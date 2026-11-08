@@ -120,6 +120,9 @@ describe('PRD の受入条件', () => {
         '考えることが多く、現実的ではない',
         '他人ごと',
         '二択',
+        'CSから「なんで記録取ってないんですか」',
+        '捨てたデータは復元できない',
+        '過去の契約を見ないと、そのデータを何に使ってよいか判断できないこともあります。',
       ]
     ) {
       expect(intro).toContain(text);
@@ -149,6 +152,7 @@ describe('PRD の受入条件', () => {
     expect(count(summary, '足さなくて構いません')).toBe(1);
     expect(summary).toContain('変更理由');
     expect(summary).toContain('組み立て直す設計');
+    expect(summary).toContain('捨てたデータは復元できません');
   });
 
   it('講師の台本に 0:35 と、遅れたときの判断表の手順が書かれている', () => {

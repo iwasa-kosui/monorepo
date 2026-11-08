@@ -23,6 +23,13 @@ export const bodyString = (body: RequestBody, key: string): string | undefined =
   return typeof value === 'string' ? value : undefined;
 };
 
+export const bodyTrimmedStringArray = (body: RequestBody, key: string): string[] | undefined => {
+  const value = body[key];
+  return Array.isArray(value) && value.every((item): item is string => typeof item === 'string')
+    ? value.map((item) => item.trim())
+    : undefined;
+};
+
 export const bodyStringList = (body: RequestBody, ...keys: ReadonlyArray<string>): string[] =>
   keys.flatMap((key) => {
     const value = body[key];

@@ -38,7 +38,7 @@ const setup = () => {
     return created.val;
   };
   const embedTopic = (topic: DigestTopic, embedding: Float32Array) => {
-    const embedded = DigestTopic.embed(topic, embedding, EMBEDDED_AT);
+    const embedded = DigestTopic.embed(topic, { embedding, excludeEmbedding: null }, EMBEDDED_AT);
     if (!embedded.ok) throw new Error('unexpected');
     return embedded.val;
   };
@@ -296,8 +296,90 @@ describe('createD1DigestTopicEditedStore', () => {
       topicKey: 'genai',
       name: '新しい名前',
       description: '新しい説明',
+      examples: [],
+      excludes: [],
       updatedAt: EDITED_AT,
     });
+  });
+});
+
+describe('テーマの examples、excludes、excludeEmbedding の保存', () => {
+  const columns = (sqlite: ReturnType<typeof setup>['sqlite']) =>
+    sqlite.prepare(
+      'SELECT examples, excludes, length(embedding) AS bytes, length(excludeEmbedding) AS excludeBytes FROM digest_topics',
+    ).all();
+
+  it('作成時に examples と excludes を JSON で書き、embedded で excludeEmbedding も書く', async () => {
+    const { sqlite, createdStore, embeddedStore, resolver } = setup();
+    const created = DigestTopic.create({
+      userId: USER_ID,
+      topicKey: 'genai',
+      name: '名前',
+      description: '説明',
+      sortOrder: 0,
+      examples: ['例'],
+      excludes: ['除く'],
+    }, CREATED_AT);
+    if (!created.ok) throw new Error('unexpected');
+    await createdStore.store(created.val);
+    expect(columns(sqlite)).toEqual([
+      { examples: '["例"]', excludes: '["除く"]', bytes: null, excludeBytes: null },
+    ]);
+
+    const embedded = DigestTopic.embed(
+      created.val.aggregateState,
+      { embedding: vector(), excludeEmbedding: vector(1) },
+      EMBEDDED_AT,
+    );
+    if (!embedded.ok) throw new Error('unexpected');
+    await embeddedStore.store(embedded.val);
+
+    expect(columns(sqlite)).toEqual([
+      {
+        examples: '["例"]',
+        excludes: '["除く"]',
+        bytes: EMBEDDING_DIMENSIONS * 4,
+        excludeBytes: EMBEDDING_DIMENSIONS * 4,
+      },
+    ]);
+    const [stored] = (await resolver.resolve(USER_ID)).val;
+    expect(stored).toMatchObject({ examples: ['例'], excludes: ['除く'] });
+    expect(stored?.excludeEmbedding?.[1]).toBeCloseTo(1 / 1024 * 2, 6);
+  });
+
+  it('embedded の元になった examples が今の値と違えば、何も書かない', async () => {
+    const { sqlite, createdStore, embeddedStore, createTopic, embedTopic } = setup();
+    const created = createTopic('genai');
+    await createdStore.store(created);
+
+    await embeddedStore.store(embedTopic({ ...created.aggregateState, examples: ['古い例'] }, vector()));
+
+    expect(columns(sqlite)).toEqual([{ examples: '[]', excludes: '[]', bytes: null, excludeBytes: null }]);
+  });
+
+  it('編集で examples と excludes を書き換え、embedding と excludeEmbedding を消す', async () => {
+    const { sqlite, createdStore, embeddedStore, editedStore, createTopic } = setup();
+    const created = createTopic('genai');
+    await createdStore.store(created);
+    const embedded = DigestTopic.embed(
+      created.aggregateState,
+      { embedding: vector(), excludeEmbedding: vector(1) },
+      EMBEDDED_AT,
+    );
+    if (!embedded.ok) throw new Error('unexpected');
+    await embeddedStore.store(embedded.val);
+
+    const edited = DigestTopic.edit(
+      embedded.val.aggregateState,
+      { name: '名前', description: '説明', examples: ['新しい例'], excludes: ['新しい除く'] },
+      EDITED_AT,
+    );
+    if (!edited.ok) throw new Error('unexpected');
+    await editedStore.store(edited.val);
+
+    expect(columns(sqlite)).toEqual([
+      { examples: '["新しい例"]', excludes: '["新しい除く"]', bytes: null, excludeBytes: null },
+    ]);
   });
 });
 

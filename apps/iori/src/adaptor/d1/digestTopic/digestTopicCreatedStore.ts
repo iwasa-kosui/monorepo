@@ -13,7 +13,10 @@ export const createD1DigestTopicCreatedStore = (db: IoriD1Db): DigestTopicCreate
       events.flatMap((event) => [
         db.insert(digestTopicsTable).values({
           ...event.aggregateState,
+          examples: JSON.stringify(event.aggregateState.examples),
+          excludes: JSON.stringify(event.aggregateState.excludes),
           embedding: null,
+          excludeEmbedding: null,
           embeddedAt: null,
           createdAt: new Date(event.aggregateState.createdAt),
           updatedAt: new Date(event.aggregateState.updatedAt),

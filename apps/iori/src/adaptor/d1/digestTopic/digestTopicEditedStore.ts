@@ -16,7 +16,10 @@ export const createD1DigestTopicEditedStore = (db: IoriD1Db): DigestTopicEditedS
           .set({
             name: event.eventPayload.name,
             description: event.eventPayload.description,
+            examples: JSON.stringify(event.eventPayload.examples),
+            excludes: JSON.stringify(event.eventPayload.excludes),
             embedding: null,
+            excludeEmbedding: null,
             embeddedAt: null,
             updatedAt: new Date(event.eventPayload.updatedAt),
           })

@@ -3,6 +3,7 @@ import { and, asc, eq, gt, gte, inArray, isNotNull } from 'drizzle-orm';
 
 import { FeedEntryId } from '../../../domain/feedEntry/feedEntryId.ts';
 import { FeedSourceId } from '../../../domain/feedSource/feedSourceId.ts';
+import { Instant } from '../../../domain/instant/instant.ts';
 import { Embedding } from '../../../domain/interestSource/embedding.ts';
 import type {
   RecommendableArticle,
@@ -18,7 +19,7 @@ const RECOMMENDABLE_KINDS: ReadonlyArray<RecommendableFeedSourceKind> = ['rss', 
 export const createD1RecommendableArticlesResolverByFetchedSince = (
   db: IoriD1Db,
 ): RecommendableArticlesResolverByFetchedSince => ({
-  resolve: async ({ fetchedSince }) => {
+  resolve: async ({ fetchedSince, limit }) => {
     const articles: RecommendableArticle[] = [];
     let after: string | undefined;
     for (;;) {
@@ -30,6 +31,7 @@ export const createD1RecommendableArticlesResolverByFetchedSince = (
         title: feedEntriesTable.title,
         description: feedEntriesTable.description,
         hatenaBookmarkCount: feedEntriesTable.hatenaBookmarkCount,
+        fetchedAt: feedEntriesTable.fetchedAt,
         embedding: feedEntriesTable.embedding,
       }).from(feedEntriesTable)
         .innerJoin(feedSourcesTable, eq(feedEntriesTable.feedSourceId, feedSourcesTable.feedSourceId))
@@ -44,6 +46,7 @@ export const createD1RecommendableArticlesResolverByFetchedSince = (
         .orderBy(asc(feedEntriesTable.feedEntryId))
         .limit(PAGE_SIZE);
       for (const row of rows) {
+        if (limit !== undefined && articles.length >= limit) break;
         if (row.embedding === null || !Embedding.validate(row.embedding).ok) continue;
         articles.push({
           feedEntryId: FeedEntryId.orThrow(row.feedEntryId),
@@ -53,10 +56,12 @@ export const createD1RecommendableArticlesResolverByFetchedSince = (
           title: row.title,
           description: row.description,
           hatenaBookmarkCount: row.hatenaBookmarkCount,
+          fetchedAt: Instant.orThrow(row.fetchedAt.getTime()),
           embedding: row.embedding,
         });
       }
       const last = rows.at(-1);
+      if (limit !== undefined && articles.length >= limit) break;
       if (rows.length < PAGE_SIZE || last === undefined) break;
       after = last.feedEntryId;
     }

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f301ad8d-102d-4170-af0f-7a76d83d1629",
+  "id": "58b7cec5-3c94-44c1-9c89-ee82fd4bbf73",
   "prevId": "144324cf-e301-4e03-bf52-208be223de5f",
   "tables": {
     "actors": {
@@ -527,143 +527,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "bluesky_timeline_items": {
-      "name": "bluesky_timeline_items",
-      "columns": {
-        "feedItemId": {
-          "name": "feedItemId",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "uri": {
-          "name": "uri",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "cid": {
-          "name": "cid",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "authorDid": {
-          "name": "authorDid",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "authorHandle": {
-          "name": "authorHandle",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "authorDisplayName": {
-          "name": "authorDisplayName",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "authorAvatar": {
-          "name": "authorAvatar",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "facets": {
-          "name": "facets",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "embed": {
-          "name": "embed",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "replyParentUri": {
-          "name": "replyParentUri",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "replyParentAuthorHandle": {
-          "name": "replyParentAuthorHandle",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "repostedByDid": {
-          "name": "repostedByDid",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "repostedByHandle": {
-          "name": "repostedByHandle",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "postedAt": {
-          "name": "postedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "indexedAt": {
-          "name": "indexedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "fetchedAt": {
-          "name": "fetchedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "bluesky_timeline_items_indexed_at_idx": {
-          "name": "bluesky_timeline_items_indexed_at_idx",
-          "columns": [
-            "indexedAt"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "digest_deep_dive_turns": {
       "name": "digest_deep_dive_turns",
       "columns": {
@@ -1119,8 +982,31 @@
           "notNull": true,
           "autoincrement": false
         },
+        "examples": {
+          "name": "examples",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
+        "excludes": {
+          "name": "excludes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
         "embedding": {
           "name": "embedding",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "excludeEmbedding": {
+          "name": "excludeEmbedding",
           "type": "blob",
           "primaryKey": false,
           "notNull": false,

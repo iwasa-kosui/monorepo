@@ -184,6 +184,7 @@ describe('RecommendableArticlesResolverByFetchedSince', () => {
       title: expect.stringMatching(/^title /),
       description: expect.stringMatching(/^description /),
       hatenaBookmarkCount: 120,
+      fetchedAt: 10_001,
     });
     expect(resolved[2]?.hatenaBookmarkCount).toBeNull();
     expect(Array.from(resolved[0]!.embedding)).toEqual(Array.from(a.embedding as Float32Array));
@@ -195,6 +196,18 @@ describe('RecommendableArticlesResolverByFetchedSince', () => {
     const disabled = addFeedSource('rss', false);
     const kept = addEntry(enabled);
     addEntry(disabled);
+
+    const resolved = await resolveArticles(0);
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
+  });
+
+  it('埋め込み済みの x_user の情報源の記事は返さない', async () => {
+    const { addFeedSource, addEntry, resolveArticles } = setup();
+    const rss = addFeedSource('rss');
+    const xUser = addFeedSource('x_user');
+    const kept = addEntry(rss);
+    addEntry(xUser);
 
     const resolved = await resolveArticles(0);
 
@@ -277,6 +290,18 @@ describe('RelatedArticlesResolverByEmbedding', () => {
     const disabled = addFeedSource('rss', false);
     const kept = addEntry(enabled, { embedding: angled(0.2) });
     addEntry(disabled, { embedding: angled(0.1) });
+
+    const resolved = await resolveRelated(angled(0));
+
+    expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
+  });
+
+  it('埋め込み済みの x_user の情報源の記事は返さない', async () => {
+    const { addFeedSource, addEntry, resolveRelated } = setup();
+    const rss = addFeedSource('rss');
+    const xUser = addFeedSource('x_user');
+    const kept = addEntry(rss, { embedding: angled(0.2) });
+    addEntry(xUser, { embedding: angled(0.1) });
 
     const resolved = await resolveRelated(angled(0));
 

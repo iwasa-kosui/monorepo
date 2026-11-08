@@ -15,7 +15,17 @@ import type { TextEmbedder } from '../ports/textEmbedder.ts';
 import { embedDigestTopicIfAvailable } from './helper/embedDigestTopics.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{ userId: UserId; topicKey: string; name?: string; description?: string }>;
+type Input = Readonly<{
+  userId: UserId;
+  topicKey: string;
+  name?: string;
+  description?: string;
+  examples?: ReadonlyArray<string>;
+  excludes?: ReadonlyArray<string>;
+}>;
+
+const sameList = (a: ReadonlyArray<string>, b: ReadonlyArray<string>): boolean =>
+  a.length === b.length && a.every((item, index) => item === b[index]);
 
 type Err = DigestTopicNotFoundError | DigestTopicParseError;
 
@@ -39,11 +49,21 @@ const create = ({
   const find = async (userId: UserId, topicKey: string) =>
     (await digestTopicsResolverByUserId.resolve(userId)).val.find((topic) => topic.topicKey === topicKey);
 
-  const run = async ({ userId, topicKey, name, description }: Input): RA<StoredDigestTopic, Err> => {
+  const run = async (
+    { userId, topicKey, name, description, examples, excludes }: Input,
+  ): RA<StoredDigestTopic, Err> => {
     const topic = await find(userId, topicKey);
     if (topic === undefined) return RA.err(DigestTopicNotFoundError.create(topicKey));
-    const next = { name: name ?? topic.name, description: description ?? topic.description };
-    if (next.name === topic.name && next.description === topic.description) return RA.ok(topic);
+    const next = {
+      name: name ?? topic.name,
+      description: description ?? topic.description,
+      examples: [...examples ?? topic.examples],
+      excludes: [...excludes ?? topic.excludes],
+    };
+    if (
+      next.name === topic.name && next.description === topic.description && sameList(next.examples, topic.examples)
+      && sameList(next.excludes, topic.excludes)
+    ) return RA.ok(topic);
 
     const edited = DigestTopic.edit(topic, next, now());
     if (!edited.ok) return RA.err(edited.err);

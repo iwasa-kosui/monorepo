@@ -20,7 +20,12 @@ export const BOOKMARK_COUNT_MAX_REQUEST_URL_LENGTH = 8_000;
 export const BOOKMARK_COUNT_MAX_TARGET_URL_LENGTH = 2_000;
 export const BOOKMARK_COUNT_REQUEST_INTERVAL_MS = 3_000;
 const FETCH_OPTIONS = { timeoutMs: 10_000, maxBytes: 256 * 1024, maxRedirects: 3 } as const;
-const EXCLUDED_KINDS: ReadonlyArray<FeedSourceKind> = ['hatena_hotentry', 'hatena_entrylist', 'thoughtworks_radar'];
+const EXCLUDED_KINDS: ReadonlyArray<FeedSourceKind> = [
+  'hatena_hotentry',
+  'hatena_entrylist',
+  'thoughtworks_radar',
+  'x_user',
+];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const countsZodType = z.record(z.string(), z.number().int().nonnegative());

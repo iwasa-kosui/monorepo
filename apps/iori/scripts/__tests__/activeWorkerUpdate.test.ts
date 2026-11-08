@@ -66,7 +66,7 @@ it('keeps immutable migration identity while recording a different reviewed code
   );
   expect(input.checkMain).toHaveBeenCalledTimes(2);
   expect(mocks.worker).toHaveBeenCalledTimes(2);
-  expect(mocks.worker.mock.calls[0][0]).toMatchObject({ missingAllowed: ['EVENT_ARCHIVE'] });
+  expect(mocks.worker.mock.calls[0][0].missingAllowed).toEqual([]);
   expect(mocks.worker.mock.calls[1][0]).not.toHaveProperty('missingAllowed');
 });
 it.each(['consumer', 'Queue', 'route', 'deploy'])(

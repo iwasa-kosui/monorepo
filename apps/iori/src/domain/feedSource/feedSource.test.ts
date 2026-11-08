@@ -32,6 +32,23 @@ describe('FeedSource.parseNew', () => {
   });
 
   it.each([
+    'https://x.com/jack',
+    'https://www.x.com/jack',
+    'https://twitter.com/jack',
+    'https://www.twitter.com/jack',
+    'https://X.COM/jack',
+    'https://Www.Twitter.Com/jack',
+    'https://x.com./jack',
+  ])('rss には x.com と twitter.com の URL %s を受け付けない', (url) => {
+    expect(FeedSource.parseNew({ kind: 'rss', url, title: 'ブログ' }).ok).toBe(false);
+  });
+
+  it('x_user はユーザー名から https://x.com/<名> の URL を作って受け付ける', () => {
+    const parsed = FeedSource.parseNew({ kind: 'x_user', username: 'jack' });
+    expect(parsed.ok && parsed.val.url).toBe('https://x.com/jack');
+  });
+
+  it.each([
     'https://user:pass@example.com/feed.xml',
     'https://user@example.com/feed.xml',
     'https://:pass@example.com/feed.xml',
@@ -82,6 +99,45 @@ describe('FeedSource.parseNew', () => {
     expect(FeedSource.parseNew({ kind: 'rss', url: 'https://example.com/feed.xml', title: '' }).ok).toBe(false);
     expect(FeedSource.parseNew({ kind: 'rss', url: 'https://example.com/feed.xml', title: 'あ'.repeat(101) }).ok)
       .toBe(false);
+  });
+});
+
+describe('FeedSource.parseNew の x_user', () => {
+  it('ユーザー名から https://x.com/<小文字のユーザー名> の URL と @<ユーザー名> の title を作る', () => {
+    expect(FeedSource.parseNew({ kind: 'x_user', username: 'Kosui_Iwasa' })).toMatchObject({
+      ok: true,
+      val: { kind: 'x_user', url: 'https://x.com/kosui_iwasa', title: '@Kosui_Iwasa' },
+    });
+  });
+
+  it('url と title を渡しても使わない', () => {
+    expect(
+      FeedSource.parseNew({ kind: 'x_user', username: 'jack', url: 'https://example.com/', title: '別名' }),
+    ).toMatchObject({ ok: true, val: { url: 'https://x.com/jack', title: '@jack' } });
+  });
+
+  it.each([undefined, '', '0123456789abcdef', 'a b', '@jack', 'ハンドル', 'a-b', 1])(
+    'ユーザー名が %s なら受け付けない',
+    (username) => {
+      expect(FeedSource.parseNew({ kind: 'x_user', username }).ok).toBe(false);
+    },
+  );
+});
+
+describe('FeedSource.createFeedSource の x_user', () => {
+  it('x_user の feedSource.created を返す', () => {
+    const parsed = FeedSource.parseNew({ kind: 'x_user', username: 'jack' });
+    if (!parsed.ok) throw new Error('parse failed');
+
+    const created = FeedSource.createFeedSource(parsed.val, now);
+
+    expect(created).toMatchObject({
+      ok: true,
+      val: {
+        eventName: 'feedSource.created',
+        aggregateState: { kind: 'x_user', url: 'https://x.com/jack', title: '@jack' },
+      },
+    });
   });
 });
 

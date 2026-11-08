@@ -6,11 +6,12 @@ import {
   FeedSourceAlreadyExistsError,
   type FeedSourceCreatedStore,
   type FeedSourceParseError,
+  type NewFeedSourceInput,
 } from '../domain/feedSource/feedSource.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{ url: string; title: string }>;
+type Input = NewFeedSourceInput;
 
 type Err = FeedSourceAlreadyExistsError | FeedSourceParseError;
 
@@ -23,8 +24,8 @@ type Deps = Readonly<{
 }>;
 
 const create = ({ allFeedSourcesResolver, feedSourceCreatedStore, now }: Deps): AddFeedSourceUseCase => {
-  const run = async ({ url, title }: Input): RA<FeedSource, Err> => {
-    const parsed = FeedSource.parseNew({ kind: 'rss', url, title });
+  const run = async (input: Input): RA<FeedSource, Err> => {
+    const parsed = FeedSource.parseNew(input);
     if (!parsed.ok) return RA.err(parsed.err);
     const registered = (await allFeedSourcesResolver.resolve()).val;
     if (registered.some((source) => source.url === parsed.val.url)) {

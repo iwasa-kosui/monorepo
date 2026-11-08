@@ -11,7 +11,7 @@ import { vapidKeyPairMatches } from './vapid-origin-check.mjs';
 import { parseWorkflowInvocation, workflowTimeBudget } from './workflow-context.mjs';
 
 const appRoot = new URL('..', import.meta.url).pathname;
-const OPTIONAL_SECRET_NAMES = Object.freeze(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD']);
+const OPTIONAL_SECRET_NAMES = Object.freeze(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD', 'TWITTERAPI_IO_API_KEY']);
 const SECRET_NAMES = Object.freeze([
   'VAPID_PUBLIC_KEY',
   'VAPID_PRIVATE_KEY',

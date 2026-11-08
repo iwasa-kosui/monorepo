@@ -7,7 +7,7 @@ import { htmlToPlainText } from '../text/htmlToPlainText.ts';
 
 export const MAX_FEED_ITEMS = 30;
 export const MAX_DESCRIPTION_CHARS = 1000;
-const MAX_TITLE_CHARS = 1000;
+export const MAX_TITLE_CHARS = 1000;
 
 export type ParsedFeedItem = Readonly<{
   guid: string;
