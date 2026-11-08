@@ -214,7 +214,7 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 │ 1       │ 'visit-tama'  │ 'cancelled' │ null                       │ null             │ null           │ null           │
 ```
 
-この行の null は、正しい結果です。`visit-tama` は、記録を足す前にキャンセルされた来院です。足す前の過去は残りません。
+この行の null は、正しい結果です。`visit-tama` は、記録を足す前にキャンセルされた来院です。記録を足す前に起きたことは `business_events` に残っていません。
 
 ## 追いつけないとき
 

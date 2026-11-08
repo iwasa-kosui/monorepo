@@ -182,7 +182,7 @@ describe('第4章 集計テーブル', () => {
     });
   });
 
-  it('イベントの導入前から残っているキャンセル数は、業務イベントから数え直した数との差として分かる', () => {
+  it('業務イベントの導入前から残っているキャンセル数は、業務イベントから数え直した数との差として分かる', () => {
     db.prepare(`INSERT INTO daily_cancellation_counts (visit_date, cancelled_count) VALUES (?, 1)`).run(visitDate);
     cancelVisit(db, cancelInput);
     assert.deepEqual(verifyCancellationCount(db, visitDate), {
