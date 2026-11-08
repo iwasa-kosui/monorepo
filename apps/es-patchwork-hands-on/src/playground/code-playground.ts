@@ -296,6 +296,12 @@ const mount = (root: HTMLElement): void => {
       restoreButton.hidden = true;
     }
   });
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      discardBackup();
+      replaceDocs(loadEdits(config.exerciseId));
+    }
+  });
   retryButton.addEventListener('click', () => runtime.reload());
   select(active);
   updateControls();

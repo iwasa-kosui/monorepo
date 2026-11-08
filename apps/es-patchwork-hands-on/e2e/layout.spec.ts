@@ -78,6 +78,15 @@ const describeFailure = (path: string, size: Size, metrics: Metrics): string =>
   + `scrollWidth=${metrics.scrollWidth} innerWidth=${metrics.innerWidth} `
   + `chapterBody=${metrics.bodyScrollHeight}/${metrics.bodyClientHeight}`;
 
+const waitForPlaygrounds = async (page: Page, path: string): Promise<void> => {
+  for (const playground of await page.locator('[data-playground]').all()) {
+    await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+  }
+  if (path === '/chapters/chapter-3/') {
+    await expect(page.locator('[data-role="origin"]')).toBeVisible({ timeout: 30_000 });
+  }
+};
+
 const collectFailures = async (
   page: Page,
   size: Size,
@@ -88,6 +97,7 @@ const collectFailures = async (
   const failures: string[] = [];
   for (const path of fitCheckedPaths()) {
     await page.goto(path);
+    await waitForPlaygrounds(page, path);
     const metrics = await measure(page);
     if (overflows(metrics)) {
       failures.push(describeFailure(path, size, metrics));

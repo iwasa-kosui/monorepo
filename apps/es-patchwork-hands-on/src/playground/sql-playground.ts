@@ -24,6 +24,8 @@ const originMessages = {
   failing:
     '第2章で書いた visits.ts は全部のテストに成功していないので、ステップ2の完成コードでこのデータベースを作りました。',
   missing: '第2章で書いた visits.ts が保存されていないので、ステップ2の完成コードでこのデータベースを作りました。',
+  unbuildable:
+    '第2章で書いた visits.ts ではデータベースを作れなかったので、ステップ2の完成コードでこのデータベースを作りました。',
 };
 
 const oneLine = (sql: string): string => sql.replace(/\s+/g, ' ').trim();
@@ -147,7 +149,11 @@ const mount = (root: HTMLElement): void => {
         message = passed ? originMessages.own : originMessages.failing;
       }
     }
-    const error = await runtime.setupScript(files, script.entry);
+    let error = await runtime.setupScript(files, script.entry);
+    if (error !== null && files !== script.files) {
+      error = await runtime.setupScript(script.files, script.entry);
+      message = originMessages.unbuildable;
+    }
     if (error === null && message !== null) {
       origin.textContent = message;
       origin.hidden = false;
@@ -159,7 +165,9 @@ const mount = (root: HTMLElement): void => {
     const error = config.setupScript === null
       ? await runtime.setupSql(config.setupSql ?? '')
       : await prepareFromScript(config.setupScript);
-    preparedGeneration = runtime.generation;
+    if (error === null) {
+      preparedGeneration = runtime.generation;
+    }
     return error;
   };
 
@@ -253,6 +261,13 @@ const mount = (root: HTMLElement): void => {
     }
     backup = null;
     restoreButton.hidden = true;
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      backup = null;
+      restoreButton.hidden = true;
+      view.setState(stateFor(loadSql(config.storageId) ?? config.initialSql));
+    }
   });
   runButton.addEventListener('click', () => void run());
   resetButton.addEventListener('click', () => void reset());
