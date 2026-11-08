@@ -1,0 +1,203 @@
+---
+import '../../playground/play.css';
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import {
+  cancelVisitOf,
+  insertTemplate,
+  lessonFile,
+  snapshotFiles,
+} from '../../lib/snapshots';
+
+const start = 'chapter-1-start';
+const files = {
+  ...snapshotFiles(start),
+  ...lessonFile('play-cancel.ts'),
+  ...lessonFile('play-initial.ts'),
+};
+const initial = cancelVisitOf(start);
+const source = files['visits.ts'] ?? '';
+const position = source.indexOf(initial);
+if (position === -1) {
+  throw new Error('visits.ts から cancelVisit を切り出せません');
+}
+const config = JSON.stringify({
+  exerciseId: 'play-add-record',
+  files,
+  head: source.slice(0, position),
+  tail: source.slice(position + initial.length),
+  initial,
+  complete: cancelVisitOf('chapter-2-step-1'),
+  template: insertTemplate(),
+});
+const blanks = [
+  ['/* event_name */', '\'VisitCancelled\''],
+  ['/* target_id */', 'input.visitId'],
+  ['/* target_type */', '\'Visit\''],
+  ['/* target_state */', 'JSON.stringify(cancelled)'],
+];
+const answers = [
+  ['when', 'いつ'],
+  ['what', '何を'],
+  ['who', '誰が'],
+  ['why', 'なぜ'],
+];
+---
+
+<BaseLayout
+  title="来院のキャンセルに業務イベントを記録する"
+  noindex
+  chapterPage
+>
+  <div
+    class="play"
+    data-play="add-record"
+    data-state="loading"
+    data-config={config}
+  >
+    <header class="play-inquiry">
+      <span class="play-inquiry-label">問い合わせ</span>
+      <h1>この来院がキャンセルになっているのはなぜですか。</h1>
+      <div class="play-status" data-role="status">
+        <span data-role="status-text" role="status"
+        >実行環境を読み込んでいます</span>
+        <button type="button" data-role="retry" hidden>もう一度読み込む</button>
+      </div>
+    </header>
+    <div class="play-columns">
+      <section class="play-col play-work" aria-label="コードの編集と実行">
+        <p class="play-next">
+          <strong>次にすること</strong>
+          <span data-role="next"></span>
+        </p>
+        <div class="play-editor-head">
+          <code>visits.ts の cancelVisit</code>
+          <div class="play-editor-tools">
+            <button
+              type="button"
+              class="play-quiet"
+              data-role="complete"
+              disabled
+            >
+              ステップ1の完成コードを読み込む
+            </button>
+            <button type="button" class="play-quiet" data-role="reset" disabled>
+              最初のコードに戻す
+            </button>
+          </div>
+        </div>
+        <div class="play-editor" data-role="editor"></div>
+        <div class="play-actions">
+          <button type="button" class="play-primary" data-role="run" disabled>
+            ポチの来院をキャンセルする
+          </button>
+          <button type="button" data-role="template" disabled>
+            記録の雛形を <code>UPDATE</code> の次の行に入れる
+          </button>
+        </div>
+        <div class="play-message" data-role="message" aria-live="polite" hidden>
+        </div>
+      </section>
+      <section class="play-col" aria-label="データベースの中身">
+        <section class="play-panel" aria-labelledby="visits-title">
+          <header class="play-panel-head">
+            <h2 id="visits-title"><code>visits</code></h2>
+            <span
+              class="play-badge"
+              data-role="visits-badge"
+              data-phase="before"
+            >実行前</span>
+          </header>
+          <table class="play-table" aria-label="visits テーブルの行">
+            <thead>
+              <tr>
+                <th>id</th>
+                <th>pet_name</th>
+                <th>status</th>
+              </tr>
+            </thead>
+            <tbody data-role="visits-body"></tbody>
+          </table>
+          <p class="play-caption" data-role="visits-caption"></p>
+        </section>
+        <section
+          class="play-panel play-panel-events"
+          aria-labelledby="events-title"
+        >
+          <header class="play-panel-head">
+            <h2 id="events-title"><code>business_events</code></h2>
+            <span
+              class="play-badge"
+              data-role="events-badge"
+              data-phase="before"
+            >実行前</span>
+          </header>
+          <div class="play-events" data-role="events"></div>
+          <p class="play-caption" data-role="events-caption"></p>
+        </section>
+      </section>
+      <section class="play-col" aria-label="問い合わせへの答えとテスト">
+        <section class="play-panel" aria-labelledby="answer-title">
+          <h2 id="answer-title">問い合わせへの答え</h2>
+          <table class="play-table play-answer" aria-label="問い合わせへの答え">
+            <tbody>
+              {
+                answers.map(([key, label]) => (
+                  <tr data-answer={key}>
+                    <th scope="row">{label}</th>
+                    <td data-role="answer-value">まだ実行していません</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </section>
+        <section
+          class="play-panel"
+          data-role="blanks"
+          aria-labelledby="blanks-title"
+          hidden
+        >
+          <h2 id="blanks-title">空欄に入れる値</h2>
+          <table class="play-table play-blanks" aria-label="空欄に入れる値">
+            <thead>
+              <tr>
+                <th>空欄</th>
+                <th>値</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                blanks.map(([blank, value]) => (
+                  <tr>
+                    <td><code>{blank}</code></td>
+                    <td><code>{value}</code></td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </section>
+        <section class="play-panel play-tests" aria-labelledby="tests-title">
+          <h2 id="tests-title">テスト</h2>
+          <div class="play-tests-row">
+            <button type="button" data-role="tests" disabled>
+              テストを実行する
+            </button>
+            <p class="play-summary" data-role="summary">まだ実行していません</p>
+          </div>
+          <ul
+            class="play-failed"
+            data-role="failed"
+            aria-label="失敗したテスト"
+          >
+          </ul>
+        </section>
+      </section>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+import '../../playground/play-add-record.ts';
+</script>
