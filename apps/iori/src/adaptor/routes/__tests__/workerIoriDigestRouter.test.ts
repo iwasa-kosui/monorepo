@@ -1051,7 +1051,13 @@ describe('iori のダイジェスト API', () => {
         const body = await response.json() as JevBody;
 
         expect(response.status).toBe(200);
-        expect(body.jev).toEqual({ model: 'typesafe/jev', configured: true, perTopicLimit: 5 });
+        expect(body.jev).toEqual({
+          model: 'typesafe/jev',
+          configured: true,
+          perTopicLimit: 5,
+          totalLimit: 60,
+          overTotalLimit: false,
+        });
         expect(body.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([0.7, 0.7]);
         expect(judge).toHaveBeenCalledWith({
           model: 'typesafe/jev',

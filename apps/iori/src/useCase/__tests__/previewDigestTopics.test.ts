@@ -10,6 +10,7 @@ import { UserId } from '../../domain/user/userId.ts';
 import type { TopicRelevanceJudge } from '../../ports/topicRelevanceJudge.ts';
 import {
   JEV_CANDIDATES_PER_TOPIC,
+  JEV_CANDIDATES_TOTAL_LIMIT,
   JEV_MODEL,
   JEV_TIMEOUT_MS,
   MAX_PREVIEW_CANDIDATES,
@@ -317,6 +318,63 @@ describe('PreviewDigestTopicsUseCase', () => {
         model: 'typesafe/jev',
         configured: true,
         perTopicLimit: JEV_CANDIDATES_PER_TOPIC,
+        totalLimit: JEV_CANDIDATES_TOTAL_LIMIT,
+        overTotalLimit: false,
+      });
+    });
+
+    describe('リクエスト全体の上限', () => {
+      const dimensions = 13;
+      const oneHot = (index: number) => Float32Array.from({ length: dimensions }, (_, i) => (i === index ? 1 : 0));
+      const manyTopics = (count: number) => Array.from({ length: count }, (_, i) => topic(`t${i}`, oneHot(i)));
+      const manyArticles = (count: number) =>
+        Array.from({ length: count * JEV_CANDIDATES_PER_TOPIC }, (_, n) =>
+          ({
+            ...article(n),
+            embedding: oneHot(Math.floor(n / JEV_CANDIDATES_PER_TOPIC)),
+          }) as unknown as RecommendableArticle);
+
+      it('テーマの順に上から数えて上限を超えた候補は判定せず、jevNoul を付けずに、overTotalLimit を true で返す', async () => {
+        const topicRelevanceJudge = judgeBy(() => 0.5);
+        const { useCase } = setup(manyTopics(13), { articles: manyArticles(13), topicRelevanceJudge });
+
+        const result = await useCase.run({ ...input, withJev: true });
+
+        expect(topicRelevanceJudge.judge).toHaveBeenCalledTimes(JEV_CANDIDATES_TOTAL_LIMIT);
+        const byTopic = result.ok ? result.val.candidates.byTopic : [];
+        expect(byTopic.slice(0, 12).every((entry) => entry.top.every((candidate) => candidate.jevNoul === 0.5)))
+          .toBe(true);
+        expect(byTopic[12]!.top).toHaveLength(JEV_CANDIDATES_PER_TOPIC);
+        expect(byTopic[12]!.top.every((candidate) => !('jevNoul' in candidate))).toBe(true);
+        expect(result.ok && result.val.jev).toMatchObject({
+          totalLimit: JEV_CANDIDATES_TOTAL_LIMIT,
+          overTotalLimit: true,
+        });
+      });
+
+      it('上限の途中でテーマの上位が切れるときは、そのテーマの上から上限までを判定する', async () => {
+        const topicRelevanceJudge = judgeBy(() => 0.5);
+        const { useCase } = setup(manyTopics(13), {
+          articles: manyArticles(13).slice(0, 62),
+          topicRelevanceJudge,
+        });
+
+        const result = await useCase.run({ ...input, withJev: true });
+
+        expect(topicRelevanceJudge.judge).toHaveBeenCalledTimes(JEV_CANDIDATES_TOTAL_LIMIT);
+        const byTopic = result.ok ? result.val.candidates.byTopic : [];
+        expect(byTopic[12]!.top).toHaveLength(2);
+        expect(byTopic[12]!.top.every((candidate) => !('jevNoul' in candidate))).toBe(true);
+      });
+
+      it('上限ちょうどまでなら、すべて判定して overTotalLimit を false で返す', async () => {
+        const topicRelevanceJudge = judgeBy(() => 0.5);
+        const { useCase } = setup(manyTopics(12), { articles: manyArticles(12), topicRelevanceJudge });
+
+        const result = await useCase.run({ ...input, withJev: true });
+
+        expect(topicRelevanceJudge.judge).toHaveBeenCalledTimes(JEV_CANDIDATES_TOTAL_LIMIT);
+        expect(result.ok && result.val.jev).toMatchObject({ overTotalLimit: false });
       });
     });
 
@@ -365,6 +423,10 @@ describe('PreviewDigestTopicsUseCase', () => {
         null,
         0.9,
       ]);
+      expect(JSON.stringify(error.mock.calls)).not.toContain('boom');
+      expect(error).toHaveBeenCalledWith('iori digest preview: judging a candidate with Jev failed.', {
+        feedEntryId: 'entry-2',
+      });
       error.mockRestore();
     });
 

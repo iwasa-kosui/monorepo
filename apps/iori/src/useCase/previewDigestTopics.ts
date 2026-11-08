@@ -22,6 +22,7 @@ export const MAX_PREVIEW_CANDIDATES = 3000;
 export const MAX_PREVIEW_DIGEST_ITEMS = 600;
 export const JEV_MODEL = 'typesafe/jev';
 export const JEV_CANDIDATES_PER_TOPIC = 5;
+export const JEV_CANDIDATES_TOTAL_LIMIT = 60;
 export const JEV_TIMEOUT_MS = 20_000;
 const JEV_EXCERPT_MAX_CHARS = 500;
 
@@ -29,7 +30,13 @@ type Input = Readonly<
   { userId: UserId; candidateHours: number; digestDays: number; limit: number; withJev?: boolean }
 >;
 
-type JevPreview = Readonly<{ model: string; configured: boolean; perTopicLimit: number }>;
+type JevPreview = Readonly<{
+  model: string;
+  configured: boolean;
+  perTopicLimit: number;
+  totalLimit: number;
+  overTotalLimit: boolean;
+}>;
 
 type Ok = Readonly<{
   topics: ReadonlyArray<StoredDigestTopic>;
@@ -89,7 +96,6 @@ const create = ({
     if (!judged.ok) {
       console.error('iori digest preview: judging a candidate with Jev failed.', {
         feedEntryId: candidate.feedEntryId,
-        errorMessage: judged.err.message,
       });
       return null;
     }
@@ -100,18 +106,27 @@ const create = ({
     preview: CandidatePreview,
     topics: ReadonlyArray<StoredDigestTopic>,
     descriptions: ReadonlyMap<string, string>,
-  ): Promise<CandidatePreview> => ({
-    ...preview,
-    byTopic: await Promise.all(preview.byTopic.map(async (entry) => {
+  ): Promise<Readonly<{ preview: CandidatePreview; overTotalLimit: boolean }>> => {
+    let remaining = JEV_CANDIDATES_TOTAL_LIMIT;
+    let overTotalLimit = false;
+    const judgedCounts = preview.byTopic.map((entry) => {
+      const wanted = Math.min(entry.top.length, JEV_CANDIDATES_PER_TOPIC);
+      const judgedCount = Math.min(wanted, remaining);
+      remaining -= judgedCount;
+      if (judgedCount < wanted) overTotalLimit = true;
+      return judgedCount;
+    });
+    const byTopic = await Promise.all(preview.byTopic.map(async (entry, topicIndex) => {
       const topic = topics.find((candidate) => candidate.topicKey === entry.topicKey);
       const top = await Promise.all(entry.top.map(async (candidate, index) => {
-        if (topic === undefined || index >= JEV_CANDIDATES_PER_TOPIC) return candidate;
+        if (topic === undefined || index >= judgedCounts[topicIndex]!) return candidate;
         const jevNoul = await judgeCandidate(topic, candidate, descriptions.get(candidate.feedEntryId) ?? '');
         return { ...candidate, jevNoul };
       }));
       return { ...entry, top };
-    })),
-  });
+    }));
+    return { preview: { ...preview, byTopic }, overTotalLimit };
+  };
 
   const run = async ({ userId, candidateHours, digestDays, limit, withJev = false }: Input) => {
     const startedAt = now();
@@ -136,6 +151,13 @@ const create = ({
       limit,
       policy: topicAssignmentPolicy,
     });
+    const judged = withJev
+      ? await judgeTopCandidates(
+        previewed,
+        comparableTopics,
+        new Map(usedArticles.map((article) => [article.feedEntryId, article.description])),
+      )
+      : undefined;
     return RA.ok({
       topics: topics.val,
       thresholds: {
@@ -143,13 +165,7 @@ const create = ({
         minMargin: topicAssignmentPolicy.minMargin,
       },
       candidates: {
-        ...(withJev
-          ? await judgeTopCandidates(
-            previewed,
-            comparableTopics,
-            new Map(usedArticles.map((article) => [article.feedEntryId, article.description])),
-          )
-          : previewed),
+        ...(judged?.preview ?? previewed),
         truncated: articles.val.length > maxCandidates,
       },
       digestItems: previewDigestItems({
@@ -159,9 +175,13 @@ const create = ({
         policy: topicAssignmentPolicy,
       }),
       digestItemsTruncated: items.val.length > maxDigestItems,
-      jev: withJev
-        ? { model: JEV_MODEL, configured: topicRelevanceJudge !== undefined, perTopicLimit: JEV_CANDIDATES_PER_TOPIC }
-        : null,
+      jev: judged === undefined ? null : {
+        model: JEV_MODEL,
+        configured: topicRelevanceJudge !== undefined,
+        perTopicLimit: JEV_CANDIDATES_PER_TOPIC,
+        totalLimit: JEV_CANDIDATES_TOTAL_LIMIT,
+        overTotalLimit: judged.overTotalLimit,
+      },
     });
   };
 

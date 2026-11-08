@@ -6,7 +6,7 @@ import type { TopicRelevanceJudge } from '../../ports/topicRelevanceJudge.ts';
 import type { WorkersAiRunner } from './workersAiRunner.ts';
 
 const responseSchema = z.object({
-  answers: z.object({ topicRelevance: z.object({ noul: z.number() }) }),
+  answers: z.object({ topicRelevance: z.object({ noul: z.number().min(0).max(1) }) }),
 });
 
 const aiError = (message: string): AiError => ({ type: 'AiError', message });

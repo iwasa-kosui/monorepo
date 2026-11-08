@@ -153,7 +153,13 @@ export type IoriDigestTopicPreviewResponse = Readonly<{
     >;
   }>;
   digestItemsTruncated: boolean;
-  jev?: Readonly<{ model: string; configured: boolean; perTopicLimit: number }>;
+  jev?: Readonly<{
+    model: string;
+    configured: boolean;
+    perTopicLimit: number;
+    totalLimit: number;
+    overTotalLimit: boolean;
+  }>;
   digestItems: ReadonlyArray<
     Readonly<{
       digestDate: string;

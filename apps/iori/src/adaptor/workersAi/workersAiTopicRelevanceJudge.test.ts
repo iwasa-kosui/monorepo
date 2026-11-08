@@ -12,8 +12,8 @@ describe('createWorkersAiTopicRelevanceJudge', () => {
   it('Noul の質問を1つ入れて呼び、answers の noul の値を返す', async () => {
     const run = vi.fn(async () => ({
       model: 'typesafe/jev',
-      answers: { topicRelevance: { noul: 0.83 } },
-      usage: { total_tokens: 10 },
+      answers: { topicRelevance: { type: 'noul', noul: 0.83 } },
+      usage: { input_tokens: 10, output_tokens: 1 },
     }));
 
     const result = await createWorkersAiTopicRelevanceJudge({ run }).judge(request);
@@ -38,12 +38,26 @@ describe('createWorkersAiTopicRelevanceJudge', () => {
     { answers: { topicRelevance: {} } },
     { answers: { topicRelevance: { noul: '0.5' } } },
     { answers: { topicRelevance: { noul: null } } },
+    { answers: { topicRelevance: { type: 'noul', noul: 1.01 } } },
+    { answers: { topicRelevance: { type: 'noul', noul: -0.01 } } },
   ])('想定と違う応答 %j は AiError にする', async (raw) => {
     const run = vi.fn(async () => raw);
 
     const result = await createWorkersAiTopicRelevanceJudge({ run }).judge(request);
 
     expect(result).toMatchObject({ ok: false, err: { type: 'AiError' } });
+  });
+
+  it.each([0, 1])('範囲の端 %d は受け付ける', async (noul) => {
+    const run = vi.fn(async () => ({
+      model: 'typesafe/jev',
+      answers: { topicRelevance: { type: 'noul', noul } },
+      usage: { input_tokens: 10, output_tokens: 1 },
+    }));
+
+    const result = await createWorkersAiTopicRelevanceJudge({ run }).judge(request);
+
+    expect(result).toEqual({ ok: true, val: { noul } });
   });
 
   it('run が例外を投げたら AiError にする', async () => {
