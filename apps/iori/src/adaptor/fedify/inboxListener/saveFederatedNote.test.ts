@@ -121,11 +121,11 @@ describe('saveFederatedNote', () => {
     expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
   });
 
-  it('does not store a federated timeline item when resolving the author actor fails', async () => {
+  it('rejects without storing a federated timeline item when resolving the author actor fails', async () => {
     const { deps, actorResolverByUri, federatedTimelineItemCreatedStore } = createDeps();
-    actorResolverByUri.resolve.mockReturnValue(RA.err(new Error('db down')) as never);
+    actorResolverByUri.resolve.mockRejectedValue(new Error('db down'));
 
-    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
+    await expect(saveFederatedNote(deps, { note: createNote(), relayId, documentLoader })).rejects.toThrow();
 
     expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
   });

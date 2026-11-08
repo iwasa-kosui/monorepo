@@ -345,7 +345,7 @@ describe('createOnCreate', () => {
         remotePostUpserter,
         federatedTimelineItemCreatedStore,
       } = setup(false, [{ relayId: 'relay-1' }]);
-      acceptedRelaysResolver.resolve.mockResolvedValue(RA.err(new Error('db down')) as never);
+      acceptedRelaysResolver.resolve.mockRejectedValue(new Error('db down'));
 
       await expect(listener(createCtx(), create(createNote()))).rejects.toThrow();
 

@@ -103,10 +103,6 @@ export const saveFederatedNote = async (
   const post = postResult.val;
 
   const authorActorResult = await deps.actorResolverByUri.resolve(authorIdentity.val.uri);
-  if (!authorActorResult.ok) {
-    getLogger().warn(`Failed to resolve the author actor for federated timeline: ${note.id.href}`);
-    return;
-  }
   if (!authorActorResult.val) {
     getLogger().warn(`Note author actor not found for federated timeline: ${note.id.href} - ${authorIdentity.val.uri}`);
     return;
