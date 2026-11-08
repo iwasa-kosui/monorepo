@@ -156,6 +156,33 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain('<meta name="robots" content="noindex">');
   });
 
+  it('redirects the federated timeline to /sign-in when logged out, without caching', async () => {
+    const anonymous = await createWorkerPageFallback(new Request('https://worker.test/federated'));
+    const expired = await createWorkerPageFallback(
+      new Request('https://worker.test/federated', {
+        headers: { Cookie: 'sessionId=expired' },
+      }),
+      { isLoggedIn: false },
+    );
+
+    for (const response of [anonymous, expired]) {
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get('Location')).toBe('/sign-in');
+      expect(response?.headers.get('Cache-Control')).toBe('no-store');
+      expect(await response?.text()).toBe('');
+    }
+  });
+
+  it('renders the federated timeline for a logged-in user', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/federated'), {
+      isLoggedIn: true,
+      userId: UserId.generate(),
+    });
+
+    expect(response?.status).toBe(200);
+    expect(await response?.text()).toContain('/static/federatedTimeline.js');
+  });
+
   it('does not add noindex to public pages', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
 

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-import { fetchPublicTimeline } from '../api/mastodonClient.ts';
+import { fetchPublicTimeline, isUnauthorizedError } from '../api/mastodonClient.ts';
+import { clearAllCache } from '../api/responseCache.ts';
 import { PostView } from '../components/PostView.tsx';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
 
@@ -15,7 +16,6 @@ const FederatedTimelinePage = () => {
   const { items, setFirstPage } = usePublicTimeline('remote');
   const [relays, setRelays] = useState<Relay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showRelayModal, setShowRelayModal] = useState(false);
   const [relayUri, setRelayUri] = useState('');
   const [relayError, setRelayError] = useState('');
@@ -27,14 +27,18 @@ const FederatedTimelinePage = () => {
       try {
         const page = await fetchPublicTimeline('remote');
         setFirstPage(page);
-        setIsLoggedIn(true);
 
         const relaysResponse = await fetch('/api/iori/v1/relays');
         if (relaysResponse.ok) {
           const relaysData = await relaysResponse.json();
           setRelays(relaysData.relays);
         }
-      } catch {
+      } catch (fetchError) {
+        if (isUnauthorizedError(fetchError)) {
+          clearAllCache();
+          window.location.href = '/sign-in';
+          return;
+        }
         // Network error
       } finally {
         setIsLoading(false);
@@ -115,32 +119,21 @@ const FederatedTimelinePage = () => {
           >
             Home
           </a>
-          {isLoggedIn
-            ? (
-              <button
-                type='button'
-                onClick={() => {
-                  setShowRelayModal(true);
-                  window.location.hash = 'add-relay';
-                }}
-                class='text-sm text-terracotta hover:text-terracotta-dark dark:text-terracotta-light dark:hover:text-terracotta transition-colors'
-              >
-                Add Relay
-              </button>
-            )
-            : (
-              <a
-                href='/sign-in'
-                class='text-sm text-terracotta hover:text-terracotta-dark dark:text-terracotta-light dark:hover:text-terracotta transition-colors'
-              >
-                Sign in
-              </a>
-            )}
+          <button
+            type='button'
+            onClick={() => {
+              setShowRelayModal(true);
+              window.location.hash = 'add-relay';
+            }}
+            class='text-sm text-terracotta hover:text-terracotta-dark dark:text-terracotta-light dark:hover:text-terracotta transition-colors'
+          >
+            Add Relay
+          </button>
         </div>
       </div>
 
       {/* Connected Relays */}
-      {isLoggedIn && relays.length > 0 && (
+      {relays.length > 0 && (
         <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-4 mb-4'>
           <h2 class='text-sm font-semibold text-charcoal dark:text-white mb-2'>
             Connected Relays ({relays.length})
@@ -174,39 +167,31 @@ const FederatedTimelinePage = () => {
 
       {items.length > 0
         ? (
-          items.map((status) => <PostView key={status.id} status={status} isLoggedIn={isLoggedIn} />)
+          items.map((status) => <PostView key={status.id} status={status} isLoggedIn />)
         )
         : (
           <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 text-center'>
             <p class='text-charcoal-light dark:text-gray-400'>
               No posts from relay servers yet
             </p>
-            {isLoggedIn
-              ? (
-                <p class='text-sm text-charcoal-light dark:text-gray-500 mt-2'>
-                  <button
-                    type='button'
-                    onClick={() => {
-                      setShowRelayModal(true);
-                      window.location.hash = 'add-relay';
-                    }}
-                    class='text-terracotta hover:underline'
-                  >
-                    Add a relay server
-                  </button>{' '}
-                  to see posts from other instances
-                </p>
-              )
-              : (
-                <p class='text-sm text-charcoal-light dark:text-gray-500 mt-2'>
-                  Sign in to add relay servers
-                </p>
-              )}
+            <p class='text-sm text-charcoal-light dark:text-gray-500 mt-2'>
+              <button
+                type='button'
+                onClick={() => {
+                  setShowRelayModal(true);
+                  window.location.hash = 'add-relay';
+                }}
+                class='text-terracotta hover:underline'
+              >
+                Add a relay server
+              </button>{' '}
+              to see posts from other instances
+            </p>
           </div>
         )}
 
       {/* Add Relay Modal */}
-      {isLoggedIn && showRelayModal && (
+      {showRelayModal && (
         <div
           class='fixed inset-0 bg-charcoal/50 backdrop-blur-sm flex items-center justify-center z-50'
           onClick={() => {
