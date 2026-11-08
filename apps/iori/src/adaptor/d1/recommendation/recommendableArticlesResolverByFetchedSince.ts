@@ -19,7 +19,7 @@ const RECOMMENDABLE_KINDS: ReadonlyArray<RecommendableFeedSourceKind> = ['rss', 
 export const createD1RecommendableArticlesResolverByFetchedSince = (
   db: IoriD1Db,
 ): RecommendableArticlesResolverByFetchedSince => ({
-  resolve: async ({ fetchedSince }) => {
+  resolve: async ({ fetchedSince, limit }) => {
     const articles: RecommendableArticle[] = [];
     let after: string | undefined;
     for (;;) {
@@ -46,6 +46,7 @@ export const createD1RecommendableArticlesResolverByFetchedSince = (
         .orderBy(asc(feedEntriesTable.feedEntryId))
         .limit(PAGE_SIZE);
       for (const row of rows) {
+        if (limit !== undefined && articles.length >= limit) break;
         if (row.embedding === null || !Embedding.validate(row.embedding).ok) continue;
         articles.push({
           feedEntryId: FeedEntryId.orThrow(row.feedEntryId),
@@ -60,6 +61,7 @@ export const createD1RecommendableArticlesResolverByFetchedSince = (
         });
       }
       const last = rows.at(-1);
+      if (limit !== undefined && articles.length >= limit) break;
       if (rows.length < PAGE_SIZE || last === undefined) break;
       after = last.feedEntryId;
     }

@@ -827,6 +827,26 @@ describe('iori のダイジェスト API', () => {
       t.request(`${PREVIEW}${query}`, { headers: me.bearer });
     const write = /^\s*(insert|update|delete|replace|create|drop|alter)\b/i;
 
+    it('トークンも Cookie も無いときは 401 にする', async () => {
+      const t = setupReadApi();
+
+      const response = await t.request(PREVIEW);
+
+      expect(response.status).toBe(401);
+    });
+
+    it.each(['digestDays=0', 'digestDays=31', 'limit=101', 'candidateHours=73'])(
+      '?%s は 400 にする',
+      async (query) => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+
+        const response = await preview(t, me, `?${query}`);
+
+        expect(response.status).toBe(400);
+      },
+    );
+
     it('ログイン中のユーザーのテーマ、候補記事の振り分け、ダイジェスト項目の類似度を返す', async () => {
       const t = setupReadApi();
       const me = await t.signIn('read:statuses');
@@ -992,12 +1012,12 @@ describe('iori のダイジェスト API', () => {
 
     it.each([
       ['candidateHours=0', 'candidateHours'],
-      ['candidateHours=169', 'candidateHours'],
+      ['candidateHours=73', 'candidateHours'],
       ['candidateHours=abc', 'candidateHours'],
       ['candidateHours=1.5', 'candidateHours'],
       ['candidateHours=', 'candidateHours'],
       ['digestDays=0', 'digestDays'],
-      ['digestDays=61', 'digestDays'],
+      ['digestDays=31', 'digestDays'],
       ['limit=0', 'limit'],
       ['limit=101', 'limit'],
       ['limit=-1', 'limit'],
@@ -1011,7 +1031,7 @@ describe('iori のダイジェスト API', () => {
       expect(await response.json()).toEqual({ error: `Validation failed: ${name}` });
     });
 
-    it.each(['candidateHours=1', 'candidateHours=168', 'digestDays=1', 'digestDays=60', 'limit=1', 'limit=100'])(
+    it.each(['candidateHours=1', 'candidateHours=72', 'digestDays=1', 'digestDays=30', 'limit=1', 'limit=100'])(
       '?%s は範囲の端として受け付ける',
       async (query) => {
         const t = setupReadApi();
@@ -1033,7 +1053,8 @@ describe('iori のダイジェスト API', () => {
       expect(await response.json()).toMatchObject({
         topics: [],
         thresholds: { topicMinSimilarity: 0.4 },
-        candidates: { total: 0, byTopic: [] },
+        candidates: { total: 0, byTopic: [], truncated: false },
+        digestItemsTruncated: false,
         digestItems: [],
       });
     });

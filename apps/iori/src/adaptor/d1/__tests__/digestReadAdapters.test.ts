@@ -264,11 +264,17 @@ describe('createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom', () => {
       2_000,
     );
   };
-  const resolve = async (db: ReturnType<typeof setup>['db'], userId: string, digestDateFrom: string) =>
+  const resolve = async (
+    db: ReturnType<typeof setup>['db'],
+    userId: string,
+    digestDateFrom: string,
+    limit = 1_000,
+  ) =>
     valueOf(
       await createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom(db).resolve({
         userId: userId as UserId,
         digestDateFrom,
+        limit,
       }),
     );
 
@@ -301,6 +307,20 @@ describe('createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom', () => {
     const items = await resolve(db, me.userId, '2026-11-05');
 
     expect(items.map((item) => [item.rank, item.embedding])).toEqual([[1, null], [2, null]]);
+  });
+
+  it('limit を渡すと、並び順の先頭からその件数だけ返す', async () => {
+    const { db, me, addDigest } = setup();
+    addDigest(me, '2026-11-04', { topicKey: 'genai', itemCount: 2 });
+    addDigest(me, '2026-11-05', { topicKey: 'genai', itemCount: 2 });
+
+    const items = await resolve(db, me.userId, '2026-11-01', 3);
+
+    expect(items.map((item) => `${item.digestDate}:${item.rank}`)).toEqual([
+      '2026-11-05:1',
+      '2026-11-05:2',
+      '2026-11-04:1',
+    ]);
   });
 
   it('他人のダイジェスト項目は返さない', async () => {

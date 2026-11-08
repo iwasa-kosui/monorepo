@@ -131,6 +131,7 @@ export type IoriDigestTopicPreviewResponse = Readonly<{
   topics: ReadonlyArray<Pick<IoriDigestTopicBody, 'topicKey' | 'name' | 'description' | 'enabled' | 'embedded'>>;
   thresholds: Readonly<{ topicMinSimilarity: number }>;
   candidates: Readonly<{
+    truncated: boolean;
     total: number;
     top1Histogram: ReadonlyArray<Readonly<{ from: number; to: number; count: number }>>;
     byTopic: ReadonlyArray<
@@ -142,6 +143,7 @@ export type IoriDigestTopicPreviewResponse = Readonly<{
       }>
     >;
   }>;
+  digestItemsTruncated: boolean;
   digestItems: ReadonlyArray<
     Readonly<{
       digestDate: string;
@@ -178,8 +180,8 @@ export type IoriDigestDeepDiveResponse = Readonly<{
 }>;
 
 const previewQuery = z.object({
-  candidateHours: z.coerce.number().int().min(1).max(168).default(72),
-  digestDays: z.coerce.number().int().min(1).max(60).default(14),
+  candidateHours: z.coerce.number().int().min(1).max(72).default(48),
+  digestDays: z.coerce.number().int().min(1).max(30).default(14),
   limit: z.coerce.number().int().min(1).max(100).default(30),
 });
 
@@ -580,7 +582,7 @@ export const createWorkerIoriDigestRouter = ({
       }
       const preview = await previewDigestTopicsUseCase.run({ userId, ...query.data });
       if (!preview.ok) return c.json(internalServerError, 500);
-      const { topics, thresholds, candidates, digestItems } = preview.val;
+      const { topics, thresholds, candidates, digestItems, digestItemsTruncated } = preview.val;
       return c.json(
         {
           topics: topics.map(({ topicKey, name, description, enabled, embedding }) => ({
@@ -592,10 +594,12 @@ export const createWorkerIoriDigestRouter = ({
           })),
           thresholds,
           candidates: {
+            truncated: candidates.truncated,
             total: candidates.total,
             top1Histogram: candidates.top1Histogram,
             byTopic: candidates.byTopic.map(toPreviewTopicCandidatesBody),
           },
+          digestItemsTruncated,
           digestItems: digestItems.map(toPreviewDigestItemBody),
         } satisfies IoriDigestTopicPreviewResponse,
       );

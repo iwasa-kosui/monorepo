@@ -13,7 +13,7 @@ import { digestItemsTable, digestsTable, feedEntriesTable } from '../schema.ts';
 export const createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom = (
   db: IoriD1Db,
 ): DigestTopicItemsResolverByUserIdAndDigestDateFrom => ({
-  resolve: async ({ userId, digestDateFrom }) => {
+  resolve: async ({ userId, digestDateFrom, limit }) => {
     const rows = await db.select({
       digestDate: digestsTable.digestDate,
       topicKey: digestsTable.topicKey,
@@ -30,7 +30,8 @@ export const createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom = (
         gte(digestsTable.digestDate, digestDateFrom),
         ne(digestsTable.topicKey, SUMMARY_DIGEST_TOPIC_KEY),
       ))
-      .orderBy(desc(digestsTable.digestDate), asc(digestsTable.topicKey), asc(digestItemsTable.rank));
+      .orderBy(desc(digestsTable.digestDate), asc(digestsTable.topicKey), asc(digestItemsTable.rank))
+      .limit(limit);
     return RA.ok(rows.map((row) => ({
       digestDate: row.digestDate,
       topicKey: row.topicKey,

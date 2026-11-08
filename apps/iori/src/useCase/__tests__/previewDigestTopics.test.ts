@@ -1,11 +1,17 @@
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { DigestTopicItem } from '../../domain/digest/digest.ts';
 import type { StoredDigestTopic } from '../../domain/digestTopic/digestTopic.ts';
 import { TOPIC_MIN_SIMILARITY } from '../../domain/digestTopic/topicAssignment.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import type { RecommendableArticle } from '../../domain/recommendation/recommendation.ts';
 import { UserId } from '../../domain/user/userId.ts';
-import { PreviewDigestTopicsUseCase } from '../previewDigestTopics.ts';
+import {
+  MAX_PREVIEW_CANDIDATES,
+  MAX_PREVIEW_DIGEST_ITEMS,
+  PreviewDigestTopicsUseCase,
+} from '../previewDigestTopics.ts';
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 8, 20, 0));
 const USER_ID = UserId.orThrow('00000000-0000-4000-8000-000000000001');
@@ -24,14 +30,47 @@ const topic = (topicKey: string, embedding: Float32Array | null, enabled = true)
   embedding,
 });
 
-const setup = (topics: ReadonlyArray<StoredDigestTopic> = []) => {
+const article = (n: number): RecommendableArticle =>
+  ({
+    feedEntryId: `entry-${n}`,
+    feedSourceId: `source-${n}`,
+    sourceKind: 'rss',
+    url: `https://example.com/${n}`,
+    title: `記事 ${n}`,
+    description: '',
+    hatenaBookmarkCount: null,
+    fetchedAt: Instant.orThrow(1),
+    embedding: new Float32Array([1, 0]),
+  }) as unknown as RecommendableArticle;
+
+const digestItem = (n: number): DigestTopicItem => ({
+  digestDate: '2026-11-08',
+  topicKey: 'on',
+  rank: n,
+  title: `項目 ${n}`,
+  url: `https://example.com/${n}`,
+  feedback: null,
+  embedding: new Float32Array([1, 0]),
+});
+
+const setup = (
+  topics: ReadonlyArray<StoredDigestTopic> = [],
+  options: {
+    articles?: ReadonlyArray<RecommendableArticle>;
+    items?: ReadonlyArray<DigestTopicItem>;
+    maxCandidates?: number;
+    maxDigestItems?: number;
+  } = {},
+) => {
   const resolveTopics = vi.fn(() => RA.ok(topics));
-  const resolveArticles = vi.fn(() => RA.ok([]));
-  const resolveItems = vi.fn(() => RA.ok([]));
+  const resolveArticles = vi.fn((_: unknown) => RA.ok(options.articles ?? []));
+  const resolveItems = vi.fn((_: unknown) => RA.ok(options.items ?? []));
   const useCase = PreviewDigestTopicsUseCase.create({
     digestTopicsResolverByUserId: { resolve: resolveTopics },
     recommendableArticlesResolverByFetchedSince: { resolve: resolveArticles },
     digestTopicItemsResolverByUserIdAndDigestDateFrom: { resolve: resolveItems },
+    maxCandidates: options.maxCandidates,
+    maxDigestItems: options.maxDigestItems,
     now: () => NOW,
   });
   return { useCase, resolveTopics, resolveArticles, resolveItems };
@@ -44,8 +83,15 @@ describe('PreviewDigestTopicsUseCase', () => {
     await useCase.run({ userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 });
 
     expect(resolveTopics).toHaveBeenCalledWith(USER_ID);
-    expect(resolveArticles).toHaveBeenCalledWith({ fetchedSince: NOW - 72 * HOUR_MS });
-    expect(resolveItems).toHaveBeenCalledWith({ userId: USER_ID, digestDateFrom: '2026-10-27' });
+    expect(resolveArticles).toHaveBeenCalledWith({
+      fetchedSince: NOW - 72 * HOUR_MS,
+      limit: MAX_PREVIEW_CANDIDATES + 1,
+    });
+    expect(resolveItems).toHaveBeenCalledWith({
+      userId: USER_ID,
+      digestDateFrom: '2026-10-27',
+      limit: MAX_PREVIEW_DIGEST_ITEMS + 1,
+    });
   });
 
   it('digestDays が 1 なら、JST の今日だけを読む', async () => {
@@ -53,7 +99,11 @@ describe('PreviewDigestTopicsUseCase', () => {
 
     await useCase.run({ userId: USER_ID, candidateHours: 1, digestDays: 1, limit: 1 });
 
-    expect(resolveItems).toHaveBeenCalledWith({ userId: USER_ID, digestDateFrom: '2026-11-09' });
+    expect(resolveItems).toHaveBeenCalledWith({
+      userId: USER_ID,
+      digestDateFrom: '2026-11-09',
+      limit: MAX_PREVIEW_DIGEST_ITEMS + 1,
+    });
   });
 
   it('テーマが無くても空の結果とふり分けのしきい値を返す', async () => {
@@ -66,8 +116,9 @@ describe('PreviewDigestTopicsUseCase', () => {
       val: {
         topics: [],
         thresholds: { topicMinSimilarity: TOPIC_MIN_SIMILARITY },
-        candidates: { total: 0, byTopic: [] },
+        candidates: { total: 0, byTopic: [], truncated: false },
         digestItems: [],
+        digestItemsTruncated: false,
       },
     });
   });
@@ -83,5 +134,55 @@ describe('PreviewDigestTopicsUseCase', () => {
 
     expect(result.ok && result.val.candidates.byTopic.map((entry) => entry.topicKey)).toEqual(['on']);
     expect(result.ok && result.val.topics.map((entry) => entry.topicKey)).toEqual(['on', 'off', 'raw']);
+  });
+
+  it('候補記事が上限を超えたら truncated を true にして、上限の件数で切る', async () => {
+    const { useCase, resolveArticles } = setup([topic('on', new Float32Array([1, 0]))], {
+      articles: [1, 2, 3, 4].map(article),
+      maxCandidates: 3,
+    });
+
+    const result = await useCase.run({ userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 });
+
+    expect(resolveArticles).toHaveBeenCalledWith({ fetchedSince: NOW - 72 * HOUR_MS, limit: 4 });
+    expect(result.ok && result.val.candidates.truncated).toBe(true);
+    expect(result.ok && result.val.candidates.total).toBe(3);
+  });
+
+  it('候補記事が上限ちょうどなら truncated は false で、全件を使う', async () => {
+    const { useCase } = setup([topic('on', new Float32Array([1, 0]))], {
+      articles: [1, 2, 3].map(article),
+      maxCandidates: 3,
+    });
+
+    const result = await useCase.run({ userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 });
+
+    expect(result.ok && result.val.candidates.truncated).toBe(false);
+    expect(result.ok && result.val.candidates.total).toBe(3);
+  });
+
+  it('ダイジェスト項目が上限を超えたら digestItemsTruncated を true にして、上限の件数で切る', async () => {
+    const { useCase, resolveItems } = setup([topic('on', new Float32Array([1, 0]))], {
+      items: [1, 2, 3].map(digestItem),
+      maxDigestItems: 2,
+    });
+
+    const result = await useCase.run({ userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 });
+
+    expect(resolveItems).toHaveBeenCalledWith({ userId: USER_ID, digestDateFrom: '2026-10-27', limit: 3 });
+    expect(result.ok && result.val.digestItemsTruncated).toBe(true);
+    expect(result.ok && result.val.digestItems.map((item) => item.rank)).toEqual([1, 2]);
+  });
+
+  it('ダイジェスト項目が上限ちょうどなら digestItemsTruncated は false で、全件を使う', async () => {
+    const { useCase } = setup([topic('on', new Float32Array([1, 0]))], {
+      items: [1, 2].map(digestItem),
+      maxDigestItems: 2,
+    });
+
+    const result = await useCase.run({ userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 });
+
+    expect(result.ok && result.val.digestItemsTruncated).toBe(false);
+    expect(result.ok && result.val.digestItems).toHaveLength(2);
   });
 });

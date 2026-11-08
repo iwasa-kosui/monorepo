@@ -250,7 +250,7 @@ export type DigestTopicItem = Readonly<{
   embedding: Float32Array | null;
 }>;
 export type DigestTopicItemsResolverByUserIdAndDigestDateFrom = Agg.Resolver<
-  { userId: UserId; digestDateFrom: string },
+  { userId: UserId; digestDateFrom: string; limit: number },
   ReadonlyArray<DigestTopicItem>
 >;
 export type DigestHeaderResolverByArticleId = Agg.Resolver<ArticleId, DigestHeader | undefined>;

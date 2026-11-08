@@ -82,6 +82,7 @@ describe('preview resolvers on workerd D1', () => {
     const resolved = await createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom(db).resolve({
       userId: USER_ID,
       digestDateFrom: '2020-01-04',
+      limit: 1_000,
     });
 
     expect(resolved.val).toHaveLength(1);
