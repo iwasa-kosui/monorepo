@@ -710,3 +710,16 @@ it('constructs the CI admission as a validated synthetic sealed identity', async
     }),
   ).toMatchObject({ mode: 'sealed', environment: 'staging', generation: 'fixture1' });
 });
+it('cancels superseded deploy runs from a workflow outside the production lock', async () => {
+  const main = await readWorkflow('deploy-iori-worker-main.yml');
+  const cancel = await readWorkflow('cancel-superseded-iori-deploys.yml');
+  expect((cancel.on as { push: unknown }).push).toEqual((main.on as { push: unknown }).push);
+  expect(cancel.concurrency).toBeUndefined();
+  expect((cancel as Workflow & { permissions?: unknown }).permissions).toEqual({
+    actions: 'write',
+    contents: 'read',
+  });
+  const job = cancel.jobs['cancel-superseded-deploys'];
+  expect(job.environment).toBeUndefined();
+  expect(job.steps.at(-1)?.run).toBe('node apps/iori/scripts/cancel-superseded-deploys.mjs');
+});
