@@ -2,7 +2,9 @@ import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Article } from '../../domain/article/article.ts';
-import { isMastodonApiError, requestDigest } from '../api/mastodonClient.ts';
+import { ARTICLES_URL, isMastodonApiError, requestDigest } from '../api/mastodonClient.ts';
+import { keepsCachedView } from '../api/pageCache.ts';
+import { clearAllCache, readCache, writeCache } from '../api/responseCache.ts';
 import { buildDigestRequestFailureMessage, DIGEST_REQUEST_PENDING_LABEL } from './digestRequestMessage.ts';
 
 type ArticleWithStatus = Article & {
@@ -22,10 +24,18 @@ const getIsLoggedIn = (): boolean => {
   return root?.dataset.isLoggedIn === 'true';
 };
 
+const readCachedArticles = (): ArticlesResponse | null => {
+  const body = readCache(ARTICLES_URL)?.body;
+  return typeof body === 'object' && body !== null && 'articles' in body && Array.isArray(body.articles)
+    ? body as ArticlesResponse
+    : null;
+};
+
 const ArticlesPage = () => {
-  const [articles, setArticles] = useState<ArticleWithStatus[]>([]);
-  const [authorUsername, setAuthorUsername] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [cached] = useState(readCachedArticles);
+  const [articles, setArticles] = useState<ArticleWithStatus[]>(cached?.articles ?? []);
+  const [authorUsername, setAuthorUsername] = useState<string | null>(cached?.authorUsername ?? null);
+  const [isLoading, setIsLoading] = useState(cached === null);
   const [error, setError] = useState<string | null>(null);
   const [isLoggedIn] = useState(() => getIsLoggedIn());
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -38,17 +48,20 @@ const ArticlesPage = () => {
 
   const fetchArticles = async () => {
     try {
-      const res = await fetch('/api/iori/v1/articles');
+      const res = await fetch(ARTICLES_URL);
+      const isUnauthorized = res.status === 401;
+      if (isUnauthorized) clearAllCache();
       const data = (await res.json()) as ArticlesResponse | { error: string };
 
       if ('error' in data) {
-        setError(data.error);
+        if (!keepsCachedView(cached !== null, isUnauthorized)) setError(data.error);
       } else {
+        if (res.ok && isLoggedIn) writeCache(ARTICLES_URL, data);
         setArticles(data.articles);
         setAuthorUsername(data.authorUsername);
       }
     } catch (err) {
-      setError((err as Error).message);
+      if (cached === null) setError((err as Error).message);
     } finally {
       setIsLoading(false);
     }
