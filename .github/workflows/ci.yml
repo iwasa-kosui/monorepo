@@ -264,11 +264,14 @@ jobs:
       - name: Check exercises tarball
         run: node apps/es-patchwork-hands-on/scripts/check-exercises-tarball.ts
 
+      - name: Check browser runtime matches node
+        run: node apps/es-patchwork-hands-on/scripts/check-browser-runtime.ts
+
       - name: Test
         run: pnpm --filter es-patchwork-hands-on run test:ci
 
-      - name: Install Playwright browser
-        run: pnpm --filter es-patchwork-hands-on exec playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: pnpm --filter es-patchwork-hands-on exec playwright install --with-deps chromium firefox webkit
 
       - name: E2E test
         run: pnpm --filter es-patchwork-hands-on run test:e2e

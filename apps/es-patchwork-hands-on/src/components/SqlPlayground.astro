@@ -1,0 +1,60 @@
+---
+import '../playground/playground.css';
+
+interface Props {
+  id: string;
+  setup: string;
+  initial: string;
+}
+
+const { id, setup, initial } = Astro.props;
+const config = JSON.stringify({
+  storageId: id,
+  setupSql: setup,
+  initialSql: initial,
+});
+---
+
+<section
+  class="playground"
+  data-playground="sql"
+  data-state="loading"
+  data-config={config}
+  aria-label="SQL を実行する欄"
+>
+  <div class="playground-status" data-role="status">
+    <span data-role="status-text" role="status"
+    >実行環境を読み込んでいます</span>
+    <button type="button" data-role="retry" hidden>もう一度読み込む</button>
+  </div>
+  <div class="playground-editor" data-role="editor"></div>
+  <div class="playground-toolbar" style="margin-top: 0.5rem">
+    <button type="button" data-role="run" disabled>実行する</button>
+    <button type="button" data-role="reset" disabled>
+      データベースを最初の状態に戻す
+    </button>
+    <button type="button" data-role="reset-sql">最初の SQL に戻す</button>
+    <button type="button" data-role="restore" hidden>
+      読み込む前の SQL に戻す
+    </button>
+  </div>
+  <p class="playground-hint">
+    Ctrl+Enter（Mac では Cmd+Enter）でも実行できます。
+  </p>
+  <div class="playground-results" data-role="results" aria-live="polite"></div>
+  <script is:inline>
+  (function() {
+    var root = document.currentScript.closest('[data-playground]');
+    setTimeout(function() {
+      if (root.hasAttribute('data-mounted')) return;
+      root.dataset.state = 'failed';
+      root.querySelector('[data-role="status-text"]').textContent =
+        '実行環境を読み込めませんでした。通信の状態を確かめて、ページを再読み込みしてください。';
+    }, 20000);
+  })();
+  </script>
+</section>
+
+<script>
+import '../playground/sql-playground.ts';
+</script>

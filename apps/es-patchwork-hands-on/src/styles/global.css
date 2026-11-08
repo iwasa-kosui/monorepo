@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source not "../playground";
 
 body.chapter-page {
   display: flex;
