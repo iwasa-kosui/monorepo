@@ -8,7 +8,6 @@ export const reconstructFeedSource = (row: typeof feedSourcesTable.$inferSelect)
   kind: row.kind as FeedSourceKind,
   url: row.url,
   title: row.title,
-  externalUserId: row.externalUserId,
   enabled: row.enabled,
   etag: row.etag,
   lastModified: row.lastModified,

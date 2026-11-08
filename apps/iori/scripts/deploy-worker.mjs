@@ -101,7 +101,7 @@ try {
   putRequiredSecret('VAPID_PUBLIC_KEY', config.path);
   putRequiredSecret('VAPID_PRIVATE_KEY', config.path);
   putRequiredSecret('SMOKE_QUEUE_TOKEN', config.path);
-  putOptionalSecret('X_API_BEARER_TOKEN', config.path);
+  putOptionalSecret('TWITTERAPI_IO_API_KEY', config.path);
   if (identity.environment === 'staging' && process.env.STAGING_ACCESS_TOKEN) {
     putRequiredSecret('STAGING_ACCESS_TOKEN', config.path);
   }

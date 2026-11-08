@@ -2,7 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 
 import { type ParsedFeedItem, parseFeed } from '../adaptor/feed/parseFeed.ts';
 import type { SafeFetcher } from '../adaptor/http/safeFetch.ts';
-import type { XApiClient } from '../adaptor/x/xApiClient.ts';
+import type { TwitterApiIoClient } from '../adaptor/twitterApiIo/twitterApiIoClient.ts';
 import {
   type FeedEntriesResolverByFeedSourceIdAndGuids,
   type FeedEntriesResolverByFetchedBefore,
@@ -16,7 +16,6 @@ import {
 } from '../domain/feedEntry/feedEntry.ts';
 import {
   FeedSource,
-  type FeedSourceExternalUserIdResolvedStore,
   type FeedSourceFetchedStore,
   type FeedSourceFetchFailedStore,
   type FeedSourceKind,
@@ -63,9 +62,8 @@ type Deps = Readonly<{
   feedEntryBookmarkCountUpdatedStore: FeedEntryBookmarkCountUpdatedStore;
   feedEntryExpiredStore: FeedEntryExpiredStore;
   feedEntryMaxGuidResolverByFeedSourceId: FeedEntryMaxGuidResolverByFeedSourceId;
-  feedSourceExternalUserIdResolvedStore: FeedSourceExternalUserIdResolvedStore;
   safeFetcher: SafeFetcher;
-  xApiClient?: XApiClient;
+  twitterApiIoClient?: TwitterApiIoClient;
   now: () => Instant;
 }>;
 
@@ -106,9 +104,8 @@ const create = ({
   feedEntryBookmarkCountUpdatedStore,
   feedEntryExpiredStore,
   feedEntryMaxGuidResolverByFeedSourceId,
-  feedSourceExternalUserIdResolvedStore,
   safeFetcher,
-  xApiClient,
+  twitterApiIoClient,
   now,
 }: Deps): CollectFeedEntriesUseCase => {
   const fetchRss: FeedItemFetcher = async (source) => {
@@ -127,12 +124,9 @@ const create = ({
     return { source, items: parsed.val, retentionDays: FEED_RETENTION_DAYS, validators };
   };
 
-  const fetchXUser: FeedItemFetcher | undefined = xApiClient === undefined ? undefined : createXUserItemsFetcher({
-    xApiClient,
-    feedEntryMaxGuidResolverByFeedSourceId,
-    feedSourceExternalUserIdResolvedStore,
-    now,
-  });
+  const fetchXUser: FeedItemFetcher | undefined = twitterApiIoClient === undefined
+    ? undefined
+    : createXUserItemsFetcher({ twitterApiIoClient, feedEntryMaxGuidResolverByFeedSourceId, now });
 
   const fetcherOf = (kind: FeedSourceKind): FeedItemFetcher | undefined => {
     if (kind === 'thoughtworks_radar') return undefined;
@@ -180,7 +174,10 @@ const create = ({
     try {
       await feedSourceFetchFailedStore.store(FeedSource.recordFetchFailed(source, message, now()));
     } catch (storeError) {
-      console.error('iori feed: failed to record a fetch failure.', { url: source.url, error: storeError });
+      console.error('iori feed: failed to record a fetch failure.', {
+        feedSourceId: source.feedSourceId,
+        error: storeError,
+      });
     }
   };
 
@@ -210,7 +207,7 @@ const create = ({
     const sources = resolved.val.filter((source) => fetcherOf(source.kind) !== undefined);
     let failed = 0;
     let collected = 0;
-    await runWithConcurrency(sources, FEED_FETCH_CONCURRENCY, async (source) => {
+    const collectOne = async (source: FeedSource): Promise<void> => {
       try {
         const fetchItems = fetcherOf(source.kind);
         if (fetchItems === undefined) return;
@@ -220,7 +217,12 @@ const create = ({
         failed += 1;
         await recordFailure(source, error);
       }
-    });
+    };
+    // twitterapi.io は top-up 前のアカウントを 5 秒に 1 リクエストに制限するため、x_user は並列にしない
+    await Promise.all([
+      runWithConcurrency(sources.filter((source) => source.kind !== 'x_user'), FEED_FETCH_CONCURRENCY, collectOne),
+      runWithConcurrency(sources.filter((source) => source.kind === 'x_user'), 1, collectOne),
+    ]);
     const expired = await expireOldEntries();
     return RA.ok({ sources: sources.length, failed, collected, expired });
   };

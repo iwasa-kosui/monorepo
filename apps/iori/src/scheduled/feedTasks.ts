@@ -10,14 +10,13 @@ import { createD1FeedEntryExpiredStore } from '../adaptor/d1/feedEntry/feedEntry
 import { createD1FeedEntryMaxGuidResolverByFeedSourceId } from '../adaptor/d1/feedEntry/feedEntryMaxGuidResolverByFeedSourceId.ts';
 import { createD1AllFeedSourcesResolver } from '../adaptor/d1/feedSource/allFeedSourcesResolver.ts';
 import { createD1FeedSourceCreatedStore } from '../adaptor/d1/feedSource/feedSourceCreatedStore.ts';
-import { createD1FeedSourceExternalUserIdResolvedStore } from '../adaptor/d1/feedSource/feedSourceExternalUserIdResolvedStore.ts';
 import { createD1FeedSourceFetchedStore } from '../adaptor/d1/feedSource/feedSourceFetchedStore.ts';
 import { createD1FeedSourceFetchFailedStore } from '../adaptor/d1/feedSource/feedSourceFetchFailedStore.ts';
 import { createD1FeedSourcesResolverByEnabled } from '../adaptor/d1/feedSource/feedSourcesResolverByEnabled.ts';
 import { createSafeFetcher } from '../adaptor/http/safeFetch.ts';
+import { createTwitterApiIoClient } from '../adaptor/twitterApiIo/twitterApiIoClient.ts';
 import { createWorkersAiEmbedder } from '../adaptor/workersAi/workersAiEmbedder.ts';
 import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
-import { createXApiClient } from '../adaptor/x/xApiClient.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { CollectFeedEntriesUseCase } from '../useCase/collectFeedEntries.ts';
 import { DetectRadarVolumeUseCase } from '../useCase/detectRadarVolume.ts';
@@ -32,7 +31,7 @@ export const createFeedUseCases = (env: IoriWorkerEnv) => {
   const now = Instant.now;
   const workersAi = env.AI as unknown as WorkersAiRunner | undefined;
   const textEmbedder = workersAi === undefined ? undefined : createWorkersAiEmbedder(workersAi);
-  const xApiBearerToken = env.X_API_BEARER_TOKEN;
+  const twitterApiIoApiKey = env.TWITTERAPI_IO_API_KEY;
   return {
     ensureDefaultFeedSources: EnsureDefaultFeedSourcesUseCase.create({
       allFeedSourcesResolver: createD1AllFeedSourcesResolver(db),
@@ -49,11 +48,10 @@ export const createFeedUseCases = (env: IoriWorkerEnv) => {
       feedEntryBookmarkCountUpdatedStore: createD1FeedEntryBookmarkCountUpdatedStore(db),
       feedEntryExpiredStore: createD1FeedEntryExpiredStore(db),
       feedEntryMaxGuidResolverByFeedSourceId: createD1FeedEntryMaxGuidResolverByFeedSourceId(db),
-      feedSourceExternalUserIdResolvedStore: createD1FeedSourceExternalUserIdResolvedStore(db),
       safeFetcher: createSafeFetcher(),
-      xApiClient: xApiBearerToken === undefined || xApiBearerToken === ''
+      twitterApiIoClient: twitterApiIoApiKey === undefined || twitterApiIoApiKey === ''
         ? undefined
-        : createXApiClient({ safeFetcher: createSafeFetcher(), bearerToken: xApiBearerToken }),
+        : createTwitterApiIoClient({ safeFetcher: createSafeFetcher(), apiKey: twitterApiIoApiKey }),
       now,
     }),
     detectRadarVolume: DetectRadarVolumeUseCase.create({

@@ -138,7 +138,7 @@ it('gives put-worker-secrets only the deploy token, the account and admission id
     VAPID_PUBLIC_KEY: secret('VAPID_PUBLIC_KEY'),
     VAPID_PRIVATE_KEY: secret('VAPID_PRIVATE_KEY'),
     SMOKE_QUEUE_TOKEN: secret('SMOKE_QUEUE_TOKEN'),
-    X_API_BEARER_TOKEN: secret('X_API_BEARER_TOKEN'),
+    TWITTERAPI_IO_API_KEY: secret('TWITTERAPI_IO_API_KEY'),
   });
   expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
   expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform/);

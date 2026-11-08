@@ -24,7 +24,7 @@ Dispatch supplies `main_sha`, `operation`, `environment`, `generation`, and `mig
 
 `put-worker-secrets` receives `CLOUDFLARE_ACCOUNT_ID`, `IORI_ADMISSION_IDENTITY`, `IORI_CLOUDFLARE_DEPLOY_API_TOKEN`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `SMOKE_QUEUE_TOKEN`. It updates only the Worker secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `SMOKE_QUEUE_TOKEN`.
 
-`put-worker-secrets` also receives the optional `X_API_BEARER_TOKEN`, the bearer token of the X API. It uploads the secret only when the GitHub secret has a value, and an empty value does not fail the operation. The Worker skips every X source and makes no X API call while the secret is absent.
+`put-worker-secrets` also receives the optional `TWITTERAPI_IO_API_KEY`, the API key of twitterapi.io. It uploads the secret only when the GitHub secret has a value, and an empty value does not fail the operation. The Worker skips every X source and makes no twitterapi.io call while the secret is absent.
 
 `delete-rehearsal-d1` receives only `CLOUDFLARE_ACCOUNT_ID` and `IORI_CLOUDFLARE_DEPLOY_API_TOKEN`. It deletes only the empty D1 databases `iori-production-prdrehearse1` to `iori-production-prdrehearse5`, and it runs only for the `production` Environment.
 

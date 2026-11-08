@@ -1839,13 +1839,12 @@ describe('iori のダイジェスト API', () => {
             },
           });
           expect(
-            t.sqlite.prepare('SELECT kind, url, title, externalUserId, enabled FROM feed_sources').all(),
+            t.sqlite.prepare('SELECT kind, url, title, enabled FROM feed_sources').all(),
           ).toEqual([
             {
               kind: 'x_user',
               url: 'https://x.com/kosui_iwasa',
               title: '@Kosui_Iwasa',
-              externalUserId: null,
               enabled: 1,
             },
           ]);

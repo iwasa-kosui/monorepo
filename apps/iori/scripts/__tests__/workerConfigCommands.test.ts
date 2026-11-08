@@ -143,7 +143,7 @@ describe('temporary Worker config command paths', () => {
     ]);
   });
 
-  it('installs X_API_BEARER_TOKEN after the required secrets only when a value is supplied', async () => {
+  it('installs TWITTERAPI_IO_API_KEY after the required secrets only when a value is supplied', async () => {
     const script = new URL('../deploy-worker.mjs', import.meta.url).pathname;
     const secretPutsWith = async (extra: Record<string, string>) => {
       const fakePnpmDirectory = await createFakePnpm();
@@ -163,13 +163,13 @@ describe('temporary Worker config command paths', () => {
       );
     };
 
-    expect(await secretPutsWith({ X_API_BEARER_TOKEN: 'fixture-x-token' })).toEqual([
+    expect(await secretPutsWith({ TWITTERAPI_IO_API_KEY: 'fixture-twitterapi-io-key' })).toEqual([
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'SMOKE_QUEUE_TOKEN',
-      'X_API_BEARER_TOKEN',
+      'TWITTERAPI_IO_API_KEY',
     ]);
-    expect(await secretPutsWith({ X_API_BEARER_TOKEN: '' })).toEqual([
+    expect(await secretPutsWith({ TWITTERAPI_IO_API_KEY: '' })).toEqual([
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'SMOKE_QUEUE_TOKEN',

@@ -108,7 +108,7 @@ describe('FeedSource.parseNew の x_user', () => {
 });
 
 describe('FeedSource.createFeedSource の x_user', () => {
-  it('externalUserId が null の feedSource.created を返す', () => {
+  it('x_user の feedSource.created を返す', () => {
     const parsed = FeedSource.parseNew({ kind: 'x_user', username: 'jack' });
     if (!parsed.ok) throw new Error('parse failed');
 
@@ -118,26 +118,8 @@ describe('FeedSource.createFeedSource の x_user', () => {
       ok: true,
       val: {
         eventName: 'feedSource.created',
-        aggregateState: { kind: 'x_user', url: 'https://x.com/jack', title: '@jack', externalUserId: null },
+        aggregateState: { kind: 'x_user', url: 'https://x.com/jack', title: '@jack' },
       },
-    });
-  });
-});
-
-describe('FeedSource.resolveExternalUserId', () => {
-  it('externalUserId だけを変えた feedSource.externalUserIdResolved を返す', () => {
-    const created = FeedSource.createFeedSource({ kind: 'x_user', url: 'https://x.com/jack', title: '@jack' }, now);
-    if (!created.ok) throw new Error('create failed');
-    const source = created.val.aggregateState;
-
-    const resolved = FeedSource.resolveExternalUserId(source, '12', later);
-
-    expect(resolved).toMatchObject({
-      aggregateName: 'feedSource',
-      eventName: 'feedSource.externalUserIdResolved',
-      aggregateId: { feedSourceId: source.feedSourceId },
-      aggregateState: { ...source, externalUserId: '12' },
-      eventPayload: { feedSourceId: source.feedSourceId, externalUserId: '12', resolvedAt: later },
     });
   });
 });

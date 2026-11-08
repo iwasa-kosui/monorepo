@@ -12,7 +12,7 @@ import { parseWorkflowInvocation, workflowTimeBudget } from './workflow-context.
 
 const appRoot = new URL('..', import.meta.url).pathname;
 const SECRET_NAMES = Object.freeze(['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'SMOKE_QUEUE_TOKEN']);
-const OPTIONAL_SECRET_NAMES = Object.freeze(['X_API_BEARER_TOKEN']);
+const OPTIONAL_SECRET_NAMES = Object.freeze(['TWITTERAPI_IO_API_KEY']);
 
 const assertIdentity = (env, invocation) => {
   let identity;

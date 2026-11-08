@@ -19,7 +19,6 @@ const zodType = z
     kind: kindZodType,
     url: z.string().min(1),
     title: z.string().min(1),
-    externalUserId: z.string().min(1).nullable(),
     enabled: z.boolean(),
     etag: z.string().nullable(),
     lastModified: z.string().nullable(),
@@ -105,11 +104,6 @@ export type FeedSourceFetchFailed = FeedSourceEvent<
   'feedSource.fetchFailed',
   { feedSourceId: FeedSourceId; lastError: string; lastFetchedAt: Instant }
 >;
-export type FeedSourceExternalUserIdResolved = FeedSourceEvent<
-  FeedSource,
-  'feedSource.externalUserIdResolved',
-  { feedSourceId: FeedSourceId; externalUserId: string; resolvedAt: Instant }
->;
 export type FeedSourceEnabledChanged = FeedSourceEvent<
   FeedSource,
   'feedSource.enabledChanged',
@@ -151,7 +145,6 @@ const createFeedSource = (
   const parsed = schema.parse({
     ...payload,
     feedSourceId: FeedSourceId.generate(),
-    externalUserId: null,
     enabled: true,
     etag: null,
     lastModified: null,
@@ -210,21 +203,6 @@ const recordFetchFailed = (feedSource: FeedSource, lastError: string, now: Insta
   );
 };
 
-const resolveExternalUserId = (
-  feedSource: FeedSource,
-  externalUserId: string,
-  now: Instant,
-): FeedSourceExternalUserIdResolved => {
-  const updated: FeedSource = { ...feedSource, externalUserId };
-  return FeedSourceEvent.create(
-    toAggregateId(updated),
-    updated,
-    'feedSource.externalUserIdResolved',
-    { feedSourceId: updated.feedSourceId, externalUserId, resolvedAt: now },
-    now,
-  );
-};
-
 const setEnabled = (feedSource: FeedSource, enabled: boolean, now: Instant): FeedSourceEnabledChanged => {
   const updated: FeedSource = { ...feedSource, enabled };
   return FeedSourceEvent.create(
@@ -240,7 +218,6 @@ export type FeedSourceCreatedStore = Agg.Store<FeedSourceCreated>;
 export type FeedSourceFetchedStore = Agg.Store<FeedSourceFetched>;
 export type FeedSourceFetchFailedStore = Agg.Store<FeedSourceFetchFailed>;
 export type FeedSourceEnabledChangedStore = Agg.Store<FeedSourceEnabledChanged>;
-export type FeedSourceExternalUserIdResolvedStore = Agg.Store<FeedSourceExternalUserIdResolved>;
 export type AllFeedSourcesResolver = Agg.Resolver<void, ReadonlyArray<FeedSource>>;
 export type FeedSourcesResolverByEnabled = Agg.Resolver<{ enabled: boolean }, ReadonlyArray<FeedSource>>;
 
@@ -249,7 +226,6 @@ export const FeedSource = {
   parseNew: newFeedSourceSchema.parse,
   createFeedSource,
   setEnabled,
-  resolveExternalUserId,
   recordFetched,
   recordFetchFailed,
   toAggregateId,

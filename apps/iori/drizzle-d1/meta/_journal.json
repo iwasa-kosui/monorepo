@@ -169,13 +169,6 @@
       "when": 1793813827618,
       "tag": "0023_remote_actor_profile",
       "breakpoints": true
-    },
-    {
-      "idx": 24,
-      "version": "6",
-      "when": 1794118627213,
-      "tag": "0024_feed_source_external_user_id",
-      "breakpoints": true
     }
   ]
 }
