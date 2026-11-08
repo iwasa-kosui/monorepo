@@ -153,6 +153,22 @@ describe('RefreshXPostsUseCase', () => {
     expect(client).not.toHaveBeenCalled();
   });
 
+  it('取得の候補が同時実行に負け、ほかの情報源がクールダウン中のときも、クールダウンの秒数を持つエラーを返す', async () => {
+    const { useCase, client } = setup(
+      [{ n: 1 }, { n: 2, lastFetchedAt: NOW - 10_000 }],
+      undefined,
+      { reserve: async () => RA.ok(false) },
+    );
+
+    const result = await useCase.run();
+
+    expect(result).toMatchObject({
+      ok: false,
+      err: { type: 'FeedSourceFetchCooldownError', detail: { retryAfterSeconds: X_MANUAL_FETCH_COOLDOWN_SECONDS } },
+    });
+    expect(client).not.toHaveBeenCalled();
+  });
+
   it('個別の失敗を lastError に記録して失敗に数え、残りの取得を続ける', async () => {
     const { useCase, fetchedUsernames, rowOf } = setup(
       [{ n: 1 }, { n: 2 }, { n: 3 }],

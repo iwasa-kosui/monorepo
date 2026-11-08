@@ -67,12 +67,11 @@ const create = (deps: Deps): RefreshXPostsUseCase => {
       if (reservation.val) reserved.push(source);
     }
     if (reserved.length === 0) {
-      const soonest = cooling.length === 0 ? undefined : Math.min(...cooling.map(fetchedAtOf)) + COOLDOWN_MS;
-      return RA.err(FeedSourceFetchCooldownError.create(
-        soonest === undefined
-          ? X_MANUAL_FETCH_COOLDOWN_SECONDS
-          : Math.max(1, Math.ceil((soonest - requestedAt) / 1000)),
-      ));
+      if (selected.length > 0 || cooling.length === 0) {
+        return RA.err(FeedSourceFetchCooldownError.create(X_MANUAL_FETCH_COOLDOWN_SECONDS));
+      }
+      const soonest = Math.min(...cooling.map(fetchedAtOf)) + COOLDOWN_MS;
+      return RA.err(FeedSourceFetchCooldownError.create(Math.max(1, Math.ceil((soonest - requestedAt) / 1000))));
     }
 
     let failed = 0;

@@ -52,6 +52,7 @@ const XPostsPage = () => {
       const page = await fetchXPosts();
       setPosts(page.posts);
       setFetchEnabled(page.fetchEnabled);
+      setError('');
     } catch (fetchError) {
       if (isUnauthorizedError(fetchError)) {
         window.location.href = '/sign-in';
@@ -66,6 +67,7 @@ const XPostsPage = () => {
   const loadSources = useCallback(async () => {
     try {
       setSources(xUserSourcesOf(await fetchFeedSources()));
+      setSourcesError('');
     } catch (fetchError) {
       if (isUnauthorizedError(fetchError)) {
         redirectToSignIn();
