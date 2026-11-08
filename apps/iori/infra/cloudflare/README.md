@@ -26,6 +26,8 @@ Dispatch supplies `main_sha`, `operation`, `environment`, `generation`, and `mig
 
 `put-worker-secrets` also receives the optional `TWITTERAPI_IO_API_KEY`, the API key of twitterapi.io. It uploads the secret only when the GitHub secret has a value, and an empty value does not fail the operation. The Worker skips every X source and makes no twitterapi.io call while the secret is absent.
 
+`put-twitterapi-secret` puts only `TWITTERAPI_IO_API_KEY` into the production Worker, so it leaves the VAPID secrets, `SMOKE_QUEUE_TOKEN` and the Bluesky secrets unchanged. It receives `CLOUDFLARE_ACCOUNT_ID`, `IORI_ADMISSION_IDENTITY`, `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` and `TWITTERAPI_IO_API_KEY`, and it runs only for the `production` Environment. Like `put-bluesky-secrets`, it calls the Cloudflare `secrets-bulk` API directly and fails with `credentials-missing`, without writing anything, when the GitHub secret is empty.
+
 `delete-rehearsal-d1` receives only `CLOUDFLARE_ACCOUNT_ID` and `IORI_CLOUDFLARE_DEPLOY_API_TOKEN`. It deletes only the empty D1 databases `iori-production-prdrehearse1` to `iori-production-prdrehearse5`, and it runs only for the `production` Environment.
 
 The source deployment and the source recovery operations use `IORI_SOURCE_SSH_HOST`, `IORI_SOURCE_SSH_USER`, `IORI_SOURCE_SSH_PRIVATE_KEY`, and `IORI_SOURCE_SSH_KNOWN_HOSTS`. The key and pinned known-hosts values become private files. Do not bootstrap trust with `ssh-keyscan`, supply source database credentials to the runner, or recreate source `env.conf` during this deployment.
