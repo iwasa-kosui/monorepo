@@ -7,6 +7,7 @@ import type {
   Status,
   Translation,
 } from '../../adaptor/mastodon/entities.ts';
+import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
 import type {
   IoriBlueskyTimelineRefreshResponse,
   IoriBlueskyTimelineResponse,
@@ -93,12 +94,9 @@ const toApiError = async (res: Response): Promise<MastodonApiError> => {
   );
 };
 
-type Query = Readonly<Record<string, string | number | boolean | readonly string[] | undefined>>;
+export type Query = Readonly<Record<string, string | number | boolean | readonly string[] | undefined>>;
 
-const request = async <T>(
-  path: string,
-  query: Query = {},
-): Promise<Readonly<{ body: T; cursors: PageCursors }>> => {
+export const requestUrl = (path: string, query: Query = {}): string => {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (typeof value === 'object') {
@@ -108,7 +106,14 @@ const request = async <T>(
     }
   }
   const queryString = search.toString();
-  const res = await fetch(queryString.length > 0 ? `${path}?${queryString}` : path, {
+  return queryString.length > 0 ? `${path}?${queryString}` : path;
+};
+
+const request = async <T>(
+  path: string,
+  query: Query = {},
+): Promise<Readonly<{ body: T; cursors: PageCursors }>> => {
+  const res = await fetch(requestUrl(path, query), {
     headers: { Accept: 'application/json' },
     credentials: 'same-origin',
   });
@@ -128,8 +133,12 @@ const pageQuery = (params: PageParams): Query => ({
   limit: params.limit,
 });
 
+const HOME_TIMELINE_PATH = '/api/v1/timelines/home';
+
+export const homeTimelineUrl = (params: PageParams = {}): string => requestUrl(HOME_TIMELINE_PATH, pageQuery(params));
+
 export const fetchHomeTimeline = (params: PageParams = {}): Promise<Page<Status>> =>
-  getPage<Status>('/api/v1/timelines/home', pageQuery(params));
+  getPage<Status>(HOME_TIMELINE_PATH, pageQuery(params));
 
 export type PublicTimelineScope = 'local' | 'remote';
 
@@ -149,8 +158,12 @@ export type StatusContext = Readonly<{
 export const fetchStatusContext = async (id: string): Promise<StatusContext> =>
   (await request<StatusContext>(`/api/v1/statuses/${encodeURIComponent(id)}/context`)).body;
 
+const VERIFY_CREDENTIALS_PATH = '/api/v1/accounts/verify_credentials';
+
+export const verifyCredentialsUrl = (): string => requestUrl(VERIFY_CREDENTIALS_PATH);
+
 export const fetchVerifyCredentials = async (): Promise<CredentialAccount> =>
-  (await request<CredentialAccount>('/api/v1/accounts/verify_credentials')).body;
+  (await request<CredentialAccount>(VERIFY_CREDENTIALS_PATH)).body;
 
 export const lookupAccount = async (acct: string): Promise<Account> =>
   (await request<Account>('/api/v1/accounts/lookup', { acct })).body;
@@ -182,8 +195,12 @@ export const fetchRelationshipOrSignedOut = async (accountId: string) => {
   }
 };
 
+const FAVOURITES_PATH = '/api/v1/favourites';
+
+export const favouritesUrl = (params: PageParams = {}): string => requestUrl(FAVOURITES_PATH, pageQuery(params));
+
 export const fetchFavourites = (params: PageParams = {}): Promise<Page<Status>> =>
-  getPage<Status>('/api/v1/favourites', pageQuery(params));
+  getPage<Status>(FAVOURITES_PATH, pageQuery(params));
 
 export const fetchFollowers = (accountId: string, params: PageParams = {}): Promise<Page<Account>> =>
   getPage<Account>(`/api/v1/accounts/${encodeURIComponent(accountId)}/followers`, pageQuery(params));
@@ -191,11 +208,24 @@ export const fetchFollowers = (accountId: string, params: PageParams = {}): Prom
 export const fetchFollowing = (accountId: string, params: PageParams = {}): Promise<Page<Account>> =>
   getPage<Account>(`/api/v1/accounts/${encodeURIComponent(accountId)}/following`, pageQuery(params));
 
+export const NOTIFICATION_TYPES = ['favourite', 'mention', 'follow', 'reblog', IORI_EMOJI_REACTION_TYPE] as const;
+
+const NOTIFICATIONS_PATH = '/api/v1/notifications';
+
+const notificationsQuery = (types: readonly string[], params: PageParams): Query => ({
+  ...pageQuery(params),
+  'types[]': types,
+});
+
+export const notificationsUrl = (types: readonly string[], params: PageParams = {}): string =>
+  requestUrl(NOTIFICATIONS_PATH, notificationsQuery(types, params));
+
 export const fetchNotifications = (
   types: readonly string[],
   params: PageParams = {},
-): Promise<Page<Notification>> =>
-  getPage<Notification>('/api/v1/notifications', { ...pageQuery(params), 'types[]': types });
+): Promise<Page<Notification>> => getPage<Notification>(NOTIFICATIONS_PATH, notificationsQuery(types, params));
+
+export const ARTICLES_URL = '/api/iori/v1/articles';
 
 const act = async <T>(method: 'POST' | 'PUT' | 'DELETE', path: string): Promise<T> => {
   const res = await fetch(path, {

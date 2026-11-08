@@ -7,11 +7,20 @@ import {
   fetchHomeTimeline,
   fetchVerifyCredentials,
   isMastodonApiError,
+  isUnauthorizedError,
 } from '../api/mastodonClient.ts';
+import { clearAllCache } from '../api/responseCache.ts';
 import { removeStatusesByPostId, updateStatusesByPostId } from '../api/status.ts';
 import { appendUniqueById } from './appendUnique.ts';
 import { currentGeneration, isStaleGeneration, startGeneration } from './generation.ts';
 import { canStartLoadMore, isCurrentCursor } from './loadMoreGuard.ts';
+import {
+  initialTimelineState,
+  readTimelineCache,
+  stateAfterFirstPage,
+  stateAfterFirstPageFailure,
+  writeTimelineCache,
+} from './timelineCache.ts';
 import { stateAfterFetchFailure } from './timelineFailure.ts';
 
 const ACCOUNT_LIST_LIMIT = 80;
@@ -48,11 +57,12 @@ export type UseTimelineReturn = Readonly<{
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
 
 export const useTimeline = (): UseTimelineReturn => {
-  const [state, setState] = useState<TimelineState>({ status: 'loading' });
+  const [state, setState] = useState<TimelineState>(() => initialTimelineState(readTimelineCache()));
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isLoadingMoreRef = useRef(false);
   const isReloadingRef = useRef(false);
-  const nextMaxIdRef = useRef<string | undefined>(undefined);
+  const isShowingCacheRef = useRef(state.status === 'success');
+  const nextMaxIdRef = useRef<string | undefined>(state.status === 'success' ? state.data.nextMaxId : undefined);
   const generationRef = useRef(0);
 
   const loadAccountLists = useCallback(async (accountId: string, generation: number) => {
@@ -84,26 +94,25 @@ export const useTimeline = (): UseTimelineReturn => {
         const [page, me] = await Promise.all([fetchHomeTimeline(), fetchVerifyCredentials()]);
         if (isStaleGeneration(generationRef, generation)) return;
         isReloadingRef.current = false;
+        isShowingCacheRef.current = false;
         nextMaxIdRef.current = page.nextMaxId;
-        setState((prev) => ({
-          status: 'success',
-          data: {
-            me,
-            statuses: page.items,
-            nextMaxId: page.nextMaxId,
-            followers: prev.status === 'success' ? prev.data.followers : [],
-            following: prev.status === 'success' ? prev.data.following : [],
-          },
-        }));
+        writeTimelineCache(page, me);
+        setState((prev) => stateAfterFirstPage(prev, me, page.items, page.nextMaxId));
         setIsRefreshing(false);
         await loadAccountLists(me.id, generation);
       } catch (error) {
         if (isStaleGeneration(generationRef, generation)) return;
         isReloadingRef.current = false;
         setIsRefreshing(false);
+        const isUnauthorized = isUnauthorizedError(error);
+        if (isUnauthorized) clearAllCache();
         if (!isManualRefresh) {
-          nextMaxIdRef.current = undefined;
-          setState((prev) => stateAfterFetchFailure(prev, false, errorMessage(error)));
+          const showingCache = isShowingCacheRef.current === true;
+          if (!showingCache || isUnauthorized) {
+            nextMaxIdRef.current = undefined;
+            isShowingCacheRef.current = false;
+          }
+          setState((prev) => stateAfterFirstPageFailure(prev, showingCache, isUnauthorized, errorMessage(error)));
         } else if (isMastodonApiError(error)) {
           nextMaxIdRef.current = undefined;
           setState({ status: 'error', error: error.message });
