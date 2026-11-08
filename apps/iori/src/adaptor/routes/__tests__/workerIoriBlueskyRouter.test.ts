@@ -1,22 +1,30 @@
 import { RA } from '@iwasa-kosui/result';
-import { describe, expect, it, vi } from 'vitest';
+import { Hono } from 'hono';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { BlueskyTimelineItemsResolver } from '../../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import type { BlueskyClientError } from '../../../ports/blueskyClient.ts';
 import type { CollectBlueskyTimelineUseCase } from '../../../useCase/collectBlueskyTimeline.ts';
+import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
+import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
+import { createSqliteD1Fixture } from '../../d1/__tests__/sqliteFixture.ts';
+import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
+import { createMastodonAuthn } from '../mastodonAuthn.ts';
+import { createWorkerIoriBlueskyRouter } from '../workerIoriBlueskyRouter.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
-import { ORIGIN } from './helper/oauthHarness.ts';
+import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 
 const BASE = Date.UTC(2026, 10, 8, 12);
 
 const seedItem = (
   t: ReturnType<typeof setupReadApi>,
   n: number,
-  options: { indexedAt?: number; embed?: unknown; repostedBy?: string } = {},
+  options: { indexedAt?: number; embed?: unknown; repostedBy?: string; feedItemId?: string } = {},
 ) =>
   t.sqlite.prepare(
     'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,authorDisplayName,authorAvatar,text,facets,embed,replyParentUri,replyParentAuthorHandle,repostedByDid,repostedByHandle,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
   ).run(
-    `at://did:plc:a/app.bsky.feed.post/${n}`,
+    options.feedItemId ?? `at://did:plc:a/app.bsky.feed.post/${n}`,
     `at://did:plc:a/app.bsky.feed.post/${n}`,
     `cid${n}`,
     'did:plc:a',
@@ -34,6 +42,16 @@ const seedItem = (
     options.indexedAt ?? BASE - n * 1000,
     BASE,
   );
+
+const seedCrosspost = (t: ReturnType<typeof setupReadApi>, n: number) =>
+  t.sqlite.prepare(
+    'INSERT INTO bluesky_crossposts(postId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+  ).run(`post-${n}`, 'sent', `at://did:plc:a/app.bsky.feed.post/${n}`, 1, BASE, BASE);
+
+const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
+afterEach(() => {
+  for (const fixture of fixtures.splice(0)) fixture.sqlite.close();
+});
 
 const collector = (result: ReturnType<CollectBlueskyTimelineUseCase['run']>) => {
   const run = vi.fn(() => result);
@@ -193,6 +211,88 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       });
 
       expect(response.status).toBe(200);
+    });
+  });
+
+  describe('GET scope=home', () => {
+    const HOME = '/api/iori/v1/bluesky/timeline?scope=home';
+    const feedItemIds = async (response: Response) =>
+      ((await response.json()) as { items: Array<{ feedItemId: string }> }).items.map((item) => item.feedItemId);
+
+    it('crosspost と同じ uri の通常の行を除き、同じ uri の repost の行を残す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      seedItem(t, 1, { indexedAt: BASE });
+      seedItem(t, 1, {
+        indexedAt: BASE - 1000,
+        repostedBy: 'did:plc:b',
+        feedItemId: 'at://did:plc:a/app.bsky.feed.post/1#repost:did:plc:b',
+      });
+      seedItem(t, 2, { indexedAt: BASE - 2000 });
+      seedCrosspost(t, 1);
+
+      const response = await t.request(HOME, { headers: me.bearer });
+
+      expect(response.status).toBe(200);
+      expect(await feedItemIds(response)).toEqual([
+        'at://did:plc:a/app.bsky.feed.post/1#repost:did:plc:b',
+        'at://did:plc:a/app.bsky.feed.post/2',
+      ]);
+    });
+
+    it('scope なしでは crosspost の行も repost の行も返す', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      seedItem(t, 1, { indexedAt: BASE });
+      seedItem(t, 1, {
+        indexedAt: BASE - 1000,
+        repostedBy: 'did:plc:b',
+        feedItemId: 'at://did:plc:a/app.bsky.feed.post/1#repost:did:plc:b',
+      });
+      seedCrosspost(t, 1);
+
+      const response = await t.request('/api/iori/v1/bluesky/timeline', { headers: me.bearer });
+
+      expect(await feedItemIds(response)).toEqual([
+        'at://did:plc:a/app.bsky.feed.post/1',
+        'at://did:plc:a/app.bsky.feed.post/1#repost:did:plc:b',
+      ]);
+    });
+
+    it('所有者でない利用者には空の結果を返し、一覧のクエリを実行しない', async () => {
+      const harness = createOAuthHarness();
+      const fixture = createSqliteD1Fixture();
+      fixtures.push(fixture);
+      const resolve = vi.fn(() => RA.ok([]));
+      const app = new Hono().route(
+        '/api',
+        createWorkerIoriBlueskyRouter({
+          authn: createMastodonAuthn({
+            verifyAccessTokenUseCase: harness.memory.useCases.verifyAccessTokenUseCase,
+            sessionResolver: harness.memory.sessionResolver as never,
+          }),
+          blueskyTimelineItemsResolver: { resolve } as BlueskyTimelineItemsResolver,
+          collectBlueskyTimelineUseCase: undefined,
+          isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
+        }),
+      );
+      const issued = await harness.issueUserToken('read:statuses');
+      createMastodonSeed(fixture).addLocalActor('alice', issued.userId);
+
+      const response = await app.request(`${ORIGIN}${HOME}`, { headers: { Authorization: `Bearer ${issued.token}` } });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ enabled: false, items: [], nextBefore: null, nextBeforeId: null });
+      expect(resolve).not.toHaveBeenCalled();
+    });
+
+    it('scope が home 以外なら 400 にする', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+
+      const response = await t.request('/api/iori/v1/bluesky/timeline?scope=all', { headers: me.bearer });
+
+      expect(response.status).toBe(400);
     });
   });
 

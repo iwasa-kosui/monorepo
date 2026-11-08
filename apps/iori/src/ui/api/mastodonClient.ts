@@ -408,9 +408,22 @@ export const requestDigest = async (): Promise<DigestRequestResult> => {
 
 export type BlueskyTimelinePage = IoriBlueskyTimelineResponse;
 
+const BLUESKY_TIMELINE_PATH = '/api/iori/v1/bluesky/timeline';
+
+export const blueskyHomeTimelineUrl = (): string => requestUrl(BLUESKY_TIMELINE_PATH, { scope: 'home' });
+
 export const fetchBlueskyTimeline = async (
-  params: Readonly<{ before?: number; beforeId?: string; limit?: number }> = {},
-): Promise<BlueskyTimelinePage> => (await request<BlueskyTimelinePage>('/api/iori/v1/bluesky/timeline', params)).body;
+  params: Readonly<{ before?: number; beforeId?: string; limit?: number; scope?: 'home' }> = {},
+): Promise<BlueskyTimelinePage> => (await request<BlueskyTimelinePage>(BLUESKY_TIMELINE_PATH, params)).body;
+
+export const fetchBlueskyHomeTimeline = (
+  cursor?: Readonly<{ before: number; beforeId: string | null }>,
+): Promise<BlueskyTimelinePage> =>
+  fetchBlueskyTimeline({
+    scope: 'home',
+    ...(cursor === undefined ? {} : { before: cursor.before }),
+    ...(cursor === undefined || cursor.beforeId === null ? {} : { beforeId: cursor.beforeId }),
+  });
 
 export type BlueskyTimelineRefreshResult = IoriBlueskyTimelineRefreshResponse;
 

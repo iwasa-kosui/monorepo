@@ -26,6 +26,7 @@ describe('prefetchUrlsFor', () => {
     expect(prefetchUrlsFor('/')).toEqual([
       '/api/v1/timelines/home',
       '/api/v1/accounts/verify_credentials',
+      '/api/iori/v1/bluesky/timeline?scope=home',
     ]);
     expect(prefetchUrlsFor('/likes')).toEqual(['/api/v1/favourites']);
     expect(prefetchUrlsFor('/notifications')).toEqual([
@@ -97,6 +98,7 @@ describe('createPrefetcher', () => {
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       '/api/v1/timelines/home',
       '/api/v1/accounts/verify_credentials',
+      '/api/iori/v1/bluesky/timeline?scope=home',
       '/api/v1/favourites',
       notificationsUrl(NOTIFICATION_TYPES),
       '/api/iori/v1/articles',

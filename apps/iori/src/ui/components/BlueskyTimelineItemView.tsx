@@ -4,7 +4,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { blueskyPostUrl, blueskyPostUrlOfUri, segmentBlueskyText } from './blueskyRichText.ts';
 
-type Props = Readonly<{ item: IoriBlueskyTimelineItemBody }>;
+type Props = Readonly<{ item: IoriBlueskyTimelineItemBody; dataIndex?: number; isSelected?: boolean }>;
 type MediaEmbed = Extract<BlueskyTimelineEmbed, { type: 'images' | 'external' | 'video' }>;
 type QuoteEmbed = Extract<BlueskyTimelineEmbed, { type: 'record' }>;
 
@@ -122,7 +122,7 @@ const BlueskyEmbed = ({ embed, postHref }: Readonly<{ embed: BlueskyTimelineEmbe
   return <BlueskyMedia media={embed} postHref={postHref} />;
 };
 
-export const BlueskyTimelineItemView = ({ item }: Props) => {
+export const BlueskyTimelineItemView = ({ item, dataIndex, isSelected }: Props) => {
   const avatar = safeAbsoluteUrl(item.authorAvatar);
   const postHref = blueskyPostUrl(item.authorDid, item.uri);
   const displayName = item.authorDisplayName ?? item.authorHandle;
@@ -132,7 +132,12 @@ export const BlueskyTimelineItemView = ({ item }: Props) => {
     </time>
   );
   return (
-    <article class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-4 space-y-2'>
+    <article
+      data-post-index={dataIndex}
+      class={`bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-4 space-y-2 ${
+        isSelected === true ? 'ring-2 ring-terracotta/30 dark:ring-terracotta-light/30' : ''
+      }`}
+    >
       {item.repostedByHandle !== null && <div class={`text-xs ${mutedClass}`}>@{item.repostedByHandle} がリポスト</div>}
       {item.replyParentUri !== null && (
         <div class={`text-xs ${mutedClass}`}>

@@ -6,6 +6,7 @@ import { safeUrl } from '../../helper/safeUrl.ts';
 import { fetchPublicTimeline, updateAvatar } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
+import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { PostForm } from '../components/PostForm.tsx';
@@ -633,17 +634,28 @@ const UpdateBioModal = () => {
 };
 
 const TimelineList = () => {
-  const { data, actions, reply, thread, ui } = useTimelineContext();
+  const { data, items, actions, reply, thread, ui } = useTimelineContext();
 
   if (!data) return null;
 
-  const { me, statuses } = data;
+  const { me } = data;
   const { actionState } = actions;
   const { selectedIndex, emojiPickerOpenForIndex, toggleEmojiPicker } = ui;
 
   return (
     <section class='space-y-6 py-2'>
-      {statuses.map((status, index) => {
+      {items.map((item, index) => {
+        if (item.kind === 'bluesky') {
+          return (
+            <BlueskyTimelineItemView
+              key={`bluesky:${item.item.feedItemId}`}
+              item={item.item}
+              dataIndex={index}
+              isSelected={selectedIndex === index}
+            />
+          );
+        }
+        const { status } = item;
         const postId = displayStatus(status).id;
         const isMyRepost = isOwnBoost(status, me.id);
 

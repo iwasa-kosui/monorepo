@@ -8,9 +8,11 @@ import { createD1BlueskyTimelineItemsExpiredStore } from '../adaptor/d1/blueskyT
 import { createD1BlueskyTimelineItemsResolver } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1BlueskyTimelineItemsSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsSavedStore.ts';
 import { createD1Db, type IoriD1Db } from '../adaptor/d1/client.ts';
+import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import type { BlueskyTimelineItemsResolver } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline.ts';
+import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { type BlueskyCredentials, resolveBlueskyCredentials } from './blueskyCrosspost.ts';
 
@@ -24,6 +26,7 @@ export const resolveBlueskyTimelineConfig = (
 export type BlueskyTimelineRuntimePorts = Readonly<{
   blueskyTimelineItemsResolver: BlueskyTimelineItemsResolver;
   collectBlueskyTimelineUseCase: CollectBlueskyTimelineUseCase | undefined;
+  isDigestOwner: IsDigestOwner;
 }>;
 
 export const createCollectBlueskyTimelineUseCase = (
@@ -59,4 +62,5 @@ export const createBlueskyTimelineRuntimePorts = (
 ): BlueskyTimelineRuntimePorts => ({
   blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
   collectBlueskyTimelineUseCase: createCollectBlueskyTimelineUseCase(env, { db, fetch: deps.fetch }),
+  isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
 });

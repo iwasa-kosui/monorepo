@@ -1,6 +1,7 @@
 import type { FC, PropsWithChildren } from 'hono/jsx';
 import { createContext, useContext, useMemo } from 'hono/jsx';
 
+import { homeFeedCursor, type HomeItem, mergeHomeFeed } from '../hooks/homeFeed.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation.ts';
 import { usePostActions, type UsePostActionsReturn } from '../hooks/usePostActions.ts';
@@ -13,6 +14,7 @@ import { useUIState, type UseUIStateReturn } from '../hooks/useUIState.ts';
 export type TimelineContextValue = Readonly<{
   timeline: UseTimelineReturn;
   data: TimelineData | null;
+  items: readonly HomeItem[];
   actions: UsePostActionsReturn;
   thread: UseThreadModalReturn;
   reply: UseReplyDialogReturn;
@@ -52,16 +54,27 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     isRefreshing: timeline.isRefreshing,
   });
 
-  const statuses = data?.statuses ?? [];
+  const items = useMemo(
+    (): readonly HomeItem[] =>
+      data === null
+        ? []
+        : mergeHomeFeed({
+          statuses: data.statuses,
+          hasMoreStatuses: data.nextMaxId !== undefined,
+          bluesky: data.bluesky.items,
+          hasMoreBluesky: data.bluesky.cursor !== undefined,
+        }),
+    [data],
+  );
 
   useInfiniteScroll({
-    nextCursor: data?.nextMaxId,
+    nextCursor: data === null ? undefined : homeFeedCursor(data.nextMaxId, data.bluesky.cursor),
     onLoadMore: timeline.loadMore,
     isFirstPageSettled: timeline.isFirstPageSettled,
   });
 
   useKeyboardNavigation({
-    items: statuses,
+    items,
     selectedIndex: ui.selectedIndex,
     setSelectedIndex: ui.setSelectedIndex,
     scrollToSelected: ui.scrollToSelected,
@@ -80,6 +93,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     (): TimelineContextValue => ({
       timeline,
       data,
+      items,
       actions,
       thread,
       reply,
@@ -87,7 +101,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       pullToRefresh,
       pullThreshold: PULL_TO_REFRESH_THRESHOLD,
     }),
-    [timeline, data, actions, thread, reply, ui, pullToRefresh],
+    [timeline, data, items, actions, thread, reply, ui, pullToRefresh],
   );
 
   return <TimelineContext.Provider value={value}>{children}</TimelineContext.Provider>;

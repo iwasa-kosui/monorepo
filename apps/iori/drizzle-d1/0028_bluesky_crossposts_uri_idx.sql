@@ -1,0 +1,1 @@
+CREATE INDEX `bluesky_crossposts_uri_idx` ON `bluesky_crossposts` (`uri`);

@@ -1,11 +1,11 @@
 import { useEffect } from 'hono/jsx';
 
-import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
+import type { HomeItem } from './homeFeed.ts';
 
 type UseKeyboardNavigationProps = Readonly<{
-  items: readonly Status[];
+  items: readonly HomeItem[];
   selectedIndex: number;
   setSelectedIndex: (index: number) => void;
   scrollToSelected: (index: number) => void;
@@ -98,7 +98,7 @@ export const useKeyboardNavigation = ({
       const selectedItem = items[selectedIndex];
       if (!selectedItem) return;
 
-      const post = displayStatus(selectedItem);
+      const post = selectedItem.kind === 'status' ? displayStatus(selectedItem.status) : undefined;
 
       switch (e.key) {
         case 'j':
@@ -118,6 +118,7 @@ export const useKeyboardNavigation = ({
           }
           break;
         case 'l':
+          if (post === undefined) break;
           e.preventDefault();
           if (post.favourited) {
             onUndoLike(post.id);
@@ -127,6 +128,7 @@ export const useKeyboardNavigation = ({
           break;
         case 'o':
         case 'Enter':
+          if (post === undefined) break;
           e.preventDefault();
           if (isLocalAccount(post.account)) {
             window.location.href = statusHref(post);
@@ -148,6 +150,7 @@ export const useKeyboardNavigation = ({
           break;
         }
         case 'e': {
+          if (post === undefined) break;
           e.preventDefault();
           setEmojiPickerOpenForIndex(
             emojiPickerOpenForIndex === selectedIndex ? null : selectedIndex,
@@ -155,6 +158,7 @@ export const useKeyboardNavigation = ({
           break;
         }
         case 'p': {
+          if (post === undefined) break;
           e.preventDefault();
           onReply(post.id);
           break;

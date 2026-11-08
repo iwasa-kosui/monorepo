@@ -1,5 +1,5 @@
 import type { CredentialAccount } from '../../adaptor/mastodon/entities.ts';
-import { type Page, verifyCredentialsUrl } from './mastodonClient.ts';
+import { type BlueskyTimelinePage, type Page, verifyCredentialsUrl } from './mastodonClient.ts';
 import { readCache, writeCache } from './responseCache.ts';
 
 export type CachedPage<T> = Readonly<{
@@ -19,6 +19,23 @@ export const writePageCache = <T>(url: string, page: Page<T>): void => {
     ...(page.prevMinId === undefined ? {} : { prevMinId: page.prevMinId }),
   });
 };
+
+const isBlueskyTimelinePage = (body: unknown): body is BlueskyTimelinePage =>
+  typeof body === 'object'
+  && body !== null
+  && 'items' in body
+  && Array.isArray(body.items)
+  && 'nextBefore' in body
+  && (body.nextBefore === null || typeof body.nextBefore === 'number')
+  && 'nextBeforeId' in body
+  && (body.nextBeforeId === null || typeof body.nextBeforeId === 'string');
+
+export const readBlueskyPageCache = (url: string): BlueskyTimelinePage | undefined => {
+  const body = readCache(url)?.body;
+  return isBlueskyTimelinePage(body) ? body : undefined;
+};
+
+export const writeBlueskyPageCache = (url: string, page: BlueskyTimelinePage): void => writeCache(url, page);
 
 export const readMeCache = (): CredentialAccount | undefined => {
   const body = readCache(verifyCredentialsUrl())?.body;
