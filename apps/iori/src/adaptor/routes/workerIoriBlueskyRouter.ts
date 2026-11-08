@@ -59,6 +59,7 @@ export type IoriBlueskyTimelineRefreshResponse = Readonly<{
 const readStatuses = Scope.orThrow('read:statuses');
 const writeAccounts = Scope.orThrow('write:accounts');
 const integerPattern = /^\d+$/;
+const forbidden = { error: 'Forbidden' } as const;
 
 const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBody => ({
   feedItemId: item.feedItemId,
@@ -111,7 +112,9 @@ export const createWorkerIoriBlueskyRouter = ({
         return c.json({ error: 'Validation failed: scope' }, 400);
       }
       const enabled = collectBlueskyTimelineUseCase !== undefined;
-      if (scope === 'home' && !(await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined))) {
+      const isOwner = await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined);
+      if (scope === undefined && !isOwner) return c.json(forbidden, 403);
+      if (scope === 'home' && !isOwner) {
         return c.json(
           { enabled, items: [], nextBefore: null, nextBeforeId: null } satisfies IoriBlueskyTimelineResponse,
         );
@@ -139,6 +142,9 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeAccounts),
       async (c) => {
+        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
+          return c.json(forbidden, 403);
+        }
         if (collectBlueskyTimelineUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
