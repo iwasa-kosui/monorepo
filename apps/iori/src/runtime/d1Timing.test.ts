@@ -69,7 +69,7 @@ describe('summarizeD1Calls', () => {
 });
 
 describe('d1TimedRouteOf', () => {
-  it('3 つの POST だけを固定の名前に対応させる', () => {
+  it('対象の 7 ルートだけを固定の名前に対応させる', () => {
     expect(d1TimedRouteOf('POST', '/api/v1/statuses')).toBe('statuses_create');
     expect(d1TimedRouteOf('POST', '/api/v1/statuses/abc/favourite')).toBe('favourite');
     expect(d1TimedRouteOf('POST', '/api/v1/statuses/abc/unfavourite')).toBe('unfavourite');
