@@ -28,6 +28,7 @@
     "IORI_ADMISSION_IDENTITY": "__IORI_ADMISSION_IDENTITY__",
     "VAPID_SUBJECT": "__VAPID_SUBJECT__",
     "IORI_PRUNE_FEDERATED_POSTS": "disabled",
+    "IORI_BLUESKY_CROSSPOST": "disabled",
   },
   "d1_databases": [
     {

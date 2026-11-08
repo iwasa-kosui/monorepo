@@ -21,6 +21,7 @@ import { Schema } from '../helper/schema.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input =
@@ -55,6 +56,7 @@ type Deps = Readonly<{
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
   ogpFetcher: OgpFetcher;
   acceptedRelaysResolver: AcceptedRelaysResolver;
+  scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   origin: string;
 }>;
 
@@ -68,6 +70,7 @@ const create = ({
   linkPreviewCreatedStore,
   ogpFetcher,
   acceptedRelaysResolver,
+  scheduleBlueskyCrosspost,
   origin,
 }: Deps): CreatePostUseCase => {
   const now = Instant.now();
@@ -211,6 +214,10 @@ const create = ({
           }
         }
 
+        return RA.ok(undefined);
+      }),
+      RA.andThrough(async ({ post }) => {
+        await scheduleBlueskyCrosspost?.run({ postId: post.postId });
         return RA.ok(undefined);
       }),
       RA.map(({ post, user }) => ({ post, user })),

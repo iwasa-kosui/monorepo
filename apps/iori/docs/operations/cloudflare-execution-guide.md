@@ -92,7 +92,7 @@ Cloudflare REST API token の実際の permission と readback API の適合も�
 operation が使う参照名は、次のとおりです。
 
 - `deploy-worker`: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
-- `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`
+- `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`。任意の secret として `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` も受け取ります
 - `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`delete-unfollowed-posts-dry-run`、`delete-unfollowed-posts`、`prune-federated-posts-dry-run`、`ensure-event-archive-bucket`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `delete-blocked-domain-posts-dry-run`、`delete-blocked-domain-posts`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
@@ -399,9 +399,11 @@ IORI_DIAG stage=deploy-worker-resolve program=none exit=none signal=none reason=
 
 #### put-worker-secrets で Worker の secret を更新する
 
-`put-worker-secrets` は、稼働中の Worker の secret の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` だけを更新する operation です。この operation は、Worker のコードも D1 も Terraform の状態も変えません。作業者は、これらの値を GitHub の environment の secret で入れ替えた後に、この operation で Worker に反映します。
+`put-worker-secrets` は、稼働中の Worker の secret の `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` と、任意の `BLUESKY_IDENTIFIER`、`BLUESKY_APP_PASSWORD` だけを更新する operation です。この operation は、Worker のコードも D1 も Terraform の状態も変えません。作業者は、これらの値を GitHub の environment の secret で入れ替えた後に、この operation で Worker に反映します。
 
-job が受け取る secret は、次の6つです。`STAGING_ACCESS_TOKEN` と Terraform の鍵は受け取りません。
+必須の secret は `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` の3つです。いずれかが未設定の場合、job は失敗します。`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` は任意の secret です。job は、値が空でないものだけを put します。未設定でも job は失敗しません。この2つは、Bluesky への投稿に使います。投稿は `IORI_BLUESKY_CROSSPOST` が `enabled` のときだけ動き、既定は `disabled` です。
+
+job が受け取る secret は、次の8つです。`STAGING_ACCESS_TOKEN` と Terraform の鍵は受け取りません。
 
 | job の環境変数            | 元の GitHub secret                 |
 | ------------------------- | ---------------------------------- |
@@ -411,18 +413,20 @@ job が受け取る secret は、次の6つです。`STAGING_ACCESS_TOKEN` と T
 | `VAPID_PUBLIC_KEY`        | `VAPID_PUBLIC_KEY`                 |
 | `VAPID_PRIVATE_KEY`       | `VAPID_PRIVATE_KEY`                |
 | `SMOKE_QUEUE_TOKEN`       | `SMOKE_QUEUE_TOKEN`                |
+| `BLUESKY_IDENTIFIER`      | `BLUESKY_IDENTIFIER`               |
+| `BLUESKY_APP_PASSWORD`    | `BLUESKY_APP_PASSWORD`             |
 
 手順は次のとおりです。
 
-1. 作業者は、GitHub の対象の environment で、更新したい secret（`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`）を新しい値に更新します。3つのうち更新しない secret にも、Worker に入れたい現在の値が入っていることを確かめます。operation は3つすべてを put するからです。VAPID の鍵を入れ替えると、ブラウザが登録済みの push の購読は使えなくなります。利用者は、購読し直す必要があります。
+1. 作業者は、GitHub の対象の environment で、更新したい secret（`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`）を新しい値に更新します。必須の3つのうち更新しない secret にも、Worker に入れたい現在の値が入っていることを確かめます。operation は必須の3つを必ず put するからです。`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` は、値が空でないものだけを put します。VAPID の鍵を入れ替えると、ブラウザが登録済みの push の購読は使えなくなります。利用者は、購読し直す必要があります。
 2. 作業者は、`deploy-iori-worker.yml` を `operation=put-worker-secrets`、`environment`、`main_sha=<最新の main の SHA>` と、`deploy-worker` と同じ `generation`、`migration_run_id`、`migration_main_sha` で dispatch します。
 3. production の場合、承認者は job の承認待ちを承認します。
 4. job は、`IORI_ADMISSION_IDENTITY` の `environment`、`generation`、`runId`、`mainSha` が dispatch の入力と一致することを確かめます。
 5. job は、`SMOKE_QUEUE_TOKEN` の形式と、`VAPID_PUBLIC_KEY` と `VAPID_PRIVATE_KEY` が対の鍵であることを確かめます。
 6. job は、Cloudflare API で Worker `iori-<environment>-<generation>` の deployments を読み、Worker が存在することを確かめます。
-7. job は、`wrangler secret bulk` を1回だけ実行します。job は、3つの値を JSON にして標準入力だけで渡し、ファイルの引数は付けません。job は、wrangler が `3 secrets successfully uploaded` の行を出したことも、成功の条件にします。値は、コマンドの引数にも、ログにも、`IORI_DIAG` の行にも出ません。
+7. job は、`wrangler secret bulk` を1回だけ実行します。job は、put する値を JSON にして標準入力だけで渡し、ファイルの引数は付けません。job は、wrangler が `<put した secret の数> secrets successfully uploaded` の行を出したことも、成功の条件にします。値は、コマンドの引数にも、ログにも、`IORI_DIAG` の行にも出ません。
 
-`wrangler secret bulk` は、3つの secret を1回の設定の更新で Worker に送ります。このため、3つとも新しい値が反映されるか、どれも反映されないかのどちらかです。1回の `put-worker-secrets` で Worker の version は1つだけ増えます。作業者は、実行後に Worker の現在の version を記録します。失敗した場合は、どの secret も新しい値になっていません。作業者は、原因を直してから `put-worker-secrets` を dispatch し直します。
+`wrangler secret bulk` は、put する secret を1回の設定の更新で Worker に送ります。このため、put する secret のすべてに新しい値が反映されるか、どれも反映されないかのどちらかです。1回の `put-worker-secrets` で Worker の version は1つだけ増えます。作業者は、実行後に Worker の現在の version を記録します。失敗した場合は、どの secret も新しい値になっていません。作業者は、原因を直してから `put-worker-secrets` を dispatch し直します。
 
 失敗した場合、job は `IORI_DIAG stage=<段> program=none exit=none signal=none reason=<語>` の行を1行出します。`stage` は次のとおりです。
 

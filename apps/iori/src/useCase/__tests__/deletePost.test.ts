@@ -1,4 +1,5 @@
 import { test as fcTest } from '@fast-check/vitest';
+import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
@@ -163,6 +164,53 @@ describe('DeletePostUseCase', () => {
         expect(result.val.success).toBe(true);
         expect(deps.postDeletedStore.store).toHaveBeenCalledTimes(1);
       }
+    });
+
+    it('投稿を削除したあとに、Bluesky の投稿の削除を依頼する', async () => {
+      const deps = createDeps();
+      const user: User = {
+        id: crypto.randomUUID() as User['id'],
+        username: 'kosui' as Username,
+      };
+      const session: Session = {
+        sessionId: crypto.randomUUID() as Session['sessionId'],
+        userId: user.id,
+        expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+      };
+      const actor: LocalActor = {
+        id: crypto.randomUUID() as LocalActor['id'],
+        userId: user.id,
+        uri: 'https://example.com/users/kosui',
+        inboxUrl: 'https://example.com/inbox',
+        type: 'local',
+        logoUri: undefined,
+      };
+      const post: LocalPost = {
+        type: 'local',
+        summary: null,
+        sensitive: false,
+        postId: crypto.randomUUID() as PostId,
+        actorId: actor.id,
+        content: 'Post to delete',
+        createdAt: Date.now() as LocalPost['createdAt'],
+        userId: user.id,
+        inReplyToUri: null,
+      };
+      setupValidUserSession(deps, user, session, actor);
+      deps.postResolver.setPost(post);
+      const removeBlueskyCrosspost = { run: vi.fn(async () => RA.ok('removed' as const)) };
+
+      const result = await DeletePostUseCase.create({ ...deps, removeBlueskyCrosspost }).run({
+        sessionId: session.sessionId,
+        postId: post.postId,
+        ctx: createMockRequestContext(),
+      });
+
+      expect(result.ok).toBe(true);
+      expect(removeBlueskyCrosspost.run).toHaveBeenCalledExactlyOnceWith({ postId: post.postId });
+      expect(vi.mocked(deps.postDeletedStore.store).mock.invocationCallOrder[0]).toBeLessThan(
+        removeBlueskyCrosspost.run.mock.invocationCallOrder[0]!,
+      );
     });
 
     fcTest.prop([arbUser()])(
