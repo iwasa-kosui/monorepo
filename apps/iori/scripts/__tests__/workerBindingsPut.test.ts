@@ -140,6 +140,32 @@ describe('put-worker-secrets', () => {
       ]);
     },
   );
+  it('puts the Bluesky credentials as well when both are set', async () => {
+    const env = environment({ BLUESKY_IDENTIFIER: 'iori.example.com', BLUESKY_APP_PASSWORD: 'abcd-efgh-ijkl-mnop' });
+    const { calls, error } = await run(env, { stdout: '\u2728 5 secrets successfully uploaded\n' });
+    expect(error).toBeUndefined();
+    expect(JSON.parse(calls[0].options.input!)).toEqual({
+      VAPID_PUBLIC_KEY: env.VAPID_PUBLIC_KEY,
+      VAPID_PRIVATE_KEY: env.VAPID_PRIVATE_KEY,
+      SMOKE_QUEUE_TOKEN: env.SMOKE_QUEUE_TOKEN,
+      BLUESKY_IDENTIFIER: 'iori.example.com',
+      BLUESKY_APP_PASSWORD: 'abcd-efgh-ijkl-mnop',
+    });
+    expect(Object.values(calls[0].options.env)).not.toContain('abcd-efgh-ijkl-mnop');
+  });
+  it.each(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD'])(
+    'does not require %s and leaves it out when empty',
+    async (name) => {
+      const env = environment({ [name]: '' });
+      const { calls, error } = await run(env);
+      expect(error).toBeUndefined();
+      expect(Object.keys(JSON.parse(calls[0].options.input!))).toEqual([
+        'VAPID_PUBLIC_KEY',
+        'VAPID_PRIVATE_KEY',
+        'SMOKE_QUEUE_TOKEN',
+      ]);
+    },
+  );
   it.each([
     ['environment', { environment: 'staging' }],
     ['generation', { generation: 'fixture2' }],

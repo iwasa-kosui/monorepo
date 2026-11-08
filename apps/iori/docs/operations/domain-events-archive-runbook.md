@@ -10,6 +10,7 @@
 - Worker は、R2 への書き出しが成功した後に、書き出した範囲の行を D1 から削除します。書き出しに失敗した場合、Worker は D1 から行を削除しません。
 - Worker は、actor の作成のイベント（`actor.created`）を D1 に残します。この行は、退避の対象にも削除の対象にもなりません。
 - Worker は、秘密情報を含むイベント（鍵の作成、プッシュ購読の作成など）について、`aggregate_state` と `event_payload` の列を NULL にして書き出します。
+- Worker は、X の投稿（情報源の kind が `x_user`）が 7 日で期限切れになるとき、その投稿を aggregate とする `feedEntry.collected`、`feedEntry.embedded`、`feedEntry.bookmarkCountUpdated` の行を、`feed_entries` の行の削除と同じバッチで D1 から削除します。この削除は `EVENT_ARCHIVE_ENABLED` の値に左右されません。`feedEntry.expired` の行は feedEntryId だけを持つので残します。RSS など x_user 以外の投稿のイベントは、この削除の対象外です。
 - Worker は、X の投稿（情報源の kind が `x_user`）の本文とユーザー名を R2 に残しません。X の投稿は 7 日で消す決まりなので、次のイベントの `aggregate_state` と `event_payload` の列を NULL にして書き出します。
   - `feedEntry.collected`、`feedEntry.embedded`、`feedEntry.bookmarkCountUpdated`: これらのイベントは情報源の kind を持たず、x_user の投稿を見分けられません。このため、RSS など x_user 以外の情報源の分も NULL にします。
   - `feedSource.created`、`feedSource.fetched`、`feedSource.fetchFailed`、`feedSource.enabledChanged`: `aggregate_state` の `kind` が `x_user` の行だけ NULL にします。`kind` を読めない行も NULL にします。x_user 以外の情報源の行は、そのまま書き出します。

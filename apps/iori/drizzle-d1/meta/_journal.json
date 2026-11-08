@@ -173,8 +173,15 @@
     {
       "idx": 24,
       "version": "6",
-      "when": 1794122282833,
-      "tag": "0024_digest_x_posts",
+      "when": 1794118631329,
+      "tag": "0024_bluesky_crosspost",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1794124613895,
+      "tag": "0025_digest_x_posts",
       "breakpoints": true
     }
   ]

@@ -203,7 +203,7 @@ describe('CollectFeedEntriesUseCase', () => {
     const db = createSerializedDb();
     const build = (current: () => Instant) => {
       const fetchText = vi.fn(async (url: string) =>
-        url === 'https://zenn.dev/feed'
+        url === 'https://zenn.dev/feed' && current() !== NOW
           ? ok({ body: rss([{ guid: 'https://e.test/old', title: 'old' }]) })
           : ok({ body: rss([]) })
       );

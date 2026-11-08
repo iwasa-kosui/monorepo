@@ -32,6 +32,23 @@ describe('FeedSource.parseNew', () => {
   });
 
   it.each([
+    'https://x.com/jack',
+    'https://www.x.com/jack',
+    'https://twitter.com/jack',
+    'https://www.twitter.com/jack',
+    'https://X.COM/jack',
+    'https://Www.Twitter.Com/jack',
+    'https://x.com./jack',
+  ])('rss には x.com と twitter.com の URL %s を受け付けない', (url) => {
+    expect(FeedSource.parseNew({ kind: 'rss', url, title: 'ブログ' }).ok).toBe(false);
+  });
+
+  it('x_user はユーザー名から https://x.com/<名> の URL を作って受け付ける', () => {
+    const parsed = FeedSource.parseNew({ kind: 'x_user', username: 'jack' });
+    expect(parsed.ok && parsed.val.url).toBe('https://x.com/jack');
+  });
+
+  it.each([
     'https://user:pass@example.com/feed.xml',
     'https://user@example.com/feed.xml',
     'https://:pass@example.com/feed.xml',
