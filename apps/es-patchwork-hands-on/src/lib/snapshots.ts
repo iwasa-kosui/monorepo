@@ -24,3 +24,14 @@ export const insertTemplate = (): string => toInsertTemplate(readSnapshot('chapt
 
 export const whoCancelledQuery = (): string =>
   extractLines(readSnapshot('chapter-2-step-2', 'who-cancelled.ts'), 'const rows =', '`).all();');
+
+export const snapshotFiles = (snapshot: string): Record<string, string> => {
+  const prefix = `/exercises/${snapshot}/`;
+  const files = Object.entries(sources)
+    .filter(([path]) => path.startsWith(prefix))
+    .map(([path, source]): [string, string] => [path.slice(prefix.length), source]);
+  if (files.length === 0) {
+    throw new Error(`スナップショットが見つかりません: ${snapshot}`);
+  }
+  return Object.fromEntries(files);
+};

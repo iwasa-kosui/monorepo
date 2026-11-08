@@ -1,0 +1,40 @@
+---
+import '../playground/playground.css';
+
+interface Props {
+  setup: string;
+  initial: string;
+}
+
+const { setup, initial } = Astro.props;
+const config = JSON.stringify({ setupSql: setup, initialSql: initial });
+---
+
+<section
+  class="playground"
+  data-playground="sql"
+  data-state="loading"
+  data-config={config}
+  aria-label="SQL を実行する欄"
+>
+  <div class="playground-status" data-role="status">
+    <span data-role="status-text" role="status"
+    >実行環境を読み込んでいます</span>
+    <button type="button" data-role="retry" hidden>もう一度読み込む</button>
+  </div>
+  <div class="playground-editor" data-role="editor"></div>
+  <div class="playground-toolbar" style="margin-top: 0.5rem">
+    <button type="button" data-role="run" disabled>実行する</button>
+    <button type="button" data-role="reset" disabled>
+      データベースを最初の状態に戻す
+    </button>
+  </div>
+  <p class="playground-hint">
+    Ctrl+Enter（Mac では Cmd+Enter）でも実行できます。
+  </p>
+  <div class="playground-results" data-role="results" aria-live="polite"></div>
+</section>
+
+<script>
+import '../playground/sql-playground.ts';
+</script>

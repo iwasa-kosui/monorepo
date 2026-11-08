@@ -1,4 +1,12 @@
-type TestEvent = { type: string; data: { name: string; details?: { type?: string }; skip?: unknown; todo?: unknown } };
+type TestEvent = {
+  type: string;
+  data: {
+    name: string;
+    details?: { type?: string; error?: { message?: string; cause?: { message?: string } } };
+    skip?: unknown;
+    todo?: unknown;
+  };
+};
 
 export default async function* jsonLinesReporter(source: AsyncIterable<TestEvent>) {
   for await (const event of source) {
@@ -8,7 +16,9 @@ export default async function* jsonLinesReporter(source: AsyncIterable<TestEvent
         : event.type === 'test:pass'
         ? 'green'
         : 'red';
-      yield `${JSON.stringify({ result, name: event.data.name })}\n`;
+      const error = event.data.details?.error;
+      const message = error?.cause?.message ?? error?.message;
+      yield `${JSON.stringify({ result, name: event.data.name, message })}\n`;
     }
   }
 }

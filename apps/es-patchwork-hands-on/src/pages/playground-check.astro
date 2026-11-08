@@ -1,0 +1,56 @@
+---
+import CodePlayground from '../components/CodePlayground.astro';
+import PageNav from '../components/PageNav.astro';
+import SqlPlayground from '../components/SqlPlayground.astro';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const setupSql = `
+CREATE TABLE visits (
+  id TEXT PRIMARY KEY,
+  pet_name TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('reserved', 'checked_in', 'completed', 'cancelled'))
+);
+CREATE TABLE business_events (
+  event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_at TEXT NOT NULL,
+  event_name TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_state TEXT NOT NULL
+);
+INSERT INTO visits (id, pet_name, status) VALUES ('visit-pochi', 'ポチ', 'reserved');
+INSERT INTO visits (id, pet_name, status) VALUES ('visit-tama', 'タマ', 'cancelled');
+`;
+---
+
+<BaseLayout title="実行欄の動作確認" noindex>
+  <h1>実行欄の動作確認</h1>
+  <p>このページは、実行欄の動作を確かめるためのものです。</p>
+
+  <h2>SQL を実行する欄</h2>
+  <SqlPlayground setup={setupSql} initial="SELECT * FROM visits;" />
+
+  <h2>コードを編集して実行する欄（第1章の開始時点）</h2>
+  <CodePlayground
+    exercise="chapter-1-start"
+    editable={['visits.ts']}
+    readonly={['db.ts', 'visits.test.ts', 'show-visits.ts', 'who-cancelled.ts']}
+    testFile="visits.test.ts"
+    scripts={[
+      { file: 'show-visits.ts', label: 'show-visits.ts を実行する' },
+      { file: 'who-cancelled.ts', label: 'who-cancelled.ts を実行する' },
+    ]}
+    complete={{ exercise: 'chapter-2-step-2' }}
+  />
+
+  <h2>コードを編集して実行する欄（第4章の外部システムとの同期の完成コード）</h2>
+  <CodePlayground
+    exercise="chapter-4-external-sync-done"
+    editable={['visits.ts']}
+    readonly={['db.ts', 'visits.test.ts', 'what-was-sent.ts']}
+    testFile="visits.test.ts"
+    scripts={[{ file: 'what-was-sent.ts', label: 'what-was-sent.ts を実行する' }]}
+  />
+  <PageNav previous={{ href: '/' }} next={{ href: '/setup/' }} />
+</BaseLayout>
