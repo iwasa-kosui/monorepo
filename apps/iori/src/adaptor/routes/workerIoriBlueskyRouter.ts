@@ -142,6 +142,9 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeAccounts),
       async (c) => {
+        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
+          return c.json(forbidden, 403);
+        }
         if (collectBlueskyTimelineUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }

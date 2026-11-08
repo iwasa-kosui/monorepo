@@ -58,7 +58,9 @@ const collector = (result: ReturnType<CollectBlueskyTimelineUseCase['run']>) => 
   return { run, useCase: { run } as CollectBlueskyTimelineUseCase };
 };
 
-const setupNonOwner = async () => {
+const setupNonOwner = async (
+  options: { scope?: string; collectBlueskyTimelineUseCase?: CollectBlueskyTimelineUseCase } = {},
+) => {
   const harness = createOAuthHarness();
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
@@ -71,15 +73,19 @@ const setupNonOwner = async () => {
         sessionResolver: harness.memory.sessionResolver as never,
       }),
       blueskyTimelineItemsResolver: { resolve } as BlueskyTimelineItemsResolver,
-      collectBlueskyTimelineUseCase: undefined,
+      collectBlueskyTimelineUseCase: options.collectBlueskyTimelineUseCase,
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
     }),
   );
-  const issued = await harness.issueUserToken('read:statuses');
-  createMastodonSeed(fixture).addLocalActor('alice', issued.userId);
+  const issued = await harness.issueUserToken(options.scope ?? 'read:statuses');
+  const seed = createMastodonSeed(fixture);
+  seed.addLocalActor('kosui');
+  seed.addLocalActor('alice', issued.userId);
   const get = (path: string) =>
     app.request(`${ORIGIN}${path}`, { headers: { Authorization: `Bearer ${issued.token}` } });
-  return { get, resolve };
+  const post = (path: string) =>
+    app.request(`${ORIGIN}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${issued.token}` } });
+  return { get, post, resolve };
 };
 
 describe('/api/iori/v1/bluesky/timeline', () => {
@@ -343,6 +349,17 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       const response = await refresh(t, { Cookie: `sessionId=${me.sessionId}`, Origin: 'https://evil.example' });
 
       expect(response.status).toBe(403);
+      expect(run).not.toHaveBeenCalled();
+    });
+
+    it('所有者でない利用者を 403 にし、取り込みを実行しない', async () => {
+      const { run, useCase } = collector(RA.ok({ pages: 1, fetched: 0, saved: 0, dropped: 0 }));
+      const { post } = await setupNonOwner({ scope: 'write:accounts', collectBlueskyTimelineUseCase: useCase });
+
+      const response = await post('/api/iori/v1/bluesky/timeline/refresh');
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'Forbidden' });
       expect(run).not.toHaveBeenCalled();
     });
 
