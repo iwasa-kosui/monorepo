@@ -25,6 +25,7 @@ import {
   isNotFoundError,
   isUnauthorizedError,
   isUnprocessableError,
+  likeBlueskyPost,
   lookupAccount,
   mute,
   parseLinkHeader,
@@ -42,6 +43,7 @@ import {
   translate,
   unfavourite,
   unfollow,
+  unlikeBlueskyPost,
   unmute,
   unreact,
   unreblog,
@@ -684,6 +686,40 @@ describe('mastodon client requests', () => {
     expect(init.method).toBe('POST');
     expect(init.credentials).toBe('same-origin');
     expect(result).toEqual(payload);
+  });
+
+  it('posts a Bluesky like with the feedItemId as a JSON body', async () => {
+    const fetchMock = stubFetch(jsonResponse({ liked: true }));
+
+    const result = await likeBlueskyPost('at://did:plc:a/app.bsky.feed.post/1#repost:did:plc:b');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/likes');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(init.body as string)).toEqual({
+      feedItemId: 'at://did:plc:a/app.bsky.feed.post/1#repost:did:plc:b',
+    });
+    expect(result).toEqual({ liked: true });
+  });
+
+  it('deletes a Bluesky like with the feedItemId in the query', async () => {
+    const fetchMock = stubFetch(jsonResponse({ liked: false }));
+
+    const result = await unlikeBlueskyPost('at://did:plc:a/app.bsky.feed.post/1');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/likes?feedItemId=at%3A%2F%2Fdid%3Aplc%3Aa%2Fapp.bsky.feed.post%2F1');
+    expect(init.method).toBe('DELETE');
+    expect(result).toEqual({ liked: false });
+  });
+
+  it('carries the status of a failed Bluesky like', async () => {
+    stubFetch(jsonResponse({ error: 'Bluesky request failed' }, { status: 502 }));
+
+    const error = await likeBlueskyPost('x').catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(502);
   });
 
   it('carries the status of a refresh rejected because the import is disabled', async () => {

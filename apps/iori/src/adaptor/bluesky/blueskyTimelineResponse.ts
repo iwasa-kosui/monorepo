@@ -1,16 +1,17 @@
 import { Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
+import { blueskyLikeRkey } from '../../domain/blueskyTimeline/blueskyLike.ts';
 import {
+  BlueskyFetchedTimelineItem,
   BlueskyTimelineEmbed,
   type BlueskyTimelineFacet,
   blueskyTimelineFeedItemId,
-  BlueskyTimelineItem,
 } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 
 export type BlueskyTimelinePageParsed = Readonly<{
-  items: readonly BlueskyTimelineItem[];
+  items: readonly BlueskyFetchedTimelineItem[];
   dropped: number;
   cursor: string | undefined;
 }>;
@@ -39,6 +40,7 @@ const feedViewPostZodType = z.looseObject({
     }),
     embed: z.unknown().optional(),
     indexedAt: z.string(),
+    viewer: z.looseObject({ like: z.string().optional() }).optional(),
   }),
   reply: z.looseObject({ parent: z.unknown() }).optional(),
   reason: z.unknown().optional(),
@@ -181,7 +183,7 @@ const embedOf = (raw: unknown): BlueskyTimelineEmbed | null => {
   return embedFrom(candidate);
 };
 
-const itemOf = (raw: unknown, fetchedAt: Instant): BlueskyTimelineItem | undefined => {
+const itemOf = (raw: unknown, fetchedAt: Instant): BlueskyFetchedTimelineItem | undefined => {
   const feedViewPost = feedViewPostZodType.safeParse(raw);
   if (!feedViewPost.success) return undefined;
   const { post, reply, reason } = feedViewPost.data;
@@ -195,7 +197,9 @@ const itemOf = (raw: unknown, fetchedAt: Instant): BlueskyTimelineItem | undefin
   const indexedAt = toInstant(repost?.data.indexedAt ?? post.indexedAt);
   if (postedAt === undefined || indexedAt === undefined) return undefined;
   const parentAuthor = parentAuthorZodType.safeParse(reply?.parent);
-  const parsed = BlueskyTimelineItem.parse({
+  const viewerLike = post.viewer?.like;
+  const viewerLikeUri = viewerLike !== undefined && blueskyLikeRkey(viewerLike) !== undefined ? viewerLike : null;
+  const parsed = BlueskyFetchedTimelineItem.parse({
     feedItemId: blueskyTimelineFeedItemId(post.uri, repostedByDid),
     uri: post.uri,
     cid: post.cid,
@@ -215,6 +219,8 @@ const itemOf = (raw: unknown, fetchedAt: Instant): BlueskyTimelineItem | undefin
     postedAt,
     indexedAt,
     fetchedAt,
+    liked: viewerLikeUri !== null,
+    viewerLikeUri,
   });
   return parsed.ok ? parsed.val : undefined;
 };
@@ -227,7 +233,7 @@ export const parseBlueskyTimelineResponse = (
   if (!page.success) return Result.err('invalid_response');
   const items = page.data.feed.map((raw) => itemOf(raw, fetchedAt));
   return Result.ok({
-    items: items.filter((item): item is BlueskyTimelineItem => item !== undefined),
+    items: items.filter((item): item is BlueskyFetchedTimelineItem => item !== undefined),
     dropped: items.filter((item) => item === undefined).length,
     cursor: page.data.cursor,
   });

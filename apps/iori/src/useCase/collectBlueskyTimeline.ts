@@ -1,11 +1,12 @@
 import { RA, Result } from '@iwasa-kosui/result';
 
+import type { BlueskyLike, BlueskyViewerLikesSyncedStore } from '../domain/blueskyTimeline/blueskyLike.ts';
 import {
   BLUESKY_TIMELINE_MAX_PAGES,
   BLUESKY_TIMELINE_PAGE_LIMIT,
   BLUESKY_TIMELINE_RETENTION_DAYS,
+  type BlueskyFetchedTimelineItem,
   type BlueskyTimelineExistingFeedItemIdsResolver,
-  type BlueskyTimelineItem,
   type BlueskyTimelineItemsSavedStore,
 } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../domain/instant/instant.ts';
@@ -27,15 +28,31 @@ type Deps = Readonly<{
   fetcher: BlueskyTimelineFetcher;
   existingResolver: BlueskyTimelineExistingFeedItemIdsResolver;
   savedStore: BlueskyTimelineItemsSavedStore;
+  viewerLikesStore: BlueskyViewerLikesSyncedStore;
   now: () => Instant;
 }>;
 
-const uniqueByFeedItemId = (items: readonly BlueskyTimelineItem[]): BlueskyTimelineItem[] => {
+const uniqueByFeedItemId = (items: readonly BlueskyFetchedTimelineItem[]): BlueskyFetchedTimelineItem[] => {
   const seen = new Set<string>();
   return items.filter((item) => !seen.has(item.feedItemId) && seen.add(item.feedItemId));
 };
 
-const create = ({ fetcher, existingResolver, savedStore, now }: Deps): CollectBlueskyTimelineUseCase => {
+const syncViewerLikes = async (
+  store: BlueskyViewerLikesSyncedStore,
+  items: readonly BlueskyFetchedTimelineItem[],
+): Promise<void> => {
+  const likes = new Map<string, BlueskyLike>();
+  for (const item of items) {
+    if (item.viewerLikeUri === null || likes.has(item.uri)) continue;
+    likes.set(item.uri, { subjectUri: item.uri, likeUri: item.viewerLikeUri, createdAt: item.fetchedAt });
+  }
+  if (likes.size === 0) return;
+  Result.unsafeUnwrap(await store.sync([...likes.values()]));
+};
+
+const create = (
+  { fetcher, existingResolver, savedStore, viewerLikesStore, now }: Deps,
+): CollectBlueskyTimelineUseCase => {
   const run = async (): RA<Ok, Err> => {
     const retentionStart = Instant.addDuration(now(), -BLUESKY_TIMELINE_RETENTION_DAYS * DAY_MS);
     let cursor: string | undefined;
@@ -61,6 +78,7 @@ const create = ({ fetcher, existingResolver, savedStore, now }: Deps): CollectBl
       const added = recent.filter((item) => !existing.has(item.feedItemId));
       const inserted = added.length === 0 ? [] : Result.unsafeUnwrap(await savedStore.save(added));
       saved += inserted.length;
+      await syncViewerLikes(viewerLikesStore, recent);
       cursor = page.val.cursor;
       if (inserted.length < recent.length || recent.length < unique.length || cursor === undefined) break;
     }

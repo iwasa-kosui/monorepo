@@ -10,6 +10,7 @@ import type {
   BlueskySessionSavedStore,
 } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyBlob } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
+import { blueskyLikeRkey } from '../../domain/blueskyTimeline/blueskyLike.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type {
   BlueskyClient,
@@ -20,6 +21,7 @@ import type {
 
 export const BLUESKY_DEFAULT_PDS_URL = 'https://bsky.social';
 const POST_COLLECTION = 'app.bsky.feed.post';
+const LIKE_COLLECTION = 'app.bsky.feed.like';
 const REQUEST_TIMEOUT_MS = 10_000;
 const UPLOAD_TIMEOUT_MS = 30_000;
 export const BLUESKY_LOGIN_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
@@ -203,6 +205,24 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
     Authorization: `Bearer ${session.accessJwt}`,
   });
 
+  const removeRecord = (collection: string, rkey: string): RA<void, BlueskyClientError> =>
+    withSession(async (session) => {
+      const deleted = await call(
+        'deleteRecord',
+        `${session.pdsUrl}/xrpc/com.atproto.repo.deleteRecord`,
+        {
+          method: 'POST',
+          headers: authorized(session, { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ repo: session.did, collection, rkey }),
+        },
+        emptyResponseSchema,
+      );
+      if (deleted.ok || deleted.err.status === 404 || deleted.err.code === 'RecordNotFound') {
+        return RA.ok(undefined);
+      }
+      return deleted;
+    });
+
   return {
     uploadBlob: ({ bytes, mimeType }) =>
       withSession(async (session) => {
@@ -248,23 +268,34 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           ? RA.err(clientError('invalid_response', 'getRecord returned an unexpected uri'))
           : RA.ok({ uri: found.val.uri, cid: found.val.cid, rkey: foundRkey });
       }),
-    deleteRecord: (rkey) =>
+    deleteRecord: (rkey) => removeRecord(POST_COLLECTION, rkey),
+    createLike: (subject, rkey) =>
       withSession(async (session) => {
-        const deleted = await call(
-          'deleteRecord',
-          `${session.pdsUrl}/xrpc/com.atproto.repo.deleteRecord`,
+        const created = await call(
+          'createLike',
+          `${session.pdsUrl}/xrpc/com.atproto.repo.putRecord`,
           {
             method: 'POST',
             headers: authorized(session, { 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ repo: session.did, collection: POST_COLLECTION, rkey }),
+            body: JSON.stringify({
+              repo: session.did,
+              collection: LIKE_COLLECTION,
+              rkey,
+              record: {
+                $type: LIKE_COLLECTION,
+                subject: { uri: subject.uri, cid: subject.cid },
+                createdAt: new Date(now()).toISOString(),
+              },
+            }),
           },
-          emptyResponseSchema,
+          createRecordResponseSchema,
         );
-        if (deleted.ok || deleted.err.status === 404 || deleted.err.code === 'RecordNotFound') {
-          return RA.ok(undefined);
-        }
-        return deleted;
+        if (!created.ok) return created;
+        return blueskyLikeRkey(created.val.uri) !== undefined
+          ? RA.ok({ uri: created.val.uri })
+          : RA.err(clientError('invalid_response', 'createLike returned an unexpected uri'));
       }),
+    deleteLike: (rkey) => removeRecord(LIKE_COLLECTION, rkey),
     query: (nsid, params) =>
       withSession((session) => {
         const search = new URLSearchParams(params).toString();

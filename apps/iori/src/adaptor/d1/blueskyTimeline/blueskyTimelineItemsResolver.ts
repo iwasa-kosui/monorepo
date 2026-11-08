@@ -3,7 +3,7 @@ import { and, desc, eq, isNotNull, lt, notExists, or, type SQL, sql } from 'driz
 
 import type { BlueskyTimelineItemsResolver } from '../../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import type { IoriD1Db } from '../client.ts';
-import { blueskyCrosspostsTable, blueskyTimelineItemsTable } from '../schema.ts';
+import { blueskyCrosspostsTable, blueskyLikesTable, blueskyTimelineItemsTable } from '../schema.ts';
 import { toBlueskyTimelineItem } from './blueskyTimelineItemRow.ts';
 
 export const createD1BlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimelineItemsResolver => ({
@@ -34,10 +34,12 @@ export const createD1BlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimel
         )!,
       );
     }
-    const rows = await db.select().from(blueskyTimelineItemsTable)
+    const rows = await db.select({ item: blueskyTimelineItemsTable, likeUri: blueskyLikesTable.likeUri })
+      .from(blueskyTimelineItemsTable)
+      .leftJoin(blueskyLikesTable, eq(blueskyLikesTable.subjectUri, blueskyTimelineItemsTable.uri))
       .where(conditions.length === 0 ? undefined : and(...conditions))
       .orderBy(desc(blueskyTimelineItemsTable.indexedAt), desc(blueskyTimelineItemsTable.feedItemId))
       .limit(limit);
-    return RA.ok(rows.map(toBlueskyTimelineItem));
+    return RA.ok(rows.map(({ item, likeUri }) => toBlueskyTimelineItem(item, likeUri !== null)));
   },
 });

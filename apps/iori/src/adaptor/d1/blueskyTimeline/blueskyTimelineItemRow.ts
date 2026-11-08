@@ -1,4 +1,5 @@
 import {
+  type BlueskyFetchedTimelineItem,
   BlueskyTimelineEmbed,
   BlueskyTimelineFacets,
   BlueskyTimelineItem,
@@ -8,7 +9,9 @@ import type { blueskyTimelineItemsTable } from '../schema.ts';
 
 type Row = typeof blueskyTimelineItemsTable.$inferSelect;
 
-export const toBlueskyTimelineItemRow = (item: BlueskyTimelineItem): typeof blueskyTimelineItemsTable.$inferInsert => ({
+export const toBlueskyTimelineItemRow = (
+  { liked: _liked, viewerLikeUri: _viewerLikeUri, ...item }: BlueskyFetchedTimelineItem,
+): typeof blueskyTimelineItemsTable.$inferInsert => ({
   ...item,
   facets: JSON.stringify(item.facets),
   embed: item.embed === null ? null : JSON.stringify(item.embed),
@@ -17,7 +20,7 @@ export const toBlueskyTimelineItemRow = (item: BlueskyTimelineItem): typeof blue
   fetchedAt: new Date(item.fetchedAt),
 });
 
-export const toBlueskyTimelineItem = (row: Row): BlueskyTimelineItem =>
+export const toBlueskyTimelineItem = (row: Row, liked: boolean): BlueskyTimelineItem =>
   BlueskyTimelineItem.orThrow({
     ...row,
     facets: BlueskyTimelineFacets.parseOrThrow(JSON.parse(row.facets)),
@@ -25,4 +28,5 @@ export const toBlueskyTimelineItem = (row: Row): BlueskyTimelineItem =>
     postedAt: row.postedAt.getTime() as Instant,
     indexedAt: row.indexedAt.getTime() as Instant,
     fetchedAt: row.fetchedAt.getTime() as Instant,
+    liked,
   });

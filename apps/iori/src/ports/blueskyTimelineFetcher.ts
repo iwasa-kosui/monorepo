@@ -1,10 +1,10 @@
 import type { RA } from '@iwasa-kosui/result';
 
-import type { BlueskyTimelineItem } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
+import type { BlueskyFetchedTimelineItem } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import type { BlueskyClientError } from './blueskyClient.ts';
 
 export type BlueskyTimelinePage = Readonly<{
-  items: readonly BlueskyTimelineItem[];
+  items: readonly BlueskyFetchedTimelineItem[];
   dropped: number;
   cursor: string | undefined;
 }>;

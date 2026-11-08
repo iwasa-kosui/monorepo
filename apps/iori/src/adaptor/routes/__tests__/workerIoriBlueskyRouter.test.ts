@@ -3,11 +3,17 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { BlueskyTimelineItemsResolver } from '../../../domain/blueskyTimeline/blueskyTimelineItem.ts';
-import type { BlueskyClientError } from '../../../ports/blueskyClient.ts';
+import { Instant } from '../../../domain/instant/instant.ts';
+import type { BlueskyClient, BlueskyClientError } from '../../../ports/blueskyClient.ts';
 import type { CollectBlueskyTimelineUseCase } from '../../../useCase/collectBlueskyTimeline.ts';
 import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
+import { LikeBlueskyPostUseCase } from '../../../useCase/likeBlueskyPost.ts';
+import { UnlikeBlueskyPostUseCase } from '../../../useCase/unlikeBlueskyPost.ts';
 import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../d1/__tests__/sqliteFixture.ts';
+import { createD1BlueskyLikeDeletedStore } from '../../d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
+import { createD1BlueskyLikeSavedStore } from '../../d1/blueskyTimeline/blueskyLikeSavedStore.ts';
+import { createD1BlueskyLikeTargetResolver } from '../../d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
 import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerIoriBlueskyRouter } from '../workerIoriBlueskyRouter.ts';
@@ -58,8 +64,20 @@ const collector = (result: ReturnType<CollectBlueskyTimelineUseCase['run']>) => 
   return { run, useCase: { run } as CollectBlueskyTimelineUseCase };
 };
 
+const likeClient = (overrides: Partial<Pick<BlueskyClient, 'createLike' | 'deleteLike'>> = {}) => ({
+  createLike: vi.fn<BlueskyClient['createLike']>(async () =>
+    RA.ok({ uri: 'at://did:plc:me/app.bsky.feed.like/3kcreated' })
+  ),
+  deleteLike: vi.fn<BlueskyClient['deleteLike']>(async () => RA.ok(undefined)),
+  ...overrides,
+});
+
 const setupNonOwner = async (
-  options: { scope?: string; collectBlueskyTimelineUseCase?: CollectBlueskyTimelineUseCase } = {},
+  options: {
+    scope?: string;
+    collectBlueskyTimelineUseCase?: CollectBlueskyTimelineUseCase;
+    blueskyLikeClient?: ReturnType<typeof likeClient>;
+  } = {},
 ) => {
   const harness = createOAuthHarness();
   const fixture = createSqliteD1Fixture();
@@ -74,6 +92,19 @@ const setupNonOwner = async (
       }),
       blueskyTimelineItemsResolver: { resolve } as BlueskyTimelineItemsResolver,
       collectBlueskyTimelineUseCase: options.collectBlueskyTimelineUseCase,
+      likeBlueskyPostUseCase: options.blueskyLikeClient === undefined ? undefined : LikeBlueskyPostUseCase.create({
+        client: options.blueskyLikeClient,
+        targetResolver: createD1BlueskyLikeTargetResolver(fixture.db),
+        savedStore: createD1BlueskyLikeSavedStore(fixture.db),
+        now: Instant.now,
+      }),
+      unlikeBlueskyPostUseCase: options.blueskyLikeClient === undefined
+        ? undefined
+        : UnlikeBlueskyPostUseCase.create({
+          client: options.blueskyLikeClient,
+          targetResolver: createD1BlueskyLikeTargetResolver(fixture.db),
+          deletedStore: createD1BlueskyLikeDeletedStore(fixture.db),
+        }),
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
     }),
   );
@@ -85,7 +116,16 @@ const setupNonOwner = async (
     app.request(`${ORIGIN}${path}`, { headers: { Authorization: `Bearer ${issued.token}` } });
   const post = (path: string) =>
     app.request(`${ORIGIN}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${issued.token}` } });
-  return { get, post, resolve };
+  const send = (method: 'POST' | 'DELETE', path: string, body?: unknown) =>
+    app.request(`${ORIGIN}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${issued.token}`,
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  return { get, post, send, resolve, sqlite: fixture.sqlite };
 };
 
 describe('/api/iori/v1/bluesky/timeline', () => {
@@ -142,6 +182,7 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         repostedByHandle: 'bob.bsky.social',
         postedAt: BASE - 10_000,
         indexedAt: BASE + 5000,
+        liked: false,
       });
     });
 
@@ -400,6 +441,177 @@ describe('/api/iori/v1/bluesky/timeline', () => {
 
       expect(response.status).toBe(502);
       expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
+    });
+  });
+
+  describe('いいね', () => {
+    const LIKES = '/api/iori/v1/bluesky/likes';
+    const ITEM = 'at://did:plc:a/app.bsky.feed.post/1';
+    const likeRows = (t: { sqlite: ReturnType<typeof createSqliteD1Fixture>['sqlite'] }) =>
+      t.sqlite.prepare('SELECT subjectUri, likeUri FROM bluesky_likes').all();
+    const create = (t: ReturnType<typeof setupReadApi>, headers: Record<string, string>, body: unknown = {
+      feedItemId: ITEM,
+    }) =>
+      t.request(LIKES, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(body),
+      });
+    const cancel = (t: ReturnType<typeof setupReadApi>, headers: Record<string, string>, feedItemId = ITEM) =>
+      t.request(`${LIKES}?feedItemId=${encodeURIComponent(feedItemId)}`, { method: 'DELETE', headers });
+
+    it('認証なしだと 401、Origin が違う Cookie だと 403 にし、Bluesky を呼ばない', async () => {
+      const client = likeClient();
+      const t = setupReadApi({ blueskyLikeClient: client });
+      const me = await t.signIn('write:favourites');
+      seedItem(t, 1);
+
+      expect((await create(t, { Origin: ORIGIN })).status).toBe(401);
+      expect((await cancel(t, { Origin: ORIGIN })).status).toBe(401);
+      const evil = { Cookie: `sessionId=${me.sessionId}`, Origin: 'https://evil.example' };
+      expect((await create(t, evil)).status).toBe(403);
+      expect((await cancel(t, evil)).status).toBe(403);
+      expect(client.createLike).not.toHaveBeenCalled();
+      expect(client.deleteLike).not.toHaveBeenCalled();
+    });
+
+    it('write:favourites を満たさない scope のトークンを 403 にする', async () => {
+      const client = likeClient();
+      const t = setupReadApi({ blueskyLikeClient: client });
+      const me = await t.signIn('read:statuses');
+      seedItem(t, 1);
+
+      expect((await create(t, me.bearer)).status).toBe(403);
+      expect((await cancel(t, me.bearer)).status).toBe(403);
+      expect(client.createLike).not.toHaveBeenCalled();
+    });
+
+    it('所有者でない利用者の POST を 403 にし、Bluesky を呼ばず D1 にも書かない', async () => {
+      const client = likeClient();
+      const t = await setupNonOwner({ scope: 'write:favourites', blueskyLikeClient: client });
+
+      const response = await t.send('POST', LIKES, { feedItemId: ITEM });
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'Forbidden' });
+      expect(client.createLike).not.toHaveBeenCalled();
+      expect(likeRows(t)).toEqual([]);
+    });
+
+    it('所有者でない利用者の DELETE を 403 にし、Bluesky を呼ばず D1 の行も消さない', async () => {
+      const client = likeClient();
+      const t = await setupNonOwner({ scope: 'write:favourites', blueskyLikeClient: client });
+      t.sqlite.prepare('INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)')
+        .run(ITEM, 'at://did:plc:me/app.bsky.feed.like/3k1', BASE);
+
+      const response = await t.send('DELETE', `${LIKES}?feedItemId=${encodeURIComponent(ITEM)}`);
+
+      expect(response.status).toBe(403);
+      expect(client.deleteLike).not.toHaveBeenCalled();
+      expect(likeRows(t)).toHaveLength(1);
+    });
+
+    it('無効のときは 409 を返し、Bluesky を呼ばない', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('write:favourites');
+      seedItem(t, 1);
+
+      const created = await create(t, me.bearer);
+      const canceled = await cancel(t, me.bearer);
+
+      expect(created.status).toBe(409);
+      expect(canceled.status).toBe(409);
+    });
+
+    it('未知の feedItemId を 404 にし、Bluesky を呼ばない', async () => {
+      const client = likeClient();
+      const t = setupReadApi({ blueskyLikeClient: client });
+      const me = await t.signIn('write:favourites');
+      seedItem(t, 1);
+
+      const created = await create(t, me.bearer, { feedItemId: 'at://did:plc:a/app.bsky.feed.post/999' });
+      const canceled = await cancel(t, me.bearer, 'at://did:plc:a/app.bsky.feed.post/999');
+
+      expect(created.status).toBe(404);
+      expect(canceled.status).toBe(404);
+      expect(client.createLike).not.toHaveBeenCalled();
+      expect(client.deleteLike).not.toHaveBeenCalled();
+    });
+
+    it('feedItemId が無い、または空だと 400 にする', async () => {
+      const client = likeClient();
+      const t = setupReadApi({ blueskyLikeClient: client });
+      const me = await t.signIn('write:favourites');
+
+      expect((await create(t, me.bearer, {})).status).toBe(400);
+      expect((await create(t, me.bearer, { feedItemId: '' })).status).toBe(400);
+      expect((await create(t, me.bearer, { feedItemId: 1 })).status).toBe(400);
+      expect((await t.request(LIKES, { method: 'DELETE', headers: me.bearer })).status).toBe(400);
+      expect(client.createLike).not.toHaveBeenCalled();
+    });
+
+    it('POST は投稿の uri と cid を D1 の行から取って Bluesky に渡し、保存して liked: true を返す', async () => {
+      const client = likeClient();
+      const t = setupReadApi({ blueskyLikeClient: client });
+      const me = await t.signIn('write:favourites read:statuses');
+      seedItem(t, 1);
+
+      const response = await create(t, { Cookie: `sessionId=${me.sessionId}`, Origin: ORIGIN });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ liked: true });
+      expect(client.createLike).toHaveBeenCalledExactlyOnceWith({ uri: ITEM, cid: 'cid1' }, expect.any(String));
+      expect(likeRows(t)).toEqual([{ subjectUri: ITEM, likeUri: 'at://did:plc:me/app.bsky.feed.like/3kcreated' }]);
+      const timeline = await (await t.request('/api/iori/v1/bluesky/timeline', { headers: me.bearer })).json() as {
+        items: Array<{ liked: boolean; likeUri?: string }>;
+      };
+      expect(timeline.items.map((item) => item.liked)).toEqual([true]);
+      expect(timeline.items[0]).not.toHaveProperty('likeUri');
+    });
+
+    it('DELETE は likeUri の rkey で削除し、行を消して liked: false を返す', async () => {
+      const client = likeClient();
+      const t = setupReadApi({ blueskyLikeClient: client });
+      const me = await t.signIn('write:favourites');
+      seedItem(t, 1);
+      t.sqlite.prepare('INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)')
+        .run(ITEM, 'at://did:plc:me/app.bsky.feed.like/3kabc', BASE);
+
+      const response = await cancel(t, me.bearer);
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ liked: false });
+      expect(client.deleteLike).toHaveBeenCalledExactlyOnceWith('3kabc');
+      expect(likeRows(t)).toEqual([]);
+    });
+
+    it('Bluesky への呼び出しが失敗したら 502 にし、詳細を返さず D1 も変えない', async () => {
+      const error: BlueskyClientError = {
+        type: 'BlueskyClientError',
+        kind: 'http',
+        message: 'createRecord failed: status 500 InternalServerError',
+        status: 500,
+      };
+      const client = likeClient({
+        createLike: vi.fn<BlueskyClient['createLike']>(async () => RA.err(error)),
+        deleteLike: vi.fn<BlueskyClient['deleteLike']>(async () => RA.err(error)),
+      });
+      const t = setupReadApi({ blueskyLikeClient: client });
+      const me = await t.signIn('write:favourites');
+      seedItem(t, 1);
+      seedItem(t, 2);
+      t.sqlite.prepare('INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)')
+        .run('at://did:plc:a/app.bsky.feed.post/2', 'at://did:plc:me/app.bsky.feed.like/3k2', BASE);
+
+      const created = await create(t, me.bearer);
+      const canceled = await cancel(t, me.bearer, 'at://did:plc:a/app.bsky.feed.post/2');
+
+      expect(created.status).toBe(502);
+      expect(await created.json()).toEqual({ error: 'Bluesky request failed' });
+      expect(canceled.status).toBe(502);
+      expect(likeRows(t)).toEqual([
+        { subjectUri: 'at://did:plc:a/app.bsky.feed.post/2', likeUri: 'at://did:plc:me/app.bsky.feed.like/3k2' },
+      ]);
     });
   });
 });

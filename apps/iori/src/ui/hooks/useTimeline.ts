@@ -22,6 +22,7 @@ import {
   settleLoadMore,
 } from './homeFeed.ts';
 import { canStartLoadMore, isCurrentCursor } from './loadMoreGuard.ts';
+import type { BlueskyItemsUpdater } from './optimisticBlueskyLike.ts';
 import { prependUniqueById } from './prependUnique.ts';
 import {
   initialTimelineState,
@@ -61,6 +62,7 @@ export type UseTimelineReturn = Readonly<{
   isRefreshing: boolean;
   isFirstPageSettled: boolean;
   updateTimelineItem: StatusUpdater;
+  updateBlueskyItems: BlueskyItemsUpdater;
   removePost: (postId: string) => void;
   prependPost: (status: Status) => void;
   updateMe: (me: CredentialAccount) => void;
@@ -212,6 +214,16 @@ export const useTimeline = (): UseTimelineReturn => {
     [],
   );
 
+  const updateBlueskyItems: BlueskyItemsUpdater = useCallback((updater) => {
+    setState((prev) => {
+      if (prev.status !== 'success') return prev;
+      return {
+        status: 'success',
+        data: { ...prev.data, bluesky: { ...prev.data.bluesky, items: updater(prev.data.bluesky.items) } },
+      };
+    });
+  }, []);
+
   const removePost = useCallback((postId: string) => {
     setState((prev) => {
       if (prev.status !== 'success') return prev;
@@ -248,6 +260,7 @@ export const useTimeline = (): UseTimelineReturn => {
     isRefreshing,
     isFirstPageSettled,
     updateTimelineItem,
+    updateBlueskyItems,
     removePost,
     prependPost,
     updateMe,

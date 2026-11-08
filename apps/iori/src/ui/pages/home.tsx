@@ -635,7 +635,7 @@ const UpdateBioModal = () => {
 };
 
 const TimelineList = () => {
-  const { data, items, actions, reply, thread, ui } = useTimelineContext();
+  const { data, items, actions, blueskyLike, reply, thread, ui } = useTimelineContext();
 
   if (!data) return null;
 
@@ -653,6 +653,9 @@ const TimelineList = () => {
               item={item.item}
               dataIndex={index}
               isSelected={selectedIndex === index}
+              onLike={blueskyLike.like}
+              onUndoLike={blueskyLike.undoLike}
+              isLikePending={blueskyLike.pendingUris.has(item.item.uri)}
             />
           );
         }

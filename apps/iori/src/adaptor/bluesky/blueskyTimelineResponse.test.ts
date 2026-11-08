@@ -56,9 +56,27 @@ describe('parseBlueskyTimelineResponse', () => {
           postedAt: Date.UTC(2026, 10, 8, 1),
           indexedAt: Date.UTC(2026, 10, 8, 1, 0, 5),
           fetchedAt: FETCHED_AT,
+          liked: false,
+          viewerLikeUri: null,
         }],
       },
     });
+  });
+
+  it('post.viewer.like があれば viewerLikeUri に入れて liked にする', () => {
+    const likeUri = 'at://did:plc:me/app.bsky.feed.like/3klike';
+
+    const item = only([{ post: postView({ viewer: { like: likeUri } }) }]);
+
+    expect(item).toMatchObject({ liked: true, viewerLikeUri: likeUri });
+  });
+
+  it.each([
+    ['viewer が無い', {}],
+    ['viewer.like が無い', { viewer: { repost: 'at://did:plc:me/app.bsky.feed.repost/3k' } }],
+    ['viewer.like が like の uri でない', { viewer: { like: 'not-an-at-uri' } }],
+  ])('%s ときは liked にしない', (_name, overrides) => {
+    expect(only([{ post: postView(overrides) }])).toMatchObject({ liked: false, viewerLikeUri: null });
   });
 
   it('リポストは feedItemId にリポストした人の DID を付け、indexedAt に reason の時刻を使う', () => {

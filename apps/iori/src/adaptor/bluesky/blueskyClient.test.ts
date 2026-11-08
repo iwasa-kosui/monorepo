@@ -250,6 +250,73 @@ describe('createBlueskyClient の各操作', () => {
     });
   });
 
+  it('createLike は putRecord で app.bsky.feed.like のレコードを指定の rkey で書き、応答の uri を返す', async () => {
+    const likeUri = 'at://did:plc:abc/app.bsky.feed.like/2222222222222';
+    const { client, calls } = setup(stored(), [() => json({ uri: likeUri, cid: 'bafylike' })]);
+
+    const result = await client.createLike(
+      { uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' },
+      '2222222222222',
+    );
+
+    expect(result).toEqual({ ok: true, val: { uri: likeUri } });
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.putRecord`);
+    const body = JSON.parse(calls[0]!.init.body as string);
+    expect(body).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.feed.like',
+      rkey: '2222222222222',
+      record: {
+        $type: 'app.bsky.feed.like',
+        subject: { uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' },
+        createdAt: new Date(NOW).toISOString(),
+      },
+    });
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+  });
+
+  it('createLike は like の uri でない応答を invalid_response として返す', async () => {
+    const { client } = setup(stored(), [() => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k1', cid: 'c' })]);
+
+    expect(await client.createLike({ uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' }, '2222222222222'))
+      .toMatchObject({
+        ok: false,
+        err: { kind: 'invalid_response' },
+      });
+  });
+
+  it('createLike は 500 を失敗として返す', async () => {
+    const { client } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+
+    expect(await client.createLike({ uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' }, '2222222222222'))
+      .toMatchObject({
+        ok: false,
+        err: { kind: 'http', status: 500 },
+      });
+  });
+
+  it('deleteLike は app.bsky.feed.like の collection と rkey を送る', async () => {
+    const { client, calls } = setup(stored(), [() => json({})]);
+
+    const result = await client.deleteLike('3klike');
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.deleteRecord`);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.feed.like',
+      rkey: '3klike',
+    });
+  });
+
+  it('deleteLike は既に無い record を成功として扱い、500 は失敗として返す', async () => {
+    const missing = setup(stored(), [() => json({ error: 'RecordNotFound' }, 400)]);
+    const failing = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+
+    expect((await missing.client.deleteLike('3klike')).ok).toBe(true);
+    expect(await failing.client.deleteLike('3klike')).toMatchObject({ ok: false, err: { kind: 'http', status: 500 } });
+  });
+
   it('getRecord は repo、collection、rkey を query に付けて uri、cid、rkey を返す', async () => {
     const { client, calls } = setup(stored(), [
       () => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k9', cid: 'bafy9', value: { text: 'x' } }),

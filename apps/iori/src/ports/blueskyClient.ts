@@ -14,11 +14,15 @@ export type BlueskyClientError = Readonly<{
 
 export type BlueskyCreatedRecord = Readonly<{ uri: string; cid: string; rkey: string }>;
 
+export type BlueskyLikeSubject = Readonly<{ uri: string; cid: string }>;
+
 export type BlueskyClient = Readonly<{
   uploadBlob: (input: Readonly<{ bytes: Uint8Array; mimeType: string }>) => RA<BlueskyBlob, BlueskyClientError>;
   createRecord: (record: BlueskyPostRecord, rkey: string) => RA<BlueskyCreatedRecord, BlueskyClientError>;
   getRecord: (rkey: string) => RA<BlueskyCreatedRecord, BlueskyClientError>;
   deleteRecord: (rkey: string) => RA<void, BlueskyClientError>;
+  createLike: (subject: BlueskyLikeSubject, rkey: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;
+  deleteLike: (rkey: string) => RA<void, BlueskyClientError>;
 }>;
 
 export type BlueskyQueryClient = Readonly<{

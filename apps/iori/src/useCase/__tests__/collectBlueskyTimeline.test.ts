@@ -1,11 +1,12 @@
-import { RA } from '@iwasa-kosui/result';
+import { RA, Result } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.ts';
 import { createD1BlueskyTimelineExistingFeedItemIdsResolver } from '../../adaptor/d1/blueskyTimeline/blueskyTimelineExistingFeedItemIdsResolver.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../../adaptor/d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1BlueskyTimelineItemsSavedStore } from '../../adaptor/d1/blueskyTimeline/blueskyTimelineItemsSavedStore.ts';
-import { BlueskyTimelineItem } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
+import { createD1BlueskyViewerLikesSyncedStore } from '../../adaptor/d1/blueskyTimeline/blueskyViewerLikesSyncedStore.ts';
+import { BlueskyFetchedTimelineItem } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type { BlueskyTimelineFetcher, BlueskyTimelinePage } from '../../ports/blueskyTimelineFetcher.ts';
@@ -14,8 +15,12 @@ import { CollectBlueskyTimelineUseCase } from '../collectBlueskyTimeline.ts';
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 8, 12));
 
-const itemAt = (n: number, indexedAt: number, overrides: Partial<BlueskyTimelineItem> = {}): BlueskyTimelineItem =>
-  BlueskyTimelineItem.orThrow({
+const itemAt = (
+  n: number,
+  indexedAt: number,
+  overrides: Partial<BlueskyFetchedTimelineItem> = {},
+): BlueskyFetchedTimelineItem =>
+  BlueskyFetchedTimelineItem.orThrow({
     feedItemId: `at://did:plc:a/app.bsky.feed.post/${n}`,
     uri: `at://did:plc:a/app.bsky.feed.post/${n}`,
     cid: `cid${n}`,
@@ -33,10 +38,12 @@ const itemAt = (n: number, indexedAt: number, overrides: Partial<BlueskyTimeline
     postedAt: Instant.orThrow(indexedAt - 1000),
     indexedAt: Instant.orThrow(indexedAt),
     fetchedAt: NOW,
+    liked: false,
+    viewerLikeUri: null,
     ...overrides,
   });
 
-const pageOf = (items: BlueskyTimelineItem[], cursor: string | undefined, dropped = 0): BlueskyTimelinePage => ({
+const pageOf = (items: BlueskyFetchedTimelineItem[], cursor: string | undefined, dropped = 0): BlueskyTimelinePage => ({
   items,
   cursor,
   dropped,
@@ -57,6 +64,7 @@ const setup = (pages: ReadonlyArray<BlueskyTimelinePage | BlueskyClientError>) =
     fetcher,
     existingResolver: createD1BlueskyTimelineExistingFeedItemIdsResolver(db),
     savedStore,
+    viewerLikesStore: createD1BlueskyViewerLikesSyncedStore(db),
     now: () => NOW,
   });
   const stored = () =>
@@ -221,6 +229,120 @@ describe('CollectBlueskyTimelineUseCase', () => {
 
     const resolved = await createD1BlueskyTimelineItemsResolver(t.db).resolve({ limit: 10, before: undefined });
 
-    expect(resolved).toEqual({ ok: true, val: [rich] });
+    const { viewerLikeUri: _viewerLikeUri, ...expected } = rich;
+    expect(resolved).toEqual({ ok: true, val: [expected] });
+  });
+
+  describe('viewer.like', () => {
+    const likeRows = (t: ReturnType<typeof setup>) =>
+      t.sqlite.prepare('SELECT subjectUri, likeUri, createdAt FROM bluesky_likes ORDER BY subjectUri').all();
+    const likeUri = (n: number) => `at://did:plc:me/app.bsky.feed.like/3k${n}`;
+    const likeQueries = (t: ReturnType<typeof setup>) =>
+      t.queries.filter(({ sql }) => sql.includes('bluesky_likes')).map(({ sql }) =>
+        sql.trim().split(/\s/)[0]?.toLowerCase()
+      );
+
+    it('新しく保存した行に viewerLikeUri があれば bluesky_likes に保存し、liked として読める', async () => {
+      const liked = itemAt(1, NOW - 1000, { liked: true, viewerLikeUri: likeUri(1) });
+      const t = setup([pageOf([liked, recent(2)], undefined)]);
+
+      await t.useCase.run();
+
+      expect(likeRows(t)).toEqual([{ subjectUri: liked.uri, likeUri: likeUri(1), createdAt: NOW }]);
+      const resolved = Result.unsafeUnwrap(
+        await createD1BlueskyTimelineItemsResolver(t.db).resolve({ limit: 10, before: undefined }),
+      );
+      expect(resolved.map((item) => [item.uri, item.liked])).toEqual([[liked.uri, true], [recent(2).uri, false]]);
+    });
+
+    it('同じ uri の通常の行と repost の行がどちらも viewerLikeUri を持っていても 1 行だけ保存する', async () => {
+      const plain = itemAt(1, NOW - 1000, { liked: true, viewerLikeUri: likeUri(1) });
+      const repost = itemAt(1, NOW - 2000, {
+        feedItemId: `${plain.uri}#repost:did:plc:b`,
+        repostedByDid: 'did:plc:b',
+        repostedByHandle: 'bob.example',
+        liked: true,
+        viewerLikeUri: likeUri(1),
+      });
+      const t = setup([pageOf([plain, repost], undefined)]);
+
+      await t.useCase.run();
+
+      expect(likeRows(t)).toHaveLength(1);
+    });
+
+    it('取り込み済みの投稿の viewerLikeUri も保存する', async () => {
+      const t = setup([pageOf([recent(1)], undefined)]);
+      await t.useCase.run();
+      t.enqueue(pageOf([itemAt(1, NOW - 1000, { liked: true, viewerLikeUri: likeUri(1) })], undefined));
+
+      await t.useCase.run();
+
+      expect(likeRows(t)).toEqual([{ subjectUri: recent(1).uri, likeUri: likeUri(1), createdAt: NOW }]);
+    });
+
+    it('保存済みの likeUri と同じなら、bluesky_likes に書き込まない', async () => {
+      const liked = itemAt(1, NOW - 1000, { liked: true, viewerLikeUri: likeUri(1) });
+      const t = setup([pageOf([liked], undefined)]);
+      await t.useCase.run();
+      t.enqueue(pageOf([liked], undefined));
+      t.queries.length = 0;
+
+      await t.useCase.run();
+
+      expect(likeQueries(t)).toEqual(['select']);
+      expect(likeRows(t)).toEqual([{ subjectUri: liked.uri, likeUri: likeUri(1), createdAt: NOW }]);
+    });
+
+    it('保存済みの likeUri と違えば、likeUri を更新する', async () => {
+      const t = setup([pageOf([itemAt(1, NOW - 1000, { liked: true, viewerLikeUri: likeUri(1) })], undefined)]);
+      await t.useCase.run();
+      t.enqueue(pageOf([itemAt(1, NOW - 1000, { liked: true, viewerLikeUri: likeUri(2) })], undefined));
+      t.queries.length = 0;
+
+      await t.useCase.run();
+
+      expect(likeQueries(t)).toEqual(['select', 'insert']);
+      expect(likeRows(t)).toEqual([{ subjectUri: recent(1).uri, likeUri: likeUri(2), createdAt: NOW }]);
+    });
+
+    it('viewerLikeUri が無い項目では、保存済みの bluesky_likes の行を消さない', async () => {
+      const t = setup([pageOf([itemAt(1, NOW - 1000, { liked: true, viewerLikeUri: likeUri(1) })], undefined)]);
+      await t.useCase.run();
+      t.enqueue(pageOf([itemAt(1, NOW - 1000)], undefined));
+
+      await t.useCase.run();
+
+      expect(likeRows(t)).toEqual([{ subjectUri: recent(1).uri, likeUri: likeUri(1), createdAt: NOW }]);
+    });
+
+    it('保持期限より古い項目の viewerLikeUri は保存しない', async () => {
+      const old = itemAt(1, NOW - 31 * DAY, { liked: true, viewerLikeUri: likeUri(1) });
+      const t = setup([pageOf([recent(2), old], undefined)]);
+
+      await t.useCase.run();
+
+      expect(likeRows(t)).toEqual([]);
+    });
+
+    it('viewerLikeUri を持つ項目が無いページでは、bluesky_likes への SELECT も INSERT も発行しない', async () => {
+      const t = setup([pageOf([recent(1), recent(2)], undefined)]);
+
+      await t.useCase.run();
+
+      expect(likeQueries(t)).toEqual([]);
+    });
+
+    it('同じページの 100 件がすべて新しい viewerLikeUri でも D1 のバインド上限に当たらない', async () => {
+      const items = Array.from(
+        { length: 100 },
+        (_, n) => itemAt(n, NOW - 1000, { liked: true, viewerLikeUri: likeUri(n) }),
+      );
+      const t = setup([pageOf(items, undefined)]);
+
+      await t.useCase.run();
+
+      expect(likeRows(t)).toHaveLength(100);
+    });
   });
 });

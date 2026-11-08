@@ -660,6 +660,12 @@ export const blueskyTimelineItemsTable = sqliteTable('bluesky_timeline_items', {
   index('bluesky_timeline_items_indexed_at_idx').on(table.indexedAt),
 ]);
 
+export const blueskyLikesTable = sqliteTable('bluesky_likes', {
+  subjectUri: text('subjectUri').primaryKey(),
+  likeUri: text('likeUri').notNull(),
+  createdAt: timestamp().notNull(),
+});
+
 export const schema = {
   usersTable,
   keysTable,
@@ -720,4 +726,5 @@ export const schema = {
   blueskyLoginFailuresTable,
   blueskyCrosspostsTable,
   blueskyTimelineItemsTable,
+  blueskyLikesTable,
 } as const;

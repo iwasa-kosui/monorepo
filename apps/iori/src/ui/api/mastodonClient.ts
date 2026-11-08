@@ -9,6 +9,7 @@ import type {
 } from '../../adaptor/mastodon/entities.ts';
 import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
 import type {
+  IoriBlueskyLikeResponse,
   IoriBlueskyTimelineRefreshResponse,
   IoriBlueskyTimelineResponse,
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
@@ -448,3 +449,19 @@ export const refreshBlueskyTimeline = async (): Promise<BlueskyTimelineRefreshRe
   if (!res.ok) throw await toApiError(res);
   return await res.json() as BlueskyTimelineRefreshResult;
 };
+
+const BLUESKY_LIKES_PATH = '/api/iori/v1/bluesky/likes';
+
+export const likeBlueskyPost = async (feedItemId: string): Promise<IoriBlueskyLikeResponse> => {
+  const res = await fetch(BLUESKY_LIKES_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ feedItemId }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as IoriBlueskyLikeResponse;
+};
+
+export const unlikeBlueskyPost = (feedItemId: string): Promise<IoriBlueskyLikeResponse> =>
+  act<IoriBlueskyLikeResponse>('DELETE', requestUrl(BLUESKY_LIKES_PATH, { feedItemId }));

@@ -10,6 +10,8 @@ import {
   refreshBlueskyTimeline,
 } from '../api/mastodonClient.ts';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
+import type { BlueskyItemsUpdater } from '../hooks/optimisticBlueskyLike.ts';
+import { useBlueskyLike } from '../hooks/useBlueskyLike.ts';
 
 type BlueskyData = Readonly<{
   enabled: boolean;
@@ -34,6 +36,10 @@ const BlueskyPage = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const isBusyRef = useRef(false);
+  const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
+    setData((prev) => prev === null ? prev : { ...prev, items: updater(prev.items) });
+  }, []);
+  const blueskyLike = useBlueskyLike(updateItems);
 
   const load = useCallback(async () => {
     try {
@@ -138,7 +144,15 @@ const BlueskyPage = () => {
       {message && <p role='status' class='mb-4 text-sm text-charcoal-light dark:text-gray-400'>{message}</p>}
       <div class='space-y-6 py-2'>
         {data.items.length > 0
-          ? data.items.map((item) => <BlueskyTimelineItemView key={item.feedItemId} item={item} />)
+          ? data.items.map((item) => (
+            <BlueskyTimelineItemView
+              key={item.feedItemId}
+              item={item}
+              onLike={blueskyLike.like}
+              onUndoLike={blueskyLike.undoLike}
+              isLikePending={blueskyLike.pendingUris.has(item.uri)}
+            />
+          ))
           : (
             <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-8 text-center'>
               <p class='text-charcoal-light dark:text-gray-400'>表示できる投稿はまだありません</p>

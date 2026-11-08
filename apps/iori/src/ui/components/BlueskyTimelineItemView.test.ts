@@ -21,9 +21,12 @@ const base: IoriBlueskyTimelineItemBody = {
   repostedByHandle: null,
   postedAt: Date.UTC(2026, 10, 8, 1),
   indexedAt: Date.UTC(2026, 10, 8, 1),
+  liked: false,
 };
-const render = (item: Partial<IoriBlueskyTimelineItemBody>): string =>
-  String(jsx(BlueskyTimelineItemView, { item: { ...base, ...item } }));
+const render = (
+  item: Partial<IoriBlueskyTimelineItemBody>,
+  props: Partial<Parameters<typeof BlueskyTimelineItemView>[0]> = {},
+): string => String(jsx(BlueskyTimelineItemView, { item: { ...base, ...item }, ...props }));
 
 describe('BlueskyTimelineItemView', () => {
   it('投稿者の表示名と @handle、本文、bsky.app の投稿へのリンクを出す', () => {
@@ -114,5 +117,42 @@ describe('BlueskyTimelineItemView', () => {
     expect(html).toContain('@q.bsky.social');
     expect(html).toContain('引用本文');
     expect(html).toContain('href="https://bsky.app/profile/did:plc:q/post/3kq"');
+  });
+
+  describe('いいねのボタン', () => {
+    const handlers = { onLike: () => {}, onUndoLike: () => {} };
+
+    it('ハンドラが渡されないときはボタンを出さない', () => {
+      expect(render({})).not.toContain('<button');
+    });
+
+    it('いいねしていなければ、塗りなしで「いいね」の title の button にする', () => {
+      const html = render({ liked: false }, handlers);
+
+      expect(html).toContain('type="button"');
+      expect(html).toContain('title="いいね"');
+      expect(html).toContain('fill="none"');
+      expect(html).not.toContain('disabled');
+    });
+
+    it('いいね済みなら、塗りつぶしの色で「いいねを取り消す」の title にする', () => {
+      const html = render({ liked: true }, handlers);
+
+      expect(html).toContain('title="いいねを取り消す"');
+      expect(html).toContain('fill="currentColor"');
+      expect(html).toContain('text-terracotta dark:text-terracotta-light');
+    });
+
+    it('送信中は disabled にし、押した後の状態に合わせた title を出す', () => {
+      expect(render({ liked: true }, { ...handlers, isLikePending: true })).toContain('title="いいね中..."');
+      expect(render({ liked: false }, { ...handlers, isLikePending: true })).toContain(
+        'title="いいね取り消し中..."',
+      );
+      expect(render({ liked: false }, { ...handlers, isLikePending: true })).toContain('disabled');
+    });
+
+    it('件数は表示しない', () => {
+      expect(render({ liked: true }, handlers)).not.toMatch(/<span class="text-sm">\d+<\/span>/);
+    });
   });
 });
