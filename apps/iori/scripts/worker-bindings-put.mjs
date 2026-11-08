@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 import { withCliSignal } from './cli-lifetime.mjs';
@@ -18,6 +19,10 @@ const SECRET_NAMES = Object.freeze([
   'SMOKE_QUEUE_TOKEN',
   ...OPTIONAL_SECRET_NAMES,
 ]);
+const BLUESKY_SECRET_NAMES = Object.freeze(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD']);
+const SECRETS_BULK_VERIFY_ATTEMPTS = 5;
+const SECRETS_BULK_VERIFY_INTERVAL_MS = 3000;
+const isBlueskyOperation = (invocation) => invocation.operation === 'put-bluesky-secrets';
 const secretNamesToPut = (env) => SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name) || env[name]);
 
 const assertIdentity = (env, invocation) => {
@@ -31,18 +36,19 @@ const assertIdentity = (env, invocation) => {
     || identity.mainSha !== invocation.migrationSha
   ) throw withReason(new Error('Migration target evidence is invalid.'), 'identity-mismatch');
 };
-const assertInputs = (env) => {
+const assertInputs = (env, bluesky) => {
   if (
     [
       'CLOUDFLARE_ACCOUNT_ID',
       'CLOUDFLARE_API_TOKEN',
-      ...SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name)),
+      ...(bluesky ? BLUESKY_SECRET_NAMES : SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name))),
     ]
       .some((name) => !env[name])
   ) throw withReason(new Error('Worker credentials are required.'), 'credentials-missing');
   if (!/^[a-f0-9]{32}$/.test(env.CLOUDFLARE_ACCOUNT_ID)) {
     throw withReason(new Error('Worker credentials are invalid.'), 'config-invalid');
   }
+  if (bluesky) return;
   assertSmokeQueueToken(env.SMOKE_QUEUE_TOKEN);
   let matches = false;
   try {
@@ -76,6 +82,69 @@ const assertWorkerExists = async ({ accountId, workerName, token, signal, fetchR
     throw failed('shape');
   }
   if (body?.success !== true || body.result === undefined) throw failed('shape');
+  return body;
+};
+const latestVersions = (body, signal) => {
+  const versions = body?.result?.deployments?.[0]?.versions;
+  if (
+    !Array.isArray(versions) || versions.length === 0
+    || versions.some((version) =>
+      typeof version?.version_id !== 'string' || version.version_id === '' || typeof version.percentage !== 'number'
+    )
+  ) throw withReason(new Error('Worker read failed.'), signal.aborted ? 'aborted' : 'workers-shape');
+  return versions;
+};
+const putSecretsBulk = async ({ accountId, workerName, token, secrets, signal, fetchRequest }) => {
+  const failed = (reason) => withReason(new Error('Worker secret put failed.'), signal.aborted ? 'aborted' : reason);
+  let response;
+  try {
+    response = await fetchRequest(
+      new URL(`https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${workerName}/secrets-bulk`),
+      {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/merge-patch+json' },
+        body: JSON.stringify({
+          secrets: Object.fromEntries(
+            Object.entries(secrets).map(([name, text]) => [name, { type: 'secret_text', name, text }]),
+          ),
+        }),
+        redirect: 'error',
+        signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+      },
+    );
+  } catch {
+    throw failed('secrets-bulk-failed');
+  }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    throw failed(
+      response.status === 401 || response.status === 403 ? 'secrets-bulk-forbidden' : 'secrets-bulk-failed',
+    );
+  }
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    throw failed('secrets-bulk-failed');
+  }
+  if (body?.success !== true) throw failed('secrets-bulk-failed');
+};
+const assertNewVersionDeployed = async ({ accountId, workerName, token, signal, fetchRequest, sleep, previous }) => {
+  for (let attempt = 0; attempt < SECRETS_BULK_VERIFY_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) {
+      try {
+        await sleep(SECRETS_BULK_VERIFY_INTERVAL_MS, signal);
+      } catch {
+        throw withReason(new Error('Worker read failed.'), 'aborted');
+      }
+    }
+    const versions = latestVersions(
+      await assertWorkerExists({ accountId, workerName, token, signal, fetchRequest }),
+      signal,
+    );
+    if (versions.length === 1 && versions[0].percentage === 100 && versions[0].version_id !== previous) return;
+  }
+  throw withReason(new Error('Worker secret put failed.'), signal.aborted ? 'aborted' : 'secrets-bulk-not-deployed');
 };
 export const putWorkerSecrets = async ({
   invocation,
@@ -85,10 +154,13 @@ export const putWorkerSecrets = async ({
   onStage = () => {},
   runCommand = runMigrationCommand,
   fetchRequest = fetch,
+  sleep = (ms, sleepSignal) => delay(ms, undefined, { signal: sleepSignal }),
 }) => {
-  onStage('put-worker-secrets');
+  const bluesky = isBlueskyOperation(invocation);
+  const stagePrefix = bluesky ? 'put-bluesky-secrets' : 'put-worker-secrets';
+  onStage(stagePrefix);
   assertIdentity(env, invocation);
-  assertInputs(env);
+  assertInputs(env, bluesky);
   let workerName;
   try {
     workerName = createTargetIdentity({
@@ -99,19 +171,41 @@ export const putWorkerSecrets = async ({
   } catch {
     throw withReason(new Error('Worker credentials are invalid.'), 'config-invalid');
   }
-  onStage('put-worker-secrets-read');
-  await assertWorkerExists({
+  onStage(`${stagePrefix}-read`);
+  const deployments = await assertWorkerExists({
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
     workerName,
     token: env.CLOUDFLARE_API_TOKEN,
     signal,
     fetchRequest,
   });
+  if (bluesky) {
+    const previous = latestVersions(deployments, signal)[0].version_id;
+    onStage(`${stagePrefix}-put`);
+    await putSecretsBulk({
+      accountId: env.CLOUDFLARE_ACCOUNT_ID,
+      workerName,
+      token: env.CLOUDFLARE_API_TOKEN,
+      secrets: Object.fromEntries(BLUESKY_SECRET_NAMES.map((name) => [name, env[name]])),
+      signal,
+      fetchRequest,
+    });
+    await assertNewVersionDeployed({
+      accountId: env.CLOUDFLARE_ACCOUNT_ID,
+      workerName,
+      token: env.CLOUDFLARE_API_TOKEN,
+      signal,
+      fetchRequest,
+      sleep,
+      previous,
+    });
+    return;
+  }
   const childEnv = {
     ...Object.fromEntries(Object.entries(env).filter(([name]) => !SECRET_NAMES.includes(name))),
     WRANGLER_SEND_METRICS: 'false',
   };
-  onStage('put-worker-secrets-put');
+  onStage(`${stagePrefix}-put`);
   const putNames = secretNamesToPut(env);
   let result;
   try {
@@ -133,13 +227,15 @@ export const putWorkerSecrets = async ({
 };
 const main = async (cliSignal, onStage) => {
   const invocation = parseWorkflowInvocation(process.env);
-  if (invocation.operation !== 'put-worker-secrets') throw new Error('Invalid Worker secret operation.');
+  if (!['put-worker-secrets', 'put-bluesky-secrets'].includes(invocation.operation)) {
+    throw new Error('Invalid Worker secret operation.');
+  }
   const { remainingMs } = workflowTimeBudget(Number(process.env.IORI_JOB_STARTED_AT));
   const signal = AbortSignal.any([cliSignal, AbortSignal.timeout(remainingMs)]);
   await putWorkerSecrets({ invocation, env: process.env, signal, timeout: remainingMs, onStage });
 };
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  let putStage = 'put-worker-secrets';
+  let putStage = process.env.IORI_OPERATION === 'put-bluesky-secrets' ? 'put-bluesky-secrets' : 'put-worker-secrets';
   withCliSignal(signal =>
     main(signal, (stage) => {
       putStage = stage;
