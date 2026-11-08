@@ -335,6 +335,85 @@ describe('createBlueskyClient の各操作', () => {
   });
 });
 
+describe('createBlueskyClient の認証付き GET（query）', () => {
+  const TIMELINE = 'app.bsky.feed.getTimeline';
+
+  it('保存済みセッションの PDS に、Bearer 付きの GET をクエリ文字列つきで送る', async () => {
+    const { client, calls } = setup(stored(), [() => json({ feed: [], cursor: 'c1' })]);
+
+    const result = await client.query(TIMELINE, { limit: '100', cursor: 'a b' });
+
+    expect(result).toEqual({ ok: true, val: { feed: [], cursor: 'c1' } });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe(`${PDS}/xrpc/${TIMELINE}?limit=100&cursor=a+b`);
+    expect(calls[0]!.init.method).toBe('GET');
+    expect(calls[0]!.init.body).toBeUndefined();
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+  });
+
+  it('パラメータが無ければクエリ文字列を付けない', async () => {
+    const { client, calls } = setup(stored(), [() => json({})]);
+
+    await client.query(TIMELINE, {});
+
+    expect(calls[0]!.url).toBe(`${PDS}/xrpc/${TIMELINE}`);
+  });
+
+  it('保存済みセッションが無ければ createSession して保存し、その PDS に GET する', async () => {
+    const { client, calls, saved } = setup(undefined, [
+      () => json(sessionBody('new', { didDoc: didDoc('https://pds.example.net') })),
+      () => json({ feed: [] }),
+    ]);
+
+    const result = await client.query(TIMELINE, { limit: '1' });
+
+    expect(result.ok).toBe(true);
+    expect(calls.map((call) => call.url)).toEqual([
+      'https://bsky.social/xrpc/com.atproto.server.createSession',
+      `https://pds.example.net/xrpc/${TIMELINE}?limit=1`,
+    ]);
+    expect(saved.map((session) => session.accessJwt)).toEqual(['access-new']);
+    expect(header(calls[1]!, 'Authorization')).toBe('Bearer access-new');
+  });
+
+  it('401 のとき、投稿と同じ refreshSession で更新して GET をやり直す', async () => {
+    const { client, calls, saved, current } = setup(stored(), [
+      () => json({ error: 'ExpiredToken' }, 400),
+      () => json(sessionBody('fresh')),
+      () => json({ feed: [] }),
+    ]);
+
+    const result = await client.query(TIMELINE, { limit: '100' });
+
+    expect(result.ok).toBe(true);
+    expect(calls.map((call) => call.url.split('?')[0]!.split('/').pop())).toEqual([
+      TIMELINE,
+      'com.atproto.server.refreshSession',
+      TIMELINE,
+    ]);
+    expect(header(calls[1]!, 'Authorization')).toBe('Bearer refresh-old');
+    expect(header(calls[2]!, 'Authorization')).toBe('Bearer access-fresh');
+    expect(saved).toHaveLength(1);
+    expect(current()).toMatchObject({ accessJwt: 'access-fresh', refreshJwt: 'refresh-fresh' });
+  });
+
+  it('認証以外の HTTP エラーは http として返し、トークンを含めない', async () => {
+    const { client, calls } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+
+    const result = await client.query(TIMELINE, {});
+
+    expect(result).toMatchObject({ ok: false, err: { kind: 'http', status: 500 } });
+    expect(JSON.stringify(result)).not.toContain('access-old');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('オブジェクトでない応答を invalid_response として返す', async () => {
+    const { client } = setup(stored(), [() => json(['not', 'an', 'object'])]);
+
+    expect(await client.query(TIMELINE, {})).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
+  });
+});
+
 describe('createBlueskyClient のタイムアウト', () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -356,6 +435,16 @@ describe('createBlueskyClient のタイムアウト', () => {
 
     expect(spy.mock.calls.map(([ms]) => ms)).toEqual([10_000, 30_000, 10_000, 10_000, 10_000]);
     expect(calls.every((call) => call.init.signal instanceof AbortSignal)).toBe(true);
+  });
+
+  it('認証付き GET（query）にも 10 秒の signal を付ける', async () => {
+    const spy = vi.spyOn(AbortSignal, 'timeout');
+    const { client, calls } = setup(stored(), [() => json({ feed: [] })]);
+
+    await client.query('app.bsky.feed.getTimeline', {});
+
+    expect(spy.mock.calls.map(([ms]) => ms)).toEqual([10_000]);
+    expect(calls[0]!.init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('タイムアウトした fetch は例外にせず network の失敗として返す', async () => {

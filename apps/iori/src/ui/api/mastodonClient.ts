@@ -7,6 +7,10 @@ import type {
   Status,
   Translation,
 } from '../../adaptor/mastodon/entities.ts';
+import type {
+  IoriBlueskyTimelineRefreshResponse,
+  IoriBlueskyTimelineResponse,
+} from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { IoriDigestRequestResponse } from '../../adaptor/routes/workerIoriDigestRouter.ts';
 import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
 import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
@@ -340,4 +344,22 @@ export const requestDigest = async (): Promise<DigestRequestResult> => {
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as DigestRequestResult;
+};
+
+export type BlueskyTimelinePage = IoriBlueskyTimelineResponse;
+
+export const fetchBlueskyTimeline = async (
+  params: Readonly<{ before?: number; beforeId?: string; limit?: number }> = {},
+): Promise<BlueskyTimelinePage> => (await request<BlueskyTimelinePage>('/api/iori/v1/bluesky/timeline', params)).body;
+
+export type BlueskyTimelineRefreshResult = IoriBlueskyTimelineRefreshResponse;
+
+export const refreshBlueskyTimeline = async (): Promise<BlueskyTimelineRefreshResult> => {
+  const res = await fetch('/api/iori/v1/bluesky/timeline/refresh', {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as BlueskyTimelineRefreshResult;
 };

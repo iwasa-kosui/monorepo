@@ -253,6 +253,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       'EVENT_ARCHIVE_ENABLED',
       'IORI_PRUNE_FEDERATED_POSTS',
       'IORI_BLUESKY_CROSSPOST',
+      'IORI_BLUESKY_TIMELINE',
       'BLUESKY_IDENTIFIER',
       'BLUESKY_APP_PASSWORD',
       'VAPID_PUBLIC_KEY',

@@ -623,6 +623,28 @@ export const blueskyCrosspostsTable = sqliteTable('bluesky_crossposts', {
   index('bluesky_crossposts_status_created_at_idx').on(table.status, table.createdAt),
 ]);
 
+export const blueskyTimelineItemsTable = sqliteTable('bluesky_timeline_items', {
+  feedItemId: text('feedItemId').primaryKey(),
+  uri: text('uri').notNull(),
+  cid: text('cid').notNull(),
+  authorDid: text('authorDid').notNull(),
+  authorHandle: text('authorHandle').notNull(),
+  authorDisplayName: text('authorDisplayName'),
+  authorAvatar: text('authorAvatar'),
+  text: text('text').notNull(),
+  facets: text('facets').notNull(),
+  embed: text('embed'),
+  replyParentUri: text('replyParentUri'),
+  replyParentAuthorHandle: text('replyParentAuthorHandle'),
+  repostedByDid: text('repostedByDid'),
+  repostedByHandle: text('repostedByHandle'),
+  postedAt: timestamp().notNull(),
+  indexedAt: timestamp().notNull(),
+  fetchedAt: timestamp().notNull(),
+}, (table) => [
+  index('bluesky_timeline_items_indexed_at_idx').on(table.indexedAt),
+]);
+
 export const schema = {
   usersTable,
   keysTable,
@@ -680,4 +702,5 @@ export const schema = {
   interestSourcesTable,
   blueskySessionsTable,
   blueskyCrosspostsTable,
+  blueskyTimelineItemsTable,
 } as const;
