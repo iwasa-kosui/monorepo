@@ -11,6 +11,17 @@ const guardPath = resolve(dirname(fileURLToPath(import.meta.url)), 'assert-workf
 const controlCharacters = /[\p{Cc}\u2028\u2029]/gu;
 const urlCredentials = /([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^\s/]+@/g;
 
+const authenticationFailure =
+  /\b(401|403)\b|unauthori[sz]ed|forbidden|authentication (failed|required)|invalid credentials/i;
+const networkFailure =
+  /\b(429|502|503|504)\b|too many requests|bad gateway|service unavailable|gateway time-?out|timed? ?out|deadline exceeded|connection (refused|reset|closed)|no such host|temporary failure|could not connect|tls handshake|\bEOF\b|try again later/i;
+
+export const classifyFailure = output => {
+  if (authenticationFailure.test(output)) return 'authentication';
+  if (networkFailure.test(output)) return 'network';
+  return 'other';
+};
+
 const runGuard = (text, stderr) => {
   const result = spawnSync(process.execPath, [guardPath], { input: text, stdio: ['pipe', 'ignore', 'pipe'] });
   if (result.stderr.length > 0) stderr(result.stderr.toString('utf8'));
@@ -76,6 +87,7 @@ export const runGuardedWithRetry = async ({
         if (attempt > 1) stdout(`Guarded command succeeded on attempt ${attempt} of ${attempts}: ${description}\n`);
         return 0;
       }
+      stderr(`Guarded command attempt ${attempt} of ${attempts} failed: kind=${classifyFailure(output)}\n`);
       if (attempt < attempts) {
         const waitMs = delaysMs[attempt - 1] ?? 0;
         stdout(

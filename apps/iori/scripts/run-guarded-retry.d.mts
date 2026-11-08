@@ -1,3 +1,5 @@
+export function classifyFailure(output: string): 'authentication' | 'network' | 'other';
+
 export function runGuardedWithRetry(input: {
   command: string;
   args: readonly string[];
