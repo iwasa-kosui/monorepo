@@ -2,9 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { fetchFavourites, isUnauthorizedError } from '../api/mastodonClient.ts';
+import { favouritesUrl, fetchFavourites, isUnauthorizedError } from '../api/mastodonClient.ts';
+import { readPageCache, writePageCache } from '../api/pageCache.ts';
+import { clearAllCache } from '../api/responseCache.ts';
 import { PostView } from '../components/PostView.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
+import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 
 type LikedPostsData = Readonly<{
@@ -12,32 +15,43 @@ type LikedPostsData = Readonly<{
   nextMaxId: string | undefined;
 }>;
 
+const readCachedLikedPosts = (): LikedPostsData | null => {
+  const cached = readPageCache<Status>(favouritesUrl());
+  return cached === undefined ? null : { statuses: cached.items, nextMaxId: cached.nextMaxId };
+};
+
 const LikedPostsPage = () => {
-  const [data, setData] = useState<LikedPostsData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [cached] = useState(readCachedLikedPosts);
+  const [data, setData] = useState<LikedPostsData | null>(cached);
+  const [isLoading, setIsLoading] = useState(cached === null);
   const [error, setError] = useState('');
+  const [isFirstPageSettled, setIsFirstPageSettled] = useState(false);
   const isLoadingMoreRef = useRef(false);
 
   useEffect(() => {
     const fetchLikedPosts = async () => {
       try {
         const page = await fetchFavourites();
+        writePageCache(favouritesUrl(), page);
         setData({ statuses: page.items, nextMaxId: page.nextMaxId });
       } catch (fetchError) {
         if (isUnauthorizedError(fetchError)) {
+          clearAllCache();
           window.location.href = '/sign-in';
           return;
         }
+        if (cached !== null) return;
         setError(fetchError instanceof TypeError ? 'Network error. Please try again.' : 'Failed to load liked posts');
       } finally {
         setIsLoading(false);
+        setIsFirstPageSettled(true);
       }
     };
     fetchLikedPosts();
   }, []);
 
   const loadMore = useCallback(async (maxId: string) => {
-    if (isLoadingMoreRef.current) return;
+    if (!canStartPageLoadMore(isLoadingMoreRef.current === true, isFirstPageSettled)) return;
     isLoadingMoreRef.current = true;
     try {
       const page = await fetchFavourites({ maxId });
@@ -48,9 +62,9 @@ const LikedPostsPage = () => {
     } finally {
       isLoadingMoreRef.current = false;
     }
-  }, []);
+  }, [isFirstPageSettled]);
 
-  useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore });
+  useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore, isFirstPageSettled });
 
   if (isLoading) {
     return (
