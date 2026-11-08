@@ -4,6 +4,7 @@ import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
+import type { ActorResolverByUri } from '../../../domain/actor/actor.ts';
 import type {
   FederatedTimelineItemCreatedStore,
   FederatedTimelineItemResolverByPostId,
@@ -31,6 +32,7 @@ export type OnCreateDeps = Readonly<{
   acceptedRelaysResolver: AcceptedRelaysResolver;
   inboxActorResolver: InboxActorResolver;
   remotePostUpserter: RemotePostUpserter;
+  actorResolverByUri: ActorResolverByUri;
   federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
   federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
   addRemotePostUseCase: AddRemotePostUseCase;
@@ -54,9 +56,11 @@ const saveForwardedCreate = async (
   const relaysResult = await deps.acceptedRelaysResolver.resolve();
   if (!relaysResult.ok) {
     getLogger().warn(
-      `Failed to resolve accepted relays for a forwarded Create: ${String(relaysResult.err)} (${note.id?.href})`,
+      `Failed to resolve accepted relays for a forwarded Create; failing the Create to retry: ${
+        String(relaysResult.err)
+      } (${note.id?.href})`,
     );
-    return;
+    throw new Error('Failed to resolve accepted relays for a forwarded Create');
   }
   if (relaysResult.val.length !== 1) {
     getLogger().info(

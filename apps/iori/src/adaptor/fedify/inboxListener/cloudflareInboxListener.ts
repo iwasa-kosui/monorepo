@@ -221,6 +221,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
       followedByLocalActorResolverByActorUri: createD1FollowedByLocalActorResolverByActorUri(db),
       acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
       remotePostUpserter,
+      actorResolverByUri,
       federatedTimelineItemResolverByPostId: createD1FederatedTimelineItemResolverByPostId(db),
       federatedTimelineItemCreatedStore: createD1FederatedTimelineItemCreatedStore(db),
       addRemotePostUseCase: AddRemotePostUseCase.create({
@@ -283,6 +284,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
       inboxActorResolver,
       addReceivedRepostUseCase,
       remotePostUpserter,
+      actorResolverByUri,
       articleResolver: createD1ArticleResolver(db),
       federatedTimelineItemResolverByPostId: createD1FederatedTimelineItemResolverByPostId(db),
       federatedTimelineItemCreatedStore: createD1FederatedTimelineItemCreatedStore(db),

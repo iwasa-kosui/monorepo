@@ -223,6 +223,7 @@ export const createCloudflareFederationRuntime = async (
       remoteActorProfileUpdatedStore: createD1RemoteActorProfileUpdatedStore(db),
       actorResolverByUri: createD1ActorResolverByUri(db),
     }),
+    actorResolverByUri: createD1ActorResolverByUri(db),
     federatedTimelineItemResolverByPostId: createD1FederatedTimelineItemResolverByPostId(db),
     federatedTimelineItemCreatedStore: createD1FederatedTimelineItemCreatedStore(db),
   });
