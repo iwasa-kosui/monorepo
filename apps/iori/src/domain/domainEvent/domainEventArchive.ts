@@ -53,6 +53,7 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'feedEntry.embedded',
   'feedEntry.expired',
   'feedSource.created',
+  'feedSource.enabledChanged',
   'feedSource.fetchFailed',
   'feedSource.fetched',
   'follow.followAccepted',
