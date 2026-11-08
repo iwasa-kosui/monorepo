@@ -1,37 +1,86 @@
+import z from 'zod/v4';
+
+import { Schema } from '../../helper/schema.ts';
 import { Recommendation } from '../recommendation/recommendation.ts';
 
-export const TOPIC_MIN_SIMILARITY = 0.4;
+const similarityRatio = z.number().min(0).max(1);
+
+const policyZodType = z
+  .object({
+    minSimilarity: similarityRatio,
+    minMargin: similarityRatio,
+    itemMinSimilarity: similarityRatio,
+  })
+  .describe('TopicAssignmentPolicy');
+const policySchema = Schema.create<z.output<typeof policyZodType>, z.input<typeof policyZodType>>(policyZodType);
+export type TopicAssignmentPolicy = Readonly<z.output<typeof policyZodType>>;
+export const TopicAssignmentPolicy = {
+  zodType: policyZodType,
+  parse: policySchema.parse,
+  orThrow: policySchema.orThrow,
+  default: { minSimilarity: 0.4, minMargin: 0, itemMinSimilarity: 0.4 } satisfies TopicAssignmentPolicy,
+} as const;
+
+export const TOPIC_MIN_SIMILARITY = TopicAssignmentPolicy.default.minSimilarity;
 
 export type TopicAssignmentArticle = Readonly<{ embedding: Float32Array }>;
 export type TopicAssignmentTopic = Readonly<{ topicKey: string; embedding: Float32Array | null }>;
 
+export type TopicMatch = Readonly<{ similarity: number; margin: number }>;
+
 export type TopicAssignment<TArticle extends TopicAssignmentArticle> = Readonly<{
   byTopic: ReadonlyMap<string, ReadonlyArray<TArticle>>;
+  matches: ReadonlyMap<TArticle, TopicMatch>;
   others: ReadonlyArray<TArticle>;
+  otherCounts: Readonly<{
+    belowMinSimilarity: number;
+    belowMinMargin: number;
+    noComparableTopic: number;
+  }>;
 }>;
 
 export const assignTopics = <TArticle extends TopicAssignmentArticle>(
   input: Readonly<{
     articles: ReadonlyArray<TArticle>;
     topics: ReadonlyArray<TopicAssignmentTopic>;
-    minSimilarity: number;
+    policy: Pick<TopicAssignmentPolicy, 'minSimilarity' | 'minMargin'>;
   }>,
 ): TopicAssignment<TArticle> => {
   const byTopic = new Map<string, TArticle[]>(input.topics.map((topic) => [topic.topicKey, []]));
+  const matches = new Map<TArticle, TopicMatch>();
   const others: TArticle[] = [];
+  const otherCounts = { belowMinSimilarity: 0, belowMinMargin: 0, noComparableTopic: 0 };
   for (const article of input.articles) {
     let bestTopicKey: string | undefined;
     let bestSimilarity = -Infinity;
+    let secondSimilarity = -Infinity;
     for (const topic of input.topics) {
       if (topic.embedding === null || topic.embedding.length !== article.embedding.length) continue;
       const similarity = Recommendation.cosineSimilarity(article.embedding, topic.embedding);
       if (similarity > bestSimilarity) {
+        secondSimilarity = bestSimilarity;
         bestSimilarity = similarity;
         bestTopicKey = topic.topicKey;
+      } else if (similarity > secondSimilarity) {
+        secondSimilarity = similarity;
       }
     }
-    if (bestTopicKey === undefined || bestSimilarity < input.minSimilarity) others.push(article);
-    else byTopic.get(bestTopicKey)!.push(article);
+    if (bestTopicKey === undefined) {
+      otherCounts.noComparableTopic += 1;
+      others.push(article);
+      continue;
+    }
+    const margin = secondSimilarity === -Infinity ? Infinity : bestSimilarity - secondSimilarity;
+    if (bestSimilarity < input.policy.minSimilarity) {
+      otherCounts.belowMinSimilarity += 1;
+      others.push(article);
+    } else if (margin < input.policy.minMargin) {
+      otherCounts.belowMinMargin += 1;
+      others.push(article);
+    } else {
+      byTopic.get(bestTopicKey)!.push(article);
+      matches.set(article, { similarity: bestSimilarity, margin });
+    }
   }
-  return { byTopic, others };
+  return { byTopic, matches, others, otherCounts };
 };
