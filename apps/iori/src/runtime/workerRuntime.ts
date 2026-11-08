@@ -458,7 +458,10 @@ export const createWorkerRuntimePorts = async (
         feedSourceEnabledChangedStore: createD1FeedSourceEnabledChangedStore(db),
         now: Instant.now,
       }),
-      getXFeedEntriesUseCase: GetXFeedEntriesUseCase.create({ xFeedEntriesResolver: createD1XFeedEntriesResolver(db) }),
+      getXFeedEntriesUseCase: GetXFeedEntriesUseCase.create({
+        xFeedEntriesResolver: createD1XFeedEntriesResolver(db),
+        now: Instant.now,
+      }),
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
       digestTopicsResolverByUserId,
       addDigestTopicUseCase: AddDigestTopicUseCase.create({

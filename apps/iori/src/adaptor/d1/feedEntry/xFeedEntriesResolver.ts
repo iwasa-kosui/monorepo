@@ -1,14 +1,17 @@
 import { RA } from '@iwasa-kosui/result';
 import { and, desc, eq, sql } from 'drizzle-orm';
 
+import { DAY_MS } from '../../../domain/aiSummary/jst.ts';
 import { FeedEntryId } from '../../../domain/feedEntry/feedEntryId.ts';
 import type { XFeedEntriesResolver } from '../../../domain/feedEntry/xFeedEntry.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import { X_USER_RETENTION_DAYS } from '../../../useCase/fetchXUserItems.ts';
 import type { IoriD1Db } from '../client.ts';
 import { feedEntriesTable, feedSourcesTable } from '../schema.ts';
 
 export const createD1XFeedEntriesResolver = (db: IoriD1Db): XFeedEntriesResolver => ({
-  resolve: async ({ limit }) => {
+  resolve: async ({ limit, now }) => {
+    const retentionStart = Instant.addDuration(now, -X_USER_RETENTION_DAYS * DAY_MS);
     const rows = await db.select({
       feedEntryId: feedEntriesTable.feedEntryId,
       sourceTitle: feedSourcesTable.title,
@@ -18,7 +21,11 @@ export const createD1XFeedEntriesResolver = (db: IoriD1Db): XFeedEntriesResolver
       fetchedAt: feedEntriesTable.fetchedAt,
     }).from(feedEntriesTable)
       .innerJoin(feedSourcesTable, eq(feedEntriesTable.feedSourceId, feedSourcesTable.feedSourceId))
-      .where(and(eq(feedSourcesTable.kind, 'x_user'), eq(feedSourcesTable.enabled, true)))
+      .where(and(
+        eq(feedSourcesTable.kind, 'x_user'),
+        eq(feedSourcesTable.enabled, true),
+        sql`coalesce(${feedEntriesTable.publishedAt}, ${feedEntriesTable.fetchedAt}) >= ${retentionStart}`,
+      ))
       .orderBy(
         desc(sql`coalesce(${feedEntriesTable.publishedAt}, ${feedEntriesTable.fetchedAt})`),
         desc(feedEntriesTable.feedEntryId),
