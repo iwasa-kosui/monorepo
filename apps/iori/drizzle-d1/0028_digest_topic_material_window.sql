@@ -1,0 +1,1 @@
+ALTER TABLE `digest_topics` ADD `materialWindowHours` integer;

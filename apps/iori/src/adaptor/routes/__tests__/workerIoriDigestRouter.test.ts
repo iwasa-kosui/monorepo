@@ -836,7 +836,7 @@ describe('iori のダイジェスト API', () => {
       expect(response.status).toBe(401);
     });
 
-    it.each(['digestDays=0', 'digestDays=31', 'limit=101', 'candidateHours=73'])(
+    it.each(['digestDays=0', 'digestDays=31', 'limit=101', 'candidateHours=337'])(
       '?%s は 400 にする',
       async (query) => {
         const t = setupReadApi();
@@ -1137,7 +1137,7 @@ describe('iori のダイジェスト API', () => {
 
     it.each([
       ['candidateHours=0', 'candidateHours'],
-      ['candidateHours=73', 'candidateHours'],
+      ['candidateHours=337', 'candidateHours'],
       ['candidateHours=abc', 'candidateHours'],
       ['candidateHours=1.5', 'candidateHours'],
       ['candidateHours=', 'candidateHours'],
@@ -1156,7 +1156,15 @@ describe('iori のダイジェスト API', () => {
       expect(await response.json()).toEqual({ error: `Validation failed: ${name}` });
     });
 
-    it.each(['candidateHours=1', 'candidateHours=72', 'digestDays=1', 'digestDays=30', 'limit=1', 'limit=100'])(
+    it.each([
+      'candidateHours=1',
+      'candidateHours=72',
+      'candidateHours=336',
+      'digestDays=1',
+      'digestDays=30',
+      'limit=1',
+      'limit=100',
+    ])(
       '?%s は範囲の端として受け付ける',
       async (query) => {
         const t = setupReadApi();
@@ -1244,10 +1252,10 @@ describe('iori のダイジェスト API', () => {
       userId: string,
       topicKey: string,
       sortOrder: number,
-      options: { embedded?: boolean; enabled?: boolean } = {},
+      options: { embedded?: boolean; enabled?: boolean; materialWindowHours?: number } = {},
     ) =>
       t.sqlite.prepare(
-        'INSERT INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+        'INSERT INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,materialWindowHours,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
       ).run(
         userId,
         topicKey,
@@ -1257,12 +1265,13 @@ describe('iori のダイジェスト API', () => {
         options.embedded === false ? null : 1,
         sortOrder,
         options.enabled === false ? 0 : 1,
+        options.materialWindowHours ?? null,
         1,
         1,
       );
     const rowOf = (t: ReturnType<typeof setupReadApi>, userId: string, topicKey: string) =>
       t.sqlite.prepare(
-        'SELECT name, description, enabled, embeddedAt, length(embedding) AS bytes FROM digest_topics WHERE userId = ? AND topicKey = ?',
+        'SELECT name, description, enabled, materialWindowHours, embeddedAt, length(embedding) AS bytes FROM digest_topics WHERE userId = ? AND topicKey = ?',
       ).get(userId, topicKey);
     const send = (method: string, headers: Record<string, string>, body?: unknown) => ({
       method,
@@ -1293,6 +1302,7 @@ describe('iori のダイジェスト API', () => {
               name: 'genai の名前',
               description: 'genai の説明',
               enabled: true,
+              materialWindowHours: null,
               sortOrder: 1,
               embedded: false,
               examples: [],
@@ -1303,11 +1313,28 @@ describe('iori のダイジェスト API', () => {
               name: 'platform の名前',
               description: 'platform の説明',
               enabled: false,
+              materialWindowHours: null,
               sortOrder: 2,
               embedded: true,
               examples: [],
               excludes: [],
             },
+          ],
+        });
+      });
+
+      it('materialWindowHours を返し、未設定は null にする', async () => {
+        const t = setupReadApi();
+        const me = await t.signIn('read:statuses');
+        seed(t, me.userId, 'genai', 0, { materialWindowHours: 72 });
+        seed(t, me.userId, 'platform', 1);
+
+        const response = await t.request('/api/iori/v1/digest-topics', { headers: me.bearer });
+
+        expect(await response.json()).toMatchObject({
+          topics: [
+            { topicKey: 'genai', materialWindowHours: 72 },
+            { topicKey: 'platform', materialWindowHours: null },
           ],
         });
       });
@@ -1391,6 +1418,7 @@ describe('iori のダイジェスト API', () => {
           name: '新しい名前',
           description: '新しい説明',
           enabled: true,
+          materialWindowHours: null,
           sortOrder: 5,
           embedded: true,
           examples: [],
@@ -1546,6 +1574,7 @@ describe('iori のダイジェスト API', () => {
             name: '新しい名前',
             description: 'genai の説明',
             enabled: true,
+            materialWindowHours: null,
             sortOrder: 3,
             embedded: true,
             examples: [],
@@ -1632,6 +1661,77 @@ describe('iori のダイジェスト API', () => {
         expect(await response.json()).toMatchObject({ topic: { topicKey: 'genai', enabled: false, embedded: true } });
         expect(stub.calls).toHaveLength(0);
         expect(rowOf(t, me.userId, 'genai')).toMatchObject({ enabled: 0, bytes: EMBEDDING_DIMENSIONS * 4 });
+      });
+
+      it('materialWindowHours だけを変えると、埋め込みを作り直さずに設定し、応答に含める', async () => {
+        const stub = createStubEmbedder(EMBEDDING_DIMENSIONS);
+        const t = setupReadApi({ textEmbedder: stub.embedder });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', me.bearer, { materialWindowHours: 72 });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({
+          topic: { topicKey: 'genai', materialWindowHours: 72, enabled: true, embedded: true },
+        });
+        expect(stub.calls).toHaveLength(0);
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({
+          materialWindowHours: 72,
+          bytes: EMBEDDING_DIMENSIONS * 4,
+        });
+      });
+
+      it.each([24, 336])('materialWindowHours %i は範囲の端として受け付ける', async (hours) => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', me.bearer, { materialWindowHours: hours });
+
+        expect(response.status).toBe(200);
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({ materialWindowHours: hours });
+      });
+
+      it('materialWindowHours に null を渡すと期間を解除する', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0, { materialWindowHours: 72 });
+
+        const response = await patch(t, 'genai', me.bearer, { materialWindowHours: null });
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ topic: { materialWindowHours: null } });
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({ materialWindowHours: null });
+      });
+
+      it('materialWindowHours と enabled を一緒に変えると、両方を反映する', async () => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0);
+
+        const response = await patch(t, 'genai', me.bearer, { materialWindowHours: 48, enabled: false });
+
+        expect(await response.json()).toMatchObject({ topic: { materialWindowHours: 48, enabled: false } });
+      });
+
+      it.each([
+        ['23', 23],
+        ['337', 337],
+        ['小数', 48.5],
+        ['文字列', '72'],
+        ['真偽値', true],
+        ['配列', [72]],
+      ])('materialWindowHours が %s なら 400 にして、何も変えない', async (_label, value) => {
+        const t = setupReadApi({ textEmbedder: stubEmbedder() });
+        const me = await t.signIn('write:accounts');
+        seed(t, me.userId, 'genai', 0, { materialWindowHours: 72 });
+
+        const response = await patch(t, 'genai', me.bearer, { materialWindowHours: value, enabled: false });
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: 'Validation failed: materialWindowHours' });
+        expect(rowOf(t, me.userId, 'genai')).toMatchObject({ enabled: 1, materialWindowHours: 72 });
       });
 
       it('name と enabled を一緒に変えると、両方を反映する', async () => {
