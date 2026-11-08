@@ -2,7 +2,25 @@
 goal: 「誰が、いつ、何を、なぜ」を業務イベントから答えられます。
 ---
 
+import SqlPlayground from '../../../components/SqlPlayground.astro';
+import { whoCancelledSql } from '../../../lib/snapshots';
+
 ## 業務イベントから、誰がなぜキャンセルしたかを答える
+
+「実行する」を押します。SQL を書き換えて実行することもできます。
+
+<SqlPlayground
+  id="chapter-3-who-cancelled"
+  script={{
+    exercise: 'chapter-2-step-2',
+    entry: 'who-cancelled.ts',
+    own: { exercise: 'chapter-1-start', file: 'visits.ts', testFile: 'visits.test.ts' },
+  }}
+  initial={whoCancelledSql()}
+/>
+
+<details>
+<summary>手元の Node で動かすとき</summary>
 
 第2章で編集した `chapter-1-start` か、`chapter-2-step-2` で、次のコマンドを実行します。
 
@@ -10,3 +28,4 @@ goal: 「誰が、いつ、何を、なぜ」を業務イベントから答え�
 node who-cancelled.ts
 ```
 
+</details>

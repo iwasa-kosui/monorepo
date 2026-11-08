@@ -31,6 +31,7 @@ export type SqlRunOutcome = {
 
 export type WorkerRequest =
   | { id: number; type: 'sql-setup'; setupSql: string }
+  | { id: number; type: 'sql-setup-script'; files: Readonly<Record<string, string>>; entry: string }
   | { id: number; type: 'sql-run'; sql: string }
   | { id: number; type: 'code-run'; files: Readonly<Record<string, string>>; entry: string };
 
@@ -38,6 +39,7 @@ export type WorkerResponse =
   | { type: 'ready' }
   | { type: 'init-error'; message: string }
   | { id: number; type: 'sql-setup'; error: string | null }
+  | { id: number; type: 'sql-setup-script'; error: string | null }
   | { id: number; type: 'sql-run'; outcome: SqlRunOutcome }
   | { id: number; type: 'code-run'; outcome: RunOutcome }
   | { id: number; type: 'failure'; message: string };

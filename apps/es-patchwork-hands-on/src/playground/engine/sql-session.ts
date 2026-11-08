@@ -70,6 +70,11 @@ export const createSqlSession = (SQL: SqlJsStatic) => {
     }
   };
 
+  const adopt = (next: Database): void => {
+    database.close();
+    database = next;
+  };
+
   const run = (sql: string): SqlRunOutcome => {
     const results: SqlStatementResult[] = [];
     let currentSql: string | null = null;
@@ -87,5 +92,5 @@ export const createSqlSession = (SQL: SqlJsStatic) => {
     }
   };
 
-  return { reset, run };
+  return { reset, adopt, run };
 };

@@ -129,7 +129,7 @@ body.chapter-page {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  gap: 0.75rem;
+  gap: 0.5rem;
   min-height: 0;
   margin-block: 0.75rem;
   overflow-wrap: anywhere;
@@ -140,6 +140,25 @@ body.chapter-page {
 }
 .content .chapter-body > * + h2 {
   margin-top: 0.75rem;
+}
+.content .chapter-body > table {
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+.content .chapter-body > table th,
+.content .chapter-body > table td {
+  padding-block: 0.125rem;
+}
+.content .detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.content .detail-row details {
+  margin-block: 0;
+}
+.content .detail-row details[open] {
+  flex-basis: 100%;
 }
 .content .chapter-body table,
 .content .chapter-body .decision-table {

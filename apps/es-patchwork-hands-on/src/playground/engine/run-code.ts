@@ -1,4 +1,4 @@
-import type { SqlJsStatic } from 'sql.js';
+import type { Database, SqlJsStatic } from 'sql.js';
 
 import { assert } from './assert.ts';
 import { createConsole } from './console.ts';
@@ -15,6 +15,18 @@ const describeError = (error: unknown): string => {
   return String(error);
 };
 
+const createShims = (
+  sqlite: ReturnType<typeof createDatabaseSync>,
+  runner: ReturnType<typeof createTestRunner>,
+): Record<string, unknown> => ({
+  'node:sqlite': { DatabaseSync: sqlite.DatabaseSync },
+  'node:test': runner.api,
+  'node:assert': assert,
+  'node:assert/strict': assert,
+  assert,
+  'assert/strict': assert,
+});
+
 export const runCode = async (options: {
   SQL: SqlJsStatic;
   files: Readonly<Record<string, string>>;
@@ -23,14 +35,6 @@ export const runCode = async (options: {
   const { console, lines, summary } = createConsole();
   const sqlite = createDatabaseSync(options.SQL);
   const runner = createTestRunner();
-  const shims: Record<string, unknown> = {
-    'node:sqlite': { DatabaseSync: sqlite.DatabaseSync },
-    'node:test': runner.api,
-    'node:assert': assert,
-    'node:assert/strict': assert,
-    assert,
-    'assert/strict': assert,
-  };
   let cutMessages = 0;
   const cut = (message: string): string => {
     if (message.length > maxMessageChars) {
@@ -46,10 +50,38 @@ export const runCode = async (options: {
     error: error === null ? null : cut(error),
   });
   try {
-    await runEntry({ files: options.files, entry: options.entry, shims, console });
+    await runEntry({ files: options.files, entry: options.entry, shims: createShims(sqlite, runner), console });
     return finish(runner.hasTests() ? await runner.run() : null, null);
   } catch (error) {
     return finish(null, describeError(error));
+  } finally {
+    sqlite.closeAll();
+  }
+};
+
+export const runForDatabase = async (options: {
+  SQL: SqlJsStatic;
+  files: Readonly<Record<string, string>>;
+  entry: string;
+}): Promise<{ database: Database | null; error: string | null }> => {
+  const { console } = createConsole();
+  const sqlite = createDatabaseSync(options.SQL);
+  try {
+    await runEntry({
+      files: options.files,
+      entry: options.entry,
+      shims: createShims(sqlite, createTestRunner()),
+      console,
+    });
+    const [database, ...others] = sqlite.databases();
+    if (database === undefined || others.length > 0) {
+      const count = others.length + (database === undefined ? 0 : 1);
+      return { database: null, error: `${options.entry} が作ったデータベースが ${count} 個あります` };
+    }
+    sqlite.release(database);
+    return { database, error: null };
+  } catch (error) {
+    return { database: null, error: describeError(error) };
   } finally {
     sqlite.closeAll();
   }

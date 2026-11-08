@@ -2,7 +2,7 @@ import type { EditorState } from '@codemirror/state';
 
 import { createRuntime, RuntimeScriptError } from './client.ts';
 import { applyRuntimeState, element, failureElement, query } from './dom.ts';
-import { createEditorState, createEditorView } from './editor.ts';
+import { createEditorState, createEditorView, revealText } from './editor.ts';
 import { maxLogLineChars, maxMessageChars } from './engine/limits.ts';
 import type { RunOutcome } from './engine/types.ts';
 import { clearEdits, loadEdits, saveEdits } from './storage.ts';
@@ -15,6 +15,7 @@ type CodeConfig = {
   editable: string[];
   readonly: string[];
   testFile: string | null;
+  reveal: string | null;
   complete: { files: Record<string, string> } | null;
 };
 
@@ -123,21 +124,32 @@ const mount = (root: HTMLElement): void => {
   const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
   const output = query<HTMLElement>(root, '[data-role="output"]');
   const editorParent = query<HTMLElement>(root, '[data-role="editor"]');
-  const resetButton = query<HTMLButtonElement>(root, '[data-role="reset"]');
+  const resetButton = root.querySelector<HTMLButtonElement>('[data-role="reset"]');
   const retryButton = query<HTMLButtonElement>(root, '[data-role="retry"]');
-  const restoreButton = query<HTMLButtonElement>(root, '[data-role="restore"]');
+  const restoreButton = root.querySelector<HTMLButtonElement>('[data-role="restore"]');
   const completeButton = root.querySelector<HTMLButtonElement>('[data-role="complete"]');
   const runButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-run-file]')];
   const shown = [...config.editable, ...config.readonly];
   root.setAttribute('data-mounted', '');
   let busy = false;
+  let backup: Record<string, string> | null = null;
+
+  const discardBackup = (): void => {
+    backup = null;
+    if (restoreButton !== null) {
+      restoreButton.hidden = true;
+    }
+  };
 
   const stateFor = (file: string, doc: string): EditorState =>
     createEditorState(doc, {
       language: 'typescript',
       label: `${file} のコード`,
       readOnly: !config.editable.includes(file),
-      onChange: () => persist(),
+      onChange: () => {
+        persist();
+        discardBackup();
+      },
     });
 
   const saved = loadEdits(config.exerciseId);
@@ -171,10 +183,17 @@ const mount = (root: HTMLElement): void => {
     }
   }
 
+  const reveal = (): void => {
+    if (config.reveal !== null && config.editable.includes(active)) {
+      revealText(view, config.reveal);
+    }
+  };
+
   const select = (file: string): void => {
     states.set(active, view.state);
     active = file;
     view.setState(states.get(file) ?? stateFor(file, ''));
+    reveal();
     for (const tab of tabs) {
       const selected = tab.dataset.file === file;
       tab.setAttribute('aria-selected', String(selected));
@@ -188,6 +207,7 @@ const mount = (root: HTMLElement): void => {
       states.set(file, stateFor(file, docs[file] ?? config.files[file] ?? ''));
     }
     view.setState(states.get(active) ?? stateFor(active, ''));
+    reveal();
   };
 
   const updateControls = (): void => {
@@ -241,7 +261,6 @@ const mount = (root: HTMLElement): void => {
       }
     });
   }
-  let backup: Record<string, string> | null = null;
 
   const editableDocs = (): Record<string, string> => {
     const docs = currentDocs();
@@ -254,24 +273,34 @@ const mount = (root: HTMLElement): void => {
   const replaceWithBackup = (target: Readonly<Record<string, string>>): void => {
     const before = editableDocs();
     backup = sameDocs(before, config.files) || sameDocs(before, target) ? null : before;
-    restoreButton.hidden = backup === null;
+    if (restoreButton !== null) {
+      restoreButton.hidden = backup === null;
+    }
     replaceDocs(target);
     persist();
   };
 
-  resetButton.addEventListener('click', () => replaceWithBackup(config.files));
+  resetButton?.addEventListener('click', () => replaceWithBackup(config.files));
   completeButton?.addEventListener('click', () => {
     if (config.complete !== null) {
       replaceWithBackup(config.complete.files);
     }
   });
-  restoreButton.addEventListener('click', () => {
+  restoreButton?.addEventListener('click', () => {
     if (backup !== null) {
       replaceDocs(backup);
       persist();
     }
     backup = null;
-    restoreButton.hidden = true;
+    if (restoreButton !== null) {
+      restoreButton.hidden = true;
+    }
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      discardBackup();
+      replaceDocs(loadEdits(config.exerciseId));
+    }
   });
   retryButton.addEventListener('click', () => runtime.reload());
   select(active);

@@ -1,7 +1,7 @@
 import initSqlJs, { type SqlJsStatic } from 'sql.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { runCode } from './run-code.ts';
+import { runCode, runForDatabase } from './run-code.ts';
 import { createSqlSession } from './sql-session.ts';
 
 let SQL: SqlJsStatic;
@@ -252,5 +252,34 @@ describe('createSqlSession', () => {
     session.run('INSERT INTO t VALUES (\'a\');');
     session.reset('CREATE TABLE t (v TEXT);');
     expect(session.run('SELECT count(*) FROM t').results[0]).toMatchObject({ rows: [[0]] });
+  });
+});
+
+describe('runForDatabase', () => {
+  const script = `
+    import { DatabaseSync } from 'node:sqlite';
+    const db = new DatabaseSync(':memory:');
+    db.exec('CREATE TABLE t (v TEXT); INSERT INTO t VALUES (\\'a\\');');
+  `;
+
+  it('スクリプトが作ったデータベースを SQL の欄の初期状態として引き継ぐ', async () => {
+    const created = await runForDatabase({ SQL, files: { 'main.ts': script }, entry: 'main.ts' });
+    expect(created.error).toBeNull();
+    expect(created.database).not.toBeNull();
+    const session = createSqlSession(SQL);
+    session.adopt(created.database as NonNullable<typeof created.database>);
+    expect(session.run('SELECT v FROM t').results[0]).toMatchObject({ rows: [['a']] });
+  });
+
+  it('スクリプトが失敗したときはエラーを返す', async () => {
+    const created = await runForDatabase({ SQL, files: { 'main.ts': 'throw new Error(\'x\');' }, entry: 'main.ts' });
+    expect(created.database).toBeNull();
+    expect(created.error).toBe('Error: x');
+  });
+
+  it('データベースが 1 つも作られないときはエラーを返す', async () => {
+    const created = await runForDatabase({ SQL, files: { 'main.ts': 'console.log(1);' }, entry: 'main.ts' });
+    expect(created.database).toBeNull();
+    expect(created.error).toBe('main.ts が作ったデータベースが 0 個あります');
   });
 });

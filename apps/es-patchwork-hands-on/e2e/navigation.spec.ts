@@ -70,6 +70,7 @@ test.describe('矢印キー', () => {
     await page.goto('/chapters/chapter-2/2/');
     await page.keyboard.press('ArrowRight');
     await expect(page).toHaveURL(/\/chapters\/chapter-2\/3\/$/);
+    await page.waitForLoadState('load');
     await page.keyboard.press('ArrowLeft');
     await expect(page).toHaveURL(/\/chapters\/chapter-2\/2\/$/);
   });
@@ -78,6 +79,7 @@ test.describe('矢印キー', () => {
     await page.goto('/chapters/intro/9/');
     await page.keyboard.press('ArrowRight');
     await expect(page).toHaveURL(/\/chapters\/chapter-1\/$/);
+    await page.waitForLoadState('load');
     await page.keyboard.press('ArrowLeft');
     await expect(page).toHaveURL(/\/chapters\/intro\/9\/$/);
   });
@@ -118,24 +120,24 @@ test.describe('矢印キー', () => {
 
   test('横にスクロールできるコード欄にフォーカスがあるときは移動しない', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/chapters/chapter-1/6/');
+    await page.goto('/chapters/chapter-1/7/');
     const code = page.locator('pre').first();
     expect(await code.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
     await logHandledKeys(page);
     await code.focus();
     await page.keyboard.press('ArrowRight');
     expect(await handledKeys(page)).toEqual([false]);
-    expect(pathOf(page)).toBe('/chapters/chapter-1/6/');
+    expect(pathOf(page)).toBe('/chapters/chapter-1/7/');
   });
 
   test('横にスクロールしないコード欄にフォーカスがあるときは移動する', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 640 });
-    await page.goto('/chapters/chapter-1/6/');
+    await page.goto('/chapters/chapter-1/7/');
     const code = page.locator('pre').first();
     expect(await code.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false);
     await code.focus();
     await page.keyboard.press('ArrowLeft');
-    await expect(page).toHaveURL(/\/chapters\/chapter-1\/5\/$/);
+    await expect(page).toHaveURL(/\/chapters\/chapter-1\/6\/$/);
   });
 
   test('キーを押し続けて繰り返されたイベントでは移動しない', async ({ page }) => {
