@@ -111,3 +111,6 @@ export type BlueskyTimelineItemsSavedStore = Readonly<{
 export type BlueskyTimelineItemsExpiredStore = Readonly<{
   expire: (indexedBefore: Instant) => RA<void, never>;
 }>;
+export type BlueskyTimelineItemsDeletedStore = Readonly<{
+  deleteByUri: (uri: string) => RA<void, never>;
+}>;

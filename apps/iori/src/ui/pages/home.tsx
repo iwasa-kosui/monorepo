@@ -12,6 +12,7 @@ import { Modal } from '../components/Modal.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
+import { homeItemKey } from '../hooks/homeFeed.ts';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
 
 const usePostedHandler = () => {
@@ -648,7 +649,7 @@ const TimelineList = () => {
         if (item.kind === 'bluesky') {
           return (
             <BlueskyTimelineItemView
-              key={`bluesky:${item.item.feedItemId}`}
+              key={homeItemKey(item)}
               item={item.item}
               dataIndex={index}
               isSelected={selectedIndex === index}

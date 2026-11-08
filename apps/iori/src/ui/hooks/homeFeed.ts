@@ -1,7 +1,7 @@
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import type { BlueskyTimelinePage } from '../api/mastodonClient.ts';
-import { appendUniqueBy } from './appendUnique.ts';
+import type { BlueskyTimelinePage, Page } from '../api/mastodonClient.ts';
+import { appendUniqueBy, appendUniqueById } from './appendUnique.ts';
 
 export type BlueskyCursor = Readonly<{ before: number; beforeId: string | null }>;
 
@@ -83,3 +83,63 @@ export const mergeHomeFeed = (
     .filter(({ time }) => floor === undefined || time >= floor)
     .map(({ item }) => item);
 };
+
+export type HomeFeedPaging = Readonly<{
+  statuses: readonly Status[];
+  nextMaxId: string | undefined;
+  bluesky: BlueskySource;
+}>;
+
+export type LoadMoreFetched = Readonly<{
+  home: PromiseSettledResult<Page<Status> | undefined>;
+  bluesky: PromiseSettledResult<BlueskyTimelinePage | undefined>;
+}>;
+
+export type LoadMoreAdvance = Readonly<{
+  nextMaxId: string | undefined;
+  blueskyCursor: BlueskyCursor | undefined;
+  statuses: readonly Status[] | undefined;
+  blueskyItems: readonly IoriBlueskyTimelineItemBody[] | undefined;
+}>;
+
+export type LoadMoreOutcome =
+  | Readonly<{ kind: 'homeFailed'; reason: unknown }>
+  | Readonly<{ kind: 'advanced'; advance: LoadMoreAdvance }>;
+
+export const settleLoadMore = (
+  cursors: Readonly<{ maxId: string | undefined; blueskyCursor: BlueskyCursor | undefined }>,
+  { home, bluesky }: LoadMoreFetched,
+): LoadMoreOutcome => {
+  if (home.status === 'rejected') return { kind: 'homeFailed', reason: home.reason };
+  const page = home.value;
+  const blueskyPage = bluesky.status === 'fulfilled' ? bluesky.value : undefined;
+  return {
+    kind: 'advanced',
+    advance: {
+      nextMaxId: page === undefined
+        ? cursors.maxId
+        : page.items.length === 0 || page.nextMaxId === cursors.maxId
+        ? undefined
+        : page.nextMaxId,
+      blueskyCursor: bluesky.status === 'rejected'
+        ? undefined
+        : blueskyPage === undefined
+        ? cursors.blueskyCursor
+        : blueskyCursorAfterPage(cursors.blueskyCursor, blueskyPage),
+      statuses: page?.items,
+      blueskyItems: blueskyPage?.items,
+    },
+  };
+};
+
+export const pagingAfterLoadMore = (
+  prev: HomeFeedPaging,
+  { nextMaxId, blueskyCursor, statuses, blueskyItems }: LoadMoreAdvance,
+): HomeFeedPaging => ({
+  statuses: statuses === undefined ? prev.statuses : appendUniqueById(prev.statuses, statuses),
+  nextMaxId,
+  bluesky: {
+    items: blueskyItems === undefined ? prev.bluesky.items : appendBlueskyItems(prev.bluesky.items, blueskyItems),
+    cursor: blueskyCursor,
+  },
+});

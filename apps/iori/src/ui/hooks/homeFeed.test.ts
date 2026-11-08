@@ -2,15 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import type { BlueskyTimelinePage } from '../api/mastodonClient.ts';
+import type { BlueskyTimelinePage, Page } from '../api/mastodonClient.ts';
 import {
   appendBlueskyItems,
   blueskyCursorAfterPage,
   blueskySourceOf,
   emptyBlueskySource,
   homeFeedCursor,
+  type HomeFeedPaging,
   homeItemKey,
+  type LoadMoreFetched,
   mergeHomeFeed,
+  pagingAfterLoadMore,
+  settleLoadMore,
 } from './homeFeed.ts';
 
 const at = (second: number) => Date.UTC(2026, 10, 8, 12, 0, second);
@@ -191,5 +195,108 @@ describe('Bluesky の情報源', () => {
     const merged = appendBlueskyItems([bluesky('b1', 3)], [bluesky('b1', 3), bluesky('b2', 2)]);
 
     expect(merged.map((item) => item.feedItemId)).toEqual(['b1', 'b2']);
+  });
+});
+
+describe('追加読み込みの結果から次の状態を計算する', () => {
+  const statusPage = (items: readonly Status[], nextMaxId: string | undefined): Page<Status> => ({
+    items,
+    nextMaxId,
+    prevMinId: undefined,
+  });
+  const fulfilled = <T>(value: T): PromiseFulfilledResult<T> => ({ status: 'fulfilled', value });
+  const rejected = (reason: unknown): PromiseRejectedResult => ({ status: 'rejected', reason });
+  const skipped = fulfilled(undefined);
+
+  const settle = (prev: HomeFeedPaging, fetched: LoadMoreFetched) => {
+    const outcome = settleLoadMore({
+      maxId: prev.nextMaxId,
+      blueskyCursor: prev.bluesky.cursor,
+    }, fetched);
+    if (outcome.kind === 'homeFailed') return { outcome, paging: prev, shown: undefined };
+    const paging = pagingAfterLoadMore(prev, outcome.advance);
+    const shown = keys(mergeHomeFeed({
+      statuses: paging.statuses,
+      hasMoreStatuses: paging.nextMaxId !== undefined,
+      bluesky: paging.bluesky.items,
+      hasMoreBluesky: paging.bluesky.cursor !== undefined,
+    }));
+    return { outcome, paging, shown };
+  };
+
+  const before: HomeFeedPaging = {
+    statuses: [status('s1', 50), status('s2', 30)],
+    nextMaxId: 's2',
+    bluesky: { items: [bluesky('b1', 45), bluesky('b2', 40)], cursor: { before: 40, beforeId: 'b2' } },
+  };
+
+  it('両方が成功したときは、両方の項目を足してカーソルを進める', () => {
+    const { paging, shown } = settle(before, {
+      home: fulfilled(statusPage([status('s3', 20)], 's3')),
+      bluesky: fulfilled(page([bluesky('b3', 35)], { before: 35, beforeId: 'b3' })),
+    });
+
+    expect(paging.nextMaxId).toBe('s3');
+    expect(paging.bluesky.cursor).toEqual({ before: 35, beforeId: 'b3' });
+    expect(shown).toEqual(['s1', 'bluesky:b1', 'bluesky:b2', 'bluesky:b3']);
+  });
+
+  it('Bluesky だけ失敗したとき、Bluesky のカーソルを消して下限から外し、iori の項目を表示する', () => {
+    const { paging, shown } = settle(before, {
+      home: fulfilled(statusPage([status('s3', 20), status('s4', 10)], 's4')),
+      bluesky: rejected(new Error('bluesky down')),
+    });
+
+    expect(paging.bluesky.cursor).toBeUndefined();
+    expect(paging.bluesky.items).toEqual(before.bluesky.items);
+    expect(paging.nextMaxId).toBe('s4');
+    expect(shown).toEqual(['s1', 'bluesky:b1', 'bluesky:b2', 's2', 's3', 's4']);
+  });
+
+  it('iori が尽きていて Bluesky だけ読んで失敗したとき、隠れていた iori の項目を表示する', () => {
+    const exhausted: HomeFeedPaging = {
+      statuses: [status('s1', 50), status('s2', 30), status('s3', 10)],
+      nextMaxId: undefined,
+      bluesky: { items: [bluesky('b1', 45), bluesky('b2', 40)], cursor: { before: 40, beforeId: 'b2' } },
+    };
+    const hidden = keys(mergeHomeFeed({
+      statuses: exhausted.statuses,
+      hasMoreStatuses: false,
+      bluesky: exhausted.bluesky.items,
+      hasMoreBluesky: true,
+    }));
+
+    const { paging, shown } = settle(exhausted, { home: skipped, bluesky: rejected(new Error('bluesky down')) });
+
+    expect(hidden).toEqual(['s1', 'bluesky:b1', 'bluesky:b2']);
+    expect(paging.bluesky.cursor).toBeUndefined();
+    expect(paging.statuses).toEqual(exhausted.statuses);
+    expect(shown).toEqual(['s1', 'bluesky:b1', 'bluesky:b2', 's2', 's3']);
+  });
+
+  it('ホームの API だけが失敗したとき、Bluesky のページを捨ててカーソルも項目も変えない', () => {
+    const { outcome, paging } = settle(before, {
+      home: rejected(new Error('home down')),
+      bluesky: fulfilled(page([bluesky('b3', 35)], { before: 35, beforeId: 'b3' })),
+    });
+
+    expect(outcome).toEqual({ kind: 'homeFailed', reason: new Error('home down') });
+    expect(paging).toBe(before);
+    expect(homeFeedCursor(paging.nextMaxId, paging.bluesky.cursor)).toBe(
+      homeFeedCursor(before.nextMaxId, before.bluesky.cursor),
+    );
+  });
+
+  it('ホームの API を読みに行かなかったとき、Bluesky が成功すればカーソルを進める', () => {
+    const exhausted: HomeFeedPaging = { ...before, nextMaxId: undefined };
+
+    const { paging } = settle(exhausted, {
+      home: skipped,
+      bluesky: fulfilled(page([bluesky('b3', 35)], { before: 35, beforeId: 'b3' })),
+    });
+
+    expect(paging.nextMaxId).toBeUndefined();
+    expect(paging.bluesky.items.map((item) => item.feedItemId)).toEqual(['b1', 'b2', 'b3']);
+    expect(paging.bluesky.cursor).toEqual({ before: 35, beforeId: 'b3' });
   });
 });

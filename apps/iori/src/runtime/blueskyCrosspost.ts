@@ -8,6 +8,7 @@ import {
   createD1BlueskySessionResolver,
   createD1BlueskySessionSavedStore,
 } from '../adaptor/d1/blueskyCrosspost/blueskySessionStore.ts';
+import { createD1BlueskyTimelineItemsDeletedStore } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsDeletedStore.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1PostImagesResolverByPostId } from '../adaptor/d1/image/postImagesResolver.ts';
 import { createD1LinkPreviewsResolverByPostId } from '../adaptor/d1/linkPreview/linkPreviewsResolverByPostId.ts';
@@ -63,6 +64,7 @@ export const createBlueskyCrosspostUseCases = (
   const crosspostResolver = createD1BlueskyCrosspostResolver(db);
   const crosspostSavedStore = createD1BlueskyCrosspostSavedStore(db);
   const crosspostDeletedStore = createD1BlueskyCrosspostDeletedStore(db);
+  const timelineItemsDeletedStore = createD1BlueskyTimelineItemsDeletedStore(db);
   const client = createBlueskyClient({
     identifier: config.identifier,
     appPassword: config.appPassword,
@@ -80,6 +82,7 @@ export const createBlueskyCrosspostUseCases = (
     crosspostResolver,
     crosspostSavedStore,
     crosspostDeletedStore,
+    timelineItemsDeletedStore,
     uploads: createPostImageR2ObjectStore({ bucket: env.UPLOADS }),
     thumbnailFetcher: createBlueskyThumbnailFetcher({ fetch: deps.fetch }),
     client,
@@ -101,6 +104,7 @@ export const createBlueskyCrosspostUseCases = (
       crosspostResolver,
       crosspostSavedStore,
       crosspostDeletedStore,
+      timelineItemsDeletedStore,
       client,
       waitUntil,
       now,
@@ -109,6 +113,7 @@ export const createBlueskyCrosspostUseCases = (
       crosspostsResolverByRetryable: createD1BlueskyCrosspostsResolverByRetryable(db),
       crosspostSavedStore,
       crosspostDeletedStore,
+      timelineItemsDeletedStore,
       client,
       send,
       now,
