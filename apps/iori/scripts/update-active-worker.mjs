@@ -5,6 +5,9 @@ import { admissionEnvironment, parseExpectedTarget, targetIdentity } from './mig
 import { assertReviewedMain } from './reviewed-main.mjs';
 import { createTargetControlPlane } from './target-control-plane.mjs';
 
+// List a binding here only in the release that first adds it, and reset to [] after that deploy succeeds.
+const BINDINGS_ADDED_BY_THIS_RELEASE = Object.freeze([]);
+
 /** A normal code update preserves the immutable migration identity and all active routing/Queue configuration. */
 export const updateActiveWorker = async (
   {
@@ -41,6 +44,7 @@ export const updateActiveWorker = async (
     zoneId,
     expectedVersionId: previousVersion,
     routePresent: true,
+    missingAllowed: BINDINGS_ADDED_BY_THIS_RELEASE,
   });
   await checkMain(currentCodeSha, { signal });
   onStage('deploy-worker-deploy');

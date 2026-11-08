@@ -499,7 +499,10 @@ export const digestTopicsTable = sqliteTable('digest_topics', {
   topicKey: text('topicKey').notNull(),
   name: text('name').notNull(),
   description: text('description').notNull(),
+  examples: text('examples').notNull().default('[]'),
+  excludes: text('excludes').notNull().default('[]'),
   embedding: embeddingBlob('embedding'),
+  excludeEmbedding: embeddingBlob('excludeEmbedding'),
   embeddedAt: timestamp(),
   sortOrder: integer('sortOrder').notNull(),
   enabled: integer('enabled', { mode: 'boolean' }).notNull(),
@@ -593,6 +596,33 @@ export const interestSourcesTable = sqliteTable('interest_sources', {
   index('interest_sources_user_id_embedded_at_deleted_at_idx').on(table.userId, table.embeddedAt, table.deletedAt),
 ]);
 
+export const blueskySessionsTable = sqliteTable('bluesky_sessions', {
+  id: text('id').primaryKey(),
+  did: text('did').notNull(),
+  handle: text('handle').notNull(),
+  pdsUrl: text('pdsUrl').notNull(),
+  accessJwt: text('accessJwt').notNull(),
+  refreshJwt: text('refreshJwt').notNull(),
+  updatedAt: timestamp().notNull(),
+});
+
+export const blueskyCrosspostsTable = sqliteTable('bluesky_crossposts', {
+  postId: text('postId').primaryKey(),
+  status: text('status').notNull(),
+  skipReason: text('skipReason'),
+  uri: text('uri'),
+  cid: text('cid'),
+  rkey: text('rkey'),
+  rootUri: text('rootUri'),
+  rootCid: text('rootCid'),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('lastError'),
+  createdAt: timestamp().notNull(),
+  updatedAt: timestamp().notNull(),
+}, (table) => [
+  index('bluesky_crossposts_status_created_at_idx').on(table.status, table.createdAt),
+]);
+
 export const schema = {
   usersTable,
   keysTable,
@@ -648,4 +678,6 @@ export const schema = {
   digestDeepDiveUsagesTable,
   digestTrendsTable,
   interestSourcesTable,
+  blueskySessionsTable,
+  blueskyCrosspostsTable,
 } as const;

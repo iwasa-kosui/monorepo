@@ -10,6 +10,10 @@
 - Worker は、R2 への書き出しが成功した後に、書き出した範囲の行を D1 から削除します。書き出しに失敗した場合、Worker は D1 から行を削除しません。
 - Worker は、actor の作成のイベント（`actor.created`）を D1 に残します。この行は、退避の対象にも削除の対象にもなりません。
 - Worker は、秘密情報を含むイベント（鍵の作成、プッシュ購読の作成など）について、`aggregate_state` と `event_payload` の列を NULL にして書き出します。
+- Worker は、X の投稿（情報源の kind が `x_user`）が 7 日で期限切れになるとき、その投稿を aggregate とする `feedEntry.collected`、`feedEntry.embedded`、`feedEntry.bookmarkCountUpdated` の行を、`feed_entries` の行の削除と同じバッチで D1 から削除します。この削除は `EVENT_ARCHIVE_ENABLED` の値に左右されません。`feedEntry.expired` の行は feedEntryId だけを持つので残します。RSS など x_user 以外の投稿のイベントは、この削除の対象外です。
+- Worker は、X の投稿（情報源の kind が `x_user`）の本文とユーザー名を R2 に残しません。X の投稿は 7 日で消す決まりなので、次のイベントの `aggregate_state` と `event_payload` の列を NULL にして書き出します。
+  - `feedEntry.collected`、`feedEntry.embedded`、`feedEntry.bookmarkCountUpdated`: これらのイベントは情報源の kind を持たず、x_user の投稿を見分けられません。このため、RSS など x_user 以外の情報源の分も NULL にします。
+  - `feedSource.created`、`feedSource.fetched`、`feedSource.fetchFailed`、`feedSource.enabledChanged`: `aggregate_state` の `kind` が `x_user` の行だけ NULL にします。`kind` を読めない行も NULL にします。x_user 以外の情報源の行は、そのまま書き出します。
 - Worker は、各バッチの書き出しと削除が終わるたびに、オブジェクトの鍵と件数を1行のログに出します。
 - 1回の実行には、10分の時間の上限と、100バッチの上限があります。どちらかの上限に達した場合、残りの行は翌日の実行で退避します。
 
@@ -27,6 +31,8 @@ domain-events/v1/year=YYYY/month=MM/day=DD/<occurredAt>-<eventId>.parquet
 
 Parquet の列は、`event_id`、`aggregate_id`、`aggregate_name`、`aggregate_state`、`event_name`、`event_payload`、`occurred_at` です。
 
+NULL にした行も、`event_id`、`aggregate_id`、`aggregate_name`、`event_name`、`occurred_at` は残ります。`feedEntry.*` と `feedSource.*` の `aggregate_id` は ID だけで、URL やユーザー名を含みません。
+
 機微な列のうち、`session.started` の `aggregate_id` は、元の値を `sha256:<16進>` に置き換えて書きます。
 
 ## 2. 有効化の手順
@@ -34,7 +40,7 @@ Parquet の列は、`event_id`、`aggregate_id`、`aggregate_name`、`aggregate_
 退避の処理は、環境変数 `EVENT_ARCHIVE_ENABLED` が文字列の `true` のときだけ動きます。`apps/iori/workers/iori/wrangler.template.jsonc` の既定値は `"false"` です。最初の配備は、無効のまま行います。
 
 1. 作業者は、バケットを operation `ensure-event-archive-bucket`（#647 で追加）で先に作ります。作業者は、この operation を、`terraform apply` を実行するすべての環境と世代で、`apply` より先に実行します。import ブロックは対象のバケットが無いと plan で失敗し、ほかのリソースの `apply` も止めるためです。Terraform は、次の `apply` で import ブロックにより、このバケットを state に取り込みます。作業者は、`apps/iori/infra/cloudflare` で `terraform apply` を実行し、`cloudflare_r2_bucket.event_archive` が state に取り込まれたことを確かめます。作業者は、Terraform の API token に R2 バケットを扱う権限があることを、先に確かめます。
-2. 作業者は、`deploy-worker` の operation を dispatch して、無効のまま Worker を配備します。この配備は、`EVENT_ARCHIVE` の R2 バインディングと、`0 19 * * *` の cron を Worker に反映します。`deploy-worker` は、`iori-<環境>-<世代>-event-archive` がないと、バケットの確認で止まります。
+2. 作業者は、`deploy-worker` の operation を dispatch して、無効のまま Worker を配備します。この配備は、`EVENT_ARCHIVE` の R2 バインディングと、`0 19 * * *` の cron を Worker に反映します。`deploy-worker` は、`iori-<環境>-<世代>-event-archive` がないと、バケットの確認で止まります。現行の Worker が `EVENT_ARCHIVE` のバインディングを持たない環境では、`deploy-worker` の配備前の検査は、`apps/iori/scripts/update-active-worker.mjs` の `BINDINGS_ADDED_BY_THIS_RELEASE` に `EVENT_ARCHIVE` があるときだけ通ります。一覧に `EVENT_ARCHIVE` がない状態で実行すると、`deploy-worker` は `worker-binding-missing` で止まります。この時点で D1 のマイグレーションも `wrangler deploy` も実行されておらず、環境は変わりません。一覧に `EVENT_ARCHIVE` がないときは、作業者は配備の前に、一覧に `EVENT_ARCHIVE` を足す PR を merge します。`EVENT_ARCHIVE` を入れるすべての環境と世代で配備が成功したら、作業者は別の PR で一覧を `[]` に戻します。
 3. 作業者は、後述の `domain-events-stats` を実行して、退避前の件数を記録します。作業者は、次の2点も確かめます。
    - `max_bytes` と `avg_bytes` が、バイトの予算 16 MB に対して十分に小さいことを確かめます。`max_bytes` が 16 MB に近い場合、作業者は有効化を止めて、原因を調べます。
    - `created_at_skew_actors` が 0 であることを確かめます。この値は、`actor.created` のイベントより古いイベントを持つ actor、または `actor.created` のイベントを持たない actor の数です。0 でない場合、退避の後にアカウントの作成日時（`createdAt`）が、現在の値からずれます。作業者は、有効化を止めて、原因を調べます。

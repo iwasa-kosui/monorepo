@@ -26,6 +26,7 @@ import { createD1ArticleWithDependentsDeletedStore } from '../adaptor/d1/article
 import { createD1PublishedArticlesWithAuthorResolver } from '../adaptor/d1/article/publishedArticlesWithAuthorResolver.ts';
 import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBodyResolver.ts';
 import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
+import { createD1BlueskyCrosspostStatusReportResolver } from '../adaptor/d1/blueskyCrosspost/blueskyCrosspostStatusReportResolver.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
 import { createD1DigestHeadersResolverByArticleIds } from '../adaptor/d1/digest/digestHeadersResolverByArticleIds.ts';
@@ -35,6 +36,7 @@ import { createD1DigestResolverByDigestItemId } from '../adaptor/d1/digest/diges
 import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResolverByUserId.ts';
 import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
+import { createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../adaptor/d1/digest/digestTopicItemsResolverByUserIdAndDigestDateFrom.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../adaptor/d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1DigestTopicCreatedStore } from '../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
@@ -118,6 +120,7 @@ import { createD1ThreadResolver } from '../adaptor/d1/post/threadResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../adaptor/d1/pushSubscription/pushSubscriptionCreatedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../adaptor/d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
+import { createD1RecommendableArticlesResolverByFetchedSince } from '../adaptor/d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
 import { createD1AcceptedRelaysResolver } from '../adaptor/d1/relay/acceptedRelaysResolver.ts';
 import { createD1AllRelaysResolver } from '../adaptor/d1/relay/allRelaysResolver.ts';
 import { createD1RelayResolverByActorUri } from '../adaptor/d1/relay/relayResolverByActorUri.ts';
@@ -181,6 +184,7 @@ import { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
+import { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import { ResolveRemoteAccountUseCase } from '../useCase/resolveRemoteAccount.ts';
@@ -209,6 +213,7 @@ import { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
+import { createBlueskyCrosspostUseCases, resolveBlueskyCrosspostConfig } from './blueskyCrosspost.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
 import { createWorkerRemoteActorActions } from './workerCoreUseCases.ts';
 
@@ -222,6 +227,7 @@ export const createWorkerRuntimePorts = async (
   waitUntil: WaitUntil,
 ): Promise<WorkerRuntimePorts> => {
   const federationRuntime = await createCloudflareFederationRuntime(env, waitUntil);
+  const blueskyCrosspost = createBlueskyCrosspostUseCases(env, waitUntil);
   const db = createD1Db(env.DB);
   const workersAi = env.AI as unknown as WorkersAiRunner | undefined;
   const textGenerator = workersAi === undefined ? undefined : createWorkersAiTextGenerator(workersAi);
@@ -472,6 +478,19 @@ export const createWorkerRuntimePorts = async (
         digestTopicEnabledChangedStore: createD1DigestTopicEnabledChangedStore(db),
         now: Instant.now,
       }),
+      previewDigestTopicsUseCase: PreviewDigestTopicsUseCase.create({
+        digestTopicsResolverByUserId,
+        recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
+        digestTopicItemsResolverByUserIdAndDigestDateFrom: createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom(
+          db,
+        ),
+        now: Instant.now,
+      }),
+    },
+    blueskyCrosspostStatus: {
+      userResolverByUsername: createD1UserResolverByUsername(db),
+      blueskyCrosspostStatusReportResolver: createD1BlueskyCrosspostStatusReportResolver(db),
+      blueskyCrosspostEnabled: resolveBlueskyCrosspostConfig(env) !== undefined,
     },
     timeline: {
       getTimelineUseCase: createGetTimelineUseCase({
@@ -496,6 +515,7 @@ export const createWorkerRuntimePorts = async (
         linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
         ogpFetcher: createOgpFetcher(),
         acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+        scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
         origin: env.ORIGIN,
       }),
     },
@@ -670,6 +690,7 @@ export const createWorkerRuntimePorts = async (
         pushSubscriptionsResolver,
         webPushSender,
         postResolver,
+        scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
         origin: env.ORIGIN,
       }),
       deletePostUseCase: DeletePostUseCase.create({
@@ -680,6 +701,7 @@ export const createWorkerRuntimePorts = async (
         postDeletedStore: createD1PostDeletedStore(db),
         articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
         articleDeletedStore: createD1ArticleDeletedStore(db),
+        removeBlueskyCrosspost: blueskyCrosspost?.remove,
       }),
       subscribePushUseCase: SubscribePushUseCase.create({
         sessionResolver,

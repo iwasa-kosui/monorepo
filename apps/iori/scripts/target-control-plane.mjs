@@ -189,7 +189,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
     };
   };
   const readWorkerState = async (
-    { resources, admissionEnvironment, zoneId, expectedVersionId, routePresent = false },
+    { resources, admissionEnvironment, zoneId, expectedVersionId, routePresent = false, missingAllowed = [] },
   ) => {
     if (typeof routePresent !== 'boolean') fail('worker-input');
     if (!same(resources?.identity, identity) || resources.queuePaused !== false) fail('worker-resources');
@@ -235,8 +235,15 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
         text: admissionEnvironment[name],
       })),
     ];
+    if (
+      !Array.isArray(missingAllowed) || missingAllowed.some((name) => !expected.some((entry) => entry.name === name))
+    ) {
+      fail('worker-input');
+    }
     for (const entry of expected) {
-      if (!bindings.some((binding) => binding.name === entry.name)) fail('worker-binding-missing');
+      const present = bindings.some((binding) => binding.name === entry.name);
+      if (!present && missingAllowed.includes(entry.name)) continue;
+      if (!present) fail('worker-binding-missing');
       if (!bindings.some((binding) => Object.entries(entry).every(([key, value]) => binding[key] === value))) {
         fail('worker-binding-mismatch');
       }
@@ -245,6 +252,9 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       'VAPID_SUBJECT',
       'EVENT_ARCHIVE_ENABLED',
       'IORI_PRUNE_FEDERATED_POSTS',
+      'IORI_BLUESKY_CROSSPOST',
+      'BLUESKY_IDENTIFIER',
+      'BLUESKY_APP_PASSWORD',
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'SMOKE_QUEUE_TOKEN',

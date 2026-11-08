@@ -14,6 +14,8 @@ const zodType = z
     topicKey: z.string().min(1),
     name: z.string().min(1).max(40),
     description: z.string().min(1).max(300),
+    examples: z.array(z.string().min(1).max(120)).max(10),
+    excludes: z.array(z.string().min(1).max(120)).max(10),
     embeddedAt: z.nullable(Instant.zodType),
     sortOrder: z.number().int().nonnegative(),
     enabled: z.boolean(),
@@ -25,7 +27,9 @@ const schema = Schema.create<z.output<typeof zodType>, z.input<typeof zodType>>(
 export type DigestTopic = z.output<typeof zodType>;
 type ParseError = Extract<ReturnType<typeof schema.parse>, { ok: false }>['err'];
 export type DigestTopicParseError = ParseError;
-export type StoredDigestTopic = DigestTopic & Readonly<{ embedding: Float32Array | null }>;
+export type StoredDigestTopic =
+  & DigestTopic
+  & Readonly<{ embedding: Float32Array | null; excludeEmbedding: Float32Array | null }>;
 
 export type DigestTopicAggregateId = Readonly<{
   userId: UserId;
@@ -48,13 +52,27 @@ export type DigestTopicCreated = DigestTopicEvent<DigestTopic, 'digestTopic.crea
 export type DigestTopicEmbedded = DigestTopicEvent<
   DigestTopic,
   'digestTopic.embedded',
-  { userId: UserId; topicKey: string; embedding: Float32Array; embeddedAt: Instant }
+  {
+    userId: UserId;
+    topicKey: string;
+    embedding: Float32Array;
+    excludeEmbedding: Float32Array | null;
+    embeddedAt: Instant;
+  }
 >;
 
 export type DigestTopicEdited = DigestTopicEvent<
   DigestTopic,
   'digestTopic.edited',
-  { userId: UserId; topicKey: string; name: string; description: string; updatedAt: Instant }
+  {
+    userId: UserId;
+    topicKey: string;
+    name: string;
+    description: string;
+    examples: ReadonlyArray<string>;
+    excludes: ReadonlyArray<string>;
+    updatedAt: Instant;
+  }
 >;
 export type DigestTopicEnabledChanged = DigestTopicEvent<
   DigestTopic,
@@ -76,10 +94,14 @@ export const DigestTopicNotFoundError = {
   }),
 } as const;
 
-export type CreateDigestTopicPayload = Pick<DigestTopic, 'userId' | 'topicKey' | 'name' | 'description' | 'sortOrder'>;
+export type CreateDigestTopicPayload =
+  & Pick<DigestTopic, 'userId' | 'topicKey' | 'name' | 'description' | 'sortOrder'>
+  & Partial<Pick<DigestTopic, 'examples' | 'excludes'>>;
 
 const create = (payload: CreateDigestTopicPayload, now: Instant): Result<DigestTopicCreated, ParseError> => {
   const parsed = schema.parse({
+    examples: [],
+    excludes: [],
     ...payload,
     embeddedAt: null,
     enabled: true,
@@ -96,13 +118,15 @@ const create = (payload: CreateDigestTopicPayload, now: Instant): Result<DigestT
 
 const edit = (
   topic: DigestTopic,
-  input: Pick<DigestTopic, 'name' | 'description'>,
+  input: Pick<DigestTopic, 'name' | 'description'> & Partial<Pick<DigestTopic, 'examples' | 'excludes'>>,
   now: Instant,
 ): Result<DigestTopicEdited, ParseError> => {
   const parsed = schema.parse({
     ...topic,
     name: input.name,
     description: input.description,
+    examples: input.examples ?? topic.examples,
+    excludes: input.excludes ?? topic.excludes,
     embeddedAt: null,
     updatedAt: now,
   });
@@ -118,6 +142,8 @@ const edit = (
         topicKey: edited.topicKey,
         name: edited.name,
         description: edited.description,
+        examples: edited.examples,
+        excludes: edited.excludes,
         updatedAt: now,
       },
       now,
@@ -147,20 +173,63 @@ const setEnabled = (
 const toEmbeddingText = (topic: Pick<DigestTopic, 'name' | 'description'>): string =>
   `${topic.name}: ${topic.description}`;
 
+const toEmbeddingTexts = (
+  topic: Pick<DigestTopic, 'name' | 'description' | 'examples' | 'excludes'>,
+): ReadonlyArray<string> => [toEmbeddingText(topic), ...topic.examples, ...topic.excludes];
+
+const meanNormalized = (vectors: ReadonlyArray<ReadonlyArray<number>>): Float32Array => {
+  const mean = new Float32Array(vectors[0]!.length);
+  for (const vector of vectors) {
+    for (let i = 0; i < mean.length; i++) mean[i]! += vector[i] ?? 0;
+  }
+  let squared = 0;
+  for (let i = 0; i < mean.length; i++) {
+    mean[i]! /= vectors.length;
+    squared += mean[i]! * mean[i]!;
+  }
+  const norm = Math.sqrt(squared);
+  if (norm > 0) {
+    for (let i = 0; i < mean.length; i++) mean[i]! /= norm;
+  }
+  return mean;
+};
+
+const combineEmbeddings = (
+  topic: Pick<DigestTopic, 'examples' | 'excludes'>,
+  vectors: ReadonlyArray<ReadonlyArray<number>>,
+): Readonly<{ embedding: Float32Array; excludeEmbedding: Float32Array | null }> => {
+  const topicVectors = vectors.slice(0, 1 + topic.examples.length);
+  const excludeVectors = vectors.slice(1 + topic.examples.length);
+  return {
+    embedding: topic.examples.length === 0 ? Float32Array.from(topicVectors[0]!) : meanNormalized(topicVectors),
+    excludeEmbedding: excludeVectors.length === 0 ? null : meanNormalized(excludeVectors),
+  };
+};
+
 const embed = (
   topic: DigestTopic,
-  embedding: Float32Array,
+  embeddings: Readonly<{ embedding: Float32Array; excludeEmbedding: Float32Array | null }>,
   now: Instant,
 ): Result<DigestTopicEmbedded, EmbeddingDimensionsError> => {
-  const validated = Embedding.validate(embedding);
+  const validated = Embedding.validate(embeddings.embedding);
   if (!validated.ok) return validated;
+  if (embeddings.excludeEmbedding !== null) {
+    const validatedExclude = Embedding.validate(embeddings.excludeEmbedding);
+    if (!validatedExclude.ok) return validatedExclude;
+  }
   const embedded: DigestTopic = { ...topic, embeddedAt: now };
   return ok(
     DigestTopicEvent.create(
       toAggregateId(embedded),
       embedded,
       'digestTopic.embedded',
-      { userId: embedded.userId, topicKey: embedded.topicKey, embedding: validated.val, embeddedAt: now },
+      {
+        userId: embedded.userId,
+        topicKey: embedded.topicKey,
+        embedding: validated.val,
+        excludeEmbedding: embeddings.excludeEmbedding,
+        embeddedAt: now,
+      },
       now,
     ),
   );
@@ -179,5 +248,7 @@ export const DigestTopic = {
   setEnabled,
   embed,
   toEmbeddingText,
+  toEmbeddingTexts,
+  combineEmbeddings,
   toAggregateId,
 } as const;

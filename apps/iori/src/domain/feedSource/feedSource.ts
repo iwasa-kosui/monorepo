@@ -56,9 +56,17 @@ const feedUrlZodType = z
     return url.href;
   });
 
+const X_HOSTS = new Set(['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com']);
+
+// x_user の登録の有無を、所有者以外が rss の POST の結果で探れないようにする
+const rssUrlZodType = feedUrlZodType.refine(
+  (href) => !X_HOSTS.has(new URL(href).hostname.replace(/\.$/, '')),
+  { message: 'x.com URLs are not allowed for rss' },
+);
+
 const newRssFeedSourceZodType = z.object({
   kind: z.literal('rss'),
-  url: feedUrlZodType,
+  url: rssUrlZodType,
   title: z.string().min(1).max(100),
 });
 const newXUserFeedSourceZodType = z.object({

@@ -108,7 +108,7 @@ const setup = (
     safeFetcher: { fetchText },
     twitterApiIoClient: apiKey === null
       ? undefined
-      : createTwitterApiIoClient({ safeFetcher: { fetchText }, apiKey }),
+      : createTwitterApiIoClient({ safeFetcher: { fetchText }, apiKey, sleep: async () => {}, now }),
     now,
   });
   const addX = async (username = 'jack') => {
@@ -475,6 +475,63 @@ describe('x_user の保存期間', () => {
     ).toHaveLength(1);
   });
 
+  it('期限切れの x_user の投稿のイベントだけを D1 から消し（退避の有効・無効に関わらず）、expired は残す', async () => {
+    let now = Instant.orThrow(NOW - 10 * DAY);
+    const fetchText = vi.fn<SafeFetcher['fetchText']>(async (url) =>
+      url === FEED_URL ? ok(rssBody) : ok(searchPage([tweet('800', 'old post', now - DAY)]))
+    );
+    const { add, addX, collect, db } = setup(fetchText, { now: () => now });
+    await addX();
+    await add.run({ kind: 'rss', url: FEED_URL, title: 'ブログ' });
+    await collect.run();
+    const entries = await db.select().from(feedEntriesTable);
+    const idOf = (guid: string) => entries.find((entry) => entry.guid === guid)!.feedEntryId;
+    for (const guid of ['800', 'https://example.com/blog']) {
+      const aggregateId = JSON.stringify({ feedEntryId: idOf(guid) });
+      await db.insert(domainEventsTable).values([
+        {
+          eventId: `embedded-${guid}`,
+          aggregateId,
+          aggregateName: 'feedEntry',
+          aggregateState: JSON.stringify({ title: `text-${guid}` }),
+          eventName: 'feedEntry.embedded',
+          eventPayload: JSON.stringify({ feedEntryId: idOf(guid) }),
+          occurredAt: new Date(now),
+        },
+        {
+          eventId: `bookmark-${guid}`,
+          aggregateId,
+          aggregateName: 'feedEntry',
+          aggregateState: JSON.stringify({ title: `text-${guid}` }),
+          eventName: 'feedEntry.bookmarkCountUpdated',
+          eventPayload: JSON.stringify({ feedEntryId: idOf(guid), hatenaBookmarkCount: 1 }),
+          occurredAt: new Date(now),
+        },
+      ]);
+    }
+    fetchText.mockImplementation(async (url) =>
+      url === FEED_URL ? ok(rssBody) : ok(searchPage([tweet('801', 'fresh post', NOW - DAY)]))
+    );
+
+    now = NOW;
+    await collect.run();
+
+    const events = await db.select().from(domainEventsTable);
+    const summarize = (names: string[]) =>
+      events.filter((event) => event.aggregateName === 'feedEntry' && names.includes(event.eventName)).map((event) =>
+        `${event.eventName}:${event.aggregateId.includes(idOf('800')) ? 'x-old' : 'other'}`
+      ).toSorted();
+    expect(summarize(['feedEntry.collected', 'feedEntry.embedded', 'feedEntry.bookmarkCountUpdated'])).toEqual([
+      'feedEntry.bookmarkCountUpdated:other',
+      'feedEntry.collected:other',
+      'feedEntry.collected:other',
+      'feedEntry.embedded:other',
+    ]);
+    expect(summarize(['feedEntry.expired'])).toEqual(['feedEntry.expired:x-old']);
+    expect(JSON.stringify(events)).not.toContain('old post');
+    expect(JSON.stringify(events)).not.toContain('text-800');
+  });
+
   it('7 日以内の投稿は残す', async () => {
     const fetchText = twitterApi(() => searchPage([tweet('900', 'fresh', NOW - 6 * DAY)]));
     const { addX, collect, db } = setup(fetchText);
@@ -482,5 +539,17 @@ describe('x_user の保存期間', () => {
 
     expect((await collect.run()).val).toMatchObject({ collected: 1, expired: 0 });
     expect(await db.select().from(feedEntriesTable)).toHaveLength(1);
+  });
+
+  it('期限内の x_user の投稿のイベントは消さない', async () => {
+    const fetchText = twitterApi(() => searchPage([tweet('900', 'fresh', NOW - 6 * DAY)]));
+    const { addX, collect, eventNames } = setup(fetchText);
+    await addX();
+    await collect.run();
+
+    await collect.run();
+
+    expect(await eventNames()).toContain('feedEntry.collected');
+    expect((await eventNames()).filter((name) => name === 'feedEntry.expired')).toEqual([]);
   });
 });

@@ -96,6 +96,11 @@ describe('Task 7 Worker route mounting', () => {
       ),
       worker.fetch(new Request('https://worker.test/api/iori/v1/relays'), env, executionContext),
       worker.fetch(
+        new Request('https://worker.test/api/iori/v1/bluesky/crossposts/status'),
+        env,
+        executionContext,
+      ),
+      worker.fetch(
         new Request('https://worker.test/remote-users/573c7c51-0e4b-453c-bb9f-5dbd15a319a7/follow', {
           method: 'POST',
         }),
@@ -104,7 +109,7 @@ describe('Task 7 Worker route mounting', () => {
       ),
     ]);
 
-    expect(responses.map((response) => response.status)).toEqual([404, 401, 400, 404, 404, 401, 404]);
+    expect(responses.map((response) => response.status)).toEqual([404, 401, 400, 404, 404, 401, 401, 404]);
     expect(await responses[1]!.json()).toEqual({ error: 'The access token is invalid' });
   });
 });

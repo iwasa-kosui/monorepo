@@ -29,6 +29,7 @@
     "VAPID_SUBJECT": "__VAPID_SUBJECT__",
     "EVENT_ARCHIVE_ENABLED": "false",
     "IORI_PRUNE_FEDERATED_POSTS": "disabled",
+    "IORI_BLUESKY_CROSSPOST": "disabled",
   },
   "d1_databases": [
     {

@@ -1,6 +1,7 @@
 import type { RA } from '@iwasa-kosui/result';
 
 import type { Agg } from '../aggregate/index.ts';
+import type { FeedSourceKind } from '../feedSource/feedSource.ts';
 import { Instant } from '../instant/instant.ts';
 
 export const ARCHIVE_RETENTION_DAYS = 7;
@@ -20,6 +21,19 @@ export const ARCHIVE_REDACTED_EVENT_NAMES = [
   'authorizationCode.consumed',
   'oauthApplication.registered',
   'pushSubscription.created',
+  // feedEntry のイベントは情報源の kind を持たず x_user の投稿を見分けられないので、RSS の分も伏せる
+  'feedEntry.bookmarkCountUpdated',
+  'feedEntry.collected',
+  'feedEntry.embedded',
+] as const;
+
+// X の投稿は 7 日で消す約束なので、x_user の情報源のイベントだけ aggregateState の kind で伏せる
+export const ARCHIVE_REDACTED_FEED_SOURCE_KINDS = ['x_user'] as const satisfies ReadonlyArray<FeedSourceKind>;
+export const ARCHIVE_FEED_SOURCE_KIND_CHECKED_EVENT_NAMES = [
+  'feedSource.created',
+  'feedSource.enabledChanged',
+  'feedSource.fetchFailed',
+  'feedSource.fetched',
 ] as const;
 
 export const ARCHIVE_PLAIN_EVENT_NAMES = [
@@ -48,9 +62,6 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'emojiReact.emojiReactDeleted',
   'federatedTimelineItem.created',
   'federatedTimelineItem.deleted',
-  'feedEntry.bookmarkCountUpdated',
-  'feedEntry.collected',
-  'feedEntry.embedded',
   'feedEntry.expired',
   'feedSource.created',
   'feedSource.enabledChanged',
@@ -155,11 +166,25 @@ const unknownEventNames = (events: ReadonlyArray<ArchivedDomainEvent>): Readonly
     !isPlain(eventName) && !(ARCHIVE_REDACTED_EVENT_NAMES as readonly string[]).includes(eventName)
   );
 
+const isRedactedFeedSourceState = (aggregateState: string | null): boolean => {
+  try {
+    const kind: unknown = JSON.parse(aggregateState ?? 'null')?.kind;
+    return typeof kind !== 'string' || (ARCHIVE_REDACTED_FEED_SOURCE_KINDS as readonly string[]).includes(kind);
+  } catch {
+    return true;
+  }
+};
+
+const isRedacted = (event: ArchivedDomainEvent): boolean =>
+  !isPlain(event.eventName)
+  || ((ARCHIVE_FEED_SOURCE_KIND_CHECKED_EVENT_NAMES as readonly string[]).includes(event.eventName)
+    && isRedactedFeedSourceState(event.aggregateState));
+
 const redact =
   (hashAggregateId: AggregateIdHasher) => async (event: ArchivedDomainEvent): Promise<ArchivedDomainEvent> => {
-    const redacted: ArchivedDomainEvent = isPlain(event.eventName)
-      ? event
-      : { ...event, aggregateState: null, eventPayload: null };
+    const redacted: ArchivedDomainEvent = isRedacted(event)
+      ? { ...event, aggregateState: null, eventPayload: null }
+      : event;
     return (ARCHIVE_HASHED_AGGREGATE_ID_EVENT_NAMES as readonly string[]).includes(event.eventName)
       ? { ...redacted, aggregateId: `sha256:${await hashAggregateId(event.aggregateId)}` }
       : redacted;

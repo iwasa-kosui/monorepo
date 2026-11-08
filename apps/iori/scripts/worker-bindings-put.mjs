@@ -11,8 +11,14 @@ import { vapidKeyPairMatches } from './vapid-origin-check.mjs';
 import { parseWorkflowInvocation, workflowTimeBudget } from './workflow-context.mjs';
 
 const appRoot = new URL('..', import.meta.url).pathname;
-const SECRET_NAMES = Object.freeze(['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'SMOKE_QUEUE_TOKEN']);
-const OPTIONAL_SECRET_NAMES = Object.freeze(['TWITTERAPI_IO_API_KEY']);
+const OPTIONAL_SECRET_NAMES = Object.freeze(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD', 'TWITTERAPI_IO_API_KEY']);
+const SECRET_NAMES = Object.freeze([
+  'VAPID_PUBLIC_KEY',
+  'VAPID_PRIVATE_KEY',
+  'SMOKE_QUEUE_TOKEN',
+  ...OPTIONAL_SECRET_NAMES,
+]);
+const secretNamesToPut = (env) => SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name) || env[name]);
 
 const assertIdentity = (env, invocation) => {
   let identity;
@@ -27,7 +33,12 @@ const assertIdentity = (env, invocation) => {
 };
 const assertInputs = (env) => {
   if (
-    ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', ...SECRET_NAMES].some((name) => !env[name])
+    [
+      'CLOUDFLARE_ACCOUNT_ID',
+      'CLOUDFLARE_API_TOKEN',
+      ...SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name)),
+    ]
+      .some((name) => !env[name])
   ) throw withReason(new Error('Worker credentials are required.'), 'credentials-missing');
   if (!/^[a-f0-9]{32}$/.test(env.CLOUDFLARE_ACCOUNT_ID)) {
     throw withReason(new Error('Worker credentials are invalid.'), 'config-invalid');
@@ -97,13 +108,11 @@ export const putWorkerSecrets = async ({
     fetchRequest,
   });
   const childEnv = {
-    ...Object.fromEntries(
-      Object.entries(env).filter(([name]) => ![...SECRET_NAMES, ...OPTIONAL_SECRET_NAMES].includes(name)),
-    ),
+    ...Object.fromEntries(Object.entries(env).filter(([name]) => !SECRET_NAMES.includes(name))),
     WRANGLER_SEND_METRICS: 'false',
   };
-  const putNames = [...SECRET_NAMES, ...OPTIONAL_SECRET_NAMES.filter((name) => env[name])];
   onStage('put-worker-secrets-put');
+  const putNames = secretNamesToPut(env);
   let result;
   try {
     result = await runCommand('pnpm', ['exec', 'wrangler', 'secret', 'bulk', '--name', workerName], {

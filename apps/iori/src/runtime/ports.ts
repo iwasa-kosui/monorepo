@@ -19,6 +19,7 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import type { BlueskyCrosspostStatusReportResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type {
   DigestHeadersResolverByArticleIds,
   DigestResolverByArticleId,
@@ -85,6 +86,7 @@ import type { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import type { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
 import type { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
+import type { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import type { RequestDigestUseCase } from '../useCase/requestDigest.ts';
@@ -191,12 +193,18 @@ export type IoriDigestRuntimePorts = Readonly<{
   addDigestTopicUseCase: AddDigestTopicUseCase;
   editDigestTopicUseCase: EditDigestTopicUseCase;
   changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase;
+  previewDigestTopicsUseCase: PreviewDigestTopicsUseCase;
   deepDiveDigestItemUseCase: DeepDiveDigestItemUseCase;
   allFeedSourcesResolver: AllFeedSourcesResolver;
   addFeedSourceUseCase: AddFeedSourceUseCase;
   changeFeedSourceEnabledUseCase: ChangeFeedSourceEnabledUseCase;
   getXFeedEntriesUseCase: GetXFeedEntriesUseCase;
   isDigestOwner: IsDigestOwner;
+}>;
+export type IoriBlueskyCrosspostStatusRuntimePorts = Readonly<{
+  userResolverByUsername: UserResolverByUsername;
+  blueskyCrosspostStatusReportResolver: BlueskyCrosspostStatusReportResolver;
+  blueskyCrosspostEnabled: boolean;
 }>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
@@ -253,6 +261,7 @@ export type IoriRuntimePorts = Readonly<{
   oauth: IoriOAuthRuntimePorts;
   mastodon: IoriMastodonRuntimePorts;
   digest: IoriDigestRuntimePorts;
+  blueskyCrosspostStatus: IoriBlueskyCrosspostStatusRuntimePorts;
   timeline: IoriTimelineRuntimePorts;
   posting: IoriPostingRuntimePorts;
   socialActions: IoriSocialActionsRuntimePorts;
