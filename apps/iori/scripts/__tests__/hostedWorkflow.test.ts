@@ -67,6 +67,7 @@ it('maps the operations to their fixed scripts', async () => {
       ['move-unfollowed-reposts', 'move-unfollowed-reposts.mjs'],
       ['delete-unfollowed-posts-dry-run', 'delete-unfollowed-posts.mjs'],
       ['delete-unfollowed-posts', 'delete-unfollowed-posts.mjs'],
+      ['domain-events-stats', 'domain-events-stats.mjs'],
       ['delete-blocked-domain-posts-dry-run', 'delete-blocked-domain-posts.mjs'],
       ['delete-blocked-domain-posts', 'delete-blocked-domain-posts.mjs'],
       ['prune-federated-posts-dry-run', 'prune-federated-posts.mjs'],
@@ -254,6 +255,29 @@ it('relays only the fixed delete-unfollowed-posts notices to the public log', as
     'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1234567890',
     'IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1 postId=12345678-1234-4234-8234-123456789012',
     ' IORI_NOTICE delete-unfollowed-posts mode=apply deleted=1',
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed domain-events-stats notices to the public log', async () => {
+  const writes = captureStderr();
+  const accepted = [
+    'IORI_NOTICE domain-events-stats summary total=120000 oldest=2026-08-01T00:00:00.000Z newest=2026-11-05T01:02:03.456Z older_than_7d=100000 avg_bytes=850 max_bytes=64000 created_at_skew_actors=3',
+    'IORI_NOTICE domain-events-stats summary total=0 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=0',
+    'IORI_NOTICE domain-events-stats day=2026-11-05 count=1234',
+    'IORI_NOTICE domain-events-stats event=timelineItem.deleted count=42',
+  ];
+  const rejected = [
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=none newest=none older_than_7d=0 avg_bytes=0',
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0',
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=-1',
+    'IORI_NOTICE domain-events-stats summary total=-1 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=0',
+    'IORI_NOTICE domain-events-stats summary total=1 oldest=yesterday newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=0',
+    'IORI_NOTICE domain-events-stats day=2026-11-05 count=1 extra=1',
+    'IORI_NOTICE domain-events-stats day=yesterday count=1',
+    'IORI_NOTICE domain-events-stats event=../secret count=1',
+    'IORI_NOTICE domain-events-stats event=post.created count=1 postId=12345678-1234-4234-8234-123456789012',
+    ' IORI_NOTICE domain-events-stats day=2026-11-05 count=1',
   ];
   await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
   expect(writes).toEqual(accepted.map(line => `${line}\n`));

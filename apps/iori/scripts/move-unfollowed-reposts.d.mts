@@ -1,4 +1,12 @@
 export const RELAY_ACTOR_URI: string;
+export const GENERATION: RegExp;
+export function fail(stage: string, reason: string, message: string): Error & { stage: string };
+export function openD1Query(options: {
+  env: Record<string, string | undefined>;
+  signal?: AbortSignal;
+  fetchRequest?: typeof fetch;
+  prefix: string;
+}): Promise<{ query: (stage: string, sql: string) => Promise<Array<{ results?: Array<Record<string, unknown>> }>> }>;
 export function targetCondition(beforeMs: number): string;
 export function relaySql(): string;
 export function dryRunSql(beforeMs: number): string;

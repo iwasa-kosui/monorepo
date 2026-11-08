@@ -157,6 +157,13 @@
       "breakpoints": true
     },
     {
+      "idx": 22,
+      "version": "6",
+      "when": 1793811000000,
+      "tag": "0022_domain_events_occurred_at_idx",
+      "breakpoints": true
+    },
+    {
       "idx": 23,
       "version": "6",
       "when": 1793813827618,

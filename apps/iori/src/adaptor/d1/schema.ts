@@ -33,6 +33,7 @@ export const domainEventsTable = sqliteTable('domain_events', {
   occurredAt: timestamp().notNull(),
 }, (table) => [
   index('domain_events_aggregate_id_idx').on(table.aggregateId),
+  index('domain_events_occurred_at_idx').on(table.occurredAt, table.eventId),
 ]);
 
 export const actorsTable = sqliteTable('actors', {

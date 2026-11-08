@@ -1,5 +1,6 @@
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createDailyDigestTask, expireDigestsTask } from './digestTasks.ts';
+import { archiveDomainEventsTask } from './eventArchiveTasks.ts';
 import { pruneFederatedPostsTask } from './federatedPostTasks.ts';
 import { collectFeedsTask, detectRadarVolumeTask } from './feedTasks.ts';
 import {
@@ -31,6 +32,7 @@ export const scheduledTasks: ScheduledTaskTable = {
   '0 21 * * *': [syncKosuiInterestSourcesTask],
   '15 20 * * 1': [detectRadarVolumeTask],
   '30 21 * * *': [createDailyDigestTask, expireDigestsTask],
+  '0 19 * * *': [archiveDomainEventsTask],
 };
 
 export const dispatchScheduled = async (

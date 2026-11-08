@@ -19,6 +19,7 @@ const fixtureEnvironment = (directory: string, options: { rejectQueueProducer?: 
   D1_DATABASE_ID: '00000000-0000-4000-8000-000000000002',
   KV_NAMESPACE_ID: '00000000000000000000000000000003',
   R2_BUCKET_NAME: 'iori-uploads-fixture',
+  R2_EVENT_ARCHIVE_BUCKET_NAME: 'iori-event-archive-fixture',
   QUEUE_NAME: 'iori-fedify-fixture',
   ORIGIN: 'https://iori.example.invalid',
   VAPID_SUBJECT: 'mailto:admin@example.invalid',
