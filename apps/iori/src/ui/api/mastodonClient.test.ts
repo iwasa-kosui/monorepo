@@ -582,6 +582,19 @@ describe('mastodon client requests', () => {
     expect(result).toEqual(payload);
   });
 
+  it('sends beforeId with before when paging the Bluesky timeline', async () => {
+    const fetchMock = stubFetch(jsonResponse({ enabled: true, items: [], nextBefore: null, nextBeforeId: null }));
+
+    await fetchBlueskyTimeline({
+      before: 1_700_000_000_000,
+      beforeId: 'at://did:plc:a/app.bsky.feed.post/1#repost:did:plc:b',
+    });
+
+    expect((fetchMock.mock.calls as unknown[][])[0]![0]).toBe(
+      '/api/iori/v1/bluesky/timeline?before=1700000000000&beforeId=at%3A%2F%2Fdid%3Aplc%3Aa%2Fapp.bsky.feed.post%2F1%23repost%3Adid%3Aplc%3Ab',
+    );
+  });
+
   it('fetches the first page of the Bluesky timeline without a query', async () => {
     const fetchMock = stubFetch(jsonResponse({ enabled: false, items: [], nextBefore: null }));
 

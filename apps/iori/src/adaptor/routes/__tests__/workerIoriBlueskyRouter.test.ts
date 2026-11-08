@@ -105,7 +105,7 @@ describe('/api/iori/v1/bluesky/timeline', () => {
 
       const body = await (await t.request('/api/iori/v1/bluesky/timeline', { headers: me.bearer })).json();
 
-      expect(body).toEqual({ enabled: true, items: [], nextBefore: null });
+      expect(body).toEqual({ enabled: true, items: [], nextBefore: null, nextBeforeId: null });
     });
 
     it('limit と before でページングし、続きがあるときだけ nextBefore を返す', async () => {
@@ -130,6 +130,32 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       expect(third.nextBefore).toBeNull();
     });
 
+    it('同じ indexedAt の行がページ境界をまたいでも、nextBeforeId で続きを取れる', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+      for (const n of [1, 2, 3, 4, 5]) seedItem(t, n, { indexedAt: BASE });
+      const get = async (query: string) =>
+        await (await t.request(`/api/iori/v1/bluesky/timeline${query}`, { headers: me.bearer })).json() as {
+          items: Array<{ uri: string }>;
+          nextBefore: number | null;
+          nextBeforeId: string | null;
+        };
+      const numbers = (page: { items: Array<{ uri: string }> }) => page.items.map((item) => item.uri.split('/').pop());
+      const next = (page: { nextBefore: number | null; nextBeforeId: string | null }) =>
+        `?limit=2&before=${page.nextBefore}&beforeId=${encodeURIComponent(page.nextBeforeId!)}`;
+
+      const first = await get('?limit=2');
+      const second = await get(next(first));
+      const third = await get(next(second));
+
+      expect(numbers(first)).toEqual(['5', '4']);
+      expect(first.nextBefore).toBe(BASE);
+      expect(first.nextBeforeId).toBe('at://did:plc:a/app.bsky.feed.post/4');
+      expect(numbers(second)).toEqual(['3', '2']);
+      expect(numbers(third)).toEqual(['1']);
+      expect(third.nextBeforeId).toBeNull();
+    });
+
     it('limit の既定は 40、上限は 100 にする', async () => {
       const t = setupReadApi();
       const me = await t.signIn('read:statuses');
@@ -144,7 +170,9 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       expect(await count('?limit=500')).toBe(100);
     });
 
-    it.each([['limit=0'], ['limit=-1'], ['limit=abc'], ['limit=1.5'], ['before=abc'], ['before=-5'], ['before=1e3']])(
+    it.each([['limit=0'], ['limit=-1'], ['limit=abc'], ['limit=1.5'], ['before=abc'], ['before=-5'], ['before=1e3'], [
+      'beforeId=x',
+    ], ['before=1&beforeId=']])(
       '不正なクエリ %s を 400 にする',
       async (query) => {
         const t = setupReadApi();

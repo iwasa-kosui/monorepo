@@ -136,6 +136,23 @@ describe('parseBlueskyTimelineResponse', () => {
     ]);
   });
 
+  it('byte 範囲が不正な facet だけを捨て、投稿は残す', () => {
+    const feature = [{ $type: 'app.bsky.richtext.facet#tag', tag: 'iori' }];
+    const item = only([{
+      post: postView({}, {
+        facets: [
+          { index: { byteStart: 1.5, byteEnd: 4 }, features: feature },
+          { index: { byteStart: -1, byteEnd: 4 }, features: feature },
+          { index: { byteStart: 5, byteEnd: 4 }, features: feature },
+          { index: { byteStart: 0, byteEnd: 2.5 }, features: feature },
+          { index: { byteStart: 2, byteEnd: 2 }, features: feature },
+        ],
+      }),
+    }]);
+
+    expect(item.facets).toEqual([{ byteStart: 2, byteEnd: 2, feature: { type: 'tag', tag: 'iori' } }]);
+  });
+
   describe('embed', () => {
     const embedOf = (embed: unknown) => only([{ post: postView({ embed }) }]).embed;
     const viewRecord = {

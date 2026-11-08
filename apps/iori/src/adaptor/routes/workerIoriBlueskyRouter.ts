@@ -44,6 +44,7 @@ export type IoriBlueskyTimelineResponse = Readonly<{
   enabled: boolean;
   items: readonly IoriBlueskyTimelineItemBody[];
   nextBefore: number | null;
+  nextBeforeId: string | null;
 }>;
 
 export type IoriBlueskyTimelineRefreshResponse = Readonly<{
@@ -98,17 +99,24 @@ export const createWorkerIoriBlueskyRouter = ({
       if (beforeParam !== undefined && (before === undefined || !before.ok)) {
         return c.json({ error: 'Validation failed: before' }, 400);
       }
+      const beforeId = c.req.query('beforeId');
+      if (beforeId !== undefined && (beforeId === '' || before === undefined)) {
+        return c.json({ error: 'Validation failed: beforeId' }, 400);
+      }
       const resolved = await blueskyTimelineItemsResolver.resolve({
         limit: limit + 1,
         before: before?.ok ? before.val : undefined,
+        beforeId,
       });
       if (!resolved.ok) return c.json(internalServerError, 500);
       const page = resolved.val.slice(0, limit);
+      const last = resolved.val.length > limit ? page.at(-1) : undefined;
       return c.json(
         {
           enabled: collectBlueskyTimelineUseCase !== undefined,
           items: page.map(toItemBody),
-          nextBefore: resolved.val.length > limit ? page.at(-1)?.indexedAt ?? null : null,
+          nextBefore: last?.indexedAt ?? null,
+          nextBeforeId: last?.feedItemId ?? null,
         } satisfies IoriBlueskyTimelineResponse,
       );
     })

@@ -15,6 +15,7 @@ type BlueskyData = Readonly<{
   enabled: boolean;
   items: readonly IoriBlueskyTimelineItemBody[];
   nextBefore: number | null;
+  nextBeforeId: string | null;
 }>;
 
 const appendUniqueByFeedItemId = (
@@ -53,12 +54,12 @@ const BlueskyPage = () => {
     load();
   }, [load]);
 
-  const loadMore = async (before: number) => {
+  const loadMore = async (before: number, beforeId: string | null) => {
     if (isBusyRef.current) return;
     isBusyRef.current = true;
     setIsLoadingMore(true);
     try {
-      const page = await fetchBlueskyTimeline({ before });
+      const page = await fetchBlueskyTimeline(beforeId === null ? { before } : { before, beforeId });
       setData((prev) => prev === null ? prev : { ...page, items: appendUniqueByFeedItemId(prev.items, page.items) });
       setMessage('');
     } catch (loadError) {
@@ -148,7 +149,7 @@ const BlueskyPage = () => {
         <div class='mt-6 text-center'>
           <button
             type='button'
-            onClick={() => loadMore(data.nextBefore!)}
+            onClick={() => loadMore(data.nextBefore!, data.nextBeforeId)}
             disabled={isLoadingMore}
             class='px-4 py-2 bg-sand hover:bg-sand-light disabled:opacity-50 text-charcoal text-sm font-medium rounded-clay transition-all shadow-clay-sm'
           >

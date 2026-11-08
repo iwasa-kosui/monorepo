@@ -349,7 +349,7 @@ export const requestDigest = async (): Promise<DigestRequestResult> => {
 export type BlueskyTimelinePage = IoriBlueskyTimelineResponse;
 
 export const fetchBlueskyTimeline = async (
-  params: Readonly<{ before?: number; limit?: number }> = {},
+  params: Readonly<{ before?: number; beforeId?: string; limit?: number }> = {},
 ): Promise<BlueskyTimelinePage> => (await request<BlueskyTimelinePage>('/api/iori/v1/bluesky/timeline', params)).body;
 
 export type BlueskyTimelineRefreshResult = IoriBlueskyTimelineRefreshResponse;

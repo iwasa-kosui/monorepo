@@ -94,6 +94,9 @@ const facetOf = (raw: unknown): BlueskyTimelineFacet | undefined => {
   const facet = facetZodType.safeParse(raw);
   if (!facet.success) return undefined;
   const { byteStart, byteEnd } = facet.data.index;
+  if (!Number.isInteger(byteStart) || !Number.isInteger(byteEnd) || byteStart < 0 || byteStart > byteEnd) {
+    return undefined;
+  }
   for (const feature of facet.data.features) {
     const link = feature.$type === 'app.bsky.richtext.facet#link' ? linkFeatureZodType.safeParse(feature) : undefined;
     if (link?.success) return { byteStart, byteEnd, feature: { type: 'link', uri: link.data.uri } };
