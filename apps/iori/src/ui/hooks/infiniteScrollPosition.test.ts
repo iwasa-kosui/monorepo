@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { isNearDocumentEnd, isNearScrollEnd, shouldAutoLoadCursor, shouldLoadNow } from './infiniteScrollPosition.ts';
+import {
+  decideLoadMore,
+  isNearDocumentEnd,
+  isNearScrollEnd,
+  shouldAutoLoadCursor,
+  shouldLoadNow,
+} from './infiniteScrollPosition.ts';
 
 describe('shouldLoadNow', () => {
   it('loads when a cursor exists and the end of the page is near', () => {
@@ -100,5 +106,43 @@ describe('isNearDocumentEnd', () => {
     stubPage({ scrollY: 500, innerHeight: 800 }, { documentElement: 3000, body: 100 });
 
     expect(isNearDocumentEnd()).toBe(false);
+  });
+});
+
+describe('decideLoadMore', () => {
+  const base = {
+    isFirstPageSettled: true,
+    cursor: 'cursor-1',
+    isNearEnd: true,
+    isAutomatic: true,
+    lastAutoLoadedCursor: undefined,
+  } as const;
+
+  it('skips both the automatic and the scroll checks until the first page has settled', () => {
+    expect(decideLoadMore({ ...base, isFirstPageSettled: false })).toEqual({ kind: 'skip' });
+    expect(decideLoadMore({ ...base, isFirstPageSettled: false, isAutomatic: false })).toEqual({ kind: 'skip' });
+  });
+
+  it('loads automatically after the first page has settled when the end of the list is on screen', () => {
+    expect(decideLoadMore(base)).toEqual({ kind: 'immediate', cursor: 'cursor-1' });
+  });
+
+  it('does not load automatically when the end of the list is off screen', () => {
+    expect(decideLoadMore({ ...base, isNearEnd: false })).toEqual({ kind: 'skip' });
+  });
+
+  it('does not load automatically twice for the same cursor', () => {
+    expect(decideLoadMore({ ...base, lastAutoLoadedCursor: 'cursor-1' })).toEqual({ kind: 'skip' });
+  });
+
+  it('debounces the scroll check once the first page has settled', () => {
+    expect(decideLoadMore({ ...base, isAutomatic: false, lastAutoLoadedCursor: 'cursor-1' })).toEqual({
+      kind: 'debounced',
+      cursor: 'cursor-1',
+    });
+  });
+
+  it('skips without a cursor', () => {
+    expect(decideLoadMore({ ...base, cursor: undefined })).toEqual({ kind: 'skip' });
   });
 });

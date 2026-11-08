@@ -153,6 +153,13 @@ export type IoriDigestTopicPreviewResponse = Readonly<{
     >;
   }>;
   digestItemsTruncated: boolean;
+  jev?: Readonly<{
+    model: string;
+    configured: boolean;
+    perTopicLimit: number;
+    totalLimit: number;
+    overTotalLimit: boolean;
+  }>;
   digestItems: ReadonlyArray<
     Readonly<{
       digestDate: string;
@@ -182,6 +189,7 @@ type IoriDigestPreviewCandidateBody = Readonly<{
   margin: number | null;
   excludeSimilarity: number | null;
   assignment: TopicAssignmentOutcome;
+  jevNoul?: number | null;
 }>;
 
 export type IoriDigestDeepDiveResponse = Readonly<{
@@ -196,6 +204,7 @@ const previewQuery = z.object({
   candidateHours: z.coerce.number().int().min(1).max(72).default(48),
   digestDays: z.coerce.number().int().min(1).max(30).default(14),
   limit: z.coerce.number().int().min(1).max(100).default(30),
+  withJev: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
 });
 
 const deepDiveRequestBody = z.object({
@@ -289,6 +298,7 @@ const toPreviewCandidateBody = (candidate: PreviewCandidate): IoriDigestPreviewC
   margin: roundNullable(candidate.margin),
   excludeSimilarity: roundNullable(candidate.excludeSimilarity),
   assignment: candidate.assignment,
+  ...(candidate.jevNoul === undefined ? {} : { jevNoul: candidate.jevNoul }),
 });
 
 const toPreviewTopicCandidatesBody = (entry: PreviewTopicCandidates) => ({
@@ -563,9 +573,9 @@ export const createWorkerIoriDigestRouter = ({
       return c.json({ sources: visible.map(toFeedSourceBody) });
     })
     .post('/iori/v1/feed-sources', requireSameOriginForCookie, authn.requireUser(writeAccounts), async (c) => {
+      if (!(await isDigestOwner(userIdOf(c)))) return c.json(forbidden, 403);
       const body = await readRequestBody(c);
       if (bodyString(body, 'kind')?.trim() === 'x_user') {
-        if (!(await isDigestOwner(userIdOf(c)))) return c.json(forbidden, 403);
         const username = bodyString(body, 'username')?.trim();
         if (username === undefined) return c.json({ error: 'Validation failed: username' }, 400);
         const added = await addFeedSourceUseCase.run({ kind: 'x_user', username });
@@ -585,13 +595,10 @@ export const createWorkerIoriDigestRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeAccounts),
       async (c) => {
+        // GET が所有者以外から x_user を隠すので、存在しない情報源と同じ 404 にして区別させない。
+        if (!(await isDigestOwner(userIdOf(c)))) return c.json(feedSourceNotFound, 404);
         const feedSourceId = FeedSourceId.parse(c.req.param('feedSourceId'));
         if (!feedSourceId.ok) return c.json(feedSourceNotFound, 404);
-        const sources = await allFeedSourcesResolver.resolve();
-        if (!sources.ok) return c.json(internalServerError, 500);
-        const target = sources.val.find((source) => source.feedSourceId === feedSourceId.val);
-        // GET が所有者以外から x_user を隠すので、存在しない情報源と同じ 404 にして区別させない。
-        if (target?.kind === 'x_user' && !(await isDigestOwner(userIdOf(c)))) return c.json(feedSourceNotFound, 404);
         const enabled = readEnabled(await readRequestBody(c));
         if (enabled === undefined) return c.json({ error: 'Validation failed: enabled' }, 400);
         const changed = await changeFeedSourceEnabledUseCase.run({ feedSourceId: feedSourceId.val, enabled });
@@ -615,7 +622,7 @@ export const createWorkerIoriDigestRouter = ({
       }
       const preview = await previewDigestTopicsUseCase.run({ userId, ...query.data });
       if (!preview.ok) return c.json(internalServerError, 500);
-      const { topics, thresholds, candidates, digestItems, digestItemsTruncated } = preview.val;
+      const { topics, thresholds, candidates, digestItems, digestItemsTruncated, jev } = preview.val;
       return c.json(
         {
           topics: topics.map(({ topicKey, name, description, enabled, embedding, examples, excludes }) => ({
@@ -635,6 +642,7 @@ export const createWorkerIoriDigestRouter = ({
             byTopic: candidates.byTopic.map(toPreviewTopicCandidatesBody),
           },
           digestItemsTruncated,
+          ...(jev === null ? {} : { jev }),
           digestItems: digestItems.map(toPreviewDigestItemBody),
         } satisfies IoriDigestTopicPreviewResponse,
       );

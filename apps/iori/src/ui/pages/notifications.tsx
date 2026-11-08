@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-import { IORI_EMOJI_REACTION_TYPE, type Notification } from '../../adaptor/mastodon/entities.ts';
+import type { Notification } from '../../adaptor/mastodon/entities.ts';
 import {
   fetchNotifications,
   fetchVerifyCredentials,
   isUnauthorizedError,
+  NOTIFICATION_TYPES,
+  notificationsUrl,
   saveNotificationsMarker,
 } from '../api/mastodonClient.ts';
+import { readMeCache, readPageCache, writeMeCache, writePageCache } from '../api/pageCache.ts';
+import { clearAllCache } from '../api/responseCache.ts';
 import { NotificationItem } from '../components/NotificationItem.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
+import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
-
-const NOTIFICATION_TYPES = ['favourite', 'mention', 'follow', 'reblog', IORI_EMOJI_REACTION_TYPE] as const;
 
 type NotificationsData = Readonly<{
   username: string;
@@ -222,10 +225,20 @@ const PushSubscriptionSection = () => {
   );
 };
 
+const readCachedNotifications = (): NotificationsData | null => {
+  const page = readPageCache<Notification>(notificationsUrl(NOTIFICATION_TYPES));
+  const me = readMeCache();
+  return page === undefined || me === undefined
+    ? null
+    : { username: me.username, notifications: page.items, nextMaxId: page.nextMaxId };
+};
+
 const NotificationsPage = () => {
-  const [data, setData] = useState<NotificationsData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [cached] = useState(readCachedNotifications);
+  const [data, setData] = useState<NotificationsData | null>(cached);
+  const [isLoading, setIsLoading] = useState(cached === null);
   const [error, setError] = useState('');
+  const [isFirstPageSettled, setIsFirstPageSettled] = useState(false);
   const isLoadingMoreRef = useRef(false);
 
   useEffect(() => {
@@ -235,6 +248,8 @@ const NotificationsPage = () => {
           fetchNotifications(NOTIFICATION_TYPES),
           fetchVerifyCredentials(),
         ]);
+        writePageCache(notificationsUrl(NOTIFICATION_TYPES), page);
+        writeMeCache(me);
         setData({ username: me.username, notifications: page.items, nextMaxId: page.nextMaxId });
         const newest = page.items[0];
         if (newest !== undefined) {
@@ -244,19 +259,22 @@ const NotificationsPage = () => {
         }
       } catch (fetchError) {
         if (isUnauthorizedError(fetchError)) {
+          clearAllCache();
           window.location.href = '/sign-in';
           return;
         }
+        if (cached !== null) return;
         setError(fetchError instanceof TypeError ? 'Network error. Please try again.' : 'Failed to load notifications');
       } finally {
         setIsLoading(false);
+        setIsFirstPageSettled(true);
       }
     };
     fetchFirstPage();
   }, []);
 
   const loadMore = useCallback(async (maxId: string) => {
-    if (isLoadingMoreRef.current) return;
+    if (!canStartPageLoadMore(isLoadingMoreRef.current === true, isFirstPageSettled)) return;
     isLoadingMoreRef.current = true;
     try {
       const page = await fetchNotifications(NOTIFICATION_TYPES, { maxId });
@@ -271,9 +289,9 @@ const NotificationsPage = () => {
     } finally {
       isLoadingMoreRef.current = false;
     }
-  }, []);
+  }, [isFirstPageSettled]);
 
-  useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore });
+  useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore, isFirstPageSettled });
 
   if (isLoading) {
     return (
