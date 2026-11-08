@@ -470,6 +470,7 @@ job が受け取る secret は、次の8つです。`STAGING_ACCESS_TOKEN` と T
 - `secrets-bulk-forbidden`: API が 401 か 403 を返しました。Worker の secret は変わっていない見込みです。作業者は、配備用の token `IORI_CLOUDFLARE_DEPLOY_API_TOKEN` に Workers Scripts の書き込み権限があるかを確かめます。作業者は、権限を直してから `put-bluesky-secrets` を dispatch し直します。
 - `secrets-bulk-failed`: API の呼び出しが失敗したか、成功の応答を確かめられませんでした。secret が反映されたかどうかは分かりません。作業者は、同じ値で `put-bluesky-secrets` を dispatch し直せます。
 - `secrets-bulk-not-deployed`: 書き込みの後の読み直しで、新しい version が100%の deployment になっていませんでした。secret は新しい version にあり、まだ配信されていない可能性があります。作業者は、Cloudflare のダッシュボードか deployment の一覧で状態を確かめます。その結果をもとに、作業者は、新しい version を deploy するか、`put-bluesky-secrets` を dispatch し直すかを決めます。`IORI_BLUESKY_CROSSPOST` と `IORI_BLUESKY_TIMELINE` が `disabled` の間は、配信中の Worker の動作に影響しません。
+- `workers-http-NNN`、`workers-request`、`workers-shape`、`aborted`（`stage` が `put-bluesky-secrets-put` のとき）: job は書き込みの後の確認で止まった場合があります。secret は新しい version にある可能性があります。作業者は、`secrets-bulk-not-deployed` と同じ手順で deployment の一覧を確かめます。
 
 #### delete-rehearsal-d1 で予行演習の空の D1 を削除する
 

@@ -23,8 +23,7 @@ const BLUESKY_SECRET_NAMES = Object.freeze(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_P
 const SECRETS_BULK_VERIFY_ATTEMPTS = 5;
 const SECRETS_BULK_VERIFY_INTERVAL_MS = 3000;
 const isBlueskyOperation = (invocation) => invocation.operation === 'put-bluesky-secrets';
-const secretNamesToPut = (env, bluesky) =>
-  bluesky ? BLUESKY_SECRET_NAMES : SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name) || env[name]);
+const secretNamesToPut = (env) => SECRET_NAMES.filter((name) => !OPTIONAL_SECRET_NAMES.includes(name) || env[name]);
 
 const assertIdentity = (env, invocation) => {
   let identity;
@@ -207,7 +206,7 @@ export const putWorkerSecrets = async ({
     WRANGLER_SEND_METRICS: 'false',
   };
   onStage(`${stagePrefix}-put`);
-  const putNames = secretNamesToPut(env, bluesky);
+  const putNames = secretNamesToPut(env);
   let result;
   try {
     result = await runCommand('pnpm', ['exec', 'wrangler', 'secret', 'bulk', '--name', workerName], {
