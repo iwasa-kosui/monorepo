@@ -2,12 +2,17 @@
 import '../playground/playground.css';
 
 interface Props {
+  id: string;
   setup: string;
   initial: string;
 }
 
-const { setup, initial } = Astro.props;
-const config = JSON.stringify({ setupSql: setup, initialSql: initial });
+const { id, setup, initial } = Astro.props;
+const config = JSON.stringify({
+  storageId: id,
+  setupSql: setup,
+  initialSql: initial,
+});
 ---
 
 <section
@@ -28,11 +33,26 @@ const config = JSON.stringify({ setupSql: setup, initialSql: initial });
     <button type="button" data-role="reset" disabled>
       データベースを最初の状態に戻す
     </button>
+    <button type="button" data-role="reset-sql">最初の SQL に戻す</button>
+    <button type="button" data-role="restore" hidden>
+      読み込む前の SQL に戻す
+    </button>
   </div>
   <p class="playground-hint">
     Ctrl+Enter（Mac では Cmd+Enter）でも実行できます。
   </p>
   <div class="playground-results" data-role="results" aria-live="polite"></div>
+  <script is:inline>
+  (function() {
+    var root = document.currentScript.closest('[data-playground]');
+    setTimeout(function() {
+      if (root.hasAttribute('data-mounted')) return;
+      root.dataset.state = 'failed';
+      root.querySelector('[data-role="status-text"]').textContent =
+        '実行環境を読み込めませんでした。通信の状態を確かめて、ページを再読み込みしてください。';
+    }, 20000);
+  })();
+  </script>
 </section>
 
 <script>

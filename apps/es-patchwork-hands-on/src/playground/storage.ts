@@ -38,3 +38,29 @@ export const clearEdits = (exerciseId: string): void => {
     return;
   }
 };
+
+const sqlPrefix = 'es-patchwork-hands-on:sql:';
+
+export const loadSql = (id: string): string | null => {
+  try {
+    return storage()?.getItem(`${sqlPrefix}${id}`) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+export const saveSql = (id: string, sql: string): void => {
+  try {
+    storage()?.setItem(`${sqlPrefix}${id}`, sql);
+  } catch {
+    return;
+  }
+};
+
+export const clearSql = (id: string): void => {
+  try {
+    storage()?.removeItem(`${sqlPrefix}${id}`);
+  } catch {
+    return;
+  }
+};

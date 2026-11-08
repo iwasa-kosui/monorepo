@@ -46,9 +46,8 @@ const parseArguments = (
     ? { options: extra, fn: optionsOrFn }
     : { options: { ...optionsOrFn, ...extra }, fn: maybeFn };
 
-const isSkipped = (parent: Suite, options: Options, fn: TestFn | undefined): boolean =>
-  parent.skipped || (options.skip !== undefined && options.skip !== false) || options.todo !== undefined
-  || fn === undefined;
+const isSkipped = (parent: Suite, options: Options): boolean =>
+  parent.skipped || (options.skip !== undefined && options.skip !== false) || options.todo !== undefined;
 
 const ancestors = (suite: Suite): Suite[] => (suite.parent === null ? [suite] : [...ancestors(suite.parent), suite]);
 
@@ -62,11 +61,12 @@ const withModifiers = (
     extra: Options,
   ) => void,
 ) =>
-  Object.assign<Define, { skip: Define; todo: Define }>(
+  Object.assign<Define, { skip: Define; todo: Define; only: Define }>(
     (name, optionsOrFn, maybeFn) => define(name, optionsOrFn, maybeFn, {}),
     {
       skip: (name, optionsOrFn, maybeFn) => define(name, optionsOrFn, maybeFn, { skip: true }),
       todo: (name, optionsOrFn, maybeFn) => define(name, optionsOrFn, maybeFn, { todo: true }),
+      only: (name, optionsOrFn, maybeFn) => define(name, optionsOrFn, maybeFn, {}),
     },
   );
 
@@ -76,12 +76,22 @@ export const createTestRunner = () => {
 
   const describe = withModifiers((name, optionsOrFn, maybeFn, extra) => {
     const { options, fn } = parseArguments(optionsOrFn, maybeFn, extra);
-    const suite = newSuite(name, current, isSkipped(current, options, () => undefined));
+    const suite = newSuite(name, current, isSkipped(current, options));
     current.items.push(suite);
     const previous = current;
     current = suite;
     try {
       fn?.({ name });
+    } catch (error) {
+      previous.items.push({
+        kind: 'case',
+        name,
+        parent: previous,
+        fn: () => {
+          throw error;
+        },
+        skipped: false,
+      });
     } finally {
       current = previous;
     }
@@ -89,7 +99,7 @@ export const createTestRunner = () => {
 
   const it = withModifiers((name, optionsOrFn, maybeFn, extra) => {
     const { options, fn } = parseArguments(optionsOrFn, maybeFn, extra);
-    current.items.push({ kind: 'case', name, parent: current, fn, skipped: isSkipped(current, options, fn) });
+    current.items.push({ kind: 'case', name, parent: current, fn, skipped: isSkipped(current, options) });
   });
 
   const api = Object.assign((name: string, optionsOrFn?: Options | TestFn, maybeFn?: TestFn): void => {
@@ -97,6 +107,7 @@ export const createTestRunner = () => {
   }, {
     skip: it.skip,
     todo: it.todo,
+    only: it.only,
     test: it,
     it,
     describe,

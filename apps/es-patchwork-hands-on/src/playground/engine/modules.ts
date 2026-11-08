@@ -1,6 +1,7 @@
 import { transform } from 'sucrase';
 
 import type { RunConsole } from './console.ts';
+import { findUnsupportedSyntax, namedValueImports } from './strip-only.ts';
 
 type ModuleRecord = { exports: unknown };
 type ModuleFunction = (
@@ -58,11 +59,27 @@ export const runEntry = async (options: {
       throw new Error(`この実行環境では ${specifier} を読み込めません`);
     }
     const resolved = resolveSpecifier(from, specifier);
-    const name = [resolved, `${resolved}.ts`].find((candidate) => Object.hasOwn(files, candidate));
-    if (name === undefined) {
+    if (!Object.hasOwn(files, resolved)) {
       throw new Error(`Cannot find module '${specifier}' imported from '${from}'`);
     }
-    return load(name);
+    return load(resolved);
+  };
+
+  const prepare = (name: string): string => {
+    const source = files[name] ?? '';
+    const unsupported = findUnsupportedSyntax(source);
+    if (unsupported !== undefined) {
+      throw new SyntaxError(`${name}: ${unsupported}`);
+    }
+    const code = stripTypes(source, name);
+    for (const { specifier, names } of namedValueImports(source)) {
+      const exported = requireFrom(name)(specifier) as Record<string, unknown>;
+      const missing = names.find((exportName) => !(exportName in exported));
+      if (missing !== undefined) {
+        throw new SyntaxError(`The requested module '${specifier}' does not provide an export named '${missing}'`);
+      }
+    }
+    return code;
   };
 
   const load = (name: string): unknown => {
@@ -72,18 +89,16 @@ export const runEntry = async (options: {
     }
     const record: ModuleRecord = { exports: {} };
     cache.set(name, record);
-    const compiled = new Function('require', 'module', 'exports', 'console', stripTypes(files[name] ?? '', name));
+    const compiled = new Function('require', 'module', 'exports', 'console', prepare(name));
     (compiled as ModuleFunction)(requireFrom(name), record, record.exports, console);
     return record.exports;
   };
 
-  const entrySource = files[options.entry];
-  if (entrySource === undefined) {
+  if (!Object.hasOwn(files, options.entry)) {
     throw new Error(`${options.entry} が見つかりません`);
   }
   const record: ModuleRecord = { exports: {} };
   cache.set(options.entry, record);
-  const body = stripTypes(entrySource, options.entry);
-  const compiled = new AsyncFunction('require', 'module', 'exports', 'console', body);
+  const compiled = new AsyncFunction('require', 'module', 'exports', 'console', prepare(options.entry));
   await compiled(requireFrom(options.entry), record, record.exports, console);
 };

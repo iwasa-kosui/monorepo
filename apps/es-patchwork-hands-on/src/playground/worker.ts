@@ -42,6 +42,11 @@ const session = (SQL: Awaited<typeof loading>): ReturnType<typeof createSqlSessi
   return current;
 };
 
+self.addEventListener('unhandledrejection', (event) => {
+  event.preventDefault();
+  self.reportError(event.reason);
+});
+
 scope.onmessage = (event) => {
   handle(event.data).then(
     (response) => scope.postMessage(response),

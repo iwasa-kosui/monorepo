@@ -1,10 +1,12 @@
-import { createRuntime, executionLimitMs, RuntimeTimeoutError } from './client.ts';
-import { applyRuntimeState, element, query } from './dom.ts';
+import { createRuntime, RuntimeScriptError } from './client.ts';
+import { applyRuntimeState, element, failureElement, query } from './dom.ts';
 import { createEditorState, createEditorView } from './editor.ts';
+import { maxSqlCellChars } from './engine/limits.ts';
 import { maxDisplayedRows } from './engine/sql-session.ts';
 import type { SqlCell, SqlRunOutcome, SqlStatementResult } from './engine/types.ts';
+import { clearSql, loadSql, saveSql } from './storage.ts';
 
-type SqlConfig = { setupSql: string; initialSql: string };
+type SqlConfig = { storageId: string; setupSql: string; initialSql: string };
 
 const oneLine = (sql: string): string => sql.replace(/\s+/g, ' ').trim();
 
@@ -30,6 +32,12 @@ const renderResult = (result: SqlStatementResult): HTMLElement => {
         ? `全 ${result.totalRows} 行のうち、先頭の ${maxDisplayedRows} 行を表示しています`
         : `${result.totalRows} 行`,
     }));
+    if (result.cutCells > 0) {
+      parts.push(element('p', {
+        className: 'playground-note',
+        text: `長い値が ${result.cutCells} 個あるため、先頭の ${maxSqlCellChars} 文字までを表示しています`,
+      }));
+    }
   } else if (result.kind === 'changes') {
     parts.push(element('p', { className: 'playground-note', text: `${result.changes} 行を変更しました` }));
   } else {
@@ -60,7 +68,10 @@ const mount = (root: HTMLElement): void => {
   const runButton = query<HTMLButtonElement>(root, '[data-role="run"]');
   const resetButton = query<HTMLButtonElement>(root, '[data-role="reset"]');
   const retryButton = query<HTMLButtonElement>(root, '[data-role="retry"]');
+  const resetSqlButton = query<HTMLButtonElement>(root, '[data-role="reset-sql"]');
+  const restoreButton = query<HTMLButtonElement>(root, '[data-role="restore"]');
   const results = query<HTMLElement>(root, '[data-role="results"]');
+  root.setAttribute('data-mounted', '');
   let busy = false;
   let preparedGeneration = -1;
 
@@ -75,25 +86,14 @@ const mount = (root: HTMLElement): void => {
   };
 
   const showFailure = (error: unknown): void => {
-    show(
-      element('div', { className: 'playground-error', attributes: { role: 'alert' } }, [
-        element('p', {
-          text: error instanceof RuntimeTimeoutError
-            ? `実行に ${
-              executionLimitMs / 1000
-            } 秒以上かかったため、途中で止めました。データベースは最初の状態に戻しました`
-            : '実行できませんでした',
-        }),
-        ...(error instanceof RuntimeTimeoutError || !(error instanceof Error)
-          ? []
-          : [element('pre', { text: error.message })]),
-      ]),
-    );
+    show(failureElement(error, 'データベースは最初の状態に戻しました'));
   };
 
   const runtime = createRuntime((state) => {
     applyRuntimeState(root, state);
     updateControls();
+  }, (message) => {
+    show(failureElement(new RuntimeScriptError(message), ''));
   });
 
   const prepare = async (): Promise<string | null> => {
@@ -149,11 +149,42 @@ const mount = (root: HTMLElement): void => {
       }
     });
 
+  const stateFor = (doc: string) =>
+    createEditorState(doc, {
+      language: 'sql',
+      label: 'SQL を入力する欄',
+      onRun: () => void run(),
+      onChange: (text) => {
+        if (text === config.initialSql) {
+          clearSql(config.storageId);
+        } else {
+          saveSql(config.storageId, text);
+        }
+      },
+    });
+
   const view = createEditorView(
     query<HTMLElement>(root, '[data-role="editor"]'),
-    createEditorState(config.initialSql, { language: 'sql', label: 'SQL を入力する欄', onRun: () => void run() }),
+    stateFor(loadSql(config.storageId) ?? config.initialSql),
   );
 
+  let backup: string | null = null;
+
+  resetSqlButton.addEventListener('click', () => {
+    const before = view.state.doc.toString();
+    backup = before === config.initialSql ? null : before;
+    restoreButton.hidden = backup === null;
+    view.setState(stateFor(config.initialSql));
+    clearSql(config.storageId);
+  });
+  restoreButton.addEventListener('click', () => {
+    if (backup !== null) {
+      view.setState(stateFor(backup));
+      saveSql(config.storageId, backup);
+    }
+    backup = null;
+    restoreButton.hidden = true;
+  });
   runButton.addEventListener('click', () => void run());
   resetButton.addEventListener('click', () => void reset());
   retryButton.addEventListener('click', () => runtime.reload());

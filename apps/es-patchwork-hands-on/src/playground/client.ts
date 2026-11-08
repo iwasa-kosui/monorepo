@@ -1,6 +1,7 @@
 import type { RunOutcome, SqlRunOutcome, WorkerRequest, WorkerResponse } from './engine/types.ts';
 
 export const executionLimitMs = 5000;
+export const loadingLimitMs = 20_000;
 
 export type RuntimeState = 'loading' | 'ready' | 'failed';
 
@@ -8,6 +9,13 @@ export class RuntimeTimeoutError extends Error {
   constructor() {
     super(`実行に ${executionLimitMs / 1000} 秒以上かかったため、途中で止めました`);
     this.name = 'RuntimeTimeoutError';
+  }
+}
+
+export class RuntimeScriptError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RuntimeScriptError';
   }
 }
 
@@ -28,8 +36,12 @@ export type Runtime = {
   runCode: (files: Readonly<Record<string, string>>, entry: string) => Promise<RunOutcome>;
 };
 
-export const createRuntime = (onStateChange: (state: RuntimeState) => void): Runtime => {
+export const createRuntime = (
+  onStateChange: (state: RuntimeState) => void,
+  onRuntimeError: (message: string) => void,
+): Runtime => {
   let worker: Worker | null = null;
+  let loadTimer: ReturnType<typeof setTimeout> | undefined;
   let state: RuntimeState = 'loading';
   let generation = 0;
   let nextId = 0;
@@ -40,15 +52,16 @@ export const createRuntime = (onStateChange: (state: RuntimeState) => void): Run
     onStateChange(next);
   };
 
-  const rejectAll = (message: string): void => {
+  const rejectAll = (error: Error): void => {
     for (const [id, entry] of pending) {
       clearTimeout(entry.timer);
-      entry.reject(new Error(message));
+      entry.reject(error);
       pending.delete(id);
     }
   };
 
   const stop = (): void => {
+    clearTimeout(loadTimer);
     worker?.terminate();
     worker = null;
   };
@@ -69,12 +82,19 @@ export const createRuntime = (onStateChange: (state: RuntimeState) => void): Run
       return;
     }
     worker = created;
+    loadTimer = setTimeout(() => {
+      if (worker === created && state === 'loading') {
+        stop();
+        setState('failed');
+      }
+    }, loadingLimitMs);
     created.addEventListener('message', (event: MessageEvent<WorkerResponse>) => {
       if (worker !== created) {
         return;
       }
       const response = event.data;
       if (response.type === 'ready') {
+        clearTimeout(loadTimer);
         setState('ready');
         return;
       }
@@ -94,13 +114,23 @@ export const createRuntime = (onStateChange: (state: RuntimeState) => void): Run
         }
       }
     });
-    created.addEventListener('error', () => {
+    created.addEventListener('error', (event: ErrorEvent) => {
       if (worker !== created) {
         return;
       }
-      stop();
-      rejectAll('実行環境が止まりました');
-      setState('failed');
+      event.preventDefault();
+      if (state === 'loading') {
+        stop();
+        setState('failed');
+        return;
+      }
+      const message = event.message === '' ? 'エラーの内容を取得できませんでした' : event.message;
+      const waiting = pending.size > 0;
+      rejectAll(new RuntimeScriptError(message));
+      if (!waiting) {
+        onRuntimeError(message);
+      }
+      start();
     });
   };
 
