@@ -7,6 +7,7 @@ const notice = (
     timelineLinks: number;
     hatena: number;
     hatenaCounts: boolean;
+    xPosts?: boolean;
     recommendations?: boolean;
   },
   edited = false,
@@ -17,14 +18,14 @@ const notice = (
   topicKey,
   items,
   edited,
-  excluded: { recommendations: false, ...excluded },
+  excluded: { xPosts: false, recommendations: false, ...excluded },
 });
 
 describe('buildDigestPublishConfirmMessage', () => {
   it('除く項目をすべて並べる', () => {
     expect(
       buildDigestPublishConfirmMessage(
-        notice({ timelineLinks: 3, hatena: 2, hatenaCounts: true, recommendations: true }),
+        notice({ timelineLinks: 3, hatena: 2, hatenaCounts: true, xPosts: true, recommendations: true }),
       ),
     ).toBe(
       [
@@ -32,6 +33,7 @@ describe('buildDigestPublishConfirmMessage', () => {
         '・みんなの関心（iori のタイムライン）3 件',
         '・みんなの関心（はてなブックマーク）2 件',
         '・新着のはてなブックマーク数の表示',
+        '・X の投稿',
         '・はてなから見つけたおすすめの記事',
         '・iori の投稿といいねを根拠にした表示',
         '公開しますか？',
@@ -45,6 +47,7 @@ describe('buildDigestPublishConfirmMessage', () => {
     expect(message).toContain('みんなの関心（はてなブックマーク）2 件');
     expect(message).not.toContain('iori のタイムライン');
     expect(message).not.toContain('はてなブックマーク数の表示');
+    expect(message).not.toContain('X の投稿');
     expect(message).not.toContain('おすすめ');
     expect(message).not.toContain('iori の投稿といいね');
   });
@@ -101,6 +104,21 @@ describe('buildDigestPublishConfirmMessage', () => {
         'この記事は公開を想定していません。',
         '公開版では次の項目を除きます。',
         '・みんなの関心（iori のタイムライン）3 件',
+        '公開しますか？',
+      ].join('\n'),
+    );
+  });
+
+  it('まとめに X の投稿を載せるなら、公開を想定していない旨の次に、除く項目として X の投稿を出す', () => {
+    expect(
+      buildDigestPublishConfirmMessage(
+        notice({ timelineLinks: 0, hatena: 0, hatenaCounts: false, xPosts: true }, false, 'summary'),
+      ),
+    ).toBe(
+      [
+        'この記事は公開を想定していません。',
+        '公開版では次の項目を除きます。',
+        '・X の投稿',
         '公開しますか？',
       ].join('\n'),
     );

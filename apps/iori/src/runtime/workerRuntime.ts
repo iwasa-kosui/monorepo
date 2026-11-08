@@ -37,6 +37,7 @@ import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResol
 import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../adaptor/d1/digest/digestTopicItemsResolverByUserIdAndDigestDateFrom.ts';
+import { createD1DigestXPostsResolverByArticleId } from '../adaptor/d1/digest/digestXPostsResolverByArticleId.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../adaptor/d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1DigestTopicCreatedStore } from '../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
@@ -50,6 +51,7 @@ import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../adaptor/d1/
 import { createD1FederatedTimelineItemsResolver } from '../adaptor/d1/federatedTimeline/federatedTimelineItemsResolver.ts';
 import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../adaptor/d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
+import { createD1XFeedEntriesResolver } from '../adaptor/d1/feedEntry/xFeedEntriesResolver.ts';
 import { createD1AllFeedSourcesResolver } from '../adaptor/d1/feedSource/allFeedSourcesResolver.ts';
 import { createD1FeedSourceCreatedStore } from '../adaptor/d1/feedSource/feedSourceCreatedStore.ts';
 import { createD1FeedSourceEnabledChangedStore } from '../adaptor/d1/feedSource/feedSourceEnabledChangedStore.ts';
@@ -179,6 +181,7 @@ import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
+import { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
@@ -254,6 +257,7 @@ export const createWorkerRuntimePorts = async (
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
   const articleResolver = createD1ArticleResolver(db);
   const articleBodyResolver = createD1ArticleBodyResolver(db);
+  const isDigestOwner = IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) });
   const articleBodyWrittenStore = createD1ArticleBodyWrittenStore(db);
   const likeResolver = createD1LikeResolver(db);
   const repostResolver = createD1RepostResolver(db);
@@ -456,7 +460,11 @@ export const createWorkerRuntimePorts = async (
         feedSourceEnabledChangedStore: createD1FeedSourceEnabledChangedStore(db),
         now: Instant.now,
       }),
-      isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
+      isDigestOwner,
+      getXFeedEntriesUseCase: GetXFeedEntriesUseCase.create({
+        xFeedEntriesResolver: createD1XFeedEntriesResolver(db),
+        now: Instant.now,
+      }),
       digestTopicsResolverByUserId,
       addDigestTopicUseCase: AddDigestTopicUseCase.create({
         digestTopicsResolverByUserId,
@@ -582,6 +590,8 @@ export const createWorkerRuntimePorts = async (
         articleResolver,
         threadResolver: createD1ThreadResolver(db, env.ORIGIN),
         articleBodyResolver,
+        digestXPostsResolverByArticleId: createD1DigestXPostsResolverByArticleId(db),
+        isDigestOwner,
       }),
       getArticlesUseCase: GetArticlesUseCase.create({
         sessionResolver,

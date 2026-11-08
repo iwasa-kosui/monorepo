@@ -13,6 +13,7 @@ import {
   digestItemsTable,
   digestsTable,
   digestTrendsTable,
+  digestXPostsTable,
   domainEventsTable,
 } from '../schema.ts';
 
@@ -51,6 +52,7 @@ export const createD1DraftArticleWithDependentsDeletedStore = (
       ),
       db.delete(digestDeepDivesTable).where(and(eq(digestDeepDivesTable.articleId, articleId), articleIsDraft)),
       db.delete(digestTrendsTable).where(and(eq(digestTrendsTable.digestId, digestId), articleIsDraft)),
+      db.delete(digestXPostsTable).where(and(eq(digestXPostsTable.digestId, digestId), articleIsDraft)),
       db.delete(digestItemsTable).where(and(eq(digestItemsTable.digestId, digestId), articleIsDraft)),
       db.delete(digestsTable).where(and(eq(digestsTable.digestId, digestId), articleIsDraft)),
       insertEventIfDraft(digestExpired),

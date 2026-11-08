@@ -21,6 +21,35 @@ const env = {
   IORI_GENERATION: 'fixture01',
   IORI_OPERATION: 'deploy-worker',
 };
+const operationEnv = (operation: string) =>
+  operation === 'put-bluesky-secrets' || operation === 'put-twitterapi-secret'
+    ? { ...env, IORI_ENVIRONMENT: 'production' }
+    : env;
+it.each(['put-worker-secrets', 'put-bluesky-secrets', 'put-twitterapi-secret'])(
+  'accepts a migration SHA that differs from the code SHA for %s',
+  operation => {
+    expect(
+      parseWorkflowInvocation({
+        ...operationEnv(operation),
+        IORI_OPERATION: operation,
+        IORI_MIGRATION_MAIN_SHA: 'b'.repeat(40),
+      }),
+    )
+      .toMatchObject({ operation, codeSha: env.MAIN_SHA, migrationSha: 'b'.repeat(40) });
+  },
+);
+it.each(['put-bluesky-secrets', 'put-twitterapi-secret'])('accepts %s only for production', operation => {
+  const invocation = { ...env, IORI_OPERATION: operation };
+  expect(parseWorkflowInvocation({ ...invocation, IORI_ENVIRONMENT: 'production' })).toMatchObject({
+    operation,
+    environment: 'production',
+  });
+  for (const environment of ['staging', 'development']) {
+    expect(() => parseWorkflowInvocation({ ...invocation, IORI_ENVIRONMENT: environment })).toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  }
+});
 it('binds protected invocation to reviewed main and separates maintenance code from immutable migration SHA', () => {
   expect(parseWorkflowInvocation(env)).toMatchObject({ codeSha: env.MAIN_SHA, migrationSha: env.MAIN_SHA });
   expect(() => parseWorkflowInvocation({ ...env, GITHUB_REF: 'refs/heads/feature' })).toThrow();
@@ -119,10 +148,10 @@ it('accepts restart-failed-source only without recovery and with a different mig
     );
   }
 });
-it.each(['deploy-worker', 'put-worker-secrets'])(
+it.each(['deploy-worker', 'put-worker-secrets', 'put-bluesky-secrets', 'put-twitterapi-secret'])(
   'rejects a non-empty IORI_RECOVERY for %s',
   (operation) => {
-    const valid = { ...env, IORI_OPERATION: operation };
+    const valid = { ...operationEnv(operation), IORI_OPERATION: operation };
     expect(parseWorkflowInvocation(valid)).toMatchObject({ operation });
     expect(parseWorkflowInvocation({ ...valid, IORI_RECOVERY: '' })).toMatchObject({ operation });
     for (const recovery of ['destination_writes_not_enabled', 'destination_writes_reconciled', 'x']) {
@@ -180,10 +209,10 @@ it('rejects diagnose-source with a recovery value, a stale main SHA or an unknow
     'Protected workflow invocation is invalid.',
   );
 });
-it.each(['deploy-worker', 'put-worker-secrets'])(
+it.each(['deploy-worker', 'put-worker-secrets', 'put-bluesky-secrets', 'put-twitterapi-secret'])(
   'rejects an empty or missing generation and run ID for %s',
   operation => {
-    const invocation = { ...env, IORI_OPERATION: operation };
+    const invocation = { ...operationEnv(operation), IORI_OPERATION: operation };
     expect(parseWorkflowInvocation(invocation)).toMatchObject({ operation });
     for (const key of ['IORI_GENERATION', 'IORI_MIGRATION_RUN_ID'] as const) {
       for (const empty of ['', undefined]) {
@@ -376,7 +405,15 @@ it('compares the time limit with the given clock', () => {
     'Protected workflow invocation is invalid.',
   );
 });
-it.each(['deploy-worker', 'put-worker-secrets', 'diagnose-source', 'delete-rehearsal-d1', 'resume-source'])(
+it.each([
+  'deploy-worker',
+  'put-worker-secrets',
+  'put-bluesky-secrets',
+  'put-twitterapi-secret',
+  'diagnose-source',
+  'delete-rehearsal-d1',
+  'resume-source',
+])(
   'rejects the repost time limit for the operation %s',
   operation => {
     const base = operation === 'delete-rehearsal-d1'
@@ -385,7 +422,7 @@ it.each(['deploy-worker', 'put-worker-secrets', 'diagnose-source', 'delete-rehea
       ? { ...env, IORI_GENERATION: '', IORI_MIGRATION_RUN_ID: '' }
       : operation === 'resume-source'
       ? { ...env, IORI_RECOVERY: 'destination_writes_reconciled' }
-      : env;
+      : operationEnv(operation);
     expect(parseWorkflowInvocation({ ...base, IORI_OPERATION: operation })).toMatchObject({ operation });
     expect(() =>
       parseWorkflowInvocation({ ...base, IORI_OPERATION: operation, IORI_REPOST_CREATED_BEFORE_MS: '1700000000000' })
@@ -505,7 +542,15 @@ it('checks only the event, ref, SHA and operation of a push while the identity i
   )
     .toThrow('Protected workflow invocation is invalid.');
 });
-it.each(['put-worker-secrets', 'delete-rehearsal-d1', 'resume-source', 'source', ''])(
+it.each([
+  'put-worker-secrets',
+  'put-bluesky-secrets',
+  'put-twitterapi-secret',
+  'delete-rehearsal-d1',
+  'resume-source',
+  'source',
+  '',
+])(
   'rejects a main push for the operation %j',
   operation => {
     expect(() => parseWorkflowInvocation({ ...pushEnv, IORI_OPERATION: operation })).toThrow(

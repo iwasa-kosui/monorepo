@@ -59,6 +59,10 @@ const setup = () => {
       fixture.sqlite.prepare('INSERT INTO digest_trends(digestId,kind,rank,url,title,count) VALUES (?,?,?,?,?,?)')
         .run(digestId, kind, rank, `https://example.com/${kind}/${rank}`, `${kind} ${rank}`, rank);
     }
+    for (const rank of [2, 1]) {
+      fixture.sqlite.prepare('INSERT INTO digest_x_posts(digestId,rank,feedEntryId) VALUES (?,?,?)')
+        .run(digestId, rank, `x-entry-${rank}`);
+    }
     return { digestId, articleId: ArticleId.orThrow(articleId) };
   };
   const addTopic = (owner: { userId: string }, topicKey: string, name: string, sortOrder: number) =>
@@ -92,6 +96,7 @@ describe('digest の読み取り resolver', () => {
       'hatena:2',
       'timeline_link:1',
     ]);
+    expect(digest?.xPostFeedEntryIds).toEqual(['x-entry-1', 'x-entry-2']);
   });
 
   it('他人の digest や別の日の digest は返さない', async () => {

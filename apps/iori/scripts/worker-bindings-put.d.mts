@@ -25,4 +25,5 @@ export function putWorkerSecrets(options: {
     },
   ) => Promise<{ stdout: string; stderr: string }>;
   fetchRequest?: typeof fetch;
+  sleep?: (ms: number, signal: AbortSignal) => Promise<unknown>;
 }): Promise<void>;
