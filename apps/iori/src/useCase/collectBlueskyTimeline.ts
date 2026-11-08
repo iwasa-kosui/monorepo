@@ -4,7 +4,7 @@ import {
   BLUESKY_TIMELINE_MAX_PAGES,
   BLUESKY_TIMELINE_PAGE_LIMIT,
   BLUESKY_TIMELINE_RETENTION_DAYS,
-  type BlueskyTimelineItem,
+  type BlueskyFetchedTimelineItem,
   type BlueskyTimelineItemsExpiredStore,
   type BlueskyTimelineItemsSavedStore,
 } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
@@ -30,7 +30,7 @@ type Deps = Readonly<{
   now: () => Instant;
 }>;
 
-const uniqueByFeedItemId = (items: readonly BlueskyTimelineItem[]): BlueskyTimelineItem[] => {
+const uniqueByFeedItemId = (items: readonly BlueskyFetchedTimelineItem[]): BlueskyFetchedTimelineItem[] => {
   const seen = new Set<string>();
   return items.filter((item) => !seen.has(item.feedItemId) && seen.add(item.feedItemId));
 };

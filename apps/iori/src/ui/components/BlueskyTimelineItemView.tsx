@@ -4,7 +4,14 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { blueskyPostUrl, blueskyPostUrlOfUri, segmentBlueskyText } from './blueskyRichText.ts';
 
-type Props = Readonly<{ item: IoriBlueskyTimelineItemBody; dataIndex?: number; isSelected?: boolean }>;
+type Props = Readonly<{
+  item: IoriBlueskyTimelineItemBody;
+  dataIndex?: number;
+  isSelected?: boolean;
+  onLike?: (item: IoriBlueskyTimelineItemBody) => void;
+  onUndoLike?: (item: IoriBlueskyTimelineItemBody) => void;
+  isLikePending?: boolean;
+}>;
 type MediaEmbed = Extract<BlueskyTimelineEmbed, { type: 'images' | 'external' | 'video' }>;
 type QuoteEmbed = Extract<BlueskyTimelineEmbed, { type: 'record' }>;
 
@@ -122,7 +129,59 @@ const BlueskyEmbed = ({ embed, postHref }: Readonly<{ embed: BlueskyTimelineEmbe
   return <BlueskyMedia media={embed} postHref={postHref} />;
 };
 
-export const BlueskyTimelineItemView = ({ item, dataIndex, isSelected }: Props) => {
+const likeTitle = (liked: boolean, isPending: boolean): string => {
+  if (isPending) return liked ? 'いいね中...' : 'いいね取り消し中...';
+  return liked ? 'いいねを取り消す' : 'いいね';
+};
+
+const BlueskyLikeButton = ({ item, onLike, onUndoLike, isPending }: Readonly<{
+  item: IoriBlueskyTimelineItemBody;
+  onLike: (item: IoriBlueskyTimelineItemBody) => void;
+  onUndoLike: ((item: IoriBlueskyTimelineItemBody) => void) | undefined;
+  isPending: boolean;
+}>) => {
+  const handleClick = (event: Event) => {
+    event.stopPropagation();
+    if (isPending) return;
+    if (item.liked) {
+      if (onUndoLike && confirm('いいねを取り消しますか？')) onUndoLike(item);
+    } else {
+      onLike(item);
+    }
+  };
+  return (
+    <button
+      type='button'
+      onClick={handleClick}
+      class={`flex items-center gap-1 transition-colors ${
+        item.liked
+          ? 'text-terracotta dark:text-terracotta-light'
+          : isPending
+          ? 'text-terracotta-light/50 dark:text-terracotta-dark cursor-wait'
+          : 'text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
+      }`}
+      title={likeTitle(item.liked, isPending)}
+      disabled={isPending}
+    >
+      <svg
+        xmlns='http://www.w3.org/2000/svg'
+        class='h-5 w-5'
+        fill={item.liked ? 'currentColor' : 'none'}
+        viewBox='0 0 24 24'
+        stroke='currentColor'
+        stroke-width='2'
+      >
+        <path
+          stroke-linecap='round'
+          stroke-linejoin='round'
+          d='M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'
+        />
+      </svg>
+    </button>
+  );
+};
+
+export const BlueskyTimelineItemView = ({ item, dataIndex, isSelected, onLike, onUndoLike, isLikePending }: Props) => {
   const avatar = safeAbsoluteUrl(item.authorAvatar);
   const postHref = blueskyPostUrl(item.authorDid, item.uri);
   const displayName = item.authorDisplayName ?? item.authorHandle;
@@ -170,6 +229,11 @@ export const BlueskyTimelineItemView = ({ item, dataIndex, isSelected }: Props) 
       </div>
       {item.text !== '' && <BlueskyText text={item.text} facets={item.facets} />}
       {item.embed !== null && <BlueskyEmbed embed={item.embed} postHref={postHref} />}
+      {onLike !== undefined && (
+        <div class='flex items-center gap-4 pt-1'>
+          <BlueskyLikeButton item={item} onLike={onLike} onUndoLike={onUndoLike} isPending={isLikePending === true} />
+        </div>
+      )}
     </article>
   );
 };

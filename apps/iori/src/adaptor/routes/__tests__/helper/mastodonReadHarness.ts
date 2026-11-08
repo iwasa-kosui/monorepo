@@ -8,6 +8,7 @@ import { Instant } from '../../../../domain/instant/instant.ts';
 import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
+import type { BlueskyClient } from '../../../../ports/blueskyClient.ts';
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import type { TopicRelevanceJudge } from '../../../../ports/topicRelevanceJudge.ts';
@@ -29,6 +30,7 @@ import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
 import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
+import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
 import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
@@ -46,6 +48,7 @@ import { createTranslatePostUseCase } from '../../../../useCase/translatePost.ts
 import { UndoEmojiReactUseCase } from '../../../../useCase/undoEmojiReact.ts';
 import { UndoLikeUseCase } from '../../../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../../../useCase/undoRepost.ts';
+import { UnlikeBlueskyPostUseCase } from '../../../../useCase/unlikeBlueskyPost.ts';
 import type { IoriWorkerEnv } from '../../../../workerEnv.ts';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../../d1/__tests__/sqliteFixture.ts';
@@ -64,6 +67,9 @@ import { createD1PostTranslationStore } from '../../../d1/aiTranslation/postTran
 import { createD1ArticleDeletedStore } from '../../../d1/article/articleDeletedStore.ts';
 import { createD1ArticleResolver } from '../../../d1/article/articleResolver.ts';
 import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
+import { createD1BlueskyLikeDeletedStore } from '../../../d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
+import { createD1BlueskyLikeSavedStore } from '../../../d1/blueskyTimeline/blueskyLikeSavedStore.ts';
+import { createD1BlueskyLikeTargetResolver } from '../../../d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../../../d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestItemFeedbackGivenStore.ts';
 import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
@@ -188,6 +194,7 @@ export const setupReadApi = (
     translationTimeoutMs?: number;
     searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
     collectBlueskyTimeline?: CollectBlueskyTimelineUseCase;
+    blueskyLikeClient?: Pick<BlueskyClient, 'createLike' | 'deleteLike'>;
     refreshXPosts?: RefreshXPostsUseCase;
   }> = {},
 ) => {
@@ -514,6 +521,19 @@ export const setupReadApi = (
           authn,
           blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
           collectBlueskyTimelineUseCase: options.collectBlueskyTimeline,
+          likeBlueskyPostUseCase: options.blueskyLikeClient === undefined ? undefined : LikeBlueskyPostUseCase.create({
+            client: options.blueskyLikeClient,
+            targetResolver: createD1BlueskyLikeTargetResolver(db),
+            savedStore: createD1BlueskyLikeSavedStore(db),
+            now: Instant.now,
+          }),
+          unlikeBlueskyPostUseCase: options.blueskyLikeClient === undefined
+            ? undefined
+            : UnlikeBlueskyPostUseCase.create({
+              client: options.blueskyLikeClient,
+              targetResolver: createD1BlueskyLikeTargetResolver(db),
+              deletedStore: createD1BlueskyLikeDeletedStore(db),
+            }),
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );

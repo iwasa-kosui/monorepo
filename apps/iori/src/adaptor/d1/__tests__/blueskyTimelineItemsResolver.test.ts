@@ -10,8 +10,9 @@ const BASE = Date.UTC(2026, 10, 8, 12);
 const setup = (
   rows: ReadonlyArray<Readonly<{ feedItemId: string; indexedAt: number; uri?: string; repostedByDid?: string }>>,
   crosspostUris: readonly (string | null)[] = [],
+  likedUris: readonly string[] = [],
 ) => {
-  const { sqlite, db } = createSqliteD1Fixture();
+  const { sqlite, db, queries } = createSqliteD1Fixture();
   const insert = sqlite.prepare(
     'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
   );
@@ -34,8 +35,12 @@ const setup = (
     'INSERT INTO bluesky_crossposts(postId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
   );
   crosspostUris.forEach((uri, index) => insertCrosspost.run(`post-${index}`, 'sent', uri, 1, 1, 1));
+  const insertLike = sqlite.prepare('INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)');
+  likedUris.forEach((uri, index) => insertLike.run(uri, `at://did:plc:me/app.bsky.feed.like/3k${index}`, 1));
   const resolver = createD1BlueskyTimelineItemsResolver(db);
   return {
+    queries,
+    resolveItems: async (limit: number) => Result.unsafeUnwrap(await resolver.resolve({ limit, before: undefined })),
     resolve: async (input: { limit: number; before?: number; beforeId?: string; excludeCrossposted?: boolean }) =>
       Result.unsafeUnwrap(
         await resolver.resolve({
@@ -118,6 +123,42 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
 
       expect(await t.resolve({ limit: 1, excludeCrossposted: true })).toEqual(['at://own#repost:did:plc:b']);
       expect(await t.resolve({ limit: 10, before: BASE - 1, excludeCrossposted: true })).toEqual(['other']);
+    });
+  });
+
+  describe('liked', () => {
+    const likeRows = [
+      { feedItemId: 'own', uri: 'at://own', indexedAt: BASE },
+      { feedItemId: 'at://own#repost:did:plc:b', uri: 'at://own', repostedByDid: 'did:plc:b', indexedAt: BASE - 1 },
+      { feedItemId: 'other', uri: 'at://other', indexedAt: BASE - 2 },
+    ];
+
+    it('bluesky_likes に同じ uri の行があれば、通常の行も repost の行も liked にする', async () => {
+      const t = setup(likeRows, [], ['at://own']);
+
+      const items = await t.resolveItems(10);
+
+      expect(items.map((item) => [item.feedItemId, item.liked])).toEqual([
+        ['own', true],
+        ['at://own#repost:did:plc:b', true],
+        ['other', false],
+      ]);
+    });
+
+    it('いいねの行があっても、タイムラインの行を増やさない', async () => {
+      const t = setup(likeRows, [], ['at://own', 'at://other']);
+
+      expect(await t.resolveItems(10)).toHaveLength(3);
+    });
+
+    it('liked の付与で D1 のクエリを増やさず、1 回の SELECT にまとめる', async () => {
+      const t = setup(likeRows, [], ['at://own']);
+      t.queries.length = 0;
+
+      await t.resolveItems(10);
+
+      expect(t.queries).toHaveLength(1);
+      expect(t.queries[0]?.sql).toMatch(/^select .* left join "bluesky_likes"/is);
     });
   });
 });

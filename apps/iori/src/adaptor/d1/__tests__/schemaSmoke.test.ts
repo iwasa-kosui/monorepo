@@ -11,6 +11,7 @@ describe('D1 schema', () => {
       'articleBodiesTable',
       'articlesTable',
       'blueskyCrosspostsTable',
+      'blueskyLikesTable',
       'blueskySessionsTable',
       'blueskyTimelineItemsTable',
       'digestDeepDiveTurnsTable',

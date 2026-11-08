@@ -1,5 +1,6 @@
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 
+import type { BlueskyLikeTargetNotFound } from '../../domain/blueskyTimeline/blueskyLike.ts';
 import {
   BLUESKY_TIMELINE_DEFAULT_LIMIT,
   BLUESKY_TIMELINE_MAX_LIMIT,
@@ -10,9 +11,13 @@ import {
 } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
+import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type { CollectBlueskyTimelineUseCase } from '../../useCase/collectBlueskyTimeline.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
+import type { LikeBlueskyPostUseCase } from '../../useCase/likeBlueskyPost.ts';
+import type { UnlikeBlueskyPostUseCase } from '../../useCase/unlikeBlueskyPost.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
+import { bodyString, readRequestBody } from './helper/requestBody.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
@@ -20,6 +25,8 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   authn: MastodonAuthn;
   blueskyTimelineItemsResolver: BlueskyTimelineItemsResolver;
   collectBlueskyTimelineUseCase: CollectBlueskyTimelineUseCase | undefined;
+  likeBlueskyPostUseCase: LikeBlueskyPostUseCase | undefined;
+  unlikeBlueskyPostUseCase: UnlikeBlueskyPostUseCase | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -40,6 +47,7 @@ export type IoriBlueskyTimelineItemBody = Readonly<{
   repostedByHandle: string | null;
   postedAt: number;
   indexedAt: number;
+  liked: boolean;
 }>;
 
 export type IoriBlueskyTimelineResponse = Readonly<{
@@ -48,6 +56,8 @@ export type IoriBlueskyTimelineResponse = Readonly<{
   nextBefore: number | null;
   nextBeforeId: string | null;
 }>;
+
+export type IoriBlueskyLikeResponse = Readonly<{ liked: boolean }>;
 
 export type IoriBlueskyTimelineRefreshResponse = Readonly<{
   pages: number;
@@ -58,6 +68,7 @@ export type IoriBlueskyTimelineRefreshResponse = Readonly<{
 
 const readStatuses = Scope.orThrow('read:statuses');
 const writeAccounts = Scope.orThrow('write:accounts');
+const writeFavourites = Scope.orThrow('write:favourites');
 const integerPattern = /^\d+$/;
 const forbidden = { error: 'Forbidden' } as const;
 
@@ -78,12 +89,20 @@ const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBody => (
   repostedByHandle: item.repostedByHandle,
   postedAt: item.postedAt,
   indexedAt: item.indexedAt,
+  liked: item.liked,
 });
+
+const likeFailure = (c: Context, error: BlueskyClientError | BlueskyLikeTargetNotFound) =>
+  error.type === 'BlueskyLikeTargetNotFound'
+    ? c.json({ error: 'Record not found' }, 404)
+    : c.json({ error: 'Bluesky request failed' }, 502);
 
 export const createWorkerIoriBlueskyRouter = ({
   authn,
   blueskyTimelineItemsResolver,
   collectBlueskyTimelineUseCase,
+  likeBlueskyPostUseCase,
+  unlikeBlueskyPostUseCase,
   isDigestOwner,
 }: WorkerIoriBlueskyRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
@@ -152,5 +171,47 @@ export const createWorkerIoriBlueskyRouter = ({
         return collected.ok
           ? c.json(collected.val satisfies IoriBlueskyTimelineRefreshResponse)
           : c.json({ error: 'Bluesky request failed' }, 502);
+      },
+    )
+    .post(
+      '/iori/v1/bluesky/likes',
+      requireSameOriginForCookie,
+      authn.requireUser(writeFavourites),
+      async (c) => {
+        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
+          return c.json(forbidden, 403);
+        }
+        if (likeBlueskyPostUseCase === undefined) {
+          return c.json({ error: 'Bluesky timeline is disabled' }, 409);
+        }
+        const feedItemId = bodyString(await readRequestBody(c), 'feedItemId');
+        if (feedItemId === undefined || feedItemId === '') {
+          return c.json({ error: 'Validation failed: feedItemId' }, 400);
+        }
+        const liked = await likeBlueskyPostUseCase.run({ feedItemId });
+        return liked.ok
+          ? c.json(liked.val satisfies IoriBlueskyLikeResponse)
+          : likeFailure(c, liked.err);
+      },
+    )
+    .delete(
+      '/iori/v1/bluesky/likes',
+      requireSameOriginForCookie,
+      authn.requireUser(writeFavourites),
+      async (c) => {
+        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
+          return c.json(forbidden, 403);
+        }
+        if (unlikeBlueskyPostUseCase === undefined) {
+          return c.json({ error: 'Bluesky timeline is disabled' }, 409);
+        }
+        const feedItemId = c.req.query('feedItemId');
+        if (feedItemId === undefined || feedItemId === '') {
+          return c.json({ error: 'Validation failed: feedItemId' }, 400);
+        }
+        const unliked = await unlikeBlueskyPostUseCase.run({ feedItemId });
+        return unliked.ok
+          ? c.json(unliked.val satisfies IoriBlueskyLikeResponse)
+          : likeFailure(c, unliked.err);
       },
     );

@@ -82,12 +82,19 @@ const blueskyTimelineItemZodType = z.object({
   postedAt: Instant.zodType,
   indexedAt: Instant.zodType,
   fetchedAt: Instant.zodType,
+  liked: z.boolean(),
+});
+const blueskyFetchedTimelineItemZodType = blueskyTimelineItemZodType.extend({
+  viewerLikeUri: z.string().min(1).nullable(),
 });
 
 export type BlueskyTimelineFacet = z.infer<typeof facetZodType>;
 export type BlueskyTimelineEmbed = z.infer<typeof embedZodType>;
 export type BlueskyTimelineItem = z.infer<typeof blueskyTimelineItemZodType>;
 export const BlueskyTimelineItem = Schema.create(blueskyTimelineItemZodType);
+
+export type BlueskyFetchedTimelineItem = z.infer<typeof blueskyFetchedTimelineItemZodType>;
+export const BlueskyFetchedTimelineItem = Schema.create(blueskyFetchedTimelineItemZodType);
 
 export const BlueskyTimelineEmbed = Schema.create(embedZodType);
 export const BlueskyTimelineFacets = Schema.create(z.array(facetZodType));
@@ -106,7 +113,7 @@ export type BlueskyTimelineItemsResolver = Readonly<{
   ) => RA<readonly BlueskyTimelineItem[], never>;
 }>;
 export type BlueskyTimelineItemsSavedStore = Readonly<{
-  save: (items: readonly BlueskyTimelineItem[]) => RA<readonly string[], never>;
+  save: (items: readonly BlueskyFetchedTimelineItem[]) => RA<readonly string[], never>;
 }>;
 export type BlueskyTimelineItemsExpiredStore = Readonly<{
   expire: (indexedBefore: Instant) => RA<void, never>;
