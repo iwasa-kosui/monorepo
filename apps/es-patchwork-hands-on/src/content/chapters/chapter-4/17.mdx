@@ -1,4 +1,42 @@
-import DecisionTable from '../../../components/DecisionTable.astro';
+import CodePlayground from '../../../components/CodePlayground.astro';
+import PlaygroundTabs from '../../../components/PlaygroundTabs.astro';
 
-<DecisionTable heading="比較" from={3} to={3} />
+<PlaygroundTabs
+  labels={[
+    '集計テーブル（chapter-4-summary-table-start）',
+    '外部システム同期（chapter-4-external-sync-start）',
+    '既存の監査ログ（chapter-4-audit-log-start）',
+  ]}
+/>
 
+<CodePlayground
+  exercise="chapter-4-summary-table-start"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'why-this-count.ts']}
+  testFile="visits.test.ts"
+  reveal="export const explainCancellationCount"
+  scripts={[{ file: 'why-this-count.ts', label: 'why-this-count.ts を実行する' }]}
+  complete={{ exercise: 'chapter-4-summary-table-done' }}
+/>
+
+<CodePlayground
+  hidden
+  exercise="chapter-4-external-sync-start"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'what-was-sent.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  scripts={[{ file: 'what-was-sent.ts', label: 'what-was-sent.ts を実行する' }]}
+  complete={{ exercise: 'chapter-4-external-sync-done' }}
+/>
+
+<CodePlayground
+  hidden
+  exercise="chapter-4-audit-log-start"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'why-changed.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  scripts={[{ file: 'why-changed.ts', label: 'why-changed.ts を実行する' }]}
+  complete={{ exercise: 'chapter-4-audit-log-done' }}
+/>

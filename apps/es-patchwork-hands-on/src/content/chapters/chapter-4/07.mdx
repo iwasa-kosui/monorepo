@@ -1,13 +1,12 @@
-## 外部システム同期
+import CodePlayground from '../../../components/CodePlayground.astro';
 
-この問いに答えます。
+「テストを実行する」と「what-was-sent.ts を実行する」を押して、完成コードの結果を見ます。
 
-> 外部システムに、いつ何を送ったのか。
-
-`cancelVisit` は来院をキャンセルしたあと、リマインダーの取り消しを外部システムへ送ります。外部への送信はトランザクションに入りません。そこで `cancelVisit` は記録を2回に分けます。
-
-1. `cancelVisit` は、トランザクションの中で `VisitCancelled` と送信の予定 `ReminderCancellationRequested` を記録します。この記録に失敗すると、来院のキャンセルも外部への送信も行われません。
-2. `cancelVisit` は、コミットの後に外部へ送り、結果を `ReminderCancellationSent` か `ReminderCancellationFailed` として記録します。
-
-送信や結果の記録に失敗しても、コミット済みの来院のキャンセルは取り消されません。`cancelVisit` は呼び出し元にエラーを返します。
-
+<CodePlayground
+  exercise="chapter-4-external-sync-done"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'what-was-sent.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  scripts={[{ file: 'what-was-sent.ts', label: 'what-was-sent.ts を実行する' }]}
+/>

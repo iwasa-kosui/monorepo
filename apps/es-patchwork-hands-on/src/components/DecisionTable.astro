@@ -1,21 +1,64 @@
 ---
 import { compiledContent } from '../../exercises/chapter-4-decision-table.md';
-import { extractHtmlSection, sliceTableRows } from '../lib/extract';
+import { extractHtmlSection, tableBodyRows } from '../lib/extract';
 
 interface Props {
   heading: string;
-  from?: number;
-  to?: number;
+  byAxis?: boolean;
 }
 
-const { heading, from, to } = Astro.props;
-if ((from === undefined) !== (to === undefined)) {
-  throw new Error('DecisionTable の from と to は両方を指定します');
-}
+const { heading, byAxis = false } = Astro.props;
 const section = extractHtmlSection(await compiledContent(), heading);
-const html = from === undefined || to === undefined
-  ? section
-  : sliceTableRows(section, from, to);
+const title = byAxis ? /^<h2[^>]*>[\s\S]*?<\/h2>/.exec(section)?.[0] ?? '' : '';
+const table = section.slice(title.length);
+const axes = byAxis
+  ? tableBodyRows(table).map((row) => /<td[^>]*>([\s\S]*?)<\/td>/.exec(row)?.[1] ?? '')
+  : [];
 ---
 
-<div class="decision-table"><Fragment set:html={html} /></div>
+<div class="decision-table" data-axis-table={byAxis ? '' : undefined}>
+  {
+    byAxis
+      ? (
+        <>
+          <Fragment set:html={title} />
+          <div class="axis-buttons" role="group" aria-label="比較する軸" hidden>
+            {
+              axes.map((label, index) => (
+                <button
+                  type="button"
+                  data-axis={index}
+                  aria-pressed={index === 0 ? 'true' : 'false'}
+                  set:html={label}
+                />
+              ))
+            }
+          </div>
+          <Fragment set:html={table} />
+        </>
+      )
+      : <Fragment set:html={section} />
+  }
+</div>
+
+<script>
+for (const root of document.querySelectorAll('[data-axis-table]')) {
+  const group = root.querySelector<HTMLElement>('.axis-buttons');
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>('[data-axis]')];
+  const rows = [...root.querySelectorAll<HTMLElement>('tbody tr')];
+  if (group === null) continue;
+  const show = (index: number): void => {
+    rows.forEach((row, rowIndex) => {
+      row.hidden = rowIndex !== index;
+    });
+    buttons.forEach((button, buttonIndex) => {
+      button.setAttribute('aria-pressed', String(buttonIndex === index));
+    });
+  };
+  for (const [index, button] of buttons.entries()) {
+    button.addEventListener('click', () => show(index));
+  }
+  group.hidden = false;
+  show(0);
+}
+</script>

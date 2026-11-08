@@ -1,5 +1,18 @@
-import CodeBlock from '../../../components/CodeBlock.astro';
-import { cancelVisitOf } from '../../../lib/snapshots';
+import SqlPlayground from '../../../components/SqlPlayground.astro';
 
-<CodeBlock code={cancelVisitOf('chapter-4-summary-table-done')} from={12} to={28} />
+## キャンセル数を SQL で調べる
 
+「実行する」を押すと、`daily_cancellation_counts` のキャンセル数と、`business_events` から数え直したキャンセル数が並びます。SQL を書き換えて、`daily_cancellation_counts` と `business_events` の中身を調べることもできます。
+
+<SqlPlayground
+  id="chapter-4-summary-table"
+  script={{ exercise: 'chapter-4-summary-table-done', entry: 'why-this-count.ts' }}
+  initial={`SELECT
+  c.visit_date,
+  c.cancelled_count AS recorded_count,
+  (
+    SELECT count(*) FROM business_events AS e
+    WHERE e.event_name = 'VisitCancelled' AND e.target_state ->> '$.visit_date' = c.visit_date
+  ) AS recalculated_count
+FROM daily_cancellation_counts AS c;`}
+/>

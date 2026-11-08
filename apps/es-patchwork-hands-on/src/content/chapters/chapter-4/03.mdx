@@ -1,8 +1,12 @@
-## 集計テーブル
+import CodePlayground from '../../../components/CodePlayground.astro';
 
-この問いに答えます。
+「テストを実行する」と「why-this-count.ts を実行する」を押して、完成コードの結果を見ます。
 
-> この集計値はなぜこの値なのか。
-
-`daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。テーブルの行には数しかありません。`cancelVisit` は業務イベントとキャンセル数を同じトランザクションで書きます。このパターンの開始と完成で、`cancelVisit` は同じです。開発者は読み取り関数だけを足します。
-
+<CodePlayground
+  exercise="chapter-4-summary-table-done"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'why-this-count.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  scripts={[{ file: 'why-this-count.ts', label: 'why-this-count.ts を実行する' }]}
+/>

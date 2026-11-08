@@ -1,4 +1,30 @@
-import DecisionTable from '../../../components/DecisionTable.astro';
+## 持ち帰りの演習
 
-<DecisionTable heading="比較" from={1} to={2} />
+次の手順で、選んだパターンを実装します。
 
+1. 次のページで、選んだパターンのボタンを押して、開始のコードを開きます。
+2. 「テストを実行する」を押します。次の表の数が出れば、開始の状態です。
+3. 実行欄で `visits.ts` を編集して、次の表の内容を実装します。
+4. 「テストを実行する」を押します。`pass 15` と `fail 0` が出れば、実装は完了です。
+5. 次の表の確認用スクリプトのボタンを押して、問いに答えられることを確かめます。
+
+| 開始のコード | 開始の結果 | 実装する内容 | 確認用スクリプト |
+|---|---|---|---|
+| `chapter-4-summary-table-start` | `pass 10`、`fail 5` | `explainCancellationCount` と `verifyCancellationCount` | `why-this-count.ts` |
+| `chapter-4-external-sync-start` | `pass 11`、`fail 4` | `cancelVisit` の送信の予定と結果の記録、`findSendRecords`、`findUnconfirmedSends` | `what-was-sent.ts` |
+| `chapter-4-audit-log-start` | `pass 11`、`fail 4` | `cancelVisit` の `payload` への `auditLogId` の追加、`explainChange`、`findChangesWithoutReason` | `why-changed.ts` |
+
+「完成コードを読み込む」を押すと、解答を読み込めます。
+
+<details>
+<summary>手元の Node で動かすとき</summary>
+
+1. 事前準備で展開したディレクトリの中にある、選んだパターンの開始のコードへ移動します。
+2. `node --test visits.test.ts` を実行します。上の表の数が出れば、開始の状態です。
+3. `visits.ts` を編集して、上の表の内容を実装します。
+4. `node --test visits.test.ts` を実行します。`pass 15` と `fail 0` が出れば、実装は完了です。
+5. 上の表の確認用スクリプトを実行して、問いに答えられることを確かめます。
+
+解答は、名前の末尾が `-done` のディレクトリにあります。
+
+</details>

@@ -1,5 +1,21 @@
-import CodeBlock from '../../../components/CodeBlock.astro';
-import { cancelVisitOf } from '../../../lib/snapshots';
+import SqlPlayground from '../../../components/SqlPlayground.astro';
 
-<CodeBlock code={cancelVisitOf('chapter-4-audit-log-done')} from={1} to={16} />
+## 業務イベントが結びついていない監査ログを SQL で調べる
 
+「実行する」を押すと、業務イベントが結びついていない監査ログの行が出ます。SQL を書き換えて、`audit_logs` と `business_events` の中身を調べることもできます。
+
+<SqlPlayground
+  id="chapter-4-audit-log"
+  script={{ exercise: 'chapter-4-audit-log-done', entry: 'why-changed.ts' }}
+  initial={`SELECT
+  a.id AS audit_log_id,
+  a.row_id,
+  a.old_value,
+  a.new_value,
+  a.operated_by,
+  a.operated_at
+FROM audit_logs AS a
+LEFT JOIN business_events AS e ON e.payload ->> '$.auditLogId' = a.id
+WHERE e.event_id IS NULL
+ORDER BY a.id;`}
+/>

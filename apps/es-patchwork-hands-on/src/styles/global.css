@@ -194,6 +194,39 @@ body.chapter-page {
 .content .decision-table table {
   display: table;
 }
+.content .decision-table[data-axis-table] table {
+  width: 100%;
+  table-layout: fixed;
+}
+.content .decision-table[data-axis-table] th:first-child,
+.content .decision-table[data-axis-table] td:first-child {
+  width: 12rem;
+}
+.content .axis-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0 0.5rem;
+}
+.content .axis-buttons[hidden] {
+  display: none;
+}
+.content .axis-buttons button {
+  border: 1px solid #1d4ed8;
+  border-radius: 0.375rem;
+  background: #fff;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.content .axis-buttons button[aria-pressed="true"] {
+  background: #1d4ed8;
+  color: #fff;
+}
+.content .axis-buttons button code {
+  background: transparent;
+  padding: 0;
+}
 
 @media (min-width: 768px) {
   body.chapter-page {

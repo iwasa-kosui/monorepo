@@ -1,4 +1,8 @@
-import DecisionTable from '../../../components/DecisionTable.astro';
+## 集計テーブル
 
-<DecisionTable heading="自分のシステムに近いパターンを選ぶ" />
+この問いに答えます。
+
+> この集計値はなぜこの値なのか。
+
+`daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。テーブルの行には数しかありません。`cancelVisit` は業務イベントとキャンセル数を同じトランザクションで書きます。このパターンの開始と完成で、`cancelVisit` は同じです。開発者は読み取り関数だけを足します。
 

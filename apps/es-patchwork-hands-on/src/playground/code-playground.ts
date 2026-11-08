@@ -302,5 +302,15 @@ const mount = (root: HTMLElement): void => {
 };
 
 for (const root of document.querySelectorAll<HTMLElement>('[data-playground="code"]')) {
-  mount(root);
+  if (!root.hidden) {
+    mount(root);
+    continue;
+  }
+  const observer = new MutationObserver(() => {
+    if (!root.hidden) {
+      observer.disconnect();
+      mount(root);
+    }
+  });
+  observer.observe(root, { attributes: true, attributeFilter: ['hidden'] });
 }

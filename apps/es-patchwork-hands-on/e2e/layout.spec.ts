@@ -88,12 +88,20 @@ const collectFailures = async (
   const failures: string[] = [];
   for (const path of fitCheckedPaths()) {
     await page.goto(path);
-    const metrics = await measure(page);
-    if (overflows(metrics)) {
-      failures.push(describeFailure(path, size, metrics));
-    }
-    if (checkInnerScroll) {
-      failures.push(...(await innerScrollers(page)).map((scroller) => describeScroller(path, size, scroller)));
+    const axisButtons = page.locator('[data-axis]');
+    const axisCount = await axisButtons.count();
+    for (let axis = 0; axis < Math.max(axisCount, 1); axis += 1) {
+      if (axisCount > 0) {
+        await axisButtons.nth(axis).click();
+      }
+      const label = axisCount > 0 ? `${path}（${axis + 1} つ目の軸）` : path;
+      const metrics = await measure(page);
+      if (overflows(metrics)) {
+        failures.push(describeFailure(label, size, metrics));
+      }
+      if (checkInnerScroll) {
+        failures.push(...(await innerScrollers(page)).map((scroller) => describeScroller(label, size, scroller)));
+      }
     }
   }
   return failures;

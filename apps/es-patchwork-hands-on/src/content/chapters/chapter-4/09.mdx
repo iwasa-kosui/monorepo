@@ -1,5 +1,22 @@
-import CodeBlock from '../../../components/CodeBlock.astro';
-import { cancelVisitOf } from '../../../lib/snapshots';
+import SqlPlayground from '../../../components/SqlPlayground.astro';
 
-<CodeBlock code={cancelVisitOf('chapter-4-external-sync-done')} from={16} to={30} />
+## 未確認の送信を SQL で調べる
 
+「実行する」を押すと、未確認の送信が出ます。SQL を書き換えて、`business_events` の中身を調べることもできます。
+
+<SqlPlayground
+  id="chapter-4-external-sync"
+  script={{ exercise: 'chapter-4-external-sync-done', entry: 'what-was-sent.ts' }}
+  initial={`SELECT
+  requested.target_id AS visit_id,
+  requested.event_at,
+  requested.payload ->> '$.message' AS message
+FROM business_events AS requested
+WHERE requested.event_name = 'ReminderCancellationRequested'
+  AND NOT EXISTS (
+    SELECT 1 FROM business_events AS finished
+    WHERE finished.event_name IN ('ReminderCancellationSent', 'ReminderCancellationFailed')
+      AND finished.payload ->> '$.causationEventId' = requested.event_id
+  )
+ORDER BY requested.event_id;`}
+/>
