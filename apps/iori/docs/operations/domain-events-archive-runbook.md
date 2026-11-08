@@ -10,6 +10,9 @@
 - Worker は、R2 への書き出しが成功した後に、書き出した範囲の行を D1 から削除します。書き出しに失敗した場合、Worker は D1 から行を削除しません。
 - Worker は、actor の作成のイベント（`actor.created`）を D1 に残します。この行は、退避の対象にも削除の対象にもなりません。
 - Worker は、秘密情報を含むイベント（鍵の作成、プッシュ購読の作成など）について、`aggregate_state` と `event_payload` の列を NULL にして書き出します。
+- Worker は、X の投稿（情報源の kind が `x_user`）の本文とユーザー名を R2 に残しません。X の投稿は 7 日で消す決まりなので、次のイベントの `aggregate_state` と `event_payload` の列を NULL にして書き出します。
+  - `feedEntry.collected`、`feedEntry.embedded`、`feedEntry.bookmarkCountUpdated`: これらのイベントは情報源の kind を持たず、x_user の投稿を見分けられません。このため、RSS など x_user 以外の情報源の分も NULL にします。
+  - `feedSource.created`、`feedSource.fetched`、`feedSource.fetchFailed`、`feedSource.enabledChanged`: `aggregate_state` の `kind` が `x_user` の行だけ NULL にします。`kind` を読めない行も NULL にします。x_user 以外の情報源の行は、そのまま書き出します。
 - Worker は、各バッチの書き出しと削除が終わるたびに、オブジェクトの鍵と件数を1行のログに出します。
 - 1回の実行には、10分の時間の上限と、100バッチの上限があります。どちらかの上限に達した場合、残りの行は翌日の実行で退避します。
 
@@ -26,6 +29,8 @@ domain-events/v1/year=YYYY/month=MM/day=DD/<occurredAt>-<eventId>.parquet
 - 同じイベントが複数のファイルに入る場合があります。読み取り側は、`event_id` で重複を除きます。
 
 Parquet の列は、`event_id`、`aggregate_id`、`aggregate_name`、`aggregate_state`、`event_name`、`event_payload`、`occurred_at` です。
+
+NULL にした行も、`event_id`、`aggregate_id`、`aggregate_name`、`event_name`、`occurred_at` は残ります。`feedEntry.*` と `feedSource.*` の `aggregate_id` は ID だけで、URL やユーザー名を含みません。
 
 機微な列のうち、`session.started` の `aggregate_id` は、元の値を `sha256:<16進>` に置き換えて書きます。
 

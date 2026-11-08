@@ -3,7 +3,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { sha256Hex } from '../../../adaptor/crypto/sha256Hex.ts';
+import { toD1DomainEventRow } from '../../../adaptor/d1/eventRow.ts';
+import { FeedEntry } from '../../feedEntry/feedEntry.ts';
+import { FeedSource } from '../../feedSource/feedSource.ts';
 import { Instant } from '../../instant/instant.ts';
+import { EMBEDDING_DIMENSIONS } from '../../interestSource/embedding.ts';
 import {
   ARCHIVE_PLAIN_EVENT_NAMES,
   ARCHIVE_REDACTED_EVENT_NAMES,
@@ -111,5 +115,111 @@ describe('archive event name lists', () => {
     expect(redacted).toMatchObject({ aggregateState: null, eventPayload: null });
     expect(DomainEventArchive.unknownEventNames([event('newThing.happened', '"x"'), event('post.created', '"y"')]))
       .toEqual(['newThing.happened']);
+  });
+});
+
+describe('DomainEventArchive.redact の feed イベント', () => {
+  const redact = DomainEventArchive.redact(sha256Hex);
+  const now = Instant.orThrow(Date.UTC(2026, 9, 20));
+  const archived = (domainEvent: Parameters<typeof toD1DomainEventRow>[0]): ArchivedDomainEvent => {
+    const row = toD1DomainEventRow(domainEvent);
+    return { ...row, occurredAt: now };
+  };
+  const unwrap = <T>(result: { ok: true; val: T } | { ok: false }): T => {
+    if (!result.ok) throw new Error('unexpected err');
+    return result.val;
+  };
+
+  const xSource = unwrap(FeedSource.createFeedSource(
+    { kind: 'x_user', url: 'https://x.com/secret_user', title: '@secret_user' },
+    now,
+  ));
+  const rssSource = unwrap(FeedSource.createFeedSource(
+    { kind: 'rss', url: 'https://example.com/feed.xml', title: 'Example Blog' },
+    now,
+  ));
+  const xEntry = unwrap(FeedEntry.collect({
+    feedSourceId: xSource.aggregateState.feedSourceId,
+    guid: '1234567890',
+    url: 'https://x.com/secret_user/status/1234567890',
+    title: 'tweet body text',
+    description: 'tweet description text',
+    publishedAt: now,
+    hatenaBookmarkCount: null,
+  }, now));
+  const forbidden = ['secret_user', '1234567890', 'tweet body text', 'tweet description text'];
+
+  const expectNothingLeaked = (redacted: ArchivedDomainEvent) => {
+    expect(redacted).toMatchObject({ aggregateState: null, eventPayload: null });
+    expect(JSON.stringify(redacted)).not.toContain('x.com');
+    for (const word of forbidden) expect(JSON.stringify(redacted)).not.toContain(word);
+  };
+
+  it('x_user の情報源のイベントは state と payload を NULL にする', async () => {
+    const events = [
+      xSource,
+      FeedSource.recordFetched(xSource.aggregateState, { etag: null, lastModified: null }, now),
+      FeedSource.recordFetchFailed(xSource.aggregateState, 'failed @secret_user', now),
+      FeedSource.setEnabled(xSource.aggregateState, false, now),
+    ];
+
+    for (const domainEvent of events) {
+      expectNothingLeaked(await redact(archived(domainEvent)));
+    }
+  });
+
+  it('x_user 以外の情報源のイベントは今までどおり state と payload を残す', async () => {
+    const events = [
+      rssSource,
+      FeedSource.recordFetched(rssSource.aggregateState, { etag: 'e', lastModified: null }, now),
+      FeedSource.recordFetchFailed(rssSource.aggregateState, 'timeout', now),
+      FeedSource.setEnabled(rssSource.aggregateState, false, now),
+    ];
+
+    for (const domainEvent of events) {
+      const plain = archived(domainEvent);
+      expect(await redact(plain)).toEqual(plain);
+    }
+  });
+
+  it('kind を読めない情報源のイベントは state と payload を NULL にする', async () => {
+    const base = archived(FeedSource.setEnabled(rssSource.aggregateState, false, now));
+
+    for (const aggregateState of [null, 'not json', '{"title":"x"}', '{"kind":1}']) {
+      expect(await redact({ ...base, aggregateState })).toMatchObject({ aggregateState: null, eventPayload: null });
+    }
+  });
+
+  it('feedEntry の collected / embedded / bookmarkCountUpdated は RSS の分も state と payload を NULL にする', async () => {
+    const rssEntry = unwrap(FeedEntry.collect({
+      feedSourceId: rssSource.aggregateState.feedSourceId,
+      guid: 'rss-guid',
+      url: 'https://example.com/post',
+      title: 'rss title',
+      description: 'rss description',
+      publishedAt: now,
+      hatenaBookmarkCount: null,
+    }, now));
+    const embedded = (entry: typeof xEntry) =>
+      unwrap(FeedEntry.embed(entry.aggregateState, new Float32Array(EMBEDDING_DIMENSIONS), now));
+    const events = [
+      xEntry,
+      embedded(xEntry),
+      FeedEntry.updateBookmarkCount(xEntry.aggregateState, 3, now),
+      rssEntry,
+      embedded(rssEntry),
+      FeedEntry.updateBookmarkCount(rssEntry.aggregateState, 3, now),
+    ];
+
+    for (const domainEvent of events) {
+      expectNothingLeaked(await redact(archived(domainEvent)));
+    }
+  });
+
+  it('feedEntry.expired は feedEntryId だけを持つのでそのまま残す', async () => {
+    const expired = archived(FeedEntry.expire(xEntry.aggregateState, now));
+
+    expect(await redact(expired)).toEqual(expired);
+    for (const word of forbidden) expect(JSON.stringify(expired)).not.toContain(word);
   });
 });
