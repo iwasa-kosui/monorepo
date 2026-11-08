@@ -109,8 +109,8 @@ describe('assets.run_worker_first', () => {
 });
 
 describe('placement', () => {
-  it('enables smart placement in the deployment config built from the template', async () => {
-    expect((await readDeployedConfig()).placement).toEqual({ mode: 'smart' });
+  it('targets the US East region in the deployment config built from the template', async () => {
+    expect((await readDeployedConfig()).placement).toEqual({ region: 'aws:us-east-1' });
   });
 });
 

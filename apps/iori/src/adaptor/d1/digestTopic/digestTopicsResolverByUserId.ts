@@ -24,6 +24,7 @@ export const createD1DigestTopicsResolverByUserId = (db: IoriD1Db): DigestTopics
       embeddedAt: row.embeddedAt === null ? null : Instant.orThrow(row.embeddedAt.getTime()),
       sortOrder: row.sortOrder,
       enabled: row.enabled,
+      materialWindowHours: row.materialWindowHours,
       createdAt: Instant.orThrow(row.createdAt.getTime()),
       updatedAt: Instant.orThrow(row.updatedAt.getTime()),
     })));

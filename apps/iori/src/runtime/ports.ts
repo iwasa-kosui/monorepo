@@ -63,6 +63,7 @@ import type { TextGenerator } from '../ports/textGenerator.ts';
 import type { AddDigestTopicUseCase } from '../useCase/addDigestTopic.ts';
 import type { AddFeedSourceUseCase } from '../useCase/addFeedSource.ts';
 import type { ChangeDigestTopicEnabledUseCase } from '../useCase/changeDigestTopicEnabled.ts';
+import type { ChangeDigestTopicMaterialWindowUseCase } from '../useCase/changeDigestTopicMaterialWindow.ts';
 import type { ChangeFeedSourceEnabledUseCase } from '../useCase/changeFeedSourceEnabled.ts';
 import type { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import type { CreateArticleUseCase } from '../useCase/createArticle.ts';
@@ -194,6 +195,7 @@ export type IoriDigestRuntimePorts = Readonly<{
   addDigestTopicUseCase: AddDigestTopicUseCase;
   editDigestTopicUseCase: EditDigestTopicUseCase;
   changeDigestTopicEnabledUseCase: ChangeDigestTopicEnabledUseCase;
+  changeDigestTopicMaterialWindowUseCase: ChangeDigestTopicMaterialWindowUseCase;
   previewDigestTopicsUseCase: PreviewDigestTopicsUseCase;
   deepDiveDigestItemUseCase: DeepDiveDigestItemUseCase;
   allFeedSourcesResolver: AllFeedSourcesResolver;

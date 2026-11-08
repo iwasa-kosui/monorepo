@@ -198,6 +198,11 @@ const create = () => {
     onCreate: {
       origin: Env.getInstance().ORIGIN,
       inboxActorResolver,
+      followedByLocalActorResolverByActorUri: PgFollowedByLocalActorResolverByActorUri.getInstance(),
+      acceptedRelaysResolver: PgAcceptedRelaysResolver.getInstance(),
+      remotePostUpserter,
+      federatedTimelineItemResolverByPostId: PgFederatedTimelineItemResolverByPostId.getInstance(),
+      federatedTimelineItemCreatedStore: PgFederatedTimelineItemCreatedStore.getInstance(),
       addRemotePostUseCase: AddRemotePostUseCase.create({
         origin: Env.getInstance().ORIGIN,
         postCreatedStore: PgPostCreatedStore.getInstance(),

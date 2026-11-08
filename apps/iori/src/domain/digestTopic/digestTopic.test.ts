@@ -236,6 +236,55 @@ describe('DigestTopic.setEnabled', () => {
   });
 });
 
+describe('DigestTopic.setMaterialWindowHours', () => {
+  const later = Instant.orThrow(now + 5_000);
+  const topicOf = () => {
+    const result = DigestTopic.create(payload(), now);
+    if (!result.ok) throw new Error('create failed');
+    return { ...result.val.aggregateState, embeddedAt: now };
+  };
+
+  it('create は materialWindowHours を null にする', () => {
+    const created = DigestTopic.create(payload(), now);
+
+    expect(created.ok && created.val.aggregateState.materialWindowHours).toBeNull();
+  });
+
+  it('materialWindowHours と updatedAt だけを変えた digestTopic.materialWindowChanged を返す', () => {
+    const topic = topicOf();
+
+    const changed = DigestTopic.setMaterialWindowHours(topic, 72, later);
+
+    expect(changed.ok).toBe(true);
+    if (!changed.ok) return;
+    expect(changed.val).toMatchObject({
+      aggregateName: 'digestTopic',
+      eventName: 'digestTopic.materialWindowChanged',
+      aggregateId: { userId: topic.userId, topicKey: 'genai' },
+      aggregateState: { ...topic, materialWindowHours: 72, updatedAt: later },
+      eventPayload: { userId: topic.userId, topicKey: 'genai', materialWindowHours: 72, updatedAt: later },
+    });
+  });
+
+  it('null で期間を解除する', () => {
+    const topic = { ...topicOf(), materialWindowHours: 72 };
+
+    const changed = DigestTopic.setMaterialWindowHours(topic, null, later);
+
+    expect(changed.ok && changed.val.eventPayload.materialWindowHours).toBeNull();
+  });
+
+  it('24 と 336 は受け取り、23、337、小数は受け取らない', () => {
+    const topic = topicOf();
+
+    expect(DigestTopic.setMaterialWindowHours(topic, 24, later).ok).toBe(true);
+    expect(DigestTopic.setMaterialWindowHours(topic, 336, later).ok).toBe(true);
+    expect(DigestTopic.setMaterialWindowHours(topic, 23, later).ok).toBe(false);
+    expect(DigestTopic.setMaterialWindowHours(topic, 337, later).ok).toBe(false);
+    expect(DigestTopic.setMaterialWindowHours(topic, 48.5, later).ok).toBe(false);
+  });
+});
+
 describe('DigestTopicNotFoundError', () => {
   it('type と topicKey を持つ', () => {
     expect(DigestTopicNotFoundError.create('genai')).toMatchObject({
