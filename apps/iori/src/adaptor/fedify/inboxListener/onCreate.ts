@@ -65,6 +65,12 @@ const saveForwardedCreate = async (
     return;
   }
   const [relay] = relaysResult.val;
+  if (note.attributionId?.href !== actorId.href) {
+    getLogger().warn(
+      `Skipping a forwarded Create whose Note author differs from the Create actor: ${note.id?.href} author=${note.attributionId?.href} actor=${actorId.href}`,
+    );
+    return;
+  }
 
   try {
     await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader, actorId, inReplyToUri });

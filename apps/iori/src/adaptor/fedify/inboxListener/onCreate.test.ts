@@ -382,6 +382,31 @@ describe('createOnCreate', () => {
       expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
     });
 
+    it.each<[string, URL | undefined]>([
+      ['is another user of the same origin', new URL('https://remote.example/users/mallory')],
+      ['is missing', undefined],
+    ])('saves nothing when the author of the Note %s', async (_name, attribution) => {
+      const {
+        listener,
+        create,
+        addRemotePostUseCase,
+        remotePostUpserter,
+        federatedTimelineItemCreatedStore,
+      } = setup(false, [{ relayId: 'relay-1' }]);
+      const note = new Note({
+        id: new URL('https://remote.example/posts/1'),
+        content: 'hi',
+        attribution,
+        tos: [publicUri],
+      });
+
+      await listener(createCtx(), create(note));
+
+      expect(addRemotePostUseCase.run).not.toHaveBeenCalled();
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+      expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    });
+
     it('does not throw nor save to the federated timeline when fetching the author fails', async () => {
       const { listener, create, remotePostUpserter, federatedTimelineItemCreatedStore } = setup(false, [
         { relayId: 'relay-1' },
