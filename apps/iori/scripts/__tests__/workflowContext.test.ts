@@ -348,6 +348,27 @@ it.each(deleteBlockedDomainOperations)(
     }
   },
 );
+it('accepts digest-quality-sample only for production with a generation and no run ID', () => {
+  const sample = {
+    ...env,
+    IORI_ENVIRONMENT: 'production',
+    IORI_GENERATION: 'prd20261102a',
+    IORI_OPERATION: 'digest-quality-sample',
+    IORI_MIGRATION_RUN_ID: '',
+  };
+  expect(parseWorkflowInvocation(sample)).toMatchObject({
+    operation: 'digest-quality-sample',
+    environment: 'production',
+    generation: 'prd20261102a',
+  });
+  for (
+    const override of [{ IORI_ENVIRONMENT: 'staging' }, { IORI_GENERATION: '' }, { IORI_MIGRATION_RUN_ID: 'run1' }]
+  ) {
+    expect(() => parseWorkflowInvocation({ ...sample, ...override })).toThrow(
+      'Protected workflow invocation is invalid.',
+    );
+  }
+});
 it('compares the time limit with the given clock', () => {
   expect(parseWorkflowInvocation(moveReposts('move-unfollowed-reposts'), { now: 1_700_000_000_000 }))
     .toMatchObject({ operation: 'move-unfollowed-reposts' });

@@ -44,6 +44,7 @@ const FIXED_REASONS = new Set([
   'd1-baseline-mismatch',
   'aborted',
   'result-invalid',
+  'cursor-invalid',
   'identity-mismatch',
   'mismatch',
   'config-invalid',

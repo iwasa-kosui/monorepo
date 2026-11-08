@@ -68,6 +68,7 @@ it('maps the operations to their fixed scripts', async () => {
       ['delete-unfollowed-posts-dry-run', 'delete-unfollowed-posts.mjs'],
       ['delete-unfollowed-posts', 'delete-unfollowed-posts.mjs'],
       ['domain-events-stats', 'domain-events-stats.mjs'],
+      ['digest-quality-sample', 'digest-quality-sample.mjs'],
       ['delete-blocked-domain-posts-dry-run', 'delete-blocked-domain-posts.mjs'],
       ['delete-blocked-domain-posts', 'delete-blocked-domain-posts.mjs'],
       ['prune-federated-posts-dry-run', 'prune-federated-posts.mjs'],
@@ -278,6 +279,31 @@ it('relays only the fixed domain-events-stats notices to the public log', async 
     'IORI_NOTICE domain-events-stats event=../secret count=1',
     'IORI_NOTICE domain-events-stats event=post.created count=1 postId=12345678-1234-4234-8234-123456789012',
     ' IORI_NOTICE domain-events-stats day=2026-11-05 count=1',
+  ];
+  await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
+  expect(writes).toEqual(accepted.map(line => `${line}\n`));
+});
+it('relays only the fixed digest-quality-sample notices to the public log', async () => {
+  const writes = captureStderr();
+  const prefix = 'IORI_NOTICE digest-quality-sample';
+  const accepted = [
+    `${prefix} overview users=1`,
+    `${prefix} user=1 summary topics=8 enabled=7 embedded=7 items=42 scored=40 matched=30 match_rate=0.750`,
+    `${prefix} user=1 summary topics=0 enabled=0 embedded=0 items=0 scored=0 matched=0 match_rate=none`,
+    `${prefix} user=1 hist=item_top1 lt0.20=0 b0.20=1 b0.25=2 ge0.80=0`,
+    `${prefix} user=2 hist=item_gap lt0.00=0 b0.00=3 ge0.20=1`,
+    `${prefix} user=1 candidates total=900 ge0.40=500 ge0.45=300 ge0.50=200 ge0.55=100 ge0.60=50`,
+    `${prefix} user=1 material kind=bookmark total=30 ge0.40=20 ge0.50=10`,
+  ];
+  const rejected = [
+    `${prefix} user=1 summary topics=8 enabled=7 embedded=7 items=42 scored=40 matched=30 match_rate=0.75`,
+    `${prefix} user=1 summary topics=8 enabled=7 embedded=7 items=42 scored=40 matched=30 match_rate=0.750 title=x`,
+    `${prefix} user=1 hist=item_top1 lt0.20=-1`,
+    `${prefix} user=1 hist=other b0.20=1`,
+    `${prefix} user=1 candidates total=900 ge0.40=500`,
+    `${prefix} user=1 material kind=Book.mark total=30 ge0.40=20 ge0.50=10`,
+    `${prefix} user=alice summary topics=8 enabled=7 embedded=7 items=42 scored=40 matched=30 match_rate=0.750`,
+    ` ${prefix} overview users=1`,
   ];
   await publishChildDiagnostics([...rejected, ...accepted].join('\n'));
   expect(writes).toEqual(accepted.map(line => `${line}\n`));
