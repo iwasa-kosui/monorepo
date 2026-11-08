@@ -6,11 +6,11 @@ export type ScheduleRow = {
 };
 
 export const schedule: readonly ScheduleRow[] = [
-  { id: 'intro', title: '導入', minutes: 4 },
+  { id: 'intro', title: '導入', minutes: 5 },
   { id: 'chapter-1', title: '第1章 答えられないことを確かめる', minutes: 4 },
   { id: 'chapter-2', title: '第2章 更新処理の境界で記録する', minutes: 14, parts: '説明2分、演習9分、解答の確認3分' },
   { id: 'chapter-3', title: '第3章 記録から答える', minutes: 5 },
-  { id: 'chapter-4', title: '第4章 3パターンを比較する', minutes: 10, parts: '実演8分、判断表で比べて選ぶ2分' },
+  { id: 'chapter-4', title: '第4章 3パターンを比較する', minutes: 9, parts: '実演7分、判断表で比べて選ぶ2分' },
   { id: 'summary', title: 'まとめ', minutes: 3 },
 ];
 

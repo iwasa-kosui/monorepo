@@ -43,7 +43,10 @@ const setup = async (options: { textEmbedder?: TextEmbedder | null } = {}) => {
     }, CREATED_AT);
     if (!created.ok) throw new Error('unexpected');
     await createD1DigestTopicCreatedStore(db).store(created.val);
-    const embedded = DigestTopic.embed(created.val.aggregateState, new Float32Array(1024), CREATED_AT);
+    const embedded = DigestTopic.embed(created.val.aggregateState, {
+      embedding: new Float32Array(1024),
+      excludeEmbedding: null,
+    }, CREATED_AT);
     if (!embedded.ok) throw new Error('unexpected');
     await createD1DigestTopicEmbeddedStore(db).store(embedded.val);
   };

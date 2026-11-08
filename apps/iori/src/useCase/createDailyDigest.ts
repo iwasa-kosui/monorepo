@@ -112,6 +112,7 @@ type Ok = Readonly<{
     assignedToTopics: number;
     belowMinSimilarity: number;
     belowMinMargin: number;
+    excluded: number;
   }>;
 }>;
 
@@ -349,6 +350,7 @@ const create = ({
         assignedToTopics: 0,
         belowMinSimilarity: 0,
         belowMinMargin: 0,
+        excluded: 0,
       },
     });
 
@@ -667,6 +669,7 @@ const create = ({
           assignedToTopics: candidates.length - assignment.others.length,
           belowMinSimilarity: assignment.otherCounts.belowMinSimilarity,
           belowMinMargin: assignment.otherCounts.belowMinMargin,
+          excluded: assignment.otherCounts.excluded,
         },
       });
     if (trigger === 'requested') return createdOk(0);
