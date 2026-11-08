@@ -2,10 +2,11 @@ import type { SqlJsStatic } from 'sql.js';
 
 import { assert } from './assert.ts';
 import { createConsole } from './console.ts';
+import { maxMessageChars, truncate } from './limits.ts';
 import { runEntry } from './modules.ts';
 import { createDatabaseSync } from './sqlite-adapter.ts';
 import { createTestRunner } from './test-runner.ts';
-import type { LogLine, RunOutcome } from './types.ts';
+import type { RunOutcome, TestResult } from './types.ts';
 
 const describeError = (error: unknown): string => {
   if (error instanceof Error) {
@@ -19,8 +20,7 @@ export const runCode = async (options: {
   files: Readonly<Record<string, string>>;
   entry: string;
 }): Promise<RunOutcome> => {
-  const logs: LogLine[] = [];
-  const console = createConsole(logs);
+  const { console, lines, summary } = createConsole();
   const sqlite = createDatabaseSync(options.SQL);
   const runner = createTestRunner();
   const shims: Record<string, unknown> = {
@@ -31,12 +31,25 @@ export const runCode = async (options: {
     assert,
     'assert/strict': assert,
   };
+  let cutMessages = 0;
+  const cut = (message: string): string => {
+    if (message.length > maxMessageChars) {
+      cutMessages += 1;
+    }
+    return truncate(message, maxMessageChars);
+  };
+  const finish = (tests: TestResult[] | null, error: string | null): RunOutcome => ({
+    logs: lines,
+    logSummary: summary(),
+    tests: tests?.map((test) => ({ ...test, message: test.message === null ? null : cut(test.message) })) ?? null,
+    cutMessages,
+    error: error === null ? null : cut(error),
+  });
   try {
     await runEntry({ files: options.files, entry: options.entry, shims, console });
-    const tests = runner.hasTests() ? await runner.run() : null;
-    return { logs, tests, error: null };
+    return finish(runner.hasTests() ? await runner.run() : null, null);
   } catch (error) {
-    return { logs, tests: null, error: describeError(error) };
+    return finish(null, describeError(error));
   } finally {
     sqlite.closeAll();
   }

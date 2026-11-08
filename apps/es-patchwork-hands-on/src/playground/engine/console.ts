@@ -1,5 +1,6 @@
 import { inspect } from './inspect.ts';
-import type { LogLine } from './types.ts';
+import { maxLogChars, maxLogLineChars, maxLogLines, truncate } from './limits.ts';
+import type { LogLine, LogSummary } from './types.ts';
 
 const isFullWidth = (code: number): boolean =>
   code >= 0x1100
@@ -186,39 +187,48 @@ export type RunConsole = {
   groupEnd: () => void;
 };
 
-export const createConsole = (lines: LogLine[]): RunConsole => {
+export const createConsole = (): { console: RunConsole; lines: LogLine[]; summary: () => LogSummary } => {
+  const lines: LogLine[] = [];
   let indent = '';
-  const write = (stream: LogLine['stream'], text: string): void => {
-    const body = indent === '' ? text : text.split('\n').map((line) => `${indent}${line}`).join('\n');
-    lines.push({ stream, text: body });
+  let totalLines = 0;
+  let totalChars = 0;
+  let cutLines = 0;
+  const write = (stream: LogLine['stream'], format: () => string): void => {
+    totalLines += 1;
+    if (lines.length >= maxLogLines || totalChars >= maxLogChars) {
+      return;
+    }
+    const text = format();
+    if (text.length > maxLogLineChars) {
+      cutLines += 1;
+    }
+    const body = truncate(text, maxLogLineChars);
+    const indented = indent === '' ? body : body.split('\n').map((line) => `${indent}${line}`).join('\n');
+    totalChars += indented.length;
+    lines.push({ stream, text: indented });
   };
-  const toStdout = (...args: unknown[]): void => write('stdout', formatLog(args));
-  const toStderr = (...args: unknown[]): void => write('stderr', formatLog(args));
+  const toStdout = (...args: unknown[]): void => write('stdout', () => formatLog(args));
+  const toStderr = (...args: unknown[]): void => write('stderr', () => formatLog(args));
   const group = (...args: unknown[]): void => {
     if (args.length > 0) {
       toStdout(...args);
     }
     indent += '  ';
   };
-  return {
+  const runConsole: RunConsole = {
     log: toStdout,
     info: toStdout,
     debug: toStdout,
     error: toStderr,
     warn: toStderr,
-    trace: (...args) => write('stderr', `Trace: ${formatLog(args)}`),
-    dir: (value) => write('stdout', inspect(value)),
+    trace: (...args) => write('stderr', () => `Trace: ${formatLog(args)}`),
+    dir: (value) => write('stdout', () => inspect(value)),
     table: (data, properties) => {
-      const rendered = formatTable(data, properties);
-      if (rendered === undefined) {
-        toStdout(data);
-      } else {
-        write('stdout', rendered);
-      }
+      write('stdout', () => formatTable(data, properties) ?? formatLog([data]));
     },
     assert: (condition, ...args) => {
       if (!condition) {
-        write('stderr', args.length === 0 ? 'Assertion failed' : `Assertion failed: ${formatLog(args)}`);
+        write('stderr', () => args.length === 0 ? 'Assertion failed' : `Assertion failed: ${formatLog(args)}`);
       }
     },
     group,
@@ -226,5 +236,10 @@ export const createConsole = (lines: LogLine[]): RunConsole => {
     groupEnd: () => {
       indent = indent.slice(2);
     },
+  };
+  return {
+    console: runConsole,
+    lines,
+    summary: () => ({ totalLines, shownLines: lines.length, cutLines }),
   };
 };

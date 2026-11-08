@@ -29,7 +29,11 @@ INSERT INTO visits (id, pet_name, status) VALUES ('visit-tama', 'タマ', 'cance
   <p>このページは、実行欄の動作を確かめるためのものです。</p>
 
   <h2>SQL を実行する欄</h2>
-  <SqlPlayground setup={setupSql} initial="SELECT * FROM visits;" />
+  <SqlPlayground
+    id="check-sql"
+    setup={setupSql}
+    initial="SELECT * FROM visits;"
+  />
 
   <h2>コードを編集して実行する欄（第1章の開始時点）</h2>
   <CodePlayground
