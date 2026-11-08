@@ -1,31 +1,33 @@
 import { useState } from 'hono/jsx';
 
-import { createStatus, failureMessage, uploadMedia } from '../api/mastodonClient.ts';
+import type { Status } from '../../adaptor/mastodon/entities.ts';
+import { createStatus, uploadMedia } from '../api/mastodonClient.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
+import { canSubmitPost, formValueAfterSubmit, submitPost } from './postSubmission.ts';
 
 type Props = Readonly<{
   id?: string;
   formId?: string;
+  onPosted: (status: Status) => void;
 }>;
 
-export const PostForm = ({ id, formId }: Props) => {
+export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [content, setContent] = useState('');
   const [uploaded, setUploaded] = useState<{ id: string; url: string }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
 
   const handleSubmit = async () => {
-    if (!content.trim() || isUploading || isPosting) return;
+    if (!canSubmitPost(content, isUploading, isPosting)) return;
     setIsPosting(true);
     try {
-      await createStatus({
-        status: content,
-        media_ids: uploaded.map((media) => media.id),
-        content_type: 'text/markdown',
-      });
-      window.location.assign('/');
-    } catch (err) {
-      alert(failureMessage('post', err));
+      const current = { content, uploaded };
+      const result = await submitPost(current, { create: createStatus, onPosted });
+      const next = formValueAfterSubmit(result, current);
+      setContent(next.content);
+      setUploaded([...next.uploaded]);
+      if (result.kind === 'failed') alert(result.message);
+    } finally {
       setIsPosting(false);
     }
   };
