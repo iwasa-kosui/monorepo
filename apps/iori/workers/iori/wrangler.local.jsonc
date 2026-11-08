@@ -37,6 +37,10 @@
       "binding": "UPLOADS",
       "bucket_name": "iori-uploads-local",
     },
+    {
+      "binding": "EVENT_ARCHIVE",
+      "bucket_name": "iori-event-archive-local",
+    },
   ],
   "kv_namespaces": [
     {

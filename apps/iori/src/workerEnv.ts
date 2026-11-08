@@ -3,6 +3,8 @@ import type { Ai, D1Database, Fetcher, KVNamespace, Queue, R2Bucket } from '@clo
 export type IoriWorkerEnv = Readonly<{
   DB: D1Database;
   UPLOADS: R2Bucket;
+  EVENT_ARCHIVE?: R2Bucket;
+  EVENT_ARCHIVE_ENABLED?: string;
   FEDIFY_KV: KVNamespace;
   FEDIFY_QUEUE: Queue;
   ASSETS?: Fetcher;

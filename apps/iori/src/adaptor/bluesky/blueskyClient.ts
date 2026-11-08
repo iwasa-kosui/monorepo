@@ -17,6 +17,8 @@ import type {
 
 export const BLUESKY_DEFAULT_PDS_URL = 'https://bsky.social';
 const POST_COLLECTION = 'app.bsky.feed.post';
+const REQUEST_TIMEOUT_MS = 10_000;
+const UPLOAD_TIMEOUT_MS = 30_000;
 
 type BlueskyClientDeps = Readonly<{
   identifier: string;
@@ -50,11 +52,17 @@ const queryResponseSchema = z.record(z.string(), z.unknown());
 const errorBodySchema = z.object({ error: z.string().optional() });
 const recordUriPattern = /^at:\/\/[^/]+\/app\.bsky\.feed\.post\/([^/]+)$/;
 
-const clientError = (kind: BlueskyClientErrorKind, message: string, status?: number): BlueskyClientError => ({
+const clientError = (
+  kind: BlueskyClientErrorKind,
+  message: string,
+  status?: number,
+  code?: string,
+): BlueskyClientError => ({
   type: 'BlueskyClientError',
   kind,
   message,
   ...(status === undefined ? {} : { status }),
+  ...(code === undefined ? {} : { code }),
 });
 
 export const resolveBlueskyPdsUrl = (didDoc: unknown): string | undefined => {
@@ -79,10 +87,11 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
     url: string,
     init: RequestInit,
     schema: S,
+    timeoutMs: number = REQUEST_TIMEOUT_MS,
   ): RA<z.output<S>, BlueskyClientError> => {
     let response: Response;
     try {
-      response = await fetchRequest(url, init);
+      response = await fetchRequest(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
     } catch {
       return RA.err(clientError('network', `${operation} request failed`));
     }
@@ -95,6 +104,7 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           response.status === 401 || expired ? 'auth' : 'http',
           `${operation} failed: status ${response.status}${name === undefined ? '' : ` ${name}`}`,
           response.status,
+          name,
         ),
       );
     }
@@ -177,10 +187,11 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           `${session.pdsUrl}/xrpc/com.atproto.repo.uploadBlob`,
           { method: 'POST', headers: authorized(session, { 'Content-Type': mimeType }), body: bytes.slice().buffer },
           uploadBlobResponseSchema,
+          UPLOAD_TIMEOUT_MS,
         );
         return uploaded.ok ? RA.ok<BlueskyBlob>(uploaded.val.blob) : uploaded;
       }),
-    createRecord: (record) =>
+    createRecord: (record, rkey) =>
       withSession(async (session) => {
         const created = await call(
           'createRecord',
@@ -188,15 +199,30 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           {
             method: 'POST',
             headers: authorized(session, { 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ repo: session.did, collection: POST_COLLECTION, record }),
+            body: JSON.stringify({ repo: session.did, collection: POST_COLLECTION, rkey, record }),
           },
           createRecordResponseSchema,
         );
         if (!created.ok) return created;
-        const rkey = recordUriPattern.exec(created.val.uri)?.[1];
-        return rkey === undefined
+        const createdRkey = recordUriPattern.exec(created.val.uri)?.[1];
+        return createdRkey === undefined
           ? RA.err(clientError('invalid_response', 'createRecord returned an unexpected uri'))
-          : RA.ok({ uri: created.val.uri, cid: created.val.cid, rkey });
+          : RA.ok({ uri: created.val.uri, cid: created.val.cid, rkey: createdRkey });
+      }),
+    getRecord: (rkey) =>
+      withSession(async (session) => {
+        const query = new URLSearchParams({ repo: session.did, collection: POST_COLLECTION, rkey });
+        const found = await call(
+          'getRecord',
+          `${session.pdsUrl}/xrpc/com.atproto.repo.getRecord?${query.toString()}`,
+          { method: 'GET', headers: authorized(session) },
+          createRecordResponseSchema,
+        );
+        if (!found.ok) return found;
+        const foundRkey = recordUriPattern.exec(found.val.uri)?.[1];
+        return foundRkey === undefined
+          ? RA.err(clientError('invalid_response', 'getRecord returned an unexpected uri'))
+          : RA.ok({ uri: found.val.uri, cid: found.val.cid, rkey: foundRkey });
       }),
     deleteRecord: (rkey) =>
       withSession(async (session) => {
@@ -210,7 +236,10 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           },
           emptyResponseSchema,
         );
-        return deleted.ok ? RA.ok(undefined) : deleted;
+        if (deleted.ok || deleted.err.status === 404 || deleted.err.code === 'RecordNotFound') {
+          return RA.ok(undefined);
+        }
+        return deleted;
       }),
     query: (nsid, params) =>
       withSession((session) => {

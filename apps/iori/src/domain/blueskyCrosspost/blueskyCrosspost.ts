@@ -6,7 +6,7 @@ import type { Agg } from '../aggregate/index.ts';
 import { Instant } from '../instant/instant.ts';
 import { PostId } from '../post/postId.ts';
 
-export const BlueskyCrosspostStatus = z.enum(['pending', 'sent', 'failed', 'skipped']);
+export const BlueskyCrosspostStatus = z.enum(['pending', 'sent', 'failed', 'skipped', 'deleting']);
 export type BlueskyCrosspostStatus = z.infer<typeof BlueskyCrosspostStatus>;
 
 export const BlueskySkipReason = z.enum(['content_warning', 'sensitive', 'reply_to_unsent']);
@@ -30,6 +30,8 @@ const blueskyCrosspostZodType = z.object({
 export type BlueskyCrosspost = z.infer<typeof blueskyCrosspostZodType>;
 
 const MAX_LAST_ERROR_LENGTH = 200;
+export const MAX_BLUESKY_CROSSPOST_ATTEMPTS = 3;
+export const MAX_BLUESKY_DELETE_ATTEMPTS = 5;
 
 const empty = {
   skipReason: null,
@@ -82,19 +84,49 @@ const markSent = (crosspost: BlueskyCrosspost, refs: BlueskySentRefs, now: Insta
   updatedAt: now,
 });
 
+const markSending = (crosspost: BlueskyCrosspost, now: Instant): BlueskyCrosspost => ({
+  ...crosspost,
+  attempts: crosspost.attempts + 1,
+  updatedAt: now,
+});
+
 const markFailed = (crosspost: BlueskyCrosspost, lastError: string, now: Instant): BlueskyCrosspost => ({
   ...crosspost,
   status: 'failed',
+  lastError: lastError.slice(0, MAX_LAST_ERROR_LENGTH),
+  updatedAt: now,
+});
+
+const markDeleting = (crosspost: BlueskyCrosspost, now: Instant): BlueskyCrosspost => ({
+  ...crosspost,
+  status: 'deleting',
+  attempts: 0,
+  lastError: null,
+  updatedAt: now,
+});
+
+const markDeleteFailed = (crosspost: BlueskyCrosspost, lastError: string, now: Instant): BlueskyCrosspost => ({
+  ...crosspost,
+  status: 'deleting',
   attempts: crosspost.attempts + 1,
   lastError: lastError.slice(0, MAX_LAST_ERROR_LENGTH),
   updatedAt: now,
 });
+
+const canRetry = (crosspost: BlueskyCrosspost): boolean =>
+  (crosspost.status === 'pending' || crosspost.status === 'failed')
+  && crosspost.attempts < MAX_BLUESKY_CROSSPOST_ATTEMPTS;
+
+const canRetryDeletion = (crosspost: BlueskyCrosspost): boolean =>
+  crosspost.status === 'deleting' && crosspost.rkey !== null
+  && crosspost.attempts < MAX_BLUESKY_DELETE_ATTEMPTS;
 
 export type BlueskyStrongRef = Readonly<{ uri: string; cid: string }>;
 
 export type BlueskyReplyContext =
   | Readonly<{ kind: 'none' }>
   | Readonly<{ kind: 'unsent' }>
+  | Readonly<{ kind: 'waiting' }>
   | Readonly<{ kind: 'sent'; root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
 
 const decideSkip = (
@@ -112,11 +144,15 @@ export const BlueskyCrosspost = {
   skipped,
   markSkipped,
   markSent,
+  markSending,
   markFailed,
+  markDeleting,
+  markDeleteFailed,
+  canRetry,
+  canRetryDeletion,
   decideSkip,
 } as const;
 
-export const MAX_BLUESKY_CROSSPOST_ATTEMPTS = 3;
 export const BLUESKY_CROSSPOST_PENDING_GRACE_MS = 10 * 60 * 1000;
 export const BLUESKY_CROSSPOST_RETRY_LIMIT = 20;
 
@@ -134,11 +170,12 @@ export const BlueskySession = Schema.create(blueskySessionZodType);
 
 export type BlueskyCrosspostResolver = Agg.Resolver<PostId, BlueskyCrosspost | undefined>;
 export type BlueskyCrosspostsResolverByRetryable = Agg.Resolver<
-  { pendingCreatedBefore: Instant; maxAttempts: number; limit: number },
+  { pendingCreatedBefore: Instant; maxAttempts: number; maxDeleteAttempts: number; limit: number },
   readonly BlueskyCrosspost[]
 >;
 export type BlueskyCrosspostSavedStore = Readonly<{
   save: (crosspost: BlueskyCrosspost) => RA<void, never>;
+  update: (crosspost: BlueskyCrosspost) => RA<boolean, never>;
 }>;
 export type BlueskyCrosspostDeletedStore = Readonly<{
   delete: (postId: PostId) => RA<void, never>;

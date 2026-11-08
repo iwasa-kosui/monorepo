@@ -27,6 +27,7 @@
     "IORI_ADMISSION_MODE": "__IORI_ADMISSION_MODE__",
     "IORI_ADMISSION_IDENTITY": "__IORI_ADMISSION_IDENTITY__",
     "VAPID_SUBJECT": "__VAPID_SUBJECT__",
+    "EVENT_ARCHIVE_ENABLED": "false",
     "IORI_PRUNE_FEDERATED_POSTS": "disabled",
     "IORI_BLUESKY_CROSSPOST": "disabled",
     "IORI_BLUESKY_TIMELINE": "disabled",
@@ -43,6 +44,10 @@
     {
       "binding": "UPLOADS",
       "bucket_name": "__R2_BUCKET_NAME__",
+    },
+    {
+      "binding": "EVENT_ARCHIVE",
+      "bucket_name": "__R2_EVENT_ARCHIVE_BUCKET_NAME__",
     },
   ],
   "kv_namespaces": [
@@ -63,6 +68,6 @@
     "binding": "AI",
   },
   "triggers": {
-    "crons": ["0 0,3,6,9,12,15,18,21 * * *", "15 20 * * 1", "30 21 * * *", "0 21 * * *"],
+    "crons": ["0 0,3,6,9,12,15,18,21 * * *", "15 20 * * 1", "30 21 * * *", "0 21 * * *", "0 19 * * *"],
   },
 }

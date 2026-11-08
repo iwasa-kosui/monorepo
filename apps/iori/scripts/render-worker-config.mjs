@@ -10,6 +10,7 @@ export const workerConfigTokens = [
   '__D1_DATABASE_ID__',
   '__KV_NAMESPACE_ID__',
   '__R2_BUCKET_NAME__',
+  '__R2_EVENT_ARCHIVE_BUCKET_NAME__',
   '__QUEUE_NAME__',
   '__ORIGIN__',
   '__IORI_ADMISSION_MODE__',

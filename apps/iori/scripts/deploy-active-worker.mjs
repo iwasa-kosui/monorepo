@@ -30,6 +30,7 @@ const main = async (cliSignal, onStage) => {
       d1_database_id: resolved.d1Id,
       kv_namespace_id: resolved.kvId,
       r2_bucket_name: config.identity.names.uploads,
+      event_archive_bucket_name: config.identity.names.eventArchive,
       queue_name: config.identity.names.queue,
       worker_name: config.identity.workerName,
     }),

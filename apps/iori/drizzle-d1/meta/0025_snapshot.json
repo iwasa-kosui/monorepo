@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "61f1c256-9f0d-4c07-8932-b9c0a2c917c5",
-  "prevId": "fdb8c5b4-9ae5-49d3-90e9-20b0eed00bf2",
+  "id": "f301ad8d-102d-4170-af0f-7a76d83d1629",
+  "prevId": "144324cf-e301-4e03-bf52-208be223de5f",
   "tables": {
     "actors": {
       "name": "actors",
@@ -1435,6 +1435,14 @@
           "name": "domain_events_aggregate_id_idx",
           "columns": [
             "aggregateId"
+          ],
+          "isUnique": false
+        },
+        "domain_events_occurred_at_idx": {
+          "name": "domain_events_occurred_at_idx",
+          "columns": [
+            "occurredAt",
+            "eventId"
           ],
           "isUnique": false
         }

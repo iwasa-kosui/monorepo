@@ -4,6 +4,7 @@ import { materializeWorkerBindings } from '../materialize-worker-bindings.mjs';
 const bindings = {
   d1_database_id: '00000000-0000-4000-8000-000000000001',
   r2_bucket_name: 'iori-uploads-fixture',
+  event_archive_bucket_name: 'iori-event-archive-fixture',
   kv_namespace_id: '00000000000000000000000000000002',
   queue_name: 'iori-fedify-fixture',
   worker_name: 'iori-fixture',

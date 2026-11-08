@@ -2,6 +2,7 @@ locals {
   generation_prefix      = "iori-${var.environment}-${var.generation}"
   d1_database_name       = local.generation_prefix
   r2_bucket_name         = "${local.generation_prefix}-uploads"
+  event_archive_name     = "${local.generation_prefix}-event-archive"
   kv_namespace_name      = "${local.generation_prefix}-fedify"
   queue_name             = "${local.generation_prefix}-fedify"
   dead_letter_queue_name = "${local.generation_prefix}-dlq"
@@ -27,6 +28,25 @@ resource "cloudflare_r2_bucket" "uploads" {
   lifecycle {
     prevent_destroy = true
   }
+}
+
+resource "cloudflare_r2_bucket" "event_archive" {
+  account_id = var.cloudflare_account_id
+  name       = local.event_archive_name
+
+  lifecycle {
+    prevent_destroy = true
+
+    precondition {
+      condition     = local.event_archive_name != local.r2_bucket_name && local.event_archive_name != "${local.generation_prefix}-transfer"
+      error_message = "The event archive bucket must be separate from the uploads and migration buckets."
+    }
+  }
+}
+
+import {
+  to = cloudflare_r2_bucket.event_archive
+  id = "${var.cloudflare_account_id}/${local.event_archive_name}/default"
 }
 
 resource "cloudflare_workers_kv_namespace" "fedify" {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts';
+import { blueskyRkeyOf } from '../domain/blueskyCrosspost/blueskyRkey.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createBlueskyCrosspostUseCases, resolveBlueskyCrosspostConfig } from './blueskyCrosspost.ts';
 
@@ -82,6 +83,7 @@ describe('createBlueskyCrosspostUseCases', () => {
       body: {
         repo: 'did:plc:abc',
         collection: 'app.bsky.feed.post',
+        rkey: blueskyRkeyOf({ postId: postId as never, createdAt: now as never }),
         record: { $type: 'app.bsky.feed.post', text: 'hello', createdAt: new Date(now).toISOString() },
       },
     }]);

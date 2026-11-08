@@ -28,6 +28,7 @@ const operations = Object.freeze({
   'move-unfollowed-reposts': 'move-unfollowed-reposts.mjs',
   'delete-unfollowed-posts-dry-run': 'delete-unfollowed-posts.mjs',
   'delete-unfollowed-posts': 'delete-unfollowed-posts.mjs',
+  'domain-events-stats': 'domain-events-stats.mjs',
   'delete-blocked-domain-posts-dry-run': 'delete-blocked-domain-posts.mjs',
   'delete-blocked-domain-posts': 'delete-blocked-domain-posts.mjs',
   'prune-federated-posts-dry-run': 'prune-federated-posts.mjs',
@@ -128,6 +129,8 @@ const moveNoticeLine =
   /^IORI_NOTICE move-unfollowed-reposts (?:mode=dry-run targets=\d{1,9} posts=\d{1,9} already_federated=\d{1,9} to_create=\d{1,9} missing_posts=\d{1,9}|mode=apply created=\d{1,9} deleted=\d{1,9})$/;
 const deleteNoticeLine =
   /^IORI_NOTICE delete-unfollowed-posts (?:mode=dry-run targets=\d{1,9} federated=\d{1,9}|mode=apply deleted=\d{1,9})$/;
+const statsNoticeLine =
+  /^IORI_NOTICE domain-events-stats (?:summary total=\d{1,12} oldest=(?:none|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) newest=(?:none|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) older_than_7d=\d{1,12} avg_bytes=\d{1,12} max_bytes=\d{1,12} created_at_skew_actors=\d{1,12}|day=\d{4}-\d{2}-\d{2} count=\d{1,12}|event=[A-Za-z][A-Za-z0-9.]{0,63} count=\d{1,12})$/;
 const deleteBlockedDomainNoticeLine =
   /^IORI_NOTICE delete-blocked-domain-posts (?:mode=dry-run domain=baraag\.net posts=\d{1,9} remote_posts=\d{1,9} timeline_items=\d{1,9} federated_items=\d{1,9} reposts=\d{1,9} likes=\d{1,9} emoji_reacts=\d{1,9} notifications=\d{1,9} orphan_repost_notifications=\d{1,9} images=\d{1,9} articles_skipped=\d{1,9} actors=\d{1,9} follows_out=\d{1,9} follows_in=\d{1,9} mutes=\d{1,9}|mode=apply deleted_posts=\d{1,9} deleted_timeline_items=\d{1,9})$/;
 const pruneNoticeLine =
@@ -166,6 +169,7 @@ const writeDiagnosticLine = async line => {
       && !restartPrecheckNoticeLine.test(line) && !restartNoticeLine.test(line)
       && !sourceDiagnoseNoticeLine.test(line) && !sourceUnitStatusNoticeLine.test(line)
       && !rehearsalNoticeLine.test(line) && !moveNoticeLine.test(line) && !deleteNoticeLine.test(line)
+      && !statsNoticeLine.test(line)
       && !pruneNoticeLine.test(line) && !bucketNoticeLine.test(line) && !deleteBlockedDomainNoticeLine.test(line)
     ) return;
     const { assertWorkflowOutput } = await import('./assert-workflow-output.mjs');

@@ -104,6 +104,7 @@ jobs:
           export D1_DATABASE_ID="$(printf '%032d' 1)"
           export KV_NAMESPACE_ID="$(printf '%032d' 2)"
           export R2_BUCKET_NAME="iori-staging-fixture1-uploads"
+          export R2_EVENT_ARCHIVE_BUCKET_NAME="iori-staging-fixture1-event-archive"
           export QUEUE_NAME="iori-staging-fixture1-fedify"
           export ORIGIN="https://iori.example.invalid"
           export IORI_ADMISSION_MODE=sealed
