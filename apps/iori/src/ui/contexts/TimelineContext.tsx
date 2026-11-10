@@ -3,6 +3,7 @@ import { createContext, useContext, useMemo } from 'hono/jsx';
 
 import { homeFeedCursor, type HomeItem, mergeHomeFeed } from '../hooks/homeFeed.ts';
 import { useBlueskyLike, type UseBlueskyLikeReturn } from '../hooks/useBlueskyLike.ts';
+import { useBlueskyRepost, type UseBlueskyRepostReturn } from '../hooks/useBlueskyRepost.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation.ts';
 import { usePostActions, type UsePostActionsReturn } from '../hooks/usePostActions.ts';
@@ -18,6 +19,7 @@ export type TimelineContextValue = Readonly<{
   items: readonly HomeItem[];
   actions: UsePostActionsReturn;
   blueskyLike: UseBlueskyLikeReturn;
+  blueskyRepost: UseBlueskyRepostReturn;
   thread: UseThreadModalReturn;
   reply: UseReplyDialogReturn;
   ui: UseUIStateReturn;
@@ -49,6 +51,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
   });
 
   const blueskyLike = useBlueskyLike(timeline.updateBlueskyItems);
+  const blueskyRepost = useBlueskyRepost(timeline.updateBlueskyItems);
 
   const pullToRefresh = usePullToRefresh({
     onRefresh: async () => {
@@ -100,13 +103,14 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       items,
       actions,
       blueskyLike,
+      blueskyRepost,
       thread,
       reply,
       ui,
       pullToRefresh,
       pullThreshold: PULL_TO_REFRESH_THRESHOLD,
     }),
-    [timeline, data, items, actions, blueskyLike, thread, reply, ui, pullToRefresh],
+    [timeline, data, items, actions, blueskyLike, blueskyRepost, thread, reply, ui, pullToRefresh],
   );
 
   return <TimelineContext.Provider value={value}>{children}</TimelineContext.Provider>;

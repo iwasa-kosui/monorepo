@@ -90,6 +90,8 @@ const setup = () => {
     },
     createLike: async () => RA.err(failure('createLike is not used')),
     deleteLike: async () => RA.err(failure('deleteLike is not used')),
+    createRepost: async () => RA.err(failure('createRepost is not used')),
+    deleteRepost: async () => RA.err(failure('deleteRepost is not used')),
   };
 
   const stored = new Map<string, { bytes: Uint8Array; contentType: string }>();

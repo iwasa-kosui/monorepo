@@ -58,6 +58,8 @@ describe('parseBlueskyTimelineResponse', () => {
           fetchedAt: FETCHED_AT,
           liked: false,
           viewerLikeUri: null,
+          reposted: false,
+          viewerRepostUri: null,
         }],
       },
     });
@@ -77,6 +79,44 @@ describe('parseBlueskyTimelineResponse', () => {
     ['viewer.like が like の uri でない', { viewer: { like: 'not-an-at-uri' } }],
   ])('%s ときは liked にしない', (_name, overrides) => {
     expect(only([{ post: postView(overrides) }])).toMatchObject({ liked: false, viewerLikeUri: null });
+  });
+
+  it('post.viewer.repost があれば viewerRepostUri に入れて reposted にする', () => {
+    const repostUri = 'at://did:plc:me/app.bsky.feed.repost/3krepost';
+
+    const item = only([{ post: postView({ viewer: { repost: repostUri } }) }]);
+
+    expect(item).toMatchObject({ reposted: true, viewerRepostUri: repostUri, liked: false, viewerLikeUri: null });
+  });
+
+  it.each([
+    ['viewer が無い', {}],
+    ['viewer.repost が無い', { viewer: { like: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
+    ['viewer.repost が repost の uri でない', { viewer: { repost: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
+  ])('%s ときは reposted にしない', (_name, overrides) => {
+    expect(only([{ post: postView(overrides) }])).toMatchObject({ reposted: false, viewerRepostUri: null });
+  });
+
+  it('リポスト行でも、uri と cid は元の投稿のものにし、viewer.repost を読む', () => {
+    const repostUri = 'at://did:plc:me/app.bsky.feed.repost/3krepost';
+
+    const item = only([{
+      post: postView({ viewer: { repost: repostUri } }),
+      reason: {
+        $type: 'app.bsky.feed.defs#reasonRepost',
+        by: { did: 'did:plc:b', handle: 'bob.example' },
+        indexedAt: '2026-11-08T02:00:00.000Z',
+      },
+    }]);
+
+    expect(item).toMatchObject({
+      feedItemId: `${URI}#repost:did:plc:b`,
+      uri: URI,
+      cid: 'bafycid',
+      repostedByDid: 'did:plc:b',
+      reposted: true,
+      viewerRepostUri: repostUri,
+    });
   });
 
   it('リポストは feedItemId にリポストした人の DID を付け、indexedAt に reason の時刻を使う', () => {

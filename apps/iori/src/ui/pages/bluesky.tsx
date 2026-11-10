@@ -12,6 +12,7 @@ import {
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import type { BlueskyItemsUpdater } from '../hooks/optimisticBlueskyLike.ts';
 import { useBlueskyLike } from '../hooks/useBlueskyLike.ts';
+import { useBlueskyRepost } from '../hooks/useBlueskyRepost.ts';
 
 type BlueskyData = Readonly<{
   enabled: boolean;
@@ -40,6 +41,7 @@ const BlueskyPage = () => {
     setData((prev) => prev === null ? prev : { ...prev, items: updater(prev.items) });
   }, []);
   const blueskyLike = useBlueskyLike(updateItems);
+  const blueskyRepost = useBlueskyRepost(updateItems);
 
   const load = useCallback(async () => {
     try {
@@ -151,6 +153,9 @@ const BlueskyPage = () => {
               onLike={blueskyLike.like}
               onUndoLike={blueskyLike.undoLike}
               isLikePending={blueskyLike.pendingUris.has(item.uri)}
+              onRepost={blueskyRepost.repost}
+              onUndoRepost={blueskyRepost.undoRepost}
+              isRepostPending={blueskyRepost.pendingUris.has(item.uri)}
             />
           ))
           : (

@@ -2,6 +2,7 @@ import { Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { blueskyLikeRkey } from '../../domain/blueskyTimeline/blueskyLike.ts';
+import { blueskyRepostRkey } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import {
   BlueskyFetchedTimelineItem,
   BlueskyTimelineEmbed,
@@ -40,7 +41,7 @@ const feedViewPostZodType = z.looseObject({
     }),
     embed: z.unknown().optional(),
     indexedAt: z.string(),
-    viewer: z.looseObject({ like: z.string().optional() }).optional(),
+    viewer: z.looseObject({ like: z.string().optional(), repost: z.string().optional() }).optional(),
   }),
   reply: z.looseObject({ parent: z.unknown() }).optional(),
   reason: z.unknown().optional(),
@@ -199,6 +200,10 @@ const itemOf = (raw: unknown, fetchedAt: Instant): BlueskyFetchedTimelineItem | 
   const parentAuthor = parentAuthorZodType.safeParse(reply?.parent);
   const viewerLike = post.viewer?.like;
   const viewerLikeUri = viewerLike !== undefined && blueskyLikeRkey(viewerLike) !== undefined ? viewerLike : null;
+  const viewerRepost = post.viewer?.repost;
+  const viewerRepostUri = viewerRepost !== undefined && blueskyRepostRkey(viewerRepost) !== undefined
+    ? viewerRepost
+    : null;
   const parsed = BlueskyFetchedTimelineItem.parse({
     feedItemId: blueskyTimelineFeedItemId(post.uri, repostedByDid),
     uri: post.uri,
@@ -221,6 +226,8 @@ const itemOf = (raw: unknown, fetchedAt: Instant): BlueskyFetchedTimelineItem | 
     fetchedAt,
     liked: viewerLikeUri !== null,
     viewerLikeUri,
+    reposted: viewerRepostUri !== null,
+    viewerRepostUri,
   });
   return parsed.ok ? parsed.val : undefined;
 };

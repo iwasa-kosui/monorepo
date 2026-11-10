@@ -12,6 +12,9 @@ type Props = Readonly<{
   onLike?: (item: IoriBlueskyTimelineItemBody) => void;
   onUndoLike?: (item: IoriBlueskyTimelineItemBody) => void;
   isLikePending?: boolean;
+  onRepost?: (item: IoriBlueskyTimelineItemBody) => void;
+  onUndoRepost?: (item: IoriBlueskyTimelineItemBody) => void;
+  isRepostPending?: boolean;
 }>;
 type MediaEmbed = Extract<BlueskyTimelineEmbed, { type: 'images' | 'external' | 'video' }>;
 type QuoteEmbed = Extract<BlueskyTimelineEmbed, { type: 'record' }>;
@@ -182,7 +185,69 @@ const BlueskyLikeButton = ({ item, onLike, onUndoLike, isPending }: Readonly<{
   );
 };
 
-export const BlueskyTimelineItemView = ({ item, dataIndex, isSelected, onLike, onUndoLike, isLikePending }: Props) => {
+const repostTitle = (reposted: boolean, isPending: boolean): string => {
+  if (isPending) return reposted ? 'リポスト中...' : 'リポスト取り消し中...';
+  return reposted ? 'リポストを取り消す' : 'リポスト';
+};
+
+const BlueskyRepostButton = ({ item, onRepost, onUndoRepost, isPending }: Readonly<{
+  item: IoriBlueskyTimelineItemBody;
+  onRepost: (item: IoriBlueskyTimelineItemBody) => void;
+  onUndoRepost: ((item: IoriBlueskyTimelineItemBody) => void) | undefined;
+  isPending: boolean;
+}>) => {
+  const handleClick = (event: Event) => {
+    event.stopPropagation();
+    if (isPending) return;
+    if (item.reposted) {
+      if (onUndoRepost && confirm('リポストを取り消しますか？')) onUndoRepost(item);
+    } else {
+      onRepost(item);
+    }
+  };
+  return (
+    <button
+      type='button'
+      onClick={handleClick}
+      class={`flex items-center gap-1 transition-colors ${
+        item.reposted
+          ? 'text-sage dark:text-sage'
+          : isPending
+          ? 'text-sage/50 dark:text-sage-dark cursor-wait'
+          : 'text-charcoal-light hover:text-sage dark:text-gray-400 dark:hover:text-sage'
+      }`}
+      title={repostTitle(item.reposted, isPending)}
+      disabled={isPending}
+    >
+      <svg
+        xmlns='http://www.w3.org/2000/svg'
+        class='h-5 w-5'
+        fill={item.reposted ? 'currentColor' : 'none'}
+        viewBox='0 0 24 24'
+        stroke='currentColor'
+        stroke-width='2'
+      >
+        <path
+          stroke-linecap='round'
+          stroke-linejoin='round'
+          d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
+        />
+      </svg>
+    </button>
+  );
+};
+
+export const BlueskyTimelineItemView = ({
+  item,
+  dataIndex,
+  isSelected,
+  onLike,
+  onUndoLike,
+  isLikePending,
+  onRepost,
+  onUndoRepost,
+  isRepostPending,
+}: Props) => {
   const avatar = safeAbsoluteUrl(item.authorAvatar);
   const postHref = blueskyPostUrl(item.authorDid, item.uri);
   const displayName = item.authorDisplayName ?? item.authorHandle;
@@ -230,9 +295,19 @@ export const BlueskyTimelineItemView = ({ item, dataIndex, isSelected, onLike, o
       </div>
       {item.text !== '' && <BlueskyText text={item.text} facets={item.facets} />}
       {item.embed !== null && <BlueskyEmbed embed={item.embed} postHref={postHref} />}
-      {onLike !== undefined && (
+      {(onLike !== undefined || onRepost !== undefined) && (
         <div class='flex items-center gap-4 pt-1'>
-          <BlueskyLikeButton item={item} onLike={onLike} onUndoLike={onUndoLike} isPending={isLikePending === true} />
+          {onRepost !== undefined && (
+            <BlueskyRepostButton
+              item={item}
+              onRepost={onRepost}
+              onUndoRepost={onUndoRepost}
+              isPending={isRepostPending === true}
+            />
+          )}
+          {onLike !== undefined && (
+            <BlueskyLikeButton item={item} onLike={onLike} onUndoLike={onUndoLike} isPending={isLikePending === true} />
+          )}
         </div>
       )}
     </article>

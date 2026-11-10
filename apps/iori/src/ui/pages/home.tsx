@@ -635,7 +635,7 @@ const UpdateBioModal = () => {
 };
 
 const TimelineList = () => {
-  const { data, items, actions, blueskyLike, reply, thread, ui } = useTimelineContext();
+  const { data, items, actions, blueskyLike, blueskyRepost, reply, thread, ui } = useTimelineContext();
 
   if (!data) return null;
 
@@ -656,6 +656,9 @@ const TimelineList = () => {
               onLike={blueskyLike.like}
               onUndoLike={blueskyLike.undoLike}
               isLikePending={blueskyLike.pendingUris.has(item.item.uri)}
+              onRepost={blueskyRepost.repost}
+              onUndoRepost={blueskyRepost.undoRepost}
+              isRepostPending={blueskyRepost.pendingUris.has(item.item.uri)}
             />
           );
         }

@@ -6,6 +6,7 @@ import { createD1BlueskyTimelineExistingFeedItemIdsResolver } from '../../adapto
 import { createD1BlueskyTimelineItemsResolver } from '../../adaptor/d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1BlueskyTimelineItemsSavedStore } from '../../adaptor/d1/blueskyTimeline/blueskyTimelineItemsSavedStore.ts';
 import { createD1BlueskyViewerLikesSyncedStore } from '../../adaptor/d1/blueskyTimeline/blueskyViewerLikesSyncedStore.ts';
+import { createD1BlueskyViewerRepostsSyncedStore } from '../../adaptor/d1/blueskyTimeline/blueskyViewerRepostsSyncedStore.ts';
 import { BlueskyFetchedTimelineItem } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
@@ -40,6 +41,8 @@ const itemAt = (
     fetchedAt: NOW,
     liked: false,
     viewerLikeUri: null,
+    reposted: false,
+    viewerRepostUri: null,
     ...overrides,
   });
 
@@ -65,6 +68,7 @@ const setup = (pages: ReadonlyArray<BlueskyTimelinePage | BlueskyClientError>) =
     existingResolver: createD1BlueskyTimelineExistingFeedItemIdsResolver(db),
     savedStore,
     viewerLikesStore: createD1BlueskyViewerLikesSyncedStore(db),
+    viewerRepostsStore: createD1BlueskyViewerRepostsSyncedStore(db),
     now: () => NOW,
   });
   const stored = () =>
@@ -162,8 +166,8 @@ describe('CollectBlueskyTimelineUseCase', () => {
 
     expect(result).toEqual({ ok: true, val: { pages: 1, fetched: 2, saved: 0, dropped: 0 } });
     expect(t.save).not.toHaveBeenCalled();
-    expect(t.queries).toHaveLength(1);
-    expect(t.queries[0]!.sql).toMatch(/^select /i);
+    expect(t.queries).toHaveLength(2);
+    expect(t.queries.every(({ sql }) => /^select /i.test(sql))).toBe(true);
     expect(t.queries.filter(({ sql }) => /^\s*(insert|update|delete)\b/i.test(sql))).toEqual([]);
     expect(t.stored()).toEqual([recent(1).feedItemId, recent(2).feedItemId]);
   });
@@ -196,7 +200,7 @@ describe('CollectBlueskyTimelineUseCase', () => {
     const result = await t.useCase.run();
 
     expect(result).toMatchObject({ ok: true, val: { pages: 2, fetched: 5, saved: 5 } });
-    expect(t.queries.filter(({ sql }) => /^\s*select /i.test(sql))).toHaveLength(2);
+    expect(t.queries.filter(({ sql }) => /^\s*select /i.test(sql) && !sql.includes('bluesky_reposts'))).toHaveLength(2);
   });
 
   it('保存済みの feedItemId の確認は D1 のバインド数の上限（100）を超えない', async () => {
@@ -229,7 +233,7 @@ describe('CollectBlueskyTimelineUseCase', () => {
 
     const resolved = await createD1BlueskyTimelineItemsResolver(t.db).resolve({ limit: 10, before: undefined });
 
-    const { viewerLikeUri: _viewerLikeUri, ...expected } = rich;
+    const { viewerLikeUri: _viewerLikeUri, viewerRepostUri: _viewerRepostUri, ...expected } = rich;
     expect(resolved).toEqual({ ok: true, val: [expected] });
   });
 
@@ -343,6 +347,240 @@ describe('CollectBlueskyTimelineUseCase', () => {
       await t.useCase.run();
 
       expect(likeRows(t)).toHaveLength(100);
+    });
+  });
+
+  describe('viewer.repost', () => {
+    const repostRows = (t: ReturnType<typeof setup>) =>
+      t.sqlite.prepare('SELECT subjectUri, repostUri, createdAt FROM bluesky_reposts ORDER BY subjectUri').all();
+    const repostUri = (n: number) => `at://did:plc:me/app.bsky.feed.repost/3k${n}`;
+    const repostQueries = (t: ReturnType<typeof setup>) =>
+      t.queries.filter(({ sql }) => sql.includes('bluesky_reposts')).map(({ sql }) =>
+        sql.trim().split(/\s/)[0]?.toLowerCase()
+      );
+
+    it('新しく保存した行に viewerRepostUri があれば bluesky_reposts に保存し、reposted として読める', async () => {
+      const reposted = itemAt(1, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(1) });
+      const t = setup([pageOf([reposted, recent(2)], undefined)]);
+
+      await t.useCase.run();
+
+      expect(repostRows(t)).toEqual([{ subjectUri: reposted.uri, repostUri: repostUri(1), createdAt: NOW }]);
+      const resolved = Result.unsafeUnwrap(
+        await createD1BlueskyTimelineItemsResolver(t.db).resolve({ limit: 10, before: undefined }),
+      );
+      expect(resolved.map((item) => [item.uri, item.reposted])).toEqual([[reposted.uri, true], [recent(2).uri, false]]);
+    });
+
+    it('同じ uri の通常の行と repost の行がどちらも viewerRepostUri を持っていても 1 行だけ保存する', async () => {
+      const plain = itemAt(1, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(1) });
+      const repostRow = itemAt(1, NOW - 2000, {
+        feedItemId: `${plain.uri}#repost:did:plc:b`,
+        repostedByDid: 'did:plc:b',
+        repostedByHandle: 'bob.example',
+        reposted: true,
+        viewerRepostUri: repostUri(1),
+      });
+      const t = setup([pageOf([plain, repostRow], undefined)]);
+
+      await t.useCase.run();
+
+      expect(repostRows(t)).toHaveLength(1);
+    });
+
+    it('取り込み済みの投稿の viewerRepostUri も保存する', async () => {
+      const t = setup([pageOf([recent(1)], undefined)]);
+      await t.useCase.run();
+      t.enqueue(pageOf([itemAt(1, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(1) })], undefined));
+
+      await t.useCase.run();
+
+      expect(repostRows(t)).toEqual([{ subjectUri: recent(1).uri, repostUri: repostUri(1), createdAt: NOW }]);
+    });
+
+    it('保存済みの repostUri と同じなら、bluesky_reposts に書き込まない', async () => {
+      const reposted = itemAt(1, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(1) });
+      const t = setup([pageOf([reposted], undefined)]);
+      await t.useCase.run();
+      t.enqueue(pageOf([reposted], undefined));
+      t.queries.length = 0;
+
+      await t.useCase.run();
+
+      expect(repostQueries(t)).toEqual(['select']);
+      expect(repostRows(t)).toEqual([{ subjectUri: reposted.uri, repostUri: repostUri(1), createdAt: NOW }]);
+    });
+
+    it('保存済みの repostUri と違えば、repostUri を更新する', async () => {
+      const t = setup([
+        pageOf([itemAt(1, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(1) })], undefined),
+      ]);
+      await t.useCase.run();
+      t.enqueue(pageOf([itemAt(1, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(2) })], undefined));
+      t.queries.length = 0;
+
+      await t.useCase.run();
+
+      expect(repostQueries(t)).toEqual(['select', 'insert']);
+      expect(repostRows(t)).toEqual([{ subjectUri: recent(1).uri, repostUri: repostUri(2), createdAt: NOW }]);
+    });
+
+    it('viewerRepostUri が無い項目では、保存済みの bluesky_reposts の行を消さない', async () => {
+      const t = setup([
+        pageOf([itemAt(1, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(1) })], undefined),
+      ]);
+      await t.useCase.run();
+      t.enqueue(pageOf([itemAt(1, NOW - 1000)], undefined));
+
+      await t.useCase.run();
+
+      expect(repostRows(t)).toEqual([{ subjectUri: recent(1).uri, repostUri: repostUri(1), createdAt: NOW }]);
+    });
+
+    it('保持期限より古い項目の viewerRepostUri は保存しない', async () => {
+      const old = itemAt(1, NOW - 31 * DAY, { reposted: true, viewerRepostUri: repostUri(1) });
+      const t = setup([pageOf([recent(2), old], undefined)]);
+
+      await t.useCase.run();
+
+      expect(repostRows(t)).toEqual([]);
+    });
+
+    it('viewerRepostUri を持つ項目が無く、保存済みの行も無いページでは、bluesky_reposts への SELECT だけを発行する', async () => {
+      const t = setup([pageOf([recent(1), recent(2)], undefined)]);
+
+      await t.useCase.run();
+
+      expect(repostQueries(t)).toEqual(['select']);
+    });
+
+    describe('別クライアントで取り消したリポストの削除', () => {
+      const MINUTE = 60 * 1000;
+      const seedRepost = (t: ReturnType<typeof setup>, n: number, createdAt: number) =>
+        t.sqlite.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)').run(
+          recent(n).uri,
+          repostUri(n),
+          createdAt,
+        );
+
+      it('viewerRepostUri が無い投稿の、取得開始の 5 分より前の行を消す', async () => {
+        const t = setup([pageOf([recent(1)], undefined)]);
+        seedRepost(t, 1, NOW - 5 * MINUTE - 1);
+
+        await t.useCase.run();
+
+        expect(repostRows(t)).toEqual([]);
+      });
+
+      it('取得開始から 5 分以内の行は消さない', async () => {
+        const t = setup([pageOf([recent(1), recent(2)], undefined)]);
+        seedRepost(t, 1, NOW - 4 * MINUTE);
+        seedRepost(t, 2, NOW - 5 * MINUTE);
+
+        await t.useCase.run();
+
+        expect(repostRows(t)).toEqual([
+          { subjectUri: recent(1).uri, repostUri: repostUri(1), createdAt: NOW - 4 * MINUTE },
+          { subjectUri: recent(2).uri, repostUri: repostUri(2), createdAt: NOW - 5 * MINUTE },
+        ]);
+      });
+
+      it('viewerRepostUri がある投稿の古い行は消さず、repostUri を同期する', async () => {
+        const t = setup([
+          pageOf([itemAt(1, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(9) })], undefined),
+        ]);
+        seedRepost(t, 1, NOW - 10 * MINUTE);
+
+        await t.useCase.run();
+
+        expect(repostRows(t)).toEqual([
+          { subjectUri: recent(1).uri, repostUri: repostUri(9), createdAt: NOW - 10 * MINUTE },
+        ]);
+      });
+
+      it('同じ uri の通常の行と repost の行の片方だけが viewerRepostUri を持つときは消さない', async () => {
+        const plain = itemAt(1, NOW - 1000);
+        const repostRow = itemAt(1, NOW - 2000, {
+          feedItemId: `${plain.uri}#repost:did:plc:b`,
+          repostedByDid: 'did:plc:b',
+          repostedByHandle: 'bob.example',
+          reposted: true,
+          viewerRepostUri: repostUri(1),
+        });
+        const t = setup([pageOf([plain, repostRow], undefined)]);
+        seedRepost(t, 1, NOW - 10 * MINUTE);
+
+        await t.useCase.run();
+
+        expect(repostRows(t)).toEqual([
+          { subjectUri: plain.uri, repostUri: repostUri(1), createdAt: NOW - 10 * MINUTE },
+        ]);
+      });
+
+      it('viewerRepostUri がある投稿と無い投稿が混在するときは、無い投稿の古い行だけを消す', async () => {
+        const reposted = itemAt(1, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(1) });
+        const t = setup([pageOf([reposted, recent(2), recent(3)], undefined)]);
+        seedRepost(t, 1, NOW - 10 * MINUTE);
+        seedRepost(t, 2, NOW - 10 * MINUTE);
+        seedRepost(t, 3, NOW - MINUTE);
+        seedRepost(t, 4, NOW - 10 * MINUTE);
+
+        await t.useCase.run();
+
+        expect(repostRows(t).map((row) => (row as { subjectUri: string }).subjectUri)).toEqual([
+          recent(1).uri,
+          recent(3).uri,
+          recent(4).uri,
+        ]);
+      });
+
+      it('削除対象の行が無ければ、DELETE を発行しない', async () => {
+        const t = setup([pageOf([recent(1), recent(2)], undefined)]);
+        seedRepost(t, 1, NOW - MINUTE);
+        t.queries.length = 0;
+
+        await t.useCase.run();
+
+        expect(repostQueries(t)).toEqual(['select']);
+      });
+
+      it('削除対象があれば SELECT と DELETE を 1 本ずつ発行する', async () => {
+        const t = setup([pageOf([recent(1)], undefined)]);
+        seedRepost(t, 1, NOW - 10 * MINUTE);
+        t.queries.length = 0;
+
+        await t.useCase.run();
+
+        expect(repostQueries(t)).toEqual(['select', 'delete']);
+      });
+
+      it('同じページの 100 件がすべて viewerRepostUri なしでも D1 のバインド上限に当たらない', async () => {
+        const items = Array.from({ length: 100 }, (_, n) => itemAt(n, NOW - 1000));
+        const t = setup([pageOf(items, undefined)]);
+        for (let n = 0; n < 100; n += 1) {
+          t.sqlite.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)').run(
+            items[n]!.uri,
+            repostUri(n),
+            NOW - 10 * MINUTE,
+          );
+        }
+
+        await t.useCase.run();
+
+        expect(repostRows(t)).toEqual([]);
+      });
+    });
+
+    it('同じページの 100 件がすべて新しい viewerRepostUri でも D1 のバインド上限に当たらない', async () => {
+      const items = Array.from(
+        { length: 100 },
+        (_, n) => itemAt(n, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(n) }),
+      );
+      const t = setup([pageOf(items, undefined)]);
+
+      await t.useCase.run();
+
+      expect(repostRows(t)).toHaveLength(100);
     });
   });
 });

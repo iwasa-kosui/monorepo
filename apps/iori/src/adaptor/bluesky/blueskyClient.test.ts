@@ -317,6 +317,78 @@ describe('createBlueskyClient の各操作', () => {
     expect(await failing.client.deleteLike('3klike')).toMatchObject({ ok: false, err: { kind: 'http', status: 500 } });
   });
 
+  it('createRepost は putRecord で app.bsky.feed.repost のレコードを指定の rkey で書き、応答の uri を返す', async () => {
+    const repostUri = 'at://did:plc:abc/app.bsky.feed.repost/2222222222222';
+    const { client, calls } = setup(stored(), [() => json({ uri: repostUri, cid: 'bafyrepost' })]);
+
+    const result = await client.createRepost(
+      { uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' },
+      '2222222222222',
+    );
+
+    expect(result).toEqual({ ok: true, val: { uri: repostUri } });
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.putRecord`);
+    const body = JSON.parse(calls[0]!.init.body as string);
+    expect(body).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.feed.repost',
+      rkey: '2222222222222',
+      record: {
+        $type: 'app.bsky.feed.repost',
+        subject: { uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' },
+        createdAt: new Date(NOW).toISOString(),
+      },
+    });
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+  });
+
+  it('createRepost は repost の uri でない応答を invalid_response として返す', async () => {
+    const { client } = setup(stored(), [() => json({ uri: 'at://did:plc:abc/app.bsky.feed.like/3k1', cid: 'c' })]);
+
+    expect(await client.createRepost({ uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' }, '2222222222222'))
+      .toMatchObject({
+        ok: false,
+        err: { kind: 'invalid_response' },
+      });
+  });
+
+  it('createRepost は 500 を失敗として返す', async () => {
+    const { client } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+
+    expect(await client.createRepost({ uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' }, '2222222222222'))
+      .toMatchObject({
+        ok: false,
+        err: { kind: 'http', status: 500 },
+      });
+  });
+
+  it('deleteRepost は app.bsky.feed.repost の collection と rkey を送る', async () => {
+    const { client, calls } = setup(stored(), [() => json({})]);
+
+    const result = await client.deleteRepost('3krepost');
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.deleteRecord`);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.feed.repost',
+      rkey: '3krepost',
+    });
+  });
+
+  it('deleteRepost は既に無い record を 404 と RecordNotFound のどちらでも成功として扱い、500 は失敗として返す', async () => {
+    const notFound = setup(stored(), [() => json({ error: 'NotFound' }, 404)]);
+    const missing = setup(stored(), [() => json({ error: 'RecordNotFound' }, 400)]);
+    const failing = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+
+    expect((await notFound.client.deleteRepost('3krepost')).ok).toBe(true);
+    expect((await missing.client.deleteRepost('3krepost')).ok).toBe(true);
+    expect(await failing.client.deleteRepost('3krepost')).toMatchObject({
+      ok: false,
+      err: { kind: 'http', status: 500 },
+    });
+  });
+
   it('getRecord は repo、collection、rkey を query に付けて uri、cid、rkey を返す', async () => {
     const { client, calls } = setup(stored(), [
       () => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k9', cid: 'bafy9', value: { text: 'x' } }),

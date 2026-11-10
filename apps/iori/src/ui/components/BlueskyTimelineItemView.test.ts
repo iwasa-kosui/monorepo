@@ -22,6 +22,7 @@ const base: IoriBlueskyTimelineItemBody = {
   postedAt: Date.UTC(2026, 10, 8, 1),
   indexedAt: Date.UTC(2026, 10, 8, 1),
   liked: false,
+  reposted: false,
 };
 const render = (
   item: Partial<IoriBlueskyTimelineItemBody>,
@@ -153,6 +154,52 @@ describe('BlueskyTimelineItemView', () => {
 
     it('件数は表示しない', () => {
       expect(render({ liked: true }, handlers)).not.toMatch(/<span class="text-sm">\d+<\/span>/);
+    });
+  });
+
+  describe('リポストのボタン', () => {
+    const handlers = { onRepost: () => {}, onUndoRepost: () => {} };
+
+    it('onRepost が渡されないときはボタンを出さない', () => {
+      expect(render({})).not.toContain('<button');
+      expect(render({}, { onLike: () => {} })).not.toContain('title="リポスト"');
+    });
+
+    it('リポストしていなければ、塗りなしで「リポスト」の title の button にする', () => {
+      const html = render({ reposted: false }, handlers);
+
+      expect(html).toContain('type="button"');
+      expect(html).toContain('title="リポスト"');
+      expect(html).toContain('fill="none"');
+      expect(html).not.toContain('disabled');
+    });
+
+    it('リポスト済みなら、塗りつぶしの色で「リポストを取り消す」の title にする', () => {
+      const html = render({ reposted: true }, handlers);
+
+      expect(html).toContain('title="リポストを取り消す"');
+      expect(html).toContain('fill="currentColor"');
+      expect(html).toContain('text-sage dark:text-sage');
+    });
+
+    it('送信中は disabled にし、押した後の状態に合わせた title を出す', () => {
+      expect(render({ reposted: true }, { ...handlers, isRepostPending: true })).toContain('title="リポスト中..."');
+      expect(render({ reposted: false }, { ...handlers, isRepostPending: true })).toContain(
+        'title="リポスト取り消し中..."',
+      );
+      expect(render({ reposted: false }, { ...handlers, isRepostPending: true })).toContain('disabled');
+    });
+
+    it('いいねのボタンと並べて出し、リポストの行の表示は変えない', () => {
+      const html = render({ repostedByHandle: 'bob.example', reposted: false }, {
+        ...handlers,
+        onLike: () => {},
+        onUndoLike: () => {},
+      });
+
+      expect(html).toContain('title="リポスト"');
+      expect(html).toContain('title="いいね"');
+      expect(html).toContain('@bob.example がリポスト');
     });
   });
 });
