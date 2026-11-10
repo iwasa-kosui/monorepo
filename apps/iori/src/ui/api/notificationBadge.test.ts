@@ -10,12 +10,13 @@ import {
 
 const fakeBadge = () => ({ textContent: 'stale', hidden: false });
 
-const rootWith = (badges: ReturnType<typeof fakeBadge>[]) => ({
-  querySelectorAll: vi.fn((selector: string) => {
-    expect(selector).toBe(NOTIFICATION_BADGE_SELECTOR);
-    return { forEach: (callback: (badge: ReturnType<typeof fakeBadge>) => void) => badges.forEach(callback) };
-  }),
-}) as unknown as ParentNode;
+const rootWith = (badges: ReturnType<typeof fakeBadge>[]) =>
+  ({
+    querySelectorAll: vi.fn((selector: string) => {
+      expect(selector).toBe(NOTIFICATION_BADGE_SELECTOR);
+      return { forEach: (callback: (badge: ReturnType<typeof fakeBadge>) => void) => badges.forEach(callback) };
+    }),
+  }) as unknown as ParentNode;
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -47,9 +48,12 @@ describe('fetchUnreadNotificationCount', () => {
     const fetcher = vi.fn(() => Promise.resolve(jsonResponse({ count: 3 })));
 
     expect(await fetchUnreadNotificationCount(fetcher)).toBe(3);
-    expect(fetcher).toHaveBeenCalledWith(unreadNotificationCountUrl(), expect.objectContaining({
-      credentials: 'same-origin',
-    }));
+    expect(fetcher).toHaveBeenCalledWith(
+      unreadNotificationCountUrl(),
+      expect.objectContaining({
+        credentials: 'same-origin',
+      }),
+    );
   });
 
   it('returns undefined for errors and malformed bodies', async () => {
