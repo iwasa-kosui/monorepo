@@ -196,7 +196,6 @@ describe('ログイン失敗後の待ち時間', () => {
     expect(requests).toEqual(['https://bsky.social/xrpc/com.atproto.server.createSession']);
     expect(sqlite.prepare('SELECT scope FROM bluesky_login_failures').all()).toEqual([{ scope: 'timeline' }]);
   });
-
 });
 
 describe('createBlueskyTimelineRuntimePorts', () => {

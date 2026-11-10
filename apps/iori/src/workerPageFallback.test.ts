@@ -38,7 +38,6 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain('<title>検索 | blog.kosui.me</title>');
   });
 
-
   it('embeds the tailwind config and the style block shared with LayoutClient', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
     const html = await response?.text();
