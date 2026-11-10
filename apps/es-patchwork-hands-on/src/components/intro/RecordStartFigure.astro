@@ -1,0 +1,346 @@
+---
+const events = [
+  { name: '予約を受けた', who: '飼い主', why: 'ワクチンのため' },
+  { name: '日時を変えた', who: '受付スタッフ', why: '仕事の都合' },
+  { name: '担当医を変えた', who: '受付スタッフ', why: '担当医の休み' },
+  { name: 'キャンセルした', who: '受付スタッフ', why: '飼い主の都合' },
+  { name: 'もう一度予約を受けた', who: '飼い主', why: '具合が戻った' },
+  { name: '来院した', who: '受付スタッフ', why: '予約どおりに来た' },
+];
+const initial = 3;
+---
+
+<section
+  class="figure"
+  data-record-figure
+  data-total={events.length}
+  data-n={initial}
+  style={`--n: ${initial}`}
+  aria-labelledby="record-title"
+>
+  <p id="record-title" class="figure-title">
+    スライダーを動かして、記録を足す日を変えてみてください。
+  </p>
+
+  <div class="timeline">
+    <div class="divider" aria-hidden="true">
+      <span class="divider-label">記録を足す</span>
+    </div>
+    <ol class="events">
+      {
+        events.map((event, index) => (
+          <li class="event" data-state={index < initial ? 'lost' : 'kept'}>
+            <span class="event-no">{index + 1}件目</span>
+            <span class="event-name">
+              <span class="real">{event.name}</span><span class="unknown"
+              >？</span>
+            </span>
+            <span class="field">
+              <span class="field-label">誰が</span>
+              <span class="real">{event.who}</span><span class="unknown"
+              >？</span>
+            </span>
+            <span class="field">
+              <span class="field-label">なぜ</span>
+              <span class="real">{event.why}</span><span class="unknown"
+              >？</span>
+            </span>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+
+  <div class="slider">
+    <label for="record-start-day">記録を足す日</label>
+    <input
+      id="record-start-day"
+      type="range"
+      min="0"
+      max={events.length}
+      step="1"
+      value={initial}
+      aria-valuetext="3件目の出来事のあと"
+    />
+    <output for="record-start-day" data-output>3件目の出来事のあと</output>
+  </div>
+  <div class="slider-ends" aria-hidden="true">
+    <span>最初から</span>
+    <span>今日</span>
+  </div>
+
+  <p class="message" aria-live="polite" data-message>
+    足す前の3件は答えられません。足した後の3件は答えられます。
+  </p>
+</section>
+
+<style>
+.figure {
+  --line: #d1d5db;
+  --panel: #f3f4f6;
+  --paper: #ffffff;
+  --text: #374151;
+  --muted: #4b5563;
+  --accent: #1d4ed8;
+  --ink: #1e2a5a;
+  --red: #dc2626;
+  --yellow: #facc15;
+  --gray: #9ca3af;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  padding: 0.875rem 1rem;
+  color: var(--text);
+}
+.figure-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.timeline {
+  position: relative;
+  padding-top: 1.5rem;
+}
+.events {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.event {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 4px solid var(--accent);
+  background: var(--paper);
+  min-height: 17rem;
+  padding: 0.75rem 0.5rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  transition:
+    background-color 0.4s ease,
+    border-color 0.4s ease,
+    color 0.4s ease;
+}
+.event + .event {
+  border-left: 1px solid var(--line);
+}
+.event::before {
+  content: "";
+  position: absolute;
+  top: -0.625rem;
+  left: 50%;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+  translate: -50% 0;
+  transition: background-color 0.4s ease;
+}
+.event-no {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.event-name {
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+}
+.field-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.unknown {
+  display: none;
+}
+.event[data-state="lost"] {
+  border-top-color: var(--gray);
+  background: #e5e7eb;
+  color: var(--gray);
+}
+.event[data-state="lost"]::before {
+  background: var(--gray);
+}
+.event[data-state="lost"] .real {
+  display: none;
+}
+.event[data-state="lost"] .unknown {
+  display: inline;
+  font-weight: 700;
+}
+.event[data-state="lost"] .field-label,
+.event[data-state="lost"] .event-no {
+  color: var(--gray);
+}
+
+.divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--n) / 6 * 100%);
+  width: 3px;
+  background: var(--red);
+  translate: -50% 0;
+  transition: left 0.4s ease;
+  z-index: 1;
+}
+.divider-label {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  border: 2px solid var(--ink);
+  border-radius: 0.25rem;
+  background: var(--yellow);
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  translate: -50% -0.125rem;
+}
+[data-n="0"] .divider-label {
+  translate: -3px -0.125rem;
+  left: 0;
+}
+[data-n="6"] .divider-label {
+  translate: calc(-100% + 3px) -0.125rem;
+  left: 100%;
+}
+
+.slider {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+.slider input {
+  flex: 1 1 8rem;
+  height: 2rem;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+.slider output {
+  min-width: 9.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.slider-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -0.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.message {
+  margin: 0;
+  min-height: 3rem;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+@media (max-height: 700px) {
+  .figure {
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .figure-title {
+    font-size: 0.8125rem;
+  }
+  .timeline {
+    padding-top: 1.25rem;
+  }
+  .event {
+    gap: 0.25rem;
+    min-height: 9.5rem;
+    padding: 0.5rem 0.25rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+  .event-name {
+    font-size: 0.8125rem;
+  }
+  .event-no,
+  .field-label {
+    font-size: 0.6875rem;
+  }
+  .slider {
+    font-size: 0.8125rem;
+  }
+  .slider-ends {
+    margin-top: -0.375rem;
+  }
+  .message {
+    min-height: 2.5rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event,
+  .event::before,
+  .divider {
+    transition: none;
+  }
+}
+</style>
+
+<script>
+const describeDay = (value: number, total: number): string => {
+  if (value === 0) return '最初から';
+  if (value === total) return '今日';
+  return `${value}件目の出来事のあと`;
+};
+
+const describeResult = (value: number, total: number): string => {
+  if (value === total) {
+    return '今日まで足さなければ今日までの出来事はどれも答えられません。';
+  }
+  if (value === 0) return '最初から足していれば全部答えられます。';
+  return `足す前の${value}件は答えられません。足した後の${
+    total - value
+  }件は答えられます。`;
+};
+
+for (
+  const root of document.querySelectorAll<HTMLElement>('[data-record-figure]')
+) {
+  const input = root.querySelector<HTMLInputElement>('input[type="range"]');
+  const output = root.querySelector<HTMLElement>('[data-output]');
+  const message = root.querySelector<HTMLElement>('[data-message]');
+  const events = [...root.querySelectorAll<HTMLElement>('.event')];
+  if (input === null || output === null || message === null) continue;
+  const total = events.length;
+
+  const show = (): void => {
+    const value = Number(input.value);
+    const day = describeDay(value, total);
+    root.dataset.n = String(value);
+    root.style.setProperty('--n', String(value));
+    input.setAttribute('aria-valuetext', day);
+    output.textContent = day;
+    message.textContent = describeResult(value, total);
+    events.forEach((event, index) => {
+      event.dataset.state = index < value ? 'lost' : 'kept';
+    });
+  };
+
+  input.addEventListener('input', show);
+  show();
+}
+</script>

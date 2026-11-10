@@ -1,0 +1,543 @@
+---
+
+---
+
+<section
+  class="figure"
+  data-method-figure
+  data-method="timetravel"
+  aria-labelledby="method-title"
+>
+  <p id="method-title" class="figure-title">
+    方法を1つ選んで、記録する場所と、分かることを確かめてみてください。
+  </p>
+
+  <div class="flow" aria-hidden="true">
+    <div class="box code-box">
+      <span class="box-name">更新処理を呼ぶコード</span>
+      <span class="box-note">なぜを知っている</span>
+      <span class="badge badge-code">記録する場所</span>
+    </div>
+    <div class="track track-code-process"><span class="arrow"></span></div>
+    <div class="box process-box">
+      <span class="box-name">更新処理</span>
+    </div>
+    <div class="track track-process-table">
+      <span class="arrow"></span>
+      <span class="dot"></span>
+      <span class="dot late"></span>
+    </div>
+    <div class="box table-box">
+      <span class="box-name">テーブル</span>
+      <span class="badge badge-table">記録する場所</span>
+    </div>
+    <div class="track track-down">
+      <span class="arrow down"></span>
+      <span class="dot"></span>
+    </div>
+    <div class="box slot-box">
+      <span class="box-name">記録</span>
+    </div>
+    <div class="box sql-box">
+      <span class="box-name">手作業の SQL</span>
+    </div>
+    <div class="track track-sql-table">
+      <span class="arrow"></span>
+      <span class="dot"></span>
+      <span class="dot late"></span>
+    </div>
+  </div>
+
+  <div class="choices" role="group" aria-label="記録する方法">
+    <button type="button" data-method-button="timetravel" aria-pressed="true">
+      データ基盤のタイムトラベル
+    </button>
+    <button type="button" data-method-button="trigger" aria-pressed="false">
+      トリガーや CDC
+    </button>
+    <button type="button" data-method-button="code" aria-pressed="false">
+      更新処理を呼ぶコードに記録を足す
+    </button>
+  </div>
+
+  <table class="results">
+    <caption class="sr-only">選んだ方法で分かること</caption>
+    <tbody>
+      <tr>
+        <th scope="row">変更前の値が見える</th>
+        <td data-result="before" data-good="true">
+          <span class="mark" aria-hidden="true">○</span>
+          <span data-text>見える</span>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">手作業の SQL の変更も見える</th>
+        <td data-result="manual" data-good="true">
+          <span class="mark" aria-hidden="true">○</span>
+          <span data-text>見える</span>
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">なぜ変えたかが残る</th>
+        <td data-result="why" data-good="false">
+          <span class="mark" aria-hidden="true">×</span>
+          <span data-text>残らない</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="message" aria-live="polite" data-message>
+    テーブルの変化は分かります。なぜ変えたのかはテーブルに届いていません。
+  </p>
+</section>
+
+<style>
+.figure {
+  --line: #d1d5db;
+  --panel: #f3f4f6;
+  --paper: #ffffff;
+  --text: #374151;
+  --muted: #4b5563;
+  --accent: #1d4ed8;
+  --ink: #1e2a5a;
+  --red: #dc2626;
+  --yellow: #facc15;
+  --glow: #facc15;
+  --gray: #9ca3af;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  padding: 0.875rem 1rem;
+  color: var(--text);
+}
+.figure-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.flow {
+  display: grid;
+  grid-template-columns: 1.25fr 1.5rem 0.9fr 1.5rem 0.9fr;
+  grid-template-rows: auto auto auto;
+  align-items: center;
+  row-gap: 0.25rem;
+  border-radius: 0.375rem;
+  background: var(--paper);
+  padding: 1.25rem 0.75rem 0.75rem;
+}
+.box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  min-height: 3.75rem;
+  border: 2px solid var(--ink);
+  border-radius: 0.375rem;
+  background: var(--paper);
+  padding: 0.25rem 0.375rem;
+  text-align: center;
+  transition:
+    box-shadow 0.4s ease,
+    background-color 0.4s ease,
+    border-color 0.4s ease;
+}
+.box-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.box-note {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.code-box {
+  grid-column: 1;
+  grid-row: 1;
+}
+.track-code-process {
+  grid-column: 2;
+  grid-row: 1;
+}
+.process-box {
+  grid-column: 3;
+  grid-row: 1;
+}
+.track-process-table {
+  grid-column: 4;
+  grid-row: 1;
+}
+.table-box {
+  grid-column: 5;
+  grid-row: 1 / 4;
+  align-self: stretch;
+}
+.track-down {
+  grid-column: 1;
+  grid-row: 2;
+  height: 1.75rem;
+}
+.slot-box {
+  grid-column: 1;
+  grid-row: 3;
+  min-height: 2.5rem;
+  border-style: dashed;
+  border-color: var(--gray);
+  color: var(--gray);
+}
+.sql-box {
+  grid-column: 3;
+  grid-row: 3;
+}
+.track-sql-table {
+  grid-column: 4;
+  grid-row: 3;
+}
+
+.track {
+  position: relative;
+  height: 1.5rem;
+}
+.arrow {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--ink);
+  translate: 0 -50%;
+}
+.arrow::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -1px;
+  border: 5px solid transparent;
+  border-left: 8px solid var(--ink);
+  border-right: 0;
+  translate: 0 -50%;
+}
+.arrow.down {
+  top: 0;
+  right: auto;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  height: auto;
+  translate: -50% 0;
+}
+.arrow.down::after {
+  top: auto;
+  right: auto;
+  bottom: -1px;
+  left: 50%;
+  border: 5px solid transparent;
+  border-top: 8px solid var(--ink);
+  border-bottom: 0;
+  translate: -50% 0;
+}
+.dot {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  display: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--red);
+  translate: -50% -50%;
+}
+.track-down .dot {
+  top: 0;
+  left: 50%;
+}
+
+.badge {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  display: none;
+  margin-bottom: 0.25rem;
+  border: 2px solid var(--ink);
+  border-radius: 0.25rem;
+  background: var(--glow);
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  translate: -50% 0;
+}
+
+[data-method="timetravel"] .table-box,
+[data-method="trigger"] .table-box,
+[data-method="code"] .code-box {
+  border-color: var(--red);
+  background: #fef9c3;
+  box-shadow: 0 0 0 4px var(--glow);
+}
+[data-method="timetravel"] .badge-table,
+[data-method="trigger"] .badge-table,
+[data-method="code"] .badge-code {
+  display: block;
+}
+[data-method="code"] .slot-box {
+  border-style: solid;
+  border-color: var(--red);
+  background: #fef9c3;
+  color: var(--ink);
+}
+[data-method="timetravel"] .track-process-table .dot,
+[data-method="timetravel"] .track-sql-table .dot,
+[data-method="trigger"] .track-process-table .dot,
+[data-method="trigger"] .track-sql-table .dot,
+[data-method="code"] .track-down .dot {
+  display: block;
+  animation: travel 1.6s linear infinite;
+}
+[data-method="timetravel"] .dot.late,
+[data-method="trigger"] .dot.late {
+  animation-delay: 0.8s;
+}
+[data-method="code"] .track-down .dot {
+  animation-name: travel-down;
+}
+@keyframes travel {
+  0% {
+    left: 0;
+  }
+  100% {
+    left: 100%;
+  }
+}
+@keyframes travel-down {
+  0% {
+    top: 0;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.choices button {
+  border: 1px solid var(--accent);
+  border-radius: 0.375rem;
+  background: var(--paper);
+  padding: 0.5rem 1rem;
+  color: var(--accent);
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+.choices button:hover {
+  background: #dbeafe;
+}
+.choices button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--paper);
+}
+
+.results {
+  display: table;
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  background: var(--paper);
+  font-size: 1rem;
+}
+.results th,
+.results td {
+  border: 1px solid var(--line);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.results th {
+  background: var(--panel);
+  font-weight: 700;
+}
+.results td {
+  font-weight: 700;
+  transition: background-color 0.4s ease;
+}
+.mark {
+  margin-right: 0.5rem;
+  font-weight: 700;
+}
+.results td[data-good="true"] {
+  background: #fef9c3;
+}
+.results td[data-good="false"] {
+  background: #e5e7eb;
+  color: var(--muted);
+}
+.message {
+  margin: 0;
+  min-height: 3rem;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+@media (max-height: 700px) {
+  .figure {
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .figure-title {
+    font-size: 0.8125rem;
+  }
+  .flow {
+    row-gap: 0.125rem;
+    padding: 1.25rem 0.625rem 0.5rem;
+  }
+  .box {
+    min-height: 2.75rem;
+  }
+  .slot-box {
+    min-height: 1.75rem;
+  }
+  .box-name {
+    font-size: 0.8125rem;
+  }
+  .box-note {
+    font-size: 0.75rem;
+  }
+  .track-down {
+    height: 1rem;
+  }
+  .badge {
+    font-size: 0.6875rem;
+  }
+  .choices button {
+    padding: 0.25rem 0.625rem;
+    font-size: 0.8125rem;
+  }
+  .results {
+    font-size: 0.8125rem;
+  }
+  .results th,
+  .results td {
+    padding: 0.25rem 0.625rem;
+  }
+  .message {
+    min-height: 2.5rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .box,
+  .results td {
+    transition: none;
+  }
+  .dot {
+    display: none !important;
+    animation: none !important;
+  }
+}
+</style>
+
+<script>
+type Method = 'timetravel' | 'trigger' | 'code';
+
+type Outcome = {
+  readonly message: string;
+  readonly before: readonly [boolean, string];
+  readonly manual: readonly [boolean, string];
+  readonly why: readonly [boolean, string];
+};
+
+const outcomes: Record<Method, Outcome> = {
+  timetravel: {
+    message:
+      'テーブルの変化は分かります。なぜ変えたのかはテーブルに届いていません。',
+    before: [true, '見える'],
+    manual: [true, '見える'],
+    why: [false, '残らない'],
+  },
+  trigger: {
+    message:
+      '手作業の SQL まで拾えます。なぜ変えたのかはテーブルに届いていません。',
+    before: [true, '見える'],
+    manual: [true, '見える'],
+    why: [false, '残らない'],
+  },
+  code: {
+    message:
+      'なぜを知っているコードの場所で書きます。手作業の SQL は拾えません。',
+    before: [true, '記録に書けば見える'],
+    manual: [false, '見えない'],
+    why: [true, '残る'],
+  },
+};
+
+const isMethod = (value: string | undefined): value is Method =>
+  value === 'timetravel' || value === 'trigger' || value === 'code';
+
+for (
+  const root of document.querySelectorAll<HTMLElement>('[data-method-figure]')
+) {
+  const message = root.querySelector<HTMLElement>('[data-message]');
+  const buttons = [
+    ...root.querySelectorAll<HTMLButtonElement>('[data-method-button]'),
+  ];
+  if (message === null) continue;
+
+  const show = (method: Method): void => {
+    const outcome = outcomes[method];
+    root.dataset.method = method;
+    message.textContent = outcome.message;
+    for (const button of buttons) {
+      button.setAttribute(
+        'aria-pressed',
+        String(button.dataset.methodButton === method),
+      );
+    }
+    for (const key of ['before', 'manual', 'why'] as const) {
+      const cell = root.querySelector<HTMLElement>(`[data-result="${key}"]`);
+      const text = cell?.querySelector<HTMLElement>('[data-text]');
+      const mark = cell?.querySelector<HTMLElement>('.mark');
+      if (
+        cell === null || cell === undefined || text === null
+        || text === undefined
+      ) continue;
+      const [good, label] = outcome[key];
+      cell.dataset.good = String(good);
+      text.textContent = label;
+      if (mark !== null && mark !== undefined) {
+        mark.textContent = good
+          ? '○'
+          : '×';
+      }
+    }
+  };
+
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      const method = button.dataset.methodButton;
+      if (isMethod(method)) show(method);
+    });
+  }
+}
+</script>
