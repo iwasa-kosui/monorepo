@@ -17,11 +17,12 @@ import { htmlToTextWithLinks, type TextLink } from './htmlToTextWithLinks.ts';
 
 export const BLUESKY_MAX_GRAPHEMES = 300;
 export const BLUESKY_MAX_TEXT_BYTES = 3000;
-export const BLUESKY_MAX_IMAGE_BYTES = 2_000_000;
+// app.bsky.embed.images の image blob の maxSize（lexicon）に合わせる
+export const BLUESKY_MAX_IMAGE_BYTES = 1_000_000;
 export const BLUESKY_MAX_IMAGES = 4;
 export const BLUESKY_MAX_THUMB_BYTES = 1_000_000;
 
-export type BlueskyImageInput = Readonly<{ bytes: Uint8Array; mimeType: string; alt: string | null }>;
+export type BlueskyImageInput = Readonly<{ bytes: Uint8Array; mimeType: string; alt: string | null; url: string }>;
 export type BlueskyThumbInput = Readonly<{ bytes: Uint8Array; mimeType: string }>;
 export type BlueskyLinkPreviewInput = Readonly<{
   url: string;
@@ -36,7 +37,7 @@ export type BuildBlueskyPostInput = Readonly<{
   sensitive: boolean;
   postUrl: string;
   images: readonly BlueskyImageInput[];
-  unavailableImageCount?: number;
+  unavailableImageUrls?: readonly string[];
   linkPreview?: BlueskyLinkPreviewInput;
   replyTo: BlueskyReplyContext;
   createdAt: Instant;
@@ -66,10 +67,10 @@ const fits = (text: string): boolean =>
 
 export const selectBlueskyImages = (
   images: readonly BlueskyImageInput[],
-): Readonly<{ kept: readonly BlueskyImageInput[]; droppedCount: number }> => {
+): Readonly<{ kept: readonly BlueskyImageInput[]; dropped: readonly BlueskyImageInput[] }> => {
   const small = images.filter((image) => image.bytes.byteLength <= BLUESKY_MAX_IMAGE_BYTES);
   const kept = small.slice(0, BLUESKY_MAX_IMAGES);
-  return { kept, droppedCount: images.length - kept.length };
+  return { kept, dropped: images.filter((image) => !kept.includes(image)) };
 };
 
 const toFacet = (text: string, link: TextLink): BlueskyFacet => ({
@@ -105,20 +106,32 @@ const truncateWithUrl = (
   };
 };
 
+const appendUrls = (
+  parsed: Readonly<{ text: string; links: readonly TextLink[] }>,
+  urls: readonly string[],
+): Readonly<{ text: string; links: readonly TextLink[] }> => {
+  let text = parsed.text;
+  const links = [...parsed.links];
+  for (const url of urls) {
+    text = text === '' ? url : `${text}\n${url}`;
+    links.push({ start: text.length - url.length, end: text.length, uri: url });
+  }
+  return { text, links };
+};
+
+// 添付できなかった画像は、Bluesky 上で直接開けるよう画像そのものの URL を本文に付ける。
+// 本文自体が収まらないときや、画像 URL を付けると収まらないときは、全文と画像を見られる投稿 URL にする。
 const composeText = (
   html: string,
   postUrl: string,
-  needsPostUrl: boolean,
+  droppedImageUrls: readonly string[],
 ): Readonly<{ text: string; links: readonly TextLink[] }> => {
   const parsed = htmlToTextWithLinks(html);
   if (!fits(parsed.text)) return truncateWithUrl(parsed.text, parsed.links, postUrl);
-  if (!needsPostUrl) return parsed;
-  const text = parsed.text === '' ? postUrl : `${parsed.text}\n${postUrl}`;
-  if (!fits(text)) return truncateWithUrl(parsed.text, parsed.links, postUrl);
-  return {
-    text,
-    links: [...parsed.links, { start: text.length - postUrl.length, end: text.length, uri: postUrl }],
-  };
+  if (droppedImageUrls.length === 0) return parsed;
+  const appended = appendUrls(parsed, droppedImageUrls);
+  if (!fits(appended.text)) return truncateWithUrl(parsed.text, parsed.links, postUrl);
+  return appended;
 };
 
 export const buildBlueskyPostDraft = (
@@ -128,12 +141,11 @@ export const buildBlueskyPostDraft = (
   if (skipReason !== undefined) return Result.err(skipReason);
   if (input.replyTo.kind === 'waiting') return Result.err('reply_to_unsent');
 
-  const { kept, droppedCount } = selectBlueskyImages(input.images);
-  const { text, links } = composeText(
-    input.html,
-    input.postUrl,
-    droppedCount + (input.unavailableImageCount ?? 0) > 0,
-  );
+  const { kept, dropped } = selectBlueskyImages(input.images);
+  const { text, links } = composeText(input.html, input.postUrl, [
+    ...dropped.map((image) => image.url),
+    ...(input.unavailableImageUrls ?? []),
+  ]);
   const preview = kept.length === 0 ? input.linkPreview : undefined;
   const thumb = preview?.thumb !== undefined && preview.thumb.bytes.byteLength <= BLUESKY_MAX_THUMB_BYTES
     ? preview.thumb

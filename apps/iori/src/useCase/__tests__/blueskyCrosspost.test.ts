@@ -325,11 +325,11 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(t.created).toEqual([]);
   });
 
-  it('R2 の画像を alt つきで送り、2,000,000 bytes を超える画像は外して投稿 URL を付ける', async () => {
+  it('R2 の画像を alt つきで送り、1,000,000 bytes を超える画像は外して画像の URL を付ける', async () => {
     const t = setup();
     const post = t.addPost({ content: '<p>写真</p>' });
     t.addStoredImage(post.postId, 'image/png', new Uint8Array([1, 2, 3]), '猫');
-    t.addStoredImage(post.postId, 'image/jpeg', new Uint8Array(2_000_001), 'big');
+    const bigImageId = t.addStoredImage(post.postId, 'image/jpeg', new Uint8Array(1_000_001), 'big');
     t.sqlite.prepare('UPDATE post_images SET createdAt = createdAt + 1 WHERE altText = ?').run('big');
 
     await run(t.schedule.run({ postId: post.postId }));
@@ -338,14 +338,14 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(t.uploaded).toHaveLength(1);
     expect(Array.from(t.uploaded[0]!.bytes)).toEqual([1, 2, 3]);
     expect(t.uploaded[0]?.mimeType).toBe('image/png');
-    expect(t.created[0]?.text).toBe(`写真\n${post.uri}`);
+    expect(t.created[0]?.text).toBe(`写真\nhttps://iori.test/uploads/${bigImageId}.png`);
     expect(t.created[0]?.embed).toMatchObject({
       $type: 'app.bsky.embed.images',
       images: [{ alt: '猫', image: { ref: { $link: 'blob1' }, mimeType: 'image/png', size: 3 } }],
     });
   });
 
-  it('R2 から読めない画像は外して投稿 URL を付ける', async () => {
+  it('R2 から読めない画像は外して画像の URL を付ける', async () => {
     const t = setup();
     const post = t.addPost({ content: '<p>写真</p>' });
     t.seed.addImage(post.postId, 'https://remote.example/elsewhere.png');
@@ -353,7 +353,7 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     await run(t.schedule.run({ postId: post.postId }));
     await t.flush();
 
-    expect(t.created[0]?.text).toBe(`写真\n${post.uri}`);
+    expect(t.created[0]?.text).toBe('写真\nhttps://remote.example/elsewhere.png');
     expect(t.created[0]?.embed).toBeUndefined();
   });
 
