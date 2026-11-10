@@ -4,7 +4,7 @@ import type { Status, Translation } from '../../adaptor/mastodon/entities.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { safeAbsoluteUrl, safeUrl } from '../../helper/safeUrl.ts';
 import { isMastodonApiError, translate } from '../api/mastodonClient.ts';
-import { accountHref, displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
+import { accountHandle, accountHref, displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
 import { translationErrorMessage } from '../api/translation.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
@@ -211,6 +211,8 @@ export const PostView = (
   const canLike = onLike && !post.favourited && !isLiking;
 
   const logoUrl = safeUrl(post.account.avatar);
+  const authorHandle = accountHandle(post.account);
+  const authorDisplayName = post.account.display_name.trim() === '' ? post.account.username : post.account.display_name;
 
   return (
     <article
@@ -283,9 +285,12 @@ export const PostView = (
             </a>
             <a
               href={accountHref(post.account)}
-              class='font-semibold text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+              class='min-w-0 flex flex-wrap items-baseline gap-x-2 group'
             >
-              @{post.account.username}
+              <span class='font-semibold text-charcoal dark:text-white group-hover:text-terracotta dark:group-hover:text-terracotta-light transition-colors truncate'>
+                {authorDisplayName}
+              </span>
+              <span class='text-sm text-charcoal-light dark:text-gray-400 truncate'>@{authorHandle}</span>
             </a>
             <span class='text-warm-gray-dark dark:text-gray-500'>·</span>
             <a
