@@ -74,7 +74,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       const object = await deps.uploads.get(imageId.val);
       if (object === undefined) return undefined;
       const bytes = new Uint8Array(await new Response(object.body as unknown as BodyInit).arrayBuffer());
-      return { bytes, mimeType: object.contentType, alt: image.altText };
+      return { bytes, mimeType: object.contentType, alt: image.altText, url: url.href };
     } catch {
       return undefined;
     }
@@ -109,6 +109,9 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       .sort((a, b) => a.createdAt - b.createdAt);
     const loaded = await Promise.all(storedImages.map(loadImage));
     const images = loaded.filter((image) => image !== undefined);
+    const unavailableImageUrls = storedImages
+      .filter((stored, index) => loaded[index] === undefined && URL.canParse(stored.url, deps.origin))
+      .map((stored) => new URL(stored.url, deps.origin).href);
 
     const preview = Result.unsafeUnwrap(await deps.linkPreviewsResolver.resolve(postId))[0];
     let linkPreview: BlueskyLinkPreviewInput | undefined;
@@ -131,7 +134,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       sensitive: post.sensitive,
       postUrl,
       images,
-      unavailableImageCount: storedImages.length - images.length,
+      unavailableImageUrls,
       linkPreview,
       replyTo,
       createdAt: post.createdAt,

@@ -20,10 +20,13 @@ const segmenter = new Intl.Segmenter('und', { granularity: 'grapheme' });
 const graphemeCount = (text: string) => Array.from(segmenter.segment(text)).length;
 const utf8 = (text: string) => new TextEncoder().encode(text);
 
+const imageUrl = (alt: string | null) => `https://iori.example/uploads/${alt ?? 'image'}.png`;
+
 const image = (size: number, alt: string | null = null): BlueskyImageInput => ({
   bytes: new Uint8Array(size),
   mimeType: 'image/png',
   alt,
+  url: imageUrl(alt),
 });
 
 const input = (overrides: Partial<BuildBlueskyPostInput> = {}): BuildBlueskyPostInput => ({
@@ -122,14 +125,21 @@ describe('buildBlueskyPostDraft の切り詰め', () => {
 });
 
 describe('buildBlueskyPostDraft の画像', () => {
-  it('2,000,000 bytes を超える画像を外し、外した画像があれば本文末尾に投稿 URL を付ける', () => {
+  it('1,000,000 bytes を超える画像を外し、外した画像の URL を本文末尾に付ける', () => {
     const draft = build({
       images: [image(10, 'small'), image(BLUESKY_MAX_IMAGE_BYTES + 1, 'big'), image(BLUESKY_MAX_IMAGE_BYTES, 'edge')],
     });
     expect(draft.images.map((item) => item.alt)).toEqual(['small', 'edge']);
-    expect(draft.text).toBe(`hello\n${POST_URL}`);
+    expect(draft.text).toBe(`hello\n${imageUrl('big')}`);
     const last = draft.facets.at(-1)!;
-    expect(sliceBytes(draft.text, last.index.byteStart, last.index.byteEnd)).toBe(POST_URL);
+    expect(sliceBytes(draft.text, last.index.byteStart, last.index.byteEnd)).toBe(imageUrl('big'));
+    expect(last.features[0].uri).toBe(imageUrl('big'));
+  });
+
+  it('外した画像が複数あれば、それぞれの URL を行ごとに付ける', () => {
+    const draft = build({ images: [image(BLUESKY_MAX_IMAGE_BYTES + 1, 'a'), image(BLUESKY_MAX_IMAGE_BYTES + 1, 'b')] });
+    expect(draft.text).toBe(`hello\n${imageUrl('a')}\n${imageUrl('b')}`);
+    expect(draft.facets.map((facet) => facet.features[0].uri)).toEqual([imageUrl('a'), imageUrl('b')]);
   });
 
   it('外した画像が無ければ URL を付けない', () => {
@@ -137,18 +147,19 @@ describe('buildBlueskyPostDraft の画像', () => {
     expect(draft.text).toBe('hello');
   });
 
-  it('本文が空なら URL だけにする', () => {
-    const draft = build({ html: '', images: [image(BLUESKY_MAX_IMAGE_BYTES + 1)] });
-    expect(draft.text).toBe(POST_URL);
+  it('本文が空なら画像の URL だけにする', () => {
+    const draft = build({ html: '', images: [image(BLUESKY_MAX_IMAGE_BYTES + 1, 'big')] });
+    expect(draft.text).toBe(imageUrl('big'));
   });
 
-  it('切り詰めで URL が付いているときは重複させない', () => {
-    const draft = build({ html: `<p>${'あ'.repeat(400)}</p>`, images: [image(BLUESKY_MAX_IMAGE_BYTES + 1)] });
+  it('本文が収まらないときは画像の URL ではなく投稿 URL を 1 つだけ付ける', () => {
+    const draft = build({ html: `<p>${'あ'.repeat(400)}</p>`, images: [image(BLUESKY_MAX_IMAGE_BYTES + 1, 'big')] });
     expect(draft.text.split(POST_URL)).toHaveLength(2);
+    expect(draft.text).not.toContain(imageUrl('big'));
     expect(draft.facets.filter((facet) => facet.features[0].uri === POST_URL)).toHaveLength(1);
   });
 
-  it('画像の URL を付けると上限を超える本文は、切り詰めの形にする', () => {
+  it('画像の URL を付けると上限を超える本文は、投稿 URL での切り詰めの形にする', () => {
     const draft = build({ html: `<p>${'a'.repeat(290)}</p>`, images: [image(BLUESKY_MAX_IMAGE_BYTES + 1)] });
     expect(graphemeCount(draft.text)).toBeLessThanOrEqual(BLUESKY_MAX_GRAPHEMES);
     expect(draft.text.endsWith(`…\n${POST_URL}`)).toBe(true);
@@ -158,7 +169,7 @@ describe('buildBlueskyPostDraft の画像', () => {
     const images = [1, 2, 3, 4, 5].map((n) => image(10, `alt${n}`));
     const draft = build({ images });
     expect(draft.images.map((item) => item.alt)).toEqual(['alt1', 'alt2', 'alt3', 'alt4']);
-    expect(draft.text).toBe(`hello\n${POST_URL}`);
+    expect(draft.text).toBe(`hello\n${imageUrl('alt5')}`);
     const blobs = draft.images.map((_, index) => ({
       $type: 'blob' as const,
       ref: { $link: `cid${index}` },
@@ -180,13 +191,14 @@ describe('buildBlueskyPostDraft の画像', () => {
     });
   });
 
-  it('取得できなかった画像も外した扱いにして URL を付ける', () => {
-    const draft = build({ unavailableImageCount: 1 });
-    expect(draft.text).toBe(`hello\n${POST_URL}`);
+  it('取得できなかった画像も外した扱いにして画像の URL を付ける', () => {
+    const draft = build({ unavailableImageUrls: [imageUrl('missing')] });
+    expect(draft.text).toBe(`hello\n${imageUrl('missing')}`);
   });
 
-  it('selectBlueskyImages は残した画像と外した数を返す', () => {
-    expect(selectBlueskyImages([image(1), image(BLUESKY_MAX_IMAGE_BYTES + 1)])).toMatchObject({ droppedCount: 1 });
+  it('selectBlueskyImages は残した画像と外した画像を返す', () => {
+    const big = image(BLUESKY_MAX_IMAGE_BYTES + 1, 'big');
+    expect(selectBlueskyImages([image(1), big]).dropped).toEqual([big]);
   });
 });
 
@@ -226,10 +238,10 @@ describe('buildBlueskyPostDraft の linkPreview', () => {
     expect(draft.external).toEqual({ uri: preview.url, title: preview.url, description: '' });
   });
 
-  it('画像をすべて外したときは external にして URL も付ける', () => {
-    const draft = build({ linkPreview: preview, images: [image(BLUESKY_MAX_IMAGE_BYTES + 1)] });
+  it('画像をすべて外したときは external にして画像の URL も付ける', () => {
+    const draft = build({ linkPreview: preview, images: [image(BLUESKY_MAX_IMAGE_BYTES + 1, 'big')] });
     expect(draft.external).toBeDefined();
-    expect(draft.text).toBe(`hello\n${POST_URL}`);
+    expect(draft.text).toBe(`hello\n${imageUrl('big')}`);
   });
 });
 
