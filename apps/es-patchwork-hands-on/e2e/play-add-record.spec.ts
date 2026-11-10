@@ -318,6 +318,72 @@ test.describe('追体験の画面 /play/add-record/', () => {
     );
   });
 
+  test('空欄を残したままページを開き直しても、visits の最初の行が表示される', async ({ page }) => {
+    await open(page);
+    await templateButton(page).click();
+    await expect(page.locator('.cm-content')).toContainText('/* event_name */');
+    await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), storageKey)).toContain(
+      '/* event_name */',
+    );
+    await open(page);
+    await page.getByRole('button', { name: '最初のコードに戻す' }).click();
+    await expect(visitStatus(page)).toHaveText('reserved');
+  });
+
+  test('一度実行した後に構文エラーになると、前回の実行結果を消す', async ({ page }) => {
+    await open(page);
+    await runButton(page).click();
+    await expect(visitStatus(page)).toHaveText('cancelled');
+    await templateButton(page).click();
+    await expect(page.locator('.cm-content')).toContainText('/* event_name */');
+    await runButton(page).click();
+    await expect(message(page).getByRole('alert')).toContainText('コードを最後まで実行できませんでした');
+    await expect(visitStatus(page)).toHaveText('reserved');
+    await expect(page.locator('[data-role="visits-badge"]')).not.toHaveText('実行後');
+    await expect(page.locator('[data-role="visits-caption"]')).not.toHaveText(
+      'status が reserved から cancelled に変わりました。',
+    );
+    await expect(answer(page, 'who')).toHaveText('まだ実行していません');
+  });
+
+  test('キャンセルを押さずにテストを実行すると、キャンセルを押すよう案内する', async ({ page }) => {
+    await open(page);
+    await page.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
+    await testsButton(page).click();
+    await expect(summary(page)).toHaveText('pass 7 / fail 1');
+    await expect(next(page)).toContainText('「ポチの来院をキャンセルする」を押して');
+    await expect(next(page)).not.toContainText(missing);
+
+    await runButton(page).click();
+    await expect(visitStatus(page)).toHaveText('cancelled');
+    await testsButton(page).click();
+    await expect(next(page)).toContainText(missing);
+  });
+
+  test('status も business_events も変わらなければ、その通りに案内する', async ({ page }) => {
+    await open(page);
+    await replaceCode(page, 'export const cancelVisit = (db, input) => {};');
+    await runButton(page).click();
+    await expect(visitStatus(page)).toHaveText('reserved');
+    await expect(next(page)).toContainText('visits の status も business_events も変わっていません。');
+  });
+
+  test('記録の INSERT が失敗すると、status が reserved のままであることを案内する', async ({ page }) => {
+    await open(page);
+    await templateButton(page).click();
+    await expect(page.locator('.cm-content')).toContainText('/* event_name */');
+    await page.keyboard.type('null');
+    for (const value of blankValues.slice(1)) {
+      await page.keyboard.press('Tab');
+      await page.keyboard.type(value);
+    }
+    await runButton(page).click();
+    await expect(message(page).getByRole('alert')).toContainText('cancelVisit がエラーを出しました');
+    await expect(visitStatus(page)).toHaveText('reserved');
+    await expect(next(page)).toContainText('visits の status は reserved のままです。');
+    await expect(next(page)).toContainText('記録を書き込めないときは、UPDATE も一緒に取り消されます。');
+  });
+
   test('動きはボタンを押したときだけで、1 秒以内に終わる', async ({ page }) => {
     await open(page);
     expect(await runningAnimations(page)).toBe(0);

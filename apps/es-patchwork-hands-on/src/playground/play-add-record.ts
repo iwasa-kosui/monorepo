@@ -113,6 +113,7 @@ const mount = (root: HTMLElement): void => {
   let busy = false;
   let hasResult = false;
   let templateShown = false;
+  let answersShown = false;
 
   const saved = loadEdits(config.exerciseId)[editedFile];
   const view = createEditorView(
@@ -272,6 +273,7 @@ const mount = (root: HTMLElement): void => {
   };
 
   const renderAnswers = (rows: Row[] | null): void => {
+    answersShown = rows !== null;
     const filled = rows === null ? null : answersOf(rows);
     for (const cell of answerCells) {
       const value = query<HTMLElement>(cell, '[data-role="answer-value"]');
@@ -296,11 +298,21 @@ const mount = (root: HTMLElement): void => {
     renderEvents(result.before.business_events, shown.business_events, phase);
   };
 
-  const resetOutputs = (initial: RunResult | null): void => {
+  const clearRunResult = (initial: RunResult | null): void => {
     if (initial !== null) {
       renderTables(initial, 'before');
     }
     renderAnswers(null);
+  };
+
+  const statusChanged = (result: RunResult): boolean => {
+    const target = result.after.visits.find((row) => row.id === visitId) ?? result.after.visits[0];
+    const earlier = result.before.visits.find((row) => row.id === target?.id);
+    return target !== undefined && earlier !== undefined && earlier.status !== target.status;
+  };
+
+  const resetOutputs = (initial: RunResult | null): void => {
+    clearRunResult(initial);
     summary.textContent = notRunText;
     summary.dataset.result = '';
     failed.replaceChildren();
@@ -326,7 +338,7 @@ const mount = (root: HTMLElement): void => {
     busy = true;
     updateControls();
     try {
-      const result = parseResult(await runtime.runCode(filesWith(), 'play-initial.ts'));
+      const result = parseResult(await runtime.runCode(config.files, 'play-initial.ts'));
       if (result !== null) {
         initialResult = result;
         hasResult = true;
@@ -350,11 +362,13 @@ const mount = (root: HTMLElement): void => {
     try {
       const outcome = await runtime.runCode(filesWith(), 'play-cancel.ts');
       if (outcome.error !== null) {
+        clearRunResult(initialResult);
         showError('コードを最後まで実行できませんでした', outcome.error);
         return;
       }
       const result = parseResult(outcome);
       if (result === null) {
+        clearRunResult(initialResult);
         showError('実行の結果を読み取れませんでした', outcome.logs.map((line) => line.text).join('\n'));
         return;
       }
@@ -363,6 +377,13 @@ const mount = (root: HTMLElement): void => {
       renderAnswers(result.after.business_events);
       if (result.error !== null) {
         showError('cancelVisit がエラーを出しました', result.error);
+        if (!statusChanged(result)) {
+          say([
+            'visits の status は reserved のままです。',
+            ...(code().includes(templateMarker) ? ['記録を書き込めないときは、UPDATE も一緒に取り消されます。'] : []),
+            'エラーの文を読んでコードを直し、もう一度押します。',
+          ]);
+        }
         return;
       }
       if (result.after.business_events.length > result.before.business_events.length) {
@@ -378,7 +399,9 @@ const mount = (root: HTMLElement): void => {
         ]);
       } else {
         say([
-          'visits の status は変わりましたが、business_events は増えていません。',
+          statusChanged(result)
+            ? 'visits の status は変わりましたが、business_events は増えていません。'
+            : 'visits の status も business_events も変わっていません。',
           code().includes(templateMarker)
             ? 'コードを見直して、もう一度押します。'
             : '「記録の雛形を UPDATE の次の行に入れる」を押します。',
@@ -426,10 +449,17 @@ const mount = (root: HTMLElement): void => {
       if (failures.length === 0) {
         say(['すべてのテストが成功しました。']);
       } else if (passed === 7 && failures.length === 1 && failures[0]?.name === pochiTest) {
-        say([
-          `残りの 1 件は「${pochiTest}」です。`,
-          `答えの欄の${quoted(['誰が', 'なぜ'])}が「${missingText}」なのと対応しています。`,
-        ]);
+        say(
+          answersShown
+            ? [
+              `残りの 1 件は「${pochiTest}」です。`,
+              `答えの欄の${quoted(['誰が', 'なぜ'])}が「${missingText}」なのと対応しています。`,
+            ]
+            : [
+              `残りの 1 件は「${pochiTest}」です。`,
+              `「ポチの来院をキャンセルする」を押して、答えの欄の${quoted(['誰が', 'なぜ'])}を確かめます。`,
+            ],
+        );
       } else {
         say(['テストの結果に、失敗したテストの名前を出しています。', 'コードを直して、もう一度押せます。']);
       }
