@@ -1,4 +1,6 @@
 import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
+import { BLUESKY_ACCOUNT_ID_PREFIX } from '../../adaptor/mastodon/toBlueskyAccount.ts';
+import { safeUrl } from '../../helper/safeUrl.ts';
 
 export const displayStatus = (status: Status): Status => status.reblog ?? status;
 
@@ -8,7 +10,7 @@ export const remoteUserPathOf = (account: Account): string | undefined =>
   isLocalAccount(account) ? undefined : `/remote-users/${account.id}`;
 
 export const accountHandle = (account: Account): string => {
-  if (!isLocalAccount(account)) return account.acct;
+  if (account.id.startsWith(BLUESKY_ACCOUNT_ID_PREFIX) || !isLocalAccount(account)) return account.acct;
   try {
     return `${account.acct}@${new URL(account.uri).host}`;
   } catch {
@@ -16,8 +18,10 @@ export const accountHandle = (account: Account): string => {
   }
 };
 
-export const accountHref = (account: Account): string =>
-  isLocalAccount(account) ? `/users/${account.username}` : `/remote-users/${account.id}`;
+export const accountHref = (account: Account): string => {
+  if (account.id.startsWith(BLUESKY_ACCOUNT_ID_PREFIX)) return safeUrl(account.url) ?? '#';
+  return isLocalAccount(account) ? `/users/${account.username}` : `/remote-users/${account.id}`;
+};
 
 export const statusHref = (status: Status): string =>
   isLocalAccount(status.account) ? `/users/${status.account.username}/posts/${status.id}` : status.uri;

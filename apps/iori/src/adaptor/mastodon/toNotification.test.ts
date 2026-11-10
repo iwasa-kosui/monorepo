@@ -13,7 +13,7 @@ import {
   toGroupedNotificationId,
   toNotification,
   toStrictlyDescending,
-  triggerActorIdOf,
+  triggerOf,
 } from './toNotification.ts';
 import { toRelationship } from './toRelationship.ts';
 
@@ -90,7 +90,7 @@ describe('toNotification', () => {
     expect(NotificationSchema.safeParse(result).success).toBe(true);
     expect(result).toMatchObject({ id: notification.notificationId, type: 'reblog' });
     expect(result).not.toHaveProperty('iori');
-    expect(triggerActorIdOf(notification)).toBe(reposterActorId);
+    expect(triggerOf(notification)).toEqual({ kind: 'actor', actorId: reposterActorId });
     expect(targetPostIdOf(notification)).toBe(repostedPostId);
   });
 
@@ -126,23 +126,125 @@ describe('toNotification', () => {
   });
 });
 
+describe('Bluesky notifications', () => {
+  const author = { did: 'did:plc:alice', handle: 'alice.bsky.social', displayName: null, avatarUrl: null };
+  const blueskyBase = { ...base, blueskyUri: 'at://did:plc:alice/app.bsky.feed.like/3k1', author };
+  const subjectUri = 'at://did:plc:me/app.bsky.feed.post/3kpost';
+
+  it('maps blueskyLike to favourite with a link to the liked post', () => {
+    const targetPostId = PostId.generate();
+    const notification: Notification = { ...blueskyBase, type: 'blueskyLike', subjectUri, targetPostId };
+
+    const result = toNotification(notification, options);
+
+    expect(NotificationSchema.safeParse(result).success).toBe(true);
+    expect(result).toMatchObject({
+      type: 'favourite',
+      iori: { bluesky: { reason: 'like', url: 'https://bsky.app/profile/did:plc:me/post/3kpost' } },
+    });
+    expect(triggerOf(notification)).toEqual({ kind: 'bluesky', author });
+    expect(targetPostIdOf(notification)).toBe(targetPostId);
+  });
+
+  it('maps blueskyRepost to reblog and has no target post when it is not matched', () => {
+    const notification: Notification = { ...blueskyBase, type: 'blueskyRepost', subjectUri, targetPostId: null };
+
+    const result = toNotification(notification, options);
+
+    expect(NotificationSchema.safeParse(result).success).toBe(true);
+    expect(result.type).toBe('reblog');
+    expect(targetPostIdOf(notification)).toBeUndefined();
+  });
+
+  it('maps blueskyFollow to follow with a link to the profile', () => {
+    const notification: Notification = { ...blueskyBase, type: 'blueskyFollow' };
+
+    const result = toNotification(notification, options);
+
+    expect(NotificationSchema.safeParse(result).success).toBe(true);
+    expect(result).toMatchObject({
+      type: 'follow',
+      iori: { bluesky: { reason: 'follow', url: 'https://bsky.app/profile/alice.bsky.social' } },
+    });
+    expect(targetPostIdOf(notification)).toBeUndefined();
+  });
+
+  it('maps blueskyMention to mention with the text and a link to the notification post itself', () => {
+    const notification: Notification = {
+      ...blueskyBase,
+      blueskyUri: 'at://did:plc:alice/app.bsky.feed.post/3kreply',
+      type: 'blueskyMention',
+      reason: 'reply',
+      subjectUri,
+      targetPostId: PostId.generate(),
+      text: 'hello',
+    };
+
+    const result = toNotification(notification, options);
+    expect(targetPostIdOf(notification)).toBeUndefined();
+
+    expect(NotificationSchema.safeParse(result).success).toBe(true);
+    expect(result).toMatchObject({
+      type: 'mention',
+      iori: { bluesky: { reason: 'reply', url: 'https://bsky.app/profile/did:plc:alice/post/3kreply', text: 'hello' } },
+    });
+  });
+
+  it('links a notification from a handle.invalid author to the profile by did', () => {
+    const result = toNotification({
+      ...blueskyBase,
+      type: 'blueskyFollow',
+      author: { ...author, handle: 'handle.invalid' },
+    }, options);
+
+    expect(result.iori?.bluesky?.url).toBe('https://bsky.app/profile/did:plc:alice');
+  });
+
+  it('falls back to the profile when the subject is not a post', () => {
+    const result = toNotification({
+      ...blueskyBase,
+      type: 'blueskyLike',
+      subjectUri: 'at://did:plc:me/app.bsky.graph.starterpack/3kpack',
+      targetPostId: null,
+    }, options);
+
+    expect(result.iori?.bluesky?.url).toBe('https://bsky.app/profile/alice.bsky.social');
+  });
+});
+
 describe('selectDomainTypes', () => {
   const select = (types: string[], excludeTypes: string[] = []) => selectDomainTypes({ types, excludeTypes });
 
   it('returns like, reply, follow and repost by default and leaves emojiReact out', () => {
-    expect(select([])).toEqual(['like', 'reply', 'follow', 'repost']);
+    expect(select([])).toEqual([
+      'like',
+      'blueskyLike',
+      'reply',
+      'blueskyMention',
+      'follow',
+      'blueskyFollow',
+      'repost',
+      'blueskyRepost',
+    ]);
   });
 
   it('returns emojiReact only when iori:emoji_reaction is named', () => {
     expect(select(['iori:emoji_reaction'])).toEqual(['emojiReact']);
-    expect(select(['favourite', 'iori:emoji_reaction'])).toEqual(['like', 'emojiReact']);
+    expect(select(['favourite', 'iori:emoji_reaction'])).toEqual(['like', 'blueskyLike', 'emojiReact']);
   });
 
   it('ignores unknown values and applies the exclusions', () => {
-    expect(select(['bogus'])).toEqual(['like', 'reply', 'follow', 'repost']);
-    expect(select(['favourite', 'bogus'])).toEqual(['like']);
-    expect(select([], ['follow', 'bogus'])).toEqual(['like', 'reply', 'repost']);
-    expect(select(['reblog'])).toEqual(['repost']);
+    expect(select(['bogus'])).toEqual(select([]));
+    expect(select(['favourite', 'bogus'])).toEqual(['like', 'blueskyLike']);
+    expect(select([], ['follow', 'bogus'])).toEqual([
+      'like',
+      'blueskyLike',
+      'reply',
+      'blueskyMention',
+      'repost',
+      'blueskyRepost',
+    ]);
+    expect(select(['reblog'])).toEqual(['repost', 'blueskyRepost']);
     expect(select(['status'])).toEqual([]);
   });
 });

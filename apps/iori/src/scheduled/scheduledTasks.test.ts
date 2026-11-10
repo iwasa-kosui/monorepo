@@ -158,6 +158,11 @@ describe('scheduledTasks', () => {
     expect(tasks.find((task) => task.name === 'embedOwnInterestSources')?.after).toBe('syncOwnInterestSources');
   });
 
+  it('runs collectBlueskyNotifications after collectBlueskyTimeline in the every-minute cron', () => {
+    const tasks = scheduledTasks['* * * * *']!;
+    expect(tasks.find((task) => task.name === 'collectBlueskyNotifications')?.after).toBe('collectBlueskyTimeline');
+  });
+
   it('registers archiveDomainEvents in the 19:00 daily cron', () => {
     expect(scheduledTasks['0 19 * * *']?.map((task) => task.name)).toEqual(['archiveDomainEvents']);
   });

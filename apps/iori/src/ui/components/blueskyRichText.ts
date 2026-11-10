@@ -1,24 +1,15 @@
 import type { BlueskyTimelineFacet } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
+import { blueskyProfileUrlOfActor, BSKY_APP_URL } from '../../helper/blueskyUrl.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 
 export type BlueskyTextSegment = Readonly<{ text: string; href: string | undefined }>;
-
-const BSKY_APP_URL = 'https://bsky.app';
-const atUriPattern = /^at:\/\/([^/]+)\/[^/]+\/([^/]+)$/;
-const didPattern = /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/;
-const handlePattern = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
-
-const profileUrlOf = (actor: string): string | undefined =>
-  didPattern.test(actor) || (handlePattern.test(actor) && actor !== 'handle.invalid')
-    ? `${BSKY_APP_URL}/profile/${actor}`
-    : undefined;
 
 const hrefOf = (facet: BlueskyTimelineFacet): string | undefined => {
   switch (facet.feature.type) {
     case 'link':
       return safeAbsoluteUrl(facet.feature.uri);
     case 'mention':
-      return profileUrlOf(facet.feature.did);
+      return blueskyProfileUrlOfActor(facet.feature.did);
     case 'tag':
       return `${BSKY_APP_URL}/hashtag/${encodeURIComponent(facet.feature.tag)}`;
   }
@@ -52,17 +43,4 @@ export const segmentBlueskyText = (
   }
   if (cursor < bytes.length) segments.push({ text: decoder.decode(bytes.slice(cursor)), href: undefined });
   return segments;
-};
-
-export const blueskyPostUrl = (did: string, uri: string): string | undefined => {
-  const rkey = atUriPattern.exec(uri)?.[2];
-  const profileUrl = profileUrlOf(did);
-  return rkey === undefined || profileUrl === undefined
-    ? undefined
-    : `${profileUrl}/post/${encodeURIComponent(rkey)}`;
-};
-
-export const blueskyPostUrlOfUri = (uri: string): string | undefined => {
-  const did = atUriPattern.exec(uri)?.[1];
-  return did === undefined ? undefined : blueskyPostUrl(did, uri);
 };

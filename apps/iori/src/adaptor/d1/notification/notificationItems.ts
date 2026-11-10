@@ -8,6 +8,7 @@ import { PostId } from '../../../domain/post/postId.ts';
 import { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import {
+  notificationBlueskyTable,
   notificationEmojiReactsTable,
   notificationFollowsTable,
   notificationLikesTable,
@@ -17,6 +18,44 @@ import {
 } from '../schema.ts';
 
 type NotificationRow = typeof notificationsTable.$inferSelect;
+type BlueskyRow = typeof notificationBlueskyTable.$inferSelect;
+
+const blueskyTypes: ReadonlyArray<string> = ['blueskyLike', 'blueskyRepost', 'blueskyFollow', 'blueskyMention'];
+const mentionReasons: ReadonlyArray<string> = ['mention', 'reply', 'quote'];
+
+const toBlueskyNotification = (
+  base: Readonly<{ notificationId: NotificationId; recipientUserId: UserId; isRead: boolean }>,
+  type: string,
+  row: BlueskyRow,
+): Notification | undefined => {
+  const common = {
+    ...base,
+    blueskyUri: row.blueskyUri,
+    author: {
+      did: row.authorDid,
+      handle: row.authorHandle,
+      displayName: row.authorDisplayName,
+      avatarUrl: row.authorAvatar,
+    },
+  };
+  const targetPostId = row.targetPostId === null ? null : PostId.orThrow(row.targetPostId);
+  if (type === 'blueskyFollow') return { ...common, type };
+  if (type === 'blueskyMention') {
+    return mentionReasons.includes(row.reason)
+      ? {
+        ...common,
+        type,
+        reason: row.reason as 'mention' | 'reply' | 'quote',
+        subjectUri: row.subjectUri,
+        targetPostId,
+        text: row.text ?? '',
+      }
+      : undefined;
+  }
+  return row.subjectUri === null || (type !== 'blueskyLike' && type !== 'blueskyRepost')
+    ? undefined
+    : { ...common, type, subjectUri: row.subjectUri, targetPostId };
+};
 
 const rowsByNotificationId = async <T extends { notificationId: string }>(
   ids: ReadonlyArray<string>,
@@ -30,7 +69,7 @@ export const loadNotificationItems = async (
 ): Promise<NotificationItem[]> => {
   const idsOf = (type: Notification['type']) =>
     rows.filter((row) => row.type === type).map((row) => row.notificationId);
-  const [likes, follows, reacts, replies, reposts] = await Promise.all([
+  const [likes, follows, reacts, replies, reposts, blueskyRows] = await Promise.all([
     rowsByNotificationId(
       idsOf('like'),
       (ids) => db.select().from(notificationLikesTable).where(inArray(notificationLikesTable.notificationId, ids)),
@@ -52,6 +91,10 @@ export const loadNotificationItems = async (
       idsOf('repost'),
       (ids) => db.select().from(notificationRepostsTable).where(inArray(notificationRepostsTable.notificationId, ids)),
     ),
+    rowsByNotificationId(
+      rows.filter((row) => blueskyTypes.includes(row.type)).map((row) => row.notificationId),
+      (ids) => db.select().from(notificationBlueskyTable).where(inArray(notificationBlueskyTable.notificationId, ids)),
+    ),
   ]);
 
   return rows.flatMap((row): NotificationItem[] => {
@@ -69,6 +112,11 @@ export const loadNotificationItems = async (
     const react = reacts.get(row.notificationId);
     const reply = replies.get(row.notificationId);
     const repost = reposts.get(row.notificationId);
+    const blueskyRow = blueskyRows.get(row.notificationId);
+    if (blueskyRow !== undefined && blueskyTypes.includes(row.type)) {
+      const bluesky = toBlueskyNotification(base, row.type, blueskyRow);
+      return bluesky === undefined ? [] : toItem(bluesky);
+    }
     if (row.type === 'like' && like !== undefined) {
       return toItem({
         ...base,

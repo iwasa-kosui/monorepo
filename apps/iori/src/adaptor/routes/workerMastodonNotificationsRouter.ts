@@ -2,7 +2,9 @@ import { type Context, Hono } from 'hono';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
+import type { Instant } from '../../domain/instant/instant.ts';
 import type {
+  Notification as DomainNotification,
   NotificationCountResolverSinceMarker,
   NotificationItem,
   NotificationResolverByUserIdAndId,
@@ -15,6 +17,7 @@ import type { PostId } from '../../domain/post/postId.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import type { ClearNotificationsUseCase } from '../../useCase/clearNotifications.ts';
 import type { DismissNotificationUseCase } from '../../useCase/dismissNotification.ts';
+import { defaultImageUrls } from '../mastodon/defaultImages.ts';
 import type {
   Account,
   GroupedNotificationsResults,
@@ -25,13 +28,15 @@ import type {
   V1NotificationPolicy,
 } from '../mastodon/entities.ts';
 import type { StatusAssembler } from '../mastodon/statusAssembler.ts';
+import { toBlueskyAccount } from '../mastodon/toBlueskyAccount.ts';
+import { toBlueskyStatus } from '../mastodon/toBlueskyStatus.ts';
 import {
   selectDomainTypes,
   targetPostIdOf,
   toGroupedNotificationId,
   toNotification,
   toStrictlyDescending,
-  triggerActorIdOf,
+  triggerOf,
 } from '../mastodon/toNotification.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import {
@@ -90,6 +95,27 @@ const uniqueBy = <T>(items: ReadonlyArray<T>, keyOf: (item: T) => string): T[] =
   ...new Map(items.map((item) => [keyOf(item), item])).values(),
 ];
 
+const isBlueskyTargetNotification = (notification: DomainNotification): boolean =>
+  notification.type === 'blueskyLike' || notification.type === 'blueskyRepost';
+
+const synthesizeBlueskyStatus = (
+  notification: DomainNotification,
+  options: Readonly<{ createdAt: Instant; account: Account; recipientAccount: Account | undefined }>,
+): Status | null => {
+  switch (notification.type) {
+    case 'blueskyLike':
+    case 'blueskyRepost':
+      return toBlueskyStatus(notification, {
+        createdAt: options.createdAt,
+        account: options.recipientAccount ?? options.account,
+      });
+    case 'blueskyMention':
+      return toBlueskyStatus(notification, { createdAt: options.createdAt, account: options.account });
+    default:
+      return null;
+  }
+};
+
 const toGroup = (notification: Notification): NotificationGroup => ({
   group_key: `ungrouped-${notification.id}`,
   notifications_count: 1,
@@ -119,7 +145,17 @@ export const createWorkerMastodonNotificationsRouter = ({
     viewerActorId: ActorId | undefined,
     requestUrl: string,
   ): Promise<Notification[]> => {
-    const actorIds = [...new Set(items.map(({ notification }) => triggerActorIdOf(notification)))];
+    const needsRecipientAccount = viewerActorId !== undefined
+      && items.some(({ notification }) => isBlueskyTargetNotification(notification));
+    const actorIds = [
+      ...new Set([
+        ...items.flatMap(({ notification }) => {
+          const trigger = triggerOf(notification);
+          return trigger.kind === 'actor' ? [trigger.actorId] : [];
+        }),
+        ...(needsRecipientAccount ? [viewerActorId] : []),
+      ]),
+    ];
     const postIds = [
       ...new Set(items.flatMap(({ notification }) => targetPostIdOf(notification) ?? [])),
     ];
@@ -146,13 +182,20 @@ export const createWorkerMastodonNotificationsRouter = ({
     ]);
     const accountById = new Map<string, Account>(accounts.map((account) => [account.id, account]));
     const statusById = new Map<string, Status>(statuses.map((status) => [status.id, status]));
+    const defaultImages = defaultImageUrls(requestUrl);
     return items.flatMap(({ notification, createdAt }): Notification[] => {
-      const account = accountById.get(triggerActorIdOf(notification));
+      const trigger = triggerOf(notification);
+      const account = trigger.kind === 'actor'
+        ? accountById.get(trigger.actorId)
+        : toBlueskyAccount(trigger.author, defaultImages);
       const postId = targetPostIdOf(notification);
-      const status = postId === undefined ? null : statusById.get(postId) ?? null;
-      return account === undefined || (postId !== undefined && status === null)
-        ? []
-        : [toNotification(notification, { createdAt, account, status })];
+      const resolved = postId === undefined ? null : statusById.get(postId) ?? null;
+      if (account === undefined || (trigger.kind === 'actor' && postId !== undefined && resolved === null)) {
+        return [];
+      }
+      const recipientAccount = viewerActorId === undefined ? undefined : accountById.get(viewerActorId);
+      const status = resolved ?? synthesizeBlueskyStatus(notification, { createdAt, account, recipientAccount });
+      return [toNotification(notification, { createdAt, account, status })];
     });
   };
 

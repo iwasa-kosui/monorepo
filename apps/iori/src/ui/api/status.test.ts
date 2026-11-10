@@ -29,6 +29,14 @@ const remoteAccount = {
   uri: 'https://remote.example/users/alice',
 } as Account;
 
+const blueskyAccount = {
+  id: 'bluesky:did:plc:carol',
+  username: 'carol.bsky.social',
+  acct: 'carol.bsky.social',
+  url: 'https://bsky.app/profile/carol.bsky.social',
+  uri: 'https://bsky.app/profile/did:plc:carol',
+} as Account;
+
 const status = (id: string, overrides: Partial<Status> = {}): Status =>
   ({
     id,
@@ -74,6 +82,15 @@ describe('account helpers', () => {
   it('links to the user page for a local account and the remote user page for a remote account', () => {
     expect(accountHref(localAccount)).toBe('/users/kosui');
     expect(accountHref(remoteAccount)).toBe('/remote-users/actor-2');
+  });
+
+  it('links a Bluesky account to its profile on bsky.app and shows its handle as it is', () => {
+    expect(accountHref(blueskyAccount)).toBe('https://bsky.app/profile/carol.bsky.social');
+    expect(accountHandle(blueskyAccount)).toBe('carol.bsky.social');
+  });
+
+  it('does not link a Bluesky account whose url is not http or https', () => {
+    expect(accountHref({ ...blueskyAccount, url: 'javascript:alert(1)' })).toBe('#');
   });
 
   it('links to the local post page and the remote post uri', () => {

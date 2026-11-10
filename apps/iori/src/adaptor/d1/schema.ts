@@ -666,6 +666,32 @@ export const blueskyLikesTable = sqliteTable('bluesky_likes', {
   createdAt: timestamp().notNull(),
 });
 
+export const notificationBlueskyTable = sqliteTable('notification_bluesky', {
+  notificationId: text('notificationId').primaryKey().references(() => notificationsTable.notificationId),
+  blueskyUri: text('blueskyUri').notNull().unique(),
+  reason: text('reason').notNull(),
+  authorDid: text('authorDid').notNull(),
+  authorHandle: text('authorHandle').notNull(),
+  authorDisplayName: text('authorDisplayName'),
+  authorAvatar: text('authorAvatar'),
+  subjectUri: text('subjectUri'),
+  targetPostId: text('targetPostId'),
+  text: text('text'),
+});
+
+export const blueskyNotificationReceiptsTable = sqliteTable('bluesky_notification_receipts', {
+  uri: text('uri').primaryKey(),
+  indexedAt: timestamp().notNull(),
+  receivedAt: timestamp().notNull(),
+}, (table) => [
+  index('bluesky_notification_receipts_indexed_at_idx').on(table.indexedAt),
+]);
+
+export const blueskyNotificationSyncStateTable = sqliteTable('bluesky_notification_sync_state', {
+  id: text('id').primaryKey(),
+  initialSyncCompletedAt: timestamp().notNull(),
+});
+
 export const schema = {
   usersTable,
   keysTable,
@@ -727,4 +753,7 @@ export const schema = {
   blueskyCrosspostsTable,
   blueskyTimelineItemsTable,
   blueskyLikesTable,
+  notificationBlueskyTable,
+  blueskyNotificationReceiptsTable,
+  blueskyNotificationSyncStateTable,
 } as const;

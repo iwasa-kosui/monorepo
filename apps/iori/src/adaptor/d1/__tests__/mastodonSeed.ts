@@ -260,6 +260,45 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     return notificationId;
   };
 
+  const addBlueskyNotification = (
+    recipientUserId: string,
+    type: 'blueskyLike' | 'blueskyRepost' | 'blueskyFollow' | 'blueskyMention',
+    createdAt: number,
+    options: {
+      blueskyUri?: string;
+      reason?: string;
+      subjectUri?: string | null;
+      targetPostId?: string | null;
+      text?: string | null;
+      receipt?: boolean;
+    } = {},
+  ) => {
+    const notificationId = addNotification(recipientUserId, type, createdAt);
+    const blueskyUri = options.blueskyUri ?? `at://did:plc:alice/app.bsky.feed.like/${notificationId}`;
+    sqlite.prepare(
+      'INSERT INTO notification_bluesky(notificationId,blueskyUri,reason,authorDid,authorHandle,authorDisplayName,authorAvatar,subjectUri,targetPostId,text) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    ).run(
+      notificationId,
+      blueskyUri,
+      options.reason
+        ?? { blueskyLike: 'like', blueskyRepost: 'repost', blueskyFollow: 'follow', blueskyMention: 'mention' }[type],
+      'did:plc:alice',
+      'alice.bsky.social',
+      'Alice',
+      null,
+      options.subjectUri === undefined
+        ? (type === 'blueskyFollow' ? null : 'at://did:plc:me/app.bsky.feed.post/3kpost')
+        : options.subjectUri,
+      options.targetPostId ?? null,
+      options.text ?? null,
+    );
+    if (options.receipt !== false) {
+      sqlite.prepare('INSERT INTO bluesky_notification_receipts(uri,indexedAt,receivedAt) VALUES (?,?,?)')
+        .run(blueskyUri, createdAt, createdAt);
+    }
+    return notificationId;
+  };
+
   const setMarker = (userId: string, timeline: 'home' | 'notifications', lastReadId: string, version = 1) =>
     sqlite.prepare('INSERT INTO mastodon_markers(userId,timeline,lastReadId,version,updatedAt) VALUES (?,?,?,?,?)').run(
       userId,
@@ -290,6 +329,7 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     addFollowNotification,
     addEmojiReactNotification,
     addRepostNotification,
+    addBlueskyNotification,
     setMarker,
   };
 };
