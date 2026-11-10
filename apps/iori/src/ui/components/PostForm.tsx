@@ -2,6 +2,7 @@ import { useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { createStatus, uploadMedia } from '../api/mastodonClient.ts';
+import { downscaleImageForUpload } from './imageDownscale.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { canSubmitPost, submitPost } from './postSubmission.ts';
 
@@ -56,7 +57,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
 
     for (const file of Array.from(files)) {
       try {
-        const media = await uploadMedia(file);
+        const media = await uploadMedia(await downscaleImageForUpload(file));
         newMedia.push({ id: media.id, url: media.url });
       } catch (err) {
         alert('Upload failed: ' + (err as Error).message);
