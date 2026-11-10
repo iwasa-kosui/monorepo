@@ -217,3 +217,78 @@ body.chapter-page {
     padding: 0.5rem 1rem;
   }
 }
+
+.intro-spread {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+.intro-spread > * {
+  min-width: 0;
+}
+.intro-text {
+  font-size: 1rem;
+  line-height: 1.65;
+}
+.content .intro-text h2 {
+  margin-block: 1.25rem 0.5rem;
+  font-size: 1.25rem;
+}
+.content .intro-text h3 {
+  margin-block: 1rem 0.375rem;
+  font-size: 1.125rem;
+}
+.content .intro-text > :first-child {
+  margin-top: 0;
+}
+.content .intro-text p,
+.content .intro-text ul,
+.content .intro-text blockquote {
+  margin-block: 0.5rem;
+}
+.content .intro-text li + li {
+  margin-top: 0.25rem;
+}
+
+@media (min-width: 1024px) {
+  .intro-spread {
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+    column-gap: 2rem;
+  }
+  .content .chapter-body > .intro-spread {
+    flex: 1 0 auto;
+  }
+}
+
+@media (max-height: 700px) {
+  .chapter-main-wide {
+    padding-block: 0.5rem;
+  }
+  .chapter-main-wide .chapter-goal {
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+  }
+  .content .chapter-main-wide .chapter-body {
+    margin-block: 0.5rem;
+  }
+  .chapter-main-wide .chapter-nav a {
+    padding-block: 0.25rem;
+  }
+  .content .intro-text {
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+  .content .intro-text h2 {
+    margin-block: 0.75rem 0.25rem;
+    font-size: 1.125rem;
+  }
+  .content .intro-text h3 {
+    margin-block: 0.625rem 0.25rem;
+    font-size: 1rem;
+  }
+  .content .intro-text p,
+  .content .intro-text ul,
+  .content .intro-text blockquote {
+    margin-block: 0.25rem;
+  }
+}

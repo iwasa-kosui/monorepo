@@ -29,8 +29,8 @@ describe('章のページ', () => {
 });
 
 describe('導入の文面', () => {
-  it('導入は 9 ページに分かれている', () => {
-    expect(chapterPageFiles('intro')).toHaveLength(9);
+  it('導入は 3 ページに分かれている', () => {
+    expect(chapterPageFiles('intro')).toHaveLength(3);
   });
 
   it('分けたページをつないだ本文が、承認済みの導入と 1 文字も違わない', () => {

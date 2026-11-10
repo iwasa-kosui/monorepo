@@ -49,7 +49,11 @@ const progress = `${page.number}/${page.total}`;
 const { Content } = await render(page.entry);
 ---
 
-<BaseLayout title={`${row.title} ${progress}`} chapterPage>
+<BaseLayout
+  title={`${row.title} ${progress}`}
+  chapterPage
+  wide={page.chapter === 'intro'}
+>
   <header class="chapter-header">
     <h1>{row.title} <span class="chapter-progress">{progress}</span></h1>
     <p class="chapter-links">
