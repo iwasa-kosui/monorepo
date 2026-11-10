@@ -30,7 +30,6 @@ import { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline
 import { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../useCase/likeBlueskyPost.ts';
-import { RefreshBlueskyTimelineUseCase } from '../useCase/refreshBlueskyTimeline.ts';
 import { RepostBlueskyPostUseCase } from '../useCase/repostBlueskyPost.ts';
 import { UndoRepostBlueskyPostUseCase } from '../useCase/undoRepostBlueskyPost.ts';
 import { UnlikeBlueskyPostUseCase } from '../useCase/unlikeBlueskyPost.ts';
@@ -47,7 +46,7 @@ export const resolveBlueskyTimelineConfig = (
 
 export type BlueskyTimelineRuntimePorts = Readonly<{
   blueskyTimelineItemsResolver: BlueskyTimelineItemsResolver;
-  collectBlueskyTimelineUseCase: CollectBlueskyTimelineUseCase | undefined;
+  blueskyTimelineEnabled: boolean;
   likeBlueskyPostUseCase: LikeBlueskyPostUseCase | undefined;
   unlikeBlueskyPostUseCase: UnlikeBlueskyPostUseCase | undefined;
   repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
@@ -154,17 +153,6 @@ export const createExpireBlueskyTimelineUseCase = (
   });
 };
 
-const createRefreshBlueskyTimelineUseCase = (
-  env: IoriWorkerEnv,
-  deps: Readonly<{ db: IoriD1Db; fetch?: typeof fetch }>,
-): RefreshBlueskyTimelineUseCase | undefined => {
-  const collect = createCollectBlueskyTimelineUseCase(env, deps);
-  const expire = createExpireBlueskyTimelineUseCase(env, deps);
-  return collect === undefined || expire === undefined
-    ? undefined
-    : RefreshBlueskyTimelineUseCase.create({ collect, expire });
-};
-
 export const createBlueskyTimelineRuntimePorts = (
   env: IoriWorkerEnv,
   db: IoriD1Db,
@@ -174,7 +162,7 @@ export const createBlueskyTimelineRuntimePorts = (
   const reposts = createRepostBlueskyPostUseCases(env, db, deps);
   return {
     blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
-    collectBlueskyTimelineUseCase: createRefreshBlueskyTimelineUseCase(env, { db, fetch: deps.fetch }),
+    blueskyTimelineEnabled: resolveBlueskyTimelineConfig(env) !== undefined,
     likeBlueskyPostUseCase: likes?.like,
     unlikeBlueskyPostUseCase: likes?.unlike,
     repostBlueskyPostUseCase: reposts?.repost,

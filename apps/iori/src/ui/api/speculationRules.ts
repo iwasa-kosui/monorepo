@@ -6,7 +6,6 @@ export const SPECULATION_PREFETCH_PATHS = [
   '/likes',
   '/articles',
   '/x',
-  '/bluesky',
   '/search',
 ] as const;
 

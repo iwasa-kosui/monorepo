@@ -13,7 +13,6 @@ import {
 import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
-import type { CollectBlueskyTimelineUseCase } from '../../useCase/collectBlueskyTimeline.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { LikeBlueskyPostUseCase } from '../../useCase/likeBlueskyPost.ts';
 import type { RepostBlueskyPostUseCase } from '../../useCase/repostBlueskyPost.ts';
@@ -27,7 +26,7 @@ import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from '
 export type WorkerIoriBlueskyRouterDeps = Readonly<{
   authn: MastodonAuthn;
   blueskyTimelineItemsResolver: BlueskyTimelineItemsResolver;
-  collectBlueskyTimelineUseCase: CollectBlueskyTimelineUseCase | undefined;
+  blueskyTimelineEnabled: boolean;
   likeBlueskyPostUseCase: LikeBlueskyPostUseCase | undefined;
   unlikeBlueskyPostUseCase: UnlikeBlueskyPostUseCase | undefined;
   repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
@@ -67,15 +66,7 @@ export type IoriBlueskyLikeResponse = Readonly<{ liked: boolean }>;
 
 export type IoriBlueskyRepostResponse = Readonly<{ reposted: boolean }>;
 
-export type IoriBlueskyTimelineRefreshResponse = Readonly<{
-  pages: number;
-  fetched: number;
-  saved: number;
-  dropped: number;
-}>;
-
 const readStatuses = Scope.orThrow('read:statuses');
-const writeAccounts = Scope.orThrow('write:accounts');
 const writeFavourites = Scope.orThrow('write:favourites');
 const writeStatuses = Scope.orThrow('write:statuses');
 const integerPattern = /^\d+$/;
@@ -115,7 +106,7 @@ const repostFailure = (c: Context, error: BlueskyClientError | BlueskyRepostTarg
 export const createWorkerIoriBlueskyRouter = ({
   authn,
   blueskyTimelineItemsResolver,
-  collectBlueskyTimelineUseCase,
+  blueskyTimelineEnabled,
   likeBlueskyPostUseCase,
   unlikeBlueskyPostUseCase,
   repostBlueskyPostUseCase,
@@ -147,7 +138,7 @@ export const createWorkerIoriBlueskyRouter = ({
       if (scope !== undefined && scope !== 'home') {
         return c.json({ error: 'Validation failed: scope' }, 400);
       }
-      const enabled = collectBlueskyTimelineUseCase !== undefined;
+      const enabled = blueskyTimelineEnabled;
       const isOwner = await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined);
       if (scope === undefined && !isOwner) return c.json(forbidden, 403);
       if (scope === 'home' && !isOwner) {
@@ -173,23 +164,6 @@ export const createWorkerIoriBlueskyRouter = ({
         } satisfies IoriBlueskyTimelineResponse,
       );
     })
-    .post(
-      '/iori/v1/bluesky/timeline/refresh',
-      requireSameOriginForCookie,
-      authn.requireUser(writeAccounts),
-      async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
-          return c.json(forbidden, 403);
-        }
-        if (collectBlueskyTimelineUseCase === undefined) {
-          return c.json({ error: 'Bluesky timeline is disabled' }, 409);
-        }
-        const collected = await collectBlueskyTimelineUseCase.run();
-        return collected.ok
-          ? c.json(collected.val satisfies IoriBlueskyTimelineRefreshResponse)
-          : c.json({ error: 'Bluesky request failed' }, 502);
-      },
-    )
     .post(
       '/iori/v1/bluesky/likes',
       requireSameOriginForCookie,

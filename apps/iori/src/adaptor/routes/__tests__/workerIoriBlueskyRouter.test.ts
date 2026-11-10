@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BlueskyTimelineItemsResolver } from '../../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../../ports/blueskyClient.ts';
-import type { CollectBlueskyTimelineUseCase } from '../../../useCase/collectBlueskyTimeline.ts';
 import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../useCase/likeBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../useCase/repostBlueskyPost.ts';
@@ -64,11 +63,6 @@ afterEach(() => {
   for (const fixture of fixtures.splice(0)) fixture.sqlite.close();
 });
 
-const collector = (result: ReturnType<CollectBlueskyTimelineUseCase['run']>) => {
-  const run = vi.fn(() => result);
-  return { run, useCase: { run } as CollectBlueskyTimelineUseCase };
-};
-
 const likeClient = (overrides: Partial<Pick<BlueskyClient, 'createLike' | 'deleteLike'>> = {}) => ({
   createLike: vi.fn<BlueskyClient['createLike']>(async () =>
     RA.ok({ uri: 'at://did:plc:me/app.bsky.feed.like/3kcreated' })
@@ -88,7 +82,6 @@ const repostClient = (overrides: Partial<Pick<BlueskyClient, 'createRepost' | 'd
 const setupNonOwner = async (
   options: {
     scope?: string;
-    collectBlueskyTimelineUseCase?: CollectBlueskyTimelineUseCase;
     blueskyLikeClient?: ReturnType<typeof likeClient>;
     blueskyRepostClient?: ReturnType<typeof repostClient>;
   } = {},
@@ -105,7 +98,7 @@ const setupNonOwner = async (
         sessionResolver: harness.memory.sessionResolver as never,
       }),
       blueskyTimelineItemsResolver: { resolve } as BlueskyTimelineItemsResolver,
-      collectBlueskyTimelineUseCase: options.collectBlueskyTimelineUseCase,
+      blueskyTimelineEnabled: false,
       likeBlueskyPostUseCase: options.blueskyLikeClient === undefined ? undefined : LikeBlueskyPostUseCase.create({
         client: options.blueskyLikeClient,
         targetResolver: createD1BlueskyLikeTargetResolver(fixture.db),
@@ -228,9 +221,7 @@ describe('/api/iori/v1/bluesky/timeline', () => {
     });
 
     it('取り込みが有効なら enabled を true にする', async () => {
-      const t = setupReadApi({
-        collectBlueskyTimeline: collector(RA.ok({ pages: 0, fetched: 0, saved: 0, dropped: 0 })).useCase,
-      });
+      const t = setupReadApi({ blueskyTimelineEnabled: true });
       const me = await t.signIn('read:statuses');
 
       const body = await (await t.request('/api/iori/v1/bluesky/timeline', { headers: me.bearer })).json();
@@ -388,90 +379,6 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       const response = await t.request('/api/iori/v1/bluesky/timeline?scope=all', { headers: me.bearer });
 
       expect(response.status).toBe(400);
-    });
-  });
-
-  describe('POST /refresh', () => {
-    const refresh = (t: ReturnType<typeof setupReadApi>, headers: Record<string, string>) =>
-      t.request('/api/iori/v1/bluesky/timeline/refresh', { method: 'POST', headers });
-
-    it('認証なしだと 401 にする', async () => {
-      const { run, useCase } = collector(RA.ok({ pages: 1, fetched: 0, saved: 0, dropped: 0 }));
-      const t = setupReadApi({ collectBlueskyTimeline: useCase });
-
-      expect((await refresh(t, { Origin: ORIGIN })).status).toBe(401);
-      expect((await refresh(t, {})).status).toBe(403);
-      expect(run).not.toHaveBeenCalled();
-    });
-
-    it('write:accounts を満たさない scope のトークンを 403 にする', async () => {
-      const { run, useCase } = collector(RA.ok({ pages: 1, fetched: 0, saved: 0, dropped: 0 }));
-      const t = setupReadApi({ collectBlueskyTimeline: useCase });
-      const me = await t.signIn('read:statuses');
-
-      expect((await refresh(t, me.bearer)).status).toBe(403);
-      expect(run).not.toHaveBeenCalled();
-    });
-
-    it('Cookie のセッションで Origin が違うと 403 にする', async () => {
-      const { run, useCase } = collector(RA.ok({ pages: 1, fetched: 0, saved: 0, dropped: 0 }));
-      const t = setupReadApi({ collectBlueskyTimeline: useCase });
-      const me = await t.signIn('write:accounts');
-
-      const response = await refresh(t, { Cookie: `sessionId=${me.sessionId}`, Origin: 'https://evil.example' });
-
-      expect(response.status).toBe(403);
-      expect(run).not.toHaveBeenCalled();
-    });
-
-    it('所有者でない利用者を 403 にし、取り込みを実行しない', async () => {
-      const { run, useCase } = collector(RA.ok({ pages: 1, fetched: 0, saved: 0, dropped: 0 }));
-      const { post } = await setupNonOwner({ scope: 'write:accounts', collectBlueskyTimelineUseCase: useCase });
-
-      const response = await post('/api/iori/v1/bluesky/timeline/refresh');
-
-      expect(response.status).toBe(403);
-      expect(await response.json()).toEqual({ error: 'Forbidden' });
-      expect(run).not.toHaveBeenCalled();
-    });
-
-    it('無効のときは取り込まず、409 を返す', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('write:accounts');
-
-      const response = await refresh(t, me.bearer);
-
-      expect(response.status).toBe(409);
-      expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
-    });
-
-    it('有効のときは取り込みを 1 回実行し、件数を返す', async () => {
-      const summary = { pages: 2, fetched: 150, saved: 120, dropped: 1 };
-      const { run, useCase } = collector(RA.ok(summary));
-      const t = setupReadApi({ collectBlueskyTimeline: useCase });
-      const me = await t.signIn('write:accounts');
-
-      const response = await refresh(t, { Cookie: `sessionId=${me.sessionId}`, Origin: ORIGIN });
-
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual(summary);
-      expect(run).toHaveBeenCalledOnce();
-    });
-
-    it('Bluesky への取得に失敗したら 502 にし、エラーの詳細を返さない', async () => {
-      const error: BlueskyClientError = {
-        type: 'BlueskyClientError',
-        kind: 'auth',
-        message: 'app.bsky.feed.getTimeline failed: status 401 ExpiredToken',
-        status: 401,
-      };
-      const t = setupReadApi({ collectBlueskyTimeline: collector(RA.err(error)).useCase });
-      const me = await t.signIn('write:accounts');
-
-      const response = await refresh(t, me.bearer);
-
-      expect(response.status).toBe(502);
-      expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
     });
   });
 

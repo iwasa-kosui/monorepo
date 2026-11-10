@@ -71,22 +71,6 @@ export const BottomNav: FC<Props> = ({ isLoggedIn = false }) => (
           </svg>
         </a>
       )}
-      {isLoggedIn && (
-        <a
-          href='/bluesky'
-          aria-label='Bluesky'
-          class='flex flex-col items-center justify-center flex-1 h-full text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
-        >
-          <svg class='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-            <path
-              stroke-linecap='round'
-              stroke-linejoin='round'
-              stroke-width='2'
-              d='M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z'
-            />
-          </svg>
-        </a>
-      )}
     </div>
   </nav>
 );
