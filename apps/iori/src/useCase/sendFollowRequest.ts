@@ -1,4 +1,5 @@
-import { Follow, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Follow } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import { ActorIdentity, ParseActorIdentityError } from '../adaptor/fedify/actorIdentity.ts';
@@ -6,6 +7,7 @@ import type { RemoteActorLookup, RemoteActorLookupError } from '../adaptor/fedif
 import type { ActorResolverByUri, ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
+import type { RemoteActorProfileUpdatedStore } from '../domain/actor/updateProfile.ts';
 import { Follow as AppFollow, type FollowRequestedStore } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
@@ -36,6 +38,7 @@ type Deps = Readonly<{
   followRequestedStore: FollowRequestedStore;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
+  remoteActorProfileUpdatedStore?: RemoteActorProfileUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
 }>;
 
@@ -47,6 +50,7 @@ const create = ({
   followRequestedStore,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
+  remoteActorProfileUpdatedStore,
   actorResolverByUri,
 }: Deps): SendFollowRequestUseCase => {
   const now = Instant.now();
@@ -74,6 +78,7 @@ const create = ({
               now,
               remoteActorCreatedStore,
               logoUriUpdatedStore,
+              remoteActorProfileUpdatedStore,
               actorResolverByUri,
             }),
           ),

@@ -1,0 +1,87 @@
+---
+import '../playground/playground.css';
+
+import { snapshotFiles } from '../lib/snapshots';
+
+interface Props {
+  id: string;
+  setup?: string;
+  script?: {
+    exercise: string;
+    entry: string;
+    own?: { exercise: string; file: string; testFile: string };
+  };
+  initial: string;
+}
+
+const { id, setup, script, initial } = Astro.props;
+if ((setup === undefined) === (script === undefined)) {
+  throw new Error(
+    'SqlPlayground には setup と script のどちらか一方を指定します',
+  );
+}
+const config = JSON.stringify({
+  storageId: id,
+  setupSql: setup ?? null,
+  setupScript: script === undefined ? null : {
+    files: snapshotFiles(script.exercise),
+    entry: script.entry,
+    own: script.own === undefined ? null : {
+      storageKey: script.own.exercise,
+      file: script.own.file,
+      testFile: script.own.testFile,
+    },
+  },
+  initialSql: initial,
+});
+---
+
+<section
+  class="playground"
+  data-playground="sql"
+  data-state="loading"
+  data-config={config}
+  aria-label="SQL を実行する欄"
+>
+  <div class="playground-status" data-role="status">
+    <span data-role="status-text" role="status"
+    >実行環境を読み込んでいます</span>
+    <button type="button" data-role="retry" hidden>もう一度読み込む</button>
+  </div>
+  <p class="playground-origin" data-role="origin" role="status" hidden></p>
+  <div class="playground-toolbar">
+    <button type="button" data-role="run" disabled>実行する</button>
+    <button type="button" data-role="reset" disabled>
+      データベースを最初の状態に戻す
+    </button>
+    <button type="button" data-role="reset-sql">最初の SQL に戻す</button>
+    <button type="button" data-role="restore" hidden>
+      読み込む前の SQL に戻す
+    </button>
+    <span class="playground-hint">
+      Ctrl+Enter（Mac では Cmd+Enter）でも実行できます。
+    </span>
+  </div>
+  <div class="playground-panes">
+    <div class="playground-pane-editor">
+      <div class="playground-editor" data-role="editor"></div>
+    </div>
+    <div class="playground-results" data-role="results" aria-live="polite">
+    </div>
+  </div>
+  <script is:inline>
+  (function() {
+    var root = document.currentScript.closest('[data-playground]');
+    setTimeout(function() {
+      if (root.hasAttribute('data-mounted')) return;
+      root.dataset.state = 'failed';
+      root.querySelector('[data-role="status-text"]').textContent =
+        '実行環境を読み込めませんでした。通信の状態を確かめて、ページを再読み込みしてください。';
+    }, 20000);
+  })();
+  </script>
+</section>
+
+<script>
+import '../playground/sql-playground.ts';
+</script>

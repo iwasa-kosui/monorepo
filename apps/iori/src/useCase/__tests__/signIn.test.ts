@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.setConfig({ testTimeout: 30000 });
 
+import { nodeArgon2idDerive } from '../../adaptor/argon2/nodeArgon2idDerive.ts';
 import { Password } from '../../domain/password/password.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
@@ -25,16 +26,17 @@ describe('SignInUseCase', () => {
       userResolverByUsername,
       userPasswordResolver,
       sessionStartedStore,
+      argon2idDerive: nodeArgon2idDerive,
     };
   };
 
-  const setupValidUser = (
+  const setupValidUser = async (
     deps: ReturnType<typeof createDeps>,
     user: User,
     password: Password,
   ) => {
     deps.userResolverByUsername.setUser(user);
-    const hashedPassword = Password.hashPassword(password);
+    const hashedPassword = await Password.hashPassword(nodeArgon2idDerive)(password);
     deps.userPasswordResolver.setPassword(user.id, hashedPassword);
   };
 
@@ -46,7 +48,7 @@ describe('SignInUseCase', () => {
         username: 'kosui' as Username,
       };
       const password = 'securepassword1234' as Password;
-      setupValidUser(deps, user, password);
+      await setupValidUser(deps, user, password);
 
       const useCase = SignInUseCase.create(deps);
       const ctx = createMockFedifyContext();
@@ -68,7 +70,7 @@ describe('SignInUseCase', () => {
       'プロパティ: 正しいパスワードで認証が成功する',
       async (user, password) => {
         const deps = createDeps();
-        setupValidUser(deps, user, password);
+        await setupValidUser(deps, user, password);
 
         const useCase = SignInUseCase.create(deps);
         const ctx = createMockFedifyContext();
@@ -107,7 +109,7 @@ describe('SignInUseCase', () => {
           deps.userResolverByUsername.setUser(user);
           // パスワードを設定しない
         } else if (setupFn === 'wrongPassword') {
-          setupValidUser(deps, user, correctPassword);
+          await setupValidUser(deps, user, correctPassword);
         }
 
         const useCase = SignInUseCase.create(deps);
@@ -126,6 +128,26 @@ describe('SignInUseCase', () => {
       });
     });
 
+    it('derive が失敗したときは UsernameOrPasswordInvalid にせず例外として伝える', async () => {
+      const deps = createDeps();
+      const user: User = {
+        id: crypto.randomUUID() as User['id'],
+        username: 'kosui' as Username,
+      };
+      const password = 'securepassword1234' as Password;
+      await setupValidUser(deps, user, password);
+
+      const useCase = SignInUseCase.create({
+        ...deps,
+        argon2idDerive: () => Promise.reject(new Error('derive failed')),
+      });
+
+      await expect(useCase.run({ username: user.username, password, ctx: createMockFedifyContext() })).rejects.toThrow(
+        'derive failed',
+      );
+      expect(deps.sessionStartedStore.store).not.toHaveBeenCalled();
+    });
+
     it.each([
       { passwordLength: 16, description: '最小長のパスワード' },
       { passwordLength: 50, description: '中程度の長さのパスワード' },
@@ -138,7 +160,7 @@ describe('SignInUseCase', () => {
       };
       const correctPassword = 'a'.repeat(passwordLength) as Password;
       const wrongPassword = 'b'.repeat(passwordLength) as Password;
-      setupValidUser(deps, user, correctPassword);
+      await setupValidUser(deps, user, correctPassword);
 
       const useCase = SignInUseCase.create(deps);
       const ctx = createMockFedifyContext();
@@ -165,7 +187,7 @@ describe('SignInUseCase', () => {
         fc.pre(correctPassword !== attemptPassword);
 
         const deps = createDeps();
-        setupValidUser(deps, user, correctPassword);
+        await setupValidUser(deps, user, correctPassword);
 
         const useCase = SignInUseCase.create(deps);
         const ctx = createMockFedifyContext();
@@ -210,7 +232,7 @@ describe('SignInUseCase', () => {
         username: 'kosui' as Username,
       };
       const password = 'securepassword1234' as Password;
-      setupValidUser(deps, user, password);
+      await setupValidUser(deps, user, password);
 
       const useCase = SignInUseCase.create(deps);
       const ctx = createMockFedifyContext();

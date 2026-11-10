@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import build from '@hono/vite-build/node';
 import devServer from '@hono/vite-dev-server';
 import { defineConfig } from 'vite';
@@ -24,18 +25,29 @@ export default defineConfig(({ mode }) => {
             notifications: './src/ui/pages/notifications.tsx',
             likedPosts: './src/ui/pages/likedPosts.tsx',
             federatedTimeline: './src/ui/pages/federatedTimeline.tsx',
+            search: './src/ui/pages/search.tsx',
+            xPosts: './src/ui/pages/xPosts.tsx',
+            navPrefetch: './src/ui/pages/navPrefetch.ts',
           },
           output: {
             entryFileNames: 'static/[name].js',
-            chunkFileNames: 'static/[name]-[hash].js',
-            assetFileNames: 'static/[name]-[hash][extname]',
+            chunkFileNames: 'static/chunks/[name]-[hash].js',
+            assetFileNames: 'static/chunks/[name]-[hash][extname]',
           },
         },
       },
     };
   }
 
+  // Embed a clean build's revision into the bundle, never reread the checkout at runtime.
+  let sourceRevision;
+  try {
+    const dirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' });
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    if (dirty.length === 0 && /^[a-f0-9]{40}$/.test(sha)) sourceRevision = sha;
+  } catch { /* Development builds may run without migration capability. */ }
   return {
+    define: { __IORI_SOURCE_REVISION__: JSON.stringify(sourceRevision) ?? 'undefined' },
     plugins: [
       build({
         entry: 'src/index.ts',

@@ -8,6 +8,244 @@
       "when": 1785856310105,
       "tag": "0000_boring_xavin",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793719989743,
+      "tag": "0001_oauth",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793721575380,
+      "tag": "0002_timeline_paging_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793723257159,
+      "tag": "0003_remote_post_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793729386207,
+      "tag": "0004_notifications_paging_and_markers",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793730226889,
+      "tag": "0005_tech_digest_feeds",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793730924056,
+      "tag": "0006_article_bodies",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793732387775,
+      "tag": "0007_remote_post_recipients",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793735722649,
+      "tag": "0008_digests",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1793743330080,
+      "tag": "0009_ai_summary_usages",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793745000670,
+      "tag": "0010_media_uploads",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1793746000000,
+      "tag": "0011_interest_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793748624720,
+      "tag": "0012_post_translations",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1793749000000,
+      "tag": "0013_digest_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1793750133536,
+      "tag": "0014_feed_entry_embeddings",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1793762548686,
+      "tag": "0015_digest_item_feedback_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1793785111500,
+      "tag": "0016_peaceful_smiling_tiger",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1793804203122,
+      "tag": "0017_article_body_markdown",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1793807383778,
+      "tag": "0018_digest_topics",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1793807088524,
+      "tag": "0019_notification_reposts",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1793810672400,
+      "tag": "0020_post_content_warning",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1793810900504,
+      "tag": "0021_digest_deep_dives",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1793811000000,
+      "tag": "0022_domain_events_occurred_at_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1793813827618,
+      "tag": "0023_remote_actor_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1794118631329,
+      "tag": "0024_bluesky_crosspost",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1794123636190,
+      "tag": "0025_digest_topic_examples",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1794124967182,
+      "tag": "0026_bluesky_timeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1794126982037,
+      "tag": "0027_digest_x_posts",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1794140494529,
+      "tag": "0028_digest_topic_material_window",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1794147386177,
+      "tag": "0029_bluesky_crossposts_uri_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1794149675203,
+      "tag": "0030_bluesky_login_failures",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1794152104823,
+      "tag": "0031_bluesky_likes",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1794271674322,
+      "tag": "0032_jazzy_lady_bullseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1794273121747,
+      "tag": "0033_bluesky_notification_sync_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1794275451424,
+      "tag": "0034_bluesky_reposts",
+      "breakpoints": true
     }
   ]
 }

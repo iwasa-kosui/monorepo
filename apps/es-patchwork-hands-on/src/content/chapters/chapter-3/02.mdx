@@ -1,0 +1,7 @@
+import CodeBlock from '../../../components/CodeBlock.astro';
+import { whoCancelledQuery } from '../../../lib/snapshots';
+
+`who-cancelled.ts` は、来院を2件用意して次の SELECT を実行します。`visits` と `business_events` を来院の ID で結びつけます。
+
+<CodeBlock code={whoCancelledQuery()} />
+

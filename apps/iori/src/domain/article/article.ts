@@ -1,12 +1,16 @@
+import type { RA, Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
 import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
+import type { ArticleBody, ArticleBodyDeleted, ArticleBodyWritten } from '../articleBody/articleBody.ts';
+import type { DigestExpired } from '../digest/digest.ts';
 import { Instant } from '../instant/instant.ts';
 import { PostId } from '../post/postId.ts';
 import { UserId } from '../user/userId.ts';
+import type { Username } from '../user/username.ts';
 import { ArticleId } from './articleId.ts';
 
 const ArticleStatus = z.enum(['draft', 'published', 'unpublished']);
@@ -16,7 +20,7 @@ const articleZodType = z.object({
   articleId: ArticleId.zodType,
   authorActorId: ActorId.zodType,
   authorUserId: UserId.zodType,
-  rootPostId: PostId.zodType,
+  rootPostId: z.nullable(PostId.zodType),
   title: z.string().min(1).max(200),
   status: ArticleStatus,
   createdAt: Instant.zodType,
@@ -26,6 +30,7 @@ const articleZodType = z.object({
 
 export type Article = z.infer<typeof articleZodType>;
 const schema = Schema.create(articleZodType);
+export type ArticleParseError = Extract<ReturnType<typeof schema.parse>, { ok: false }>['err'];
 
 type ArticleAggregate = Agg.Aggregate<ArticleId, 'article', Article>;
 
@@ -47,6 +52,11 @@ export type ArticleUnpublished = ArticleEvent<
   Article,
   'article.unpublished',
   { articleId: ArticleId; unpublishedAt: Instant }
+>;
+export type ArticleTitleChanged = ArticleEvent<
+  Article,
+  'article.titleChanged',
+  { articleId: ArticleId; title: string; changedAt: Instant }
 >;
 export type ArticleDeleted = ArticleEvent<undefined, 'article.deleted', { articleId: ArticleId; deletedAt: Instant }>;
 
@@ -96,6 +106,26 @@ const unpublishArticle = (now: Instant) => (article: Article): ArticleUnpublishe
   );
 };
 
+const changeArticleTitle =
+  (now: Instant) => (article: Article, title: string): Result<ArticleTitleChanged, ArticleParseError> => {
+    const parsed = schema.parse({ ...article, title });
+    if (!parsed.ok) return parsed;
+    const retitledArticle = parsed.val;
+    return {
+      ...parsed,
+      val: ArticleEvent.create(
+        article.articleId,
+        retitledArticle,
+        'article.titleChanged',
+        { articleId: article.articleId, title: retitledArticle.title, changedAt: now },
+        now,
+      ),
+    };
+  };
+
+const isBodyEdited = (article: Pick<Article, 'createdAt'>, body: Pick<ArticleBody, 'updatedAt'> | undefined): boolean =>
+  body !== undefined && body.updatedAt > article.createdAt;
+
 const deleteArticle = (now: Instant) => (articleId: ArticleId): ArticleDeleted => {
   return ArticleEvent.create(articleId, undefined, 'article.deleted', { articleId, deletedAt: now }, now);
 };
@@ -105,6 +135,8 @@ export const Article = {
   createArticle,
   publishArticle,
   unpublishArticle,
+  changeArticleTitle,
+  isBodyEdited,
   deleteArticle,
 } as const;
 
@@ -112,10 +144,38 @@ export type ArticleCreatedStore = Agg.Store<ArticleCreated>;
 export type ArticlePublishedStore = Agg.Store<ArticlePublished>;
 export type ArticleUnpublishedStore = Agg.Store<ArticleUnpublished>;
 export type ArticleDeletedStore = Agg.Store<ArticleDeleted>;
+export type ArticleWithBodyCreatedStore = Readonly<{
+  store: (articleCreated: ArticleCreated, bodyWritten: ArticleBodyWritten) => RA<void, never>;
+}>;
+export type ArticleWithBodyEditedStore = Readonly<{
+  store: (
+    titleChanged: ArticleTitleChanged | undefined,
+    bodyWritten: ArticleBodyWritten,
+    baseUpdatedAt: Instant,
+  ) => RA<{ edited: boolean }, never>;
+}>;
+export type ArticleWithDependentsDeletedStore = Readonly<{
+  store: (
+    articleDeleted: ArticleDeleted,
+    bodyDeleted: ArticleBodyDeleted | undefined,
+    digestExpired: DigestExpired | undefined,
+  ) => RA<void, never>;
+}>;
+export type DraftArticleWithDependentsDeletedStore = Readonly<{
+  store: (
+    articleDeleted: ArticleDeleted,
+    bodyDeleted: ArticleBodyDeleted | undefined,
+    digestExpired: DigestExpired,
+  ) => RA<{ deleted: boolean }, never>;
+}>;
 
 export type ArticleResolver = Agg.Resolver<ArticleId, Article | undefined>;
 export type ArticleResolverByRootPostId = Agg.Resolver<{ rootPostId: PostId }, Article | undefined>;
 export type ArticlesResolverByAuthorActorId = Agg.Resolver<{ actorId: ActorId }, Article[]>;
+export type PublishedArticlesWithAuthorResolver = Agg.Resolver<
+  void,
+  Readonly<{ articles: readonly Article[]; authorUsername: Username | null }>
+>;
 
 export type ArticleNotFoundError = Readonly<{
   type: 'ArticleNotFoundError';
@@ -170,5 +230,37 @@ export const ArticleInvalidStatusError = {
       expectedStatus.join(', ')
     }.`,
     detail: { articleId, currentStatus, expectedStatus },
+  }),
+} as const;
+
+export type ArticleBodyMissingError = Readonly<{
+  type: 'ArticleBodyMissingError';
+  message: string;
+  detail: {
+    articleId: ArticleId;
+  };
+}>;
+
+export const ArticleBodyMissingError = {
+  create: (articleId: ArticleId): ArticleBodyMissingError => ({
+    type: 'ArticleBodyMissingError',
+    message: `The article with ID "${articleId}" has no body and cannot be published.`,
+    detail: { articleId },
+  }),
+} as const;
+
+export type ArticleNotEditableError = Readonly<{
+  type: 'ArticleNotEditableError';
+  message: string;
+  detail: {
+    articleId: ArticleId;
+  };
+}>;
+
+export const ArticleNotEditableError = {
+  create: (articleId: ArticleId): ArticleNotEditableError => ({
+    type: 'ArticleNotEditableError',
+    message: `The article with ID "${articleId}" is built from a post and its body cannot be edited.`,
+    detail: { articleId },
   }),
 } as const;

@@ -1,0 +1,35 @@
+---
+import { getCollection } from 'astro:content';
+
+import { chapterOfEntryId } from '../lib/chapter-routes';
+import { schedule, withTimeRanges } from '../schedule';
+
+const pageIds = new Set(
+  (await getCollection('chapters')).map((entry) => chapterOfEntryId(entry.id)),
+);
+---
+
+<table>
+  <thead>
+    <tr>
+      <th>時間</th>
+      <th>内容</th>
+    </tr>
+  </thead>
+  <tbody>
+    {
+      withTimeRanges(schedule).map((row) => (
+        <tr>
+          <td>{row.range}</td>
+          <td>
+            {
+              pageIds.has(row.id) ? (
+                <a href={`/chapters/${row.id}/`}>{row.title}</a>
+              ) : row.title
+            }
+          </td>
+        </tr>
+      ))
+    }
+  </tbody>
+</table>

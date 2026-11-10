@@ -7,6 +7,7 @@ import type { ActorId } from './actorId.ts';
 import { LocalActor } from './localActor.ts';
 import { RemoteActor } from './remoteActor.ts';
 import { updateLogoUri } from './updateLogoUri.ts';
+import { updateRemoteActorProfile } from './updateProfile.ts';
 
 export type { LocalActor } from './localActor.ts';
 export type { RemoteActor } from './remoteActor.ts';
@@ -15,6 +16,7 @@ export type Actor = LocalActor | RemoteActor;
 export const Actor = {
   zodType: z.union([LocalActor.zodType, RemoteActor.zodType]).describe('Actor'),
   updateLogoUri,
+  updateRemoteActorProfile,
   match: <T, U>({ onLocal, onRemote }: {
     onLocal: (localActor: LocalActor) => T;
     onRemote: (remoteActor: RemoteActor) => U;
@@ -51,5 +53,28 @@ export const ActorNotFoundError = {
     type: 'ActorNotFoundError',
     message: `The actor with URI "${uri}" was not found.`,
     detail: { uri },
+  }),
+} as const;
+
+export type UndoActorMismatchError = Readonly<{
+  type: 'UndoActorMismatchError';
+  message: string;
+  detail: {
+    activityUri: string;
+    storedActorUri: string;
+    undoActorUri: string;
+  };
+}>;
+
+export const UndoActorMismatchError = {
+  create: ({ activityUri, storedActorUri, undoActorUri }: {
+    activityUri: string;
+    storedActorUri: string;
+    undoActorUri: string;
+  }): UndoActorMismatchError => ({
+    type: 'UndoActorMismatchError',
+    message:
+      `The undo actor "${undoActorUri}" does not match the actor "${storedActorUri}" of the activity "${activityUri}".`,
+    detail: { activityUri, storedActorUri, undoActorUri },
   }),
 } as const;

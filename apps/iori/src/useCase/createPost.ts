@@ -1,4 +1,5 @@
-import { Create, Document, Note, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Create, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 import z from 'zod/v4';
@@ -6,30 +7,32 @@ import z from 'zod/v4';
 import type { OgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { extractUrlsFromHtml } from '../adaptor/ogp/urlExtractor.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
-import type { PostImage, PostImageCreatedStore } from '../domain/image/image.ts';
-import { ImageId } from '../domain/image/imageId.ts';
-import { getMimeTypeFromUrl } from '../domain/image/mimeType.ts';
+import type { PostImageCreatedStore } from '../domain/image/image.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { LinkPreview, LinkPreviewCreatedStore } from '../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
 import { Post, type PostCreatedStore } from '../domain/post/post.ts';
 import type { AcceptedRelaysResolver } from '../domain/relay/relay.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
-import { SessionId } from '../domain/session/sessionId.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import { User, UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
-import { Env } from '../env.ts';
 import { Schema } from '../helper/schema.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { toImageDocument } from './helper/postImageDocument.ts';
+import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  content: string;
-  imageUrls: string[];
-  ctx: RequestContext<unknown>;
-}>;
+type Input =
+  & Requester
+  & PostImagesInput
+  & Readonly<{
+    content: string;
+    summary?: string | null;
+    sensitive?: boolean;
+    ctx: RequestContext<unknown>;
+  }>;
 
 const Ok = Schema.create(
   z.object({
@@ -53,6 +56,8 @@ type Deps = Readonly<{
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
   ogpFetcher: OgpFetcher;
   acceptedRelaysResolver: AcceptedRelaysResolver;
+  scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
+  origin: string;
 }>;
 
 const create = ({
@@ -65,23 +70,25 @@ const create = ({
   linkPreviewCreatedStore,
   ogpFetcher,
   acceptedRelaysResolver,
+  scheduleBlueskyCrosspost,
+  origin,
 }: Deps): CreatePostUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-      RA.andBind('postEvent', ({ actor, content }) => {
+      RA.andBind('postEvent', ({ actor, content, summary, sensitive }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content,
           userId: actor.userId,
+          summary,
+          sensitive,
         });
         return RA.ok(postEvent);
       }),
@@ -98,24 +105,16 @@ const create = ({
         }, now);
         return timelineItemCreatedStore.store(timelineItemEvent);
       }),
-      RA.andBind('images', async ({ post, imageUrls }) => {
-        if (imageUrls.length > 0) {
-          const images: PostImage[] = imageUrls.map((url) => ({
-            imageId: ImageId.generate(),
-            postId: post.postId,
-            url,
-            altText: null,
-            createdAt: now,
-          }));
+      RA.andBind('images', async (input) => {
+        const images = toPostImages(input.post.postId, input, now);
+        if (images.length > 0) {
           await postImageCreatedStore.store(images);
-          return RA.ok(images);
         }
-        return RA.ok([]);
+        return RA.ok(images);
       }),
       RA.andThrough(async ({ post, content }) => {
         // URLを抽出してOGP情報を取得
-        const env = Env.getInstance();
-        const excludeHost = new URL(env.ORIGIN).host;
+        const excludeHost = new URL(origin).host;
         const urls = extractUrlsFromHtml(content, excludeHost);
 
         if (urls.length === 0) {
@@ -168,13 +167,7 @@ const create = ({
             actors: note?.attributionIds,
             tos: note?.toIds,
             ccs: note?.ccIds,
-            attachments: images.map(
-              (image) =>
-                new Document({
-                  url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
-                  mediaType: getMimeTypeFromUrl(image.url),
-                }),
-            ),
+            attachments: images.map((image) => toImageDocument(image, origin)),
           }),
         );
         return RA.ok(undefined);
@@ -201,13 +194,7 @@ const create = ({
           actors: note.attributionIds,
           tos: note.toIds,
           ccs: note.ccIds,
-          attachments: images.map(
-            (image) =>
-              new Document({
-                url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
-                mediaType: getMimeTypeFromUrl(image.url),
-              }),
-          ),
+          attachments: images.map((image) => toImageDocument(image, origin)),
         });
 
         // Send to each relay's inbox
@@ -229,11 +216,17 @@ const create = ({
 
         return RA.ok(undefined);
       }),
+      RA.andThrough(async ({ post }) => {
+        await scheduleBlueskyCrosspost?.run({ postId: post.postId });
+        return RA.ok(undefined);
+      }),
       RA.map(({ post, user }) => ({ post, user })),
     );
 
   return { run };
 };
+
+export const createCreatePostUseCase = (deps: Deps): CreatePostUseCase => create(deps);
 
 export const CreatePostUseCase = {
   create,

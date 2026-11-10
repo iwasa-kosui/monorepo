@@ -11,22 +11,22 @@ import { z } from 'zod/v4';
 import { ActorId } from '../../domain/actor/actorId.ts';
 import { ImageId } from '../../domain/image/imageId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { nobleArgon2idDerive } from '../../domain/password/argon2idDerive.ts';
 import { Password } from '../../domain/password/password.ts';
 import { PostContent } from '../../domain/post/postContent.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
+import { Env } from '../../env.ts';
 import { Federation } from '../../federation.ts';
 import { CreateMuteUseCase } from '../../useCase/createMute.ts';
 import { CreatePostUseCase } from '../../useCase/createPost.ts';
 import { DeleteMuteUseCase } from '../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../useCase/deletePost.ts';
-import { GetFederatedTimelineUseCase } from '../../useCase/getFederatedTimeline.ts';
 import { GetLikedPostsUseCase } from '../../useCase/getLikedPosts.ts';
 import { GetMutesUseCase } from '../../useCase/getMutes.ts';
 import { GetNotificationsUseCase } from '../../useCase/getNotifications.ts';
 import { GetRemoteActorPostsUseCase } from '../../useCase/getRemoteActorPosts.ts';
-import { GetServerTimelineUseCase } from '../../useCase/getServerTimeline.ts';
 import { GetTimelineUseCase } from '../../useCase/getTimeline.ts';
 import { GetUserPostsUseCase } from '../../useCase/getUserPosts.ts';
 import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from '../../useCase/helper/resolve.ts';
@@ -44,6 +44,7 @@ import { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { FedifyRemoteActorLookup } from '../fedify/remoteActorLookup.ts';
 import { createOgpFetcher } from '../ogp/ogpFetcher.ts';
+import { PgActorResolverById } from '../pg/actor/actorResolverById.ts';
 import { PgActorResolverByUri } from '../pg/actor/actorResolverByUri.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
 import { PgActorResolverByFollowerId } from '../pg/actor/followsResolverByFollowerId.ts';
@@ -56,7 +57,6 @@ import { PgArticleResolverByRootPostId } from '../pg/article/articleResolverByRo
 import { PgEmojiReactCreatedStore } from '../pg/emojiReact/emojiReactCreatedStore.ts';
 import { PgEmojiReactDeletedStore } from '../pg/emojiReact/emojiReactDeletedStore.ts';
 import { PgEmojiReactResolverByActorAndPostAndEmoji } from '../pg/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
-import { PgFederatedTimelineItemsResolver } from '../pg/federatedTimeline/federatedTimelineItemsResolver.ts';
 import { PgFollowRequestedStore } from '../pg/follow/followRequestedStore.ts';
 import { PgPostImageCreatedStore } from '../pg/image/postImageCreatedStore.ts';
 import { PgLikedPostsResolverByActorId } from '../pg/like/likedPostsResolverByActorId.ts';
@@ -78,7 +78,6 @@ import { PgPostCreatedStore } from '../pg/post/postCreatedStore.ts';
 import { PgPostDeletedStore } from '../pg/post/postDeletedStore.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgRemotePostUpserter } from '../pg/post/remotePostUpserter.ts';
-import { PgThreadResolver } from '../pg/post/threadResolver.ts';
 import { PgPushSubscriptionsResolverByUserId } from '../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { PgAcceptedRelaysResolver } from '../pg/relay/acceptedRelaysResolver.ts';
 import { PgAllRelaysResolver } from '../pg/relay/allRelaysResolver.ts';
@@ -150,59 +149,6 @@ const app = new Hono()
               actor,
               followers,
               following,
-            });
-          },
-          err: (err) => {
-            deleteCookie(c, 'sessionId');
-            return c.json({ error: String(JSON.stringify(err)) }, 400);
-          },
-        }),
-      );
-    },
-  )
-  .get(
-    '/v1/federated',
-    sValidator(
-      'query',
-      z.object({
-        receivedAt: z.optional(z.coerce.number().pipe(Instant.zodType)),
-      }),
-      (res, c) => {
-        if (!res.success) {
-          return c.json(
-            { error: res.error.flatMap((e) => e.message).join(',') },
-            400,
-          );
-        }
-      },
-    ),
-    async (c) => {
-      const useCase = GetFederatedTimelineUseCase.create({
-        sessionResolver: PgSessionResolver.getInstance(),
-        userResolver: PgUserResolver.getInstance(),
-        actorResolverByUserId: PgActorResolverByUserId.getInstance(),
-        federatedTimelineItemsResolver: PgFederatedTimelineItemsResolver.getInstance(),
-        mutedActorIdsResolverByUserId: PgMutedActorIdsResolverByUserId.getInstance(),
-      });
-      const sessionId = getCookie(c, 'sessionId');
-      if (!sessionId) {
-        return c.json({ error: 'Unauthorized' }, 401);
-      }
-      const receivedAt = c.req.valid('query').receivedAt;
-      return RA.flow(
-        RA.ok(sessionId),
-        RA.andThen((sessionId) => useCase.run({ sessionId: SessionId.orThrow(sessionId), receivedAt })),
-        RA.match({
-          ok: ({ items, nextCursor }) => {
-            return c.json({
-              items: items.map((item) => ({
-                ...item,
-                post: {
-                  ...item.post,
-                  content: sanitize(item.post.content),
-                },
-              })),
-              nextCursor,
             });
           },
           err: (err) => {
@@ -306,6 +252,7 @@ const app = new Hono()
         sessionResolver: PgSessionResolver.getInstance(),
         userResolver: PgUserResolver.getInstance(),
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        actorResolverById: PgActorResolverById.getInstance(),
         likeResolver: PgLikeResolver.getInstance(),
         localLikeDeletedStore: PgLocalLikeDeletedStore.getInstance(),
         postResolver: PgPostResolver.getInstance(),
@@ -347,6 +294,7 @@ const app = new Hono()
       const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
 
       const useCase = SendRepostUseCase.create({
+        origin: Env.getInstance().ORIGIN,
         sessionResolver: PgSessionResolver.getInstance(),
         userResolver: PgUserResolver.getInstance(),
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
@@ -355,6 +303,7 @@ const app = new Hono()
         remotePostUpserter: PgRemotePostUpserter.getInstance(),
         timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
         postResolver: PgPostResolver.getInstance(),
+        articleResolverByRootPostId: PgArticleResolverByRootPostId.getInstance(),
       });
 
       const result = await useCase.run({
@@ -396,11 +345,13 @@ const app = new Hono()
         sessionResolver: PgSessionResolver.getInstance(),
         userResolver: PgUserResolver.getInstance(),
         actorResolverByUserId: PgActorResolverByUserId.getInstance(),
+        actorResolverById: PgActorResolverById.getInstance(),
         repostResolver: PgRepostResolver.getInstance(),
         repostDeletedStore: PgRepostDeletedStore.getInstance(),
         timelineItemResolverByRepostId: PgTimelineItemResolverByRepostId.getInstance(),
         timelineItemDeletedStore: PgTimelineItemDeletedStore.getInstance(),
         postResolver: PgPostResolver.getInstance(),
+        articleResolverByRootPostId: PgArticleResolverByRootPostId.getInstance(),
       });
 
       const result = await useCase.run({
@@ -546,6 +497,7 @@ const app = new Hono()
         pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
         webPushSender: WebPushSender.getInstance(),
         postResolver: PgPostResolver.getInstance(),
+        origin: Env.getInstance().ORIGIN,
       });
 
       const result = await useCase.run({
@@ -648,6 +600,7 @@ const app = new Hono()
         linkPreviewCreatedStore: PgLinkPreviewCreatedStore.getInstance(),
         ogpFetcher: createOgpFetcher(),
         acceptedRelaysResolver: PgAcceptedRelaysResolver.getInstance(),
+        origin: Env.getInstance().ORIGIN,
       });
 
       const { content, imageUrls } = c.req.valid('json');
@@ -858,51 +811,6 @@ const app = new Hono()
       );
     },
   )
-  .get(
-    '/v1/thread',
-    sValidator(
-      'query',
-      z.object({
-        postId: PostId.zodType,
-      }),
-      (res, c) => {
-        if (!res.success) {
-          return c.json(
-            { error: res.error.flatMap((e) => e.message).join(',') },
-            400,
-          );
-        }
-      },
-    ),
-    async (c) => {
-      const { postId } = c.req.valid('query');
-
-      const threadResolver = PgThreadResolver.getInstance();
-      const result = await threadResolver.resolve({ postId });
-
-      if (!result.ok) {
-        return c.json({ error: String(result.err) }, 400);
-      }
-
-      const { currentPost, ancestors, descendants } = result.val;
-      return c.json({
-        currentPost: currentPost
-          ? {
-            ...currentPost,
-            content: sanitize(currentPost.content),
-          }
-          : null,
-        ancestors: ancestors.map((post) => ({
-          ...post,
-          content: sanitize(post.content),
-        })),
-        descendants: descendants.map((post) => ({
-          ...post,
-          content: sanitize(post.content),
-        })),
-      });
-    },
-  )
   .get('/v1/mutes', async (c) => {
     const sessionId = getCookie(c, 'sessionId');
     if (!sessionId) {
@@ -1076,6 +984,7 @@ const app = new Hono()
         userResolverByUsername: PgUserResolverByUsername.getInstance(),
         userPasswordResolver: PgUserPasswordResolver.getInstance(),
         sessionStartedStore: PgSessionStartedStore.getInstance(),
+        argon2idDerive: nobleArgon2idDerive,
       });
 
       const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
@@ -1121,6 +1030,7 @@ const app = new Hono()
         userCreatedStore: PgUserCreatedStore.getInstance(),
         localActorCreatedStore: PgLocalActorCreatedStore.getInstance(),
         userPasswordSetStore: PgUserPasswordSetStore.getInstance(),
+        argon2idDerive: nobleArgon2idDerive,
       });
 
       const ctx = Federation.getInstance().createContext(c.req.raw, undefined);
@@ -1258,24 +1168,6 @@ const app = new Hono()
           });
         },
         err: () => c.json({ error: 'Failed to load liked posts' }, 400),
-      }),
-    );
-  })
-  .get('/v1/server-timeline', async (c) => {
-    const useCase = GetServerTimelineUseCase.getInstance();
-
-    return RA.flow(
-      RA.ok(undefined),
-      RA.andThen(() => useCase.run({ createdAt: undefined })),
-      RA.match({
-        ok: ({ posts }) =>
-          c.json({
-            posts: posts.map((post) => ({
-              ...post,
-              content: sanitize(post.content),
-            })),
-          }),
-        err: () => c.json({ error: 'Failed to load timeline' }, 500),
       }),
     );
   })

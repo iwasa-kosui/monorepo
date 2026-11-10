@@ -1,29 +1,31 @@
 import type { RequestContext } from '@fedify/fedify';
-import { Article as FedifyArticle, Delete, Tombstone } from '@fedify/fedify';
+import { Article as FedifyArticle, Delete, Tombstone } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import {
   Article,
-  type ArticleDeletedStore,
   ArticleNotFoundError,
   type ArticleResolver,
+  type ArticleWithDependentsDeletedStore,
 } from '../domain/article/article.ts';
 import { ArticleId } from '../domain/article/articleId.ts';
+import { ArticleBody, type ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import { Digest, type DigestHeaderResolverByArticleId } from '../domain/digest/digest.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
-import { SessionId } from '../domain/session/sessionId.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  articleId: ArticleId;
-  ctx: RequestContext<unknown>;
-}>;
+type Input =
+  & Requester
+  & Readonly<{
+    articleId: ArticleId;
+    ctx: RequestContext<unknown>;
+  }>;
 
 const Ok = Schema.create(
   z.object({
@@ -53,7 +55,9 @@ type Deps = Readonly<{
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
   articleResolver: ArticleResolver;
-  articleDeletedStore: ArticleDeletedStore;
+  articleBodyResolver: ArticleBodyResolver;
+  digestHeaderResolverByArticleId: DigestHeaderResolverByArticleId;
+  articleWithDependentsDeletedStore: ArticleWithDependentsDeletedStore;
 }>;
 
 const create = ({
@@ -61,18 +65,18 @@ const create = ({
   userResolver,
   actorResolverByUserId,
   articleResolver,
-  articleDeletedStore,
+  articleBodyResolver,
+  digestHeaderResolverByArticleId,
+  articleWithDependentsDeletedStore,
 }: Deps): DeleteArticleUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (input) => resolveRequesterUser(input)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       RA.andBind('existingArticle', async ({ articleId }) => {
         const article = await articleResolver.resolve(articleId);
@@ -89,8 +93,20 @@ const create = ({
           return RA.err(UnauthorizedError.create());
         }
 
-        const deleteEvent = Article.deleteArticle(now)(articleId);
-        await articleDeletedStore.store(deleteEvent);
+        const body = await articleBodyResolver.resolve(articleId);
+        if (!body.ok) {
+          return body;
+        }
+        const digestHeader = await digestHeaderResolverByArticleId.resolve(articleId);
+        if (!digestHeader.ok) {
+          return digestHeader;
+        }
+
+        await articleWithDependentsDeletedStore.store(
+          Article.deleteArticle(now)(articleId),
+          body.val === undefined ? undefined : ArticleBody.deleteArticleBody(now)(articleId),
+          digestHeader.val === undefined ? undefined : Digest.expire(digestHeader.val, now),
+        );
 
         if (existingArticle.status === 'published') {
           const articleUri = ctx.getObjectUri(FedifyArticle, {

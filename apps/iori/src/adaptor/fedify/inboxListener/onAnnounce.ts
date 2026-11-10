@@ -1,26 +1,90 @@
-import { type Announce, type InboxContext, isActor, Note } from '@fedify/fedify';
+import { type InboxContext } from '@fedify/fedify';
+import { type Announce, isActor, Note } from '@fedify/vocab';
+import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
-import { FederatedTimelineItem } from '../../../domain/federatedTimeline/federatedTimelineItem.ts';
-import { FederatedTimelineItemId } from '../../../domain/federatedTimeline/federatedTimelineItemId.ts';
-import { Instant } from '../../../domain/instant/instant.ts';
+import type { ActorResolverByUri } from '../../../domain/actor/actor.ts';
+import type { ArticleResolver } from '../../../domain/article/article.ts';
+import { ArticleId } from '../../../domain/article/articleId.ts';
+import type {
+  FederatedTimelineItemCreatedStore,
+  FederatedTimelineItemResolverByPostId,
+} from '../../../domain/federatedTimeline/federatedTimelineItem.ts';
+import type { FollowedByLocalActorResolverByActorUri } from '../../../domain/follow/follow.ts';
+import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
-import { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
-import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
-import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
-import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
-import { PgFederatedTimelineItemCreatedStore } from '../../pg/federatedTimeline/federatedTimelineItemCreatedStore.ts';
-import { PgFederatedTimelineItemResolverByPostId } from '../../pg/federatedTimeline/federatedTimelineItemResolverByPostId.ts';
-import { PgPostResolver } from '../../pg/post/postResolver.ts';
-import { PgRemotePostUpserter } from '../../pg/post/remotePostUpserter.ts';
-import { PgRelayResolverByActorUri } from '../../pg/relay/relayResolverByActorUri.ts';
-import { PgRepostCreatedStore } from '../../pg/repost/repostCreatedStore.ts';
-import { PgRepostResolverByActivityUri } from '../../pg/repost/repostResolverByActivityUri.ts';
-import { PgTimelineItemCreatedStore } from '../../pg/timeline/timelineItemCreatedStore.ts';
-import { InboxActorResolver } from '../inboxActorResolver.ts';
+import type { AcceptedRelaysResolver, RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
+import type { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
+import { ActorIdentity } from '../actorIdentity.ts';
+import { extractContentWarning } from '../extractContentWarning.ts';
+import { extractRecipientActorUris } from '../extractRecipients.ts';
+import { extractVisibility } from '../extractVisibility.ts';
+import type { InboxActorResolver } from '../inboxActorResolver.ts';
+import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
+import { extractAttachments } from './extractAttachments.ts';
+import { saveFederatedNote } from './saveFederatedNote.ts';
 
-export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce) => {
+const NOTE_TYPE_ID = 'https://www.w3.org/ns/activitystreams#Note';
+const ARTICLE_TYPE_ID = 'https://www.w3.org/ns/activitystreams#Article';
+
+export type OnAnnounceDeps = Readonly<{
+  origin: string;
+  relayResolverByActorUri: RelayResolverByActorUri;
+  followedByLocalActorResolverByActorUri: FollowedByLocalActorResolverByActorUri;
+  acceptedRelaysResolver: AcceptedRelaysResolver;
+  inboxActorResolver: InboxActorResolver;
+  addReceivedRepostUseCase: AddReceivedRepostUseCase;
+  articleResolver: ArticleResolver;
+  remotePostUpserter: RemotePostUpserter;
+  actorResolverByUri: ActorResolverByUri;
+  federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
+  federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
+}>;
+
+const extractAttachmentsOrEmpty = async (
+  note: Note,
+  documentLoader: DocumentLoader,
+): Promise<RemotePostAttachment[]> => {
+  try {
+    return await extractAttachments(note, documentLoader);
+  } catch (error) {
+    getLogger().warn(`Failed to extract attachments for: ${note.id?.href} - ${String(error)}`);
+    return [];
+  }
+};
+
+const getSignedDocumentLoader = (ctx: InboxContext<unknown>) =>
+  ctx.getDocumentLoader({ identifier: ctx.recipient ?? INSTANCE_ACTOR_IDENTIFIER });
+
+const saveForwardedAnnounce = async (
+  deps: OnAnnounceDeps,
+  ctx: InboxContext<unknown>,
+  activity: Announce,
+) => {
+  const relaysResult = await deps.acceptedRelaysResolver.resolve();
+  if (!relaysResult.ok || relaysResult.val.length !== 1) {
+    return;
+  }
+  const [relay] = relaysResult.val;
+
+  const documentLoader = await getSignedDocumentLoader(ctx);
+  let note;
+  try {
+    note = await activity.getObject({ documentLoader });
+  } catch (error) {
+    getLogger().warn(`Failed to fetch forwarded Announce object: ${activity.objectId?.href} - ${String(error)}`);
+    return;
+  }
+  if (!(note instanceof Note)) {
+    getLogger().info(`Forwarded Announce object is not a Note: ${activity.objectId?.href}`);
+    return;
+  }
+
+  await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader });
+};
+
+export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxContext<unknown>, activity: Announce) => {
   const actorId = activity.actorId;
   if (!actorId) {
     getLogger().warn('Announce activity has no actorId');
@@ -28,25 +92,12 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
   }
 
   // Check if this is from a relay server
-  const relayResolver = PgRelayResolverByActorUri.getInstance();
-  const relayResult = await relayResolver.resolve({ actorUri: actorId.href });
+  const relayResult = await deps.relayResolverByActorUri.resolve({ actorUri: actorId.href });
   if (relayResult.ok && relayResult.val && relayResult.val.status === 'accepted') {
     // This is from a relay server - process as federated timeline item
-    await processRelayAnnounce(ctx, activity, relayResult.val);
+    await processRelayAnnounce(deps, ctx, activity, relayResult.val);
     return;
   }
-
-  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
-  if (!actorResult.ok) {
-    getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
-    return;
-  }
-  const { actorIdentity: reposterIdentity } = actorResult.val;
-  if (!activity.id) {
-    getLogger().warn('Announce activity has no id');
-    return;
-  }
-  const announceActivityUri = activity.id.href;
 
   const objectId = activity.objectId;
   if (!objectId) {
@@ -54,32 +105,74 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
     return;
   }
 
-  const useCase = AddReceivedRepostUseCase.create({
-    repostCreatedStore: PgRepostCreatedStore.getInstance(),
-    repostResolverByActivityUri: PgRepostResolverByActivityUri.getInstance(),
-    postResolver: PgPostResolver.getInstance(),
-    remotePostUpserter: PgRemotePostUpserter.getInstance(),
-    remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
-    logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
-    actorResolverByUri: PgActorResolverByUri.getInstance(),
-    timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
-  });
-
-  // Check if this is a local Note
+  // Check if this is a local Note or Article
   const parsed = ctx.parseUri(objectId);
-  if (
-    parsed && parsed.type === 'object' && parsed.class?.typeId?.href === 'https://www.w3.org/ns/activitystreams#Note'
-  ) {
-    // Local Note repost
-    const postIdResult = PostId.parse(parsed.values.id);
-    if (!postIdResult.ok) {
-      getLogger().warn(`Failed to parse postId from Announce activity: ${parsed.values.id}`);
+  const localObject = parsed && parsed.type === 'object'
+      && (parsed.class?.typeId?.href === NOTE_TYPE_ID || parsed.class?.typeId?.href === ARTICLE_TYPE_ID)
+    ? parsed
+    : undefined;
+
+  if (!localObject) {
+    const followedResult = await deps.followedByLocalActorResolverByActorUri.resolve({ actorUri: actorId.href });
+    if (!followedResult.ok) {
+      getLogger().warn(
+        `Failed to determine whether a local actor follows ${actorId.href}; failing the Announce to retry: ${activity.id?.href} - ${
+          String(followedResult.err)
+        }`,
+      );
+      throw new Error(`Failed to determine whether a local actor follows ${actorId.href}`);
+    }
+    if (!followedResult.val) {
+      getLogger().info(
+        `Not creating a repost for an Announce from an actor no local actor follows; trying to save it to the federated timeline as a relay-forwarded boost: ${actorId.href} (${activity.id?.href})`,
+      );
+      await saveForwardedAnnounce(deps, ctx, activity);
       return;
     }
-    const repostedPostId = postIdResult.val;
+  }
+
+  const actorResult = await deps.inboxActorResolver.resolve(ctx, activity);
+  if (!actorResult.ok) {
+    getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
+    return;
+  }
+  const { actorIdentity: reposterIdentity, documentLoaderOptions } = actorResult.val;
+  if (!activity.id) {
+    getLogger().warn('Announce activity has no id');
+    return;
+  }
+  const announceActivityUri = activity.id.href;
+
+  if (localObject) {
+    let repostedPostId: PostId;
+    if (localObject.class?.typeId?.href === ARTICLE_TYPE_ID) {
+      const articleIdResult = ArticleId.parse(localObject.values.id);
+      if (!articleIdResult.ok) {
+        getLogger().warn(`Failed to parse articleId from Announce activity: ${localObject.values.id}`);
+        return;
+      }
+      const articleResult = await deps.articleResolver.resolve(articleIdResult.val);
+      const article = articleResult.ok ? articleResult.val : undefined;
+      const rootPostId = article?.status === 'published' ? article.rootPostId : undefined;
+      if (!rootPostId) {
+        getLogger().info(
+          `Announce activity targets an unpublished article or one without a root post: ${objectId.href}`,
+        );
+        return;
+      }
+      repostedPostId = rootPostId;
+    } else {
+      // Local Note repost
+      const postIdResult = PostId.parse(localObject.values.id);
+      if (!postIdResult.ok) {
+        getLogger().warn(`Failed to parse postId from Announce activity: ${localObject.values.id}`);
+        return;
+      }
+      repostedPostId = postIdResult.val;
+    }
 
     return RA.flow(
-      useCase.run({
+      deps.addReceivedRepostUseCase.run({
         type: 'local',
         announceActivityUri,
         repostedPostId,
@@ -103,7 +196,8 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
   // Remote Note repost - lookup the remote note
   getLogger().info(`Processing remote Announce activity: ${objectId.href}`);
 
-  const note = await activity.getObject();
+  const documentLoader = documentLoaderOptions.documentLoader ?? await getSignedDocumentLoader(ctx);
+  const note = await activity.getObject({ documentLoader });
   if (!(note instanceof Note)) {
     getLogger().info(`Announce activity object is not a Note: ${objectId.href}`);
     return;
@@ -115,7 +209,7 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
   }
 
   // Get the note's author
-  const author = await note.getAttribution();
+  const author = await note.getAttribution({ documentLoader });
   if (!author || !isActor(author)) {
     getLogger().warn(`Could not resolve Note author for: ${note.id.href}`);
     return;
@@ -126,26 +220,35 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
     return;
   }
 
+  if (author.id.origin !== note.id.origin) {
+    getLogger().warn(`Note origin does not match actor origin: ${note.id.href} - ${author.id.href}`);
+    return;
+  }
+
   const contentText = String(note.content ?? '');
-  const authorIcon = await author.getIcon();
+  const authorIdentity = await ActorIdentity.fromFedifyActor(author, { documentLoader });
+  if (!authorIdentity.ok) {
+    getLogger().warn(`Could not read Note author: ${note.id.href}`);
+    return;
+  }
+  const attachments = await extractAttachmentsOrEmpty(
+    note,
+    documentLoader,
+  );
 
   return RA.flow(
-    useCase.run({
+    deps.addReceivedRepostUseCase.run({
       type: 'remote',
       announceActivityUri,
       reposterIdentity,
       remotePostIdentity: {
         uri: note.id.href,
         content: contentText,
-        authorIdentity: {
-          uri: author.id.href,
-          inboxUrl: author.inboxId.href,
-          url: author.url instanceof URL ? author.url.href : undefined,
-          username: typeof author.preferredUsername === 'string'
-            ? author.preferredUsername
-            : author.preferredUsername?.toString(),
-          logoUri: authorIcon?.url instanceof URL ? authorIcon.url.href : undefined,
-        },
+        ...extractContentWarning(note),
+        visibility: extractVisibility(note, author.followersId),
+        recipientActorUris: extractRecipientActorUris([note], deps.origin),
+        attachments,
+        authorIdentity: authorIdentity.val,
       },
     }),
     RA.match({
@@ -170,87 +273,19 @@ export const onAnnounce = async (ctx: InboxContext<unknown>, activity: Announce)
 import type { Relay } from '../../../domain/relay/relay.ts';
 
 const processRelayAnnounce = async (
-  _ctx: InboxContext<unknown>,
+  deps: OnAnnounceDeps,
+  ctx: InboxContext<unknown>,
   activity: Announce,
   relay: Relay,
 ) => {
-  const now = Instant.now();
-
   getLogger().info(`Processing relay Announce from: ${relay.actorUri}`);
 
-  const note = await activity.getObject();
+  const documentLoader = await getSignedDocumentLoader(ctx);
+  const note = await activity.getObject({ documentLoader });
   if (!(note instanceof Note)) {
     getLogger().info(`Relay Announce object is not a Note`);
     return;
   }
 
-  if (!note.id) {
-    getLogger().warn('Relay Announce Note has no id');
-    return;
-  }
-
-  // Get the note's author
-  const author = await note.getAttribution();
-  if (!author || !isActor(author)) {
-    getLogger().warn(`Could not resolve Note author for relay: ${note.id.href}`);
-    return;
-  }
-
-  if (!author.id || !author.inboxId) {
-    getLogger().warn(`Note author has no id or inbox for relay: ${note.id.href}`);
-    return;
-  }
-
-  const contentText = String(note.content ?? '');
-  const authorIcon = await author.getIcon();
-
-  // Upsert the remote post using the existing upserter
-  const remotePostUpserter = PgRemotePostUpserter.getInstance();
-
-  // Use the remote post upserter to create/get the post
-  const postResult = await remotePostUpserter.resolve({
-    uri: note.id.href,
-    content: contentText,
-    authorIdentity: {
-      uri: author.id.href,
-      inboxUrl: author.inboxId.href,
-      url: author.url instanceof URL ? author.url.href : undefined,
-      username: typeof author.preferredUsername === 'string'
-        ? author.preferredUsername
-        : author.preferredUsername?.toString(),
-      logoUri: authorIcon?.url instanceof URL ? authorIcon.url.href : undefined,
-    },
-    inReplyToUri: null,
-  });
-
-  if (!postResult.ok) {
-    getLogger().warn(`Failed to upsert remote post for relay: ${note.id.href}`);
-    return;
-  }
-
-  const post = postResult.val;
-
-  // Check if this post already exists in federated timeline
-  const federatedTimelineItemResolver = PgFederatedTimelineItemResolverByPostId.getInstance();
-  const existingItemResult = await federatedTimelineItemResolver.resolve({ postId: post.postId });
-
-  if (existingItemResult.ok && existingItemResult.val) {
-    getLogger().info(`Post already in federated timeline: ${post.postId}`);
-    return;
-  }
-
-  // Create federated timeline item
-  const federatedTimelineItemCreatedStore = PgFederatedTimelineItemCreatedStore.getInstance();
-  const event = FederatedTimelineItem.createFederatedTimelineItem(
-    {
-      federatedTimelineItemId: FederatedTimelineItemId.generate(),
-      postId: post.postId,
-      relayId: relay.relayId,
-      receivedAt: now,
-    },
-    now,
-  );
-
-  await federatedTimelineItemCreatedStore.store(event);
-  getLogger().info(`Created federated timeline item for relay post: ${post.postId}`);
+  await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader });
 };

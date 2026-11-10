@@ -1,0 +1,73 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "__WORKER_NAME__",
+  "account_id": "__ACCOUNT_ID__",
+  "main": "../../src/worker.ts",
+  "workers_dev": true,
+  "preview_urls": false,
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "alias": {
+    "undici": "./empty-module.mjs",
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
+  "placement": {
+    "region": "aws:us-east-1",
+  },
+  "assets": {
+    "binding": "ASSETS",
+    "run_worker_first": ["/*", "!/static/*", "!/manifest.json", "!/favicon.ico", "!/icon-192.png", "!/icon-512.png"],
+    "directory": "../../dist",
+  },
+  "vars": {
+    "ORIGIN": "__ORIGIN__",
+    "IORI_ADMISSION_MODE": "__IORI_ADMISSION_MODE__",
+    "IORI_ADMISSION_IDENTITY": "__IORI_ADMISSION_IDENTITY__",
+    "VAPID_SUBJECT": "__VAPID_SUBJECT__",
+    "EVENT_ARCHIVE_ENABLED": "false",
+    "IORI_PRUNE_FEDERATED_POSTS": "disabled",
+    "IORI_BLUESKY_CROSSPOST": "enabled",
+    "IORI_BLUESKY_TIMELINE": "enabled",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "__WORKER_NAME__",
+      "database_id": "__D1_DATABASE_ID__",
+      "migrations_dir": "../../drizzle-d1",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "__R2_BUCKET_NAME__",
+    },
+    {
+      "binding": "EVENT_ARCHIVE",
+      "bucket_name": "__R2_EVENT_ARCHIVE_BUCKET_NAME__",
+    },
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "FEDIFY_KV",
+      "id": "__KV_NAMESPACE_ID__",
+    },
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "FEDIFY_QUEUE",
+        "queue": "__QUEUE_NAME__",
+      },
+    ],
+  },
+  "ai": {
+    "binding": "AI",
+  },
+  "triggers": {
+    "crons": ["* * * * *", "0 0,3,6,9,12,15,18,21 * * *", "15 20 * * 1", "30 21 * * *", "0 21 * * *", "0 19 * * *"],
+  },
+}

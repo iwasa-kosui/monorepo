@@ -1,4 +1,5 @@
 import { test as fcTest } from '@fast-check/vitest';
+import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
@@ -137,6 +138,8 @@ describe('DeletePostUseCase', () => {
       };
       const post: LocalPost = {
         type: 'local',
+        summary: null,
+        sensitive: false,
         postId: crypto.randomUUID() as PostId,
         actorId: actor.id,
         content: 'Post to delete',
@@ -163,6 +166,53 @@ describe('DeletePostUseCase', () => {
       }
     });
 
+    it('投稿を削除したあとに、Bluesky の投稿の削除を依頼する', async () => {
+      const deps = createDeps();
+      const user: User = {
+        id: crypto.randomUUID() as User['id'],
+        username: 'kosui' as Username,
+      };
+      const session: Session = {
+        sessionId: crypto.randomUUID() as Session['sessionId'],
+        userId: user.id,
+        expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+      };
+      const actor: LocalActor = {
+        id: crypto.randomUUID() as LocalActor['id'],
+        userId: user.id,
+        uri: 'https://example.com/users/kosui',
+        inboxUrl: 'https://example.com/inbox',
+        type: 'local',
+        logoUri: undefined,
+      };
+      const post: LocalPost = {
+        type: 'local',
+        summary: null,
+        sensitive: false,
+        postId: crypto.randomUUID() as PostId,
+        actorId: actor.id,
+        content: 'Post to delete',
+        createdAt: Date.now() as LocalPost['createdAt'],
+        userId: user.id,
+        inReplyToUri: null,
+      };
+      setupValidUserSession(deps, user, session, actor);
+      deps.postResolver.setPost(post);
+      const removeBlueskyCrosspost = { run: vi.fn(async () => RA.ok('removed' as const)) };
+
+      const result = await DeletePostUseCase.create({ ...deps, removeBlueskyCrosspost }).run({
+        sessionId: session.sessionId,
+        postId: post.postId,
+        ctx: createMockRequestContext(),
+      });
+
+      expect(result.ok).toBe(true);
+      expect(removeBlueskyCrosspost.run).toHaveBeenCalledExactlyOnceWith({ postId: post.postId });
+      expect(vi.mocked(deps.postDeletedStore.store).mock.invocationCallOrder[0]).toBeLessThan(
+        removeBlueskyCrosspost.run.mock.invocationCallOrder[0]!,
+      );
+    });
+
     fcTest.prop([arbUser()])(
       'プロパティ: 有効なセッションで自分の投稿を削除できる',
       async (user) => {
@@ -182,6 +232,8 @@ describe('DeletePostUseCase', () => {
         };
         const post: LocalPost = {
           type: 'local',
+          summary: null,
+          sensitive: false,
           postId: crypto.randomUUID() as PostId,
           actorId: actor.id,
           content: 'Test',
@@ -332,6 +384,8 @@ describe('DeletePostUseCase', () => {
       };
       const otherPost: LocalPost = {
         type: 'local',
+        summary: null,
+        sensitive: false,
         postId: crypto.randomUUID() as PostId,
         actorId: crypto.randomUUID() as LocalPost['actorId'],
         content: 'Other user post',
@@ -378,12 +432,15 @@ describe('DeletePostUseCase', () => {
       };
       const remotePost: RemotePost = {
         type: 'remote',
+        summary: null,
+        sensitive: false,
         postId: crypto.randomUUID() as PostId,
         actorId: crypto.randomUUID() as RemotePost['actorId'],
         content: 'Remote post',
         createdAt: Date.now() as RemotePost['createdAt'],
         uri: 'https://remote.example.com/posts/1',
         inReplyToUri: null,
+        visibility: null,
       };
       setupValidUserSession(deps, user, session, actor);
       deps.postResolver.setPost(remotePost);
@@ -446,6 +503,8 @@ describe('DeletePostUseCase', () => {
       };
       const post: LocalPost = {
         type: 'local',
+        summary: null,
+        sensitive: false,
         postId: crypto.randomUUID() as PostId,
         actorId: actor.id,
         content: 'Test',
@@ -505,6 +564,8 @@ describe('DeletePostUseCase', () => {
       };
       const post: LocalPost = {
         type: 'local',
+        summary: null,
+        sensitive: false,
         postId: crypto.randomUUID() as PostId,
         actorId: actor.id,
         content: 'Test',

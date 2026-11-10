@@ -1,25 +1,48 @@
-import { useRef, useState } from 'hono/jsx';
+import { useState } from 'hono/jsx';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
+import { createStatus, uploadMedia } from '../api/mastodonClient.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
+import { canSubmitPost, submitPost } from './postSubmission.ts';
 
 type Props = Readonly<{
   id?: string;
   formId?: string;
+  onPosted: (status: Status) => void;
 }>;
 
-export const PostForm = ({ id, formId }: Props) => {
+export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [content, setContent] = useState('');
-  const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
+  const [uploaded, setUploaded] = useState<{ id: string; url: string }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const formRef = useRef<HTMLFormElement>(null);
+  const [isPosting, setIsPosting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!canSubmitPost(content, isUploading, isPosting)) return;
+    setIsPosting(true);
+    try {
+      const result = await submitPost({ content, uploaded }, { create: createStatus, onPosted });
+      if (result.kind === 'posted') {
+        setContent('');
+        setUploaded([]);
+      } else {
+        alert(result.message);
+      }
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  const handleFormSubmit = (e: Event) => {
+    e.preventDefault();
+    handleSubmit();
+  };
 
   const handleKeyDown = (e: KeyboardEvent) => {
     // Command+Enter (Mac) or Ctrl+Enter (Windows/Linux) to submit
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
-      if (formRef.current && content.trim()) {
-        formRef.current.submit();
-      }
+      handleSubmit();
     }
   };
 
@@ -29,38 +52,28 @@ export const PostForm = ({ id, formId }: Props) => {
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
-    const newUrls: string[] = [];
+    const newMedia: { id: string; url: string }[] = [];
 
     for (const file of Array.from(files)) {
-      const formData = new FormData();
-      formData.append('file', file);
       try {
-        const res = await fetch('/api/v1/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        const result = await res.json();
-        if (result.url) {
-          newUrls.push(result.url);
-        } else if (result.error) {
-          alert('Upload failed: ' + result.error);
-        }
+        const media = await uploadMedia(file);
+        newMedia.push({ id: media.id, url: media.url });
       } catch (err) {
         alert('Upload failed: ' + (err as Error).message);
       }
     }
 
-    setUploadedUrls((prev) => [...prev, ...newUrls]);
+    setUploaded((prev) => [...prev, ...newMedia]);
     setIsUploading(false);
     target.value = '';
   };
 
   const handleRemoveImage = (index: number) => {
-    setUploadedUrls((prev) => prev.filter((_, i) => i !== index));
+    setUploaded((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
-    <form id={formId ?? id} method='post' action='/posts' ref={formRef} class='flex flex-col flex-1 min-h-0'>
+    <form id={formId ?? id} onSubmit={handleFormSubmit} class='flex flex-col flex-1 min-h-0'>
       <MarkdownEditor
         value={content}
         onChange={setContent}
@@ -70,11 +83,10 @@ export const PostForm = ({ id, formId }: Props) => {
         name='content'
       />
 
-      <input type='hidden' name='imageUrls' value={uploadedUrls.join(',')} />
-      {uploadedUrls.length > 0 && (
+      {uploaded.length > 0 && (
         <div class='mt-3 flex flex-wrap gap-2 flex-shrink-0'>
-          {uploadedUrls.map((url, index) => (
-            <div key={url} class='relative group'>
+          {uploaded.map(({ id: mediaId, url }, index) => (
+            <div key={mediaId} class='relative group'>
               <img src={url} alt='Preview' class='w-16 h-16 object-cover rounded-xl shadow-clay-sm' />
               <button
                 type='button'
@@ -112,6 +124,7 @@ export const PostForm = ({ id, formId }: Props) => {
         </label>
         <button
           type='submit'
+          disabled={isPosting}
           class='px-5 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
         >
           投稿する

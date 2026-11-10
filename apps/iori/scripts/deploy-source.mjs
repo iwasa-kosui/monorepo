@@ -1,0 +1,338 @@
+import { build } from 'esbuild';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { withCliSignal } from './cli-lifetime.mjs';
+import { runMigrationCommand } from './migration-command.mjs';
+import { createPrivateCommandLog } from './private-command-log.mjs';
+import { assertReviewedMain } from './reviewed-main.mjs';
+import { createSourceBuildManifest } from './source-build-manifest.mjs';
+import { createSourceSshAdapter } from './source-control-ssh.mjs';
+import { sourceUnitStatusNoticeLine } from './source-diagnose-remote.mjs';
+
+const appRoot = fileURLToPath(new URL('../', import.meta.url));
+export const sourceDeploymentSshArguments = ({ user, identityFile, knownHostsFile }) => [
+  '-F',
+  '/dev/null',
+  '-T',
+  '-a',
+  '-o',
+  'BatchMode=yes',
+  '-o',
+  'IdentitiesOnly=yes',
+  '-o',
+  'IdentityAgent=none',
+  '-o',
+  'StrictHostKeyChecking=yes',
+  '-o',
+  `UserKnownHostsFile=${knownHostsFile}`,
+  '-o',
+  'GlobalKnownHostsFile=/dev/null',
+  '-o',
+  'ClearAllForwardings=yes',
+  '-o',
+  'ConnectTimeout=15',
+  '-o',
+  'ServerAliveInterval=30',
+  '-o',
+  'ServerAliveCountMax=4',
+  '-i',
+  identityFile,
+  '-l',
+  user,
+];
+const fixedReasons = [
+  ['Invalid source inputs.', 'source-inputs-invalid'],
+  ['Reviewed main is required.', 'reviewed-main-required'],
+  ['Reviewed checkout mismatch.', 'reviewed-checkout-mismatch'],
+  ['Tracked checkout is dirty.', 'reviewed-checkout-dirty'],
+  ['Reviewed main changed.', 'reviewed-main-changed'],
+  ['Source bootstrap is too large.', 'bootstrap-too-large'],
+  ['Unsupported source Node.', 'source-node-version'],
+  ['Source checkout is invalid.', 'source-checkout-invalid'],
+  ['Invalid source pnpm executable.', 'source-pnpm-invalid'],
+  ['Source UPLOAD_DIR is not set.', 'upload-dir-unset'],
+  ['Source UPLOAD_DIR must be an absolute path', 'upload-dir-not-absolute'],
+  ['Source UPLOAD_DIR must be outside dist', 'upload-dir-inside-dist'],
+  ['Source UPLOAD_DIR must be an existing directory', 'upload-dir-missing'],
+  ['Source diagnostic limit exceeded.', 'diagnostic-limit'],
+  ['Source diagnostic transport failed.', 'diagnostic-transport'],
+  ['Invalid source deployment operation.', 'invalid-operation'],
+  ['Dirty source checkout.', 'source-dirty'],
+  ['Source revision mismatch.', 'source-revision-mismatch'],
+  ['Unexpected source repository.', 'source-repository-unexpected'],
+  ['Source main changed.', 'source-main-changed'],
+  ['Unsupported source pnpm.', 'source-pnpm-version'],
+  ['Source configuration unavailable.', 'source-config-unavailable'],
+  ['Source configuration owner reset failed.', 'config-owner-reset-failed'],
+  ['Source configuration mode reset failed.', 'config-mode-reset-failed'],
+  ['Source deployment is blocked.', 'source-deploy-blocked'],
+  ['Invalid source build closure.', 'source-build-closure-invalid'],
+  ['Invalid source command.', 'source-command-invalid'],
+  ['Unsafe source control.', 'source-control-unsafe'],
+  ['Source output limit.', 'source-output-limit'],
+  ['Source control rejected.', 'source-control-rejected'],
+  ['Source control is not ready.', 'source-control-not-ready'],
+  ['Source operation failed.', 'source-operation-failed'],
+  ['Invalid source diagnostic.', 'diagnostic-invalid'],
+  ['Source prerequisite readiness failed.', 'readiness-failed'],
+  ['Source is not frozen.', 'source-not-frozen'],
+  ['Source identity mismatch.', 'source-identity-mismatch'],
+  ['Source queue has failed.', 'source-queue-failed'],
+  ['Source is not idle.', 'source-not-idle'],
+  ['Source resume was not confirmed.', 'resume-not-confirmed'],
+  ['Invalid source release operation.', 'invalid-release-operation'],
+  ['Source service stop failed.', 'service-stop-failed'],
+  ['Source service is not stopped.', 'service-not-stopped'],
+  ['Source service start failed.', 'service-start-failed'],
+  ['Source service control is not permitted.', 'service-control-not-permitted'],
+  ['Source freeze is already committed.', 'freeze-committed'],
+  ['Source pending freeze is invalid.', 'pending-freeze-invalid'],
+  ['Source pending freeze identity mismatch.', 'pending-identity-mismatch'],
+  ['Source release destination exists.', 'release-target-exists'],
+  ['Source release rename verification failed.', 'release-rename-failed'],
+  ['Source release was not confirmed.', 'release-not-confirmed'],
+  ['Invalid source restart operation.', 'invalid-restart-operation'],
+  ['Source pending freeze is present.', 'pending-freeze-present'],
+  ['Source freeze is not committed.', 'freeze-not-committed'],
+  ['Source freeze is invalid.', 'freeze-invalid'],
+  ['Source freeze identity mismatch.', 'freeze-identity-mismatch'],
+  ['Source restart was already attempted.', 'restart-already-attempted'],
+  ['Source restart record is invalid.', 'restart-record-invalid'],
+  ['Source restart record failed.', 'restart-record-failed'],
+  ['Source queue has not failed.', 'source-queue-not-failed'],
+  ['Source restart was not confirmed.', 'restart-not-confirmed'],
+  ['Migration command aborted.', 'aborted'],
+  ['Private diagnostic directory is invalid.', 'log-directory-invalid'],
+];
+const sshReasons = [
+  [['Permission denied'], 'ssh-auth-denied'],
+  [['Host key verification failed'], 'ssh-host-key'],
+  [['Load key'], 'ssh-key-format'],
+  [['Connection timed out', 'Operation timed out'], 'ssh-timeout'],
+  [['Connection refused'], 'ssh-refused'],
+  [['Could not resolve hostname'], 'ssh-dns'],
+];
+const ownerNotice = /^IORI_NOTICE stage=remote-configuration-owner previous_uid=\d{1,10} previous_gid=\d{1,10}$/;
+const modeNotice = /^IORI_NOTICE stage=remote-configuration-mode previous_mode=0[0-7]{3}$/;
+const classifyFailure = (program, error, stderr) => {
+  const text = `${error?.message ?? ''}\n${stderr}`;
+  const fixed = fixedReasons.find(([needle]) => text.includes(needle));
+  if (fixed) return fixed[1];
+  if (error?.spawnFailed === true) return 'spawn-failed';
+  const sshExit = (program === 'ssh' && error?.exitCode === 255)
+    || (program === 'rsync' && (error?.exitCode === 255 || error?.exitCode === 12));
+  const ssh = sshExit ? sshReasons.find(([needles]) => needles.some(needle => text.includes(needle))) : undefined;
+  if (ssh) return ssh[1];
+  if (program === 'ssh' && error?.exitCode === 127 && text.includes('No such file or directory')) {
+    return 'remote-node-missing';
+  }
+  if (stderr.includes('Migration command failed; outcome may be uncertain.')) return 'remote-command-failed';
+  if (typeof error?.signal === 'string') return 'command-signaled';
+  return 'unclassified';
+};
+export const writeDiagnostic = (stage, program, error, stderr) => {
+  try {
+    const exit = Number.isInteger(error?.exitCode) && error.exitCode >= 0 && error.exitCode <= 255
+      ? String(error.exitCode)
+      : 'none';
+    const signal = typeof error?.signal === 'string' && /^[A-Z0-9]{1,12}$/.test(error.signal) ? error.signal : 'none';
+    process.stderr.write(
+      `IORI_DIAG stage=${stage} program=${program} exit=${exit} signal=${signal} reason=${
+        classifyFailure(program, error, stderr)
+      }\n`,
+    );
+  } catch {}
+};
+export const waitForRetry = (milliseconds, signal) =>
+  new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new Error('Migration command aborted.'));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error('Migration command aborted.'));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, milliseconds);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+const checkDist = async (sha, signal) => {
+  const root = join(appRoot, 'dist');
+  return { root, manifest: await createSourceBuildManifest(root, sha, { signal }) };
+};
+export const deploySource = async (options, {
+  runCommand = runMigrationCommand,
+  checkMain = assertReviewedMain,
+  sourceFactory = createSourceSshAdapter,
+  inspectDist = checkDist,
+  signal: suppliedSignal,
+  statusRetryTimeoutMs = 120_000,
+  statusRetryIntervalMs = 3000,
+} = {}) => {
+  const { mainSha, host } = options;
+  const current = { program: 'none', stderr: '' };
+  const stage = async (name, operation) => {
+    current.program = 'none';
+    current.stderr = '';
+    try {
+      return await operation();
+    } catch (error) {
+      writeDiagnostic(name, current.program, error, current.stderr);
+      throw error;
+    }
+  };
+  const { source, ssh } = await stage('inputs', async () => ({
+    source: await sourceFactory(options),
+    ssh: sourceDeploymentSshArguments(options),
+  }));
+  const signal = AbortSignal.any([...(suppliedSignal ? [suppliedSignal] : []), AbortSignal.timeout(50 * 60_000)]);
+  const execute = async (program, args, input, timeout = 16 * 60_000) => {
+    current.program = ['ssh', 'rsync'].includes(program) ? program : 'none';
+    current.stderr = '';
+    const directory = process.env.IORI_PRIVATE_LOG_DIRECTORY;
+    const log = directory ? await createPrivateCommandLog(directory) : undefined;
+    try {
+      return await runCommand(program, args, {
+        cwd: appRoot,
+        env: process.env,
+        timeout,
+        killGraceMs: 15000,
+        maxBuffer: 8_000_000,
+        signal,
+        input,
+        captureOutput: async (result) => {
+          current.stderr = result.stderr;
+          if (program === 'ssh') {
+            for (const line of result.stderr.split('\n')) {
+              if (ownerNotice.test(line) || modeNotice.test(line) || sourceUnitStatusNoticeLine.test(line)) {
+                process.stderr.write(`${line}\n`);
+              }
+            }
+          }
+          await log?.capture(result);
+        },
+      });
+    } finally {
+      await log?.close();
+    }
+  };
+  let manifest;
+  const bootstrap = async (phase, timeoutMs) => {
+    const script = await build({
+      stdin: {
+        contents:
+          `import {runSourceDeployStep,captureSourceCommandOutput} from './scripts/source-deploy-operations.mjs';
+          import {withCliSignal} from './scripts/cli-lifetime.mjs';
+          if (process.version !== 'v24.12.0') throw new Error('Unsupported source Node.');
+          await withCliSignal(signal => runSourceDeployStep(${JSON.stringify({ phase, sha: mainSha, manifest })},
+            {signal,captureOutput:captureSourceCommandOutput}), {timeoutMs: ${timeoutMs}});`,
+        resolveDir: appRoot,
+      },
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      write: false,
+    });
+    const input = script.outputFiles[0].text;
+    if (Buffer.byteLength(input) > 1024 * 1024) throw new Error('Source bootstrap is too large.');
+    return input;
+  };
+  const runBootstrap = (input, timeout) =>
+    execute(
+      'ssh',
+      [
+        ...ssh,
+        '--',
+        host,
+        '"$HOME/.nvm/versions/node/v24.12.0/bin/node"',
+        '--input-type=module',
+        '-',
+      ],
+      input,
+      timeout,
+    );
+  const remote = (phase) =>
+    stage(`remote-${phase}`, async () => {
+      await checkMain(mainSha, { signal });
+      await runBootstrap(await bootstrap(phase, 15 * 60 * 1000));
+    });
+  const reportUnitStatus = async () => {
+    const saved = { ...current };
+    try {
+      if (signal.aborted) return;
+      await runBootstrap(await bootstrap('unit-status', 60_000), 90_000);
+    } catch {
+    } finally {
+      Object.assign(current, saved);
+    }
+  };
+  const dist = await stage('manifest', async () => {
+    await checkMain(mainSha, { signal });
+    return inspectDist(mainSha, signal);
+  });
+  manifest = dist.manifest;
+  await remote('check'); // No currently installed control client is required for prerequisite deployment.
+  await remote('checkout');
+  await remote('dependencies');
+  await remote('dist-check'); // Immediately before the fixed dist mutation after dependency/setup delay.
+  await stage('rsync', () =>
+    execute('rsync', [
+      '--archive',
+      '--compress',
+      '--delete',
+      '--exclude=/uploads',
+      '--rsh',
+      ['ssh', ...ssh].join(' '),
+      `${dist.root}/`,
+      `${host}:monorepo/apps/iori/dist/`,
+    ]));
+  await remote('verify-dist');
+  await remote('configuration-owner');
+  await remote('install');
+  await remote('restart');
+  await stage('status', async () => {
+    current.program = 'ssh';
+    const deadline = Date.now() + statusRetryTimeoutMs;
+    try {
+      let state;
+      while (state === undefined) {
+        try {
+          state = await source.status(signal);
+        } catch (error) {
+          if (error?.retryable !== true || Date.now() + statusRetryIntervalMs > deadline) throw error;
+          await waitForRetry(statusRetryIntervalMs, signal);
+        }
+      }
+      if (
+        state.source_revision !== mainSha || state.ingress_frozen || state.consumer_paused
+        || state.queue_failed || state.identity !== null
+      ) throw new Error('Source prerequisite readiness failed.');
+    } catch (error) {
+      await reportUnitStatus();
+      throw error;
+    }
+  });
+};
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const env = process.env;
+  const valid = env.GITHUB_EVENT_NAME === 'workflow_dispatch'
+    && env.GITHUB_REF === 'refs/heads/main' && env.MAIN_SHA === env.GITHUB_SHA;
+  withCliSignal(async (signal) => {
+    if (!valid) throw new Error('Invalid source deployment event.');
+    return deploySource({
+      host: env.IORI_SOURCE_SSH_HOST,
+      user: env.IORI_SOURCE_SSH_USER,
+      identityFile: env.IORI_SOURCE_SSH_IDENTITY_FILE,
+      knownHostsFile: env.IORI_SOURCE_SSH_KNOWN_HOSTS_FILE,
+      mainSha: env.MAIN_SHA,
+      runId: `deploy_${env.GITHUB_RUN_ID}`,
+    }, { signal });
+  }).then(() => console.log('Source prerequisite deployment completed.')).catch(() => {
+    console.error('Source deployment failed; retain source state for reviewed recovery.');
+    process.exitCode = 1;
+  });
+}

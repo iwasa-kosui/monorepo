@@ -1,5 +1,5 @@
-import type { Actor } from '@fedify/fedify';
-import { isActor } from '@fedify/fedify';
+import type { Actor } from '@fedify/vocab';
+import { isActor } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import type { Username } from '../../domain/user/username.ts';

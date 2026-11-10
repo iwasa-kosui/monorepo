@@ -1,0 +1,4 @@
+export const CONTROL_PLANE_APIS: readonly string[];
+export function controlPlaneApi(path: string): string;
+export function isPreparationReason(reason: unknown): boolean;
+export function withReason(error: unknown, reason: string): Error & { diagnostic: { reason: string } };

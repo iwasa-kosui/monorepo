@@ -1,6 +1,9 @@
 import type { FC, PropsWithChildren } from 'hono/jsx';
 import { createContext, useContext, useMemo } from 'hono/jsx';
 
+import { homeFeedCursor, type HomeItem, mergeHomeFeed } from '../hooks/homeFeed.ts';
+import { useBlueskyLike, type UseBlueskyLikeReturn } from '../hooks/useBlueskyLike.ts';
+import { useBlueskyRepost, type UseBlueskyRepostReturn } from '../hooks/useBlueskyRepost.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation.ts';
 import { usePostActions, type UsePostActionsReturn } from '../hooks/usePostActions.ts';
@@ -13,7 +16,10 @@ import { useUIState, type UseUIStateReturn } from '../hooks/useUIState.ts';
 export type TimelineContextValue = Readonly<{
   timeline: UseTimelineReturn;
   data: TimelineData | null;
+  items: readonly HomeItem[];
   actions: UsePostActionsReturn;
+  blueskyLike: UseBlueskyLikeReturn;
+  blueskyRepost: UseBlueskyRepostReturn;
   thread: UseThreadModalReturn;
   reply: UseReplyDialogReturn;
   ui: UseUIStateReturn;
@@ -32,7 +38,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
 
   const reply = useReplyDialog({
     onReplySent: () => {
-      timeline.fetchMore(undefined);
+      timeline.reload();
     },
   });
 
@@ -40,9 +46,12 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     updateTimelineItem: timeline.updateTimelineItem,
     updateThreadPost: thread.updateThreadPost,
     removePost: timeline.removePost,
-    refreshTimeline: () => timeline.fetchMore(undefined),
+    refreshTimeline: () => timeline.reload(),
     onPostDeleted: thread.removeFromThread,
   });
+
+  const blueskyLike = useBlueskyLike(timeline.updateBlueskyItems);
+  const blueskyRepost = useBlueskyRepost(timeline.updateBlueskyItems);
 
   const pullToRefresh = usePullToRefresh({
     onRefresh: async () => {
@@ -52,15 +61,27 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     isRefreshing: timeline.isRefreshing,
   });
 
-  const timelineItems = data?.timelineItems ?? [];
+  const items = useMemo(
+    (): readonly HomeItem[] =>
+      data === null
+        ? []
+        : mergeHomeFeed({
+          statuses: data.statuses,
+          hasMoreStatuses: data.nextMaxId !== undefined,
+          bluesky: data.bluesky.items,
+          hasMoreBluesky: data.bluesky.cursor !== undefined,
+        }),
+    [data],
+  );
 
   useInfiniteScroll({
-    items: timelineItems,
-    onLoadMore: timeline.fetchMore,
+    nextCursor: data === null ? undefined : homeFeedCursor(data.nextMaxId, data.bluesky.cursor),
+    onLoadMore: timeline.loadMore,
+    isFirstPageSettled: timeline.isFirstPageSettled,
   });
 
   useKeyboardNavigation({
-    items: timelineItems,
+    items,
     selectedIndex: ui.selectedIndex,
     setSelectedIndex: ui.setSelectedIndex,
     scrollToSelected: ui.scrollToSelected,
@@ -68,8 +89,6 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     setEmojiPickerOpenForIndex: ui.setEmojiPickerOpenForIndex,
     replyingToPostId: reply.replyingToPostId,
     threadModalPostId: thread.threadModalPostId,
-    likingPostId: actions.actionState.likingPostId,
-    undoingLikePostId: actions.actionState.undoingLikePostId,
     onLike: actions.like,
     onUndoLike: actions.undoLike,
     onReply: reply.openReplyDialog,
@@ -81,14 +100,17 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     (): TimelineContextValue => ({
       timeline,
       data,
+      items,
       actions,
+      blueskyLike,
+      blueskyRepost,
       thread,
       reply,
       ui,
       pullToRefresh,
       pullThreshold: PULL_TO_REFRESH_THRESHOLD,
     }),
-    [timeline, data, actions, thread, reply, ui, pullToRefresh],
+    [timeline, data, items, actions, blueskyLike, blueskyRepost, thread, reply, ui, pullToRefresh],
   );
 
   return <TimelineContext.Provider value={value}>{children}</TimelineContext.Provider>;

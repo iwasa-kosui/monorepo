@@ -1,9 +1,15 @@
 import { RA } from '@iwasa-kosui/result';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
-import type { Agg } from '../../../domain/aggregate/index.ts';
+import { ImageId } from '../../../domain/image/imageId.ts';
 import type { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
-import { LocalPost, type PostImage, type PostWithAuthor, RemotePost } from '../../../domain/post/post.ts';
+import {
+  LocalPost,
+  type PostImage,
+  type PostWithAuthor,
+  RemotePost,
+  type ThreadResolver,
+} from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { Env } from '../../../env.ts';
@@ -23,10 +29,7 @@ import {
   usersTable,
 } from '../schema.ts';
 
-export type ThreadResolver = Agg.Resolver<
-  { postId: PostId },
-  { currentPost: PostWithAuthor | null; ancestors: PostWithAuthor[]; descendants: PostWithAuthor[] }
->;
+export type { ThreadResolver } from '../../../domain/post/post.ts';
 
 const getInstance = singleton((): ThreadResolver => {
   const resolve = async ({ postId }: { postId: PostId }) => {
@@ -142,6 +145,8 @@ const getInstance = singleton((): ThreadResolver => {
             createdAt: row.posts.createdAt.getTime(),
             userId: row.local_posts.userId,
             inReplyToUri: row.local_posts.inReplyToUri,
+            summary: null,
+            sensitive: false,
             type: 'local',
           }),
           username: Username.orThrow(row.users.username),
@@ -196,6 +201,8 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
         createdAt: row.posts.createdAt.getTime(),
         userId: row.local_posts.userId,
         inReplyToUri: row.local_posts.inReplyToUri,
+        summary: null,
+        sensitive: false,
         type: 'local',
       }),
       username: Username.orThrow(row.users.username),
@@ -240,6 +247,9 @@ async function getPostById(postId: PostId): Promise<PostWithAuthor | null> {
         content: row.posts.content,
         createdAt: row.posts.createdAt.getTime(),
         inReplyToUri: row.remote_posts.inReplyToUri,
+        visibility: null,
+        summary: null,
+        sensitive: false,
         type: 'remote',
       }),
       username: Username.orThrow(row.remote_actors?.username ?? 'unknown'),
@@ -288,6 +298,9 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
         content: row.posts.content,
         createdAt: row.posts.createdAt.getTime(),
         inReplyToUri: row.remote_posts.inReplyToUri,
+        visibility: null,
+        summary: null,
+        sensitive: false,
         type: 'remote',
       }),
       username: Username.orThrow(row.remote_actors?.username ?? 'unknown'),
@@ -337,6 +350,8 @@ async function getPostByUri(uri: string): Promise<PostWithAuthor | null> {
           createdAt: row.posts.createdAt.getTime(),
           userId: row.local_posts.userId,
           inReplyToUri: row.local_posts.inReplyToUri,
+          summary: null,
+          sensitive: false,
           type: 'local',
         }),
         username: Username.orThrow(row.users.username),
@@ -363,6 +378,7 @@ async function getPostImages(postId: string): Promise<PostImage[]> {
     .execute();
 
   return imageRows.map((row) => ({
+    imageId: ImageId.orThrow(row.imageId),
     url: row.url,
     altText: row.altText,
   }));
@@ -382,7 +398,7 @@ async function getPostImagesByIds(postIds: string[]): Promise<Map<string, PostIm
   for (const imageRow of imageRows) {
     if (postIds.includes(imageRow.postId)) {
       const existing = imagesByPostId.get(imageRow.postId) ?? [];
-      existing.push({ url: imageRow.url, altText: imageRow.altText });
+      existing.push({ imageId: ImageId.orThrow(imageRow.imageId), url: imageRow.url, altText: imageRow.altText });
       imagesByPostId.set(imageRow.postId, existing);
     }
   }

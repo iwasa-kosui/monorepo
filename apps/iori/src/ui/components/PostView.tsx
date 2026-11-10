@@ -1,45 +1,43 @@
 import { useRef, useState } from 'hono/jsx';
 
+import type { Status, Translation } from '../../adaptor/mastodon/entities.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
-import type { PostId } from '../../domain/post/postId.ts';
-import type { UserId } from '../../domain/user/userId.ts';
+import { safeAbsoluteUrl, safeUrl } from '../../helper/safeUrl.ts';
+import { isMastodonApiError, translate } from '../api/mastodonClient.ts';
+import { accountHref, displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
+import { translationErrorMessage } from '../api/translation.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 
 type Props = Readonly<{
-  post: PostWithAuthor;
-  repostedBy?: {
-    username: string;
-    logoUri?: string;
-  };
-  onLike?: (postId: PostId) => void;
+  status: Status;
+  onLike?: (postId: string) => void;
   isLiking?: boolean;
-  onUndoLike?: (postId: PostId) => void;
+  onUndoLike?: (postId: string) => void;
   isUndoingLike?: boolean;
-  onRepost?: (postId: PostId) => void;
+  onRepost?: (postId: string) => void;
   isReposting?: boolean;
-  onUndoRepost?: (postId: PostId) => void;
+  onUndoRepost?: (postId: string) => void;
   isUndoingRepost?: boolean;
-  onDelete?: (postId: PostId) => void;
+  onDelete?: (postId: string) => void;
   isDeleting?: boolean;
-  onEmojiReact?: (postId: PostId, emoji: string) => void;
-  onUndoEmojiReact?: (postId: PostId, emoji: string) => void;
+  onEmojiReact?: (postId: string, emoji: string) => void;
+  onUndoEmojiReact?: (postId: string, emoji: string) => void;
   isEmojiReacting?: boolean;
   myReactions?: readonly string[];
-  currentUserId?: UserId;
+  currentAccountId?: string;
+  isLoggedIn?: boolean;
   isSelected?: boolean;
   dataIndex?: number;
   isEmojiPickerOpen?: boolean;
   onToggleEmojiPicker?: () => void;
-  onReply?: (postId: PostId) => void;
-  onShowThread?: (postId: PostId) => void;
+  onReply?: (postId: string) => void;
+  onShowThread?: (postId: string) => void;
 }>;
 
 export const PostView = (
   {
-    post,
-    repostedBy,
+    status,
     onLike,
     isLiking,
     onUndoLike,
@@ -53,8 +51,9 @@ export const PostView = (
     onEmojiReact,
     onUndoEmojiReact,
     isEmojiReacting,
-    myReactions = [],
-    currentUserId,
+    myReactions,
+    currentAccountId,
+    isLoggedIn,
     isSelected,
     dataIndex,
     isEmojiPickerOpen,
@@ -63,10 +62,15 @@ export const PostView = (
     onShowThread,
   }: Props,
 ) => {
-  const isRemotePost = post.type === 'remote' && 'uri' in post;
-  const isLocalPost = post.type === 'local';
-  const isOwner = isLocalPost && currentUserId && post.userId === currentUserId;
-  const inReplyToUri = 'inReplyToUri' in post ? post.inReplyToUri : null;
+  const post = displayStatus(status);
+  const repostedBy = status.reblog === null ? undefined : status.account;
+  const isLocalPost = isLocalAccount(post.account);
+  const isRemotePost = !isLocalPost;
+  const isOwner = isLocalPost && currentAccountId !== undefined && post.account.id === currentAccountId;
+  const isReplyPost = post.in_reply_to_id !== null;
+  const images = post.media_attachments.filter((attachment) => attachment.type === 'image');
+  const linkPreviews = post.iori?.link_previews ?? [];
+  const reactions = post.iori?.reactions ?? [];
 
   // Gesture states for like
   const [isFloating, setIsFloating] = useState(false);
@@ -74,19 +78,26 @@ export const PostView = (
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
   const lastTapTime = useRef<number>(0);
+  const isTranslatingRef = useRef(false);
+  const [translation, setTranslation] = useState<Translation | null>(null);
+  const [isTranslationShown, setIsTranslationShown] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState('');
+  const canTranslate = isLoggedIn === true && post.visibility !== 'direct' && post.language === 'und';
+  const [isSpoilerOpen, setIsSpoilerOpen] = useState(false);
+  const [isSensitiveMediaShown, setIsSensitiveMediaShown] = useState(false);
+  const hasSpoiler = post.spoiler_text !== '';
+  const isContentHidden = hasSpoiler && !isSpoilerOpen;
+  const isMediaConcealed = !hasSpoiler && post.sensitive && !isSensitiveMediaShown;
 
   // Generate link to post detail page
-  const postDetailLink = isLocalPost
-    ? `/users/${post.username}/posts/${post.postId}`
-    : isRemotePost
-    ? post.uri
-    : undefined;
+  const postDetailLink = isLocalPost ? statusHref(post) : safeAbsoluteUrl(post.uri);
 
   const triggerLike = () => {
-    if (onLike && !post.liked && !isLiking) {
+    if (onLike && !post.favourited && !isLiking) {
       setShowHeartAnimation(true);
       setIsFloating(true);
-      onLike(post.postId);
+      onLike(post.id);
       setTimeout(() => {
         setShowHeartAnimation(false);
         setIsFloating(false);
@@ -97,17 +108,17 @@ export const PostView = (
   const handleLikeClick = () => {
     if (isLiking || isUndoingLike) return;
 
-    if (post.liked) {
+    if (post.favourited) {
       // Undo like
       if (onUndoLike) {
         if (confirm('いいねを取り消しますか？')) {
-          onUndoLike(post.postId);
+          onUndoLike(post.id);
         }
       }
     } else {
       // Like
       if (onLike) {
-        onLike(post.postId);
+        onLike(post.id);
       }
     }
   };
@@ -115,7 +126,7 @@ export const PostView = (
   const handleDeleteClick = () => {
     if (isOwner && onDelete && !isDeleting) {
       if (confirm('Are you sure you want to delete this post?')) {
-        onDelete(post.postId);
+        onDelete(post.id);
       }
     }
   };
@@ -123,20 +134,40 @@ export const PostView = (
   const handleRepostClick = () => {
     if (isReposting || isUndoingRepost) return;
 
-    if (post.reposted) {
+    if (post.reblogged) {
       // Undo repost
       if (onUndoRepost) {
         if (confirm('リポストを取り消しますか？')) {
-          onUndoRepost(post.postId);
+          onUndoRepost(post.id);
         }
       }
     } else {
       // Repost
       if (onRepost) {
         if (confirm('リポストしますか？')) {
-          onRepost(post.postId);
+          onRepost(post.id);
         }
       }
+    }
+  };
+
+  const handleTranslateClick = async () => {
+    if (isTranslatingRef.current) return;
+    if (translation !== null) {
+      setIsTranslationShown(!isTranslationShown);
+      return;
+    }
+    isTranslatingRef.current = true;
+    setIsTranslating(true);
+    setTranslationError('');
+    try {
+      setTranslation(await translate(post.id));
+      setIsTranslationShown(true);
+    } catch (error) {
+      setTranslationError(translationErrorMessage(isMastodonApiError(error) ? error.status : undefined));
+    } finally {
+      isTranslatingRef.current = false;
+      setIsTranslating(false);
     }
   };
 
@@ -147,7 +178,7 @@ export const PostView = (
   };
 
   const handleTouchEnd = (e: TouchEvent) => {
-    if (post.liked || isLiking) return;
+    if (post.favourited || isLiking) return;
     if (touchStartX.current === null || touchStartY.current === null) return;
 
     const touchEndX = e.changedTouches[0].clientX;
@@ -163,7 +194,7 @@ export const PostView = (
 
   // Double tap detection for like
   const handleClick = (e: MouseEvent) => {
-    if (post.liked || isLiking) return;
+    if (post.favourited || isLiking) return;
     if (lastTapTime.current === null) return;
 
     const now = Date.now();
@@ -177,7 +208,9 @@ export const PostView = (
     lastTapTime.current = now;
   };
 
-  const canLike = onLike && !post.liked && !isLiking;
+  const canLike = onLike && !post.favourited && !isLiking;
+
+  const logoUrl = safeUrl(post.account.avatar);
 
   return (
     <article
@@ -233,96 +266,137 @@ export const PostView = (
         <div class='flex-1 min-w-0'>
           <div class='flex items-center gap-2'>
             <a
-              href={isLocalPost
-                ? `/users/${post.username}`
-                : isRemotePost
-                ? `/remote-users/${post.actorId}`
-                : undefined}
+              href={accountHref(post.account)}
               class='w-8 h-8 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 shadow-clay-sm'
             >
-              {post.logoUri
+              {logoUrl
                 ? (
                   <img
-                    src={post.logoUri}
+                    src={logoUrl}
                     alt='Author Logo'
                     class='w-8 h-8 blob-avatar object-cover'
                   />
                 )
                 : (
-                  String(post.username).charAt(0).toUpperCase()
+                  post.account.username.charAt(0).toUpperCase()
                 )}
             </a>
             <a
-              href={isLocalPost
-                ? `/users/${post.username}`
-                : isRemotePost
-                ? `/remote-users/${post.actorId}`
-                : undefined}
+              href={accountHref(post.account)}
               class='font-semibold text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
             >
-              @{post.username}
+              @{post.account.username}
             </a>
             <span class='text-warm-gray-dark dark:text-gray-500'>·</span>
             <a
               href={postDetailLink}
-              target={isRemotePost ? '_blank' : undefined}
-              rel={isRemotePost ? 'noopener noreferrer' : undefined}
+              target={isRemotePost && postDetailLink ? '_blank' : undefined}
+              rel={isRemotePost && postDetailLink ? 'noopener noreferrer' : undefined}
               class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
-              title={new Date(post.createdAt).toLocaleString()}
+              title={new Date(post.created_at).toLocaleString()}
             >
-              <time dateTime={new Date(post.createdAt).toISOString()}>
-                {Instant.formatRelative(post.createdAt)}
+              <time dateTime={new Date(post.created_at).toISOString()}>
+                {Instant.formatRelative(Date.parse(post.created_at) as Instant)}
               </time>
             </a>
           </div>
         </div>
         <div>
-          <div
-            class='mt-2 text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-sand [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-charcoal-light dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent [&_.invisible]:visible [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mb-2'
-            dangerouslySetInnerHTML={{ __html: post.content }}
-          />
-          {post.images && post.images.length > 0 && (
+          {hasSpoiler && (
+            <div class='mt-2 flex flex-wrap items-center gap-2 rounded-2xl bg-sand/40 px-3 py-2 dark:bg-gray-700/40'>
+              <p class='text-sm text-charcoal dark:text-gray-200 break-words'>{post.spoiler_text}</p>
+              <button
+                type='button'
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsSpoilerOpen(!isSpoilerOpen);
+                }}
+                class='text-sm text-terracotta hover:underline dark:text-terracotta-light'
+              >
+                {isSpoilerOpen ? '閉じる' : 'もっと見る'}
+              </button>
+            </div>
+          )}
+          {!isContentHidden && (
+            <>
+              <div
+                class='mt-2 text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-sand [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-charcoal-light dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent [&_.invisible]:visible [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mb-2'
+                dangerouslySetInnerHTML={{ __html: post.content }}
+              />
+              {isTranslationShown && translation !== null && (
+                <div class='mt-2 border-t border-warm-gray pt-2 dark:border-gray-700'>
+                  <div
+                    class='text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline break-words [&_p]:mb-4 [&_.invisible]:visible'
+                    dangerouslySetInnerHTML={{ __html: translation.content }}
+                  />
+                  <p class='text-xs text-warm-gray-dark dark:text-gray-500'>Workers AI で翻訳</p>
+                </div>
+              )}
+            </>
+          )}
+          {!isContentHidden && images.length > 0 && isMediaConcealed && (
+            <div class='mt-3 flex items-center gap-2 rounded-2xl bg-sand/40 px-3 py-2 dark:bg-gray-700/40'>
+              <p class='text-sm text-charcoal dark:text-gray-200'>センシティブな画像があります</p>
+              <button
+                type='button'
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsSensitiveMediaShown(true);
+                }}
+                class='text-sm text-terracotta hover:underline dark:text-terracotta-light'
+              >
+                表示する
+              </button>
+            </div>
+          )}
+          {!isContentHidden && images.length > 0 && !isMediaConcealed && (
             <div
               class={`mt-3 grid gap-2 ${
-                post.images.length === 1
+                images.length === 1
                   ? 'grid-cols-1'
-                  : post.images.length === 2
+                  : images.length === 2
                   ? 'grid-cols-2'
                   : 'grid-cols-2 md:grid-cols-3'
               }`}
             >
-              {post.images.map((image, index) => (
-                <a
-                  key={index}
-                  href={image.url}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                  class='block overflow-hidden rounded-2xl'
-                >
-                  <img
-                    src={image.url}
-                    alt={image.altText || 'Post image'}
-                    class='w-full h-auto max-h-80 object-cover hover:opacity-90 transition-opacity'
-                    loading='lazy'
-                  />
-                </a>
-              ))}
+              {images.map((image, index) => {
+                const imageUrl = safeUrl(image.url);
+                if (!imageUrl) return null;
+                return (
+                  <a
+                    key={index}
+                    href={imageUrl}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    class='block overflow-hidden rounded-2xl'
+                  >
+                    <img
+                      src={imageUrl}
+                      alt={image.description || 'Post image'}
+                      class='w-full h-auto max-h-80 object-cover hover:opacity-90 transition-opacity'
+                      loading='lazy'
+                    />
+                  </a>
+                );
+              })}
             </div>
           )}
           {/* Link previews */}
-          {post.linkPreviews && post.linkPreviews.length > 0 && (
+          {!isContentHidden && linkPreviews.length > 0 && (
             <div class='mt-3 space-y-2'>
-              {post.linkPreviews.map((preview) => <LinkPreviewCard key={preview.linkPreviewId} preview={preview} />)}
+              {linkPreviews.map((preview, index) => (
+                <LinkPreviewCard key={`${preview.url}#${index}`} preview={preview} />
+              ))}
             </div>
           )}
           {/* Show thread link */}
-          {onShowThread && inReplyToUri && (
+          {onShowThread && isReplyPost && (
             <div class='mt-2'>
               <button
                 type='button'
                 onClick={(e) => {
                   e.stopPropagation();
-                  onShowThread(post.postId);
+                  onShowThread(post.id);
                 }}
                 class='flex items-center gap-1 text-sm transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
               >
@@ -345,11 +419,34 @@ export const PostView = (
             </div>
           )}
           <div class='mt-3 flex items-center justify-end gap-4'>
+            {canTranslate && (
+              <button
+                type='button'
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleTranslateClick();
+                }}
+                class={`flex items-center gap-1 text-sm transition-colors ${
+                  isTranslating
+                    ? 'text-charcoal-light/50 dark:text-gray-500 cursor-wait'
+                    : 'text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
+                }`}
+                disabled={isTranslating}
+              >
+                {isTranslating
+                  ? '翻訳しています'
+                  : translation === null
+                  ? '翻訳'
+                  : isTranslationShown
+                  ? '原文のみ表示'
+                  : '翻訳を表示'}
+              </button>
+            )}
             {/* Reply button */}
             {onReply && (
               <button
                 type='button'
-                onClick={() => onReply(post.postId)}
+                onClick={() => onReply(post.id)}
                 class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
                 title='Reply (p)'
               >
@@ -374,7 +471,7 @@ export const PostView = (
                 type='button'
                 onClick={handleRepostClick}
                 class={`flex items-center gap-1 transition-colors ${
-                  post.reposted
+                  post.reblogged
                     ? 'text-sage dark:text-sage'
                     : isReposting || isUndoingRepost
                     ? 'text-sage/50 dark:text-sage-dark cursor-wait'
@@ -384,7 +481,7 @@ export const PostView = (
                   ? 'リポスト中...'
                   : isUndoingRepost
                   ? 'リポスト取り消し中...'
-                  : post.reposted
+                  : post.reblogged
                   ? 'リポストを取り消す'
                   : 'リポスト'}
                 disabled={isReposting || isUndoingRepost}
@@ -392,7 +489,7 @@ export const PostView = (
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
                   class='h-5 w-5'
-                  fill={post.reposted ? 'currentColor' : 'none'}
+                  fill={post.reblogged ? 'currentColor' : 'none'}
                   viewBox='0 0 24 24'
                   stroke='currentColor'
                   stroke-width='2'
@@ -403,7 +500,7 @@ export const PostView = (
                     d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
                   />
                 </svg>
-                {post.repostCount > 0 && <span class='text-sm'>{post.repostCount}</span>}
+                {post.reblogs_count > 0 && <span class='text-sm'>{post.reblogs_count}</span>}
               </button>
             }
             {
@@ -411,7 +508,7 @@ export const PostView = (
                 type='button'
                 onClick={handleLikeClick}
                 class={`flex items-center gap-1 transition-colors ${
-                  post.liked
+                  post.favourited
                     ? 'text-terracotta dark:text-terracotta-light'
                     : isLiking || isUndoingLike
                     ? 'text-terracotta-light/50 dark:text-terracotta-dark cursor-wait'
@@ -421,7 +518,7 @@ export const PostView = (
                   ? 'いいね中...'
                   : isUndoingLike
                   ? 'いいね取り消し中...'
-                  : post.liked
+                  : post.favourited
                   ? 'いいねを取り消す'
                   : 'いいね'}
                 disabled={isLiking || isUndoingLike}
@@ -429,7 +526,7 @@ export const PostView = (
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
                   class='h-5 w-5'
-                  fill={post.liked ? 'currentColor' : 'none'}
+                  fill={post.favourited ? 'currentColor' : 'none'}
                   viewBox='0 0 24 24'
                   stroke='currentColor'
                   stroke-width='2'
@@ -440,7 +537,7 @@ export const PostView = (
                     d='M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'
                   />
                 </svg>
-                {post.likeCount > 0 && <span class='text-sm'>{post.likeCount}</span>}
+                {post.favourites_count > 0 && <span class='text-sm'>{post.favourites_count}</span>}
               </button>
             }
             {/* Emoji reaction button */}
@@ -479,7 +576,7 @@ export const PostView = (
                   isOpen={isEmojiPickerOpen ?? false}
                   onClose={() => onToggleEmojiPicker?.()}
                   onSelect={(emoji) => {
-                    onEmojiReact(post.postId, emoji);
+                    onEmojiReact(post.id, emoji);
                     onToggleEmojiPicker?.();
                   }}
                   isLoading={isEmojiReacting}
@@ -515,11 +612,14 @@ export const PostView = (
               </button>
             )}
           </div>
+          {translationError !== '' && <p class='mt-2 text-sm text-red-600 dark:text-red-400'>{translationError}</p>}
           {/* Reactions display */}
-          {(post.reactions.length > 0 || myReactions.length > 0) && (
+          {(reactions.length > 0 || (myReactions?.length ?? 0) > 0) && (
             <div class='mt-2 flex flex-wrap items-center gap-1'>
-              {post.reactions.map((reaction) => {
-                const isMyReaction = myReactions.includes(reaction.emoji);
+              {reactions.map((reaction) => {
+                const isMyReaction = myReactions === undefined ? reaction.me : myReactions.includes(reaction.emoji);
+                const emojiUrl = safeUrl(reaction.url);
+
                 return (
                   <button
                     key={reaction.emoji}
@@ -527,9 +627,9 @@ export const PostView = (
                     onClick={(e) => {
                       e.stopPropagation();
                       if (isMyReaction && onUndoEmojiReact) {
-                        onUndoEmojiReact(post.postId, reaction.emoji);
+                        onUndoEmojiReact(post.id, reaction.emoji);
                       } else if (!isMyReaction && onEmojiReact) {
-                        onEmojiReact(post.postId, reaction.emoji);
+                        onEmojiReact(post.id, reaction.emoji);
                       }
                     }}
                     class={`inline-flex items-center gap-1 px-2 py-0.5 text-sm rounded-full transition-colors shadow-clay-sm ${
@@ -539,10 +639,10 @@ export const PostView = (
                     }`}
                     title={isMyReaction ? 'クリックで取り消す' : 'クリックでリアクション'}
                   >
-                    {reaction.emojiImageUrl
+                    {emojiUrl
                       ? (
                         <img
-                          src={reaction.emojiImageUrl}
+                          src={emojiUrl}
                           alt={reaction.emoji}
                           class='w-4 h-4 object-contain'
                         />

@@ -1,4 +1,5 @@
-import { isActor, Like, Note, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { isActor, Like, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
@@ -13,17 +14,17 @@ import { LikeId } from '../domain/like/likeId.ts';
 import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
-import type { SessionId } from '../domain/session/sessionId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  postId: PostId;
-  request: Request;
-  ctx: RequestContext<unknown>;
-}>;
+type Input =
+  & Requester
+  & Readonly<{
+    postId: PostId;
+    request: Request;
+    ctx: RequestContext<unknown>;
+  }>;
 
 type Ok = void;
 
@@ -71,8 +72,7 @@ const create = ({
   postResolver,
 }: Deps): SendLikeUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   const resolvePostOrErr = (postId: PostId): RA<Post, PostNotFoundError> =>
@@ -94,8 +94,7 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (input) => resolveRequesterUser(input)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       // Resolve the post
       RA.andBind('post', ({ postId }) => resolvePostOrErr(postId)),
@@ -116,25 +115,12 @@ const create = ({
           }),
         );
       }),
-      // Create and store like
-      RA.bind('likeCreated', ({ actor, postId }) =>
-        AppLike.createLocalLike(
-          {
-            likeId: LikeId.generate(),
-            actorId: actor.id,
-            postId,
-          },
-          now,
-        )),
-      RA.andThrough(async ({ likeCreated }) => localLikeCreatedStore.store(likeCreated)),
-      // Send ActivityPub Like if remote post
-      RA.andThrough(async ({ user, post, ctx, likeCreated }) => {
+      RA.andBind('remote', async ({ user, post, ctx }) => {
         // Local posts don't need ActivityPub delivery
         if (post.type === 'local') {
           return RA.ok(undefined);
         }
 
-        // For remote posts, lookup and send ActivityPub Like
         const objectUri = post.uri;
         const documentLoader = await ctx.getDocumentLoader({
           identifier: user.username,
@@ -167,17 +153,36 @@ const create = ({
           );
         }
 
+        return RA.ok({ noteId: result.id, author, authorId: author.id });
+      }),
+      // Create and store like
+      RA.bind('likeCreated', ({ actor, postId }) =>
+        AppLike.createLocalLike(
+          {
+            likeId: LikeId.generate(),
+            actorId: actor.id,
+            postId,
+          },
+          now,
+        )),
+      RA.andThrough(async ({ likeCreated }) => localLikeCreatedStore.store(likeCreated)),
+      // Send ActivityPub Like if remote post
+      RA.andThrough(async ({ user, ctx, likeCreated, remote }) => {
+        if (remote === undefined) {
+          return RA.ok(undefined);
+        }
+
         await ctx.sendActivity(
           { username: user.username },
-          author,
+          remote.author,
           new Like({
             id: new URL(
               `#likes/${likeCreated.aggregateId.likeId}`,
               ctx.getActorUri(user.username),
             ),
             actor: ctx.getActorUri(user.username),
-            object: result.id,
-            to: author.id,
+            object: remote.noteId,
+            to: remote.authorId,
           }),
         );
         return RA.ok(undefined);

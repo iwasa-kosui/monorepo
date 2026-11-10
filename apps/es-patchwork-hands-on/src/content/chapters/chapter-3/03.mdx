@@ -1,0 +1,16 @@
+前のページで実行すると、次の表が出ます。`event_at` の値は実行のたびに変わります。
+
+| id | status | event_at | event_name | operated_by | reason |
+|---|---|---|---|---|---|
+| visit-pochi | cancelled | 2026-11-06T18:11:58.846Z | VisitCancelled | 受付スタッフ | 飼い主の都合 |
+| visit-tama | cancelled | NULL | NULL | NULL | NULL |
+
+同じ問い合わせが `visit-pochi` に届いたら、この行から答えられます。
+
+| 問い | 列 | 答え |
+|---|---|---|
+| 誰が | `operated_by` | 受付スタッフ |
+| いつ | `event_at` | 記録された時刻 |
+| 何を | `event_name` | 来院のキャンセル |
+| なぜ | `reason` | 飼い主の都合 |
+

@@ -6,6 +6,7 @@ import z from 'zod/v4';
 
 import { PostContent } from '../../domain/post/postContent.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
+import { Env } from '../../env.ts';
 import { Federation } from '../../federation.ts';
 import { Layout } from '../../layout.tsx';
 import { CreatePostUseCase } from '../../useCase/createPost.ts';
@@ -40,6 +41,7 @@ app.post(
       linkPreviewCreatedStore: PgLinkPreviewCreatedStore.getInstance(),
       ogpFetcher: createOgpFetcher(),
       acceptedRelaysResolver: PgAcceptedRelaysResolver.getInstance(),
+      origin: Env.getInstance().ORIGIN,
     });
     const sessionId = getCookie(c, 'sessionId');
     if (!sessionId) {

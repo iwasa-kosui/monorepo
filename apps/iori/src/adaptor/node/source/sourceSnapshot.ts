@@ -1,0 +1,390 @@
+import { createHash } from 'node:crypto';
+import { lstat, mkdir, open, realpath, statfs, unlink } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { createInterface } from 'node:readline';
+import { Readable } from 'node:stream';
+import { z } from 'zod';
+
+import {
+  APPLICATION_TABLE_ORDER,
+  EXPORT_OWNER_ACTOR_IDS,
+  EXPORT_ROW_SCOPE,
+  exportPostgres,
+  type PostgresExportClient,
+} from '../../../../scripts/export-postgres-lib.mjs';
+import {
+  assertExternalMigrationPath,
+  assertExternalMigrationRoot,
+} from '../../../../scripts/migration-path-safety.mjs';
+import {
+  classifyUploadUrl,
+  createUploadTracker,
+  requireSourceHostname,
+} from '../../../../scripts/migration-upload-rows.mjs';
+import { guardPostgresClient } from '../../../../scripts/postgres-client-lifetime.mjs';
+import {
+  logicalFilePath,
+  SOURCE_LIMITS,
+  type SourceFile,
+  type SourceIdentity,
+  sourceIdentitySchema,
+  type SourceInventory,
+  validateSourceInventory,
+} from '../../../../scripts/source-transfer-protocol.mjs';
+import { validatePrivateDirectory } from './sourceControl.ts';
+import { openSourceFile, type SourceFileFailure } from './sourceFile.ts';
+
+export type FileTransfer = (metadata: SourceFile, stream: Readable) => Promise<void>;
+const number = z.coerce.number().int().nonnegative().safe();
+const failureReasons: readonly SourceFileFailure[] = [
+  'missing',
+  'owner',
+  'not-regular',
+  'too-large',
+  'access',
+  'other',
+];
+const uploadExtensions = ['webp', 'png', 'jpeg', 'gif'] as const;
+type UploadExtension = (typeof uploadExtensions)[number];
+const extensionOf = (filename: string) => {
+  const extension = filename.slice(filename.lastIndexOf('.') + 1).toLowerCase();
+  const normalized = extension === 'jpg' ? 'jpeg' : extension;
+  return uploadExtensions.find((known) => known === normalized);
+};
+const failureOf = (error: unknown) => {
+  const reason = (error as { reason?: unknown } | null | undefined)?.reason;
+  return failureReasons.find((known) => known === reason) ?? 'other';
+};
+async function hashOrCopy(path: string, maxBytes: number, signal: AbortSignal, destination?: string) {
+  const { file, stat } = await openSourceFile(path, maxBytes, destination === undefined);
+  let output: Awaited<ReturnType<typeof open>> | undefined;
+  let bytes = 0;
+  const hash = createHash('sha256');
+  const stream = file.createReadStream({ signal });
+  try {
+    if (destination) output = await open(destination, 'wx', 0o600);
+    for await (const chunk of stream) {
+      signal.throwIfAborted();
+      bytes += chunk.length;
+      if (bytes > maxBytes || bytes > stat.size) throw new Error('file_changed');
+      hash.update(chunk);
+      await output?.writeFile(chunk);
+    }
+    if (bytes !== stat.size) throw new Error('file_changed');
+    await output?.sync();
+    return { bytes, checksum: hash.digest('hex') };
+  } finally {
+    stream.destroy();
+    await file.close();
+    await output?.close();
+  }
+}
+
+export class SourceSnapshot {
+  #cache?: { key: string; inventory: SourceInventory; files: Map<string, SourceFile> };
+  constructor(
+    private readonly options: {
+      base: string;
+      uploadDir: string;
+      origin: string;
+      createClient: () => Promise<PostgresExportClient>;
+    },
+  ) {}
+  private key(identity: SourceIdentity) {
+    const checked = sourceIdentitySchema.parse(identity);
+    return `${checked.main_sha}-${checked.run_id}`;
+  }
+  private runRoot(identity: SourceIdentity) {
+    return join(this.options.base, 'exports', this.key(identity));
+  }
+  async estimate(signal: AbortSignal) {
+    let stage = 'estimate-connect';
+    let sourceHostname: string;
+    try {
+      sourceHostname = requireSourceHostname(this.options.origin);
+    } catch {
+      throw new Error('source_estimate_failed:estimate-other');
+    }
+    let client: PostgresExportClient;
+    try {
+      client = await this.options.createClient();
+    } catch {
+      throw new Error(`source_estimate_failed:${stage}`);
+    }
+    let tableBytes = 0;
+    let uploadBytes = 0;
+    let rows = 0;
+    const uploads = createUploadTracker();
+    let articles = 0;
+    const failures = Object.fromEntries(failureReasons.map((reason) => [reason, 0])) as Record<
+      SourceFileFailure,
+      number
+    >;
+    const extensions = Object.fromEntries(uploadExtensions.map((extension) => [extension, 0])) as Record<
+      UploadExtension,
+      number
+    >;
+    const failedExtensions = { ...extensions };
+    const limit = signal;
+    const lifetime = guardPostgresClient(client, signal);
+    signal = lifetime.signal;
+    try {
+      signal.throwIfAborted();
+      await client.connect();
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query('SET LOCAL statement_timeout = \'30s\'');
+      stage = 'estimate-query';
+      const owners = await client.query(`SELECT count(*)::text AS count FROM (${EXPORT_OWNER_ACTOR_IDS}) AS owner`);
+      if (number.parse(owners.rows[0]?.count) !== 1) {
+        stage = 'estimate-export-owner';
+        throw new Error('export_owner_not_unique');
+      }
+      for (const table of APPLICATION_TABLE_ORDER) {
+        signal.throwIfAborted();
+        const result = await client.query(
+          `SELECT COALESCE(SUM(octet_length(to_jsonb(row)::text) + 1), 0)::text AS bytes, COUNT(*)::text AS count FROM "${table}" AS row`,
+        );
+        tableBytes += number.parse(result.rows[0]?.bytes);
+        rows += number.parse(result.rows[0]?.count);
+        if (table === 'articles') articles = number.parse(result.rows[0]?.count);
+        if (tableBytes > SOURCE_LIMITS.totalBytes) {
+          stage = 'estimate-too-large';
+          throw new Error('source_too_large');
+        }
+      }
+      await client.query(
+        `DECLARE iori_images NO SCROLL CURSOR FOR SELECT jsonb_build_object('imageId', "imageId", 'url', left(url, 128)) AS row FROM post_images WHERE ${EXPORT_ROW_SCOPE.post_images}`,
+      );
+      while (true) {
+        stage = 'estimate-query';
+        signal.throwIfAborted();
+        const page = await client.query('FETCH FORWARD 100 FROM iori_images');
+        if (page.rows.length > 100) throw new Error('invalid_page');
+        if (!page.rows.length) break;
+        for (const { row } of page.rows) {
+          stage = 'estimate-query';
+          signal.throwIfAborted();
+          stage = 'estimate-upload-row';
+          const upload = this.uploadOf(row, sourceHostname);
+          if (upload.kind === 'legacy') stage = 'estimate-upload-legacy-path';
+          if (upload.kind === 'same-origin') stage = 'estimate-upload-same-origin';
+          if (upload.kind === 'legacy' || upload.kind === 'same-origin' || upload.kind === 'invalid') {
+            throw new Error('invalid_upload');
+          }
+          if (upload.kind === 'remote') continue;
+          const extension = extensionOf(upload.filename);
+          if (!extension) throw new Error('invalid_upload');
+          const added = uploads.add(upload);
+          if (added === 'conflict') throw new Error('invalid_upload');
+          if (added === 'duplicate') continue;
+          stage = 'estimate-upload-root';
+          const path = join(await this.uploadRoot(), upload.filename);
+          stage = 'estimate-upload-open';
+          extensions[extension] += 1;
+          const opened = await openSourceFile(path, SOURCE_LIMITS.uploadBytes, false).catch((error: unknown) => {
+            failures[failureOf(error)] += 1;
+            failedExtensions[extension] += 1;
+          });
+          if (opened) {
+            await opened.file.close();
+            uploadBytes += opened.stat.size;
+          }
+          if (
+            uploads.uniqueCount > SOURCE_LIMITS.inventoryFiles - 32
+            || tableBytes + uploadBytes > SOURCE_LIMITS.totalBytes
+          ) {
+            stage = 'estimate-too-large';
+            throw new Error('source_too_large');
+          }
+        }
+      }
+      stage = 'estimate-query';
+      await client.query('COMMIT');
+      stage = 'estimate-other';
+      const fs = await statfs(this.options.base);
+      const source_free_bytes = number.parse(fs.bavail * fs.bsize);
+      const source_required_bytes = tableBytes * 24 + uploadBytes * 2 + 64 * 1024 ** 2;
+      const runner_required_bytes = tableBytes * 24 + uploadBytes * 3 + 128 * 1024 ** 2;
+      await lifetime.close();
+      signal.throwIfAborted();
+      return {
+        table_bytes: tableBytes,
+        upload_bytes: uploadBytes,
+        rows,
+        upload_count: uploads.uniqueCount,
+        upload_duplicate_count: uploads.duplicateCount,
+        upload_missing_count: failures.missing,
+        upload_owner_count: failures.owner,
+        upload_not_regular_count: failures['not-regular'],
+        upload_too_large_count: failures['too-large'],
+        upload_access_count: failures.access,
+        upload_other_count: failures.other,
+        upload_ext_webp_count: extensions.webp,
+        upload_ext_png_count: extensions.png,
+        upload_ext_jpeg_count: extensions.jpeg,
+        upload_ext_gif_count: extensions.gif,
+        upload_failed_ext_webp_count: failedExtensions.webp,
+        upload_failed_ext_png_count: failedExtensions.png,
+        upload_failed_ext_jpeg_count: failedExtensions.jpeg,
+        upload_failed_ext_gif_count: failedExtensions.gif,
+        article_count: articles,
+        source_free_bytes,
+        source_required_bytes,
+        runner_required_bytes,
+        source_sufficient: source_free_bytes >= source_required_bytes,
+        limits: SOURCE_LIMITS,
+      };
+    } catch {
+      try {
+        await client.query('ROLLBACK');
+      } catch { /* Abort closes connection. */ }
+      throw new Error(`source_estimate_failed:${limit.aborted ? 'estimate-limit' : stage}`);
+    } finally {
+      await lifetime.cleanup();
+    }
+  }
+  private uploadOf(row: unknown, sourceHostname: string) {
+    return classifyUploadUrl((row as { url?: unknown } | null | undefined)?.url, sourceHostname);
+  }
+  private async uploadRoot() {
+    const root = resolve(this.options.uploadDir);
+    if (await realpath(root) !== root) throw new Error('unsafe_upload_root');
+    return root;
+  }
+  async export(identity: SourceIdentity, signal: AbortSignal): Promise<SourceInventory> {
+    const sourceHostname = requireSourceHostname(this.options.origin);
+    const parent = join(this.options.base, 'exports');
+    await assertExternalMigrationPath(parent);
+    await validatePrivateDirectory(parent);
+    const root = this.runRoot(identity);
+    await mkdir(root, { mode: 0o700 });
+    await validatePrivateDirectory(root);
+    const inventoryPath = join(root, 'source-inventory.json');
+    let published = false;
+    try {
+      await exportPostgres({ outputDir: join(root, 'export'), createClient: this.options.createClient, signal });
+      await mkdir(join(root, 'uploads'), { mode: 0o700 });
+      const files: SourceFile[] = [];
+      let totalBytes = 0;
+      const add = (file: SourceFile) => {
+        totalBytes += file.bytes;
+        if (totalBytes > SOURCE_LIMITS.totalBytes || files.length >= SOURCE_LIMITS.inventoryFiles) {
+          throw new Error('source_too_large');
+        }
+        files.push(file);
+      };
+      for (const id of [...APPLICATION_TABLE_ORDER.map((table) => `table.${table}`), 'manifest.export']) {
+        const path = logicalFilePath(id);
+        add({ id, path, ...await hashOrCopy(join(root, path), SOURCE_LIMITS.totalBytes, signal) });
+      }
+      const { file: imageRows } = await openSourceFile(
+        join(root, 'export/post_images.ndjson'),
+        SOURCE_LIMITS.totalBytes,
+      );
+      const source = imageRows.createReadStream({ encoding: 'utf8', signal });
+      const lines = createInterface({ input: source, crlfDelay: Infinity });
+      const seen = createUploadTracker();
+      let missingUploadCount = 0;
+      try {
+        for await (const line of lines) {
+          signal.throwIfAborted();
+          const upload = this.uploadOf(JSON.parse(line), sourceHostname);
+          if (upload.kind === 'legacy') throw new Error('upload-legacy-path');
+          if (upload.kind === 'same-origin') throw new Error('upload-same-origin');
+          if (upload.kind === 'invalid') throw new Error('invalid_upload');
+          if (upload.kind === 'remote') continue;
+          const added = seen.add(upload);
+          if (added === 'conflict') throw new Error('invalid_upload');
+          if (added === 'duplicate') continue;
+          const original = join(await this.uploadRoot(), upload.filename);
+          const id = `upload.${upload.filename}`;
+          const path = logicalFilePath(id);
+          try {
+            add({ id, path, ...await hashOrCopy(original, SOURCE_LIMITS.uploadBytes, signal, join(root, path)) });
+          } catch (error) {
+            if (failureOf(error) !== 'missing') throw error;
+            missingUploadCount += 1;
+          }
+        }
+      } finally {
+        lines.close();
+        source.destroy();
+        await imageRows.close();
+      }
+      const inventory = validateSourceInventory({
+        schemaVersion: 1,
+        complete: true,
+        identity,
+        totalBytes,
+        missingUploadCount,
+        files,
+      });
+      const text = JSON.stringify(inventory);
+      if (Buffer.byteLength(text) > SOURCE_LIMITS.inventoryBytes) throw new Error('inventory_too_large');
+      signal.throwIfAborted();
+      const file = await open(inventoryPath, 'wx', 0o600);
+      published = true;
+      try {
+        await file.writeFile(text);
+        await file.sync();
+      } finally {
+        await file.close();
+      }
+      signal.throwIfAborted();
+      this.#cache = { key: this.key(identity), inventory, files: new Map(files.map((file) => [file.id, file])) };
+      return inventory;
+    } catch (error) {
+      if (published) await unlink(inventoryPath);
+      throw error;
+    }
+  }
+  async inventory(identity: SourceIdentity): Promise<SourceInventory> {
+    const key = this.key(identity);
+    if (this.#cache?.key === key) return this.#cache.inventory;
+    const root = this.runRoot(identity);
+    await assertExternalMigrationRoot(root);
+    const stat = await lstat(root);
+    if (stat.uid !== process.getuid?.() || (stat.mode & 0o777) !== 0o700) throw new Error('unsafe_directory');
+    const { file } = await openSourceFile(join(root, 'source-inventory.json'), SOURCE_LIMITS.inventoryBytes);
+    try {
+      const inventory = validateSourceInventory(JSON.parse(await file.readFile('utf8')));
+      if (this.key(inventory.identity) !== key) throw new Error('identity_mismatch');
+      this.#cache = { key, inventory, files: new Map(inventory.files.map((file) => [file.id, file])) };
+      return inventory;
+    } finally {
+      await file.close();
+    }
+  }
+  async transfer(identity: SourceIdentity, id: string, send: FileTransfer, signal: AbortSignal) {
+    await this.inventory(identity);
+    const metadata = this.#cache?.files.get(id);
+    if (!metadata) throw new Error('unknown_file');
+    const path = join(this.runRoot(identity), logicalFilePath(id));
+    const { file, stat } = await openSourceFile(path, metadata.bytes);
+    const stream = file.createReadStream({ signal });
+    let complete = false;
+    const checked = Readable.from((async function*() {
+      let bytes = 0;
+      const hash = createHash('sha256');
+      for await (const chunk of stream) {
+        signal.throwIfAborted();
+        bytes += chunk.length;
+        if (bytes > metadata.bytes) throw new Error('file_changed');
+        hash.update(chunk);
+        yield chunk;
+      }
+      if (bytes !== metadata.bytes || hash.digest('hex') !== metadata.checksum) throw new Error('file_changed');
+      complete = true;
+    })());
+    try {
+      if (stat.size !== metadata.bytes) throw new Error('file_changed');
+      await send(metadata, checked);
+      signal.throwIfAborted();
+      if (!complete) throw new Error('incomplete_transfer');
+    } finally {
+      checked.destroy();
+      stream.destroy();
+      await file.close();
+    }
+  }
+}

@@ -1,43 +1,28 @@
-import { Accept, type Follow, type InboxContext } from '@fedify/fedify';
+import { type InboxContext } from '@fedify/fedify';
+import { Accept, type Follow } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { Username } from '../../../domain/user/username.ts';
 import { AcceptFollowRequestUseCase } from '../../../useCase/acceptFollowRequest.ts';
-import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
-import { PgActorResolverByUserId } from '../../pg/actor/actorResolverByUserId.ts';
-import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
-import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
-import { PgFollowedStore } from '../../pg/follow/followAcceptedStore.ts';
-import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
-import { PgFollowNotificationCreatedStore } from '../../pg/notification/followNotificationCreatedStore.ts';
-import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
-import { PgUserResolverByUsername } from '../../pg/user/userResolverByUsername.ts';
-import { WebPushSender } from '../../webPush/webPushSender.ts';
-import { InboxActorResolver } from '../inboxActorResolver.ts';
+import type { InboxActorResolver } from '../inboxActorResolver.ts';
+import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 
-export const onFollow = async (ctx: InboxContext<unknown>, activity: Follow) => {
+export type OnFollowDeps = Readonly<{
+  inboxActorResolver: InboxActorResolver;
+  acceptFollowRequestUseCase: ReturnType<typeof AcceptFollowRequestUseCase.create>;
+}>;
+
+export const createOnFollow = (deps: OnFollowDeps) => async (ctx: InboxContext<unknown>, activity: Follow) => {
   if (!activity.objectId) {
     return;
   }
-  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
+  const actorResult = await deps.inboxActorResolver.resolve(ctx, activity);
   if (!actorResult.ok) {
     getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
   }
   const { actor: follower, actorIdentity: followerIdentity } = actorResult.val;
-  const useCase = AcceptFollowRequestUseCase.create({
-    followedStore: PgFollowedStore.getInstance(),
-    followResolver: PgFollowResolver.getInstance(),
-    actorResolverByUri: PgActorResolverByUri.getInstance(),
-    actorResolverByUserId: PgActorResolverByUserId.getInstance(),
-    remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
-    userResolverByUsername: PgUserResolverByUsername.getInstance(),
-    logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
-    followNotificationCreatedStore: PgFollowNotificationCreatedStore.getInstance(),
-    pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
-    webPushSender: WebPushSender.getInstance(),
-  });
   return RA.flow(
     RA.ok({}),
     RA.andBind('object', () => {
@@ -52,19 +37,23 @@ export const onFollow = async (ctx: InboxContext<unknown>, activity: Follow) => 
     }),
     RA.andBind('username', ({ object }) => Username.parse(object.identifier)),
     RA.andThrough(async ({ username, object }) => {
-      await useCase.run({
+      const accepted = await deps.acceptFollowRequestUseCase.run({
         username,
         follower: followerIdentity,
       });
-      await ctx.sendActivity(
-        object,
-        follower,
-        new Accept({
-          actor: activity.objectId,
-          to: activity.actorId,
-          object: activity,
-        }),
-      );
+      if (!accepted.ok && object.identifier !== INSTANCE_ACTOR_IDENTIFIER) {
+        return RA.err(new Error(accepted.err.message));
+      }
+      const accept = new Accept({
+        actor: activity.objectId,
+        to: activity.actorId,
+        object: activity,
+      });
+      if (object.identifier === INSTANCE_ACTOR_IDENTIFIER) {
+        await ctx.sendActivity(await ctx.getActorKeyPairs(INSTANCE_ACTOR_IDENTIFIER), follower, accept);
+      } else {
+        await ctx.sendActivity(object, follower, accept);
+      }
       return RA.ok(undefined);
     }),
     RA.match({

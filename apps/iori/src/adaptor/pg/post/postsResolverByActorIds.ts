@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
+import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
@@ -87,10 +88,10 @@ const getInstance = singleton((): PostsResolverByActorIds => {
       : [];
 
     // Group images by postId
-    const imagesByPostId = new Map<string, { url: string; altText: string | null }[]>();
+    const imagesByPostId = new Map<string, { imageId: ImageId; url: string; altText: string | null }[]>();
     for (const imageRow of imageRows) {
       const existing = imagesByPostId.get(imageRow.postId) ?? [];
-      existing.push({ url: imageRow.url, altText: imageRow.altText });
+      existing.push({ imageId: ImageId.orThrow(imageRow.imageId), url: imageRow.url, altText: imageRow.altText });
       imagesByPostId.set(imageRow.postId, existing);
     }
 
@@ -207,6 +208,8 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           createdAt: row.posts.createdAt.getTime(),
           userId: row.local_posts.userId,
           inReplyToUri: row.local_posts.inReplyToUri,
+          summary: null,
+          sensitive: false,
           type: 'local',
         });
         return {
@@ -230,6 +233,9 @@ const getInstance = singleton((): PostsResolverByActorIds => {
           content: row.posts.content,
           createdAt: row.posts.createdAt.getTime(),
           inReplyToUri: row.remote_posts.inReplyToUri,
+          visibility: null,
+          summary: null,
+          sensitive: false,
           type: 'remote',
         });
         if (row.remote_actors === null) {

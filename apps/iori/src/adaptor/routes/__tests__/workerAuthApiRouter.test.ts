@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest';
+
+import { Password } from '../../../domain/password/password.ts';
+import { UserId } from '../../../domain/user/userId.ts';
+import { Username } from '../../../domain/user/username.ts';
+import {
+  createMockFedifyContext,
+  createMockSessionStartedStore,
+  createMockUserPasswordResolver,
+  createMockUserResolverByUsername,
+} from '../../../useCase/__tests__/helper/mockAdaptors.ts';
+import { createSignInUseCase } from '../../../useCase/signIn.ts';
+import { nodeArgon2idDerive } from '../../argon2/nodeArgon2idDerive.ts';
+import { createWorkerAuthApiRouter } from '../workerAuthApiRouter.ts';
+
+describe('createWorkerAuthApiRouter', () => {
+  // Real Argon2 hashing and verification can exceed Vitest's default timeout on hosted runners.
+  it('runs sign-in and sets a session cookie for the Worker API path', async () => {
+    const username = Username.orThrow('kosui');
+    const password = Password.orThrow('securepassword1234');
+    const userResolverByUsername = createMockUserResolverByUsername();
+    const userPasswordResolver = createMockUserPasswordResolver();
+    const sessionStartedStore = createMockSessionStartedStore();
+    const user = { id: UserId.generate(), username };
+    userResolverByUsername.setUser(user);
+    userPasswordResolver.setPassword(user.id, await Password.hashPassword(nodeArgon2idDerive)(password));
+    const app = createWorkerAuthApiRouter({
+      signInUseCase: createSignInUseCase({
+        userResolverByUsername,
+        userPasswordResolver,
+        sessionStartedStore,
+        argon2idDerive: nodeArgon2idDerive,
+      }),
+      createContext: () => createMockFedifyContext(),
+    });
+
+    const response = await app.request('http://worker.test/v1/sign-in', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true });
+    expect(response.headers.get('set-cookie')).toContain('sessionId=');
+    expect(sessionStartedStore.items).toHaveLength(1);
+  }, 30_000);
+});

@@ -1,19 +1,22 @@
-import { hc } from 'hono/client';
 import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
-import type { UserId } from '../../domain/user/userId.ts';
+import type { Status } from '../../adaptor/mastodon/entities.ts';
+import {
+  createStatus,
+  deleteStatus,
+  fetchStatus,
+  fetchStatusContext,
+  fetchVerifyCredentials,
+  isNotFoundError,
+} from '../api/mastodonClient.ts';
 import { PostView } from '../components/PostView.tsx';
 import { ReplyModal } from '../components/ReplyModal.tsx';
 
-const client = hc<APIRouterType>('/api');
-
 type ThreadData = {
-  ancestors: PostWithAuthor[];
-  currentPost: PostWithAuthor | null;
-  descendants: PostWithAuthor[];
+  ancestors: readonly Status[];
+  currentPost: Status | null;
+  descendants: readonly Status[];
 };
 
 const getIsLoggedIn = (): boolean => {
@@ -21,18 +24,12 @@ const getIsLoggedIn = (): boolean => {
   return root?.dataset.isLoggedIn === 'true';
 };
 
-const getCurrentUserId = (): UserId | undefined => {
-  const root = document.getElementById('root');
-  const userId = root?.dataset.userId;
-  return userId ? (userId as UserId) : undefined;
-};
-
 const LocalPostPage = () => {
   const [threadData, setThreadData] = useState<ThreadData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoggedIn] = useState(() => getIsLoggedIn());
-  const [currentUserId] = useState(() => getCurrentUserId());
+  const [currentAccountId, setCurrentAccountId] = useState<string | undefined>(undefined);
 
   const [replyToPostId, setReplyToPostId] = useState<string | null>(null);
   const [isSendingReply, setIsSendingReply] = useState(false);
@@ -59,18 +56,21 @@ const LocalPostPage = () => {
     }
 
     try {
-      const res = await client.v1.thread.$get({
-        query: { postId },
+      const [currentPost, context] = await Promise.all([
+        fetchStatus(postId),
+        fetchStatusContext(postId),
+      ]);
+      setThreadData({
+        currentPost,
+        ancestors: context.ancestors,
+        descendants: context.descendants,
       });
-      const data = await res.json();
-
-      if ('error' in data) {
-        setError(data.error);
-      } else {
-        setThreadData(data);
-      }
     } catch (err) {
-      setError((err as Error).message);
+      if (isNotFoundError(err)) {
+        setThreadData(null);
+      } else {
+        setError((err as Error).message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -78,6 +78,11 @@ const LocalPostPage = () => {
 
   useEffect(() => {
     fetchThread();
+    if (isLoggedIn) {
+      fetchVerifyCredentials()
+        .then((account) => setCurrentAccountId(account.id))
+        .catch((err) => console.error('Failed to load the current account:', err));
+    }
   }, []);
 
   const username = getUsernameFromUrl();
@@ -90,14 +95,14 @@ const LocalPostPage = () => {
     setReplyToPostId(null);
   };
 
-  const getReplyToPost = (): PostWithAuthor | undefined => {
+  const getReplyToPost = (): Status | undefined => {
     if (!replyToPostId || !threadData) return undefined;
-    if (threadData.currentPost?.postId === replyToPostId) {
+    if (threadData.currentPost?.id === replyToPostId) {
       return threadData.currentPost;
     }
-    const ancestor = threadData.ancestors.find((p) => p.postId === replyToPostId);
+    const ancestor = threadData.ancestors.find((p) => p.id === replyToPostId);
     if (ancestor) return ancestor;
-    return threadData.descendants.find((p) => p.postId === replyToPostId);
+    return threadData.descendants.find((p) => p.id === replyToPostId);
   };
 
   const handleSubmitReply = async (content: string) => {
@@ -105,21 +110,9 @@ const LocalPostPage = () => {
 
     setIsSendingReply(true);
     try {
-      const res = await client.v1.reply.$post({
-        json: {
-          postId: replyToPostId,
-          content,
-          imageUrls: [],
-        },
-      });
-      const data = await res.json();
-
-      if ('error' in data) {
-        alert(data.error);
-      } else {
-        setReplyToPostId(null);
-        fetchThread();
-      }
+      await createStatus({ status: content, in_reply_to_id: replyToPostId, content_type: 'text/markdown' });
+      setReplyToPostId(null);
+      fetchThread();
     } catch (err) {
       alert((err as Error).message);
     } finally {
@@ -134,21 +127,13 @@ const LocalPostPage = () => {
 
     setDeletingPostId(postId);
     try {
-      const res = await client.v1.posts[':postId'].$delete({
-        param: { postId },
-      });
-      const data = await res.json();
-
-      if ('error' in data) {
-        alert(data.error);
+      await deleteStatus(postId);
+      // If the deleted post is the current post, navigate back to user page
+      if (threadData?.currentPost?.id === postId) {
+        window.location.href = `/users/${username}`;
       } else {
-        // If the deleted post is the current post, navigate back to user page
-        if (threadData?.currentPost?.postId === postId) {
-          window.location.href = `/users/${username}`;
-        } else {
-          // Otherwise, refresh the thread
-          fetchThread();
-        }
+        // Otherwise, refresh the thread
+        fetchThread();
       }
     } catch (err) {
       alert((err as Error).message);
@@ -236,13 +221,14 @@ const LocalPostPage = () => {
           {threadData.ancestors.length > 0 && (
             <>
               {threadData.ancestors.map((post) => (
-                <div key={post.postId} class='relative'>
+                <div key={post.id} class='relative'>
                   <PostView
-                    post={post}
+                    status={post}
                     onReply={isLoggedIn ? handleReply : undefined}
                     onDelete={isLoggedIn ? handleDelete : undefined}
-                    isDeleting={deletingPostId === post.postId}
-                    currentUserId={currentUserId}
+                    isDeleting={deletingPostId === post.id}
+                    currentAccountId={currentAccountId}
+                    isLoggedIn={isLoggedIn}
                   />
                 </div>
               ))}
@@ -251,24 +237,26 @@ const LocalPostPage = () => {
           {threadData.currentPost && (
             <div class='relative'>
               <PostView
-                post={threadData.currentPost}
+                status={threadData.currentPost}
                 onReply={isLoggedIn ? handleReply : undefined}
                 onDelete={isLoggedIn ? handleDelete : undefined}
-                isDeleting={deletingPostId === threadData.currentPost.postId}
-                currentUserId={currentUserId}
+                isDeleting={deletingPostId === threadData.currentPost.id}
+                currentAccountId={currentAccountId}
+                isLoggedIn={isLoggedIn}
               />
             </div>
           )}
           {threadData.descendants.length > 0 && (
             <>
               {threadData.descendants.map((post) => (
-                <div key={post.postId} class='relative'>
+                <div key={post.id} class='relative'>
                   <PostView
-                    post={post}
+                    status={post}
                     onReply={isLoggedIn ? handleReply : undefined}
                     onDelete={isLoggedIn ? handleDelete : undefined}
-                    isDeleting={deletingPostId === post.postId}
-                    currentUserId={currentUserId}
+                    isDeleting={deletingPostId === post.id}
+                    currentAccountId={currentAccountId}
+                    isLoggedIn={isLoggedIn}
                   />
                 </div>
               ))}
@@ -283,7 +271,7 @@ const LocalPostPage = () => {
           isOpen={replyToPostId !== null}
           onClose={handleCloseReplyModal}
           onSubmit={handleSubmitReply}
-          replyToUsername={replyToPost?.username}
+          replyToUsername={replyToPost?.account.username}
           isSubmitting={isSendingReply}
         />
       )}

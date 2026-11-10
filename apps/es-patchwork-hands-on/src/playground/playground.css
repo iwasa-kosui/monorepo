@@ -1,0 +1,229 @@
+.playground {
+  min-width: 0;
+  max-width: 100%;
+  margin-block: 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+  padding: 0.75rem;
+}
+.playground [hidden] {
+  display: none;
+}
+.playground-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+.playground-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.playground button {
+  border: 1px solid #9ca3af;
+  border-radius: 0.375rem;
+  background: #fff;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.playground button:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+.playground button[data-role="run"],
+.playground button[data-run-file] {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+}
+.playground button[data-role="run"]:disabled,
+.playground button[data-run-file]:disabled {
+  border-color: #9ca3af;
+  background: #e5e7eb;
+  color: #6b7280;
+}
+.playground-hint {
+  align-self: center;
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+.content .playground .playground-origin {
+  margin-block: 0 0.5rem;
+  font-size: 0.85rem;
+}
+.playground-panes {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.playground-pane-editor {
+  min-width: 0;
+}
+.playground-tabs {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+}
+.playground-tabs button {
+  flex: none;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+.playground-tabs button[aria-selected="true"] {
+  border-bottom-color: #fff;
+  background: #fff;
+  font-weight: 700;
+}
+.playground-editor {
+  min-width: 0;
+  border: 1px solid #9ca3af;
+}
+.playground-editor .cm-editor {
+  max-width: 100%;
+}
+.playground-results {
+  min-width: 0;
+  max-height: 22rem;
+  margin-top: 0.75rem;
+  overflow: auto;
+}
+.playground-results:empty {
+  display: none;
+}
+.content .playground table {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.content .playground th,
+.content .playground td {
+  padding: 0.25rem 0.5rem;
+}
+.content .playground th {
+  position: sticky;
+  top: 0;
+}
+.content .playground p,
+.content .playground pre {
+  margin-block: 0.25rem;
+}
+.playground-statement code {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+.playground-result {
+  margin-bottom: 0.75rem;
+}
+.playground-note,
+.playground-label {
+  font-size: 0.85rem;
+  color: #374151;
+}
+.playground-label {
+  font-weight: 700;
+}
+.playground-null {
+  color: #6b7280;
+  font-style: italic;
+}
+.playground-summary {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #166534;
+}
+.content .playground .playground-summary-failed {
+  color: #b91c1c;
+}
+.content .playground .playground-failures {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+.playground pre {
+  overflow-x: auto;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.playground-error {
+  border-left: 4px solid #b91c1c;
+  background: #fef2f2;
+  padding: 0.25rem 0.75rem;
+}
+.playground-log {
+  border-radius: 0.25rem;
+  background: #111827;
+  padding: 0.5rem;
+  color: #f9fafb;
+  white-space: pre;
+}
+
+@media (min-width: 768px) {
+  .content .chapter-body > .playground {
+    display: flex;
+    flex: 1 1 auto;
+    flex-shrink: 1;
+    flex-direction: column;
+    min-height: 14rem;
+    max-height: 28rem;
+    margin-block: 0;
+    padding: 0.5rem;
+  }
+  .chapter-body .playground-status,
+  .chapter-body .playground-toolbar {
+    margin-bottom: 0.25rem;
+  }
+  .chapter-body .playground-tabs button {
+    padding-block: 0.15rem;
+  }
+  .chapter-body .playground-panes {
+    display: grid;
+    flex: 1 1 0;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0.75rem;
+    min-height: 0;
+  }
+  .chapter-body [data-playground="sql"] .playground-panes {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  }
+  .chapter-body .playground-pane-editor {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .chapter-body .playground-editor {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .chapter-body .playground-editor .cm-editor {
+    height: 100%;
+    max-height: none;
+  }
+  .chapter-body .playground-results,
+  .chapter-body .playground-results:empty {
+    display: block;
+    max-height: none;
+    min-height: 0;
+    margin-top: 0;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    padding: 0.5rem;
+  }
+}

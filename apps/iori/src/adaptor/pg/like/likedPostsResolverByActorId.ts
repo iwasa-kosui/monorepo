@@ -2,11 +2,11 @@ import { RA } from '@iwasa-kosui/result';
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
-import type { Agg } from '../../../domain/aggregate/index.ts';
+import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
-import { LocalPost, type PostWithAuthor, RemotePost } from '../../../domain/post/post.ts';
+import { type LikedPostsResolverByActorId, LocalPost, RemotePost } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { singleton } from '../../../helper/singleton.ts';
@@ -25,11 +25,6 @@ import {
   repostsTable,
   usersTable,
 } from '../schema.ts';
-
-export type LikedPostsResolverByActorId = Agg.Resolver<
-  { actorId: ActorId; currentActorId: ActorId | undefined; createdAt: Instant | undefined },
-  PostWithAuthor[]
->;
 
 const getInstance = singleton((): LikedPostsResolverByActorId => {
   const resolve = async (
@@ -80,10 +75,10 @@ const getInstance = singleton((): LikedPostsResolverByActorId => {
         .execute()
       : [];
 
-    const imagesByPostId = new Map<string, { url: string; altText: string | null }[]>();
+    const imagesByPostId = new Map<string, { imageId: ImageId; url: string; altText: string | null }[]>();
     for (const imageRow of imageRows) {
       const existing = imagesByPostId.get(imageRow.postId) ?? [];
-      existing.push({ url: imageRow.url, altText: imageRow.altText });
+      existing.push({ imageId: ImageId.orThrow(imageRow.imageId), url: imageRow.url, altText: imageRow.altText });
       imagesByPostId.set(imageRow.postId, existing);
     }
 
@@ -204,6 +199,8 @@ const getInstance = singleton((): LikedPostsResolverByActorId => {
             createdAt: row.posts.createdAt.getTime(),
             userId: row.local_posts.userId,
             inReplyToUri: row.local_posts.inReplyToUri,
+            summary: null,
+            sensitive: false,
             type: 'local',
           });
           return {
@@ -227,6 +224,9 @@ const getInstance = singleton((): LikedPostsResolverByActorId => {
             content: row.posts.content,
             createdAt: row.posts.createdAt.getTime(),
             inReplyToUri: row.remote_posts.inReplyToUri,
+            visibility: null,
+            summary: null,
+            sensitive: false,
             type: 'remote',
           });
           return {

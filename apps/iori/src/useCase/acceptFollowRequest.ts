@@ -1,10 +1,11 @@
 import { RA } from '@iwasa-kosui/result';
 
-import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPushSender.ts';
+import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { Actor, ActorResolverByUri, ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { LocalActor } from '../domain/actor/localActor.ts';
-import { RemoteActor, type RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
+import { RemoteActor, type RemoteActorCreatedStore, type RemoteActorProfile } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
+import type { RemoteActorProfileUpdatedStore } from '../domain/actor/updateProfile.ts';
 import { Follow, type FollowAcceptedStore, type FollowResolver } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
@@ -22,7 +23,7 @@ import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
   username: Username;
-  follower: Pick<RemoteActor, 'uri' | 'inboxUrl' | 'url' | 'username'>;
+  follower: Pick<RemoteActor, 'uri' | 'inboxUrl' | 'url' | 'username'> & { profile?: RemoteActorProfile };
 }>;
 
 type Ok = Follow;
@@ -40,6 +41,7 @@ type Deps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
+  remoteActorProfileUpdatedStore?: RemoteActorProfileUpdatedStore;
   followedStore: FollowAcceptedStore;
   followResolver: FollowResolver;
   followNotificationCreatedStore: FollowNotificationCreatedStore;
@@ -55,6 +57,7 @@ const create = ({
   userResolverByUsername,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
+  remoteActorProfileUpdatedStore,
   actorResolverByUserId,
   actorResolverByUri,
   followNotificationCreatedStore,
@@ -87,6 +90,7 @@ const create = ({
           now,
           remoteActorCreatedStore,
           logoUriUpdatedStore,
+          remoteActorProfileUpdatedStore,
           actorResolverByUri,
         })(follower)),
       RA.andThen(({ username, followingActor, followerActor }) => {

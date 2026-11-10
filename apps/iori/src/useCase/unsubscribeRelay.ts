@@ -1,4 +1,5 @@
-import { Follow, type RequestContext, Undo } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Follow, Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import { INSTANCE_ACTOR_IDENTIFIER } from '../adaptor/fedify/sharedKeyDispatcher.ts';

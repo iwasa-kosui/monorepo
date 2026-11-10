@@ -18,14 +18,17 @@ import { PublishArticleUseCase } from '../../useCase/publishArticle.ts';
 import { UnpublishArticleUseCase } from '../../useCase/unpublishArticle.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
+import { PgArticleBodyResolver } from '../pg/article/articleBodyResolver.ts';
 import { PgArticleCreatedStore } from '../pg/article/articleCreatedStore.ts';
-import { PgArticleDeletedStore } from '../pg/article/articleDeletedStore.ts';
 import { PgArticlePublishedStore } from '../pg/article/articlePublishedStore.ts';
 import { PgArticleResolver } from '../pg/article/articleResolver.ts';
 import { PgArticleResolverByRootPostId } from '../pg/article/articleResolverByRootPostId.ts';
 import { PgArticlesResolverByAuthorActorId } from '../pg/article/articlesResolverByAuthorActorId.ts';
 import { PgArticleUnpublishedStore } from '../pg/article/articleUnpublishedStore.ts';
+import { PgArticleWithDependentsDeletedStore } from '../pg/article/articleWithDependentsDeletedStore.ts';
 import { DB } from '../pg/db.ts';
+import { PgDigestHeaderResolverByArticleId } from '../pg/digest/digestHeaderResolverByArticleId.ts';
+import { PgDigestResolverByArticleId } from '../pg/digest/digestResolverByArticleId.ts';
 import { PgPostResolver } from '../pg/post/postResolver.ts';
 import { PgThreadResolver } from '../pg/post/threadResolver.ts';
 import { articlesTable, usersTable } from '../pg/schema.ts';
@@ -45,6 +48,7 @@ app.get('/articles/:articleId', async (c) => {
   const useCase = GetArticleWithThreadUseCase.create({
     articleResolver: PgArticleResolver.getInstance(),
     threadResolver: PgThreadResolver.getInstance(),
+    articleBodyResolver: PgArticleBodyResolver.getInstance(),
   });
 
   const result = await useCase.run({
@@ -188,6 +192,8 @@ app.post('/articles/:articleId/publish', async (c) => {
     actorResolverByUserId: PgActorResolverByUserId.getInstance(),
     articleResolver: PgArticleResolver.getInstance(),
     articlePublishedStore: PgArticlePublishedStore.getInstance(),
+    articleBodyResolver: PgArticleBodyResolver.getInstance(),
+    digestResolverByArticleId: PgDigestResolverByArticleId.getInstance(),
   });
 
   const result = await useCase.run({
@@ -285,7 +291,9 @@ app.delete('/articles/:articleId', async (c) => {
     userResolver: PgUserResolver.getInstance(),
     actorResolverByUserId: PgActorResolverByUserId.getInstance(),
     articleResolver: PgArticleResolver.getInstance(),
-    articleDeletedStore: PgArticleDeletedStore.getInstance(),
+    articleBodyResolver: PgArticleBodyResolver.getInstance(),
+    digestHeaderResolverByArticleId: PgDigestHeaderResolverByArticleId.getInstance(),
+    articleWithDependentsDeletedStore: PgArticleWithDependentsDeletedStore.getInstance(),
   });
 
   const result = await useCase.run({

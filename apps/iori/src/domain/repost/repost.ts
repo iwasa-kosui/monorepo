@@ -72,6 +72,8 @@ export type RepostResolver = Agg.Resolver<
   { actorId: ActorId; postId: PostId },
   Repost | undefined
 >;
+export type RepostWithCreatedAt = Repost & { createdAt: Instant };
+export type RepostResolverById = Agg.Resolver<RepostId, RepostWithCreatedAt | undefined>;
 export type RepostsResolverByPostId = Agg.Resolver<
   { postId: PostId },
   Repost[]
@@ -101,6 +103,22 @@ export const AlreadyRepostedError = {
     type: 'AlreadyRepostedError',
     message: `The actor with ID "${actorId}" has already reposted the post "${postId}".`,
     detail: { actorId, postId },
+  }),
+} as const;
+
+export type RepostNotAllowedError = Readonly<{
+  type: 'RepostNotAllowedError';
+  message: string;
+  detail: {
+    postId: PostId;
+  };
+}>;
+
+export const RepostNotAllowedError = {
+  create: ({ postId }: { postId: PostId }): RepostNotAllowedError => ({
+    type: 'RepostNotAllowedError',
+    message: `The post "${postId}" is private or direct and cannot be reposted.`,
+    detail: { postId },
   }),
 } as const;
 

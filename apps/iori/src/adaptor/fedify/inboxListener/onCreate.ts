@@ -1,56 +1,98 @@
-import { Create, Document, type DocumentLoader, Image, type InboxContext, Note } from '@fedify/fedify';
+import { type InboxContext } from '@fedify/fedify';
+import { Create, Note } from '@fedify/vocab';
+import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
-import { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
-import { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
-import { createOgpFetcher } from '../../ogp/ogpFetcher.ts';
-import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
-import { PgLogoUriUpdatedStore } from '../../pg/actor/logoUriUpdatedStore.ts';
-import { PgRemoteActorCreatedStore } from '../../pg/actor/remoteActorCreatedStore.ts';
-import { PgPostImageCreatedStore } from '../../pg/image/postImageCreatedStore.ts';
-import { PgLinkPreviewCreatedStore } from '../../pg/linkPreview/linkPreviewCreatedStore.ts';
-import { PgReplyNotificationCreatedStore } from '../../pg/notification/replyNotificationCreatedStore.ts';
-import { PgLocalPostResolverByUri } from '../../pg/post/localPostResolverByUri.ts';
-import { PgPostCreatedStore } from '../../pg/post/postCreatedStore.ts';
-import { PgPostResolverByUri } from '../../pg/post/postResolverByUri.ts';
-import { PgRemotePostUpserter } from '../../pg/post/remotePostUpserter.ts';
-import { PgPushSubscriptionsResolverByUserId } from '../../pg/pushSubscription/pushSubscriptionsResolverByUserId.ts';
-import { PgTimelineItemCreatedStore } from '../../pg/timeline/timelineItemCreatedStore.ts';
-import { WebPushSender } from '../../webPush/webPushSender.ts';
-import { InboxActorResolver } from '../inboxActorResolver.ts';
+import type { ActorResolverByUri } from '../../../domain/actor/actor.ts';
+import type {
+  FederatedTimelineItemCreatedStore,
+  FederatedTimelineItemResolverByPostId,
+} from '../../../domain/federatedTimeline/federatedTimelineItem.ts';
+import type { FollowedByLocalActorResolverByActorUri } from '../../../domain/follow/follow.ts';
+import type { RemotePostUpserter } from '../../../domain/post/post.ts';
+import { Visibility } from '../../../domain/post/visibility.ts';
+import type { AcceptedRelaysResolver } from '../../../domain/relay/relay.ts';
+import type { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
+import type { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
+import { extractContentWarning } from '../extractContentWarning.ts';
+import { extractRecipientActorUris } from '../extractRecipients.ts';
+import { extractVisibility } from '../extractVisibility.ts';
+import type { InboxActorResolver } from '../inboxActorResolver.ts';
+import { isFetchFailure } from '../relayForwardedCreate/refetchRelayForwardedNote.ts';
+import { extractAttachments } from './extractAttachments.ts';
+import { saveFederatedNote } from './saveFederatedNote.ts';
 
-type Attachment = Readonly<{
-  url: string;
-  altText: string | null;
+const NOTE_TYPE_ID = 'https://www.w3.org/ns/activitystreams#Note';
+const ARTICLE_TYPE_ID = 'https://www.w3.org/ns/activitystreams#Article';
+
+export type OnCreateDeps = Readonly<{
+  origin: string;
+  followedByLocalActorResolverByActorUri: FollowedByLocalActorResolverByActorUri;
+  acceptedRelaysResolver: AcceptedRelaysResolver;
+  inboxActorResolver: InboxActorResolver;
+  remotePostUpserter: RemotePostUpserter;
+  actorResolverByUri: ActorResolverByUri;
+  federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
+  federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
+  addRemotePostUseCase: AddRemotePostUseCase;
+  fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase;
 }>;
 
-const extractAttachments = async (
-  note: Note,
-  documentLoader: DocumentLoader,
-): Promise<Attachment[]> => {
-  const attachments: Attachment[] = [];
-  for await (const attachment of note.getAttachments({ documentLoader })) {
-    if (attachment instanceof Document || attachment instanceof Image) {
-      const url = attachment.url;
-      if (url instanceof URL) {
-        attachments.push({
-          url: url.href,
-          altText: attachment.name?.toString() ?? null,
-        });
-      }
-    }
+const saveForwardedCreate = async (
+  deps: OnCreateDeps,
+  { note, actorId, visibility, documentLoader, inReplyToUri }: Readonly<{
+    note: Note;
+    actorId: URL;
+    visibility: Visibility | null;
+    documentLoader: DocumentLoader;
+    inReplyToUri: string | null;
+  }>,
+) => {
+  if (!Visibility.isVisibleToAnonymous(visibility)) {
+    getLogger().info(`Skipping a forwarded Create that is neither public nor unlisted: ${note.id?.href}`);
+    return;
   }
-  return attachments;
+  const relaysResult = await deps.acceptedRelaysResolver.resolve();
+  if (!relaysResult.ok) {
+    getLogger().warn(
+      `Failed to resolve accepted relays for a forwarded Create; failing the Create to retry: ${
+        String(relaysResult.err)
+      } (${note.id?.href})`,
+    );
+    throw new Error('Failed to resolve accepted relays for a forwarded Create');
+  }
+  if (relaysResult.val.length !== 1) {
+    getLogger().info(
+      `Not saving a forwarded Create to the federated timeline because the number of accepted relays is not one: ${relaysResult.val.length} (${note.id?.href})`,
+    );
+    return;
+  }
+  const [relay] = relaysResult.val;
+  if (note.attributionId?.href !== actorId.href) {
+    getLogger().warn(
+      `Skipping a forwarded Create whose Note author differs from the Create actor: ${note.id?.href} author=${note.attributionId?.href} actor=${actorId.href}`,
+    );
+    return;
+  }
+
+  try {
+    await saveFederatedNote(deps, { note, relayId: relay.relayId, documentLoader, actorId, inReplyToUri });
+  } catch (error) {
+    if (!isFetchFailure(error)) {
+      throw error;
+    }
+    getLogger().warn(`Failed to fetch the author of a forwarded Create: ${note.id?.href} - ${String(error)}`);
+  }
 };
 
-export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => {
-  const actorResult = await InboxActorResolver.getInstance().resolve(ctx, activity);
+export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<unknown>, activity: Create) => {
+  const actorResult = await deps.inboxActorResolver.resolve(ctx, activity);
   if (!actorResult.ok) {
     getLogger().warn(`Failed to resolve actor: ${actorResult.err.message}`);
     return;
   }
-  const { actorIdentity, documentLoaderOptions } = actorResult.val;
+  const { actor, actorIdentity, documentLoaderOptions } = actorResult.val;
   const documentLoader = documentLoaderOptions.documentLoader;
   if (!documentLoader) {
     getLogger().warn('documentLoader is undefined');
@@ -66,60 +108,78 @@ export const onCreate = async (ctx: InboxContext<unknown>, activity: Create) => 
   }
   const objectUri = object.id.href;
 
-  const useCase = AddRemotePostUseCase.create({
-    postCreatedStore: PgPostCreatedStore.getInstance(),
-    postImageCreatedStore: PgPostImageCreatedStore.getInstance(),
-    remoteActorCreatedStore: PgRemoteActorCreatedStore.getInstance(),
-    logoUriUpdatedStore: PgLogoUriUpdatedStore.getInstance(),
-    actorResolverByUri: PgActorResolverByUri.getInstance(),
-    timelineItemCreatedStore: PgTimelineItemCreatedStore.getInstance(),
-    localPostResolverByUri: PgLocalPostResolverByUri.getInstance(),
-    replyNotificationCreatedStore: PgReplyNotificationCreatedStore.getInstance(),
-    pushSubscriptionsResolver: PgPushSubscriptionsResolverByUserId.getInstance(),
-    webPushSender: WebPushSender.getInstance(),
-    linkPreviewCreatedStore: PgLinkPreviewCreatedStore.getInstance(),
-    ogpFetcher: createOgpFetcher(),
-  });
-
   const attachments = await extractAttachments(object, documentLoader);
   const inReplyToUri = object.replyTargetId?.href ?? null;
+  const addressed = object.toIds.length + object.ccIds.length > 0 ? object : activity;
+  const visibility = extractVisibility(addressed, actor.followersId);
+  const recipientActorUris = extractRecipientActorUris([object, activity], deps.origin);
+
+  const parsedReplyTarget = inReplyToUri && URL.canParse(inReplyToUri) ? ctx.parseUri(new URL(inReplyToUri)) : null;
+  const repliesToLocalPost = parsedReplyTarget?.type === 'object'
+    && (parsedReplyTarget.class?.typeId?.href === NOTE_TYPE_ID
+      || parsedReplyTarget.class?.typeId?.href === ARTICLE_TYPE_ID);
+
+  if (recipientActorUris.length === 0 && !repliesToLocalPost) {
+    const actorId = activity.actorId;
+    if (!actorId) {
+      getLogger().warn('Create activity has no actorId');
+      return;
+    }
+    const followedResult = await deps.followedByLocalActorResolverByActorUri.resolve({ actorUri: actorId.href });
+    if (!followedResult.ok) {
+      getLogger().warn(
+        `Failed to determine whether a local actor follows ${actorId.href}; failing the Create to retry: ${activity.id?.href} - ${
+          String(followedResult.err)
+        }`,
+      );
+      throw new Error(`Failed to determine whether a local actor follows ${actorId.href}`);
+    }
+    if (!followedResult.val) {
+      getLogger().info(
+        `Not creating a home timeline item for a Create from an actor no local actor follows; trying to save it to the federated timeline as a relay-forwarded post: ${actorId.href} (${activity.id?.href})`,
+      );
+      await saveForwardedCreate(deps, { note: object, actorId, visibility, documentLoader, inReplyToUri });
+      return;
+    }
+  }
 
   return RA.flow(
-    useCase.run({
+    deps.addRemotePostUseCase.run({
       content: String(object.content),
       uri: objectUri,
       actorIdentity,
       attachments,
       inReplyToUri,
+      ...extractContentWarning(object),
+      visibility,
+      recipientActorUris,
     }),
     RA.match({
-      ok: ({ actor: createdActor }) => {
+      ok: async ({ actor: createdActor }) => {
         getLogger().info(
           `Processed Create activity: ${objectUri} by ${createdActor.uri}`,
         );
 
-        // Fetch reply notes recursively in the background
         if (inReplyToUri) {
-          const fetchReplyNotesUseCase = FetchReplyNotesRecursiveUseCase.create({
-            postResolverByUri: PgPostResolverByUri.getInstance(),
-            localPostResolverByUri: PgLocalPostResolverByUri.getInstance(),
-            remotePostUpserter: PgRemotePostUpserter.getInstance(),
-          });
-
-          void fetchReplyNotesUseCase.run({
+          const result = await deps.fetchReplyNotesRecursiveUseCase.run({
             inReplyToUri,
             documentLoader,
             lookupObject: (uri, options) => ctx.lookupObject(uri, options),
-          }).then((result) => {
-            if (result.ok && result.val.fetchedPosts.length > 0) {
-              getLogger().info(
-                `Fetched ${result.val.fetchedPosts.length} reply notes for: ${objectUri}`,
-              );
-            }
           });
+          if (result.ok && result.val.fetchedPosts.length > 0) {
+            getLogger().info(
+              `Fetched ${result.val.fetchedPosts.length} reply notes for: ${objectUri}`,
+            );
+          }
         }
       },
       err: (err) => {
+        if (err.type === 'RemotePostAuthorMismatchError') {
+          getLogger().warn(
+            `Ignored Create activity for a post owned by another actor: ${objectUri} existing=${err.detail.existingActorId} actor=${err.detail.actorId}`,
+          );
+          return;
+        }
         getLogger().warn(
           `Failed to process Create activity: ${objectUri} - ${err}`,
         );

@@ -1,0 +1,23 @@
+import CodePlayground from '../../../components/CodePlayground.astro';
+
+## テストを実行する
+
+「テストを実行する」を押します。
+
+<CodePlayground
+  exercise="chapter-1-start"
+  editable={[]}
+  readonly={['visits.test.ts']}
+  testFile="visits.test.ts"
+/>
+
+<details>
+<summary>手元の Node で動かすとき</summary>
+
+同じディレクトリで、次のコマンドを実行します。
+
+```bash
+node --test visits.test.ts
+```
+
+</details>

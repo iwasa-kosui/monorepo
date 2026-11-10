@@ -1,4 +1,5 @@
-import { Article as FedifyArticle, Delete, Note, type RequestContext, Tombstone } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Article as FedifyArticle, Delete, Note, Tombstone } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
@@ -8,17 +9,18 @@ import { Instant } from '../domain/instant/instant.ts';
 import { Post, type PostDeletedStore, PostNotFoundError, type PostResolver } from '../domain/post/post.ts';
 import { PostId } from '../domain/post/postId.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
-import { SessionId } from '../domain/session/sessionId.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import type { RemoveBlueskyCrosspostUseCase } from './removeBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  postId: PostId;
-  ctx: RequestContext<unknown>;
-}>;
+type Input =
+  & Requester
+  & Readonly<{
+    postId: PostId;
+    ctx: RequestContext<unknown>;
+  }>;
 
 const Ok = Schema.create(
   z.object({
@@ -52,6 +54,7 @@ type Deps = Readonly<{
   // Article is a child aggregate of Post, so we keep it
   articleResolverByRootPostId: ArticleResolverByRootPostId;
   articleDeletedStore: ArticleDeletedStore;
+  removeBlueskyCrosspost?: RemoveBlueskyCrosspostUseCase;
 }>;
 
 const create = ({
@@ -62,17 +65,16 @@ const create = ({
   postResolver,
   articleResolverByRootPostId,
   articleDeletedStore,
+  removeBlueskyCrosspost,
 }: Deps): DeletePostUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       RA.andBind('post', async ({ postId }) => {
         const post = await postResolver.resolve(postId);
@@ -103,6 +105,7 @@ const create = ({
         // Delete the post via event store
         const deleteEvent = Post.deletePost(now)(postId);
         await postDeletedStore.store(deleteEvent);
+        await removeBlueskyCrosspost?.run({ postId });
 
         // Build Note URI for the Delete activity using Fedify context
         const noteUri = ctx.getObjectUri(Note, { identifier: user.username, id: postId });

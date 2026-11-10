@@ -67,13 +67,19 @@ iori provides a "**second brain connected to collective intelligence**" — not 
 
 ### Installation
 
-1. Start the database
+1. Build the workspace package `result`
+
+```bash
+pnpm --filter result run build
+```
+
+2. Start the database
 
 ```bash
 pnpm compose:up
 ```
 
-2. Configure environment variables
+3. Configure environment variables
 
 ```bash
 cp .env.example .env
@@ -87,13 +93,13 @@ Required environment variables:
 | `DATABASE_URL` | PostgreSQL connection string                    |
 | `ORIGIN`       | Server origin URL (e.g., `https://example.com`) |
 
-3. Run database migrations
+4. Run database migrations
 
 ```bash
 pnpm drizzle:push
 ```
 
-4. Start development server
+5. Start development server
 
 ```bash
 pnpm dev
@@ -116,6 +122,7 @@ pnpm format
 pnpm exec tsc --noEmit
 
 # Production build
+pnpm --filter result run build
 pnpm build
 ```
 

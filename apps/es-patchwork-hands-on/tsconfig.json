@@ -1,0 +1,4 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "include": [".astro/types.d.ts", "src", "worker", "e2e", "playwright.config.ts", "scripts/check-browser-runtime.ts"]
+}

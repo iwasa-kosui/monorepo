@@ -1,13 +1,11 @@
-import { Create, Document, isActor, Note, PUBLIC_COLLECTION, type RequestContext } from '@fedify/fedify';
+import { type RequestContext } from '@fedify/fedify';
+import { Create, isActor, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 
-import type { LocalPostResolverByUri } from '../adaptor/pg/post/localPostResolverByUri.ts';
-import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPushSender.ts';
+import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
-import type { PostImage, PostImageCreatedStore } from '../domain/image/image.ts';
-import { ImageId } from '../domain/image/imageId.ts';
-import { getMimeTypeFromUrl } from '../domain/image/mimeType.ts';
+import type { PostImageCreatedStore } from '../domain/image/image.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
   Notification,
@@ -15,6 +13,7 @@ import {
   type ReplyNotificationCreatedStore,
 } from '../domain/notification/notification.ts';
 import { NotificationId } from '../domain/notification/notificationId.ts';
+import type { LocalPostResolverByUri } from '../domain/post/post.ts';
 import {
   type LocalPost,
   Post,
@@ -26,24 +25,28 @@ import {
 import type { PostId } from '../domain/post/postId.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
-import type { SessionId } from '../domain/session/sessionId.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
-import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { Env } from '../env.ts';
-import { resolveLocalActorWith, resolveSessionWith, resolveUserWith } from './helper/resolve.ts';
+import type { User, UserNotFoundError, UserResolver } from '../domain/user/user.ts';
+import { toImageDocument } from './helper/postImageDocument.ts';
+import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
+import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{
-  sessionId: SessionId;
-  postId: PostId;
-  content: string;
-  imageUrls: string[];
-  request: Request;
-  ctx: RequestContext<unknown>;
-}>;
+type Input =
+  & Requester
+  & PostImagesInput
+  & Readonly<{
+    postId: PostId;
+    content: string;
+    summary?: string | null;
+    sensitive?: boolean;
+    request: Request;
+    ctx: RequestContext<unknown>;
+  }>;
 
-type Ok = void;
+type Ok = Readonly<{ post: Post; user: User }>;
 
 export type RemoteNoteLookupError = Readonly<{
   type: 'RemoteNoteLookupError';
@@ -82,6 +85,8 @@ type Deps = Readonly<{
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
   postResolver: PostResolver;
+  scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
+  origin: string;
 }>;
 
 const create = ({
@@ -96,10 +101,11 @@ const create = ({
   pushSubscriptionsResolver,
   webPushSender,
   postResolver,
+  scheduleBlueskyCrosspost,
+  origin,
 }: Deps): SendReplyUseCase => {
   const now = Instant.now();
-  const resolveSession = resolveSessionWith(sessionResolver, now);
-  const resolveUser = resolveUserWith(userResolver);
+  const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
   const resolveLocalActor = resolveLocalActorWith(actorResolverByUserId);
 
   type ResolvedPost = LocalPost | RemotePost;
@@ -123,8 +129,7 @@ const create = ({
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
-      RA.andBind('session', ({ sessionId }) => resolveSession(sessionId)),
-      RA.andBind('user', ({ session }) => resolveUser(session.userId)),
+      RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
       // Resolve the parent post
       RA.andBind('parentPost', ({ postId }) => resolvePostOrErr(postId)),
@@ -139,12 +144,14 @@ const create = ({
         return RA.ok(parentPost.uri);
       }),
       // Create the reply post
-      RA.andBind('postEvent', ({ actor, content, inReplyToUri }) => {
+      RA.andBind('postEvent', ({ actor, content, inReplyToUri, summary, sensitive }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content,
           userId: actor.userId,
           inReplyToUri,
+          summary,
+          sensitive,
         });
         return RA.ok(postEvent);
       }),
@@ -163,19 +170,12 @@ const create = ({
         return timelineItemCreatedStore.store(timelineItemEvent);
       }),
       // Store images
-      RA.andBind('images', async ({ replyPost, imageUrls }) => {
-        if (imageUrls.length > 0) {
-          const images: PostImage[] = imageUrls.map((url) => ({
-            imageId: ImageId.generate(),
-            postId: replyPost.postId,
-            url,
-            altText: null,
-            createdAt: now,
-          }));
+      RA.andBind('images', async (input) => {
+        const images = toPostImages(input.replyPost.postId, input, now);
+        if (images.length > 0) {
           await postImageCreatedStore.store(images);
-          return RA.ok(images);
         }
-        return RA.ok([]);
+        return RA.ok(images);
       }),
       // Send ActivityPub Create activity (only for remote parent posts)
       RA.andThrough(async ({ user, parentPost, replyPost, images, ctx, inReplyToUri }) => {
@@ -191,14 +191,10 @@ const create = ({
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
             url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+            summary: replyPost.summary,
+            sensitive: replyPost.sensitive,
             replyTarget: new URL(inReplyToUri),
-            attachments: images.map(
-              (image) =>
-                new Document({
-                  url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
-                  mediaType: getMimeTypeFromUrl(image.url),
-                }),
-            ),
+            attachments: images.map((image) => toImageDocument(image, origin)),
           });
 
           await ctx.sendActivity(
@@ -258,14 +254,10 @@ const create = ({
           mediaType: 'text/html',
           published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
           url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+          summary: replyPost.summary,
+          sensitive: replyPost.sensitive,
           replyTarget: new URL(objectUri),
-          attachments: images.map(
-            (image) =>
-              new Document({
-                url: new URL(`${Env.getInstance().ORIGIN}${image.url}`),
-                mediaType: getMimeTypeFromUrl(image.url),
-              }),
-          ),
+          attachments: images.map((image) => toImageDocument(image, origin)),
         });
 
         // Send to the note's author
@@ -294,6 +286,10 @@ const create = ({
           }),
         );
 
+        return RA.ok(undefined);
+      }),
+      RA.andThrough(async ({ replyPost }) => {
+        await scheduleBlueskyCrosspost?.run({ postId: replyPost.postId });
         return RA.ok(undefined);
       }),
       // Create reply notification if replying to a local post (and not self-reply)
@@ -387,7 +383,7 @@ const create = ({
         }
         return RA.ok(undefined);
       }),
-      RA.map(() => undefined),
+      RA.map(({ replyPost, user }) => ({ post: replyPost, user })),
     );
 
   return { run };

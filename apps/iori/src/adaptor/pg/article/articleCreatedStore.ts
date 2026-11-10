@@ -9,6 +9,9 @@ const store = async (...events: readonly ArticleCreated[]): RA<void, never> => {
   await DB.getInstance().transaction(async (tx) => {
     for (const event of events) {
       const article = event.aggregateState;
+      if (article.rootPostId === null) {
+        throw new Error(`Articles without a rootPostId are not supported: ${article.articleId}`);
+      }
       await tx.insert(articlesTable).values({
         articleId: article.articleId,
         authorActorId: article.authorActorId,

@@ -2,11 +2,16 @@ import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Article } from '../../domain/article/article.ts';
+import { ARTICLES_URL, isMastodonApiError, requestDigest } from '../api/mastodonClient.ts';
+import { keepsCachedView } from '../api/pageCache.ts';
+import { clearAllCache, readCache, writeCache } from '../api/responseCache.ts';
+import { buildDigestRequestFailureMessage, DIGEST_REQUEST_PENDING_LABEL } from './digestRequestMessage.ts';
 
 type ArticleWithStatus = Article & {
   isPublishing?: boolean;
   isUnpublishing?: boolean;
   isDeleting?: boolean;
+  isDigest?: boolean;
 };
 
 type ArticlesResponse = {
@@ -19,10 +24,18 @@ const getIsLoggedIn = (): boolean => {
   return root?.dataset.isLoggedIn === 'true';
 };
 
+const readCachedArticles = (): ArticlesResponse | null => {
+  const body = readCache(ARTICLES_URL)?.body;
+  return typeof body === 'object' && body !== null && 'articles' in body && Array.isArray(body.articles)
+    ? body as ArticlesResponse
+    : null;
+};
+
 const ArticlesPage = () => {
-  const [articles, setArticles] = useState<ArticleWithStatus[]>([]);
-  const [authorUsername, setAuthorUsername] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [cached] = useState(readCachedArticles);
+  const [articles, setArticles] = useState<ArticleWithStatus[]>(cached?.articles ?? []);
+  const [authorUsername, setAuthorUsername] = useState<string | null>(cached?.authorUsername ?? null);
+  const [isLoading, setIsLoading] = useState(cached === null);
   const [error, setError] = useState<string | null>(null);
   const [isLoggedIn] = useState(() => getIsLoggedIn());
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -30,20 +43,25 @@ const ArticlesPage = () => {
   const [newArticleTitle, setNewArticleTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [isRequestingDigest, setIsRequestingDigest] = useState(false);
+  const [digestRequestError, setDigestRequestError] = useState<string | null>(null);
 
   const fetchArticles = async () => {
     try {
-      const res = await fetch('/api/v1/articles');
+      const res = await fetch(ARTICLES_URL);
+      const isUnauthorized = res.status === 401;
+      if (isUnauthorized) clearAllCache();
       const data = (await res.json()) as ArticlesResponse | { error: string };
 
       if ('error' in data) {
-        setError(data.error);
+        if (!keepsCachedView(cached !== null, isUnauthorized)) setError(data.error);
       } else {
+        if (res.ok && isLoggedIn) writeCache(ARTICLES_URL, data);
         setArticles(data.articles);
         setAuthorUsername(data.authorUsername);
       }
     } catch (err) {
-      setError((err as Error).message);
+      if (cached === null) setError((err as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +75,7 @@ const ArticlesPage = () => {
     setArticles((prev) => prev.map((a) => (a.articleId === articleId ? { ...a, isPublishing: true } : a)));
 
     try {
-      const res = await fetch(`/api/v1/articles/${articleId}/publish`, {
+      const res = await fetch(`/api/iori/v1/articles/${articleId}/publish`, {
         method: 'POST',
       });
       const data = await res.json();
@@ -84,7 +102,7 @@ const ArticlesPage = () => {
     setArticles((prev) => prev.map((a) => a.articleId === articleId ? { ...a, isUnpublishing: true } : a));
 
     try {
-      const res = await fetch(`/api/v1/articles/${articleId}/unpublish`, {
+      const res = await fetch(`/api/iori/v1/articles/${articleId}/unpublish`, {
         method: 'POST',
       });
       const data = await res.json();
@@ -95,7 +113,7 @@ const ArticlesPage = () => {
         setArticles((prev) =>
           prev.map((a) =>
             a.articleId === articleId
-              ? { ...data.article, isUnpublishing: false }
+              ? { ...data.article, isDigest: a.isDigest, isUnpublishing: false }
               : a
           )
         );
@@ -115,7 +133,7 @@ const ArticlesPage = () => {
     setArticles((prev) => prev.map((a) => (a.articleId === articleId ? { ...a, isDeleting: true } : a)));
 
     try {
-      const res = await fetch(`/api/v1/articles/${articleId}`, {
+      const res = await fetch(`/api/iori/v1/articles/${articleId}`, {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -142,7 +160,7 @@ const ArticlesPage = () => {
     setCreateError(null);
 
     try {
-      const res = await fetch('/api/v1/articles', {
+      const res = await fetch('/api/iori/v1/articles', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -166,6 +184,25 @@ const ArticlesPage = () => {
       setCreateError((err as Error).message);
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleRequestDigest = async () => {
+    setIsRequestingDigest(true);
+    setDigestRequestError(null);
+
+    try {
+      const { articleId } = await requestDigest();
+      window.location.href = `/articles/${articleId}`;
+    } catch (err) {
+      setDigestRequestError(
+        buildDigestRequestFailureMessage(
+          isMastodonApiError(err)
+            ? { status: err.status, error: err.message, retryAfterSeconds: err.retryAfterSeconds }
+            : {},
+        ),
+      );
+      setIsRequestingDigest(false);
     }
   };
 
@@ -235,6 +272,34 @@ const ArticlesPage = () => {
 
   return (
     <div class='flex flex-col h-full'>
+      {isLoggedIn && (
+        <a
+          href='/digest'
+          class='md:hidden mb-4 px-4 py-3 rounded-clay bg-cream dark:bg-gray-800 shadow-clay dark:shadow-clay-dark text-sm font-medium text-charcoal dark:text-white flex items-center justify-between flex-shrink-0'
+        >
+          最新のダイジェスト
+          <svg class='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 5l7 7-7 7' />
+          </svg>
+        </a>
+      )}
+      {isLoggedIn && (
+        <div class='mb-4 flex flex-col items-start gap-2 flex-shrink-0'>
+          <button
+            type='button'
+            onClick={handleRequestDigest}
+            disabled={isRequestingDigest}
+            class='px-4 py-2 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
+          >
+            {isRequestingDigest ? DIGEST_REQUEST_PENDING_LABEL : '今すぐダイジェストを作る'}
+          </button>
+          {digestRequestError && (
+            <p role='alert' class='text-sm text-terracotta-dark dark:text-terracotta-light'>
+              {digestRequestError}
+            </p>
+          )}
+        </div>
+      )}
       {/* Header */}
       <div class='flex items-center justify-between mb-6 flex-shrink-0'>
         <h1 class='text-xl font-semibold text-charcoal dark:text-white'>
@@ -344,16 +409,25 @@ const ArticlesPage = () => {
                   </div>
                   <div class='flex items-center gap-2 flex-shrink-0'>
                     {article.status === 'draft' || article.status === 'unpublished'
-                      ? (
-                        <button
-                          type='button'
-                          onClick={() => handlePublish(article.articleId)}
-                          disabled={article.isPublishing}
-                          class='px-3 py-1.5 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all shadow-clay-sm'
-                        >
-                          {article.isPublishing ? '公開中...' : '公開'}
-                        </button>
-                      )
+                      ? article.isDigest
+                        ? (
+                          <a
+                            href={`/articles/${article.articleId}`}
+                            class='px-3 py-1.5 bg-sage-dark hover:bg-sage text-white text-sm font-medium rounded-xl transition-all shadow-clay-sm'
+                          >
+                            詳細で公開
+                          </a>
+                        )
+                        : (
+                          <button
+                            type='button'
+                            onClick={() => handlePublish(article.articleId)}
+                            disabled={article.isPublishing}
+                            class='px-3 py-1.5 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all shadow-clay-sm'
+                          >
+                            {article.isPublishing ? '公開中...' : '公開'}
+                          </button>
+                        )
                       : (
                         <button
                           type='button'

@@ -1,0 +1,18 @@
+export function materializeHostedValues(
+  env: Record<string, string | undefined>,
+): Promise<Record<string, string | undefined>>;
+export function initializeHostedWorkflow(env: Record<string, string | undefined>): Promise<Record<string, string>>;
+export function runHostedWorkflow(
+  phase: string,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal,
+): Promise<void>;
+export function publishChildDiagnostics(stderr: string): Promise<void>;
+export function executeHostedOperation(
+  name: string,
+  scriptPath: string,
+  env: Record<string, string | undefined>,
+  signal: AbortSignal,
+  timeout: number,
+): Promise<unknown>;
+export function hostedFailureMessage(): string;

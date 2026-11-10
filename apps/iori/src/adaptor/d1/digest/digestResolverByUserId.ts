@@ -1,0 +1,18 @@
+import { RA } from '@iwasa-kosui/result';
+import { and, desc, eq } from 'drizzle-orm';
+
+import { type DigestResolverByUserId, SUMMARY_DIGEST_TOPIC_KEY } from '../../../domain/digest/digest.ts';
+import type { IoriD1Db } from '../client.ts';
+import { digestsTable } from '../schema.ts';
+import { reconstructDigestHeader } from './digestHeaderMapper.ts';
+import { reconstructDigest } from './digestMapper.ts';
+
+export const createD1DigestResolverByUserId = (db: IoriD1Db): DigestResolverByUserId => ({
+  resolve: async (userId) => {
+    const [row] = await db.select().from(digestsTable)
+      .where(and(eq(digestsTable.userId, userId), eq(digestsTable.topicKey, SUMMARY_DIGEST_TOPIC_KEY)))
+      .orderBy(desc(digestsTable.digestDate))
+      .limit(1);
+    return RA.ok(row === undefined ? undefined : await reconstructDigest(db, reconstructDigestHeader(row)));
+  },
+});

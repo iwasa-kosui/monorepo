@@ -1,20 +1,22 @@
-import { hc } from 'hono/client';
-import { useCallback, useState } from 'hono/jsx';
+import { useCallback, useRef, useState } from 'hono/jsx';
 
-import type { APIRouterType } from '../../adaptor/routes/apiRouter.tsx';
-import type { PostWithAuthor } from '../../domain/post/post.ts';
-import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
+import type { Status } from '../../adaptor/mastodon/entities.ts';
+import {
+  deleteStatus,
+  failureMessage,
+  favourite,
+  react,
+  reblog,
+  unfavourite,
+  unreact,
+  unreblog,
+} from '../api/mastodonClient.ts';
+import { withReblogged, withUpdatedStatus } from '../api/status.ts';
+import { runExclusive, runOptimisticFavourite } from './optimisticFavourite.ts';
 
-const client = hc<APIRouterType>('/api');
-
-type PostUpdater = (
+type StatusUpdater = (
   postId: string,
-  updater: (item: TimelineItemWithPost) => TimelineItemWithPost,
-) => void;
-
-type ThreadPostUpdater = (
-  postId: string,
-  updater: (post: PostWithAuthor) => PostWithAuthor,
+  updater: (status: Status) => Status,
 ) => void;
 
 export type ActionState = Readonly<{
@@ -39,8 +41,8 @@ export type UsePostActionsReturn = Readonly<{
 }>;
 
 type UsePostActionsProps = Readonly<{
-  updateTimelineItem: PostUpdater;
-  updateThreadPost?: ThreadPostUpdater;
+  updateTimelineItem: StatusUpdater;
+  updateThreadPost?: StatusUpdater;
   removePost: (postId: string) => void;
   refreshTimeline: () => Promise<void>;
   onPostDeleted?: (postId: string) => void;
@@ -60,54 +62,50 @@ export const usePostActions = ({
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [emojiReactingPostId, setEmojiReactingPostId] = useState<string | null>(null);
   const [myReactions, setMyReactions] = useState<Map<string, string[]>>(new Map());
+  const favouriteInFlightRef = useRef<Set<string>>(null);
+  const favouriteInFlight = () => (favouriteInFlightRef.current ??= new Set<string>());
 
   const like = useCallback(
-    async (postId: string) => {
-      setLikingPostId(postId);
-      try {
-        const res = await client.v1.like.$post({ json: { postId } });
-        const result = await res.json();
-        if ('success' in result && result.success) {
-          updateTimelineItem(postId, (item) => ({
-            ...item,
-            post: { ...item.post, liked: true },
-          }));
-          updateThreadPost?.(postId, (post) => ({ ...post, liked: true }));
-        } else if ('error' in result) {
-          console.error('Failed to like:', result.error);
+    (postId: string) =>
+      runExclusive(favouriteInFlight(), postId, async () => {
+        setLikingPostId(postId);
+        try {
+          await runOptimisticFavourite({
+            postId,
+            favourited: true,
+            request: favourite,
+            updateTimelineItem,
+            updateThreadPost,
+          });
+        } catch (error) {
+          console.error('Failed to like:', error);
+          alert(failureMessage('like', error));
+        } finally {
+          setLikingPostId(null);
         }
-      } catch (error) {
-        console.error('Failed to like:', error);
-      } finally {
-        setLikingPostId(null);
-      }
-    },
+      }),
     [updateTimelineItem, updateThreadPost],
   );
 
   const undoLike = useCallback(
-    async (postId: string) => {
-      setUndoingLikePostId(postId);
-      try {
-        const res = await client.v1.like.$delete({ json: { postId } });
-        const result = await res.json();
-        if ('success' in result && result.success) {
-          updateTimelineItem(postId, (item) => ({
-            ...item,
-            post: { ...item.post, liked: false },
-          }));
-          updateThreadPost?.(postId, (post) => ({ ...post, liked: false }));
-        } else if ('error' in result) {
-          console.error('Failed to undo like:', result.error);
-          alert(`Failed to undo like: ${result.error}`);
+    (postId: string) =>
+      runExclusive(favouriteInFlight(), postId, async () => {
+        setUndoingLikePostId(postId);
+        try {
+          await runOptimisticFavourite({
+            postId,
+            favourited: false,
+            request: unfavourite,
+            updateTimelineItem,
+            updateThreadPost,
+          });
+        } catch (error) {
+          console.error('Failed to undo like:', error);
+          alert(failureMessage('undo like', error));
+        } finally {
+          setUndoingLikePostId(null);
         }
-      } catch (error) {
-        console.error('Failed to undo like:', error);
-        alert('Failed to undo like. Please try again.');
-      } finally {
-        setUndoingLikePostId(null);
-      }
-    },
+      }),
     [updateTimelineItem, updateThreadPost],
   );
 
@@ -115,18 +113,16 @@ export const usePostActions = ({
     async (postId: string) => {
       setRepostingPostId(postId);
       try {
-        const res = await client.v1.repost.$post({ json: { postId } });
-        const result = await res.json();
-        if ('success' in result && result.success) {
-          await refreshTimeline();
-          updateThreadPost?.(postId, (post) => ({ ...post, reposted: true }));
-        } else if ('error' in result) {
-          console.error('Failed to repost:', result.error);
-          alert(`Failed to repost: ${result.error}`);
-        }
+        const boost = await reblog(postId);
+        await refreshTimeline();
+        const original = boost.reblog;
+        updateThreadPost?.(
+          postId,
+          (status) => original === null ? withReblogged(status, true) : withUpdatedStatus(status, original),
+        );
       } catch (error) {
         console.error('Failed to repost:', error);
-        alert('Failed to repost. Please try again.');
+        alert(failureMessage('repost', error));
       } finally {
         setRepostingPostId(null);
       }
@@ -141,18 +137,12 @@ export const usePostActions = ({
       }
       setUndoingRepostPostId(postId);
       try {
-        const res = await client.v1.repost.$delete({ json: { postId } });
-        const result = await res.json();
-        if ('success' in result && result.success) {
-          await refreshTimeline();
-          updateThreadPost?.(postId, (post) => ({ ...post, reposted: false }));
-        } else if ('error' in result) {
-          console.error('Failed to undo repost:', result.error);
-          alert(`Failed to undo repost: ${result.error}`);
-        }
+        const original = await unreblog(postId);
+        await refreshTimeline();
+        updateThreadPost?.(postId, (status) => withUpdatedStatus(status, original));
       } catch (error) {
         console.error('Failed to undo repost:', error);
-        alert('Failed to undo repost. Please try again.');
+        alert(failureMessage('undo repost', error));
       } finally {
         setUndoingRepostPostId(null);
       }
@@ -164,20 +154,12 @@ export const usePostActions = ({
     async (postId: string) => {
       setDeletingPostId(postId);
       try {
-        const res = await client.v1.posts[':postId'].$delete({
-          param: { postId },
-        });
-        const result = await res.json();
-        if ('success' in result && result.success) {
-          removePost(postId);
-          onPostDeleted?.(postId);
-        } else if ('error' in result) {
-          console.error('Failed to delete:', result.error);
-          alert(`Failed to delete: ${result.error}`);
-        }
+        await deleteStatus(postId);
+        removePost(postId);
+        onPostDeleted?.(postId);
       } catch (error) {
         console.error('Failed to delete:', error);
-        alert('Failed to delete the post. Please try again.');
+        alert(failureMessage('delete', error));
       } finally {
         setDeletingPostId(null);
       }
@@ -188,55 +170,47 @@ export const usePostActions = ({
   const emojiReact = useCallback(async (postId: string, emoji: string) => {
     setEmojiReactingPostId(postId);
     try {
-      const res = await client.v1.react.$post({ json: { postId, emoji } });
-      const result = await res.json();
-      if ('success' in result && result.success) {
-        setMyReactions((prev) => {
-          const newMap = new Map(prev);
-          const existing = newMap.get(postId) ?? [];
-          if (!existing.includes(emoji)) {
-            newMap.set(postId, [...existing, emoji]);
-          }
-          return newMap;
-        });
-      } else if ('error' in result) {
-        console.error('Failed to react:', result.error);
-        alert(`Failed to react: ${result.error}`);
-      }
+      const updated = await react(postId, emoji);
+      updateTimelineItem(postId, (status) => withUpdatedStatus(status, updated));
+      updateThreadPost?.(postId, (status) => withUpdatedStatus(status, updated));
+      setMyReactions((prev) => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(postId) ?? [];
+        if (!existing.includes(emoji)) {
+          newMap.set(postId, [...existing, emoji]);
+        }
+        return newMap;
+      });
     } catch (error) {
       console.error('Failed to react:', error);
-      alert('Failed to add reaction. Please try again.');
+      alert(failureMessage('add reaction', error));
     } finally {
       setEmojiReactingPostId(null);
     }
-  }, []);
+  }, [updateTimelineItem, updateThreadPost]);
 
   const undoEmojiReact = useCallback(async (postId: string, emoji: string) => {
     setEmojiReactingPostId(postId);
     try {
-      const res = await client.v1.react.$delete({ json: { postId, emoji } });
-      const result = await res.json();
-      if ('success' in result && result.success) {
-        setMyReactions((prev) => {
-          const newMap = new Map(prev);
-          const existing = newMap.get(postId) ?? [];
-          newMap.set(
-            postId,
-            existing.filter((e) => e !== emoji),
-          );
-          return newMap;
-        });
-      } else if ('error' in result) {
-        console.error('Failed to undo react:', result.error);
-        alert(`Failed to undo reaction: ${result.error}`);
-      }
+      const updated = await unreact(postId, emoji);
+      updateTimelineItem(postId, (status) => withUpdatedStatus(status, updated));
+      updateThreadPost?.(postId, (status) => withUpdatedStatus(status, updated));
+      setMyReactions((prev) => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(postId) ?? [];
+        newMap.set(
+          postId,
+          existing.filter((e) => e !== emoji),
+        );
+        return newMap;
+      });
     } catch (error) {
       console.error('Failed to undo react:', error);
-      alert('Failed to remove reaction. Please try again.');
+      alert(failureMessage('remove reaction', error));
     } finally {
       setEmojiReactingPostId(null);
     }
-  }, []);
+  }, [updateTimelineItem, updateThreadPost]);
 
   return {
     actionState: {

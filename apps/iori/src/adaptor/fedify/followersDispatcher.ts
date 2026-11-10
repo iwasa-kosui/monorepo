@@ -1,9 +1,16 @@
-import { type Context, type Recipient } from '@fedify/fedify';
+import { type Context } from '@fedify/fedify';
+import { type Recipient } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { Username } from '../../domain/user/username.ts';
 import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
+
+export {
+  createFollowersCounter,
+  createFollowersDispatcher,
+  type FollowersDispatcherDeps,
+} from './followersDispatcherFactory.ts';
 
 const getInstance = () => {
   const useCase = GetUserProfileUseCase.getInstance();

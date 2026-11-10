@@ -1,11 +1,13 @@
 import z from 'zod/v4';
 
+import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { Schema } from '../../helper/schema.ts';
 import type { Actor } from '../actor/actor.ts';
 import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
 import type { Instant } from '../instant/instant.ts';
+import type { PageRequest } from '../page/page.ts';
 import type { Post } from '../post/post.ts';
 import { PostId } from '../post/postId.ts';
 import { UserId } from '../user/userId.ts';
@@ -69,11 +71,98 @@ const replyNotificationZodType = z
 export type ReplyNotification = z.output<typeof replyNotificationZodType>;
 export const ReplyNotification = Schema.create(replyNotificationZodType);
 
+const repostNotificationZodType = z
+  .object({
+    type: z.literal('repost'),
+    notificationId: NotificationId.zodType,
+    recipientUserId: UserId.zodType,
+    isRead: z.boolean(),
+    reposterActorId: ActorId.zodType,
+    repostedPostId: PostId.zodType,
+  })
+  .describe('RepostNotification');
+
+export type RepostNotification = z.output<typeof repostNotificationZodType>;
+export const RepostNotification = Schema.create(repostNotificationZodType);
+
+const httpUrlZodType = z.string().refine((value) => safeAbsoluteUrl(value) === value);
+
+const blueskyNotificationAuthorZodType = z.object({
+  did: z.string().min(1),
+  handle: z.string().min(1),
+  displayName: z.string().nullable(),
+  avatarUrl: httpUrlZodType.nullable(),
+});
+
+export type BlueskyNotificationAuthor = z.output<typeof blueskyNotificationAuthorZodType>;
+export const BlueskyNotificationAuthor = Schema.create(blueskyNotificationAuthorZodType);
+
+const blueskyNotificationBaseShape = {
+  notificationId: NotificationId.zodType,
+  recipientUserId: UserId.zodType,
+  isRead: z.boolean(),
+  blueskyUri: z.string().min(1),
+  author: blueskyNotificationAuthorZodType,
+};
+
+const blueskyLikeNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyLike'),
+    subjectUri: z.string().min(1),
+    targetPostId: z.nullable(PostId.zodType),
+  })
+  .describe('BlueskyLikeNotification');
+
+export type BlueskyLikeNotification = z.output<typeof blueskyLikeNotificationZodType>;
+export const BlueskyLikeNotification = Schema.create(blueskyLikeNotificationZodType);
+
+const blueskyRepostNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyRepost'),
+    subjectUri: z.string().min(1),
+    targetPostId: z.nullable(PostId.zodType),
+  })
+  .describe('BlueskyRepostNotification');
+
+export type BlueskyRepostNotification = z.output<typeof blueskyRepostNotificationZodType>;
+export const BlueskyRepostNotification = Schema.create(blueskyRepostNotificationZodType);
+
+const blueskyFollowNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyFollow'),
+  })
+  .describe('BlueskyFollowNotification');
+
+export type BlueskyFollowNotification = z.output<typeof blueskyFollowNotificationZodType>;
+export const BlueskyFollowNotification = Schema.create(blueskyFollowNotificationZodType);
+
+const blueskyMentionNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyMention'),
+    reason: z.enum(['mention', 'reply', 'quote']),
+    subjectUri: z.string().min(1).nullable(),
+    targetPostId: z.nullable(PostId.zodType),
+    text: z.string(),
+  })
+  .describe('BlueskyMentionNotification');
+
+export type BlueskyMentionNotification = z.output<typeof blueskyMentionNotificationZodType>;
+export const BlueskyMentionNotification = Schema.create(blueskyMentionNotificationZodType);
+
 const notificationZodType = z.discriminatedUnion('type', [
   likeNotificationZodType,
   followNotificationZodType,
   emojiReactNotificationZodType,
   replyNotificationZodType,
+  repostNotificationZodType,
+  blueskyLikeNotificationZodType,
+  blueskyRepostNotificationZodType,
+  blueskyFollowNotificationZodType,
+  blueskyMentionNotificationZodType,
 ]);
 
 export type Notification = z.output<typeof notificationZodType>;
@@ -317,6 +406,53 @@ export type ReplyNotificationsResolverByOriginalPostId = Agg.Resolver<
   ReplyNotification[]
 >;
 
+export type RepostNotificationCreated = NotificationEvent<
+  RepostNotification,
+  'notification.repostNotificationCreated',
+  RepostNotification
+>;
+
+const createRepostNotification = (payload: RepostNotification, now: Instant): RepostNotificationCreated => {
+  return NotificationEvent.create(
+    toAggregateId(payload),
+    payload,
+    'notification.repostNotificationCreated',
+    payload,
+    now,
+  );
+};
+
+export type RepostNotificationCreatedStore = Agg.Store<RepostNotificationCreated>;
+
+export type RepostNotificationResolverByRecipientAndActorIdAndPostId = Agg.Resolver<
+  { recipientUserId: UserId; reposterActorId: ActorId; repostedPostId: PostId },
+  RepostNotification | undefined
+>;
+
+export type BlueskyNotification =
+  | BlueskyLikeNotification
+  | BlueskyRepostNotification
+  | BlueskyFollowNotification
+  | BlueskyMentionNotification;
+
+export type BlueskyNotificationCreated = NotificationEvent<
+  BlueskyNotification,
+  'notification.blueskyNotificationCreated',
+  BlueskyNotification
+>;
+
+const createBlueskyNotification = (payload: BlueskyNotification, now: Instant): BlueskyNotificationCreated => {
+  return NotificationEvent.create(
+    toAggregateId(payload),
+    payload,
+    'notification.blueskyNotificationCreated',
+    payload,
+    now,
+  );
+};
+
+export type BlueskyNotificationCreatedStore = Agg.Store<BlueskyNotificationCreated>;
+
 // 通知既読イベント
 export type NotificationsReadPayload = Readonly<{
   notificationIds: ReadonlyArray<NotificationId>;
@@ -349,6 +485,64 @@ const markAsRead = (
 
 export type NotificationsReadStore = Agg.Store<NotificationsRead>;
 
+export type NotificationDismissedPayload = Readonly<{
+  notificationId: NotificationId;
+  userId: UserId;
+}>;
+
+export type NotificationDismissed = NotificationEvent<
+  undefined,
+  'notification.notificationDismissed',
+  NotificationDismissedPayload
+>;
+
+const dismissNotification = (notification: Notification, now: Instant): NotificationDismissed => {
+  return NotificationEvent.create(
+    toAggregateId(notification),
+    undefined,
+    'notification.notificationDismissed',
+    { notificationId: notification.notificationId, userId: notification.recipientUserId },
+    now,
+  );
+};
+
+export type NotificationDismissedStore = Agg.Store<NotificationDismissed>;
+
+export type NotificationsClearedPayload = Readonly<{ userId: UserId }>;
+
+export type NotificationsCleared = NotificationEvent<
+  undefined,
+  'notification.notificationsCleared',
+  NotificationsClearedPayload
+>;
+
+const clearNotifications = (userId: UserId, now: Instant): NotificationsCleared => {
+  // 全件削除は特定の通知に紐づかないので、集約IDは新しく採番する
+  return NotificationEvent.create(
+    { notificationId: NotificationId.generate() },
+    undefined,
+    'notification.notificationsCleared',
+    { userId },
+    now,
+  );
+};
+
+export type NotificationsClearedStore = Agg.Store<NotificationsCleared>;
+
+export type NotificationNotFoundError = Readonly<{
+  type: 'NotificationNotFoundError';
+  message: string;
+  detail: { notificationId: NotificationId };
+}>;
+
+export const NotificationNotFoundError = {
+  create: (notificationId: NotificationId): NotificationNotFoundError => ({
+    type: 'NotificationNotFoundError',
+    message: `The notification with ID "${notificationId}" was not found.`,
+    detail: { notificationId },
+  }),
+} as const;
+
 export const Notification = {
   ...schema,
   createLikeNotification,
@@ -358,7 +552,11 @@ export const Notification = {
   deleteEmojiReactNotification,
   createReplyNotification,
   deleteReplyNotification,
+  createRepostNotification,
+  createBlueskyNotification,
   markAsRead,
+  dismissNotification,
+  clearNotifications,
   toAggregateId,
 } as const;
 
@@ -408,3 +606,28 @@ export type NotificationsResolverByUserId = Agg.Resolver<UserId, NotificationWit
 
 // 未読通知数を取得するリゾルバ
 export type UnreadNotificationCountResolverByUserId = Agg.Resolver<UserId, number>;
+
+export type NotificationItem = Readonly<{
+  notification: Notification;
+  createdAt: Instant;
+}>;
+
+export type NotificationsResolverByPage = Agg.Resolver<
+  Readonly<{ recipientUserId: UserId; page: PageRequest; types: ReadonlyArray<Notification['type']> }>,
+  NotificationItem[]
+>;
+
+export type NotificationResolverByUserIdAndId = Agg.Resolver<
+  Readonly<{ recipientUserId: UserId; notificationId: NotificationId }>,
+  NotificationItem | undefined
+>;
+
+export type NotificationIdsResolverByUserIdAndCreatedAt = Agg.Resolver<
+  Readonly<{ recipientUserId: UserId; createdAt: Instant }>,
+  NotificationId[]
+>;
+
+export type NotificationCountResolverSinceMarker = Agg.Resolver<
+  Readonly<{ userId: UserId; types: ReadonlyArray<Notification['type']>; limit: number }>,
+  number
+>;

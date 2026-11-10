@@ -3,12 +3,36 @@ import { render } from 'hono/jsx/dom';
 
 import type { Article } from '../../domain/article/article.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
+import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { postToStatus } from '../legacyConversion.ts';
+import { buildDigestPublishConfirmMessage, type DigestPublishNotice } from './digestPublishConfirm.ts';
+
+type DigestFeedbackValue = 'interested' | 'not_interested';
+
+type DigestFeedbackItem = {
+  digestItemId: string;
+  rank: number;
+  url: string;
+  title: string;
+  feedback: DigestFeedbackValue | null;
+};
 
 type ArticleData = {
   article: Article;
   thread: PostWithAuthor[];
+  body?: { html: string; updatedAt: number };
+  digest?: Omit<DigestPublishNotice, 'items'> & { items: DigestFeedbackItem[] };
 };
+
+type DeepDiveMessage = { digestItemId: string; text: string; isError: boolean };
+
+const DEEP_DIVE_INSTRUCTION_MAX_LENGTH = 200;
+
+const feedbackButtons: ReadonlyArray<Readonly<{ value: DigestFeedbackValue; label: string; pressedClass: string }>> = [
+  { value: 'interested', label: '関心あり', pressedClass: 'bg-sage-dark hover:bg-sage text-white' },
+  { value: 'not_interested', label: '関心なし', pressedClass: 'bg-rust hover:bg-rust text-white' },
+];
 
 const getIsLoggedIn = (): boolean => {
   const root = document.getElementById('root');
@@ -22,6 +46,16 @@ const ArticleDetailPage = () => {
   const [isLoggedIn] = useState(() => getIsLoggedIn());
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isLoadingEdit, setIsLoadingEdit] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editMarkdown, setEditMarkdown] = useState('');
+  const [editBaseUpdatedAt, setEditBaseUpdatedAt] = useState(0);
+  const [deepDiveItemId, setDeepDiveItemId] = useState<string | null>(null);
+  const [deepDiveInstruction, setDeepDiveInstruction] = useState('');
+  const [isDeepDiving, setIsDeepDiving] = useState(false);
+  const [deepDiveMessage, setDeepDiveMessage] = useState<DeepDiveMessage | null>(null);
 
   const getArticleIdFromUrl = () => {
     const pathParts = window.location.pathname.split('/');
@@ -38,7 +72,7 @@ const ArticleDetailPage = () => {
     }
 
     try {
-      const res = await fetch(`/api/v1/articles/${articleId}`);
+      const res = await fetch(`/api/iori/v1/articles/${articleId}`);
       const result = await res.json();
 
       if ('error' in result) {
@@ -60,9 +94,12 @@ const ArticleDetailPage = () => {
   const handlePublish = async () => {
     if (!data) return;
 
+    const confirmMessage = data.digest === undefined ? undefined : buildDigestPublishConfirmMessage(data.digest);
+    if (confirmMessage !== undefined && !confirm(confirmMessage)) return;
+
     setIsPublishing(true);
     try {
-      const res = await fetch(`/api/v1/articles/${data.article.articleId}/publish`, {
+      const res = await fetch(`/api/iori/v1/articles/${data.article.articleId}/publish`, {
         method: 'POST',
       });
       const result = await res.json();
@@ -84,7 +121,7 @@ const ArticleDetailPage = () => {
 
     setIsUnpublishing(true);
     try {
-      const res = await fetch(`/api/v1/articles/${data.article.articleId}/unpublish`, {
+      const res = await fetch(`/api/iori/v1/articles/${data.article.articleId}/unpublish`, {
         method: 'POST',
       });
       const result = await res.json();
@@ -98,6 +135,94 @@ const ArticleDetailPage = () => {
       alert((err as Error).message);
     } finally {
       setIsUnpublishing(false);
+    }
+  };
+
+  const handleStartEdit = async () => {
+    if (!data) return;
+
+    setIsLoadingEdit(true);
+    try {
+      const res = await fetch(`/api/iori/v1/articles/${data.article.articleId}/edit`);
+      const result = await res.json();
+
+      if ('error' in result) {
+        alert(result.error);
+      } else {
+        setEditTitle(result.title);
+        setEditMarkdown(result.markdown);
+        setEditBaseUpdatedAt(result.updatedAt);
+        setIsEditing(true);
+      }
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setIsLoadingEdit(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!data) return;
+
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/iori/v1/articles/${data.article.articleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editTitle, markdown: editMarkdown, baseUpdatedAt: editBaseUpdatedAt }),
+      });
+      const result = await res.json();
+
+      if ('error' in result) {
+        alert(result.error);
+      } else {
+        await fetchArticle();
+        setIsEditing(false);
+      }
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeepDive = async (digestItemId: string) => {
+    if (!data || data.body === undefined) return;
+
+    setIsDeepDiving(true);
+    setDeepDiveMessage(null);
+    try {
+      const res = await fetch(`/api/iori/v1/digest-items/${digestItemId}/deep-dive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction: deepDiveInstruction, baseUpdatedAt: data.body.updatedAt }),
+      });
+      if (res.status === 504) {
+        await fetchArticle();
+        setDeepDiveMessage({
+          digestItemId,
+          text: '時間がかかったため、結果を確かめられませんでした。本文を読み込み直しました。',
+          isError: true,
+        });
+        return;
+      }
+      const result = await res.json();
+
+      if ('error' in result) {
+        setDeepDiveMessage({ digestItemId, text: result.error, isError: true });
+      } else {
+        await fetchArticle();
+        setDeepDiveInstruction('');
+        setDeepDiveMessage({
+          digestItemId,
+          text: `この項目はあと ${result.turnsLeft} 往復、今日はあと ${result.dailyRemaining} 回新しく深掘りできます`,
+          isError: false,
+        });
+      }
+    } catch (err) {
+      setDeepDiveMessage({ digestItemId, text: (err as Error).message, isError: true });
+    } finally {
+      setIsDeepDiving(false);
     }
   };
 
@@ -162,7 +287,55 @@ const ArticleDetailPage = () => {
     );
   }
 
-  const { article, thread } = data;
+  const { article, thread, body } = data;
+  const canEdit = isLoggedIn
+    && (article.status === 'draft' || article.status === 'unpublished')
+    && article.rootPostId === null
+    && body !== undefined;
+
+  if (isEditing) {
+    return (
+      <div class='flex flex-col h-full'>
+        <div class='flex items-center justify-between mb-4 flex-shrink-0'>
+          <h1 class='text-xl font-bold text-charcoal dark:text-white'>記事を編集する</h1>
+          <div class='flex items-center gap-2'>
+            <button
+              type='button'
+              onClick={() => setIsEditing(false)}
+              disabled={isSaving}
+              class='px-4 py-2 bg-sand hover:bg-sand-light disabled:opacity-50 text-charcoal text-sm font-medium rounded-clay transition-all shadow-clay-sm'
+            >
+              キャンセル
+            </button>
+            <button
+              type='button'
+              onClick={handleSave}
+              disabled={isSaving || editTitle.trim() === '' || editMarkdown.trim() === ''}
+              class='px-4 py-2 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-clay transition-all shadow-clay-sm'
+            >
+              {isSaving ? '保存中...' : '保存する'}
+            </button>
+          </div>
+        </div>
+        <input
+          type='text'
+          value={editTitle}
+          maxLength={200}
+          disabled={isSaving}
+          placeholder='タイトル'
+          onInput={(e) => setEditTitle((e.target as HTMLInputElement).value)}
+          class='w-full mb-4 px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset text-xl font-bold'
+        />
+        <MarkdownEditor
+          value={editMarkdown}
+          onChange={setEditMarkdown}
+          disabled={isSaving}
+          placeholder='本文を Markdown で書く'
+          minHeight='400px'
+        />
+      </div>
+    );
+  }
 
   return (
     <div class='flex flex-col h-full'>
@@ -184,6 +357,16 @@ const ArticleDetailPage = () => {
         </a>
         {isLoggedIn && (
           <div class='flex items-center gap-2'>
+            {canEdit && (
+              <button
+                type='button'
+                onClick={handleStartEdit}
+                disabled={isLoadingEdit}
+                class='px-4 py-2 bg-sand hover:bg-sand-light disabled:opacity-50 text-charcoal text-sm font-medium rounded-clay transition-all shadow-clay-sm'
+              >
+                {isLoadingEdit ? '読み込み中...' : '編集する'}
+              </button>
+            )}
             {article.status === 'draft' || article.status === 'unpublished'
               ? (
                 <button
@@ -221,7 +404,14 @@ const ArticleDetailPage = () => {
 
       {/* Thread Content */}
       <div class='flex-1'>
-        {thread.length === 0
+        {body !== undefined
+          ? (
+            <div
+              class='text-charcoal dark:text-gray-200 prose dark:prose-invert max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent'
+              dangerouslySetInnerHTML={{ __html: body.html }}
+            />
+          )
+          : thread.length === 0
           ? (
             <p class='text-charcoal-light dark:text-gray-400 text-center py-8'>
               スレッドが見つかりませんでした
@@ -229,10 +419,92 @@ const ArticleDetailPage = () => {
           )
           : (
             <div class='space-y-6 py-2'>
-              {thread.map((post) => <PostView key={post.postId} post={post} />)}
+              {thread.map((post) => <PostView key={post.postId} status={postToStatus(post)} />)}
             </div>
           )}
       </div>
+
+      {isLoggedIn && article.status !== 'published' && data.digest !== undefined && data.digest.items.length > 0 && (
+        <div class='mt-8 flex-shrink-0'>
+          <h2 class='text-xl font-bold text-charcoal dark:text-white mb-3'>この記事への反応</h2>
+          <ul class='space-y-3'>
+            {data.digest.items.map((item) => (
+              <li key={item.digestItemId} class='flex flex-col gap-2'>
+                <a
+                  href={item.url}
+                  class='text-terracotta dark:text-terracotta-light hover:underline break-all'
+                >
+                  {item.title}
+                </a>
+                <form
+                  method='post'
+                  action={`/api/iori/v1/digest-items/${item.digestItemId}/feedback`}
+                  class='flex items-center gap-2'
+                >
+                  {feedbackButtons.map(({ value, label, pressedClass }) => (
+                    <button
+                      key={value}
+                      type='submit'
+                      name='feedback'
+                      value={value}
+                      aria-pressed={item.feedback === value ? 'true' : 'false'}
+                      class={`px-3 py-1 text-sm font-medium rounded-clay transition-all shadow-clay-sm ${
+                        item.feedback === value ? pressedClass : 'bg-sand hover:bg-sand-light text-charcoal'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  <button
+                    type='button'
+                    onClick={() => setDeepDiveItemId(deepDiveItemId === item.digestItemId ? null : item.digestItemId)}
+                    disabled={isEditing || isDeepDiving || data.body === undefined}
+                    aria-expanded={deepDiveItemId === item.digestItemId ? 'true' : 'false'}
+                    class='px-3 py-1 text-sm font-medium rounded-clay transition-all shadow-clay-sm disabled:opacity-50 bg-sand hover:bg-sand-light text-charcoal'
+                  >
+                    深掘り
+                  </button>
+                </form>
+                {deepDiveItemId === item.digestItemId && (
+                  <div class='flex flex-col gap-2'>
+                    <input
+                      type='text'
+                      value={deepDiveInstruction}
+                      maxLength={DEEP_DIVE_INSTRUCTION_MAX_LENGTH}
+                      disabled={isDeepDiving}
+                      placeholder='依頼（任意）'
+                      onInput={(e) => setDeepDiveInstruction((e.target as HTMLInputElement).value)}
+                      class='w-full px-3 py-2 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset text-sm'
+                    />
+                    <div class='flex items-center gap-2'>
+                      <button
+                        type='button'
+                        onClick={() => handleDeepDive(item.digestItemId)}
+                        disabled={isEditing || isDeepDiving}
+                        class='px-3 py-1 text-sm font-medium rounded-clay transition-all shadow-clay-sm disabled:opacity-50 bg-sage-dark hover:bg-sage text-white'
+                      >
+                        依頼する
+                      </button>
+                      {isDeepDiving && (
+                        <span class='text-sm text-charcoal-light dark:text-gray-400'>深掘りしています…</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {deepDiveMessage !== null && deepDiveMessage.digestItemId === item.digestItemId && (
+                  <p
+                    class={`text-sm ${
+                      deepDiveMessage.isError ? 'text-terracotta' : 'text-charcoal-light dark:text-gray-400'
+                    }`}
+                  >
+                    {deepDiveMessage.text}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,17 +1,13 @@
 import { RA } from '@iwasa-kosui/result';
 import { and, eq, isNull } from 'drizzle-orm';
 
-import type { Agg } from '../../../domain/aggregate/index.ts';
-import type { RemotePost } from '../../../domain/post/post.ts';
+import type { PostResolverByUri } from '../../../domain/post/post.ts';
 import { RemotePost as RemotePostSchema } from '../../../domain/post/post.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
 import { postsTable, remotePostsTable } from '../schema.ts';
 
-export type PostResolverByUri = Agg.Resolver<
-  { uri: string },
-  RemotePost | undefined
->;
+export type { PostResolverByUri } from '../../../domain/post/post.ts';
 
 const getInstance = singleton((): PostResolverByUri => {
   const resolve = async ({ uri }: { uri: string }) => {
@@ -35,6 +31,9 @@ const getInstance = singleton((): PostResolverByUri => {
       createdAt: row.posts.createdAt.getTime(),
       uri: row.remote_posts.uri,
       inReplyToUri: row.remote_posts.inReplyToUri,
+      visibility: null,
+      summary: null,
+      sensitive: false,
       type: 'remote',
     }));
   };

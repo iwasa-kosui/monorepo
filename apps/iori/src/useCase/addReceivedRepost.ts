@@ -1,16 +1,33 @@
 import { RA } from '@iwasa-kosui/result';
 
-import type { RemotePostUpserter } from '../adaptor/pg/post/remotePostUpserter.ts';
+import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
-import type { RemoteActorCreatedStore } from '../domain/actor/remoteActor.ts';
+import type { RemoteActorCreatedStore, RemoteActorProfile } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
+import type { RemoteActorProfileUpdatedStore } from '../domain/actor/updateProfile.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { type LocalPost, type PostResolver, type RemotePost } from '../domain/post/post.ts';
+import {
+  Notification,
+  type RepostNotification,
+  type RepostNotificationCreatedStore,
+  type RepostNotificationResolverByRecipientAndActorIdAndPostId,
+} from '../domain/notification/notification.ts';
+import { NotificationId } from '../domain/notification/notificationId.ts';
+import {
+  type LocalPost,
+  type PostResolver,
+  type RemotePost,
+  type RemotePostAttachment,
+  type RemotePostUpserter,
+} from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
+import type { Visibility } from '../domain/post/visibility.ts';
+import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import {
   AlreadyRepostedError,
   Repost,
   type RepostCreatedStore,
+  type RepostResolver,
   type RepostResolverByActivityUri,
 } from '../domain/repost/repost.ts';
 import { RepostId } from '../domain/repost/repostId.ts';
@@ -25,12 +42,18 @@ type ActorIdentity = Readonly<{
   url?: string;
   username?: string;
   logoUri?: string;
+  profile?: RemoteActorProfile;
 }>;
 
 type RemotePostIdentity = Readonly<{
   uri: string;
   content: string;
   authorIdentity: ActorIdentity;
+  summary?: string | null;
+  sensitive?: boolean;
+  visibility: Visibility | null;
+  recipientActorUris?: ReadonlyArray<string>;
+  attachments?: readonly RemotePostAttachment[];
 }>;
 
 type LocalPostInput = Readonly<{
@@ -77,12 +100,18 @@ export type AddReceivedRepostUseCase = UseCase<Input, Ok, Err>;
 type Deps = Readonly<{
   repostCreatedStore: RepostCreatedStore;
   repostResolverByActivityUri: RepostResolverByActivityUri;
+  repostResolver: RepostResolver;
+  repostNotificationCreatedStore: RepostNotificationCreatedStore;
+  repostNotificationResolver: RepostNotificationResolverByRecipientAndActorIdAndPostId;
   postResolver: PostResolver;
   remotePostUpserter: RemotePostUpserter;
   remoteActorCreatedStore: RemoteActorCreatedStore;
   logoUriUpdatedStore: LogoUriUpdatedStore;
+  remoteActorProfileUpdatedStore?: RemoteActorProfileUpdatedStore;
   actorResolverByUri: ActorResolverByUri;
   timelineItemCreatedStore: TimelineItemCreatedStore;
+  pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
+  webPushSender: WebPushSender;
 }>;
 
 const isLocalPost = (post: LocalPost | RemotePost): post is LocalPost => post.type === 'local';
@@ -90,29 +119,59 @@ const isLocalPost = (post: LocalPost | RemotePost): post is LocalPost => post.ty
 const create = ({
   repostCreatedStore,
   repostResolverByActivityUri,
+  repostResolver,
+  repostNotificationCreatedStore,
+  repostNotificationResolver,
   postResolver,
   remotePostUpserter,
   remoteActorCreatedStore,
   logoUriUpdatedStore,
+  remoteActorProfileUpdatedStore,
   actorResolverByUri,
   timelineItemCreatedStore,
+  pushSubscriptionsResolver,
+  webPushSender,
 }: Deps): AddReceivedRepostUseCase => {
+  const notifyRepost = (post: LocalPost, actor: Actor, now: Instant) =>
+    RA.flow(
+      RA.ok({ post, actor }),
+      RA.andThrough(({ post, actor }) => {
+        const notification: RepostNotification = {
+          type: 'repost',
+          notificationId: NotificationId.generate(),
+          recipientUserId: post.userId,
+          isRead: false,
+          reposterActorId: actor.id,
+          repostedPostId: post.postId,
+        };
+        return repostNotificationCreatedStore.store(Notification.createRepostNotification(notification, now));
+      }),
+      RA.andThrough(({ post, actor }) => {
+        const reposterName = actor.type === 'remote' && actor.username ? actor.username : 'Someone';
+        const payload: PushPayload = {
+          title: 'New Boost',
+          body: `${reposterName} boosted your post`,
+          url: '/notifications',
+        };
+        return RA.flow(
+          pushSubscriptionsResolver.resolve(post.userId),
+          RA.andThen(async (subscriptions) => {
+            for (const subscription of subscriptions) {
+              await webPushSender.send(subscription, payload);
+            }
+            return RA.ok(undefined);
+          }),
+        );
+      }),
+    );
+
   const runLocalPostRepost = async (input: LocalPostInput, now: Instant) => {
     return RA.flow(
       RA.ok(input),
       RA.andBind(
-        'existingRepost',
+        'existingRepostByActivityUri',
         ({ announceActivityUri }) => repostResolverByActivityUri.resolve({ announceActivityUri }),
       ),
-      RA.andThen(({ existingRepost, ...rest }) => {
-        if (existingRepost) {
-          return RA.err(AlreadyRepostedError.create({
-            actorId: existingRepost.actorId,
-            postId: existingRepost.postId,
-          }));
-        }
-        return RA.ok(rest);
-      }),
       RA.andBind('post', ({ repostedPostId }) => postResolver.resolve(repostedPostId)),
       RA.andThen(({ post, ...rest }) => {
         if (!post || !isLocalPost(post)) {
@@ -125,31 +184,77 @@ const create = ({
           now,
           remoteActorCreatedStore,
           logoUriUpdatedStore,
+          remoteActorProfileUpdatedStore,
           actorResolverByUri,
         })(reposterIdentity)),
-      RA.andBind('repost', ({ actor, announceActivityUri, post }) => {
-        const repostId = RepostId.generate();
-        const repost: Repost = {
-          repostId,
-          actorId: actor.id,
-          postId: post.postId,
-          announceActivityUri,
-        };
-        const event = Repost.createRepost(repost, now);
-        return repostCreatedStore.store(event).then(() => RA.ok(repost));
+      RA.andBind(
+        'existingRepost',
+        ({ existingRepostByActivityUri, actor, post }) =>
+          existingRepostByActivityUri === undefined
+            ? repostResolver.resolve({ actorId: actor.id, postId: post.postId })
+            : RA.ok<Repost | undefined>(existingRepostByActivityUri),
+      ),
+      RA.andThen(({ existingRepost, actor, post, announceActivityUri }) => {
+        if (existingRepost) {
+          return RA.flow(
+            repostNotificationResolver.resolve({
+              recipientUserId: post.userId,
+              reposterActorId: actor.id,
+              repostedPostId: post.postId,
+            }),
+            RA.andThen((existingNotification) => {
+              if (existingNotification) {
+                return RA.err(AlreadyRepostedError.create({
+                  actorId: existingRepost.actorId,
+                  postId: existingRepost.postId,
+                }));
+              }
+              return RA.flow(
+                notifyRepost(post, actor, now),
+                RA.map(() => ({ repost: existingRepost, actor })),
+              );
+            }),
+          );
+        }
+        return RA.flow(
+          RA.ok({ actor, post, announceActivityUri }),
+          RA.andBind('repost', ({ actor, announceActivityUri, post }) => {
+            const repostId = RepostId.generate();
+            const repost: Repost = {
+              repostId,
+              actorId: actor.id,
+              postId: post.postId,
+              announceActivityUri,
+            };
+            const event = Repost.createRepost(repost, now);
+            return repostCreatedStore.store(event).then(() => RA.ok(repost));
+          }),
+          RA.andThrough(({ repost, actor, post }) => {
+            const timelineItemEvent = TimelineItem.createTimelineItem({
+              timelineItemId: TimelineItemId.generate(),
+              type: 'repost',
+              actorId: actor.id,
+              postId: post.postId,
+              repostId: repost.repostId,
+              createdAt: now,
+            }, now);
+            return timelineItemCreatedStore.store(timelineItemEvent);
+          }),
+          RA.andThrough(({ post, actor }) =>
+            RA.flow(
+              repostNotificationResolver.resolve({
+                recipientUserId: post.userId,
+                reposterActorId: actor.id,
+                repostedPostId: post.postId,
+              }),
+              RA.andThen((existingNotification) =>
+                existingNotification ? RA.ok(undefined) : notifyRepost(post, actor, now)
+              ),
+            )
+          ),
+          RA.map(({ repost, actor }) => ({ repost, actor })),
+        );
       }),
-      RA.andThrough(({ repost, actor, post }) => {
-        const timelineItemEvent = TimelineItem.createTimelineItem({
-          timelineItemId: TimelineItemId.generate(),
-          type: 'repost',
-          actorId: actor.id,
-          postId: post.postId,
-          repostId: repost.repostId,
-          createdAt: now,
-        }, now);
-        return timelineItemCreatedStore.store(timelineItemEvent);
-      }),
-      RA.map(({ repost, actor }) => ({ repost, actor })),
     );
   };
 
@@ -175,6 +280,7 @@ const create = ({
           now,
           remoteActorCreatedStore,
           logoUriUpdatedStore,
+          remoteActorProfileUpdatedStore,
           actorResolverByUri,
         })(reposterIdentity)),
       // Get or create the remote post being reposted

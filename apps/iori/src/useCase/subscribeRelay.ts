@@ -1,6 +1,8 @@
-import { Follow, type RequestContext } from '@fedify/fedify';
+import type { RequestContext } from '@fedify/fedify';
+import { Follow } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
+import { RELAY_FOLLOW_ID_HASH_PREFIX } from '../adaptor/fedify/relayFollow.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../adaptor/fedify/sharedKeyDispatcher.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
@@ -34,6 +36,7 @@ const sendFollowActivity = async (
 ): Promise<void> => {
   // Get key pairs directly to ensure proper signing
   const keys = await ctx.getActorKeyPairs(INSTANCE_ACTOR_IDENTIFIER);
+  const actorUri = ctx.getActorUri(INSTANCE_ACTOR_IDENTIFIER);
   await ctx.sendActivity(
     keys,
     {
@@ -41,7 +44,8 @@ const sendFollowActivity = async (
       inboxId: new URL(relay.inboxUrl),
     },
     new Follow({
-      actor: ctx.getActorUri(INSTANCE_ACTOR_IDENTIFIER),
+      id: new URL(`/${RELAY_FOLLOW_ID_HASH_PREFIX}${crypto.randomUUID()}`, actorUri.origin),
+      actor: actorUri,
       object: new URL('https://www.w3.org/ns/activitystreams#Public'),
       to: new URL('https://www.w3.org/ns/activitystreams#Public'),
     }),

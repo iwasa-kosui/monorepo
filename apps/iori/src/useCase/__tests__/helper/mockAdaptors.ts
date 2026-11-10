@@ -1,12 +1,12 @@
 import type { Context, RequestContext } from '@fedify/fedify';
-import { Note } from '@fedify/fedify';
+import { Note } from '@fedify/vocab';
 import type { RA } from '@iwasa-kosui/result';
 import { RA as RAImpl } from '@iwasa-kosui/result';
 import { vi } from 'vitest';
 
 import type { OgpFetcher } from '../../../adaptor/ogp/ogpFetcher.ts';
 import type { LocalPostResolverByUri } from '../../../adaptor/pg/post/localPostResolverByUri.ts';
-import type { WebPushSender } from '../../../adaptor/webPush/webPushSender.ts';
+import type { WebPushSender } from '../../../adaptor/webPush/webPush.ts';
 import type {
   Actor,
   ActorResolverByUri,
@@ -19,6 +19,7 @@ import type { ActorId } from '../../../domain/actor/actorId.ts';
 import type { LocalActorCreatedStore } from '../../../domain/actor/createLocalActor.ts';
 import type { RemoteActorCreated, RemoteActorCreatedStore } from '../../../domain/actor/remoteActor.ts';
 import type { LogoUriUpdated, LogoUriUpdatedStore } from '../../../domain/actor/updateLogoUri.ts';
+import type { RemoteActorProfileUpdated, RemoteActorProfileUpdatedStore } from '../../../domain/actor/updateProfile.ts';
 import type {
   Article,
   ArticleDeleted,
@@ -54,7 +55,11 @@ import type {
   RemoteLikeDeleted,
   RemoteLikeDeletedStore,
 } from '../../../domain/like/like.ts';
-import type { LinkPreview, LinkPreviewCreatedStore } from '../../../domain/linkPreview/linkPreview.ts';
+import type {
+  LinkPreview,
+  LinkPreviewCreatedStore,
+  LinkPreviewsResolverByPostId,
+} from '../../../domain/linkPreview/linkPreview.ts';
 import type { Mute, MutedActorIdsResolverByUserId, MuteResolver } from '../../../domain/mute/mute.ts';
 import type {
   EmojiReactNotification,
@@ -89,9 +94,11 @@ import type {
   PostDeleted,
   PostDeletedStore,
   PostResolver,
+  PostResolverByUri,
   PostsResolverByActorIds,
   PostsResolverByActorIdWithPagination,
   PostWithAuthor,
+  RemotePost,
 } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import type { PushSubscriptionsResolverByUserId } from '../../../domain/pushSubscription/pushSubscription.ts';
@@ -112,6 +119,7 @@ import type {
   TimelineItemDeletedStore,
   TimelineItemResolverByPostId,
   TimelineItemsResolverByActorIds,
+  TimelineItemsResolverByPostId,
   TimelineItemWithPost,
 } from '../../../domain/timeline/timelineItem.ts';
 import type { UserCreatedStore } from '../../../domain/user/createUser.ts';
@@ -227,6 +235,13 @@ export const createMockLinkPreviewCreatedStore = (): LinkPreviewCreatedStore & I
   };
 };
 
+export const createMockLinkPreviewsResolver = (
+  previews: Map<PostId, LinkPreview[]> = new Map(),
+): LinkPreviewsResolverByPostId & { setPreviews: (postId: PostId, p: LinkPreview[]) => void } => ({
+  resolve: vi.fn((postId: PostId) => RAImpl.ok(previews.get(postId) ?? [])),
+  setPreviews: (postId: PostId, p: LinkPreview[]) => previews.set(postId, p),
+});
+
 export const createMockOgpFetcher = (): OgpFetcher => ({
   fetch: vi.fn(async () => ({
     title: null,
@@ -305,6 +320,13 @@ export const createMockPostResolver = (
 ): PostResolver & { setPost: (post: Post) => void } => ({
   resolve: vi.fn((postId: PostId) => RAImpl.ok(posts.get(postId))),
   setPost: (post: Post) => posts.set(post.postId, post),
+});
+
+export const createMockPostResolverByUri = (
+  posts: Map<string, RemotePost> = new Map(),
+): PostResolverByUri & { setPost: (post: RemotePost) => void } => ({
+  resolve: vi.fn(({ uri }: { uri: string }) => RAImpl.ok(posts.get(uri))),
+  setPost: (post: RemotePost) => posts.set(post.uri, post),
 });
 
 export const createMockPostDeletedStore = (): PostDeletedStore & InMemoryStore<PostDeleted> => {
@@ -387,6 +409,19 @@ export const createMockLogoUriUpdatedStore = (): LogoUriUpdatedStore & InMemoryS
     store: vi.fn(inMemoryStore.store) as unknown as
       & LogoUriUpdatedStore['store']
       & InMemoryStore<LogoUriUpdated>['store'],
+  };
+};
+
+export const createMockRemoteActorProfileUpdatedStore = ():
+  & RemoteActorProfileUpdatedStore
+  & InMemoryStore<RemoteActorProfileUpdated> =>
+{
+  const inMemoryStore = createInMemoryStore<RemoteActorProfileUpdated>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & RemoteActorProfileUpdatedStore['store']
+      & InMemoryStore<RemoteActorProfileUpdated>['store'],
   };
 };
 
@@ -478,6 +513,13 @@ export const createMockTimelineItemResolverByPostId = (
 ): TimelineItemResolverByPostId & { setItem: (item: TimelineItem) => void } => ({
   resolve: vi.fn(({ postId }: { postId: PostId }) => RAImpl.ok(items.get(postId))),
   setItem: (item: TimelineItem) => items.set(item.postId, item),
+});
+
+export const createMockTimelineItemsResolverByPostId = (
+  items: Map<PostId, TimelineItem[]> = new Map(),
+): TimelineItemsResolverByPostId & { setItems: (postId: PostId, i: TimelineItem[]) => void } => ({
+  resolve: vi.fn(({ postId }: { postId: PostId }) => RAImpl.ok(items.get(postId) ?? [])),
+  setItems: (postId: PostId, i: TimelineItem[]) => items.set(postId, i),
 });
 
 export const createMockTimelineItemsResolverByActorIds = (
@@ -669,7 +711,9 @@ export const createMockArticleResolverByRootPostId = (
   articles: Map<PostId, Article> = new Map(),
 ): ArticleResolverByRootPostId & { setArticle: (article: Article) => void } => ({
   resolve: vi.fn(({ rootPostId }: { rootPostId: PostId }) => RAImpl.ok(articles.get(rootPostId))),
-  setArticle: (article: Article) => articles.set(article.rootPostId, article),
+  setArticle: (article: Article) => {
+    if (article.rootPostId !== null) articles.set(article.rootPostId, article);
+  },
 });
 
 export const createMockArticleDeletedStore = (): ArticleDeletedStore & InMemoryStore<ArticleDeleted> => {

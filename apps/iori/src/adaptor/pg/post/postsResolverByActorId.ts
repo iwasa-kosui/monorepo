@@ -33,6 +33,8 @@ const getInstance = singleton((): PostsResolverByActorId => {
           createdAt: row.posts.createdAt.getTime(),
           userId: row.local_posts.userId,
           inReplyToUri: row.local_posts.inReplyToUri,
+          summary: null,
+          sensitive: false,
           type: 'local',
         });
         return post;
@@ -45,6 +47,9 @@ const getInstance = singleton((): PostsResolverByActorId => {
           content: row.posts.content,
           createdAt: row.posts.createdAt.getTime(),
           inReplyToUri: row.remote_posts.inReplyToUri,
+          visibility: null,
+          summary: null,
+          sensitive: false,
           type: 'remote',
         });
         return post;

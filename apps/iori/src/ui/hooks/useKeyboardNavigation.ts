@@ -1,9 +1,11 @@
 import { useEffect } from 'hono/jsx';
 
-import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
+import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
+import { displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
+import type { HomeItem } from './homeFeed.ts';
 
 type UseKeyboardNavigationProps = Readonly<{
-  items: readonly TimelineItemWithPost[];
+  items: readonly HomeItem[];
   selectedIndex: number;
   setSelectedIndex: (index: number) => void;
   scrollToSelected: (index: number) => void;
@@ -11,8 +13,6 @@ type UseKeyboardNavigationProps = Readonly<{
   setEmojiPickerOpenForIndex: (index: number | null) => void;
   replyingToPostId: string | null;
   threadModalPostId: string | null;
-  likingPostId: string | null;
-  undoingLikePostId: string | null;
   onLike: (postId: string) => void;
   onUndoLike: (postId: string) => void;
   onReply: (postId: string) => void;
@@ -29,8 +29,6 @@ export const useKeyboardNavigation = ({
   setEmojiPickerOpenForIndex,
   replyingToPostId,
   threadModalPostId,
-  likingPostId,
-  undoingLikePostId,
   onLike,
   onUndoLike,
   onReply,
@@ -100,7 +98,7 @@ export const useKeyboardNavigation = ({
       const selectedItem = items[selectedIndex];
       if (!selectedItem) return;
 
-      const post = selectedItem.post;
+      const post = selectedItem.kind === 'status' ? displayStatus(selectedItem.status) : undefined;
 
       switch (e.key) {
         case 'j':
@@ -120,20 +118,23 @@ export const useKeyboardNavigation = ({
           }
           break;
         case 'l':
+          if (post === undefined) break;
           e.preventDefault();
-          if (post.liked && !undoingLikePostId) {
-            onUndoLike(post.postId);
-          } else if (!post.liked && !likingPostId) {
-            onLike(post.postId);
+          if (post.favourited) {
+            onUndoLike(post.id);
+          } else {
+            onLike(post.id);
           }
           break;
         case 'o':
         case 'Enter':
+          if (post === undefined) break;
           e.preventDefault();
-          if (post.type === 'local') {
-            window.location.href = `/users/${post.username}/posts/${post.postId}`;
-          } else if (post.type === 'remote' && 'uri' in post) {
-            window.open(post.uri, '_blank');
+          if (isLocalAccount(post.account)) {
+            window.location.href = statusHref(post);
+          } else {
+            const uri = safeAbsoluteUrl(post.uri);
+            if (uri) window.open(uri, '_blank');
           }
           break;
         case 'g':
@@ -149,6 +150,7 @@ export const useKeyboardNavigation = ({
           break;
         }
         case 'e': {
+          if (post === undefined) break;
           e.preventDefault();
           setEmojiPickerOpenForIndex(
             emojiPickerOpenForIndex === selectedIndex ? null : selectedIndex,
@@ -156,8 +158,9 @@ export const useKeyboardNavigation = ({
           break;
         }
         case 'p': {
+          if (post === undefined) break;
           e.preventDefault();
-          onReply(post.postId);
+          onReply(post.id);
           break;
         }
       }
@@ -174,8 +177,6 @@ export const useKeyboardNavigation = ({
     setEmojiPickerOpenForIndex,
     replyingToPostId,
     threadModalPostId,
-    likingPostId,
-    undoingLikePostId,
     onLike,
     onUndoLike,
     onReply,

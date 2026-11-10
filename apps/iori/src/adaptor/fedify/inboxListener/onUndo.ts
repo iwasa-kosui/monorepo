@@ -1,44 +1,33 @@
-import { Activity, Announce, Follow, type InboxContext, Like, Undo } from '@fedify/fedify';
+import { type InboxContext } from '@fedify/fedify';
+import { Activity, Announce, Follow, Like, Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { Username } from '../../../domain/user/username.ts';
 import { AcceptUnfollowUseCase } from '../../../useCase/acceptUnfollow.ts';
-import { RemoveReceivedEmojiReactUseCase } from '../../../useCase/removeReceivedEmojiReact.ts';
-import { RemoveReceivedLikeUseCase } from '../../../useCase/removeReceivedLike.ts';
-import { RemoveReceivedRepostUseCase } from '../../../useCase/removeReceivedRepost.ts';
-import { PgActorResolverByUri } from '../../pg/actor/actorResolverByUri.ts';
-import { PgActorResolverByUserId } from '../../pg/actor/actorResolverByUserId.ts';
-import { PgEmojiReactDeletedStore } from '../../pg/emojiReact/emojiReactDeletedStore.ts';
-import { PgEmojiReactResolverByActivityUri } from '../../pg/emojiReact/emojiReactResolverByActivityUri.ts';
-import { PgFollowResolver } from '../../pg/follow/followResolver.ts';
-import { PgUnfollowedStore } from '../../pg/follow/undoFollowingProcessedStore.ts';
-import { PgRemoteLikeDeletedStore } from '../../pg/like/remoteLikeDeletedStore.ts';
-import { PgRemoteLikeResolverByActivityUri } from '../../pg/like/remoteLikeResolverByActivityUri.ts';
-import { PgRepostDeletedStore } from '../../pg/repost/repostDeletedStore.ts';
-import { PgRepostResolverByActivityUri } from '../../pg/repost/repostResolverByActivityUri.ts';
-import { PgUserResolverByUsername } from '../../pg/user/userResolverByUsername.ts';
+import type { RemoveReceivedEmojiReactUseCase } from '../../../useCase/removeReceivedEmojiReact.ts';
+import type { RemoveReceivedLikeUseCase } from '../../../useCase/removeReceivedLike.ts';
+import type { RemoveReceivedRepostUseCase } from '../../../useCase/removeReceivedRepost.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 
-const handleUndoFollow = async (ctx: InboxContext<unknown>, undo: Undo, follow: Follow) => {
+export type OnUndoDeps = Readonly<{
+  acceptUnfollowUseCase: ReturnType<typeof AcceptUnfollowUseCase.create>;
+  removeReceivedLikeUseCase: RemoveReceivedLikeUseCase;
+  removeReceivedRepostUseCase: RemoveReceivedRepostUseCase;
+  removeReceivedEmojiReactUseCase: RemoveReceivedEmojiReactUseCase;
+}>;
+
+const handleUndoFollow = async (deps: OnUndoDeps, ctx: InboxContext<unknown>, undo: Undo, follow: Follow) => {
   const actorId = undo.actorId;
   if (actorId == null || follow.objectId == null) return;
   const parsed = ctx.parseUri(follow.objectId);
   if (parsed == null || parsed.type !== 'actor') return;
 
-  const useCase = AcceptUnfollowUseCase.create({
-    unfollowedStore: PgUnfollowedStore.getInstance(),
-    followResolver: PgFollowResolver.getInstance(),
-    actorResolverByUri: PgActorResolverByUri.getInstance(),
-    actorResolverByUserId: PgActorResolverByUserId.getInstance(),
-    userResolverByUsername: PgUserResolverByUsername.getInstance(),
-  });
-
   return RA.flow(
     RA.ok(parsed.identifier),
     RA.andThen(Username.parse),
     RA.andThen(async (username) =>
-      useCase.run({
+      deps.acceptUnfollowUseCase.run({
         username,
         follower: {
           uri: actorId.href,
@@ -60,47 +49,64 @@ const handleUndoFollow = async (ctx: InboxContext<unknown>, undo: Undo, follow: 
   );
 };
 
-const handleUndoLike = async (like: Like) => {
+const warnUndoActorMismatch = (kind: string, activityUri: string, undoActorUri: string) => {
+  getLogger().warn(
+    `Ignored Undo ${kind}: ${activityUri} - the Undo sender ${undoActorUri} does not match the stored actor`,
+  );
+};
+
+const handleUndoLike = async (deps: OnUndoDeps, undo: Undo, like: Like) => {
   if (!like.id) {
     getLogger().warn('Undo Like activity has no Like id');
     return;
   }
   const likeActivityUri = like.id.href;
+  const actorId = undo.actorId;
+  if (actorId == null) {
+    getLogger().warn(`Undo Like activity has no actor: ${likeActivityUri}`);
+    return;
+  }
+  const actorUri = actorId.href;
 
-  const useCase = RemoveReceivedLikeUseCase.create({
-    remoteLikeDeletedStore: PgRemoteLikeDeletedStore.getInstance(),
-    remoteLikeResolverByActivityUri: PgRemoteLikeResolverByActivityUri.getInstance(),
+  const likeResult = await deps.removeReceivedLikeUseCase.run({ likeActivityUri, actorUri });
+  if (likeResult.ok) {
+    getLogger().info(`Processed Undo Like: ${likeActivityUri}`);
+    return;
+  }
+  if (likeResult.err.type === 'UndoActorMismatchError') {
+    warnUndoActorMismatch('Like', likeActivityUri, actorUri);
+    return;
+  }
+  if (likeResult.err.type !== 'LikeNotFoundError') {
+    getLogger().warn(`Failed to process Undo Like: ${likeActivityUri} - ${JSON.stringify(likeResult.err)}`);
+    return;
+  }
+
+  const emojiReactResult = await deps.removeReceivedEmojiReactUseCase.run({
+    emojiReactActivityUri: likeActivityUri,
+    actorUri,
   });
-
-  return RA.flow(
-    RA.ok({ likeActivityUri }),
-    RA.andThen(({ likeActivityUri }) => useCase.run({ likeActivityUri })),
-    RA.match({
-      ok: () => {
-        getLogger().info(`Processed Undo Like: ${likeActivityUri}`);
-      },
-      err: (err) => {
-        getLogger().warn(`Failed to process Undo Like: ${likeActivityUri} - ${JSON.stringify(err)}`);
-      },
-    }),
-  );
+  if (emojiReactResult.ok) {
+    getLogger().info(`Processed Undo Like as EmojiReact: ${likeActivityUri}`);
+    return;
+  }
+  if (emojiReactResult.err.type === 'UndoActorMismatchError') {
+    warnUndoActorMismatch('Like', likeActivityUri, actorUri);
+    return;
+  }
+  getLogger().warn(`Failed to process Undo Like: ${likeActivityUri} - ${JSON.stringify(emojiReactResult.err)}`);
 };
 
-const handleUndoAnnounce = async (announce: Announce) => {
+const handleUndoAnnounce = async (deps: OnUndoDeps, announce: Announce) => {
   if (!announce.id) {
     getLogger().warn('Undo Announce activity has no Announce id');
     return;
   }
   const announceActivityUri = announce.id.href;
 
-  const useCase = RemoveReceivedRepostUseCase.create({
-    repostDeletedStore: PgRepostDeletedStore.getInstance(),
-    repostResolverByActivityUri: PgRepostResolverByActivityUri.getInstance(),
-  });
-
   return RA.flow(
     RA.ok({ announceActivityUri }),
-    RA.andThen(({ announceActivityUri }) => useCase.run({ announceActivityUri })),
+    RA.andThen(({ announceActivityUri }) => deps.removeReceivedRepostUseCase.run({ announceActivityUri })),
     RA.match({
       ok: () => {
         getLogger().info(`Processed Undo Announce: ${announceActivityUri}`);
@@ -123,7 +129,7 @@ const isEmojiReactJsonLd = (json: unknown): json is JsonLdEmojiReact => {
   return obj.type === 'EmojiReact' || obj.type === 'litepub:EmojiReact';
 };
 
-const handleUndoEmojiReact = async (object: Activity) => {
+const handleUndoEmojiReact = async (deps: OnUndoDeps, undo: Undo, object: Activity) => {
   const json = await object.toJsonLd();
   if (!isEmojiReactJsonLd(json)) {
     return false;
@@ -135,19 +141,25 @@ const handleUndoEmojiReact = async (object: Activity) => {
     return true;
   }
 
-  const useCase = RemoveReceivedEmojiReactUseCase.create({
-    emojiReactDeletedStore: PgEmojiReactDeletedStore.getInstance(),
-    emojiReactResolverByActivityUri: PgEmojiReactResolverByActivityUri.getInstance(),
-  });
+  const actorId = undo.actorId;
+  if (actorId == null) {
+    getLogger().warn(`Undo EmojiReact activity has no actor: ${emojiReactActivityUri}`);
+    return true;
+  }
+  const actorUri = actorId.href;
 
   await RA.flow(
-    RA.ok({ emojiReactActivityUri }),
-    RA.andThen(({ emojiReactActivityUri }) => useCase.run({ emojiReactActivityUri })),
+    RA.ok({ emojiReactActivityUri, actorUri }),
+    RA.andThen((input) => deps.removeReceivedEmojiReactUseCase.run(input)),
     RA.match({
       ok: () => {
         getLogger().info(`Processed Undo EmojiReact: ${emojiReactActivityUri}`);
       },
       err: (err) => {
+        if (err.type === 'UndoActorMismatchError') {
+          warnUndoActorMismatch('EmojiReact', emojiReactActivityUri, actorUri);
+          return;
+        }
         getLogger().warn(`Failed to process Undo EmojiReact: ${emojiReactActivityUri} - ${JSON.stringify(err)}`);
       },
     }),
@@ -156,7 +168,7 @@ const handleUndoEmojiReact = async (object: Activity) => {
   return true;
 };
 
-export const onUndo = async (ctx: InboxContext<unknown>, undo: Undo) => {
+export const createOnUndo = (deps: OnUndoDeps) => async (ctx: InboxContext<unknown>, undo: Undo) => {
   // 個人inboxの場合はrecipientからidentifierを取得、共有inboxの場合はインスタンスアクターを使用
   // インスタンスアクターを使用することで、Authorized Fetchモードのサーバーにも対応
   const documentLoader = await ctx.getDocumentLoader({
@@ -165,20 +177,20 @@ export const onUndo = async (ctx: InboxContext<unknown>, undo: Undo) => {
   const object = await undo.getObject({ documentLoader });
 
   if (object instanceof Follow) {
-    return handleUndoFollow(ctx, undo, object);
+    return handleUndoFollow(deps, ctx, undo, object);
   }
 
   if (object instanceof Like) {
-    return handleUndoLike(object);
+    return handleUndoLike(deps, undo, object);
   }
 
   if (object instanceof Announce) {
-    return handleUndoAnnounce(object);
+    return handleUndoAnnounce(deps, object);
   }
 
   // Try to handle EmojiReact (custom activity type not natively supported by Fedify)
   if (object instanceof Activity) {
-    const handled = await handleUndoEmojiReact(object);
+    const handled = await handleUndoEmojiReact(deps, undo, object);
     if (handled) {
       return;
     }

@@ -1,0 +1,39 @@
+import CodeBlock from '../../../components/CodeBlock.astro';
+import CodePlayground from '../../../components/CodePlayground.astro';
+import { cancelVisitOf } from '../../../lib/snapshots';
+
+## ステップ2: 理由と操作した人を記録する
+
+同じ `cancelVisit` を、次の2か所で変更します。
+
+1. `input` の型に `reason: string` と `operatedBy: string` を足します。
+2. `payload` の `JSON.stringify({})` を、`reason` と `operatedBy` を持つオブジェクトに変えます。キーの名前はこのとおりにします。テストと第3章の SELECT は `$.reason` と `$.operatedBy` を読みます。
+
+「テストを実行する」を押します。`pass 8` と `fail 0` が出れば、ステップ2は完了です。
+
+<CodePlayground
+  exercise="chapter-1-start"
+  editable={['visits.ts']}
+  readonly={['visits.test.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  complete={{ exercise: 'chapter-2-step-2', label: 'ステップ2の完成コードを読み込む' }}
+/>
+
+<div class="detail-row">
+
+<details>
+<summary>ステップ2の解答を見る</summary>
+
+<CodeBlock code={cancelVisitOf('chapter-2-step-2')} />
+
+</details>
+
+<details>
+<summary>手元の Node で動かすとき</summary>
+
+`node --test visits.test.ts` を実行します。`pass 8` と `fail 0` が出れば、ステップ2は完了です。
+
+</details>
+
+</div>

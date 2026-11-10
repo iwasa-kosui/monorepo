@@ -1,23 +1,26 @@
 import { useCallback, useEffect, useRef } from 'hono/jsx';
 
-import type { Instant } from '../../domain/instant/instant.ts';
+import { decideLoadMore, isNearDocumentEnd } from './infiniteScrollPosition.ts';
 
 type UseInfiniteScrollProps = Readonly<{
-  items: readonly { createdAt: Instant }[];
-  onLoadMore: (cursor: Instant) => void;
+  nextCursor: string | undefined;
+  onLoadMore: (cursor: string) => void;
   debounceMs?: number;
+  isFirstPageSettled?: boolean;
 }>;
 
 export const useInfiniteScroll = ({
-  items,
+  nextCursor,
   onLoadMore,
   debounceMs = 300,
+  isFirstPageSettled = true,
 }: UseInfiniteScrollProps): void => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const timeoutRef = useRef<any>(undefined);
+  const lastAutoLoadedCursorRef = useRef<string | undefined>(undefined);
 
   const debouncedLoadMore = useCallback(
-    (cursor: Instant) => {
+    (cursor: string) => {
       if (timeoutRef.current !== undefined) {
         clearTimeout(timeoutRef.current);
       }
@@ -29,25 +32,35 @@ export const useInfiniteScroll = ({
   );
 
   useEffect(() => {
-    const handleScroll = () => {
-      if (items.length === 0) return;
-
-      const scrollHeight = document.body.scrollHeight;
-      const scrollTop = document.body.scrollTop;
-      const clientHeight = document.body.clientHeight;
-
-      if (scrollTop + clientHeight >= scrollHeight - 10) {
-        const oldest = items.reduce((prev, curr) => new Date(prev.createdAt) < new Date(curr.createdAt) ? prev : curr);
-        debouncedLoadMore(oldest.createdAt);
+    const check = (isAutomatic: boolean) => {
+      const decision = decideLoadMore({
+        isFirstPageSettled,
+        cursor: nextCursor,
+        isNearEnd: isFirstPageSettled && isNearDocumentEnd(),
+        isAutomatic,
+        lastAutoLoadedCursor: lastAutoLoadedCursorRef.current ?? undefined,
+      });
+      if (decision.kind === 'skip') return;
+      if (decision.kind === 'debounced') {
+        debouncedLoadMore(decision.cursor);
+        return;
       }
+      lastAutoLoadedCursorRef.current = decision.cursor;
+      onLoadMore(decision.cursor);
     };
 
-    window.addEventListener('scroll', handleScroll);
+    const handleScrollOrResize = () => check(false);
+
+    const frameId = requestAnimationFrame(() => check(true));
+    window.addEventListener('scroll', handleScrollOrResize);
+    window.addEventListener('resize', handleScrollOrResize);
     return () => {
-      window.removeEventListener('scroll', handleScroll);
+      cancelAnimationFrame(frameId);
+      window.removeEventListener('scroll', handleScrollOrResize);
+      window.removeEventListener('resize', handleScrollOrResize);
       if (timeoutRef.current !== undefined) {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [items, debouncedLoadMore]);
+  }, [nextCursor, onLoadMore, debouncedLoadMore, isFirstPageSettled]);
 };

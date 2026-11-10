@@ -1,12 +1,14 @@
-import { type DocumentLoader, isActor, Note } from '@fedify/fedify';
+import { isActor, Note } from '@fedify/vocab';
+import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
-import type { LocalPostResolverByUri } from '../adaptor/pg/post/localPostResolverByUri.ts';
-import type { PostResolverByUri } from '../adaptor/pg/post/postResolverByUri.ts';
-import type { RemotePostUpserter } from '../adaptor/pg/post/remotePostUpserter.ts';
-import type { RemotePost } from '../domain/post/post.ts';
+import { extractContentWarning } from '../adaptor/fedify/extractContentWarning.ts';
+import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
+import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
+import type { LocalPostResolverByUri, PostResolverByUri, RemotePost, RemotePostUpserter } from '../domain/post/post.ts';
+import type { Visibility } from '../domain/post/visibility.ts';
 
 const MAX_DEPTH = 10;
 
@@ -29,12 +31,14 @@ export type FetchReplyNotesRecursiveUseCase = Readonly<{
 }>;
 
 type Deps = Readonly<{
+  origin: string;
   postResolverByUri: PostResolverByUri;
   localPostResolverByUri: LocalPostResolverByUri;
   remotePostUpserter: RemotePostUpserter;
 }>;
 
 const create = ({
+  origin,
   postResolverByUri,
   localPostResolverByUri,
   remotePostUpserter,
@@ -43,7 +47,15 @@ const create = ({
     uri: string,
     documentLoader: DocumentLoader,
     lookupObject: LookupObject,
-  ): Promise<{ note: Note; authorIdentity: ActorIdentity } | undefined> => {
+  ): Promise<
+    | {
+      note: Note;
+      authorIdentity: ActorIdentity;
+      visibility: Visibility | null;
+      recipientActorUris: string[];
+    }
+    | undefined
+  > => {
     try {
       const result = await lookupObject(uri, { documentLoader });
       if (!(result instanceof Note)) {
@@ -70,6 +82,8 @@ const create = ({
       return {
         note: result,
         authorIdentity: actorIdentityResult.val,
+        visibility: extractVisibility(result, author.followersId),
+        recipientActorUris: extractRecipientActorUris([result], origin),
       };
     } catch (error) {
       getLogger().debug(`Failed to fetch note: ${uri} - ${error}`);
@@ -119,7 +133,7 @@ const create = ({
         break;
       }
 
-      const { note, authorIdentity } = fetchResult;
+      const { note, authorIdentity, visibility, recipientActorUris } = fetchResult;
       const noteUri = note.id?.href;
       if (!noteUri) {
         break;
@@ -133,6 +147,9 @@ const create = ({
         content: String(note.content ?? ''),
         authorIdentity,
         inReplyToUri: noteInReplyToUri,
+        ...extractContentWarning(note),
+        visibility,
+        recipientActorUris,
       });
 
       if (upsertResult.ok) {

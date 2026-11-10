@@ -1,58 +1,875 @@
 name: Deploy iori Worker
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "apps/iori/**"
-      - "packages/result/**"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/deploy-iori-worker.yml"
   workflow_dispatch:
+    inputs:
+      main_sha:
+        description: Reviewed current main code SHA
+        required: true
+        type: string
+      migration_main_sha:
+        description: Immutable migration SHA (required for resume-source, release-pending-freeze and restart-failed-source; defaults to main_sha when empty otherwise)
+        required: false
+        type: string
+      operation:
+        description: Protected operation (maintenance choices explicitly stop before privileges)
+        required: true
+        type: choice
+        options:
+          - deploy-worker
+          - put-worker-secrets
+          - put-bluesky-secrets
+          - put-twitterapi-secret
+          - resume-source
+          - release-pending-freeze
+          - restart-failed-source
+          - diagnose-source
+          - reconcile-resources
+          - replace-queue-consumer
+          - delete-rehearsal-d1
+          - move-unfollowed-reposts-dry-run
+          - move-unfollowed-reposts
+          - delete-unfollowed-posts-dry-run
+          - delete-unfollowed-posts
+          - domain-events-stats
+          - digest-quality-sample
+          - prune-federated-posts-dry-run
+          - ensure-event-archive-bucket
+          - delete-blocked-domain-posts-dry-run
+          - delete-blocked-domain-posts
+      environment:
+        description: Protected isolated destination and source environment
+        required: true
+        type: choice
+        options: [production, staging]
+      generation:
+        description: Reviewed fresh generation (8-20 lowercase alphanumeric characters; leave empty for diagnose-source)
+        required: false
+        type: string
+      migration_run_id:
+        description: Immutable run ID (1-80 ASCII letters, digits, underscore or hyphen; leave empty for diagnose-source)
+        required: false
+        type: string
+      recovery:
+        description: Required for resume-source only (destination_writes_not_enabled or destination_writes_reconciled); leave empty otherwise
+        required: false
+        type: string
+      repost_created_before_ms:
+        description: Required for move-unfollowed-reposts-dry-run, move-unfollowed-reposts, delete-unfollowed-posts-dry-run and delete-unfollowed-posts only (epoch milliseconds, not in the future); leave empty otherwise
+        required: false
+        type: string
 
 concurrency:
-  group: deploy-iori-worker
+  group: deploy-iori-worker-production
   cancel-in-progress: false
-
 permissions:
   contents: read
+env:
+  MAIN_SHA: ${{ inputs.main_sha }}
+  IORI_MIGRATION_MAIN_SHA: ${{ inputs.migration_main_sha }}
+  IORI_OPERATION: ${{ inputs.operation }}
+  IORI_ENVIRONMENT: ${{ inputs.environment }}
+  IORI_GENERATION: ${{ inputs.generation }}
+  IORI_MIGRATION_RUN_ID: ${{ inputs.migration_run_id }}
+  IORI_RECOVERY: ${{ inputs.recovery }}
+  IORI_REPOST_CREATED_BEFORE_MS: ${{ inputs.repost_created_before_ms }}
+  WRANGLER_SEND_METRICS: "false"
+  AWS_EC2_METADATA_DISABLED: "true"
 
 jobs:
-  deploy:
-    name: Deploy Worker
+  public-artifact-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: production
-
+    timeout-minutes: 360
     steps:
-      - name: Checkout repository
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
         uses: actions/checkout@v4
-
-      - name: Setup pnpm
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
         uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
         uses: actions/setup-node@v4
         with:
           node-version: "24.12.0"
-          cache: "pnpm"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Check public artifact policy with sanitized output
+        run: node apps/iori/scripts/hosted-workflow.mjs public-check
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build packages/result
-        run: pnpm --filter result run build
-
-      - name: Type check iori
-        run: pnpm --filter iori run typecheck
-
-      - name: Deploy iori Worker
-        run: pnpm --filter iori run deploy:worker
+  deploy-worker:
+    if: inputs.operation == 'deploy-worker'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          IORI_ADMISSION_MODE: sealed
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          ORIGIN: ${{ vars.IORI_ORIGIN }}
-          VAPID_SUBJECT: ${{ vars.IORI_VAPID_SUBJECT }}
-          VAPID_PUBLIC_KEY: ${{ secrets.IORI_VAPID_PUBLIC_KEY }}
-          VAPID_PRIVATE_KEY: ${{ secrets.IORI_VAPID_PRIVATE_KEY }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          IORI_ADMISSION_IDENTITY: ${{ secrets.IORI_ADMISSION_IDENTITY }}
+          ORIGIN: ${{ secrets.ORIGIN }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  put-worker-secrets:
+    if: inputs.operation == 'put-worker-secrets'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          IORI_ADMISSION_IDENTITY: ${{ secrets.IORI_ADMISSION_IDENTITY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          SMOKE_QUEUE_TOKEN: ${{ secrets.SMOKE_QUEUE_TOKEN }}
+          TWITTERAPI_IO_API_KEY: ${{ secrets.TWITTERAPI_IO_API_KEY }}
+          BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  put-bluesky-secrets:
+    if: inputs.operation == 'put-bluesky-secrets'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$IORI_ENVIRONMENT" = production
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          IORI_ADMISSION_IDENTITY: ${{ secrets.IORI_ADMISSION_IDENTITY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+          BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  put-twitterapi-secret:
+    if: inputs.operation == 'put-twitterapi-secret'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$IORI_ENVIRONMENT" = production
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          IORI_ADMISSION_IDENTITY: ${{ secrets.IORI_ADMISSION_IDENTITY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+          TWITTERAPI_IO_API_KEY: ${{ secrets.TWITTERAPI_IO_API_KEY }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  delete-rehearsal-d1:
+    if: inputs.operation == 'delete-rehearsal-d1'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  move-unfollowed-reposts-dry-run:
+    if: inputs.operation == 'move-unfollowed-reposts-dry-run'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  move-unfollowed-reposts:
+    if: inputs.operation == 'move-unfollowed-reposts'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  delete-unfollowed-posts-dry-run:
+    if: inputs.operation == 'delete-unfollowed-posts-dry-run'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  delete-unfollowed-posts:
+    if: inputs.operation == 'delete-unfollowed-posts'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  domain-events-stats:
+    if: inputs.operation == 'domain-events-stats'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  digest-quality-sample:
+    if: inputs.operation == 'digest-quality-sample'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  prune-federated-posts-dry-run:
+    if: inputs.operation == 'prune-federated-posts-dry-run'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  ensure-event-archive-bucket:
+    if: inputs.operation == 'ensure-event-archive-bucket'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  delete-blocked-domain-posts-dry-run:
+    if: inputs.operation == 'delete-blocked-domain-posts-dry-run'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  delete-blocked-domain-posts:
+    if: inputs.operation == 'delete-blocked-domain-posts'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
+
+  recover-source:
+    if: inputs.operation == 'resume-source' || inputs.operation == 'release-pending-freeze' || inputs.operation == 'restart-failed-source' || inputs.operation == 'diagnose-source'
+    needs: public-artifact-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Record first-step deadline and gate trusted event
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'IORI_JOB_STARTED_AT=%s000\n' "$(date +%s)" >> "$GITHUB_ENV"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$MAIN_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$MAIN_SHA" = "$GITHUB_SHA"
+          case "$IORI_OPERATION" in
+            reconcile-resources|replace-queue-consumer) printf '%s\n' 'Maintenance operation requires a separate review.'; exit 1 ;;
+          esac
+      - name: Checkout trusted event SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Setup pinned pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "10.12.4"
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+          cache: pnpm
+      - name: Create fresh private job directory
+        run: node apps/iori/scripts/hosted-workflow.mjs init
+      - name: Install and build with private diagnostics
+        run: node apps/iori/scripts/hosted-workflow.mjs setup
+      - name: Run fixed protected operation
+        run: node apps/iori/scripts/hosted-workflow.mjs operate
+        env:
+          IORI_SOURCE_SSH_HOST: ${{ secrets.IORI_SOURCE_SSH_HOST }}
+          IORI_SOURCE_SSH_USER: ${{ secrets.IORI_SOURCE_SSH_USER }}
+          IORI_SOURCE_SSH_PRIVATE_KEY: ${{ secrets.IORI_SOURCE_SSH_PRIVATE_KEY }}
+          IORI_SOURCE_SSH_KNOWN_HOSTS: ${{ secrets.IORI_SOURCE_SSH_KNOWN_HOSTS }}
+      - name: Remove this job's private directory
+        if: always() && env.IORI_PRIVATE_DIRECTORY != ''
+        run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs

@@ -1,12 +1,28 @@
 import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
+import { safeUrl } from '../../helper/safeUrl.ts';
+import { fetchPublicTimeline, updateAvatar } from '../api/mastodonClient.ts';
+import { displayStatus, isOwnBoost } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
+import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
+import { homeItemKey } from '../hooks/homeFeed.ts';
+import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
+
+const usePostedHandler = () => {
+  const { timeline, ui } = useTimelineContext();
+  return (status: Status) => {
+    timeline.prependPost(status);
+    ui.setSelectedIndex(-1);
+    ui.setEmojiPickerOpenForIndex(null);
+  };
+};
 
 const PullToRefreshIndicator = () => {
   const { pullToRefresh, pullThreshold, timeline } = useTimelineContext();
@@ -196,7 +212,7 @@ const ThreadModal = () => {
     return null;
   }
 
-  const currentUserId = data?.user.id;
+  const currentAccountId = data?.me.id;
   const toggleThreadEmojiPicker = (postId: string) => {
     setThreadEmojiPickerPostId((prev) => (prev === postId ? null : postId));
   };
@@ -277,27 +293,28 @@ const ThreadModal = () => {
                 {threadData.ancestors.length > 0 && (
                   <>
                     {threadData.ancestors.map((post) => (
-                      <div key={post.postId} class='relative'>
+                      <div key={post.id} class='relative'>
                         <PostView
-                          post={post}
-                          currentUserId={currentUserId}
+                          status={post}
+                          currentAccountId={currentAccountId}
+                          isLoggedIn
                           onReply={reply.openReplyDialog}
                           onLike={actions.like}
-                          isLiking={actionState.likingPostId === post.postId}
+                          isLiking={actionState.likingPostId === post.id}
                           onUndoLike={actions.undoLike}
-                          isUndoingLike={actionState.undoingLikePostId === post.postId}
+                          isUndoingLike={actionState.undoingLikePostId === post.id}
                           onRepost={actions.repost}
-                          isReposting={actionState.repostingPostId === post.postId}
-                          onUndoRepost={post.reposted ? actions.undoRepost : undefined}
-                          isUndoingRepost={actionState.undoingRepostPostId === post.postId}
+                          isReposting={actionState.repostingPostId === post.id}
+                          onUndoRepost={post.reblogged ? actions.undoRepost : undefined}
+                          isUndoingRepost={actionState.undoingRepostPostId === post.id}
                           onDelete={actions.deletePost}
-                          isDeleting={actionState.deletingPostId === post.postId}
+                          isDeleting={actionState.deletingPostId === post.id}
                           onEmojiReact={actions.emojiReact}
                           onUndoEmojiReact={actions.undoEmojiReact}
-                          isEmojiReacting={actionState.emojiReactingPostId === post.postId}
-                          myReactions={actionState.myReactions.get(post.postId) ?? []}
-                          isEmojiPickerOpen={threadEmojiPickerPostId === post.postId}
-                          onToggleEmojiPicker={() => toggleThreadEmojiPicker(post.postId)}
+                          isEmojiReacting={actionState.emojiReactingPostId === post.id}
+                          myReactions={actionState.myReactions.get(post.id)}
+                          isEmojiPickerOpen={threadEmojiPickerPostId === post.id}
+                          onToggleEmojiPicker={() => toggleThreadEmojiPicker(post.id)}
                         />
                       </div>
                     ))}
@@ -306,25 +323,26 @@ const ThreadModal = () => {
                 {threadData.currentPost && (
                   <div class='relative'>
                     <PostView
-                      post={threadData.currentPost}
-                      currentUserId={currentUserId}
+                      status={threadData.currentPost}
+                      currentAccountId={currentAccountId}
+                      isLoggedIn
                       onReply={reply.openReplyDialog}
                       onLike={actions.like}
-                      isLiking={actionState.likingPostId === threadData.currentPost.postId}
+                      isLiking={actionState.likingPostId === threadData.currentPost.id}
                       onUndoLike={actions.undoLike}
-                      isUndoingLike={actionState.undoingLikePostId === threadData.currentPost.postId}
+                      isUndoingLike={actionState.undoingLikePostId === threadData.currentPost.id}
                       onRepost={actions.repost}
-                      isReposting={actionState.repostingPostId === threadData.currentPost.postId}
-                      onUndoRepost={threadData.currentPost.reposted ? actions.undoRepost : undefined}
-                      isUndoingRepost={actionState.undoingRepostPostId === threadData.currentPost.postId}
+                      isReposting={actionState.repostingPostId === threadData.currentPost.id}
+                      onUndoRepost={threadData.currentPost.reblogged ? actions.undoRepost : undefined}
+                      isUndoingRepost={actionState.undoingRepostPostId === threadData.currentPost.id}
                       onDelete={actions.deletePost}
-                      isDeleting={actionState.deletingPostId === threadData.currentPost.postId}
+                      isDeleting={actionState.deletingPostId === threadData.currentPost.id}
                       onEmojiReact={actions.emojiReact}
                       onUndoEmojiReact={actions.undoEmojiReact}
-                      isEmojiReacting={actionState.emojiReactingPostId === threadData.currentPost.postId}
-                      myReactions={actionState.myReactions.get(threadData.currentPost.postId) ?? []}
-                      isEmojiPickerOpen={threadEmojiPickerPostId === threadData.currentPost.postId}
-                      onToggleEmojiPicker={() => toggleThreadEmojiPicker(threadData.currentPost!.postId)}
+                      isEmojiReacting={actionState.emojiReactingPostId === threadData.currentPost.id}
+                      myReactions={actionState.myReactions.get(threadData.currentPost.id)}
+                      isEmojiPickerOpen={threadEmojiPickerPostId === threadData.currentPost.id}
+                      onToggleEmojiPicker={() => toggleThreadEmojiPicker(threadData.currentPost!.id)}
                     />
                   </div>
                 )}
@@ -332,27 +350,28 @@ const ThreadModal = () => {
                   ? (
                     <>
                       {threadData.descendants.map((post) => (
-                        <div key={post.postId} class='relative'>
+                        <div key={post.id} class='relative'>
                           <PostView
-                            post={post}
-                            currentUserId={currentUserId}
+                            status={post}
+                            currentAccountId={currentAccountId}
+                            isLoggedIn
                             onReply={reply.openReplyDialog}
                             onLike={actions.like}
-                            isLiking={actionState.likingPostId === post.postId}
+                            isLiking={actionState.likingPostId === post.id}
                             onUndoLike={actions.undoLike}
-                            isUndoingLike={actionState.undoingLikePostId === post.postId}
+                            isUndoingLike={actionState.undoingLikePostId === post.id}
                             onRepost={actions.repost}
-                            isReposting={actionState.repostingPostId === post.postId}
-                            onUndoRepost={post.reposted ? actions.undoRepost : undefined}
-                            isUndoingRepost={actionState.undoingRepostPostId === post.postId}
+                            isReposting={actionState.repostingPostId === post.id}
+                            onUndoRepost={post.reblogged ? actions.undoRepost : undefined}
+                            isUndoingRepost={actionState.undoingRepostPostId === post.id}
                             onDelete={actions.deletePost}
-                            isDeleting={actionState.deletingPostId === post.postId}
+                            isDeleting={actionState.deletingPostId === post.id}
                             onEmojiReact={actions.emojiReact}
                             onUndoEmojiReact={actions.undoEmojiReact}
-                            isEmojiReacting={actionState.emojiReactingPostId === post.postId}
-                            myReactions={actionState.myReactions.get(post.postId) ?? []}
-                            isEmojiPickerOpen={threadEmojiPickerPostId === post.postId}
-                            onToggleEmojiPicker={() => toggleThreadEmojiPicker(post.postId)}
+                            isEmojiReacting={actionState.emojiReactingPostId === post.id}
+                            myReactions={actionState.myReactions.get(post.id)}
+                            isEmojiPickerOpen={threadEmojiPickerPostId === post.id}
+                            onToggleEmojiPicker={() => toggleThreadEmojiPicker(post.id)}
                           />
                         </div>
                       ))}
@@ -421,18 +440,21 @@ const ThreadModal = () => {
 
 const UserProfile = () => {
   const { data } = useTimelineContext();
+  const handlePosted = usePostedHandler();
 
   if (!data) return null;
 
-  const { user, actor, followers, following, timelineItems } = data;
-  const url = new URL(actor.uri);
-  const handle = `@${user.username}@${url.host}`;
+  const { me, followers, following, statuses } = data;
+  const url = new URL(me.uri);
+  const handle = `@${me.username}@${url.host}`;
+
+  const logoUrl = safeUrl(me.avatar);
 
   return (
     <section class='hidden md:block mb-8'>
       <header class='mb-4'>
         <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
-          Hi, {String(user.username)}
+          Hi, {me.username}
         </h1>
       </header>
       <section class='mb-8'>
@@ -440,16 +462,16 @@ const UserProfile = () => {
           <div class='flex items-center gap-4 mb-4 relative z-10'>
             <a href='#update-bio' class='relative group flex-shrink-0'>
               <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold shadow-clay-sm'>
-                {actor.logoUri
+                {logoUrl
                   ? (
                     <img
-                      src={actor.logoUri}
+                      src={logoUrl}
                       alt='User Logo'
                       class='w-16 h-16 blob-avatar object-cover'
                     />
                   )
                   : (
-                    String(user.username).charAt(0).toUpperCase()
+                    me.username.charAt(0).toUpperCase()
                   )}
               </div>
               <div class='absolute inset-0 rounded-full bg-charcoal/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity'>
@@ -470,7 +492,7 @@ const UserProfile = () => {
             </a>
             <div>
               <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
-                {String(user.username)}
+                {me.username}
               </h1>
               <p class='text-charcoal-light dark:text-gray-400'>{handle}</p>
             </div>
@@ -479,7 +501,7 @@ const UserProfile = () => {
           <div class='flex gap-6 text-sm'>
             <div>
               <span class='font-semibold text-charcoal dark:text-white'>
-                {followers.length}
+                {me.followers_count}
               </span>
               <a
                 class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
@@ -490,7 +512,7 @@ const UserProfile = () => {
             </div>
             <div>
               <span class='font-semibold text-charcoal dark:text-white'>
-                {following.length}
+                {me.following_count}
               </span>
               <a
                 class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
@@ -501,7 +523,7 @@ const UserProfile = () => {
             </div>
             <div>
               <span class='font-semibold text-charcoal dark:text-white'>
-                {timelineItems.length}
+                {statuses.length}
               </span>
               <span class='text-charcoal-light dark:text-gray-400 ml-1'>Posts</span>
             </div>
@@ -516,7 +538,7 @@ const UserProfile = () => {
             {followers.length > 0
               ? (
                 <div class='space-y-1 max-h-48 overflow-y-auto'>
-                  {followers.map((follower) => <ActorLink key={follower.id} actor={follower} />)}
+                  {followers.map((follower) => <ActorLink key={follower.id} account={follower} />)}
                 </div>
               )
               : (
@@ -533,7 +555,7 @@ const UserProfile = () => {
             {following.length > 0
               ? (
                 <div class='space-y-1 max-h-48 overflow-y-auto'>
-                  {following.map((followed) => <ActorLink key={followed.id} actor={followed} />)}
+                  {following.map((followed) => <ActorLink key={followed.id} account={followed} />)}
                 </div>
               )
               : (
@@ -545,30 +567,51 @@ const UserProfile = () => {
         </div>
       </section>
 
-      <PostForm id='post' />
+      <PostForm id='post' onPosted={handlePosted} />
     </section>
   );
 };
 
 const UpdateBioModal = () => {
-  const { data } = useTimelineContext();
+  const { data, timeline } = useTimelineContext();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorText, setErrorText] = useState<string | undefined>(undefined);
 
   if (!data) return null;
 
-  const { user } = data;
+  const handleSubmit = async (e: Event) => {
+    e.preventDefault();
+    const input = (e.currentTarget as HTMLFormElement).elements.namedItem('avatar') as HTMLInputElement | null;
+    const file = input?.files?.[0];
+    if (file === undefined) {
+      setErrorText('Choose an image');
+      return;
+    }
+    setIsSubmitting(true);
+    setErrorText(undefined);
+    try {
+      timeline.updateMe(await updateAvatar(file));
+      window.location.hash = '';
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <Modal id='update-bio' showCloseButton={false}>
-      <form method='post' action={`/users/${user.username}`}>
+      <form onSubmit={handleSubmit}>
         <p class='text-charcoal-light dark:text-gray-400 text-sm mb-3'>
-          Enter a URL for your profile image
+          Choose a profile image (JPEG, PNG, GIF or WebP, up to 5MB)
         </p>
         <input
-          type='url'
-          name='logoUri'
-          placeholder='https://example.com/image.png'
-          class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset mb-3 transition-all'
+          type='file'
+          name='avatar'
+          accept='image/jpeg,image/png,image/gif,image/webp'
+          class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset mb-3 transition-all'
         />
+        {errorText !== undefined && <p class='text-terracotta text-sm mb-3'>{errorText}</p>}
         <div class='flex gap-2 justify-end'>
           <a href='#'>
             <button
@@ -580,9 +623,10 @@ const UpdateBioModal = () => {
           </a>
           <button
             type='submit'
+            disabled={isSubmitting}
             class='px-5 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
           >
-            Update
+            {isSubmitting ? 'Updating...' : 'Update'}
           </button>
         </div>
       </form>
@@ -591,25 +635,41 @@ const UpdateBioModal = () => {
 };
 
 const TimelineList = () => {
-  const { data, actions, reply, thread, ui } = useTimelineContext();
+  const { data, items, actions, blueskyLike, blueskyRepost, reply, thread, ui } = useTimelineContext();
 
   if (!data) return null;
 
-  const { user, actor, timelineItems } = data;
+  const { me } = data;
   const { actionState } = actions;
   const { selectedIndex, emojiPickerOpenForIndex, toggleEmojiPicker } = ui;
 
   return (
     <section class='space-y-6 py-2'>
-      {timelineItems.map((item, index) => {
-        const postId = item.post.postId;
-        const isMyRepost = item.type === 'repost' && item.repostedBy.actorId === actor.id;
+      {items.map((item, index) => {
+        if (item.kind === 'bluesky') {
+          return (
+            <BlueskyTimelineItemView
+              key={homeItemKey(item)}
+              item={item.item}
+              dataIndex={index}
+              isSelected={selectedIndex === index}
+              onLike={blueskyLike.like}
+              onUndoLike={blueskyLike.undoLike}
+              isLikePending={blueskyLike.pendingUris.has(item.item.uri)}
+              onRepost={blueskyRepost.repost}
+              onUndoRepost={blueskyRepost.undoRepost}
+              isRepostPending={blueskyRepost.pendingUris.has(item.item.uri)}
+            />
+          );
+        }
+        const { status } = item;
+        const postId = displayStatus(status).id;
+        const isMyRepost = isOwnBoost(status, me.id);
 
         return (
           <PostView
-            key={item.timelineItemId}
-            post={item.post}
-            repostedBy={item.type === 'repost' ? item.repostedBy : undefined}
+            key={status.id}
+            status={status}
             onLike={actions.like}
             isLiking={actionState.likingPostId === postId}
             onUndoLike={actions.undoLike}
@@ -623,8 +683,9 @@ const TimelineList = () => {
             onEmojiReact={actions.emojiReact}
             onUndoEmojiReact={actions.undoEmojiReact}
             isEmojiReacting={actionState.emojiReactingPostId === postId}
-            myReactions={actionState.myReactions.get(postId) ?? []}
-            currentUserId={user.id}
+            myReactions={actionState.myReactions.get(postId)}
+            currentAccountId={me.id}
+            isLoggedIn
             isSelected={selectedIndex === index}
             dataIndex={index}
             isEmojiPickerOpen={emojiPickerOpenForIndex === index}
@@ -638,24 +699,15 @@ const TimelineList = () => {
   );
 };
 
-type ServerTimelinePost = {
-  postId: string;
-  content: string;
-  [key: string]: unknown;
-};
-
 const ServerTimeline = () => {
-  const [posts, setPosts] = useState<ServerTimelinePost[]>([]);
+  const { items: posts, setFirstPage } = usePublicTimeline('local');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchPosts = async () => {
       try {
-        const response = await fetch('/api/v1/server-timeline');
-        if (response.ok) {
-          const data = await response.json();
-          setPosts(data.posts);
-        }
+        const page = await fetchPublicTimeline('local');
+        setFirstPage(page);
       } catch {
         // ignore
       } finally {
@@ -686,16 +738,24 @@ const ServerTimeline = () => {
         <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
           blog.kosui.me
         </h1>
-        <a
-          href='/about'
-          class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
-        >
-          ioriについて
-        </a>
+        <div class='flex items-center gap-4'>
+          <a
+            href='/about'
+            class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+          >
+            ioriについて
+          </a>
+          <a
+            href='/sign-in'
+            class='text-sm text-terracotta hover:text-terracotta-dark dark:text-terracotta-light dark:hover:text-terracotta transition-colors'
+          >
+            Sign in
+          </a>
+        </div>
       </div>
       {posts.length > 0
         ? (
-          posts.map((post) => <PostView key={post.postId} post={post as never} />)
+          posts.map((post) => <PostView key={post.id} status={post} />)
         )
         : (
           <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 text-center'>
@@ -708,6 +768,15 @@ const ServerTimeline = () => {
 
 const HomePage = () => {
   const { timeline } = useTimelineContext();
+  const handlePosted = usePostedHandler();
+  const isTimelineReady = timeline.state.status === 'success';
+
+  useEffect(() => {
+    if (!isTimelineReady || window.location.hash !== '#post-modal') return;
+    if (document.getElementById('post-modal') === null) return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    window.location.replace('#post-modal');
+  }, [isTimelineReady]);
 
   if (timeline.state.status === 'loading') {
     return <div>Loading...</div>;
@@ -721,7 +790,13 @@ const HomePage = () => {
     <>
       <UserProfile />
       <Modal id='post-modal' showCloseButton={false} fullScreen>
-        <PostForm formId='post-modal-form' />
+        <PostForm
+          formId='post-modal-form'
+          onPosted={(status) => {
+            handlePosted(status);
+            if (window.location.hash === '#post-modal') window.location.replace('#');
+          }}
+        />
       </Modal>
       <UpdateBioModal />
       <PullToRefreshIndicator />

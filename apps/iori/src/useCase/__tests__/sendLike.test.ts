@@ -163,6 +163,8 @@ describe('SendLikeUseCase', () => {
 
       const post: LocalPost = {
         type: 'local',
+        summary: null,
+        sensitive: false,
         postId: crypto.randomUUID() as PostId,
         actorId: actor.id,
         content: 'Test post',
@@ -258,6 +260,8 @@ describe('SendLikeUseCase', () => {
 
       const post: LocalPost = {
         type: 'local',
+        summary: null,
+        sensitive: false,
         postId: crypto.randomUUID() as PostId,
         actorId: actor.id,
         content: 'Test post',
@@ -313,6 +317,8 @@ describe('SendLikeUseCase', () => {
 
       const post: LocalPost = {
         type: 'local',
+        summary: null,
+        sensitive: false,
         postId: crypto.randomUUID() as PostId,
         actorId: actor.id,
         content: 'Test post',
@@ -347,6 +353,62 @@ describe('SendLikeUseCase', () => {
         expect(err.detail.actorId).toBe(actor.id);
         expect(err.detail.postId).toBe(post.postId);
       }
+    });
+  });
+
+  describe('userId で解決する入口', () => {
+    it('セッションなしで、userId のユーザーのいいねを保存する', async () => {
+      const deps = createDeps();
+      const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
+      const actor: LocalActor = {
+        id: crypto.randomUUID() as LocalActor['id'],
+        userId: user.id,
+        uri: 'https://example.com/users/kosui',
+        inboxUrl: 'https://example.com/inbox',
+        type: 'local',
+        logoUri: undefined,
+      };
+      deps.userResolver.setUser(user);
+      deps.actorResolverByUserId.setActor(actor);
+      const post: LocalPost = {
+        type: 'local',
+        summary: null,
+        sensitive: false,
+        postId: crypto.randomUUID() as PostId,
+        actorId: actor.id,
+        content: 'Test post',
+        createdAt: Date.now() as LocalPost['createdAt'],
+        userId: user.id,
+        inReplyToUri: null,
+      };
+      deps.postResolver.setPost(post);
+
+      const result = await SendLikeUseCase.create(deps).run({
+        userId: user.id,
+        postId: post.postId,
+        request: new Request('https://example.com'),
+        ctx: createMockRequestContext(),
+      });
+
+      expect(result.ok).toBe(true);
+      expect(deps.localLikeCreatedStore.store).toHaveBeenCalledOnce();
+    });
+
+    it('userId のユーザーが存在しない場合 UserNotFoundError を返して保存しない', async () => {
+      const deps = createDeps();
+
+      const result = await SendLikeUseCase.create(deps).run({
+        userId: crypto.randomUUID() as User['id'],
+        postId: crypto.randomUUID() as PostId,
+        request: new Request('https://example.com'),
+        ctx: createMockRequestContext(),
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.err.type).toBe('UserNotFoundError');
+      }
+      expect(deps.localLikeCreatedStore.store).not.toHaveBeenCalled();
     });
   });
 });

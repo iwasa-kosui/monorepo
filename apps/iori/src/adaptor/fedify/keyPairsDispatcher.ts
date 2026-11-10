@@ -9,6 +9,7 @@ import type { Key } from '../../domain/key/key.ts';
 import { KeyType } from '../../domain/key/keyType.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { Username } from '../../domain/user/username.ts';
+import { settleAll } from '../../helper/settleAll.ts';
 import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
 import { DB } from '../pg/db.ts';
 import { PgKeyGeneratedStore } from '../pg/key/keyGeneratedStore.ts';
@@ -16,6 +17,8 @@ import { PgKeysResolverByUserId } from '../pg/key/keysResolverByUserId.ts';
 import { instanceActorKeysTable } from '../pg/schema.ts';
 import { FedifyKeyGenerator } from './keyGenerator.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from './sharedKeyDispatcher.ts';
+
+export { createKeyPairsDispatcher, type KeyPairsDispatcherDeps } from './keyPairsDispatcherFactory.ts';
 
 const getInstance = () => {
   const keyGenerator = FedifyKeyGenerator.getInstance();
@@ -122,9 +125,9 @@ const getInstance = () => {
           RA.ok(user.id),
           RA.andThen(keysResolverByUserId.resolve),
           RA.andThen((keys) =>
-            RA.all(
+            settleAll(
               KeyType.values.map((type) => generateIfMissing(keys, type, user.id)),
-            )
+            ).then((values) => RA.all(values.map((value) => Promise.resolve(value))))
           ),
           RA.map((keyPairs): CryptoKeyPair[] => keyPairs),
         )

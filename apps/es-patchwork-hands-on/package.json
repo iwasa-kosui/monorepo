@@ -1,0 +1,50 @@
+{
+  "name": "es-patchwork-hands-on",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": "24.12.0"
+  },
+  "dependencies": {
+    "@astrojs/check": "0.9.6",
+    "@astrojs/mdx": "4.3.13",
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-javascript": "6.2.5",
+    "@codemirror/lang-sql": "6.10.0",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
+    "astro": "5.16.15",
+    "sql.js": "1.15.2",
+    "sucrase": "3.35.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "@playwright/test": "1.65.0",
+    "@tailwindcss/vite": "4.1.11",
+    "@types/sql.js": "1.4.11",
+    "dprint": "0.51.1",
+    "eslint": "9.36.0",
+    "eslint-plugin-simple-import-sort": "12.1.1",
+    "eslint-plugin-unused-imports": "4.3.0",
+    "tailwindcss": "4.1.11",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.53.0",
+    "vitest": "3.1.2",
+    "wrangler": "4.72.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && node scripts/build-exercises-tarball.ts",
+    "preview": "wrangler dev",
+    "test": "vitest",
+    "test:ci": "vitest --run",
+    "typecheck": "astro check && tsc --noEmit",
+    "tsc": "astro check && tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "dprint fmt",
+    "format:check": "dprint check",
+    "test:e2e": "playwright test"
+  }
+}

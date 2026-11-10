@@ -1,27 +1,35 @@
 import { Marked, Renderer } from 'marked';
-import type { Highlighter } from 'shiki';
+import type { HighlighterCore } from 'shiki/core';
 
-let highlighterPromise: Promise<Highlighter> | null = null;
+import { sanitizePostContent } from './sanitizePostContent.ts';
 
-const getHighlighter = async (): Promise<Highlighter> => {
+let highlighterPromise: Promise<HighlighterCore> | null = null;
+
+const getHighlighter = async (): Promise<HighlighterCore> => {
   if (!highlighterPromise) {
-    highlighterPromise = import('shiki').then(({ createHighlighter }) =>
-      createHighlighter({
-        themes: ['rose-pine-dawn', 'rose-pine'],
-        langs: [
-          'javascript',
-          'typescript',
-          'json',
-          'bash',
-          'plaintext',
+    highlighterPromise = Promise.all([
+      import('shiki/core'),
+      import('shiki/engine/javascript'),
+    ]).then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }]) =>
+      createHighlighterCore({
+        themes: [
+          import('shiki/themes/rose-pine-dawn.mjs'),
+          import('shiki/themes/rose-pine.mjs'),
         ],
+        langs: [
+          import('shiki/langs/javascript.mjs'),
+          import('shiki/langs/typescript.mjs'),
+          import('shiki/langs/json.mjs'),
+          import('shiki/langs/shellscript.mjs'),
+        ],
+        engine: createJavaScriptRegexEngine(),
       })
     );
   }
   return highlighterPromise;
 };
 
-const createRenderer = (highlighter: Highlighter): Renderer => {
+const createRenderer = (highlighter: HighlighterCore): Renderer => {
   const renderer = new Renderer();
 
   renderer.code = ({ text, lang }) => {
@@ -48,13 +56,16 @@ const createRenderer = (highlighter: Highlighter): Renderer => {
   return renderer;
 };
 
+export const renderMarkdownToUnsanitizedHtml = async (markdown: string): Promise<string> => {
+  const highlighter = await getHighlighter();
+  const marked = new Marked({ renderer: createRenderer(highlighter) });
+  return marked.parse(markdown, { async: false }) as string;
+};
+
 /**
  * PostContent - Markdown to HTML conversion service
  */
 export const PostContent = {
-  fromMarkdown: async (markdown: string): Promise<string> => {
-    const highlighter = await getHighlighter();
-    const marked = new Marked({ renderer: createRenderer(highlighter) });
-    return marked.parse(markdown, { async: false }) as string;
-  },
+  fromMarkdown: async (markdown: string): Promise<string> =>
+    sanitizePostContent(await renderMarkdownToUnsanitizedHtml(markdown)),
 } as const;
