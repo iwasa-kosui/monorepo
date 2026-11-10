@@ -1,5 +1,6 @@
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { retryBlueskyCrosspostsTask } from './blueskyCrosspostTasks.ts';
+import { collectBlueskyNotificationsTask, expireBlueskyNotificationReceiptsTask } from './blueskyNotificationTasks.ts';
 import { collectBlueskyTimelineTask, expireBlueskyTimelineTask } from './blueskyTimelineTasks.ts';
 import { createDailyDigestTask, expireDigestsTask } from './digestTasks.ts';
 import { archiveDomainEventsTask } from './eventArchiveTasks.ts';
@@ -32,8 +33,12 @@ export const scheduledTasks: ScheduledTaskTable = {
     pruneFederatedPostsTask,
     retryBlueskyCrosspostsTask,
     expireBlueskyTimelineTask,
+    expireBlueskyNotificationReceiptsTask,
   ],
-  '* * * * *': [collectBlueskyTimelineTask],
+  '* * * * *': [
+    collectBlueskyTimelineTask,
+    { ...collectBlueskyNotificationsTask, after: collectBlueskyTimelineTask.name },
+  ],
   '0 21 * * *': [syncKosuiInterestSourcesTask],
   '15 20 * * 1': [detectRadarVolumeTask],
   '30 21 * * *': [createDailyDigestTask, expireDigestsTask],

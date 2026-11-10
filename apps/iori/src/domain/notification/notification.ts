@@ -1,5 +1,6 @@
 import z from 'zod/v4';
 
+import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { Schema } from '../../helper/schema.ts';
 import type { Actor } from '../actor/actor.ts';
 import { ActorId } from '../actor/actorId.ts';
@@ -84,12 +85,84 @@ const repostNotificationZodType = z
 export type RepostNotification = z.output<typeof repostNotificationZodType>;
 export const RepostNotification = Schema.create(repostNotificationZodType);
 
+const httpUrlZodType = z.string().refine((value) => safeAbsoluteUrl(value) === value);
+
+const blueskyNotificationAuthorZodType = z.object({
+  did: z.string().min(1),
+  handle: z.string().min(1),
+  displayName: z.string().nullable(),
+  avatarUrl: httpUrlZodType.nullable(),
+});
+
+export type BlueskyNotificationAuthor = z.output<typeof blueskyNotificationAuthorZodType>;
+export const BlueskyNotificationAuthor = Schema.create(blueskyNotificationAuthorZodType);
+
+const blueskyNotificationBaseShape = {
+  notificationId: NotificationId.zodType,
+  recipientUserId: UserId.zodType,
+  isRead: z.boolean(),
+  blueskyUri: z.string().min(1),
+  author: blueskyNotificationAuthorZodType,
+};
+
+const blueskyLikeNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyLike'),
+    subjectUri: z.string().min(1),
+    targetPostId: z.nullable(PostId.zodType),
+  })
+  .describe('BlueskyLikeNotification');
+
+export type BlueskyLikeNotification = z.output<typeof blueskyLikeNotificationZodType>;
+export const BlueskyLikeNotification = Schema.create(blueskyLikeNotificationZodType);
+
+const blueskyRepostNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyRepost'),
+    subjectUri: z.string().min(1),
+    targetPostId: z.nullable(PostId.zodType),
+  })
+  .describe('BlueskyRepostNotification');
+
+export type BlueskyRepostNotification = z.output<typeof blueskyRepostNotificationZodType>;
+export const BlueskyRepostNotification = Schema.create(blueskyRepostNotificationZodType);
+
+const blueskyFollowNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyFollow'),
+  })
+  .describe('BlueskyFollowNotification');
+
+export type BlueskyFollowNotification = z.output<typeof blueskyFollowNotificationZodType>;
+export const BlueskyFollowNotification = Schema.create(blueskyFollowNotificationZodType);
+
+const blueskyMentionNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyMention'),
+    reason: z.enum(['mention', 'reply', 'quote']),
+    subjectUri: z.string().min(1).nullable(),
+    targetPostId: z.nullable(PostId.zodType),
+    text: z.string(),
+  })
+  .describe('BlueskyMentionNotification');
+
+export type BlueskyMentionNotification = z.output<typeof blueskyMentionNotificationZodType>;
+export const BlueskyMentionNotification = Schema.create(blueskyMentionNotificationZodType);
+
 const notificationZodType = z.discriminatedUnion('type', [
   likeNotificationZodType,
   followNotificationZodType,
   emojiReactNotificationZodType,
   replyNotificationZodType,
   repostNotificationZodType,
+  blueskyLikeNotificationZodType,
+  blueskyRepostNotificationZodType,
+  blueskyFollowNotificationZodType,
+  blueskyMentionNotificationZodType,
 ]);
 
 export type Notification = z.output<typeof notificationZodType>;
@@ -356,6 +429,30 @@ export type RepostNotificationResolverByRecipientAndActorIdAndPostId = Agg.Resol
   RepostNotification | undefined
 >;
 
+export type BlueskyNotification =
+  | BlueskyLikeNotification
+  | BlueskyRepostNotification
+  | BlueskyFollowNotification
+  | BlueskyMentionNotification;
+
+export type BlueskyNotificationCreated = NotificationEvent<
+  BlueskyNotification,
+  'notification.blueskyNotificationCreated',
+  BlueskyNotification
+>;
+
+const createBlueskyNotification = (payload: BlueskyNotification, now: Instant): BlueskyNotificationCreated => {
+  return NotificationEvent.create(
+    toAggregateId(payload),
+    payload,
+    'notification.blueskyNotificationCreated',
+    payload,
+    now,
+  );
+};
+
+export type BlueskyNotificationCreatedStore = Agg.Store<BlueskyNotificationCreated>;
+
 // 通知既読イベント
 export type NotificationsReadPayload = Readonly<{
   notificationIds: ReadonlyArray<NotificationId>;
@@ -456,6 +553,7 @@ export const Notification = {
   createReplyNotification,
   deleteReplyNotification,
   createRepostNotification,
+  createBlueskyNotification,
   markAsRead,
   dismissNotification,
   clearNotifications,

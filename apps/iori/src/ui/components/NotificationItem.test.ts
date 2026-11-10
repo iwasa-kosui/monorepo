@@ -137,6 +137,137 @@ describe('NotificationItem', () => {
     expect(html).not.toContain('javascript:');
   });
 
+  describe('Bluesky notifications without a status', () => {
+    const blueskyAccount = {
+      id: 'bluesky:did:plc:carol',
+      username: 'carol.bsky.social',
+      acct: 'carol.bsky.social',
+      url: 'https://bsky.app/profile/carol.bsky.social',
+      uri: 'https://bsky.app/profile/did:plc:carol',
+      avatar: 'https://iori.example/default-avatar.png',
+    } as Account;
+
+    it('links a favourite to the post on bsky.app and the actor to the profile', () => {
+      const html = render(notification({
+        type: 'favourite',
+        account: blueskyAccount,
+        iori: { bluesky: { reason: 'like', url: 'https://bsky.app/profile/did:plc:me/post/3kpost' } },
+      }));
+
+      expect(html).toContain('liked your post');
+      expect(html).toContain('carol.bsky.social');
+      expect(html).toContain('href="https://bsky.app/profile/did:plc:me/post/3kpost"');
+      expect(html).toContain('href="https://bsky.app/profile/carol.bsky.social"');
+      expect(html).not.toContain('/posts/"');
+    });
+
+    it('shows the text of a mention and links to the post itself', () => {
+      const html = render(notification({
+        type: 'mention',
+        account: blueskyAccount,
+        iori: {
+          bluesky: {
+            reason: 'mention',
+            url: 'https://bsky.app/profile/did:plc:carol/post/3kmention',
+            text: 'hello <b>there</b>',
+          },
+        },
+      }));
+
+      expect(html).toContain('mentioned you');
+      expect(html).toContain('hello &lt;b&gt;there&lt;/b&gt;');
+      expect(html).toContain('href="https://bsky.app/profile/did:plc:carol/post/3kmention"');
+    });
+
+    it('shows the text of a reply and a quote with their own labels', () => {
+      const reply = render(notification({
+        type: 'mention',
+        account: blueskyAccount,
+        status: status('p1'),
+        iori: { bluesky: { reason: 'reply', url: 'https://bsky.app/x', text: 'a reply' } },
+      }));
+      const quote = render(notification({
+        type: 'mention',
+        account: blueskyAccount,
+        iori: { bluesky: { reason: 'quote', url: 'https://bsky.app/y', text: 'a quote' } },
+      }));
+
+      expect(reply).toContain('replied to your post');
+      expect(reply).toContain('a reply');
+      expect(reply).not.toContain('content of p1');
+      expect(quote).toContain('quoted your post');
+    });
+
+    describe('with a synthesized status', () => {
+      const synthetic = (id: string, overrides: Partial<Status> = {}): Status =>
+        status(id, { content: '', account: blueskyAccount, ...overrides });
+
+      it('links a favourite to bsky.app and renders no internal link or empty block', () => {
+        const html = render(notification({
+          type: 'favourite',
+          account: blueskyAccount,
+          status: synthetic('bluesky:at://did:plc:me/app.bsky.feed.post/3kpost'),
+          iori: { bluesky: { reason: 'like', url: 'https://bsky.app/profile/did:plc:me/post/3kpost' } },
+        }));
+
+        expect(html).toContain('href="https://bsky.app/profile/did:plc:me/post/3kpost"');
+        expect(html).not.toContain('/users/kosui/posts/');
+        expect(html).not.toContain('role="button"');
+      });
+
+      it('prefers the text of a mention over the synthesized content', () => {
+        const html = render(notification({
+          type: 'mention',
+          account: blueskyAccount,
+          status: synthetic('bluesky:at://did:plc:carol/app.bsky.feed.post/3kmention', {
+            content: '<p>from content</p>',
+          }),
+          iori: {
+            bluesky: {
+              reason: 'mention',
+              url: 'https://bsky.app/profile/did:plc:carol/post/3kmention',
+              text: 'from text',
+            },
+          },
+        }));
+
+        expect(html).toContain('from text');
+        expect(html).not.toContain('from content');
+        expect(html).not.toContain('/users/kosui/posts/');
+      });
+
+      it('renders a reblog without an internal link or an empty block', () => {
+        const html = render(notification({
+          type: 'reblog',
+          account: blueskyAccount,
+          status: synthetic('bluesky:at://did:plc:me/app.bsky.feed.post/3kpost'),
+          iori: { bluesky: { reason: 'repost', url: 'https://bsky.app/profile/did:plc:me/post/3kpost' } },
+        }));
+
+        expect(html).toContain('boosted your post');
+        expect(html).toContain('href="https://bsky.app/profile/did:plc:me/post/3kpost"');
+        expect(html).not.toContain('/posts/bluesky:');
+        expect(html).not.toContain('role="button"');
+      });
+    });
+
+    it('renders a follow and a reblog without a status', () => {
+      const follow = render(notification({
+        type: 'follow',
+        account: blueskyAccount,
+        iori: { bluesky: { reason: 'follow', url: 'https://bsky.app/profile/carol.bsky.social' } },
+      }));
+      const reblog = render(notification({
+        type: 'reblog',
+        account: blueskyAccount,
+        iori: { bluesky: { reason: 'repost', url: 'https://bsky.app/profile/did:plc:me/post/3kpost' } },
+      }));
+
+      expect(follow).toContain('started following you');
+      expect(reblog).toContain('boosted your post');
+    });
+  });
+
   it('renders nothing for a notification type the page does not request', () => {
     expect(render(notification({ type: 'poll' }))).toBe('');
   });

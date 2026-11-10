@@ -1,5 +1,6 @@
 import { IORI_EMOJI_REACTION_TYPE, type Notification, type Status } from '../../adaptor/mastodon/entities.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { BLUESKY_STATUS_ID_PREFIX } from '../../helper/blueskyUrl.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { accountHandle, accountHref } from '../api/status.ts';
 
@@ -8,19 +9,29 @@ type Props = Readonly<{
   recipientUsername: string;
 }>;
 
+const ioriStatusOf = (notification: Notification): Status | undefined =>
+  notification.status?.id.startsWith(BLUESKY_STATUS_ID_PREFIX) ? undefined : notification.status;
+
 const createdAtOf = (notification: Notification): Instant => Date.parse(notification.created_at) as Instant;
 
 const PostQuote = ({
   status,
   postUrl,
   createdAt,
+  text,
 }: {
   status: Status | undefined;
   postUrl: string;
   createdAt: Instant;
+  text?: string;
 }) => (
   <>
-    {status !== undefined && (
+    {text !== undefined && text !== '' && (
+      <div class='block p-3 bg-sand-light/50 dark:bg-gray-700/50 rounded-xl shadow-clay-inset'>
+        <div class='text-sm text-charcoal dark:text-gray-200 line-clamp-2 whitespace-pre-wrap'>{text}</div>
+      </div>
+    )}
+    {status !== undefined && (text === undefined || text === '') && (
       <div
         role='button'
         class='block p-3 bg-sand-light/50 dark:bg-gray-700/50 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors shadow-clay-inset'
@@ -51,12 +62,13 @@ const PostQuote = ({
 );
 
 const LikeNotificationItem = ({ notification, recipientUsername }: Props) => {
-  const { account, status } = notification;
+  const { account } = notification;
+  const status = ioriStatusOf(notification);
   const createdAt = createdAtOf(notification);
 
   const handle = accountHandle(account);
   const actorUrl = accountHref(account);
-  const postUrl = `/users/${recipientUsername}/posts/${status?.id ?? ''}`;
+  const postUrl = notification.iori?.bluesky?.url ?? `/users/${recipientUsername}/posts/${status?.id ?? ''}`;
   const logoUrl = safeUrl(account.avatar);
 
   return (
@@ -112,12 +124,13 @@ const LikeNotificationItem = ({ notification, recipientUsername }: Props) => {
 };
 
 const ReblogNotificationItem = ({ notification, recipientUsername }: Props) => {
-  const { account, status } = notification;
+  const { account } = notification;
+  const status = ioriStatusOf(notification);
   const createdAt = createdAtOf(notification);
 
   const handle = accountHandle(account);
   const actorUrl = accountHref(account);
-  const postUrl = `/users/${recipientUsername}/posts/${status?.id ?? ''}`;
+  const postUrl = notification.iori?.bluesky?.url ?? `/users/${recipientUsername}/posts/${status?.id ?? ''}`;
   const logoUrl = safeUrl(account.avatar);
 
   return (
@@ -292,14 +305,27 @@ const EmojiReactNotificationItem = ({ notification, recipientUsername }: Props) 
   );
 };
 
+const mentionLabelOf = (notification: Notification): string => {
+  switch (notification.iori?.bluesky?.reason) {
+    case 'mention':
+      return 'mentioned you';
+    case 'quote':
+      return 'quoted your post';
+    default:
+      return 'replied to your post';
+  }
+};
+
 const MentionNotificationItem = ({ notification, recipientUsername }: Props) => {
-  const { account, status } = notification;
+  const { account } = notification;
+  const status = ioriStatusOf(notification);
   const createdAt = createdAtOf(notification);
 
   const handle = accountHandle(account);
   const actorUrl = accountHref(account);
   // 旧 UI と同じく、返信そのものではなく返信先の投稿へリンクする
-  const postUrl = `/users/${recipientUsername}/posts/${status?.in_reply_to_id ?? status?.id ?? ''}`;
+  const postUrl = notification.iori?.bluesky?.url
+    ?? `/users/${recipientUsername}/posts/${status?.in_reply_to_id ?? status?.id ?? ''}`;
   const logoUrl = safeUrl(account.avatar);
 
   return (
@@ -343,11 +369,11 @@ const MentionNotificationItem = ({ notification, recipientUsername }: Props) => 
               </span>
             </a>
             <span class='text-sm text-charcoal-light dark:text-gray-400 flex-shrink-0'>
-              replied to your post
+              {mentionLabelOf(notification)}
             </span>
           </div>
 
-          <PostQuote status={status} postUrl={postUrl} createdAt={createdAt} />
+          <PostQuote status={status} postUrl={postUrl} createdAt={createdAt} text={notification.iori?.bluesky?.text} />
         </div>
       </div>
     </article>

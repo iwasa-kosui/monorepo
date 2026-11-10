@@ -225,6 +225,20 @@
       "when": 1794152104823,
       "tag": "0031_bluesky_likes",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1794271674322,
+      "tag": "0032_jazzy_lady_bullseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1794273121747,
+      "tag": "0033_bluesky_notification_sync_state",
+      "breakpoints": true
     }
   ]
 }

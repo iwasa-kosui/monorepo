@@ -34,6 +34,7 @@ import { runBatch } from '../runBatch.ts';
 import {
   domainEventsTable,
   mastodonMarkersTable,
+  notificationBlueskyTable,
   notificationEmojiReactsTable,
   notificationFollowsTable,
   notificationLikesTable,
@@ -42,7 +43,7 @@ import {
   notificationsTable,
 } from '../schema.ts';
 
-const eventRow = (event: {
+export const eventRow = (event: {
   eventId: string;
   aggregateId: unknown;
   aggregateName: string;
@@ -60,7 +61,7 @@ const eventRow = (event: {
   occurredAt: new Date(event.occurredAt),
 });
 
-const notificationRow = (
+export const notificationRow = (
   notification: { notificationId: string; recipientUserId: string; type: string; isRead: boolean },
   createdAt: number,
 ) => ({
@@ -189,6 +190,7 @@ const subtypeTables = [
   notificationEmojiReactsTable,
   notificationRepliesTable,
   notificationRepostsTable,
+  notificationBlueskyTable,
 ] as const;
 
 const markerNotifications = eq(mastodonMarkersTable.timeline, 'notifications');

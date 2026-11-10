@@ -381,6 +381,94 @@ describe('repost 通知', () => {
   });
 });
 
+describe('Bluesky の通知', () => {
+  const blueskyTypes: Notification['type'][] = ['blueskyLike', 'blueskyRepost', 'blueskyFollow', 'blueskyMention'];
+  const seedBluesky = () => {
+    const t = seedNotifications();
+    const targetPostId = t.myPost.postId;
+    const ids = {
+      like: t.seed.addBlueskyNotification(t.me.userId, 'blueskyLike', 11_000, { targetPostId }),
+      repost: t.seed.addBlueskyNotification(t.me.userId, 'blueskyRepost', 12_000),
+      follow: t.seed.addBlueskyNotification(t.me.userId, 'blueskyFollow', 13_000),
+      mention: t.seed.addBlueskyNotification(t.me.userId, 'blueskyMention', 14_000, {
+        reason: 'reply',
+        subjectUri: null,
+        text: 'hello',
+      }),
+    };
+    return { ...t, blueskyIds: ids };
+  };
+  const receipts = (t: ReturnType<typeof seedBluesky>) =>
+    (t.sqlite.prepare('SELECT count(*) AS n FROM bluesky_notification_receipts').get() as { n: number }).n;
+  const subtypeRows = (t: ReturnType<typeof seedBluesky>) =>
+    (t.sqlite.prepare('SELECT count(*) AS n FROM notification_bluesky').get() as { n: number }).n;
+
+  it('types に含まれるときだけ、子表から 4 種の値を復元して返す', async () => {
+    const t = seedBluesky();
+
+    const result = await t.resolveByPage({}, blueskyTypes);
+
+    expect(await t.idsOf()).not.toContain(t.blueskyIds.like);
+    expect(result.ok && result.val.map((item) => item.notification)).toMatchObject([
+      {
+        type: 'blueskyMention',
+        reason: 'reply',
+        subjectUri: null,
+        targetPostId: null,
+        text: 'hello',
+        author: { did: 'did:plc:alice', handle: 'alice.bsky.social', displayName: 'Alice', avatarUrl: null },
+      },
+      { type: 'blueskyFollow' },
+      { type: 'blueskyRepost', subjectUri: 'at://did:plc:me/app.bsky.feed.post/3kpost', targetPostId: null },
+      { type: 'blueskyLike', targetPostId: t.myPost.postId, notificationId: t.blueskyIds.like },
+    ]);
+    expect(result.ok && result.val[0]?.createdAt).toBe(14_000);
+  });
+
+  it('未読件数に数える', async () => {
+    const t = seedBluesky();
+
+    const unread = await createD1NotificationCountResolverSinceMarker(t.db).resolve({
+      userId: UserId.orThrow(t.me.userId),
+      types: [...mastodonTypes, ...blueskyTypes],
+      limit: 100,
+    });
+
+    expect(unread).toEqual({ ok: true, val: 7, err: undefined });
+  });
+
+  it('個別の削除で通知と子表の行が消え、受信の記録は残る', async () => {
+    const t = seedBluesky();
+
+    await createD1NotificationDismissedStore(t.db).store(
+      Notification.dismissNotification({
+        type: 'blueskyFollow',
+        notificationId: NotificationId.orThrow(t.blueskyIds.follow),
+        recipientUserId: UserId.orThrow(t.me.userId),
+        isRead: false,
+        blueskyUri: 'at://x',
+        author: { did: 'did:plc:alice', handle: 'alice.bsky.social', displayName: null, avatarUrl: null },
+      }, Instant.orThrow(20_000)),
+    );
+
+    expect(subtypeRows(t)).toBe(3);
+    expect(receipts(t)).toBe(4);
+    expect(await t.idsOf({}, blueskyTypes)).not.toContain(t.blueskyIds.follow);
+  });
+
+  it('全件削除で通知と子表の行が消え、受信の記録は残る', async () => {
+    const t = seedBluesky();
+
+    await createD1NotificationsClearedStore(t.db).store(
+      Notification.clearNotifications(UserId.orThrow(t.me.userId), Instant.orThrow(20_000)),
+    );
+
+    expect(subtypeRows(t)).toBe(0);
+    expect(receipts(t)).toBe(4);
+    expect(await t.idsOf({}, [...mastodonTypes, ...blueskyTypes])).toEqual([]);
+  });
+});
+
 describe('マーカーの保存と取得', () => {
   it('同じ timeline への保存で version を進め、別の timeline と別のユーザーには影響しない', async () => {
     const fixture = createSqliteD1Fixture();

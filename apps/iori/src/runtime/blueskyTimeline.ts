@@ -46,7 +46,7 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
   isDigestOwner: IsDigestOwner;
 }>;
 
-const createTimelineClient = (
+export const createTimelineClient = (
   config: BlueskyCredentials,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch; holdLoginAfterFailure?: boolean }>,

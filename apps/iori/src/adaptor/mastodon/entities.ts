@@ -207,10 +207,26 @@ export type NotificationType = z.infer<typeof NotificationTypeSchema>;
 
 export const IORI_EMOJI_REACTION_TYPE = 'iori:emoji_reaction';
 
-export const IoriNotificationExtensionSchema = z.object({
+const IoriEmojiReactionExtensionSchema = z.object({
   emoji: z.string(),
   url: z.string().nullable(),
+  bluesky: z.undefined().optional(),
 });
+
+const IoriBlueskyNotificationExtensionSchema = z.object({
+  emoji: z.undefined().optional(),
+  url: z.undefined().optional(),
+  bluesky: z.object({
+    reason: z.enum(['like', 'repost', 'follow', 'mention', 'reply', 'quote']),
+    url: z.string(),
+    text: z.string().optional(),
+  }),
+});
+
+export const IoriNotificationExtensionSchema = z.union([
+  IoriEmojiReactionExtensionSchema,
+  IoriBlueskyNotificationExtensionSchema,
+]);
 export type IoriNotificationExtension = z.infer<typeof IoriNotificationExtensionSchema>;
 
 export const NotificationSchema = z.object({

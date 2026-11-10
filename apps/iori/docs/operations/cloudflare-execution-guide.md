@@ -619,6 +619,14 @@ IORI_NOTICE prune-federated-posts mode=dry-run candidates=<n> local_likes=<n> lo
 
 取り込みのログインが失敗すると、Cron の取り込みは30分のあいだログインを試みません。手動の `POST /api/iori/v1/bluesky/timeline/refresh` は、この待ち時間の対象外です。
 
+`IORI_BLUESKY_TIMELINE` を `enabled` にすると、Worker はタイムラインの取り込みに加えて、1分ごとに Bluesky の通知を取得します。通知のための専用の環境変数はありません。
+
+Worker は、取得した Bluesky の通知を iori の通知に保存し、新しい通知ごとに所有者へ Web Push を送ります。ただし、Worker は最初の取り込みでは Web Push を送らず、15分より古い通知の Web Push も送りません。Worker は、1回の実行で Web Push を個別に最大5件送り、残りを1件にまとめて送ります。
+
+Worker は、最初の取り込みで、過去30日以内の通知を最大500件保存します。通知画面の既読位置をまだ保存していない所有者では、最初の取り込みの後に未読数が一度に増えます。
+
+staging に同じ Secret を設定すると、staging の Worker も同じアカウントの通知を取得します。staging の所有者が Web Push を購読していれば、staging からも Web Push が届きます。
+
 #### ensure-event-archive-bucket でドメインイベント退避用の R2 バケットを作る
 
 `ensure-event-archive-bucket` は、ドメインイベントの退避先になる非公開の R2 バケット `iori-<environment>-<generation>-event-archive` を、まだ無いときだけ作る operation です。Terraform の定義にこのバケットを足す変更は、すでにある generation にバケットを作りません。このため、その変更を配備すると、`deploy-worker` の読み戻しがバケットの不在で止まります。作業者は、この operation で先にバケットを作ります。

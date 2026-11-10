@@ -1,8 +1,9 @@
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { BlueskyTimelineEmbed } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { blueskyPostUrl, blueskyPostUrlOfUri } from '../../helper/blueskyUrl.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
-import { blueskyPostUrl, blueskyPostUrlOfUri, segmentBlueskyText } from './blueskyRichText.ts';
+import { segmentBlueskyText } from './blueskyRichText.ts';
 
 type Props = Readonly<{
   item: IoriBlueskyTimelineItemBody;

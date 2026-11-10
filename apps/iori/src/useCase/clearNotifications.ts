@@ -18,7 +18,16 @@ type Deps = Readonly<{
   notificationsClearedStore: NotificationsClearedStore;
 }>;
 
-const allTypes: ReadonlyArray<Notification['type']> = ['like', 'follow', 'emojiReact', 'reply'];
+const allTypes: ReadonlyArray<Notification['type']> = [
+  'like',
+  'follow',
+  'emojiReact',
+  'reply',
+  'blueskyLike',
+  'blueskyRepost',
+  'blueskyFollow',
+  'blueskyMention',
+];
 
 const create = ({ notificationsResolverByPage, notificationsClearedStore }: Deps): ClearNotificationsUseCase => {
   const run = async ({ userId }: Input) =>

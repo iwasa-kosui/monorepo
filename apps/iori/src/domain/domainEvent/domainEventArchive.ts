@@ -85,6 +85,7 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'mediaUpload.descriptionUpdated',
   'mute.muteCreated',
   'mute.muteDeleted',
+  'notification.blueskyNotificationCreated',
   'notification.emojiReactNotificationCreated',
   'notification.emojiReactNotificationDeleted',
   'notification.followNotificationCreated',
