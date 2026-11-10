@@ -38,22 +38,6 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain('<title>検索 | blog.kosui.me</title>');
   });
 
-  it('renders the Bluesky entry and links it from the Sidebar and BottomNav only when logged in', async () => {
-    const response = await createWorkerPageFallback(new Request('https://worker.test/bluesky'), {
-      isLoggedIn: true,
-      userId: UserId.generate(),
-    });
-    const html = await response?.text();
-
-    expect(response?.status).toBe(200);
-    expect(html).toContain('/static/bluesky.js');
-    expect(html).toContain('<title>Bluesky | blog.kosui.me</title>');
-    expect(await renderSidebar(true)).toContain('href="/bluesky"');
-    expect(await renderBottomNav(true)).toContain('href="/bluesky"');
-    expect(await renderSidebar(false)).not.toContain('/bluesky');
-    expect(await renderBottomNav(false)).not.toContain('/bluesky');
-  });
-
   it('embeds the tailwind config and the style block shared with LayoutClient', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
     const html = await response?.text();

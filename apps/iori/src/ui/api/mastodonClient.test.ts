@@ -32,7 +32,6 @@ import {
   parseRetryAfter,
   react,
   reblog,
-  refreshBlueskyTimeline,
   refreshXPosts,
   repostBlueskyPost,
   requestDigest,
@@ -677,19 +676,6 @@ describe('mastodon client requests', () => {
     expect(requestedUrl(fetchMock)).toBe(expectedUrl);
   });
 
-  it('posts a Bluesky timeline refresh and returns the counts', async () => {
-    const payload = { pages: 1, fetched: 3, saved: 2, dropped: 0 };
-    const fetchMock = stubFetch(jsonResponse(payload));
-
-    const result = await refreshBlueskyTimeline();
-
-    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
-    expect(url).toBe('/api/iori/v1/bluesky/timeline/refresh');
-    expect(init.method).toBe('POST');
-    expect(init.credentials).toBe('same-origin');
-    expect(result).toEqual(payload);
-  });
-
   it('posts a Bluesky like with the feedItemId as a JSON body', async () => {
     const fetchMock = stubFetch(jsonResponse({ liked: true }));
 
@@ -756,14 +742,6 @@ describe('mastodon client requests', () => {
     const error = await repostBlueskyPost('x').catch((e: unknown) => e);
 
     expect(isMastodonApiError(error) && error.status).toBe(502);
-  });
-
-  it('carries the status of a refresh rejected because the import is disabled', async () => {
-    stubFetch(jsonResponse({ error: 'Bluesky timeline is disabled' }, { status: 409 }));
-
-    const error = await refreshBlueskyTimeline().catch((e: unknown) => e);
-
-    expect(isMastodonApiError(error) && error.status).toBe(409);
   });
 
   it('posts a refresh request for the X posts and returns the counts', async () => {

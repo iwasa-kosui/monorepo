@@ -196,54 +196,24 @@ describe('ログイン失敗後の待ち時間', () => {
     expect(requests).toEqual(['https://bsky.social/xrpc/com.atproto.server.createSession']);
     expect(sqlite.prepare('SELECT scope FROM bluesky_login_failures').all()).toEqual([{ scope: 'timeline' }]);
   });
-
-  it('手動の refresh は、待ち時間の記録を読まず書かず、毎回 createSession を呼ぶ', async () => {
-    const { db, binding, sqlite } = createSqliteD1Fixture();
-    const { requests, fetchStub } = failingLogin();
-    const env = { ...enabled, DB: binding } as unknown as IoriWorkerEnv;
-    const ports = createBlueskyTimelineRuntimePorts(env, db, { fetch: fetchStub });
-
-    await ports.collectBlueskyTimelineUseCase?.run();
-    await ports.collectBlueskyTimelineUseCase?.run();
-
-    expect(requests).toEqual([
-      'https://bsky.social/xrpc/com.atproto.server.createSession',
-      'https://bsky.social/xrpc/com.atproto.server.createSession',
-    ]);
-    expect(sqlite.prepare('SELECT scope FROM bluesky_login_failures').all()).toEqual([]);
-  });
 });
 
 describe('createBlueskyTimelineRuntimePorts', () => {
-  it('無効でも保存済みの行を読む resolver を持ち、取り込み用の use case は持たない', () => {
+  it('無効でも保存済みの行を読む resolver を持ち、取り込みは無効として扱う', () => {
     const { db } = createSqliteD1Fixture();
     const ports = createBlueskyTimelineRuntimePorts(
       { IORI_BLUESKY_TIMELINE: 'disabled' } as unknown as IoriWorkerEnv,
       db,
     );
 
-    expect(ports.collectBlueskyTimelineUseCase).toBeUndefined();
+    expect(ports.blueskyTimelineEnabled).toBe(false);
     expect(ports.blueskyTimelineItemsResolver.resolve).toBeTypeOf('function');
   });
 
-  it('有効なときの取り込み用の use case は、取り込みのあとに期限切れの行を削除する', async () => {
-    const { db, binding, sqlite } = createSqliteD1Fixture();
-    const now = Date.now();
-    sqlite.prepare(
-      'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
-    )
-      .run('default', 'did:plc:me', 'kosui.me', 'https://pds.example.net', 'access', 'refresh', now);
-    sqlite.prepare(
-      'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    )
-      .run('old', 'old', 'c', 'did', 'h', 't', '[]', 1, 1, 1);
-    const fetchStub = (async () => Response.json({ feed: [] })) as unknown as typeof fetch;
-    const env = { ...enabled, DB: binding } as unknown as IoriWorkerEnv;
+  it('有効なときは取り込みを有効として扱う', () => {
+    const { db } = createSqliteD1Fixture();
+    const ports = createBlueskyTimelineRuntimePorts(enabled as unknown as IoriWorkerEnv, db);
 
-    const ports = createBlueskyTimelineRuntimePorts(env, db, { fetch: fetchStub });
-    const result = await ports.collectBlueskyTimelineUseCase?.run();
-
-    expect(result).toEqual({ ok: true, val: { pages: 1, fetched: 0, saved: 0, dropped: 0 } });
-    expect(sqlite.prepare('SELECT feedItemId FROM bluesky_timeline_items').all()).toEqual([]);
+    expect(ports.blueskyTimelineEnabled).toBe(true);
   });
 });

@@ -20,7 +20,6 @@ import { ChangeDigestTopicEnabledUseCase } from '../../../../useCase/changeDiges
 import { ChangeDigestTopicMaterialWindowUseCase } from '../../../../useCase/changeDigestTopicMaterialWindow.ts';
 import { ChangeFeedSourceEnabledUseCase } from '../../../../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
-import type { CollectBlueskyTimelineUseCase } from '../../../../useCase/collectBlueskyTimeline.ts';
 import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
 import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
@@ -198,7 +197,7 @@ export const setupReadApi = (
     topicRelevanceJudge?: TopicRelevanceJudge;
     translationTimeoutMs?: number;
     searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
-    collectBlueskyTimeline?: CollectBlueskyTimelineUseCase;
+    blueskyTimelineEnabled?: boolean;
     blueskyLikeClient?: Pick<BlueskyClient, 'createLike' | 'deleteLike'>;
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
     refreshXPosts?: RefreshXPostsUseCase;
@@ -526,7 +525,7 @@ export const setupReadApi = (
         createWorkerIoriBlueskyRouter({
           authn,
           blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
-          collectBlueskyTimelineUseCase: options.collectBlueskyTimeline,
+          blueskyTimelineEnabled: options.blueskyTimelineEnabled ?? false,
           likeBlueskyPostUseCase: options.blueskyLikeClient === undefined ? undefined : LikeBlueskyPostUseCase.create({
             client: options.blueskyLikeClient,
             targetResolver: createD1BlueskyLikeTargetResolver(db),
