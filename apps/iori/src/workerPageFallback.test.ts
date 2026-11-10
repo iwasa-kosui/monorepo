@@ -91,6 +91,21 @@ describe('createWorkerPageFallback', () => {
     expect(post).toBeGreaterThan(notifications);
   });
 
+  it('renders a hidden notification badge in both navs and loads the badge script', async () => {
+    const html = await (await createWorkerPageFallback(new Request('https://worker.test/'), {
+      isLoggedIn: true,
+      userId: UserId.generate(),
+    }))?.text();
+
+    for (const nav of [await renderSidebar(true), await renderBottomNav(true)]) {
+      const notifications = nav.indexOf('href="/notifications"');
+      const badge = nav.indexOf('data-notification-badge');
+      expect(badge).toBeGreaterThan(notifications);
+      expect(nav).toMatch(/<span data-notification-badge="true" hidden="" /);
+    }
+    expect(html).toContain('<script type="module" src="/static/notificationBadge.js"></script>');
+  });
+
   it('keeps the BottomNav below page modals and inside the bottom safe area', async () => {
     const html = await renderBottomNav(true);
 

@@ -87,6 +87,7 @@ export const createWorkerPageFallback = async (
     ${speculationRulesScript()}
     <script type="module" src="/static/${page.entry}.js"></script>
     <script type="module" src="/static/navPrefetch.js"></script>
+    <script type="module" src="/static/notificationBadge.js"></script>
   </head>
   <body class="bg-clay-bg dark:bg-gray-900 min-h-screen text-charcoal dark:text-gray-100 ${
     isLoggedIn ? 'pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 md:px-16' : ''

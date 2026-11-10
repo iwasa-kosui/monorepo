@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => {
             search: './src/ui/pages/search.tsx',
             xPosts: './src/ui/pages/xPosts.tsx',
             navPrefetch: './src/ui/pages/navPrefetch.ts',
+            notificationBadge: './src/ui/pages/notificationBadge.ts',
           },
           output: {
             entryFileNames: 'static/[name].js',
