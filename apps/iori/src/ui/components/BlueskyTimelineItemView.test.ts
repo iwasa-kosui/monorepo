@@ -157,6 +157,13 @@ describe('BlueskyTimelineItemView', () => {
     });
   });
 
+  it('Fediverse の投稿と同じく、操作のボタンを右寄せでリポスト、いいねの順に並べる', () => {
+    const html = render({}, { onLike: () => {}, onRepost: () => {} });
+
+    expect(html).toContain('class="flex items-center justify-end gap-4 pt-1"');
+    expect(html.indexOf('title="リポスト"')).toBeLessThan(html.indexOf('title="いいね"'));
+  });
+
   describe('リポストのボタン', () => {
     const handlers = { onRepost: () => {}, onUndoRepost: () => {} };
 

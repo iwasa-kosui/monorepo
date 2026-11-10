@@ -259,7 +259,7 @@ export const BlueskyTimelineItemView = ({
   return (
     <article
       data-post-index={dataIndex}
-      class={`bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-4 space-y-2 ${
+      class={`bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5 space-y-2 ${
         isSelected === true ? 'ring-2 ring-terracotta/30 dark:ring-terracotta-light/30' : ''
       }`}
     >
@@ -296,7 +296,7 @@ export const BlueskyTimelineItemView = ({
       {item.text !== '' && <BlueskyText text={item.text} facets={item.facets} />}
       {item.embed !== null && <BlueskyEmbed embed={item.embed} postHref={postHref} />}
       {(onLike !== undefined || onRepost !== undefined) && (
-        <div class='flex items-center gap-4 pt-1'>
+        <div class='flex items-center justify-end gap-4 pt-1'>
           {onRepost !== undefined && (
             <BlueskyRepostButton
               item={item}
