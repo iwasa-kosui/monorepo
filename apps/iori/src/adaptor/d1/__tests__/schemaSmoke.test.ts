@@ -15,6 +15,7 @@ describe('D1 schema', () => {
       'blueskyLoginFailuresTable',
       'blueskyNotificationReceiptsTable',
       'blueskyNotificationSyncStateTable',
+      'blueskyRepostsTable',
       'blueskySessionsTable',
       'blueskyTimelineItemsTable',
       'digestDeepDiveTurnsTable',

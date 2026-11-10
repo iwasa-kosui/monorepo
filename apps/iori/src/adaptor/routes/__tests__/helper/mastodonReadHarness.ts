@@ -33,6 +33,7 @@ import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
 import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts';
+import { RepostBlueskyPostUseCase } from '../../../../useCase/repostBlueskyPost.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
@@ -48,6 +49,7 @@ import { createTranslatePostUseCase } from '../../../../useCase/translatePost.ts
 import { UndoEmojiReactUseCase } from '../../../../useCase/undoEmojiReact.ts';
 import { UndoLikeUseCase } from '../../../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../../../useCase/undoRepost.ts';
+import { UndoRepostBlueskyPostUseCase } from '../../../../useCase/undoRepostBlueskyPost.ts';
 import { UnlikeBlueskyPostUseCase } from '../../../../useCase/unlikeBlueskyPost.ts';
 import type { IoriWorkerEnv } from '../../../../workerEnv.ts';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
@@ -70,6 +72,9 @@ import { createD1ArticleResolverByRootPostId } from '../../../d1/article/article
 import { createD1BlueskyLikeDeletedStore } from '../../../d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../../../d1/blueskyTimeline/blueskyLikeSavedStore.ts';
 import { createD1BlueskyLikeTargetResolver } from '../../../d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
+import { createD1BlueskyRepostDeletedStore } from '../../../d1/blueskyTimeline/blueskyRepostDeletedStore.ts';
+import { createD1BlueskyRepostSavedStore } from '../../../d1/blueskyTimeline/blueskyRepostSavedStore.ts';
+import { createD1BlueskyRepostTargetResolver } from '../../../d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../../../d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestItemFeedbackGivenStore.ts';
 import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
@@ -195,6 +200,7 @@ export const setupReadApi = (
     searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
     collectBlueskyTimeline?: CollectBlueskyTimelineUseCase;
     blueskyLikeClient?: Pick<BlueskyClient, 'createLike' | 'deleteLike'>;
+    blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
     refreshXPosts?: RefreshXPostsUseCase;
   }> = {},
 ) => {
@@ -533,6 +539,22 @@ export const setupReadApi = (
               client: options.blueskyLikeClient,
               targetResolver: createD1BlueskyLikeTargetResolver(db),
               deletedStore: createD1BlueskyLikeDeletedStore(db),
+            }),
+          repostBlueskyPostUseCase: options.blueskyRepostClient === undefined
+            ? undefined
+            : RepostBlueskyPostUseCase.create({
+              client: options.blueskyRepostClient,
+              targetResolver: createD1BlueskyRepostTargetResolver(db),
+              viewerRepostResolver: { resolve: async () => RA.ok(null) },
+              savedStore: createD1BlueskyRepostSavedStore(db),
+              now: Instant.now,
+            }),
+          undoRepostBlueskyPostUseCase: options.blueskyRepostClient === undefined
+            ? undefined
+            : UndoRepostBlueskyPostUseCase.create({
+              client: options.blueskyRepostClient,
+              targetResolver: createD1BlueskyRepostTargetResolver(db),
+              deletedStore: createD1BlueskyRepostDeletedStore(db),
             }),
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),

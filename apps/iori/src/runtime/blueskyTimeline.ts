@@ -1,5 +1,6 @@
 import { createBlueskyClient } from '../adaptor/bluesky/blueskyClient.ts';
 import { createBlueskyTimelineFetcher } from '../adaptor/bluesky/blueskyTimelineFetcher.ts';
+import { createBlueskyViewerRepostResolver } from '../adaptor/bluesky/blueskyViewerRepostResolver.ts';
 import {
   createD1BlueskyLoginFailureDeletedStore,
   createD1BlueskyLoginFailureResolver,
@@ -12,11 +13,15 @@ import {
 import { createD1BlueskyLikeDeletedStore } from '../adaptor/d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyLikeSavedStore.ts';
 import { createD1BlueskyLikeTargetResolver } from '../adaptor/d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
+import { createD1BlueskyRepostDeletedStore } from '../adaptor/d1/blueskyTimeline/blueskyRepostDeletedStore.ts';
+import { createD1BlueskyRepostSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyRepostSavedStore.ts';
+import { createD1BlueskyRepostTargetResolver } from '../adaptor/d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
 import { createD1BlueskyTimelineExistingFeedItemIdsResolver } from '../adaptor/d1/blueskyTimeline/blueskyTimelineExistingFeedItemIdsResolver.ts';
 import { createD1BlueskyTimelineItemsExpiredStore } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsExpiredStore.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1BlueskyTimelineItemsSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsSavedStore.ts';
 import { createD1BlueskyViewerLikesSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyViewerLikesSyncedStore.ts';
+import { createD1BlueskyViewerRepostsSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyViewerRepostsSyncedStore.ts';
 import { createD1Db, type IoriD1Db } from '../adaptor/d1/client.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import type { BlueskyTimelineItemsResolver } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
@@ -26,6 +31,8 @@ import { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.t
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../useCase/likeBlueskyPost.ts';
 import { RefreshBlueskyTimelineUseCase } from '../useCase/refreshBlueskyTimeline.ts';
+import { RepostBlueskyPostUseCase } from '../useCase/repostBlueskyPost.ts';
+import { UndoRepostBlueskyPostUseCase } from '../useCase/undoRepostBlueskyPost.ts';
 import { UnlikeBlueskyPostUseCase } from '../useCase/unlikeBlueskyPost.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { type BlueskyCredentials, resolveBlueskyCredentials } from './blueskyCrosspost.ts';
@@ -43,6 +50,8 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
   collectBlueskyTimelineUseCase: CollectBlueskyTimelineUseCase | undefined;
   likeBlueskyPostUseCase: LikeBlueskyPostUseCase | undefined;
   unlikeBlueskyPostUseCase: UnlikeBlueskyPostUseCase | undefined;
+  repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
+  undoRepostBlueskyPostUseCase: UndoRepostBlueskyPostUseCase | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -91,6 +100,31 @@ export const createLikeBlueskyPostUseCases = (
   };
 };
 
+export const createRepostBlueskyPostUseCases = (
+  env: IoriWorkerEnv,
+  db: IoriD1Db,
+  deps: Readonly<{ fetch?: typeof fetch }> = {},
+): Readonly<{ repost: RepostBlueskyPostUseCase; undoRepost: UndoRepostBlueskyPostUseCase }> | undefined => {
+  const config = resolveBlueskyTimelineConfig(env);
+  if (config === undefined) return undefined;
+  const client = createTimelineClient(config, db, deps);
+  const targetResolver = createD1BlueskyRepostTargetResolver(db);
+  return {
+    repost: RepostBlueskyPostUseCase.create({
+      client,
+      targetResolver,
+      viewerRepostResolver: createBlueskyViewerRepostResolver({ client }),
+      savedStore: createD1BlueskyRepostSavedStore(db),
+      now: Instant.now,
+    }),
+    undoRepost: UndoRepostBlueskyPostUseCase.create({
+      client,
+      targetResolver,
+      deletedStore: createD1BlueskyRepostDeletedStore(db),
+    }),
+  };
+};
+
 export const createCollectBlueskyTimelineUseCase = (
   env: IoriWorkerEnv,
   deps: Readonly<{ db?: IoriD1Db; fetch?: typeof fetch; holdLoginAfterFailure?: boolean }> = {},
@@ -104,6 +138,7 @@ export const createCollectBlueskyTimelineUseCase = (
     existingResolver: createD1BlueskyTimelineExistingFeedItemIdsResolver(db),
     savedStore: createD1BlueskyTimelineItemsSavedStore(db),
     viewerLikesStore: createD1BlueskyViewerLikesSyncedStore(db),
+    viewerRepostsStore: createD1BlueskyViewerRepostsSyncedStore(db),
     now,
   });
 };
@@ -136,11 +171,14 @@ export const createBlueskyTimelineRuntimePorts = (
   deps: Readonly<{ fetch?: typeof fetch }> = {},
 ): BlueskyTimelineRuntimePorts => {
   const likes = createLikeBlueskyPostUseCases(env, db, deps);
+  const reposts = createRepostBlueskyPostUseCases(env, db, deps);
   return {
     blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
     collectBlueskyTimelineUseCase: createRefreshBlueskyTimelineUseCase(env, { db, fetch: deps.fetch }),
     likeBlueskyPostUseCase: likes?.like,
     unlikeBlueskyPostUseCase: likes?.unlike,
+    repostBlueskyPostUseCase: reposts?.repost,
+    undoRepostBlueskyPostUseCase: reposts?.undoRepost,
     isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
   };
 };

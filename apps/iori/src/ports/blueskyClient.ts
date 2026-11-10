@@ -23,6 +23,8 @@ export type BlueskyClient = Readonly<{
   deleteRecord: (rkey: string) => RA<void, BlueskyClientError>;
   createLike: (subject: BlueskyLikeSubject, rkey: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;
   deleteLike: (rkey: string) => RA<void, BlueskyClientError>;
+  createRepost: (subject: BlueskyLikeSubject, rkey: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;
+  deleteRepost: (rkey: string) => RA<void, BlueskyClientError>;
 }>;
 
 export type BlueskyQueryClient = Readonly<{

@@ -2,6 +2,11 @@ import { RA, Result } from '@iwasa-kosui/result';
 
 import type { BlueskyLike, BlueskyViewerLikesSyncedStore } from '../domain/blueskyTimeline/blueskyLike.ts';
 import {
+  BLUESKY_REPOST_SYNC_GRACE_MS,
+  type BlueskyRepost,
+  type BlueskyViewerRepostsSyncedStore,
+} from '../domain/blueskyTimeline/blueskyRepost.ts';
+import {
   BLUESKY_TIMELINE_MAX_PAGES,
   BLUESKY_TIMELINE_PAGE_LIMIT,
   BLUESKY_TIMELINE_RETENTION_DAYS,
@@ -29,6 +34,7 @@ type Deps = Readonly<{
   existingResolver: BlueskyTimelineExistingFeedItemIdsResolver;
   savedStore: BlueskyTimelineItemsSavedStore;
   viewerLikesStore: BlueskyViewerLikesSyncedStore;
+  viewerRepostsStore: BlueskyViewerRepostsSyncedStore;
   now: () => Instant;
 }>;
 
@@ -50,11 +56,33 @@ const syncViewerLikes = async (
   Result.unsafeUnwrap(await store.sync([...likes.values()]));
 };
 
+const syncViewerReposts = async (
+  store: BlueskyViewerRepostsSyncedStore,
+  items: readonly BlueskyFetchedTimelineItem[],
+  staleBefore: Instant,
+): Promise<void> => {
+  const reposts = new Map<string, BlueskyRepost>();
+  const unreposted = new Set<string>();
+  for (const item of items) {
+    if (item.viewerRepostUri === null) {
+      unreposted.add(item.uri);
+      continue;
+    }
+    if (reposts.has(item.uri)) continue;
+    reposts.set(item.uri, { subjectUri: item.uri, repostUri: item.viewerRepostUri, createdAt: item.fetchedAt });
+  }
+  if (reposts.size > 0) Result.unsafeUnwrap(await store.sync([...reposts.values()]));
+  const absent = [...unreposted].filter((uri) => !reposts.has(uri));
+  if (absent.length > 0) Result.unsafeUnwrap(await store.deleteStale(absent, staleBefore));
+};
+
 const create = (
-  { fetcher, existingResolver, savedStore, viewerLikesStore, now }: Deps,
+  { fetcher, existingResolver, savedStore, viewerLikesStore, viewerRepostsStore, now }: Deps,
 ): CollectBlueskyTimelineUseCase => {
   const run = async (): RA<Ok, Err> => {
-    const retentionStart = Instant.addDuration(now(), -BLUESKY_TIMELINE_RETENTION_DAYS * DAY_MS);
+    const startedAt = now();
+    const retentionStart = Instant.addDuration(startedAt, -BLUESKY_TIMELINE_RETENTION_DAYS * DAY_MS);
+    const repostStaleBefore = Instant.addDuration(startedAt, -BLUESKY_REPOST_SYNC_GRACE_MS);
     let cursor: string | undefined;
     let failure: Err | undefined;
     let pages = 0;
@@ -79,6 +107,7 @@ const create = (
       const inserted = added.length === 0 ? [] : Result.unsafeUnwrap(await savedStore.save(added));
       saved += inserted.length;
       await syncViewerLikes(viewerLikesStore, recent);
+      await syncViewerReposts(viewerRepostsStore, recent, repostStaleBefore);
       cursor = page.val.cursor;
       if (inserted.length < recent.length || recent.length < unique.length || cursor === undefined) break;
     }

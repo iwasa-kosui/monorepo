@@ -11,6 +11,7 @@ import type {
 } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyBlob } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import { blueskyLikeRkey } from '../../domain/blueskyTimeline/blueskyLike.ts';
+import { blueskyRepostRkey } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type {
   BlueskyClient,
@@ -22,6 +23,7 @@ import type {
 export const BLUESKY_DEFAULT_PDS_URL = 'https://bsky.social';
 const POST_COLLECTION = 'app.bsky.feed.post';
 const LIKE_COLLECTION = 'app.bsky.feed.like';
+const REPOST_COLLECTION = 'app.bsky.feed.repost';
 const REQUEST_TIMEOUT_MS = 10_000;
 const UPLOAD_TIMEOUT_MS = 30_000;
 export const BLUESKY_LOGIN_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
@@ -296,6 +298,33 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           : RA.err(clientError('invalid_response', 'createLike returned an unexpected uri'));
       }),
     deleteLike: (rkey) => removeRecord(LIKE_COLLECTION, rkey),
+    createRepost: (subject, rkey) =>
+      withSession(async (session) => {
+        const created = await call(
+          'createRepost',
+          `${session.pdsUrl}/xrpc/com.atproto.repo.putRecord`,
+          {
+            method: 'POST',
+            headers: authorized(session, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+              repo: session.did,
+              collection: REPOST_COLLECTION,
+              rkey,
+              record: {
+                $type: REPOST_COLLECTION,
+                subject: { uri: subject.uri, cid: subject.cid },
+                createdAt: new Date(now()).toISOString(),
+              },
+            }),
+          },
+          createRecordResponseSchema,
+        );
+        if (!created.ok) return created;
+        return blueskyRepostRkey(created.val.uri) !== undefined
+          ? RA.ok({ uri: created.val.uri })
+          : RA.err(clientError('invalid_response', 'createRepost returned an unexpected uri'));
+      }),
+    deleteRepost: (rkey) => removeRecord(REPOST_COLLECTION, rkey),
     query: (nsid, params) =>
       withSession((session) => {
         const search = new URLSearchParams(params).toString();
