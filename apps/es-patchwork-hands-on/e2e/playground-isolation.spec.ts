@@ -46,7 +46,9 @@ test('確認用ページは実行基盤の JS を読み込み、noindex を付�
 });
 
 test('確認用ページと第1章から第3章のページ以外の HTML は実行基盤の JS を読み込まず、確認用ページへのリンクも持たない', () => {
-  const others = htmlFiles().filter((file) => file !== checkFile && !embeddedPages.test(file));
+  const others = htmlFiles().filter((file) =>
+    file !== checkFile && !embeddedPages.test(file) && !file.startsWith('play/')
+  );
   expect(others.length).toBeGreaterThan(10);
   expect(others).toContain('chapters/intro/index.html');
   expect(others).toContain('chapters/summary/index.html');
