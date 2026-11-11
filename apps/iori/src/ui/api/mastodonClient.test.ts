@@ -173,12 +173,12 @@ describe('mastodon client requests', () => {
     expect(page).toEqual({ items: [{ id: 's1' }], nextMaxId: 's1', prevMinId: 's1' });
   });
 
-  it('requests the home timeline without a query when no parameter is given', async () => {
+  it('requests a full page of the home timeline when no parameter is given', async () => {
     const fetchMock = stubFetch(jsonResponse([]));
 
     const page = await fetchHomeTimeline();
 
-    expect(requestedUrl(fetchMock)).toBe('/api/v1/timelines/home');
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/timelines/home?limit=40');
     expect(page).toEqual({ items: [], nextMaxId: undefined, prevMinId: undefined });
   });
 

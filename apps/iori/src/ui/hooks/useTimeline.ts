@@ -7,9 +7,11 @@ import {
   fetchFollowing,
   fetchHomeTimeline,
   fetchVerifyCredentials,
+  HOME_TIMELINE_PAGE_LIMIT,
   isMastodonApiError,
   isUnauthorizedError,
 } from '../api/mastodonClient.ts';
+import { writeMeCache } from '../api/pageCache.ts';
 import { clearAllCache } from '../api/responseCache.ts';
 import { removeStatusesByPostId, updateStatusesByPostId } from '../api/status.ts';
 import { currentGeneration, isStaleGeneration, startGeneration } from './generation.ts';
@@ -21,6 +23,8 @@ import {
   pagingAfterLoadMore,
   settleLoadMore,
 } from './homeFeed.ts';
+import { fetchNewerBluesky, fetchNewerStatuses, pagingAfterRefresh } from './homeFeedRefresh.ts';
+import { clearHomeSnapshot, type HomeSnapshot } from './homeSnapshot.ts';
 import { canStartLoadMore, isCurrentCursor } from './loadMoreGuard.ts';
 import type { BlueskyItemsUpdater } from './optimisticBlueskyLike.ts';
 import { prependUniqueById } from './prependUnique.ts';
@@ -57,9 +61,11 @@ type StatusUpdater = (
 export type UseTimelineReturn = Readonly<{
   state: TimelineState;
   loadMore: (maxId: string) => Promise<void>;
-  reload: () => Promise<void>;
-  refresh: () => Promise<void>;
+  /** 最新側を取得する。戻り値は先頭に追加された件数（置き換え・失敗時は undefined）。 */
+  reload: () => Promise<number | undefined>;
+  refresh: () => Promise<number | undefined>;
   isRefreshing: boolean;
+  isLoadingMore: boolean;
   isFirstPageSettled: boolean;
   updateTimelineItem: StatusUpdater;
   updateBlueskyItems: BlueskyItemsUpdater;
@@ -70,9 +76,17 @@ export type UseTimelineReturn = Readonly<{
 
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
 
-export const useTimeline = (): UseTimelineReturn => {
-  const [state, setState] = useState<TimelineState>(() => initialTimelineState(readTimelineCache()));
+const initialStateOf = (snapshot: HomeSnapshot | undefined): TimelineState =>
+  snapshot === undefined
+    ? initialTimelineState(readTimelineCache())
+    : initialTimelineState({ me: snapshot.me, ...snapshot.paging });
+
+export const useTimeline = (snapshot?: HomeSnapshot): UseTimelineReturn => {
+  const [state, setState] = useState<TimelineState>(() => initialStateOf(snapshot));
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isFirstPageSettled, setIsFirstPageSettled] = useState(false);
   const isLoadingMoreRef = useRef(false);
   const isReloadingRef = useRef(state.status === 'success');
@@ -102,13 +116,60 @@ export const useTimeline = (): UseTimelineReturn => {
     }
   }, []);
 
+  /** 手元にタイムラインがあるときは、読んでいる位置を保つために新着分だけを先頭に足す。 */
+  const loadNewer = useCallback(
+    async (generation: number, current: TimelineData): Promise<number | undefined> => {
+      const [[statusesResult, blueskyResult], me] = await Promise.all([
+        Promise.allSettled([
+          fetchNewerStatuses(fetchHomeTimeline, current.statuses, HOME_TIMELINE_PAGE_LIMIT),
+          fetchNewerBluesky(fetchBlueskyHomeTimeline, current.bluesky.items),
+        ]),
+        fetchVerifyCredentials(),
+      ]);
+      if (isStaleGeneration(generationRef, generation)) return undefined;
+      if (statusesResult.status === 'rejected') throw statusesResult.reason;
+      const latest: TimelineState = stateRef.current ?? { status: 'loading' };
+      const base = latest.status === 'success' ? latest.data : current;
+      const { paging, newCount } = pagingAfterRefresh(
+        base,
+        statusesResult.value,
+        blueskyResult.status === 'fulfilled' ? blueskyResult.value : undefined,
+      );
+      isReloadingRef.current = false;
+      isShowingCacheRef.current = false;
+      nextMaxIdRef.current = paging.nextMaxId;
+      blueskyCursorRef.current = paging.bluesky.cursor;
+      writeMeCache(me);
+      setState((prev) => ({
+        status: 'success',
+        data: {
+          ...(prev.status === 'success' ? prev.data : base),
+          me,
+          ...paging,
+        },
+      }));
+      setIsRefreshing(false);
+      setIsFirstPageSettled(true);
+      void loadAccountLists(me.id, generation);
+      return newCount;
+    },
+    [loadAccountLists],
+  );
+
   const loadFirstPage = useCallback(
-    async (isManualRefresh: boolean) => {
+    async (isManualRefresh: boolean): Promise<number | undefined> => {
       const generation = startGeneration(generationRef);
       isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
       isReloadingRef.current = true;
       if (isManualRefresh) setIsRefreshing(true);
       try {
+        const current: TimelineState = stateRef.current ?? { status: 'loading' };
+        if (
+          current.status === 'success' && (current.data.statuses.length > 0 || current.data.bluesky.items.length > 0)
+        ) {
+          return await loadNewer(generation, current.data);
+        }
         const [[homeResult, blueskyResult], me] = await Promise.all([
           Promise.allSettled([fetchHomeTimeline(), fetchBlueskyHomeTimeline()]),
           fetchVerifyCredentials(),
@@ -126,14 +187,18 @@ export const useTimeline = (): UseTimelineReturn => {
         setState((prev) => stateAfterFirstPage(prev, me, page.items, page.nextMaxId, bluesky));
         setIsRefreshing(false);
         setIsFirstPageSettled(true);
-        await loadAccountLists(me.id, generation);
+        void loadAccountLists(me.id, generation);
+        return undefined;
       } catch (error) {
-        if (isStaleGeneration(generationRef, generation)) return;
+        if (isStaleGeneration(generationRef, generation)) return undefined;
         isReloadingRef.current = false;
         setIsRefreshing(false);
         setIsFirstPageSettled(true);
         const isUnauthorized = isUnauthorizedError(error);
-        if (isUnauthorized) clearAllCache();
+        if (isUnauthorized) {
+          clearAllCache();
+          clearHomeSnapshot();
+        }
         if (!isManualRefresh) {
           const showingCache = isShowingCacheRef.current === true;
           if (!showingCache || isUnauthorized) {
@@ -149,9 +214,10 @@ export const useTimeline = (): UseTimelineReturn => {
         } else {
           console.error('Failed to refresh:', error);
         }
+        return undefined;
       }
     },
-    [loadAccountLists],
+    [loadAccountLists, loadNewer],
   );
 
   const reload = useCallback(() => loadFirstPage(false), [loadFirstPage]);
@@ -170,6 +236,7 @@ export const useTimeline = (): UseTimelineReturn => {
       )
     ) return;
     isLoadingMoreRef.current = true;
+    setIsLoadingMore(true);
     const generation = currentGeneration(generationRef);
     const maxId = nextMaxIdRef.current ?? undefined;
     const blueskyCursor = blueskyCursorRef.current ?? undefined;
@@ -197,6 +264,7 @@ export const useTimeline = (): UseTimelineReturn => {
     } finally {
       if (!isStaleGeneration(generationRef, generation)) {
         isLoadingMoreRef.current = false;
+        setIsLoadingMore(false);
       }
     }
   }, []);
@@ -258,6 +326,7 @@ export const useTimeline = (): UseTimelineReturn => {
     reload,
     refresh,
     isRefreshing,
+    isLoadingMore,
     isFirstPageSettled,
     updateTimelineItem,
     updateBlueskyItems,

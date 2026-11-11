@@ -1,10 +1,18 @@
-const NEAR_END_THRESHOLD_PX = 10;
+const MIN_PREFETCH_DISTANCE_PX = 1200;
+const PREFETCH_VIEWPORTS = 2;
+
+/**
+ * 末尾に到達する前に次のページを取りに行くための距離。
+ * 画面2枚分（最低 1200px）手前で取得を始め、スクロールが止まらないようにする。
+ */
+export const prefetchDistance = (innerHeight: number): number =>
+  Math.max(MIN_PREFETCH_DISTANCE_PX, innerHeight * PREFETCH_VIEWPORTS);
 
 export const isNearScrollEnd = (
   scrollY: number,
   innerHeight: number,
   scrollHeight: number,
-): boolean => scrollY + innerHeight >= scrollHeight - NEAR_END_THRESHOLD_PX;
+): boolean => scrollY + innerHeight >= scrollHeight - prefetchDistance(innerHeight);
 
 export const shouldLoadNow = (
   cursor: string | undefined,

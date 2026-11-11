@@ -1,13 +1,15 @@
 import type { FC, PropsWithChildren } from 'hono/jsx';
-import { createContext, useContext, useMemo } from 'hono/jsx';
+import { createContext, useContext, useMemo, useState } from 'hono/jsx';
 
 import { homeFeedCursor, type HomeItem, mergeHomeFeed } from '../hooks/homeFeed.ts';
+import { readHomeSnapshot } from '../hooks/homeSnapshot.ts';
 import { useBlueskyLike, type UseBlueskyLikeReturn } from '../hooks/useBlueskyLike.ts';
 import { useBlueskyRepost, type UseBlueskyRepostReturn } from '../hooks/useBlueskyRepost.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation.ts';
 import { usePostActions, type UsePostActionsReturn } from '../hooks/usePostActions.ts';
 import { PULL_TO_REFRESH_THRESHOLD, usePullToRefresh, type UsePullToRefreshReturn } from '../hooks/usePullToRefresh.ts';
+import { useReadingPosition, type UseReadingPositionReturn } from '../hooks/useReadingPosition.ts';
 import { useReplyDialog, type UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
 import { useThreadModal, type UseThreadModalReturn } from '../hooks/useThreadModal.ts';
 import { type TimelineData, useTimeline, type UseTimelineReturn } from '../hooks/useTimeline.ts';
@@ -25,12 +27,14 @@ export type TimelineContextValue = Readonly<{
   ui: UseUIStateReturn;
   pullToRefresh: UsePullToRefreshReturn;
   pullThreshold: number;
+  reading: UseReadingPositionReturn;
 }>;
 
 const TimelineContext = createContext<TimelineContextValue | null>(null);
 
 export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
-  const timeline = useTimeline();
+  const [snapshot] = useState(() => readHomeSnapshot());
+  const timeline = useTimeline(snapshot);
   const thread = useThreadModal();
   const ui = useUIState();
 
@@ -46,7 +50,9 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     updateTimelineItem: timeline.updateTimelineItem,
     updateThreadPost: thread.updateThreadPost,
     removePost: timeline.removePost,
-    refreshTimeline: () => timeline.reload(),
+    refreshTimeline: async () => {
+      await timeline.reload();
+    },
     onPostDeleted: thread.removeFromThread,
   });
 
@@ -55,10 +61,10 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
 
   const pullToRefresh = usePullToRefresh({
     onRefresh: async () => {
-      await timeline.refresh();
+      const count = await timeline.refresh();
       ui.setSelectedIndex(-1);
+      return count;
     },
-    isRefreshing: timeline.isRefreshing,
   });
 
   const items = useMemo(
@@ -73,6 +79,8 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
         }),
     [data],
   );
+
+  const reading = useReadingPosition({ items, data, initialAnchor: snapshot?.anchor });
 
   useInfiniteScroll({
     nextCursor: data === null ? undefined : homeFeedCursor(data.nextMaxId, data.bluesky.cursor),
@@ -109,8 +117,9 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       ui,
       pullToRefresh,
       pullThreshold: PULL_TO_REFRESH_THRESHOLD,
+      reading,
     }),
-    [timeline, data, items, actions, blueskyLike, blueskyRepost, thread, reply, ui, pullToRefresh],
+    [timeline, data, items, actions, blueskyLike, blueskyRepost, thread, reply, ui, pullToRefresh, reading],
   );
 
   return <TimelineContext.Provider value={value}>{children}</TimelineContext.Provider>;
