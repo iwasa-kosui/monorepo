@@ -136,10 +136,16 @@ const pageQuery = (params: PageParams): Query => ({
 
 const HOME_TIMELINE_PATH = '/api/v1/timelines/home';
 
-export const homeTimelineUrl = (params: PageParams = {}): string => requestUrl(HOME_TIMELINE_PATH, pageQuery(params));
+/** ホームタイムラインを一度に取得する件数（サーバー側の上限）。 */
+export const HOME_TIMELINE_PAGE_LIMIT = 40;
+
+const homePageQuery = (params: PageParams): Query => pageQuery({ limit: HOME_TIMELINE_PAGE_LIMIT, ...params });
+
+export const homeTimelineUrl = (params: PageParams = {}): string =>
+  requestUrl(HOME_TIMELINE_PATH, homePageQuery(params));
 
 export const fetchHomeTimeline = (params: PageParams = {}): Promise<Page<Status>> =>
-  getPage<Status>(HOME_TIMELINE_PATH, pageQuery(params));
+  getPage<Status>(HOME_TIMELINE_PATH, homePageQuery(params));
 
 export type PublicTimelineScope = 'local' | 'remote';
 

@@ -24,7 +24,7 @@ const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
 describe('prefetchUrlsFor', () => {
   it('maps the four screens to the GET APIs they call first', () => {
     expect(prefetchUrlsFor('/')).toEqual([
-      '/api/v1/timelines/home',
+      '/api/v1/timelines/home?limit=40',
       '/api/v1/accounts/verify_credentials',
       '/api/iori/v1/bluesky/timeline?scope=home',
     ]);
@@ -96,7 +96,7 @@ describe('createPrefetcher', () => {
       expect(String(url)).not.toMatch(/markers|push|\/auth\//);
     }
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      '/api/v1/timelines/home',
+      '/api/v1/timelines/home?limit=40',
       '/api/v1/accounts/verify_credentials',
       '/api/iori/v1/bluesky/timeline?scope=home',
       '/api/v1/favourites',

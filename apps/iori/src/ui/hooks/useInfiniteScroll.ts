@@ -12,7 +12,7 @@ type UseInfiniteScrollProps = Readonly<{
 export const useInfiniteScroll = ({
   nextCursor,
   onLoadMore,
-  debounceMs = 300,
+  debounceMs = 100,
   isFirstPageSettled = true,
 }: UseInfiniteScrollProps): void => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

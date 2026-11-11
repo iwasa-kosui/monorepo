@@ -1,3 +1,4 @@
+import type { Child } from 'hono/jsx';
 import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
@@ -13,7 +14,9 @@ import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
 import { homeItemKey } from '../hooks/homeFeed.ts';
+import { pullProgress, refreshResultLabel } from '../hooks/pullGesture.ts';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
+import { ITEM_KEY_ATTRIBUTE } from '../hooks/useReadingPosition.ts';
 
 const usePostedHandler = () => {
   const { timeline, ui } = useTimelineContext();
@@ -24,81 +27,147 @@ const usePostedHandler = () => {
   };
 };
 
-const PullToRefreshIndicator = () => {
-  const { pullToRefresh, pullThreshold, timeline } = useTimelineContext();
-  const { pullDistance } = pullToRefresh;
-  const isRefreshing = timeline.isRefreshing;
+const Spinner = ({ class: className = 'h-5 w-5' }: { class?: string }) => (
+  <svg class={`animate-spin ${className}`} viewBox='0 0 24 24' aria-hidden='true'>
+    <circle class='opacity-20' cx='12' cy='12' r='9' stroke='currentColor' stroke-width='2.5' fill='none' />
+    <path
+      class='opacity-80'
+      d='M21 12a9 9 0 0 0-9-9'
+      stroke='currentColor'
+      stroke-width='2.5'
+      stroke-linecap='round'
+      fill='none'
+    />
+  </svg>
+);
 
-  if (pullDistance <= 0 && !isRefreshing) {
-    return null;
-  }
+/** 引っ張り具合に合わせて円弧が伸び、しきい値を越えると矢印が反転するインジケーター。 */
+const PullProgressIcon = ({ progress, isArmed }: { progress: number; isArmed: boolean }) => {
+  const circumference = 2 * Math.PI * 9;
+  return (
+    <svg
+      class='h-6 w-6'
+      viewBox='0 0 24 24'
+      aria-hidden='true'
+      style={{ transform: `rotate(${progress * 270 - 90}deg)` }}
+    >
+      <circle cx='12' cy='12' r='9' stroke='currentColor' stroke-width='2.5' fill='none' class='opacity-20' />
+      <circle
+        cx='12'
+        cy='12'
+        r='9'
+        stroke='currentColor'
+        stroke-width='2.5'
+        stroke-linecap='round'
+        fill='none'
+        stroke-dasharray={`${circumference}`}
+        stroke-dashoffset={`${circumference * (1 - progress * 0.85)}`}
+      />
+      <path
+        d='M12 8v8m0 0l-3-3m3 3l3-3'
+        stroke='currentColor'
+        stroke-width='2'
+        stroke-linecap='round'
+        stroke-linejoin='round'
+        fill='none'
+        style={{
+          transformOrigin: '12px 12px',
+          transform: `rotate(${90 + (isArmed ? 180 : 0)}deg)`,
+          transition: 'transform 200ms cubic-bezier(.2,.8,.2,1)',
+        }}
+      />
+    </svg>
+  );
+};
+
+const REFRESHING_HEIGHT_PX = 56;
+
+const PullToRefreshIndicator = () => {
+  const { pullToRefresh } = useTimelineContext();
+  const { pullDistance, phase, isArmed, resultCount } = pullToRefresh;
+  const isDragging = phase === 'pulling';
+  const height = isDragging ? pullDistance : phase === 'refreshing' || phase === 'done' ? REFRESHING_HEIGHT_PX : 0;
+  const progress = pullProgress(pullDistance);
 
   return (
     <div
-      class='flex items-center justify-center overflow-hidden transition-all duration-200'
-      style={{ height: isRefreshing ? '48px' : `${pullDistance}px` }}
+      class='flex items-end justify-center overflow-hidden'
+      style={{
+        height: `${height}px`,
+        // 指に追従している間はアニメーションさせず、離したときだけなめらかに戻す
+        transition: isDragging ? 'none' : 'height 380ms cubic-bezier(.2,.8,.2,1)',
+      }}
+      aria-live='polite'
     >
-      <div class='flex items-center gap-2 text-gray-500 dark:text-gray-400'>
-        {isRefreshing
+      <div
+        class='flex h-14 items-center gap-2 text-terracotta dark:text-gray-300'
+        style={{
+          opacity: isDragging ? Math.max(0.15, progress) : 1,
+          transform: isDragging ? `scale(${0.8 + progress * 0.2})` : 'scale(1)',
+          transition: isDragging ? 'none' : 'opacity 200ms ease, transform 200ms ease',
+        }}
+      >
+        {phase === 'refreshing'
+          ? <Spinner class='h-6 w-6' />
+          : phase === 'done'
           ? (
-            <>
-              <svg class='animate-spin h-5 w-5' viewBox='0 0 24 24'>
-                <circle
-                  class='opacity-25'
-                  cx='12'
-                  cy='12'
-                  r='10'
-                  stroke='currentColor'
-                  stroke-width='4'
-                  fill='none'
-                />
-                <path
-                  class='opacity-75'
-                  fill='currentColor'
-                  d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
-                />
-              </svg>
-              <span class='text-sm'>更新中...</span>
-            </>
+            <span class='text-sm font-medium text-charcoal-light dark:text-gray-400'>
+              {refreshResultLabel(resultCount)}
+            </span>
           )
-          : pullDistance >= pullThreshold
-          ? (
-            <>
-              <svg
-                class='h-5 w-5 rotate-180'
-                fill='none'
-                viewBox='0 0 24 24'
-                stroke='currentColor'
-              >
-                <path
-                  stroke-linecap='round'
-                  stroke-linejoin='round'
-                  stroke-width='2'
-                  d='M19 14l-7 7m0 0l-7-7m7 7V3'
-                />
-              </svg>
-              <span class='text-sm'>離して更新</span>
-            </>
-          )
-          : (
-            <>
-              <svg
-                class='h-5 w-5'
-                fill='none'
-                viewBox='0 0 24 24'
-                stroke='currentColor'
-              >
-                <path
-                  stroke-linecap='round'
-                  stroke-linejoin='round'
-                  stroke-width='2'
-                  d='M19 14l-7 7m0 0l-7-7m7 7V3'
-                />
-              </svg>
-              <span class='text-sm'>引っ張って更新</span>
-            </>
-          )}
+          : <PullProgressIcon progress={progress} isArmed={isArmed} />}
       </div>
+    </div>
+  );
+};
+
+/** 読んでいる位置より上に新着が届いたことを知らせるボタン。押すと先頭までなめらかにスクロールする。 */
+const NewPostsPill = () => {
+  const { reading, data } = useTimelineContext();
+  const count = reading.unseenKeys.size;
+  const isVisible = count > 0;
+  const avatars = data === null
+    ? []
+    : data.statuses
+      .filter((status) => reading.unseenKeys.has(status.id))
+      .slice(0, 3)
+      .map((status) => status.account);
+
+  return (
+    <div
+      class='pointer-events-none fixed inset-x-0 z-30 flex justify-center'
+      style={{ top: 'calc(env(safe-area-inset-top) + 12px)' }}
+    >
+      <button
+        type='button'
+        onClick={reading.scrollToTop}
+        tabIndex={isVisible ? 0 : -1}
+        aria-hidden={!isVisible}
+        class='flex items-center gap-2 rounded-full bg-terracotta py-1.5 pl-2 pr-4 text-sm font-medium text-white shadow-clay-btn'
+        style={{
+          pointerEvents: isVisible ? 'auto' : 'none',
+          opacity: isVisible ? 1 : 0,
+          transform: isVisible ? 'translateY(0) scale(1)' : 'translateY(-16px) scale(0.95)',
+          transition: 'opacity 240ms ease, transform 320ms cubic-bezier(.2,.8,.2,1)',
+        }}
+      >
+        <svg class='h-4 w-4' fill='none' viewBox='0 0 24 24' stroke='currentColor' aria-hidden='true'>
+          <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='M12 19V5m0 0l-6 6m6-6l6 6' />
+        </svg>
+        {avatars.length > 0 && (
+          <span class='flex -space-x-2'>
+            {avatars.map((account) => (
+              <img
+                key={account.id}
+                src={account.avatar}
+                alt=''
+                class='h-5 w-5 rounded-full border border-white/80 object-cover'
+              />
+            ))}
+          </span>
+        )}
+        <span>{count}件の新しい投稿</span>
+      </button>
     </div>
   );
 };
@@ -635,7 +704,8 @@ const UpdateBioModal = () => {
 };
 
 const TimelineList = () => {
-  const { data, items, actions, blueskyLike, blueskyRepost, reply, thread, ui } = useTimelineContext();
+  const { data, items, actions, blueskyLike, blueskyRepost, reply, thread, ui, reading, timeline } =
+    useTimelineContext();
 
   if (!data) return null;
 
@@ -643,11 +713,38 @@ const TimelineList = () => {
   const { actionState } = actions;
   const { selectedIndex, emojiPickerOpenForIndex, toggleEmojiPicker } = ui;
 
+  let enteringOrder = 0;
+  const wrap = (key: string, child: Child) => {
+    const isEntering = reading.enteringKeys.has(key);
+    const delay = isEntering ? Math.min(enteringOrder++, 8) * 40 : 0;
+    return (
+      <div
+        key={key}
+        {...{ [ITEM_KEY_ATTRIBUTE]: key }}
+        style={isEntering ? { animation: `iori-timeline-enter 420ms cubic-bezier(.2,.8,.2,1) ${delay}ms both` } : {}}
+      >
+        {child}
+      </div>
+    );
+  };
+
+  const hasMore = data.nextMaxId !== undefined || data.bluesky.cursor !== undefined;
+
   return (
     <section class='space-y-6 py-2'>
+      <style>
+        {`@keyframes iori-timeline-enter {
+          from { opacity: 0; transform: translateY(-12px) scale(0.98); }
+          to { opacity: 1; transform: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          [${ITEM_KEY_ATTRIBUTE}] { animation: none !important; }
+        }`}
+      </style>
       {items.map((item, index) => {
         if (item.kind === 'bluesky') {
-          return (
+          return wrap(
+            homeItemKey(item),
             <BlueskyTimelineItemView
               key={homeItemKey(item)}
               item={item.item}
@@ -659,16 +756,16 @@ const TimelineList = () => {
               onRepost={blueskyRepost.repost}
               onUndoRepost={blueskyRepost.undoRepost}
               isRepostPending={blueskyRepost.pendingUris.has(item.item.uri)}
-            />
+            />,
           );
         }
         const { status } = item;
         const postId = displayStatus(status).id;
         const isMyRepost = isOwnBoost(status, me.id);
 
-        return (
+        return wrap(
+          homeItemKey(item),
           <PostView
-            key={status.id}
             status={status}
             onLike={actions.like}
             isLiking={actionState.likingPostId === postId}
@@ -692,9 +789,19 @@ const TimelineList = () => {
             onToggleEmojiPicker={() => toggleEmojiPicker(index)}
             onReply={reply.openReplyDialog}
             onShowThread={thread.showThread}
-          />
+          />,
         );
       })}
+      {hasMore && (
+        <div
+          class='flex justify-center py-6 text-charcoal-light dark:text-gray-500'
+          aria-hidden={!timeline.isLoadingMore}
+        >
+          <span style={{ opacity: timeline.isLoadingMore ? 1 : 0, transition: 'opacity 200ms ease' }}>
+            <Spinner />
+          </span>
+        </div>
+      )}
     </section>
   );
 };
@@ -800,6 +907,7 @@ const HomePage = () => {
       </Modal>
       <UpdateBioModal />
       <PullToRefreshIndicator />
+      <NewPostsPill />
       <ReplyModal />
       <ThreadModal />
       <TimelineList />
