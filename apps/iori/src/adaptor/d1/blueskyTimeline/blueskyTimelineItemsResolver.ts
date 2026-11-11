@@ -6,6 +6,7 @@ import type { IoriD1Db } from '../client.ts';
 import {
   blueskyCrosspostsTable,
   blueskyLikesTable,
+  blueskyMutedActorsTable,
   blueskyRepostsTable,
   blueskyTimelineItemsTable,
 } from '../schema.ts';
@@ -14,7 +15,18 @@ import { toBlueskyTimelineItem } from './blueskyTimelineItemRow.ts';
 export const createD1BlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimelineItemsResolver => ({
   resolve: async ({ limit, before, beforeId, excludeCrossposted }) => {
     const beforeAt = before === undefined ? undefined : new Date(before);
-    const conditions: SQL[] = [];
+    // Bluesky でミュートしたアカウントの投稿と、そのアカウントによるリポストは返さない
+    const conditions: SQL[] = [
+      notExists(
+        db.select({ one: sql`1` }).from(blueskyMutedActorsTable)
+          .where(
+            or(
+              eq(blueskyMutedActorsTable.did, blueskyTimelineItemsTable.authorDid),
+              eq(blueskyMutedActorsTable.did, blueskyTimelineItemsTable.repostedByDid),
+            ),
+          ),
+      ),
+    ];
     if (beforeAt !== undefined) {
       conditions.push(
         beforeId === undefined
@@ -47,7 +59,7 @@ export const createD1BlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimel
       .from(blueskyTimelineItemsTable)
       .leftJoin(blueskyLikesTable, eq(blueskyLikesTable.subjectUri, blueskyTimelineItemsTable.uri))
       .leftJoin(blueskyRepostsTable, eq(blueskyRepostsTable.subjectUri, blueskyTimelineItemsTable.uri))
-      .where(conditions.length === 0 ? undefined : and(...conditions))
+      .where(and(...conditions))
       .orderBy(desc(blueskyTimelineItemsTable.indexedAt), desc(blueskyTimelineItemsTable.feedItemId))
       .limit(limit);
     return RA.ok(

@@ -13,6 +13,7 @@ describe('D1 schema', () => {
       'blueskyCrosspostsTable',
       'blueskyLikesTable',
       'blueskyLoginFailuresTable',
+      'blueskyMutedActorsTable',
       'blueskyNotificationReceiptsTable',
       'blueskyNotificationSyncStateTable',
       'blueskyRepostsTable',

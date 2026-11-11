@@ -8,10 +8,13 @@ import { createSqliteD1Fixture } from './sqliteFixture.ts';
 const BASE = Date.UTC(2026, 10, 8, 12);
 
 const setup = (
-  rows: ReadonlyArray<Readonly<{ feedItemId: string; indexedAt: number; uri?: string; repostedByDid?: string }>>,
+  rows: ReadonlyArray<
+    Readonly<{ feedItemId: string; indexedAt: number; uri?: string; authorDid?: string; repostedByDid?: string }>
+  >,
   crosspostUris: readonly (string | null)[] = [],
   likedUris: readonly string[] = [],
   repostedUris: readonly string[] = [],
+  mutedDids: readonly string[] = [],
 ) => {
   const { sqlite, db, queries } = createSqliteD1Fixture();
   const insert = sqlite.prepare(
@@ -22,7 +25,7 @@ const setup = (
       row.feedItemId,
       row.uri ?? row.feedItemId,
       'cid',
-      'did:plc:a',
+      row.authorDid ?? 'did:plc:a',
       'alice.bsky.social',
       'text',
       '[]',
@@ -40,6 +43,8 @@ const setup = (
   likedUris.forEach((uri, index) => insertLike.run(uri, `at://did:plc:me/app.bsky.feed.like/3k${index}`, 1));
   const insertRepost = sqlite.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)');
   repostedUris.forEach((uri, index) => insertRepost.run(uri, `at://did:plc:me/app.bsky.feed.repost/3k${index}`, 1));
+  const insertMuted = sqlite.prepare('INSERT INTO bluesky_muted_actors(did) VALUES (?)');
+  mutedDids.forEach((did) => insertMuted.run(did));
   const resolver = createD1BlueskyTimelineItemsResolver(db);
   return {
     queries,
@@ -87,6 +92,45 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
     expect(first).toEqual(['d', 'c']);
     expect(second).toEqual(['b', 'a']);
     expect(third).toEqual(['e']);
+  });
+
+  describe('Bluesky でのミュート', () => {
+    const mutedRows = [
+      { feedItemId: 'muted-post', uri: 'at://muted', authorDid: 'did:plc:muted', indexedAt: BASE },
+      {
+        feedItemId: 'at://other#repost:did:plc:muted',
+        uri: 'at://other',
+        repostedByDid: 'did:plc:muted',
+        indexedAt: BASE - 1,
+      },
+      {
+        feedItemId: 'at://muted#repost:did:plc:b',
+        uri: 'at://muted',
+        authorDid: 'did:plc:muted',
+        repostedByDid: 'did:plc:b',
+        indexedAt: BASE - 2,
+      },
+      { feedItemId: 'other', uri: 'at://other', indexedAt: BASE - 3 },
+    ];
+
+    it('ミュートしたアカウントの投稿・そのアカウントのリポスト・そのアカウントの投稿のリポストを返さない', async () => {
+      const t = setup(mutedRows, [], [], [], ['did:plc:muted']);
+
+      expect(await t.resolve({ limit: 10 })).toEqual(['other']);
+      expect(await t.resolve({ limit: 10, excludeCrossposted: true })).toEqual(['other']);
+    });
+
+    it('除いた行を数えずに limit まで返す', async () => {
+      const t = setup(mutedRows, [], [], [], ['did:plc:muted']);
+
+      expect(await t.resolve({ limit: 1 })).toEqual(['other']);
+    });
+
+    it('ミュートが無ければすべて返す', async () => {
+      const t = setup(mutedRows);
+
+      expect(await t.resolve({ limit: 10 })).toHaveLength(4);
+    });
   });
 
   describe('excludeCrossposted', () => {

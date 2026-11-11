@@ -3,12 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline.ts';
 import type { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.ts';
+import type { SyncBlueskyMutedActorsUseCase } from '../useCase/syncBlueskyMutedActors.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import {
   collectBlueskyTimelineTask,
   createCollectBlueskyTimelineTask,
   createExpireBlueskyTimelineTask,
+  createSyncBlueskyMutedActorsTask,
   expireBlueskyTimelineTask,
+  syncBlueskyMutedActorsTask,
 } from './blueskyTimelineTasks.ts';
 import { dispatchScheduled, type ScheduledTaskContext, scheduledTasks } from './scheduledTasks.ts';
 
@@ -89,7 +92,7 @@ describe('collectBlueskyTimelineTask', () => {
 
   it('1 分ごとの cron にだけ登録されている', () => {
     const everyMinute = scheduledTasks['* * * * *']!.map((task) => task.name);
-    expect(everyMinute).toEqual(['collectBlueskyTimeline', 'collectBlueskyNotifications']);
+    expect(everyMinute).toEqual(['collectBlueskyTimeline', 'collectBlueskyNotifications', 'syncBlueskyMutedActors']);
     const threeHourly = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
     expect(threeHourly).not.toContain('collectBlueskyTimeline');
   });
@@ -126,6 +129,41 @@ describe('expireBlueskyTimelineTask', () => {
   });
 });
 
+describe('syncBlueskyMutedActorsTask', () => {
+  it('無効な設定のときは、DB に触れず、無効であることをログに出す', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await syncBlueskyMutedActorsTask.run(contextWith({}));
+
+    expect(info).toHaveBeenCalledWith('iori bluesky timeline is disabled.');
+  });
+
+  it('同期に失敗したら、理由をログに出して例外にしない', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const run = vi.fn(async () =>
+      RA.err({ type: 'BlueskyClientError', kind: 'http', message: 'app.bsky.graph.getMutes failed: status 500' })
+    );
+    const task = createSyncBlueskyMutedActorsTask(() => ({ run }) as unknown as SyncBlueskyMutedActorsUseCase);
+
+    await task.run(contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }));
+
+    expect(error).toHaveBeenCalledWith(
+      'iori bluesky muted actors: sync failed. app.bsky.graph.getMutes failed: status 500',
+    );
+  });
+
+  it('ミュートが変わらなかった実行ではログを出さない', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const run = vi.fn(async () => RA.ok({ muted: 2, added: 0, removed: 0 }));
+    const task = createSyncBlueskyMutedActorsTask(() => ({ run }) as unknown as SyncBlueskyMutedActorsUseCase);
+
+    await task.run(contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }));
+
+    expect(run).toHaveBeenCalledOnce();
+    expect(info).not.toHaveBeenCalled();
+  });
+});
+
 describe('dispatchScheduled with the registered table', () => {
   const ranNames = async (cron: string): Promise<string[]> => {
     const ran: string[] = [];
@@ -140,8 +178,12 @@ describe('dispatchScheduled with the registered table', () => {
     return ran;
   };
 
-  it('* * * * * では取り込みだけが動く', async () => {
-    expect(await ranNames('* * * * *')).toEqual(['collectBlueskyTimeline', 'collectBlueskyNotifications']);
+  it('* * * * * では取り込みとミュートの同期だけが動く', async () => {
+    expect(await ranNames('* * * * *')).toEqual([
+      'collectBlueskyTimeline',
+      'collectBlueskyNotifications',
+      'syncBlueskyMutedActors',
+    ]);
   });
 
   it('3 時間ごとの式では、期限切れの削除と crosspost の再試行が動き、取り込みは動かない', async () => {

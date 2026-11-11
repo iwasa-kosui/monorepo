@@ -698,6 +698,10 @@ export const blueskyNotificationSyncStateTable = sqliteTable('bluesky_notificati
   initialSyncCompletedAt: timestamp().notNull(),
 });
 
+export const blueskyMutedActorsTable = sqliteTable('bluesky_muted_actors', {
+  did: text('did').primaryKey(),
+});
+
 export const schema = {
   usersTable,
   keysTable,
@@ -763,4 +767,5 @@ export const schema = {
   notificationBlueskyTable,
   blueskyNotificationReceiptsTable,
   blueskyNotificationSyncStateTable,
+  blueskyMutedActorsTable,
 } as const;

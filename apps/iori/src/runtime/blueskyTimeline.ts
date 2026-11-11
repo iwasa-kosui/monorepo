@@ -1,4 +1,5 @@
 import { createBlueskyClient } from '../adaptor/bluesky/blueskyClient.ts';
+import { createBlueskyMutedActorsFetcher } from '../adaptor/bluesky/blueskyMutedActorsFetcher.ts';
 import { createBlueskyTimelineFetcher } from '../adaptor/bluesky/blueskyTimelineFetcher.ts';
 import { createBlueskyViewerRepostResolver } from '../adaptor/bluesky/blueskyViewerRepostResolver.ts';
 import {
@@ -13,6 +14,7 @@ import {
 import { createD1BlueskyLikeDeletedStore } from '../adaptor/d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyLikeSavedStore.ts';
 import { createD1BlueskyLikeTargetResolver } from '../adaptor/d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
+import { createD1BlueskyMutedActorsSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyMutedActorsSyncedStore.ts';
 import { createD1BlueskyRepostDeletedStore } from '../adaptor/d1/blueskyTimeline/blueskyRepostDeletedStore.ts';
 import { createD1BlueskyRepostSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyRepostSavedStore.ts';
 import { createD1BlueskyRepostTargetResolver } from '../adaptor/d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
@@ -31,6 +33,7 @@ import { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.t
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../useCase/likeBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../useCase/repostBlueskyPost.ts';
+import { SyncBlueskyMutedActorsUseCase } from '../useCase/syncBlueskyMutedActors.ts';
 import { UndoRepostBlueskyPostUseCase } from '../useCase/undoRepostBlueskyPost.ts';
 import { UnlikeBlueskyPostUseCase } from '../useCase/unlikeBlueskyPost.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
@@ -139,6 +142,19 @@ export const createCollectBlueskyTimelineUseCase = (
     viewerLikesStore: createD1BlueskyViewerLikesSyncedStore(db),
     viewerRepostsStore: createD1BlueskyViewerRepostsSyncedStore(db),
     now,
+  });
+};
+
+export const createSyncBlueskyMutedActorsUseCase = (
+  env: IoriWorkerEnv,
+  deps: Readonly<{ db?: IoriD1Db; fetch?: typeof fetch; holdLoginAfterFailure?: boolean }> = {},
+): SyncBlueskyMutedActorsUseCase | undefined => {
+  const config = resolveBlueskyTimelineConfig(env);
+  if (config === undefined) return undefined;
+  const db = deps.db ?? createD1Db(env.DB);
+  return SyncBlueskyMutedActorsUseCase.create({
+    fetcher: createBlueskyMutedActorsFetcher({ client: createTimelineClient(config, db, deps) }),
+    syncedStore: createD1BlueskyMutedActorsSyncedStore(db),
   });
 };
 

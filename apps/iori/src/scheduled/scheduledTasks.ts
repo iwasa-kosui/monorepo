@@ -1,7 +1,11 @@
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { retryBlueskyCrosspostsTask } from './blueskyCrosspostTasks.ts';
 import { collectBlueskyNotificationsTask, expireBlueskyNotificationReceiptsTask } from './blueskyNotificationTasks.ts';
-import { collectBlueskyTimelineTask, expireBlueskyTimelineTask } from './blueskyTimelineTasks.ts';
+import {
+  collectBlueskyTimelineTask,
+  expireBlueskyTimelineTask,
+  syncBlueskyMutedActorsTask,
+} from './blueskyTimelineTasks.ts';
 import { createDailyDigestTask, expireDigestsTask } from './digestTasks.ts';
 import { archiveDomainEventsTask } from './eventArchiveTasks.ts';
 import { pruneFederatedPostsTask } from './federatedPostTasks.ts';
@@ -38,6 +42,8 @@ export const scheduledTasks: ScheduledTaskTable = {
   '* * * * *': [
     collectBlueskyTimelineTask,
     { ...collectBlueskyNotificationsTask, after: collectBlueskyTimelineTask.name },
+    // 同じ Bluesky のセッションを使うので、セッションの更新が重ならないよう通知の取り込みの後に動かす
+    { ...syncBlueskyMutedActorsTask, after: collectBlueskyNotificationsTask.name },
   ],
   '0 21 * * *': [syncKosuiInterestSourcesTask],
   '15 20 * * 1': [detectRadarVolumeTask],
