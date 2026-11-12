@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'hono/jsx';
+import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
@@ -11,10 +11,13 @@ import {
   summarizeTimeline,
   type TimelineSummary,
 } from '../api/mastodonClient.ts';
+import { updateStatusesByPostId } from '../api/status.ts';
 import { buildSummaryRequest, summaryErrorMessage, summaryResultLabel, summaryTargetLabel } from '../api/summary.ts';
 import { BlueskyActorSearchResults, BlueskyPostSearchResults } from '../components/BlueskySearchResults.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { statusActionProps } from '../components/statusActionProps.ts';
 import { SummaryText } from '../components/SummaryText.tsx';
+import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 import { isRemoteImportFailure, type RemoteImportResult, remoteSearchUrl } from './searchRemoteUrl.ts';
 import {
   parseSearchSource,
@@ -23,6 +26,7 @@ import {
   shouldRerunIoriSearch,
   withSearchSource,
 } from './searchSource.ts';
+import { updateSearchedStatuses, updateSummaryCitations } from './searchStatusUpdate.ts';
 
 const inputClass =
   'w-full rounded-clay bg-cream dark:bg-gray-800 shadow-clay-sm dark:shadow-clay-dark px-4 py-2 text-charcoal dark:text-gray-100';
@@ -54,6 +58,14 @@ const SearchPage = () => {
   const [summary, setSummary] = useState<{ result: TimelineSummary; target: string } | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState('');
+
+  const updateStatus = useCallback((postId: string, updater: (status: Status) => Status) => {
+    setSearched((prev) => updateSearchedStatuses(prev, postId, updater));
+    setRemoteStatuses((prev) => updateStatusesByPostId(prev, postId, updater));
+    setSummary((prev) => updateSummaryCitations(prev, postId, updater));
+  }, []);
+
+  const actions = useStatusListActions(updateStatus);
 
   useEffect(() => {
     const handlePopState = () => setSource(parseSearchSource(window.location.search));
@@ -290,7 +302,11 @@ const SearchPage = () => {
                     {summary.result.citations.map((citation) => (
                       <li key={citation.n}>
                         <p class={noticeClass}>[{citation.n}]</p>
-                        <PostView status={citation.status} isLoggedIn />
+                        <PostView
+                          status={citation.status}
+                          isLoggedIn
+                          {...statusActionProps(actions, citation.status)}
+                        />
                       </li>
                     ))}
                   </ol>
@@ -314,7 +330,9 @@ const SearchPage = () => {
           {remoteStatuses.length > 0 && (
             <div class='space-y-6 py-2 mb-6'>
               <h2 class='font-bold text-charcoal dark:text-white'>相手のサーバーの投稿</h2>
-              {remoteStatuses.map((status) => <PostView key={status.id} status={status} isLoggedIn />)}
+              {remoteStatuses.map((status) => (
+                <PostView key={status.id} status={status} isLoggedIn {...statusActionProps(actions, status)} />
+              ))}
             </div>
           )}
           {searched !== null && !isSearching && (
@@ -324,7 +342,9 @@ const SearchPage = () => {
                 {searched.expansion === 'failed' && <p>検索語の展開に失敗したため、入力した語だけで検索しました</p>}
               </div>
               {ownStatuses.length > 0
-                ? ownStatuses.map((status) => <PostView key={status.id} status={status} isLoggedIn />)
+                ? ownStatuses.map((status) => (
+                  <PostView key={status.id} status={status} isLoggedIn {...statusActionProps(actions, status)} />
+                ))
                 : remoteStatuses.length > 0
                 ? null
                 : (

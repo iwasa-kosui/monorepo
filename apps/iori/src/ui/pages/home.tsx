@@ -937,7 +937,12 @@ const ServerTimeline = () => {
       {posts.length > 0
         ? (
           posts.map((post) => (
-            <PostView key={post.id} status={post} {...statusActionProps(isLoggedIn ? actions : undefined, post)} />
+            <PostView
+              key={post.id}
+              status={post}
+              isLoggedIn={isLoggedIn}
+              {...statusActionProps(isLoggedIn ? actions : undefined, post)}
+            />
           ))
         )
         : (
