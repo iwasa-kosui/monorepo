@@ -4,6 +4,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { blueskyPostUrl, blueskyProfilePathOf, ioriBlueskyPostPath } from '../../helper/blueskyUrl.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { segmentBlueskyText } from './blueskyRichText.ts';
+import { BlueskyVideoPlayer } from './BlueskyVideoPlayer.tsx';
 import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
 
 type Props = Readonly<{
@@ -98,27 +99,16 @@ const BlueskyMedia = ({ media, bskyHref }: Readonly<{ media: MediaEmbed; bskyHre
         </a>
       );
     }
-    case 'video': {
-      const thumbnail = safeAbsoluteUrl(media.thumbnail);
+    case 'video':
       return (
-        <a
-          href={bskyHref ?? safeAbsoluteUrl(media.playlist)}
-          target='_blank'
-          rel='noopener noreferrer'
-          class='relative block overflow-hidden rounded-xl bg-sand dark:bg-gray-700'
-        >
-          {thumbnail !== undefined && (
-            <img
-              src={thumbnail}
-              alt=''
-              class='w-full max-h-96 object-cover'
-              loading='lazy'
-            />
-          )}
-          <span class='absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white'>動画</span>
-        </a>
+        <BlueskyVideoPlayer
+          thumbnail={media.thumbnail}
+          playlist={media.playlist}
+          aspectRatio={media.aspectRatio}
+          alt={media.alt}
+          bskyHref={bskyHref}
+        />
       );
-    }
   }
 };
 

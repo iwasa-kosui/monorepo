@@ -54,7 +54,13 @@ const externalViewZodType = z.looseObject({
     thumb: z.string().optional(),
   }),
 });
-const videoViewZodType = z.looseObject({ playlist: z.string(), thumbnail: z.string().optional() });
+const videoViewZodType = z.looseObject({
+  playlist: z.string(),
+  thumbnail: z.string().optional(),
+  aspectRatio: z.looseObject({ width: z.number().int().positive(), height: z.number().int().positive() }).optional()
+    .catch(undefined),
+  alt: z.string().optional().catch(undefined),
+});
 const recordViewZodType = z.looseObject({
   record: z.looseObject({
     uri: z.string().min(1),
@@ -131,7 +137,15 @@ const mediaOf = (raw: unknown): unknown => {
   if (typed.data.$type === 'app.bsky.embed.video#view') {
     const view = videoViewZodType.safeParse(raw);
     return view.success
-      ? { type: 'video', thumbnail: view.data.thumbnail ?? null, playlist: view.data.playlist }
+      ? {
+        type: 'video',
+        thumbnail: view.data.thumbnail ?? null,
+        playlist: view.data.playlist,
+        aspectRatio: view.data.aspectRatio === undefined
+          ? null
+          : { width: view.data.aspectRatio.width, height: view.data.aspectRatio.height },
+        alt: view.data.alt === undefined || view.data.alt === '' ? null : view.data.alt,
+      }
       : undefined;
   }
   return undefined;

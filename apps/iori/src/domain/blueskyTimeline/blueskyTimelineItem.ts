@@ -44,6 +44,9 @@ const videoEmbedZodType = z.object({
   type: z.literal('video'),
   thumbnail: httpUrlZodType.nullable(),
   playlist: httpUrlZodType,
+  aspectRatio: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).nullable()
+    .default(null),
+  alt: z.string().nullable().default(null),
 });
 const recordEmbedZodType = z.object({
   type: z.literal('record'),
