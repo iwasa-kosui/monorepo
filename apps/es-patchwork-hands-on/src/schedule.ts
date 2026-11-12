@@ -19,7 +19,8 @@ export const schedule: readonly ScheduleRow[] = [
   { id: 'summary', title: 'まとめ', minutes: 3 },
 ];
 
-const formatClock = (minutes: number): string => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+export const formatClock = (minutes: number): string =>
+  `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
 
 export const withTimeRanges = (rows: readonly ScheduleRow[]): readonly (ScheduleRow & { readonly range: string })[] => {
   let elapsed = 0;
