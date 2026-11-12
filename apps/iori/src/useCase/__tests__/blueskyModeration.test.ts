@@ -365,6 +365,21 @@ describe('ReportBlueskyActorUseCase', () => {
     });
   });
 
+  it('post があるとき、subjectPost として渡す', async () => {
+    const t = setup();
+    const post = { uri: `at://${DID}/app.bsky.feed.post/3kpost`, cid: 'bafycid' };
+
+    const result = await t.report.run({ did: DID, category: 'spam', comment: '理由', post });
+
+    expect(result).toEqual({ ok: true, val: { reported: true } });
+    expect(t.client.createReport).toHaveBeenCalledExactlyOnceWith({
+      subjectDid: DID,
+      reasonType: 'com.atproto.moderation.defs#reasonSpam',
+      reason: '理由',
+      subjectPost: post,
+    });
+  });
+
   it('comment は前後の空白を取り除いて渡し、空なら空文字のまま渡す', async () => {
     const t = setup();
 

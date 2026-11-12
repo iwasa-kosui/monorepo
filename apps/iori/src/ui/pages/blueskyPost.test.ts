@@ -24,6 +24,7 @@ const item: IoriBlueskyTimelineItemBody = {
   indexedAt: Date.UTC(2026, 10, 8, 1),
   liked: false,
   reposted: false,
+  isOwn: false,
 };
 
 const actions = (overrides: Partial<BlueskyPostActions> = {}): BlueskyPostActions => ({

@@ -98,6 +98,26 @@ describe('Bluesky のミュート、ブロック、通報の API', () => {
     expect(JSON.parse(init.body as string)).toEqual({ did: DID, category: 'spam', comment: '宣伝' });
   });
 
+  it('reportBlueskyActor は uri と cid があれば本文に入れる', async () => {
+    const fetchMock = stubFetch(json({}, 201));
+
+    await reportBlueskyActor({
+      did: DID,
+      category: 'spam',
+      comment: '',
+      uri: 'at://did:plc:target/app.bsky.feed.post/3kpost',
+      cid: 'bafycid',
+    });
+
+    expect(JSON.parse(firstCall(fetchMock)[1].body as string)).toEqual({
+      did: DID,
+      category: 'spam',
+      comment: '',
+      uri: 'at://did:plc:target/app.bsky.feed.post/3kpost',
+      cid: 'bafycid',
+    });
+  });
+
   it('失敗した応答は、サーバーの error を message にした status つきのエラーにする', async () => {
     stubFetch(json({ error: 'Bluesky login failed' }, 502));
 

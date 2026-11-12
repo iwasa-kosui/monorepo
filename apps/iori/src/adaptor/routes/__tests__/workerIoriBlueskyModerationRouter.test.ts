@@ -407,6 +407,64 @@ describe('POST /api/iori/v1/bluesky/reports', () => {
     });
   });
 
+  it('uri と cid がそろっているとき、投稿を対象にして通報に渡す', async () => {
+    const t = await setup();
+    const uri = `at://${DID}/app.bsky.feed.post/3kpost`;
+
+    const response = await t.send('POST', REPORTS, { did: DID, category: 'spam', uri, cid: 'bafycid' });
+
+    expect(response.status).toBe(201);
+    expect(t.client.createReport).toHaveBeenCalledExactlyOnceWith({
+      subjectDid: DID,
+      reasonType: 'com.atproto.moderation.defs#reasonSpam',
+      reason: '',
+      subjectPost: { uri, cid: 'bafycid' },
+    });
+  });
+
+  it('uri と cid の片方だけのときは 400 にする', async () => {
+    const t = await setup();
+    const uri = `at://${DID}/app.bsky.feed.post/3kpost`;
+
+    const onlyUri = await t.send('POST', REPORTS, { did: DID, category: 'spam', uri });
+    const onlyCid = await t.send('POST', REPORTS, { did: DID, category: 'spam', cid: 'bafycid' });
+
+    expect(onlyUri.status).toBe(400);
+    expect(await onlyUri.json()).toEqual({ error: 'Validation failed: cid' });
+    expect(onlyCid.status).toBe(400);
+    expect(await onlyCid.json()).toEqual({ error: 'Validation failed: uri' });
+    expect(t.client.createReport).not.toHaveBeenCalled();
+  });
+
+  it('uri が投稿の形でない、または did と作者が違うとき、cid が空のときは 400 にする', async () => {
+    const t = await setup();
+    const uri = `at://${DID}/app.bsky.feed.post/3kpost`;
+
+    const badUri = await t.send('POST', REPORTS, {
+      did: DID,
+      category: 'spam',
+      uri: `at://${DID}/app.bsky.graph.block/3kblock`,
+      cid: 'bafycid',
+    });
+    const otherAuthor = await t.send('POST', REPORTS, {
+      did: DID,
+      category: 'spam',
+      uri: 'at://did:plc:other/app.bsky.feed.post/3kpost',
+      cid: 'bafycid',
+    });
+    const notString = await t.send('POST', REPORTS, { did: DID, category: 'spam', uri: 1, cid: 'bafycid' });
+    const emptyCid = await t.send('POST', REPORTS, { did: DID, category: 'spam', uri, cid: '' });
+
+    expect(badUri.status).toBe(400);
+    expect(await badUri.json()).toEqual({ error: 'Validation failed: uri' });
+    expect(otherAuthor.status).toBe(400);
+    expect(await otherAuthor.json()).toEqual({ error: 'Validation failed: uri' });
+    expect(notString.status).toBe(400);
+    expect(emptyCid.status).toBe(400);
+    expect(await emptyCid.json()).toEqual({ error: 'Validation failed: cid' });
+    expect(t.client.createReport).not.toHaveBeenCalled();
+  });
+
   it('category が不正、または無いときは 400 にする', async () => {
     const t = await setup();
 

@@ -10,6 +10,7 @@ import { blueskySearchErrorMessage } from '../pages/searchSource.ts';
 import { BlueskyActorRow } from './BlueskyActorRow.tsx';
 import { blueskyItemActionProps, type BlueskyPostActions } from './blueskyPostActions.ts';
 import { BlueskyQuoteModal, BlueskyReplyModal } from './BlueskyReplyModal.tsx';
+import { BlueskyReportPostModal } from './BlueskyReportPostModal.tsx';
 import { BlueskyTimelineItemView } from './BlueskyTimelineItemView.tsx';
 
 type Submitted = Readonly<{ q: string; seq: number }>;
@@ -76,7 +77,7 @@ export const BlueskySearchPostItem = (
 
 export const BlueskyPostSearchResults = ({ submitted }: Readonly<{ submitted: Submitted }>) => {
   const view = useBlueskySearch({ query: submitted.q, seq: submitted.seq, fetchPage: fetchPostsPage, keyOf: postKey });
-  const { actions: uriActions, replyDialog } = useBlueskyUriActions(view.updateItems);
+  const { actions: uriActions, replyDialog, reportDialog, notice } = useBlueskyUriActions(view.updateItems);
   const quoteDialog = useBlueskyQuoteDialog();
   const actions: BlueskyPostActions = { ...uriActions, onQuote: quoteDialog.open };
   return (
@@ -87,6 +88,7 @@ export const BlueskyPostSearchResults = ({ submitted }: Readonly<{ submitted: Su
         renderItem={(item) => <BlueskySearchPostItem key={item.feedItemId} item={item} actions={actions} />}
       />
       <BlueskyReplyModal dialog={replyDialog} />
+      <BlueskyReportPostModal reportDialog={reportDialog} {...(notice === undefined ? {} : { notice })} />
       <BlueskyQuoteModal dialog={quoteDialog} />
     </>
   );

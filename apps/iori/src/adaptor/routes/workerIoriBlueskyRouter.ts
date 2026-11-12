@@ -1,3 +1,4 @@
+import type { RA } from '@iwasa-kosui/result';
 import { type Context, Hono } from 'hono';
 
 import type {
@@ -83,6 +84,7 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   markBlueskyNotificationsSeenUseCase: MarkBlueskyNotificationsSeenUseCase | undefined;
   blueskySearch: BlueskySearch | undefined;
   blueskyChat: BlueskyChatUseCases | undefined;
+  viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -105,6 +107,7 @@ export type IoriBlueskyTimelineItemBody = Readonly<{
   indexedAt: number;
   liked: boolean;
   reposted: boolean;
+  isOwn: boolean;
 }>;
 
 export type IoriBlueskyTimelineResponse = Readonly<{
@@ -245,7 +248,7 @@ const postTargetOf = (
   return feedItemId === undefined || feedItemId === '' ? { invalid: 'feedItemId' } : { target: { feedItemId } };
 };
 
-export const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBody => ({
+export const toItemBody = (item: BlueskyTimelineItem, viewerDid: string | undefined): IoriBlueskyTimelineItemBody => ({
   feedItemId: item.feedItemId,
   uri: item.uri,
   cid: item.cid,
@@ -264,10 +267,19 @@ export const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBo
   indexedAt: item.indexedAt,
   liked: item.liked,
   reposted: item.reposted,
+  isOwn: viewerDid !== undefined && item.authorDid === viewerDid,
 });
 
-const toNodeBody = (node: BlueskyThreadNode): IoriBlueskyThreadNodeBody =>
-  node.kind === 'post' ? { kind: 'post', item: toItemBody(node.item) } : node;
+const toNodeBody = (node: BlueskyThreadNode, viewerDid: string | undefined): IoriBlueskyThreadNodeBody =>
+  node.kind === 'post' ? { kind: 'post', item: toItemBody(node.item, viewerDid) } : node;
+
+export const resolveViewerDid = async (
+  viewerDid: (() => RA<string, BlueskyClientError>) | undefined,
+): Promise<string | undefined> => {
+  if (viewerDid === undefined) return undefined;
+  const resolved = await viewerDid();
+  return resolved.ok ? resolved.val : undefined;
+};
 
 const threadFailure = (c: Context, error: BlueskyClientError | BlueskyPostThreadUnavailable) => {
   if (error.type === 'BlueskyPostThreadUnavailable') {
@@ -409,6 +421,7 @@ export const createWorkerIoriBlueskyRouter = ({
   markBlueskyNotificationsSeenUseCase,
   blueskySearch,
   blueskyChat,
+  viewerDid,
   isDigestOwner,
 }: WorkerIoriBlueskyRouterDeps): Hono<MastodonAuthEnv> => {
   const chatAccess = async (c: Context): Promise<BlueskyChatUseCases | Response> => {
@@ -457,10 +470,11 @@ export const createWorkerIoriBlueskyRouter = ({
       if (!resolved.ok) return c.json(internalServerError, 500);
       const page = resolved.val.slice(0, limit);
       const last = resolved.val.length > limit ? page.at(-1) : undefined;
+      const viewer = await resolveViewerDid(viewerDid);
       return c.json(
         {
           enabled,
-          items: page.map(toItemBody),
+          items: page.map((item) => toItemBody(item, viewer)),
           nextBefore: last?.indexedAt ?? null,
           nextBeforeId: last?.feedItemId ?? null,
         } satisfies IoriBlueskyTimelineResponse,
@@ -475,9 +489,10 @@ export const createWorkerIoriBlueskyRouter = ({
       if (input === undefined) return c.json({ error: 'Validation failed: q' }, 400);
       const searched = await blueskySearch.searchPosts({ ...input, limit: SEARCH_LIMIT });
       if (!searched.ok) return searchFailure(c, searched.err);
+      const viewer = await resolveViewerDid(viewerDid);
       return c.json(
         {
-          items: searched.val.items.map(toItemBody),
+          items: searched.val.items.map((item) => toItemBody(item, viewer)),
           cursor: searched.val.cursor ?? null,
         } satisfies IoriBlueskySearchPostsResponse,
       );
@@ -511,11 +526,12 @@ export const createWorkerIoriBlueskyRouter = ({
       }
       const thread = await blueskyPostThreadFetcher.fetch({ uri });
       if (!thread.ok) return threadFailure(c, thread.err);
+      const viewer = await resolveViewerDid(viewerDid);
       return c.json(
         {
-          ancestors: thread.val.ancestors.map(toNodeBody),
-          post: toItemBody(thread.val.post),
-          replies: thread.val.replies.map(({ depth, node }) => ({ depth, node: toNodeBody(node) })),
+          ancestors: thread.val.ancestors.map((node) => toNodeBody(node, viewer)),
+          post: toItemBody(thread.val.post, viewer),
+          replies: thread.val.replies.map(({ depth, node }) => ({ depth, node: toNodeBody(node, viewer) })),
         } satisfies IoriBlueskyThreadResponse,
       );
     })

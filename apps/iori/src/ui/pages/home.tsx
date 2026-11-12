@@ -8,6 +8,7 @@ import { fetchPublicTimeline, updateProfile } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
+import { BlueskyReportPostModal } from '../components/BlueskyReportPostModal.tsx';
 import { BlueskyStatusNotice } from '../components/BlueskyStatusNotice.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
@@ -709,6 +710,7 @@ const TimelineList = () => {
     blueskyRepost,
     blueskyReply,
     blueskyQuote,
+    blueskyModeration,
     blueskyStatus,
     reply,
     quote,
@@ -774,6 +776,9 @@ const TimelineList = () => {
               onRepost={blueskyRepost.repost}
               onUndoRepost={blueskyRepost.undoRepost}
               isRepostPending={blueskyRepost.pendingUris.has(item.item.uri)}
+              onMuteAuthor={blueskyModeration.onMuteAuthor}
+              onBlockAuthor={blueskyModeration.onBlockAuthor}
+              onReportPost={blueskyModeration.onReportPost}
             />,
           );
         }
@@ -921,7 +926,7 @@ const ReportPostModal = () => {
 };
 
 const HomePage = () => {
-  const { timeline, blueskyReply, blueskyQuote } = useTimelineContext();
+  const { timeline, blueskyReply, blueskyQuote, blueskyModeration } = useTimelineContext();
   const handlePosted = usePostedHandler();
   const isTimelineReady = timeline.state.status === 'success';
 
@@ -961,6 +966,7 @@ const HomePage = () => {
       <FediverseQuoteModal />
       <ThreadModal />
       <ReportPostModal />
+      <BlueskyReportPostModal reportDialog={blueskyModeration.reportDialog} notice={blueskyModeration.notice} />
       <TimelineList />
       <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>
     </>
