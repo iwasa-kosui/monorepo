@@ -7,7 +7,6 @@ import {
   fetchAccountStatuses,
   fetchFollowers,
   fetchFollowing,
-  fetchVerifyCredentials,
   isNotFoundError,
   lookupAccount,
 } from '../api/mastodonClient.ts';
@@ -281,7 +280,6 @@ type LocalUserData = Readonly<{
   following: readonly Account[];
   statuses: readonly Status[];
   nextMaxId: string | undefined;
-  isLoggedIn: boolean;
 }>;
 
 const getUsernameFromUrl = () => {
@@ -290,8 +288,14 @@ const getUsernameFromUrl = () => {
   return pathParts[usernameIndex];
 };
 
+const getIsLoggedIn = (): boolean => {
+  const root = document.getElementById('root');
+  return root?.dataset.isLoggedIn === 'true';
+};
+
 const App = () => {
   const [data, setData] = useState<{ error: string } | LocalUserData | null>(null);
+  const [isLoggedIn] = useState(() => getIsLoggedIn());
   const isFetchingMoreRef = useRef(false);
 
   useEffect(() => {
@@ -305,11 +309,10 @@ const App = () => {
           window.location.replace(remotePath);
           return;
         }
-        const [page, followers, following, isLoggedIn] = await Promise.all([
+        const [page, followers, following] = await Promise.all([
           fetchAccountStatuses(account.id, { excludeReblogs: true }),
           fetchFollowers(account.id, { limit: ACCOUNT_LIST_LIMIT }),
           fetchFollowing(account.id, { limit: ACCOUNT_LIST_LIMIT }),
-          fetchVerifyCredentials().then(() => true, () => false),
         ]);
         setData({
           account,
@@ -317,7 +320,6 @@ const App = () => {
           following: following.items,
           statuses: page.items,
           nextMaxId: page.nextMaxId,
-          isLoggedIn,
         });
       } catch (error) {
         setData({
@@ -380,7 +382,7 @@ const App = () => {
       followers={data.followers}
       following={data.following}
       statuses={data.statuses}
-      isLoggedIn={data.isLoggedIn}
+      isLoggedIn={isLoggedIn}
       actions={actions}
     />
   );
