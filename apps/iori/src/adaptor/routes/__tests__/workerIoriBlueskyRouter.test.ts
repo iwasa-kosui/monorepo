@@ -13,6 +13,8 @@ import { UndoRepostBlueskyPostUseCase } from '../../../useCase/undoRepostBluesky
 import { UnlikeBlueskyPostUseCase } from '../../../useCase/unlikeBlueskyPost.ts';
 import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../d1/__tests__/sqliteFixture.ts';
+import { createD1BlueskyLoginFailureResolver } from '../../d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
+import { createD1BlueskySyncStatusResolver } from '../../d1/blueskySyncStatus/blueskySyncStatusStore.ts';
 import { createD1BlueskyLikeDeletedStore } from '../../d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../../d1/blueskyTimeline/blueskyLikeSavedStore.ts';
 import { createD1BlueskyLikeTargetResolver } from '../../d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
@@ -101,6 +103,8 @@ const setupNonOwner = async (
       }),
       blueskyTimelineItemsResolver: { resolve } as BlueskyTimelineItemsResolver,
       blueskyTimelineEnabled: false,
+      blueskySyncStatusResolver: createD1BlueskySyncStatusResolver(fixture.db),
+      blueskyLoginFailureResolver: createD1BlueskyLoginFailureResolver(fixture.db, 'timeline'),
       likeBlueskyPostUseCase: options.blueskyLikeClient === undefined ? undefined : LikeBlueskyPostUseCase.create({
         client: options.blueskyLikeClient,
         targetResolver: createD1BlueskyLikeTargetResolver(fixture.db),
@@ -750,6 +754,32 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         { subjectUri: 'at://did:plc:a/app.bsky.feed.post/2', likeUri: 'at://did:plc:me/app.bsky.feed.like/3k2' },
       ]);
     });
+
+    it('認証の失敗なら 502 のまま、error を Bluesky login failed にする', async () => {
+      const error: BlueskyClientError = {
+        type: 'BlueskyClientError',
+        kind: 'auth',
+        message: 'createSession skipped: waiting after a recent login failure',
+      };
+      const client = likeClient({
+        createLike: vi.fn<BlueskyClient['createLike']>(async () => RA.err(error)),
+        deleteLike: vi.fn<BlueskyClient['deleteLike']>(async () => RA.err(error)),
+      });
+      const t = setupReadApi({ blueskyLikeClient: client });
+      const me = await t.signIn('write:favourites');
+      seedItem(t, 1);
+      seedItem(t, 2);
+      t.sqlite.prepare('INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)')
+        .run('at://did:plc:a/app.bsky.feed.post/2', 'at://did:plc:me/app.bsky.feed.like/3k2', BASE);
+
+      const created = await create(t, me.bearer);
+      const canceled = await cancel(t, me.bearer, 'at://did:plc:a/app.bsky.feed.post/2');
+
+      expect(created.status).toBe(502);
+      expect(await created.json()).toEqual({ error: 'Bluesky login failed' });
+      expect(canceled.status).toBe(502);
+      expect(await canceled.json()).toEqual({ error: 'Bluesky login failed' });
+    });
   });
 
   describe('リポスト', () => {
@@ -923,5 +953,153 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         { subjectUri: 'at://did:plc:a/app.bsky.feed.post/2', repostUri: 'at://did:plc:me/app.bsky.feed.repost/3k2' },
       ]);
     });
+
+    it('認証の失敗なら 502 のまま、error を Bluesky login failed にする', async () => {
+      const error: BlueskyClientError = {
+        type: 'BlueskyClientError',
+        kind: 'auth',
+        message: 'createSession skipped: waiting after a recent login failure',
+      };
+      const client = repostClient({
+        createRepost: vi.fn<BlueskyClient['createRepost']>(async () => RA.err(error)),
+        deleteRepost: vi.fn<BlueskyClient['deleteRepost']>(async () => RA.err(error)),
+      });
+      const t = setupReadApi({ blueskyRepostClient: client });
+      const me = await t.signIn('write:statuses');
+      seedItem(t, 1);
+      seedItem(t, 2);
+      t.sqlite.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)')
+        .run('at://did:plc:a/app.bsky.feed.post/2', 'at://did:plc:me/app.bsky.feed.repost/3k2', BASE);
+
+      const created = await create(t, me.bearer);
+      const canceled = await cancel(t, me.bearer, 'at://did:plc:a/app.bsky.feed.post/2');
+
+      expect(created.status).toBe(502);
+      expect(await created.json()).toEqual({ error: 'Bluesky login failed' });
+      expect(canceled.status).toBe(502);
+      expect(await canceled.json()).toEqual({ error: 'Bluesky login failed' });
+    });
+  });
+});
+
+describe('/api/iori/v1/bluesky/status', () => {
+  const STATUS = '/api/iori/v1/bluesky/status';
+  const NOW = Instant.orThrow(BASE + 60 * 60 * 1000);
+  const isoAt = (at: number) => new Date(at).toISOString();
+  const seedSync = (
+    t: ReturnType<typeof setupReadApi>,
+    scope: string,
+    values: {
+      succeededAt?: number;
+      failedAt?: number;
+      kind?: string;
+      code?: string;
+    },
+  ) =>
+    t.sqlite.prepare(
+      'INSERT INTO bluesky_sync_status(scope,lastSucceededAt,lastFailedAt,lastFailureKind,lastFailureCode) VALUES (?,?,?,?,?)',
+    ).run(scope, values.succeededAt ?? null, values.failedAt ?? null, values.kind ?? null, values.code ?? null);
+
+  it('認証なしだと 401 にする', async () => {
+    const t = setupReadApi({ blueskyTimelineEnabled: true });
+
+    expect((await t.request(STATUS)).status).toBe(401);
+  });
+
+  it('read:statuses を満たさない scope のトークンを 403 にする', async () => {
+    const t = setupReadApi({ blueskyTimelineEnabled: true });
+    const me = await t.signIn('write:accounts');
+
+    expect((await t.request(STATUS, { headers: me.bearer })).status).toBe(403);
+  });
+
+  it('無効なら enabled: false だけを返し、保存済みの記録を返さない', async () => {
+    const t = setupReadApi({ blueskyTimelineEnabled: false });
+    const me = await t.signIn('read:statuses');
+    seedSync(t, 'timeline', { failedAt: BASE, kind: 'auth' });
+
+    const response = await t.request(STATUS, { headers: me.bearer });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ enabled: false });
+  });
+
+  it('所有者でない利用者には enabled: false を返す', async () => {
+    const { get } = await setupNonOwner();
+
+    const response = await get(STATUS);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ enabled: false });
+  });
+
+  it('有効で記録が無ければ、どの scope も unknown にして login を ok にする', async () => {
+    const t = setupReadApi({ blueskyTimelineEnabled: true, blueskyNow: () => NOW });
+    const me = await t.signIn('read:statuses');
+
+    const body = await (await t.request(STATUS, { headers: me.bearer })).json();
+
+    const unknown = {
+      state: 'unknown',
+      lastSucceededAt: null,
+      lastFailedAt: null,
+      failureKind: null,
+      failureCode: null,
+    };
+    expect(body).toEqual({ enabled: true, timeline: unknown, notifications: unknown, login: { state: 'ok' } });
+  });
+
+  it('有効なら scope ごとの状態を、時刻を ISO 文字列にして返す', async () => {
+    const t = setupReadApi({ blueskyTimelineEnabled: true, blueskyNow: () => NOW });
+    const me = await t.signIn('read:statuses');
+    seedSync(t, 'timeline', { succeededAt: BASE + 1000 });
+    seedSync(t, 'notifications', { succeededAt: BASE, failedAt: BASE + 5000, kind: 'http', code: 'UpstreamFailure' });
+
+    const body = await (await t.request(STATUS, { headers: me.bearer })).json();
+
+    expect(body).toEqual({
+      enabled: true,
+      timeline: {
+        state: 'ok',
+        lastSucceededAt: isoAt(BASE + 1000),
+        lastFailedAt: null,
+        failureKind: null,
+        failureCode: null,
+      },
+      notifications: {
+        state: 'failing',
+        lastSucceededAt: isoAt(BASE),
+        lastFailedAt: isoAt(BASE + 5000),
+        failureKind: 'http',
+        failureCode: 'UpstreamFailure',
+      },
+      login: { state: 'ok' },
+    });
+  });
+
+  it('ログインの失敗から 30 分以内なら login を waiting にし、再試行の時刻を返す', async () => {
+    const failedAt = NOW - 10 * 60 * 1000;
+    const t = setupReadApi({ blueskyTimelineEnabled: true, blueskyNow: () => NOW });
+    const me = await t.signIn('read:statuses');
+    t.sqlite.prepare('INSERT INTO bluesky_login_failures(scope,failedAt) VALUES (?,?)').run('timeline', failedAt);
+
+    const body = await (await t.request(STATUS, { headers: me.bearer })).json() as { login: unknown };
+
+    expect(body.login).toEqual({
+      state: 'waiting',
+      failedAt: isoAt(failedAt),
+      retryAt: isoAt(failedAt + 30 * 60 * 1000),
+    });
+  });
+
+  it('ログインの失敗から 30 分が過ぎていれば login を ok にする', async () => {
+    const t = setupReadApi({ blueskyTimelineEnabled: true, blueskyNow: () => NOW });
+    const me = await t.signIn('read:statuses');
+    t.sqlite.prepare('INSERT INTO bluesky_login_failures(scope,failedAt) VALUES (?,?)')
+      .run('timeline', NOW - 31 * 60 * 1000);
+
+    const body = await (await t.request(STATUS, { headers: me.bearer })).json() as { login: unknown };
+
+    expect(body.login).toEqual({ state: 'ok' });
   });
 });

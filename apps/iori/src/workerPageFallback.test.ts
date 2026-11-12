@@ -20,6 +20,22 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain(`data-user-id="${userId}"`);
   });
 
+  it.each([
+    '/posts/01989332-d1c1-7dd1-9ed7-886b8857dffa',
+    '/posts/01989332-d1c1-7dd1-9ed7-886b8857dffa/',
+  ])('renders the post entry for %s without a username', async (path) => {
+    const response = await createWorkerPageFallback(new Request(`https://worker.test${path}`));
+
+    expect(response?.status).toBe(200);
+    const html = await response?.text();
+    expect(html).toContain('/static/localPost.js');
+    expect(html).toContain('<title>Post | blog.kosui.me</title>');
+  });
+
+  it.each(['/posts', '/posts/a/b'])('does not render a page for %s', async (path) => {
+    expect(await createWorkerPageFallback(new Request(`https://worker.test${path}`))).toBeUndefined();
+  });
+
   it('renders the sign-in entry when the query carries a next path', async () => {
     const response = await createWorkerPageFallback(
       new Request('https://worker.test/sign-in?next=%2Foauth%2Fauthorize%3Fclient_id%3Dabc'),

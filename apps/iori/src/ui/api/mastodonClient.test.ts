@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   addXUserFeedSource,
+  blueskyFailureMessage,
   createStatus,
   deleteStatus,
   failureMessage,
@@ -10,6 +11,7 @@ import {
   fetchAccountStatuses,
   fetchBlueskyHomeTimeline,
   fetchBlueskyPostThread,
+  fetchBlueskyStatus,
   fetchBlueskyTimeline,
   fetchFavourites,
   fetchFeedSources,
@@ -721,6 +723,27 @@ describe('mastodon client requests', () => {
     const error = await likeBlueskyPost('x').catch((e: unknown) => e);
 
     expect(isMastodonApiError(error) && error.status).toBe(502);
+  });
+
+  it('uses the login message for a Bluesky like that failed to log in, and keeps the generic message otherwise', async () => {
+    stubFetch(jsonResponse({ error: 'Bluesky login failed' }, { status: 502 }));
+
+    const loginError = await likeBlueskyPost('x').catch((e: unknown) => e);
+    stubFetch(jsonResponse({ error: 'Bluesky request failed' }, { status: 502 }));
+    const requestError = await likeBlueskyPost('x').catch((e: unknown) => e);
+
+    expect(blueskyFailureMessage('like', loginError)).toBe('Bluesky にログインできないため、操作できませんでした。');
+    expect(blueskyFailureMessage('like', requestError)).toBe('Failed to like: Bluesky request failed');
+    expect(blueskyFailureMessage('like', new TypeError('Failed to fetch'))).toBe('Failed to like. Please try again.');
+  });
+
+  it('fetches the Bluesky status', async () => {
+    const fetchMock = stubFetch(jsonResponse({ enabled: false }));
+
+    const result = await fetchBlueskyStatus();
+
+    expect(requestedUrl(fetchMock)).toBe('/api/iori/v1/bluesky/status');
+    expect(result).toEqual({ enabled: false });
   });
 
   it('posts a Bluesky repost with the feedItemId as a JSON body', async () => {

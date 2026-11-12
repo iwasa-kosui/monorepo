@@ -2,8 +2,6 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const checkPath = '/playground-check/';
 
-const box = (page: Page): Locator => page.locator('[data-playground]').first();
-
 const sqlBox = (page: Page): Locator => page.locator('[data-playground="sql"]');
 const codeBox = (page: Page, index: number): Locator => page.locator('[data-playground="code"]').nth(index);
 
@@ -560,9 +558,10 @@ test.describe('矢印キー', () => {
 
   test('章のページの編集欄でも、左右の矢印キーを押してもページは移動しない', async ({ page }) => {
     await page.goto('/chapters/chapter-2/5/');
-    await waitUntilReady(box(page));
+    const scene = page.locator('[data-play="add-record"]');
+    await waitUntilReady(scene);
     await page.waitForLoadState('load');
-    await arrowKeysStayInEditor(page, box(page).locator('.cm-content'));
+    await arrowKeysStayInEditor(page, scene.locator('.cm-content'));
   });
 
   test('エディタの外では矢印キーでページが移動する', async ({ page }) => {

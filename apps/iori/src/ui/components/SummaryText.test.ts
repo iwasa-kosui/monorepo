@@ -28,17 +28,18 @@ describe('SummaryText', () => {
     expect(html).toContain('<a href="/users/kosui/posts/p1" class="text-terracotta hover:underline">1</a>');
   });
 
-  it('links a remote post to its uri and leaves unknown numbers as text', () => {
+  it('links a remote post to its detail page in iori and leaves unknown numbers as text', () => {
     const html = render('a [2, 9]', [{ n: 2, status: status('p2', remoteAccount, 'https://remote.example/notes/2') }]);
 
-    expect(html).toContain('href="https://remote.example/notes/2"');
+    expect(html).toContain('<a href="/posts/p2" class="text-terracotta hover:underline">2</a>');
+    expect(html).not.toContain('remote.example');
     expect(html).toContain(', 9]');
   });
 
-  it('does not link a remote post whose uri is not http or https', () => {
+  it('links a remote post whose uri is not http or https to its detail page in iori', () => {
     const html = render('a [2]', [{ n: 2, status: status('p2', remoteAccount, 'javascript:alert(1)') }]);
 
-    expect(html).not.toContain('<a ');
-    expect(html).toContain('[2]');
+    expect(html).toContain('href="/posts/p2"');
+    expect(html).not.toContain('javascript:');
   });
 });

@@ -1,5 +1,11 @@
 import { type Context, Hono } from 'hono';
 
+import type { BlueskyLoginFailureResolver } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import {
+  type BlueskyConnectionStatus,
+  type BlueskySyncStatusResolver,
+  toBlueskyConnectionStatus,
+} from '../../domain/blueskySyncStatus/blueskySyncStatus.ts';
 import type { BlueskyLikeTargetNotFound } from '../../domain/blueskyTimeline/blueskyLike.ts';
 import type { BlueskyRepostTargetNotFound } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import {
@@ -23,6 +29,7 @@ import type { LikeBlueskyPostUseCase } from '../../useCase/likeBlueskyPost.ts';
 import type { RepostBlueskyPostUseCase } from '../../useCase/repostBlueskyPost.ts';
 import type { UndoRepostBlueskyPostUseCase } from '../../useCase/undoRepostBlueskyPost.ts';
 import type { UnlikeBlueskyPostUseCase } from '../../useCase/unlikeBlueskyPost.ts';
+import { BLUESKY_LOGIN_RETRY_COOLDOWN_MS } from '../bluesky/blueskyClient.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { bodyString, readRequestBody } from './helper/requestBody.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
@@ -32,6 +39,9 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   authn: MastodonAuthn;
   blueskyTimelineItemsResolver: BlueskyTimelineItemsResolver;
   blueskyTimelineEnabled: boolean;
+  blueskySyncStatusResolver: BlueskySyncStatusResolver;
+  blueskyLoginFailureResolver: BlueskyLoginFailureResolver;
+  now?: () => Instant;
   likeBlueskyPostUseCase: LikeBlueskyPostUseCase | undefined;
   unlikeBlueskyPostUseCase: UnlikeBlueskyPostUseCase | undefined;
   repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
@@ -79,6 +89,25 @@ export type IoriBlueskyThreadResponse = Readonly<{
   replies: readonly Readonly<{ depth: number; node: IoriBlueskyThreadNodeBody }>[];
 }>;
 
+type IsoInstant = string | null;
+
+export type IoriBlueskyScopeStatusBody = Readonly<{
+  state: BlueskyConnectionStatus['timeline']['state'];
+  lastSucceededAt: IsoInstant;
+  lastFailedAt: IsoInstant;
+  failureKind: BlueskyConnectionStatus['timeline']['failureKind'];
+  failureCode: string | null;
+}>;
+
+export type IoriBlueskyStatusResponse =
+  | Readonly<{ enabled: false }>
+  | Readonly<{
+    enabled: true;
+    timeline: IoriBlueskyScopeStatusBody;
+    notifications: IoriBlueskyScopeStatusBody;
+    login: Readonly<{ state: 'ok' }> | Readonly<{ state: 'waiting'; failedAt: string; retryAt: string }>;
+  }>;
+
 export type IoriBlueskyLikeResponse = Readonly<{ liked: boolean }>;
 
 export type IoriBlueskyRepostResponse = Readonly<{ reposted: boolean }>;
@@ -124,20 +153,36 @@ const threadFailure = (c: Context, error: BlueskyClientError | BlueskyPostThread
     : c.json({ error: 'Bluesky request failed' }, 502);
 };
 
+const iso = (at: number | null): IsoInstant => at === null ? null : new Date(at).toISOString();
+
+const toScopeBody = (scope: BlueskyConnectionStatus['timeline']): IoriBlueskyScopeStatusBody => ({
+  state: scope.state,
+  lastSucceededAt: iso(scope.lastSucceededAt),
+  lastFailedAt: iso(scope.lastFailedAt),
+  failureKind: scope.failureKind,
+  failureCode: scope.failureCode,
+});
+
+const clientFailure = (c: Context, error: BlueskyClientError) =>
+  c.json({ error: error.kind === 'auth' ? 'Bluesky login failed' : 'Bluesky request failed' }, 502);
+
 const likeFailure = (c: Context, error: BlueskyClientError | BlueskyLikeTargetNotFound) =>
   error.type === 'BlueskyLikeTargetNotFound'
     ? c.json({ error: 'Record not found' }, 404)
-    : c.json({ error: 'Bluesky request failed' }, 502);
+    : clientFailure(c, error);
 
 const repostFailure = (c: Context, error: BlueskyClientError | BlueskyRepostTargetNotFound) =>
   error.type === 'BlueskyRepostTargetNotFound'
     ? c.json({ error: 'Record not found' }, 404)
-    : c.json({ error: 'Bluesky request failed' }, 502);
+    : clientFailure(c, error);
 
 export const createWorkerIoriBlueskyRouter = ({
   authn,
   blueskyTimelineItemsResolver,
   blueskyTimelineEnabled,
+  blueskySyncStatusResolver,
+  blueskyLoginFailureResolver,
+  now = Instant.now,
   likeBlueskyPostUseCase,
   unlikeBlueskyPostUseCase,
   repostBlueskyPostUseCase,
@@ -215,6 +260,37 @@ export const createWorkerIoriBlueskyRouter = ({
           post: toItemBody(thread.val.post),
           replies: thread.val.replies.map(({ depth, node }) => ({ depth, node: toNodeBody(node) })),
         } satisfies IoriBlueskyThreadResponse,
+      );
+    })
+    .get('/iori/v1/bluesky/status', authn.requireUser(readStatuses), async (c) => {
+      const isOwner = await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined);
+      if (!blueskyTimelineEnabled || !isOwner) {
+        return c.json({ enabled: false } satisfies IoriBlueskyStatusResponse);
+      }
+      const [records, loginFailedAt] = await Promise.all([
+        blueskySyncStatusResolver.resolve(),
+        blueskyLoginFailureResolver.resolve(),
+      ]);
+      if (!records.ok || !loginFailedAt.ok) return c.json(internalServerError, 500);
+      const status = toBlueskyConnectionStatus({
+        records: records.val,
+        loginFailedAt: loginFailedAt.val,
+        now: now(),
+        loginCooldownMs: BLUESKY_LOGIN_RETRY_COOLDOWN_MS,
+      });
+      return c.json(
+        {
+          enabled: true,
+          timeline: toScopeBody(status.timeline),
+          notifications: toScopeBody(status.notifications),
+          login: status.login.state === 'waiting'
+            ? {
+              state: 'waiting',
+              failedAt: new Date(status.login.failedAt).toISOString(),
+              retryAt: new Date(status.login.retryAt).toISOString(),
+            }
+            : { state: 'ok' },
+        } satisfies IoriBlueskyStatusResponse,
       );
     })
     .post(
