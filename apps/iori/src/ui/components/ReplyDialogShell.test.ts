@@ -21,6 +21,25 @@ describe('ReplyDialogShell', () => {
     expect(html).toContain('返信する');
   });
 
+  it('title と submitLabel を渡さないときは、見出しを「返信」、送信のボタンを「返信する」にする', () => {
+    const html = render();
+
+    expect(html).toContain('>返信</h2>');
+    expect(html).toContain('>返信する</button>');
+  });
+
+  it('title と submitLabel を渡すと、見出しと送信のボタンをその文言にする', () => {
+    const html = render({ title: '引用', submitLabel: '引用して投稿' });
+
+    expect(html).toContain('>引用</h2>');
+    expect(html).toContain('>引用して投稿</button>');
+    expect(html).not.toContain('返信する');
+  });
+
+  it('送信中は submitLabel によらず「送信中...」を出す', () => {
+    expect(render({ isSending: true, submitLabel: '引用して投稿' })).toContain('>送信中...</button>');
+  });
+
   it('leadingActions を渡すと、ボタン列の先頭でキャンセルのボタンより前に出す', () => {
     const html = render({ leadingActions: jsx('select', { name: 'reply-destination' }) });
 

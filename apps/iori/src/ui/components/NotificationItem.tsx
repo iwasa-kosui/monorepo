@@ -3,6 +3,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { BLUESKY_STATUS_ID_PREFIX } from '../../helper/blueskyUrl.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { accountHandle, accountHref, detailHref } from '../api/status.ts';
+import { blueskyNotificationPostHref } from './notificationPostHref.ts';
 
 type Props = Readonly<{
   notification: Notification;
@@ -68,7 +69,8 @@ const LikeNotificationItem = ({ notification, recipientUsername }: Props) => {
 
   const handle = accountHandle(account);
   const actorUrl = accountHref(account);
-  const postUrl = notification.iori?.bluesky?.url ?? `/users/${recipientUsername}/posts/${status?.id ?? ''}`;
+  const postUrl = blueskyNotificationPostHref(notification.iori?.bluesky)
+    ?? `/users/${recipientUsername}/posts/${status?.id ?? ''}`;
   const logoUrl = safeUrl(account.avatar);
 
   return (
@@ -130,7 +132,8 @@ const ReblogNotificationItem = ({ notification, recipientUsername }: Props) => {
 
   const handle = accountHandle(account);
   const actorUrl = accountHref(account);
-  const postUrl = notification.iori?.bluesky?.url ?? `/users/${recipientUsername}/posts/${status?.id ?? ''}`;
+  const postUrl = blueskyNotificationPostHref(notification.iori?.bluesky)
+    ?? `/users/${recipientUsername}/posts/${status?.id ?? ''}`;
   const logoUrl = safeUrl(account.avatar);
 
   return (
@@ -323,7 +326,8 @@ const MentionNotificationItem = ({ notification }: Props) => {
 
   const handle = accountHandle(account);
   const actorUrl = accountHref(account);
-  const postUrl = notification.iori?.bluesky?.url ?? (status === undefined ? '' : detailHref(status));
+  const postUrl = blueskyNotificationPostHref(notification.iori?.bluesky)
+    ?? (status === undefined ? '' : detailHref(status));
   const logoUrl = safeUrl(account.avatar);
 
   return (

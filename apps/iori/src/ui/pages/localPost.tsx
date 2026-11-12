@@ -6,6 +6,7 @@ import type { PostDestination } from '../../domain/post/postDestination.ts';
 import {
   createStatus,
   deleteStatus,
+  fetchRemoteContext,
   fetchStatus,
   fetchStatusContext,
   fetchVerifyCredentials,
@@ -17,7 +18,12 @@ import { PostView } from '../components/PostView.tsx';
 import { QuoteModal } from '../components/QuoteModal.tsx';
 import { ReplyModal } from '../components/ReplyModal.tsx';
 import { useQuoteDialog } from '../hooks/useQuoteDialog.ts';
-import { resolveLocalPostThread } from './localPostThread.ts';
+import {
+  applyContext,
+  resolveLocalPostThread,
+  shouldReloadContext,
+  showsRemoteContextLoading,
+} from './localPostThread.ts';
 
 type ThreadData = {
   ancestors: readonly Status[];
@@ -36,6 +42,7 @@ const LocalPostPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [contextFailed, setContextFailed] = useState(false);
   const [isRetryingContext, setIsRetryingContext] = useState(false);
+  const [isLoadingRemoteContext, setIsLoadingRemoteContext] = useState(false);
   const [isLoggedIn] = useState(() => getIsLoggedIn());
   const [currentAccountId, setCurrentAccountId] = useState<string | undefined>(undefined);
 
@@ -50,12 +57,12 @@ const LocalPostPage = () => {
     return pathParts[postsIndex + 1];
   };
 
-  const fetchThread = async () => {
+  const fetchThread = async (): Promise<boolean> => {
     const postId = getPostIdFromUrl();
     if (!postId) {
       setError('Post ID not found');
       setIsLoading(false);
-      return;
+      return false;
     }
 
     const [status, context] = await Promise.allSettled([
@@ -80,6 +87,26 @@ const LocalPostPage = () => {
         break;
     }
     setIsLoading(false);
+    return thread.type === 'loaded';
+  };
+
+  const loadRemoteContext = async () => {
+    const postId = getPostIdFromUrl();
+    if (!postId) return;
+
+    setIsLoadingRemoteContext(true);
+    try {
+      const remote = await fetchRemoteContext(postId);
+      if (shouldReloadContext(remote)) {
+        const context = await fetchStatusContext(postId);
+        setThreadData((prev) => applyContext(prev, context));
+        setContextFailed(false);
+      }
+    } catch (err) {
+      console.error('Failed to load the remote context:', err);
+    } finally {
+      setIsLoadingRemoteContext(false);
+    }
   };
 
   const handleRetryContext = async () => {
@@ -99,7 +126,9 @@ const LocalPostPage = () => {
   };
 
   useEffect(() => {
-    fetchThread();
+    fetchThread().then(async (loaded) => {
+      if (loaded && isLoggedIn) await loadRemoteContext();
+    });
     if (isLoggedIn) {
       fetchVerifyCredentials()
         .then((account) => setCurrentAccountId(account.id))
@@ -323,6 +352,11 @@ const LocalPostPage = () => {
                 </div>
               ))}
             </>
+          )}
+          {showsRemoteContextLoading(isLoadingRemoteContext, threadData.currentPost) && (
+            <p role='status' class='text-sm text-charcoal-light dark:text-gray-400'>
+              相手のサーバーから返信を読み込んでいます
+            </p>
           )}
         </div>
       </div>

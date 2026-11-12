@@ -1,7 +1,16 @@
 import { useCallback, useRef, useState } from 'hono/jsx';
 
-import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import { blueskyFailureMessage, repostBlueskyPost, undoRepostBlueskyPost } from '../api/mastodonClient.ts';
+import type {
+  IoriBlueskyRepostResponse,
+  IoriBlueskyTimelineItemBody,
+} from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
+import {
+  blueskyFailureMessage,
+  repostBlueskyPost,
+  repostBlueskyPostByUri,
+  undoRepostBlueskyPost,
+  undoRepostBlueskyPostByUri,
+} from '../api/mastodonClient.ts';
 import type { BlueskyItemsUpdater } from './optimisticBlueskyLike.ts';
 import { runOptimisticBlueskyRepost } from './optimisticBlueskyRepost.ts';
 import { runExclusive } from './optimisticFavourite.ts';
@@ -12,7 +21,25 @@ export type UseBlueskyRepostReturn = Readonly<{
   undoRepost: (item: IoriBlueskyTimelineItemBody) => Promise<void>;
 }>;
 
-export const useBlueskyRepost = (updateItems: BlueskyItemsUpdater): UseBlueskyRepostReturn => {
+export type BlueskyRepostRequests = Readonly<{
+  repost: (item: IoriBlueskyTimelineItemBody) => Promise<IoriBlueskyRepostResponse>;
+  undoRepost: (item: IoriBlueskyTimelineItemBody) => Promise<IoriBlueskyRepostResponse>;
+}>;
+
+const FEED_ITEM_REQUESTS: BlueskyRepostRequests = {
+  repost: (item) => repostBlueskyPost(item.feedItemId),
+  undoRepost: (item) => undoRepostBlueskyPost(item.feedItemId),
+};
+
+export const BLUESKY_REPOST_BY_URI_REQUESTS: BlueskyRepostRequests = {
+  repost: (item) => repostBlueskyPostByUri(item.uri),
+  undoRepost: (item) => undoRepostBlueskyPostByUri(item.uri),
+};
+
+export const useBlueskyRepost = (
+  updateItems: BlueskyItemsUpdater,
+  requests: BlueskyRepostRequests = FEED_ITEM_REQUESTS,
+): UseBlueskyRepostReturn => {
   const [pendingUris, setPendingUris] = useState<ReadonlySet<string>>(new Set());
   const inFlightRef = useRef<Set<string>>(null);
   const inFlight = () => (inFlightRef.current ??= new Set<string>());
@@ -26,7 +53,7 @@ export const useBlueskyRepost = (updateItems: BlueskyItemsUpdater): UseBlueskyRe
             feedItemId: item.feedItemId,
             uri: item.uri,
             reposted,
-            request: reposted ? repostBlueskyPost : undoRepostBlueskyPost,
+            request: () => (reposted ? requests.repost(item) : requests.undoRepost(item)),
             updateItems,
           });
         } catch (error) {
@@ -41,7 +68,7 @@ export const useBlueskyRepost = (updateItems: BlueskyItemsUpdater): UseBlueskyRe
           });
         }
       }),
-    [updateItems],
+    [updateItems, requests],
   );
 
   const repost = useCallback((item: IoriBlueskyTimelineItemBody) => run(item, true), [run]);

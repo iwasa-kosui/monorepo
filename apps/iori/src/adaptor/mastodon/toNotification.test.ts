@@ -155,7 +155,7 @@ describe('Bluesky notifications', () => {
     expect(NotificationSchema.safeParse(result).success).toBe(true);
     expect(result).toMatchObject({
       type: 'favourite',
-      iori: { bluesky: { reason: 'like', url: 'https://bsky.app/profile/did:plc:me/post/3kpost' } },
+      iori: { bluesky: { reason: 'like', url: 'https://bsky.app/profile/did:plc:me/post/3kpost', uri: subjectUri } },
     });
     expect(triggerOf(notification)).toEqual({ kind: 'bluesky', author });
     expect(targetPostIdOf(notification)).toBe(targetPostId);
@@ -168,6 +168,11 @@ describe('Bluesky notifications', () => {
 
     expect(NotificationSchema.safeParse(result).success).toBe(true);
     expect(result.type).toBe('reblog');
+    expect(result.iori?.bluesky).toEqual({
+      reason: 'repost',
+      url: 'https://bsky.app/profile/did:plc:me/post/3kpost',
+      uri: subjectUri,
+    });
     expect(targetPostIdOf(notification)).toBeUndefined();
   });
 
@@ -181,6 +186,7 @@ describe('Bluesky notifications', () => {
       type: 'follow',
       iori: { bluesky: { reason: 'follow', url: 'https://bsky.app/profile/alice.bsky.social' } },
     });
+    expect(result.iori?.bluesky).not.toHaveProperty('uri');
     expect(targetPostIdOf(notification)).toBeUndefined();
   });
 
@@ -201,7 +207,14 @@ describe('Bluesky notifications', () => {
     expect(NotificationSchema.safeParse(result).success).toBe(true);
     expect(result).toMatchObject({
       type: 'mention',
-      iori: { bluesky: { reason: 'reply', url: 'https://bsky.app/profile/did:plc:alice/post/3kreply', text: 'hello' } },
+      iori: {
+        bluesky: {
+          reason: 'reply',
+          url: 'https://bsky.app/profile/did:plc:alice/post/3kreply',
+          uri: 'at://did:plc:alice/app.bsky.feed.post/3kreply',
+          text: 'hello',
+        },
+      },
     });
   });
 
@@ -224,6 +237,18 @@ describe('Bluesky notifications', () => {
     }, options);
 
     expect(result.iori?.bluesky?.url).toBe('https://bsky.app/profile/alice.bsky.social');
+    expect(result.iori?.bluesky).not.toHaveProperty('uri');
+  });
+
+  it('does not set uri for a post uri that the post endpoints would reject', () => {
+    const result = toNotification({
+      ...blueskyBase,
+      type: 'blueskyLike',
+      subjectUri: 'at://did:plc:me/app.bsky.feed.post/3kpost#repost:did:plc:bob',
+      targetPostId: null,
+    }, options);
+
+    expect(result.iori?.bluesky).not.toHaveProperty('uri');
   });
 });
 
