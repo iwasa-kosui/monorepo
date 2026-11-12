@@ -12,6 +12,8 @@ export type BlueskyBookmarkReader = Readonly<{
   getBookmarks: (input: Readonly<{ cursor: string | undefined }>) => RA<BlueskyBookmarksPage, BlueskyClientError>;
 }>;
 
+export const BLUESKY_BAD_TOKEN_SCOPE = 'Bad token scope';
+
 const BOOKMARK_UNAVAILABLE_STATUSES: readonly number[] = [401, 403, 501];
 const BOOKMARK_UNAVAILABLE_CODES: readonly string[] = ['MethodNotImplemented', 'Forbidden', 'Unauthorized'];
 const BOOKMARK_LOGIN_CODES: readonly string[] = [
@@ -22,8 +24,12 @@ const BOOKMARK_LOGIN_CODES: readonly string[] = [
   'AuthMissing',
 ];
 
+const isBadTokenScope = (error: BlueskyClientError): boolean =>
+  error.code === 'InvalidToken' && error.message.includes(BLUESKY_BAD_TOKEN_SCOPE);
+
 export const isBlueskyBookmarkUnavailable = (error: BlueskyClientError): boolean =>
   (error.kind === 'auth' || error.kind === 'http')
-  && (error.code === undefined || !BOOKMARK_LOGIN_CODES.includes(error.code))
-  && (error.status !== undefined && BOOKMARK_UNAVAILABLE_STATUSES.includes(error.status)
-    || error.code !== undefined && BOOKMARK_UNAVAILABLE_CODES.includes(error.code));
+  && (isBadTokenScope(error)
+    || (error.code === undefined || !BOOKMARK_LOGIN_CODES.includes(error.code))
+      && (error.status !== undefined && BOOKMARK_UNAVAILABLE_STATUSES.includes(error.status)
+        || error.code !== undefined && BOOKMARK_UNAVAILABLE_CODES.includes(error.code)));

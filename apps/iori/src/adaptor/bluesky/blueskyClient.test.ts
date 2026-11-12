@@ -1308,4 +1308,59 @@ describe('createBlueskyClient のブックマーク', () => {
       err: { kind: 'http', status: 501, code: 'MethodNotImplemented' },
     });
   });
+
+  it('400 InvalidToken の Bad token scope は再ログインせず、message を含む http の失敗で返す', async () => {
+    const { client, calls, saved } = setup(stored(), [
+      () => json({ error: 'InvalidToken', message: 'Bad token scope' }, 400),
+    ]);
+
+    const created = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(created).toMatchObject({
+      ok: false,
+      err: { kind: 'http', status: 400, code: 'InvalidToken', message: expect.stringContaining('Bad token scope') },
+    });
+    expect(calls).toHaveLength(1);
+    expect(saved).toEqual([]);
+  });
+
+  it('deleteBookmark と getBookmarks でも Bad token scope で再ログインしない', async () => {
+    const rejected = () => json({ error: 'InvalidToken', message: 'Bad token scope' }, 400);
+    const deleting = setup(stored(), [rejected]);
+    const listing = setup(stored(), [rejected]);
+
+    const deleted = await deleting.client.deleteBookmark(POST_URI);
+    const listed = await listing.client.query('app.bsky.bookmark.getBookmarks', { limit: '30' });
+
+    expect(deleted).toMatchObject({ ok: false, err: { kind: 'http', code: 'InvalidToken' } });
+    expect(listed).toMatchObject({ ok: false, err: { kind: 'http', code: 'InvalidToken' } });
+    expect(deleting.calls).toHaveLength(1);
+    expect(listing.calls).toHaveLength(1);
+  });
+
+  it('Bad token scope を含まない InvalidToken は、これまでどおり認証の更新をしてやり直す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'InvalidToken', message: 'Bad token' }, 400),
+      () => json(sessionBody('new')),
+      () => json({}),
+    ]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
+  });
+
+  it('ブックマーク以外の API の Bad token scope は、これまでどおり認証の失敗として更新を試みる', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'InvalidToken', message: 'Bad token scope' }, 400),
+      () => json(sessionBody('new')),
+      () => json({}),
+    ]);
+
+    const result = await client.muteActor('did:plc:target');
+
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
+  });
 });

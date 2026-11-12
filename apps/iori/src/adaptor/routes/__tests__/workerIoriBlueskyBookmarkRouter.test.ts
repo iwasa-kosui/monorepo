@@ -245,6 +245,11 @@ describe('GET /api/iori/v1/bluesky/bookmarks', () => {
       ['403', { status: 403, code: 'Forbidden' }],
       ['501', { status: 501, code: 'MethodNotImplemented' }],
       ['401 の権限の拒否', { kind: 'auth', status: 401 }],
+      ['400 InvalidToken の Bad token scope', {
+        status: 400,
+        code: 'InvalidToken',
+        message: 'status 400 InvalidToken Bad token scope',
+      }],
     ] as const,
   )('ブックマークを使えない応答（%s）は 502 の Bluesky bookmarks unavailable にする', async (_name, overrides) => {
     const t = await setup({

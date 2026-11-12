@@ -25,6 +25,22 @@ describe('isBlueskyBookmarkUnavailable', () => {
     expect(isBlueskyBookmarkUnavailable(error(overrides))).toBe(true);
   });
 
+  it('400 InvalidToken の message に Bad token scope を含むときは使えないものとみなす', () => {
+    const rejected = { status: 400, code: 'InvalidToken', message: 'createBookmark failed: Bad token scope' };
+
+    expect(isBlueskyBookmarkUnavailable(error(rejected))).toBe(true);
+    expect(isBlueskyBookmarkUnavailable(error({ ...rejected, kind: 'auth' }))).toBe(true);
+  });
+
+  it('Bad token scope を含まない InvalidToken と、InvalidToken でない code の Bad token scope は使えないものとみなさない', () => {
+    expect(
+      isBlueskyBookmarkUnavailable(error({ kind: 'auth', status: 400, code: 'InvalidToken', message: 'Bad token' })),
+    )
+      .toBe(false);
+    expect(isBlueskyBookmarkUnavailable(error({ status: 400, code: 'ExpiredToken', message: 'Bad token scope' })))
+      .toBe(false);
+  });
+
   it.each(
     [
       ['ExpiredToken', { kind: 'auth', status: 400, code: 'ExpiredToken' }],
