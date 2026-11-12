@@ -66,12 +66,47 @@ describe('NotificationItem', () => {
     expect(html).toContain('href="/remote-users/actor-2"');
   });
 
-  it('renders a mention with the reply content and a link to the replied-to post', () => {
-    const html = render(notification({ type: 'mention', status: status('reply-1', { in_reply_to_id: 'p1' }) }));
+  it('renders a mention from a remote account with a link to the detail page of the post itself', () => {
+    const html = render(notification({
+      type: 'mention',
+      status: status('m1', { uri: 'https://remote.example/users/alice/statuses/m1', account: remoteAccount }),
+      iori: { fediverse: { reason: 'mention' } },
+    }));
+
+    expect(html).toContain('mentioned you');
+    expect(html).not.toContain('replied to your post');
+    expect(html).toContain('<p>content of m1</p>');
+    expect(html).toContain('href="/posts/m1"');
+    expect(html).not.toContain('/users/kosui/posts/');
+  });
+
+  it('renders a mention that replies to my post with a link to the detail page of the reply', () => {
+    const html = render(notification({
+      type: 'mention',
+      status: status('reply-1', { account: remoteAccount, in_reply_to_id: 'p1' }),
+      iori: { fediverse: { reason: 'reply' } },
+    }));
 
     expect(html).toContain('replied to your post');
     expect(html).toContain('<p>content of reply-1</p>');
-    expect(html).toContain('href="/users/kosui/posts/p1"');
+    expect(html).toContain('href="/posts/reply-1"');
+    expect(html).not.toContain('href="/users/kosui/posts/p1"');
+  });
+
+  it('keeps the reply label for a mention without a fediverse reason', () => {
+    const html = render(notification({ type: 'mention', status: status('m3', { account: remoteAccount }) }));
+
+    expect(html).toContain('replied to your post');
+  });
+
+  it('renders a mention from a local account with a link to the post in the profile', () => {
+    const html = render(notification({
+      type: 'mention',
+      account: localAccount,
+      status: status('m2', { account: localAccount }),
+    }));
+
+    expect(html).toContain('href="/users/kosui/posts/m2"');
   });
 
   it('renders the spoiler text instead of the content for a post with a content warning', () => {

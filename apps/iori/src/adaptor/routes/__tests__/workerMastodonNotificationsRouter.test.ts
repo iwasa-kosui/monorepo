@@ -114,6 +114,36 @@ describe('GET /api/v1/notifications', () => {
     expect(await t.typesOf(withEmoji)).toEqual([]);
   });
 
+  it('返信ではないメンションの通知を mention として投稿つきで返し、types[]=mention で絞り込める', async () => {
+    const t = await seedNotifications();
+    const mentionPost = t.seed.addRemotePost(t.alice, 3_500, {
+      timeline: false,
+      visibility: 'direct',
+      recipientActorUris: ['https://iori.test/users/kosui'],
+    });
+    const mention = t.seed.addMentionNotification(t.me.userId, t.alice.actorId, mentionPost.postId, 3_600);
+
+    const [defaults, only, excluded] = await Promise.all([
+      t.get('/api/v1/notifications'),
+      t.get('/api/v1/notifications?types[]=mention'),
+      t.get('/api/v1/notifications?exclude_types[]=mention'),
+    ]);
+
+    const parse = async (response: Response) =>
+      ((await response.json()) as unknown[]).map((item) => NotificationSchema.parse(item));
+    expect((await parse(defaults)).map((item) => [item.id, item.type, item.status?.id, item.account.id]))
+      .toContainEqual(
+        [mention, 'mention', mentionPost.postId, t.alice.actorId],
+      );
+    const mentions = await parse(only);
+    expect(mentions.map((item) => item.id)).toEqual([mention, t.ids.reply]);
+    expect(mentions.map((item) => item.iori)).toEqual([
+      { fediverse: { reason: 'mention' } },
+      { fediverse: { reason: 'reply' } },
+    ]);
+    expect((await parse(excluded)).map((item) => item.id)).not.toContain(mention);
+  });
+
   it('limit と max_id と min_id と Link ヘッダーでページを送る', async () => {
     const t = await seedNotifications();
 
@@ -226,6 +256,7 @@ describe('GET /api/v2/notifications', () => {
         latest_page_notification_at: '1970-01-01T00:00:03.000Z',
         sample_account_ids: [t.bob.actorId],
         status_id: t.aliceReply.postId,
+        iori: { fediverse: { reason: 'reply' } },
       },
       {
         group_key: `ungrouped-${t.ids.like}`,

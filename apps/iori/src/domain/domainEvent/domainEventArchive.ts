@@ -91,6 +91,8 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'notification.followNotificationCreated',
   'notification.likeNotificationCreated',
   'notification.likeNotificationDeleted',
+  'notification.mentionNotificationCreated',
+  'notification.mentionNotificationDeleted',
   'notification.notificationDismissed',
   'notification.notificationsCleared',
   'notification.notificationsRead',

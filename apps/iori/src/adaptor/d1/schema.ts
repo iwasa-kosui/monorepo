@@ -324,6 +324,16 @@ export const notificationRepliesTable = sqliteTable('notification_replies', {
   index('notification_replies_original_post_id_idx').on(table.originalPostId),
 ]);
 
+export const notificationMentionsTable = sqliteTable('notification_mentions', {
+  notificationId: text('notificationId').primaryKey().references(() => notificationsTable.notificationId),
+  recipientUserId: text('recipientUserId').notNull().references(() => usersTable.userId),
+  mentionerActorId: text('mentionerActorId').notNull().references(() => actorsTable.actorId),
+  mentionPostId: text('mentionPostId').notNull(),
+}, (table) => [
+  uniqueIndex('notification_mentions_recipient_post_unique').on(table.recipientUserId, table.mentionPostId),
+  index('notification_mentions_mention_post_id_idx').on(table.mentionPostId),
+]);
+
 export const mutesTable = sqliteTable('mutes', {
   muteId: text('muteId').primaryKey(),
   userId: text('userId').notNull().references(() => usersTable.userId),
@@ -731,6 +741,7 @@ export const schema = {
   emojiReactsTable,
   notificationEmojiReactsTable,
   notificationRepliesTable,
+  notificationMentionsTable,
   notificationRepostsTable,
   mutesTable,
   articlesTable,

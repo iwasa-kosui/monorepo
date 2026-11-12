@@ -24,6 +24,8 @@ import type {
   EmojiReactNotificationsResolverByPostId,
   LikeNotificationDeletedStore,
   LikeNotificationsResolverByPostId,
+  MentionNotificationDeletedStore,
+  MentionNotificationsResolverByMentionPostId,
   ReplyNotificationDeletedStore,
   ReplyNotificationsResolverByOriginalPostId,
   ReplyNotificationsResolverByReplyPostId,
@@ -47,6 +49,7 @@ export type OnDeleteDeps = Readonly<{
   emojiReactNotificationsResolverByPostId: EmojiReactNotificationsResolverByPostId;
   replyNotificationsResolverByReplyPostId: ReplyNotificationsResolverByReplyPostId;
   replyNotificationsResolverByOriginalPostId: ReplyNotificationsResolverByOriginalPostId;
+  mentionNotificationsResolverByMentionPostId?: MentionNotificationsResolverByMentionPostId;
   repostsResolverByPostId: RepostsResolverByPostId;
   likesResolverByPostId: LikesResolverByPostId;
   emojiReactsResolverByPostId: EmojiReactsResolverByPostId;
@@ -55,6 +58,7 @@ export type OnDeleteDeps = Readonly<{
   likeNotificationDeletedStore: LikeNotificationDeletedStore;
   emojiReactNotificationDeletedStore: EmojiReactNotificationDeletedStore;
   replyNotificationDeletedStore: ReplyNotificationDeletedStore;
+  mentionNotificationDeletedStore?: MentionNotificationDeletedStore;
   repostDeletedStore: RepostDeletedStore;
   localLikeDeletedStore: LocalLikeDeletedStore;
   remoteLikeDeletedStore: RemoteLikeDeletedStore;
@@ -123,6 +127,7 @@ async (
     emojiReactNotificationsResult,
     replyNotificationsByReplyPostResult,
     replyNotificationsByOriginalPostResult,
+    mentionNotificationsResult,
     repostsResult,
     likesResult,
     emojiReactsResult,
@@ -133,6 +138,7 @@ async (
     deps.emojiReactNotificationsResolverByPostId.resolve({ postId }),
     deps.replyNotificationsResolverByReplyPostId.resolve({ replyPostId: postId }),
     deps.replyNotificationsResolverByOriginalPostId.resolve({ originalPostId: postId }),
+    deps.mentionNotificationsResolverByMentionPostId?.resolve({ mentionPostId: postId }),
     deps.repostsResolverByPostId.resolve({ postId }),
     deps.likesResolverByPostId.resolve({ postId }),
     deps.emojiReactsResolverByPostId.resolve({ postId }),
@@ -161,6 +167,10 @@ async (
       : []),
   ];
 
+  const mentionNotificationEvents = mentionNotificationsResult?.ok
+    ? mentionNotificationsResult.val.map((n) => Notification.deleteMentionNotification(n, now))
+    : [];
+
   const repostEvents = repostsResult.ok
     ? repostsResult.val.map((r) => Repost.deleteRepost(r, now))
     : [];
@@ -186,6 +196,9 @@ async (
     deps.likeNotificationDeletedStore.store(...likeNotificationEvents),
     deps.emojiReactNotificationDeletedStore.store(...emojiReactNotificationEvents),
     deps.replyNotificationDeletedStore.store(...replyNotificationEvents),
+    ...(deps.mentionNotificationDeletedStore
+      ? [deps.mentionNotificationDeletedStore.store(...mentionNotificationEvents)]
+      : []),
     deps.repostDeletedStore.store(...repostEvents),
     deps.localLikeDeletedStore.store(...localLikeEvents),
     deps.remoteLikeDeletedStore.store(...remoteLikeEvents),
