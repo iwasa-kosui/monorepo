@@ -5,6 +5,7 @@ import {
   deleteStatus,
   failureMessage,
   favourite,
+  mute,
   react,
   reblog,
   unfavourite,
@@ -36,6 +37,7 @@ export type UsePostActionsReturn = Readonly<{
   repost: (postId: string) => Promise<void>;
   undoRepost: (postId: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
+  muteAccount: (accountId: string) => Promise<void>;
   emojiReact: (postId: string, emoji: string) => Promise<void>;
   undoEmojiReact: (postId: string, emoji: string) => Promise<void>;
 }>;
@@ -44,6 +46,7 @@ type UsePostActionsProps = Readonly<{
   updateTimelineItem: StatusUpdater;
   updateThreadPost?: StatusUpdater;
   removePost: (postId: string) => void;
+  removeAccountPosts: (accountId: string) => void;
   refreshTimeline: () => Promise<void>;
   onPostDeleted?: (postId: string) => void;
 }>;
@@ -52,6 +55,7 @@ export const usePostActions = ({
   updateTimelineItem,
   updateThreadPost,
   removePost,
+  removeAccountPosts,
   refreshTimeline,
   onPostDeleted,
 }: UsePostActionsProps): UsePostActionsReturn => {
@@ -167,6 +171,19 @@ export const usePostActions = ({
     [removePost, onPostDeleted],
   );
 
+  const muteAccount = useCallback(
+    async (accountId: string) => {
+      try {
+        await mute(accountId);
+        removeAccountPosts(accountId);
+      } catch (error) {
+        console.error('Failed to mute:', error);
+        alert(failureMessage('mute', error));
+      }
+    },
+    [removeAccountPosts],
+  );
+
   const emojiReact = useCallback(async (postId: string, emoji: string) => {
     setEmojiReactingPostId(postId);
     try {
@@ -227,6 +244,7 @@ export const usePostActions = ({
     repost,
     undoRepost,
     deletePost,
+    muteAccount,
     emojiReact,
     undoEmojiReact,
   } as const;

@@ -13,7 +13,7 @@ import {
 } from '../api/mastodonClient.ts';
 import { writeMeCache } from '../api/pageCache.ts';
 import { clearAllCache } from '../api/responseCache.ts';
-import { removeStatusesByPostId, updateStatusesByPostId } from '../api/status.ts';
+import { removeStatusesByAccountId, removeStatusesByPostId, updateStatusesByPostId } from '../api/status.ts';
 import { currentGeneration, isStaleGeneration, startGeneration } from './generation.ts';
 import {
   type BlueskyCursor,
@@ -71,6 +71,7 @@ export type UseTimelineReturn = Readonly<{
   updateTimelineItem: StatusUpdater;
   updateBlueskyItems: BlueskyItemsUpdater;
   removePost: (postId: string) => void;
+  removeAccountPosts: (accountId: string) => void;
   prependPost: (status: Status) => void;
   updateMe: (me: CredentialAccount) => void;
 }>;
@@ -306,6 +307,16 @@ export const useTimeline = (snapshot?: HomeSnapshot): UseTimelineReturn => {
     });
   }, []);
 
+  const removeAccountPosts = useCallback((accountId: string) => {
+    setState((prev) => {
+      if (prev.status !== 'success') return prev;
+      return {
+        status: 'success',
+        data: { ...prev.data, statuses: removeStatusesByAccountId(prev.data.statuses, accountId) },
+      };
+    });
+  }, []);
+
   const prependPost = useCallback((status: Status) => {
     setState((prev) => {
       if (prev.status !== 'success') return prev;
@@ -336,6 +347,7 @@ export const useTimeline = (snapshot?: HomeSnapshot): UseTimelineReturn => {
     updateTimelineItem,
     updateBlueskyItems,
     removePost,
+    removeAccountPosts,
     prependPost,
     updateMe,
   } as const;

@@ -406,6 +406,7 @@ const ThreadModal = () => {
                           onUndoRepost={post.reblogged ? actions.undoRepost : undefined}
                           isUndoingRepost={actionState.undoingRepostPostId === post.id}
                           onDelete={actions.deletePost}
+                          onMute={actions.muteAccount}
                           isDeleting={actionState.deletingPostId === post.id}
                           onEmojiReact={actions.emojiReact}
                           onUndoEmojiReact={actions.undoEmojiReact}
@@ -434,6 +435,7 @@ const ThreadModal = () => {
                       onUndoRepost={threadData.currentPost.reblogged ? actions.undoRepost : undefined}
                       isUndoingRepost={actionState.undoingRepostPostId === threadData.currentPost.id}
                       onDelete={actions.deletePost}
+                      onMute={actions.muteAccount}
                       isDeleting={actionState.deletingPostId === threadData.currentPost.id}
                       onEmojiReact={actions.emojiReact}
                       onUndoEmojiReact={actions.undoEmojiReact}
@@ -463,6 +465,7 @@ const ThreadModal = () => {
                             onUndoRepost={post.reblogged ? actions.undoRepost : undefined}
                             isUndoingRepost={actionState.undoingRepostPostId === post.id}
                             onDelete={actions.deletePost}
+                            onMute={actions.muteAccount}
                             isDeleting={actionState.deletingPostId === post.id}
                             onEmojiReact={actions.emojiReact}
                             onUndoEmojiReact={actions.undoEmojiReact}
@@ -828,6 +831,7 @@ const TimelineList = () => {
             onUndoRepost={isMyRepost ? actions.undoRepost : undefined}
             isUndoingRepost={actionState.undoingRepostPostId === postId}
             onDelete={actions.deletePost}
+            onMute={actions.muteAccount}
             isDeleting={actionState.deletingPostId === postId}
             onEmojiReact={actions.emojiReact}
             onUndoEmojiReact={actions.undoEmojiReact}
