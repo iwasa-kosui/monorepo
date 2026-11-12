@@ -187,14 +187,47 @@ describe('BlueskyTimelineItemView', () => {
     expect(html).not.toMatch(/<a [^>]*>返信<\/a>/);
   });
 
-  it('動画のカードを、bsky.app の投稿を新しいタブで開くリンクにする', () => {
+  it('動画は、押すまで読み込まないサムネイルと再生ボタンにする（bsky.app へのリンクにしない）', () => {
     const html = render({
-      embed: { type: 'video', thumbnail: null, playlist: 'https://video.example/playlist.m3u8' },
+      embed: {
+        type: 'video',
+        thumbnail: 'https://video.example/thumb.jpg',
+        playlist: 'https://video.example/playlist.m3u8',
+        aspectRatio: { width: 9, height: 16 },
+        alt: '走る猫',
+      },
     });
 
-    expect(html).toMatch(
-      /<a href="https:\/\/bsky.app\/profile\/did:plc:author\/post\/3kabc" target="_blank" rel="noopener noreferrer" class="relative block/,
-    );
+    expect(html).toContain('aria-label="動画を再生"');
+    expect(html).toContain('src="https://video.example/thumb.jpg"');
+    expect(html).toContain('aspect-ratio: 9 / 16');
+    expect(html).not.toContain('<video');
+    expect(html).not.toContain('bsky.app');
+    expect(html).not.toContain('m3u8');
+  });
+
+  it('recordWithMedia の動画も再生ボタンにする', () => {
+    const html = render({
+      embed: {
+        type: 'recordWithMedia',
+        media: {
+          type: 'video',
+          thumbnail: null,
+          playlist: 'https://video.example/playlist.m3u8',
+          aspectRatio: null,
+          alt: null,
+        },
+        record: {
+          type: 'record',
+          uri: 'at://did:plc:q/app.bsky.feed.post/3kq',
+          authorHandle: 'q.bsky.social',
+          text: '',
+        },
+      },
+    });
+
+    expect(html).toContain('aria-label="動画を再生"');
+    expect(html).toContain('aspect-ratio: 16 / 9');
   });
 
   describe('いいねのボタン', () => {

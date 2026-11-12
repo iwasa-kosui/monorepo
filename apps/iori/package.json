@@ -26,6 +26,7 @@
     "dotenv": "17.2.3",
     "drizzle-orm": "0.45.1",
     "fast-xml-parser": "5.11.2",
+    "hls.js": "1.5.20",
     "hono": "4.11.1",
     "hyparquet-writer": "0.18.0",
     "marked": "17.0.1",
