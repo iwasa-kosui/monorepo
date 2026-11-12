@@ -20,6 +20,7 @@ export const useBlueskyUriActions = (
   actions: BlueskyPostActions;
   replyDialog: UseBlueskyReplyDialogReturn;
   reportDialog: BlueskyReportDialog;
+  notice: string | undefined;
 }> => {
   const { pendingUris: likePendingUris, like, undoLike } = useBlueskyLike(updateItems, BLUESKY_LIKE_BY_URI_REQUESTS);
   const { pendingUris: repostPendingUris, repost, undoRepost } = useBlueskyRepost(
@@ -27,7 +28,7 @@ export const useBlueskyUriActions = (
     BLUESKY_REPOST_BY_URI_REQUESTS,
   );
   const replyDialog = useBlueskyReplyDialog(sendBlueskyReplyByUri);
-  const { onMuteAuthor, onBlockAuthor, onReportPost, reportDialog } = useBlueskyAuthorModeration(
+  const { onMuteAuthor, onBlockAuthor, onReportPost, reportDialog, notice } = useBlueskyAuthorModeration(
     updateItems,
     options,
   );
@@ -43,5 +44,5 @@ export const useBlueskyUriActions = (
     onBlockAuthor,
     onReportPost,
   };
-  return { actions, replyDialog, reportDialog };
+  return { actions, replyDialog, reportDialog, notice };
 };

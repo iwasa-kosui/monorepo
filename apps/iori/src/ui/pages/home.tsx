@@ -981,7 +981,7 @@ const HomePage = () => {
       <FediverseQuoteModal />
       <ThreadModal />
       <ReportPostModal />
-      <BlueskyReportPostModal reportDialog={blueskyModeration.reportDialog} />
+      <BlueskyReportPostModal reportDialog={blueskyModeration.reportDialog} notice={blueskyModeration.notice} />
       <TimelineList />
       <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>
     </>

@@ -369,7 +369,12 @@ const App = () => {
         }
     );
   }, []);
-  const { actions: uriActions, replyDialog, reportDialog } = useBlueskyUriActions(updateItems, { onModerated });
+  const profileDid = data === null || 'error' in data ? undefined : data.profile.did;
+  const removeItems = useCallback((did: string) => did !== profileDid, [profileDid]);
+  const { actions: uriActions, replyDialog, reportDialog, notice } = useBlueskyUriActions(updateItems, {
+    onModerated,
+    removeItems,
+  });
   const quoteDialog = useBlueskyQuoteDialog();
   const actions: BlueskyPostActions = { ...uriActions, onQuote: quoteDialog.open };
 
@@ -576,7 +581,7 @@ const App = () => {
         actions={actions}
       />
       <BlueskyReplyModal dialog={replyDialog} />
-      <BlueskyReportPostModal reportDialog={reportDialog} />
+      <BlueskyReportPostModal reportDialog={reportDialog} {...(notice === undefined ? {} : { notice })} />
       <ReportModal
         targetLabel={`@${data.profile.handle}`}
         isOpen={isReportOpen}

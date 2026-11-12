@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import { withoutBlueskyActor } from './blueskyAuthorModeration.ts';
+import { blueskyModerationNotice, withoutBlueskyActor } from './blueskyAuthorModeration.ts';
 
 const item = (
   feedItemId: string,
@@ -45,5 +45,36 @@ describe('withoutBlueskyActor', () => {
     const items = [item('1', 'did:plc:other')];
 
     expect(withoutBlueskyActor(items, 'did:plc:target')).toBe(items);
+  });
+});
+
+describe('blueskyModerationNotice', () => {
+  it('ミュートの成功を伝える', () => {
+    expect(blueskyModerationNotice({ action: 'mute', handle: 'a', removed: true })).toBe('@a をミュートしました');
+  });
+
+  it('ブロックの成功を伝える', () => {
+    expect(blueskyModerationNotice({ action: 'block', handle: 'a', removed: true })).toBe('@a をブロックしました');
+  });
+
+  it('一覧から除いたときは、補足があっても足さない', () => {
+    expect(blueskyModerationNotice({ action: 'mute', handle: 'a', removed: true, keptItemsNote: '補足' })).toBe(
+      '@a をミュートしました',
+    );
+  });
+
+  it('一覧から除かなかったときは、補足を続ける', () => {
+    expect(
+      blueskyModerationNotice({
+        action: 'mute',
+        handle: 'a',
+        removed: false,
+        keptItemsNote: 'この画面の投稿は再読み込みまで表示されます',
+      }),
+    ).toBe('@a をミュートしました。この画面の投稿は再読み込みまで表示されます');
+  });
+
+  it('一覧から除かなくても、補足が無ければ足さない', () => {
+    expect(blueskyModerationNotice({ action: 'block', handle: 'a', removed: false })).toBe('@a をブロックしました');
   });
 });

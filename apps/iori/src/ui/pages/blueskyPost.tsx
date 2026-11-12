@@ -57,6 +57,11 @@ export const ThreadNodeView = ({ node, isFocused, actions }: Readonly<{
   );
 };
 
+const moderationOptions = {
+  removeItems: () => false,
+  keptItemsNote: 'この画面の投稿は再読み込みまで表示されます',
+};
+
 const BlueskyPostPage = () => {
   const [thread, setThread] = useState<BlueskyPostThread | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,7 +72,10 @@ const BlueskyPostPage = () => {
   const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
     setThread((prev) => prev === null ? prev : updateThreadItems(prev, updater));
   }, []);
-  const { actions: uriActions, replyDialog, reportDialog } = useBlueskyUriActions(updateItems);
+  const { actions: uriActions, replyDialog, reportDialog, notice } = useBlueskyUriActions(
+    updateItems,
+    moderationOptions,
+  );
   const quoteDialog = useBlueskyQuoteDialog();
   const actions: BlueskyPostActions = { ...uriActions, onQuote: quoteDialog.open };
 
@@ -193,7 +201,7 @@ const BlueskyPostPage = () => {
       )}
 
       <BlueskyReplyModal dialog={{ ...replyDialog, send: sendReply }} />
-      <BlueskyReportPostModal reportDialog={reportDialog} />
+      <BlueskyReportPostModal reportDialog={reportDialog} {...(notice === undefined ? {} : { notice })} />
       <BlueskyQuoteModal dialog={quoteDialog} />
     </div>
   );
