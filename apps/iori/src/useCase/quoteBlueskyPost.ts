@@ -27,7 +27,11 @@ const getPostsResponseSchema = z.object({
     cid: z.string().min(1),
     viewer: z.looseObject({ embeddingDisabled: z.boolean().optional() }).optional(),
     author: z.looseObject({
-      viewer: z.looseObject({ blockedBy: z.boolean().optional(), blocking: z.string().optional() }).optional(),
+      viewer: z.looseObject({
+        blockedBy: z.boolean().optional(),
+        blocking: z.string().optional(),
+        blockingByList: z.looseObject({}).nullish(),
+      }).optional(),
     }).optional(),
   })),
 });
@@ -51,7 +55,7 @@ const create = (deps: Deps): QuoteBlueskyPostUseCase => {
     const authorViewer = post.author?.viewer;
     if (
       post.viewer?.embeddingDisabled === true || authorViewer?.blockedBy === true
-      || authorViewer?.blocking !== undefined
+      || authorViewer?.blocking !== undefined || (authorViewer?.blockingByList ?? null) !== null
     ) {
       return RA.err({ type: 'BlueskyQuoteNotAllowed' });
     }

@@ -100,6 +100,10 @@ describe('QuoteBlueskyPostUseCase', () => {
       ['引用が無効', { viewer: { embeddingDisabled: true } }],
       ['相手にブロックされている', { author: { viewer: { blockedBy: true } } }],
       ['相手をブロックしている', { author: { viewer: { blocking: 'at://did:plc:me/app.bsky.graph.block/1' } } }],
+      [
+        'リストでブロックしている',
+        { author: { viewer: { blockingByList: { uri: 'at://did:plc:me/app.bsky.graph.list/1', name: 'mute' } } } },
+      ],
     ])('%s ときは NotAllowed にし、投稿しない', async (_label, extra) => {
       const t = setup(target(extra));
 
