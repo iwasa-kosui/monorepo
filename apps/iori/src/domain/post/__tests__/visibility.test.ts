@@ -43,6 +43,17 @@ describe('Visibility.fromAddressing', () => {
   });
 });
 
+describe('Visibility.narrower', () => {
+  const order = ['public', 'unlisted', 'private', 'direct'] as const;
+
+  it.each(order.flatMap((a, i) => order.map((b, j) => ({ a, b, expected: order[Math.max(i, j)]! }))))(
+    '$a と $b のうち狭い方 $expected を返す',
+    ({ a, b, expected }) => {
+      expect(Visibility.narrower(a, b)).toBe(expected);
+    },
+  );
+});
+
 describe('Visibility.isVisibleToAnonymous', () => {
   it('accepts only public and unlisted', () => {
     expect(Visibility.isVisibleToAnonymous('public')).toBe(true);

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { LocalPost, RemotePost } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
@@ -662,7 +663,7 @@ describe('SendReplyUseCase の親がリモートの返信の宛先の解決', ()
       createdAt: Date.now() as RemotePost['createdAt'],
       uri: 'https://remote.example/notes/1',
       inReplyToUri: null,
-      visibility: 'direct',
+      visibility: 'public',
     };
     const sessionResolver = createMockSessionResolver();
     sessionResolver.setSession(session);
@@ -801,4 +802,182 @@ describe('SendReplyUseCase の親がリモートの返信の宛先の解決', ()
     expect(deps.timelineItemCreatedStore.store).not.toHaveBeenCalled();
     expect(ctx.sendActivity).not.toHaveBeenCalled();
   });
+});
+
+describe('SendReplyUseCase の元の投稿の公開範囲', () => {
+  const aliceUri = 'https://remote.example/users/alice';
+  const aliceInbox = 'https://remote.example/users/alice/inbox';
+  const followersUri = 'https://example.com/users/kosui/followers';
+  const publicUri = 'https://www.w3.org/ns/activitystreams#Public';
+
+  const setup = (parentType: 'local' | 'remote', parentVisibility: Visibility | null) => {
+    const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
+    const session: Session = {
+      sessionId: crypto.randomUUID() as Session['sessionId'],
+      userId: user.id,
+      expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+    };
+    const actor: LocalActor = {
+      id: crypto.randomUUID() as LocalActor['id'],
+      userId: user.id,
+      uri: 'https://example.com/users/kosui',
+      inboxUrl: 'https://example.com/inbox',
+      type: 'local',
+      logoUri: undefined,
+    };
+    const common = {
+      summary: null,
+      sensitive: false,
+      postId: crypto.randomUUID() as PostId,
+      content: 'parent',
+      createdAt: Date.now() as LocalPost['createdAt'],
+      inReplyToUri: null,
+    };
+    const parent: LocalPost | RemotePost = parentType === 'local'
+      ? { ...common, type: 'local', visibility: parentVisibility ?? 'public', actorId: actor.id, userId: user.id }
+      : {
+        ...common,
+        type: 'remote',
+        visibility: parentVisibility,
+        actorId: crypto.randomUUID() as RemotePost['actorId'],
+        uri: 'https://remote.example/notes/1',
+      };
+    const sessionResolver = createMockSessionResolver();
+    sessionResolver.setSession(session);
+    const userResolver = createMockUserResolver();
+    userResolver.setUser(user);
+    const actorResolverByUserId = createMockActorResolverByUserId();
+    actorResolverByUserId.setActor(actor);
+    const postResolver = createMockPostResolver();
+    postResolver.setPost(parent);
+    const deps = {
+      sessionResolver,
+      userResolver,
+      actorResolverByUserId,
+      postCreatedStore: createMockPostCreatedStore(),
+      postImageCreatedStore: createMockPostImageCreatedStore(),
+      timelineItemCreatedStore: createMockTimelineItemCreatedStore(),
+      localPostResolverByUri: createMockLocalPostResolverByUri(),
+      replyNotificationCreatedStore: createMockReplyNotificationCreatedStore(),
+      pushSubscriptionsResolver: createMockPushSubscriptionsResolverByUserId(),
+      webPushSender: createMockWebPushSender(),
+      postResolver,
+      origin: 'https://example.com',
+    };
+    const author = new Person({ id: new URL(aliceUri), preferredUsername: 'alice', inbox: new URL(aliceInbox) });
+    const ctx = Object.assign(createContext(), {
+      getDocumentLoader: vi.fn(async () => ({})),
+      lookupObject: vi.fn(async () => new Note({ id: new URL('https://remote.example/notes/1'), attribution: author })),
+    });
+    const reply = (visibility?: Visibility, extraDeps: Partial<Parameters<typeof SendReplyUseCase.create>[0]> = {}) =>
+      SendReplyUseCase.create({ ...deps, ...extraDeps }).run({
+        sessionId: session.sessionId,
+        postId: parent.postId,
+        content: '<p>reply</p>',
+        imageUrls: [],
+        ...(visibility === undefined ? {} : { visibility }),
+        request: new Request('https://example.com'),
+        ctx,
+      });
+    return { deps, ctx, reply };
+  };
+
+  const noteOf = async (call: readonly unknown[]) => {
+    const create = call[2] as { getObject: () => Promise<Note | null> };
+    return (await create.getObject()) as Note;
+  };
+
+  const cases: ReadonlyArray<
+    readonly [Visibility | null, ReadonlyArray<readonly [Visibility | undefined, Visibility]>]
+  > = [
+    ['unlisted', [[undefined, 'unlisted'], ['public', 'unlisted'], ['unlisted', 'unlisted'], ['private', 'private'], [
+      'direct',
+      'direct',
+    ]]],
+    ['private', [[undefined, 'private'], ['public', 'private'], ['unlisted', 'private'], ['private', 'private'], [
+      'direct',
+      'direct',
+    ]]],
+    ['direct', [[undefined, 'direct'], ['public', 'direct'], ['unlisted', 'direct'], ['private', 'direct'], [
+      'direct',
+      'direct',
+    ]]],
+    [null, [[undefined, 'public'], ['public', 'public'], ['unlisted', 'unlisted'], ['private', 'private'], [
+      'direct',
+      'direct',
+    ]]],
+  ];
+
+  describe.each(['local', 'remote'] as const)('親が%sの投稿のとき', (parentType) => {
+    const applicable = cases.filter(([parentVisibility]) => parentType === 'remote' || parentVisibility !== null);
+
+    it.each(
+      applicable.flatMap(([parentVisibility, rows]) =>
+        rows.map(([requested, expected]) => ({ parentVisibility, requested, expected }))
+      ),
+    )(
+      '親が $parentVisibility で指定が $requested の返信は $expected にする',
+      async ({ parentVisibility, requested, expected }) => {
+        const { deps, reply } = setup(parentType, parentVisibility);
+
+        const result = await reply(requested);
+
+        expect(result.ok && result.val.post.visibility).toBe(expected);
+        expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
+          visibility: expected,
+        });
+      },
+    );
+  });
+
+  it.each([
+    { parentVisibility: 'unlisted' as const, tos: [followersUri], ccs: [publicUri, aliceUri], toFollowers: true },
+    { parentVisibility: 'private' as const, tos: [followersUri], ccs: [aliceUri], toFollowers: true },
+    { parentVisibility: 'direct' as const, tos: [aliceUri], ccs: [], toFollowers: false },
+  ])(
+    '親がリモートの $parentVisibility の投稿への返信を省略指定で作ると、Note の to と cc を親の公開範囲に合わせる',
+    async ({ parentVisibility, tos, ccs, toFollowers }) => {
+      const { ctx, reply } = setup('remote', parentVisibility);
+
+      const result = await reply();
+
+      expect(result.ok).toBe(true);
+      const calls = vi.mocked(ctx.sendActivity).mock.calls;
+      expect(calls.map((call) => call[1] === 'followers')).toContain(toFollowers);
+      const note = await noteOf(calls[0] ?? []);
+      expect(note.toIds.map((url) => url.href)).toEqual(tos);
+      expect(note.ccIds.map((url) => url.href)).toEqual(ccs);
+    },
+  );
+
+  it('親がリモートの direct の投稿へ public と指定した返信は、作者と宛先を参加者に保存する', async () => {
+    const { deps, reply } = setup('remote', 'direct');
+    const actorResolverById = { resolve: vi.fn(() => RA.ok({ uri: aliceUri } as never)) };
+
+    await reply('public', { actorResolverById });
+
+    expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
+      participantActorUris: ['https://example.com/users/kosui', aliceUri],
+    });
+  });
+
+  it.each(['private', 'direct'] as const)(
+    '親がローカルの %s の投稿への返信を省略指定で作ると、followers に送らず、Public をどこにも入れない',
+    async (parentVisibility) => {
+      const { ctx, reply } = setup('local', parentVisibility);
+
+      const result = await reply();
+
+      expect(result.ok).toBe(true);
+      const calls = vi.mocked(ctx.sendActivity).mock.calls;
+      if (parentVisibility === 'direct') {
+        expect(calls).toHaveLength(0);
+        return;
+      }
+      expect(calls).toHaveLength(1);
+      const note = await noteOf(calls[0] ?? []);
+      expect(note.toIds.map((url) => url.href)).toEqual([followersUri]);
+      expect(note.ccIds).toEqual([]);
+    },
+  );
 });
