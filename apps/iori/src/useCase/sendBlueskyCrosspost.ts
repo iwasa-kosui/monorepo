@@ -21,12 +21,13 @@ import type { BlueskyTimelineItemsDeletedStore } from '../domain/blueskyTimeline
 import type { PostImagesResolverByPostId } from '../domain/image/image.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { LinkPreviewsResolverByPostId } from '../domain/linkPreview/linkPreview.ts';
-import type { LocalPostResolverByUri, PostResolver } from '../domain/post/post.ts';
+import type { LocalPostResolverByUri, PostQuotesResolverByPostIds, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { UserResolver } from '../domain/user/user.ts';
 import type { BlueskyClient, BlueskyQueryClient, BlueskyThumbnailFetcher } from '../ports/blueskyClient.ts';
 import type { PostImageObjectStore } from '../ports/postImageObjectStore.ts';
 import { findMentionHandles, withMentionFacets } from './helper/blueskyMentionFacets.ts';
+import { resolveBlueskyQuoteContextWith } from './helper/blueskyQuoteContext.ts';
 import { resolveBlueskyReplyContextWith } from './helper/blueskyReplyContext.ts';
 import { deleteBlueskyRecordWith } from './helper/deleteBlueskyRecord.ts';
 import { resolveDids } from './helper/publishBlueskyPost.ts';
@@ -42,6 +43,7 @@ type Deps = Readonly<{
   postResolver: PostResolver;
   userResolver: UserResolver;
   localPostResolverByUri: LocalPostResolverByUri;
+  postQuotesResolver: PostQuotesResolverByPostIds;
   postImagesResolver: PostImagesResolverByPostId;
   linkPreviewsResolver: LinkPreviewsResolverByPostId;
   crosspostResolver: BlueskyCrosspostResolver;
@@ -60,6 +62,7 @@ const errorNameOf = (error: unknown): string => error instanceof Error ? error.n
 
 const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
   const resolveReplyContext = resolveBlueskyReplyContextWith(deps);
+  const resolveQuoteContext = resolveBlueskyQuoteContextWith(deps);
   const deleteRemote = deleteBlueskyRecordWith(deps);
 
   const failWith = async (crosspost: BlueskyCrosspost, message: string): Promise<SendBlueskyCrosspostOutcome> => {
@@ -110,7 +113,8 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       await deps.crosspostSavedStore.update(BlueskyCrosspost.markSkipped(crosspost, skipReason, deps.now()));
       return 'skipped';
     }
-    if (replyTo.kind === 'waiting') return 'noop';
+    const quote = await resolveQuoteContext(post);
+    if (replyTo.kind === 'waiting' || quote.kind === 'waiting') return 'noop';
 
     const attempting = BlueskyCrosspost.markSending(crosspost, deps.now());
     if (!Result.unsafeUnwrap(await deps.crosspostSavedStore.update(attempting))) return 'noop';
@@ -154,6 +158,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       unavailableImageUrls,
       linkPreview,
       replyTo,
+      quote,
       createdAt: post.createdAt,
     });
     if (!draft.ok) {

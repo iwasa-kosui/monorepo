@@ -13,6 +13,7 @@ import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1PostImagesResolverByPostId } from '../adaptor/d1/image/postImagesResolver.ts';
 import { createD1LinkPreviewsResolverByPostId } from '../adaptor/d1/linkPreview/linkPreviewsResolverByPostId.ts';
 import { createD1LocalPostResolverByUri } from '../adaptor/d1/post/localPostResolverByUri.ts';
+import { createD1PostQuotesResolverByPostIds } from '../adaptor/d1/post/postQuotesResolverByPostIds.ts';
 import { createD1PostResolver } from '../adaptor/d1/post/postResolver.ts';
 import { createD1UserResolver } from '../adaptor/d1/user/userResolver.ts';
 import { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
@@ -61,6 +62,7 @@ export const createBlueskyCrosspostUseCases = (
   const now = Instant.now;
   const postResolver = createD1PostResolver(db);
   const localPostResolverByUri = createD1LocalPostResolverByUri(db, env.ORIGIN);
+  const postQuotesResolver = createD1PostQuotesResolverByPostIds(db);
   const crosspostResolver = createD1BlueskyCrosspostResolver(db);
   const crosspostSavedStore = createD1BlueskyCrosspostSavedStore(db);
   const crosspostDeletedStore = createD1BlueskyCrosspostDeletedStore(db);
@@ -77,6 +79,7 @@ export const createBlueskyCrosspostUseCases = (
     postResolver,
     userResolver: createD1UserResolver(db),
     localPostResolverByUri,
+    postQuotesResolver,
     postImagesResolver: createD1PostImagesResolverByPostId(db),
     linkPreviewsResolver: createD1LinkPreviewsResolverByPostId(db),
     crosspostResolver,

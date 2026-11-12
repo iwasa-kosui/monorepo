@@ -13,6 +13,7 @@ import { createD1BlueskyTimelineItemsDeletedStore } from '../../adaptor/d1/blues
 import { createD1PostImagesResolverByPostId } from '../../adaptor/d1/image/postImagesResolver.ts';
 import { createD1LinkPreviewsResolverByPostId } from '../../adaptor/d1/linkPreview/linkPreviewsResolverByPostId.ts';
 import { createD1LocalPostResolverByUri } from '../../adaptor/d1/post/localPostResolverByUri.ts';
+import { createD1PostQuotesResolverByPostIds } from '../../adaptor/d1/post/postQuotesResolverByPostIds.ts';
 import { createD1PostResolver } from '../../adaptor/d1/post/postResolver.ts';
 import { createD1UserResolver } from '../../adaptor/d1/user/userResolver.ts';
 import { BlueskyCrosspost } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
@@ -20,6 +21,7 @@ import type { BlueskyBlob, BlueskyPostRecord } from '../../domain/blueskyCrosspo
 import { blueskyRkeyOf } from '../../domain/blueskyCrosspost/blueskyRkey.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { PostId } from '../../domain/post/postId.ts';
+import { appendQuoteInline } from '../../domain/post/quoteInline.ts';
 import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import type { PostImageObjectStore } from '../../ports/postImageObjectStore.ts';
 import { RemoveBlueskyCrosspostUseCase } from '../removeBlueskyCrosspost.ts';
@@ -133,6 +135,7 @@ const setup = () => {
 
   const postResolver = createD1PostResolver(db);
   const localPostResolverByUri = createD1LocalPostResolverByUri(db, SEED_ORIGIN);
+  const postQuotesResolver = createD1PostQuotesResolverByPostIds(db);
   const crosspostResolver = createD1BlueskyCrosspostResolver(db);
   const crosspostSavedStore = createD1BlueskyCrosspostSavedStore(db);
   const crosspostDeletedStore = createD1BlueskyCrosspostDeletedStore(db);
@@ -141,6 +144,7 @@ const setup = () => {
     postResolver,
     userResolver: createD1UserResolver(db),
     localPostResolverByUri,
+    postQuotesResolver,
     postImagesResolver: createD1PostImagesResolverByPostId(db),
     linkPreviewsResolver: createD1LinkPreviewsResolverByPostId(db),
     crosspostResolver,
@@ -186,13 +190,16 @@ const setup = () => {
     options: {
       content?: string;
       inReplyToUri?: string | null;
+      quoteUri?: string;
       summary?: string | null;
       sensitive?: boolean;
       visibility?: 'public' | 'unlisted' | 'private';
     } = {},
   ) => {
     const post = seed.addLocalPost(actor, CREATED_AT, {
-      content: options.content ?? '<p>こんにちは <a href="https://example.com/x">example.com/x</a></p>',
+      content: options.quoteUri === undefined
+        ? options.content ?? '<p>こんにちは <a href="https://example.com/x">example.com/x</a></p>'
+        : appendQuoteInline(options.content ?? '<p>引用</p>', options.quoteUri),
       inReplyToUri: options.inReplyToUri,
       visibility: options.visibility,
     });
@@ -201,6 +208,9 @@ const setup = () => {
       options.sensitive === true ? 1 : 0,
       post.postId,
     );
+    if (options.quoteUri !== undefined) {
+      sqlite.prepare('INSERT INTO post_quotes(postId,quoteUri) VALUES (?,?)').run(post.postId, options.quoteUri);
+    }
     return { ...post, postId: post.postId as PostId };
   };
   const insertTimelineItem = (feedItemId: string, uri: string, repostedByDid: string | null = null) =>
@@ -1200,6 +1210,91 @@ describe('スレッドの 2 件目以降', () => {
 
     expect(await t.row(child.postId)).toMatchObject({ status: 'sent', attempts: 1 });
     expect(t.created[1]?.reply).toBeDefined();
+  });
+});
+
+describe('自分の投稿の引用', () => {
+  const insertRow = (t: ReturnType<typeof setup>, postId: string, status: 'pending' | 'skipped') =>
+    t.sqlite.prepare(
+      'INSERT INTO bluesky_crossposts(postId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?)',
+    ).run(postId, status, 0, NOW, NOW);
+  const quotedRef = { uri: 'at://did:plc:abc/app.bsky.feed.post/3k0', cid: 'bafycid0' };
+
+  it('引用元が sent なら、embed.record を付け、RE: の段落を本文から取り除いて送る', async () => {
+    const t = setup();
+    const quoted = t.addPost({ content: '<p>元</p>' });
+    insertRow(t, quoted.postId, 'pending');
+    await run(t.send.run({ postId: quoted.postId }));
+    const post = t.addPost({ content: '<p>引用</p>', quoteUri: quoted.uri });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.created).toHaveLength(2);
+    expect(t.created[1]?.text).toBe('引用');
+    expect(t.created[1]?.embed).toEqual({ $type: 'app.bsky.embed.record', record: quotedRef });
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
+  });
+
+  it('引用元が pending の間、send は引用投稿を pending のまま、attempts を増やさず何もしない', async () => {
+    const t = setup();
+    const quoted = t.addPost({ content: '<p>元</p>' });
+    insertRow(t, quoted.postId, 'pending');
+    const post = t.addPost({ quoteUri: quoted.uri });
+
+    expect(await run(t.schedule.run({ postId: post.postId }))).toBe('pending');
+    await t.flush();
+
+    expect(await t.row(post.postId)).toMatchObject({ status: 'pending', attempts: 0 });
+    expect(t.created).toEqual([]);
+  });
+
+  it('引用元の送信後に retry すると、引用投稿が embed.record 付きで送られる', async () => {
+    const t = setup();
+    const quoted = t.addPost({ content: '<p>元</p>' });
+    insertRow(t, quoted.postId, 'pending');
+    const post = t.addPost({ quoteUri: quoted.uri });
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    await run(t.send.run({ postId: quoted.postId }));
+    t.sqlite.prepare('UPDATE bluesky_crossposts SET createdAt = ? WHERE postId = ?').run(
+      NOW - 60 * 60_000,
+      post.postId,
+    );
+    await run(t.retry.run());
+
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent', attempts: 1 });
+    expect(t.created[1]?.embed).toEqual({ $type: 'app.bsky.embed.record', record: quotedRef });
+  });
+
+  it('引用元が skipped なら、RE: のリンクのまま embed なしで送る', async () => {
+    const t = setup();
+    const quoted = t.addPost({ content: '<p>元</p>', visibility: 'unlisted' });
+    insertRow(t, quoted.postId, 'skipped');
+    const post = t.addPost({ quoteUri: quoted.uri });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.created).toHaveLength(1);
+    expect(t.created[0]?.text).toBe(`引用\n\nRE: ${quoted.uri}`);
+    expect(t.created[0]).not.toHaveProperty('embed');
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
+  });
+
+  it('他人の投稿を引用したときは、従来どおり RE: のリンクのまま embed なしで送る', async () => {
+    const t = setup();
+    const remoteActor = t.seed.addRemoteActor('alice');
+    const remote = t.seed.addRemotePost(remoteActor, CREATED_AT, { content: '<p>他人</p>' });
+    const post = t.addPost({ quoteUri: remote.uri });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.created).toHaveLength(1);
+    expect(t.created[0]?.text).toBe(`引用\n\nRE: ${remote.uri}`);
+    expect(t.created[0]).not.toHaveProperty('embed');
   });
 });
 

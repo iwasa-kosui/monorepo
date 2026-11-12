@@ -376,3 +376,81 @@ describe('buildBlueskyPostDraft の sensitive', () => {
     expect('labels' in record).toBe(false);
   });
 });
+
+describe('buildBlueskyPostDraft の引用', () => {
+  const quoteUri = 'https://iori.example/users/kosui/posts/11111111-1111-4111-8111-111111111111';
+  const ref = { uri: 'at://did:plc:x/app.bsky.feed.post/quoted', cid: 'cidquoted' };
+  const quote = { kind: 'sent' as const, ...ref, quoteUri };
+  const html = `<p>hello</p><p>RE: <a href="${quoteUri}">${quoteUri}</a></p>`;
+  const preview = { url: 'https://example.com/article', title: 'タイトル', description: '説明' };
+
+  it('引用だけなら embed.record にし、本文から RE: の段落を取り除く', () => {
+    const draft = build({ html, quote });
+    expect(draft.text).toBe('hello');
+    expect(draft.facets).toEqual([]);
+    expect(toBlueskyPostRecord(draft, { images: [] }).embed).toEqual({ $type: 'app.bsky.embed.record', record: ref });
+  });
+
+  it('画像があれば recordWithMedia の media に images を入れる', () => {
+    const blob = { $type: 'blob' as const, ref: { $link: 'img' }, mimeType: 'image/png', size: 10 };
+    const draft = build({ html, quote, images: [image(10, 'a')] });
+    expect(toBlueskyPostRecord(draft, { images: [blob] }).embed).toEqual({
+      $type: 'app.bsky.embed.recordWithMedia',
+      record: { record: ref },
+      media: { $type: 'app.bsky.embed.images', images: [{ alt: 'a', image: blob }] },
+    });
+  });
+
+  it('画像が無く linkPreview があれば recordWithMedia の media に external を入れる', () => {
+    const draft = build({ html, quote, linkPreview: preview });
+    expect(toBlueskyPostRecord(draft, { images: [] }).embed).toEqual({
+      $type: 'app.bsky.embed.recordWithMedia',
+      record: { record: ref },
+      media: {
+        $type: 'app.bsky.embed.external',
+        external: { uri: preview.url, title: 'タイトル', description: '説明' },
+      },
+    });
+  });
+
+  it('ユーザーが本文に書いた引用先へのリンクは消さない', () => {
+    const own = `<p>see <a href="${quoteUri}">this</a></p>`;
+    expect(build({ html: own, quote }).text).toBe('see this');
+  });
+
+  it('300 graphemes の判定は RE: の段落を取り除いた本文で行う', () => {
+    const body = 'あ'.repeat(BLUESKY_MAX_GRAPHEMES);
+    const draft = build({ html: `<p>${body}</p><p>RE: <a href="${quoteUri}">${quoteUri}</a></p>`, quote });
+    expect(draft.text).toBe(body);
+  });
+
+  it('引用が none、unsent、waiting のときは RE: の段落を残し、embed を作らない', () => {
+    for (const context of [{ kind: 'none' }, { kind: 'unsent' }, { kind: 'waiting' }] as const) {
+      const draft = build({ html, quote: context });
+      expect(draft.text).toBe(`hello\n\nRE: ${quoteUri}`);
+      expect(draft.quote).toBeUndefined();
+      expect('embed' in toBlueskyPostRecord(draft, { images: [] })).toBe(false);
+    }
+  });
+
+  it('引用を渡さなければ従来どおり', () => {
+    const draft = build({ html });
+    expect(draft.text).toBe(`hello\n\nRE: ${quoteUri}`);
+    expect(draft.quote).toBeUndefined();
+  });
+
+  it('CW 付きの投稿は引用を付けず、embed を作らない', () => {
+    const draft = build({ summary: '注意', html, quote });
+    expect(draft.quote).toBeUndefined();
+    expect('embed' in toBlueskyPostRecord(draft, { images: [] })).toBe(false);
+  });
+
+  it('返信と引用が両方あれば、reply と embed の両方を付ける', () => {
+    const root = { uri: 'at://did:plc:x/app.bsky.feed.post/root', cid: 'cidroot' };
+    const record = toBlueskyPostRecord(build({ html, quote, replyTo: { kind: 'sent', root, parent: root } }), {
+      images: [],
+    });
+    expect(record.reply).toEqual({ root, parent: root });
+    expect(record.embed).toEqual({ $type: 'app.bsky.embed.record', record: ref });
+  });
+});
