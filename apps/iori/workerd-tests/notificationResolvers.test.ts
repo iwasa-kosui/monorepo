@@ -18,6 +18,12 @@ const bob = crypto.randomUUID();
 const carol = crypto.randomUUID();
 const notificationIds: string[] = [];
 const blockIds: string[] = [];
+const moderatedUserId = crypto.randomUUID();
+const mutedDid = `did:plc:muted-${crypto.randomUUID()}`;
+const blockedDid = `did:plc:blocked-${crypto.randomUUID()}`;
+const visibleDid = `did:plc:visible-${crypto.randomUUID()}`;
+const blueskyTypes = ['blueskyFollow'] as const;
+type Kind = (typeof types)[number] | (typeof blueskyTypes)[number];
 
 const addActor = (actorId: string) =>
   env.DB.prepare('INSERT INTO actors(actorId,uri,inboxUrl,type) VALUES (?,?,?,?)').bind(
@@ -61,6 +67,34 @@ const addNotification = (
   };
 };
 
+const addBlueskyFollow = (recipientUserId: string, authorDid: string, createdAt: number) => {
+  const notificationId = crypto.randomUUID();
+  notificationIds.push(notificationId);
+  return {
+    notificationId,
+    statements: [
+      env.DB.prepare(
+        'INSERT INTO notifications(notificationId,recipientUserId,type,isRead,createdAt) VALUES (?,?,?,?,?)',
+      )
+        .bind(notificationId, recipientUserId, 'blueskyFollow', 0, createdAt),
+      env.DB.prepare(
+        'INSERT INTO notification_bluesky(notificationId,blueskyUri,reason,authorDid,authorHandle) VALUES (?,?,?,?,?)',
+      )
+        .bind(
+          notificationId,
+          `at://${authorDid}/app.bsky.graph.follow/${notificationId}`,
+          'follow',
+          authorDid,
+          'a.test',
+        ),
+    ],
+  };
+};
+
+const addModeratedActor = (did: string, muted: number, blockUri: string | null) =>
+  env.DB.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
+    .bind(did, muted, blockUri, 1);
+
 const aliceLike = addNotification('like', meId, alice, 1_000);
 const bobLike = addNotification('like', meId, bob, 2_000);
 const aliceMention = addNotification('mention', meId, alice, 3_000);
@@ -69,20 +103,27 @@ const carolLike = addNotification('like', meId, carol, 5_000);
 const otherBobLike = addNotification('like', otherId, bob, 6_000);
 const otherAliceLike = addNotification('like', otherId, alice, 7_000);
 
-const resolveByPage = async (recipient: string) => {
+const mutedFollow = addBlueskyFollow(moderatedUserId, mutedDid, 1_000);
+const blockedFollow = addBlueskyFollow(moderatedUserId, blockedDid, 2_000);
+const visibleFollow = addBlueskyFollow(moderatedUserId, visibleDid, 3_000);
+
+const resolveByPage = async (
+  recipient: string,
+  kinds: ReadonlyArray<Kind> = types,
+) => {
   const result = await createD1NotificationsResolverByPage(db).resolve({
     recipientUserId: UserId.orThrow(recipient),
     page: { limit: 20, olderThanId: undefined, newerThanId: undefined, order: 'newestFirst' },
-    types: [...types],
+    types: [...kinds],
   });
   if (!result.ok) throw new Error('resolve failed');
   return result.val.map((item) => item.notification.notificationId as string);
 };
 
-const count = async (userId: string) => {
+const count = async (userId: string, kinds: ReadonlyArray<Kind> = types) => {
   const result = await createD1NotificationCountResolverSinceMarker(db).resolve({
     userId: UserId.orThrow(userId),
-    types: [...types],
+    types: [...kinds],
     limit: 100,
   });
   if (!result.ok) throw new Error('count failed');
@@ -102,6 +143,12 @@ beforeAll(async () => {
   await env.DB.batch([
     env.DB.prepare('INSERT INTO users(userId,username) VALUES (?,?)').bind(meId, `notification-me-${meId}`),
     env.DB.prepare('INSERT INTO users(userId,username) VALUES (?,?)').bind(otherId, `notification-other-${otherId}`),
+    env.DB.prepare('INSERT INTO users(userId,username) VALUES (?,?)').bind(
+      moderatedUserId,
+      `notification-moderated-${moderatedUserId}`,
+    ),
+    addModeratedActor(mutedDid, 1, null),
+    addModeratedActor(blockedDid, 0, `at://${blockedDid}/app.bsky.graph.block/3kblock`),
     addActor(alice),
     addActor(bob),
     addActor(carol),
@@ -110,6 +157,7 @@ beforeAll(async () => {
     addBlock(otherId, carol),
     ...[aliceLike, bobLike, aliceMention, bobMention, carolLike, otherBobLike, otherAliceLike]
       .flatMap((notification) => notification.statements),
+    ...[mutedFollow, blockedFollow, visibleFollow].flatMap((notification) => notification.statements),
   ]);
 });
 
@@ -118,6 +166,9 @@ afterAll(async () => {
   const blocks = JSON.stringify(blockIds);
   await env.DB.batch([
     env.DB.prepare('DELETE FROM mastodon_markers WHERE userId IN (?, ?)').bind(meId, otherId),
+    env.DB.prepare('DELETE FROM notification_bluesky WHERE notificationId IN (SELECT value FROM json_each(?))').bind(
+      notifications,
+    ),
     env.DB.prepare('DELETE FROM notification_likes WHERE notificationId IN (SELECT value FROM json_each(?))').bind(
       notifications,
     ),
@@ -128,8 +179,9 @@ afterAll(async () => {
       notifications,
     ),
     env.DB.prepare('DELETE FROM blocks WHERE blockId IN (SELECT value FROM json_each(?))').bind(blocks),
+    env.DB.prepare('DELETE FROM bluesky_moderated_actors WHERE did IN (?, ?)').bind(mutedDid, blockedDid),
     env.DB.prepare('DELETE FROM actors WHERE actorId IN (?, ?, ?)').bind(alice, bob, carol),
-    env.DB.prepare('DELETE FROM users WHERE userId IN (?, ?)').bind(meId, otherId),
+    env.DB.prepare('DELETE FROM users WHERE userId IN (?, ?, ?)').bind(meId, otherId, moderatedUserId),
   ]);
 });
 
@@ -168,5 +220,21 @@ describe('通知のリゾルバーが workerd の D1 でブロックを除く', 
     expect(await resolveById(otherId, otherBobLike.notificationId)).toBeUndefined();
     expect(await resolveById(meId, bobLike.notificationId)).toBeDefined();
     expect(await resolveById(meId, carolLike.notificationId)).toBeDefined();
+  });
+});
+
+describe('通知のリゾルバーが workerd の D1 で Bluesky のミュートとブロックを除く', () => {
+  it('1件の取得は、ミュートまたはブロックした相手の通知を返さず、ほかの相手の通知を返す', async () => {
+    expect(await resolveById(moderatedUserId, mutedFollow.notificationId)).toBeUndefined();
+    expect(await resolveById(moderatedUserId, blockedFollow.notificationId)).toBeUndefined();
+    expect((await resolveById(moderatedUserId, visibleFollow.notificationId))?.notification).toMatchObject({
+      type: 'blueskyFollow',
+      notificationId: visibleFollow.notificationId,
+    });
+  });
+
+  it('一覧と件数も、同じ通知を除く', async () => {
+    expect(await resolveByPage(moderatedUserId, blueskyTypes)).toEqual([visibleFollow.notificationId]);
+    expect(await count(moderatedUserId, blueskyTypes)).toBe(1);
   });
 });
