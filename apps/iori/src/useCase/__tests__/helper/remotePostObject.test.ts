@@ -208,6 +208,35 @@ describe('readRemotePostPoll', () => {
     expect(poll?.votersCount).toBe(7);
   });
 
+  it('votersCount が負の数、小数、文字列なら null にして、残りは使う', async () => {
+    const received = (voters: unknown) =>
+      Question.fromJsonLd({
+        '@context': ['https://www.w3.org/ns/activitystreams', { toot: 'http://joinmastodon.org/ns#' }],
+        type: 'Question',
+        id: ID.href,
+        oneOf: [{ type: 'Note', name: 'a', replies: { type: 'Collection', totalItems: 2 } }],
+        'toot:votersCount': voters,
+      });
+    const negative = await readRemotePostPoll(await received(-1));
+    const fractional = await readRemotePostPoll(await received(1.5));
+    const text = await readRemotePostPoll(await received('7'));
+
+    for (const poll of [negative, fractional, text]) {
+      expect(poll?.votersCount).toBeNull();
+      expect(poll?.options).toEqual([{ title: 'a', votesCount: 2 }]);
+    }
+  });
+
+  it('選択肢は先頭から 50 個までにする', async () => {
+    const options = Array.from({ length: 60 }, (_, index) => option(`o${index}`, index));
+
+    const poll = await readRemotePostPoll(question({ exclusiveOptions: options }));
+
+    expect(poll?.options).toHaveLength(50);
+    expect(poll?.options[0]).toEqual({ title: 'o0', votesCount: 0 });
+    expect(poll?.options[49]).toEqual({ title: 'o49', votesCount: 49 });
+  });
+
   it('endTime を expiresAt にする', async () => {
     const endTime = Temporal.Instant.from('2999-01-02T03:04:05Z');
     const poll = await readRemotePostPoll(question({ exclusiveOptions: [option('a')], endTime }));

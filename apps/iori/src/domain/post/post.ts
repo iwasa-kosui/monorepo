@@ -115,6 +115,11 @@ export type RemotePostUpdated = PostEvent<
     poll: RemotePostPoll | null;
   }
 >;
+export type RemotePostPollUpdated = PostEvent<
+  RemotePost,
+  'post.remotePostPollUpdated',
+  { postId: PostId; poll: RemotePostPoll }
+>;
 export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
 
 const createPost = (now: Instant) =>
@@ -293,6 +298,9 @@ const updateRemotePost = (now: Instant) => (post: RemotePost, edit: RemotePostEd
   );
 };
 
+const updateRemotePostPoll = (now: Instant) => (post: RemotePost, poll: RemotePostPoll): RemotePostPollUpdated =>
+  PostEvent.create(post.postId, post, 'post.remotePostPollUpdated', { postId: post.postId, poll }, now);
+
 const deletePost = (now: Instant) => (postId: PostId): PostDeleted => {
   return PostEvent.create(
     postId,
@@ -311,6 +319,7 @@ export const Post = {
   createRemotePost,
   updatePost,
   updateRemotePost,
+  updateRemotePostPoll,
   isNewerEdit,
   deletePost,
   isVisibleToAnonymous,
@@ -321,6 +330,7 @@ export type PostUpdatedStore = Agg.Store<PostUpdated>;
 export type RemotePostUpdatedStore = Readonly<{
   store: (event: RemotePostUpdated) => RA<Readonly<{ written: boolean }>, never>;
 }>;
+export type RemotePostPollUpdatedStore = Agg.Store<RemotePostPollUpdated>;
 export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostSourceTextResolver = Agg.Resolver<PostId, string | null>;
