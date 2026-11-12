@@ -290,3 +290,79 @@ describe('GET /api/v1/mutes', () => {
     expect([anonymous.status, forbidden.status, cookie.status]).toEqual([401, 403, 200]);
   });
 });
+
+describe('GET /api/v1/blocks', () => {
+  const seedBlocks = async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    const bob = t.seed.addRemoteActor('bob');
+    const carol = t.seed.addRemoteActor('carol');
+    const blockAlice = t.seed.addBlock(me.userId, alice.actorId, 1_000);
+    const blockBob = t.seed.addBlock(me.userId, bob.actorId, 2_000);
+    const blockCarol = t.seed.addBlock(me.userId, carol.actorId, 3_000);
+    const other = t.seed.addLocalActor('other');
+    const foreign = t.seed.addBlock(other.userId, alice.actorId, 4_000);
+    t.seed.addMute(me.userId, t.seed.addRemoteActor('dave').actorId, 5_000);
+    return {
+      ...t,
+      me,
+      foreign,
+      blockIds: [blockCarol.blockId, blockBob.blockId, blockAlice.blockId],
+      accountIds: [carol.actorId, bob.actorId, alice.actorId],
+    };
+  };
+
+  it('ブロックしたアカウントを新しい順に Account で返し、他人のブロックとミュートを含めない', async () => {
+    const t = await seedBlocks();
+
+    const response = await t.request('/api/v1/blocks', { headers: t.me.bearer });
+
+    expect(response.status).toBe(200);
+    const accounts = (await response.json() as unknown[]).map((item) => AccountSchema.parse(item));
+    expect(accounts.map((account) => account.id)).toEqual(t.accountIds);
+    expect(accounts[0]).toMatchObject({ username: 'carol', acct: 'carol@remote.example' });
+  });
+
+  it('limit と max_id と Link ヘッダーで blockId を位置にしてページを送る', async () => {
+    const t = await seedBlocks();
+
+    const first = await t.request('/api/v1/blocks?limit=2', { headers: t.me.bearer });
+    const next = linkOf(first, 'next');
+    const second = await t.request(`${next?.pathname}${next?.search}`, { headers: t.me.bearer });
+
+    expect(idsOf(await first.json())).toEqual(t.accountIds.slice(0, 2));
+    expect(next?.searchParams.get('max_id')).toBe(t.blockIds[1]);
+    expect(idsOf(await second.json())).toEqual([t.accountIds[2]]);
+  });
+
+  it('他人の blockId を max_id に使っても、その時刻を位置にしない', async () => {
+    const t = await seedBlocks();
+
+    const response = await t.request(`/api/v1/blocks?max_id=${t.foreign.blockId}`, { headers: t.me.bearer });
+
+    expect(await response.json()).toEqual([]);
+  });
+
+  it('ブロックがなければ空配列を返し、Link を付けない', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+
+    const response = await t.request('/api/v1/blocks', { headers: me.bearer });
+
+    expect(await response.json()).toEqual([]);
+    expect(response.headers.get('Link')).toBeNull();
+  });
+
+  it('認証がなければ 401、スコープが足りなければ 403 にし、Cookie は通す', async () => {
+    const t = await seedBlocks();
+
+    const [anonymous, forbidden, cookie] = await Promise.all([
+      t.request('/api/v1/blocks'),
+      t.request('/api/v1/blocks', { headers: await t.bearerFor('read:mutes') }),
+      t.request('/api/v1/blocks', { headers: { Cookie: `sessionId=${t.me.sessionId}` } }),
+    ]);
+
+    expect([anonymous.status, forbidden.status, cookie.status]).toEqual([401, 403, 200]);
+  });
+});

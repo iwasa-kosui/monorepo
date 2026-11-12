@@ -1,6 +1,7 @@
 import { createOnAccept, type OnAcceptDeps } from './onAccept.ts';
 import { createOnActivity, type OnActivityDeps } from './onActivity.ts';
 import { createOnAnnounce, type OnAnnounceDeps } from './onAnnounce.ts';
+import { createOnBlock, type OnBlockDeps } from './onBlock.ts';
 import { createOnCreate, type OnCreateDeps } from './onCreate.ts';
 import { createOnDelete, type OnDeleteDeps } from './onDelete.ts';
 import { createOnFollow, type OnFollowDeps } from './onFollow.ts';
@@ -12,6 +13,7 @@ export type InboxListenerDeps = Readonly<{
   onAccept: OnAcceptDeps;
   onActivity: OnActivityDeps;
   onAnnounce: OnAnnounceDeps;
+  onBlock: OnBlockDeps;
   onCreate: OnCreateDeps;
   onDelete: OnDeleteDeps;
   onFollow: OnFollowDeps;
@@ -24,6 +26,7 @@ export const createInboxListener = (deps: InboxListenerDeps) => ({
   onAccept: createOnAccept(deps.onAccept),
   onActivity: createOnActivity(deps.onActivity),
   onAnnounce: createOnAnnounce(deps.onAnnounce),
+  onBlock: createOnBlock(deps.onBlock),
   onCreate: createOnCreate(deps.onCreate),
   onDelete: createOnDelete(deps.onDelete),
   onFollow: createOnFollow(deps.onFollow),

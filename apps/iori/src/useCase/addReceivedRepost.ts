@@ -5,6 +5,7 @@ import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore, RemoteActorProfile } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import type { RemoteActorProfileUpdatedStore } from '../domain/actor/updateProfile.ts';
+import type { BlockResolver } from '../domain/block/block.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
   Notification,
@@ -33,6 +34,7 @@ import {
 import { RepostId } from '../domain/repost/repostId.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
+import { isBlockedBy } from './helper/isBlockedBy.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -112,6 +114,7 @@ type Deps = Readonly<{
   timelineItemCreatedStore: TimelineItemCreatedStore;
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
+  blockResolver?: BlockResolver;
 }>;
 
 const isLocalPost = (post: LocalPost | RemotePost): post is LocalPost => post.type === 'local';
@@ -131,11 +134,14 @@ const create = ({
   timelineItemCreatedStore,
   pushSubscriptionsResolver,
   webPushSender,
+  blockResolver,
 }: Deps): AddReceivedRepostUseCase => {
   const notifyRepost = (post: LocalPost, actor: Actor, now: Instant) =>
     RA.flow(
       RA.ok({ post, actor }),
-      RA.andThrough(({ post, actor }) => {
+      RA.andBind('blocked', async ({ post, actor }) => RA.ok(await isBlockedBy(blockResolver, post.userId, actor.id))),
+      RA.andThrough(({ post, actor, blocked }) => {
+        if (blocked) return RA.ok(undefined);
         const notification: RepostNotification = {
           type: 'repost',
           notificationId: NotificationId.generate(),
@@ -146,7 +152,8 @@ const create = ({
         };
         return repostNotificationCreatedStore.store(Notification.createRepostNotification(notification, now));
       }),
-      RA.andThrough(({ post, actor }) => {
+      RA.andThrough(({ post, actor, blocked }) => {
+        if (blocked) return RA.ok(undefined);
         const reposterName = actor.type === 'remote' && actor.username ? actor.username : 'Someone';
         const payload: PushPayload = {
           title: 'New Boost',

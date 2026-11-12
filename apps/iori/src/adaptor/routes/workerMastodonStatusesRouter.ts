@@ -4,6 +4,7 @@ import { type Context, Hono } from 'hono';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
+import type { BlockedActorIdsResolverByUserId } from '../../domain/block/block.ts';
 import { MediaId } from '../../domain/mediaUpload/mediaId.ts';
 import type { MediaUpload, MediaUploadResolver } from '../../domain/mediaUpload/mediaUpload.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
@@ -59,6 +60,7 @@ export type WorkerMastodonStatusesRouterDeps = Readonly<{
   repostResolverById: RepostResolverById;
   repostResolver: RepostResolver;
   threadResolver: ThreadResolver;
+  blockedActorIdsResolverByUserId: BlockedActorIdsResolverByUserId;
   statusAssembler: StatusAssembler;
   mediaUploadResolver: MediaUploadResolver;
   createPostUseCase: CreatePostUseCase;
@@ -152,6 +154,7 @@ export const createWorkerMastodonStatusesRouter = ({
   repostResolverById,
   repostResolver,
   threadResolver,
+  blockedActorIdsResolverByUserId,
   statusAssembler,
   mediaUploadResolver,
   createPostUseCase,
@@ -522,8 +525,17 @@ export const createWorkerMastodonStatusesRouter = ({
       if (currentPost === null || (viewerActorId === undefined && !Post.isVisibleToAnonymous(currentPost))) {
         return c.json(recordNotFound, 404);
       }
+      const userId = principal?.userId;
+      const blocked = userId === null || userId === undefined
+        ? undefined
+        : await blockedActorIdsResolverByUserId.resolve(userId);
+      if (blocked !== undefined && !blocked.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const blockedActorIds = new Set<ActorId>(blocked?.val ?? []);
       const visible = (posts: ReadonlyArray<PostWithAuthor>): PostWithAuthor[] =>
-        viewerActorId === undefined ? posts.filter(Post.isVisibleToAnonymous) : [...posts];
+        (viewerActorId === undefined ? posts.filter(Post.isVisibleToAnonymous) : [...posts])
+          .filter((post) => !blockedActorIds.has(post.actorId));
       const ancestors = visible(thread.val.ancestors);
       const descendants = visible(thread.val.descendants);
       const statuses = await statusAssembler.assemble({

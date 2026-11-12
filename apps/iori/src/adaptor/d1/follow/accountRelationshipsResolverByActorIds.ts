@@ -23,6 +23,9 @@ export const createD1AccountRelationshipsResolverByActorIds = (
       muting: sql<number>`exists (
         select 1 from mutes where mutes.userId = ${viewerUserId} and mutes.mutedActorId = ${actorsTable.actorId}
       )`,
+      blocking: sql<number>`exists (
+        select 1 from blocks where blocks.userId = ${viewerUserId} and blocks.blockedActorId = ${actorsTable.actorId}
+      )`,
     }).from(actorsTable)
       .where(inArray(actorsTable.actorId, sql`(select value from json_each(${idsJson(actorIds)}))`));
     return RA.ok(rows.map((row) => ({
@@ -30,6 +33,7 @@ export const createD1AccountRelationshipsResolverByActorIds = (
       following: Boolean(row.following),
       followedBy: Boolean(row.followedBy),
       muting: Boolean(row.muting),
+      blocking: Boolean(row.blocking),
     })));
   },
 });

@@ -6,6 +6,7 @@ import type { LocalActor } from '../domain/actor/localActor.ts';
 import { RemoteActor, type RemoteActorCreatedStore, type RemoteActorProfile } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import type { RemoteActorProfileUpdatedStore } from '../domain/actor/updateProfile.ts';
+import type { BlockResolver } from '../domain/block/block.ts';
 import { Follow, type FollowAcceptedStore, type FollowResolver } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
@@ -18,6 +19,7 @@ import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscripti
 import { UserNotFoundError } from '../domain/user/user.ts';
 import type { Username } from '../domain/user/username.ts';
 import type { UserResolverByUsername } from './../domain/user/user.ts';
+import { isBlockedBy } from './helper/isBlockedBy.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -47,6 +49,7 @@ type Deps = Readonly<{
   followNotificationCreatedStore: FollowNotificationCreatedStore;
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
+  blockResolver?: BlockResolver;
 }>;
 
 const isLocalActor = (actor: Actor): actor is LocalActor => actor.type === 'local';
@@ -63,6 +66,7 @@ const create = ({
   followNotificationCreatedStore,
   pushSubscriptionsResolver,
   webPushSender,
+  blockResolver,
 }: Deps): CreateUserUseCase => {
   const run = async (input: Input) => {
     const now = Instant.now();
@@ -121,9 +125,14 @@ const create = ({
           RA.andThrough(() => followedStore.store(followCreated)),
         );
       }),
+      RA.andBind('notifiable', async ({ followingActor, followerActor, isNewFollow }) =>
+        RA.ok(
+          isNewFollow && isLocalActor(followingActor)
+            && !(await isBlockedBy(blockResolver, followingActor.userId, followerActor.id)),
+        )),
       // フォロー通知を作成（新規フォローかつローカルアクターの場合のみ）
-      RA.andThrough(({ followingActor, followerActor, isNewFollow }) => {
-        if (!isNewFollow || !isLocalActor(followingActor)) {
+      RA.andThrough(({ followingActor, followerActor, notifiable }) => {
+        if (!notifiable || !isLocalActor(followingActor)) {
           return RA.ok(undefined);
         }
         const notificationId = NotificationId.generate();
@@ -138,8 +147,8 @@ const create = ({
         return followNotificationCreatedStore.store(event);
       }),
       // Web Push通知を送信（新規フォローかつローカルアクターの場合のみ）
-      RA.andThrough(({ followingActor, followerActor, isNewFollow }) => {
-        if (!isNewFollow || !isLocalActor(followingActor)) {
+      RA.andThrough(({ followingActor, followerActor, notifiable }) => {
+        if (!notifiable || !isLocalActor(followingActor)) {
           return RA.ok(undefined);
         }
         const followerName = followerActor.type === 'remote' && followerActor.username

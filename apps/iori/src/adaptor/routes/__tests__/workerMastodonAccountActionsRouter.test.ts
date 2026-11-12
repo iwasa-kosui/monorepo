@@ -1,4 +1,4 @@
-import { Follow, Undo } from '@fedify/vocab';
+import { Block, Follow, Reject, Undo } from '@fedify/vocab';
 import { describe, expect, it } from 'vitest';
 
 import { RelationshipSchema } from '../../mastodon/entities.ts';
@@ -282,5 +282,236 @@ describe('POST /api/v1/accounts/:id/mute と /unmute', () => {
 
     expect([same.status, cross.status, missing.status]).toEqual([200, 403, 403]);
     expect(t.count('mutes')).toBe(1);
+  });
+});
+
+describe('POST /api/v1/accounts/:id/block と /unblock', () => {
+  it('リモートのアカウントをブロックし、blocking が true の Relationship を返して Block を送る', async () => {
+    const t = await seedActions();
+
+    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/block`);
+
+    expect(response.status).toBe(200);
+    expect(RelationshipSchema.parse(await response.json())).toMatchObject({
+      id: t.alice.actorId,
+      blocking: true,
+      blocked_by: false,
+      following: false,
+    });
+    expect(t.count('blocks', `userId='${t.me.userId}' AND blockedActorId='${t.alice.actorId}'`)).toBe(1);
+    expect(t.count('domain_events', `eventName='block.blockCreated'`)).toBe(1);
+    expect(t.sentActivities()).toHaveLength(1);
+    const sent = t.sentActivities()[0] as Block;
+    expect(sent).toBeInstanceOf(Block);
+    expect(sent.actorId?.href).toBe(`${ORIGIN}/users/kosui`);
+    expect(sent.objectId?.href).toBe('https://remote.example/users/alice');
+    const blockId = (t.sqlite.prepare('SELECT blockId FROM blocks').get() as { blockId: string }).blockId;
+    expect(sent.id?.href).toBe(`${ORIGIN}/users/kosui#blocks/${blockId}`);
+  });
+
+  it('ブロックしている相手へのフォローを外し、Undo(Follow) のあとに Block を送る', async () => {
+    const t = await seedActions();
+    t.seed.addFollow(t.me.actorId, t.alice.actorId);
+
+    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/block`);
+
+    expect(response.status).toBe(200);
+    expect(RelationshipSchema.parse(await response.json())).toMatchObject({ blocking: true, following: false });
+    expect(t.count('follows')).toBe(0);
+    const [undo, block] = t.sentActivities();
+    expect(undo).toBeInstanceOf(Undo);
+    expect(await (undo as Undo).getObject()).toBeInstanceOf(Follow);
+    expect(block).toBeInstanceOf(Block);
+    expect(t.sentActivities()).toHaveLength(2);
+  });
+
+  it('相手から自分へのフォローを外し、Reject(Follow) のあとに Block を送る', async () => {
+    const t = await seedActions();
+    t.seed.addFollow(t.alice.actorId, t.me.actorId);
+
+    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/block`);
+
+    expect(response.status).toBe(200);
+    expect(RelationshipSchema.parse(await response.json())).toMatchObject({ blocking: true, followed_by: false });
+    expect(t.count('follows')).toBe(0);
+    const [reject, block] = t.sentActivities();
+    expect(reject).toBeInstanceOf(Reject);
+    const rejected = await (reject as Reject).getObject() as Follow;
+    expect(rejected).toBeInstanceOf(Follow);
+    expect(rejected.actorId?.href).toBe('https://remote.example/users/alice');
+    expect(rejected.objectId?.href).toBe(`${ORIGIN}/users/kosui`);
+    expect(block).toBeInstanceOf(Block);
+    expect(t.sentActivities()).toHaveLength(2);
+  });
+
+  it('ブロック済みでもエラーにせず、blocks を増やさず、残っていたフォローを外して Block を送り直す', async () => {
+    const t = await seedActions();
+    const existing = t.seed.addBlock(t.me.userId, t.alice.actorId);
+    t.seed.addFollow(t.me.actorId, t.alice.actorId);
+
+    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/block`);
+
+    expect(response.status).toBe(200);
+    expect(RelationshipSchema.parse(await response.json())).toMatchObject({ blocking: true, following: false });
+    expect(t.count('blocks')).toBe(1);
+    expect(t.count('domain_events', `eventName='block.blockCreated'`)).toBe(0);
+    expect(t.count('follows')).toBe(0);
+    const [undo, block] = t.sentActivities();
+    expect(undo).toBeInstanceOf(Undo);
+    expect(block).toBeInstanceOf(Block);
+    expect((block as Block).id?.href).toBe(`${ORIGIN}/users/kosui#blocks/${existing.blockId}`);
+    expect(t.sentActivities()).toHaveLength(2);
+  });
+
+  it('ブロック済みで残ったフォローがなければ、Block だけを送り直す', async () => {
+    const t = await seedActions();
+    t.seed.addBlock(t.me.userId, t.alice.actorId);
+
+    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/block`);
+
+    expect(response.status).toBe(200);
+    expect(t.count('blocks')).toBe(1);
+    expect(t.sentActivities()).toHaveLength(1);
+    expect(t.sentActivities()[0]).toBeInstanceOf(Block);
+  });
+
+  it('ブロックを外し、blocking が false の Relationship を返して Undo(Block) を送り、フォローは戻さない', async () => {
+    const t = await seedActions();
+    const existing = t.seed.addBlock(t.me.userId, t.alice.actorId);
+
+    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/unblock`);
+
+    expect(response.status).toBe(200);
+    expect(RelationshipSchema.parse(await response.json())).toMatchObject({
+      id: t.alice.actorId,
+      blocking: false,
+      following: false,
+    });
+    expect(t.count('blocks')).toBe(0);
+    expect(t.count('follows')).toBe(0);
+    expect(t.count('domain_events', `eventName='block.blockDeleted'`)).toBe(1);
+    expect(t.sentActivities()).toHaveLength(1);
+    const undo = t.sentActivities()[0] as Undo;
+    expect(undo).toBeInstanceOf(Undo);
+    const object = await undo.getObject();
+    expect(object).toBeInstanceOf(Block);
+    expect(undo.id?.href).toBe(`${ORIGIN}/users/kosui#undo-blocks/${existing.blockId}`);
+    expect(object?.id?.href).toBe(`${ORIGIN}/users/kosui#blocks/${existing.blockId}`);
+  });
+
+  it('未ブロックでもエラーにせず、現在の Relationship を返して何も送らない', async () => {
+    const t = await seedActions();
+
+    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/unblock`);
+
+    expect(response.status).toBe(200);
+    expect(RelationshipSchema.parse(await response.json())).toMatchObject({ blocking: false });
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+
+  it('ローカルのアカウントはブロックとフォロー解除だけを行い、何も送らない', async () => {
+    const t = await seedActions();
+    t.seed.addFollow(t.me.actorId, t.other.actorId);
+    t.seed.addFollow(t.other.actorId, t.me.actorId);
+
+    const blocked = await t.post(`/api/v1/accounts/${t.other.actorId}/block`);
+
+    expect(blocked.status).toBe(200);
+    expect(RelationshipSchema.parse(await blocked.json())).toMatchObject({
+      blocking: true,
+      following: false,
+      followed_by: false,
+    });
+    expect(t.count('blocks')).toBe(1);
+    expect(t.count('follows')).toBe(0);
+
+    const unblocked = await t.post(`/api/v1/accounts/${t.other.actorId}/unblock`);
+
+    expect(unblocked.status).toBe(200);
+    expect(t.count('blocks')).toBe(0);
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+
+  it('自分自身は 422 にする', async () => {
+    const t = await seedActions();
+
+    const responses = await Promise.all([
+      t.post(`/api/v1/accounts/${t.me.actorId}/block`),
+      t.post(`/api/v1/accounts/${t.me.actorId}/unblock`),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([422, 422]);
+    expect(t.count('blocks')).toBe(0);
+  });
+
+  it('存在しないアカウントと不正な ID は 404 にする', async () => {
+    const t = await seedActions();
+
+    const responses = await Promise.all([
+      t.post(`/api/v1/accounts/${t.seed.uuid()}/block`),
+      t.post('/api/v1/accounts/not-an-id/unblock'),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([404, 404]);
+    expect(t.count('blocks')).toBe(0);
+  });
+
+  it('トークンがないと 401、write:blocks を満たさないスコープは 403 にする', async () => {
+    const t = await seedActions();
+    const readOnly = await t.bearerFor('read');
+    const mutesOnly = await t.bearerFor('write:mutes');
+
+    const responses = await Promise.all([
+      t.request(`/api/v1/accounts/${t.alice.actorId}/block`, { method: 'POST' }),
+      t.post(`/api/v1/accounts/${t.alice.actorId}/block`, readOnly),
+      t.post(`/api/v1/accounts/${t.alice.actorId}/unblock`, mutesOnly),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([401, 403, 403]);
+    expect(t.count('blocks')).toBe(0);
+  });
+
+  it.each(['follow', 'write:blocks'])('%s スコープのトークンでブロックできる', async (scope) => {
+    const t = setupReadApi();
+    const me = await t.signIn(scope);
+    const alice = t.seed.addRemoteActor('alice');
+
+    const response = await t.request(`/api/v1/accounts/${alice.actorId}/block`, {
+      method: 'POST',
+      headers: me.bearer,
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  it('Cookie の利用者は同一オリジンのときだけ操作でき、Origin が違うか欠けると 403 にする', async () => {
+    const t = await seedActions();
+    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
+
+    const same = await t.post(`/api/v1/accounts/${t.alice.actorId}/block`, { ...cookie, Origin: ORIGIN });
+    const cross = await t.post(`/api/v1/accounts/${t.alice.actorId}/unblock`, {
+      ...cookie,
+      Origin: 'https://evil.example',
+    });
+    const missing = await t.post(`/api/v1/accounts/${t.alice.actorId}/unblock`, cookie);
+
+    expect([same.status, cross.status, missing.status]).toEqual([200, 403, 403]);
+    expect(t.count('blocks')).toBe(1);
+  });
+
+  it('GET /accounts/relationships の blocking にブロックを反映する', async () => {
+    const t = await seedActions();
+    t.seed.addBlock(t.me.userId, t.alice.actorId);
+
+    const response = await t.request(
+      `/api/v1/accounts/relationships?id[]=${t.alice.actorId}&id[]=${t.other.actorId}`,
+      { headers: t.me.bearer },
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json() as unknown[]).map((item) => RelationshipSchema.parse(item))).toMatchObject([
+      { id: t.alice.actorId, blocking: true, blocked_by: false },
+      { id: t.other.actorId, blocking: false },
+    ]);
   });
 });

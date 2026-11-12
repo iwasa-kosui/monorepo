@@ -4,6 +4,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, notInArray, or, sql } from 'd
 import type { TimelineLinkTrendsResolverByUserId } from '../../../domain/digest/digestMaterial.ts';
 import type { IoriD1Db } from '../client.ts';
 import {
+  blocksTable,
   followsTable,
   linkPreviewsTable,
   localActorsTable,
@@ -22,6 +23,8 @@ export const createD1TimelineLinkTrendsResolverByUserId = (
       .where(inArray(followsTable.followerId, ownActorIds));
     const mutedActorIds = db.select({ actorId: mutesTable.mutedActorId }).from(mutesTable)
       .where(eq(mutesTable.userId, userId));
+    const blockedActorIds = db.select({ actorId: blocksTable.blockedActorId }).from(blocksTable)
+      .where(eq(blocksTable.userId, userId));
     const sharedBy = sql<number>`count(distinct ${postsTable.actorId})`;
     const rows = await db.select({
       url: linkPreviewsTable.url,
@@ -37,6 +40,7 @@ export const createD1TimelineLinkTrendsResolverByUserId = (
         or(isNull(remotePostsTable.visibility), notInArray(remotePostsTable.visibility, ['private', 'direct'])),
         or(inArray(postsTable.actorId, ownActorIds), inArray(postsTable.actorId, followingActorIds)),
         notInArray(postsTable.actorId, mutedActorIds),
+        notInArray(postsTable.actorId, blockedActorIds),
       ))
       .groupBy(linkPreviewsTable.url)
       .orderBy(desc(sharedBy), asc(linkPreviewsTable.url))
