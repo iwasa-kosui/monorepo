@@ -26,6 +26,7 @@ import {
   type RemotePost,
 } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
+import { sanitizePostContent } from '../domain/post/sanitizePostContent.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
@@ -167,7 +168,7 @@ const create = ({
         return RA.ok([
           ctx.getActorUri(user.username).href,
           ...(parentAuthorUri === undefined ? [] : [parentAuthorUri]),
-          ...toMentionNoteFields(content).ccs.map((uri) => uri.href),
+          ...toMentionNoteFields(sanitizePostContent(content)).ccs.map((uri) => uri.href),
         ]);
       }),
       RA.andBind(
@@ -354,6 +355,9 @@ const create = ({
       }),
       // Create reply notification if replying to a local post (and not self-reply)
       RA.andThrough(async ({ actor, replyPost, parentPost, inReplyToUri }) => {
+        if (replyPost.visibility === 'direct') {
+          return RA.ok(undefined);
+        }
         // Check if parent is a local post
         if (parentPost.type !== 'local') {
           // Also check via URI resolver for backwards compatibility
@@ -399,7 +403,10 @@ const create = ({
         return RA.ok(undefined);
       }),
       // Send web push notification for reply
-      RA.andThrough(async ({ actor, user, parentPost, inReplyToUri }) => {
+      RA.andThrough(async ({ actor, user, replyPost, parentPost, inReplyToUri }) => {
+        if (replyPost.visibility === 'direct') {
+          return RA.ok(undefined);
+        }
         // Check if parent is local
         if (parentPost.type !== 'local') {
           const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });

@@ -5,7 +5,7 @@ import { Instant } from '../../../domain/instant/instant.ts';
 import type { OwnLikeContentsResolverByActorId } from '../../../domain/interestSource/interestMaterial.ts';
 import { LikeId } from '../../../domain/like/likeId.ts';
 import type { IoriD1Db } from '../client.ts';
-import { likesTable, postsTable, remotePostsTable } from '../schema.ts';
+import { likesTable, localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
 
 export const createD1OwnLikeContentsResolverByActorId = (db: IoriD1Db): OwnLikeContentsResolverByActorId => ({
   resolve: async (actorId) => {
@@ -16,10 +16,12 @@ export const createD1OwnLikeContentsResolverByActorId = (db: IoriD1Db): OwnLikeC
     }).from(likesTable)
       .innerJoin(postsTable, eq(likesTable.postId, postsTable.postId))
       .leftJoin(remotePostsTable, eq(remotePostsTable.postId, postsTable.postId))
+      .leftJoin(localPostsTable, eq(localPostsTable.postId, postsTable.postId))
       .where(and(
         eq(likesTable.actorId, actorId),
         isNull(postsTable.deletedAt),
         or(isNull(remotePostsTable.visibility), notInArray(remotePostsTable.visibility, ['private', 'direct'])),
+        or(isNull(localPostsTable.visibility), notInArray(localPostsTable.visibility, ['direct'])),
       ));
     return RA.ok(rows.map((row) => ({
       likeId: LikeId.orThrow(row.likeId),

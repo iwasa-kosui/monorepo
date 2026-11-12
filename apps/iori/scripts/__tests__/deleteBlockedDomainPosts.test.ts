@@ -248,6 +248,7 @@ const SNAPSHOT_TABLES: Array<[string, string]> = [
   ['remote_posts', 'postId'],
   ['local_posts', 'postId'],
   ['remote_post_recipients', 'postId, actorUri'],
+  ['direct_post_participants', 'postId, actorUri'],
   ['post_quotes', 'postId'],
   ['post_images', 'imageId'],
   ['link_previews', 'linkPreviewId'],
@@ -515,6 +516,22 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
     expect(count(fixture, 'link_previews')).toBe(0);
     expect(count(fixture, 'post_translations')).toBe(0);
   });
+  it('deletes the participants of the direct posts of the domain without a foreign key violation, and keeps the others', async () => {
+    const { fixture, seed, bara } = build();
+    const notbaraag = seed.addRemoteActor('n9', 'notbaraag.net');
+    const blockedDirect = seed.addRemotePost(bara, 150, { visibility: 'direct', timeline: false });
+    const keptDirect = seed.addRemotePost(notbaraag, 151, { visibility: 'direct', timeline: false });
+    const insert = fixture.sqlite.prepare('INSERT INTO direct_post_participants(postId,actorUri) VALUES (?,?)');
+    insert.run(blockedDirect.postId, 'https://baraag.net/users/b1');
+    insert.run(blockedDirect.postId, 'https://iori.test/users/alice');
+    insert.run(keptDirect.postId, 'https://notbaraag.net/users/n1');
+    insert.run(keptDirect.postId, 'https://iori.test/users/alice');
+    await run('apply', fixture);
+    expect(count(fixture, 'posts', `postId = '${blockedDirect.postId}'`)).toBe(0);
+    expect(column(fixture, 'SELECT postId FROM direct_post_participants')).toEqual(
+      ids(keptDirect.postId, keptDirect.postId),
+    );
+  });
   it('keeps the post that an article refers to, with everything attached to it', async () => {
     const { fixture, article, federated, reposts, notifications, imageIds } = build();
     await run('apply', fixture);
@@ -587,6 +604,7 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
       'DELETE FROM post_quotes',
       'DELETE FROM local_posts',
       'DELETE FROM remote_post_recipients',
+      'DELETE FROM direct_post_participants',
       'DELETE FROM remote_posts',
       'post.deleted',
       'DELETE FROM posts',

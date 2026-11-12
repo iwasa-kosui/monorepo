@@ -19,6 +19,7 @@ import {
 import { PostContent } from '../../domain/post/postContent.ts';
 import { PostDestination } from '../../domain/post/postDestination.ts';
 import { PostId } from '../../domain/post/postId.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import type { RepostResolver, RepostResolverById } from '../../domain/repost/repost.ts';
 import { RepostId } from '../../domain/repost/repostId.ts';
 import type { UserResolver } from '../../domain/user/user.ts';
@@ -88,10 +89,18 @@ const validationFailed = (message: string) => ({ error: `Validation failed: ${me
 
 const isOmitted = (value: unknown): boolean => value === undefined || value === null;
 
+const isPostableVisibility = (value: unknown): value is Visibility =>
+  value === 'public' || value === 'unlisted' || value === 'private' || value === 'direct';
+
+const postVisibility = (body: RequestBody): Visibility => {
+  const visibility = body['visibility'];
+  return isPostableVisibility(visibility) ? visibility : 'public';
+};
+
 const validateStatusParams = (body: RequestBody): string | undefined => {
   const visibility = body['visibility'];
-  if (!isOmitted(visibility) && visibility !== 'public' && visibility !== 'direct') {
-    return 'Only public visibility is supported';
+  if (!isOmitted(visibility) && !isPostableVisibility(visibility)) {
+    return 'Visibility must be public, unlisted, private or direct';
   }
   const spoilerText = body['spoiler_text'];
   if (!isOmitted(spoilerText) && typeof spoilerText !== 'string') {
@@ -350,21 +359,24 @@ export const createWorkerMastodonStatusesRouter = ({
       const content = format === 'markdown'
         ? await PostContent.fromMarkdown(text, mentions.links)
         : plainTextToHtml(text, mentions.links);
-      const isDirect = body['visibility'] === 'direct';
-      if (isDirect && mentionLinksOfHtml(content).length === 0) {
-        return c.json(validationFailed('Direct statuses must mention at least one account'), 422);
+      const ctx = createContext(c.req.raw);
+      const ownOrigin = user.ok && user.val !== undefined ? ctx.getActorUri(user.val.username).origin : undefined;
+      const mentionsRemote = ownOrigin !== undefined
+        && mentions.recipients.some((recipient) => new URL(recipient.id).origin !== ownOrigin);
+      if (body['visibility'] === 'direct' && (!mentionsRemote || mentionLinksOfHtml(content).length === 0)) {
+        return c.json(validationFailed('Direct statuses must mention at least one account on another server'), 422);
       }
       const summary = spoilerSummary(body);
       const input = {
-        ...(isDirect ? { visibility: 'direct' as const } : {}),
         userId,
         content,
         mentions: mentions.recipients,
         summary,
         sensitive: bodyBoolean(body, 'sensitive') || summary !== null,
+        visibility: postVisibility(body),
         images: medias.map((media) => ({ url: media.url, altText: media.description })),
         crosspostToBluesky: sendsToBluesky(body),
-        ctx: createContext(c.req.raw),
+        ctx,
       };
       const created = replyTo === undefined
         ? await createPostUseCase.run(input)

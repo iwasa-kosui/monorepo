@@ -2,6 +2,13 @@ import { Delete, Endpoints, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import { Instant } from '../../../domain/instant/instant.ts';
+import { ScheduleBlueskyCrosspostUseCase } from '../../../useCase/scheduleBlueskyCrosspost.ts';
+import type { SendBlueskyCrosspostUseCase } from '../../../useCase/sendBlueskyCrosspost.ts';
+import { createD1BlueskyCrosspostResolver } from '../../d1/blueskyCrosspost/blueskyCrosspostResolver.ts';
+import { createD1BlueskyCrosspostSavedStore } from '../../d1/blueskyCrosspost/blueskyCrosspostSavedStore.ts';
+import { createD1LocalPostResolverByUri } from '../../d1/post/localPostResolverByUri.ts';
+import { createD1PostResolver } from '../../d1/post/postResolver.ts';
 import { StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
@@ -29,7 +36,8 @@ const setup = async (options: Parameters<typeof setupReadApi>[0] = {}) => {
 
 describe('POST /api/v1/statuses の検証', () => {
   const rejected: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
-    ['visibility が public 以外', { status: 'hi', visibility: 'private' }],
+    ['visibility が未知の値', { status: 'hi', visibility: 'friends' }],
+    ['visibility が文字列でない', { status: 'hi', visibility: 1 }],
     ['spoiler_text が文字列でない', { status: 'hi', spoiler_text: 1 }],
     ['status と spoiler_text の合計が 10001 文字', { status: 'あ'.repeat(5000), spoiler_text: 'い'.repeat(5001) }],
     ['content_type が未対応', { status: 'hi', content_type: 'text/html' }],
@@ -159,6 +167,106 @@ describe('POST /api/v1/statuses の検証', () => {
 
     expect(response.status).toBe(403);
     expect(t.count('posts')).toBe(0);
+  });
+});
+
+describe('POST /api/v1/statuses の visibility', () => {
+  const visibilityOf = (t: Awaited<ReturnType<typeof setup>>, postId: string) =>
+    (t.sqlite.prepare('SELECT visibility FROM local_posts WHERE postId = ?').get(postId) as { visibility: string })
+      .visibility;
+
+  it('未知の visibility を 422 にして、受け付ける値が分かるメッセージを返す', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi', visibility: 'friends' });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toBe(
+      'Validation failed: Visibility must be public, unlisted, private or direct',
+    );
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it.each([['public'], ['unlisted'], ['private']])(
+    'visibility が %s のとき、その公開範囲で投稿を保存して返す',
+    async (visibility) => {
+      const t = await setup();
+
+      const response = await t.json({ status: 'hi', visibility });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status.visibility).toBe(visibility);
+      expect(visibilityOf(t, status.id)).toBe(visibility);
+    },
+  );
+
+  it.each([[undefined], [null]])('visibility が %s のとき public で投稿する', async (visibility) => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi', visibility });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(visibilityOf(t, status.id)).toBe('public');
+  });
+
+  it.each([['unlisted'], ['private']])(
+    '返信で visibility が %s のとき、その公開範囲で返信を保存する',
+    async (visibility) => {
+      const t = await setup();
+      const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
+
+      const response = await t.json({ status: 'reply', in_reply_to_id: parent.postId, visibility });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(visibilityOf(t, status.id)).toBe(visibility);
+    },
+  );
+
+  it.each([['unlisted'], ['private']])(
+    'visibility が %s で iori_destination が both のとき、保存した公開範囲の投稿を Bluesky の予約に渡す',
+    async (visibility) => {
+      const scheduleBlueskyCrosspost = { run: vi.fn(async () => RA.ok('pending' as const)) };
+      const t = await setup({ scheduleBlueskyCrosspost });
+
+      const response = await t.json({ status: 'hi', visibility, iori_destination: 'both' });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(scheduleBlueskyCrosspost.run).toHaveBeenCalledWith({ postId: status.id });
+      expect(visibilityOf(t, status.id)).toBe(visibility);
+    },
+  );
+
+  it('visibility が unlisted で iori_destination が both のとき、実際の予約が応答の skip_reason を visibility にする', async () => {
+    const scheduled: { useCase?: ScheduleBlueskyCrosspostUseCase } = {};
+    const send = { run: vi.fn(async () => RA.ok(undefined)) };
+    const waitUntil = vi.fn();
+    const t = await setup({ scheduleBlueskyCrosspost: { run: (input) => scheduled.useCase!.run(input) } });
+    scheduled.useCase = ScheduleBlueskyCrosspostUseCase.create({
+      postResolver: createD1PostResolver(t.db),
+      localPostResolverByUri: createD1LocalPostResolverByUri(t.db, ORIGIN),
+      crosspostResolver: createD1BlueskyCrosspostResolver(t.db),
+      crosspostSavedStore: createD1BlueskyCrosspostSavedStore(t.db),
+      send: send as unknown as SendBlueskyCrosspostUseCase,
+      waitUntil,
+      now: Instant.now,
+    });
+
+    const response = await t.json({ status: 'hi', visibility: 'unlisted', iori_destination: 'both' });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(status.iori?.bluesky_crosspost).toEqual({
+      status: 'skipped',
+      skip_reason: 'visibility',
+      retrying: false,
+      url: null,
+    });
+    expect(send.run).not.toHaveBeenCalled();
+    expect(waitUntil).not.toHaveBeenCalled();
   });
 });
 
@@ -620,6 +728,26 @@ describe('POST /api/v1/statuses のメンション', () => {
 
       expect(response.status).toBe(422);
       expect(t.count('posts')).toBe(0);
+    });
+
+    it('自サーバーのアカウントしかメンションしていないときは 422 にして投稿を作らない', async () => {
+      const t = await withRemoteAlice();
+      t.remoteActorLookup.lookup.mockImplementation(
+        (() =>
+          RA.ok(
+            new Person({
+              id: new URL(`${ORIGIN}/users/alice`),
+              inbox: new URL(`${ORIGIN}/users/alice/inbox`),
+            }),
+          )) as never,
+      );
+
+      const response = await t.json({ status: 'hi @alice@remote.example', visibility: 'direct' });
+
+      expect(response.status).toBe(422);
+      expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+      expect(t.count('posts')).toBe(0);
+      expect(t.federation.sendActivity).not.toHaveBeenCalled();
     });
 
     it('返信でも direct で投稿でき、followers には送らない', async () => {

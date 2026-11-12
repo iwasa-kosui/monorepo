@@ -500,3 +500,135 @@ describe('SendReplyUseCase のメンション', () => {
     });
   });
 });
+
+describe('SendReplyUseCase の返信通知', () => {
+  const alice = {
+    id: 'https://remote.example/users/alice',
+    inboxUrl: 'https://remote.example/users/alice/inbox',
+  };
+  const mentionHtml =
+    `<span class="h-card"><a href="${alice.id}" class="u-url mention">@<span>alice@remote.example</span></a></span>`;
+
+  const setup = () => {
+    const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
+    const owner: User = { id: crypto.randomUUID() as User['id'], username: 'owner' as Username };
+    const session: Session = {
+      sessionId: crypto.randomUUID() as Session['sessionId'],
+      userId: user.id,
+      expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+    };
+    const actor: LocalActor = {
+      id: crypto.randomUUID() as LocalActor['id'],
+      userId: user.id,
+      uri: 'https://example.com/users/kosui',
+      inboxUrl: 'https://example.com/inbox',
+      type: 'local',
+      logoUri: undefined,
+    };
+    const parent: LocalPost = {
+      type: 'local',
+      visibility: 'public',
+      summary: null,
+      sensitive: false,
+      postId: crypto.randomUUID() as PostId,
+      actorId: crypto.randomUUID() as LocalPost['actorId'],
+      content: 'parent',
+      createdAt: Date.now() as LocalPost['createdAt'],
+      userId: owner.id,
+      inReplyToUri: null,
+    };
+    const sessionResolver = createMockSessionResolver();
+    sessionResolver.setSession(session);
+    const userResolver = createMockUserResolver();
+    userResolver.setUser(user);
+    const actorResolverByUserId = createMockActorResolverByUserId();
+    actorResolverByUserId.setActor(actor);
+    const postResolver = createMockPostResolver();
+    postResolver.setPost(parent);
+    const pushSubscriptionsResolver = createMockPushSubscriptionsResolverByUserId();
+    const deps = {
+      sessionResolver,
+      userResolver,
+      actorResolverByUserId,
+      postCreatedStore: createMockPostCreatedStore(),
+      postImageCreatedStore: createMockPostImageCreatedStore(),
+      timelineItemCreatedStore: createMockTimelineItemCreatedStore(),
+      localPostResolverByUri: createMockLocalPostResolverByUri(),
+      replyNotificationCreatedStore: createMockReplyNotificationCreatedStore(),
+      pushSubscriptionsResolver,
+      webPushSender: createMockWebPushSender(),
+      postResolver,
+      origin: 'https://example.com',
+    };
+    const reply = (visibility?: 'public' | 'direct', ctx = createContext()) =>
+      SendReplyUseCase.create(deps).run({
+        sessionId: session.sessionId,
+        postId: parent.postId,
+        content: `<p>${mentionHtml} hi</p>`,
+        imageUrls: [],
+        ...(visibility === undefined ? {} : { visibility }),
+        mentions: [alice],
+        request: new Request('https://example.com'),
+        ctx,
+      });
+    return { deps, parent, owner, reply, pushSubscriptionsResolver };
+  };
+
+  it('public の返信は、親投稿のローカルの作者への返信通知と Web Push を作る', async () => {
+    const { deps, owner, reply, pushSubscriptionsResolver } = setup();
+
+    const result = await reply('public');
+
+    expect(result.ok).toBe(true);
+    expect(deps.replyNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+    expect(pushSubscriptionsResolver.resolve).toHaveBeenCalledExactlyOnceWith(owner.id);
+  });
+
+  it('direct の返信は、親投稿のローカルの作者への返信通知と Web Push を作らない', async () => {
+    const { deps, reply, pushSubscriptionsResolver } = setup();
+
+    const result = await reply('direct');
+
+    expect(result.ok && result.val.post.visibility).toBe('direct');
+    expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
+    expect(pushSubscriptionsResolver.resolve).not.toHaveBeenCalled();
+    expect(deps.webPushSender.send).not.toHaveBeenCalled();
+  });
+
+  it('親がリモートの投稿でも、direct の返信は URI で見つけたローカルの作者への通知と Web Push を作らない', async () => {
+    const { deps, parent, owner, reply, pushSubscriptionsResolver } = setup();
+    const remoteParent: RemotePost = {
+      type: 'remote',
+      summary: null,
+      sensitive: false,
+      postId: crypto.randomUUID() as PostId,
+      actorId: crypto.randomUUID() as RemotePost['actorId'],
+      content: 'parent',
+      createdAt: Date.now() as RemotePost['createdAt'],
+      uri: 'https://remote.example/notes/1',
+      inReplyToUri: null,
+      visibility: 'public',
+    };
+    vi.mocked(deps.postResolver.resolve).mockImplementation(
+      (() => RA.ok(remoteParent)) as never,
+    );
+    deps.localPostResolverByUri.setPost(remoteParent.uri, { ...parent, userId: owner.id });
+
+    const author = new Person({
+      id: new URL(alice.id),
+      preferredUsername: 'alice',
+      inbox: new URL(alice.inboxUrl),
+    });
+    const note = new Note({ id: new URL(remoteParent.uri), attribution: author });
+    const ctx = Object.assign(createContext(), {
+      getDocumentLoader: vi.fn(async () => ({})),
+      lookupObject: vi.fn(async () => note),
+    });
+
+    const result = await reply('direct', ctx);
+
+    expect(result.ok).toBe(true);
+    expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
+    expect(pushSubscriptionsResolver.resolve).not.toHaveBeenCalled();
+  });
+});
