@@ -55,6 +55,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     updateTimelineItem: timeline.updateTimelineItem,
     updateThreadPost: thread.updateThreadPost,
     removePost: timeline.removePost,
+    removeAccountPosts: timeline.removeAccountPosts,
     refreshTimeline: async () => {
       await timeline.reload();
     },
