@@ -12,9 +12,11 @@ import {
 } from '../api/mastodonClient.ts';
 import { readMeCache, readPageCache, writeMeCache, writePageCache } from '../api/pageCache.ts';
 import { clearAllCache } from '../api/responseCache.ts';
+import { BlueskyStatusNotice } from '../components/BlueskyStatusNotice.tsx';
 import { NotificationItem } from '../components/NotificationItem.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
+import { useBlueskyStatus } from '../hooks/useBlueskyStatus.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 
 type NotificationsData = Readonly<{
@@ -240,6 +242,7 @@ const NotificationsPage = () => {
   const [error, setError] = useState('');
   const [isFirstPageSettled, setIsFirstPageSettled] = useState(false);
   const isLoadingMoreRef = useRef(false);
+  const blueskyStatus = useBlueskyStatus();
 
   useEffect(() => {
     const fetchFirstPage = async () => {
@@ -325,6 +328,14 @@ const NotificationsPage = () => {
   return (
     <section class='mb-8'>
       <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Notifications</h1>
+
+      <div class='mb-6 empty:hidden'>
+        <BlueskyStatusNotice
+          status={blueskyStatus.status}
+          page='notifications'
+          clientLoadFailed={blueskyStatus.loadFailed}
+        />
+      </div>
 
       <PushSubscriptionSection />
 
