@@ -292,7 +292,7 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
     expect(note.summary?.toString()).toBe('warn');
     expect(note.sensitive).toBe(true);
     expect(note.updated?.epochMilliseconds).toBe(Date.parse(status.edited_at!));
-    expect(note.published?.toString()).toBe(new Date(status.created_at).toISOString());
+    expect(note.published?.epochMilliseconds).toBe(Date.parse(status.created_at));
   });
 
   it('編集後の本文のメンションの相手にも送る', async () => {
