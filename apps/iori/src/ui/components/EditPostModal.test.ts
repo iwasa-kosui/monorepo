@@ -134,11 +134,17 @@ describe('EditPostModal', () => {
       expect(render({ target: withCrosspost(sent) })).toContain(notice);
     });
 
-    it('Bluesky に送っていない投稿では出さない', () => {
+    it('Bluesky に送信中か送信に失敗した投稿では、編集後の内容を送ると伝える', () => {
+      const notSentYet = 'Bluesky にはまだ送っていません。送るときは編集後の内容を送ります';
+
+      expect(render({ target: withCrosspost({ ...sent, status: 'pending', retrying: true }) })).toContain(notSentYet);
+      expect(render({ target: withCrosspost({ ...sent, status: 'failed', retrying: true }) })).toContain(notSentYet);
+      expect(render({ target: withCrosspost({ ...sent, status: 'failed', retrying: false }) })).toContain(notSentYet);
+    });
+
+    it('Bluesky に送らない投稿では出さない', () => {
       expect(render()).not.toContain('Bluesky');
       expect(render({ target: withCrosspost({ ...sent, status: 'skipped', skip_reason: 'visibility' }) }))
-        .not.toContain('Bluesky');
-      expect(render({ target: withCrosspost({ ...sent, status: 'failed', retrying: false }) }))
         .not.toContain('Bluesky');
     });
   });

@@ -994,9 +994,9 @@ const HomePage = () => {
       <ReplyModal />
       <BlueskyReplyModal dialog={blueskyReply} />
       <BlueskyQuoteModal dialog={blueskyQuote} />
+      <ThreadModal />
       <FediverseQuoteModal />
       <FediverseEditModal />
-      <ThreadModal />
       <ReportPostModal />
       <BlueskyReportPostModal reportDialog={blueskyModeration.reportDialog} notice={blueskyModeration.notice} />
       <TimelineList />

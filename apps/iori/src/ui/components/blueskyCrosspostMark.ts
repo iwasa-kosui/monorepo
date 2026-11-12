@@ -100,6 +100,16 @@ export const blueskyCrosspostNotice = (
 };
 
 export const BLUESKY_EDIT_NOT_APPLIED_NOTICE = 'Bluesky に送った投稿は変わらず、編集前の内容のまま残ります';
+export const BLUESKY_EDIT_NOT_SENT_YET_NOTICE = 'Bluesky にはまだ送っていません。送るときは編集後の内容を送ります';
 
-export const blueskyEditNotice = (status: Pick<Status, 'iori'>): string | undefined =>
-  status.iori?.bluesky_crosspost?.status === 'sent' ? BLUESKY_EDIT_NOT_APPLIED_NOTICE : undefined;
+export const blueskyEditNotice = (status: Pick<Status, 'iori'>): string | undefined => {
+  switch (status.iori?.bluesky_crosspost?.status) {
+    case 'sent':
+      return BLUESKY_EDIT_NOT_APPLIED_NOTICE;
+    case 'pending':
+    case 'failed':
+      return BLUESKY_EDIT_NOT_SENT_YET_NOTICE;
+    default:
+      return undefined;
+  }
+};

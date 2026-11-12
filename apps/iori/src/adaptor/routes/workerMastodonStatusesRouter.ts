@@ -166,6 +166,8 @@ const failed = (c: Context, err: Readonly<{ type: string }>): Response => {
     case 'UserNotFoundError':
     case 'SessionExpiredError':
       return c.json(invalidToken, 401);
+    case 'DirectAddresseeAddedError':
+      return c.json(validationFailed('Direct statuses can\'t add new recipients when edited'), 422);
     case 'RemoteNoteLookupError':
       return c.json({ error: 'The remote server could not be reached' }, 502);
     default:

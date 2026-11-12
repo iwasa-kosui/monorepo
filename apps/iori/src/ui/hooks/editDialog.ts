@@ -12,7 +12,7 @@ export type EditLoadState = 'loading' | 'loaded' | 'failed';
 export const initialEditValue = (source: StatusSourceText, status: Status): EditFormValue => ({
   content: source.text,
   cw: source.spoiler_text,
-  sensitive: status.sensitive,
+  sensitive: source.spoiler_text === '' ? status.sensitive : false,
 });
 
 export const hasEditableImages = (status: Status): boolean => status.media_attachments.length > 0;
@@ -33,6 +33,9 @@ export const editErrorMessage = (error: unknown): string => {
   if (isMastodonApiError(error)) {
     if (error.status === 404) return '編集する投稿が見つかりません';
     if (error.status === 422) {
+      if (error.message.includes('new recipients')) {
+        return 'ダイレクトの投稿には宛先を足せません';
+      }
       return '投稿を更新できません。本文が空でないか、文字数が上限を超えていないか確認してください';
     }
   }

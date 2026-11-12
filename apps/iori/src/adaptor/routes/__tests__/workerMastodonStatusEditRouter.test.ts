@@ -292,7 +292,7 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
     expect(note.summary?.toString()).toBe('warn');
     expect(note.sensitive).toBe(true);
     expect(note.updated?.epochMilliseconds).toBe(Date.parse(status.edited_at!));
-    expect(note.published?.toString()).toBe(new Date(status.created_at).toISOString());
+    expect(note.published?.epochMilliseconds).toBe(Date.parse(status.created_at));
   });
 
   it('編集後の本文のメンションの相手にも送る', async () => {
@@ -469,6 +469,78 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
       );
       expect(t.rowOf(created.id)).toMatchObject({ sourceText: 'hi @alice@remote.example', editedAt: null });
       expect(t.sentActivities()).toHaveLength(0);
+    });
+
+    describe('宛先の変更', () => {
+      const bobId = 'https://remote.example/users/bob';
+      const withAliceAndBob = async () => {
+        const t = await withRemoteAlice();
+        const alice = t.remoteActorLookup.lookup.getMockImplementation()!;
+        t.remoteActorLookup.lookup.mockImplementation(
+          ((args: { handle: string }) =>
+            args.handle === '@bob@remote.example'
+              ? RA.ok(new Person({ id: new URL(bobId), inbox: new URL(`${bobId}/inbox`) }))
+              : (alice as (arg: unknown) => unknown)(args)) as never,
+        );
+        return t;
+      };
+
+      it('元の宛先に無い相手を足す編集は 422 にして、保存も送信もしない', async () => {
+        const t = await withAliceAndBob();
+        const created = await postDirect(t);
+        t.federation.sendActivity.mockClear();
+
+        const response = await t.edit(created.id, { status: 'hi @alice@remote.example @bob@remote.example' });
+
+        expect(response.status).toBe(422);
+        expect(((await response.json()) as { error: string }).error).toBe(
+          'Validation failed: Direct statuses can\'t add new recipients when edited',
+        );
+        expect(t.rowOf(created.id)).toMatchObject({ sourceText: 'hi @alice@remote.example', editedAt: null });
+        expect(t.sentActivities()).toHaveLength(0);
+        expect(
+          t.sqlite.prepare('SELECT actorUri FROM direct_post_participants WHERE postId = ?').all(created.id),
+        ).not.toContainEqual({ actorUri: bobId });
+      });
+
+      it('同じ宛先のままの編集は通る', async () => {
+        const t = await withAliceAndBob();
+        const created = await postDirect(t);
+
+        const response = await t.edit(created.id, { status: 'again @alice@remote.example' });
+
+        expect(response.status).toBe(200);
+        expect(t.rowOf(created.id).editedAt).not.toBeNull();
+      });
+
+      it('宛先を外す編集は通る', async () => {
+        const t = await withAliceAndBob();
+        const created = StatusSchema.parse(
+          await (await t.post({
+            status: 'hi @alice@remote.example @bob@remote.example',
+            visibility: 'direct',
+          })).json(),
+        );
+        t.federation.sendActivity.mockClear();
+
+        const response = await t.edit(created.id, { status: 'hi @alice@remote.example' });
+
+        expect(response.status).toBe(200);
+        expect(t.rowOf(created.id).editedAt).not.toBeNull();
+      });
+
+      it('参加者の記録が無い投稿は、編集前の本文のメンションを元の宛先にする', async () => {
+        const t = await withAliceAndBob();
+        t.seed.addRemoteActor('alice');
+        const created = await postDirect(t);
+        t.sqlite.prepare('DELETE FROM direct_post_participants WHERE postId = ?').run(created.id);
+
+        const kept = await t.edit(created.id, { status: 'again @alice@remote.example' });
+        const added = await t.edit(created.id, { status: 'again @alice@remote.example @bob@remote.example' });
+
+        expect(kept.status).toBe(200);
+        expect(added.status).toBe(422);
+      });
     });
 
     it('引用付きの投稿を編集しても、引用先の作者には送らず、Note の引用先は保つ', async () => {

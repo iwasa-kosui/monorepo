@@ -832,6 +832,7 @@ export const createWorkerRuntimePorts = async (
         postImagesResolver: createD1PostImagesResolverByPostId(db),
         postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
         acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+        directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
         origin: env.ORIGIN,
       }),
       postSourceTextResolver: createD1PostSourceTextResolver(db),
