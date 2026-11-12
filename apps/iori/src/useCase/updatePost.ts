@@ -20,12 +20,13 @@ import {
 } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import { appendQuoteInline } from '../domain/post/quoteInline.ts';
+import { sanitizePostContent } from '../domain/post/sanitizePostContent.ts';
 import type { AcceptedRelaysResolver } from '../domain/relay/relay.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import { User, type UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
 import { buildLocalNote } from './helper/localNote.ts';
-import type { MentionedActor } from './helper/mentionNote.ts';
+import { type MentionedActor, toMentionNoteFields } from './helper/mentionNote.ts';
 import { toQuoteNoteFields } from './helper/quoteNote.ts';
 import { type Requester, resolveRequesterUserWith } from './helper/resolve.ts';
 import { sendToMentions } from './helper/sendToMentions.ts';
@@ -181,22 +182,30 @@ const create = ({
       }),
       RA.andBind('previous', async ({ post, ctx, user }) =>
         RA.ok(await resolvePreviousAddressees(post, ctx, user.username))),
-      RA.andBind('postEvent', ({ post, content, sourceText, summary, sensitive, quote }) =>
+      RA.andBind('quoteFields', ({ post, quote }) => {
+        const fields = toQuoteNoteFields(quote);
+        return RA.ok(post.visibility === 'direct' ? { ...fields, actors: [], recipients: [] } : fields);
+      }),
+      RA.andBind('postEvent', ({ post, user, ctx, content, sourceText, summary, sensitive, quote, previous }) =>
         RA.ok(
           Post.updatePost(now)(post, {
             content: quote === undefined ? content : appendQuoteInline(content, quote.uri),
             sourceText,
             summary,
             sensitive,
+            participantActorUris: [
+              ctx.getActorUri(user.username).href,
+              ...previous.map(({ recipient }) =>
+                recipient.id
+              ),
+              ...toMentionNoteFields(sanitizePostContent(content)).ccs.map((uri) => uri.href),
+            ],
           }),
         )),
-      RA.andThrough(({ postEvent }) =>
-        postUpdatedStore.store(postEvent)
-      ),
+      RA.andThrough(({ postEvent }) => postUpdatedStore.store(postEvent)),
       RA.bind('updated', ({ postEvent }) => postEvent.aggregateState),
       RA.andBind('images', ({ post }) => postImagesResolver.resolve(post.postId)),
-      RA.andBind('note', ({ user, ctx, updated, images, quote, previous }) => {
-        const quoteFields = toQuoteNoteFields(quote);
+      RA.andBind('note', ({ user, ctx, updated, images, quoteFields, previous }) => {
         return RA.ok(buildLocalNote({
           ctx,
           identifier: user.username,
@@ -216,8 +225,10 @@ const create = ({
             ccs: note.ccIds,
           }),
         )),
-      RA.andThrough(async ({ user, ctx, activity, mentions, quote, previous }) => {
-        await ctx.sendActivity({ identifier: user.username }, 'followers', activity);
+      RA.andThrough(async ({ user, ctx, activity, mentions, quoteFields, previous, updated }) => {
+        if (updated.visibility !== 'direct') {
+          await ctx.sendActivity({ identifier: user.username }, 'followers', activity);
+        }
         await sendToMentions({
           ctx,
           identifier: user.username,
@@ -225,8 +236,9 @@ const create = ({
           mentions: [
             ...(mentions ?? []),
             ...previous.map(({ recipient }) => recipient),
-            ...toQuoteNoteFields(quote).recipients,
+            ...quoteFields.recipients,
           ],
+          visibility: updated.visibility,
         });
         return RA.ok(undefined);
       }),

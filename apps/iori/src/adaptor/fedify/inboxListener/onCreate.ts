@@ -16,6 +16,7 @@ import type { AcceptedRelaysResolver } from '../../../domain/relay/relay.ts';
 import type { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
 import type { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
+import { extractMentionedActorUris } from '../extractMentionedActorUris.ts';
 import { extractQuoteUri } from '../extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
@@ -155,6 +156,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
       ...extractContentWarning(object),
       visibility,
       recipientActorUris,
+      mentionedActorUris: await extractMentionedActorUris(object),
       quoteUri,
     }),
     RA.match({

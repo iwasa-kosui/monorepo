@@ -8,6 +8,7 @@ import { TimelineItemId } from '../../../domain/timeline/timelineItemId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { createD1PostDeletedStore } from '../post/postDeletedStore.ts';
 import {
+  directPostParticipantsTable,
   domainEventsTable,
   localPostsTable,
   postImagesTable,
@@ -28,6 +29,7 @@ type Operation = Readonly<{
 const createRecordingDb = () => {
   const operations: Operation[] = [];
   const tableNames = new Map<unknown, string>([
+    [directPostParticipantsTable, 'direct_post_participants'],
     [domainEventsTable, 'domain_events'],
     [localPostsTable, 'local_posts'],
     [postImagesTable, 'post_images'],
@@ -79,6 +81,7 @@ describe('D1 post deletion stores', () => {
       'delete:post_images',
       'delete:post_quotes',
       'delete:local_posts',
+      'delete:direct_post_participants',
       'delete:remote_post_recipients',
       'delete:remote_posts',
       'delete:posts',

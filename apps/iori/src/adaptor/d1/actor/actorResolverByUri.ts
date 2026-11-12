@@ -40,6 +40,8 @@ export const createD1ActorResolverByUri = (db: IoriD1Db): ActorResolverByUri => 
             type: 'local',
             userId: UserId.orThrow(row.local_actors.userId),
             logoUri: row.actors.logoUri ?? undefined,
+            displayName: row.local_actors.displayName ?? undefined,
+            bio: row.local_actors.bio ?? undefined,
           };
         }
         throw new Error(`Actor type could not be determined for uri: ${uri}`);

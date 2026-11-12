@@ -1,5 +1,6 @@
 import type { LocalActor, RemoteActor } from '../../domain/actor/actor.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
+import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Account, CustomEmoji, Field } from './entities.ts';
 import { toSafeApiUrl } from './safeApiUrl.ts';
@@ -84,6 +85,8 @@ const toAccountOf = (
       url: string;
       fallbackPath: string;
       logoUri: string | undefined;
+      displayName?: string;
+      note?: string;
       profile?: RemoteProfile;
     }
   >,
@@ -101,8 +104,8 @@ const toAccountOf = (
     acct: props.acct,
     url: toSafeApiUrl(props.url, options.baseUrl) ?? uri,
     uri,
-    display_name: profile?.displayName ?? props.username,
-    note: profile?.note ?? '',
+    display_name: profile?.displayName ?? props.displayName ?? props.username,
+    note: profile?.note ?? props.note ?? '',
     avatar,
     avatar_static: avatar,
     header,
@@ -134,6 +137,8 @@ export const toAccount = (source: AccountSource, options: ToAccountOptions): Acc
       url: actor.uri,
       fallbackPath: `/users/${user.username}`,
       logoUri: actor.logoUri,
+      displayName: actor.displayName,
+      note: actor.bio === undefined ? undefined : plainTextToHtml(actor.bio),
     }, options);
   }
   const { actor } = source;

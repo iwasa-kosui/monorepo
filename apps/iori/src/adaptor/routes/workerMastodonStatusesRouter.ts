@@ -9,6 +9,7 @@ import { MediaId } from '../../domain/mediaUpload/mediaId.ts';
 import type { MediaUpload, MediaUploadResolver } from '../../domain/mediaUpload/mediaUpload.ts';
 import type { MutedActorIdsResolverByUserId } from '../../domain/mute/mute.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
+import { mentionLinksOfHtml } from '../../domain/post/mention.ts';
 import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 import {
   Post,
@@ -100,12 +101,10 @@ const quoteNotAllowed = validationFailed('Quote not allowed');
 
 const isOmitted = (value: unknown): boolean => value === undefined || value === null;
 
-type PostableVisibility = Exclude<Visibility, 'direct'>;
+const isPostableVisibility = (value: unknown): value is Visibility =>
+  value === 'public' || value === 'unlisted' || value === 'private' || value === 'direct';
 
-const isPostableVisibility = (value: unknown): value is PostableVisibility =>
-  value === 'public' || value === 'unlisted' || value === 'private';
-
-const postVisibility = (body: RequestBody): PostableVisibility => {
+const postVisibility = (body: RequestBody): Visibility => {
   const visibility = body['visibility'];
   return isPostableVisibility(visibility) ? visibility : 'public';
 };
@@ -113,7 +112,7 @@ const postVisibility = (body: RequestBody): PostableVisibility => {
 const validateStatusParams = (body: RequestBody): string | undefined => {
   const visibility = body['visibility'];
   if (!isOmitted(visibility) && !isPostableVisibility(visibility)) {
-    return 'Visibility must be public, unlisted or private (direct is not supported)';
+    return 'Visibility must be public, unlisted, private or direct';
   }
   const spoilerText = body['spoiler_text'];
   if (!isOmitted(spoilerText) && typeof spoilerText !== 'string') {
@@ -339,7 +338,12 @@ export const createWorkerMastodonStatusesRouter = ({
     const content = format === 'markdown'
       ? await PostContent.fromMarkdown(text, mentions.links)
       : plainTextToHtml(text, mentions.links);
-    return { content, recipients: mentions.recipients };
+    const ownOrigin = user.ok && user.val !== undefined
+      ? createContext(c.req.raw).getActorUri(user.val.username).origin
+      : undefined;
+    const mentionsRemote = ownOrigin !== undefined
+      && mentions.recipients.some((recipient) => new URL(recipient.id).origin !== ownOrigin);
+    return { content, recipients: mentions.recipients, mentionsRemote };
   };
 
   return new Hono<MastodonAuthEnv>()
@@ -416,7 +420,10 @@ export const createWorkerMastodonStatusesRouter = ({
           ? quoted.uri
           : ctx.getObjectUri(Note, { identifier: quoted.username, id: quoted.postId }).href;
       }
-      const { content, recipients } = await renderContent(c, userId, body, text);
+      const { content, recipients, mentionsRemote } = await renderContent(c, userId, body, text);
+      if (body['visibility'] === 'direct' && (!mentionsRemote || mentionLinksOfHtml(content).length === 0)) {
+        return c.json(validationFailed('Direct statuses must mention at least one account on another server'), 422);
+      }
       const summary = spoilerSummary(body);
       const input = {
         userId,
@@ -462,7 +469,10 @@ export const createWorkerMastodonStatusesRouter = ({
       if (text === undefined || (text.trim() === '' && post.images.length === 0)) {
         return c.json(validationFailed('Text can\'t be blank'), 422);
       }
-      const { content, recipients } = await renderContent(c, userId, body, text);
+      const { content, recipients, mentionsRemote } = await renderContent(c, userId, body, text);
+      if (post.visibility === 'direct' && (!mentionsRemote || mentionLinksOfHtml(content).length === 0)) {
+        return c.json(validationFailed('Direct statuses must mention at least one account on another server'), 422);
+      }
       const summary = editedSummary(body, post.summary);
       const updated = await updatePostUseCase.run({
         userId,

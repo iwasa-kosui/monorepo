@@ -4,7 +4,9 @@ import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 
 import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
-import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
+import type { Actor, ActorResolverByUserId } from '../domain/actor/actor.ts';
+import type { ActorId } from '../domain/actor/actorId.ts';
+import type { Agg } from '../domain/aggregate/index.ts';
 import type { PostImageCreatedStore } from '../domain/image/image.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
@@ -26,6 +28,7 @@ import {
 } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import { appendQuoteInline } from '../domain/post/quoteInline.ts';
+import { sanitizePostContent } from '../domain/post/sanitizePostContent.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
@@ -51,7 +54,7 @@ type Input =
     sourceText?: string;
     summary?: string | null;
     sensitive?: boolean;
-    visibility?: Exclude<Visibility, 'direct'>;
+    visibility?: Visibility;
     crosspostToBluesky?: boolean;
     mentions?: ReadonlyArray<MentionRecipient>;
     quoteUri?: string;
@@ -98,6 +101,7 @@ type Deps = Readonly<{
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
   postResolver: PostResolver;
+  actorResolverById?: Agg.Resolver<ActorId, Actor | undefined>;
   postQuotesResolver?: PostQuotesResolverByPostIds;
   scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   origin: string;
@@ -115,6 +119,7 @@ const create = ({
   pushSubscriptionsResolver,
   webPushSender,
   postResolver,
+  actorResolverById,
   postQuotesResolver,
   scheduleBlueskyCrosspost,
   origin,
@@ -159,9 +164,25 @@ const create = ({
         return RA.ok(parentPost.uri);
       }),
       // Create the reply post
+      RA.andBind('participantActorUris', async ({ user, ctx, parentPost, content, visibility }) => {
+        if (visibility !== 'direct') {
+          return RA.ok([]);
+        }
+        const parentAuthor = parentPost.type === 'remote'
+          ? await actorResolverById?.resolve(parentPost.actorId)
+          : undefined;
+        const parentAuthorUri = parentAuthor?.ok ? parentAuthor.val?.uri : undefined;
+        return RA.ok([
+          ctx.getActorUri(user.username).href,
+          ...(parentAuthorUri === undefined ? [] : [parentAuthorUri]),
+          ...toMentionNoteFields(sanitizePostContent(content)).ccs.map((uri) => uri.href),
+        ]);
+      }),
       RA.andBind(
         'postEvent',
-        ({ actor, content, sourceText, inReplyToUri, summary, sensitive, visibility, quoteUri }) => {
+        (
+          { actor, content, sourceText, inReplyToUri, summary, sensitive, visibility, quoteUri, participantActorUris },
+        ) => {
           const postEvent = Post.createPost(now)({
             actorId: actor.id,
             content: quoteUri === undefined ? content : appendQuoteInline(content, quoteUri),
@@ -172,6 +193,7 @@ const create = ({
             visibility,
             quoteUri,
             sourceText,
+            participantActorUris,
           });
           return RA.ok(postEvent);
         },
@@ -200,7 +222,12 @@ const create = ({
       }),
       // Send ActivityPub Create activity (only for remote parent posts)
       RA.andThrough(async ({ user, parentPost, replyPost, images, ctx, inReplyToUri, mentions, quoteUri }) => {
-        const quote = await resolveQuoteNoteFields(postQuotesResolver, replyPost.postId, quoteUri);
+        const quote = await resolveQuoteNoteFields(
+          postQuotesResolver,
+          replyPost.postId,
+          quoteUri,
+          replyPost.visibility,
+        );
         // For local parent posts, no ActivityPub delivery to remote author needed
         if (parentPost.type === 'local') {
           // Still send to followers
@@ -232,12 +259,15 @@ const create = ({
             tos: replyNote.toIds,
             ccs: replyNote.ccIds,
           });
-          await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+          if (replyPost.visibility !== 'direct') {
+            await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+          }
           await sendToMentions({
             ctx,
             identifier: user.username,
             activity: createActivity,
             mentions: [...(mentions ?? []), ...quote.recipients],
+            visibility: replyPost.visibility,
           });
 
           return RA.ok(undefined);
@@ -322,13 +352,16 @@ const create = ({
           tos: replyNote.toIds,
           ccs: replyNote.ccIds,
         });
-        await ctx.sendActivity({ identifier: user.username }, 'followers', followersActivity);
+        if (replyPost.visibility !== 'direct') {
+          await ctx.sendActivity({ identifier: user.username }, 'followers', followersActivity);
+        }
         await sendToMentions({
           ctx,
           identifier: user.username,
           activity: followersActivity,
           mentions: [...(mentions ?? []), ...quote.recipients],
           excludedActorIds: [author.id.href],
+          visibility: replyPost.visibility,
         });
 
         return RA.ok(undefined);
@@ -341,6 +374,9 @@ const create = ({
       }),
       // Create reply notification if replying to a local post (and not self-reply)
       RA.andThrough(async ({ actor, replyPost, parentPost, inReplyToUri }) => {
+        if (replyPost.visibility === 'direct') {
+          return RA.ok(undefined);
+        }
         // Check if parent is a local post
         if (parentPost.type !== 'local') {
           // Also check via URI resolver for backwards compatibility
@@ -386,7 +422,10 @@ const create = ({
         return RA.ok(undefined);
       }),
       // Send web push notification for reply
-      RA.andThrough(async ({ actor, user, parentPost, inReplyToUri }) => {
+      RA.andThrough(async ({ actor, user, replyPost, parentPost, inReplyToUri }) => {
+        if (replyPost.visibility === 'direct') {
+          return RA.ok(undefined);
+        }
         // Check if parent is local
         if (parentPost.type !== 'local') {
           const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });

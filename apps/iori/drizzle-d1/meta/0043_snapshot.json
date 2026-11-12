@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "3ffe37c8-1d63-4b41-be50-a135229e9027",
+  "id": "8922cd15-0d3b-4099-8f4d-9e1a69f4ce4f",
   "prevId": "b0dcac77-0225-47d0-99fb-25da3b63af1c",
   "tables": {
     "actors": {
@@ -1788,6 +1788,60 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "direct_post_participants": {
+      "name": "direct_post_participants",
+      "columns": {
+        "postId": {
+          "name": "postId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actorUri": {
+          "name": "actorUri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "direct_post_participants_actor_uri_idx": {
+          "name": "direct_post_participants_actor_uri_idx",
+          "columns": [
+            "actorUri"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "direct_post_participants_postId_posts_postId_fk": {
+          "name": "direct_post_participants_postId_posts_postId_fk",
+          "tableFrom": "direct_post_participants",
+          "tableTo": "posts",
+          "columnsFrom": [
+            "postId"
+          ],
+          "columnsTo": [
+            "postId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "direct_post_participants_postId_actorUri_pk": {
+          "columns": [
+            "postId",
+            "actorUri"
+          ],
+          "name": "direct_post_participants_postId_actorUri_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "domain_events": {
       "name": "domain_events",
       "columns": {
@@ -2894,20 +2948,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'public'"
-        },
-        "sourceText": {
-          "name": "sourceText",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "editedAt": {
-          "name": "editedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {

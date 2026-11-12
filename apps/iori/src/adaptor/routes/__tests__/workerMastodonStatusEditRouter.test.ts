@@ -432,6 +432,66 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
     expect(note.quoteUrl?.href).toBe(quoted.uri);
   });
 
+  describe('ダイレクトの投稿', () => {
+    const postDirect = async (t: Awaited<ReturnType<typeof withRemoteAlice>>, extra: Record<string, unknown> = {}) =>
+      StatusSchema.parse(
+        await (await t.post({ status: 'hi @alice@remote.example', visibility: 'direct', ...extra })).json(),
+      );
+
+    it('フォロワーには送らず、メンションの相手にだけ共有 inbox を使わずに Update を送る', async () => {
+      const t = await withRemoteAlice();
+      t.seed.addRelay();
+      const created = await postDirect(t);
+      t.federation.sendActivity.mockClear();
+
+      const response = await t.edit(created.id, { status: 'hello @alice@remote.example' });
+
+      expect(response.status).toBe(200);
+      const sent = t.sentActivities();
+      expect(sent).toHaveLength(1);
+      expect(sent[0]?.[1]).toEqual([expect.objectContaining({ id: new URL(aliceId) })]);
+      expect(sent[0]?.[3]).toEqual({ preferSharedInbox: false });
+      const note = await noteOf(sent[0]?.[2]);
+      expect(note.toIds.map((id) => id.href)).toEqual([aliceId]);
+      expect(note.ccIds).toEqual([]);
+    });
+
+    it('他サーバーのメンションの無い本文に編集すると 422 にして変えない', async () => {
+      const t = await withRemoteAlice();
+      const created = await postDirect(t);
+      t.federation.sendActivity.mockClear();
+
+      const response = await t.edit(created.id, { status: 'no mention' });
+
+      expect(response.status).toBe(422);
+      expect(((await response.json()) as { error: string }).error).toBe(
+        'Validation failed: Direct statuses must mention at least one account on another server',
+      );
+      expect(t.rowOf(created.id)).toMatchObject({ sourceText: 'hi @alice@remote.example', editedAt: null });
+      expect(t.sentActivities()).toHaveLength(0);
+    });
+
+    it('引用付きの投稿を編集しても、引用先の作者には送らず、Note の引用先は保つ', async () => {
+      const t = await withRemoteAlice();
+      const quoted = t.seed.addRemotePost(t.seed.addRemoteActor('bob'), 1_000, { visibility: 'public' });
+      const created = await postDirect(t, { quoted_status_id: quoted.postId });
+      t.federation.sendActivity.mockClear();
+
+      const response = await t.edit(created.id, { status: 'again @alice@remote.example' });
+
+      expect(response.status).toBe(200);
+      const sent = t.sentActivities();
+      expect(sent).toHaveLength(1);
+      expect(sent[0]?.[1]).toEqual([expect.objectContaining({ id: new URL(aliceId) })]);
+      const note = await noteOf(sent[0]?.[2]);
+      expect(note.quoteUrl?.href).toBe(quoted.uri);
+      expect(note.ccIds.map((id) => id.href)).not.toContain('https://remote.example/users/bob');
+      expect((await Array.fromAsync(note.getTags())).map((tag) => (tag as { href?: URL }).href?.href)).toEqual([
+        aliceId,
+      ]);
+    });
+  });
+
   it('画像を Note の添付に保つ', async () => {
     const t = await setup();
     const media = await t.addMedia(t.me.userId, 'alt');

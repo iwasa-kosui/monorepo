@@ -5,6 +5,7 @@ import { getLogger } from '@logtape/logtape';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { UpdateRemotePostUseCase } from '../../../useCase/updateRemotePost.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
+import { extractMentionedActorUris } from '../extractMentionedActorUris.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
@@ -67,6 +68,7 @@ export const createOnUpdate = (deps: OnUpdateDeps) => async (ctx: InboxContext<u
     ...extractContentWarning(object),
     attachments,
     recipientActorUris: extractRecipientActorUris([object, activity], deps.origin),
+    mentionedActorUris: await extractMentionedActorUris(object),
     visibility,
     editedAt: toEditedAt(object),
   });

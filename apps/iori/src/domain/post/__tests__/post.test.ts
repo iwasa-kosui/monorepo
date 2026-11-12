@@ -123,9 +123,24 @@ describe('Post.updatePost', () => {
       summary: 'warn',
       sensitive: true,
       sourceText: 'new',
+      participantActorUris: [],
       editedAt: now,
     });
     expect(event.occurredAt).toBe(now);
+  });
+
+  it('ダイレクトの投稿だけ参加者を重複なしでイベントに載せる', () => {
+    const direct = LocalPost.orThrow({ ...localPostFields(), visibility: 'direct' });
+    const participantActorUris = [
+      'https://a.example/users/a',
+      'https://b.example/users/b',
+      'https://a.example/users/a',
+    ];
+
+    expect(Post.updatePost(Instant.orThrow(5_000))(direct, { ...changes, participantActorUris }).eventPayload)
+      .toHaveProperty('participantActorUris', ['https://a.example/users/a', 'https://b.example/users/b']);
+    expect(Post.updatePost(Instant.orThrow(5_000))(post, { ...changes, participantActorUris }).eventPayload)
+      .toHaveProperty('participantActorUris', []);
   });
 
   it('公開範囲・返信先・作成日時は変えない', () => {

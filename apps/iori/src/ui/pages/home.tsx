@@ -4,7 +4,7 @@ import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
-import { fetchPublicTimeline, updateAvatar } from '../api/mastodonClient.ts';
+import { fetchPublicTimeline, updateProfile } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
@@ -15,9 +15,11 @@ import { Modal } from '../components/Modal.tsx';
 import { PostDestinationSelect } from '../components/PostDestinationSelect.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { isEmptyProfileUpdate, toProfileUpdate } from '../components/profileUpdate.ts';
 import { QuoteModal } from '../components/QuoteModal.tsx';
 import { ReplyDialogShell } from '../components/ReplyDialogShell.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
+import { UpdateProfileModal } from '../components/UpdateProfileModal.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
 import { homeItemKey } from '../hooks/homeFeed.ts';
 import { pullProgress, refreshResultLabel } from '../hooks/pullGesture.ts';
@@ -572,11 +574,16 @@ const UserProfile = () => {
             </a>
             <div>
               <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
-                {me.username}
+                {me.display_name}
               </h1>
               <p class='text-charcoal-light dark:text-gray-400'>{handle}</p>
             </div>
           </div>
+          {me.source.note !== '' && (
+            <p class='text-charcoal dark:text-gray-200 text-sm whitespace-pre-wrap mb-4 relative z-10'>
+              {me.source.note}
+            </p>
+          )}
 
           <div class='flex gap-6 text-sm'>
             <div>
@@ -661,16 +668,18 @@ const UpdateBioModal = () => {
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
-    const input = (e.currentTarget as HTMLFormElement).elements.namedItem('avatar') as HTMLInputElement | null;
-    const file = input?.files?.[0];
-    if (file === undefined) {
-      setErrorText('Choose an image');
+    const update = toProfileUpdate(new FormData(e.currentTarget as HTMLFormElement), {
+      displayName: data.me.display_name,
+      note: data.me.source.note,
+    });
+    if (isEmptyProfileUpdate(update)) {
+      window.location.hash = '';
       return;
     }
     setIsSubmitting(true);
     setErrorText(undefined);
     try {
-      timeline.updateMe(await updateAvatar(file));
+      timeline.updateMe(await updateProfile(update));
       window.location.hash = '';
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : String(error));
@@ -680,37 +689,13 @@ const UpdateBioModal = () => {
   };
 
   return (
-    <Modal id='update-bio' showCloseButton={false}>
-      <form onSubmit={handleSubmit}>
-        <p class='text-charcoal-light dark:text-gray-400 text-sm mb-3'>
-          Choose a profile image (JPEG, PNG, GIF or WebP, up to 5MB)
-        </p>
-        <input
-          type='file'
-          name='avatar'
-          accept='image/jpeg,image/png,image/gif,image/webp'
-          class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset mb-3 transition-all'
-        />
-        {errorText !== undefined && <p class='text-terracotta text-sm mb-3'>{errorText}</p>}
-        <div class='flex gap-2 justify-end'>
-          <a href='#'>
-            <button
-              type='button'
-              class='px-4 py-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
-            >
-              Cancel
-            </button>
-          </a>
-          <button
-            type='submit'
-            disabled={isSubmitting}
-            class='px-5 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
-          >
-            {isSubmitting ? 'Updating...' : 'Update'}
-          </button>
-        </div>
-      </form>
-    </Modal>
+    <UpdateProfileModal
+      displayName={data.me.display_name}
+      note={data.me.source.note}
+      isSubmitting={isSubmitting}
+      errorText={errorText}
+      onSubmit={handleSubmit}
+    />
   );
 };
 

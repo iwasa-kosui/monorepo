@@ -50,6 +50,8 @@ export const actorsTable = sqliteTable('actors', {
 export const localActorsTable = sqliteTable('local_actors', {
   actorId: text('actorId').primaryKey().references(() => actorsTable.actorId),
   userId: text('userId').notNull().references(() => usersTable.userId),
+  displayName: text('displayName'),
+  bio: text('bio'),
 }, (table) => [
   uniqueIndex('local_actor_user_unique').on(table.userId),
 ]);
@@ -129,6 +131,14 @@ export const remotePostRecipientsTable = sqliteTable('remote_post_recipients', {
 }, (table) => [
   primaryKey({ columns: [table.postId, table.actorUri] }),
   index('remote_post_recipients_actor_uri_idx').on(table.actorUri),
+]);
+
+export const directPostParticipantsTable = sqliteTable('direct_post_participants', {
+  postId: text('postId').notNull().references(() => postsTable.postId),
+  actorUri: text('actorUri').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.postId, table.actorUri] }),
+  index('direct_post_participants_actor_uri_idx').on(table.actorUri),
 ]);
 
 export const postQuotesTable = sqliteTable('post_quotes', {

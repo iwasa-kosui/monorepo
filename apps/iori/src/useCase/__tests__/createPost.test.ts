@@ -689,7 +689,7 @@ describe('CreatePostUseCase', () => {
       return { deps, session };
     };
 
-    const post = async (visibility?: 'public' | 'unlisted' | 'private') => {
+    const post = async (visibility?: 'public' | 'unlisted' | 'private' | 'direct') => {
       const { deps, session } = setup();
       const ctx = createMockRequestContext();
       const result = await CreatePostUseCase.create(deps).run({
@@ -755,6 +755,38 @@ describe('CreatePostUseCase', () => {
       expect(hrefs(create.toIds)).toEqual([followersUri]);
       expect(hrefs(create.ccIds)).toEqual([alice.id]);
       expect([...hrefs(create.toIds), ...hrefs(create.ccIds)]).not.toContain(publicUri);
+    });
+
+    it('direct は followers にもリレーにも送らず、mentions の相手の inbox にだけ共有 inbox を使わず送る', async () => {
+      const { result, relayCall, followersCall, calls } = await post('direct');
+
+      expect(result.ok && result.val.post.visibility).toBe('direct');
+      expect(relayCall).toBeUndefined();
+      expect(followersCall).toBeUndefined();
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[1]).toEqual([
+        {
+          id: new URL(alice.id),
+          inboxId: new URL(alice.inboxUrl),
+          endpoints: { sharedInbox: new URL(alice.sharedInboxUrl) },
+        },
+      ]);
+      expect(calls[0]?.[3]).toEqual({ preferSharedInbox: false });
+      const create = calls[0]?.[2] as Create;
+      expect(hrefs(create.toIds)).toEqual([alice.id]);
+      expect(create.ccIds).toEqual([]);
+    });
+
+    it('direct の投稿は、作者と mentions の相手を参加者として保存し、direct 以外では保存しない', async () => {
+      const direct = await post('direct');
+      const publicPost = await post('public');
+
+      expect(vi.mocked(direct.deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
+        participantActorUris: ['https://example.com/users/kosui', alice.id],
+      });
+      expect(vi.mocked(publicPost.deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
+        participantActorUris: [],
+      });
     });
 
     it('private の投稿は、保存した Note の内容で Create を作る（ctx.getObject に頼らない）', async () => {

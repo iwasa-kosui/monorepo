@@ -1,11 +1,12 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Application, Endpoints, Image, Person } from '@fedify/vocab';
+import { Application, Endpoints } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
+import { buildLocalPerson } from '../../useCase/helper/localPerson.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from './sharedKeyDispatcher.ts';
 
 export type ActorDispatcherDeps = Readonly<{
@@ -41,21 +42,7 @@ export const createActorDispatcher = ({ userResolverByUsername, actorResolverByU
       RA.match({
         ok: async (actor) => {
           if (actor === undefined) return null;
-          const keys = await ctx.getActorKeyPairs(identifier);
-          return new Person({
-            id: ctx.getActorUri(identifier),
-            preferredUsername: identifier,
-            inbox: ctx.getInboxUri(identifier),
-            outbox: ctx.getOutboxUri(identifier),
-            followers: ctx.getFollowersUri(identifier),
-            endpoints: new Endpoints({ sharedInbox: ctx.getInboxUri() }),
-            url: ctx.getActorUri(identifier),
-            icon: actor.logoUri === undefined
-              ? undefined
-              : new Image({ url: new URL(actor.logoUri), mediaType: 'image/png' }),
-            publicKey: keys.at(0)?.cryptographicKey,
-            assertionMethods: keys.map((key) => key.multikey),
-          });
+          return buildLocalPerson(ctx, identifier, actor);
         },
         err: (error) => {
           getLogger().warn(`Failed to resolve user for federation: ${identifier} - ${error}`);

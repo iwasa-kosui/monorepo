@@ -27,10 +27,14 @@ const base = postToStatus({
   linkPreviews: [],
 } as unknown as PostWithAuthor);
 
-const render = (crosspost?: IoriBlueskyCrosspost): string => {
+const render = (crosspost?: IoriBlueskyCrosspost, visibility?: Status['visibility']): string => {
   const status: Status = crosspost === undefined
     ? base
-    : { ...base, iori: { ...base.iori!, bluesky_crosspost: crosspost } };
+    : {
+      ...base,
+      ...(visibility === undefined ? {} : { visibility }),
+      iori: { ...base.iori!, bluesky_crosspost: crosspost },
+    };
   return String(jsx(PostView, { status }));
 };
 
@@ -83,6 +87,16 @@ describe('PostView の Bluesky の印', () => {
   it('reply_to_unsent の skipped は印を出さない', () => {
     expect(render(crosspost({ status: 'skipped', skip_reason: 'reply_to_unsent', retrying: false })))
       .not.toContain('Bluesky');
+  });
+
+  it('direct の投稿の visibility の skipped は印を出さない', () => {
+    expect(render(crosspost({ status: 'skipped', skip_reason: 'visibility', retrying: false }), 'direct'))
+      .not.toContain('Bluesky');
+  });
+
+  it('private の投稿の visibility の skipped は印を出す', () => {
+    expect(render(crosspost({ status: 'skipped', skip_reason: 'visibility', retrying: false }), 'private'))
+      .toContain('Bluesky に未送信');
   });
 
   it('deleting は何も出さない', () => {

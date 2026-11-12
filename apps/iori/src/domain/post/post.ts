@@ -13,6 +13,7 @@ import type { LinkPreview } from '../linkPreview/linkPreview.ts';
 import type { PageRequest } from '../page/page.ts';
 import { UserId } from '../user/userId.ts';
 import type { Username } from '../user/username.ts';
+import { DirectPostParticipants } from './directPostParticipants.ts';
 import { PostId } from './postId.ts';
 import { Visibility } from './visibility.ts';
 
@@ -77,12 +78,16 @@ export const PostEvent = AggregateEvent.createFactory<PostAggregate>('post');
 export type PostCreated = PostEvent<
   Post,
   'post.created',
-  Post & { quoteUri: string | null; sourceText: string | null }
+  Post & { quoteUri: string | null; sourceText: string | null; participantActorUris: ReadonlyArray<string> }
 >;
 export type RemotePostCreated = PostEvent<
   RemotePost,
   'post.remotePostCreated',
-  RemotePost & { recipientActorUris: ReadonlyArray<string>; quoteUri: string | null }
+  RemotePost & {
+    recipientActorUris: ReadonlyArray<string>;
+    quoteUri: string | null;
+    participantActorUris: ReadonlyArray<string>;
+  }
 >;
 export type PostUpdated = PostEvent<
   LocalPost,
@@ -93,6 +98,7 @@ export type PostUpdated = PostEvent<
     summary: string | null;
     sensitive: boolean;
     sourceText: string;
+    participantActorUris: ReadonlyArray<string>;
     editedAt: Instant;
   }
 >;
@@ -102,6 +108,7 @@ export type RemotePostUpdated = PostEvent<
   RemotePost & {
     recipientActorUris: ReadonlyArray<string>;
     previousRecipientActorUris: ReadonlyArray<string>;
+    participantActorUris: ReadonlyArray<string>;
     images: ReadonlyArray<StoredPostImage>;
   }
 >;
@@ -121,10 +128,15 @@ const createPost = (now: Instant) =>
       visibility?: Visibility;
       quoteUri?: string | null;
       sourceText?: string | null;
+      participantActorUris?: ReadonlyArray<string>;
     },
-): PostEvent<LocalPost, 'post.created', LocalPost & { quoteUri: string | null; sourceText: string | null }> => {
-  const { quoteUri = null, sourceText = null, ...postPayload } = payload;
+): PostEvent<
+  LocalPost,
+  'post.created',
+  LocalPost & { quoteUri: string | null; sourceText: string | null; participantActorUris: ReadonlyArray<string> }
+> => {
   const postId = PostId.generate();
+  const { quoteUri = null, sourceText = null, participantActorUris = [], ...postPayload } = payload;
   const post: LocalPost = {
     ...postPayload,
     postId,
@@ -139,7 +151,12 @@ const createPost = (now: Instant) =>
     postId,
     post,
     'post.created',
-    { ...post, quoteUri, sourceText },
+    {
+      ...post,
+      quoteUri,
+      sourceText,
+      participantActorUris: DirectPostParticipants.of(post.visibility, participantActorUris),
+    },
     now,
   );
 };
@@ -147,15 +164,27 @@ const createPost = (now: Instant) =>
 const updatePost = (now: Instant) =>
 (
   post: LocalPost,
-  changes: Readonly<{ content: string; summary: string | null; sensitive: boolean; sourceText: string }>,
+  changes: Readonly<{
+    content: string;
+    summary: string | null;
+    sensitive: boolean;
+    sourceText: string;
+    participantActorUris?: ReadonlyArray<string>;
+  }>,
 ): PostUpdated => {
-  const { sourceText, ...fields } = changes;
+  const { sourceText, participantActorUris = [], ...fields } = changes;
   const updated: LocalPost = { ...post, ...fields, editedAt: now };
   return PostEvent.create(
     post.postId,
     updated,
     'post.updated',
-    { postId: post.postId, ...fields, sourceText, editedAt: now },
+    {
+      postId: post.postId,
+      ...fields,
+      sourceText,
+      participantActorUris: DirectPostParticipants.of(post.visibility, participantActorUris),
+      editedAt: now,
+    },
     now,
   );
 };
@@ -170,9 +199,17 @@ const createRemotePost = (now: Instant) =>
       sensitive?: boolean;
       recipientActorUris?: ReadonlyArray<string>;
       quoteUri?: string | null;
+      authorActorUri?: string;
+      mentionedActorUris?: ReadonlyArray<string>;
     },
 ): RemotePostCreated => {
-  const { recipientActorUris = [], quoteUri = null, ...postPayload } = payload;
+  const {
+    recipientActorUris = [],
+    quoteUri = null,
+    authorActorUri,
+    mentionedActorUris = [],
+    ...postPayload
+  } = payload;
   const postId = PostId.generate();
   const post: RemotePost = {
     ...postPayload,
@@ -187,7 +224,16 @@ const createRemotePost = (now: Instant) =>
     postId,
     post,
     'post.remotePostCreated',
-    { ...post, recipientActorUris, quoteUri },
+    {
+      ...post,
+      recipientActorUris,
+      quoteUri,
+      participantActorUris: DirectPostParticipants.of(post.visibility, [
+        authorActorUri,
+        ...mentionedActorUris,
+        ...recipientActorUris,
+      ]),
+    },
     Instant.now(),
   );
 };
@@ -200,6 +246,8 @@ export type RemotePostEdit = Readonly<{
   visibility: Visibility | null;
   recipientActorUris: ReadonlyArray<string>;
   previousRecipientActorUris: ReadonlyArray<string>;
+  authorActorUri?: string;
+  mentionedActorUris?: ReadonlyArray<string>;
   images: ReadonlyArray<StoredPostImage>;
 }>;
 
@@ -207,13 +255,31 @@ const isNewerEdit = (post: RemotePost, editedAt: Instant): boolean =>
   post.editedAt === undefined || post.editedAt === null || editedAt > post.editedAt;
 
 const updateRemotePost = (now: Instant) => (post: RemotePost, edit: RemotePostEdit): RemotePostUpdated => {
-  const { recipientActorUris, previousRecipientActorUris, images, visibility, ...changed } = edit;
+  const {
+    recipientActorUris,
+    previousRecipientActorUris,
+    authorActorUri,
+    mentionedActorUris = [],
+    images,
+    visibility,
+    ...changed
+  } = edit;
   const updated: RemotePost = { ...post, ...changed, visibility: Visibility.narrow(post.visibility, visibility) };
   return PostEvent.create(
     post.postId,
     updated,
     'post.remotePostUpdated',
-    { ...updated, recipientActorUris, previousRecipientActorUris, images },
+    {
+      ...updated,
+      recipientActorUris,
+      previousRecipientActorUris,
+      participantActorUris: DirectPostParticipants.of(updated.visibility, [
+        authorActorUri,
+        ...mentionedActorUris,
+        ...recipientActorUris,
+      ]),
+      images,
+    },
     now,
   );
 };
@@ -283,6 +349,7 @@ export type RemotePostIdentity = Readonly<{
   sensitive?: boolean;
   visibility: Visibility | null;
   recipientActorUris?: ReadonlyArray<string>;
+  mentionedActorUris?: ReadonlyArray<string>;
   quoteUri?: string | null;
   attachments?: readonly RemotePostAttachment[];
   publishedAt?: Instant;

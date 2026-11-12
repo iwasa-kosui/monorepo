@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { LocalPost, PostQuote, PostQuotesResolverByPostIds, RemotePost } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
@@ -94,7 +95,7 @@ const setup = (parent: 'local' | 'remote', quote: PostQuote | undefined = aliceQ
     postQuotesResolver,
     origin: 'https://example.com',
   });
-  const run = async (input: { content: string; quoteUri?: string }) => {
+  const run = async (input: { content: string; quoteUri?: string; visibility?: Visibility }) => {
     const ctx = createContext();
     if (parent === 'remote') {
       const bob = new Person({
@@ -230,5 +231,29 @@ describe('SendReplyUseCase の引用', () => {
     expect(note.quoteUrl).toBeNull();
     expect(postCreatedStore.items[0]?.eventPayload.quoteUri).toBeNull();
     expect(postCreatedStore.items[0]?.aggregateState.content).toBe('<p>reply</p>');
+  });
+
+  it('direct の返信では、返信先が自分のサーバーの投稿でも、引用先の作者を Mention と cc に入れず、配送もしない', async () => {
+    const { run } = setup('local');
+
+    const { result, sent } = await run({ content: '<p>reply</p>', quoteUri, visibility: 'direct' });
+
+    expect(result.ok).toBe(true);
+    expect(sent).toEqual([]);
+  });
+
+  it('direct の返信で返信先がリモートなら、返信先の作者にだけ配送し、Note に引用先の作者を入れない', async () => {
+    const { run } = setup('remote');
+
+    const { result, sent } = await run({ content: '<p>reply</p>', quoteUri, visibility: 'direct' });
+
+    expect(result.ok).toBe(true);
+    expect(sent).toHaveLength(1);
+    const note = await noteOf(sent[0]!.create);
+    expect(note.quoteUrl?.href).toBe(quoteUri);
+    expect(note.toIds.map((url) => url.href)).toEqual(['https://bob.example/users/bob']);
+    expect(note.ccIds).toEqual([]);
+    const hrefs = (await Array.fromAsync(note.getTags())).map((tag) => (tag as Mention).href?.href);
+    expect(hrefs).toEqual(['https://bob.example/users/bob']);
   });
 });

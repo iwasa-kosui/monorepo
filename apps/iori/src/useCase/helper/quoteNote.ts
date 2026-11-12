@@ -1,6 +1,7 @@
 import type { MentionRecipient } from '../../domain/post/mention.ts';
 import type { PostQuote, PostQuotesResolverByPostIds } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import type { MentionedActor } from './mentionNote.ts';
 
 export type QuoteNoteFields = Readonly<{
@@ -28,9 +29,13 @@ export const resolveQuoteNoteFields = async (
   resolver: PostQuotesResolverByPostIds | undefined,
   postId: PostId,
   quoteUri: string | undefined,
+  visibility?: Visibility,
 ): Promise<QuoteNoteFields> => {
   if (quoteUri === undefined) {
     return toQuoteNoteFields(undefined);
+  }
+  if (visibility === 'direct') {
+    return { quoteUrl: new URL(quoteUri), actors: [], recipients: [] };
   }
   const resolved = await resolver?.resolve([postId]);
   return toQuoteNoteFields({
