@@ -23,6 +23,7 @@ const allTypes: ReadonlyArray<Notification['type']> = [
   'follow',
   'emojiReact',
   'reply',
+  'mention',
   'blueskyLike',
   'blueskyRepost',
   'blueskyFollow',
