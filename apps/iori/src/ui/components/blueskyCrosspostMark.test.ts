@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { IoriBlueskyCrosspost } from '../../adaptor/mastodon/entities.ts';
 import {
   BLUESKY_NOT_SENT_NOTICE,
+  BLUESKY_NOT_SENT_VISIBILITY_NOTICE,
   blueskyNotSentNotice,
   postedMessage,
   skipReasonText,
@@ -130,18 +131,38 @@ describe('postedMessage', () => {
 
 describe('blueskyNotSentNotice', () => {
   it('送り先が両方で、CW があれば説明を返す', () => {
-    expect(blueskyNotSentNotice('both', '注意', false)).toBe(BLUESKY_NOT_SENT_NOTICE);
+    expect(blueskyNotSentNotice('both', '注意', false, 'public')).toBe(BLUESKY_NOT_SENT_NOTICE);
   });
 
   it('送り先が両方で、センシティブがオンなら説明を返す', () => {
-    expect(blueskyNotSentNotice('both', '', true)).toBe(BLUESKY_NOT_SENT_NOTICE);
+    expect(blueskyNotSentNotice('both', '', true, 'public')).toBe(BLUESKY_NOT_SENT_NOTICE);
   });
 
   it('CW が空白だけでセンシティブがオフなら返さない', () => {
-    expect(blueskyNotSentNotice('both', '  ', false)).toBeUndefined();
+    expect(blueskyNotSentNotice('both', '  ', false, 'public')).toBeUndefined();
   });
 
   it('送り先が Fediverse だけなら返さない', () => {
-    expect(blueskyNotSentNotice('fediverse', '注意', true)).toBeUndefined();
+    expect(blueskyNotSentNotice('fediverse', '注意', true, 'public')).toBeUndefined();
+  });
+
+  it.each(['unlisted', 'private'] as const)('送り先が両方で、公開範囲が %s なら公開範囲の説明を返す', (visibility) => {
+    expect(blueskyNotSentNotice('both', '', false, visibility)).toBe(BLUESKY_NOT_SENT_VISIBILITY_NOTICE);
+  });
+
+  it('公開範囲の説明は「公開ではないので、Bluesky には送りません」にする', () => {
+    expect(BLUESKY_NOT_SENT_VISIBILITY_NOTICE).toBe('公開範囲が公開ではないので、Bluesky には送りません');
+  });
+
+  it('公開範囲が公開以外でも、CW があれば CW の説明を優先する', () => {
+    expect(blueskyNotSentNotice('both', '注意', false, 'private')).toBe(BLUESKY_NOT_SENT_NOTICE);
+  });
+
+  it('送り先が Fediverse だけなら、公開範囲が公開以外でも返さない', () => {
+    expect(blueskyNotSentNotice('fediverse', '', false, 'private')).toBeUndefined();
+  });
+
+  it('公開範囲が公開で CW もセンシティブもなければ返さない', () => {
+    expect(blueskyNotSentNotice('both', '', false, 'public')).toBeUndefined();
   });
 });

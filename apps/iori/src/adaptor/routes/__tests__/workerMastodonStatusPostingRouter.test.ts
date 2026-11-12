@@ -29,7 +29,9 @@ const setup = async (options: Parameters<typeof setupReadApi>[0] = {}) => {
 
 describe('POST /api/v1/statuses の検証', () => {
   const rejected: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
-    ['visibility が public 以外', { status: 'hi', visibility: 'private' }],
+    ['visibility が direct', { status: 'hi', visibility: 'direct' }],
+    ['visibility が未知の値', { status: 'hi', visibility: 'friends' }],
+    ['visibility が文字列でない', { status: 'hi', visibility: 1 }],
     ['spoiler_text が文字列でない', { status: 'hi', spoiler_text: 1 }],
     ['status と spoiler_text の合計が 10001 文字', { status: 'あ'.repeat(5000), spoiler_text: 'い'.repeat(5001) }],
     ['content_type が未対応', { status: 'hi', content_type: 'text/html' }],
@@ -160,6 +162,77 @@ describe('POST /api/v1/statuses の検証', () => {
     expect(response.status).toBe(403);
     expect(t.count('posts')).toBe(0);
   });
+});
+
+describe('POST /api/v1/statuses の visibility', () => {
+  const visibilityOf = (t: Awaited<ReturnType<typeof setup>>, postId: string) =>
+    (t.sqlite.prepare('SELECT visibility FROM local_posts WHERE postId = ?').get(postId) as { visibility: string })
+      .visibility;
+
+  it('direct を 422 にして、direct を受け付けないことが分かるメッセージを返す', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi', visibility: 'direct' });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toBe(
+      'Validation failed: Visibility must be public, unlisted or private (direct is not supported)',
+    );
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it.each([['public'], ['unlisted'], ['private']])(
+    'visibility が %s のとき、その公開範囲で投稿を保存して返す',
+    async (visibility) => {
+      const t = await setup();
+
+      const response = await t.json({ status: 'hi', visibility });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status.visibility).toBe(visibility);
+      expect(visibilityOf(t, status.id)).toBe(visibility);
+    },
+  );
+
+  it.each([[undefined], [null]])('visibility が %s のとき public で投稿する', async (visibility) => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi', visibility });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(visibilityOf(t, status.id)).toBe('public');
+  });
+
+  it.each([['unlisted'], ['private']])(
+    '返信で visibility が %s のとき、その公開範囲で返信を保存する',
+    async (visibility) => {
+      const t = await setup();
+      const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
+
+      const response = await t.json({ status: 'reply', in_reply_to_id: parent.postId, visibility });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(visibilityOf(t, status.id)).toBe(visibility);
+    },
+  );
+
+  it.each([['unlisted'], ['private']])(
+    'visibility が %s で iori_destination が both のとき、保存した公開範囲の投稿を Bluesky の予約に渡す',
+    async (visibility) => {
+      const scheduleBlueskyCrosspost = { run: vi.fn(async () => RA.ok('pending' as const)) };
+      const t = await setup({ scheduleBlueskyCrosspost });
+
+      const response = await t.json({ status: 'hi', visibility, iori_destination: 'both' });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(scheduleBlueskyCrosspost.run).toHaveBeenCalledWith({ postId: status.id });
+      expect(visibilityOf(t, status.id)).toBe(visibility);
+    },
+  );
 });
 
 describe('POST /api/v1/statuses の iori_destination', () => {

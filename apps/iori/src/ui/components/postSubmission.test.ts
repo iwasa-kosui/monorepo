@@ -12,6 +12,7 @@ const filled: PostFormValue = {
   content: 'hello',
   uploaded: [{ id: 'media-1', url: 'https://example.com/a.png', description: '' }],
   destination: 'both',
+  visibility: 'public',
   cw: '',
   sensitive: false,
 };
@@ -51,6 +52,7 @@ describe('submitPost', () => {
       media_ids: ['media-1'],
       content_type: 'text/markdown',
       iori_destination: 'both',
+      visibility: 'public',
     });
     expect(result).toEqual({ kind: 'posted', status: created });
     expect(onPosted).toHaveBeenCalledTimes(1);
@@ -64,6 +66,14 @@ describe('submitPost', () => {
     await submitPost({ ...filled, destination: 'fediverse' }, { create, updateMedia, onPosted: vi.fn() });
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ iori_destination: 'fediverse' }));
+  });
+
+  it.each(['public', 'unlisted', 'private'] as const)('passes the selected visibility %s', async (visibility) => {
+    const create = vi.fn().mockResolvedValue(created);
+
+    await submitPost({ ...filled, visibility }, { create, updateMedia, onPosted: vi.fn() });
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ visibility }));
   });
 
   it('passes a trimmed spoiler_text and sensitive', async () => {

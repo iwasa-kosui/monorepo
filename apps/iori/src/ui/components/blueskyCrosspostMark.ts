@@ -1,5 +1,6 @@
 import type { IoriBlueskyCrosspost } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
+import type { PostVisibility } from './postVisibility.ts';
 
 export type BlueskyCrosspostMark = Readonly<{
   label: string;
@@ -71,9 +72,15 @@ export const postedMessage = (
 
 export const BLUESKY_NOT_SENT_NOTICE = 'CW 付き・センシティブ指定の投稿は Bluesky に送りません';
 
+export const BLUESKY_NOT_SENT_VISIBILITY_NOTICE = '公開範囲が公開ではないので、Bluesky には送りません';
+
 export const blueskyNotSentNotice = (
   destination: PostDestination,
   cw: string,
   sensitive: boolean,
-): string | undefined =>
-  destination === 'both' && (cw.trim() !== '' || sensitive) ? BLUESKY_NOT_SENT_NOTICE : undefined;
+  visibility: PostVisibility,
+): string | undefined => {
+  if (destination !== 'both') return undefined;
+  if (cw.trim() !== '' || sensitive) return BLUESKY_NOT_SENT_NOTICE;
+  return visibility !== 'public' ? BLUESKY_NOT_SENT_VISIBILITY_NOTICE : undefined;
+};

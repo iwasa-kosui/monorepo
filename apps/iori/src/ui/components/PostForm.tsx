@@ -9,6 +9,8 @@ import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
 import { canSubmitPost, submitPost, type UploadedMedia } from './postSubmission.ts';
+import { DEFAULT_POST_VISIBILITY, type PostVisibility } from './postVisibility.ts';
+import { PostVisibilitySelect } from './PostVisibilitySelect.tsx';
 
 type Props = Readonly<{
   id?: string;
@@ -22,6 +24,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [destination, setDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
+  const [visibility, setVisibility] = useState<PostVisibility>(DEFAULT_POST_VISIBILITY);
   const [resultMessage, setResultMessage] = useState('');
   const [cwEnabled, setCwEnabled] = useState(false);
   const [cw, setCw] = useState('');
@@ -30,7 +33,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const hasCw = cwEnabled && cw.trim() !== '';
   const hasImages = uploaded.length > 0;
   const sensitive = hasImages && (sensitiveChecked || hasCw);
-  const notice = blueskyNotSentNotice(destination, cwEnabled ? cw : '', sensitive);
+  const notice = blueskyNotSentNotice(destination, cwEnabled ? cw : '', sensitive, visibility);
 
   const handleContentChange = (value: string) => {
     setContent(value);
@@ -42,13 +45,21 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
     setIsPosting(true);
     try {
       const result = await submitPost(
-        { content, uploaded, destination, cw: cwEnabled ? cw : '', sensitive: hasImages && sensitiveChecked },
+        {
+          content,
+          uploaded,
+          destination,
+          visibility,
+          cw: cwEnabled ? cw : '',
+          sensitive: hasImages && sensitiveChecked,
+        },
         { create: createStatus, updateMedia, onPosted },
       );
       if (result.kind === 'posted') {
         setContent('');
         setUploaded([]);
         setDestination(DEFAULT_POST_DESTINATION);
+        setVisibility(DEFAULT_POST_VISIBILITY);
         setCwEnabled(false);
         setCw('');
         setSensitiveChecked(false);
@@ -169,6 +180,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
       )}
       <div class='mt-2 flex justify-end items-center gap-3 flex-shrink-0'>
         <PostDestinationSelect value={destination} onChange={setDestination} name='destination' />
+        <PostVisibilitySelect value={visibility} onChange={setVisibility} name='visibility' />
         <label class='cursor-pointer text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
           {isUploading
             ? <span class='text-xs'>Uploading...</span>

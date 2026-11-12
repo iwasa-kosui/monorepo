@@ -345,6 +345,7 @@ export type CreateStatusParams = Readonly<{
   media_ids?: readonly string[];
   content_type: string;
   iori_destination?: PostDestination;
+  visibility?: 'public' | 'unlisted' | 'private';
   spoiler_text?: string;
   sensitive?: boolean;
 }>;

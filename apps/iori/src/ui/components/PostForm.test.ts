@@ -13,6 +13,19 @@ describe('PostForm', () => {
     expect(html).not.toContain('注意書き（CW）');
   });
 
+  it('公開範囲の radiogroup を出し、初期状態では「公開」を選んでおく', () => {
+    const html = render();
+
+    expect(html).toContain('aria-label="公開範囲"');
+    expect(html).toMatch(/<input[^>]*name="visibility"[^>]*value="public"[^>]*checked/);
+    expect(html).not.toMatch(/<input[^>]*name="visibility"[^>]*value="unlisted"[^>]*checked/);
+    expect(html).not.toMatch(/<input[^>]*name="visibility"[^>]*value="private"[^>]*checked/);
+  });
+
+  it('公開範囲が公開の初期状態では、Bluesky に送らない案内を出さない', () => {
+    expect(render()).not.toContain('Bluesky には送りません');
+  });
+
   it('画像がなければ ALT の欄とセンシティブのチェックボックスを出さない', () => {
     const html = render();
 
