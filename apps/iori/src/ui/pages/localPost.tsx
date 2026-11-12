@@ -11,6 +11,7 @@ import {
   fetchVerifyCredentials,
   isNotFoundError,
 } from '../api/mastodonClient.ts';
+import { accountHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { DEFAULT_POST_DESTINATION } from '../components/postDestination.ts';
 import { replyParams } from '../components/postSubmission.ts';
 import { PostView } from '../components/PostView.tsx';
@@ -43,12 +44,6 @@ const LocalPostPage = () => {
     const pathParts = window.location.pathname.split('/');
     const postsIndex = pathParts.indexOf('posts');
     return pathParts[postsIndex + 1];
-  };
-
-  const getUsernameFromUrl = () => {
-    const pathParts = window.location.pathname.split('/');
-    const usersIndex = pathParts.indexOf('users');
-    return pathParts[usersIndex + 1];
   };
 
   const fetchThread = async () => {
@@ -88,8 +83,6 @@ const LocalPostPage = () => {
         .catch((err) => console.error('Failed to load the current account:', err));
     }
   }, []);
-
-  const username = getUsernameFromUrl();
 
   const handleReply = (postId: string) => {
     setReplyToPostId(postId);
@@ -135,7 +128,7 @@ const LocalPostPage = () => {
       await deleteStatus(postId);
       // If the deleted post is the current post, navigate back to user page
       if (threadData?.currentPost?.id === postId) {
-        window.location.href = `/users/${username}`;
+        window.location.href = accountHref(displayStatus(threadData.currentPost).account);
       } else {
         // Otherwise, refresh the thread
         fetchThread();
@@ -183,35 +176,48 @@ const LocalPostPage = () => {
 
   if (!threadData) {
     return (
-      <div class='text-charcoal-light dark:text-gray-400 text-center py-8'>
-        Post not found
+      <div class='text-center py-8'>
+        <p class='text-charcoal-light dark:text-gray-400 mb-4'>Post not found</p>
+        <a
+          href='/'
+          class='text-terracotta hover:text-terracotta-dark transition-colors'
+        >
+          ホームに戻る
+        </a>
       </div>
     );
   }
+
+  const focusedPost = threadData.currentPost === null ? undefined : displayStatus(threadData.currentPost);
+  const originalPostUrl = focusedPost === undefined || isLocalAccount(focusedPost.account)
+    ? undefined
+    : focusedPost.url ?? undefined;
 
   return (
     <div class='flex flex-col h-full'>
       {/* Header */}
       <div class='flex items-center justify-between mb-4 flex-shrink-0'>
-        <a
-          href={`/users/${username}`}
-          class='text-lg font-semibold text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light flex items-center gap-2 transition-colors'
-        >
-          <svg
-            class='w-5 h-5'
-            fill='none'
-            viewBox='0 0 24 24'
-            stroke='currentColor'
+        {focusedPost && (
+          <a
+            href={accountHref(focusedPost.account)}
+            class='text-lg font-semibold text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light flex items-center gap-2 transition-colors'
           >
-            <path
-              stroke-linecap='round'
-              stroke-linejoin='round'
-              stroke-width='2'
-              d='M15 19l-7-7 7-7'
-            />
-          </svg>
-          @{username}
-        </a>
+            <svg
+              class='w-5 h-5'
+              fill='none'
+              viewBox='0 0 24 24'
+              stroke='currentColor'
+            >
+              <path
+                stroke-linecap='round'
+                stroke-linejoin='round'
+                stroke-width='2'
+                d='M15 19l-7-7 7-7'
+              />
+            </svg>
+            @{focusedPost.account.acct}
+          </a>
+        )}
         <a
           href='/'
           class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
@@ -249,6 +255,16 @@ const LocalPostPage = () => {
                 currentAccountId={currentAccountId}
                 isLoggedIn={isLoggedIn}
               />
+              {originalPostUrl && (
+                <a
+                  href={originalPostUrl}
+                  target='_blank'
+                  rel='noopener noreferrer'
+                  class='mt-2 inline-block text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+                >
+                  元の投稿を開く
+                </a>
+              )}
             </div>
           )}
           {threadData.descendants.length > 0 && (

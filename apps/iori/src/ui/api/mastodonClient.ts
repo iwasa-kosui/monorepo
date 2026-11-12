@@ -11,6 +11,7 @@ import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
 import type {
   IoriBlueskyLikeResponse,
   IoriBlueskyRepostResponse,
+  IoriBlueskyStatusResponse,
   IoriBlueskyTimelineResponse,
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { IoriDigestRequestResponse, IoriFeedSourceBody } from '../../adaptor/routes/workerIoriDigestRouter.ts';
@@ -50,6 +51,13 @@ export const isUnprocessableError = (error: unknown): boolean => isMastodonApiEr
 
 export const failureMessage = (action: string, error: unknown): string =>
   isMastodonApiError(error) ? `Failed to ${action}: ${error.message}` : `Failed to ${action}. Please try again.`;
+
+export const BLUESKY_LOGIN_FAILED_ERROR = 'Bluesky login failed';
+
+export const blueskyFailureMessage = (action: string, error: unknown): string =>
+  isMastodonApiError(error) && error.message === BLUESKY_LOGIN_FAILED_ERROR
+    ? 'Bluesky にログインできないため、操作できませんでした。'
+    : failureMessage(action, error);
 
 const queryOf = (url: string): URLSearchParams | undefined => {
   try {
@@ -445,6 +453,11 @@ export const fetchBlueskyHomeTimeline = (
     ...(cursor === undefined ? {} : { before: cursor.before }),
     ...(cursor === undefined || cursor.beforeId === null ? {} : { beforeId: cursor.beforeId }),
   });
+
+export type BlueskyStatus = IoriBlueskyStatusResponse;
+
+export const fetchBlueskyStatus = async (): Promise<BlueskyStatus> =>
+  (await request<BlueskyStatus>('/api/iori/v1/bluesky/status')).body;
 
 const BLUESKY_LIKES_PATH = '/api/iori/v1/bluesky/likes';
 

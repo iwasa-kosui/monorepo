@@ -25,7 +25,17 @@ const contextWith = (env: Partial<IoriWorkerEnv>): ScheduledTaskContext => ({
   waitUntil: () => undefined,
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+const recorderStub = () => ({
+  succeededStore: { save: vi.fn(async () => RA.ok(undefined)) },
+  failedStore: { save: vi.fn(async () => RA.ok(undefined)) },
+});
+
+const NOW = Date.UTC(2026, 10, 12, 3, 4, 5);
 
 describe('collectBlueskyTimelineTask', () => {
   it.each([
@@ -60,11 +70,18 @@ describe('collectBlueskyTimelineTask', () => {
       env: { IORI_BLUESKY_TIMELINE: 'enabled' } as never,
     };
 
-    await createCollectBlueskyTimelineTask(createUseCase).run(context);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    const recorder = recorderStub();
+
+    await createCollectBlueskyTimelineTask(createUseCase, () => recorder).run(context);
 
     expect(createUseCase).toHaveBeenCalledWith(context.env);
     expect(run).toHaveBeenCalledOnce();
     expect(info).toHaveBeenCalledWith('iori bluesky timeline collected.', summary);
+    expect(recorder.succeededStore.save).toHaveBeenCalledOnce();
+    expect(recorder.succeededStore.save).toHaveBeenCalledWith('timeline', NOW);
+    expect(recorder.failedStore.save).not.toHaveBeenCalled();
   });
 
   it('取り込みが失敗したら、秘密を含まない短い文字列を console.error に 1 回だけ出す', async () => {
@@ -75,9 +92,16 @@ describe('collectBlueskyTimelineTask', () => {
         kind: 'auth' as const,
         message: 'app.bsky.feed.getTimeline failed: status 401 ExpiredToken',
         status: 401,
+        code: 'ExpiredToken',
       })
     );
-    const task = createCollectBlueskyTimelineTask(() => ({ run }) as unknown as CollectBlueskyTimelineUseCase);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    const recorder = recorderStub();
+    const task = createCollectBlueskyTimelineTask(
+      () => ({ run }) as unknown as CollectBlueskyTimelineUseCase,
+      () => recorder,
+    );
 
     await task.run(contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }));
 
@@ -85,6 +109,34 @@ describe('collectBlueskyTimelineTask', () => {
     expect(error).toHaveBeenCalledWith(
       'iori bluesky timeline: collection failed. app.bsky.feed.getTimeline failed: status 401 ExpiredToken',
     );
+    expect(recorder.failedStore.save).toHaveBeenCalledOnce();
+    expect(recorder.failedStore.save).toHaveBeenCalledWith('timeline', NOW, 'auth', 'ExpiredToken');
+    expect(recorder.succeededStore.save).not.toHaveBeenCalled();
+  });
+
+  it('失敗にコードが無ければ、コードを null にして記録する', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const run = vi.fn(async () =>
+      RA.err({ type: 'BlueskyClientError' as const, kind: 'network' as const, message: 'getTimeline request failed' })
+    );
+    const recorder = recorderStub();
+    const task = createCollectBlueskyTimelineTask(
+      () => ({ run }) as unknown as CollectBlueskyTimelineUseCase,
+      () => recorder,
+    );
+
+    await task.run(contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }));
+
+    expect(recorder.failedStore.save).toHaveBeenCalledWith('timeline', expect.any(Number), 'network', null);
+  });
+
+  it('無効なときは、記録の保存先を作らない', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const createRecorder = vi.fn(recorderStub);
+
+    await createCollectBlueskyTimelineTask(() => undefined, createRecorder).run(contextWith({}));
+
+    expect(createRecorder).not.toHaveBeenCalled();
   });
 
   it('1 分ごとの cron にだけ登録されている', () => {

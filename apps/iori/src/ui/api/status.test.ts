@@ -4,6 +4,7 @@ import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
 import {
   accountHandle,
   accountHref,
+  detailHref,
   displayStatus,
   isLocalAccount,
   isOwnBoost,
@@ -97,6 +98,18 @@ describe('account helpers', () => {
     expect(statusHref(status('p1'))).toBe('/users/kosui/posts/p1');
     expect(statusHref(status('p2', { account: remoteAccount, uri: 'https://remote.example/notes/2' }))).toBe(
       'https://remote.example/notes/2',
+    );
+  });
+});
+
+describe('detailHref', () => {
+  it('links a local post to its post page', () => {
+    expect(detailHref(status('p1'))).toBe('/users/kosui/posts/p1');
+  });
+
+  it('links a remote post to the detail page in iori', () => {
+    expect(detailHref(status('p2', { account: remoteAccount, uri: 'https://remote.example/notes/2' }))).toBe(
+      '/posts/p2',
     );
   });
 });

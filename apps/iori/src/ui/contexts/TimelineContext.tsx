@@ -5,6 +5,7 @@ import { homeFeedCursor, type HomeItem, mergeHomeFeed } from '../hooks/homeFeed.
 import { readHomeSnapshot } from '../hooks/homeSnapshot.ts';
 import { useBlueskyLike, type UseBlueskyLikeReturn } from '../hooks/useBlueskyLike.ts';
 import { useBlueskyRepost, type UseBlueskyRepostReturn } from '../hooks/useBlueskyRepost.ts';
+import { useBlueskyStatus, type UseBlueskyStatusReturn } from '../hooks/useBlueskyStatus.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation.ts';
 import { usePostActions, type UsePostActionsReturn } from '../hooks/usePostActions.ts';
@@ -22,6 +23,7 @@ export type TimelineContextValue = Readonly<{
   actions: UsePostActionsReturn;
   blueskyLike: UseBlueskyLikeReturn;
   blueskyRepost: UseBlueskyRepostReturn;
+  blueskyStatus: UseBlueskyStatusReturn;
   thread: UseThreadModalReturn;
   reply: UseReplyDialogReturn;
   ui: UseUIStateReturn;
@@ -37,6 +39,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
   const timeline = useTimeline(snapshot);
   const thread = useThreadModal();
   const ui = useUIState();
+  const blueskyStatus = useBlueskyStatus();
 
   const data = timeline.state.status === 'success' ? timeline.state.data : null;
 
@@ -61,7 +64,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
 
   const pullToRefresh = usePullToRefresh({
     onRefresh: async () => {
-      const count = await timeline.refresh();
+      const [count] = await Promise.all([timeline.refresh(), blueskyStatus.reload()]);
       ui.setSelectedIndex(-1);
       return count;
     },
@@ -112,6 +115,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       actions,
       blueskyLike,
       blueskyRepost,
+      blueskyStatus,
       thread,
       reply,
       ui,
@@ -119,7 +123,20 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       pullThreshold: PULL_TO_REFRESH_THRESHOLD,
       reading,
     }),
-    [timeline, data, items, actions, blueskyLike, blueskyRepost, thread, reply, ui, pullToRefresh, reading],
+    [
+      timeline,
+      data,
+      items,
+      actions,
+      blueskyLike,
+      blueskyRepost,
+      blueskyStatus,
+      thread,
+      reply,
+      ui,
+      pullToRefresh,
+      reading,
+    ],
   );
 
   return <TimelineContext.Provider value={value}>{children}</TimelineContext.Provider>;

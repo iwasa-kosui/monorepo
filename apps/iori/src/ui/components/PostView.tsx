@@ -2,9 +2,9 @@ import { useRef, useState } from 'hono/jsx';
 
 import type { Status, Translation } from '../../adaptor/mastodon/entities.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import { safeAbsoluteUrl, safeUrl } from '../../helper/safeUrl.ts';
+import { safeUrl } from '../../helper/safeUrl.ts';
 import { isMastodonApiError, translate } from '../api/mastodonClient.ts';
-import { accountHandle, accountHref, displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
+import { accountHandle, accountHref, detailHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { translationErrorMessage } from '../api/translation.ts';
 import { toBlueskyCrosspostMark } from './blueskyCrosspostMark.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
@@ -66,7 +66,6 @@ export const PostView = (
   const post = displayStatus(status);
   const repostedBy = status.reblog === null ? undefined : status.account;
   const isLocalPost = isLocalAccount(post.account);
-  const isRemotePost = !isLocalPost;
   const isOwner = isLocalPost && currentAccountId !== undefined && post.account.id === currentAccountId;
   const isReplyPost = post.in_reply_to_id !== null;
   const crosspostMark = post.iori?.bluesky_crosspost === undefined
@@ -95,7 +94,7 @@ export const PostView = (
   const isMediaConcealed = !hasSpoiler && post.sensitive && !isSensitiveMediaShown;
 
   // Generate link to post detail page
-  const postDetailLink = isLocalPost ? statusHref(post) : safeAbsoluteUrl(post.uri);
+  const postDetailLink = detailHref(post);
 
   const triggerLike = () => {
     if (onLike && !post.favourited && !isLiking) {
@@ -299,8 +298,6 @@ export const PostView = (
             <span class='text-warm-gray-dark dark:text-gray-500'>·</span>
             <a
               href={postDetailLink}
-              target={isRemotePost && postDetailLink ? '_blank' : undefined}
-              rel={isRemotePost && postDetailLink ? 'noopener noreferrer' : undefined}
               class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
               title={new Date(post.created_at).toLocaleString()}
             >
