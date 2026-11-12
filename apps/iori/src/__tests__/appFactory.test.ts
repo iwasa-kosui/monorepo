@@ -42,6 +42,15 @@ describe('createIoriApp', () => {
             new Response(new ReadableStream({ cancel: cancelImageStream }), {
               headers: { 'Content-Type': 'image/png' },
             }));
+          router.get('/img-cached', () =>
+            new Response('png', {
+              headers: {
+                'Content-Type': 'image/png',
+                'Cache-Control': 'public, max-age=31536000, immutable',
+                'Content-Length': '3',
+                'ETag': '"abc"',
+              },
+            }));
         },
         serveAsset: async () => undefined,
         serveUpload: options.serveUpload ?? (async () => undefined),
@@ -109,6 +118,16 @@ describe('createIoriApp', () => {
 
       expect(response.status).toBe(403);
       expect(cancelImageStream).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not carry the original image headers over to the 403', async () => {
+      const response = await createApp().request('/img-cached', { headers: { 'User-Agent': gptBot } });
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+      expect(response.headers.get('Cache-Control')).toBeNull();
+      expect(response.headers.get('Content-Length')).not.toBe('3');
+      expect(response.headers.get('ETag')).toBeNull();
     });
 
     it('lets a Mastodon server fetch an image from a non-image path', async () => {

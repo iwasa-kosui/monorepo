@@ -114,6 +114,8 @@ export const aiCrawlerGuard = createMiddleware(async (c, next) => {
   await next();
   if (c.res.headers.get('content-type')?.toLowerCase().startsWith('image/') === true) {
     await c.res.body?.cancel();
+    // Hono の c.res の setter は既存の応答のヘッダを新しい応答にコピーする
+    c.res = undefined;
     c.res = forbidden();
   }
 });
