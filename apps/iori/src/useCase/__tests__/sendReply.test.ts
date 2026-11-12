@@ -632,3 +632,173 @@ describe('SendReplyUseCase の返信通知', () => {
     expect(pushSubscriptionsResolver.resolve).not.toHaveBeenCalled();
   });
 });
+
+describe('SendReplyUseCase の親がリモートの返信の宛先の解決', () => {
+  const aliceUri = 'https://remote.example/users/alice';
+  const aliceInbox = 'https://remote.example/users/alice/inbox';
+
+  const setup = () => {
+    const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
+    const session: Session = {
+      sessionId: crypto.randomUUID() as Session['sessionId'],
+      userId: user.id,
+      expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+    };
+    const actor: LocalActor = {
+      id: crypto.randomUUID() as LocalActor['id'],
+      userId: user.id,
+      uri: 'https://example.com/users/kosui',
+      inboxUrl: 'https://example.com/inbox',
+      type: 'local',
+      logoUri: undefined,
+    };
+    const remoteParent: RemotePost = {
+      type: 'remote',
+      summary: null,
+      sensitive: false,
+      postId: crypto.randomUUID() as PostId,
+      actorId: crypto.randomUUID() as RemotePost['actorId'],
+      content: 'parent',
+      createdAt: Date.now() as RemotePost['createdAt'],
+      uri: 'https://remote.example/notes/1',
+      inReplyToUri: null,
+      visibility: 'direct',
+    };
+    const sessionResolver = createMockSessionResolver();
+    sessionResolver.setSession(session);
+    const userResolver = createMockUserResolver();
+    userResolver.setUser(user);
+    const actorResolverByUserId = createMockActorResolverByUserId();
+    actorResolverByUserId.setActor(actor);
+    const postResolver = createMockPostResolver();
+    postResolver.setPost(remoteParent);
+    const storedAuthor = (inboxUrl: string) => ({
+      id: remoteParent.actorId,
+      uri: aliceUri,
+      inboxUrl,
+      type: 'remote' as const,
+      username: 'alice',
+    });
+    const actorResolverById = (author: ReturnType<typeof storedAuthor> | undefined) => ({
+      resolve: vi.fn(() => RA.ok(author as never)),
+    });
+    const deps = {
+      sessionResolver,
+      userResolver,
+      actorResolverByUserId,
+      postCreatedStore: createMockPostCreatedStore(),
+      postImageCreatedStore: createMockPostImageCreatedStore(),
+      timelineItemCreatedStore: createMockTimelineItemCreatedStore(),
+      localPostResolverByUri: createMockLocalPostResolverByUri(),
+      replyNotificationCreatedStore: createMockReplyNotificationCreatedStore(),
+      pushSubscriptionsResolver: createMockPushSubscriptionsResolverByUserId(),
+      webPushSender: createMockWebPushSender(),
+      postResolver,
+      origin: 'https://example.com',
+    };
+    const contextWith = (found: Note | null) =>
+      Object.assign(createContext(), {
+        getDocumentLoader: vi.fn(async () => ({})),
+        lookupObject: vi.fn(async () => found),
+      });
+    const lookedUpNote = () =>
+      new Note({
+        id: new URL(remoteParent.uri),
+        attribution: new Person({ id: new URL(aliceUri), preferredUsername: 'alice', inbox: new URL(aliceInbox) }),
+      });
+    const reply = (
+      ctx: ReturnType<typeof contextWith>,
+      actorResolver: ReturnType<typeof actorResolverById>,
+      visibility: 'public' | 'direct' = 'public',
+    ) =>
+      SendReplyUseCase.create({ ...deps, actorResolverById: actorResolver }).run({
+        sessionId: session.sessionId,
+        postId: remoteParent.postId,
+        content: '<p>reply</p>',
+        imageUrls: [],
+        visibility,
+        request: new Request('https://example.com'),
+        ctx,
+      });
+    return { deps, remoteParent, storedAuthor, actorResolverById, contextWith, lookedUpNote, reply };
+  };
+
+  const noteOf = async (call: readonly unknown[]) => {
+    const create = call[2] as { getObject: () => Promise<Note | null> };
+    return (await create.getObject()) as Note;
+  };
+
+  it('親の作者が保存済みなら、相手のサーバーに問い合わせず、保存済みの情報で作者と followers に送る', async () => {
+    const { remoteParent, storedAuthor, actorResolverById, contextWith, reply } = setup();
+    const ctx = contextWith(null);
+
+    const result = await reply(ctx, actorResolverById(storedAuthor(aliceInbox)));
+
+    expect(result.ok).toBe(true);
+    expect(ctx.lookupObject).not.toHaveBeenCalled();
+    const calls = vi.mocked(ctx.sendActivity).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.[1]).toEqual({ id: new URL(aliceUri), inboxId: new URL(aliceInbox), endpoints: null });
+    expect(calls[1]?.[1]).toBe('followers');
+    const note = await noteOf(calls[0] ?? []);
+    expect(note.replyTargetId?.href).toBe(remoteParent.uri);
+    expect(note.toIds.map((url) => url.href)).toEqual(['https://www.w3.org/ns/activitystreams#Public']);
+    expect(note.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers', aliceUri]);
+    const tags = await Array.fromAsync(note.getTags());
+    expect(tags).toHaveLength(1);
+    expect((tags[0] as { name?: { toString(): string } | null }).name?.toString()).toBe('@alice@remote.example');
+  });
+
+  it('親の作者が保存済みの direct の返信は、followers に送らず、作者にだけ送る', async () => {
+    const { deps, storedAuthor, actorResolverById, contextWith, reply } = setup();
+    const ctx = contextWith(null);
+
+    const result = await reply(ctx, actorResolverById(storedAuthor(aliceInbox)), 'direct');
+
+    expect(result.ok && result.val.post.visibility).toBe('direct');
+    expect(ctx.lookupObject).not.toHaveBeenCalled();
+    const calls = vi.mocked(ctx.sendActivity).mock.calls;
+    expect(calls.map((call) => call[1])).not.toContain('followers');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.[1]).toEqual({ id: new URL(aliceUri), inboxId: new URL(aliceInbox), endpoints: null });
+    const note = await noteOf(calls[0] ?? []);
+    expect(note.toIds.map((url) => url.href)).toEqual([aliceUri]);
+    expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
+      participantActorUris: ['https://example.com/users/kosui', aliceUri],
+    });
+  });
+
+  it('親の作者が保存されていないときは、相手のサーバーのノートを引いて送る', async () => {
+    const { actorResolverById, contextWith, lookedUpNote, reply } = setup();
+    const ctx = contextWith(lookedUpNote());
+
+    const result = await reply(ctx, actorResolverById(undefined));
+
+    expect(result.ok).toBe(true);
+    expect(ctx.lookupObject).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(ctx.sendActivity).mock.calls).toHaveLength(2);
+  });
+
+  it('保存済みの作者の inbox が無いときは、相手のサーバーのノートを引いて送る', async () => {
+    const { storedAuthor, actorResolverById, contextWith, lookedUpNote, reply } = setup();
+    const ctx = contextWith(lookedUpNote());
+
+    const result = await reply(ctx, actorResolverById(storedAuthor('')));
+
+    expect(result.ok).toBe(true);
+    expect(ctx.lookupObject).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(ctx.sendActivity).mock.calls).toHaveLength(2);
+  });
+
+  it('相手のサーバーのノートを引けないときは、何も保存せず、何も送らずに失敗する', async () => {
+    const { deps, actorResolverById, contextWith, reply } = setup();
+    const ctx = contextWith(null);
+
+    const result = await reply(ctx, actorResolverById(undefined), 'direct');
+
+    expect(!result.ok && result.err.type).toBe('RemoteNoteLookupError');
+    expect(deps.postCreatedStore.store).not.toHaveBeenCalled();
+    expect(deps.timelineItemCreatedStore.store).not.toHaveBeenCalled();
+    expect(ctx.sendActivity).not.toHaveBeenCalled();
+  });
+});

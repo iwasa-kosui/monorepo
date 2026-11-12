@@ -62,6 +62,9 @@ import { createD1EmojiReactCreatedStore } from '../adaptor/d1/emojiReact/emojiRe
 import { createD1EmojiReactDeletedStore } from '../adaptor/d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../adaptor/d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { createD1FederatedTimelineItemsResolver } from '../adaptor/d1/federatedTimeline/federatedTimelineItemsResolver.ts';
+import { createD1DirectMessageActorsResolverByUris } from '../adaptor/d1/fediverseConversation/directMessageActorsResolverByUris.ts';
+import { createD1DirectMessageNotificationsReadMarker } from '../adaptor/d1/fediverseConversation/directMessageNotificationsReadMarker.ts';
+import { createD1DirectMessagePostsResolver } from '../adaptor/d1/fediverseConversation/directMessagePostsResolver.ts';
 import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../adaptor/d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1XFeedEntriesResolver } from '../adaptor/d1/feedEntry/xFeedEntriesResolver.ts';
@@ -599,6 +602,12 @@ export const createWorkerRuntimePorts = async (
       userResolverByUsername: createD1UserResolverByUsername(db),
       blueskyCrosspostStatusReportResolver: createD1BlueskyCrosspostStatusReportResolver(db),
       blueskyCrosspostEnabled: resolveBlueskyCrosspostConfig(env) !== undefined,
+    },
+    fediverseConversations: {
+      directMessagePostsResolver: createD1DirectMessagePostsResolver(db),
+      directMessageActorsResolverByUris: createD1DirectMessageActorsResolverByUris(db),
+      directMessageNotificationsReadMarker: createD1DirectMessageNotificationsReadMarker(db),
+      isDigestOwner,
     },
     timeline: {
       getTimelineUseCase: createGetTimelineUseCase({

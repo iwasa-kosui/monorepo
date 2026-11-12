@@ -30,6 +30,7 @@ import {
   prependOlderMessages,
   splitConvos,
 } from '../hooks/blueskyChat.ts';
+import { FediverseConversationPage, FediverseConversationSection } from './fediverseMessages.tsx';
 
 const POLL_INTERVAL_MS = 10 * 1000;
 const NEAR_BOTTOM_PX = 200;
@@ -48,13 +49,13 @@ const notifyRead = (): void => {
 const ConvoSection = (
   { title, convos, now }: Readonly<{ title: string; convos: readonly IoriBlueskyChatConvoBody[]; now: number }>,
 ) => (
-  <section class='space-y-3'>
-    <h2 class='text-lg font-bold text-charcoal dark:text-white'>{title}</h2>
+  <div class='space-y-3'>
+    <h3 class='text-base font-bold text-charcoal dark:text-white'>{title}</h3>
     {convos.map((convo) => <BlueskyChatConvoRow key={convo.id} convo={convo} now={now} />)}
-  </section>
+  </div>
 );
 
-const ConvoListPage = () => {
+const BlueskyConvoSection = () => {
   const [convos, setConvos] = useState<readonly IoriBlueskyChatConvoBody[] | null>(null);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -96,13 +97,13 @@ const ConvoListPage = () => {
   const { requests, accepted } = splitConvos(convos ?? []);
 
   return (
-    <>
-      <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>メッセージ</h1>
-      {error !== null && <p role='alert' class='mb-4 text-sm text-red-600 dark:text-red-400'>{error}</p>}
+    <section class='space-y-3' data-testid='bluesky-section'>
+      <h2 class='text-lg font-bold text-charcoal dark:text-white'>Bluesky</h2>
+      {error !== null && <p role='alert' class='text-sm text-red-600 dark:text-red-400'>{error}</p>}
       {convos === null
         ? error === null && <p class={mutedClass}>Loading...</p>
         : (
-          <div class='space-y-8'>
+          <div class='space-y-6'>
             {requests.length > 0 && <ConvoSection title='リクエスト' convos={requests} now={now} />}
             {accepted.length > 0 && <ConvoSection title='会話' convos={accepted} now={now} />}
             {requests.length === 0 && accepted.length === 0 && <p class={mutedClass}>まだ会話がありません。</p>}
@@ -113,9 +114,19 @@ const ConvoListPage = () => {
             )}
           </div>
         )}
-    </>
+    </section>
   );
 };
+
+const ConvoListPage = () => (
+  <>
+    <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>メッセージ</h1>
+    <div class='space-y-10'>
+      <FediverseConversationSection />
+      <BlueskyConvoSection />
+    </div>
+  </>
+);
 
 const ConvoPage = ({ convoId }: Readonly<{ convoId: string }>) => {
   const [convo, setConvo] = useState<IoriBlueskyChatConvoBody | null>(null);
@@ -335,7 +346,10 @@ const ConvoPage = ({ convoId }: Readonly<{ convoId: string }>) => {
 const App = () => {
   const route = chatRouteOfPath(window.location.pathname);
   if (route === undefined) return <p class={mutedClass}>この会話は見つかりません。</p>;
-  return route.kind === 'list' ? <ConvoListPage /> : <ConvoPage convoId={route.convoId} />;
+  if (route.kind === 'list') return <ConvoListPage />;
+  return route.kind === 'fediverseConvo'
+    ? <FediverseConversationPage conversationKey={route.key} />
+    : <ConvoPage convoId={route.convoId} />;
 };
 
 if (globalThis.window) {
