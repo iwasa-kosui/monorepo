@@ -24,6 +24,7 @@ const localPostZodType = z.object({
   inReplyToUri: z.nullable(z.string()),
   summary: z.nullable(z.string()),
   sensitive: z.boolean(),
+  visibility: Visibility.zodTypeOrPublic,
 });
 const remotePostZodType = z.object({
   type: z.literal('remote'),
@@ -80,9 +81,9 @@ export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId;
 const createPost = (now: Instant) =>
 (
   payload:
-    & Omit<LocalPost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri' | 'summary' | 'sensitive'>
-    & { inReplyToUri?: string | null; summary?: string | null; sensitive?: boolean },
-): PostCreated => {
+    & Omit<LocalPost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri' | 'summary' | 'sensitive' | 'visibility'>
+    & { inReplyToUri?: string | null; summary?: string | null; sensitive?: boolean; visibility?: Visibility },
+): PostEvent<LocalPost, 'post.created', LocalPost> => {
   const postId = PostId.generate();
   const post: LocalPost = {
     ...payload,
@@ -92,6 +93,7 @@ const createPost = (now: Instant) =>
     inReplyToUri: payload.inReplyToUri ?? null,
     summary: payload.summary ?? null,
     sensitive: payload.sensitive ?? false,
+    visibility: payload.visibility ?? 'public',
   };
   return PostEvent.create(
     postId,
@@ -144,8 +146,7 @@ const deletePost = (now: Instant) => (postId: PostId): PostDeleted => {
   );
 };
 
-const isVisibleToAnonymous = (post: Post): boolean =>
-  post.type === 'local' || Visibility.isVisibleToAnonymous(post.visibility);
+const isVisibleToAnonymous = (post: Post): boolean => Visibility.isVisibleToAnonymous(post.visibility);
 
 export const Post = {
   ...schema,

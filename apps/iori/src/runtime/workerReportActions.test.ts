@@ -54,6 +54,7 @@ const setup = () => {
   const strangerPost = remotePost(otherRemote.id, 'https://remote.test/notes/3');
   const localPost: Post = {
     type: 'local',
+    visibility: 'public',
     postId: PostId.generate(),
     actorId: target.id,
     content: 'hi',

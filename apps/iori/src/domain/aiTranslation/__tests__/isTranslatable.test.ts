@@ -9,6 +9,7 @@ import { isTranslatable } from '../isTranslatable.ts';
 
 const localPost = (): LocalPost => ({
   type: 'local',
+  visibility: 'public',
   summary: null,
   sensitive: false,
   postId: PostId.generate(),

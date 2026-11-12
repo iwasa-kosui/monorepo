@@ -1,8 +1,10 @@
 import { test as fcTest } from '@fast-check/vitest';
+import { Create, type Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
+import type { Relay } from '../../domain/relay/relay.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
@@ -646,6 +648,133 @@ describe('CreatePostUseCase', () => {
 
       expect(result.ok).toBe(true);
       expect(scheduleBlueskyCrosspost.run).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('公開範囲ごとの配送', () => {
+    const publicUri = 'https://www.w3.org/ns/activitystreams#Public';
+    const followersUri = 'https://example.com/users/kosui/followers';
+    const relay: Relay = {
+      relayId: crypto.randomUUID() as Relay['relayId'],
+      inboxUrl: 'https://relay.example/inbox',
+      actorUri: 'https://relay.example/actor',
+      status: 'accepted',
+      createdAt: 1,
+      acceptedAt: 2,
+    };
+    const alice = {
+      id: 'https://remote.example/users/alice',
+      inboxUrl: 'https://remote.example/users/alice/inbox',
+      sharedInboxUrl: 'https://remote.example/inbox',
+    };
+
+    const setup = () => {
+      const deps = createDeps();
+      deps.acceptedRelaysResolver.setRelays([relay]);
+      const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
+      const session: Session = {
+        sessionId: crypto.randomUUID() as Session['sessionId'],
+        userId: user.id,
+        expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+      };
+      const actor: LocalActor = {
+        id: crypto.randomUUID() as LocalActor['id'],
+        userId: user.id,
+        uri: 'https://example.com/users/kosui',
+        inboxUrl: 'https://example.com/inbox',
+        type: 'local',
+        logoUri: undefined,
+      };
+      setupValidUserSession(deps, user, session, actor);
+      return { deps, session };
+    };
+
+    const post = async (visibility?: 'public' | 'unlisted' | 'private') => {
+      const { deps, session } = setup();
+      const ctx = createMockRequestContext();
+      const result = await CreatePostUseCase.create(deps).run({
+        sessionId: session.sessionId,
+        content: `<p><a href="${alice.id}" class="u-url mention">@<span>alice@remote.example</span></a> hi</p>`,
+        imageUrls: [],
+        mentions: [alice],
+        ...(visibility === undefined ? {} : { visibility }),
+        ctx,
+      });
+      const calls = vi.mocked(ctx.sendActivity).mock.calls;
+      const followersCall = calls.find((call) => call[1] === 'followers');
+      const relayCall = calls.find((call) => (call[1] as { id?: URL }).id?.href === relay.actorUri);
+      const mentionCall = calls.find((call) => Array.isArray(call[1]));
+      return { deps, result, followersCall, relayCall, mentionCall, calls };
+    };
+
+    const hrefs = (urls: ReadonlyArray<URL>) => urls.map((url) => url.href);
+
+    it('visibility を省略すると public で保存し、to に Public、cc に followers と mentions を入れる', async () => {
+      const { deps, result, followersCall } = await post();
+
+      expect(result.ok && result.val.post.visibility).toBe('public');
+      expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.aggregateState).toMatchObject({
+        visibility: 'public',
+      });
+      const create = followersCall?.[2] as Create;
+      expect(hrefs(create.toIds)).toEqual([publicUri]);
+      expect(hrefs(create.ccIds)).toEqual([followersUri, alice.id]);
+    });
+
+    it('public はリレーにも followers と mentions にも送る', async () => {
+      const { relayCall, followersCall, mentionCall } = await post('public');
+
+      expect(relayCall).toBeDefined();
+      expect(followersCall).toBeDefined();
+      expect(mentionCall).toBeDefined();
+    });
+
+    it('unlisted はリレーに送らず、followers と mentions に送り、to に followers、cc に Public と mentions を入れる', async () => {
+      const { result, relayCall, followersCall, mentionCall } = await post('unlisted');
+
+      expect(result.ok && result.val.post.visibility).toBe('unlisted');
+      expect(relayCall).toBeUndefined();
+      expect(followersCall).toBeDefined();
+      expect(mentionCall).toBeDefined();
+      const create = followersCall?.[2] as Create;
+      expect(hrefs(create.toIds)).toEqual([followersUri]);
+      expect(hrefs(create.ccIds)).toEqual([publicUri, alice.id]);
+    });
+
+    it('private はリレーに送らず、followers と mentions に送り、Public をどこにも入れない', async () => {
+      const { result, deps, relayCall, followersCall, mentionCall } = await post('private');
+
+      expect(result.ok && result.val.post.visibility).toBe('private');
+      expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.aggregateState).toMatchObject({
+        visibility: 'private',
+      });
+      expect(relayCall).toBeUndefined();
+      expect(followersCall).toBeDefined();
+      expect(mentionCall).toBeDefined();
+      const create = followersCall?.[2] as Create;
+      expect(hrefs(create.toIds)).toEqual([followersUri]);
+      expect(hrefs(create.ccIds)).toEqual([alice.id]);
+      expect([...hrefs(create.toIds), ...hrefs(create.ccIds)]).not.toContain(publicUri);
+    });
+
+    it('private の投稿は、保存した Note の内容で Create を作る（ctx.getObject に頼らない）', async () => {
+      const { deps, session } = setup();
+      const ctx = createMockRequestContext();
+      vi.mocked(ctx.getObject).mockResolvedValue(null);
+
+      await CreatePostUseCase.create(deps).run({
+        sessionId: session.sessionId,
+        content: 'secret',
+        imageUrls: [],
+        visibility: 'private',
+        ctx,
+      });
+
+      const create = vi.mocked(ctx.sendActivity).mock.calls[0]?.[2] as Create;
+      const note = (await create.getObject()) as Note;
+      expect(note.content?.toString()).toBe('secret');
+      expect(hrefs(note.toIds)).toEqual([followersUri]);
+      expect(note.ccIds).toEqual([]);
     });
   });
 });

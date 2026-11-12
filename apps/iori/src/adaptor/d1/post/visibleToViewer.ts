@@ -5,8 +5,17 @@ import type { ActorId } from '../../../domain/actor/actorId.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { idsJson } from '../idsJson.ts';
-import { actorsTable, followsTable, postsTable, remotePostRecipientsTable, remotePostsTable } from '../schema.ts';
+import {
+  actorsTable,
+  followsTable,
+  localPostsTable,
+  postsTable,
+  remotePostRecipientsTable,
+  remotePostsTable,
+} from '../schema.ts';
 
+const visibleLocalPost = alias(localPostsTable, 'visible_local_post');
+const visibleLocalFollow = alias(followsTable, 'visible_local_follow');
 const visibleRemotePost = alias(remotePostsTable, 'visible_remote_post');
 const visibleRecipient = alias(remotePostRecipientsTable, 'visible_recipient');
 const visibleViewerActor = alias(actorsTable, 'visible_viewer_actor');
@@ -18,7 +27,25 @@ export const visibleToViewer = (
   const { currentActorId } = input;
   if (input.onlyVisibleToViewer !== true || currentActorId === undefined) return undefined;
   return sql`(
-    ${postsTable.type} = 'local'
+    (
+      ${postsTable.type} = 'local'
+      and exists (
+        select 1 from ${localPostsTable} ${visibleLocalPost}
+        where ${visibleLocalPost.postId} = ${postsTable.postId}
+          and (
+            ${visibleLocalPost.visibility} in ('public', 'unlisted')
+            or ${postsTable.actorId} = ${currentActorId}
+            or (
+              ${visibleLocalPost.visibility} = 'private'
+              and exists (
+                select 1 from ${followsTable} ${visibleLocalFollow}
+                where ${visibleLocalFollow.followerId} = ${currentActorId}
+                  and ${visibleLocalFollow.followingId} = ${postsTable.actorId}
+              )
+            )
+          )
+      )
+    )
     or exists (
       select 1 from ${remotePostsTable} ${visibleRemotePost}
       where ${visibleRemotePost.postId} = ${postsTable.postId}

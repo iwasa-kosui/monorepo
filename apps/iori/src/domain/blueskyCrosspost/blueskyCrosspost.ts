@@ -5,12 +5,13 @@ import { Schema } from '../../helper/schema.ts';
 import type { Agg } from '../aggregate/index.ts';
 import { Instant } from '../instant/instant.ts';
 import { PostId } from '../post/postId.ts';
+import type { Visibility } from '../post/visibility.ts';
 
 export const BlueskyCrosspostStatus = z.enum(['pending', 'sent', 'failed', 'skipped', 'deleting']);
 export type BlueskyCrosspostStatus = z.infer<typeof BlueskyCrosspostStatus>;
 
 // content_warning と sensitive は、送らなかった過去の行を読むために残す
-export const BlueskySkipReason = z.enum(['content_warning', 'sensitive', 'reply_to_unsent']);
+export const BlueskySkipReason = z.enum(['visibility', 'content_warning', 'sensitive', 'reply_to_unsent']);
 export type BlueskySkipReason = z.infer<typeof BlueskySkipReason>;
 
 const blueskyCrosspostZodType = z.object({
@@ -131,8 +132,9 @@ export type BlueskyReplyContext =
   | Readonly<{ kind: 'sent'; root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
 
 const decideSkip = (
-  input: Readonly<{ replyTo: BlueskyReplyContext }>,
+  input: Readonly<{ visibility: Visibility; replyTo: BlueskyReplyContext }>,
 ): BlueskySkipReason | undefined => {
+  if (input.visibility !== 'public') return 'visibility';
   if (input.replyTo.kind === 'unsent') return 'reply_to_unsent';
   return undefined;
 };
