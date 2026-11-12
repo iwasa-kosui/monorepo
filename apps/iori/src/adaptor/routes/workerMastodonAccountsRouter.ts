@@ -18,7 +18,7 @@ import type { PageRequest } from '../../domain/page/page.ts';
 import type { AccountStatusItemsResolverByActorId } from '../../domain/post/accountStatusItem.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { Username } from '../../domain/user/username.ts';
-import type { WorkerRemoteActorAction } from '../../runtime/ports.ts';
+import type { WorkerBlockAction, WorkerRemoteActorAction } from '../../runtime/ports.ts';
 import type { CreateMuteUseCase } from '../../useCase/createMute.ts';
 import type { DeleteMuteUseCase } from '../../useCase/deleteMute.ts';
 import type { ActorResolverById } from '../d1/actor/actorResolverById.ts';
@@ -56,6 +56,8 @@ export type WorkerMastodonAccountsRouterDeps = Readonly<{
   deleteMuteUseCase: DeleteMuteUseCase;
   followRemoteActor: WorkerRemoteActorAction;
   unfollowRemoteActor: WorkerRemoteActorAction;
+  blockActor: WorkerBlockAction;
+  unblockActor: WorkerBlockAction;
   createContext: (request: Request) => FedifyContext<unknown>;
 }>;
 
@@ -76,9 +78,10 @@ const readFollows = Scope.orThrow('read:follows');
 const readStatuses = Scope.orThrow('read:statuses');
 const writeFollows = Scope.orThrow('write:follows');
 const writeMutes = Scope.orThrow('write:mutes');
+const writeBlocks = Scope.orThrow('write:blocks');
 const ownAccount = { error: 'Validation failed: The action cannot target your own account' } as const;
 const localTargetError = 'Validation failed: The action is not supported for local accounts';
-const actionFailed = (action: 'followed' | 'unfollowed' | 'muted' | 'unmuted'): string =>
+const actionFailed = (action: 'followed' | 'unfollowed' | 'muted' | 'unmuted' | 'blocked' | 'unblocked'): string =>
   `Validation failed: The account could not be ${action}`;
 
 const relationshipOf = (relationship: AccountRelationship) =>
@@ -87,6 +90,7 @@ const relationshipOf = (relationship: AccountRelationship) =>
     following: relationship.following,
     followedBy: relationship.followedBy,
     muting: relationship.muting,
+    blocking: relationship.blocking,
   });
 
 const parseAcct = (acct: string, localHost: string): AcctLookup | undefined => {
@@ -118,6 +122,8 @@ export const createWorkerMastodonAccountsRouter = ({
   deleteMuteUseCase,
   followRemoteActor,
   unfollowRemoteActor,
+  blockActor,
+  unblockActor,
   createContext,
 }: WorkerMastodonAccountsRouterDeps): Hono<MastodonAuthEnv> => {
   const listAccounts = (resolver: ActorIdsPageResolver) => async (c: Parameters<typeof respondWithPage>[0]) => {
@@ -227,12 +233,24 @@ export const createWorkerMastodonAccountsRouter = ({
     return !unmuted.ok && unmuted.err.type !== 'NotMutedError' ? actionFailed('unmuted') : undefined;
   };
 
+  const block: AccountAction = async ({ userId, target, request }) => {
+    const blocked = await blockActor({ userId, actorId: target.id, ctx: createContext(request) });
+    return blocked.ok ? undefined : actionFailed('blocked');
+  };
+
+  const unblock: AccountAction = async ({ userId, target, request }) => {
+    const unblocked = await unblockActor({ userId, actorId: target.id, ctx: createContext(request) });
+    return unblocked.ok ? undefined : actionFailed('unblocked');
+  };
+
   return new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
     .post(`/v1/accounts/:id{${accountIdPattern}}/follow`, authn.requireUser(writeFollows), actOnAccount(follow))
     .post(`/v1/accounts/:id{${accountIdPattern}}/unfollow`, authn.requireUser(writeFollows), actOnAccount(unfollow))
     .post(`/v1/accounts/:id{${accountIdPattern}}/mute`, authn.requireUser(writeMutes), actOnAccount(mute))
     .post(`/v1/accounts/:id{${accountIdPattern}}/unmute`, authn.requireUser(writeMutes), actOnAccount(unmute))
+    .post(`/v1/accounts/:id{${accountIdPattern}}/block`, authn.requireUser(writeBlocks), actOnAccount(block))
+    .post(`/v1/accounts/:id{${accountIdPattern}}/unblock`, authn.requireUser(writeBlocks), actOnAccount(unblock))
     .get('/v1/accounts', authn.optionalAuth, async (c) => {
       const rejection = rejectUnlessTokenScope(c, getMastodonPrincipal(c), [readAccounts]);
       if (rejection !== undefined) {

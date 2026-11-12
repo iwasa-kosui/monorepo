@@ -231,7 +231,6 @@ export const createWorkerMastodonCoreRouter = ({
     ['/v1/followed_tags', readFollows],
     ['/v1/follow_requests', readFollows],
     ['/v1/bookmarks', readBookmarks],
-    ['/v1/blocks', readBlocks],
     ['/v1/domain_blocks', readBlocks],
     ['/v1/featured_tags', readAccounts],
     ['/v1/conversations', readStatuses],

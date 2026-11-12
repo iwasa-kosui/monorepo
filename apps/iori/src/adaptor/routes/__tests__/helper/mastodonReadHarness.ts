@@ -12,7 +12,7 @@ import type { BlueskyClient } from '../../../../ports/blueskyClient.ts';
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import type { TopicRelevanceJudge } from '../../../../ports/topicRelevanceJudge.ts';
-import { createWorkerRemoteActorActions } from '../../../../runtime/workerCoreUseCases.ts';
+import { createWorkerBlockActions, createWorkerRemoteActorActions } from '../../../../runtime/workerCoreUseCases.ts';
 import { createDigestUseCases } from '../../../../scheduled/digestTasks.ts';
 import { AddDigestTopicUseCase } from '../../../../useCase/addDigestTopic.ts';
 import { AddFeedSourceUseCase } from '../../../../useCase/addFeedSource.ts';
@@ -20,8 +20,10 @@ import { ChangeDigestTopicEnabledUseCase } from '../../../../useCase/changeDiges
 import { ChangeDigestTopicMaterialWindowUseCase } from '../../../../useCase/changeDigestTopicMaterialWindow.ts';
 import { ChangeFeedSourceEnabledUseCase } from '../../../../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
+import { CreateBlockUseCase } from '../../../../useCase/createBlock.ts';
 import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
 import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
+import { DeleteBlockUseCase } from '../../../../useCase/deleteBlock.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
@@ -68,6 +70,12 @@ import { createD1PostTranslationStore } from '../../../d1/aiTranslation/postTran
 import { createD1ArticleDeletedStore } from '../../../d1/article/articleDeletedStore.ts';
 import { createD1ArticleResolver } from '../../../d1/article/articleResolver.ts';
 import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
+import { createD1BlockCreatedStore } from '../../../d1/block/blockCreatedStore.ts';
+import { createD1BlockDeletedStore } from '../../../d1/block/blockDeletedStore.ts';
+import { createD1BlockedActorIdsResolverByUserId } from '../../../d1/block/blockedActorIdsResolverByUserId.ts';
+import { createD1BlockedActorsResolverByUserIdWithPagination } from '../../../d1/block/blockedActorsResolverByUserIdWithPagination.ts';
+import { createD1BlockResolver } from '../../../d1/block/blockResolver.ts';
+import { createD1MutedOrBlockedActorIdsResolverByUserId } from '../../../d1/block/mutedOrBlockedActorIdsResolverByUserId.ts';
 import { createD1BlueskyLikeDeletedStore } from '../../../d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../../../d1/blueskyTimeline/blueskyLikeSavedStore.ts';
 import { createD1BlueskyLikeTargetResolver } from '../../../d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
@@ -122,7 +130,6 @@ import { createD1MarkersResolverByUserId } from '../../../d1/marker/markersResol
 import { createD1MediaUploadCreatedStore } from '../../../d1/mediaUpload/mediaUploadCreatedStore.ts';
 import { createD1MediaUploadResolver } from '../../../d1/mediaUpload/mediaUploadResolver.ts';
 import { createD1MuteCreatedStore } from '../../../d1/mute/muteCreatedStore.ts';
-import { createD1MutedActorIdsResolverByUserId } from '../../../d1/mute/mutedActorIdsResolverByUserId.ts';
 import { createD1MutedActorsResolverByUserIdWithPagination } from '../../../d1/mute/mutedActorsResolverByUserIdWithPagination.ts';
 import { createD1MuteDeletedStore } from '../../../d1/mute/muteDeletedStore.ts';
 import { createD1MuteResolver } from '../../../d1/mute/muteResolver.ts';
@@ -263,6 +270,27 @@ export const setupReadApi = (
     followRequestedStore: createD1FollowRequestedStore(db),
     undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
   });
+  const blockActions = createWorkerBlockActions({
+    userResolver,
+    actorResolverByUserId,
+    actorResolverById: createD1ActorResolverById(db),
+    followResolver: createD1FollowResolver(db),
+    undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
+    createBlockUseCase: CreateBlockUseCase.create({
+      sessionResolver,
+      userResolver,
+      actorResolverByUserId,
+      blockCreatedStore: createD1BlockCreatedStore(db),
+      blockResolver: createD1BlockResolver(db),
+    }),
+    deleteBlockUseCase: DeleteBlockUseCase.create({
+      sessionResolver,
+      userResolver,
+      blockDeletedStore: createD1BlockDeletedStore(db),
+      blockResolver: createD1BlockResolver(db),
+    }),
+    unfollowRemoteActor: remoteActorActions.unfollowRemoteActor,
+  });
   const mediaUploadResolver = createD1MediaUploadResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
   const postImageCreatedStore = createD1PostImageCreatedStore(db);
@@ -274,7 +302,7 @@ export const setupReadApi = (
   const searchTimeline = createSearchTimelineUseCase({
     actorResolverByUserId,
     actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-    mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+    mutedActorIdsResolverByUserId: createD1MutedOrBlockedActorIdsResolverByUserId(db),
     textGenerator: options.textGenerator,
     timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
     htmlToPlainText,
@@ -289,7 +317,7 @@ export const setupReadApi = (
           authn,
           actorResolverByUserId,
           actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-          mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+          mutedActorIdsResolverByUserId: createD1MutedOrBlockedActorIdsResolverByUserId(db),
           timelineItemsResolverByActorIds: createD1TimelineItemsResolverByActorIds(db),
           localPostsResolverByPage: createD1LocalPostsResolverByPage(db),
           federatedTimelineItemsResolver: createD1FederatedTimelineItemsResolver(db),
@@ -305,6 +333,7 @@ export const setupReadApi = (
           repostResolverById: createD1RepostResolverById(db),
           repostResolver,
           threadResolver: createD1ThreadResolver(db, ORIGIN),
+          blockedActorIdsResolverByUserId: createD1BlockedActorIdsResolverByUserId(db),
           statusAssembler,
           mediaUploadResolver,
           createPostUseCase: CreatePostUseCase.create({
@@ -423,6 +452,8 @@ export const setupReadApi = (
           }),
           followRemoteActor: remoteActorActions.followRemoteActor,
           unfollowRemoteActor: remoteActorActions.unfollowRemoteActor,
+          blockActor: blockActions.blockActor,
+          unblockActor: blockActions.unblockActor,
           createContext,
         }),
       );
@@ -433,6 +464,7 @@ export const setupReadApi = (
           actorResolverByUserId,
           likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
           mutedActorsResolverByUserIdWithPagination: createD1MutedActorsResolverByUserIdWithPagination(db),
+          blockedActorsResolverByUserIdWithPagination: createD1BlockedActorsResolverByUserIdWithPagination(db),
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,
         }),
@@ -461,7 +493,7 @@ export const setupReadApi = (
           summarizeTimeline: createSummarizeTimelineUseCase({
             actorResolverByUserId,
             actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-            mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+            mutedActorIdsResolverByUserId: createD1MutedOrBlockedActorIdsResolverByUserId(db),
             searchTimeline,
             homePostsResolverByPeriod: createD1HomePostsResolverByPeriod(db),
             postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),

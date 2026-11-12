@@ -427,7 +427,6 @@ describe('createWorkerMastodonCoreRouter', () => {
       ['/api/v1/followed_tags', 'read:follows'],
       ['/api/v1/follow_requests', 'read:follows'],
       ['/api/v1/bookmarks', 'read:bookmarks'],
-      ['/api/v1/blocks', 'read:blocks'],
       ['/api/v1/domain_blocks', 'read:blocks'],
       ['/api/v1/featured_tags', 'read:accounts'],
       ['/api/v1/conversations', 'read:statuses'],

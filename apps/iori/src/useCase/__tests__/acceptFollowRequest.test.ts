@@ -1,7 +1,9 @@
 import { test as fcTest } from '@fast-check/vitest';
-import { describe, expect, it } from 'vitest';
+import { RA } from '@iwasa-kosui/result';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
+import type { BlockResolver } from '../../domain/block/block.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
 import { AcceptFollowRequestUseCase } from '../acceptFollowRequest.ts';
@@ -52,6 +54,54 @@ describe('AcceptFollowRequestUseCase', () => {
       userId: user.id,
     });
   };
+
+  describe('ブロックしている相手', () => {
+    const run = async (blockResolver: BlockResolver) => {
+      const deps = {
+        ...createDeps(),
+        pushSubscriptionsResolver: {
+          resolve: vi.fn(() => RA.ok([{ endpoint: 'https://push.example.com/1' }] as never)),
+        },
+        blockResolver,
+      };
+      const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
+      setupLocalUser(deps as never, user, {
+        id: crypto.randomUUID() as LocalActor['id'],
+        userId: user.id,
+        uri: 'https://example.com/users/kosui',
+        inboxUrl: 'https://example.com/inbox',
+        type: 'local',
+        logoUri: undefined,
+      });
+      const result = await AcceptFollowRequestUseCase.create(deps as never).run({
+        username: user.username,
+        follower: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+          url: 'https://remote.example.com/@remote',
+          username: 'remote',
+        },
+      });
+      return { deps, result };
+    };
+
+    it('フォローは受け入れるが、通知も Web Push も作らない', async () => {
+      const { deps, result } = await run({ resolve: vi.fn(() => RA.ok({} as never)) });
+
+      expect(result.ok).toBe(true);
+      expect(deps.followedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.followNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
+    });
+
+    it('ブロックしていない相手なら、これまでどおり通知と Web Push を作る', async () => {
+      const { deps, result } = await run({ resolve: vi.fn(() => RA.ok(undefined)) });
+
+      expect(result.ok).toBe(true);
+      expect(deps.followNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+  });
 
   describe('正常系', () => {
     it('フォローリクエストを受け入れできる', async () => {

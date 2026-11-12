@@ -158,6 +158,55 @@ describe('GET /api/v1/notifications', () => {
   });
 });
 
+describe('ブロックした相手の通知', () => {
+  it('v1 の一覧と未読数と単体の取得から除くが、ミュートした相手の通知は除かない', async () => {
+    const t = await seedNotifications();
+    t.seed.addBlock(t.me.userId, t.alice.actorId);
+
+    const [list, single, unread] = await Promise.all([
+      t.get('/api/v1/notifications'),
+      t.get(`/api/v1/notifications/${t.ids.like}`),
+      t.get('/api/v1/notifications/unread_count'),
+    ]);
+
+    expect(((await list.json()) as Array<{ id: string }>).map((item) => item.id)).toEqual([t.ids.reply]);
+    expect(single.status).toBe(404);
+    expect(await unread.json()).toEqual({ count: 1 });
+  });
+
+  it('v2 の一覧と未読数からも除く', async () => {
+    const t = await seedNotifications();
+    t.seed.addBlock(t.me.userId, t.alice.actorId);
+
+    const [list, unread] = await Promise.all([
+      t.get('/api/v2/notifications'),
+      t.get('/api/v2/notifications/unread_count'),
+    ]);
+
+    const body = GroupedNotificationsResultsSchema.parse(await list.json());
+    expect(body.notification_groups.map((group) => group.type)).toEqual(['mention']);
+    expect(await unread.json()).toEqual({ count: 1 });
+  });
+
+  it('ミュートだけでは通知を除かない', async () => {
+    const t = await seedNotifications();
+    t.seed.addMute(t.me.userId, t.alice.actorId);
+
+    const response = await t.get('/api/v1/notifications');
+
+    expect(await t.typesOf(response)).toEqual(['follow', 'mention', 'favourite']);
+  });
+
+  it('他人のブロックの影響を受けない', async () => {
+    const t = await seedNotifications();
+    t.seed.addBlock(t.other.userId, t.alice.actorId);
+
+    const response = await t.get('/api/v1/notifications');
+
+    expect(await t.typesOf(response)).toEqual(['follow', 'mention', 'favourite']);
+  });
+});
+
 describe('GET /api/v1/notifications/:id', () => {
   it('自分の通知を Notification で返し、emojiReact も ID を指定すれば返す', async () => {
     const t = await seedNotifications();

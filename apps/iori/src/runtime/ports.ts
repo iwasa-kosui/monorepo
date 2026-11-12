@@ -19,6 +19,10 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import type {
+  BlockedActorIdsResolverByUserId,
+  BlockedActorsResolverByUserIdWithPagination,
+} from '../domain/block/block.ts';
 import type { BlueskyCrosspostStatusReportResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type {
   DigestHeadersResolverByArticleIds,
@@ -127,6 +131,8 @@ export type WorkerRemoteActorAction = (
   }>,
 ) => ResultAsync<void, Readonly<{ message: string }>>;
 
+export type WorkerBlockAction = WorkerRemoteActorAction;
+
 export type UploadObjectStore = ReturnType<typeof createPostImageR2ObjectStore>;
 export type IoriAuthRuntimePorts = Readonly<{
   signInUseCase: ReturnType<typeof createSignInUseCase>;
@@ -163,6 +169,8 @@ export type IoriMastodonRuntimePorts = Readonly<{
   accountRelationshipsResolverByActorIds: AccountRelationshipsResolverByActorIds;
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
   mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
+  blockedActorsResolverByUserIdWithPagination: BlockedActorsResolverByUserIdWithPagination;
+  blockedActorIdsResolverByUserId: BlockedActorIdsResolverByUserId;
   statusAssembler: StatusAssembler;
   searchTimeline: SearchTimelineUseCase;
   summarizeTimeline: SummarizeTimelineUseCase;
@@ -258,6 +266,8 @@ export type IoriCoreRuntimePorts = Readonly<{
   subscribePushUseCase: SubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;
   unfollowRemoteActor: WorkerRemoteActorAction;
+  blockActor: WorkerBlockAction;
+  unblockActor: WorkerBlockAction;
   vapidPublicKey: string | undefined;
 }>;
 

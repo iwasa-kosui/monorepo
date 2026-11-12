@@ -512,6 +512,36 @@ describe('AddRemotePostUseCase', () => {
       expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
     });
 
+    it('返信した相手を受信ユーザーがブロックしているとき、返信の通知も Web Push も作らない', async () => {
+      const deps = createIdempotencyDeps();
+      deps.postResolverByUri.setPost(existingPost);
+      deps.timelineItemsResolverByPostId.setItems(existingPost.postId, [timelineItem]);
+      deps.postImagesResolver.setImages(existingPost.postId, [image]);
+      deps.linkPreviewsResolver.setPreviews(existingPost.postId, [linkPreview]);
+      const blockResolver = { resolve: vi.fn(() => RA.ok({} as never)) };
+
+      const result = await AddRemotePostUseCase.create({ ...deps, blockResolver }).run(input);
+
+      expect(result.ok).toBe(true);
+      expect(blockResolver.resolve).toHaveBeenCalledWith({ userId: originalPost.userId, blockedActorId: actor.id });
+      expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
+    });
+
+    it('返信した相手をブロックしていないとき、これまでどおり返信の通知と Web Push を作る', async () => {
+      const deps = createIdempotencyDeps();
+      deps.postResolverByUri.setPost(existingPost);
+      deps.timelineItemsResolverByPostId.setItems(existingPost.postId, [timelineItem]);
+      deps.postImagesResolver.setImages(existingPost.postId, [image]);
+      deps.linkPreviewsResolver.setPreviews(existingPost.postId, [linkPreview]);
+      const blockResolver = { resolve: vi.fn(() => RA.ok(undefined)) };
+
+      await AddRemotePostUseCase.create({ ...deps, blockResolver }).run(input);
+
+      expect(deps.replyNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+
     it('投稿も返信の通知もあるとき、Web Push を送らない', async () => {
       const deps = createIdempotencyDeps();
       deps.postResolverByUri.setPost(existingPost);

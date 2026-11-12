@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   addXUserFeedSource,
+  block,
   createStatus,
   deleteStatus,
   failureMessage,
@@ -41,6 +42,7 @@ import {
   setFeedSourceEnabled,
   summarizeTimeline,
   translate,
+  unblock,
   undoRepostBlueskyPost,
   unfavourite,
   unfollow,
@@ -415,7 +417,12 @@ describe('mastodon client requests', () => {
   it('treats a 422 from relationships as logged in without a relationship', async () => {
     stubFetch(jsonResponse({ error: 'Actor not found' }, { status: 422 }));
 
-    expect(await fetchRelationshipOrSignedOut('a1')).toEqual({ isLoggedIn: true, isFollowing: false, isMuted: false });
+    expect(await fetchRelationshipOrSignedOut('a1')).toEqual({
+      isLoggedIn: true,
+      isFollowing: false,
+      isMuted: false,
+      isBlocked: false,
+    });
   });
 
   it.each([
@@ -427,6 +434,8 @@ describe('mastodon client requests', () => {
     ['unfollow', unfollow, '/api/v1/accounts/s1/unfollow'],
     ['mute', mute, '/api/v1/accounts/s1/mute'],
     ['unmute', unmute, '/api/v1/accounts/s1/unmute'],
+    ['block', block, '/api/v1/accounts/s1/block'],
+    ['unblock', unblock, '/api/v1/accounts/s1/unblock'],
   ])('posts %s to its path with the same-origin headers and returns the body', async (_name, action, path) => {
     const fetchMock = stubFetch(jsonResponse({ id: 's1' }));
 

@@ -9,7 +9,20 @@ import {
   type MessageQueueEnqueueOptions,
   SendActivityError,
 } from '@fedify/fedify';
-import { Accept, Activity, Announce, Article, Create, Delete, Follow, Like, Note, Reject, Undo } from '@fedify/vocab';
+import {
+  Accept,
+  Activity,
+  Announce,
+  Article,
+  Block,
+  Create,
+  Delete,
+  Follow,
+  Like,
+  Note,
+  Reject,
+  Undo,
+} from '@fedify/vocab';
 import { FetchError } from '@fedify/vocab-runtime';
 
 import { createD1ActorResolverByUri } from './adaptor/d1/actor/actorResolverByUri.ts';
@@ -233,6 +246,7 @@ export const createCloudflareFederationRuntime = async (
     .on(Accept, inboxListener.onAccept)
     .on(Reject, inboxListener.onReject)
     .on(Follow, inboxListener.onFollow)
+    .on(Block, inboxListener.onBlock)
     .on(Undo, inboxListener.onUndo)
     .on(Create, inboxListener.onCreate)
     .on(Delete, inboxListener.onDelete)
