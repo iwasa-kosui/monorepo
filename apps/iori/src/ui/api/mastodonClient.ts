@@ -11,6 +11,8 @@ import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
 import type {
   IoriBlueskyLikeResponse,
   IoriBlueskyRepostResponse,
+  IoriBlueskySearchActorsResponse,
+  IoriBlueskySearchPostsResponse,
   IoriBlueskyStatusResponse,
   IoriBlueskyThreadResponse,
   IoriBlueskyTimelineResponse,
@@ -39,7 +41,7 @@ export type PageParams = Readonly<{
   limit?: number;
 }>;
 
-export type MastodonApiError = Error & Readonly<{ status: number; retryAfterSeconds?: number }>;
+export type MastodonApiError = Error & Readonly<{ status: number; retryAfterSeconds?: number; code?: string }>;
 
 export const isMastodonApiError = (error: unknown): error is MastodonApiError =>
   error instanceof Error && typeof (error as { status?: unknown }).status === 'number';
@@ -97,11 +99,15 @@ export const toApiError = async (res: Response): Promise<MastodonApiError> => {
   const message = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
     ? body.error
     : `HTTP ${res.status}`;
+  const code = typeof body === 'object' && body !== null && 'code' in body && typeof body.code === 'string'
+    ? body.code
+    : undefined;
   const retryAfterSeconds = parseRetryAfter(res.headers.get('Retry-After'), new Date());
   return Object.assign(
     new Error(message),
     { status: res.status },
     retryAfterSeconds === undefined ? {} : { retryAfterSeconds },
+    code === undefined ? {} : { code },
   );
 };
 
@@ -526,3 +532,13 @@ export const replyToBlueskyPost = async (feedItemId: string, text: string): Prom
   if (!res.ok) throw await toApiError(res);
   return await res.json() as BlueskyReplyResponse;
 };
+
+const BLUESKY_SEARCH_POSTS_PATH = '/api/iori/v1/bluesky/search/posts';
+
+export const searchBlueskyPosts = async (q: string, cursor?: string): Promise<IoriBlueskySearchPostsResponse> =>
+  (await request<IoriBlueskySearchPostsResponse>(BLUESKY_SEARCH_POSTS_PATH, { q, cursor })).body;
+
+const BLUESKY_SEARCH_ACTORS_PATH = '/api/iori/v1/bluesky/search/actors';
+
+export const searchBlueskyActors = async (q: string, cursor?: string): Promise<IoriBlueskySearchActorsResponse> =>
+  (await request<IoriBlueskySearchActorsResponse>(BLUESKY_SEARCH_ACTORS_PATH, { q, cursor })).body;

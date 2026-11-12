@@ -59,3 +59,20 @@ export const parseBlueskyTimelineResponse = (
     cursor: page.data.cursor,
   });
 };
+
+const searchPostsPageZodType = z.object({ cursor: z.string().optional(), posts: z.array(z.unknown()) });
+
+export const parseBlueskySearchPostsResponse = (
+  payload: unknown,
+  fetchedAt: Instant,
+): Result<
+  Readonly<{ items: readonly BlueskyFetchedTimelineItem[]; cursor: string | undefined }>,
+  'invalid_response'
+> => {
+  const page = searchPostsPageZodType.safeParse(payload);
+  if (!page.success) return Result.err('invalid_response');
+  return Result.ok({
+    items: page.data.posts.flatMap((post) => itemOf({ post }, fetchedAt) ?? []),
+    cursor: page.data.cursor,
+  });
+};
