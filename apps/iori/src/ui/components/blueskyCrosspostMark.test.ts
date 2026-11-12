@@ -80,6 +80,7 @@ describe('toBlueskyCrosspostMark', () => {
 describe('skipReasonText', () => {
   it.each(
     [
+      ['visibility', '公開範囲が公開ではないため Bluesky に送っていません'],
       ['content_warning', 'CW 付きの投稿は Bluesky に送りません'],
       ['sensitive', 'センシティブ指定の投稿は Bluesky に送りません'],
       ['reply_to_unsent', '返信先が Bluesky にないため送っていません'],

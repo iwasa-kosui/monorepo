@@ -99,7 +99,7 @@ export const toIoriBlueskyCrosspost = (crosspost: BlueskyCrosspost): IoriBluesky
 });
 
 const toVisibility = (post: PostWithAuthor): Visibility =>
-  post.type === 'local' ? 'public' : post.visibility ?? 'private';
+  post.type === 'local' ? post.visibility : post.visibility ?? 'private';
 
 export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status => {
   const { uri, url } = toPostUrls(post, options);

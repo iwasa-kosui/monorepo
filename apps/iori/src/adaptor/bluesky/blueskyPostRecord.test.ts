@@ -30,6 +30,7 @@ const image = (size: number, alt: string | null = null): BlueskyImageInput => ({
 });
 
 const input = (overrides: Partial<BuildBlueskyPostInput> = {}): BuildBlueskyPostInput => ({
+  visibility: 'public',
   html: '<p>hello</p>',
   summary: null,
   sensitive: false,
@@ -254,6 +255,8 @@ describe('buildBlueskyPostDraft の返信とスキップ', () => {
   });
 
   it.each([
+    ['visibility', { visibility: 'unlisted' as const }],
+    ['visibility', { visibility: 'private' as const }],
     ['content_warning', { summary: 'CW' }],
     ['sensitive', { sensitive: true }],
     ['reply_to_unsent', { replyTo: { kind: 'unsent' as const } }],
@@ -264,6 +267,12 @@ describe('buildBlueskyPostDraft の返信とスキップ', () => {
   it('summary が空文字や空白だけならスキップしない', () => {
     expect(buildBlueskyPostDraft(input({ summary: '' })).ok).toBe(true);
     expect(buildBlueskyPostDraft(input({ summary: '  ' })).ok).toBe(true);
+  });
+
+  it('visibility を CW より先に判定する', () => {
+    expect(buildBlueskyPostDraft(input({ visibility: 'private', summary: 'CW', sensitive: true }))).toEqual(
+      Result.err('visibility'),
+    );
   });
 
   it('CW を sensitive と reply_to_unsent より先に判定する', () => {

@@ -48,6 +48,7 @@ export const createD1PostCreatedStore = (db: IoriD1Db): PostCreatedStore => ({
             postId: post.postId,
             userId: post.userId,
             inReplyToUri: post.inReplyToUri,
+            visibility: post.visibility,
           })
           : db.insert(remotePostsTable).values({
             postId: post.postId,

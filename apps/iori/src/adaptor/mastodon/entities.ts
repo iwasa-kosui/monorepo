@@ -126,7 +126,7 @@ export type PreviewCard = z.infer<typeof PreviewCardSchema>;
 
 export const IoriBlueskyCrosspostSchema = z.object({
   status: z.enum(['pending', 'sent', 'failed', 'skipped', 'deleting']),
-  skip_reason: z.enum(['content_warning', 'sensitive', 'reply_to_unsent']).nullable(),
+  skip_reason: z.enum(['visibility', 'content_warning', 'sensitive', 'reply_to_unsent']).nullable(),
   retrying: z.boolean(),
   url: z.string().nullable(),
 });

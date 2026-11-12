@@ -260,6 +260,13 @@
       "when": 1794448112065,
       "tag": "0036_fediverse_blocks",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1794454317569,
+      "tag": "0040_local_post_visibility",
+      "breakpoints": true
     }
   ]
 }

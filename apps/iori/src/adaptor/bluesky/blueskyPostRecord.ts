@@ -13,6 +13,7 @@ import type {
   BlueskyPostRecord,
 } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import { htmlToTextWithLinks, type TextLink } from './htmlToTextWithLinks.ts';
 
 export const BLUESKY_MAX_GRAPHEMES = 300;
@@ -32,6 +33,7 @@ export type BlueskyLinkPreviewInput = Readonly<{
 }>;
 
 export type BuildBlueskyPostInput = Readonly<{
+  visibility: Visibility;
   html: string;
   summary: string | null;
   sensitive: boolean;
