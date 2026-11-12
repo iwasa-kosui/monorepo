@@ -2,7 +2,7 @@ import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 import { type CreateStatusParams, failureMessage } from '../api/mastodonClient.ts';
 
-export type UploadedMedia = Readonly<{ id: string; url: string; description: string }>;
+export type UploadedMedia = Readonly<{ id: string; url: string; description: string; savedDescription: string }>;
 
 export type PostFormValue = Readonly<{
   content: string;
@@ -19,6 +19,7 @@ export type PostSubmitResult =
 type SubmitPostDeps = Readonly<{
   create: (params: CreateStatusParams) => Promise<Status>;
   updateMedia: (id: string, description: string) => Promise<unknown>;
+  onDescriptionSaved: (id: string, description: string) => void;
   onPosted: (status: Status) => void;
 }>;
 
@@ -31,7 +32,10 @@ export const submitPost = async (
 ): Promise<PostSubmitResult> => {
   try {
     for (const media of value.uploaded) {
-      if (media.description.trim() !== '') await deps.updateMedia(media.id, media.description);
+      const description = media.description.trim() === '' ? '' : media.description;
+      if (description === media.savedDescription) continue;
+      await deps.updateMedia(media.id, description);
+      deps.onDescriptionSaved(media.id, description);
     }
   } catch (err) {
     return { kind: 'failed', message: failureMessage('save the image description', err) };
