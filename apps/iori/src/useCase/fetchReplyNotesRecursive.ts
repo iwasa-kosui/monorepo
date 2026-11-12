@@ -21,6 +21,7 @@ type Input = Readonly<{
   documentLoader: DocumentLoader;
   lookupObject: LookupObject;
   shouldSave?: (identity: RemotePostIdentity) => boolean | Promise<boolean>;
+  maxDepth?: number;
 }>;
 
 type Ok = Readonly<{
@@ -38,6 +39,7 @@ type Deps = Readonly<{
   postResolverByUri: PostResolverByUri;
   localPostResolverByUri: LocalPostResolverByUri;
   remotePostUpserter: RemotePostUpserter;
+  isBlockedUri: (uri: string) => boolean;
 }>;
 
 const create = ({
@@ -45,6 +47,7 @@ const create = ({
   postResolverByUri,
   localPostResolverByUri,
   remotePostUpserter,
+  isBlockedUri,
 }: Deps): FetchReplyNotesRecursiveUseCase => {
   const fetchNote = async (
     uri: string,
@@ -61,7 +64,7 @@ const create = ({
         getLogger().debug(`Note has no id: ${uri}`);
         return undefined;
       }
-      return await toRemotePostIdentity(result, { origin, documentLoader });
+      return await toRemotePostIdentity(result, { origin, documentLoader, isBlockedUri });
     } catch (error) {
       getLogger().debug(`Failed to fetch note: ${uri} - ${error}`);
       return undefined;
@@ -69,14 +72,14 @@ const create = ({
   };
 
   const run = async (input: Input): RA<Ok, Err> => {
-    const { inReplyToUri, documentLoader, lookupObject, shouldSave } = input;
+    const { inReplyToUri, documentLoader, lookupObject, shouldSave, maxDepth = MAX_DEPTH } = input;
     const fetchedPosts: RemotePost[] = [];
     const visited = new Set<string>();
 
     let currentUri: string | null = inReplyToUri;
     let depth = 0;
 
-    while (currentUri && depth < MAX_DEPTH) {
+    while (currentUri && depth < maxDepth) {
       if (visited.has(currentUri)) {
         getLogger().debug(`Already visited: ${currentUri}, stopping to prevent cycle`);
         break;
@@ -101,6 +104,11 @@ const create = ({
         currentUri = existingLocalPostResult.val.inReplyToUri;
         depth++;
         continue;
+      }
+
+      if (isBlockedUri(currentUri)) {
+        getLogger().debug(`Skipped a blocked domain: ${currentUri}, stopping chain`);
+        break;
       }
 
       // Fetch the note from remote
@@ -131,8 +139,8 @@ const create = ({
       depth++;
     }
 
-    if (depth >= MAX_DEPTH) {
-      getLogger().debug(`Reached max depth (${MAX_DEPTH}) while fetching reply chain`);
+    if (depth >= maxDepth) {
+      getLogger().debug(`Reached max depth (${maxDepth}) while fetching reply chain`);
     }
 
     return RA.ok({ fetchedPosts });

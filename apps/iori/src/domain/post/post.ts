@@ -74,7 +74,7 @@ export type PostCreated = PostEvent<Post, 'post.created', Post>;
 export type RemotePostCreated = PostEvent<
   RemotePost,
   'post.remotePostCreated',
-  RemotePost & { recipientActorUris: ReadonlyArray<string> }
+  RemotePost & { recipientActorUris: ReadonlyArray<string>; quoteUri: string | null }
 >;
 export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
 
@@ -113,9 +113,10 @@ const createRemotePost = (now: Instant) =>
       summary?: string | null;
       sensitive?: boolean;
       recipientActorUris?: ReadonlyArray<string>;
+      quoteUri?: string | null;
     },
 ): RemotePostCreated => {
-  const { recipientActorUris = [], ...postPayload } = payload;
+  const { recipientActorUris = [], quoteUri = null, ...postPayload } = payload;
   const postId = PostId.generate();
   const post: RemotePost = {
     ...postPayload,
@@ -130,7 +131,7 @@ const createRemotePost = (now: Instant) =>
     postId,
     post,
     'post.remotePostCreated',
-    { ...post, recipientActorUris },
+    { ...post, recipientActorUris, quoteUri },
     Instant.now(),
   );
 };
@@ -179,6 +180,7 @@ export type RemotePostIdentity = Readonly<{
   sensitive?: boolean;
   visibility: Visibility | null;
   recipientActorUris?: ReadonlyArray<string>;
+  quoteUri?: string | null;
   attachments?: readonly RemotePostAttachment[];
   publishedAt?: Instant;
 }>;

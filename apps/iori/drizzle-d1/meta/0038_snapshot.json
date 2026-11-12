@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "08506024-4a60-4fd0-82e6-7631cc942b38",
+  "id": "011707b0-1e66-422b-a360-c71179565a8d",
   "prevId": "81c8fc22-325c-4f4d-a849-2baa7684c024",
   "tables": {
     "actors": {
@@ -2847,14 +2847,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "visibility": {
-          "name": "visibility",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'public'"
         }
       },
       "indexes": {
@@ -4061,6 +4053,52 @@
         "post_images_postId_posts_postId_fk": {
           "name": "post_images_postId_posts_postId_fk",
           "tableFrom": "post_images",
+          "tableTo": "posts",
+          "columnsFrom": [
+            "postId"
+          ],
+          "columnsTo": [
+            "postId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "post_quotes": {
+      "name": "post_quotes",
+      "columns": {
+        "postId": {
+          "name": "postId",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quoteUri": {
+          "name": "quoteUri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "post_quotes_quote_uri_idx": {
+          "name": "post_quotes_quote_uri_idx",
+          "columns": [
+            "quoteUri"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "post_quotes_postId_posts_postId_fk": {
+          "name": "post_quotes_postId_posts_postId_fk",
+          "tableFrom": "post_quotes",
           "tableTo": "posts",
           "columnsFrom": [
             "postId"

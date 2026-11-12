@@ -3,13 +3,24 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { BlueskyCrosspost } from '../../../domain/blueskyCrosspost/blueskyCrosspost.ts';
-import type { PostWithAuthor } from '../../../domain/post/post.ts';
+import { Post, type PostWithAuthor } from '../../../domain/post/post.ts';
 import type { PostExtras, PostExtrasResolverByPosts } from '../../../domain/post/postExtras.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import { toBlueskyCrosspost } from '../blueskyCrosspost/blueskyCrosspostRow.ts';
 import type { IoriD1Db } from '../client.ts';
 import { idsJson } from '../idsJson.ts';
-import { blueskyCrosspostsTable, emojiReactsTable, localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
+import {
+  blocksTable,
+  blueskyCrosspostsTable,
+  emojiReactsTable,
+  localActorsTable,
+  localPostsTable,
+  mutesTable,
+  postQuotesTable,
+  postsTable,
+  remotePostsTable,
+} from '../schema.ts';
+import { resolvePostsWithAuthorByIds } from './postWithAuthorBatch.ts';
 
 type ReplyTarget = Readonly<{ postId: PostId; actorId: ActorId }>;
 
@@ -19,6 +30,23 @@ const addTo = <K, V>(map: Map<K, V[]>, key: K, value: V): void => {
   const group = map.get(key);
   if (group === undefined) map.set(key, [value]);
   else group.push(value);
+};
+
+const selectMutedOrBlockedActorIds = async (
+  db: IoriD1Db,
+  viewerActorId: ActorId,
+  actorIds: ReadonlyArray<string>,
+): Promise<ReadonlySet<string>> => {
+  if (actorIds.length === 0) return new Set();
+  const viewerUserId = db.select({ userId: localActorsTable.userId }).from(localActorsTable)
+    .where(eq(localActorsTable.actorId, viewerActorId));
+  const rows = await db.select({ actorId: mutesTable.mutedActorId }).from(mutesTable)
+    .where(and(inArray(mutesTable.userId, viewerUserId), inArray(mutesTable.mutedActorId, jsonEach(actorIds))))
+    .union(
+      db.select({ actorId: blocksTable.blockedActorId }).from(blocksTable)
+        .where(and(inArray(blocksTable.userId, viewerUserId), inArray(blocksTable.blockedActorId, jsonEach(actorIds)))),
+    );
+  return new Set(rows.map((row) => row.actorId));
 };
 
 export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string): PostExtrasResolverByPosts => {
@@ -33,6 +61,52 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
     } catch {
       return undefined;
     }
+  };
+
+  const resolveQuotedPosts = async (
+    quoteUris: ReadonlyArray<string>,
+    currentActorId: ActorId | undefined,
+  ): Promise<ReadonlyMap<string, PostWithAuthor>> => {
+    const uris = [...new Set(quoteUris)];
+    if (uris.length === 0) return new Map();
+    const localIdByUri = new Map(uris.flatMap((uri): [string, string][] => {
+      const id = localPostIdOf(uri);
+      return id === undefined ? [] : [[uri, id]];
+    }));
+    const remoteUris = uris.filter((uri) => !localIdByUri.has(uri));
+    const [localRows, remoteRows] = await Promise.all([
+      localIdByUri.size === 0
+        ? Promise.resolve([])
+        : db.select({ postId: localPostsTable.postId }).from(localPostsTable)
+          .where(inArray(localPostsTable.postId, jsonEach([...localIdByUri.values()]))),
+      remoteUris.length === 0
+        ? Promise.resolve([])
+        : db.select({ uri: remotePostsTable.uri, postId: remotePostsTable.postId }).from(remotePostsTable)
+          .where(inArray(remotePostsTable.uri, jsonEach(remoteUris))),
+    ]);
+    const localPostIds = new Set(localRows.map((row) => row.postId));
+    const postIdByUri = new Map<string, string>(remoteRows.map((row) => [row.uri, row.postId]));
+    for (const [uri, id] of localIdByUri) {
+      if (localPostIds.has(id)) postIdByUri.set(uri, id);
+    }
+    const posts = await resolvePostsWithAuthorByIds(
+      db,
+      [...new Set(postIdByUri.values())].map((id) => PostId.orThrow(id)),
+      currentActorId,
+      true,
+    );
+    const hiddenAuthorIds = currentActorId === undefined
+      ? new Set<string>()
+      : await selectMutedOrBlockedActorIds(db, currentActorId, [...posts.values()].map((post) => post.actorId));
+    return new Map(
+      [...postIdByUri].flatMap(([uri, id]): [string, PostWithAuthor][] => {
+        const post = posts.get(PostId.orThrow(id));
+        if (post !== undefined && hiddenAuthorIds.has(post.actorId)) return [];
+        return post !== undefined && (currentActorId !== undefined || Post.isVisibleToAnonymous(post))
+          ? [[uri, post]]
+          : [];
+      }),
+    );
   };
 
   return {
@@ -51,38 +125,43 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
         ? []
         : posts.filter((post) => post.type === 'local' && post.actorId === currentActorId).map((post) => post.postId);
 
-      const [localReplies, remoteReplies, localParents, remoteParents, myReactions, crossposts] = await Promise.all([
-        db.select({ uri: localPostsTable.inReplyToUri, replies: sql<number>`count(*)` })
-          .from(localPostsTable)
-          .innerJoin(postsTable, eq(localPostsTable.postId, postsTable.postId))
-          .where(and(isNull(postsTable.deletedAt), inArray(localPostsTable.inReplyToUri, jsonEach(ownUris))))
-          .groupBy(localPostsTable.inReplyToUri),
-        db.select({ uri: remotePostsTable.inReplyToUri, replies: sql<number>`count(*)` })
-          .from(remotePostsTable)
-          .innerJoin(postsTable, eq(remotePostsTable.postId, postsTable.postId))
-          .where(and(isNull(postsTable.deletedAt), inArray(remotePostsTable.inReplyToUri, jsonEach(ownUris))))
-          .groupBy(remotePostsTable.inReplyToUri),
-        localParentIds.length === 0
-          ? none
-          : db.select({ postId: postsTable.postId, actorId: postsTable.actorId }).from(postsTable)
-            .where(and(isNull(postsTable.deletedAt), inArray(postsTable.postId, jsonEach(localParentIds)))),
-        remoteParentUris.length === 0
-          ? none
-          : db.select({ uri: remotePostsTable.uri, postId: postsTable.postId, actorId: postsTable.actorId })
+      const [localReplies, remoteReplies, localParents, remoteParents, myReactions, crossposts, quoteRows] =
+        await Promise.all([
+          db.select({ uri: localPostsTable.inReplyToUri, replies: sql<number>`count(*)` })
+            .from(localPostsTable)
+            .innerJoin(postsTable, eq(localPostsTable.postId, postsTable.postId))
+            .where(and(isNull(postsTable.deletedAt), inArray(localPostsTable.inReplyToUri, jsonEach(ownUris))))
+            .groupBy(localPostsTable.inReplyToUri),
+          db.select({ uri: remotePostsTable.inReplyToUri, replies: sql<number>`count(*)` })
             .from(remotePostsTable)
             .innerJoin(postsTable, eq(remotePostsTable.postId, postsTable.postId))
-            .where(and(isNull(postsTable.deletedAt), inArray(remotePostsTable.uri, jsonEach(remoteParentUris)))),
-        currentActorId === undefined
-          ? none
-          : db.select({ postId: emojiReactsTable.postId, emoji: emojiReactsTable.emoji }).from(emojiReactsTable)
-            .where(
-              and(eq(emojiReactsTable.actorId, currentActorId), inArray(emojiReactsTable.postId, jsonEach(postIds))),
-            ),
-        ownLocalPostIds.length === 0
-          ? none
-          : db.select().from(blueskyCrosspostsTable)
-            .where(inArray(blueskyCrosspostsTable.postId, jsonEach(ownLocalPostIds))),
-      ]);
+            .where(and(isNull(postsTable.deletedAt), inArray(remotePostsTable.inReplyToUri, jsonEach(ownUris))))
+            .groupBy(remotePostsTable.inReplyToUri),
+          localParentIds.length === 0
+            ? none
+            : db.select({ postId: postsTable.postId, actorId: postsTable.actorId }).from(postsTable)
+              .where(and(isNull(postsTable.deletedAt), inArray(postsTable.postId, jsonEach(localParentIds)))),
+          remoteParentUris.length === 0
+            ? none
+            : db.select({ uri: remotePostsTable.uri, postId: postsTable.postId, actorId: postsTable.actorId })
+              .from(remotePostsTable)
+              .innerJoin(postsTable, eq(remotePostsTable.postId, postsTable.postId))
+              .where(and(isNull(postsTable.deletedAt), inArray(remotePostsTable.uri, jsonEach(remoteParentUris)))),
+          currentActorId === undefined
+            ? none
+            : db.select({ postId: emojiReactsTable.postId, emoji: emojiReactsTable.emoji }).from(emojiReactsTable)
+              .where(
+                and(eq(emojiReactsTable.actorId, currentActorId), inArray(emojiReactsTable.postId, jsonEach(postIds))),
+              ),
+          ownLocalPostIds.length === 0
+            ? none
+            : db.select().from(blueskyCrosspostsTable)
+              .where(inArray(blueskyCrosspostsTable.postId, jsonEach(ownLocalPostIds))),
+          db.select({ postId: postQuotesTable.postId, quoteUri: postQuotesTable.quoteUri })
+            .from(postQuotesTable)
+            .where(inArray(postQuotesTable.postId, jsonEach(postIds))),
+        ]);
+      const quotedByUri = await resolveQuotedPosts(quoteRows.map((row) => row.quoteUri), currentActorId);
 
       const reactionsByPostId = new Map<string, string[]>();
       for (const reaction of myReactions) {
@@ -111,6 +190,8 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
         });
       }
 
+      const quoteUriByPostId = new Map(quoteRows.map((row) => [row.postId, row.quoteUri]));
+
       const extras = new Map<PostId, PostExtras>();
       posts.forEach((post, index) => {
         const parentUri = post.inReplyToUri;
@@ -125,6 +206,12 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
           inReplyTo: inReplyTo ?? null,
           myReactionEmojis: reactionsByPostId.get(post.postId) ?? [],
           blueskyCrosspost: crosspostByPostId.get(post.postId) ?? null,
+          quote: quoteUriByPostId.has(post.postId)
+            ? {
+              uri: quoteUriByPostId.get(post.postId)!,
+              post: quotedByUri.get(quoteUriByPostId.get(post.postId)!) ?? null,
+            }
+            : null,
         });
       });
       return RA.ok(extras);

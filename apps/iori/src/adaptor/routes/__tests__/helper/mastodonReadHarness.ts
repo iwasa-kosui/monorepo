@@ -836,7 +836,9 @@ export const setupReadApi = (
               postResolverByUri: createD1PostResolverByUri(db),
               localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
               remotePostUpserter,
+              isBlockedUri: () => false,
             }),
+            isBlockedUri: () => false,
           }),
           fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase.create({
             origin: ORIGIN,

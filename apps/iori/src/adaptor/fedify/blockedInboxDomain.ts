@@ -40,6 +40,11 @@ export const isBlockedHost = (hostname: string, domain: string): boolean => {
   return host === blocked || host.endsWith(`.${blocked}`);
 };
 
+export const isBlockedUri = (uri: string, domains: readonly string[] = BLOCKED_INBOX_DOMAINS): boolean => {
+  const hostname = hostnameOf(uri);
+  return hostname !== undefined && domains.some((d) => isBlockedHost(hostname, d));
+};
+
 export const findBlockedInboxDomain = (
   activity: unknown,
   domains: readonly string[] = BLOCKED_INBOX_DOMAINS,

@@ -84,6 +84,21 @@ describe('createD1RemotePostUpserter', () => {
     );
   });
 
+  it('passes the quoted note URI of a new post to the store', async () => {
+    const { deps, postCreatedStore } = createDeps(undefined);
+
+    await createD1RemotePostUpserter(deps).resolve({
+      ...identity,
+      quoteUri: 'https://remote.example/posts/quoted',
+    });
+
+    expect(postCreatedStore.store).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventPayload: expect.objectContaining({ quoteUri: 'https://remote.example/posts/quoted' }),
+      }),
+    );
+  });
+
   it('passes the recipients of a new post to the store', async () => {
     const { deps, postCreatedStore } = createDeps(undefined);
 

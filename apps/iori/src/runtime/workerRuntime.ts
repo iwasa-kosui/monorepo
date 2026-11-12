@@ -153,6 +153,7 @@ import { createD1UserResolver } from '../adaptor/d1/user/userResolver.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPasswordResolver.ts';
 import { createD1UserPasswordSetStore } from '../adaptor/d1/userPassword/userPasswordSetStore.ts';
+import { isBlockedUri } from '../adaptor/fedify/blockedInboxDomain.ts';
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
 import { createStatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
@@ -668,7 +669,9 @@ export const createWorkerRuntimePorts = async (
           postResolverByUri,
           localPostResolverByUri,
           remotePostUpserter,
+          isBlockedUri: (uri) => isBlockedUri(uri),
         }),
+        isBlockedUri: (uri) => isBlockedUri(uri),
       }),
       fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase.create({
         origin: env.ORIGIN,

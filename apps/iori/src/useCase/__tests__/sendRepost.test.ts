@@ -1,8 +1,9 @@
+import { Note, Person, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
-import type { LocalPost, RemotePostUpserter } from '../../domain/post/post.ts';
+import type { LocalPost, RemotePost, RemotePostUpserter } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { RepostCreatedStore, RepostResolver } from '../../domain/repost/repost.ts';
 import type { Session } from '../../domain/session/session.ts';
@@ -19,7 +20,7 @@ import {
   createMockUserResolver,
 } from './helper/mockAdaptors.ts';
 
-const setup = (visibility: LocalPost['visibility']) => {
+const setupRequester = () => {
   const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
   const session: Session = {
     sessionId: crypto.randomUUID() as Session['sessionId'],
@@ -34,44 +35,49 @@ const setup = (visibility: LocalPost['visibility']) => {
     type: 'local',
     logoUri: undefined,
   };
-  const post: LocalPost = {
-    type: 'local',
-    visibility,
-    summary: null,
-    sensitive: false,
-    postId: crypto.randomUUID() as PostId,
-    actorId: actor.id,
-    content: 'mine',
-    createdAt: Date.now() as LocalPost['createdAt'],
-    userId: user.id,
-    inReplyToUri: null,
-  };
   const sessionResolver = createMockSessionResolver();
   sessionResolver.setSession(session);
   const userResolver = createMockUserResolver();
   userResolver.setUser(user);
   const actorResolverByUserId = createMockActorResolverByUserId();
   actorResolverByUserId.setActor(actor);
-  const postResolver = createMockPostResolver();
-  postResolver.setPost(post);
-  const repostCreatedStore: RepostCreatedStore = { store: vi.fn(async () => RA.ok(undefined)) } as never;
-  const timelineItemCreatedStore = createMockTimelineItemCreatedStore();
-  const deps = {
-    origin: 'https://example.com',
-    sessionResolver,
-    userResolver,
-    actorResolverByUserId,
-    repostCreatedStore,
-    repostResolver: { resolve: vi.fn(async () => RA.ok(undefined)) } as unknown as RepostResolver,
-    remotePostUpserter: { resolve: vi.fn() } as unknown as RemotePostUpserter,
-    timelineItemCreatedStore,
-    postResolver,
-    articleResolverByRootPostId: createMockArticleResolverByRootPostId(),
-  };
-  return { deps, session, post };
+  return { user, session, actor, sessionResolver, userResolver, actorResolverByUserId };
 };
 
 describe('SendRepostUseCase のローカルの投稿', () => {
+  const setup = (visibility: LocalPost['visibility']) => {
+    const { user, session, actor, sessionResolver, userResolver, actorResolverByUserId } = setupRequester();
+    const post: LocalPost = {
+      type: 'local',
+      visibility,
+      summary: null,
+      sensitive: false,
+      postId: crypto.randomUUID() as PostId,
+      actorId: actor.id,
+      content: 'mine',
+      createdAt: Date.now() as LocalPost['createdAt'],
+      userId: user.id,
+      inReplyToUri: null,
+    };
+    const postResolver = createMockPostResolver();
+    postResolver.setPost(post);
+    const repostCreatedStore: RepostCreatedStore = { store: vi.fn(async () => RA.ok(undefined)) } as never;
+    const timelineItemCreatedStore = createMockTimelineItemCreatedStore();
+    const deps = {
+      origin: 'https://example.com',
+      sessionResolver,
+      userResolver,
+      actorResolverByUserId,
+      repostCreatedStore,
+      repostResolver: { resolve: vi.fn(async () => RA.ok(undefined)) } as unknown as RepostResolver,
+      remotePostUpserter: { resolve: vi.fn() } as unknown as RemotePostUpserter,
+      timelineItemCreatedStore,
+      postResolver,
+      articleResolverByRootPostId: createMockArticleResolverByRootPostId(),
+    };
+    return { deps, session, post };
+  };
+
   it.each(['private', 'direct'] as const)(
     'visibility が %s の投稿は RepostNotAllowedError で拒否し、何も保存も配送もしない',
     async (visibility) => {
@@ -108,5 +114,74 @@ describe('SendRepostUseCase のローカルの投稿', () => {
     expect(result.ok).toBe(true);
     expect(deps.repostCreatedStore.store).toHaveBeenCalledTimes(1);
     expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SendRepostUseCase のリモート投稿のブースト', () => {
+  const setup = (noteOverrides: ConstructorParameters<typeof Note>[0] = {}) => {
+    const { session, sessionResolver, userResolver, actorResolverByUserId } = setupRequester();
+    const remotePost: RemotePost = {
+      type: 'remote',
+      summary: null,
+      sensitive: false,
+      postId: crypto.randomUUID() as PostId,
+      actorId: crypto.randomUUID() as RemotePost['actorId'],
+      content: 'remote',
+      createdAt: Date.now() as RemotePost['createdAt'],
+      uri: 'https://remote.example/notes/1',
+      inReplyToUri: null,
+      visibility: 'public',
+    };
+    const postResolver = createMockPostResolver();
+    postResolver.setPost(remotePost);
+    const remotePostUpserter = { resolve: vi.fn(async () => RA.ok(remotePost)) };
+    const deps = {
+      origin: 'https://example.com',
+      sessionResolver,
+      userResolver,
+      actorResolverByUserId,
+      repostCreatedStore: { store: vi.fn(async () => RA.ok(undefined)) },
+      repostResolver: { resolve: vi.fn(async () => RA.ok(undefined)) },
+      remotePostUpserter,
+      timelineItemCreatedStore: createMockTimelineItemCreatedStore(),
+      postResolver,
+      articleResolverByRootPostId: { resolve: vi.fn(async () => RA.ok(undefined)) },
+    };
+    const author = new Person({
+      id: new URL('https://remote.example/users/alice'),
+      preferredUsername: 'alice',
+      inbox: new URL('https://remote.example/users/alice/inbox'),
+    });
+    const note = new Note({
+      id: new URL(remotePost.uri),
+      content: '<p>remote</p>',
+      attribution: author,
+      tos: [PUBLIC_COLLECTION],
+      ...noteOverrides,
+    });
+    const ctx = Object.assign(createMockRequestContext(), {
+      getFollowersUri: vi.fn((username: string) => new URL(`https://example.com/users/${username}/followers`)),
+      getDocumentLoader: vi.fn(async () => ({})),
+      lookupObject: vi.fn(async () => note),
+    });
+    return { deps, session, remotePost, remotePostUpserter, ctx };
+  };
+
+  it('引用を持つ投稿をブーストすると、引用先の URI を remotePostUpserter に渡す', async () => {
+    const { deps, session, remotePost, remotePostUpserter, ctx } = setup({
+      quote: new URL('https://other.example/notes/quoted'),
+    });
+
+    const result = await SendRepostUseCase.create(deps as never).run({
+      sessionId: session.sessionId,
+      postId: remotePost.postId,
+      request: new Request('https://example.com'),
+      ctx,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ uri: remotePost.uri, quoteUri: 'https://other.example/notes/quoted' }),
+    );
   });
 });

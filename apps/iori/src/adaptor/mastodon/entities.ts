@@ -148,8 +148,16 @@ export const IoriStatusExtensionSchema = z.object({
     favicon: z.string().nullable(),
   })),
   bluesky_crosspost: IoriBlueskyCrosspostSchema.optional(),
+  quote_url: z.string().optional(),
 });
 export type IoriStatusExtension = z.infer<typeof IoriStatusExtensionSchema>;
+
+export const QuoteSchema = z.object({
+  state: z.literal('accepted'),
+  get quoted_status() {
+    return StatusSchema;
+  },
+});
 
 export const StatusSchema = z.object({
   id: z.string(),
@@ -172,6 +180,9 @@ export const StatusSchema = z.object({
   in_reply_to_account_id: z.string().nullable(),
   get reblog() {
     return StatusSchema.nullable();
+  },
+  get quote() {
+    return QuoteSchema.nullable();
   },
   poll: z.null(),
   card: PreviewCardSchema.nullable(),
