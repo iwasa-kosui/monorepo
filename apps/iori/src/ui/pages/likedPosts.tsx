@@ -20,6 +20,15 @@ const readCachedLikedPosts = (): LikedPostsData | null => {
   return cached === undefined ? null : { statuses: cached.items, nextMaxId: cached.nextMaxId };
 };
 
+const PageHeading = () => (
+  <div class='flex items-baseline justify-between mb-6'>
+    <h1 class='text-2xl font-bold text-charcoal dark:text-white'>Liked Posts</h1>
+    <a href='/bookmarks' class='md:hidden text-sm text-terracotta hover:underline dark:text-terracotta-light'>
+      ブックマーク
+    </a>
+  </div>
+);
+
 const LikedPostsPage = () => {
   const [cached] = useState(readCachedLikedPosts);
   const [data, setData] = useState<LikedPostsData | null>(cached);
@@ -69,7 +78,7 @@ const LikedPostsPage = () => {
   if (isLoading) {
     return (
       <section class='mb-8'>
-        <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Liked Posts</h1>
+        <PageHeading />
         <div class='flex items-center justify-center py-8'>
           <svg class='animate-spin h-8 w-8 text-terracotta' viewBox='0 0 24 24'>
             <circle class='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' stroke-width='4' fill='none' />
@@ -87,7 +96,7 @@ const LikedPostsPage = () => {
   if (error) {
     return (
       <section class='mb-8'>
-        <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Liked Posts</h1>
+        <PageHeading />
         <p class='text-charcoal-light dark:text-gray-400'>{error}</p>
       </section>
     );
@@ -97,7 +106,7 @@ const LikedPostsPage = () => {
 
   return (
     <section class='mb-8'>
-      <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Liked Posts</h1>
+      <PageHeading />
 
       <div class='space-y-6 py-2'>
         {data.statuses.length > 0

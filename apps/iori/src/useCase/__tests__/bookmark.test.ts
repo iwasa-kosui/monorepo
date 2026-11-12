@@ -2,13 +2,14 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
-import type {
-  Bookmark,
-  BookmarkCreated,
-  BookmarkCreatedStore,
-  BookmarkDeleted,
-  BookmarkDeletedStore,
-  BookmarkResolver,
+import {
+  AlreadyBookmarkedError,
+  type Bookmark,
+  type BookmarkCreated,
+  type BookmarkCreatedStore,
+  type BookmarkDeleted,
+  type BookmarkDeletedStore,
+  type BookmarkResolver,
 } from '../../domain/bookmark/bookmark.ts';
 import type { BookmarkId } from '../../domain/bookmark/bookmarkId.ts';
 import type { PostId } from '../../domain/post/postId.ts';
@@ -44,7 +45,7 @@ const setup = () => {
     resolve: async ({ actorId, postId }) => RA.ok(bookmarks.get(keyOf(actorId, postId))),
   };
   const bookmarkCreatedStore = {
-    store: vi.fn(async (event: BookmarkCreated) => {
+    store: vi.fn(async (event: BookmarkCreated): ReturnType<BookmarkCreatedStore['store']> => {
       bookmarks.set(keyOf(event.aggregateState.actorId, event.aggregateState.postId), event.aggregateState);
       return RA.ok(undefined);
     }),
@@ -94,6 +95,17 @@ describe('CreateBookmarkUseCase', () => {
 
     expect(result).toMatchObject({ ok: false, err: { type: 'AlreadyBookmarkedError' } });
     expect(t.bookmarkCreatedStore.store).toHaveBeenCalledTimes(1);
+  });
+
+  it('同時のリクエストで保存が重複したとき AlreadyBookmarkedError を返す', async () => {
+    const t = setup();
+    t.bookmarkCreatedStore.store.mockReturnValueOnce(
+      RA.err(AlreadyBookmarkedError.create({ actorId: t.actor.id, postId: newPostId() })),
+    );
+
+    const result = await t.create.run({ userId: t.user.id, postId: newPostId() });
+
+    expect(result).toMatchObject({ ok: false, err: { type: 'AlreadyBookmarkedError' } });
   });
 
   it('ユーザーが存在しないとき UserNotFoundError を返し、保存しない', async () => {

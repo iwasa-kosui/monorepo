@@ -1,3 +1,4 @@
+import type { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
@@ -62,12 +63,15 @@ const deleteBookmark = (bookmark: Bookmark, now: Instant): BookmarkDeleted => {
   );
 };
 
-export type BookmarkCreatedStore = Agg.Store<BookmarkCreated>;
+export type BookmarkCreatedStore = Readonly<{
+  store: (...events: readonly BookmarkCreated[]) => RA<void, AlreadyBookmarkedError>;
+}>;
 export type BookmarkDeletedStore = Agg.Store<BookmarkDeleted>;
 export type BookmarkResolver = Agg.Resolver<
   { actorId: ActorId; postId: PostId },
   Bookmark | undefined
 >;
+export type BookmarksResolverByPostId = Agg.Resolver<{ postId: PostId }, Bookmark[]>;
 export type BookmarkedPostIdsResolverByActorIdWithPagination = Agg.Resolver<
   Readonly<{ actorId: ActorId; page: PageRequest }>,
   ReadonlyArray<Readonly<{ bookmarkId: BookmarkId; postId: PostId }>>

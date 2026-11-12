@@ -121,6 +121,7 @@ const options = {
   inReplyToId: 'parent-id',
   inReplyToAccountId: 'parent-account-id',
   myReactionEmojis: new Set(['🎉']),
+  bookmarked: false,
 };
 
 describe('toStatus の edited_at', () => {

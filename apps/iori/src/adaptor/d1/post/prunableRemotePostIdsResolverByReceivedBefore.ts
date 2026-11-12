@@ -33,6 +33,7 @@ export const createD1PrunableRemotePostIdsResolverByReceivedBefore = (
         AND p.postId NOT IN (
           SELECT postId FROM reposts WHERE actorId IN (SELECT actorId FROM local_actors)
         )
+        AND p.postId NOT IN (SELECT postId FROM bookmarks)
         AND p.postId NOT IN (SELECT likedPostId FROM notification_likes)
         AND p.postId NOT IN (SELECT repostedPostId FROM notification_reposts)
         AND p.postId NOT IN (SELECT reactedPostId FROM notification_emoji_reacts)

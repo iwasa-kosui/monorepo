@@ -3,6 +3,11 @@ import type { Delete } from '@fedify/vocab';
 import { getLogger } from '@logtape/logtape';
 
 import {
+  Bookmark,
+  type BookmarkDeletedStore,
+  type BookmarksResolverByPostId,
+} from '../../../domain/bookmark/bookmark.ts';
+import {
   EmojiReact,
   type EmojiReactDeletedStore,
   type EmojiReactsResolverByPostId,
@@ -53,6 +58,7 @@ export type OnDeleteDeps = Readonly<{
   repostsResolverByPostId: RepostsResolverByPostId;
   likesResolverByPostId: LikesResolverByPostId;
   emojiReactsResolverByPostId: EmojiReactsResolverByPostId;
+  bookmarksResolverByPostId?: BookmarksResolverByPostId;
   federatedTimelineItemsResolverByPostId: FederatedTimelineItemsResolverByPostId;
   timelineItemDeletedStore: TimelineItemDeletedStore;
   likeNotificationDeletedStore: LikeNotificationDeletedStore;
@@ -63,6 +69,7 @@ export type OnDeleteDeps = Readonly<{
   localLikeDeletedStore: LocalLikeDeletedStore;
   remoteLikeDeletedStore: RemoteLikeDeletedStore;
   emojiReactDeletedStore: EmojiReactDeletedStore;
+  bookmarkDeletedStore?: BookmarkDeletedStore;
   federatedTimelineItemDeletedStore: FederatedTimelineItemDeletedStore;
   postDeletedStore: PostDeletedStore;
 }>;
@@ -131,6 +138,7 @@ async (
     repostsResult,
     likesResult,
     emojiReactsResult,
+    bookmarksResult,
     federatedTimelineItemsResult,
   ] = await Promise.all([
     deps.timelineItemsResolverByPostId.resolve({ postId }),
@@ -142,6 +150,7 @@ async (
     deps.repostsResolverByPostId.resolve({ postId }),
     deps.likesResolverByPostId.resolve({ postId }),
     deps.emojiReactsResolverByPostId.resolve({ postId }),
+    deps.bookmarksResolverByPostId?.resolve({ postId }),
     deps.federatedTimelineItemsResolverByPostId.resolve({ postId }),
   ]);
 
@@ -184,6 +193,9 @@ async (
   const emojiReactEvents = emojiReactsResult.ok
     ? emojiReactsResult.val.map((reaction) => EmojiReact.deleteEmojiReact(reaction, now))
     : [];
+  const bookmarkEvents = bookmarksResult?.ok
+    ? bookmarksResult.val.map((bookmark) => Bookmark.deleteBookmark(bookmark, now))
+    : [];
   const federatedTimelineItemEvents = federatedTimelineItemsResult.ok
     ? federatedTimelineItemsResult.val.map((item) =>
       FederatedTimelineItem.deleteFederatedTimelineItem(item.federatedTimelineItemId, now)
@@ -203,6 +215,7 @@ async (
     deps.localLikeDeletedStore.store(...localLikeEvents),
     deps.remoteLikeDeletedStore.store(...remoteLikeEvents),
     deps.emojiReactDeletedStore.store(...emojiReactEvents),
+    ...(deps.bookmarkDeletedStore ? [deps.bookmarkDeletedStore.store(...bookmarkEvents)] : []),
     deps.federatedTimelineItemDeletedStore.store(...federatedTimelineItemEvents),
   ]);
 
