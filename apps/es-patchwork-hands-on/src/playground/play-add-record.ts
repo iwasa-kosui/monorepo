@@ -104,6 +104,7 @@ const mount = (root: HTMLElement): void => {
   const completeButton = query<HTMLButtonElement>(root, '[data-role="complete"]');
   const completeStep2Button = root.querySelector<HTMLButtonElement>('[data-role="complete-step-2"]');
   const resetButton = query<HTMLButtonElement>(root, '[data-role="reset"]');
+  const restoreButton = query<HTMLButtonElement>(root, '[data-role="restore"]');
   const testsButton = query<HTMLButtonElement>(root, '[data-role="tests"]');
   const retryButton = query<HTMLButtonElement>(root, '[data-role="retry"]');
   const visitsBody = query<HTMLElement>(root, '[data-role="visits-body"]');
@@ -122,6 +123,12 @@ const mount = (root: HTMLElement): void => {
   let hasResult = false;
   let templateShown = false;
   let answersShown = false;
+  let backup: string | null = null;
+
+  const discardBackup = (): void => {
+    backup = null;
+    restoreButton.hidden = true;
+  };
 
   const saved = loadEdits(config.exerciseId)[editedFile];
   const view = createEditorView(
@@ -131,6 +138,7 @@ const mount = (root: HTMLElement): void => {
       label: 'cancelVisit のコード',
       onChange: () => {
         persist();
+        discardBackup();
         updateControls();
       },
     }),
@@ -165,6 +173,13 @@ const mount = (root: HTMLElement): void => {
   const setCode = (doc: string): void => {
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc }, selection: { anchor: 0 } });
     revealPayload();
+  };
+
+  const replaceWithBackup = (target: string): void => {
+    const before = code();
+    setCode(target);
+    backup = before === config.initial || before === target ? null : before;
+    restoreButton.hidden = backup === null;
   };
 
   const filesWith = (): Record<string, string> => ({
@@ -582,7 +597,7 @@ const mount = (root: HTMLElement): void => {
   testsButton.addEventListener('click', () => void runTests());
   templateButton?.addEventListener('click', insertRecordTemplate);
   completeButton.addEventListener('click', () => {
-    setCode(config.complete);
+    replaceWithBackup(config.complete);
     clearMessage();
     say(
       config.step === 2
@@ -591,7 +606,7 @@ const mount = (root: HTMLElement): void => {
     );
   });
   completeStep2Button?.addEventListener('click', () => {
-    setCode(config.completeStep2 ?? config.complete);
+    replaceWithBackup(config.completeStep2 ?? config.complete);
     clearMessage();
     say([
       'ステップ2の完成コードを読み込みました。',
@@ -600,11 +615,29 @@ const mount = (root: HTMLElement): void => {
     ]);
   });
   resetButton.addEventListener('click', () => {
-    setCode(config.initial);
+    replaceWithBackup(config.initial);
     templateShown = false;
     resetOutputs(initialResult);
     sayStart();
     updateControls();
+  });
+  restoreButton.addEventListener('click', () => {
+    if (backup !== null) {
+      setCode(backup);
+    }
+    discardBackup();
+    clearMessage();
+    sayStart();
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      const restored = loadEdits(config.exerciseId)[editedFile] ?? config.initial;
+      if (restored !== code()) {
+        setCode(restored);
+      }
+      discardBackup();
+      updateControls();
+    }
   });
   retryButton.addEventListener('click', () => runtime.reload());
 

@@ -79,7 +79,9 @@ const answers = [
               を編集し、<code>node --test visits.test.ts</code>
               を実行します。<code>pass 7</code> と <code>fail 1</code>
               が出れば、ステップ1は完了です。終わらないうちにステップ2へ進むときは、<code
-              >chapter-2-step-1</code> に移動して続けます。
+              >chapter-2-step-1</code> に移動して続けます。第1章と同じく、<code
+              >ℹ pass</code> と <code>ℹ fail</code>
+              の行は失敗の詳細の上に出ます。
             </p>
           ) : (
             <p>
@@ -127,6 +129,9 @@ const answers = [
           }
           <button type="button" class="play-quiet" data-role="reset" disabled>
             最初のコードに戻す
+          </button>
+          <button type="button" class="play-quiet" data-role="restore" hidden>
+            読み込む前のコードに戻す
           </button>
         </div>
       </div>
