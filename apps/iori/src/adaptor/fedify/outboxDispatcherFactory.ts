@@ -5,20 +5,22 @@ import { Temporal } from '@js-temporal/polyfill';
 import { getLogger } from '@logtape/logtape';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
-import type { PostsResolverByActorId } from '../../domain/post/post.ts';
+import type { PostQuotesResolverByPostIds, PostsResolverByActorId } from '../../domain/post/post.ts';
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
 import { toMentionNoteFields } from '../../useCase/helper/mentionNote.ts';
+import { toQuoteNoteFields } from '../../useCase/helper/quoteNote.ts';
 
 export type OutboxDispatcherDeps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   actorResolverByUserId: ActorResolverByUserId;
   postsResolverByActorId: PostsResolverByActorId;
+  postQuotesResolver?: PostQuotesResolverByPostIds;
 }>;
 
 export const createOutboxDispatcher = (
-  { userResolverByUsername, actorResolverByUserId, postsResolverByActorId }: OutboxDispatcherDeps,
+  { userResolverByUsername, actorResolverByUserId, postsResolverByActorId, postQuotesResolver }: OutboxDispatcherDeps,
 ) => ({
   dispatch: (ctx: RequestContext<unknown>, identifier: string) =>
     RA.flow(
@@ -33,11 +35,16 @@ export const createOutboxDispatcher = (
           ? RA.err(new Error(`Actor not found: ${identifier}`))
           : postsResolverByActorId.resolve(actor.id)
       ),
+      RA.andThen(async (posts) => {
+        const quotes = await postQuotesResolver?.resolve(posts.map((post) => post.postId));
+        return RA.ok({ posts, quotes: quotes?.ok ? quotes.val : undefined });
+      }),
       RA.match({
-        ok: (posts) => ({
+        ok: ({ posts, quotes }) => ({
           items: posts.map((post) => {
             const content = sanitizePostContent(post.content);
-            const mentionFields = toMentionNoteFields(content);
+            const quoteFields = toQuoteNoteFields(quotes?.get(post.postId));
+            const mentionFields = toMentionNoteFields(content, quoteFields.actors);
             const note = new Note({
               id: ctx.getObjectUri(Note, { identifier, id: post.postId }),
               attribution: ctx.getActorUri(identifier),
@@ -50,6 +57,7 @@ export const createOutboxDispatcher = (
               url: ctx.getObjectUri(Note, { identifier, id: post.postId }),
               summary: post.summary,
               sensitive: post.sensitive,
+              quoteUrl: quoteFields.quoteUrl,
             });
             return new Create({
               id: new URL('#activity', note.id ?? undefined),

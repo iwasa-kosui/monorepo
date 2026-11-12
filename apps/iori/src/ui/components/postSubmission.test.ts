@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { canSubmitPost, type PostFormValue, replyParams, submitPost } from './postSubmission.ts';
+import { canSubmitPost, type PostFormValue, quoteParams, replyParams, submitPost } from './postSubmission.ts';
 
 const created = {
   id: 'status-1',
@@ -257,5 +257,20 @@ describe('replyParams', () => {
       content_type: 'text/markdown',
       iori_destination: 'fediverse',
     });
+  });
+});
+
+describe('quoteParams', () => {
+  it('passes the quoted post id as quoted_status_id and the selected destination as iori_destination', () => {
+    expect(quoteParams('post-1', 'hello', 'fediverse')).toEqual({
+      status: 'hello',
+      quoted_status_id: 'post-1',
+      content_type: 'text/markdown',
+      iori_destination: 'fediverse',
+    });
+  });
+
+  it('does not send in_reply_to_id', () => {
+    expect(quoteParams('post-1', 'hello', 'fediverse')).not.toHaveProperty('in_reply_to_id');
   });
 });

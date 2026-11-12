@@ -12,7 +12,8 @@ import { Instant } from '../domain/instant/instant.ts';
 import type { LinkPreview, LinkPreviewCreatedStore } from '../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
 import type { MentionRecipient } from '../domain/post/mention.ts';
-import { Post, type PostCreatedStore } from '../domain/post/post.ts';
+import { Post, type PostCreatedStore, type PostQuotesResolverByPostIds } from '../domain/post/post.ts';
+import { appendQuoteInline } from '../domain/post/quoteInline.ts';
 import type { AcceptedRelaysResolver } from '../domain/relay/relay.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
@@ -21,6 +22,7 @@ import { User, UserNotFoundError, type UserResolver } from '../domain/user/user.
 import { Schema } from '../helper/schema.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
+import { resolveQuoteNoteFields } from './helper/quoteNote.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import { sendToMentions } from './helper/sendToMentions.ts';
 import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
@@ -35,6 +37,7 @@ type Input =
     sensitive?: boolean;
     crosspostToBluesky?: boolean;
     mentions?: ReadonlyArray<MentionRecipient>;
+    quoteUri?: string;
     ctx: RequestContext<unknown>;
   }>;
 
@@ -60,6 +63,7 @@ type Deps = Readonly<{
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
   ogpFetcher: OgpFetcher;
   acceptedRelaysResolver: AcceptedRelaysResolver;
+  postQuotesResolver?: PostQuotesResolverByPostIds;
   scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   origin: string;
 }>;
@@ -74,6 +78,7 @@ const create = ({
   linkPreviewCreatedStore,
   ogpFetcher,
   acceptedRelaysResolver,
+  postQuotesResolver,
   scheduleBlueskyCrosspost,
   origin,
 }: Deps): CreatePostUseCase => {
@@ -86,13 +91,14 @@ const create = ({
       RA.ok(input),
       RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-      RA.andBind('postEvent', ({ actor, content, summary, sensitive }) => {
+      RA.andBind('postEvent', ({ actor, content, summary, sensitive, quoteUri }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
-          content,
+          content: quoteUri === undefined ? content : appendQuoteInline(content, quoteUri),
           userId: actor.userId,
           summary,
           sensitive,
+          quoteUri,
         });
         return RA.ok(postEvent);
       }),
@@ -159,7 +165,8 @@ const create = ({
 
         return RA.ok(undefined);
       }),
-      RA.andThrough(async ({ post, user, ctx, images, mentions }) => {
+      RA.andThrough(async ({ post, user, ctx, images, mentions, quoteUri }) => {
+        const quote = await resolveQuoteNoteFields(postQuotesResolver, post.postId, quoteUri);
         const noteArgs = { identifier: user.username, id: post.postId };
         const note = await ctx.getObject(Note, noteArgs);
         const createActivity = new Create({
@@ -175,7 +182,7 @@ const create = ({
           ctx,
           identifier: user.username,
           activity: createActivity,
-          mentions: mentions ?? [],
+          mentions: [...(mentions ?? []), ...quote.recipients],
         });
         return RA.ok(undefined);
       }),

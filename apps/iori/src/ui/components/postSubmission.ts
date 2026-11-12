@@ -68,3 +68,14 @@ export const replyParams = (
   content_type: 'text/markdown',
   iori_destination: destination,
 });
+
+export const quoteParams = (
+  postId: string,
+  content: string,
+  destination: PostDestination,
+): CreateStatusParams => ({
+  status: content,
+  quoted_status_id: postId,
+  content_type: 'text/markdown',
+  iori_destination: destination,
+});

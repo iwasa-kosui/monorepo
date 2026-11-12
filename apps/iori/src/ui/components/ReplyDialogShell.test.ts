@@ -43,4 +43,26 @@ describe('ReplyDialogShell', () => {
     expect(html).not.toContain('<select');
     expect(html).toContain('<div class="mt-3 flex gap-2 justify-end"><button');
   });
+
+  it('title と submitLabel を渡さないときは、見出しを返信、ボタンを返信するにする', () => {
+    const html = render();
+
+    expect(html).toMatch(/<h2[^>]*>返信<\/h2>/);
+    expect(html).toMatch(/>返信する<\/button>/);
+  });
+
+  it('title と submitLabel を渡すと、見出しとボタンを置き換える', () => {
+    const html = render({ title: '引用', submitLabel: '引用して投稿' });
+
+    expect(html).toMatch(/<h2[^>]*>引用<\/h2>/);
+    expect(html).toMatch(/>引用して投稿<\/button>/);
+    expect(html).not.toContain('返信する');
+  });
+
+  it('送信中は submitLabel によらず送信中と出す', () => {
+    const html = render({ submitLabel: '引用して投稿', isSending: true });
+
+    expect(html).toContain('送信中...');
+    expect(html).not.toContain('引用して投稿');
+  });
 });

@@ -132,4 +132,59 @@ describe('createOutboxDispatcher', () => {
     expect(note.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers']);
     await expect(Array.fromAsync(note.getTags())).resolves.toEqual([]);
   });
+
+  it('引用先のある投稿は、quoteUrl を付け、リモートの作者を Mention と cc に入れる', async () => {
+    const userId = UserId.generate();
+    const actorId = ActorId.generate();
+    const base = {
+      type: 'local' as const,
+      summary: null,
+      sensitive: false,
+      actorId,
+      content: '<p>hi</p>',
+      createdAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
+      userId,
+      inReplyToUri: null,
+    };
+    const quoted: LocalPost = { ...base, postId: PostId.generate() };
+    const plain: LocalPost = { ...base, postId: PostId.generate() };
+    const quoteUri = 'https://remote.example/users/alice/statuses/1';
+    const resolve = vi.fn(async () =>
+      RA.ok(
+        new Map([[quoted.postId, {
+          uri: quoteUri,
+          author: {
+            id: 'https://remote.example/users/alice',
+            inboxUrl: 'https://remote.example/users/alice/inbox',
+            username: 'alice',
+          },
+        }]]),
+      )
+    );
+    const dispatcher = createOutboxDispatcher({
+      userResolverByUsername: {
+        resolve: vi.fn(async () => RA.ok({ id: userId, username: Username.orThrow('kosui') })),
+      } as never,
+      actorResolverByUserId: { resolve: vi.fn(async () => RA.ok({ id: actorId })) } as never,
+      postsResolverByActorId: { resolve: vi.fn(async () => RA.ok([quoted, plain])) } as never,
+      postQuotesResolver: { resolve },
+    });
+
+    const result = await dispatcher.dispatch(createContext(), 'kosui');
+
+    expect(resolve).toHaveBeenCalledExactlyOnceWith([quoted.postId, plain.postId]);
+    const [quotedNote, plainNote] = await Promise.all(
+      result.items.map(async (item) => (await (item as Create).getObject()) as Note),
+    );
+    expect(quotedNote?.quoteUrl?.href).toBe(quoteUri);
+    expect(quotedNote?.ccIds.map((url) => url.href)).toEqual([
+      'https://example.com/users/kosui/followers',
+      'https://remote.example/users/alice',
+    ]);
+    const tags = await Array.fromAsync(quotedNote!.getTags());
+    expect(tags).toHaveLength(1);
+    expect(tags[0]).toBeInstanceOf(Mention);
+    expect(plainNote?.quoteUrl).toBeNull();
+    expect(plainNote?.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers']);
+  });
 });

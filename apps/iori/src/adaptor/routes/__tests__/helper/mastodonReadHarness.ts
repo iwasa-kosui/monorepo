@@ -155,6 +155,7 @@ import { createD1LocalPostsResolverByPage } from '../../../d1/post/localPostsRes
 import { createD1PostCreatedStore } from '../../../d1/post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../../../d1/post/postDeletedStore.ts';
 import { createD1PostExtrasResolverByPosts } from '../../../d1/post/postExtrasResolverByPosts.ts';
+import { createD1PostQuotesResolverByPostIds } from '../../../d1/post/postQuotesResolverByPostIds.ts';
 import { createD1PostResolver } from '../../../d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../../../d1/post/postResolverByUri.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
@@ -372,6 +373,7 @@ export const setupReadApi = (
               fetch: async () => ({ title: null, description: null, imageUrl: null, faviconUrl: null, siteName: null }),
             },
             acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+            postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
             origin: ORIGIN,
             scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),
@@ -387,6 +389,7 @@ export const setupReadApi = (
             pushSubscriptionsResolver: createD1PushSubscriptionsResolverByUserId(db),
             webPushSender: { send: () => RA.ok(undefined) },
             postResolver,
+            postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
             origin: ORIGIN,
             scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),

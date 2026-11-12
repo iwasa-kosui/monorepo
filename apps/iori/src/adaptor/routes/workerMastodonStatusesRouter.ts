@@ -1,4 +1,5 @@
 import type { RequestContext } from '@fedify/fedify';
+import { Note } from '@fedify/vocab';
 import { Result } from '@iwasa-kosui/result';
 import { type Context, Hono } from 'hono';
 
@@ -22,6 +23,7 @@ import type { RepostResolver, RepostResolverById } from '../../domain/repost/rep
 import { RepostId } from '../../domain/repost/repostId.ts';
 import type { UserResolver } from '../../domain/user/user.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import { BLUESKY_STATUS_ID_PREFIX } from '../../helper/blueskyUrl.ts';
 import type { CreatePostUseCase } from '../../useCase/createPost.ts';
 import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
 import { resolveOwnedMediaUpload } from '../../useCase/getMediaUpload.ts';
@@ -84,6 +86,8 @@ const writeFavourites = Scope.orThrow('write:favourites');
 const MAX_MEDIA_ATTACHMENTS = 4;
 
 const validationFailed = (message: string) => ({ error: `Validation failed: ${message}` });
+
+const quoteNotAllowed = validationFailed('Quote not allowed');
 
 const isOmitted = (value: unknown): boolean => value === undefined || value === null;
 
@@ -335,6 +339,25 @@ export const createWorkerMastodonStatusesRouter = ({
           return c.json(recordNotFound, 404);
         }
       }
+      const ctx = createContext(c.req.raw);
+      const rawQuote = body['quoted_status_id'];
+      let quoteUri: string | undefined;
+      if (!isOmitted(rawQuote) && rawQuote !== '') {
+        if (typeof rawQuote === 'string' && rawQuote.startsWith(BLUESKY_STATUS_ID_PREFIX)) {
+          return c.json(quoteNotAllowed, 422);
+        }
+        const quotedId = PostId.parse(rawQuote);
+        const quoted = quotedId.ok ? await resolvePost(quotedId.val, viewer.val.id) : undefined;
+        if (quoted === undefined) {
+          return c.json(recordNotFound, 404);
+        }
+        if (!Post.isVisibleToAnonymous(quoted)) {
+          return c.json(quoteNotAllowed, 422);
+        }
+        quoteUri = quoted.type === 'remote'
+          ? quoted.uri
+          : ctx.getObjectUri(Note, { identifier: quoted.username, id: quoted.postId }).href;
+      }
       const format = body['content_type'] === 'text/markdown' ? 'markdown' : 'plain';
       const user = await userResolver.resolve(userId);
       const mentions = user.ok && user.val !== undefined
@@ -358,7 +381,8 @@ export const createWorkerMastodonStatusesRouter = ({
         sensitive: bodyBoolean(body, 'sensitive') || summary !== null,
         images: medias.map((media) => ({ url: media.url, altText: media.description })),
         crosspostToBluesky: sendsToBluesky(body),
-        ctx: createContext(c.req.raw),
+        ...(quoteUri === undefined ? {} : { quoteUri }),
+        ctx,
       };
       const created = replyTo === undefined
         ? await createPostUseCase.run(input)
