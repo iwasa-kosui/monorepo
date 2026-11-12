@@ -2620,6 +2620,75 @@ describe('/api/iori/v1/bluesky/chat', () => {
     expect(await response.json()).toEqual({ unread: 2, requests: 1 });
   });
 
+  describe('失敗の構造化ログ', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const failedList = (error: BlueskyClientError) => chatMock({ listConvos: async () => RA.err(error) });
+    const loggedLines = (warn: ReturnType<typeof vi.spyOn>) =>
+      warn.mock.calls.map(([line]) => JSON.parse(line as string) as Record<string, unknown>);
+
+    it('chat_not_permitted で 403 にするとき、秘密値を含まない 1 行を console.warn に出す', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const t = setupReadApi({
+        blueskyChat: failedList(clientError({
+          kind: 'chat_not_permitted',
+          message: 'chat.bsky.convo.listConvos failed: status 400 InvalidToken',
+          code: 'InvalidToken',
+        })),
+      });
+      const me = await t.signIn('read:statuses');
+
+      const response = await t.request(`${BASE_PATH}/unread_count`, { headers: me.bearer });
+
+      expect(response.status).toBe(403);
+      expect(loggedLines(warn)).toEqual([{
+        event: 'bluesky_client_failure',
+        kind: 'chat_not_permitted',
+        status: 400,
+        code: 'InvalidToken',
+        operation: 'chat.bsky.convo.listConvos',
+        responseStatus: 403,
+      }]);
+    });
+
+    it('502 にするときも 1 行出し、iori が返した status を持つ', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const t = setupReadApi({
+        blueskyChat: failedList(clientError({
+          message: 'chat.bsky.convo.listConvos failed: status 500 InternalServerError',
+          status: 500,
+          code: 'InternalServerError',
+        })),
+      });
+      const me = await t.signIn('read:statuses');
+
+      const response = await t.request(`${BASE_PATH}/unread_count`, { headers: me.bearer });
+
+      expect(response.status).toBe(502);
+      expect(loggedLines(warn)).toEqual([{
+        event: 'bluesky_client_failure',
+        kind: 'http',
+        status: 500,
+        code: 'InternalServerError',
+        operation: 'chat.bsky.convo.listConvos',
+        responseStatus: 502,
+      }]);
+    });
+
+    it('成功したときは出さない', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const t = setupReadApi({ blueskyChat: chatMock() });
+      const me = await t.signIn('read:statuses');
+
+      const response = await t.request(`${BASE_PATH}/unread_count`, { headers: me.bearer });
+
+      expect(response.status).toBe(200);
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
   describe('送信', () => {
     it('成功したら 201 で message を返し、前後の空白を除いた本文を送る', async () => {
       const chat = chatMock();

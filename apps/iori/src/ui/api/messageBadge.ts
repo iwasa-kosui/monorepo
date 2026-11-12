@@ -42,13 +42,28 @@ export const combineUnreadMessages = (sources: readonly UnreadMessages[]): Unrea
   return sources.every((source) => source === 'unavailable') ? 'unavailable' : undefined;
 };
 
+export type MessagePolling = Readonly<{ blueskyUnavailable: boolean }>;
+
+export const initialMessagePolling: MessagePolling = { blueskyUnavailable: false };
+
+export const nextMessagePolling = (polling: MessagePolling, bluesky: UnreadMessages): MessagePolling =>
+  polling.blueskyUnavailable || bluesky === 'unavailable' ? { blueskyUnavailable: true } : polling;
+
+export const pollUnreadMessages = async (
+  fetcher: typeof fetch,
+  polling: MessagePolling,
+): Promise<Readonly<{ unread: UnreadMessages; polling: MessagePolling }>> => {
+  const [bluesky, fediverse] = await Promise.all([
+    polling.blueskyUnavailable
+      ? Promise.resolve<UnreadMessages>('unavailable')
+      : fetchCount(fetcher, unreadMessageCountUrl(), blueskyCountOf),
+    fetchCount(fetcher, unreadFediverseMessageCountUrl(), fediverseCountOf),
+  ]);
+  return { unread: combineUnreadMessages([bluesky, fediverse]), polling: nextMessagePolling(polling, bluesky) };
+};
+
 export const fetchUnreadMessageCount = async (fetcher: typeof fetch): Promise<UnreadMessages> =>
-  combineUnreadMessages(
-    await Promise.all([
-      fetchCount(fetcher, unreadMessageCountUrl(), blueskyCountOf),
-      fetchCount(fetcher, unreadFediverseMessageCountUrl(), fediverseCountOf),
-    ]),
-  );
+  (await pollUnreadMessages(fetcher, initialMessagePolling)).unread;
 
 export const applyMessageBadge = (root: ParentNode, count: number): void => {
   const label = formatNotificationBadge(count);

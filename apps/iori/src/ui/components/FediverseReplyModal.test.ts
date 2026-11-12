@@ -1,0 +1,45 @@
+import { jsx } from 'hono/jsx';
+import { describe, expect, it } from 'vitest';
+
+import type { UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
+import { FediverseReplyModal } from './FediverseReplyModal.tsx';
+import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
+
+const noop = () => {};
+
+const dialog = (overrides: Partial<UseReplyDialogReturn> = {}): UseReplyDialogReturn => ({
+  replyingToPostId: null,
+  replyContent: '',
+  replyDestination: DEFAULT_POST_DESTINATION,
+  isSendingReply: false,
+  openReplyDialog: noop,
+  closeReplyDialog: noop,
+  setReplyContent: noop,
+  setReplyDestination: noop,
+  sendReply: () => Promise.resolve(true),
+  ...overrides,
+});
+
+const render = (overrides: Partial<UseReplyDialogReturn> = {}): string =>
+  String(jsx(FediverseReplyModal, { dialog: dialog(overrides) }));
+
+describe('FediverseReplyModal', () => {
+  it('返信先がなければ何も描画しない', () => {
+    expect(render()).toBe('');
+  });
+
+  it('返信先があれば返信のダイアログを描画する', () => {
+    const html = render({ replyingToPostId: 'post-1' });
+
+    expect(html).toContain('返信する');
+    expect(html).toContain('キャンセル');
+  });
+
+  it('本文が空なら送信できない', () => {
+    expect(render({ replyingToPostId: 'post-1', replyContent: '  ' })).toContain('disabled');
+  });
+
+  it('送信中は「送信中...」を出す', () => {
+    expect(render({ replyingToPostId: 'post-1', replyContent: 'hi', isSendingReply: true })).toContain('送信中...');
+  });
+});

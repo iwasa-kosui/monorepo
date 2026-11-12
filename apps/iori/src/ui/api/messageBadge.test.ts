@@ -4,7 +4,10 @@ import {
   applyMessageBadge,
   combineUnreadMessages,
   fetchUnreadMessageCount,
+  initialMessagePolling,
   MESSAGE_BADGE_SELECTOR,
+  nextMessagePolling,
+  pollUnreadMessages,
 } from './messageBadge.ts';
 import { NOTIFICATION_BADGE_SELECTOR } from './notificationBadge.ts';
 
@@ -109,6 +112,82 @@ describe('fetchUnreadMessageCount', () => {
     expect(
       await fetchUnreadMessageCount(fetcherOf({ [BLUESKY_URL]: ok(null), [FEDIVERSE_URL]: ok({ unread: 'x' }) })),
     ).toBeUndefined();
+  });
+});
+
+describe('nextMessagePolling', () => {
+  it('Bluesky が unavailable になったら、以降は unavailable のままにする', () => {
+    expect(nextMessagePolling(initialMessagePolling, 'unavailable')).toEqual({ blueskyUnavailable: true });
+    expect(nextMessagePolling({ blueskyUnavailable: true }, 3)).toEqual({ blueskyUnavailable: true });
+    expect(nextMessagePolling({ blueskyUnavailable: true }, undefined)).toEqual({ blueskyUnavailable: true });
+  });
+
+  it('Bluesky が数か一時的な失敗のときは、Bluesky を呼び続ける', () => {
+    expect(nextMessagePolling(initialMessagePolling, 3)).toEqual({ blueskyUnavailable: false });
+    expect(nextMessagePolling(initialMessagePolling, undefined)).toEqual({ blueskyUnavailable: false });
+  });
+});
+
+describe('pollUnreadMessages', () => {
+  const callsTo = (fetcher: ReturnType<typeof fetcherOf>, url: string) =>
+    fetcher.mock.calls.filter(([input]) => String(input) === url).length;
+
+  it.each([403, 409])(
+    'Bluesky が %i を返したら、次からは Bluesky を呼ばず、Fediverse だけ呼んで、Fediverse の数を返す',
+    async (code) => {
+      const fetcher = fetcherOf({ [BLUESKY_URL]: status(code), [FEDIVERSE_URL]: ok({ unread: 2 }) });
+
+      const first = await pollUnreadMessages(fetcher, initialMessagePolling);
+      const second = await pollUnreadMessages(fetcher, first.polling);
+      const third = await pollUnreadMessages(fetcher, second.polling);
+
+      expect([first.unread, second.unread, third.unread]).toEqual([2, 2, 2]);
+      expect(first.polling).toEqual({ blueskyUnavailable: true });
+      expect(callsTo(fetcher, BLUESKY_URL)).toBe(1);
+      expect(callsTo(fetcher, FEDIVERSE_URL)).toBe(3);
+    },
+  );
+
+  it('Bluesky を呼ばないあいだに Fediverse が unavailable になったら、unavailable を返す', async () => {
+    const fetcher = fetcherOf({ [BLUESKY_URL]: status(403), [FEDIVERSE_URL]: status(409) });
+
+    const first = await pollUnreadMessages(fetcher, initialMessagePolling);
+    const second = await pollUnreadMessages(fetcher, { blueskyUnavailable: true });
+
+    expect(first.unread).toBe('unavailable');
+    expect(second.unread).toBe('unavailable');
+    expect(callsTo(fetcher, BLUESKY_URL)).toBe(1);
+  });
+
+  it('Bluesky を呼ばないあいだに Fediverse が一時的に失敗したら、undefined を返す', async () => {
+    const fetcher = fetcherOf({ [BLUESKY_URL]: status(403), [FEDIVERSE_URL]: status(500) });
+
+    const polled = await pollUnreadMessages(fetcher, { blueskyUnavailable: true });
+
+    expect(polled.unread).toBeUndefined();
+    expect(callsTo(fetcher, BLUESKY_URL)).toBe(0);
+  });
+
+  it.each([500, 502])('Bluesky が %i のような一時的な失敗のときは、次も Bluesky を呼ぶ', async (code) => {
+    const fetcher = fetcherOf({ [BLUESKY_URL]: status(code), [FEDIVERSE_URL]: ok({ unread: 1 }) });
+
+    const first = await pollUnreadMessages(fetcher, initialMessagePolling);
+    const second = await pollUnreadMessages(fetcher, first.polling);
+
+    expect(first.polling).toEqual({ blueskyUnavailable: false });
+    expect(second.unread).toBe(1);
+    expect(callsTo(fetcher, BLUESKY_URL)).toBe(2);
+  });
+
+  it('Bluesky が数を返すあいだは、Bluesky と Fediverse の数を足し、両方を呼び続ける', async () => {
+    const fetcher = fetcherOf({ [BLUESKY_URL]: ok({ unread: 3, requests: 2 }), [FEDIVERSE_URL]: ok({ unread: 4 }) });
+
+    const first = await pollUnreadMessages(fetcher, initialMessagePolling);
+    const second = await pollUnreadMessages(fetcher, first.polling);
+
+    expect([first.unread, second.unread]).toEqual([9, 9]);
+    expect(callsTo(fetcher, BLUESKY_URL)).toBe(2);
+    expect(callsTo(fetcher, FEDIVERSE_URL)).toBe(2);
   });
 });
 
