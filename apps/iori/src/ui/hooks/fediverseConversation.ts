@@ -10,8 +10,7 @@ export const FEDIVERSE_NOT_PERMITTED_MESSAGE = 'Fediverse のメッセージを�
 export const FEDIVERSE_NOT_FOUND_MESSAGE = 'この会話は見つかりません。';
 export const FEDIVERSE_ACTOR_NOT_FOUND_MESSAGE = 'この相手のアカウントが見つかりません。';
 export const FEDIVERSE_PEER_REJECTED_MESSAGE = 'この相手には、iori からメッセージを送れません。';
-export const FEDIVERSE_DELIVERY_FAILED_MESSAGE =
-  '相手のサーバーに接続できませんでした。メッセージは保存されている場合があるので、画面を読み込み直して確かめてください。';
+export const FEDIVERSE_DELIVERY_FAILED_MESSAGE = '送れませんでした。時間をおいてもう一度試してください。';
 export const FEDIVERSE_RETRY_MESSAGE = 'メッセージの処理に失敗しました。しばらくしてからもう一度お試しください。';
 export const FEDIVERSE_ENCRYPTION_NOTICE =
   'このメッセージは相手のサーバーにも保存されます。サーバーの管理者が読める場合があります。';

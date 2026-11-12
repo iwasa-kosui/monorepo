@@ -383,9 +383,31 @@ describe('POST /conversations/:key/messages', () => {
     expect(t.sent().map((call) => call[1])).not.toContain('followers');
   });
 
-  it('会話の最新の投稿が相手のものなら、相手のサーバーのノートへの返信にして相手に送る', async () => {
+  it('会話の最新の投稿が相手のものなら、相手のサーバーに問い合わせず、保存済みの情報で返信にして相手に送る', async () => {
     const t = await setup();
     const latest = t.fromRemote(t.alice, NOW - 1000, [aliceUri, meUri]);
+
+    const response = await t.post(`/${aliceKey}/messages`, { text: 'reply' });
+
+    expect(response.status).toBe(201);
+    const status = StatusSchema.parse(((await response.json()) as { message: unknown }).message);
+    expect(status.in_reply_to_id).toBe(latest.postId);
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+    expect(t.sent().map((call) => call[1])).not.toContain('followers');
+    expect(t.sent()).toHaveLength(1);
+    expect(t.sent()[0]?.[1]).toEqual(
+      expect.objectContaining({ id: new URL(aliceUri), inboxId: new URL(`${aliceUri}/inbox`) }),
+    );
+    const create = t.sent()[0]?.[2] as { getObject: () => Promise<Note> };
+    const note = await create.getObject();
+    expect(note.replyTargetId?.href).toBe(latest.uri);
+  });
+
+  it('保存済みの相手の inbox が無いときは、相手のサーバーのノートを引いて返信にして相手に送る', async () => {
+    const t = await setup();
+    const carol = t.seed.addRemoteActor('carol');
+    t.sqlite.prepare('UPDATE actors SET inboxUrl = ? WHERE actorId = ?').run('', carol.actorId);
+    const latest = t.fromRemote(carol, NOW - 1000, [aliceUri, meUri]);
     t.federation.lookupObject.mockResolvedValue(
       new Note({
         id: new URL(latest.uri),
@@ -398,18 +420,24 @@ describe('POST /conversations/:key/messages', () => {
     expect(response.status).toBe(201);
     const status = StatusSchema.parse(((await response.json()) as { message: unknown }).message);
     expect(status.in_reply_to_id).toBe(latest.postId);
+    expect(t.federation.lookupObject).toHaveBeenCalledTimes(1);
     expect(t.sent().map((call) => call[1])).not.toContain('followers');
     expect(t.sent()).toHaveLength(1);
   });
 
-  it('相手のサーバーのノートを引けないときは 502 にする', async () => {
+  it('相手のサーバーのノートを引けないときは 502 にし、投稿を保存せず、何も送らない', async () => {
     const t = await setup();
-    t.fromRemote(t.alice, NOW - 1000, [aliceUri, meUri]);
+    const carol = t.seed.addRemoteActor('carol');
+    t.sqlite.prepare('UPDATE actors SET inboxUrl = ? WHERE actorId = ?').run('', carol.actorId);
+    t.fromRemote(carol, NOW - 1000, [aliceUri, meUri]);
+    const before = t.count('posts');
 
     const response = await t.post(`/${aliceKey}/messages`, { text: 'reply' });
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'The remote server could not be reached' });
+    expect(t.count('posts')).toBe(before);
+    expect(t.sent()).toHaveLength(0);
   });
 
   it.each([
