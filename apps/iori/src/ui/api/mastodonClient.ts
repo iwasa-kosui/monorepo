@@ -10,6 +10,7 @@ import type {
 import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
 import type {
   IoriBlueskyLikeResponse,
+  IoriBlueskyPostResponse,
   IoriBlueskyRepostResponse,
   IoriBlueskyStatusResponse,
   IoriBlueskyTimelineResponse,
@@ -319,6 +320,23 @@ export const createStatus = async (params: CreateStatusParams): Promise<Status> 
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as Status;
+};
+
+export type CreateBlueskyPostParams = Readonly<{
+  status: string;
+  media_ids?: readonly string[];
+  content_type: 'text/plain' | 'text/markdown';
+}>;
+
+export const createBlueskyPost = async (params: CreateBlueskyPostParams): Promise<IoriBlueskyPostResponse> => {
+  const res = await fetch('/api/iori/v1/bluesky/posts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as IoriBlueskyPostResponse;
 };
 
 export const deleteStatus = async (id: string): Promise<Status> => {

@@ -33,6 +33,7 @@ import { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline
 import { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../useCase/likeBlueskyPost.ts';
+import { PostToBlueskyUseCase } from '../useCase/postToBluesky.ts';
 import { ReplyToBlueskyPostUseCase } from '../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../useCase/repostBlueskyPost.ts';
 import { UndoRepostBlueskyPostUseCase } from '../useCase/undoRepostBlueskyPost.ts';
@@ -58,6 +59,7 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
   repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
   undoRepostBlueskyPostUseCase: UndoRepostBlueskyPostUseCase | undefined;
   replyToBlueskyPostUseCase: ReplyToBlueskyPostUseCase | undefined;
+  postToBlueskyUseCase: PostToBlueskyUseCase | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -147,6 +149,17 @@ export const createReplyToBlueskyPostUseCase = (
   });
 };
 
+export const createPostToBlueskyUseCase = (
+  env: IoriWorkerEnv,
+  db: IoriD1Db,
+  deps: Readonly<{ fetch?: typeof fetch }> = {},
+): PostToBlueskyUseCase | undefined => {
+  const config = resolveBlueskyCredentials(env);
+  if (config === undefined) return undefined;
+  const client = createTimelineClient(config, db, deps);
+  return PostToBlueskyUseCase.create({ client, query: client.query, now: Instant.now });
+};
+
 export const createCollectBlueskyTimelineUseCase = (
   env: IoriWorkerEnv,
   deps: Readonly<{ db?: IoriD1Db; fetch?: typeof fetch; holdLoginAfterFailure?: boolean }> = {},
@@ -193,6 +206,7 @@ export const createBlueskyTimelineRuntimePorts = (
     repostBlueskyPostUseCase: reposts?.repost,
     undoRepostBlueskyPostUseCase: reposts?.undoRepost,
     replyToBlueskyPostUseCase: createReplyToBlueskyPostUseCase(env, db, deps),
+    postToBlueskyUseCase: createPostToBlueskyUseCase(env, db, deps),
     isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
   };
 };

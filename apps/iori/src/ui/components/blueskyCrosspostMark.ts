@@ -67,3 +67,5 @@ export const postedMessage = (
   }
   return destination === 'fediverse' ? 'Fediverse に投稿しました' : '投稿しました';
 };
+
+export const BLUESKY_ONLY_POSTED_MESSAGE = 'Bluesky に投稿しました';

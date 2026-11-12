@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { canSubmitPost, type PostFormValue, replyParams, submitPost } from './postSubmission.ts';
+import { canSubmitPost, postedNotice, type PostFormValue, replyParams, submitPost } from './postSubmission.ts';
 
 const created = {
   id: 'status-1',
@@ -40,7 +40,7 @@ describe('submitPost', () => {
     const create = vi.fn().mockResolvedValue(created);
     const onPosted = vi.fn();
 
-    const result = await submitPost(filled, { create, onPosted });
+    const result = await submitPost(filled, { create, createBlueskyPost: vi.fn(), onPosted });
 
     expect(create).toHaveBeenCalledWith({
       status: 'hello',
@@ -57,7 +57,11 @@ describe('submitPost', () => {
   it('passes the selected destination as iori_destination', async () => {
     const create = vi.fn().mockResolvedValue(created);
 
-    await submitPost({ ...filled, destination: 'fediverse' }, { create, onPosted: vi.fn() });
+    await submitPost({ ...filled, destination: 'fediverse' }, {
+      create,
+      createBlueskyPost: vi.fn(),
+      onPosted: vi.fn(),
+    });
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ iori_destination: 'fediverse' }));
   });
@@ -66,7 +70,7 @@ describe('submitPost', () => {
     const create = vi.fn().mockRejectedValue(new Error('network'));
     const onPosted = vi.fn();
 
-    const result = await submitPost(filled, { create, onPosted });
+    const result = await submitPost(filled, { create, createBlueskyPost: vi.fn(), onPosted });
 
     expect(result).toEqual({ kind: 'failed', message: 'Failed to post. Please try again.' });
     expect(onPosted).not.toHaveBeenCalled();
@@ -76,7 +80,7 @@ describe('submitPost', () => {
     const create = vi.fn().mockRejectedValue(Object.assign(new Error('Validation failed'), { status: 422 }));
     const onPosted = vi.fn();
 
-    const result = await submitPost(filled, { create, onPosted });
+    const result = await submitPost(filled, { create, createBlueskyPost: vi.fn(), onPosted });
 
     expect(result).toEqual({ kind: 'failed', message: 'Failed to post: Validation failed' });
     expect(onPosted).not.toHaveBeenCalled();
@@ -88,7 +92,76 @@ describe('submitPost', () => {
       throw new Error('render');
     });
 
-    await expect(submitPost(filled, { create, onPosted })).rejects.toThrow('render');
+    await expect(submitPost(filled, { create, createBlueskyPost: vi.fn(), onPosted })).rejects.toThrow('render');
+  });
+});
+
+describe('submitPost to Bluesky only', () => {
+  const blueskyOnly: PostFormValue = { ...filled, destination: 'bluesky' };
+
+  it('calls createBlueskyPost with the content and media, and does not call create or onPosted', async () => {
+    const create = vi.fn();
+    const createBlueskyPost = vi.fn().mockResolvedValue({
+      uri: 'at://did:plc:me/app.bsky.feed.post/3k',
+      url: 'https://bsky.app/x',
+    });
+    const onPosted = vi.fn();
+
+    const result = await submitPost(blueskyOnly, { create, createBlueskyPost, onPosted });
+
+    expect(createBlueskyPost).toHaveBeenCalledExactlyOnceWith({
+      status: 'hello',
+      media_ids: ['media-1'],
+      content_type: 'text/markdown',
+    });
+    expect(result).toEqual({ kind: 'postedToBluesky', url: 'https://bsky.app/x' });
+    expect(create).not.toHaveBeenCalled();
+    expect(onPosted).not.toHaveBeenCalled();
+  });
+
+  it('reports the server message when Bluesky refuses the post', async () => {
+    const create = vi.fn();
+    const createBlueskyPost = vi.fn().mockRejectedValue(
+      Object.assign(new Error('Bluesky に送れる本文は 300 文字までです'), { status: 422 }),
+    );
+    const onPosted = vi.fn();
+
+    const result = await submitPost(blueskyOnly, { create, createBlueskyPost, onPosted });
+
+    expect(result).toEqual({ kind: 'failed', message: 'Failed to post: Bluesky に送れる本文は 300 文字までです' });
+    expect(create).not.toHaveBeenCalled();
+    expect(onPosted).not.toHaveBeenCalled();
+  });
+
+  it('does not call createBlueskyPost for the other destinations', async () => {
+    const createBlueskyPost = vi.fn();
+
+    await submitPost(filled, { create: vi.fn().mockResolvedValue(created), createBlueskyPost, onPosted: vi.fn() });
+
+    expect(createBlueskyPost).not.toHaveBeenCalled();
+  });
+});
+
+describe('postedNotice', () => {
+  it('says the post went to Bluesky and carries the URL', () => {
+    expect(postedNotice('bluesky', { kind: 'postedToBluesky', url: 'https://bsky.app/x' })).toEqual({
+      message: 'Bluesky に投稿しました',
+      href: 'https://bsky.app/x',
+    });
+  });
+
+  it('has no link when the URL is unknown', () => {
+    expect(postedNotice('bluesky', { kind: 'postedToBluesky', url: null })).toEqual({
+      message: 'Bluesky に投稿しました',
+      href: null,
+    });
+  });
+
+  it('keeps the existing message for a Fediverse post', () => {
+    expect(postedNotice('fediverse', { kind: 'posted', status: created })).toEqual({
+      message: 'Fediverse に投稿しました',
+      href: null,
+    });
   });
 });
 

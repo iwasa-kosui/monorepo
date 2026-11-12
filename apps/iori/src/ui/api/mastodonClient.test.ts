@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   addXUserFeedSource,
   blueskyFailureMessage,
+  createBlueskyPost,
   createStatus,
   deleteStatus,
   failureMessage,
@@ -355,6 +356,34 @@ describe('mastodon client requests', () => {
       content_type: 'text/markdown',
     });
     expect(status).toEqual({ id: 's2' });
+  });
+
+  it('posts only to Bluesky with a same-origin JSON post and returns the uri and url', async () => {
+    const fetchMock = stubFetch(
+      jsonResponse({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', url: 'https://bsky.app/x' }),
+    );
+
+    const posted = await createBlueskyPost({ status: 'hello', media_ids: ['m1'], content_type: 'text/markdown' });
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/posts');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(String(init.body))).toEqual({
+      status: 'hello',
+      media_ids: ['m1'],
+      content_type: 'text/markdown',
+    });
+    expect(posted).toEqual({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', url: 'https://bsky.app/x' });
+  });
+
+  it('throws an unprocessable error carrying the Japanese server message when Bluesky refuses the post', async () => {
+    stubFetch(jsonResponse({ error: 'Bluesky に送れる本文は 300 文字までです' }, { status: 422 }));
+
+    const error = await createBlueskyPost({ status: 'x', content_type: 'text/plain' }).catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Bluesky に送れる本文は 300 文字までです');
   });
 
   it('omits the optional fields of a status that is not a reply and has no media', async () => {

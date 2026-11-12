@@ -2,13 +2,12 @@ import { useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
-import { createStatus, uploadMedia } from '../api/mastodonClient.ts';
-import { postedMessage } from './blueskyCrosspostMark.ts';
+import { createBlueskyPost, createStatus, uploadMedia } from '../api/mastodonClient.ts';
 import { downscaleImageForUpload } from './imageDownscale.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
-import { canSubmitPost, submitPost } from './postSubmission.ts';
+import { canSubmitPost, postedNotice, type PostNotice, submitPost } from './postSubmission.ts';
 
 type Props = Readonly<{
   id?: string;
@@ -22,25 +21,28 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [destination, setDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
-  const [resultMessage, setResultMessage] = useState('');
+  const [notice, setNotice] = useState<PostNotice | undefined>(undefined);
 
   const handleContentChange = (value: string) => {
     setContent(value);
-    setResultMessage('');
+    setNotice(undefined);
   };
 
   const handleSubmit = async () => {
     if (!canSubmitPost(content, isUploading, isPosting)) return;
     setIsPosting(true);
     try {
-      const result = await submitPost({ content, uploaded, destination }, { create: createStatus, onPosted });
-      if (result.kind === 'posted') {
+      const result = await submitPost(
+        { content, uploaded, destination },
+        { create: createStatus, createBlueskyPost, onPosted },
+      );
+      if (result.kind === 'failed') {
+        alert(result.message);
+      } else {
         setContent('');
         setUploaded([]);
         setDestination(DEFAULT_POST_DESTINATION);
-        setResultMessage(postedMessage(destination, result.status.iori?.bluesky_crosspost));
-      } else {
-        alert(result.message);
+        setNotice(postedNotice(destination, result));
       }
     } finally {
       setIsPosting(false);
@@ -114,7 +116,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         </div>
       )}
       <div class='mt-2 flex justify-end items-center gap-3 flex-shrink-0'>
-        <PostDestinationSelect value={destination} onChange={setDestination} name='destination' />
+        <PostDestinationSelect value={destination} onChange={setDestination} name='destination' allowBlueskyOnly />
         <label class='cursor-pointer text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
           {isUploading
             ? <span class='text-xs'>Uploading...</span>
@@ -145,9 +147,19 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           投稿する
         </button>
       </div>
-      {resultMessage !== '' && (
+      {notice !== undefined && (
         <p role='status' class='mt-2 text-sm text-charcoal-light dark:text-gray-400 flex-shrink-0'>
-          {resultMessage}
+          {notice.message}
+          {notice.href !== null && (
+            <a
+              href={notice.href}
+              target='_blank'
+              rel='noopener noreferrer'
+              class='ml-2 underline hover:text-terracotta dark:hover:text-terracotta-light'
+            >
+              Bluesky で開く
+            </a>
+          )}
         </p>
       )}
     </form>

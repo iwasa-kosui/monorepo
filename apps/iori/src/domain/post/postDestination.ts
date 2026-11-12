@@ -2,7 +2,7 @@ import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
 
-const zodType = z.enum(['both', 'fediverse']);
+const zodType = z.enum(['both', 'fediverse', 'bluesky']);
 export type PostDestination = z.infer<typeof zodType>;
 const schema = Schema.create(zodType);
 

@@ -18,18 +18,31 @@ import {
   type BlueskyTimelineItemsResolver,
 } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { MediaId } from '../../domain/mediaUpload/mediaId.ts';
+import type { MediaUpload, MediaUploadResolver } from '../../domain/mediaUpload/mediaUpload.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
-import type { BlueskyPostInvalid } from '../../useCase/helper/publishBlueskyPost.ts';
+import type { PostImageObjectStore } from '../../ports/postImageObjectStore.ts';
+import { resolveOwnedMediaUpload } from '../../useCase/getMediaUpload.ts';
+import type { BlueskyPostImage, BlueskyPostInvalid } from '../../useCase/helper/publishBlueskyPost.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { LikeBlueskyPostUseCase } from '../../useCase/likeBlueskyPost.ts';
+import type { PostToBlueskyUseCase } from '../../useCase/postToBluesky.ts';
 import type { ReplyToBlueskyPostUseCase } from '../../useCase/replyToBlueskyPost.ts';
 import type { RepostBlueskyPostUseCase } from '../../useCase/repostBlueskyPost.ts';
 import type { UndoRepostBlueskyPostUseCase } from '../../useCase/undoRepostBlueskyPost.ts';
 import type { UnlikeBlueskyPostUseCase } from '../../useCase/unlikeBlueskyPost.ts';
 import { BLUESKY_LOGIN_RETRY_COOLDOWN_MS } from '../bluesky/blueskyClient.ts';
+import {
+  BLUESKY_MAX_GRAPHEMES,
+  BLUESKY_MAX_IMAGE_BYTES,
+  BLUESKY_MAX_IMAGES,
+  BLUESKY_MAX_TEXT_BYTES,
+} from '../bluesky/blueskyPostRecord.ts';
+import { blueskyPostTextOf } from './helper/blueskyPostText.ts';
+import { loadBlueskyPostImage } from './helper/loadBlueskyPostImage.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
-import { bodyString, readRequestBody } from './helper/requestBody.ts';
+import { bodyString, bodyStringList, readRequestBody } from './helper/requestBody.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
@@ -45,6 +58,9 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
   undoRepostBlueskyPostUseCase: UndoRepostBlueskyPostUseCase | undefined;
   replyToBlueskyPostUseCase: ReplyToBlueskyPostUseCase | undefined;
+  postToBlueskyUseCase: PostToBlueskyUseCase | undefined;
+  mediaUploadResolver: MediaUploadResolver;
+  uploads: Pick<PostImageObjectStore, 'get'>;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -100,6 +116,8 @@ export type IoriBlueskyLikeResponse = Readonly<{ liked: boolean }>;
 export type IoriBlueskyRepostResponse = Readonly<{ reposted: boolean }>;
 
 export type IoriBlueskyReplyResponse = Readonly<{ uri: string; cid: string }>;
+
+export type IoriBlueskyPostResponse = Readonly<{ uri: string; url: string | null }>;
 
 const readStatuses = Scope.orThrow('read:statuses');
 const writeFavourites = Scope.orThrow('write:favourites');
@@ -163,6 +181,21 @@ const replyFailure = (
   return c.json({ error: 'Bluesky request failed' }, 502);
 };
 
+const postInvalidMessages: Readonly<Record<BlueskyPostInvalid['reason'], string>> = {
+  empty: 'Bluesky に送る本文か画像がありません',
+  too_many_graphemes: `Bluesky に送れる本文は ${BLUESKY_MAX_GRAPHEMES} 文字までです`,
+  too_many_bytes: `Bluesky に送れる本文は ${BLUESKY_MAX_TEXT_BYTES} バイトまでです`,
+  too_many_images: `Bluesky に送れる画像は ${BLUESKY_MAX_IMAGES} 枚までです`,
+  image_too_large: `Bluesky に送れる画像は 1 枚 ${BLUESKY_MAX_IMAGE_BYTES / 1_000_000} MB までです`,
+};
+
+const postFailure = (c: Context, error: BlueskyClientError | BlueskyPostInvalid) =>
+  error.type === 'BlueskyPostInvalid'
+    ? c.json({ error: postInvalidMessages[error.reason], reason: error.reason }, 422)
+    : clientFailure(c, error);
+
+const mediaUnavailable = { error: '添付した画像が見つからないか、読み込めませんでした' } as const;
+
 export const createWorkerIoriBlueskyRouter = ({
   authn,
   blueskyTimelineItemsResolver,
@@ -175,6 +208,9 @@ export const createWorkerIoriBlueskyRouter = ({
   repostBlueskyPostUseCase,
   undoRepostBlueskyPostUseCase,
   replyToBlueskyPostUseCase,
+  postToBlueskyUseCase,
+  mediaUploadResolver,
+  uploads,
   isDigestOwner,
 }: WorkerIoriBlueskyRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
@@ -365,5 +401,49 @@ export const createWorkerIoriBlueskyRouter = ({
         return replied.ok
           ? c.json(replied.val satisfies IoriBlueskyReplyResponse, 201)
           : replyFailure(c, replied.err);
+      },
+    )
+    .post(
+      '/iori/v1/bluesky/posts',
+      requireSameOriginForCookie,
+      authn.requireUser(writeStatuses),
+      async (c) => {
+        const userId = getMastodonPrincipal(c)?.userId ?? undefined;
+        if (userId === undefined || !await isDigestOwner(userId)) return c.json(forbidden, 403);
+        if (postToBlueskyUseCase === undefined) {
+          return c.json({ error: 'Bluesky credentials are not configured' }, 409);
+        }
+        const body = await readRequestBody(c);
+        const status = bodyString(body, 'status');
+        if (status === undefined) return c.json({ error: 'Validation failed: status' }, 400);
+        const contentType = body['content_type'] ?? 'text/plain';
+        if (contentType !== 'text/plain' && contentType !== 'text/markdown') {
+          return c.json({ error: 'Validation failed: content_type' }, 400);
+        }
+        const mediaIds = [...new Set(bodyStringList(body, 'media_ids[]', 'media_ids').filter((id) => id !== ''))];
+        const medias: MediaUpload[] = [];
+        for (const mediaId of mediaIds) {
+          const parsed = MediaId.parse(mediaId);
+          const media = parsed.ok
+            ? await resolveOwnedMediaUpload(mediaUploadResolver)({ userId, mediaId: parsed.val })
+            : undefined;
+          if (media === undefined || !media.ok) {
+            if (media !== undefined && media.err.type !== 'MediaNotFoundError') {
+              throw new Error('Failed to resolve the media');
+            }
+            return c.json(mediaUnavailable, 422);
+          }
+          medias.push(media.val);
+        }
+        const loaded = await Promise.all(medias.map((media) => loadBlueskyPostImage(uploads, media)));
+        const images = loaded.filter((image): image is BlueskyPostImage => image !== undefined);
+        if (images.length !== medias.length) return c.json(mediaUnavailable, 422);
+        const posted = await postToBlueskyUseCase.run({
+          text: await blueskyPostTextOf(status, contentType),
+          images,
+        });
+        return posted.ok
+          ? c.json({ uri: posted.val.uri, url: posted.val.url } satisfies IoriBlueskyPostResponse)
+          : postFailure(c, posted.err);
       },
     );
