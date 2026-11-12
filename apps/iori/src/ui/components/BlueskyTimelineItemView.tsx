@@ -4,6 +4,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { blueskyPostUrl, blueskyProfilePathOf, ioriBlueskyPostPath } from '../../helper/blueskyUrl.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { segmentBlueskyText } from './blueskyRichText.ts';
+import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
 
 type Props = Readonly<{
   item: IoriBlueskyTimelineItemBody;
@@ -316,6 +317,10 @@ export const BlueskyTimelineItemView = ({
       {Instant.formatRelative(item.postedAt as Instant)}
     </time>
   );
+  const menuItems: readonly PostMenuItem[] = bskyHref === undefined ? [] : [
+    { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: bskyHref },
+    { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: bskyHref },
+  ];
   return (
     <article
       data-post-index={dataIndex}
@@ -369,7 +374,8 @@ export const BlueskyTimelineItemView = ({
       </div>
       {item.text !== '' && <BlueskyText text={item.text} facets={item.facets} />}
       {item.embed !== null && <BlueskyEmbed embed={item.embed} bskyHref={bskyHref} />}
-      {(onReply !== undefined || onQuote !== undefined || onLike !== undefined || onRepost !== undefined) && (
+      {(onReply !== undefined || onQuote !== undefined || onLike !== undefined || onRepost !== undefined
+        || menuItems.length > 0) && (
         <div class='flex items-center justify-end gap-4 pt-1'>
           {onReply !== undefined && <BlueskyReplyButton item={item} onReply={onReply} />}
           {onRepost !== undefined && (
@@ -384,6 +390,7 @@ export const BlueskyTimelineItemView = ({
           {onLike !== undefined && (
             <BlueskyLikeButton item={item} onLike={onLike} onUndoLike={onUndoLike} isPending={isLikePending === true} />
           )}
+          <PostMenu items={menuItems} />
         </div>
       )}
     </article>

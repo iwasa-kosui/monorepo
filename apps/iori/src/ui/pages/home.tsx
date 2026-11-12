@@ -7,6 +7,7 @@ import { safeUrl } from '../../helper/safeUrl.ts';
 import { fetchPublicTimeline, updateAvatar } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
+import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyStatusNotice } from '../components/BlueskyStatusNotice.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
@@ -16,10 +17,8 @@ import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { ReplyDialogShell } from '../components/ReplyDialogShell.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
-import { blueskyReplyExcerpt, blueskyReplyRemaining, canSendBlueskyReply } from '../hooks/blueskyReply.ts';
 import { homeItemKey } from '../hooks/homeFeed.ts';
 import { pullProgress, refreshResultLabel } from '../hooks/pullGesture.ts';
-import type { UseBlueskyPostDialogReturn } from '../hooks/useBlueskyPostDialog.ts';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
 import { ITEM_KEY_ATTRIBUTE } from '../hooks/useReadingPosition.ts';
 
@@ -229,88 +228,6 @@ const ReplyModal = () => {
   );
 };
 
-const BlueskyPostModal = ({ dialog, title, submitLabel, placeholder }: Readonly<{
-  dialog: UseBlueskyPostDialogReturn;
-  title?: string;
-  submitLabel?: string;
-  placeholder: string;
-}>) => {
-  const { target, content, isSending, errorText, close, setContent, send } = dialog;
-
-  if (target === null) {
-    return null;
-  }
-
-  const remaining = blueskyReplyRemaining(content);
-  const canSubmit = canSendBlueskyReply(content, isSending);
-
-  return (
-    <ReplyDialogShell
-      title={title}
-      submitLabel={submitLabel}
-      onClose={close}
-      onSubmit={() => void send()}
-      isSending={isSending}
-      canSubmit={canSubmit}
-      errorText={errorText}
-      target={
-        <div class='mb-3 rounded-xl border border-warm-gray dark:border-gray-700 p-3 text-sm'>
-          <div class='flex flex-wrap items-baseline gap-x-2'>
-            <span class='font-semibold text-charcoal dark:text-white'>
-              {target.authorDisplayName ?? target.authorHandle}
-            </span>
-            <span class='text-charcoal-light dark:text-gray-400'>@{target.authorHandle}</span>
-          </div>
-          <p class='mt-1 whitespace-pre-wrap break-words text-charcoal-light dark:text-gray-400'>
-            {blueskyReplyExcerpt(target.text)}
-          </p>
-        </div>
-      }
-      counter={
-        <span
-          class={`mr-auto self-center text-sm ${
-            remaining < 0 ? 'text-terracotta font-medium' : 'text-charcoal-light dark:text-gray-400'
-          }`}
-        >
-          {remaining}
-        </span>
-      }
-    >
-      <textarea
-        value={content}
-        onInput={(e) => setContent((e.target as HTMLTextAreaElement).value)}
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-            e.preventDefault();
-            if (canSubmit) void send();
-          }
-        }}
-        placeholder={placeholder}
-        disabled={isSending}
-        class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all'
-        style={{ minHeight: '150px' }}
-      />
-    </ReplyDialogShell>
-  );
-};
-
-const BlueskyReplyModal = () => {
-  const { blueskyReply } = useTimelineContext();
-  return <BlueskyPostModal dialog={blueskyReply} placeholder='返信を書く... (⌘+Enter to post)' />;
-};
-
-const BlueskyQuoteModal = () => {
-  const { blueskyQuote } = useTimelineContext();
-  return (
-    <BlueskyPostModal
-      dialog={blueskyQuote}
-      title='引用'
-      submitLabel='引用して投稿'
-      placeholder='引用にコメントを書く... (⌘+Enter to post)'
-    />
-  );
-};
-
 const ThreadModal = () => {
   const { thread, actions, reply, data } = useTimelineContext();
   const {
@@ -430,6 +347,7 @@ const ThreadModal = () => {
                           onUndoRepost={post.reblogged ? actions.undoRepost : undefined}
                           isUndoingRepost={actionState.undoingRepostPostId === post.id}
                           onDelete={actions.deletePost}
+                          onMute={actions.muteAccount}
                           isDeleting={actionState.deletingPostId === post.id}
                           onEmojiReact={actions.emojiReact}
                           onUndoEmojiReact={actions.undoEmojiReact}
@@ -458,6 +376,7 @@ const ThreadModal = () => {
                       onUndoRepost={threadData.currentPost.reblogged ? actions.undoRepost : undefined}
                       isUndoingRepost={actionState.undoingRepostPostId === threadData.currentPost.id}
                       onDelete={actions.deletePost}
+                      onMute={actions.muteAccount}
                       isDeleting={actionState.deletingPostId === threadData.currentPost.id}
                       onEmojiReact={actions.emojiReact}
                       onUndoEmojiReact={actions.undoEmojiReact}
@@ -487,6 +406,7 @@ const ThreadModal = () => {
                             onUndoRepost={post.reblogged ? actions.undoRepost : undefined}
                             isUndoingRepost={actionState.undoingRepostPostId === post.id}
                             onDelete={actions.deletePost}
+                            onMute={actions.muteAccount}
                             isDeleting={actionState.deletingPostId === post.id}
                             onEmojiReact={actions.emojiReact}
                             onUndoEmojiReact={actions.undoEmojiReact}
@@ -854,6 +774,7 @@ const TimelineList = () => {
             onUndoRepost={isMyRepost ? actions.undoRepost : undefined}
             isUndoingRepost={actionState.undoingRepostPostId === postId}
             onDelete={actions.deletePost}
+            onMute={actions.muteAccount}
             isDeleting={actionState.deletingPostId === postId}
             onEmojiReact={actions.emojiReact}
             onUndoEmojiReact={actions.undoEmojiReact}
@@ -952,7 +873,7 @@ const ServerTimeline = () => {
 };
 
 const HomePage = () => {
-  const { timeline } = useTimelineContext();
+  const { timeline, blueskyReply, blueskyQuote } = useTimelineContext();
   const handlePosted = usePostedHandler();
   const isTimelineReady = timeline.state.status === 'success';
 
@@ -987,8 +908,8 @@ const HomePage = () => {
       <PullToRefreshIndicator />
       <NewPostsPill />
       <ReplyModal />
-      <BlueskyReplyModal />
-      <BlueskyQuoteModal />
+      <BlueskyReplyModal dialog={blueskyReply} />
+      <BlueskyQuoteModal dialog={blueskyQuote} />
       <ThreadModal />
       <TimelineList />
       <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>

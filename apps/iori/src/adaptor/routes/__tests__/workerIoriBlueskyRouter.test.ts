@@ -24,9 +24,11 @@ import { createD1BlueskySyncStatusResolver } from '../../d1/blueskySyncStatus/bl
 import { createD1BlueskyLikeDeletedStore } from '../../d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../../d1/blueskyTimeline/blueskyLikeSavedStore.ts';
 import { createD1BlueskyLikeTargetResolver } from '../../d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
+import { createD1BlueskyLikeUriResolver } from '../../d1/blueskyTimeline/blueskyLikeUriResolver.ts';
 import { createD1BlueskyRepostDeletedStore } from '../../d1/blueskyTimeline/blueskyRepostDeletedStore.ts';
 import { createD1BlueskyRepostSavedStore } from '../../d1/blueskyTimeline/blueskyRepostSavedStore.ts';
 import { createD1BlueskyRepostTargetResolver } from '../../d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
+import { createD1BlueskyRepostUriResolver } from '../../d1/blueskyTimeline/blueskyRepostUriResolver.ts';
 import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerIoriBlueskyRouter } from '../workerIoriBlueskyRouter.ts';
@@ -126,6 +128,8 @@ const setupNonOwner = async (
       likeBlueskyPostUseCase: options.blueskyLikeClient === undefined ? undefined : LikeBlueskyPostUseCase.create({
         client: options.blueskyLikeClient,
         targetResolver: createD1BlueskyLikeTargetResolver(fixture.db),
+        likeUriResolver: createD1BlueskyLikeUriResolver(fixture.db),
+        cidResolver: { resolve: async () => RA.ok(undefined) },
         savedStore: createD1BlueskyLikeSavedStore(fixture.db),
         now: Instant.now,
       }),
@@ -134,6 +138,8 @@ const setupNonOwner = async (
         : UnlikeBlueskyPostUseCase.create({
           client: options.blueskyLikeClient,
           targetResolver: createD1BlueskyLikeTargetResolver(fixture.db),
+          likeUriResolver: createD1BlueskyLikeUriResolver(fixture.db),
+          cidResolver: { resolve: async () => RA.ok(undefined) },
           deletedStore: createD1BlueskyLikeDeletedStore(fixture.db),
         }),
       repostBlueskyPostUseCase: options.blueskyRepostClient === undefined
@@ -141,6 +147,8 @@ const setupNonOwner = async (
         : RepostBlueskyPostUseCase.create({
           client: options.blueskyRepostClient,
           targetResolver: createD1BlueskyRepostTargetResolver(fixture.db),
+          repostUriResolver: createD1BlueskyRepostUriResolver(fixture.db),
+          cidResolver: { resolve: async () => RA.ok(undefined) },
           viewerRepostResolver: { resolve: async () => RA.ok(null) },
           savedStore: createD1BlueskyRepostSavedStore(fixture.db),
           now: Instant.now,
@@ -150,6 +158,8 @@ const setupNonOwner = async (
         : UndoRepostBlueskyPostUseCase.create({
           client: options.blueskyRepostClient,
           targetResolver: createD1BlueskyRepostTargetResolver(fixture.db),
+          repostUriResolver: createD1BlueskyRepostUriResolver(fixture.db),
+          cidResolver: { resolve: async () => RA.ok(undefined) },
           deletedStore: createD1BlueskyRepostDeletedStore(fixture.db),
         }),
       blueskyPostThreadFetcher: options.blueskyPostThreadFetcher,
@@ -168,6 +178,7 @@ const setupNonOwner = async (
           query: options.blueskyQuoteClient.query,
           now: Instant.now,
         }),
+      markBlueskyNotificationsSeenUseCase: undefined,
       blueskySearch: options.blueskySearch,
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
     }),
@@ -1609,5 +1620,351 @@ describe('/api/iori/v1/bluesky/status', () => {
         }
       },
     );
+  });
+});
+
+describe('投稿の uri で操作する', () => {
+  const POST = 'at://did:plc:z/app.bsky.feed.post/3kzzz';
+  const CIDS = { [POST]: 'bafyfresh' };
+  const LIKE = 'at://did:plc:me/app.bsky.feed.like/3kold';
+  const REPOST = 'at://did:plc:me/app.bsky.feed.repost/3kold';
+  const json = (headers: Record<string, string>) => ({ 'Content-Type': 'application/json', ...headers });
+  const bodyOf = (t: ReturnType<typeof setupReadApi>, path: string, headers: Record<string, string>, body: unknown) =>
+    t.request(path, { method: 'POST', headers: json(headers), body: JSON.stringify(body) });
+  const rows = (t: ReturnType<typeof setupReadApi>, table: 'bluesky_likes' | 'bluesky_reposts') =>
+    t.sqlite.prepare(`SELECT subjectUri FROM ${table}`).all();
+
+  describe('いいね', () => {
+    const LIKES = '/api/iori/v1/bluesky/likes';
+
+    it('POST は D1 に行が無い投稿でも、cid を取得して作成し、liked: true を返す', async () => {
+      const client = likeClient();
+      const t = setupReadApi({ blueskyLikeClient: client, blueskyPostCids: CIDS });
+      const me = await t.signIn('write:favourites');
+
+      const response = await bodyOf(t, LIKES, me.bearer, { uri: POST });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ liked: true });
+      expect(client.createLike).toHaveBeenCalledExactlyOnceWith({ uri: POST, cid: 'bafyfresh' }, expect.any(String));
+      expect(rows(t, 'bluesky_likes')).toEqual([{ subjectUri: POST }]);
+    });
+
+    it('POST は Bluesky に投稿が無ければ 404 にし、作成しない', async () => {
+      const client = likeClient();
+      const t = setupReadApi({ blueskyLikeClient: client, blueskyPostCids: {} });
+      const me = await t.signIn('write:favourites');
+
+      const response = await bodyOf(t, LIKES, me.bearer, { uri: POST });
+
+      expect(response.status).toBe(404);
+      expect(client.createLike).not.toHaveBeenCalled();
+    });
+
+    it('DELETE は bluesky_likes の likeUri で削除し、行を消して liked: false を返す', async () => {
+      const client = likeClient();
+      const t = setupReadApi({ blueskyLikeClient: client });
+      const me = await t.signIn('write:favourites');
+      t.sqlite.prepare('INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)').run(POST, LIKE, BASE);
+
+      const response = await t.request(`${LIKES}?uri=${encodeURIComponent(POST)}`, {
+        method: 'DELETE',
+        headers: me.bearer,
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ liked: false });
+      expect(client.deleteLike).toHaveBeenCalledExactlyOnceWith('3kold');
+      expect(rows(t, 'bluesky_likes')).toEqual([]);
+    });
+
+    it('DELETE は D1 に行が無くても viewer.like があれば、その rkey で削除して liked: false を返す', async () => {
+      const client = likeClient();
+      const t = setupReadApi({
+        blueskyLikeClient: client,
+        blueskyPostCids: { [POST]: { cid: 'bafyfresh', likeUri: LIKE } },
+      });
+      const me = await t.signIn('write:favourites');
+
+      const response = await t.request(`${LIKES}?uri=${encodeURIComponent(POST)}`, {
+        method: 'DELETE',
+        headers: me.bearer,
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ liked: false });
+      expect(client.deleteLike).toHaveBeenCalledExactlyOnceWith('3kold');
+    });
+
+    it('DELETE は行が無ければ Bluesky を呼ばず liked: false を返す', async () => {
+      const client = likeClient();
+      const t = setupReadApi({ blueskyLikeClient: client });
+      const me = await t.signIn('write:favourites');
+
+      const response = await t.request(`${LIKES}?uri=${encodeURIComponent(POST)}`, {
+        method: 'DELETE',
+        headers: me.bearer,
+      });
+
+      expect(await response.json()).toEqual({ liked: false });
+      expect(client.deleteLike).not.toHaveBeenCalled();
+    });
+
+    it('feedItemId と uri が両方ある、どちらも無い、uri が投稿の at-uri でないときは 400 にし、Bluesky を呼ばない', async () => {
+      const client = likeClient();
+      const t = setupReadApi({ blueskyLikeClient: client, blueskyPostCids: CIDS });
+      const me = await t.signIn('write:favourites');
+      const bad = [
+        { feedItemId: POST, uri: POST },
+        {},
+        { uri: '' },
+        { uri: 'https://bsky.app/profile/x/post/1' },
+        { uri: 'at://did:plc:z/app.bsky.feed.like/3k1' },
+        { uri: 1 },
+      ];
+
+      for (const body of bad) expect((await bodyOf(t, LIKES, me.bearer, body)).status).toBe(400);
+      const both = await t.request(`${LIKES}?feedItemId=${POST}&uri=${POST}`, { method: 'DELETE', headers: me.bearer });
+      const invalid = await t.request(`${LIKES}?uri=nope`, { method: 'DELETE', headers: me.bearer });
+      expect(both.status).toBe(400);
+      expect(invalid.status).toBe(400);
+      expect(await invalid.json()).toEqual({ error: 'Validation failed: uri' });
+      expect(client.createLike).not.toHaveBeenCalled();
+      expect(client.deleteLike).not.toHaveBeenCalled();
+    });
+
+    it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
+      const client = likeClient();
+      const t = await setupNonOwner({ scope: 'write:favourites', blueskyLikeClient: client });
+
+      const response = await t.send('POST', LIKES, { uri: POST });
+
+      expect(response.status).toBe(403);
+      expect(client.createLike).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('リポスト', () => {
+    const REPOSTS = '/api/iori/v1/bluesky/reposts';
+
+    it('POST は D1 に行が無い投稿でも、cid を取得して作成し、reposted: true を返す', async () => {
+      const client = repostClient();
+      const t = setupReadApi({ blueskyRepostClient: client, blueskyPostCids: CIDS });
+      const me = await t.signIn('write:statuses');
+
+      const response = await bodyOf(t, REPOSTS, me.bearer, { uri: POST });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ reposted: true });
+      expect(client.createRepost).toHaveBeenCalledExactlyOnceWith({ uri: POST, cid: 'bafyfresh' }, expect.any(String));
+      expect(rows(t, 'bluesky_reposts')).toEqual([{ subjectUri: POST }]);
+    });
+
+    it('POST は Bluesky に投稿が無ければ 404 にし、作成しない', async () => {
+      const client = repostClient();
+      const t = setupReadApi({ blueskyRepostClient: client, blueskyPostCids: {} });
+      const me = await t.signIn('write:statuses');
+
+      expect((await bodyOf(t, REPOSTS, me.bearer, { uri: POST })).status).toBe(404);
+      expect(client.createRepost).not.toHaveBeenCalled();
+    });
+
+    it('DELETE は bluesky_reposts の repostUri で削除し、行を消して reposted: false を返す', async () => {
+      const client = repostClient();
+      const t = setupReadApi({ blueskyRepostClient: client });
+      const me = await t.signIn('write:statuses');
+      t.sqlite.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)')
+        .run(POST, REPOST, BASE);
+
+      const response = await t.request(`${REPOSTS}?uri=${encodeURIComponent(POST)}`, {
+        method: 'DELETE',
+        headers: me.bearer,
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ reposted: false });
+      expect(client.deleteRepost).toHaveBeenCalledExactlyOnceWith('3kold');
+      expect(rows(t, 'bluesky_reposts')).toEqual([]);
+    });
+
+    it('DELETE は D1 に行が無くても viewer.repost があれば、その rkey で削除して reposted: false を返す', async () => {
+      const client = repostClient();
+      const t = setupReadApi({
+        blueskyRepostClient: client,
+        blueskyPostCids: { [POST]: { cid: 'bafyfresh', repostUri: REPOST } },
+      });
+      const me = await t.signIn('write:statuses');
+
+      const response = await t.request(`${REPOSTS}?uri=${encodeURIComponent(POST)}`, {
+        method: 'DELETE',
+        headers: me.bearer,
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ reposted: false });
+      expect(client.deleteRepost).toHaveBeenCalledExactlyOnceWith('3kold');
+    });
+
+    it('feedItemId と uri が両方ある、どちらも無い、uri が投稿の at-uri でないときは 400 にする', async () => {
+      const client = repostClient();
+      const t = setupReadApi({ blueskyRepostClient: client, blueskyPostCids: CIDS });
+      const me = await t.signIn('write:statuses');
+
+      for (const body of [{ feedItemId: POST, uri: POST }, {}, { uri: 'nope' }]) {
+        expect((await bodyOf(t, REPOSTS, me.bearer, body)).status).toBe(400);
+      }
+      expect((await t.request(`${REPOSTS}?uri=nope`, { method: 'DELETE', headers: me.bearer })).status).toBe(400);
+      expect(client.createRepost).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('返信', () => {
+    const REPLIES = '/api/iori/v1/bluesky/replies';
+
+    it('D1 に行が無い投稿でも、uri を返信先にして getPosts から決め、201 で返す', async () => {
+      const client = replyClient([{ uri: POST, cid: 'bafyfresh' }]);
+      const t = setupReadApi({ blueskyReplyClient: client });
+      const me = await t.signIn('write:statuses');
+
+      const response = await bodyOf(t, REPLIES, me.bearer, { uri: POST, text: 'こんにちは' });
+
+      expect(response.status).toBe(201);
+      expect(await response.json()).toEqual({ uri: POSTED_URI, cid: 'bafyreply' });
+      expect(client.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getPosts', { uris: POST });
+      expect(client.createRecord).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          reply: { root: { uri: POST, cid: 'bafyfresh' }, parent: { uri: POST, cid: 'bafyfresh' } },
+        }),
+        expect.any(String),
+      );
+    });
+
+    it('Bluesky 側に投稿が無ければ 404 にし、投稿しない', async () => {
+      const client = replyClient([]);
+      const t = setupReadApi({ blueskyReplyClient: client });
+      const me = await t.signIn('write:statuses');
+
+      expect((await bodyOf(t, REPLIES, me.bearer, { uri: POST, text: 'hi' })).status).toBe(404);
+      expect(client.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('feedItemId と uri が両方ある、どちらも無い、uri が不正なときは 400 にし、Bluesky を呼ばない', async () => {
+      const client = replyClient();
+      const t = setupReadApi({ blueskyReplyClient: client });
+      const me = await t.signIn('write:statuses');
+
+      for (const body of [{ feedItemId: POST, uri: POST, text: 'hi' }, { text: 'hi' }, { uri: 'nope', text: 'hi' }]) {
+        expect((await bodyOf(t, REPLIES, me.bearer, body)).status).toBe(400);
+      }
+      expect((await bodyOf(t, REPLIES, me.bearer, { uri: POST })).status).toBe(400);
+      expect(client.query).not.toHaveBeenCalled();
+      expect(client.createRecord).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('/api/iori/v1/bluesky/notifications/seen', () => {
+  const SEEN = '/api/iori/v1/bluesky/notifications/seen';
+  const NOW = Instant.orThrow(Date.UTC(2026, 10, 12, 3));
+  const seenClient = () => ({ updateSeen: vi.fn<BlueskyClient['updateSeen']>(async () => RA.ok(undefined)) });
+  const mark = (t: ReturnType<typeof setupReadApi>, headers: Record<string, string>, body: unknown = {
+    seenAt: '2026-11-12T02:00:00.000Z',
+  }) =>
+    t.request(SEEN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+    });
+
+  it('認証なしだと 401、Origin が違う Cookie だと 403 にし、Bluesky を呼ばない', async () => {
+    const client = seenClient();
+    const t = setupReadApi({ blueskySeenClient: client, blueskyNow: () => NOW });
+    const me = await t.signIn('write:notifications');
+
+    expect((await mark(t, { Origin: ORIGIN })).status).toBe(401);
+    expect((await mark(t, { Cookie: `sessionId=${me.sessionId}`, Origin: 'https://evil.example' })).status).toBe(403);
+    expect(client.updateSeen).not.toHaveBeenCalled();
+  });
+
+  it('write:notifications を満たさない scope のトークンを 403 にする', async () => {
+    const client = seenClient();
+    const t = setupReadApi({ blueskySeenClient: client, blueskyNow: () => NOW });
+    const me = await t.signIn('read:notifications write:statuses');
+
+    expect((await mark(t, me.bearer)).status).toBe(403);
+    expect(client.updateSeen).not.toHaveBeenCalled();
+  });
+
+  it('所有者でない利用者を、無効の 409 より先に 403 にする', async () => {
+    const t = await setupNonOwner({ scope: 'write:notifications' });
+
+    const response = await t.send('POST', SEEN, { seenAt: '2026-11-12T02:00:00.000Z' });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Forbidden' });
+  });
+
+  it('無効のときは 409 を返す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn('write:notifications');
+
+    const response = await mark(t, me.bearer);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
+  });
+
+  it('seenAt が無い、文字列でない、ISO 8601 でない、存在しない日時のときは 400 にし、Bluesky を呼ばない', async () => {
+    const client = seenClient();
+    const t = setupReadApi({ blueskySeenClient: client, blueskyNow: () => NOW });
+    const me = await t.signIn('write:notifications');
+
+    for (const body of [{}, { seenAt: 1 }, { seenAt: 'yesterday' }, { seenAt: '2026-13-40T00:00:00Z' }]) {
+      const response = await mark(t, me.bearer, body);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'Validation failed: seenAt' });
+    }
+    expect(client.updateSeen).not.toHaveBeenCalled();
+  });
+
+  it('成功したら 204 で本文なしにし、seenAt を Bluesky に渡す', async () => {
+    const client = seenClient();
+    const t = setupReadApi({ blueskySeenClient: client, blueskyNow: () => NOW });
+    const me = await t.signIn('write:notifications');
+
+    const response = await mark(t, { Cookie: `sessionId=${me.sessionId}`, Origin: ORIGIN });
+
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe('');
+    expect(client.updateSeen).toHaveBeenCalledExactlyOnceWith(Instant.orThrow(Date.UTC(2026, 10, 12, 2)));
+  });
+
+  it('タイムゾーン付きの ISO 文字列も受け、未来の seenAt は現在時刻に丸めて渡す', async () => {
+    const client = seenClient();
+    const t = setupReadApi({ blueskySeenClient: client, blueskyNow: () => NOW });
+    const me = await t.signIn('write:notifications');
+
+    await mark(t, me.bearer, { seenAt: '2026-11-12T11:00:00+09:00' });
+    await mark(t, me.bearer, { seenAt: '2027-01-01T00:00:00Z' });
+
+    expect(client.updateSeen.mock.calls).toEqual([[Instant.orThrow(Date.UTC(2026, 10, 12, 2))], [NOW]]);
+  });
+
+  it('Bluesky への呼び出しが失敗したら 502 にし、詳細を返さない', async () => {
+    const error: BlueskyClientError = {
+      type: 'BlueskyClientError',
+      kind: 'http',
+      message: 'updateSeen failed: status 500 InternalServerError',
+      status: 500,
+    };
+    const client = seenClient();
+    client.updateSeen.mockReturnValueOnce(RA.err(error));
+    const t = setupReadApi({ blueskySeenClient: client, blueskyNow: () => NOW });
+    const me = await t.signIn('write:notifications');
+
+    const response = await mark(t, me.bearer);
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
   });
 });

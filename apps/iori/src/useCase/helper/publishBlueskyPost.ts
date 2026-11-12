@@ -8,7 +8,6 @@ import {
   BLUESKY_MAX_TEXT_BYTES,
   byteLengthOf,
   graphemesOf,
-  toByteIndex,
   toFacet,
 } from '../../adaptor/bluesky/blueskyPostRecord.ts';
 import type { BlueskyStrongRef } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
@@ -27,6 +26,8 @@ import type {
   BlueskyCreatedRecord,
   BlueskyQueryClient,
 } from '../../ports/blueskyClient.ts';
+import { findMentionHandles, withMentionFacets } from './blueskyMentionFacets.ts';
+import { findUrls } from './blueskyTextMatches.ts';
 
 export type BlueskyPostInvalidReason =
   | 'empty'
@@ -57,13 +58,6 @@ export type PublishedBlueskyPost = BlueskyCreatedRecord;
 
 export type PublishBlueskyPostError = BlueskyClientError | BlueskyPostInvalid;
 
-type Span = Readonly<{ start: number; end: number }>;
-
-const urlPattern = /https?:\/\/[\x21-\x7E]+/g;
-// 公式アプリの検出に合わせ、@ の直前が先頭・空白・( のときだけ mention にする
-const mentionPattern =
-  /(?<=^|\s|\()@((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)/g;
-const trailingPunctuation = /[.,;:!?'"\]}>]$/;
 const resolveHandleResponseSchema = z.object({ did: z.string().startsWith('did:') });
 
 const invalid = (reason: BlueskyPostInvalidReason): BlueskyPostInvalid => ({ type: 'BlueskyPostInvalid', reason });
@@ -78,30 +72,7 @@ export const validateBlueskyPostInput = (input: PublishBlueskyPostInput): Bluesk
   return undefined;
 };
 
-const trimUrl = (url: string): string => {
-  let trimmed = url;
-  for (;;) {
-    if (trailingPunctuation.test(trimmed)) trimmed = trimmed.slice(0, -1);
-    else if (trimmed.endsWith(')') && trimmed.split(')').length > trimmed.split('(').length) {
-      trimmed = trimmed.slice(0, -1);
-    } else return trimmed;
-  }
-};
-
-const findUrls = (text: string): Array<Span & Readonly<{ uri: string }>> =>
-  Array.from(text.matchAll(urlPattern), (match) => {
-    const uri = trimUrl(match[0]);
-    return { start: match.index, end: match.index + uri.length, uri };
-  }).filter(({ uri }) => URL.canParse(uri));
-
-const findMentions = (text: string, urls: readonly Span[]): Array<Span & Readonly<{ handle: string }>> =>
-  Array.from(text.matchAll(mentionPattern), (match) => ({
-    start: match.index,
-    end: match.index + match[0].length,
-    handle: match[1]!.toLowerCase(),
-  })).filter((mention) => !urls.some((url) => mention.start < url.end && url.start < mention.end));
-
-const resolveDids = async (
+export const resolveDids = async (
   query: PublishBlueskyPostDeps['query'],
   handles: readonly string[],
 ): Promise<Map<string, string>> => {
@@ -117,18 +88,9 @@ const buildFacets = async (
   text: string,
   query: PublishBlueskyPostDeps['query'],
 ): Promise<Array<BlueskyFacet | BlueskyMentionFacet>> => {
-  const urls = findUrls(text);
-  const mentions = findMentions(text, urls);
-  const dids = await resolveDids(query, mentions.map(({ handle }) => handle));
-  const mentionFacets = mentions.flatMap(({ start, end, handle }): BlueskyMentionFacet[] => {
-    const did = dids.get(handle);
-    return did === undefined ? [] : [{
-      index: toByteIndex(text, start, end),
-      features: [{ $type: 'app.bsky.richtext.facet#mention', did }],
-    }];
-  });
-  return [...urls.map((url) => toFacet(text, url)), ...mentionFacets]
-    .sort((a, b) => a.index.byteStart - b.index.byteStart);
+  const urlFacets = findUrls(text).map((url) => toFacet(text, url));
+  const dids = await resolveDids(query, findMentionHandles(text, urlFacets));
+  return withMentionFacets(text, urlFacets, dids);
 };
 
 const uploadImages = async (

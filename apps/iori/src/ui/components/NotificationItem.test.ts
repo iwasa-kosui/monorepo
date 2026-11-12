@@ -66,12 +66,47 @@ describe('NotificationItem', () => {
     expect(html).toContain('href="/remote-users/actor-2"');
   });
 
-  it('renders a mention with the reply content and a link to the replied-to post', () => {
-    const html = render(notification({ type: 'mention', status: status('reply-1', { in_reply_to_id: 'p1' }) }));
+  it('renders a mention from a remote account with a link to the detail page of the post itself', () => {
+    const html = render(notification({
+      type: 'mention',
+      status: status('m1', { uri: 'https://remote.example/users/alice/statuses/m1', account: remoteAccount }),
+      iori: { fediverse: { reason: 'mention' } },
+    }));
+
+    expect(html).toContain('mentioned you');
+    expect(html).not.toContain('replied to your post');
+    expect(html).toContain('<p>content of m1</p>');
+    expect(html).toContain('href="/posts/m1"');
+    expect(html).not.toContain('/users/kosui/posts/');
+  });
+
+  it('renders a mention that replies to my post with a link to the detail page of the reply', () => {
+    const html = render(notification({
+      type: 'mention',
+      status: status('reply-1', { account: remoteAccount, in_reply_to_id: 'p1' }),
+      iori: { fediverse: { reason: 'reply' } },
+    }));
 
     expect(html).toContain('replied to your post');
     expect(html).toContain('<p>content of reply-1</p>');
-    expect(html).toContain('href="/users/kosui/posts/p1"');
+    expect(html).toContain('href="/posts/reply-1"');
+    expect(html).not.toContain('href="/users/kosui/posts/p1"');
+  });
+
+  it('keeps the reply label for a mention without a fediverse reason', () => {
+    const html = render(notification({ type: 'mention', status: status('m3', { account: remoteAccount }) }));
+
+    expect(html).toContain('replied to your post');
+  });
+
+  it('renders a mention from a local account with a link to the post in the profile', () => {
+    const html = render(notification({
+      type: 'mention',
+      account: localAccount,
+      status: status('m2', { account: localAccount }),
+    }));
+
+    expect(html).toContain('href="/users/kosui/posts/m2"');
   });
 
   it('renders the spoiler text instead of the content for a post with a content warning', () => {
@@ -251,6 +286,50 @@ describe('NotificationItem', () => {
       });
     });
 
+    describe('with the post uri', () => {
+      const uri = 'at://did:plc:me/app.bsky.feed.post/3kpost';
+      const url = 'https://bsky.app/profile/did:plc:me/post/3kpost';
+
+      it('links a favourite and a reblog to the post page in iori', () => {
+        const like = render(notification({
+          type: 'favourite',
+          account: blueskyAccount,
+          iori: { bluesky: { reason: 'like', url, uri } },
+        }));
+        const repost = render(notification({
+          type: 'reblog',
+          account: blueskyAccount,
+          iori: { bluesky: { reason: 'repost', url, uri } },
+        }));
+
+        expect(like).toContain('href="/bluesky/profile/did:plc:me/post/3kpost"');
+        expect(repost).toContain('href="/bluesky/profile/did:plc:me/post/3kpost"');
+        expect(like).not.toContain('bsky.app');
+      });
+
+      it('links a mention to the post page in iori', () => {
+        const html = render(notification({
+          type: 'mention',
+          account: blueskyAccount,
+          iori: {
+            bluesky: { reason: 'reply', url, uri: 'at://did:plc:carol/app.bsky.feed.post/3kreply', text: 'hi' },
+          },
+        }));
+
+        expect(html).toContain('href="/bluesky/profile/did:plc:carol/post/3kreply"');
+      });
+
+      it('keeps the bsky.app link when the uri is not a post uri', () => {
+        const html = render(notification({
+          type: 'favourite',
+          account: blueskyAccount,
+          iori: { bluesky: { reason: 'like', url, uri: 'at://did:plc:me/app.bsky.feed.like/3klike' } },
+        }));
+
+        expect(html).toContain(`href="${url}"`);
+      });
+    });
+
     it('renders a follow and a reblog without a status', () => {
       const follow = render(notification({
         type: 'follow',
@@ -264,6 +343,8 @@ describe('NotificationItem', () => {
       }));
 
       expect(follow).toContain('started following you');
+      expect(follow).toContain('href="/bluesky/profile/did%3Aplc%3Acarol"');
+      expect(follow).not.toContain('bsky.app');
       expect(reblog).toContain('boosted your post');
     });
   });

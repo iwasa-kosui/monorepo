@@ -12,7 +12,7 @@ import {
 } from './helper/publishBlueskyPost.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{ feedItemId: string; text: string }>;
+type Input = Readonly<{ feedItemId: string; text: string }> | Readonly<{ uri: string; text: string }>;
 
 type Ok = Readonly<{ uri: string; cid: string }>;
 
@@ -36,10 +36,13 @@ const getPostsResponseSchema = z.object({
 });
 
 const create = (deps: Deps): ReplyToBlueskyPostUseCase => {
-  const run = async ({ feedItemId, text }: Input): RA<Ok, Err> => {
+  const run = async (input: Input): RA<Ok, Err> => {
+    const { text } = input;
     const problem = validateBlueskyPostInput({ text });
     if (problem !== undefined) return RA.err(problem);
-    const target = Result.unsafeUnwrap(await deps.targetResolver.resolve(feedItemId));
+    const target = 'feedItemId' in input
+      ? Result.unsafeUnwrap(await deps.targetResolver.resolve(input.feedItemId))
+      : { uri: input.uri };
     if (target === undefined) return RA.err({ type: 'BlueskyReplyTargetNotFound' });
     const response = await deps.query('app.bsky.feed.getPosts', { uris: target.uri });
     if (!response.ok) return RA.err(response.err);

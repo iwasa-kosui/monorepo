@@ -20,6 +20,9 @@ export type BlueskyRepost = Readonly<{
 export type BlueskyRepostTargetResolver = Readonly<{
   resolve: (feedItemId: string) => RA<BlueskyRepostTarget | undefined, never>;
 }>;
+export type BlueskyRepostUriResolver = Readonly<{
+  resolve: (subjectUri: string) => RA<string | null, never>;
+}>;
 export type BlueskyRepostSavedStore = Readonly<{
   save: (repost: BlueskyRepost) => RA<void, never>;
 }>;

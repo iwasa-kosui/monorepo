@@ -86,6 +86,7 @@ export const createBlueskyCrosspostUseCases = (
     uploads: createPostImageR2ObjectStore({ bucket: env.UPLOADS }),
     thumbnailFetcher: createBlueskyThumbnailFetcher({ fetch: deps.fetch }),
     client,
+    query: client.query,
     origin: env.ORIGIN,
     now,
   });

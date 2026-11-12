@@ -59,7 +59,7 @@ export const useBlueskyPostDialog = ({ submit, errorMessage, failureLog }: Optio
       sendingRef.current = false;
       setIsSending(false);
     }
-  }, [target, content]);
+  }, [target, content, submit, errorMessage, failureLog]);
 
   return { target, content, isSending, errorText, open, close, setContent, send } as const;
 };

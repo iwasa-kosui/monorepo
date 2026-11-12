@@ -19,6 +19,9 @@ export type BlueskyLike = Readonly<{
 export type BlueskyLikeTargetResolver = Readonly<{
   resolve: (feedItemId: string) => RA<BlueskyLikeTarget | undefined, never>;
 }>;
+export type BlueskyLikeUriResolver = Readonly<{
+  resolve: (subjectUri: string) => RA<string | null, never>;
+}>;
 export type BlueskyLikeSavedStore = Readonly<{
   save: (like: BlueskyLike) => RA<void, never>;
 }>;

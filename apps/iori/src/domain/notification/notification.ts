@@ -71,6 +71,20 @@ const replyNotificationZodType = z
 export type ReplyNotification = z.output<typeof replyNotificationZodType>;
 export const ReplyNotification = Schema.create(replyNotificationZodType);
 
+const mentionNotificationZodType = z
+  .object({
+    type: z.literal('mention'),
+    notificationId: NotificationId.zodType,
+    recipientUserId: UserId.zodType,
+    isRead: z.boolean(),
+    mentionerActorId: ActorId.zodType,
+    mentionPostId: PostId.zodType,
+  })
+  .describe('MentionNotification');
+
+export type MentionNotification = z.output<typeof mentionNotificationZodType>;
+export const MentionNotification = Schema.create(mentionNotificationZodType);
+
 const repostNotificationZodType = z
   .object({
     type: z.literal('repost'),
@@ -158,6 +172,7 @@ const notificationZodType = z.discriminatedUnion('type', [
   followNotificationZodType,
   emojiReactNotificationZodType,
   replyNotificationZodType,
+  mentionNotificationZodType,
   repostNotificationZodType,
   blueskyLikeNotificationZodType,
   blueskyRepostNotificationZodType,
@@ -406,6 +421,65 @@ export type ReplyNotificationsResolverByOriginalPostId = Agg.Resolver<
   ReplyNotification[]
 >;
 
+export type MentionNotificationCreated = NotificationEvent<
+  MentionNotification,
+  'notification.mentionNotificationCreated',
+  MentionNotification
+>;
+
+const createMentionNotification = (payload: MentionNotification, now: Instant): MentionNotificationCreated => {
+  return NotificationEvent.create(
+    toAggregateId(payload),
+    payload,
+    'notification.mentionNotificationCreated',
+    payload,
+    now,
+  );
+};
+
+export type MentionNotificationCreatedStore = Agg.Store<MentionNotificationCreated>;
+
+export type MentionNotificationDeletedPayload = Readonly<{
+  notificationId: NotificationId;
+  mentionerActorId: ActorId;
+  mentionPostId: PostId;
+}>;
+
+export type MentionNotificationDeleted = NotificationEvent<
+  undefined,
+  'notification.mentionNotificationDeleted',
+  MentionNotificationDeletedPayload
+>;
+
+const deleteMentionNotification = (
+  notification: MentionNotification,
+  now: Instant,
+): MentionNotificationDeleted => {
+  return NotificationEvent.create(
+    toAggregateId(notification),
+    undefined,
+    'notification.mentionNotificationDeleted',
+    {
+      notificationId: notification.notificationId,
+      mentionerActorId: notification.mentionerActorId,
+      mentionPostId: notification.mentionPostId,
+    },
+    now,
+  );
+};
+
+export type MentionNotificationDeletedStore = Agg.Store<MentionNotificationDeleted>;
+
+export type MentionNotificationsResolverByMentionPostId = Agg.Resolver<
+  { mentionPostId: PostId },
+  MentionNotification[]
+>;
+
+export type MentionNotificationResolverByRecipientAndMentionPostId = Agg.Resolver<
+  { recipientUserId: UserId; mentionPostId: PostId },
+  MentionNotification | undefined
+>;
+
 export type RepostNotificationCreated = NotificationEvent<
   RepostNotification,
   'notification.repostNotificationCreated',
@@ -552,6 +626,8 @@ export const Notification = {
   deleteEmojiReactNotification,
   createReplyNotification,
   deleteReplyNotification,
+  createMentionNotification,
+  deleteMentionNotification,
   createRepostNotification,
   createBlueskyNotification,
   markAsRead,

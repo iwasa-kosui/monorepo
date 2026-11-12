@@ -19,6 +19,9 @@ import type {
 } from '../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
 import {
+  type MentionNotification,
+  type MentionNotificationCreatedStore,
+  type MentionNotificationResolverByRecipientAndMentionPostId,
   Notification,
   type ReplyNotification,
   type ReplyNotificationCreatedStore,
@@ -42,6 +45,7 @@ import {
   type TimelineItemsResolverByPostId,
 } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
+import type { UserId } from '../domain/user/userId.ts';
 import { isBlockedBy } from './helper/isBlockedBy.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
@@ -110,6 +114,8 @@ type Deps = Readonly<{
   localPostResolverByUri: LocalPostResolverByUri;
   replyNotificationCreatedStore: ReplyNotificationCreatedStore;
   replyNotificationsResolverByReplyPostId: ReplyNotificationsResolverByReplyPostId;
+  mentionNotificationCreatedStore?: MentionNotificationCreatedStore;
+  mentionNotificationResolver?: MentionNotificationResolverByRecipientAndMentionPostId;
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
@@ -133,6 +139,8 @@ const create = ({
   localPostResolverByUri,
   replyNotificationCreatedStore,
   replyNotificationsResolverByReplyPostId,
+  mentionNotificationCreatedStore,
+  mentionNotificationResolver,
   pushSubscriptionsResolver,
   webPushSender,
   linkPreviewCreatedStore,
@@ -339,6 +347,66 @@ const create = ({
         }
         for (const subscription of subscriptionsResult.val) {
           await webPushSender.send(subscription, payload);
+        }
+        return RA.ok(undefined);
+      }),
+      RA.andBind('mentionedUserIds', async ({ saved: { post }, actor, inReplyToUri, recipientActorUris }) => {
+        if (!mentionNotificationCreatedStore || !mentionNotificationResolver || !recipientActorUris?.length) {
+          return RA.ok<UserId[]>([]);
+        }
+        let replyRecipientUserId: UserId | undefined;
+        if (inReplyToUri) {
+          const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });
+          replyRecipientUserId = originalPostResult.ok ? originalPostResult.val?.userId : undefined;
+        }
+        const created: UserId[] = [];
+        for (const recipientUri of recipientActorUris) {
+          const recipientResult = await actorResolverByUri.resolve(recipientUri);
+          const recipient = recipientResult.ok ? recipientResult.val : undefined;
+          if (!recipient || recipient.type !== 'local' || recipient.id === actor.id) {
+            continue;
+          }
+          if (await isBlockedBy(blockResolver, recipient.userId, actor.id)) {
+            continue;
+          }
+          if (recipient.userId === replyRecipientUserId) {
+            continue;
+          }
+          const existing = await mentionNotificationResolver.resolve({
+            recipientUserId: recipient.userId,
+            mentionPostId: post.postId,
+          });
+          if (existing.ok && existing.val) {
+            continue;
+          }
+          const notification: MentionNotification = {
+            type: 'mention',
+            notificationId: NotificationId.generate(),
+            recipientUserId: recipient.userId,
+            isRead: false,
+            mentionerActorId: actor.id,
+            mentionPostId: post.postId,
+          };
+          await mentionNotificationCreatedStore.store(Notification.createMentionNotification(notification, now));
+          created.push(recipient.userId);
+        }
+        return RA.ok(created);
+      }),
+      RA.andThrough(async ({ mentionedUserIds, actor }) => {
+        const mentionerName = actor.type === 'remote' && actor.username ? actor.username : 'Someone';
+        const payload: PushPayload = {
+          title: 'New Mention',
+          body: `${mentionerName} mentioned you`,
+          url: '/notifications',
+        };
+        for (const userId of mentionedUserIds) {
+          const subscriptionsResult = await pushSubscriptionsResolver.resolve(userId);
+          if (!subscriptionsResult.ok) {
+            continue;
+          }
+          for (const subscription of subscriptionsResult.val) {
+            await webPushSender.send(subscription, payload);
+          }
         }
         return RA.ok(undefined);
       }),

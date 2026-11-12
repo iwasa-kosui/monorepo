@@ -9,6 +9,7 @@ import {
   isLocalAccount,
   isOwnBoost,
   remoteUserPathOf,
+  removeStatusesByAccountId,
   removeStatusesByPostId,
   statusHref,
   updateStatusesByPostId,
@@ -177,5 +178,34 @@ describe('status updates', () => {
     const remaining = removeStatusesByPostId([original, boost, other], 'p1');
 
     expect(remaining.map((s) => s.id)).toEqual(['p2']);
+  });
+
+  describe('removeStatusesByAccountId', () => {
+    it('removes the statuses written by the account', () => {
+      const mine = status('p1');
+      const theirs = status('p2', { account: remoteAccount });
+
+      expect(removeStatusesByAccountId([mine, theirs], 'actor-2').map((s) => s.id)).toEqual(['p1']);
+    });
+
+    it('removes a boost whose original was written by the account, as the server does', () => {
+      const boostOfTheirs = status('r1', { reblog: status('p2', { account: remoteAccount }) });
+      const other = status('p1');
+
+      expect(removeStatusesByAccountId([boostOfTheirs, other], 'actor-2').map((s) => s.id)).toEqual(['p1']);
+    });
+
+    it('removes a boost made by the account, as the server does', () => {
+      const boostByTheirs = status('r1', { account: remoteAccount, reblog: status('p1') });
+      const other = status('p2');
+
+      expect(removeStatusesByAccountId([boostByTheirs, other], 'actor-2').map((s) => s.id)).toEqual(['p2']);
+    });
+
+    it('keeps everything when the account has no statuses', () => {
+      const statuses = [status('p1'), status('r1', { reblog: status('p2') })];
+
+      expect(removeStatusesByAccountId(statuses, 'actor-9')).toEqual(statuses);
+    });
   });
 });

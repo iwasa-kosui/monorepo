@@ -20,6 +20,7 @@ import {
 } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
+import { blueskyPostUriPattern } from '../../helper/blueskyUrl.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type {
   BlueskyPostThreadFetcher,
@@ -30,6 +31,7 @@ import type { BlueskySearch, BlueskySearchedActor } from '../../ports/blueskySea
 import type { BlueskyPostInvalid } from '../../useCase/helper/publishBlueskyPost.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { LikeBlueskyPostUseCase } from '../../useCase/likeBlueskyPost.ts';
+import type { MarkBlueskyNotificationsSeenUseCase } from '../../useCase/markBlueskyNotificationsSeen.ts';
 import type { QuoteBlueskyPostUseCase } from '../../useCase/quoteBlueskyPost.ts';
 import type { ReplyToBlueskyPostUseCase } from '../../useCase/replyToBlueskyPost.ts';
 import type { RepostBlueskyPostUseCase } from '../../useCase/repostBlueskyPost.ts';
@@ -55,6 +57,7 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   blueskyPostThreadFetcher: BlueskyPostThreadFetcher | undefined;
   replyToBlueskyPostUseCase: ReplyToBlueskyPostUseCase | undefined;
   quoteBlueskyPostUseCase: QuoteBlueskyPostUseCase | undefined;
+  markBlueskyNotificationsSeenUseCase: MarkBlueskyNotificationsSeenUseCase | undefined;
   blueskySearch: BlueskySearch | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
@@ -136,16 +139,35 @@ export type IoriBlueskyRepostResponse = Readonly<{ reposted: boolean }>;
 export type IoriBlueskyReplyResponse = Readonly<{ uri: string; cid: string }>;
 
 export type IoriBlueskyQuoteResponse = Readonly<{ uri: string; cid: string }>;
+export type IoriBlueskyPostTargetBody = Readonly<{ feedItemId: string }> | Readonly<{ uri: string }>;
+
+export type IoriBlueskyLikeRequest = IoriBlueskyPostTargetBody;
+
+export type IoriBlueskyRepostRequest = IoriBlueskyPostTargetBody;
+
+export type IoriBlueskyReplyRequest = IoriBlueskyPostTargetBody & Readonly<{ text: string }>;
+
+export type IoriBlueskyNotificationsSeenRequest = Readonly<{ seenAt: string }>;
 
 const readStatuses = Scope.orThrow('read:statuses');
 const readSearch = Scope.orThrow('read:search');
 const writeFavourites = Scope.orThrow('write:favourites');
 const writeStatuses = Scope.orThrow('write:statuses');
+const writeNotifications = Scope.orThrow('write:notifications');
 const integerPattern = /^\d+$/;
-const postUriPattern = /^at:\/\/did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]\/app\.bsky\.feed\.post\/[a-zA-Z0-9._~:-]+$/;
+const isoInstantPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 const forbidden = { error: 'Forbidden' } as const;
 const SEARCH_LIMIT = 25;
 const SEARCH_QUERY_MAX_LENGTH = 300;
+
+const postTargetOf = (
+  feedItemId: string | undefined,
+  uri: string | undefined,
+): { target: IoriBlueskyPostTargetBody } | { invalid: 'feedItemId' | 'uri' } => {
+  if (feedItemId !== undefined && uri !== undefined) return { invalid: 'uri' };
+  if (uri !== undefined) return blueskyPostUriPattern.test(uri) ? { target: { uri } } : { invalid: 'uri' };
+  return feedItemId === undefined || feedItemId === '' ? { invalid: 'feedItemId' } : { target: { feedItemId } };
+};
 
 export const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBody => ({
   feedItemId: item.feedItemId,
@@ -263,6 +285,7 @@ export const createWorkerIoriBlueskyRouter = ({
   blueskyPostThreadFetcher,
   replyToBlueskyPostUseCase,
   quoteBlueskyPostUseCase,
+  markBlueskyNotificationsSeenUseCase,
   blueskySearch,
   isDigestOwner,
 }: WorkerIoriBlueskyRouterDeps): Hono<MastodonAuthEnv> =>
@@ -357,7 +380,7 @@ export const createWorkerIoriBlueskyRouter = ({
         return c.json({ error: 'Bluesky timeline is disabled' }, 409);
       }
       const uri = c.req.query('uri');
-      if (uri === undefined || !postUriPattern.test(uri)) {
+      if (uri === undefined || !blueskyPostUriPattern.test(uri)) {
         return c.json({ error: 'Validation failed: uri' }, 400);
       }
       const thread = await blueskyPostThreadFetcher.fetch({ uri });
@@ -412,11 +435,10 @@ export const createWorkerIoriBlueskyRouter = ({
         if (likeBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
-        const feedItemId = bodyString(await readRequestBody(c), 'feedItemId');
-        if (feedItemId === undefined || feedItemId === '') {
-          return c.json({ error: 'Validation failed: feedItemId' }, 400);
-        }
-        const liked = await likeBlueskyPostUseCase.run({ feedItemId });
+        const body = await readRequestBody(c);
+        const resolved = postTargetOf(bodyString(body, 'feedItemId'), bodyString(body, 'uri'));
+        if ('invalid' in resolved) return c.json({ error: `Validation failed: ${resolved.invalid}` }, 400);
+        const liked = await likeBlueskyPostUseCase.run(resolved.target);
         return liked.ok
           ? c.json(liked.val satisfies IoriBlueskyLikeResponse)
           : likeFailure(c, liked.err);
@@ -433,11 +455,9 @@ export const createWorkerIoriBlueskyRouter = ({
         if (unlikeBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
-        const feedItemId = c.req.query('feedItemId');
-        if (feedItemId === undefined || feedItemId === '') {
-          return c.json({ error: 'Validation failed: feedItemId' }, 400);
-        }
-        const unliked = await unlikeBlueskyPostUseCase.run({ feedItemId });
+        const resolved = postTargetOf(c.req.query('feedItemId'), c.req.query('uri'));
+        if ('invalid' in resolved) return c.json({ error: `Validation failed: ${resolved.invalid}` }, 400);
+        const unliked = await unlikeBlueskyPostUseCase.run(resolved.target);
         return unliked.ok
           ? c.json(unliked.val satisfies IoriBlueskyLikeResponse)
           : likeFailure(c, unliked.err);
@@ -454,11 +474,10 @@ export const createWorkerIoriBlueskyRouter = ({
         if (repostBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
-        const feedItemId = bodyString(await readRequestBody(c), 'feedItemId');
-        if (feedItemId === undefined || feedItemId === '') {
-          return c.json({ error: 'Validation failed: feedItemId' }, 400);
-        }
-        const reposted = await repostBlueskyPostUseCase.run({ feedItemId });
+        const body = await readRequestBody(c);
+        const resolved = postTargetOf(bodyString(body, 'feedItemId'), bodyString(body, 'uri'));
+        if ('invalid' in resolved) return c.json({ error: `Validation failed: ${resolved.invalid}` }, 400);
+        const reposted = await repostBlueskyPostUseCase.run(resolved.target);
         return reposted.ok
           ? c.json(reposted.val satisfies IoriBlueskyRepostResponse)
           : repostFailure(c, reposted.err);
@@ -475,11 +494,9 @@ export const createWorkerIoriBlueskyRouter = ({
         if (undoRepostBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
-        const feedItemId = c.req.query('feedItemId');
-        if (feedItemId === undefined || feedItemId === '') {
-          return c.json({ error: 'Validation failed: feedItemId' }, 400);
-        }
-        const unreposted = await undoRepostBlueskyPostUseCase.run({ feedItemId });
+        const resolved = postTargetOf(c.req.query('feedItemId'), c.req.query('uri'));
+        if ('invalid' in resolved) return c.json({ error: `Validation failed: ${resolved.invalid}` }, 400);
+        const unreposted = await undoRepostBlueskyPostUseCase.run(resolved.target);
         return unreposted.ok
           ? c.json(unreposted.val satisfies IoriBlueskyRepostResponse)
           : repostFailure(c, unreposted.err);
@@ -497,13 +514,11 @@ export const createWorkerIoriBlueskyRouter = ({
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
         const body = await readRequestBody(c);
-        const feedItemId = bodyString(body, 'feedItemId');
-        if (feedItemId === undefined || feedItemId === '') {
-          return c.json({ error: 'Validation failed: feedItemId' }, 400);
-        }
+        const resolved = postTargetOf(bodyString(body, 'feedItemId'), bodyString(body, 'uri'));
+        if ('invalid' in resolved) return c.json({ error: `Validation failed: ${resolved.invalid}` }, 400);
         const text = bodyString(body, 'text');
         if (text === undefined) return c.json({ error: 'Validation failed: text' }, 400);
-        const replied = await replyToBlueskyPostUseCase.run({ feedItemId, text });
+        const replied = await replyToBlueskyPostUseCase.run({ ...resolved.target, text });
         return replied.ok
           ? c.json(replied.val satisfies IoriBlueskyReplyResponse, 201)
           : replyFailure(c, replied.err);
@@ -522,7 +537,7 @@ export const createWorkerIoriBlueskyRouter = ({
         }
         const body = await readRequestBody(c);
         const uri = bodyString(body, 'uri');
-        if (uri === undefined || !postUriPattern.test(uri)) {
+        if (uri === undefined || !blueskyPostUriPattern.test(uri)) {
           return c.json({ error: 'Validation failed: uri' }, 400);
         }
         const text = bodyString(body, 'text');
@@ -531,5 +546,25 @@ export const createWorkerIoriBlueskyRouter = ({
         return quoted.ok
           ? c.json(quoted.val satisfies IoriBlueskyQuoteResponse, 201)
           : quoteFailure(c, quoted.err);
+      },
+    )
+    .post(
+      '/iori/v1/bluesky/notifications/seen',
+      requireSameOriginForCookie,
+      authn.requireUser(writeNotifications),
+      async (c) => {
+        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
+          return c.json(forbidden, 403);
+        }
+        if (markBlueskyNotificationsSeenUseCase === undefined) {
+          return c.json({ error: 'Bluesky timeline is disabled' }, 409);
+        }
+        const seenAtText = bodyString(await readRequestBody(c), 'seenAt');
+        const seenAt = seenAtText !== undefined && isoInstantPattern.test(seenAtText)
+          ? Instant.of(Date.parse(seenAtText))
+          : undefined;
+        if (seenAt === undefined || !seenAt.ok) return c.json({ error: 'Validation failed: seenAt' }, 400);
+        const marked = await markBlueskyNotificationsSeenUseCase.run({ seenAt: seenAt.val });
+        return marked.ok ? c.body(null, 204) : clientFailure(c, marked.err);
       },
     );
