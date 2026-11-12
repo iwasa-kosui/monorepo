@@ -848,6 +848,7 @@ export const setupReadApi = (
             localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, ORIGIN),
             remotePostUpserter,
             blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+            isBlockedUri: () => false,
           }),
           allRelaysResolver: createD1AllRelaysResolver(db),
           createContext,

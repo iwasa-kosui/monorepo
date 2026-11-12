@@ -4,11 +4,13 @@ import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 import { describe, expect, it, vi } from 'vitest';
 
+import { isBlockedUri } from '../../adaptor/fedify/blockedInboxDomain.ts';
 import type { Actor } from '../../domain/actor/actor.ts';
 import { FetchRemoteOutboxUseCase } from '../fetchRemoteOutbox.ts';
 
 const ORIGIN = 'https://iori.test';
 const ACTOR_URI = 'https://remote.example/users/alice';
+const BLOCKED_DOMAIN = 'blocked.example';
 
 const personOf = (name: string, outbox?: OrderedCollection) =>
   new Person({
@@ -57,6 +59,7 @@ type Setup = Readonly<{
   stored?: ReadonlyArray<string>;
   localUris?: ReadonlyArray<string>;
   blocked?: boolean;
+  blockedAfterFirstCheck?: boolean;
   failingUris?: ReadonlyArray<string>;
   hangingUris?: ReadonlyArray<string>;
   documentLoader?: DocumentLoader;
@@ -89,6 +92,10 @@ const setup = (options: Setup = {}) => {
   const blockedActorUriResolverByUsername = {
     resolve: vi.fn(async (_input: { username: unknown; actorUri: string }) => RA.ok(options.blocked ?? false)),
   };
+  if (options.blockedAfterFirstCheck) {
+    blockedActorUriResolverByUsername.resolve.mockImplementationOnce(async () => RA.ok(false));
+    blockedActorUriResolverByUsername.resolve.mockImplementation(async () => RA.ok(true));
+  }
   const remotePostUrisResolverByUris = {
     resolve: vi.fn(async ({ uris }: { uris: readonly string[] }) => RA.ok(uris.filter((uri) => stored.has(uri)))),
   };
@@ -108,6 +115,7 @@ const setup = (options: Setup = {}) => {
     localPostUrisResolverByUris,
     remotePostUpserter,
     blockedActorUriResolverByUsername,
+    isBlockedUri: (uri) => isBlockedUri(uri, [BLOCKED_DOMAIN]),
     fetchTimeoutMs: options.fetchTimeoutMs,
     totalTimeoutMs: options.totalTimeoutMs,
     now: options.now,
@@ -236,6 +244,81 @@ describe('FetchRemoteOutboxUseCase', () => {
     });
     expect(t.lookupObject).not.toHaveBeenCalled();
     expect(t.ctx.getDocumentLoader).not.toHaveBeenCalled();
+  });
+
+  it('ブロックしたドメインのアクターなら outbox を取りに行かない', async () => {
+    const blockedActor = {
+      id: 'actor-1',
+      type: 'remote',
+      uri: `https://${BLOCKED_DOMAIN}/users/alice`,
+    } as unknown as Actor;
+    const note = noteOf(1);
+    const t = setup({ actor: blockedActor, outbox: outboxOf([createOf(note)]), notes: [note] });
+
+    expect(await t.run()).toBe(0);
+    expect(t.lookupObject).not.toHaveBeenCalled();
+    expect(t.ctx.getDocumentLoader).not.toHaveBeenCalled();
+    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
+  });
+
+  it('ブロックしたサブドメインのアクターでも outbox を取りに行かない', async () => {
+    const blockedActor = {
+      id: 'actor-1',
+      type: 'remote',
+      uri: `https://social.${BLOCKED_DOMAIN}/users/alice`,
+    } as unknown as Actor;
+    const t = setup({ actor: blockedActor, outbox: outboxOf([]) });
+
+    expect(await t.run()).toBe(0);
+    expect(t.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('outbox の中のブロックしたドメインの投稿は取りに行かず、保存しない', async () => {
+    const blockedNote = new Note({
+      id: new URL(`https://${BLOCKED_DOMAIN}/notes/1`),
+      content: 'blocked',
+      attribution: personOf('alice'),
+    });
+    const notes = [blockedNote, noteOf(2)];
+    const t = setup({ outbox: outboxOf(notes.map(createOf)), notes });
+
+    expect(await t.run()).toBe(1);
+    expect(storedUris(t)).toEqual([noteUri(2)]);
+    expect(lookedUpUris(t)).not.toContain(blockedNote.id!.href);
+    expect(t.remotePostUrisResolverByUris.resolve).toHaveBeenCalledWith({ uris: [noteUri(2)] });
+  });
+
+  it('作者の一人がブロックしたドメインの投稿は保存しない', async () => {
+    const sharedNote = new Note({
+      id: new URL(noteUri(1)),
+      content: 'shared',
+      attributions: [personOf('alice'), new Person({ id: new URL(`https://${BLOCKED_DOMAIN}/users/bob`) })],
+    });
+    const notes = [sharedNote, noteOf(2)];
+    const t = setup({ outbox: outboxOf(notes.map(createOf)), notes });
+
+    expect(await t.run()).toBe(1);
+    expect(storedUris(t)).toEqual([noteUri(2)]);
+  });
+
+  it('ブロックしていないドメインの投稿は、ブロックの設定があっても保存する', async () => {
+    const notes = [noteOf(1), noteOf(2)];
+    const t = setup({ outbox: outboxOf(notes.map(createOf)), notes });
+
+    expect(await t.run()).toBe(2);
+    expect(storedUris(t)).toEqual([noteUri(1), noteUri(2)]);
+  });
+
+  it('個別にブロックした作者の投稿は保存しない', async () => {
+    const notes = [noteOf(1), noteOf(2)];
+    const t = setup({ outbox: outboxOf(notes.map(createOf)), notes, blockedAfterFirstCheck: true });
+
+    expect(await t.run()).toBe(0);
+    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
+    expect(t.blockedActorUriResolverByUsername.resolve).toHaveBeenCalledWith({
+      username: 'kosui',
+      actorUri: ACTOR_URI,
+    });
   });
 
   it('ローカルのアクターなら何も取らず 0 件を返す', async () => {
@@ -414,6 +497,7 @@ describe('FetchRemoteOutboxUseCase', () => {
         localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
         remotePostUpserter: { resolve: vi.fn() },
         blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
+        isBlockedUri: () => false,
       });
       const input = {
         userId: 'user-1' as never,
@@ -572,6 +656,7 @@ describe('FetchRemoteOutboxUseCase', () => {
         localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
         remotePostUpserter: { resolve: vi.fn() },
         blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
+        isBlockedUri: () => false,
       });
 
       const result = await useCase.run({
@@ -592,6 +677,7 @@ describe('FetchRemoteOutboxUseCase', () => {
         localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
         remotePostUpserter: { resolve: vi.fn() },
         blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
+        isBlockedUri: () => false,
       });
 
       const result = await useCase.run({

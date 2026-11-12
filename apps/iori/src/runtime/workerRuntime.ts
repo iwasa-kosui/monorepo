@@ -681,6 +681,7 @@ export const createWorkerRuntimePorts = async (
         localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, env.ORIGIN),
         remotePostUpserter,
         blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+        isBlockedUri: (uri) => isBlockedUri(uri),
       }),
     },
     articles: {
