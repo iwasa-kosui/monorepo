@@ -238,10 +238,10 @@ const LocalPostPage = () => {
         {focusedPost && (
           <a
             href={accountHref(focusedPost.account)}
-            class='text-lg font-semibold text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light flex items-center gap-2 transition-colors'
+            class='min-w-0 text-lg font-semibold text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light flex items-center gap-2 transition-colors'
           >
             <svg
-              class='w-5 h-5'
+              class='w-5 h-5 flex-shrink-0'
               fill='none'
               viewBox='0 0 24 24'
               stroke='currentColor'
@@ -253,7 +253,7 @@ const LocalPostPage = () => {
                 d='M15 19l-7-7 7-7'
               />
             </svg>
-            @{focusedPost.account.acct}
+            <span class='truncate'>@{focusedPost.account.acct}</span>
           </a>
         )}
         <a

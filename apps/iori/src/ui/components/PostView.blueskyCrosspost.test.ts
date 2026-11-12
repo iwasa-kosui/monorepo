@@ -70,6 +70,7 @@ describe('PostView の Bluesky の印', () => {
     const html = render(crosspost({ status: 'pending' }));
 
     expect(html).toContain('aria-label="Bluesky 送信中"');
+    expect(html).toContain('role="img"');
     expect(html).toContain('<svg');
     expect(textOf(html)).not.toContain('Bluesky');
   });
@@ -78,6 +79,7 @@ describe('PostView の Bluesky の印', () => {
     const html = render(crosspost({ status: 'failed', retrying: true }));
 
     expect(html).toContain('aria-label="Bluesky 再送待ち"');
+    expect(html).toContain('role="img"');
     expect(html).toContain('<svg');
     expect(textOf(html)).not.toContain('Bluesky');
   });
@@ -86,6 +88,7 @@ describe('PostView の Bluesky の印', () => {
     const html = render(crosspost({ status: 'failed', retrying: false }));
 
     expect(html).toContain('aria-label="Bluesky に届いていません"');
+    expect(html).toContain('role="img"');
     expect(html).toContain('<svg');
     expect(html).toContain('text-red-600');
     expect(textOf(html)).not.toContain('Bluesky');
@@ -95,6 +98,7 @@ describe('PostView の Bluesky の印', () => {
     const html = render(crosspost({ status: 'skipped', skip_reason: 'content_warning', retrying: false }));
 
     expect(html).toContain('aria-label="Bluesky に未送信"');
+    expect(html).toContain('role="img"');
     expect(html).toContain('<svg');
     expect(html).toContain('title="この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした"');
     expect(textOf(html)).not.toContain('Bluesky');
@@ -114,6 +118,7 @@ describe('PostView の Bluesky の印', () => {
     const html = render(crosspost({ status: 'skipped', skip_reason: 'visibility', retrying: false }), 'private');
 
     expect(html).toContain('aria-label="Bluesky に未送信"');
+    expect(html).toContain('role="img"');
     expect(html).toContain('<svg');
     expect(textOf(html)).not.toContain('Bluesky');
   });

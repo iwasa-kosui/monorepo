@@ -261,11 +261,11 @@ export const FediverseConversationPage = ({ conversationKey }: Readonly<{ conver
     <>
       <header class='mb-4 space-y-2'>
         {backLink}
-        <h1 class='text-xl font-bold text-charcoal dark:text-white break-words [overflow-wrap:anywhere]'>
+        <h1 class='text-xl font-bold text-charcoal dark:text-white truncate'>
           {conversation.peers.length === 0
             ? fediverseConversationTitle(conversation.peers)
             : conversation.peers.map((peer) => (
-              <span key={peer.actorUri} class='block'>
+              <span key={peer.actorUri} class='block truncate'>
                 <PeerLink peer={peer} />
               </span>
             ))}

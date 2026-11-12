@@ -50,7 +50,7 @@ export const ReportModal = ({ targetLabel, isOpen, isSubmitting, error, onSubmit
         onClick={(e) => e.stopPropagation()}
       >
         <div class='flex items-center justify-between mb-4'>
-          <h2 id='report-modal-title' class='text-lg font-semibold text-charcoal dark:text-white'>
+          <h2 id='report-modal-title' class='min-w-0 truncate text-lg font-semibold text-charcoal dark:text-white'>
             {`${targetLabel} を通報`}
           </h2>
           <button

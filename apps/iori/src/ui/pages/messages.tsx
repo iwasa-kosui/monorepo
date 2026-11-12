@@ -286,7 +286,7 @@ const ConvoPage = ({ convoId }: Readonly<{ convoId: string }>) => {
     <>
       <header class='mb-4 space-y-2'>
         {backLink}
-        <h1 class='text-xl font-bold text-charcoal dark:text-white'>
+        <h1 class='truncate text-xl font-bold text-charcoal dark:text-white'>
           {peer === undefined
             ? convoTitle(convo.peers)
             : (

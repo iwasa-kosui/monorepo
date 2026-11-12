@@ -180,9 +180,12 @@ const BlueskyEmbed = ({ embed, bskyHref }: Readonly<{ embed: BlueskyTimelineEmbe
 const ReplyParent = ({ uri, label }: Readonly<{ uri: string; label: string }>) => {
   const href = ioriBlueskyPostPath(uri);
   return href === undefined
-    ? <div class={`text-xs ${mutedClass}`}>{label}</div>
+    ? <div class={`truncate text-xs ${mutedClass}`}>{label}</div>
     : (
-      <a href={href} class={`block text-xs ${mutedClass} hover:text-terracotta dark:hover:text-terracotta-light`}>
+      <a
+        href={href}
+        class={`block truncate text-xs ${mutedClass} hover:text-terracotta dark:hover:text-terracotta-light`}
+      >
         {label}
       </a>
     );
@@ -446,7 +449,7 @@ export const BlueskyTimelineItemView = ({
       }`}
     >
       {item.repostedByHandle !== null && (
-        <div class={`text-xs ${mutedClass}`}>
+        <div class={`truncate text-xs ${mutedClass}`}>
           {item.repostedByDid === null
             ? `@${item.repostedByHandle}`
             : <a href={blueskyProfilePathOf(item.repostedByDid)} class='hover:underline'>@{item.repostedByHandle}</a>}
