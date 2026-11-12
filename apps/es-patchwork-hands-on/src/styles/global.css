@@ -56,6 +56,24 @@ body.chapter-page {
   padding-left: 1rem;
   color: #374151;
 }
+.content figure.quote {
+  margin-block: 0.25rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.content figure.quote blockquote {
+  margin: 0;
+}
+.content figure.quote blockquote p {
+  margin: 0;
+}
+.content figure.quote figcaption {
+  border-left: 4px solid #d1d5db;
+  padding-left: 1rem;
+  color: #6b7280;
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
 .content table {
   display: block;
   overflow-x: auto;
