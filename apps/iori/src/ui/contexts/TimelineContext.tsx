@@ -1,6 +1,8 @@
 import type { FC, PropsWithChildren } from 'hono/jsx';
 import { createContext, useContext, useMemo, useState } from 'hono/jsx';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
+import { withUpdatedStatus } from '../api/status.ts';
 import { homeFeedCursor, type HomeItem, mergeHomeFeed } from '../hooks/homeFeed.ts';
 import { readHomeSnapshot } from '../hooks/homeSnapshot.ts';
 import {
@@ -13,6 +15,7 @@ import { useBlueskyQuoteDialog, type UseBlueskyQuoteDialogReturn } from '../hook
 import { useBlueskyReplyDialog, type UseBlueskyReplyDialogReturn } from '../hooks/useBlueskyReplyDialog.ts';
 import { useBlueskyRepost, type UseBlueskyRepostReturn } from '../hooks/useBlueskyRepost.ts';
 import { useBlueskyStatus, type UseBlueskyStatusReturn } from '../hooks/useBlueskyStatus.ts';
+import { useEditDialog, type UseEditDialogReturn } from '../hooks/useEditDialog.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation.ts';
 import { usePostActions, type UsePostActionsReturn } from '../hooks/usePostActions.ts';
@@ -41,6 +44,7 @@ export type TimelineContextValue = Readonly<{
   reply: UseReplyDialogReturn;
   reportPost: UseReportPostReturn;
   quote: UseQuoteDialogReturn;
+  edit: UseEditDialogReturn;
   ui: UseUIStateReturn;
   pullToRefresh: UsePullToRefreshReturn;
   pullThreshold: number;
@@ -67,6 +71,14 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
   const quote = useQuoteDialog({
     onQuoted: () => {
       timeline.reload();
+    },
+  });
+
+  const edit = useEditDialog({
+    onEdited: (updated) => {
+      const apply = (status: Status): Status => withUpdatedStatus(status, updated);
+      timeline.updateTimelineItem(updated.id, apply);
+      thread.updateThreadPost(updated.id, apply);
     },
   });
 
@@ -127,7 +139,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     emojiPickerOpenForIndex: ui.emojiPickerOpenForIndex,
     setEmojiPickerOpenForIndex: ui.setEmojiPickerOpenForIndex,
     replyingToPostId: reply.replyingToPostId ?? blueskyReply.target?.feedItemId ?? blueskyQuote.target?.feedItemId
-      ?? quote.target?.id ?? null,
+      ?? quote.target?.id ?? edit.target?.id ?? null,
     threadModalPostId: thread.threadModalPostId,
     onLike: actions.like,
     onUndoLike: actions.undoLike,
@@ -138,6 +150,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       blueskyReply.close();
       blueskyQuote.close();
       quote.close();
+      edit.close();
     },
     onCloseThread: thread.closeThread,
   });
@@ -159,6 +172,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       reply,
       reportPost,
       quote,
+      edit,
       ui,
       pullToRefresh,
       pullThreshold: PULL_TO_REFRESH_THRESHOLD,
@@ -180,6 +194,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       reply,
       reportPost,
       quote,
+      edit,
       ui,
       pullToRefresh,
       reading,
