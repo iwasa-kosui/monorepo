@@ -465,6 +465,8 @@ export const createBlueskyClient = (
         );
         return updated.ok ? RA.ok(undefined) : updated;
       }),
+    createBookmark: ({ uri, cid }) => postProcedure('createBookmark', 'app.bsky.bookmark.createBookmark', { uri, cid }),
+    deleteBookmark: (uri) => postProcedure('deleteBookmark', 'app.bsky.bookmark.deleteBookmark', { uri }),
     query: (nsid, params) =>
       withSession((session) => {
         const search = new URLSearchParams(params).toString();

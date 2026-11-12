@@ -24,6 +24,7 @@ const base: IoriBlueskyTimelineItemBody = {
   indexedAt: Date.UTC(2026, 10, 8, 1),
   liked: false,
   reposted: false,
+  bookmarked: false,
   isOwn: false,
 };
 const render = (
@@ -411,6 +412,62 @@ describe('BlueskyTimelineItemView', () => {
         { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: url },
         { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: url },
       ]);
+    });
+
+    describe('ブックマーク', () => {
+      it('ハンドラが無いときは出さない', () => {
+        const items = findMenuItems(BlueskyTimelineItemView({ item: base })) ?? [];
+
+        expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link']);
+      });
+
+      it('ブックマークしていない投稿には「ブックマーク」を出し、選ぶと onBookmark を item つきで呼ぶ', () => {
+        const onBookmark = vi.fn();
+        const onUndoBookmark = vi.fn();
+        const items = findMenuItems(BlueskyTimelineItemView({ item: base, onBookmark, onUndoBookmark })) ?? [];
+
+        expect(items.map(menuSummary)).toContainEqual({ key: 'bookmark', label: 'ブックマーク', danger: undefined });
+        const entry = items.find((candidate) => candidate.key === 'bookmark');
+        if (entry?.kind === 'action') void entry.onSelect();
+        expect(onBookmark).toHaveBeenCalledExactlyOnceWith(base);
+        expect(onUndoBookmark).not.toHaveBeenCalled();
+      });
+
+      it('ブックマーク済みの投稿には「ブックマークを外す」を出し、選ぶと onUndoBookmark を呼ぶ', () => {
+        const onBookmark = vi.fn();
+        const onUndoBookmark = vi.fn();
+        const bookmarked = { ...base, bookmarked: true };
+        const items = findMenuItems(BlueskyTimelineItemView({ item: bookmarked, onBookmark, onUndoBookmark })) ?? [];
+
+        expect(items.map(menuSummary)).toContainEqual({
+          key: 'bookmark',
+          label: 'ブックマークを外す',
+          danger: undefined,
+        });
+        expect(items.map((candidate) => candidate.label)).not.toContain('ブックマーク');
+        const entry = items.find((candidate) => candidate.key === 'bookmark');
+        if (entry?.kind === 'action') void entry.onSelect();
+        expect(onUndoBookmark).toHaveBeenCalledExactlyOnceWith(bookmarked);
+        expect(onBookmark).not.toHaveBeenCalled();
+      });
+
+      it('状態に合うハンドラが渡されないときは出さない', () => {
+        const onlyBookmark = findMenuItems(
+          BlueskyTimelineItemView({ item: { ...base, bookmarked: true }, onBookmark: vi.fn() }),
+        ) ?? [];
+        const onlyUndo = findMenuItems(BlueskyTimelineItemView({ item: base, onUndoBookmark: vi.fn() })) ?? [];
+
+        expect(onlyBookmark.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link']);
+        expect(onlyUndo.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link']);
+      });
+
+      it('自分の投稿にも出す', () => {
+        const items = findMenuItems(
+          BlueskyTimelineItemView({ item: { ...base, isOwn: true }, onBookmark: vi.fn() }),
+        ) ?? [];
+
+        expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link', 'bookmark']);
+      });
     });
 
     describe('作者のモデレーション', () => {

@@ -15,6 +15,7 @@ export const toBlueskyTimelineItemRow = (
     viewerLikeUri: _viewerLikeUri,
     reposted: _reposted,
     viewerRepostUri: _viewerRepostUri,
+    bookmarked: _bookmarked,
     ...item
   }: BlueskyFetchedTimelineItem,
 ): typeof blueskyTimelineItemsTable.$inferInsert => ({
@@ -26,7 +27,12 @@ export const toBlueskyTimelineItemRow = (
   fetchedAt: new Date(item.fetchedAt),
 });
 
-export const toBlueskyTimelineItem = (row: Row, liked: boolean, reposted: boolean): BlueskyTimelineItem =>
+export const toBlueskyTimelineItem = (
+  row: Row,
+  liked: boolean,
+  reposted: boolean,
+  bookmarked: boolean,
+): BlueskyTimelineItem =>
   BlueskyTimelineItem.orThrow({
     ...row,
     facets: BlueskyTimelineFacets.parseOrThrow(JSON.parse(row.facets)),
@@ -36,4 +42,5 @@ export const toBlueskyTimelineItem = (row: Row, liked: boolean, reposted: boolea
     fetchedAt: row.fetchedAt.getTime() as Instant,
     liked,
     reposted,
+    bookmarked,
   });

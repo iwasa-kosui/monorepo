@@ -128,6 +128,7 @@ import type { UpdateProfileUseCase } from '../useCase/updateProfile.ts';
 import type { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
+import type { BlueskyBookmarkRuntimePorts } from './blueskyBookmark.ts';
 import type { BlueskyModerationRuntimePorts } from './blueskyModeration.ts';
 import type { BlueskyProfileRuntimePorts } from './blueskyProfile.ts';
 import type { BlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
@@ -228,6 +229,7 @@ export type IoriDigestRuntimePorts = Readonly<{
 export type IoriBlueskyTimelineRuntimePorts = BlueskyTimelineRuntimePorts;
 export type IoriBlueskyModerationRuntimePorts = BlueskyModerationRuntimePorts;
 export type IoriBlueskyProfileRuntimePorts = BlueskyProfileRuntimePorts;
+export type IoriBlueskyBookmarkRuntimePorts = BlueskyBookmarkRuntimePorts;
 export type IoriBlueskyCrosspostStatusRuntimePorts = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   blueskyCrosspostStatusReportResolver: BlueskyCrosspostStatusReportResolver;
@@ -302,6 +304,7 @@ export type IoriRuntimePorts = Readonly<{
   blueskyTimeline: IoriBlueskyTimelineRuntimePorts;
   blueskyModeration: IoriBlueskyModerationRuntimePorts;
   blueskyProfile: IoriBlueskyProfileRuntimePorts;
+  blueskyBookmark: IoriBlueskyBookmarkRuntimePorts;
   blueskyCrosspostStatus: IoriBlueskyCrosspostStatusRuntimePorts;
   timeline: IoriTimelineRuntimePorts;
   posting: IoriPostingRuntimePorts;

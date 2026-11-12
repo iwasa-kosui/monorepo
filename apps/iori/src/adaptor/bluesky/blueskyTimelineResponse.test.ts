@@ -60,6 +60,7 @@ describe('parseBlueskyTimelineResponse', () => {
           viewerLikeUri: null,
           reposted: false,
           viewerRepostUri: null,
+          bookmarked: false,
         }],
       },
     });
@@ -95,6 +96,18 @@ describe('parseBlueskyTimelineResponse', () => {
     ['viewer.repost が repost の uri でない', { viewer: { repost: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
   ])('%s ときは reposted にしない', (_name, overrides) => {
     expect(only([{ post: postView(overrides) }])).toMatchObject({ reposted: false, viewerRepostUri: null });
+  });
+
+  it('post.viewer.bookmarked が true なら bookmarked にする', () => {
+    expect(only([{ post: postView({ viewer: { bookmarked: true } }) }])).toMatchObject({ bookmarked: true });
+  });
+
+  it.each([
+    ['viewer が無い', {}],
+    ['viewer.bookmarked が無い', { viewer: { like: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
+    ['viewer.bookmarked が false', { viewer: { bookmarked: false } }],
+  ])('%s ときは bookmarked にしない', (_name, overrides) => {
+    expect(only([{ post: postView(overrides) }])).toMatchObject({ bookmarked: false });
   });
 
   it('リポスト行でも、uri と cid は元の投稿のものにし、viewer.repost を読む', () => {

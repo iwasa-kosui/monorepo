@@ -14,6 +14,7 @@ const setup = (
   crosspostUris: readonly (string | null)[] = [],
   likedUris: readonly string[] = [],
   repostedUris: readonly string[] = [],
+  bookmarkedUris: readonly string[] = [],
 ) => {
   const { sqlite, db, queries } = createSqliteD1Fixture();
   const insert = sqlite.prepare(
@@ -42,6 +43,8 @@ const setup = (
   likedUris.forEach((uri, index) => insertLike.run(uri, `at://did:plc:me/app.bsky.feed.like/3k${index}`, 1));
   const insertRepost = sqlite.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)');
   repostedUris.forEach((uri, index) => insertRepost.run(uri, `at://did:plc:me/app.bsky.feed.repost/3k${index}`, 1));
+  const insertBookmark = sqlite.prepare('INSERT INTO bluesky_bookmarks(subjectUri,createdAt) VALUES (?,?)');
+  bookmarkedUris.forEach((uri) => insertBookmark.run(uri, 1));
   const resolver = createD1BlueskyTimelineItemsResolver(db);
   return {
     queries,
@@ -209,6 +212,48 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
 
       expect(t.queries).toHaveLength(1);
       expect(t.queries[0]?.sql).toMatch(/^select .* left join "bluesky_reposts"/is);
+    });
+  });
+
+  describe('bookmarked', () => {
+    const bookmarkRows = [
+      { feedItemId: 'own', uri: 'at://own', indexedAt: BASE },
+      { feedItemId: 'at://own#repost:did:plc:b', uri: 'at://own', repostedByDid: 'did:plc:b', indexedAt: BASE - 1 },
+      { feedItemId: 'other', uri: 'at://other', indexedAt: BASE - 2 },
+    ];
+
+    it('bluesky_bookmarks に同じ uri の行があれば、通常の行も repost の行も bookmarked にする', async () => {
+      const t = setup(bookmarkRows, [], [], [], ['at://own']);
+
+      const items = await t.resolveItems(10);
+
+      expect(items.map((item) => [item.feedItemId, item.bookmarked])).toEqual([
+        ['own', true],
+        ['at://own#repost:did:plc:b', true],
+        ['other', false],
+      ]);
+    });
+
+    it('いいねとリポストとは別に付け、タイムラインの行を増やさない', async () => {
+      const t = setup(bookmarkRows, [], ['at://other'], ['at://own'], ['at://own', 'at://other']);
+
+      const items = await t.resolveItems(10);
+
+      expect(items.map((item) => [item.feedItemId, item.liked, item.reposted, item.bookmarked])).toEqual([
+        ['own', false, true, true],
+        ['at://own#repost:did:plc:b', false, true, true],
+        ['other', true, false, true],
+      ]);
+    });
+
+    it('bookmarked の付与で D1 のクエリを増やさず、1 回の SELECT にまとめる', async () => {
+      const t = setup(bookmarkRows, [], [], [], ['at://own']);
+      t.queries.length = 0;
+
+      await t.resolveItems(10);
+
+      expect(t.queries).toHaveLength(1);
+      expect(t.queries[0]?.sql).toMatch(/^select .* left join "bluesky_bookmarks"/is);
     });
   });
 

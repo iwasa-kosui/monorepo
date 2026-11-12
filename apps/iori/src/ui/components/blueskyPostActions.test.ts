@@ -24,6 +24,7 @@ const item: IoriBlueskyTimelineItemBody = {
   indexedAt: Date.UTC(2026, 10, 8, 1),
   liked: false,
   reposted: false,
+  bookmarked: false,
   isOwn: false,
 };
 
@@ -57,6 +58,20 @@ describe('blueskyItemActionProps', () => {
 
     expect(blueskyItemActionProps(actions(), item)).not.toHaveProperty('onQuote');
     expect(blueskyItemActionProps(actions({ onQuote }), item)).toMatchObject({ onQuote });
+  });
+});
+
+describe('blueskyItemActionProps のブックマーク', () => {
+  it('ブックマークのハンドラは、操作に含まれるときだけ渡す', () => {
+    const onBookmark = () => {};
+    const onUndoBookmark = () => {};
+
+    expect(blueskyItemActionProps(actions(), item)).not.toHaveProperty('onBookmark');
+    expect(blueskyItemActionProps(actions(), item)).not.toHaveProperty('onUndoBookmark');
+    expect(blueskyItemActionProps(actions({ onBookmark, onUndoBookmark }), item)).toMatchObject({
+      onBookmark,
+      onUndoBookmark,
+    });
   });
 });
 

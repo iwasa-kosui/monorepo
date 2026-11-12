@@ -1250,3 +1250,62 @@ describe('resolveBlueskyPdsUrl', () => {
     expect(resolveBlueskyPdsUrl(value)).toBeUndefined();
   });
 });
+
+describe('createBlueskyClient のブックマーク', () => {
+  const POST_URI = 'at://did:plc:author/app.bsky.feed.post/3kpost';
+
+  it('createBookmark は app.bsky.bookmark.createBookmark に uri と cid を POST し、空の応答を成功にする', async () => {
+    const { client, calls } = setup(stored(), [() => new Response('', { status: 200 })]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result).toEqual({ ok: true, val: undefined });
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.bookmark.createBookmark`);
+    expect(calls[0]?.init.method).toBe('POST');
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ uri: POST_URI, cid: 'bafycid' });
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+    expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
+  });
+
+  it('deleteBookmark は app.bsky.bookmark.deleteBookmark に uri だけを POST する', async () => {
+    const { client, calls } = setup(stored(), [() => json({})]);
+
+    const result = await client.deleteBookmark(POST_URI);
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.bookmark.deleteBookmark`);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ uri: POST_URI });
+  });
+
+  it('createBookmark は期限切れの認証を更新してからやり直す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'ExpiredToken' }, 400),
+      () => json(sessionBody('new')),
+      () => json({}),
+    ]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
+    expect(header(calls[2]!, 'Authorization')).toBe('Bearer access-new');
+  });
+
+  it('権限が無い 403 は再ログインせず、status と code を持つ http の失敗で返す', async () => {
+    const { client, calls } = setup(stored(), [() => json({ error: 'Forbidden' }, 403)]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result).toMatchObject({ ok: false, err: { kind: 'http', status: 403, code: 'Forbidden' } });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('未実装の 501 は http の失敗で返す', async () => {
+    const { client } = setup(stored(), [() => json({ error: 'MethodNotImplemented' }, 501)]);
+
+    expect(await client.deleteBookmark(POST_URI)).toMatchObject({
+      ok: false,
+      err: { kind: 'http', status: 501, code: 'MethodNotImplemented' },
+    });
+  });
+});

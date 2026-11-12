@@ -5,10 +5,19 @@ import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { bookmarksUrl, fetchBookmarks, isUnauthorizedError } from '../api/mastodonClient.ts';
 import { readPageCache, writePageCache } from '../api/pageCache.ts';
 import { clearAllCache } from '../api/responseCache.ts';
+import { BlueskyBookmarksList } from '../components/BlueskyBookmarksList.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
+import { useBlueskyStatus } from '../hooks/useBlueskyStatus.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import {
+  BOOKMARKS_SOURCE_TABS,
+  type BookmarksSource,
+  parseBookmarksSource,
+  resolveBookmarksSource,
+  withBookmarksSource,
+} from './bookmarksSource.ts';
 
 type BookmarksData = Readonly<{
   statuses: readonly Status[];
@@ -20,7 +29,7 @@ const readCachedBookmarks = (): BookmarksData | null => {
   return cached === undefined ? null : { statuses: cached.items, nextMaxId: cached.nextMaxId };
 };
 
-const BookmarksPage = () => {
+const FediverseBookmarks = () => {
   const [cached] = useState(readCachedBookmarks);
   const [data, setData] = useState<BookmarksData | null>(cached);
   const [isLoading, setIsLoading] = useState(cached === null);
@@ -69,7 +78,6 @@ const BookmarksPage = () => {
   if (isLoading) {
     return (
       <section class='mb-8'>
-        <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Bookmarks</h1>
         <div class='flex items-center justify-center py-8'>
           <svg class='animate-spin h-8 w-8 text-terracotta' viewBox='0 0 24 24'>
             <circle class='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' stroke-width='4' fill='none' />
@@ -87,7 +95,6 @@ const BookmarksPage = () => {
   if (error) {
     return (
       <section class='mb-8'>
-        <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Bookmarks</h1>
         <p class='text-charcoal-light dark:text-gray-400'>{error}</p>
       </section>
     );
@@ -97,8 +104,6 @@ const BookmarksPage = () => {
 
   return (
     <section class='mb-8'>
-      <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Bookmarks</h1>
-
       <div class='space-y-6 py-2'>
         {data.statuses.length > 0
           ? (
@@ -127,6 +132,59 @@ const BookmarksPage = () => {
             </div>
           )}
       </div>
+    </section>
+  );
+};
+
+const BookmarksPage = () => {
+  const blueskyStatus = useBlueskyStatus();
+  const [source, setSource] = useState<BookmarksSource>(() => parseBookmarksSource(window.location.search));
+  const blueskyEnabled = blueskyStatus.status === undefined
+    ? blueskyStatus.loadFailed ? false : undefined
+    : blueskyStatus.status.enabled;
+  const visible = resolveBookmarksSource(source, blueskyEnabled);
+
+  useEffect(() => {
+    const handlePopState = () => setSource(parseBookmarksSource(window.location.search));
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleSelectSource = (next: BookmarksSource) => {
+    if (next === source) return;
+    window.history.pushState(
+      null,
+      '',
+      `${window.location.pathname}${withBookmarksSource(window.location.search, next)}`,
+    );
+    setSource(next);
+  };
+
+  return (
+    <section class='mb-8'>
+      <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Bookmarks</h1>
+      {blueskyEnabled === true && (
+        <div role='tablist' class='flex flex-wrap gap-2 mb-6'>
+          {BOOKMARKS_SOURCE_TABS.map((tab) => (
+            <button
+              key={tab.source}
+              type='button'
+              role='tab'
+              aria-selected={tab.source === visible}
+              class={`rounded-clay px-4 py-2 shadow-clay-sm ${
+                tab.source === visible
+                  ? 'bg-terracotta text-white'
+                  : 'bg-cream dark:bg-gray-800 text-charcoal dark:text-gray-100'
+              }`}
+              onClick={() => handleSelectSource(tab.source)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {visible === 'fediverse' && <FediverseBookmarks />}
+      {visible === 'bluesky' && <BlueskyBookmarksList />}
     </section>
   );
 };

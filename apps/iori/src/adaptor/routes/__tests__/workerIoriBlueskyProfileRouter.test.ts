@@ -74,6 +74,7 @@ const feedItem = {
   viewerLikeUri: null,
   reposted: false,
   viewerRepostUri: null,
+  bookmarked: false,
 };
 
 const setup = async (options: {
@@ -295,6 +296,7 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
       indexedAt: NOW - 500,
       liked: false,
       reposted: false,
+      bookmarked: false,
       isOwn: false,
     }]);
     expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: 'abc' });

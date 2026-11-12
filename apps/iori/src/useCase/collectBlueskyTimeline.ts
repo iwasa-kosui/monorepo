@@ -1,5 +1,10 @@
 import { RA, Result } from '@iwasa-kosui/result';
 
+import {
+  BLUESKY_BOOKMARK_SYNC_GRACE_MS,
+  type BlueskyBookmark,
+  type BlueskyViewerBookmarksSyncedStore,
+} from '../domain/blueskyTimeline/blueskyBookmark.ts';
 import type { BlueskyLike, BlueskyViewerLikesSyncedStore } from '../domain/blueskyTimeline/blueskyLike.ts';
 import {
   BLUESKY_REPOST_SYNC_GRACE_MS,
@@ -35,6 +40,7 @@ type Deps = Readonly<{
   savedStore: BlueskyTimelineItemsSavedStore;
   viewerLikesStore: BlueskyViewerLikesSyncedStore;
   viewerRepostsStore: BlueskyViewerRepostsSyncedStore;
+  viewerBookmarksStore: BlueskyViewerBookmarksSyncedStore;
   now: () => Instant;
 }>;
 
@@ -76,13 +82,34 @@ const syncViewerReposts = async (
   if (absent.length > 0) Result.unsafeUnwrap(await store.deleteStale(absent, staleBefore));
 };
 
+const syncViewerBookmarks = async (
+  store: BlueskyViewerBookmarksSyncedStore,
+  items: readonly BlueskyFetchedTimelineItem[],
+  staleBefore: Instant,
+): Promise<void> => {
+  const bookmarks = new Map<string, BlueskyBookmark>();
+  const unbookmarked = new Set<string>();
+  for (const item of items) {
+    if (!item.bookmarked) {
+      unbookmarked.add(item.uri);
+      continue;
+    }
+    if (bookmarks.has(item.uri)) continue;
+    bookmarks.set(item.uri, { subjectUri: item.uri, createdAt: item.fetchedAt });
+  }
+  if (bookmarks.size > 0) Result.unsafeUnwrap(await store.sync([...bookmarks.values()]));
+  const absent = [...unbookmarked].filter((uri) => !bookmarks.has(uri));
+  if (absent.length > 0) Result.unsafeUnwrap(await store.deleteStale(absent, staleBefore));
+};
+
 const create = (
-  { fetcher, existingResolver, savedStore, viewerLikesStore, viewerRepostsStore, now }: Deps,
+  { fetcher, existingResolver, savedStore, viewerLikesStore, viewerRepostsStore, viewerBookmarksStore, now }: Deps,
 ): CollectBlueskyTimelineUseCase => {
   const run = async (): RA<Ok, Err> => {
     const startedAt = now();
     const retentionStart = Instant.addDuration(startedAt, -BLUESKY_TIMELINE_RETENTION_DAYS * DAY_MS);
     const repostStaleBefore = Instant.addDuration(startedAt, -BLUESKY_REPOST_SYNC_GRACE_MS);
+    const bookmarkStaleBefore = Instant.addDuration(startedAt, -BLUESKY_BOOKMARK_SYNC_GRACE_MS);
     let cursor: string | undefined;
     let failure: Err | undefined;
     let pages = 0;
@@ -108,6 +135,7 @@ const create = (
       saved += inserted.length;
       await syncViewerLikes(viewerLikesStore, recent);
       await syncViewerReposts(viewerRepostsStore, recent, repostStaleBefore);
+      await syncViewerBookmarks(viewerBookmarksStore, recent, bookmarkStaleBefore);
       cursor = page.val.cursor;
       if (inserted.length < recent.length || recent.length < unique.length || cursor === undefined) break;
     }

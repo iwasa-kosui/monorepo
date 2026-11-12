@@ -103,6 +103,8 @@ const setup = () => {
     createFollow: async () => RA.err(failure('createFollow is not used')),
     deleteFollow: async () => RA.err(failure('deleteFollow is not used')),
     updateSeen: async () => RA.err(failure('updateSeen is not used')),
+    createBookmark: async () => RA.err(failure('createBookmark is not used')),
+    deleteBookmark: async () => RA.err(failure('deleteBookmark is not used')),
   };
 
   const handleDids = new Map<string, string>([['alice.bsky.social', 'did:plc:alice']]);

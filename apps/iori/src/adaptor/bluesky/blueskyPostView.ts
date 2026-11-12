@@ -31,7 +31,11 @@ export const postViewZodType = z.looseObject({
   }),
   embed: z.unknown().optional(),
   indexedAt: z.string(),
-  viewer: z.looseObject({ like: z.string().optional(), repost: z.string().optional() }).optional(),
+  viewer: z.looseObject({
+    like: z.string().optional(),
+    repost: z.string().optional(),
+    bookmarked: z.boolean().optional(),
+  }).optional(),
 });
 export type BlueskyPostView = z.infer<typeof postViewZodType>;
 
@@ -265,6 +269,7 @@ export const itemFromPostView = (
     viewerLikeUri,
     reposted: viewerRepostUri !== null,
     viewerRepostUri,
+    bookmarked: post.viewer?.bookmarked === true,
   });
   return parsed.ok ? parsed.val : undefined;
 };
