@@ -50,6 +50,19 @@ const menuItems = (props: Partial<Parameters<typeof PostView>[0]> & { status: St
 const keys = (props: Partial<Parameters<typeof PostView>[0]> & { status: Status }): readonly string[] =>
   menuItems(props).map((item) => item.key);
 
+type ButtonNode = Readonly<
+  { props: Record<string, unknown> & { onClick: (e: { stopPropagation: () => void }) => void } }
+>;
+
+const findButtonByTitle = (node: unknown, title: string): ButtonNode | undefined => {
+  if (Array.isArray(node)) return node.map((child) => findButtonByTitle(child, title)).find((found) => found);
+  if (typeof node !== 'object' || node === null || !('tag' in node)) return undefined;
+  const { tag, props, children } = node as { tag: unknown; props: Record<string, unknown>; children: unknown };
+  if (tag === 'button' && props.title === title) return node as unknown as ButtonNode;
+  if (typeof tag === 'function') return findButtonByTitle(tag({ ...props, children }), title);
+  return findButtonByTitle(children, title);
+};
+
 describe('PostView の「…」メニュー', () => {
   it('リモートの投稿では「元の投稿を開く」と「リンクをコピー」を出す', () => {
     expect(menuItems({ status: remote })).toEqual([
@@ -374,42 +387,58 @@ describe('PostView の「…」メニュー', () => {
   describe('引用', () => {
     const base = { status: { ...remote, visibility: 'public' as const }, onQuote: () => {} };
 
-    it('public の投稿では、先頭に action として出す', () => {
-      expect(menuItems(base)[0]).toMatchObject({ key: 'quote', label: '引用', kind: 'action' });
+    it('「…」メニューには出さない', () => {
+      expect(keys(base)).not.toContain('quote');
+    });
+
+    it('public の投稿では、操作の行に title と aria-label が「引用」のボタンを出す', () => {
+      const button = findButtonByTitle(PostView(base), '引用');
+
+      expect(button?.props['aria-label']).toBe('引用');
     });
 
     it('unlisted の投稿でも出す', () => {
-      expect(keys({ ...base, status: { ...remote, visibility: 'unlisted' } })).toContain('quote');
+      expect(findButtonByTitle(PostView({ ...base, status: { ...remote, visibility: 'unlisted' } }), '引用'))
+        .toBeDefined();
     });
 
     it('private と direct の投稿には出さない', () => {
-      expect(keys({ ...base, status: { ...remote, visibility: 'private' } })).not.toContain('quote');
-      expect(keys({ ...base, status: { ...remote, visibility: 'direct' } })).not.toContain('quote');
+      expect(findButtonByTitle(PostView({ ...base, status: { ...remote, visibility: 'private' } }), '引用'))
+        .toBeUndefined();
+      expect(findButtonByTitle(PostView({ ...base, status: { ...remote, visibility: 'direct' } }), '引用'))
+        .toBeUndefined();
     });
 
     it('onQuote が無いときは出さない', () => {
-      expect(keys({ ...base, onQuote: undefined })).not.toContain('quote');
+      expect(findButtonByTitle(PostView({ ...base, onQuote: undefined }), '引用')).toBeUndefined();
     });
 
-    it('選ぶと、表示している投稿を渡して onQuote を呼ぶ', () => {
+    it('押すと、表示している投稿を渡して onQuote を呼ぶ', () => {
       const onQuote = vi.fn();
-      const quote = menuItems({ ...base, onQuote }).find((item) => item.key === 'quote');
+      const button = findButtonByTitle(PostView({ ...base, onQuote }), '引用');
 
-      if (quote?.kind !== 'action') throw new Error('quote not found');
-      void quote.onSelect();
+      button?.props.onClick({ stopPropagation: vi.fn() });
 
       expect(onQuote).toHaveBeenCalledTimes(1);
       expect(onQuote).toHaveBeenCalledWith(base.status);
+    });
+
+    it('押したとき、イベントを親に伝えない', () => {
+      const stopPropagation = vi.fn();
+      const button = findButtonByTitle(PostView({ ...base, onQuote: vi.fn() }), '引用');
+
+      button?.props.onClick({ stopPropagation });
+
+      expect(stopPropagation).toHaveBeenCalledTimes(1);
     });
 
     it('リポストは中身の投稿を引用の対象にし、可視性も中身で判定する', () => {
       const onQuote = vi.fn();
       const inner = { ...remote, visibility: 'public' as const };
       const boost = { ...local, id: 'boost-1', visibility: 'private' as const, reblog: inner };
-      const quote = menuItems({ status: boost, onQuote }).find((item) => item.key === 'quote');
+      const button = findButtonByTitle(PostView({ status: boost, onQuote }), '引用');
 
-      if (quote?.kind !== 'action') throw new Error('quote not found');
-      void quote.onSelect();
+      button?.props.onClick({ stopPropagation: vi.fn() });
 
       expect(onQuote).toHaveBeenCalledWith(inner);
     });

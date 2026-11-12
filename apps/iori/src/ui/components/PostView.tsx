@@ -14,6 +14,7 @@ import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 import { PollView } from './PollView.tsx';
 import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
 import { QuotedPostCard } from './QuotedPostCard.tsx';
+import { QuoteIcon } from './QuoteIcon.tsx';
 
 type Props = Readonly<{
   status: Status;
@@ -113,9 +114,6 @@ export const PostView = (
   const canQuote = onQuote !== undefined && (post.visibility === 'public' || post.visibility === 'unlisted');
   const canEdit = onEdit !== undefined && isOwner;
   const menuItems: readonly PostMenuItem[] = [
-    ...(canQuote
-      ? [{ key: 'quote', label: '引用', kind: 'action', onSelect: () => onQuote?.(post) } as const]
-      : []),
     ...(canEdit
       ? [{ key: 'edit', label: '編集', kind: 'action', onSelect: () => onEdit?.(post) } as const]
       : []),
@@ -605,7 +603,7 @@ export const PostView = (
               </button>
             </div>
           )}
-          <div class='mt-3 flex items-center justify-end gap-4'>
+          <div class='mt-3 flex items-center justify-end flex-wrap gap-x-3 gap-y-2 sm:gap-x-4'>
             {canTranslate && (
               <button
                 type='button'
@@ -711,6 +709,20 @@ export const PostView = (
                   />
                 </svg>
                 {post.reblogs_count > 0 && <span class='text-sm'>{post.reblogs_count}</span>}
+              </button>
+            )}
+            {canQuote && (
+              <button
+                type='button'
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuote?.(post);
+                }}
+                class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
+                title='引用'
+                aria-label='引用'
+              >
+                <QuoteIcon />
               </button>
             )}
             {!(onLike || onUndoLike) && post.favourites_count > 0 && (
