@@ -678,6 +678,20 @@ describe('GET /api/iori/v1/bluesky/feeds/posts', () => {
     }
   });
 
+  it('リストの 5xx は Feed provider failed にせず、Bluesky request failed にする', async () => {
+    const path = `${FEED_POSTS}?uri=${encodeURIComponent(LIST_URI)}`;
+
+    for (const error of [clientError({ status: 502, code: 'UpstreamFailure' }), clientError({ status: 500 })]) {
+      const t = await setup({
+        scope: 'read:accounts',
+        feedReader: { getFeedPosts: vi.fn(async () => RA.err(error)) },
+      });
+      const response = await t.get(path);
+      expect(response.status).toBe(502);
+      expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
+    }
+  });
+
   it('ネットワークの失敗と、提供元の失敗でない HTTP エラーは Bluesky request failed にする', async () => {
     const path = `${FEED_POSTS}?uri=${encodeURIComponent(FEED_URI)}`;
     const network = await setup({

@@ -58,6 +58,12 @@ const VIEW_TABS: readonly Readonly<{ view: BlueskyFeedView; label: string }>[] =
 
 const actorKey = (actor: IoriBlueskyActorBody): string => actor.did;
 
+const feedPostsFailureMessage = (error: unknown, kind: 'first' | 'more'): string =>
+  blueskyFeedPostsFailureMessage(error, kind, 'feed');
+
+const listPostsFailureMessage = (error: unknown, kind: 'first' | 'more'): string =>
+  blueskyFeedPostsFailureMessage(error, kind, 'list');
+
 const FeedBadge = ({ selected, children }: Readonly<{ selected: boolean; children: string }>) => (
   <span
     class={`rounded-full px-2 py-0.5 text-xs whitespace-nowrap ${
@@ -373,7 +379,7 @@ const FeedsContent = () => {
                 <BlueskyPostList
                   load={loadPosts}
                   emptyMessage={emptyPostsMessageOf(selected)}
-                  failureMessage={blueskyFeedPostsFailureMessage}
+                  failureMessage={selected.kind === 'list' ? listPostsFailureMessage : feedPostsFailureMessage}
                 />
               )}
           </>

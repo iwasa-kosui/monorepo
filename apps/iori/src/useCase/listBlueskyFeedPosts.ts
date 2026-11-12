@@ -21,7 +21,7 @@ const create = ({ reader }: Deps): ListBlueskyFeedPostsUseCase => ({
   run: async ({ uri, cursor }) => {
     const page = await reader.getFeedPosts({ uri, cursor });
     if (page.ok) return page;
-    return RA.err(isBlueskyFeedNotFound(page.err) ? { type: 'BlueskyFeedNotFound' } : page.err);
+    return RA.err(isBlueskyFeedNotFound(page.err, cursor) ? { type: 'BlueskyFeedNotFound' } : page.err);
   },
 });
 

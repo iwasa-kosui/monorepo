@@ -31,6 +31,28 @@ describe('PagedListBody', () => {
     expect(html).toContain('フィードはありません');
   });
 
+  it('0 件でも cursor があれば空の文言を出さず、読み込み中の文言を出す', () => {
+    const html = render({ kind: 'ready', items: [], cursor: 'next', loadMoreFailed: null });
+
+    expect(html).toContain('読み込んでいます');
+    expect(html).not.toContain('フィードはありません');
+    expect(html).not.toContain('もう一度読み込む');
+  });
+
+  it('0 件で cursor があり続きの取得に失敗したら、失敗の文言と再読み込みのボタンを出す', () => {
+    const html = render({
+      kind: 'ready',
+      items: [],
+      cursor: 'next',
+      loadMoreFailed: '続きを読み込めませんでした',
+    });
+
+    expect(html).toContain('続きを読み込めませんでした');
+    expect(html).toContain('もう一度読み込む');
+    expect(html).not.toContain('フィードはありません');
+    expect(html).not.toContain('読み込んでいます');
+  });
+
   it('項目を出し、続きが失敗しているときだけ文言と再読み込みのボタンを出す', () => {
     const ok = render({ kind: 'ready', items: ['a', 'b'], cursor: 'next', loadMoreFailed: null });
     const failed = render({

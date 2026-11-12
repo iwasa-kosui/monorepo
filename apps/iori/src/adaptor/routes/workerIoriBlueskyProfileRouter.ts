@@ -217,11 +217,16 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
       if (listBlueskyFeedPostsUseCase === undefined) return c.json(disabled, 409);
       const uri = c.req.query('uri');
-      if (uri === undefined || blueskyFeedKindOf(uri) === undefined) {
+      const feedKind = uri === undefined ? undefined : blueskyFeedKindOf(uri);
+      if (uri === undefined || feedKind === undefined) {
         return c.json({ error: 'Validation failed: uri' }, 400);
       }
       const page = await listBlueskyFeedPostsUseCase.run({ uri, cursor: c.req.query('cursor') || undefined });
-      if (!page.ok) return isFeedProviderFailure(page.err) ? c.json(feedProviderFailed, 502) : failure(c, page.err);
+      if (!page.ok) {
+        return feedKind === 'feed' && isFeedProviderFailure(page.err)
+          ? c.json(feedProviderFailed, 502)
+          : failure(c, page.err);
+      }
       const viewer = await resolveViewerDid(viewerDid);
       return c.json(
         {

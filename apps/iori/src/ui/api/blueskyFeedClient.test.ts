@@ -146,28 +146,34 @@ describe('失敗の文言', () => {
     stubFetch(json({ error: 'Feed provider failed' }, 502));
     const providerFailed = await failure(fetchBlueskyFeedPosts(FEED));
 
-    expect(blueskyFeedPostsFailureMessage(missing, 'first')).toBe(
+    expect(blueskyFeedPostsFailureMessage(missing, 'first', 'feed')).toBe(
       'このフィードは見つかりませんでした。削除された可能性があります。',
     );
-    expect(blueskyFeedPostsFailureMessage(missing, 'more')).toBe(
+    expect(blueskyFeedPostsFailureMessage(missing, 'more', 'feed')).toBe(
       'このフィードは見つかりませんでした。削除された可能性があります。',
     );
-    expect(blueskyFeedPostsFailureMessage(providerFailed, 'first')).toBe(
+    expect(blueskyFeedPostsFailureMessage(providerFailed, 'first', 'feed')).toBe(
       'フィードの提供元から取得できませんでした。時間をおいて読み込み直してください。',
     );
-    expect(blueskyFeedPostsFailureMessage(providerFailed, 'more')).toBe(
+    expect(blueskyFeedPostsFailureMessage(providerFailed, 'more', 'feed')).toBe(
       'フィードの提供元から取得できませんでした。時間をおいて読み込み直してください。',
     );
-    expect(blueskyFeedPostsFailureMessage(login, 'first')).toBe(
+    expect(blueskyFeedPostsFailureMessage(missing, 'first', 'list')).toBe(
+      'このリストは見つかりませんでした。削除された可能性があります。',
+    );
+    expect(blueskyFeedPostsFailureMessage(missing, 'more', 'list')).toBe(
+      'このリストは見つかりませんでした。削除された可能性があります。',
+    );
+    expect(blueskyFeedPostsFailureMessage(login, 'first', 'feed')).toBe(
       'Bluesky にログインできないため、投稿を読み込めませんでした',
     );
-    expect(blueskyFeedPostsFailureMessage(login, 'more')).toBe(
+    expect(blueskyFeedPostsFailureMessage(login, 'more', 'feed')).toBe(
       'Bluesky にログインできないため、続きを読み込めませんでした',
     );
-    expect(blueskyFeedPostsFailureMessage(disabled, 'first')).toBe('Bluesky 連携が無効です');
-    expect(blueskyFeedPostsFailureMessage(other, 'first')).toBe('投稿を読み込めませんでした');
-    expect(blueskyFeedPostsFailureMessage(other, 'more')).toBe('続きを読み込めませんでした');
-    expect(blueskyFeedPostsFailureMessage(new Error('x'), 'first')).toBe('投稿を読み込めませんでした');
+    expect(blueskyFeedPostsFailureMessage(disabled, 'first', 'feed')).toBe('Bluesky 連携が無効です');
+    expect(blueskyFeedPostsFailureMessage(other, 'first', 'feed')).toBe('投稿を読み込めませんでした');
+    expect(blueskyFeedPostsFailureMessage(other, 'more', 'feed')).toBe('続きを読み込めませんでした');
+    expect(blueskyFeedPostsFailureMessage(new Error('x'), 'first', 'feed')).toBe('投稿を読み込めませんでした');
   });
 });
 
@@ -297,7 +303,15 @@ describe('追加した失敗の文言', () => {
     const disabled = await failure(fetchBlueskyListMembers(LIST));
     stubFetch(json({ error: 'Bluesky request failed' }, 502));
     const other = await failure(fetchBlueskyListMembers(LIST));
+    stubFetch(json({ error: 'Feed not found' }, 404));
+    const missing = await failure(fetchBlueskyListMembers(LIST));
 
+    expect(blueskyListMembersFailureMessage(missing, 'first')).toBe(
+      'このリストは見つかりませんでした。削除された可能性があります。',
+    );
+    expect(blueskyListMembersFailureMessage(missing, 'more')).toBe(
+      'このリストは見つかりませんでした。削除された可能性があります。',
+    );
     expect(blueskyListMembersFailureMessage(login, 'first')).toBe(
       'Bluesky にログインできないため、メンバーを読み込めませんでした',
     );

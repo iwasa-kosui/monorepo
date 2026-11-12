@@ -23,7 +23,7 @@ export const PagedListBody = <T,>({ state, emptyMessage, renderItem, onRetryFirs
       </div>
     );
   }
-  if (state.items.length === 0) {
+  if (state.items.length === 0 && state.cursor === undefined) {
     return (
       <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-8 text-center'>
         <p class='text-charcoal-light dark:text-gray-400'>{emptyMessage}</p>
@@ -34,6 +34,7 @@ export const PagedListBody = <T,>({ state, emptyMessage, renderItem, onRetryFirs
   return (
     <>
       <div class='space-y-3 py-2'>{state.items.map(renderItem)}</div>
+      {state.items.length === 0 && retryCursor === undefined && <p class={mutedTextClass}>読み込んでいます</p>}
       {retryCursor !== undefined && (
         <div class='py-4 space-y-3'>
           <p class='text-charcoal-light dark:text-gray-400'>{state.loadMoreFailed}</p>

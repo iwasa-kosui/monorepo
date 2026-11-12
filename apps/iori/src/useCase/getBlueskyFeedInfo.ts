@@ -21,7 +21,7 @@ const create = ({ reader }: Deps): GetBlueskyFeedInfoUseCase => ({
   run: async ({ uri }) => {
     const info = await reader.getFeedInfo(uri);
     if (info.ok) return info;
-    return RA.err(isBlueskyFeedNotFound(info.err) ? { type: 'BlueskyFeedNotFound' } : info.err);
+    return RA.err(isBlueskyFeedNotFound(info.err, undefined) ? { type: 'BlueskyFeedNotFound' } : info.err);
   },
 });
 

@@ -4,6 +4,7 @@ import type {
   IoriBlueskyFeedPostsResponse,
   IoriBlueskyListMembersResponse,
 } from '../../adaptor/routes/workerIoriBlueskyProfileRouter.ts';
+import type { BlueskyFeedKind } from '../../domain/blueskyFeed/blueskyFeedUri.ts';
 import { BLUESKY_LOGIN_FAILED_ERROR, isMastodonApiError, requestUrl, toApiError } from './mastodonClient.ts';
 
 const FEEDS_PATH = '/api/iori/v1/bluesky/feeds';
@@ -97,7 +98,11 @@ export const blueskySavedFeedsFailureMessage = (error: unknown): string => {
   return '保存したフィードとリストを読み込めませんでした';
 };
 
-export const blueskyFeedPostsFailureMessage = (error: unknown, kind: 'first' | 'more'): string => {
+export const blueskyFeedPostsFailureMessage = (
+  error: unknown,
+  kind: 'first' | 'more',
+  feedKind: BlueskyFeedKind,
+): string => {
   if (isMastodonApiError(error) && error.message === BLUESKY_LOGIN_FAILED_ERROR) {
     return kind === 'first'
       ? 'Bluesky にログインできないため、投稿を読み込めませんでした'
@@ -105,7 +110,9 @@ export const blueskyFeedPostsFailureMessage = (error: unknown, kind: 'first' | '
   }
   if (isMastodonApiError(error) && error.status === 409) return 'Bluesky 連携が無効です';
   if (isMastodonApiError(error) && error.status === 404) {
-    return 'このフィードは見つかりませんでした。削除された可能性があります。';
+    return feedKind === 'list'
+      ? 'このリストは見つかりませんでした。削除された可能性があります。'
+      : 'このフィードは見つかりませんでした。削除された可能性があります。';
   }
   if (isMastodonApiError(error) && error.message === FEED_PROVIDER_FAILED_ERROR) {
     return 'フィードの提供元から取得できませんでした。時間をおいて読み込み直してください。';
@@ -136,6 +143,9 @@ export const blueskyListMembersFailureMessage = (error: unknown, kind: 'first' |
       : 'Bluesky にログインできないため、続きを読み込めませんでした';
   }
   if (isMastodonApiError(error) && error.status === 409) return 'Bluesky 連携が無効です';
+  if (isMastodonApiError(error) && error.status === 404) {
+    return 'このリストは見つかりませんでした。削除された可能性があります。';
+  }
   return kind === 'first' ? 'メンバーを読み込めませんでした' : '続きを読み込めませんでした';
 };
 

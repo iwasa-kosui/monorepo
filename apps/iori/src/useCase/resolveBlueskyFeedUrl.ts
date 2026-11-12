@@ -21,7 +21,7 @@ const create = ({ reader }: Deps): ResolveBlueskyFeedUrlUseCase => ({
     if (parsed === undefined) return RA.err({ type: 'BlueskyFeedUrlInvalid' });
     if (isBlueskyDid(parsed.actor)) return RA.ok({ uri: blueskyFeedUriOf(parsed.actor, parsed.kind, parsed.rkey) });
     const did = await reader.resolveHandle(parsed.actor);
-    if (!did.ok) return RA.err(isBlueskyFeedNotFound(did.err) ? { type: 'BlueskyFeedNotFound' } : did.err);
+    if (!did.ok) return RA.err(isBlueskyFeedNotFound(did.err, undefined) ? { type: 'BlueskyFeedNotFound' } : did.err);
     return RA.ok({ uri: blueskyFeedUriOf(did.val, parsed.kind, parsed.rkey) });
   },
 });

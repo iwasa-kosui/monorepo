@@ -22,6 +22,21 @@ describe('blueskyFeedKindOf', () => {
   });
 });
 
+describe('blueskyFeedKindOf の authority と rkey の検証', () => {
+  it('authority が did でなければ undefined にする', () => {
+    expect(blueskyFeedKindOf('at://alice.bsky.social/app.bsky.feed.generator/whats-hot')).toBeUndefined();
+    expect(blueskyFeedKindOf('at://not-a-did/app.bsky.graph.list/3kabc')).toBeUndefined();
+    expect(blueskyFeedKindOf('at://did:plc:/app.bsky.graph.list/3kabc')).toBeUndefined();
+  });
+
+  it('rkey が不正な文字を含む、または . と .. なら undefined にする', () => {
+    expect(blueskyFeedKindOf('at://did:plc:alice/app.bsky.feed.generator/a b')).toBeUndefined();
+    expect(blueskyFeedKindOf('at://did:plc:alice/app.bsky.feed.generator/a%2Fb')).toBeUndefined();
+    expect(blueskyFeedKindOf('at://did:plc:alice/app.bsky.graph.list/.')).toBeUndefined();
+    expect(blueskyFeedKindOf('at://did:plc:alice/app.bsky.graph.list/..')).toBeUndefined();
+  });
+});
+
 describe('parseBlueskyFeedUrl', () => {
   it('フィードの URL を actor と rkey に分ける', () => {
     expect(parseBlueskyFeedUrl('https://bsky.app/profile/did:plc:alice/feed/whats-hot')).toEqual({
