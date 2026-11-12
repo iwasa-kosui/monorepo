@@ -276,6 +276,60 @@ describe('ブロックした相手の通知', () => {
 
     expect(await t.idsOf({}, blockedTypes)).toEqual([t.visible.mention, t.visible.like]);
   });
+
+  type SeededTest = ReturnType<typeof seedNotifications>;
+  type Bob = { actorId: string };
+  const perType: ReadonlyArray<
+    [Notification['type'], (t: SeededTest, actor: Bob, createdAt: number) => string]
+  > = [
+    [
+      'like',
+      (t, actor, createdAt) => t.seed.addLikeNotification(t.me.userId, actor.actorId, t.myPost.postId, createdAt),
+    ],
+    ['follow', (t, actor, createdAt) => t.seed.addFollowNotification(t.me.userId, actor.actorId, createdAt)],
+    [
+      'emojiReact',
+      (t, actor, createdAt) => t.seed.addEmojiReactNotification(t.me.userId, actor.actorId, t.myPost.postId, createdAt),
+    ],
+    [
+      'reply',
+      (t, actor, createdAt) =>
+        t.seed.addReplyNotification(
+          t.me.userId,
+          actor.actorId,
+          t.seed.addRemotePost(actor, createdAt, { timeline: false }).postId,
+          t.myPost.postId,
+          createdAt,
+        ),
+    ],
+    [
+      'repost',
+      (t, actor, createdAt) => t.seed.addRepostNotification(t.me.userId, actor.actorId, t.myPost.postId, createdAt),
+    ],
+    [
+      'mention',
+      (t, actor, createdAt) =>
+        t.seed.addMentionNotification(
+          t.me.userId,
+          actor.actorId,
+          t.seed.addRemotePost(actor, createdAt, { timeline: false }).postId,
+          createdAt,
+        ),
+    ],
+  ];
+
+  it.each(perType)(
+    '一覧から、ブロックした相手の %s を除き、ブロックしていない相手のものを残す',
+    async (type, addNotification) => {
+      const t = seedNotifications();
+      const bob = t.seed.addRemoteActor('bob');
+      addNotification(t, t.alice, 9_000);
+      const visible = addNotification(t, bob, 9_500);
+      t.seed.addBlock(t.me.userId, t.alice.actorId);
+
+      expect(await t.idsOf({}, [type])).toEqual([visible]);
+    },
+  );
 });
 
 describe('通知の削除と notifications のマーカー', () => {
