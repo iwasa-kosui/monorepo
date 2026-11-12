@@ -117,11 +117,13 @@ export const postsTable = sqliteTable('posts', {
 export const remotePostsTable = sqliteTable('remote_posts', {
   postId: text('postId').primaryKey().references(() => postsTable.postId),
   uri: text('uri').notNull(),
+  url: text('url'),
   inReplyToUri: text('inReplyToUri'),
   visibility: text('visibility'),
   editedAt: timestamp(),
 }, (table) => [
   uniqueIndex('remote_posts_uri_unique').on(table.uri),
+  index('remote_posts_url_idx').on(table.url),
   index('remote_posts_in_reply_to_uri_idx').on(table.inReplyToUri),
 ]);
 
@@ -731,6 +733,7 @@ export const blueskyTimelineItemsTable = sqliteTable('bluesky_timeline_items', {
   replyParentAuthorHandle: text('replyParentAuthorHandle'),
   repostedByDid: text('repostedByDid'),
   repostedByHandle: text('repostedByHandle'),
+  bridgyOriginalUrl: text('bridgyOriginalUrl'),
   postedAt: timestamp().notNull(),
   indexedAt: timestamp().notNull(),
   fetchedAt: timestamp().notNull(),

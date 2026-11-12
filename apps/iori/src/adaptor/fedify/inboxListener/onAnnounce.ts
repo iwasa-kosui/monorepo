@@ -24,6 +24,7 @@ import {
 } from '../../../useCase/helper/remotePostObject.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
+import { extractNoteUrl } from '../extractNoteUrl.ts';
 import { extractQuoteUri } from '../extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
@@ -262,6 +263,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
       reposterIdentity,
       remotePostIdentity: {
         uri: note.id.href,
+        url: extractNoteUrl(note),
         content: contentText,
         poll,
         ...extractContentWarning(note),

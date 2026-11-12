@@ -50,6 +50,7 @@ type ActorIdentity = Readonly<{
 
 type RemotePostIdentity = Readonly<{
   uri: string;
+  url?: string | null;
   content: string;
   authorIdentity: ActorIdentity;
   summary?: string | null;

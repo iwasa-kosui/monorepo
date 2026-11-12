@@ -44,6 +44,7 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
     const event = Post.createRemotePost(createdAt)({
       content: identity.content,
       uri: identity.uri,
+      url: identity.url,
       actorId: actor.val.id,
       inReplyToUri: identity.inReplyToUri,
       summary: identity.summary,

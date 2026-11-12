@@ -142,6 +142,19 @@ describe('createOnAnnounce', () => {
     );
   });
 
+  it('passes the url of the Note of a remote Announce to addReceivedRepostUseCase', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined);
+    const note = createNote([]).clone({ url: new URL('https://remote.example/@alice/1') });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remotePostIdentity: expect.objectContaining({ url: 'https://remote.example/@alice/1' }),
+      }),
+    );
+  });
+
   it('passes the poll of an announced Question to addReceivedRepostUseCase', async () => {
     const { deps, addReceivedRepostUseCase } = createDeps(undefined);
     const note = createNote([]);
@@ -167,6 +180,16 @@ describe('createOnAnnounce', () => {
           },
         }),
       }),
+    );
+  });
+
+  it('passes a null url when the Note of a remote Announce has none', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined);
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(createNote([])));
+
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
+      expect.objectContaining({ remotePostIdentity: expect.objectContaining({ url: null }) }),
     );
   });
 

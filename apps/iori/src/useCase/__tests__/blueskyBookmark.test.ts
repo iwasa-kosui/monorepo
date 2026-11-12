@@ -201,6 +201,8 @@ describe('ListBlueskyBookmarksUseCase', () => {
       replyParentAuthorHandle: null,
       repostedByDid: null,
       repostedByHandle: null,
+      bridgyOriginalUrl: null,
+      bridgedFromPostId: null,
       postedAt: NOW,
       indexedAt: NOW,
       fetchedAt: NOW,

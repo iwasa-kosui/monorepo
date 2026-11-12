@@ -37,6 +37,8 @@ const itemAt = (
     replyParentAuthorHandle: null,
     repostedByDid: null,
     repostedByHandle: null,
+    bridgyOriginalUrl: null,
+    bridgedFromPostId: null,
     postedAt: Instant.orThrow(indexedAt - 1000),
     indexedAt: Instant.orThrow(indexedAt),
     fetchedAt: NOW,

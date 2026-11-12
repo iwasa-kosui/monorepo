@@ -226,6 +226,7 @@ export const createD1TimelineItemsResolverByActorIds = (
           ? RemotePost.orThrow({
             postId: row.posts.postId,
             uri: row.remote_posts.uri,
+            url: row.remote_posts.url,
             actorId: row.posts.actorId,
             content: row.posts.content,
             createdAt: row.posts.createdAt.getTime(),

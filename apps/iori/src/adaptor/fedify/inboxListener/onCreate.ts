@@ -22,6 +22,7 @@ import {
 } from '../../../useCase/helper/remotePostObject.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractMentionedActorUris } from '../extractMentionedActorUris.ts';
+import { extractNoteUrl } from '../extractNoteUrl.ts';
 import { extractQuoteUri } from '../extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
@@ -155,6 +156,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
     deps.addRemotePostUseCase.run({
       ...await buildRemotePostBody(object),
       uri: objectUri,
+      url: extractNoteUrl(object),
       actorIdentity,
       attachments,
       inReplyToUri,

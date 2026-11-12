@@ -38,6 +38,7 @@ const remotePostZodType = z.object({
   content: z.string(),
   createdAt: Instant.zodType,
   uri: z.string(),
+  url: z.nullable(z.string()).optional(),
   inReplyToUri: z.nullable(z.string()),
   visibility: z.nullable(Visibility.zodType),
   summary: z.nullable(z.string()),
@@ -200,8 +201,9 @@ const updatePost = (now: Instant) =>
 const createRemotePost = (now: Instant) =>
 (
   payload:
-    & Omit<RemotePost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri' | 'summary' | 'sensitive'>
+    & Omit<RemotePost, 'type' | 'createdAt' | 'postId' | 'url' | 'inReplyToUri' | 'summary' | 'sensitive'>
     & {
+      url?: string | null;
       inReplyToUri?: string | null;
       summary?: string | null;
       sensitive?: boolean;
@@ -226,6 +228,7 @@ const createRemotePost = (now: Instant) =>
     postId,
     type: 'remote',
     createdAt: now,
+    url: postPayload.url ?? null,
     inReplyToUri: postPayload.inReplyToUri ?? null,
     summary: postPayload.summary ?? null,
     sensitive: postPayload.sensitive ?? false,
@@ -354,6 +357,7 @@ export type LocalPostUrisResolverByUris = Agg.Resolver<{ uris: readonly string[]
 export type RemotePostAttachment = Readonly<{ url: string; altText: string | null; mediaType: string | null }>;
 export type RemotePostIdentity = Readonly<{
   uri: string;
+  url?: string | null;
   content: string;
   authorIdentity: Readonly<{
     uri: string;

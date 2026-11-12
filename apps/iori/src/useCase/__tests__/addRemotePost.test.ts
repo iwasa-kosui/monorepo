@@ -240,6 +240,38 @@ describe('AddRemotePostUseCase', () => {
       );
     });
 
+    it('受信した Note の url を投稿に保存し、無ければ null にする', async () => {
+      const deps = createDeps();
+      const useCase = AddRemotePostUseCase.create(deps);
+      const input = {
+        content: 'Hello',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'public' as const,
+        attachments: [],
+      };
+
+      await useCase.run({
+        ...input,
+        uri: 'https://remote.example.com/posts/with-url',
+        url: 'https://remote.example.com/@remote/1',
+      });
+      await useCase.run({ ...input, uri: 'https://remote.example.com/posts/without-url' });
+
+      expect(deps.postCreatedStore.store).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          aggregateState: expect.objectContaining({ url: 'https://remote.example.com/@remote/1' }),
+        }),
+      );
+      expect(deps.postCreatedStore.store).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ aggregateState: expect.objectContaining({ url: null }) }),
+      );
+    });
+
     it('投票を投稿の作成イベントに渡す', async () => {
       const deps = createDeps();
       const poll = {

@@ -412,6 +412,33 @@ describe('createOnCreate', () => {
       expect(fetchReplyNotesRecursiveUseCase.run).not.toHaveBeenCalled();
     });
 
+    describe('url', () => {
+      it('passes the url of the Note to addRemotePostUseCase', async () => {
+        const { listener, create, addRemotePostUseCase } = setup(true);
+        const note = new Note({
+          id: new URL('https://remote.example/posts/1'),
+          url: new URL('https://remote.example/@alice/1'),
+          content: 'hello',
+          attribution: alice,
+          tos: [publicUri],
+        });
+
+        await listener(createCtx(), create(note));
+
+        expect(addRemotePostUseCase.run).toHaveBeenCalledWith(
+          expect.objectContaining({ url: 'https://remote.example/@alice/1' }),
+        );
+      });
+
+      it('passes null when the Note has no url', async () => {
+        const { listener, create, addRemotePostUseCase } = setup(true);
+
+        await listener(createCtx(), create(createNote()));
+
+        expect(addRemotePostUseCase.run).toHaveBeenCalledWith(expect.objectContaining({ url: null }));
+      });
+    });
+
     describe('quote', () => {
       const quoteId = new URL('https://other.example/notes/quoted');
       const quotingNote = () =>
