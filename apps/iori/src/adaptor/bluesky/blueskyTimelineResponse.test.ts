@@ -119,7 +119,7 @@ describe('parseBlueskyTimelineResponse', () => {
   });
 
   it.each([
-    ["viewer が無い", {}],
+    ['viewer が無い', {}],
     ['viewer.threadMuted が無い', { viewer: { like: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
     ['viewer.threadMuted が false', { viewer: { threadMuted: false } }],
   ])('%s と threadMuted は false になる', (_, overrides) => {
