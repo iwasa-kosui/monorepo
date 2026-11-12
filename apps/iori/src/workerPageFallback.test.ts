@@ -273,7 +273,7 @@ describe('createWorkerPageFallback', () => {
   });
 
   it('redirects the private messages pages to /sign-in when logged out, without caching', async () => {
-    for (const path of ['/messages', '/messages/3kconvo', '/messages/3kconvo/']) {
+    for (const path of ['/messages', '/messages/3kconvo', '/messages/3kconvo/', '/messages/fediverse/WyJhIl0']) {
       const response = await createWorkerPageFallback(new Request(`https://worker.test${path}`));
 
       expect(response?.status).toBe(302);
@@ -283,7 +283,9 @@ describe('createWorkerPageFallback', () => {
   });
 
   it('renders the messages entry for the list and a conversation with a Japanese title and noindex', async () => {
-    for (const path of ['/messages', '/messages/3kconvo']) {
+    for (
+      const path of ['/messages', '/messages/3kconvo', '/messages/fediverse/WyJhIl0', '/messages/fediverse/WyJhIl0/']
+    ) {
       const response = await createWorkerPageFallback(new Request(`https://worker.test${path}`), {
         isLoggedIn: true,
         userId: UserId.generate(),
@@ -299,7 +301,15 @@ describe('createWorkerPageFallback', () => {
   });
 
   it('does not claim messages paths with extra segments', async () => {
-    for (const path of ['/messages/a/b', '/messagesx']) {
+    for (
+      const path of [
+        '/messages/a/b',
+        '/messagesx',
+        '/messages/fediverse',
+        '/messages/fediverse/',
+        '/messages/fediverse/a/b',
+      ]
+    ) {
       expect(
         await createWorkerPageFallback(new Request(`https://worker.test${path}`), {
           isLoggedIn: true,

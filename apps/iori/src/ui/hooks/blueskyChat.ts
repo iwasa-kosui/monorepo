@@ -4,6 +4,7 @@ import type {
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { BLUESKY_CHAT_MAX_GRAPHEMES } from '../../domain/blueskyChat/blueskyChat.ts';
 import { isBlueskyChatApiError } from '../api/blueskyChatClient.ts';
+import { fediverseRouteOfPath } from './fediverseConversation.ts';
 
 export const CHAT_NOT_PERMITTED_MESSAGE =
   'iori が使っている Bluesky のアプリパスワードに DM の許可がありません。bsky.app の設定で『ダイレクトメッセージへのアクセスを許可』を選んだアプリパスワードを作り、iori の設定を差し替えてください。';
@@ -22,7 +23,8 @@ export type ChatMessagesState = Readonly<{
 
 export type ChatRoute =
   | Readonly<{ kind: 'list' }>
-  | Readonly<{ kind: 'convo'; convoId: string }>;
+  | Readonly<{ kind: 'convo'; convoId: string }>
+  | Readonly<{ kind: 'fediverseConvo'; key: string }>;
 
 export type ChatKeyEvent = Readonly<{
   key: string;
@@ -69,6 +71,10 @@ export const chatErrorMessageOf = (error: unknown): string =>
 
 export const chatRouteOfPath = (pathname: string): ChatRoute | undefined => {
   if (/^\/messages\/?$/.test(pathname)) return { kind: 'list' };
+  if (/^\/messages\/fediverse(?:\/|$)/.test(pathname)) {
+    const fediverse = fediverseRouteOfPath(pathname);
+    return fediverse === undefined ? undefined : { kind: 'fediverseConvo', key: fediverse.key };
+  }
   const encoded = /^\/messages\/([^/]+)\/?$/.exec(pathname)?.[1];
   if (encoded === undefined) return undefined;
   try {

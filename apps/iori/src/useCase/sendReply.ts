@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Create, isActor, Note } from '@fedify/vocab';
+import { Create, isActor, Note, type Recipient } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 
@@ -35,7 +35,7 @@ import type { SessionExpiredError, SessionResolver } from '../domain/session/ses
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { User, UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { toMentionNoteFields } from './helper/mentionNote.ts';
+import { type MentionedActor, toMentionNoteFields } from './helper/mentionNote.ts';
 import { toPostAddressing } from './helper/postAddressing.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
@@ -146,6 +146,52 @@ const create = ({
       ),
     );
 
+  type RemoteAuthor = Readonly<{ mention: MentionedActor; recipient: Recipient }>;
+
+  const resolveStoredAuthor = async (parentPost: RemotePost): Promise<RemoteAuthor | undefined> => {
+    const stored = await actorResolverById?.resolve(parentPost.actorId);
+    const author = stored?.ok ? stored.val : undefined;
+    if (author?.type !== 'remote' || !URL.canParse(author.uri) || !URL.canParse(author.inboxUrl)) {
+      return undefined;
+    }
+    const id = new URL(author.uri);
+    return {
+      mention: { id, ...(author.username === undefined ? {} : { name: `@${author.username}@${id.host}` }) },
+      recipient: { id, inboxId: new URL(author.inboxUrl), endpoints: null },
+    };
+  };
+
+  const lookupAuthor = async (
+    objectUri: string,
+    ctx: RequestContext<unknown>,
+    username: string,
+  ): RA<RemoteAuthor, RemoteNoteLookupError> => {
+    const documentLoader = await ctx.getDocumentLoader({ identifier: username });
+    const result = await ctx.lookupObject(objectUri.trim(), { documentLoader });
+
+    if (!(result instanceof Note)) {
+      return RA.err(RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'));
+    }
+    if (!result.id) {
+      return RA.err(RemoteNoteLookupError.create(objectUri, 'Could not resolve Note ID'));
+    }
+    const author = await result.getAttribution();
+    if (!author || !isActor(author)) {
+      return RA.err(RemoteNoteLookupError.create(objectUri, 'Could not resolve Note author'));
+    }
+    if (!author.id || !author.inboxId) {
+      return RA.err(RemoteNoteLookupError.create(objectUri, 'Note author has no inbox'));
+    }
+    const authorUsername = author.preferredUsername?.toString();
+    return RA.ok({
+      mention: {
+        id: author.id,
+        ...(authorUsername === undefined ? {} : { name: `@${authorUsername}@${author.id.host}` }),
+      },
+      recipient: author,
+    });
+  };
+
   const run = async (input: Input) =>
     RA.flow(
       RA.ok(input),
@@ -163,6 +209,16 @@ const create = ({
         // For remote posts, use the existing URI
         return RA.ok(parentPost.uri);
       }),
+      RA.andBind(
+        'remoteAuthor',
+        async ({ parentPost, ctx, user }): RA<RemoteAuthor | undefined, RemoteNoteLookupError> => {
+          if (parentPost.type === 'local') {
+            return RA.ok(undefined);
+          }
+          const stored = await resolveStoredAuthor(parentPost);
+          return stored === undefined ? lookupAuthor(parentPost.uri, ctx, user.username) : RA.ok(stored);
+        },
+      ),
       // Create the reply post
       RA.andBind('participantActorUris', async ({ user, ctx, parentPost, content, visibility }) => {
         if (visibility !== 'direct') {
@@ -221,17 +277,65 @@ const create = ({
         return RA.ok(images);
       }),
       // Send ActivityPub Create activity (only for remote parent posts)
-      RA.andThrough(async ({ user, parentPost, replyPost, images, ctx, inReplyToUri, mentions, quoteUri }) => {
-        const quote = await resolveQuoteNoteFields(
-          postQuotesResolver,
-          replyPost.postId,
-          quoteUri,
-          replyPost.visibility,
-        );
-        // For local parent posts, no ActivityPub delivery to remote author needed
-        if (parentPost.type === 'local') {
-          // Still send to followers
-          const mentionFields = toMentionNoteFields(replyPost.content, quote.actors);
+      RA.andThrough(
+        async ({ user, parentPost, replyPost, images, ctx, inReplyToUri, mentions, quoteUri, remoteAuthor }) => {
+          const quote = await resolveQuoteNoteFields(
+            postQuotesResolver,
+            replyPost.postId,
+            quoteUri,
+            replyPost.visibility,
+          );
+          // For local parent posts, no ActivityPub delivery to remote author needed
+          if (parentPost.type === 'local') {
+            // Still send to followers
+            const mentionFields = toMentionNoteFields(replyPost.content, quote.actors);
+            const replyNote = new Note({
+              id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+              attribution: ctx.getActorUri(user.username),
+              ...toPostAddressing({
+                visibility: replyPost.visibility,
+                followersUri: ctx.getFollowersUri(user.username),
+                mentionUris: mentionFields.ccs,
+              }),
+              tags: mentionFields.tags,
+              content: replyPost.content,
+              mediaType: 'text/html',
+              published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
+              url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+              summary: replyPost.summary,
+              sensitive: replyPost.sensitive,
+              replyTarget: new URL(inReplyToUri),
+              quoteUrl: quote.quoteUrl,
+              attachments: images.map((image) => toImageDocument(image, origin)),
+            });
+
+            const createActivity = new Create({
+              id: new URL('#activity', replyNote.id ?? undefined),
+              object: replyNote,
+              actors: replyNote.attributionIds,
+              tos: replyNote.toIds,
+              ccs: replyNote.ccIds,
+            });
+            if (replyPost.visibility !== 'direct') {
+              await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+            }
+            await sendToMentions({
+              ctx,
+              identifier: user.username,
+              activity: createActivity,
+              mentions: [...(mentions ?? []), ...quote.recipients],
+              visibility: replyPost.visibility,
+            });
+
+            return RA.ok(undefined);
+          }
+
+          // For remote parent posts, send to the author
+          if (remoteAuthor === undefined) {
+            return RA.ok(undefined);
+          }
+          const objectUri = parentPost.uri;
+          const mentionFields = toMentionNoteFields(replyPost.content, [remoteAuthor.mention, ...quote.actors]);
           const replyNote = new Note({
             id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
             attribution: ctx.getActorUri(user.username),
@@ -247,12 +351,26 @@ const create = ({
             url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
             summary: replyPost.summary,
             sensitive: replyPost.sensitive,
-            replyTarget: new URL(inReplyToUri),
+            replyTarget: new URL(objectUri),
             quoteUrl: quote.quoteUrl,
             attachments: images.map((image) => toImageDocument(image, origin)),
           });
 
-          const createActivity = new Create({
+          // Send to the note's author
+          await ctx.sendActivity(
+            { username: user.username },
+            remoteAuthor.recipient,
+            new Create({
+              id: new URL('#activity', replyNote.id ?? undefined),
+              object: replyNote,
+              actors: replyNote.attributionIds,
+              tos: replyNote.toIds,
+              ccs: replyNote.ccIds,
+            }),
+          );
+
+          // Also send to followers
+          const followersActivity = new Create({
             id: new URL('#activity', replyNote.id ?? undefined),
             object: replyNote,
             actors: replyNote.attributionIds,
@@ -260,112 +378,20 @@ const create = ({
             ccs: replyNote.ccIds,
           });
           if (replyPost.visibility !== 'direct') {
-            await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+            await ctx.sendActivity({ identifier: user.username }, 'followers', followersActivity);
           }
           await sendToMentions({
             ctx,
             identifier: user.username,
-            activity: createActivity,
+            activity: followersActivity,
             mentions: [...(mentions ?? []), ...quote.recipients],
+            excludedActorIds: [remoteAuthor.mention.id.href],
             visibility: replyPost.visibility,
           });
 
           return RA.ok(undefined);
-        }
-
-        // For remote parent posts, lookup and send to the author
-        const objectUri = parentPost.uri;
-        const documentLoader = await ctx.getDocumentLoader({
-          identifier: user.username,
-        });
-        const result = await ctx.lookupObject(objectUri.trim(), {
-          documentLoader,
-        });
-
-        if (!(result instanceof Note)) {
-          return RA.err(
-            RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'),
-          );
-        }
-
-        if (!result.id) {
-          return RA.err(
-            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note ID'),
-          );
-        }
-
-        const author = await result.getAttribution();
-        if (!author || !isActor(author)) {
-          return RA.err(
-            RemoteNoteLookupError.create(objectUri, 'Could not resolve Note author'),
-          );
-        }
-        if (!author.id || !author.inboxId) {
-          return RA.err(
-            RemoteNoteLookupError.create(objectUri, 'Note author has no inbox'),
-          );
-        }
-
-        const authorUsername = author.preferredUsername?.toString();
-        const mentionFields = toMentionNoteFields(replyPost.content, [{
-          id: author.id,
-          ...(authorUsername === undefined ? {} : { name: `@${authorUsername}@${author.id.host}` }),
-        }, ...quote.actors]);
-        const replyNote = new Note({
-          id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
-          attribution: ctx.getActorUri(user.username),
-          ...toPostAddressing({
-            visibility: replyPost.visibility,
-            followersUri: ctx.getFollowersUri(user.username),
-            mentionUris: mentionFields.ccs,
-          }),
-          tags: mentionFields.tags,
-          content: replyPost.content,
-          mediaType: 'text/html',
-          published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
-          url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
-          summary: replyPost.summary,
-          sensitive: replyPost.sensitive,
-          replyTarget: new URL(objectUri),
-          quoteUrl: quote.quoteUrl,
-          attachments: images.map((image) => toImageDocument(image, origin)),
-        });
-
-        // Send to the note's author
-        await ctx.sendActivity(
-          { username: user.username },
-          author,
-          new Create({
-            id: new URL('#activity', replyNote.id ?? undefined),
-            object: replyNote,
-            actors: replyNote.attributionIds,
-            tos: replyNote.toIds,
-            ccs: replyNote.ccIds,
-          }),
-        );
-
-        // Also send to followers
-        const followersActivity = new Create({
-          id: new URL('#activity', replyNote.id ?? undefined),
-          object: replyNote,
-          actors: replyNote.attributionIds,
-          tos: replyNote.toIds,
-          ccs: replyNote.ccIds,
-        });
-        if (replyPost.visibility !== 'direct') {
-          await ctx.sendActivity({ identifier: user.username }, 'followers', followersActivity);
-        }
-        await sendToMentions({
-          ctx,
-          identifier: user.username,
-          activity: followersActivity,
-          mentions: [...(mentions ?? []), ...quote.recipients],
-          excludedActorIds: [author.id.href],
-          visibility: replyPost.visibility,
-        });
-
-        return RA.ok(undefined);
-      }),
+        },
+      ),
       RA.andThrough(async ({ replyPost, crosspostToBluesky }) => {
         if (crosspostToBluesky !== false) {
           await scheduleBlueskyCrosspost?.run({ postId: replyPost.postId });
