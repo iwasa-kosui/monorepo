@@ -8,6 +8,7 @@ type Props = Readonly<{
   target?: Child;
   errorText?: string;
   counter?: Child;
+  leadingActions?: Child;
   children: Child;
 }>;
 
@@ -19,6 +20,7 @@ export const ReplyDialogShell = ({
   target,
   errorText,
   counter,
+  leadingActions,
   children,
 }: Props) => (
   <div
@@ -51,6 +53,7 @@ export const ReplyDialogShell = ({
       {errorText !== undefined && <p role='alert' class='mt-3 text-terracotta text-sm'>{errorText}</p>}
 
       <div class='mt-3 flex gap-2 justify-end'>
+        {leadingActions}
         {counter}
         <button
           type='button'

@@ -147,7 +147,7 @@ describe('NotificationItem', () => {
       avatar: 'https://iori.example/default-avatar.png',
     } as Account;
 
-    it('links a favourite to the post on bsky.app and the actor to the profile', () => {
+    it('links a favourite to the post on bsky.app and the actor to the profile page in iori', () => {
       const html = render(notification({
         type: 'favourite',
         account: blueskyAccount,
@@ -157,7 +157,7 @@ describe('NotificationItem', () => {
       expect(html).toContain('liked your post');
       expect(html).toContain('carol.bsky.social');
       expect(html).toContain('href="https://bsky.app/profile/did:plc:me/post/3kpost"');
-      expect(html).toContain('href="https://bsky.app/profile/carol.bsky.social"');
+      expect(html).toContain('href="/bluesky/profile/did%3Aplc%3Acarol"');
       expect(html).not.toContain('/posts/"');
     });
 
