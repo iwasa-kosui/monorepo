@@ -25,5 +25,9 @@ export type LinkPreviewCreatedStore = {
   store: (previews: LinkPreview[]) => Promise<void>;
 };
 
+export type LinkPreviewsDeletedStore = {
+  store: (linkPreviewIds: LinkPreviewId[]) => Promise<void>;
+};
+
 export type LinkPreviewsResolverByPostId = Agg.Resolver<PostId, LinkPreview[]>;
 export type LinkPreviewsResolverByPostIds = Agg.Resolver<PostId[], Map<string, LinkPreview[]>>;

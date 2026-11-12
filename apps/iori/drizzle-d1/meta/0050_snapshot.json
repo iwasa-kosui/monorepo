@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a8351662-ad19-4103-a1af-288987a98721",
-  "prevId": "9115e9b7-ad85-4165-a73d-87e6e8759718",
+  "id": "2025c3cd-db2e-4ce3-aaca-d12cd3604dee",
+  "prevId": "599afbbe-a283-4351-bfe6-33d41edd67cc",
   "tables": {
     "actors": {
       "name": "actors",
@@ -4739,6 +4739,13 @@
         "visibility": {
           "name": "visibility",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "editedAt": {
+          "name": "editedAt",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

@@ -10,7 +10,7 @@ import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.t
 import type { PostImage } from '../../domain/image/image.ts';
 import { ImageId } from '../../domain/image/imageId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import type { LocalPost, Post, PostResolver, RemotePost, ThreadResolver } from '../../domain/post/post.ts';
+import type { LocalPost, Post, PostQuote, PostResolver, RemotePost, ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import type { User } from '../../domain/user/user.ts';
@@ -422,5 +422,83 @@ describe('createObjectDispatcher ofNote', () => {
     const [document] = await getDocuments(result as Note);
     expect(document).toBeInstanceOf(Document);
     expect(document?.name).toBeNull();
+  });
+});
+
+describe('createObjectDispatcher ofNote の引用', () => {
+  const quoteUri = 'https://remote.example/users/alice/statuses/1';
+  const aliceId = 'https://remote.example/users/alice';
+  const aliceQuote: PostQuote = {
+    uri: quoteUri,
+    author: { id: aliceId, inboxUrl: `${aliceId}/inbox`, username: 'alice' },
+  };
+
+  const dispatchNote = async (post: LocalPost, quote: PostQuote | undefined) => {
+    const dispatcher = createObjectDispatcher({
+      origin: 'https://example.com',
+      postResolver: { resolve: vi.fn(async () => RA.ok(post)) } as unknown as PostResolver,
+      postImagesResolver: { resolve: vi.fn(async () => RA.ok([])) } as never,
+      postQuotesResolver: {
+        resolve: vi.fn(async () => RA.ok(new Map(quote === undefined ? [] : [[post.postId, quote]]))),
+      },
+      userResolverByUsername: {
+        resolve: vi.fn(async (username: string) => RA.ok([author].find((user) => user.username === username))),
+      } as never,
+      articleBodyResolver: { resolve: vi.fn(async () => RA.ok(undefined)) } as unknown as ArticleBodyResolver,
+    });
+    return await dispatcher.ofNote(createContext(), { id: post.postId, identifier: 'kosui' }) as Note;
+  };
+
+  it('引用先のある投稿は、quoteUrl を出し、quote と quoteAuthorization を出さない', async () => {
+    const note = await dispatchNote(createLocalPost(), aliceQuote);
+
+    expect(note.quoteUrl?.href).toBe(quoteUri);
+    expect(note.quoteId).toBeNull();
+    expect(note.quoteAuthorizationId).toBeNull();
+    const json = await note.toJsonLd({ format: 'compact' }) as Record<string, unknown>;
+    expect(json).toMatchObject({ quoteUrl: quoteUri, _misskey_quote: quoteUri, quoteUri });
+    expect(json).not.toHaveProperty('quote');
+    expect(json).not.toHaveProperty('quoteAuthorization');
+    expect(json).not.toHaveProperty('interactionPolicy');
+  });
+
+  it('引用先がリモートの投稿なら、その作者を Mention と cc に入れる', async () => {
+    const note = await dispatchNote(createLocalPost(), aliceQuote);
+
+    expect(note.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers', aliceId]);
+    const tags = await Array.fromAsync(note.getTags());
+    expect(tags).toHaveLength(1);
+    expect(tags[0]).toBeInstanceOf(Mention);
+    expect((tags[0] as Mention).href?.href).toBe(aliceId);
+    expect((tags[0] as Mention).name?.toString()).toBe('@alice@remote.example');
+  });
+
+  it('引用先がローカルの投稿なら、quoteUrl だけを出して Mention と cc を足さない', async () => {
+    const localUri = 'https://example.com/users/other/posts/1';
+
+    const note = await dispatchNote(createLocalPost(), { uri: localUri, author: null });
+
+    expect(note.quoteUrl?.href).toBe(localUri);
+    expect(note.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers']);
+    await expect(Array.fromAsync(note.getTags())).resolves.toEqual([]);
+  });
+
+  it('引用先の作者が本文でもメンションされていれば、Mention を 1 つにする', async () => {
+    const post = {
+      ...createLocalPost(),
+      content:
+        `<p><span class="h-card"><a href="${aliceId}" class="u-url mention">@<span>alice@remote.example</span></a></span> hi</p>`,
+    };
+
+    const note = await dispatchNote(post, aliceQuote);
+
+    expect(note.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers', aliceId]);
+    expect(await Array.fromAsync(note.getTags())).toHaveLength(1);
+  });
+
+  it('引用先の無い投稿は、quoteUrl を持たない', async () => {
+    const note = await dispatchNote(createLocalPost(), undefined);
+
+    expect(note.quoteUrl).toBeNull();
   });
 });

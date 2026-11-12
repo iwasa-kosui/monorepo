@@ -8,6 +8,7 @@ import { createOnFollow, type OnFollowDeps } from './onFollow.ts';
 import { createOnLike, type OnLikeDeps } from './onLike.ts';
 import { createOnReject, type OnRejectDeps } from './onReject.ts';
 import { createOnUndo, type OnUndoDeps } from './onUndo.ts';
+import { createOnUpdate, type OnUpdateDeps } from './onUpdate.ts';
 
 export type InboxListenerDeps = Readonly<{
   onAccept: OnAcceptDeps;
@@ -20,6 +21,7 @@ export type InboxListenerDeps = Readonly<{
   onLike: OnLikeDeps;
   onReject: OnRejectDeps;
   onUndo: OnUndoDeps;
+  onUpdate: OnUpdateDeps;
 }>;
 
 export const createInboxListener = (deps: InboxListenerDeps) => ({
@@ -33,4 +35,5 @@ export const createInboxListener = (deps: InboxListenerDeps) => ({
   onLike: createOnLike(deps.onLike),
   onReject: createOnReject(deps.onReject),
   onUndo: createOnUndo(deps.onUndo),
+  onUpdate: createOnUpdate(deps.onUpdate),
 });

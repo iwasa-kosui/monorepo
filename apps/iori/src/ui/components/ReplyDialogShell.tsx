@@ -1,12 +1,12 @@
 import type { Child } from 'hono/jsx';
 
 type Props = Readonly<{
-  title?: string;
-  submitLabel?: string;
   onClose: () => void;
   onSubmit: () => void;
   isSending: boolean;
   canSubmit: boolean;
+  title?: string;
+  submitLabel?: string;
   target?: Child;
   errorText?: string;
   counter?: Child;
@@ -15,12 +15,12 @@ type Props = Readonly<{
 }>;
 
 export const ReplyDialogShell = ({
-  title = '返信',
-  submitLabel = '返信する',
   onClose,
   onSubmit,
   isSending,
   canSubmit,
+  title = '返信',
+  submitLabel = '返信する',
   target,
   errorText,
   counter,

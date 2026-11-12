@@ -8,7 +8,13 @@ import type { ArticleResolver } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
 import type { PostImagesResolverByPostId } from '../../domain/image/image.ts';
-import { Post, type PostResolver, type PostWithAuthor, type ThreadResolver } from '../../domain/post/post.ts';
+import {
+  Post,
+  type PostQuotesResolverByPostIds,
+  type PostResolver,
+  type PostWithAuthor,
+  type ThreadResolver,
+} from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import type { UserResolverByUsername } from '../../domain/user/user.ts';
@@ -16,12 +22,14 @@ import { Username } from '../../domain/user/username.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
 import { GetPostUseCase } from '../../useCase/getPost.ts';
 import { buildLocalNote } from '../../useCase/helper/localNote.ts';
+import { toQuoteNoteFields } from '../../useCase/helper/quoteNote.ts';
 import { sanitizeArticleBody } from '../routes/helper/sanitizeArticleBody.ts';
 
 export type ObjectDispatcherDeps = Readonly<{
   origin: string;
   postResolver: PostResolver;
   postImagesResolver: PostImagesResolverByPostId;
+  postQuotesResolver?: PostQuotesResolverByPostIds;
   userResolverByUsername: UserResolverByUsername;
   articleResolver?: ArticleResolver;
   threadResolver?: ThreadResolver;
@@ -32,6 +40,7 @@ export const createObjectDispatcher = ({
   origin,
   postResolver,
   postImagesResolver,
+  postQuotesResolver,
   userResolverByUsername,
   articleResolver,
   threadResolver,
@@ -56,9 +65,20 @@ export const createObjectDispatcher = ({
           ),
         );
       }),
+      RA.andThen(async ({ post, postImages }) => {
+        const quotes = await postQuotesResolver?.resolve([post.postId]);
+        return RA.ok({ post, postImages, quote: quotes?.ok ? quotes.val.get(post.postId) : undefined });
+      }),
       RA.match({
-        ok: ({ post, postImages }) =>
-          buildLocalNote({ ctx, identifier: values.identifier, post, images: postImages, origin }),
+        ok: ({ post, postImages, quote }) =>
+          buildLocalNote({
+            ctx,
+            identifier: values.identifier,
+            post,
+            images: postImages,
+            origin,
+            quote: toQuoteNoteFields(quote),
+          }),
         err: (error) => {
           getLogger().warn(`Failed to resolve post for federation: ${values.identifier} - ${values.id} - ${error}`);
           return null;

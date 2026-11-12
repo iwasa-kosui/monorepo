@@ -13,6 +13,7 @@ import {
   Note,
   Reject,
   Undo,
+  Update,
 } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
@@ -83,6 +84,7 @@ const create = () => {
     .on(Undo, inboxListener.onUndo)
     .on(Create, inboxListener.onCreate)
     .on(Delete, inboxListener.onDelete)
+    .on(Update, inboxListener.onUpdate)
     .on(Like, inboxListener.onLike)
     .on(Announce, inboxListener.onAnnounce)
     .on(Activity, inboxListener.onActivity)
