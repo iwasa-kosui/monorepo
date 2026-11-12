@@ -5,12 +5,16 @@ type Props = Readonly<{
   isSending: boolean;
   canSend: boolean;
   error: string | null;
+  remaining?: number;
+  notice?: string;
+  testId?: string;
   onChange: (text: string) => void;
   onSend: () => void;
 }>;
 
-export const BlueskyChatComposer = ({ text, isSending, canSend, error, onChange, onSend }: Props) => {
-  const remaining = remainingGraphemes(text);
+export const BlueskyChatComposer = (
+  { text, isSending, canSend, error, remaining = remainingGraphemes(text), notice, testId, onChange, onSend }: Props,
+) => {
   return (
     <form
       class='mt-4 space-y-2'
@@ -36,9 +40,12 @@ export const BlueskyChatComposer = ({ text, isSending, canSend, error, onChange,
         }}
         class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all'
       />
+      {notice !== undefined && (
+        <p data-testid='chat-composer-notice' class='text-xs text-charcoal-light dark:text-gray-400'>{notice}</p>
+      )}
       <div class='flex items-center justify-between gap-3'>
         <span
-          data-testid='bluesky-chat-remaining'
+          data-testid={testId ?? 'bluesky-chat-remaining'}
           class={`text-sm ${
             remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-charcoal-light dark:text-gray-400'
           }`}

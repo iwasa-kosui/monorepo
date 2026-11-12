@@ -36,6 +36,11 @@ import type {
 import type { DigestSubscriptionResolverByUserId } from '../domain/digestSubscription/digestSubscription.ts';
 import type { DigestTopicsResolverByUserId } from '../domain/digestTopic/digestTopic.ts';
 import type { FederatedTimelineItemsResolver } from '../domain/federatedTimeline/federatedTimelineItem.ts';
+import type {
+  DirectMessageActorsResolverByUris,
+  DirectMessageNotificationsReadMarker,
+  DirectMessagePostsResolver,
+} from '../domain/fediverseConversation/fediverseConversation.ts';
 import type { AllFeedSourcesResolver } from '../domain/feedSource/feedSource.ts';
 import type { LikedPostIdsResolverByActorIdWithPagination } from '../domain/like/like.ts';
 import type { MarkersResolverByUserId } from '../domain/marker/marker.ts';
@@ -229,6 +234,12 @@ export type IoriBlueskyCrosspostStatusRuntimePorts = Readonly<{
   blueskyCrosspostStatusReportResolver: BlueskyCrosspostStatusReportResolver;
   blueskyCrosspostEnabled: boolean;
 }>;
+export type IoriFediverseConversationsRuntimePorts = Readonly<{
+  directMessagePostsResolver: DirectMessagePostsResolver;
+  directMessageActorsResolverByUris: DirectMessageActorsResolverByUris;
+  directMessageNotificationsReadMarker: DirectMessageNotificationsReadMarker;
+  isDigestOwner: IsDigestOwner;
+}>;
 export type IoriTimelineRuntimePorts = Readonly<{
   getTimelineUseCase: ReturnType<typeof createGetTimelineUseCase>;
 }>;
@@ -297,6 +308,7 @@ export type IoriRuntimePorts = Readonly<{
   blueskyModeration: IoriBlueskyModerationRuntimePorts;
   blueskyProfile: IoriBlueskyProfileRuntimePorts;
   blueskyCrosspostStatus: IoriBlueskyCrosspostStatusRuntimePorts;
+  fediverseConversations: IoriFediverseConversationsRuntimePorts;
   timeline: IoriTimelineRuntimePorts;
   posting: IoriPostingRuntimePorts;
   socialActions: IoriSocialActionsRuntimePorts;
