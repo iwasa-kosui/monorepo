@@ -13,6 +13,7 @@ import {
   type ReplyNotificationCreatedStore,
 } from '../domain/notification/notification.ts';
 import { NotificationId } from '../domain/notification/notificationId.ts';
+import type { MentionRecipient } from '../domain/post/mention.ts';
 import type { LocalPostResolverByUri } from '../domain/post/post.ts';
 import {
   type LocalPost,
@@ -28,9 +29,11 @@ import type { SessionExpiredError, SessionResolver } from '../domain/session/ses
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { User, UserNotFoundError, UserResolver } from '../domain/user/user.ts';
+import { toMentionNoteFields } from './helper/mentionNote.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import { sendToMentions } from './helper/sendToMentions.ts';
 import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -42,6 +45,7 @@ type Input =
     content: string;
     summary?: string | null;
     sensitive?: boolean;
+    mentions?: ReadonlyArray<MentionRecipient>;
     request: Request;
     ctx: RequestContext<unknown>;
   }>;
@@ -178,15 +182,17 @@ const create = ({
         return RA.ok(images);
       }),
       // Send ActivityPub Create activity (only for remote parent posts)
-      RA.andThrough(async ({ user, parentPost, replyPost, images, ctx, inReplyToUri }) => {
+      RA.andThrough(async ({ user, parentPost, replyPost, images, ctx, inReplyToUri, mentions }) => {
         // For local parent posts, no ActivityPub delivery to remote author needed
         if (parentPost.type === 'local') {
           // Still send to followers
+          const mentionFields = toMentionNoteFields(replyPost.content);
           const replyNote = new Note({
             id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
             attribution: ctx.getActorUri(user.username),
             to: PUBLIC_COLLECTION,
-            cc: ctx.getFollowersUri(user.username),
+            ccs: [ctx.getFollowersUri(user.username), ...mentionFields.ccs],
+            tags: mentionFields.tags,
             content: replyPost.content,
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
@@ -197,17 +203,20 @@ const create = ({
             attachments: images.map((image) => toImageDocument(image, origin)),
           });
 
-          await ctx.sendActivity(
-            { identifier: user.username },
-            'followers',
-            new Create({
-              id: new URL('#activity', replyNote.id ?? undefined),
-              object: replyNote,
-              actors: replyNote.attributionIds,
-              tos: replyNote.toIds,
-              ccs: replyNote.ccIds,
-            }),
-          );
+          const createActivity = new Create({
+            id: new URL('#activity', replyNote.id ?? undefined),
+            object: replyNote,
+            actors: replyNote.attributionIds,
+            tos: replyNote.toIds,
+            ccs: replyNote.ccIds,
+          });
+          await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+          await sendToMentions({
+            ctx,
+            identifier: user.username,
+            activity: createActivity,
+            mentions: mentions ?? [],
+          });
 
           return RA.ok(undefined);
         }
@@ -245,11 +254,17 @@ const create = ({
           );
         }
 
+        const authorUsername = author.preferredUsername?.toString();
+        const mentionFields = toMentionNoteFields(replyPost.content, [{
+          id: author.id,
+          ...(authorUsername === undefined ? {} : { name: `@${authorUsername}@${author.id.host}` }),
+        }]);
         const replyNote = new Note({
           id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
           attribution: ctx.getActorUri(user.username),
           to: PUBLIC_COLLECTION,
-          cc: ctx.getFollowersUri(user.username),
+          ccs: [ctx.getFollowersUri(user.username), ...mentionFields.ccs],
+          tags: mentionFields.tags,
           content: replyPost.content,
           mediaType: 'text/html',
           published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
@@ -274,17 +289,21 @@ const create = ({
         );
 
         // Also send to followers
-        await ctx.sendActivity(
-          { identifier: user.username },
-          'followers',
-          new Create({
-            id: new URL('#activity', replyNote.id ?? undefined),
-            object: replyNote,
-            actors: replyNote.attributionIds,
-            tos: replyNote.toIds,
-            ccs: replyNote.ccIds,
-          }),
-        );
+        const followersActivity = new Create({
+          id: new URL('#activity', replyNote.id ?? undefined),
+          object: replyNote,
+          actors: replyNote.attributionIds,
+          tos: replyNote.toIds,
+          ccs: replyNote.ccIds,
+        });
+        await ctx.sendActivity({ identifier: user.username }, 'followers', followersActivity);
+        await sendToMentions({
+          ctx,
+          identifier: user.username,
+          activity: followersActivity,
+          mentions: mentions ?? [],
+          excludedActorIds: [author.id.href],
+        });
 
         return RA.ok(undefined);
       }),

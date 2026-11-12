@@ -488,4 +488,109 @@ describe('CreatePostUseCase', () => {
       expect(result.ok).toBe(true);
     });
   });
+
+  describe('メンション相手への配送', () => {
+    const alice = {
+      id: 'https://remote.example/users/alice',
+      inboxUrl: 'https://remote.example/users/alice/inbox',
+      sharedInboxUrl: 'https://remote.example/inbox',
+    };
+
+    const setup = () => {
+      const deps = createDeps();
+      const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
+      const session: Session = {
+        sessionId: crypto.randomUUID() as Session['sessionId'],
+        userId: user.id,
+        expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+      };
+      const actor: LocalActor = {
+        id: crypto.randomUUID() as LocalActor['id'],
+        userId: user.id,
+        uri: 'https://example.com/users/kosui',
+        inboxUrl: 'https://example.com/inbox',
+        type: 'local',
+        logoUri: undefined,
+      };
+      setupValidUserSession(deps, user, session, actor);
+      return { deps, session };
+    };
+
+    it('followers への送信に加えて、mentions の相手に同じ Create を送る', async () => {
+      const { deps, session } = setup();
+      const ctx = createMockRequestContext();
+
+      const result = await CreatePostUseCase.create(deps).run({
+        sessionId: session.sessionId,
+        content: 'hi',
+        imageUrls: [],
+        mentions: [alice],
+        ctx,
+      });
+
+      expect(result.ok).toBe(true);
+      const calls = vi.mocked(ctx.sendActivity).mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(calls[0]?.[1]).toBe('followers');
+      expect(calls[1]?.[0]).toEqual({ identifier: 'kosui' });
+      expect(calls[1]?.[1]).toEqual([
+        {
+          id: new URL(alice.id),
+          inboxId: new URL(alice.inboxUrl),
+          endpoints: { sharedInbox: new URL(alice.sharedInboxUrl) },
+        },
+      ]);
+      expect(calls[1]?.[2]).toBe(calls[0]?.[2]);
+      expect(calls[1]?.[3]).toEqual({ preferSharedInbox: true });
+    });
+
+    it('mentions の無い投稿は followers にだけ送る', async () => {
+      const { deps, session } = setup();
+      const ctx = createMockRequestContext();
+
+      await CreatePostUseCase.create(deps).run({
+        sessionId: session.sessionId,
+        content: 'hi',
+        imageUrls: [],
+        ctx,
+      });
+
+      expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+    });
+
+    it('同じ actor が重なる mentions には 1 回だけ送る', async () => {
+      const { deps, session } = setup();
+      const ctx = createMockRequestContext();
+
+      await CreatePostUseCase.create(deps).run({
+        sessionId: session.sessionId,
+        content: 'hi',
+        imageUrls: [],
+        mentions: [alice, alice],
+        ctx,
+      });
+
+      expect(vi.mocked(ctx.sendActivity).mock.calls[1]?.[1]).toHaveLength(1);
+    });
+
+    it('mentions への送信が失敗しても投稿は成功し、Bluesky の予約まで進む', async () => {
+      const { deps, session } = setup();
+      const ctx = createMockRequestContext();
+      vi.mocked(ctx.sendActivity).mockImplementation(async (_sender, recipients) => {
+        if (recipients !== 'followers') throw new Error('delivery failed');
+      });
+      const scheduleBlueskyCrosspost = { run: vi.fn(async () => RA.ok('pending' as const)) };
+
+      const result = await CreatePostUseCase.create({ ...deps, scheduleBlueskyCrosspost }).run({
+        sessionId: session.sessionId,
+        content: 'hi',
+        imageUrls: [],
+        mentions: [alice],
+        ctx,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(scheduleBlueskyCrosspost.run).toHaveBeenCalledTimes(1);
+    });
+  });
 });
