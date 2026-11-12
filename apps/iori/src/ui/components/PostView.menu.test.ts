@@ -272,4 +272,48 @@ describe('PostView の「…」メニュー', () => {
       }),
     ).toEqual(['open-original', 'copy-link', 'mute', 'block', 'report']);
   });
+
+  describe('引用', () => {
+    const base = { status: { ...remote, visibility: 'public' as const }, onQuote: () => {} };
+
+    it('public の投稿では、先頭に action として出す', () => {
+      expect(menuItems(base)[0]).toMatchObject({ key: 'quote', label: '引用', kind: 'action' });
+    });
+
+    it('unlisted の投稿でも出す', () => {
+      expect(keys({ ...base, status: { ...remote, visibility: 'unlisted' } })).toContain('quote');
+    });
+
+    it('private と direct の投稿には出さない', () => {
+      expect(keys({ ...base, status: { ...remote, visibility: 'private' } })).not.toContain('quote');
+      expect(keys({ ...base, status: { ...remote, visibility: 'direct' } })).not.toContain('quote');
+    });
+
+    it('onQuote が無いときは出さない', () => {
+      expect(keys({ ...base, onQuote: undefined })).not.toContain('quote');
+    });
+
+    it('選ぶと、表示している投稿を渡して onQuote を呼ぶ', () => {
+      const onQuote = vi.fn();
+      const quote = menuItems({ ...base, onQuote }).find((item) => item.key === 'quote');
+
+      if (quote?.kind !== 'action') throw new Error('quote not found');
+      void quote.onSelect();
+
+      expect(onQuote).toHaveBeenCalledTimes(1);
+      expect(onQuote).toHaveBeenCalledWith(base.status);
+    });
+
+    it('リポストは中身の投稿を引用の対象にし、可視性も中身で判定する', () => {
+      const onQuote = vi.fn();
+      const inner = { ...remote, visibility: 'public' as const };
+      const boost = { ...local, id: 'boost-1', visibility: 'private' as const, reblog: inner };
+      const quote = menuItems({ status: boost, onQuote }).find((item) => item.key === 'quote');
+
+      if (quote?.kind !== 'action') throw new Error('quote not found');
+      void quote.onSelect();
+
+      expect(onQuote).toHaveBeenCalledWith(inner);
+    });
+  });
 });

@@ -19,6 +19,7 @@ const profile: BlueskyProfile = {
   following: false,
   followedBy: false,
   followUri: null,
+  isSelf: false,
 };
 
 const item: IoriBlueskyTimelineItemBody = {
@@ -60,8 +61,11 @@ const render = (props: Partial<Parameters<typeof BlueskyProfilePage>[0]> = {}): 
     isFeedLoading: false,
     isFollowing: false,
     isTogglingFollow: false,
+    isOpeningMessage: false,
+    messageError: null,
     onFollow: async () => {},
     onUnfollow: async () => {},
+    onMessage: async () => {},
     ...props,
   }));
 

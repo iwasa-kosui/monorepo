@@ -31,7 +31,6 @@ const recipientInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated) 
 };
 
 const quoteInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated) => {
-  if (event.eventName !== 'post.remotePostCreated') return [];
   const { quoteUri } = event.eventPayload;
   if (quoteUri === null) return [];
   return [db.insert(postQuotesTable).values({ postId: event.aggregateState.postId, quoteUri })];

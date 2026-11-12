@@ -8,18 +8,20 @@ import { toMentionNoteFields } from './mentionNote.ts';
 import { toPostAddressing } from './postAddressing.ts';
 import { toImageDocument } from './postImageDocument.ts';
 import type { PostImageSource } from './postImages.ts';
+import type { QuoteNoteFields } from './quoteNote.ts';
 
 export const buildLocalNote = (
-  { ctx, identifier, post, images, origin }: Readonly<{
+  { ctx, identifier, post, images, origin, quote }: Readonly<{
     ctx: RequestContext<unknown>;
     identifier: string;
     post: LocalPost;
     images: ReadonlyArray<PostImageSource>;
     origin: string;
+    quote?: QuoteNoteFields;
   }>,
 ): Note => {
   const content = sanitizePostContent(post.content);
-  const mentionFields = toMentionNoteFields(content);
+  const mentionFields = toMentionNoteFields(content, quote?.actors);
   const objectUri = ctx.getObjectUri(Note, { identifier, id: post.postId });
   return new Note({
     id: objectUri,
@@ -37,6 +39,7 @@ export const buildLocalNote = (
     summary: post.summary,
     sensitive: post.sensitive,
     replyTarget: post.inReplyToUri !== null ? new URL(post.inReplyToUri) : undefined,
+    quoteUrl: quote?.quoteUrl,
     attachments: images.map((image) => toImageDocument(image, origin)),
   });
 };

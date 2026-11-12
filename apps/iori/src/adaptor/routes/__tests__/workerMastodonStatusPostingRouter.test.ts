@@ -2,6 +2,13 @@ import { Delete, Endpoints, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import { Instant } from '../../../domain/instant/instant.ts';
+import { ScheduleBlueskyCrosspostUseCase } from '../../../useCase/scheduleBlueskyCrosspost.ts';
+import type { SendBlueskyCrosspostUseCase } from '../../../useCase/sendBlueskyCrosspost.ts';
+import { createD1BlueskyCrosspostResolver } from '../../d1/blueskyCrosspost/blueskyCrosspostResolver.ts';
+import { createD1BlueskyCrosspostSavedStore } from '../../d1/blueskyCrosspost/blueskyCrosspostSavedStore.ts';
+import { createD1LocalPostResolverByUri } from '../../d1/post/localPostResolverByUri.ts';
+import { createD1PostResolver } from '../../d1/post/postResolver.ts';
 import { StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
@@ -29,7 +36,9 @@ const setup = async (options: Parameters<typeof setupReadApi>[0] = {}) => {
 
 describe('POST /api/v1/statuses の検証', () => {
   const rejected: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
-    ['visibility が public 以外', { status: 'hi', visibility: 'private' }],
+    ['visibility が direct', { status: 'hi', visibility: 'direct' }],
+    ['visibility が未知の値', { status: 'hi', visibility: 'friends' }],
+    ['visibility が文字列でない', { status: 'hi', visibility: 1 }],
     ['spoiler_text が文字列でない', { status: 'hi', spoiler_text: 1 }],
     ['status と spoiler_text の合計が 10001 文字', { status: 'あ'.repeat(5000), spoiler_text: 'い'.repeat(5001) }],
     ['content_type が未対応', { status: 'hi', content_type: 'text/html' }],
@@ -159,6 +168,106 @@ describe('POST /api/v1/statuses の検証', () => {
 
     expect(response.status).toBe(403);
     expect(t.count('posts')).toBe(0);
+  });
+});
+
+describe('POST /api/v1/statuses の visibility', () => {
+  const visibilityOf = (t: Awaited<ReturnType<typeof setup>>, postId: string) =>
+    (t.sqlite.prepare('SELECT visibility FROM local_posts WHERE postId = ?').get(postId) as { visibility: string })
+      .visibility;
+
+  it('direct を 422 にして、direct を受け付けないことが分かるメッセージを返す', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi', visibility: 'direct' });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toBe(
+      'Validation failed: Visibility must be public, unlisted or private (direct is not supported)',
+    );
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it.each([['public'], ['unlisted'], ['private']])(
+    'visibility が %s のとき、その公開範囲で投稿を保存して返す',
+    async (visibility) => {
+      const t = await setup();
+
+      const response = await t.json({ status: 'hi', visibility });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status.visibility).toBe(visibility);
+      expect(visibilityOf(t, status.id)).toBe(visibility);
+    },
+  );
+
+  it.each([[undefined], [null]])('visibility が %s のとき public で投稿する', async (visibility) => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi', visibility });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(visibilityOf(t, status.id)).toBe('public');
+  });
+
+  it.each([['unlisted'], ['private']])(
+    '返信で visibility が %s のとき、その公開範囲で返信を保存する',
+    async (visibility) => {
+      const t = await setup();
+      const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
+
+      const response = await t.json({ status: 'reply', in_reply_to_id: parent.postId, visibility });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(visibilityOf(t, status.id)).toBe(visibility);
+    },
+  );
+
+  it.each([['unlisted'], ['private']])(
+    'visibility が %s で iori_destination が both のとき、保存した公開範囲の投稿を Bluesky の予約に渡す',
+    async (visibility) => {
+      const scheduleBlueskyCrosspost = { run: vi.fn(async () => RA.ok('pending' as const)) };
+      const t = await setup({ scheduleBlueskyCrosspost });
+
+      const response = await t.json({ status: 'hi', visibility, iori_destination: 'both' });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(scheduleBlueskyCrosspost.run).toHaveBeenCalledWith({ postId: status.id });
+      expect(visibilityOf(t, status.id)).toBe(visibility);
+    },
+  );
+
+  it('visibility が unlisted で iori_destination が both のとき、実際の予約が応答の skip_reason を visibility にする', async () => {
+    const scheduled: { useCase?: ScheduleBlueskyCrosspostUseCase } = {};
+    const send = { run: vi.fn(async () => RA.ok(undefined)) };
+    const waitUntil = vi.fn();
+    const t = await setup({ scheduleBlueskyCrosspost: { run: (input) => scheduled.useCase!.run(input) } });
+    scheduled.useCase = ScheduleBlueskyCrosspostUseCase.create({
+      postResolver: createD1PostResolver(t.db),
+      localPostResolverByUri: createD1LocalPostResolverByUri(t.db, ORIGIN),
+      crosspostResolver: createD1BlueskyCrosspostResolver(t.db),
+      crosspostSavedStore: createD1BlueskyCrosspostSavedStore(t.db),
+      send: send as unknown as SendBlueskyCrosspostUseCase,
+      waitUntil,
+      now: Instant.now,
+    });
+
+    const response = await t.json({ status: 'hi', visibility: 'unlisted', iori_destination: 'both' });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(status.iori?.bluesky_crosspost).toEqual({
+      status: 'skipped',
+      skip_reason: 'visibility',
+      retrying: false,
+      url: null,
+    });
+    expect(send.run).not.toHaveBeenCalled();
+    expect(waitUntil).not.toHaveBeenCalled();
   });
 });
 
@@ -574,6 +683,210 @@ describe('POST /api/v1/statuses のメンション', () => {
     const status = StatusSchema.parse(await response.json());
     expect(t.storedContent(status.id)).toBe(`<p>${mentionLink} reply</p>`);
     expect(t.federation.sendActivity).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('POST /api/v1/statuses の引用', () => {
+  const quoteRowOf = (t: Awaited<ReturnType<typeof setup>>, postId: string) =>
+    t.sqlite.prepare('SELECT quoteUri FROM post_quotes WHERE postId = ?').get(postId) as
+      | { quoteUri: string }
+      | undefined;
+  const contentOf = (t: Awaited<ReturnType<typeof setup>>, postId: string) =>
+    (t.sqlite.prepare('SELECT content FROM posts WHERE postId = ?').get(postId) as { content: string }).content;
+  const quoteNotAllowed = { error: 'Validation failed: Quote not allowed' };
+
+  it.each(['public', 'unlisted'] as const)(
+    '%s のリモートの投稿を引用して投稿し、quote に引用先の Status を載せ、本文に RE: の段落を足す',
+    async (visibility) => {
+      const t = await setup();
+      const bob = t.seed.addRemoteActor('bob');
+      const quoted = t.seed.addRemotePost(bob, 1_000, { visibility });
+
+      const response = await t.json({ status: 'look', quoted_status_id: quoted.postId });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status.quote).toMatchObject({ state: 'accepted', quoted_status: { id: quoted.postId } });
+      expect(status.content).toBe(`<p>look</p><p>RE: <a href="${quoted.uri}">${quoted.uri}</a></p>`);
+      expect(quoteRowOf(t, status.id)).toEqual({ quoteUri: quoted.uri });
+      expect(contentOf(t, status.id)).toBe(status.content);
+    },
+  );
+
+  it('引用先の作者の inbox にも配送する', async () => {
+    const t = await setup();
+    const bob = t.seed.addRemoteActor('bob');
+    const quoted = t.seed.addRemotePost(bob, 1_000, { visibility: 'public' });
+
+    await t.json({ status: 'look', quoted_status_id: quoted.postId });
+
+    const recipients = t.federation.sendActivity.mock.calls.map((call) => (call as unknown[])[1]);
+    expect(recipients).toHaveLength(2);
+    expect(recipients[0]).toBe('followers');
+    expect(recipients[1]).toEqual([
+      expect.objectContaining({
+        id: new URL('https://remote.example/users/bob'),
+        inboxId: new URL('https://remote.example/users/bob/inbox'),
+      }),
+    ]);
+  });
+
+  it('ローカルの投稿を引用すると、その Note のオブジェクト URI を引用先にして、追加の配送をしない', async () => {
+    const t = await setup();
+    const quoted = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>hello</p>' });
+
+    const response = await t.json({ status: 'look', quoted_status_id: quoted.postId });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(quoteRowOf(t, status.id)).toEqual({ quoteUri: `${ORIGIN}/users/alice/posts/${quoted.postId}` });
+    expect(status.quote).toMatchObject({ state: 'accepted', quoted_status: { id: quoted.postId } });
+    expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('本文に引用先のリンクが既にあれば、RE: の段落を足さない', async () => {
+    const t = await setup();
+    const bob = t.seed.addRemoteActor('bob');
+    const quoted = t.seed.addRemotePost(bob, 1_000, { visibility: 'public' });
+
+    const response = await t.json({
+      status: `see ${quoted.uri}`,
+      quoted_status_id: quoted.postId,
+    });
+
+    expect(StatusSchema.parse(await response.json()).content).toBe(
+      `<p>see <a href="${quoted.uri}">${quoted.uri}</a></p>`,
+    );
+  });
+
+  it('返信かつ引用として投稿でき、in_reply_to_id と quote の両方を持つ Status を返す', async () => {
+    const t = await setup();
+    const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
+    const bob = t.seed.addRemoteActor('bob');
+    const quoted = t.seed.addRemotePost(bob, 2_000, { visibility: 'public' });
+
+    const response = await t.json({ status: 'both', in_reply_to_id: parent.postId, quoted_status_id: quoted.postId });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(status).toMatchObject({
+      in_reply_to_id: parent.postId,
+      quote: { state: 'accepted', quoted_status: { id: quoted.postId } },
+    });
+    expect(quoteRowOf(t, status.id)).toEqual({ quoteUri: quoted.uri });
+    expect(t.count('local_posts', `postId='${status.id}' AND inReplyToUri IS NOT NULL`)).toBe(1);
+  });
+
+  it('quoted_status_id を空文字や null にしたときは引用にしない', async () => {
+    const t = await setup();
+
+    const responses = await Promise.all([
+      t.json({ status: 'a', quoted_status_id: '' }),
+      t.json({ status: 'b', quoted_status_id: null }),
+    ]);
+
+    for (const response of responses) {
+      expect(response.status).toBe(200);
+      expect(StatusSchema.parse(await response.json()).quote).toBeNull();
+    }
+    expect(t.count('post_quotes')).toBe(0);
+  });
+
+  it.each([
+    ['存在しない UUID', () => crypto.randomUUID()],
+    ['UUID でない文字列', () => 'nope'],
+  ])('quoted_status_id が %s のとき 404 にして投稿を作らない', async (_name, id) => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi', quoted_status_id: id() });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual(notFound);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('引用先が閲覧者に見えないとき 404 にする', async () => {
+    const t = await setup();
+    const bob = t.seed.addRemoteActor('bob');
+    const hidden = t.seed.addRemotePost(bob, 1_000, { visibility: 'direct', timeline: false });
+
+    const response = await t.json({ status: 'hi', quoted_status_id: hidden.postId });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual(notFound);
+    expect(t.count('posts', `postId != '${hidden.postId}'`)).toBe(0);
+  });
+
+  it('フォローしている相手の private な投稿は、見えても引用できず 422 にする', async () => {
+    const t = await setup();
+    const bob = t.seed.addRemoteActor('bob');
+    t.seed.addFollow(t.me.actorId, bob.actorId);
+    const quoted = t.seed.addRemotePost(bob, 1_000, { visibility: 'private' });
+
+    const response = await t.json({ status: 'hi', quoted_status_id: quoted.postId });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual(quoteNotAllowed);
+    expect(t.count('posts', `postId != '${quoted.postId}'`)).toBe(0);
+  });
+
+  it('宛先に自分がいる direct な投稿は、見えても引用できず 422 にする', async () => {
+    const t = await setup();
+    const bob = t.seed.addRemoteActor('bob');
+    const quoted = t.seed.addRemotePost(bob, 1_000, {
+      visibility: 'direct',
+      recipientActorUris: [`${ORIGIN}/users/${t.me.username}`],
+    });
+
+    const response = await t.json({ status: 'hi', quoted_status_id: quoted.postId });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual(quoteNotAllowed);
+    expect(t.count('posts', `postId != '${quoted.postId}'`)).toBe(0);
+  });
+
+  it.each(['block', 'mute'] as const)('引用先の作者を %s していると 422 にし、引用も配送も作らない', async (kind) => {
+    const t = await setup();
+    const bob = t.seed.addRemoteActor('bob');
+    const quoted = t.seed.addRemotePost(bob, 1_000, { visibility: 'public' });
+    if (kind === 'block') {
+      t.seed.addBlock(t.me.userId, bob.actorId);
+    } else {
+      t.seed.addMute(t.me.userId, bob.actorId);
+    }
+
+    const response = await t.json({ status: 'hi', quoted_status_id: quoted.postId });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual(quoteNotAllowed);
+    expect(t.count('posts', `postId != '${quoted.postId}'`)).toBe(0);
+    expect(t.count('post_quotes')).toBe(0);
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+
+  it('Bluesky の投稿の ID は 422 にし、投稿を作らない', async () => {
+    const t = await setup();
+
+    const response = await t.json({ status: 'hi', quoted_status_id: 'bluesky:at://did:plc:abc/app.bsky.feed.post/1' });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual(quoteNotAllowed);
+    expect(t.count('posts')).toBe(0);
+  });
+
+  it('quoted_status_id は form でも受け取る', async () => {
+    const t = await setup();
+    const bob = t.seed.addRemoteActor('bob');
+    const quoted = t.seed.addRemotePost(bob, 1_000, { visibility: 'public' });
+
+    const response = await t.request('/api/v1/statuses', {
+      method: 'POST',
+      headers: { ...t.me.bearer, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams([['status', 'look'], ['quoted_status_id', quoted.postId]]).toString(),
+    });
+
+    expect(response.status).toBe(200);
+    expect(StatusSchema.parse(await response.json()).quote).toMatchObject({ quoted_status: { id: quoted.postId } });
   });
 });
 

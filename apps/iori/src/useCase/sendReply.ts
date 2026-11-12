@@ -20,10 +20,12 @@ import {
   Post,
   type PostCreatedStore,
   type PostNotFoundError,
+  type PostQuotesResolverByPostIds,
   type PostResolver,
   type RemotePost,
 } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
+import { appendQuoteInline } from '../domain/post/quoteInline.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
@@ -34,6 +36,7 @@ import { toMentionNoteFields } from './helper/mentionNote.ts';
 import { toPostAddressing } from './helper/postAddressing.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
+import { resolveQuoteNoteFields } from './helper/quoteNote.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import { sendToMentions } from './helper/sendToMentions.ts';
 import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
@@ -50,6 +53,7 @@ type Input =
     visibility?: Exclude<Visibility, 'direct'>;
     crosspostToBluesky?: boolean;
     mentions?: ReadonlyArray<MentionRecipient>;
+    quoteUri?: string;
     request: Request;
     ctx: RequestContext<unknown>;
   }>;
@@ -93,6 +97,7 @@ type Deps = Readonly<{
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
   postResolver: PostResolver;
+  postQuotesResolver?: PostQuotesResolverByPostIds;
   scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   origin: string;
 }>;
@@ -109,6 +114,7 @@ const create = ({
   pushSubscriptionsResolver,
   webPushSender,
   postResolver,
+  postQuotesResolver,
   scheduleBlueskyCrosspost,
   origin,
 }: Deps): SendReplyUseCase => {
@@ -152,15 +158,16 @@ const create = ({
         return RA.ok(parentPost.uri);
       }),
       // Create the reply post
-      RA.andBind('postEvent', ({ actor, content, inReplyToUri, summary, sensitive, visibility }) => {
+      RA.andBind('postEvent', ({ actor, content, inReplyToUri, summary, sensitive, visibility, quoteUri }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
-          content,
+          content: quoteUri === undefined ? content : appendQuoteInline(content, quoteUri),
           userId: actor.userId,
           inReplyToUri,
           summary,
           sensitive,
           visibility,
+          quoteUri,
         });
         return RA.ok(postEvent);
       }),
@@ -187,11 +194,12 @@ const create = ({
         return RA.ok(images);
       }),
       // Send ActivityPub Create activity (only for remote parent posts)
-      RA.andThrough(async ({ user, parentPost, replyPost, images, ctx, inReplyToUri, mentions }) => {
+      RA.andThrough(async ({ user, parentPost, replyPost, images, ctx, inReplyToUri, mentions, quoteUri }) => {
+        const quote = await resolveQuoteNoteFields(postQuotesResolver, replyPost.postId, quoteUri);
         // For local parent posts, no ActivityPub delivery to remote author needed
         if (parentPost.type === 'local') {
           // Still send to followers
-          const mentionFields = toMentionNoteFields(replyPost.content);
+          const mentionFields = toMentionNoteFields(replyPost.content, quote.actors);
           const replyNote = new Note({
             id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
             attribution: ctx.getActorUri(user.username),
@@ -208,6 +216,7 @@ const create = ({
             summary: replyPost.summary,
             sensitive: replyPost.sensitive,
             replyTarget: new URL(inReplyToUri),
+            quoteUrl: quote.quoteUrl,
             attachments: images.map((image) => toImageDocument(image, origin)),
           });
 
@@ -223,7 +232,7 @@ const create = ({
             ctx,
             identifier: user.username,
             activity: createActivity,
-            mentions: mentions ?? [],
+            mentions: [...(mentions ?? []), ...quote.recipients],
           });
 
           return RA.ok(undefined);
@@ -266,7 +275,7 @@ const create = ({
         const mentionFields = toMentionNoteFields(replyPost.content, [{
           id: author.id,
           ...(authorUsername === undefined ? {} : { name: `@${authorUsername}@${author.id.host}` }),
-        }]);
+        }, ...quote.actors]);
         const replyNote = new Note({
           id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
           attribution: ctx.getActorUri(user.username),
@@ -283,6 +292,7 @@ const create = ({
           summary: replyPost.summary,
           sensitive: replyPost.sensitive,
           replyTarget: new URL(objectUri),
+          quoteUrl: quote.quoteUrl,
           attachments: images.map((image) => toImageDocument(image, origin)),
         });
 
@@ -312,7 +322,7 @@ const create = ({
           ctx,
           identifier: user.username,
           activity: followersActivity,
-          mentions: mentions ?? [],
+          mentions: [...(mentions ?? []), ...quote.recipients],
           excludedActorIds: [author.id.href],
         });
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { canSubmitPost, type PostFormValue, replyParams, submitPost } from './postSubmission.ts';
+import { canSubmitPost, type PostFormValue, quoteParams, replyParams, submitPost } from './postSubmission.ts';
 
 const created = {
   id: 'status-1',
@@ -12,6 +12,7 @@ const filled: PostFormValue = {
   content: 'hello',
   uploaded: [{ id: 'media-1', url: 'https://example.com/a.png', description: '', savedDescription: '' }],
   destination: 'both',
+  visibility: 'public',
   cw: '',
   sensitive: false,
 };
@@ -51,6 +52,7 @@ describe('submitPost', () => {
       media_ids: ['media-1'],
       content_type: 'text/markdown',
       iori_destination: 'both',
+      visibility: 'public',
     });
     expect(result).toEqual({ kind: 'posted', status: created });
     expect(onPosted).toHaveBeenCalledTimes(1);
@@ -69,6 +71,19 @@ describe('submitPost', () => {
     });
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ iori_destination: 'fediverse' }));
+  });
+
+  it.each(['public', 'unlisted', 'private'] as const)('passes the selected visibility %s', async (visibility) => {
+    const create = vi.fn().mockResolvedValue(created);
+
+    await submitPost({ ...filled, visibility }, {
+      create,
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted: vi.fn(),
+    });
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ visibility }));
   });
 
   it('passes a trimmed spoiler_text and sensitive', async () => {
@@ -257,5 +272,20 @@ describe('replyParams', () => {
       content_type: 'text/markdown',
       iori_destination: 'fediverse',
     });
+  });
+});
+
+describe('quoteParams', () => {
+  it('passes the quoted post id as quoted_status_id and the selected destination as iori_destination', () => {
+    expect(quoteParams('post-1', 'hello', 'fediverse')).toEqual({
+      status: 'hello',
+      quoted_status_id: 'post-1',
+      content_type: 'text/markdown',
+      iori_destination: 'fediverse',
+    });
+  });
+
+  it('does not send in_reply_to_id', () => {
+    expect(quoteParams('post-1', 'hello', 'fediverse')).not.toHaveProperty('in_reply_to_id');
   });
 });

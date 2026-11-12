@@ -1,7 +1,10 @@
+import type { RA } from '@iwasa-kosui/result';
+
 import { createBlueskyProfileReader } from '../adaptor/bluesky/blueskyProfileReader.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import { FollowBlueskyActorUseCase } from '../useCase/followBlueskyActor.ts';
 import { GetBlueskyProfileUseCase } from '../useCase/getBlueskyProfile.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
@@ -15,6 +18,7 @@ export type BlueskyProfileRuntimePorts = Readonly<{
   listBlueskyAuthorFeedUseCase: ListBlueskyAuthorFeedUseCase | undefined;
   followBlueskyActorUseCase: FollowBlueskyActorUseCase | undefined;
   unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase | undefined;
+  viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -31,6 +35,7 @@ export const createBlueskyProfileRuntimePorts = (
       listBlueskyAuthorFeedUseCase: undefined,
       followBlueskyActorUseCase: undefined,
       unfollowBlueskyActorUseCase: undefined,
+      viewerDid: undefined,
       isDigestOwner,
     };
   }
@@ -41,6 +46,7 @@ export const createBlueskyProfileRuntimePorts = (
     listBlueskyAuthorFeedUseCase: ListBlueskyAuthorFeedUseCase.create({ reader }),
     followBlueskyActorUseCase: FollowBlueskyActorUseCase.create({ reader, client }),
     unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase.create({ reader, client }),
+    viewerDid: () => client.viewerDid(),
     isDigestOwner,
   };
 };

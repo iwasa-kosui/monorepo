@@ -15,6 +15,7 @@ import { Modal } from '../components/Modal.tsx';
 import { PostDestinationSelect } from '../components/PostDestinationSelect.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { QuoteModal } from '../components/QuoteModal.tsx';
 import { ReplyDialogShell } from '../components/ReplyDialogShell.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
@@ -229,8 +230,30 @@ const ReplyModal = () => {
   );
 };
 
+const FediverseQuoteModal = () => {
+  const { quote } = useTimelineContext();
+
+  if (quote.target === null) {
+    return null;
+  }
+
+  return (
+    <QuoteModal
+      target={quote.target}
+      content={quote.content}
+      destination={quote.destination}
+      isSending={quote.isSending}
+      errorText={quote.errorText}
+      onClose={quote.close}
+      onSubmit={() => void quote.send()}
+      onContentChange={quote.setContent}
+      onDestinationChange={quote.setDestination}
+    />
+  );
+};
+
 const ThreadModal = () => {
-  const { thread, actions, reply, reportPost, data } = useTimelineContext();
+  const { thread, actions, reply, quote, reportPost, data } = useTimelineContext();
   const {
     threadModalPostId,
     threadData,
@@ -339,6 +362,7 @@ const ThreadModal = () => {
                           currentAccountId={currentAccountId}
                           isLoggedIn
                           onReply={reply.openReplyDialog}
+                          onQuote={quote.open}
                           onLike={actions.like}
                           isLiking={actionState.likingPostId === post.id}
                           onUndoLike={actions.undoLike}
@@ -370,6 +394,7 @@ const ThreadModal = () => {
                       currentAccountId={currentAccountId}
                       isLoggedIn
                       onReply={reply.openReplyDialog}
+                      onQuote={quote.open}
                       onLike={actions.like}
                       isLiking={actionState.likingPostId === threadData.currentPost.id}
                       onUndoLike={actions.undoLike}
@@ -402,6 +427,7 @@ const ThreadModal = () => {
                             currentAccountId={currentAccountId}
                             isLoggedIn
                             onReply={reply.openReplyDialog}
+                            onQuote={quote.open}
                             onLike={actions.like}
                             isLiking={actionState.likingPostId === post.id}
                             onUndoLike={actions.undoLike}
@@ -700,6 +726,7 @@ const TimelineList = () => {
     blueskyQuote,
     blueskyStatus,
     reply,
+    quote,
     thread,
     ui,
     reading,
@@ -797,6 +824,7 @@ const TimelineList = () => {
             isEmojiPickerOpen={emojiPickerOpenForIndex === index}
             onToggleEmojiPicker={() => toggleEmojiPicker(index)}
             onReply={reply.openReplyDialog}
+            onQuote={quote.open}
             onShowThread={thread.showThread}
           />,
         );
@@ -945,6 +973,7 @@ const HomePage = () => {
       <ReplyModal />
       <BlueskyReplyModal dialog={blueskyReply} />
       <BlueskyQuoteModal dialog={blueskyQuote} />
+      <FediverseQuoteModal />
       <ThreadModal />
       <ReportPostModal />
       <TimelineList />

@@ -352,9 +352,11 @@ export const saveNotificationsMarker = async (lastReadId: string): Promise<void>
 export type CreateStatusParams = Readonly<{
   status: string;
   in_reply_to_id?: string;
+  quoted_status_id?: string;
   media_ids?: readonly string[];
   content_type: string;
   iori_destination?: PostDestination;
+  visibility?: 'public' | 'unlisted' | 'private';
   spoiler_text?: string;
   sensitive?: boolean;
 }>;

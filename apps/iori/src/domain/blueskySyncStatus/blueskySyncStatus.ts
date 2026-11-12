@@ -7,7 +7,7 @@ import { Instant } from '../instant/instant.ts';
 export const BlueskySyncScope = z.enum(['timeline', 'notifications']);
 export type BlueskySyncScope = z.infer<typeof BlueskySyncScope>;
 
-export const BlueskySyncFailureKind = z.enum(['auth', 'http', 'network', 'invalid_response']);
+export const BlueskySyncFailureKind = z.enum(['auth', 'http', 'network', 'invalid_response', 'chat_not_permitted']);
 export type BlueskySyncFailureKind = z.infer<typeof BlueskySyncFailureKind>;
 
 const blueskySyncStatusRecordZodType = z.object({
