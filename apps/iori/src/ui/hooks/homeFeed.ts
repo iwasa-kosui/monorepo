@@ -62,6 +62,33 @@ export type HomeFeedSources = Readonly<{
   hasMoreBluesky: boolean;
 }>;
 
+const BRIDGED_ID_PREFIX = 'https://bsky.brid.gy/convert/ap/';
+
+const decodeUriComponent = (value: string): string => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+// Bridgy Fed は Bluesky の投稿を https://bsky.brid.gy/convert/ap/<at:// URI> の id で Fediverse に出す
+export const bridgedBlueskyUriOf = (status: Status): string | null => {
+  const { uri } = status.reblog ?? status;
+  if (!uri.startsWith(BRIDGED_ID_PREFIX)) return null;
+  const atUri = decodeUriComponent(uri.slice(BRIDGED_ID_PREFIX.length));
+  return atUri.startsWith('at://') ? atUri : null;
+};
+
+export const dedupeBridgedItems = (items: readonly HomeItem[]): readonly HomeItem[] => {
+  const blueskyUris = new Set(items.flatMap((item) => item.kind === 'bluesky' ? [item.item.uri] : []));
+  return items.filter((item) => {
+    if (item.kind !== 'status') return true;
+    const bridged = bridgedBlueskyUriOf(item.status);
+    return bridged === null || !blueskyUris.has(bridged);
+  });
+};
+
 const oldestOf = (times: readonly number[]): number | undefined =>
   times.length === 0 ? undefined : times.reduce((oldest, time) => Math.min(oldest, time));
 
@@ -78,9 +105,10 @@ export const mergeHomeFeed = (
     hasMoreBluesky ? oldestOf(timesOf('bluesky')) : undefined,
   ].filter((time): time is number => time !== undefined);
   const floor = limits.length === 0 ? undefined : Math.max(...limits);
+  const shown = new Set(dedupeBridgedItems(timed.map(({ item }) => item)));
   return timed
     .toSorted((a, b) => b.time - a.time)
-    .filter(({ time }) => floor === undefined || time >= floor)
+    .filter(({ item, time }) => shown.has(item) && (floor === undefined || time >= floor))
     .map(({ item }) => item);
 };
 
