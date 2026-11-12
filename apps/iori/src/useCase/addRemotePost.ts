@@ -19,7 +19,6 @@ import type {
 } from '../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
 import {
-  type MentionNotification,
   type MentionNotificationCreatedStore,
   type MentionNotificationResolverByRecipientAndMentionPostId,
   Notification,
@@ -47,6 +46,7 @@ import {
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import { isBlockedBy } from './helper/isBlockedBy.ts';
+import { notifyMentions } from './helper/notifyMentions.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -350,64 +350,23 @@ const create = ({
         }
         return RA.ok(undefined);
       }),
-      RA.andBind('mentionedUserIds', async ({ saved: { post }, actor, inReplyToUri, recipientActorUris }) => {
+      RA.andThrough(async ({ saved: { post }, actor, inReplyToUri, recipientActorUris }) => {
         if (!mentionNotificationCreatedStore || !mentionNotificationResolver || !recipientActorUris?.length) {
-          return RA.ok<UserId[]>([]);
+          return RA.ok(undefined);
         }
         let replyRecipientUserId: UserId | undefined;
         if (inReplyToUri) {
           const originalPostResult = await localPostResolverByUri.resolve({ uri: inReplyToUri });
           replyRecipientUserId = originalPostResult.ok ? originalPostResult.val?.userId : undefined;
         }
-        const created: UserId[] = [];
-        for (const recipientUri of recipientActorUris) {
-          const recipientResult = await actorResolverByUri.resolve(recipientUri);
-          const recipient = recipientResult.ok ? recipientResult.val : undefined;
-          if (!recipient || recipient.type !== 'local' || recipient.id === actor.id) {
-            continue;
-          }
-          if (await isBlockedBy(blockResolver, recipient.userId, actor.id)) {
-            continue;
-          }
-          if (recipient.userId === replyRecipientUserId) {
-            continue;
-          }
-          const existing = await mentionNotificationResolver.resolve({
-            recipientUserId: recipient.userId,
-            mentionPostId: post.postId,
-          });
-          if (existing.ok && existing.val) {
-            continue;
-          }
-          const notification: MentionNotification = {
-            type: 'mention',
-            notificationId: NotificationId.generate(),
-            recipientUserId: recipient.userId,
-            isRead: false,
-            mentionerActorId: actor.id,
-            mentionPostId: post.postId,
-          };
-          await mentionNotificationCreatedStore.store(Notification.createMentionNotification(notification, now));
-          created.push(recipient.userId);
-        }
-        return RA.ok(created);
-      }),
-      RA.andThrough(async ({ mentionedUserIds, actor }) => {
-        const mentionerName = actor.type === 'remote' && actor.username ? actor.username : 'Someone';
-        const payload: PushPayload = {
-          title: 'New Mention',
-          body: `${mentionerName} mentioned you`,
-          url: '/notifications',
-        };
-        for (const userId of mentionedUserIds) {
-          const subscriptionsResult = await pushSubscriptionsResolver.resolve(userId);
-          if (!subscriptionsResult.ok) {
-            continue;
-          }
-          for (const subscription of subscriptionsResult.val) {
-            await webPushSender.send(subscription, payload);
-          }
-        }
+        await notifyMentions({
+          actorResolverByUri,
+          mentionNotificationCreatedStore,
+          mentionNotificationResolver,
+          pushSubscriptionsResolver,
+          webPushSender,
+          blockResolver,
+        })({ now, mentioner: actor, mentionPostId: post.postId, recipientActorUris, replyRecipientUserId });
         return RA.ok(undefined);
       }),
       RA.map(({ saved: { post }, actor }) => ({ post, actor })),

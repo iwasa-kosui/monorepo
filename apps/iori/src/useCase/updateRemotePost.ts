@@ -3,7 +3,9 @@ import { getLogger } from '@logtape/logtape';
 
 import type { OgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { extractUrlsFromHtml } from '../adaptor/ogp/urlExtractor.ts';
-import type { ActorResolverByUri } from '../domain/actor/actor.ts';
+import type { WebPushSender } from '../adaptor/webPush/webPush.ts';
+import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
+import type { BlockResolver } from '../domain/block/block.ts';
 import type { PostImage, PostImagesResolverByPostId } from '../domain/image/image.ts';
 import { ImageId } from '../domain/image/imageId.ts';
 import { Instant } from '../domain/instant/instant.ts';
@@ -14,7 +16,12 @@ import type {
   LinkPreviewsResolverByPostId,
 } from '../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
+import type {
+  MentionNotificationCreatedStore,
+  MentionNotificationResolverByRecipientAndMentionPostId,
+} from '../domain/notification/notification.ts';
 import {
+  type LocalPostResolverByUri,
   Post,
   type PostResolverByUri,
   type RemotePost,
@@ -23,6 +30,9 @@ import {
   type RemotePostUpdatedStore,
 } from '../domain/post/post.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
+import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
+import type { UserId } from '../domain/user/userId.ts';
+import { notifyMentions } from './helper/notifyMentions.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
@@ -75,6 +85,12 @@ type Deps = Readonly<{
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
   linkPreviewsDeletedStore: LinkPreviewsDeletedStore;
   ogpFetcher: OgpFetcher;
+  localPostResolverByUri: LocalPostResolverByUri;
+  mentionNotificationCreatedStore: MentionNotificationCreatedStore;
+  mentionNotificationResolver: MentionNotificationResolverByRecipientAndMentionPostId;
+  pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
+  webPushSender: WebPushSender;
+  blockResolver?: BlockResolver;
 }>;
 
 const create = ({
@@ -88,6 +104,12 @@ const create = ({
   linkPreviewCreatedStore,
   linkPreviewsDeletedStore,
   ogpFetcher,
+  localPostResolverByUri,
+  mentionNotificationCreatedStore,
+  mentionNotificationResolver,
+  pushSubscriptionsResolver,
+  webPushSender,
+  blockResolver,
 }: Deps): UpdateRemotePostUseCase => {
   const refreshLinkPreviews = async (post: RemotePost, content: string, now: Instant) => {
     const urls = extractUrlsFromHtml(content, new URL(origin).host);
@@ -123,6 +145,27 @@ const create = ({
     if (added.length > 0) {
       await linkPreviewCreatedStore.store(added);
     }
+  };
+
+  const notifyAddedMentions = async (
+    post: RemotePost,
+    author: Actor,
+    recipientActorUris: ReadonlyArray<string>,
+    now: Instant,
+  ) => {
+    let replyRecipientUserId: UserId | undefined;
+    if (post.inReplyToUri) {
+      const originalPostResult = await localPostResolverByUri.resolve({ uri: post.inReplyToUri });
+      replyRecipientUserId = originalPostResult.ok ? originalPostResult.val?.userId : undefined;
+    }
+    await notifyMentions({
+      actorResolverByUri,
+      mentionNotificationCreatedStore,
+      mentionNotificationResolver,
+      pushSubscriptionsResolver,
+      webPushSender,
+      blockResolver,
+    })({ now, mentioner: author, mentionPostId: post.postId, recipientActorUris, replyRecipientUserId });
   };
 
   const run = async (input: Input) => {
@@ -168,12 +211,26 @@ const create = ({
       previousRecipientActorUris: previousRecipients.val,
       images,
     });
-    await remotePostUpdatedStore.store(event);
+    const stored = await remotePostUpdatedStore.store(event);
+    if (!stored.ok) throw new Error(`Failed to store the edit of ${input.uri}`);
+    if (!stored.val.written) return RA.ok<Ok>({ type: 'staleEdit' });
 
     try {
       await refreshLinkPreviews(post, input.content, now);
     } catch (error) {
       getLogger().warn(`Failed to refresh link previews for edited remote post ${input.uri}: ${String(error)}`);
+    }
+
+    try {
+      const previous = new Set(previousRecipients.val);
+      await notifyAddedMentions(
+        post,
+        authorResult.val,
+        input.recipientActorUris.filter((uri) => !previous.has(uri)),
+        now,
+      );
+    } catch (error) {
+      getLogger().warn(`Failed to notify mentions for edited remote post ${input.uri}: ${String(error)}`);
     }
 
     return RA.ok<Ok>({ type: 'updated', post: event.aggregateState });
