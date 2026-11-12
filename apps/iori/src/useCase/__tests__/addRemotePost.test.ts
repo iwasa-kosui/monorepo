@@ -227,8 +227,8 @@ describe('AddRemotePostUseCase', () => {
         },
         visibility: null,
         attachments: [
-          { url: 'https://remote.example.com/image1.png', altText: 'Image 1' },
-          { url: 'https://remote.example.com/image2.png', altText: null },
+          { url: 'https://remote.example.com/image1.png', altText: 'Image 1', mediaType: null },
+          { url: 'https://remote.example.com/image2.png', altText: null, mediaType: null },
         ],
       });
 
@@ -248,6 +248,7 @@ describe('AddRemotePostUseCase', () => {
       const attachments = Array.from({ length: attachmentCount }, (_, i) => ({
         url: `https://remote.example.com/image${i}.png`,
         altText: `Image ${i}`,
+        mediaType: null,
       }));
 
       const useCase = AddRemotePostUseCase.create(deps);
@@ -356,7 +357,7 @@ describe('AddRemotePostUseCase', () => {
         },
         visibility: null,
         attachments: [
-          { url: 'https://remote.example.com/image.png', altText: 'Test image' },
+          { url: 'https://remote.example.com/image.png', altText: 'Test image', mediaType: null },
         ],
       });
 
@@ -417,7 +418,7 @@ describe('AddRemotePostUseCase', () => {
     const actorUri = 'https://remote.example.com/users/remote';
     const postUri = 'https://remote.example.com/posts/idempotent';
     const content = '<p>reply <a href="https://news.example.org/article">link</a></p>';
-    const attachments = [{ url: 'https://remote.example.com/image.png', altText: 'Image' }];
+    const attachments = [{ url: 'https://remote.example.com/image.png', altText: 'Image', mediaType: null }];
     const actor = {
       id: 'actor-remote' as ActorId,
       type: 'remote',
@@ -457,6 +458,7 @@ describe('AddRemotePostUseCase', () => {
       postId: existingPost.postId,
       url: attachments[0].url,
       altText: 'Image',
+      mediaType: null,
       createdAt: 0 as Instant,
     };
     const linkPreview = {
