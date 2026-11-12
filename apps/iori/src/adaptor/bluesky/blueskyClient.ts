@@ -10,6 +10,11 @@ import type {
   BlueskySessionSavedStore,
 } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyBlob } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
+import {
+  BLUESKY_BLOCK_COLLECTION,
+  blueskyBlockUri,
+  parseBlueskyBlockUri,
+} from '../../domain/blueskyModeration/blueskyModeration.ts';
 import { blueskyLikeRkey } from '../../domain/blueskyTimeline/blueskyLike.ts';
 import { blueskyRepostRkey } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import { Instant } from '../../domain/instant/instant.ts';
@@ -26,6 +31,7 @@ const POST_COLLECTION = 'app.bsky.feed.post';
 const LIKE_COLLECTION = 'app.bsky.feed.like';
 const REPOST_COLLECTION = 'app.bsky.feed.repost';
 const FOLLOW_COLLECTION = 'app.bsky.graph.follow';
+const REPORT_PROXY = 'did:plc:ar7c4by46qjdydhdevvrndac#atproto_labeler';
 const CHAT_PROXY_HEADERS = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' } as const;
 const REQUEST_TIMEOUT_MS = 10_000;
 const UPLOAD_TIMEOUT_MS = 30_000;
@@ -63,6 +69,7 @@ const blobSchema = z.object({
 });
 const uploadBlobResponseSchema = z.object({ blob: blobSchema });
 const createRecordResponseSchema = z.object({ uri: z.string().min(1), cid: z.string().min(1) });
+const getRecordResponseSchema = createRecordResponseSchema.extend({ value: z.unknown().optional() });
 const emptyResponseSchema = z.looseObject({});
 const queryResponseSchema = z.record(z.string(), z.unknown());
 const errorBodySchema = z.object({ error: z.string().optional(), message: z.string().optional() });
@@ -218,8 +225,31 @@ export const createBlueskyClient = (
     Authorization: `Bearer ${session.accessJwt}`,
   });
 
-  const removeRecord = (collection: string, rkey: string): RA<void, BlueskyClientError> =>
+  const postProcedure = (
+    operation: string,
+    nsid: string,
+    body: unknown,
+    headers: Record<string, string> = {},
+  ): RA<void, BlueskyClientError> =>
     withSession(async (session) => {
+      const done = await call(
+        operation,
+        `${session.pdsUrl}/xrpc/${nsid}`,
+        {
+          method: 'POST',
+          headers: authorized(session, { 'Content-Type': 'application/json', ...headers }),
+          body: JSON.stringify(body),
+        },
+        emptyResponseSchema,
+      );
+      return done.ok ? RA.ok(undefined) : done;
+    });
+
+  const removeRecord = (collection: string, rkey: string, repo?: string): RA<void, BlueskyClientError> =>
+    withSession(async (session) => {
+      if (repo !== undefined && repo !== session.did) {
+        return RA.err(clientError('invalid_response', 'deleteRecord received a uri of another repo'));
+      }
       const deleted = await call(
         'deleteRecord',
         `${session.pdsUrl}/xrpc/com.atproto.repo.deleteRecord`,
@@ -273,14 +303,19 @@ export const createBlueskyClient = (
           'getRecord',
           `${session.pdsUrl}/xrpc/com.atproto.repo.getRecord?${query.toString()}`,
           { method: 'GET', headers: authorized(session) },
-          createRecordResponseSchema,
+          getRecordResponseSchema,
         );
         if (!found.ok) return found;
         const foundRkey = (collection === FOLLOW_COLLECTION ? followUriPattern : recordUriPattern).exec(found.val.uri)
           ?.[1];
         return foundRkey === undefined
           ? RA.err(clientError('invalid_response', 'getRecord returned an unexpected uri'))
-          : RA.ok({ uri: found.val.uri, cid: found.val.cid, rkey: foundRkey });
+          : RA.ok({
+            uri: found.val.uri,
+            cid: found.val.cid,
+            rkey: foundRkey,
+            ...(found.val.value === undefined ? {} : { value: found.val.value }),
+          });
       }),
     deleteRecord: (rkey) => removeRecord(POST_COLLECTION, rkey),
     createLike: (subject, rkey) =>
@@ -337,6 +372,50 @@ export const createBlueskyClient = (
           : RA.err(clientError('invalid_response', 'createRepost returned an unexpected uri'));
       }),
     deleteRepost: (rkey) => removeRecord(REPOST_COLLECTION, rkey),
+    muteActor: (actor) => postProcedure('muteActor', 'app.bsky.graph.muteActor', { actor }),
+    unmuteActor: (actor) => postProcedure('unmuteActor', 'app.bsky.graph.unmuteActor', { actor }),
+    createBlock: (subjectDid) =>
+      withSession(async (session) => {
+        const created = await call(
+          'createBlock',
+          `${session.pdsUrl}/xrpc/com.atproto.repo.createRecord`,
+          {
+            method: 'POST',
+            headers: authorized(session, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+              repo: session.did,
+              collection: BLUESKY_BLOCK_COLLECTION,
+              record: {
+                $type: BLUESKY_BLOCK_COLLECTION,
+                subject: subjectDid,
+                createdAt: new Date(now()).toISOString(),
+              },
+            }),
+          },
+          createRecordResponseSchema,
+        );
+        if (!created.ok) return created;
+        return blueskyBlockUri(created.val.uri) !== undefined
+          ? RA.ok({ uri: created.val.uri })
+          : RA.err(clientError('invalid_response', 'createBlock returned an unexpected uri'));
+      }),
+    deleteBlock: async (blockUri) => {
+      const parsed = parseBlueskyBlockUri(blockUri);
+      return parsed === undefined
+        ? RA.err(clientError('invalid_response', 'deleteBlock received an unexpected uri'))
+        : removeRecord(BLUESKY_BLOCK_COLLECTION, parsed.rkey, parsed.repo);
+    },
+    createReport: ({ subjectDid, reasonType, reason }) =>
+      postProcedure(
+        'createReport',
+        'com.atproto.moderation.createReport',
+        {
+          reasonType,
+          ...(reason === undefined || reason === '' ? {} : { reason }),
+          subject: { $type: 'com.atproto.admin.defs#repoRef', did: subjectDid },
+        },
+        { 'atproto-proxy': REPORT_PROXY },
+      ),
     createFollow: (subjectDid) =>
       withSession(async (session) => {
         const created = await call(

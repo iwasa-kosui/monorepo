@@ -54,10 +54,18 @@ const render = (
     isFeedLoading: false,
     isFollowing: false,
     isTogglingFollow: false,
+    moderation: null,
+    isTogglingMute: false,
+    isTogglingBlock: false,
     isOpeningMessage: false,
     messageError: null,
     onFollow: async () => {},
     onUnfollow: async () => {},
+    onMute: async () => {},
+    onUnmute: async () => {},
+    onBlock: async () => {},
+    onUnblock: async () => {},
+    onReport: () => {},
     onMessage: async () => {},
     ...props,
   }));
@@ -111,6 +119,54 @@ describe('BlueskyProfilePage', () => {
 
     expect(render({}, { isTogglingFollow: true })).toMatch(disabledAttribute);
     expect(render({}, { isTogglingFollow: false })).not.toMatch(disabledAttribute);
+  });
+
+  it('ミュート・ブロック・通報の状態が読めないときは、そのボタンを出さず、フォローのボタンは出す', () => {
+    const html = render({}, { moderation: null });
+
+    expect(html).not.toContain('title="ミュート"');
+    expect(html).not.toContain('title="ブロック"');
+    expect(html).not.toContain('title="通報"');
+    expect(html).toContain('title="フォロー"');
+  });
+
+  it('状態が読めていれば、フォローのボタンの後に「ミュート」「ブロック」「通報」を並べる', () => {
+    const html = render({}, { moderation: { muted: false, blockUri: null } });
+
+    expect(html).toContain('title="ミュート"');
+    expect(html).toContain('title="ブロック"');
+    expect(html).toContain('title="通報"');
+    expect(html).not.toContain('title="ミュート解除"');
+    expect(html).not.toContain('title="ブロック解除"');
+    expect(html.indexOf('title="フォロー"')).toBeLessThan(html.indexOf('title="ミュート"'));
+    expect(html.indexOf('title="ミュート"')).toBeLessThan(html.indexOf('title="ブロック"'));
+    expect(html.indexOf('title="ブロック"')).toBeLessThan(html.indexOf('title="通報"'));
+  });
+
+  it('ミュート中なら「ミュート解除」、ブロック中なら「ブロック解除」を出す', () => {
+    const muted = render({}, { moderation: { muted: true, blockUri: null } });
+    const blocking = render({}, { moderation: { muted: false, blockUri: 'at://did:plc:me/app.bsky.graph.block/3k' } });
+
+    expect(muted).toContain('title="ミュート解除"');
+    expect(muted).not.toContain('title="ミュート"');
+    expect(muted).toContain('title="ブロック"');
+    expect(blocking).toContain('title="ブロック解除"');
+    expect(blocking).not.toContain('title="ブロック"');
+    expect(blocking).toContain('title="ミュート"');
+  });
+
+  it('ミュートとブロックの操作中は、それぞれのボタンだけを無効にする', () => {
+    const buttonOf = (html: string, title: string): string =>
+      new RegExp(`<button[^>]*title="${title}"[^>]*>`).exec(html)?.[0] ?? '';
+    const state = { muted: false, blockUri: null };
+
+    const muting = render({}, { moderation: state, isTogglingMute: true });
+    const blocking = render({}, { moderation: state, isTogglingBlock: true });
+
+    expect(buttonOf(muting, 'ミュート')).toMatch(/\sdisabled(?=[\s>=])/);
+    expect(buttonOf(muting, 'ブロック')).not.toMatch(/\sdisabled(?=[\s>=])/);
+    expect(buttonOf(blocking, 'ブロック')).toMatch(/\sdisabled(?=[\s>=])/);
+    expect(buttonOf(blocking, 'ミュート')).not.toMatch(/\sdisabled(?=[\s>=])/);
   });
 
   it('自分以外のプロフィールには「メッセージ」のボタンを出し、自分のプロフィールには出さない', () => {
