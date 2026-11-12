@@ -132,14 +132,14 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
       if (listBlueskyActorLikesUseCase === undefined) return c.json(disabled, 409);
       const page = await listBlueskyActorLikesUseCase.run({ cursor: c.req.query('cursor') || undefined });
-      return page.ok
-        ? c.json(
-          {
-            items: page.val.items.map(toItemBody),
-            cursor: page.val.cursor ?? null,
-          } satisfies IoriBlueskyLikedPostsResponse,
-        )
-        : failure(c, page.err);
+      if (!page.ok) return failure(c, page.err);
+      const viewer = await resolveViewerDid(viewerDid);
+      return c.json(
+        {
+          items: page.val.items.map((item) => toItemBody(item, viewer)),
+          cursor: page.val.cursor ?? null,
+        } satisfies IoriBlueskyLikedPostsResponse,
+      );
     })
     .post(
       '/iori/v1/bluesky/follows',
