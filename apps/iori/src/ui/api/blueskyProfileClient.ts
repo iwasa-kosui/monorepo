@@ -1,6 +1,7 @@
 import type {
   IoriBlueskyAuthorFeedResponse,
   IoriBlueskyFollowResponse,
+  IoriBlueskyLikedPostsResponse,
   IoriBlueskyProfileBody,
   IoriBlueskyUnfollowResponse,
 } from '../../adaptor/routes/workerIoriBlueskyProfileRouter.ts';
@@ -10,8 +11,11 @@ export type BlueskyProfile = IoriBlueskyProfileBody;
 
 export type BlueskyAuthorFeedPage = IoriBlueskyAuthorFeedResponse;
 
+export type BlueskyLikedPostsPage = IoriBlueskyLikedPostsResponse;
+
 const PROFILES_PATH = '/api/iori/v1/bluesky/profiles';
 const FOLLOWS_PATH = '/api/iori/v1/bluesky/follows';
+const LIKED_POSTS_PATH = '/api/iori/v1/bluesky/liked-posts';
 const LOGIN_FAILED_MESSAGE = 'Bluesky login failed';
 
 const get = async <T>(path: string): Promise<T> => {
@@ -25,6 +29,9 @@ export const fetchBlueskyProfile = (actor: string): Promise<BlueskyProfile> =>
 
 export const fetchBlueskyAuthorFeed = (actor: string, cursor?: string): Promise<BlueskyAuthorFeedPage> =>
   get<BlueskyAuthorFeedPage>(requestUrl(`${PROFILES_PATH}/${encodeURIComponent(actor)}/feed`, { cursor }));
+
+export const fetchBlueskyLikedPosts = (cursor?: string): Promise<BlueskyLikedPostsPage> =>
+  get<BlueskyLikedPostsPage>(requestUrl(LIKED_POSTS_PATH, { cursor }));
 
 export const followBlueskyActor = async (
   did: string,

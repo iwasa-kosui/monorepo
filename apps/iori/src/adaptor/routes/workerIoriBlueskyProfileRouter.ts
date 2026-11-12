@@ -7,6 +7,7 @@ import type { BlueskyProfile, BlueskyProfileNotFound } from '../../ports/bluesky
 import type { FollowBlueskyActorUseCase } from '../../useCase/followBlueskyActor.ts';
 import type { GetBlueskyProfileUseCase } from '../../useCase/getBlueskyProfile.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
+import type { ListBlueskyActorLikesUseCase } from '../../useCase/listBlueskyActorLikes.ts';
 import type { ListBlueskyAuthorFeedUseCase } from '../../useCase/listBlueskyAuthorFeed.ts';
 import type { UnfollowBlueskyActorUseCase } from '../../useCase/unfollowBlueskyActor.ts';
 import { handleInternalError } from './helper/mastodonErrors.ts';
@@ -19,6 +20,7 @@ export type WorkerIoriBlueskyProfileRouterDeps = Readonly<{
   authn: MastodonAuthn;
   getBlueskyProfileUseCase: GetBlueskyProfileUseCase | undefined;
   listBlueskyAuthorFeedUseCase: ListBlueskyAuthorFeedUseCase | undefined;
+  listBlueskyActorLikesUseCase: ListBlueskyActorLikesUseCase | undefined;
   followBlueskyActorUseCase: FollowBlueskyActorUseCase | undefined;
   unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase | undefined;
   viewerDid?: (() => RA<string, BlueskyClientError>) | undefined;
@@ -45,6 +47,11 @@ export type IoriBlueskyAuthorFeedResponse = Readonly<{
   items: readonly IoriBlueskyTimelineItemBody[];
   cursor: string | null;
   unavailable: 'blocked' | null;
+}>;
+
+export type IoriBlueskyLikedPostsResponse = Readonly<{
+  items: readonly IoriBlueskyTimelineItemBody[];
+  cursor: string | null;
 }>;
 
 export type IoriBlueskyFollowResponse = Readonly<{ following: true; followUri: string }>;
@@ -83,6 +90,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
   authn,
   getBlueskyProfileUseCase,
   listBlueskyAuthorFeedUseCase,
+  listBlueskyActorLikesUseCase,
   followBlueskyActorUseCase,
   unfollowBlueskyActorUseCase,
   viewerDid,
@@ -117,6 +125,19 @@ export const createWorkerIoriBlueskyProfileRouter = ({
             cursor: page.val.cursor ?? null,
             unavailable: page.val.unavailable,
           } satisfies IoriBlueskyAuthorFeedResponse,
+        )
+        : failure(c, page.err);
+    })
+    .get('/iori/v1/bluesky/liked-posts', authn.requireUser(readAccounts), async (c) => {
+      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      if (listBlueskyActorLikesUseCase === undefined) return c.json(disabled, 409);
+      const page = await listBlueskyActorLikesUseCase.run({ cursor: c.req.query('cursor') || undefined });
+      return page.ok
+        ? c.json(
+          {
+            items: page.val.items.map(toItemBody),
+            cursor: page.val.cursor ?? null,
+          } satisfies IoriBlueskyLikedPostsResponse,
         )
         : failure(c, page.err);
     })
