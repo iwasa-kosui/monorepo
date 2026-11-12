@@ -4,12 +4,15 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { blueskyPostUrl, blueskyProfilePathOf, ioriBlueskyPostPath } from '../../helper/blueskyUrl.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { segmentBlueskyText } from './blueskyRichText.ts';
+import { BlueskyVideoPlayer } from './BlueskyVideoPlayer.tsx';
+import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
 
 type Props = Readonly<{
   item: IoriBlueskyTimelineItemBody;
   dataIndex?: number;
   isSelected?: boolean;
   onReply?: (item: IoriBlueskyTimelineItemBody) => void;
+  onQuote?: (item: IoriBlueskyTimelineItemBody) => void;
   onLike?: (item: IoriBlueskyTimelineItemBody) => void;
   onUndoLike?: (item: IoriBlueskyTimelineItemBody) => void;
   isLikePending?: boolean;
@@ -97,27 +100,16 @@ const BlueskyMedia = ({ media, bskyHref }: Readonly<{ media: MediaEmbed; bskyHre
         </a>
       );
     }
-    case 'video': {
-      const thumbnail = safeAbsoluteUrl(media.thumbnail);
+    case 'video':
       return (
-        <a
-          href={bskyHref ?? safeAbsoluteUrl(media.playlist)}
-          target='_blank'
-          rel='noopener noreferrer'
-          class='relative block overflow-hidden rounded-xl bg-sand dark:bg-gray-700'
-        >
-          {thumbnail !== undefined && (
-            <img
-              src={thumbnail}
-              alt=''
-              class='w-full max-h-96 object-cover'
-              loading='lazy'
-            />
-          )}
-          <span class='absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white'>動画</span>
-        </a>
+        <BlueskyVideoPlayer
+          thumbnail={media.thumbnail}
+          playlist={media.playlist}
+          aspectRatio={media.aspectRatio}
+          alt={media.alt}
+          bskyHref={bskyHref}
+        />
       );
-    }
   }
 };
 
@@ -168,6 +160,23 @@ const BlueskyReplyButton = ({ item, onReply }: Readonly<{
     >
       <path stroke-linecap='round' stroke-linejoin='round' d='M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6' />
     </svg>
+  </button>
+);
+
+const BlueskyQuoteButton = ({ item, onQuote }: Readonly<{
+  item: IoriBlueskyTimelineItemBody;
+  onQuote: (item: IoriBlueskyTimelineItemBody) => void;
+}>) => (
+  <button
+    type='button'
+    onClick={(event: Event) => {
+      event.stopPropagation();
+      onQuote(item);
+    }}
+    class='flex items-center gap-1 text-sm transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
+    title='引用'
+  >
+    引用
   </button>
 );
 
@@ -280,6 +289,7 @@ export const BlueskyTimelineItemView = ({
   dataIndex,
   isSelected,
   onReply,
+  onQuote,
   onLike,
   onUndoLike,
   isLikePending,
@@ -297,6 +307,10 @@ export const BlueskyTimelineItemView = ({
       {Instant.formatRelative(item.postedAt as Instant)}
     </time>
   );
+  const menuItems: readonly PostMenuItem[] = bskyHref === undefined ? [] : [
+    { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: bskyHref },
+    { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: bskyHref },
+  ];
   return (
     <article
       data-post-index={dataIndex}
@@ -350,7 +364,8 @@ export const BlueskyTimelineItemView = ({
       </div>
       {item.text !== '' && <BlueskyText text={item.text} facets={item.facets} />}
       {item.embed !== null && <BlueskyEmbed embed={item.embed} bskyHref={bskyHref} />}
-      {(onReply !== undefined || onLike !== undefined || onRepost !== undefined) && (
+      {(onReply !== undefined || onQuote !== undefined || onLike !== undefined || onRepost !== undefined
+        || menuItems.length > 0) && (
         <div class='flex items-center justify-end gap-4 pt-1'>
           {onReply !== undefined && <BlueskyReplyButton item={item} onReply={onReply} />}
           {onRepost !== undefined && (
@@ -361,9 +376,11 @@ export const BlueskyTimelineItemView = ({
               isPending={isRepostPending === true}
             />
           )}
+          {onQuote !== undefined && <BlueskyQuoteButton item={item} onQuote={onQuote} />}
           {onLike !== undefined && (
             <BlueskyLikeButton item={item} onLike={onLike} onUndoLike={onUndoLike} isPending={isLikePending === true} />
           )}
+          <PostMenu items={menuItems} />
         </div>
       )}
     </article>

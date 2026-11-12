@@ -4,6 +4,7 @@ import type {
   MediaAttachment,
   Notification,
   Relationship,
+  Report,
   Status,
   Translation,
 } from '../../adaptor/mastodon/entities.ts';
@@ -310,6 +311,24 @@ export const mute = (accountId: string): Promise<Relationship> =>
 export const unmute = (accountId: string): Promise<Relationship> =>
   post<Relationship>(accountActionPath(accountId, 'unmute'));
 
+export type ReportParams = Readonly<{
+  account_id: string;
+  category: Report['category'];
+  comment: string;
+  status_ids?: readonly string[];
+}>;
+
+export const report = async (params: ReportParams): Promise<Report> => {
+  const res = await fetch('/api/v1/reports', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ ...params, forward: true }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as Report;
+};
+
 export const block = (accountId: string): Promise<Relationship> =>
   post<Relationship>(accountActionPath(accountId, 'block'));
 
@@ -541,6 +560,57 @@ export const replyToBlueskyPost = async (feedItemId: string, text: string): Prom
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as BlueskyReplyResponse;
+};
+
+const BLUESKY_QUOTES_PATH = '/api/iori/v1/bluesky/quotes';
+
+export type BlueskyQuoteResponse = Readonly<{ uri: string; cid: string }>;
+
+export const quoteBlueskyPost = async (uri: string, text: string): Promise<BlueskyQuoteResponse> => {
+  const res = await fetch(BLUESKY_QUOTES_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ uri, text }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as BlueskyQuoteResponse;
+};
+
+const postJson = async <T>(path: string, body: unknown): Promise<T> => {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as T;
+};
+
+export const likeBlueskyPostByUri = (uri: string): Promise<IoriBlueskyLikeResponse> =>
+  postJson<IoriBlueskyLikeResponse>(BLUESKY_LIKES_PATH, { uri });
+
+export const unlikeBlueskyPostByUri = (uri: string): Promise<IoriBlueskyLikeResponse> =>
+  act<IoriBlueskyLikeResponse>('DELETE', requestUrl(BLUESKY_LIKES_PATH, { uri }));
+
+export const repostBlueskyPostByUri = (uri: string): Promise<IoriBlueskyRepostResponse> =>
+  postJson<IoriBlueskyRepostResponse>(BLUESKY_REPOSTS_PATH, { uri });
+
+export const undoRepostBlueskyPostByUri = (uri: string): Promise<IoriBlueskyRepostResponse> =>
+  act<IoriBlueskyRepostResponse>('DELETE', requestUrl(BLUESKY_REPOSTS_PATH, { uri }));
+
+export const replyToBlueskyPostByUri = (uri: string, text: string): Promise<BlueskyReplyResponse> =>
+  postJson<BlueskyReplyResponse>(BLUESKY_REPLIES_PATH, { uri, text });
+
+export const markBlueskyNotificationsSeen = async (seenAt: string): Promise<void> => {
+  const res = await fetch('/api/iori/v1/bluesky/notifications/seen', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ seenAt }),
+  });
+  if (!res.ok) throw await toApiError(res);
 };
 
 const BLUESKY_SEARCH_POSTS_PATH = '/api/iori/v1/bluesky/search/posts';

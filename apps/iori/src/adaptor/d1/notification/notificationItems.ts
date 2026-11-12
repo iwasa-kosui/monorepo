@@ -12,6 +12,7 @@ import {
   notificationEmojiReactsTable,
   notificationFollowsTable,
   notificationLikesTable,
+  notificationMentionsTable,
   notificationRepliesTable,
   notificationRepostsTable,
   type notificationsTable,
@@ -69,7 +70,7 @@ export const loadNotificationItems = async (
 ): Promise<NotificationItem[]> => {
   const idsOf = (type: Notification['type']) =>
     rows.filter((row) => row.type === type).map((row) => row.notificationId);
-  const [likes, follows, reacts, replies, reposts, blueskyRows] = await Promise.all([
+  const [likes, follows, reacts, replies, mentions, reposts, blueskyRows] = await Promise.all([
     rowsByNotificationId(
       idsOf('like'),
       (ids) => db.select().from(notificationLikesTable).where(inArray(notificationLikesTable.notificationId, ids)),
@@ -86,6 +87,11 @@ export const loadNotificationItems = async (
     rowsByNotificationId(
       idsOf('reply'),
       (ids) => db.select().from(notificationRepliesTable).where(inArray(notificationRepliesTable.notificationId, ids)),
+    ),
+    rowsByNotificationId(
+      idsOf('mention'),
+      (ids) =>
+        db.select().from(notificationMentionsTable).where(inArray(notificationMentionsTable.notificationId, ids)),
     ),
     rowsByNotificationId(
       idsOf('repost'),
@@ -111,6 +117,7 @@ export const loadNotificationItems = async (
     const follow = follows.get(row.notificationId);
     const react = reacts.get(row.notificationId);
     const reply = replies.get(row.notificationId);
+    const mention = mentions.get(row.notificationId);
     const repost = reposts.get(row.notificationId);
     const blueskyRow = blueskyRows.get(row.notificationId);
     if (blueskyRow !== undefined && blueskyTypes.includes(row.type)) {
@@ -145,6 +152,14 @@ export const loadNotificationItems = async (
         replierActorId: ActorId.orThrow(reply.replierActorId),
         replyPostId: PostId.orThrow(reply.replyPostId),
         originalPostId: PostId.orThrow(reply.originalPostId),
+      });
+    }
+    if (row.type === 'mention' && mention !== undefined) {
+      return toItem({
+        ...base,
+        type: 'mention',
+        mentionerActorId: ActorId.orThrow(mention.mentionerActorId),
+        mentionPostId: PostId.orThrow(mention.mentionPostId),
       });
     }
     if (row.type === 'repost' && repost !== undefined) {

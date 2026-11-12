@@ -154,6 +154,10 @@ describe('PruneFederatedPostsUseCase', () => {
           seed.addReplyNotification(local.userId, remote.actorId, seed.uuid(), post.postId, 1),
       ],
       [
+        '(d) メンションの通知が指している',
+        ({ seed, local, remote, post }) => seed.addMentionNotification(local.userId, remote.actorId, post.postId, 1),
+      ],
+      [
         '(e) article の rootPostId が指している',
         ({ sqlite, seed, local, post }) =>
           sqlite.prepare(

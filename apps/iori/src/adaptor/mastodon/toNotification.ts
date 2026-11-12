@@ -6,7 +6,7 @@ import type {
   Notification as DomainNotification,
 } from '../../domain/notification/notification.ts';
 import type { PostId } from '../../domain/post/postId.ts';
-import { blueskyPostUrlOfUri } from '../../helper/blueskyUrl.ts';
+import { blueskyPostUriPattern, blueskyPostUrlOfUri } from '../../helper/blueskyUrl.ts';
 import {
   type Account,
   IORI_EMOJI_REACTION_TYPE,
@@ -31,6 +31,7 @@ export const toType = (notification: DomainNotification): ResponseNotificationTy
     case 'like':
       return 'favourite';
     case 'reply':
+    case 'mention':
       return 'mention';
     case 'follow':
       return 'follow';
@@ -59,6 +60,8 @@ export const triggerOf = (notification: DomainNotification): NotificationTrigger
       return { kind: 'actor', actorId: notification.likerActorId };
     case 'reply':
       return { kind: 'actor', actorId: notification.replierActorId };
+    case 'mention':
+      return { kind: 'actor', actorId: notification.mentionerActorId };
     case 'follow':
       return { kind: 'actor', actorId: notification.followerActorId };
     case 'emojiReact':
@@ -79,6 +82,8 @@ export const targetPostIdOf = (notification: DomainNotification): PostId | undef
       return notification.likedPostId;
     case 'reply':
       return notification.replyPostId;
+    case 'mention':
+      return notification.mentionPostId;
     case 'follow':
       return undefined;
     case 'emojiReact':
@@ -99,21 +104,33 @@ const BLUESKY_POST_COLLECTION = '/app.bsky.feed.post/';
 const blueskyPostUrlOf = (uri: string): string | undefined =>
   uri.includes(BLUESKY_POST_COLLECTION) ? blueskyPostUrlOfUri(uri) : undefined;
 
+const blueskyPostUriOf = (uri: string): { uri: string } | Record<string, never> =>
+  blueskyPostUriPattern.test(uri) ? { uri } : {};
+
 export const blueskyExtensionOf = (
   notification: BlueskyNotification,
 ): NonNullable<IoriNotificationExtension['bluesky']> => {
   const profileUrl = blueskyProfileUrlOf(notification.author);
   switch (notification.type) {
     case 'blueskyLike':
-      return { reason: 'like', url: blueskyPostUrlOf(notification.subjectUri) ?? profileUrl };
+      return {
+        reason: 'like',
+        url: blueskyPostUrlOf(notification.subjectUri) ?? profileUrl,
+        ...blueskyPostUriOf(notification.subjectUri),
+      };
     case 'blueskyRepost':
-      return { reason: 'repost', url: blueskyPostUrlOf(notification.subjectUri) ?? profileUrl };
+      return {
+        reason: 'repost',
+        url: blueskyPostUrlOf(notification.subjectUri) ?? profileUrl,
+        ...blueskyPostUriOf(notification.subjectUri),
+      };
     case 'blueskyFollow':
       return { reason: 'follow', url: profileUrl };
     case 'blueskyMention':
       return {
         reason: notification.reason,
         url: blueskyPostUrlOf(notification.blueskyUri) ?? profileUrl,
+        ...blueskyPostUriOf(notification.blueskyUri),
         text: notification.text,
       };
   }
@@ -123,6 +140,10 @@ export const toExtension = (notification: DomainNotification): IoriNotificationE
   switch (notification.type) {
     case 'emojiReact':
       return { emoji: notification.emoji, url: notification.emojiImageUrl };
+    case 'reply':
+      return { fediverse: { reason: 'reply' } };
+    case 'mention':
+      return { fediverse: { reason: 'mention' } };
     case 'blueskyLike':
     case 'blueskyRepost':
     case 'blueskyFollow':
@@ -135,7 +156,7 @@ export const toExtension = (notification: DomainNotification): IoriNotificationE
 
 const domainTypesOf: Readonly<Record<ResponseNotificationType, ReadonlyArray<DomainNotification['type']>>> = {
   favourite: ['like', 'blueskyLike'],
-  mention: ['reply', 'blueskyMention'],
+  mention: ['reply', 'mention', 'blueskyMention'],
   follow: ['follow', 'blueskyFollow'],
   [IORI_EMOJI_REACTION_TYPE]: ['emojiReact'],
   status: [],

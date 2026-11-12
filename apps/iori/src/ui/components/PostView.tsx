@@ -9,6 +9,7 @@ import { translationErrorMessage } from '../api/translation.ts';
 import { toBlueskyCrosspostMark } from './blueskyCrosspostMark.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
+import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
 
 type Props = Readonly<{
   status: Status;
@@ -34,7 +35,12 @@ type Props = Readonly<{
   onToggleEmojiPicker?: () => void;
   onReply?: (postId: string) => void;
   onShowThread?: (postId: string) => void;
+  onMute?: (accountId: string, acct: string) => void;
+  onBlock?: (accountId: string, acct: string) => void;
+  onReport?: (target: Readonly<{ accountId: string; acct: string; statusId: string }>) => void;
 }>;
+
+const isOriginUri = (uri: string): boolean => uri.startsWith('https:') && !uri.includes('/api/v1/statuses/');
 
 export const PostView = (
   {
@@ -61,6 +67,9 @@ export const PostView = (
     onToggleEmojiPicker,
     onReply,
     onShowThread,
+    onMute,
+    onBlock,
+    onReport,
   }: Props,
 ) => {
   const post = displayStatus(status);
@@ -74,6 +83,54 @@ export const PostView = (
   const images = post.media_attachments.filter((attachment) => attachment.type === 'image');
   const linkPreviews = post.iori?.link_previews ?? [];
   const reactions = post.iori?.reactions ?? [];
+  const postUrl = post.url ?? (!isLocalPost && isOriginUri(post.uri) ? post.uri : undefined);
+  const isOtherAccount = isLoggedIn === true
+    && currentAccountId !== undefined
+    && post.account.id !== currentAccountId;
+  const canMute = onMute !== undefined && isOtherAccount;
+  const canBlock = onBlock !== undefined && isOtherAccount && !isLocalPost;
+  const canReport = onReport !== undefined && isOtherAccount && !isLocalPost;
+  const menuItems: readonly PostMenuItem[] = [
+    ...(postUrl !== undefined && !isLocalPost
+      ? [{ key: 'open-original', label: '元の投稿を開く', kind: 'link', href: postUrl } as const]
+      : []),
+    ...(postUrl !== undefined
+      ? [{ key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: postUrl } as const]
+      : []),
+    ...(canMute
+      ? [
+        {
+          key: 'mute',
+          label: `@${post.account.acct} をミュート`,
+          kind: 'action',
+          danger: true,
+          onSelect: () => onMute?.(post.account.id, post.account.acct),
+        } as const,
+      ]
+      : []),
+    ...(canBlock
+      ? [
+        {
+          key: 'block',
+          label: `@${post.account.acct} をブロック`,
+          kind: 'action',
+          danger: true,
+          onSelect: () => onBlock?.(post.account.id, post.account.acct),
+        } as const,
+      ]
+      : []),
+    ...(canReport
+      ? [
+        {
+          key: 'report',
+          label: 'この投稿を通報',
+          kind: 'action',
+          danger: true,
+          onSelect: () => onReport?.({ accountId: post.account.id, acct: post.account.acct, statusId: post.id }),
+        } as const,
+      ]
+      : []),
+  ];
 
   // Gesture states for like
   const [isFloating, setIsFloating] = useState(false);
@@ -643,6 +700,7 @@ export const PostView = (
                 </svg>
               </button>
             )}
+            <PostMenu items={menuItems} />
           </div>
           {translationError !== '' && <p class='mt-2 text-sm text-red-600 dark:text-red-400'>{translationError}</p>}
           {/* Reactions display */}

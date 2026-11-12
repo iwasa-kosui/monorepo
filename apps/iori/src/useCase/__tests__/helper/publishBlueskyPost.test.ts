@@ -193,6 +193,20 @@ describe('publishBlueskyPost', () => {
     ]);
   });
 
+  it('利用者が書いた末尾の … は切り詰めとみなさず、@alice.bsky.social… にも mention を付ける', async () => {
+    const t = setup();
+
+    await t.publish({ text: '@alice.bsky.social…' });
+
+    expect(t.query).toHaveBeenCalledWith('com.atproto.identity.resolveHandle', { handle: 'alice.bsky.social' });
+    expect(t.record().facets).toEqual([
+      {
+        index: { byteStart: 0, byteEnd: 18 },
+        features: [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' }],
+      },
+    ]);
+  });
+
   it('サロゲートペアや ZWJ の絵文字を前に含む本文でも、link と mention のバイト位置が UTF-8 で正しい', async () => {
     const t = setup();
     const prefix = '👍🏽 👨‍👩‍👧‍👦 ';
@@ -246,6 +260,42 @@ describe('publishBlueskyPost', () => {
         { alt: '', image: { $type: 'blob', ref: { $link: 'bafyblob' }, mimeType: 'image/jpeg', size: 3 } },
       ],
     });
+  });
+
+  it('引用だけなら、uri と cid の app.bsky.embed.record にする', async () => {
+    const t = setup();
+
+    await t.publish({ text: 'quote', quote: ROOT });
+
+    expect(t.record().embed).toEqual({ $type: 'app.bsky.embed.record', record: ROOT });
+    expect(t.uploadBlob).not.toHaveBeenCalled();
+  });
+
+  it('引用と画像があれば、recordWithMedia に引用と images を入れる', async () => {
+    const t = setup();
+
+    await t.publish({
+      text: 'quote',
+      quote: ROOT,
+      images: [{ bytes: new Uint8Array([1, 2, 3]), mimeType: 'image/png', alt: '猫' }],
+    });
+
+    expect(t.record().embed).toEqual({
+      $type: 'app.bsky.embed.recordWithMedia',
+      record: { record: ROOT },
+      media: {
+        $type: 'app.bsky.embed.images',
+        images: [{ alt: '猫', image: { $type: 'blob', ref: { $link: 'bafyblob' }, mimeType: 'image/png', size: 3 } }],
+      },
+    });
+  });
+
+  it('引用も画像も無ければ embed を付けない', async () => {
+    const t = setup();
+
+    await t.publish({ text: 'plain' });
+
+    expect(t.record()).not.toHaveProperty('embed');
   });
 
   it('本文が空でも画像があれば投稿できる', async () => {

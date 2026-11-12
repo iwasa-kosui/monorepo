@@ -9,6 +9,10 @@ import { UserId } from '../../../domain/user/userId.ts';
 import { createD1MarkerSavedStore } from '../marker/markerSavedStore.ts';
 import { createD1MarkersResolverByUserId } from '../marker/markersResolverByUserId.ts';
 import {
+  createD1MentionNotificationCreatedStore,
+  createD1MentionNotificationDeletedStore,
+  createD1MentionNotificationResolverByRecipientAndMentionPostId,
+  createD1MentionNotificationsResolverByMentionPostId,
   createD1NotificationDismissedStore,
   createD1NotificationsClearedStore,
   createD1RepostNotificationCreatedStore,
@@ -370,6 +374,129 @@ describe('repost 通知', () => {
         isRead: false,
         reposterActorId: t.alice.actorId as never,
         repostedPostId: t.myPost.postId as never,
+      }, Instant.orThrow(9_000)),
+    );
+    expect(count()).toMatchObject({ n: 1 });
+
+    await createD1NotificationsClearedStore(t.db).store(
+      Notification.clearNotifications(UserId.orThrow(t.me.userId), Instant.orThrow(9_500)),
+    );
+    expect(count()).toMatchObject({ n: 0 });
+  });
+});
+
+describe('mention 通知', () => {
+  const seedMentions = () => {
+    const t = seedNotifications();
+    const mentionPost = t.seed.addRemotePost(t.alice, 8_000, { timeline: false });
+    const mention = t.seed.addMentionNotification(t.me.userId, t.alice.actorId, mentionPost.postId, 8_100);
+    return { ...t, mentionPost, mention };
+  };
+
+  it('types に mention が含まれるときだけ、子表から値を復元して返す', async () => {
+    const t = seedMentions();
+
+    const result = await t.resolveByPage({}, ['mention']);
+
+    expect(await t.idsOf()).not.toContain(t.mention);
+    expect(result.ok && result.val.map((item) => item.notification)).toMatchObject([
+      {
+        type: 'mention',
+        notificationId: t.mention,
+        recipientUserId: t.me.userId,
+        mentionerActorId: t.alice.actorId,
+        mentionPostId: t.mentionPost.postId,
+      },
+    ]);
+    expect(result.ok && result.val[0]?.createdAt).toBe(8_100);
+  });
+
+  it('作成ストアが通知、子表、ドメインイベントを保存する', async () => {
+    const t = seedNotifications();
+    const mentionPost = t.seed.addRemotePost(t.alice, 8_000, { timeline: false });
+    const event = Notification.createMentionNotification({
+      type: 'mention',
+      notificationId: NotificationId.generate(),
+      recipientUserId: UserId.orThrow(t.me.userId),
+      isRead: false,
+      mentionerActorId: t.alice.actorId as never,
+      mentionPostId: mentionPost.postId as never,
+    }, Instant.orThrow(9_000));
+
+    await createD1MentionNotificationCreatedStore(t.db).store(event);
+
+    const items = await t.resolveByPage({}, ['mention']);
+    const events = t.sqlite.prepare('SELECT count(*) AS n FROM domain_events WHERE eventName = ?').get(
+      'notification.mentionNotificationCreated',
+    );
+    expect(items.ok && items.val.map((item) => item.notification)).toEqual([event.aggregateState]);
+    expect(events).toMatchObject({ n: 1 });
+  });
+
+  it('受信者と投稿が一致する通知だけをリゾルバーが返す', async () => {
+    const t = seedMentions();
+    const resolver = createD1MentionNotificationResolverByRecipientAndMentionPostId(t.db);
+    const resolve = (recipientUserId: string, mentionPostId: string) =>
+      resolver.resolve({ recipientUserId: UserId.orThrow(recipientUserId), mentionPostId: mentionPostId as never });
+
+    const found = await resolve(t.me.userId, t.mentionPost.postId);
+    const otherRecipient = await resolve(t.other.userId, t.mentionPost.postId);
+    const otherPost = await resolve(t.me.userId, t.seed.uuid());
+
+    expect(found.ok && found.val).toMatchObject({ type: 'mention', notificationId: t.mention });
+    expect(otherRecipient.ok && otherRecipient.val).toBeUndefined();
+    expect(otherPost.ok && otherPost.val).toBeUndefined();
+  });
+
+  it('同じ (受信者, 投稿) の組で2件目の通知を作ると一意索引で失敗し、別の受信者なら作れる', () => {
+    const t = seedMentions();
+
+    expect(() => t.seed.addMentionNotification(t.me.userId, t.other.actorId, t.mentionPost.postId, 8_600))
+      .toThrow(/UNIQUE/);
+    expect(() => t.seed.addMentionNotification(t.other.userId, t.alice.actorId, t.mentionPost.postId, 8_700))
+      .not.toThrow();
+  });
+
+  it('投稿の ID で通知を引き、削除ストアが通知、子表、ドメインイベントを消して記録する', async () => {
+    const t = seedMentions();
+    const otherPost = t.seed.addRemotePost(t.alice, 8_200, { timeline: false });
+    const keep = t.seed.addMentionNotification(t.me.userId, t.alice.actorId, otherPost.postId, 8_300);
+    const resolved = await createD1MentionNotificationsResolverByMentionPostId(t.db).resolve({
+      mentionPostId: t.mentionPost.postId as never,
+    });
+
+    expect(resolved.ok && resolved.val.map((n) => n.notificationId)).toEqual([t.mention]);
+
+    await createD1MentionNotificationDeletedStore(t.db).store(
+      ...(resolved.ok
+        ? resolved.val.map((n) => Notification.deleteMentionNotification(n, Instant.orThrow(9_000)))
+        : []),
+    );
+
+    const remaining = (table: string) =>
+      t.sqlite.prepare(`SELECT notificationId FROM ${table}`).all().map((row) => row.notificationId);
+    expect(remaining('notification_mentions')).toEqual([keep]);
+    expect(remaining('notifications')).not.toContain(t.mention);
+    expect(
+      t.sqlite.prepare('SELECT count(*) AS n FROM domain_events WHERE eventName = ?').get(
+        'notification.mentionNotificationDeleted',
+      ),
+    ).toMatchObject({ n: 1 });
+  });
+
+  it('通知の削除と全件削除で子表の行も消える', async () => {
+    const t = seedMentions();
+    t.seed.addMentionNotification(t.me.userId, t.alice.actorId, t.seed.uuid(), 8_500);
+    const count = () => t.sqlite.prepare('SELECT count(*) AS n FROM notification_mentions').get();
+
+    await createD1NotificationDismissedStore(t.db).store(
+      Notification.dismissNotification({
+        type: 'mention',
+        notificationId: NotificationId.orThrow(t.mention),
+        recipientUserId: UserId.orThrow(t.me.userId),
+        isRead: false,
+        mentionerActorId: t.alice.actorId as never,
+        mentionPostId: t.mentionPost.postId as never,
       }, Instant.orThrow(9_000)),
     );
     expect(count()).toMatchObject({ n: 1 });

@@ -38,6 +38,7 @@ export const createD1PrunableRemotePostIdsResolverByReceivedBefore = (
         AND p.postId NOT IN (SELECT reactedPostId FROM notification_emoji_reacts)
         AND p.postId NOT IN (SELECT replyPostId FROM notification_replies)
         AND p.postId NOT IN (SELECT originalPostId FROM notification_replies)
+        AND p.postId NOT IN (SELECT mentionPostId FROM notification_mentions)
         AND p.postId NOT IN (SELECT rootPostId FROM articles WHERE rootPostId IS NOT NULL)
         AND NOT EXISTS (SELECT 1 FROM local_posts reply WHERE reply.inReplyToUri = rp.uri)
         AND NOT EXISTS (

@@ -36,9 +36,11 @@ import {
   mute,
   parseLinkHeader,
   parseRetryAfter,
+  quoteBlueskyPost,
   react,
   reblog,
   refreshXPosts,
+  report,
   repostBlueskyPost,
   requestDigest,
   saveNotificationsMarker,
@@ -380,6 +382,36 @@ describe('mastodon client requests', () => {
 
     expect(isUnprocessableError(error)).toBe(true);
     expect((error as Error).message).toBe('Validation failed: Text can not be blank');
+  });
+
+  it('posts a report as same-origin JSON and returns the report', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'r1', category: 'violation' }));
+
+    const created = await report({ account_id: 'a1', category: 'violation', comment: 'rude' });
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/v1/reports');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({
+      account_id: 'a1',
+      category: 'violation',
+      comment: 'rude',
+      forward: true,
+    });
+    expect(created).toEqual({ id: 'r1', category: 'violation' });
+  });
+
+  it('throws an unprocessable error carrying the server message when the report is refused', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: The report is not supported for local accounts' }, {
+      status: 422,
+    }));
+
+    const error = await report({ account_id: 'a1', category: 'spam', comment: '' }).catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Validation failed: The report is not supported for local accounts');
   });
 
   it('deletes a status by encoded id and returns the deleted status', async () => {
@@ -850,6 +882,29 @@ describe('mastodon client requests', () => {
     const error = await repostBlueskyPost('x').catch((e: unknown) => e);
 
     expect(isMastodonApiError(error) && error.status).toBe(502);
+  });
+
+  it('posts a Bluesky quote with the uri and text as a JSON body', async () => {
+    const fetchMock = stubFetch(
+      jsonResponse({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', cid: 'bafy' }, { status: 201 }),
+    );
+
+    const result = await quoteBlueskyPost('at://did:plc:a/app.bsky.feed.post/1', '引用です');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/quotes');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(init.body as string)).toEqual({ uri: 'at://did:plc:a/app.bsky.feed.post/1', text: '引用です' });
+    expect(result).toEqual({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', cid: 'bafy' });
+  });
+
+  it('carries the status of a failed Bluesky quote', async () => {
+    stubFetch(jsonResponse({ error: 'Quote not allowed' }, { status: 422 }));
+
+    const error = await quoteBlueskyPost('at://did:plc:a/app.bsky.feed.post/1', 'x').catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(422);
   });
 
   it('posts a refresh request for the X posts and returns the counts', async () => {

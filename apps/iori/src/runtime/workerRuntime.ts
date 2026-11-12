@@ -134,6 +134,7 @@ import { createD1AcceptedRelaysResolver } from '../adaptor/d1/relay/acceptedRela
 import { createD1AllRelaysResolver } from '../adaptor/d1/relay/allRelaysResolver.ts';
 import { createD1RelayResolverByActorUri } from '../adaptor/d1/relay/relayResolverByActorUri.ts';
 import { createD1RelaySubscriptionRequestedStore } from '../adaptor/d1/relay/relaySubscriptionRequestedStore.ts';
+import { createD1ReportSubmittedStore } from '../adaptor/d1/report/reportSubmittedStore.ts';
 import { createD1RepostCreatedStore } from '../adaptor/d1/repost/repostCreatedStore.ts';
 import { createD1RepostDeletedStore } from '../adaptor/d1/repost/repostDeletedStore.ts';
 import { createD1RepostResolver } from '../adaptor/d1/repost/repostResolver.ts';
@@ -235,6 +236,7 @@ import { createBlueskyProfileRuntimePorts } from './blueskyProfile.ts';
 import { createBlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
 import { createWorkerBlockActions, createWorkerRemoteActorActions } from './workerCoreUseCases.ts';
+import { createWorkerReportAction } from './workerReportActions.ts';
 
 const lazyWorkerArgon2idDerive: Argon2idDerive = async (params) => {
   const { workerArgon2idDerive } = await import('../adaptor/argon2/workerArgon2idDerive.ts');
@@ -312,6 +314,13 @@ export const createWorkerRuntimePorts = async (
     followResolver: createD1FollowResolver(db),
     followRequestedStore: createD1FollowRequestedStore(db),
     undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
+  });
+  const reportRemoteActor = createWorkerReportAction({
+    userResolver,
+    actorResolverByUserId,
+    actorResolverById: createD1ActorResolverById(db),
+    postResolver,
+    reportSubmittedStore: createD1ReportSubmittedStore(db),
   });
   const blockActions = createWorkerBlockActions({
     userResolver,
@@ -795,6 +804,7 @@ export const createWorkerRuntimePorts = async (
         pushSubscriptionResolverByEndpoint: createD1PushSubscriptionResolverByEndpoint(db),
       }),
       ...remoteActorActions,
+      reportRemoteActor,
       ...blockActions,
       vapidPublicKey: env.VAPID_PUBLIC_KEY,
     },

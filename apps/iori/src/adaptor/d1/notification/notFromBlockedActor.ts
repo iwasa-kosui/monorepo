@@ -5,6 +5,7 @@ import {
   notificationEmojiReactsTable,
   notificationFollowsTable,
   notificationLikesTable,
+  notificationMentionsTable,
   notificationRepliesTable,
   notificationRepostsTable,
   notificationsTable,
@@ -28,5 +29,8 @@ export const notFromBlockedActor = sql`not exists (
       union all
       select ${notificationRepostsTable.reposterActorId} from ${notificationRepostsTable}
         where ${notificationRepostsTable.notificationId} = ${notificationsTable.notificationId}
+      union all
+      select ${notificationMentionsTable.mentionerActorId} from ${notificationMentionsTable}
+        where ${notificationMentionsTable.notificationId} = ${notificationsTable.notificationId}
     )
 )`;

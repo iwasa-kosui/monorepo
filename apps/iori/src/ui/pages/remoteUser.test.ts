@@ -38,6 +38,9 @@ const render = (a: Account, overrides: Partial<Parameters<typeof RemoteUserPage>
     onUnfollow: async () => {},
     onMute: async () => {},
     onUnmute: async () => {},
+    onReportOpen: () => {},
+    onReportClose: () => {},
+    onReportSubmit: () => {},
     onBlock: async () => {},
     onUnblock: async () => {},
     likingPostId: null,
@@ -45,6 +48,9 @@ const render = (a: Account, overrides: Partial<Parameters<typeof RemoteUserPage>
     isBlocking: false,
     isTogglingFollow: false,
     isLoadingRemoteStatuses: false,
+    isReportOpen: false,
+    isReporting: false,
+    isReported: false,
     ...overrides,
   }));
 
@@ -190,5 +196,31 @@ describe('CustomEmojiText', () => {
     const unsafe = { shortcode: 'x', url: 'javascript:alert(1)' } as Account['emojis'][number];
 
     expect(String(jsx(CustomEmojiText, { text: ':x:', emojis: [unsafe] }))).toBe(':x:');
+  });
+});
+
+describe('RemoteUserPage report', () => {
+  it('shows a report button titled 通報 for a signed-in viewer', () => {
+    const html = render(account(), { isLoggedIn: true });
+
+    expect(html).toMatch(/<button[^>]*title="通報"/);
+  });
+
+  it('does not show the report button to a signed-out viewer', () => {
+    expect(render(account())).not.toContain('title="通報"');
+  });
+
+  it('shows the report modal for the handle only while it is open', () => {
+    expect(render(account(), { isLoggedIn: true })).not.toContain('を通報');
+
+    const html = render(account(), { isLoggedIn: true, isReportOpen: true, reportError: 'Failed to report: HTTP 422' });
+
+    expect(html).toContain('@alice@remote.example を通報');
+    expect(html).toContain('Failed to report: HTTP 422');
+  });
+
+  it('shows the 通報しました notice only after a successful report', () => {
+    expect(render(account(), { isLoggedIn: true })).not.toContain('通報しました');
+    expect(render(account(), { isLoggedIn: true, isReported: true })).toContain('通報しました');
   });
 });
