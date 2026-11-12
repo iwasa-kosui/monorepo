@@ -50,7 +50,7 @@ describe('toBlueskyTimelineItem', () => {
       ...oldRecord,
       authorDisplayName: '引用者',
       authorAvatar: 'https://cdn.example/q.jpg',
-      media: { type: 'video', thumbnail: null, playlist: 'https://video.example/q.m3u8' },
+      media: { type: 'video', thumbnail: null, playlist: 'https://video.example/q.m3u8', aspectRatio: null, alt: null },
     };
 
     expect(toBlueskyTimelineItem(row(unavailable), false, false).embed).toEqual(unavailable);
@@ -59,7 +59,13 @@ describe('toBlueskyTimelineItem', () => {
       toBlueskyTimelineItem(
         row({
           type: 'recordWithMedia',
-          media: { type: 'video', thumbnail: null, playlist: 'https://video.example/q.m3u8' },
+          media: {
+            type: 'video',
+            thumbnail: null,
+            playlist: 'https://video.example/q.m3u8',
+            aspectRatio: null,
+            alt: null,
+          },
           record: unavailable,
         }),
         false,

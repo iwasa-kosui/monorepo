@@ -244,13 +244,19 @@ describe('BlueskyTimelineItemView', () => {
       const video = render({
         embed: {
           ...record,
-          media: { type: 'video', thumbnail: null, playlist: 'https://video.example/q.m3u8' },
+          media: {
+            type: 'video',
+            thumbnail: null,
+            playlist: 'https://video.example/q.m3u8',
+            aspectRatio: null,
+            alt: null,
+          },
         },
       });
 
       expect(card).toContain('href="https://example.com/q"');
       expect(card).not.toMatch(nestedAnchor);
-      expect(video).toContain('href="https://bsky.app/profile/did:plc:q/post/3kq"');
+      expect(video).toContain('aria-label="動画を再生"');
       expect(video).not.toMatch(nestedAnchor);
     });
 
