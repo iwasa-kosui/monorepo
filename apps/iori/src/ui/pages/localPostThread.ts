@@ -19,7 +19,7 @@ export const resolveLocalPostThread = (
   if (status.status === 'rejected') {
     return isNotFoundError(status.reason)
       ? { type: 'notFound' }
-      : { type: 'error', message: (status.reason as Error).message };
+      : { type: 'error', message: status.reason instanceof Error ? status.reason.message : String(status.reason) };
   }
   if (context.status === 'rejected') {
     return { type: 'loaded', currentPost: status.value, ancestors: [], descendants: [], contextFailed: true };

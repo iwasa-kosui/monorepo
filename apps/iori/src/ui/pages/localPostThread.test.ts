@@ -40,6 +40,13 @@ describe('resolveLocalPostThread', () => {
     });
   });
 
+  it('本体が Error でない値で失敗したら、その文字列を message とする', () => {
+    expect(resolveLocalPostThread(rejected('plain failure'), fulfilled(context))).toEqual({
+      type: 'error',
+      message: 'plain failure',
+    });
+  });
+
   it('本体も context も成功したら、投稿とスレッドを返す', () => {
     expect(resolveLocalPostThread(fulfilled(post('p')), fulfilled(context))).toEqual({
       type: 'loaded',

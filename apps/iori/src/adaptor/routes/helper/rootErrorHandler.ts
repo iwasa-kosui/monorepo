@@ -1,3 +1,4 @@
+import { DrizzleQueryError } from 'drizzle-orm';
 import type { ErrorHandler } from 'hono';
 
 import { renderErrorPage } from '../../../errorPage.ts';
@@ -9,6 +10,13 @@ const plainTextError = (): Response =>
     headers: { 'Content-Type': 'text/plain; charset=UTF-8' },
   });
 
+const stackForLog = (err: unknown): string | undefined => {
+  if (err instanceof DrizzleQueryError) {
+    return err.cause instanceof Error ? err.cause.stack : undefined;
+  }
+  return err instanceof Error ? err.stack : undefined;
+};
+
 export const rootErrorHandler: ErrorHandler = (err, c) => {
   if ('getResponse' in err && typeof err.getResponse === 'function') {
     return err.getResponse();
@@ -18,16 +26,20 @@ export const rootErrorHandler: ErrorHandler = (err, c) => {
     method: c.req.method,
     path: pathname,
     error: describeErrorForLog(err),
+    stack: stackForLog(err),
   });
-  if (pathname.startsWith('/api/') || pathname.startsWith('/oauth/')) {
+  const accept = c.req.header('Accept') ?? '';
+  if (pathname.startsWith('/api/')) {
     return c.json(internalServerError, 500);
   }
-  const accept = c.req.header('Accept') ?? '';
+  if (pathname.startsWith('/oauth/') && !accept.includes('text/html')) {
+    return c.json(internalServerError, 500);
+  }
   if (accept.includes('application/activity+json') || accept.includes('application/ld+json')) {
     return plainTextError();
   }
   if (accept.includes('text/html')) {
-    return c.html(renderErrorPage(pathname), 500);
+    return c.html(renderErrorPage(), 500);
   }
   return plainTextError();
 };

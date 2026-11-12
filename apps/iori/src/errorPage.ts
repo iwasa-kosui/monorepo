@@ -1,11 +1,8 @@
 import { layoutStyle, tailwindConfigScript } from './layoutAssets.ts';
 
-const escapeHtml = (value: string): string =>
-  value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-
-export const renderErrorPage = (currentPath: string): string =>
+export const renderErrorPage = (): string =>
   `<!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -21,7 +18,7 @@ export const renderErrorPage = (currentPath: string): string =>
       <h1>ページを表示できませんでした</h1>
       <p>時間をおいて、もう一度読み込んでください。</p>
       <p>
-        <a href="${escapeHtml(currentPath)}">もう一度読み込む</a>
+        <a href="">もう一度読み込む</a>
         <a href="/">ホームへ戻る</a>
       </p>
     </main>

@@ -1,3 +1,4 @@
+import { DrizzleQueryError } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -125,8 +126,42 @@ describe('createIoriApp', () => {
       expect(response.status).toBe(500);
       expect(response.headers.get('Content-Type')).toContain('text/html');
       expect(html).toContain('ページを表示できませんでした');
-      expect(html).toContain('href="/users/x"');
+      expect(html).toContain('href=""');
       expect(html).toContain('href="/"');
+      expect(html).toContain('<html lang="ja">');
+    });
+
+    it('does not put the request path into the error page links', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await throwingApp('//evil.example/x').request('https://worker.test//evil.example/x', {
+        headers: { Accept: 'text/html' },
+      });
+      const html = await response.text();
+
+      expect(response.status).toBe(500);
+      expect(html).toContain('href=""');
+      expect(html).not.toContain('//evil.example');
+    });
+
+    it('returns an HTML 500 for /oauth/authorize opened in a browser', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await throwingApp('/oauth/authorize').request('/oauth/authorize', {
+        headers: { Accept: 'text/html,application/xhtml+xml' },
+      });
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get('Content-Type')).toContain('text/html');
+      expect(await response.text()).toContain('ページを表示できませんでした');
+    });
+
+    it('returns a JSON 500 under /oauth/ for a non-HTML Accept header', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await throwingApp('/oauth/token').request('/oauth/token', {
+        headers: { Accept: 'application/json' },
+      });
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: 'Internal server error' });
     });
 
     it('returns a plain text 500 when no Accept header is sent', async () => {
@@ -191,6 +226,38 @@ describe('createIoriApp', () => {
       expect(spy).toHaveBeenCalledTimes(1);
       expect(JSON.stringify(spy.mock.calls)).not.toContain('secret');
       expect(spy.mock.calls[0]?.[1]).toMatchObject({ method: 'GET', path: '/oauth/callback' });
+    });
+
+    it('logs the stack of an ordinary Error as a separate field', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      await throwingApp('/users/x').request('/users/x');
+
+      const logged = spy.mock.calls[0]?.[1] as { error: unknown; stack: unknown };
+      expect(typeof logged.stack).toBe('string');
+      expect(logged.stack).toContain('Error: boom');
+      expect(logged.error).not.toContain('at ');
+    });
+
+    it('logs only the cause stack of a DrizzleQueryError, never its parameters', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const thrown = new DrizzleQueryError(
+        'insert into posts (content) values (?)',
+        ['secret-body'],
+        new Error('cause-message'),
+      );
+      const app = createIoriApp({
+        ...baseAdapters,
+        registerRoutes: (router) => {
+          router.get('/users/x', () => {
+            throw thrown;
+          });
+        },
+      });
+      await app.request('/users/x');
+
+      const logged = spy.mock.calls[0]?.[1] as { stack: string };
+      expect(logged.stack).toContain('cause-message');
+      expect(logged.stack).not.toContain('secret-body');
     });
 
     it('returns a plain text 500 when the federation middleware throws for an ActivityPub request', async () => {
