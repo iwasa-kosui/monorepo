@@ -9,11 +9,13 @@ import { clearEdits, loadEdits, saveEdits } from './storage.ts';
 
 type Config = {
   exerciseId: string;
+  step: 1 | 2;
   files: Record<string, string>;
   head: string;
   tail: string;
   initial: string;
   complete: string;
+  completeStep2: string | null;
   template: string;
 };
 
@@ -23,6 +25,8 @@ type RunResult = { before: Snapshot; after: Snapshot; error: string | null };
 type Filled = { key: string; label: string; value: string | null };
 
 const editedFile = 'cancelVisit';
+const chapterStartId = 'chapter-1-start';
+const revealMarker = 'JSON.stringify({';
 const visitId = 'visit-pochi';
 const updateMarker = '\'cancelled\'';
 const templateMarker = 'const cancelled =';
@@ -85,6 +89,9 @@ const answersOf = (events: Row[]): Filled[] => {
   ];
 };
 
+const nextPageNote = '次のページのステップ2で、「誰が」「なぜ」を記録します。';
+const changesTitle = '右の「ステップ2で変える2か所」';
+
 const quoted = (labels: string[]): string => labels.map((label) => `「${label}」`).join('');
 
 const mount = (root: HTMLElement): void => {
@@ -93,8 +100,9 @@ const mount = (root: HTMLElement): void => {
   const message = query<HTMLElement>(root, '[data-role="message"]');
   const editorParent = query<HTMLElement>(root, '[data-role="editor"]');
   const runButton = query<HTMLButtonElement>(root, '[data-role="run"]');
-  const templateButton = query<HTMLButtonElement>(root, '[data-role="template"]');
+  const templateButton = root.querySelector<HTMLButtonElement>('[data-role="template"]');
   const completeButton = query<HTMLButtonElement>(root, '[data-role="complete"]');
+  const completeStep2Button = root.querySelector<HTMLButtonElement>('[data-role="complete-step-2"]');
   const resetButton = query<HTMLButtonElement>(root, '[data-role="reset"]');
   const testsButton = query<HTMLButtonElement>(root, '[data-role="tests"]');
   const retryButton = query<HTMLButtonElement>(root, '[data-role="retry"]');
@@ -104,7 +112,7 @@ const mount = (root: HTMLElement): void => {
   const events = query<HTMLElement>(root, '[data-role="events"]');
   const eventsBadge = query<HTMLElement>(root, '[data-role="events-badge"]');
   const eventsCaption = query<HTMLElement>(root, '[data-role="events-caption"]');
-  const blanks = query<HTMLElement>(root, '[data-role="blanks"]');
+  const blanks = root.querySelector<HTMLElement>('[data-role="blanks"]');
   const summary = query<HTMLElement>(root, '[data-role="summary"]');
   const failed = query<HTMLElement>(root, '[data-role="failed"]');
   const answerCells = [...root.querySelectorAll<HTMLElement>('[data-answer]')];
@@ -134,13 +142,29 @@ const mount = (root: HTMLElement): void => {
   function persist(): void {
     if (code() === config.initial) {
       clearEdits(config.exerciseId);
+      clearEdits(chapterStartId);
     } else {
       saveEdits(config.exerciseId, { [editedFile]: code() });
+      // 第3章が参加者のコードを使うため
+      saveEdits(chapterStartId, { 'visits.ts': config.head + code() + config.tail });
     }
   }
 
+  const revealPayload = (): void => {
+    if (config.step !== 2) {
+      return;
+    }
+    const index = code().indexOf(revealMarker);
+    if (index !== -1) {
+      requestAnimationFrame(() => {
+        view.dispatch({ effects: EditorView.scrollIntoView(index, { y: 'center' }) });
+      });
+    }
+  };
+
   const setCode = (doc: string): void => {
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc }, selection: { anchor: 0 } });
+    revealPayload();
   };
 
   const filesWith = (): Record<string, string> => ({
@@ -149,7 +173,9 @@ const mount = (root: HTMLElement): void => {
   });
 
   const showBlanks = (): void => {
-    blanks.hidden = !(templateShown || new RegExp(blankPattern.source).test(code()));
+    if (blanks !== null) {
+      blanks.hidden = !(templateShown || new RegExp(blankPattern.source).test(code()));
+    }
   };
 
   const updateControls = (): void => {
@@ -157,16 +183,36 @@ const mount = (root: HTMLElement): void => {
     runButton.disabled = !idle;
     testsButton.disabled = !idle;
     completeButton.disabled = !idle;
+    if (completeStep2Button !== null) {
+      completeStep2Button.disabled = !idle;
+    }
     resetButton.disabled = !idle;
-    templateButton.disabled = !idle || code().includes(templateMarker);
+    if (templateButton !== null) {
+      templateButton.disabled = !idle || code().includes(templateMarker);
+    }
     showBlanks();
   };
 
   const say = (sentences: string[]): void => {
-    next.textContent = sentences.join('');
+    next.replaceChildren(
+      ...sentences.join('').split(/`([^`]+)`/).map((part, index) =>
+        index % 2 === 1 ? element('code', { text: part }) : document.createTextNode(part)
+      ),
+    );
   };
 
+  const stepOneUnfinished = '「ステップ1の完成コードを読み込む」を押して続けます。';
+  const changeCancelVisit = `${changesTitle}のとおりに \`cancelVisit\` を変更します。`;
+
   const sayStart = (): void => {
+    if (config.step === 2) {
+      say(
+        code().includes(templateMarker)
+          ? [changeCancelVisit, '終わったら「ポチの来院をキャンセルする」を押します。']
+          : [`ステップ1が終わっていないときは、${stepOneUnfinished}`],
+      );
+      return;
+    }
     say([
       '「ポチの来院をキャンセルする」を押します。',
       'いまのコードで、visits と business_events がどう変わるかを見ます。',
@@ -387,16 +433,24 @@ const mount = (root: HTMLElement): void => {
         return;
       }
       if (result.after.business_events.length > result.before.business_events.length) {
-        const labels = answersOf(result.after.business_events).filter((answer) => answer.value !== null).map((answer) =>
-          answer.label
-        );
-        say([
-          `business_events に ${
-            result.after.business_events.length - result.before.business_events.length
-          } 行増えました。`,
-          `答えの欄の${quoted(labels)}が埋まりました。`,
-          '「テストを実行する」を押します。',
-        ]);
+        const answers = answersOf(result.after.business_events);
+        const labels = answers.filter((answer) => answer.value !== null).map((answer) => answer.label);
+        const added = `business_events に ${
+          result.after.business_events.length - result.before.business_events.length
+        } 行増えました。`;
+        const unfilled = answers.filter((answer) =>
+          answer.value === null && (answer.key === 'who' || answer.key === 'why')
+        )
+          .map((answer) => answer.label);
+        if (config.step === 2 && unfilled.length > 0) {
+          say([
+            added,
+            `答えの欄の${quoted(unfilled)}は、まだ「${missingText}」です。`,
+            '`payload` に `reason` と `operatedBy` が入っているかを見直して、もう一度押します。',
+          ]);
+          return;
+        }
+        say([added, `答えの欄の${quoted(labels)}が埋まりました。`, '「テストを実行する」を押します。']);
       } else {
         say([
           statusChanged(result)
@@ -404,6 +458,8 @@ const mount = (root: HTMLElement): void => {
             : 'visits の status も business_events も変わっていません。',
           code().includes(templateMarker)
             ? 'コードを見直して、もう一度押します。'
+            : config.step === 2
+            ? `ステップ1が終わっていないときは、${stepOneUnfinished}`
             : '「記録の雛形を UPDATE の次の行に入れる」を押します。',
         ]);
       }
@@ -447,17 +503,25 @@ const mount = (root: HTMLElement): void => {
         ])
       ));
       if (failures.length === 0) {
-        say(['すべてのテストが成功しました。']);
+        say(
+          config.step === 2
+            ? ['すべてのテストが成功しました。', '次のページへ進みます。']
+            : ['すべてのテストが成功しました。'],
+        );
       } else if (passed === 7 && failures.length === 1 && failures[0]?.name === pochiTest) {
         say(
-          answersShown
+          config.step === 2
+            ? [`残りの 1 件は「${pochiTest}」です。`, `${changesTitle}のとおりに変更します。`]
+            : answersShown
             ? [
               `残りの 1 件は「${pochiTest}」です。`,
               `答えの欄の${quoted(['誰が', 'なぜ'])}が「${missingText}」なのと対応しています。`,
+              nextPageNote,
             ]
             : [
               `残りの 1 件は「${pochiTest}」です。`,
               `「ポチの来院をキャンセルする」を押して、答えの欄の${quoted(['誰が', 'なぜ'])}を確かめます。`,
+              nextPageNote,
             ],
         );
       } else {
@@ -516,11 +580,24 @@ const mount = (root: HTMLElement): void => {
 
   runButton.addEventListener('click', () => void run());
   testsButton.addEventListener('click', () => void runTests());
-  templateButton.addEventListener('click', insertRecordTemplate);
+  templateButton?.addEventListener('click', insertRecordTemplate);
   completeButton.addEventListener('click', () => {
     setCode(config.complete);
     clearMessage();
-    say(['ステップ1の完成コードを読み込みました。', '「ポチの来院をキャンセルする」を押します。']);
+    say(
+      config.step === 2
+        ? ['ステップ1の完成コードを読み込みました。', changeCancelVisit]
+        : ['ステップ1の完成コードを読み込みました。', '「ポチの来院をキャンセルする」を押します。'],
+    );
+  });
+  completeStep2Button?.addEventListener('click', () => {
+    setCode(config.completeStep2 ?? config.complete);
+    clearMessage();
+    say([
+      'ステップ2の完成コードを読み込みました。',
+      '全テストが成功するコードです。第3章は自分のコードを使わなくても進められます。',
+      '「ポチの来院をキャンセルする」を押します。',
+    ]);
   });
   resetButton.addEventListener('click', () => {
     setCode(config.initial);
@@ -531,6 +608,7 @@ const mount = (root: HTMLElement): void => {
   });
   retryButton.addEventListener('click', () => runtime.reload());
 
+  revealPayload();
   sayStart();
   updateControls();
 };
