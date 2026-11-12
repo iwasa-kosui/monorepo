@@ -254,6 +254,8 @@ export default {
             deleteMuteUseCase: runtime.mutesRelays.deleteMuteUseCase,
             followRemoteActor: runtime.core.followRemoteActor,
             unfollowRemoteActor: runtime.core.unfollowRemoteActor,
+            blockActor: runtime.core.blockActor,
+            unblockActor: runtime.core.unblockActor,
             authn,
             createContext,
           }),

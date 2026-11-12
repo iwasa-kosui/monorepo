@@ -1,4 +1,4 @@
-import { Activity, Like, type Undo } from '@fedify/vocab';
+import { Activity, Block, Like, type Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -161,5 +161,27 @@ describe('createOnUndo (Undo EmojiReact)', () => {
     const { deps, emojiReacts } = createDeps();
     await createOnUndo(deps)(ctx, createUndoEmojiReact(malloryUri));
     expect(emojiReacts).toHaveLength(1);
+  });
+});
+
+describe('createOnUndo (Undo Block)', () => {
+  it('何も変更せずに終わる', async () => {
+    const { deps, emojiReacts, remoteLikes } = createDeps();
+    const undo = {
+      actorId: new URL(aliceUri),
+      getObject: vi.fn(async () =>
+        new Block({
+          id: new URL('https://misskey.example/blocks/1'),
+          actor: new URL(aliceUri),
+          object: new URL('https://iori.test/users/bob'),
+        })
+      ),
+    } as unknown as Undo;
+
+    await createOnUndo(deps)(ctx, undo);
+
+    expect(emojiReacts).toHaveLength(1);
+    expect(remoteLikes).toHaveLength(0);
+    expect(deps.acceptUnfollowUseCase.run as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 });

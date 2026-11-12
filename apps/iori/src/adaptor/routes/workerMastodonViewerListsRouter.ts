@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
+import type { BlockedActorsResolverByUserIdWithPagination } from '../../domain/block/block.ts';
 import type { LikedPostIdsResolverByActorIdWithPagination } from '../../domain/like/like.ts';
 import type { MutedActorsResolverByUserIdWithPagination } from '../../domain/mute/mute.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
@@ -21,6 +22,7 @@ export type WorkerMastodonViewerListsRouterDeps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId;
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
   mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
+  blockedActorsResolverByUserIdWithPagination: BlockedActorsResolverByUserIdWithPagination;
   postsWithAuthorResolverByPostIds: PostsWithAuthorResolverByPostIds;
   statusAssembler: StatusAssembler;
 }>;
@@ -28,12 +30,14 @@ export type WorkerMastodonViewerListsRouterDeps = Readonly<{
 const invalidToken = { error: 'The access token is invalid' } as const;
 const readFavourites = Scope.orThrow('read:favourites');
 const readMutes = Scope.orThrow('read:mutes');
+const readBlocks = Scope.orThrow('read:blocks');
 
 export const createWorkerMastodonViewerListsRouter = ({
   authn,
   actorResolverByUserId,
   likedPostIdsResolverByActorIdWithPagination,
   mutedActorsResolverByUserIdWithPagination,
+  blockedActorsResolverByUserIdWithPagination,
   postsWithAuthorResolverByPostIds,
   statusAssembler,
 }: WorkerMastodonViewerListsRouterDeps): Hono<MastodonAuthEnv> =>
@@ -93,4 +97,21 @@ export const createWorkerMastodonViewerListsRouter = ({
         requestUrl: c.req.url,
       });
       return respondWithPage(c, accounts, rows.map((row) => row.muteId));
+    })
+    .get('/v1/blocks', authn.requireUser(readBlocks), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId;
+      if (userId === null || userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      const page = parsePageRequest(c, accountListLimits);
+      const blocks = await blockedActorsResolverByUserIdWithPagination.resolve({ userId, page });
+      if (!blocks.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const rows = toNewestFirst(blocks.val, page);
+      const accounts = await statusAssembler.assembleAccounts({
+        actorIds: rows.map((row) => row.blockedActorId),
+        requestUrl: c.req.url,
+      });
+      return respondWithPage(c, accounts, rows.map((row) => row.blockId));
     });

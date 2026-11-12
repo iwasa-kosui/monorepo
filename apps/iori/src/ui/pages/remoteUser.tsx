@@ -5,6 +5,7 @@ import { DEFAULT_HEADER_PATH } from '../../adaptor/mastodon/defaultImages.ts';
 import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import {
+  block,
   failureMessage,
   favourite,
   fetchAccount,
@@ -13,6 +14,7 @@ import {
   follow,
   isNotFoundError,
   mute,
+  unblock,
   unfollow,
   unmute,
 } from '../api/mastodonClient.ts';
@@ -28,14 +30,18 @@ type Props = Readonly<{
   statuses: readonly Status[];
   isFollowing: boolean;
   isMuted: boolean;
+  isBlocked: boolean;
   isLoggedIn: boolean;
   onLike: (postId: string) => Promise<void>;
   onFollow: () => Promise<void>;
   onUnfollow: () => Promise<void>;
   onMute: () => Promise<void>;
   onUnmute: () => Promise<void>;
+  onBlock: () => Promise<void>;
+  onUnblock: () => Promise<void>;
   likingPostId: string | null;
   isMuting: boolean;
+  isBlocking: boolean;
   isTogglingFollow: boolean;
 }>;
 
@@ -52,14 +58,18 @@ export const RemoteUserPage = ({
   statuses,
   isFollowing,
   isMuted,
+  isBlocked,
   isLoggedIn,
   onLike,
   onFollow,
   onUnfollow,
   onMute,
   onUnmute,
+  onBlock,
+  onUnblock,
   likingPostId,
   isMuting,
+  isBlocking,
   isTogglingFollow,
 }: Props) => {
   const handle = account.acct;
@@ -269,6 +279,55 @@ export const RemoteUserPage = ({
                         </svg>
                       </button>
                     )}
+                  {isBlocked
+                    ? (
+                      <button
+                        type='button'
+                        onClick={onUnblock}
+                        disabled={isBlocking}
+                        class='flex items-center justify-center p-2 rounded-xl text-terracotta dark:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                        title='ブロック解除'
+                      >
+                        <svg
+                          xmlns='http://www.w3.org/2000/svg'
+                          class='h-5 w-5'
+                          fill='none'
+                          viewBox='0 0 24 24'
+                          stroke='currentColor'
+                          stroke-width='2'
+                        >
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636'
+                          />
+                        </svg>
+                      </button>
+                    )
+                    : (
+                      <button
+                        type='button'
+                        onClick={onBlock}
+                        disabled={isBlocking}
+                        class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                        title='ブロック'
+                      >
+                        <svg
+                          xmlns='http://www.w3.org/2000/svg'
+                          class='h-5 w-5'
+                          fill='none'
+                          viewBox='0 0 24 24'
+                          stroke='currentColor'
+                          stroke-width='2'
+                        >
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636'
+                          />
+                        </svg>
+                      </button>
+                    )}
                 </>
               )
               : (
@@ -336,6 +395,7 @@ type RemoteUserData = Readonly<{
   nextMaxId: string | undefined;
   isFollowing: boolean;
   isMuted: boolean;
+  isBlocked: boolean;
   isLoggedIn: boolean;
 }>;
 
@@ -350,6 +410,7 @@ const App = () => {
   const favouriteInFlightRef = useRef<Set<string>>(null);
   const [likingPostId, setLikingPostId] = useState<string | null>(null);
   const [isMuting, setIsMuting] = useState(false);
+  const [isBlocking, setIsBlocking] = useState(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
   const [data, setData] = useState<{ error: string } | RemoteUserData | null>(null);
 
@@ -486,6 +547,43 @@ const App = () => {
     }
   };
 
+  const handleBlock = async () => {
+    if (!data || 'error' in data) return;
+    if (!confirm(`@${data.account.acct} をブロックしますか？フォローとフォロワーの関係も解除されます`)) return;
+    setIsBlocking(true);
+    try {
+      const relationship = await block(data.account.id);
+      setData((prev) =>
+        prev === null || 'error' in prev
+          ? prev
+          : { ...prev, isBlocked: relationship.blocking, isFollowing: relationship.following }
+      );
+    } catch (error) {
+      console.error('Failed to block:', error);
+      alert(failureMessage('block', error));
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
+  const handleUnblock = async () => {
+    if (!data || 'error' in data) return;
+    setIsBlocking(true);
+    try {
+      const relationship = await unblock(data.account.id);
+      setData((prev) =>
+        prev === null || 'error' in prev
+          ? prev
+          : { ...prev, isBlocked: relationship.blocking, isFollowing: relationship.following }
+      );
+    } catch (error) {
+      console.error('Failed to unblock:', error);
+      alert(failureMessage('unblock', error));
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
   if (data === null) {
     return <div class='text-charcoal-light dark:text-gray-400'>Loading...</div>;
   }
@@ -500,14 +598,18 @@ const App = () => {
       statuses={data.statuses}
       isFollowing={data.isFollowing}
       isMuted={data.isMuted}
+      isBlocked={data.isBlocked}
       isLoggedIn={data.isLoggedIn}
       onLike={handleLike}
       onFollow={handleFollow}
       onUnfollow={handleUnfollow}
       onMute={handleMute}
       onUnmute={handleUnmute}
+      onBlock={handleBlock}
+      onUnblock={handleUnblock}
       likingPostId={likingPostId}
       isMuting={isMuting}
+      isBlocking={isBlocking}
       isTogglingFollow={isTogglingFollow}
     />
   );
