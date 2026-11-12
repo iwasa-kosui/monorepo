@@ -4,6 +4,7 @@ import { and, count, eq, gt, inArray, or, sql } from 'drizzle-orm';
 import type { NotificationCountResolverSinceMarker } from '../../../domain/notification/notification.ts';
 import type { IoriD1Db } from '../client.ts';
 import { mastodonMarkersTable, notificationsTable } from '../schema.ts';
+import { notFromModeratedBlueskyActor } from './moderatedBlueskyNotifications.ts';
 
 export const createD1NotificationCountResolverSinceMarker = (db: IoriD1Db): NotificationCountResolverSinceMarker => ({
   resolve: async ({ userId, types, limit }) => {
@@ -26,6 +27,7 @@ export const createD1NotificationCountResolverSinceMarker = (db: IoriD1Db): Noti
       .where(and(
         eq(notificationsTable.recipientUserId, userId),
         inArray(notificationsTable.type, [...types]),
+        notFromModeratedBlueskyActor(db),
         cursor === undefined ? undefined : or(
           gt(notificationsTable.createdAt, cursor.createdAt),
           and(

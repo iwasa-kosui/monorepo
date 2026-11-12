@@ -15,6 +15,7 @@ import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.
 import { createWorkerIoriActionsRouter } from './adaptor/routes/workerIoriActionsRouter.ts';
 import { createWorkerIoriArticlesRouter } from './adaptor/routes/workerIoriArticlesRouter.ts';
 import { createWorkerIoriBlueskyCrosspostStatusRouter } from './adaptor/routes/workerIoriBlueskyCrosspostStatusRouter.ts';
+import { createWorkerIoriBlueskyModerationRouter } from './adaptor/routes/workerIoriBlueskyModerationRouter.ts';
 import { createWorkerIoriBlueskyRouter } from './adaptor/routes/workerIoriBlueskyRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
@@ -263,6 +264,7 @@ export default {
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
         app.route('/api', createWorkerIoriXPostsRouter({ ...runtime.digest, authn }));
         app.route('/api', createWorkerIoriBlueskyRouter({ ...runtime.blueskyTimeline, authn }));
+        app.route('/api', createWorkerIoriBlueskyModerationRouter({ ...runtime.blueskyModeration, authn }));
         app.route('/api', createWorkerIoriBlueskyCrosspostStatusRouter({ ...runtime.blueskyCrosspostStatus, authn }));
         app.route(
           '/api',

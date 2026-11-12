@@ -474,6 +474,158 @@ describe('createBlueskyClient の各操作', () => {
   });
 });
 
+describe('createBlueskyClient のミュート、ブロック、通報', () => {
+  const BLOCK_URI = 'at://did:plc:abc/app.bsky.graph.block/3kblock';
+
+  it('muteActor は app.bsky.graph.muteActor に actor を POST し、空の応答を成功にする', async () => {
+    const { client, calls } = setup(stored(), [() => new Response('', { status: 200 })]);
+
+    const result = await client.muteActor('did:plc:target');
+
+    expect(result).toEqual({ ok: true, val: undefined });
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.graph.muteActor`);
+    expect(calls[0]?.init.method).toBe('POST');
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ actor: 'did:plc:target' });
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+    expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
+  });
+
+  it('unmuteActor は app.bsky.graph.unmuteActor に actor を POST する', async () => {
+    const { client, calls } = setup(stored(), [() => json({})]);
+
+    const result = await client.unmuteActor('did:plc:target');
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.graph.unmuteActor`);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ actor: 'did:plc:target' });
+  });
+
+  it('muteActor は期限切れの認証を更新してからやり直す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'ExpiredToken' }, 400),
+      () => json(sessionBody('new')),
+      () => json({}),
+    ]);
+
+    const result = await client.muteActor('did:plc:target');
+
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
+    expect(header(calls[2]!, 'Authorization')).toBe('Bearer access-new');
+  });
+
+  it('muteActor は 500 を失敗として返す', async () => {
+    const { client } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+
+    expect(await client.muteActor('did:plc:target')).toMatchObject({
+      ok: false,
+      err: { kind: 'http', status: 500 },
+    });
+  });
+
+  it('createBlock は createRecord で app.bsky.graph.block のレコードを rkey なしで書き、応答の uri を返す', async () => {
+    const { client, calls } = setup(stored(), [() => json({ uri: BLOCK_URI, cid: 'bafyblock' })]);
+
+    const result = await client.createBlock('did:plc:target');
+
+    expect(result).toEqual({ ok: true, val: { uri: BLOCK_URI } });
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.createRecord`);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.graph.block',
+      record: {
+        $type: 'app.bsky.graph.block',
+        subject: 'did:plc:target',
+        createdAt: new Date(NOW).toISOString(),
+      },
+    });
+  });
+
+  it('createBlock は block の uri でない応答を invalid_response として返す', async () => {
+    const { client } = setup(stored(), [() => json({ uri: 'at://did:plc:abc/app.bsky.graph.list/3k1', cid: 'c' })]);
+
+    expect(await client.createBlock('did:plc:target')).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+  });
+
+  it('deleteBlock は block の uri の rkey を app.bsky.graph.block の collection で deleteRecord する', async () => {
+    const { client, calls } = setup(stored(), [() => json({})]);
+
+    const result = await client.deleteBlock(BLOCK_URI);
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.deleteRecord`);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.graph.block',
+      rkey: '3kblock',
+    });
+  });
+
+  it('deleteBlock は block の uri でないものを送らずに invalid_response として返す', async () => {
+    const { client, calls } = setup(stored(), []);
+
+    const list = await client.deleteBlock('at://did:plc:abc/app.bsky.graph.list/3klist');
+    const post = await client.deleteBlock('at://did:plc:abc/app.bsky.feed.post/3kpost');
+    const garbage = await client.deleteBlock('not-a-uri');
+
+    for (const result of [list, post, garbage]) {
+      expect(result).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it('createReport は Bluesky 公式のモデレーションを atproto-proxy に指定して、repoRef の通報を POST する', async () => {
+    const { client, calls } = setup(stored(), [() => json({ id: 1 })]);
+
+    const result = await client.createReport({
+      subjectDid: 'did:plc:target',
+      reasonType: 'com.atproto.moderation.defs#reasonSpam',
+      reason: '宣伝ばかり',
+    });
+
+    expect(result).toEqual({ ok: true, val: undefined });
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.moderation.createReport`);
+    expect(header(calls[0]!, 'atproto-proxy')).toBe('did:plc:ar7c4by46qjdydhdevvrndac#atproto_labeler');
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      reasonType: 'com.atproto.moderation.defs#reasonSpam',
+      reason: '宣伝ばかり',
+      subject: { $type: 'com.atproto.admin.defs#repoRef', did: 'did:plc:target' },
+    });
+  });
+
+  it('createReport は reason が空または無いとき、本文に reason を入れない', async () => {
+    const { client, calls } = setup(stored(), [() => json({}), () => json({})]);
+
+    await client.createReport({
+      subjectDid: 'did:plc:target',
+      reasonType: 'com.atproto.moderation.defs#reasonRude',
+      reason: '',
+    });
+    await client.createReport({
+      subjectDid: 'did:plc:target',
+      reasonType: 'com.atproto.moderation.defs#reasonOther',
+    });
+
+    for (const call of calls) expect(JSON.parse(call.init.body as string)).not.toHaveProperty('reason');
+    expect(JSON.parse(calls[0]!.init.body as string).reasonType).toBe('com.atproto.moderation.defs#reasonRude');
+    expect(JSON.parse(calls[1]!.init.body as string).reasonType).toBe('com.atproto.moderation.defs#reasonOther');
+  });
+
+  it('保存済みセッションが無いときは、どの操作も先にログインしてから送る', async () => {
+    const { client, calls } = setup(undefined, [() => json(sessionBody('1')), () => json({})]);
+
+    const result = await client.unmuteActor('did:plc:target');
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe('https://bsky.social/xrpc/com.atproto.server.createSession');
+    expect(header(calls[1]!, 'Authorization')).toBe('Bearer access-1');
+  });
+});
+
 describe('createBlueskyClient の認証付き GET（query）', () => {
   const TIMELINE = 'app.bsky.feed.getTimeline';
 
