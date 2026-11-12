@@ -21,6 +21,7 @@ export const createD1PostImageCreatedStore = (db: IoriD1Db): PostImageCreatedSto
           postId: image.postId,
           url: image.url,
           altText: image.altText,
+          mediaType: image.mediaType,
           createdAt: new Date(image.createdAt),
         })),
       )

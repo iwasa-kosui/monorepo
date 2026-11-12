@@ -394,7 +394,7 @@ describe('createD1PostExtrasResolverByPosts', () => {
     });
 
     const value = extras.ok ? extras.val.get(PostId.orThrow(post.postId)) : undefined;
-    expect(loaded[0]?.images).toEqual([{ imageId, url: '/uploads/a.png', altText: 'alt' }]);
+    expect(loaded[0]?.images).toEqual([{ imageId, url: '/uploads/a.png', altText: 'alt', mediaType: null }]);
     expect(value).toEqual({
       repliesCount: 2,
       inReplyTo: { postId: parent.postId, actorId: alice.actorId },

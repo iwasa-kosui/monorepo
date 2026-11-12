@@ -121,7 +121,7 @@ describe('createOnAnnounce', () => {
         type: 'remote',
         remotePostIdentity: expect.objectContaining({
           uri: 'https://remote.example/notes/1',
-          attachments: [{ url: 'https://remote.example/media/1.png', altText: null }],
+          attachments: [{ url: 'https://remote.example/media/1.png', altText: null, mediaType: 'image/png' }],
         }),
       }),
     );
@@ -217,7 +217,7 @@ describe('createOnAnnounce', () => {
     expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
       expect.objectContaining({
         uri: 'https://remote.example/notes/1',
-        attachments: [{ url: 'https://remote.example/media/1.png', altText: null }],
+        attachments: [{ url: 'https://remote.example/media/1.png', altText: null, mediaType: 'image/png' }],
       }),
     );
   });

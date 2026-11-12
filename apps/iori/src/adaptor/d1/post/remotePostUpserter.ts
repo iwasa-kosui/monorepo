@@ -58,6 +58,7 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
         postId: event.aggregateState.postId,
         url: attachment.url,
         altText: attachment.altText,
+        mediaType: attachment.mediaType,
         createdAt: now,
       }));
       try {

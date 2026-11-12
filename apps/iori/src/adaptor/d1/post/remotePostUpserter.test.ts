@@ -14,7 +14,7 @@ const identity = {
   },
   inReplyToUri: null,
   visibility: null,
-  attachments: [{ url: 'https://remote.example/media/1.png', altText: null }],
+  attachments: [{ url: 'https://remote.example/media/1.png', altText: null, mediaType: null }],
 };
 
 const createDeps = (existing: RemotePost | undefined) => {
@@ -48,6 +48,24 @@ describe('createD1RemotePostUpserter', () => {
         url: 'https://remote.example/media/1.png',
         altText: null,
       }),
+    ]);
+  });
+
+  it('passes the mediaType of each attachment to the image store', async () => {
+    const { deps, postImageCreatedStore } = createDeps(undefined);
+
+    const result = await createD1RemotePostUpserter(deps).resolve({
+      ...identity,
+      attachments: [
+        { url: 'https://remote.example/media/1.mp4', altText: null, mediaType: 'video/mp4' },
+        { url: 'https://remote.example/media/2.png', altText: null, mediaType: null },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(postImageCreatedStore.store).toHaveBeenCalledWith([
+      expect.objectContaining({ url: 'https://remote.example/media/1.mp4', mediaType: 'video/mp4' }),
+      expect.objectContaining({ url: 'https://remote.example/media/2.png', mediaType: null }),
     ]);
   });
 

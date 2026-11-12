@@ -43,7 +43,7 @@ export const LocalPost = Schema.create(localPostZodType);
 export type RemotePost = z.infer<typeof remotePostZodType>;
 export const RemotePost = Schema.create(remotePostZodType);
 export type Post = LocalPost | RemotePost;
-export type PostImage = { imageId: ImageId; url: string; altText: string | null };
+export type PostImage = { imageId: ImageId; url: string; altText: string | null; mediaType?: string | null };
 export type PostReaction = { emoji: string; count: number; emojiImageUrl: string | null };
 export type PostWithAuthor = Post & {
   username: Username;
@@ -159,7 +159,7 @@ export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostResolverByUri = Agg.Resolver<{ uri: string }, RemotePost | undefined>;
 export type LocalPostResolverByUri = Agg.Resolver<{ uri: string }, LocalPost | undefined>;
-export type RemotePostAttachment = Readonly<{ url: string; altText: string | null }>;
+export type RemotePostAttachment = Readonly<{ url: string; altText: string | null; mediaType: string | null }>;
 export type RemotePostIdentity = Readonly<{
   uri: string;
   content: string;
