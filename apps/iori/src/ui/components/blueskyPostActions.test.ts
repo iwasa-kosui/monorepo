@@ -24,6 +24,8 @@ const item: IoriBlueskyTimelineItemBody = {
   indexedAt: Date.UTC(2026, 10, 8, 1),
   liked: false,
   reposted: false,
+  threadMuted: false,
+  replyRootUri: null,
   isOwn: false,
 };
 
@@ -50,6 +52,18 @@ describe('blueskyItemActionProps', () => {
     );
 
     expect(props).toMatchObject({ isLikePending: true, isRepostPending: false });
+  });
+
+  it('スレッドのミュートのハンドラは、操作に含まれるときだけ渡す', () => {
+    const onMuteThread = () => {};
+    const onUnmuteThread = () => {};
+
+    expect(blueskyItemActionProps(actions(), item)).not.toHaveProperty('onMuteThread');
+    expect(blueskyItemActionProps(actions(), item)).not.toHaveProperty('onUnmuteThread');
+    expect(blueskyItemActionProps(actions({ onMuteThread, onUnmuteThread }), item)).toMatchObject({
+      onMuteThread,
+      onUnmuteThread,
+    });
   });
 
   it('引用のハンドラは、操作に含まれるときだけ渡す', () => {

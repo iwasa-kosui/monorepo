@@ -76,6 +76,8 @@ const feedItem = {
   liked: false,
   viewerLikeUri: null,
   reposted: false,
+  threadMuted: false,
+  replyRootUri: null,
   viewerRepostUri: null,
 };
 
@@ -303,6 +305,8 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
       indexedAt: NOW - 500,
       liked: false,
       reposted: false,
+      threadMuted: false,
+      replyRootUri: null,
       isOwn: false,
     }]);
     expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: 'abc' });

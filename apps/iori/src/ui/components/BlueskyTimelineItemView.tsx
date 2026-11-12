@@ -24,6 +24,8 @@ type Props = Readonly<{
   onRepost?: (item: IoriBlueskyTimelineItemBody) => void;
   onUndoRepost?: (item: IoriBlueskyTimelineItemBody) => void;
   isRepostPending?: boolean;
+  onMuteThread?: (item: IoriBlueskyTimelineItemBody) => void;
+  onUnmuteThread?: (item: IoriBlueskyTimelineItemBody) => void;
   onMuteAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
   onBlockAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
   onReportPost?: (item: IoriBlueskyTimelineItemBody) => void;
@@ -342,6 +344,8 @@ export const BlueskyTimelineItemView = ({
   onRepost,
   onUndoRepost,
   isRepostPending,
+  onMuteThread,
+  onUnmuteThread,
   onMuteAuthor,
   onBlockAuthor,
   onReportPost,
@@ -362,6 +366,26 @@ export const BlueskyTimelineItemView = ({
       { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: bskyHref } as const,
       { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: bskyHref } as const,
     ]),
+    ...(item.threadMuted === false || item.threadMuted === null || item.threadMuted === undefined
+      ? onMuteThread === undefined ? [] : [
+        {
+          key: 'mute-thread',
+          label: 'スレッドをミュート',
+          kind: 'action',
+          onSelect: () => onMuteThread(item),
+        } as const,
+      ]
+      : []),
+    ...(item.threadMuted === true || item.threadMuted === null || item.threadMuted === undefined
+      ? onUnmuteThread === undefined ? [] : [
+        {
+          key: 'unmute-thread',
+          label: 'スレッドのミュートを解除',
+          kind: 'action',
+          onSelect: () => onUnmuteThread(item),
+        } as const,
+      ]
+      : []),
     ...(canModerate && onMuteAuthor !== undefined
       ? [
         {

@@ -7,6 +7,16 @@ export const withoutBlueskyActor = (items: BlueskyItems, did: string): BlueskyIt
   return kept.length === items.length ? items : kept;
 };
 
+export const withBlueskyThreadMuted = (items: BlueskyItems, rootUri: string, muted: boolean): BlueskyItems => {
+  let changed = false;
+  const next = items.map((item) => {
+    if ((item.replyRootUri ?? item.uri) !== rootUri || item.threadMuted === muted) return item;
+    changed = true;
+    return { ...item, threadMuted: muted };
+  });
+  return changed ? next : items;
+};
+
 export const blueskyModerationNotice = (
   { action, handle, removed, keptItemsNote }: Readonly<{
     action: 'mute' | 'block';
