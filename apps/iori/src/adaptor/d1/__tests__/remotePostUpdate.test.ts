@@ -1,19 +1,28 @@
+import { RA } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
-import { Post, type RemotePost } from '../../../domain/post/post.ts';
+import type { MentionNotificationCreatedStore } from '../../../domain/notification/notification.ts';
+import { Post, type RemotePost, type RemotePostUpdatedStore } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import { UpdateRemotePostUseCase } from '../../../useCase/updateRemotePost.ts';
 import { createD1ActorResolverByUri } from '../actor/actorResolverByUri.ts';
+import { createD1BlockResolver } from '../block/blockResolver.ts';
 import { createD1PostImagesResolverByPostId } from '../image/postImagesResolver.ts';
 import { createD1LinkPreviewCreatedStore } from '../linkPreview/linkPreviewCreatedStore.ts';
 import { createD1LinkPreviewsDeletedStore } from '../linkPreview/linkPreviewsDeletedStore.ts';
 import { createD1LinkPreviewsResolverByPostId } from '../linkPreview/linkPreviewsResolverByPostId.ts';
+import {
+  createD1MentionNotificationCreatedStore,
+  createD1MentionNotificationResolverByRecipientAndMentionPostId,
+} from '../notification/inboxNotificationAdapters.ts';
+import { createD1LocalPostResolverByUri } from '../post/localPostResolverByUri.ts';
 import { createD1PostResolverByUri } from '../post/postResolverByUri.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../post/postWithAuthorBatch.ts';
 import { createD1RemotePostRecipientsResolverByPostId } from '../post/remotePostRecipientsResolverByPostId.ts';
 import { createD1RemotePostUpdatedStore } from '../post/remotePostUpdatedStore.ts';
+import { createD1PushSubscriptionsResolverByUserId } from '../pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { createMastodonSeed, SEED_ORIGIN } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
@@ -25,14 +34,17 @@ afterEach(() => {
 const kosuiUri = `${SEED_ORIGIN}/users/kosui`;
 const hanakoUri = `${SEED_ORIGIN}/users/hanako`;
 
-const setup = () => {
+const setup = (
+  wrapStore: (store: RemotePostUpdatedStore) => RemotePostUpdatedStore = (store) => store,
+  wrapMentionStore: (store: MentionNotificationCreatedStore) => MentionNotificationCreatedStore = (store) => store,
+) => {
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
   const seed = createMastodonSeed(fixture);
   const alice = seed.addRemoteActor('alice');
   const mallory = seed.addRemoteActor('mallory');
-  seed.addLocalActor('kosui');
-  seed.addLocalActor('hanako');
+  const kosui = seed.addLocalActor('kosui');
+  const hanako = seed.addLocalActor('hanako');
   const post = seed.addRemotePost(alice, 1_000, {
     content: '<p>before</p>',
     visibility: 'direct',
@@ -55,6 +67,7 @@ const setup = () => {
       siteName: null,
     })),
   };
+  const webPushSender = { send: vi.fn((..._args: unknown[]) => RA.ok(undefined)) };
   const { db } = fixture;
   const useCase = UpdateRemotePostUseCase.create({
     origin: SEED_ORIGIN,
@@ -62,11 +75,17 @@ const setup = () => {
     actorResolverByUri: createD1ActorResolverByUri(db),
     remotePostRecipientsResolver: createD1RemotePostRecipientsResolverByPostId(db),
     postImagesResolver: createD1PostImagesResolverByPostId(db),
-    remotePostUpdatedStore: createD1RemotePostUpdatedStore(db),
+    remotePostUpdatedStore: wrapStore(createD1RemotePostUpdatedStore(db)),
     linkPreviewsResolver: createD1LinkPreviewsResolverByPostId(db),
     linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
     linkPreviewsDeletedStore: createD1LinkPreviewsDeletedStore(db),
     ogpFetcher,
+    localPostResolverByUri: createD1LocalPostResolverByUri(db, SEED_ORIGIN),
+    mentionNotificationCreatedStore: wrapMentionStore(createD1MentionNotificationCreatedStore(db)),
+    mentionNotificationResolver: createD1MentionNotificationResolverByRecipientAndMentionPostId(db),
+    pushSubscriptionsResolver: createD1PushSubscriptionsResolverByUserId(db),
+    webPushSender,
+    blockResolver: createD1BlockResolver(db),
   });
   const input = (overrides: Partial<Parameters<typeof useCase.run>[0]> = {}) => ({
     uri: post.uri,
@@ -111,6 +130,14 @@ const setup = () => {
       ...event,
       eventPayload: JSON.parse(event.eventPayload) as Record<string, unknown>,
     }));
+  const mentionNotifications = () =>
+    fixture.sqlite.prepare(
+      'SELECT recipientUserId, mentionerActorId, mentionPostId FROM notification_mentions ORDER BY recipientUserId',
+    ).all();
+  const addPushSubscription = (userId: string, endpoint: string) =>
+    fixture.sqlite.prepare(
+      'INSERT INTO push_subscriptions(subscriptionId,userId,endpoint,p256dhKey,authKey,createdAt) VALUES (?,?,?,?,?,?)',
+    ).run(seed.uuid(), userId, endpoint, 'p256dh', 'auth', 1_000);
   const unchanged = {
     content: '<p>before</p>',
     summary: 'old cw',
@@ -124,6 +151,8 @@ const setup = () => {
     seed,
     alice,
     mallory,
+    kosui,
+    hanako,
     post,
     useCase,
     input,
@@ -135,6 +164,9 @@ const setup = () => {
     recipients,
     events,
     ogpFetcher,
+    webPushSender,
+    mentionNotifications,
+    addPushSubscription,
     unchanged,
   };
 };
@@ -425,6 +457,34 @@ describe('同時に来た更新の競合', () => {
     expect(t.events()[0].eventPayload).toMatchObject({ content: '<p>newer</p>' });
   });
 
+  it('store は、書き込んだときは written: true、条件に合わず何も書かなかったときは written: false を返す', async () => {
+    const t = setup();
+    const stored = await t.storedPost();
+    const edit = {
+      summary: null,
+      sensitive: false,
+      previousRecipientActorUris: [kosuiUri],
+      visibility: 'direct' as const,
+      recipientActorUris: [hanakoUri],
+      images: [],
+    };
+    const newer = Post.updateRemotePost(Instant.orThrow(8_000))(stored, {
+      ...edit,
+      content: '<p>newer</p>',
+      editedAt: Instant.orThrow(6_000),
+    });
+    const older = Post.updateRemotePost(Instant.orThrow(9_000))(stored, {
+      ...edit,
+      content: '<p>older</p>',
+      editedAt: Instant.orThrow(5_000),
+    });
+    const store = createD1RemotePostUpdatedStore(t.db);
+
+    expect(await store.store(newer)).toEqual({ ok: true, val: { written: true } });
+    expect(await store.store(older)).toEqual({ ok: true, val: { written: false } });
+    expect(await store.store(newer)).toEqual({ ok: true, val: { written: false } });
+  });
+
   it('新しい編集でも、読んだ時点の公開範囲から広げる内容なら、保存済みの狭い公開範囲を広げない', async () => {
     const t = setup();
     t.setVisibility('public');
@@ -474,5 +534,221 @@ describe('API に出す編集時刻', () => {
     const notEdited = result.val.get(PostId.orThrow(untouched.postId));
     expect(edited).toMatchObject({ type: 'remote', editedAt: 5_000, content: '<p>after</p>' });
     expect(notEdited).toMatchObject({ type: 'remote', editedAt: null });
+  });
+});
+
+describe('編集で新しく足された宛先への通知', () => {
+  const mentionPayload = { title: 'New Mention', body: 'alice mentioned you', url: '/notifications' };
+
+  it('編集で新しく足されたローカルユーザーに、メンションの通知と Web Push を出す', async () => {
+    const t = setup();
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+
+    const result = await t.useCase.run(t.input());
+
+    expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
+    expect(t.mentionNotifications()).toEqual([
+      { recipientUserId: t.hanako.userId, mentionerActorId: t.alice.actorId, mentionPostId: t.post.postId },
+    ]);
+    expect(t.webPushSender.send).toHaveBeenCalledTimes(1);
+    expect(t.webPushSender.send).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'https://push.example/hanako' }),
+      mentionPayload,
+    );
+  });
+
+  it('編集の前から宛先にいたユーザーには出さない', async () => {
+    const t = setup();
+    t.addPushSubscription(t.kosui.userId, 'https://push.example/kosui');
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+
+    await t.useCase.run(t.input({ recipientActorUris: [kosuiUri, hanakoUri] }));
+
+    expect(t.mentionNotifications()).toEqual([
+      { recipientUserId: t.hanako.userId, mentionerActorId: t.alice.actorId, mentionPostId: t.post.postId },
+    ]);
+    expect(t.webPushSender.send).toHaveBeenCalledTimes(1);
+    expect(t.webPushSender.send).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'https://push.example/hanako' }),
+      mentionPayload,
+    );
+  });
+
+  it('編集でメンションを消しても、何も出さず、既存の通知も消さない', async () => {
+    const t = setup();
+    t.addPushSubscription(t.kosui.userId, 'https://push.example/kosui');
+    t.seed.addMentionNotification(t.kosui.userId, t.alice.actorId, t.post.postId, 1_000);
+
+    const result = await t.useCase.run(t.input({ recipientActorUris: [] }));
+
+    expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
+    expect(t.mentionNotifications()).toEqual([
+      { recipientUserId: t.kosui.userId, mentionerActorId: t.alice.actorId, mentionPostId: t.post.postId },
+    ]);
+    expect(t.webPushSender.send).not.toHaveBeenCalled();
+  });
+
+  it('宛先をブロックしている相手の編集では出さない', async () => {
+    const t = setup();
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+    t.seed.addBlock(t.hanako.userId, t.alice.actorId);
+
+    const result = await t.useCase.run(t.input());
+
+    expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
+    expect(t.mentionNotifications()).toEqual([]);
+    expect(t.webPushSender.send).not.toHaveBeenCalled();
+  });
+
+  it('同じ Update を 2 回受けても、staleEdit で止まり通知は重ならない', async () => {
+    const t = setup();
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+
+    await t.useCase.run(t.input());
+    const second = await t.useCase.run(t.input());
+
+    expect(second).toMatchObject({ ok: true, val: { type: 'staleEdit' } });
+    expect(t.mentionNotifications()).toHaveLength(1);
+    expect(t.webPushSender.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('宛先の記録を前の状態に戻して別の Update を受けても、既存の通知があれば重ならない', async () => {
+    const t = setup();
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+    await t.useCase.run(t.input());
+    t.sqlite.prepare('DELETE FROM remote_post_recipients WHERE postId = ?').run(t.post.postId);
+
+    const second = await t.useCase.run(t.input({ editedAt: Instant.orThrow(6_000) }));
+
+    expect(second).toMatchObject({ ok: true, val: { type: 'updated' } });
+    expect(t.mentionNotifications()).toHaveLength(1);
+    expect(t.webPushSender.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('返信先の作者が新しく足されても、メンションの通知は出さず、返信の通知も新しく出さない', async () => {
+    const t = setup();
+    t.addPushSubscription(t.kosui.userId, 'https://push.example/kosui');
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+    const original = t.seed.addLocalPost(t.kosui, 500);
+    const reply = t.seed.addRemotePost(t.alice, 2_000, { inReplyToUri: original.uri, visibility: 'public' });
+
+    await t.useCase.run(t.input({ uri: reply.uri, recipientActorUris: [kosuiUri, hanakoUri] }));
+
+    expect(t.mentionNotifications()).toEqual([
+      { recipientUserId: t.hanako.userId, mentionerActorId: t.alice.actorId, mentionPostId: reply.postId },
+    ]);
+    expect(t.sqlite.prepare('SELECT COUNT(*) AS n FROM notification_replies').get()).toEqual({ n: 0 });
+    expect(t.webPushSender.send).toHaveBeenCalledTimes(1);
+    expect(t.webPushSender.send).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'https://push.example/hanako' }),
+      mentionPayload,
+    );
+  });
+
+  it('postNotFound、staleEdit、作者不一致では出さない', async () => {
+    const t = setup();
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+    await t.useCase.run(t.input({ recipientActorUris: [kosuiUri] }));
+
+    const notFound = await t.useCase.run(t.input({ uri: 'https://remote.example/notes/unknown' }));
+    const stale = await t.useCase.run(t.input({ editedAt: Instant.orThrow(4_000) }));
+    const mismatch = await t.useCase.run(
+      t.input({ actorUri: 'https://remote.example/users/mallory', editedAt: Instant.orThrow(9_000) }),
+    );
+
+    expect(notFound).toMatchObject({ ok: true, val: { type: 'postNotFound' } });
+    expect(stale).toMatchObject({ ok: true, val: { type: 'staleEdit' } });
+    expect(mismatch).toMatchObject({ ok: false, err: { type: 'RemotePostUpdateAuthorMismatchError' } });
+    expect(t.mentionNotifications()).toEqual([]);
+    expect(t.webPushSender.send).not.toHaveBeenCalled();
+  });
+
+  it('Web Push の送信に失敗しても、投稿の更新は成功のままにする', async () => {
+    const t = setup();
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+    t.webPushSender.send.mockImplementationOnce(() => {
+      throw new Error('push failed');
+    });
+
+    const result = await t.useCase.run(t.input());
+
+    expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
+    expect(t.row()).toMatchObject({ content: '<p>after</p>', editedAt: 5_000 });
+  });
+
+  it('1人目の宛先の通知の保存が例外を投げても、2人目の宛先には通知と Web Push を出す', async () => {
+    const failingUserIds = new Set<string>();
+    const t = setup(undefined, (real) => ({
+      store: (event) => {
+        if (failingUserIds.has(event.aggregateState.recipientUserId)) {
+          throw new Error('UNIQUE constraint failed: notification_mentions_recipient_post_unique');
+        }
+        return real.store(event);
+      },
+    }));
+    const taro = t.seed.addLocalActor('taro');
+    failingUserIds.add(t.hanako.userId);
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+    t.addPushSubscription(taro.userId, 'https://push.example/taro');
+
+    const result = await t.useCase.run(t.input({ recipientActorUris: [hanakoUri, `${SEED_ORIGIN}/users/taro`] }));
+
+    expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
+    expect(t.mentionNotifications()).toEqual([
+      { recipientUserId: taro.userId, mentionerActorId: t.alice.actorId, mentionPostId: t.post.postId },
+    ]);
+    expect(t.webPushSender.send).toHaveBeenCalledTimes(1);
+    expect(t.webPushSender.send).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'https://push.example/taro' }),
+      mentionPayload,
+    );
+  });
+
+  it('1人目の宛先への Web Push が例外を投げても、2人目の宛先には Web Push を出す', async () => {
+    const t = setup();
+    const taro = t.seed.addLocalActor('taro');
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+    t.addPushSubscription(taro.userId, 'https://push.example/taro');
+    t.webPushSender.send.mockImplementationOnce(() => {
+      throw new Error('push failed');
+    });
+
+    const result = await t.useCase.run(t.input({ recipientActorUris: [hanakoUri, `${SEED_ORIGIN}/users/taro`] }));
+
+    expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
+    expect(t.mentionNotifications()).toHaveLength(2);
+    expect(t.webPushSender.send).toHaveBeenCalledTimes(2);
+    expect(t.webPushSender.send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ endpoint: 'https://push.example/taro' }),
+      mentionPayload,
+    );
+  });
+
+  it('use case の古さの判定を通っても、同時の新しい Update で store が何も書かなかったときは、通知を出さず staleEdit を返す', async () => {
+    const racing = setup((real) => ({
+      store: async (event) => {
+        await real.store(
+          Post.updateRemotePost(Instant.orThrow(8_000))(event.aggregateState, {
+            content: '<p>newer</p>',
+            summary: null,
+            sensitive: false,
+            editedAt: Instant.orThrow(6_000),
+            visibility: 'direct',
+            recipientActorUris: [kosuiUri],
+            previousRecipientActorUris: [kosuiUri],
+            images: [],
+          }),
+        );
+        return real.store(event);
+      },
+    }));
+    racing.addPushSubscription(racing.hanako.userId, 'https://push.example/hanako');
+
+    const result = await racing.useCase.run(racing.input());
+
+    expect(result).toMatchObject({ ok: true, val: { type: 'staleEdit' } });
+    expect(racing.row()).toMatchObject({ content: '<p>newer</p>', editedAt: 6_000 });
+    expect(racing.mentionNotifications()).toEqual([]);
+    expect(racing.webPushSender.send).not.toHaveBeenCalled();
   });
 });

@@ -118,7 +118,7 @@ describe('ListBlueskyAuthorFeedUseCase', () => {
 describe('FollowBlueskyActorUseCase', () => {
   it('viewer.following の記録が自分の repo にあれば、createFollow を呼ばずにその uri を返す', async () => {
     const t = setup(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW })));
-    t.getRecord.mockReturnValueOnce(RA.ok({ uri: FOLLOW, cid: 'cid', rkey: '3kold' }));
+    t.getRecord.mockReturnValueOnce(RA.ok({ uri: FOLLOW, cid: 'cid', rkey: '3kold', value: { subject: DID } }));
 
     const result = await t.follow.run({ did: DID });
 
@@ -140,7 +140,7 @@ describe('FollowBlueskyActorUseCase', () => {
   it('body の followUri の記録があれば、createFollow を呼ばずにその uri を返す', async () => {
     const t = setup();
     const known = 'at://did:plc:me/app.bsky.graph.follow/3kknown';
-    t.getRecord.mockReturnValueOnce(RA.ok({ uri: known, cid: 'cid', rkey: '3kknown' }));
+    t.getRecord.mockReturnValueOnce(RA.ok({ uri: known, cid: 'cid', rkey: '3kknown', value: { subject: DID } }));
 
     const result = await t.follow.run({ did: DID, followUri: known });
 
@@ -159,6 +159,33 @@ describe('FollowBlueskyActorUseCase', () => {
     expect(same.getRecord).toHaveBeenCalledTimes(1);
     expect(invalid.getRecord).not.toHaveBeenCalled();
     expect(invalid.createFollow).toHaveBeenCalledExactlyOnceWith(DID);
+  });
+
+  it('見つけた記録の subject が対象の did と違えば「フォロー済み」とみなさず、次の候補を確かめる', async () => {
+    const other = 'at://did:plc:me/app.bsky.graph.follow/3kother';
+    const t = setup(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW })));
+    t.getRecord
+      .mockReturnValueOnce(RA.ok({ uri: other, cid: 'cid', rkey: '3kother', value: { subject: 'did:plc:bob' } }))
+      .mockReturnValueOnce(RA.ok({ uri: FOLLOW, cid: 'cid', rkey: '3kold', value: { subject: DID } }));
+
+    const result = await t.follow.run({ did: DID, followUri: other });
+
+    expect(result).toEqual({ ok: true, val: { following: true, followUri: FOLLOW } });
+    expect(t.getRecord).toHaveBeenCalledTimes(2);
+    expect(t.createFollow).not.toHaveBeenCalled();
+  });
+
+  it('どの候補の記録も対象の did の follow でなければ、createFollow を呼ぶ', async () => {
+    const t = setup(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW })));
+    t.getRecord
+      .mockReturnValueOnce(RA.ok({ uri: FOLLOW, cid: 'cid', rkey: '3kold', value: { subject: 'did:plc:bob' } }))
+      .mockReturnValueOnce(RA.ok({ uri: FOLLOW, cid: 'cid', rkey: '3kold' }));
+
+    const result = await t.follow.run({ did: DID, followUri: CREATED });
+
+    expect(result).toEqual({ ok: true, val: { following: true, followUri: CREATED } });
+    expect(t.getRecord).toHaveBeenCalledTimes(2);
+    expect(t.createFollow).toHaveBeenCalledExactlyOnceWith(DID);
   });
 
   it('記録が無いことを示す 404 も「無い」として扱い、createFollow を呼ぶ', async () => {
@@ -224,12 +251,36 @@ describe('UnfollowBlueskyActorUseCase', () => {
     expect(t.deleteFollow).toHaveBeenCalledExactlyOnceWith(CREATED);
   });
 
-  it('followUri があれば viewer.following と違っても followUri を消す', async () => {
+  it('followUri と viewer.following がどちらも follow の uri で値が違えば、両方を消す', async () => {
     const t = setup(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW })));
 
-    await t.unfollow.run({ did: DID, followUri: CREATED });
+    const result = await t.unfollow.run({ did: DID, followUri: CREATED });
 
-    expect(t.deleteFollow).toHaveBeenCalledExactlyOnceWith(CREATED);
+    expect(result).toEqual({ ok: true, val: { following: false } });
+    expect(t.deleteFollow.mock.calls).toEqual([[CREATED], [FOLLOW]]);
+  });
+
+  it('followUri と viewer.following が同じなら1回だけ消し、どちらかが follow の uri でなければ followUri だけを消す', async () => {
+    const same = setup(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW })));
+    const invalid = setup(async () => RA.ok(profile({ viewerFollowingUri: 'at://did:plc:me/app.bsky.feed.like/3k1' })));
+
+    await same.unfollow.run({ did: DID, followUri: FOLLOW });
+    await invalid.unfollow.run({ did: DID, followUri: CREATED });
+
+    expect(same.deleteFollow).toHaveBeenCalledExactlyOnceWith(FOLLOW);
+    expect(invalid.deleteFollow).toHaveBeenCalledExactlyOnceWith(CREATED);
+  });
+
+  it('2つの follow を消すとき、片方が失敗したらエラーを返す', async () => {
+    const first = setup(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW })));
+    const second = setup(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW })));
+    first.deleteFollow.mockReturnValueOnce(RA.err(failure));
+    second.deleteFollow.mockReturnValueOnce(RA.ok(undefined)).mockReturnValueOnce(RA.err(failure));
+
+    expect(await first.unfollow.run({ did: DID, followUri: CREATED })).toEqual({ ok: false, err: failure });
+    expect(await second.unfollow.run({ did: DID, followUri: CREATED })).toEqual({ ok: false, err: failure });
+    expect(first.deleteFollow).toHaveBeenCalledTimes(1);
+    expect(second.deleteFollow).toHaveBeenCalledTimes(2);
   });
 
   it('フォローの記録が無ければ何もせず、following: false を返す', async () => {

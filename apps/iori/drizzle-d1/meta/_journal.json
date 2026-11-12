@@ -299,6 +299,13 @@
     {
       "idx": 42,
       "version": "6",
+      "when": 1794466330367,
+      "tag": "0042_bluesky_moderated_actors",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
       "when": 1794469068189,
       "tag": "0061_local_actor_profile",
       "breakpoints": true

@@ -21,16 +21,26 @@ type Deps = Readonly<{
   client: Pick<BlueskyClient, 'deleteFollow'>;
 }>;
 
+const followUriPattern = /^at:\/\/[^/]+\/app\.bsky\.graph\.follow\/[^/]+$/;
+
 const create = ({ reader, client }: Deps): UnfollowBlueskyActorUseCase => {
   const run = async ({ did, followUri }: Input): RA<Ok, Err> => {
     const profile = await reader.getProfile(did);
     if (!profile.ok) {
       return RA.err(isBlueskyProfileNotFound(profile.err) ? { type: 'BlueskyProfileNotFound' } : profile.err);
     }
-    const target = followUri ?? profile.val.viewerFollowingUri;
+    const viewerFollowingUri = profile.val.viewerFollowingUri;
+    const target = followUri ?? viewerFollowingUri;
     if (target === undefined) return RA.ok({ following: false });
-    const deleted = await client.deleteFollow(target);
-    return deleted.ok ? RA.ok({ following: false }) : RA.err(deleted.err);
+    const targets = viewerFollowingUri !== undefined && viewerFollowingUri !== target
+        && followUriPattern.test(target) && followUriPattern.test(viewerFollowingUri)
+      ? [target, viewerFollowingUri]
+      : [target];
+    for (const uri of targets) {
+      const deleted = await client.deleteFollow(uri);
+      if (!deleted.ok) return RA.err(deleted.err);
+    }
+    return RA.ok({ following: false });
   };
 
   return { run };

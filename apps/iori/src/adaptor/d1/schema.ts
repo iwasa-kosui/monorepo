@@ -726,6 +726,13 @@ export const notificationBlueskyTable = sqliteTable('notification_bluesky', {
   text: text('text'),
 });
 
+export const blueskyModeratedActorsTable = sqliteTable('bluesky_moderated_actors', {
+  did: text('did').primaryKey(),
+  muted: integer('muted').notNull().default(0),
+  blockUri: text('blockUri'),
+  updatedAt: timestamp().notNull(),
+});
+
 export const blueskyNotificationReceiptsTable = sqliteTable('bluesky_notification_receipts', {
   uri: text('uri').primaryKey(),
   indexedAt: timestamp().notNull(),
@@ -806,6 +813,7 @@ export const schema = {
   blueskyLikesTable,
   blueskyRepostsTable,
   notificationBlueskyTable,
+  blueskyModeratedActorsTable,
   blueskyNotificationReceiptsTable,
   blueskyNotificationSyncStateTable,
 } as const;
