@@ -1,0 +1,305 @@
+---
+import './figure.css';
+
+import { richHtml } from './rich';
+
+const messages = [
+  '「次へ」を押すと、ポチのキャンセルで書く1行が列ごとに埋まります。',
+  '`event_id` は DB が連番で採番します。',
+  '`event_at` は「いつ」に答えます。',
+  '`event_name` は「何を」に答えます。',
+  '`payload` には、呼び出し元が渡した理由と操作した人が入ります。「誰が」「なぜ」に答えます。',
+  '`target_` で始まる3列は、どの来院がどの状態になったかを残します。',
+  'この1行で、問い合わせの「誰が、いつ、何を、なぜ」に答えられます。',
+];
+const payloadHead = '{"reason":"';
+const payloadMiddle = '","operatedBy":"';
+const payloadTail = '"}';
+const targetState =
+  '{"id":"visit-pochi","pet_name":"ポチ","status":"cancelled"}';
+---
+
+<section
+  class="cfig"
+  data-event-row-figure
+  data-step="0"
+  data-messages={JSON.stringify(messages)}
+  aria-label="business_events の1行が埋まる図"
+>
+  <p class="call">
+    <code>cancelVisit(db, &#123; visitId: 'visit-pochi', <span class="arg"
+      >reason: '飼い主の都合'</span>, <span class="arg"
+      >operatedBy: '受付スタッフ'</span> &#125;)</code>
+  </p>
+  <p class="flow" aria-hidden="true">↓</p>
+
+  <ul class="card" aria-label="business_events の1行">
+    <li class="field" data-from="1">
+      <code class="col">event_id</code>
+      <span class="val"><span class="val-text">1</span></span>
+      <span class="badges"></span>
+    </li>
+    <li class="field" data-from="2">
+      <code class="col">event_at</code>
+      <span class="val"><span class="val-text"
+        >2026-11-06T18:11:58.846Z</span></span>
+      <span class="badges"><span class="badge" data-from="2">いつ</span></span>
+    </li>
+    <li class="field" data-from="3">
+      <code class="col">event_name</code>
+      <span class="val"><span class="val-text">VisitCancelled</span></span>
+      <span class="badges"><span class="badge" data-from="3">何を</span></span>
+    </li>
+    <li class="field" data-from="4">
+      <code class="col">payload</code>
+      <span class="val"><span class="val-text">{payloadHead}<span class="arg"
+          >飼い主の都合</span>{payloadMiddle}<span class="arg"
+          >受付スタッフ</span>{payloadTail}</span></span>
+      <span class="badges">
+        <span class="badge" data-from="4">誰が</span>
+        <span class="badge" data-from="4">なぜ</span>
+      </span>
+    </li>
+    <li class="field" data-from="5">
+      <code class="col">target_id</code>
+      <span class="val"><span class="val-text">visit-pochi</span></span>
+      <span class="badges"></span>
+    </li>
+    <li class="field" data-from="5">
+      <code class="col">target_type</code>
+      <span class="val"><span class="val-text">Visit</span></span>
+      <span class="badges"></span>
+    </li>
+    <li class="field" data-from="5">
+      <code class="col">target_state</code>
+      <span class="val"><span class="val-text">{targetState}</span></span>
+      <span class="badges"></span>
+    </li>
+  </ul>
+
+  <div class="cfig-controls">
+    <button type="button" data-action="next">次へ</button>
+    <button type="button" data-action="reset" disabled>最初に戻す</button>
+  </div>
+
+  <p
+    class="cfig-message"
+    aria-live="polite"
+    data-message
+    set:html={richHtml(messages[0] ?? '')}
+  >
+  </p>
+</section>
+
+<style>
+.call {
+  margin: 0;
+  border: 2px solid var(--ink);
+  border-radius: 0.375rem;
+  background: var(--paper);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.call code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+.flow {
+  margin: -0.25rem 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1;
+  text-align: center;
+  visibility: hidden;
+}
+[data-step="4"] .flow {
+  color: var(--red);
+  visibility: visible;
+}
+.arg {
+  border-radius: 0.25rem;
+  transition: background-color 0.4s ease;
+}
+[data-step="4"] .arg {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  border: 2px solid var(--line);
+  border-radius: 0.375rem;
+  background: var(--paper);
+  padding: 0.375rem 0.5rem;
+  list-style: none;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+[data-step="6"] .card {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px var(--yellow);
+}
+.field {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+.col {
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.val {
+  display: flex;
+  align-items: center;
+  min-height: 1.5rem;
+  border: 1px dashed var(--gray);
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+  transition: background-color 0.4s ease, border-color 0.4s ease;
+}
+.val-text {
+  display: none;
+}
+.badges {
+  display: flex;
+  gap: 0.25rem;
+  min-height: 1.375rem;
+}
+.badge {
+  display: none;
+  border: 2px solid var(--ink);
+  border-radius: 0.25rem;
+  background: var(--soft-yellow);
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background-color 0.4s ease;
+}
+[data-step="6"] .badge {
+  background: var(--yellow);
+  box-shadow: 0 0 0 2px var(--red);
+}
+.field[data-filled] .val {
+  border-style: solid;
+  border-color: var(--line);
+}
+.field[data-filled] .val-text {
+  display: inline;
+}
+.field[data-focus] .val {
+  border-color: var(--accent);
+  background: #dbeafe;
+}
+.badge[data-filled] {
+  display: inline-block;
+}
+
+@media (max-height: 700px) {
+  .call {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+  .card {
+    gap: 0.125rem;
+    padding: 0.25rem 0.375rem;
+  }
+  .field {
+    font-size: 0.75rem;
+  }
+  .col {
+    font-size: 0.75rem;
+  }
+  .val {
+    min-height: 1.25rem;
+    padding-block: 0;
+    font-size: 0.75rem;
+  }
+  .badges {
+    min-height: 1.125rem;
+  }
+  .badge {
+    font-size: 0.6875rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .field {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .val {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arg,
+  .card,
+  .val,
+  .badge {
+    transition: none;
+  }
+}
+</style>
+
+<script>
+import { richHtml } from './rich';
+
+const last = 6;
+
+for (
+  const root of document.querySelectorAll<HTMLElement>(
+    '[data-event-row-figure]',
+  )
+) {
+  const message = root.querySelector<HTMLElement>('[data-message]');
+  const next = root.querySelector<HTMLButtonElement>('[data-action="next"]');
+  const reset = root.querySelector<HTMLButtonElement>('[data-action="reset"]');
+  const fields = [...root.querySelectorAll<HTMLElement>('.field')];
+  const badges = [...root.querySelectorAll<HTMLElement>('.badge')];
+  if (message === null || next === null || reset === null) continue;
+  const messages = JSON.parse(
+    root.dataset.messages ?? '[]',
+  ) as readonly string[];
+
+  let step = 0;
+
+  const show = (): void => {
+    root.dataset.step = String(step);
+    for (const field of fields) {
+      const from = Number(field.dataset.from);
+      field.toggleAttribute('data-filled', step >= from);
+      field.toggleAttribute('data-focus', step === from);
+    }
+    for (const badge of badges) {
+      badge.toggleAttribute('data-filled', step >= Number(badge.dataset.from));
+    }
+    message.innerHTML = richHtml(messages[step] ?? '');
+    next.disabled = step === last;
+    reset.disabled = step === 0;
+  };
+
+  next.addEventListener('click', () => {
+    step += 1;
+    show();
+  });
+  reset.addEventListener('click', () => {
+    step = 0;
+    show();
+  });
+}
+</script>
