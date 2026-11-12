@@ -37,6 +37,7 @@ type Props = Readonly<{
   onToggleEmojiPicker?: () => void;
   onReply?: (postId: string) => void;
   onQuote?: (post: Status) => void;
+  onEdit?: (post: Status) => void;
   onShowThread?: (postId: string) => void;
   onMute?: (accountId: string, acct: string) => void;
   onBlock?: (accountId: string, acct: string) => void;
@@ -70,6 +71,7 @@ export const PostView = (
     onToggleEmojiPicker,
     onReply,
     onQuote,
+    onEdit,
     onShowThread,
     onMute,
     onBlock,
@@ -101,9 +103,13 @@ export const PostView = (
   const canBlock = onBlock !== undefined && isOtherAccount && !isLocalPost;
   const canReport = onReport !== undefined && isOtherAccount && !isLocalPost;
   const canQuote = onQuote !== undefined && (post.visibility === 'public' || post.visibility === 'unlisted');
+  const canEdit = onEdit !== undefined && isOwner;
   const menuItems: readonly PostMenuItem[] = [
     ...(canQuote
       ? [{ key: 'quote', label: '引用', kind: 'action', onSelect: () => onQuote?.(post) } as const]
+      : []),
+    ...(canEdit
+      ? [{ key: 'edit', label: '編集', kind: 'action', onSelect: () => onEdit?.(post) } as const]
       : []),
     ...(postUrl !== undefined && !isLocalPost
       ? [{ key: 'open-original', label: '元の投稿を開く', kind: 'link', href: postUrl } as const]
@@ -376,6 +382,14 @@ export const PostView = (
                 {Instant.formatRelative(Date.parse(post.created_at) as Instant)}
               </time>
             </a>
+            {post.edited_at != null && (
+              <span
+                title={`${new Date(post.edited_at).toLocaleString()} に編集`}
+                class='text-xs text-charcoal-light dark:text-gray-400'
+              >
+                編集済み
+              </span>
+            )}
             {crosspostMark !== undefined && (
               crosspostMark.href === null
                 ? (

@@ -98,3 +98,8 @@ export const blueskyCrosspostNotice = (
   if (cw.trim() !== '') return BLUESKY_CONTENT_WARNING_NOTICE;
   return sensitive ? BLUESKY_SENSITIVE_NOTICE : undefined;
 };
+
+export const BLUESKY_EDIT_NOT_APPLIED_NOTICE = 'Bluesky に送った投稿は変わらず、編集前の内容のまま残ります';
+
+export const blueskyEditNotice = (status: Pick<Status, 'iori'>): string | undefined =>
+  status.iori?.bluesky_crosspost?.status === 'sent' ? BLUESKY_EDIT_NOT_APPLIED_NOTICE : undefined;

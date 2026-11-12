@@ -11,6 +11,7 @@ import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReply
 import { BlueskyReportPostModal } from '../components/BlueskyReportPostModal.tsx';
 import { BlueskyStatusNotice } from '../components/BlueskyStatusNotice.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
+import { EditPostModal } from '../components/EditPostModal.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { PostDestinationSelect } from '../components/PostDestinationSelect.tsx';
@@ -255,8 +256,33 @@ const FediverseQuoteModal = () => {
   );
 };
 
+const FediverseEditModal = () => {
+  const { edit } = useTimelineContext();
+
+  if (edit.target === null) {
+    return null;
+  }
+
+  return (
+    <EditPostModal
+      target={edit.target}
+      loadState={edit.loadState}
+      content={edit.content}
+      cw={edit.cw}
+      sensitive={edit.sensitive}
+      isSending={edit.isSending}
+      errorText={edit.errorText}
+      onClose={edit.close}
+      onSubmit={() => void edit.send()}
+      onContentChange={edit.setContent}
+      onCwChange={edit.setCw}
+      onSensitiveChange={edit.setSensitive}
+    />
+  );
+};
+
 const ThreadModal = () => {
-  const { thread, actions, reply, quote, reportPost, data } = useTimelineContext();
+  const { thread, actions, reply, quote, edit, reportPost, data } = useTimelineContext();
   const {
     threadModalPostId,
     threadData,
@@ -366,6 +392,7 @@ const ThreadModal = () => {
                           isLoggedIn
                           onReply={reply.openReplyDialog}
                           onQuote={quote.open}
+                          onEdit={edit.open}
                           onLike={actions.like}
                           isLiking={actionState.likingPostId === post.id}
                           onUndoLike={actions.undoLike}
@@ -398,6 +425,7 @@ const ThreadModal = () => {
                       isLoggedIn
                       onReply={reply.openReplyDialog}
                       onQuote={quote.open}
+                      onEdit={edit.open}
                       onLike={actions.like}
                       isLiking={actionState.likingPostId === threadData.currentPost.id}
                       onUndoLike={actions.undoLike}
@@ -431,6 +459,7 @@ const ThreadModal = () => {
                             isLoggedIn
                             onReply={reply.openReplyDialog}
                             onQuote={quote.open}
+                            onEdit={edit.open}
                             onLike={actions.like}
                             isLiking={actionState.likingPostId === post.id}
                             onUndoLike={actions.undoLike}
@@ -714,6 +743,7 @@ const TimelineList = () => {
     blueskyStatus,
     reply,
     quote,
+    edit,
     thread,
     ui,
     reading,
@@ -815,6 +845,7 @@ const TimelineList = () => {
             onToggleEmojiPicker={() => toggleEmojiPicker(index)}
             onReply={reply.openReplyDialog}
             onQuote={quote.open}
+            onEdit={edit.open}
             onShowThread={thread.showThread}
           />,
         );
@@ -964,6 +995,7 @@ const HomePage = () => {
       <BlueskyReplyModal dialog={blueskyReply} />
       <BlueskyQuoteModal dialog={blueskyQuote} />
       <FediverseQuoteModal />
+      <FediverseEditModal />
       <ThreadModal />
       <ReportPostModal />
       <BlueskyReportPostModal reportDialog={blueskyModeration.reportDialog} notice={blueskyModeration.notice} />

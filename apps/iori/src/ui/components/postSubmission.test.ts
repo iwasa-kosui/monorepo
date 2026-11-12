@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import {
   canSubmitPost,
+  editParams,
   postedNotice,
   type PostFormValue,
   quoteParams,
@@ -534,5 +535,29 @@ describe('quoteParams', () => {
 
   it('does not send in_reply_to_id', () => {
     expect(quoteParams('post-1', 'hello', 'fediverse')).not.toHaveProperty('in_reply_to_id');
+  });
+});
+
+describe('editParams', () => {
+  it('本文、CW、センシティブ、Markdown の指定を PUT に送る形にする', () => {
+    expect(editParams({ content: '直した本文', cw: '注意', sensitive: true }, true)).toEqual({
+      status: '直した本文',
+      spoiler_text: '注意',
+      sensitive: true,
+      content_type: 'text/markdown',
+    });
+  });
+
+  it('CW の前後の空白を取り、空白だけなら空文字にして CW を外す', () => {
+    expect(editParams({ content: 'a', cw: ' 注意 ', sensitive: false }, true).spoiler_text).toBe('注意');
+    expect(editParams({ content: 'a', cw: '  ', sensitive: false }, true).spoiler_text).toBe('');
+  });
+
+  it('画像が無い投稿では、センシティブを送らない', () => {
+    expect(editParams({ content: 'a', cw: '', sensitive: true }, false).sensitive).toBe(false);
+  });
+
+  it('画像があり、センシティブを外したら false を送る', () => {
+    expect(editParams({ content: 'a', cw: '', sensitive: false }, true).sensitive).toBe(false);
   });
 });

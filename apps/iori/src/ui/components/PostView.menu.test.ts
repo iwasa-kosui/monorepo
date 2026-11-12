@@ -99,6 +99,55 @@ describe('PostView の「…」メニュー', () => {
     ]);
   });
 
+  describe('編集', () => {
+    const base = { status: local, onEdit: () => {}, isLoggedIn: true, currentAccountId: 'actor-1' };
+
+    it('自分のローカルの投稿で onEdit があれば、「編集」を action として出す', () => {
+      const edit = menuItems(base).find((item) => item.key === 'edit');
+
+      expect(edit).toMatchObject({ label: '編集', kind: 'action' });
+      expect(edit).not.toHaveProperty('danger');
+    });
+
+    it('選ぶと、投稿を渡して onEdit を呼ぶ', () => {
+      const onEdit = vi.fn();
+      const edit = menuItems({ ...base, onEdit }).find((item) => item.key === 'edit');
+
+      if (edit?.kind !== 'action') throw new Error('edit not found');
+      void edit.onSelect();
+
+      expect(onEdit).toHaveBeenCalledTimes(1);
+      expect(onEdit).toHaveBeenCalledWith(local);
+    });
+
+    it('リポストは中身の自分の投稿を編集の対象にする', () => {
+      const onEdit = vi.fn();
+      const boost = { ...remote, id: 'boost-1', account: { ...remote.account, id: 'actor-9' }, reblog: local };
+      const edit = menuItems({ ...base, status: boost, onEdit }).find((item) => item.key === 'edit');
+
+      if (edit?.kind !== 'action') throw new Error('edit not found');
+      void edit.onSelect();
+
+      expect(onEdit).toHaveBeenCalledWith(local);
+    });
+
+    it('他人のローカルの投稿には出さない', () => {
+      expect(keys({ ...base, currentAccountId: 'viewer' })).not.toContain('edit');
+    });
+
+    it('リモートの投稿には、投稿者の ID が自分と同じでも出さない', () => {
+      expect(keys({ ...base, status: remote })).not.toContain('edit');
+    });
+
+    it('currentAccountId が無いときは出さない', () => {
+      expect(keys({ ...base, currentAccountId: undefined })).not.toContain('edit');
+    });
+
+    it('onEdit が無いときは出さない', () => {
+      expect(keys({ ...base, onEdit: undefined })).not.toContain('edit');
+    });
+  });
+
   describe('ミュート', () => {
     const base = { status: remote, onMute: () => {}, isLoggedIn: true, currentAccountId: 'viewer' };
 

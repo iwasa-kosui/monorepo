@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import type { IoriBlueskyCrosspost } from '../../adaptor/mastodon/entities.ts';
 import {
   BLUESKY_CONTENT_WARNING_NOTICE,
+  BLUESKY_EDIT_NOT_APPLIED_NOTICE,
   BLUESKY_NOT_SENT_VISIBILITY_NOTICE,
   BLUESKY_SENSITIVE_NOTICE,
   blueskyCrosspostNotice,
+  blueskyEditNotice,
   postedMessage,
   skipReasonText,
   toBlueskyCrosspostMark,
@@ -192,5 +194,30 @@ describe('blueskyCrosspostNotice', () => {
 
   it('公開範囲が公開で CW もセンシティブもなければ返さない', () => {
     expect(blueskyCrosspostNotice('both', '', false, 'public')).toBeUndefined();
+  });
+});
+
+describe('blueskyEditNotice', () => {
+  const crosspost = (status: IoriBlueskyCrosspost['status']): IoriBlueskyCrosspost => ({
+    status,
+    skip_reason: status === 'skipped' ? 'visibility' : null,
+    retrying: false,
+    url: null,
+  });
+
+  it('Bluesky に送った投稿では、Bluesky は変わらず編集前の内容のまま残ると伝える', () => {
+    expect(blueskyEditNotice({ iori: { reactions: [], link_previews: [], bluesky_crosspost: crosspost('sent') } }))
+      .toBe('Bluesky に送った投稿は変わらず、編集前の内容のまま残ります');
+    expect(BLUESKY_EDIT_NOT_APPLIED_NOTICE).toBe('Bluesky に送った投稿は変わらず、編集前の内容のまま残ります');
+  });
+
+  it.each(['pending', 'failed', 'skipped', 'deleting'] as const)('Bluesky の状態が %s なら伝えない', (status) => {
+    expect(blueskyEditNotice({ iori: { reactions: [], link_previews: [], bluesky_crosspost: crosspost(status) } }))
+      .toBeUndefined();
+  });
+
+  it('bluesky_crosspost が無いか iori が無ければ伝えない', () => {
+    expect(blueskyEditNotice({ iori: { reactions: [], link_previews: [] } })).toBeUndefined();
+    expect(blueskyEditNotice({})).toBeUndefined();
   });
 });
