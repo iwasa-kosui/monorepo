@@ -4,9 +4,10 @@ import { render } from 'hono/jsx/dom';
 import { blueskyPostUrl } from '../../helper/blueskyUrl.ts';
 import { type BlueskyPostThread, fetchBlueskyPostThread, isMastodonApiError } from '../api/mastodonClient.ts';
 import { blueskyItemActionProps, type BlueskyPostActions } from '../components/blueskyPostActions.ts';
-import { BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
+import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import type { BlueskyItemsUpdater } from '../hooks/optimisticBlueskyLike.ts';
+import { useBlueskyQuoteDialog } from '../hooks/useBlueskyQuoteDialog.ts';
 import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
 import { updateThreadItems } from './blueskyThread.ts';
 
@@ -39,7 +40,7 @@ const Placeholder = ({ text }: Readonly<{ text: string }>) => (
   </div>
 );
 
-const ThreadNodeView = ({ node, isFocused, actions }: Readonly<{
+export const ThreadNodeView = ({ node, isFocused, actions }: Readonly<{
   node: ThreadNode;
   isFocused?: boolean;
   actions: BlueskyPostActions;
@@ -65,7 +66,9 @@ const BlueskyPostPage = () => {
   const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
     setThread((prev) => prev === null ? prev : updateThreadItems(prev, updater));
   }, []);
-  const { actions, replyDialog } = useBlueskyUriActions(updateItems);
+  const { actions: uriActions, replyDialog } = useBlueskyUriActions(updateItems);
+  const quoteDialog = useBlueskyQuoteDialog();
+  const actions: BlueskyPostActions = { ...uriActions, onQuote: quoteDialog.open };
 
   useEffect(() => {
     const uri = postUriFromLocation();
@@ -189,6 +192,7 @@ const BlueskyPostPage = () => {
       )}
 
       <BlueskyReplyModal dialog={{ ...replyDialog, send: sendReply }} />
+      <BlueskyQuoteModal dialog={quoteDialog} />
     </div>
   );
 };

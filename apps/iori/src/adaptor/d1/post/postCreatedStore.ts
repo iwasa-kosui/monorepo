@@ -14,7 +14,7 @@ import {
 } from '../schema.ts';
 
 // D1 の束縛上限 100 に収まるよう、1 文あたり 2 列 × 40 行に分ける
-const RECIPIENT_ROWS_PER_INSERT = 40;
+export const RECIPIENT_ROWS_PER_INSERT = 40;
 
 const recipientInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated) => {
   if (event.eventName !== 'post.remotePostCreated') return [];
@@ -46,7 +46,6 @@ const participantInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated
 };
 
 const quoteInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated) => {
-  if (event.eventName !== 'post.remotePostCreated') return [];
   const { quoteUri } = event.eventPayload;
   if (quoteUri === null) return [];
   return [db.insert(postQuotesTable).values({ postId: event.aggregateState.postId, quoteUri })];

@@ -51,8 +51,11 @@ describe('blueskyItemActionProps', () => {
     expect(props).toMatchObject({ isLikePending: true, isRepostPending: false });
   });
 
-  it('引用のハンドラは渡さない', () => {
+  it('引用のハンドラは、操作に含まれるときだけ渡す', () => {
+    const onQuote = () => {};
+
     expect(blueskyItemActionProps(actions(), item)).not.toHaveProperty('onQuote');
+    expect(blueskyItemActionProps(actions({ onQuote }), item)).toMatchObject({ onQuote });
   });
 });
 

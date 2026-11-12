@@ -124,6 +124,7 @@ import { createD1LocalPostUrisResolverByUris } from '../adaptor/d1/post/localPos
 import { createD1PostCreatedStore } from '../adaptor/d1/post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../adaptor/d1/post/postDeletedStore.ts';
 import { createD1PostExtrasResolverByPosts } from '../adaptor/d1/post/postExtrasResolverByPosts.ts';
+import { createD1PostQuotesResolverByPostIds } from '../adaptor/d1/post/postQuotesResolverByPostIds.ts';
 import { createD1PostResolver } from '../adaptor/d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../adaptor/d1/post/postResolverByUri.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../adaptor/d1/post/postWithAuthorBatch.ts';
@@ -466,6 +467,7 @@ export const createWorkerRuntimePorts = async (
         actorResolverById: createD1ActorResolverById(db),
         remotePostUpserter,
         blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+        isBlockedUri: (uri) => isBlockedUri(uri),
       }),
       markersResolverByUserId,
       notificationIdsResolverByUserIdAndCreatedAt: createD1NotificationIdsResolverByUserIdAndCreatedAt(db),
@@ -603,6 +605,7 @@ export const createWorkerRuntimePorts = async (
         linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
         ogpFetcher: createOgpFetcher(),
         acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+        postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
         scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
         origin: env.ORIGIN,
       }),
@@ -809,6 +812,7 @@ export const createWorkerRuntimePorts = async (
         webPushSender,
         postResolver,
         actorResolverById: createD1ActorResolverById(db),
+        postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
         scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
         origin: env.ORIGIN,
       }),
@@ -817,6 +821,7 @@ export const createWorkerRuntimePorts = async (
         userResolver,
         actorResolverByUserId,
         postResolver,
+        postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
         postDeletedStore: createD1PostDeletedStore(db),
         articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
         articleDeletedStore: createD1ArticleDeletedStore(db),

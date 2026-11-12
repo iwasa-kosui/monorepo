@@ -37,6 +37,7 @@ type Props = Readonly<{
   isEmojiPickerOpen?: boolean;
   onToggleEmojiPicker?: () => void;
   onReply?: (postId: string) => void;
+  onQuote?: (post: Status) => void;
   onShowThread?: (postId: string) => void;
   onMute?: (accountId: string, acct: string) => void;
   onBlock?: (accountId: string, acct: string) => void;
@@ -69,6 +70,7 @@ export const PostView = (
     isEmojiPickerOpen,
     onToggleEmojiPicker,
     onReply,
+    onQuote,
     onShowThread,
     onMute,
     onBlock,
@@ -99,7 +101,11 @@ export const PostView = (
   const canMute = onMute !== undefined && isOtherAccount;
   const canBlock = onBlock !== undefined && isOtherAccount && !isLocalPost;
   const canReport = onReport !== undefined && isOtherAccount && !isLocalPost;
+  const canQuote = onQuote !== undefined && (post.visibility === 'public' || post.visibility === 'unlisted');
   const menuItems: readonly PostMenuItem[] = [
+    ...(canQuote
+      ? [{ key: 'quote', label: '引用', kind: 'action', onSelect: () => onQuote?.(post) } as const]
+      : []),
     ...(postUrl !== undefined && !isLocalPost
       ? [{ key: 'open-original', label: '元の投稿を開く', kind: 'link', href: postUrl } as const]
       : []),

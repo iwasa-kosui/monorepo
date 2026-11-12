@@ -9,12 +9,19 @@ import { Article, type ArticleDeletedStore, type ArticleResolverByRootPostId } f
 import { Instant } from '../domain/instant/instant.ts';
 import type { DirectPostParticipantsResolverByPostId } from '../domain/post/directPostParticipants.ts';
 import { MENTION_LOOKUP_TIMEOUT_MS, mentionLinksOfHtml, MentionRecipient } from '../domain/post/mention.ts';
-import { Post, type PostDeletedStore, PostNotFoundError, type PostResolver } from '../domain/post/post.ts';
+import {
+  Post,
+  type PostDeletedStore,
+  PostNotFoundError,
+  type PostQuotesResolverByPostIds,
+  type PostResolver,
+} from '../domain/post/post.ts';
 import { PostId } from '../domain/post/postId.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
 import { timedOut, withTimeout } from '../helper/withTimeout.ts';
+import { toQuoteNoteFields } from './helper/quoteNote.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import { sendToMentions } from './helper/sendToMentions.ts';
 import type { RemoveBlueskyCrosspostUseCase } from './removeBlueskyCrosspost.ts';
@@ -56,6 +63,7 @@ type Deps = Readonly<{
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
   postResolver: PostResolver;
+  postQuotesResolver?: PostQuotesResolverByPostIds;
   // Article is a child aggregate of Post, so we keep it
   articleResolverByRootPostId: ArticleResolverByRootPostId;
   articleDeletedStore: ArticleDeletedStore;
@@ -107,6 +115,7 @@ const create = ({
   userResolver,
   actorResolverByUserId,
   postResolver,
+  postQuotesResolver,
   articleResolverByRootPostId,
   articleDeletedStore,
   directPostParticipantsResolverByPostId,
@@ -150,6 +159,8 @@ const create = ({
         const participants = post.visibility === 'direct'
           ? await directPostParticipantsResolverByPostId?.resolve(postId)
           : undefined;
+        const quotes = post.visibility === 'direct' ? undefined : await postQuotesResolver?.resolve([postId]);
+        const quoteRecipients = toQuoteNoteFields(quotes?.ok ? quotes.val.get(postId) : undefined).recipients;
 
         // Delete the post via event store
         const deleteEvent = Post.deletePost(now)(postId);
@@ -174,13 +185,16 @@ const create = ({
           ctx,
           identifier: user.username,
           activity: deleteActivity,
-          mentions: await resolveMentionRecipients(
-            ctx,
-            user.username,
-            participants?.ok
-              ? participants.val
-              : mentionLinksOfHtml(post.content).map(({ href }) => href),
-          ),
+          mentions: [
+            ...await resolveMentionRecipients(
+              ctx,
+              user.username,
+              participants?.ok
+                ? participants.val
+                : mentionLinksOfHtml(post.content).map(({ href }) => href),
+            ),
+            ...quoteRecipients,
+          ],
           visibility: post.visibility,
         });
 

@@ -19,6 +19,7 @@ import type { Username } from '../domain/user/username.ts';
 import { timedOut, withTimeout } from '../helper/withTimeout.ts';
 import type { FetchReplyNotesRecursiveUseCase } from './fetchReplyNotesRecursive.ts';
 import { signalWithTimeout, withFetchTimeout } from './helper/abortableFetch.ts';
+import { isBlockedActorUri } from './helper/isBlockedActorUri.ts';
 import { createRecentRuns } from './helper/recentRuns.ts';
 import { toRemotePostIdentity } from './helper/remoteNoteIdentity.ts';
 import { resolveUserWith } from './helper/resolve.ts';
@@ -114,10 +115,8 @@ const create = ({
     return new Set([...(remote.ok ? remote.val : []), ...(local.ok ? local.val : [])]);
   };
 
-  const isBlocked = async (username: Username, actorUri: string): Promise<boolean> => {
-    const blocked = await blockedActorUriResolverByUsername.resolve({ username, actorUri });
-    return blocked.ok && blocked.val;
-  };
+  const isBlocked = (username: Username, actorUri: string): Promise<boolean> =>
+    isBlockedActorUri(blockedActorUriResolverByUsername, username, actorUri);
 
   const replyItemIds = async function*(
     note: Note,

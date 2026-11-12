@@ -95,10 +95,11 @@ describe('D1 inbox adapters', () => {
       onLike: {} as never,
       onReject: {} as never,
       onUndo: {} as never,
+      onUpdate: {} as never,
     });
 
     expect(Object.values(listener).every((handler) => typeof handler === 'function')).toBe(true);
-    expect(Object.keys(listener)).toHaveLength(10);
+    expect(Object.keys(listener)).toHaveLength(11);
   });
 
   it('reconstructs all constraint-relevant post references for deletion', async () => {

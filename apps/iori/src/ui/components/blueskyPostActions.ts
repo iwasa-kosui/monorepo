@@ -8,6 +8,7 @@ export type BlueskyPostActions = Readonly<{
   onRepost: (item: IoriBlueskyTimelineItemBody) => void;
   onUndoRepost: (item: IoriBlueskyTimelineItemBody) => void;
   repostPendingUris: ReadonlySet<string>;
+  onQuote?: (item: IoriBlueskyTimelineItemBody) => void;
 }>;
 
 export const blueskyItemActionProps = (actions: BlueskyPostActions | undefined, item: IoriBlueskyTimelineItemBody) =>
@@ -19,4 +20,5 @@ export const blueskyItemActionProps = (actions: BlueskyPostActions | undefined, 
     onRepost: actions.onRepost,
     onUndoRepost: actions.onUndoRepost,
     isRepostPending: actions.repostPendingUris.has(item.uri),
+    ...(actions.onQuote === undefined ? {} : { onQuote: actions.onQuote }),
   };

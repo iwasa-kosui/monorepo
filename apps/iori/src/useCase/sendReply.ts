@@ -22,10 +22,12 @@ import {
   Post,
   type PostCreatedStore,
   type PostNotFoundError,
+  type PostQuotesResolverByPostIds,
   type PostResolver,
   type RemotePost,
 } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
+import { appendQuoteInline } from '../domain/post/quoteInline.ts';
 import { sanitizePostContent } from '../domain/post/sanitizePostContent.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
@@ -37,6 +39,7 @@ import { type MentionedActor, toMentionNoteFields } from './helper/mentionNote.t
 import { toPostAddressing } from './helper/postAddressing.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
+import { resolveQuoteNoteFields } from './helper/quoteNote.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import { sendToMentions } from './helper/sendToMentions.ts';
 import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
@@ -53,6 +56,7 @@ type Input =
     visibility?: Visibility;
     crosspostToBluesky?: boolean;
     mentions?: ReadonlyArray<MentionRecipient>;
+    quoteUri?: string;
     request: Request;
     ctx: RequestContext<unknown>;
   }>;
@@ -97,6 +101,7 @@ type Deps = Readonly<{
   webPushSender: WebPushSender;
   postResolver: PostResolver;
   actorResolverById?: Agg.Resolver<ActorId, Actor | undefined>;
+  postQuotesResolver?: PostQuotesResolverByPostIds;
   scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   origin: string;
 }>;
@@ -114,6 +119,7 @@ const create = ({
   webPushSender,
   postResolver,
   actorResolverById,
+  postQuotesResolver,
   scheduleBlueskyCrosspost,
   origin,
 }: Deps): SendReplyUseCase => {
@@ -229,15 +235,16 @@ const create = ({
       }),
       RA.andBind(
         'postEvent',
-        ({ actor, content, inReplyToUri, summary, sensitive, visibility, participantActorUris }) => {
+        ({ actor, content, inReplyToUri, summary, sensitive, visibility, quoteUri, participantActorUris }) => {
           const postEvent = Post.createPost(now)({
             actorId: actor.id,
-            content,
+            content: quoteUri === undefined ? content : appendQuoteInline(content, quoteUri),
             userId: actor.userId,
             inReplyToUri,
             summary,
             sensitive,
             visibility,
+            quoteUri,
             participantActorUris,
           });
           return RA.ok(postEvent);
@@ -266,11 +273,65 @@ const create = ({
         return RA.ok(images);
       }),
       // Send ActivityPub Create activity (only for remote parent posts)
-      RA.andThrough(async ({ user, parentPost, replyPost, images, ctx, inReplyToUri, mentions, remoteAuthor }) => {
-        // For local parent posts, no ActivityPub delivery to remote author needed
-        if (parentPost.type === 'local') {
-          // Still send to followers
-          const mentionFields = toMentionNoteFields(replyPost.content);
+      RA.andThrough(
+        async ({ user, parentPost, replyPost, images, ctx, inReplyToUri, mentions, quoteUri, remoteAuthor }) => {
+          const quote = await resolveQuoteNoteFields(
+            postQuotesResolver,
+            replyPost.postId,
+            quoteUri,
+            replyPost.visibility,
+          );
+          // For local parent posts, no ActivityPub delivery to remote author needed
+          if (parentPost.type === 'local') {
+            // Still send to followers
+            const mentionFields = toMentionNoteFields(replyPost.content, quote.actors);
+            const replyNote = new Note({
+              id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+              attribution: ctx.getActorUri(user.username),
+              ...toPostAddressing({
+                visibility: replyPost.visibility,
+                followersUri: ctx.getFollowersUri(user.username),
+                mentionUris: mentionFields.ccs,
+              }),
+              tags: mentionFields.tags,
+              content: replyPost.content,
+              mediaType: 'text/html',
+              published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
+              url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
+              summary: replyPost.summary,
+              sensitive: replyPost.sensitive,
+              replyTarget: new URL(inReplyToUri),
+              quoteUrl: quote.quoteUrl,
+              attachments: images.map((image) => toImageDocument(image, origin)),
+            });
+
+            const createActivity = new Create({
+              id: new URL('#activity', replyNote.id ?? undefined),
+              object: replyNote,
+              actors: replyNote.attributionIds,
+              tos: replyNote.toIds,
+              ccs: replyNote.ccIds,
+            });
+            if (replyPost.visibility !== 'direct') {
+              await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+            }
+            await sendToMentions({
+              ctx,
+              identifier: user.username,
+              activity: createActivity,
+              mentions: [...(mentions ?? []), ...quote.recipients],
+              visibility: replyPost.visibility,
+            });
+
+            return RA.ok(undefined);
+          }
+
+          // For remote parent posts, send to the author
+          if (remoteAuthor === undefined) {
+            return RA.ok(undefined);
+          }
+          const objectUri = parentPost.uri;
+          const mentionFields = toMentionNoteFields(replyPost.content, [remoteAuthor.mention, ...quote.actors]);
           const replyNote = new Note({
             id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
             attribution: ctx.getActorUri(user.username),
@@ -286,11 +347,26 @@ const create = ({
             url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
             summary: replyPost.summary,
             sensitive: replyPost.sensitive,
-            replyTarget: new URL(inReplyToUri),
+            replyTarget: new URL(objectUri),
+            quoteUrl: quote.quoteUrl,
             attachments: images.map((image) => toImageDocument(image, origin)),
           });
 
-          const createActivity = new Create({
+          // Send to the note's author
+          await ctx.sendActivity(
+            { username: user.username },
+            remoteAuthor.recipient,
+            new Create({
+              id: new URL('#activity', replyNote.id ?? undefined),
+              object: replyNote,
+              actors: replyNote.attributionIds,
+              tos: replyNote.toIds,
+              ccs: replyNote.ccIds,
+            }),
+          );
+
+          // Also send to followers
+          const followersActivity = new Create({
             id: new URL('#activity', replyNote.id ?? undefined),
             object: replyNote,
             actors: replyNote.attributionIds,
@@ -298,79 +374,20 @@ const create = ({
             ccs: replyNote.ccIds,
           });
           if (replyPost.visibility !== 'direct') {
-            await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+            await ctx.sendActivity({ identifier: user.username }, 'followers', followersActivity);
           }
           await sendToMentions({
             ctx,
             identifier: user.username,
-            activity: createActivity,
-            mentions: mentions ?? [],
+            activity: followersActivity,
+            mentions: [...(mentions ?? []), ...quote.recipients],
+            excludedActorIds: [remoteAuthor.mention.id.href],
             visibility: replyPost.visibility,
           });
 
           return RA.ok(undefined);
-        }
-
-        // For remote parent posts, send to the author
-        if (remoteAuthor === undefined) {
-          return RA.ok(undefined);
-        }
-        const objectUri = parentPost.uri;
-        const mentionFields = toMentionNoteFields(replyPost.content, [remoteAuthor.mention]);
-        const replyNote = new Note({
-          id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
-          attribution: ctx.getActorUri(user.username),
-          ...toPostAddressing({
-            visibility: replyPost.visibility,
-            followersUri: ctx.getFollowersUri(user.username),
-            mentionUris: mentionFields.ccs,
-          }),
-          tags: mentionFields.tags,
-          content: replyPost.content,
-          mediaType: 'text/html',
-          published: Temporal.Instant.fromEpochMilliseconds(replyPost.createdAt),
-          url: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
-          summary: replyPost.summary,
-          sensitive: replyPost.sensitive,
-          replyTarget: new URL(objectUri),
-          attachments: images.map((image) => toImageDocument(image, origin)),
-        });
-
-        // Send to the note's author
-        await ctx.sendActivity(
-          { username: user.username },
-          remoteAuthor.recipient,
-          new Create({
-            id: new URL('#activity', replyNote.id ?? undefined),
-            object: replyNote,
-            actors: replyNote.attributionIds,
-            tos: replyNote.toIds,
-            ccs: replyNote.ccIds,
-          }),
-        );
-
-        // Also send to followers
-        const followersActivity = new Create({
-          id: new URL('#activity', replyNote.id ?? undefined),
-          object: replyNote,
-          actors: replyNote.attributionIds,
-          tos: replyNote.toIds,
-          ccs: replyNote.ccIds,
-        });
-        if (replyPost.visibility !== 'direct') {
-          await ctx.sendActivity({ identifier: user.username }, 'followers', followersActivity);
-        }
-        await sendToMentions({
-          ctx,
-          identifier: user.username,
-          activity: followersActivity,
-          mentions: mentions ?? [],
-          excludedActorIds: [remoteAuthor.mention.id.href],
-          visibility: replyPost.visibility,
-        });
-
-        return RA.ok(undefined);
-      }),
+        },
+      ),
       RA.andThrough(async ({ replyPost, crosspostToBluesky }) => {
         if (crosspostToBluesky !== false) {
           await scheduleBlueskyCrosspost?.run({ postId: replyPost.postId });
