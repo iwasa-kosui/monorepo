@@ -76,6 +76,7 @@ import { createD1FollowRequestedStore } from '../adaptor/d1/follow/followRequest
 import { createD1FollowResolver } from '../adaptor/d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../adaptor/d1/follow/undoFollowingProcessedStore.ts';
 import { createD1PostImageCreatedStore } from '../adaptor/d1/image/postImageCreatedStore.ts';
+import { createD1PostImagesResolverByPostId } from '../adaptor/d1/image/postImagesResolver.ts';
 import { createD1InterestSourceDeletedStore } from '../adaptor/d1/interestSource/interestSourceDeletedStore.ts';
 import { createD1InterestSourceEmbeddingCopiedStore } from '../adaptor/d1/interestSource/interestSourceEmbeddingCopiedStore.ts';
 import { createD1InterestSourcesResolverByUserIdAndRefAndKinds } from '../adaptor/d1/interestSource/interestSourcesResolverByUserIdAndRefAndKinds.ts';
@@ -129,6 +130,9 @@ import { createD1PostExtrasResolverByPosts } from '../adaptor/d1/post/postExtras
 import { createD1PostQuotesResolverByPostIds } from '../adaptor/d1/post/postQuotesResolverByPostIds.ts';
 import { createD1PostResolver } from '../adaptor/d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../adaptor/d1/post/postResolverByUri.ts';
+import { createD1PostSourceTextResolver } from '../adaptor/d1/post/postSourceTextResolver.ts';
+import { createD1PostUpdatedStore } from '../adaptor/d1/post/postUpdatedStore.ts';
+import { createD1PostVersionsResolverByPostId } from '../adaptor/d1/post/postVersionsResolverByPostId.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../adaptor/d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../adaptor/d1/post/remotePostUpserter.ts';
 import { createD1RemotePostUrisResolverByUris } from '../adaptor/d1/post/remotePostUrisResolverByUris.ts';
@@ -162,6 +166,7 @@ import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPas
 import { createD1UserPasswordSetStore } from '../adaptor/d1/userPassword/userPasswordSetStore.ts';
 import { isBlockedUri } from '../adaptor/fedify/blockedInboxDomain.ts';
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
+import { createLookupUrlResolver } from '../adaptor/fedify/lookupUrlResolver.ts';
 import { createStatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { createR2OgImageStore } from '../adaptor/r2/ogImageStore.ts';
@@ -238,6 +243,7 @@ import { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
 import { UpdateAvatarUseCase } from '../useCase/updateAvatar.ts';
 import { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescription.ts';
+import { UpdatePostUseCase } from '../useCase/updatePost.ts';
 import { UpdateProfileUseCase } from '../useCase/updateProfile.ts';
 import { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
@@ -476,6 +482,7 @@ export const createWorkerRuntimePorts = async (
         remotePostUpserter,
         blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
         isBlockedUri: (uri) => isBlockedUri(uri),
+        lookupUrlResolver: createLookupUrlResolver({ isBlockedUri: (uri) => isBlockedUri(uri) }),
       }),
       markersResolverByUserId,
       notificationIdsResolverByUserIdAndCreatedAt: createD1NotificationIdsResolverByUserIdAndCreatedAt(db),
@@ -838,6 +845,21 @@ export const createWorkerRuntimePorts = async (
         scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
         origin: env.ORIGIN,
       }),
+      updatePostUseCase: UpdatePostUseCase.create({
+        sessionResolver,
+        userResolver,
+        postResolver,
+        postResolverByUri: createD1PostResolverByUri(db),
+        actorResolverById: createD1ActorResolverById(db),
+        actorResolverByUri: createD1ActorResolverByUri(db),
+        postUpdatedStore: createD1PostUpdatedStore(db),
+        postImagesResolver: createD1PostImagesResolverByPostId(db),
+        postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
+        acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+        origin: env.ORIGIN,
+      }),
+      postSourceTextResolver: createD1PostSourceTextResolver(db),
+      postVersionsResolver: createD1PostVersionsResolverByPostId(db),
       deletePostUseCase: DeletePostUseCase.create({
         sessionResolver,
         userResolver,

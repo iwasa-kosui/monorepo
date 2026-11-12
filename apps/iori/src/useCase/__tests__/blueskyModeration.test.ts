@@ -1,6 +1,7 @@
 import { RA } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { createBlueskyThreadRootResolver } from '../../adaptor/bluesky/blueskyThreadRootResolver.ts';
 import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.ts';
 import { createD1BlueskyModeratedActorsResolver } from '../../adaptor/d1/blueskyModeration/blueskyModeratedActorsResolver.ts';
 import {
@@ -14,17 +15,21 @@ import {
   BLUESKY_REPORT_COMMENT_MAX_LENGTH,
 } from '../../domain/blueskyModeration/blueskyModeration.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import type { BlueskyModerationReader } from '../../ports/blueskyModerationReader.ts';
 import { BlockBlueskyActorUseCase } from '../blockBlueskyActor.ts';
 import { GetBlueskyModerationStateUseCase } from '../getBlueskyModerationState.ts';
 import { MuteBlueskyActorUseCase } from '../muteBlueskyActor.ts';
+import { MuteBlueskyThreadUseCase } from '../muteBlueskyThread.ts';
 import { ReportBlueskyActorUseCase } from '../reportBlueskyActor.ts';
 import { UnblockBlueskyActorUseCase } from '../unblockBlueskyActor.ts';
 import { UnmuteBlueskyActorUseCase } from '../unmuteBlueskyActor.ts';
+import { UnmuteBlueskyThreadUseCase } from '../unmuteBlueskyThread.ts';
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 12, 12));
 const DID = 'did:plc:target';
+const ROOT = 'at://did:plc:target/app.bsky.feed.post/3kroot';
+const REPLY = 'at://did:plc:other/app.bsky.feed.post/3kreply';
 const OLD_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3kold';
 const NEW_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3knew';
 const STORED_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3kstored';
@@ -47,10 +52,16 @@ const setup = (viewer: Readonly<{ muted?: boolean; blockUri?: string | null; has
   const client = {
     muteActor: vi.fn<BlueskyClient['muteActor']>(async () => RA.ok(undefined)),
     unmuteActor: vi.fn<BlueskyClient['unmuteActor']>(async () => RA.ok(undefined)),
+    muteThread: vi.fn<BlueskyClient['muteThread']>(async () => RA.ok(undefined)),
+    unmuteThread: vi.fn<BlueskyClient['unmuteThread']>(async () => RA.ok(undefined)),
     createBlock: vi.fn<BlueskyClient['createBlock']>(async () => RA.ok({ uri: NEW_BLOCK })),
     deleteBlock: vi.fn<BlueskyClient['deleteBlock']>(async () => RA.ok(undefined)),
     createReport: vi.fn<BlueskyClient['createReport']>(async () => RA.ok(undefined)),
   };
+  const query = vi.fn<BlueskyQueryClient['query']>(async (_nsid, params) =>
+    RA.ok({ posts: [{ uri: params.uris, cid: 'bafypost', record: {} }] })
+  );
+  const threadRootResolver = createBlueskyThreadRootResolver({ client: { query } });
   const reader = {
     resolveViewerState: vi.fn<BlueskyModerationReader['resolveViewerState']>(async () =>
       RA.ok({ muted: viewer.muted ?? false, blockUri: viewer.blockUri ?? null })
@@ -61,9 +72,12 @@ const setup = (viewer: Readonly<{ muted?: boolean; blockUri?: string | null; has
   const now = () => NOW;
   return {
     client,
+    query,
     reader,
     mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
     unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
+    muteThread: MuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
+    unmuteThread: UnmuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
     block: BlockBlueskyActorUseCase.create({
       client,
       reader,
@@ -136,6 +150,104 @@ describe('MuteBlueskyActorUseCase と UnmuteBlueskyActorUseCase', () => {
 
     expect(await t.unmute.run({ did: DID })).toEqual({ ok: false, err: failure });
     expect(t.rows()).toEqual([{ did: DID, muted: 1, blockUri: null }]);
+  });
+});
+
+describe('MuteBlueskyThreadUseCase と UnmuteBlueskyThreadUseCase', () => {
+  const replyPost = { uri: REPLY, cid: 'bafyreply', record: { reply: { root: { uri: ROOT }, parent: { uri: ROOT } } } };
+
+  it('muteThread は返信でない投稿なら、その uri で Bluesky のスレッドのミュートを呼び、D1 に保存しない', async () => {
+    const t = setup();
+
+    const result = await t.muteThread.run({ uri: ROOT });
+
+    expect(result).toEqual({ ok: true, val: { threadMuted: true } });
+    expect(t.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getPosts', { uris: ROOT });
+    expect(t.client.muteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+    expect(t.rows()).toEqual([]);
+  });
+
+  it('muteThread は返信の uri を受け取ったら、根の uri でスレッドのミュートを呼ぶ', async () => {
+    const t = setup();
+    t.query.mockReturnValueOnce(RA.ok({ posts: [replyPost] }));
+
+    const result = await t.muteThread.run({ uri: REPLY });
+
+    expect(result).toEqual({ ok: true, val: { threadMuted: true } });
+    expect(t.client.muteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+  });
+
+  it('muteThread は投稿が見つからなければ、スレッドのミュートを呼ばず見つからない失敗を返す', async () => {
+    const t = setup();
+    t.query.mockReturnValueOnce(RA.ok({ posts: [] }));
+
+    expect(await t.muteThread.run({ uri: ROOT })).toEqual({
+      ok: false,
+      err: { type: 'BlueskyThreadTargetNotFound' },
+    });
+    expect(t.client.muteThread).not.toHaveBeenCalled();
+  });
+
+  it('muteThread は getPosts が失敗したらその失敗を返し、スレッドのミュートを呼ばない', async () => {
+    const t = setup();
+    t.query.mockReturnValueOnce(RA.err(failure));
+
+    expect(await t.muteThread.run({ uri: ROOT })).toEqual({ ok: false, err: failure });
+    expect(t.client.muteThread).not.toHaveBeenCalled();
+  });
+
+  it('muteThread は Bluesky が失敗したらその失敗を返す', async () => {
+    const t = setup();
+    t.client.muteThread.mockReturnValueOnce(RA.err(failure));
+
+    expect(await t.muteThread.run({ uri: ROOT })).toEqual({ ok: false, err: failure });
+    expect(t.rows()).toEqual([]);
+  });
+
+  it('unmuteThread は返信でない投稿なら、その uri で Bluesky のスレッドのミュートの解除を呼び、D1 に書かない', async () => {
+    const t = setup();
+
+    const result = await t.unmuteThread.run({ uri: ROOT });
+
+    expect(result).toEqual({ ok: true, val: { threadMuted: false } });
+    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+    expect(t.rows()).toEqual([]);
+  });
+
+  it('unmuteThread は返信の uri を受け取ったら、根の uri でスレッドのミュートの解除を呼ぶ', async () => {
+    const t = setup();
+    t.query.mockReturnValueOnce(RA.ok({ posts: [replyPost] }));
+
+    const result = await t.unmuteThread.run({ uri: REPLY });
+
+    expect(result).toEqual({ ok: true, val: { threadMuted: false } });
+    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+  });
+
+  it('unmuteThread は投稿が見つからなければ、受け取った uri でスレッドのミュートの解除を呼ぶ', async () => {
+    const t = setup();
+    t.query.mockReturnValueOnce(RA.ok({ posts: [] }));
+
+    const result = await t.unmuteThread.run({ uri: REPLY });
+
+    expect(result).toEqual({ ok: true, val: { threadMuted: false } });
+    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(REPLY);
+  });
+
+  it('unmuteThread は getPosts が失敗したらその失敗を返し、解除を呼ばない', async () => {
+    const t = setup();
+    t.query.mockReturnValueOnce(RA.err(failure));
+
+    expect(await t.unmuteThread.run({ uri: ROOT })).toEqual({ ok: false, err: failure });
+    expect(t.client.unmuteThread).not.toHaveBeenCalled();
+  });
+
+  it('unmuteThread は Bluesky が失敗したらその失敗を返す', async () => {
+    const t = setup();
+    t.client.unmuteThread.mockReturnValueOnce(RA.err(failure));
+
+    expect(await t.unmuteThread.run({ uri: ROOT })).toEqual({ ok: false, err: failure });
+    expect(t.rows()).toEqual([]);
   });
 });
 

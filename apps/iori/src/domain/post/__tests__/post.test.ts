@@ -84,3 +84,73 @@ describe('Post.createPost の visibility', () => {
     },
   );
 });
+
+describe('Post.createPost の sourceText', () => {
+  const payload = { actorId: ActorId.generate(), userId: UserId.generate(), content: '<p>hi</p>' };
+
+  it('省略したときは null にする', () => {
+    expect(Post.createPost(Instant.now())(payload).eventPayload.sourceText).toBeNull();
+  });
+
+  it('指定した原文をイベントに載せ、投稿には載せない', () => {
+    const event = Post.createPost(Instant.now())({ ...payload, sourceText: 'hi' });
+    expect(event.eventPayload.sourceText).toBe('hi');
+    expect(event.aggregateState).not.toHaveProperty('sourceText');
+  });
+});
+
+describe('Post.updatePost', () => {
+  const post = LocalPost.orThrow({ ...localPostFields(), visibility: 'unlisted' });
+  const changes = { content: '<p>new</p>', summary: 'warn', sensitive: true, sourceText: 'new' };
+
+  it('本文・CW・センシティブを置き換え、編集日時を入れる', () => {
+    const now = Instant.orThrow(5_000);
+
+    const event = Post.updatePost(now)(post, changes);
+
+    expect(event.eventName).toBe('post.updated');
+    expect(event.aggregateId).toBe(post.postId);
+    expect(event.aggregateState).toEqual({
+      ...post,
+      content: '<p>new</p>',
+      summary: 'warn',
+      sensitive: true,
+      editedAt: now,
+    });
+    expect(event.eventPayload).toEqual({
+      postId: post.postId,
+      content: '<p>new</p>',
+      summary: 'warn',
+      sensitive: true,
+      sourceText: 'new',
+      participantActorUris: [],
+      editedAt: now,
+    });
+    expect(event.occurredAt).toBe(now);
+  });
+
+  it('ダイレクトの投稿だけ参加者を重複なしでイベントに載せる', () => {
+    const direct = LocalPost.orThrow({ ...localPostFields(), visibility: 'direct' });
+    const participantActorUris = [
+      'https://a.example/users/a',
+      'https://b.example/users/b',
+      'https://a.example/users/a',
+    ];
+
+    expect(Post.updatePost(Instant.orThrow(5_000))(direct, { ...changes, participantActorUris }).eventPayload)
+      .toHaveProperty('participantActorUris', ['https://a.example/users/a', 'https://b.example/users/b']);
+    expect(Post.updatePost(Instant.orThrow(5_000))(post, { ...changes, participantActorUris }).eventPayload)
+      .toHaveProperty('participantActorUris', []);
+  });
+
+  it('公開範囲・返信先・作成日時は変えない', () => {
+    const event = Post.updatePost(Instant.orThrow(5_000))(post, changes);
+
+    expect(event.aggregateState).toMatchObject({
+      visibility: 'unlisted',
+      inReplyToUri: null,
+      createdAt: post.createdAt,
+      userId: post.userId,
+    });
+  });
+});

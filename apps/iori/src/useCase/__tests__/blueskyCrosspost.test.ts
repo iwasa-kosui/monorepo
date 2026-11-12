@@ -95,6 +95,8 @@ const setup = () => {
     deleteRepost: async () => RA.err(failure('deleteRepost is not used')),
     muteActor: async () => RA.err(failure('muteActor is not used')),
     unmuteActor: async () => RA.err(failure('unmuteActor is not used')),
+    muteThread: async () => RA.err(failure('muteThread is not used')),
+    unmuteThread: async () => RA.err(failure('unmuteThread is not used')),
     createBlock: async () => RA.err(failure('createBlock is not used')),
     deleteBlock: async () => RA.err(failure('deleteBlock is not used')),
     createReport: async () => RA.err(failure('createReport is not used')),

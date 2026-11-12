@@ -35,6 +35,7 @@ export const buildLocalNote = (
     content,
     mediaType: 'text/html',
     published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
+    updated: post.editedAt === undefined ? undefined : Temporal.Instant.fromEpochMilliseconds(post.editedAt),
     url: objectUri,
     summary: post.summary,
     sensitive: post.sensitive,
