@@ -158,6 +158,27 @@ describe('createD1LocalPostsResolverByPage', () => {
 
     expect(result.ok && result.val.map((post) => post.postId)).toEqual([publicPost.postId]);
   });
+
+  it('min_id を指定すると、cursor より新しいローカルの投稿だけを古い順に返し、リモートの投稿と cursor 自身を含めない', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const remote = t.seed.addRemoteActor('alice');
+    t.seed.addLocalPost(me, 1_000);
+    t.seed.addRemotePost(remote, 1_500);
+    const cursor = t.seed.addLocalPost(me, 2_000);
+    t.seed.addRemotePost(remote, 2_500);
+    t.seed.addRemotePost(remote, 3_500);
+    const newest = t.seed.addLocalPost(me, 4_000);
+    const newer = t.seed.addLocalPost(me, 3_000);
+
+    const result = await createD1LocalPostsResolverByPage(t.db).resolve({
+      currentActorId: ActorId.orThrow(me.actorId),
+      mutedActorIds: [],
+      page: { ...page(), newerThanId: cursor.postId, order: 'oldestFirst' },
+    });
+
+    expect(result.ok && result.val.map((post) => post.postId)).toEqual([newer.postId, newest.postId]);
+  });
 });
 
 describe('onlyVisibleToViewer でのローカルの投稿の絞り込み', () => {
