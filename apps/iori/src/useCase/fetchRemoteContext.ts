@@ -1,4 +1,4 @@
-import { type Collection, CollectionPage, Note } from '@fedify/vocab';
+import { type Collection, CollectionPage } from '@fedify/vocab';
 import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
@@ -22,6 +22,7 @@ import { signalWithTimeout, withFetchTimeout } from './helper/abortableFetch.ts'
 import { isBlockedActorUri } from './helper/isBlockedActorUri.ts';
 import { createRecentRuns } from './helper/recentRuns.ts';
 import { toRemotePostIdentity } from './helper/remoteNoteIdentity.ts';
+import { isRemotePostObject, type RemotePostObject } from './helper/remotePostObject.ts';
 import { resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -119,7 +120,7 @@ const create = ({
     isBlockedActorUri(blockedActorUriResolverByUsername, username, actorUri);
 
   const replyItemIds = async function*(
-    note: Note,
+    note: RemotePostObject,
     documentLoader: DocumentLoader,
   ): AsyncGenerator<readonly URL[]> {
     const options = { documentLoader, suppressError: true } as const;
@@ -172,7 +173,7 @@ const create = ({
 
     let lookups = 0;
 
-    const lookupNote = async (uri: string): Promise<Note | undefined> => {
+    const lookupNote = async (uri: string): Promise<RemotePostObject | undefined> => {
       if (progress.stopped || lookups >= MAX_LOOKUPS) {
         return undefined;
       }
@@ -182,7 +183,7 @@ const create = ({
           documentLoader,
           signal: signalFor(progress),
         });
-        return found instanceof Note ? found : undefined;
+        return isRemotePostObject(found) ? found : undefined;
       } catch (error) {
         getLogger().debug(`Failed to look up a note: ${uri} - ${error}`);
         return undefined;
@@ -191,10 +192,10 @@ const create = ({
 
     const visitReply = async (
       replyUri: string,
-      parent: Note,
+      parent: RemotePostObject,
       depth: number,
       isStored: boolean,
-    ): Promise<Note | undefined> => {
+    ): Promise<RemotePostObject | undefined> => {
       try {
         if (isStored && depth + 1 >= MAX_REPLY_DEPTH) {
           return undefined;
@@ -233,7 +234,7 @@ const create = ({
     if (root === undefined) {
       return;
     }
-    const queue: { note: Note; depth: number }[] = [{ note: root, depth: 0 }];
+    const queue: { note: RemotePostObject; depth: number }[] = [{ note: root, depth: 0 }];
     for (let head = 0; head < queue.length; head++) {
       const { note, depth } = queue[head]!;
       try {

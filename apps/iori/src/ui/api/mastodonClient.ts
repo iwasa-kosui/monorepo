@@ -384,6 +384,33 @@ export const createStatus = async (params: CreateStatusParams): Promise<Status> 
   return await res.json() as Status;
 };
 
+export type StatusSourceText = Readonly<{
+  id: string;
+  text: string;
+  spoiler_text: string;
+}>;
+
+export const fetchStatusSource = async (id: string): Promise<StatusSourceText> =>
+  (await request<StatusSourceText>(`/api/v1/statuses/${encodeURIComponent(id)}/source`)).body;
+
+export type UpdateStatusParams = Readonly<{
+  status: string;
+  spoiler_text: string;
+  sensitive: boolean;
+  content_type: string;
+}>;
+
+export const updateStatus = async (id: string, params: UpdateStatusParams): Promise<Status> => {
+  const res = await fetch(`/api/v1/statuses/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as Status;
+};
+
 export type CreateBlueskyPostParams = Readonly<{
   status: string;
   media_ids?: readonly string[];

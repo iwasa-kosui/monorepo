@@ -1,4 +1,4 @@
-import { Note, Person } from '@fedify/vocab';
+import { Article, Note, Person, Question } from '@fedify/vocab';
 import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
@@ -154,6 +154,68 @@ describe('ResolveRemotePostUseCase', () => {
       uri: NOTE_URI,
       authorIdentity: { uri: ALICE_URI },
     });
+  });
+
+  it('Article は name と本文を組み立てて保存し、その postId を返す', async () => {
+    const t = setup({
+      lookupObject: async () =>
+        new Article({ id: new URL(NOTE_URI), name: 'Title', content: '<p>body</p>', attribution: personOf('alice') }),
+    });
+
+    expect(await t.run(HTML_URL)).toBe(`saved:${NOTE_URI}`);
+    expect(t.remotePostUpserter.resolve.mock.calls[0]![0]).toMatchObject({
+      uri: NOTE_URI,
+      content: `<p><strong>Title</strong></p><p>body</p><p><a href="${NOTE_URI}">元の記事を読む</a></p>`,
+      authorIdentity: { uri: ALICE_URI },
+    });
+  });
+
+  it('Question は選択肢と投票のリンクを組み立てて保存し、その postId を返す', async () => {
+    const t = setup({
+      lookupObject: async () =>
+        new Question({
+          id: new URL(NOTE_URI),
+          content: '<p>q</p>',
+          exclusiveOptions: [new Note({ name: 'a' }), new Note({ name: 'b' })],
+          attribution: personOf('alice'),
+        }),
+    });
+
+    expect(await t.run(HTML_URL)).toBe(`saved:${NOTE_URI}`);
+    expect(t.remotePostUpserter.resolve.mock.calls[0]![0]).toMatchObject({
+      uri: NOTE_URI,
+      content: `<p>q</p><ul><li>a</li><li>b</li></ul><p><a href="${NOTE_URI}">元の投稿で投票する</a></p>`,
+    });
+  });
+
+  it('ブロックしたドメインの Article と Question は、保存せず見つからない扱いにする', async () => {
+    const blockedUri = `https://${BLOCKED_DOMAIN}/objects/1`;
+    const article = setup({ lookupObject: async () => new Article({ id: new URL(blockedUri), content: 'x' }) });
+    const question = setup({ lookupObject: async () => new Question({ id: new URL(blockedUri), content: 'x' }) });
+
+    expect(await article.run(HTML_URL)).toBeUndefined();
+    expect(await question.run(HTML_URL)).toBeUndefined();
+    expect(article.remotePostUpserter.resolve).not.toHaveBeenCalled();
+    expect(question.remotePostUpserter.resolve).not.toHaveBeenCalled();
+  });
+
+  it('著者がブロックしたドメインの Article と Question は、保存せず見つからない扱いにする', async () => {
+    const author = new Person({
+      id: new URL(`https://${BLOCKED_DOMAIN}/users/mallory`),
+      inbox: new URL(`https://${BLOCKED_DOMAIN}/users/mallory/inbox`),
+      preferredUsername: 'mallory',
+    });
+    const article = setup({
+      lookupObject: async () => new Article({ id: new URL(NOTE_URI), content: 'x', attribution: author }),
+    });
+    const question = setup({
+      lookupObject: async () => new Question({ id: new URL(NOTE_URI), content: 'x', attribution: author }),
+    });
+
+    expect(await article.run(HTML_URL)).toBeUndefined();
+    expect(await question.run(HTML_URL)).toBeUndefined();
+    expect(article.remotePostUpserter.resolve).not.toHaveBeenCalled();
+    expect(question.remotePostUpserter.resolve).not.toHaveBeenCalled();
   });
 
   it('ログインユーザーの署名付きの文書取得で取得する', async () => {

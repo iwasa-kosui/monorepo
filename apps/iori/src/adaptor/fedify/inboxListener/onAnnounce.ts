@@ -1,5 +1,5 @@
 import { type InboxContext } from '@fedify/fedify';
-import { type Announce, isActor, Note } from '@fedify/vocab';
+import { type Announce, isActor } from '@fedify/vocab';
 import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
@@ -17,6 +17,11 @@ import { PostId } from '../../../domain/post/postId.ts';
 import type { AcceptedRelaysResolver, RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
 import type { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
 import { isBlockedRemoteObject } from '../../../useCase/helper/isBlockedRemoteObject.ts';
+import {
+  buildRemotePostContent,
+  isRemotePostObject,
+  type RemotePostObject,
+} from '../../../useCase/helper/remotePostObject.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractQuoteUri } from '../extractQuoteUri.ts';
@@ -46,7 +51,7 @@ export type OnAnnounceDeps = Readonly<{
 }>;
 
 const extractAttachmentsOrEmpty = async (
-  note: Note,
+  note: RemotePostObject,
   documentLoader: DocumentLoader,
 ): Promise<RemotePostAttachment[]> => {
   try {
@@ -79,8 +84,8 @@ const saveForwardedAnnounce = async (
     getLogger().warn(`Failed to fetch forwarded Announce object: ${activity.objectId?.href} - ${String(error)}`);
     return;
   }
-  if (!(note instanceof Note)) {
-    getLogger().info(`Forwarded Announce object is not a Note: ${activity.objectId?.href}`);
+  if (!isRemotePostObject(note)) {
+    getLogger().info(`Forwarded Announce object is not a Note, Article or Question: ${activity.objectId?.href}`);
     return;
   }
 
@@ -207,8 +212,8 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
 
   const documentLoader = documentLoaderOptions.documentLoader ?? await getSignedDocumentLoader(ctx);
   const note = await activity.getObject({ documentLoader });
-  if (!(note instanceof Note)) {
-    getLogger().info(`Announce activity object is not a Note: ${objectId.href}`);
+  if (!isRemotePostObject(note)) {
+    getLogger().info(`Announce activity object is not a Note, Article or Question: ${objectId.href}`);
     return;
   }
 
@@ -239,7 +244,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
     return;
   }
 
-  const contentText = String(note.content ?? '');
+  const contentText = await buildRemotePostContent(note);
   const authorIdentity = await ActorIdentity.fromFedifyActor(author, { documentLoader });
   if (!authorIdentity.ok) {
     getLogger().warn(`Could not read Note author: ${note.id.href}`);
@@ -297,8 +302,8 @@ const processRelayAnnounce = async (
 
   const documentLoader = await getSignedDocumentLoader(ctx);
   const note = await activity.getObject({ documentLoader });
-  if (!(note instanceof Note)) {
-    getLogger().info(`Relay Announce object is not a Note`);
+  if (!isRemotePostObject(note)) {
+    getLogger().info(`Relay Announce object is not a Note, Article or Question`);
     return;
   }
 

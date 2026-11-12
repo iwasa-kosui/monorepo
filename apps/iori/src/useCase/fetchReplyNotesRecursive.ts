@@ -1,4 +1,3 @@
-import { Note } from '@fedify/vocab';
 import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
@@ -11,6 +10,7 @@ import type {
   RemotePostUpserter,
 } from '../domain/post/post.ts';
 import { toRemotePostIdentity } from './helper/remoteNoteIdentity.ts';
+import { isRemotePostObject } from './helper/remotePostObject.ts';
 
 const MAX_DEPTH = 10;
 
@@ -56,8 +56,8 @@ const create = ({
   ): Promise<RemotePostIdentity | undefined> => {
     try {
       const result = await lookupObject(uri, { documentLoader });
-      if (!(result instanceof Note)) {
-        getLogger().debug(`Fetched object is not a Note: ${uri}`);
+      if (!isRemotePostObject(result)) {
+        getLogger().debug(`Fetched object is not a Note, Article or Question: ${uri}`);
         return undefined;
       }
       if (!result.id) {

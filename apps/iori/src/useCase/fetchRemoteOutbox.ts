@@ -1,4 +1,4 @@
-import { type Collection, CollectionPage, Create, isActor, Note } from '@fedify/vocab';
+import { type Collection, CollectionPage, Create, isActor } from '@fedify/vocab';
 import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
@@ -20,6 +20,7 @@ import { signalWithTimeout, withFetchTimeout } from './helper/abortableFetch.ts'
 import { isBlockedActorUri } from './helper/isBlockedActorUri.ts';
 import { createRecentRuns } from './helper/recentRuns.ts';
 import { toRemotePostIdentity } from './helper/remoteNoteIdentity.ts';
+import { isRemotePostObject, type RemotePostObject } from './helper/remotePostObject.ts';
 import { resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -125,10 +126,10 @@ const create = ({
     uri: string,
     documentLoader: DocumentLoader,
     progress: Progress,
-  ): Promise<Note | undefined> => {
+  ): Promise<RemotePostObject | undefined> => {
     try {
       const found = await ctx.lookupObject(uri, { documentLoader, signal: signalFor(progress) });
-      return found instanceof Note ? found : undefined;
+      return isRemotePostObject(found) ? found : undefined;
     } catch (error) {
       getLogger().debug(`Failed to look up a note: ${uri} - ${error}`);
       return undefined;
@@ -136,7 +137,7 @@ const create = ({
   };
 
   const saveNote = async (
-    note: Note | undefined,
+    note: RemotePostObject | undefined,
     noteUri: string,
     actorUri: string,
     username: Username,
@@ -168,7 +169,7 @@ const create = ({
     documentLoader: DocumentLoader,
     progress: Progress,
   ): Promise<void> => {
-    const lookups: Promise<Note | undefined>[] = [];
+    const lookups: Promise<RemotePostObject | undefined>[] = [];
     let running = 0;
     let consumed = 0;
     const startLookups = (): void => {

@@ -1,5 +1,5 @@
 import { type Context, createExponentialBackoffPolicy, type TaskRegistry } from '@fedify/fedify';
-import { Note } from '@fedify/vocab';
+import { Object as ActivityPubObject } from '@fedify/vocab';
 import { FetchError, UrlError } from '@fedify/vocab-runtime';
 import { getLogger } from '@logtape/logtape';
 import z from 'zod/v4';
@@ -7,6 +7,7 @@ import z from 'zod/v4';
 import { Visibility } from '../../../domain/post/visibility.ts';
 import type { RelayResolver } from '../../../domain/relay/relay.ts';
 import { RelayId } from '../../../domain/relay/relayId.ts';
+import { isRemotePostObject } from '../../../useCase/helper/remotePostObject.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import { saveFederatedNote, type SaveFederatedNoteDeps } from '../inboxListener/saveFederatedNote.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
@@ -76,12 +77,12 @@ async (
 
   let note: unknown;
   try {
-    note = await Note.fromJsonLd(document, { documentLoader, contextLoader: ctx.contextLoader });
+    note = await ActivityPubObject.fromJsonLd(document, { documentLoader, contextLoader: ctx.contextLoader });
   } catch (error) {
     getLogger().warn(`Refetched object is not the requested Note: ${objectId.href} - ${String(error)}`);
     return;
   }
-  if (!(note instanceof Note) || note.id?.href !== objectId.href) {
+  if (!isRemotePostObject(note) || note.id?.href !== objectId.href) {
     getLogger().warn(`Refetched object is not the requested Note: ${objectId.href}`);
     return;
   }
