@@ -65,6 +65,7 @@ describe('D1 schema', () => {
       'postQuotesTable',
       'postTranslationsTable',
       'postsTable',
+      'passkeyCredentialsTable',
       'pushSubscriptionsTable',
       'relaysTable',
       'remoteActorsTable',
@@ -78,6 +79,7 @@ describe('D1 schema', () => {
       'timelineItemsTable',
       'userPasswordsTable',
       'usersTable',
+      'webauthnChallengesTable',
     ].sort());
   });
 });

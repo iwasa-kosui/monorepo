@@ -99,6 +99,29 @@ export const sessionsTable = sqliteTable('sessions', {
   expires: timestamp().notNull(),
 });
 
+export const passkeyCredentialsTable = sqliteTable('passkey_credentials', {
+  credentialId: text('credentialId').primaryKey(),
+  userId: text('userId').notNull(),
+  publicKey: text('publicKey').notNull(),
+  counter: integer('counter').notNull(),
+  transports: text('transports').notNull(),
+  deviceType: text('deviceType').notNull(),
+  backedUp: integer('backedUp', { mode: 'boolean' }).notNull(),
+  name: text('name').notNull(),
+  createdAt: timestamp().notNull(),
+  lastUsedAt: timestamp(),
+}, (table) => [
+  index('passkey_credentials_user_id_idx').on(table.userId),
+]);
+
+export const webauthnChallengesTable = sqliteTable('webauthn_challenges', {
+  challengeId: text('challengeId').primaryKey(),
+  challenge: text('challenge').notNull(),
+  purpose: text('purpose').notNull(),
+  userId: text('userId'),
+  expires: timestamp().notNull(),
+});
+
 export const postsTable = sqliteTable('posts', {
   postId: text('postId').primaryKey(),
   actorId: text('actorId').notNull().references(() => actorsTable.actorId),
@@ -822,6 +845,8 @@ export const schema = {
   notificationLikesTable,
   notificationFollowsTable,
   pushSubscriptionsTable,
+  passkeyCredentialsTable,
+  webauthnChallengesTable,
   repostsTable,
   timelineItemsTable,
   instanceActorKeysTable,
