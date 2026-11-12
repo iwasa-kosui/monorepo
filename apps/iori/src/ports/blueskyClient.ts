@@ -53,7 +53,7 @@ export type BlueskyClient = Readonly<{
 export type BlueskyQueryClient = Readonly<{
   query: (
     nsid: string,
-    params: Readonly<Record<string, string>>,
+    params: Readonly<Record<string, string | readonly string[]>>,
   ) => RA<Readonly<Record<string, unknown>>, BlueskyClientError>;
 }>;
 

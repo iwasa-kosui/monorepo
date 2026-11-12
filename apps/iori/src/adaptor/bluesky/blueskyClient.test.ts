@@ -814,6 +814,16 @@ describe('createBlueskyClient の認証付き GET（query）', () => {
     expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
   });
 
+  it('配列のパラメータは同名キーで繰り返してクエリ文字列に入れる', async () => {
+    const { client, calls } = setup(stored(), [() => json({ feeds: [] })]);
+
+    await client.query('app.bsky.feed.getFeedGenerators', { feeds: ['at://did:plc:a/x/1', 'at://did:plc:b/x/2'] });
+
+    expect(calls[0]!.url).toBe(
+      `${PDS}/xrpc/app.bsky.feed.getFeedGenerators?feeds=at%3A%2F%2Fdid%3Aplc%3Aa%2Fx%2F1&feeds=at%3A%2F%2Fdid%3Aplc%3Ab%2Fx%2F2`,
+    );
+  });
+
   it('パラメータが無ければクエリ文字列を付けない', async () => {
     const { client, calls } = setup(stored(), [() => json({})]);
 

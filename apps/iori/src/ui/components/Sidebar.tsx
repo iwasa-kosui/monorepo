@@ -96,6 +96,22 @@ export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
       )}
       {isLoggedIn && (
         <a
+          href='/feeds'
+          aria-label='フィード'
+          class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
+        >
+          <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+            <path
+              stroke-linecap='round'
+              stroke-linejoin='round'
+              stroke-width='2'
+              d='M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-6 0a1 1 0 11-2 0 1 1 0 012 0z'
+            />
+          </svg>
+        </a>
+      )}
+      {isLoggedIn && (
+        <a
           href='/digest'
           class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
         >

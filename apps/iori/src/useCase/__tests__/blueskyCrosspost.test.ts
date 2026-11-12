@@ -109,7 +109,7 @@ const setup = () => {
   const queryBehavior = { throws: false };
   const query = vi.fn<BlueskyQueryClient['query']>(async (_nsid, params) => {
     if (queryBehavior.throws) throw new Error('network down');
-    const did = handleDids.get(params.handle ?? '');
+    const did = handleDids.get(String(params.handle ?? ''));
     return did === undefined ? RA.err(failure('resolveHandle failed: status 400')) : RA.ok({ did });
   });
 

@@ -89,6 +89,13 @@ const clientError = (
   ...(code === undefined ? {} : { code }),
 });
 
+const queryStringOf = (params: Readonly<Record<string, string | readonly string[]>>): string =>
+  new URLSearchParams(
+    Object.entries(params).flatMap(([key, value]): [string, string][] =>
+      typeof value === 'string' ? [[key, value]] : value.map((item): [string, string] => [key, item])
+    ),
+  ).toString();
+
 export const resolveBlueskyPdsUrl = (didDoc: unknown): string | undefined => {
   const parsed = didDocSchema.safeParse(didDoc);
   if (!parsed.success) return undefined;
@@ -467,7 +474,7 @@ export const createBlueskyClient = (
       }),
     query: (nsid, params) =>
       withSession((session) => {
-        const search = new URLSearchParams(params).toString();
+        const search = queryStringOf(params);
         return call(
           nsid,
           `${session.pdsUrl}/xrpc/${nsid}${search === '' ? '' : `?${search}`}`,
@@ -477,11 +484,7 @@ export const createBlueskyClient = (
       }),
     chatQuery: (nsid, params) =>
       withSession((session) => {
-        const search = new URLSearchParams(
-          Object.entries(params).flatMap(([key, value]): [string, string][] =>
-            typeof value === 'string' ? [[key, value]] : value.map((item): [string, string] => [key, item])
-          ),
-        ).toString();
+        const search = queryStringOf(params);
         return call(
           nsid,
           `${session.pdsUrl}/xrpc/${nsid}${search === '' ? '' : `?${search}`}`,
