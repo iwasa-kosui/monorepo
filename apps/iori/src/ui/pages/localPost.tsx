@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'hono/jsx';
+import { useCallback, useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
@@ -18,13 +18,16 @@ import { replyParams } from '../components/postSubmission.ts';
 import { PostView } from '../components/PostView.tsx';
 import { QuoteModal } from '../components/QuoteModal.tsx';
 import { ReplyModal } from '../components/ReplyModal.tsx';
+import { statusActionProps } from '../components/statusActionProps.ts';
 import { useEditDialog } from '../hooks/useEditDialog.ts';
 import { useQuoteDialog } from '../hooks/useQuoteDialog.ts';
+import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 import {
   applyContext,
   resolveLocalPostThread,
   shouldReloadContext,
   showsRemoteContextLoading,
+  updateThreadStatuses,
 } from './localPostThread.ts';
 
 type ThreadData = {
@@ -141,6 +144,12 @@ const LocalPostPage = () => {
   const handleReply = (postId: string) => {
     setReplyToPostId(postId);
   };
+
+  const updateStatus = useCallback((postId: string, updater: (status: Status) => Status) => {
+    setThreadData((prev) => updateThreadStatuses(prev, postId, updater));
+  }, []);
+
+  const actions = useStatusListActions(updateStatus);
 
   const quote = useQuoteDialog({ onQuoted: () => void fetchThread() });
 
@@ -311,6 +320,7 @@ const LocalPostPage = () => {
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
                     isLoggedIn={isLoggedIn}
+                    {...statusActionProps(isLoggedIn ? actions : undefined, post)}
                   />
                 </div>
               ))}
@@ -327,6 +337,7 @@ const LocalPostPage = () => {
                 isDeleting={deletingPostId === threadData.currentPost.id}
                 currentAccountId={currentAccountId}
                 isLoggedIn={isLoggedIn}
+                {...statusActionProps(isLoggedIn ? actions : undefined, threadData.currentPost)}
               />
               {originalPostUrl && (
                 <a
@@ -366,6 +377,7 @@ const LocalPostPage = () => {
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
                     isLoggedIn={isLoggedIn}
+                    {...statusActionProps(isLoggedIn ? actions : undefined, post)}
                   />
                 </div>
               ))}

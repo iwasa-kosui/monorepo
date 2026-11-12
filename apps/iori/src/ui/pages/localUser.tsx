@@ -7,14 +7,17 @@ import {
   fetchAccountStatuses,
   fetchFollowers,
   fetchFollowing,
+  fetchVerifyCredentials,
   isNotFoundError,
   lookupAccount,
 } from '../api/mastodonClient.ts';
-import { accountHandle, remoteUserPathOf } from '../api/status.ts';
+import { accountHandle, remoteUserPathOf, updateStatusesByPostId } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { statusActionProps, type StatusActions } from '../components/statusActionProps.ts';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 
 const ACCOUNT_LIST_LIMIT = 80;
 
@@ -24,6 +27,8 @@ type Props = Readonly<{
   followers: readonly Account[];
   following: readonly Account[];
   statuses: readonly Status[];
+  isLoggedIn: boolean;
+  actions?: StatusActions;
 }>;
 
 export const LocalUserPage = ({
@@ -32,6 +37,8 @@ export const LocalUserPage = ({
   followers,
   following,
   statuses,
+  isLoggedIn,
+  actions,
 }: Props) => {
   const logoUrl = safeUrl(account.avatar);
 
@@ -249,7 +256,14 @@ export const LocalUserPage = ({
         <h2 class='text-lg font-semibold text-charcoal dark:text-white'>Posts</h2>
         {statuses.length > 0
           ? (
-            statuses.map((status) => <PostView key={status.id} status={status} />)
+            statuses.map((status) => (
+              <PostView
+                key={status.id}
+                status={status}
+                isLoggedIn={isLoggedIn}
+                {...statusActionProps(isLoggedIn ? actions : undefined, status)}
+              />
+            ))
           )
           : (
             <div class='bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-6 text-center'>
@@ -267,6 +281,7 @@ type LocalUserData = Readonly<{
   following: readonly Account[];
   statuses: readonly Status[];
   nextMaxId: string | undefined;
+  isLoggedIn: boolean;
 }>;
 
 const getUsernameFromUrl = () => {
@@ -290,10 +305,11 @@ const App = () => {
           window.location.replace(remotePath);
           return;
         }
-        const [page, followers, following] = await Promise.all([
+        const [page, followers, following, isLoggedIn] = await Promise.all([
           fetchAccountStatuses(account.id, { excludeReblogs: true }),
           fetchFollowers(account.id, { limit: ACCOUNT_LIST_LIMIT }),
           fetchFollowing(account.id, { limit: ACCOUNT_LIST_LIMIT }),
+          fetchVerifyCredentials().then(() => true, () => false),
         ]);
         setData({
           account,
@@ -301,6 +317,7 @@ const App = () => {
           following: following.items,
           statuses: page.items,
           nextMaxId: page.nextMaxId,
+          isLoggedIn,
         });
       } catch (error) {
         setData({
@@ -338,6 +355,16 @@ const App = () => {
 
   useInfiniteScroll({ nextCursor: loaded?.nextMaxId, onLoadMore: loadMore });
 
+  const updateStatus = useCallback((postId: string, updater: (status: Status) => Status) => {
+    setData((prev) =>
+      prev === null || 'error' in prev
+        ? prev
+        : { ...prev, statuses: updateStatusesByPostId(prev.statuses, postId, updater) }
+    );
+  }, []);
+
+  const actions = useStatusListActions(updateStatus);
+
   if (data === null) {
     return <div class='text-gray-500 dark:text-gray-400'>Loading...</div>;
   }
@@ -353,6 +380,8 @@ const App = () => {
       followers={data.followers}
       following={data.following}
       statuses={data.statuses}
+      isLoggedIn={data.isLoggedIn}
+      actions={actions}
     />
   );
 };
