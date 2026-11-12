@@ -6,9 +6,10 @@ import type { HomeFeedPaging } from './homeFeed.ts';
 import { parseSnapshot, SNAPSHOT_MAX_AGE_MS, snapshotOf, trimPagingForSnapshot } from './homeSnapshot.ts';
 
 const at = (second: number) => Date.UTC(2026, 10, 8, 12, 0, 0) + second * 1000;
-const status = (id: string, second: number) => ({ id, created_at: new Date(at(second)).toISOString() }) as Status;
-const bluesky = (id: string, second: number) =>
-  ({ feedItemId: id, indexedAt: at(second) }) as IoriBlueskyTimelineItemBody;
+const status = (id: string, second: number, uri: string = `https://example.com/notes/${id}`) =>
+  ({ id, uri, created_at: new Date(at(second)).toISOString() }) as Status;
+const bluesky = (id: string, second: number, uri: string = `at://did:plc:x/app.bsky.feed.post/${id}`) =>
+  ({ feedItemId: id, uri, indexedAt: at(second) }) as IoriBlueskyTimelineItemBody;
 const me = { id: 'me' } as CredentialAccount;
 
 /** 新しい順に、偶数秒はステータス・奇数秒は Bluesky を交互に並べる。 */
@@ -55,6 +56,20 @@ describe('trimPagingForSnapshot', () => {
     // ステータスの最古（2秒）より古い b1 は画面に出ていないので保存しない
     expect(trimmed.bluesky.items.map((item) => item.feedItemId)).toEqual(['b9', 'b7', 'b5', 'b3']);
     expect(trimmed.bluesky.cursor).toEqual({ before: at(3), beforeId: 'b3' });
+  });
+
+  it('ブリッジの status は隠れるので、保存する件数に数えない', () => {
+    const postUri = 'at://did:plc:x/app.bsky.feed.post/real';
+    const paging: HomeFeedPaging = {
+      statuses: [status('s3', 30), status('bridged', 20, `https://bsky.brid.gy/convert/ap/${postUri}`)],
+      nextMaxId: undefined,
+      bluesky: { items: [bluesky('b1', 21, postUri)], cursor: undefined },
+    };
+
+    const trimmed = trimPagingForSnapshot(paging, undefined);
+
+    expect(trimmed.statuses.map((item) => item.id)).toEqual(['s3']);
+    expect(trimmed.bluesky.items.map((item) => item.feedItemId)).toEqual(['b1']);
   });
 
   it('上限を超えるときは上限で切る', () => {
