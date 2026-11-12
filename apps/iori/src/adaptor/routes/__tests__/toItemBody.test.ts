@@ -26,6 +26,7 @@ const item = (overrides: Partial<BlueskyTimelineItem> = {}): BlueskyTimelineItem
   fetchedAt: 3000 as Instant,
   liked: false,
   reposted: false,
+  bookmarked: false,
   threadMuted: null,
   replyRootUri: null,
   ...overrides,

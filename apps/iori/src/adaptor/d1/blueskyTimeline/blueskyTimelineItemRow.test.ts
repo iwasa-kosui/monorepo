@@ -104,6 +104,7 @@ describe('Bridgy Fed の元の投稿の URL', () => {
     viewerLikeUri: null,
     reposted: false,
     viewerRepostUri: null,
+    bookmarked: false,
     threadMuted: false,
     replyRootUri: null,
   });
@@ -113,14 +114,15 @@ describe('Bridgy Fed の元の投稿の URL', () => {
 
     expect(saved.bridgyOriginalUrl).toBe('https://mastodon.example/@alice/123');
     expect(saved).not.toHaveProperty('bridgedFromPostId');
-    expect(toBlueskyTimelineItem(row(oldRecord, 'https://mastodon.example/@alice/123'), false, false)).toMatchObject({
-      bridgyOriginalUrl: 'https://mastodon.example/@alice/123',
-      bridgedFromPostId: null,
-    });
+    expect(toBlueskyTimelineItem(row(oldRecord, 'https://mastodon.example/@alice/123'), false, false, false))
+      .toMatchObject({
+        bridgyOriginalUrl: 'https://mastodon.example/@alice/123',
+        bridgedFromPostId: null,
+      });
   });
 
   it('URL が無い行は null のまま読める', () => {
     expect(toBlueskyTimelineItemRow(fetched(null)).bridgyOriginalUrl).toBeNull();
-    expect(toBlueskyTimelineItem(row(oldRecord), false, false).bridgyOriginalUrl).toBeNull();
+    expect(toBlueskyTimelineItem(row(oldRecord), false, false, false).bridgyOriginalUrl).toBeNull();
   });
 });
