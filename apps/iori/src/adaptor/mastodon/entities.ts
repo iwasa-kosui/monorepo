@@ -323,7 +323,7 @@ export const ReportSchema = z.object({
   id: z.string(),
   action_taken: z.boolean(),
   action_taken_at: z.string().nullable(),
-  category: z.enum(['spam', 'violation', 'other']),
+  category: z.enum(['spam', 'legal', 'violation', 'other']),
   comment: z.string(),
   forwarded: z.boolean(),
   created_at: z.string(),

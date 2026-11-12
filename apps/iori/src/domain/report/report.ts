@@ -25,6 +25,7 @@ const zodType = z
     statusIds: z.array(PostId.zodType).max(MAX_REPORT_STATUS_COUNT),
     category: categoryZodType,
     comment: z.string().max(MAX_REPORT_COMMENT_LENGTH),
+    forwarded: z.boolean(),
   })
   .describe('Report');
 const schema = Schema.create<z.output<typeof zodType>, z.input<typeof zodType>>(zodType);

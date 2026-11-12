@@ -9,8 +9,8 @@ import type { WorkerReportAction } from '../../runtime/workerReportActions.ts';
 import type { Report } from '../mastodon/entities.ts';
 import type { StatusAssembler } from '../mastodon/statusAssembler.ts';
 import { toIsoString } from '../mastodon/time.ts';
-import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
-import { bodyString, bodyStringList, readRequestBody } from './helper/requestBody.ts';
+import { actorNotFound, handleInternalError } from './helper/mastodonErrors.ts';
+import { bodyBoolean, bodyString, bodyStringList, readRequestBody } from './helper/requestBody.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
 export type WorkerMastodonReportsRouterDeps = Readonly<{
@@ -27,6 +27,7 @@ const validationFailed = (message: string) => ({ error: `Validation failed: ${me
 
 const categories: Readonly<Record<Report['category'], ReportCategory>> = {
   spam: 'spam',
+  legal: 'other',
   violation: 'offensive',
   other: 'other',
 };
@@ -74,12 +75,20 @@ export const createWorkerMastodonReportsRouter = ({
       if (invalidStatus !== undefined) {
         return c.json(validationFailed('Status is not found'), 422);
       }
+      const [account] = await statusAssembler.assembleAccounts({
+        actorIds: [actorId.val],
+        requestUrl: c.req.url,
+      });
+      if (account === undefined) {
+        return c.json(recordNotFound, 404);
+      }
       const reported = await reportRemoteActor({
         userId,
         actorId: actorId.val,
         statusIds: statusIds.flatMap((id) => id.ok ? [id.val] : []),
         category,
         comment: bodyString(body, 'comment') ?? '',
+        forward: bodyBoolean(body, 'forward'),
         ctx: createContext(c.req.raw),
       });
       if (!reported.ok) {
@@ -92,20 +101,13 @@ export const createWorkerMastodonReportsRouter = ({
             return c.json(validationFailed(reported.err.message), 422);
         }
       }
-      const [account] = await statusAssembler.assembleAccounts({
-        actorIds: [reported.val.report.targetActorId],
-        requestUrl: c.req.url,
-      });
-      if (account === undefined) {
-        return c.json(internalServerError, 500);
-      }
       const report: Report = {
         id: reported.val.report.reportId,
         action_taken: false,
         action_taken_at: null,
         category: mastodonCategories[reported.val.report.category],
         comment: reported.val.report.comment,
-        forwarded: true,
+        forwarded: reported.val.report.forwarded,
         created_at: toIsoString(reported.val.submittedAt),
         status_ids: [...reported.val.report.statusIds],
         rule_ids: null,

@@ -14,6 +14,7 @@ const input = () => ({
   statusIds: [PostId.generate()],
   category: 'spam' as const,
   comment: '宣伝ばかりです',
+  forwarded: true,
 });
 
 describe('Report.submit', () => {

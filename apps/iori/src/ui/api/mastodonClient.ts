@@ -301,7 +301,7 @@ export const report = async (params: ReportParams): Promise<Report> => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify(params),
+    body: JSON.stringify({ ...params, forward: true }),
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as Report;

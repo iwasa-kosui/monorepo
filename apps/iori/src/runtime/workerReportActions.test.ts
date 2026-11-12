@@ -79,7 +79,10 @@ const setup = () => {
     postResolver: { resolve: vi.fn(async (id: PostId) => RA.ok(posts.get(id))) },
     reportSubmittedStore,
   });
-  const ctx = { getActorUri: vi.fn(() => new URL(reporter.uri)), sendActivity } as never;
+  const ctx = {
+    getActorUri: vi.fn((username: string) => new URL(`https://actor.test/users/${username}`)),
+    sendActivity,
+  } as never;
   return {
     userId,
     reporter,
@@ -106,6 +109,7 @@ describe('createWorkerReportAction', () => {
       statusIds: [t.ownPost.postId, t.secondPost.postId],
       category: 'offensive',
       comment: '攻撃的です',
+      forward: true,
       ctx: t.ctx,
     });
 
@@ -122,6 +126,7 @@ describe('createWorkerReportAction', () => {
         statusIds: [t.ownPost.postId, t.secondPost.postId],
         category: 'offensive',
         comment: '攻撃的です',
+        forwarded: true,
       },
     });
     expect(t.sendActivity).toHaveBeenCalledOnce();
@@ -133,14 +138,54 @@ describe('createWorkerReportAction', () => {
     expect(sender).toEqual({ username: 'kosui' });
     expect(recipient).toEqual({ id: new URL(t.target.uri), inboxId: new URL(t.target.inboxUrl) });
     expect(activity).toBeInstanceOf(Flag);
-    expect(activity.id?.href).toBe(`${t.reporter.uri}#flags/${event.eventPayload['reportId']}`);
-    expect(activity.actorId?.href).toBe(t.reporter.uri);
+    expect(activity.id?.href).toBe(`https://actor.test/users/kosui#flags/${event.eventPayload['reportId']}`);
+    expect(activity.actorId?.href).toBe('https://actor.test/users/kosui');
     expect(activity.objectIds.map((id) => id.href)).toEqual([
       t.target.uri,
       'https://remote.test/notes/1',
       'https://remote.test/notes/2',
     ]);
     expect(activity.content).toBe('不快・攻撃的な内容\n攻撃的です');
+  });
+
+  it('forward が偽のときは通報をイベントとして保存するだけで、Flag を送らず、forwarded を偽にする', async () => {
+    const t = setup();
+
+    const reported = await t.action({
+      userId: t.userId,
+      actorId: t.target.id,
+      statusIds: [t.ownPost.postId],
+      category: 'spam',
+      comment: '宣伝ばかりです',
+      forward: false,
+      ctx: t.ctx,
+    });
+
+    expect(reported.ok && reported.val.report.forwarded).toBe(false);
+    expect(t.reportSubmittedStore.store).toHaveBeenCalledOnce();
+    expect(
+      ((t.reportSubmittedStore.store.mock.calls as unknown as unknown[][])[0]![0] as {
+        eventPayload: Record<string, unknown>;
+      }).eventPayload['forwarded'],
+    ).toBe(false);
+    expect(t.sendActivity).not.toHaveBeenCalled();
+  });
+
+  it('forward が真のときは forwarded を真にして返す', async () => {
+    const t = setup();
+
+    const reported = await t.action({
+      userId: t.userId,
+      actorId: t.target.id,
+      statusIds: [],
+      category: 'spam',
+      comment: '',
+      forward: true,
+      ctx: t.ctx,
+    });
+
+    expect(reported.ok && reported.val.report.forwarded).toBe(true);
+    expect(t.sendActivity).toHaveBeenCalledOnce();
   });
 
   it('保存してから送る', async () => {
@@ -160,6 +205,7 @@ describe('createWorkerReportAction', () => {
       statusIds: [],
       category: 'spam',
       comment: '',
+      forward: true,
       ctx: t.ctx,
     });
 
@@ -175,6 +221,7 @@ describe('createWorkerReportAction', () => {
       statusIds: [],
       category: 'spam',
       comment: '',
+      forward: true,
       ctx: t.ctx,
     });
 
@@ -192,6 +239,7 @@ describe('createWorkerReportAction', () => {
       statusIds: [t.ownPost.postId, t.ownPost.postId],
       category: 'other',
       comment: '',
+      forward: true,
       ctx: t.ctx,
     });
 
@@ -209,6 +257,7 @@ describe('createWorkerReportAction', () => {
       statusIds: [],
       category: 'spam',
       comment: '',
+      forward: true,
       ctx: t.ctx,
     });
 
@@ -226,6 +275,7 @@ describe('createWorkerReportAction', () => {
       statusIds: [],
       category: 'spam',
       comment: '',
+      forward: true,
       ctx: t.ctx,
     });
 
@@ -243,6 +293,7 @@ describe('createWorkerReportAction', () => {
       statusIds: [],
       category: 'spam',
       comment: '',
+      forward: true,
       ctx: t.ctx,
     });
 
@@ -262,6 +313,7 @@ describe('createWorkerReportAction', () => {
       statusIds: [t.ownPost.postId, pick(t)],
       category: 'spam',
       comment: '',
+      forward: true,
       ctx: t.ctx,
     });
 
@@ -279,6 +331,7 @@ describe('createWorkerReportAction', () => {
       statusIds: [],
       category: 'spam',
       comment: 'a'.repeat(1001),
+      forward: true,
       ctx: t.ctx,
     });
 

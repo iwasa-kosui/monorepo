@@ -1,7 +1,11 @@
 import { Flag } from '@fedify/vocab';
-import { describe, expect, it } from 'vitest';
+import { Hono } from 'hono';
+import { describe, expect, it, vi } from 'vitest';
 
+import { ActorId } from '../../../domain/actor/actorId.ts';
+import { UserId } from '../../../domain/user/userId.ts';
 import { ReportSchema } from '../../mastodon/entities.ts';
+import { createWorkerMastodonReportsRouter } from '../workerMastodonReportsRouter.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
 
@@ -37,7 +41,7 @@ describe('POST /api/v1/reports', () => {
       status_ids: [t.alicePost.postId],
       comment: '宣伝ばかりです',
       category: 'spam',
-      forward: false,
+      forward: true,
     });
 
     expect(response.status).toBe(200);
@@ -62,6 +66,7 @@ describe('POST /api/v1/reports', () => {
       statusIds: [t.alicePost.postId],
       category: 'spam',
       comment: '宣伝ばかりです',
+      forwarded: true,
     });
     expect(JSON.parse(event!.aggregateState)).toEqual({
       reportId: report.id,
@@ -83,10 +88,54 @@ describe('POST /api/v1/reports', () => {
     });
   });
 
+  it.each([
+    ['forward を省く', {}],
+    ['forward が false', { forward: false }],
+  ])('%s と、イベントだけ保存して Flag を送らず、forwarded を false にして返す', async (_name, extra) => {
+    const t = await seedReports();
+
+    const response = await t.json({ account_id: t.alice.actorId, status_ids: [t.alicePost.postId], ...extra });
+
+    expect(response.status).toBe(200);
+    expect(ReportSchema.parse(await response.json()).forwarded).toBe(false);
+    expect(JSON.parse(t.events()[0]!.eventPayload)).toMatchObject({ forwarded: false });
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['true', true],
+    ['1', true],
+    ['false', false],
+    ['0', false],
+  ])('form の forward=%s を受け付ける', async (value, forwarded) => {
+    const t = await seedReports();
+    const form = new URLSearchParams({ account_id: t.alice.actorId, forward: value });
+
+    const response = await t.request('/api/v1/reports', {
+      method: 'POST',
+      headers: { ...t.me.bearer, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    });
+
+    expect(ReportSchema.parse(await response.json()).forwarded).toBe(forwarded);
+    expect(t.sent()).toHaveLength(forwarded ? 1 : 0);
+  });
+
+  it('category の legal は other として保存し、応答では other を返す', async () => {
+    const t = await seedReports();
+
+    const response = await t.json({ account_id: t.alice.actorId, category: 'legal', forward: true });
+
+    expect(response.status).toBe(200);
+    expect(ReportSchema.parse(await response.json()).category).toBe('other');
+    expect(JSON.parse(t.events()[0]!.eventPayload)).toMatchObject({ category: 'other' });
+    expect((t.sent()[0] as Flag).content).toBe('その他');
+  });
+
   it('category の violation は offensive として保存し、応答では violation に戻す', async () => {
     const t = await seedReports();
 
-    const response = await t.json({ account_id: t.alice.actorId, category: 'violation', comment: '' });
+    const response = await t.json({ account_id: t.alice.actorId, category: 'violation', comment: '', forward: true });
 
     expect(ReportSchema.parse(await response.json()).category).toBe('violation');
     expect(JSON.parse(t.events()[0]!.eventPayload)).toMatchObject({ category: 'offensive' });
@@ -96,7 +145,7 @@ describe('POST /api/v1/reports', () => {
   it('category と comment と status_ids を省くと other と空文字と空の配列になる', async () => {
     const t = await seedReports();
 
-    const response = await t.json({ account_id: t.alice.actorId });
+    const response = await t.json({ account_id: t.alice.actorId, forward: true });
 
     expect(response.status).toBe(200);
     expect(ReportSchema.parse(await response.json())).toMatchObject({
@@ -164,7 +213,7 @@ describe('POST /api/v1/reports', () => {
 
     const responses = await Promise.all([
       t.json({}),
-      t.json({ account_id: t.alice.actorId, category: 'legal' }),
+      t.json({ account_id: t.alice.actorId, category: 'unknown' }),
       t.json({ account_id: t.alice.actorId, status_ids: ['not-an-id'] }),
       t.json({ account_id: t.alice.actorId, comment: 'a'.repeat(1001) }),
     ]);
@@ -172,6 +221,45 @@ describe('POST /api/v1/reports', () => {
     expect(responses.map((response) => response.status)).toEqual([422, 422, 422, 422]);
     expect(t.events()).toEqual([]);
     expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+
+  it('target_account を組み立てられないときは、通報を実行せずに 500 を返す', async () => {
+    const reportRemoteActor = vi.fn();
+    const router = createWorkerMastodonReportsRouter({
+      authn: {
+        optionalAuth: async (_c, next) => await next(),
+        requireApp: async (_c, next) => await next(),
+        requireUser: () => async (c, next) => {
+          c.set('principal', {
+            source: 'token',
+            applicationId: null,
+            userId: UserId.generate(),
+            sessionId: null,
+            scopes: [],
+          });
+          await next();
+        },
+      },
+      statusAssembler: {
+        assemble: vi.fn(),
+        assembleAccounts: vi.fn(async () => {
+          throw new Error('Failed to resolve account profiles');
+        }),
+      },
+      reportRemoteActor,
+      createContext: () => ({}) as never,
+    });
+    const app = new Hono().route('/api', router);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await app.request('http://localhost/api/v1/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id: ActorId.generate(), forward: true }),
+    });
+
+    expect(response.status).toBe(500);
+    expect(reportRemoteActor).not.toHaveBeenCalled();
   });
 
   it('comment は 1000 文字まで受け付ける', async () => {

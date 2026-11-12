@@ -8,12 +8,8 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
-import {
-  Report as DomainReport,
-  type Report,
-  type ReportCategory,
-  type ReportSubmittedStore,
-} from '../domain/report/report.ts';
+import type { Report, ReportCategory, ReportSubmittedStore } from '../domain/report/report.ts';
+import { Report as DomainReport } from '../domain/report/report.ts';
 import type { UserResolver } from '../domain/user/user.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import { resolveLocalActorWith, resolveUserWith } from '../useCase/helper/resolve.ts';
@@ -24,6 +20,7 @@ export type WorkerReportActionInput = Readonly<{
   statusIds: ReadonlyArray<PostId>;
   category: ReportCategory;
   comment: string;
+  forward: boolean;
   ctx: Context<unknown>;
 }>;
 
@@ -84,6 +81,7 @@ export const createWorkerReportAction = (deps: WorkerReportActionDeps): WorkerRe
     statusIds: [...new Set(input.statusIds)],
     category: input.category,
     comment: input.comment,
+    forwarded: input.forward,
   }, Instant.now());
   if (!submitted.ok) return failure('InvalidReportError', submitted.err.message);
   const event = submitted.val;
@@ -96,15 +94,18 @@ export const createWorkerReportAction = (deps: WorkerReportActionDeps): WorkerRe
     statusUris.push(post.val.uri);
   }
   await deps.reportSubmittedStore.store(event);
-  await input.ctx.sendActivity(
-    { username: user.val.username },
-    { id: new URL(target.val.uri), inboxId: new URL(target.val.inboxUrl) },
-    new Flag({
-      id: new URL(`${reporter.val.uri}#flags/${event.eventPayload.reportId}`),
-      actor: input.ctx.getActorUri(user.val.username),
-      objects: [new URL(target.val.uri), ...statusUris.map((uri) => new URL(uri))],
-      content: toFlagContent(event.eventPayload.category, event.eventPayload.comment),
-    }),
-  );
+  if (input.forward) {
+    const reporterUri = input.ctx.getActorUri(user.val.username);
+    await input.ctx.sendActivity(
+      { username: user.val.username },
+      { id: new URL(target.val.uri), inboxId: new URL(target.val.inboxUrl) },
+      new Flag({
+        id: new URL(`${reporterUri.href}#flags/${event.eventPayload.reportId}`),
+        actor: reporterUri,
+        objects: [new URL(target.val.uri), ...statusUris.map((uri) => new URL(uri))],
+        content: toFlagContent(event.eventPayload.category, event.eventPayload.comment),
+      }),
+    );
+  }
   return RA.ok({ report: event.eventPayload, submittedAt: event.occurredAt });
 };

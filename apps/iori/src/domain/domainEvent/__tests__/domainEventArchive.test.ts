@@ -237,6 +237,7 @@ describe('DomainEventArchive.redact の report イベント', () => {
       statusIds: [PostId.generate()],
       category: 'offensive',
       comment: 'secret-report-comment',
+      forwarded: true,
     }, now);
     if (!submitted.ok) throw new Error('unexpected err');
     const row = { ...toD1DomainEventRow(submitted.val), occurredAt: now };

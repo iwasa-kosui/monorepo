@@ -386,7 +386,12 @@ describe('mastodon client requests', () => {
     expect(init.method).toBe('POST');
     expect(init.credentials).toBe('same-origin');
     expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
-    expect(JSON.parse(String(init.body))).toEqual({ account_id: 'a1', category: 'violation', comment: 'rude' });
+    expect(JSON.parse(String(init.body))).toEqual({
+      account_id: 'a1',
+      category: 'violation',
+      comment: 'rude',
+      forward: true,
+    });
     expect(created).toEqual({ id: 'r1', category: 'violation' });
   });
 
