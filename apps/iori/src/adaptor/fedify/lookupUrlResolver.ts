@@ -4,6 +4,8 @@ import {
   isValidPublicIPv4Address,
   isValidPublicIPv6Address,
   type RemoteDocument,
+  UrlError,
+  validatePublicUrl,
 } from '@fedify/vocab-runtime';
 
 import type { LookupUrlResolution, LookupUrlResolver } from '../../ports/lookupUrlResolver.ts';
@@ -14,8 +16,8 @@ const isRedirect = (status: number): boolean => status >= 300 && status < 400;
 
 const IPV4_LITERAL = /^\d{1,3}(\.\d{1,3}){3}$/;
 
-// fedify の validatePublicUrl は DNS を引けない環境で失敗するので、DNS を引かずに確かめられる範囲だけを確かめる
-export const validateLiteralPublicUrl = async (url: string): Promise<void> => {
+// fedify の validatePublicUrl は DNS を引けない環境で失敗するので、DNS を引けないときだけ通す
+export const validatePublicLookupUrl = async (url: string): Promise<void> => {
   const { protocol, hostname } = new URL(url);
   const host = hostname.replace(/^\[|\]$/g, '');
   const isPublic = (protocol === 'https:' || protocol === 'http:')
@@ -27,6 +29,11 @@ export const validateLiteralPublicUrl = async (url: string): Promise<void> => {
       ? isValidPublicIPv6Address(host)
       : true);
   if (!isPublic) throw new Error(`Invalid or private address: ${url}`);
+  try {
+    await validatePublicUrl(url);
+  } catch (error) {
+    if (!(error instanceof UrlError && error.reason === 'dns')) throw error;
+  }
 };
 
 const discard = (response: Response): void => {
@@ -43,14 +50,15 @@ type Deps = Readonly<{
 export const createLookupUrlResolver = ({
   isBlockedUri,
   fetch: fetchImpl = globalThis.fetch,
-  validateUrl = validateLiteralPublicUrl,
+  validateUrl = validatePublicLookupUrl,
 }: Deps): LookupUrlResolver =>
 async (url, { signal }) => {
   let current = new URL(url).href;
   const visited = new Set<string>();
+  const resolved = (): LookupUrlResolution => ({ type: 'resolved', url: current });
   for (let hop = 0; hop <= MAX_HOPS; hop++) {
     if (isBlockedUri(current)) return { type: 'blocked' };
-    if (visited.has(current)) break;
+    if (visited.has(current)) return resolved();
     visited.add(current);
     try {
       await validateUrl(current);
@@ -61,17 +69,18 @@ async (url, { signal }) => {
     try {
       response = await fetchImpl(createActivityPubRequest(current), { signal });
     } catch {
-      break;
+      return resolved();
     }
     const location = response.headers.get('Location');
     if (isRedirect(response.status) && location !== null) {
       discard(response);
+      if (!URL.canParse(location, current)) return resolved();
       current = new URL(location, current).href;
       continue;
     }
     if (!response.ok) {
       discard(response);
-      break;
+      return resolved();
     }
     let alternate: string | undefined;
     try {
@@ -80,10 +89,11 @@ async (url, { signal }) => {
         return { contextUrl: null, document: null, documentUrl: alternateUrl };
       }, { signal, suppressError: true });
     } catch {
-      break;
+      return resolved();
     }
-    if (alternate === undefined) break;
+    if (alternate === undefined) return resolved();
     current = alternate;
   }
-  return isBlockedUri(current) ? { type: 'blocked' } : { type: 'resolved', url: current } satisfies LookupUrlResolution;
+  // 署名付きの loader は確かめずにその先を追うので、上限まで確かめきれなかった URL は渡さない
+  return { type: 'blocked' };
 };

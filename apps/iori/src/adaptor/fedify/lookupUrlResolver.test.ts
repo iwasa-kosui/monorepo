@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { isBlockedUri } from './blockedInboxDomain.ts';
-import { createLookupUrlResolver, validateLiteralPublicUrl } from './lookupUrlResolver.ts';
+import { createLookupUrlResolver, validatePublicLookupUrl } from './lookupUrlResolver.ts';
 
 const URL_ = 'https://remote.example/@alice/1';
 const NOTE = 'https://remote.example/users/alice/statuses/1';
@@ -91,6 +91,42 @@ describe('createLookupUrlResolver', () => {
     expect(t.fetched()).toEqual([URL_, NOTE, moved]);
   });
 
+  it('ブロックしていない先でも、6回目のリダイレクトの先は取得せず、見つからない扱いにする', async () => {
+    const hop = (n: number) => `https://remote.example/hop/${n}`;
+    const t = setup({
+      [URL_]: () => redirect(hop(1)),
+      ...Object.fromEntries([1, 2, 3, 4, 5].map((n) => [hop(n), () => redirect(hop(n + 1))])),
+    });
+
+    expect(await t.resolve()).toEqual({ type: 'blocked' });
+    expect(t.fetched()).toEqual([URL_, hop(1), hop(2), hop(3), hop(4), hop(5)]);
+  });
+
+  it('5回のリダイレクトの先までは追う', async () => {
+    const hop = (n: number) => `https://remote.example/hop/${n}`;
+    const t = setup({
+      [URL_]: () => redirect(hop(1)),
+      ...Object.fromEntries([1, 2, 3, 4].map((n) => [hop(n), () => redirect(hop(n + 1))])),
+      [hop(5)]: json,
+    });
+
+    expect(await t.resolve()).toEqual({ type: 'resolved', url: hop(5) });
+  });
+
+  it('リダイレクトが循環したら、取得を止めてその時点の URL を返す', async () => {
+    const other = 'https://remote.example/other';
+    const t = setup({ [URL_]: () => redirect(other), [other]: () => redirect(URL_) });
+
+    expect(await t.resolve()).toEqual({ type: 'resolved', url: URL_ });
+    expect(t.fetched()).toEqual([URL_, other]);
+  });
+
+  it('Location が URL として解釈できなければ、その時点の URL を返す', async () => {
+    const t = setup({ [URL_]: () => redirect('http://[invalid') });
+
+    expect(await t.resolve()).toEqual({ type: 'resolved', url: URL_ });
+  });
+
   it('公開されていないアドレスの URL は取得しない', async () => {
     const t = setup({ [URL_]: json }, async () => {
       throw new Error('Invalid or private address');
@@ -115,7 +151,7 @@ describe('createLookupUrlResolver', () => {
   });
 });
 
-describe('validateLiteralPublicUrl', () => {
+describe('validatePublicLookupUrl', () => {
   it.each([
     'http://127.0.0.1/notes/1',
     'http://10.0.0.1/notes/1',
@@ -125,13 +161,13 @@ describe('validateLiteralPublicUrl', () => {
     'http://app.localhost/notes/1',
     'ftp://remote.example/notes/1',
   ])('%s を拒む', async (url) => {
-    await expect(validateLiteralPublicUrl(url)).rejects.toThrow();
+    await expect(validatePublicLookupUrl(url)).rejects.toThrow();
   });
 
-  it.each(['https://remote.example/notes/1', 'https://1.1.1.1/notes/1', 'https://[2606:4700::1111]/notes/1'])(
-    '%s を受け付ける',
+  it.each(['https://remote.invalid/notes/1', 'https://1.1.1.1/notes/1', 'https://[2606:4700::1111]/notes/1'])(
+    '%s を受け付ける（DNS を引けない名前も通す）',
     async (url) => {
-      await expect(validateLiteralPublicUrl(url)).resolves.toBeUndefined();
+      await expect(validatePublicLookupUrl(url)).resolves.toBeUndefined();
     },
   );
 });
