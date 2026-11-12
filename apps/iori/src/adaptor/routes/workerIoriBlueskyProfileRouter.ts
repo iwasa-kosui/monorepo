@@ -19,6 +19,7 @@ import type { ListBlueskyListMembersUseCase } from '../../useCase/listBlueskyLis
 import type { ListBlueskySavedFeedsUseCase } from '../../useCase/listBlueskySavedFeeds.ts';
 import type { BlueskyFeedUrlInvalid, ResolveBlueskyFeedUrlUseCase } from '../../useCase/resolveBlueskyFeedUrl.ts';
 import type { UnfollowBlueskyActorUseCase } from '../../useCase/unfollowBlueskyActor.ts';
+import { logBlueskyFailure } from './helper/blueskyFailureLog.ts';
 import { handleInternalError } from './helper/mastodonErrors.ts';
 import { bodyString, readRequestBody } from './helper/requestBody.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
@@ -139,6 +140,7 @@ const failure = (
   if (error.type === 'BlueskyProfileNotFound') return c.json({ error: 'Profile not found' }, 404);
   if (error.type === 'BlueskyFeedNotFound') return c.json({ error: 'Feed not found' }, 404);
   if (error.type === 'BlueskyFeedUrlInvalid') return c.json({ error: 'Validation failed: url' }, 400);
+  logBlueskyFailure(error, 502);
   return c.json({ error: error.kind === 'auth' ? 'Bluesky login failed' : 'Bluesky request failed' }, 502);
 };
 
@@ -223,9 +225,11 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       }
       const page = await listBlueskyFeedPostsUseCase.run({ uri, cursor: c.req.query('cursor') || undefined });
       if (!page.ok) {
-        return feedKind === 'feed' && isFeedProviderFailure(page.err)
-          ? c.json(feedProviderFailed, 502)
-          : failure(c, page.err);
+        if (page.err.type === 'BlueskyClientError' && feedKind === 'feed' && isFeedProviderFailure(page.err)) {
+          logBlueskyFailure(page.err, 502);
+          return c.json(feedProviderFailed, 502);
+        }
+        return failure(c, page.err);
       }
       const viewer = await resolveViewerDid(viewerDid);
       return c.json(
