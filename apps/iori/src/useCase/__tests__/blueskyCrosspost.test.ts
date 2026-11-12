@@ -97,6 +97,8 @@ const setup = () => {
     createBlock: async () => RA.err(failure('createBlock is not used')),
     deleteBlock: async () => RA.err(failure('deleteBlock is not used')),
     createReport: async () => RA.err(failure('createReport is not used')),
+    createFollow: async () => RA.err(failure('createFollow is not used')),
+    deleteFollow: async () => RA.err(failure('deleteFollow is not used')),
   };
 
   const stored = new Map<string, { bytes: Uint8Array; contentType: string }>();

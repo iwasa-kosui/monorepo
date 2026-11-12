@@ -79,7 +79,7 @@ const describeFailure = (path: string, size: Size, metrics: Metrics): string =>
   + `chapterBody=${metrics.bodyScrollHeight}/${metrics.bodyClientHeight}`;
 
 const waitForPlaygrounds = async (page: Page, path: string): Promise<void> => {
-  for (const playground of await page.locator('[data-playground]').all()) {
+  for (const playground of await page.locator('[data-playground]:not([hidden])').all()) {
     await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
   }
   if (path === '/chapters/chapter-3/') {
@@ -98,12 +98,25 @@ const collectFailures = async (
   for (const path of fitCheckedPaths()) {
     await page.goto(path);
     await waitForPlaygrounds(page, path);
-    const metrics = await measure(page);
-    if (overflows(metrics)) {
-      failures.push(describeFailure(path, size, metrics));
-    }
-    if (checkInnerScroll) {
-      failures.push(...(await innerScrollers(page)).map((scroller) => describeScroller(path, size, scroller)));
+    const axisButtons = page.locator('[data-axis]');
+    const tabButtons = page.locator('[data-playground-switch] button');
+    const [switches, noun] = (await axisButtons.count()) > 0
+      ? [axisButtons, '軸'] as const
+      : [tabButtons, 'タブ'] as const;
+    const switchCount = await switches.count();
+    for (let index = 0; index < Math.max(switchCount, 1); index += 1) {
+      if (switchCount > 0) {
+        await switches.nth(index).click();
+        await waitForPlaygrounds(page, path);
+      }
+      const label = switchCount > 0 ? `${path}（${index + 1} つ目の${noun}）` : path;
+      const metrics = await measure(page);
+      if (overflows(metrics)) {
+        failures.push(describeFailure(label, size, metrics));
+      }
+      if (checkInnerScroll) {
+        failures.push(...(await innerScrollers(page)).map((scroller) => describeScroller(label, size, scroller)));
+      }
     }
   }
   return failures;

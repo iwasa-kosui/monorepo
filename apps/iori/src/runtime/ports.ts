@@ -118,6 +118,7 @@ import type { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { BlueskyModerationRuntimePorts } from './blueskyModeration.ts';
+import type { BlueskyProfileRuntimePorts } from './blueskyProfile.ts';
 import type { BlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
 
 export type WorkerRemoteActorAction = (
@@ -209,6 +210,7 @@ export type IoriDigestRuntimePorts = Readonly<{
 }>;
 export type IoriBlueskyTimelineRuntimePorts = BlueskyTimelineRuntimePorts;
 export type IoriBlueskyModerationRuntimePorts = BlueskyModerationRuntimePorts;
+export type IoriBlueskyProfileRuntimePorts = BlueskyProfileRuntimePorts;
 export type IoriBlueskyCrosspostStatusRuntimePorts = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   blueskyCrosspostStatusReportResolver: BlueskyCrosspostStatusReportResolver;
@@ -271,6 +273,7 @@ export type IoriRuntimePorts = Readonly<{
   digest: IoriDigestRuntimePorts;
   blueskyTimeline: IoriBlueskyTimelineRuntimePorts;
   blueskyModeration: IoriBlueskyModerationRuntimePorts;
+  blueskyProfile: IoriBlueskyProfileRuntimePorts;
   blueskyCrosspostStatus: IoriBlueskyCrosspostStatusRuntimePorts;
   timeline: IoriTimelineRuntimePorts;
   posting: IoriPostingRuntimePorts;

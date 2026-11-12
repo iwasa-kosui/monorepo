@@ -11,6 +11,7 @@ import { BlueskyStatusNotice } from '../components/BlueskyStatusNotice.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { Modal } from '../components/Modal.tsx';
+import { PostDestinationSelect } from '../components/PostDestinationSelect.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
@@ -178,9 +179,11 @@ const ReplyModal = () => {
   const {
     replyingToPostId,
     replyContent,
+    replyDestination,
     isSendingReply,
     closeReplyDialog,
     setReplyContent,
+    setReplyDestination,
     sendReply,
   } = reply;
 
@@ -231,6 +234,7 @@ const ReplyModal = () => {
         />
 
         <div class='mt-3 flex gap-2 justify-end'>
+          <PostDestinationSelect value={replyDestination} onChange={setReplyDestination} name='reply-destination' />
           <button
             type='button'
             onClick={closeReplyDialog}
@@ -271,8 +275,10 @@ const ThreadModal = () => {
   } = thread;
   const {
     replyContent,
+    replyDestination,
     isSendingReply,
     setReplyContent,
+    setReplyDestination,
     sendReply,
   } = reply;
   const { actionState } = actions;
@@ -477,6 +483,11 @@ const ThreadModal = () => {
 
           {/* Action Buttons */}
           <div class='mt-3 flex gap-2 justify-end'>
+            <PostDestinationSelect
+              value={replyDestination}
+              onChange={setReplyDestination}
+              name='thread-reply-destination'
+            />
             <button
               type='button'
               onClick={closeThread}

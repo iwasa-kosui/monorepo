@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { canSubmitPost, type PostFormValue, submitPost } from './postSubmission.ts';
+import { canSubmitPost, type PostFormValue, replyParams, submitPost } from './postSubmission.ts';
 
 const created = {
   id: 'status-1',
@@ -11,6 +11,7 @@ const created = {
 const filled: PostFormValue = {
   content: 'hello',
   uploaded: [{ id: 'media-1', url: 'https://example.com/a.png' }],
+  destination: 'both',
 };
 
 afterEach(() => {
@@ -45,11 +46,20 @@ describe('submitPost', () => {
       status: 'hello',
       media_ids: ['media-1'],
       content_type: 'text/markdown',
+      iori_destination: 'both',
     });
     expect(result).toEqual({ kind: 'posted', status: created });
     expect(onPosted).toHaveBeenCalledTimes(1);
     expect(onPosted).toHaveBeenCalledWith(created);
     expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('passes the selected destination as iori_destination', async () => {
+    const create = vi.fn().mockResolvedValue(created);
+
+    await submitPost({ ...filled, destination: 'fediverse' }, { create, onPosted: vi.fn() });
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ iori_destination: 'fediverse' }));
   });
 
   it('does not call onPosted and reports the failure message when creating fails', async () => {
@@ -79,5 +89,16 @@ describe('submitPost', () => {
     });
 
     await expect(submitPost(filled, { create, onPosted })).rejects.toThrow('render');
+  });
+});
+
+describe('replyParams', () => {
+  it('passes the selected destination as iori_destination', () => {
+    expect(replyParams('post-1', 'hello', 'fediverse')).toEqual({
+      status: 'hello',
+      in_reply_to_id: 'post-1',
+      content_type: 'text/markdown',
+      iori_destination: 'fediverse',
+    });
   });
 });

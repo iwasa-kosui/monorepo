@@ -15,6 +15,8 @@ export type BlueskyClientError = Readonly<{
 
 export type BlueskyCreatedRecord = Readonly<{ uri: string; cid: string; rkey: string }>;
 
+export type BlueskyFetchedRecord = BlueskyCreatedRecord & Readonly<{ value?: unknown }>;
+
 export type BlueskyLikeSubject = Readonly<{ uri: string; cid: string }>;
 
 export type BlueskyReportInput = Readonly<{
@@ -23,10 +25,12 @@ export type BlueskyReportInput = Readonly<{
   reason?: string;
 }>;
 
+export type BlueskyRecordCollection = 'app.bsky.feed.post' | 'app.bsky.graph.follow';
+
 export type BlueskyClient = Readonly<{
   uploadBlob: (input: Readonly<{ bytes: Uint8Array; mimeType: string }>) => RA<BlueskyBlob, BlueskyClientError>;
   createRecord: (record: BlueskyPostRecord, rkey: string) => RA<BlueskyCreatedRecord, BlueskyClientError>;
-  getRecord: (rkey: string) => RA<BlueskyCreatedRecord, BlueskyClientError>;
+  getRecord: (rkey: string, collection?: BlueskyRecordCollection) => RA<BlueskyFetchedRecord, BlueskyClientError>;
   deleteRecord: (rkey: string) => RA<void, BlueskyClientError>;
   createLike: (subject: BlueskyLikeSubject, rkey: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;
   deleteLike: (rkey: string) => RA<void, BlueskyClientError>;
@@ -37,6 +41,8 @@ export type BlueskyClient = Readonly<{
   createBlock: (subjectDid: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;
   deleteBlock: (blockUri: string) => RA<void, BlueskyClientError>;
   createReport: (input: BlueskyReportInput) => RA<void, BlueskyClientError>;
+  createFollow: (subjectDid: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;
+  deleteFollow: (followUri: string) => RA<void, BlueskyClientError>;
 }>;
 
 export type BlueskyQueryClient = Readonly<{
