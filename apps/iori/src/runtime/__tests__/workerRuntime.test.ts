@@ -30,6 +30,7 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.socialActions.sendEmojiReactUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.undoEmojiReactUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.fetchRemoteContextUseCase.run).toBeTypeOf('function');
+    expect(runtime.socialActions.fetchRemoteOutboxUseCase.run).toBeTypeOf('function');
     expect(runtime.mastodon.notificationsResolverByPage.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.notificationResolverByUserIdAndId.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.notificationCountResolverSinceMarker.resolve).toBeTypeOf('function');

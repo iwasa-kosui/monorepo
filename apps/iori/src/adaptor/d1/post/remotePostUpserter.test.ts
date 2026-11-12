@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
+import { Instant } from '../../../domain/instant/instant.ts';
 import type { RemotePost } from '../../../domain/post/post.ts';
 import { createD1RemotePostUpserter } from './remotePostUpserter.ts';
 
@@ -97,6 +98,54 @@ describe('createD1RemotePostUpserter', () => {
         eventPayload: expect.objectContaining({ recipientActorUris: ['https://iori.test/users/kosui'] }),
       }),
     );
+  });
+
+  describe('createdAt', () => {
+    const now = Date.parse('2026-11-12T00:00:00.000Z');
+
+    const createdAtOf = async (publishedAt: number | undefined) => {
+      const { deps, postCreatedStore } = createDeps(undefined);
+      const result = await createD1RemotePostUpserter(deps).resolve({
+        ...identity,
+        publishedAt: publishedAt === undefined ? undefined : Instant.orThrow(publishedAt),
+      });
+      expect(result.ok).toBe(true);
+      return {
+        post: result.ok ? result.val.createdAt : undefined,
+        stored:
+          ((postCreatedStore.store.mock.calls as unknown[][])[0]?.[0] as { aggregateState: { createdAt: number } })
+            .aggregateState.createdAt,
+      };
+    };
+
+    it('uses publishedAt as createdAt when it is given', async () => {
+      vi.useFakeTimers({ now });
+      try {
+        const published = Date.parse('2024-01-02T03:04:05.000Z');
+
+        expect(await createdAtOf(published)).toEqual({ post: published, stored: published });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('uses the current time when publishedAt is not given', async () => {
+      vi.useFakeTimers({ now });
+      try {
+        expect(await createdAtOf(undefined)).toEqual({ post: now, stored: now });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('uses the current time when publishedAt is in the future', async () => {
+      vi.useFakeTimers({ now });
+      try {
+        expect(await createdAtOf(now + 60_000)).toEqual({ post: now, stored: now });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it('does not store again when the post already exists', async () => {

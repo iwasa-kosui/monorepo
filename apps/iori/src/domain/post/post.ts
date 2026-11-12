@@ -177,6 +177,7 @@ export type RemotePostIdentity = Readonly<{
   visibility: Visibility | null;
   recipientActorUris?: ReadonlyArray<string>;
   attachments?: readonly RemotePostAttachment[];
+  publishedAt?: Instant;
 }>;
 export type RemotePostUpserter = Agg.Resolver<RemotePostIdentity, RemotePost>;
 export type ThreadResolver = Agg.Resolver<
