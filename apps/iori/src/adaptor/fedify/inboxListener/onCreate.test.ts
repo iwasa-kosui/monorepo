@@ -1,4 +1,4 @@
-import { Create, Mention, Note, Person } from '@fedify/vocab';
+import { Article, Create, Mention, Note, Person, Question } from '@fedify/vocab';
 import { FetchError } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
@@ -84,7 +84,7 @@ describe('createOnCreate', () => {
     expect(settled).toBe(true);
   });
 
-  const run = async (note: Note, activity?: Partial<Create>) => {
+  const run = async (note: Note | Article | Question | Person, activity?: Partial<Create>) => {
     const addRemotePostUseCase = {
       run: vi.fn(async () => RA.ok({ actor: { uri: 'https://remote.example/users/alice' } } as never)),
     };
@@ -215,6 +215,48 @@ describe('createOnCreate', () => {
     const addRemotePost = await run(note);
 
     expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ summary: null, sensitive: false }));
+  });
+
+  it('records an Article with its name and content', async () => {
+    const article = new Article({
+      id: new URL('https://remote.example/posts/1'),
+      name: 'Title',
+      content: '<p>body</p>',
+      tos: [publicUri],
+    });
+
+    const addRemotePost = await run(article);
+
+    expect(addRemotePost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        uri: 'https://remote.example/posts/1',
+        content: '<p><strong>Title</strong></p><p>body</p>',
+        visibility: 'public',
+      }),
+    );
+  });
+
+  it('records a Question with its options and a link to vote', async () => {
+    const question = new Question({
+      id: new URL('https://remote.example/posts/1'),
+      content: '<p>q</p>',
+      exclusiveOptions: [new Note({ name: 'a' }), new Note({ name: 'b' })],
+    });
+
+    const addRemotePost = await run(question);
+
+    expect(addRemotePost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content:
+          '<p>q</p><ul><li>a</li><li>b</li></ul><p><a href="https://remote.example/posts/1">元の投稿で投票する</a></p>',
+      }),
+    );
+  });
+
+  it('ignores an object that is not a Note, an Article or a Question', async () => {
+    const addRemotePost = await run(new Person({ id: new URL('https://remote.example/users/bob') }));
+
+    expect(addRemotePost).not.toHaveBeenCalled();
   });
 
   it('records no recipients when no local actor is addressed', async () => {

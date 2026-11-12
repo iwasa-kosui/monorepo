@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { isActor, Like, Note } from '@fedify/vocab';
+import { isActor, Like } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
@@ -15,6 +15,7 @@ import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.
 import type { PostId } from '../domain/post/postId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
+import { isRemotePostObject } from './helper/remotePostObject.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -129,7 +130,7 @@ const create = ({
           documentLoader,
         });
 
-        if (!(result instanceof Note)) {
+        if (!isRemotePostObject(result)) {
           return RA.err(
             RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'),
           );

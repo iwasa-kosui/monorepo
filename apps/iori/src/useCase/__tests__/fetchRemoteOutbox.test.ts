@@ -1,4 +1,13 @@
-import { Announce, Create, Note, OrderedCollection, OrderedCollectionPage, Person } from '@fedify/vocab';
+import {
+  Announce,
+  Article,
+  Create,
+  Note,
+  OrderedCollection,
+  OrderedCollectionPage,
+  Person,
+  Question,
+} from '@fedify/vocab';
 import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
@@ -30,7 +39,7 @@ const noteOf = (index: number, options: { author?: string; published?: string } 
     published: options.published === undefined ? null : Temporal.Instant.from(options.published),
   });
 
-const createOf = (note: Note) =>
+const createOf = (note: Note | Article | Question) =>
   new Create({ id: new URL(`${note.id!.href}/activity`), actor: personOf('alice'), object: note });
 
 const announceOf = (note: Note) =>
@@ -55,7 +64,7 @@ const localActor = { id: 'actor-1', type: 'local', uri: 'https://iori.test/users
 type Setup = Readonly<{
   actor?: Actor | undefined;
   outbox?: OrderedCollection;
-  notes?: ReadonlyArray<Note>;
+  notes?: ReadonlyArray<Note | Article | Question>;
   stored?: ReadonlyArray<string>;
   localUris?: ReadonlyArray<string>;
   blocked?: boolean;
@@ -73,7 +82,7 @@ const setup = (options: Setup = {}) => {
   const stored = new Set(options.stored ?? []);
   const objects = new Map<string, unknown>([
     [ACTOR_URI, personOf('alice', options.outbox)],
-    ...(options.notes ?? []).map((note): [string, Note] => [note.id!.href, note]),
+    ...(options.notes ?? []).map((note): [string, Note | Article | Question] => [note.id!.href, note]),
   ]);
   const lookupObject = vi.fn(
     async (uri: string, _options: { documentLoader: DocumentLoader; signal?: AbortSignal }) => {
@@ -162,6 +171,28 @@ describe('FetchRemoteOutboxUseCase', () => {
     expect(await t.run()).toBe(2);
     expect(storedUris(t)).toEqual([noteUri(1), noteUri(3)]);
     expect(lookedUpUris(t)).not.toContain(noteUri(2));
+  });
+
+  it('outbox の Create の Article と Question も、本文を組み立てて保存する', async () => {
+    const article = new Article({
+      id: new URL(noteUri(1)),
+      name: 'Title',
+      content: '<p>body</p>',
+      attribution: personOf('alice'),
+    });
+    const question = new Question({
+      id: new URL(noteUri(2)),
+      content: '<p>q</p>',
+      exclusiveOptions: [new Note({ name: 'a' })],
+      attribution: personOf('alice'),
+    });
+    const t = setup({ outbox: outboxOf([createOf(article), createOf(question)]), notes: [article, question] });
+
+    expect(await t.run()).toBe(2);
+    expect(t.remotePostUpserter.resolve.mock.calls.map(([identity]) => identity)).toMatchObject([
+      { uri: noteUri(1), content: '<p><strong>Title</strong></p><p>body</p>' },
+      { uri: noteUri(2), content: `<p>q</p><ul><li>a</li></ul><p><a href="${noteUri(2)}">元の投稿で投票する</a></p>` },
+    ]);
   });
 
   it('署名付きのローダーはログインユーザーの identifier で作る', async () => {

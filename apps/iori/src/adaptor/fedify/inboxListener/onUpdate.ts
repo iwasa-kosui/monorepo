@@ -1,8 +1,13 @@
 import { type InboxContext } from '@fedify/fedify';
-import { Note, type Update } from '@fedify/vocab';
+import { type Update } from '@fedify/vocab';
 import { getLogger } from '@logtape/logtape';
 
 import { Instant } from '../../../domain/instant/instant.ts';
+import {
+  buildRemotePostContent,
+  isRemotePostObject,
+  type RemotePostObject,
+} from '../../../useCase/helper/remotePostObject.ts';
 import type { UpdateRemotePostUseCase } from '../../../useCase/updateRemotePost.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractMentionedActorUris } from '../extractMentionedActorUris.ts';
@@ -16,7 +21,7 @@ export type OnUpdateDeps = Readonly<{
   updateRemotePostUseCase: UpdateRemotePostUseCase;
 }>;
 
-const toEditedAt = (note: Note): Instant => {
+const toEditedAt = (note: RemotePostObject): Instant => {
   const updated = note.updated;
   if (updated) {
     const parsed = Instant.of(updated.epochMilliseconds);
@@ -32,7 +37,7 @@ export const createOnUpdate = (deps: OnUpdateDeps) => async (ctx: InboxContext<u
   });
 
   const object = await activity.getObject({ documentLoader });
-  if (!(object instanceof Note) || !object.id) {
+  if (!isRemotePostObject(object) || !object.id) {
     return;
   }
   const objectUri = object.id.href;
@@ -64,7 +69,7 @@ export const createOnUpdate = (deps: OnUpdateDeps) => async (ctx: InboxContext<u
   const result = await deps.updateRemotePostUseCase.run({
     uri: objectUri,
     actorUri: senderId.href,
-    content: String(object.content ?? ''),
+    content: await buildRemotePostContent(object),
     ...extractContentWarning(object),
     attachments,
     recipientActorUris: extractRecipientActorUris([object, activity], deps.origin),

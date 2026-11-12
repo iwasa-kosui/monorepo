@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Emoji, EmojiReact as FedifyEmojiReact, Image, isActor, Note } from '@fedify/vocab';
+import { Emoji, EmojiReact as FedifyEmojiReact, Image, isActor } from '@fedify/vocab';
 import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
@@ -18,6 +18,7 @@ import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.
 import type { PostId } from '../domain/post/postId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
+import { isRemotePostObject, type RemotePostObject } from './helper/remotePostObject.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import { RemoteNoteLookupError } from './sendLike.ts';
 import type { UseCase } from './useCase.ts';
@@ -58,7 +59,7 @@ type EmojiImage = Readonly<{
 }>;
 
 const findEmojiImage = async (
-  note: Note,
+  note: RemotePostObject,
   emoji: string,
   documentLoader: DocumentLoader,
 ): Promise<EmojiImage | undefined> => {
@@ -152,7 +153,7 @@ const create = ({
           documentLoader,
         });
 
-        if (!(result instanceof Note)) {
+        if (!isRemotePostObject(result)) {
           return RA.err(
             RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'),
           );

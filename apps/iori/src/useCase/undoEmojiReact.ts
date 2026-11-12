@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { EmojiReact as FedifyEmojiReact, isActor, Note, Undo } from '@fedify/vocab';
+import { EmojiReact as FedifyEmojiReact, isActor, Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
@@ -15,6 +15,7 @@ import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.
 import type { PostId } from '../domain/post/postId.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
+import { isRemotePostObject } from './helper/remotePostObject.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import { RemoteNoteLookupError } from './sendLike.ts';
 import type { UseCase } from './useCase.ts';
@@ -114,7 +115,7 @@ const create = ({
           documentLoader,
         });
 
-        if (!(result instanceof Note)) {
+        if (!isRemotePostObject(result)) {
           return RA.err(
             RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'),
           );
