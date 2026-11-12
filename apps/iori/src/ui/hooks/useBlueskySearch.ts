@@ -2,7 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 
 import { isUnauthorizedError } from '../api/mastodonClient.ts';
 import { appendUniqueBy } from './appendUnique.ts';
-import { autoLoadCursor, type BlueskySearchFailure, nextSearchCursor, toSearchFailure } from './blueskySearchPages.ts';
+import {
+  autoLoadCursor,
+  type BlueskySearchFailure,
+  nextSearchCursor,
+  toSearchFailure,
+  withSearchItems,
+} from './blueskySearchPages.ts';
 import { currentGeneration, type GenerationRef, isStaleGeneration, startGeneration } from './generation.ts';
 import { canStartPageLoadMore } from './loadMoreGuard.ts';
 import { useInfiniteScroll } from './useInfiniteScroll.ts';
@@ -21,7 +27,11 @@ export type BlueskySearchState<T> =
     loadMoreFailure: BlueskySearchFailure | undefined;
   }>;
 
-export type BlueskySearchView<T> = Readonly<{ state: BlueskySearchState<T>; retryLoadMore: () => void }>;
+export type BlueskySearchView<T> = Readonly<{
+  state: BlueskySearchState<T>;
+  retryLoadMore: () => void;
+  updateItems: (updater: (items: readonly T[]) => readonly T[]) => void;
+}>;
 
 type Props<T> = Readonly<{
   query: string;
@@ -107,5 +117,9 @@ export const useBlueskySearch = <T>({ query, seq, fetchPage, keyOf }: Props<T>):
     if (state.kind === 'ready' && state.cursor !== undefined) void loadMore(state.cursor);
   }, [state, loadMore]);
 
-  return { state, retryLoadMore };
+  const updateItems = useCallback((updater: (items: readonly T[]) => readonly T[]) => {
+    setState((prev) => withSearchItems(prev, updater));
+  }, []);
+
+  return { state, retryLoadMore, updateItems };
 };
