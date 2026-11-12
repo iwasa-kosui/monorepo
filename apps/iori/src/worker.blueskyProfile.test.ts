@@ -18,6 +18,17 @@ const FEEDS_API = '/api/iori/v1/bluesky/feeds';
 const FEED_POSTS_API = `/api/iori/v1/bluesky/feeds/posts?uri=${
   encodeURIComponent('at://did:plc:gen/app.bsky.feed.generator/a')
 }`;
+const FEED_INFO_API = `/api/iori/v1/bluesky/feeds/info?uri=${
+  encodeURIComponent('at://did:plc:gen/app.bsky.feed.generator/a')
+}`;
+const FEED_RESOLVE_API = `/api/iori/v1/bluesky/feeds/resolve?url=${
+  encodeURIComponent('https://bsky.app/profile/did:plc:gen/feed/a')
+}`;
+const LIST_MEMBERS_API = `/api/iori/v1/bluesky/lists/members?uri=${
+  encodeURIComponent('at://did:plc:own/app.bsky.graph.list/b')
+}`;
+const ACTOR_FEEDS_API = '/api/iori/v1/bluesky/profiles/did%3Aplc%3Aalice/feeds';
+const ACTOR_LISTS_API = '/api/iori/v1/bluesky/profiles/did%3Aplc%3Aalice/lists';
 const PROFILE_API = '/api/iori/v1/bluesky/profiles/did%3Aplc%3Aalice';
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
@@ -121,7 +132,15 @@ describe('Bluesky のプロフィール画面', () => {
     expect(await disabled.json()).toEqual({ error: 'Bluesky timeline is disabled' });
   });
 
-  it.each([FEEDS_API, FEED_POSTS_API])(
+  it.each([
+    FEEDS_API,
+    FEED_POSTS_API,
+    FEED_INFO_API,
+    FEED_RESOLVE_API,
+    LIST_MEMBERS_API,
+    ACTOR_FEEDS_API,
+    ACTOR_LISTS_API,
+  ])(
     'フィードの API %s は、未ログインを 401、所有者でないユーザーを 403、取り込みが無効の所有者を 409 にする',
     async (path) => {
       const t = setup();

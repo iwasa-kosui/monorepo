@@ -2,7 +2,7 @@ import type { IoriBlueskyActorBody } from '../../adaptor/routes/workerIoriBluesk
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { blueskyProfilePageHref, isExternalHref } from '../api/blueskyLinks.ts';
 
-type Props = Readonly<{ actor: IoriBlueskyActorBody }>;
+type Props = Readonly<{ actor: IoriBlueskyActorBody; href?: string }>;
 
 const DESCRIPTION_MAX_LENGTH = 120;
 
@@ -12,9 +12,9 @@ export const actorDescriptionExcerpt = (description: string | null): string => {
   return chars.length > DESCRIPTION_MAX_LENGTH ? `${chars.slice(0, DESCRIPTION_MAX_LENGTH).join('')}…` : text;
 };
 
-export const BlueskyActorRow = ({ actor }: Props) => {
+export const BlueskyActorRow = ({ actor, href: hrefOverride }: Props) => {
   const avatar = safeAbsoluteUrl(actor.avatar);
-  const href = blueskyProfilePageHref(actor.did);
+  const href = hrefOverride ?? blueskyProfilePageHref(actor.did);
   const excerpt = actorDescriptionExcerpt(actor.description);
   const external = isExternalHref(href);
   return (

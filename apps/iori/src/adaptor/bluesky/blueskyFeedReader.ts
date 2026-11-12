@@ -6,9 +6,12 @@ import type { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import type { BlueskyFeedReader, BlueskySavedFeed } from '../../ports/blueskyFeedReader.ts';
 import { httpUrlOrNull } from './blueskyPostView.ts';
+import { actorOf } from './blueskySearch.ts';
 import { parseBlueskyTimelineResponse } from './blueskyTimelineResponse.ts';
 
 const FEED_POSTS_LIMIT = '30';
+const LIST_MEMBERS_LIMIT = '50';
+const CURATE_LIST_PURPOSE = 'app.bsky.graph.defs#curatelist';
 const FEED_GENERATORS_CHUNK_SIZE = 25;
 const SAVED_FEEDS_PREF_V2 = 'app.bsky.actor.defs#savedFeedsPrefV2';
 const SAVED_FEEDS_PREF = 'app.bsky.actor.defs#savedFeedsPref';
@@ -31,14 +34,23 @@ const generatorZodType = z.looseObject({
   description: z.string().optional(),
   creator: creatorZodType.optional(),
 });
-const listResponseZodType = z.looseObject({
-  list: z.looseObject({
-    name: z.string().optional(),
-    avatar: z.string().optional(),
-    description: z.string().optional(),
-    creator: creatorZodType.optional(),
-  }),
+const listViewZodType = z.looseObject({
+  name: z.string().optional(),
+  avatar: z.string().optional(),
+  description: z.string().optional(),
+  creator: creatorZodType.optional(),
 });
+const listResponseZodType = z.looseObject({ list: listViewZodType });
+const listItemZodType = listViewZodType.extend({ uri: z.string().min(1), purpose: z.string().optional() });
+const generatorResponseZodType = z.looseObject({ view: generatorZodType });
+const actorFeedsZodType = z.looseObject({ cursor: z.string().optional(), feeds: z.array(z.unknown()) });
+const actorListsZodType = z.looseObject({ cursor: z.string().optional(), lists: z.array(z.unknown()) });
+const listMembersZodType = z.looseObject({
+  cursor: z.string().optional(),
+  items: z.array(z.unknown()),
+});
+const listMemberZodType = z.looseObject({ subject: z.unknown() });
+const resolvedHandleZodType = z.looseObject({ did: z.string().min(1) });
 
 type SavedFeedEntry = Readonly<{ uri: string; kind: BlueskyFeedKind; pinned: boolean }>;
 type FeedMetadata = Readonly<Pick<BlueskySavedFeed, 'displayName' | 'avatar' | 'description' | 'creatorHandle'>>;
@@ -65,6 +77,22 @@ const metadataOf = (
   description: textOrUndefined(raw.description),
   creatorHandle: raw.creatorHandle,
 });
+
+const generatorMetadataOf = (generator: z.infer<typeof generatorZodType>): FeedMetadata =>
+  metadataOf({
+    name: generator.displayName,
+    avatar: generator.avatar,
+    description: generator.description,
+    creatorHandle: generator.creator?.handle,
+  });
+
+const listMetadataOf = (list: z.infer<typeof listViewZodType>): FeedMetadata =>
+  metadataOf({
+    name: list.name,
+    avatar: list.avatar,
+    description: list.description,
+    creatorHandle: list.creator?.handle,
+  });
 
 const entryOf = (raw: unknown): SavedFeedEntry | undefined => {
   const parsed = savedFeedItemZodType.safeParse(raw);
@@ -115,15 +143,7 @@ export const createBlueskyFeedReader = (
       pages.flat().flatMap((raw): [string, FeedMetadata][] => {
         const parsed = generatorZodType.safeParse(raw);
         return parsed.success
-          ? [[
-            parsed.data.uri,
-            metadataOf({
-              name: parsed.data.displayName,
-              avatar: parsed.data.avatar,
-              description: parsed.data.description,
-              creatorHandle: parsed.data.creator?.handle,
-            }),
-          ]]
+          ? [[parsed.data.uri, generatorMetadataOf(parsed.data)]]
           : [];
       }),
     );
@@ -133,8 +153,7 @@ export const createBlueskyFeedReader = (
     const response = await deps.client.query('app.bsky.graph.getList', { list: uri, limit: '1' });
     const parsed = response.ok ? listResponseZodType.safeParse(response.val) : undefined;
     if (parsed?.success !== true) return undefined;
-    const { name, avatar, description, creator } = parsed.data.list;
-    return metadataOf({ name, avatar, description, creatorHandle: creator?.handle });
+    return listMetadataOf(parsed.data.list);
   };
 
   return {
@@ -156,6 +175,85 @@ export const createBlueskyFeedReader = (
           ...(entry.kind === 'feed' ? feeds.get(entry.uri) : listsByUri.get(entry.uri)),
         })),
       });
+    },
+    getFeedInfo: async (uri) => {
+      const kind = blueskyFeedKindOf(uri);
+      if (kind === undefined) return RA.err(invalidResponse('getFeedInfo'));
+      if (kind === 'feed') {
+        const response = await deps.client.query('app.bsky.feed.getFeedGenerator', { feed: uri });
+        if (!response.ok) return response;
+        const parsed = generatorResponseZodType.safeParse(response.val);
+        return parsed.success
+          ? RA.ok({ uri, kind, pinned: false, ...generatorMetadataOf(parsed.data.view) })
+          : RA.err(invalidResponse('getFeedGenerator'));
+      }
+      const response = await deps.client.query('app.bsky.graph.getList', { list: uri, limit: '1' });
+      if (!response.ok) return response;
+      const parsed = listResponseZodType.safeParse(response.val);
+      return parsed.success
+        ? RA.ok({ uri, kind, pinned: false, ...listMetadataOf(parsed.data.list) })
+        : RA.err(invalidResponse('getList'));
+    },
+    getListMembers: async ({ uri, cursor }) => {
+      if (blueskyFeedKindOf(uri) !== 'list') return RA.err(invalidResponse('getListMembers'));
+      const response = await deps.client.query('app.bsky.graph.getList', {
+        list: uri,
+        limit: LIST_MEMBERS_LIMIT,
+        ...(cursor === undefined ? {} : { cursor }),
+      });
+      if (!response.ok) return response;
+      const parsed = listMembersZodType.safeParse(response.val);
+      if (!parsed.success) return RA.err(invalidResponse('getList'));
+      return RA.ok({
+        actors: parsed.data.items.flatMap((raw) => {
+          const item = listMemberZodType.safeParse(raw);
+          return item.success ? actorOf(item.data.subject) ?? [] : [];
+        }),
+        cursor: parsed.data.cursor,
+      });
+    },
+    getActorFeeds: async ({ actor, cursor }) => {
+      const response = await deps.client.query('app.bsky.feed.getActorFeeds', {
+        actor,
+        ...(cursor === undefined ? {} : { cursor }),
+      });
+      if (!response.ok) return response;
+      const parsed = actorFeedsZodType.safeParse(response.val);
+      if (!parsed.success) return RA.err(invalidResponse('getActorFeeds'));
+      return RA.ok({
+        feeds: parsed.data.feeds.flatMap((raw): BlueskySavedFeed[] => {
+          const generator = generatorZodType.safeParse(raw);
+          return generator.success && blueskyFeedKindOf(generator.data.uri) === 'feed'
+            ? [{ uri: generator.data.uri, kind: 'feed', pinned: false, ...generatorMetadataOf(generator.data) }]
+            : [];
+        }),
+        cursor: parsed.data.cursor,
+      });
+    },
+    getActorLists: async ({ actor, cursor }) => {
+      const response = await deps.client.query('app.bsky.graph.getLists', {
+        actor,
+        ...(cursor === undefined ? {} : { cursor }),
+      });
+      if (!response.ok) return response;
+      const parsed = actorListsZodType.safeParse(response.val);
+      if (!parsed.success) return RA.err(invalidResponse('getLists'));
+      return RA.ok({
+        feeds: parsed.data.lists.flatMap((raw): BlueskySavedFeed[] => {
+          const list = listItemZodType.safeParse(raw);
+          return list.success && list.data.purpose === CURATE_LIST_PURPOSE
+              && blueskyFeedKindOf(list.data.uri) === 'list'
+            ? [{ uri: list.data.uri, kind: 'list', pinned: false, ...listMetadataOf(list.data) }]
+            : [];
+        }),
+        cursor: parsed.data.cursor,
+      });
+    },
+    resolveHandle: async (handle) => {
+      const response = await deps.client.query('com.atproto.identity.resolveHandle', { handle });
+      if (!response.ok) return response;
+      const parsed = resolvedHandleZodType.safeParse(response.val);
+      return parsed.success ? RA.ok(parsed.data.did) : RA.err(invalidResponse('resolveHandle'));
     },
     getFeedPosts: async ({ uri, cursor }) => {
       const kind = blueskyFeedKindOf(uri);
