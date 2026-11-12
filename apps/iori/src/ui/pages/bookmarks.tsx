@@ -80,11 +80,11 @@ const FediverseBookmarks = () => {
 
   useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore, isFirstPageSettled });
 
-  const updateStatus = (postId: string, updater: (status: Status) => Status) => {
+  const updateStatus = useCallback((postId: string, updater: (status: Status) => Status) => {
     setData((prev) =>
       prev === null ? prev : { ...prev, statuses: updateStatusesByPostId(prev.statuses, postId, updater) }
     );
-  };
+  }, []);
 
   const actions = useStatusListActions(updateStatus);
   const reply = useReplyDialog();

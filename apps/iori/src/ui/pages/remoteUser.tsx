@@ -596,13 +596,13 @@ const App = () => {
 
   useInfiniteScroll({ nextCursor: loaded?.nextMaxId, onLoadMore: loadMore });
 
-  const updateStatus = (postId: string, updater: (status: Status) => Status) => {
+  const updateStatus = useCallback((postId: string, updater: (status: Status) => Status) => {
     setData((prev) =>
       prev === null || 'error' in prev
         ? prev
         : { ...prev, statuses: updateStatusesByPostId(prev.statuses, postId, updater) }
     );
-  };
+  }, []);
 
   const actions = useStatusListActions(updateStatus);
   const reply = useReplyDialog();

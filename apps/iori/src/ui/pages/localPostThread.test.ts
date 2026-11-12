@@ -7,6 +7,7 @@ import {
   resolveLocalPostThread,
   shouldReloadContext,
   showsRemoteContextLoading,
+  updateThreadStatuses,
 } from './localPostThread.ts';
 
 const post = (id: string) => ({ id }) as unknown as Status;
@@ -124,5 +125,39 @@ describe('showsRemoteContextLoading', () => {
       showsRemoteContextLoading(true, null),
       showsRemoteContextLoading(true, statusOf('kosui', statusOf('alice@remote.example'))),
     ]).toEqual([true, false, false, false, true]);
+  });
+});
+
+describe('updateThreadStatuses', () => {
+  const favourited = (status: Status): Status => ({ ...status, favourited: true });
+  const thread = { currentPost: post('p'), ancestors: [post('a1'), post('a2')], descendants: [post('d1'), post('d2')] };
+
+  it('祖先・本体・子孫のうち id が一致する投稿だけに updater を適用する', () => {
+    expect(updateThreadStatuses(thread, 'a2', favourited)).toEqual({
+      currentPost: post('p'),
+      ancestors: [post('a1'), { ...post('a2'), favourited: true }],
+      descendants: [post('d1'), post('d2')],
+    });
+    expect(updateThreadStatuses(thread, 'p', favourited)?.currentPost).toEqual({ ...post('p'), favourited: true });
+    expect(updateThreadStatuses(thread, 'd1', favourited)?.descendants).toEqual([
+      { ...post('d1'), favourited: true },
+      post('d2'),
+    ]);
+  });
+
+  it('本体がないスレッドでも祖先と子孫を更新する', () => {
+    expect(updateThreadStatuses({ ...thread, currentPost: null }, 'd2', favourited)).toEqual({
+      currentPost: null,
+      ancestors: [post('a1'), post('a2')],
+      descendants: [post('d1'), { ...post('d2'), favourited: true }],
+    });
+  });
+
+  it('一致する投稿がなければ内容を変えない', () => {
+    expect(updateThreadStatuses(thread, 'none', favourited)).toEqual(thread);
+  });
+
+  it('スレッドがまだないときは null のままにする', () => {
+    expect(updateThreadStatuses(null, 'p', favourited)).toBeNull();
   });
 });

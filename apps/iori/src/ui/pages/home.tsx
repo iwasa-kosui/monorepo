@@ -889,6 +889,7 @@ const ServerTimeline = () => {
             <PostView
               key={post.id}
               status={post}
+              isLoggedIn={isLoggedIn}
               {...statusActionProps(isLoggedIn ? actions : undefined, post)}
               onReply={isLoggedIn ? reply.openReplyDialog : undefined}
             />

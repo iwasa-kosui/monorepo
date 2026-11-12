@@ -49,7 +49,7 @@ app.get(
         server='/src/ui/pages/localUser.tsx'
         isLoggedIn={isLoggedIn}
       >
-        <div id='root' />
+        <div id='root' data-is-logged-in={String(isLoggedIn)} />
       </LayoutClient>,
     );
   },
