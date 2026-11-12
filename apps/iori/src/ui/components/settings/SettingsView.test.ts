@@ -35,6 +35,15 @@ describe('SettingsView', () => {
     }
   });
 
+  it('shows the security section with a link to manage passkeys after the relays', () => {
+    const html = render(false);
+
+    expect(html).toContain('id="security"');
+    expect(html).toContain('セキュリティ');
+    expect(html).toMatch(/<a href="\/settings\/passkeys"[^>]*>\s*パスキーを管理する\s*<\/a>/);
+    expect(html.indexOf('id="security"')).toBeGreaterThan(html.indexOf('id="relays"'));
+  });
+
   it('hides the X section from anyone but the owner', () => {
     expect(render(false)).not.toContain('id="x-feed-sources"');
     expect(render(false)).not.toContain('X の取り込み元');

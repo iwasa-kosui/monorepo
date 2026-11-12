@@ -22,11 +22,13 @@ paths:
 | **PushSubscription** | `PushSubscriptionId` | Web Push購読 | `/domain/pushSubscription/` |
 | **Image** | `ImageId` | 投稿添付画像 | `/domain/image/` |
 | **RemotePostPollVote** | 複合ID（`postId` と `actorId`） | リモートの投票に、ローカルのアクターがした投票の記録 | `/domain/post/` |
+| **PasskeyCredential** | `PasskeyCredentialId` | 利用者のパスキーの資格情報（credentialId、公開鍵、署名カウンタ）。`userId` で User を参照する | `/domain/passkey/` |
+| **WebAuthnChallenge** | `WebAuthnChallengeId` | パスキーの登録とログインで1回だけ使う challenge。5分で失効し、使うと削除する | `/domain/passkey/` |
 
 ## 集約間の参照関係
 
 ```
-User → LocalActor, Key, Session, PushSubscription (userId)
+User → LocalActor, Key, Session, PushSubscription, PasskeyCredential (userId)
 Actor → Post, Like, Repost, Notification, Follow, RemotePostPollVote (actorId)
 Post → Image [1:N], TimelineItem, Repost [1:N], Notification [1:N], RemotePostPollVote [1:N] (postId)
 ```
@@ -41,6 +43,8 @@ Post → Image [1:N], TimelineItem, Repost [1:N], Notification [1:N], RemotePost
 | Notification | `notification.likeNotificationCreated` / `notification.likeNotificationDeleted` | `LikeNotification` / `undefined` |
 | TimelineItem | `timelineItem.created` / `timelineItem.deleted` | `TimelineItem` / `undefined` |
 | Follow | `follow.followAccepted` / `follow.undoFollowingProcessed` | `Follow` / `undefined` |
+| PasskeyCredential | `passkeyCredential.registered` / `passkeyCredential.used` / `passkeyCredential.deleted` | `PasskeyCredential` / `PasskeyCredential` / `undefined` |
+| WebAuthnChallenge | `webAuthnChallenge.issued` / `webAuthnChallenge.consumed` | `WebAuthnChallenge` / `undefined` |
 
 ## 集約境界の規則
 

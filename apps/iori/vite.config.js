@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
             articleDetail: './src/ui/pages/articleDetail.tsx',
             signIn: './src/ui/pages/signIn.tsx',
             signUp: './src/ui/pages/signUp.tsx',
+            settingsPasskeys: './src/ui/pages/settingsPasskeys.tsx',
             follow: './src/ui/pages/follow.tsx',
             about: './src/ui/pages/about.tsx',
             notifications: './src/ui/pages/notifications.tsx',

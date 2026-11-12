@@ -2,6 +2,7 @@ import { BlueskySettingsSection } from './BlueskySettingsSection.tsx';
 import { NotificationsSettingsSection } from './NotificationsSettingsSection.tsx';
 import { ProfileSettingsSection } from './ProfileSettingsSection.tsx';
 import { RelaysSettingsSection } from './RelaysSettingsSection.tsx';
+import { SecuritySettingsSection } from './SecuritySettingsSection.tsx';
 import { XFeedSourcesSettingsSection } from './XFeedSourcesSettingsSection.tsx';
 
 type Props = Readonly<{
@@ -16,6 +17,7 @@ export const SettingsView = ({ isXOwner, onProfileLoaded }: Props) => (
     <NotificationsSettingsSection />
     <BlueskySettingsSection isOwner={isXOwner} />
     <RelaysSettingsSection />
+    <SecuritySettingsSection />
     {isXOwner && <XFeedSourcesSettingsSection />}
   </div>
 );

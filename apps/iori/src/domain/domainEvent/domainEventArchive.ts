@@ -22,6 +22,11 @@ export const ARCHIVE_REDACTED_EVENT_NAMES = [
   'oauthApplication.registered',
   'pushSubscription.created',
   'report.reportSubmitted',
+  'passkeyCredential.registered',
+  'passkeyCredential.used',
+  'passkeyCredential.deleted',
+  'webAuthnChallenge.issued',
+  'webAuthnChallenge.consumed',
   // feedEntry のイベントは情報源の kind を持たず x_user の投稿を見分けられないので、RSS の分も伏せる
   'feedEntry.bookmarkCountUpdated',
   'feedEntry.collected',
@@ -123,7 +128,12 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'user.created',
 ] as const;
 
-export const ARCHIVE_HASHED_AGGREGATE_ID_EVENT_NAMES = ['session.started'] as const;
+export const ARCHIVE_HASHED_AGGREGATE_ID_EVENT_NAMES = [
+  'session.started',
+  'passkeyCredential.registered',
+  'passkeyCredential.used',
+  'passkeyCredential.deleted',
+] as const;
 
 export type AggregateIdHasher = (aggregateId: string) => Promise<string>;
 
