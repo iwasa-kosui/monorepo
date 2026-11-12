@@ -3,10 +3,16 @@ goal: 自分のシステムで答えられない問いを1つ挙げられます�
 ---
 
 import CodePlayground from '../../../components/CodePlayground.astro';
+import PlaygroundTabs from '../../../components/PlaygroundTabs.astro';
+import SqlPlayground from '../../../components/SqlPlayground.astro';
 
 ## 来院のキャンセル理由を visits テーブルで調べる
 
-「show-visits.ts を実行する」を押します。見るだけの人は、講師の画面で同じ結果を確かめます。
+「show-visits.ts を実行する」を押します。見るだけの人は、講師の画面で同じ結果を確かめます。実行すると、`visits` テーブルの行が出ます。この行を見て、「この来院がキャンセルになっているのはなぜですか」に答えてみます。`show-visits.ts` は `visit-pochi` をキャンセルするときに、理由と操作した人を `cancelVisit` に渡しています。しかし、どちらも行に残っていません。この行から読み取れるのは、来院がキャンセルされたことだけです。誰が、いつ、なぜキャンセルしたのかには答えられません。
+
+実行欄の「SQL で調べる」を押し、SQL を書き換えて「実行する」を押します。`visits` テーブルに、キャンセルの理由や操作した人を答えられる列があるかを確かめます。
+
+<PlaygroundTabs labels={['show-visits.ts を実行する', 'SQL で調べる']} label="実行欄" />
 
 <CodePlayground
   exercise="chapter-1-start"
@@ -14,6 +20,29 @@ import CodePlayground from '../../../components/CodePlayground.astro';
   readonly={['show-visits.ts']}
   scripts={[{ file: 'show-visits.ts', label: 'show-visits.ts を実行する' }]}
 />
+
+<SqlPlayground
+  hidden
+  id="chapter-1-visits"
+  script={{ exercise: 'chapter-1-start', entry: 'show-visits.ts' }}
+  initial="SELECT * FROM visits ORDER BY id;"
+/>
+
+<div class="detail-row">
+
+<details>
+<summary>出力例を見る</summary>
+
+```text
+┌─────────┬───────────────┬──────────┬─────────────┐
+│ (index) │ id            │ pet_name │ status      │
+├─────────┼───────────────┼──────────┼─────────────┤
+│ 0       │ 'visit-pochi' │ 'ポチ'   │ 'cancelled' │
+│ 1       │ 'visit-tama'  │ 'タマ'   │ 'cancelled' │
+└─────────┴───────────────┴──────────┴─────────────┘
+```
+
+</details>
 
 <details>
 <summary>手元の Node で動かすとき</summary>
@@ -24,4 +53,8 @@ import CodePlayground from '../../../components/CodePlayground.astro';
 node show-visits.ts
 ```
 
+`ExperimentalWarning: SQLite is an experimental feature` という警告が出ても問題ありません。
+
 </details>
+
+</div>

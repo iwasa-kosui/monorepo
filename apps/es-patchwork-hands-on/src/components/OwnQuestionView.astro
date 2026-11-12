@@ -1,0 +1,35 @@
+<div class="my-2 flex min-w-0" data-own-question-view>
+  <span class="flex-none"><strong data-label>題材の問い</strong>：</span>
+  <span class="min-w-0 truncate" data-text
+  >この来院がキャンセルになっているのはなぜですか。</span>
+</div>
+
+<script>
+import { loadQuestion } from '../playground/storage.ts';
+
+for (
+  const root of document.querySelectorAll<HTMLElement>(
+    '[data-own-question-view]',
+  )
+) {
+  const label = root.querySelector<HTMLElement>('[data-label]');
+  const text = root.querySelector<HTMLElement>('[data-text]');
+  if (label === null || text === null) continue;
+  const initialLabel = label.textContent;
+  const initialText = text.textContent;
+  const show = (): void => {
+    const question = loadQuestion('chapter-1')?.trim() ?? '';
+    label.textContent = question === '' ? initialLabel : '第1章で挙げた問い';
+    text.textContent = question === '' ? initialText : question;
+    if (question === '') {
+      text.removeAttribute('title');
+    } else {
+      text.title = question;
+    }
+  };
+  show();
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) show();
+  });
+}
+</script>
