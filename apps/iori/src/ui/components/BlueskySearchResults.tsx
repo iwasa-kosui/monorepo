@@ -3,12 +3,13 @@ import type {
   IoriBlueskyTimelineItemBody,
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { searchBlueskyActors, searchBlueskyPosts } from '../api/mastodonClient.ts';
+import { useBlueskyQuoteDialog } from '../hooks/useBlueskyQuoteDialog.ts';
 import { type BlueskySearchPage, type BlueskySearchView, useBlueskySearch } from '../hooks/useBlueskySearch.ts';
 import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
 import { blueskySearchErrorMessage } from '../pages/searchSource.ts';
 import { BlueskyActorRow } from './BlueskyActorRow.tsx';
 import { blueskyItemActionProps, type BlueskyPostActions } from './blueskyPostActions.ts';
-import { BlueskyReplyModal } from './BlueskyReplyModal.tsx';
+import { BlueskyQuoteModal, BlueskyReplyModal } from './BlueskyReplyModal.tsx';
 import { BlueskyTimelineItemView } from './BlueskyTimelineItemView.tsx';
 
 type Submitted = Readonly<{ q: string; seq: number }>;
@@ -75,7 +76,9 @@ export const BlueskySearchPostItem = (
 
 export const BlueskyPostSearchResults = ({ submitted }: Readonly<{ submitted: Submitted }>) => {
   const view = useBlueskySearch({ query: submitted.q, seq: submitted.seq, fetchPage: fetchPostsPage, keyOf: postKey });
-  const { actions, replyDialog } = useBlueskyUriActions(view.updateItems);
+  const { actions: uriActions, replyDialog } = useBlueskyUriActions(view.updateItems);
+  const quoteDialog = useBlueskyQuoteDialog();
+  const actions: BlueskyPostActions = { ...uriActions, onQuote: quoteDialog.open };
   return (
     <>
       <BlueskySearchList
@@ -84,6 +87,7 @@ export const BlueskyPostSearchResults = ({ submitted }: Readonly<{ submitted: Su
         renderItem={(item) => <BlueskySearchPostItem key={item.feedItemId} item={item} actions={actions} />}
       />
       <BlueskyReplyModal dialog={replyDialog} />
+      <BlueskyQuoteModal dialog={quoteDialog} />
     </>
   );
 };
