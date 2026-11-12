@@ -1,6 +1,7 @@
 import { RA, Result } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import { BLUESKY_SENSITIVE_SELF_LABEL } from '../../adaptor/bluesky/blueskyPostRecord.ts';
 import { createBlueskyThumbnailFetcher } from '../../adaptor/bluesky/thumbnailFetcher.ts';
 import { createMastodonSeed, SEED_ORIGIN } from '../../adaptor/d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.ts';
@@ -278,19 +279,37 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(t.created).toHaveLength(1);
   });
 
-  it.each([
-    ['content_warning', { summary: '注意' }],
-    ['sensitive', { sensitive: true }],
-  ])('%s の投稿は skipped で保存し、送らない', async (reason, options) => {
+  it('CW 付きの投稿は sent になり、CW の文と投稿 URL だけを送る', async () => {
     const t = setup();
-    const post = t.addPost(options);
+    const post = t.addPost({ summary: '注意', content: '<p>本文 <a href="https://example.com/x">x</a></p>' });
+    t.addStoredImage(post.postId, 'image/png', new Uint8Array([1, 2, 3]), '猫');
 
-    expect(await run(t.schedule.run({ postId: post.postId }))).toBe('skipped');
+    expect(await run(t.schedule.run({ postId: post.postId }))).toBe('pending');
     await t.flush();
 
-    expect(await t.row(post.postId)).toMatchObject({ status: 'skipped', skipReason: reason });
-    expect(t.waiting).toEqual([]);
-    expect(t.created).toEqual([]);
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent', skipReason: null });
+    expect(t.created).toHaveLength(1);
+    expect(t.created[0]?.text).toBe(`注意\n${SEED_ORIGIN}/users/kosui/posts/${post.postId}`);
+    expect(t.uploaded).toEqual([]);
+    expect(t.created[0]).not.toHaveProperty('embed');
+    expect(t.created[0]).not.toHaveProperty('labels');
+  });
+
+  it('sensitive だけの投稿は sent になり、画像を upload して record に labels を付ける', async () => {
+    const t = setup();
+    const post = t.addPost({ sensitive: true });
+    t.addStoredImage(post.postId, 'image/png', new Uint8Array([1, 2, 3]), '猫');
+
+    expect(await run(t.schedule.run({ postId: post.postId }))).toBe('pending');
+    await t.flush();
+
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent', skipReason: null });
+    expect(t.uploaded).toHaveLength(1);
+    expect(t.created[0]?.embed?.$type).toBe('app.bsky.embed.images');
+    expect(t.created[0]?.labels).toEqual({
+      $type: 'com.atproto.label.defs#selfLabels',
+      values: [{ val: BLUESKY_SENSITIVE_SELF_LABEL }],
+    });
   });
 
   it('親が送信済みの返信は root と parent を付け、行に root を保存する', async () => {
@@ -323,11 +342,11 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
 
   it('親が送信済みでない返信と、他人の投稿への返信は reply_to_unsent で skipped にする', async () => {
     const t = setup();
-    const skippedParent = t.addPost({ summary: 'CW' });
-    await run(t.schedule.run({ postId: skippedParent.postId }));
-    const replyToSkipped = t.addPost({ inReplyToUri: skippedParent.uri });
     const remote = t.seed.addRemoteActor('alice');
     const remotePost = t.seed.addRemotePost(remote, 1_000);
+    const skippedParent = t.addPost({ inReplyToUri: remotePost.uri });
+    await run(t.schedule.run({ postId: skippedParent.postId }));
+    const replyToSkipped = t.addPost({ inReplyToUri: skippedParent.uri });
     const replyToRemote = t.addPost({ inReplyToUri: remotePost.uri });
     const neverScheduled = t.addPost();
     const replyToNeverScheduled = t.addPost({ inReplyToUri: neverScheduled.uri });
