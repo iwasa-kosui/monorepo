@@ -35,7 +35,7 @@ const setup = (posts: Record<string, unknown> = {
   );
   const uploadBlob = vi.fn<BlueskyClient['uploadBlob']>();
   const query = vi.fn<BlueskyQueryClient['query']>(async (_nsid, params) => {
-    const post = posts[params.uris ?? ''];
+    const post = posts[String(params.uris ?? '')];
     return RA.ok({ posts: post === undefined ? [] : [post] });
   });
   const reply = ReplyToBlueskyPostUseCase.create({
