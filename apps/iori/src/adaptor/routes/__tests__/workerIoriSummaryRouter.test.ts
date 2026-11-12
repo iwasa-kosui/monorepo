@@ -211,7 +211,7 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
       summary: '- 話題 [1][2][3]',
       source_status_ids: [t.privateFromAlice.postId, t.fromAlice.postId, t.mine.postId],
       used_status_count: 3,
-      excluded_non_public_count: 1,
+      excluded_non_public_count: 0,
       truncated: false,
       model: '@cf/meta/llama-4-scout-17b-16e-instruct',
       remaining_today: 19,
