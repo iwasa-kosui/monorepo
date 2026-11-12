@@ -1,6 +1,12 @@
 ---
 goal: 既存の更新処理に、記録を1か所足せます。
+wide: true
 ---
+
+import TransactionFigure from '../../../components/figures/TransactionFigure.astro';
+
+<div class="intro-spread">
+<div class="intro-text">
 
 ## 説明
 
@@ -16,3 +22,6 @@ goal: 既存の更新処理に、記録を1か所足せます。
 
 この演習では、業務イベントの記録を来院の更新と同じトランザクションに入れます。記録に失敗すると、来院の更新も失敗します。こうすると、記録が抜けたキャンセルは残りません。`cancelVisit` は開始時点で `withTransaction` の中にあるので、参加者はトランザクションを書き足さなくて済みます。
 
+</div>
+<TransactionFigure />
+</div>

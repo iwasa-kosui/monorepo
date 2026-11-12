@@ -64,3 +64,26 @@ export const clearSql = (id: string): void => {
     return;
   }
 };
+
+const questionPrefix = 'es-patchwork-hands-on:question:';
+
+export const loadQuestion = (id: string): string | null => {
+  try {
+    return storage()?.getItem(`${questionPrefix}${id}`) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+export const saveQuestion = (id: string, question: string): boolean => {
+  try {
+    const target = storage();
+    if (target === null) {
+      return false;
+    }
+    target.setItem(`${questionPrefix}${id}`, question);
+    return true;
+  } catch {
+    return false;
+  }
+};

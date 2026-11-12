@@ -12,6 +12,7 @@ import type {
   IoriBlueskyLikeResponse,
   IoriBlueskyRepostResponse,
   IoriBlueskyStatusResponse,
+  IoriBlueskyThreadResponse,
   IoriBlueskyTimelineResponse,
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { IoriDigestRequestResponse, IoriFeedSourceBody } from '../../adaptor/routes/workerIoriDigestRouter.ts';
@@ -308,6 +309,8 @@ export type CreateStatusParams = Readonly<{
   media_ids?: readonly string[];
   content_type: string;
   iori_destination?: PostDestination;
+  spoiler_text?: string;
+  sensitive?: boolean;
 }>;
 
 export const createStatus = async (params: CreateStatusParams): Promise<Status> => {
@@ -453,6 +456,13 @@ export const fetchBlueskyHomeTimeline = (
     ...(cursor === undefined ? {} : { before: cursor.before }),
     ...(cursor === undefined || cursor.beforeId === null ? {} : { beforeId: cursor.beforeId }),
   });
+
+export type BlueskyPostThread = IoriBlueskyThreadResponse;
+
+const BLUESKY_THREAD_PATH = '/api/iori/v1/bluesky/thread';
+
+export const fetchBlueskyPostThread = async (uri: string): Promise<BlueskyPostThread> =>
+  (await request<BlueskyPostThread>(BLUESKY_THREAD_PATH, { uri })).body;
 
 export type BlueskyStatus = IoriBlueskyStatusResponse;
 

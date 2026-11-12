@@ -67,3 +67,12 @@ export const postedMessage = (
   }
   return destination === 'fediverse' ? 'Fediverse に投稿しました' : '投稿しました';
 };
+
+export const BLUESKY_NOT_SENT_NOTICE = 'CW 付き・センシティブ指定の投稿は Bluesky に送りません';
+
+export const blueskyNotSentNotice = (
+  destination: PostDestination,
+  cw: string,
+  sensitive: boolean,
+): string | undefined =>
+  destination === 'both' && (cw.trim() !== '' || sensitive) ? BLUESKY_NOT_SENT_NOTICE : undefined;
