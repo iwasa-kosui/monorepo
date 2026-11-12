@@ -5,6 +5,7 @@ import { Temporal } from '@js-temporal/polyfill';
 
 import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
 import { extractContentWarning } from '../adaptor/fedify/extractContentWarning.ts';
+import { extractNoteUrl } from '../adaptor/fedify/extractNoteUrl.ts';
 import { extractQuoteUri } from '../adaptor/fedify/extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
@@ -252,6 +253,7 @@ const create = ({
           }
           const remotePostResult = await remotePostUpserter.resolve({
             uri: objectUri,
+            url: extractNoteUrl(result),
             content: String(result.content ?? ''),
             ...extractContentWarning(result),
             visibility: fetchedVisibility,

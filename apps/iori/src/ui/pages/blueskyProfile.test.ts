@@ -37,6 +37,8 @@ const item: IoriBlueskyTimelineItemBody = {
   replyParentAuthorHandle: null,
   repostedByDid: null,
   repostedByHandle: null,
+  bridgyOriginalUrl: null,
+  bridgedFromPostId: null,
   postedAt: Date.UTC(2026, 10, 8, 1),
   indexedAt: Date.UTC(2026, 10, 8, 1),
   liked: false,

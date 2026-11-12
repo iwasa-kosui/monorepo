@@ -11,6 +11,7 @@ import {
   blueskyTimelineItemsTable,
 } from '../schema.ts';
 import { toBlueskyTimelineItem } from './blueskyTimelineItemRow.ts';
+import { withBridgedFromPostIds } from './bridgedFromPostIds.ts';
 
 export const createD1BlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimelineItemsResolver => ({
   resolve: async ({ limit, before, beforeId, excludeCrossposted }) => {
@@ -63,7 +64,10 @@ export const createD1BlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimel
       .orderBy(desc(blueskyTimelineItemsTable.indexedAt), desc(blueskyTimelineItemsTable.feedItemId))
       .limit(limit);
     return RA.ok(
-      rows.map(({ item, likeUri, repostUri }) => toBlueskyTimelineItem(item, likeUri !== null, repostUri !== null)),
+      await withBridgedFromPostIds(
+        db,
+        rows.map(({ item, likeUri, repostUri }) => toBlueskyTimelineItem(item, likeUri !== null, repostUri !== null)),
+      ),
     );
   },
 });

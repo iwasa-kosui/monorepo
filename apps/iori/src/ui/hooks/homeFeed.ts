@@ -80,10 +80,18 @@ export const bridgedBlueskyUriOf = (status: Status): string | null => {
   return atUri.startsWith('at://') ? atUri : null;
 };
 
+const isBridgedFromShownStatus = (
+  item: IoriBlueskyTimelineItemBody,
+  statusIds: ReadonlySet<string>,
+): boolean => typeof item.bridgedFromPostId === 'string' && statusIds.has(item.bridgedFromPostId);
+
 export const dedupeBridgedItems = (items: readonly HomeItem[]): readonly HomeItem[] => {
   const blueskyUris = new Set(items.flatMap((item) => item.kind === 'bluesky' ? [item.item.uri] : []));
+  const statusIds = new Set(
+    items.flatMap((item) => item.kind === 'status' ? [(item.status.reblog ?? item.status).id] : []),
+  );
   return items.filter((item) => {
-    if (item.kind !== 'status') return true;
+    if (item.kind === 'bluesky') return !isBridgedFromShownStatus(item.item, statusIds);
     const bridged = bridgedBlueskyUriOf(item.status);
     return bridged === null || !blueskyUris.has(bridged);
   });

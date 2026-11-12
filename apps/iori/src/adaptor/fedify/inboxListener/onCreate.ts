@@ -17,6 +17,7 @@ import type { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
 import type { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractMentionedActorUris } from '../extractMentionedActorUris.ts';
+import { extractNoteUrl } from '../extractNoteUrl.ts';
 import { extractQuoteUri } from '../extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
@@ -150,6 +151,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
     deps.addRemotePostUseCase.run({
       content: String(object.content),
       uri: objectUri,
+      url: extractNoteUrl(object),
       actorIdentity,
       attachments,
       inReplyToUri,

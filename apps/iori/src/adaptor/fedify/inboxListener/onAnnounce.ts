@@ -18,6 +18,7 @@ import type { AcceptedRelaysResolver, RelayResolverByActorUri } from '../../../d
 import type { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
+import { extractNoteUrl } from '../extractNoteUrl.ts';
 import { extractQuoteUri } from '../extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
@@ -244,6 +245,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
       reposterIdentity,
       remotePostIdentity: {
         uri: note.id.href,
+        url: extractNoteUrl(note),
         content: contentText,
         ...extractContentWarning(note),
         visibility: extractVisibility(note, author.followersId),

@@ -14,6 +14,7 @@ import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/p
 import type { RelayId } from '../../../domain/relay/relayId.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
+import { extractNoteUrl } from '../extractNoteUrl.ts';
 import { extractQuoteUri } from '../extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
@@ -87,6 +88,7 @@ export const saveFederatedNote = async (
 
   const postResult = await deps.remotePostUpserter.resolve({
     uri: note.id.href,
+    url: extractNoteUrl(note),
     content: contentText,
     ...extractContentWarning(note),
     visibility: extractVisibility(note, author.followersId),

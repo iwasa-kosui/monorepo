@@ -102,6 +102,32 @@ describe('createD1RemotePostUpserter', () => {
     );
   });
 
+  it('records the url of a new post', async () => {
+    const { deps, postCreatedStore } = createDeps(undefined);
+
+    const result = await createD1RemotePostUpserter(deps).resolve({
+      ...identity,
+      url: 'https://remote.example/@alice/1',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.val.url).toBe('https://remote.example/@alice/1');
+    expect(postCreatedStore.store).toHaveBeenCalledWith(
+      expect.objectContaining({ aggregateState: expect.objectContaining({ url: 'https://remote.example/@alice/1' }) }),
+    );
+  });
+
+  it('records a null url when the identity has none', async () => {
+    const { deps } = createDeps(undefined);
+
+    const result = await createD1RemotePostUpserter(deps).resolve(identity);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.val.url).toBeNull();
+  });
+
   it('passes the quoted note URI of a new post to the store', async () => {
     const { deps, postCreatedStore } = createDeps(undefined);
 

@@ -62,6 +62,7 @@ type ActorIdentity = Readonly<{
 type Input = Readonly<{
   content: string;
   uri: string;
+  url?: string | null;
   actorIdentity: ActorIdentity;
   attachments: RemotePostAttachment[];
   inReplyToUri?: string | null;
@@ -171,6 +172,7 @@ const create = ({
             actorIdentity,
             content,
             uri,
+            url,
             inReplyToUri,
             summary,
             sensitive,
@@ -192,6 +194,7 @@ const create = ({
           const createPost = Post.createRemotePost(now)({
             content,
             uri,
+            url,
             actorId: actor.id,
             inReplyToUri,
             summary,

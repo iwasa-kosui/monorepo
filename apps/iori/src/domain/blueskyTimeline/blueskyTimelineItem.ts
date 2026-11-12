@@ -95,6 +95,8 @@ const blueskyTimelineItemZodType = z.object({
   replyParentAuthorHandle: z.string().nullable(),
   repostedByDid: z.string().nullable(),
   repostedByHandle: z.string().nullable(),
+  bridgyOriginalUrl: httpUrlZodType.nullable(),
+  bridgedFromPostId: z.string().nullable(),
   postedAt: Instant.zodType,
   indexedAt: Instant.zodType,
   fetchedAt: Instant.zodType,

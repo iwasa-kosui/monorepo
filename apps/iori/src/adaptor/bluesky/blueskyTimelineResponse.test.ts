@@ -53,6 +53,8 @@ describe('parseBlueskyTimelineResponse', () => {
           replyParentAuthorHandle: null,
           repostedByDid: null,
           repostedByHandle: null,
+          bridgyOriginalUrl: null,
+          bridgedFromPostId: null,
           postedAt: Date.UTC(2026, 10, 8, 1),
           indexedAt: Date.UTC(2026, 10, 8, 1, 0, 5),
           fetchedAt: FETCHED_AT,
@@ -65,6 +67,24 @@ describe('parseBlueskyTimelineResponse', () => {
         }],
       },
     });
+  });
+
+  it('record.bridgyOriginalUrl を bridgyOriginalUrl に入れる', () => {
+    const item = only([{ post: postView({}, { bridgyOriginalUrl: 'https://mastodon.example/@alice/123' }) }]);
+
+    expect(item.bridgyOriginalUrl).toBe('https://mastodon.example/@alice/123');
+  });
+
+  it('record.bridgyOriginalUrl が無ければ null にする', () => {
+    expect(only([{ post: postView() }]).bridgyOriginalUrl).toBeNull();
+  });
+
+  it.each([
+    ['http 以外のスキーム', 'javascript:alert(1)'],
+    ['URL でない文字列', 'not a url'],
+    ['空文字', ''],
+  ])('record.bridgyOriginalUrl が%sなら null にする', (_label, bridgyOriginalUrl) => {
+    expect(only([{ post: postView({}, { bridgyOriginalUrl }) }]).bridgyOriginalUrl).toBeNull();
   });
 
   it('post.viewer.like があれば viewerLikeUri に入れて liked にする', () => {

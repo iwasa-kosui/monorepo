@@ -5,6 +5,7 @@ import { getLogger } from '@logtape/logtape';
 import { ActorIdentity } from '../../adaptor/fedify/actorIdentity.ts';
 import { extractContentWarning } from '../../adaptor/fedify/extractContentWarning.ts';
 import { extractMentionedActorUris } from '../../adaptor/fedify/extractMentionedActorUris.ts';
+import { extractNoteUrl } from '../../adaptor/fedify/extractNoteUrl.ts';
 import { extractQuoteUri } from '../../adaptor/fedify/extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../../adaptor/fedify/extractVisibility.ts';
@@ -52,6 +53,7 @@ export const toRemotePostIdentity = async (
   const publishedMs = note.published?.epochMilliseconds;
   return {
     uri,
+    url: extractNoteUrl(note),
     content: String(note.content ?? ''),
     authorIdentity: actorIdentityResult.val,
     inReplyToUri: note.replyTargetId?.href ?? null,
