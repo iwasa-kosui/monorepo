@@ -32,11 +32,11 @@ export const BlueskyReplyModal = (
       errorText={errorText}
       target={
         <div class='mb-3 rounded-xl border border-warm-gray dark:border-gray-700 p-3 text-sm'>
-          <div class='flex flex-wrap items-baseline gap-x-2'>
-            <span class='font-semibold text-charcoal dark:text-white'>
+          <div class='flex flex-wrap items-baseline gap-x-2 min-w-0'>
+            <span class='truncate font-semibold text-charcoal dark:text-white'>
               {target.authorDisplayName ?? target.authorHandle}
             </span>
-            <span class='text-charcoal-light dark:text-gray-400'>@{target.authorHandle}</span>
+            <span class='truncate text-charcoal-light dark:text-gray-400'>@{target.authorHandle}</span>
           </div>
           <p class='mt-1 whitespace-pre-wrap break-words text-charcoal-light dark:text-gray-400'>
             {blueskyReplyExcerpt(target.text)}

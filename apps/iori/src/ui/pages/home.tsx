@@ -569,11 +569,11 @@ const UserProfile = () => {
                   </svg>
                 </div>
               </a>
-              <div>
-                <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
+              <div class='min-w-0 flex-1'>
+                <h1 class='truncate text-2xl font-bold text-charcoal dark:text-white'>
                   {me.display_name}
                 </h1>
-                <p class='text-charcoal-light dark:text-gray-400'>{handle}</p>
+                <p class='truncate text-charcoal-light dark:text-gray-400'>{handle}</p>
               </div>
             </div>
             {me.source.note !== '' && (

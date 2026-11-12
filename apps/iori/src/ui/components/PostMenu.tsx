@@ -131,7 +131,7 @@ export const PostMenu = ({ items, label = 'その他の操作', defaultOpen = fa
       {isOpen && (
         <div
           id={menuId}
-          class='absolute right-0 bottom-full mb-2 w-max bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark border border-warm-gray-dark dark:border-gray-700 p-2 z-50'
+          class='absolute right-0 bottom-full mb-2 w-max max-w-[calc(100vw-2rem)] bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark border border-warm-gray-dark dark:border-gray-700 p-2 z-50'
         >
           {items.map((item) =>
             item.kind === 'link'
@@ -144,7 +144,7 @@ export const PostMenu = ({ items, label = 'その他の操作', defaultOpen = fa
                   onClick={closeAndFocusTrigger}
                   class={itemClass(false)}
                 >
-                  {item.label}
+                  <span class='truncate'>{item.label}</span>
                 </a>
               )
               : (
@@ -161,7 +161,7 @@ export const PostMenu = ({ items, label = 'その他の操作', defaultOpen = fa
                   }}
                   class={itemClass(item.kind === 'action' && item.danger === true)}
                 >
-                  {item.label}
+                  <span class='truncate'>{item.label}</span>
                 </button>
               )
           )}

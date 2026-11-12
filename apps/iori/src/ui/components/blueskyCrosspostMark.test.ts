@@ -25,11 +25,12 @@ const crosspost = (overrides: Partial<IoriBlueskyCrosspost>): IoriBlueskyCrosspo
 describe('toBlueskyCrosspostMark', () => {
   it('sent は URL へのリンクにする', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'sent', retrying: false, url: 'https://bsky.app/x' })))
-      .toMatchObject({ label: 'Bluesky', href: 'https://bsky.app/x', emphasized: false });
+      .toMatchObject({ kind: 'sent', label: 'Bluesky', href: 'https://bsky.app/x', emphasized: false });
   });
 
   it('sent で URL が無ければリンクにしない', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'sent', retrying: false }))).toMatchObject({
+      kind: 'sent',
       label: 'Bluesky',
       href: null,
     });
@@ -37,6 +38,7 @@ describe('toBlueskyCrosspostMark', () => {
 
   it('pending は送信中にする', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'pending' }))).toMatchObject({
+      kind: 'pending',
       label: 'Bluesky 送信中',
       emphasized: false,
     });
@@ -44,6 +46,7 @@ describe('toBlueskyCrosspostMark', () => {
 
   it('failed で再送が残っていれば再送待ちにする', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'failed', retrying: true }))).toMatchObject({
+      kind: 'retrying',
       label: 'Bluesky 再送待ち',
       emphasized: false,
     });
@@ -51,6 +54,7 @@ describe('toBlueskyCrosspostMark', () => {
 
   it('failed で再送が残っていなければ強調する', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'failed', retrying: false }))).toMatchObject({
+      kind: 'failed',
       label: 'Bluesky に届いていません',
       emphasized: true,
     });
@@ -59,6 +63,7 @@ describe('toBlueskyCrosspostMark', () => {
   it('skipped は title に理由を入れる', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'skipped', skip_reason: 'sensitive', retrying: false })))
       .toMatchObject({
+        kind: 'skipped',
         label: 'Bluesky に未送信',
         title: 'この投稿の当時は、センシティブ指定の投稿を Bluesky に送っていませんでした',
       });
@@ -67,6 +72,7 @@ describe('toBlueskyCrosspostMark', () => {
   it('content_warning の skipped は印を出す', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'skipped', skip_reason: 'content_warning', retrying: false })))
       .toMatchObject({
+        kind: 'skipped',
         label: 'Bluesky に未送信',
         title: 'この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした',
       });
@@ -87,6 +93,7 @@ describe('toBlueskyCrosspostMark', () => {
     expect(
       toBlueskyCrosspostMark(crosspost({ status: 'skipped', skip_reason: 'visibility', retrying: false }), 'private'),
     ).toMatchObject({
+      kind: 'skipped',
       label: 'Bluesky に未送信',
       title: '公開範囲が公開ではないため Bluesky に送っていません',
     });

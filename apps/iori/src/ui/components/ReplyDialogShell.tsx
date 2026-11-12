@@ -36,7 +36,7 @@ export const ReplyDialogShell = ({
       onClick={(e) => e.stopPropagation()}
     >
       <div class='flex items-center justify-between mb-4'>
-        <h2 class='text-lg font-semibold text-charcoal dark:text-white'>
+        <h2 class='min-w-0 truncate text-lg font-semibold text-charcoal dark:text-white'>
           {title}
         </h2>
         <button
