@@ -13,7 +13,7 @@ import {
 } from '../schema.ts';
 import { RECIPIENT_ROWS_PER_INSERT } from './postCreatedStore.ts';
 
-// D1 の束縛上限 100 に収まるよう、1 文あたり 5 列 × 10 行に分ける
+// D1 の束縛上限 100 に収まるよう、1 文あたり 6 列 × 10 行に分ける
 const IMAGE_ROWS_PER_INSERT = 10;
 
 const chunk = <T>(items: ReadonlyArray<T>, size: number): T[][] => {
