@@ -14,7 +14,7 @@ export type BlueskyStatusNotice = Readonly<{
 const STALE_AFTER_MS = 3 * 60 * 1000;
 const LOGIN_FAILED_TITLE = 'Bluesky にログインできません';
 const REPLACE_PASSWORD_HINT =
-  'アプリパスワードを取り消したか変更した場合は、BLUESKY_APP_PASSWORD を新しいアプリパスワードに替えてデプロイしてください。';
+  'アプリパスワードを取り消したか変更した場合は、設定画面の「Bluesky の連携」で新しいアプリパスワードを登録し直してください。';
 
 const two = (value: number): string => String(value).padStart(2, '0');
 

@@ -32,9 +32,6 @@ export const statusHref = (status: Status): string =>
 export const detailHref = (status: Status): string =>
   isLocalAccount(status.account) ? statusHref(status) : `/posts/${status.id}`;
 
-export const isOwnBoost = (status: Status, accountId: string): boolean =>
-  status.reblog !== null && status.account.id === accountId;
-
 export const withFavourited = (status: Status, favourited: boolean): Status => ({
   ...status,
   favourited,

@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process';
 import build from '@hono/vite-build/node';
 import devServer from '@hono/vite-dev-server';
+import { execFileSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 
 export default defineConfig(({ mode }) => {
@@ -28,11 +28,11 @@ export default defineConfig(({ mode }) => {
             bookmarks: './src/ui/pages/bookmarks.tsx',
             federatedTimeline: './src/ui/pages/federatedTimeline.tsx',
             search: './src/ui/pages/search.tsx',
+            settings: './src/ui/pages/settings.tsx',
             xPosts: './src/ui/pages/xPosts.tsx',
             blueskyProfile: './src/ui/pages/blueskyProfile.tsx',
             messages: './src/ui/pages/messages.tsx',
             blueskyFeeds: './src/ui/pages/blueskyFeeds.tsx',
-            blueskyCredential: './src/ui/pages/blueskyCredential.tsx',
             navPrefetch: './src/ui/pages/navPrefetch.ts',
             notificationBadge: './src/ui/pages/notificationBadge.ts',
           },

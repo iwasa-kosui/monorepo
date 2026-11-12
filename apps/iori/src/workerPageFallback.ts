@@ -27,7 +27,7 @@ const staticPages = new Map<string, WorkerPage>([
   ['/messages', { entry: 'messages', title: 'メッセージ | blog.kosui.me', private: true }],
   ['/notifications', { entry: 'notifications', title: 'Notifications | blog.kosui.me' }],
   ['/search', { entry: 'search', title: '検索 | blog.kosui.me' }],
-  ['/settings/bluesky', { entry: 'blueskyCredential', title: 'Bluesky の連携 | blog.kosui.me', private: true }],
+  ['/settings', { entry: 'settings', title: '設定 | blog.kosui.me', private: true }],
   ['/sign-in', { entry: 'signIn', title: 'Sign in | blog.kosui.me' }],
   ['/sign-up', { entry: 'signUp', title: 'Sign up | blog.kosui.me' }],
   ['/x', { entry: 'xPosts', title: 'X | blog.kosui.me', private: true }],

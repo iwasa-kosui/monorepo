@@ -194,8 +194,7 @@ export const BlueskyCredentialSection = () => {
   };
 
   return (
-    <section class='space-y-4 mb-8'>
-      <h2 class='text-xl font-bold text-charcoal dark:text-white'>Bluesky の連携</h2>
+    <div class='space-y-4'>
       {state.kind === 'loading' && <p class={mutedTextClass}>読み込んでいます</p>}
       {state.kind === 'error' && (
         <div class='space-y-3'>
@@ -232,6 +231,6 @@ export const BlueskyCredentialSection = () => {
           )}
         </>
       )}
-    </section>
+    </div>
   );
 };

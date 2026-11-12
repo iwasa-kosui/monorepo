@@ -22,6 +22,7 @@ import {
 } from '../api/mastodonClient.ts';
 import { isLocalAccount, updateStatusesByPostId } from '../api/status.ts';
 import { CustomEmojiText } from '../components/CustomEmojiText.tsx';
+import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { PostView } from '../components/PostView.tsx';
 import type { ReportCategory } from '../components/ReportModal.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
@@ -29,6 +30,7 @@ import { statusActionProps, type StatusActions } from '../components/statusActio
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { fediverseChatPath, fediverseErrorMessageOf } from '../hooks/fediverseConversation.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import { useReplyDialog, type UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
 import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 import { shouldReloadStatuses } from './remoteUserStatuses.ts';
 
@@ -40,6 +42,7 @@ type Props = Readonly<{
   isBlocked: boolean;
   isLoggedIn: boolean;
   actions?: StatusActions;
+  reply?: UseReplyDialogReturn;
   onFollow: () => Promise<void>;
   onUnfollow: () => Promise<void>;
   onMute: () => Promise<void>;
@@ -78,6 +81,7 @@ export const RemoteUserPage = ({
   isBlocked,
   isLoggedIn,
   actions,
+  reply,
   onFollow,
   onUnfollow,
   onMute,
@@ -447,6 +451,7 @@ export const RemoteUserPage = ({
       </section>
 
       <section class='space-y-6 py-2'>
+        {reply !== undefined && <FediverseReplyModal dialog={reply} />}
         <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>
           Posts
         </h2>
@@ -457,6 +462,7 @@ export const RemoteUserPage = ({
               status={status}
               isLoggedIn={isLoggedIn}
               {...statusActionProps(isLoggedIn ? actions : undefined, status)}
+              onReply={isLoggedIn ? reply?.openReplyDialog : undefined}
             />
           ))
         )}
@@ -599,6 +605,7 @@ const App = () => {
   }, []);
 
   const actions = useStatusListActions(updateStatus);
+  const reply = useReplyDialog();
 
   const handleFollow = async () => {
     if (!data || 'error' in data) return;
@@ -757,6 +764,7 @@ const App = () => {
       isBlocked={data.isBlocked}
       isLoggedIn={data.isLoggedIn}
       actions={actions}
+      reply={reply}
       onFollow={handleFollow}
       onUnfollow={handleUnfollow}
       onMute={handleMute}

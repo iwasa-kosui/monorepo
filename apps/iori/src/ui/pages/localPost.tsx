@@ -2,9 +2,7 @@ import { useCallback, useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import type { PostDestination } from '../../domain/post/postDestination.ts';
 import {
-  createStatus,
   deleteStatus,
   fetchRemoteContext,
   fetchStatus,
@@ -13,14 +11,13 @@ import {
 } from '../api/mastodonClient.ts';
 import { accountHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { EditPostModal } from '../components/EditPostModal.tsx';
-import { DEFAULT_POST_DESTINATION } from '../components/postDestination.ts';
-import { replyParams } from '../components/postSubmission.ts';
+import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { QuoteModal } from '../components/QuoteModal.tsx';
-import { ReplyModal } from '../components/ReplyModal.tsx';
 import { statusActionProps } from '../components/statusActionProps.ts';
 import { useEditDialog } from '../hooks/useEditDialog.ts';
 import { useQuoteDialog } from '../hooks/useQuoteDialog.ts';
+import { useReplyDialog } from '../hooks/useReplyDialog.ts';
 import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 import {
   applyContext,
@@ -51,9 +48,6 @@ const LocalPostPage = () => {
   const [isLoggedIn] = useState(() => getIsLoggedIn());
   const [currentAccountId, setCurrentAccountId] = useState<string | undefined>(undefined);
 
-  const [replyToPostId, setReplyToPostId] = useState<string | null>(null);
-  const [replyDestination, setReplyDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
-  const [isSendingReply, setIsSendingReply] = useState(false);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
 
   const getPostIdFromUrl = () => {
@@ -141,15 +135,13 @@ const LocalPostPage = () => {
     }
   }, []);
 
-  const handleReply = (postId: string) => {
-    setReplyToPostId(postId);
-  };
-
   const updateStatus = useCallback((postId: string, updater: (status: Status) => Status) => {
     setThreadData((prev) => updateThreadStatuses(prev, postId, updater));
   }, []);
 
   const actions = useStatusListActions(updateStatus);
+
+  const reply = useReplyDialog({ onReplySent: () => void fetchThread() });
 
   const quote = useQuoteDialog({ onQuoted: () => void fetchThread() });
 
@@ -165,38 +157,6 @@ const LocalPostPage = () => {
         };
       }),
   });
-
-  const handleCloseReplyModal = () => {
-    setReplyToPostId(null);
-  };
-
-  const getReplyToPost = (): Status | undefined => {
-    if (!replyToPostId || !threadData) return undefined;
-    if (threadData.currentPost?.id === replyToPostId) {
-      return threadData.currentPost;
-    }
-    const ancestor = threadData.ancestors.find((p) => p.id === replyToPostId);
-    if (ancestor) return ancestor;
-    return threadData.descendants.find((p) => p.id === replyToPostId);
-  };
-
-  const handleSubmitReply = async (content: string) => {
-    if (!replyToPostId || !content.trim()) return;
-
-    setIsSendingReply(true);
-    try {
-      await createStatus(replyParams(replyToPostId, content, replyDestination));
-      setReplyToPostId(null);
-      setReplyDestination(DEFAULT_POST_DESTINATION);
-      fetchThread();
-    } catch (err) {
-      alert((err as Error).message);
-    } finally {
-      setIsSendingReply(false);
-    }
-  };
-
-  const replyToPost = getReplyToPost();
 
   const handleDelete = async (postId: string) => {
     if (!confirm('この投稿を削除しますか？')) return;
@@ -313,7 +273,7 @@ const LocalPostPage = () => {
                 <div key={post.id} class='relative'>
                   <PostView
                     status={post}
-                    onReply={isLoggedIn ? handleReply : undefined}
+                    onReply={isLoggedIn ? reply.openReplyDialog : undefined}
                     onQuote={isLoggedIn ? quote.open : undefined}
                     onEdit={isLoggedIn ? edit.open : undefined}
                     onDelete={isLoggedIn ? handleDelete : undefined}
@@ -330,7 +290,7 @@ const LocalPostPage = () => {
             <div class='relative'>
               <PostView
                 status={threadData.currentPost}
-                onReply={isLoggedIn ? handleReply : undefined}
+                onReply={isLoggedIn ? reply.openReplyDialog : undefined}
                 onQuote={isLoggedIn ? quote.open : undefined}
                 onEdit={isLoggedIn ? edit.open : undefined}
                 onDelete={isLoggedIn ? handleDelete : undefined}
@@ -370,7 +330,7 @@ const LocalPostPage = () => {
                 <div key={post.id} class='relative'>
                   <PostView
                     status={post}
-                    onReply={isLoggedIn ? handleReply : undefined}
+                    onReply={isLoggedIn ? reply.openReplyDialog : undefined}
                     onQuote={isLoggedIn ? quote.open : undefined}
                     onEdit={isLoggedIn ? edit.open : undefined}
                     onDelete={isLoggedIn ? handleDelete : undefined}
@@ -391,18 +351,7 @@ const LocalPostPage = () => {
         </div>
       </div>
 
-      {/* Reply Modal */}
-      {isLoggedIn && (
-        <ReplyModal
-          isOpen={replyToPostId !== null}
-          onClose={handleCloseReplyModal}
-          onSubmit={handleSubmitReply}
-          replyToUsername={replyToPost?.account.username}
-          isSubmitting={isSendingReply}
-          destination={replyDestination}
-          onDestinationChange={setReplyDestination}
-        />
-      )}
+      {isLoggedIn && <FediverseReplyModal dialog={reply} />}
 
       {isLoggedIn && quote.target !== null && (
         <QuoteModal
@@ -434,8 +383,6 @@ const LocalPostPage = () => {
           onSensitiveChange={edit.setSensitive}
         />
       )}
-
-      {isLoggedIn && <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>}
     </div>
   );
 };

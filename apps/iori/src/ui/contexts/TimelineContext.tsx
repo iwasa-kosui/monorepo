@@ -140,6 +140,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     setEmojiPickerOpenForIndex: ui.setEmojiPickerOpenForIndex,
     replyingToPostId: reply.replyingToPostId ?? blueskyReply.target?.feedItemId ?? blueskyQuote.target?.feedItemId
       ?? quote.target?.id ?? edit.target?.id ?? null,
+    isSendingReply: reply.isSendingReply,
     threadModalPostId: thread.threadModalPostId,
     onLike: actions.like,
     onUndoLike: actions.undoLike,

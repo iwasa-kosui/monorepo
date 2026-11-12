@@ -1,0 +1,76 @@
+import { useEffect } from 'hono/jsx';
+
+import type { UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
+import { MarkdownEditor } from './MarkdownEditor.tsx';
+import { PostDestinationSelect } from './PostDestinationSelect.tsx';
+import { ReplyDialogShell } from './ReplyDialogShell.tsx';
+
+type Props = Readonly<{
+  dialog: UseReplyDialogReturn;
+}>;
+
+export const shouldCloseReplyModalOnKey = (key: string, isSending: boolean): boolean => key === 'Escape' && !isSending;
+
+export const FediverseReplyModal = ({ dialog }: Props) => {
+  const {
+    replyingToPostId,
+    replyingToUsername,
+    replyContent,
+    replyDestination,
+    isSendingReply,
+    closeReplyDialog,
+    setReplyContent,
+    setReplyDestination,
+    sendReply,
+  } = dialog;
+
+  useEffect(() => {
+    if (!replyingToPostId) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (shouldCloseReplyModalOnKey(e.key, isSendingReply)) {
+        closeReplyDialog();
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [replyingToPostId, isSendingReply, closeReplyDialog]);
+
+  if (!replyingToPostId) {
+    return null;
+  }
+
+  const submit = () => {
+    if (replyContent.trim()) {
+      sendReply(replyingToPostId, replyContent);
+    }
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      submit();
+    }
+  };
+
+  return (
+    <ReplyDialogShell
+      title={replyingToUsername ? `@${replyingToUsername} に返信` : undefined}
+      onClose={closeReplyDialog}
+      onSubmit={submit}
+      isSending={isSendingReply}
+      canSubmit={!isSendingReply && replyContent.trim() !== ''}
+      leadingActions={
+        <PostDestinationSelect value={replyDestination} onChange={setReplyDestination} name='reply-destination' />
+      }
+    >
+      <MarkdownEditor
+        value={replyContent}
+        onChange={setReplyContent}
+        onKeyDown={handleKeyDown}
+        placeholder='返信を書く... (⌘+Enter to post)'
+        minHeight='150px'
+        disabled={isSendingReply}
+      />
+    </ReplyDialogShell>
+  );
+};

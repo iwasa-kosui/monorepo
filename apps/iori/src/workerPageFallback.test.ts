@@ -442,22 +442,6 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain('<title>フィード | blog.kosui.me</title>');
   });
 
-  it('renders the Bluesky credential entry for a logged-in user and redirects a visitor', async () => {
-    const owner = await createWorkerPageFallback(new Request('https://worker.test/settings/bluesky'), {
-      isLoggedIn: true,
-      userId: UserId.generate(),
-    });
-    const visitor = await createWorkerPageFallback(new Request('https://worker.test/settings/bluesky'), {
-      isLoggedIn: false,
-    });
-
-    expect(owner?.status).toBe(200);
-    expect(owner?.headers.get('X-Robots-Tag')).toBe('noindex');
-    expect(await owner?.text()).toContain('/static/blueskyCredential.js');
-    expect(visitor?.status).toBe(302);
-    expect(visitor?.headers.get('Location')).toBe('/sign-in');
-  });
-
   it('does not claim feeds paths with extra segments', async () => {
     for (const path of ['/feeds/a', '/feedsx']) {
       expect(
@@ -473,6 +457,38 @@ describe('createWorkerPageFallback', () => {
     expect(await renderSidebar(true)).toContain('href="/feeds"');
     expect(await renderSidebar(false)).not.toContain('href="/feeds"');
     expect(await renderBottomNav(true)).not.toContain('href="/feeds"');
+  });
+
+  it('redirects the private settings page to /sign-in when logged out, without caching', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/settings'));
+
+    expect(response?.status).toBe(302);
+    expect(response?.headers.get('Location')).toBe('/sign-in');
+    expect(response?.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('renders the settings entry for a logged-in user with a Japanese title, no-store and noindex', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/settings#profile'), {
+      isLoggedIn: true,
+      userId: UserId.generate(),
+    });
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('Cache-Control')).toBe('no-store');
+    expect(response?.headers.get('X-Robots-Tag')).toBe('noindex');
+    const html = await response?.text();
+    expect(html).toContain('/static/settings.js');
+    expect(html).toContain('<title>設定 | blog.kosui.me</title>');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+  });
+
+  it('shows the settings link last in the Sidebar only when logged in, and not in the BottomNav', async () => {
+    const loggedIn = await renderSidebar(true);
+
+    expect(loggedIn).toContain('href="/settings"');
+    expect(loggedIn.indexOf('href="/settings"')).toBeGreaterThan(loggedIn.indexOf('href="/search"'));
+    expect(await renderSidebar(false)).not.toContain('href="/settings"');
+    expect(await renderBottomNav(true)).not.toContain('href="/settings"');
   });
 
   it('does not claim unknown GET routes', async () => {

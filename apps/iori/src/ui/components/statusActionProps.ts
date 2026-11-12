@@ -29,3 +29,18 @@ export const statusActionProps = (actions: StatusActions | undefined, status: St
     onVote: actions.vote,
   };
 };
+
+export const likeRepostActionProps = (actions: StatusActions | undefined, status: Status) => {
+  if (actions === undefined) return {};
+  const postId = displayStatus(status).id;
+  return {
+    onLike: actions.like,
+    isLiking: actions.actionState.likingPostId === postId,
+    onUndoLike: actions.undoLike,
+    isUndoingLike: actions.actionState.undoingLikePostId === postId,
+    onRepost: actions.repost,
+    isReposting: actions.actionState.repostingPostId === postId,
+    onUndoRepost: actions.undoRepost,
+    isUndoingRepost: actions.actionState.undoingRepostPostId === postId,
+  };
+};

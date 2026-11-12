@@ -11,6 +11,7 @@ import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { segmentBlueskyText } from './blueskyRichText.ts';
 import { BlueskyVideoPlayer } from './BlueskyVideoPlayer.tsx';
 import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
+import { QuoteIcon } from './QuoteIcon.tsx';
 
 type Props = Readonly<{
   item: IoriBlueskyTimelineItemBody;
@@ -223,10 +224,11 @@ const BlueskyQuoteButton = ({ item, onQuote }: Readonly<{
       event.stopPropagation();
       onQuote(item);
     }}
-    class='flex items-center gap-1 text-sm transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
+    class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
     title='引用'
+    aria-label='引用'
   >
-    引用
+    <QuoteIcon />
   </button>
 );
 
