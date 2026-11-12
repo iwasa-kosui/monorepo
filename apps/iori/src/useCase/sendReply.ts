@@ -40,6 +40,7 @@ import { toPostAddressing } from './helper/postAddressing.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { resolveQuoteNoteFields } from './helper/quoteNote.ts';
+import { isRemotePostObject } from './helper/remotePostObject.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import { sendToMentions } from './helper/sendToMentions.ts';
 import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
@@ -169,8 +170,8 @@ const create = ({
     const documentLoader = await ctx.getDocumentLoader({ identifier: username });
     const result = await ctx.lookupObject(objectUri.trim(), { documentLoader });
 
-    if (!(result instanceof Note)) {
-      return RA.err(RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'));
+    if (!isRemotePostObject(result)) {
+      return RA.err(RemoteNoteLookupError.create(objectUri, 'Not a valid Note, Article or Question object'));
     }
     if (!result.id) {
       return RA.err(RemoteNoteLookupError.create(objectUri, 'Could not resolve Note ID'));

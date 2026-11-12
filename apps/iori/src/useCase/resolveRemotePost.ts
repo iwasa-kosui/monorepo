@@ -1,4 +1,3 @@
-import { Note } from '@fedify/vocab';
 import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
@@ -15,6 +14,7 @@ import type { LookupUrlResolver } from '../ports/lookupUrlResolver.ts';
 import type { FederationContext } from './fetchRemoteContext.ts';
 import { isBlockedActorUri } from './helper/isBlockedActorUri.ts';
 import { toRemotePostIdentity } from './helper/remoteNoteIdentity.ts';
+import { isRemotePostObject } from './helper/remotePostObject.ts';
 import { resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -115,7 +115,9 @@ const create = ({
       documentLoader,
       signal: AbortSignal.any([controller.signal, AbortSignal.timeout(fetchTimeoutMs)]),
     });
-    if (!(found instanceof Note) || found.id === null || found.id.origin === ownOrigin || isBlockedUri(found.id.href)) {
+    if (
+      !isRemotePostObject(found) || found.id === null || found.id.origin === ownOrigin || isBlockedUri(found.id.href)
+    ) {
       return undefined;
     }
     const known = await storedPost(found.id.href);

@@ -865,6 +865,7 @@ export const createWorkerRuntimePorts = async (
         actorResolverById: createD1ActorResolverById(db),
         actorResolverByUri: createD1ActorResolverByUri(db),
         postUpdatedStore: createD1PostUpdatedStore(db),
+        postVersionsResolver: createD1PostVersionsResolverByPostId(db),
         postImagesResolver: createD1PostImagesResolverByPostId(db),
         postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
         acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),

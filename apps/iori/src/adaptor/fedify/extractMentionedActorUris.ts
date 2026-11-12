@@ -1,8 +1,10 @@
-import { Mention, type Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Mention, PUBLIC_COLLECTION } from '@fedify/vocab';
+
+import type { RemotePostObject } from '../../useCase/helper/remotePostObject.ts';
 
 const embeddedOnlyDocumentLoader = (): Promise<never> => Promise.reject(new Error('remote tags are not fetched'));
 
-export const extractMentionedActorUris = async (note: Note): Promise<string[]> => {
+export const extractMentionedActorUris = async (note: RemotePostObject): Promise<string[]> => {
   const uris = new Set<string>();
   try {
     for await (const tag of note.getTags({ documentLoader: embeddedOnlyDocumentLoader, suppressError: true })) {

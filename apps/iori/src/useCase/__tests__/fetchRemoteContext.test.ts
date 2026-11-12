@@ -1,4 +1,4 @@
-import { Collection, CollectionPage, Note, Person } from '@fedify/vocab';
+import { Article, Collection, CollectionPage, Note, Person, Question } from '@fedify/vocab';
 import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
@@ -44,7 +44,7 @@ const remotePost = (overrides: Partial<Post> = {}) =>
 
 type Setup = Readonly<{
   post?: Post;
-  notes?: ReadonlyArray<Note>;
+  notes?: ReadonlyArray<Note | Article | Question>;
   stored?: ReadonlyArray<string>;
   localUris?: ReadonlyArray<string>;
   blockedActorUris?: ReadonlyArray<string>;
@@ -146,6 +146,47 @@ describe('FetchRemoteContextUseCase', () => {
 
       expect(await t.run()).toBe(2);
       expect(storedUris(t)).toEqual([replyUri(1), replyUri(2)]);
+    });
+
+    it('Article の投稿の返信にある Article と Question も、本文を組み立てて保存する', async () => {
+      const article = new Article({
+        id: new URL(replyUri(1)),
+        name: 'Title',
+        content: '<p>body</p>',
+        attribution: personOf('bob'),
+        replyTarget: new URL(ROOT_URI),
+      });
+      const question = new Question({
+        id: new URL(replyUri(2)),
+        content: '<p>q</p>',
+        exclusiveOptions: [new Note({ name: 'a' })],
+        attribution: personOf('carol'),
+        replyTarget: new URL(ROOT_URI),
+      });
+      const t = setup({
+        notes: [
+          new Article({
+            id: new URL(ROOT_URI),
+            content: 'root',
+            attribution: personOf('alice'),
+            replies: repliesOf(replyUri(1), replyUri(2)),
+          }),
+          article,
+          question,
+        ],
+      });
+
+      expect(await t.run()).toBe(2);
+      expect(t.remotePostUpserter.resolve.mock.calls.map(([identity]) => identity)).toMatchObject([
+        {
+          uri: replyUri(1),
+          content: `<p><strong>Title</strong></p><p>body</p><p><a href="${replyUri(1)}">元の記事を読む</a></p>`,
+        },
+        {
+          uri: replyUri(2),
+          content: `<p>q</p><ul><li>a</li></ul><p><a href="${replyUri(2)}">元の投稿で投票する</a></p>`,
+        },
+      ]);
     });
 
     it('署名付きのローダーはログインユーザーの identifier で作る', async () => {
