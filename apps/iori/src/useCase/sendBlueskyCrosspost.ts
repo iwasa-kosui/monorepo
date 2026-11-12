@@ -119,8 +119,10 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     if (user === undefined) return failWith(attempting, 'user not found');
     const postUrl = new URL(`/users/${user.username}/posts/${post.postId}`, deps.origin).href;
 
-    const storedImages = [...Result.unsafeUnwrap(await deps.postImagesResolver.resolve(postId))]
-      .sort((a, b) => a.createdAt - b.createdAt);
+    const storedImages = hasContentWarning(post.summary)
+      ? []
+      : [...Result.unsafeUnwrap(await deps.postImagesResolver.resolve(postId))]
+        .sort((a, b) => a.createdAt - b.createdAt);
     const loaded = await Promise.all(storedImages.map(loadImage));
     const images = loaded.filter((image) => image !== undefined);
     const unavailableImageUrls = storedImages

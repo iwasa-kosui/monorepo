@@ -340,6 +340,11 @@ describe('buildBlueskyPostDraft の sensitive', () => {
     });
   });
 
+  it('画像の無い sensitive の投稿には labels を付けない', () => {
+    const record = toBlueskyPostRecord(build({ sensitive: true, images: [] }), { images: [] });
+    expect('labels' in record).toBe(false);
+  });
+
   it('sensitive が false なら record に labels を付けない', () => {
     const record = toBlueskyPostRecord(build({ sensitive: false }), { images: [] });
     expect('labels' in record).toBe(false);

@@ -187,7 +187,7 @@ export const buildBlueskyPostDraft = (
     text,
     facets: links.map((link) => toFacet(text, link)).sort((a, b) => a.index.byteStart - b.index.byteStart),
     images: kept,
-    ...(input.sensitive ? { selfLabeled: true } : {}),
+    ...(input.sensitive && kept.length > 0 ? { selfLabeled: true } : {}),
     ...(preview === undefined ? {} : {
       external: {
         uri: preview.url,
