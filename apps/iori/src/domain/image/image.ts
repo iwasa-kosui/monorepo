@@ -21,5 +21,9 @@ export type PostImageCreatedStore = {
   store: (images: PostImage[]) => Promise<void>;
 };
 
+export type PostImagesReplacedStore = {
+  store: (input: Readonly<{ postId: PostId; images: PostImage[] }>) => Promise<void>;
+};
+
 export type PostImagesResolverByPostId = Agg.Resolver<PostId, PostImage[]>;
 export type PostImagesResolverByPostIds = Agg.Resolver<PostId[], Map<string, PostImage[]>>;

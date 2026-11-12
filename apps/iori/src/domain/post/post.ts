@@ -36,6 +36,7 @@ const remotePostZodType = z.object({
   visibility: z.nullable(Visibility.zodType),
   summary: z.nullable(z.string()),
   sensitive: z.boolean(),
+  editedAt: z.nullable(Instant.zodType).optional(),
 });
 
 export type LocalPost = z.infer<typeof localPostZodType>;
@@ -74,6 +75,14 @@ export type RemotePostCreated = PostEvent<
   RemotePost,
   'post.remotePostCreated',
   RemotePost & { recipientActorUris: ReadonlyArray<string> }
+>;
+export type RemotePostUpdated = PostEvent<
+  RemotePost,
+  'post.remotePostUpdated',
+  RemotePost & {
+    recipientActorUris: ReadonlyArray<string>;
+    previousRecipientActorUris: ReadonlyArray<string>;
+  }
 >;
 export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
 
@@ -133,6 +142,30 @@ const createRemotePost = (now: Instant) =>
   );
 };
 
+export type RemotePostEdit = Readonly<{
+  content: string;
+  summary: string | null;
+  sensitive: boolean;
+  editedAt: Instant;
+  recipientActorUris: ReadonlyArray<string>;
+  previousRecipientActorUris: ReadonlyArray<string>;
+}>;
+
+const isNewerEdit = (post: RemotePost, editedAt: Instant): boolean =>
+  post.editedAt === undefined || post.editedAt === null || editedAt > post.editedAt;
+
+const updateRemotePost = (now: Instant) => (post: RemotePost, edit: RemotePostEdit): RemotePostUpdated => {
+  const { recipientActorUris, previousRecipientActorUris, ...changed } = edit;
+  const updated: RemotePost = { ...post, ...changed };
+  return PostEvent.create(
+    post.postId,
+    updated,
+    'post.remotePostUpdated',
+    { ...updated, recipientActorUris, previousRecipientActorUris },
+    now,
+  );
+};
+
 const deletePost = (now: Instant) => (postId: PostId): PostDeleted => {
   return PostEvent.create(
     postId,
@@ -150,15 +183,19 @@ export const Post = {
   ...schema,
   createPost,
   createRemotePost,
+  updateRemotePost,
+  isNewerEdit,
   deletePost,
   isVisibleToAnonymous,
 } as const;
 
 export type PostCreatedStore = Agg.Store<PostCreated | RemotePostCreated>;
+export type RemotePostUpdatedStore = Agg.Store<RemotePostUpdated>;
 export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostResolverByUri = Agg.Resolver<{ uri: string }, RemotePost | undefined>;
 export type LocalPostResolverByUri = Agg.Resolver<{ uri: string }, LocalPost | undefined>;
+export type RemotePostRecipientsResolverByPostId = Agg.Resolver<PostId, ReadonlyArray<string>>;
 export type RemotePostAttachment = Readonly<{ url: string; altText: string | null }>;
 export type RemotePostIdentity = Readonly<{
   uri: string;

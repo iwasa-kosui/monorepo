@@ -22,6 +22,7 @@ import {
   Note,
   Reject,
   Undo,
+  Update,
 } from '@fedify/vocab';
 import { FetchError } from '@fedify/vocab-runtime';
 
@@ -250,6 +251,7 @@ export const createCloudflareFederationRuntime = async (
     .on(Undo, inboxListener.onUndo)
     .on(Create, inboxListener.onCreate)
     .on(Delete, inboxListener.onDelete)
+    .on(Update, inboxListener.onUpdate)
     .on(Like, inboxListener.onLike)
     .on(Announce, inboxListener.onAnnounce)
     .on(Activity, inboxListener.onActivity)

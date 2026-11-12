@@ -117,6 +117,7 @@ export const remotePostsTable = sqliteTable('remote_posts', {
   uri: text('uri').notNull(),
   inReplyToUri: text('inReplyToUri'),
   visibility: text('visibility'),
+  editedAt: timestamp(),
 }, (table) => [
   uniqueIndex('remote_posts_uri_unique').on(table.uri),
   index('remote_posts_in_reply_to_uri_idx').on(table.inReplyToUri),

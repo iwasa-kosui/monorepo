@@ -264,6 +264,10 @@ const create = () => {
       federatedTimelineItemDeletedStore: PgFederatedTimelineItemDeletedStore.getInstance(),
       postDeletedStore: PgPostDeletedStore.getInstance(),
     },
+    onUpdate: {
+      origin: Env.getInstance().ORIGIN,
+      updateRemotePostUseCase: { run: async () => RA.ok({ type: 'postNotFound' as const }) },
+    },
     onLike: { inboxActorResolver, addReceivedEmojiReactUseCase, addReceivedLikeUseCase },
     onAnnounce: {
       origin: Env.getInstance().ORIGIN,

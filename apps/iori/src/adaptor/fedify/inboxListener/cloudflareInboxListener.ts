@@ -10,6 +10,7 @@ import { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNote
 import { RemoveReceivedEmojiReactUseCase } from '../../../useCase/removeReceivedEmojiReact.ts';
 import { RemoveReceivedLikeUseCase } from '../../../useCase/removeReceivedLike.ts';
 import { RemoveReceivedRepostUseCase } from '../../../useCase/removeReceivedRepost.ts';
+import { UpdateRemotePostUseCase } from '../../../useCase/updateRemotePost.ts';
 import { createD1ActorResolverById } from '../../d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUri } from '../../d1/actor/actorResolverByUri.ts';
 import { createD1ActorResolverByUserId } from '../../d1/actor/actorResolverByUserId.ts';
@@ -33,6 +34,7 @@ import { createD1FollowedByLocalActorResolverByActorUri } from '../../d1/follow/
 import { createD1FollowResolver } from '../../d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../../d1/follow/undoFollowingProcessedStore.ts';
 import { createD1PostImageCreatedStore } from '../../d1/image/postImageCreatedStore.ts';
+import { createD1PostImagesReplacedStore } from '../../d1/image/postImagesReplacedStore.ts';
 import { createD1PostImagesResolverByPostId } from '../../d1/image/postImagesResolver.ts';
 import { createD1LikesResolverByPostId } from '../../d1/like/likesResolverByPostId.ts';
 import { createD1LocalLikeDeletedStore } from '../../d1/like/localLikeDeletedStore.ts';
@@ -40,6 +42,7 @@ import { createD1RemoteLikeCreatedStore } from '../../d1/like/remoteLikeCreatedS
 import { createD1RemoteLikeDeletedStore } from '../../d1/like/remoteLikeDeletedStore.ts';
 import { createD1RemoteLikeResolverByActivityUri } from '../../d1/like/remoteLikeResolverByActivityUri.ts';
 import { createD1LinkPreviewCreatedStore } from '../../d1/linkPreview/linkPreviewCreatedStore.ts';
+import { createD1LinkPreviewsDeletedStore } from '../../d1/linkPreview/linkPreviewsDeletedStore.ts';
 import { createD1LinkPreviewsResolverByPostId } from '../../d1/linkPreview/linkPreviewsResolverByPostId.ts';
 import {
   createD1EmojiReactNotificationCreatedStore,
@@ -65,6 +68,8 @@ import { createD1PostCreatedStore } from '../../d1/post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../../d1/post/postDeletedStore.ts';
 import { createD1PostResolver } from '../../d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../../d1/post/postResolverByUri.ts';
+import { createD1RemotePostRecipientsResolverByPostId } from '../../d1/post/remotePostRecipientsResolverByPostId.ts';
+import { createD1RemotePostUpdatedStore } from '../../d1/post/remotePostUpdatedStore.ts';
 import { createD1RemotePostUpserter } from '../../d1/post/remotePostUpserter.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../../d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { createD1AcceptedRelaysResolver } from '../../d1/relay/acceptedRelaysResolver.ts';
@@ -301,6 +306,21 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
       emojiReactDeletedStore: createD1EmojiReactDeletedStore(db),
       federatedTimelineItemDeletedStore: createD1FederatedTimelineItemDeletedStore(db),
       postDeletedStore: createD1PostDeletedStore(db),
+    },
+    onUpdate: {
+      origin,
+      updateRemotePostUseCase: UpdateRemotePostUseCase.create({
+        origin,
+        postResolverByUri,
+        actorResolverByUri,
+        remotePostRecipientsResolver: createD1RemotePostRecipientsResolverByPostId(db),
+        postImagesReplacedStore: createD1PostImagesReplacedStore(db),
+        remotePostUpdatedStore: createD1RemotePostUpdatedStore(db),
+        linkPreviewsResolver: createD1LinkPreviewsResolverByPostId(db),
+        linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
+        linkPreviewsDeletedStore: createD1LinkPreviewsDeletedStore(db),
+        ogpFetcher: createOgpFetcher(),
+      }),
     },
     onLike: { inboxActorResolver, addReceivedEmojiReactUseCase, addReceivedLikeUseCase },
     onAnnounce: {

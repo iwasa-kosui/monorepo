@@ -122,6 +122,21 @@ const options = {
   myReactionEmojis: new Set(['🎉']),
 };
 
+describe('toStatus の edited_at', () => {
+  it('編集された Fediverse の投稿は編集時刻を ISO 8601 で返す', () => {
+    const status = toStatus({ ...remotePost, editedAt: Date.UTC(2025, 0, 3, 4, 5, 6) as Instant }, options);
+
+    expect(StatusSchema.safeParse(status).success).toBe(true);
+    expect(status.edited_at).toBe('2025-01-03T04:05:06.000Z');
+  });
+
+  it('編集されていない投稿とローカルの投稿は null を返す', () => {
+    expect(toStatus({ ...remotePost, editedAt: null }, options).edited_at).toBeNull();
+    expect(toStatus(remotePost, options).edited_at).toBeNull();
+    expect(toStatus(localPost, options).edited_at).toBeNull();
+  });
+});
+
 describe('toStatus', () => {
   it('converts a local post into a Status that passes the schema', () => {
     const status = toStatus(localPost, options);
