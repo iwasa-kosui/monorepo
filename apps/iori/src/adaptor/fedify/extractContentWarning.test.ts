@@ -1,4 +1,4 @@
-import { Note } from '@fedify/vocab';
+import { Article, Note, Question } from '@fedify/vocab';
 import { LanguageString } from '@fedify/vocab-runtime';
 import { describe, expect, it } from 'vitest';
 
@@ -36,5 +36,17 @@ describe('extractContentWarning', () => {
     const note = new Note({ id: noteId, summary: 'CW', sensitive: null });
 
     expect(extractContentWarning(note)).toEqual({ summary: 'CW', sensitive: false });
+  });
+
+  it('ignores the summary of an Article and keeps its sensitive flag', () => {
+    const article = new Article({ id: noteId, summary: '<p>excerpt</p>', sensitive: true });
+
+    expect(extractContentWarning(article)).toEqual({ summary: null, sensitive: true });
+  });
+
+  it('reads the summary of a Question as a content warning', () => {
+    const question = new Question({ id: noteId, summary: 'CW', sensitive: true });
+
+    expect(extractContentWarning(question)).toEqual({ summary: 'CW', sensitive: true });
   });
 });

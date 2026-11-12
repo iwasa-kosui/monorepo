@@ -36,10 +36,12 @@ const isBlank = (text: string): boolean => text.trim() === '';
 const buildArticleContent = (post: Article): string => {
   const name = String(post.name ?? '');
   const content = String(post.content ?? '');
+  const summary = String(post.summary ?? '');
   const title = isBlank(name) ? '' : `<p><strong>${escapeHtml(name)}</strong></p>`;
-  if (!isBlank(content)) return `${title}${content}`;
+  const body = !isBlank(content) ? content : isBlank(summary) ? '' : summary;
   const href = toLinkHref(post);
-  return href === undefined ? title : `${title}<p><a href="${escapeHtml(href)}">${escapeHtml(href)}</a></p>`;
+  const link = href === undefined ? '' : `<p><a href="${escapeHtml(href)}">元の記事を読む</a></p>`;
+  return `${title}${body}${link}`;
 };
 
 const buildQuestionContent = async (post: Question): Promise<string> => {

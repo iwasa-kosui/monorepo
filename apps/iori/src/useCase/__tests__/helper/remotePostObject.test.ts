@@ -35,45 +35,61 @@ describe('buildRemotePostContent', () => {
   });
 
   describe('Article', () => {
-    it('name があれば、エスケープした name を太字の段落にして content の前に置く', async () => {
-      const article = new Article({ id: ID, name: 'A <b> & "c"', content: '<p>body</p>' });
+    const readMore = (href: string) => `<p><a href="${href}">元の記事を読む</a></p>`;
+
+    it('name、content、元の記事へのリンクをこの順に並べ、name はエスケープして太字の段落にする', async () => {
+      const article = new Article({ id: ID, url: URL_OF_POST, name: 'A <b> & "c"', content: '<p>body</p>' });
 
       expect(await buildRemotePostContent(article)).toBe(
-        '<p><strong>A &lt;b&gt; &amp; &quot;c&quot;</strong></p><p>body</p>',
+        `<p><strong>A &lt;b&gt; &amp; &quot;c&quot;</strong></p><p>body</p>${readMore(URL_OF_POST.href)}`,
       );
     });
 
-    it('name が無ければ、content だけを返す', async () => {
-      expect(await buildRemotePostContent(new Article({ id: ID, content: '<p>body</p>' }))).toBe('<p>body</p>');
+    it('name が無ければ、content と元の記事へのリンクを返す', async () => {
+      const article = new Article({ id: ID, url: URL_OF_POST, content: '<p>body</p>' });
+
+      expect(await buildRemotePostContent(article)).toBe(`<p>body</p>${readMore(URL_OF_POST.href)}`);
     });
 
-    it('content が空なら、url へのリンクを置く', async () => {
+    it('content が空で summary があれば、summary を HTML のまま本文にする', async () => {
+      const article = new Article({ id: ID, url: URL_OF_POST, name: 'Title', summary: '<p>excerpt</p>', content: ' ' });
+
+      expect(await buildRemotePostContent(article)).toBe(
+        `<p><strong>Title</strong></p><p>excerpt</p>${readMore(URL_OF_POST.href)}`,
+      );
+    });
+
+    it('content があれば、summary は本文に入れない', async () => {
+      const article = new Article({ id: ID, url: URL_OF_POST, summary: '<p>excerpt</p>', content: '<p>body</p>' });
+
+      expect(await buildRemotePostContent(article)).toBe(`<p>body</p>${readMore(URL_OF_POST.href)}`);
+    });
+
+    it('content も summary も空なら、元の記事へのリンクだけを置く', async () => {
       const article = new Article({ id: ID, name: 'Title', url: URL_OF_POST });
 
       expect(await buildRemotePostContent(article)).toBe(
-        `<p><strong>Title</strong></p><p><a href="${URL_OF_POST.href}">${URL_OF_POST.href}</a></p>`,
+        `<p><strong>Title</strong></p>${readMore(URL_OF_POST.href)}`,
       );
     });
 
-    it('content が空で url が Link なら、Link の href へのリンクを置く', async () => {
+    it('url が Link なら、Link の href へのリンクを置く', async () => {
       const article = new Article({ id: ID, url: new Link({ href: URL_OF_POST }) });
 
-      expect(await buildRemotePostContent(article)).toBe(
-        `<p><a href="${URL_OF_POST.href}">${URL_OF_POST.href}</a></p>`,
-      );
+      expect(await buildRemotePostContent(article)).toBe(readMore(URL_OF_POST.href));
     });
 
-    it('content が空で url も無ければ、id へのリンクを置く', async () => {
+    it('url が無ければ、id へのリンクを置く', async () => {
       const article = new Article({ id: ID, content: '  ' });
 
-      expect(await buildRemotePostContent(article)).toBe(`<p><a href="${ID.href}">${ID.href}</a></p>`);
+      expect(await buildRemotePostContent(article)).toBe(readMore(ID.href));
     });
 
     it('リンクの href をエスケープする', async () => {
       const article = new Article({ id: new URL('https://remote.example/a?x=1&y="2"') });
 
       expect(await buildRemotePostContent(article)).toBe(
-        '<p><a href="https://remote.example/a?x=1&amp;y=%222%22">https://remote.example/a?x=1&amp;y=%222%22</a></p>',
+        '<p><a href="https://remote.example/a?x=1&amp;y=%222%22">元の記事を読む</a></p>',
       );
     });
   });

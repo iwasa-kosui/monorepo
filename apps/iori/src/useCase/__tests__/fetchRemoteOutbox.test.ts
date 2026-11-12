@@ -190,7 +190,10 @@ describe('FetchRemoteOutboxUseCase', () => {
 
     expect(await t.run()).toBe(2);
     expect(t.remotePostUpserter.resolve.mock.calls.map(([identity]) => identity)).toMatchObject([
-      { uri: noteUri(1), content: '<p><strong>Title</strong></p><p>body</p>' },
+      {
+        uri: noteUri(1),
+        content: `<p><strong>Title</strong></p><p>body</p><p><a href="${noteUri(1)}">元の記事を読む</a></p>`,
+      },
       { uri: noteUri(2), content: `<p>q</p><ul><li>a</li></ul><p><a href="${noteUri(2)}">元の投稿で投票する</a></p>` },
     ]);
   });

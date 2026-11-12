@@ -117,7 +117,7 @@ const create = ({
 
         if (!isRemotePostObject(result)) {
           return RA.err(
-            RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'),
+            RemoteNoteLookupError.create(objectUri, 'Not a valid Note, Article or Question object'),
           );
         }
 
