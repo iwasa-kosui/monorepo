@@ -7,7 +7,7 @@ import { safeUrl } from '../../helper/safeUrl.ts';
 import { fetchPublicTimeline, updateAvatar } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
-import { BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
+import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyStatusNotice } from '../components/BlueskyStatusNotice.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
@@ -697,6 +697,7 @@ const TimelineList = () => {
     blueskyLike,
     blueskyRepost,
     blueskyReply,
+    blueskyQuote,
     blueskyStatus,
     reply,
     thread,
@@ -754,6 +755,7 @@ const TimelineList = () => {
               dataIndex={index}
               isSelected={selectedIndex === index}
               onReply={blueskyReply.open}
+              onQuote={blueskyQuote.open}
               onLike={blueskyLike.like}
               onUndoLike={blueskyLike.undoLike}
               isLikePending={blueskyLike.pendingUris.has(item.item.uri)}
@@ -906,7 +908,7 @@ const ReportPostModal = () => {
 };
 
 const HomePage = () => {
-  const { timeline, blueskyReply } = useTimelineContext();
+  const { timeline, blueskyReply, blueskyQuote } = useTimelineContext();
   const handlePosted = usePostedHandler();
   const isTimelineReady = timeline.state.status === 'success';
 
@@ -942,6 +944,7 @@ const HomePage = () => {
       <NewPostsPill />
       <ReplyModal />
       <BlueskyReplyModal dialog={blueskyReply} />
+      <BlueskyQuoteModal dialog={blueskyQuote} />
       <ThreadModal />
       <ReportPostModal />
       <TimelineList />

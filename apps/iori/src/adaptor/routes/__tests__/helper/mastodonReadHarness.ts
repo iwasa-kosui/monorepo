@@ -40,6 +40,7 @@ import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
 import { MarkBlueskyNotificationsSeenUseCase } from '../../../../useCase/markBlueskyNotificationsSeen.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
+import { QuoteBlueskyPostUseCase } from '../../../../useCase/quoteBlueskyPost.ts';
 import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts';
 import { ReplyToBlueskyPostUseCase } from '../../../../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../../useCase/repostBlueskyPost.ts';
@@ -235,6 +236,7 @@ export const setupReadApi = (
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
     blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
     blueskyReplyClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
+    blueskyQuoteClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
     blueskyPostCids?: Readonly<
       Record<string, string | Readonly<{ cid: string; likeUri?: string; repostUri?: string }>>
     >;
@@ -669,6 +671,13 @@ export const setupReadApi = (
               client: options.blueskyReplyClient,
               query: options.blueskyReplyClient.query,
               targetResolver: createD1BlueskyLikeTargetResolver(db),
+              now: Instant.now,
+            }),
+          quoteBlueskyPostUseCase: options.blueskyQuoteClient === undefined
+            ? undefined
+            : QuoteBlueskyPostUseCase.create({
+              client: options.blueskyQuoteClient,
+              query: options.blueskyQuoteClient.query,
               now: Instant.now,
             }),
           markBlueskyNotificationsSeenUseCase: options.blueskySeenClient === undefined
