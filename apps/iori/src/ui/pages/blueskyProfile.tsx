@@ -15,10 +15,15 @@ import {
   followBlueskyActor,
   unfollowBlueskyActor,
 } from '../api/blueskyProfileClient.ts';
+import { blueskyItemActionProps, type BlueskyPostActions } from '../components/blueskyPostActions.ts';
+import { BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { appendUniqueBy } from '../hooks/appendUnique.ts';
 import { chatConvoPath, chatErrorMessageOf } from '../hooks/blueskyChat.ts';
+import type { BlueskyItemsUpdater } from '../hooks/optimisticBlueskyLike.ts';
+import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import { withFeedItems } from './blueskyProfileFeed.ts';
 
 type Props = Readonly<{
   profile: BlueskyProfile;
@@ -32,6 +37,7 @@ type Props = Readonly<{
   onFollow: () => Promise<void>;
   onUnfollow: () => Promise<void>;
   onMessage: () => Promise<void>;
+  actions?: BlueskyPostActions;
 }>;
 
 export const BlueskyProfilePage = (
@@ -47,6 +53,7 @@ export const BlueskyProfilePage = (
     onFollow,
     onUnfollow,
     onMessage,
+    actions,
   }: Props,
 ) => {
   const displayName = profile.displayName ?? profile.handle;
@@ -213,7 +220,9 @@ export const BlueskyProfilePage = (
           ? <p class='text-charcoal-light dark:text-gray-400'>{feedNotice}</p>
           : items.length === 0
           ? <p class='text-charcoal-light dark:text-gray-400'>No posts yet.</p>
-          : items.map((item) => <BlueskyTimelineItemView key={item.feedItemId} item={item} />)}
+          : items.map((item) => (
+            <BlueskyTimelineItemView key={item.feedItemId} item={item} {...blueskyItemActionProps(actions, item)} />
+          ))}
       </section>
     </>
   );
@@ -241,6 +250,10 @@ const App = () => {
   const [data, setData] = useState<{ error: string } | ProfileData | null>(null);
   const [feed, setFeed] = useState<FeedData | null>(null);
   const actor = blueskyActorOfPath(window.location.pathname);
+  const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
+    setFeed((prev) => withFeedItems(prev, updater));
+  }, []);
+  const { actions, replyDialog } = useBlueskyUriActions(updateItems);
 
   useEffect(() => {
     if (actor === undefined) {
@@ -338,19 +351,23 @@ const App = () => {
   }
 
   return (
-    <BlueskyProfilePage
-      profile={data.profile}
-      items={feed?.items ?? []}
-      feedNotice={feed === null ? null : blueskyFeedNoticeMessage(feed)}
-      isFeedLoading={feed === null}
-      isFollowing={data.followUri !== null}
-      isTogglingFollow={isTogglingFollow}
-      isOpeningMessage={isOpeningMessage}
-      messageError={messageError}
-      onFollow={() => toggleFollow(true)}
-      onUnfollow={() => toggleFollow(false)}
-      onMessage={openMessage}
-    />
+    <>
+      <BlueskyProfilePage
+        profile={data.profile}
+        items={feed?.items ?? []}
+        feedNotice={feed === null ? null : blueskyFeedNoticeMessage(feed)}
+        isFeedLoading={feed === null}
+        isFollowing={data.followUri !== null}
+        isTogglingFollow={isTogglingFollow}
+        isOpeningMessage={isOpeningMessage}
+        messageError={messageError}
+        onFollow={() => toggleFollow(true)}
+        onUnfollow={() => toggleFollow(false)}
+        onMessage={openMessage}
+        actions={actions}
+      />
+      <BlueskyReplyModal dialog={replyDialog} />
+    </>
   );
 };
 

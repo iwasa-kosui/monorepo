@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { IoriBlueskyCrosspost } from '../../adaptor/mastodon/entities.ts';
 import {
-  BLUESKY_NOT_SENT_NOTICE,
-  blueskyNotSentNotice,
+  BLUESKY_CONTENT_WARNING_NOTICE,
+  BLUESKY_SENSITIVE_NOTICE,
+  blueskyCrosspostNotice,
   postedMessage,
   skipReasonText,
   toBlueskyCrosspostMark,
@@ -55,7 +56,7 @@ describe('toBlueskyCrosspostMark', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'skipped', skip_reason: 'sensitive', retrying: false })))
       .toMatchObject({
         label: 'Bluesky に未送信',
-        title: 'センシティブ指定の投稿は Bluesky に送りません',
+        title: 'この投稿の当時は、センシティブ指定の投稿を Bluesky に送っていませんでした',
       });
   });
 
@@ -63,7 +64,7 @@ describe('toBlueskyCrosspostMark', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'skipped', skip_reason: 'content_warning', retrying: false })))
       .toMatchObject({
         label: 'Bluesky に未送信',
-        title: 'CW 付きの投稿は Bluesky に送りません',
+        title: 'この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした',
       });
   });
 
@@ -80,8 +81,8 @@ describe('toBlueskyCrosspostMark', () => {
 describe('skipReasonText', () => {
   it.each(
     [
-      ['content_warning', 'CW 付きの投稿は Bluesky に送りません'],
-      ['sensitive', 'センシティブ指定の投稿は Bluesky に送りません'],
+      ['content_warning', 'この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした'],
+      ['sensitive', 'この投稿の当時は、センシティブ指定の投稿を Bluesky に送っていませんでした'],
       ['reply_to_unsent', '返信先が Bluesky にないため送っていません'],
     ] as const,
   )('%s の文言を返す', (reason, text) => {
@@ -123,24 +124,30 @@ describe('postedMessage', () => {
 
   it('skipped なら理由を添える', () => {
     expect(postedMessage('both', crosspost({ status: 'skipped', skip_reason: 'content_warning', retrying: false })))
-      .toBe('Fediverse に投稿しました。Bluesky には送っていません（CW 付きの投稿は Bluesky に送りません）');
+      .toBe(
+        'Fediverse に投稿しました。Bluesky には送っていません（この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした）',
+      );
   });
 });
 
-describe('blueskyNotSentNotice', () => {
-  it('送り先が両方で、CW があれば説明を返す', () => {
-    expect(blueskyNotSentNotice('both', '注意', false)).toBe(BLUESKY_NOT_SENT_NOTICE);
+describe('blueskyCrosspostNotice', () => {
+  it('送り先が両方で、CW があれば CW の文と投稿へのリンクだけを送る説明を返す', () => {
+    expect(blueskyCrosspostNotice('both', '注意', false)).toBe(BLUESKY_CONTENT_WARNING_NOTICE);
+    expect(blueskyCrosspostNotice('both', '注意', true)).toBe(BLUESKY_CONTENT_WARNING_NOTICE);
+    expect(BLUESKY_CONTENT_WARNING_NOTICE).toBe('Bluesky には CW の文と投稿へのリンクだけを送ります');
   });
 
-  it('送り先が両方で、センシティブがオンなら説明を返す', () => {
-    expect(blueskyNotSentNotice('both', '', true)).toBe(BLUESKY_NOT_SENT_NOTICE);
+  it('送り先が両方で、CW が無くセンシティブがオンなら画像に注意のラベルを付ける説明を返す', () => {
+    expect(blueskyCrosspostNotice('both', '', true)).toBe(BLUESKY_SENSITIVE_NOTICE);
+    expect(blueskyCrosspostNotice('both', '  ', true)).toBe(BLUESKY_SENSITIVE_NOTICE);
+    expect(BLUESKY_SENSITIVE_NOTICE).toBe('Bluesky には画像に注意のラベルを付けて送ります');
   });
 
   it('CW が空白だけでセンシティブがオフなら返さない', () => {
-    expect(blueskyNotSentNotice('both', '  ', false)).toBeUndefined();
+    expect(blueskyCrosspostNotice('both', '  ', false)).toBeUndefined();
   });
 
   it('送り先が Fediverse だけなら返さない', () => {
-    expect(blueskyNotSentNotice('fediverse', '注意', true)).toBeUndefined();
+    expect(blueskyCrosspostNotice('fediverse', '注意', true)).toBeUndefined();
   });
 });

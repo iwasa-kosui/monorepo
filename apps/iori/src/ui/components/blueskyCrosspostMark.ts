@@ -9,8 +9,8 @@ export type BlueskyCrosspostMark = Readonly<{
 }>;
 
 const skipReasonTexts: Readonly<Record<NonNullable<IoriBlueskyCrosspost['skip_reason']>, string>> = {
-  content_warning: 'CW 付きの投稿は Bluesky に送りません',
-  sensitive: 'センシティブ指定の投稿は Bluesky に送りません',
+  content_warning: 'この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした',
+  sensitive: 'この投稿の当時は、センシティブ指定の投稿を Bluesky に送っていませんでした',
   reply_to_unsent: '返信先が Bluesky にないため送っていません',
 };
 
@@ -68,11 +68,15 @@ export const postedMessage = (
   return destination === 'fediverse' ? 'Fediverse に投稿しました' : '投稿しました';
 };
 
-export const BLUESKY_NOT_SENT_NOTICE = 'CW 付き・センシティブ指定の投稿は Bluesky に送りません';
+export const BLUESKY_CONTENT_WARNING_NOTICE = 'Bluesky には CW の文と投稿へのリンクだけを送ります';
+export const BLUESKY_SENSITIVE_NOTICE = 'Bluesky には画像に注意のラベルを付けて送ります';
 
-export const blueskyNotSentNotice = (
+export const blueskyCrosspostNotice = (
   destination: PostDestination,
   cw: string,
   sensitive: boolean,
-): string | undefined =>
-  destination === 'both' && (cw.trim() !== '' || sensitive) ? BLUESKY_NOT_SENT_NOTICE : undefined;
+): string | undefined => {
+  if (destination !== 'both') return undefined;
+  if (cw.trim() !== '') return BLUESKY_CONTENT_WARNING_NOTICE;
+  return sensitive ? BLUESKY_SENSITIVE_NOTICE : undefined;
+};

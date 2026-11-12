@@ -153,6 +153,7 @@ import { createD1UserResolver } from '../adaptor/d1/user/userResolver.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPasswordResolver.ts';
 import { createD1UserPasswordSetStore } from '../adaptor/d1/userPassword/userPasswordSetStore.ts';
+import { isBlockedUri } from '../adaptor/fedify/blockedInboxDomain.ts';
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
 import { createStatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
@@ -191,6 +192,7 @@ import { EditArticleUseCase } from '../useCase/editArticle.ts';
 import { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import { FetchRemoteContextUseCase } from '../useCase/fetchRemoteContext.ts';
+import { FetchRemoteOutboxUseCase } from '../useCase/fetchRemoteOutbox.ts';
 import { FetchReplyNotesRecursiveUseCase } from '../useCase/fetchReplyNotesRecursive.ts';
 import { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
@@ -205,6 +207,7 @@ import { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import { ResolveRemoteAccountUseCase } from '../useCase/resolveRemoteAccount.ts';
+import { ResolveRemotePostUseCase } from '../useCase/resolveRemotePost.ts';
 import { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import { SaveDigestSubscriptionUseCase } from '../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
@@ -451,6 +454,15 @@ export const createWorkerRuntimePorts = async (
         remoteActorProfileUpdatedStore: createD1RemoteActorProfileUpdatedStore(db),
         actorResolverByUri: createD1ActorResolverByUri(db),
       }),
+      resolveRemotePostUseCase: ResolveRemotePostUseCase.create({
+        origin: env.ORIGIN,
+        userResolver,
+        postResolverByUri,
+        localPostResolverByUri,
+        actorResolverById: createD1ActorResolverById(db),
+        remotePostUpserter,
+        blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+      }),
       markersResolverByUserId,
       notificationIdsResolverByUserIdAndCreatedAt: createD1NotificationIdsResolverByUserIdAndCreatedAt(db),
       saveMarkersUseCase: SaveMarkersUseCase.create({
@@ -657,7 +669,18 @@ export const createWorkerRuntimePorts = async (
           postResolverByUri,
           localPostResolverByUri,
           remotePostUpserter,
+          isBlockedUri: (uri) => isBlockedUri(uri),
         }),
+        isBlockedUri: (uri) => isBlockedUri(uri),
+      }),
+      fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase.create({
+        origin: env.ORIGIN,
+        userResolver,
+        actorResolverById: createD1ActorResolverById(db),
+        remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+        localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, env.ORIGIN),
+        remotePostUpserter,
+        blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
       }),
     },
     articles: {

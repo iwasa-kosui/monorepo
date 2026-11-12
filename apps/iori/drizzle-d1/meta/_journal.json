@@ -267,6 +267,13 @@
       "when": 1794451311116,
       "tag": "0037_notification_mentions",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1794457934379,
+      "tag": "0038_post_quotes",
+      "breakpoints": true
     }
   ]
 }

@@ -271,7 +271,7 @@ export default {
           }),
         );
         app.route('/api', createWorkerMastodonViewerListsRouter({ ...runtime.mastodon, authn }));
-        app.route('/api', createWorkerIoriSearchRouter({ ...runtime.mastodon, authn }));
+        app.route('/api', createWorkerIoriSearchRouter({ ...runtime.mastodon, authn, createContext }));
         app.route('/api', createWorkerIoriSummaryRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonTranslateRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));

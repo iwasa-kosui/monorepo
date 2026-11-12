@@ -5,6 +5,7 @@ import { Temporal } from '@js-temporal/polyfill';
 
 import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
 import { extractContentWarning } from '../adaptor/fedify/extractContentWarning.ts';
+import { extractQuoteUri } from '../adaptor/fedify/extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
@@ -246,6 +247,7 @@ const create = ({
             ...extractContentWarning(result),
             visibility: fetchedVisibility,
             recipientActorUris: extractRecipientActorUris([result], origin),
+            quoteUri: await extractQuoteUri(result),
             authorIdentity: authorIdentity.val,
           });
 

@@ -35,6 +35,7 @@ import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
 import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
 import { FetchRemoteContextUseCase } from '../../../../useCase/fetchRemoteContext.ts';
+import { FetchRemoteOutboxUseCase } from '../../../../useCase/fetchRemoteOutbox.ts';
 import { FetchReplyNotesRecursiveUseCase } from '../../../../useCase/fetchReplyNotesRecursive.ts';
 import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
@@ -47,6 +48,7 @@ import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts'
 import { ReplyToBlueskyPostUseCase } from '../../../../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../../useCase/repostBlueskyPost.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
+import { ResolveRemotePostUseCase } from '../../../../useCase/resolveRemotePost.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
 import type { ScheduleBlueskyCrosspostUseCase } from '../../../../useCase/scheduleBlueskyCrosspost.ts';
@@ -542,6 +544,7 @@ export const setupReadApi = (
         '/api',
         createWorkerIoriSearchRouter({
           authn,
+          actorResolverByUserId,
           searchTimeline,
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,
@@ -553,6 +556,16 @@ export const setupReadApi = (
             remoteActorProfileUpdatedStore,
             actorResolverByUri,
           }),
+          resolveRemotePostUseCase: ResolveRemotePostUseCase.create({
+            origin: ORIGIN,
+            userResolver,
+            postResolverByUri: createD1PostResolverByUri(db),
+            localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
+            actorResolverById: createD1ActorResolverById(db),
+            remotePostUpserter,
+            blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+          }),
+          createContext,
         }),
       );
       root.route(
@@ -829,7 +842,18 @@ export const setupReadApi = (
               postResolverByUri: createD1PostResolverByUri(db),
               localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
               remotePostUpserter,
+              isBlockedUri: () => false,
             }),
+            isBlockedUri: () => false,
+          }),
+          fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase.create({
+            origin: ORIGIN,
+            userResolver,
+            actorResolverById: createD1ActorResolverById(db),
+            remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+            localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, ORIGIN),
+            remotePostUpserter,
+            blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
           }),
           allRelaysResolver: createD1AllRelaysResolver(db),
           createContext,

@@ -11,6 +11,7 @@ import {
   fetchAccount,
   fetchAccountStatuses,
   fetchRelationshipOrSignedOut,
+  fetchRemoteStatuses,
   follow,
   isNotFoundError,
   mute,
@@ -27,6 +28,7 @@ import { ReportModal } from '../components/ReportModal.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { runExclusive, runOptimisticFavourite } from '../hooks/optimisticFavourite.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import { shouldReloadStatuses } from './remoteUserStatuses.ts';
 
 type Props = Readonly<{
   account: Account;
@@ -49,6 +51,7 @@ type Props = Readonly<{
   isMuting: boolean;
   isBlocking: boolean;
   isTogglingFollow: boolean;
+  isLoadingRemoteStatuses: boolean;
   isReportOpen: boolean;
   isReporting: boolean;
   isReported: boolean;
@@ -84,6 +87,7 @@ export const RemoteUserPage = ({
   isMuting,
   isBlocking,
   isTogglingFollow,
+  isLoadingRemoteStatuses,
   isReportOpen,
   isReporting,
   isReported,
@@ -423,6 +427,11 @@ export const RemoteUserPage = ({
             />
           ))
         )}
+        {isLoadingRemoteStatuses && (
+          <p role='status' class='text-sm text-charcoal-light dark:text-gray-400'>
+            相手のサーバーから過去の投稿を読み込んでいます
+          </p>
+        )}
       </section>
 
       <ReportModal
@@ -457,11 +466,13 @@ const getActorIdFromUrl = () => {
 
 const App = () => {
   const isFetchingMoreRef = useRef(false);
+  const hasLoadedMoreRef = useRef(false);
   const favouriteInFlightRef = useRef<Set<string>>(null);
   const [likingPostId, setLikingPostId] = useState<string | null>(null);
   const [isMuting, setIsMuting] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
+  const [isLoadingRemoteStatuses, setIsLoadingRemoteStatuses] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isReporting, setIsReporting] = useState(false);
   const [isReported, setIsReported] = useState(false);
@@ -471,6 +482,24 @@ const App = () => {
   useEffect(() => {
     const actorId = getActorIdFromUrl();
     if (!actorId) return;
+    const loadRemoteStatuses = async () => {
+      setIsLoadingRemoteStatuses(true);
+      try {
+        const remote = await fetchRemoteStatuses(actorId);
+        if (shouldReloadStatuses(remote, hasLoadedMoreRef.current === true)) {
+          const page = await fetchAccountStatuses(actorId, { excludeReblogs: true });
+          if (hasLoadedMoreRef.current !== true) {
+            setData((prev) =>
+              prev === null || 'error' in prev ? prev : { ...prev, statuses: page.items, nextMaxId: page.nextMaxId }
+            );
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load the remote statuses:', error);
+      } finally {
+        setIsLoadingRemoteStatuses(false);
+      }
+    };
     const fetchFirstPage = async () => {
       try {
         const [account, page, relationship] = await Promise.all([
@@ -483,6 +512,7 @@ const App = () => {
           return;
         }
         setData({ account, statuses: page.items, nextMaxId: page.nextMaxId, ...relationship });
+        if (relationship.isLoggedIn) void loadRemoteStatuses();
       } catch (error) {
         setData({
           error: isNotFoundError(error)
@@ -508,6 +538,7 @@ const App = () => {
   const loadMore = useCallback(async (maxId: string) => {
     if (accountId === undefined || isFetchingMoreRef.current) return;
     isFetchingMoreRef.current = true;
+    hasLoadedMoreRef.current = true;
     try {
       const page = await fetchAccountStatuses(accountId, { maxId, excludeReblogs: true });
       const nextMaxId = page.items.length === 0 || page.nextMaxId === maxId ? undefined : page.nextMaxId;
@@ -705,6 +736,7 @@ const App = () => {
       isMuting={isMuting}
       isBlocking={isBlocking}
       isTogglingFollow={isTogglingFollow}
+      isLoadingRemoteStatuses={isLoadingRemoteStatuses}
       isReportOpen={isReportOpen}
       isReporting={isReporting}
       isReported={isReported}

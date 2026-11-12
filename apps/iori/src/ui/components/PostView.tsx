@@ -4,12 +4,14 @@ import type { Status, Translation } from '../../adaptor/mastodon/entities.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { isMastodonApiError, translate } from '../api/mastodonClient.ts';
+import { hideQuoteInline, quoteOf, quoteTargetUrls } from '../api/quote.ts';
 import { accountHandle, accountHref, detailHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { translationErrorMessage } from '../api/translation.ts';
 import { toBlueskyCrosspostMark } from './blueskyCrosspostMark.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
+import { QuotedPostCard } from './QuotedPostCard.tsx';
 
 type Props = Readonly<{
   status: Status;
@@ -83,6 +85,8 @@ export const PostView = (
   const images = post.media_attachments.filter((attachment) => attachment.type === 'image');
   const linkPreviews = post.iori?.link_previews ?? [];
   const reactions = post.iori?.reactions ?? [];
+  const quote = quoteOf(post);
+  const contentHtml = quote === undefined ? post.content : hideQuoteInline(post.content, quoteTargetUrls(quote));
   const postUrl = post.url ?? (!isLocalPost && isOriginUri(post.uri) ? post.uri : undefined);
   const isOtherAccount = isLoggedIn === true
     && currentAccountId !== undefined
@@ -410,7 +414,7 @@ export const PostView = (
             <>
               <div
                 class='mt-2 text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-sand [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-charcoal-light dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent [&_.invisible]:visible [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mb-2'
-                dangerouslySetInnerHTML={{ __html: post.content }}
+                dangerouslySetInnerHTML={{ __html: contentHtml }}
               />
               {isTranslationShown && translation !== null && (
                 <div class='mt-2 border-t border-warm-gray pt-2 dark:border-gray-700'>
@@ -468,6 +472,11 @@ export const PostView = (
                   </a>
                 );
               })}
+            </div>
+          )}
+          {!isContentHidden && quote !== undefined && (
+            <div class='mt-3'>
+              <QuotedPostCard quote={quote} />
             </div>
           )}
           {/* Link previews */}

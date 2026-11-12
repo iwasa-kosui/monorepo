@@ -20,6 +20,7 @@ export type ToStatusOptions = Readonly<{
   inReplyToAccountId: string | null;
   myReactionEmojis: ReadonlySet<string>;
   blueskyCrosspost?: BlueskyCrosspost | null;
+  quote?: Readonly<{ uri: string; status: Status | null }> | null;
 }>;
 
 type LinkPreviews = PostWithAuthor['linkPreviews'];
@@ -101,6 +102,12 @@ export const toIoriBlueskyCrosspost = (crosspost: BlueskyCrosspost): IoriBluesky
 const toVisibility = (post: PostWithAuthor): Visibility =>
   post.type === 'local' ? 'public' : post.visibility ?? 'private';
 
+const quoteUrlExtension = (options: ToStatusOptions): { quote_url?: string } => {
+  if (options.quote == null || options.quote.status !== null) return {};
+  const quoteUrl = toSafeApiUrl(options.quote.uri, options.baseUrl);
+  return quoteUrl === undefined ? {} : { quote_url: quoteUrl };
+};
+
 export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status => {
   const { uri, url } = toPostUrls(post, options);
   return {
@@ -123,6 +130,7 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
     in_reply_to_id: options.inReplyToId,
     in_reply_to_account_id: options.inReplyToAccountId,
     reblog: null,
+    quote: options.quote?.status == null ? null : { state: 'accepted', quoted_status: options.quote.status },
     poll: null,
     card: toCard(post.linkPreviews, options.baseUrl),
     language: toLanguage(post.content),
@@ -153,6 +161,7 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
       ...(options.blueskyCrosspost == null
         ? {}
         : { bluesky_crosspost: toIoriBlueskyCrosspost(options.blueskyCrosspost) }),
+      ...quoteUrlExtension(options),
     },
   };
 };
@@ -186,6 +195,7 @@ export const toReblogStatus = (
   in_reply_to_id: null,
   in_reply_to_account_id: null,
   reblog: options.reblog,
+  quote: null,
   poll: null,
   card: null,
   language: options.reblog.language,

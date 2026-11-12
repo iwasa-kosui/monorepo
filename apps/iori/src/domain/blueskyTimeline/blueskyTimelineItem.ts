@@ -48,23 +48,36 @@ const videoEmbedZodType = z.object({
     .default(null),
   alt: z.string().nullable().default(null),
 });
-const recordEmbedZodType = z.object({
-  type: z.literal('record'),
-  uri: z.string().min(1),
-  authorHandle: z.string().min(1),
-  text: z.string(),
-});
 const mediaEmbedZodType = z.discriminatedUnion('type', [
   imagesEmbedZodType,
   externalEmbedZodType,
   videoEmbedZodType,
 ]);
+const recordEmbedZodType = z.object({
+  type: z.literal('record'),
+  uri: z.string().min(1),
+  authorHandle: z.string().min(1),
+  text: z.string(),
+  authorDisplayName: z.string().min(1).optional(),
+  authorAvatar: httpUrlZodType.optional(),
+  media: mediaEmbedZodType.optional(),
+});
+const recordUnavailableEmbedZodType = z.object({
+  type: z.literal('recordUnavailable'),
+  uri: z.string().min(1),
+  reason: z.enum(['notFound', 'blocked', 'detached']),
+});
 const embedZodType = z.discriminatedUnion('type', [
   imagesEmbedZodType,
   externalEmbedZodType,
   videoEmbedZodType,
   recordEmbedZodType,
-  z.object({ type: z.literal('recordWithMedia'), media: mediaEmbedZodType, record: recordEmbedZodType }),
+  recordUnavailableEmbedZodType,
+  z.object({
+    type: z.literal('recordWithMedia'),
+    media: mediaEmbedZodType,
+    record: z.discriminatedUnion('type', [recordEmbedZodType, recordUnavailableEmbedZodType]),
+  }),
 ]);
 
 const blueskyTimelineItemZodType = z.object({
