@@ -23,6 +23,7 @@ const noteOf = (id: string, author = 'alice') =>
 type Setup = Readonly<{
   stored?: Readonly<Record<string, string>>;
   localStored?: Readonly<Record<string, string>>;
+  storedAuthorUris?: Readonly<Record<string, string>>;
   blockedActorUris?: ReadonlyArray<string>;
   lookupObject?: (uri: string) => Promise<unknown>;
   documentLoader?: DocumentLoader;
@@ -48,12 +49,26 @@ const setup = (options: Setup = {}) => {
   };
   const postResolverByUri = {
     resolve: vi.fn(async ({ uri }: { uri: string }) =>
-      RA.ok(stored.has(uri) ? ({ postId: stored.get(uri) } as never) : undefined)
+      RA.ok(
+        stored.has(uri)
+          ? ({ type: 'remote', postId: stored.get(uri), actorId: `actor-of:${stored.get(uri)}` } as never)
+          : undefined,
+      )
     ),
+  };
+  const actorResolverById = {
+    resolve: vi.fn(async (actorId: string) => {
+      const postId = actorId.replace('actor-of:', '');
+      return RA.ok({ uri: options.storedAuthorUris?.[postId] ?? ALICE_URI } as never);
+    }),
   };
   const localPostResolverByUri = {
     resolve: vi.fn(async ({ uri }: { uri: string }) =>
-      RA.ok(options.localStored?.[uri] === undefined ? undefined : ({ postId: options.localStored[uri] } as never))
+      RA.ok(
+        options.localStored?.[uri] === undefined
+          ? undefined
+          : ({ type: 'local', postId: options.localStored[uri] } as never),
+      )
     ),
   };
   const useCase = ResolveRemotePostUseCase.create({
@@ -64,6 +79,7 @@ const setup = (options: Setup = {}) => {
     },
     postResolverByUri,
     localPostResolverByUri,
+    actorResolverById: actorResolverById as never,
     remotePostUpserter,
     blockedActorUriResolverByUsername: {
       resolve: async ({ actorUri }) => RA.ok(options.blockedActorUris?.includes(actorUri) ?? false),
@@ -158,6 +174,37 @@ describe('ResolveRemotePostUseCase', () => {
     expect(await ownId.run(HTML_URL)).toBeUndefined();
     expect(withoutId.remotePostUpserter.resolve).not.toHaveBeenCalled();
     expect(ownId.remotePostUpserter.resolve).not.toHaveBeenCalled();
+  });
+
+  it('ブロックした相手の保存済みの投稿は、URL で引けても note.id で引けても見つからない扱いにする', async () => {
+    const byUrl = setup({
+      stored: { [NOTE_URI]: 'post-1' },
+      storedAuthorUris: { 'post-1': ALICE_URI },
+      blockedActorUris: [ALICE_URI],
+    });
+    const byNoteId = setup({
+      stored: { [NOTE_URI]: 'post-1' },
+      storedAuthorUris: { 'post-1': ALICE_URI },
+      blockedActorUris: [ALICE_URI],
+      lookupObject: async () => noteOf(NOTE_URI),
+    });
+
+    expect(await byUrl.run(NOTE_URI)).toBeUndefined();
+    expect(await byNoteId.run(HTML_URL)).toBeUndefined();
+    expect(byNoteId.remotePostUpserter.resolve).not.toHaveBeenCalled();
+  });
+
+  it('ブロックしていない相手の保存済みの投稿と、自分の保存済みの投稿は、ブロックの判定を受けずに返す', async () => {
+    const uri = `${ORIGIN}/users/kosui/posts/post-9`;
+    const t = setup({
+      stored: { [NOTE_URI]: 'post-1' },
+      localStored: { [uri]: 'post-9' },
+      blockedActorUris: [ALICE_URI],
+      storedAuthorUris: { 'post-1': 'https://remote.example/users/bob' },
+    });
+
+    expect(await t.run(NOTE_URI)).toBe('post-1');
+    expect(await t.run(uri)).toBe('post-9');
   });
 
   it('ブロックした相手の投稿は保存せず、見つからない扱いにする', async () => {

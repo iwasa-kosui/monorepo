@@ -3,8 +3,9 @@ import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
+import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import type { BlockedActorUriResolverByUsername } from '../domain/block/block.ts';
-import type { LocalPostResolverByUri, PostResolverByUri, RemotePostUpserter } from '../domain/post/post.ts';
+import type { LocalPostResolverByUri, Post, PostResolverByUri, RemotePostUpserter } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
 import type { UserId } from '../domain/user/userId.ts';
@@ -35,6 +36,7 @@ type Deps = Readonly<{
   userResolver: UserResolver;
   postResolverByUri: PostResolverByUri;
   localPostResolverByUri: LocalPostResolverByUri;
+  actorResolverById: ActorResolverById;
   remotePostUpserter: RemotePostUpserter;
   blockedActorUriResolverByUsername: BlockedActorUriResolverByUsername;
   fetchTimeoutMs?: number;
@@ -46,6 +48,7 @@ const create = ({
   userResolver,
   postResolverByUri,
   localPostResolverByUri,
+  actorResolverById,
   remotePostUpserter,
   blockedActorUriResolverByUsername,
   fetchTimeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
@@ -63,18 +66,25 @@ const create = ({
       ),
     });
 
-  const storedPostId = async (uri: string): Promise<PostId | undefined> => {
+  const storedPost = async (uri: string): Promise<Post | undefined> => {
     const [remote, local] = await Promise.all([
       postResolverByUri.resolve({ uri }),
       localPostResolverByUri.resolve({ uri }),
     ]);
-    const post = (remote.ok ? remote.val : undefined) ?? (local.ok ? local.val : undefined);
-    return post?.postId;
+    return (remote.ok ? remote.val : undefined) ?? (local.ok ? local.val : undefined);
   };
 
   const isBlocked = async (username: Username, actorUri: string): Promise<boolean> => {
     const blocked = await blockedActorUriResolverByUsername.resolve({ username, actorUri });
     return blocked.ok && blocked.val;
+  };
+
+  const visiblePostId = async (username: Username, post: Post | undefined): Promise<PostId | undefined> => {
+    if (post === undefined || post.type === 'local') {
+      return post?.postId;
+    }
+    const author = await actorResolverById.resolve(post.actorId);
+    return author.ok && author.val !== undefined && await isBlocked(username, author.val.uri) ? undefined : post.postId;
   };
 
   const importNote = async (
@@ -84,9 +94,9 @@ const create = ({
     documentLoader: DocumentLoader,
     controller: AbortController,
   ): Promise<PostId | undefined> => {
-    const stored = await storedPostId(url.href);
+    const stored = await storedPost(url.href);
     if (stored !== undefined || url.origin === ownOrigin) {
-      return stored;
+      return visiblePostId(username, stored);
     }
     const found = await ctx.lookupObject(url.href, {
       documentLoader,
@@ -95,9 +105,9 @@ const create = ({
     if (!(found instanceof Note) || found.id === null || found.id.origin === ownOrigin) {
       return undefined;
     }
-    const known = await storedPostId(found.id.href);
+    const known = await storedPost(found.id.href);
     if (known !== undefined) {
-      return known;
+      return visiblePostId(username, known);
     }
     if (found.attributionId !== null && await isBlocked(username, found.attributionId.href)) {
       return undefined;

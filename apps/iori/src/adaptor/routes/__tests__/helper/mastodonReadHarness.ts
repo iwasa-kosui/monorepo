@@ -557,6 +557,7 @@ export const setupReadApi = (
             userResolver,
             postResolverByUri: createD1PostResolverByUri(db),
             localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
+            actorResolverById: createD1ActorResolverById(db),
             remotePostUpserter,
             blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
           }),

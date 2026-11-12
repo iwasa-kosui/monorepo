@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { remoteSearchUrl } from './searchRemoteUrl.ts';
+import { isRemoteImportFailure, remoteSearchUrl } from './searchRemoteUrl.ts';
 
 const OWN_HOST = 'iori.test';
 
@@ -36,5 +36,23 @@ describe('remoteSearchUrl', () => {
 
   it('URL として解釈できない入力は返さない', () => {
     expect(remoteSearchUrl('https://', OWN_HOST)).toBeUndefined();
+  });
+});
+
+describe('isRemoteImportFailure', () => {
+  it('取り込みが失敗したときは、失敗として扱う', () => {
+    expect(isRemoteImportFailure({ kind: 'failed' })).toBe(true);
+  });
+
+  it('取り込めた投稿が 0 件のときは、失敗として扱う', () => {
+    expect(isRemoteImportFailure({ kind: 'loaded', count: 0 })).toBe(true);
+  });
+
+  it('取り込めた投稿が 1 件以上あるときは、失敗として扱わない', () => {
+    expect(isRemoteImportFailure({ kind: 'loaded', count: 1 })).toBe(false);
+  });
+
+  it('取り込みを始めていないときや、401 で転送するときは、失敗として扱わない', () => {
+    expect(isRemoteImportFailure(undefined)).toBe(false);
   });
 });

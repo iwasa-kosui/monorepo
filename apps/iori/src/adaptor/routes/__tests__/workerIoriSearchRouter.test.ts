@@ -572,6 +572,23 @@ describe('GET /api/v2/search の resolve=true', () => {
     expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
   });
 
+  it('アカウントの解決が 10 秒で終わらないときは、accounts を空にして検索を返す', async () => {
+    const t = await seedResolve();
+    t.remoteActorLookup.lookup.mockImplementation(() => new Promise(() => undefined) as never);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const pending = t.search({ q: '@erin@remote.example', resolve: 'true' });
+      await vi.waitFor(() => expect(t.remoteActorLookup.lookup).toHaveBeenCalled());
+      await vi.advanceTimersByTimeAsync(10_000);
+      const response = await pending;
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resolve がないか true でないときは解決しない', async () => {
     const t = await seedResolve();
 
@@ -843,6 +860,72 @@ describe('GET /api/v2/search の投稿の URL の解決', () => {
     });
 
     const response = await t.search({ q: HTML_URL, resolve: 'true' });
+
+    expect(response.status).toBe(200);
+    expect(await t.statusesOf(response)).toEqual([]);
+  });
+
+  it('アカウントの解決と投稿の解決を並行に走らせる', async () => {
+    const t = await seedUrl();
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fallback = setTimeout(release, 300);
+    let accountLookupFinished = false;
+    let finishedWhenPostLookupStarted: boolean | undefined;
+    t.remoteActorLookup.lookup.mockImplementation(
+      (async () => {
+        await gate;
+        accountLookupFinished = true;
+        return RA.err({
+          type: 'RemoteActorLookupError',
+          message: 'not found',
+          detail: { handle: '', reason: 'not found' },
+        } as never);
+      }) as never,
+    );
+    t.federation.lookupObject.mockImplementation(async (uri?: string) => {
+      if (uri !== HTML_URL) return null;
+      finishedWhenPostLookupStarted = accountLookupFinished;
+      release();
+      return erinNote();
+    });
+
+    const response = await t.search({ q: HTML_URL, resolve: 'true' });
+    clearTimeout(fallback);
+
+    expect(response.status).toBe(200);
+    expect(finishedWhenPostLookupStarted).toBe(false);
+    expect(await t.statusesOf(response)).toHaveLength(1);
+  });
+
+  it('アカウントの解決が時間切れでも、解決した投稿を返す', async () => {
+    const t = await seedUrl();
+    t.remoteActorLookup.lookup.mockImplementation(() => new Promise(() => undefined) as never);
+    const before = t.remotePostCount();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const pending = t.search({ q: HTML_URL, resolve: 'true' });
+      await vi.waitFor(() => expect(t.remotePostCount()).toBe(before + 1));
+      await vi.advanceTimersByTimeAsync(10_000);
+      const response = await pending;
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { accounts: unknown[]; statuses: unknown[] };
+      expect(body.accounts).toEqual([]);
+      expect(parseStatuses(body.statuses)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ブロックした相手の保存済みの投稿は、resolve=true で検索しても statuses に出ない', async () => {
+    const t = await seedUrl();
+    t.seed.addBlock(t.me.userId, t.bob.actorId);
+    const stored = t.seed.addRemotePost(t.bob, 2_000, { content: '<p>bob の投稿</p>', timeline: false });
+
+    const response = await t.search({ q: stored.uri, resolve: 'true' });
 
     expect(response.status).toBe(200);
     expect(await t.statusesOf(response)).toEqual([]);

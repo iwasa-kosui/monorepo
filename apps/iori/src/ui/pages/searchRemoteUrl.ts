@@ -11,3 +11,8 @@ export const remoteSearchUrl = (q: string, ownHost: string): string | undefined 
   }
   return url.host.toLowerCase() === ownHost.toLowerCase() ? undefined : trimmed;
 };
+
+export type RemoteImportResult = Readonly<{ kind: 'failed' }> | Readonly<{ kind: 'loaded'; count: number }>;
+
+export const isRemoteImportFailure = (result: RemoteImportResult | undefined): boolean =>
+  result !== undefined && (result.kind === 'failed' || result.count === 0);

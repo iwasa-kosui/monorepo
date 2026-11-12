@@ -15,7 +15,7 @@ import { buildSummaryRequest, summaryErrorMessage, summaryResultLabel, summaryTa
 import { BlueskyActorSearchResults, BlueskyPostSearchResults } from '../components/BlueskySearchResults.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { SummaryText } from '../components/SummaryText.tsx';
-import { remoteSearchUrl } from './searchRemoteUrl.ts';
+import { isRemoteImportFailure, type RemoteImportResult, remoteSearchUrl } from './searchRemoteUrl.ts';
 import {
   parseSearchSource,
   SEARCH_SOURCE_TABS,
@@ -48,6 +48,7 @@ const SearchPage = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [remoteStatuses, setRemoteStatuses] = useState<readonly Status[]>([]);
   const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+  const [remoteImportResult, setRemoteImportResult] = useState<RemoteImportResult | undefined>(undefined);
   const remoteSeqRef = useRef(0);
   const [searchError, setSearchError] = useState('');
   const [summary, setSummary] = useState<{ result: TimelineSummary; target: string } | null>(null);
@@ -75,13 +76,19 @@ const SearchPage = () => {
   const loadRemoteStatuses = async (url: string) => {
     const seq = nextRemoteSeq();
     setRemoteStatuses([]);
+    setRemoteImportResult(undefined);
     setIsLoadingRemote(true);
     try {
       const statuses = await searchRemoteStatuses(url);
-      if (seq === remoteSeqRef.current) setRemoteStatuses(statuses);
+      if (seq === remoteSeqRef.current) {
+        setRemoteStatuses(statuses);
+        setRemoteImportResult({ kind: 'loaded', count: statuses.length });
+      }
     } catch (error) {
       if (isUnauthorizedError(error)) {
         redirectToSignIn();
+      } else if (seq === remoteSeqRef.current) {
+        setRemoteImportResult({ kind: 'failed' });
       }
     } finally {
       if (seq === remoteSeqRef.current) setIsLoadingRemote(false);
@@ -91,6 +98,7 @@ const SearchPage = () => {
   const clearRemoteStatuses = () => {
     nextRemoteSeq();
     setRemoteStatuses([]);
+    setRemoteImportResult(undefined);
     setIsLoadingRemote(false);
   };
 
@@ -296,6 +304,11 @@ const SearchPage = () => {
           {isLoadingRemote && (
             <p role='status' class='text-charcoal-light dark:text-gray-400 mb-4'>
               相手のサーバーから投稿を読み込んでいます
+            </p>
+          )}
+          {!isLoadingRemote && isRemoteImportFailure(remoteImportResult) && (
+            <p role='status' class='text-charcoal-light dark:text-gray-400 mb-4'>
+              相手のサーバーから投稿を取り込めませんでした
             </p>
           )}
           {remoteStatuses.length > 0 && (

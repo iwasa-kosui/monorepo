@@ -13,6 +13,7 @@ import {
   MAX_QUERY_LIMIT,
   TimelineSearchQuery,
 } from '../../domain/timelineSearch/timelineSearchQuery.ts';
+import { timedOut, withTimeout } from '../../helper/withTimeout.ts';
 import type { ResolveRemoteAccountUseCase } from '../../useCase/resolveRemoteAccount.ts';
 import type { ResolveRemotePostUseCase } from '../../useCase/resolveRemotePost.ts';
 import type { SearchTimelineUseCase, TimelineSearchExpansion } from '../../useCase/searchTimeline.ts';
@@ -53,6 +54,8 @@ type SearchedStatuses = Readonly<{
   expansion: TimelineSearchExpansion;
   serverTiming: string;
 }>;
+
+const ACCOUNTS_TIMEOUT_MS = 10_000;
 
 const invalidToken = { error: 'The access token is invalid' } as const;
 const readSearch = Scope.orThrow('read:search');
@@ -140,7 +143,12 @@ export const createWorkerIoriSearchRouter = ({
 
   const resolveAccountsOrEmpty = async (c: Context<MastodonAuthEnv>): Promise<Result<Account[], Response>> => {
     try {
-      return await resolveAccounts(c);
+      const resolved = await withTimeout(resolveAccounts(c), ACCOUNTS_TIMEOUT_MS);
+      if (resolved === timedOut) {
+        getLogger().warn('Timed out while resolving remote accounts for search');
+        return Result.ok([]);
+      }
+      return resolved;
     } catch (error) {
       getLogger().warn(`Failed to resolve remote accounts for search: ${String(error)}`);
       return Result.ok([]);
@@ -280,6 +288,19 @@ export const createWorkerIoriSearchRouter = ({
       if (type === 'hashtags' || isPaging) {
         return c.json(empty);
       }
+      const accountId = c.req.query('account_id');
+      const onlyActorId = accountId === undefined ? undefined : ActorId.parse(accountId);
+      const remotePostUrl = type === 'accounts' || onlyActorId !== undefined ? undefined : remotePostUrlOf(c);
+      if (remotePostUrl !== undefined) {
+        const [accounts, resolved] = await Promise.all([
+          type === 'statuses' ? Result.ok<Account[]>([]) : resolveAccountsOrEmpty(c),
+          resolveStatus(c, remotePostUrl),
+        ]);
+        if (!accounts.ok) {
+          return accounts.err;
+        }
+        return resolved.ok ? c.json({ ...empty, accounts: accounts.val, statuses: resolved.val }) : resolved.err;
+      }
       const accounts = type === 'statuses' ? Result.ok<Account[]>([]) : await resolveAccountsOrEmpty(c);
       if (!accounts.ok) {
         return accounts.err;
@@ -290,15 +311,8 @@ export const createWorkerIoriSearchRouter = ({
       if ((c.req.query('q') ?? '').trim() === '') {
         return c.json(validationFailed('q'), 400);
       }
-      const accountId = c.req.query('account_id');
-      const onlyActorId = accountId === undefined ? undefined : ActorId.parse(accountId);
       if (onlyActorId !== undefined && !onlyActorId.ok) {
         return c.json({ ...empty, accounts: accounts.val });
-      }
-      const remotePostUrl = onlyActorId === undefined ? remotePostUrlOf(c) : undefined;
-      if (remotePostUrl !== undefined) {
-        const resolved = await resolveStatus(c, remotePostUrl);
-        return resolved.ok ? c.json({ ...empty, accounts: accounts.val, statuses: resolved.val }) : resolved.err;
       }
       const searched = await searchStatuses(c, { limitOf: clampedLimit, onlyActorId: onlyActorId?.val });
       if (!searched.ok) {
