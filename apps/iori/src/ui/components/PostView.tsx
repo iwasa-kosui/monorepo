@@ -6,6 +6,7 @@ import { safeAbsoluteUrl, safeUrl } from '../../helper/safeUrl.ts';
 import { isMastodonApiError, translate } from '../api/mastodonClient.ts';
 import { accountHandle, accountHref, displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
 import { translationErrorMessage } from '../api/translation.ts';
+import { toBlueskyCrosspostMark } from './blueskyCrosspostMark.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 
@@ -68,6 +69,9 @@ export const PostView = (
   const isRemotePost = !isLocalPost;
   const isOwner = isLocalPost && currentAccountId !== undefined && post.account.id === currentAccountId;
   const isReplyPost = post.in_reply_to_id !== null;
+  const crosspostMark = post.iori?.bluesky_crosspost === undefined
+    ? undefined
+    : toBlueskyCrosspostMark(post.iori.bluesky_crosspost);
   const images = post.media_attachments.filter((attachment) => attachment.type === 'image');
   const linkPreviews = post.iori?.link_previews ?? [];
   const reactions = post.iori?.reactions ?? [];
@@ -304,6 +308,32 @@ export const PostView = (
                 {Instant.formatRelative(Date.parse(post.created_at) as Instant)}
               </time>
             </a>
+            {crosspostMark !== undefined && (
+              crosspostMark.href === null
+                ? (
+                  <span
+                    title={crosspostMark.title}
+                    class={`text-xs ${
+                      crosspostMark.emphasized
+                        ? 'font-medium text-red-600 dark:text-red-400'
+                        : 'text-charcoal-light dark:text-gray-400'
+                    }`}
+                  >
+                    {crosspostMark.label}
+                  </span>
+                )
+                : (
+                  <a
+                    href={crosspostMark.href}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    title={crosspostMark.title}
+                    class='text-xs text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+                  >
+                    {crosspostMark.label}
+                  </a>
+                )
+            )}
           </div>
         </div>
         <div>

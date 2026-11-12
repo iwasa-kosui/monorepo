@@ -161,6 +161,34 @@ describe('POST /api/v1/statuses の検証', () => {
   });
 });
 
+describe('POST /api/v1/statuses の iori_destination', () => {
+  it.each([['fediverse'], ['both'], [undefined], [null]])(
+    'iori_destination が %s のとき投稿できる',
+    async (destination) => {
+      const t = await setup();
+
+      const response = await t.json({ status: 'hi', iori_destination: destination });
+
+      expect(response.status).toBe(200);
+      expect(t.count('posts')).toBe(1);
+      expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([['bluesky'], ['unknown'], [''], [1], [true]])(
+    'iori_destination が %s のとき 422 にして投稿を作らない',
+    async (destination) => {
+      const t = await setup();
+
+      const response = await t.json({ status: 'hi', iori_destination: destination });
+
+      expect(response.status).toBe(422);
+      expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+      expect(t.count('posts')).toBe(0);
+    },
+  );
+});
+
 describe('POST /api/v1/statuses', () => {
   it('text/plain の本文を HTML にして投稿し、language と Idempotency-Key は無視する', async () => {
     const t = await setup();

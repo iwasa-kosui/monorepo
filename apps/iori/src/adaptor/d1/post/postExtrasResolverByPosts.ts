@@ -2,12 +2,14 @@ import { RA } from '@iwasa-kosui/result';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
+import type { BlueskyCrosspost } from '../../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { PostWithAuthor } from '../../../domain/post/post.ts';
 import type { PostExtras, PostExtrasResolverByPosts } from '../../../domain/post/postExtras.ts';
 import { PostId } from '../../../domain/post/postId.ts';
+import { toBlueskyCrosspost } from '../blueskyCrosspost/blueskyCrosspostRow.ts';
 import type { IoriD1Db } from '../client.ts';
 import { idsJson } from '../idsJson.ts';
-import { emojiReactsTable, localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
+import { blueskyCrosspostsTable, emojiReactsTable, localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
 
 type ReplyTarget = Readonly<{ postId: PostId; actorId: ActorId }>;
 
@@ -45,8 +47,11 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
       });
       const remoteParentUris = parentUris.filter((uri) => localPostIdOf(uri) === undefined);
       const none = Promise.resolve([]);
+      const ownLocalPostIds = currentActorId === undefined
+        ? []
+        : posts.filter((post) => post.type === 'local' && post.actorId === currentActorId).map((post) => post.postId);
 
-      const [localReplies, remoteReplies, localParents, remoteParents, myReactions] = await Promise.all([
+      const [localReplies, remoteReplies, localParents, remoteParents, myReactions, crossposts] = await Promise.all([
         db.select({ uri: localPostsTable.inReplyToUri, replies: sql<number>`count(*)` })
           .from(localPostsTable)
           .innerJoin(postsTable, eq(localPostsTable.postId, postsTable.postId))
@@ -73,11 +78,19 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
             .where(
               and(eq(emojiReactsTable.actorId, currentActorId), inArray(emojiReactsTable.postId, jsonEach(postIds))),
             ),
+        ownLocalPostIds.length === 0
+          ? none
+          : db.select().from(blueskyCrosspostsTable)
+            .where(inArray(blueskyCrosspostsTable.postId, jsonEach(ownLocalPostIds))),
       ]);
 
       const reactionsByPostId = new Map<string, string[]>();
       for (const reaction of myReactions) {
         addTo(reactionsByPostId, reaction.postId, reaction.emoji);
+      }
+      const crosspostByPostId = new Map<string, BlueskyCrosspost>();
+      for (const row of crossposts) {
+        crosspostByPostId.set(row.postId, toBlueskyCrosspost(row));
       }
       const repliesByUri = new Map<string, number>();
       for (const row of [...localReplies, ...remoteReplies]) {
@@ -111,6 +124,7 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
           repliesCount: repliesByUri.get(ownUris[index]!) ?? 0,
           inReplyTo: inReplyTo ?? null,
           myReactionEmojis: reactionsByPostId.get(post.postId) ?? [],
+          blueskyCrosspost: crosspostByPostId.get(post.postId) ?? null,
         });
       });
       return RA.ok(extras);
