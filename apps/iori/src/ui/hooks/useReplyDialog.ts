@@ -7,10 +7,11 @@ import { replyParams } from '../components/postSubmission.ts';
 
 export type UseReplyDialogReturn = Readonly<{
   replyingToPostId: string | null;
+  replyingToUsername: string | null;
   replyContent: string;
   replyDestination: PostDestination;
   isSendingReply: boolean;
-  openReplyDialog: (postId: string) => void;
+  openReplyDialog: (postId: string, username?: string) => void;
   closeReplyDialog: () => void;
   setReplyContent: (content: string) => void;
   setReplyDestination: (destination: PostDestination) => void;
@@ -25,17 +26,20 @@ export const useReplyDialog = ({
   onReplySent,
 }: UseReplyDialogProps = {}): UseReplyDialogReturn => {
   const [replyingToPostId, setReplyingToPostId] = useState<string | null>(null);
+  const [replyingToUsername, setReplyingToUsername] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [replyDestination, setReplyDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
   const [isSendingReply, setIsSendingReply] = useState(false);
 
-  const openReplyDialog = useCallback((postId: string) => {
+  const openReplyDialog = useCallback((postId: string, username?: string) => {
     setReplyingToPostId(postId);
+    setReplyingToUsername(username ?? null);
     setReplyContent('');
   }, []);
 
   const closeReplyDialog = useCallback(() => {
     setReplyingToPostId(null);
+    setReplyingToUsername(null);
     setReplyContent('');
   }, []);
 
@@ -45,6 +49,7 @@ export const useReplyDialog = ({
       try {
         await createStatus(replyParams(postId, content, replyDestination));
         setReplyingToPostId(null);
+        setReplyingToUsername(null);
         setReplyContent('');
         setReplyDestination(DEFAULT_POST_DESTINATION);
         onReplySent?.();
@@ -62,6 +67,7 @@ export const useReplyDialog = ({
 
   return {
     replyingToPostId,
+    replyingToUsername,
     replyContent,
     replyDestination,
     isSendingReply,

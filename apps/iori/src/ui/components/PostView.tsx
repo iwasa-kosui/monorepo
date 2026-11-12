@@ -41,7 +41,7 @@ type Props = Readonly<{
   dataIndex?: number;
   isEmojiPickerOpen?: boolean;
   onToggleEmojiPicker?: () => void;
-  onReply?: (postId: string) => void;
+  onReply?: (postId: string, username: string) => void;
   onQuote?: (post: Status) => void;
   onEdit?: (post: Status) => void;
   onShowThread?: (postId: string) => void;
@@ -631,7 +631,7 @@ export const PostView = (
             {onReply && (
               <button
                 type='button'
-                onClick={() => onReply(post.id)}
+                onClick={() => onReply(post.id, post.account.username)}
                 class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
                 title='Reply (p)'
               >
