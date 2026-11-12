@@ -4,7 +4,8 @@ import z from 'zod/v4';
 import type { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import { type BlueskyProfileReader, isBlueskyActorBlocked } from '../../ports/blueskyProfileReader.ts';
-import { httpUrlOrNull, parseBlueskyTimelineResponse } from './blueskyTimelineResponse.ts';
+import { httpUrlOrNull } from './blueskyPostView.ts';
+import { parseBlueskyTimelineResponse } from './blueskyTimelineResponse.ts';
 
 const AUTHOR_FEED_LIMIT = '30';
 const AUTHOR_FEED_FILTER = 'posts_and_author_threads';
