@@ -278,6 +278,19 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     return notificationId;
   };
 
+  const addMentionNotification = (
+    recipientUserId: string,
+    mentionerActorId: string,
+    mentionPostId: string,
+    createdAt: number,
+  ) => {
+    const notificationId = addNotification(recipientUserId, 'mention', createdAt);
+    sqlite.prepare(
+      'INSERT INTO notification_mentions(notificationId,recipientUserId,mentionerActorId,mentionPostId) VALUES (?,?,?,?)',
+    ).run(notificationId, recipientUserId, mentionerActorId, mentionPostId);
+    return notificationId;
+  };
+
   const addBlueskyNotification = (
     recipientUserId: string,
     type: 'blueskyLike' | 'blueskyRepost' | 'blueskyFollow' | 'blueskyMention',
@@ -348,6 +361,7 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     addFollowNotification,
     addEmojiReactNotification,
     addRepostNotification,
+    addMentionNotification,
     addBlueskyNotification,
     setMarker,
   };

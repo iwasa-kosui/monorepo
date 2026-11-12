@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "efaf1439-66ae-4c27-bd06-0df5997066c3",
-  "prevId": "37856fe0-6e5a-4b4b-86e8-cffda7dcf294",
+  "id": "08506024-4a60-4fd0-82e6-7631cc942b38",
+  "prevId": "81c8fc22-325c-4f4d-a849-2baa7684c024",
   "tables": {
     "actors": {
       "name": "actors",
@@ -3398,6 +3398,100 @@
           "tableTo": "actors",
           "columnsFrom": [
             "likerActorId"
+          ],
+          "columnsTo": [
+            "actorId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "notification_mentions": {
+      "name": "notification_mentions",
+      "columns": {
+        "notificationId": {
+          "name": "notificationId",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recipientUserId": {
+          "name": "recipientUserId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mentionerActorId": {
+          "name": "mentionerActorId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mentionPostId": {
+          "name": "mentionPostId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "notification_mentions_recipient_post_unique": {
+          "name": "notification_mentions_recipient_post_unique",
+          "columns": [
+            "recipientUserId",
+            "mentionPostId"
+          ],
+          "isUnique": true
+        },
+        "notification_mentions_mention_post_id_idx": {
+          "name": "notification_mentions_mention_post_id_idx",
+          "columns": [
+            "mentionPostId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "notification_mentions_notificationId_notifications_notificationId_fk": {
+          "name": "notification_mentions_notificationId_notifications_notificationId_fk",
+          "tableFrom": "notification_mentions",
+          "tableTo": "notifications",
+          "columnsFrom": [
+            "notificationId"
+          ],
+          "columnsTo": [
+            "notificationId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "notification_mentions_recipientUserId_users_userId_fk": {
+          "name": "notification_mentions_recipientUserId_users_userId_fk",
+          "tableFrom": "notification_mentions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "recipientUserId"
+          ],
+          "columnsTo": [
+            "userId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "notification_mentions_mentionerActorId_actors_actorId_fk": {
+          "name": "notification_mentions_mentionerActorId_actors_actorId_fk",
+          "tableFrom": "notification_mentions",
+          "tableTo": "actors",
+          "columnsFrom": [
+            "mentionerActorId"
           ],
           "columnsTo": [
             "actorId"
