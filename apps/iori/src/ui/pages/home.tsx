@@ -4,7 +4,7 @@ import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
-import { fetchPublicTimeline, updateProfile } from '../api/mastodonClient.ts';
+import { fetchPublicTimeline, fetchVerifyCredentials, updateProfile } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
@@ -21,12 +21,14 @@ import { isEmptyProfileUpdate, toProfileUpdate } from '../components/profileUpda
 import { QuoteModal } from '../components/QuoteModal.tsx';
 import { ReplyDialogShell } from '../components/ReplyDialogShell.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
+import { statusActionProps } from '../components/statusActionProps.ts';
 import { UpdateProfileModal } from '../components/UpdateProfileModal.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
 import { homeItemKey } from '../hooks/homeFeed.ts';
 import { pullProgress, refreshResultLabel } from '../hooks/pullGesture.ts';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
 import { ITEM_KEY_ATTRIBUTE } from '../hooks/useReadingPosition.ts';
+import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 
 const usePostedHandler = () => {
   const { timeline, ui } = useTimelineContext();
@@ -834,23 +836,14 @@ const TimelineList = () => {
           homeItemKey(item),
           <PostView
             status={status}
-            onLike={actions.like}
-            isLiking={actionState.likingPostId === postId}
-            onUndoLike={actions.undoLike}
-            onBookmark={actions.bookmarkPost}
-            onUndoBookmark={actions.undoBookmarkPost}
-            isUndoingLike={actionState.undoingLikePostId === postId}
-            onRepost={actions.repost}
-            isReposting={actionState.repostingPostId === postId}
+            {...statusActionProps(actions, status)}
             onUndoRepost={isMyRepost ? actions.undoRepost : undefined}
-            isUndoingRepost={actionState.undoingRepostPostId === postId}
             onDelete={actions.deletePost}
             onMute={actions.muteAccount}
             onBlock={actions.blockAccount}
             onReport={reportPost.open}
             isDeleting={actionState.deletingPostId === postId}
             onEmojiReact={actions.emojiReact}
-            onVote={actions.vote}
             onUndoEmojiReact={actions.undoEmojiReact}
             isEmojiReacting={actionState.emojiReactingPostId === postId}
             myReactions={actionState.myReactions.get(postId)}
@@ -882,14 +875,20 @@ const TimelineList = () => {
 };
 
 const ServerTimeline = () => {
-  const { items: posts, setFirstPage } = usePublicTimeline('local');
+  const { items: posts, setFirstPage, updateItem } = usePublicTimeline('local');
+  const actions = useStatusListActions(updateItem);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const fetchPosts = async () => {
       try {
-        const page = await fetchPublicTimeline('local');
+        const [page, loggedIn] = await Promise.all([
+          fetchPublicTimeline('local'),
+          fetchVerifyCredentials().then(() => true, () => false),
+        ]);
         setFirstPage(page);
+        setIsLoggedIn(loggedIn);
       } catch {
         // ignore
       } finally {
@@ -937,7 +936,9 @@ const ServerTimeline = () => {
       </div>
       {posts.length > 0
         ? (
-          posts.map((post) => <PostView key={post.id} status={post} />)
+          posts.map((post) => (
+            <PostView key={post.id} status={post} {...statusActionProps(isLoggedIn ? actions : undefined, post)} />
+          ))
         )
         : (
           <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 text-center'>

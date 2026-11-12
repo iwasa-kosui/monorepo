@@ -20,7 +20,7 @@ import { withPoll, withReblogged, withUpdatedStatus } from '../api/status.ts';
 import { runOptimisticBookmark } from './optimisticBookmark.ts';
 import { runExclusive, runOptimisticFavourite } from './optimisticFavourite.ts';
 
-type StatusUpdater = (
+export type StatusUpdater = (
   postId: string,
   updater: (status: Status) => Status,
 ) => void;
@@ -54,6 +54,7 @@ export type UsePostActionsReturn = Readonly<{
 type UsePostActionsProps = Readonly<{
   updateTimelineItem: StatusUpdater;
   updateThreadPost?: StatusUpdater;
+  updateRepostedItem?: StatusUpdater;
   removePost: (postId: string) => void;
   removeAccountPosts: (accountId: string) => void;
   refreshTimeline: () => Promise<void>;
@@ -63,6 +64,7 @@ type UsePostActionsProps = Readonly<{
 export const usePostActions = ({
   updateTimelineItem,
   updateThreadPost,
+  updateRepostedItem,
   removePost,
   removeAccountPosts,
   refreshTimeline,
@@ -169,10 +171,10 @@ export const usePostActions = ({
         const boost = await reblog(postId);
         await refreshTimeline();
         const original = boost.reblog;
-        updateThreadPost?.(
-          postId,
-          (status) => original === null ? withReblogged(status, true) : withUpdatedStatus(status, original),
-        );
+        const applyRepost = (status: Status) =>
+          original === null ? withReblogged(status, true) : withUpdatedStatus(status, original);
+        updateRepostedItem?.(postId, applyRepost);
+        updateThreadPost?.(postId, applyRepost);
       } catch (error) {
         console.error('Failed to repost:', error);
         alert(failureMessage('repost', error));
@@ -180,7 +182,7 @@ export const usePostActions = ({
         setRepostingPostId(null);
       }
     },
-    [refreshTimeline, updateThreadPost],
+    [refreshTimeline, updateThreadPost, updateRepostedItem],
   );
 
   const undoRepost = useCallback(
@@ -192,7 +194,9 @@ export const usePostActions = ({
       try {
         const original = await unreblog(postId);
         await refreshTimeline();
-        updateThreadPost?.(postId, (status) => withUpdatedStatus(status, original));
+        const applyUndo = (status: Status) => withUpdatedStatus(status, original);
+        updateRepostedItem?.(postId, applyUndo);
+        updateThreadPost?.(postId, applyUndo);
       } catch (error) {
         console.error('Failed to undo repost:', error);
         alert(failureMessage('undo repost', error));
@@ -200,7 +204,7 @@ export const usePostActions = ({
         setUndoingRepostPostId(null);
       }
     },
-    [refreshTimeline, updateThreadPost],
+    [refreshTimeline, updateThreadPost, updateRepostedItem],
   );
 
   const deletePost = useCallback(
