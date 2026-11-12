@@ -1,3 +1,12 @@
+---
+wide: true
+---
+
+import EventRowFigure from '../../../components/figures/EventRowFigure.astro';
+
+<div class="intro-spread">
+<div class="intro-text">
+
 ### business_events テーブル
 
 `business_events` テーブルは開始時点の DB に用意してあります。各列は、次の問いに答えるために残します。
@@ -14,3 +23,6 @@
 
 [関連記事](https://kosui.me/posts/2025/05/06/142842)のテーブル設計は PostgreSQL 向けで、`event_id` に UUID v7 を使います。この演習は SQLite を使い、`event_id` を連番にします。参加者の Node の下限である 24.12.0 に `crypto.randomUUIDv7` が無いためです。
 
+</div>
+<EventRowFigure />
+</div>

@@ -1,0 +1,53 @@
+---
+interface Props {
+  labels: string[];
+  label?: string;
+}
+
+const { labels, label: groupLabel = 'パターン' } = Astro.props;
+---
+
+<div
+  class="playground-switch"
+  role="group"
+  aria-label={groupLabel}
+  data-playground-switch
+>
+  {
+    labels.map((label, index) => (
+      <button type="button" aria-pressed={index === 0 ? 'true' : 'false'}>
+        {label}
+      </button>
+    ))
+  }
+</div>
+
+<script>
+for (
+  const group of document.querySelectorAll<HTMLElement>(
+    '[data-playground-switch]',
+  )
+) {
+  const panels: HTMLElement[] = [];
+  for (
+    let next = group.nextElementSibling;
+    next !== null;
+    next = next.nextElementSibling
+  ) {
+    if (next instanceof HTMLElement && next.matches('[data-playground]')) {
+      panels.push(next);
+    }
+  }
+  const buttons = [...group.querySelectorAll<HTMLButtonElement>('button')];
+  for (const [index, button] of buttons.entries()) {
+    button.addEventListener('click', () => {
+      panels.forEach((panel, panelIndex) => {
+        panel.hidden = panelIndex !== index;
+      });
+      buttons.forEach((other, otherIndex) => {
+        other.setAttribute('aria-pressed', String(otherIndex === index));
+      });
+    });
+  }
+}
+</script>

@@ -15,9 +15,9 @@ const clockIdOf = (postId: PostId): bigint => {
   return BigInt(hash) & CLOCK_ID_MASK;
 };
 
-export const blueskyRkeyOf = (input: Readonly<{ postId: PostId; createdAt: Instant }>): string => {
-  const microseconds = BigInt(Math.trunc(input.createdAt)) * 1000n;
-  let value = (microseconds << CLOCK_ID_BITS) | clockIdOf(input.postId);
+const encodeTid = (createdAt: Instant, clockId: bigint): string => {
+  const microseconds = BigInt(Math.trunc(createdAt)) * 1000n;
+  let value = (microseconds << CLOCK_ID_BITS) | clockId;
   let rkey = '';
   for (let index = 0; index < TID_LENGTH; index += 1) {
     rkey = BASE32_SORTABLE[Number(value & 31n)] + rkey;
@@ -25,3 +25,9 @@ export const blueskyRkeyOf = (input: Readonly<{ postId: PostId; createdAt: Insta
   }
   return rkey;
 };
+
+export const blueskyRkeyOf = (input: Readonly<{ postId: PostId; createdAt: Instant }>): string =>
+  encodeTid(input.createdAt, clockIdOf(input.postId));
+
+export const blueskyTidOf = (input: Readonly<{ createdAt: Instant; clockId: number }>): string =>
+  encodeTid(input.createdAt, BigInt(input.clockId) & CLOCK_ID_MASK);

@@ -4,7 +4,8 @@ import z from 'zod/v4';
 import type { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import type { BlueskySearch, BlueskySearchedActor } from '../../ports/blueskySearch.ts';
-import { httpUrlOrNull, parseBlueskySearchPostsResponse } from './blueskyTimelineResponse.ts';
+import { httpUrlOrNull } from './blueskyPostView.ts';
+import { parseBlueskySearchPostsResponse } from './blueskyTimelineResponse.ts';
 
 const actorsPageZodType = z.object({ cursor: z.string().optional(), actors: z.array(z.unknown()) });
 const actorZodType = z.looseObject({

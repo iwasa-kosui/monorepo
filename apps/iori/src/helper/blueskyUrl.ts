@@ -1,6 +1,7 @@
 export const BSKY_APP_URL = 'https://bsky.app';
 export const BLUESKY_STATUS_ID_PREFIX = 'bluesky:';
 const atUriPattern = /^at:\/\/([^/]+)\/[^/]+\/([^/]+)$/;
+const postAtUriPattern = /^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/([^/]+)$/;
 const didPattern = /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/;
 const handlePattern = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
 
@@ -8,6 +9,8 @@ export const blueskyProfileUrlOfActor = (actor: string): string | undefined =>
   didPattern.test(actor) || (handlePattern.test(actor) && actor !== 'handle.invalid')
     ? `${BSKY_APP_URL}/profile/${actor}`
     : undefined;
+
+export const blueskyProfilePathOf = (actor: string): string => `/bluesky/profile/${encodeURIComponent(actor)}`;
 
 export const blueskyPostUrl = (did: string, uri: string): string | undefined => {
   const rkey = atUriPattern.exec(uri)?.[2];
@@ -20,4 +23,13 @@ export const blueskyPostUrl = (did: string, uri: string): string | undefined => 
 export const blueskyPostUrlOfUri = (uri: string): string | undefined => {
   const did = atUriPattern.exec(uri)?.[1];
   return did === undefined ? undefined : blueskyPostUrl(did, uri);
+};
+
+export const ioriBlueskyPostPath = (uri: string): string | undefined => {
+  const match = postAtUriPattern.exec(uri);
+  const did = match?.[1];
+  const rkey = match?.[2];
+  return did === undefined || rkey === undefined || !didPattern.test(did)
+    ? undefined
+    : `/bluesky/profile/${did}/post/${encodeURIComponent(rkey)}`;
 };

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'hono/jsx';
 
+import type { PostDestination } from '../../domain/post/postDestination.ts';
+import { PostDestinationSelect } from './PostDestinationSelect.tsx';
+
 type TabMode = 'markdown' | 'preview';
 
 type Props = Readonly<{
@@ -8,6 +11,8 @@ type Props = Readonly<{
   onSubmit: (content: string) => Promise<void>;
   replyToUsername?: string;
   isSubmitting: boolean;
+  destination: PostDestination;
+  onDestinationChange: (destination: PostDestination) => void;
 }>;
 
 export const ReplyModal = ({
@@ -16,6 +21,8 @@ export const ReplyModal = ({
   onSubmit,
   replyToUsername,
   isSubmitting,
+  destination,
+  onDestinationChange,
 }: Props) => {
   const [content, setContent] = useState('');
   const [activeTab, setActiveTab] = useState<TabMode>('markdown');
@@ -175,6 +182,7 @@ export const ReplyModal = ({
 
         {/* Action Buttons */}
         <div class='mt-4 flex gap-2 justify-end flex-shrink-0'>
+          <PostDestinationSelect value={destination} onChange={onDestinationChange} name='reply-destination' />
           <button
             type='button'
             onClick={onClose}

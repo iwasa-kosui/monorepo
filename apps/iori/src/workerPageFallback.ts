@@ -35,7 +35,10 @@ const pageForPath = (pathname: string): WorkerPage | undefined => {
   if (/^\/remote-users\/[^/]+\/?$/.test(pathname)) {
     return { entry: 'remoteUser', title: 'Profile | blog.kosui.me' };
   }
-  if (/^\/users\/[^/]+\/posts\/[^/]+\/?$/.test(pathname)) {
+  if (/^\/bluesky\/profile\/[^/]+\/?$/.test(pathname)) {
+    return { entry: 'blueskyProfile', title: 'Bluesky profile | blog.kosui.me', private: true };
+  }
+  if (/^\/(?:users\/[^/]+\/)?posts\/[^/]+\/?$/.test(pathname)) {
     return { entry: 'localPost', title: 'Post | blog.kosui.me' };
   }
   if (/^\/users\/[^/]+\/articles\/[^/]+\/?$/.test(pathname) || /^\/articles\/[^/]+\/?$/.test(pathname)) {
@@ -43,6 +46,9 @@ const pageForPath = (pathname: string): WorkerPage | undefined => {
   }
   if (/^\/users\/[^/]+\/?$/.test(pathname)) {
     return { entry: 'localUser', title: 'Profile | blog.kosui.me' };
+  }
+  if (/^\/bluesky\/profile\/did:[a-z]+:[^/]+\/post\/[^/]+\/?$/.test(pathname)) {
+    return { entry: 'blueskyPost', title: 'Bluesky | blog.kosui.me', private: true };
   }
   return undefined;
 };

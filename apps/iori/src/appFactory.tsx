@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 
+import { rootErrorHandler } from './adaptor/routes/helper/rootErrorHandler.ts';
 import type { IoriAppAdapters } from './runtime/ioriRuntime.ts';
 
 export const createIoriApp = (adapters: IoriAppAdapters): Hono => {
@@ -29,6 +30,8 @@ export const createIoriApp = (adapters: IoriAppAdapters): Hono => {
     const page = await adapters.servePage?.(c.req.raw);
     return page ?? c.notFound();
   });
+
+  app.onError(rootErrorHandler);
 
   return app;
 };

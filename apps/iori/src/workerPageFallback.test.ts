@@ -20,6 +20,22 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain(`data-user-id="${userId}"`);
   });
 
+  it.each([
+    '/posts/01989332-d1c1-7dd1-9ed7-886b8857dffa',
+    '/posts/01989332-d1c1-7dd1-9ed7-886b8857dffa/',
+  ])('renders the post entry for %s without a username', async (path) => {
+    const response = await createWorkerPageFallback(new Request(`https://worker.test${path}`));
+
+    expect(response?.status).toBe(200);
+    const html = await response?.text();
+    expect(html).toContain('/static/localPost.js');
+    expect(html).toContain('<title>Post | blog.kosui.me</title>');
+  });
+
+  it.each(['/posts', '/posts/a/b'])('does not render a page for %s', async (path) => {
+    expect(await createWorkerPageFallback(new Request(`https://worker.test${path}`))).toBeUndefined();
+  });
+
   it('renders the sign-in entry when the query carries a next path', async () => {
     const response = await createWorkerPageFallback(
       new Request('https://worker.test/sign-in?next=%2Foauth%2Fauthorize%3Fclient_id%3Dabc'),
@@ -155,6 +171,36 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain('<meta name="robots" content="noindex">');
   });
 
+  it('redirects the private Bluesky profile page to /sign-in when logged out, without caching', async () => {
+    for (const path of ['/bluesky/profile/did%3Aplc%3Aalice', '/bluesky/profile/alice.bsky.social/']) {
+      const response = await createWorkerPageFallback(new Request(`https://worker.test${path}`));
+
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get('Location')).toBe('/sign-in');
+      expect(response?.headers.get('Cache-Control')).toBe('no-store');
+    }
+  });
+
+  it('renders the Bluesky profile entry for a logged-in user with no-store and noindex', async () => {
+    const response = await createWorkerPageFallback(
+      new Request('https://worker.test/bluesky/profile/did%3Aplc%3Aalice'),
+      { isLoggedIn: true, userId: UserId.generate() },
+    );
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('Cache-Control')).toBe('no-store');
+    expect(response?.headers.get('X-Robots-Tag')).toBe('noindex');
+    const html = await response?.text();
+    expect(html).toContain('/static/blueskyProfile.js');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+  });
+
+  it('does not claim a Bluesky profile path without an actor or with extra segments', async () => {
+    for (const path of ['/bluesky/profile', '/bluesky/profile/', '/bluesky/profile/a/b']) {
+      expect(await createWorkerPageFallback(new Request(`https://worker.test${path}`))).toBeUndefined();
+    }
+  });
+
   it('redirects the federated timeline to /sign-in when logged out, without caching', async () => {
     const anonymous = await createWorkerPageFallback(new Request('https://worker.test/federated'));
     const expired = await createWorkerPageFallback(
@@ -180,6 +226,50 @@ describe('createWorkerPageFallback', () => {
 
     expect(response?.status).toBe(200);
     expect(await response?.text()).toContain('/static/federatedTimeline.js');
+  });
+
+  it('redirects the Bluesky post page to /sign-in when logged out, without caching', async () => {
+    const url = 'https://worker.test/bluesky/profile/did:plc:abc/post/3kxyz';
+    const anonymous = await createWorkerPageFallback(new Request(url));
+    const expired = await createWorkerPageFallback(
+      new Request(url, { headers: { Cookie: 'sessionId=expired' } }),
+      { isLoggedIn: false },
+    );
+
+    for (const response of [anonymous, expired]) {
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get('Location')).toBe('/sign-in');
+      expect(response?.headers.get('Cache-Control')).toBe('no-store');
+      expect(await response?.text()).toBe('');
+    }
+  });
+
+  it('renders the Bluesky post page for a logged-in user with noindex', async () => {
+    const response = await createWorkerPageFallback(
+      new Request('https://worker.test/bluesky/profile/did:plc:abc/post/3kxyz'),
+      { isLoggedIn: true, userId: UserId.generate() },
+    );
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('X-Robots-Tag')).toBe('noindex');
+    expect(await response?.text()).toContain('/static/blueskyPost.js');
+  });
+
+  it('does not register Bluesky post paths that are not a DID and an rkey', async () => {
+    for (
+      const path of [
+        '/bluesky/profile/alice.bsky.social/post/3kxyz',
+        '/bluesky/profile/did:plc:abc/post',
+        '/bluesky/profile/did:plc:abc/post/3kxyz/extra',
+      ]
+    ) {
+      expect(
+        await createWorkerPageFallback(new Request(`https://worker.test${path}`), {
+          isLoggedIn: true,
+          userId: UserId.generate(),
+        }),
+      ).toBeUndefined();
+    }
   });
 
   it('does not add noindex to public pages', async () => {

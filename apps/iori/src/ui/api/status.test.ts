@@ -4,6 +4,7 @@ import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
 import {
   accountHandle,
   accountHref,
+  detailHref,
   displayStatus,
   isLocalAccount,
   isOwnBoost,
@@ -84,19 +85,32 @@ describe('account helpers', () => {
     expect(accountHref(remoteAccount)).toBe('/remote-users/actor-2');
   });
 
-  it('links a Bluesky account to its profile on bsky.app and shows its handle as it is', () => {
-    expect(accountHref(blueskyAccount)).toBe('https://bsky.app/profile/carol.bsky.social');
+  it('links a Bluesky account to its profile page in iori and shows its handle as it is', () => {
+    expect(accountHref(blueskyAccount)).toBe('/bluesky/profile/did%3Aplc%3Acarol');
     expect(accountHandle(blueskyAccount)).toBe('carol.bsky.social');
   });
 
-  it('does not link a Bluesky account whose url is not http or https', () => {
-    expect(accountHref({ ...blueskyAccount, url: 'javascript:alert(1)' })).toBe('#');
+  it('does not link a Bluesky account whose id does not hold a valid DID', () => {
+    expect(accountHref({ ...blueskyAccount, id: 'bluesky:' })).toBe('#');
+    expect(accountHref({ ...blueskyAccount, id: 'bluesky:javascript:alert(1)' })).toBe('#');
   });
 
   it('links to the local post page and the remote post uri', () => {
     expect(statusHref(status('p1'))).toBe('/users/kosui/posts/p1');
     expect(statusHref(status('p2', { account: remoteAccount, uri: 'https://remote.example/notes/2' }))).toBe(
       'https://remote.example/notes/2',
+    );
+  });
+});
+
+describe('detailHref', () => {
+  it('links a local post to its post page', () => {
+    expect(detailHref(status('p1'))).toBe('/users/kosui/posts/p1');
+  });
+
+  it('links a remote post to the detail page in iori', () => {
+    expect(detailHref(status('p2', { account: remoteAccount, uri: 'https://remote.example/notes/2' }))).toBe(
+      '/posts/p2',
     );
   });
 });

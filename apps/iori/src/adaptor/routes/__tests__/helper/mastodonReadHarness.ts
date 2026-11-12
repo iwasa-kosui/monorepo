@@ -8,7 +8,8 @@ import { Instant } from '../../../../domain/instant/instant.ts';
 import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
-import type { BlueskyClient } from '../../../../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
+import type { BlueskyPostThreadFetcher } from '../../../../ports/blueskyPostThreadFetcher.ts';
 import type { BlueskySearch } from '../../../../ports/blueskySearch.ts';
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
@@ -33,10 +34,12 @@ import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
 import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts';
+import { ReplyToBlueskyPostUseCase } from '../../../../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../../useCase/repostBlueskyPost.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
+import type { ScheduleBlueskyCrosspostUseCase } from '../../../../useCase/scheduleBlueskyCrosspost.ts';
 import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
 import { SendEmojiReactUseCase } from '../../../../useCase/sendEmojiReact.ts';
 import { SendLikeUseCase } from '../../../../useCase/sendLike.ts';
@@ -69,6 +72,8 @@ import { createD1PostTranslationStore } from '../../../d1/aiTranslation/postTran
 import { createD1ArticleDeletedStore } from '../../../d1/article/articleDeletedStore.ts';
 import { createD1ArticleResolver } from '../../../d1/article/articleResolver.ts';
 import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
+import { createD1BlueskyLoginFailureResolver } from '../../../d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
+import { createD1BlueskySyncStatusResolver } from '../../../d1/blueskySyncStatus/blueskySyncStatusStore.ts';
 import { createD1BlueskyLikeDeletedStore } from '../../../d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../../../d1/blueskyTimeline/blueskyLikeSavedStore.ts';
 import { createD1BlueskyLikeTargetResolver } from '../../../d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
@@ -199,10 +204,14 @@ export const setupReadApi = (
     translationTimeoutMs?: number;
     searchTimeline?: Partial<Parameters<typeof createSearchTimelineUseCase>[0]>;
     blueskyTimelineEnabled?: boolean;
+    blueskyNow?: () => Instant;
     blueskyLikeClient?: Pick<BlueskyClient, 'createLike' | 'deleteLike'>;
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
+    blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
+    blueskyReplyClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
     blueskySearch?: BlueskySearch;
     refreshXPosts?: RefreshXPostsUseCase;
+    scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   }> = {},
 ) => {
   const harness = createOAuthHarness();
@@ -322,6 +331,7 @@ export const setupReadApi = (
             },
             acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
             origin: ORIGIN,
+            scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),
           sendReplyUseCase: SendReplyUseCase.create({
             sessionResolver,
@@ -336,6 +346,7 @@ export const setupReadApi = (
             webPushSender: { send: () => RA.ok(undefined) },
             postResolver,
             origin: ORIGIN,
+            scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),
           deletePostUseCase: DeletePostUseCase.create({
             sessionResolver,
@@ -528,6 +539,9 @@ export const setupReadApi = (
           authn,
           blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
           blueskyTimelineEnabled: options.blueskyTimelineEnabled ?? false,
+          blueskySyncStatusResolver: createD1BlueskySyncStatusResolver(db),
+          blueskyLoginFailureResolver: createD1BlueskyLoginFailureResolver(db, 'timeline'),
+          now: options.blueskyNow,
           likeBlueskyPostUseCase: options.blueskyLikeClient === undefined ? undefined : LikeBlueskyPostUseCase.create({
             client: options.blueskyLikeClient,
             targetResolver: createD1BlueskyLikeTargetResolver(db),
@@ -556,6 +570,15 @@ export const setupReadApi = (
               client: options.blueskyRepostClient,
               targetResolver: createD1BlueskyRepostTargetResolver(db),
               deletedStore: createD1BlueskyRepostDeletedStore(db),
+            }),
+          blueskyPostThreadFetcher: options.blueskyPostThreadFetcher,
+          replyToBlueskyPostUseCase: options.blueskyReplyClient === undefined
+            ? undefined
+            : ReplyToBlueskyPostUseCase.create({
+              client: options.blueskyReplyClient,
+              query: options.blueskyReplyClient.query,
+              targetResolver: createD1BlueskyLikeTargetResolver(db),
+              now: Instant.now,
             }),
           blueskySearch: options.blueskySearch,
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),

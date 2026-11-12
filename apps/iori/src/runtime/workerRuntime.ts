@@ -219,6 +219,7 @@ import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthoriz
 import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createBlueskyCrosspostUseCases, resolveBlueskyCrosspostConfig } from './blueskyCrosspost.ts';
+import { createBlueskyProfileRuntimePorts } from './blueskyProfile.ts';
 import { createBlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
 import { createWorkerRemoteActorActions } from './workerCoreUseCases.ts';
@@ -430,6 +431,7 @@ export const createWorkerRuntimePorts = async (
       }),
     },
     blueskyTimeline: createBlueskyTimelineRuntimePorts(env, db),
+    blueskyProfile: createBlueskyProfileRuntimePorts(env, db),
     digest: {
       digestResolverByUserIdAndDigestDate,
       digestResolverByUserId: createD1DigestResolverByUserId(db),

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'hono/jsx';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import { failureMessage, repostBlueskyPost, undoRepostBlueskyPost } from '../api/mastodonClient.ts';
+import { blueskyFailureMessage, repostBlueskyPost, undoRepostBlueskyPost } from '../api/mastodonClient.ts';
 import type { BlueskyItemsUpdater } from './optimisticBlueskyLike.ts';
 import { runOptimisticBlueskyRepost } from './optimisticBlueskyRepost.ts';
 import { runExclusive } from './optimisticFavourite.ts';
@@ -32,7 +32,7 @@ export const useBlueskyRepost = (updateItems: BlueskyItemsUpdater): UseBlueskyRe
         } catch (error) {
           const action = reposted ? 'repost' : 'undo repost';
           console.error(`Failed to ${action}:`, error);
-          alert(failureMessage(action, error));
+          alert(blueskyFailureMessage(action, error));
         } finally {
           setPendingUris((prev) => {
             const next = new Set(prev);
