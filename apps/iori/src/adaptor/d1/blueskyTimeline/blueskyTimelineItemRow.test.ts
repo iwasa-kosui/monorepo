@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { toBlueskyTimelineItem } from './blueskyTimelineItemRow.ts';
+import type { BlueskyFetchedTimelineItem } from '../../../domain/blueskyTimeline/blueskyTimelineItem.ts';
+import type { Instant } from '../../../domain/instant/instant.ts';
+import { toBlueskyTimelineItem, toBlueskyTimelineItemRow } from './blueskyTimelineItemRow.ts';
 
 const AT = new Date(Date.UTC(2026, 10, 8, 1));
-const row = (embed: unknown) => ({
+const row = (embed: unknown, bridgyOriginalUrl: string | null = null) => ({
   feedItemId: 'at://did:plc:author/app.bsky.feed.post/3kabc',
   uri: 'at://did:plc:author/app.bsky.feed.post/3kabc',
   cid: 'cid',
@@ -18,6 +20,7 @@ const row = (embed: unknown) => ({
   replyParentAuthorHandle: null,
   repostedByDid: null,
   repostedByHandle: null,
+  bridgyOriginalUrl,
   postedAt: AT,
   indexedAt: AT,
   fetchedAt: AT,
@@ -73,5 +76,53 @@ describe('toBlueskyTimelineItem', () => {
         false,
       ).embed,
     ).toMatchObject({ type: 'recordWithMedia', record: unavailable });
+  });
+});
+
+describe('Bridgy Fed の元の投稿の URL', () => {
+  const fetched = (bridgyOriginalUrl: string | null): BlueskyFetchedTimelineItem => ({
+    feedItemId: 'at://did:plc:author/app.bsky.feed.post/3kabc',
+    uri: 'at://did:plc:author/app.bsky.feed.post/3kabc',
+    cid: 'cid',
+    authorDid: 'did:plc:author',
+    authorHandle: 'alice.mastodon.example.ap.brid.gy',
+    authorDisplayName: null,
+    authorAvatar: null,
+    text: '本文',
+    facets: [],
+    embed: null,
+    replyParentUri: null,
+    replyParentAuthorHandle: null,
+    repostedByDid: null,
+    repostedByHandle: null,
+    bridgyOriginalUrl,
+    bridgedFromPostId: null,
+    postedAt: AT.getTime() as Instant,
+    indexedAt: AT.getTime() as Instant,
+    fetchedAt: AT.getTime() as Instant,
+    liked: false,
+    viewerLikeUri: null,
+    reposted: false,
+    viewerRepostUri: null,
+    bookmarked: false,
+    threadMuted: false,
+    replyRootUri: null,
+  });
+
+  it('行に保存し、読み出した項目に戻す。突き合わせ先の postId は行に持たない', () => {
+    const saved = toBlueskyTimelineItemRow(fetched('https://mastodon.example/@alice/123'));
+
+    expect(saved.bridgyOriginalUrl).toBe('https://mastodon.example/@alice/123');
+    expect(saved).not.toHaveProperty('bridgedFromPostId');
+    expect(toBlueskyTimelineItem(row(oldRecord, 'https://mastodon.example/@alice/123'), false, false, false))
+      .toMatchObject({
+        bridgyOriginalUrl: 'https://mastodon.example/@alice/123',
+        bridgedFromPostId: null,
+      });
+  });
+
+  it('URL が無い行は null のまま読める', () => {
+    expect(toBlueskyTimelineItemRow(fetched(null)).bridgyOriginalUrl).toBeNull();
+    expect(toBlueskyTimelineItem(row(oldRecord), false, false, false).bridgyOriginalUrl).toBeNull();
   });
 });

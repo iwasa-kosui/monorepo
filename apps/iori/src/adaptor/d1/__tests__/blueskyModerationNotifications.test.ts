@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Notification } from '../../../domain/notification/notification.ts';
+import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import type { PageRequest } from '../../../domain/page/page.ts';
 import { UserId } from '../../../domain/user/userId.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../notification/notificationCountResolverSinceMarker.ts';
+import { createD1NotificationResolverByUserIdAndId } from '../notification/notificationResolverByUserIdAndId.ts';
 import { createD1NotificationsResolverByPage } from '../notification/notificationsResolverByPage.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
@@ -53,7 +55,14 @@ const setup = () => {
     });
     return result.ok ? result.val : undefined;
   };
-  return { ...fixture, seed, me, ids, moderate, listed, unread };
+  const resolveById = async (notificationId: string) => {
+    const result = await createD1NotificationResolverByUserIdAndId(fixture.db).resolve({
+      recipientUserId: UserId.orThrow(me.userId),
+      notificationId: NotificationId.orThrow(notificationId),
+    });
+    return result.ok ? result.val : undefined;
+  };
+  return { ...fixture, seed, me, ids, moderate, listed, unread, resolveById };
 };
 
 describe('ミュートとブロックの通知の除外', () => {
@@ -110,5 +119,28 @@ describe('ミュートとブロックの通知の除外', () => {
     t.moderate(1, null);
 
     expect(await t.unread()).toBe(0);
+  });
+
+  it('ミュートした相手の Bluesky の通知を1件の取得から除き、Fediverse の通知は返す', async () => {
+    const t = setup();
+    t.moderate(1, null);
+
+    expect(await t.resolveById(t.ids.blueskyLike)).toBeUndefined();
+    expect(await t.resolveById(t.ids.fediverseLike)).toBeDefined();
+  });
+
+  it('ブロックした相手の Bluesky の通知を1件の取得から除き、Fediverse の通知は返す', async () => {
+    const t = setup();
+    t.moderate(0, BLOCK);
+
+    expect(await t.resolveById(t.ids.blueskyLike)).toBeUndefined();
+    expect(await t.resolveById(t.ids.fediverseLike)).toBeDefined();
+  });
+
+  it('ミュートもブロックもしていない行は、Bluesky の通知を1件の取得で返す', async () => {
+    const t = setup();
+    t.moderate(0, null);
+
+    expect(await t.resolveById(t.ids.blueskyLike)).toBeDefined();
   });
 });

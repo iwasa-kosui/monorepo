@@ -27,6 +27,7 @@ export const postViewZodType = z.looseObject({
     text: z.string(),
     facets: z.array(z.unknown()).optional(),
     createdAt: z.string(),
+    bridgyOriginalUrl: z.string().optional(),
     reply: z.looseObject({
       parent: z.looseObject({ uri: z.string().min(1) }),
       root: z.looseObject({ uri: z.string().min(1) }).optional(),
@@ -266,6 +267,8 @@ export const itemFromPostView = (
     replyParentAuthorHandle: context.replyParentAuthorHandle,
     repostedByDid: context.repostedByDid,
     repostedByHandle: context.repostedByHandle,
+    bridgyOriginalUrl: httpUrlOrNull(post.record.bridgyOriginalUrl),
+    bridgedFromPostId: null,
     postedAt: context.postedAt,
     indexedAt: context.indexedAt,
     fetchedAt: context.fetchedAt,

@@ -77,6 +77,7 @@ describe('D1 timeline and posting adapters', () => {
     expect(remotePostInsert.values).toEqual({
       postId: event.aggregateState.postId,
       uri: 'https://remote.example/notes/1',
+      url: null,
       inReplyToUri: null,
       visibility: 'unlisted',
     });

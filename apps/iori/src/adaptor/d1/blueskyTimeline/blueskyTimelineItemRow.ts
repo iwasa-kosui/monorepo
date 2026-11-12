@@ -19,6 +19,7 @@ export const toBlueskyTimelineItemRow = (
     bookmarkUnknown: _bookmarkUnknown,
     threadMuted: _threadMuted,
     replyRootUri: _replyRootUri,
+    bridgedFromPostId: _bridgedFromPostId,
     ...item
   }: BlueskyFetchedTimelineItem,
 ): typeof blueskyTimelineItemsTable.$inferInsert => ({
@@ -48,4 +49,5 @@ export const toBlueskyTimelineItem = (
     bookmarked,
     threadMuted: null,
     replyRootUri: null,
+    bridgedFromPostId: null,
   });

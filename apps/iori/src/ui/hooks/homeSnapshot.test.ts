@@ -86,6 +86,21 @@ describe('trimPagingForSnapshot', () => {
     expect(trimmed.nextMaxId).toBe('older-status');
   });
 
+  it('Fediverse のブリッジの Bluesky 項目は隠れるので、保存する件数に数えず、何も切っていなければカーソルを変えない', () => {
+    const cursor = { before: at(0), beforeId: 'older-bluesky' };
+    const bridge = { ...bluesky('b1', 21), bridgedFromPostId: 's2' } as IoriBlueskyTimelineItemBody;
+    const paging: HomeFeedPaging = {
+      statuses: [status('s3', 30), status('s2', 20)],
+      nextMaxId: undefined,
+      bluesky: { items: [bridge, bluesky('b2', 10)], cursor },
+    };
+
+    const trimmed = trimPagingForSnapshot(paging, undefined);
+
+    expect(trimmed.bluesky.items.map((item) => item.feedItemId)).toEqual(['b2']);
+    expect(trimmed.bluesky.cursor).toEqual(cursor);
+  });
+
   it('上限を超えるときは上限で切る', () => {
     const trimmed = trimPagingForSnapshot(pagingOf(500), 's10', 300);
 

@@ -203,6 +203,80 @@ describe('mergeHomeFeed の Bridgy Fed の重複', () => {
   });
 });
 
+describe('mergeHomeFeed の Fediverse の投稿のブリッジの重複', () => {
+  const fromFediverse = (id: string, second: number, bridgedFromPostId: string | null, uri?: string) =>
+    ({
+      ...bluesky(id, second, uri),
+      authorHandle: 'alice.mastodon.example.ap.brid.gy',
+      bridgedFromPostId,
+    }) as IoriBlueskyTimelineItemBody;
+
+  it('本物の Fediverse の投稿とブリッジの投稿が両方あると、Bluesky 側のブリッジを隠す', () => {
+    expect(merge([status('s1', 50), status('s2', 30)], [fromFediverse('b1', 31, 's2')])).toEqual(['s1', 's2']);
+  });
+
+  it('ブリッジ側だけなら、そのまま表示する', () => {
+    expect(merge([status('s1', 50)], [fromFediverse('b1', 31, 's9')])).toEqual(['s1', 'bluesky:b1']);
+    expect(merge([status('s1', 50)], [fromFediverse('b1', 31, null)])).toEqual(['s1', 'bluesky:b1']);
+  });
+
+  it('Bluesky 側がリポストの項目でも隠す', () => {
+    const repost = {
+      ...fromFediverse('r1', 31, 's2'),
+      repostedByDid: 'did:plc:b',
+      repostedByHandle: 'bob.bsky.social',
+    };
+
+    expect(merge([status('s2', 30)], [repost])).toEqual(['s2']);
+  });
+
+  it('Fediverse 側がブーストのときは、内側の投稿と一致すれば隠す', () => {
+    const boost = boostOf('s1', 40, status('inner', 30));
+
+    expect(merge([boost], [fromFediverse('b1', 31, 'inner')])).toEqual(['s1']);
+    expect(merge([boost], [fromFediverse('b2', 31, 's1')])).toEqual(['s1', 'bluesky:b2']);
+  });
+
+  it('bridgedFromPostId が無い項目（ブリッジでない投稿、古いスナップショット）は隠さない', () => {
+    const old = { ...bluesky('b1', 31), authorHandle: 'alice.mastodon.example.ap.brid.gy' };
+
+    expect(merge([status('s1', 50)], [old as IoriBlueskyTimelineItemBody, bluesky('b2', 20)])).toEqual([
+      's1',
+      'bluesky:b1',
+      'bluesky:b2',
+    ]);
+  });
+
+  it('読み込み順を変えても、残るのは常に Fediverse 側にする', () => {
+    const statuses = [status('s1', 50), status('s2', 30)];
+    const bridge = fromFediverse('b1', 31, 's2');
+
+    expect(merge(statuses, [bridge])).toEqual(['s1', 's2']);
+    expect(merge([...statuses].reverse(), [bridge])).toEqual(['s1', 's2']);
+    expect(merge([status('s1', 50)], [bridge])).toEqual(['s1', 'bluesky:b1']);
+  });
+
+  it('下限より古い Fediverse の投稿があっても、対応する Bluesky 側のブリッジは隠す', () => {
+    const merged = mergeHomeFeed({
+      statuses: [status('s1', 50), status('s2', 10)],
+      hasMoreStatuses: false,
+      bluesky: [bluesky('b1', 45), fromFediverse('b2', 40, 's2')],
+      hasMoreBluesky: true,
+    });
+
+    expect(keys(merged)).toEqual(['s1', 'bluesky:b1']);
+  });
+
+  it('両方向の重複を同時に隠す', () => {
+    const merged = merge(
+      [status('s1', 50), bridged('s2', 40), status('s3', 30)],
+      [bluesky('b1', 41, postUri), fromFediverse('b2', 31, 's3')],
+    );
+
+    expect(merged).toEqual(['s1', 'bluesky:b1', 's3']);
+  });
+});
+
 describe('bridgedBlueskyUriOf', () => {
   it('Bridgy Fed の id から at:// URI を取り出す', () => {
     expect(bridgedBlueskyUriOf(bridged('s1', 1))).toBe(postUri);

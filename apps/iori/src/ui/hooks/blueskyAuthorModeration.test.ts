@@ -22,6 +22,8 @@ const item = (
   replyParentAuthorHandle: null,
   repostedByDid,
   repostedByHandle: repostedByDid === null ? null : 'r.example.com',
+  bridgyOriginalUrl: null,
+  bridgedFromPostId: null,
   postedAt: 0,
   indexedAt: 0,
   liked: false,

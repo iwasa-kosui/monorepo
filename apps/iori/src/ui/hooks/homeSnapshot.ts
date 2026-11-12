@@ -69,20 +69,20 @@ export const trimPagingForSnapshot = (
   const statuses = trimSource(paging.statuses, keptStatuses);
   const blueskyItems = trimSource<IoriBlueskyTimelineItemBody>(paging.bluesky.items, keptBluesky);
 
-  const visibleStatuses = new Set(
-    dedupeBridgedItems([
-      ...paging.statuses.map((status): HomeItem => ({ kind: 'status', status })),
-      ...paging.bluesky.items.map((item): HomeItem => ({ kind: 'bluesky', item })),
-    ]).flatMap((item) => item.kind === 'status' ? [item.status] : []),
-  );
+  const visibleItems = dedupeBridgedItems([
+    ...paging.statuses.map((status): HomeItem => ({ kind: 'status', status })),
+    ...paging.bluesky.items.map((item): HomeItem => ({ kind: 'bluesky', item })),
+  ]);
+  const visibleStatuses = new Set(visibleItems.flatMap((item) => item.kind === 'status' ? [item.status] : []));
+  const visibleBluesky = new Set(visibleItems.flatMap((item) => item.kind === 'bluesky' ? [item.item] : []));
   const isStatusesCut = paging.statuses.some((status) => visibleStatuses.has(status) && !keptStatuses.has(status));
+  const isBlueskyCut = paging.bluesky.items.some((item) => visibleBluesky.has(item) && !keptBluesky.has(item));
   const lastStatus = lastOf(statuses);
   const nextMaxId = isStatusesCut ? lastStatus?.id : paging.nextMaxId;
   const lastBluesky = lastOf(blueskyItems);
-  const blueskyCursor: BlueskyCursor | undefined =
-    blueskyItems.length === paging.bluesky.items.length || lastBluesky === undefined
-      ? paging.bluesky.cursor
-      : { before: lastBluesky.indexedAt, beforeId: lastBluesky.feedItemId };
+  const blueskyCursor: BlueskyCursor | undefined = !isBlueskyCut || lastBluesky === undefined
+    ? paging.bluesky.cursor
+    : { before: lastBluesky.indexedAt, beforeId: lastBluesky.feedItemId };
 
   return { statuses, nextMaxId, bluesky: { items: blueskyItems, cursor: blueskyCursor } };
 };

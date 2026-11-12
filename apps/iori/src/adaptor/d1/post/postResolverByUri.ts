@@ -19,6 +19,7 @@ export const createD1PostResolverByUri = (db: IoriD1Db): PostResolverByUri => ({
         content: row.posts.content,
         createdAt: row.posts.createdAt.getTime(),
         uri: row.remote_posts.uri,
+        url: row.remote_posts.url,
         inReplyToUri: row.remote_posts.inReplyToUri,
         visibility: toVisibility(row.remote_posts.visibility),
         editedAt: row.remote_posts.editedAt?.getTime() ?? null,

@@ -85,6 +85,25 @@ describe('saveFederatedNote', () => {
     );
   });
 
+  it('passes the url of the Note to the upserter', async () => {
+    const { deps, remotePostUpserter } = createDeps();
+    const note = createNote().clone({ url: new URL('https://remote.example/@alice/1') });
+
+    await saveFederatedNote(deps, { note, relayId, documentLoader });
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'https://remote.example/@alice/1' }),
+    );
+  });
+
+  it('passes a null url to the upserter when the Note has none', async () => {
+    const { deps, remotePostUpserter } = createDeps();
+
+    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ url: null }));
+  });
+
   it('passes the quoted note URI of the Note to the upserter', async () => {
     const { deps, remotePostUpserter } = createDeps();
     const note = createNote().clone({ quote: new URL('https://other.example/notes/quoted') });
