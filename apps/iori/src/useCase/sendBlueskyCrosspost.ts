@@ -113,7 +113,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       await deps.crosspostSavedStore.update(BlueskyCrosspost.markSkipped(crosspost, skipReason, deps.now()));
       return 'skipped';
     }
-    const quote = await resolveQuoteContext(post);
+    const quote = hasContentWarning(post.summary) ? { kind: 'none' as const } : await resolveQuoteContext(post);
     if (replyTo.kind === 'waiting' || quote.kind === 'waiting') return 'noop';
 
     const attempting = BlueskyCrosspost.markSending(crosspost, deps.now());

@@ -16,7 +16,7 @@ import { createD1LocalPostResolverByUri } from '../../adaptor/d1/post/localPostR
 import { createD1PostQuotesResolverByPostIds } from '../../adaptor/d1/post/postQuotesResolverByPostIds.ts';
 import { createD1PostResolver } from '../../adaptor/d1/post/postResolver.ts';
 import { createD1UserResolver } from '../../adaptor/d1/user/userResolver.ts';
-import { BlueskyCrosspost } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import { BlueskyCrosspost, MAX_BLUESKY_CROSSPOST_ATTEMPTS } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyBlob, BlueskyPostRecord } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import { blueskyRkeyOf } from '../../domain/blueskyCrosspost/blueskyRkey.ts';
 import { Instant } from '../../domain/instant/instant.ts';
@@ -1214,10 +1214,15 @@ describe('スレッドの 2 件目以降', () => {
 });
 
 describe('自分の投稿の引用', () => {
-  const insertRow = (t: ReturnType<typeof setup>, postId: string, status: 'pending' | 'skipped') =>
+  const insertRow = (
+    t: ReturnType<typeof setup>,
+    postId: string,
+    status: 'pending' | 'skipped' | 'failed',
+    attempts = 0,
+  ) =>
     t.sqlite.prepare(
       'INSERT INTO bluesky_crossposts(postId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?)',
-    ).run(postId, status, 0, NOW, NOW);
+    ).run(postId, status, attempts, NOW, NOW);
   const quotedRef = { uri: 'at://did:plc:abc/app.bsky.feed.post/3k0', cid: 'bafycid0' };
 
   it('引用元が sent なら、embed.record を付け、RE: の段落を本文から取り除いて送る', async () => {
@@ -1279,6 +1284,36 @@ describe('自分の投稿の引用', () => {
 
     expect(t.created).toHaveLength(1);
     expect(t.created[0]?.text).toBe(`引用\n\nRE: ${quoted.uri}`);
+    expect(t.created[0]).not.toHaveProperty('embed');
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
+  });
+
+  it('引用元が上限に達した failed なら、RE: のリンクのまま embed なしで送る', async () => {
+    const t = setup();
+    const quoted = t.addPost({ content: '<p>元</p>' });
+    insertRow(t, quoted.postId, 'failed', MAX_BLUESKY_CROSSPOST_ATTEMPTS);
+    const post = t.addPost({ quoteUri: quoted.uri });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.created).toHaveLength(1);
+    expect(t.created[0]?.text).toBe(`引用\n\nRE: ${quoted.uri}`);
+    expect(t.created[0]).not.toHaveProperty('embed');
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
+  });
+
+  it('CW 付きの引用投稿は、引用元が pending でも待たずに embed なしで送る', async () => {
+    const t = setup();
+    const quoted = t.addPost({ content: '<p>元</p>' });
+    insertRow(t, quoted.postId, 'pending');
+    const post = t.addPost({ quoteUri: quoted.uri, summary: '注意' });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.created).toHaveLength(1);
+    expect(t.created[0]?.text).toBe(`注意\n${SEED_ORIGIN}/users/kosui/posts/${post.postId}`);
     expect(t.created[0]).not.toHaveProperty('embed');
     expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
   });
