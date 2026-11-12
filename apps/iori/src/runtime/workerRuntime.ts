@@ -463,6 +463,7 @@ export const createWorkerRuntimePorts = async (
         actorResolverById: createD1ActorResolverById(db),
         remotePostUpserter,
         blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+        isBlockedUri: (uri) => isBlockedUri(uri),
       }),
       markersResolverByUserId,
       notificationIdsResolverByUserIdAndCreatedAt: createD1NotificationIdsResolverByUserIdAndCreatedAt(db),

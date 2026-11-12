@@ -48,6 +48,7 @@ type Setup = Readonly<{
   stored?: ReadonlyArray<string>;
   localUris?: ReadonlyArray<string>;
   blockedActorUris?: ReadonlyArray<string>;
+  blockedCheckRejects?: boolean;
   isBlockedUri?: (uri: string) => boolean;
   documentLoader?: DocumentLoader;
   failingUris?: ReadonlyArray<string>;
@@ -96,7 +97,10 @@ const setup = (options: Setup = {}) => {
     localPostUrisResolverByUris,
     remotePostUpserter,
     blockedActorUriResolverByUsername: {
-      resolve: async ({ actorUri }) => RA.ok(options.blockedActorUris?.includes(actorUri) ?? false),
+      resolve: async ({ actorUri }) => {
+        if (options.blockedCheckRejects) throw new Error('D1 is down');
+        return RA.ok(options.blockedActorUris?.includes(actorUri) ?? false);
+      },
     },
     fetchReplyNotesRecursiveUseCase,
     isBlockedUri: options.isBlockedUri ?? (() => false),
@@ -323,6 +327,21 @@ describe('FetchRemoteContextUseCase', () => {
 
       expect(await t.run()).toBe(0);
       expect(t.lookupObject.mock.calls.map(([uri]) => uri)).toEqual([ROOT_URI, replyUri(1)]);
+    });
+
+    it('ブロックの判定が失敗したときは、その相手の返信を保存しない', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const t = setup({
+        notes: [
+          noteOf(ROOT_URI, { replies: repliesOf(replyUri(1)) }),
+          noteOf(replyUri(1), { replyTo: ROOT_URI }),
+        ],
+        blockedCheckRejects: true,
+      });
+
+      expect(await t.run()).toBe(0);
+      expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
+      warn.mockRestore();
     });
 
     it('外部への lookup は、保存済みも数えて合計 60 回までにする', async () => {
@@ -658,6 +677,23 @@ describe('FetchRemoteContextUseCase', () => {
 
       expect(await shouldSave({ authorIdentity: { uri: 'https://remote.example/users/spammer' } })).toBe(false);
       expect(await shouldSave({ authorIdentity: { uri: 'https://remote.example/users/alice' } })).toBe(true);
+    });
+
+    it('ブロックの判定が失敗したときは、祖先の保存前の判定を偽にする', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const t = setup({
+        post: remotePost({ inReplyToUri: PARENT_URI }),
+        notes: [noteOf(ROOT_URI)],
+        blockedCheckRejects: true,
+      });
+
+      await t.run();
+      const [{ shouldSave }] = t.fetchReplyNotesRecursiveUseCase.run.mock.calls[0] as unknown as [
+        { shouldSave: (identity: { authorIdentity: { uri: string } }) => Promise<boolean> },
+      ];
+
+      expect(await shouldSave({ authorIdentity: { uri: 'https://remote.example/users/alice' } })).toBe(false);
+      warn.mockRestore();
     });
 
     it('祖先の保存前の判定は、全体の時間切れのあとは偽にする', async () => {

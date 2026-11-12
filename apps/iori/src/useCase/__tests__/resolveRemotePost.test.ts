@@ -3,12 +3,14 @@ import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import { isBlockedUri } from '../../adaptor/fedify/blockedInboxDomain.ts';
 import { ResolveRemotePostUseCase } from '../resolveRemotePost.ts';
 
 const ORIGIN = 'https://iori.test';
 const HTML_URL = 'https://remote.example/@alice/123';
 const NOTE_URI = 'https://remote.example/notes/123';
 const ALICE_URI = 'https://remote.example/users/alice';
+const BLOCKED_DOMAIN = 'blocked.example';
 
 const personOf = (name: string) =>
   new Person({
@@ -25,6 +27,7 @@ type Setup = Readonly<{
   localStored?: Readonly<Record<string, string>>;
   storedAuthorUris?: Readonly<Record<string, string>>;
   blockedActorUris?: ReadonlyArray<string>;
+  blockedCheckRejects?: boolean;
   lookupObject?: (uri: string) => Promise<unknown>;
   documentLoader?: DocumentLoader;
   userFound?: boolean;
@@ -82,8 +85,12 @@ const setup = (options: Setup = {}) => {
     actorResolverById: actorResolverById as never,
     remotePostUpserter,
     blockedActorUriResolverByUsername: {
-      resolve: async ({ actorUri }) => RA.ok(options.blockedActorUris?.includes(actorUri) ?? false),
+      resolve: async ({ actorUri }) => {
+        if (options.blockedCheckRejects) throw new Error('D1 is down');
+        return RA.ok(options.blockedActorUris?.includes(actorUri) ?? false);
+      },
     },
+    isBlockedUri: (uri) => isBlockedUri(uri, [BLOCKED_DOMAIN]),
     fetchTimeoutMs: options.fetchTimeoutMs,
     totalTimeoutMs: options.totalTimeoutMs,
   });
@@ -212,6 +219,54 @@ describe('ResolveRemotePostUseCase', () => {
 
     expect(await t.run(HTML_URL)).toBeUndefined();
     expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
+  });
+
+  it('ブロックの判定が失敗したときは、その相手の投稿を保存せず、見つからない扱いにする', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const t = setup({ blockedCheckRejects: true, lookupObject: async () => noteOf(NOTE_URI) });
+
+    expect(await t.run(HTML_URL)).toBeUndefined();
+    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('ブロックしたドメインの URL は、サブドメインも含めて、取得せず見つからない扱いにする', async () => {
+    const t = setup({ lookupObject: async (uri) => noteOf(uri) });
+
+    expect(await t.run(`https://${BLOCKED_DOMAIN}/@alice/1`)).toBeUndefined();
+    expect(await t.run(`https://social.${BLOCKED_DOMAIN}/@alice/1`)).toBeUndefined();
+    expect(t.lookupObject).not.toHaveBeenCalled();
+    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
+  });
+
+  it('取得した Note の id がブロックしたドメインなら、保存せず見つからない扱いにする', async () => {
+    const t = setup({ lookupObject: async () => noteOf(`https://${BLOCKED_DOMAIN}/notes/1`) });
+
+    expect(await t.run(HTML_URL)).toBeUndefined();
+    expect(t.lookupObject).toHaveBeenCalledTimes(1);
+    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
+  });
+
+  it('取得した Note の著者がブロックしたドメインなら、保存せず見つからない扱いにする', async () => {
+    const author = new Person({
+      id: new URL(`https://${BLOCKED_DOMAIN}/users/mallory`),
+      inbox: new URL(`https://${BLOCKED_DOMAIN}/users/mallory/inbox`),
+      preferredUsername: 'mallory',
+    });
+    const t = setup({
+      lookupObject: async () => new Note({ id: new URL(NOTE_URI), content: 'x', attribution: author }),
+    });
+
+    expect(await t.run(HTML_URL)).toBeUndefined();
+    expect(t.lookupObject).toHaveBeenCalledTimes(1);
+    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
+  });
+
+  it('ブロックしていないドメインの投稿は、ブロックの設定があっても取得して保存する', async () => {
+    const t = setup({ lookupObject: async () => noteOf(NOTE_URI) });
+
+    expect(await t.run(HTML_URL)).toBe(`saved:${NOTE_URI}`);
+    expect(t.remotePostUpserter.resolve).toHaveBeenCalledTimes(1);
   });
 
   it('投稿者を解決できない Note は保存せず、見つからない扱いにする', async () => {

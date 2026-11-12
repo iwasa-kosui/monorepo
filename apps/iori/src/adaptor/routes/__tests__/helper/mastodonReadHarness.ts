@@ -568,6 +568,7 @@ export const setupReadApi = (
             actorResolverById: createD1ActorResolverById(db),
             remotePostUpserter,
             blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+            isBlockedUri: () => false,
           }),
           createContext,
         }),
