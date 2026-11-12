@@ -353,6 +353,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
       articleResolver: createD1ArticleResolver(db),
       federatedTimelineItemResolverByPostId: createD1FederatedTimelineItemResolverByPostId(db),
       federatedTimelineItemCreatedStore: createD1FederatedTimelineItemCreatedStore(db),
+      isBlockedUri: (uri) => isBlockedUri(uri),
     },
     onActivity: { inboxActorResolver, addReceivedEmojiReactUseCase },
   });

@@ -7,9 +7,10 @@ import type { HomeFeedPaging } from './homeFeed.ts';
 import { fetchNewerBluesky, fetchNewerStatuses, MAX_REFRESH_PAGES, pagingAfterRefresh } from './homeFeedRefresh.ts';
 
 const at = (second: number) => Date.UTC(2026, 10, 8, 12, 0, second);
-const status = (id: string, second = 0) => ({ id, created_at: new Date(at(second)).toISOString() }) as Status;
-const bluesky = (id: string, second: number) =>
-  ({ feedItemId: id, indexedAt: at(second) }) as IoriBlueskyTimelineItemBody;
+const status = (id: string, second = 0, uri: string = `https://example.com/notes/${id}`) =>
+  ({ id, uri, created_at: new Date(at(second)).toISOString() }) as Status;
+const bluesky = (id: string, second: number, uri: string = `at://did:plc:x/app.bsky.feed.post/${id}`) =>
+  ({ feedItemId: id, uri, indexedAt: at(second) }) as IoriBlueskyTimelineItemBody;
 const statusPage = (items: readonly Status[], nextMaxId: string | undefined): Page<Status> => ({
   items,
   nextMaxId,
@@ -102,7 +103,7 @@ describe('fetchNewerBluesky', () => {
 
 describe('pagingAfterRefresh', () => {
   const prev: HomeFeedPaging = {
-    statuses: [status('s2'), status('s1')],
+    statuses: [status('s2', 11), status('s1', 10)],
     nextMaxId: 's1',
     bluesky: { items: [bluesky('b1', 10)], cursor: { before: at(10), beforeId: 'b1' } },
   };
@@ -110,7 +111,7 @@ describe('pagingAfterRefresh', () => {
   it('新着を先頭に足し、続きを読むためのカーソルは手元のものを保つ', () => {
     const result = pagingAfterRefresh(
       prev,
-      { kind: 'merged', newer: [status('s3'), status('s2')] },
+      { kind: 'merged', newer: [status('s3', 30), status('s2', 11)] },
       { kind: 'merged', newer: [bluesky('b2', 20)] },
     );
 
@@ -130,9 +131,21 @@ describe('pagingAfterRefresh', () => {
   });
 
   it('Bluesky の取得に失敗したときは手元の Bluesky を残す', () => {
-    const result = pagingAfterRefresh(prev, { kind: 'merged', newer: [status('s3')] }, undefined);
+    const result = pagingAfterRefresh(prev, { kind: 'merged', newer: [status('s3', 30)] }, undefined);
 
     expect(result.paging.bluesky).toBe(prev.bluesky);
+    expect(result.newCount).toBe(1);
+  });
+
+  it('ブリッジの status と本物の Bluesky が同時に新着になったら 1 件と数える', () => {
+    const postUri = 'at://did:plc:x/app.bsky.feed.post/real';
+
+    const result = pagingAfterRefresh(
+      prev,
+      { kind: 'merged', newer: [status('bridged', 20, `https://bsky.brid.gy/convert/ap/${postUri}`)] },
+      { kind: 'merged', newer: [bluesky('real', 21, postUri)] },
+    );
+
     expect(result.newCount).toBe(1);
   });
 
@@ -151,7 +164,7 @@ describe('pagingAfterRefresh', () => {
   it('空だった情報源の置き換えは新着として数える（Bluesky を使っていない場合など）', () => {
     const result = pagingAfterRefresh(
       { ...prev, bluesky: { items: [], cursor: undefined } },
-      { kind: 'merged', newer: [status('s3')] },
+      { kind: 'merged', newer: [status('s3', 30)] },
       { kind: 'replaced', items: [], cursor: undefined },
     );
 

@@ -7,6 +7,7 @@ import {
   appendBlueskyItems,
   blueskyCursorAfterPage,
   blueskySourceOf,
+  bridgedBlueskyUriOf,
   emptyBlueskySource,
   homeFeedCursor,
   type HomeFeedPaging,
@@ -18,9 +19,10 @@ import {
 } from './homeFeed.ts';
 
 const at = (second: number) => Date.UTC(2026, 10, 8, 12, 0, second);
-const status = (id: string, second: number) => ({ id, created_at: new Date(at(second)).toISOString() }) as Status;
-const bluesky = (id: string, second: number) =>
-  ({ feedItemId: id, indexedAt: at(second) }) as IoriBlueskyTimelineItemBody;
+const status = (id: string, second: number, extra: Partial<Status> = {}) =>
+  ({ id, uri: `https://example.com/notes/${id}`, created_at: new Date(at(second)).toISOString(), ...extra }) as Status;
+const bluesky = (id: string, second: number, uri: string = `at://did:plc:x/app.bsky.feed.post/${id}`) =>
+  ({ feedItemId: id, uri, indexedAt: at(second) }) as IoriBlueskyTimelineItemBody;
 const page = (
   items: readonly IoriBlueskyTimelineItemBody[],
   next: { before: number; beforeId: string | null } | undefined,
@@ -140,6 +142,87 @@ describe('mergeHomeFeed', () => {
     });
 
     expect(keys(merged)).toEqual(['s1', 's2', 'bluesky:b1', 'bluesky:b2']);
+  });
+});
+
+const postUri = 'at://did:plc:3ljmtyyjqcjee2kpewgsifvb/app.bsky.feed.post/3lhputf77w22j';
+const bridgedId = `https://bsky.brid.gy/convert/ap/${postUri}`;
+const bridged = (id: string, second: number) => status(id, second, { uri: bridgedId, url: bridgedId });
+const boostOf = (id: string, second: number, inner: Status) => status(id, second, { reblog: inner });
+const merge = (statuses: readonly Status[], items: readonly IoriBlueskyTimelineItemBody[]) =>
+  keys(mergeHomeFeed({ statuses, hasMoreStatuses: false, bluesky: items, hasMoreBluesky: false }));
+
+describe('mergeHomeFeed の Bridgy Fed の重複', () => {
+  it('本物の Bluesky の投稿とブリッジの投稿が両方あると、ブリッジ側の status を隠す', () => {
+    expect(merge([status('s1', 50), bridged('s2', 30)], [bluesky('b1', 31, postUri)])).toEqual([
+      's1',
+      'bluesky:b1',
+    ]);
+  });
+
+  it('ブリッジ側だけならそのまま表示する', () => {
+    expect(merge([bridged('s1', 30)], [bluesky('b1', 31)])).toEqual(['bluesky:b1', 's1']);
+  });
+
+  it('ブーストの内側がブリッジの投稿でも隠す', () => {
+    const boost = boostOf('s1', 40, bridged('inner', 30));
+
+    expect(merge([boost], [bluesky('b1', 31, postUri)])).toEqual(['bluesky:b1']);
+  });
+
+  it('Bluesky 側がリポストの項目でも、元の投稿の uri が一致すれば隠す', () => {
+    const repost = bluesky(`${postUri}#repost:did:plc:b`, 31, postUri);
+
+    expect(merge([bridged('s1', 30)], [repost])).toEqual([`bluesky:${postUri}#repost:did:plc:b`]);
+  });
+
+  it('普通の Fediverse の投稿と、bsky.brid.gy 以外の URL は隠さない', () => {
+    const lookalike = status('s2', 30, { uri: `https://example.com/convert/ap/${postUri}` });
+
+    expect(merge([status('s1', 40), lookalike], [bluesky('b1', 31, postUri)])).toEqual(['s1', 'bluesky:b1', 's2']);
+  });
+
+  it('Bluesky が後のページで届いても、残るのは常に Bluesky 側にする', () => {
+    const statuses = [status('s1', 50), bridged('s2', 30)];
+    const real = bluesky('b1', 31, postUri);
+
+    expect(merge(statuses, [])).toEqual(['s1', 's2']);
+    expect(merge(statuses, [real])).toEqual(['s1', 'bluesky:b1']);
+    expect(merge([...statuses].reverse(), [real])).toEqual(['s1', 'bluesky:b1']);
+  });
+
+  it('下限より古い Bluesky の項目があっても、対応するブリッジの status は隠す', () => {
+    const merged = mergeHomeFeed({
+      statuses: [status('s1', 50), bridged('s2', 40)],
+      hasMoreStatuses: true,
+      bluesky: [bluesky('b1', 45), bluesky('b2', 10, postUri)],
+      hasMoreBluesky: false,
+    });
+
+    expect(keys(merged)).toEqual(['s1', 'bluesky:b1']);
+  });
+});
+
+describe('bridgedBlueskyUriOf', () => {
+  it('Bridgy Fed の id から at:// URI を取り出す', () => {
+    expect(bridgedBlueskyUriOf(bridged('s1', 1))).toBe(postUri);
+  });
+
+  it('エンコードされた at:// URI も取り出す', () => {
+    const encoded = `https://bsky.brid.gy/convert/ap/${encodeURIComponent(postUri)}`;
+
+    expect(bridgedBlueskyUriOf(status('s1', 1, { uri: encoded }))).toBe(postUri);
+  });
+
+  it('ブーストは内側の投稿で判定する', () => {
+    expect(bridgedBlueskyUriOf(boostOf('s1', 2, bridged('inner', 1)))).toBe(postUri);
+    expect(bridgedBlueskyUriOf(boostOf('s1', 2, status('inner', 1)))).toBeNull();
+  });
+
+  it('Bridgy Fed の id でなければ null にする', () => {
+    expect(bridgedBlueskyUriOf(status('s1', 1))).toBeNull();
+    expect(bridgedBlueskyUriOf(status('s1', 1, { uri: 'https://bsky.brid.gy/convert/ap/did:plc:x' }))).toBeNull();
+    expect(bridgedBlueskyUriOf(status('s1', 1, { uri: 'https://bsky.brid.gy/r/https://example.com' }))).toBeNull();
   });
 });
 
