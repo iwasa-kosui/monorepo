@@ -1,3 +1,5 @@
+import { useEffect } from 'hono/jsx';
+
 import type { UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
@@ -10,6 +12,7 @@ type Props = Readonly<{
 export const FediverseReplyModal = ({ dialog }: Props) => {
   const {
     replyingToPostId,
+    replyingToUsername,
     replyContent,
     replyDestination,
     isSendingReply,
@@ -18,6 +21,17 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
     setReplyDestination,
     sendReply,
   } = dialog;
+
+  useEffect(() => {
+    if (!replyingToPostId) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeReplyDialog();
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [replyingToPostId, closeReplyDialog]);
 
   if (!replyingToPostId) {
     return null;
@@ -38,6 +52,7 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
 
   return (
     <ReplyDialogShell
+      title={replyingToUsername ? `@${replyingToUsername} に返信` : undefined}
       onClose={closeReplyDialog}
       onSubmit={submit}
       isSending={isSendingReply}

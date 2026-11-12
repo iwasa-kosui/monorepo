@@ -14,9 +14,11 @@ import {
 import { updateStatusesByPostId } from '../api/status.ts';
 import { buildSummaryRequest, summaryErrorMessage, summaryResultLabel, summaryTargetLabel } from '../api/summary.ts';
 import { BlueskyActorSearchResults, BlueskyPostSearchResults } from '../components/BlueskySearchResults.tsx';
+import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { statusActionProps } from '../components/statusActionProps.ts';
 import { SummaryText } from '../components/SummaryText.tsx';
+import { useReplyDialog } from '../hooks/useReplyDialog.ts';
 import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 import { isRemoteImportFailure, type RemoteImportResult, remoteSearchUrl } from './searchRemoteUrl.ts';
 import {
@@ -66,6 +68,7 @@ const SearchPage = () => {
   }, []);
 
   const actions = useStatusListActions(updateStatus);
+  const reply = useReplyDialog();
 
   useEffect(() => {
     const handlePopState = () => setSource(parseSearchSource(window.location.search));
@@ -247,6 +250,7 @@ const SearchPage = () => {
 
       {source === 'iori' && (
         <>
+          <FediverseReplyModal dialog={reply} />
           <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-4 mb-6 space-y-3'>
             <h2 class='font-bold text-charcoal dark:text-white'>要約</h2>
             <div class='grid grid-cols-1 sm:grid-cols-2 gap-3'>
@@ -306,6 +310,7 @@ const SearchPage = () => {
                           status={citation.status}
                           isLoggedIn
                           {...statusActionProps(actions, citation.status)}
+                          onReply={reply.openReplyDialog}
                         />
                       </li>
                     ))}
@@ -331,7 +336,13 @@ const SearchPage = () => {
             <div class='space-y-6 py-2 mb-6'>
               <h2 class='font-bold text-charcoal dark:text-white'>相手のサーバーの投稿</h2>
               {remoteStatuses.map((status) => (
-                <PostView key={status.id} status={status} isLoggedIn {...statusActionProps(actions, status)} />
+                <PostView
+                  key={status.id}
+                  status={status}
+                  isLoggedIn
+                  {...statusActionProps(actions, status)}
+                  onReply={reply.openReplyDialog}
+                />
               ))}
             </div>
           )}
@@ -343,7 +354,13 @@ const SearchPage = () => {
               </div>
               {ownStatuses.length > 0
                 ? ownStatuses.map((status) => (
-                  <PostView key={status.id} status={status} isLoggedIn {...statusActionProps(actions, status)} />
+                  <PostView
+                    key={status.id}
+                    status={status}
+                    isLoggedIn
+                    {...statusActionProps(actions, status)}
+                    onReply={reply.openReplyDialog}
+                  />
                 ))
                 : remoteStatuses.length > 0
                 ? null

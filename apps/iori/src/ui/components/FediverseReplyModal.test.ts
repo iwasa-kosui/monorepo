@@ -9,6 +9,7 @@ const noop = () => {};
 
 const dialog = (overrides: Partial<UseReplyDialogReturn> = {}): UseReplyDialogReturn => ({
   replyingToPostId: null,
+  replyingToUsername: null,
   replyContent: '',
   replyDestination: DEFAULT_POST_DESTINATION,
   isSendingReply: false,
@@ -33,6 +34,25 @@ describe('FediverseReplyModal', () => {
 
     expect(html).toContain('返信する');
     expect(html).toContain('キャンセル');
+  });
+
+  it('返信先のユーザー名があれば、見出しを「@ユーザー名 に返信」にする', () => {
+    const html = render({ replyingToPostId: 'post-1', replyingToUsername: 'alice' });
+
+    expect(html).toContain('>@alice に返信</h2>');
+  });
+
+  it('返信先のユーザー名がなければ、見出しを「返信」にする', () => {
+    const html = render({ replyingToPostId: 'post-1' });
+
+    expect(html).toContain('>返信</h2>');
+  });
+
+  it('Markdown とプレビューのタブを出す', () => {
+    const html = render({ replyingToPostId: 'post-1' });
+
+    expect(html).toContain('>Markdown</button>');
+    expect(html).toContain('>Preview</button>');
   });
 
   it('本文が空なら送信できない', () => {
