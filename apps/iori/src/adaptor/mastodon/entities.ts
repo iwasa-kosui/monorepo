@@ -220,6 +220,7 @@ const IoriEmojiReactionExtensionSchema = z.object({
   emoji: z.string(),
   url: z.string().nullable(),
   bluesky: z.undefined().optional(),
+  fediverse: z.undefined().optional(),
 });
 
 const IoriBlueskyNotificationExtensionSchema = z.object({
@@ -231,11 +232,22 @@ const IoriBlueskyNotificationExtensionSchema = z.object({
     uri: z.string().optional(),
     text: z.string().optional(),
   }),
+  fediverse: z.undefined().optional(),
+});
+
+const IoriFediverseNotificationExtensionSchema = z.object({
+  emoji: z.undefined().optional(),
+  url: z.undefined().optional(),
+  bluesky: z.undefined().optional(),
+  fediverse: z.object({
+    reason: z.enum(['mention', 'reply']),
+  }),
 });
 
 export const IoriNotificationExtensionSchema = z.union([
   IoriEmojiReactionExtensionSchema,
   IoriBlueskyNotificationExtensionSchema,
+  IoriFediverseNotificationExtensionSchema,
 ]);
 export type IoriNotificationExtension = z.infer<typeof IoriNotificationExtensionSchema>;
 

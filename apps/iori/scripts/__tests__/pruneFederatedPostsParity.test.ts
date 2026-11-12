@@ -61,6 +61,7 @@ const build = () => {
     notificationEmoji: federated(),
     notificationReply: federated(),
     notificationOriginal: federated(),
+    notificationMention: federated(),
     article: federated(),
     overlap: federated(),
   };
@@ -89,6 +90,7 @@ const build = () => {
     referenced.notificationOriginal.postId,
     1,
   );
+  seed.addMentionNotification(local.userId, remote.actorId, referenced.notificationMention.postId, 1);
   sqlite.prepare(
     'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
   ).run(seed.uuid(), local.actorId, local.userId, referenced.article.postId, 't', 'draft', 1, null, null);

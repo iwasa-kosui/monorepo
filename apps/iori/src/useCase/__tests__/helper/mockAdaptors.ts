@@ -72,6 +72,9 @@ import type {
   LikeNotificationDeleted,
   LikeNotificationDeletedStore,
   LikeNotificationsResolverByPostId,
+  MentionNotificationCreated,
+  MentionNotificationCreatedStore,
+  MentionNotificationResolverByRecipientAndMentionPostId,
   ReplyNotification,
   ReplyNotificationCreated,
   ReplyNotificationCreatedStore,
@@ -588,6 +591,31 @@ export const createMockReplyNotificationCreatedStore = ():
       & InMemoryStore<ReplyNotificationCreated>['store'],
   };
 };
+
+export const createMockMentionNotificationCreatedStore = ():
+  & MentionNotificationCreatedStore
+  & InMemoryStore<MentionNotificationCreated> =>
+{
+  const inMemoryStore = createInMemoryStore<MentionNotificationCreated>();
+  return {
+    ...inMemoryStore,
+    store: vi.fn(inMemoryStore.store) as unknown as
+      & MentionNotificationCreatedStore['store']
+      & InMemoryStore<MentionNotificationCreated>['store'],
+  };
+};
+
+export const createMockMentionNotificationResolver = (
+  created: InMemoryStore<MentionNotificationCreated>,
+): MentionNotificationResolverByRecipientAndMentionPostId => ({
+  resolve: vi.fn(({ recipientUserId, mentionPostId }) =>
+    RAImpl.ok(
+      created.items.map((event) => event.aggregateState).find((notification) =>
+        notification.recipientUserId === recipientUserId && notification.mentionPostId === mentionPostId
+      ),
+    )
+  ),
+});
 
 export const createMockReplyNotificationDeletedStore = ():
   & ReplyNotificationDeletedStore

@@ -51,6 +51,7 @@ describe('D1 schema', () => {
       'notificationEmojiReactsTable',
       'notificationFollowsTable',
       'notificationLikesTable',
+      'notificationMentionsTable',
       'notificationRepliesTable',
       'notificationRepostsTable',
       'notificationsTable',
