@@ -33,12 +33,15 @@ const noop = () => {};
 const render = (props: Partial<Parameters<typeof PostView>[0]> = {}, status: Status = base): string =>
   String(jsx(PostView, { status, ...props }));
 
+const countButtons = (html: string): number => html.split('<button').length - 1;
+
 describe('PostView のいいねボタン', () => {
-  it('onLike も onUndoLike も渡さなければ出さない', () => {
+  it('onLike も onUndoLike も渡さなければ button と title は出さない', () => {
     const html = render({}, { ...base, favourites_count: 3 });
 
     expect(html).not.toContain('title="いいね"');
     expect(html).not.toContain('title="いいねを取り消す"');
+    expect(countButtons(html)).toBe(countButtons(render({}, { ...base, favourites_count: 0 })));
   });
 
   it('onLike を渡せば出す', () => {
@@ -49,21 +52,27 @@ describe('PostView のいいねボタン', () => {
     expect(render({ onUndoLike: noop }, { ...base, favourited: true })).toContain('title="いいねを取り消す"');
   });
 
-  it('出さないときはいいね数も出さない', () => {
-    const hidden = render({}, { ...base, favourites_count: 7 });
-    const shown = render({ onLike: noop }, { ...base, favourites_count: 7 });
+  it('操作が無くてもいいね数は出す', () => {
+    const html = render({}, { ...base, favourites_count: 7 });
 
-    expect(hidden).not.toContain('>7<');
-    expect(shown).toContain('>7<');
+    expect(html).toContain('>7<');
+    expect(html).not.toContain('title="いいね"');
+  });
+
+  it('いいね数が 0 で操作も無ければ何も出さない', () => {
+    const empty = render({}, { ...base, favourites_count: 0 });
+
+    expect(empty).not.toContain('M4.318 6.318');
   });
 });
 
 describe('PostView のリポストボタン', () => {
-  it('onRepost も onUndoRepost も渡さなければ出さない', () => {
+  it('onRepost も onUndoRepost も渡さなければ button と title は出さない', () => {
     const html = render({}, { ...base, reblogs_count: 3 });
 
     expect(html).not.toContain('title="リポスト"');
     expect(html).not.toContain('title="リポストを取り消す"');
+    expect(countButtons(html)).toBe(countButtons(render({}, { ...base, reblogs_count: 0 })));
   });
 
   it('onRepost を渡せば出す', () => {
@@ -74,11 +83,16 @@ describe('PostView のリポストボタン', () => {
     expect(render({ onUndoRepost: noop }, { ...base, reblogged: true })).toContain('title="リポストを取り消す"');
   });
 
-  it('出さないときはリポスト数も出さない', () => {
-    const hidden = render({}, { ...base, reblogs_count: 7 });
-    const shown = render({ onRepost: noop }, { ...base, reblogs_count: 7 });
+  it('操作が無くてもリポスト数は出す', () => {
+    const html = render({}, { ...base, reblogs_count: 7 });
 
-    expect(hidden).not.toContain('>7<');
-    expect(shown).toContain('>7<');
+    expect(html).toContain('>7<');
+    expect(html).not.toContain('title="リポスト"');
+  });
+
+  it('リポスト数が 0 で操作も無ければ何も出さない', () => {
+    const empty = render({}, { ...base, reblogs_count: 0 });
+
+    expect(empty).not.toContain('M4 4v5h.582');
   });
 });
