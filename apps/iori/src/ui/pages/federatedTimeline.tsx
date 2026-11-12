@@ -4,14 +4,17 @@ import { render } from 'hono/jsx/dom';
 import { fetchPublicTimeline, isUnauthorizedError } from '../api/mastodonClient.ts';
 import { addRelay, fetchRelays, type Relay } from '../api/relays.ts';
 import { clearAllCache } from '../api/responseCache.ts';
+import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { statusActionProps } from '../components/statusActionProps.ts';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
+import { useReplyDialog } from '../hooks/useReplyDialog.ts';
 import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 
 const FederatedTimelinePage = () => {
   const { items, setFirstPage, updateItem } = usePublicTimeline('remote');
   const actions = useStatusListActions(updateItem);
+  const reply = useReplyDialog();
   const [relays, setRelays] = useState<readonly Relay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showRelayModal, setShowRelayModal] = useState(false);
@@ -91,6 +94,7 @@ const FederatedTimelinePage = () => {
 
   return (
     <section class='space-y-6 py-2'>
+      <FediverseReplyModal dialog={reply} />
       <div class='flex items-center justify-between mb-2'>
         <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
           Federated Timeline
@@ -151,7 +155,13 @@ const FederatedTimelinePage = () => {
       {items.length > 0
         ? (
           items.map((status) => (
-            <PostView key={status.id} status={status} isLoggedIn {...statusActionProps(actions, status)} />
+            <PostView
+              key={status.id}
+              status={status}
+              isLoggedIn
+              {...statusActionProps(actions, status)}
+              onReply={reply.openReplyDialog}
+            />
           ))
         )
         : (

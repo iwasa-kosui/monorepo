@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { Article } from '../../domain/article/article.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
+import { updateStatusesByPostId } from '../api/status.ts';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { likeRepostActionProps } from '../components/statusActionProps.ts';
+import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 import { postToStatus } from '../legacyConversion.ts';
 import { buildDigestPublishConfirmMessage, type DigestPublishNotice } from './digestPublishConfirm.ts';
 
@@ -44,6 +48,10 @@ const ArticleDetailPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoggedIn] = useState(() => getIsLoggedIn());
+  const [threadStatuses, setThreadStatuses] = useState<readonly Status[]>([]);
+  const threadActions = useStatusListActions((postId, updater) =>
+    setThreadStatuses((prev) => updateStatusesByPostId(prev, postId, updater))
+  );
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -79,6 +87,7 @@ const ArticleDetailPage = () => {
         setError(result.error);
       } else {
         setData(result);
+        setThreadStatuses(result.thread.map(postToStatus));
       }
     } catch (err) {
       setError((err as Error).message);
@@ -419,7 +428,13 @@ const ArticleDetailPage = () => {
           )
           : (
             <div class='space-y-6 py-2'>
-              {thread.map((post) => <PostView key={post.postId} status={postToStatus(post)} />)}
+              {threadStatuses.map((status) => (
+                <PostView
+                  key={status.id}
+                  status={status}
+                  {...likeRepostActionProps(isLoggedIn ? threadActions : undefined, status)}
+                />
+              ))}
             </div>
           )}
       </div>
