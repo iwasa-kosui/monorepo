@@ -15,7 +15,9 @@ import { accountHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { DEFAULT_POST_DESTINATION } from '../components/postDestination.ts';
 import { replyParams } from '../components/postSubmission.ts';
 import { PostView } from '../components/PostView.tsx';
+import { QuoteModal } from '../components/QuoteModal.tsx';
 import { ReplyModal } from '../components/ReplyModal.tsx';
+import { useQuoteDialog } from '../hooks/useQuoteDialog.ts';
 import {
   applyContext,
   resolveLocalPostThread,
@@ -137,6 +139,8 @@ const LocalPostPage = () => {
   const handleReply = (postId: string) => {
     setReplyToPostId(postId);
   };
+
+  const quote = useQuoteDialog({ onQuoted: () => void fetchThread() });
 
   const handleCloseReplyModal = () => {
     setReplyToPostId(null);
@@ -286,6 +290,7 @@ const LocalPostPage = () => {
                   <PostView
                     status={post}
                     onReply={isLoggedIn ? handleReply : undefined}
+                    onQuote={isLoggedIn ? quote.open : undefined}
                     onDelete={isLoggedIn ? handleDelete : undefined}
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
@@ -300,6 +305,7 @@ const LocalPostPage = () => {
               <PostView
                 status={threadData.currentPost}
                 onReply={isLoggedIn ? handleReply : undefined}
+                onQuote={isLoggedIn ? quote.open : undefined}
                 onDelete={isLoggedIn ? handleDelete : undefined}
                 isDeleting={deletingPostId === threadData.currentPost.id}
                 currentAccountId={currentAccountId}
@@ -337,6 +343,7 @@ const LocalPostPage = () => {
                   <PostView
                     status={post}
                     onReply={isLoggedIn ? handleReply : undefined}
+                    onQuote={isLoggedIn ? quote.open : undefined}
                     onDelete={isLoggedIn ? handleDelete : undefined}
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
@@ -364,6 +371,20 @@ const LocalPostPage = () => {
           isSubmitting={isSendingReply}
           destination={replyDestination}
           onDestinationChange={setReplyDestination}
+        />
+      )}
+
+      {isLoggedIn && quote.target !== null && (
+        <QuoteModal
+          target={quote.target}
+          content={quote.content}
+          destination={quote.destination}
+          isSending={quote.isSending}
+          errorText={quote.errorText}
+          onClose={quote.close}
+          onSubmit={() => void quote.send()}
+          onContentChange={quote.setContent}
+          onDestinationChange={quote.setDestination}
         />
       )}
 

@@ -12,6 +12,7 @@ import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation.ts';
 import { usePostActions, type UsePostActionsReturn } from '../hooks/usePostActions.ts';
 import { PULL_TO_REFRESH_THRESHOLD, usePullToRefresh, type UsePullToRefreshReturn } from '../hooks/usePullToRefresh.ts';
+import { useQuoteDialog, type UseQuoteDialogReturn } from '../hooks/useQuoteDialog.ts';
 import { useReadingPosition, type UseReadingPositionReturn } from '../hooks/useReadingPosition.ts';
 import { useReplyDialog, type UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
 import { useReportPost, type UseReportPostReturn } from '../hooks/useReportPost.ts';
@@ -32,6 +33,7 @@ export type TimelineContextValue = Readonly<{
   thread: UseThreadModalReturn;
   reply: UseReplyDialogReturn;
   reportPost: UseReportPostReturn;
+  quote: UseQuoteDialogReturn;
   ui: UseUIStateReturn;
   pullToRefresh: UsePullToRefreshReturn;
   pullThreshold: number;
@@ -51,6 +53,12 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
 
   const reply = useReplyDialog({
     onReplySent: () => {
+      timeline.reload();
+    },
+  });
+
+  const quote = useQuoteDialog({
+    onQuoted: () => {
       timeline.reload();
     },
   });
@@ -110,7 +118,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     emojiPickerOpenForIndex: ui.emojiPickerOpenForIndex,
     setEmojiPickerOpenForIndex: ui.setEmojiPickerOpenForIndex,
     replyingToPostId: reply.replyingToPostId ?? blueskyReply.target?.feedItemId ?? blueskyQuote.target?.feedItemId
-      ?? null,
+      ?? quote.target?.id ?? null,
     threadModalPostId: thread.threadModalPostId,
     onLike: actions.like,
     onUndoLike: actions.undoLike,
@@ -120,6 +128,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       reply.closeReplyDialog();
       blueskyReply.close();
       blueskyQuote.close();
+      quote.close();
     },
     onCloseThread: thread.closeThread,
   });
@@ -138,6 +147,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       thread,
       reply,
       reportPost,
+      quote,
       ui,
       pullToRefresh,
       pullThreshold: PULL_TO_REFRESH_THRESHOLD,
@@ -156,6 +166,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       thread,
       reply,
       reportPost,
+      quote,
       ui,
       pullToRefresh,
       reading,

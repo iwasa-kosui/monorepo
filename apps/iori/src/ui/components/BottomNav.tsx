@@ -1,5 +1,6 @@
 import type { FC } from 'hono/jsx';
 
+import { WithMessageBadge } from './MessageBadge.tsx';
 import { WithNotificationBadge } from './NotificationBadge.tsx';
 
 type Props = {
@@ -37,6 +38,24 @@ export const BottomNav: FC<Props> = ({ isLoggedIn = false }) => (
           </svg>
         </WithNotificationBadge>
       </a>
+      {isLoggedIn && (
+        <a
+          href='/messages'
+          aria-label='メッセージ'
+          class='flex flex-col items-center justify-center flex-1 h-full text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+        >
+          <WithMessageBadge>
+            <svg class='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+              <path
+                stroke-linecap='round'
+                stroke-linejoin='round'
+                stroke-width='2'
+                d='M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
+              />
+            </svg>
+          </WithMessageBadge>
+        </a>
+      )}
       <a
         href={isLoggedIn ? '/#post-modal' : '/sign-in'}
         class='flex flex-col items-center justify-center flex-1 h-full text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'

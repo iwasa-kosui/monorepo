@@ -8,6 +8,7 @@ import {
   failureMessage,
 } from '../api/mastodonClient.ts';
 import { BLUESKY_ONLY_POSTED_MESSAGE, postedMessage } from './blueskyCrosspostMark.ts';
+import type { PostVisibility } from './postVisibility.ts';
 
 export type UploadedMedia = Readonly<{ id: string; url: string; description: string; savedDescription: string }>;
 
@@ -15,6 +16,7 @@ export type PostFormValue = Readonly<{
   content: string;
   uploaded: readonly UploadedMedia[];
   destination: PostDestination;
+  visibility: PostVisibility;
   cw: string;
   sensitive: boolean;
 }>;
@@ -71,6 +73,7 @@ export const submitPost = async (
       media_ids: value.uploaded.map((media) => media.id),
       content_type: 'text/markdown',
       iori_destination: value.destination,
+      visibility: value.visibility,
       ...(spoilerText === '' ? {} : { spoiler_text: spoilerText }),
       ...(value.sensitive ? { sensitive: true } : {}),
     });
@@ -96,6 +99,17 @@ export const replyParams = (
 ): CreateStatusParams => ({
   status: content,
   in_reply_to_id: postId,
+  content_type: 'text/markdown',
+  iori_destination: destination,
+});
+
+export const quoteParams = (
+  postId: string,
+  content: string,
+  destination: PostDestination,
+): CreateStatusParams => ({
+  status: content,
+  quoted_status_id: postId,
   content_type: 'text/markdown',
   iori_destination: destination,
 });

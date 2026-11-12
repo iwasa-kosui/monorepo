@@ -80,6 +80,7 @@ const create = ({
         postId: createPost.aggregateState.postId,
         url: attachment.url,
         altText: attachment.altText,
+        mediaType: attachment.mediaType,
         createdAt: now,
       }));
       try {

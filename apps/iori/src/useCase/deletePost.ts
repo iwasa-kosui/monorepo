@@ -8,12 +8,19 @@ import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Article, type ArticleDeletedStore, type ArticleResolverByRootPostId } from '../domain/article/article.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { MENTION_LOOKUP_TIMEOUT_MS, mentionLinksOfHtml, MentionRecipient } from '../domain/post/mention.ts';
-import { Post, type PostDeletedStore, PostNotFoundError, type PostResolver } from '../domain/post/post.ts';
+import {
+  Post,
+  type PostDeletedStore,
+  PostNotFoundError,
+  type PostQuotesResolverByPostIds,
+  type PostResolver,
+} from '../domain/post/post.ts';
 import { PostId } from '../domain/post/postId.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
 import { timedOut, withTimeout } from '../helper/withTimeout.ts';
+import { toQuoteNoteFields } from './helper/quoteNote.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import { sendToMentions } from './helper/sendToMentions.ts';
 import type { RemoveBlueskyCrosspostUseCase } from './removeBlueskyCrosspost.ts';
@@ -55,6 +62,7 @@ type Deps = Readonly<{
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
   postResolver: PostResolver;
+  postQuotesResolver?: PostQuotesResolverByPostIds;
   // Article is a child aggregate of Post, so we keep it
   articleResolverByRootPostId: ArticleResolverByRootPostId;
   articleDeletedStore: ArticleDeletedStore;
@@ -105,6 +113,7 @@ const create = ({
   userResolver,
   actorResolverByUserId,
   postResolver,
+  postQuotesResolver,
   articleResolverByRootPostId,
   articleDeletedStore,
   removeBlueskyCrosspost,
@@ -144,6 +153,9 @@ const create = ({
           await articleDeletedStore.store(articleDeleteEvent);
         }
 
+        const quotes = await postQuotesResolver?.resolve([postId]);
+        const quoteRecipients = toQuoteNoteFields(quotes?.ok ? quotes.val.get(postId) : undefined).recipients;
+
         // Delete the post via event store
         const deleteEvent = Post.deletePost(now)(postId);
         await postDeletedStore.store(deleteEvent);
@@ -165,7 +177,7 @@ const create = ({
           ctx,
           identifier: user.username,
           activity: deleteActivity,
-          mentions: await resolveMentionRecipients(ctx, user.username, post.content),
+          mentions: [...await resolveMentionRecipients(ctx, user.username, post.content), ...quoteRecipients],
         });
 
         // If there was a published article, send Delete activity for it too

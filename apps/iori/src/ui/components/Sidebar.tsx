@@ -1,5 +1,6 @@
 import type { FC } from 'hono/jsx';
 
+import { WithMessageBadge } from './MessageBadge.tsx';
 import { WithNotificationBadge } from './NotificationBadge.tsx';
 
 type Props = {
@@ -45,6 +46,24 @@ export const Sidebar: FC<Props> = ({ isLoggedIn = false }) => (
           </svg>
         </WithNotificationBadge>
       </a>
+      {isLoggedIn && (
+        <a
+          href='/messages'
+          aria-label='メッセージ'
+          class='flex items-center gap-3 px-4 py-3 rounded-clay text-charcoal-light dark:text-gray-300 hover:bg-cream dark:hover:bg-gray-800 hover:shadow-clay-sm dark:hover:shadow-clay-dark transition-all clay-hover-lift'
+        >
+          <WithMessageBadge>
+            <svg class='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+              <path
+                stroke-linecap='round'
+                stroke-linejoin='round'
+                stroke-width='2'
+                d='M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
+              />
+            </svg>
+          </WithMessageBadge>
+        </a>
+      )}
       {isLoggedIn && (
         <a
           href='/likes'

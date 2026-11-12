@@ -239,6 +239,7 @@ const create = ({
           postId: post.postId,
           url: attachment.url,
           altText: attachment.altText,
+          mediaType: attachment.mediaType,
           createdAt: now,
         }));
         await postImageCreatedStore.store(images);

@@ -14,7 +14,7 @@ const identity = {
   },
   inReplyToUri: null,
   visibility: null,
-  attachments: [{ url: 'https://remote.example/media/1.png', altText: null }],
+  attachments: [{ url: 'https://remote.example/media/1.png', altText: null, mediaType: null }],
 };
 
 const createDeps = (existing: RemotePost | undefined) => {

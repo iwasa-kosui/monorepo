@@ -123,6 +123,21 @@ const options = {
   myReactionEmojis: new Set(['🎉']),
 };
 
+describe('toStatus の edited_at', () => {
+  it('編集された Fediverse の投稿は編集時刻を ISO 8601 で返す', () => {
+    const status = toStatus({ ...remotePost, editedAt: Date.UTC(2025, 0, 3, 4, 5, 6) as Instant }, options);
+
+    expect(StatusSchema.safeParse(status).success).toBe(true);
+    expect(status.edited_at).toBe('2025-01-03T04:05:06.000Z');
+  });
+
+  it('編集されていない投稿とローカルの投稿は null を返す', () => {
+    expect(toStatus({ ...remotePost, editedAt: null }, options).edited_at).toBeNull();
+    expect(toStatus(remotePost, options).edited_at).toBeNull();
+    expect(toStatus(localPost, options).edited_at).toBeNull();
+  });
+});
+
 describe('toStatus', () => {
   it('converts a local post into a Status that passes the schema', () => {
     const status = toStatus(localPost, options);
@@ -391,6 +406,46 @@ describe('toStatus url safety', () => {
       url: 'https://iori.example/uploads/a.png',
       preview_url: 'https://iori.example/uploads/a.png',
     });
+  });
+
+  it.each([
+    { mediaType: 'video/mp4', url: 'https://remote.example/media/1.mp4', type: 'video', preview: null },
+    { mediaType: 'audio/mpeg', url: 'https://remote.example/media/1.mp3', type: 'audio', preview: null },
+    {
+      mediaType: 'image/png',
+      url: 'https://remote.example/media/1.png',
+      type: 'image',
+      preview: 'https://remote.example/media/1.png',
+    },
+    { mediaType: null, url: 'https://remote.example/media/1.webm', type: 'video', preview: null },
+    { mediaType: null, url: 'https://remote.example/media/1.ogg', type: 'audio', preview: null },
+    {
+      mediaType: null,
+      url: 'https://remote.example/media/1.jpg',
+      type: 'image',
+      preview: 'https://remote.example/media/1.jpg',
+    },
+  ])('decides the media attachment type $type from mediaType $mediaType and the url', (
+    { mediaType, url, type, preview },
+  ) => {
+    const post: PostWithAuthor = {
+      ...localPost,
+      images: [{ imageId: ImageId.generate(), url, altText: 'alt', mediaType }],
+    };
+
+    const status = toStatus(post, { ...options, mediaAttachmentIds: ['media-1'] });
+
+    expect(status.media_attachments).toEqual([{
+      id: 'media-1',
+      type,
+      url,
+      preview_url: preview,
+      remote_url: null,
+      meta: null,
+      description: 'alt',
+      blurhash: null,
+    }]);
+    expect(StatusSchema.safeParse(status).success).toBe(true);
   });
 
   it('drops a media attachment whose url is not http or https', () => {

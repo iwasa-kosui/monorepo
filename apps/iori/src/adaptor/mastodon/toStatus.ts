@@ -1,5 +1,6 @@
 import { containsKana } from '../../domain/aiTranslation/isJapanese.ts';
 import { BlueskyCrosspost } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import { attachmentKindOf } from '../../domain/image/attachmentKind.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import type { RepostId } from '../../domain/repost/repostId.ts';
@@ -34,11 +35,12 @@ const toMediaAttachments = (
     const id = mediaAttachmentIds[index];
     const url = toSafeApiUrl(image.url, baseUrl);
     if (id === undefined || url === undefined) return [];
+    const type = attachmentKindOf(image);
     return [{
       id,
-      type: 'image',
+      type,
       url,
-      preview_url: url,
+      preview_url: type === 'image' ? url : null,
       remote_url: null,
       meta: null,
       description: image.altText,
@@ -134,7 +136,7 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
     poll: null,
     card: toCard(post.linkPreviews, options.baseUrl),
     language: toLanguage(post.content),
-    edited_at: null,
+    edited_at: post.type === 'remote' && post.editedAt != null ? toIsoString(post.editedAt) : null,
     favourited: post.liked,
     reblogged: post.reposted,
     muted: false,

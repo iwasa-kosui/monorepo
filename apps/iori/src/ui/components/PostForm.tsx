@@ -9,6 +9,8 @@ import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
 import { canSubmitPost, postedNotice, type PostNotice, submitPost, type UploadedMedia } from './postSubmission.ts';
+import { DEFAULT_POST_VISIBILITY, type PostVisibility } from './postVisibility.ts';
+import { PostVisibilitySelect } from './PostVisibilitySelect.tsx';
 
 type Props = Readonly<{
   id?: string;
@@ -22,6 +24,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [destination, setDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
+  const [visibility, setVisibility] = useState<PostVisibility>(DEFAULT_POST_VISIBILITY);
   const [notice, setNotice] = useState<PostNotice | undefined>(undefined);
   const [cwEnabled, setCwEnabled] = useState(false);
   const [cw, setCw] = useState('');
@@ -31,7 +34,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const hasImages = uploaded.length > 0;
   const sensitive = hasImages && (sensitiveChecked || hasCw);
   const isBlueskyOnly = destination === 'bluesky';
-  const crosspostNotice = blueskyCrosspostNotice(destination, cwEnabled ? cw : '', sensitive);
+  const crosspostNotice = blueskyCrosspostNotice(destination, cwEnabled ? cw : '', sensitive, visibility);
 
   const handleContentChange = (value: string) => {
     setContent(value);
@@ -43,7 +46,14 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
     setIsPosting(true);
     try {
       const result = await submitPost(
-        { content, uploaded, destination, cw: cwEnabled ? cw : '', sensitive: hasImages && sensitiveChecked },
+        {
+          content,
+          uploaded,
+          destination,
+          visibility,
+          cw: cwEnabled ? cw : '',
+          sensitive: hasImages && sensitiveChecked,
+        },
         { create: createStatus, createBlueskyPost, updateMedia, onDescriptionSaved: handleDescriptionSaved, onPosted },
       );
       if (result.kind === 'failed') {
@@ -52,6 +62,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         setContent('');
         setUploaded([]);
         setDestination(DEFAULT_POST_DESTINATION);
+        setVisibility(DEFAULT_POST_VISIBILITY);
         setCwEnabled(false);
         setCw('');
         setSensitiveChecked(false);
@@ -181,7 +192,15 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           </label>
         </div>
       )}
-      <div class='mt-2 flex justify-end items-center gap-3 flex-shrink-0'>
+      <div class='mt-2 flex-shrink-0'>
+        <PostVisibilitySelect
+          value={visibility}
+          onChange={setVisibility}
+          name='visibility'
+          id={`${formId ?? id ?? 'post-form'}-visibility`}
+        />
+      </div>
+      <div class='mt-2 flex flex-wrap justify-end items-center gap-3 flex-shrink-0'>
         <PostDestinationSelect
           value={destination}
           onChange={handleDestinationChange}

@@ -107,6 +107,7 @@ describe('D1 timeline and posting adapters', () => {
       postId: postEvent.aggregateState.postId,
       url: '/uploads/image.webp',
       altText: 'A post image',
+      mediaType: null,
       createdAt: now,
     };
 

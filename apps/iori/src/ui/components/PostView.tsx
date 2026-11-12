@@ -36,6 +36,7 @@ type Props = Readonly<{
   isEmojiPickerOpen?: boolean;
   onToggleEmojiPicker?: () => void;
   onReply?: (postId: string) => void;
+  onQuote?: (post: Status) => void;
   onShowThread?: (postId: string) => void;
   onMute?: (accountId: string, acct: string) => void;
   onBlock?: (accountId: string, acct: string) => void;
@@ -68,6 +69,7 @@ export const PostView = (
     isEmojiPickerOpen,
     onToggleEmojiPicker,
     onReply,
+    onQuote,
     onShowThread,
     onMute,
     onBlock,
@@ -83,6 +85,10 @@ export const PostView = (
     ? undefined
     : toBlueskyCrosspostMark(post.iori.bluesky_crosspost);
   const images = post.media_attachments.filter((attachment) => attachment.type === 'image');
+  const playables = post.media_attachments.filter((attachment) =>
+    attachment.type === 'video' || attachment.type === 'audio'
+  );
+  const hasMedia = images.length > 0 || playables.length > 0;
   const linkPreviews = post.iori?.link_previews ?? [];
   const reactions = post.iori?.reactions ?? [];
   const quote = quoteOf(post);
@@ -94,7 +100,11 @@ export const PostView = (
   const canMute = onMute !== undefined && isOtherAccount;
   const canBlock = onBlock !== undefined && isOtherAccount && !isLocalPost;
   const canReport = onReport !== undefined && isOtherAccount && !isLocalPost;
+  const canQuote = onQuote !== undefined && (post.visibility === 'public' || post.visibility === 'unlisted');
   const menuItems: readonly PostMenuItem[] = [
+    ...(canQuote
+      ? [{ key: 'quote', label: '引用', kind: 'action', onSelect: () => onQuote?.(post) } as const]
+      : []),
     ...(postUrl !== undefined && !isLocalPost
       ? [{ key: 'open-original', label: '元の投稿を開く', kind: 'link', href: postUrl } as const]
       : []),
@@ -427,9 +437,11 @@ export const PostView = (
               )}
             </>
           )}
-          {!isContentHidden && images.length > 0 && isMediaConcealed && (
+          {!isContentHidden && hasMedia && isMediaConcealed && (
             <div class='mt-3 flex items-center gap-2 rounded-2xl bg-sand/40 px-3 py-2 dark:bg-gray-700/40'>
-              <p class='text-sm text-charcoal dark:text-gray-200'>センシティブな画像があります</p>
+              <p class='text-sm text-charcoal dark:text-gray-200'>
+                {playables.length > 0 ? 'センシティブなメディアがあります' : 'センシティブな画像があります'}
+              </p>
               <button
                 type='button'
                 onClick={(e) => {
@@ -471,6 +483,41 @@ export const PostView = (
                     />
                   </a>
                 );
+              })}
+            </div>
+          )}
+          {!isContentHidden && playables.length > 0 && !isMediaConcealed && (
+            <div
+              class='mt-3 space-y-2'
+              onClick={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+            >
+              {playables.map((attachment, index) => {
+                const mediaUrl = safeUrl(attachment.url);
+                if (!mediaUrl) return null;
+                return attachment.type === 'video'
+                  ? (
+                    <video
+                      key={index}
+                      src={mediaUrl}
+                      aria-label={attachment.description || '動画'}
+                      controls
+                      preload='metadata'
+                      playsinline
+                      class='block w-full h-auto max-h-80 rounded-2xl bg-black'
+                    />
+                  )
+                  : (
+                    <audio
+                      key={index}
+                      src={mediaUrl}
+                      aria-label={attachment.description || '音声'}
+                      controls
+                      preload='metadata'
+                      class='block w-full'
+                    />
+                  );
               })}
             </div>
           )}

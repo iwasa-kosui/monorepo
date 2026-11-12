@@ -14,8 +14,10 @@ import type {
 } from '../domain/post/post.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
 import type { UserId } from '../domain/user/userId.ts';
+import type { Username } from '../domain/user/username.ts';
 import { timedOut, withTimeout } from '../helper/withTimeout.ts';
 import { signalWithTimeout, withFetchTimeout } from './helper/abortableFetch.ts';
+import { isBlockedActorUri } from './helper/isBlockedActorUri.ts';
 import { createRecentRuns } from './helper/recentRuns.ts';
 import { toRemotePostIdentity } from './helper/remoteNoteIdentity.ts';
 import { resolveUserWith } from './helper/resolve.ts';
@@ -58,6 +60,7 @@ type Deps = Readonly<{
   localPostUrisResolverByUris: LocalPostUrisResolverByUris;
   remotePostUpserter: RemotePostUpserter;
   blockedActorUriResolverByUsername: BlockedActorUriResolverByUsername;
+  isBlockedUri: (uri: string) => boolean;
   fetchTimeoutMs?: number;
   totalTimeoutMs?: number;
   now?: () => number;
@@ -77,6 +80,7 @@ const create = ({
   localPostUrisResolverByUris,
   remotePostUpserter,
   blockedActorUriResolverByUsername,
+  isBlockedUri,
   fetchTimeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
   totalTimeoutMs = DEFAULT_TOTAL_TIMEOUT_MS,
   now = Date.now,
@@ -98,6 +102,9 @@ const create = ({
     ]);
     return new Set([...(remote.ok ? remote.val : []), ...(local.ok ? local.val : [])]);
   };
+
+  const isBlocked = (username: Username, actorUri: string): Promise<boolean> =>
+    isBlockedActorUri(blockedActorUriResolverByUsername, username, actorUri);
 
   const outboxPages = async function*(outbox: Collection, documentLoader: DocumentLoader): AsyncGenerator<Collection> {
     const options = { documentLoader, suppressError: true } as const;
@@ -132,6 +139,7 @@ const create = ({
     note: Note | undefined,
     noteUri: string,
     actorUri: string,
+    username: Username,
     documentLoader: DocumentLoader,
     progress: Progress,
   ): Promise<void> => {
@@ -139,8 +147,8 @@ const create = ({
       if (note === undefined || note.attributionId?.href !== actorUri) {
         return;
       }
-      const identity = await toRemotePostIdentity(note, { origin, documentLoader });
-      if (identity === undefined || progress.stopped) {
+      const identity = await toRemotePostIdentity(note, { origin, documentLoader, isBlockedUri });
+      if (identity === undefined || await isBlocked(username, identity.authorIdentity.uri) || progress.stopped) {
         return;
       }
       const upserted = await remotePostUpserter.resolve(identity);
@@ -155,6 +163,7 @@ const create = ({
   const saveCreates = async (
     creates: readonly Create[],
     actorUri: string,
+    username: Username,
     ctx: FederationContext,
     documentLoader: DocumentLoader,
     progress: Progress,
@@ -189,7 +198,7 @@ const create = ({
       if (progress.stopped || progress.fetched >= MAX_SAVED) {
         return;
       }
-      await saveNote(note, creates[index]!.objectId!.href, actorUri, documentLoader, progress);
+      await saveNote(note, creates[index]!.objectId!.href, actorUri, username, documentLoader, progress);
       consumed++;
     }
   };
@@ -204,7 +213,7 @@ const create = ({
       if (progress.stopped || creates.length >= MAX_ITEMS_PER_PAGE) {
         break;
       }
-      if (item instanceof Create && item.objectId !== null) {
+      if (item instanceof Create && item.objectId !== null && !isBlockedUri(item.objectId.href)) {
         creates.push(item);
       }
     }
@@ -213,6 +222,7 @@ const create = ({
 
   const fetchOutbox = async (
     actorUri: string,
+    username: Username,
     ctx: FederationContext,
     documentLoader: DocumentLoader,
     progress: Progress,
@@ -230,7 +240,7 @@ const create = ({
         const creates = await pageCreates(page, documentLoader, progress);
         const stored = await storedUris(creates.map((create) => create.objectId!.href));
         const fresh = creates.filter((create) => !stored.has(create.objectId!.href));
-        await saveCreates(fresh, actorUri, ctx, documentLoader, progress);
+        await saveCreates(fresh, actorUri, username, ctx, documentLoader, progress);
         if (progress.stopped || progress.fetched >= MAX_SAVED) {
           return;
         }
@@ -253,11 +263,7 @@ const create = ({
     if (actor.type === 'local') {
       return RA.ok({ fetchedCount: 0 });
     }
-    const blocked = await blockedActorUriResolverByUsername.resolve({
-      username: user.val.username,
-      actorUri: actor.uri,
-    });
-    if (!blocked.ok || blocked.val) {
+    if (isBlockedUri(actor.uri) || await isBlocked(user.val.username, actor.uri)) {
       return RA.ok({ fetchedCount: 0 });
     }
 
@@ -268,7 +274,10 @@ const create = ({
       fetchTimeoutMs,
     );
     const progress: Progress = { fetched: 0, stopped: false, signal: controller.signal };
-    const finished = await withTimeout(fetchOutbox(actor.uri, ctx, documentLoader, progress), totalTimeoutMs);
+    const finished = await withTimeout(
+      fetchOutbox(actor.uri, user.val.username, ctx, documentLoader, progress),
+      totalTimeoutMs,
+    );
     if (finished === timedOut) {
       progress.stopped = true;
       controller.abort();

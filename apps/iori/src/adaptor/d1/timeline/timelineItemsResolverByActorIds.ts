@@ -146,10 +146,18 @@ export const createD1TimelineItemsResolverByActorIds = (
         : Promise.resolve([]),
     ]);
 
-    const imagesByPostId = new Map<string, { imageId: ImageId; url: string; altText: string | null }[]>();
+    const imagesByPostId = new Map<
+      string,
+      { imageId: ImageId; url: string; altText: string | null; mediaType: string | null }[]
+    >();
     for (const image of imageRows) {
       const images = imagesByPostId.get(image.postId) ?? [];
-      images.push({ imageId: ImageId.orThrow(image.imageId), url: image.url, altText: image.altText });
+      images.push({
+        imageId: ImageId.orThrow(image.imageId),
+        url: image.url,
+        altText: image.altText,
+        mediaType: image.mediaType,
+      });
       imagesByPostId.set(image.postId, images);
     }
 
@@ -222,6 +230,7 @@ export const createD1TimelineItemsResolverByActorIds = (
             createdAt: row.posts.createdAt.getTime(),
             inReplyToUri: row.remote_posts.inReplyToUri,
             visibility: toVisibility(row.remote_posts.visibility),
+            editedAt: row.remote_posts.editedAt?.getTime() ?? null,
             summary: row.posts.summary,
             sensitive: row.posts.sensitive,
             type: 'remote',
