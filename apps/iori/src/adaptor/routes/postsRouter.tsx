@@ -5,10 +5,11 @@ import { getCookie } from 'hono/cookie';
 import z from 'zod/v4';
 
 import { PostContent } from '../../domain/post/postContent.ts';
+import { PostId } from '../../domain/post/postId.ts';
 import { SessionId } from '../../domain/session/sessionId.ts';
 import { Env } from '../../env.ts';
 import { Federation } from '../../federation.ts';
-import { Layout } from '../../layout.tsx';
+import { Layout, LayoutClient } from '../../layout.tsx';
 import { CreatePostUseCase } from '../../useCase/createPost.ts';
 import { createOgpFetcher } from '../ogp/ogpFetcher.ts';
 import { PgActorResolverByUserId } from '../pg/actor/actorResolverByUserId.ts';
@@ -79,6 +80,23 @@ app.post(
           );
         },
       }),
+    );
+  },
+);
+
+app.get(
+  '/:postId',
+  sValidator('param', z.object({ postId: PostId.zodType })),
+  (c) => {
+    const isLoggedIn = !!getCookie(c, 'sessionId');
+    return c.html(
+      <LayoutClient
+        client='/static/localPost.js'
+        server='/src/ui/pages/localPost.tsx'
+        isLoggedIn={isLoggedIn}
+      >
+        <div id='root' class='h-full flex flex-col' data-is-logged-in={String(isLoggedIn)} />
+      </LayoutClient>,
     );
   },
 );
