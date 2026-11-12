@@ -204,10 +204,15 @@ export const fetchRelationships = async (accountIds: readonly string[]): Promise
 export const fetchRelationshipOrSignedOut = async (accountId: string) => {
   try {
     const [relationship] = await fetchRelationships([accountId]);
-    return { isLoggedIn: true, isFollowing: relationship?.following ?? false, isMuted: relationship?.muting ?? false };
+    return {
+      isLoggedIn: true,
+      isFollowing: relationship?.following ?? false,
+      isMuted: relationship?.muting ?? false,
+      isBlocked: relationship?.blocking ?? false,
+    };
   } catch (error) {
-    if (isUnauthorizedError(error)) return { isLoggedIn: false, isFollowing: false, isMuted: false };
-    if (isUnprocessableError(error)) return { isLoggedIn: true, isFollowing: false, isMuted: false };
+    if (isUnauthorizedError(error)) return { isLoggedIn: false, isFollowing: false, isMuted: false, isBlocked: false };
+    if (isUnprocessableError(error)) return { isLoggedIn: true, isFollowing: false, isMuted: false, isBlocked: false };
     throw error;
   }
 };
@@ -288,6 +293,12 @@ export const mute = (accountId: string): Promise<Relationship> =>
 
 export const unmute = (accountId: string): Promise<Relationship> =>
   post<Relationship>(accountActionPath(accountId, 'unmute'));
+
+export const block = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'block'));
+
+export const unblock = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'unblock'));
 
 export const searchAccount = async (acct: string): Promise<Account | undefined> =>
   (await request<{ accounts: Account[] }>('/api/v2/search', { q: acct, resolve: true, type: 'accounts' }))

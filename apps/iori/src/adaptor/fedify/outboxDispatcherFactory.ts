@@ -9,6 +9,7 @@ import type { PostsResolverByActorId } from '../../domain/post/post.ts';
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
+import { toMentionNoteFields } from '../../useCase/helper/mentionNote.ts';
 
 export type OutboxDispatcherDeps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
@@ -35,12 +36,15 @@ export const createOutboxDispatcher = (
       RA.match({
         ok: (posts) => ({
           items: posts.map((post) => {
+            const content = sanitizePostContent(post.content);
+            const mentionFields = toMentionNoteFields(content);
             const note = new Note({
               id: ctx.getObjectUri(Note, { identifier, id: post.postId }),
               attribution: ctx.getActorUri(identifier),
               to: PUBLIC_COLLECTION,
-              cc: ctx.getFollowersUri(identifier),
-              content: sanitizePostContent(post.content),
+              ccs: [ctx.getFollowersUri(identifier), ...mentionFields.ccs],
+              tags: mentionFields.tags,
+              content,
               mediaType: 'text/html',
               published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
               url: ctx.getObjectUri(Note, { identifier, id: post.postId }),

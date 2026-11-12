@@ -310,10 +310,8 @@ describe('createD1ThreadResolver', () => {
       a.postId,
       a1.postId,
     ]);
-    const childQueries = t.queries.filter((query) =>
-      query.sql.includes('json_each') && query.sql.includes('inReplyToUri')
-    );
-    expect(childQueries).toHaveLength(4);
+    const childQueries = t.queries.filter((query) => query.sql.includes('thread_descendants'));
+    expect(childQueries).toHaveLength(1);
   });
 
   it('子孫の深さを 20、件数を 60 までにし、循環でも止まる', async () => {

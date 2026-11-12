@@ -3,6 +3,7 @@ import type { ResultAsync } from '@iwasa-kosui/result';
 
 import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
+import type { RemoteActorLookup } from '../adaptor/fedify/remoteActorLookup.ts';
 import type { StatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import type { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
 import type {
@@ -19,6 +20,10 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import type {
+  BlockedActorIdsResolverByUserId,
+  BlockedActorsResolverByUserIdWithPagination,
+} from '../domain/block/block.ts';
 import type { BlueskyCrosspostStatusReportResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type {
   DigestHeadersResolverByArticleIds,
@@ -128,6 +133,8 @@ export type WorkerRemoteActorAction = (
   }>,
 ) => ResultAsync<void, Readonly<{ message: string }>>;
 
+export type WorkerBlockAction = WorkerRemoteActorAction;
+
 export type UploadObjectStore = ReturnType<typeof createPostImageR2ObjectStore>;
 export type IoriAuthRuntimePorts = Readonly<{
   signInUseCase: ReturnType<typeof createSignInUseCase>;
@@ -164,6 +171,8 @@ export type IoriMastodonRuntimePorts = Readonly<{
   accountRelationshipsResolverByActorIds: AccountRelationshipsResolverByActorIds;
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
   mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
+  blockedActorsResolverByUserIdWithPagination: BlockedActorsResolverByUserIdWithPagination;
+  blockedActorIdsResolverByUserId: BlockedActorIdsResolverByUserId;
   statusAssembler: StatusAssembler;
   searchTimeline: SearchTimelineUseCase;
   summarizeTimeline: SummarizeTimelineUseCase;
@@ -219,6 +228,7 @@ export type IoriTimelineRuntimePorts = Readonly<{
 }>;
 export type IoriPostingRuntimePorts = Readonly<{
   createPostUseCase: ReturnType<typeof createCreatePostUseCase>;
+  remoteActorLookup: RemoteActorLookup;
 }>;
 export type IoriSocialActionsRuntimePorts = Readonly<{
   sendLikeUseCase: SendLikeUseCase;
@@ -260,6 +270,8 @@ export type IoriCoreRuntimePorts = Readonly<{
   subscribePushUseCase: SubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;
   unfollowRemoteActor: WorkerRemoteActorAction;
+  blockActor: WorkerBlockAction;
+  unblockActor: WorkerBlockAction;
   vapidPublicKey: string | undefined;
 }>;
 

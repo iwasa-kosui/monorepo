@@ -4,6 +4,7 @@ import { type Context, Hono } from 'hono';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
+import type { BlockedActorIdsResolverByUserId } from '../../domain/block/block.ts';
 import { MediaId } from '../../domain/mediaUpload/mediaId.ts';
 import type { MediaUpload, MediaUploadResolver } from '../../domain/mediaUpload/mediaUpload.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
@@ -19,6 +20,7 @@ import { PostDestination } from '../../domain/post/postDestination.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { RepostResolver, RepostResolverById } from '../../domain/repost/repost.ts';
 import { RepostId } from '../../domain/repost/repostId.ts';
+import type { UserResolver } from '../../domain/user/user.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import type { CreatePostUseCase } from '../../useCase/createPost.ts';
 import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
@@ -28,6 +30,7 @@ import type { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import type { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import type { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
+import type { RemoteActorLookup } from '../fedify/remoteActorLookup.ts';
 import type { Status } from '../mastodon/entities.ts';
 import { MAX_STATUS_CHARACTERS } from '../mastodon/instance.ts';
 import {
@@ -39,6 +42,7 @@ import {
 import { htmlToPlainText } from '../text/htmlToPlainText.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { resolveViewer } from './helper/mastodonViewer.ts';
+import { noMentions, resolveMentions } from './helper/mentionResolution.ts';
 import { bodyBoolean, bodyString, bodyStringList, readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import {
   getMastodonPrincipal,
@@ -49,11 +53,14 @@ import {
 
 export type WorkerMastodonStatusesRouterDeps = Readonly<{
   authn: MastodonAuthn;
+  userResolver: UserResolver;
+  remoteActorLookup: RemoteActorLookup;
   actorResolverByUserId: ActorResolverByUserId;
   postsWithAuthorResolverByPostIds: PostsWithAuthorResolverByPostIds;
   repostResolverById: RepostResolverById;
   repostResolver: RepostResolver;
   threadResolver: ThreadResolver;
+  blockedActorIdsResolverByUserId: BlockedActorIdsResolverByUserId;
   statusAssembler: StatusAssembler;
   mediaUploadResolver: MediaUploadResolver;
   createPostUseCase: CreatePostUseCase;
@@ -140,11 +147,14 @@ const failed = (c: Context, err: Readonly<{ type: string }>): Response => {
 
 export const createWorkerMastodonStatusesRouter = ({
   authn,
+  userResolver,
+  remoteActorLookup,
   actorResolverByUserId,
   postsWithAuthorResolverByPostIds,
   repostResolverById,
   repostResolver,
   threadResolver,
+  blockedActorIdsResolverByUserId,
   statusAssembler,
   mediaUploadResolver,
   createPostUseCase,
@@ -325,13 +335,25 @@ export const createWorkerMastodonStatusesRouter = ({
           return c.json(recordNotFound, 404);
         }
       }
-      const content = body['content_type'] === 'text/markdown'
-        ? await PostContent.fromMarkdown(text)
-        : plainTextToHtml(text);
+      const format = body['content_type'] === 'text/markdown' ? 'markdown' : 'plain';
+      const user = await userResolver.resolve(userId);
+      const mentions = user.ok && user.val !== undefined
+        ? await resolveMentions({
+          lookup: remoteActorLookup,
+          text,
+          format,
+          identifier: user.val.username,
+          request: c.req.raw,
+        })
+        : noMentions;
+      const content = format === 'markdown'
+        ? await PostContent.fromMarkdown(text, mentions.links)
+        : plainTextToHtml(text, mentions.links);
       const summary = spoilerSummary(body);
       const input = {
         userId,
         content,
+        mentions: mentions.recipients,
         summary,
         sensitive: bodyBoolean(body, 'sensitive') || summary !== null,
         images: medias.map((media) => ({ url: media.url, altText: media.description })),
@@ -503,8 +525,17 @@ export const createWorkerMastodonStatusesRouter = ({
       if (currentPost === null || (viewerActorId === undefined && !Post.isVisibleToAnonymous(currentPost))) {
         return c.json(recordNotFound, 404);
       }
+      const userId = principal?.userId;
+      const blocked = userId === null || userId === undefined
+        ? undefined
+        : await blockedActorIdsResolverByUserId.resolve(userId);
+      if (blocked !== undefined && !blocked.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const blockedActorIds = new Set<ActorId>(blocked?.val ?? []);
       const visible = (posts: ReadonlyArray<PostWithAuthor>): PostWithAuthor[] =>
-        viewerActorId === undefined ? posts.filter(Post.isVisibleToAnonymous) : [...posts];
+        (viewerActorId === undefined ? posts.filter(Post.isVisibleToAnonymous) : [...posts])
+          .filter((post) => !blockedActorIds.has(post.actorId));
       const ancestors = visible(thread.val.ancestors);
       const descendants = visible(thread.val.descendants);
       const statuses = await statusAssembler.assemble({
