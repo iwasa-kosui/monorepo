@@ -1,3 +1,4 @@
+import type { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
@@ -203,7 +204,9 @@ export const Post = {
 } as const;
 
 export type PostCreatedStore = Agg.Store<PostCreated | RemotePostCreated>;
-export type RemotePostUpdatedStore = Agg.Store<RemotePostUpdated>;
+export type RemotePostUpdatedStore = Readonly<{
+  store: (event: RemotePostUpdated) => RA<Readonly<{ written: boolean }>, never>;
+}>;
 export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostQuote = Readonly<{

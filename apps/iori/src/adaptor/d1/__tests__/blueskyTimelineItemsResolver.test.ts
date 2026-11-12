@@ -8,7 +8,9 @@ import { createSqliteD1Fixture } from './sqliteFixture.ts';
 const BASE = Date.UTC(2026, 10, 8, 12);
 
 const setup = (
-  rows: ReadonlyArray<Readonly<{ feedItemId: string; indexedAt: number; uri?: string; repostedByDid?: string }>>,
+  rows: ReadonlyArray<
+    Readonly<{ feedItemId: string; indexedAt: number; uri?: string; repostedByDid?: string; authorDid?: string }>
+  >,
   crosspostUris: readonly (string | null)[] = [],
   likedUris: readonly string[] = [],
   repostedUris: readonly string[] = [],
@@ -22,7 +24,7 @@ const setup = (
       row.feedItemId,
       row.uri ?? row.feedItemId,
       'cid',
-      'did:plc:a',
+      row.authorDid ?? 'did:plc:a',
       'alice.bsky.social',
       'text',
       '[]',
@@ -43,6 +45,9 @@ const setup = (
   const resolver = createD1BlueskyTimelineItemsResolver(db);
   return {
     queries,
+    moderate: (did: string, muted: number, blockUri: string | null) =>
+      sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
+        .run(did, muted, blockUri, 1),
     resolveItems: async (limit: number) => Result.unsafeUnwrap(await resolver.resolve({ limit, before: undefined })),
     resolve: async (input: { limit: number; before?: number; beforeId?: string; excludeCrossposted?: boolean }) =>
       Result.unsafeUnwrap(
@@ -204,6 +209,93 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
 
       expect(t.queries).toHaveLength(1);
       expect(t.queries[0]?.sql).toMatch(/^select .* left join "bluesky_reposts"/is);
+    });
+  });
+
+  describe('ミュートとブロックの除外', () => {
+    const BLOCK = 'at://did:plc:me/app.bsky.graph.block/3kblock';
+    const moderationRows = [
+      { feedItemId: 'by-a', authorDid: 'did:plc:a', indexedAt: BASE },
+      { feedItemId: 'by-muted', authorDid: 'did:plc:muted', indexedAt: BASE - 1 },
+      { feedItemId: 'by-blocked', authorDid: 'did:plc:blocked', indexedAt: BASE - 2 },
+      {
+        feedItemId: 'a-reposted-by-muted',
+        authorDid: 'did:plc:a',
+        repostedByDid: 'did:plc:muted',
+        indexedAt: BASE - 3,
+      },
+      {
+        feedItemId: 'a-reposted-by-blocked',
+        authorDid: 'did:plc:a',
+        repostedByDid: 'did:plc:blocked',
+        indexedAt: BASE - 4,
+      },
+      { feedItemId: 'a-reposted-by-b', authorDid: 'did:plc:a', repostedByDid: 'did:plc:b', indexedAt: BASE - 5 },
+      {
+        feedItemId: 'muted-reposted-by-b',
+        authorDid: 'did:plc:muted',
+        repostedByDid: 'did:plc:b',
+        indexedAt: BASE - 6,
+      },
+    ];
+
+    it('ミュートした相手の投稿と、その人のリポストを除く', async () => {
+      const t = setup(moderationRows);
+      t.moderate('did:plc:muted', 1, null);
+
+      expect(await t.resolve({ limit: 10 })).toEqual([
+        'by-a',
+        'by-blocked',
+        'a-reposted-by-blocked',
+        'a-reposted-by-b',
+      ]);
+    });
+
+    it('ブロックした相手の投稿と、その人のリポストを除く', async () => {
+      const t = setup(moderationRows);
+      t.moderate('did:plc:blocked', 0, BLOCK);
+
+      expect(await t.resolve({ limit: 10 })).toEqual([
+        'by-a',
+        'by-muted',
+        'a-reposted-by-muted',
+        'a-reposted-by-b',
+        'muted-reposted-by-b',
+      ]);
+    });
+
+    it('ミュートもブロックもしていない行がある DID の投稿は残す', async () => {
+      const t = setup(moderationRows);
+      t.moderate('did:plc:muted', 0, null);
+
+      expect(await t.resolve({ limit: 10 })).toHaveLength(moderationRows.length);
+    });
+
+    it('除いた行を数えずに limit まで返し、カーソルと excludeCrossposted とも併用できる', async () => {
+      const t = setup(moderationRows, ['by-a']);
+      t.moderate('did:plc:muted', 1, null);
+
+      expect(await t.resolve({ limit: 2 })).toEqual(['by-a', 'by-blocked']);
+      expect(await t.resolve({ limit: 10, before: BASE - 1, beforeId: 'by-muted' })).toEqual([
+        'by-blocked',
+        'a-reposted-by-blocked',
+        'a-reposted-by-b',
+      ]);
+      expect(await t.resolve({ limit: 10, excludeCrossposted: true })).toEqual([
+        'by-blocked',
+        'a-reposted-by-blocked',
+        'a-reposted-by-b',
+      ]);
+    });
+
+    it('除外を付けても、タイムラインの取得は 1 回の SELECT のままにする', async () => {
+      const t = setup(moderationRows);
+      t.moderate('did:plc:muted', 1, null);
+      t.queries.length = 0;
+
+      await t.resolveItems(10);
+
+      expect(t.queries).toHaveLength(1);
     });
   });
 });
