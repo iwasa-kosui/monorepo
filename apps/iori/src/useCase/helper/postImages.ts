@@ -18,6 +18,7 @@ export const toPostImages = (postId: PostId, input: PostImagesInput, now: Instan
     postId,
     url,
     altText,
+    mediaType: null,
     createdAt: Instant.addDuration(now, index),
   }));
 };

@@ -65,7 +65,7 @@ describe('createOnUpdate', () => {
       content: '<p>after</p>',
       summary: 'cw',
       sensitive: true,
-      attachments: [{ url: 'https://remote.example/media/a.png', altText: 'alt' }],
+      attachments: [{ url: 'https://remote.example/media/a.png', altText: 'alt', mediaType: null }],
       recipientActorUris: [kosuiId.href],
       visibility: 'direct',
       editedAt: 5_000,

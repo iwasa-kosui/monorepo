@@ -17,6 +17,7 @@ export const extractAttachments = async (
         attachments.push({
           url: url.href,
           altText: attachment.name?.toString() ?? null,
+          mediaType: attachment.mediaType ?? null,
         });
       }
     }

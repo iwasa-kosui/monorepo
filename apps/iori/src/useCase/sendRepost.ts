@@ -5,12 +5,19 @@ import { Temporal } from '@js-temporal/polyfill';
 
 import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
 import { extractContentWarning } from '../adaptor/fedify/extractContentWarning.ts';
+import { extractQuoteUri } from '../adaptor/fedify/extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { ArticleResolverByRootPostId } from '../domain/article/article.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import type { Post, PostNotFoundError, PostResolver, RemotePost, RemotePostUpserter } from '../domain/post/post.ts';
+import {
+  Post,
+  type PostNotFoundError,
+  type PostResolver,
+  type RemotePost,
+  type RemotePostUpserter,
+} from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import { Visibility } from '../domain/post/visibility.ts';
 import {
@@ -147,6 +154,9 @@ const create = ({
           const announceId = repostAnnounceUri(ctx, user.username, repostId);
 
           if (post.type === 'local') {
+            if (!Post.isVisibleToAnonymous(post)) {
+              return RA.err(RepostNotAllowedError.create({ postId }));
+            }
             const postAuthor = await resolveUser(post.userId);
             if (!postAuthor.ok) {
               return postAuthor;
@@ -246,6 +256,7 @@ const create = ({
             ...extractContentWarning(result),
             visibility: fetchedVisibility,
             recipientActorUris: extractRecipientActorUris([result], origin),
+            quoteUri: await extractQuoteUri(result),
             authorIdentity: authorIdentity.val,
           });
 

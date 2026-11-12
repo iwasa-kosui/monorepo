@@ -40,7 +40,8 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
       actorResolverByUri: deps.actorResolverByUri,
     })(identity.authorIdentity);
     if (!actor.ok) throw new Error('Failed to upsert remote actor');
-    const event = Post.createRemotePost(now)({
+    const createdAt = identity.publishedAt !== undefined && identity.publishedAt < now ? identity.publishedAt : now;
+    const event = Post.createRemotePost(createdAt)({
       content: identity.content,
       uri: identity.uri,
       actorId: actor.val.id,
@@ -49,6 +50,7 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
       sensitive: identity.sensitive,
       visibility: identity.visibility,
       recipientActorUris: identity.recipientActorUris,
+      quoteUri: identity.quoteUri,
     });
     await deps.postCreatedStore.store(event);
     const attachments = identity.attachments ?? [];
@@ -58,6 +60,7 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
         postId: event.aggregateState.postId,
         url: attachment.url,
         altText: attachment.altText,
+        mediaType: attachment.mediaType,
         createdAt: now,
       }));
       try {

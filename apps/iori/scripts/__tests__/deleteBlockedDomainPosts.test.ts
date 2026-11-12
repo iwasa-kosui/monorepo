@@ -83,6 +83,15 @@ const build = () => {
   sqlite.prepare('UPDATE remote_posts SET uri = ? WHERE postId = ?').run('https://media.baraag.net/@b2/1', bp2.postId);
   sqlite.prepare('UPDATE remote_posts SET uri = ? WHERE postId = ?').run('https://baraag.net/@o1/1', kept.other.postId);
 
+  sqlite.prepare('INSERT INTO post_quotes(postId,quoteUri) VALUES (?,?)').run(
+    bp1.postId,
+    'https://remote.example/notes/q1',
+  );
+  sqlite.prepare('INSERT INTO post_quotes(postId,quoteUri) VALUES (?,?)').run(
+    kept.notbaraag.postId,
+    'https://remote.example/notes/q2',
+  );
+
   sqlite.prepare(
     'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
   ).run(seed.uuid(), local.actorId, local.userId, article.postId, 'title', 'published', 1, 1, null);
@@ -239,6 +248,7 @@ const SNAPSHOT_TABLES: Array<[string, string]> = [
   ['remote_posts', 'postId'],
   ['local_posts', 'postId'],
   ['remote_post_recipients', 'postId, actorUri'],
+  ['post_quotes', 'postId'],
   ['post_images', 'imageId'],
   ['link_previews', 'linkPreviewId'],
   ['post_translations', 'postId, targetLanguage'],
@@ -501,6 +511,7 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
     );
     expect(column(fixture, 'SELECT imageId FROM post_images')).toEqual(ids(imageIds[2], imageIds[3]));
     expect(column(fixture, 'SELECT postId FROM remote_post_recipients')).toEqual(ids(kept.notbaraag.postId));
+    expect(column(fixture, 'SELECT postId FROM post_quotes')).toEqual(ids(kept.notbaraag.postId));
     expect(count(fixture, 'link_previews')).toBe(0);
     expect(count(fixture, 'post_translations')).toBe(0);
   });
@@ -573,6 +584,7 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
       'federatedTimelineItem.deleted',
       'DELETE FROM federated_timeline_items',
       'DELETE FROM post_images',
+      'DELETE FROM post_quotes',
       'DELETE FROM local_posts',
       'DELETE FROM remote_post_recipients',
       'DELETE FROM remote_posts',

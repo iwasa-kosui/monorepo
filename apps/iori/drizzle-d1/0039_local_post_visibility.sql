@@ -1,0 +1,1 @@
+ALTER TABLE `local_posts` ADD `visibility` text DEFAULT 'public' NOT NULL;

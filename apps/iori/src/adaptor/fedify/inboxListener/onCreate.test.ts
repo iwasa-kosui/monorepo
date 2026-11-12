@@ -320,6 +320,99 @@ describe('createOnCreate', () => {
       expect(fetchReplyNotesRecursiveUseCase.run).not.toHaveBeenCalled();
     });
 
+    describe('quote', () => {
+      const quoteId = new URL('https://other.example/notes/quoted');
+      const quotingNote = () =>
+        new Note({
+          id: new URL('https://remote.example/posts/1'),
+          content: 'quoting',
+          attribution: alice,
+          tos: [publicUri],
+          quote: quoteId,
+        });
+
+      it('passes the quoted note URI to addRemotePostUseCase', async () => {
+        const { listener, create, addRemotePostUseCase } = setup(true);
+
+        await listener(createCtx(), create(quotingNote()));
+
+        expect(addRemotePostUseCase.run).toHaveBeenCalledWith(
+          expect.objectContaining({ quoteUri: 'https://other.example/notes/quoted' }),
+        );
+      });
+
+      it('passes null when the Note quotes nothing', async () => {
+        const { listener, create, addRemotePostUseCase } = setup(true);
+
+        await listener(createCtx(), create(createNote()));
+
+        expect(addRemotePostUseCase.run).toHaveBeenCalledWith(expect.objectContaining({ quoteUri: null }));
+      });
+
+      it('fetches only the quoted note, one level deep, after saving the post', async () => {
+        const { listener, create, addRemotePostUseCase, fetchReplyNotesRecursiveUseCase } = setup(true);
+
+        await listener(createCtx(), create(quotingNote()));
+
+        expect(fetchReplyNotesRecursiveUseCase.run).toHaveBeenCalledOnce();
+        expect(fetchReplyNotesRecursiveUseCase.run).toHaveBeenCalledWith(
+          expect.objectContaining({ inReplyToUri: 'https://other.example/notes/quoted', maxDepth: 1 }),
+        );
+        expect(addRemotePostUseCase.run.mock.invocationCallOrder[0]).toBeLessThan(
+          fetchReplyNotesRecursiveUseCase.run.mock.invocationCallOrder[0]!,
+        );
+      });
+
+      it('does not fetch a quoted note when the Note quotes nothing', async () => {
+        const { listener, create, fetchReplyNotesRecursiveUseCase } = setup(true);
+
+        await listener(createCtx(), create(createNote()));
+
+        expect(fetchReplyNotesRecursiveUseCase.run).not.toHaveBeenCalled();
+      });
+
+      it('fetches the reply target and the quoted note separately', async () => {
+        const { listener, create, fetchReplyNotesRecursiveUseCase } = setup(true);
+        const note = new Note({
+          id: new URL('https://remote.example/posts/1'),
+          content: 'quoting reply',
+          attribution: alice,
+          tos: [publicUri],
+          replyTarget: new URL('https://remote.example/p/0'),
+          quote: quoteId,
+        });
+
+        await listener(createCtx(), create(note));
+
+        expect(fetchReplyNotesRecursiveUseCase.run.mock.calls.map((call: readonly unknown[]) => call[0])).toEqual([
+          expect.objectContaining({ inReplyToUri: 'https://remote.example/p/0' }),
+          expect.objectContaining({ inReplyToUri: 'https://other.example/notes/quoted', maxDepth: 1 }),
+        ]);
+      });
+
+      it('still succeeds when fetching the quoted note throws', async () => {
+        const { listener, create, addRemotePostUseCase, fetchReplyNotesRecursiveUseCase } = setup(true);
+        fetchReplyNotesRecursiveUseCase.run.mockRejectedValueOnce(new Error('lookup failed'));
+
+        await expect(listener(createCtx(), create(quotingNote()))).resolves.not.toThrow();
+
+        expect(addRemotePostUseCase.run).toHaveBeenCalledOnce();
+      });
+
+      it('passes the quoted note URI when saving to the federated timeline, without fetching the quoted note', async () => {
+        const { listener, create, remotePostUpserter, fetchReplyNotesRecursiveUseCase } = setup(false, [
+          { relayId: 'relay-1' },
+        ]);
+
+        await listener(createCtx(), create(quotingNote()));
+
+        expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
+          expect.objectContaining({ quoteUri: 'https://other.example/notes/quoted' }),
+        );
+        expect(fetchReplyNotesRecursiveUseCase.run).not.toHaveBeenCalled();
+      });
+    });
+
     it.each([
       [0, []],
       [2, [{ relayId: 'relay-1' }, { relayId: 'relay-2' }]],

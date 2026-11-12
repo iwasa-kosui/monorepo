@@ -69,6 +69,7 @@ type Input = Readonly<{
   sensitive?: boolean;
   visibility: Visibility | null;
   recipientActorUris?: ReadonlyArray<string>;
+  quoteUri?: string | null;
 }>;
 
 type Ok = Readonly<{
@@ -163,7 +164,7 @@ const create = ({
         })(actorIdentity)),
       RA.andBind(
         'saved',
-        async ({ actor, content, uri, inReplyToUri, summary, sensitive, visibility, recipientActorUris }) => {
+        async ({ actor, content, uri, inReplyToUri, summary, sensitive, visibility, recipientActorUris, quoteUri }) => {
           const existing = await postResolverByUri.resolve({ uri });
           if (existing.ok && existing.val) {
             if (existing.val.actorId !== actor.id) {
@@ -182,6 +183,7 @@ const create = ({
             sensitive,
             visibility,
             recipientActorUris,
+            quoteUri,
           });
           try {
             await postCreatedStore.store(createPost);
@@ -237,6 +239,7 @@ const create = ({
           postId: post.postId,
           url: attachment.url,
           altText: attachment.altText,
+          mediaType: attachment.mediaType,
           createdAt: now,
         }));
         await postImageCreatedStore.store(images);

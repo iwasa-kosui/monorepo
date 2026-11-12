@@ -77,7 +77,7 @@ describe('PostView の Bluesky の印', () => {
     const html = render(crosspost({ status: 'skipped', skip_reason: 'content_warning', retrying: false }));
 
     expect(html).toContain('Bluesky に未送信');
-    expect(html).toContain('title="CW 付きの投稿は Bluesky に送りません"');
+    expect(html).toContain('title="この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした"');
   });
 
   it('reply_to_unsent の skipped は印を出さない', () => {

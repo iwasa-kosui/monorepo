@@ -205,6 +205,23 @@ describe('parseBlueskyPostThreadResponse', () => {
     expect(replies.map(({ node }) => nodeLabel(node))).toEqual([uriOf('ok')]);
   });
 
+  it('引用先が読めない投稿を、recordUnavailable の embed を持つ投稿として読む', () => {
+    const thread = {
+      ...threadView('me'),
+      post: {
+        ...postView('me'),
+        embed: {
+          $type: 'app.bsky.embed.record#view',
+          record: { $type: 'app.bsky.embed.record#viewNotFound', uri: uriOf('gone'), notFound: true },
+        },
+      },
+    };
+
+    const { post } = parsedOk(thread);
+
+    expect(post.embed).toEqual({ type: 'recordUnavailable', uri: uriOf('gone'), reason: 'notFound' });
+  });
+
   it('thread 自体が見つからない、またはブロックされているときはエラー種別で返す', () => {
     expect(parse(notFoundPost('me'))).toEqual({ ok: false, err: 'notFound' });
     expect(parse(blockedPost('me'))).toEqual({ ok: false, err: 'blocked' });

@@ -121,8 +121,21 @@ describe('createOnAnnounce', () => {
         type: 'remote',
         remotePostIdentity: expect.objectContaining({
           uri: 'https://remote.example/notes/1',
-          attachments: [{ url: 'https://remote.example/media/1.png', altText: null }],
+          attachments: [{ url: 'https://remote.example/media/1.png', altText: null, mediaType: 'image/png' }],
         }),
+      }),
+    );
+  });
+
+  it('passes the quoted note URI of a remote Announce to addReceivedRepostUseCase', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined);
+    const note = createNote([]).clone({ quote: new URL('https://other.example/notes/quoted') });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remotePostIdentity: expect.objectContaining({ quoteUri: 'https://other.example/notes/quoted' }),
       }),
     );
   });
@@ -217,7 +230,7 @@ describe('createOnAnnounce', () => {
     expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
       expect.objectContaining({
         uri: 'https://remote.example/notes/1',
-        attachments: [{ url: 'https://remote.example/media/1.png', altText: null }],
+        attachments: [{ url: 'https://remote.example/media/1.png', altText: null, mediaType: 'image/png' }],
       }),
     );
   });

@@ -1,5 +1,6 @@
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { isNotFoundError, type StatusContext } from '../api/mastodonClient.ts';
+import { displayStatus, isLocalAccount } from '../api/status.ts';
 
 export type LocalPostThread =
   | Readonly<{ type: 'notFound' }>
@@ -32,3 +33,13 @@ export const resolveLocalPostThread = (
     contextFailed: false,
   };
 };
+
+export const shouldReloadContext = (remote: Readonly<{ fetched: number }>): boolean => remote.fetched > 0;
+
+export const applyContext = <T extends Readonly<{ ancestors: readonly Status[]; descendants: readonly Status[] }>>(
+  thread: T | null,
+  context: StatusContext,
+): T | null => thread === null ? null : { ...thread, ancestors: context.ancestors, descendants: context.descendants };
+
+export const showsRemoteContextLoading = (isLoadingRemoteContext: boolean, currentPost: Status | null): boolean =>
+  isLoadingRemoteContext && currentPost !== null && !isLocalAccount(displayStatus(currentPost).account);

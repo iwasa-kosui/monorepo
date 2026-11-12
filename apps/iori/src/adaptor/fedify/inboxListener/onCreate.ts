@@ -16,6 +16,7 @@ import type { AcceptedRelaysResolver } from '../../../domain/relay/relay.ts';
 import type { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
 import type { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
+import { extractQuoteUri } from '../extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
@@ -110,6 +111,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
 
   const attachments = await extractAttachments(object, documentLoader);
   const inReplyToUri = object.replyTargetId?.href ?? null;
+  const quoteUri = await extractQuoteUri(object);
   const addressed = object.toIds.length + object.ccIds.length > 0 ? object : activity;
   const visibility = extractVisibility(addressed, actor.followersId);
   const recipientActorUris = extractRecipientActorUris([object, activity], deps.origin);
@@ -153,6 +155,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
       ...extractContentWarning(object),
       visibility,
       recipientActorUris,
+      quoteUri,
     }),
     RA.match({
       ok: async ({ actor: createdActor }) => {
@@ -170,6 +173,22 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
             getLogger().info(
               `Fetched ${result.val.fetchedPosts.length} reply notes for: ${objectUri}`,
             );
+          }
+        }
+
+        if (quoteUri) {
+          try {
+            const result = await deps.fetchReplyNotesRecursiveUseCase.run({
+              inReplyToUri: quoteUri,
+              documentLoader,
+              lookupObject: (uri, options) => ctx.lookupObject(uri, options),
+              maxDepth: 1,
+            });
+            if (result.ok && result.val.fetchedPosts.length > 0) {
+              getLogger().info(`Fetched the quoted note for: ${objectUri}`);
+            }
+          } catch (error) {
+            getLogger().warn(`Failed to fetch the quoted note: ${quoteUri} for ${objectUri} - ${String(error)}`);
           }
         }
       },

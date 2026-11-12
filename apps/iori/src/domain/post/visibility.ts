@@ -5,6 +5,7 @@ import { Schema } from '../../helper/schema.ts';
 const zodType = z.enum(['public', 'unlisted', 'private', 'direct']);
 export type Visibility = z.infer<typeof zodType>;
 const schema = Schema.create(zodType);
+const zodTypeOrPublic = zodType.default('public');
 
 const publicAddresses: ReadonlySet<string> = new Set([
   'https://www.w3.org/ns/activitystreams#Public',
@@ -44,6 +45,7 @@ const isVisibleToAnonymous = (visibility: Visibility | null): boolean =>
 
 export const Visibility = {
   ...schema,
+  zodTypeOrPublic,
   fromAddressing,
   narrow,
   isVisibleToAnonymous,

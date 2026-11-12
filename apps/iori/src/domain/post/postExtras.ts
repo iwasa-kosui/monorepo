@@ -9,6 +9,7 @@ export type PostExtras = Readonly<{
   inReplyTo: Readonly<{ postId: PostId; actorId: ActorId }> | null;
   myReactionEmojis: ReadonlyArray<string>;
   blueskyCrosspost: BlueskyCrosspost | null;
+  quote: Readonly<{ uri: string; post: PostWithAuthor | null }> | null;
 }>;
 
 export type PostExtrasResolverByPosts = Agg.Resolver<

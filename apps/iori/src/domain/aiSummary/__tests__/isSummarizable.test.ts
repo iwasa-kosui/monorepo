@@ -9,6 +9,7 @@ import { isSummarizable } from '../isSummarizable.ts';
 
 const localPost = (): LocalPost => ({
   type: 'local',
+  visibility: 'public',
   summary: null,
   sensitive: false,
   postId: PostId.generate(),

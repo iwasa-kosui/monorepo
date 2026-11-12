@@ -177,6 +177,7 @@ const author: User = { id: UserId.generate(), username: Username.orThrow('kosui'
 
 const createLocalPost = (): LocalPost => ({
   type: 'local',
+  visibility: 'public',
   summary: null,
   sensitive: false,
   postId: PostId.generate(),
@@ -291,6 +292,32 @@ describe('createObjectDispatcher ofNote', () => {
     expect(note.content?.toString()).toContain('class="u-url mention"');
   });
 
+  it('unlisted の投稿は、to に followers、cc に Public と followers 以外のメンションを入れる', async () => {
+    const post: LocalPost = {
+      ...createLocalPost(),
+      visibility: 'unlisted',
+      content:
+        '<p><a href="https://remote.example/users/alice" class="u-url mention">@<span>alice@remote.example</span></a> hi</p>',
+    };
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
+
+    const note = result as Note;
+    expect(note.toIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers']);
+    expect(note.ccIds.map((url) => url.href)).toEqual([
+      'https://www.w3.org/ns/activitystreams#Public',
+      'https://remote.example/users/alice',
+    ]);
+  });
+
+  it('private の投稿は、署名なしの取得には null を返す', async () => {
+    const post: LocalPost = { ...createLocalPost(), visibility: 'private' };
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
+
+    expect(result).toBeNull();
+  });
+
   it.each([null, 'public', 'unlisted', 'private', 'direct'] as const)(
     'リモートの投稿（visibility: %s）は null を返す',
     async (visibility) => {
@@ -356,6 +383,7 @@ describe('createObjectDispatcher ofNote', () => {
     postId: post.postId,
     url,
     altText,
+    mediaType: null,
     createdAt: post.createdAt,
   });
 

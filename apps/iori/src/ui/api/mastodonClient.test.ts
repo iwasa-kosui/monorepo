@@ -22,6 +22,8 @@ import {
   fetchPublicTimeline,
   fetchRelationshipOrSignedOut,
   fetchRelationships,
+  fetchRemoteContext,
+  fetchRemoteStatuses,
   fetchStatus,
   fetchStatusContext,
   follow,
@@ -34,6 +36,7 @@ import {
   mute,
   parseLinkHeader,
   parseRetryAfter,
+  quoteBlueskyPost,
   react,
   reblog,
   refreshXPosts,
@@ -44,6 +47,7 @@ import {
   searchAccount,
   searchBlueskyActors,
   searchBlueskyPosts,
+  searchRemoteStatuses,
   searchStatuses,
   setFeedSourceEnabled,
   summarizeTimeline,
@@ -526,6 +530,30 @@ describe('mastodon client requests', () => {
     expect(failureMessage('add reaction', error)).toBe('Failed to add reaction: Record not found');
   });
 
+  it('posts to the remote context path with the encoded id and returns the fetched count', async () => {
+    const fetchMock = stubFetch(jsonResponse({ fetched: 3 }));
+
+    const result = await fetchRemoteContext('a/b');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/statuses/a%2Fb/remote-context');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual({ fetched: 3 });
+  });
+
+  it('posts to the remote statuses path with the encoded id and returns the fetched count', async () => {
+    const fetchMock = stubFetch(jsonResponse({ fetched: 2 }));
+
+    const result = await fetchRemoteStatuses('a/b');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/accounts/a%2Fb/remote-statuses');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual({ fetched: 2 });
+  });
+
   it('encodes the id in a write path', async () => {
     const fetchMock = stubFetch(jsonResponse({ id: 'a/b' }));
 
@@ -592,6 +620,31 @@ describe('mastodon client requests', () => {
     expect(parsed.searchParams.get('limit')).toBe('20');
     expect(init.credentials).toBe('same-origin');
     expect(result).toEqual(payload);
+  });
+
+  it('searches a remote post URL with resolve=true and type=statuses and returns the statuses', async () => {
+    const fetchMock = stubFetch(jsonResponse({ accounts: [], statuses: [{ id: 's1' }, { id: 's2' }], hashtags: [] }));
+
+    const statuses = await searchRemoteStatuses('https://remote.example/@alice/123');
+
+    expect(requestedUrl(fetchMock)).toBe(
+      '/api/v2/search?q=https%3A%2F%2Fremote.example%2F%40alice%2F123&resolve=true&type=statuses',
+    );
+    expect(statuses).toEqual([{ id: 's1' }, { id: 's2' }]);
+  });
+
+  it('returns no statuses when the remote post search finds nothing', async () => {
+    stubFetch(jsonResponse({ accounts: [], statuses: [], hashtags: [] }));
+
+    expect(await searchRemoteStatuses('https://remote.example/@alice/123')).toEqual([]);
+  });
+
+  it('throws an unauthorized error when the remote post search is not signed in', async () => {
+    stubFetch(jsonResponse({ error: 'The access token is invalid' }, { status: 401 }));
+
+    const error = await searchRemoteStatuses('https://remote.example/@alice/123').catch((e: unknown) => e);
+
+    expect(isUnauthorizedError(error)).toBe(true);
   });
 
   it('posts the summary request as JSON without authorization headers', async () => {
@@ -855,6 +908,29 @@ describe('mastodon client requests', () => {
     const error = await repostBlueskyPost('x').catch((e: unknown) => e);
 
     expect(isMastodonApiError(error) && error.status).toBe(502);
+  });
+
+  it('posts a Bluesky quote with the uri and text as a JSON body', async () => {
+    const fetchMock = stubFetch(
+      jsonResponse({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', cid: 'bafy' }, { status: 201 }),
+    );
+
+    const result = await quoteBlueskyPost('at://did:plc:a/app.bsky.feed.post/1', '引用です');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/quotes');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(init.body as string)).toEqual({ uri: 'at://did:plc:a/app.bsky.feed.post/1', text: '引用です' });
+    expect(result).toEqual({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', cid: 'bafy' });
+  });
+
+  it('carries the status of a failed Bluesky quote', async () => {
+    stubFetch(jsonResponse({ error: 'Quote not allowed' }, { status: 422 }));
+
+    const error = await quoteBlueskyPost('at://did:plc:a/app.bsky.feed.post/1', 'x').catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(422);
   });
 
   it('posts a refresh request for the X posts and returns the counts', async () => {

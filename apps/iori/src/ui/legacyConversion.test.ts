@@ -62,6 +62,32 @@ describe('postToStatus', () => {
     ]);
   });
 
+  it('decides the media attachment type from mediaType, or from the url extension when mediaType is null', () => {
+    const post = {
+      ...basePost,
+      type: 'remote',
+      userId: undefined,
+      inReplyToUri: null,
+      images: [
+        { url: 'https://remote.example/1.mp4', altText: 'v', mediaType: 'video/mp4' },
+        { url: 'https://remote.example/2.mp3', altText: null, mediaType: 'audio/mpeg' },
+        { url: 'https://remote.example/3.png', altText: null, mediaType: 'image/png' },
+        { url: 'https://remote.example/4.webm', altText: null, mediaType: null },
+        { url: 'https://remote.example/5.png', altText: null },
+      ],
+    } as unknown as PostWithAuthor;
+
+    const status = postToStatus(post);
+
+    expect(status.media_attachments.map((attachment) => [attachment.type, attachment.preview_url])).toEqual([
+      ['video', null],
+      ['audio', null],
+      ['image', 'https://remote.example/3.png'],
+      ['video', null],
+      ['image', 'https://remote.example/5.png'],
+    ]);
+  });
+
   it('converts a remote post into a remote status that keeps the post uri', () => {
     const post = {
       ...basePost,
@@ -76,6 +102,20 @@ describe('postToStatus', () => {
     expect(status.account.acct).toBe('kosui@remote.example');
     expect(status.uri).toBe('https://remote.example/notes/1');
     expect(status.in_reply_to_id).not.toBeNull();
+  });
+});
+
+describe('postToStatus の visibility', () => {
+  it.each(['public', 'unlisted', 'private'] as const)('ローカルの投稿の visibility %s をそのまま返す', (visibility) => {
+    const post = {
+      ...basePost,
+      type: 'local',
+      userId: 'user-1',
+      inReplyToUri: null,
+      visibility,
+    } as unknown as PostWithAuthor;
+
+    expect(postToStatus(post).visibility).toBe(visibility);
   });
 });
 

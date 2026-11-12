@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { LocalPost, type LocalPostResolverByUri } from '../../../domain/post/post.ts';
+import { Visibility } from '../../../domain/post/visibility.ts';
 import type { IoriD1Db } from '../client.ts';
 import { localPostsTable, postsTable } from '../schema.ts';
 
@@ -25,6 +26,7 @@ export const createD1LocalPostResolverByUri = (db: IoriD1Db, origin: string): Lo
         inReplyToUri: row.local_posts.inReplyToUri,
         summary: row.posts.summary,
         sensitive: row.posts.sensitive,
+        visibility: Visibility.parseOrThrow(row.local_posts.visibility),
       }),
     );
   },

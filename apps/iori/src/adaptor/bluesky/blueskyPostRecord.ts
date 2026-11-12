@@ -14,6 +14,7 @@ import type {
   BlueskyPostRecord,
 } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import { htmlToTextWithLinks, type TextLink } from './htmlToTextWithLinks.ts';
 
 export const BLUESKY_MAX_GRAPHEMES = 300;
@@ -22,6 +23,7 @@ export const BLUESKY_MAX_TEXT_BYTES = 3000;
 export const BLUESKY_MAX_IMAGE_BYTES = 1_000_000;
 export const BLUESKY_MAX_IMAGES = 4;
 export const BLUESKY_MAX_THUMB_BYTES = 1_000_000;
+export const BLUESKY_SENSITIVE_SELF_LABEL = 'graphic-media';
 
 export type BlueskyImageInput = Readonly<{ bytes: Uint8Array; mimeType: string; alt: string | null; url: string }>;
 export type BlueskyThumbInput = Readonly<{ bytes: Uint8Array; mimeType: string }>;
@@ -33,6 +35,7 @@ export type BlueskyLinkPreviewInput = Readonly<{
 }>;
 
 export type BuildBlueskyPostInput = Readonly<{
+  visibility: Visibility;
   html: string;
   summary: string | null;
   sensitive: boolean;
@@ -49,6 +52,7 @@ export type BlueskyPostDraft = Readonly<{
   facets: ReadonlyArray<BlueskyFacet | BlueskyMentionFacet>;
   images: readonly BlueskyImageInput[];
   external?: Readonly<{ uri: string; title: string; description: string; thumb?: BlueskyThumbInput }>;
+  selfLabeled?: boolean;
   reply?: Readonly<{ root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
   createdAt: string;
 }>;
@@ -137,12 +141,40 @@ const composeText = (
   return appended;
 };
 
+export const hasContentWarning = (summary: string | null): summary is string =>
+  summary !== null && summary.trim() !== '';
+
+const composeContentWarningText = (
+  summary: string,
+  postUrl: string,
+): Readonly<{ text: string; links: readonly TextLink[] }> => {
+  const text = `${summary}\n${postUrl}`;
+  if (!fits(text)) return truncateWithUrl(summary, [], postUrl);
+  return { text, links: [{ start: text.length - postUrl.length, end: text.length, uri: postUrl }] };
+};
+
 export const buildBlueskyPostDraft = (
   input: BuildBlueskyPostInput,
 ): Result<BlueskyPostDraft, BlueskySkipReason> => {
   const skipReason = BlueskyCrosspost.decideSkip(input);
   if (skipReason !== undefined) return Result.err(skipReason);
   if (input.replyTo.kind === 'waiting') return Result.err('reply_to_unsent');
+
+  const reply = input.replyTo.kind === 'sent'
+    ? { reply: { root: input.replyTo.root, parent: input.replyTo.parent } }
+    : {};
+  const createdAt = new Date(input.createdAt).toISOString();
+
+  if (hasContentWarning(input.summary)) {
+    const { text, links } = composeContentWarningText(input.summary.trim(), input.postUrl);
+    return Result.ok({
+      text,
+      facets: links.map((link) => toFacet(text, link)),
+      images: [],
+      ...reply,
+      createdAt,
+    });
+  }
 
   const { kept, dropped } = selectBlueskyImages(input.images);
   const { text, links } = composeText(input.html, input.postUrl, [
@@ -157,6 +189,7 @@ export const buildBlueskyPostDraft = (
     text,
     facets: links.map((link) => toFacet(text, link)).sort((a, b) => a.index.byteStart - b.index.byteStart),
     images: kept,
+    ...(input.sensitive && kept.length > 0 ? { selfLabeled: true } : {}),
     ...(preview === undefined ? {} : {
       external: {
         uri: preview.url,
@@ -165,8 +198,8 @@ export const buildBlueskyPostDraft = (
         ...(thumb === undefined ? {} : { thumb }),
       },
     }),
-    ...(input.replyTo.kind === 'sent' ? { reply: { root: input.replyTo.root, parent: input.replyTo.parent } } : {}),
-    createdAt: new Date(input.createdAt).toISOString(),
+    ...reply,
+    createdAt,
   });
 };
 
@@ -199,5 +232,8 @@ export const toBlueskyPostRecord = (draft: BlueskyPostDraft, blobs: BlueskyEmbed
     ...(draft.facets.length === 0 ? {} : { facets: draft.facets }),
     ...(draft.reply === undefined ? {} : { reply: draft.reply }),
     ...(embed === undefined ? {} : { embed }),
+    ...(draft.selfLabeled === true
+      ? { labels: { $type: 'com.atproto.label.defs#selfLabels', values: [{ val: BLUESKY_SENSITIVE_SELF_LABEL }] } }
+      : {}),
   };
 };

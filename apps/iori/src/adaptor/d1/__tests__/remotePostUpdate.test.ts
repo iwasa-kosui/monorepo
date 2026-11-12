@@ -93,7 +93,7 @@ const setup = (
     content: '<p>after</p>',
     summary: 'new cw',
     sensitive: false,
-    attachments: [{ url: 'https://remote.example/media/new.png', altText: 'new alt' }],
+    attachments: [{ url: 'https://remote.example/media/new.png', altText: 'new alt', mediaType: 'image/png' }],
     recipientActorUris: [hanakoUri],
     visibility: 'direct' as const,
     editedAt: Instant.orThrow(5_000),
@@ -187,6 +187,9 @@ describe('リモート投稿の編集の保存', () => {
       editedAt: 5_000,
     });
     expect(t.images()).toEqual([{ url: 'https://remote.example/media/new.png', altText: 'new alt' }]);
+    expect(t.sqlite.prepare('SELECT mediaType FROM post_images WHERE postId = ?').all(t.post.postId)).toEqual([
+      { mediaType: 'image/png' },
+    ]);
     expect(t.recipients()).toEqual([hanakoUri]);
   });
 
@@ -329,8 +332,8 @@ describe('添付の imageId', () => {
 
     await t.useCase.run(t.input({
       attachments: [
-        { url: 'https://remote.example/media/old.png', altText: 'new alt' },
-        { url: 'https://remote.example/media/new.png', altText: null },
+        { url: 'https://remote.example/media/old.png', altText: 'new alt', mediaType: 'image/png' },
+        { url: 'https://remote.example/media/new.png', altText: null, mediaType: null },
       ],
     }));
 
@@ -351,8 +354,8 @@ describe('添付の imageId', () => {
 
     await t.useCase.run(t.input({
       attachments: [
-        { url: 'https://remote.example/media/old.png', altText: 'a' },
-        { url: 'https://remote.example/media/old.png', altText: 'b' },
+        { url: 'https://remote.example/media/old.png', altText: 'a', mediaType: null },
+        { url: 'https://remote.example/media/old.png', altText: 'b', mediaType: null },
       ],
     }));
 
@@ -423,6 +426,7 @@ describe('同時に来た更新の競合', () => {
         postId: stored.postId,
         url: 'https://remote.example/media/newer.png',
         altText: 'newer',
+        mediaType: null,
         createdAt: Instant.orThrow(8_000),
       }],
     });
@@ -437,6 +441,7 @@ describe('同時に来た更新の競合', () => {
         postId: stored.postId,
         url: 'https://remote.example/media/older.png',
         altText: 'older',
+        mediaType: null,
         createdAt: Instant.orThrow(9_000),
       }],
     });

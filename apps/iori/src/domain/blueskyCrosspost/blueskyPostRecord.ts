@@ -25,6 +25,18 @@ export type BlueskyEmbed =
   | Readonly<{
     $type: 'app.bsky.embed.external';
     external: Readonly<{ uri: string; title: string; description: string; thumb?: BlueskyBlob }>;
+  }>
+  | Readonly<{
+    $type: 'app.bsky.embed.record';
+    record: BlueskyStrongRef;
+  }>
+  | Readonly<{
+    $type: 'app.bsky.embed.recordWithMedia';
+    record: Readonly<{ record: BlueskyStrongRef }>;
+    media: Readonly<{
+      $type: 'app.bsky.embed.images';
+      images: ReadonlyArray<Readonly<{ alt: string; image: BlueskyBlob }>>;
+    }>;
   }>;
 
 export type BlueskyPostRecord = Readonly<{
@@ -35,4 +47,5 @@ export type BlueskyPostRecord = Readonly<{
   reply?: Readonly<{ root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
   embed?: BlueskyEmbed;
   langs?: readonly string[];
+  labels?: Readonly<{ $type: 'com.atproto.label.defs#selfLabels'; values: ReadonlyArray<Readonly<{ val: string }>> }>;
 }>;
