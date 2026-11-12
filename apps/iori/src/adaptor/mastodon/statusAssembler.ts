@@ -94,6 +94,7 @@ export const createStatusAssembler = (
       inReplyToId: postExtras?.inReplyTo?.postId ?? null,
       inReplyToAccountId: postExtras?.inReplyTo?.actorId ?? null,
       myReactionEmojis: new Set(postExtras?.myReactionEmojis ?? []),
+      bookmarked: postExtras?.bookmarked ?? false,
       blueskyCrosspost: postExtras?.blueskyCrosspost ?? null,
       quote,
     });

@@ -19,6 +19,7 @@ const staticPages = new Map<string, WorkerPage>([
   ['/', { entry: 'home', title: 'blog.kosui.me' }],
   ['/about', { entry: 'about', title: 'About | blog.kosui.me' }],
   ['/articles', { entry: 'articles', title: 'Articles | blog.kosui.me' }],
+  ['/bookmarks', { entry: 'bookmarks', title: 'Bookmarks | blog.kosui.me', private: true }],
   ['/federated', { entry: 'federatedTimeline', title: 'Federated timeline | blog.kosui.me', private: true }],
   ['/follow', { entry: 'follow', title: 'Follow | blog.kosui.me' }],
   ['/likes', { entry: 'likedPosts', title: 'Liked posts | blog.kosui.me' }],

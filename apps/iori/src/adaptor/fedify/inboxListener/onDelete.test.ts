@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
+import { BookmarkId } from '../../../domain/bookmark/bookmarkId.ts';
 import { EmojiReactId } from '../../../domain/emojiReact/emojiReactId.ts';
 import { FederatedTimelineItemId } from '../../../domain/federatedTimeline/federatedTimelineItemId.ts';
 import { LikeId } from '../../../domain/like/likeId.ts';
@@ -415,6 +416,86 @@ describe('createOnDelete', () => {
       await createOnDelete(deps)({} as never, activity);
 
       expect(postDeletedStore.store).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('bookmarks', () => {
+    it('deletes the bookmarks of the post before the post itself', async () => {
+      const postId = PostId.generate();
+      const actorId = ActorId.generate();
+      const bookmark = { bookmarkId: BookmarkId.generate(), actorId: ActorId.generate(), postId };
+      const calls: string[] = [];
+      const empty = { resolve: async () => RA.ok([]) };
+      const noopStore = { store: vi.fn(async () => RA.ok(undefined)) };
+      const bookmarksResolverByPostId = { resolve: vi.fn(async () => RA.ok([bookmark])) };
+      const bookmarkDeletedStore = {
+        store: vi.fn(async () => {
+          calls.push('bookmark');
+          return RA.ok(undefined);
+        }),
+      };
+      const postDeletedStore = {
+        store: vi.fn(async () => {
+          calls.push('post');
+          return RA.ok(undefined);
+        }),
+      };
+      const deps = {
+        remotePostResolverByUri: {
+          resolve: async () =>
+            RA.ok({
+              type: 'remote' as const,
+              postId,
+              actorId,
+              content: 'remote post',
+              createdAt: Date.now() as never,
+              uri: 'https://remote.example/posts/1',
+              inReplyToUri: null,
+              visibility: null,
+              summary: null,
+              sensitive: false,
+            }),
+        },
+        actorResolverById: { resolve: async () => RA.ok({ ...remoteAuthor, id: actorId }) },
+        timelineItemsResolverByPostId: empty,
+        likeNotificationsResolverByPostId: empty,
+        emojiReactNotificationsResolverByPostId: empty,
+        replyNotificationsResolverByReplyPostId: empty,
+        replyNotificationsResolverByOriginalPostId: empty,
+        repostsResolverByPostId: empty,
+        likesResolverByPostId: empty,
+        emojiReactsResolverByPostId: empty,
+        bookmarksResolverByPostId,
+        federatedTimelineItemsResolverByPostId: empty,
+        timelineItemDeletedStore: noopStore,
+        likeNotificationDeletedStore: noopStore,
+        emojiReactNotificationDeletedStore: noopStore,
+        replyNotificationDeletedStore: noopStore,
+        repostDeletedStore: noopStore,
+        localLikeDeletedStore: noopStore,
+        remoteLikeDeletedStore: noopStore,
+        emojiReactDeletedStore: noopStore,
+        bookmarkDeletedStore,
+        federatedTimelineItemDeletedStore: noopStore,
+        postDeletedStore,
+      } satisfies OnDeleteDeps;
+
+      await createOnDelete(deps)(
+        {} as never,
+        {
+          actorId: new URL('https://remote.example/users/alice'),
+          objectId: new URL('https://remote.example/posts/1'),
+        } as never,
+      );
+
+      expect(bookmarksResolverByPostId.resolve).toHaveBeenCalledWith({ postId });
+      expect(bookmarkDeletedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventName: 'bookmark.bookmarkDeleted',
+          eventPayload: { bookmarkId: bookmark.bookmarkId },
+        }),
+      );
+      expect(calls).toEqual(['bookmark', 'post']);
     });
   });
 });

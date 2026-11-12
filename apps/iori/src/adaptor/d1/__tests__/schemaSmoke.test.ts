@@ -21,6 +21,7 @@ describe('D1 schema', () => {
       'blueskySessionsTable',
       'blueskySyncStatusTable',
       'blueskyTimelineItemsTable',
+      'bookmarksTable',
       'digestDeepDiveTurnsTable',
       'digestDeepDiveUsagesTable',
       'digestDeepDivesTable',
