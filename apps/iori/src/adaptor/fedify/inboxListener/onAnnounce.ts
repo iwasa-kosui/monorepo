@@ -18,7 +18,7 @@ import type { AcceptedRelaysResolver, RelayResolverByActorUri } from '../../../d
 import type { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
 import { isBlockedRemoteObject } from '../../../useCase/helper/isBlockedRemoteObject.ts';
 import {
-  buildRemotePostContent,
+  buildRemotePostBody,
   isRemotePostObject,
   type RemotePostObject,
 } from '../../../useCase/helper/remotePostObject.ts';
@@ -244,7 +244,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
     return;
   }
 
-  const contentText = await buildRemotePostContent(note);
+  const { content: contentText, poll } = await buildRemotePostBody(note);
   const authorIdentity = await ActorIdentity.fromFedifyActor(author, { documentLoader });
   if (!authorIdentity.ok) {
     getLogger().warn(`Could not read Note author: ${note.id.href}`);
@@ -263,6 +263,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
       remotePostIdentity: {
         uri: note.id.href,
         content: contentText,
+        poll,
         ...extractContentWarning(note),
         visibility: extractVisibility(note, author.followersId),
         recipientActorUris: extractRecipientActorUris([note], deps.origin),

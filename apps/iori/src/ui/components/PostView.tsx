@@ -11,6 +11,7 @@ import { toBlueskyCrosspostMark } from './blueskyCrosspostMark.ts';
 import { DirectMark, isDirectStatus } from './DirectMark.tsx';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
+import { PollView } from './PollView.tsx';
 import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
 import { QuotedPostCard } from './QuotedPostCard.tsx';
 
@@ -470,6 +471,7 @@ export const PostView = (
               )}
             </>
           )}
+          {!isContentHidden && post.poll !== null && <PollView poll={post.poll} />}
           {!isContentHidden && hasMedia && isMediaConcealed && (
             <div class='mt-3 flex items-center gap-2 rounded-2xl bg-sand/40 px-3 py-2 dark:bg-gray-700/40'>
               <p class='text-sm text-charcoal dark:text-gray-200'>

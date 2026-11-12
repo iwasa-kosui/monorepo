@@ -10,7 +10,7 @@ import { extractRecipientActorUris } from '../../adaptor/fedify/extractRecipient
 import { extractVisibility } from '../../adaptor/fedify/extractVisibility.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { RemotePostIdentity } from '../../domain/post/post.ts';
-import { buildRemotePostContent, type RemotePostObject } from './remotePostObject.ts';
+import { buildRemotePostBody, type RemotePostObject } from './remotePostObject.ts';
 
 type Options = Readonly<{
   origin: string;
@@ -53,7 +53,7 @@ export const toRemotePostIdentity = async (
   const publishedMs = note.published?.epochMilliseconds;
   return {
     uri,
-    content: await buildRemotePostContent(note),
+    ...await buildRemotePostBody(note),
     authorIdentity: actorIdentityResult.val,
     inReplyToUri: note.replyTargetId?.href ?? null,
     ...extractContentWarning(note),

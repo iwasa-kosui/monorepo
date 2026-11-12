@@ -4,6 +4,7 @@ import type { Instant } from '../../domain/instant/instant.ts';
 import { Post, type PostWithAuthor } from '../../domain/post/post.ts';
 import type { PostExtras, PostExtrasResolverByPosts } from '../../domain/post/postExtras.ts';
 import type { PostId } from '../../domain/post/postId.ts';
+import type { RemotePostPoll, RemotePostPollsResolverByPostIds } from '../../domain/post/remotePostPoll.ts';
 import type { RepostId } from '../../domain/repost/repostId.ts';
 import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
 import { defaultImageUrls } from './defaultImages.ts';
@@ -35,6 +36,7 @@ export const statusSourceOfTimelineItem = (item: TimelineItemWithPost): StatusSo
 export type StatusAssemblerDeps = Readonly<{
   accountProfilesResolver: AccountProfilesResolverByActorIds;
   postExtrasResolver: PostExtrasResolverByPosts;
+  remotePostPollsResolver: RemotePostPollsResolverByPostIds;
 }>;
 
 export type AssembleInput = Readonly<{
@@ -63,8 +65,11 @@ export class StatusAssemblyError extends Error {
 }
 
 export const createStatusAssembler = (
-  { accountProfilesResolver, postExtrasResolver }: StatusAssemblerDeps,
+  { accountProfilesResolver, postExtrasResolver, remotePostPollsResolver }: StatusAssemblerDeps,
 ): StatusAssembler => {
+  const remotePostIdsOf = (posts: ReadonlyArray<PostWithAuthor>): PostId[] =>
+    posts.filter((post) => post.type === 'remote').map((post) => post.postId);
+
   const resolveAccounts = async (
     actorIds: ReadonlyArray<ActorId>,
     requestUrl: string,
@@ -86,6 +91,7 @@ export const createStatusAssembler = (
       account: Account,
       postExtras: PostExtras | undefined,
       quote: ToStatusOptions['quote'],
+      poll: RemotePostPoll | undefined,
     ): ToStatusOptions => ({
       baseUrl: requestUrl,
       account,
@@ -97,6 +103,7 @@ export const createStatusAssembler = (
       bookmarked: postExtras?.bookmarked ?? false,
       blueskyCrosspost: postExtras?.blueskyCrosspost ?? null,
       quote,
+      poll,
     });
 
     const posts = [...new Map(sources.map((source) => [source.post.postId, source.post])).values()];
@@ -107,11 +114,14 @@ export const createStatusAssembler = (
         ),
       ),
     ];
-    const [extras, accounts] = await Promise.all([
+    const [extras, accounts, polls] = await Promise.all([
       postExtrasResolver.resolve({ posts, currentActorId: viewerActorId }),
       resolveAccounts(actorIds, requestUrl),
+      remotePostPollsResolver.resolve(remotePostIdsOf(posts)),
     ]);
     if (!extras.ok) throw new StatusAssemblyError('Failed to resolve post extras');
+    if (!polls.ok) throw new StatusAssemblyError('Failed to resolve remote post polls');
+    const pollsByPostId: ReadonlyMap<PostId, RemotePostPoll> = polls.val;
     const extrasByPostId: ReadonlyMap<PostId, PostExtras> = extras.val;
 
     const quotedPosts = [
@@ -124,17 +134,22 @@ export const createStatusAssembler = (
     const quotedStatusByPostId = new Map<PostId, Status>();
     if (quotedPosts.length > 0) {
       const missingActorIds = [...new Set(quotedPosts.map((post) => post.actorId))].filter((id) => !accounts.has(id));
-      const [quotedExtras, quotedAccounts] = await Promise.all([
+      const [quotedExtras, quotedAccounts, quotedPolls] = await Promise.all([
         postExtrasResolver.resolve({ posts: quotedPosts, currentActorId: viewerActorId }),
         resolveAccounts(missingActorIds, requestUrl),
+        remotePostPollsResolver.resolve(remotePostIdsOf(quotedPosts)),
       ]);
       if (!quotedExtras.ok) throw new StatusAssemblyError('Failed to resolve post extras');
+      if (!quotedPolls.ok) throw new StatusAssemblyError('Failed to resolve remote post polls');
       for (const post of quotedPosts) {
         const account = accounts.get(post.actorId) ?? quotedAccounts.get(post.actorId);
         if (account === undefined) continue;
         quotedStatusByPostId.set(
           post.postId,
-          toStatus(post, toStatusOptions(post, account, quotedExtras.val.get(post.postId), null)),
+          toStatus(
+            post,
+            toStatusOptions(post, account, quotedExtras.val.get(post.postId), null, quotedPolls.val.get(post.postId)),
+          ),
         );
       }
     }
@@ -159,6 +174,7 @@ export const createStatusAssembler = (
                 uri: quote.uri,
                 status: quote.post === null ? null : quotedStatusByPostId.get(quote.post.postId) ?? null,
               },
+            pollsByPostId.get(post.postId),
           ),
         ),
       );

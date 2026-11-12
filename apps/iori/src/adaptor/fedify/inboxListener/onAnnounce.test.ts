@@ -1,4 +1,4 @@
-import { type Announce, Document, Note, Person } from '@fedify/vocab';
+import { type Announce, Collection, Document, Note, Person, Question } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -138,6 +138,34 @@ describe('createOnAnnounce', () => {
     expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
       expect.objectContaining({
         remotePostIdentity: expect.objectContaining({ quoteUri: 'https://other.example/notes/quoted' }),
+      }),
+    );
+  });
+
+  it('passes the poll of an announced Question to addReceivedRepostUseCase', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined);
+    const note = createNote([]);
+    const question = new Question({
+      id: new URL('https://remote.example/notes/2'),
+      content: '<p>q</p>',
+      attribution: await note.getAttribution(),
+      exclusiveOptions: [new Note({ name: 'a', replies: new Collection({ totalItems: 4 }) })],
+    });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(question as unknown as Note));
+
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remotePostIdentity: expect.objectContaining({
+          content: '<p>q</p><p><a href="https://remote.example/notes/2">元の投稿で投票する</a></p>',
+          poll: {
+            multiple: false,
+            options: [{ title: 'a', votesCount: 4 }],
+            votersCount: null,
+            expiresAt: null,
+            closed: false,
+          },
+        }),
       }),
     );
   });

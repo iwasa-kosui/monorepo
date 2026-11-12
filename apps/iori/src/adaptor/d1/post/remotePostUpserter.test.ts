@@ -117,6 +117,33 @@ describe('createD1RemotePostUpserter', () => {
     );
   });
 
+  it('passes the poll of a new post to the store', async () => {
+    const { deps, postCreatedStore } = createDeps(undefined);
+    const poll = {
+      multiple: false,
+      options: [{ title: 'a', votesCount: 2 }],
+      votersCount: 2,
+      expiresAt: null,
+      closed: false,
+    };
+
+    await createD1RemotePostUpserter(deps).resolve({ ...identity, poll });
+
+    expect(postCreatedStore.store).toHaveBeenCalledWith(
+      expect.objectContaining({ eventPayload: expect.objectContaining({ poll }) }),
+    );
+  });
+
+  it('passes a null poll to the store when the identity has no poll', async () => {
+    const { deps, postCreatedStore } = createDeps(undefined);
+
+    await createD1RemotePostUpserter(deps).resolve(identity);
+
+    expect(postCreatedStore.store).toHaveBeenCalledWith(
+      expect.objectContaining({ eventPayload: expect.objectContaining({ poll: null }) }),
+    );
+  });
+
   it('passes the recipients of a new post to the store', async () => {
     const { deps, postCreatedStore } = createDeps(undefined);
 

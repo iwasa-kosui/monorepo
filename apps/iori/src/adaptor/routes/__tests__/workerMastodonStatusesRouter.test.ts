@@ -34,6 +34,60 @@ describe('GET /api/v1/statuses/:id', () => {
     });
   });
 
+  describe('投票', () => {
+    const addPoll = (t: Awaited<ReturnType<typeof seedStatuses>>, postId: string, closed = 0) =>
+      t.sqlite.prepare(
+        'INSERT INTO remote_post_polls(postId,multiple,options,votersCount,expiresAt,closed) VALUES (?,?,?,?,?,?)',
+      ).run(
+        postId,
+        0,
+        JSON.stringify([{ title: '赤', votesCount: 3 }, { title: '青', votesCount: 1 }]),
+        4,
+        4_000_000_000_000,
+        closed,
+      );
+
+    it('保存した投票を poll に入れる', async () => {
+      const t = await seedStatuses();
+      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
+      addPoll(t, post.postId);
+
+      const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
+
+      expect(StatusSchema.parse(await response.json()).poll).toEqual({
+        id: post.postId,
+        expires_at: new Date(4_000_000_000_000).toISOString(),
+        expired: false,
+        multiple: false,
+        votes_count: 4,
+        voters_count: 4,
+        options: [{ title: '赤', votes_count: 3 }, { title: '青', votes_count: 1 }],
+        emojis: [],
+        voted: false,
+        own_votes: [],
+      });
+    });
+
+    it('closed の投票は expired にする', async () => {
+      const t = await seedStatuses();
+      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
+      addPoll(t, post.postId, 1);
+
+      const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
+
+      expect(StatusSchema.parse(await response.json()).poll?.expired).toBe(true);
+    });
+
+    it('投票の無い投稿は poll を null にする', async () => {
+      const t = await seedStatuses();
+      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
+
+      const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
+
+      expect(StatusSchema.parse(await response.json()).poll).toBeNull();
+    });
+  });
+
   describe('引用', () => {
     const addQuote = (t: Awaited<ReturnType<typeof seedStatuses>>, postId: string, quoteUri: string) =>
       t.sqlite.prepare('INSERT INTO post_quotes(postId,quoteUri) VALUES (?,?)').run(postId, quoteUri);

@@ -1,8 +1,14 @@
-import { Article, Image, Link, Note, Person, Question } from '@fedify/vocab';
+import { Article, Collection, Image, Link, Note, Person, Question } from '@fedify/vocab';
+import { Temporal } from '@js-temporal/polyfill';
 import { describe, expect, it } from 'vitest';
 
 import { sanitizePostContent } from '../../../domain/post/sanitizePostContent.ts';
-import { buildRemotePostContent, isRemotePostObject } from '../../helper/remotePostObject.ts';
+import {
+  buildRemotePostBody,
+  buildRemotePostContent,
+  isRemotePostObject,
+  readRemotePostPoll,
+} from '../../helper/remotePostObject.ts';
 
 const ID = new URL('https://remote.example/objects/1');
 const URL_OF_POST = new URL('https://remote.example/@alice/1');
@@ -99,42 +105,22 @@ describe('buildRemotePostContent', () => {
       new Question({ id: ID, url: URL_OF_POST, ...values });
     const vote = `<p><a href="${URL_OF_POST.href}">元の投稿で投票する</a></p>`;
 
-    it('content、exclusive の選択肢、投票のリンクをこの順に並べる', async () => {
+    it('content と投票のリンクをこの順に並べ、選択肢のリストは置かない', async () => {
       const post = question({
         content: '<p>好きな色は?</p>',
         exclusiveOptions: [new Note({ name: '赤' }), new Note({ name: '青' })],
       });
 
-      expect(await buildRemotePostContent(post)).toBe(
-        `<p>好きな色は?</p><ul><li>赤</li><li>青</li></ul>${vote}`,
-      );
-    });
-
-    it('inclusive の選択肢も並べる', async () => {
-      const post = question({
-        content: '<p>q</p>',
-        exclusiveOptions: [new Note({ name: 'a' })],
-        inclusiveOptions: [new Note({ name: 'b' }), new Note({ name: 'c' })],
-      });
-
-      expect(await buildRemotePostContent(post)).toBe(`<p>q</p><ul><li>a</li><li>b</li><li>c</li></ul>${vote}`);
+      expect(await buildRemotePostContent(post)).toBe(`<p>好きな色は?</p>${vote}`);
     });
 
     it('content が空なら、name をエスケープして段落にする', async () => {
       const post = question({ name: 'x < y?', inclusiveOptions: [new Note({ name: 'yes' })] });
 
-      expect(await buildRemotePostContent(post)).toBe(`<p>x &lt; y?</p><ul><li>yes</li></ul>${vote}`);
+      expect(await buildRemotePostContent(post)).toBe(`<p>x &lt; y?</p>${vote}`);
     });
 
-    it('選択肢をエスケープする', async () => {
-      const post = question({ content: '<p>q</p>', exclusiveOptions: [new Note({ name: '<script>&"\'' })] });
-
-      expect(await buildRemotePostContent(post)).toBe(
-        `<p>q</p><ul><li>&lt;script&gt;&amp;&quot;&#39;</li></ul>${vote}`,
-      );
-    });
-
-    it('選択肢が無ければ、リストを置かない', async () => {
+    it('選択肢が無ければ、投票のリンクだけを置く', async () => {
       expect(await buildRemotePostContent(question({ content: '<p>q</p>' }))).toBe(`<p>q</p>${vote}`);
     });
 
@@ -154,13 +140,160 @@ describe('buildRemotePostContent', () => {
     });
   });
 
-  it('組み立てた HTML は sanitizer を通しても strong、ul、li、a が残る', async () => {
+  it('組み立てた HTML は sanitizer を通しても strong、a が残る', async () => {
     const article = await buildRemotePostContent(new Article({ id: ID, name: 'T', url: URL_OF_POST }));
     const poll = await buildRemotePostContent(
-      new Question({ id: ID, content: '<p>q</p>', exclusiveOptions: [new Note({ name: 'a' })] }),
+      new Question({ id: ID, url: URL_OF_POST, content: '<p>q</p>', exclusiveOptions: [new Note({ name: 'a' })] }),
     );
 
     expect(sanitizePostContent(article)).toBe(article);
     expect(sanitizePostContent(poll)).toBe(poll);
+  });
+});
+
+describe('readRemotePostPoll', () => {
+  const question = (values: ConstructorParameters<typeof Question>[0]) =>
+    new Question({ id: ID, url: URL_OF_POST, ...values });
+  const option = (name: string, totalItems?: number) =>
+    new Note({
+      name,
+      replies: totalItems === undefined ? undefined : new Collection({ totalItems }),
+    });
+
+  it('Note と Article は投票を持たない', async () => {
+    expect(await readRemotePostPoll(new Note({ id: ID }))).toBeUndefined();
+    expect(await readRemotePostPoll(new Article({ id: ID }))).toBeUndefined();
+  });
+
+  it('exclusive の選択肢は multiple を false にし、replies の totalItems を票数にする', async () => {
+    const poll = await readRemotePostPoll(
+      question({ exclusiveOptions: [option('赤', 3), option('青', 5)] }),
+    );
+
+    expect(poll).toEqual({
+      multiple: false,
+      options: [{ title: '赤', votesCount: 3 }, { title: '青', votesCount: 5 }],
+      votersCount: null,
+      expiresAt: null,
+      closed: false,
+    });
+  });
+
+  it('inclusive の選択肢は multiple を true にする', async () => {
+    const poll = await readRemotePostPoll(question({ inclusiveOptions: [option('a', 1), option('b', 2)] }));
+
+    expect(poll?.multiple).toBe(true);
+    expect(poll?.options).toEqual([{ title: 'a', votesCount: 1 }, { title: 'b', votesCount: 2 }]);
+  });
+
+  it('replies が無い選択肢の票数は 0 にする', async () => {
+    const poll = await readRemotePostPoll(question({ exclusiveOptions: [option('a'), option('b', 4)] }));
+
+    expect(poll?.options).toEqual([{ title: 'a', votesCount: 0 }, { title: 'b', votesCount: 4 }]);
+  });
+
+  it('replies が id だけなら、取りに行かず票数を 0 にする', async () => {
+    const poll = await readRemotePostPoll(
+      question({
+        exclusiveOptions: [new Note({ name: 'a', replies: new URL('https://remote.example/options/a/replies') })],
+      }),
+    );
+
+    expect(poll?.options).toEqual([{ title: 'a', votesCount: 0 }]);
+  });
+
+  it('toot:votersCount を votersCount にする', async () => {
+    const poll = await readRemotePostPoll(question({ exclusiveOptions: [option('a', 1)], voters: 7 }));
+
+    expect(poll?.votersCount).toBe(7);
+  });
+
+  it('votersCount が負の数、小数、文字列なら null にして、残りは使う', async () => {
+    const received = (voters: unknown) =>
+      Question.fromJsonLd({
+        '@context': ['https://www.w3.org/ns/activitystreams', { toot: 'http://joinmastodon.org/ns#' }],
+        type: 'Question',
+        id: ID.href,
+        oneOf: [{ type: 'Note', name: 'a', replies: { type: 'Collection', totalItems: 2 } }],
+        'toot:votersCount': voters,
+      });
+    const negative = await readRemotePostPoll(await received(-1));
+    const fractional = await readRemotePostPoll(await received(1.5));
+    const text = await readRemotePostPoll(await received('7'));
+
+    for (const poll of [negative, fractional, text]) {
+      expect(poll?.votersCount).toBeNull();
+      expect(poll?.options).toEqual([{ title: 'a', votesCount: 2 }]);
+    }
+  });
+
+  it('選択肢は先頭から 50 個までにする', async () => {
+    const options = Array.from({ length: 60 }, (_, index) => option(`o${index}`, index));
+
+    const poll = await readRemotePostPoll(question({ exclusiveOptions: options }));
+
+    expect(poll?.options).toHaveLength(50);
+    expect(poll?.options[0]).toEqual({ title: 'o0', votesCount: 0 });
+    expect(poll?.options[49]).toEqual({ title: 'o49', votesCount: 49 });
+  });
+
+  it('endTime を expiresAt にする', async () => {
+    const endTime = Temporal.Instant.from('2999-01-02T03:04:05Z');
+    const poll = await readRemotePostPoll(question({ exclusiveOptions: [option('a')], endTime }));
+
+    expect(poll?.expiresAt).toBe(endTime.epochMilliseconds);
+    expect(poll?.closed).toBe(false);
+  });
+
+  it('endTime が過去なら closed にする', async () => {
+    const endTime = Temporal.Instant.from('2000-01-02T03:04:05Z');
+    const poll = await readRemotePostPoll(question({ exclusiveOptions: [option('a')], endTime }));
+
+    expect(poll?.expiresAt).toBe(endTime.epochMilliseconds);
+    expect(poll?.closed).toBe(true);
+  });
+
+  it('closed があれば、endTime が未来でも closed にする', async () => {
+    const endTime = Temporal.Instant.from('2999-01-02T03:04:05Z');
+    const byInstant = await readRemotePostPoll(
+      question({ exclusiveOptions: [option('a')], endTime, closed: Temporal.Instant.from('2026-01-01T00:00:00Z') }),
+    );
+    const byFlag = await readRemotePostPoll(question({ exclusiveOptions: [option('a')], endTime, closed: true }));
+
+    expect(byInstant?.closed).toBe(true);
+    expect(byFlag?.closed).toBe(true);
+  });
+
+  it('名前が空の選択肢は数えない', async () => {
+    const poll = await readRemotePostPoll(question({ exclusiveOptions: [option('  ', 9), option('a', 1)] }));
+
+    expect(poll?.options).toEqual([{ title: 'a', votesCount: 1 }]);
+  });
+
+  it('選択肢が id だけなら、取りに行かず投票を読まない', async () => {
+    const poll = await readRemotePostPoll(
+      question({ exclusiveOptions: [new URL('https://remote.example/options/1')] }),
+    );
+
+    expect(poll).toBeUndefined();
+  });
+
+  it('選択肢が無ければ、投票を読まない', async () => {
+    expect(await readRemotePostPoll(question({ content: '<p>q</p>' }))).toBeUndefined();
+  });
+});
+
+describe('buildRemotePostBody', () => {
+  it('Question は本文と投票を一緒に返す', async () => {
+    const body = await buildRemotePostBody(
+      new Question({ id: ID, url: URL_OF_POST, content: '<p>q</p>', exclusiveOptions: [new Note({ name: 'a' })] }),
+    );
+
+    expect(body.content).toBe(`<p>q</p><p><a href="${URL_OF_POST.href}">元の投稿で投票する</a></p>`);
+    expect(body.poll?.options).toEqual([{ title: 'a', votesCount: 0 }]);
+  });
+
+  it('Note は本文だけを返す', async () => {
+    expect(await buildRemotePostBody(new Note({ id: ID, content: '<p>x</p>' }))).toEqual({ content: '<p>x</p>' });
   });
 });

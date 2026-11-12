@@ -36,6 +36,7 @@ import {
   type RemotePost,
   type RemotePostAttachment,
 } from '../domain/post/post.ts';
+import type { RemotePostPoll } from '../domain/post/remotePostPoll.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import {
@@ -71,6 +72,7 @@ type Input = Readonly<{
   recipientActorUris?: ReadonlyArray<string>;
   mentionedActorUris?: ReadonlyArray<string>;
   quoteUri?: string | null;
+  poll?: RemotePostPoll;
 }>;
 
 type Ok = Readonly<{
@@ -178,6 +180,7 @@ const create = ({
             recipientActorUris,
             mentionedActorUris,
             quoteUri,
+            poll,
           },
         ) => {
           const existing = await postResolverByUri.resolve({ uri });
@@ -201,6 +204,7 @@ const create = ({
             mentionedActorUris,
             authorActorUri: actorIdentity.uri,
             quoteUri,
+            poll,
           });
           try {
             await postCreatedStore.store(createPost);
