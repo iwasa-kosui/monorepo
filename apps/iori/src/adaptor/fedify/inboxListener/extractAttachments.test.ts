@@ -36,6 +36,7 @@ describe('extractAttachments', () => {
     expect(attachments).toEqual([{
       url: 'https://media.misskeyusercontent.com/io/f306a9db-8c63-45fc-9b5a-f97ce80b2d5d.webp',
       altText: null,
+      mediaType: 'image/webp',
     }]);
   });
 
@@ -62,7 +63,7 @@ describe('extractAttachments', () => {
 
     const attachments = await extractAttachments(note, noLoad);
 
-    expect(attachments).toEqual([{ url: 'http://remote.example/media/ok.png', altText: null }]);
+    expect(attachments).toEqual([{ url: 'http://remote.example/media/ok.png', altText: null, mediaType: 'image/png' }]);
   });
 
   it('returns Document and Image attachments in order with altText from name', async () => {
@@ -74,8 +75,8 @@ describe('extractAttachments', () => {
     const attachments = await extractAttachments(note, noLoad);
 
     expect(attachments).toEqual([
-      { url: 'https://remote.example/media/1.png', altText: 'first' },
-      { url: 'https://remote.example/media/2.png', altText: 'second' },
+      { url: 'https://remote.example/media/1.png', altText: 'first', mediaType: 'image/png' },
+      { url: 'https://remote.example/media/2.png', altText: 'second', mediaType: null },
     ]);
   });
 
@@ -88,16 +89,38 @@ describe('extractAttachments', () => {
 
     const attachments = await extractAttachments(note, noLoad);
 
-    expect(attachments).toEqual([{ url: 'https://remote.example/media/1.png', altText: null }]);
+    expect(attachments).toEqual([{ url: 'https://remote.example/media/1.png', altText: null, mediaType: 'image/png' }]);
   });
 
-  it('returns a video Document as it is', async () => {
+  it('returns a video Document with its mediaType', async () => {
     const note = await noteWith([
       { type: 'Document', mediaType: 'video/mp4', url: 'https://remote.example/media/1.mp4' },
     ]);
 
     const attachments = await extractAttachments(note, noLoad);
 
-    expect(attachments).toEqual([{ url: 'https://remote.example/media/1.mp4', altText: null }]);
+    expect(attachments).toEqual([{ url: 'https://remote.example/media/1.mp4', altText: null, mediaType: 'video/mp4' }]);
+  });
+
+  it('returns an audio Document with its mediaType', async () => {
+    const note = await noteWith([
+      { type: 'Document', mediaType: 'audio/mpeg', url: 'https://remote.example/media/1.mp3', name: 'song' },
+    ]);
+
+    const attachments = await extractAttachments(note, noLoad);
+
+    expect(attachments).toEqual([{
+      url: 'https://remote.example/media/1.mp3',
+      altText: 'song',
+      mediaType: 'audio/mpeg',
+    }]);
+  });
+
+  it('returns null as the mediaType of a Document without mediaType', async () => {
+    const note = await noteWith([{ type: 'Document', url: 'https://remote.example/media/1.mp4' }]);
+
+    const attachments = await extractAttachments(note, noLoad);
+
+    expect(attachments).toEqual([{ url: 'https://remote.example/media/1.mp4', altText: null, mediaType: null }]);
   });
 });

@@ -393,6 +393,7 @@ describe('GetArticleWithThreadUseCase', () => {
       ({
         ...postBase,
         type: 'local',
+        visibility: 'public',
         postId: PostId.generate(),
         actorId: ActorId.generate(),
         userId: authorUserId,

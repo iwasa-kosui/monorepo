@@ -22,6 +22,7 @@ const staticPages = new Map<string, WorkerPage>([
   ['/federated', { entry: 'federatedTimeline', title: 'Federated timeline | blog.kosui.me', private: true }],
   ['/follow', { entry: 'follow', title: 'Follow | blog.kosui.me' }],
   ['/likes', { entry: 'likedPosts', title: 'Liked posts | blog.kosui.me' }],
+  ['/messages', { entry: 'messages', title: 'メッセージ | blog.kosui.me', private: true }],
   ['/notifications', { entry: 'notifications', title: 'Notifications | blog.kosui.me' }],
   ['/search', { entry: 'search', title: '検索 | blog.kosui.me' }],
   ['/sign-in', { entry: 'signIn', title: 'Sign in | blog.kosui.me' }],
@@ -35,6 +36,9 @@ const pageForPath = (pathname: string): WorkerPage | undefined => {
   if (/^\/remote-users\/[^/]+\/?$/.test(pathname)) {
     return { entry: 'remoteUser', title: 'Profile | blog.kosui.me' };
   }
+  if (/^\/messages\/[^/]+\/?$/.test(pathname)) {
+    return { entry: 'messages', title: 'メッセージ | blog.kosui.me', private: true };
+  }
   if (/^\/bluesky\/profile\/[^/]+\/?$/.test(pathname)) {
     return { entry: 'blueskyProfile', title: 'Bluesky profile | blog.kosui.me', private: true };
   }
@@ -46,6 +50,9 @@ const pageForPath = (pathname: string): WorkerPage | undefined => {
   }
   if (/^\/users\/[^/]+\/?$/.test(pathname)) {
     return { entry: 'localUser', title: 'Profile | blog.kosui.me' };
+  }
+  if (/^\/bluesky\/profile\/did:[a-z]+:[^/]+\/post\/[^/]+\/?$/.test(pathname)) {
+    return { entry: 'blueskyPost', title: 'Bluesky | blog.kosui.me', private: true };
   }
   return undefined;
 };

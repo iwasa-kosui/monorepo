@@ -8,32 +8,47 @@ import { Instant } from '../../../../domain/instant/instant.ts';
 import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
-import type { BlueskyClient } from '../../../../ports/blueskyClient.ts';
+import type { BlueskyChat } from '../../../../ports/blueskyChat.ts';
+import type { BlueskyClient, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
+import type { BlueskyPostSubject } from '../../../../ports/blueskyPostCidResolver.ts';
+import type { BlueskyPostThreadFetcher } from '../../../../ports/blueskyPostThreadFetcher.ts';
+import type { BlueskySearch } from '../../../../ports/blueskySearch.ts';
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import type { TopicRelevanceJudge } from '../../../../ports/topicRelevanceJudge.ts';
-import { createWorkerRemoteActorActions } from '../../../../runtime/workerCoreUseCases.ts';
+import { createWorkerBlockActions, createWorkerRemoteActorActions } from '../../../../runtime/workerCoreUseCases.ts';
+import { createWorkerReportAction } from '../../../../runtime/workerReportActions.ts';
 import { createDigestUseCases } from '../../../../scheduled/digestTasks.ts';
 import { AddDigestTopicUseCase } from '../../../../useCase/addDigestTopic.ts';
 import { AddFeedSourceUseCase } from '../../../../useCase/addFeedSource.ts';
+import { BlueskyChatUseCases } from '../../../../useCase/blueskyChat.ts';
 import { ChangeDigestTopicEnabledUseCase } from '../../../../useCase/changeDigestTopicEnabled.ts';
 import { ChangeDigestTopicMaterialWindowUseCase } from '../../../../useCase/changeDigestTopicMaterialWindow.ts';
 import { ChangeFeedSourceEnabledUseCase } from '../../../../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
+import { CreateBlockUseCase } from '../../../../useCase/createBlock.ts';
 import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
 import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
+import { DeleteBlockUseCase } from '../../../../useCase/deleteBlock.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
 import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
+import { FetchRemoteContextUseCase } from '../../../../useCase/fetchRemoteContext.ts';
+import { FetchRemoteOutboxUseCase } from '../../../../useCase/fetchRemoteOutbox.ts';
+import { FetchReplyNotesRecursiveUseCase } from '../../../../useCase/fetchReplyNotesRecursive.ts';
 import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
+import { MarkBlueskyNotificationsSeenUseCase } from '../../../../useCase/markBlueskyNotificationsSeen.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
+import { QuoteBlueskyPostUseCase } from '../../../../useCase/quoteBlueskyPost.ts';
 import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts';
+import { ReplyToBlueskyPostUseCase } from '../../../../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../../useCase/repostBlueskyPost.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
+import { ResolveRemotePostUseCase } from '../../../../useCase/resolveRemotePost.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
 import type { ScheduleBlueskyCrosspostUseCase } from '../../../../useCase/scheduleBlueskyCrosspost.ts';
@@ -69,14 +84,22 @@ import { createD1PostTranslationStore } from '../../../d1/aiTranslation/postTran
 import { createD1ArticleDeletedStore } from '../../../d1/article/articleDeletedStore.ts';
 import { createD1ArticleResolver } from '../../../d1/article/articleResolver.ts';
 import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
+import { createD1BlockCreatedStore } from '../../../d1/block/blockCreatedStore.ts';
+import { createD1BlockDeletedStore } from '../../../d1/block/blockDeletedStore.ts';
+import { createD1BlockedActorsResolverByUserIdWithPagination } from '../../../d1/block/blockedActorsResolverByUserIdWithPagination.ts';
+import { createD1BlockedActorUriResolverByUsername } from '../../../d1/block/blockedActorUriResolverByUsername.ts';
+import { createD1BlockResolver } from '../../../d1/block/blockResolver.ts';
+import { createD1MutedOrBlockedActorIdsResolverByUserId } from '../../../d1/block/mutedOrBlockedActorIdsResolverByUserId.ts';
 import { createD1BlueskyLoginFailureResolver } from '../../../d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
 import { createD1BlueskySyncStatusResolver } from '../../../d1/blueskySyncStatus/blueskySyncStatusStore.ts';
 import { createD1BlueskyLikeDeletedStore } from '../../../d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../../../d1/blueskyTimeline/blueskyLikeSavedStore.ts';
 import { createD1BlueskyLikeTargetResolver } from '../../../d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
+import { createD1BlueskyLikeUriResolver } from '../../../d1/blueskyTimeline/blueskyLikeUriResolver.ts';
 import { createD1BlueskyRepostDeletedStore } from '../../../d1/blueskyTimeline/blueskyRepostDeletedStore.ts';
 import { createD1BlueskyRepostSavedStore } from '../../../d1/blueskyTimeline/blueskyRepostSavedStore.ts';
 import { createD1BlueskyRepostTargetResolver } from '../../../d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
+import { createD1BlueskyRepostUriResolver } from '../../../d1/blueskyTimeline/blueskyRepostUriResolver.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../../../d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestItemFeedbackGivenStore.ts';
 import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
@@ -125,7 +148,6 @@ import { createD1MarkersResolverByUserId } from '../../../d1/marker/markersResol
 import { createD1MediaUploadCreatedStore } from '../../../d1/mediaUpload/mediaUploadCreatedStore.ts';
 import { createD1MediaUploadResolver } from '../../../d1/mediaUpload/mediaUploadResolver.ts';
 import { createD1MuteCreatedStore } from '../../../d1/mute/muteCreatedStore.ts';
-import { createD1MutedActorIdsResolverByUserId } from '../../../d1/mute/mutedActorIdsResolverByUserId.ts';
 import { createD1MutedActorsResolverByUserIdWithPagination } from '../../../d1/mute/mutedActorsResolverByUserIdWithPagination.ts';
 import { createD1MuteDeletedStore } from '../../../d1/mute/muteDeletedStore.ts';
 import { createD1MuteResolver } from '../../../d1/mute/muteResolver.ts';
@@ -141,13 +163,16 @@ import { createD1NotificationsResolverByPage } from '../../../d1/notification/no
 import { createD1AccountStatusItemsResolverByActorId } from '../../../d1/post/accountStatusItemsResolverByActorId.ts';
 import { createD1LocalPostResolverByUri } from '../../../d1/post/localPostResolverByUri.ts';
 import { createD1LocalPostsResolverByPage } from '../../../d1/post/localPostsResolverByPage.ts';
+import { createD1LocalPostUrisResolverByUris } from '../../../d1/post/localPostUrisResolverByUris.ts';
 import { createD1PostCreatedStore } from '../../../d1/post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../../../d1/post/postDeletedStore.ts';
 import { createD1PostExtrasResolverByPosts } from '../../../d1/post/postExtrasResolverByPosts.ts';
+import { createD1PostQuotesResolverByPostIds } from '../../../d1/post/postQuotesResolverByPostIds.ts';
 import { createD1PostResolver } from '../../../d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../../../d1/post/postResolverByUri.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../../../d1/post/remotePostUpserter.ts';
+import { createD1RemotePostUrisResolverByUris } from '../../../d1/post/remotePostUrisResolverByUris.ts';
 import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../../../d1/pushSubscription/pushSubscriptionCreatedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../../../d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
@@ -157,6 +182,7 @@ import { createD1AcceptedRelaysResolver } from '../../../d1/relay/acceptedRelays
 import { createD1AllRelaysResolver } from '../../../d1/relay/allRelaysResolver.ts';
 import { createD1RelayResolverByActorUri } from '../../../d1/relay/relayResolverByActorUri.ts';
 import { createD1RelaySubscriptionRequestedStore } from '../../../d1/relay/relaySubscriptionRequestedStore.ts';
+import { createD1ReportSubmittedStore } from '../../../d1/report/reportSubmittedStore.ts';
 import { createD1RepostCreatedStore } from '../../../d1/repost/repostCreatedStore.ts';
 import { createD1RepostDeletedStore } from '../../../d1/repost/repostDeletedStore.ts';
 import { createD1RepostResolver } from '../../../d1/repost/repostResolver.ts';
@@ -182,6 +208,7 @@ import { createWorkerMastodonAccountsRouter } from '../../workerMastodonAccounts
 import { createWorkerMastodonFallbackRouter } from '../../workerMastodonFallbackRouter.ts';
 import { createWorkerMastodonMarkersRouter } from '../../workerMastodonMarkersRouter.ts';
 import { createWorkerMastodonNotificationsRouter } from '../../workerMastodonNotificationsRouter.ts';
+import { createWorkerMastodonReportsRouter } from '../../workerMastodonReportsRouter.ts';
 import { createWorkerMastodonStatusesRouter } from '../../workerMastodonStatusesRouter.ts';
 import { createWorkerMastodonTimelinesRouter } from '../../workerMastodonTimelinesRouter.ts';
 import { createWorkerMastodonTranslateRouter } from '../../workerMastodonTranslateRouter.ts';
@@ -192,6 +219,14 @@ const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
 afterEach(() => {
   for (const fixture of fixtures.splice(0)) fixture.sqlite.close();
 });
+
+const resolveBlueskyPostSubject = (
+  entry: string | Readonly<{ cid: string; likeUri?: string; repostUri?: string }> | undefined,
+): BlueskyPostSubject | undefined => {
+  if (entry === undefined) return undefined;
+  if (typeof entry === 'string') return { cid: entry, likeUri: null, repostUri: null };
+  return { cid: entry.cid, likeUri: entry.likeUri ?? null, repostUri: entry.repostUri ?? null };
+};
 
 export const setupReadApi = (
   options: Readonly<{
@@ -204,6 +239,15 @@ export const setupReadApi = (
     blueskyNow?: () => Instant;
     blueskyLikeClient?: Pick<BlueskyClient, 'createLike' | 'deleteLike'>;
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
+    blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
+    blueskyReplyClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
+    blueskyQuoteClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
+    blueskyPostCids?: Readonly<
+      Record<string, string | Readonly<{ cid: string; likeUri?: string; repostUri?: string }>>
+    >;
+    blueskySeenClient?: Pick<BlueskyClient, 'updateSeen'>;
+    blueskySearch?: BlueskySearch;
+    blueskyChat?: BlueskyChat;
     refreshXPosts?: RefreshXPostsUseCase;
     scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   }> = {},
@@ -248,7 +292,7 @@ export const setupReadApi = (
     ),
     getDocumentLoader: vi.fn(async (): Promise<unknown> => ({})),
     getActorKeyPairs: vi.fn(async () => []),
-    lookupObject: vi.fn(async (): Promise<unknown> => null),
+    lookupObject: vi.fn(async (_uri?: string, _options?: unknown): Promise<unknown> => null),
   };
   const createContext = () => federation as never;
   const remoteActorLookup = {
@@ -268,9 +312,47 @@ export const setupReadApi = (
     followRequestedStore: createD1FollowRequestedStore(db),
     undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
   });
+  const reportRemoteActor = createWorkerReportAction({
+    userResolver,
+    actorResolverByUserId,
+    actorResolverById: createD1ActorResolverById(db),
+    postResolver,
+    reportSubmittedStore: createD1ReportSubmittedStore(db),
+  });
+  const blockActions = createWorkerBlockActions({
+    userResolver,
+    actorResolverByUserId,
+    actorResolverById: createD1ActorResolverById(db),
+    followResolver: createD1FollowResolver(db),
+    undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
+    blockResolver: createD1BlockResolver(db),
+    createBlockUseCase: CreateBlockUseCase.create({
+      sessionResolver,
+      userResolver,
+      actorResolverByUserId,
+      blockCreatedStore: createD1BlockCreatedStore(db),
+      blockResolver: createD1BlockResolver(db),
+    }),
+    deleteBlockUseCase: DeleteBlockUseCase.create({
+      sessionResolver,
+      userResolver,
+      blockDeletedStore: createD1BlockDeletedStore(db),
+      blockResolver: createD1BlockResolver(db),
+    }),
+    unfollowRemoteActor: remoteActorActions.unfollowRemoteActor,
+  });
   const mediaUploadResolver = createD1MediaUploadResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
   const postImageCreatedStore = createD1PostImageCreatedStore(db);
+  const remotePostUpserter = createD1RemotePostUpserter({
+    postResolverByUri: createD1PostResolverByUri(db),
+    postCreatedStore,
+    postImageCreatedStore,
+    remoteActorCreatedStore,
+    logoUriUpdatedStore,
+    remoteActorProfileUpdatedStore,
+    actorResolverByUri,
+  });
   const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
   const statusAssembler = createStatusAssembler({
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
@@ -279,7 +361,7 @@ export const setupReadApi = (
   const searchTimeline = createSearchTimelineUseCase({
     actorResolverByUserId,
     actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-    mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+    mutedActorIdsResolverByUserId: createD1MutedOrBlockedActorIdsResolverByUserId(db),
     textGenerator: options.textGenerator,
     timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
     htmlToPlainText,
@@ -294,7 +376,7 @@ export const setupReadApi = (
           authn,
           actorResolverByUserId,
           actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-          mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+          mutedActorIdsResolverByUserId: createD1MutedOrBlockedActorIdsResolverByUserId(db),
           timelineItemsResolverByActorIds: createD1TimelineItemsResolverByActorIds(db),
           localPostsResolverByPage: createD1LocalPostsResolverByPage(db),
           federatedTimelineItemsResolver: createD1FederatedTimelineItemsResolver(db),
@@ -305,11 +387,14 @@ export const setupReadApi = (
         '/api',
         createWorkerMastodonStatusesRouter({
           authn,
+          userResolver,
+          remoteActorLookup,
           actorResolverByUserId,
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           repostResolverById: createD1RepostResolverById(db),
           repostResolver,
           threadResolver: createD1ThreadResolver(db, ORIGIN),
+          mutedActorIdsResolverByUserId: createD1MutedOrBlockedActorIdsResolverByUserId(db),
           statusAssembler,
           mediaUploadResolver,
           createPostUseCase: CreatePostUseCase.create({
@@ -324,6 +409,7 @@ export const setupReadApi = (
               fetch: async () => ({ title: null, description: null, imageUrl: null, faviconUrl: null, siteName: null }),
             },
             acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+            postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
             origin: ORIGIN,
             scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),
@@ -339,6 +425,7 @@ export const setupReadApi = (
             pushSubscriptionsResolver: createD1PushSubscriptionsResolverByUserId(db),
             webPushSender: { send: () => RA.ok(undefined) },
             postResolver,
+            postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
             origin: ORIGIN,
             scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),
@@ -347,6 +434,7 @@ export const setupReadApi = (
             userResolver,
             actorResolverByUserId,
             postResolver,
+            postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
             postDeletedStore: createD1PostDeletedStore(db),
             articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
             articleDeletedStore: createD1ArticleDeletedStore(db),
@@ -430,6 +518,17 @@ export const setupReadApi = (
           }),
           followRemoteActor: remoteActorActions.followRemoteActor,
           unfollowRemoteActor: remoteActorActions.unfollowRemoteActor,
+          blockActor: blockActions.blockActor,
+          unblockActor: blockActions.unblockActor,
+          createContext,
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerMastodonReportsRouter({
+          authn,
+          statusAssembler,
+          reportRemoteActor,
           createContext,
         }),
       );
@@ -440,6 +539,7 @@ export const setupReadApi = (
           actorResolverByUserId,
           likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
           mutedActorsResolverByUserIdWithPagination: createD1MutedActorsResolverByUserIdWithPagination(db),
+          blockedActorsResolverByUserIdWithPagination: createD1BlockedActorsResolverByUserIdWithPagination(db),
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,
         }),
@@ -448,6 +548,7 @@ export const setupReadApi = (
         '/api',
         createWorkerIoriSearchRouter({
           authn,
+          actorResolverByUserId,
           searchTimeline,
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,
@@ -459,6 +560,16 @@ export const setupReadApi = (
             remoteActorProfileUpdatedStore,
             actorResolverByUri,
           }),
+          resolveRemotePostUseCase: ResolveRemotePostUseCase.create({
+            origin: ORIGIN,
+            userResolver,
+            postResolverByUri: createD1PostResolverByUri(db),
+            localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
+            actorResolverById: createD1ActorResolverById(db),
+            remotePostUpserter,
+            blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+          }),
+          createContext,
         }),
       );
       root.route(
@@ -468,7 +579,7 @@ export const setupReadApi = (
           summarizeTimeline: createSummarizeTimelineUseCase({
             actorResolverByUserId,
             actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-            mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+            mutedActorIdsResolverByUserId: createD1MutedOrBlockedActorIdsResolverByUserId(db),
             searchTimeline,
             homePostsResolverByPeriod: createD1HomePostsResolverByPeriod(db),
             postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
@@ -539,6 +650,8 @@ export const setupReadApi = (
           likeBlueskyPostUseCase: options.blueskyLikeClient === undefined ? undefined : LikeBlueskyPostUseCase.create({
             client: options.blueskyLikeClient,
             targetResolver: createD1BlueskyLikeTargetResolver(db),
+            likeUriResolver: createD1BlueskyLikeUriResolver(db),
+            cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
             savedStore: createD1BlueskyLikeSavedStore(db),
             now: Instant.now,
           }),
@@ -547,6 +660,8 @@ export const setupReadApi = (
             : UnlikeBlueskyPostUseCase.create({
               client: options.blueskyLikeClient,
               targetResolver: createD1BlueskyLikeTargetResolver(db),
+              likeUriResolver: createD1BlueskyLikeUriResolver(db),
+              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
               deletedStore: createD1BlueskyLikeDeletedStore(db),
             }),
           repostBlueskyPostUseCase: options.blueskyRepostClient === undefined
@@ -554,6 +669,8 @@ export const setupReadApi = (
             : RepostBlueskyPostUseCase.create({
               client: options.blueskyRepostClient,
               targetResolver: createD1BlueskyRepostTargetResolver(db),
+              repostUriResolver: createD1BlueskyRepostUriResolver(db),
+              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
               viewerRepostResolver: { resolve: async () => RA.ok(null) },
               savedStore: createD1BlueskyRepostSavedStore(db),
               now: Instant.now,
@@ -563,8 +680,36 @@ export const setupReadApi = (
             : UndoRepostBlueskyPostUseCase.create({
               client: options.blueskyRepostClient,
               targetResolver: createD1BlueskyRepostTargetResolver(db),
+              repostUriResolver: createD1BlueskyRepostUriResolver(db),
+              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
               deletedStore: createD1BlueskyRepostDeletedStore(db),
             }),
+          blueskyPostThreadFetcher: options.blueskyPostThreadFetcher,
+          replyToBlueskyPostUseCase: options.blueskyReplyClient === undefined
+            ? undefined
+            : ReplyToBlueskyPostUseCase.create({
+              client: options.blueskyReplyClient,
+              query: options.blueskyReplyClient.query,
+              targetResolver: createD1BlueskyLikeTargetResolver(db),
+              now: Instant.now,
+            }),
+          quoteBlueskyPostUseCase: options.blueskyQuoteClient === undefined
+            ? undefined
+            : QuoteBlueskyPostUseCase.create({
+              client: options.blueskyQuoteClient,
+              query: options.blueskyQuoteClient.query,
+              now: Instant.now,
+            }),
+          markBlueskyNotificationsSeenUseCase: options.blueskySeenClient === undefined
+            ? undefined
+            : MarkBlueskyNotificationsSeenUseCase.create({
+              client: options.blueskySeenClient,
+              now: options.blueskyNow ?? Instant.now,
+            }),
+          blueskySearch: options.blueskySearch,
+          blueskyChat: options.blueskyChat === undefined
+            ? undefined
+            : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );
@@ -687,6 +832,33 @@ export const setupReadApi = (
             userResolver,
             pushSubscriptionCreatedStore: createD1PushSubscriptionCreatedStore(db),
             pushSubscriptionResolverByEndpoint: createD1PushSubscriptionResolverByEndpoint(db),
+          }),
+          fetchRemoteContextUseCase: FetchRemoteContextUseCase.create({
+            origin: ORIGIN,
+            userResolver,
+            postResolver,
+            remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+            localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, ORIGIN),
+            remotePostUpserter,
+            blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+            fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase.create({
+              origin: ORIGIN,
+              postResolverByUri: createD1PostResolverByUri(db),
+              localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
+              remotePostUpserter,
+              isBlockedUri: () => false,
+            }),
+            isBlockedUri: () => false,
+          }),
+          fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase.create({
+            origin: ORIGIN,
+            userResolver,
+            actorResolverById: createD1ActorResolverById(db),
+            remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+            localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, ORIGIN),
+            remotePostUpserter,
+            blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+            isBlockedUri: () => false,
           }),
           allRelaysResolver: createD1AllRelaysResolver(db),
           createContext,

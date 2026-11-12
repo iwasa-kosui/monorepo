@@ -1,4 +1,5 @@
 import type { RequestContext } from '@fedify/fedify';
+import { Note } from '@fedify/vocab';
 import { Result } from '@iwasa-kosui/result';
 import { type Context, Hono } from 'hono';
 
@@ -6,6 +7,7 @@ import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
 import { MediaId } from '../../domain/mediaUpload/mediaId.ts';
 import type { MediaUpload, MediaUploadResolver } from '../../domain/mediaUpload/mediaUpload.ts';
+import type { MutedActorIdsResolverByUserId } from '../../domain/mute/mute.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 import {
@@ -17,9 +19,12 @@ import {
 import { PostContent } from '../../domain/post/postContent.ts';
 import { PostDestination } from '../../domain/post/postDestination.ts';
 import { PostId } from '../../domain/post/postId.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import type { RepostResolver, RepostResolverById } from '../../domain/repost/repost.ts';
 import { RepostId } from '../../domain/repost/repostId.ts';
+import type { UserResolver } from '../../domain/user/user.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import { BLUESKY_STATUS_ID_PREFIX } from '../../helper/blueskyUrl.ts';
 import type { CreatePostUseCase } from '../../useCase/createPost.ts';
 import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
 import { resolveOwnedMediaUpload } from '../../useCase/getMediaUpload.ts';
@@ -28,6 +33,7 @@ import type { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import type { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import type { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
+import type { RemoteActorLookup } from '../fedify/remoteActorLookup.ts';
 import type { Status } from '../mastodon/entities.ts';
 import { MAX_STATUS_CHARACTERS } from '../mastodon/instance.ts';
 import {
@@ -39,6 +45,7 @@ import {
 import { htmlToPlainText } from '../text/htmlToPlainText.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { resolveViewer } from './helper/mastodonViewer.ts';
+import { noMentions, resolveMentions } from './helper/mentionResolution.ts';
 import { bodyBoolean, bodyString, bodyStringList, readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import {
   getMastodonPrincipal,
@@ -49,11 +56,14 @@ import {
 
 export type WorkerMastodonStatusesRouterDeps = Readonly<{
   authn: MastodonAuthn;
+  userResolver: UserResolver;
+  remoteActorLookup: RemoteActorLookup;
   actorResolverByUserId: ActorResolverByUserId;
   postsWithAuthorResolverByPostIds: PostsWithAuthorResolverByPostIds;
   repostResolverById: RepostResolverById;
   repostResolver: RepostResolver;
   threadResolver: ThreadResolver;
+  mutedActorIdsResolverByUserId: MutedActorIdsResolverByUserId;
   statusAssembler: StatusAssembler;
   mediaUploadResolver: MediaUploadResolver;
   createPostUseCase: CreatePostUseCase;
@@ -78,12 +88,24 @@ const MAX_MEDIA_ATTACHMENTS = 4;
 
 const validationFailed = (message: string) => ({ error: `Validation failed: ${message}` });
 
+const quoteNotAllowed = validationFailed('Quote not allowed');
+
 const isOmitted = (value: unknown): boolean => value === undefined || value === null;
+
+type PostableVisibility = Exclude<Visibility, 'direct'>;
+
+const isPostableVisibility = (value: unknown): value is PostableVisibility =>
+  value === 'public' || value === 'unlisted' || value === 'private';
+
+const postVisibility = (body: RequestBody): PostableVisibility => {
+  const visibility = body['visibility'];
+  return isPostableVisibility(visibility) ? visibility : 'public';
+};
 
 const validateStatusParams = (body: RequestBody): string | undefined => {
   const visibility = body['visibility'];
-  if (!isOmitted(visibility) && visibility !== 'public') {
-    return 'Only public visibility is supported';
+  if (!isOmitted(visibility) && !isPostableVisibility(visibility)) {
+    return 'Visibility must be public, unlisted or private (direct is not supported)';
   }
   const spoilerText = body['spoiler_text'];
   if (!isOmitted(spoilerText) && typeof spoilerText !== 'string') {
@@ -140,11 +162,14 @@ const failed = (c: Context, err: Readonly<{ type: string }>): Response => {
 
 export const createWorkerMastodonStatusesRouter = ({
   authn,
+  userResolver,
+  remoteActorLookup,
   actorResolverByUserId,
   postsWithAuthorResolverByPostIds,
   repostResolverById,
   repostResolver,
   threadResolver,
+  mutedActorIdsResolverByUserId,
   statusAssembler,
   mediaUploadResolver,
   createPostUseCase,
@@ -325,18 +350,58 @@ export const createWorkerMastodonStatusesRouter = ({
           return c.json(recordNotFound, 404);
         }
       }
-      const content = body['content_type'] === 'text/markdown'
-        ? await PostContent.fromMarkdown(text)
-        : plainTextToHtml(text);
+      const ctx = createContext(c.req.raw);
+      const rawQuote = body['quoted_status_id'];
+      let quoteUri: string | undefined;
+      if (!isOmitted(rawQuote) && rawQuote !== '') {
+        if (typeof rawQuote === 'string' && rawQuote.startsWith(BLUESKY_STATUS_ID_PREFIX)) {
+          return c.json(quoteNotAllowed, 422);
+        }
+        const quotedId = PostId.parse(rawQuote);
+        const quoted = quotedId.ok ? await resolvePost(quotedId.val, viewer.val.id) : undefined;
+        if (quoted === undefined) {
+          return c.json(recordNotFound, 404);
+        }
+        if (!Post.isVisibleToAnonymous(quoted)) {
+          return c.json(quoteNotAllowed, 422);
+        }
+        const mutedOrBlocked = await mutedActorIdsResolverByUserId.resolve(userId);
+        if (!mutedOrBlocked.ok) {
+          return c.json(internalServerError, 500);
+        }
+        if (mutedOrBlocked.val.includes(quoted.actorId)) {
+          return c.json(quoteNotAllowed, 422);
+        }
+        quoteUri = quoted.type === 'remote'
+          ? quoted.uri
+          : ctx.getObjectUri(Note, { identifier: quoted.username, id: quoted.postId }).href;
+      }
+      const format = body['content_type'] === 'text/markdown' ? 'markdown' : 'plain';
+      const user = await userResolver.resolve(userId);
+      const mentions = user.ok && user.val !== undefined
+        ? await resolveMentions({
+          lookup: remoteActorLookup,
+          text,
+          format,
+          identifier: user.val.username,
+          request: c.req.raw,
+        })
+        : noMentions;
+      const content = format === 'markdown'
+        ? await PostContent.fromMarkdown(text, mentions.links)
+        : plainTextToHtml(text, mentions.links);
       const summary = spoilerSummary(body);
       const input = {
         userId,
         content,
+        mentions: mentions.recipients,
         summary,
         sensitive: bodyBoolean(body, 'sensitive') || summary !== null,
+        visibility: postVisibility(body),
         images: medias.map((media) => ({ url: media.url, altText: media.description })),
         crosspostToBluesky: sendsToBluesky(body),
-        ctx: createContext(c.req.raw),
+        ...(quoteUri === undefined ? {} : { quoteUri }),
+        ctx,
       };
       const created = replyTo === undefined
         ? await createPostUseCase.run(input)
@@ -503,8 +568,17 @@ export const createWorkerMastodonStatusesRouter = ({
       if (currentPost === null || (viewerActorId === undefined && !Post.isVisibleToAnonymous(currentPost))) {
         return c.json(recordNotFound, 404);
       }
+      const userId = principal?.userId;
+      const hidden = userId === null || userId === undefined
+        ? undefined
+        : await mutedActorIdsResolverByUserId.resolve(userId);
+      if (hidden !== undefined && !hidden.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const hiddenActorIds = new Set<ActorId>(hidden?.val ?? []);
       const visible = (posts: ReadonlyArray<PostWithAuthor>): PostWithAuthor[] =>
-        viewerActorId === undefined ? posts.filter(Post.isVisibleToAnonymous) : [...posts];
+        (viewerActorId === undefined ? posts.filter(Post.isVisibleToAnonymous) : [...posts])
+          .filter((post) => !hiddenActorIds.has(post.actorId));
       const ancestors = visible(thread.val.ancestors);
       const descendants = visible(thread.val.descendants);
       const statuses = await statusAssembler.assemble({

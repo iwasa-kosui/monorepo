@@ -3,6 +3,7 @@ import { render } from 'hono/jsx/dom';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { blueskyProfileUrlOfActor } from '../../helper/blueskyUrl.ts';
+import { openBlueskyChatConvo } from '../api/blueskyChatClient.ts';
 import {
   blockBlueskyActor,
   blueskyModerationFailureMessage,
@@ -23,10 +24,16 @@ import {
   followBlueskyActor,
   unfollowBlueskyActor,
 } from '../api/blueskyProfileClient.ts';
+import { blueskyItemActionProps, type BlueskyPostActions } from '../components/blueskyPostActions.ts';
+import { BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { type ReportCategory, ReportModal } from '../components/ReportModal.tsx';
 import { appendUniqueBy } from '../hooks/appendUnique.ts';
+import { chatConvoPath, chatErrorMessageOf } from '../hooks/blueskyChat.ts';
+import type { BlueskyItemsUpdater } from '../hooks/optimisticBlueskyLike.ts';
+import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import { withFeedItems } from './blueskyProfileFeed.ts';
 
 export type BlueskyModerationView = Readonly<{ muted: boolean; blockUri: string | null }>;
 
@@ -40,6 +47,8 @@ type Props = Readonly<{
   moderation: BlueskyModerationView | null;
   isTogglingMute: boolean;
   isTogglingBlock: boolean;
+  isOpeningMessage: boolean;
+  messageError: string | null;
   onFollow: () => Promise<void>;
   onUnfollow: () => Promise<void>;
   onMute: () => Promise<void>;
@@ -47,6 +56,8 @@ type Props = Readonly<{
   onBlock: () => Promise<void>;
   onUnblock: () => Promise<void>;
   onReport: () => void;
+  onMessage: () => Promise<void>;
+  actions?: BlueskyPostActions;
 }>;
 
 type ModerationButtonProps = Readonly<{
@@ -98,6 +109,8 @@ export const BlueskyProfilePage = (
     moderation,
     isTogglingMute,
     isTogglingBlock,
+    isOpeningMessage,
+    messageError,
     onFollow,
     onUnfollow,
     onMute,
@@ -105,6 +118,8 @@ export const BlueskyProfilePage = (
     onBlock,
     onUnblock,
     onReport,
+    onMessage,
+    actions,
   }: Props,
 ) => {
   const displayName = profile.displayName ?? profile.handle;
@@ -232,6 +247,31 @@ export const BlueskyProfilePage = (
                 />
               </>
             )}
+            {!profile.isSelf && (
+              <button
+                type='button'
+                onClick={onMessage}
+                disabled={isOpeningMessage}
+                class='flex items-center justify-center gap-1 p-2 rounded-xl text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                title='メッセージ'
+              >
+                <svg
+                  xmlns='http://www.w3.org/2000/svg'
+                  class='h-5 w-5'
+                  fill='none'
+                  viewBox='0 0 24 24'
+                  stroke='currentColor'
+                  stroke-width='2'
+                >
+                  <path
+                    stroke-linecap='round'
+                    stroke-linejoin='round'
+                    d='M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
+                  />
+                </svg>
+                メッセージ
+              </button>
+            )}
             {profileUrl !== undefined && (
               <a
                 href={profileUrl}
@@ -257,6 +297,9 @@ export const BlueskyProfilePage = (
               </a>
             )}
           </div>
+          {messageError !== null && (
+            <p role='alert' class='mt-3 text-sm text-red-600 dark:text-red-400'>{messageError}</p>
+          )}
         </div>
       </section>
 
@@ -268,7 +311,9 @@ export const BlueskyProfilePage = (
           ? <p class='text-charcoal-light dark:text-gray-400'>{feedNotice}</p>
           : items.length === 0
           ? <p class='text-charcoal-light dark:text-gray-400'>No posts yet.</p>
-          : items.map((item) => <BlueskyTimelineItemView key={item.feedItemId} item={item} />)}
+          : items.map((item) => (
+            <BlueskyTimelineItemView key={item.feedItemId} item={item} {...blueskyItemActionProps(actions, item)} />
+          ))}
       </section>
     </>
   );
@@ -290,6 +335,7 @@ type FeedData = Readonly<{
 const App = () => {
   const isFetchingMoreRef = useRef(false);
   const isTogglingFollowRef = useRef(false);
+  const isOpeningMessageRef = useRef(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
   const isTogglingMuteRef = useRef(false);
   const [isTogglingMute, setIsTogglingMute] = useState(false);
@@ -299,9 +345,15 @@ const App = () => {
   const [isReporting, setIsReporting] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportError, setReportError] = useState<string | undefined>(undefined);
+  const [isOpeningMessage, setIsOpeningMessage] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
   const [data, setData] = useState<{ error: string } | ProfileData | null>(null);
   const [feed, setFeed] = useState<FeedData | null>(null);
   const actor = blueskyActorOfPath(window.location.pathname);
+  const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
+    setFeed((prev) => withFeedItems(prev, updater));
+  }, []);
+  const { actions, replyDialog } = useBlueskyUriActions(updateItems);
 
   useEffect(() => {
     if (actor === undefined) {
@@ -457,6 +509,22 @@ const App = () => {
     }
   };
 
+  const openMessage = async () => {
+    if (loaded === undefined || isOpeningMessageRef.current) return;
+    isOpeningMessageRef.current = true;
+    setIsOpeningMessage(true);
+    setMessageError(null);
+    try {
+      const { convoId } = await openBlueskyChatConvo(loaded.profile.did);
+      window.location.href = chatConvoPath(convoId);
+    } catch (error) {
+      console.error('Failed to open the Bluesky conversation:', error);
+      setMessageError(chatErrorMessageOf(error));
+      isOpeningMessageRef.current = false;
+      setIsOpeningMessage(false);
+    }
+  };
+
   if (data === null) {
     return <div class='text-charcoal-light dark:text-gray-400'>Loading...</div>;
   }
@@ -477,6 +545,8 @@ const App = () => {
         moderation={data.moderation}
         isTogglingMute={isTogglingMute}
         isTogglingBlock={isTogglingBlock}
+        isOpeningMessage={isOpeningMessage}
+        messageError={messageError}
         onFollow={() => toggleFollow(true)}
         onUnfollow={() => toggleFollow(false)}
         onMute={() => toggleMute(true)}
@@ -484,7 +554,10 @@ const App = () => {
         onBlock={() => toggleBlock(true)}
         onUnblock={() => toggleBlock(false)}
         onReport={() => setIsReportOpen(true)}
+        onMessage={openMessage}
+        actions={actions}
       />
+      <BlueskyReplyModal dialog={replyDialog} />
       <ReportModal
         targetLabel={`@${data.profile.handle}`}
         isOpen={isReportOpen}

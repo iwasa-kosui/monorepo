@@ -88,7 +88,9 @@ export const dryRunSql = () =>
     IN_TARGETS('likedPostId')
   }) + (SELECT COUNT(*) FROM notification_emoji_reacts WHERE ${
     IN_TARGETS('reactedPostId')
-  }) + (SELECT COUNT(*) FROM notification_replies WHERE ${REPLY_TARGET}) + (SELECT COUNT(*) FROM notification_reposts WHERE ${
+  }) + (SELECT COUNT(*) FROM notification_replies WHERE ${REPLY_TARGET}) + (SELECT COUNT(*) FROM notification_mentions WHERE ${
+    IN_TARGETS('mentionPostId')
+  }) + (SELECT COUNT(*) FROM notification_reposts WHERE ${
     IN_TARGETS('repostedPostId')
   })) AS notifications, (SELECT COUNT(*) FROM notifications WHERE ${
     ORPHAN_NOTIFICATION({ type: 'repost', table: 'notification_reposts' })
@@ -141,9 +143,18 @@ export const applySql = ({ now }) => [
     where: `(${IN_TARGETS('nr.replyPostId')} OR ${IN_TARGETS('nr.originalPostId')})`,
     now,
   }),
+  notificationEvents({
+    table: 'notification_mentions',
+    alias: 'nm',
+    eventName: 'notification.mentionNotificationDeleted',
+    keys: ['notificationId', 'mentionerActorId', 'mentionPostId'],
+    where: IN_TARGETS('nm.mentionPostId'),
+    now,
+  }),
   `DELETE FROM notification_likes WHERE ${IN_TARGETS('likedPostId')}`,
   `DELETE FROM notification_emoji_reacts WHERE ${IN_TARGETS('reactedPostId')}`,
   `DELETE FROM notification_replies WHERE ${REPLY_TARGET}`,
+  `DELETE FROM notification_mentions WHERE ${IN_TARGETS('mentionPostId')}`,
   `DELETE FROM notification_reposts WHERE ${IN_TARGETS('repostedPostId')}`,
   `DELETE FROM notifications WHERE ${
     [
@@ -161,6 +172,11 @@ export const applySql = ({ now }) => [
         type: 'reply',
         table: 'notification_replies',
         eventName: 'notification.replyNotificationDeleted',
+      }),
+      ORPHAN_NOTIFICATION({
+        type: 'mention',
+        table: 'notification_mentions',
+        eventName: 'notification.mentionNotificationDeleted',
       }),
       ORPHAN_NOTIFICATION({ type: 'repost', table: 'notification_reposts' }),
     ].join(' OR ')
@@ -217,6 +233,7 @@ export const applySql = ({ now }) => [
   }),
   `DELETE FROM federated_timeline_items WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM post_images WHERE ${IN_TARGETS('postId')}`,
+  `DELETE FROM post_quotes WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM local_posts WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM remote_post_recipients WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM remote_posts WHERE ${IN_TARGETS('postId')}`,

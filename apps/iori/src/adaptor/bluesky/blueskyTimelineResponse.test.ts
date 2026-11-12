@@ -243,6 +243,7 @@ describe('parseBlueskyTimelineResponse', () => {
       playlist: 'https://video.example/playlist.m3u8',
       thumbnail: 'https://video.example/thumb.jpg',
       aspectRatio: { width: 16, height: 9 },
+      alt: '走る猫',
     };
 
     it('images を thumb・fullsize・alt に整える（alt が無ければ空文字）', () => {
@@ -272,19 +273,116 @@ describe('parseBlueskyTimelineResponse', () => {
       });
     });
 
-    it('record（引用）を uri・handle・本文だけにする', () => {
-      expect(embedOf({ $type: 'app.bsky.embed.record#view', record: viewRecord })).toEqual({
+    it('record（引用）を uri・handle・本文と、投稿者の項目にする', () => {
+      expect(embedOf({
+        $type: 'app.bsky.embed.record#view',
+        record: {
+          ...viewRecord,
+          author: { ...viewRecord.author, avatar: 'https://cdn.example/q.jpg' },
+        },
+      })).toEqual({
         type: 'record',
         uri: 'at://did:plc:q/app.bsky.feed.post/3kq',
         authorHandle: 'quote.bsky.social',
         text: '引用された投稿',
+        authorDisplayName: 'Q',
+        authorAvatar: 'https://cdn.example/q.jpg',
       });
     });
 
-    it('引用先が削除済み・ブロック済みなら embed を持たない', () => {
+    it('record の項目が足りなければ、読めた項目だけにする', () => {
       expect(embedOf({
         $type: 'app.bsky.embed.record#view',
-        record: { $type: 'app.bsky.embed.record#viewNotFound', uri: viewRecord.uri, notFound: true },
+        record: {
+          uri: viewRecord.uri,
+          author: { handle: 'quote.bsky.social', displayName: '', avatar: 'javascript:alert(1)' },
+          value: { text: '本文' },
+        },
+      })).toEqual({
+        type: 'record',
+        uri: viewRecord.uri,
+        authorHandle: 'quote.bsky.social',
+        text: '本文',
+      });
+    });
+
+    it('引用先の embeds[0] が images・external・video なら media に取り出す', () => {
+      const mediaOfQuote = (quoteEmbed: unknown) =>
+        embedOf({ $type: 'app.bsky.embed.record#view', record: { ...viewRecord, embeds: [quoteEmbed] } }) as {
+          media?: unknown;
+        };
+
+      expect(mediaOfQuote(imagesView).media).toEqual({
+        type: 'images',
+        images: [
+          { thumb: 'https://cdn.example/t1.jpg', fullsize: 'https://cdn.example/f1.jpg', alt: '猫' },
+          { thumb: 'https://cdn.example/t2.jpg', fullsize: 'https://cdn.example/f2.jpg', alt: '' },
+        ],
+      });
+      expect(mediaOfQuote(externalView).media).toMatchObject({ type: 'external', uri: 'https://example.com/article' });
+      expect(mediaOfQuote(videoView).media).toMatchObject({
+        type: 'video',
+        playlist: 'https://video.example/playlist.m3u8',
+      });
+    });
+
+    it('引用先の中の引用や読めない media は持たず、引用は残す', () => {
+      const quoteWith = (quoteEmbed: unknown) =>
+        embedOf({ $type: 'app.bsky.embed.record#view', record: { ...viewRecord, embeds: [quoteEmbed] } });
+      const nested = quoteWith({
+        $type: 'app.bsky.embed.record#view',
+        record: { ...viewRecord, uri: 'at://did:plc:n/app.bsky.feed.post/3kn' },
+      });
+      const broken = quoteWith({
+        ...imagesView,
+        images: [{ thumb: 'data:text/html,x', fullsize: 'https://a.example/f.jpg' }],
+      });
+
+      expect(nested).toMatchObject({ type: 'record', uri: viewRecord.uri });
+      expect(nested).not.toHaveProperty('media', expect.anything());
+      expect(broken).toMatchObject({ type: 'record', uri: viewRecord.uri });
+      expect(broken).not.toHaveProperty('media', expect.anything());
+    });
+
+    it('引用先の embeds[0] が recordWithMedia なら、その media を取り出し、入れ子の引用は持たない', () => {
+      const quote = embedOf({
+        $type: 'app.bsky.embed.record#view',
+        record: {
+          ...viewRecord,
+          embeds: [{
+            $type: 'app.bsky.embed.recordWithMedia#view',
+            record: {
+              $type: 'app.bsky.embed.record#view',
+              record: { ...viewRecord, uri: 'at://did:plc:n/app.bsky.feed.post/3kn' },
+            },
+            media: imagesView,
+          }],
+        },
+      });
+
+      expect(quote).toMatchObject({ type: 'record', uri: viewRecord.uri, media: { type: 'images' } });
+      expect(quote).not.toHaveProperty('record');
+    });
+
+    it.each([
+      ['app.bsky.embed.record#viewNotFound', 'notFound'],
+      ['app.bsky.embed.record#viewBlocked', 'blocked'],
+      ['app.bsky.embed.record#viewDetached', 'detached'],
+    ])('引用先が %s なら recordUnavailable（%s）にする', (viewType, reason) => {
+      expect(embedOf({
+        $type: 'app.bsky.embed.record#view',
+        record: { $type: viewType, uri: viewRecord.uri },
+      })).toEqual({ type: 'recordUnavailable', uri: viewRecord.uri, reason });
+    });
+
+    it('引用先の $type が未知、または uri が無ければ embed を持たない', () => {
+      expect(embedOf({
+        $type: 'app.bsky.embed.record#view',
+        record: { $type: 'app.bsky.feed.defs#generatorView', uri: viewRecord.uri },
+      })).toBeNull();
+      expect(embedOf({
+        $type: 'app.bsky.embed.record#view',
+        record: { $type: 'app.bsky.embed.record#viewNotFound' },
       })).toBeNull();
     });
 
@@ -300,7 +398,29 @@ describe('parseBlueskyTimelineResponse', () => {
       });
     });
 
-    it('recordWithMedia の引用先が読めなければ media だけ残す', () => {
+    it.each([
+      ['app.bsky.embed.record#viewNotFound', 'notFound'],
+      ['app.bsky.embed.record#viewBlocked', 'blocked'],
+      ['app.bsky.embed.record#viewDetached', 'detached'],
+    ])('recordWithMedia の引用先が %s なら、media と recordUnavailable（%s）を持つ', (viewType, reason) => {
+      expect(embedOf({
+        $type: 'app.bsky.embed.recordWithMedia#view',
+        record: { $type: 'app.bsky.embed.record#view', record: { $type: viewType, uri: viewRecord.uri } },
+        media: externalView,
+      })).toEqual({
+        type: 'recordWithMedia',
+        media: {
+          type: 'external',
+          uri: 'https://example.com/article',
+          title: '記事',
+          description: '説明',
+          thumb: 'https://cdn.example/card.jpg',
+        },
+        record: { type: 'recordUnavailable', uri: viewRecord.uri, reason },
+      });
+    });
+
+    it('recordWithMedia の引用先が uri も無く読めなければ media だけ残す', () => {
       expect(embedOf({
         $type: 'app.bsky.embed.recordWithMedia#view',
         record: { $type: 'app.bsky.embed.record#view', record: { $type: 'app.bsky.embed.record#viewBlocked' } },
@@ -308,11 +428,44 @@ describe('parseBlueskyTimelineResponse', () => {
       })).toMatchObject({ type: 'external' });
     });
 
-    it('video を thumbnail と playlist の URL だけにする', () => {
+    it('video を thumbnail・playlist・aspectRatio・alt に整える', () => {
       expect(embedOf(videoView)).toEqual({
         type: 'video',
         thumbnail: 'https://video.example/thumb.jpg',
         playlist: 'https://video.example/playlist.m3u8',
+        aspectRatio: { width: 16, height: 9 },
+        alt: '走る猫',
+      });
+    });
+
+    it('video の aspectRatio と alt が無い・不正・空なら null にする', () => {
+      const bare = { $type: videoView.$type, playlist: videoView.playlist };
+      expect(embedOf(bare)).toEqual({
+        type: 'video',
+        thumbnail: null,
+        playlist: 'https://video.example/playlist.m3u8',
+        aspectRatio: null,
+        alt: null,
+      });
+      expect(embedOf({ ...videoView, aspectRatio: { width: 0, height: 9 }, alt: '' })).toMatchObject({
+        thumbnail: 'https://video.example/thumb.jpg',
+        aspectRatio: null,
+        alt: null,
+      });
+      expect(embedOf({ ...videoView, aspectRatio: { width: 1.5, height: 9 }, alt: 3 })).toMatchObject({
+        aspectRatio: null,
+        alt: null,
+      });
+    });
+
+    it('recordWithMedia の media の video も aspectRatio と alt を持つ', () => {
+      expect(embedOf({
+        $type: 'app.bsky.embed.recordWithMedia#view',
+        record: { $type: 'app.bsky.embed.record#view', record: viewRecord },
+        media: videoView,
+      })).toMatchObject({
+        type: 'recordWithMedia',
+        media: { type: 'video', aspectRatio: { width: 16, height: 9 }, alt: '走る猫' },
       });
     });
 

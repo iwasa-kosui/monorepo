@@ -1,3 +1,4 @@
+import { AcceptBlockUseCase } from '../../../useCase/acceptBlock.ts';
 import { AcceptFollowRequestUseCase } from '../../../useCase/acceptFollowRequest.ts';
 import { AcceptRelaySubscriptionUseCase } from '../../../useCase/acceptRelaySubscription.ts';
 import { AcceptUnfollowUseCase } from '../../../useCase/acceptUnfollow.ts';
@@ -16,6 +17,8 @@ import { createD1LogoUriUpdatedStore } from '../../d1/actor/logoUriUpdatedStore.
 import { createD1RemoteActorCreatedStore } from '../../d1/actor/remoteActorCreatedStore.ts';
 import { createD1RemoteActorProfileUpdatedStore } from '../../d1/actor/remoteActorProfileUpdatedStore.ts';
 import { createD1ArticleResolver } from '../../d1/article/articleResolver.ts';
+import { createD1BlockedActorUriResolverByUsername } from '../../d1/block/blockedActorUriResolverByUsername.ts';
+import { createD1BlockResolver } from '../../d1/block/blockResolver.ts';
 import type { IoriD1Db } from '../../d1/client.ts';
 import { createD1EmojiReactCreatedStore } from '../../d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../../d1/emojiReact/emojiReactDeletedStore.ts';
@@ -46,6 +49,10 @@ import {
   createD1LikeNotificationCreatedStore,
   createD1LikeNotificationDeletedStore,
   createD1LikeNotificationsResolverByPostId,
+  createD1MentionNotificationCreatedStore,
+  createD1MentionNotificationDeletedStore,
+  createD1MentionNotificationResolverByRecipientAndMentionPostId,
+  createD1MentionNotificationsResolverByMentionPostId,
   createD1ReplyNotificationCreatedStore,
   createD1ReplyNotificationDeletedStore,
   createD1ReplyNotificationsResolverByOriginalPostId,
@@ -74,6 +81,7 @@ import { createD1TimelineItemsResolverByPostId } from '../../d1/timeline/timelin
 import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
 import { createOgpFetcher } from '../../ogp/ogpFetcher.ts';
 import { createCloudflareWebPushSender } from '../../webPush/cloudflareWebPushSender.ts';
+import { isBlockedUri } from '../blockedInboxDomain.ts';
 import { InboxActorResolver } from '../inboxActorResolver.ts';
 import { createInboxListener } from './inboxListenerFactory.ts';
 
@@ -115,6 +123,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
   const emojiReactResolverByActivityUri = createD1EmojiReactResolverByActivityUri(db);
   const emojiReactNotificationCreatedStore = createD1EmojiReactNotificationCreatedStore(db);
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
+  const blockResolver = createD1BlockResolver(db);
 
   const addReceivedEmojiReactUseCase = AddReceivedEmojiReactUseCase.create({
     emojiReactCreatedStore,
@@ -127,6 +136,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     actorResolverByUri,
     pushSubscriptionsResolver,
     webPushSender,
+    blockResolver,
   });
   const addReceivedLikeUseCase = AddReceivedLikeUseCase.create({
     remoteLikeCreatedStore: createD1RemoteLikeCreatedStore(db),
@@ -139,6 +149,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     actorResolverByUri,
     pushSubscriptionsResolver,
     webPushSender,
+    blockResolver,
   });
   const addReceivedRepostUseCase = AddReceivedRepostUseCase.create({
     repostCreatedStore: createD1RepostCreatedStore(db),
@@ -155,6 +166,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     timelineItemCreatedStore,
     pushSubscriptionsResolver,
     webPushSender,
+    blockResolver,
   });
 
   return createInboxListener({
@@ -178,6 +190,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     },
     onFollow: {
       inboxActorResolver,
+      blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
       acceptFollowRequestUseCase: AcceptFollowRequestUseCase.create({
         followedStore: createD1FollowAcceptedStore(db),
         followResolver: createD1FollowResolver(db),
@@ -190,6 +203,16 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         followNotificationCreatedStore: createD1FollowNotificationCreatedStore(db),
         pushSubscriptionsResolver,
         webPushSender,
+        blockResolver,
+      }),
+    },
+    onBlock: {
+      acceptBlockUseCase: AcceptBlockUseCase.create({
+        unfollowedStore: createD1UndoFollowingProcessedStore(db),
+        followResolver: createD1FollowResolver(db),
+        actorResolverByUri,
+        actorResolverByUserId,
+        userResolverByUsername: createD1UserResolverByUsername(db),
       }),
     },
     onUndo: {
@@ -239,8 +262,11 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         localPostResolverByUri,
         replyNotificationCreatedStore: createD1ReplyNotificationCreatedStore(db),
         replyNotificationsResolverByReplyPostId: createD1ReplyNotificationsResolverByReplyPostId(db),
+        mentionNotificationCreatedStore: createD1MentionNotificationCreatedStore(db),
+        mentionNotificationResolver: createD1MentionNotificationResolverByRecipientAndMentionPostId(db),
         pushSubscriptionsResolver,
         webPushSender,
+        blockResolver,
         linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
         linkPreviewsResolver: createD1LinkPreviewsResolverByPostId(db),
         ogpFetcher: createOgpFetcher(),
@@ -250,6 +276,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         postResolverByUri,
         localPostResolverByUri,
         remotePostUpserter,
+        isBlockedUri: (uri) => isBlockedUri(uri),
       }),
     },
     onDelete: {
@@ -260,6 +287,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
       emojiReactNotificationsResolverByPostId: createD1EmojiReactNotificationsResolverByPostId(db),
       replyNotificationsResolverByReplyPostId: createD1ReplyNotificationsResolverByReplyPostId(db),
       replyNotificationsResolverByOriginalPostId: createD1ReplyNotificationsResolverByOriginalPostId(db),
+      mentionNotificationsResolverByMentionPostId: createD1MentionNotificationsResolverByMentionPostId(db),
       repostsResolverByPostId: createD1RepostsResolverByPostId(db),
       likesResolverByPostId: createD1LikesResolverByPostId(db),
       emojiReactsResolverByPostId: createD1EmojiReactsResolverByPostId(db),
@@ -268,6 +296,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
       likeNotificationDeletedStore: createD1LikeNotificationDeletedStore(db),
       emojiReactNotificationDeletedStore: createD1EmojiReactNotificationDeletedStore(db),
       replyNotificationDeletedStore: createD1ReplyNotificationDeletedStore(db),
+      mentionNotificationDeletedStore: createD1MentionNotificationDeletedStore(db),
       repostDeletedStore: createD1RepostDeletedStore(db),
       localLikeDeletedStore: createD1LocalLikeDeletedStore(db),
       remoteLikeDeletedStore: createD1RemoteLikeDeletedStore(db),

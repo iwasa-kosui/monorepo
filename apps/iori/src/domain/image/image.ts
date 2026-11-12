@@ -11,6 +11,7 @@ const postImageZodType = z.object({
   postId: PostId.zodType,
   url: z.string(),
   altText: z.string().nullable(),
+  mediaType: z.string().nullable().default(null),
   createdAt: Instant.zodType,
 });
 

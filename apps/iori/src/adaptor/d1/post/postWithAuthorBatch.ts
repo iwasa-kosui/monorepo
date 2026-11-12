@@ -12,6 +12,7 @@ import {
   RemotePost,
 } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
+import { Visibility } from '../../../domain/post/visibility.ts';
 import { Username } from '../../../domain/user/username.ts';
 import type { IoriD1Db } from '../client.ts';
 import { idsJson } from '../idsJson.ts';
@@ -111,10 +112,11 @@ export const enrichPostRows = async (
       logoUri: row.actors.logoUri ?? undefined,
       liked: likedPostIds.has(postId),
       reposted: repostedPostIds.has(postId),
-      images: (imagesByPostId.get(postId) ?? []).map(({ imageId, url, altText }) => ({
+      images: (imagesByPostId.get(postId) ?? []).map(({ imageId, url, altText, mediaType }) => ({
         imageId: ImageId.orThrow(imageId),
         url,
         altText,
+        mediaType,
       })),
       likeCount: likeCountByPostId.get(postId) ?? 0,
       repostCount: repostCountByPostId.get(postId) ?? 0,
@@ -137,6 +139,7 @@ export const enrichPostRows = async (
         ...LocalPost.orThrow({
           ...row.posts,
           ...row.local_posts,
+          visibility: Visibility.parseOrThrow(row.local_posts.visibility),
           type: 'local',
           createdAt: row.posts.createdAt.getTime(),
         }),

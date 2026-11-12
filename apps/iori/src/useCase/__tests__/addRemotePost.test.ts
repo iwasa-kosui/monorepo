@@ -3,6 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ActorId } from '../../domain/actor/actorId.ts';
+import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { RemoteActor } from '../../domain/actor/remoteActor.ts';
 import type { ImageId } from '../../domain/image/imageId.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
@@ -28,6 +29,8 @@ import {
   createMockLinkPreviewsResolver,
   createMockLocalPostResolverByUri,
   createMockLogoUriUpdatedStore,
+  createMockMentionNotificationCreatedStore,
+  createMockMentionNotificationResolver,
   createMockOgpFetcher,
   createMockPostCreatedStore,
   createMockPostImageCreatedStore,
@@ -56,6 +59,8 @@ describe('AddRemotePostUseCase', () => {
     const localPostResolverByUri = createMockLocalPostResolverByUri();
     const replyNotificationCreatedStore = createMockReplyNotificationCreatedStore();
     const replyNotificationsResolverByReplyPostId = createMockReplyNotificationsResolverByReplyPostId();
+    const mentionNotificationCreatedStore = createMockMentionNotificationCreatedStore();
+    const mentionNotificationResolver = createMockMentionNotificationResolver(mentionNotificationCreatedStore);
     const pushSubscriptionsResolver = createMockPushSubscriptionsResolverByUserId();
     const webPushSender = createMockWebPushSender();
     const linkPreviewCreatedStore = createMockLinkPreviewCreatedStore();
@@ -75,6 +80,8 @@ describe('AddRemotePostUseCase', () => {
       localPostResolverByUri,
       replyNotificationCreatedStore,
       replyNotificationsResolverByReplyPostId,
+      mentionNotificationCreatedStore,
+      mentionNotificationResolver,
       pushSubscriptionsResolver,
       webPushSender,
       linkPreviewCreatedStore,
@@ -159,6 +166,51 @@ describe('AddRemotePostUseCase', () => {
       );
     });
 
+    it('受信した引用先の URI を投稿の作成イベントに渡す', async () => {
+      const deps = createDeps();
+
+      const useCase = AddRemotePostUseCase.create(deps);
+
+      await useCase.run({
+        content: 'Quote',
+        uri: 'https://remote.example.com/posts/quote',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'public',
+        quoteUri: 'https://remote.example.com/posts/quoted',
+        attachments: [],
+      });
+
+      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventPayload: expect.objectContaining({ quoteUri: 'https://remote.example.com/posts/quoted' }),
+        }),
+      );
+    });
+
+    it('引用先の URI が無ければ投稿の作成イベントに null を渡す', async () => {
+      const deps = createDeps();
+
+      const useCase = AddRemotePostUseCase.create(deps);
+
+      await useCase.run({
+        content: 'Plain',
+        uri: 'https://remote.example.com/posts/plain',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'public',
+        attachments: [],
+      });
+
+      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({ eventPayload: expect.objectContaining({ quoteUri: null }) }),
+      );
+    });
+
     it('画像付きリモート投稿を追加できる', async () => {
       const deps = createDeps();
 
@@ -175,8 +227,8 @@ describe('AddRemotePostUseCase', () => {
         },
         visibility: null,
         attachments: [
-          { url: 'https://remote.example.com/image1.png', altText: 'Image 1' },
-          { url: 'https://remote.example.com/image2.png', altText: null },
+          { url: 'https://remote.example.com/image1.png', altText: 'Image 1', mediaType: null },
+          { url: 'https://remote.example.com/image2.png', altText: null, mediaType: null },
         ],
       });
 
@@ -196,6 +248,7 @@ describe('AddRemotePostUseCase', () => {
       const attachments = Array.from({ length: attachmentCount }, (_, i) => ({
         url: `https://remote.example.com/image${i}.png`,
         altText: `Image ${i}`,
+        mediaType: null,
       }));
 
       const useCase = AddRemotePostUseCase.create(deps);
@@ -304,7 +357,7 @@ describe('AddRemotePostUseCase', () => {
         },
         visibility: null,
         attachments: [
-          { url: 'https://remote.example.com/image.png', altText: 'Test image' },
+          { url: 'https://remote.example.com/image.png', altText: 'Test image', mediaType: null },
         ],
       });
 
@@ -365,7 +418,7 @@ describe('AddRemotePostUseCase', () => {
     const actorUri = 'https://remote.example.com/users/remote';
     const postUri = 'https://remote.example.com/posts/idempotent';
     const content = '<p>reply <a href="https://news.example.org/article">link</a></p>';
-    const attachments = [{ url: 'https://remote.example.com/image.png', altText: 'Image' }];
+    const attachments = [{ url: 'https://remote.example.com/image.png', altText: 'Image', mediaType: null }];
     const actor = {
       id: 'actor-remote' as ActorId,
       type: 'remote',
@@ -405,6 +458,7 @@ describe('AddRemotePostUseCase', () => {
       postId: existingPost.postId,
       url: attachments[0].url,
       altText: 'Image',
+      mediaType: null,
       createdAt: 0 as Instant,
     };
     const linkPreview = {
@@ -508,6 +562,36 @@ describe('AddRemotePostUseCase', () => {
 
       expect(result.ok && result.val.post.postId).toBe(existingPost.postId);
       expect(deps.postCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.replyNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('返信した相手を受信ユーザーがブロックしているとき、返信の通知も Web Push も作らない', async () => {
+      const deps = createIdempotencyDeps();
+      deps.postResolverByUri.setPost(existingPost);
+      deps.timelineItemsResolverByPostId.setItems(existingPost.postId, [timelineItem]);
+      deps.postImagesResolver.setImages(existingPost.postId, [image]);
+      deps.linkPreviewsResolver.setPreviews(existingPost.postId, [linkPreview]);
+      const blockResolver = { resolve: vi.fn(() => RA.ok({} as never)) };
+
+      const result = await AddRemotePostUseCase.create({ ...deps, blockResolver }).run(input);
+
+      expect(result.ok).toBe(true);
+      expect(blockResolver.resolve).toHaveBeenCalledWith({ userId: originalPost.userId, blockedActorId: actor.id });
+      expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
+    });
+
+    it('返信した相手をブロックしていないとき、これまでどおり返信の通知と Web Push を作る', async () => {
+      const deps = createIdempotencyDeps();
+      deps.postResolverByUri.setPost(existingPost);
+      deps.timelineItemsResolverByPostId.setItems(existingPost.postId, [timelineItem]);
+      deps.postImagesResolver.setImages(existingPost.postId, [image]);
+      deps.linkPreviewsResolver.setPreviews(existingPost.postId, [linkPreview]);
+      const blockResolver = { resolve: vi.fn(() => RA.ok(undefined)) };
+
+      await AddRemotePostUseCase.create({ ...deps, blockResolver }).run(input);
+
       expect(deps.replyNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
       expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
     });
@@ -639,6 +723,277 @@ describe('AddRemotePostUseCase', () => {
       expect(deps.linkPreviewCreatedStore.store).toHaveBeenCalledTimes(1);
       expect(deps.replyNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
       expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('メンションの通知', () => {
+    const remoteUri = 'https://remote.example.com/users/remote';
+    const remoteActor = {
+      id: 'actor-remote' as ActorId,
+      type: 'remote',
+      uri: remoteUri,
+      inboxUrl: 'https://remote.example.com/inbox',
+      username: 'remote',
+    } as RemoteActor;
+    const localActor = {
+      id: 'actor-local' as ActorId,
+      type: 'local',
+      uri: 'https://iori.test/users/kosui',
+      inboxUrl: 'https://iori.test/users/kosui/inbox',
+      userId: 'user-local' as UserId,
+    } as LocalActor;
+    const otherLocalActor = {
+      id: 'actor-other-local' as ActorId,
+      type: 'local',
+      uri: 'https://iori.test/users/other',
+      inboxUrl: 'https://iori.test/users/other/inbox',
+      userId: 'user-other-local' as UserId,
+    } as LocalActor;
+    const localPost = {
+      type: 'local',
+      postId: 'post-local' as PostId,
+      actorId: localActor.id,
+      content: 'mine',
+      createdAt: 0 as Instant,
+      userId: localActor.userId,
+      inReplyToUri: null,
+    } as LocalPost;
+    const localPostUri = 'https://iori.test/users/kosui/posts/post-local';
+    const existingPost = {
+      type: 'remote',
+      postId: 'post-mention' as PostId,
+      actorId: remoteActor.id,
+      content: 'hello',
+      createdAt: 0 as Instant,
+      uri: 'https://remote.example.com/posts/mention',
+      inReplyToUri: null,
+      visibility: null,
+    } as RemotePost;
+    const input = {
+      content: '<p>hello</p>',
+      uri: existingPost.uri,
+      actorIdentity: { uri: remoteUri, inboxUrl: remoteActor.inboxUrl, username: 'remote' },
+      attachments: [],
+      visibility: 'public' as const,
+      recipientActorUris: [localActor.uri],
+    };
+    const createMentionDeps = () => {
+      const deps = {
+        ...createDeps(),
+        pushSubscriptionsResolver: {
+          resolve: vi.fn(() => RA.ok([{ endpoint: 'https://push.example.com/1' }] as never)),
+        },
+      };
+      deps.actorResolverByUri.setActor(remoteActor);
+      deps.actorResolverByUri.setActor(localActor);
+      return deps;
+    };
+
+    it('返信ではないメンションで通知を作り、Web Push を送る', async () => {
+      const deps = createMentionDeps();
+
+      const result = await AddRemotePostUseCase.create(deps).run(input);
+
+      expect(result.ok).toBe(true);
+      expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.mentionNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.mentionNotificationCreatedStore.items[0]).toMatchObject({
+        eventName: 'notification.mentionNotificationCreated',
+        aggregateState: {
+          type: 'mention',
+          recipientUserId: localActor.userId,
+          isRead: false,
+          mentionerActorId: remoteActor.id,
+          mentionPostId: result.ok ? result.val.post.postId : undefined,
+        },
+      });
+      expect(deps.pushSubscriptionsResolver.resolve).toHaveBeenCalledWith(localActor.userId);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+      expect(deps.webPushSender.send).toHaveBeenCalledWith(
+        { endpoint: 'https://push.example.com/1' },
+        { title: 'New Mention', body: 'remote mentioned you', url: '/notifications' },
+      );
+    });
+
+    it('DM でも通知を作る', async () => {
+      const deps = createMentionDeps();
+
+      await AddRemotePostUseCase.create(deps).run({ ...input, visibility: 'direct' });
+
+      expect(deps.mentionNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('宛先の複数のローカルアクターそれぞれに通知を作る', async () => {
+      const deps = createMentionDeps();
+      deps.actorResolverByUri.setActor(otherLocalActor);
+
+      await AddRemotePostUseCase.create(deps).run({
+        ...input,
+        recipientActorUris: [localActor.uri, otherLocalActor.uri],
+      });
+
+      expect(deps.mentionNotificationCreatedStore.items.map((event) => event.aggregateState.recipientUserId))
+        .toEqual([localActor.userId, otherLocalActor.userId]);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(2);
+    });
+
+    it('メンションした相手を受信ユーザーがブロックしているとき、メンションの通知も Web Push も作らない', async () => {
+      const deps = createMentionDeps();
+      const blockResolver = { resolve: vi.fn(() => RA.ok({} as never)) };
+
+      const result = await AddRemotePostUseCase.create({ ...deps, blockResolver }).run(input);
+
+      expect(result.ok).toBe(true);
+      expect(blockResolver.resolve).toHaveBeenCalledWith({ userId: localActor.userId, blockedActorId: remoteActor.id });
+      expect(deps.mentionNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
+    });
+
+    it('宛先のうちブロックしていない別のローカルアクターには、メンションの通知を作る', async () => {
+      const deps = createMentionDeps();
+      deps.actorResolverByUri.setActor(otherLocalActor);
+      const blockResolver = {
+        resolve: vi.fn(({ userId }: { userId: UserId }) =>
+          RA.ok(userId === localActor.userId ? ({} as never) : undefined)
+        ),
+      };
+
+      await AddRemotePostUseCase.create({ ...deps, blockResolver }).run({
+        ...input,
+        recipientActorUris: [localActor.uri, otherLocalActor.uri],
+      });
+
+      expect(deps.mentionNotificationCreatedStore.items.map((event) => event.aggregateState.recipientUserId))
+        .toEqual([otherLocalActor.userId]);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('blockResolver を渡さないとき、これまでどおりメンションの通知を作る', async () => {
+      const deps = createMentionDeps();
+
+      await AddRemotePostUseCase.create(deps).run(input);
+
+      expect(deps.mentionNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('自分の投稿への返信と宛先の両方に当たるとき、返信の通知だけを1件作る', async () => {
+      const deps = createMentionDeps();
+      deps.localPostResolverByUri.setPost(localPostUri, localPost);
+
+      await AddRemotePostUseCase.create(deps).run({ ...input, inReplyToUri: localPostUri });
+
+      expect(deps.replyNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.mentionNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+      expect(deps.webPushSender.send).toHaveBeenCalledWith(
+        { endpoint: 'https://push.example.com/1' },
+        expect.objectContaining({ title: 'New Reply' }),
+      );
+    });
+
+    it('返信の通知が既にあるとき、同じ受信者のメンションの通知を作らない', async () => {
+      const deps = createMentionDeps();
+      deps.localPostResolverByUri.setPost(localPostUri, localPost);
+      deps.postResolverByUri.setPost(existingPost);
+      deps.replyNotificationsResolverByReplyPostId.setNotifications(existingPost.postId, [{
+        type: 'reply',
+        notificationId: 'notification-1' as NotificationId,
+        recipientUserId: localPost.userId,
+        isRead: false,
+        replierActorId: remoteActor.id,
+        replyPostId: existingPost.postId,
+        originalPostId: localPost.postId,
+      }]);
+
+      await AddRemotePostUseCase.create(deps).run({ ...input, inReplyToUri: localPostUri });
+
+      expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.mentionNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
+    });
+
+    it('自分の投稿への返信で、別のローカルアクターにも宛てたとき、その別のアクターにメンションの通知を作る', async () => {
+      const deps = createMentionDeps();
+      deps.actorResolverByUri.setActor(otherLocalActor);
+      deps.localPostResolverByUri.setPost(localPostUri, localPost);
+
+      await AddRemotePostUseCase.create(deps).run({
+        ...input,
+        inReplyToUri: localPostUri,
+        recipientActorUris: [localActor.uri, otherLocalActor.uri],
+      });
+
+      expect(deps.replyNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.mentionNotificationCreatedStore.items.map((event) => event.aggregateState.recipientUserId))
+        .toEqual([otherLocalActor.userId]);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(2);
+    });
+
+    it('同じ投稿を2回受け取っても、メンションの通知は1件だけ作る', async () => {
+      const deps = createMentionDeps();
+      deps.postResolverByUri.setPost(existingPost);
+      const useCase = AddRemotePostUseCase.create(deps);
+
+      await useCase.run(input);
+      await useCase.run(input);
+
+      expect(deps.mentionNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('投稿者が受信者自身のとき、通知を作らない', async () => {
+      const deps = createMentionDeps();
+
+      await AddRemotePostUseCase.create(deps).run({
+        ...input,
+        actorIdentity: { uri: localActor.uri, inboxUrl: localActor.inboxUrl },
+      });
+
+      expect(deps.mentionNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
+    });
+
+    it('ローカルアクターでない宛先と解決できない宛先を無視する', async () => {
+      const deps = createMentionDeps();
+      const otherRemote = {
+        id: 'actor-other-remote' as ActorId,
+        type: 'remote',
+        uri: 'https://other.example.com/users/other',
+        inboxUrl: 'https://other.example.com/inbox',
+      } as RemoteActor;
+      deps.actorResolverByUri.setActor(otherRemote);
+
+      await AddRemotePostUseCase.create(deps).run({
+        ...input,
+        recipientActorUris: [otherRemote.uri, 'https://iori.test/users/unknown'],
+      });
+
+      expect(deps.mentionNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
+    });
+
+    it('宛先が無いとき、通知を作らない', async () => {
+      const deps = createMentionDeps();
+
+      await AddRemotePostUseCase.create(deps).run({ ...input, recipientActorUris: undefined });
+
+      expect(deps.mentionNotificationCreatedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('メンション用の依存を渡さないとき、通知を作らずに投稿を追加できる', async () => {
+      const {
+        mentionNotificationCreatedStore: _store,
+        mentionNotificationResolver: _resolver,
+        ...deps
+      } = createMentionDeps();
+      deps.actorResolverByUri.setActor(localActor);
+
+      const result = await AddRemotePostUseCase.create(deps).run(input);
+
+      expect(result.ok).toBe(true);
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
     });
   });
 });

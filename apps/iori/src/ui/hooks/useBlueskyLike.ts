@@ -1,7 +1,16 @@
 import { useCallback, useRef, useState } from 'hono/jsx';
 
-import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import { blueskyFailureMessage, likeBlueskyPost, unlikeBlueskyPost } from '../api/mastodonClient.ts';
+import type {
+  IoriBlueskyLikeResponse,
+  IoriBlueskyTimelineItemBody,
+} from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
+import {
+  blueskyFailureMessage,
+  likeBlueskyPost,
+  likeBlueskyPostByUri,
+  unlikeBlueskyPost,
+  unlikeBlueskyPostByUri,
+} from '../api/mastodonClient.ts';
 import type { BlueskyItemsUpdater } from './optimisticBlueskyLike.ts';
 import { runOptimisticBlueskyLike } from './optimisticBlueskyLike.ts';
 import { runExclusive } from './optimisticFavourite.ts';
@@ -12,7 +21,25 @@ export type UseBlueskyLikeReturn = Readonly<{
   undoLike: (item: IoriBlueskyTimelineItemBody) => Promise<void>;
 }>;
 
-export const useBlueskyLike = (updateItems: BlueskyItemsUpdater): UseBlueskyLikeReturn => {
+export type BlueskyLikeRequests = Readonly<{
+  like: (item: IoriBlueskyTimelineItemBody) => Promise<IoriBlueskyLikeResponse>;
+  unlike: (item: IoriBlueskyTimelineItemBody) => Promise<IoriBlueskyLikeResponse>;
+}>;
+
+const FEED_ITEM_REQUESTS: BlueskyLikeRequests = {
+  like: (item) => likeBlueskyPost(item.feedItemId),
+  unlike: (item) => unlikeBlueskyPost(item.feedItemId),
+};
+
+export const BLUESKY_LIKE_BY_URI_REQUESTS: BlueskyLikeRequests = {
+  like: (item) => likeBlueskyPostByUri(item.uri),
+  unlike: (item) => unlikeBlueskyPostByUri(item.uri),
+};
+
+export const useBlueskyLike = (
+  updateItems: BlueskyItemsUpdater,
+  requests: BlueskyLikeRequests = FEED_ITEM_REQUESTS,
+): UseBlueskyLikeReturn => {
   const [pendingUris, setPendingUris] = useState<ReadonlySet<string>>(new Set());
   const inFlightRef = useRef<Set<string>>(null);
   const inFlight = () => (inFlightRef.current ??= new Set<string>());
@@ -26,7 +53,7 @@ export const useBlueskyLike = (updateItems: BlueskyItemsUpdater): UseBlueskyLike
             feedItemId: item.feedItemId,
             uri: item.uri,
             liked,
-            request: liked ? likeBlueskyPost : unlikeBlueskyPost,
+            request: () => (liked ? requests.like(item) : requests.unlike(item)),
             updateItems,
           });
         } catch (error) {
@@ -41,7 +68,7 @@ export const useBlueskyLike = (updateItems: BlueskyItemsUpdater): UseBlueskyLike
           });
         }
       }),
-    [updateItems],
+    [updateItems, requests],
   );
 
   const like = useCallback((item: IoriBlueskyTimelineItemBody) => run(item, true), [run]);

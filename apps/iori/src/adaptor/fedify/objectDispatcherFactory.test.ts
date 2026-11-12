@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Article as FedifyArticle, Document, Note } from '@fedify/vocab';
+import { Article as FedifyArticle, Document, Mention, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -10,7 +10,7 @@ import type { ArticleBodyResolver } from '../../domain/articleBody/articleBody.t
 import type { PostImage } from '../../domain/image/image.ts';
 import { ImageId } from '../../domain/image/imageId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import type { LocalPost, Post, PostResolver, RemotePost, ThreadResolver } from '../../domain/post/post.ts';
+import type { LocalPost, Post, PostQuote, PostResolver, RemotePost, ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import type { User } from '../../domain/user/user.ts';
@@ -177,6 +177,7 @@ const author: User = { id: UserId.generate(), username: Username.orThrow('kosui'
 
 const createLocalPost = (): LocalPost => ({
   type: 'local',
+  visibility: 'public',
   summary: null,
   sensitive: false,
   postId: PostId.generate(),
@@ -258,6 +259,65 @@ describe('createObjectDispatcher ofNote', () => {
     expect(content).toContain('href="https://example.com/"');
   });
 
+  it('メンションのない投稿は、cc に followers だけを持ち、tags を持たない', async () => {
+    const post = createLocalPost();
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
+
+    expect((result as Note).ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers']);
+    expect((result as Note).toIds.map((url) => url.href)).toEqual(['https://www.w3.org/ns/activitystreams#Public']);
+    await expect(Array.fromAsync((result as Note).getTags())).resolves.toEqual([]);
+  });
+
+  it('本文に a.mention のある投稿は、Mention タグを付け、相手の actor を followers に加えて cc に入れる', async () => {
+    const post = {
+      ...createLocalPost(),
+      content:
+        '<p><span class="h-card"><a href="https://remote.example/users/alice" class="u-url mention">@<span>alice@remote.example</span></a></span> hi</p>',
+    };
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
+
+    const note = result as Note;
+    expect(note.toIds.map((url) => url.href)).toEqual(['https://www.w3.org/ns/activitystreams#Public']);
+    expect(note.ccIds.map((url) => url.href)).toEqual([
+      'https://example.com/users/kosui/followers',
+      'https://remote.example/users/alice',
+    ]);
+    const tags = await Array.fromAsync(note.getTags());
+    expect(tags).toHaveLength(1);
+    expect(tags[0]).toBeInstanceOf(Mention);
+    expect((tags[0] as Mention).href?.href).toBe('https://remote.example/users/alice');
+    expect((tags[0] as Mention).name?.toString()).toBe('@alice@remote.example');
+    expect(note.content?.toString()).toContain('class="u-url mention"');
+  });
+
+  it('unlisted の投稿は、to に followers、cc に Public と followers 以外のメンションを入れる', async () => {
+    const post: LocalPost = {
+      ...createLocalPost(),
+      visibility: 'unlisted',
+      content:
+        '<p><a href="https://remote.example/users/alice" class="u-url mention">@<span>alice@remote.example</span></a> hi</p>',
+    };
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
+
+    const note = result as Note;
+    expect(note.toIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers']);
+    expect(note.ccIds.map((url) => url.href)).toEqual([
+      'https://www.w3.org/ns/activitystreams#Public',
+      'https://remote.example/users/alice',
+    ]);
+  });
+
+  it('private の投稿は、署名なしの取得には null を返す', async () => {
+    const post: LocalPost = { ...createLocalPost(), visibility: 'private' };
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
+
+    expect(result).toBeNull();
+  });
+
   it.each([null, 'public', 'unlisted', 'private', 'direct'] as const)(
     'リモートの投稿（visibility: %s）は null を返す',
     async (visibility) => {
@@ -323,6 +383,7 @@ describe('createObjectDispatcher ofNote', () => {
     postId: post.postId,
     url,
     altText,
+    mediaType: null,
     createdAt: post.createdAt,
   });
 
@@ -361,5 +422,83 @@ describe('createObjectDispatcher ofNote', () => {
     const [document] = await getDocuments(result as Note);
     expect(document).toBeInstanceOf(Document);
     expect(document?.name).toBeNull();
+  });
+});
+
+describe('createObjectDispatcher ofNote の引用', () => {
+  const quoteUri = 'https://remote.example/users/alice/statuses/1';
+  const aliceId = 'https://remote.example/users/alice';
+  const aliceQuote: PostQuote = {
+    uri: quoteUri,
+    author: { id: aliceId, inboxUrl: `${aliceId}/inbox`, username: 'alice' },
+  };
+
+  const dispatchNote = async (post: LocalPost, quote: PostQuote | undefined) => {
+    const dispatcher = createObjectDispatcher({
+      origin: 'https://example.com',
+      postResolver: { resolve: vi.fn(async () => RA.ok(post)) } as unknown as PostResolver,
+      postImagesResolver: { resolve: vi.fn(async () => RA.ok([])) } as never,
+      postQuotesResolver: {
+        resolve: vi.fn(async () => RA.ok(new Map(quote === undefined ? [] : [[post.postId, quote]]))),
+      },
+      userResolverByUsername: {
+        resolve: vi.fn(async (username: string) => RA.ok([author].find((user) => user.username === username))),
+      } as never,
+      articleBodyResolver: { resolve: vi.fn(async () => RA.ok(undefined)) } as unknown as ArticleBodyResolver,
+    });
+    return await dispatcher.ofNote(createContext(), { id: post.postId, identifier: 'kosui' }) as Note;
+  };
+
+  it('引用先のある投稿は、quoteUrl を出し、quote と quoteAuthorization を出さない', async () => {
+    const note = await dispatchNote(createLocalPost(), aliceQuote);
+
+    expect(note.quoteUrl?.href).toBe(quoteUri);
+    expect(note.quoteId).toBeNull();
+    expect(note.quoteAuthorizationId).toBeNull();
+    const json = await note.toJsonLd({ format: 'compact' }) as Record<string, unknown>;
+    expect(json).toMatchObject({ quoteUrl: quoteUri, _misskey_quote: quoteUri, quoteUri });
+    expect(json).not.toHaveProperty('quote');
+    expect(json).not.toHaveProperty('quoteAuthorization');
+    expect(json).not.toHaveProperty('interactionPolicy');
+  });
+
+  it('引用先がリモートの投稿なら、その作者を Mention と cc に入れる', async () => {
+    const note = await dispatchNote(createLocalPost(), aliceQuote);
+
+    expect(note.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers', aliceId]);
+    const tags = await Array.fromAsync(note.getTags());
+    expect(tags).toHaveLength(1);
+    expect(tags[0]).toBeInstanceOf(Mention);
+    expect((tags[0] as Mention).href?.href).toBe(aliceId);
+    expect((tags[0] as Mention).name?.toString()).toBe('@alice@remote.example');
+  });
+
+  it('引用先がローカルの投稿なら、quoteUrl だけを出して Mention と cc を足さない', async () => {
+    const localUri = 'https://example.com/users/other/posts/1';
+
+    const note = await dispatchNote(createLocalPost(), { uri: localUri, author: null });
+
+    expect(note.quoteUrl?.href).toBe(localUri);
+    expect(note.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers']);
+    await expect(Array.fromAsync(note.getTags())).resolves.toEqual([]);
+  });
+
+  it('引用先の作者が本文でもメンションされていれば、Mention を 1 つにする', async () => {
+    const post = {
+      ...createLocalPost(),
+      content:
+        `<p><span class="h-card"><a href="${aliceId}" class="u-url mention">@<span>alice@remote.example</span></a></span> hi</p>`,
+    };
+
+    const note = await dispatchNote(post, aliceQuote);
+
+    expect(note.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers', aliceId]);
+    expect(await Array.fromAsync(note.getTags())).toHaveLength(1);
+  });
+
+  it('引用先の無い投稿は、quoteUrl を持たない', async () => {
+    const note = await dispatchNote(createLocalPost(), undefined);
+
+    expect(note.quoteUrl).toBeNull();
   });
 });

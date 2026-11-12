@@ -208,6 +208,11 @@ describe('createBlueskyTimelineRuntimePorts', () => {
 
     expect(ports.blueskyTimelineEnabled).toBe(false);
     expect(ports.blueskyTimelineItemsResolver.resolve).toBeTypeOf('function');
+    expect(ports.replyToBlueskyPostUseCase).toBeUndefined();
+    expect(ports.quoteBlueskyPostUseCase).toBeUndefined();
+    expect(ports.markBlueskyNotificationsSeenUseCase).toBeUndefined();
+    expect(ports.blueskySearch).toBeUndefined();
+    expect(ports.blueskyChat).toBeUndefined();
   });
 
   it('有効なときは取り込みを有効として扱う', () => {
@@ -215,5 +220,10 @@ describe('createBlueskyTimelineRuntimePorts', () => {
     const ports = createBlueskyTimelineRuntimePorts(enabled as unknown as IoriWorkerEnv, db);
 
     expect(ports.blueskyTimelineEnabled).toBe(true);
+    expect(ports.replyToBlueskyPostUseCase?.run).toBeTypeOf('function');
+    expect(ports.quoteBlueskyPostUseCase?.run).toBeTypeOf('function');
+    expect(ports.markBlueskyNotificationsSeenUseCase?.run).toBeTypeOf('function');
+    expect(ports.blueskySearch?.searchPosts).toBeTypeOf('function');
+    expect(ports.blueskyChat?.listConvos.run).toBeTypeOf('function');
   });
 });

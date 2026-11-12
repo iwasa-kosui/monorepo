@@ -17,6 +17,7 @@ export const createD1PostImagesResolverByPostId = (db: IoriD1Db): PostImagesReso
             postId: row.postId,
             url: row.url,
             altText: row.altText,
+            mediaType: row.mediaType,
             createdAt: row.createdAt.getTime(),
           })
         )

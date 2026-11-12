@@ -3,6 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import { Env } from '../../../env.ts';
 import { singleton } from '../../../helper/singleton.ts';
+import { AcceptBlockUseCase } from '../../../useCase/acceptBlock.ts';
 import { AcceptFollowRequestUseCase } from '../../../useCase/acceptFollowRequest.ts';
 import { AcceptRelaySubscriptionUseCase } from '../../../useCase/acceptRelaySubscription.ts';
 import { AcceptUnfollowUseCase } from '../../../useCase/acceptUnfollow.ts';
@@ -73,6 +74,7 @@ import { PgTimelineItemDeletedStore } from '../../pg/timeline/timelineItemDelete
 import { PgTimelineItemsResolverByPostId } from '../../pg/timeline/timelineItemsResolverByPostId.ts';
 import { PgUserResolverByUsername } from '../../pg/user/userResolverByUsername.ts';
 import { WebPushSender } from '../../webPush/webPushSender.ts';
+import { isBlockedUri } from '../blockedInboxDomain.ts';
 import { InboxActorResolver } from '../inboxActorResolver.ts';
 import { createInboxListener } from './inboxListenerFactory.ts';
 
@@ -172,6 +174,15 @@ const create = () => {
         webPushSender,
       }),
     },
+    onBlock: {
+      acceptBlockUseCase: AcceptBlockUseCase.create({
+        unfollowedStore: PgUnfollowedStore.getInstance(),
+        followResolver: PgFollowResolver.getInstance(),
+        actorResolverByUri,
+        actorResolverByUserId,
+        userResolverByUsername: PgUserResolverByUsername.getInstance(),
+      }),
+    },
     onUndo: {
       acceptUnfollowUseCase: AcceptUnfollowUseCase.create({
         unfollowedStore: PgUnfollowedStore.getInstance(),
@@ -229,6 +240,7 @@ const create = () => {
         postResolverByUri: PgPostResolverByUri.getInstance(),
         localPostResolverByUri: PgLocalPostResolverByUri.getInstance(),
         remotePostUpserter,
+        isBlockedUri: (uri) => isBlockedUri(uri),
       }),
     },
     onDelete: {

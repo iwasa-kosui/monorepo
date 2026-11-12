@@ -6,6 +6,7 @@ import { fromD1 } from '../query.ts';
 import {
   domainEventsTable,
   localPostsTable,
+  postQuotesTable,
   postsTable,
   remotePostRecipientsTable,
   remotePostsTable,
@@ -29,6 +30,12 @@ const recipientInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated) 
   return inserts;
 };
 
+const quoteInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated) => {
+  const { quoteUri } = event.eventPayload;
+  if (quoteUri === null) return [];
+  return [db.insert(postQuotesTable).values({ postId: event.aggregateState.postId, quoteUri })];
+};
+
 export const createD1PostCreatedStore = (db: IoriD1Db): PostCreatedStore => ({
   store: (event: PostCreated | RemotePostCreated) =>
     RA.flow(
@@ -48,6 +55,7 @@ export const createD1PostCreatedStore = (db: IoriD1Db): PostCreatedStore => ({
             postId: post.postId,
             userId: post.userId,
             inReplyToUri: post.inReplyToUri,
+            visibility: post.visibility,
           })
           : db.insert(remotePostsTable).values({
             postId: post.postId,
@@ -60,6 +68,7 @@ export const createD1PostCreatedStore = (db: IoriD1Db): PostCreatedStore => ({
           postInsert,
           subtypeInsert,
           ...recipientInserts(db, event),
+          ...quoteInserts(db, event),
           db.insert(domainEventsTable).values({
             eventId: event.eventId,
             aggregateId: event.aggregateId,

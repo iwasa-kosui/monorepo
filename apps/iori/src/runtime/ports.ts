@@ -3,6 +3,7 @@ import type { ResultAsync } from '@iwasa-kosui/result';
 
 import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
+import type { RemoteActorLookup } from '../adaptor/fedify/remoteActorLookup.ts';
 import type { StatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import type { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
 import type {
@@ -19,6 +20,7 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import type { BlockedActorsResolverByUserIdWithPagination } from '../domain/block/block.ts';
 import type { BlueskyCrosspostStatusReportResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type {
   DigestHeadersResolverByArticleIds,
@@ -78,6 +80,8 @@ import type { DismissNotificationUseCase } from '../useCase/dismissNotification.
 import type { EditArticleUseCase } from '../useCase/editArticle.ts';
 import type { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
+import type { FetchRemoteContextUseCase } from '../useCase/fetchRemoteContext.ts';
+import type { FetchRemoteOutboxUseCase } from '../useCase/fetchRemoteOutbox.ts';
 import type { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
@@ -93,6 +97,7 @@ import type { RefreshXPostsUseCase } from '../useCase/refreshXPosts.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import type { RequestDigestUseCase } from '../useCase/requestDigest.ts';
 import type { ResolveRemoteAccountUseCase } from '../useCase/resolveRemoteAccount.ts';
+import type { ResolveRemotePostUseCase } from '../useCase/resolveRemotePost.ts';
 import type { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import type { SaveDigestSubscriptionUseCase } from '../useCase/saveDigestSubscription.ts';
 import type { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
@@ -120,6 +125,7 @@ import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { BlueskyModerationRuntimePorts } from './blueskyModeration.ts';
 import type { BlueskyProfileRuntimePorts } from './blueskyProfile.ts';
 import type { BlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
+import type { WorkerReportAction } from './workerReportActions.ts';
 
 export type WorkerRemoteActorAction = (
   input: Readonly<{
@@ -128,6 +134,8 @@ export type WorkerRemoteActorAction = (
     ctx: Context<unknown>;
   }>,
 ) => ResultAsync<void, Readonly<{ message: string }>>;
+
+export type WorkerBlockAction = WorkerRemoteActorAction;
 
 export type UploadObjectStore = ReturnType<typeof createPostImageR2ObjectStore>;
 export type IoriAuthRuntimePorts = Readonly<{
@@ -165,6 +173,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   accountRelationshipsResolverByActorIds: AccountRelationshipsResolverByActorIds;
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
   mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
+  blockedActorsResolverByUserIdWithPagination: BlockedActorsResolverByUserIdWithPagination;
   statusAssembler: StatusAssembler;
   searchTimeline: SearchTimelineUseCase;
   summarizeTimeline: SummarizeTimelineUseCase;
@@ -183,6 +192,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   dismissNotificationUseCase: DismissNotificationUseCase;
   clearNotificationsUseCase: ClearNotificationsUseCase;
   resolveRemoteAccountUseCase: ResolveRemoteAccountUseCase;
+  resolveRemotePostUseCase: ResolveRemotePostUseCase;
 }>;
 export type IoriDigestRuntimePorts = Readonly<{
   digestResolverByUserIdAndDigestDate: DigestResolverByUserIdAndDigestDate;
@@ -221,6 +231,7 @@ export type IoriTimelineRuntimePorts = Readonly<{
 }>;
 export type IoriPostingRuntimePorts = Readonly<{
   createPostUseCase: ReturnType<typeof createCreatePostUseCase>;
+  remoteActorLookup: RemoteActorLookup;
 }>;
 export type IoriSocialActionsRuntimePorts = Readonly<{
   sendLikeUseCase: SendLikeUseCase;
@@ -229,6 +240,8 @@ export type IoriSocialActionsRuntimePorts = Readonly<{
   undoRepostUseCase: UndoRepostUseCase;
   sendEmojiReactUseCase: SendEmojiReactUseCase;
   undoEmojiReactUseCase: UndoEmojiReactUseCase;
+  fetchRemoteContextUseCase: FetchRemoteContextUseCase;
+  fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase;
 }>;
 export type IoriArticlesRuntimePorts = Readonly<{
   getArticleWithThreadUseCase: GetArticleWithThreadUseCase;
@@ -262,6 +275,9 @@ export type IoriCoreRuntimePorts = Readonly<{
   subscribePushUseCase: SubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;
   unfollowRemoteActor: WorkerRemoteActorAction;
+  reportRemoteActor: WorkerReportAction;
+  blockActor: WorkerBlockAction;
+  unblockActor: WorkerBlockAction;
   vapidPublicKey: string | undefined;
 }>;
 

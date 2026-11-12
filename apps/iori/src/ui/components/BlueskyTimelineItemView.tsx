@@ -1,14 +1,23 @@
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { BlueskyTimelineEmbed } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import { blueskyPostUrl, blueskyPostUrlOfUri, blueskyProfilePathOf } from '../../helper/blueskyUrl.ts';
+import {
+  blueskyPostUrl,
+  blueskyPostUrlOfUri,
+  blueskyProfilePathOf,
+  ioriBlueskyPostPath,
+} from '../../helper/blueskyUrl.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { segmentBlueskyText } from './blueskyRichText.ts';
+import { BlueskyVideoPlayer } from './BlueskyVideoPlayer.tsx';
+import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
 
 type Props = Readonly<{
   item: IoriBlueskyTimelineItemBody;
   dataIndex?: number;
   isSelected?: boolean;
+  onReply?: (item: IoriBlueskyTimelineItemBody) => void;
+  onQuote?: (item: IoriBlueskyTimelineItemBody) => void;
   onLike?: (item: IoriBlueskyTimelineItemBody) => void;
   onUndoLike?: (item: IoriBlueskyTimelineItemBody) => void;
   isLikePending?: boolean;
@@ -18,11 +27,21 @@ type Props = Readonly<{
 }>;
 type MediaEmbed = Extract<BlueskyTimelineEmbed, { type: 'images' | 'external' | 'video' }>;
 type QuoteEmbed = Extract<BlueskyTimelineEmbed, { type: 'record' }>;
+type QuoteUnavailableEmbed = Extract<BlueskyTimelineEmbed, { type: 'recordUnavailable' }>;
+
+const quoteCardClass = 'block rounded-xl border border-warm-gray dark:border-gray-700';
+const quoteUnavailableMessages: Record<QuoteUnavailableEmbed['reason'], string> = {
+  notFound: '引用された投稿は削除されています',
+  blocked: 'ブロックにより引用された投稿を表示できません',
+  detached: '引用元の投稿者が引用を外しました',
+};
 
 const linkClass = 'text-terracotta hover:underline dark:text-terracotta-light break-all';
 const mutedClass = 'text-charcoal-light dark:text-gray-400';
 
-const BlueskyText = ({ text, facets }: Readonly<{ text: string; facets: IoriBlueskyTimelineItemBody['facets'] }>) => (
+export const BlueskyText = (
+  { text, facets }: Readonly<{ text: string; facets: IoriBlueskyTimelineItemBody['facets'] }>,
+) => (
   <p class='whitespace-pre-wrap break-words text-charcoal dark:text-gray-100'>
     {segmentBlueskyText(text, facets).map((segment) =>
       segment.href === undefined
@@ -34,29 +53,7 @@ const BlueskyText = ({ text, facets }: Readonly<{ text: string; facets: IoriBlue
   </p>
 );
 
-const BlueskyQuote = ({ quote }: Readonly<{ quote: QuoteEmbed }>) => {
-  const href = blueskyPostUrlOfUri(quote.uri);
-  const body = (
-    <>
-      <div class={`text-xs ${mutedClass} mb-1`}>@{quote.authorHandle}</div>
-      <p class='text-sm whitespace-pre-wrap break-words text-charcoal dark:text-gray-100'>{quote.text}</p>
-    </>
-  );
-  return href === undefined
-    ? <div class='block rounded-xl border border-warm-gray dark:border-gray-700 p-3'>{body}</div>
-    : (
-      <a
-        href={href}
-        target='_blank'
-        rel='noopener noreferrer'
-        class='block rounded-xl border border-warm-gray dark:border-gray-700 p-3 hover:bg-sand-light/50 dark:hover:bg-gray-700/50 transition-colors'
-      >
-        {body}
-      </a>
-    );
-};
-
-const BlueskyMedia = ({ media, postHref }: Readonly<{ media: MediaEmbed; postHref: string | undefined }>) => {
+const BlueskyMedia = ({ media, bskyHref }: Readonly<{ media: MediaEmbed; bskyHref: string | undefined }>) => {
   switch (media.type) {
     case 'images':
       return (
@@ -98,42 +95,133 @@ const BlueskyMedia = ({ media, postHref }: Readonly<{ media: MediaEmbed; postHre
         </a>
       );
     }
-    case 'video': {
-      const thumbnail = safeAbsoluteUrl(media.thumbnail);
+    case 'video':
       return (
-        <a
-          href={postHref ?? safeAbsoluteUrl(media.playlist)}
-          target='_blank'
-          rel='noopener noreferrer'
-          class='relative block overflow-hidden rounded-xl bg-sand dark:bg-gray-700'
-        >
-          {thumbnail !== undefined && (
-            <img
-              src={thumbnail}
-              alt=''
-              class='w-full max-h-96 object-cover'
-              loading='lazy'
-            />
-          )}
-          <span class='absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white'>動画</span>
-        </a>
+        <BlueskyVideoPlayer
+          thumbnail={media.thumbnail}
+          playlist={media.playlist}
+          aspectRatio={media.aspectRatio}
+          alt={media.alt}
+          bskyHref={bskyHref}
+        />
       );
-    }
   }
 };
 
-const BlueskyEmbed = ({ embed, postHref }: Readonly<{ embed: BlueskyTimelineEmbed; postHref: string | undefined }>) => {
-  if (embed.type === 'record') return <BlueskyQuote quote={embed} />;
+const BlueskyQuote = ({ quote }: Readonly<{ quote: QuoteEmbed }>) => {
+  const href = ioriBlueskyPostPath(quote.uri);
+  const avatar = safeAbsoluteUrl(quote.authorAvatar);
+  const body = (
+    <>
+      <div class='flex items-center gap-2 mb-1 min-w-0'>
+        {avatar !== undefined && (
+          <img src={avatar} alt='' class='w-5 h-5 blob-avatar object-cover flex-shrink-0' loading='lazy' />
+        )}
+        {quote.authorDisplayName !== undefined && (
+          <span class='text-sm font-semibold text-charcoal dark:text-white truncate'>{quote.authorDisplayName}</span>
+        )}
+        <span class={`text-xs ${mutedClass} truncate`}>@{quote.authorHandle}</span>
+      </div>
+      {quote.text !== '' && (
+        <p class='text-sm whitespace-pre-wrap break-words text-charcoal dark:text-gray-100'>{quote.text}</p>
+      )}
+    </>
+  );
+  const media = quote.media === undefined ? null : (
+    <div class='px-3 pb-3'>
+      <BlueskyMedia media={quote.media} bskyHref={blueskyPostUrlOfUri(quote.uri)} />
+    </div>
+  );
+  return (
+    <div class={quoteCardClass}>
+      {href === undefined
+        ? <div class='p-3'>{body}</div>
+        : (
+          <a
+            href={href}
+            class='block rounded-xl p-3 hover:bg-sand-light/50 dark:hover:bg-gray-700/50 transition-colors'
+          >
+            {body}
+          </a>
+        )}
+      {media}
+    </div>
+  );
+};
+
+const BlueskyQuoteUnavailable = ({ quote }: Readonly<{ quote: QuoteUnavailableEmbed }>) => (
+  <div class={`${quoteCardClass} p-3 text-sm ${mutedClass}`}>{quoteUnavailableMessages[quote.reason]}</div>
+);
+
+const BlueskyQuoteCard = ({ quote }: Readonly<{ quote: QuoteEmbed | QuoteUnavailableEmbed }>) =>
+  quote.type === 'record' ? <BlueskyQuote quote={quote} /> : <BlueskyQuoteUnavailable quote={quote} />;
+
+const BlueskyEmbed = ({ embed, bskyHref }: Readonly<{ embed: BlueskyTimelineEmbed; bskyHref: string | undefined }>) => {
+  if (embed.type === 'record' || embed.type === 'recordUnavailable') return <BlueskyQuoteCard quote={embed} />;
   if (embed.type === 'recordWithMedia') {
     return (
       <div class='space-y-2'>
-        <BlueskyMedia media={embed.media} postHref={postHref} />
-        <BlueskyQuote quote={embed.record} />
+        <BlueskyMedia media={embed.media} bskyHref={bskyHref} />
+        <BlueskyQuoteCard quote={embed.record} />
       </div>
     );
   }
-  return <BlueskyMedia media={embed} postHref={postHref} />;
+  return <BlueskyMedia media={embed} bskyHref={bskyHref} />;
 };
+
+const ReplyParent = ({ uri, label }: Readonly<{ uri: string; label: string }>) => {
+  const href = ioriBlueskyPostPath(uri);
+  return href === undefined
+    ? <div class={`text-xs ${mutedClass}`}>{label}</div>
+    : (
+      <a href={href} class={`block text-xs ${mutedClass} hover:text-terracotta dark:hover:text-terracotta-light`}>
+        {label}
+      </a>
+    );
+};
+
+const BlueskyReplyButton = ({ item, onReply }: Readonly<{
+  item: IoriBlueskyTimelineItemBody;
+  onReply: (item: IoriBlueskyTimelineItemBody) => void;
+}>) => (
+  <button
+    type='button'
+    onClick={(event: Event) => {
+      event.stopPropagation();
+      onReply(item);
+    }}
+    class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
+    title='返信 (p)'
+  >
+    <svg
+      xmlns='http://www.w3.org/2000/svg'
+      class='h-5 w-5'
+      fill='none'
+      viewBox='0 0 24 24'
+      stroke='currentColor'
+      stroke-width='2'
+    >
+      <path stroke-linecap='round' stroke-linejoin='round' d='M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6' />
+    </svg>
+  </button>
+);
+
+const BlueskyQuoteButton = ({ item, onQuote }: Readonly<{
+  item: IoriBlueskyTimelineItemBody;
+  onQuote: (item: IoriBlueskyTimelineItemBody) => void;
+}>) => (
+  <button
+    type='button'
+    onClick={(event: Event) => {
+      event.stopPropagation();
+      onQuote(item);
+    }}
+    class='flex items-center gap-1 text-sm transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
+    title='引用'
+  >
+    引用
+  </button>
+);
 
 const likeTitle = (liked: boolean, isPending: boolean): string => {
   if (isPending) return liked ? 'いいね中...' : 'いいね取り消し中...';
@@ -243,6 +331,8 @@ export const BlueskyTimelineItemView = ({
   item,
   dataIndex,
   isSelected,
+  onReply,
+  onQuote,
   onLike,
   onUndoLike,
   isLikePending,
@@ -251,7 +341,8 @@ export const BlueskyTimelineItemView = ({
   isRepostPending,
 }: Props) => {
   const avatar = safeAbsoluteUrl(item.authorAvatar);
-  const postHref = blueskyPostUrl(item.authorDid, item.uri);
+  const postHref = ioriBlueskyPostPath(item.uri);
+  const bskyHref = blueskyPostUrl(item.authorDid, item.uri);
   const profileHref = blueskyProfilePathOf(item.authorDid);
   const displayName = item.authorDisplayName ?? item.authorHandle;
   const posted = (
@@ -259,6 +350,10 @@ export const BlueskyTimelineItemView = ({
       {Instant.formatRelative(item.postedAt as Instant)}
     </time>
   );
+  const menuItems: readonly PostMenuItem[] = bskyHref === undefined ? [] : [
+    { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: bskyHref },
+    { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: bskyHref },
+  ];
   return (
     <article
       data-post-index={dataIndex}
@@ -276,9 +371,10 @@ export const BlueskyTimelineItemView = ({
         </div>
       )}
       {item.replyParentUri !== null && (
-        <div class={`text-xs ${mutedClass}`}>
-          {item.replyParentAuthorHandle === null ? '返信' : `@${item.replyParentAuthorHandle} への返信`}
-        </div>
+        <ReplyParent
+          uri={item.replyParentUri}
+          label={item.replyParentAuthorHandle === null ? '返信' : `@${item.replyParentAuthorHandle} への返信`}
+        />
       )}
       <div class='flex items-center gap-2'>
         <a
@@ -302,8 +398,6 @@ export const BlueskyTimelineItemView = ({
           : (
             <a
               href={postHref}
-              target='_blank'
-              rel='noopener noreferrer'
               class={`text-sm ${mutedClass} hover:text-terracotta dark:hover:text-terracotta-light transition-colors flex-shrink-0`}
               title={new Date(item.postedAt).toLocaleString()}
             >
@@ -312,9 +406,11 @@ export const BlueskyTimelineItemView = ({
           )}
       </div>
       {item.text !== '' && <BlueskyText text={item.text} facets={item.facets} />}
-      {item.embed !== null && <BlueskyEmbed embed={item.embed} postHref={postHref} />}
-      {(onLike !== undefined || onRepost !== undefined) && (
+      {item.embed !== null && <BlueskyEmbed embed={item.embed} bskyHref={bskyHref} />}
+      {(onReply !== undefined || onQuote !== undefined || onLike !== undefined || onRepost !== undefined
+        || menuItems.length > 0) && (
         <div class='flex items-center justify-end gap-4 pt-1'>
+          {onReply !== undefined && <BlueskyReplyButton item={item} onReply={onReply} />}
           {onRepost !== undefined && (
             <BlueskyRepostButton
               item={item}
@@ -323,9 +419,11 @@ export const BlueskyTimelineItemView = ({
               isPending={isRepostPending === true}
             />
           )}
+          {onQuote !== undefined && <BlueskyQuoteButton item={item} onQuote={onQuote} />}
           {onLike !== undefined && (
             <BlueskyLikeButton item={item} onLike={onLike} onUndoLike={onUndoLike} isPending={isLikePending === true} />
           )}
+          <PostMenu items={menuItems} />
         </div>
       )}
     </article>

@@ -18,12 +18,18 @@ const axes = byAxis
   : [];
 ---
 
-<div class="decision-table" data-axis-table={byAxis ? '' : undefined}>
+<div
+  class:list={['decision-table', byAxis && 'relative']}
+  data-axis-table={byAxis ? '' : undefined}
+>
   {
     byAxis
       ? (
       <>
         <Fragment set:html={title} />
+        <div class="absolute top-0 right-0 max-w-[calc(100%-6rem)] [&>*]:my-0!">
+          <slot />
+        </div>
         <div class="axis-buttons" role="group" aria-label="比較する軸" hidden>
           {
             axes.map((label, index) => (

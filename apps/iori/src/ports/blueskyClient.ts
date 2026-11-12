@@ -2,8 +2,9 @@ import type { RA } from '@iwasa-kosui/result';
 
 import type { BlueskyBlob, BlueskyPostRecord } from '../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import type { BlueskyReportReasonType } from '../domain/blueskyModeration/blueskyModeration.ts';
+import type { Instant } from '../domain/instant/instant.ts';
 
-export type BlueskyClientErrorKind = 'auth' | 'http' | 'network' | 'invalid_response';
+export type BlueskyClientErrorKind = 'auth' | 'http' | 'network' | 'invalid_response' | 'chat_not_permitted';
 
 export type BlueskyClientError = Readonly<{
   type: 'BlueskyClientError';
@@ -43,6 +44,7 @@ export type BlueskyClient = Readonly<{
   createReport: (input: BlueskyReportInput) => RA<void, BlueskyClientError>;
   createFollow: (subjectDid: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;
   deleteFollow: (followUri: string) => RA<void, BlueskyClientError>;
+  updateSeen: (seenAt: Instant) => RA<void, BlueskyClientError>;
 }>;
 
 export type BlueskyQueryClient = Readonly<{
@@ -50,6 +52,18 @@ export type BlueskyQueryClient = Readonly<{
     nsid: string,
     params: Readonly<Record<string, string>>,
   ) => RA<Readonly<Record<string, unknown>>, BlueskyClientError>;
+}>;
+
+export type BlueskyChatClient = Readonly<{
+  chatQuery: (
+    nsid: string,
+    params: Readonly<Record<string, string | readonly string[]>>,
+  ) => RA<Readonly<Record<string, unknown>>, BlueskyClientError>;
+  chatProcedure: (
+    nsid: string,
+    body: Readonly<Record<string, unknown>>,
+  ) => RA<Readonly<Record<string, unknown>>, BlueskyClientError>;
+  viewerDid: () => RA<string, BlueskyClientError>;
 }>;
 
 export type BlueskyThumbnail = Readonly<{ bytes: Uint8Array; mimeType: string }>;

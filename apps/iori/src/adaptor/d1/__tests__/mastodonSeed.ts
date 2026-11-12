@@ -40,7 +40,13 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
   const addLocalPost = (
     actor: { actorId: string; userId: string; username: string },
     createdAt: number,
-    options: { content?: string; inReplyToUri?: string | null; timeline?: boolean; deletedAt?: number | null } = {},
+    options: {
+      content?: string;
+      inReplyToUri?: string | null;
+      timeline?: boolean;
+      deletedAt?: number | null;
+      visibility?: string;
+    } = {},
   ) => {
     const postId = uuid();
     sqlite.prepare('INSERT INTO posts(postId,actorId,content,createdAt,type,deletedAt) VALUES (?,?,?,?,?,?)').run(
@@ -51,10 +57,11 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
       'local',
       options.deletedAt ?? null,
     );
-    sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri) VALUES (?,?,?)').run(
+    sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri,visibility) VALUES (?,?,?,?)').run(
       postId,
       actor.userId,
       options.inReplyToUri ?? null,
+      options.visibility ?? 'public',
     );
     const timelineItemId = options.timeline === false ? undefined : addTimelineItem(actor.actorId, postId, createdAt);
     return { postId, timelineItemId, uri: `${SEED_ORIGIN}/users/${actor.username}/posts/${postId}` };
@@ -136,6 +143,17 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
       createdAt,
     );
     return { muteId };
+  };
+
+  const addBlock = (userId: string, blockedActorId: string, createdAt = 1) => {
+    const blockId = uuid();
+    sqlite.prepare('INSERT INTO blocks(blockId,userId,blockedActorId,createdAt) VALUES (?,?,?,?)').run(
+      blockId,
+      userId,
+      blockedActorId,
+      createdAt,
+    );
+    return { blockId };
   };
 
   const addLike = (actorId: string, postId: string, createdAt = 1) => {
@@ -260,6 +278,19 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     return notificationId;
   };
 
+  const addMentionNotification = (
+    recipientUserId: string,
+    mentionerActorId: string,
+    mentionPostId: string,
+    createdAt: number,
+  ) => {
+    const notificationId = addNotification(recipientUserId, 'mention', createdAt);
+    sqlite.prepare(
+      'INSERT INTO notification_mentions(notificationId,recipientUserId,mentionerActorId,mentionPostId) VALUES (?,?,?,?)',
+    ).run(notificationId, recipientUserId, mentionerActorId, mentionPostId);
+    return notificationId;
+  };
+
   const addBlueskyNotification = (
     recipientUserId: string,
     type: 'blueskyLike' | 'blueskyRepost' | 'blueskyFollow' | 'blueskyMention',
@@ -318,6 +349,7 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     addRepost,
     addFollow,
     addMute,
+    addBlock,
     addLike,
     addEmojiReact,
     addImage,
@@ -329,6 +361,7 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     addFollowNotification,
     addEmojiReactNotification,
     addRepostNotification,
+    addMentionNotification,
     addBlueskyNotification,
     setMarker,
   };

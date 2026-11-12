@@ -32,6 +32,7 @@ describe('createWorkerTimelinePostingApiRouter', () => {
       summary: null,
       sensitive: false,
       type: 'local' as const,
+      visibility: 'public' as const,
       username: user.username,
       logoUri: undefined,
       liked: false,

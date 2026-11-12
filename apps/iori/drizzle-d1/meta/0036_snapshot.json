@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b0dcac77-0225-47d0-99fb-25da3b63af1c",
+  "id": "37856fe0-6e5a-4b4b-86e8-cffda7dcf294",
   "prevId": "8fbeb500-cd99-47df-a115-74705f0bfc18",
   "tables": {
     "actors": {
@@ -364,6 +364,94 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "blocks": {
+      "name": "blocks",
+      "columns": {
+        "blockId": {
+          "name": "blockId",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "blockedActorId": {
+          "name": "blockedActorId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "block_user_actor_unique": {
+          "name": "block_user_actor_unique",
+          "columns": [
+            "userId",
+            "blockedActorId"
+          ],
+          "isUnique": true
+        },
+        "blocks_user_id_idx": {
+          "name": "blocks_user_id_idx",
+          "columns": [
+            "userId"
+          ],
+          "isUnique": false
+        },
+        "blocks_blocked_actor_id_idx": {
+          "name": "blocks_blocked_actor_id_idx",
+          "columns": [
+            "blockedActorId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "blocks_userId_users_userId_fk": {
+          "name": "blocks_userId_users_userId_fk",
+          "tableFrom": "blocks",
+          "tableTo": "users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "userId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "blocks_blockedActorId_actors_actorId_fk": {
+          "name": "blocks_blockedActorId_actors_actorId_fk",
+          "tableFrom": "blocks",
+          "tableTo": "actors",
+          "columnsFrom": [
+            "blockedActorId"
+          ],
+          "columnsTo": [
+            "actorId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "bluesky_crossposts": {
       "name": "bluesky_crossposts",
       "columns": {
@@ -518,45 +606,6 @@
         },
         "failedAt": {
           "name": "failedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "bluesky_moderated_actors": {
-      "name": "bluesky_moderated_actors",
-      "columns": {
-        "did": {
-          "name": "did",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "muted": {
-          "name": "muted",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "blockUri": {
-          "name": "blockUri",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "updatedAt": {
-          "name": "updatedAt",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,

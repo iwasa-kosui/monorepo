@@ -29,6 +29,8 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.socialActions.undoRepostUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.sendEmojiReactUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.undoEmojiReactUseCase.run).toBeTypeOf('function');
+    expect(runtime.socialActions.fetchRemoteContextUseCase.run).toBeTypeOf('function');
+    expect(runtime.socialActions.fetchRemoteOutboxUseCase.run).toBeTypeOf('function');
     expect(runtime.mastodon.notificationsResolverByPage.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.notificationResolverByUserIdAndId.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.notificationCountResolverSinceMarker.resolve).toBeTypeOf('function');
@@ -40,6 +42,7 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.mastodon.repostResolver.resolve).toBeTypeOf('function');
     expect(runtime.core.followRemoteActor).toBeTypeOf('function');
     expect(runtime.core.unfollowRemoteActor).toBeTypeOf('function');
+    expect(runtime.core.reportRemoteActor).toBeTypeOf('function');
     expect(runtime.articles.getArticleWithThreadUseCase.run).toBeTypeOf('function');
     expect(runtime.articles.getArticlesUseCase.run).toBeTypeOf('function');
     expect(runtime.articles.createArticleUseCase.run).toBeTypeOf('function');

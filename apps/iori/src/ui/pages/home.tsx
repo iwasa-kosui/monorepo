@@ -7,6 +7,7 @@ import { safeUrl } from '../../helper/safeUrl.ts';
 import { fetchPublicTimeline, updateAvatar } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
+import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyStatusNotice } from '../components/BlueskyStatusNotice.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
@@ -14,6 +15,9 @@ import { Modal } from '../components/Modal.tsx';
 import { PostDestinationSelect } from '../components/PostDestinationSelect.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { QuoteModal } from '../components/QuoteModal.tsx';
+import { ReplyDialogShell } from '../components/ReplyDialogShell.tsx';
+import { ReportModal } from '../components/ReportModal.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
 import { homeItemKey } from '../hooks/homeFeed.ts';
 import { pullProgress, refreshResultLabel } from '../hooks/pullGesture.ts';
@@ -201,72 +205,55 @@ const ReplyModal = () => {
   };
 
   return (
-    <div
-      class='fixed inset-0 bg-charcoal/50 backdrop-blur-sm flex items-center justify-center z-50'
-      onClick={closeReplyDialog}
+    <ReplyDialogShell
+      onClose={closeReplyDialog}
+      onSubmit={() => {
+        if (replyContent.trim() && replyingToPostId) {
+          sendReply(replyingToPostId, replyContent);
+        }
+      }}
+      isSending={isSendingReply}
+      canSubmit={!isSendingReply && replyContent.trim() !== ''}
+      leadingActions={
+        <PostDestinationSelect value={replyDestination} onChange={setReplyDestination} name='reply-destination' />
+      }
     >
-      <div
-        class='bg-cream dark:bg-gray-800 md:rounded-clay shadow-clay dark:shadow-clay-dark p-4 md:p-6 w-full h-full md:h-auto md:max-w-lg md:mx-4 flex flex-col'
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div class='flex items-center justify-between mb-4'>
-          <h2 class='text-lg font-semibold text-charcoal dark:text-white'>
-            返信
-          </h2>
-          <button
-            type='button'
-            onClick={closeReplyDialog}
-            class='p-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 transition-colors rounded-xl hover:bg-sand-light dark:hover:bg-gray-700'
-          >
-            <svg class='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-              <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
-            </svg>
-          </button>
-        </div>
+      <MarkdownEditor
+        value={replyContent}
+        onChange={setReplyContent}
+        onKeyDown={handleKeyDown}
+        placeholder='返信を書く... (⌘+Enter to post)'
+        minHeight='150px'
+        disabled={isSendingReply}
+      />
+    </ReplyDialogShell>
+  );
+};
 
-        <MarkdownEditor
-          value={replyContent}
-          onChange={setReplyContent}
-          onKeyDown={handleKeyDown}
-          placeholder='返信を書く... (⌘+Enter to post)'
-          minHeight='150px'
-          disabled={isSendingReply}
-        />
+const FediverseQuoteModal = () => {
+  const { quote } = useTimelineContext();
 
-        <div class='mt-3 flex gap-2 justify-end'>
-          <PostDestinationSelect value={replyDestination} onChange={setReplyDestination} name='reply-destination' />
-          <button
-            type='button'
-            onClick={closeReplyDialog}
-            class='px-4 py-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
-            disabled={isSendingReply}
-          >
-            キャンセル
-          </button>
-          <button
-            type='button'
-            onClick={() => {
-              if (replyContent.trim() && replyingToPostId) {
-                sendReply(replyingToPostId, replyContent);
-              }
-            }}
-            class={`px-5 py-2 text-white text-sm font-medium rounded-clay transition-all ${
-              isSendingReply || !replyContent.trim()
-                ? 'bg-warm-gray-dark cursor-not-allowed'
-                : 'bg-terracotta hover:bg-terracotta-dark shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
-            }`}
-            disabled={isSendingReply || !replyContent.trim()}
-          >
-            {isSendingReply ? '送信中...' : '返信する'}
-          </button>
-        </div>
-      </div>
-    </div>
+  if (quote.target === null) {
+    return null;
+  }
+
+  return (
+    <QuoteModal
+      target={quote.target}
+      content={quote.content}
+      destination={quote.destination}
+      isSending={quote.isSending}
+      errorText={quote.errorText}
+      onClose={quote.close}
+      onSubmit={() => void quote.send()}
+      onContentChange={quote.setContent}
+      onDestinationChange={quote.setDestination}
+    />
   );
 };
 
 const ThreadModal = () => {
-  const { thread, actions, reply, data } = useTimelineContext();
+  const { thread, actions, reply, quote, reportPost, data } = useTimelineContext();
   const {
     threadModalPostId,
     threadData,
@@ -375,6 +362,7 @@ const ThreadModal = () => {
                           currentAccountId={currentAccountId}
                           isLoggedIn
                           onReply={reply.openReplyDialog}
+                          onQuote={quote.open}
                           onLike={actions.like}
                           isLiking={actionState.likingPostId === post.id}
                           onUndoLike={actions.undoLike}
@@ -384,6 +372,9 @@ const ThreadModal = () => {
                           onUndoRepost={post.reblogged ? actions.undoRepost : undefined}
                           isUndoingRepost={actionState.undoingRepostPostId === post.id}
                           onDelete={actions.deletePost}
+                          onMute={actions.muteAccount}
+                          onBlock={actions.blockAccount}
+                          onReport={reportPost.open}
                           isDeleting={actionState.deletingPostId === post.id}
                           onEmojiReact={actions.emojiReact}
                           onUndoEmojiReact={actions.undoEmojiReact}
@@ -403,6 +394,7 @@ const ThreadModal = () => {
                       currentAccountId={currentAccountId}
                       isLoggedIn
                       onReply={reply.openReplyDialog}
+                      onQuote={quote.open}
                       onLike={actions.like}
                       isLiking={actionState.likingPostId === threadData.currentPost.id}
                       onUndoLike={actions.undoLike}
@@ -412,6 +404,9 @@ const ThreadModal = () => {
                       onUndoRepost={threadData.currentPost.reblogged ? actions.undoRepost : undefined}
                       isUndoingRepost={actionState.undoingRepostPostId === threadData.currentPost.id}
                       onDelete={actions.deletePost}
+                      onMute={actions.muteAccount}
+                      onBlock={actions.blockAccount}
+                      onReport={reportPost.open}
                       isDeleting={actionState.deletingPostId === threadData.currentPost.id}
                       onEmojiReact={actions.emojiReact}
                       onUndoEmojiReact={actions.undoEmojiReact}
@@ -432,6 +427,7 @@ const ThreadModal = () => {
                             currentAccountId={currentAccountId}
                             isLoggedIn
                             onReply={reply.openReplyDialog}
+                            onQuote={quote.open}
                             onLike={actions.like}
                             isLiking={actionState.likingPostId === post.id}
                             onUndoLike={actions.undoLike}
@@ -441,6 +437,9 @@ const ThreadModal = () => {
                             onUndoRepost={post.reblogged ? actions.undoRepost : undefined}
                             isUndoingRepost={actionState.undoingRepostPostId === post.id}
                             onDelete={actions.deletePost}
+                            onMute={actions.muteAccount}
+                            onBlock={actions.blockAccount}
+                            onReport={reportPost.open}
                             isDeleting={actionState.deletingPostId === post.id}
                             onEmojiReact={actions.emojiReact}
                             onUndoEmojiReact={actions.undoEmojiReact}
@@ -716,8 +715,23 @@ const UpdateBioModal = () => {
 };
 
 const TimelineList = () => {
-  const { data, items, actions, blueskyLike, blueskyRepost, blueskyStatus, reply, thread, ui, reading, timeline } =
-    useTimelineContext();
+  const {
+    data,
+    items,
+    actions,
+    reportPost,
+    blueskyLike,
+    blueskyRepost,
+    blueskyReply,
+    blueskyQuote,
+    blueskyStatus,
+    reply,
+    quote,
+    thread,
+    ui,
+    reading,
+    timeline,
+  } = useTimelineContext();
 
   if (!data) return null;
 
@@ -767,6 +781,8 @@ const TimelineList = () => {
               item={item.item}
               dataIndex={index}
               isSelected={selectedIndex === index}
+              onReply={blueskyReply.open}
+              onQuote={blueskyQuote.open}
               onLike={blueskyLike.like}
               onUndoLike={blueskyLike.undoLike}
               isLikePending={blueskyLike.pendingUris.has(item.item.uri)}
@@ -793,6 +809,9 @@ const TimelineList = () => {
             onUndoRepost={isMyRepost ? actions.undoRepost : undefined}
             isUndoingRepost={actionState.undoingRepostPostId === postId}
             onDelete={actions.deletePost}
+            onMute={actions.muteAccount}
+            onBlock={actions.blockAccount}
+            onReport={reportPost.open}
             isDeleting={actionState.deletingPostId === postId}
             onEmojiReact={actions.emojiReact}
             onUndoEmojiReact={actions.undoEmojiReact}
@@ -805,6 +824,7 @@ const TimelineList = () => {
             isEmojiPickerOpen={emojiPickerOpenForIndex === index}
             onToggleEmojiPicker={() => toggleEmojiPicker(index)}
             onReply={reply.openReplyDialog}
+            onQuote={quote.open}
             onShowThread={thread.showThread}
           />,
         );
@@ -890,8 +910,33 @@ const ServerTimeline = () => {
   );
 };
 
+const ReportPostModal = () => {
+  const { reportPost } = useTimelineContext();
+
+  return (
+    <>
+      <ReportModal
+        targetLabel={reportPost.target === null ? '' : `@${reportPost.target.acct} の投稿`}
+        isOpen={reportPost.target !== null}
+        isSubmitting={reportPost.isReporting}
+        error={reportPost.error}
+        onSubmit={reportPost.submit}
+        onClose={reportPost.close}
+      />
+      {reportPost.isReported && (
+        <p
+          role='status'
+          class='fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-clay bg-cream dark:bg-gray-800 shadow-clay dark:shadow-clay-dark text-sm text-sage-dark dark:text-sage'
+        >
+          通報しました
+        </p>
+      )}
+    </>
+  );
+};
+
 const HomePage = () => {
-  const { timeline } = useTimelineContext();
+  const { timeline, blueskyReply, blueskyQuote } = useTimelineContext();
   const handlePosted = usePostedHandler();
   const isTimelineReady = timeline.state.status === 'success';
 
@@ -926,7 +971,11 @@ const HomePage = () => {
       <PullToRefreshIndicator />
       <NewPostsPill />
       <ReplyModal />
+      <BlueskyReplyModal dialog={blueskyReply} />
+      <BlueskyQuoteModal dialog={blueskyQuote} />
+      <FediverseQuoteModal />
       <ThreadModal />
+      <ReportPostModal />
       <TimelineList />
       <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>
     </>

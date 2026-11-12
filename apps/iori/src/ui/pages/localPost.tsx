@@ -6,16 +6,24 @@ import type { PostDestination } from '../../domain/post/postDestination.ts';
 import {
   createStatus,
   deleteStatus,
+  fetchRemoteContext,
   fetchStatus,
   fetchStatusContext,
   fetchVerifyCredentials,
-  isNotFoundError,
 } from '../api/mastodonClient.ts';
 import { accountHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { DEFAULT_POST_DESTINATION } from '../components/postDestination.ts';
 import { replyParams } from '../components/postSubmission.ts';
 import { PostView } from '../components/PostView.tsx';
+import { QuoteModal } from '../components/QuoteModal.tsx';
 import { ReplyModal } from '../components/ReplyModal.tsx';
+import { useQuoteDialog } from '../hooks/useQuoteDialog.ts';
+import {
+  applyContext,
+  resolveLocalPostThread,
+  shouldReloadContext,
+  showsRemoteContextLoading,
+} from './localPostThread.ts';
 
 type ThreadData = {
   ancestors: readonly Status[];
@@ -32,6 +40,9 @@ const LocalPostPage = () => {
   const [threadData, setThreadData] = useState<ThreadData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [contextFailed, setContextFailed] = useState(false);
+  const [isRetryingContext, setIsRetryingContext] = useState(false);
+  const [isLoadingRemoteContext, setIsLoadingRemoteContext] = useState(false);
   const [isLoggedIn] = useState(() => getIsLoggedIn());
   const [currentAccountId, setCurrentAccountId] = useState<string | undefined>(undefined);
 
@@ -46,37 +57,78 @@ const LocalPostPage = () => {
     return pathParts[postsIndex + 1];
   };
 
-  const fetchThread = async () => {
+  const fetchThread = async (): Promise<boolean> => {
     const postId = getPostIdFromUrl();
     if (!postId) {
       setError('Post ID not found');
       setIsLoading(false);
-      return;
+      return false;
     }
 
-    try {
-      const [currentPost, context] = await Promise.all([
-        fetchStatus(postId),
-        fetchStatusContext(postId),
-      ]);
-      setThreadData({
-        currentPost,
-        ancestors: context.ancestors,
-        descendants: context.descendants,
-      });
-    } catch (err) {
-      if (isNotFoundError(err)) {
+    const [status, context] = await Promise.allSettled([
+      fetchStatus(postId),
+      fetchStatusContext(postId),
+    ]);
+    const thread = resolveLocalPostThread(status, context);
+    switch (thread.type) {
+      case 'notFound':
         setThreadData(null);
-      } else {
-        setError((err as Error).message);
+        break;
+      case 'error':
+        setError(thread.message);
+        break;
+      case 'loaded':
+        setThreadData({
+          currentPost: thread.currentPost,
+          ancestors: thread.ancestors,
+          descendants: thread.descendants,
+        });
+        setContextFailed(thread.contextFailed);
+        break;
+    }
+    setIsLoading(false);
+    return thread.type === 'loaded';
+  };
+
+  const loadRemoteContext = async () => {
+    const postId = getPostIdFromUrl();
+    if (!postId) return;
+
+    setIsLoadingRemoteContext(true);
+    try {
+      const remote = await fetchRemoteContext(postId);
+      if (shouldReloadContext(remote)) {
+        const context = await fetchStatusContext(postId);
+        setThreadData((prev) => applyContext(prev, context));
+        setContextFailed(false);
       }
+    } catch (err) {
+      console.error('Failed to load the remote context:', err);
     } finally {
-      setIsLoading(false);
+      setIsLoadingRemoteContext(false);
+    }
+  };
+
+  const handleRetryContext = async () => {
+    const postId = getPostIdFromUrl();
+    if (!postId) return;
+
+    setIsRetryingContext(true);
+    try {
+      const context = await fetchStatusContext(postId);
+      setThreadData((prev) => prev && { ...prev, ancestors: context.ancestors, descendants: context.descendants });
+      setContextFailed(false);
+    } catch {
+      setContextFailed(true);
+    } finally {
+      setIsRetryingContext(false);
     }
   };
 
   useEffect(() => {
-    fetchThread();
+    fetchThread().then(async (loaded) => {
+      if (loaded && isLoggedIn) await loadRemoteContext();
+    });
     if (isLoggedIn) {
       fetchVerifyCredentials()
         .then((account) => setCurrentAccountId(account.id))
@@ -87,6 +139,8 @@ const LocalPostPage = () => {
   const handleReply = (postId: string) => {
     setReplyToPostId(postId);
   };
+
+  const quote = useQuoteDialog({ onQuoted: () => void fetchThread() });
 
   const handleCloseReplyModal = () => {
     setReplyToPostId(null);
@@ -236,6 +290,7 @@ const LocalPostPage = () => {
                   <PostView
                     status={post}
                     onReply={isLoggedIn ? handleReply : undefined}
+                    onQuote={isLoggedIn ? quote.open : undefined}
                     onDelete={isLoggedIn ? handleDelete : undefined}
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
@@ -250,6 +305,7 @@ const LocalPostPage = () => {
               <PostView
                 status={threadData.currentPost}
                 onReply={isLoggedIn ? handleReply : undefined}
+                onQuote={isLoggedIn ? quote.open : undefined}
                 onDelete={isLoggedIn ? handleDelete : undefined}
                 isDeleting={deletingPostId === threadData.currentPost.id}
                 currentAccountId={currentAccountId}
@@ -267,6 +323,19 @@ const LocalPostPage = () => {
               )}
             </div>
           )}
+          {contextFailed && (
+            <div class='flex flex-wrap items-center gap-3'>
+              <p role='alert' class='text-charcoal-light dark:text-gray-400'>返信とスレッドを読み込めませんでした。</p>
+              <button
+                type='button'
+                onClick={handleRetryContext}
+                disabled={isRetryingContext}
+                class='px-4 py-2 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
+              >
+                もう一度読み込む
+              </button>
+            </div>
+          )}
           {threadData.descendants.length > 0 && (
             <>
               {threadData.descendants.map((post) => (
@@ -274,6 +343,7 @@ const LocalPostPage = () => {
                   <PostView
                     status={post}
                     onReply={isLoggedIn ? handleReply : undefined}
+                    onQuote={isLoggedIn ? quote.open : undefined}
                     onDelete={isLoggedIn ? handleDelete : undefined}
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
@@ -282,6 +352,11 @@ const LocalPostPage = () => {
                 </div>
               ))}
             </>
+          )}
+          {showsRemoteContextLoading(isLoadingRemoteContext, threadData.currentPost) && (
+            <p role='status' class='text-sm text-charcoal-light dark:text-gray-400'>
+              相手のサーバーから返信を読み込んでいます
+            </p>
           )}
         </div>
       </div>
@@ -296,6 +371,20 @@ const LocalPostPage = () => {
           isSubmitting={isSendingReply}
           destination={replyDestination}
           onDestinationChange={setReplyDestination}
+        />
+      )}
+
+      {isLoggedIn && quote.target !== null && (
+        <QuoteModal
+          target={quote.target}
+          content={quote.content}
+          destination={quote.destination}
+          isSending={quote.isSending}
+          errorText={quote.errorText}
+          onClose={quote.close}
+          onSubmit={() => void quote.send()}
+          onContentChange={quote.setContent}
+          onDestinationChange={quote.setDestination}
         />
       )}
 

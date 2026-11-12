@@ -83,6 +83,15 @@ const build = () => {
   sqlite.prepare('UPDATE remote_posts SET uri = ? WHERE postId = ?').run('https://media.baraag.net/@b2/1', bp2.postId);
   sqlite.prepare('UPDATE remote_posts SET uri = ? WHERE postId = ?').run('https://baraag.net/@o1/1', kept.other.postId);
 
+  sqlite.prepare('INSERT INTO post_quotes(postId,quoteUri) VALUES (?,?)').run(
+    bp1.postId,
+    'https://remote.example/notes/q1',
+  );
+  sqlite.prepare('INSERT INTO post_quotes(postId,quoteUri) VALUES (?,?)').run(
+    kept.notbaraag.postId,
+    'https://remote.example/notes/q2',
+  );
+
   sqlite.prepare(
     'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
   ).run(seed.uuid(), local.actorId, local.userId, article.postId, 'title', 'published', 1, 1, null);
@@ -136,6 +145,8 @@ const build = () => {
     emojiOnBp1: seed.addEmojiReactNotification(local.userId, other.actorId, bp1.postId, 2),
     replyFromBp2: seed.addReplyNotification(local.userId, sub.actorId, bp2.postId, localPost.postId, 3),
     replyToBp1: seed.addReplyNotification(local.userId, other.actorId, kept.other.postId, bp1.postId, 4),
+    mentionOnBp1: seed.addMentionNotification(local.userId, other.actorId, bp1.postId, 10),
+    mentionOnKept: seed.addMentionNotification(local.userId, other.actorId, kept.notbaraag.postId, 11),
     repostOfBp2: seed.addRepostNotification(local.userId, other.actorId, bp2.postId, 5),
     likeOnKept: seed.addLikeNotification(local.userId, other.actorId, kept.notbaraag.postId, 6),
     replyOnKept: seed.addReplyNotification(local.userId, other.actorId, kept.other.postId, localPost.postId, 7),
@@ -237,6 +248,7 @@ const SNAPSHOT_TABLES: Array<[string, string]> = [
   ['remote_posts', 'postId'],
   ['local_posts', 'postId'],
   ['remote_post_recipients', 'postId, actorUri'],
+  ['post_quotes', 'postId'],
   ['post_images', 'imageId'],
   ['link_previews', 'linkPreviewId'],
   ['post_translations', 'postId, targetLanguage'],
@@ -245,6 +257,7 @@ const SNAPSHOT_TABLES: Array<[string, string]> = [
   ['notification_likes', 'notificationId'],
   ['notification_emoji_reacts', 'notificationId'],
   ['notification_replies', 'notificationId'],
+  ['notification_mentions', 'notificationId'],
   ['notification_reposts', 'notificationId'],
   ['notification_follows', 'notificationId'],
   ['reposts', 'repostId'],
@@ -378,7 +391,7 @@ describe('delete-blocked-domain-posts dry-run', () => {
     const { notices, error } = await run('dry-run', fixture);
     expect(error).toBeUndefined();
     expect(notices).toEqual([
-      'IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=2 remote_posts=2 timeline_items=4 federated_items=2 reposts=2 likes=2 emoji_reacts=2 notifications=5 orphan_repost_notifications=0 images=2 articles_skipped=1 actors=2 follows_out=1 follows_in=1 mutes=1',
+      'IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=2 remote_posts=2 timeline_items=4 federated_items=2 reposts=2 likes=2 emoji_reacts=2 notifications=6 orphan_repost_notifications=0 images=2 articles_skipped=1 actors=2 follows_out=1 follows_in=1 mutes=1',
     ]);
   });
   it('prints zeros when nothing is left', async () => {
@@ -400,7 +413,7 @@ describe('delete-blocked-domain-posts dry-run counts', () => {
       ).run(seed.uuid(), local.userId, type, 0, createdAt);
     }
     const { notices } = await run('dry-run', fixture);
-    expect(notices[0]).toContain(' notifications=5 orphan_repost_notifications=2 ');
+    expect(notices[0]).toContain(' notifications=6 orphan_repost_notifications=2 ');
   });
   it('counts remote_posts by the same condition as the deletion', async () => {
     const { fixture, kept } = build();
@@ -467,11 +480,18 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
     const { fixture, notifications } = build();
     await run('apply', fixture);
     expect(column(fixture, 'SELECT notificationId FROM notifications')).toEqual(
-      ids(notifications.likeOnKept, notifications.replyOnKept, notifications.likeOnArticle, notifications.follow),
+      ids(
+        notifications.likeOnKept,
+        notifications.replyOnKept,
+        notifications.mentionOnKept,
+        notifications.likeOnArticle,
+        notifications.follow,
+      ),
     );
     expect(count(fixture, 'notification_likes')).toBe(2);
     expect(count(fixture, 'notification_emoji_reacts')).toBe(0);
     expect(count(fixture, 'notification_replies')).toBe(1);
+    expect(count(fixture, 'notification_mentions')).toBe(1);
     expect(count(fixture, 'notification_reposts')).toBe(0);
     expect(count(fixture, 'notification_follows')).toBe(1);
   });
@@ -491,6 +511,7 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
     );
     expect(column(fixture, 'SELECT imageId FROM post_images')).toEqual(ids(imageIds[2], imageIds[3]));
     expect(column(fixture, 'SELECT postId FROM remote_post_recipients')).toEqual(ids(kept.notbaraag.postId));
+    expect(column(fixture, 'SELECT postId FROM post_quotes')).toEqual(ids(kept.notbaraag.postId));
     expect(count(fixture, 'link_previews')).toBe(0);
     expect(count(fixture, 'post_translations')).toBe(0);
   });
@@ -544,9 +565,11 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
       'notification.likeNotificationDeleted',
       'notification.emojiReactNotificationDeleted',
       'notification.replyNotificationDeleted',
+      'notification.mentionNotificationDeleted',
       'DELETE FROM notification_likes',
       'DELETE FROM notification_emoji_reacts',
       'DELETE FROM notification_replies',
+      'DELETE FROM notification_mentions',
       'DELETE FROM notification_reposts',
       'DELETE FROM notifications',
       'repost.repostDeleted',
@@ -561,6 +584,7 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
       'federatedTimelineItem.deleted',
       'DELETE FROM federated_timeline_items',
       'DELETE FROM post_images',
+      'DELETE FROM post_quotes',
       'DELETE FROM local_posts',
       'DELETE FROM remote_post_recipients',
       'DELETE FROM remote_posts',
@@ -643,6 +667,14 @@ describe('delete-blocked-domain-posts domain events', () => {
         }),
         at,
       ),
+      Notification.deleteMentionNotification(
+        cast({
+          notificationId: notifications.mentionOnBp1,
+          mentionerActorId: other.actorId,
+          mentionPostId: bp1.postId,
+        }),
+        at,
+      ),
       ...[reposts.otherOfBp1, reposts.subOfBp2].map((repost) => Repost.deleteRepost(cast(repost), at)),
       Like.deleteLocalLike(cast({ likeId: localLike.likeId }), at),
       Like.deleteRemoteLike(cast({ likeId: remoteLikeId, likeActivityUri: 'https://remote.example/likes/1' }), at),
@@ -682,8 +714,8 @@ describe('delete-blocked-domain-posts domain events', () => {
     const { fixture } = build();
     await run('apply', fixture);
     const ids = rows(fixture, 'SELECT eventId FROM domain_events').map((row) => String(row.eventId));
-    expect(ids).toHaveLength(18);
-    expect(new Set(ids).size).toBe(18);
+    expect(ids).toHaveLength(19);
+    expect(new Set(ids).size).toBe(19);
     for (const id of ids) {
       expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     }

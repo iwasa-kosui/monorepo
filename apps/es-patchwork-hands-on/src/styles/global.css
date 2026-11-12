@@ -287,6 +287,15 @@ body.chapter-page {
 .content .intro-text li + li {
   margin-top: 0.25rem;
 }
+.content .intro-text table {
+  margin-block: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+.content .intro-text th,
+.content .intro-text td {
+  padding: 0.125rem 0.5rem;
+}
 
 @media (min-width: 1024px) {
   .intro-spread {

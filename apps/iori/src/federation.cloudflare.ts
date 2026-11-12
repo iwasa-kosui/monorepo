@@ -9,7 +9,20 @@ import {
   type MessageQueueEnqueueOptions,
   SendActivityError,
 } from '@fedify/fedify';
-import { Accept, Activity, Announce, Article, Create, Delete, Follow, Like, Note, Reject, Undo } from '@fedify/vocab';
+import {
+  Accept,
+  Activity,
+  Announce,
+  Article,
+  Block,
+  Create,
+  Delete,
+  Follow,
+  Like,
+  Note,
+  Reject,
+  Undo,
+} from '@fedify/vocab';
 import { FetchError } from '@fedify/vocab-runtime';
 
 import { createD1ActorResolverByUri } from './adaptor/d1/actor/actorResolverByUri.ts';
@@ -29,6 +42,7 @@ import { createD1InstanceActorKeyPairsResolver } from './adaptor/d1/key/instance
 import { createD1KeyGeneratedStore } from './adaptor/d1/key/keyGeneratedStore.ts';
 import { createD1KeysResolverByUserId } from './adaptor/d1/key/keysResolverByUserId.ts';
 import { createD1PostCreatedStore } from './adaptor/d1/post/postCreatedStore.ts';
+import { createD1PostQuotesResolverByPostIds } from './adaptor/d1/post/postQuotesResolverByPostIds.ts';
 import { createD1PostResolver } from './adaptor/d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from './adaptor/d1/post/postResolverByUri.ts';
 import { createD1PostsResolverByActorId } from './adaptor/d1/post/postsResolverByActorId.ts';
@@ -183,11 +197,13 @@ export const createCloudflareFederationRuntime = async (
   const outboxDispatcher = createOutboxDispatcher({
     ...actorDeps,
     postsResolverByActorId: createD1PostsResolverByActorId(db),
+    postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
   });
   const objectDispatcher = createObjectDispatcher({
     origin: env.ORIGIN,
     postResolver: createD1PostResolver(db),
     postImagesResolver: createD1PostImagesResolverByPostId(db),
+    postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
     userResolverByUsername,
     articleResolver: createD1ArticleResolver(db),
     threadResolver: createD1ThreadResolver(db, env.ORIGIN),
@@ -233,6 +249,7 @@ export const createCloudflareFederationRuntime = async (
     .on(Accept, inboxListener.onAccept)
     .on(Reject, inboxListener.onReject)
     .on(Follow, inboxListener.onFollow)
+    .on(Block, inboxListener.onBlock)
     .on(Undo, inboxListener.onUndo)
     .on(Create, inboxListener.onCreate)
     .on(Delete, inboxListener.onDelete)

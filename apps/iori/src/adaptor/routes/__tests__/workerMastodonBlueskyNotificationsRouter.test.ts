@@ -58,9 +58,18 @@ describe('Bluesky の通知の Mastodon 互換 API', () => {
     });
     expect(body[0]).toMatchObject({
       account: { acct: 'alice.bsky.social', url: 'https://bsky.app/profile/alice.bsky.social', display_name: 'Alice' },
-      iori: { bluesky: { reason: 'reply', url: 'https://bsky.app/profile/did:plc:alice/post/3kreply', text: 'hello' } },
+      iori: {
+        bluesky: {
+          reason: 'reply',
+          url: 'https://bsky.app/profile/did:plc:alice/post/3kreply',
+          uri: 'at://did:plc:alice/app.bsky.feed.post/3kreply',
+          text: 'hello',
+        },
+      },
     });
     expect(body[3]?.iori?.bluesky?.url).toBe('https://bsky.app/profile/did:plc:me/post/3kpost');
+    expect(body[3]?.iori?.bluesky?.uri).toBe('at://did:plc:me/app.bsky.feed.post/3kpost');
+    expect(body[1]?.iori?.bluesky).not.toHaveProperty('uri');
   });
 
   it('対象の投稿が削除済みなら、Bluesky の通知は最小の Status を合成して返す', async () => {

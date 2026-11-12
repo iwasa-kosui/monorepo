@@ -257,8 +257,43 @@
     {
       "idx": 36,
       "version": "6",
-      "when": 1794449085733,
-      "tag": "0036_bluesky_moderated_actors",
+      "when": 1794448112065,
+      "tag": "0036_fediverse_blocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1794451311116,
+      "tag": "0037_notification_mentions",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1794457934379,
+      "tag": "0038_post_quotes",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1794463367694,
+      "tag": "0039_local_post_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1794464345893,
+      "tag": "0040_post_image_media_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1794465345893,
+      "tag": "0042_bluesky_moderated_actors",
       "breakpoints": true
     }
   ]

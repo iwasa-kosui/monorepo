@@ -1,9 +1,10 @@
 import { test as fcTest } from '@fast-check/vitest';
+import { Endpoints, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
-import type { LocalPost, RemotePost } from '../../domain/post/post.ts';
+import type { LocalPost, PostQuote, PostQuotesResolverByPostIds, RemotePost } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
@@ -138,6 +139,7 @@ describe('DeletePostUseCase', () => {
       };
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -187,6 +189,7 @@ describe('DeletePostUseCase', () => {
       };
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -232,6 +235,7 @@ describe('DeletePostUseCase', () => {
         };
         const post: LocalPost = {
           type: 'local',
+          visibility: 'public',
           summary: null,
           sensitive: false,
           postId: crypto.randomUUID() as PostId,
@@ -384,6 +388,7 @@ describe('DeletePostUseCase', () => {
       };
       const otherPost: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -503,6 +508,7 @@ describe('DeletePostUseCase', () => {
       };
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -564,6 +570,7 @@ describe('DeletePostUseCase', () => {
       };
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -586,6 +593,213 @@ describe('DeletePostUseCase', () => {
       });
 
       expect(ctx.sendActivity).toHaveBeenCalled();
+    });
+
+    describe('メンション相手への配送', () => {
+      const aliceId = 'https://remote.example/users/alice';
+      const selfId = 'https://example.com/users/kosui';
+      const mentionOf = (id: string, name: string) =>
+        `<span class="h-card"><a href="${id}" class="u-url mention">@<span>${name}</span></a></span>`;
+
+      const setup = (content: string) => {
+        const deps = createDeps();
+        const user: User = {
+          id: crypto.randomUUID() as User['id'],
+          username: 'kosui' as Username,
+        };
+        const session: Session = {
+          sessionId: crypto.randomUUID() as Session['sessionId'],
+          userId: user.id,
+          expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+        };
+        const actor: LocalActor = {
+          id: crypto.randomUUID() as LocalActor['id'],
+          userId: user.id,
+          uri: selfId,
+          inboxUrl: 'https://example.com/inbox',
+          type: 'local',
+          logoUri: undefined,
+        };
+        const post: LocalPost = {
+          type: 'local',
+          visibility: 'public',
+          summary: null,
+          sensitive: false,
+          postId: crypto.randomUUID() as PostId,
+          actorId: actor.id,
+          content,
+          createdAt: Date.now() as LocalPost['createdAt'],
+          userId: user.id,
+          inReplyToUri: null,
+        };
+        setupValidUserSession(deps, user, session, actor);
+        deps.postResolver.setPost(post);
+        const ctx = createMockRequestContext();
+        const lookupObject = vi.fn(async (uri: string) =>
+          uri === aliceId
+            ? new Person({
+              id: new URL(aliceId),
+              inbox: new URL(`${aliceId}/inbox`),
+              endpoints: new Endpoints({ sharedInbox: new URL('https://remote.example/inbox') }),
+            })
+            : null
+        );
+        Object.assign(ctx, { lookupObject, getDocumentLoader: vi.fn(async () => ({})) });
+        const run = (postQuotesResolver?: PostQuotesResolverByPostIds) =>
+          DeletePostUseCase.create({ ...deps, ...(postQuotesResolver === undefined ? {} : { postQuotesResolver }) })
+            .run({
+              sessionId: session.sessionId,
+              postId: post.postId,
+              ctx,
+            });
+        return { deps, ctx, lookupObject, run, postId: post.postId };
+      };
+
+      const quoteResolverOf = (postId: PostId, quote: PostQuote) => {
+        const resolve = vi.fn(async () => RA.ok(new Map<PostId, PostQuote>([[postId, quote]])));
+        return { resolve } as unknown as PostQuotesResolverByPostIds & { resolve: typeof resolve };
+      };
+      const bobId = 'https://remote.example/users/bob';
+      const bobQuote: PostQuote = {
+        uri: 'https://remote.example/notes/1',
+        author: { id: bobId, inboxUrl: `${bobId}/inbox`, username: 'bob' },
+      };
+
+      it('メンションのある投稿を消すと、相手にも同じ Delete を送る', async () => {
+        const { ctx, run } = setup(`<p>hi ${mentionOf(aliceId, 'alice@remote.example')}</p>`);
+
+        const result = await run();
+
+        expect(result.ok).toBe(true);
+        const calls = vi.mocked(ctx.sendActivity).mock.calls;
+        expect(calls).toHaveLength(2);
+        expect(calls[0]?.[1]).toBe('followers');
+        expect(calls[1]?.[1]).toEqual([
+          {
+            id: new URL(aliceId),
+            inboxId: new URL(`${aliceId}/inbox`),
+            endpoints: { sharedInbox: new URL('https://remote.example/inbox') },
+          },
+        ]);
+        expect(calls[1]?.[2]).toBe(calls[0]?.[2]);
+      });
+
+      it('相手の actor を解決できなくても削除は成功し、相手には送らない', async () => {
+        const { deps, ctx, lookupObject, run } = setup(
+          `<p>${mentionOf('https://gone.example/users/bob', 'bob@gone.example')}</p>`,
+        );
+        lookupObject.mockRejectedValue(new Error('network down'));
+
+        const result = await run();
+
+        expect(result.ok).toBe(true);
+        expect(deps.postDeletedStore.store).toHaveBeenCalledTimes(1);
+        expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+      });
+
+      it('相手の lookup が返らなくても削除は成功し、時間切れの相手には送らない', async () => {
+        const { deps, ctx, lookupObject, run } = setup(`<p>${mentionOf(aliceId, 'alice@remote.example')}</p>`);
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+          const lookupStarted = Promise.withResolvers<void>();
+          lookupObject.mockImplementation(
+            (() => {
+              lookupStarted.resolve();
+              return new Promise(() => {});
+            }) as never,
+          );
+
+          const resultPromise = run();
+          await lookupStarted.promise;
+          await vi.advanceTimersByTimeAsync(5000);
+          const result = await resultPromise;
+
+          expect(result.ok).toBe(true);
+          expect(deps.postDeletedStore.store).toHaveBeenCalledTimes(1);
+          expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('相手への送信が失敗しても削除は成功する', async () => {
+        const { deps, ctx, run } = setup(`<p>${mentionOf(aliceId, 'alice@remote.example')}</p>`);
+        vi.mocked(ctx.sendActivity).mockImplementation(async (_sender, recipients) => {
+          if (recipients !== 'followers') throw new Error('delivery failed');
+        });
+
+        const result = await run();
+
+        expect(result.ok).toBe(true);
+        expect(deps.postDeletedStore.store).toHaveBeenCalledTimes(1);
+      });
+
+      it('自分のホストのメンションは引かず、送らない', async () => {
+        const { ctx, lookupObject, run } = setup(`<p>${mentionOf(selfId, 'kosui@example.com')}</p>`);
+
+        await run();
+
+        expect(lookupObject).not.toHaveBeenCalled();
+        expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+      });
+
+      it('引用の投稿を消すと、引用先の作者にも同じ Delete を送る', async () => {
+        const { ctx, run, postId } = setup('<p>look</p>');
+
+        const result = await run(quoteResolverOf(postId, bobQuote));
+
+        expect(result.ok).toBe(true);
+        const calls = vi.mocked(ctx.sendActivity).mock.calls;
+        expect(calls).toHaveLength(2);
+        expect(calls[1]?.[1]).toEqual([
+          { id: new URL(bobId), inboxId: new URL(`${bobId}/inbox`), endpoints: null },
+        ]);
+        expect(calls[1]?.[2]).toBe(calls[0]?.[2]);
+      });
+
+      it('引用先の作者を、投稿を削除する前に引く', async () => {
+        const { deps, run, postId } = setup('<p>look</p>');
+        const resolver = quoteResolverOf(postId, bobQuote);
+
+        await run(resolver);
+
+        expect(resolver.resolve).toHaveBeenCalledWith([postId]);
+        expect(resolver.resolve.mock.invocationCallOrder[0]).toBeLessThan(
+          vi.mocked(deps.postDeletedStore.store).mock.invocationCallOrder[0]!,
+        );
+      });
+
+      it('引用先の作者が本文のメンションの相手と同じなら、1回だけ送る', async () => {
+        const { ctx, run, postId } = setup(`<p>${mentionOf(aliceId, 'alice@remote.example')}</p>`);
+        const quote: PostQuote = {
+          uri: 'https://remote.example/notes/2',
+          author: { id: aliceId, inboxUrl: `${aliceId}/inbox`, username: 'alice' },
+        };
+
+        await run(quoteResolverOf(postId, quote));
+
+        const calls = vi.mocked(ctx.sendActivity).mock.calls;
+        expect(calls).toHaveLength(2);
+        expect(calls[1]?.[1]).toHaveLength(1);
+      });
+
+      it('引用先の作者が分からない(ローカルの引用先や未取得)ときは、作者には送らない', async () => {
+        const { ctx, run, postId } = setup('<p>look</p>');
+
+        const result = await run(quoteResolverOf(postId, { uri: bobQuote.uri, author: null }));
+
+        expect(result.ok).toBe(true);
+        expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+      });
+
+      it('メンションの無い投稿は従来どおり followers にだけ送る', async () => {
+        const { ctx, lookupObject, run } = setup('<p>hello</p>');
+
+        await run();
+
+        expect(lookupObject).not.toHaveBeenCalled();
+        expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

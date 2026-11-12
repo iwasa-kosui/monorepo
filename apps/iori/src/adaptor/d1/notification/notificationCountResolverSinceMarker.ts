@@ -5,6 +5,7 @@ import type { NotificationCountResolverSinceMarker } from '../../../domain/notif
 import type { IoriD1Db } from '../client.ts';
 import { mastodonMarkersTable, notificationsTable } from '../schema.ts';
 import { notFromModeratedBlueskyActor } from './moderatedBlueskyNotifications.ts';
+import { notFromBlockedActor } from './notFromBlockedActor.ts';
 
 export const createD1NotificationCountResolverSinceMarker = (db: IoriD1Db): NotificationCountResolverSinceMarker => ({
   resolve: async ({ userId, types, limit }) => {
@@ -28,6 +29,7 @@ export const createD1NotificationCountResolverSinceMarker = (db: IoriD1Db): Noti
         eq(notificationsTable.recipientUserId, userId),
         inArray(notificationsTable.type, [...types]),
         notFromModeratedBlueskyActor(db),
+        notFromBlockedActor,
         cursor === undefined ? undefined : or(
           gt(notificationsTable.createdAt, cursor.createdAt),
           and(

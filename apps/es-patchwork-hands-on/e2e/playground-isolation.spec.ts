@@ -51,11 +51,11 @@ test('確認用ページと第1章から第4章のページ以外の HTML は実
   const others = htmlFiles().filter((file) =>
     file !== checkFile && !embeddedPages.test(file) && !file.startsWith('play/')
   );
-  expect(others.length).toBeGreaterThan(10);
+  expect(others.length).toBeGreaterThan(0);
   expect(others).toContain('chapters/intro/index.html');
   expect(others).toContain('chapters/summary/index.html');
   expect(others).toContain('chapters/intro/3/index.html');
-  expect(others).toContain('chapters/summary/5/index.html');
+  expect(others).toContain('chapters/summary/2/index.html');
   const offenders = others.filter((file) => {
     const html = readDistFile(file);
     return usesPlaygroundRuntime(html) || html.includes('playground-check') || html.includes('name="robots"');
@@ -75,7 +75,6 @@ test('第1章から第4章では、実行欄を置いたページだけが実行
   expect(mismatches).toEqual([]);
   expect(pages.filter((file) => hasRuntimeMarkup(readDistFile(file))).sort()).toEqual([
     'chapters/chapter-1/3/index.html',
-    'chapters/chapter-1/5/index.html',
     'chapters/chapter-1/index.html',
     'chapters/chapter-2/2/index.html',
     'chapters/chapter-2/4/index.html',

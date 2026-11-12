@@ -24,6 +24,7 @@ const localPostZodType = z.object({
   inReplyToUri: z.nullable(z.string()),
   summary: z.nullable(z.string()),
   sensitive: z.boolean(),
+  visibility: Visibility.zodTypeOrPublic,
 });
 const remotePostZodType = z.object({
   type: z.literal('remote'),
@@ -43,7 +44,7 @@ export const LocalPost = Schema.create(localPostZodType);
 export type RemotePost = z.infer<typeof remotePostZodType>;
 export const RemotePost = Schema.create(remotePostZodType);
 export type Post = LocalPost | RemotePost;
-export type PostImage = { imageId: ImageId; url: string; altText: string | null };
+export type PostImage = { imageId: ImageId; url: string; altText: string | null; mediaType?: string | null };
 export type PostReaction = { emoji: string; count: number; emojiImageUrl: string | null };
 export type PostWithAuthor = Post & {
   username: Username;
@@ -69,35 +70,43 @@ export type PostEvent<
 
 export const PostEvent = AggregateEvent.createFactory<PostAggregate>('post');
 
-export type PostCreated = PostEvent<Post, 'post.created', Post>;
+export type PostCreated = PostEvent<Post, 'post.created', Post & { quoteUri: string | null }>;
 export type RemotePostCreated = PostEvent<
   RemotePost,
   'post.remotePostCreated',
-  RemotePost & { recipientActorUris: ReadonlyArray<string> }
+  RemotePost & { recipientActorUris: ReadonlyArray<string>; quoteUri: string | null }
 >;
 export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
 
 const createPost = (now: Instant) =>
 (
   payload:
-    & Omit<LocalPost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri' | 'summary' | 'sensitive'>
-    & { inReplyToUri?: string | null; summary?: string | null; sensitive?: boolean },
-): PostCreated => {
+    & Omit<LocalPost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri' | 'summary' | 'sensitive' | 'visibility'>
+    & {
+      inReplyToUri?: string | null;
+      summary?: string | null;
+      sensitive?: boolean;
+      visibility?: Visibility;
+      quoteUri?: string | null;
+    },
+): PostEvent<LocalPost, 'post.created', LocalPost & { quoteUri: string | null }> => {
+  const { quoteUri = null, ...postPayload } = payload;
   const postId = PostId.generate();
   const post: LocalPost = {
-    ...payload,
+    ...postPayload,
     postId,
     type: 'local',
     createdAt: now,
-    inReplyToUri: payload.inReplyToUri ?? null,
-    summary: payload.summary ?? null,
-    sensitive: payload.sensitive ?? false,
+    inReplyToUri: postPayload.inReplyToUri ?? null,
+    summary: postPayload.summary ?? null,
+    sensitive: postPayload.sensitive ?? false,
+    visibility: postPayload.visibility ?? 'public',
   };
   return PostEvent.create(
     postId,
     post,
     'post.created',
-    post,
+    { ...post, quoteUri },
     now,
   );
 };
@@ -111,9 +120,10 @@ const createRemotePost = (now: Instant) =>
       summary?: string | null;
       sensitive?: boolean;
       recipientActorUris?: ReadonlyArray<string>;
+      quoteUri?: string | null;
     },
 ): RemotePostCreated => {
-  const { recipientActorUris = [], ...postPayload } = payload;
+  const { recipientActorUris = [], quoteUri = null, ...postPayload } = payload;
   const postId = PostId.generate();
   const post: RemotePost = {
     ...postPayload,
@@ -128,7 +138,7 @@ const createRemotePost = (now: Instant) =>
     postId,
     post,
     'post.remotePostCreated',
-    { ...post, recipientActorUris },
+    { ...post, recipientActorUris, quoteUri },
     Instant.now(),
   );
 };
@@ -143,8 +153,7 @@ const deletePost = (now: Instant) => (postId: PostId): PostDeleted => {
   );
 };
 
-const isVisibleToAnonymous = (post: Post): boolean =>
-  post.type === 'local' || Visibility.isVisibleToAnonymous(post.visibility);
+const isVisibleToAnonymous = (post: Post): boolean => Visibility.isVisibleToAnonymous(post.visibility);
 
 export const Post = {
   ...schema,
@@ -157,9 +166,16 @@ export const Post = {
 export type PostCreatedStore = Agg.Store<PostCreated | RemotePostCreated>;
 export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
+export type PostQuote = Readonly<{
+  uri: string;
+  author: Readonly<{ id: string; inboxUrl: string; username: string | null }> | null;
+}>;
+export type PostQuotesResolverByPostIds = Agg.Resolver<ReadonlyArray<PostId>, ReadonlyMap<PostId, PostQuote>>;
 export type PostResolverByUri = Agg.Resolver<{ uri: string }, RemotePost | undefined>;
 export type LocalPostResolverByUri = Agg.Resolver<{ uri: string }, LocalPost | undefined>;
-export type RemotePostAttachment = Readonly<{ url: string; altText: string | null }>;
+export type RemotePostUrisResolverByUris = Agg.Resolver<{ uris: readonly string[] }, readonly string[]>;
+export type LocalPostUrisResolverByUris = Agg.Resolver<{ uris: readonly string[] }, readonly string[]>;
+export type RemotePostAttachment = Readonly<{ url: string; altText: string | null; mediaType: string | null }>;
 export type RemotePostIdentity = Readonly<{
   uri: string;
   content: string;
@@ -176,7 +192,9 @@ export type RemotePostIdentity = Readonly<{
   sensitive?: boolean;
   visibility: Visibility | null;
   recipientActorUris?: ReadonlyArray<string>;
+  quoteUri?: string | null;
   attachments?: readonly RemotePostAttachment[];
+  publishedAt?: Instant;
 }>;
 export type RemotePostUpserter = Agg.Resolver<RemotePostIdentity, RemotePost>;
 export type ThreadResolver = Agg.Resolver<

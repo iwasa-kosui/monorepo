@@ -42,6 +42,8 @@ describe('PruneFederatedPostsUseCase', () => {
     const target = addReceived(OLD, OLD, { inReplyToUri: 'https://remote.example/notes/other' });
     sqlite.prepare('INSERT INTO remote_post_recipients(postId,actorUri) VALUES (?,?)')
       .run(target.postId, 'https://remote.example/users/bob');
+    sqlite.prepare('INSERT INTO post_quotes(postId,quoteUri) VALUES (?,?)')
+      .run(target.postId, 'https://remote.example/notes/quoted');
     seed.addTimelineItem(remote.actorId, target.postId, OLD, { deletedAt: OLD + 1 });
     const remoteLike = seed.addLike(remote.actorId, target.postId);
     sqlite.prepare('UPDATE likes SET type = ? WHERE likeId = ?').run('remote', remoteLike.likeId);
@@ -71,6 +73,7 @@ describe('PruneFederatedPostsUseCase', () => {
         'reposts',
         'post_images',
         'remote_post_recipients',
+        'post_quotes',
         'remote_posts',
         'post_translations',
         'link_previews',
@@ -152,6 +155,10 @@ describe('PruneFederatedPostsUseCase', () => {
         '(d) 返信の通知が originalPostId で指している',
         ({ seed, local, remote, post }) =>
           seed.addReplyNotification(local.userId, remote.actorId, seed.uuid(), post.postId, 1),
+      ],
+      [
+        '(d) メンションの通知が指している',
+        ({ seed, local, remote, post }) => seed.addMentionNotification(local.userId, remote.actorId, post.postId, 1),
       ],
       [
         '(e) article の rootPostId が指している',

@@ -130,10 +130,18 @@ export const remotePostRecipientsTable = sqliteTable('remote_post_recipients', {
   index('remote_post_recipients_actor_uri_idx').on(table.actorUri),
 ]);
 
+export const postQuotesTable = sqliteTable('post_quotes', {
+  postId: text('postId').primaryKey().references(() => postsTable.postId),
+  quoteUri: text('quoteUri').notNull(),
+}, (table) => [
+  index('post_quotes_quote_uri_idx').on(table.quoteUri),
+]);
+
 export const localPostsTable = sqliteTable('local_posts', {
   postId: text('postId').primaryKey().references(() => postsTable.postId),
   userId: text('userId').notNull().references(() => usersTable.userId),
   inReplyToUri: text('inReplyToUri'),
+  visibility: text('visibility').notNull().default('public'),
 }, (table) => [
   index('local_posts_in_reply_to_uri_idx').on(table.inReplyToUri),
 ]);
@@ -164,6 +172,7 @@ export const postImagesTable = sqliteTable('post_images', {
   postId: text('postId').notNull().references(() => postsTable.postId),
   url: text('url').notNull(),
   altText: text('altText'),
+  mediaType: text('mediaType'),
   createdAt: timestamp().notNull(),
 });
 
@@ -324,6 +333,16 @@ export const notificationRepliesTable = sqliteTable('notification_replies', {
   index('notification_replies_original_post_id_idx').on(table.originalPostId),
 ]);
 
+export const notificationMentionsTable = sqliteTable('notification_mentions', {
+  notificationId: text('notificationId').primaryKey().references(() => notificationsTable.notificationId),
+  recipientUserId: text('recipientUserId').notNull().references(() => usersTable.userId),
+  mentionerActorId: text('mentionerActorId').notNull().references(() => actorsTable.actorId),
+  mentionPostId: text('mentionPostId').notNull(),
+}, (table) => [
+  uniqueIndex('notification_mentions_recipient_post_unique').on(table.recipientUserId, table.mentionPostId),
+  index('notification_mentions_mention_post_id_idx').on(table.mentionPostId),
+]);
+
 export const mutesTable = sqliteTable('mutes', {
   muteId: text('muteId').primaryKey(),
   userId: text('userId').notNull().references(() => usersTable.userId),
@@ -333,6 +352,17 @@ export const mutesTable = sqliteTable('mutes', {
   uniqueIndex('mute_user_actor_unique').on(table.userId, table.mutedActorId),
   index('mutes_user_id_idx').on(table.userId),
   index('mutes_muted_actor_id_idx').on(table.mutedActorId),
+]);
+
+export const blocksTable = sqliteTable('blocks', {
+  blockId: text('blockId').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  blockedActorId: text('blockedActorId').notNull().references(() => actorsTable.actorId),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('block_user_actor_unique').on(table.userId, table.blockedActorId),
+  index('blocks_user_id_idx').on(table.userId),
+  index('blocks_blocked_actor_id_idx').on(table.blockedActorId),
 ]);
 
 export const articlesTable = sqliteTable('articles', {
@@ -726,6 +756,7 @@ export const schema = {
   postsTable,
   remotePostsTable,
   remotePostRecipientsTable,
+  postQuotesTable,
   localPostsTable,
   likesTable,
   localLikesTable,
@@ -746,8 +777,10 @@ export const schema = {
   emojiReactsTable,
   notificationEmojiReactsTable,
   notificationRepliesTable,
+  notificationMentionsTable,
   notificationRepostsTable,
   mutesTable,
+  blocksTable,
   articlesTable,
   articleBodiesTable,
   linkPreviewsTable,

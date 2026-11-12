@@ -34,6 +34,108 @@ describe('GET /api/v1/statuses/:id', () => {
     });
   });
 
+  describe('引用', () => {
+    const addQuote = (t: Awaited<ReturnType<typeof seedStatuses>>, postId: string, quoteUri: string) =>
+      t.sqlite.prepare('INSERT INTO post_quotes(postId,quoteUri) VALUES (?,?)').run(postId, quoteUri);
+
+    it('引用先が見えるときは quote に引用先の Status を入れ、その中の quote は null にする', async () => {
+      const t = await seedStatuses();
+      const quoted = t.seed.addRemotePost(t.alice, 3_000, { visibility: 'public' });
+      const quotedQuoted = t.seed.addRemotePost(t.alice, 2_900, { visibility: 'public' });
+      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
+      addQuote(t, post.postId, quoted.uri);
+      addQuote(t, quoted.postId, quotedQuoted.uri);
+
+      const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status.quote).toMatchObject({ state: 'accepted', quoted_status: { id: quoted.postId, quote: null } });
+      expect(status.iori).not.toHaveProperty('quote_url');
+    });
+
+    it('引用先がローカルの投稿でも quote に入れる', async () => {
+      const t = await seedStatuses();
+      const quoted = t.seed.addLocalPost(t.me, 3_000);
+      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
+      addQuote(t, post.postId, quoted.uri);
+
+      const response = await t.request(`/api/v1/statuses/${post.postId}`);
+
+      const status = StatusSchema.parse(await response.json());
+      expect(status.quote).toMatchObject({ state: 'accepted', quoted_status: { id: quoted.postId } });
+    });
+
+    it('引用先が未取得のとき quote を null にして iori.quote_url に URI を載せる', async () => {
+      const t = await seedStatuses();
+      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
+      addQuote(t, post.postId, 'https://other.example/notes/unknown');
+
+      const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
+
+      const status = StatusSchema.parse(await response.json());
+      expect(status.quote).toBeNull();
+      expect(status.iori?.quote_url).toBe('https://other.example/notes/unknown');
+    });
+
+    it('未認証では見えない引用先を quote に入れず、URI だけ iori.quote_url に載せる', async () => {
+      const t = await seedStatuses();
+      const hidden = t.seed.addRemotePost(t.alice, 3_000, { visibility: 'private' });
+      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
+      addQuote(t, post.postId, hidden.uri);
+
+      const response = await t.request(`/api/v1/statuses/${post.postId}`);
+
+      const status = StatusSchema.parse(await response.json());
+      expect(status.quote).toBeNull();
+      expect(status.iori?.quote_url).toBe(hidden.uri);
+    });
+
+    it.each(['mute', 'block'] as const)(
+      '閲覧者が%sした相手の引用先は quote を null にして iori.quote_url に URI を載せる',
+      async (kind) => {
+        const t = await seedStatuses();
+        const bob = t.seed.addRemoteActor('bob');
+        if (kind === 'mute') t.seed.addMute(t.me.userId, bob.actorId);
+        else t.seed.addBlock(t.me.userId, bob.actorId);
+        const quoted = t.seed.addRemotePost(bob, 3_000, { visibility: 'public' });
+        const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
+        addQuote(t, post.postId, quoted.uri);
+
+        const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
+
+        const status = StatusSchema.parse(await response.json());
+        expect(status.quote).toBeNull();
+        expect(status.iori?.quote_url).toBe(quoted.uri);
+      },
+    );
+
+    it('引用が無い投稿は quote を null にし、quote_url を出さない', async () => {
+      const t = await seedStatuses();
+      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
+
+      const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
+
+      const status = StatusSchema.parse(await response.json());
+      expect(status.quote).toBeNull();
+      expect(status.iori).not.toHaveProperty('quote_url');
+    });
+
+    it('ブーストされた投稿の引用を reblog の中に載せる', async () => {
+      const t = await seedStatuses();
+      const quoted = t.seed.addRemotePost(t.alice, 3_000, { visibility: 'public' });
+      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
+      addQuote(t, post.postId, quoted.uri);
+      const boost = t.seed.addRepost(t.me.actorId, post.postId, 4_000);
+
+      const response = await t.request(`/api/v1/statuses/${boost.repostId}`, { headers: t.me.bearer });
+
+      const status = StatusSchema.parse(await response.json());
+      expect(status.quote).toBeNull();
+      expect(status.reblog?.quote).toMatchObject({ state: 'accepted', quoted_status: { id: quoted.postId } });
+    });
+  });
+
   it('未認証では公開範囲の記録がないリモートの投稿と、そのブーストを 404 にする', async () => {
     const t = await seedStatuses();
 
@@ -186,6 +288,52 @@ describe('GET /api/v1/statuses/:id/context', () => {
     expect(ancestors.map((status) => status.id)).toEqual([root.postId]);
     expect(descendants.map((status) => status.id)).toEqual([early.postId, late.postId]);
     expect(descendants[1]).toMatchObject({ favourited: true, in_reply_to_id: mid.postId });
+  });
+
+  it('ブロックした相手の祖先と子孫を除き、起点がブロックした相手でも 404 にしない', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    const bob = t.seed.addRemoteActor('bob');
+    t.seed.addFollow(me.actorId, alice.actorId);
+    t.seed.addFollow(me.actorId, bob.actorId);
+    const root = t.seed.addRemotePost(alice, 1_000);
+    const mid = t.seed.addRemotePost(bob, 2_000, { inReplyToUri: root.uri });
+    const fromAlice = t.seed.addRemotePost(alice, 3_000, { inReplyToUri: mid.uri });
+    const fromMe = t.seed.addLocalPost(me, 4_000, { inReplyToUri: mid.uri });
+    t.seed.addBlock(me.userId, alice.actorId);
+
+    const response = await t.request(`/api/v1/statuses/${mid.postId}/context`, { headers: me.bearer });
+    const blockedFocus = await t.request(`/api/v1/statuses/${fromAlice.postId}/context`, { headers: me.bearer });
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ancestors: unknown[]; descendants: unknown[] };
+    expect(body.ancestors).toEqual([]);
+    expect(body.descendants.map((item) => StatusSchema.parse(item).id)).toEqual([fromMe.postId]);
+    expect(blockedFocus.status).toBe(200);
+  });
+
+  it('ミュートした相手の祖先と子孫を除き、起点がミュートした相手でも 404 にしない', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    const bob = t.seed.addRemoteActor('bob');
+    t.seed.addFollow(me.actorId, alice.actorId);
+    t.seed.addFollow(me.actorId, bob.actorId);
+    const root = t.seed.addRemotePost(alice, 1_000);
+    const mid = t.seed.addRemotePost(bob, 2_000, { inReplyToUri: root.uri });
+    const fromAlice = t.seed.addRemotePost(alice, 3_000, { inReplyToUri: mid.uri });
+    const fromMe = t.seed.addLocalPost(me, 4_000, { inReplyToUri: mid.uri });
+    t.seed.addMute(me.userId, alice.actorId);
+
+    const response = await t.request(`/api/v1/statuses/${mid.postId}/context`, { headers: me.bearer });
+    const mutedFocus = await t.request(`/api/v1/statuses/${fromAlice.postId}/context`, { headers: me.bearer });
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ancestors: unknown[]; descendants: unknown[] };
+    expect(body.ancestors).toEqual([]);
+    expect(body.descendants.map((item) => StatusSchema.parse(item).id)).toEqual([fromMe.postId]);
+    expect(mutedFocus.status).toBe(200);
   });
 
   it('未認証では public と unlisted のリモートの投稿だけを祖先と子孫に含め、起点が private なら 404 にする', async () => {

@@ -2,6 +2,7 @@
 import { getCollection, render } from 'astro:content';
 
 import PageNav from '../../components/PageNav.astro';
+import PageProgress from '../../components/PageProgress.astro';
 import { buildChapterPages, pagePath } from '../../lib/chapter-routes';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { schedule, withTimeRanges } from '../../schedule';
@@ -52,7 +53,7 @@ const { Content } = await render(page.entry);
 <BaseLayout
   title={`${row.title} ${progress}`}
   chapterPage
-  wide={page.chapter === 'intro'}
+  wide={page.chapter === 'intro' || page.entry.data.wide === true}
 >
   <header class="chapter-header">
     <h1>{row.title} <span class="chapter-progress">{progress}</span></h1>
@@ -63,6 +64,7 @@ const { Content } = await render(page.entry);
     <p class="chapter-range">
       {row.range}{row.parts === undefined ? '' : `：${row.parts}`}
     </p>
+    <PageProgress chapter={page.chapter} number={page.number} />
   </header>
   {
     page.entry.data.goal !== undefined && (

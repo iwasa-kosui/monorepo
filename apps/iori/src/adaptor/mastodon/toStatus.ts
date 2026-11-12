@@ -1,5 +1,6 @@
 import { containsKana } from '../../domain/aiTranslation/isJapanese.ts';
 import { BlueskyCrosspost } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import { attachmentKindOf } from '../../domain/image/attachmentKind.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import type { RepostId } from '../../domain/repost/repostId.ts';
@@ -20,6 +21,7 @@ export type ToStatusOptions = Readonly<{
   inReplyToAccountId: string | null;
   myReactionEmojis: ReadonlySet<string>;
   blueskyCrosspost?: BlueskyCrosspost | null;
+  quote?: Readonly<{ uri: string; status: Status | null }> | null;
 }>;
 
 type LinkPreviews = PostWithAuthor['linkPreviews'];
@@ -33,11 +35,12 @@ const toMediaAttachments = (
     const id = mediaAttachmentIds[index];
     const url = toSafeApiUrl(image.url, baseUrl);
     if (id === undefined || url === undefined) return [];
+    const type = attachmentKindOf(image);
     return [{
       id,
-      type: 'image',
+      type,
       url,
-      preview_url: url,
+      preview_url: type === 'image' ? url : null,
       remote_url: null,
       meta: null,
       description: image.altText,
@@ -99,7 +102,13 @@ export const toIoriBlueskyCrosspost = (crosspost: BlueskyCrosspost): IoriBluesky
 });
 
 const toVisibility = (post: PostWithAuthor): Visibility =>
-  post.type === 'local' ? 'public' : post.visibility ?? 'private';
+  post.type === 'local' ? post.visibility : post.visibility ?? 'private';
+
+const quoteUrlExtension = (options: ToStatusOptions): { quote_url?: string } => {
+  if (options.quote == null || options.quote.status !== null) return {};
+  const quoteUrl = toSafeApiUrl(options.quote.uri, options.baseUrl);
+  return quoteUrl === undefined ? {} : { quote_url: quoteUrl };
+};
 
 export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status => {
   const { uri, url } = toPostUrls(post, options);
@@ -123,6 +132,7 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
     in_reply_to_id: options.inReplyToId,
     in_reply_to_account_id: options.inReplyToAccountId,
     reblog: null,
+    quote: options.quote?.status == null ? null : { state: 'accepted', quoted_status: options.quote.status },
     poll: null,
     card: toCard(post.linkPreviews, options.baseUrl),
     language: toLanguage(post.content),
@@ -153,6 +163,7 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
       ...(options.blueskyCrosspost == null
         ? {}
         : { bluesky_crosspost: toIoriBlueskyCrosspost(options.blueskyCrosspost) }),
+      ...quoteUrlExtension(options),
     },
   };
 };
@@ -186,6 +197,7 @@ export const toReblogStatus = (
   in_reply_to_id: null,
   in_reply_to_account_id: null,
   reblog: options.reblog,
+  quote: null,
   poll: null,
   card: null,
   language: options.reblog.language,

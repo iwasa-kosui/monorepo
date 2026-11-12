@@ -5,6 +5,7 @@ import type { Actor, ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { RemoteActorCreatedStore, RemoteActorProfile } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import type { RemoteActorProfileUpdatedStore } from '../domain/actor/updateProfile.ts';
+import type { BlockResolver } from '../domain/block/block.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
   AlreadyLikedError,
@@ -23,6 +24,7 @@ import { NotificationId } from '../domain/notification/notificationId.ts';
 import type { LocalPost, Post, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
+import { isBlockedBy } from './helper/isBlockedBy.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -77,6 +79,7 @@ type Deps = Readonly<{
   actorResolverByUri: ActorResolverByUri;
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
+  blockResolver?: BlockResolver;
 }>;
 
 const isLocalPost = (post: Post): post is LocalPost => post.type === 'local';
@@ -92,6 +95,7 @@ const create = ({
   actorResolverByUri,
   pushSubscriptionsResolver,
   webPushSender,
+  blockResolver,
 }: Deps): AddReceivedLikeUseCase => {
   const run = async (input: Input) => {
     const now = Instant.now();
@@ -139,7 +143,9 @@ const create = ({
         );
         return remoteLikeCreatedStore.store(event).then(() => RA.ok(event.aggregateState));
       }),
-      RA.andThrough(({ post, actor }) => {
+      RA.andBind('blocked', async ({ post, actor }) => RA.ok(await isBlockedBy(blockResolver, post.userId, actor.id))),
+      RA.andThrough(({ post, actor, blocked }) => {
+        if (blocked) return RA.ok(undefined);
         const notificationId = NotificationId.generate();
         const notification: LikeNotification = {
           type: 'like',
@@ -152,7 +158,8 @@ const create = ({
         const event = Notification.createLikeNotification(notification, now);
         return likeNotificationCreatedStore.store(event);
       }),
-      RA.andThrough(({ post, actor }) => {
+      RA.andThrough(({ post, actor, blocked }) => {
+        if (blocked) return RA.ok(undefined);
         const likerName = actor.type === 'remote' && actor.username ? actor.username : 'Someone';
         const payload: PushPayload = {
           title: 'New Like',

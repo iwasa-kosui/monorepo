@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Create, Note } from '@fedify/vocab';
+import { Create } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 import z from 'zod/v4';
@@ -11,16 +11,22 @@ import type { PostImageCreatedStore } from '../domain/image/image.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { LinkPreview, LinkPreviewCreatedStore } from '../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
-import { Post, type PostCreatedStore } from '../domain/post/post.ts';
+import type { MentionRecipient } from '../domain/post/mention.ts';
+import { Post, type PostCreatedStore, type PostQuotesResolverByPostIds } from '../domain/post/post.ts';
+import { appendQuoteInline } from '../domain/post/quoteInline.ts';
+import type { Visibility } from '../domain/post/visibility.ts';
 import type { AcceptedRelaysResolver } from '../domain/relay/relay.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import { User, UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
+import { buildLocalNote } from './helper/localNote.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
+import { resolveQuoteNoteFields } from './helper/quoteNote.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import { sendToMentions } from './helper/sendToMentions.ts';
 import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -31,7 +37,10 @@ type Input =
     content: string;
     summary?: string | null;
     sensitive?: boolean;
+    visibility?: Exclude<Visibility, 'direct'>;
     crosspostToBluesky?: boolean;
+    mentions?: ReadonlyArray<MentionRecipient>;
+    quoteUri?: string;
     ctx: RequestContext<unknown>;
   }>;
 
@@ -57,6 +66,7 @@ type Deps = Readonly<{
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
   ogpFetcher: OgpFetcher;
   acceptedRelaysResolver: AcceptedRelaysResolver;
+  postQuotesResolver?: PostQuotesResolverByPostIds;
   scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   origin: string;
 }>;
@@ -71,6 +81,7 @@ const create = ({
   linkPreviewCreatedStore,
   ogpFetcher,
   acceptedRelaysResolver,
+  postQuotesResolver,
   scheduleBlueskyCrosspost,
   origin,
 }: Deps): CreatePostUseCase => {
@@ -83,13 +94,15 @@ const create = ({
       RA.ok(input),
       RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-      RA.andBind('postEvent', ({ actor, content, summary, sensitive }) => {
+      RA.andBind('postEvent', ({ actor, content, summary, sensitive, visibility, quoteUri }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
-          content,
+          content: quoteUri === undefined ? content : appendQuoteInline(content, quoteUri),
           userId: actor.userId,
           summary,
           sensitive,
+          visibility,
+          quoteUri,
         });
         return RA.ok(postEvent);
       }),
@@ -156,38 +169,41 @@ const create = ({
 
         return RA.ok(undefined);
       }),
-      RA.andThrough(async ({ post, user, ctx, images }) => {
-        const noteArgs = { identifier: user.username, id: post.postId };
-        const note = await ctx.getObject(Note, noteArgs);
-        await ctx.sendActivity(
-          { identifier: user.username },
-          'followers',
-          new Create({
-            id: new URL('#activity', note?.id ?? undefined),
-            object: note,
-            actors: note?.attributionIds,
-            tos: note?.toIds,
-            ccs: note?.ccIds,
-            attachments: images.map((image) => toImageDocument(image, origin)),
-          }),
-        );
+      RA.andBind('quote', async ({ post, quoteUri }) =>
+        RA.ok(await resolveQuoteNoteFields(postQuotesResolver, post.postId, quoteUri))),
+      RA.andThrough(async ({ post, user, ctx, images, mentions, quote }) => {
+        const note = buildLocalNote({ ctx, identifier: user.username, post, images, origin, quote });
+        const createActivity = new Create({
+          id: new URL('#activity', note.id ?? undefined),
+          object: note,
+          actors: note.attributionIds,
+          tos: note.toIds,
+          ccs: note.ccIds,
+          attachments: images.map((image) =>
+            toImageDocument(image, origin)
+          ),
+        });
+        await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+        await sendToMentions({
+          ctx,
+          identifier: user.username,
+          activity: createActivity,
+          mentions: [...(mentions ?? []), ...quote.recipients],
+        });
         return RA.ok(undefined);
       }),
       // Send to accepted relays
-      RA.andThrough(async ({ post, user, ctx, images }) => {
+      RA.andThrough(async ({ post, user, ctx, images, quote }) => {
+        if (post.visibility !== 'public') {
+          return RA.ok(undefined);
+        }
         const relaysResult = await acceptedRelaysResolver.resolve();
         if (!relaysResult.ok || relaysResult.val.length === 0) {
           return RA.ok(undefined);
         }
 
         const relays = relaysResult.val;
-        const noteArgs = { identifier: user.username, id: post.postId };
-        const note = await ctx.getObject(Note, noteArgs);
-
-        if (!note) {
-          getLogger().warn(`Failed to get Note object for relay distribution: ${post.postId}`);
-          return RA.ok(undefined);
-        }
+        const note = buildLocalNote({ ctx, identifier: user.username, post, images, origin, quote });
 
         const createActivity = new Create({
           id: new URL('#activity', note.id ?? undefined),

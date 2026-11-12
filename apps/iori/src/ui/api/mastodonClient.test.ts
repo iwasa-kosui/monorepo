@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   addXUserFeedSource,
+  block,
   blueskyFailureMessage,
   createStatus,
   deleteStatus,
@@ -10,6 +11,7 @@ import {
   fetchAccount,
   fetchAccountStatuses,
   fetchBlueskyHomeTimeline,
+  fetchBlueskyPostThread,
   fetchBlueskyStatus,
   fetchBlueskyTimeline,
   fetchFavourites,
@@ -20,6 +22,8 @@ import {
   fetchPublicTimeline,
   fetchRelationshipOrSignedOut,
   fetchRelationships,
+  fetchRemoteContext,
+  fetchRemoteStatuses,
   fetchStatus,
   fetchStatusContext,
   follow,
@@ -32,17 +36,23 @@ import {
   mute,
   parseLinkHeader,
   parseRetryAfter,
+  quoteBlueskyPost,
   react,
   reblog,
   refreshXPosts,
+  report,
   repostBlueskyPost,
   requestDigest,
   saveNotificationsMarker,
   searchAccount,
+  searchBlueskyActors,
+  searchBlueskyPosts,
+  searchRemoteStatuses,
   searchStatuses,
   setFeedSourceEnabled,
   summarizeTimeline,
   translate,
+  unblock,
   undoRepostBlueskyPost,
   unfavourite,
   unfollow,
@@ -375,6 +385,36 @@ describe('mastodon client requests', () => {
     expect((error as Error).message).toBe('Validation failed: Text can not be blank');
   });
 
+  it('posts a report as same-origin JSON and returns the report', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'r1', category: 'violation' }));
+
+    const created = await report({ account_id: 'a1', category: 'violation', comment: 'rude' });
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/v1/reports');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({
+      account_id: 'a1',
+      category: 'violation',
+      comment: 'rude',
+      forward: true,
+    });
+    expect(created).toEqual({ id: 'r1', category: 'violation' });
+  });
+
+  it('throws an unprocessable error carrying the server message when the report is refused', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: The report is not supported for local accounts' }, {
+      status: 422,
+    }));
+
+    const error = await report({ account_id: 'a1', category: 'spam', comment: '' }).catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Validation failed: The report is not supported for local accounts');
+  });
+
   it('deletes a status by encoded id and returns the deleted status', async () => {
     const fetchMock = stubFetch(jsonResponse({ id: 'a/b', text: 'bye' }));
 
@@ -414,10 +454,25 @@ describe('mastodon client requests', () => {
     expect((error as Error).message).toBe('HTTP 404');
   });
 
+  it('reads the code from the error body and leaves it out when the body has none', async () => {
+    stubFetch(jsonResponse({ error: 'Bluesky authentication failed', code: 'auth' }, { status: 502 }));
+    const withCode = await fetchStatus('s1').catch((e: unknown) => e);
+    stubFetch(jsonResponse({ error: 'Not found' }, { status: 404 }));
+    const withoutCode = await fetchStatus('s1').catch((e: unknown) => e);
+
+    expect((withCode as { code?: string }).code).toBe('auth');
+    expect('code' in (withoutCode as object)).toBe(false);
+  });
+
   it('treats a 422 from relationships as logged in without a relationship', async () => {
     stubFetch(jsonResponse({ error: 'Actor not found' }, { status: 422 }));
 
-    expect(await fetchRelationshipOrSignedOut('a1')).toEqual({ isLoggedIn: true, isFollowing: false, isMuted: false });
+    expect(await fetchRelationshipOrSignedOut('a1')).toEqual({
+      isLoggedIn: true,
+      isFollowing: false,
+      isMuted: false,
+      isBlocked: false,
+    });
   });
 
   it.each([
@@ -429,6 +484,8 @@ describe('mastodon client requests', () => {
     ['unfollow', unfollow, '/api/v1/accounts/s1/unfollow'],
     ['mute', mute, '/api/v1/accounts/s1/mute'],
     ['unmute', unmute, '/api/v1/accounts/s1/unmute'],
+    ['block', block, '/api/v1/accounts/s1/block'],
+    ['unblock', unblock, '/api/v1/accounts/s1/unblock'],
   ])('posts %s to its path with the same-origin headers and returns the body', async (_name, action, path) => {
     const fetchMock = stubFetch(jsonResponse({ id: 's1' }));
 
@@ -471,6 +528,30 @@ describe('mastodon client requests', () => {
 
     expect(isNotFoundError(error)).toBe(true);
     expect(failureMessage('add reaction', error)).toBe('Failed to add reaction: Record not found');
+  });
+
+  it('posts to the remote context path with the encoded id and returns the fetched count', async () => {
+    const fetchMock = stubFetch(jsonResponse({ fetched: 3 }));
+
+    const result = await fetchRemoteContext('a/b');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/statuses/a%2Fb/remote-context');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual({ fetched: 3 });
+  });
+
+  it('posts to the remote statuses path with the encoded id and returns the fetched count', async () => {
+    const fetchMock = stubFetch(jsonResponse({ fetched: 2 }));
+
+    const result = await fetchRemoteStatuses('a/b');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/accounts/a%2Fb/remote-statuses');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual({ fetched: 2 });
   });
 
   it('encodes the id in a write path', async () => {
@@ -539,6 +620,31 @@ describe('mastodon client requests', () => {
     expect(parsed.searchParams.get('limit')).toBe('20');
     expect(init.credentials).toBe('same-origin');
     expect(result).toEqual(payload);
+  });
+
+  it('searches a remote post URL with resolve=true and type=statuses and returns the statuses', async () => {
+    const fetchMock = stubFetch(jsonResponse({ accounts: [], statuses: [{ id: 's1' }, { id: 's2' }], hashtags: [] }));
+
+    const statuses = await searchRemoteStatuses('https://remote.example/@alice/123');
+
+    expect(requestedUrl(fetchMock)).toBe(
+      '/api/v2/search?q=https%3A%2F%2Fremote.example%2F%40alice%2F123&resolve=true&type=statuses',
+    );
+    expect(statuses).toEqual([{ id: 's1' }, { id: 's2' }]);
+  });
+
+  it('returns no statuses when the remote post search finds nothing', async () => {
+    stubFetch(jsonResponse({ accounts: [], statuses: [], hashtags: [] }));
+
+    expect(await searchRemoteStatuses('https://remote.example/@alice/123')).toEqual([]);
+  });
+
+  it('throws an unauthorized error when the remote post search is not signed in', async () => {
+    stubFetch(jsonResponse({ error: 'The access token is invalid' }, { status: 401 }));
+
+    const error = await searchRemoteStatuses('https://remote.example/@alice/123').catch((e: unknown) => e);
+
+    expect(isUnauthorizedError(error)).toBe(true);
   });
 
   it('posts the summary request as JSON without authorization headers', async () => {
@@ -642,6 +748,18 @@ describe('mastodon client requests', () => {
     expect(result).toEqual(payload);
   });
 
+  it('fetches a Bluesky post thread by its at-uri', async () => {
+    const payload = { ancestors: [], post: { uri: 'at://did:plc:a/app.bsky.feed.post/1' }, replies: [] };
+    const fetchMock = stubFetch(jsonResponse(payload));
+
+    const result = await fetchBlueskyPostThread('at://did:plc:a/app.bsky.feed.post/1');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/thread?uri=at%3A%2F%2Fdid%3Aplc%3Aa%2Fapp.bsky.feed.post%2F1');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual(payload);
+  });
+
   it('sends beforeId with before when paging the Bluesky timeline', async () => {
     const fetchMock = stubFetch(jsonResponse({ enabled: true, items: [], nextBefore: null, nextBeforeId: null }));
 
@@ -712,6 +830,31 @@ describe('mastodon client requests', () => {
     expect(isMastodonApiError(error) && error.status).toBe(502);
   });
 
+  it('searches Bluesky posts with the query and the cursor', async () => {
+    const fetchMock = stubFetch(jsonResponse({ items: [], cursor: null }));
+
+    const result = await searchBlueskyPosts('猫 犬', 'c1');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/iori/v1/bluesky/search/posts?q=%E7%8C%AB+%E7%8A%AC&cursor=c1');
+    expect(result).toEqual({ items: [], cursor: null });
+  });
+
+  it('searches Bluesky actors without a cursor on the first page', async () => {
+    const fetchMock = stubFetch(jsonResponse({ actors: [], cursor: null }));
+
+    await searchBlueskyActors('alice');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/iori/v1/bluesky/search/actors?q=alice');
+  });
+
+  it('carries the status of a failed Bluesky search', async () => {
+    stubFetch(jsonResponse({ error: 'Bluesky timeline is disabled' }, { status: 409 }));
+
+    const error = await searchBlueskyPosts('x').catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(409);
+  });
+
   it('uses the login message for a Bluesky like that failed to log in, and keeps the generic message otherwise', async () => {
     stubFetch(jsonResponse({ error: 'Bluesky login failed' }, { status: 502 }));
 
@@ -765,6 +908,29 @@ describe('mastodon client requests', () => {
     const error = await repostBlueskyPost('x').catch((e: unknown) => e);
 
     expect(isMastodonApiError(error) && error.status).toBe(502);
+  });
+
+  it('posts a Bluesky quote with the uri and text as a JSON body', async () => {
+    const fetchMock = stubFetch(
+      jsonResponse({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', cid: 'bafy' }, { status: 201 }),
+    );
+
+    const result = await quoteBlueskyPost('at://did:plc:a/app.bsky.feed.post/1', '引用です');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/quotes');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(init.body as string)).toEqual({ uri: 'at://did:plc:a/app.bsky.feed.post/1', text: '引用です' });
+    expect(result).toEqual({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', cid: 'bafy' });
+  });
+
+  it('carries the status of a failed Bluesky quote', async () => {
+    stubFetch(jsonResponse({ error: 'Quote not allowed' }, { status: 422 }));
+
+    const error = await quoteBlueskyPost('at://did:plc:a/app.bsky.feed.post/1', 'x').catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(422);
   });
 
   it('posts a refresh request for the X posts and returns the counts', async () => {

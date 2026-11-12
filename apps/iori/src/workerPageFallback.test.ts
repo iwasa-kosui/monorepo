@@ -228,6 +228,111 @@ describe('createWorkerPageFallback', () => {
     expect(await response?.text()).toContain('/static/federatedTimeline.js');
   });
 
+  it('redirects the Bluesky post page to /sign-in when logged out, without caching', async () => {
+    const url = 'https://worker.test/bluesky/profile/did:plc:abc/post/3kxyz';
+    const anonymous = await createWorkerPageFallback(new Request(url));
+    const expired = await createWorkerPageFallback(
+      new Request(url, { headers: { Cookie: 'sessionId=expired' } }),
+      { isLoggedIn: false },
+    );
+
+    for (const response of [anonymous, expired]) {
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get('Location')).toBe('/sign-in');
+      expect(response?.headers.get('Cache-Control')).toBe('no-store');
+      expect(await response?.text()).toBe('');
+    }
+  });
+
+  it('renders the Bluesky post page for a logged-in user with noindex', async () => {
+    const response = await createWorkerPageFallback(
+      new Request('https://worker.test/bluesky/profile/did:plc:abc/post/3kxyz'),
+      { isLoggedIn: true, userId: UserId.generate() },
+    );
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('X-Robots-Tag')).toBe('noindex');
+    expect(await response?.text()).toContain('/static/blueskyPost.js');
+  });
+
+  it('does not register Bluesky post paths that are not a DID and an rkey', async () => {
+    for (
+      const path of [
+        '/bluesky/profile/alice.bsky.social/post/3kxyz',
+        '/bluesky/profile/did:plc:abc/post',
+        '/bluesky/profile/did:plc:abc/post/3kxyz/extra',
+      ]
+    ) {
+      expect(
+        await createWorkerPageFallback(new Request(`https://worker.test${path}`), {
+          isLoggedIn: true,
+          userId: UserId.generate(),
+        }),
+      ).toBeUndefined();
+    }
+  });
+
+  it('redirects the private messages pages to /sign-in when logged out, without caching', async () => {
+    for (const path of ['/messages', '/messages/3kconvo', '/messages/3kconvo/']) {
+      const response = await createWorkerPageFallback(new Request(`https://worker.test${path}`));
+
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get('Location')).toBe('/sign-in');
+      expect(response?.headers.get('Cache-Control')).toBe('no-store');
+    }
+  });
+
+  it('renders the messages entry for the list and a conversation with a Japanese title and noindex', async () => {
+    for (const path of ['/messages', '/messages/3kconvo']) {
+      const response = await createWorkerPageFallback(new Request(`https://worker.test${path}`), {
+        isLoggedIn: true,
+        userId: UserId.generate(),
+      });
+
+      expect(response?.status).toBe(200);
+      expect(response?.headers.get('Cache-Control')).toBe('no-store');
+      expect(response?.headers.get('X-Robots-Tag')).toBe('noindex');
+      const html = await response?.text();
+      expect(html).toContain('/static/messages.js');
+      expect(html).toContain('<title>メッセージ | blog.kosui.me</title>');
+    }
+  });
+
+  it('does not claim messages paths with extra segments', async () => {
+    for (const path of ['/messages/a/b', '/messagesx']) {
+      expect(
+        await createWorkerPageFallback(new Request(`https://worker.test${path}`), {
+          isLoggedIn: true,
+          userId: UserId.generate(),
+        }),
+      ).toBeUndefined();
+    }
+  });
+
+  it('shows the messages link right after notifications in both navs only when logged in, with its own hidden badge', async () => {
+    for (const nav of [await renderSidebar(true), await renderBottomNav(true)]) {
+      const notifications = nav.indexOf('href="/notifications"');
+      const messages = nav.indexOf('href="/messages"');
+      const badge = nav.indexOf('data-dm-badge');
+
+      expect(messages).toBeGreaterThan(notifications);
+      expect(nav.indexOf('href="/#post-modal"')).not.toBeLessThan(0);
+      expect(badge).toBeGreaterThan(messages);
+      expect(nav).toMatch(/<span data-dm-badge="true" hidden="" /);
+      expect(nav).toContain('data-notification-badge');
+    }
+    expect(await renderSidebar(false)).not.toContain('href="/messages"');
+    expect(await renderBottomNav(false)).not.toContain('href="/messages"');
+  });
+
+  it('keeps the BottomNav items from overflowing a 360px screen', async () => {
+    const html = await renderBottomNav(true);
+    const items = html.match(/<a [^>]*class="flex flex-col items-center justify-center flex-1 h-full/g) ?? [];
+
+    expect(items.length).toBeLessThanOrEqual(6);
+    expect(360 / items.length).toBeGreaterThanOrEqual(48);
+  });
+
   it('does not add noindex to public pages', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
 
