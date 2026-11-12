@@ -55,13 +55,26 @@ const externalViewZodType = z.looseObject({
   }),
 });
 const videoViewZodType = z.looseObject({ playlist: z.string(), thumbnail: z.string().optional() });
-const recordViewZodType = z.looseObject({
-  record: z.looseObject({
-    uri: z.string().min(1),
-    author: z.looseObject({ handle: z.string().min(1) }),
-    value: z.looseObject({ text: z.string().optional() }),
+const recordViewZodType = z.looseObject({ record: z.unknown() });
+const quoteTargetZodType = z.looseObject({ $type: z.string().optional(), uri: z.string().min(1) });
+const viewRecordZodType = z.looseObject({
+  uri: z.string().min(1),
+  cid: z.string().optional(),
+  author: z.looseObject({
+    handle: z.string().min(1),
+    did: z.string().optional(),
+    displayName: z.string().optional(),
+    avatar: z.string().optional(),
   }),
+  value: z.looseObject({ text: z.string().optional(), createdAt: z.string().optional() }),
+  indexedAt: z.string().optional(),
+  embeds: z.array(z.unknown()).optional(),
 });
+const QUOTE_UNAVAILABLE_REASONS = {
+  'app.bsky.embed.record#viewNotFound': 'notFound',
+  'app.bsky.embed.record#viewBlocked': 'blocked',
+  'app.bsky.embed.record#viewDetached': 'detached',
+} as const;
 const recordWithMediaViewZodType = z.looseObject({ record: z.unknown(), media: z.unknown() });
 
 export const toInstant = (value: string): Instant | undefined => {
@@ -137,16 +150,44 @@ const mediaOf = (raw: unknown): unknown => {
   return undefined;
 };
 
+const nonEmpty = (value: string | undefined): string | undefined =>
+  value === undefined || value === '' ? undefined : value;
+
 const quoteOf = (raw: unknown): unknown => {
   const view = recordViewZodType.safeParse(raw);
-  return view.success
-    ? {
-      type: 'record',
-      uri: view.data.record.uri,
-      authorHandle: view.data.record.author.handle,
-      text: view.data.record.value.text ?? '',
-    }
-    : undefined;
+  if (!view.success) return undefined;
+  const target = quoteTargetZodType.safeParse(view.data.record);
+  if (!target.success) return undefined;
+  const { $type, uri } = target.data;
+  if ($type !== undefined && Object.hasOwn(QUOTE_UNAVAILABLE_REASONS, $type)) {
+    return {
+      type: 'recordUnavailable',
+      uri,
+      reason: QUOTE_UNAVAILABLE_REASONS[$type as keyof typeof QUOTE_UNAVAILABLE_REASONS],
+    };
+  }
+  if ($type !== undefined && $type !== 'app.bsky.embed.record#viewRecord') return undefined;
+  const record = viewRecordZodType.safeParse(view.data.record);
+  if (!record.success) return undefined;
+  const { author, value } = record.data;
+  const createdAt = [value.createdAt, record.data.indexedAt].find((at) =>
+    at !== undefined && toInstant(at) !== undefined
+  );
+  const media = embedFrom(mediaOf(record.data.embeds?.[0]));
+  return {
+    type: 'record',
+    uri: record.data.uri,
+    authorHandle: author.handle,
+    text: value.text ?? '',
+    cid: nonEmpty(record.data.cid),
+    authorDid: nonEmpty(author.did),
+    authorDisplayName: nonEmpty(author.displayName),
+    authorAvatar: httpUrlOrNull(author.avatar) ?? undefined,
+    createdAt,
+    media: media !== null && (media.type === 'images' || media.type === 'external' || media.type === 'video')
+      ? media
+      : undefined,
+  };
 };
 
 const embedOf = (raw: unknown): BlueskyTimelineEmbed | null => {
@@ -160,7 +201,7 @@ const embedOf = (raw: unknown): BlueskyTimelineEmbed | null => {
     if (view.success) {
       const media = embedFrom(mediaOf(view.data.media));
       const record = embedFrom(quoteOf(view.data.record));
-      candidate = media !== null && record !== null && record.type === 'record'
+      candidate = media !== null && record !== null && (record.type === 'record' || record.type === 'recordUnavailable')
         ? { type: 'recordWithMedia', media, record }
         : media ?? record;
     }

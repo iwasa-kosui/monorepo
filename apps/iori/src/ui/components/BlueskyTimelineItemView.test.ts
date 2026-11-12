@@ -169,6 +169,142 @@ describe('BlueskyTimelineItemView', () => {
     expect(html).not.toContain('bsky.app');
   });
 
+  describe('引用', () => {
+    const quoteUri = 'at://did:plc:q/app.bsky.feed.post/3kq';
+    const quoteHref = '/bluesky/profile/did:plc:q/post/3kq';
+    const record = { type: 'record', uri: quoteUri, authorHandle: 'q.bsky.social', text: '引用本文' } as const;
+    const nestedAnchor = /<a\b(?:(?!<\/a>)[\s\S])*<a\b/;
+
+    it('投稿者のアバター・表示名・@handle・本文を出し、カードの本文を投稿の詳細へのリンクにする', () => {
+      const html = render({
+        embed: {
+          ...record,
+          authorDisplayName: '引用者',
+          authorAvatar: 'https://cdn.example/q.jpg',
+          authorDid: 'did:plc:q',
+        },
+      });
+
+      expect(html).toContain('src="https://cdn.example/q.jpg"');
+      expect(html).toContain('引用者');
+      expect(html).toContain('@q.bsky.social');
+      expect(html).toContain('引用本文');
+      expect(html).toContain(`<a href="${quoteHref}"`);
+    });
+
+    it('引用先の画像を表示し、リンクを入れ子にしない', () => {
+      const html = render({
+        embed: {
+          ...record,
+          media: {
+            type: 'images',
+            images: [{ thumb: 'https://cdn.example/qt.jpg', fullsize: 'https://cdn.example/qf.jpg', alt: '引用の猫' }],
+          },
+        },
+      });
+
+      expect(html).toContain('src="https://cdn.example/qt.jpg"');
+      expect(html).toContain('href="https://cdn.example/qf.jpg"');
+      expect(html).toContain(`<a href="${quoteHref}"`);
+      expect(html).not.toMatch(nestedAnchor);
+    });
+
+    it('引用先のリンクカードと動画を表示し、リンクを入れ子にしない', () => {
+      const card = render({
+        embed: {
+          ...record,
+          media: { type: 'external', uri: 'https://example.com/q', title: '引用の記事', description: '', thumb: null },
+        },
+      });
+      const video = render({
+        embed: {
+          ...record,
+          authorDid: 'did:plc:q',
+          media: { type: 'video', thumbnail: null, playlist: 'https://video.example/q.m3u8' },
+        },
+      });
+
+      expect(card).toContain('href="https://example.com/q"');
+      expect(card).not.toMatch(nestedAnchor);
+      expect(video).toContain('href="https://bsky.app/profile/did:plc:q/post/3kq"');
+      expect(video).not.toMatch(nestedAnchor);
+    });
+
+    it('recordWithMedia の引用先のメディアも入れ子のリンクにしない', () => {
+      const html = render({
+        embed: {
+          type: 'recordWithMedia',
+          media: { type: 'external', uri: 'https://example.com/a', title: '記事', description: '', thumb: null },
+          record: {
+            ...record,
+            media: {
+              type: 'external',
+              uri: 'https://example.com/q',
+              title: '引用の記事',
+              description: '',
+              thumb: null,
+            },
+          },
+        },
+      });
+
+      expect(html).toContain('href="https://example.com/a"');
+      expect(html).toContain('href="https://example.com/q"');
+      expect(html).not.toMatch(nestedAnchor);
+    });
+
+    it('新しい項目が無い旧形式の引用は、@handle と本文だけを出す', () => {
+      const html = render({ embed: record });
+
+      expect(html).toContain('@q.bsky.social');
+      expect(html).toContain('引用本文');
+      expect(html).toContain(`<a href="${quoteHref}"`);
+      expect(html).not.toContain('<img src="https://cdn.example/q');
+      expect(html).not.toMatch(nestedAnchor);
+    });
+
+    it('引用先の uri が投稿の at-uri として読めなければ、リンクにしない', () => {
+      const html = render({ embed: { ...record, uri: 'nope' } });
+
+      expect(html).toContain('引用本文');
+      expect(html).not.toContain('href="/bluesky/profile/did:plc:q');
+      expect(html).not.toContain('href="nope"');
+    });
+
+    it('引用先のアバターが http/https 以外なら出さない', () => {
+      const html = render({ embed: { ...record, authorAvatar: 'javascript:alert(1)' } });
+
+      expect(html).not.toContain('javascript:');
+    });
+
+    it.each(
+      [
+        ['notFound', '引用された投稿は削除されています'],
+        ['blocked', 'ブロックにより引用された投稿を表示できません'],
+        ['detached', '引用元の投稿者が引用を外しました'],
+      ] as const,
+    )('引用先が %s なら、リンクなしの枠に文言を出す', (reason, message) => {
+      const html = render({ embed: { type: 'recordUnavailable', uri: quoteUri, reason } });
+
+      expect(html).toContain(message);
+      expect(html).not.toContain(quoteHref);
+      expect(html.match(/<a /g)).toHaveLength(render({}).match(/<a /g)!.length);
+    });
+
+    it('recordWithMedia の引用先が読めないときも、media と文言を出す', () => {
+      const html = render({
+        embed: {
+          type: 'recordWithMedia',
+          media: { type: 'external', uri: 'https://example.com/a', title: '記事', description: '', thumb: null },
+          record: { type: 'recordUnavailable', uri: quoteUri, reason: 'blocked' },
+        },
+      });
+
+      expect(html).toContain('href="https://example.com/a"');
+      expect(html).toContain('ブロックにより引用された投稿を表示できません');
+    });
+  });
+
   it('返信先の表示を、親の投稿の詳細へのリンクにする', () => {
     const html = render({
       replyParentUri: 'at://did:plc:p/app.bsky.feed.post/3kp',
