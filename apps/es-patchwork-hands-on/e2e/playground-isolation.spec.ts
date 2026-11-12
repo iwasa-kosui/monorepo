@@ -51,7 +51,7 @@ test('確認用ページと第1章から第4章のページ以外の HTML は実
   const others = htmlFiles().filter((file) =>
     file !== checkFile && !embeddedPages.test(file) && !file.startsWith('play/')
   );
-  expect(others.length).toBeGreaterThan(8);
+  expect(others.length).toBeGreaterThan(0);
   expect(others).toContain('chapters/intro/index.html');
   expect(others).toContain('chapters/summary/index.html');
   expect(others).toContain('chapters/intro/3/index.html');

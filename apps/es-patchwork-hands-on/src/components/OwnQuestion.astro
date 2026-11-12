@@ -2,16 +2,25 @@
 interface Props {
   id?: string;
   label?: string;
+  showLabel?: boolean;
+  rows?: number;
 }
-const { id = 'chapter-1', label = '自分のシステムの問いを1つ挙げる' } =
-  Astro.props;
+const {
+  id = 'chapter-1',
+  label = '自分のシステムの問いを1つ挙げる',
+  showLabel = false,
+  rows = 3,
+} = Astro.props;
+const inputId = `own-question-${id}`;
 ---
 
 <div class="grid gap-1" data-own-question data-question-id={id}>
+  {showLabel && <label for={inputId} class="text-sm font-bold">{label}</label>}
   <textarea
+    id={inputId}
     class="block w-full rounded border border-gray-400 bg-white px-2 py-1"
-    rows="3"
-    aria-label={label}
+    rows={rows}
+    aria-label={showLabel ? undefined : label}
   ></textarea>
   <div class="min-h-5 text-sm text-gray-600" role="status" data-saved></div>
 </div>
