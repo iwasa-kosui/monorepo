@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9ed048fc-5a7b-4320-b90a-239909a2c358",
+  "id": "be3e9c37-5781-4fe3-a061-67dea6dfaf99",
   "prevId": "670a2f59-0e65-43b7-b946-930c18a277cc",
   "tables": {
     "actors": {
@@ -2091,6 +2091,13 @@
             "emojiReactActivityUri"
           ],
           "isUnique": true
+        },
+        "emoji_reacts_post_id_idx": {
+          "name": "emoji_reacts_post_id_idx",
+          "columns": [
+            "postId"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -2803,6 +2810,13 @@
             "postId"
           ],
           "isUnique": true
+        },
+        "likes_post_id_idx": {
+          "name": "likes_post_id_idx",
+          "columns": [
+            "postId"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -4243,94 +4257,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "passkey_credentials": {
-      "name": "passkey_credentials",
-      "columns": {
-        "credentialId": {
-          "name": "credentialId",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "userId": {
-          "name": "userId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "publicKey": {
-          "name": "publicKey",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "counter": {
-          "name": "counter",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "transports": {
-          "name": "transports",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "deviceType": {
-          "name": "deviceType",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "backedUp": {
-          "name": "backedUp",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "lastUsedAt": {
-          "name": "lastUsedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "passkey_credentials_user_id_idx": {
-          "name": "passkey_credentials_user_id_idx",
-          "columns": [
-            "userId"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "post_images": {
       "name": "post_images",
       "columns": {
@@ -4377,7 +4303,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "post_images_post_id_idx": {
+          "name": "post_images_post_id_idx",
+          "columns": [
+            "postId"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "post_images_postId_posts_postId_fk": {
           "name": "post_images_postId_posts_postId_fk",
@@ -5263,6 +5197,13 @@
             "repostId"
           ],
           "isUnique": false
+        },
+        "reposts_post_id_idx": {
+          "name": "reposts_post_id_idx",
+          "columns": [
+            "postId"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -5403,6 +5344,13 @@
             "timelineItemId"
           ],
           "isUnique": false
+        },
+        "timeline_items_post_id_idx": {
+          "name": "timeline_items_post_id_idx",
+          "columns": [
+            "postId"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -5531,51 +5479,6 @@
           "isUnique": true
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "webauthn_challenges": {
-      "name": "webauthn_challenges",
-      "columns": {
-        "challengeId": {
-          "name": "challengeId",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "challenge": {
-          "name": "challenge",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "purpose": {
-          "name": "purpose",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "userId": {
-          "name": "userId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "expires": {
-          "name": "expires",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

@@ -7,7 +7,6 @@ import {
   detailHref,
   displayStatus,
   isLocalAccount,
-  isOwnBoost,
   remoteUserPathOf,
   removeStatusesByAccountId,
   removeStatusesByPostId,
@@ -115,16 +114,6 @@ describe('detailHref', () => {
     expect(detailHref(status('p2', { account: remoteAccount, uri: 'https://remote.example/notes/2' }))).toBe(
       '/posts/p2',
     );
-  });
-});
-
-describe('isOwnBoost', () => {
-  it('is true only for a boost made by the account', () => {
-    const boost = status('r1', { account: localAccount, reblog: status('p1', { account: remoteAccount }) });
-
-    expect(isOwnBoost(boost, 'actor-1')).toBe(true);
-    expect(isOwnBoost(boost, 'actor-9')).toBe(false);
-    expect(isOwnBoost(status('p1'), 'actor-1')).toBe(false);
   });
 });
 

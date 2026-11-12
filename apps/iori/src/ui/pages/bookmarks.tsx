@@ -7,12 +7,14 @@ import { readPageCache, writePageCache } from '../api/pageCache.ts';
 import { clearAllCache } from '../api/responseCache.ts';
 import { updateStatusesByPostId } from '../api/status.ts';
 import { BlueskyBookmarksList } from '../components/BlueskyBookmarksList.tsx';
+import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { statusActionProps } from '../components/statusActionProps.ts';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
 import { useBlueskyStatus } from '../hooks/useBlueskyStatus.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import { useReplyDialog } from '../hooks/useReplyDialog.ts';
 import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 import {
   BOOKMARKS_SOURCE_TABS,
@@ -85,6 +87,7 @@ const FediverseBookmarks = () => {
   }, []);
 
   const actions = useStatusListActions(updateStatus);
+  const reply = useReplyDialog();
 
   if (isLoading) {
     return (
@@ -115,6 +118,7 @@ const FediverseBookmarks = () => {
 
   return (
     <section class='mb-8'>
+      <FediverseReplyModal dialog={reply} />
       <div class='space-y-6 py-2'>
         {data.statuses.length > 0
           ? (
@@ -124,6 +128,7 @@ const FediverseBookmarks = () => {
                 status={status}
                 isLoggedIn
                 {...statusActionProps(actions, status)}
+                onReply={reply.openReplyDialog}
               />
             ))
           )

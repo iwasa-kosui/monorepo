@@ -210,6 +210,7 @@ export const likesTable = sqliteTable('likes', {
   createdAt: timestamp().notNull(),
 }, (table) => [
   uniqueIndex('like_actor_post_unique').on(table.actorId, table.postId),
+  index('likes_post_id_idx').on(table.postId),
 ]);
 
 export const bookmarksTable = sqliteTable('bookmarks', {
@@ -239,7 +240,9 @@ export const postImagesTable = sqliteTable('post_images', {
   altText: text('altText'),
   mediaType: text('mediaType'),
   createdAt: timestamp().notNull(),
-});
+}, (table) => [
+  index('post_images_post_id_idx').on(table.postId),
+]);
 
 export const mediaUploadsTable = sqliteTable('media_uploads', {
   mediaId: text('mediaId').primaryKey(),
@@ -344,6 +347,7 @@ export const repostsTable = sqliteTable('reposts', {
   uniqueIndex('repost_actor_post_unique').on(table.actorId, table.postId),
   uniqueIndex('reposts_announceActivityUri_unique').on(table.announceActivityUri),
   index('reposts_actor_id_created_at_repost_id_idx').on(table.actorId, table.createdAt, table.repostId),
+  index('reposts_post_id_idx').on(table.postId),
 ]);
 
 export const timelineItemsTable = sqliteTable('timeline_items', {
@@ -356,6 +360,7 @@ export const timelineItemsTable = sqliteTable('timeline_items', {
   deletedAt: timestamp(),
 }, (table) => [
   index('timeline_items_created_at_id_idx').on(table.createdAt, table.timelineItemId),
+  index('timeline_items_post_id_idx').on(table.postId),
 ]);
 
 export const instanceActorKeysTable = sqliteTable('instance_actor_keys', {
@@ -378,6 +383,7 @@ export const emojiReactsTable = sqliteTable('emoji_reacts', {
 }, (table) => [
   uniqueIndex('emoji_react_actor_post_emoji_unique').on(table.actorId, table.postId, table.emoji),
   uniqueIndex('emoji_reacts_emojiReactActivityUri_unique').on(table.emojiReactActivityUri),
+  index('emoji_reacts_post_id_idx').on(table.postId),
 ]);
 
 export const notificationEmojiReactsTable = sqliteTable('notification_emoji_reacts', {
