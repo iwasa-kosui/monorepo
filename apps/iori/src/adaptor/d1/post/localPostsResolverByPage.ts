@@ -19,9 +19,10 @@ export const createD1LocalPostsResolverByPage = (db: IoriD1Db): LocalPostsResolv
   resolve: async ({ currentActorId, mutedActorIds, page }) => {
     const columns = { createdAt: postsTable.createdAt, id: postsTable.postId };
     const rows = await db.select({ postId: postsTable.postId })
-      .from(postsTable)
-      .innerJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
+      .from(localPostsTable)
+      .crossJoin(postsTable)
       .where(and(
+        eq(postsTable.postId, localPostsTable.postId),
         isNull(postsTable.deletedAt),
         eq(localPostsTable.visibility, 'public'),
         mutedActorIds.length === 0
