@@ -76,7 +76,7 @@ describe('createCollectBlueskyTimelineUseCase', () => {
 });
 
 describe('新しい投稿がない取り込み', () => {
-  it('D1 には セッション・既存の確認・リポストの削除対象の SELECT だけを発行し、書き込みは 1 本も発行しない', async () => {
+  it('D1 には セッション・既存の確認・リポストとブックマークの削除対象の SELECT だけを発行し、書き込みは 1 本も発行しない', async () => {
     const { binding, sqlite, queries } = createSqliteD1Fixture();
     const now = Date.now();
     sqlite.prepare(
@@ -107,6 +107,7 @@ describe('新しい投稿がない取り込み', () => {
             author: { did: 'did:plc:a', handle: 'alice.bsky.social' },
             record: { $type: 'app.bsky.feed.post', text: 'hi', createdAt: new Date(now).toISOString() },
             indexedAt: new Date(now).toISOString(),
+            viewer: { bookmarked: false },
           },
         }],
         cursor: 'next',
@@ -117,15 +118,21 @@ describe('新しい投稿がない取り込み', () => {
     const result = await createCollectBlueskyTimelineUseCase(env, { fetch: fetchStub })?.run();
 
     expect(result).toEqual({ ok: true, val: { pages: 1, fetched: 1, saved: 0, dropped: 0 } });
-    expect(queries.map(({ sql }) => sql.trim().split(/\s+/)[0]!.toLowerCase())).toEqual(['select', 'select', 'select']);
+    expect(queries.map(({ sql }) => sql.trim().split(/\s+/)[0]!.toLowerCase())).toEqual([
+      'select',
+      'select',
+      'select',
+      'select',
+    ]);
     expect(queries[0]!.sql).toContain('bluesky_sessions');
     expect(queries[1]!.sql).toContain('bluesky_timeline_items');
     expect(queries[2]!.sql).toContain('bluesky_reposts');
+    expect(queries[3]!.sql).toContain('bluesky_bookmarks');
   });
 });
 
 describe('新しい投稿がない取り込み（cron）', () => {
-  it('ログインの待ち時間の依存を渡しても、保存済みのセッションが有効なら SELECT 3 本だけで書き込みは 0 本', async () => {
+  it('ログインの待ち時間の依存を渡しても、保存済みのセッションが有効なら SELECT 4 本だけで書き込みは 0 本', async () => {
     const { binding, sqlite, queries } = createSqliteD1Fixture();
     const now = Date.now();
     sqlite.prepare(
@@ -156,6 +163,7 @@ describe('新しい投稿がない取り込み（cron）', () => {
             author: { did: 'did:plc:a', handle: 'alice.bsky.social' },
             record: { $type: 'app.bsky.feed.post', text: 'hi', createdAt: new Date(now).toISOString() },
             indexedAt: new Date(now).toISOString(),
+            viewer: { bookmarked: false },
           },
         }],
         cursor: 'next',
@@ -167,7 +175,12 @@ describe('新しい投稿がない取り込み（cron）', () => {
       ?.run();
 
     expect(result).toEqual({ ok: true, val: { pages: 1, fetched: 1, saved: 0, dropped: 0 } });
-    expect(queries.map(({ sql }) => sql.trim().split(/\s+/)[0]!.toLowerCase())).toEqual(['select', 'select', 'select']);
+    expect(queries.map(({ sql }) => sql.trim().split(/\s+/)[0]!.toLowerCase())).toEqual([
+      'select',
+      'select',
+      'select',
+      'select',
+    ]);
   });
 });
 

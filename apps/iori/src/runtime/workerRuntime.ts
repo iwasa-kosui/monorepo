@@ -254,6 +254,7 @@ import { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
+import { createBlueskyBookmarkRuntimePorts } from './blueskyBookmark.ts';
 import { createBlueskyCrosspostUseCases, resolveBlueskyCrosspostConfig } from './blueskyCrosspost.ts';
 import { createBlueskyModerationRuntimePorts } from './blueskyModeration.ts';
 import { createBlueskyProfileRuntimePorts } from './blueskyProfile.ts';
@@ -523,6 +524,7 @@ export const createWorkerRuntimePorts = async (
     blueskyTimeline: createBlueskyTimelineRuntimePorts(env, db),
     blueskyModeration: createBlueskyModerationRuntimePorts(env, db),
     blueskyProfile: createBlueskyProfileRuntimePorts(env, db),
+    blueskyBookmark: createBlueskyBookmarkRuntimePorts(env, db),
     digest: {
       digestResolverByUserIdAndDigestDate,
       digestResolverByUserId: createD1DigestResolverByUserId(db),

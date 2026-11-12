@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "ddc13ee2-9114-49f9-a075-4cca8201deef",
-  "prevId": "92152080-ccf9-4cb6-8137-f5df9418fe17",
+  "prevId": "24c20dc9-dcbe-4eaa-b883-e85d3d604d73",
   "tables": {
     "actors": {
       "name": "actors",
@@ -448,6 +448,30 @@
           "onUpdate": "no action"
         }
       },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "bluesky_bookmarks": {
+      "name": "bluesky_bookmarks",
+      "columns": {
+        "subjectUri": {
+          "name": "subjectUri",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
