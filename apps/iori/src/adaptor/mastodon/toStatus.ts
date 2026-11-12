@@ -26,6 +26,7 @@ export type ToStatusOptions = Readonly<{
   blueskyCrosspost?: BlueskyCrosspost | null;
   quote?: Readonly<{ uri: string; status: Status | null }> | null;
   poll?: RemotePostPoll | null;
+  ownVotes?: ReadonlyArray<number>;
 }>;
 
 type LinkPreviews = PostWithAuthor['linkPreviews'];
@@ -92,7 +93,11 @@ const toPostUrls = (
   };
 };
 
-const toPoll = (post: PostWithAuthor, poll: RemotePostPoll | null | undefined): Poll | null => {
+const toPoll = (
+  post: PostWithAuthor,
+  poll: RemotePostPoll | null | undefined,
+  ownVotes: ReadonlyArray<number> = [],
+): Poll | null => {
   if (poll == null) return null;
   return {
     id: post.postId,
@@ -103,8 +108,8 @@ const toPoll = (post: PostWithAuthor, poll: RemotePostPoll | null | undefined): 
     voters_count: poll.votersCount,
     options: poll.options.map((option) => ({ title: option.title, votes_count: option.votesCount })),
     emojis: [],
-    voted: false,
-    own_votes: [],
+    voted: ownVotes.length > 0,
+    own_votes: [...ownVotes],
   };
 };
 
@@ -153,7 +158,7 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
     in_reply_to_account_id: options.inReplyToAccountId,
     reblog: null,
     quote: options.quote?.status == null ? null : { state: 'accepted', quoted_status: options.quote.status },
-    poll: toPoll(post, options.poll),
+    poll: toPoll(post, options.poll, options.ownVotes),
     card: toCard(post.linkPreviews, options.baseUrl),
     language: toLanguage(post.content),
     edited_at: post.editedAt != null ? toIsoString(post.editedAt) : null,

@@ -252,7 +252,7 @@ describe('createOnCreate', () => {
     expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ summary: null, sensitive: true }));
   });
 
-  it('records a Question with a link to vote and its poll', async () => {
+  it('records a Question without a link to vote and its poll', async () => {
     const question = new Question({
       id: new URL('https://remote.example/posts/1'),
       content: '<p>q</p>',
@@ -267,7 +267,7 @@ describe('createOnCreate', () => {
 
     expect(addRemotePost).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: '<p>q</p><p><a href="https://remote.example/posts/1">元の投稿で投票する</a></p>',
+        content: '<p>q</p>',
         poll: {
           multiple: false,
           options: [{ title: 'a', votesCount: 2 }, { title: 'b', votesCount: 0 }],

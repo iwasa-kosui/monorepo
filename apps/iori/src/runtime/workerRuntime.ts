@@ -139,6 +139,8 @@ import { createD1PostUpdatedStore } from '../adaptor/d1/post/postUpdatedStore.ts
 import { createD1PostVersionsResolverByPostId } from '../adaptor/d1/post/postVersionsResolverByPostId.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../adaptor/d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostPollsResolverByPostIds } from '../adaptor/d1/post/remotePostPollsResolverByPostIds.ts';
+import { createD1RemotePostPollVotedStore } from '../adaptor/d1/post/remotePostPollVotedStore.ts';
+import { createD1RemotePostPollVotesResolverByPostIds } from '../adaptor/d1/post/remotePostPollVotesResolverByPostIds.ts';
 import { createD1RemotePostUpserter } from '../adaptor/d1/post/remotePostUpserter.ts';
 import { createD1RemotePostUrisResolverByUris } from '../adaptor/d1/post/remotePostUrisResolverByUris.ts';
 import { createD1ThreadResolver } from '../adaptor/d1/post/threadResolver.ts';
@@ -253,6 +255,7 @@ import { UpdateProfileUseCase } from '../useCase/updateProfile.ts';
 import { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
+import { VotePollUseCase } from '../useCase/votePoll.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createBlueskyBookmarkRuntimePorts } from './blueskyBookmark.ts';
 import { createBlueskyCrosspostUseCases, resolveBlueskyCrosspostConfig } from './blueskyCrosspost.ts';
@@ -441,6 +444,7 @@ export const createWorkerRuntimePorts = async (
         accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
         postExtrasResolver: createD1PostExtrasResolverByPosts(db, env.ORIGIN),
         remotePostPollsResolver: createD1RemotePostPollsResolverByPostIds(db),
+        remotePostPollVotesResolver: createD1RemotePostPollVotesResolverByPostIds(db),
       }),
       searchTimeline,
       summarizeTimeline: createSummarizeTimelineUseCase({
@@ -648,6 +652,18 @@ export const createWorkerRuntimePorts = async (
         localLikeCreatedStore: createD1LocalLikeCreatedStore(db),
         likeResolver,
         postResolver,
+      }),
+      votePollUseCase: VotePollUseCase.create({
+        sessionResolver,
+        userResolver,
+        actorResolverByUserId,
+        actorResolverById: createD1ActorResolverById(db),
+        postResolver,
+        remotePostPollsResolver: createD1RemotePostPollsResolverByPostIds(db),
+        remotePostPollVotesResolver: createD1RemotePostPollVotesResolverByPostIds(db),
+        remotePostPollVotedStore: createD1RemotePostPollVotedStore(db),
+        blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+        isBlockedUri: (uri) => isBlockedUri(uri),
       }),
       undoLikeUseCase: UndoLikeUseCase.create({
         sessionResolver,

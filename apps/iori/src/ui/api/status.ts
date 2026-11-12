@@ -1,4 +1,4 @@
-import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
+import type { Account, Poll, Status } from '../../adaptor/mastodon/entities.ts';
 import { BLUESKY_ACCOUNT_ID_PREFIX } from '../../adaptor/mastodon/toBlueskyAccount.ts';
 import { blueskyProfilePathOf, blueskyProfileUrlOfActor } from '../../helper/blueskyUrl.ts';
 
@@ -52,6 +52,9 @@ export const withReblogged = (status: Status, reblogged: boolean): Status => ({
   reblogged,
   reblog: status.reblog === null ? null : { ...status.reblog, reblogged },
 });
+
+export const withPoll = (status: Status, poll: Poll): Status =>
+  status.reblog === null ? { ...status, poll } : { ...status, reblog: { ...status.reblog, poll } };
 
 export const withUpdatedStatus = (status: Status, updated: Status): Status =>
   status.reblog === null

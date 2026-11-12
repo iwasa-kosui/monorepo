@@ -134,6 +134,15 @@ export const remotePostPollsTable = sqliteTable('remote_post_polls', {
   closed: integer('closed', { mode: 'boolean' }).notNull(),
 });
 
+export const remotePostPollVotesTable = sqliteTable('remote_post_poll_votes', {
+  postId: text('postId').notNull().references(() => postsTable.postId),
+  actorId: text('actorId').notNull().references(() => actorsTable.actorId),
+  choice: integer('choice').notNull(),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.postId, table.actorId, table.choice] }),
+]);
+
 export const remotePostRecipientsTable = sqliteTable('remote_post_recipients', {
   postId: text('postId').notNull().references(() => postsTable.postId),
   actorUri: text('actorUri').notNull(),
@@ -793,6 +802,7 @@ export const schema = {
   remotePostsTable,
   remotePostRecipientsTable,
   remotePostPollsTable,
+  remotePostPollVotesTable,
   postQuotesTable,
   localPostsTable,
   likesTable,

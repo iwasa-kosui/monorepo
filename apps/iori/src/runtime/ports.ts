@@ -133,6 +133,7 @@ import type { UpdateProfileUseCase } from '../useCase/updateProfile.ts';
 import type { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
+import type { VotePollUseCase } from '../useCase/votePoll.ts';
 import type { BlueskyBookmarkRuntimePorts } from './blueskyBookmark.ts';
 import type { BlueskyModerationRuntimePorts } from './blueskyModeration.ts';
 import type { BlueskyProfileRuntimePorts } from './blueskyProfile.ts';
@@ -255,6 +256,7 @@ export type IoriPostingRuntimePorts = Readonly<{
 }>;
 export type IoriSocialActionsRuntimePorts = Readonly<{
   sendLikeUseCase: SendLikeUseCase;
+  votePollUseCase: VotePollUseCase;
   undoLikeUseCase: UndoLikeUseCase;
   createBookmarkUseCase: CreateBookmarkUseCase;
   deleteBookmarkUseCase: DeleteBookmarkUseCase;

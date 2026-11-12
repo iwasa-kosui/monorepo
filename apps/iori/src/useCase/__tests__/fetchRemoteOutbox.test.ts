@@ -196,7 +196,7 @@ describe('FetchRemoteOutboxUseCase', () => {
       },
       {
         uri: noteUri(2),
-        content: `<p>q</p><p><a href="${noteUri(2)}">元の投稿で投票する</a></p>`,
+        content: '<p>q</p>',
         poll: {
           multiple: false,
           options: [{ title: 'a', votesCount: 0 }],
