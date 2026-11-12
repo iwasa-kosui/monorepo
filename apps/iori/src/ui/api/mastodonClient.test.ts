@@ -37,6 +37,7 @@ import {
   react,
   reblog,
   refreshXPosts,
+  report,
   repostBlueskyPost,
   requestDigest,
   saveNotificationsMarker,
@@ -378,6 +379,36 @@ describe('mastodon client requests', () => {
 
     expect(isUnprocessableError(error)).toBe(true);
     expect((error as Error).message).toBe('Validation failed: Text can not be blank');
+  });
+
+  it('posts a report as same-origin JSON and returns the report', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'r1', category: 'violation' }));
+
+    const created = await report({ account_id: 'a1', category: 'violation', comment: 'rude' });
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/v1/reports');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({
+      account_id: 'a1',
+      category: 'violation',
+      comment: 'rude',
+      forward: true,
+    });
+    expect(created).toEqual({ id: 'r1', category: 'violation' });
+  });
+
+  it('throws an unprocessable error carrying the server message when the report is refused', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: The report is not supported for local accounts' }, {
+      status: 422,
+    }));
+
+    const error = await report({ account_id: 'a1', category: 'spam', comment: '' }).catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Validation failed: The report is not supported for local accounts');
   });
 
   it('deletes a status by encoded id and returns the deleted status', async () => {

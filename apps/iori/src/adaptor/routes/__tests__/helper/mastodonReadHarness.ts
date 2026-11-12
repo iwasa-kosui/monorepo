@@ -15,6 +15,7 @@ import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import type { TopicRelevanceJudge } from '../../../../ports/topicRelevanceJudge.ts';
 import { createWorkerBlockActions, createWorkerRemoteActorActions } from '../../../../runtime/workerCoreUseCases.ts';
+import { createWorkerReportAction } from '../../../../runtime/workerReportActions.ts';
 import { createDigestUseCases } from '../../../../scheduled/digestTasks.ts';
 import { AddDigestTopicUseCase } from '../../../../useCase/addDigestTopic.ts';
 import { AddFeedSourceUseCase } from '../../../../useCase/addFeedSource.ts';
@@ -167,6 +168,7 @@ import { createD1AcceptedRelaysResolver } from '../../../d1/relay/acceptedRelays
 import { createD1AllRelaysResolver } from '../../../d1/relay/allRelaysResolver.ts';
 import { createD1RelayResolverByActorUri } from '../../../d1/relay/relayResolverByActorUri.ts';
 import { createD1RelaySubscriptionRequestedStore } from '../../../d1/relay/relaySubscriptionRequestedStore.ts';
+import { createD1ReportSubmittedStore } from '../../../d1/report/reportSubmittedStore.ts';
 import { createD1RepostCreatedStore } from '../../../d1/repost/repostCreatedStore.ts';
 import { createD1RepostDeletedStore } from '../../../d1/repost/repostDeletedStore.ts';
 import { createD1RepostResolver } from '../../../d1/repost/repostResolver.ts';
@@ -192,6 +194,7 @@ import { createWorkerMastodonAccountsRouter } from '../../workerMastodonAccounts
 import { createWorkerMastodonFallbackRouter } from '../../workerMastodonFallbackRouter.ts';
 import { createWorkerMastodonMarkersRouter } from '../../workerMastodonMarkersRouter.ts';
 import { createWorkerMastodonNotificationsRouter } from '../../workerMastodonNotificationsRouter.ts';
+import { createWorkerMastodonReportsRouter } from '../../workerMastodonReportsRouter.ts';
 import { createWorkerMastodonStatusesRouter } from '../../workerMastodonStatusesRouter.ts';
 import { createWorkerMastodonTimelinesRouter } from '../../workerMastodonTimelinesRouter.ts';
 import { createWorkerMastodonTranslateRouter } from '../../workerMastodonTranslateRouter.ts';
@@ -280,6 +283,13 @@ export const setupReadApi = (
     followResolver: createD1FollowResolver(db),
     followRequestedStore: createD1FollowRequestedStore(db),
     undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
+  });
+  const reportRemoteActor = createWorkerReportAction({
+    userResolver,
+    actorResolverByUserId,
+    actorResolverById: createD1ActorResolverById(db),
+    postResolver,
+    reportSubmittedStore: createD1ReportSubmittedStore(db),
   });
   const blockActions = createWorkerBlockActions({
     userResolver,
@@ -470,6 +480,15 @@ export const setupReadApi = (
           unfollowRemoteActor: remoteActorActions.unfollowRemoteActor,
           blockActor: blockActions.blockActor,
           unblockActor: blockActions.unblockActor,
+          createContext,
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerMastodonReportsRouter({
+          authn,
+          statusAssembler,
+          reportRemoteActor,
           createContext,
         }),
       );
