@@ -50,7 +50,9 @@ const menuItems = (props: Partial<Parameters<typeof PostView>[0]> & { status: St
 const keys = (props: Partial<Parameters<typeof PostView>[0]> & { status: Status }): readonly string[] =>
   menuItems(props).map((item) => item.key);
 
-type ButtonNode = Readonly<{ props: Record<string, unknown> & { onClick: () => void } }>;
+type ButtonNode = Readonly<
+  { props: Record<string, unknown> & { onClick: (e: { stopPropagation: () => void }) => void } }
+>;
 
 const findButtonByTitle = (node: unknown, title: string): ButtonNode | undefined => {
   if (Array.isArray(node)) return node.map((child) => findButtonByTitle(child, title)).find((found) => found);
@@ -415,10 +417,19 @@ describe('PostView の「…」メニュー', () => {
       const onQuote = vi.fn();
       const button = findButtonByTitle(PostView({ ...base, onQuote }), '引用');
 
-      button?.props.onClick();
+      button?.props.onClick({ stopPropagation: vi.fn() });
 
       expect(onQuote).toHaveBeenCalledTimes(1);
       expect(onQuote).toHaveBeenCalledWith(base.status);
+    });
+
+    it('押したとき、イベントを親に伝えない', () => {
+      const stopPropagation = vi.fn();
+      const button = findButtonByTitle(PostView({ ...base, onQuote: vi.fn() }), '引用');
+
+      button?.props.onClick({ stopPropagation });
+
+      expect(stopPropagation).toHaveBeenCalledTimes(1);
     });
 
     it('リポストは中身の投稿を引用の対象にし、可視性も中身で判定する', () => {
@@ -427,7 +438,7 @@ describe('PostView の「…」メニュー', () => {
       const boost = { ...local, id: 'boost-1', visibility: 'private' as const, reblog: inner };
       const button = findButtonByTitle(PostView({ status: boost, onQuote }), '引用');
 
-      button?.props.onClick();
+      button?.props.onClick({ stopPropagation: vi.fn() });
 
       expect(onQuote).toHaveBeenCalledWith(inner);
     });

@@ -603,7 +603,7 @@ export const PostView = (
               </button>
             </div>
           )}
-          <div class='mt-3 flex items-center justify-end gap-4'>
+          <div class='mt-3 flex items-center justify-end flex-wrap gap-x-3 gap-y-2 sm:gap-x-4'>
             {canTranslate && (
               <button
                 type='button'
@@ -691,7 +691,10 @@ export const PostView = (
             {canQuote && (
               <button
                 type='button'
-                onClick={() => onQuote?.(post)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuote?.(post);
+                }}
                 class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
                 title='引用'
                 aria-label='引用'
