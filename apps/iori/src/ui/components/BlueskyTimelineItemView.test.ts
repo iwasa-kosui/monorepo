@@ -29,6 +29,17 @@ const render = (
   props: Partial<Parameters<typeof BlueskyTimelineItemView>[0]> = {},
 ): string => String(jsx(BlueskyTimelineItemView, { item: { ...base, ...item }, ...props }));
 
+type ClickableNode = Readonly<{ props: { onClick: (event: { stopPropagation: () => void }) => void } }>;
+
+const findButtonByTitle = (node: unknown, title: string): ClickableNode | undefined => {
+  if (Array.isArray(node)) return node.map((child) => findButtonByTitle(child, title)).find((found) => found);
+  if (typeof node !== 'object' || node === null || !('tag' in node)) return undefined;
+  const { tag, props, children } = node as { tag: unknown; props: Record<string, unknown>; children: unknown };
+  if (tag === 'button' && props.title === title) return node as unknown as ClickableNode;
+  if (typeof tag === 'function') return findButtonByTitle(tag({ ...props, children }), title);
+  return findButtonByTitle(children, title);
+};
+
 describe('BlueskyTimelineItemView', () => {
   it('投稿者の表示名と @handle、本文、bsky.app の投稿へのリンクを出す', () => {
     const html = render({});
@@ -192,6 +203,41 @@ describe('BlueskyTimelineItemView', () => {
 
     expect(html).toContain('class="flex items-center justify-end gap-4 pt-1"');
     expect(html.indexOf('title="リポスト"')).toBeLessThan(html.indexOf('title="いいね"'));
+  });
+
+  describe('返信のボタン', () => {
+    it('onReply が渡されないときはボタンを出さない', () => {
+      expect(render({})).not.toContain('title="返信 (p)"');
+      expect(render({}, { onLike: () => {} })).not.toContain('title="返信 (p)"');
+    });
+
+    it('onReply が渡されたときは、それだけでも操作の行に「返信 (p)」の button を出す', () => {
+      const html = render({}, { onReply: () => {} });
+
+      expect(html).toContain('class="flex items-center justify-end gap-4 pt-1"');
+      expect(html).toContain('type="button"');
+      expect(html).toContain('title="返信 (p)"');
+      expect(html).toContain('fill="none"');
+    });
+
+    it('Fediverse の投稿と同じく、返信、リポスト、いいねの順に並べる', () => {
+      const html = render({}, { onReply: () => {}, onRepost: () => {}, onLike: () => {} });
+
+      expect(html.indexOf('title="返信 (p)"')).toBeLessThan(html.indexOf('title="リポスト"'));
+      expect(html.indexOf('title="リポスト"')).toBeLessThan(html.indexOf('title="いいね"'));
+    });
+
+    it('押すと、その投稿を渡して onReply を呼び、親要素へのクリックは伝えない', () => {
+      const calls: IoriBlueskyTimelineItemBody[] = [];
+      const element = BlueskyTimelineItemView({ item: base, onReply: (item) => calls.push(item) });
+      const button = findButtonByTitle(element, '返信 (p)');
+      let stopped = false;
+
+      button?.props.onClick({ stopPropagation: () => (stopped = true) });
+
+      expect(calls).toEqual([base]);
+      expect(stopped).toBe(true);
+    });
   });
 
   describe('リポストのボタン', () => {

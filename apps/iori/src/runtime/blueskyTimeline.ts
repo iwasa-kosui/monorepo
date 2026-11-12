@@ -33,6 +33,7 @@ import { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline
 import { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../useCase/likeBlueskyPost.ts';
+import { ReplyToBlueskyPostUseCase } from '../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../useCase/repostBlueskyPost.ts';
 import { UndoRepostBlueskyPostUseCase } from '../useCase/undoRepostBlueskyPost.ts';
 import { UnlikeBlueskyPostUseCase } from '../useCase/unlikeBlueskyPost.ts';
@@ -56,6 +57,7 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
   unlikeBlueskyPostUseCase: UnlikeBlueskyPostUseCase | undefined;
   repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
   undoRepostBlueskyPostUseCase: UndoRepostBlueskyPostUseCase | undefined;
+  replyToBlueskyPostUseCase: ReplyToBlueskyPostUseCase | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -129,6 +131,22 @@ export const createRepostBlueskyPostUseCases = (
   };
 };
 
+export const createReplyToBlueskyPostUseCase = (
+  env: IoriWorkerEnv,
+  db: IoriD1Db,
+  deps: Readonly<{ fetch?: typeof fetch }> = {},
+): ReplyToBlueskyPostUseCase | undefined => {
+  const config = resolveBlueskyTimelineConfig(env);
+  if (config === undefined) return undefined;
+  const client = createTimelineClient(config, db, deps);
+  return ReplyToBlueskyPostUseCase.create({
+    client,
+    query: client.query,
+    targetResolver: createD1BlueskyLikeTargetResolver(db),
+    now: Instant.now,
+  });
+};
+
 export const createCollectBlueskyTimelineUseCase = (
   env: IoriWorkerEnv,
   deps: Readonly<{ db?: IoriD1Db; fetch?: typeof fetch; holdLoginAfterFailure?: boolean }> = {},
@@ -174,6 +192,7 @@ export const createBlueskyTimelineRuntimePorts = (
     unlikeBlueskyPostUseCase: likes?.unlike,
     repostBlueskyPostUseCase: reposts?.repost,
     undoRepostBlueskyPostUseCase: reposts?.undoRepost,
+    replyToBlueskyPostUseCase: createReplyToBlueskyPostUseCase(env, db, deps),
     isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
   };
 };

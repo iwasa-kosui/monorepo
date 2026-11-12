@@ -490,3 +490,18 @@ export const repostBlueskyPost = async (feedItemId: string): Promise<IoriBluesky
 
 export const undoRepostBlueskyPost = (feedItemId: string): Promise<IoriBlueskyRepostResponse> =>
   act<IoriBlueskyRepostResponse>('DELETE', requestUrl(BLUESKY_REPOSTS_PATH, { feedItemId }));
+
+const BLUESKY_REPLIES_PATH = '/api/iori/v1/bluesky/replies';
+
+export type BlueskyReplyResponse = Readonly<{ uri: string; cid: string }>;
+
+export const replyToBlueskyPost = async (feedItemId: string, text: string): Promise<BlueskyReplyResponse> => {
+  const res = await fetch(BLUESKY_REPLIES_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ feedItemId, text }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as BlueskyReplyResponse;
+};

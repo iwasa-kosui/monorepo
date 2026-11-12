@@ -8,7 +8,7 @@ import { Instant } from '../../../../domain/instant/instant.ts';
 import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
-import type { BlueskyClient } from '../../../../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import type { TopicRelevanceJudge } from '../../../../ports/topicRelevanceJudge.ts';
@@ -32,6 +32,7 @@ import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
 import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts';
+import { ReplyToBlueskyPostUseCase } from '../../../../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../../useCase/repostBlueskyPost.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
@@ -204,6 +205,7 @@ export const setupReadApi = (
     blueskyNow?: () => Instant;
     blueskyLikeClient?: Pick<BlueskyClient, 'createLike' | 'deleteLike'>;
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
+    blueskyReplyClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
     refreshXPosts?: RefreshXPostsUseCase;
     scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   }> = {},
@@ -564,6 +566,14 @@ export const setupReadApi = (
               client: options.blueskyRepostClient,
               targetResolver: createD1BlueskyRepostTargetResolver(db),
               deletedStore: createD1BlueskyRepostDeletedStore(db),
+            }),
+          replyToBlueskyPostUseCase: options.blueskyReplyClient === undefined
+            ? undefined
+            : ReplyToBlueskyPostUseCase.create({
+              client: options.blueskyReplyClient,
+              query: options.blueskyReplyClient.query,
+              targetResolver: createD1BlueskyLikeTargetResolver(db),
+              now: Instant.now,
             }),
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),

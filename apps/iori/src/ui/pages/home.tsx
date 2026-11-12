@@ -14,7 +14,9 @@ import { Modal } from '../components/Modal.tsx';
 import { PostDestinationSelect } from '../components/PostDestinationSelect.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { ReplyDialogShell } from '../components/ReplyDialogShell.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
+import { blueskyReplyExcerpt, blueskyReplyRemaining, canSendBlueskyReply } from '../hooks/blueskyReply.ts';
 import { homeItemKey } from '../hooks/homeFeed.ts';
 import { pullProgress, refreshResultLabel } from '../hooks/pullGesture.ts';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
@@ -201,67 +203,87 @@ const ReplyModal = () => {
   };
 
   return (
-    <div
-      class='fixed inset-0 bg-charcoal/50 backdrop-blur-sm flex items-center justify-center z-50'
-      onClick={closeReplyDialog}
+    <ReplyDialogShell
+      onClose={closeReplyDialog}
+      onSubmit={() => {
+        if (replyContent.trim() && replyingToPostId) {
+          sendReply(replyingToPostId, replyContent);
+        }
+      }}
+      isSending={isSendingReply}
+      canSubmit={!isSendingReply && replyContent.trim() !== ''}
+      leadingActions={
+        <PostDestinationSelect value={replyDestination} onChange={setReplyDestination} name='reply-destination' />
+      }
     >
-      <div
-        class='bg-cream dark:bg-gray-800 md:rounded-clay shadow-clay dark:shadow-clay-dark p-4 md:p-6 w-full h-full md:h-auto md:max-w-lg md:mx-4 flex flex-col'
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div class='flex items-center justify-between mb-4'>
-          <h2 class='text-lg font-semibold text-charcoal dark:text-white'>
-            返信
-          </h2>
-          <button
-            type='button'
-            onClick={closeReplyDialog}
-            class='p-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 transition-colors rounded-xl hover:bg-sand-light dark:hover:bg-gray-700'
-          >
-            <svg class='w-5 h-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-              <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 18L18 6M6 6l12 12' />
-            </svg>
-          </button>
-        </div>
+      <MarkdownEditor
+        value={replyContent}
+        onChange={setReplyContent}
+        onKeyDown={handleKeyDown}
+        placeholder='返信を書く... (⌘+Enter to post)'
+        minHeight='150px'
+        disabled={isSendingReply}
+      />
+    </ReplyDialogShell>
+  );
+};
 
-        <MarkdownEditor
-          value={replyContent}
-          onChange={setReplyContent}
-          onKeyDown={handleKeyDown}
-          placeholder='返信を書く... (⌘+Enter to post)'
-          minHeight='150px'
-          disabled={isSendingReply}
-        />
+const BlueskyReplyModal = () => {
+  const { blueskyReply } = useTimelineContext();
+  const { target, content, isSending, errorText, close, setContent, send } = blueskyReply;
 
-        <div class='mt-3 flex gap-2 justify-end'>
-          <PostDestinationSelect value={replyDestination} onChange={setReplyDestination} name='reply-destination' />
-          <button
-            type='button'
-            onClick={closeReplyDialog}
-            class='px-4 py-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
-            disabled={isSendingReply}
-          >
-            キャンセル
-          </button>
-          <button
-            type='button'
-            onClick={() => {
-              if (replyContent.trim() && replyingToPostId) {
-                sendReply(replyingToPostId, replyContent);
-              }
-            }}
-            class={`px-5 py-2 text-white text-sm font-medium rounded-clay transition-all ${
-              isSendingReply || !replyContent.trim()
-                ? 'bg-warm-gray-dark cursor-not-allowed'
-                : 'bg-terracotta hover:bg-terracotta-dark shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
-            }`}
-            disabled={isSendingReply || !replyContent.trim()}
-          >
-            {isSendingReply ? '送信中...' : '返信する'}
-          </button>
+  if (target === null) {
+    return null;
+  }
+
+  const remaining = blueskyReplyRemaining(content);
+  const canSubmit = canSendBlueskyReply(content, isSending);
+
+  return (
+    <ReplyDialogShell
+      onClose={close}
+      onSubmit={() => void send()}
+      isSending={isSending}
+      canSubmit={canSubmit}
+      errorText={errorText}
+      target={
+        <div class='mb-3 rounded-xl border border-warm-gray dark:border-gray-700 p-3 text-sm'>
+          <div class='flex flex-wrap items-baseline gap-x-2'>
+            <span class='font-semibold text-charcoal dark:text-white'>
+              {target.authorDisplayName ?? target.authorHandle}
+            </span>
+            <span class='text-charcoal-light dark:text-gray-400'>@{target.authorHandle}</span>
+          </div>
+          <p class='mt-1 whitespace-pre-wrap break-words text-charcoal-light dark:text-gray-400'>
+            {blueskyReplyExcerpt(target.text)}
+          </p>
         </div>
-      </div>
-    </div>
+      }
+      counter={
+        <span
+          class={`mr-auto self-center text-sm ${
+            remaining < 0 ? 'text-terracotta font-medium' : 'text-charcoal-light dark:text-gray-400'
+          }`}
+        >
+          {remaining}
+        </span>
+      }
+    >
+      <textarea
+        value={content}
+        onInput={(e) => setContent((e.target as HTMLTextAreaElement).value)}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            if (canSubmit) void send();
+          }
+        }}
+        placeholder='返信を書く... (⌘+Enter to post)'
+        disabled={isSending}
+        class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all'
+        style={{ minHeight: '150px' }}
+      />
+    </ReplyDialogShell>
   );
 };
 
@@ -716,8 +738,20 @@ const UpdateBioModal = () => {
 };
 
 const TimelineList = () => {
-  const { data, items, actions, blueskyLike, blueskyRepost, blueskyStatus, reply, thread, ui, reading, timeline } =
-    useTimelineContext();
+  const {
+    data,
+    items,
+    actions,
+    blueskyLike,
+    blueskyRepost,
+    blueskyReply,
+    blueskyStatus,
+    reply,
+    thread,
+    ui,
+    reading,
+    timeline,
+  } = useTimelineContext();
 
   if (!data) return null;
 
@@ -767,6 +801,7 @@ const TimelineList = () => {
               item={item.item}
               dataIndex={index}
               isSelected={selectedIndex === index}
+              onReply={blueskyReply.open}
               onLike={blueskyLike.like}
               onUndoLike={blueskyLike.undoLike}
               isLikePending={blueskyLike.pendingUris.has(item.item.uri)}
@@ -926,6 +961,7 @@ const HomePage = () => {
       <PullToRefreshIndicator />
       <NewPostsPill />
       <ReplyModal />
+      <BlueskyReplyModal />
       <ThreadModal />
       <TimelineList />
       <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>
