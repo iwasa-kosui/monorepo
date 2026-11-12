@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import {
+  block,
   deleteStatus,
   failureMessage,
   favourite,
@@ -38,6 +39,7 @@ export type UsePostActionsReturn = Readonly<{
   undoRepost: (postId: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
   muteAccount: (accountId: string, acct: string) => Promise<void>;
+  blockAccount: (accountId: string, acct: string) => Promise<void>;
   emojiReact: (postId: string, emoji: string) => Promise<void>;
   undoEmojiReact: (postId: string, emoji: string) => Promise<void>;
 }>;
@@ -185,6 +187,24 @@ export const usePostActions = ({
     [removeAccountPosts],
   );
 
+  const blockAccount = useCallback(
+    async (accountId: string, acct: string) => {
+      if (
+        !confirm(
+          `@${acct} をブロックしますか？フォローとフォロワーの関係も解除されます\nブロックは相手のプロフィール画面で解除できます`,
+        )
+      ) return;
+      try {
+        await block(accountId);
+        removeAccountPosts(accountId);
+      } catch (error) {
+        console.error('Failed to block:', error);
+        alert(failureMessage('block', error));
+      }
+    },
+    [removeAccountPosts],
+  );
+
   const emojiReact = useCallback(async (postId: string, emoji: string) => {
     setEmojiReactingPostId(postId);
     try {
@@ -246,6 +266,7 @@ export const usePostActions = ({
     undoRepost,
     deletePost,
     muteAccount,
+    blockAccount,
     emojiReact,
     undoEmojiReact,
   } as const;

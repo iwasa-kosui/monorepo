@@ -12,6 +12,7 @@ type Props = Readonly<{
   dataIndex?: number;
   isSelected?: boolean;
   onReply?: (item: IoriBlueskyTimelineItemBody) => void;
+  onQuote?: (item: IoriBlueskyTimelineItemBody) => void;
   onLike?: (item: IoriBlueskyTimelineItemBody) => void;
   onUndoLike?: (item: IoriBlueskyTimelineItemBody) => void;
   isLikePending?: boolean;
@@ -162,6 +163,23 @@ const BlueskyReplyButton = ({ item, onReply }: Readonly<{
   </button>
 );
 
+const BlueskyQuoteButton = ({ item, onQuote }: Readonly<{
+  item: IoriBlueskyTimelineItemBody;
+  onQuote: (item: IoriBlueskyTimelineItemBody) => void;
+}>) => (
+  <button
+    type='button'
+    onClick={(event: Event) => {
+      event.stopPropagation();
+      onQuote(item);
+    }}
+    class='flex items-center gap-1 text-sm transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
+    title='引用'
+  >
+    引用
+  </button>
+);
+
 const likeTitle = (liked: boolean, isPending: boolean): string => {
   if (isPending) return liked ? 'いいね中...' : 'いいね取り消し中...';
   return liked ? 'いいねを取り消す' : 'いいね';
@@ -271,6 +289,7 @@ export const BlueskyTimelineItemView = ({
   dataIndex,
   isSelected,
   onReply,
+  onQuote,
   onLike,
   onUndoLike,
   isLikePending,
@@ -345,7 +364,8 @@ export const BlueskyTimelineItemView = ({
       </div>
       {item.text !== '' && <BlueskyText text={item.text} facets={item.facets} />}
       {item.embed !== null && <BlueskyEmbed embed={item.embed} bskyHref={bskyHref} />}
-      {(onReply !== undefined || onLike !== undefined || onRepost !== undefined || menuItems.length > 0) && (
+      {(onReply !== undefined || onQuote !== undefined || onLike !== undefined || onRepost !== undefined
+        || menuItems.length > 0) && (
         <div class='flex items-center justify-end gap-4 pt-1'>
           {onReply !== undefined && <BlueskyReplyButton item={item} onReply={onReply} />}
           {onRepost !== undefined && (
@@ -356,6 +376,7 @@ export const BlueskyTimelineItemView = ({
               isPending={isRepostPending === true}
             />
           )}
+          {onQuote !== undefined && <BlueskyQuoteButton item={item} onQuote={onQuote} />}
           {onLike !== undefined && (
             <BlueskyLikeButton item={item} onLike={onLike} onUndoLike={onUndoLike} isPending={isLikePending === true} />
           )}
