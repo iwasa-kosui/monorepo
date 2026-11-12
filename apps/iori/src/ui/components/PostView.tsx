@@ -7,6 +7,7 @@ import { isMastodonApiError, translate } from '../api/mastodonClient.ts';
 import { hideQuoteInline, quoteOf, quoteTargetUrls } from '../api/quote.ts';
 import { accountHandle, accountHref, detailHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { translationErrorMessage } from '../api/translation.ts';
+import { BlueskyCrosspostIcon } from './BlueskyCrosspostIcon.tsx';
 import { toBlueskyCrosspostMark } from './blueskyCrosspostMark.ts';
 import { DirectMark, isDirectStatus } from './DirectMark.tsx';
 import { EmojiPicker } from './EmojiPicker.tsx';
@@ -391,10 +392,10 @@ export const PostView = (
               </span>
               <span class='text-sm text-charcoal-light dark:text-gray-400 truncate'>@{authorHandle}</span>
             </a>
-            <span class='text-warm-gray-dark dark:text-gray-500'>·</span>
+            <span class='flex-shrink-0 text-warm-gray-dark dark:text-gray-500'>·</span>
             <a
               href={postDetailLink}
-              class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+              class='flex-shrink-0 whitespace-nowrap text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
               title={new Date(post.created_at).toLocaleString()}
             >
               <time dateTime={new Date(post.created_at).toISOString()}>
@@ -404,7 +405,7 @@ export const PostView = (
             {post.edited_at != null && (
               <span
                 title={`${new Date(post.edited_at).toLocaleString()} に編集`}
-                class='text-xs text-charcoal-light dark:text-gray-400'
+                class='flex-shrink-0 whitespace-nowrap text-xs text-charcoal-light dark:text-gray-400'
               >
                 編集済み
               </span>
@@ -414,14 +415,16 @@ export const PostView = (
               crosspostMark.href === null
                 ? (
                   <span
+                    role='img'
                     title={crosspostMark.title}
-                    class={`text-xs ${
+                    aria-label={crosspostMark.label}
+                    class={`inline-flex flex-shrink-0 items-center ${
                       crosspostMark.emphasized
-                        ? 'font-medium text-red-600 dark:text-red-400'
+                        ? 'text-red-600 dark:text-red-400'
                         : 'text-charcoal-light dark:text-gray-400'
                     }`}
                   >
-                    {crosspostMark.label}
+                    <BlueskyCrosspostIcon kind={crosspostMark.kind} />
                   </span>
                 )
                 : (
@@ -430,9 +433,10 @@ export const PostView = (
                     target='_blank'
                     rel='noopener noreferrer'
                     title={crosspostMark.title}
-                    class='text-xs text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+                    aria-label={crosspostMark.label}
+                    class='inline-flex flex-shrink-0 items-center text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
                   >
-                    {crosspostMark.label}
+                    <BlueskyCrosspostIcon kind={crosspostMark.kind} />
                   </a>
                 )
             )}

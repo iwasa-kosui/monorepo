@@ -46,6 +46,8 @@ const crosspost = (overrides: Partial<IoriBlueskyCrosspost>): IoriBlueskyCrosspo
   ...overrides,
 });
 
+const textOf = (html: string): string => html.replace(/<[^>]*>/g, '');
+
 describe('PostView の Bluesky の印', () => {
   it('bluesky_crosspost が無ければ印を出さない', () => {
     expect(render()).not.toContain('Bluesky');
@@ -59,29 +61,43 @@ describe('PostView の Bluesky の印', () => {
     expect(html).toContain('href="https://bsky.app/profile/did:plc:a/post/b"');
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');
-    expect(html).toContain('>Bluesky</a>');
+    expect(html).toContain('aria-label="Bluesky"');
+    expect(html).toContain('<svg');
+    expect(textOf(html)).not.toContain('Bluesky');
   });
 
-  it('pending は「Bluesky 送信中」を出す', () => {
-    expect(render(crosspost({ status: 'pending' }))).toContain('Bluesky 送信中');
+  it('pending は「Bluesky 送信中」をアイコンの aria-label に入れる', () => {
+    const html = render(crosspost({ status: 'pending' }));
+
+    expect(html).toContain('aria-label="Bluesky 送信中"');
+    expect(html).toContain('<svg');
+    expect(textOf(html)).not.toContain('Bluesky');
   });
 
-  it('failed で再送が残っていれば「Bluesky 再送待ち」を出す', () => {
-    expect(render(crosspost({ status: 'failed', retrying: true }))).toContain('Bluesky 再送待ち');
+  it('failed で再送が残っていれば「Bluesky 再送待ち」をアイコンの aria-label に入れる', () => {
+    const html = render(crosspost({ status: 'failed', retrying: true }));
+
+    expect(html).toContain('aria-label="Bluesky 再送待ち"');
+    expect(html).toContain('<svg');
+    expect(textOf(html)).not.toContain('Bluesky');
   });
 
-  it('failed で再送が残っていなければ赤で「Bluesky に届いていません」を出す', () => {
+  it('failed で再送が残っていなければ赤のアイコンで「Bluesky に届いていません」を aria-label に入れる', () => {
     const html = render(crosspost({ status: 'failed', retrying: false }));
 
-    expect(html).toContain('Bluesky に届いていません');
+    expect(html).toContain('aria-label="Bluesky に届いていません"');
+    expect(html).toContain('<svg');
     expect(html).toContain('text-red-600');
+    expect(textOf(html)).not.toContain('Bluesky');
   });
 
-  it('content_warning の skipped は「Bluesky に未送信」を出し、title に理由を入れる', () => {
+  it('content_warning の skipped は「Bluesky に未送信」を aria-label に入れ、title に理由を入れる', () => {
     const html = render(crosspost({ status: 'skipped', skip_reason: 'content_warning', retrying: false }));
 
-    expect(html).toContain('Bluesky に未送信');
+    expect(html).toContain('aria-label="Bluesky に未送信"');
+    expect(html).toContain('<svg');
     expect(html).toContain('title="この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした"');
+    expect(textOf(html)).not.toContain('Bluesky');
   });
 
   it('reply_to_unsent の skipped は印を出さない', () => {
@@ -95,8 +111,11 @@ describe('PostView の Bluesky の印', () => {
   });
 
   it('private の投稿の visibility の skipped は印を出す', () => {
-    expect(render(crosspost({ status: 'skipped', skip_reason: 'visibility', retrying: false }), 'private'))
-      .toContain('Bluesky に未送信');
+    const html = render(crosspost({ status: 'skipped', skip_reason: 'visibility', retrying: false }), 'private');
+
+    expect(html).toContain('aria-label="Bluesky に未送信"');
+    expect(html).toContain('<svg');
+    expect(textOf(html)).not.toContain('Bluesky');
   });
 
   it('deleting は何も出さない', () => {

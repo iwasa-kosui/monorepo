@@ -2,7 +2,10 @@ import type { IoriBlueskyCrosspost, Status } from '../../adaptor/mastodon/entiti
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 import type { PostVisibility } from './postVisibility.ts';
 
+export type BlueskyCrosspostKind = 'sent' | 'pending' | 'retrying' | 'failed' | 'skipped';
+
 export type BlueskyCrosspostMark = Readonly<{
+  kind: BlueskyCrosspostKind;
   label: string;
   title: string;
   emphasized: boolean;
@@ -30,18 +33,32 @@ export const toBlueskyCrosspostMark = (
 ): BlueskyCrosspostMark | undefined => {
   switch (crosspost.status) {
     case 'sent':
-      return { label: 'Bluesky', title: 'Bluesky に投稿しました', emphasized: false, href: crosspost.url };
+      return {
+        kind: 'sent',
+        label: 'Bluesky',
+        title: 'Bluesky に投稿しました',
+        emphasized: false,
+        href: crosspost.url,
+      };
     case 'pending':
-      return { label: 'Bluesky 送信中', title: 'Bluesky に送信しています', emphasized: false, href: null };
+      return {
+        kind: 'pending',
+        label: 'Bluesky 送信中',
+        title: 'Bluesky に送信しています',
+        emphasized: false,
+        href: null,
+      };
     case 'failed':
       return crosspost.retrying
         ? {
+          kind: 'retrying',
           label: 'Bluesky 再送待ち',
           title: 'Bluesky への送信に失敗しました。あとで再送します',
           emphasized: false,
           href: null,
         }
         : {
+          kind: 'failed',
           label: 'Bluesky に届いていません',
           title: 'Bluesky への送信に失敗し、再送も終わりました',
           emphasized: true,
@@ -52,6 +69,7 @@ export const toBlueskyCrosspostMark = (
         return undefined;
       }
       return {
+        kind: 'skipped',
         label: 'Bluesky に未送信',
         title: skipReasonText(crosspost.skip_reason) ?? 'Bluesky には送っていません',
         emphasized: false,
