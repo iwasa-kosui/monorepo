@@ -25,10 +25,9 @@ const participantCount = alias(directPostParticipantsTable, 'dm_participant_coun
 const participantInSet = alias(directPostParticipantsTable, 'dm_participant_in_set');
 
 const hasViewerParticipant = (viewerUri: string): SQL =>
-  sql`exists (
-    select 1 from ${directPostParticipantsTable} ${viewerParticipant}
-    where ${viewerParticipant.postId} = ${postsTable.postId}
-      and ${viewerParticipant.actorUri} = ${viewerUri}
+  sql`${postsTable.postId} in (
+    select ${viewerParticipant.postId} from ${directPostParticipantsTable} ${viewerParticipant}
+    where ${viewerParticipant.actorUri} = ${viewerUri}
   )`;
 
 const hasExactParticipants = (uris: ReadonlyArray<string>): SQL =>
@@ -44,17 +43,17 @@ const hasUnreadNotification = (userId: string): SQL =>
   sql`(
     exists (
       select 1 from ${notificationMentionsTable}
-      inner join ${notificationsTable}
-        on ${notificationsTable.notificationId} = ${notificationMentionsTable.notificationId}
-      where ${notificationMentionsTable.mentionPostId} = ${postsTable.postId}
+      cross join ${notificationsTable}
+      where ${notificationsTable.notificationId} = ${notificationMentionsTable.notificationId}
+        and ${notificationMentionsTable.mentionPostId} = ${postsTable.postId}
         and ${notificationsTable.recipientUserId} = ${userId}
         and ${notificationsTable.isRead} = 0
     )
     or exists (
       select 1 from ${notificationRepliesTable}
-      inner join ${notificationsTable}
-        on ${notificationsTable.notificationId} = ${notificationRepliesTable.notificationId}
-      where ${notificationRepliesTable.replyPostId} = ${postsTable.postId}
+      cross join ${notificationsTable}
+      where ${notificationsTable.notificationId} = ${notificationRepliesTable.notificationId}
+        and ${notificationRepliesTable.replyPostId} = ${postsTable.postId}
         and ${notificationsTable.recipientUserId} = ${userId}
         and ${notificationsTable.isRead} = 0
     )

@@ -1,4 +1,9 @@
-import { applyMessageBadge, fetchUnreadMessageCount, MESSAGES_READ_EVENT } from '../api/messageBadge.ts';
+import {
+  applyMessageBadge,
+  initialMessagePolling,
+  MESSAGES_READ_EVENT,
+  pollUnreadMessages,
+} from '../api/messageBadge.ts';
 import { readIsLoggedIn } from '../api/navPrefetch.ts';
 import { applyNotificationBadge, fetchUnreadNotificationCount } from '../api/notificationBadge.ts';
 
@@ -20,11 +25,13 @@ if (globalThis.window && readIsLoggedIn(document)) {
   window.setInterval(() => void refresh(), POLL_INTERVAL_MS);
 
   let messagesUnavailable = false;
+  let messagePolling = initialMessagePolling;
   const refreshMessages = async () => {
     if (messagesUnavailable || document.visibilityState !== 'visible') return;
-    const unread = await fetchUnreadMessageCount((input, init) => fetch(input, init));
-    if (unread === 'unavailable') messagesUnavailable = true;
-    applyMessageBadge(document, typeof unread === 'number' ? unread : 0);
+    const polled = await pollUnreadMessages((input, init) => fetch(input, init), messagePolling);
+    messagePolling = polled.polling;
+    if (polled.unread === 'unavailable') messagesUnavailable = true;
+    applyMessageBadge(document, typeof polled.unread === 'number' ? polled.unread : 0);
   };
   void refreshMessages();
   document.addEventListener('visibilitychange', () => void refreshMessages());

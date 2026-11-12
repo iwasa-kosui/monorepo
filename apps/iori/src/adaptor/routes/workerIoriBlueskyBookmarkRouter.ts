@@ -9,6 +9,7 @@ import type { BookmarkBlueskyPostUseCase } from '../../useCase/bookmarkBlueskyPo
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { ListBlueskyBookmarksUseCase } from '../../useCase/listBlueskyBookmarks.ts';
 import type { UnbookmarkBlueskyPostUseCase } from '../../useCase/unbookmarkBlueskyPost.ts';
+import { logBlueskyFailure } from './helper/blueskyFailureLog.ts';
 import { handleInternalError } from './helper/mastodonErrors.ts';
 import { bodyString, readRequestBody } from './helper/requestBody.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
@@ -46,7 +47,10 @@ const disabled = { error: 'Bluesky timeline is disabled' } as const;
 
 const failure = (c: Context, error: BlueskyClientError | BlueskyBookmarkTargetNotFound) => {
   if (error.type === 'BlueskyBookmarkTargetNotFound') return c.json({ error: 'Record not found' }, 404);
-  if (isBlueskyBookmarkUnavailable(error)) return c.json({ error: BLUESKY_BOOKMARKS_UNAVAILABLE_ERROR }, 502);
+  if (isBlueskyBookmarkUnavailable(error)) {
+    logBlueskyFailure(error, 502);
+    return c.json({ error: BLUESKY_BOOKMARKS_UNAVAILABLE_ERROR }, 502);
+  }
   return clientFailure(c, error);
 };
 

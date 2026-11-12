@@ -57,6 +57,7 @@ import {
   BLUESKY_MAX_IMAGES,
   BLUESKY_MAX_TEXT_BYTES,
 } from '../bluesky/blueskyPostRecord.ts';
+import { logBlueskyFailure } from './helper/blueskyFailureLog.ts';
 import { blueskyPostTextOf } from './helper/blueskyPostText.ts';
 import { loadBlueskyPostImage } from './helper/loadBlueskyPostImage.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
@@ -295,10 +296,16 @@ const threadFailure = (c: Context, error: BlueskyClientError | BlueskyPostThread
   if (error.type === 'BlueskyPostThreadUnavailable') {
     return c.json({ error: 'Record not found', code: error.reason === 'blocked' ? 'blocked' : 'not_found' }, 404);
   }
-  if (error.status === 429) return c.json({ error: 'Bluesky rate limited' }, 429);
-  return error.code === 'NotFound'
-    ? c.json({ error: 'Record not found', code: 'not_found' }, 404)
-    : c.json({ error: 'Bluesky request failed' }, 502);
+  if (error.status === 429) {
+    logBlueskyFailure(error, 429);
+    return c.json({ error: 'Bluesky rate limited' }, 429);
+  }
+  if (error.code === 'NotFound') {
+    logBlueskyFailure(error, 404);
+    return c.json({ error: 'Record not found', code: 'not_found' }, 404);
+  }
+  logBlueskyFailure(error, 502);
+  return c.json({ error: 'Bluesky request failed' }, 502);
 };
 
 const iso = (at: number | null): IsoInstant => at === null ? null : new Date(at).toISOString();
@@ -311,8 +318,10 @@ const toScopeBody = (scope: BlueskyConnectionStatus['timeline']): IoriBlueskySco
   failureCode: scope.failureCode,
 });
 
-export const clientFailure = (c: Context, error: BlueskyClientError) =>
-  c.json({ error: error.kind === 'auth' ? 'Bluesky login failed' : 'Bluesky request failed' }, 502);
+export const clientFailure = (c: Context, error: BlueskyClientError) => {
+  logBlueskyFailure(error, 502);
+  return c.json({ error: error.kind === 'auth' ? 'Bluesky login failed' : 'Bluesky request failed' }, 502);
+};
 const toActorBody = (actor: BlueskySearchedActor): IoriBlueskyActorBody => ({
   did: actor.did,
   handle: actor.handle,
@@ -330,7 +339,11 @@ const searchInput = (c: Context): { q: string; cursor: string | undefined } | un
 };
 
 const searchFailure = (c: Context, error: BlueskyClientError) => {
-  if (error.status === 429) return c.json({ error: 'Bluesky rate limited' }, 429);
+  if (error.status === 429) {
+    logBlueskyFailure(error, 429);
+    return c.json({ error: 'Bluesky rate limited' }, 429);
+  }
+  logBlueskyFailure(error, 502);
   if (error.kind === 'auth') return c.json({ error: 'Bluesky authentication failed', code: 'auth' }, 502);
   return c.json({ error: 'Bluesky request failed', code: 'unavailable' }, 502);
 };
@@ -354,6 +367,7 @@ const replyFailure = (
   if (error.type === 'BlueskyPostInvalid') {
     return c.json({ error: 'Validation failed: text', reason: error.reason }, 400);
   }
+  logBlueskyFailure(error, 502);
   return c.json({ error: 'Bluesky request failed' }, 502);
 };
 
@@ -369,7 +383,10 @@ const postFailure = (c: Context, error: BlueskyClientError | BlueskyPostInvalid)
   if (error.type === 'BlueskyPostInvalid') {
     return c.json({ error: postInvalidMessages[error.reason], reason: error.reason }, 422);
   }
-  if (error.status === 429) return c.json({ error: 'Bluesky rate limited' }, 429);
+  if (error.status === 429) {
+    logBlueskyFailure(error, 429);
+    return c.json({ error: 'Bluesky rate limited' }, 429);
+  }
   return clientFailure(c, error);
 };
 
@@ -384,6 +401,7 @@ const quoteFailure = (
   if (error.type === 'BlueskyPostInvalid') {
     return c.json({ error: 'Validation failed: text', reason: error.reason }, 400);
   }
+  logBlueskyFailure(error, 502);
   return c.json({ error: 'Bluesky request failed' }, 502);
 };
 
@@ -395,15 +413,17 @@ const chatFailure = (c: Context, error: BlueskyClientError | BlueskyChatMessageI
     return c.json({ error: 'Validation failed: text', reason: error.reason } satisfies IoriBlueskyChatErrorBody, 422);
   }
   if (error.kind === 'chat_not_permitted') {
+    logBlueskyFailure(error, 403);
     return c.json({ error: 'chat_not_permitted' } satisfies IoriBlueskyChatErrorBody, 403);
   }
   if (error.code === 'InvalidConvo') {
+    logBlueskyFailure(error, 404);
     return c.json({ error: 'InvalidConvo' } satisfies IoriBlueskyChatErrorBody, 404);
   }
   const rejection = chatRejectionOf(error.code);
-  return rejection === undefined
-    ? clientFailure(c, error)
-    : c.json({ error: rejection } satisfies IoriBlueskyChatErrorBody, 422);
+  if (rejection === undefined) return clientFailure(c, error);
+  logBlueskyFailure(error, 422);
+  return c.json({ error: rejection } satisfies IoriBlueskyChatErrorBody, 422);
 };
 
 const cursorOf = (c: Context): string | undefined => {
