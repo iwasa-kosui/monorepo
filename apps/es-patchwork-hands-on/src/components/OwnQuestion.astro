@@ -1,8 +1,17 @@
-<div class="grid gap-1" data-own-question>
+---
+interface Props {
+  id?: string;
+  label?: string;
+}
+const { id = 'chapter-1', label = '自分のシステムの問いを1つ挙げる' } =
+  Astro.props;
+---
+
+<div class="grid gap-1" data-own-question data-question-id={id}>
   <textarea
     class="block w-full rounded border border-gray-400 bg-white px-2 py-1"
     rows="3"
-    aria-label="自分のシステムの問いを1つ挙げる"
+    aria-label={label}
   ></textarea>
   <div class="min-h-5 text-sm text-gray-600" role="status" data-saved></div>
 </div>
@@ -15,9 +24,10 @@ for (
 ) {
   const text = root.querySelector('textarea');
   const status = root.querySelector('[data-saved]');
-  if (text === null || status === null) continue;
+  const id = root.dataset.questionId;
+  if (text === null || status === null || id === undefined) continue;
   const restore = (): void => {
-    const saved = loadQuestion('chapter-1');
+    const saved = loadQuestion(id);
     if (saved !== null) {
       text.value = saved;
     }
@@ -27,7 +37,7 @@ for (
     if (event.persisted) restore();
   });
   text.addEventListener('input', () => {
-    status.textContent = saveQuestion('chapter-1', text.value)
+    status.textContent = saveQuestion(id, text.value)
       ? 'このブラウザに保存しました。'
       : 'このブラウザには保存できませんでした。';
   });
