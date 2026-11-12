@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import type { IoriBlueskyCrosspost } from '../../adaptor/mastodon/entities.ts';
-import { postedMessage, skipReasonText, toBlueskyCrosspostMark } from './blueskyCrosspostMark.ts';
+import {
+  BLUESKY_NOT_SENT_NOTICE,
+  blueskyNotSentNotice,
+  postedMessage,
+  skipReasonText,
+  toBlueskyCrosspostMark,
+} from './blueskyCrosspostMark.ts';
 
 const crosspost = (overrides: Partial<IoriBlueskyCrosspost>): IoriBlueskyCrosspost => ({
   status: 'pending',
@@ -118,5 +124,23 @@ describe('postedMessage', () => {
   it('skipped なら理由を添える', () => {
     expect(postedMessage('both', crosspost({ status: 'skipped', skip_reason: 'content_warning', retrying: false })))
       .toBe('Fediverse に投稿しました。Bluesky には送っていません（CW 付きの投稿は Bluesky に送りません）');
+  });
+});
+
+describe('blueskyNotSentNotice', () => {
+  it('送り先が両方で、CW があれば説明を返す', () => {
+    expect(blueskyNotSentNotice('both', '注意', false)).toBe(BLUESKY_NOT_SENT_NOTICE);
+  });
+
+  it('送り先が両方で、センシティブがオンなら説明を返す', () => {
+    expect(blueskyNotSentNotice('both', '', true)).toBe(BLUESKY_NOT_SENT_NOTICE);
+  });
+
+  it('CW が空白だけでセンシティブがオフなら返さない', () => {
+    expect(blueskyNotSentNotice('both', '  ', false)).toBeUndefined();
+  });
+
+  it('送り先が Fediverse だけなら返さない', () => {
+    expect(blueskyNotSentNotice('fediverse', '注意', true)).toBeUndefined();
   });
 });
