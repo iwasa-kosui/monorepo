@@ -1,8 +1,85 @@
-## 集計テーブル
+import CodeBlock from '../../../components/CodeBlock.astro';
+import CodePlayground from '../../../components/CodePlayground.astro';
+import PlaygroundTabs from '../../../components/PlaygroundTabs.astro';
+import SqlPlayground from '../../../components/SqlPlayground.astro';
+import { readFunctionsOf } from '../../../lib/snapshots';
 
-この問いに答えます。
+## 外部システム同期
 
-> この集計値はなぜこの値なのか。
+> 外部システムに、いつ何を送ったのか。
 
-`daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。テーブルの行には数しかありません。`cancelVisit` は業務イベントとキャンセル数を同じトランザクションで書きます。このパターンの開始と完成で、`cancelVisit` は同じです。開発者は読み取り関数だけを足します。
+外部への送信はトランザクションに入りません。そこで `cancelVisit` は記録を2回に分けます。
 
+1. `cancelVisit` は、トランザクションの中で `VisitCancelled` と送信の予定 `ReminderCancellationRequested` を記録します。
+2. `cancelVisit` は、コミットの後に外部へ送り、結果を `ReminderCancellationSent` か `ReminderCancellationFailed` として記録します。
+
+`result` の `unconfirmed` は、送信の予定があり結果の記録が無い送信を表します。この送信が外部に届いたとは限りません。
+
+<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} />
+
+<CodePlayground
+  exercise="chapter-4-external-sync-done"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'what-was-sent.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  scripts={[{ file: 'what-was-sent.ts', label: 'what-was-sent.ts を実行する' }]}
+/>
+
+<SqlPlayground
+  hidden
+  id="chapter-4-external-sync"
+  script={{ exercise: 'chapter-4-external-sync-done', entry: 'what-was-sent.ts' }}
+  initial={`SELECT
+  requested.target_id AS visit_id,
+  requested.event_at,
+  requested.payload ->> '$.message' AS message
+FROM business_events AS requested
+WHERE requested.event_name = 'ReminderCancellationRequested'
+  AND NOT EXISTS (
+    SELECT 1 FROM business_events AS finished
+    WHERE finished.event_name IN ('ReminderCancellationSent', 'ReminderCancellationFailed')
+      AND finished.payload ->> '$.causationEventId' = requested.event_id
+  )
+ORDER BY requested.event_id;`}
+/>
+
+<div class="detail-row">
+
+<details>
+<summary>読み取り関数を見る</summary>
+
+<CodeBlock code={readFunctionsOf('chapter-4-external-sync-done', 'findSendRecords')} />
+
+</details>
+
+<details>
+<summary>出力例を見る</summary>
+
+```text
+┌─────────┬────────────────────────────┬────────────────────────────┬─────────────────────────────────────────────┐
+│ (index) │ requestedAt                │ finishedAt                 │ message                                     │
+├─────────┼────────────────────────────┼────────────────────────────┼─────────────────────────────────────────────┤
+│ 0       │ '2026-11-06T10:14:12.720Z' │ '2026-11-06T10:14:12.720Z' │ { visitId: 'visit-1', petName: 'ポチ' }     │
+│ 1       │ '2026-11-06T10:14:12.720Z' │ '2026-11-06T10:14:12.720Z' │ { visitId: 'visit-2', petName: 'タマ' }     │
+│ 2       │ '2026-11-06T10:14:12.720Z' │ null                       │ { visitId: 'visit-3', petName: 'コタロウ' } │
+└─────────┴────────────────────────────┴────────────────────────────┴─────────────────────────────────────────────┘
+┌─────────┬────────────────────────┬────────────────┬───────────────┬──────────────────────────┐
+│ (index) │ reason                 │ operatedBy     │ result        │ error                    │
+├─────────┼────────────────────────┼────────────────┼───────────────┼──────────────────────────┤
+│ 0       │ '飼い主の都合'         │ '受付スタッフ' │ 'sent'        │ null                     │
+│ 1       │ '来院前に回復したため' │ '院長'         │ 'failed'      │ '送信先に接続できません' │
+│ 2       │ '飼い主の都合'         │ '受付スタッフ' │ 'unconfirmed' │ null                     │
+└─────────┴────────────────────────┴────────────────┴───────────────┴──────────────────────────┘
+```
+
+</details>
+
+<details>
+<summary>手元の Node で動かすとき</summary>
+
+`chapter-4-external-sync-done` で `node what-was-sent.ts` を実行します。
+
+</details>
+
+</div>

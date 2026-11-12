@@ -1,5 +1,9 @@
-import CodeBlock from '../../../components/CodeBlock.astro';
-import { cancelVisitOf } from '../../../lib/snapshots';
+import DecisionTable from '../../../components/DecisionTable.astro';
 
-<CodeBlock code={cancelVisitOf('chapter-4-summary-table-done')} from={12} to={28} />
+## 3つのパターンを表で比べて、自分のシステムに近いものを1つ選ぶ
 
+第1章で挙げた問いに近いパターンを1つ選びます。選んだパターンの「活用するもの」と「記録しないもの」を読みます。
+
+更新処理の行数は、`cancelVisit` と、`cancelVisit` から呼ぶ補助関数の差分です。読み取り関数の行数は、未実装の関数を完成させた差分です。
+
+<DecisionTable heading="比較" byAxis />

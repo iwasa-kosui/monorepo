@@ -1,5 +1,77 @@
 import CodeBlock from '../../../components/CodeBlock.astro';
-import { cancelVisitOf } from '../../../lib/snapshots';
+import CodePlayground from '../../../components/CodePlayground.astro';
+import PlaygroundTabs from '../../../components/PlaygroundTabs.astro';
+import SqlPlayground from '../../../components/SqlPlayground.astro';
+import { readFunctionsOf } from '../../../lib/snapshots';
 
-<CodeBlock code={cancelVisitOf('chapter-4-summary-table-done')} from={1} to={11} />
+## 既存の監査ログ
 
+> この変更の業務上の理由は何か。
+
+`audit_logs` テーブルは、変更前後の値と操作者を持ちます。業務上の理由は持ちません。このパターンでは、監査ログと業務イベントの役割を分けます。`cancelVisit` は監査ログの ID を業務イベントの `payload` に入れます。`payload` は変更前後の値を持ちません。
+
+<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} />
+
+<CodePlayground
+  exercise="chapter-4-audit-log-done"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'why-changed.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  scripts={[{ file: 'why-changed.ts', label: 'why-changed.ts を実行する' }]}
+/>
+
+<SqlPlayground
+  hidden
+  id="chapter-4-audit-log"
+  script={{ exercise: 'chapter-4-audit-log-done', entry: 'why-changed.ts' }}
+  initial={`SELECT
+  a.id AS audit_log_id,
+  a.row_id,
+  a.old_value,
+  a.new_value,
+  a.operated_by,
+  a.operated_at
+FROM audit_logs AS a
+LEFT JOIN business_events AS e ON e.payload ->> '$.auditLogId' = a.id
+WHERE e.event_id IS NULL
+ORDER BY a.id;`}
+/>
+
+<div class="detail-row">
+
+<details>
+<summary>読み取り関数を見る</summary>
+
+<CodeBlock code={readFunctionsOf('chapter-4-audit-log-done', 'explainChange')} />
+
+</details>
+
+<details>
+<summary>出力例を見る</summary>
+
+```text
+┌─────────┬────────────┬────────────┬─────────────┬────────────────┬────────────────────────────┬──────────────────┬────────────────────────┐
+│ (index) │ auditLogId │ oldValue   │ newValue    │ operatedBy     │ operatedAt                 │ eventName        │ reason                 │
+├─────────┼────────────┼────────────┼─────────────┼────────────────┼────────────────────────────┼──────────────────┼────────────────────────┤
+│ 0       │ 1          │ 'reserved' │ 'cancelled' │ '受付スタッフ' │ '2026-11-06T10:14:12.901Z' │ 'VisitCancelled' │ '飼い主の都合'         │
+│ 1       │ 2          │ 'reserved' │ 'cancelled' │ '受付スタッフ' │ '2026-11-06T10:14:12.902Z' │ 'VisitCancelled' │ '来院前に回復したため' │
+│ 2       │ 3          │ 'reserved' │ 'completed' │ '獣医師'       │ '2026-11-06T10:14:12.902Z' │ null             │ null                   │
+└─────────┴────────────┴────────────┴─────────────┴────────────────┴────────────────────────────┴──────────────────┴────────────────────────┘
+┌─────────┬────────────┬───────────┬────────────┬─────────────┬────────────┬────────────────────────────┐
+│ (index) │ auditLogId │ rowId     │ oldValue   │ newValue    │ operatedBy │ operatedAt                 │
+├─────────┼────────────┼───────────┼────────────┼─────────────┼────────────┼────────────────────────────┤
+│ 0       │ 3          │ 'visit-3' │ 'reserved' │ 'completed' │ '獣医師'   │ '2026-11-06T10:14:12.902Z' │
+└─────────┴────────────┴───────────┴────────────┴─────────────┴────────────┴────────────────────────────┘
+```
+
+</details>
+
+<details>
+<summary>手元の Node で動かすとき</summary>
+
+`chapter-4-audit-log-done` で `node why-changed.ts` を実行します。
+
+</details>
+
+</div>

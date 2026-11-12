@@ -12,10 +12,19 @@ interface Props {
   reveal?: string;
   scripts?: { file: string; label: string }[];
   complete?: { exercise: string; label?: string };
+  hidden?: boolean;
 }
 
-const { exercise, editable, testFile, lesson, reveal, scripts = [], complete } =
-  Astro.props;
+const {
+  exercise,
+  editable,
+  testFile,
+  lesson,
+  reveal,
+  scripts = [],
+  complete,
+  hidden = false,
+} = Astro.props;
 const readonlyFiles = Astro.props.readonly ?? [];
 const shown = [...editable, ...readonlyFiles];
 const config = JSON.stringify({
@@ -40,6 +49,7 @@ const config = JSON.stringify({
   data-state="loading"
   data-config={config}
   aria-label="コードを編集して実行する欄"
+  hidden={hidden}
 >
   <div class="playground-status" data-role="status">
     <span data-role="status-text" role="status"

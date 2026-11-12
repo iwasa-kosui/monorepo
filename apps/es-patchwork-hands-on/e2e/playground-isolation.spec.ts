@@ -6,7 +6,7 @@ import { distDir, htmlFiles, readDistFile } from './dist';
 
 const checkFile = 'playground-check/index.html';
 
-const embeddedPages = /^chapters\/chapter-[123]\/(?:\d+\/)?index\.html$/;
+const embeddedPages = /^chapters\/chapter-[1234]\/(?:\d+\/)?index\.html$/;
 
 const markers = ['cm-editor', 'sql-wasm', 'sucrase'];
 
@@ -45,14 +45,15 @@ test('確認用ページは実行基盤の JS を読み込み、noindex を付�
   expect(html).toContain('<meta name="robots" content="noindex">');
 });
 
-test('確認用ページと第1章から第3章のページ以外の HTML は実行基盤の JS を読み込まず、確認用ページへのリンクも持たない', () => {
+test('確認用ページと第1章から第4章のページ以外の HTML は実行基盤の JS を読み込まず、確認用ページへのリンクも持たない', () => {
   const others = htmlFiles().filter((file) =>
     file !== checkFile && !embeddedPages.test(file) && !file.startsWith('play/')
   );
   expect(others.length).toBeGreaterThan(10);
   expect(others).toContain('chapters/intro/index.html');
   expect(others).toContain('chapters/summary/index.html');
-  expect(others).toContain('chapters/chapter-4/index.html');
+  expect(others).toContain('chapters/intro/3/index.html');
+  expect(others).toContain('chapters/summary/5/index.html');
   const offenders = others.filter((file) => {
     const html = readDistFile(file);
     return usesPlaygroundRuntime(html) || html.includes('playground-check') || html.includes('name="robots"');
@@ -60,7 +61,7 @@ test('確認用ページと第1章から第3章のページ以外の HTML は実
   expect(offenders).toEqual([]);
 });
 
-test('第1章から第3章では、実行欄を置いたページだけが実行基盤の JS を読み込む', () => {
+test('第1章から第4章では、実行欄を置いたページだけが実行基盤の JS を読み込む', () => {
   const pages = htmlFiles().filter((file) => embeddedPages.test(file));
   expect(pages.length).toBeGreaterThan(10);
   const mismatches = pages.filter((file) => {
@@ -78,5 +79,9 @@ test('第1章から第3章では、実行欄を置いたページだけが実行
     'chapters/chapter-2/5/index.html',
     'chapters/chapter-2/6/index.html',
     'chapters/chapter-3/index.html',
+    'chapters/chapter-4/2/index.html',
+    'chapters/chapter-4/3/index.html',
+    'chapters/chapter-4/4/index.html',
+    'chapters/chapter-4/6/index.html',
   ]);
 });

@@ -141,6 +141,9 @@ body.chapter-page {
 .content .chapter-body > * + h2 {
   margin-top: 0.75rem;
 }
+.content .chapter-body > blockquote > p {
+  margin-block: 0;
+}
 .content .chapter-body > table {
   font-size: 0.9rem;
   line-height: 1.25;
@@ -193,6 +196,41 @@ body.chapter-page {
 }
 .content .decision-table table {
   display: table;
+}
+.content .decision-table[data-axis-table] table {
+  width: 100%;
+  table-layout: fixed;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.content .decision-table[data-axis-table] th:first-child,
+.content .decision-table[data-axis-table] td:first-child {
+  width: 12rem;
+}
+.content .axis-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0 0.5rem;
+}
+.content .axis-buttons[hidden] {
+  display: none;
+}
+.content .axis-buttons button {
+  border: 1px solid #1d4ed8;
+  border-radius: 0.375rem;
+  background: #fff;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.content .axis-buttons button[aria-pressed="true"] {
+  background: #1d4ed8;
+  color: #fff;
+}
+.content .axis-buttons button code {
+  background: transparent;
+  padding: 0;
 }
 
 @media (min-width: 768px) {
