@@ -138,7 +138,7 @@ describe('saveFederatedNote', () => {
 
     expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
       expect.objectContaining({
-        content: '<p>q</p><p><a href="https://remote.example/notes/2">元の投稿で投票する</a></p>',
+        content: '<p>q</p>',
         poll: {
           multiple: false,
           options: [{ title: 'a', votesCount: 3 }],

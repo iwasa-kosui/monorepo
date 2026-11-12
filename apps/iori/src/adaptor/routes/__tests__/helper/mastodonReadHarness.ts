@@ -72,6 +72,7 @@ import { UndoRepostUseCase } from '../../../../useCase/undoRepost.ts';
 import { UndoRepostBlueskyPostUseCase } from '../../../../useCase/undoRepostBlueskyPost.ts';
 import { UnlikeBlueskyPostUseCase } from '../../../../useCase/unlikeBlueskyPost.ts';
 import { UpdatePostUseCase } from '../../../../useCase/updatePost.ts';
+import { VotePollUseCase } from '../../../../useCase/votePoll.ts';
 import type { IoriWorkerEnv } from '../../../../workerEnv.ts';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../../d1/__tests__/sqliteFixture.ts';
@@ -190,6 +191,8 @@ import { createD1PostUpdatedStore } from '../../../d1/post/postUpdatedStore.ts';
 import { createD1PostVersionsResolverByPostId } from '../../../d1/post/postVersionsResolverByPostId.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostPollsResolverByPostIds } from '../../../d1/post/remotePostPollsResolverByPostIds.ts';
+import { createD1RemotePostPollVotedStore } from '../../../d1/post/remotePostPollVotedStore.ts';
+import { createD1RemotePostPollVotesResolverByPostIds } from '../../../d1/post/remotePostPollVotesResolverByPostIds.ts';
 import { createD1RemotePostUpserter } from '../../../d1/post/remotePostUpserter.ts';
 import { createD1RemotePostUrisResolverByUris } from '../../../d1/post/remotePostUrisResolverByUris.ts';
 import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
@@ -382,6 +385,7 @@ export const setupReadApi = (
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
     postExtrasResolver: createD1PostExtrasResolverByPosts(db, ORIGIN),
     remotePostPollsResolver: createD1RemotePostPollsResolverByPostIds(db),
+    remotePostPollVotesResolver: createD1RemotePostPollVotesResolverByPostIds(db),
   });
   const searchTimeline = createSearchTimelineUseCase({
     actorResolverByUserId,
@@ -492,6 +496,18 @@ export const setupReadApi = (
             localLikeCreatedStore: createD1LocalLikeCreatedStore(db),
             likeResolver: createD1LikeResolver(db),
             postResolver,
+          }),
+          votePollUseCase: VotePollUseCase.create({
+            sessionResolver,
+            userResolver,
+            actorResolverByUserId,
+            actorResolverById: createD1ActorResolverById(db),
+            postResolver,
+            remotePostPollsResolver: createD1RemotePostPollsResolverByPostIds(db),
+            remotePostPollVotesResolver: createD1RemotePostPollVotesResolverByPostIds(db),
+            remotePostPollVotedStore: createD1RemotePostPollVotedStore(db),
+            blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+            isBlockedUri: () => false,
           }),
           undoLikeUseCase: UndoLikeUseCase.create({
             sessionResolver,

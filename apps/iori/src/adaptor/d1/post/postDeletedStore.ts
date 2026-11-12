@@ -11,6 +11,7 @@ import {
   postQuotesTable,
   postsTable,
   remotePostPollsTable,
+  remotePostPollVotesTable,
   remotePostRecipientsTable,
   remotePostsTable,
 } from '../schema.ts';
@@ -20,6 +21,7 @@ export const createD1PostDeletedStore = (db: IoriD1Db): PostDeletedStore => ({
     await db.batch([
       db.delete(postImagesTable).where(eq(postImagesTable.postId, event.eventPayload.postId)),
       db.delete(postQuotesTable).where(eq(postQuotesTable.postId, event.eventPayload.postId)),
+      db.delete(remotePostPollVotesTable).where(eq(remotePostPollVotesTable.postId, event.eventPayload.postId)),
       db.delete(remotePostPollsTable).where(eq(remotePostPollsTable.postId, event.eventPayload.postId)),
       db.delete(localPostsTable).where(eq(localPostsTable.postId, event.eventPayload.postId)),
       db.delete(directPostParticipantsTable).where(eq(directPostParticipantsTable.postId, event.eventPayload.postId)),

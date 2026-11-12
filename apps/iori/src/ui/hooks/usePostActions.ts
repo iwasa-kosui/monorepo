@@ -14,8 +14,9 @@ import {
   unfavourite,
   unreact,
   unreblog,
+  votePoll,
 } from '../api/mastodonClient.ts';
-import { withReblogged, withUpdatedStatus } from '../api/status.ts';
+import { withPoll, withReblogged, withUpdatedStatus } from '../api/status.ts';
 import { runOptimisticBookmark } from './optimisticBookmark.ts';
 import { runExclusive, runOptimisticFavourite } from './optimisticFavourite.ts';
 
@@ -47,6 +48,7 @@ export type UsePostActionsReturn = Readonly<{
   blockAccount: (accountId: string, acct: string) => Promise<void>;
   emojiReact: (postId: string, emoji: string) => Promise<void>;
   undoEmojiReact: (postId: string, emoji: string) => Promise<void>;
+  vote: (postId: string, choices: readonly number[]) => Promise<void>;
 }>;
 
 type UsePostActionsProps = Readonly<{
@@ -295,6 +297,12 @@ export const usePostActions = ({
     }
   }, [updateTimelineItem, updateThreadPost]);
 
+  const vote = useCallback(async (postId: string, choices: readonly number[]) => {
+    const poll = await votePoll(postId, choices);
+    updateTimelineItem(postId, (status) => withPoll(status, poll));
+    updateThreadPost?.(postId, (status) => withPoll(status, poll));
+  }, [updateTimelineItem, updateThreadPost]);
+
   return {
     actionState: {
       likingPostId,
@@ -316,5 +324,6 @@ export const usePostActions = ({
     blockAccount,
     emojiReact,
     undoEmojiReact,
+    vote,
   } as const;
 };

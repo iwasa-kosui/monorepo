@@ -234,6 +234,7 @@ export const applySql = ({ now }) => [
   `DELETE FROM federated_timeline_items WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM post_images WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM post_quotes WHERE ${IN_TARGETS('postId')}`,
+  `DELETE FROM remote_post_poll_votes WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM remote_post_polls WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM local_posts WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM remote_post_recipients WHERE ${IN_TARGETS('postId')}`,

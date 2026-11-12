@@ -86,18 +86,23 @@ const buildArticleContent = (post: Article): string => {
   return `${title}${body}${link}`;
 };
 
-const buildQuestionContent = (post: Question): string => {
+const buildQuestionContent = (post: Question, poll: RemotePostPoll | undefined): string => {
   const content = String(post.content ?? '');
   const name = String(post.name ?? '');
   const body = !isBlank(content) ? content : isBlank(name) ? '' : `<p>${escapeHtml(name)}</p>`;
   const href = toLinkHref(post);
-  const link = href === undefined ? '' : `<p><a href="${escapeHtml(href)}">元の投稿で投票する</a></p>`;
+  const link = href === undefined || poll !== undefined
+    ? ''
+    : `<p><a href="${escapeHtml(href)}">元の投稿で投票する</a></p>`;
   return `${body}${link}`;
 };
 
-export const buildRemotePostContent = async (post: RemotePostObject): Promise<string> => {
+export const buildRemotePostContent = async (
+  post: RemotePostObject,
+  poll?: RemotePostPoll,
+): Promise<string> => {
   if (post instanceof Article) return buildArticleContent(post);
-  if (post instanceof Question) return buildQuestionContent(post);
+  if (post instanceof Question) return buildQuestionContent(post, poll);
   return String(post.content ?? '');
 };
 
@@ -108,6 +113,6 @@ export const buildRemotePostBody = async (
   post: RemotePostObject,
 ): Promise<Readonly<{ content: string; poll?: RemotePostPoll }>> => {
   const poll = await readRemotePostPoll(post);
-  const content = await buildRemotePostContent(post);
+  const content = await buildRemotePostContent(post, poll);
   return poll === undefined ? { content } : { content, poll };
 };

@@ -5,6 +5,7 @@ import { Post, type PostWithAuthor } from '../../domain/post/post.ts';
 import type { PostExtras, PostExtrasResolverByPosts } from '../../domain/post/postExtras.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { RemotePostPoll, RemotePostPollsResolverByPostIds } from '../../domain/post/remotePostPoll.ts';
+import type { RemotePostPollVotesResolverByPostIds } from '../../domain/post/remotePostPollVote.ts';
 import type { RepostId } from '../../domain/repost/repostId.ts';
 import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts';
 import { defaultImageUrls } from './defaultImages.ts';
@@ -37,6 +38,7 @@ export type StatusAssemblerDeps = Readonly<{
   accountProfilesResolver: AccountProfilesResolverByActorIds;
   postExtrasResolver: PostExtrasResolverByPosts;
   remotePostPollsResolver: RemotePostPollsResolverByPostIds;
+  remotePostPollVotesResolver: RemotePostPollVotesResolverByPostIds;
 }>;
 
 export type AssembleInput = Readonly<{
@@ -65,10 +67,22 @@ export class StatusAssemblyError extends Error {
 }
 
 export const createStatusAssembler = (
-  { accountProfilesResolver, postExtrasResolver, remotePostPollsResolver }: StatusAssemblerDeps,
+  { accountProfilesResolver, postExtrasResolver, remotePostPollsResolver, remotePostPollVotesResolver }:
+    StatusAssemblerDeps,
 ): StatusAssembler => {
   const remotePostIdsOf = (posts: ReadonlyArray<PostWithAuthor>): PostId[] =>
     posts.filter((post) => post.type === 'remote').map((post) => post.postId);
+
+  const resolveOwnVotes = async (
+    posts: ReadonlyArray<PostWithAuthor>,
+    viewerActorId: ActorId | undefined,
+  ): Promise<ReadonlyMap<PostId, ReadonlyArray<number>>> => {
+    const postIds = remotePostIdsOf(posts);
+    if (viewerActorId === undefined || postIds.length === 0) return new Map();
+    const votes = await remotePostPollVotesResolver.resolve({ actorId: viewerActorId, postIds });
+    if (!votes.ok) throw new StatusAssemblyError('Failed to resolve remote post poll votes');
+    return votes.val;
+  };
 
   const resolveAccounts = async (
     actorIds: ReadonlyArray<ActorId>,
@@ -92,6 +106,7 @@ export const createStatusAssembler = (
       postExtras: PostExtras | undefined,
       quote: ToStatusOptions['quote'],
       poll: RemotePostPoll | undefined,
+      ownVotes: ReadonlyArray<number> | undefined,
     ): ToStatusOptions => ({
       baseUrl: requestUrl,
       account,
@@ -104,6 +119,7 @@ export const createStatusAssembler = (
       blueskyCrosspost: postExtras?.blueskyCrosspost ?? null,
       quote,
       poll,
+      ...(ownVotes === undefined ? {} : { ownVotes }),
     });
 
     const posts = [...new Map(sources.map((source) => [source.post.postId, source.post])).values()];
@@ -114,10 +130,11 @@ export const createStatusAssembler = (
         ),
       ),
     ];
-    const [extras, accounts, polls] = await Promise.all([
+    const [extras, accounts, polls, ownVotesByPostId] = await Promise.all([
       postExtrasResolver.resolve({ posts, currentActorId: viewerActorId }),
       resolveAccounts(actorIds, requestUrl),
       remotePostPollsResolver.resolve(remotePostIdsOf(posts)),
+      resolveOwnVotes(posts, viewerActorId),
     ]);
     if (!extras.ok) throw new StatusAssemblyError('Failed to resolve post extras');
     if (!polls.ok) throw new StatusAssemblyError('Failed to resolve remote post polls');
@@ -134,10 +151,11 @@ export const createStatusAssembler = (
     const quotedStatusByPostId = new Map<PostId, Status>();
     if (quotedPosts.length > 0) {
       const missingActorIds = [...new Set(quotedPosts.map((post) => post.actorId))].filter((id) => !accounts.has(id));
-      const [quotedExtras, quotedAccounts, quotedPolls] = await Promise.all([
+      const [quotedExtras, quotedAccounts, quotedPolls, quotedOwnVotes] = await Promise.all([
         postExtrasResolver.resolve({ posts: quotedPosts, currentActorId: viewerActorId }),
         resolveAccounts(missingActorIds, requestUrl),
         remotePostPollsResolver.resolve(remotePostIdsOf(quotedPosts)),
+        resolveOwnVotes(quotedPosts, viewerActorId),
       ]);
       if (!quotedExtras.ok) throw new StatusAssemblyError('Failed to resolve post extras');
       if (!quotedPolls.ok) throw new StatusAssemblyError('Failed to resolve remote post polls');
@@ -148,7 +166,14 @@ export const createStatusAssembler = (
           post.postId,
           toStatus(
             post,
-            toStatusOptions(post, account, quotedExtras.val.get(post.postId), null, quotedPolls.val.get(post.postId)),
+            toStatusOptions(
+              post,
+              account,
+              quotedExtras.val.get(post.postId),
+              null,
+              quotedPolls.val.get(post.postId),
+              quotedOwnVotes.get(post.postId),
+            ),
           ),
         );
       }
@@ -175,6 +200,7 @@ export const createStatusAssembler = (
                 status: quote.post === null ? null : quotedStatusByPostId.get(quote.post.postId) ?? null,
               },
             pollsByPostId.get(post.postId),
+            ownVotesByPostId.get(post.postId),
           ),
         ),
       );

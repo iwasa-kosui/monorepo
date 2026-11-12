@@ -82,8 +82,10 @@ const poll = (votesCount: number): RemotePostPoll => ({
 const setup = (
   polls: ReadonlyMap<PostId, RemotePostPoll>,
   extrasOf: (post: PostWithAuthor) => PostExtras = () => extras(),
+  votes: ReadonlyMap<PostId, ReadonlyArray<number>> = new Map(),
 ) => {
   const remotePostPollsResolver = { resolve: vi.fn(async () => RA.ok(polls)) };
+  const remotePostPollVotesResolver = { resolve: vi.fn(async () => RA.ok(votes)) };
   const assembler = createStatusAssembler({
     accountProfilesResolver: { resolve: async () => RA.ok(new Map([[actorId, profile]])) },
     postExtrasResolver: {
@@ -91,14 +93,15 @@ const setup = (
         RA.ok(new Map(posts.map((post): [PostId, PostExtras] => [post.postId, extrasOf(post)]))),
     },
     remotePostPollsResolver,
+    remotePostPollVotesResolver,
   } as never);
-  const assemble = (posts: ReadonlyArray<PostWithAuthor>) =>
+  const assemble = (posts: ReadonlyArray<PostWithAuthor>, viewerActorId: ActorId | undefined = undefined) =>
     assembler.assemble({
       sources: posts.map((post): StatusSource => ({ type: 'post', post })),
-      viewerActorId: undefined,
+      viewerActorId,
       requestUrl: 'https://iori.example/api/v1/timelines/public',
     });
-  return { remotePostPollsResolver, assemble };
+  return { remotePostPollsResolver, remotePostPollVotesResolver, assemble };
 };
 
 describe('createStatusAssembler の投票', () => {
@@ -150,5 +153,82 @@ describe('createStatusAssembler の投票', () => {
     await t.assemble([remotePost(), remotePost()]);
 
     expect(t.remotePostPollsResolver.resolve).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createStatusAssembler の自分の投票', () => {
+  const viewerActorId = ActorId.generate();
+
+  it('複数の投稿の自分の投票を 1 回の問い合わせでまとめて読み、投稿ごとに voted と own_votes を入れる', async () => {
+    const voted = remotePost();
+    const notVoted = remotePost();
+    const multiple = remotePost();
+    const t = setup(
+      new Map([[voted.postId, poll(4)], [notVoted.postId, poll(2)], [multiple.postId, poll(1)]]),
+      () => extras(),
+      new Map([[voted.postId, [1]], [multiple.postId, [0, 1]]]),
+    );
+
+    const statuses = await t.assemble([voted, notVoted, multiple], viewerActorId);
+
+    expect(t.remotePostPollVotesResolver.resolve).toHaveBeenCalledTimes(1);
+    expect(t.remotePostPollVotesResolver.resolve).toHaveBeenCalledWith({
+      actorId: viewerActorId,
+      postIds: [voted.postId, notVoted.postId, multiple.postId],
+    });
+    expect(statuses.map((status) => [status.poll?.voted, status.poll?.own_votes])).toEqual([
+      [true, [1]],
+      [false, []],
+      [true, [0, 1]],
+    ]);
+  });
+
+  it('ローカルの投稿は自分の投票を読む対象にしない', async () => {
+    const remote = remotePost();
+    const t = setup(new Map([[remote.postId, poll(1)]]));
+
+    await t.assemble([localPost(), remote], viewerActorId);
+
+    expect(t.remotePostPollVotesResolver.resolve).toHaveBeenCalledWith({
+      actorId: viewerActorId,
+      postIds: [remote.postId],
+    });
+  });
+
+  it('閲覧者がいなければ、自分の投票を読まず、voted を false にする', async () => {
+    const remote = remotePost();
+    const t = setup(new Map([[remote.postId, poll(1)]]), () => extras(), new Map([[remote.postId, [0]]]));
+
+    const statuses = await t.assemble([remote]);
+
+    expect(t.remotePostPollVotesResolver.resolve).not.toHaveBeenCalled();
+    expect(statuses[0].poll).toMatchObject({ voted: false, own_votes: [] });
+  });
+
+  it('引用先の自分の投票も、引用元とは別に 1 回の問い合わせで読む', async () => {
+    const quoted = remotePost();
+    const quoting = remotePost();
+    const t = setup(
+      new Map([[quoted.postId, poll(7)]]),
+      (post) => post.postId === quoting.postId ? extras(quoted) : extras(),
+      new Map([[quoted.postId, [1]]]),
+    );
+
+    const statuses = await t.assemble([quoting], viewerActorId);
+
+    expect(t.remotePostPollVotesResolver.resolve).toHaveBeenCalledTimes(2);
+    expect(t.remotePostPollVotesResolver.resolve).toHaveBeenNthCalledWith(2, {
+      actorId: viewerActorId,
+      postIds: [quoted.postId],
+    });
+    expect(statuses[0].quote?.quoted_status.poll).toMatchObject({ voted: true, own_votes: [1] });
+  });
+
+  it('自分の投票を読めなければ、組み立てに失敗する', async () => {
+    const remote = remotePost();
+    const t = setup(new Map([[remote.postId, poll(1)]]));
+    t.remotePostPollVotesResolver.resolve.mockResolvedValue(RA.err(new Error('x')) as never);
+
+    await expect(t.assemble([remote], viewerActorId)).rejects.toThrow('Failed to resolve remote post poll votes');
   });
 });

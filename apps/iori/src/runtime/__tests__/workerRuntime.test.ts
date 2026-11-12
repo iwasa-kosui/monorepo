@@ -24,6 +24,7 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.timeline.getTimelineUseCase.run).toBeTypeOf('function');
     expect(runtime.posting.createPostUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.sendLikeUseCase.run).toBeTypeOf('function');
+    expect(runtime.socialActions.votePollUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.undoLikeUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.createBookmarkUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.deleteBookmarkUseCase.run).toBeTypeOf('function');

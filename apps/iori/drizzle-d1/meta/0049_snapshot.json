@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "275370d5-51d0-48ee-b6a0-71d131b4c089",
+  "id": "d534b0ea-b076-46ad-9d23-62c5c2ec3dc2",
   "prevId": "ddc13ee2-9114-49f9-a075-4cca8201deef",
   "tables": {
     "actors": {
@@ -975,13 +975,6 @@
         },
         "repostedByHandle": {
           "name": "repostedByHandle",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "bridgyOriginalUrl": {
-          "name": "bridgyOriginalUrl",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -4830,6 +4823,80 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "remote_post_poll_votes": {
+      "name": "remote_post_poll_votes",
+      "columns": {
+        "postId": {
+          "name": "postId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actorId": {
+          "name": "actorId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "choice": {
+          "name": "choice",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "remote_post_poll_votes_postId_posts_postId_fk": {
+          "name": "remote_post_poll_votes_postId_posts_postId_fk",
+          "tableFrom": "remote_post_poll_votes",
+          "tableTo": "posts",
+          "columnsFrom": [
+            "postId"
+          ],
+          "columnsTo": [
+            "postId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "remote_post_poll_votes_actorId_actors_actorId_fk": {
+          "name": "remote_post_poll_votes_actorId_actors_actorId_fk",
+          "tableFrom": "remote_post_poll_votes",
+          "tableTo": "actors",
+          "columnsFrom": [
+            "actorId"
+          ],
+          "columnsTo": [
+            "actorId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "remote_post_poll_votes_postId_actorId_choice_pk": {
+          "columns": [
+            "postId",
+            "actorId",
+            "choice"
+          ],
+          "name": "remote_post_poll_votes_postId_actorId_choice_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "remote_post_polls": {
       "name": "remote_post_polls",
       "columns": {
@@ -4967,13 +5034,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "url": {
-          "name": "url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "inReplyToUri": {
           "name": "inReplyToUri",
           "type": "text",
@@ -5003,13 +5063,6 @@
             "uri"
           ],
           "isUnique": true
-        },
-        "remote_posts_url_idx": {
-          "name": "remote_posts_url_idx",
-          "columns": [
-            "url"
-          ],
-          "isUnique": false
         },
         "remote_posts_in_reply_to_uri_idx": {
           "name": "remote_posts_in_reply_to_uri_idx",

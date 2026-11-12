@@ -1,4 +1,5 @@
-import { sql } from 'drizzle-orm';
+import { type AnyColumn, sql } from 'drizzle-orm';
+import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 
 import {
   blocksTable,
@@ -11,26 +12,45 @@ import {
   notificationsTable,
 } from '../schema.ts';
 
-export const notFromBlockedActor = sql`not exists (
-  select 1 from ${blocksTable}
-  where ${blocksTable.userId} = ${notificationsTable.recipientUserId}
-    and ${blocksTable.blockedActorId} in (
-      select ${notificationLikesTable.likerActorId} from ${notificationLikesTable}
-        where ${notificationLikesTable.notificationId} = ${notificationsTable.notificationId}
-      union all
-      select ${notificationFollowsTable.followerActorId} from ${notificationFollowsTable}
-        where ${notificationFollowsTable.notificationId} = ${notificationsTable.notificationId}
-      union all
-      select ${notificationEmojiReactsTable.reactorActorId} from ${notificationEmojiReactsTable}
-        where ${notificationEmojiReactsTable.notificationId} = ${notificationsTable.notificationId}
-      union all
-      select ${notificationRepliesTable.replierActorId} from ${notificationRepliesTable}
-        where ${notificationRepliesTable.notificationId} = ${notificationsTable.notificationId}
-      union all
-      select ${notificationRepostsTable.reposterActorId} from ${notificationRepostsTable}
-        where ${notificationRepostsTable.notificationId} = ${notificationsTable.notificationId}
-      union all
-      select ${notificationMentionsTable.mentionerActorId} from ${notificationMentionsTable}
-        where ${notificationMentionsTable.notificationId} = ${notificationsTable.notificationId}
-    )
-)`;
+const notBlockedIn = (child: SQLiteTable, notificationId: AnyColumn, actorId: AnyColumn) =>
+  sql`not exists (
+    select 1 from ${child}
+      join ${blocksTable} on ${blocksTable.blockedActorId} = ${actorId}
+      where ${notificationId} = ${notificationsTable.notificationId}
+        and ${blocksTable.userId} = ${notificationsTable.recipientUserId}
+  )`;
+
+export const notFromBlockedActor = sql`(${
+  sql.join([
+    notBlockedIn(
+      notificationLikesTable,
+      notificationLikesTable.notificationId,
+      notificationLikesTable.likerActorId,
+    ),
+    notBlockedIn(
+      notificationFollowsTable,
+      notificationFollowsTable.notificationId,
+      notificationFollowsTable.followerActorId,
+    ),
+    notBlockedIn(
+      notificationEmojiReactsTable,
+      notificationEmojiReactsTable.notificationId,
+      notificationEmojiReactsTable.reactorActorId,
+    ),
+    notBlockedIn(
+      notificationRepliesTable,
+      notificationRepliesTable.notificationId,
+      notificationRepliesTable.replierActorId,
+    ),
+    notBlockedIn(
+      notificationRepostsTable,
+      notificationRepostsTable.notificationId,
+      notificationRepostsTable.reposterActorId,
+    ),
+    notBlockedIn(
+      notificationMentionsTable,
+      notificationMentionsTable.notificationId,
+      notificationMentionsTable.mentionerActorId,
+    ),
+  ], sql` and `)
+})`;
