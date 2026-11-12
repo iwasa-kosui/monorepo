@@ -69,7 +69,7 @@ export const toInstant = (value: string): Instant | undefined => {
   return parsed.ok ? parsed.val : undefined;
 };
 
-const httpUrlOrNull = (value: string | undefined): string | null => {
+export const httpUrlOrNull = (value: string | undefined): string | null => {
   if (value === undefined) return null;
   try {
     const { protocol } = new URL(value);

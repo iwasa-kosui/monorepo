@@ -1,7 +1,7 @@
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { BlueskyTimelineEmbed } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import { blueskyPostUrl, ioriBlueskyPostPath } from '../../helper/blueskyUrl.ts';
+import { blueskyPostUrl, blueskyProfilePathOf, ioriBlueskyPostPath } from '../../helper/blueskyUrl.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { segmentBlueskyText } from './blueskyRichText.ts';
 
@@ -27,6 +27,8 @@ const BlueskyText = ({ text, facets }: Readonly<{ text: string; facets: IoriBlue
     {segmentBlueskyText(text, facets).map((segment) =>
       segment.href === undefined
         ? <span>{segment.text}</span>
+        : segment.href.startsWith('/')
+        ? <a href={segment.href} class={linkClass}>{segment.text}</a>
         : <a href={segment.href} target='_blank' rel='noopener noreferrer' class={linkClass}>{segment.text}</a>
     )}
   </p>
@@ -260,6 +262,7 @@ export const BlueskyTimelineItemView = ({
   const avatar = safeAbsoluteUrl(item.authorAvatar);
   const postHref = ioriBlueskyPostPath(item.uri);
   const bskyHref = blueskyPostUrl(item.authorDid, item.uri);
+  const profileHref = blueskyProfilePathOf(item.authorDid);
   const displayName = item.authorDisplayName ?? item.authorHandle;
   const posted = (
     <time dateTime={new Date(item.postedAt).toISOString()}>
@@ -273,7 +276,15 @@ export const BlueskyTimelineItemView = ({
         isSelected === true ? 'ring-2 ring-terracotta/30 dark:ring-terracotta-light/30' : ''
       }`}
     >
-      {item.repostedByHandle !== null && <div class={`text-xs ${mutedClass}`}>@{item.repostedByHandle} がリポスト</div>}
+      {item.repostedByHandle !== null && (
+        <div class={`text-xs ${mutedClass}`}>
+          {item.repostedByDid === null
+            ? `@${item.repostedByHandle}`
+            : <a href={blueskyProfilePathOf(item.repostedByDid)} class='hover:underline'>@{item.repostedByHandle}</a>}
+          {' '}
+          がリポスト
+        </div>
+      )}
       {item.replyParentUri !== null && (
         <ReplyParent
           uri={item.replyParentUri}
@@ -281,14 +292,21 @@ export const BlueskyTimelineItemView = ({
         />
       )}
       <div class='flex items-center gap-2'>
-        <span class='w-8 h-8 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 shadow-clay-sm overflow-hidden'>
+        <a
+          href={profileHref}
+          class='w-8 h-8 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 shadow-clay-sm overflow-hidden'
+        >
           {avatar === undefined
             ? item.authorHandle.charAt(0).toUpperCase()
             : <img src={avatar} alt='' class='w-8 h-8 blob-avatar object-cover' loading='lazy' />}
-        </span>
-        <div class='min-w-0 flex-1 flex flex-wrap items-baseline gap-x-2'>
-          <span class='font-semibold text-charcoal dark:text-white truncate'>{displayName}</span>
-          <span class={`text-sm ${mutedClass} truncate`}>@{item.authorHandle}</span>
+        </a>
+        <div class='min-w-0 flex-1'>
+          <a href={profileHref} class='inline-flex max-w-full flex-wrap items-baseline gap-x-2 group'>
+            <span class='font-semibold text-charcoal dark:text-white group-hover:text-terracotta dark:group-hover:text-terracotta-light transition-colors truncate'>
+              {displayName}
+            </span>
+            <span class={`text-sm ${mutedClass} truncate`}>@{item.authorHandle}</span>
+          </a>
         </div>
         {postHref === undefined
           ? <span class={`text-sm ${mutedClass}`} title={new Date(item.postedAt).toLocaleString()}>{posted}</span>

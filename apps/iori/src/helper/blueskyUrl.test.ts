@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { blueskyPostUrl, blueskyPostUrlOfUri, ioriBlueskyPostPath } from './blueskyUrl.ts';
+import { blueskyPostUrl, blueskyPostUrlOfUri, blueskyProfilePathOf, ioriBlueskyPostPath } from './blueskyUrl.ts';
 
 describe('blueskyPostUrl', () => {
   it('投稿者の DID と uri の末尾の rkey から bsky.app の URL を作る', () => {
@@ -66,5 +66,19 @@ describe('ioriBlueskyPostPath', () => {
   it('コレクションが app.bsky.feed.post でない at-uri は undefined にする', () => {
     expect(ioriBlueskyPostPath('at://did:plc:q/app.bsky.feed.like/3kq')).toBeUndefined();
     expect(ioriBlueskyPostPath('at://did:plc:q/app.bsky.graph.list/3kq')).toBeUndefined();
+  });
+});
+
+describe('blueskyProfilePathOf', () => {
+  it('DID をエンコードして iori のプロフィール画面のパスにする', () => {
+    expect(blueskyProfilePathOf('did:plc:abc')).toBe('/bluesky/profile/did%3Aplc%3Aabc');
+  });
+
+  it('ハンドルはそのままのパスにする', () => {
+    expect(blueskyProfilePathOf('alice.bsky.social')).toBe('/bluesky/profile/alice.bsky.social');
+  });
+
+  it('パスの区切りになりうる文字をエンコードする', () => {
+    expect(blueskyProfilePathOf('a/b?c#d')).toBe('/bluesky/profile/a%2Fb%3Fc%23d');
   });
 });

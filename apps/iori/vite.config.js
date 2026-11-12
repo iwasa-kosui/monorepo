@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => {
             federatedTimeline: './src/ui/pages/federatedTimeline.tsx',
             search: './src/ui/pages/search.tsx',
             xPosts: './src/ui/pages/xPosts.tsx',
+            blueskyProfile: './src/ui/pages/blueskyProfile.tsx',
             navPrefetch: './src/ui/pages/navPrefetch.ts',
             notificationBadge: './src/ui/pages/notificationBadge.ts',
           },

@@ -33,7 +33,7 @@ describe('segmentBlueskyText', () => {
       { text: 'see ', href: undefined },
       { text: 'https://example.com', href: 'https://example.com' },
       { text: ' ', href: undefined },
-      { text: '@alice', href: 'https://bsky.app/profile/did:plc:alice' },
+      { text: '@alice', href: '/bluesky/profile/did%3Aplc%3Aalice' },
       { text: ' ', href: undefined },
       { text: '#iori', href: 'https://bsky.app/hashtag/iori' },
       { text: ' end', href: undefined },

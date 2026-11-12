@@ -10,6 +10,8 @@ export const blueskyProfileUrlOfActor = (actor: string): string | undefined =>
     ? `${BSKY_APP_URL}/profile/${actor}`
     : undefined;
 
+export const blueskyProfilePathOf = (actor: string): string => `/bluesky/profile/${encodeURIComponent(actor)}`;
+
 export const blueskyPostUrl = (did: string, uri: string): string | undefined => {
   const rkey = atUriPattern.exec(uri)?.[2];
   const profileUrl = blueskyProfileUrlOfActor(did);

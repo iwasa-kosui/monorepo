@@ -171,6 +171,36 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain('<meta name="robots" content="noindex">');
   });
 
+  it('redirects the private Bluesky profile page to /sign-in when logged out, without caching', async () => {
+    for (const path of ['/bluesky/profile/did%3Aplc%3Aalice', '/bluesky/profile/alice.bsky.social/']) {
+      const response = await createWorkerPageFallback(new Request(`https://worker.test${path}`));
+
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get('Location')).toBe('/sign-in');
+      expect(response?.headers.get('Cache-Control')).toBe('no-store');
+    }
+  });
+
+  it('renders the Bluesky profile entry for a logged-in user with no-store and noindex', async () => {
+    const response = await createWorkerPageFallback(
+      new Request('https://worker.test/bluesky/profile/did%3Aplc%3Aalice'),
+      { isLoggedIn: true, userId: UserId.generate() },
+    );
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('Cache-Control')).toBe('no-store');
+    expect(response?.headers.get('X-Robots-Tag')).toBe('noindex');
+    const html = await response?.text();
+    expect(html).toContain('/static/blueskyProfile.js');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+  });
+
+  it('does not claim a Bluesky profile path without an actor or with extra segments', async () => {
+    for (const path of ['/bluesky/profile', '/bluesky/profile/', '/bluesky/profile/a/b']) {
+      expect(await createWorkerPageFallback(new Request(`https://worker.test${path}`))).toBeUndefined();
+    }
+  });
+
   it('redirects the federated timeline to /sign-in when logged out, without caching', async () => {
     const anonymous = await createWorkerPageFallback(new Request('https://worker.test/federated'));
     const expired = await createWorkerPageFallback(
@@ -229,7 +259,6 @@ describe('createWorkerPageFallback', () => {
     for (
       const path of [
         '/bluesky/profile/alice.bsky.social/post/3kxyz',
-        '/bluesky/profile/did:plc:abc',
         '/bluesky/profile/did:plc:abc/post',
         '/bluesky/profile/did:plc:abc/post/3kxyz/extra',
       ]

@@ -119,7 +119,7 @@ const integerPattern = /^\d+$/;
 const postUriPattern = /^at:\/\/did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]\/app\.bsky\.feed\.post\/[a-zA-Z0-9._~:-]+$/;
 const forbidden = { error: 'Forbidden' } as const;
 
-const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBody => ({
+export const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBody => ({
   feedItemId: item.feedItemId,
   uri: item.uri,
   cid: item.cid,
