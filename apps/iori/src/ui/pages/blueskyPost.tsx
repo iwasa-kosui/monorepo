@@ -1,9 +1,14 @@
-import { useEffect, useRef, useState } from 'hono/jsx';
+import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import { blueskyPostUrl } from '../../helper/blueskyUrl.ts';
 import { type BlueskyPostThread, fetchBlueskyPostThread, isMastodonApiError } from '../api/mastodonClient.ts';
+import { blueskyItemActionProps, type BlueskyPostActions } from '../components/blueskyPostActions.ts';
+import { BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
+import type { BlueskyItemsUpdater } from '../hooks/optimisticBlueskyLike.ts';
+import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
+import { updateThreadItems } from './blueskyThread.ts';
 
 type ThreadNode = BlueskyPostThread['ancestors'][number];
 
@@ -34,10 +39,20 @@ const Placeholder = ({ text }: Readonly<{ text: string }>) => (
   </div>
 );
 
-const ThreadNodeView = ({ node, isFocused }: Readonly<{ node: ThreadNode; isFocused?: boolean }>) => {
+const ThreadNodeView = ({ node, isFocused, actions }: Readonly<{
+  node: ThreadNode;
+  isFocused?: boolean;
+  actions: BlueskyPostActions;
+}>) => {
   if (node.kind === 'notFound') return <Placeholder text='削除されたか見つからない投稿' />;
   if (node.kind === 'blocked') return <Placeholder text='表示できない投稿（ブロック）' />;
-  return <BlueskyTimelineItemView item={node.item} isSelected={isFocused === true} />;
+  return (
+    <BlueskyTimelineItemView
+      item={node.item}
+      isSelected={isFocused === true}
+      {...blueskyItemActionProps(actions, node.item)}
+    />
+  );
 };
 
 const BlueskyPostPage = () => {
@@ -45,6 +60,12 @@ const BlueskyPostPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const focusRef = useRef<HTMLDivElement>(null);
+  const hasScrolledRef = useRef(false);
+
+  const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
+    setThread((prev) => prev === null ? prev : updateThreadItems(prev, updater));
+  }, []);
+  const { actions, replyDialog } = useBlueskyUriActions(updateItems);
 
   useEffect(() => {
     const uri = postUriFromLocation();
@@ -60,8 +81,25 @@ const BlueskyPostPage = () => {
   }, []);
 
   useEffect(() => {
-    if (thread !== null && thread.ancestors.length > 0) focusRef.current?.scrollIntoView({ block: 'start' });
+    if (thread === null || hasScrolledRef.current) return;
+    hasScrolledRef.current = true;
+    if (thread.ancestors.length > 0) focusRef.current?.scrollIntoView({ block: 'start' });
   }, [thread]);
+
+  const reloadThread = useCallback(() => {
+    const uri = postUriFromLocation();
+    if (uri === undefined) return;
+    fetchBlueskyPostThread(uri)
+      .then(setThread)
+      .catch((err) => console.error('Failed to reload the Bluesky thread:', err));
+  }, []);
+
+  const { send: sendReplyOnly } = replyDialog;
+  const sendReply = useCallback(async (): Promise<boolean> => {
+    const sent = await sendReplyOnly();
+    if (sent) reloadThread();
+    return sent;
+  }, [sendReplyOnly, reloadThread]);
 
   if (isLoading) {
     return (
@@ -121,10 +159,10 @@ const BlueskyPostPage = () => {
         <div class='flex-1 min-h-0 overflow-y-auto'>
           <div class='space-y-6 py-2'>
             {thread.ancestors.map((node) => (
-              <ThreadNodeView key={node.kind === 'post' ? node.item.uri : node.uri} node={node} />
+              <ThreadNodeView key={node.kind === 'post' ? node.item.uri : node.uri} node={node} actions={actions} />
             ))}
             <div ref={focusRef} class='space-y-2'>
-              <ThreadNodeView node={{ kind: 'post', item: thread.post }} isFocused />
+              <ThreadNodeView node={{ kind: 'post', item: thread.post }} isFocused actions={actions} />
               {openOnBluesky !== undefined && (
                 <div class='text-right'>
                   <a
@@ -143,12 +181,14 @@ const BlueskyPostPage = () => {
                 key={node.kind === 'post' ? node.item.uri : node.uri}
                 class={REPLY_INDENT_CLASSES[Math.min(depth, REPLY_INDENT_CLASSES.length - 1)]}
               >
-                <ThreadNodeView node={node} />
+                <ThreadNodeView node={node} actions={actions} />
               </div>
             ))}
           </div>
         </div>
       )}
+
+      <BlueskyReplyModal dialog={{ ...replyDialog, send: sendReply }} />
     </div>
   );
 };

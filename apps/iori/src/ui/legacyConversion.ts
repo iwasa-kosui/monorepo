@@ -111,6 +111,7 @@ export const postToStatus = (post: PostWithAuthor): Status => {
     in_reply_to_id: post.inReplyToUri ?? null,
     in_reply_to_account_id: null,
     reblog: null,
+    quote: null,
     poll: null,
     card: null,
     language: null,

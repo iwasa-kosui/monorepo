@@ -10,7 +10,8 @@ describe('PostForm', () => {
     const html = render();
 
     expect(html).toContain('aria-pressed="false"');
-    expect(html).not.toContain('注意書き（CW）');
+    expect(html).toContain('aria-label="注意書き（CW）を付ける"');
+    expect(html).not.toContain('name="spoiler_text"');
   });
 
   it('公開範囲の radiogroup を出し、初期状態では「公開」を選んでおく', () => {
@@ -47,7 +48,7 @@ describe('PostForm', () => {
   it('画像がなければ ALT の欄とセンシティブのチェックボックスを出さない', () => {
     const html = render();
 
-    expect(html).not.toContain('画像の説明（ALT）');
+    expect(html).not.toContain('説明（ALT）');
     expect(html).not.toContain('画像をセンシティブにする');
   });
 });

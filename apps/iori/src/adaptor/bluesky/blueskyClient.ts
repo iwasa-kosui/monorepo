@@ -359,6 +359,20 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
         ? RA.err(clientError('invalid_response', 'deleteFollow received an unexpected uri'))
         : removeRecord(FOLLOW_COLLECTION, rkey);
     },
+    updateSeen: (seenAt) =>
+      withSession(async (session) => {
+        const updated = await call(
+          'updateSeen',
+          `${session.pdsUrl}/xrpc/app.bsky.notification.updateSeen`,
+          {
+            method: 'POST',
+            headers: authorized(session, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ seenAt: new Date(seenAt).toISOString() }),
+          },
+          emptyResponseSchema,
+        );
+        return updated.ok ? RA.ok(undefined) : updated;
+      }),
     query: (nsid, params) =>
       withSession((session) => {
         const search = new URLSearchParams(params).toString();

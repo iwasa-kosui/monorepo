@@ -9,7 +9,7 @@ import type { TimelineItemWithPost } from '../../domain/timeline/timelineItem.ts
 import { defaultImageUrls } from './defaultImages.ts';
 import type { Account, Status } from './entities.ts';
 import { type AccountSource, toAccount } from './toAccount.ts';
-import { toReblogStatus, toStatus } from './toStatus.ts';
+import { toReblogStatus, toStatus, type ToStatusOptions } from './toStatus.ts';
 
 export type StatusSource =
   | Readonly<{ type: 'post'; post: PostWithAuthor }>
@@ -81,6 +81,23 @@ export const createStatusAssembler = (
   };
 
   const assemble = async ({ sources, viewerActorId, requestUrl }: AssembleInput): Promise<Status[]> => {
+    const toStatusOptions = (
+      post: PostWithAuthor,
+      account: Account,
+      postExtras: PostExtras | undefined,
+      quote: ToStatusOptions['quote'],
+    ): ToStatusOptions => ({
+      baseUrl: requestUrl,
+      account,
+      mediaAttachmentIds: post.images.map((image) => image.imageId),
+      repliesCount: postExtras?.repliesCount ?? 0,
+      inReplyToId: postExtras?.inReplyTo?.postId ?? null,
+      inReplyToAccountId: postExtras?.inReplyTo?.actorId ?? null,
+      myReactionEmojis: new Set(postExtras?.myReactionEmojis ?? []),
+      blueskyCrosspost: postExtras?.blueskyCrosspost ?? null,
+      quote,
+    });
+
     const posts = [...new Map(sources.map((source) => [source.post.postId, source.post])).values()];
     const actorIds = [
       ...new Set(
@@ -96,23 +113,53 @@ export const createStatusAssembler = (
     if (!extras.ok) throw new StatusAssemblyError('Failed to resolve post extras');
     const extrasByPostId: ReadonlyMap<PostId, PostExtras> = extras.val;
 
+    const quotedPosts = [
+      ...new Map(
+        [...extrasByPostId.values()].flatMap((postExtras) =>
+          postExtras.quote?.post == null ? [] : [[postExtras.quote.post.postId, postExtras.quote.post] as const]
+        ),
+      ).values(),
+    ];
+    const quotedStatusByPostId = new Map<PostId, Status>();
+    if (quotedPosts.length > 0) {
+      const missingActorIds = [...new Set(quotedPosts.map((post) => post.actorId))].filter((id) => !accounts.has(id));
+      const [quotedExtras, quotedAccounts] = await Promise.all([
+        postExtrasResolver.resolve({ posts: quotedPosts, currentActorId: viewerActorId }),
+        resolveAccounts(missingActorIds, requestUrl),
+      ]);
+      if (!quotedExtras.ok) throw new StatusAssemblyError('Failed to resolve post extras');
+      for (const post of quotedPosts) {
+        const account = accounts.get(post.actorId) ?? quotedAccounts.get(post.actorId);
+        if (account === undefined) continue;
+        quotedStatusByPostId.set(
+          post.postId,
+          toStatus(post, toStatusOptions(post, account, quotedExtras.val.get(post.postId), null)),
+        );
+      }
+    }
+
     const statusByPostId = new Map<PostId, Status>();
     for (const post of posts) {
       const account = accounts.get(post.actorId);
       if (account === undefined) continue;
       const postExtras = extrasByPostId.get(post.postId);
+      const quote = postExtras?.quote ?? null;
       statusByPostId.set(
         post.postId,
-        toStatus(post, {
-          baseUrl: requestUrl,
-          account,
-          mediaAttachmentIds: post.images.map((image) => image.imageId),
-          repliesCount: postExtras?.repliesCount ?? 0,
-          inReplyToId: postExtras?.inReplyTo?.postId ?? null,
-          inReplyToAccountId: postExtras?.inReplyTo?.actorId ?? null,
-          myReactionEmojis: new Set(postExtras?.myReactionEmojis ?? []),
-          blueskyCrosspost: postExtras?.blueskyCrosspost ?? null,
-        }),
+        toStatus(
+          post,
+          toStatusOptions(
+            post,
+            account,
+            postExtras,
+            quote === null
+              ? null
+              : {
+                uri: quote.uri,
+                status: quote.post === null ? null : quotedStatusByPostId.get(quote.post.postId) ?? null,
+              },
+          ),
+        ),
       );
     }
 
