@@ -72,7 +72,7 @@ export const createD1RemotePostUpdatedStore = (db: IoriD1Db): RemotePostUpdatedS
       end
     )`;
 
-    await db.batch([
+    const results = await db.batch([
       db.update(postsTable)
         .set({ content: post.content, summary: post.summary, sensitive: post.sensitive })
         .where(and(eq(postsTable.postId, post.postId), guard)),
@@ -92,6 +92,6 @@ export const createD1RemotePostUpdatedStore = (db: IoriD1Db): RemotePostUpdatedS
           or(isNull(remotePostsTable.editedAt), lt(remotePostsTable.editedAt, new Date(editedAt))),
         )),
     ]);
-    return RA.ok(undefined);
+    return RA.ok({ written: results[results.length - 1].meta.changes === 1 });
   },
 });

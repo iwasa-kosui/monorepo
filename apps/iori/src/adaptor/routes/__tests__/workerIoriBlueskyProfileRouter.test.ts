@@ -394,7 +394,9 @@ describe('POST /api/iori/v1/bluesky/follows', () => {
   it('body の followUri の記録が自分の repo にあれば、createFollow を呼ばずにその uri を返す', async () => {
     const t = await setup({
       scope: 'write:follows',
-      client: { getRecord: vi.fn(async () => RA.ok({ uri: FOLLOW_URI, cid: 'cid', rkey: '3kfollow' })) },
+      client: {
+        getRecord: vi.fn(async () => RA.ok({ uri: FOLLOW_URI, cid: 'cid', rkey: '3kfollow', value: { subject: DID } })),
+      },
     });
 
     const response = await t.send('POST', FOLLOWS, { did: DID, followUri: FOLLOW_URI });

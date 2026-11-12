@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "3ffe37c8-1d63-4b41-be50-a135229e9027",
-  "prevId": "599afbbe-a283-4351-bfe6-33d41edd67cc",
+  "prevId": "b0dcac77-0225-47d0-99fb-25da3b63af1c",
   "tables": {
     "actors": {
       "name": "actors",
@@ -606,6 +606,45 @@
         },
         "failedAt": {
           "name": "failedAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "bluesky_moderated_actors": {
+      "name": "bluesky_moderated_actors",
+      "columns": {
+        "did": {
+          "name": "did",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "muted": {
+          "name": "muted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "blockUri": {
+          "name": "blockUri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
