@@ -239,6 +239,7 @@ export default {
             ...runtime.mastodon,
             ...runtime.socialActions,
             createPostUseCase: runtime.posting.createPostUseCase,
+            remoteActorLookup: runtime.posting.remoteActorLookup,
             sendReplyUseCase: runtime.core.sendReplyUseCase,
             deletePostUseCase: runtime.core.deletePostUseCase,
             authn,

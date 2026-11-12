@@ -87,4 +87,72 @@ describe('PostContent.fromMarkdown', () => {
     expect(html).toContain('<span style="color:#286983;--shiki-dark:#31748F">const</span>');
     expect(html).not.toContain('rose-pine');
   });
+
+  describe('mentions', () => {
+    const alice = 'https://remote.example/users/alice';
+    const resolved = new Map([['alice@remote.example', alice]]);
+    const link =
+      `<span class="h-card"><a href="${alice}" class="u-url mention">@<span>alice@remote.example</span></a></span>`;
+
+    it('解決済みの acct を h-card のリンクにして、サニタイズ後も class と href を残す', async () => {
+      const html = await PostContent.fromMarkdown('hi @alice@remote.example!', resolved);
+
+      expect(html).toBe(`<p>hi ${link}!</p>\n`);
+    });
+
+    it('表の key の大文字小文字を区別せず、本文に書かれた user の表記を表示に残す', async () => {
+      const html = await PostContent.fromMarkdown(
+        'hi @Alice@Remote.Example',
+        new Map([['ALICE@remote.example', alice]]),
+      );
+
+      expect(html).toBe(
+        `<p>hi <span class="h-card"><a href="${alice}" class="u-url mention">@<span>Alice@remote.example</span></a></span></p>\n`,
+      );
+    });
+
+    it('未解決の acct は mailto リンクにせずプレーンテキストで残す', async () => {
+      const html = await PostContent.fromMarkdown('hi @bob@other.example', resolved);
+
+      expect(html).toBe('<p>hi @bob@other.example</p>\n');
+    });
+
+    it('強調やリストの中の acct もリンクにする', async () => {
+      const html = await PostContent.fromMarkdown('**@alice@remote.example**\n\n- @alice@remote.example', resolved);
+
+      expect(html).toContain(`<strong>${link}</strong>`);
+      expect(html).toContain(`<li>${link}</li>`);
+    });
+
+    it('コードとリンクの表示文字列の中の acct はそのまま残す', async () => {
+      const html = await PostContent.fromMarkdown(
+        '`@alice@remote.example`\n\n[@alice@remote.example](https://example.com)',
+        resolved,
+      );
+
+      expect(html).not.toContain('h-card');
+      expect(html).toContain('<code>@alice@remote.example</code>');
+      expect(html).toContain('<a href="https://example.com">@alice@remote.example</a>');
+    });
+
+    it('直前が英数字の acct はメンションにしない', async () => {
+      const html = await PostContent.fromMarkdown('x@alice@remote.example', resolved);
+
+      expect(html).not.toContain('h-card');
+    });
+
+    it('通常のメールアドレスは従来どおり自動リンクの対象にする', async () => {
+      const html = await PostContent.fromMarkdown('mail foo@bar.example', resolved);
+
+      expect(html).toContain('foo@bar.example');
+      expect(html).not.toContain('h-card');
+    });
+
+    it('解決済みの表を渡さないときは従来の変換をする', async () => {
+      const html = await PostContent.fromMarkdown('hi @alice@remote.example');
+
+      expect(html).not.toContain('h-card');
+      expect(html).toContain('alice@remote.example');
+    });
+  });
 });

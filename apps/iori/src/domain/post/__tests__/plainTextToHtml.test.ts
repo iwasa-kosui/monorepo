@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { plainTextToHtml } from '../plainTextToHtml.ts';
+import { sanitizePostContent } from '../sanitizePostContent.ts';
 
 describe('plainTextToHtml', () => {
   it('wraps a line in a paragraph', () => {
@@ -53,5 +54,42 @@ describe('plainTextToHtml', () => {
   it('returns an empty string for blank input', () => {
     expect(plainTextToHtml('')).toBe('');
     expect(plainTextToHtml(' \n\n ')).toBe('');
+  });
+
+  describe('mentions', () => {
+    const resolved = new Map([['alice@remote.example', 'https://remote.example/users/alice']]);
+
+    it('解決済みの acct を h-card のリンクにする', () => {
+      expect(plainTextToHtml('hi @alice@remote.example!', resolved)).toBe(
+        '<p>hi <span class="h-card"><a href="https://remote.example/users/alice" class="u-url mention">'
+          + '@<span>alice@remote.example</span></a></span>!</p>',
+      );
+    });
+
+    it('未解決の acct はプレーンテキストのまま残す', () => {
+      expect(plainTextToHtml('hi @bob@other.example', resolved)).toBe('<p>hi @bob@other.example</p>');
+    });
+
+    it('解決済みの表がなければ acct をそのまま残す', () => {
+      expect(plainTextToHtml('hi @alice@remote.example')).toBe('<p>hi @alice@remote.example</p>');
+    });
+
+    it('直前が英数字の acct と URL の中の acct はリンクにしない', () => {
+      expect(plainTextToHtml('x@alice@remote.example https://remote.example/@alice@remote.example', resolved))
+        .not.toContain('h-card');
+    });
+
+    it('URL と acct を同じ行でそれぞれリンクにする', () => {
+      const html = plainTextToHtml('@alice@remote.example https://example.com/a', resolved);
+
+      expect(html).toContain('class="u-url mention"');
+      expect(html).toContain('<a href="https://example.com/a">https://example.com/a</a>');
+    });
+
+    it('サニタイズ後も class と href が残る', () => {
+      const html = plainTextToHtml('@alice@remote.example', resolved);
+
+      expect(sanitizePostContent(html)).toBe(html);
+    });
   });
 });

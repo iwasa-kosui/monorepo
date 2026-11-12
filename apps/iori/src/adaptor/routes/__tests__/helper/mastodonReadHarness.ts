@@ -309,6 +309,8 @@ export const setupReadApi = (
         '/api',
         createWorkerMastodonStatusesRouter({
           authn,
+          userResolver,
+          remoteActorLookup,
           actorResolverByUserId,
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           repostResolverById: createD1RepostResolverById(db),

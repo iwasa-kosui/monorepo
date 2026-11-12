@@ -3,6 +3,7 @@ import type { ResultAsync } from '@iwasa-kosui/result';
 
 import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
+import type { RemoteActorLookup } from '../adaptor/fedify/remoteActorLookup.ts';
 import type { StatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import type { createPostImageR2ObjectStore } from '../adaptor/r2/postImageObjectStore.ts';
 import type {
@@ -219,6 +220,7 @@ export type IoriTimelineRuntimePorts = Readonly<{
 }>;
 export type IoriPostingRuntimePorts = Readonly<{
   createPostUseCase: ReturnType<typeof createCreatePostUseCase>;
+  remoteActorLookup: RemoteActorLookup;
 }>;
 export type IoriSocialActionsRuntimePorts = Readonly<{
   sendLikeUseCase: SendLikeUseCase;
