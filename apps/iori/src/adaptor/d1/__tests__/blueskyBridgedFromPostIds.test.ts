@@ -91,6 +91,50 @@ describe('Bluesky のタイムラインの項目と Fediverse の投稿の突き
     expect(await t.bridgedFromPostIds()).toEqual({ 'at://x/1': null });
   });
 
+  it('ハンドルの instance と bridgyOriginalUrl の host が違えば、URL が一致しても null にする', async () => {
+    const t = setup();
+    t.remotePost('post-1', 'https://mastodon.example/users/alice/statuses/1', 'https://mastodon.example/@alice/1');
+    t.blueskyItem('at://x/1', 'https://mastodon.example/@alice/1', 'alice.other.example.ap.brid.gy');
+
+    expect(await t.bridgedFromPostIds()).toEqual({ 'at://x/1': null });
+  });
+
+  it('ハンドルの instance は大文字小文字を区別せず、host の一部だけの一致では照合しない', async () => {
+    const t = setup();
+    t.remotePost('post-1', 'https://mastodon.example/users/alice/statuses/1', 'https://mastodon.example/@alice/1');
+    t.blueskyItem('at://x/1', 'https://mastodon.example/@alice/1', 'Alice.Mastodon.Example.ap.brid.gy');
+    t.blueskyItem('at://x/2', 'https://mastodon.example/@alice/1', 'alice.xmastodon.example.ap.brid.gy');
+
+    expect(await t.bridgedFromPostIds()).toEqual({ 'at://x/1': 'post-1', 'at://x/2': null });
+  });
+
+  it('url の origin が uri の origin と違う行は、url が一致しても照合しない', async () => {
+    const t = setup();
+    t.remotePost('post-1', 'https://attacker.example/notes/1', 'https://mastodon.example/@victim/1');
+    t.blueskyItem('at://x/1', 'https://mastodon.example/@victim/1');
+
+    expect(await t.bridgedFromPostIds()).toEqual({ 'at://x/1': null });
+  });
+
+  it('同じ url に異なる postId が複数当たるときは、どれも採用せず null にする', async () => {
+    const t = setup();
+    t.remotePost('post-1', 'https://mastodon.example/users/alice/statuses/1', 'https://mastodon.example/@alice/1');
+    t.remotePost('post-2', 'https://mastodon.example/users/bob/statuses/1', 'https://mastodon.example/@alice/1/');
+    t.blueskyItem('at://x/1', 'https://mastodon.example/@alice/1');
+
+    expect(await t.bridgedFromPostIds()).toEqual({ 'at://x/1': null });
+  });
+
+  it('url が複数の投稿に当たっても、uri で 1 件に決まればそれを採る', async () => {
+    const t = setup();
+    t.remotePost('post-1', 'https://mastodon.example/users/alice/statuses/1', 'https://mastodon.example/@alice/1');
+    t.remotePost('post-2', 'https://mastodon.example/users/bob/statuses/1', 'https://mastodon.example/@alice/1');
+    t.remotePost('post-uri', 'https://mastodon.example/@alice/1', null);
+    t.blueskyItem('at://x/1', 'https://mastodon.example/@alice/1');
+
+    expect(await t.bridgedFromPostIds()).toEqual({ 'at://x/1': 'post-uri' });
+  });
+
   it('一致する投稿が無いとき、bridgyOriginalUrl が無いときは null にする', async () => {
     const t = setup();
     t.remotePost('post-1', 'https://mastodon.example/users/alice/statuses/1', 'https://mastodon.example/@alice/1');

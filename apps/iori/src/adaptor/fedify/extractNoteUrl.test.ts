@@ -38,4 +38,19 @@ describe('extractNoteUrl', () => {
 
     expect(extractNoteUrl(note)).toBe('https://remote.example/@alice/1');
   });
+
+  it('returns null for a url whose origin differs from the id', () => {
+    const note = new Note({ id: noteId, url: new URL('https://other.example/@victim/1') });
+
+    expect(extractNoteUrl(note)).toBeNull();
+  });
+
+  it('skips a url whose origin differs from the id and reads the next one', () => {
+    const note = new Note({
+      id: noteId,
+      urls: [new URL('https://other.example/@victim/1'), new URL('https://remote.example/@alice/1')],
+    });
+
+    expect(extractNoteUrl(note)).toBe('https://remote.example/@alice/1');
+  });
 });

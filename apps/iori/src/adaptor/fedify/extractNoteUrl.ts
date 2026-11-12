@@ -8,9 +8,10 @@ const toHttpUrl = (url: URL | Link): string | null => {
 };
 
 export const extractNoteUrl = (note: RemotePostObject): string | null => {
+  if (note.id === null) return null;
   for (const url of note.urls) {
     const found = toHttpUrl(url);
-    if (found !== null) return found;
+    if (found !== null && new URL(found).origin === note.id.origin) return found;
   }
   return null;
 };
