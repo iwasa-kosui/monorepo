@@ -234,11 +234,6 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
     return;
   }
 
-  if (deps.isBlockedUri(author.id.href)) {
-    getLogger().info(`Ignoring an Announce of a Note by an author from a blocked domain: ${author.id.href}`);
-    return;
-  }
-
   if (author.id.origin !== note.id.origin) {
     getLogger().warn(`Note origin does not match actor origin: ${note.id.href} - ${author.id.href}`);
     return;

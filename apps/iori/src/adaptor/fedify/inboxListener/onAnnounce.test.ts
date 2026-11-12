@@ -692,39 +692,29 @@ describe('createOnAnnounce', () => {
       expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
     });
 
-    it('does not save a remote Announce whose resolved author id is on a blocked domain', async () => {
-      const blockedAuthorUri = 'https://remote.example/users/alice';
-      const { deps, addReceivedRepostUseCase } = createDeps(
-        undefined,
-        true,
-        [],
-        undefined,
-        (uri) => uri === blockedAuthorUri,
-      );
-      const note = createNote([]).clone({
-        attribution: new Person({
-          id: new URL('https://remote.example/users/bob'),
-          inbox: new URL('https://remote.example/users/bob/inbox'),
-        }),
-      });
-      const getAttribution = vi.spyOn(note, 'getAttribution').mockResolvedValue(
-        new Person({
-          id: new URL(blockedAuthorUri),
-          inbox: new URL('https://remote.example/users/alice/inbox'),
-        }),
-      );
-
-      await createOnAnnounce(deps)(createCtx(), createActivityReturning(note));
-
-      expect(getAttribution).toHaveBeenCalledOnce();
-      expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
-    });
-
     it('does not save a relay Announce whose Note id is on a blocked domain', async () => {
       const { deps, remotePostUpserter, federatedTimelineItemCreatedStore } = createDeps(
         relay,
         true,
         [],
+        undefined,
+        isBlockedUri,
+      );
+      const note = createBlockedNote();
+      const getAttribution = vi.spyOn(note, 'getAttribution');
+
+      await createOnAnnounce(deps)(createCtx(), createActivityReturning(note));
+
+      expect(getAttribution).not.toHaveBeenCalled();
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+      expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('does not save a forwarded Announce whose Note id is on a blocked domain', async () => {
+      const { deps, remotePostUpserter, federatedTimelineItemCreatedStore } = createDeps(
+        undefined,
+        false,
+        [relay],
         undefined,
         isBlockedUri,
       );
