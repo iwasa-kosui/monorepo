@@ -23,17 +23,10 @@ const crosspost = (overrides: Partial<IoriBlueskyCrosspost>): IoriBlueskyCrosspo
 });
 
 describe('toBlueskyCrosspostMark', () => {
-  it('sent は URL へのリンクにする', () => {
+  it('sent は url の有無にかかわらず undefined を返す', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'sent', retrying: false, url: 'https://bsky.app/x' })))
-      .toMatchObject({ kind: 'sent', label: 'Bluesky', href: 'https://bsky.app/x', emphasized: false });
-  });
-
-  it('sent で URL が無ければリンクにしない', () => {
-    expect(toBlueskyCrosspostMark(crosspost({ status: 'sent', retrying: false }))).toMatchObject({
-      kind: 'sent',
-      label: 'Bluesky',
-      href: null,
-    });
+      .toBeUndefined();
+    expect(toBlueskyCrosspostMark(crosspost({ status: 'sent', retrying: false }))).toBeUndefined();
   });
 
   it('pending は送信中にする', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Status } from '../../adaptor/mastodon/entities.ts';
+import type { IoriBlueskyCrosspost, Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import { postToStatus } from '../legacyConversion.ts';
 import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
@@ -110,6 +110,32 @@ describe('PostView の「…」メニュー', () => {
       'https://remote.example/notes/1',
       'copy-link',
     ]);
+  });
+
+  describe('Bluesky で開く', () => {
+    const blueskyUrl = 'https://bsky.app/profile/did:plc:a/post/b';
+    const withCrosspost = (bluesky_crosspost: IoriBlueskyCrosspost): Status => ({
+      ...local,
+      iori: { ...local.iori!, bluesky_crosspost },
+    });
+
+    it('sent で url があれば、link 項目として出す', () => {
+      const item = menuItems({
+        status: withCrosspost({ status: 'sent', skip_reason: null, retrying: false, url: blueskyUrl }),
+      }).find((candidate) => candidate.key === 'open-bluesky');
+
+      expect(item).toEqual({ key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: blueskyUrl });
+    });
+
+    it.each(
+      [
+        ['pending', { status: 'pending', skip_reason: null, retrying: true, url: null }],
+        ['failed', { status: 'failed', skip_reason: null, retrying: false, url: null }],
+        ['sent で url が null', { status: 'sent', skip_reason: null, retrying: false, url: null }],
+      ] as const,
+    )('%s のときは出さない', (_, crosspost) => {
+      expect(keys({ status: withCrosspost(crosspost) })).not.toContain('open-bluesky');
+    });
   });
 
   describe('編集', () => {
