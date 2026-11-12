@@ -9,6 +9,7 @@ type Props = Readonly<{
   item: IoriBlueskyTimelineItemBody;
   dataIndex?: number;
   isSelected?: boolean;
+  onReply?: (item: IoriBlueskyTimelineItemBody) => void;
   onLike?: (item: IoriBlueskyTimelineItemBody) => void;
   onUndoLike?: (item: IoriBlueskyTimelineItemBody) => void;
   isLikePending?: boolean;
@@ -133,6 +134,32 @@ const BlueskyEmbed = ({ embed, postHref }: Readonly<{ embed: BlueskyTimelineEmbe
   return <BlueskyMedia media={embed} postHref={postHref} />;
 };
 
+const BlueskyReplyButton = ({ item, onReply }: Readonly<{
+  item: IoriBlueskyTimelineItemBody;
+  onReply: (item: IoriBlueskyTimelineItemBody) => void;
+}>) => (
+  <button
+    type='button'
+    onClick={(event: Event) => {
+      event.stopPropagation();
+      onReply(item);
+    }}
+    class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
+    title='返信 (p)'
+  >
+    <svg
+      xmlns='http://www.w3.org/2000/svg'
+      class='h-5 w-5'
+      fill='none'
+      viewBox='0 0 24 24'
+      stroke='currentColor'
+      stroke-width='2'
+    >
+      <path stroke-linecap='round' stroke-linejoin='round' d='M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6' />
+    </svg>
+  </button>
+);
+
 const likeTitle = (liked: boolean, isPending: boolean): string => {
   if (isPending) return liked ? 'いいね中...' : 'いいね取り消し中...';
   return liked ? 'いいねを取り消す' : 'いいね';
@@ -241,6 +268,7 @@ export const BlueskyTimelineItemView = ({
   item,
   dataIndex,
   isSelected,
+  onReply,
   onLike,
   onUndoLike,
   isLikePending,
@@ -295,8 +323,9 @@ export const BlueskyTimelineItemView = ({
       </div>
       {item.text !== '' && <BlueskyText text={item.text} facets={item.facets} />}
       {item.embed !== null && <BlueskyEmbed embed={item.embed} postHref={postHref} />}
-      {(onLike !== undefined || onRepost !== undefined) && (
+      {(onReply !== undefined || onLike !== undefined || onRepost !== undefined) && (
         <div class='flex items-center justify-end gap-4 pt-1'>
+          {onReply !== undefined && <BlueskyReplyButton item={item} onReply={onReply} />}
           {onRepost !== undefined && (
             <BlueskyRepostButton
               item={item}

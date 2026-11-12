@@ -4,6 +4,7 @@ import { createContext, useContext, useMemo, useState } from 'hono/jsx';
 import { homeFeedCursor, type HomeItem, mergeHomeFeed } from '../hooks/homeFeed.ts';
 import { readHomeSnapshot } from '../hooks/homeSnapshot.ts';
 import { useBlueskyLike, type UseBlueskyLikeReturn } from '../hooks/useBlueskyLike.ts';
+import { useBlueskyReplyDialog, type UseBlueskyReplyDialogReturn } from '../hooks/useBlueskyReplyDialog.ts';
 import { useBlueskyRepost, type UseBlueskyRepostReturn } from '../hooks/useBlueskyRepost.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation.ts';
@@ -22,6 +23,7 @@ export type TimelineContextValue = Readonly<{
   actions: UsePostActionsReturn;
   blueskyLike: UseBlueskyLikeReturn;
   blueskyRepost: UseBlueskyRepostReturn;
+  blueskyReply: UseBlueskyReplyDialogReturn;
   thread: UseThreadModalReturn;
   reply: UseReplyDialogReturn;
   ui: UseUIStateReturn;
@@ -58,6 +60,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
 
   const blueskyLike = useBlueskyLike(timeline.updateBlueskyItems);
   const blueskyRepost = useBlueskyRepost(timeline.updateBlueskyItems);
+  const blueskyReply = useBlueskyReplyDialog();
 
   const pullToRefresh = usePullToRefresh({
     onRefresh: async () => {
@@ -95,12 +98,16 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     scrollToSelected: ui.scrollToSelected,
     emojiPickerOpenForIndex: ui.emojiPickerOpenForIndex,
     setEmojiPickerOpenForIndex: ui.setEmojiPickerOpenForIndex,
-    replyingToPostId: reply.replyingToPostId,
+    replyingToPostId: reply.replyingToPostId ?? blueskyReply.target?.feedItemId ?? null,
     threadModalPostId: thread.threadModalPostId,
     onLike: actions.like,
     onUndoLike: actions.undoLike,
     onReply: reply.openReplyDialog,
-    onCancelReply: reply.closeReplyDialog,
+    onBlueskyReply: blueskyReply.open,
+    onCancelReply: () => {
+      reply.closeReplyDialog();
+      blueskyReply.close();
+    },
     onCloseThread: thread.closeThread,
   });
 
@@ -112,6 +119,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       actions,
       blueskyLike,
       blueskyRepost,
+      blueskyReply,
       thread,
       reply,
       ui,
@@ -119,7 +127,20 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       pullThreshold: PULL_TO_REFRESH_THRESHOLD,
       reading,
     }),
-    [timeline, data, items, actions, blueskyLike, blueskyRepost, thread, reply, ui, pullToRefresh, reading],
+    [
+      timeline,
+      data,
+      items,
+      actions,
+      blueskyLike,
+      blueskyRepost,
+      blueskyReply,
+      thread,
+      reply,
+      ui,
+      pullToRefresh,
+      reading,
+    ],
   );
 
   return <TimelineContext.Provider value={value}>{children}</TimelineContext.Provider>;
