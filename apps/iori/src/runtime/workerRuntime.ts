@@ -206,6 +206,7 @@ import { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import { ResolveRemoteAccountUseCase } from '../useCase/resolveRemoteAccount.ts';
+import { ResolveRemotePostUseCase } from '../useCase/resolveRemotePost.ts';
 import { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import { SaveDigestSubscriptionUseCase } from '../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
@@ -451,6 +452,15 @@ export const createWorkerRuntimePorts = async (
         logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
         remoteActorProfileUpdatedStore: createD1RemoteActorProfileUpdatedStore(db),
         actorResolverByUri: createD1ActorResolverByUri(db),
+      }),
+      resolveRemotePostUseCase: ResolveRemotePostUseCase.create({
+        origin: env.ORIGIN,
+        userResolver,
+        postResolverByUri,
+        localPostResolverByUri,
+        actorResolverById: createD1ActorResolverById(db),
+        remotePostUpserter,
+        blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
       }),
       markersResolverByUserId,
       notificationIdsResolverByUserIdAndCreatedAt: createD1NotificationIdsResolverByUserIdAndCreatedAt(db),

@@ -47,6 +47,7 @@ import {
   searchAccount,
   searchBlueskyActors,
   searchBlueskyPosts,
+  searchRemoteStatuses,
   searchStatuses,
   setFeedSourceEnabled,
   summarizeTimeline,
@@ -619,6 +620,31 @@ describe('mastodon client requests', () => {
     expect(parsed.searchParams.get('limit')).toBe('20');
     expect(init.credentials).toBe('same-origin');
     expect(result).toEqual(payload);
+  });
+
+  it('searches a remote post URL with resolve=true and type=statuses and returns the statuses', async () => {
+    const fetchMock = stubFetch(jsonResponse({ accounts: [], statuses: [{ id: 's1' }, { id: 's2' }], hashtags: [] }));
+
+    const statuses = await searchRemoteStatuses('https://remote.example/@alice/123');
+
+    expect(requestedUrl(fetchMock)).toBe(
+      '/api/v2/search?q=https%3A%2F%2Fremote.example%2F%40alice%2F123&resolve=true&type=statuses',
+    );
+    expect(statuses).toEqual([{ id: 's1' }, { id: 's2' }]);
+  });
+
+  it('returns no statuses when the remote post search finds nothing', async () => {
+    stubFetch(jsonResponse({ accounts: [], statuses: [], hashtags: [] }));
+
+    expect(await searchRemoteStatuses('https://remote.example/@alice/123')).toEqual([]);
+  });
+
+  it('throws an unauthorized error when the remote post search is not signed in', async () => {
+    stubFetch(jsonResponse({ error: 'The access token is invalid' }, { status: 401 }));
+
+    const error = await searchRemoteStatuses('https://remote.example/@alice/123').catch((e: unknown) => e);
+
+    expect(isUnauthorizedError(error)).toBe(true);
   });
 
   it('posts the summary request as JSON without authorization headers', async () => {

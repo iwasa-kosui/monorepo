@@ -97,6 +97,7 @@ import type { RefreshXPostsUseCase } from '../useCase/refreshXPosts.ts';
 import type { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
 import type { RequestDigestUseCase } from '../useCase/requestDigest.ts';
 import type { ResolveRemoteAccountUseCase } from '../useCase/resolveRemoteAccount.ts';
+import type { ResolveRemotePostUseCase } from '../useCase/resolveRemotePost.ts';
 import type { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import type { SaveDigestSubscriptionUseCase } from '../useCase/saveDigestSubscription.ts';
 import type { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
@@ -190,6 +191,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   dismissNotificationUseCase: DismissNotificationUseCase;
   clearNotificationsUseCase: ClearNotificationsUseCase;
   resolveRemoteAccountUseCase: ResolveRemoteAccountUseCase;
+  resolveRemotePostUseCase: ResolveRemotePostUseCase;
 }>;
 export type IoriDigestRuntimePorts = Readonly<{
   digestResolverByUserIdAndDigestDate: DigestResolverByUserIdAndDigestDate;
