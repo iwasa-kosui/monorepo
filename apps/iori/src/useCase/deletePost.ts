@@ -7,6 +7,7 @@ import z from 'zod/v4';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Article, type ArticleDeletedStore, type ArticleResolverByRootPostId } from '../domain/article/article.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { DirectPostParticipantsResolverByPostId } from '../domain/post/directPostParticipants.ts';
 import { MENTION_LOOKUP_TIMEOUT_MS, mentionLinksOfHtml, MentionRecipient } from '../domain/post/mention.ts';
 import {
   Post,
@@ -66,19 +67,20 @@ type Deps = Readonly<{
   // Article is a child aggregate of Post, so we keep it
   articleResolverByRootPostId: ArticleResolverByRootPostId;
   articleDeletedStore: ArticleDeletedStore;
+  directPostParticipantsResolverByPostId?: DirectPostParticipantsResolverByPostId;
   removeBlueskyCrosspost?: RemoveBlueskyCrosspostUseCase;
 }>;
 
 const resolveMentionRecipients = async (
   ctx: RequestContext<unknown>,
   identifier: string,
-  content: string,
+  hrefs: ReadonlyArray<string>,
 ): Promise<MentionRecipient[]> => {
   const ownOrigin = ctx.getActorUri(identifier).origin;
   const resolved = await Promise.all(
-    mentionLinksOfHtml(content)
-      .filter(({ href }) => new URL(href).origin !== ownOrigin)
-      .map(async ({ href }): Promise<MentionRecipient | undefined> => {
+    hrefs
+      .filter((href) => new URL(href).origin !== ownOrigin)
+      .map(async (href): Promise<MentionRecipient | undefined> => {
         try {
           const documentLoader = await ctx.getDocumentLoader({ identifier });
           const actor = await withTimeout(
@@ -116,6 +118,7 @@ const create = ({
   postQuotesResolver,
   articleResolverByRootPostId,
   articleDeletedStore,
+  directPostParticipantsResolverByPostId,
   removeBlueskyCrosspost,
 }: Deps): DeletePostUseCase => {
   const now = Instant.now();
@@ -153,7 +156,10 @@ const create = ({
           await articleDeletedStore.store(articleDeleteEvent);
         }
 
-        const quotes = await postQuotesResolver?.resolve([postId]);
+        const participants = post.visibility === 'direct'
+          ? await directPostParticipantsResolverByPostId?.resolve(postId)
+          : undefined;
+        const quotes = post.visibility === 'direct' ? undefined : await postQuotesResolver?.resolve([postId]);
         const quoteRecipients = toQuoteNoteFields(quotes?.ok ? quotes.val.get(postId) : undefined).recipients;
 
         // Delete the post via event store
@@ -172,12 +178,24 @@ const create = ({
             id: noteUri,
           }),
         });
-        await ctx.sendActivity({ identifier: user.username }, 'followers', deleteActivity);
+        if (post.visibility !== 'direct') {
+          await ctx.sendActivity({ identifier: user.username }, 'followers', deleteActivity);
+        }
         await sendToMentions({
           ctx,
           identifier: user.username,
           activity: deleteActivity,
-          mentions: [...await resolveMentionRecipients(ctx, user.username, post.content), ...quoteRecipients],
+          mentions: [
+            ...await resolveMentionRecipients(
+              ctx,
+              user.username,
+              participants?.ok
+                ? participants.val
+                : mentionLinksOfHtml(post.content).map(({ href }) => href),
+            ),
+            ...quoteRecipients,
+          ],
+          visibility: post.visibility,
         });
 
         // If there was a published article, send Delete activity for it too

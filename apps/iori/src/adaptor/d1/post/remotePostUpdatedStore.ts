@@ -5,6 +5,7 @@ import type { RemotePostUpdatedStore } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import type { IoriD1Db } from '../client.ts';
 import {
+  directPostParticipantsTable,
   domainEventsTable,
   postImagesTable,
   postsTable,
@@ -37,7 +38,7 @@ const narrowness = (visibility: SQL): SQL =>
 export const createD1RemotePostUpdatedStore = (db: IoriD1Db): RemotePostUpdatedStore => ({
   store: async (event) => {
     const post = event.aggregateState;
-    const { recipientActorUris, images } = event.eventPayload;
+    const { recipientActorUris, participantActorUris, images } = event.eventPayload;
     const { editedAt } = post;
     if (editedAt === undefined || editedAt === null) {
       throw new Error(`The edited remote post ${post.postId} has no editedAt`);
@@ -49,6 +50,12 @@ export const createD1RemotePostUpdatedStore = (db: IoriD1Db): RemotePostUpdatedS
         select column1, column2 from (values ${sql.join(uris.map((uri) => sql`(${post.postId}, ${uri})`), sql`, `)})
         where ${guard}
       `)
+    );
+    const participantInserts = chunk(participantActorUris, RECIPIENT_ROWS_PER_INSERT).map((uris) =>
+      db.insert(directPostParticipantsTable).select(sql`
+        select column1, column2 from (values ${sql.join(uris.map((uri) => sql`(${post.postId}, ${uri})`), sql`, `)})
+        where ${guard}
+      `).onConflictDoNothing()
     );
     const imageInserts = chunk(images, IMAGE_ROWS_PER_INSERT).map((rows) =>
       db.insert(postImagesTable).select(sql`
@@ -78,6 +85,7 @@ export const createD1RemotePostUpdatedStore = (db: IoriD1Db): RemotePostUpdatedS
         .where(and(eq(postsTable.postId, post.postId), guard)),
       db.delete(remotePostRecipientsTable).where(and(eq(remotePostRecipientsTable.postId, post.postId), guard)),
       ...recipientInserts,
+      ...participantInserts,
       db.delete(postImagesTable).where(and(eq(postImagesTable.postId, post.postId), guard)),
       ...imageInserts,
       db.insert(domainEventsTable).select(sql`

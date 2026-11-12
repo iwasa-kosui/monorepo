@@ -405,6 +405,88 @@ describe('公開範囲を狭める更新', () => {
   });
 });
 
+describe('direct の投稿の参加者', () => {
+  const aliceUri = 'https://remote.example/users/alice';
+  const bobUri = 'https://other.example/users/bob';
+
+  const participants = (t: ReturnType<typeof setup>) =>
+    (t.sqlite.prepare('SELECT actorUri FROM direct_post_participants WHERE postId = ? ORDER BY actorUri').all(
+      t.post.postId,
+    ) as { actorUri: string }[]).map((row) => row.actorUri);
+
+  const seedParticipants = (t: ReturnType<typeof setup>, uris: ReadonlyArray<string>) => {
+    for (const uri of uris) {
+      t.sqlite.prepare('INSERT INTO direct_post_participants(postId,actorUri) VALUES (?,?)').run(t.post.postId, uri);
+    }
+  };
+
+  it('宛先とメンションが増えたら参加者に足し、外れた宛先は消さない', async () => {
+    const t = setup();
+    seedParticipants(t, [aliceUri, kosuiUri]);
+
+    await t.useCase.run(t.input({ recipientActorUris: [hanakoUri], mentionedActorUris: [bobUri] }));
+
+    expect(participants(t)).toEqual([aliceUri, bobUri, hanakoUri, kosuiUri].sort());
+    expect(t.recipients()).toEqual([hanakoUri]);
+  });
+
+  it('同じ宛先で編集しても参加者は重複せず、行数が変わらない', async () => {
+    const t = setup();
+    seedParticipants(t, [aliceUri, kosuiUri]);
+
+    await t.useCase.run(t.input({ recipientActorUris: [kosuiUri] }));
+
+    expect(participants(t)).toEqual([aliceUri, kosuiUri].sort());
+  });
+
+  it('更新イベントの payload に参加者を入れる', async () => {
+    const t = setup();
+
+    await t.useCase.run(t.input({ recipientActorUris: [hanakoUri], mentionedActorUris: [bobUri] }));
+
+    expect(t.events()[0]?.eventPayload).toMatchObject({
+      participantActorUris: [aliceUri, bobUri, hanakoUri],
+    });
+  });
+
+  it('direct でない投稿の編集では、参加者を保存しない', async () => {
+    const t = setup();
+    t.setVisibility('public');
+
+    await t.useCase.run(t.input({ visibility: 'public', mentionedActorUris: [bobUri] }));
+
+    expect(participants(t)).toEqual([]);
+  });
+
+  it('公開範囲が direct に狭まる編集では、作者と宛先を参加者にする', async () => {
+    const t = setup();
+    t.setVisibility('private');
+
+    await t.useCase.run(t.input({ visibility: 'direct' }));
+
+    expect(t.row()).toMatchObject({ visibility: 'direct' });
+    expect(participants(t)).toEqual([aliceUri, hanakoUri].sort());
+  });
+
+  it('保存済みの編集時刻より新しくない更新では、参加者を足さない', async () => {
+    const t = setup();
+    await t.useCase.run(t.input());
+
+    await t.useCase.run(t.input({ editedAt: Instant.orThrow(4_000), mentionedActorUris: [bobUri] }));
+
+    expect(participants(t)).toEqual([aliceUri, hanakoUri].sort());
+  });
+
+  it('参加者が束縛数の上限を超える数あっても保存できる', async () => {
+    const t = setup();
+    const uris = Array.from({ length: 95 }, (_, n) => `${SEED_ORIGIN}/users/user${n}`);
+
+    await t.useCase.run(t.input({ recipientActorUris: uris }));
+
+    expect(participants(t)).toHaveLength(96);
+  });
+});
+
 describe('同時に来た更新の競合', () => {
   it('古い編集時刻の書き込みが新しい編集の後に走っても、何も変えない', async () => {
     const t = setup();

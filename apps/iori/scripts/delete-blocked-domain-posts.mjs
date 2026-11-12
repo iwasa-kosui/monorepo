@@ -236,6 +236,7 @@ export const applySql = ({ now }) => [
   `DELETE FROM post_quotes WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM local_posts WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM remote_post_recipients WHERE ${IN_TARGETS('postId')}`,
+  `DELETE FROM direct_post_participants WHERE ${IN_TARGETS('postId')}`,
   `DELETE FROM remote_posts WHERE ${IN_TARGETS('postId')}`,
   insertEvents({
     aggregateName: 'post',

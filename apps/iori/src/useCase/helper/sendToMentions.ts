@@ -3,6 +3,7 @@ import type { Activity, Recipient } from '@fedify/vocab';
 import { getLogger } from '@logtape/logtape';
 
 import type { MentionRecipient } from '../../domain/post/mention.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 
 type Params = Readonly<{
   ctx: RequestContext<unknown>;
@@ -10,6 +11,7 @@ type Params = Readonly<{
   activity: Activity;
   mentions: ReadonlyArray<MentionRecipient>;
   excludedActorIds?: ReadonlyArray<string>;
+  visibility?: Visibility;
 }>;
 
 const toRecipients = (
@@ -39,13 +41,14 @@ export const sendToMentions = async ({
   activity,
   mentions,
   excludedActorIds = [],
+  visibility,
 }: Params): Promise<void> => {
   const recipients = toRecipients(mentions, excludedActorIds, ctx.getActorUri(identifier).origin);
   if (recipients.length === 0) {
     return;
   }
   try {
-    await ctx.sendActivity({ identifier }, recipients, activity, { preferSharedInbox: true });
+    await ctx.sendActivity({ identifier }, recipients, activity, { preferSharedInbox: visibility !== 'direct' });
     getLogger().info(`Sent post to mentioned actors: ${recipients.length}`);
   } catch (err) {
     getLogger().warn(`Failed to send post to mentioned actors: ${err}`);

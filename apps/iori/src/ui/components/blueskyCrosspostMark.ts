@@ -1,4 +1,4 @@
-import type { IoriBlueskyCrosspost } from '../../adaptor/mastodon/entities.ts';
+import type { IoriBlueskyCrosspost, Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 import type { PostVisibility } from './postVisibility.ts';
 
@@ -19,7 +19,15 @@ const skipReasonTexts: Readonly<Record<NonNullable<IoriBlueskyCrosspost['skip_re
 export const skipReasonText = (reason: IoriBlueskyCrosspost['skip_reason']): string | undefined =>
   reason === null ? undefined : skipReasonTexts[reason];
 
-export const toBlueskyCrosspostMark = (crosspost: IoriBlueskyCrosspost): BlueskyCrosspostMark | undefined => {
+const isDirectVisibilitySkip = (
+  crosspost: IoriBlueskyCrosspost,
+  visibility: Status['visibility'] | undefined,
+): boolean => visibility === 'direct' && crosspost.skip_reason === 'visibility';
+
+export const toBlueskyCrosspostMark = (
+  crosspost: IoriBlueskyCrosspost,
+  visibility?: Status['visibility'],
+): BlueskyCrosspostMark | undefined => {
   switch (crosspost.status) {
     case 'sent':
       return { label: 'Bluesky', title: 'Bluesky に投稿しました', emphasized: false, href: crosspost.url };
@@ -40,7 +48,9 @@ export const toBlueskyCrosspostMark = (crosspost: IoriBlueskyCrosspost): Bluesky
           href: null,
         };
     case 'skipped':
-      if (crosspost.skip_reason === 'reply_to_unsent') return undefined;
+      if (crosspost.skip_reason === 'reply_to_unsent' || isDirectVisibilitySkip(crosspost, visibility)) {
+        return undefined;
+      }
       return {
         label: 'Bluesky に未送信',
         title: skipReasonText(crosspost.skip_reason) ?? 'Bluesky には送っていません',
@@ -55,6 +65,7 @@ export const toBlueskyCrosspostMark = (crosspost: IoriBlueskyCrosspost): Bluesky
 export const postedMessage = (
   destination: PostDestination,
   crosspost: IoriBlueskyCrosspost | undefined,
+  visibility?: Status['visibility'],
 ): string => {
   if (crosspost?.status === 'pending') return '投稿しました。Bluesky には送信中です';
   if (crosspost?.status === 'sent') return '投稿しました（Bluesky にも送りました）';
@@ -64,7 +75,7 @@ export const postedMessage = (
       : '投稿しました。Bluesky には届いていません';
   }
   if (crosspost?.status === 'skipped') {
-    const reason = skipReasonText(crosspost.skip_reason);
+    const reason = isDirectVisibilitySkip(crosspost, visibility) ? undefined : skipReasonText(crosspost.skip_reason);
     return `Fediverse に投稿しました。Bluesky には送っていません${reason === undefined ? '' : `（${reason}）`}`;
   }
   return destination === 'fediverse' ? 'Fediverse に投稿しました' : '投稿しました';

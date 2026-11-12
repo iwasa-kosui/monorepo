@@ -5,6 +5,7 @@ import type { RemotePostsPrunedStore } from '../../../domain/post/remotePostPrun
 import type { IoriD1Db } from '../client.ts';
 import { runBatch } from '../runBatch.ts';
 import {
+  directPostParticipantsTable,
   emojiReactsTable,
   federatedTimelineItemsTable,
   likesTable,
@@ -41,6 +42,7 @@ export const createD1RemotePostsPrunedStore = (db: IoriD1Db): RemotePostsPrunedS
       ),
       db.delete(postImagesTable).where(inArray(postImagesTable.postId, ids)),
       db.delete(postQuotesTable).where(inArray(postQuotesTable.postId, ids)),
+      db.delete(directPostParticipantsTable).where(inArray(directPostParticipantsTable.postId, ids)),
       db.delete(remotePostRecipientsTable).where(inArray(remotePostRecipientsTable.postId, ids)),
       db.delete(remotePostsTable).where(inArray(remotePostsTable.postId, ids)),
       db.delete(postsTable).where(inArray(postsTable.postId, ids)),

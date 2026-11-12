@@ -1,4 +1,4 @@
-import { Image, Note, Person, Update } from '@fedify/vocab';
+import { Image, Mention, Note, Person, Update } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 import { describe, expect, it, vi } from 'vitest';
@@ -67,9 +67,20 @@ describe('createOnUpdate', () => {
       sensitive: true,
       attachments: [{ url: 'https://remote.example/media/a.png', altText: 'alt', mediaType: null }],
       recipientActorUris: [kosuiId.href],
+      mentionedActorUris: [],
       visibility: 'direct',
       editedAt: 5_000,
     });
+  });
+
+  it('Note のメンションのタグから、メンションされた actor の URI を取り出して渡す', async () => {
+    const { run, listener } = setup();
+    const bobId = new URL('https://other.example/users/bob');
+
+    await listener(createCtx(), updateOf(noteOf({ tags: [new Mention({ href: bobId, name: '@bob@other.example' })] })));
+
+    expect(run).toHaveBeenCalledOnce();
+    expect(run.mock.calls[0]?.[0]).toMatchObject({ mentionedActorUris: [bobId.href] });
   });
 
   it('Note の宛先から公開範囲を求める', async () => {

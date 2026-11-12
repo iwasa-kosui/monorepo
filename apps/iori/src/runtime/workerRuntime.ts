@@ -115,6 +115,7 @@ import {
   createD1OAuthApplicationResolverByClientId,
 } from '../adaptor/d1/oauth/oauthApplicationResolvers.ts';
 import { createD1AccountStatusItemsResolverByActorId } from '../adaptor/d1/post/accountStatusItemsResolverByActorId.ts';
+import { createD1DirectPostParticipantsResolverByPostId } from '../adaptor/d1/post/directPostParticipantsResolverByPostId.ts';
 import { createD1LocalPostResolverByUri } from '../adaptor/d1/post/localPostResolverByUri.ts';
 import { createD1LocalPostsResolverByPage } from '../adaptor/d1/post/localPostsResolverByPage.ts';
 import { createD1LocalPostUrisResolverByUris } from '../adaptor/d1/post/localPostUrisResolverByUris.ts';
@@ -810,6 +811,7 @@ export const createWorkerRuntimePorts = async (
         pushSubscriptionsResolver,
         webPushSender,
         postResolver,
+        actorResolverById: createD1ActorResolverById(db),
         postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
         scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
         origin: env.ORIGIN,
@@ -823,6 +825,7 @@ export const createWorkerRuntimePorts = async (
         postDeletedStore: createD1PostDeletedStore(db),
         articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
         articleDeletedStore: createD1ArticleDeletedStore(db),
+        directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
         removeBlueskyCrosspost: blueskyCrosspost?.remove,
       }),
       subscribePushUseCase: SubscribePushUseCase.create({
