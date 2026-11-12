@@ -51,16 +51,18 @@ describe('ThreadNodeView の引用ボタン', () => {
     expect(html).not.toContain('title="引用"');
   });
 
-  it('押すと、その投稿を渡して onQuote を呼ぶ', () => {
-    const calls: IoriBlueskyTimelineItemBody[] = [];
+  it('onQuote をそのまま BlueskyTimelineItemView に渡す', () => {
+    const onQuote = (_target: IoriBlueskyTimelineItemBody) => {};
+    const node = { kind: 'post', item } as const;
     const element = ThreadNodeView({
-      node: { kind: 'post', item },
-      actions: actions({ onQuote: (target) => calls.push(target) }),
-    }) as unknown as { props: { onQuote: (target: IoriBlueskyTimelineItemBody) => void } };
+      node,
+      actions: actions({ onQuote }),
+    }) as unknown as {
+      props: { onQuote: (target: IoriBlueskyTimelineItemBody) => void; item: IoriBlueskyTimelineItemBody };
+    };
 
-    element.props.onQuote(item);
-
-    expect(calls.map((target) => target.uri)).toEqual([item.uri]);
+    expect(element.props.onQuote).toBe(onQuote);
+    expect(element.props.item).toBe(node.item);
   });
 
   it('削除済みやブロックの投稿には、引用のボタンを出さない', () => {
@@ -72,5 +74,14 @@ describe('ThreadNodeView の引用ボタン', () => {
     );
 
     expect(notFound).not.toContain('title="引用"');
+
+    const blocked = String(
+      jsx(ThreadNodeView, {
+        node: { kind: 'blocked', uri: 'at://did:plc:b/app.bsky.feed.post/blocked' },
+        actions: actions({ onQuote: () => {} }),
+      }),
+    );
+
+    expect(blocked).not.toContain('title="引用"');
   });
 });
