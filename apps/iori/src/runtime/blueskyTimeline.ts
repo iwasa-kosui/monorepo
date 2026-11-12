@@ -1,4 +1,5 @@
 import { createBlueskyClient } from '../adaptor/bluesky/blueskyClient.ts';
+import { createBlueskyPostThreadFetcher } from '../adaptor/bluesky/blueskyPostThreadFetcher.ts';
 import { createBlueskyTimelineFetcher } from '../adaptor/bluesky/blueskyTimelineFetcher.ts';
 import { createBlueskyViewerRepostResolver } from '../adaptor/bluesky/blueskyViewerRepostResolver.ts';
 import {
@@ -29,6 +30,7 @@ import type { BlueskyLoginFailureResolver } from '../domain/blueskyCrosspost/blu
 import type { BlueskySyncStatusResolver } from '../domain/blueskySyncStatus/blueskySyncStatus.ts';
 import type { BlueskyTimelineItemsResolver } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { BlueskyPostThreadFetcher } from '../ports/blueskyPostThreadFetcher.ts';
 import { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline.ts';
 import { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
@@ -57,6 +59,7 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
   unlikeBlueskyPostUseCase: UnlikeBlueskyPostUseCase | undefined;
   repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
   undoRepostBlueskyPostUseCase: UndoRepostBlueskyPostUseCase | undefined;
+  blueskyPostThreadFetcher: BlueskyPostThreadFetcher | undefined;
   replyToBlueskyPostUseCase: ReplyToBlueskyPostUseCase | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
@@ -183,15 +186,19 @@ export const createBlueskyTimelineRuntimePorts = (
 ): BlueskyTimelineRuntimePorts => {
   const likes = createLikeBlueskyPostUseCases(env, db, deps);
   const reposts = createRepostBlueskyPostUseCases(env, db, deps);
+  const config = resolveBlueskyTimelineConfig(env);
   return {
     blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
-    blueskyTimelineEnabled: resolveBlueskyTimelineConfig(env) !== undefined,
+    blueskyTimelineEnabled: config !== undefined,
     blueskySyncStatusResolver: createD1BlueskySyncStatusResolver(db),
     blueskyLoginFailureResolver: createD1BlueskyLoginFailureResolver(db, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
     likeBlueskyPostUseCase: likes?.like,
     unlikeBlueskyPostUseCase: likes?.unlike,
     repostBlueskyPostUseCase: reposts?.repost,
     undoRepostBlueskyPostUseCase: reposts?.undoRepost,
+    blueskyPostThreadFetcher: config === undefined
+      ? undefined
+      : createBlueskyPostThreadFetcher({ client: createTimelineClient(config, db, deps), now: Instant.now }),
     replyToBlueskyPostUseCase: createReplyToBlueskyPostUseCase(env, db, deps),
     isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
   };

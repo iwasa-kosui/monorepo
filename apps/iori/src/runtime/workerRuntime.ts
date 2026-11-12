@@ -538,6 +538,7 @@ export const createWorkerRuntimePorts = async (
         scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
         origin: env.ORIGIN,
       }),
+      remoteActorLookup: createCloudflareRemoteActorLookup(federationRuntime.federation),
     },
     socialActions: {
       sendLikeUseCase: SendLikeUseCase.create({
