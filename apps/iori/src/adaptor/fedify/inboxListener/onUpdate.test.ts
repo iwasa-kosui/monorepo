@@ -26,10 +26,13 @@ const setup = (result: unknown = RA.ok({ type: 'updated' })) => {
   return { run, listener };
 };
 
+const followersId = new URL('https://remote.example/users/alice/followers');
+
 const updateOf = (object: unknown, actor: URL | null = actorId) =>
   ({
     actorId: actor,
     getObject: vi.fn(async () => object),
+    getActor: vi.fn(async () => ({ followersId })),
     toIds: [],
     ccIds: [],
     btoIds: [],
@@ -64,8 +67,32 @@ describe('createOnUpdate', () => {
       sensitive: true,
       attachments: [{ url: 'https://remote.example/media/a.png', altText: 'alt' }],
       recipientActorUris: [kosuiId.href],
+      visibility: 'direct',
       editedAt: 5_000,
     });
+  });
+
+  it('Note の宛先から公開範囲を求める', async () => {
+    const { run, listener } = setup();
+    const publicId = new URL('https://www.w3.org/ns/activitystreams#Public');
+
+    await listener(createCtx(), updateOf(noteOf({ tos: [publicId] })));
+    await listener(createCtx(), updateOf(noteOf({ tos: [followersId] })));
+    await listener(createCtx(), updateOf(noteOf({ tos: [], ccs: [] })));
+
+    expect(run.mock.calls.map(([input]) => input.visibility)).toEqual(['public', 'private', null]);
+  });
+
+  it('actor を取得できなければ公開範囲を不明として渡す', async () => {
+    const { run, listener } = setup();
+    const update = updateOf(noteOf());
+    (update as unknown as { getActor: unknown }).getActor = vi.fn(async () => {
+      throw new Error('fetch failed');
+    });
+
+    await listener(createCtx(), update);
+
+    expect(run.mock.calls[0][0].visibility).toBeNull();
   });
 
   it('updated がなければ受信時刻を編集時刻にする', async () => {

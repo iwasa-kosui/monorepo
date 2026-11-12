@@ -4,7 +4,7 @@ import { getLogger } from '@logtape/logtape';
 import type { OgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { extractUrlsFromHtml } from '../adaptor/ogp/urlExtractor.ts';
 import type { ActorResolverByUri } from '../domain/actor/actor.ts';
-import type { PostImage, PostImagesReplacedStore } from '../domain/image/image.ts';
+import type { PostImage, PostImagesResolverByPostId } from '../domain/image/image.ts';
 import { ImageId } from '../domain/image/imageId.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type {
@@ -22,6 +22,7 @@ import {
   type RemotePostRecipientsResolverByPostId,
   type RemotePostUpdatedStore,
 } from '../domain/post/post.ts';
+import type { Visibility } from '../domain/post/visibility.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
@@ -32,6 +33,7 @@ type Input = Readonly<{
   sensitive: boolean;
   attachments: ReadonlyArray<RemotePostAttachment>;
   recipientActorUris: ReadonlyArray<string>;
+  visibility: Visibility | null;
   editedAt: Instant;
 }>;
 
@@ -67,7 +69,7 @@ type Deps = Readonly<{
   postResolverByUri: PostResolverByUri;
   actorResolverByUri: ActorResolverByUri;
   remotePostRecipientsResolver: RemotePostRecipientsResolverByPostId;
-  postImagesReplacedStore: PostImagesReplacedStore;
+  postImagesResolver: PostImagesResolverByPostId;
   remotePostUpdatedStore: RemotePostUpdatedStore;
   linkPreviewsResolver: LinkPreviewsResolverByPostId;
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
@@ -80,7 +82,7 @@ const create = ({
   postResolverByUri,
   actorResolverByUri,
   remotePostRecipientsResolver,
-  postImagesReplacedStore,
+  postImagesResolver,
   remotePostUpdatedStore,
   linkPreviewsResolver,
   linkPreviewCreatedStore,
@@ -141,22 +143,30 @@ const create = ({
     const previousRecipients = await remotePostRecipientsResolver.resolve(post.postId);
     if (!previousRecipients.ok) throw new Error(`Failed to resolve the recipients of ${input.uri}`);
 
-    const images: PostImage[] = input.attachments.map((attachment) => ({
-      imageId: ImageId.generate(),
-      postId: post.postId,
-      url: attachment.url,
-      altText: attachment.altText,
-      createdAt: now,
-    }));
-    await postImagesReplacedStore.store({ postId: post.postId, images });
+    const existingImages = await postImagesResolver.resolve(post.postId);
+    if (!existingImages.ok) throw new Error(`Failed to resolve the images of ${input.uri}`);
+    const reusable = new Map(existingImages.val.map((image) => [image.url, image]));
+    const images: PostImage[] = input.attachments.map((attachment) => {
+      const previous = reusable.get(attachment.url);
+      reusable.delete(attachment.url);
+      return {
+        imageId: previous?.imageId ?? ImageId.generate(),
+        postId: post.postId,
+        url: attachment.url,
+        altText: attachment.altText,
+        createdAt: previous?.createdAt ?? now,
+      };
+    });
 
     const event = Post.updateRemotePost(now)(post, {
       content: input.content,
       summary: input.summary,
       sensitive: input.sensitive,
       editedAt: input.editedAt,
+      visibility: input.visibility,
       recipientActorUris: input.recipientActorUris,
       previousRecipientActorUris: previousRecipients.val,
+      images,
     });
     await remotePostUpdatedStore.store(event);
 

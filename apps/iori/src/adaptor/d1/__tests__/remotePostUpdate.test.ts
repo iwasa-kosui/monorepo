@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import { Post, type RemotePost } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import { UpdateRemotePostUseCase } from '../../../useCase/updateRemotePost.ts';
 import { createD1ActorResolverByUri } from '../actor/actorResolverByUri.ts';
-import { createD1PostImagesReplacedStore } from '../image/postImagesReplacedStore.ts';
+import { createD1PostImagesResolverByPostId } from '../image/postImagesResolver.ts';
 import { createD1LinkPreviewCreatedStore } from '../linkPreview/linkPreviewCreatedStore.ts';
 import { createD1LinkPreviewsDeletedStore } from '../linkPreview/linkPreviewsDeletedStore.ts';
 import { createD1LinkPreviewsResolverByPostId } from '../linkPreview/linkPreviewsResolverByPostId.ts';
@@ -59,7 +61,7 @@ const setup = () => {
     postResolverByUri: createD1PostResolverByUri(db),
     actorResolverByUri: createD1ActorResolverByUri(db),
     remotePostRecipientsResolver: createD1RemotePostRecipientsResolverByPostId(db),
-    postImagesReplacedStore: createD1PostImagesReplacedStore(db),
+    postImagesResolver: createD1PostImagesResolverByPostId(db),
     remotePostUpdatedStore: createD1RemotePostUpdatedStore(db),
     linkPreviewsResolver: createD1LinkPreviewsResolverByPostId(db),
     linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
@@ -74,6 +76,7 @@ const setup = () => {
     sensitive: false,
     attachments: [{ url: 'https://remote.example/media/new.png', altText: 'new alt' }],
     recipientActorUris: [hanakoUri],
+    visibility: 'direct' as const,
     editedAt: Instant.orThrow(5_000),
     ...overrides,
   });
@@ -83,6 +86,20 @@ const setup = () => {
     ).get(post.postId);
   const images = () =>
     fixture.sqlite.prepare('SELECT url, altText FROM post_images WHERE postId = ? ORDER BY url').all(post.postId);
+  const imageIds =
+    () => (fixture.sqlite.prepare('SELECT imageId, url FROM post_images WHERE postId = ? ORDER BY url').all(
+      post.postId,
+    ) as {
+      imageId: string;
+      url: string;
+    }[]);
+  const setVisibility = (visibility: string | null) =>
+    fixture.sqlite.prepare('UPDATE remote_posts SET visibility = ? WHERE postId = ?').run(visibility, post.postId);
+  const storedPost = async (): Promise<RemotePost> => {
+    const resolved = await createD1PostResolverByUri(db).resolve({ uri: post.uri });
+    if (!resolved.ok || !resolved.val) throw new Error('unreachable');
+    return resolved.val;
+  };
   const recipients = () =>
     (fixture.sqlite.prepare('SELECT actorUri FROM remote_post_recipients WHERE postId = ?').all(post.postId) as {
       actorUri: string;
@@ -112,6 +129,9 @@ const setup = () => {
     input,
     row,
     images,
+    imageIds,
+    setVisibility,
+    storedPost,
     recipients,
     events,
     ogpFetcher,
@@ -266,6 +286,170 @@ describe('リモート投稿の編集の保存', () => {
       { url: 'https://new.example/c', title: 'title of https://new.example/c' },
     ]);
     expect(t.ogpFetcher.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('添付の imageId', () => {
+  const oldImageId = '00000000-0000-4000-8000-0000000000aa';
+
+  it('url が同じ添付は imageId と作成時刻を使い回し、altText を新しい値にする', async () => {
+    const t = setup();
+
+    await t.useCase.run(t.input({
+      attachments: [
+        { url: 'https://remote.example/media/old.png', altText: 'new alt' },
+        { url: 'https://remote.example/media/new.png', altText: null },
+      ],
+    }));
+
+    const [fresh, kept] = t.imageIds();
+    expect(kept).toEqual({ imageId: oldImageId, url: 'https://remote.example/media/old.png' });
+    expect(fresh.imageId).not.toBe(oldImageId);
+    expect(t.images()).toEqual([
+      { url: 'https://remote.example/media/new.png', altText: null },
+      { url: 'https://remote.example/media/old.png', altText: 'new alt' },
+    ]);
+    expect(
+      t.sqlite.prepare('SELECT createdAt FROM post_images WHERE imageId = ?').get(oldImageId),
+    ).toEqual({ createdAt: 1_000 });
+  });
+
+  it('同じ url の添付が重複しても主キーが衝突せず、使い回すのは 1 件だけにする', async () => {
+    const t = setup();
+
+    await t.useCase.run(t.input({
+      attachments: [
+        { url: 'https://remote.example/media/old.png', altText: 'a' },
+        { url: 'https://remote.example/media/old.png', altText: 'b' },
+      ],
+    }));
+
+    const rows = t.imageIds();
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((row) => row.imageId === oldImageId)).toHaveLength(1);
+  });
+});
+
+describe('公開範囲を狭める更新', () => {
+  it.each(
+    [
+      ['public', 'unlisted', 'unlisted'],
+      ['public', 'direct', 'direct'],
+      ['unlisted', 'private', 'private'],
+      ['private', 'direct', 'direct'],
+      [null, 'direct', 'direct'],
+    ] as const,
+  )('保存済みが %s の投稿への %s の更新は %s にする', async (stored, incoming, expected) => {
+    const t = setup();
+    t.setVisibility(stored);
+
+    await t.useCase.run(t.input({ visibility: incoming }));
+
+    expect(t.row()).toMatchObject({ visibility: expected });
+  });
+
+  it.each(
+    [
+      ['direct', 'public', 'direct'],
+      ['direct', 'private', 'direct'],
+      ['private', 'unlisted', 'private'],
+      ['unlisted', 'public', 'unlisted'],
+      ['public', 'public', 'public'],
+      ['public', null, 'public'],
+      [null, 'public', null],
+      [null, 'private', null],
+      [null, null, null],
+    ] as const,
+  )('保存済みが %s の投稿への %s の更新では %s のまま変えない', async (stored, incoming, expected) => {
+    const t = setup();
+    t.setVisibility(stored);
+
+    await t.useCase.run(t.input({ visibility: incoming }));
+
+    expect(t.row()).toMatchObject({ visibility: expected, content: '<p>after</p>' });
+  });
+});
+
+describe('同時に来た更新の競合', () => {
+  it('古い編集時刻の書き込みが新しい編集の後に走っても、何も変えない', async () => {
+    const t = setup();
+    t.setVisibility('public');
+    const stored = await t.storedPost();
+    const edit = {
+      summary: null,
+      sensitive: false,
+      previousRecipientActorUris: [kosuiUri],
+    };
+    const newer = Post.updateRemotePost(Instant.orThrow(8_000))(stored, {
+      ...edit,
+      content: '<p>newer</p>',
+      editedAt: Instant.orThrow(6_000),
+      visibility: 'direct',
+      recipientActorUris: [hanakoUri],
+      images: [{
+        imageId: ImageId.orThrow('00000000-0000-4000-8000-0000000000bb'),
+        postId: stored.postId,
+        url: 'https://remote.example/media/newer.png',
+        altText: 'newer',
+        createdAt: Instant.orThrow(8_000),
+      }],
+    });
+    const older = Post.updateRemotePost(Instant.orThrow(9_000))(stored, {
+      ...edit,
+      content: '<p>older</p>',
+      editedAt: Instant.orThrow(5_000),
+      visibility: 'public',
+      recipientActorUris: [kosuiUri, hanakoUri],
+      images: [{
+        imageId: ImageId.orThrow('00000000-0000-4000-8000-0000000000cc'),
+        postId: stored.postId,
+        url: 'https://remote.example/media/older.png',
+        altText: 'older',
+        createdAt: Instant.orThrow(9_000),
+      }],
+    });
+    const store = createD1RemotePostUpdatedStore(t.db);
+
+    await store.store(newer);
+    await store.store(older);
+
+    expect(t.row()).toMatchObject({ content: '<p>newer</p>', editedAt: 6_000, visibility: 'direct' });
+    expect(t.images()).toEqual([{ url: 'https://remote.example/media/newer.png', altText: 'newer' }]);
+    expect(t.recipients()).toEqual([hanakoUri]);
+    expect(t.events()).toHaveLength(1);
+    expect(t.events()[0].eventPayload).toMatchObject({ content: '<p>newer</p>' });
+  });
+
+  it('新しい編集でも、読んだ時点の公開範囲から広げる内容なら、保存済みの狭い公開範囲を広げない', async () => {
+    const t = setup();
+    t.setVisibility('public');
+    const stored = await t.storedPost();
+    const edit = {
+      summary: null,
+      sensitive: false,
+      previousRecipientActorUris: [kosuiUri],
+      recipientActorUris: [hanakoUri],
+      images: [],
+    };
+    const narrowing = Post.updateRemotePost(Instant.orThrow(8_000))(stored, {
+      ...edit,
+      content: '<p>narrowing</p>',
+      editedAt: Instant.orThrow(6_000),
+      visibility: 'direct',
+    });
+    const later = Post.updateRemotePost(Instant.orThrow(9_000))(stored, {
+      ...edit,
+      content: '<p>later</p>',
+      editedAt: Instant.orThrow(7_000),
+      visibility: 'public',
+    });
+    const store = createD1RemotePostUpdatedStore(t.db);
+
+    await store.store(narrowing);
+    await store.store(later);
+
+    expect(t.row()).toMatchObject({ content: '<p>later</p>', editedAt: 7_000, visibility: 'direct' });
+    expect(t.events()).toHaveLength(2);
   });
 });
 

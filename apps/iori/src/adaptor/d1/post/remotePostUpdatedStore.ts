@@ -1,44 +1,96 @@
 import { RA } from '@iwasa-kosui/result';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
 
 import type { RemotePostUpdatedStore } from '../../../domain/post/post.ts';
+import type { PostId } from '../../../domain/post/postId.ts';
 import type { IoriD1Db } from '../client.ts';
-import { domainEventsTable, postsTable, remotePostRecipientsTable, remotePostsTable } from '../schema.ts';
+import {
+  domainEventsTable,
+  postImagesTable,
+  postsTable,
+  remotePostRecipientsTable,
+  remotePostsTable,
+} from '../schema.ts';
 import { RECIPIENT_ROWS_PER_INSERT } from './postCreatedStore.ts';
+
+// D1 の束縛上限 100 に収まるよう、1 文あたり 5 列 × 10 行に分ける
+const IMAGE_ROWS_PER_INSERT = 10;
+
+const chunk = <T>(items: ReadonlyArray<T>, size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+};
+
+const isNotOlderEdit = (postId: PostId, editedAt: number): SQL =>
+  sql`exists (
+    select 1 from ${remotePostsTable}
+    where ${remotePostsTable.postId} = ${postId}
+      and (${remotePostsTable.editedAt} is null or ${remotePostsTable.editedAt} < ${editedAt})
+  )`;
+
+const narrowness = (visibility: SQL): SQL =>
+  sql`(case ${visibility} when 'public' then 0 when 'unlisted' then 1 when 'private' then 2 else 3 end)`;
 
 export const createD1RemotePostUpdatedStore = (db: IoriD1Db): RemotePostUpdatedStore => ({
   store: async (event) => {
     const post = event.aggregateState;
-    const { recipientActorUris } = event.eventPayload;
-    const recipientInserts = [];
-    for (let i = 0; i < recipientActorUris.length; i += RECIPIENT_ROWS_PER_INSERT) {
-      recipientInserts.push(
-        db.insert(remotePostRecipientsTable).values(
-          recipientActorUris.slice(i, i + RECIPIENT_ROWS_PER_INSERT).map((actorUri) => ({
-            postId: post.postId,
-            actorUri,
-          })),
-        ),
-      );
+    const { recipientActorUris, images } = event.eventPayload;
+    const { editedAt } = post;
+    if (editedAt === undefined || editedAt === null) {
+      throw new Error(`The edited remote post ${post.postId} has no editedAt`);
     }
+    const guard = isNotOlderEdit(post.postId, editedAt);
+
+    const recipientInserts = chunk(recipientActorUris, RECIPIENT_ROWS_PER_INSERT).map((uris) =>
+      db.insert(remotePostRecipientsTable).select(sql`
+        select column1, column2 from (values ${sql.join(uris.map((uri) => sql`(${post.postId}, ${uri})`), sql`, `)})
+        where ${guard}
+      `)
+    );
+    const imageInserts = chunk(images, IMAGE_ROWS_PER_INSERT).map((rows) =>
+      db.insert(postImagesTable).select(sql`
+        select column1, column2, column3, column4, column5 from (values ${
+        sql.join(
+          rows.map((image) =>
+            sql`(${image.imageId}, ${image.postId}, ${image.url}, ${image.altText}, ${image.createdAt})`
+          ),
+          sql`, `,
+        )
+      })
+        where ${guard}
+      `)
+    );
+    const visibility = post.visibility === null ? undefined : sql`(
+      case when ${narrowness(sql`${post.visibility}`)} > ${
+      narrowness(sql`coalesce(${remotePostsTable.visibility}, 'private')`)
+    }
+        then ${post.visibility}
+        else ${remotePostsTable.visibility}
+      end
+    )`;
+
     await db.batch([
       db.update(postsTable)
         .set({ content: post.content, summary: post.summary, sensitive: post.sensitive })
-        .where(eq(postsTable.postId, post.postId)),
-      db.update(remotePostsTable)
-        .set({ editedAt: post.editedAt === undefined || post.editedAt === null ? null : new Date(post.editedAt) })
-        .where(eq(remotePostsTable.postId, post.postId)),
-      db.delete(remotePostRecipientsTable).where(eq(remotePostRecipientsTable.postId, post.postId)),
+        .where(and(eq(postsTable.postId, post.postId), guard)),
+      db.delete(remotePostRecipientsTable).where(and(eq(remotePostRecipientsTable.postId, post.postId), guard)),
       ...recipientInserts,
-      db.insert(domainEventsTable).values({
-        eventId: event.eventId,
-        aggregateId: event.aggregateId,
-        aggregateName: event.aggregateName,
-        aggregateState: JSON.stringify(event.aggregateState),
-        eventName: event.eventName,
-        eventPayload: JSON.stringify(event.eventPayload),
-        occurredAt: new Date(event.occurredAt),
-      }),
+      db.delete(postImagesTable).where(and(eq(postImagesTable.postId, post.postId), guard)),
+      ...imageInserts,
+      db.insert(domainEventsTable).select(sql`
+        select ${event.eventId}, ${event.aggregateId}, ${event.aggregateName}, ${JSON.stringify(event.aggregateState)},
+          ${event.eventName}, ${JSON.stringify(event.eventPayload)}, ${event.occurredAt}
+        where ${guard}
+      `),
+      db.update(remotePostsTable)
+        .set({ editedAt: new Date(editedAt), visibility })
+        .where(and(
+          eq(remotePostsTable.postId, post.postId),
+          or(isNull(remotePostsTable.editedAt), lt(remotePostsTable.editedAt, new Date(editedAt))),
+        )),
     ]);
     return RA.ok(undefined);
   },

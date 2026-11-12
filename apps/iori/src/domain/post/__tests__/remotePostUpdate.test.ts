@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ActorId } from '../../actor/actorId.ts';
 import { Instant } from '../../instant/instant.ts';
 import { Post } from '../post.ts';
+import { Visibility } from '../visibility.ts';
 
 const created = Post.createRemotePost(Instant.orThrow(1_000))({
   actorId: ActorId.generate(),
@@ -20,11 +21,13 @@ describe('Post.updateRemotePost', () => {
     summary: null,
     sensitive: false,
     editedAt: Instant.orThrow(5_000),
+    visibility: 'direct' as const,
     recipientActorUris: ['https://iori.test/users/kosui'],
     previousRecipientActorUris: ['https://iori.test/users/hanako'],
+    images: [],
   };
 
-  it('本文、CW、センシティブ、編集時刻だけを変え、公開範囲、返信先、作成時刻は変えない', () => {
+  it('本文、CW、センシティブ、編集時刻を変え、同じ公開範囲のままなら公開範囲、返信先、作成時刻は変えない', () => {
     const event = Post.updateRemotePost(Instant.orThrow(6_000))(post, edit);
 
     expect(event.eventName).toBe('post.remotePostUpdated');
@@ -47,6 +50,53 @@ describe('Post.updateRemotePost', () => {
       recipientActorUris: ['https://iori.test/users/kosui'],
       previousRecipientActorUris: ['https://iori.test/users/hanako'],
     });
+  });
+});
+
+describe('Post.updateRemotePost の公開範囲', () => {
+  const edit = {
+    content: '<p>after</p>',
+    summary: null,
+    sensitive: false,
+    editedAt: Instant.orThrow(5_000),
+    recipientActorUris: [],
+    previousRecipientActorUris: [],
+    images: [],
+  };
+
+  it('Update の宛先が狭ければ公開範囲を狭め、広ければ変えない', () => {
+    const narrowed = Post.updateRemotePost(Instant.orThrow(6_000))({ ...post, visibility: 'public' }, {
+      ...edit,
+      visibility: 'private',
+    });
+    const kept = Post.updateRemotePost(Instant.orThrow(6_000))({ ...post, visibility: 'private' }, {
+      ...edit,
+      visibility: 'public',
+    });
+
+    expect(narrowed.aggregateState.visibility).toBe('private');
+    expect(narrowed.eventPayload.visibility).toBe('private');
+    expect(kept.aggregateState.visibility).toBe('private');
+  });
+});
+
+describe('Visibility.narrow', () => {
+  it.each(
+    [
+      ['public', 'unlisted', 'unlisted'],
+      ['unlisted', 'private', 'private'],
+      ['private', 'direct', 'direct'],
+      ['direct', 'public', 'direct'],
+      ['private', 'private', 'private'],
+      ['public', null, 'public'],
+      [null, null, null],
+      [null, 'public', null],
+      [null, 'unlisted', null],
+      [null, 'private', null],
+      [null, 'direct', 'direct'],
+    ] as const,
+  )('保存済み %s と Update の %s では %s になる', (stored, incoming, expected) => {
+    expect(Visibility.narrow(stored, incoming)).toBe(expected);
   });
 });
 

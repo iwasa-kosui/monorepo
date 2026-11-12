@@ -34,7 +34,6 @@ import { createD1FollowedByLocalActorResolverByActorUri } from '../../d1/follow/
 import { createD1FollowResolver } from '../../d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../../d1/follow/undoFollowingProcessedStore.ts';
 import { createD1PostImageCreatedStore } from '../../d1/image/postImageCreatedStore.ts';
-import { createD1PostImagesReplacedStore } from '../../d1/image/postImagesReplacedStore.ts';
 import { createD1PostImagesResolverByPostId } from '../../d1/image/postImagesResolver.ts';
 import { createD1LikesResolverByPostId } from '../../d1/like/likesResolverByPostId.ts';
 import { createD1LocalLikeDeletedStore } from '../../d1/like/localLikeDeletedStore.ts';
@@ -314,7 +313,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         postResolverByUri,
         actorResolverByUri,
         remotePostRecipientsResolver: createD1RemotePostRecipientsResolverByPostId(db),
-        postImagesReplacedStore: createD1PostImagesReplacedStore(db),
+        postImagesResolver: createD1PostImagesResolverByPostId(db),
         remotePostUpdatedStore: createD1RemotePostUpdatedStore(db),
         linkPreviewsResolver: createD1LinkPreviewsResolverByPostId(db),
         linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),

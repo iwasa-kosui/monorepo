@@ -6,6 +6,7 @@ import { Instant } from '../../../domain/instant/instant.ts';
 import type { UpdateRemotePostUseCase } from '../../../useCase/updateRemotePost.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
+import { extractVisibility } from '../extractVisibility.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 import { extractAttachments } from './extractAttachments.ts';
 
@@ -56,6 +57,9 @@ export const createOnUpdate = (deps: OnUpdateDeps) => async (ctx: InboxContext<u
   }
 
   const attachments = await extractAttachments(object, documentLoader);
+  const addressed = object.toIds.length + object.ccIds.length > 0 ? object : activity;
+  const actor = await activity.getActor({ documentLoader }).catch(() => null);
+  const visibility = actor ? extractVisibility(addressed, actor.followersId) : null;
   const result = await deps.updateRemotePostUseCase.run({
     uri: objectUri,
     actorUri: senderId.href,
@@ -63,6 +67,7 @@ export const createOnUpdate = (deps: OnUpdateDeps) => async (ctx: InboxContext<u
     ...extractContentWarning(object),
     attachments,
     recipientActorUris: extractRecipientActorUris([object, activity], deps.origin),
+    visibility,
     editedAt: toEditedAt(object),
   });
 

@@ -5,6 +5,7 @@ import { ActorId } from '../actor/actorId.ts';
 import type { RemoteActorProfile } from '../actor/remoteActor.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
+import type { PostImage as StoredPostImage } from '../image/image.ts';
 import type { ImageId } from '../image/imageId.ts';
 import { Instant } from '../instant/instant.ts';
 import type { LinkPreview } from '../linkPreview/linkPreview.ts';
@@ -82,6 +83,7 @@ export type RemotePostUpdated = PostEvent<
   RemotePost & {
     recipientActorUris: ReadonlyArray<string>;
     previousRecipientActorUris: ReadonlyArray<string>;
+    images: ReadonlyArray<StoredPostImage>;
   }
 >;
 export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
@@ -147,21 +149,23 @@ export type RemotePostEdit = Readonly<{
   summary: string | null;
   sensitive: boolean;
   editedAt: Instant;
+  visibility: Visibility | null;
   recipientActorUris: ReadonlyArray<string>;
   previousRecipientActorUris: ReadonlyArray<string>;
+  images: ReadonlyArray<StoredPostImage>;
 }>;
 
 const isNewerEdit = (post: RemotePost, editedAt: Instant): boolean =>
   post.editedAt === undefined || post.editedAt === null || editedAt > post.editedAt;
 
 const updateRemotePost = (now: Instant) => (post: RemotePost, edit: RemotePostEdit): RemotePostUpdated => {
-  const { recipientActorUris, previousRecipientActorUris, ...changed } = edit;
-  const updated: RemotePost = { ...post, ...changed };
+  const { recipientActorUris, previousRecipientActorUris, images, visibility, ...changed } = edit;
+  const updated: RemotePost = { ...post, ...changed, visibility: Visibility.narrow(post.visibility, visibility) };
   return PostEvent.create(
     post.postId,
     updated,
     'post.remotePostUpdated',
-    { ...updated, recipientActorUris, previousRecipientActorUris },
+    { ...updated, recipientActorUris, previousRecipientActorUris, images },
     now,
   );
 };
