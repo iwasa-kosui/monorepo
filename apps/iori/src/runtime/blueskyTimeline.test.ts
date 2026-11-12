@@ -208,6 +208,7 @@ describe('createBlueskyTimelineRuntimePorts', () => {
 
     expect(ports.blueskyTimelineEnabled).toBe(false);
     expect(ports.blueskyTimelineItemsResolver.resolve).toBeTypeOf('function');
+    expect(ports.blueskySearch).toBeUndefined();
   });
 
   it('有効なときは取り込みを有効として扱う', () => {
@@ -215,5 +216,6 @@ describe('createBlueskyTimelineRuntimePorts', () => {
     const ports = createBlueskyTimelineRuntimePorts(enabled as unknown as IoriWorkerEnv, db);
 
     expect(ports.blueskyTimelineEnabled).toBe(true);
+    expect(ports.blueskySearch?.searchPosts).toBeTypeOf('function');
   });
 });

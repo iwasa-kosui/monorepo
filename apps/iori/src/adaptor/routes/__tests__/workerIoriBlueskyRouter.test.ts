@@ -2,9 +2,13 @@ import { RA } from '@iwasa-kosui/result';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { BlueskyTimelineItemsResolver } from '../../../domain/blueskyTimeline/blueskyTimelineItem.ts';
+import type {
+  BlueskyFetchedTimelineItem,
+  BlueskyTimelineItemsResolver,
+} from '../../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../../ports/blueskyClient.ts';
+import type { BlueskySearch } from '../../../ports/blueskySearch.ts';
 import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../useCase/likeBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../useCase/repostBlueskyPost.ts';
@@ -84,6 +88,7 @@ const setupNonOwner = async (
     scope?: string;
     blueskyLikeClient?: ReturnType<typeof likeClient>;
     blueskyRepostClient?: ReturnType<typeof repostClient>;
+    blueskySearch?: BlueskySearch;
   } = {},
 ) => {
   const harness = createOAuthHarness();
@@ -128,6 +133,7 @@ const setupNonOwner = async (
           targetResolver: createD1BlueskyRepostTargetResolver(fixture.db),
           deletedStore: createD1BlueskyRepostDeletedStore(fixture.db),
         }),
+      blueskySearch: options.blueskySearch,
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
     }),
   );
@@ -723,6 +729,150 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       expect(repostRows(t)).toEqual([
         { subjectUri: 'at://did:plc:a/app.bsky.feed.post/2', repostUri: 'at://did:plc:me/app.bsky.feed.repost/3k2' },
       ]);
+    });
+  });
+
+  describe('検索', () => {
+    const POSTS = '/api/iori/v1/bluesky/search/posts';
+    const ACTORS = '/api/iori/v1/bluesky/search/actors';
+    const POST_ITEM: BlueskyFetchedTimelineItem = {
+      feedItemId: 'at://did:plc:a/app.bsky.feed.post/1',
+      uri: 'at://did:plc:a/app.bsky.feed.post/1',
+      cid: 'cid1',
+      authorDid: 'did:plc:a',
+      authorHandle: 'alice.bsky.social',
+      authorDisplayName: 'Alice',
+      authorAvatar: null,
+      text: 'hello',
+      facets: [],
+      embed: null,
+      replyParentUri: null,
+      replyParentAuthorHandle: null,
+      repostedByDid: null,
+      repostedByHandle: null,
+      postedAt: Instant.orThrow(BASE),
+      indexedAt: Instant.orThrow(BASE),
+      fetchedAt: Instant.orThrow(BASE),
+      liked: true,
+      reposted: false,
+      viewerLikeUri: 'at://did:plc:me/app.bsky.feed.like/3k1',
+      viewerRepostUri: null,
+    };
+    const ACTOR = {
+      did: 'did:plc:a',
+      handle: 'alice.bsky.social',
+      displayName: 'Alice',
+      avatar: null,
+      description: null,
+      followedByMe: true,
+    };
+    const searchMock = (
+      overrides: Readonly<{
+        searchPosts?: ReturnType<typeof vi.fn<BlueskySearch['searchPosts']>>;
+        searchActors?: ReturnType<typeof vi.fn<BlueskySearch['searchActors']>>;
+      }> = {},
+    ) => ({
+      searchPosts: overrides.searchPosts
+        ?? vi.fn<BlueskySearch['searchPosts']>(async () => RA.ok({ items: [POST_ITEM], cursor: 'next' })),
+      searchActors: overrides.searchActors
+        ?? vi.fn<BlueskySearch['searchActors']>(async () => RA.ok({ actors: [ACTOR], cursor: undefined })),
+    });
+
+    it('投稿検索は q を trim し、limit 25 と cursor を渡して、表示用の項目と cursor を返す', async () => {
+      const blueskySearch = searchMock();
+      const t = setupReadApi({ blueskyTimelineEnabled: true, blueskySearch });
+      const me = await t.signIn('read:search');
+
+      const response = await t.request(`${POSTS}?q=${encodeURIComponent('  hello world ')}&cursor=abc`, {
+        headers: me.bearer,
+      });
+
+      expect(response.status).toBe(200);
+      const { viewerLikeUri: _like, viewerRepostUri: _repost, fetchedAt: _fetchedAt, ...item } = POST_ITEM;
+      expect(await response.json()).toEqual({ items: [item], cursor: 'next' });
+      expect(blueskySearch.searchPosts).toHaveBeenCalledWith({ q: 'hello world', cursor: 'abc', limit: 25 });
+    });
+
+    it('人の検索は actors を返し、cursor が無ければ null にする', async () => {
+      const blueskySearch = searchMock();
+      const t = setupReadApi({ blueskyTimelineEnabled: true, blueskySearch });
+      const me = await t.signIn('read:search');
+
+      const response = await t.request(`${ACTORS}?q=alice`, { headers: me.bearer });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ actors: [ACTOR], cursor: null });
+      expect(blueskySearch.searchActors).toHaveBeenCalledWith({ q: 'alice', cursor: undefined, limit: 25 });
+    });
+
+    it.each([[POSTS], [ACTORS]])('%s は認証なしを 401、read:search を満たさない scope を 403 にする', async (path) => {
+      const blueskySearch = searchMock();
+      const t = setupReadApi({ blueskyTimelineEnabled: true, blueskySearch });
+      const me = await t.signIn('read:statuses');
+
+      expect((await t.request(`${path}?q=a`)).status).toBe(401);
+      expect((await t.request(`${path}?q=a`, { headers: me.bearer })).status).toBe(403);
+      expect(blueskySearch.searchPosts).not.toHaveBeenCalled();
+      expect(blueskySearch.searchActors).not.toHaveBeenCalled();
+    });
+
+    it.each([[POSTS], [ACTORS]])('%s は所有者でない利用者を 403 にし、Bluesky を呼ばない', async (path) => {
+      const blueskySearch = searchMock();
+      const { get } = await setupNonOwner({ scope: 'read:search', blueskySearch });
+
+      const response = await get(`${path}?q=a`);
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'Forbidden' });
+      expect(blueskySearch.searchPosts).not.toHaveBeenCalled();
+      expect(blueskySearch.searchActors).not.toHaveBeenCalled();
+    });
+
+    it.each([[POSTS], [ACTORS]])('%s は q が空、空白のみ、301 文字以上のとき 400 にする', async (path) => {
+      const blueskySearch = searchMock();
+      const t = setupReadApi({ blueskyTimelineEnabled: true, blueskySearch });
+      const me = await t.signIn('read:search');
+
+      for (const query of ['', '?q=', '?q=%20%20', `?q=${'a'.repeat(301)}`]) {
+        const response = await t.request(`${path}${query}`, { headers: me.bearer });
+        expect(response.status).toBe(400);
+        expect(await response.json()).toEqual({ error: 'Validation failed: q' });
+      }
+      expect((await t.request(`${path}?q=${'a'.repeat(300)}`, { headers: me.bearer })).status).toBe(200);
+      expect(blueskySearch.searchPosts.mock.calls.length + blueskySearch.searchActors.mock.calls.length).toBe(1);
+    });
+
+    it.each([[POSTS], [ACTORS]])('%s は Bluesky が無効なら 409 にする', async (path) => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:search');
+
+      const response = await t.request(`${path}?q=a`, { headers: me.bearer });
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
+    });
+
+    it('Bluesky への呼び出しが失敗したら 502 にし、詳細を返さない', async () => {
+      const error: BlueskyClientError = {
+        type: 'BlueskyClientError',
+        kind: 'http',
+        message: 'searchPosts failed: status 500 InternalServerError',
+        status: 500,
+      };
+      const t = setupReadApi({
+        blueskyTimelineEnabled: true,
+        blueskySearch: searchMock({
+          searchPosts: vi.fn<BlueskySearch['searchPosts']>(async () => RA.err(error)),
+          searchActors: vi.fn<BlueskySearch['searchActors']>(async () => RA.err(error)),
+        }),
+      });
+      const me = await t.signIn('read:search');
+
+      for (const path of [POSTS, ACTORS]) {
+        const response = await t.request(`${path}?q=a`, { headers: me.bearer });
+        expect(response.status).toBe(502);
+        expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
+      }
     });
   });
 });

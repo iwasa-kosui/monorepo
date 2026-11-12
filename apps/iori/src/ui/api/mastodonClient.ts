@@ -11,6 +11,8 @@ import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
 import type {
   IoriBlueskyLikeResponse,
   IoriBlueskyRepostResponse,
+  IoriBlueskySearchActorsResponse,
+  IoriBlueskySearchPostsResponse,
   IoriBlueskyTimelineResponse,
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { IoriDigestRequestResponse, IoriFeedSourceBody } from '../../adaptor/routes/workerIoriDigestRouter.ts';
@@ -475,3 +477,13 @@ export const repostBlueskyPost = async (feedItemId: string): Promise<IoriBluesky
 
 export const undoRepostBlueskyPost = (feedItemId: string): Promise<IoriBlueskyRepostResponse> =>
   act<IoriBlueskyRepostResponse>('DELETE', requestUrl(BLUESKY_REPOSTS_PATH, { feedItemId }));
+
+const BLUESKY_SEARCH_POSTS_PATH = '/api/iori/v1/bluesky/search/posts';
+
+export const searchBlueskyPosts = async (q: string, cursor?: string): Promise<IoriBlueskySearchPostsResponse> =>
+  (await request<IoriBlueskySearchPostsResponse>(BLUESKY_SEARCH_POSTS_PATH, { q, cursor })).body;
+
+const BLUESKY_SEARCH_ACTORS_PATH = '/api/iori/v1/bluesky/search/actors';
+
+export const searchBlueskyActors = async (q: string, cursor?: string): Promise<IoriBlueskySearchActorsResponse> =>
+  (await request<IoriBlueskySearchActorsResponse>(BLUESKY_SEARCH_ACTORS_PATH, { q, cursor })).body;

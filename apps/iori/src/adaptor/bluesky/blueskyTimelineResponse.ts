@@ -83,7 +83,7 @@ const toInstant = (value: string): Instant | undefined => {
   return parsed.ok ? parsed.val : undefined;
 };
 
-const httpUrlOrNull = (value: string | undefined): string | null => {
+export const httpUrlOrNull = (value: string | undefined): string | null => {
   if (value === undefined) return null;
   try {
     const { protocol } = new URL(value);
@@ -242,6 +242,23 @@ export const parseBlueskyTimelineResponse = (
   return Result.ok({
     items: items.filter((item): item is BlueskyFetchedTimelineItem => item !== undefined),
     dropped: items.filter((item) => item === undefined).length,
+    cursor: page.data.cursor,
+  });
+};
+
+const searchPostsPageZodType = z.object({ cursor: z.string().optional(), posts: z.array(z.unknown()) });
+
+export const parseBlueskySearchPostsResponse = (
+  payload: unknown,
+  fetchedAt: Instant,
+): Result<
+  Readonly<{ items: readonly BlueskyFetchedTimelineItem[]; cursor: string | undefined }>,
+  'invalid_response'
+> => {
+  const page = searchPostsPageZodType.safeParse(payload);
+  if (!page.success) return Result.err('invalid_response');
+  return Result.ok({
+    items: page.data.posts.flatMap((post) => itemOf({ post }, fetchedAt) ?? []),
     cursor: page.data.cursor,
   });
 };

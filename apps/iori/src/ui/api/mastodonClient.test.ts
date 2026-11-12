@@ -37,6 +37,8 @@ import {
   requestDigest,
   saveNotificationsMarker,
   searchAccount,
+  searchBlueskyActors,
+  searchBlueskyPosts,
   searchStatuses,
   setFeedSourceEnabled,
   summarizeTimeline,
@@ -708,6 +710,31 @@ describe('mastodon client requests', () => {
     const error = await likeBlueskyPost('x').catch((e: unknown) => e);
 
     expect(isMastodonApiError(error) && error.status).toBe(502);
+  });
+
+  it('searches Bluesky posts with the query and the cursor', async () => {
+    const fetchMock = stubFetch(jsonResponse({ items: [], cursor: null }));
+
+    const result = await searchBlueskyPosts('猫 犬', 'c1');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/iori/v1/bluesky/search/posts?q=%E7%8C%AB+%E7%8A%AC&cursor=c1');
+    expect(result).toEqual({ items: [], cursor: null });
+  });
+
+  it('searches Bluesky actors without a cursor on the first page', async () => {
+    const fetchMock = stubFetch(jsonResponse({ actors: [], cursor: null }));
+
+    await searchBlueskyActors('alice');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/iori/v1/bluesky/search/actors?q=alice');
+  });
+
+  it('carries the status of a failed Bluesky search', async () => {
+    stubFetch(jsonResponse({ error: 'Bluesky timeline is disabled' }, { status: 409 }));
+
+    const error = await searchBlueskyPosts('x').catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(409);
   });
 
   it('posts a Bluesky repost with the feedItemId as a JSON body', async () => {

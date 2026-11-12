@@ -13,6 +13,7 @@ import {
 import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
+import type { BlueskySearch, BlueskySearchedActor } from '../../ports/blueskySearch.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { LikeBlueskyPostUseCase } from '../../useCase/likeBlueskyPost.ts';
 import type { RepostBlueskyPostUseCase } from '../../useCase/repostBlueskyPost.ts';
@@ -31,6 +32,7 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   unlikeBlueskyPostUseCase: UnlikeBlueskyPostUseCase | undefined;
   repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
   undoRepostBlueskyPostUseCase: UndoRepostBlueskyPostUseCase | undefined;
+  blueskySearch: BlueskySearch | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -62,15 +64,30 @@ export type IoriBlueskyTimelineResponse = Readonly<{
   nextBeforeId: string | null;
 }>;
 
+export type IoriBlueskyActorBody = BlueskySearchedActor;
+
+export type IoriBlueskySearchPostsResponse = Readonly<{
+  items: readonly IoriBlueskyTimelineItemBody[];
+  cursor: string | null;
+}>;
+
+export type IoriBlueskySearchActorsResponse = Readonly<{
+  actors: readonly IoriBlueskyActorBody[];
+  cursor: string | null;
+}>;
+
 export type IoriBlueskyLikeResponse = Readonly<{ liked: boolean }>;
 
 export type IoriBlueskyRepostResponse = Readonly<{ reposted: boolean }>;
 
 const readStatuses = Scope.orThrow('read:statuses');
+const readSearch = Scope.orThrow('read:search');
 const writeFavourites = Scope.orThrow('write:favourites');
 const writeStatuses = Scope.orThrow('write:statuses');
 const integerPattern = /^\d+$/;
 const forbidden = { error: 'Forbidden' } as const;
+const SEARCH_LIMIT = 25;
+const SEARCH_QUERY_MAX_LENGTH = 300;
 
 const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBody => ({
   feedItemId: item.feedItemId,
@@ -93,6 +110,22 @@ const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBody => (
   reposted: item.reposted,
 });
 
+const toActorBody = (actor: BlueskySearchedActor): IoriBlueskyActorBody => ({
+  did: actor.did,
+  handle: actor.handle,
+  displayName: actor.displayName,
+  avatar: actor.avatar,
+  description: actor.description,
+  followedByMe: actor.followedByMe,
+});
+
+const searchInput = (c: Context): { q: string; cursor: string | undefined } | undefined => {
+  const q = c.req.query('q')?.trim() ?? '';
+  if (q === '' || q.length > SEARCH_QUERY_MAX_LENGTH) return undefined;
+  const cursor = c.req.query('cursor');
+  return { q, cursor: cursor === undefined || cursor === '' ? undefined : cursor };
+};
+
 const likeFailure = (c: Context, error: BlueskyClientError | BlueskyLikeTargetNotFound) =>
   error.type === 'BlueskyLikeTargetNotFound'
     ? c.json({ error: 'Record not found' }, 404)
@@ -111,6 +144,7 @@ export const createWorkerIoriBlueskyRouter = ({
   unlikeBlueskyPostUseCase,
   repostBlueskyPostUseCase,
   undoRepostBlueskyPostUseCase,
+  blueskySearch,
   isDigestOwner,
 }: WorkerIoriBlueskyRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
@@ -162,6 +196,38 @@ export const createWorkerIoriBlueskyRouter = ({
           nextBefore: last?.indexedAt ?? null,
           nextBeforeId: last?.feedItemId ?? null,
         } satisfies IoriBlueskyTimelineResponse,
+      );
+    })
+    .get('/iori/v1/bluesky/search/posts', authn.requireUser(readSearch), async (c) => {
+      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
+        return c.json(forbidden, 403);
+      }
+      if (blueskySearch === undefined) return c.json({ error: 'Bluesky timeline is disabled' }, 409);
+      const input = searchInput(c);
+      if (input === undefined) return c.json({ error: 'Validation failed: q' }, 400);
+      const searched = await blueskySearch.searchPosts({ ...input, limit: SEARCH_LIMIT });
+      if (!searched.ok) return c.json({ error: 'Bluesky request failed' }, 502);
+      return c.json(
+        {
+          items: searched.val.items.map(toItemBody),
+          cursor: searched.val.cursor ?? null,
+        } satisfies IoriBlueskySearchPostsResponse,
+      );
+    })
+    .get('/iori/v1/bluesky/search/actors', authn.requireUser(readSearch), async (c) => {
+      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
+        return c.json(forbidden, 403);
+      }
+      if (blueskySearch === undefined) return c.json({ error: 'Bluesky timeline is disabled' }, 409);
+      const input = searchInput(c);
+      if (input === undefined) return c.json({ error: 'Validation failed: q' }, 400);
+      const searched = await blueskySearch.searchActors({ ...input, limit: SEARCH_LIMIT });
+      if (!searched.ok) return c.json({ error: 'Bluesky request failed' }, 502);
+      return c.json(
+        {
+          actors: searched.val.actors.map(toActorBody),
+          cursor: searched.val.cursor ?? null,
+        } satisfies IoriBlueskySearchActorsResponse,
       );
     })
     .post(
