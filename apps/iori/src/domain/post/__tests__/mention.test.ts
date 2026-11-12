@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractMentionAccts, mentionLinksOfHtml } from '../mention.ts';
+import { escapeWithMentions, extractMentionAccts, mentionLinksOfHtml } from '../mention.ts';
 
 describe('extractMentionAccts (plain)', () => {
   it('@user@host の形だけを acct として取り出す', () => {
@@ -32,6 +32,11 @@ describe('extractMentionAccts (plain)', () => {
 
   it('host の大文字小文字をそろえ、重複を除く', () => {
     expect(extractMentionAccts('@a@Remote.Example @a@remote.example', 'plain')).toEqual(['a@remote.example']);
+  });
+
+  it('user の大文字小文字も区別せず、重複を除く', () => {
+    expect(extractMentionAccts('@Foo@host.example @foo@HOST.example', 'plain')).toEqual(['foo@host.example']);
+    expect(extractMentionAccts('@Foo@host.example **@foo@host.example**', 'markdown')).toEqual(['foo@host.example']);
   });
 
   it('文末のピリオドは host に含めない', () => {
@@ -79,6 +84,18 @@ describe('extractMentionAccts (markdown)', () => {
     const text = Array.from({ length: 12 }, (_, i) => `@u${i}@remote.example`).join(' ');
 
     expect(extractMentionAccts(text, 'markdown')).toHaveLength(10);
+  });
+});
+
+describe('escapeWithMentions', () => {
+  it('表の key の大文字小文字を区別せず照合する', () => {
+    const html = escapeWithMentions(
+      'hi @Alice@Remote.Example',
+      new Map([['ALICE@remote.example', 'https://remote.example/users/alice']]),
+    );
+
+    expect(html).toContain('href="https://remote.example/users/alice"');
+    expect(html).toContain('@<span>Alice@remote.example</span>');
   });
 });
 

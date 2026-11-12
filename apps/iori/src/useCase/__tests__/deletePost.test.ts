@@ -1,4 +1,5 @@
 import { test as fcTest } from '@fast-check/vitest';
+import { Endpoints, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -586,6 +587,123 @@ describe('DeletePostUseCase', () => {
       });
 
       expect(ctx.sendActivity).toHaveBeenCalled();
+    });
+
+    describe('メンション相手への配送', () => {
+      const aliceId = 'https://remote.example/users/alice';
+      const selfId = 'https://example.com/users/kosui';
+      const mentionOf = (id: string, name: string) =>
+        `<span class="h-card"><a href="${id}" class="u-url mention">@<span>${name}</span></a></span>`;
+
+      const setup = (content: string) => {
+        const deps = createDeps();
+        const user: User = {
+          id: crypto.randomUUID() as User['id'],
+          username: 'kosui' as Username,
+        };
+        const session: Session = {
+          sessionId: crypto.randomUUID() as Session['sessionId'],
+          userId: user.id,
+          expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+        };
+        const actor: LocalActor = {
+          id: crypto.randomUUID() as LocalActor['id'],
+          userId: user.id,
+          uri: selfId,
+          inboxUrl: 'https://example.com/inbox',
+          type: 'local',
+          logoUri: undefined,
+        };
+        const post: LocalPost = {
+          type: 'local',
+          summary: null,
+          sensitive: false,
+          postId: crypto.randomUUID() as PostId,
+          actorId: actor.id,
+          content,
+          createdAt: Date.now() as LocalPost['createdAt'],
+          userId: user.id,
+          inReplyToUri: null,
+        };
+        setupValidUserSession(deps, user, session, actor);
+        deps.postResolver.setPost(post);
+        const ctx = createMockRequestContext();
+        const lookupObject = vi.fn(async (uri: string) =>
+          uri === aliceId
+            ? new Person({
+              id: new URL(aliceId),
+              inbox: new URL(`${aliceId}/inbox`),
+              endpoints: new Endpoints({ sharedInbox: new URL('https://remote.example/inbox') }),
+            })
+            : null
+        );
+        Object.assign(ctx, { lookupObject, getDocumentLoader: vi.fn(async () => ({})) });
+        const run = () =>
+          DeletePostUseCase.create(deps).run({ sessionId: session.sessionId, postId: post.postId, ctx });
+        return { deps, ctx, lookupObject, run };
+      };
+
+      it('メンションのある投稿を消すと、相手にも同じ Delete を送る', async () => {
+        const { ctx, run } = setup(`<p>hi ${mentionOf(aliceId, 'alice@remote.example')}</p>`);
+
+        const result = await run();
+
+        expect(result.ok).toBe(true);
+        const calls = vi.mocked(ctx.sendActivity).mock.calls;
+        expect(calls).toHaveLength(2);
+        expect(calls[0]?.[1]).toBe('followers');
+        expect(calls[1]?.[1]).toEqual([
+          {
+            id: new URL(aliceId),
+            inboxId: new URL(`${aliceId}/inbox`),
+            endpoints: { sharedInbox: new URL('https://remote.example/inbox') },
+          },
+        ]);
+        expect(calls[1]?.[2]).toBe(calls[0]?.[2]);
+      });
+
+      it('相手の actor を解決できなくても削除は成功し、相手には送らない', async () => {
+        const { deps, ctx, lookupObject, run } = setup(
+          `<p>${mentionOf('https://gone.example/users/bob', 'bob@gone.example')}</p>`,
+        );
+        lookupObject.mockRejectedValue(new Error('network down'));
+
+        const result = await run();
+
+        expect(result.ok).toBe(true);
+        expect(deps.postDeletedStore.store).toHaveBeenCalledTimes(1);
+        expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+      });
+
+      it('相手への送信が失敗しても削除は成功する', async () => {
+        const { deps, ctx, run } = setup(`<p>${mentionOf(aliceId, 'alice@remote.example')}</p>`);
+        vi.mocked(ctx.sendActivity).mockImplementation(async (_sender, recipients) => {
+          if (recipients !== 'followers') throw new Error('delivery failed');
+        });
+
+        const result = await run();
+
+        expect(result.ok).toBe(true);
+        expect(deps.postDeletedStore.store).toHaveBeenCalledTimes(1);
+      });
+
+      it('自分のホストのメンションは引かず、送らない', async () => {
+        const { ctx, lookupObject, run } = setup(`<p>${mentionOf(selfId, 'kosui@example.com')}</p>`);
+
+        await run();
+
+        expect(lookupObject).not.toHaveBeenCalled();
+        expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+      });
+
+      it('メンションの無い投稿は従来どおり followers にだけ送る', async () => {
+        const { ctx, lookupObject, run } = setup('<p>hello</p>');
+
+        await run();
+
+        expect(lookupObject).not.toHaveBeenCalled();
+        expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

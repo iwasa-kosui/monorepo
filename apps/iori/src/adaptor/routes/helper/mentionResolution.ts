@@ -59,9 +59,9 @@ const resolveAcct = async (
 };
 
 export const resolveMentions = async ({ text, format, ...rest }: ResolveParams): Promise<MentionResolution> => {
-  const resolved = await Promise.all(
-    extractMentionAccts(text, format).map((acct) => resolveAcct(rest, acct)),
-  );
+  const ownHost = new URL(rest.request.url).host.toLowerCase();
+  const accts = extractMentionAccts(text, format).filter((acct) => acct.slice(acct.lastIndexOf('@') + 1) !== ownHost);
+  const resolved = await Promise.all(accts.map((acct) => resolveAcct(rest, acct)));
   const found = resolved.filter((entry) => entry !== undefined);
   return {
     links: new Map(found.map(({ acct, recipient }) => [acct, recipient.id])),

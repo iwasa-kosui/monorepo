@@ -609,6 +609,25 @@ describe('CreatePostUseCase', () => {
       expect(vi.mocked(ctx.sendActivity).mock.calls[1]?.[1]).toHaveLength(1);
     });
 
+    it('自分のホストの actor には mentions でも送らない', async () => {
+      const { deps, session } = setup();
+      const ctx = createMockRequestContext();
+      const self = {
+        id: 'https://example.com/users/kosui',
+        inboxUrl: 'https://example.com/users/kosui/inbox',
+      };
+
+      await CreatePostUseCase.create(deps).run({
+        sessionId: session.sessionId,
+        content: 'hi',
+        imageUrls: [],
+        mentions: [self],
+        ctx,
+      });
+
+      expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+    });
+
     it('mentions への送信が失敗しても投稿は成功し、Bluesky の予約まで進む', async () => {
       const { deps, session } = setup();
       const ctx = createMockRequestContext();

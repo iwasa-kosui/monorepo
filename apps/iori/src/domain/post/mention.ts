@@ -29,45 +29,56 @@ const ACCT_AT_HEAD = new RegExp(`^${ACCT_SOURCE}`);
 const ACCT_IN_TEXT = new RegExp(`(?<![A-Za-z0-9_./@])${ACCT_SOURCE}`, 'g');
 const PRECEDING_CHAR = /[A-Za-z0-9_./@]/;
 
-const normalizeAcct = (user: string, host: string): string => `${user}@${host.toLowerCase()}`;
+const normalizeAcct = (user: string, host: string): string => `${user}@${host}`.toLowerCase();
 
-const mentionHtml = (acct: string, href: string): string =>
+const displayAcct = (user: string, host: string): string => `${user}@${host.toLowerCase()}`;
+
+const lowerCaseKeys = (mentions: ResolvedMentions): ResolvedMentions =>
+  new Map([...mentions].map(([acct, href]) => [acct.toLowerCase(), href]));
+
+const mentionHtml = (label: string, href: string): string =>
   `<span class="h-card"><a href="${escapeHtml(href)}" class="u-url mention">@<span>${
-    escapeHtml(acct)
+    escapeHtml(label)
   }</span></a></span>`;
 
-type MentionToken = Readonly<{ type: 'mention'; raw: string; acct: string; href: string | undefined }>;
+type MentionToken = Readonly<
+  { type: 'mention'; raw: string; acct: string; label: string; href: string | undefined }
+>;
 
 const isMentionToken = (token: Token): token is Token & MentionToken => token.type === 'mention';
 
-export const createMentionExtension = (mentions: ResolvedMentions = new Map()): TokenizerAndRendererExtension => ({
-  name: 'mention',
-  level: 'inline',
-  start: (src) => {
-    const index = src.search(ACCT_ANYWHERE);
-    return index < 0 ? undefined : index;
-  },
-  tokenizer(src, tokens) {
-    if (this.lexer.state.inLink) {
-      return undefined;
-    }
-    const match = ACCT_AT_HEAD.exec(src);
-    if (match === null) {
-      return undefined;
-    }
-    const preceding = tokens.at(-1)?.raw.at(-1);
-    if (preceding !== undefined && PRECEDING_CHAR.test(preceding)) {
-      return undefined;
-    }
-    const acct = normalizeAcct(match[1] ?? '', match[2] ?? '');
-    const token: MentionToken = { type: 'mention', raw: match[0], acct, href: mentions.get(acct) };
-    return token;
-  },
-  renderer(token) {
-    const { raw, acct, href } = token as MentionToken;
-    return href === undefined ? escapeHtml(raw) : mentionHtml(acct, href);
-  },
-});
+export const createMentionExtension = (mentions: ResolvedMentions = new Map()): TokenizerAndRendererExtension => {
+  const table = lowerCaseKeys(mentions);
+  return {
+    name: 'mention',
+    level: 'inline',
+    start: (src) => {
+      const index = src.search(ACCT_ANYWHERE);
+      return index < 0 ? undefined : index;
+    },
+    tokenizer(src, tokens) {
+      if (this.lexer.state.inLink) {
+        return undefined;
+      }
+      const match = ACCT_AT_HEAD.exec(src);
+      if (match === null) {
+        return undefined;
+      }
+      const preceding = tokens.at(-1)?.raw.at(-1);
+      if (preceding !== undefined && PRECEDING_CHAR.test(preceding)) {
+        return undefined;
+      }
+      const acct = normalizeAcct(match[1] ?? '', match[2] ?? '');
+      const label = displayAcct(match[1] ?? '', match[2] ?? '');
+      const token: MentionToken = { type: 'mention', raw: match[0], acct, label, href: table.get(acct) };
+      return token;
+    },
+    renderer(token) {
+      const { raw, label, href } = token as MentionToken;
+      return href === undefined ? escapeHtml(raw) : mentionHtml(label, href);
+    },
+  };
+};
 
 const acctsOfMarkdown = (markdown: string): ReadonlyArray<string> => {
   const marked = new Marked({ extensions: [createMentionExtension()] });
@@ -94,13 +105,14 @@ export const escapeWithMentions = (text: string, mentions: ResolvedMentions): st
   if (mentions.size === 0) {
     return escapeHtml(text);
   }
+  const table = lowerCaseKeys(mentions);
   let html = '';
   let cursor = 0;
   for (const match of text.matchAll(ACCT_IN_TEXT)) {
     const acct = normalizeAcct(match[1] ?? '', match[2] ?? '');
-    const href = mentions.get(acct);
+    const href = table.get(acct);
     html += escapeHtml(text.slice(cursor, match.index));
-    html += href === undefined ? escapeHtml(match[0]) : mentionHtml(acct, href);
+    html += href === undefined ? escapeHtml(match[0]) : mentionHtml(displayAcct(match[1] ?? '', match[2] ?? ''), href);
     cursor = match.index + match[0].length;
   }
   return html + escapeHtml(text.slice(cursor));

@@ -100,6 +100,17 @@ describe('PostContent.fromMarkdown', () => {
       expect(html).toBe(`<p>hi ${link}!</p>\n`);
     });
 
+    it('表の key の大文字小文字を区別せず、本文に書かれた user の表記を表示に残す', async () => {
+      const html = await PostContent.fromMarkdown(
+        'hi @Alice@Remote.Example',
+        new Map([['ALICE@remote.example', alice]]),
+      );
+
+      expect(html).toBe(
+        `<p>hi <span class="h-card"><a href="${alice}" class="u-url mention">@<span>Alice@remote.example</span></a></span></p>\n`,
+      );
+    });
+
     it('未解決の acct は mailto リンクにせずプレーンテキストで残す', async () => {
       const html = await PostContent.fromMarkdown('hi @bob@other.example', resolved);
 

@@ -15,11 +15,12 @@ type Params = Readonly<{
 const toRecipients = (
   mentions: ReadonlyArray<MentionRecipient>,
   excludedActorIds: ReadonlyArray<string>,
+  ownOrigin: string,
 ): Recipient[] => {
   const seen = new Set(excludedActorIds);
   const recipients: Recipient[] = [];
   for (const mention of mentions) {
-    if (seen.has(mention.id)) {
+    if (seen.has(mention.id) || new URL(mention.id).origin === ownOrigin) {
       continue;
     }
     seen.add(mention.id);
@@ -39,7 +40,7 @@ export const sendToMentions = async ({
   mentions,
   excludedActorIds = [],
 }: Params): Promise<void> => {
-  const recipients = toRecipients(mentions, excludedActorIds);
+  const recipients = toRecipients(mentions, excludedActorIds, ctx.getActorUri(identifier).origin);
   if (recipients.length === 0) {
     return;
   }

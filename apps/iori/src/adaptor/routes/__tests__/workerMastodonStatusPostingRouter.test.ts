@@ -533,6 +533,27 @@ describe('POST /api/v1/statuses のメンション', () => {
     }
   });
 
+  it('自分のホストの acct は lookup せず、平文のまま mentions にも含めない', async () => {
+    const t = await withRemoteAlice();
+
+    const response = await t.json({ status: 'hi @kosui@iori.test and @Kosui@IORI.test' });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
+    expect(t.storedContent(status.id)).toBe('<p>hi @kosui@iori.test and @Kosui@IORI.test</p>');
+    expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('同じ相手を大文字小文字違いで書いても lookup は 1 回だけにする', async () => {
+    const t = await withRemoteAlice();
+
+    const response = await t.json({ status: '@alice@remote.example @Alice@Remote.Example' });
+
+    expect(response.status).toBe(200);
+    expect(t.remoteActorLookup.lookup).toHaveBeenCalledTimes(1);
+  });
+
   it('@user@host の無い本文は lookup を呼ばない', async () => {
     const t = await withRemoteAlice();
 
