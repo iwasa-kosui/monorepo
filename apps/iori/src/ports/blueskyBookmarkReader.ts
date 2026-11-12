@@ -16,7 +16,7 @@ export const BLUESKY_BAD_TOKEN_SCOPE = 'Bad token scope';
 
 const BOOKMARK_UNAVAILABLE_STATUSES: readonly number[] = [401, 403, 501];
 const BOOKMARK_UNAVAILABLE_CODES: readonly string[] = ['MethodNotImplemented', 'Forbidden', 'Unauthorized'];
-const BOOKMARK_LOGIN_CODES: readonly string[] = [
+export const BLUESKY_BOOKMARK_LOGIN_CODES: readonly string[] = [
   'ExpiredToken',
   'InvalidToken',
   'AuthRequired',
@@ -30,6 +30,6 @@ const isBadTokenScope = (error: BlueskyClientError): boolean =>
 export const isBlueskyBookmarkUnavailable = (error: BlueskyClientError): boolean =>
   (error.kind === 'auth' || error.kind === 'http')
   && (isBadTokenScope(error)
-    || (error.code === undefined || !BOOKMARK_LOGIN_CODES.includes(error.code))
+    || (error.code === undefined || !BLUESKY_BOOKMARK_LOGIN_CODES.includes(error.code))
       && (error.status !== undefined && BOOKMARK_UNAVAILABLE_STATUSES.includes(error.status)
         || error.code !== undefined && BOOKMARK_UNAVAILABLE_CODES.includes(error.code)));

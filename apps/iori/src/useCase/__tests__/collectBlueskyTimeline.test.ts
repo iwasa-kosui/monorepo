@@ -690,6 +690,16 @@ describe('CollectBlueskyTimelineUseCase', () => {
       expect(bookmarkRows(t)).toHaveLength(1);
     });
 
+    it('bookmarkUnknown の投稿の古い行は消さない', async () => {
+      const t = setup([pageOf([itemAt(1, NOW - 1000, { bookmarkUnknown: true }), recent(2)], undefined)]);
+      seedBookmark(t, 1, NOW - 10 * MINUTE);
+      seedBookmark(t, 2, NOW - 10 * MINUTE);
+
+      await t.useCase.run();
+
+      expect(bookmarkRows(t)).toEqual([{ subjectUri: recent(1).uri, createdAt: NOW - 10 * MINUTE }]);
+    });
+
     it('削除対象が無いページでは bluesky_bookmarks への SELECT だけを発行する', async () => {
       const t = setup([pageOf([recent(1), recent(2)], undefined)]);
 

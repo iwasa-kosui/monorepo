@@ -5,6 +5,7 @@ import { createBlueskyPostCidResolver } from '../adaptor/bluesky/blueskyPostCidR
 import { createD1BlueskyBookmarkDeletedStore } from '../adaptor/d1/blueskyTimeline/blueskyBookmarkDeletedStore.ts';
 import { createD1BlueskyBookmarkSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyBookmarkSavedStore.ts';
 import { createD1BlueskyBookmarkTargetResolver } from '../adaptor/d1/blueskyTimeline/blueskyBookmarkTargetResolver.ts';
+import { createD1BlueskyViewerBookmarksSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyViewerBookmarksSyncedStore.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { Instant } from '../domain/instant/instant.ts';
@@ -57,6 +58,7 @@ export const createBlueskyBookmarkRuntimePorts = (
     }),
     listBlueskyBookmarksUseCase: ListBlueskyBookmarksUseCase.create({
       reader: createBlueskyBookmarkReader({ client, now: Instant.now }),
+      viewerBookmarksStore: createD1BlueskyViewerBookmarksSyncedStore(db),
     }),
     viewerDid: () => client.viewerDid(),
     isDigestOwner,

@@ -61,6 +61,7 @@ describe('parseBlueskyTimelineResponse', () => {
           reposted: false,
           viewerRepostUri: null,
           bookmarked: false,
+          bookmarkUnknown: true,
           threadMuted: false,
           replyRootUri: null,
         }],
@@ -116,6 +117,17 @@ describe('parseBlueskyTimelineResponse', () => {
     ['viewer.bookmarked が false', { viewer: { bookmarked: false } }],
   ])('%s ときは bookmarked にしない', (_name, overrides) => {
     expect(only([{ post: postView(overrides) }])).toMatchObject({ bookmarked: false });
+  });
+
+  it.each([
+    ['viewer が無い', {}],
+    ['viewer.bookmarked が無い', { viewer: { like: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
+  ])('%s ときは bookmarkUnknown にする', (_name, overrides) => {
+    expect(only([{ post: postView(overrides) }])).toMatchObject({ bookmarked: false, bookmarkUnknown: true });
+  });
+
+  it.each([true, false])('viewer.bookmarked が %s のときは bookmarkUnknown にしない', (bookmarked) => {
+    expect(only([{ post: postView({ viewer: { bookmarked } }) }])).not.toHaveProperty('bookmarkUnknown');
   });
 
   it.each([

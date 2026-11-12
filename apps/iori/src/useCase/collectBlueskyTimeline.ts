@@ -91,7 +91,7 @@ const syncViewerBookmarks = async (
   const unbookmarked = new Set<string>();
   for (const item of items) {
     if (!item.bookmarked) {
-      unbookmarked.add(item.uri);
+      if (item.bookmarkUnknown !== true) unbookmarked.add(item.uri);
       continue;
     }
     if (bookmarks.has(item.uri)) continue;

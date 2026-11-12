@@ -5,6 +5,8 @@ import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.
 import { createD1BlueskyBookmarkDeletedStore } from '../../adaptor/d1/blueskyTimeline/blueskyBookmarkDeletedStore.ts';
 import { createD1BlueskyBookmarkSavedStore } from '../../adaptor/d1/blueskyTimeline/blueskyBookmarkSavedStore.ts';
 import { createD1BlueskyBookmarkTargetResolver } from '../../adaptor/d1/blueskyTimeline/blueskyBookmarkTargetResolver.ts';
+import { createD1BlueskyViewerBookmarksSyncedStore } from '../../adaptor/d1/blueskyTimeline/blueskyViewerBookmarksSyncedStore.ts';
+import { BlueskyFetchedTimelineItem } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyBookmarkReader, BlueskyBookmarksPage } from '../../ports/blueskyBookmarkReader.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
@@ -183,22 +185,76 @@ describe('UnbookmarkBlueskyPostUseCase', () => {
 });
 
 describe('ListBlueskyBookmarksUseCase', () => {
-  const page: BlueskyBookmarksPage = { items: [], cursor: 'next' };
+  const itemOf = (n: number): BlueskyFetchedTimelineItem =>
+    BlueskyFetchedTimelineItem.orThrow({
+      feedItemId: `at://did:plc:a/app.bsky.feed.post/${n}`,
+      uri: `at://did:plc:a/app.bsky.feed.post/${n}`,
+      cid: `cid${n}`,
+      authorDid: 'did:plc:a',
+      authorHandle: 'alice.bsky.social',
+      authorDisplayName: null,
+      authorAvatar: null,
+      text: `post ${n}`,
+      facets: [],
+      embed: null,
+      replyParentUri: null,
+      replyParentAuthorHandle: null,
+      repostedByDid: null,
+      repostedByHandle: null,
+      postedAt: NOW,
+      indexedAt: NOW,
+      fetchedAt: NOW,
+      liked: false,
+      viewerLikeUri: null,
+      reposted: false,
+      viewerRepostUri: null,
+      bookmarked: true,
+      threadMuted: false,
+      replyRootUri: null,
+    });
+  const page: BlueskyBookmarksPage = { items: [itemOf(1), itemOf(2), itemOf(1)], cursor: 'next' };
+
+  const listSetup = (getBookmarks: BlueskyBookmarkReader['getBookmarks']) => {
+    const { db, sqlite } = createSqliteD1Fixture();
+    const viewerBookmarksStore = createD1BlueskyViewerBookmarksSyncedStore(db);
+    const useCase = ListBlueskyBookmarksUseCase.create({ reader: { getBookmarks }, viewerBookmarksStore });
+    const rows = () => sqlite.prepare('SELECT subjectUri, createdAt FROM bluesky_bookmarks ORDER BY subjectUri').all();
+    return { useCase, viewerBookmarksStore, rows, sqlite };
+  };
 
   it('reader に cursor を渡し、ページをそのまま返す', async () => {
     const getBookmarks = vi.fn<BlueskyBookmarkReader['getBookmarks']>(async () => RA.ok(page));
-    const useCase = ListBlueskyBookmarksUseCase.create({ reader: { getBookmarks } });
+    const t = listSetup(getBookmarks);
 
-    const result = await useCase.run({ cursor: 'c1' });
+    const result = await t.useCase.run({ cursor: 'c1' });
 
     expect(result).toEqual({ ok: true, val: page });
     expect(getBookmarks).toHaveBeenCalledExactlyOnceWith({ cursor: 'c1' });
   });
 
-  it('reader の失敗をそのまま返す', async () => {
-    const getBookmarks = vi.fn<BlueskyBookmarkReader['getBookmarks']>(async () => RA.err(failure));
-    const useCase = ListBlueskyBookmarksUseCase.create({ reader: { getBookmarks } });
+  it('取得したページの uri を重複なく bluesky_bookmarks に追加し、保存済みの行は書き直さない', async () => {
+    const t = listSetup(async () => RA.ok(page));
+    t.sqlite.prepare('INSERT INTO bluesky_bookmarks(subjectUri,createdAt) VALUES (?,?)').run(itemOf(2).uri, 5);
 
-    expect(await useCase.run({ cursor: undefined })).toEqual({ ok: false, err: failure });
+    await t.useCase.run({ cursor: undefined });
+
+    expect(t.rows()).toEqual([{ subjectUri: itemOf(1).uri, createdAt: NOW }, {
+      subjectUri: itemOf(2).uri,
+      createdAt: 5,
+    }]);
+  });
+
+  it('ミラーの保存に失敗しても、ページを返す', async () => {
+    const t = listSetup(async () => RA.ok(page));
+    vi.spyOn(t.viewerBookmarksStore, 'sync').mockRejectedValueOnce(new Error('d1 down'));
+
+    expect(await t.useCase.run({ cursor: undefined })).toEqual({ ok: true, val: page });
+  });
+
+  it('reader の失敗をそのまま返し、ミラーに書かない', async () => {
+    const t = listSetup(async () => RA.err(failure));
+
+    expect(await t.useCase.run({ cursor: undefined })).toEqual({ ok: false, err: failure });
+    expect(t.rows()).toEqual([]);
   });
 });

@@ -18,7 +18,7 @@ import {
 import { blueskyLikeRkey } from '../../domain/blueskyTimeline/blueskyLike.ts';
 import { blueskyRepostRkey } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import { BLUESKY_BAD_TOKEN_SCOPE } from '../../ports/blueskyBookmarkReader.ts';
+import { BLUESKY_BAD_TOKEN_SCOPE, BLUESKY_BOOKMARK_LOGIN_CODES } from '../../ports/blueskyBookmarkReader.ts';
 import type {
   BlueskyChatClient,
   BlueskyClient,
@@ -141,9 +141,11 @@ export const createBlueskyClient = (
         );
       }
       const expired = name === 'ExpiredToken' || name === 'InvalidToken';
+      const unauthorized = response.status === 401
+        && (!isBookmark || name !== undefined && BLUESKY_BOOKMARK_LOGIN_CODES.includes(name));
       return RA.err(
         clientError(
-          response.status === 401 || expired ? 'auth' : 'http',
+          unauthorized || expired ? 'auth' : 'http',
           `${operation} failed: status ${response.status}${name === undefined ? '' : ` ${name}`}`,
           response.status,
           name,

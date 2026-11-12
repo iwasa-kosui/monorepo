@@ -1338,6 +1338,33 @@ describe('createBlueskyClient のブックマーク', () => {
     expect(listing.calls).toHaveLength(1);
   });
 
+  it.each([
+    ['code の無い 401', {}],
+    ['401 Unauthorized', { error: 'Unauthorized' }],
+  ])('ブックマークの %s は認証の更新をせず、http の失敗で返す', async (_name, body) => {
+    const { client, calls, saved } = setup(stored(), [() => json(body, 401)]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result).toMatchObject({ ok: false, err: { kind: 'http', status: 401 } });
+    expect(calls).toHaveLength(1);
+    expect(saved).toEqual([]);
+  });
+
+  it('ブックマークの 401 ExpiredToken は、これまでどおり認証を更新してやり直す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'ExpiredToken' }, 401),
+      () => json(sessionBody('new')),
+      () => json({}),
+    ]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
+    expect(header(calls[2]!, 'Authorization')).toBe('Bearer access-new');
+  });
+
   it('Bad token scope を含まない InvalidToken は、これまでどおり認証の更新をしてやり直す', async () => {
     const { client, calls } = setup(stored(), [
       () => json({ error: 'InvalidToken', message: 'Bad token' }, 400),

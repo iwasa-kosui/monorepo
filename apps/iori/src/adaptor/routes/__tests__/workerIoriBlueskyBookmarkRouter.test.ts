@@ -15,6 +15,7 @@ import { createSqliteD1Fixture } from '../../d1/__tests__/sqliteFixture.ts';
 import { createD1BlueskyBookmarkDeletedStore } from '../../d1/blueskyTimeline/blueskyBookmarkDeletedStore.ts';
 import { createD1BlueskyBookmarkSavedStore } from '../../d1/blueskyTimeline/blueskyBookmarkSavedStore.ts';
 import { createD1BlueskyBookmarkTargetResolver } from '../../d1/blueskyTimeline/blueskyBookmarkTargetResolver.ts';
+import { createD1BlueskyViewerBookmarksSyncedStore } from '../../d1/blueskyTimeline/blueskyViewerBookmarksSyncedStore.ts';
 import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerIoriBlueskyBookmarkRouter } from '../workerIoriBlueskyBookmarkRouter.ts';
@@ -122,7 +123,12 @@ const setup = async (options: {
           deletedStore: createD1BlueskyBookmarkDeletedStore(fixture.db),
         })
         : undefined,
-      listBlueskyBookmarksUseCase: enabled ? ListBlueskyBookmarksUseCase.create({ reader }) : undefined,
+      listBlueskyBookmarksUseCase: enabled
+        ? ListBlueskyBookmarksUseCase.create({
+          reader,
+          viewerBookmarksStore: createD1BlueskyViewerBookmarksSyncedStore(fixture.db),
+        })
+        : undefined,
       viewerDid: options.viewerDid,
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
     }),

@@ -20,6 +20,8 @@ describe('isBlueskyBookmarkUnavailable', () => {
       ['400 の MethodNotImplemented', { status: 400, code: 'MethodNotImplemented' }],
       ['code の無い 401', { kind: 'auth', status: 401 }],
       ['401 の知らない権限系の code', { kind: 'auth', status: 401, code: 'PermissionDenied' }],
+      ['http の code の無い 401', { kind: 'http', status: 401 }],
+      ['http の 401 Unauthorized', { kind: 'http', status: 401, code: 'Unauthorized' }],
     ] as const,
   )('%s を使えないものとみなす', (_name, overrides) => {
     expect(isBlueskyBookmarkUnavailable(error(overrides))).toBe(true);
@@ -48,6 +50,7 @@ describe('isBlueskyBookmarkUnavailable', () => {
       ['401 の AuthRequired', { kind: 'auth', status: 401, code: 'AuthRequired' }],
       ['createSession の 401 AuthenticationRequired', { kind: 'auth', status: 401, code: 'AuthenticationRequired' }],
       ['403 でも InvalidToken', { status: 403, code: 'InvalidToken' }],
+      ['http の 401 ExpiredToken', { kind: 'http', status: 401, code: 'ExpiredToken' }],
     ] as const,
   )('%s はログイン切れの扱いにして、使えないものとみなさない', (_name, overrides) => {
     expect(isBlueskyBookmarkUnavailable(error(overrides))).toBe(false);

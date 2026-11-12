@@ -274,6 +274,7 @@ export const itemFromPostView = (
     reposted: viewerRepostUri !== null,
     viewerRepostUri,
     bookmarked: post.viewer?.bookmarked === true,
+    ...(post.viewer?.bookmarked === undefined ? { bookmarkUnknown: true } : {}),
     threadMuted: post.viewer?.threadMuted === true,
     replyRootUri: post.record.reply?.root?.uri ?? null,
   });

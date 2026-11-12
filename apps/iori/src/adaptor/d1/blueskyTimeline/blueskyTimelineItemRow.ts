@@ -16,6 +16,7 @@ export const toBlueskyTimelineItemRow = (
     reposted: _reposted,
     viewerRepostUri: _viewerRepostUri,
     bookmarked: _bookmarked,
+    bookmarkUnknown: _bookmarkUnknown,
     threadMuted: _threadMuted,
     replyRootUri: _replyRootUri,
     ...item
