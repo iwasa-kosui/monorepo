@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { blueskyPostUrl } from '../../helper/blueskyUrl.ts';
 import { type BlueskyPostThread, fetchBlueskyPostThread, isMastodonApiError } from '../api/mastodonClient.ts';
+import { blueskyItemActionProps, type BlueskyPostActions } from '../components/blueskyPostActions.ts';
 import { BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import type { BlueskyItemsUpdater } from '../hooks/optimisticBlueskyLike.ts';
-import { BLUESKY_LIKE_BY_URI_REQUESTS, useBlueskyLike } from '../hooks/useBlueskyLike.ts';
-import { sendBlueskyReplyByUri, useBlueskyReplyDialog } from '../hooks/useBlueskyReplyDialog.ts';
-import { BLUESKY_REPOST_BY_URI_REQUESTS, useBlueskyRepost } from '../hooks/useBlueskyRepost.ts';
+import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
 import { updateThreadItems } from './blueskyThread.ts';
 
 type ThreadNode = BlueskyPostThread['ancestors'][number];
@@ -41,20 +39,10 @@ const Placeholder = ({ text }: Readonly<{ text: string }>) => (
   </div>
 );
 
-type PostActions = Readonly<{
-  onReply: (item: IoriBlueskyTimelineItemBody) => void;
-  onLike: (item: IoriBlueskyTimelineItemBody) => void;
-  onUndoLike: (item: IoriBlueskyTimelineItemBody) => void;
-  likePendingUris: ReadonlySet<string>;
-  onRepost: (item: IoriBlueskyTimelineItemBody) => void;
-  onUndoRepost: (item: IoriBlueskyTimelineItemBody) => void;
-  repostPendingUris: ReadonlySet<string>;
-}>;
-
 const ThreadNodeView = ({ node, isFocused, actions }: Readonly<{
   node: ThreadNode;
   isFocused?: boolean;
-  actions: PostActions;
+  actions: BlueskyPostActions;
 }>) => {
   if (node.kind === 'notFound') return <Placeholder text='削除されたか見つからない投稿' />;
   if (node.kind === 'blocked') return <Placeholder text='表示できない投稿（ブロック）' />;
@@ -62,13 +50,7 @@ const ThreadNodeView = ({ node, isFocused, actions }: Readonly<{
     <BlueskyTimelineItemView
       item={node.item}
       isSelected={isFocused === true}
-      onReply={actions.onReply}
-      onLike={actions.onLike}
-      onUndoLike={actions.onUndoLike}
-      isLikePending={actions.likePendingUris.has(node.item.uri)}
-      onRepost={actions.onRepost}
-      onUndoRepost={actions.onUndoRepost}
-      isRepostPending={actions.repostPendingUris.has(node.item.uri)}
+      {...blueskyItemActionProps(actions, node.item)}
     />
   );
 };
@@ -83,12 +65,7 @@ const BlueskyPostPage = () => {
   const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
     setThread((prev) => prev === null ? prev : updateThreadItems(prev, updater));
   }, []);
-  const { pendingUris: likePendingUris, like, undoLike } = useBlueskyLike(updateItems, BLUESKY_LIKE_BY_URI_REQUESTS);
-  const { pendingUris: repostPendingUris, repost, undoRepost } = useBlueskyRepost(
-    updateItems,
-    BLUESKY_REPOST_BY_URI_REQUESTS,
-  );
-  const replyDialog = useBlueskyReplyDialog(sendBlueskyReplyByUri);
+  const { actions, replyDialog } = useBlueskyUriActions(updateItems);
 
   useEffect(() => {
     const uri = postUriFromLocation();
@@ -123,16 +100,6 @@ const BlueskyPostPage = () => {
     if (sent) reloadThread();
     return sent;
   }, [sendReplyOnly, reloadThread]);
-
-  const actions: PostActions = {
-    onReply: replyDialog.open,
-    onLike: like,
-    onUndoLike: undoLike,
-    likePendingUris,
-    onRepost: repost,
-    onUndoRepost: undoRepost,
-    repostPendingUris,
-  };
 
   if (isLoading) {
     return (
