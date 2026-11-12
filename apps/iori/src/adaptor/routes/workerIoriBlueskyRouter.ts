@@ -655,6 +655,10 @@ export const createWorkerIoriBlueskyRouter = ({
         return marked.ok ? c.body(null, 204) : clientFailure(c, marked.err);
       },
     )
+    .use('/iori/v1/bluesky/chat/*', async (c, next) => {
+      await next();
+      c.res.headers.set('Cache-Control', 'private, no-store');
+    })
     .get('/iori/v1/bluesky/chat/convos', authn.requireUser(readStatuses), async (c) => {
       const chat = await chatAccess(c);
       if (chat instanceof Response) return chat;

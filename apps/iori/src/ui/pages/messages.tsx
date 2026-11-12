@@ -130,6 +130,7 @@ const ConvoPage = ({ convoId }: Readonly<{ convoId: string }>) => {
   const [isAccepting, setIsAccepting] = useState(false);
   const messagesRef = useRef<readonly IoriBlueskyChatMessageBody[]>([]);
   const isSendingRef = useRef(false);
+  const isAcceptingRef = useRef(false);
   const isLoadingOlderRef = useRef(false);
   const scrollToBottomRef = useRef(false);
 
@@ -159,7 +160,7 @@ const ConvoPage = ({ convoId }: Readonly<{ convoId: string }>) => {
         setOlderCursor(page.cursor ?? undefined);
         scrollToBottomRef.current = true;
         setIsLoaded(true);
-        void markRead(page.messages);
+        if (loadedConvo.convo.unreadCount > 0) void markRead(page.messages);
       } catch (cause) {
         console.error('Failed to load the Bluesky conversation:', cause);
         setLoadError(chatErrorMessageOf(cause));
@@ -236,6 +237,8 @@ const ConvoPage = ({ convoId }: Readonly<{ convoId: string }>) => {
   };
 
   const accept = async () => {
+    if (isAcceptingRef.current) return;
+    isAcceptingRef.current = true;
     setIsAccepting(true);
     setActionError(null);
     try {
@@ -246,6 +249,7 @@ const ConvoPage = ({ convoId }: Readonly<{ convoId: string }>) => {
       console.error('Failed to accept the Bluesky conversation:', cause);
       setActionError(chatErrorMessageOf(cause));
     } finally {
+      isAcceptingRef.current = false;
       setIsAccepting(false);
     }
   };

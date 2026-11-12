@@ -692,7 +692,7 @@ export const setupReadApi = (
           blueskySearch: options.blueskySearch,
           blueskyChat: options.blueskyChat === undefined
             ? undefined
-            : BlueskyChatUseCases.create({ chat: options.blueskyChat }),
+            : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );

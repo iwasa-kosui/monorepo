@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createBlueskyChat } from '../../adaptor/bluesky/blueskyChat.ts';
 import type { BlueskyChatConvo, BlueskyChatMessage } from '../../domain/blueskyChat/blueskyChat.ts';
 import type { BlueskyChat } from '../../ports/blueskyChat.ts';
-import type { BlueskyChatClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
+import type { BlueskyChatClient, BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import { BlueskyChatUseCases } from '../blueskyChat.ts';
 
 const ME = 'did:plc:me';
@@ -41,7 +41,7 @@ const convo = (overrides: Partial<BlueskyChatConvo> = {}): BlueskyChatConvo => (
   ...overrides,
 });
 
-const setup = (overrides: Partial<BlueskyChat> = {}) => {
+const setup = (overrides: Partial<BlueskyChat> = {}, query: BlueskyQueryClient['query'] = async () => RA.ok({})) => {
   const base: BlueskyChat = {
     viewerDid: () => RA.ok(ME),
     listConvos: async () => RA.ok({ items: [], cursor: undefined }),
@@ -63,7 +63,7 @@ const setup = (overrides: Partial<BlueskyChat> = {}) => {
     updateRead: vi.fn(base.updateRead),
     acceptConvo: vi.fn(base.acceptConvo),
   } satisfies BlueskyChat;
-  return { chat, useCases: BlueskyChatUseCases.create({ chat }) };
+  return { chat, useCases: BlueskyChatUseCases.create({ chat, query }) };
 };
 
 describe('BlueskyChatUseCases', () => {
@@ -195,6 +195,40 @@ describe('BlueskyChatUseCases', () => {
       expect(t.chat.sendMessage).toHaveBeenCalledExactlyOnceWith({ convoId: 'c1', text: 'こんにちは' });
     });
 
+    it('URL とメンションを含む本文には facets を付けて送る', async () => {
+      const query = vi.fn<BlueskyQueryClient['query']>(async () => RA.ok({ did: 'did:plc:bob' }));
+      const t = setup({}, query);
+      const text = 'https://example.com と @bob.bsky.social';
+
+      await t.useCases.sendMessage.run({ convoId: 'c1', text });
+
+      expect(query).toHaveBeenCalledExactlyOnceWith('com.atproto.identity.resolveHandle', {
+        handle: 'bob.bsky.social',
+      });
+      expect(t.chat.sendMessage).toHaveBeenCalledExactlyOnceWith({
+        convoId: 'c1',
+        text,
+        facets: [
+          {
+            index: { byteStart: 0, byteEnd: 19 },
+            features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://example.com' }],
+          },
+          {
+            index: { byteStart: 24, byteEnd: 40 },
+            features: [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:bob' }],
+          },
+        ],
+      });
+    });
+
+    it('URL もメンションも含まない本文には facets を付けない', async () => {
+      const t = setup();
+
+      await t.useCases.sendMessage.run({ convoId: 'c1', text: 'こんにちは' });
+
+      expect(t.chat.sendMessage.mock.calls[0]![0]).not.toHaveProperty('facets');
+    });
+
     it('空の本文は empty で拒否し、送らない', async () => {
       const t = setup();
 
@@ -230,7 +264,7 @@ describe('BlueskyChatUseCases', () => {
   });
 
   describe('unreadCount', () => {
-    it('listConvos を limit 100 で 1 ページ読み、accepted の unreadCount だけを合計して、リクエストは件数を別に返す', async () => {
+    it('listConvos を limit 100 と readState=unread で 1 ページ読み、ミュートを除いた accepted の unreadCount を合計する', async () => {
       const t = setup({
         listConvos: async () =>
           RA.ok({
@@ -239,7 +273,7 @@ describe('BlueskyChatUseCases', () => {
               convo({ id: 'b', unreadCount: 5, status: 'request' }),
               convo({ id: 'c', unreadCount: 1 }),
               convo({ id: 'd', unreadCount: 4, status: 'unknown' }),
-              convo({ id: 'e', unreadCount: 0, status: 'request' }),
+              convo({ id: 'm', unreadCount: 9, muted: true }),
             ],
             cursor: 'more',
           }),
@@ -247,8 +281,24 @@ describe('BlueskyChatUseCases', () => {
 
       const result = await t.useCases.unreadCount.run();
 
-      expect(result).toEqual({ ok: true, val: { unread: 3, requests: 2 } });
-      expect(t.chat.listConvos).toHaveBeenCalledExactlyOnceWith({ limit: 100 });
+      expect(result).toEqual({ ok: true, val: { unread: 3, requests: 1 } });
+      expect(t.chat.listConvos).toHaveBeenCalledExactlyOnceWith({ limit: 100, readState: 'unread' });
+    });
+
+    it('ミュートしたリクエストと、未読の無いリクエストは requests に数えない', async () => {
+      const t = setup({
+        listConvos: async () =>
+          RA.ok({
+            items: [
+              convo({ id: 'a', unreadCount: 1, status: 'request' }),
+              convo({ id: 'b', unreadCount: 0, status: 'request' }),
+              convo({ id: 'c', unreadCount: 3, status: 'request', muted: true }),
+            ],
+            cursor: undefined,
+          }),
+      });
+
+      expect(await t.useCases.unreadCount.run()).toEqual({ ok: true, val: { unread: 0, requests: 1 } });
     });
 
     it('取得の失敗をそのまま返す', async () => {
@@ -289,7 +339,7 @@ describe('BlueskyChatUseCases', () => {
       const chat = createBlueskyChat({
         client: { chatQuery, chatProcedure: vi.fn(), viewerDid: () => RA.ok(ME) },
       });
-      const useCases = BlueskyChatUseCases.create({ chat });
+      const useCases = BlueskyChatUseCases.create({ chat, query: async () => RA.ok({}) });
 
       const convos = await useCases.listConvos.run({});
       const messages = await useCases.listMessages.run({ convoId: 'c1' });

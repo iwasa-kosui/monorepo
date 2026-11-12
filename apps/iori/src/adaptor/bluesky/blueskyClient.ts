@@ -107,6 +107,7 @@ export const createBlueskyClient = (
     init: RequestInit,
     schema: S,
     timeoutMs: number = REQUEST_TIMEOUT_MS,
+    viaChatProxy = false,
   ): RA<z.output<S>, BlueskyClientError> => {
     let response: Response;
     try {
@@ -117,9 +118,7 @@ export const createBlueskyClient = (
     if (!response.ok) {
       const body = errorBodySchema.safeParse(await response.json().catch(() => undefined));
       const name = body.success ? body.data.error : undefined;
-      if (
-        response.status === 400 && name === 'InvalidToken' && body.success && body.data.message === 'Bad token method'
-      ) {
+      if (viaChatProxy && response.status === 400 && name === 'InvalidToken') {
         // DM の許可が無いアプリパスワードで再ログインしても直らないため
         return RA.err(clientError('chat_not_permitted', `${operation} failed: status 400 InvalidToken`, 400, name));
       }
@@ -405,6 +404,8 @@ export const createBlueskyClient = (
           `${session.pdsUrl}/xrpc/${nsid}${search === '' ? '' : `?${search}`}`,
           { method: 'GET', headers: authorized(session, CHAT_PROXY_HEADERS) },
           queryResponseSchema,
+          REQUEST_TIMEOUT_MS,
+          true,
         );
       }),
     chatProcedure: (nsid, body) =>
@@ -418,6 +419,8 @@ export const createBlueskyClient = (
             body: JSON.stringify(body),
           },
           queryResponseSchema,
+          REQUEST_TIMEOUT_MS,
+          true,
         )
       ),
     viewerDid: () => withSession(async (session) => RA.ok(session.did)),

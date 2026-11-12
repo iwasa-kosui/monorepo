@@ -186,7 +186,7 @@ const setupNonOwner = async (
       blueskySearch: options.blueskySearch,
       blueskyChat: options.blueskyChat === undefined
         ? undefined
-        : BlueskyChatUseCases.create({ chat: options.blueskyChat }),
+        : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
     }),
   );
@@ -2084,6 +2084,41 @@ describe('/api/iori/v1/bluesky/chat', () => {
       expect(chat.getConvo).not.toHaveBeenCalled();
       expect(chat.sendMessage).not.toHaveBeenCalled();
       expect(chat.acceptConvo).not.toHaveBeenCalled();
+    });
+
+    it('成功とエラーのどの応答にも Cache-Control: private, no-store を付ける', async () => {
+      const noStore = 'private, no-store';
+      const denied = RA.err(clientError({ kind: 'chat_not_permitted', code: 'InvalidToken' }));
+      const ok = setupReadApi({ blueskyChat: chatMock() });
+      const okMe = await ok.signIn(route.scope);
+      const forbidden = setupReadApi({
+        blueskyChat: chatMock({
+          listConvos: async () => denied,
+          getConvo: async () => denied,
+          getConvoForMember: async () => denied,
+          getMessages: async () => denied,
+          sendMessage: async () => denied,
+          updateRead: async () => denied,
+          acceptConvo: async () => denied,
+        }),
+      });
+      const forbiddenMe = await forbidden.signIn(route.scope);
+      const disabled = setupReadApi();
+      const disabledMe = await disabled.signIn(route.scope);
+
+      const success = await call(ok, route, okMe.bearer);
+      const unauthorized = await call(ok, route, { Origin: ORIGIN });
+      const notPermitted = await call(forbidden, route, forbiddenMe.bearer);
+      const conflict = await call(disabled, route, disabledMe.bearer);
+
+      expect(success.status).toBeLessThan(300);
+      expect(success.headers.get('Cache-Control')).toBe(noStore);
+      expect(unauthorized.status).toBe(401);
+      expect(unauthorized.headers.get('Cache-Control')).toBe(noStore);
+      expect(notPermitted.status).toBe(403);
+      expect(notPermitted.headers.get('Cache-Control')).toBe(noStore);
+      expect(conflict.status).toBe(409);
+      expect(conflict.headers.get('Cache-Control')).toBe(noStore);
     });
 
     it('Bluesky のタイムラインが無効なとき 409 にする', async () => {

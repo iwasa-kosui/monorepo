@@ -171,10 +171,11 @@ export const createBlueskyChat = (deps: Readonly<{ client: BlueskyChatClient }>)
   const { client } = deps;
   return {
     viewerDid: client.viewerDid,
-    listConvos: async ({ limit, cursor }) => {
+    listConvos: async ({ limit, cursor, readState }) => {
       const response = await client.chatQuery('chat.bsky.convo.listConvos', {
         limit: String(limit),
         ...withCursor(cursor),
+        ...(readState === undefined ? {} : { readState }),
       });
       if (!response.ok) return response;
       const page = convosPageZodType.safeParse(response.val);
@@ -202,8 +203,11 @@ export const createBlueskyChat = (deps: Readonly<{ client: BlueskyChatClient }>)
         ? RA.ok({ items: page.data.messages.flatMap((message) => messageOf(message) ?? []), cursor: page.data.cursor })
         : RA.err(invalid('getMessages'));
     },
-    sendMessage: async ({ convoId, text }) => {
-      const response = await client.chatProcedure('chat.bsky.convo.sendMessage', { convoId, message: { text } });
+    sendMessage: async ({ convoId, text, facets }) => {
+      const response = await client.chatProcedure('chat.bsky.convo.sendMessage', {
+        convoId,
+        message: { text, ...(facets === undefined || facets.length === 0 ? {} : { facets }) },
+      });
       if (!response.ok) return response;
       const message = messageOf(response.val);
       return message?.kind === 'message' ? RA.ok(message) : RA.err(invalid('sendMessage'));

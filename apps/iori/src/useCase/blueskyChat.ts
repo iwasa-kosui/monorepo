@@ -13,7 +13,8 @@ import {
   type BlueskyChatTextMessage,
 } from '../domain/blueskyChat/blueskyChat.ts';
 import type { BlueskyChat } from '../ports/blueskyChat.ts';
-import type { BlueskyClientError } from '../ports/blueskyClient.ts';
+import type { BlueskyClientError, BlueskyQueryClient } from '../ports/blueskyClient.ts';
+import { buildFacets } from './helper/publishBlueskyPost.ts';
 import type { UseCase } from './useCase.ts';
 
 const CONVOS_LIMIT = 50;
@@ -90,7 +91,7 @@ export type BlueskyChatUseCases = Readonly<{
   unreadCount: GetBlueskyChatUnreadCountUseCase;
 }>;
 
-type Deps = Readonly<{ chat: BlueskyChat }>;
+type Deps = Readonly<{ chat: BlueskyChat; query: BlueskyQueryClient['query'] }>;
 
 const previewOf = (message: BlueskyChatMessage | null): BlueskyChatMessagePreview | null => {
   if (message === null) return null;
@@ -125,7 +126,7 @@ const validateText = (text: string): Readonly<{ text: string }> | BlueskyChatMes
   return { text: trimmed };
 };
 
-const create = ({ chat }: Deps): BlueskyChatUseCases => {
+const create = ({ chat, query }: Deps): BlueskyChatUseCases => {
   const summarized = async (
     fetched: RA<BlueskyChatConvo, BlueskyClientError>,
   ): RA<BlueskyChatConvoSummary, BlueskyClientError> => {
@@ -162,7 +163,8 @@ const create = ({ chat }: Deps): BlueskyChatUseCases => {
       run: async ({ convoId, text }) => {
         const validated = validateText(text);
         if ('type' in validated) return RA.err(validated);
-        return chat.sendMessage({ convoId, text: validated.text });
+        const facets = await buildFacets(validated.text, query);
+        return chat.sendMessage({ convoId, text: validated.text, ...(facets.length === 0 ? {} : { facets }) });
       },
     },
     markRead: { run: ({ convoId, messageId }) => summarized(chat.updateRead({ convoId, messageId })) },
@@ -170,13 +172,14 @@ const create = ({ chat }: Deps): BlueskyChatUseCases => {
     openConvo: { run: ({ did }) => summarized(chat.getConvoForMember(did)) },
     unreadCount: {
       run: async () => {
-        const page = await chat.listConvos({ limit: BLUESKY_CHAT_PAGE_LIMIT });
+        const page = await chat.listConvos({ limit: BLUESKY_CHAT_PAGE_LIMIT, readState: 'unread' });
         if (!page.ok) return page;
+        const unmuted = page.val.items.filter((convo) => !convo.muted);
         return RA.ok({
-          unread: page.val.items
+          unread: unmuted
             .filter((convo) => convo.status === 'accepted')
             .reduce((total, convo) => total + convo.unreadCount, 0),
-          requests: page.val.items.filter((convo) => convo.status === 'request').length,
+          requests: unmuted.filter((convo) => convo.status === 'request' && convo.unreadCount > 0).length,
         });
       },
     },

@@ -226,6 +226,9 @@ export const createExpireBlueskyTimelineUseCase = (
   });
 };
 
+const createChatUseCases = (client: ReturnType<typeof createTimelineClient>) =>
+  BlueskyChatUseCases.create({ chat: createBlueskyChat({ client }), query: client.query });
+
 export const createBlueskyTimelineRuntimePorts = (
   env: IoriWorkerEnv,
   db: IoriD1Db,
@@ -252,9 +255,7 @@ export const createBlueskyTimelineRuntimePorts = (
     blueskySearch: config === undefined
       ? undefined
       : createBlueskySearch({ client: createTimelineClient(config, db, deps), now: Instant.now }),
-    blueskyChat: config === undefined
-      ? undefined
-      : BlueskyChatUseCases.create({ chat: createBlueskyChat({ client: createTimelineClient(config, db, deps) }) }),
+    blueskyChat: config === undefined ? undefined : createChatUseCases(createTimelineClient(config, db, deps)),
     isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
   };
 };

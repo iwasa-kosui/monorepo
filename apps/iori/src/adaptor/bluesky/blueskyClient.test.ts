@@ -729,9 +729,21 @@ describe('createBlueskyClient の DM（chat）', () => {
     expect(saved).toEqual([]);
   });
 
-  it('message が Bad token method でない InvalidToken は、これまでどおり auth として再ログインを試す', async () => {
-    const { client, calls } = setup(stored(), [
+  it('chat の経路では message が違う 400 InvalidToken も chat_not_permitted にし、再ログインしない', async () => {
+    const { client, calls, saved } = setup(stored(), [
       () => json({ error: 'InvalidToken', message: 'Token could not be verified' }, 400),
+    ]);
+
+    const result = await client.chatQuery('chat.bsky.convo.listConvos', {});
+
+    expect(result).toMatchObject({ ok: false, err: { kind: 'chat_not_permitted', status: 400, code: 'InvalidToken' } });
+    expect(calls).toHaveLength(1);
+    expect(saved).toEqual([]);
+  });
+
+  it('chat の経路でも期限切れの ExpiredToken は auth として refresh してやり直す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'ExpiredToken', message: 'Token has expired' }, 400),
       () => json(sessionBody('fresh')),
       () => json({ convos: [] }),
     ]);
@@ -745,6 +757,23 @@ describe('createBlueskyClient の DM（chat）', () => {
       'chat.bsky.convo.listConvos',
     ]);
     expect(header(calls[2]!, 'atproto-proxy')).toBe(PROXY);
+  });
+
+  it('chat 以外の経路の InvalidToken は、これまでどおり auth として再ログインを試す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'InvalidToken', message: 'Bad token method' }, 400),
+      () => json(sessionBody('fresh')),
+      () => json({ feed: [] }),
+    ]);
+
+    const result = await client.query('app.bsky.feed.getTimeline', {});
+
+    expect(result.ok).toBe(true);
+    expect(calls.map((call) => call.url.split('?')[0]!.split('/').pop())).toEqual([
+      'app.bsky.feed.getTimeline',
+      'com.atproto.server.refreshSession',
+      'app.bsky.feed.getTimeline',
+    ]);
   });
 
   it('InvalidConvo や MessagesDisabled などの XRPC エラーは http として、error 名を code に入れて返す', async () => {

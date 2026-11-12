@@ -74,6 +74,17 @@ describe('createBlueskyChat', () => {
     });
   });
 
+  it('listConvos は readState があれば送る', async () => {
+    const t = setup({ convos: [] });
+
+    await t.chat.listConvos({ limit: 100, readState: 'unread' });
+
+    expect(t.chatQuery).toHaveBeenCalledExactlyOnceWith('chat.bsky.convo.listConvos', {
+      limit: '100',
+      readState: 'unread',
+    });
+  });
+
   it('listConvos は cursor が無ければ送らない', async () => {
     const t = setup({ convos: [] });
 
@@ -205,6 +216,26 @@ describe('createBlueskyChat', () => {
       message: { text: 'hi' },
     });
     expect(result).toMatchObject({ ok: true, val: { kind: 'message', id: 'm9', text: 'hi', senderDid: ME } });
+  });
+
+  it('sendMessage は facets があれば message に含め、空なら含めない', async () => {
+    const t = setup({ id: 'm9', rev: 'r9', text: 'hi', sender: { did: ME }, sentAt: SENT_AT });
+    const facets = [{
+      index: { byteStart: 0, byteEnd: 2 },
+      features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://a.example' }],
+    }] as const;
+
+    await t.chat.sendMessage({ convoId: 'c1', text: 'hi', facets });
+    await t.chat.sendMessage({ convoId: 'c1', text: 'hi', facets: [] });
+
+    expect(t.chatProcedure).toHaveBeenNthCalledWith(1, 'chat.bsky.convo.sendMessage', {
+      convoId: 'c1',
+      message: { text: 'hi', facets },
+    });
+    expect(t.chatProcedure).toHaveBeenNthCalledWith(2, 'chat.bsky.convo.sendMessage', {
+      convoId: 'c1',
+      message: { text: 'hi' },
+    });
   });
 
   it('sendMessage は message でない応答を invalid_response にする', async () => {
