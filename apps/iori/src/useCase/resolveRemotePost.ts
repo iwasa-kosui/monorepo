@@ -12,6 +12,7 @@ import type { UserId } from '../domain/user/userId.ts';
 import type { Username } from '../domain/user/username.ts';
 import { timedOut, withTimeout } from '../helper/withTimeout.ts';
 import type { FederationContext } from './fetchRemoteContext.ts';
+import { isBlockedActorUri } from './helper/isBlockedActorUri.ts';
 import { toRemotePostIdentity } from './helper/remoteNoteIdentity.ts';
 import { resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
@@ -39,6 +40,7 @@ type Deps = Readonly<{
   actorResolverById: ActorResolverById;
   remotePostUpserter: RemotePostUpserter;
   blockedActorUriResolverByUsername: BlockedActorUriResolverByUsername;
+  isBlockedUri: (uri: string) => boolean;
   fetchTimeoutMs?: number;
   totalTimeoutMs?: number;
 }>;
@@ -51,6 +53,7 @@ const create = ({
   actorResolverById,
   remotePostUpserter,
   blockedActorUriResolverByUsername,
+  isBlockedUri,
   fetchTimeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
   totalTimeoutMs = DEFAULT_TOTAL_TIMEOUT_MS,
 }: Deps): ResolveRemotePostUseCase => {
@@ -74,10 +77,8 @@ const create = ({
     return (remote.ok ? remote.val : undefined) ?? (local.ok ? local.val : undefined);
   };
 
-  const isBlocked = async (username: Username, actorUri: string): Promise<boolean> => {
-    const blocked = await blockedActorUriResolverByUsername.resolve({ username, actorUri });
-    return blocked.ok && blocked.val;
-  };
+  const isBlocked = (username: Username, actorUri: string): Promise<boolean> =>
+    isBlockedActorUri(blockedActorUriResolverByUsername, username, actorUri);
 
   const visiblePostId = async (username: Username, post: Post | undefined): Promise<PostId | undefined> => {
     if (post === undefined || post.type === 'local') {
@@ -94,6 +95,9 @@ const create = ({
     documentLoader: DocumentLoader,
     controller: AbortController,
   ): Promise<PostId | undefined> => {
+    if (isBlockedUri(url.href)) {
+      return undefined;
+    }
     const stored = await storedPost(url.href);
     if (stored !== undefined || url.origin === ownOrigin) {
       return visiblePostId(username, stored);
@@ -102,7 +106,7 @@ const create = ({
       documentLoader,
       signal: AbortSignal.any([controller.signal, AbortSignal.timeout(fetchTimeoutMs)]),
     });
-    if (!(found instanceof Note) || found.id === null || found.id.origin === ownOrigin) {
+    if (!(found instanceof Note) || found.id === null || found.id.origin === ownOrigin || isBlockedUri(found.id.href)) {
       return undefined;
     }
     const known = await storedPost(found.id.href);
@@ -112,7 +116,7 @@ const create = ({
     if (found.attributionId !== null && await isBlocked(username, found.attributionId.href)) {
       return undefined;
     }
-    const identity = await toRemotePostIdentity(found, { origin, documentLoader });
+    const identity = await toRemotePostIdentity(found, { origin, documentLoader, isBlockedUri });
     if (identity === undefined || await isBlocked(username, identity.authorIdentity.uri) || controller.signal.aborted) {
       return undefined;
     }
