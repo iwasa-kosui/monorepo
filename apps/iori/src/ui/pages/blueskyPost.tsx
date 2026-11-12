@@ -24,6 +24,7 @@ const errorMessageOf = (error: unknown): string => {
   if (!isMastodonApiError(error)) return '読み込めませんでした。時間をおいて再度お試しください。';
   if (error.status === 403) return 'この投稿は所有者だけが見られます。';
   if (error.status === 404) return '投稿が見つからないか、表示できません。';
+  if (error.status === 429) return 'Bluesky の利用上限に達しました。時間をおいて再度お試しください';
   return `読み込めませんでした: ${error.message}`;
 };
 

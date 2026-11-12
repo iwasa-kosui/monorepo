@@ -552,6 +552,24 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
     });
 
+    it('Bluesky がレート制限を返したら 429 にする', async () => {
+      const fetcher = fetcherReturning(
+        RA.err({
+          type: 'BlueskyClientError',
+          kind: 'http',
+          message: 'getPostThread failed: status 429 RateLimitExceeded',
+          status: 429,
+        }),
+      );
+      const t = setupReadApi({ blueskyPostThreadFetcher: fetcher });
+      const me = await t.signIn('read:statuses');
+
+      const response = await getThread(t, me.bearer);
+
+      expect(response.status).toBe(429);
+      expect(await response.json()).toEqual({ error: 'Bluesky rate limited' });
+    });
+
     it('Bluesky が設定されていないと 409 にする', async () => {
       const t = setupReadApi();
       const me = await t.signIn('read:statuses');

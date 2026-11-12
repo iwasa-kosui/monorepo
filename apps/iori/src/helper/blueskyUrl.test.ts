@@ -62,4 +62,9 @@ describe('ioriBlueskyPostPath', () => {
     expect(ioriBlueskyPostPath('https://example.com/x')).toBeUndefined();
     expect(ioriBlueskyPostPath('nope')).toBeUndefined();
   });
+
+  it('コレクションが app.bsky.feed.post でない at-uri は undefined にする', () => {
+    expect(ioriBlueskyPostPath('at://did:plc:q/app.bsky.feed.like/3kq')).toBeUndefined();
+    expect(ioriBlueskyPostPath('at://did:plc:q/app.bsky.graph.list/3kq')).toBeUndefined();
+  });
 });

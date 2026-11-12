@@ -146,12 +146,14 @@ describe('BlueskyTimelineItemView', () => {
     expect(html).not.toMatch(/<a [^>]*>返信<\/a>/);
   });
 
-  it('動画のカードを、同じタブで開く iori 内の詳細へのリンクにする', () => {
+  it('動画のカードを、bsky.app の投稿を新しいタブで開くリンクにする', () => {
     const html = render({
       embed: { type: 'video', thumbnail: null, playlist: 'https://video.example/playlist.m3u8' },
     });
 
-    expect(html).toMatch(/<a href="\/bluesky\/profile\/did:plc:author\/post\/3kabc" class="relative block/);
+    expect(html).toMatch(
+      /<a href="https:\/\/bsky.app\/profile\/did:plc:author\/post\/3kabc" target="_blank" rel="noopener noreferrer" class="relative block/,
+    );
   });
 
   describe('いいねのボタン', () => {

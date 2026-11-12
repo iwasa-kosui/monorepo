@@ -1,7 +1,7 @@
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { BlueskyTimelineEmbed } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import { ioriBlueskyPostPath } from '../../helper/blueskyUrl.ts';
+import { blueskyPostUrl, ioriBlueskyPostPath } from '../../helper/blueskyUrl.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { segmentBlueskyText } from './blueskyRichText.ts';
 
@@ -52,7 +52,7 @@ const BlueskyQuote = ({ quote }: Readonly<{ quote: QuoteEmbed }>) => {
     );
 };
 
-const BlueskyMedia = ({ media, postHref }: Readonly<{ media: MediaEmbed; postHref: string | undefined }>) => {
+const BlueskyMedia = ({ media, bskyHref }: Readonly<{ media: MediaEmbed; bskyHref: string | undefined }>) => {
   switch (media.type) {
     case 'images':
       return (
@@ -98,8 +98,9 @@ const BlueskyMedia = ({ media, postHref }: Readonly<{ media: MediaEmbed; postHre
       const thumbnail = safeAbsoluteUrl(media.thumbnail);
       return (
         <a
-          href={postHref ?? safeAbsoluteUrl(media.playlist)}
-          {...(postHref === undefined ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          href={bskyHref ?? safeAbsoluteUrl(media.playlist)}
+          target='_blank'
+          rel='noopener noreferrer'
           class='relative block overflow-hidden rounded-xl bg-sand dark:bg-gray-700'
         >
           {thumbnail !== undefined && (
@@ -117,17 +118,17 @@ const BlueskyMedia = ({ media, postHref }: Readonly<{ media: MediaEmbed; postHre
   }
 };
 
-const BlueskyEmbed = ({ embed, postHref }: Readonly<{ embed: BlueskyTimelineEmbed; postHref: string | undefined }>) => {
+const BlueskyEmbed = ({ embed, bskyHref }: Readonly<{ embed: BlueskyTimelineEmbed; bskyHref: string | undefined }>) => {
   if (embed.type === 'record') return <BlueskyQuote quote={embed} />;
   if (embed.type === 'recordWithMedia') {
     return (
       <div class='space-y-2'>
-        <BlueskyMedia media={embed.media} postHref={postHref} />
+        <BlueskyMedia media={embed.media} bskyHref={bskyHref} />
         <BlueskyQuote quote={embed.record} />
       </div>
     );
   }
-  return <BlueskyMedia media={embed} postHref={postHref} />;
+  return <BlueskyMedia media={embed} bskyHref={bskyHref} />;
 };
 
 const ReplyParent = ({ uri, label }: Readonly<{ uri: string; label: string }>) => {
@@ -258,6 +259,7 @@ export const BlueskyTimelineItemView = ({
 }: Props) => {
   const avatar = safeAbsoluteUrl(item.authorAvatar);
   const postHref = ioriBlueskyPostPath(item.uri);
+  const bskyHref = blueskyPostUrl(item.authorDid, item.uri);
   const displayName = item.authorDisplayName ?? item.authorHandle;
   const posted = (
     <time dateTime={new Date(item.postedAt).toISOString()}>
@@ -301,7 +303,7 @@ export const BlueskyTimelineItemView = ({
           )}
       </div>
       {item.text !== '' && <BlueskyText text={item.text} facets={item.facets} />}
-      {item.embed !== null && <BlueskyEmbed embed={item.embed} postHref={postHref} />}
+      {item.embed !== null && <BlueskyEmbed embed={item.embed} bskyHref={bskyHref} />}
       {(onLike !== undefined || onRepost !== undefined) && (
         <div class='flex items-center justify-end gap-4 pt-1'>
           {onRepost !== undefined && (

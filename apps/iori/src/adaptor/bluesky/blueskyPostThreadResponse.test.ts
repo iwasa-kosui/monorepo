@@ -161,8 +161,34 @@ describe('parseBlueskyPostThreadResponse', () => {
 
     const { ancestors, replies } = parsedOk(thread);
 
-    expect(ancestors).toEqual([]);
+    expect(ancestors).toEqual([{ kind: 'notFound', uri: uriOf('x') }]);
     expect(replies.map(({ node }) => nodeLabel(node))).toEqual([uriOf('ok')]);
+  });
+
+  it('uri の読めない不明な $type の親は、ノードを足さずに止める', () => {
+    const thread = threadView('me', { parent: { $type: 'app.bsky.feed.defs#somethingNew' } });
+
+    expect(parsedOk(thread).ancestors).toEqual([]);
+  });
+
+  it('投稿として読めない親を、その親の uri の notFound ノードにして、そこより上は返さない', () => {
+    const unreadableDate = threadView('badDate', { parent: threadView('root') }, { createdAt: 'not a date' });
+    const unreadablePost = { $type: THREAD_VIEW, post: { uri: uriOf('broken') }, parent: threadView('root') };
+
+    expect(parsedOk(threadView('me', { parent: unreadableDate })).ancestors).toEqual([
+      { kind: 'notFound', uri: uriOf('badDate') },
+    ]);
+    expect(parsedOk(threadView('me', { parent: unreadablePost })).ancestors).toEqual([
+      { kind: 'notFound', uri: uriOf('broken') },
+    ]);
+  });
+
+  it('途中の祖先が読めないときも、それより下の祖先は残す', () => {
+    const thread = threadView('me', {
+      parent: threadView('mid', { parent: threadView('badDate', {}, { createdAt: 'not a date' }) }),
+    });
+
+    expect(parsedOk(thread).ancestors.map(nodeLabel)).toEqual([`notFound:${uriOf('badDate')}`, uriOf('mid')]);
   });
 
   it('投稿として読めない返信を、その返信の木ごと除く', () => {

@@ -43,6 +43,15 @@ const unavailableOf = (raw: unknown): Extract<BlueskyThreadNode, { kind: 'notFou
   return unavailable.success ? { kind, uri: unavailable.data.uri } : undefined;
 };
 
+const wrappedUriZodType = z.looseObject({ post: unavailableZodType });
+
+const notFoundOf = (raw: unknown): Extract<BlueskyThreadNode, { kind: 'notFound' }> | undefined => {
+  const direct = unavailableZodType.safeParse(raw);
+  if (direct.success) return { kind: 'notFound', uri: direct.data.uri };
+  const wrapped = wrappedUriZodType.safeParse(raw);
+  return wrapped.success ? { kind: 'notFound', uri: wrapped.data.post.uri } : undefined;
+};
+
 const itemOf = (
   post: BlueskyPostView,
   parentView: ThreadView | undefined,
@@ -67,12 +76,15 @@ const ancestorsOf = (view: ThreadView, fetchedAt: Instant): readonly BlueskyThre
   for (;;) {
     const parentView = threadViewOf(child.parent);
     if (parentView === undefined) {
-      const unavailable = unavailableOf(child.parent);
+      const unavailable = unavailableOf(child.parent) ?? notFoundOf(child.parent);
       if (unavailable !== undefined) nodes.push(unavailable);
       break;
     }
     const item = itemOf(parentView.post, threadViewOf(parentView.parent), fetchedAt);
-    if (item === undefined) break;
+    if (item === undefined) {
+      nodes.push({ kind: 'notFound', uri: parentView.post.uri });
+      break;
+    }
     nodes.push({ kind: 'post', item });
     child = parentView;
   }

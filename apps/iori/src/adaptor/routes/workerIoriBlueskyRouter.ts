@@ -118,6 +118,7 @@ const threadFailure = (c: Context, error: BlueskyClientError | BlueskyPostThread
   if (error.type === 'BlueskyPostThreadUnavailable') {
     return c.json({ error: 'Record not found', code: error.reason === 'blocked' ? 'blocked' : 'not_found' }, 404);
   }
+  if (error.status === 429) return c.json({ error: 'Bluesky rate limited' }, 429);
   return error.code === 'NotFound'
     ? c.json({ error: 'Record not found', code: 'not_found' }, 404)
     : c.json({ error: 'Bluesky request failed' }, 502);
