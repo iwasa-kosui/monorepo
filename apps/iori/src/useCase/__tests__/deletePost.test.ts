@@ -601,7 +601,7 @@ describe('DeletePostUseCase', () => {
       const mentionOf = (id: string, name: string) =>
         `<span class="h-card"><a href="${id}" class="u-url mention">@<span>${name}</span></a></span>`;
 
-      const setup = (content: string) => {
+      const setup = (content: string, visibility: LocalPost['visibility'] = 'public') => {
         const deps = createDeps();
         const user: User = {
           id: crypto.randomUUID() as User['id'],
@@ -622,7 +622,7 @@ describe('DeletePostUseCase', () => {
         };
         const post: LocalPost = {
           type: 'local',
-          visibility: 'public',
+          visibility: visibility,
           summary: null,
           sensitive: false,
           postId: crypto.randomUUID() as PostId,
@@ -645,13 +645,12 @@ describe('DeletePostUseCase', () => {
             : null
         );
         Object.assign(ctx, { lookupObject, getDocumentLoader: vi.fn(async () => ({})) });
-        const run = (postQuotesResolver?: PostQuotesResolverByPostIds) =>
-          DeletePostUseCase.create({ ...deps, ...(postQuotesResolver === undefined ? {} : { postQuotesResolver }) })
-            .run({
-              sessionId: session.sessionId,
-              postId: post.postId,
-              ctx,
-            });
+        const run = (extra: Partial<Parameters<typeof DeletePostUseCase.create>[0]> = {}) =>
+          DeletePostUseCase.create({ ...deps, ...extra }).run({
+            sessionId: session.sessionId,
+            postId: post.postId,
+            ctx,
+          });
         return { deps, ctx, lookupObject, run, postId: post.postId };
       };
 
@@ -664,6 +663,39 @@ describe('DeletePostUseCase', () => {
         uri: 'https://remote.example/notes/1',
         author: { id: bobId, inboxUrl: `${bobId}/inbox`, username: 'bob' },
       };
+
+      it('direct の投稿を消すと、followers には送らず、参加者の inbox にだけ共有 inbox を使わず Delete を送る', async () => {
+        const { deps, ctx, run } = setup('<p>secret</p>', 'direct');
+        const directPostParticipantsResolverByPostId = {
+          resolve: vi.fn(() => RA.ok([selfId, aliceId, 'https://example.com/users/hanako'])),
+        };
+
+        const result = await run({ directPostParticipantsResolverByPostId });
+
+        expect(result.ok).toBe(true);
+        const calls = vi.mocked(ctx.sendActivity).mock.calls;
+        expect(calls).toHaveLength(1);
+        expect(calls[0]?.[1]).toEqual([
+          {
+            id: new URL(aliceId),
+            inboxId: new URL(`${aliceId}/inbox`),
+            endpoints: { sharedInbox: new URL('https://remote.example/inbox') },
+          },
+        ]);
+        expect(calls[0]?.[3]).toEqual({ preferSharedInbox: false });
+        expect(vi.mocked(directPostParticipantsResolverByPostId.resolve).mock.invocationCallOrder[0])
+          .toBeLessThan(vi.mocked(deps.postDeletedStore.store).mock.invocationCallOrder[0]!);
+      });
+
+      it('public の投稿を消すときは参加者を引かず、従来どおり followers に送る', async () => {
+        const { ctx, run } = setup(`<p>hi ${mentionOf(aliceId, 'alice@remote.example')}</p>`);
+        const directPostParticipantsResolverByPostId = { resolve: vi.fn(() => RA.ok([])) };
+
+        await run({ directPostParticipantsResolverByPostId });
+
+        expect(directPostParticipantsResolverByPostId.resolve).not.toHaveBeenCalled();
+        expect(vi.mocked(ctx.sendActivity).mock.calls[0]?.[1]).toBe('followers');
+      });
 
       it('メンションのある投稿を消すと、相手にも同じ Delete を送る', async () => {
         const { ctx, run } = setup(`<p>hi ${mentionOf(aliceId, 'alice@remote.example')}</p>`);
@@ -746,7 +778,7 @@ describe('DeletePostUseCase', () => {
       it('引用の投稿を消すと、引用先の作者にも同じ Delete を送る', async () => {
         const { ctx, run, postId } = setup('<p>look</p>');
 
-        const result = await run(quoteResolverOf(postId, bobQuote));
+        const result = await run({ postQuotesResolver: quoteResolverOf(postId, bobQuote) });
 
         expect(result.ok).toBe(true);
         const calls = vi.mocked(ctx.sendActivity).mock.calls;
@@ -761,7 +793,7 @@ describe('DeletePostUseCase', () => {
         const { deps, run, postId } = setup('<p>look</p>');
         const resolver = quoteResolverOf(postId, bobQuote);
 
-        await run(resolver);
+        await run({ postQuotesResolver: resolver });
 
         expect(resolver.resolve).toHaveBeenCalledWith([postId]);
         expect(resolver.resolve.mock.invocationCallOrder[0]).toBeLessThan(
@@ -776,7 +808,7 @@ describe('DeletePostUseCase', () => {
           author: { id: aliceId, inboxUrl: `${aliceId}/inbox`, username: 'alice' },
         };
 
-        await run(quoteResolverOf(postId, quote));
+        await run({ postQuotesResolver: quoteResolverOf(postId, quote) });
 
         const calls = vi.mocked(ctx.sendActivity).mock.calls;
         expect(calls).toHaveLength(2);
@@ -786,10 +818,31 @@ describe('DeletePostUseCase', () => {
       it('引用先の作者が分からない(ローカルの引用先や未取得)ときは、作者には送らない', async () => {
         const { ctx, run, postId } = setup('<p>look</p>');
 
-        const result = await run(quoteResolverOf(postId, { uri: bobQuote.uri, author: null }));
+        const result = await run({ postQuotesResolver: quoteResolverOf(postId, { uri: bobQuote.uri, author: null }) });
 
         expect(result.ok).toBe(true);
         expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+      });
+
+      it('direct の投稿を消すときは、引用先の作者が参加者でなければ送らない', async () => {
+        const { ctx, run, postId } = setup('<p>secret</p>', 'direct');
+        const postQuotesResolver = quoteResolverOf(postId, bobQuote);
+        const directPostParticipantsResolverByPostId = {
+          resolve: vi.fn(() => RA.ok([selfId, aliceId])),
+        };
+
+        await run({ postQuotesResolver, directPostParticipantsResolverByPostId });
+
+        expect(postQuotesResolver.resolve).not.toHaveBeenCalled();
+        const calls = vi.mocked(ctx.sendActivity).mock.calls;
+        expect(calls).toHaveLength(1);
+        expect(calls[0]?.[1]).toEqual([
+          {
+            id: new URL(aliceId),
+            inboxId: new URL(`${aliceId}/inbox`),
+            endpoints: { sharedInbox: new URL('https://remote.example/inbox') },
+          },
+        ]);
       });
 
       it('メンションの無い投稿は従来どおり followers にだけ送る', async () => {

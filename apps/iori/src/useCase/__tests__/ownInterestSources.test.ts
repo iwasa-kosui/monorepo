@@ -82,7 +82,23 @@ const setup = (options: { textEmbedder?: TextEmbedder | null } = {}) => {
     sqlite.prepare('DELETE FROM posts WHERE postId = ?').run(postId);
   };
   const run = { userId };
-  return { sqlite, seed, me, friend, remote, userId, stub, sync, embed, buildEmbed, rows, rowOf, purgePost, run };
+  return {
+    fixture,
+    sqlite,
+    seed,
+    me,
+    friend,
+    remote,
+    userId,
+    stub,
+    sync,
+    embed,
+    buildEmbed,
+    rows,
+    rowOf,
+    purgePost,
+    run,
+  };
 };
 
 afterEach(() => vi.restoreAllMocks());
@@ -132,6 +148,82 @@ describe('SyncOwnInterestSourcesUseCase', () => {
       occurredAt: LIKE_AT,
       contentHash: await sha256Hex('友達の投稿'),
     });
+  });
+
+  it('本人のローカルの direct の投稿と、ローカルの direct の投稿へのいいねは作らず、private は作る', async () => {
+    const { seed, me, friend, run, sync, rows } = setup();
+    const own = seed.addLocalPost(me, POST_AT, { content: '自分の投稿', timeline: false });
+    const ownPrivate = seed.addLocalPost(me, POST_AT, {
+      content: '自分の非公開',
+      visibility: 'private',
+      timeline: false,
+    });
+    const ownDirect = seed.addLocalPost(me, POST_AT, {
+      content: '自分のダイレクト',
+      visibility: 'direct',
+      timeline: false,
+    });
+    const friendPrivate = seed.addLocalPost(friend, POST_AT, {
+      content: '友達の非公開',
+      visibility: 'private',
+      timeline: false,
+    });
+    const friendDirect = seed.addLocalPost(friend, POST_AT, {
+      content: '友達のダイレクト',
+      visibility: 'direct',
+      timeline: false,
+    });
+    const likedPrivate = seed.addLike(me.actorId, friendPrivate.postId, LIKE_AT);
+    const likedDirect = seed.addLike(me.actorId, friendDirect.postId, LIKE_AT);
+    const likedOwnDirect = seed.addLike(me.actorId, ownDirect.postId, LIKE_AT);
+
+    await sync.run(run);
+
+    expect(rows('own_post').map((row) => row.ref).sort()).toEqual([own.postId, ownPrivate.postId].sort());
+    expect(rows('own_like').map((row) => row.ref)).toEqual([likedPrivate.likeId]);
+    const refs = rows().map((row) => row.ref);
+    for (const excluded of [ownDirect.postId, likedDirect.likeId, likedOwnDirect.likeId]) {
+      expect(refs).not.toContain(excluded);
+    }
+  });
+
+  it('埋め込みの本文の取得でも、ローカルの direct の投稿と、そのいいねを返さない', async () => {
+    const { sqlite, seed, me, friend, run, sync, stub, embed, rows } = setup();
+    const own = seed.addLocalPost(me, POST_AT, { content: '自分の投稿', timeline: false });
+    const ownDirect = seed.addLocalPost(me, POST_AT, { content: '自分のダイレクト', timeline: false });
+    const friendDirect = seed.addLocalPost(friend, POST_AT, { content: '友達のダイレクト', timeline: false });
+    const liked = seed.addLike(me.actorId, friendDirect.postId, LIKE_AT);
+    await sync.run(run);
+    expect(rows().map((row) => row.ref).sort()).toEqual([own.postId, ownDirect.postId, liked.likeId].sort());
+    sqlite.prepare('UPDATE local_posts SET visibility = ? WHERE postId IN (?, ?)').run(
+      'direct',
+      ownDirect.postId,
+      friendDirect.postId,
+    );
+
+    const result = await embed.run(run);
+
+    expect(result).toEqual({ ok: true, val: { embedded: 1, skipped: 2 } });
+    expect(stub.calls.flatMap((call) => [...call.texts])).toEqual(['自分の投稿']);
+  });
+
+  it('投稿の本文の取得は、リモートの direct を返さず、private と公開範囲が不明の投稿は返す', async () => {
+    const { fixture, seed, remote } = setup();
+    const publicPost = seed.addRemotePost(remote, POST_AT, { content: '公開', visibility: 'public' });
+    const privatePost = seed.addRemotePost(remote, POST_AT, { content: '非公開', visibility: 'private' });
+    const legacy = seed.addRemotePost(remote, POST_AT, { content: '不明', visibility: null });
+    const direct = seed.addRemotePost(remote, POST_AT, { content: 'ダイレクト', visibility: 'direct' });
+
+    const result = await createD1PostContentsResolverByPostIds(fixture.db).resolve([
+      publicPost.postId,
+      privatePost.postId,
+      legacy.postId,
+      direct.postId,
+    ] as never);
+
+    expect(result.ok && result.val.map((row) => row.postId).sort()).toEqual(
+      [publicPost.postId, privatePost.postId, legacy.postId].sort(),
+    );
   });
 
   it('本文が空の投稿は作らない', async () => {

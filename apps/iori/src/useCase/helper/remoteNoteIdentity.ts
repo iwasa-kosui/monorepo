@@ -4,6 +4,7 @@ import { getLogger } from '@logtape/logtape';
 
 import { ActorIdentity } from '../../adaptor/fedify/actorIdentity.ts';
 import { extractContentWarning } from '../../adaptor/fedify/extractContentWarning.ts';
+import { extractMentionedActorUris } from '../../adaptor/fedify/extractMentionedActorUris.ts';
 import { extractQuoteUri } from '../../adaptor/fedify/extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../../adaptor/fedify/extractVisibility.ts';
@@ -57,6 +58,7 @@ export const toRemotePostIdentity = async (
     ...extractContentWarning(note),
     visibility: extractVisibility(note, author.followersId),
     recipientActorUris: extractRecipientActorUris([note], origin),
+    mentionedActorUris: await extractMentionedActorUris(note),
     quoteUri: await extractQuoteUri(note),
     publishedAt: publishedMs !== undefined && Number.isSafeInteger(publishedMs) && publishedMs >= 0
       ? Instant.orThrow(publishedMs)

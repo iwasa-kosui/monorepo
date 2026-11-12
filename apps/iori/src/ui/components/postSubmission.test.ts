@@ -496,6 +496,19 @@ describe('postedNotice', () => {
       href: null,
     });
   });
+
+  it('passes the visibility of the created status, so a DM skip does not show the visibility reason', () => {
+    const direct = {
+      ...created,
+      visibility: 'direct',
+      iori: { bluesky_crosspost: { status: 'skipped', skip_reason: 'visibility' } },
+    } as unknown as Status;
+
+    expect(postedNotice('both', { kind: 'posted', status: direct })).toEqual({
+      message: 'Fediverse に投稿しました。Bluesky には送っていません',
+      href: null,
+    });
+  });
 });
 
 describe('replyParams', () => {

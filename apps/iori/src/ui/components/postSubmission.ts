@@ -91,7 +91,10 @@ export const postedNotice = (
 ): PostNotice =>
   result.kind === 'postedToBluesky'
     ? { message: BLUESKY_ONLY_POSTED_MESSAGE, href: result.url }
-    : { message: postedMessage(destination, result.status.iori?.bluesky_crosspost), href: null };
+    : {
+      message: postedMessage(destination, result.status.iori?.bluesky_crosspost, result.status.visibility),
+      href: null,
+    };
 
 export const replyParams = (
   postId: string,

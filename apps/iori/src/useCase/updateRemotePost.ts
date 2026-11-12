@@ -43,6 +43,7 @@ type Input = Readonly<{
   sensitive: boolean;
   attachments: ReadonlyArray<RemotePostAttachment>;
   recipientActorUris: ReadonlyArray<string>;
+  mentionedActorUris?: ReadonlyArray<string>;
   visibility: Visibility | null;
   editedAt: Instant;
 }>;
@@ -210,6 +211,8 @@ const create = ({
       visibility: input.visibility,
       recipientActorUris: input.recipientActorUris,
       previousRecipientActorUris: previousRecipients.val,
+      authorActorUri: input.actorUri,
+      mentionedActorUris: input.mentionedActorUris,
       images,
     });
     const stored = await remotePostUpdatedStore.store(event);
