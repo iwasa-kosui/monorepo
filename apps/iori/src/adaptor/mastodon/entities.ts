@@ -220,6 +220,7 @@ const IoriEmojiReactionExtensionSchema = z.object({
   emoji: z.string(),
   url: z.string().nullable(),
   bluesky: z.undefined().optional(),
+  fediverse: z.undefined().optional(),
 });
 
 const IoriBlueskyNotificationExtensionSchema = z.object({
@@ -230,11 +231,22 @@ const IoriBlueskyNotificationExtensionSchema = z.object({
     url: z.string(),
     text: z.string().optional(),
   }),
+  fediverse: z.undefined().optional(),
+});
+
+const IoriFediverseNotificationExtensionSchema = z.object({
+  emoji: z.undefined().optional(),
+  url: z.undefined().optional(),
+  bluesky: z.undefined().optional(),
+  fediverse: z.object({
+    reason: z.enum(['mention', 'reply']),
+  }),
 });
 
 export const IoriNotificationExtensionSchema = z.union([
   IoriEmojiReactionExtensionSchema,
   IoriBlueskyNotificationExtensionSchema,
+  IoriFediverseNotificationExtensionSchema,
 ]);
 export type IoriNotificationExtension = z.infer<typeof IoriNotificationExtensionSchema>;
 
@@ -318,6 +330,20 @@ export const RelationshipSchema = z.object({
   note: z.string(),
 });
 export type Relationship = z.infer<typeof RelationshipSchema>;
+
+export const ReportSchema = z.object({
+  id: z.string(),
+  action_taken: z.boolean(),
+  action_taken_at: z.string().nullable(),
+  category: z.enum(['spam', 'legal', 'violation', 'other']),
+  comment: z.string(),
+  forwarded: z.boolean(),
+  created_at: z.string(),
+  status_ids: z.array(z.string()).nullable(),
+  rule_ids: z.array(z.string()).nullable(),
+  target_account: AccountSchema,
+});
+export type Report = z.infer<typeof ReportSchema>;
 
 export const ApplicationSchema = z.object({
   name: z.string(),

@@ -324,6 +324,16 @@ export const notificationRepliesTable = sqliteTable('notification_replies', {
   index('notification_replies_original_post_id_idx').on(table.originalPostId),
 ]);
 
+export const notificationMentionsTable = sqliteTable('notification_mentions', {
+  notificationId: text('notificationId').primaryKey().references(() => notificationsTable.notificationId),
+  recipientUserId: text('recipientUserId').notNull().references(() => usersTable.userId),
+  mentionerActorId: text('mentionerActorId').notNull().references(() => actorsTable.actorId),
+  mentionPostId: text('mentionPostId').notNull(),
+}, (table) => [
+  uniqueIndex('notification_mentions_recipient_post_unique').on(table.recipientUserId, table.mentionPostId),
+  index('notification_mentions_mention_post_id_idx').on(table.mentionPostId),
+]);
+
 export const mutesTable = sqliteTable('mutes', {
   muteId: text('muteId').primaryKey(),
   userId: text('userId').notNull().references(() => usersTable.userId),
@@ -333,6 +343,17 @@ export const mutesTable = sqliteTable('mutes', {
   uniqueIndex('mute_user_actor_unique').on(table.userId, table.mutedActorId),
   index('mutes_user_id_idx').on(table.userId),
   index('mutes_muted_actor_id_idx').on(table.mutedActorId),
+]);
+
+export const blocksTable = sqliteTable('blocks', {
+  blockId: text('blockId').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  blockedActorId: text('blockedActorId').notNull().references(() => actorsTable.actorId),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('block_user_actor_unique').on(table.userId, table.blockedActorId),
+  index('blocks_user_id_idx').on(table.userId),
+  index('blocks_blocked_actor_id_idx').on(table.blockedActorId),
 ]);
 
 export const articlesTable = sqliteTable('articles', {
@@ -739,8 +760,10 @@ export const schema = {
   emojiReactsTable,
   notificationEmojiReactsTable,
   notificationRepliesTable,
+  notificationMentionsTable,
   notificationRepostsTable,
   mutesTable,
+  blocksTable,
   articlesTable,
   articleBodiesTable,
   linkPreviewsTable,

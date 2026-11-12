@@ -1,8 +1,9 @@
 import { type InboxContext } from '@fedify/fedify';
-import { Accept, type Follow } from '@fedify/vocab';
+import { Accept, type Follow, Reject } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
+import type { BlockedActorUriResolverByUsername } from '../../../domain/block/block.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { AcceptFollowRequestUseCase } from '../../../useCase/acceptFollowRequest.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
@@ -10,6 +11,7 @@ import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
 
 export type OnFollowDeps = Readonly<{
   inboxActorResolver: InboxActorResolver;
+  blockedActorUriResolverByUsername?: BlockedActorUriResolverByUsername;
   acceptFollowRequestUseCase: ReturnType<typeof AcceptFollowRequestUseCase.create>;
 }>;
 
@@ -37,6 +39,24 @@ export const createOnFollow = (deps: OnFollowDeps) => async (ctx: InboxContext<u
     }),
     RA.andBind('username', ({ object }) => Username.parse(object.identifier)),
     RA.andThrough(async ({ username, object }) => {
+      if (object.identifier !== INSTANCE_ACTOR_IDENTIFIER && deps.blockedActorUriResolverByUsername !== undefined) {
+        const blocked = await deps.blockedActorUriResolverByUsername.resolve({
+          username,
+          actorUri: followerIdentity.uri,
+        });
+        if (blocked.ok && blocked.val) {
+          await ctx.sendActivity(
+            object,
+            follower,
+            new Reject({
+              actor: activity.objectId,
+              to: activity.actorId,
+              object: activity,
+            }),
+          );
+          return RA.ok(undefined);
+        }
+      }
       const accepted = await deps.acceptFollowRequestUseCase.run({
         username,
         follower: followerIdentity,

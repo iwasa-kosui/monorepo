@@ -1,0 +1,127 @@
+---
+import { getCollection } from 'astro:content';
+
+import { buildChapterPages, pagePath } from '../lib/chapter-routes';
+import {
+  elapsedMinutes,
+  firstHeading,
+  formatElapsed,
+  pageLabel,
+} from '../lib/page-guide';
+import { schedule, withTimeRanges } from '../schedule';
+import '../styles/page-progress.css';
+
+interface Props {
+  chapter: string;
+  number: number;
+}
+
+const { chapter, number } = Astro.props;
+const pages = buildChapterPages(
+  await getCollection('chapters'),
+  schedule.map((row) => row.id),
+);
+const rows = withTimeRanges(schedule);
+const overall =
+  pages.findIndex((page) => page.chapter === chapter && page.number === number)
+  + 1;
+const current = pages[overall - 1];
+if (current === undefined) {
+  throw new Error(`ページが見つかりません: ${chapter} ${number}`);
+}
+const elapsed = formatElapsed(
+  elapsedMinutes(schedule, chapter, number, current.total),
+);
+const labelOf = (member: (typeof pages)[number]) =>
+  pageLabel(member.number, firstHeading(member.entry.body));
+const groups = rows.map((row) => ({
+  row,
+  pages: pages.filter((page) => page.chapter === row.id),
+}));
+---
+
+<div class="page-progress">
+  <p class="page-progress__status">
+    <span>全体 <strong>{overall}/{pages.length}</strong></span>
+    <span>目安 {elapsed}ごろ</span>
+  </p>
+  <details class="page-progress__menu">
+    <summary>ページ一覧</summary>
+    <nav class="page-progress__panel" aria-label="全ページの一覧">
+      {
+        groups.map(({ row, pages: members }) => (
+          <section class="page-progress__group">
+            <p class="page-progress__group-title">
+              <strong>{row.title}</strong>
+              <span>{row.range}</span>
+            </p>
+            <ol>
+              {
+                members.map((member) => (
+                  <li>
+                    <a
+                      href={pagePath(member.chapter, member.number)}
+                      aria-current={member.chapter === chapter
+                        && member.number === number
+                      ? 'page'
+                      : undefined}
+                    >
+                      {labelOf(member)}
+                    </a>
+                  </li>
+                ))
+              }
+            </ol>
+          </section>
+        ))
+      }
+    </nav>
+  </details>
+  <span class="page-progress__bar" aria-hidden="true">
+    <span
+      class="page-progress__bar-fill"
+      style={`width: ${(overall / pages.length) * 100}%`}
+    ></span>
+  </span>
+</div>
+
+<script>
+const menu = document.querySelector<HTMLDetailsElement>('.page-progress__menu');
+
+if (menu !== null) {
+  const close = (): void => {
+    menu.open = false;
+  };
+
+  menu.addEventListener('toggle', () => {
+    if (!menu.open) return;
+    const panel = menu.querySelector<HTMLElement>('.page-progress__panel');
+    const here = menu.querySelector<HTMLElement>('[aria-current="page"]');
+    if (panel === null || here === null) return;
+    const panelRect = panel.getBoundingClientRect();
+    const hereRect = here.getBoundingClientRect();
+    if (hereRect.top < panelRect.top) {
+      panel.scrollTop += hereRect.top - panelRect.top;
+    } else if (hereRect.bottom > panelRect.bottom) {
+      panel.scrollTop += hereRect.bottom - panelRect.bottom;
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !menu.open) return;
+    close();
+    menu.querySelector('summary')?.focus();
+  });
+
+  menu.addEventListener('focusout', (event) => {
+    const next = event.relatedTarget;
+    if (menu.open && next instanceof Node && !menu.contains(next)) close();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (
+      menu.open && event.target instanceof Node && !menu.contains(event.target)
+    ) close();
+  });
+}
+</script>

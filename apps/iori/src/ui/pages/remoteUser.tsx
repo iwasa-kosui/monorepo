@@ -5,6 +5,7 @@ import { DEFAULT_HEADER_PATH } from '../../adaptor/mastodon/defaultImages.ts';
 import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import {
+  block,
   failureMessage,
   favourite,
   fetchAccount,
@@ -13,12 +14,16 @@ import {
   follow,
   isNotFoundError,
   mute,
+  report,
+  unblock,
   unfollow,
   unmute,
 } from '../api/mastodonClient.ts';
 import { isLocalAccount, updateStatusesByPostId } from '../api/status.ts';
 import { CustomEmojiText } from '../components/CustomEmojiText.tsx';
 import { PostView } from '../components/PostView.tsx';
+import type { ReportCategory } from '../components/ReportModal.tsx';
+import { ReportModal } from '../components/ReportModal.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { runExclusive, runOptimisticFavourite } from '../hooks/optimisticFavourite.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
@@ -28,15 +33,26 @@ type Props = Readonly<{
   statuses: readonly Status[];
   isFollowing: boolean;
   isMuted: boolean;
+  isBlocked: boolean;
   isLoggedIn: boolean;
   onLike: (postId: string) => Promise<void>;
   onFollow: () => Promise<void>;
   onUnfollow: () => Promise<void>;
   onMute: () => Promise<void>;
   onUnmute: () => Promise<void>;
+  onReportOpen: () => void;
+  onReportClose: () => void;
+  onReportSubmit: (input: { category: ReportCategory; comment: string }) => void;
+  onBlock: () => Promise<void>;
+  onUnblock: () => Promise<void>;
   likingPostId: string | null;
   isMuting: boolean;
+  isBlocking: boolean;
   isTogglingFollow: boolean;
+  isReportOpen: boolean;
+  isReporting: boolean;
+  isReported: boolean;
+  reportError?: string;
 }>;
 
 const isDefaultHeader = (header: string): boolean => {
@@ -52,15 +68,26 @@ export const RemoteUserPage = ({
   statuses,
   isFollowing,
   isMuted,
+  isBlocked,
   isLoggedIn,
   onLike,
   onFollow,
   onUnfollow,
   onMute,
   onUnmute,
+  onReportOpen,
+  onReportClose,
+  onReportSubmit,
+  onBlock,
+  onUnblock,
   likingPostId,
   isMuting,
+  isBlocking,
   isTogglingFollow,
+  isReportOpen,
+  isReporting,
+  isReported,
+  reportError,
 }: Props) => {
   const handle = account.acct;
   const hasDisplayName = account.display_name.trim() !== '';
@@ -269,6 +296,77 @@ export const RemoteUserPage = ({
                         </svg>
                       </button>
                     )}
+                  {isBlocked
+                    ? (
+                      <button
+                        type='button'
+                        onClick={onUnblock}
+                        disabled={isBlocking}
+                        class='flex items-center justify-center p-2 rounded-xl text-terracotta dark:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                        title='ブロック解除'
+                      >
+                        <svg
+                          xmlns='http://www.w3.org/2000/svg'
+                          class='h-5 w-5'
+                          fill='none'
+                          viewBox='0 0 24 24'
+                          stroke='currentColor'
+                          stroke-width='2'
+                        >
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636'
+                          />
+                        </svg>
+                      </button>
+                    )
+                    : (
+                      <button
+                        type='button'
+                        onClick={onBlock}
+                        disabled={isBlocking}
+                        class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                        title='ブロック'
+                      >
+                        <svg
+                          xmlns='http://www.w3.org/2000/svg'
+                          class='h-5 w-5'
+                          fill='none'
+                          viewBox='0 0 24 24'
+                          stroke='currentColor'
+                          stroke-width='2'
+                        >
+                          <path
+                            stroke-linecap='round'
+                            stroke-linejoin='round'
+                            d='M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636'
+                          />
+                        </svg>
+                      </button>
+                    )}
+                  <button
+                    type='button'
+                    onClick={onReportOpen}
+                    class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'
+                    title='通報'
+                  >
+                    <svg
+                      xmlns='http://www.w3.org/2000/svg'
+                      class='h-5 w-5'
+                      fill='none'
+                      viewBox='0 0 24 24'
+                      stroke='currentColor'
+                      stroke-width='2'
+                    >
+                      <path
+                        stroke-linecap='round'
+                        stroke-linejoin='round'
+                        d='M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9'
+                      />
+                    </svg>
+                  </button>
+                  {isReported && <span role='status' class='text-sm text-sage-dark dark:text-sage'>通報しました</span>}
                 </>
               )
               : (
@@ -326,6 +424,15 @@ export const RemoteUserPage = ({
           ))
         )}
       </section>
+
+      <ReportModal
+        targetLabel={`@${handle}`}
+        isOpen={isReportOpen}
+        isSubmitting={isReporting}
+        error={reportError}
+        onSubmit={onReportSubmit}
+        onClose={onReportClose}
+      />
     </>
   );
 };
@@ -336,8 +443,11 @@ type RemoteUserData = Readonly<{
   nextMaxId: string | undefined;
   isFollowing: boolean;
   isMuted: boolean;
+  isBlocked: boolean;
   isLoggedIn: boolean;
 }>;
+
+const REPORTED_NOTICE_MS = 4000;
 
 const getActorIdFromUrl = () => {
   const pathParts = window.location.pathname.split('/');
@@ -350,7 +460,12 @@ const App = () => {
   const favouriteInFlightRef = useRef<Set<string>>(null);
   const [likingPostId, setLikingPostId] = useState<string | null>(null);
   const [isMuting, setIsMuting] = useState(false);
+  const [isBlocking, setIsBlocking] = useState(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isReporting, setIsReporting] = useState(false);
+  const [isReported, setIsReported] = useState(false);
+  const [reportError, setReportError] = useState<string | undefined>(undefined);
   const [data, setData] = useState<{ error: string } | RemoteUserData | null>(null);
 
   useEffect(() => {
@@ -380,6 +495,12 @@ const App = () => {
     };
     fetchFirstPage();
   }, []);
+
+  useEffect(() => {
+    if (!isReported) return;
+    const timer = setTimeout(() => setIsReported(false), REPORTED_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [isReported]);
 
   const loaded = data !== null && !('error' in data) ? data : undefined;
   const accountId = loaded?.account.id;
@@ -486,6 +607,74 @@ const App = () => {
     }
   };
 
+  const handleReportOpen = () => {
+    setReportError(undefined);
+    setIsReportOpen(true);
+  };
+
+  const handleReportClose = () => {
+    if (isReporting) return;
+    setIsReportOpen(false);
+    setReportError(undefined);
+  };
+
+  const handleReportSubmit = async ({ category, comment }: { category: ReportCategory; comment: string }) => {
+    if (!data || 'error' in data) return;
+    setIsReporting(true);
+    setReportError(undefined);
+    try {
+      await report({
+        account_id: data.account.id,
+        category: category === 'offensive' ? 'violation' : category,
+        comment,
+      });
+      setIsReportOpen(false);
+      setIsReported(true);
+    } catch (error) {
+      console.error('Failed to report:', error);
+      setReportError(failureMessage('report', error));
+    } finally {
+      setIsReporting(false);
+    }
+  };
+
+  const handleBlock = async () => {
+    if (!data || 'error' in data) return;
+    if (!confirm(`@${data.account.acct} をブロックしますか？フォローとフォロワーの関係も解除されます`)) return;
+    setIsBlocking(true);
+    try {
+      const relationship = await block(data.account.id);
+      setData((prev) =>
+        prev === null || 'error' in prev
+          ? prev
+          : { ...prev, isBlocked: relationship.blocking, isFollowing: relationship.following }
+      );
+    } catch (error) {
+      console.error('Failed to block:', error);
+      alert(failureMessage('block', error));
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
+  const handleUnblock = async () => {
+    if (!data || 'error' in data) return;
+    setIsBlocking(true);
+    try {
+      const relationship = await unblock(data.account.id);
+      setData((prev) =>
+        prev === null || 'error' in prev
+          ? prev
+          : { ...prev, isBlocked: relationship.blocking, isFollowing: relationship.following }
+      );
+    } catch (error) {
+      console.error('Failed to unblock:', error);
+      alert(failureMessage('unblock', error));
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
   if (data === null) {
     return <div class='text-charcoal-light dark:text-gray-400'>Loading...</div>;
   }
@@ -500,15 +689,26 @@ const App = () => {
       statuses={data.statuses}
       isFollowing={data.isFollowing}
       isMuted={data.isMuted}
+      isBlocked={data.isBlocked}
       isLoggedIn={data.isLoggedIn}
       onLike={handleLike}
       onFollow={handleFollow}
       onUnfollow={handleUnfollow}
       onMute={handleMute}
       onUnmute={handleUnmute}
+      onReportOpen={handleReportOpen}
+      onReportClose={handleReportClose}
+      onReportSubmit={handleReportSubmit}
+      onBlock={handleBlock}
+      onUnblock={handleUnblock}
       likingPostId={likingPostId}
       isMuting={isMuting}
+      isBlocking={isBlocking}
       isTogglingFollow={isTogglingFollow}
+      isReportOpen={isReportOpen}
+      isReporting={isReporting}
+      isReported={isReported}
+      reportError={reportError}
     />
   );
 };

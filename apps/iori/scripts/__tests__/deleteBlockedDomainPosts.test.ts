@@ -136,6 +136,8 @@ const build = () => {
     emojiOnBp1: seed.addEmojiReactNotification(local.userId, other.actorId, bp1.postId, 2),
     replyFromBp2: seed.addReplyNotification(local.userId, sub.actorId, bp2.postId, localPost.postId, 3),
     replyToBp1: seed.addReplyNotification(local.userId, other.actorId, kept.other.postId, bp1.postId, 4),
+    mentionOnBp1: seed.addMentionNotification(local.userId, other.actorId, bp1.postId, 10),
+    mentionOnKept: seed.addMentionNotification(local.userId, other.actorId, kept.notbaraag.postId, 11),
     repostOfBp2: seed.addRepostNotification(local.userId, other.actorId, bp2.postId, 5),
     likeOnKept: seed.addLikeNotification(local.userId, other.actorId, kept.notbaraag.postId, 6),
     replyOnKept: seed.addReplyNotification(local.userId, other.actorId, kept.other.postId, localPost.postId, 7),
@@ -245,6 +247,7 @@ const SNAPSHOT_TABLES: Array<[string, string]> = [
   ['notification_likes', 'notificationId'],
   ['notification_emoji_reacts', 'notificationId'],
   ['notification_replies', 'notificationId'],
+  ['notification_mentions', 'notificationId'],
   ['notification_reposts', 'notificationId'],
   ['notification_follows', 'notificationId'],
   ['reposts', 'repostId'],
@@ -378,7 +381,7 @@ describe('delete-blocked-domain-posts dry-run', () => {
     const { notices, error } = await run('dry-run', fixture);
     expect(error).toBeUndefined();
     expect(notices).toEqual([
-      'IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=2 remote_posts=2 timeline_items=4 federated_items=2 reposts=2 likes=2 emoji_reacts=2 notifications=5 orphan_repost_notifications=0 images=2 articles_skipped=1 actors=2 follows_out=1 follows_in=1 mutes=1',
+      'IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=2 remote_posts=2 timeline_items=4 federated_items=2 reposts=2 likes=2 emoji_reacts=2 notifications=6 orphan_repost_notifications=0 images=2 articles_skipped=1 actors=2 follows_out=1 follows_in=1 mutes=1',
     ]);
   });
   it('prints zeros when nothing is left', async () => {
@@ -400,7 +403,7 @@ describe('delete-blocked-domain-posts dry-run counts', () => {
       ).run(seed.uuid(), local.userId, type, 0, createdAt);
     }
     const { notices } = await run('dry-run', fixture);
-    expect(notices[0]).toContain(' notifications=5 orphan_repost_notifications=2 ');
+    expect(notices[0]).toContain(' notifications=6 orphan_repost_notifications=2 ');
   });
   it('counts remote_posts by the same condition as the deletion', async () => {
     const { fixture, kept } = build();
@@ -467,11 +470,18 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
     const { fixture, notifications } = build();
     await run('apply', fixture);
     expect(column(fixture, 'SELECT notificationId FROM notifications')).toEqual(
-      ids(notifications.likeOnKept, notifications.replyOnKept, notifications.likeOnArticle, notifications.follow),
+      ids(
+        notifications.likeOnKept,
+        notifications.replyOnKept,
+        notifications.mentionOnKept,
+        notifications.likeOnArticle,
+        notifications.follow,
+      ),
     );
     expect(count(fixture, 'notification_likes')).toBe(2);
     expect(count(fixture, 'notification_emoji_reacts')).toBe(0);
     expect(count(fixture, 'notification_replies')).toBe(1);
+    expect(count(fixture, 'notification_mentions')).toBe(1);
     expect(count(fixture, 'notification_reposts')).toBe(0);
     expect(count(fixture, 'notification_follows')).toBe(1);
   });
@@ -544,9 +554,11 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
       'notification.likeNotificationDeleted',
       'notification.emojiReactNotificationDeleted',
       'notification.replyNotificationDeleted',
+      'notification.mentionNotificationDeleted',
       'DELETE FROM notification_likes',
       'DELETE FROM notification_emoji_reacts',
       'DELETE FROM notification_replies',
+      'DELETE FROM notification_mentions',
       'DELETE FROM notification_reposts',
       'DELETE FROM notifications',
       'repost.repostDeleted',
@@ -643,6 +655,14 @@ describe('delete-blocked-domain-posts domain events', () => {
         }),
         at,
       ),
+      Notification.deleteMentionNotification(
+        cast({
+          notificationId: notifications.mentionOnBp1,
+          mentionerActorId: other.actorId,
+          mentionPostId: bp1.postId,
+        }),
+        at,
+      ),
       ...[reposts.otherOfBp1, reposts.subOfBp2].map((repost) => Repost.deleteRepost(cast(repost), at)),
       Like.deleteLocalLike(cast({ likeId: localLike.likeId }), at),
       Like.deleteRemoteLike(cast({ likeId: remoteLikeId, likeActivityUri: 'https://remote.example/likes/1' }), at),
@@ -682,8 +702,8 @@ describe('delete-blocked-domain-posts domain events', () => {
     const { fixture } = build();
     await run('apply', fixture);
     const ids = rows(fixture, 'SELECT eventId FROM domain_events').map((row) => String(row.eventId));
-    expect(ids).toHaveLength(18);
-    expect(new Set(ids).size).toBe(18);
+    expect(ids).toHaveLength(19);
+    expect(new Set(ids).size).toBe(19);
     for (const id of ids) {
       expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     }

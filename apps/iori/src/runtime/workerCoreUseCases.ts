@@ -1,8 +1,10 @@
-import { Follow as ActivityPubFollow, Undo } from '@fedify/vocab';
+import { Block as ActivityPubBlock, Follow as ActivityPubFollow, Reject, Undo } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 
 import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
+import type { ActorId } from '../domain/actor/actorId.ts';
+import type { BlockResolver } from '../domain/block/block.ts';
 import {
   Follow as DomainFollow,
   type FollowRequestedStore,
@@ -11,8 +13,10 @@ import {
 } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { UserResolver } from '../domain/user/user.ts';
+import type { CreateBlockUseCase } from '../useCase/createBlock.ts';
+import type { DeleteBlockUseCase } from '../useCase/deleteBlock.ts';
 import { resolveLocalActorWith, resolveUserWith } from '../useCase/helper/resolve.ts';
-import type { WorkerRemoteActorAction } from './ports.ts';
+import type { WorkerBlockAction, WorkerRemoteActorAction } from './ports.ts';
 
 export type WorkerRemoteActorActionInput = Parameters<WorkerRemoteActorAction>[0];
 
@@ -103,3 +107,121 @@ export const createWorkerRemoteActorActions = (
     return RA.ok(undefined);
   },
 });
+
+type WorkerBlockActionsDeps = Readonly<{
+  userResolver: UserResolver;
+  actorResolverByUserId: ActorResolverByUserId;
+  actorResolverById: ActorResolverById;
+  followResolver: FollowResolver;
+  undoFollowingProcessedStore: UndoFollowingProcessedStore;
+  blockResolver: BlockResolver;
+  createBlockUseCase: CreateBlockUseCase;
+  deleteBlockUseCase: DeleteBlockUseCase;
+  unfollowRemoteActor: WorkerRemoteActorAction;
+}>;
+
+const blockActors = async (deps: WorkerBlockActionsDeps, input: WorkerRemoteActorActionInput) => {
+  const user = await resolveUserWith(deps.userResolver)(input.userId);
+  if (!user.ok) return RA.err({ message: user.err.message });
+  const blocker = await resolveLocalActorWith(deps.actorResolverByUserId)(input.userId);
+  if (!blocker.ok) return RA.err({ message: blocker.err.message });
+  const target = await deps.actorResolverById.resolve(input.actorId);
+  if (!target.ok || target.val === undefined) {
+    return RA.err({ message: `Actor not found: ${input.actorId}` });
+  }
+  return RA.ok({ user: user.val, blocker: blocker.val, target: target.val });
+};
+
+export const createWorkerBlockActions = (
+  deps: WorkerBlockActionsDeps,
+): Readonly<{
+  blockActor: WorkerBlockAction;
+  unblockActor: WorkerBlockAction;
+}> => {
+  const hasFollow = async (followerId: ActorId, followingId: ActorId) => {
+    const follow = await deps.followResolver.resolve({ followerId, followingId });
+    return follow.ok && follow.val !== undefined;
+  };
+  const removeFollow = (followerId: ActorId, followingId: ActorId) =>
+    deps.undoFollowingProcessedStore.store(DomainFollow.undoFollow({ followerId, followingId }, Instant.now()));
+
+  return {
+    blockActor: async (input) => {
+      const actors = await blockActors(deps, input);
+      if (!actors.ok) return actors;
+      const { user, blocker, target } = actors.val;
+      const created = await deps.createBlockUseCase.run({ userId: input.userId, blockedActorId: target.id });
+      if (!created.ok && created.err.type !== 'AlreadyBlockedError') return RA.err({ message: created.err.message });
+      const block = await deps.blockResolver.resolve({ userId: input.userId, blockedActorId: target.id });
+      if (!block.ok) return RA.err({ message: String(block.err) });
+      if (block.val === undefined) return RA.err({ message: `Block not found: ${target.id}` });
+      const blockId = block.val.blockId;
+      if (await hasFollow(blocker.id, target.id)) {
+        const unfollowed = target.type === 'remote'
+          ? await deps.unfollowRemoteActor(input)
+          : await removeFollow(blocker.id, target.id);
+        if (!unfollowed.ok) return RA.err({ message: unfollowed.err.message });
+      }
+      const blockerUri = input.ctx.getActorUri(user.username);
+      if (await hasFollow(target.id, blocker.id)) {
+        const removed = await removeFollow(target.id, blocker.id);
+        if (!removed.ok) return RA.err({ message: String(removed.err) });
+        if (target.type === 'remote') {
+          await input.ctx.sendActivity(
+            { username: user.username },
+            { id: new URL(target.uri), inboxId: new URL(target.inboxUrl) },
+            new Reject({
+              id: new URL(`${blocker.uri}#reject-follows/${target.id}`),
+              actor: blockerUri,
+              object: new ActivityPubFollow({ actor: new URL(target.uri), object: blockerUri }),
+              to: new URL(target.uri),
+            }),
+          );
+        }
+      }
+      if (target.type === 'remote') {
+        await input.ctx.sendActivity(
+          { username: user.username },
+          { id: new URL(target.uri), inboxId: new URL(target.inboxUrl) },
+          new ActivityPubBlock({
+            id: new URL(`${blocker.uri}#blocks/${blockId}`),
+            actor: blockerUri,
+            object: new URL(target.uri),
+            to: new URL(target.uri),
+          }),
+        );
+      }
+      return RA.ok(undefined);
+    },
+    unblockActor: async (input) => {
+      const actors = await blockActors(deps, input);
+      if (!actors.ok) return actors;
+      const { user, blocker, target } = actors.val;
+      const block = await deps.blockResolver.resolve({ userId: input.userId, blockedActorId: target.id });
+      if (!block.ok) return RA.err({ message: String(block.err) });
+      const deleted = await deps.deleteBlockUseCase.run({ userId: input.userId, blockedActorId: target.id });
+      if (!deleted.ok) {
+        return deleted.err.type === 'NotBlockedError' ? RA.ok(undefined) : RA.err({ message: deleted.err.message });
+      }
+      if (target.type === 'remote' && block.val !== undefined) {
+        const blockerUri = input.ctx.getActorUri(user.username);
+        const blockId = block.val.blockId;
+        await input.ctx.sendActivity(
+          { username: user.username },
+          { id: new URL(target.uri), inboxId: new URL(target.inboxUrl) },
+          new Undo({
+            id: new URL(`${blocker.uri}#undo-blocks/${blockId}`),
+            actor: blockerUri,
+            object: new ActivityPubBlock({
+              id: new URL(`${blocker.uri}#blocks/${blockId}`),
+              actor: blockerUri,
+              object: new URL(target.uri),
+            }),
+            to: new URL(target.uri),
+          }),
+        );
+      }
+      return RA.ok(undefined);
+    },
+  };
+};

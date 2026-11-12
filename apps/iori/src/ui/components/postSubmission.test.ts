@@ -10,7 +10,7 @@ const created = {
 
 const filled: PostFormValue = {
   content: 'hello',
-  uploaded: [{ id: 'media-1', url: 'https://example.com/a.png', description: '' }],
+  uploaded: [{ id: 'media-1', url: 'https://example.com/a.png', description: '', savedDescription: '' }],
   destination: 'both',
   cw: '',
   sensitive: false,
@@ -44,7 +44,13 @@ describe('submitPost', () => {
     const create = vi.fn().mockResolvedValue(created);
     const onPosted = vi.fn();
 
-    const result = await submitPost(filled, { create, createBlueskyPost: vi.fn(), updateMedia, onPosted });
+    const result = await submitPost(filled, {
+      create,
+      createBlueskyPost: vi.fn(),
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted,
+    });
 
     expect(create).toHaveBeenCalledWith({
       status: 'hello',
@@ -65,6 +71,7 @@ describe('submitPost', () => {
       create,
       createBlueskyPost: vi.fn(),
       updateMedia,
+      onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
     });
 
@@ -78,6 +85,7 @@ describe('submitPost', () => {
       create,
       createBlueskyPost: vi.fn(),
       updateMedia,
+      onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
     });
 
@@ -87,7 +95,13 @@ describe('submitPost', () => {
   it('omits spoiler_text and sensitive when the CW is blank and sensitive is off', async () => {
     const create = vi.fn().mockResolvedValue(created);
 
-    await submitPost({ ...filled, cw: '  ' }, { create, createBlueskyPost: vi.fn(), updateMedia, onPosted: vi.fn() });
+    await submitPost({ ...filled, cw: '  ' }, {
+      create,
+      createBlueskyPost: vi.fn(),
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted: vi.fn(),
+    });
 
     const params = create.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(params).not.toHaveProperty('spoiler_text');
@@ -104,15 +118,16 @@ describe('submitPost', () => {
       return created;
     });
     const uploaded = [
-      { id: 'media-1', url: 'https://example.com/a.png', description: '猫の写真' },
-      { id: 'media-2', url: 'https://example.com/b.png', description: '  ' },
-      { id: 'media-3', url: 'https://example.com/c.png', description: '犬の写真' },
+      { id: 'media-1', url: 'https://example.com/a.png', description: '猫の写真', savedDescription: '' },
+      { id: 'media-2', url: 'https://example.com/b.png', description: '  ', savedDescription: '' },
+      { id: 'media-3', url: 'https://example.com/c.png', description: '犬の写真', savedDescription: '' },
     ];
 
     await submitPost({ ...filled, uploaded }, {
       create,
       createBlueskyPost: vi.fn(),
       updateMedia: update,
+      onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
     });
 
@@ -122,16 +137,97 @@ describe('submitPost', () => {
     expect(order).toEqual(['update:media-1', 'update:media-3', 'create']);
   });
 
+  it('does not save a description that matches the last saved one', async () => {
+    const create = vi.fn().mockResolvedValue(created);
+    const update = vi.fn().mockResolvedValue({});
+    const uploaded = [
+      { id: 'media-1', url: 'https://example.com/a.png', description: '猫の写真', savedDescription: '猫の写真' },
+      { id: 'media-2', url: 'https://example.com/b.png', description: '犬の写真', savedDescription: '猫の写真' },
+    ];
+
+    await submitPost(
+      { ...filled, uploaded },
+      { create, createBlueskyPost: vi.fn(), updateMedia: update, onDescriptionSaved: vi.fn(), onPosted: vi.fn() },
+    );
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith('media-2', '犬の写真');
+  });
+
+  it('saves an empty description when it was cleared after being saved', async () => {
+    const create = vi.fn().mockResolvedValue(created);
+    const update = vi.fn().mockResolvedValue({});
+    const onDescriptionSaved = vi.fn();
+    const uploaded = [
+      { id: 'media-1', url: 'https://example.com/a.png', description: '', savedDescription: '猫の写真' },
+    ];
+
+    await submitPost({ ...filled, uploaded }, {
+      create,
+      createBlueskyPost: vi.fn(),
+      updateMedia: update,
+      onDescriptionSaved,
+      onPosted: vi.fn(),
+    });
+
+    expect(update).toHaveBeenCalledWith('media-1', '');
+    expect(onDescriptionSaved).toHaveBeenCalledWith('media-1', '');
+  });
+
+  it('reports saved descriptions even when creating the status fails', async () => {
+    const create = vi.fn().mockRejectedValue(new Error('network'));
+    const update = vi.fn().mockResolvedValue({});
+    const onDescriptionSaved = vi.fn();
+    const uploaded = [
+      { id: 'media-1', url: 'https://example.com/a.png', description: '猫の写真', savedDescription: '' },
+    ];
+
+    const result = await submitPost(
+      { ...filled, uploaded },
+      { create, createBlueskyPost: vi.fn(), updateMedia: update, onDescriptionSaved, onPosted: vi.fn() },
+    );
+
+    expect(result.kind).toBe('failed');
+    expect(onDescriptionSaved).toHaveBeenCalledWith('media-1', '猫の写真');
+  });
+
+  it('reports the descriptions saved before a later save fails', async () => {
+    const create = vi.fn().mockResolvedValue(created);
+    const update = vi.fn(async (id: string) => {
+      if (id === 'media-2') throw new Error('network');
+    });
+    const onDescriptionSaved = vi.fn();
+    const uploaded = [
+      { id: 'media-1', url: 'https://example.com/a.png', description: '猫の写真', savedDescription: '' },
+      { id: 'media-2', url: 'https://example.com/b.png', description: '犬の写真', savedDescription: '' },
+    ];
+
+    const result = await submitPost(
+      { ...filled, uploaded },
+      { create, createBlueskyPost: vi.fn(), updateMedia: update, onDescriptionSaved, onPosted: vi.fn() },
+    );
+
+    expect(result.kind).toBe('failed');
+    expect(onDescriptionSaved).toHaveBeenCalledTimes(1);
+    expect(onDescriptionSaved).toHaveBeenCalledWith('media-1', '猫の写真');
+  });
+
   it('does not create the status and reports failure when saving a description fails', async () => {
     const create = vi.fn().mockResolvedValue(created);
     const update = vi.fn().mockRejectedValue(new Error('network'));
     const onPosted = vi.fn();
-    const uploaded = [{ id: 'media-1', url: 'https://example.com/a.png', description: '猫の写真' }];
+    const uploaded = [{
+      id: 'media-1',
+      url: 'https://example.com/a.png',
+      description: '猫の写真',
+      savedDescription: '',
+    }];
 
     const result = await submitPost({ ...filled, uploaded }, {
       create,
       createBlueskyPost: vi.fn(),
       updateMedia: update,
+      onDescriptionSaved: vi.fn(),
       onPosted,
     });
 
@@ -147,7 +243,13 @@ describe('submitPost', () => {
     const create = vi.fn().mockRejectedValue(new Error('network'));
     const onPosted = vi.fn();
 
-    const result = await submitPost(filled, { create, createBlueskyPost: vi.fn(), updateMedia, onPosted });
+    const result = await submitPost(filled, {
+      create,
+      createBlueskyPost: vi.fn(),
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted,
+    });
 
     expect(result).toEqual({ kind: 'failed', message: 'Failed to post. Please try again.' });
     expect(onPosted).not.toHaveBeenCalled();
@@ -157,7 +259,13 @@ describe('submitPost', () => {
     const create = vi.fn().mockRejectedValue(Object.assign(new Error('Validation failed'), { status: 422 }));
     const onPosted = vi.fn();
 
-    const result = await submitPost(filled, { create, createBlueskyPost: vi.fn(), updateMedia, onPosted });
+    const result = await submitPost(filled, {
+      create,
+      createBlueskyPost: vi.fn(),
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted,
+    });
 
     expect(result).toEqual({ kind: 'failed', message: 'Failed to post: Validation failed' });
     expect(onPosted).not.toHaveBeenCalled();
@@ -169,7 +277,9 @@ describe('submitPost', () => {
       throw new Error('render');
     });
 
-    await expect(submitPost(filled, { create, createBlueskyPost: vi.fn(), updateMedia, onPosted })).rejects.toThrow(
+    await expect(
+      submitPost(filled, { create, createBlueskyPost: vi.fn(), updateMedia, onDescriptionSaved: vi.fn(), onPosted }),
+    ).rejects.toThrow(
       'render',
     );
   });
@@ -186,7 +296,13 @@ describe('submitPost to Bluesky only', () => {
     });
     const onPosted = vi.fn();
 
-    const result = await submitPost(blueskyOnly, { create, createBlueskyPost, updateMedia, onPosted });
+    const result = await submitPost(blueskyOnly, {
+      create,
+      createBlueskyPost,
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted,
+    });
 
     expect(createBlueskyPost).toHaveBeenCalledExactlyOnceWith({
       status: 'hello',
@@ -205,7 +321,13 @@ describe('submitPost to Bluesky only', () => {
     );
     const onPosted = vi.fn();
 
-    const result = await submitPost(blueskyOnly, { create, createBlueskyPost, updateMedia, onPosted });
+    const result = await submitPost(blueskyOnly, {
+      create,
+      createBlueskyPost,
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted,
+    });
 
     expect(result).toEqual({ kind: 'failed', message: 'Failed to post: Bluesky に送れる本文は 300 文字までです' });
     expect(create).not.toHaveBeenCalled();
@@ -221,6 +343,7 @@ describe('submitPost to Bluesky only', () => {
       create: vi.fn(),
       createBlueskyPost,
       updateMedia,
+      onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
     });
 
@@ -237,14 +360,15 @@ describe('submitPost to Bluesky only', () => {
       return { uri: 'at://did:plc:me/app.bsky.feed.post/3k', url: 'https://bsky.app/x' };
     });
     const uploaded = [
-      { id: 'media-1', url: 'https://example.com/a.png', description: '猫の写真' },
-      { id: 'media-2', url: 'https://example.com/b.png', description: '' },
+      { id: 'media-1', url: 'https://example.com/a.png', description: '猫の写真', savedDescription: '' },
+      { id: 'media-2', url: 'https://example.com/b.png', description: '', savedDescription: '' },
     ];
 
     await submitPost({ ...blueskyOnly, uploaded }, {
       create: vi.fn(),
       createBlueskyPost,
       updateMedia: update,
+      onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
     });
 
@@ -255,12 +379,18 @@ describe('submitPost to Bluesky only', () => {
   it('does not call createBlueskyPost and reports failure when saving a description fails', async () => {
     const createBlueskyPost = vi.fn();
     const update = vi.fn().mockRejectedValue(new Error('network'));
-    const uploaded = [{ id: 'media-1', url: 'https://example.com/a.png', description: '猫の写真' }];
+    const uploaded = [{
+      id: 'media-1',
+      url: 'https://example.com/a.png',
+      description: '猫の写真',
+      savedDescription: '',
+    }];
 
     const result = await submitPost({ ...blueskyOnly, uploaded }, {
       create: vi.fn(),
       createBlueskyPost,
       updateMedia: update,
+      onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
     });
 
@@ -278,6 +408,7 @@ describe('submitPost to Bluesky only', () => {
       create: vi.fn(),
       createBlueskyPost,
       updateMedia,
+      onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
     });
 
@@ -293,6 +424,7 @@ describe('submitPost to Bluesky only', () => {
       create: vi.fn().mockResolvedValue(created),
       createBlueskyPost,
       updateMedia,
+      onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
     });
 

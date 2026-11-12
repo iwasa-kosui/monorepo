@@ -266,6 +266,22 @@ describe('GET と PUT /api/v1/media/:id', () => {
     expect(s.medias.get(id)?.description).toBeNull();
   });
 
+  it('multipart の本文で description が空文字なら説明を消す', async () => {
+    const s = setup();
+    const { headers } = await s.user();
+    const { id } = await uploadAs(s, headers, '猫');
+
+    const response = await s.request(`/api/v1/media/${id}`, {
+      method: 'PUT',
+      headers,
+      body: multipart({ description: '' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ id, description: null });
+    expect(s.medias.get(id)?.description).toBeNull();
+  });
+
   it('1500 文字を超える説明の PUT は 422 にして、説明を変えない', async () => {
     const s = setup();
     const { headers } = await s.user();

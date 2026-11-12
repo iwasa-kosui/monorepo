@@ -2,7 +2,7 @@ import { IORI_EMOJI_REACTION_TYPE, type Notification, type Status } from '../../
 import { Instant } from '../../domain/instant/instant.ts';
 import { BLUESKY_STATUS_ID_PREFIX } from '../../helper/blueskyUrl.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
-import { accountHandle, accountHref } from '../api/status.ts';
+import { accountHandle, accountHref, detailHref } from '../api/status.ts';
 
 type Props = Readonly<{
   notification: Notification;
@@ -306,7 +306,7 @@ const EmojiReactNotificationItem = ({ notification, recipientUsername }: Props) 
 };
 
 const mentionLabelOf = (notification: Notification): string => {
-  switch (notification.iori?.bluesky?.reason) {
+  switch (notification.iori?.bluesky?.reason ?? notification.iori?.fediverse?.reason) {
     case 'mention':
       return 'mentioned you';
     case 'quote':
@@ -316,16 +316,14 @@ const mentionLabelOf = (notification: Notification): string => {
   }
 };
 
-const MentionNotificationItem = ({ notification, recipientUsername }: Props) => {
+const MentionNotificationItem = ({ notification }: Props) => {
   const { account } = notification;
   const status = ioriStatusOf(notification);
   const createdAt = createdAtOf(notification);
 
   const handle = accountHandle(account);
   const actorUrl = accountHref(account);
-  // 旧 UI と同じく、返信そのものではなく返信先の投稿へリンクする
-  const postUrl = notification.iori?.bluesky?.url
-    ?? `/users/${recipientUsername}/posts/${status?.in_reply_to_id ?? status?.id ?? ''}`;
+  const postUrl = notification.iori?.bluesky?.url ?? (status === undefined ? '' : detailHref(status));
   const logoUrl = safeUrl(account.avatar);
 
   return (

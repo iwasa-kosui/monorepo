@@ -22,7 +22,7 @@ export const REASONS = Object.freeze({
   reply:
     '(EXISTS (SELECT 1 FROM remote_posts rp JOIN local_posts lr ON lr.inReplyToUri = rp.uri WHERE rp.postId = c.postId) OR EXISTS (SELECT 1 FROM remote_posts rp JOIN local_posts parent ON parent.postId = replace(rp.inReplyToUri, rtrim(rp.inReplyToUri, replace(rp.inReplyToUri, \'/\', \'\')), \'\') WHERE rp.postId = c.postId AND rp.inReplyToUri IS NOT NULL AND rp.inReplyToUri LIKE \'%/posts/\' || parent.postId))',
   notification:
-    '(EXISTS (SELECT 1 FROM notification_likes n WHERE n.likedPostId = c.postId) OR EXISTS (SELECT 1 FROM notification_reposts n WHERE n.repostedPostId = c.postId) OR EXISTS (SELECT 1 FROM notification_emoji_reacts n WHERE n.reactedPostId = c.postId) OR EXISTS (SELECT 1 FROM notification_replies n WHERE n.replyPostId = c.postId OR n.originalPostId = c.postId))',
+    '(EXISTS (SELECT 1 FROM notification_likes n WHERE n.likedPostId = c.postId) OR EXISTS (SELECT 1 FROM notification_reposts n WHERE n.repostedPostId = c.postId) OR EXISTS (SELECT 1 FROM notification_emoji_reacts n WHERE n.reactedPostId = c.postId) OR EXISTS (SELECT 1 FROM notification_replies n WHERE n.replyPostId = c.postId OR n.originalPostId = c.postId) OR EXISTS (SELECT 1 FROM notification_mentions n WHERE n.mentionPostId = c.postId))',
   article: 'EXISTS (SELECT 1 FROM articles ar WHERE ar.rootPostId = c.postId)',
 });
 const REASON_NAMES = Object.keys(REASONS);

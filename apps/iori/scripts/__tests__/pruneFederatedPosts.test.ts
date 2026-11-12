@@ -65,10 +65,14 @@ const build = () => {
       'remote',
       1,
     );
-  const notification = (post: { postId: string }, kind: 'like' | 'repost' | 'emoji' | 'reply' | 'original') => {
+  const notification = (
+    post: { postId: string },
+    kind: 'like' | 'repost' | 'emoji' | 'reply' | 'original' | 'mention',
+  ) => {
     if (kind === 'like') seed.addLikeNotification(local.userId, remote.actorId, post.postId, 1);
     if (kind === 'repost') seed.addRepostNotification(local.userId, remote.actorId, post.postId, 1);
     if (kind === 'emoji') seed.addEmojiReactNotification(local.userId, remote.actorId, post.postId, 1);
+    if (kind === 'mention') seed.addMentionNotification(local.userId, remote.actorId, post.postId, 1);
     const other = seed.addLocalPost(local, 1, { timeline: false });
     if (kind === 'reply') seed.addReplyNotification(local.userId, remote.actorId, post.postId, other.postId, 1);
     if (kind === 'original') seed.addReplyNotification(local.userId, remote.actorId, other.postId, post.postId, 1);
@@ -110,6 +114,7 @@ const build = () => {
     notificationEmoji: federated(),
     notificationReply: federated(),
     notificationOriginal: federated(),
+    notificationMention: federated(),
     article: federated(),
     overlap: federated(),
   };
@@ -132,6 +137,7 @@ const build = () => {
   notification(excluded.notificationEmoji, 'emoji');
   notification(excluded.notificationReply, 'reply');
   notification(excluded.notificationOriginal, 'original');
+  notification(excluded.notificationMention, 'mention');
   fixture.sqlite.prepare(
     'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
   ).run(seed.uuid(), local.actorId, local.userId, excluded.article.postId, 't', 'draft', 1, null, null);
@@ -197,7 +203,7 @@ describe('prune-federated-posts dry-run counts', () => {
     const { notices, error } = await run(fixture);
     expect(error).toBeUndefined();
     expect(notices).toEqual([
-      `IORI_NOTICE prune-federated-posts mode=dry-run candidates=21 local_likes=2 local_emoji=1 home=2 local_repost=1 reply=3 notification=5 article=1 to_delete=7 cutoff_ms=${cutoff}`,
+      `IORI_NOTICE prune-federated-posts mode=dry-run candidates=22 local_likes=2 local_emoji=1 home=2 local_repost=1 reply=3 notification=6 article=1 to_delete=7 cutoff_ms=${cutoff}`,
     ]);
   });
   it('sends exactly one SELECT after resolving the database and changes nothing', async () => {
@@ -230,7 +236,7 @@ describe('prune-federated-posts dry-run counts', () => {
     seed.addFederatedItem(boundary.postId, seed.addRelay(), cutoff);
     expect(ids(candidateSql(cutoff))).not.toContain(boundary.postId);
     expect(ids(candidateSql(cutoff + 1))).toContain(boundary.postId);
-    expect(ids(candidateSql(cutoff)).length).toBe(21);
+    expect(ids(candidateSql(cutoff)).length).toBe(22);
   });
   it('does not look at posts.createdAt', () => {
     expect(candidateSql(cutoff)).not.toContain('createdAt');
@@ -246,7 +252,7 @@ describe('prune-federated-posts dry-run counts', () => {
     fixture.sqlite.prepare('DELETE FROM remote_posts WHERE postId = ?').run(deletable[0].postId);
     const ids = rows(fixture, candidateSql(cutoff)).map((row) => String(row.postId));
     expect(ids).not.toContain(deletable[0].postId);
-    expect(ids.length).toBe(20);
+    expect(ids.length).toBe(21);
   });
   it('uses a seven day retention', () => {
     expect(RETENTION_MS).toBe(7 * 24 * 60 * 60 * 1000);

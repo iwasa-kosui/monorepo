@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Article as FedifyArticle, Document, Note } from '@fedify/vocab';
+import { Article as FedifyArticle, Document, Mention, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -256,6 +256,39 @@ describe('createObjectDispatcher ofNote', () => {
     expect(content).toContain('hi');
     expect(content).toContain('link');
     expect(content).toContain('href="https://example.com/"');
+  });
+
+  it('メンションのない投稿は、cc に followers だけを持ち、tags を持たない', async () => {
+    const post = createLocalPost();
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
+
+    expect((result as Note).ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers']);
+    expect((result as Note).toIds.map((url) => url.href)).toEqual(['https://www.w3.org/ns/activitystreams#Public']);
+    await expect(Array.fromAsync((result as Note).getTags())).resolves.toEqual([]);
+  });
+
+  it('本文に a.mention のある投稿は、Mention タグを付け、相手の actor を followers に加えて cc に入れる', async () => {
+    const post = {
+      ...createLocalPost(),
+      content:
+        '<p><span class="h-card"><a href="https://remote.example/users/alice" class="u-url mention">@<span>alice@remote.example</span></a></span> hi</p>',
+    };
+
+    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
+
+    const note = result as Note;
+    expect(note.toIds.map((url) => url.href)).toEqual(['https://www.w3.org/ns/activitystreams#Public']);
+    expect(note.ccIds.map((url) => url.href)).toEqual([
+      'https://example.com/users/kosui/followers',
+      'https://remote.example/users/alice',
+    ]);
+    const tags = await Array.fromAsync(note.getTags());
+    expect(tags).toHaveLength(1);
+    expect(tags[0]).toBeInstanceOf(Mention);
+    expect((tags[0] as Mention).href?.href).toBe('https://remote.example/users/alice');
+    expect((tags[0] as Mention).name?.toString()).toBe('@alice@remote.example');
+    expect(note.content?.toString()).toContain('class="u-url mention"');
   });
 
   it.each([null, 'public', 'unlisted', 'private', 'direct'] as const)(

@@ -3,6 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import { Env } from '../../../env.ts';
 import { singleton } from '../../../helper/singleton.ts';
+import { AcceptBlockUseCase } from '../../../useCase/acceptBlock.ts';
 import { AcceptFollowRequestUseCase } from '../../../useCase/acceptFollowRequest.ts';
 import { AcceptRelaySubscriptionUseCase } from '../../../useCase/acceptRelaySubscription.ts';
 import { AcceptUnfollowUseCase } from '../../../useCase/acceptUnfollow.ts';
@@ -170,6 +171,15 @@ const create = () => {
         followNotificationCreatedStore: PgFollowNotificationCreatedStore.getInstance(),
         pushSubscriptionsResolver,
         webPushSender,
+      }),
+    },
+    onBlock: {
+      acceptBlockUseCase: AcceptBlockUseCase.create({
+        unfollowedStore: PgUnfollowedStore.getInstance(),
+        followResolver: PgFollowResolver.getInstance(),
+        actorResolverByUri,
+        actorResolverByUserId,
+        userResolverByUsername: PgUserResolverByUsername.getInstance(),
       }),
     },
     onUndo: {

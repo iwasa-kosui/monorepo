@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Actor } from '../../domain/actor/actor.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
 import { RemoteActor } from '../../domain/actor/remoteActor.ts';
+import type { BlockResolver } from '../../domain/block/block.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type {
   RepostNotification,
@@ -40,7 +41,7 @@ const reposterIdentity = {
 };
 
 describe('AddReceivedRepostUseCase (local post)', () => {
-  const createDeps = () => {
+  const createDeps = (blockResolver?: BlockResolver) => {
     const reposts: Repost[] = [];
     const notifications: RepostNotification[] = [];
     const notificationEvents: RepostNotificationCreated[] = [];
@@ -123,6 +124,7 @@ describe('AddReceivedRepostUseCase (local post)', () => {
       timelineItemCreatedStore,
       pushSubscriptionsResolver,
       webPushSender,
+      blockResolver,
     });
 
     const run = (announceActivityUri: string) =>
@@ -163,6 +165,27 @@ describe('AddReceivedRepostUseCase (local post)', () => {
       repostedPostId: deps.post.postId,
     });
   };
+
+  it('受信ユーザーがブロックしている相手のブーストでは、repost は保存するが通知も Web Push も作らない', async () => {
+    const deps = createDeps({ resolve: vi.fn(() => RA.ok({} as never)) });
+
+    const result = await deps.run('https://remote.example.com/activities/1');
+
+    expect(result.ok).toBe(true);
+    expect(deps.reposts).toHaveLength(1);
+    expect(deps.notifications).toHaveLength(0);
+    expect(deps.webPushSender.send).not.toHaveBeenCalled();
+  });
+
+  it('ブロックしていない相手のブーストでは、これまでどおり通知と Web Push を作る', async () => {
+    const deps = createDeps({ resolve: vi.fn(() => RA.ok(undefined)) });
+
+    const result = await deps.run('https://remote.example.com/activities/1');
+
+    expect(result.ok).toBe(true);
+    expect(deps.notifications).toHaveLength(1);
+    expect(deps.webPushSender.send).toHaveBeenCalledOnce();
+  });
 
   it('新しいブーストでは repost と TimelineItem を保存し、通知と Web Push を作る', async () => {
     const deps = createDeps();

@@ -78,6 +78,7 @@ describe('toNotification', () => {
 
     expect(NotificationSchema.safeParse(result).success).toBe(true);
     expect(result?.type).toBe('mention');
+    expect(result.iori).toEqual({ fediverse: { reason: 'reply' } });
   });
 
   it('maps repost to reblog with the reposter and the reposted post', () => {
@@ -92,6 +93,20 @@ describe('toNotification', () => {
     expect(result).not.toHaveProperty('iori');
     expect(triggerOf(notification)).toEqual({ kind: 'actor', actorId: reposterActorId });
     expect(targetPostIdOf(notification)).toBe(repostedPostId);
+  });
+
+  it('maps mention to mention with the mentioner and the mentioning post', () => {
+    const mentionerActorId = ActorId.generate();
+    const mentionPostId = PostId.generate();
+    const notification: Notification = { ...base, type: 'mention', mentionerActorId, mentionPostId };
+
+    const result = toNotification(notification, options);
+
+    expect(NotificationSchema.safeParse(result).success).toBe(true);
+    expect(result).toMatchObject({ id: notification.notificationId, type: 'mention' });
+    expect(result.iori).toEqual({ fediverse: { reason: 'mention' } });
+    expect(triggerOf(notification)).toEqual({ kind: 'actor', actorId: mentionerActorId });
+    expect(targetPostIdOf(notification)).toBe(mentionPostId);
   });
 
   it('maps follow to follow without a status', () => {
@@ -215,11 +230,12 @@ describe('Bluesky notifications', () => {
 describe('selectDomainTypes', () => {
   const select = (types: string[], excludeTypes: string[] = []) => selectDomainTypes({ types, excludeTypes });
 
-  it('returns like, reply, follow and repost by default and leaves emojiReact out', () => {
+  it('returns like, reply, mention, follow and repost by default and leaves emojiReact out', () => {
     expect(select([])).toEqual([
       'like',
       'blueskyLike',
       'reply',
+      'mention',
       'blueskyMention',
       'follow',
       'blueskyFollow',
@@ -240,6 +256,7 @@ describe('selectDomainTypes', () => {
       'like',
       'blueskyLike',
       'reply',
+      'mention',
       'blueskyMention',
       'repost',
       'blueskyRepost',
@@ -288,7 +305,13 @@ describe('toStrictlyDescending', () => {
 
 describe('toRelationship', () => {
   it('sets the given flags and leaves the others false', () => {
-    const relationship = toRelationship({ id: account.id, following: true, followedBy: false, muting: true });
+    const relationship = toRelationship({
+      id: account.id,
+      following: true,
+      followedBy: false,
+      muting: true,
+      blocking: false,
+    });
 
     expect(RelationshipSchema.safeParse(relationship).success).toBe(true);
     expect(relationship).toMatchObject({

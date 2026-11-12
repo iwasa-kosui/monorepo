@@ -210,6 +210,7 @@ describe('createBlueskyTimelineRuntimePorts', () => {
     expect(ports.blueskyTimelineItemsResolver.resolve).toBeTypeOf('function');
     expect(ports.replyToBlueskyPostUseCase).toBeUndefined();
     expect(ports.postToBlueskyUseCase).toBeUndefined();
+    expect(ports.blueskySearch).toBeUndefined();
   });
 
   it('有効なときは取り込みを有効として扱う', () => {
@@ -219,6 +220,7 @@ describe('createBlueskyTimelineRuntimePorts', () => {
     expect(ports.blueskyTimelineEnabled).toBe(true);
     expect(ports.replyToBlueskyPostUseCase?.run).toBeTypeOf('function');
     expect(ports.postToBlueskyUseCase?.run).toBeTypeOf('function');
+    expect(ports.blueskySearch?.searchPosts).toBeTypeOf('function');
   });
 
   it('タイムラインが無効でも、認証情報があれば Bluesky への直接投稿を使える', () => {

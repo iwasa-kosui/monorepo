@@ -5,6 +5,7 @@ export type ToRelationshipProps = Readonly<{
   following: boolean;
   followedBy: boolean;
   muting: boolean;
+  blocking: boolean;
 }>;
 
 export const toRelationship = (props: ToRelationshipProps): Relationship => ({
@@ -14,7 +15,7 @@ export const toRelationship = (props: ToRelationshipProps): Relationship => ({
   notifying: false,
   languages: null,
   followed_by: props.followedBy,
-  blocking: false,
+  blocking: props.blocking,
   blocked_by: false,
   muting: props.muting,
   muting_notifications: false,

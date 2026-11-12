@@ -138,6 +138,17 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     return { muteId };
   };
 
+  const addBlock = (userId: string, blockedActorId: string, createdAt = 1) => {
+    const blockId = uuid();
+    sqlite.prepare('INSERT INTO blocks(blockId,userId,blockedActorId,createdAt) VALUES (?,?,?,?)').run(
+      blockId,
+      userId,
+      blockedActorId,
+      createdAt,
+    );
+    return { blockId };
+  };
+
   const addLike = (actorId: string, postId: string, createdAt = 1) => {
     const likeId = uuid();
     sqlite.prepare('INSERT INTO likes(likeId,actorId,postId,type,createdAt) VALUES (?,?,?,?,?)').run(
@@ -260,6 +271,19 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     return notificationId;
   };
 
+  const addMentionNotification = (
+    recipientUserId: string,
+    mentionerActorId: string,
+    mentionPostId: string,
+    createdAt: number,
+  ) => {
+    const notificationId = addNotification(recipientUserId, 'mention', createdAt);
+    sqlite.prepare(
+      'INSERT INTO notification_mentions(notificationId,recipientUserId,mentionerActorId,mentionPostId) VALUES (?,?,?,?)',
+    ).run(notificationId, recipientUserId, mentionerActorId, mentionPostId);
+    return notificationId;
+  };
+
   const addBlueskyNotification = (
     recipientUserId: string,
     type: 'blueskyLike' | 'blueskyRepost' | 'blueskyFollow' | 'blueskyMention',
@@ -318,6 +342,7 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     addRepost,
     addFollow,
     addMute,
+    addBlock,
     addLike,
     addEmojiReact,
     addImage,
@@ -329,6 +354,7 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     addFollowNotification,
     addEmojiReactNotification,
     addRepostNotification,
+    addMentionNotification,
     addBlueskyNotification,
     setMarker,
   };

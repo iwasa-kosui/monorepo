@@ -9,7 +9,7 @@ import {
 } from '../api/mastodonClient.ts';
 import { BLUESKY_ONLY_POSTED_MESSAGE, postedMessage } from './blueskyCrosspostMark.ts';
 
-export type UploadedMedia = Readonly<{ id: string; url: string; description: string }>;
+export type UploadedMedia = Readonly<{ id: string; url: string; description: string; savedDescription: string }>;
 
 export type PostFormValue = Readonly<{
   content: string;
@@ -30,6 +30,7 @@ type SubmitPostDeps = Readonly<{
   create: (params: CreateStatusParams) => Promise<Status>;
   createBlueskyPost: (params: CreateBlueskyPostParams) => Promise<IoriBlueskyPostResponse>;
   updateMedia: (id: string, description: string) => Promise<unknown>;
+  onDescriptionSaved: (id: string, description: string) => void;
   onPosted: (status: Status) => void;
 }>;
 
@@ -42,7 +43,10 @@ export const submitPost = async (
 ): Promise<PostSubmitResult> => {
   try {
     for (const media of value.uploaded) {
-      if (media.description.trim() !== '') await deps.updateMedia(media.id, media.description);
+      const description = media.description.trim() === '' ? '' : media.description;
+      if (description === media.savedDescription) continue;
+      await deps.updateMedia(media.id, description);
+      deps.onDescriptionSaved(media.id, description);
     }
   } catch (err) {
     return { kind: 'failed', message: failureMessage('save the image description', err) };
