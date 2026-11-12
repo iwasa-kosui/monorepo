@@ -1011,6 +1011,31 @@ describe('AddRemotePostUseCase', () => {
       expect(deps.mentionNotificationCreatedStore.store).not.toHaveBeenCalled();
     });
 
+    it('1人目の宛先の通知の保存が失敗しても、2人目の宛先には通知と Web Push を出し、そのうえで例外を呼び出し元に伝える', async () => {
+      const deps = createMentionDeps();
+      deps.actorResolverByUri.setActor(otherLocalActor);
+      const realStore = deps.mentionNotificationCreatedStore.store;
+      deps.mentionNotificationCreatedStore.store = vi.fn((event) => {
+        if (event.aggregateState.recipientUserId === localActor.userId) {
+          throw new Error('transient store failure');
+        }
+        return realStore(event);
+      }) as typeof realStore;
+
+      await expect(
+        AddRemotePostUseCase.create(deps).run({
+          ...input,
+          recipientActorUris: [localActor.uri, otherLocalActor.uri],
+        }),
+      ).rejects.toThrow(/Failed to store 1 mention notification\(s\): Error: transient store failure/);
+
+      expect(deps.mentionNotificationCreatedStore.items.map((event) => event.aggregateState.recipientUserId))
+        .toEqual([otherLocalActor.userId]);
+      expect(deps.pushSubscriptionsResolver.resolve).toHaveBeenCalledTimes(1);
+      expect(deps.pushSubscriptionsResolver.resolve).toHaveBeenCalledWith(otherLocalActor.userId);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+
     it('メンション用の依存を渡さないとき、通知を作らずに投稿を追加できる', async () => {
       const {
         mentionNotificationCreatedStore: _store,

@@ -271,7 +271,7 @@ const toScopeBody = (scope: BlueskyConnectionStatus['timeline']): IoriBlueskySco
   failureCode: scope.failureCode,
 });
 
-const clientFailure = (c: Context, error: BlueskyClientError) =>
+export const clientFailure = (c: Context, error: BlueskyClientError) =>
   c.json({ error: error.kind === 'auth' ? 'Bluesky login failed' : 'Bluesky request failed' }, 502);
 const toActorBody = (actor: BlueskySearchedActor): IoriBlueskyActorBody => ({
   did: actor.did,

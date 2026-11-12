@@ -6,6 +6,7 @@ import type { NotificationsResolverByPage } from '../../../domain/notification/n
 import type { IoriD1Db } from '../client.ts';
 import { pageConditions, pageOrderBy } from '../pageCondition.ts';
 import { notificationsTable } from '../schema.ts';
+import { notFromModeratedBlueskyActor } from './moderatedBlueskyNotifications.ts';
 import { notFromBlockedActor } from './notFromBlockedActor.ts';
 import { loadNotificationItems } from './notificationItems.ts';
 
@@ -24,6 +25,7 @@ export const createD1NotificationsResolverByPage = (db: IoriD1Db): Notifications
       .where(and(
         eq(notificationsTable.recipientUserId, recipientUserId),
         inArray(notificationsTable.type, [...types]),
+        notFromModeratedBlueskyActor(db),
         notFromBlockedActor,
         ...pageConditions(page, columns, cursorOf),
       ))
