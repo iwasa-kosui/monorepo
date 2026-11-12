@@ -200,6 +200,9 @@ export type BlueskySessionResolver = Readonly<{
 export type BlueskySessionSavedStore = Readonly<{
   save: (session: BlueskySession) => RA<void, never>;
 }>;
+export type BlueskySessionDeletedStore = Readonly<{
+  delete: () => RA<void, never>;
+}>;
 export type BlueskyLoginFailureResolver = Readonly<{
   resolve: () => RA<Instant | undefined, never>;
 }>;

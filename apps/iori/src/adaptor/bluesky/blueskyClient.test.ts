@@ -52,8 +52,7 @@ const setup = (initial: BlueskySession | undefined, responders: Responder[]) => 
     return responder(call);
   }) as typeof fetch;
   const client = createBlueskyClient({
-    identifier: 'iori.example.com',
-    appPassword: 'app-pass-secret',
+    resolveCredentials: async () => ({ identifier: 'iori.example.com', appPassword: 'app-pass-secret' }),
     sessionResolver: { resolve: () => RA.ok(session) },
     sessionStore: {
       save: (next) => {
@@ -1128,8 +1127,7 @@ describe('createBlueskyClient のログイン失敗後の待ち時間', () => {
       return responder(call);
     }) as typeof fetch;
     const client = createBlueskyClient({
-      identifier: 'iori.example.com',
-      appPassword: 'app-pass-secret',
+      resolveCredentials: async () => ({ identifier: 'iori.example.com', appPassword: 'app-pass-secret' }),
       sessionResolver: { resolve: () => RA.ok(session) },
       sessionStore: { save: () => RA.ok(undefined) },
       ...(guarded

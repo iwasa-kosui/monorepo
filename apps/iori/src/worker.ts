@@ -15,6 +15,7 @@ import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.
 import { createWorkerIoriActionsRouter } from './adaptor/routes/workerIoriActionsRouter.ts';
 import { createWorkerIoriArticlesRouter } from './adaptor/routes/workerIoriArticlesRouter.ts';
 import { createWorkerIoriBlueskyBookmarkRouter } from './adaptor/routes/workerIoriBlueskyBookmarkRouter.ts';
+import { createWorkerIoriBlueskyCredentialRouter } from './adaptor/routes/workerIoriBlueskyCredentialRouter.ts';
 import { createWorkerIoriBlueskyCrosspostStatusRouter } from './adaptor/routes/workerIoriBlueskyCrosspostStatusRouter.ts';
 import { createWorkerIoriBlueskyModerationRouter } from './adaptor/routes/workerIoriBlueskyModerationRouter.ts';
 import { createWorkerIoriBlueskyProfileRouter } from './adaptor/routes/workerIoriBlueskyProfileRouter.ts';
@@ -306,6 +307,7 @@ export default {
         app.route('/api', createWorkerIoriBlueskyModerationRouter({ ...runtime.blueskyModeration, authn }));
         app.route('/api', createWorkerIoriBlueskyProfileRouter({ ...runtime.blueskyProfile, authn }));
         app.route('/api', createWorkerIoriBlueskyBookmarkRouter({ ...runtime.blueskyBookmark, authn }));
+        app.route('/api', createWorkerIoriBlueskyCredentialRouter({ ...runtime.blueskyCredential, authn }));
         app.route('/api', createWorkerIoriBlueskyCrosspostStatusRouter({ ...runtime.blueskyCrosspostStatus, authn }));
         app.route(
           '/api',

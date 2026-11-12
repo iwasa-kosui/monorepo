@@ -23,4 +23,5 @@ export type IoriWorkerEnv = Readonly<{
   IORI_BLUESKY_TIMELINE?: string;
   BLUESKY_IDENTIFIER?: string;
   BLUESKY_APP_PASSWORD?: string;
+  BLUESKY_CREDENTIAL_KEY?: string;
 }>;

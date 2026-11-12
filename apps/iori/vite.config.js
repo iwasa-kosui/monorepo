@@ -32,6 +32,7 @@ export default defineConfig(({ mode }) => {
             blueskyProfile: './src/ui/pages/blueskyProfile.tsx',
             messages: './src/ui/pages/messages.tsx',
             blueskyFeeds: './src/ui/pages/blueskyFeeds.tsx',
+            blueskyCredential: './src/ui/pages/blueskyCredential.tsx',
             navPrefetch: './src/ui/pages/navPrefetch.ts',
             notificationBadge: './src/ui/pages/notificationBadge.ts',
           },

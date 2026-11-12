@@ -14,6 +14,8 @@ export type BlueskyClientError = Readonly<{
   code?: string;
 }>;
 
+export type BlueskyCredentials = Readonly<{ identifier: string; appPassword: string }>;
+
 export type BlueskyCreatedRecord = Readonly<{ uri: string; cid: string; rkey: string }>;
 
 export type BlueskyFetchedRecord = BlueskyCreatedRecord & Readonly<{ value?: unknown }>;

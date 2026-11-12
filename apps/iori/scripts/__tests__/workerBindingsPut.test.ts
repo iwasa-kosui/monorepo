@@ -423,6 +423,40 @@ describe('put-bluesky-secrets', () => {
     expect([calls, requests]).toEqual([[], []]);
     expectDiagnostic(stages.at(-1)!, error, 'credentials-missing', env);
   });
+  it('adds BLUESKY_CREDENTIAL_KEY to the patch when it has a value', async () => {
+    const credentialKey = 'credential-key-value-for-fixture';
+    const env = blueskyEnvironment({ BLUESKY_CREDENTIAL_KEY: credentialKey });
+    const { calls, patches, written, error } = await runBluesky(env);
+    expect(error).toBeUndefined();
+    expect(calls).toEqual([]);
+    expect(patches).toHaveLength(1);
+    expect(JSON.parse(patches[0].body!).secrets).toEqual({
+      BLUESKY_IDENTIFIER: { type: 'secret_text', name: 'BLUESKY_IDENTIFIER', text: 'iori.example.com' },
+      BLUESKY_APP_PASSWORD: { type: 'secret_text', name: 'BLUESKY_APP_PASSWORD', text: 'abcd-efgh-ijkl-mnop' },
+      BLUESKY_CREDENTIAL_KEY: { type: 'secret_text', name: 'BLUESKY_CREDENTIAL_KEY', text: credentialKey },
+    });
+    expectNoLeak(env, written, error, { secretValues: [...blueskyValues, credentialKey] });
+  });
+  it.each([['empty', { BLUESKY_CREDENTIAL_KEY: '' }], ['unset', {}]])(
+    'does not fail and leaves out only BLUESKY_CREDENTIAL_KEY when it is %s',
+    async (_label, overrides) => {
+      const env = blueskyEnvironment(overrides);
+      const { calls, patches, reads, error } = await runBluesky(env);
+      expect(error).toBeUndefined();
+      expect(calls).toEqual([]);
+      expect(patches).toHaveLength(1);
+      expect(reads).toHaveLength(2);
+      const { secrets } = JSON.parse(patches[0].body!);
+      expect(Object.keys(secrets)).toEqual(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD']);
+      expect(patches[0].body).not.toContain('BLUESKY_CREDENTIAL_KEY');
+    },
+  );
+  it('does not put BLUESKY_CREDENTIAL_KEY in put-twitterapi-secret', async () => {
+    const env = twitterapiEnvironment({ BLUESKY_CREDENTIAL_KEY: 'credential-key-value-for-fixture' });
+    const { patches, error } = await runTwitterapi(env);
+    expect(error).toBeUndefined();
+    expect(Object.keys(JSON.parse(patches[0].body!).secrets)).toEqual(['TWITTERAPI_IO_API_KEY']);
+  });
   it.each([
     ['environment', { environment: 'staging' }],
     ['generation', { generation: 'fixture2' }],

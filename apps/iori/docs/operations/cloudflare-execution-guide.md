@@ -93,7 +93,7 @@ operation が使う参照名は、次のとおりです。
 
 - `deploy-worker`: `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_ZONE_ID`、`IORI_ADMISSION_IDENTITY`、`ORIGIN`、`VAPID_SUBJECT`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `put-worker-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN`。任意の secret として `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` も受け取ります
-- `put-bluesky-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`BLUESKY_IDENTIFIER`、`BLUESKY_APP_PASSWORD`
+- `put-bluesky-secrets`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`BLUESKY_IDENTIFIER`、`BLUESKY_APP_PASSWORD`。任意の secret として `BLUESKY_CREDENTIAL_KEY` も受け取ります
 - `put-twitterapi-secret`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_ADMISSION_IDENTITY`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`、`TWITTERAPI_IO_API_KEY`
 - `delete-rehearsal-d1`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
 - `move-unfollowed-reposts-dry-run`、`move-unfollowed-reposts`、`delete-unfollowed-posts-dry-run`、`delete-unfollowed-posts`、`prune-federated-posts-dry-run`、`ensure-event-archive-bucket`: `CLOUDFLARE_ACCOUNT_ID`、`IORI_CLOUDFLARE_DEPLOY_API_TOKEN`
@@ -456,13 +456,13 @@ job が受け取る secret は、次の8つです。`STAGING_ACCESS_TOKEN` と T
 
 #### put-bluesky-secrets で Bluesky の secret を入れる
 
-`put-bluesky-secrets` は、稼働中の Worker に `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` の2つだけを入れる operation です。この operation は、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` を読みません。作業者は、Bluesky の secret を入れるときにこの operation を使い、`put-worker-secrets` を使いません。`put-worker-secrets` は VAPID の鍵も入れ直し、鍵が入れ替わると既存の push の購読に届かなくなって戻せないからです。
+`put-bluesky-secrets` は、稼働中の Worker に `BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` の2つを必ず入れ、任意の `BLUESKY_CREDENTIAL_KEY` を値があるときだけ入れる operation です。この operation は、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` を読みません。作業者は、Bluesky の secret を入れるときにこの operation を使い、`put-worker-secrets` を使いません。`put-worker-secrets` は VAPID の鍵も入れ直し、鍵が入れ替わると既存の push の購読に届かなくなって戻せないからです。
 
 この operation は production だけを受け付けます。`environment` が `production` 以外の場合、job は最初の step で失敗します。
 
-作業者は、`deploy-iori-worker.yml` を `operation=put-bluesky-secrets`、`environment=production`、`main_sha=<最新の main の SHA>` と、`deploy-worker` と同じ `generation`、`migration_run_id`、`migration_main_sha` で dispatch します。`IORI_ADMISSION_IDENTITY` が dispatch の入力と一致しない場合、job は Worker に何も入れる前に止まります。どちらかの secret が空の場合、job は `reason=credentials-missing` で失敗します。
+作業者は、`deploy-iori-worker.yml` を `operation=put-bluesky-secrets`、`environment=production`、`main_sha=<最新の main の SHA>` と、`deploy-worker` と同じ `generation`、`migration_run_id`、`migration_main_sha` で dispatch します。`IORI_ADMISSION_IDENTITY` が dispatch の入力と一致しない場合、job は Worker に何も入れる前に止まります。`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` のどちらかが空の場合、job は `reason=credentials-missing` で失敗します。`BLUESKY_CREDENTIAL_KEY` が空か未設定の場合、job は失敗せず、この secret だけを送りません。Worker にすでにある `BLUESKY_CREDENTIAL_KEY` の値は、そのまま残ります。
 
-`put-bluesky-secrets` は、`wrangler secret bulk` を使いません。job は、Cloudflare の `PATCH .../workers/scripts/{worker}/secrets-bulk` API を直接呼びます。job は、`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` の2つだけを1回のリクエストで送ります。Cloudflare の API リファレンスは、リクエストに含めない secret は変わらないと明記しています。このため、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` は、この operation で変わりません。Cloudflare の文書で確かめられた内容は、1回のリクエストで1つの version を作ることです。
+`put-bluesky-secrets` は、`wrangler secret bulk` を使いません。job は、Cloudflare の `PATCH .../workers/scripts/{worker}/secrets-bulk` API を直接呼びます。job は、`BLUESKY_IDENTIFIER` と `BLUESKY_APP_PASSWORD` の2つと、値が空でない場合の `BLUESKY_CREDENTIAL_KEY` だけを1回のリクエストで送ります。Cloudflare の API リファレンスは、リクエストに含めない secret は変わらないと明記しています。このため、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`SMOKE_QUEUE_TOKEN` は、この operation で変わりません。Cloudflare の文書で確かめられた内容は、1回のリクエストで1つの version を作ることです。
 
 書き込みの後、job は deployment の一覧を読み直します。job は、最新の deployment が100%で新しい version を指していることを確かめます。確かめられない場合、job は失敗します。job は、secret の値と API の応答本文をログに出しません。
 

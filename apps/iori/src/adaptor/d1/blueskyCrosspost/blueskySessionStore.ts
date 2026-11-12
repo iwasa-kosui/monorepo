@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 
 import {
   BlueskySession,
+  type BlueskySessionDeletedStore,
   type BlueskySessionResolver,
   type BlueskySessionSavedStore,
 } from '../../../domain/blueskyCrosspost/blueskyCrosspost.ts';
@@ -35,6 +36,13 @@ export const createD1BlueskySessionSavedStore = (db: IoriD1Db): BlueskySessionSa
       target: blueskySessionsTable.id,
       set: values,
     });
+    return RA.ok(undefined);
+  },
+});
+
+export const createD1BlueskySessionDeletedStore = (db: IoriD1Db): BlueskySessionDeletedStore => ({
+  delete: async () => {
+    await db.delete(blueskySessionsTable).where(eq(blueskySessionsTable.id, BLUESKY_SESSION_ID));
     return RA.ok(undefined);
   },
 });

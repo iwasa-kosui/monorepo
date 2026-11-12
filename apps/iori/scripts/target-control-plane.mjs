@@ -256,6 +256,7 @@ export const createTargetControlPlane = ({ identity: supplied, token, fetchReque
       'IORI_BLUESKY_TIMELINE',
       'BLUESKY_IDENTIFIER',
       'BLUESKY_APP_PASSWORD',
+      'BLUESKY_CREDENTIAL_KEY',
       'VAPID_PUBLIC_KEY',
       'VAPID_PRIVATE_KEY',
       'SMOKE_QUEUE_TOKEN',

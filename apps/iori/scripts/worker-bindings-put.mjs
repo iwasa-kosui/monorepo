@@ -24,6 +24,7 @@ const SECRETS_BULK_OPERATIONS = Object.freeze({
   'put-bluesky-secrets': Object.freeze({
     stagePrefix: 'put-bluesky-secrets',
     secretNames: Object.freeze(['BLUESKY_IDENTIFIER', 'BLUESKY_APP_PASSWORD']),
+    optionalSecretNames: Object.freeze(['BLUESKY_CREDENTIAL_KEY']),
   }),
   'put-twitterapi-secret': Object.freeze({
     stagePrefix: 'put-twitterapi',
@@ -197,7 +198,10 @@ export const putWorkerSecrets = async ({
       accountId: env.CLOUDFLARE_ACCOUNT_ID,
       workerName,
       token: env.CLOUDFLARE_API_TOKEN,
-      secrets: Object.fromEntries(bulkOperation.secretNames.map((name) => [name, env[name]])),
+      secrets: Object.fromEntries(
+        [...bulkOperation.secretNames, ...(bulkOperation.optionalSecretNames ?? []).filter((name) => env[name])]
+          .map((name) => [name, env[name]]),
+      ),
       signal,
       fetchRequest,
     });

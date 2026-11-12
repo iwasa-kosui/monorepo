@@ -5,6 +5,8 @@ import { blueskyRkeyOf } from '../domain/blueskyCrosspost/blueskyRkey.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createBlueskyCrosspostUseCases, resolveBlueskyCrosspostConfig } from './blueskyCrosspost.ts';
 
+const VALID_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
+
 const enabled = {
   IORI_BLUESKY_CROSSPOST: 'enabled',
   BLUESKY_IDENTIFIER: ' iori.example.com ',
@@ -13,11 +15,30 @@ const enabled = {
 
 describe('resolveBlueskyCrosspostConfig', () => {
   it('enabled と空でない 2 つの secret がそろったときだけ設定を返す', () => {
-    expect(resolveBlueskyCrosspostConfig(enabled)).toEqual({ identifier: 'iori.example.com', appPassword: 'app-pass' });
+    expect(resolveBlueskyCrosspostConfig(enabled)).toEqual({
+      envCredentials: { identifier: 'iori.example.com', appPassword: 'app-pass' },
+      credentialKey: undefined,
+    });
     expect(resolveBlueskyCrosspostConfig({ ...enabled, IORI_BLUESKY_CROSSPOST: 'disabled' })).toBeUndefined();
     expect(resolveBlueskyCrosspostConfig({ ...enabled, IORI_BLUESKY_CROSSPOST: undefined })).toBeUndefined();
     expect(resolveBlueskyCrosspostConfig({ ...enabled, BLUESKY_IDENTIFIER: '' })).toBeUndefined();
     expect(resolveBlueskyCrosspostConfig({ ...enabled, BLUESKY_APP_PASSWORD: undefined })).toBeUndefined();
+  });
+
+  it('secret が無くても、有効な鍵があれば設定を返す。鍵が不正なら返さない', () => {
+    const withoutSecrets = { IORI_BLUESKY_CROSSPOST: 'enabled' };
+    expect(resolveBlueskyCrosspostConfig({ ...withoutSecrets, BLUESKY_CREDENTIAL_KEY: VALID_KEY })).toEqual({
+      envCredentials: undefined,
+      credentialKey: VALID_KEY,
+    });
+    expect(resolveBlueskyCrosspostConfig({ ...withoutSecrets, BLUESKY_CREDENTIAL_KEY: 'not-a-key' })).toBeUndefined();
+    expect(
+      resolveBlueskyCrosspostConfig({
+        ...withoutSecrets,
+        IORI_BLUESKY_CROSSPOST: 'disabled',
+        BLUESKY_CREDENTIAL_KEY: VALID_KEY,
+      }),
+    ).toBeUndefined();
   });
 });
 

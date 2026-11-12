@@ -442,6 +442,22 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain('<title>フィード | blog.kosui.me</title>');
   });
 
+  it('renders the Bluesky credential entry for a logged-in user and redirects a visitor', async () => {
+    const owner = await createWorkerPageFallback(new Request('https://worker.test/settings/bluesky'), {
+      isLoggedIn: true,
+      userId: UserId.generate(),
+    });
+    const visitor = await createWorkerPageFallback(new Request('https://worker.test/settings/bluesky'), {
+      isLoggedIn: false,
+    });
+
+    expect(owner?.status).toBe(200);
+    expect(owner?.headers.get('X-Robots-Tag')).toBe('noindex');
+    expect(await owner?.text()).toContain('/static/blueskyCredential.js');
+    expect(visitor?.status).toBe(302);
+    expect(visitor?.headers.get('Location')).toBe('/sign-in');
+  });
+
   it('does not claim feeds paths with extra segments', async () => {
     for (const path of ['/feeds/a', '/feedsx']) {
       expect(

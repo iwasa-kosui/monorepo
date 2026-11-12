@@ -267,6 +267,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.IORI_CLOUDFLARE_DEPLOY_API_TOKEN }}
           BLUESKY_IDENTIFIER: ${{ secrets.BLUESKY_IDENTIFIER }}
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          BLUESKY_CREDENTIAL_KEY: ${{ secrets.BLUESKY_CREDENTIAL_KEY }}
       - name: Remove this job's private directory
         if: always() && env.IORI_PRIVATE_DIRECTORY != ''
         run: node apps/iori/scripts/cleanup-private-workflow-directory.mjs
