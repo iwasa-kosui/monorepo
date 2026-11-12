@@ -27,6 +27,7 @@ export const createD1LocalPostResolverByUri = (db: IoriD1Db, origin: string): Lo
         summary: row.posts.summary,
         sensitive: row.posts.sensitive,
         visibility: Visibility.parseOrThrow(row.local_posts.visibility),
+        editedAt: row.local_posts.editedAt?.getTime(),
       }),
     );
   },

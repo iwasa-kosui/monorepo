@@ -37,6 +37,7 @@ type Input =
   & PostImagesInput
   & Readonly<{
     content: string;
+    sourceText?: string;
     summary?: string | null;
     sensitive?: boolean;
     visibility?: Visibility;
@@ -96,7 +97,7 @@ const create = ({
       RA.ok(input),
       RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-      RA.andBind('postEvent', ({ actor, user, ctx, content, summary, sensitive, visibility, quoteUri }) => {
+      RA.andBind('postEvent', ({ actor, user, ctx, content, sourceText, summary, sensitive, visibility, quoteUri }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content: quoteUri === undefined ? content : appendQuoteInline(content, quoteUri),
@@ -109,6 +110,7 @@ const create = ({
             ...toMentionNoteFields(sanitizePostContent(content)).ccs.map((uri) => uri.href),
           ],
           quoteUri,
+          sourceText,
         });
         return RA.ok(postEvent);
       }),
