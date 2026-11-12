@@ -101,7 +101,7 @@ const points = [
         <tr>
           <td>visit-pochi</td>
           <td>cancelled</td>
-          <td class="wrap">2026-11-06T<wbr />18:11:58.846Z</td>
+          <td>2026-11-06T<wbr />18:11:58.846Z</td>
           <td>VisitCancelled</td>
           <td>受付スタッフ</td>
           <td>飼い主の都合</td>
@@ -231,22 +231,35 @@ const points = [
 }
 .result {
   display: none;
-  overflow-x: auto;
 }
 [data-step="4"] .result {
   display: block;
 }
-.result .cfig-table {
-  font-size: 0.8125rem;
+.cfig[data-before-record-figure] .result .cfig-table {
+  table-layout: fixed;
+  font-size: 0.75rem;
 }
-.result .cfig-table th,
-.result .cfig-table td {
+.cfig[data-before-record-figure] .result .cfig-table th,
+.cfig[data-before-record-figure] .result .cfig-table td {
   padding-inline: 0.25rem;
-  white-space: nowrap;
 }
-.result .cfig-table td.wrap {
-  white-space: normal;
-  overflow-wrap: normal;
+.result .cfig-table th:nth-child(1) {
+  width: 15%;
+}
+.result .cfig-table th:nth-child(2) {
+  width: 14%;
+}
+.result .cfig-table th:nth-child(3) {
+  width: 18%;
+}
+.result .cfig-table th:nth-child(4) {
+  width: 19%;
+}
+.result .cfig-table th:nth-child(5) {
+  width: 18%;
+}
+.result .cfig-table th:nth-child(6) {
+  width: 16%;
 }
 .result td.null {
   background: #fee2e2;
