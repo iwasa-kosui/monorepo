@@ -43,7 +43,6 @@ type ActingOnPost = Readonly<{ userId: UserId; viewerActorId: ActorId; post: Pos
 const invalidToken = { error: 'The access token is invalid' } as const;
 const recordNotFound = { error: 'Record not found' } as const;
 const read = Scope.orThrow('read');
-const readStatuses = Scope.orThrow('read:statuses');
 const write = Scope.orThrow('write');
 const writeStatuses = Scope.orThrow('write:statuses');
 const writeFavourites = Scope.orThrow('write:favourites');
@@ -188,7 +187,7 @@ export const createWorkerIoriActionsRouter = ({
         ? failed(c, undone.err)
         : respondWithStatus(c, acting.val);
     })
-    .post('/iori/v1/statuses/:id/remote-context', authn.requireUser(readStatuses), async (c) => {
+    .post('/iori/v1/statuses/:id/remote-context', authn.requireUser(writeStatuses), async (c) => {
       const userId = getMastodonPrincipal(c)?.userId;
       if (userId === null || userId === undefined) {
         return c.json(invalidToken, 401);

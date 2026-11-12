@@ -54,6 +54,7 @@ type Setup = Readonly<{
   ancestors?: number;
   fetchTimeoutMs?: number;
   totalTimeoutMs?: number;
+  now?: () => number;
 }>;
 
 const setup = (options: Setup = {}) => {
@@ -78,14 +79,20 @@ const setup = (options: Setup = {}) => {
       RA.ok({ fetchedPosts: Array.from({ length: options.ancestors ?? 0 }, () => ({}) as never) })
     ),
   };
+  const remotePostUrisResolverByUris = {
+    resolve: vi.fn(async ({ uris }: { uris: readonly string[] }) => RA.ok(uris.filter((uri) => stored.has(uri)))),
+  };
+  const localPostUrisResolverByUris = {
+    resolve: vi.fn(async ({ uris }: { uris: readonly string[] }) =>
+      RA.ok(uris.filter((uri) => options.localUris?.includes(uri)))
+    ),
+  };
   const useCase = FetchRemoteContextUseCase.create({
     origin: ORIGIN,
     userResolver: { resolve: async () => RA.ok({ id: 'user-1', username: 'kosui' } as never) },
     postResolver: { resolve: async () => RA.ok(options.post ?? remotePost()) },
-    postResolverByUri: { resolve: async ({ uri }) => RA.ok(stored.has(uri) ? ({ uri } as never) : undefined) },
-    localPostResolverByUri: {
-      resolve: async ({ uri }) => RA.ok(options.localUris?.includes(uri) ? ({ uri } as never) : undefined),
-    },
+    remotePostUrisResolverByUris,
+    localPostUrisResolverByUris,
     remotePostUpserter,
     blockedActorUriResolverByUsername: {
       resolve: async ({ actorUri }) => RA.ok(options.blockedActorUris?.includes(actorUri) ?? false),
@@ -93,13 +100,24 @@ const setup = (options: Setup = {}) => {
     fetchReplyNotesRecursiveUseCase,
     fetchTimeoutMs: options.fetchTimeoutMs,
     totalTimeoutMs: options.totalTimeoutMs,
+    now: options.now,
   });
-  const run = async () => {
-    const result = await useCase.run({ userId: 'user-1' as never, postId: 'post-1' as never, ctx });
+  const run = async (postId = 'post-1') => {
+    const result = await useCase.run({ userId: 'user-1' as never, postId: postId as never, ctx });
     if (!result.ok) throw new Error(`unexpected error: ${result.err.type}`);
     return result.val.fetchedCount;
   };
-  return { run, ctx, lookupObject, remotePostUpserter, fetchReplyNotesRecursiveUseCase, stored, documentLoader };
+  return {
+    run,
+    ctx,
+    lookupObject,
+    remotePostUpserter,
+    remotePostUrisResolverByUris,
+    localPostUrisResolverByUris,
+    fetchReplyNotesRecursiveUseCase,
+    stored,
+    documentLoader,
+  };
 };
 
 const storedUris = (t: ReturnType<typeof setup>) =>
@@ -214,7 +232,7 @@ describe('FetchRemoteContextUseCase', () => {
       expect(documentLoader).toHaveBeenCalledTimes(10);
     });
 
-    it('既に D1 にある URI は取得しない', async () => {
+    it('既に D1 にある URI は保存し直さない', async () => {
       const t = setup({
         notes: [
           noteOf(ROOT_URI, { replies: repliesOf(replyUri(1), replyUri(2), replyUri(3)) }),
@@ -227,7 +245,110 @@ describe('FetchRemoteContextUseCase', () => {
       });
 
       expect(await t.run()).toBe(1);
-      expect(t.lookupObject.mock.calls.map(([uri]) => uri)).toEqual([ROOT_URI, replyUri(3)]);
+      expect(storedUris(t)).toEqual([replyUri(3)]);
+    });
+
+    it('1 ページ分の URI をまとめて、リモートとローカルそれぞれ 1 回の問い合わせで保存済みか調べる', async () => {
+      const t = setup({
+        notes: [
+          noteOf(ROOT_URI, { replies: repliesOf(replyUri(1), replyUri(2), replyUri(3)) }),
+          ...[1, 2, 3].map((index) => noteOf(replyUri(index), { replyTo: ROOT_URI })),
+        ],
+      });
+
+      await t.run();
+
+      expect(t.remotePostUrisResolverByUris.resolve).toHaveBeenCalledTimes(1);
+      expect(t.remotePostUrisResolverByUris.resolve).toHaveBeenCalledWith({
+        uris: [replyUri(1), replyUri(2), replyUri(3)],
+      });
+      expect(t.localPostUrisResolverByUris.resolve).toHaveBeenCalledTimes(1);
+    });
+
+    it('保存済みの返信は保存し直さず、その下の返信を保存する', async () => {
+      const t = setup({
+        notes: [
+          noteOf(ROOT_URI, { replies: repliesOf(replyUri(1)) }),
+          noteOf(replyUri(1), { replyTo: ROOT_URI, replies: repliesOf(replyUri(2)) }),
+          noteOf(replyUri(2), { replyTo: replyUri(1) }),
+        ],
+        stored: [replyUri(1)],
+      });
+
+      expect(await t.run()).toBe(1);
+      expect(storedUris(t)).toEqual([replyUri(2)]);
+    });
+
+    it('保存済みの返信が深さの上限にあるときは、取得しない', async () => {
+      const t = setup({
+        notes: [
+          noteOf(ROOT_URI, { replies: repliesOf(replyUri(1)) }),
+          noteOf(replyUri(1), { replyTo: ROOT_URI, replies: repliesOf(replyUri(2)) }),
+          noteOf(replyUri(2), { replyTo: replyUri(1), replies: repliesOf(replyUri(3)) }),
+          noteOf(replyUri(3), { replyTo: replyUri(2) }),
+        ],
+        stored: [replyUri(1), replyUri(2), replyUri(3)],
+      });
+
+      expect(await t.run()).toBe(0);
+      expect(t.lookupObject.mock.calls.map(([uri]) => uri)).toEqual([ROOT_URI, replyUri(1), replyUri(2)]);
+    });
+
+    it('保存済みの返信が親への返信でなければ、その下は取得しない', async () => {
+      const t = setup({
+        notes: [
+          noteOf(ROOT_URI, { replies: repliesOf(replyUri(1)) }),
+          noteOf(replyUri(1), { replyTo: 'https://remote.example/notes/other', replies: repliesOf(replyUri(2)) }),
+          noteOf(replyUri(2), { replyTo: replyUri(1) }),
+        ],
+        stored: [replyUri(1)],
+      });
+
+      expect(await t.run()).toBe(0);
+      expect(t.lookupObject.mock.calls.map(([uri]) => uri)).toEqual([ROOT_URI, replyUri(1)]);
+    });
+
+    it('ブロックしているアクターの保存済みの返信の下は取得しない', async () => {
+      const t = setup({
+        notes: [
+          noteOf(ROOT_URI, { replies: repliesOf(replyUri(1)) }),
+          noteOf(replyUri(1), { replyTo: ROOT_URI, author: 'spammer', replies: repliesOf(replyUri(2)) }),
+          noteOf(replyUri(2), { replyTo: replyUri(1) }),
+        ],
+        stored: [replyUri(1)],
+        blockedActorUris: ['https://remote.example/users/spammer'],
+      });
+
+      expect(await t.run()).toBe(0);
+      expect(t.lookupObject.mock.calls.map(([uri]) => uri)).toEqual([ROOT_URI, replyUri(1)]);
+    });
+
+    it('外部への lookup は、保存済みも数えて合計 60 回までにする', async () => {
+      const uris = Array.from({ length: 100 }, (_, index) => replyUri(index));
+      const t = setup({
+        notes: [
+          noteOf(ROOT_URI, { replies: repliesOf(...uris) }),
+          ...uris.map((uri) => noteOf(uri, { replyTo: ROOT_URI })),
+        ],
+        stored: uris,
+      });
+
+      expect(await t.run()).toBe(0);
+      expect(t.lookupObject).toHaveBeenCalledTimes(60);
+    });
+
+    it('新規と保存済みが混ざっていても、lookup は合計 60 回までにする', async () => {
+      const uris = Array.from({ length: 100 }, (_, index) => replyUri(index));
+      const t = setup({
+        notes: [
+          noteOf(ROOT_URI, { replies: repliesOf(...uris) }),
+          ...uris.map((uri) => noteOf(uri, { replyTo: ROOT_URI })),
+        ],
+        stored: uris.filter((_, index) => index % 2 === 0),
+      });
+
+      expect(await t.run()).toBe(29);
+      expect(t.lookupObject).toHaveBeenCalledTimes(60);
     });
 
     it('ブロックしているアクターの返信は保存しない', async () => {
@@ -312,6 +433,44 @@ describe('FetchRemoteContextUseCase', () => {
       expect(storedUris(t)).toEqual([replyUri(1)]);
     });
 
+    it('全体の時間切れで、実行中の取得に渡した signal を abort する', async () => {
+      const t = setup({
+        totalTimeoutMs: 50,
+        lookupObject: async () => new Promise(() => undefined),
+      });
+
+      await t.run();
+
+      const signal = t.lookupObject.mock.calls[0]![1].signal!;
+      expect(signal.aborted).toBe(true);
+    });
+
+    it('時間切れにならなければ、取得に渡した signal を abort しない', async () => {
+      const t = setup({ notes: [noteOf(ROOT_URI)] });
+
+      await t.run();
+
+      expect(t.lookupObject.mock.calls[0]![1].signal!.aborted).toBe(false);
+    });
+
+    it('全体の時間切れで、文書の取得に渡す signal も abort する', async () => {
+      const signals: AbortSignal[] = [];
+      const documentLoader = vi.fn(async (_url: string, options?: { signal?: AbortSignal }) => {
+        signals.push(options!.signal!);
+        return new Promise(() => undefined);
+      }) as unknown as DocumentLoader;
+      const t = setup({
+        documentLoader,
+        totalTimeoutMs: 50,
+        notes: [noteOf(ROOT_URI, { replies: new Collection({ first: new URL('https://remote.example/replies') }) })],
+      });
+
+      await t.run();
+
+      expect(signals).toHaveLength(1);
+      expect(signals[0]!.aborted).toBe(true);
+    });
+
     it('ローカルの投稿の返信は相手のサーバーから取らない', async () => {
       const t = setup({ post: { ...remotePost(), type: 'local' } as Post });
 
@@ -323,6 +482,94 @@ describe('FetchRemoteContextUseCase', () => {
       const t = setup();
 
       expect(await t.run()).toBe(0);
+    });
+  });
+
+  describe('同じ投稿への取得', () => {
+    const withReply = () => ({
+      notes: [noteOf(ROOT_URI, { replies: repliesOf(replyUri(1)) }), noteOf(replyUri(1), { replyTo: ROOT_URI })],
+    });
+
+    it('同時の 2 回のリクエストは、1 回の取得にまとめて同じ結果を返す', async () => {
+      const t = setup(withReply());
+
+      const counts = await Promise.all([t.run(), t.run()]);
+
+      expect(counts).toEqual([1, 1]);
+      expect(t.ctx.getDocumentLoader).toHaveBeenCalledTimes(1);
+      expect(t.lookupObject).toHaveBeenCalledTimes(2);
+      expect(t.remotePostUpserter.resolve).toHaveBeenCalledTimes(1);
+    });
+
+    it('別の投稿への同時のリクエストはまとめない', async () => {
+      const t = setup(withReply());
+
+      await Promise.all([t.run('post-1'), t.run('post-2')]);
+
+      expect(t.ctx.getDocumentLoader).toHaveBeenCalledTimes(2);
+    });
+
+    it('完了から 60 秒以内の再実行は、取得せずに 0 件を返す', async () => {
+      let time = 1_000_000;
+      const t = setup({ ...withReply(), now: () => time });
+
+      expect(await t.run()).toBe(1);
+      time += 59_999;
+
+      expect(await t.run()).toBe(0);
+      expect(t.ctx.getDocumentLoader).toHaveBeenCalledTimes(1);
+      expect(t.lookupObject).toHaveBeenCalledTimes(2);
+    });
+
+    it('完了から 60 秒たったら、もう一度取得する', async () => {
+      let time = 1_000_000;
+      const t = setup({ ...withReply(), now: () => time });
+
+      await t.run();
+      time += 60_000;
+      await t.run();
+
+      expect(t.ctx.getDocumentLoader).toHaveBeenCalledTimes(2);
+      expect(t.lookupObject).toHaveBeenCalledTimes(4);
+    });
+
+    it('投稿が見つからなかった実行は覚えず、続けて呼ぶと毎回調べる', async () => {
+      const postResolver = { resolve: vi.fn(async () => RA.ok(undefined)) };
+      const useCase = FetchRemoteContextUseCase.create({
+        origin: ORIGIN,
+        userResolver: { resolve: async () => RA.ok({ id: 'user-1', username: 'kosui' } as never) },
+        postResolver,
+        remotePostUrisResolverByUris: { resolve: async () => RA.ok([]) },
+        localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
+        remotePostUpserter: { resolve: vi.fn() },
+        blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
+        fetchReplyNotesRecursiveUseCase: { run: vi.fn() },
+      });
+      const input = {
+        userId: 'user-1' as never,
+        postId: 'post-1' as never,
+        ctx: { getDocumentLoader: vi.fn(), lookupObject: vi.fn() },
+      };
+
+      const results = [await useCase.run(input), await useCase.run(input)];
+
+      expect(results.map((result) => result.ok)).toEqual([false, false]);
+      expect(postResolver.resolve).toHaveBeenCalledTimes(2);
+    });
+
+    it('覚えておく投稿は 200 件までにし、古いものから忘れる', async () => {
+      let time = 1_000_000;
+      const t = setup({ ...withReply(), now: () => time });
+      for (let index = 0; index < 201; index++) {
+        await t.run(`post-${index}`);
+        time += 1;
+      }
+      const loaders = t.ctx.getDocumentLoader.mock.calls.length;
+
+      await t.run('post-200');
+      expect(t.ctx.getDocumentLoader.mock.calls.length).toBe(loaders);
+      await t.run('post-0');
+      expect(t.ctx.getDocumentLoader.mock.calls.length).toBe(loaders + 1);
     });
   });
 
@@ -355,6 +602,37 @@ describe('FetchRemoteContextUseCase', () => {
       expect(t.fetchReplyNotesRecursiveUseCase.run).not.toHaveBeenCalled();
     });
 
+    it('祖先の保存前の判定では、ブロックしているアクターを偽にする', async () => {
+      const t = setup({
+        post: remotePost({ inReplyToUri: PARENT_URI }),
+        notes: [noteOf(ROOT_URI)],
+        blockedActorUris: ['https://remote.example/users/spammer'],
+      });
+
+      await t.run();
+      const [{ shouldSave }] = t.fetchReplyNotesRecursiveUseCase.run.mock.calls[0] as unknown as [
+        { shouldSave: (identity: { authorIdentity: { uri: string } }) => Promise<boolean> },
+      ];
+
+      expect(await shouldSave({ authorIdentity: { uri: 'https://remote.example/users/spammer' } })).toBe(false);
+      expect(await shouldSave({ authorIdentity: { uri: 'https://remote.example/users/alice' } })).toBe(true);
+    });
+
+    it('祖先の保存前の判定は、全体の時間切れのあとは偽にする', async () => {
+      const t = setup({
+        post: remotePost({ inReplyToUri: PARENT_URI }),
+        totalTimeoutMs: 50,
+        lookupObject: async () => new Promise(() => undefined),
+      });
+
+      await t.run();
+      const [{ shouldSave }] = t.fetchReplyNotesRecursiveUseCase.run.mock.calls[0] as unknown as [
+        { shouldSave: (identity: { authorIdentity: { uri: string } }) => Promise<boolean> },
+      ];
+
+      expect(await shouldSave({ authorIdentity: { uri: 'https://remote.example/users/alice' } })).toBe(false);
+    });
+
     it('祖先の取得にも 5 秒の signal を付ける', async () => {
       const t = setup({ post: remotePost({ inReplyToUri: PARENT_URI }), notes: [noteOf(PARENT_URI)] });
 
@@ -377,8 +655,8 @@ describe('FetchRemoteContextUseCase', () => {
         origin: ORIGIN,
         userResolver: { resolve: async () => RA.ok({ id: 'user-1', username: 'kosui' } as never) },
         postResolver: { resolve: async () => RA.ok(undefined) },
-        postResolverByUri: { resolve: async () => RA.ok(undefined) },
-        localPostResolverByUri: { resolve: async () => RA.ok(undefined) },
+        remotePostUrisResolverByUris: { resolve: async () => RA.ok([]) },
+        localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
         remotePostUpserter: { resolve: vi.fn() },
         blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
         fetchReplyNotesRecursiveUseCase: { run: vi.fn() },
@@ -398,8 +676,8 @@ describe('FetchRemoteContextUseCase', () => {
         origin: ORIGIN,
         userResolver: { resolve: async () => RA.ok(undefined) },
         postResolver: { resolve: async () => RA.ok(remotePost()) },
-        postResolverByUri: { resolve: async () => RA.ok(undefined) },
-        localPostResolverByUri: { resolve: async () => RA.ok(undefined) },
+        remotePostUrisResolverByUris: { resolve: async () => RA.ok([]) },
+        localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
         remotePostUpserter: { resolve: vi.fn() },
         blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
         fetchReplyNotesRecursiveUseCase: { run: vi.fn() },
