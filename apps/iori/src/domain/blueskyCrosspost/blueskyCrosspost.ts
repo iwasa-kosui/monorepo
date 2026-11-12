@@ -131,6 +131,12 @@ export type BlueskyReplyContext =
   | Readonly<{ kind: 'waiting' }>
   | Readonly<{ kind: 'sent'; root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
 
+export type BlueskyQuoteContext =
+  | Readonly<{ kind: 'none' }>
+  | Readonly<{ kind: 'unsent' }>
+  | Readonly<{ kind: 'waiting' }>
+  | Readonly<{ kind: 'sent'; uri: string; cid: string; quoteUri: string }>;
+
 const decideSkip = (
   input: Readonly<{ visibility: Visibility; replyTo: BlueskyReplyContext }>,
 ): BlueskySkipReason | undefined => {

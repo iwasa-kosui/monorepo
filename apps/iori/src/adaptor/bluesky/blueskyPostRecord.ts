@@ -2,6 +2,7 @@ import { Result } from '@iwasa-kosui/result';
 
 import {
   BlueskyCrosspost,
+  type BlueskyQuoteContext,
   type BlueskyReplyContext,
   type BlueskySkipReason,
   type BlueskyStrongRef,
@@ -14,6 +15,7 @@ import type {
   BlueskyPostRecord,
 } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
+import { removeQuoteInline } from '../../domain/post/quoteInline.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import { htmlToTextWithLinks, type TextLink } from './htmlToTextWithLinks.ts';
 
@@ -44,6 +46,7 @@ export type BuildBlueskyPostInput = Readonly<{
   unavailableImageUrls?: readonly string[];
   linkPreview?: BlueskyLinkPreviewInput;
   replyTo: BlueskyReplyContext;
+  quote?: BlueskyQuoteContext;
   createdAt: Instant;
 }>;
 
@@ -54,6 +57,7 @@ export type BlueskyPostDraft = Readonly<{
   external?: Readonly<{ uri: string; title: string; description: string; thumb?: BlueskyThumbInput }>;
   selfLabeled?: boolean;
   reply?: Readonly<{ root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
+  quote?: BlueskyStrongRef;
   createdAt: string;
 }>;
 
@@ -177,7 +181,9 @@ export const buildBlueskyPostDraft = (
   }
 
   const { kept, dropped } = selectBlueskyImages(input.images);
-  const { text, links } = composeText(input.html, input.postUrl, [
+  const quote = input.quote?.kind === 'sent' ? { uri: input.quote.uri, cid: input.quote.cid } : undefined;
+  const html = input.quote?.kind === 'sent' ? removeQuoteInline(input.html, input.quote.quoteUri) : input.html;
+  const { text, links } = composeText(html, input.postUrl, [
     ...dropped.map((image) => image.url),
     ...(input.unavailableImageUrls ?? []),
   ]);
@@ -198,12 +204,16 @@ export const buildBlueskyPostDraft = (
         ...(thumb === undefined ? {} : { thumb }),
       },
     }),
+    ...(quote === undefined ? {} : { quote }),
     ...reply,
     createdAt,
   });
 };
 
-const toEmbed = (draft: BlueskyPostDraft, blobs: BlueskyEmbedBlobs): BlueskyEmbed | undefined => {
+const toMedia = (
+  draft: BlueskyPostDraft,
+  blobs: BlueskyEmbedBlobs,
+): Extract<BlueskyEmbed, { $type: 'app.bsky.embed.recordWithMedia' }>['media'] | undefined => {
   if (draft.images.length > 0) {
     return {
       $type: 'app.bsky.embed.images',
@@ -221,6 +231,13 @@ const toEmbed = (draft: BlueskyPostDraft, blobs: BlueskyEmbedBlobs): BlueskyEmbe
     };
   }
   return undefined;
+};
+
+const toEmbed = (draft: BlueskyPostDraft, blobs: BlueskyEmbedBlobs): BlueskyEmbed | undefined => {
+  const media = toMedia(draft, blobs);
+  if (draft.quote === undefined) return media;
+  if (media === undefined) return { $type: 'app.bsky.embed.record', record: draft.quote };
+  return { $type: 'app.bsky.embed.recordWithMedia', record: { record: draft.quote }, media };
 };
 
 export const toBlueskyPostRecord = (draft: BlueskyPostDraft, blobs: BlueskyEmbedBlobs): BlueskyPostRecord => {

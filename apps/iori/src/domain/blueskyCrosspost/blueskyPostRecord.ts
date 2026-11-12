@@ -33,10 +33,15 @@ export type BlueskyEmbed =
   | Readonly<{
     $type: 'app.bsky.embed.recordWithMedia';
     record: Readonly<{ record: BlueskyStrongRef }>;
-    media: Readonly<{
-      $type: 'app.bsky.embed.images';
-      images: ReadonlyArray<Readonly<{ alt: string; image: BlueskyBlob }>>;
-    }>;
+    media:
+      | Readonly<{
+        $type: 'app.bsky.embed.images';
+        images: ReadonlyArray<Readonly<{ alt: string; image: BlueskyBlob }>>;
+      }>
+      | Readonly<{
+        $type: 'app.bsky.embed.external';
+        external: Readonly<{ uri: string; title: string; description: string; thumb?: BlueskyBlob }>;
+      }>;
   }>;
 
 export type BlueskyPostRecord = Readonly<{

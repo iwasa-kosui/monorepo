@@ -23,5 +23,13 @@ const linksTo = (html: string, uri: string): boolean => {
   return [...html.matchAll(HREF_ATTRIBUTE)].some((match) => normalize(decodeEntities(match[1] ?? '')) === target);
 };
 
+const quoteParagraph = (quoteUri: string): string =>
+  `<p>RE: <a href="${escapeHtml(quoteUri)}">${escapeHtml(quoteUri)}</a></p>`;
+
 export const appendQuoteInline = (html: string, quoteUri: string): string =>
-  linksTo(html, quoteUri) ? html : `${html}<p>RE: <a href="${escapeHtml(quoteUri)}">${escapeHtml(quoteUri)}</a></p>`;
+  linksTo(html, quoteUri) ? html : `${html}${quoteParagraph(quoteUri)}`;
+
+export const removeQuoteInline = (html: string, quoteUri: string): string => {
+  const paragraph = quoteParagraph(quoteUri);
+  return html.endsWith(paragraph) ? html.slice(0, -paragraph.length) : html;
+};
