@@ -85,6 +85,7 @@ import type { DeepDiveDigestItemUseCase } from '../useCase/deepDiveDigestItem.ts
 import type { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
 import type { DeleteBookmarkUseCase } from '../useCase/deleteBookmark.ts';
 import type { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
+import type { DeletePasskeyUseCase } from '../useCase/deletePasskey.ts';
 import type { DeletePostUseCase } from '../useCase/deletePost.ts';
 import type { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
 import type { EditArticleUseCase } from '../useCase/editArticle.ts';
@@ -92,6 +93,8 @@ import type { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import type { FetchRemoteContextUseCase } from '../useCase/fetchRemoteContext.ts';
 import type { FetchRemoteOutboxUseCase } from '../useCase/fetchRemoteOutbox.ts';
+import type { FinishPasskeyAuthenticationUseCase } from '../useCase/finishPasskeyAuthentication.ts';
+import type { FinishPasskeyRegistrationUseCase } from '../useCase/finishPasskeyRegistration.ts';
 import type { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
@@ -101,6 +104,7 @@ import type { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import type { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
 import type { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
+import type { ListPasskeysUseCase } from '../useCase/listPasskeys.ts';
 import type { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RefreshXPostsUseCase } from '../useCase/refreshXPosts.ts';
@@ -118,6 +122,8 @@ import type { SendReplyUseCase } from '../useCase/sendReply.ts';
 import type { SendRepostUseCase } from '../useCase/sendRepost.ts';
 import type { createSignInUseCase } from '../useCase/signIn.ts';
 import type { createSignUpUseCase } from '../useCase/signUp.ts';
+import type { StartPasskeyAuthenticationUseCase } from '../useCase/startPasskeyAuthentication.ts';
+import type { StartPasskeyRegistrationUseCase } from '../useCase/startPasskeyRegistration.ts';
 import type { SubscribePushUseCase } from '../useCase/subscribePush.ts';
 import type { SubscribeRelayUseCase } from '../useCase/subscribeRelay.ts';
 import type { SummarizeTimelineUseCase } from '../useCase/summarizeTimeline.ts';
@@ -153,6 +159,14 @@ export type WorkerBlockAction = WorkerRemoteActorAction;
 export type UploadObjectStore = ReturnType<typeof createPostImageR2ObjectStore>;
 export type IoriAuthRuntimePorts = Readonly<{
   signInUseCase: ReturnType<typeof createSignInUseCase>;
+}>;
+export type IoriPasskeyRuntimePorts = Readonly<{
+  startPasskeyRegistrationUseCase: StartPasskeyRegistrationUseCase;
+  finishPasskeyRegistrationUseCase: FinishPasskeyRegistrationUseCase;
+  startPasskeyAuthenticationUseCase: StartPasskeyAuthenticationUseCase;
+  finishPasskeyAuthenticationUseCase: FinishPasskeyAuthenticationUseCase;
+  listPasskeysUseCase: ListPasskeysUseCase;
+  deletePasskeyUseCase: DeletePasskeyUseCase;
 }>;
 export type IoriOAuthRuntimePorts = Readonly<{
   registerOAuthApplicationUseCase: RegisterOAuthApplicationUseCase;
@@ -311,6 +325,7 @@ export type IoriCoreRuntimePorts = Readonly<{
 export type IoriRuntimePorts = Readonly<{
   db: IoriD1Db;
   auth: IoriAuthRuntimePorts;
+  passkey: IoriPasskeyRuntimePorts;
   oauth: IoriOAuthRuntimePorts;
   mastodon: IoriMastodonRuntimePorts;
   digest: IoriDigestRuntimePorts;

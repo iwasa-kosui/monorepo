@@ -38,6 +38,7 @@ import { createWorkerMastodonTranslateRouter } from './adaptor/routes/workerMast
 import { createWorkerMastodonViewerListsRouter } from './adaptor/routes/workerMastodonViewerListsRouter.ts';
 import { createWorkerOAuthRouter } from './adaptor/routes/workerOAuthRouter.ts';
 import { createWorkerRemoteFollowRedirectRouter } from './adaptor/routes/workerPageActionsRouter.ts';
+import { createWorkerPasskeyRouter } from './adaptor/routes/workerPasskeyRouter.ts';
 import { createWorkerTimelinePostingApiRouter } from './adaptor/routes/workerTimelinePostingApiRouter.ts';
 import { createIoriApp } from './appFactory.tsx';
 import { ArticleId } from './domain/article/articleId.ts';
@@ -217,6 +218,7 @@ export default {
           verifyAccessTokenUseCase: runtime.oauth.verifyAccessTokenUseCase,
           sessionResolver: runtime.oauth.sessionResolver,
         });
+        app.route('/auth/passkey', createWorkerPasskeyRouter({ ...runtime.passkey, authn }));
         app.route('/', createWorkerOAuthRouter(runtime.oauth));
         app.route('/api', createWorkerMastodonAppsRouter({ ...runtime.oauth, authn }));
         const createContext = (mastodonRequest: Request) =>

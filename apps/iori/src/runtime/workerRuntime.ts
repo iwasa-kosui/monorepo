@@ -123,6 +123,13 @@ import {
   createD1OAuthApplicationResolver,
   createD1OAuthApplicationResolverByClientId,
 } from '../adaptor/d1/oauth/oauthApplicationResolvers.ts';
+import { createD1PasskeyCredentialResolverByCredentialId } from '../adaptor/d1/passkey/passkeyCredentialResolverByCredentialId.ts';
+import { createD1PasskeyCredentialsResolverByUserId } from '../adaptor/d1/passkey/passkeyCredentialsResolverByUserId.ts';
+import { createD1PasskeyDeletedStore } from '../adaptor/d1/passkey/passkeyDeletedStore.ts';
+import { createD1PasskeyRegisteredStore } from '../adaptor/d1/passkey/passkeyRegisteredStore.ts';
+import { createD1PasskeyUsedStore } from '../adaptor/d1/passkey/passkeyUsedStore.ts';
+import { createD1WebAuthnChallengeConsumer } from '../adaptor/d1/passkey/webAuthnChallengeConsumer.ts';
+import { createD1WebAuthnChallengeIssuedStore } from '../adaptor/d1/passkey/webAuthnChallengeIssuedStore.ts';
 import { createD1AccountStatusItemsResolverByActorId } from '../adaptor/d1/post/accountStatusItemsResolverByActorId.ts';
 import { createD1DirectPostParticipantsResolverByPostId } from '../adaptor/d1/post/directPostParticipantsResolverByPostId.ts';
 import { createD1LocalPostResolverByUri } from '../adaptor/d1/post/localPostResolverByUri.ts';
@@ -207,6 +214,7 @@ import { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
 import { DeleteBlockUseCase } from '../useCase/deleteBlock.ts';
 import { DeleteBookmarkUseCase } from '../useCase/deleteBookmark.ts';
 import { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
+import { DeletePasskeyUseCase } from '../useCase/deletePasskey.ts';
 import { DeletePostUseCase } from '../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
 import { EditArticleUseCase } from '../useCase/editArticle.ts';
@@ -215,6 +223,8 @@ import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import { FetchRemoteContextUseCase } from '../useCase/fetchRemoteContext.ts';
 import { FetchRemoteOutboxUseCase } from '../useCase/fetchRemoteOutbox.ts';
 import { FetchReplyNotesRecursiveUseCase } from '../useCase/fetchReplyNotesRecursive.ts';
+import { FinishPasskeyAuthenticationUseCase } from '../useCase/finishPasskeyAuthentication.ts';
+import { FinishPasskeyRegistrationUseCase } from '../useCase/finishPasskeyRegistration.ts';
 import { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
@@ -224,6 +234,7 @@ import { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
+import { ListPasskeysUseCase } from '../useCase/listPasskeys.ts';
 import { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
@@ -239,6 +250,8 @@ import { SendReplyUseCase } from '../useCase/sendReply.ts';
 import { SendRepostUseCase } from '../useCase/sendRepost.ts';
 import { createSignInUseCase } from '../useCase/signIn.ts';
 import { createSignUpUseCase } from '../useCase/signUp.ts';
+import { StartPasskeyAuthenticationUseCase } from '../useCase/startPasskeyAuthentication.ts';
+import { StartPasskeyRegistrationUseCase } from '../useCase/startPasskeyRegistration.ts';
 import { SubscribePushUseCase } from '../useCase/subscribePush.ts';
 import { SubscribeRelayUseCase } from '../useCase/subscribeRelay.ts';
 import { createSummarizeTimelineUseCase } from '../useCase/summarizeTimeline.ts';
@@ -283,6 +296,11 @@ export const createWorkerRuntimePorts = async (
   const sessionResolver = createD1SessionResolver(db);
   const sessionWithUserAndActorResolver = createD1SessionWithUserAndActorResolver(db);
   const userResolver = createD1UserResolver(db);
+  const rpId = new URL(env.ORIGIN).hostname;
+  const passkeyCredentialsResolverByUserId = createD1PasskeyCredentialsResolverByUserId(db);
+  const passkeyCredentialResolverByCredentialId = createD1PasskeyCredentialResolverByCredentialId(db);
+  const webAuthnChallengeIssuedStore = createD1WebAuthnChallengeIssuedStore(db);
+  const webAuthnChallengeConsumer = createD1WebAuthnChallengeConsumer(db);
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
   const markersResolverByUserId = createD1MarkersResolverByUserId(db);
   const mutedActorIdsResolverByUserId = createD1MutedOrBlockedActorIdsResolverByUserId(db);
@@ -382,6 +400,40 @@ export const createWorkerRuntimePorts = async (
         userPasswordResolver: createD1UserPasswordResolver(db),
         sessionStartedStore: createD1SessionStartedStore(db),
         argon2idDerive: lazyWorkerArgon2idDerive,
+      }),
+    },
+    passkey: {
+      startPasskeyRegistrationUseCase: StartPasskeyRegistrationUseCase.create({
+        userResolver,
+        userPasswordResolver: createD1UserPasswordResolver(db),
+        passkeyCredentialsResolverByUserId,
+        webAuthnChallengeIssuedStore,
+        argon2idDerive: lazyWorkerArgon2idDerive,
+        rpId,
+      }),
+      finishPasskeyRegistrationUseCase: FinishPasskeyRegistrationUseCase.create({
+        webAuthnChallengeConsumer,
+        passkeyCredentialResolverByCredentialId,
+        passkeyRegisteredStore: createD1PasskeyRegisteredStore(db),
+        rpId,
+        origin: env.ORIGIN,
+      }),
+      startPasskeyAuthenticationUseCase: StartPasskeyAuthenticationUseCase.create({
+        webAuthnChallengeIssuedStore,
+        rpId,
+      }),
+      finishPasskeyAuthenticationUseCase: FinishPasskeyAuthenticationUseCase.create({
+        webAuthnChallengeConsumer,
+        passkeyCredentialResolverByCredentialId,
+        passkeyUsedStore: createD1PasskeyUsedStore(db),
+        sessionStartedStore: createD1SessionStartedStore(db),
+        rpId,
+        origin: env.ORIGIN,
+      }),
+      listPasskeysUseCase: ListPasskeysUseCase.create({ passkeyCredentialsResolverByUserId }),
+      deletePasskeyUseCase: DeletePasskeyUseCase.create({
+        passkeyCredentialResolverByCredentialId,
+        passkeyDeletedStore: createD1PasskeyDeletedStore(db),
       }),
     },
     oauth: {
