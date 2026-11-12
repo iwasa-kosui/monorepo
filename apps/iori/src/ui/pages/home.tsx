@@ -16,6 +16,7 @@ import { PostDestinationSelect } from '../components/PostDestinationSelect.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { ReplyDialogShell } from '../components/ReplyDialogShell.tsx';
+import { ReportModal } from '../components/ReportModal.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
 import { homeItemKey } from '../hooks/homeFeed.ts';
 import { pullProgress, refreshResultLabel } from '../hooks/pullGesture.ts';
@@ -229,7 +230,7 @@ const ReplyModal = () => {
 };
 
 const ThreadModal = () => {
-  const { thread, actions, reply, data } = useTimelineContext();
+  const { thread, actions, reply, reportPost, data } = useTimelineContext();
   const {
     threadModalPostId,
     threadData,
@@ -348,6 +349,8 @@ const ThreadModal = () => {
                           isUndoingRepost={actionState.undoingRepostPostId === post.id}
                           onDelete={actions.deletePost}
                           onMute={actions.muteAccount}
+                          onBlock={actions.blockAccount}
+                          onReport={reportPost.open}
                           isDeleting={actionState.deletingPostId === post.id}
                           onEmojiReact={actions.emojiReact}
                           onUndoEmojiReact={actions.undoEmojiReact}
@@ -377,6 +380,8 @@ const ThreadModal = () => {
                       isUndoingRepost={actionState.undoingRepostPostId === threadData.currentPost.id}
                       onDelete={actions.deletePost}
                       onMute={actions.muteAccount}
+                      onBlock={actions.blockAccount}
+                      onReport={reportPost.open}
                       isDeleting={actionState.deletingPostId === threadData.currentPost.id}
                       onEmojiReact={actions.emojiReact}
                       onUndoEmojiReact={actions.undoEmojiReact}
@@ -407,6 +412,8 @@ const ThreadModal = () => {
                             isUndoingRepost={actionState.undoingRepostPostId === post.id}
                             onDelete={actions.deletePost}
                             onMute={actions.muteAccount}
+                            onBlock={actions.blockAccount}
+                            onReport={reportPost.open}
                             isDeleting={actionState.deletingPostId === post.id}
                             onEmojiReact={actions.emojiReact}
                             onUndoEmojiReact={actions.undoEmojiReact}
@@ -686,6 +693,7 @@ const TimelineList = () => {
     data,
     items,
     actions,
+    reportPost,
     blueskyLike,
     blueskyRepost,
     blueskyReply,
@@ -773,6 +781,8 @@ const TimelineList = () => {
             isUndoingRepost={actionState.undoingRepostPostId === postId}
             onDelete={actions.deletePost}
             onMute={actions.muteAccount}
+            onBlock={actions.blockAccount}
+            onReport={reportPost.open}
             isDeleting={actionState.deletingPostId === postId}
             onEmojiReact={actions.emojiReact}
             onUndoEmojiReact={actions.undoEmojiReact}
@@ -870,6 +880,31 @@ const ServerTimeline = () => {
   );
 };
 
+const ReportPostModal = () => {
+  const { reportPost } = useTimelineContext();
+
+  return (
+    <>
+      <ReportModal
+        targetLabel={reportPost.target === null ? '' : `@${reportPost.target.acct} の投稿`}
+        isOpen={reportPost.target !== null}
+        isSubmitting={reportPost.isReporting}
+        error={reportPost.error}
+        onSubmit={reportPost.submit}
+        onClose={reportPost.close}
+      />
+      {reportPost.isReported && (
+        <p
+          role='status'
+          class='fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-clay bg-cream dark:bg-gray-800 shadow-clay dark:shadow-clay-dark text-sm text-sage-dark dark:text-sage'
+        >
+          通報しました
+        </p>
+      )}
+    </>
+  );
+};
+
 const HomePage = () => {
   const { timeline, blueskyReply } = useTimelineContext();
   const handlePosted = usePostedHandler();
@@ -908,6 +943,7 @@ const HomePage = () => {
       <ReplyModal />
       <BlueskyReplyModal dialog={blueskyReply} />
       <ThreadModal />
+      <ReportPostModal />
       <TimelineList />
       <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>
     </>

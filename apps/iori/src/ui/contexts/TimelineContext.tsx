@@ -13,6 +13,7 @@ import { usePostActions, type UsePostActionsReturn } from '../hooks/usePostActio
 import { PULL_TO_REFRESH_THRESHOLD, usePullToRefresh, type UsePullToRefreshReturn } from '../hooks/usePullToRefresh.ts';
 import { useReadingPosition, type UseReadingPositionReturn } from '../hooks/useReadingPosition.ts';
 import { useReplyDialog, type UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
+import { useReportPost, type UseReportPostReturn } from '../hooks/useReportPost.ts';
 import { useThreadModal, type UseThreadModalReturn } from '../hooks/useThreadModal.ts';
 import { type TimelineData, useTimeline, type UseTimelineReturn } from '../hooks/useTimeline.ts';
 import { useUIState, type UseUIStateReturn } from '../hooks/useUIState.ts';
@@ -28,6 +29,7 @@ export type TimelineContextValue = Readonly<{
   blueskyStatus: UseBlueskyStatusReturn;
   thread: UseThreadModalReturn;
   reply: UseReplyDialogReturn;
+  reportPost: UseReportPostReturn;
   ui: UseUIStateReturn;
   pullToRefresh: UsePullToRefreshReturn;
   pullThreshold: number;
@@ -61,6 +63,8 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     },
     onPostDeleted: thread.removeFromThread,
   });
+
+  const reportPost = useReportPost();
 
   const blueskyLike = useBlueskyLike(timeline.updateBlueskyItems);
   const blueskyRepost = useBlueskyRepost(timeline.updateBlueskyItems);
@@ -127,6 +131,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       blueskyStatus,
       thread,
       reply,
+      reportPost,
       ui,
       pullToRefresh,
       pullThreshold: PULL_TO_REFRESH_THRESHOLD,
@@ -143,6 +148,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       blueskyStatus,
       thread,
       reply,
+      reportPost,
       ui,
       pullToRefresh,
       reading,
