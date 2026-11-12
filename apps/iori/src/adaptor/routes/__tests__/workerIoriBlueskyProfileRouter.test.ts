@@ -79,6 +79,7 @@ const feedItem = {
   threadMuted: false,
   replyRootUri: null,
   viewerRepostUri: null,
+  bookmarked: false,
 };
 
 const setup = async (options: {
@@ -305,6 +306,7 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
       indexedAt: NOW - 500,
       liked: false,
       reposted: false,
+      bookmarked: false,
       threadMuted: false,
       replyRootUri: null,
       isOwn: false,

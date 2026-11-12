@@ -726,6 +726,11 @@ export const blueskyLikesTable = sqliteTable('bluesky_likes', {
   createdAt: timestamp().notNull(),
 });
 
+export const blueskyBookmarksTable = sqliteTable('bluesky_bookmarks', {
+  subjectUri: text('subjectUri').primaryKey(),
+  createdAt: timestamp().notNull(),
+});
+
 export const blueskyRepostsTable = sqliteTable('bluesky_reposts', {
   subjectUri: text('subjectUri').primaryKey(),
   repostUri: text('repostUri').notNull(),
@@ -831,6 +836,7 @@ export const schema = {
   blueskyCrosspostsTable,
   blueskyTimelineItemsTable,
   blueskyLikesTable,
+  blueskyBookmarksTable,
   blueskyRepostsTable,
   notificationBlueskyTable,
   blueskyModeratedActorsTable,
