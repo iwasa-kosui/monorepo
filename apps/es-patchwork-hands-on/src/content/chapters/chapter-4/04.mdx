@@ -10,7 +10,7 @@ import { readFunctionsOf } from '../../../lib/snapshots';
 
 `audit_logs` テーブルは、変更前後の値と操作者を持ちます。業務上の理由は持ちません。このパターンでは、監査ログと業務イベントの役割を分けます。`cancelVisit` は監査ログの ID を業務イベントの `payload` に入れます。`payload` は変更前後の値を持ちません。
 
-<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} />
+<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} label="実行欄" />
 
 <CodePlayground
   exercise="chapter-4-audit-log-done"
@@ -37,6 +37,8 @@ LEFT JOIN business_events AS e ON e.payload ->> '$.auditLogId' = a.id
 WHERE e.event_id IS NULL
 ORDER BY a.id;`}
 />
+
+上の表の1行目と2行目は、変更前後の値が同じです。担当者は `reason` で2つを見分けられます。3行目の診察の完了は業務イベントを記録しないので、`reason` が `null` です。
 
 <div class="detail-row">
 

@@ -8,14 +8,9 @@ import { readFunctionsOf } from '../../../lib/snapshots';
 
 > 外部システムに、いつ何を送ったのか。
 
-外部への送信はトランザクションに入りません。そこで `cancelVisit` は記録を2回に分けます。
+`cancelVisit` は来院をキャンセルしたあと、リマインダーの取り消しを外部システムへ送ります。外部への送信はトランザクションに入りません。そこで `cancelVisit` は記録を2回に分けます。`cancelVisit` は、トランザクションの中で `VisitCancelled` と送信の予定 `ReminderCancellationRequested` を記録します。`cancelVisit` は、コミットの後に外部へ送り、結果を `ReminderCancellationSent` か `ReminderCancellationFailed` として記録します。
 
-1. `cancelVisit` は、トランザクションの中で `VisitCancelled` と送信の予定 `ReminderCancellationRequested` を記録します。
-2. `cancelVisit` は、コミットの後に外部へ送り、結果を `ReminderCancellationSent` か `ReminderCancellationFailed` として記録します。
-
-`result` の `unconfirmed` は、送信の予定があり結果の記録が無い送信を表します。この送信が外部に届いたとは限りません。
-
-<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} />
+<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} label="実行欄" />
 
 <CodePlayground
   exercise="chapter-4-external-sync-done"
@@ -43,6 +38,8 @@ WHERE requested.event_name = 'ReminderCancellationRequested'
   )
 ORDER BY requested.event_id;`}
 />
+
+3行目は、確認用スクリプトが結果の記録を失敗させた例です。`result` の `unconfirmed` は、送信の予定があり結果の記録が無い送信を表します。この送信が外部に届いたとは限りません。この演習のコードは、未確認の送信を再送しません。
 
 <div class="detail-row">
 

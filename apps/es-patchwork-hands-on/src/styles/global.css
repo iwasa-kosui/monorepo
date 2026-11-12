@@ -201,7 +201,7 @@ body.chapter-page {
   width: 100%;
   table-layout: fixed;
   font-size: 0.875rem;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 .content .decision-table[data-axis-table] th:first-child,
 .content .decision-table[data-axis-table] td:first-child {

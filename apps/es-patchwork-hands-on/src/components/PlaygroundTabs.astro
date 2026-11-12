@@ -1,15 +1,16 @@
 ---
 interface Props {
   labels: string[];
+  label?: string;
 }
 
-const { labels } = Astro.props;
+const { labels, label: groupLabel = 'パターン' } = Astro.props;
 ---
 
 <div
   class="playground-switch"
   role="group"
-  aria-label="パターン"
+  aria-label={groupLabel}
   data-playground-switch
 >
   {

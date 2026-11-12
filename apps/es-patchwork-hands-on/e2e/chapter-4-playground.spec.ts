@@ -124,7 +124,7 @@ test.describe('第4章の SQL の欄', () => {
 
   const openSql = async (page: Page, path: string): Promise<Locator> => {
     await page.goto(path);
-    await page.getByRole('group', { name: 'パターン' }).getByRole('button', { name: 'SQL で調べる' }).click();
+    await page.getByRole('group', { name: '実行欄' }).getByRole('button', { name: 'SQL で調べる' }).click();
     const playground = visible(page);
     await expect(playground).toHaveCount(1);
     await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
@@ -141,7 +141,7 @@ test.describe('第4章の SQL の欄', () => {
     test(`${pattern.name}: 最初は完成コードの欄だけが出て、「SQL で調べる」を押すと SQL の欄に切り替わる`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 640 });
       await open(page, pattern.path);
-      const buttons = page.getByRole('group', { name: 'パターン' }).getByRole('button');
+      const buttons = page.getByRole('group', { name: '実行欄' }).getByRole('button');
       await expect(buttons).toHaveText(['完成コードを実行する', 'SQL で調べる']);
       await expect(page.locator('[data-playground]')).toHaveCount(2);
       await expect(visible(page)).toHaveAttribute('data-playground', 'code');

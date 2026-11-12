@@ -8,9 +8,9 @@ import { readFunctionsOf } from '../../../lib/snapshots';
 
 > この集計値はなぜこの値なのか。
 
-`daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。テーブルの行には数しかありません。開発者は読み取り関数だけを足します。キャンセル数の3に対して、業務イベントから再計算した値は2です。差の1は、業務イベントを導入する前から残っているキャンセルです。この比較は差があることを示しますが、差の理由は示しません。
+`daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。テーブルの行には数しかありません。`cancelVisit` は業務イベントとキャンセル数を同じトランザクションで書きます。このパターンの開始と完成で、`cancelVisit` は同じです。開発者は読み取り関数だけを足します。キャンセル数の3に対して、業務イベントから再計算した値は2です。差の1は、業務イベントを導入する前から残っているキャンセルです。この比較は差があることを示しますが、差の理由は示しません。
 
-<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} />
+<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} label="実行欄" />
 
 <CodePlayground
   exercise="chapter-4-summary-table-done"
@@ -34,6 +34,8 @@ import { readFunctionsOf } from '../../../lib/snapshots';
   ) AS recalculated_count
 FROM daily_cancellation_counts AS c;`}
 />
+
+上の表は、キャンセル数の内訳を理由と操作者つきで示します。
 
 <div class="detail-row">
 

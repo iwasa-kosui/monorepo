@@ -195,7 +195,7 @@
     flex: 1 1 auto;
     flex-shrink: 1;
     flex-direction: column;
-    min-height: 14rem;
+    min-height: 12.5rem;
     max-height: 28rem;
     margin-block: 0;
     padding: 0.5rem;
