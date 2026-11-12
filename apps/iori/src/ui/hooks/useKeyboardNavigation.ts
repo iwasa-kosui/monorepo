@@ -2,6 +2,7 @@ import { useEffect } from 'hono/jsx';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { detailHref, displayStatus } from '../api/status.ts';
+import { shouldCloseReplyModalOnKey } from '../components/FediverseReplyModal.tsx';
 import type { HomeItem } from './homeFeed.ts';
 
 type UseKeyboardNavigationProps = Readonly<{
@@ -12,6 +13,7 @@ type UseKeyboardNavigationProps = Readonly<{
   emojiPickerOpenForIndex: number | null;
   setEmojiPickerOpenForIndex: (index: number | null) => void;
   replyingToPostId: string | null;
+  isSendingReply: boolean;
   threadModalPostId: string | null;
   onLike: (postId: string) => void;
   onUndoLike: (postId: string) => void;
@@ -29,6 +31,7 @@ export const useKeyboardNavigation = ({
   emojiPickerOpenForIndex,
   setEmojiPickerOpenForIndex,
   replyingToPostId,
+  isSendingReply,
   threadModalPostId,
   onLike,
   onUndoLike,
@@ -72,6 +75,7 @@ export const useKeyboardNavigation = ({
         }
         if (replyingToPostId !== null) {
           e.preventDefault();
+          if (!shouldCloseReplyModalOnKey(e.key, isSendingReply)) return;
           onCancelReply();
           return;
         }
@@ -162,7 +166,7 @@ export const useKeyboardNavigation = ({
           }
           if (post === undefined) break;
           e.preventDefault();
-          onReply(post.id, post.account.username);
+          onReply(post.id, post.account.acct);
           break;
         }
       }
@@ -178,6 +182,7 @@ export const useKeyboardNavigation = ({
     emojiPickerOpenForIndex,
     setEmojiPickerOpenForIndex,
     replyingToPostId,
+    isSendingReply,
     threadModalPostId,
     onLike,
     onUndoLike,

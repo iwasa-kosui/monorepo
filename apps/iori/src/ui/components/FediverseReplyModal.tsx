@@ -9,6 +9,8 @@ type Props = Readonly<{
   dialog: UseReplyDialogReturn;
 }>;
 
+export const shouldCloseReplyModalOnKey = (key: string, isSending: boolean): boolean => key === 'Escape' && !isSending;
+
 export const FediverseReplyModal = ({ dialog }: Props) => {
   const {
     replyingToPostId,
@@ -25,13 +27,13 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
   useEffect(() => {
     if (!replyingToPostId) return;
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (shouldCloseReplyModalOnKey(e.key, isSendingReply)) {
         closeReplyDialog();
       }
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [replyingToPostId, closeReplyDialog]);
+  }, [replyingToPostId, isSendingReply, closeReplyDialog]);
 
   if (!replyingToPostId) {
     return null;
