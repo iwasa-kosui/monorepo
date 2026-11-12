@@ -25,7 +25,17 @@ const contextWith = (env: Partial<IoriWorkerEnv>): ScheduledTaskContext => ({
   waitUntil: () => undefined,
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+const recorderStub = () => ({
+  succeededStore: { save: vi.fn(async () => RA.ok(undefined)) },
+  failedStore: { save: vi.fn(async () => RA.ok(undefined)) },
+});
+
+const NOW = Date.UTC(2026, 10, 12, 3, 4, 5);
 
 describe('collectBlueskyNotificationsTask', () => {
   it.each([
@@ -56,11 +66,18 @@ describe('collectBlueskyNotificationsTask', () => {
       env: { IORI_BLUESKY_TIMELINE: 'enabled' } as never,
     };
 
-    await createCollectBlueskyNotificationsTask(createUseCase).run(context);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    const recorder = recorderStub();
+
+    await createCollectBlueskyNotificationsTask(createUseCase, () => recorder).run(context);
 
     expect(createUseCase).toHaveBeenCalledWith(context.env);
     expect(run).toHaveBeenCalledOnce();
     expect(info).toHaveBeenCalledWith('iori bluesky notifications collected.', summary);
+    expect(recorder.succeededStore.save).toHaveBeenCalledOnce();
+    expect(recorder.succeededStore.save).toHaveBeenCalledWith('notifications', NOW);
+    expect(recorder.failedStore.save).not.toHaveBeenCalled();
   });
 
   it('取り込みが失敗したら、秘密を含まない短い文字列を console.error に 1 回だけ出す', async () => {
@@ -71,10 +88,15 @@ describe('collectBlueskyNotificationsTask', () => {
         kind: 'auth' as const,
         message: 'app.bsky.notification.listNotifications failed: status 401 ExpiredToken',
         status: 401,
+        code: 'ExpiredToken',
       })
     );
-    const task = createCollectBlueskyNotificationsTask(() =>
-      ({ run }) as unknown as CollectBlueskyNotificationsUseCase
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    const recorder = recorderStub();
+    const task = createCollectBlueskyNotificationsTask(
+      () => ({ run }) as unknown as CollectBlueskyNotificationsUseCase,
+      () => recorder,
     );
 
     await task.run(contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }));
@@ -83,6 +105,39 @@ describe('collectBlueskyNotificationsTask', () => {
     expect(error).toHaveBeenCalledWith(
       'iori bluesky notifications: collection failed. app.bsky.notification.listNotifications failed: status 401 ExpiredToken',
     );
+    expect(recorder.failedStore.save).toHaveBeenCalledOnce();
+    expect(recorder.failedStore.save).toHaveBeenCalledWith('notifications', NOW, 'auth', 'ExpiredToken');
+    expect(recorder.succeededStore.save).not.toHaveBeenCalled();
+  });
+
+  it('失敗にコードが無ければ、コードを null にして記録する', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const run = vi.fn(async () =>
+      RA.err({
+        type: 'BlueskyClientError' as const,
+        kind: 'http' as const,
+        message: 'listNotifications failed: status 502',
+        status: 502,
+      })
+    );
+    const recorder = recorderStub();
+    const task = createCollectBlueskyNotificationsTask(
+      () => ({ run }) as unknown as CollectBlueskyNotificationsUseCase,
+      () => recorder,
+    );
+
+    await task.run(contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }));
+
+    expect(recorder.failedStore.save).toHaveBeenCalledWith('notifications', expect.any(Number), 'http', null);
+  });
+
+  it('無効なときは、記録の保存先を作らない', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const createRecorder = vi.fn(recorderStub);
+
+    await createCollectBlueskyNotificationsTask(() => undefined, createRecorder).run(contextWith({}));
+
+    expect(createRecorder).not.toHaveBeenCalled();
   });
 
   it('1 分ごとの cron でタイムラインの取り込みの後に動き、3 時間ごとの cron には登録されていない', () => {

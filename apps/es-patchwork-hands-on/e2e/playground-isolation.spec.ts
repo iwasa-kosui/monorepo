@@ -37,7 +37,9 @@ const scriptClosure = (html: string): Map<string, string> => {
 const loadsRuntimeScript = (html: string): boolean =>
   [...scriptClosure(html).values()].some((source) => markers.some((marker) => source.includes(marker)));
 
-const usesPlaygroundRuntime = (html: string): boolean => html.includes('data-playground=') || loadsRuntimeScript(html);
+const hasRuntimeMarkup = (html: string): boolean => html.includes('data-playground=') || html.includes('data-play=');
+
+const usesPlaygroundRuntime = (html: string): boolean => hasRuntimeMarkup(html) || loadsRuntimeScript(html);
 
 test('確認用ページは実行基盤の JS を読み込み、noindex を付けている', () => {
   const html = readDistFile(checkFile);
@@ -65,18 +67,18 @@ test('第1章から第3章では、実行欄を置いたページだけが実行
   expect(pages.length).toBeGreaterThan(10);
   const mismatches = pages.filter((file) => {
     const html = readDistFile(file);
-    return html.includes('data-playground=') !== loadsRuntimeScript(html)
+    return hasRuntimeMarkup(html) !== loadsRuntimeScript(html)
       || html.includes('playground-check')
       || html.includes('name="robots"');
   });
   expect(mismatches).toEqual([]);
-  expect(pages.filter((file) => readDistFile(file).includes('data-playground=')).sort()).toEqual([
+  expect(pages.filter((file) => hasRuntimeMarkup(readDistFile(file))).sort()).toEqual([
     'chapters/chapter-1/3/index.html',
     'chapters/chapter-1/5/index.html',
     'chapters/chapter-1/index.html',
     'chapters/chapter-2/2/index.html',
+    'chapters/chapter-2/4/index.html',
     'chapters/chapter-2/5/index.html',
-    'chapters/chapter-2/6/index.html',
     'chapters/chapter-3/index.html',
   ]);
 });

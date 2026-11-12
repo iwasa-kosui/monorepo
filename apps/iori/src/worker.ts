@@ -41,6 +41,7 @@ import { Session } from './domain/session/session.ts';
 import { SessionId } from './domain/session/sessionId.ts';
 import { Username } from './domain/user/username.ts';
 import { processCloudflareFedifyQueueBatch } from './federation.cloudflare.ts';
+import { withD1ReadRetry } from './runtime/d1ReadRetry.ts';
 import { createD1TimingCollector, instrumentEnvD1, logD1Timing } from './runtime/d1Timing.ts';
 import { createWorkerRuntimePorts } from './runtime/workerRuntime.ts';
 import { dispatchScheduled, scheduledTasks } from './scheduled/scheduledTasks.ts';
@@ -91,6 +92,9 @@ const fetchAsset = async (
   });
 };
 
+const withReadRetryEnv = (env: IoriWorkerEnv): IoriWorkerEnv =>
+  env.DB === undefined || env.DB === null ? env : { ...env, DB: withD1ReadRetry(env.DB) };
+
 const ogImageFailures: OgImageFailureLog = new Map();
 
 type IoriWorkerHandler = Readonly<{
@@ -127,7 +131,7 @@ export default {
       return Response.json({ accepted: true, queue: { enqueued: 1 } }, { headers: { 'Cache-Control': 'no-store' } });
     }
     const d1Timing = createD1TimingCollector();
-    env = instrumentEnvD1(env, d1Timing);
+    env = instrumentEnvD1(withReadRetryEnv(env), d1Timing);
     if (admission.capability === 'smoke') env = readOnlySmokeEnvironment(env);
     const runtime = await createWorkerRuntimePorts(env, (promise) => executionCtx.waitUntil(promise));
 
@@ -385,7 +389,7 @@ export default {
     if (messages.length > 0) {
       await processCloudflareFedifyQueueBatch(
         { ...batch, messages },
-        env,
+        withReadRetryEnv(env),
         (promise) => executionCtx.waitUntil(promise),
       );
     }
@@ -404,7 +408,7 @@ export default {
       return;
     }
     await dispatchScheduled(controller.cron, scheduledTasks, {
-      env,
+      env: withReadRetryEnv(env),
       scheduledTime: new Date(controller.scheduledTime),
       waitUntil: (promise) => executionCtx.waitUntil(promise),
     });

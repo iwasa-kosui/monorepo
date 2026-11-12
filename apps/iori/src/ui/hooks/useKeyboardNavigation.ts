@@ -1,8 +1,7 @@
 import { useEffect } from 'hono/jsx';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
-import { displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
+import { detailHref, displayStatus } from '../api/status.ts';
 import type { HomeItem } from './homeFeed.ts';
 
 type UseKeyboardNavigationProps = Readonly<{
@@ -133,12 +132,7 @@ export const useKeyboardNavigation = ({
         case 'Enter':
           if (post === undefined) break;
           e.preventDefault();
-          if (isLocalAccount(post.account)) {
-            window.location.href = statusHref(post);
-          } else {
-            const uri = safeAbsoluteUrl(post.uri);
-            if (uri) window.open(uri, '_blank');
-          }
+          window.location.href = detailHref(post);
           break;
         case 'g':
           e.preventDefault();
