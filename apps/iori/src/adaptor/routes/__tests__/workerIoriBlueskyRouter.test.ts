@@ -279,7 +279,7 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         indexedAt: BASE + 5000,
         liked: false,
         reposted: false,
-        threadMuted: false,
+        threadMuted: null,
         replyRootUri: null,
         isOwn: false,
       });

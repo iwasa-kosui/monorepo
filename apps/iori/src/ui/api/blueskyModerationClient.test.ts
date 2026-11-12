@@ -183,7 +183,7 @@ describe('Bluesky のミュート、ブロック、通報の API', () => {
     const login = await muteBlueskyThread(ROOT).catch((error: unknown) => error);
 
     expect(blueskyModerationFailureMessage('muteThread', notFound)).toBe(
-      '投稿が見つからないため、スレッドをミュートできませんでした',
+      '投稿が見つからないため、スレッドのミュートを変更できませんでした',
     );
     expect(blueskyModerationFailureMessage('mute', notFound)).toBe('ミュートを変更できませんでした');
     expect(blueskyModerationFailureMessage('muteThread', login)).toBe(

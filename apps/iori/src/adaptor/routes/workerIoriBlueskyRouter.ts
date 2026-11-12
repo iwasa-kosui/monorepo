@@ -107,7 +107,7 @@ export type IoriBlueskyTimelineItemBody = Readonly<{
   indexedAt: number;
   liked: boolean;
   reposted: boolean;
-  threadMuted: boolean;
+  threadMuted: boolean | null;
   replyRootUri: string | null;
   isOwn: boolean;
 }>;

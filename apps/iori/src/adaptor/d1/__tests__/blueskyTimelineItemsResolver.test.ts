@@ -171,7 +171,7 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
   });
 
   describe('threadMuted と replyRootUri', () => {
-    it('D1 には保存しないので、すべての行で false と null を返す', async () => {
+    it('D1 には保存しないので、すべての行で null を返す', async () => {
       const t = setup([
         { feedItemId: 'own', uri: 'at://own', indexedAt: BASE },
         { feedItemId: 'other', uri: 'at://other', indexedAt: BASE - 1 },
@@ -180,8 +180,8 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
       const items = await t.resolveItems(10);
 
       expect(items.map((item) => [item.feedItemId, item.threadMuted, item.replyRootUri])).toEqual([
-        ['own', false, null],
-        ['other', false, null],
+        ['own', null, null],
+        ['other', null, null],
       ]);
     });
   });

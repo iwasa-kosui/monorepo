@@ -440,13 +440,45 @@ describe('BlueskyTimelineItemView', () => {
         expect(items.map((entry) => entry.label)).toContain('スレッドのミュートを解除');
       });
 
-      it('古いキャッシュで threadMuted が無くても、ミュートしていないものとして扱う', () => {
+      it('古いキャッシュで threadMuted が無ければ、ミュートとミュート解除を両方出す', () => {
         const { threadMuted: _threadMuted, ...stale } = base;
         const items = findMenuItems(
           BlueskyTimelineItemView({ item: stale as unknown as typeof base, ...threadHandlers() }),
         ) ?? [];
 
-        expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link', 'mute-thread']);
+        expect(items.map((entry) => entry.key)).toEqual([
+          'open-bluesky',
+          'copy-link',
+          'mute-thread',
+          'unmute-thread',
+        ]);
+      });
+
+      it('threadMuted が null なら、ミュートとミュート解除をこの順で両方出す', () => {
+        const items = findMenuItems(
+          BlueskyTimelineItemView({ item: { ...base, threadMuted: null }, ...threadHandlers() }),
+        ) ?? [];
+
+        expect(items.map((entry) => entry.key)).toEqual([
+          'open-bluesky',
+          'copy-link',
+          'mute-thread',
+          'unmute-thread',
+        ]);
+        expect(items.map((entry) => entry.label)).toEqual([
+          'Bluesky で開く',
+          'リンクをコピー',
+          'スレッドをミュート',
+          'スレッドのミュートを解除',
+        ]);
+      });
+
+      it('threadMuted が null でも、対応するハンドラが無い項目は出さない', () => {
+        const items = findMenuItems(
+          BlueskyTimelineItemView({ item: { ...base, threadMuted: null }, onUnmuteThread: vi.fn() }),
+        ) ?? [];
+
+        expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link', 'unmute-thread']);
       });
 
       it('該当するハンドラが無ければ出さない', () => {

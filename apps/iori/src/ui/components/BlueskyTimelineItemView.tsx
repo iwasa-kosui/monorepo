@@ -366,7 +366,17 @@ export const BlueskyTimelineItemView = ({
       { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: bskyHref } as const,
       { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: bskyHref } as const,
     ]),
-    ...(item.threadMuted === true
+    ...(item.threadMuted === false || item.threadMuted === null || item.threadMuted === undefined
+      ? onMuteThread === undefined ? [] : [
+        {
+          key: 'mute-thread',
+          label: 'スレッドをミュート',
+          kind: 'action',
+          onSelect: () => onMuteThread(item),
+        } as const,
+      ]
+      : []),
+    ...(item.threadMuted === true || item.threadMuted === null || item.threadMuted === undefined
       ? onUnmuteThread === undefined ? [] : [
         {
           key: 'unmute-thread',
@@ -375,16 +385,7 @@ export const BlueskyTimelineItemView = ({
           onSelect: () => onUnmuteThread(item),
         } as const,
       ]
-      : onMuteThread === undefined
-      ? []
-      : [
-        {
-          key: 'mute-thread',
-          label: 'スレッドをミュート',
-          kind: 'action',
-          onSelect: () => onMuteThread(item),
-        } as const,
-      ]),
+      : []),
     ...(canModerate && onMuteAuthor !== undefined
       ? [
         {

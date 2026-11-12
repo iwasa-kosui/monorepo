@@ -69,6 +69,13 @@ describe('withBlueskyThreadMuted', () => {
     expect(withBlueskyThreadMuted([reply], ROOT, false).map((i) => i.threadMuted)).toEqual([false]);
   });
 
+  it('threadMuted が null の投稿も、true と false に書き換える', () => {
+    const unknown = { ...item('1', 'did:plc:other'), replyRootUri: ROOT, threadMuted: null };
+
+    expect(withBlueskyThreadMuted([unknown], ROOT, true).map((i) => i.threadMuted)).toEqual([true]);
+    expect(withBlueskyThreadMuted([unknown], ROOT, false).map((i) => i.threadMuted)).toEqual([false]);
+  });
+
   it('該当する投稿が無いときは、同じ配列をそのまま返す', () => {
     const items = [item('1', 'did:plc:other')];
 

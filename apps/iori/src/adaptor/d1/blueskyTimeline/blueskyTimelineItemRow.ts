@@ -38,6 +38,6 @@ export const toBlueskyTimelineItem = (row: Row, liked: boolean, reposted: boolea
     fetchedAt: row.fetchedAt.getTime() as Instant,
     liked,
     reposted,
-    threadMuted: false,
+    threadMuted: null,
     replyRootUri: null,
   });
