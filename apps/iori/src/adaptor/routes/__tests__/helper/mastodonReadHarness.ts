@@ -36,6 +36,7 @@ import { RepostBlueskyPostUseCase } from '../../../../useCase/repostBlueskyPost.
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
+import type { ScheduleBlueskyCrosspostUseCase } from '../../../../useCase/scheduleBlueskyCrosspost.ts';
 import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
 import { SendEmojiReactUseCase } from '../../../../useCase/sendEmojiReact.ts';
 import { SendLikeUseCase } from '../../../../useCase/sendLike.ts';
@@ -204,6 +205,7 @@ export const setupReadApi = (
     blueskyLikeClient?: Pick<BlueskyClient, 'createLike' | 'deleteLike'>;
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
     refreshXPosts?: RefreshXPostsUseCase;
+    scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   }> = {},
 ) => {
   const harness = createOAuthHarness();
@@ -325,6 +327,7 @@ export const setupReadApi = (
             },
             acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
             origin: ORIGIN,
+            scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),
           sendReplyUseCase: SendReplyUseCase.create({
             sessionResolver,
@@ -339,6 +342,7 @@ export const setupReadApi = (
             webPushSender: { send: () => RA.ok(undefined) },
             postResolver,
             origin: ORIGIN,
+            scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),
           deletePostUseCase: DeletePostUseCase.create({
             sessionResolver,

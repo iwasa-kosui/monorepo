@@ -8,8 +8,8 @@ import { ORIGIN } from './helper/oauthHarness.ts';
 
 const notFound = { error: 'Record not found' };
 
-const setup = async () => {
-  const t = setupReadApi();
+const setup = async (options: Parameters<typeof setupReadApi>[0] = {}) => {
+  const t = setupReadApi(options);
   const me = await t.signIn('write:statuses');
   const alice = t.seed.addLocalActor('alice');
   const json = (body: unknown, headers: Record<string, string> = me.bearer) =>
@@ -160,6 +160,54 @@ describe('POST /api/v1/statuses の検証', () => {
     expect(response.status).toBe(403);
     expect(t.count('posts')).toBe(0);
   });
+});
+
+describe('POST /api/v1/statuses の iori_destination', () => {
+  const setupWithSchedule = async () => {
+    const scheduleBlueskyCrosspost = { run: vi.fn(async () => RA.ok('pending' as const)) };
+    return { ...(await setup({ scheduleBlueskyCrosspost })), scheduleBlueskyCrosspost };
+  };
+
+  it.each([['fediverse', 0], ['both', 1], [undefined, 1], [null, 1]])(
+    'iori_destination が %s のとき、投稿して Bluesky への予約を %i 回呼ぶ',
+    async (destination, scheduled) => {
+      const t = await setupWithSchedule();
+
+      const response = await t.json({ status: 'hi', iori_destination: destination });
+
+      expect(response.status).toBe(200);
+      expect(t.count('posts')).toBe(1);
+      expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+      expect(t.scheduleBlueskyCrosspost.run).toHaveBeenCalledTimes(scheduled);
+    },
+  );
+
+  it.each([['fediverse', 0], [undefined, 1]])(
+    '返信で iori_destination が %s のとき、投稿して Bluesky への予約を %i 回呼ぶ',
+    async (destination, scheduled) => {
+      const t = await setupWithSchedule();
+      const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
+
+      const response = await t.json({ status: 'reply', in_reply_to_id: parent.postId, iori_destination: destination });
+
+      expect(response.status).toBe(200);
+      expect(t.count('local_posts', `inReplyToUri IS NOT NULL`)).toBe(1);
+      expect(t.scheduleBlueskyCrosspost.run).toHaveBeenCalledTimes(scheduled);
+    },
+  );
+
+  it.each([['bluesky'], ['unknown'], [''], [1], [true]])(
+    'iori_destination が %s のとき 422 にして投稿を作らない',
+    async (destination) => {
+      const t = await setup();
+
+      const response = await t.json({ status: 'hi', iori_destination: destination });
+
+      expect(response.status).toBe(422);
+      expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+      expect(t.count('posts')).toBe(0);
+    },
+  );
 });
 
 describe('POST /api/v1/statuses', () => {

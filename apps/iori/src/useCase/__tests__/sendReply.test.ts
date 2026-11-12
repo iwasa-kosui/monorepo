@@ -103,6 +103,26 @@ describe('SendReplyUseCase の Bluesky への投稿の予約', () => {
     );
   });
 
+  it('Bluesky に送らない指定のときは予約せず、Fediverse には配送する', async () => {
+    const { deps, session, parent } = setup();
+    const scheduleBlueskyCrosspost = { run: vi.fn(async () => RA.ok('pending' as const)) };
+    const ctx = createContext();
+
+    const result = await SendReplyUseCase.create({ ...deps, scheduleBlueskyCrosspost }).run({
+      sessionId: session.sessionId,
+      postId: parent.postId,
+      content: 'reply',
+      imageUrls: [],
+      crosspostToBluesky: false,
+      request: new Request('https://example.com'),
+      ctx,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(scheduleBlueskyCrosspost.run).not.toHaveBeenCalled();
+    expect(ctx.sendActivity).toHaveBeenCalled();
+  });
+
   it('予約の use case が無くても返信できる', async () => {
     const { deps, session, parent } = setup();
 

@@ -33,6 +33,7 @@ type Input =
     content: string;
     summary?: string | null;
     sensitive?: boolean;
+    crosspostToBluesky?: boolean;
     mentions?: ReadonlyArray<MentionRecipient>;
     ctx: RequestContext<unknown>;
   }>;
@@ -222,8 +223,10 @@ const create = ({
 
         return RA.ok(undefined);
       }),
-      RA.andThrough(async ({ post }) => {
-        await scheduleBlueskyCrosspost?.run({ postId: post.postId });
+      RA.andThrough(async ({ post, crosspostToBluesky }) => {
+        if (crosspostToBluesky !== false) {
+          await scheduleBlueskyCrosspost?.run({ postId: post.postId });
+        }
         return RA.ok(undefined);
       }),
       RA.map(({ post, user }) => ({ post, user })),

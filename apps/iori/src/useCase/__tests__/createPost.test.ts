@@ -474,6 +474,42 @@ describe('CreatePostUseCase', () => {
       );
     });
 
+    it('Bluesky に送らない指定のときは予約せず、Fediverse には配送する', async () => {
+      const deps = createDeps();
+      const session = setupUser(deps);
+      const scheduleBlueskyCrosspost = { run: vi.fn(async () => RA.ok('pending' as const)) };
+      const ctx = createMockRequestContext();
+
+      const result = await CreatePostUseCase.create({ ...deps, scheduleBlueskyCrosspost }).run({
+        sessionId: session.sessionId,
+        content: 'Fediverse only',
+        imageUrls: [],
+        crosspostToBluesky: false,
+        ctx,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(scheduleBlueskyCrosspost.run).not.toHaveBeenCalled();
+      expect(ctx.sendActivity).toHaveBeenCalled();
+    });
+
+    it('Bluesky に送る指定のときは予約する', async () => {
+      const deps = createDeps();
+      const session = setupUser(deps);
+      const scheduleBlueskyCrosspost = { run: vi.fn(async () => RA.ok('pending' as const)) };
+
+      const result = await CreatePostUseCase.create({ ...deps, scheduleBlueskyCrosspost }).run({
+        sessionId: session.sessionId,
+        content: 'Both',
+        imageUrls: [],
+        crosspostToBluesky: true,
+        ctx: createMockRequestContext(),
+      });
+
+      expect(result.ok).toBe(true);
+      expect(scheduleBlueskyCrosspost.run).toHaveBeenCalledTimes(1);
+    });
+
     it('予約の use case が無くても投稿できる', async () => {
       const deps = createDeps();
       const session = setupUser(deps);

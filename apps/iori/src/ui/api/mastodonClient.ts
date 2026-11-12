@@ -18,6 +18,7 @@ import type { IoriDigestRequestResponse, IoriFeedSourceBody } from '../../adapto
 import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
 import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
 import type { IoriXPostsRefreshResponse, IoriXPostsResponse } from '../../adaptor/routes/workerIoriXPostsRouter.ts';
+import type { PostDestination } from '../../domain/post/postDestination.ts';
 
 export type PageCursors = Readonly<{
   nextMaxId: string | undefined;
@@ -306,6 +307,7 @@ export type CreateStatusParams = Readonly<{
   in_reply_to_id?: string;
   media_ids?: readonly string[];
   content_type: string;
+  iori_destination?: PostDestination;
 }>;
 
 export const createStatus = async (params: CreateStatusParams): Promise<Status> => {

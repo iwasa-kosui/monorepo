@@ -1,10 +1,12 @@
 import { containsKana } from '../../domain/aiTranslation/isJapanese.ts';
+import { BlueskyCrosspost } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import type { RepostId } from '../../domain/repost/repostId.ts';
 import type { RepostTimelineItem } from '../../domain/timeline/timelineItem.ts';
+import { blueskyPostUrlOfUri } from '../../helper/blueskyUrl.ts';
 import { htmlToPlainText } from '../text/htmlToPlainText.ts';
-import type { Account, MediaAttachment, PreviewCard, Status } from './entities.ts';
+import type { Account, IoriBlueskyCrosspost, MediaAttachment, PreviewCard, Status } from './entities.ts';
 import { toSafeApiUrl } from './safeApiUrl.ts';
 import { sanitizeStatusContent } from './sanitizeContent.ts';
 import { toIsoString } from './time.ts';
@@ -17,6 +19,7 @@ export type ToStatusOptions = Readonly<{
   inReplyToId: string | null;
   inReplyToAccountId: string | null;
   myReactionEmojis: ReadonlySet<string>;
+  blueskyCrosspost?: BlueskyCrosspost | null;
 }>;
 
 type LinkPreviews = PostWithAuthor['linkPreviews'];
@@ -88,6 +91,13 @@ const toLanguage = (html: string): string | null => {
   return containsKana(text) ? 'ja' : 'und';
 };
 
+export const toIoriBlueskyCrosspost = (crosspost: BlueskyCrosspost): IoriBlueskyCrosspost => ({
+  status: crosspost.status,
+  skip_reason: crosspost.skipReason,
+  retrying: BlueskyCrosspost.canRetry(crosspost),
+  url: crosspost.status === 'sent' && crosspost.uri !== null ? blueskyPostUrlOfUri(crosspost.uri) ?? null : null,
+});
+
 const toVisibility = (post: PostWithAuthor): Visibility =>
   post.type === 'local' ? 'public' : post.visibility ?? 'private';
 
@@ -140,6 +150,9 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
           favicon: toSafeApiUrl(preview.faviconUrl, options.baseUrl) ?? null,
         }];
       }),
+      ...(options.blueskyCrosspost == null
+        ? {}
+        : { bluesky_crosspost: toIoriBlueskyCrosspost(options.blueskyCrosspost) }),
     },
   };
 };
