@@ -100,7 +100,7 @@ export const toIoriBlueskyCrosspost = (crosspost: BlueskyCrosspost): IoriBluesky
 });
 
 const toVisibility = (post: PostWithAuthor): Visibility =>
-  post.type === 'local' ? 'public' : post.visibility ?? 'private';
+  post.type === 'local' ? post.visibility : post.visibility ?? 'private';
 
 const quoteUrlExtension = (options: ToStatusOptions): { quote_url?: string } => {
   if (options.quote == null || options.quote.status !== null) return {};

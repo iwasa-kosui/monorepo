@@ -12,6 +12,7 @@ import {
   RemotePost,
 } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
+import { Visibility } from '../../../domain/post/visibility.ts';
 import { Username } from '../../../domain/user/username.ts';
 import type { IoriD1Db } from '../client.ts';
 import { idsJson } from '../idsJson.ts';
@@ -137,6 +138,7 @@ export const enrichPostRows = async (
         ...LocalPost.orThrow({
           ...row.posts,
           ...row.local_posts,
+          visibility: Visibility.parseOrThrow(row.local_posts.visibility),
           type: 'local',
           createdAt: row.posts.createdAt.getTime(),
         }),

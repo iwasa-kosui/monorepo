@@ -174,11 +174,18 @@ const setup = () => {
   });
 
   const addPost = (
-    options: { content?: string; inReplyToUri?: string | null; summary?: string | null; sensitive?: boolean } = {},
+    options: {
+      content?: string;
+      inReplyToUri?: string | null;
+      summary?: string | null;
+      sensitive?: boolean;
+      visibility?: 'public' | 'unlisted' | 'private';
+    } = {},
   ) => {
     const post = seed.addLocalPost(actor, CREATED_AT, {
       content: options.content ?? '<p>こんにちは <a href="https://example.com/x">example.com/x</a></p>',
       inReplyToUri: options.inReplyToUri,
+      visibility: options.visibility,
     });
     sqlite.prepare('UPDATE posts SET summary = ?, sensitive = ? WHERE postId = ?').run(
       options.summary ?? null,
@@ -293,6 +300,17 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(t.uploaded).toEqual([]);
     expect(t.created[0]).not.toHaveProperty('embed');
     expect(t.created[0]).not.toHaveProperty('labels');
+  });
+
+  it('CW 付きでも、公開でなければ skipped になり visibility を理由にして送らない', async () => {
+    const t = setup();
+    const post = t.addPost({ summary: '注意', visibility: 'unlisted' });
+
+    expect(await run(t.schedule.run({ postId: post.postId }))).toBe('skipped');
+    await t.flush();
+
+    expect(await t.row(post.postId)).toMatchObject({ status: 'skipped', skipReason: 'visibility' });
+    expect(t.created).toEqual([]);
   });
 
   it('sensitive だけの投稿は sent になり、画像を upload して record に labels を付ける', async () => {

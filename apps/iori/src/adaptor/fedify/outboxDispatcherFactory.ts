@@ -1,15 +1,16 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Create, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Create, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 import { getLogger } from '@logtape/logtape';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
-import type { PostQuotesResolverByPostIds, PostsResolverByActorId } from '../../domain/post/post.ts';
+import { Post, type PostQuotesResolverByPostIds, type PostsResolverByActorId } from '../../domain/post/post.ts';
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
 import { toMentionNoteFields } from '../../useCase/helper/mentionNote.ts';
+import { toPostAddressing } from '../../useCase/helper/postAddressing.ts';
 import { toQuoteNoteFields } from '../../useCase/helper/quoteNote.ts';
 
 export type OutboxDispatcherDeps = Readonly<{
@@ -41,15 +42,18 @@ export const createOutboxDispatcher = (
       }),
       RA.match({
         ok: ({ posts, quotes }) => ({
-          items: posts.map((post) => {
+          items: posts.filter(Post.isVisibleToAnonymous).map((post) => {
             const content = sanitizePostContent(post.content);
             const quoteFields = toQuoteNoteFields(quotes?.get(post.postId));
             const mentionFields = toMentionNoteFields(content, quoteFields.actors);
             const note = new Note({
               id: ctx.getObjectUri(Note, { identifier, id: post.postId }),
               attribution: ctx.getActorUri(identifier),
-              to: PUBLIC_COLLECTION,
-              ccs: [ctx.getFollowersUri(identifier), ...mentionFields.ccs],
+              ...toPostAddressing({
+                visibility: post.visibility ?? 'public',
+                followersUri: ctx.getFollowersUri(identifier),
+                mentionUris: mentionFields.ccs,
+              }),
               tags: mentionFields.tags,
               content,
               mediaType: 'text/html',

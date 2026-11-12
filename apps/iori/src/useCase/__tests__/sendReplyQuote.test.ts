@@ -63,7 +63,7 @@ const setup = (parent: 'local' | 'remote', quote: PostQuote | undefined = aliceQ
     sensitive: false,
   };
   const parentPost: LocalPost | RemotePost = parent === 'local'
-    ? { ...base, type: 'local', userId: user.id }
+    ? { ...base, type: 'local', userId: user.id, visibility: 'public' }
     : { ...base, type: 'remote', uri: 'https://bob.example/notes/1', visibility: 'public' };
   const sessionResolver = createMockSessionResolver();
   sessionResolver.setSession(session);

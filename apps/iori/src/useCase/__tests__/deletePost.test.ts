@@ -139,6 +139,7 @@ describe('DeletePostUseCase', () => {
       };
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -188,6 +189,7 @@ describe('DeletePostUseCase', () => {
       };
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -233,6 +235,7 @@ describe('DeletePostUseCase', () => {
         };
         const post: LocalPost = {
           type: 'local',
+          visibility: 'public',
           summary: null,
           sensitive: false,
           postId: crypto.randomUUID() as PostId,
@@ -385,6 +388,7 @@ describe('DeletePostUseCase', () => {
       };
       const otherPost: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -504,6 +508,7 @@ describe('DeletePostUseCase', () => {
       };
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -565,6 +570,7 @@ describe('DeletePostUseCase', () => {
       };
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -616,6 +622,7 @@ describe('DeletePostUseCase', () => {
         };
         const post: LocalPost = {
           type: 'local',
+          visibility: 'public',
           summary: null,
           sensitive: false,
           postId: crypto.randomUUID() as PostId,

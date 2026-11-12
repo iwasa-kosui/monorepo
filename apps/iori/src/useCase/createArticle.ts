@@ -43,7 +43,25 @@ const UnauthorizedError = {
   }),
 } as const;
 
-type Err = SessionExpiredError | UserNotFoundError | PostNotFoundError | UnauthorizedError | ArticleAlreadyExistsError;
+type ArticleRootNotPublicError = Readonly<{
+  type: 'ArticleRootNotPublicError';
+  message: string;
+}>;
+
+const ArticleRootNotPublicError = {
+  create: (): ArticleRootNotPublicError => ({
+    type: 'ArticleRootNotPublicError',
+    message: 'An article can only be created from a post that is visible to anonymous viewers.',
+  }),
+} as const;
+
+type Err =
+  | SessionExpiredError
+  | UserNotFoundError
+  | PostNotFoundError
+  | UnauthorizedError
+  | ArticleRootNotPublicError
+  | ArticleAlreadyExistsError;
 
 export type CreateArticleUseCase = UseCase<Input, Ok, Err>;
 
@@ -86,6 +104,9 @@ const create = ({
       RA.andThen(async ({ post, user, actor, rootPostId, title }): Promise<Result<Ok, Err>> => {
         if (post.type !== 'local' || post.userId !== user.id) {
           return RA.err(UnauthorizedError.create());
+        }
+        if (post.visibility !== 'public') {
+          return RA.err(ArticleRootNotPublicError.create());
         }
 
         const existingArticle = await articleResolverByRootPostId.resolve({ rootPostId });

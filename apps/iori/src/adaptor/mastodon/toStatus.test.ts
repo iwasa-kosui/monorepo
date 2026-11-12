@@ -88,6 +88,7 @@ const author = {
 const localPost: PostWithAuthor = {
   ...author,
   type: 'local',
+  visibility: 'public',
   summary: null,
   sensitive: false,
   postId: PostId.generate(),
@@ -187,6 +188,13 @@ describe('toStatus', () => {
   it('uses public for a local post', () => {
     expect(toStatus(localPost, options).visibility).toBe('public');
   });
+
+  it.each(['public', 'unlisted', 'private'] as const)(
+    'uses the stored visibility %s of a local post',
+    (visibility) => {
+      expect(toStatus({ ...localPost, visibility } as PostWithAuthor, options).visibility).toBe(visibility);
+    },
+  );
 
   it.each(['public', 'unlisted', 'private', 'direct'] as const)(
     'uses the recorded visibility %s of a remote post',

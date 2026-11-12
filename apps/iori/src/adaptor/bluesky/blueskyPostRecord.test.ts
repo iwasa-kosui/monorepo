@@ -37,6 +37,7 @@ const image = (size: number, alt: string | null = null): BlueskyImageInput => ({
 });
 
 const input = (overrides: Partial<BuildBlueskyPostInput> = {}): BuildBlueskyPostInput => ({
+  visibility: 'public',
   html: '<p>hello</p>',
   summary: null,
   sensitive: false,
@@ -260,11 +261,18 @@ describe('buildBlueskyPostDraft の返信とスキップ', () => {
     expect(toBlueskyPostRecord(draft, { images: [] }).reply).toEqual({ root, parent });
   });
 
+  it.each([
+    ['unlisted' as const],
+    ['private' as const],
+  ])('公開範囲が %s なら visibility をスキップにする', (visibility) => {
+    expect(buildBlueskyPostDraft(input({ visibility }))).toEqual(Result.err('visibility'));
+  });
+
   it('reply_to_unsent をスキップにする', () => {
     expect(buildBlueskyPostDraft(input({ replyTo: { kind: 'unsent' } }))).toEqual(Result.err('reply_to_unsent'));
   });
 
-  it('CW と sensitive はスキップにしない', () => {
+  it('公開なら CW と sensitive はスキップにしない', () => {
     expect(buildBlueskyPostDraft(input({ summary: 'CW' })).ok).toBe(true);
     expect(buildBlueskyPostDraft(input({ sensitive: true })).ok).toBe(true);
   });
@@ -272,6 +280,24 @@ describe('buildBlueskyPostDraft の返信とスキップ', () => {
   it('summary が空文字や空白だけならスキップしない', () => {
     expect(buildBlueskyPostDraft(input({ summary: '' })).ok).toBe(true);
     expect(buildBlueskyPostDraft(input({ summary: '  ' })).ok).toBe(true);
+  });
+
+  it('CW 付きでも、公開でなければ visibility をスキップにする', () => {
+    expect(buildBlueskyPostDraft(input({ visibility: 'private', summary: 'CW', sensitive: true }))).toEqual(
+      Result.err('visibility'),
+    );
+    expect(buildBlueskyPostDraft(input({ visibility: 'unlisted', summary: 'CW' }))).toEqual(Result.err('visibility'));
+  });
+
+  it('公開範囲が公開でなければ、返信先が未送信でも visibility を先に判定する', () => {
+    expect(buildBlueskyPostDraft(input({ visibility: 'unlisted', replyTo: { kind: 'unsent' } }))).toEqual(
+      Result.err('visibility'),
+    );
+  });
+
+  it('公開の CW 付きなら、CW の文と投稿 URL だけを送る', () => {
+    const draft = build({ visibility: 'public', summary: ' 注意 ', html: '<p>本文</p>' });
+    expect(draft.text).toBe(`注意\n${POST_URL}`);
   });
 
   it('CW 付きでも、返信先が未送信なら reply_to_unsent をスキップにする', () => {

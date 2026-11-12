@@ -47,6 +47,7 @@ describe('SendReplyUseCase の Bluesky への投稿の予約', () => {
     };
     const parent: LocalPost = {
       type: 'local',
+      visibility: 'public',
       summary: null,
       sensitive: false,
       postId: crypto.randomUUID() as PostId,
@@ -168,6 +169,7 @@ describe('SendReplyUseCase のメンション', () => {
     };
     const localParent: LocalPost = {
       type: 'local',
+      visibility: 'public',
       summary: null,
       sensitive: false,
       postId: crypto.randomUUID() as PostId,
@@ -355,5 +357,75 @@ describe('SendReplyUseCase のメンション', () => {
     });
 
     expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+  });
+
+  const followersUri = 'https://example.com/users/kosui/followers';
+  const publicUri = 'https://www.w3.org/ns/activitystreams#Public';
+
+  it.each([
+    { visibility: 'unlisted' as const, tos: [followersUri], ccs: [publicUri, alice.id] },
+    { visibility: 'private' as const, tos: [followersUri], ccs: [alice.id] },
+  ])(
+    '親がローカルの返信を $visibility にすると、Note の to と cc を公開範囲に合わせ、保存もその値で行う',
+    async ({ visibility, tos, ccs }) => {
+      const { deps, session, localParent } = setup();
+      const ctx = createContext();
+
+      const result = await SendReplyUseCase.create(deps).run({
+        sessionId: session.sessionId,
+        postId: localParent.postId,
+        content: `<p>${mentionHtml(alice.id, 'alice@remote.example')} hi</p>`,
+        imageUrls: [],
+        mentions: [alice],
+        visibility,
+        request: new Request('https://example.com'),
+        ctx,
+      });
+
+      expect(result.ok && result.val.post.visibility).toBe(visibility);
+      const calls = vi.mocked(ctx.sendActivity).mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(calls[0]?.[1]).toBe('followers');
+      const note = await noteOf(calls[0] ?? []);
+      expect(note.toIds.map((url) => url.href)).toEqual(tos);
+      expect(note.ccIds.map((url) => url.href)).toEqual(ccs);
+    },
+  );
+
+  it('visibility を省略した返信は public にする', async () => {
+    const { deps, session, localParent } = setup();
+
+    const result = await SendReplyUseCase.create(deps).run({
+      sessionId: session.sessionId,
+      postId: localParent.postId,
+      content: '<p>reply</p>',
+      imageUrls: [],
+      request: new Request('https://example.com'),
+      ctx: createContext(),
+    });
+
+    expect(result.ok && result.val.post.visibility).toBe('public');
+  });
+
+  it('親がリモートの返信を private にすると、作者と followers に送り、Public をどこにも入れない', async () => {
+    const { deps, session, remoteParent, ctxWithRemoteAuthor } = setup();
+    const ctx = ctxWithRemoteAuthor();
+
+    const result = await SendReplyUseCase.create(deps).run({
+      sessionId: session.sessionId,
+      postId: remoteParent.postId,
+      content: '<p>reply</p>',
+      imageUrls: [],
+      visibility: 'private',
+      request: new Request('https://example.com'),
+      ctx,
+    });
+
+    expect(result.ok).toBe(true);
+    const calls = vi.mocked(ctx.sendActivity).mock.calls;
+    expect(calls).toHaveLength(2);
+    const note = await noteOf(calls[0] ?? []);
+    expect(note.toIds.map((url) => url.href)).toEqual([followersUri]);
+    expect(note.ccIds.map((url) => url.href)).toEqual([alice.id]);
   });
 });

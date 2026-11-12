@@ -57,4 +57,12 @@ describe('createD1TimelineLinkTrendsResolverByUserId', () => {
 
     expect(await resolve()).toEqual(['https://example.com/local']);
   });
+
+  it('ローカルの private の投稿のリンクは数えず、unlisted の投稿のリンクは数える', async () => {
+    const { seed, viewer, addLink, resolve } = setup();
+    addLink(seed.addLocalPost(viewer, 1_500, { visibility: 'private' }).postId, 'https://example.com/private');
+    addLink(seed.addLocalPost(viewer, 1_500, { visibility: 'unlisted' }).postId, 'https://example.com/unlisted');
+
+    expect(await resolve()).toEqual(['https://example.com/unlisted']);
+  });
 });

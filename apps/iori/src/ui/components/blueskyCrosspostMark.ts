@@ -9,6 +9,7 @@ export type BlueskyCrosspostMark = Readonly<{
 }>;
 
 const skipReasonTexts: Readonly<Record<NonNullable<IoriBlueskyCrosspost['skip_reason']>, string>> = {
+  visibility: '公開範囲が公開ではないため Bluesky に送っていません',
   content_warning: 'この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした',
   sensitive: 'この投稿の当時は、センシティブ指定の投稿を Bluesky に送っていませんでした',
   reply_to_unsent: '返信先が Bluesky にないため送っていません',
