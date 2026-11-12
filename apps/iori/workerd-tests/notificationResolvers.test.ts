@@ -23,6 +23,7 @@ const mutedDid = `did:plc:muted-${crypto.randomUUID()}`;
 const blockedDid = `did:plc:blocked-${crypto.randomUUID()}`;
 const visibleDid = `did:plc:visible-${crypto.randomUUID()}`;
 const blueskyTypes = ['blueskyFollow'] as const;
+type Kind = (typeof types)[number] | (typeof blueskyTypes)[number];
 
 const addActor = (actorId: string) =>
   env.DB.prepare('INSERT INTO actors(actorId,uri,inboxUrl,type) VALUES (?,?,?,?)').bind(
@@ -108,7 +109,7 @@ const visibleFollow = addBlueskyFollow(moderatedUserId, visibleDid, 3_000);
 
 const resolveByPage = async (
   recipient: string,
-  kinds: ReadonlyArray<(typeof types)[number] | 'blueskyFollow'> = types,
+  kinds: ReadonlyArray<Kind> = types,
 ) => {
   const result = await createD1NotificationsResolverByPage(db).resolve({
     recipientUserId: UserId.orThrow(recipient),
@@ -119,7 +120,7 @@ const resolveByPage = async (
   return result.val.map((item) => item.notification.notificationId as string);
 };
 
-const count = async (userId: string, kinds: ReadonlyArray<(typeof types)[number] | 'blueskyFollow'> = types) => {
+const count = async (userId: string, kinds: ReadonlyArray<Kind> = types) => {
   const result = await createD1NotificationCountResolverSinceMarker(db).resolve({
     userId: UserId.orThrow(userId),
     types: [...kinds],
