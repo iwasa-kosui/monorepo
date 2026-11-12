@@ -19,6 +19,7 @@ import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContex
 import { blueskyReplyExcerpt, blueskyReplyRemaining, canSendBlueskyReply } from '../hooks/blueskyReply.ts';
 import { homeItemKey } from '../hooks/homeFeed.ts';
 import { pullProgress, refreshResultLabel } from '../hooks/pullGesture.ts';
+import type { UseBlueskyPostDialogReturn } from '../hooks/useBlueskyPostDialog.ts';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
 import { ITEM_KEY_ATTRIBUTE } from '../hooks/useReadingPosition.ts';
 
@@ -228,9 +229,13 @@ const ReplyModal = () => {
   );
 };
 
-const BlueskyReplyModal = () => {
-  const { blueskyReply } = useTimelineContext();
-  const { target, content, isSending, errorText, close, setContent, send } = blueskyReply;
+const BlueskyPostModal = ({ dialog, title, submitLabel, placeholder }: Readonly<{
+  dialog: UseBlueskyPostDialogReturn;
+  title?: string;
+  submitLabel?: string;
+  placeholder: string;
+}>) => {
+  const { target, content, isSending, errorText, close, setContent, send } = dialog;
 
   if (target === null) {
     return null;
@@ -241,6 +246,8 @@ const BlueskyReplyModal = () => {
 
   return (
     <ReplyDialogShell
+      title={title}
+      submitLabel={submitLabel}
       onClose={close}
       onSubmit={() => void send()}
       isSending={isSending}
@@ -278,12 +285,29 @@ const BlueskyReplyModal = () => {
             if (canSubmit) void send();
           }
         }}
-        placeholder='返信を書く... (⌘+Enter to post)'
+        placeholder={placeholder}
         disabled={isSending}
         class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all'
         style={{ minHeight: '150px' }}
       />
     </ReplyDialogShell>
+  );
+};
+
+const BlueskyReplyModal = () => {
+  const { blueskyReply } = useTimelineContext();
+  return <BlueskyPostModal dialog={blueskyReply} placeholder='返信を書く... (⌘+Enter to post)' />;
+};
+
+const BlueskyQuoteModal = () => {
+  const { blueskyQuote } = useTimelineContext();
+  return (
+    <BlueskyPostModal
+      dialog={blueskyQuote}
+      title='引用'
+      submitLabel='引用して投稿'
+      placeholder='引用にコメントを書く... (⌘+Enter to post)'
+    />
   );
 };
 
@@ -745,6 +769,7 @@ const TimelineList = () => {
     blueskyLike,
     blueskyRepost,
     blueskyReply,
+    blueskyQuote,
     blueskyStatus,
     reply,
     thread,
@@ -802,6 +827,7 @@ const TimelineList = () => {
               dataIndex={index}
               isSelected={selectedIndex === index}
               onReply={blueskyReply.open}
+              onQuote={blueskyQuote.open}
               onLike={blueskyLike.like}
               onUndoLike={blueskyLike.undoLike}
               isLikePending={blueskyLike.pendingUris.has(item.item.uri)}
@@ -962,6 +988,7 @@ const HomePage = () => {
       <NewPostsPill />
       <ReplyModal />
       <BlueskyReplyModal />
+      <BlueskyQuoteModal />
       <ThreadModal />
       <TimelineList />
       <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>

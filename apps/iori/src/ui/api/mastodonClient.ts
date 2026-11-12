@@ -552,6 +552,21 @@ export const replyToBlueskyPost = async (feedItemId: string, text: string): Prom
   return await res.json() as BlueskyReplyResponse;
 };
 
+const BLUESKY_QUOTES_PATH = '/api/iori/v1/bluesky/quotes';
+
+export type BlueskyQuoteResponse = Readonly<{ uri: string; cid: string }>;
+
+export const quoteBlueskyPost = async (uri: string, text: string): Promise<BlueskyQuoteResponse> => {
+  const res = await fetch(BLUESKY_QUOTES_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ uri, text }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as BlueskyQuoteResponse;
+};
+
 const BLUESKY_SEARCH_POSTS_PATH = '/api/iori/v1/bluesky/search/posts';
 
 export const searchBlueskyPosts = async (q: string, cursor?: string): Promise<IoriBlueskySearchPostsResponse> =>

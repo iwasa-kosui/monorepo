@@ -276,6 +276,41 @@ describe('BlueskyTimelineItemView', () => {
     });
   });
 
+  describe('引用のボタン', () => {
+    it('onQuote が渡されないときはボタンを出さない', () => {
+      expect(render({})).not.toContain('title="引用"');
+      expect(render({}, { onReply: () => {}, onLike: () => {}, onRepost: () => {} })).not.toContain('title="引用"');
+    });
+
+    it('onQuote が渡されたときは、それだけでも操作の行に「引用」の button を出す', () => {
+      const html = render({}, { onQuote: () => {} });
+
+      expect(html).toContain('class="flex items-center justify-end gap-4 pt-1"');
+      expect(html).toContain('type="button"');
+      expect(html).toContain('title="引用"');
+    });
+
+    it('返信、リポスト、引用、いいねの順に並べる', () => {
+      const html = render({}, { onReply: () => {}, onRepost: () => {}, onQuote: () => {}, onLike: () => {} });
+
+      expect(html.indexOf('title="返信 (p)"')).toBeLessThan(html.indexOf('title="リポスト"'));
+      expect(html.indexOf('title="リポスト"')).toBeLessThan(html.indexOf('title="引用"'));
+      expect(html.indexOf('title="引用"')).toBeLessThan(html.indexOf('title="いいね"'));
+    });
+
+    it('押すと、その投稿を渡して onQuote を呼び、親要素へのクリックは伝えない', () => {
+      const calls: IoriBlueskyTimelineItemBody[] = [];
+      const element = BlueskyTimelineItemView({ item: base, onQuote: (item) => calls.push(item) });
+      const button = findButtonByTitle(element, '引用');
+      let stopped = false;
+
+      button?.props.onClick({ stopPropagation: () => (stopped = true) });
+
+      expect(calls).toEqual([base]);
+      expect(stopped).toBe(true);
+    });
+  });
+
   describe('リポストのボタン', () => {
     const handlers = { onRepost: () => {}, onUndoRepost: () => {} };
 

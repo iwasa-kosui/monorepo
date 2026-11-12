@@ -34,6 +34,7 @@ import {
   mute,
   parseLinkHeader,
   parseRetryAfter,
+  quoteBlueskyPost,
   react,
   reblog,
   refreshXPosts,
@@ -855,6 +856,29 @@ describe('mastodon client requests', () => {
     const error = await repostBlueskyPost('x').catch((e: unknown) => e);
 
     expect(isMastodonApiError(error) && error.status).toBe(502);
+  });
+
+  it('posts a Bluesky quote with the uri and text as a JSON body', async () => {
+    const fetchMock = stubFetch(
+      jsonResponse({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', cid: 'bafy' }, { status: 201 }),
+    );
+
+    const result = await quoteBlueskyPost('at://did:plc:a/app.bsky.feed.post/1', '引用です');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/quotes');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(init.body as string)).toEqual({ uri: 'at://did:plc:a/app.bsky.feed.post/1', text: '引用です' });
+    expect(result).toEqual({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', cid: 'bafy' });
+  });
+
+  it('carries the status of a failed Bluesky quote', async () => {
+    stubFetch(jsonResponse({ error: 'Quote not allowed' }, { status: 422 }));
+
+    const error = await quoteBlueskyPost('at://did:plc:a/app.bsky.feed.post/1', 'x').catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(422);
   });
 
   it('posts a refresh request for the X posts and returns the counts', async () => {

@@ -14,6 +14,7 @@ import {
 import type { BlueskyStrongRef } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type {
   BlueskyBlob,
+  BlueskyEmbed,
   BlueskyFacet,
   BlueskyMentionFacet,
   BlueskyPostRecord,
@@ -41,6 +42,7 @@ export type BlueskyPostImage = Readonly<{ bytes: Uint8Array; mimeType: string; a
 export type PublishBlueskyPostInput = Readonly<{
   text: string;
   reply?: Readonly<{ root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
+  quote?: BlueskyStrongRef;
   images?: readonly BlueskyPostImage[];
   langs?: readonly string[];
 }>;
@@ -142,6 +144,16 @@ const uploadImages = async (
   return RA.ok(uploaded);
 };
 
+const embedOf = (
+  quote: BlueskyStrongRef | undefined,
+  images: ReadonlyArray<Readonly<{ alt: string; image: BlueskyBlob }>>,
+): BlueskyEmbed | undefined => {
+  const imagesEmbed = images.length === 0 ? undefined : { $type: 'app.bsky.embed.images', images } as const;
+  if (quote === undefined) return imagesEmbed;
+  if (imagesEmbed === undefined) return { $type: 'app.bsky.embed.record', record: quote };
+  return { $type: 'app.bsky.embed.recordWithMedia', record: { record: quote }, media: imagesEmbed };
+};
+
 const clockIdOf = (): number => crypto.getRandomValues(new Uint16Array(1))[0]! & 1023;
 
 export const publishBlueskyPost = async (
@@ -155,13 +167,14 @@ export const publishBlueskyPost = async (
   if (!images.ok) return RA.err(images.err);
   const createdAt = now();
   const facets = await buildFacets(text, query);
+  const embed = embedOf(input.quote, images.val);
   const record: BlueskyPostRecord = {
     $type: 'app.bsky.feed.post',
     text,
     createdAt: new Date(createdAt).toISOString(),
     ...(facets.length === 0 ? {} : { facets }),
     ...(input.reply === undefined ? {} : { reply: input.reply }),
-    ...(images.val.length === 0 ? {} : { embed: { $type: 'app.bsky.embed.images', images: images.val } }),
+    ...(embed === undefined ? {} : { embed }),
     ...(input.langs === undefined || input.langs.length === 0 ? {} : { langs: input.langs }),
   };
   return client.createRecord(record, blueskyTidOf({ createdAt, clockId: clockIdOf() }));

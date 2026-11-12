@@ -4,6 +4,7 @@ import { createContext, useContext, useMemo, useState } from 'hono/jsx';
 import { homeFeedCursor, type HomeItem, mergeHomeFeed } from '../hooks/homeFeed.ts';
 import { readHomeSnapshot } from '../hooks/homeSnapshot.ts';
 import { useBlueskyLike, type UseBlueskyLikeReturn } from '../hooks/useBlueskyLike.ts';
+import { useBlueskyQuoteDialog, type UseBlueskyQuoteDialogReturn } from '../hooks/useBlueskyQuoteDialog.ts';
 import { useBlueskyReplyDialog, type UseBlueskyReplyDialogReturn } from '../hooks/useBlueskyReplyDialog.ts';
 import { useBlueskyRepost, type UseBlueskyRepostReturn } from '../hooks/useBlueskyRepost.ts';
 import { useBlueskyStatus, type UseBlueskyStatusReturn } from '../hooks/useBlueskyStatus.ts';
@@ -25,6 +26,7 @@ export type TimelineContextValue = Readonly<{
   blueskyLike: UseBlueskyLikeReturn;
   blueskyRepost: UseBlueskyRepostReturn;
   blueskyReply: UseBlueskyReplyDialogReturn;
+  blueskyQuote: UseBlueskyQuoteDialogReturn;
   blueskyStatus: UseBlueskyStatusReturn;
   thread: UseThreadModalReturn;
   reply: UseReplyDialogReturn;
@@ -64,6 +66,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
   const blueskyLike = useBlueskyLike(timeline.updateBlueskyItems);
   const blueskyRepost = useBlueskyRepost(timeline.updateBlueskyItems);
   const blueskyReply = useBlueskyReplyDialog();
+  const blueskyQuote = useBlueskyQuoteDialog();
 
   const pullToRefresh = usePullToRefresh({
     onRefresh: async () => {
@@ -101,7 +104,8 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     scrollToSelected: ui.scrollToSelected,
     emojiPickerOpenForIndex: ui.emojiPickerOpenForIndex,
     setEmojiPickerOpenForIndex: ui.setEmojiPickerOpenForIndex,
-    replyingToPostId: reply.replyingToPostId ?? blueskyReply.target?.feedItemId ?? null,
+    replyingToPostId: reply.replyingToPostId ?? blueskyReply.target?.feedItemId ?? blueskyQuote.target?.feedItemId
+      ?? null,
     threadModalPostId: thread.threadModalPostId,
     onLike: actions.like,
     onUndoLike: actions.undoLike,
@@ -110,6 +114,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     onCancelReply: () => {
       reply.closeReplyDialog();
       blueskyReply.close();
+      blueskyQuote.close();
     },
     onCloseThread: thread.closeThread,
   });
@@ -123,6 +128,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       blueskyLike,
       blueskyRepost,
       blueskyReply,
+      blueskyQuote,
       blueskyStatus,
       thread,
       reply,
@@ -139,6 +145,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       blueskyLike,
       blueskyRepost,
       blueskyReply,
+      blueskyQuote,
       blueskyStatus,
       thread,
       reply,
