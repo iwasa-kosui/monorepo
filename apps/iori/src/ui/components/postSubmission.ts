@@ -1,7 +1,12 @@
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { IoriBlueskyPostResponse } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
-import { type CreateBlueskyPostParams, type CreateStatusParams, failureMessage } from '../api/mastodonClient.ts';
+import {
+  blueskyFailureMessage,
+  type CreateBlueskyPostParams,
+  type CreateStatusParams,
+  failureMessage,
+} from '../api/mastodonClient.ts';
 import { BLUESKY_ONLY_POSTED_MESSAGE, postedMessage } from './blueskyCrosspostMark.ts';
 
 export type UploadedMedia = Readonly<{ id: string; url: string; description: string }>;
@@ -51,7 +56,7 @@ export const submitPost = async (
       });
       return { kind: 'postedToBluesky', url };
     } catch (err) {
-      return { kind: 'failed', message: failureMessage('post', err) };
+      return { kind: 'failed', message: blueskyFailureMessage('post', err) };
     }
   }
   const spoilerText = value.cw.trim();

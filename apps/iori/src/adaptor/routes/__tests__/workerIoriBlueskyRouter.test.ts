@@ -1342,7 +1342,36 @@ describe('/api/iori/v1/bluesky/posts', () => {
     const t = setupReadApi();
     const me = await t.signIn('write:statuses');
 
-    expect((await post(t, me.bearer)).status).toBe(409);
+    const response = await post(t, me.bearer);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Bluesky のアカウントが設定されていないため、投稿できません' });
+  });
+
+  it('spoiler_text か sensitive があるときは 422 にし、Bluesky を呼ばない', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+    const error = { error: 'Bluesky だけの投稿では CW とセンシティブ指定を使えません' };
+
+    for (const extra of [{ spoiler_text: '注意' }, { sensitive: true }, { sensitive: 'true' }]) {
+      const response = await post(t, me.bearer, { status: 'hi', ...extra });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual(error);
+    }
+    expect(client.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('空白だけの spoiler_text と sensitive false は受け付ける', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    const response = await post(t, me.bearer, { status: 'hi', spoiler_text: '  ', sensitive: false });
+
+    expect(response.status).toBe(200);
+    expect(client.createRecord).toHaveBeenCalledTimes(1);
   });
 
   it('status が文字列でない、または content_type が不正なときは 400 にし、Bluesky を呼ばない', async () => {
@@ -1493,5 +1522,23 @@ describe('/api/iori/v1/bluesky/posts', () => {
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
+  });
+
+  it('Bluesky がレート制限を返したら 429 にする', async () => {
+    const error: BlueskyClientError = {
+      type: 'BlueskyClientError',
+      kind: 'http',
+      message: 'createRecord failed: status 429 RateLimitExceeded',
+      status: 429,
+    };
+    const client = replyClient();
+    client.createRecord.mockReturnValueOnce(RA.err(error));
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    const response = await post(t, me.bearer);
+
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: 'Bluesky rate limited' });
   });
 });

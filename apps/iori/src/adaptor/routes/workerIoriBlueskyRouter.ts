@@ -47,7 +47,7 @@ import {
 import { blueskyPostTextOf } from './helper/blueskyPostText.ts';
 import { loadBlueskyPostImage } from './helper/loadBlueskyPostImage.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
-import { bodyString, bodyStringList, readRequestBody } from './helper/requestBody.ts';
+import { bodyBoolean, bodyString, bodyStringList, readRequestBody } from './helper/requestBody.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
@@ -220,10 +220,13 @@ const postInvalidMessages: Readonly<Record<BlueskyPostInvalid['reason'], string>
   image_too_large: `Bluesky に送れる画像は 1 枚 ${BLUESKY_MAX_IMAGE_BYTES / 1_000_000} MB までです`,
 };
 
-const postFailure = (c: Context, error: BlueskyClientError | BlueskyPostInvalid) =>
-  error.type === 'BlueskyPostInvalid'
-    ? c.json({ error: postInvalidMessages[error.reason], reason: error.reason }, 422)
-    : clientFailure(c, error);
+const postFailure = (c: Context, error: BlueskyClientError | BlueskyPostInvalid) => {
+  if (error.type === 'BlueskyPostInvalid') {
+    return c.json({ error: postInvalidMessages[error.reason], reason: error.reason }, 422);
+  }
+  if (error.status === 429) return c.json({ error: 'Bluesky rate limited' }, 429);
+  return clientFailure(c, error);
+};
 
 const mediaUnavailable = { error: '添付した画像が見つからないか、読み込めませんでした' } as const;
 
@@ -464,9 +467,12 @@ export const createWorkerIoriBlueskyRouter = ({
         const userId = getMastodonPrincipal(c)?.userId ?? undefined;
         if (userId === undefined || !await isDigestOwner(userId)) return c.json(forbidden, 403);
         if (postToBlueskyUseCase === undefined) {
-          return c.json({ error: 'Bluesky credentials are not configured' }, 409);
+          return c.json({ error: 'Bluesky のアカウントが設定されていないため、投稿できません' }, 409);
         }
         const body = await readRequestBody(c);
+        if ((bodyString(body, 'spoiler_text') ?? '').trim() !== '' || bodyBoolean(body, 'sensitive')) {
+          return c.json({ error: 'Bluesky だけの投稿では CW とセンシティブ指定を使えません' }, 422);
+        }
         const status = bodyString(body, 'status');
         if (status === undefined) return c.json({ error: 'Validation failed: status' }, 400);
         const contentType = body['content_type'] ?? 'text/plain';

@@ -212,6 +212,21 @@ describe('submitPost to Bluesky only', () => {
     expect(onPosted).not.toHaveBeenCalled();
   });
 
+  it('reports the login message when Bluesky login fails', async () => {
+    const createBlueskyPost = vi.fn().mockRejectedValue(
+      Object.assign(new Error('Bluesky login failed'), { status: 502 }),
+    );
+
+    const result = await submitPost(blueskyOnly, {
+      create: vi.fn(),
+      createBlueskyPost,
+      updateMedia,
+      onPosted: vi.fn(),
+    });
+
+    expect(result).toEqual({ kind: 'failed', message: 'Bluesky にログインできないため、操作できませんでした。' });
+  });
+
   it('saves descriptions before calling createBlueskyPost', async () => {
     const order: string[] = [];
     const update = vi.fn(async (id: string) => {
