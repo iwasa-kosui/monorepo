@@ -8,7 +8,6 @@ import {
   BLUESKY_MAX_TEXT_BYTES,
   byteLengthOf,
   graphemesOf,
-  toByteIndex,
   toFacet,
 } from '../../adaptor/bluesky/blueskyPostRecord.ts';
 import type { BlueskyStrongRef } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
@@ -26,6 +25,7 @@ import type {
   BlueskyCreatedRecord,
   BlueskyQueryClient,
 } from '../../ports/blueskyClient.ts';
+import { findMentionHandles, withMentionFacets } from './blueskyMentionFacets.ts';
 
 export type BlueskyPostInvalidReason =
   | 'empty'
@@ -115,18 +115,9 @@ const buildFacets = async (
   text: string,
   query: PublishBlueskyPostDeps['query'],
 ): Promise<Array<BlueskyFacet | BlueskyMentionFacet>> => {
-  const urls = findUrls(text);
-  const mentions = findMentions(text, urls);
-  const dids = await resolveDids(query, mentions.map(({ handle }) => handle));
-  const mentionFacets = mentions.flatMap(({ start, end, handle }): BlueskyMentionFacet[] => {
-    const did = dids.get(handle);
-    return did === undefined ? [] : [{
-      index: toByteIndex(text, start, end),
-      features: [{ $type: 'app.bsky.richtext.facet#mention', did }],
-    }];
-  });
-  return [...urls.map((url) => toFacet(text, url)), ...mentionFacets]
-    .sort((a, b) => a.index.byteStart - b.index.byteStart);
+  const urlFacets = findUrls(text).map((url) => toFacet(text, url));
+  const dids = await resolveDids(query, findMentionHandles(text, urlFacets));
+  return withMentionFacets(text, urlFacets, dids);
 };
 
 const uploadImages = async (

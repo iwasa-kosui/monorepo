@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { toFacet } from '../../../adaptor/bluesky/blueskyPostRecord.ts';
-import { findMentionHandles, withMentionFacets } from '../../helper/blueskyMentionFacets.ts';
+import { findMentionHandles, MAX_RESOLVED_MENTIONS, withMentionFacets } from '../../helper/blueskyMentionFacets.ts';
 
 const DIDS = new Map([['alice.bsky.social', 'did:plc:alice'], ['bob.example.com', 'did:plc:bob']]);
 const mention = (byteStart: number, byteEnd: number, did: string) => ({
@@ -11,14 +11,36 @@ const mention = (byteStart: number, byteEnd: number, did: string) => ({
 
 describe('findMentionHandles', () => {
   it('ハンドルを小文字にして、重複なしで返す', () => {
-    expect(findMentionHandles('@Alice.bsky.social と (@bob.example.com) と @alice.bsky.social')).toEqual([
+    expect(findMentionHandles('@Alice.bsky.social と (@bob.example.com) と @alice.bsky.social', [])).toEqual([
       'alice.bsky.social',
       'bob.example.com',
     ]);
   });
 
   it('メールアドレスや URL の中の @ は対象にしない', () => {
-    expect(findMentionHandles('a@alice.bsky.social https://example.com/@bob.example.com')).toEqual([]);
+    expect(findMentionHandles('a@alice.bsky.social https://example.com/@bob.example.com', [])).toEqual([]);
+  });
+
+  it('本文の先頭から数えて、異なるハンドルを最大10件までにする', () => {
+    const handles = Array.from({ length: 12 }, (_, index) => `user${index + 1}.bsky.social`);
+    const text = [...handles, handles[0]].map((handle) => `@${handle}`).join(' ');
+
+    expect(MAX_RESOLVED_MENTIONS).toBe(10);
+    expect(findMentionHandles(text, [])).toEqual(handles.slice(0, 10));
+  });
+
+  it('切り詰めで途中で切れたハンドルは対象にしない', () => {
+    expect(findMentionHandles('@alice.bsky.social と @bob.example.co…\nhttps://example.com/x', [])).toEqual([
+      'alice.bsky.social',
+    ]);
+  });
+
+  it('link facet と重なるハンドルは対象にせず、上限はその後に数える', () => {
+    const handles = Array.from({ length: 11 }, (_, index) => `user${index + 1}.bsky.social`);
+    const text = ['@alice.bsky.social', ...handles.map((handle) => `@${handle}`)].join(' ');
+    const link = toFacet(text, { start: 0, end: 18, uri: 'https://mastodon.example/@alice.bsky.social' });
+
+    expect(findMentionHandles(text, [link])).toEqual(handles.slice(0, 10));
   });
 });
 
@@ -44,6 +66,14 @@ describe('withMentionFacets', () => {
     const link = toFacet(text, { start: 0, end: 18, uri: 'https://mastodon.example/@alice.bsky.social' });
 
     expect(withMentionFacets(text, [link], DIDS)).toEqual([link, mention(23, 39, 'did:plc:bob')]);
+  });
+
+  it('切り詰めで途中で切れたハンドルには、解決できる DID があっても mention facet を付けない', () => {
+    const dids = new Map([...DIDS, ['bob.example.co', 'did:plc:bobco']]);
+
+    expect(withMentionFacets('@alice.bsky.social と @bob.example.co…', [], dids)).toEqual([
+      mention(0, 18, 'did:plc:alice'),
+    ]);
   });
 
   it('byteStart の順に並べる', () => {

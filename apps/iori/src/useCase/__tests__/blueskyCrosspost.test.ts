@@ -213,6 +213,7 @@ const setup = () => {
     rkeys,
     behavior,
     query,
+    handleDids,
     queryBehavior,
     stored,
     thumbnails,
@@ -502,6 +503,51 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(t.created[0]?.facets).toEqual([{
       index: { byteStart: 0, byteEnd: 18 },
       features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://mastodon.example/@alice.bsky.social' }],
+    }]);
+    expect(t.query).not.toHaveBeenCalled();
+  });
+
+  it('異なるハンドルが11件以上あっても、先頭から10件までしか解決せず、11件目以降に facet を付けない', async () => {
+    const t = setup();
+    const handles = Array.from({ length: 12 }, (_, index) => `user${index + 1}.bsky.social`);
+    for (const handle of handles) t.handleDids.set(handle, `did:plc:${handle}`);
+    const post = t.addPost({ content: `<p>${handles.map((handle) => `@${handle}`).join(' ')}</p>` });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.query).toHaveBeenCalledTimes(10);
+    expect(t.query.mock.calls.map(([, params]) => params.handle)).toEqual(handles.slice(0, 10));
+    expect(t.created[0]?.facets).toHaveLength(10);
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
+  });
+
+  it('本文が切り詰められてハンドルが途中で切れたら、そのハンドルを解決せず facet も付けない', async () => {
+    const t = setup();
+    t.handleDids.set('bob.example.co', 'did:plc:bobco');
+    const filler = 'あ'.repeat(210);
+    const post = t.addPost({ content: `<p>${filler} @bob.example.com ${'い'.repeat(400)}</p>` });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.created[0]?.text).toMatch(/@bob\.example\.co…\n/);
+    expect(t.query).not.toHaveBeenCalled();
+    expect(t.created[0]?.facets?.every(({ features }) => features[0]?.$type !== 'app.bsky.richtext.facet#mention'))
+      .toBe(true);
+  });
+
+  it('複数のハンドルのうち解決できたものにだけ、mention facet を付ける', async () => {
+    const t = setup();
+    const post = t.addPost({ content: '<p>@nobody.bsky.social @alice.bsky.social</p>' });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.query).toHaveBeenCalledTimes(2);
+    expect(t.created[0]?.facets).toEqual([{
+      index: { byteStart: 20, byteEnd: 38 },
+      features: [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' }],
     }]);
   });
 

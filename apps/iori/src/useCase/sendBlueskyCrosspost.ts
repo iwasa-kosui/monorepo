@@ -160,7 +160,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     const facets = withMentionFacets(
       draft.val.text,
       draft.val.facets,
-      await resolveMentionDids(findMentionHandles(draft.val.text)),
+      await resolveMentionDids(findMentionHandles(draft.val.text, draft.val.facets)),
     );
     const imageBlobs = [];
     for (const image of draft.val.images) {
