@@ -3,7 +3,7 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Instant } from '../../../domain/instant/instant.ts';
-import type { PostVersion } from '../../../domain/post/post.ts';
+import type { PostVersion, PostVersionsResolverByPostId } from '../../../domain/post/post.ts';
 import { StatusEditSchema, StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
@@ -35,7 +35,12 @@ const setup = async (options: Parameters<typeof setupReadApi>[0] = {}) => {
       editedAt: number | null;
     };
   const sentActivities = () => t.federation.sendActivity.mock.calls.map((call) => call as unknown[]);
-  return { ...t, me, alice, post, edit, source, rowOf, sentActivities };
+  const dropSummaryAndSensitiveFromCreated = (postId: string) =>
+    t.sqlite.prepare(
+      `UPDATE domain_events SET aggregateState = json_remove(aggregateState, '$.summary', '$.sensitive')
+       WHERE aggregateId = ? AND eventName = 'post.created'`,
+    ).run(postId);
+  return { ...t, me, alice, post, edit, source, rowOf, sentActivities, dropSummaryAndSensitiveFromCreated };
 };
 
 describe('新規投稿の原文の保存', () => {
@@ -428,14 +433,16 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
     });
 
     describe('版を組み立てられないとき', () => {
-      const withoutVersions = async (versions: ReadonlyArray<PostVersion>) => {
-        const t = await withRemoteAlice({ postVersionsResolver: { resolve: async () => RA.ok(versions) } });
+      const withResolver = async (postVersionsResolver: PostVersionsResolverByPostId) => {
+        const t = await withRemoteAlice({ postVersionsResolver });
         t.seed.addRemoteActor('alice');
         const created = StatusSchema.parse(await (await t.post({ status: 'hi @alice@remote.example' })).json());
         await t.edit(created.id, { status: 'hi' });
         t.federation.sendActivity.mockClear();
         return { t, created };
       };
+      const withoutVersions = (versions: ReadonlyArray<PostVersion>) =>
+        withResolver({ resolve: async () => RA.ok(versions) });
 
       it('版が空なら、編集直前の宛先だけで送る', async () => {
         const { t, created } = await withoutVersions([]);
@@ -458,6 +465,52 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
         expect(sent).toHaveLength(1);
         expect(sent[0]?.[1]).toBe('followers');
       });
+
+      it('resolver が例外を投げても 200 にして、編集直前の宛先だけで送る', async () => {
+        const { t, created } = await withResolver({
+          resolve: async () => {
+            throw new Error('D1 is unavailable');
+          },
+        });
+
+        const response = await t.edit(created.id, { status: 'hi again' });
+
+        expect(response.status).toBe(200);
+        const sent = t.sentActivities();
+        expect(sent).toHaveLength(1);
+        expect(sent[0]?.[1]).toBe('followers');
+      });
+
+      it('resolver が Err を返しても 200 にして、編集直前の宛先だけで送る', async () => {
+        const { t, created } = await withResolver({ resolve: async () => RA.err(new Error('broken')) as never });
+
+        const response = await t.edit(created.id, { status: 'hi again' });
+
+        expect(response.status).toBe(200);
+        const sent = t.sentActivities();
+        expect(sent).toHaveLength(1);
+        expect(sent[0]?.[1]).toBe('followers');
+      });
+    });
+
+    it('summary と sensitive の無い古い post.created の投稿も編集でき、以前の版のメンションの相手にも送る', async () => {
+      const t = await withRemoteAlice();
+      t.seed.addRemoteActor('alice');
+      const created = StatusSchema.parse(await (await t.post({ status: 'hi @alice@remote.example' })).json());
+      await t.edit(created.id, { status: 'hi' });
+      t.dropSummaryAndSensitiveFromCreated(created.id);
+      t.federation.sendActivity.mockClear();
+
+      const response = await t.edit(created.id, { status: 'hi again' });
+
+      expect(response.status).toBe(200);
+      const sent = t.sentActivities();
+      expect(sent).toHaveLength(2);
+      expect(sent[1]?.[1]).toEqual([
+        expect.objectContaining({ id: new URL(aliceId), inboxId: new URL(`${aliceId}/inbox`) }),
+      ]);
+      const note = await noteOf(sent[1]?.[2]);
+      expect(note.ccIds.map((id) => id.href)).toContain(aliceId);
     });
   });
 
@@ -652,6 +705,23 @@ describe('GET /api/v1/statuses/:id/history', () => {
       { content: '<p>v3</p>', spoiler_text: '', sensitive: true },
     ]);
     expect(edits.map((edit) => edit.created_at)).toEqual([created.created_at, first.edited_at, second.edited_at]);
+  });
+
+  it('summary と sensitive の無い古い post.created の投稿は、CW なし・センシティブでなしの最初の版として返す', async () => {
+    const t = await setup();
+    const created = StatusSchema.parse(await (await t.post({ status: 'v1' })).json());
+    const edited = StatusSchema.parse(await (await t.edit(created.id, { status: 'v2', spoiler_text: 'cw' })).json());
+    t.dropSummaryAndSensitiveFromCreated(created.id);
+
+    const response = await history(t, created.id);
+
+    expect(response.status).toBe(200);
+    const edits = StatusEditSchema.array().parse(await response.json());
+    expect(edits.map(({ content, spoiler_text, sensitive }) => ({ content, spoiler_text, sensitive }))).toEqual([
+      { content: '<p>v1</p>', spoiler_text: '', sensitive: false },
+      { content: '<p>v2</p>', spoiler_text: 'cw', sensitive: true },
+    ]);
+    expect(edits.map((edit) => edit.created_at)).toEqual([created.created_at, edited.edited_at]);
   });
 
   it('他人の公開の投稿とリモートの投稿は、現在の版を 1 件返す', async () => {

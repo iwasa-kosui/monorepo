@@ -131,8 +131,19 @@ const create = ({
     identifier: string,
   ): Promise<ReadonlyArray<Addressee>> => {
     const addressees: Addressee[] = [];
-    const versions = await postVersionsResolver.resolve(post.postId);
-    const contents = [post.content, ...(versions.ok ? versions.val.map(({ content }) => content) : [])];
+    const previousContents = async (): Promise<ReadonlyArray<string>> => {
+      try {
+        const versions = await postVersionsResolver.resolve(post.postId);
+        if (!versions.ok) {
+          throw versions.err;
+        }
+        return versions.val.map(({ content }) => content);
+      } catch (err) {
+        getLogger().warn(`Failed to resolve the versions of post ${post.postId}: ${err}`);
+      }
+      return [];
+    };
+    const contents = [post.content, ...await previousContents()];
     const links = new Map<string, string>();
     for (const content of contents) {
       for (const { href, name } of mentionLinksOfHtml(content)) {
