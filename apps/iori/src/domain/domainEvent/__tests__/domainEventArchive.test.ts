@@ -4,10 +4,14 @@ import { describe, expect, it } from 'vitest';
 
 import { sha256Hex } from '../../../adaptor/crypto/sha256Hex.ts';
 import { toD1DomainEventRow } from '../../../adaptor/d1/eventRow.ts';
+import { ActorId } from '../../actor/actorId.ts';
 import { FeedEntry } from '../../feedEntry/feedEntry.ts';
 import { FeedSource } from '../../feedSource/feedSource.ts';
 import { Instant } from '../../instant/instant.ts';
 import { EMBEDDING_DIMENSIONS } from '../../interestSource/embedding.ts';
+import { PostId } from '../../post/postId.ts';
+import { Report } from '../../report/report.ts';
+import { UserId } from '../../user/userId.ts';
 import {
   ARCHIVE_PLAIN_EVENT_NAMES,
   ARCHIVE_REDACTED_EVENT_NAMES,
@@ -221,5 +225,27 @@ describe('DomainEventArchive.redact の feed イベント', () => {
 
     expect(await redact(expired)).toEqual(expired);
     for (const word of forbidden) expect(JSON.stringify(expired)).not.toContain(word);
+  });
+});
+
+describe('DomainEventArchive.redact の report イベント', () => {
+  it('report.reportSubmitted は REDACTED に入っていて、comment を state と payload に残さない', async () => {
+    const now = Instant.orThrow(Date.UTC(2026, 9, 20));
+    const submitted = Report.submit({
+      userId: UserId.generate(),
+      targetActorId: ActorId.generate(),
+      statusIds: [PostId.generate()],
+      category: 'offensive',
+      comment: 'secret-report-comment',
+    }, now);
+    if (!submitted.ok) throw new Error('unexpected err');
+    const row = { ...toD1DomainEventRow(submitted.val), occurredAt: now };
+
+    const redacted = await DomainEventArchive.redact(sha256Hex)(row);
+
+    expect((ARCHIVE_REDACTED_EVENT_NAMES as readonly string[]).includes('report.reportSubmitted')).toBe(true);
+    expect((ARCHIVE_PLAIN_EVENT_NAMES as readonly string[]).includes('report.reportSubmitted')).toBe(false);
+    expect(redacted).toMatchObject({ aggregateState: null, eventPayload: null });
+    expect(JSON.stringify(redacted)).not.toContain('secret-report-comment');
   });
 });

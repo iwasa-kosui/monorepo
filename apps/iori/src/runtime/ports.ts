@@ -119,6 +119,7 @@ import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAut
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { BlueskyProfileRuntimePorts } from './blueskyProfile.ts';
 import type { BlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
+import type { WorkerReportAction } from './workerReportActions.ts';
 
 export type WorkerRemoteActorAction = (
   input: Readonly<{
@@ -260,6 +261,7 @@ export type IoriCoreRuntimePorts = Readonly<{
   subscribePushUseCase: SubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;
   unfollowRemoteActor: WorkerRemoteActorAction;
+  reportRemoteActor: WorkerReportAction;
   vapidPublicKey: string | undefined;
 }>;
 

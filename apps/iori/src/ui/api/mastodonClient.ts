@@ -4,6 +4,7 @@ import type {
   MediaAttachment,
   Notification,
   Relationship,
+  Report,
   Status,
   Translation,
 } from '../../adaptor/mastodon/entities.ts';
@@ -287,6 +288,24 @@ export const mute = (accountId: string): Promise<Relationship> =>
 
 export const unmute = (accountId: string): Promise<Relationship> =>
   post<Relationship>(accountActionPath(accountId, 'unmute'));
+
+export type ReportParams = Readonly<{
+  account_id: string;
+  category: Report['category'];
+  comment: string;
+  status_ids?: readonly string[];
+}>;
+
+export const report = async (params: ReportParams): Promise<Report> => {
+  const res = await fetch('/api/v1/reports', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as Report;
+};
 
 export const searchAccount = async (acct: string): Promise<Account | undefined> =>
   (await request<{ accounts: Account[] }>('/api/v2/search', { q: acct, resolve: true, type: 'accounts' }))

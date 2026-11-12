@@ -319,6 +319,20 @@ export const RelationshipSchema = z.object({
 });
 export type Relationship = z.infer<typeof RelationshipSchema>;
 
+export const ReportSchema = z.object({
+  id: z.string(),
+  action_taken: z.boolean(),
+  action_taken_at: z.string().nullable(),
+  category: z.enum(['spam', 'violation', 'other']),
+  comment: z.string(),
+  forwarded: z.boolean(),
+  created_at: z.string(),
+  status_ids: z.array(z.string()).nullable(),
+  rule_ids: z.array(z.string()).nullable(),
+  target_account: AccountSchema,
+});
+export type Report = z.infer<typeof ReportSchema>;
+
 export const ApplicationSchema = z.object({
   name: z.string(),
   website: z.string().nullable(),

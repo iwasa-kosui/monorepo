@@ -40,6 +40,7 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.mastodon.repostResolver.resolve).toBeTypeOf('function');
     expect(runtime.core.followRemoteActor).toBeTypeOf('function');
     expect(runtime.core.unfollowRemoteActor).toBeTypeOf('function');
+    expect(runtime.core.reportRemoteActor).toBeTypeOf('function');
     expect(runtime.articles.getArticleWithThreadUseCase.run).toBeTypeOf('function');
     expect(runtime.articles.getArticlesUseCase.run).toBeTypeOf('function');
     expect(runtime.articles.createArticleUseCase.run).toBeTypeOf('function');
