@@ -20,6 +20,117 @@ describe('createIoriApp', () => {
     expect(await response.text()).toBe('OK');
   });
 
+  describe('AI crawler guard', () => {
+    const gptBot =
+      'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.4; +https://openai.com/gptbot)';
+    const mastodon = 'Mastodon/4.3.2 (http.rb/5.2.0; +https://mastodon.social/)';
+    const facebookExternalHit = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+    const googlebot = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+    const imageResponse = () => new Response('png', { headers: { 'Content-Type': 'image/png' } });
+    const createApp = (
+      options: {
+        federationMiddleware?: Parameters<typeof createIoriApp>[0]['federationMiddleware'];
+        serveUpload?: Parameters<typeof createIoriApp>[0]['serveUpload'];
+      } = {},
+    ) =>
+      createIoriApp({
+        federationMiddleware: options.federationMiddleware,
+        registerRoutes: (router) => {
+          router.get('/img-no-ext', () => imageResponse());
+        },
+        serveAsset: async () => undefined,
+        serveUpload: options.serveUpload ?? (async () => undefined),
+        serveOgImage: async () => new Response('not implemented', { status: 501 }),
+      });
+
+    it('serves robots.txt as text/plain', async () => {
+      const response = await createApp().request('/robots.txt', { headers: { 'User-Agent': mastodon } });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+      expect(await response.text()).toContain('User-agent: GPTBot');
+    });
+
+    it('serves robots.txt to an AI crawler', async () => {
+      const response = await createApp().request('/robots.txt', { headers: { 'User-Agent': gptBot } });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+    });
+
+    it('lets an AI crawler fetch a page', async () => {
+      const response = await createApp().request('/health', { headers: { 'User-Agent': gptBot } });
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe('OK');
+    });
+
+    it('responds 403 to an AI crawler for an image path without calling serveUpload', async () => {
+      const serveUpload = vi.fn(async () => imageResponse());
+      const response = await createApp({ serveUpload }).request('/uploads/x.png', {
+        headers: { 'User-Agent': gptBot },
+      });
+
+      expect(response.status).toBe(403);
+      expect(await response.text()).toBe('Forbidden');
+      expect(serveUpload).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['Mastodon', mastodon],
+      ['facebookexternalhit', facebookExternalHit],
+      ['Googlebot', googlebot],
+    ])('lets %s fetch an image path', async (_name, userAgent) => {
+      const serveUpload = vi.fn(async () => imageResponse());
+      const response = await createApp({ serveUpload }).request('/uploads/x.png', {
+        headers: { 'User-Agent': userAgent },
+      });
+
+      expect(response.status).toBe(200);
+      expect(serveUpload).toHaveBeenCalledTimes(1);
+    });
+
+    it('responds 403 to an AI crawler when a non-image path returns an image', async () => {
+      const response = await createApp().request('/img-no-ext', { headers: { 'User-Agent': gptBot } });
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
+      expect(await response.text()).toBe('Forbidden');
+    });
+
+    it('lets a Mastodon server fetch an image from a non-image path', async () => {
+      const response = await createApp().request('/img-no-ext', { headers: { 'User-Agent': mastodon } });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Type')).toBe('image/png');
+    });
+
+    it('lets a Mastodon server through', async () => {
+      const response = await createApp().request('/health', { headers: { 'User-Agent': mastodon } });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('calls the federation middleware for an AI crawler only on non-image paths', async () => {
+      const federation = vi.fn(async (_c: unknown, next: () => Promise<void>) => {
+        await next();
+      });
+      const app = createApp({ federationMiddleware: federation as never });
+
+      const robots = await app.request('/robots.txt', { headers: { 'User-Agent': gptBot } });
+      expect(robots.status).toBe(200);
+      expect(federation).not.toHaveBeenCalled();
+
+      const image = await app.request('/uploads/x.png', { headers: { 'User-Agent': gptBot } });
+      expect(image.status).toBe(403);
+      expect(federation).not.toHaveBeenCalled();
+
+      const page = await app.request('/health', { headers: { 'User-Agent': gptBot } });
+      expect(page.status).toBe(200);
+      expect(federation).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('runs registered routes before the asset fallback', async () => {
     const app = createIoriApp({
       federationMiddleware: undefined,
