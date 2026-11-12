@@ -250,8 +250,15 @@
     {
       "idx": 35,
       "version": "6",
+      "when": 1794360000000,
+      "tag": "0035_bluesky_sync_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
       "when": 1794448112065,
-      "tag": "0035_fediverse_blocks",
+      "tag": "0037_fediverse_blocks",
       "breakpoints": true
     }
   ]

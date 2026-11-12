@@ -1,15 +1,3 @@
-import CodeBlock from '../../../components/CodeBlock.astro';
-import { insertTemplate } from '../../../lib/snapshots';
+import AddRecordScene from '../../../components/AddRecordScene.astro';
 
-## ステップ1: キャンセルを記録する
-
-次のページの編集欄で、`cancelVisit` を編集します。`UPDATE visits SET status = 'cancelled'` の次の行に、次の雛形を貼り付けます。更新の後に置くのは、変化後の状態を `target_state` に入れるためです。
-
-<CodeBlock code={insertTemplate()} />
-
-<details>
-<summary>手元の Node で動かすとき</summary>
-
-`chapter-1-start/visits.ts` の `cancelVisit` を編集します。
-
-</details>
+<AddRecordScene step={1} />

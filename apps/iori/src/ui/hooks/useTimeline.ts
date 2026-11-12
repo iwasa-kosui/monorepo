@@ -67,6 +67,7 @@ export type UseTimelineReturn = Readonly<{
   isRefreshing: boolean;
   isLoadingMore: boolean;
   isFirstPageSettled: boolean;
+  blueskyLoadFailed: boolean;
   updateTimelineItem: StatusUpdater;
   updateBlueskyItems: BlueskyItemsUpdater;
   removePost: (postId: string) => void;
@@ -88,6 +89,7 @@ export const useTimeline = (snapshot?: HomeSnapshot): UseTimelineReturn => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isFirstPageSettled, setIsFirstPageSettled] = useState(false);
+  const [blueskyLoadFailed, setBlueskyLoadFailed] = useState(false);
   const isLoadingMoreRef = useRef(false);
   const isReloadingRef = useRef(state.status === 'success');
   const isShowingCacheRef = useRef(state.status === 'success');
@@ -128,6 +130,7 @@ export const useTimeline = (snapshot?: HomeSnapshot): UseTimelineReturn => {
       ]);
       if (isStaleGeneration(generationRef, generation)) return undefined;
       if (statusesResult.status === 'rejected') throw statusesResult.reason;
+      setBlueskyLoadFailed(blueskyResult.status === 'rejected');
       const latest: TimelineState = stateRef.current ?? { status: 'loading' };
       const base = latest.status === 'success' ? latest.data : current;
       const { paging, newCount } = pagingAfterRefresh(
@@ -176,6 +179,7 @@ export const useTimeline = (snapshot?: HomeSnapshot): UseTimelineReturn => {
         ]);
         if (isStaleGeneration(generationRef, generation)) return;
         if (homeResult.status === 'rejected') throw homeResult.reason;
+        setBlueskyLoadFailed(blueskyResult.status === 'rejected');
         const page = homeResult.value;
         const blueskyPage = blueskyResult.status === 'fulfilled' ? blueskyResult.value : undefined;
         const bluesky = blueskySourceOf(blueskyPage);
@@ -328,6 +332,7 @@ export const useTimeline = (snapshot?: HomeSnapshot): UseTimelineReturn => {
     isRefreshing,
     isLoadingMore,
     isFirstPageSettled,
+    blueskyLoadFailed,
     updateTimelineItem,
     updateBlueskyItems,
     removePost,

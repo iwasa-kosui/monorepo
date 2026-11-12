@@ -10,6 +10,7 @@ import {
   createD1BlueskySessionResolver,
   createD1BlueskySessionSavedStore,
 } from '../adaptor/d1/blueskyCrosspost/blueskySessionStore.ts';
+import { createD1BlueskySyncStatusResolver } from '../adaptor/d1/blueskySyncStatus/blueskySyncStatusStore.ts';
 import { createD1BlueskyLikeDeletedStore } from '../adaptor/d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyLikeSavedStore.ts';
 import { createD1BlueskyLikeTargetResolver } from '../adaptor/d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
@@ -24,6 +25,8 @@ import { createD1BlueskyViewerLikesSyncedStore } from '../adaptor/d1/blueskyTime
 import { createD1BlueskyViewerRepostsSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyViewerRepostsSyncedStore.ts';
 import { createD1Db, type IoriD1Db } from '../adaptor/d1/client.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
+import type { BlueskyLoginFailureResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import type { BlueskySyncStatusResolver } from '../domain/blueskySyncStatus/blueskySyncStatus.ts';
 import type { BlueskyTimelineItemsResolver } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline.ts';
@@ -47,6 +50,8 @@ export const resolveBlueskyTimelineConfig = (
 export type BlueskyTimelineRuntimePorts = Readonly<{
   blueskyTimelineItemsResolver: BlueskyTimelineItemsResolver;
   blueskyTimelineEnabled: boolean;
+  blueskySyncStatusResolver: BlueskySyncStatusResolver;
+  blueskyLoginFailureResolver: BlueskyLoginFailureResolver;
   likeBlueskyPostUseCase: LikeBlueskyPostUseCase | undefined;
   unlikeBlueskyPostUseCase: UnlikeBlueskyPostUseCase | undefined;
   repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
@@ -163,6 +168,8 @@ export const createBlueskyTimelineRuntimePorts = (
   return {
     blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
     blueskyTimelineEnabled: resolveBlueskyTimelineConfig(env) !== undefined,
+    blueskySyncStatusResolver: createD1BlueskySyncStatusResolver(db),
+    blueskyLoginFailureResolver: createD1BlueskyLoginFailureResolver(db, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
     likeBlueskyPostUseCase: likes?.like,
     unlikeBlueskyPostUseCase: likes?.unlike,
     repostBlueskyPostUseCase: reposts?.repost,

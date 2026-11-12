@@ -401,7 +401,62 @@ describe('createD1PostExtrasResolverByPosts', () => {
       repliesCount: 2,
       inReplyTo: { postId: parent.postId, actorId: alice.actorId },
       myReactionEmojis: ['🎉'],
+      blueskyCrosspost: null,
     });
+  });
+
+  it('自分のローカル投稿の Bluesky への投稿だけを引く', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const bob = t.seed.addLocalActor('bob');
+    const mine = t.seed.addLocalPost(me, 1_000);
+    const mineWithoutRow = t.seed.addLocalPost(me, 1_100);
+    const theirs = t.seed.addLocalPost(bob, 2_000);
+    for (const post of [mine, theirs]) {
+      t.sqlite.prepare(
+        'INSERT INTO bluesky_crossposts(postId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?)',
+      ).run(post.postId, 'failed', 1, 1_000, 1_000);
+    }
+    const posts = await createD1PostsWithAuthorResolverByPostIds(t.db).resolve({
+      postIds: [mine, mineWithoutRow, theirs].map((post) => PostId.orThrow(post.postId)),
+      currentActorId: actorId(me.actorId),
+    });
+    const loaded = posts.ok ? [...posts.val.values()] : [];
+
+    const extras = await createD1PostExtrasResolverByPosts(t.db, SEED_ORIGIN).resolve({
+      posts: loaded,
+      currentActorId: actorId(me.actorId),
+    });
+
+    const crosspostOf = (post: { postId: string }) =>
+      extras.ok ? extras.val.get(PostId.orThrow(post.postId))?.blueskyCrosspost : undefined;
+    expect(crosspostOf(mine)).toMatchObject({ postId: mine.postId, status: 'failed', attempts: 1 });
+    expect(crosspostOf(mineWithoutRow)).toBeNull();
+    expect(crosspostOf(theirs)).toBeNull();
+  });
+
+  it('currentActorId が無ければ Bluesky への投稿を引かない', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const mine = t.seed.addLocalPost(me, 1_000);
+    t.sqlite.prepare('INSERT INTO bluesky_crossposts(postId,status,createdAt,updatedAt) VALUES (?,?,?,?)').run(
+      mine.postId,
+      'pending',
+      1_000,
+      1_000,
+    );
+    const posts = await createD1PostsWithAuthorResolverByPostIds(t.db).resolve({
+      postIds: [PostId.orThrow(mine.postId)],
+      currentActorId: undefined,
+    });
+    const loaded = posts.ok ? [...posts.val.values()] : [];
+
+    const extras = await createD1PostExtrasResolverByPosts(t.db, SEED_ORIGIN).resolve({
+      posts: loaded,
+      currentActorId: undefined,
+    });
+
+    expect(extras.ok && extras.val.get(PostId.orThrow(mine.postId))?.blueskyCrosspost).toBeNull();
   });
 });
 

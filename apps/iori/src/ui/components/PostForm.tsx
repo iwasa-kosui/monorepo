@@ -1,9 +1,13 @@
 import { useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
+import type { PostDestination } from '../../domain/post/postDestination.ts';
 import { createStatus, uploadMedia } from '../api/mastodonClient.ts';
+import { postedMessage } from './blueskyCrosspostMark.ts';
 import { downscaleImageForUpload } from './imageDownscale.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
+import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
+import { PostDestinationSelect } from './PostDestinationSelect.tsx';
 import { canSubmitPost, submitPost } from './postSubmission.ts';
 
 type Props = Readonly<{
@@ -17,15 +21,24 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [uploaded, setUploaded] = useState<{ id: string; url: string }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const [destination, setDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
+  const [resultMessage, setResultMessage] = useState('');
+
+  const handleContentChange = (value: string) => {
+    setContent(value);
+    setResultMessage('');
+  };
 
   const handleSubmit = async () => {
     if (!canSubmitPost(content, isUploading, isPosting)) return;
     setIsPosting(true);
     try {
-      const result = await submitPost({ content, uploaded }, { create: createStatus, onPosted });
+      const result = await submitPost({ content, uploaded, destination }, { create: createStatus, onPosted });
       if (result.kind === 'posted') {
         setContent('');
         setUploaded([]);
+        setDestination(DEFAULT_POST_DESTINATION);
+        setResultMessage(postedMessage(destination, result.status.iori?.bluesky_crosspost));
       } else {
         alert(result.message);
       }
@@ -77,7 +90,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
     <form id={formId ?? id} onSubmit={handleFormSubmit} class='flex flex-col flex-1 min-h-0'>
       <MarkdownEditor
         value={content}
-        onChange={setContent}
+        onChange={handleContentChange}
         onKeyDown={handleKeyDown}
         placeholder="What's on your mind? (⌘+Enter to post)"
         minHeight='150px'
@@ -101,6 +114,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         </div>
       )}
       <div class='mt-2 flex justify-end items-center gap-3 flex-shrink-0'>
+        <PostDestinationSelect value={destination} onChange={setDestination} name='destination' />
         <label class='cursor-pointer text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
           {isUploading
             ? <span class='text-xs'>Uploading...</span>
@@ -131,6 +145,11 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           投稿する
         </button>
       </div>
+      {resultMessage !== '' && (
+        <p role='status' class='mt-2 text-sm text-charcoal-light dark:text-gray-400 flex-shrink-0'>
+          {resultMessage}
+        </p>
+      )}
     </form>
   );
 };

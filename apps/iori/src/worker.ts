@@ -15,6 +15,7 @@ import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.
 import { createWorkerIoriActionsRouter } from './adaptor/routes/workerIoriActionsRouter.ts';
 import { createWorkerIoriArticlesRouter } from './adaptor/routes/workerIoriArticlesRouter.ts';
 import { createWorkerIoriBlueskyCrosspostStatusRouter } from './adaptor/routes/workerIoriBlueskyCrosspostStatusRouter.ts';
+import { createWorkerIoriBlueskyProfileRouter } from './adaptor/routes/workerIoriBlueskyProfileRouter.ts';
 import { createWorkerIoriBlueskyRouter } from './adaptor/routes/workerIoriBlueskyRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
@@ -265,6 +266,7 @@ export default {
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
         app.route('/api', createWorkerIoriXPostsRouter({ ...runtime.digest, authn }));
         app.route('/api', createWorkerIoriBlueskyRouter({ ...runtime.blueskyTimeline, authn }));
+        app.route('/api', createWorkerIoriBlueskyProfileRouter({ ...runtime.blueskyProfile, authn }));
         app.route('/api', createWorkerIoriBlueskyCrosspostStatusRouter({ ...runtime.blueskyCrosspostStatus, authn }));
         app.route(
           '/api',
@@ -294,9 +296,10 @@ export default {
       serveAsset: (assetRequest) => fetchAsset(env, assetRequest.url),
       servePage: async (pageRequest) => {
         const identity = await pageIdentity(pageRequest, runtime);
-        // 所有者以外には /x の存在を見せないため、404 と同じく undefined を返す。
+        // 所有者以外には /x と Bluesky のプロフィールの存在を見せないため、404 と同じく undefined を返す。
+        const pathname = new URL(pageRequest.url).pathname;
         if (
-          new URL(pageRequest.url).pathname === '/x' && identity.isLoggedIn
+          (pathname === '/x' || pathname.startsWith('/bluesky/profile/')) && identity.isLoggedIn
           && !(await runtime.digest.isDigestOwner(identity.userId))
         ) return undefined;
         return createWorkerPageFallback(pageRequest, identity);

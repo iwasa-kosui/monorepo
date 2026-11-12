@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ActorId } from '../../domain/actor/actorId.ts';
+import type { BlueskyCrosspost } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import { ImageId } from '../../domain/image/imageId.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
 import { LinkPreviewId } from '../../domain/linkPreview/linkPreviewId.ts';
@@ -13,7 +14,7 @@ import { UserId } from '../../domain/user/userId.ts';
 import { Username } from '../../domain/user/username.ts';
 import { type Account, AccountSchema, StatusSchema } from './entities.ts';
 import { toAccount } from './toAccount.ts';
-import { toReblogStatus, toStatus } from './toStatus.ts';
+import { toIoriBlueskyCrosspost, toReblogStatus, toStatus } from './toStatus.ts';
 
 const createdAt = Date.UTC(2025, 0, 2, 3, 4, 5) as Instant;
 const authorActorId = ActorId.generate();
@@ -388,5 +389,52 @@ describe('toReblogStatus', () => {
     expect(status.content).toBe('');
     expect(status.favourited).toBe(true);
     expect(status.language).toBe(reblog.language);
+  });
+});
+
+describe('toIoriBlueskyCrosspost', () => {
+  const crosspost = (overrides: Partial<BlueskyCrosspost>): BlueskyCrosspost => ({
+    postId: localPost.postId,
+    status: 'pending',
+    skipReason: null,
+    uri: null,
+    cid: null,
+    rkey: null,
+    rootUri: null,
+    rootCid: null,
+    attempts: 0,
+    lastError: null,
+    createdAt: 0 as Instant,
+    updatedAt: 0 as Instant,
+    ...overrides,
+  });
+
+  it('sent で uri があれば bsky.app の投稿の URL にする', () => {
+    expect(toIoriBlueskyCrosspost(crosspost({ status: 'sent', uri: 'at://did:plc:abc/app.bsky.feed.post/3kxyz' })))
+      .toEqual({
+        status: 'sent',
+        skip_reason: null,
+        retrying: false,
+        url: 'https://bsky.app/profile/did:plc:abc/post/3kxyz',
+      });
+  });
+
+  it('sent 以外では uri があっても URL を出さない', () => {
+    expect(
+      toIoriBlueskyCrosspost(crosspost({ status: 'failed', uri: 'at://did:plc:abc/app.bsky.feed.post/3kxyz' })).url,
+    )
+      .toBeNull();
+  });
+
+  it('retrying は canRetry の結果にする', () => {
+    expect(toIoriBlueskyCrosspost(crosspost({ status: 'failed', attempts: 3 })).retrying).toBe(false);
+    expect(toIoriBlueskyCrosspost(crosspost({ status: 'failed', attempts: 2 })).retrying).toBe(true);
+  });
+
+  it('toStatus は blueskyCrosspost を渡したときだけ iori に載せる', () => {
+    expect(toStatus(localPost, options).iori?.bluesky_crosspost).toBeUndefined();
+    expect(toStatus(localPost, { ...options, blueskyCrosspost: null }).iori?.bluesky_crosspost).toBeUndefined();
+    expect(toStatus(localPost, { ...options, blueskyCrosspost: crosspost({}) }).iori?.bluesky_crosspost)
+      .toMatchObject({ status: 'pending' });
   });
 });

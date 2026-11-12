@@ -11,12 +11,14 @@ import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
 import type {
   IoriBlueskyLikeResponse,
   IoriBlueskyRepostResponse,
+  IoriBlueskyStatusResponse,
   IoriBlueskyTimelineResponse,
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { IoriDigestRequestResponse, IoriFeedSourceBody } from '../../adaptor/routes/workerIoriDigestRouter.ts';
 import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
 import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
 import type { IoriXPostsRefreshResponse, IoriXPostsResponse } from '../../adaptor/routes/workerIoriXPostsRouter.ts';
+import type { PostDestination } from '../../domain/post/postDestination.ts';
 
 export type PageCursors = Readonly<{
   nextMaxId: string | undefined;
@@ -50,6 +52,13 @@ export const isUnprocessableError = (error: unknown): boolean => isMastodonApiEr
 export const failureMessage = (action: string, error: unknown): string =>
   isMastodonApiError(error) ? `Failed to ${action}: ${error.message}` : `Failed to ${action}. Please try again.`;
 
+export const BLUESKY_LOGIN_FAILED_ERROR = 'Bluesky login failed';
+
+export const blueskyFailureMessage = (action: string, error: unknown): string =>
+  isMastodonApiError(error) && error.message === BLUESKY_LOGIN_FAILED_ERROR
+    ? 'Bluesky にログインできないため、操作できませんでした。'
+    : failureMessage(action, error);
+
 const queryOf = (url: string): URLSearchParams | undefined => {
   try {
     return new URL(url, 'http://localhost').searchParams;
@@ -82,7 +91,7 @@ export const parseRetryAfter = (header: string | null, now: Date): number | unde
   return Number.isNaN(time) ? undefined : Math.max(0, Math.ceil((time - now.getTime()) / 1000));
 };
 
-const toApiError = async (res: Response): Promise<MastodonApiError> => {
+export const toApiError = async (res: Response): Promise<MastodonApiError> => {
   const body: unknown = await res.json().catch(() => undefined);
   const message = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
     ? body.error
@@ -309,6 +318,7 @@ export type CreateStatusParams = Readonly<{
   in_reply_to_id?: string;
   media_ids?: readonly string[];
   content_type: string;
+  iori_destination?: PostDestination;
 }>;
 
 export const createStatus = async (params: CreateStatusParams): Promise<Status> => {
@@ -454,6 +464,11 @@ export const fetchBlueskyHomeTimeline = (
     ...(cursor === undefined ? {} : { before: cursor.before }),
     ...(cursor === undefined || cursor.beforeId === null ? {} : { beforeId: cursor.beforeId }),
   });
+
+export type BlueskyStatus = IoriBlueskyStatusResponse;
+
+export const fetchBlueskyStatus = async (): Promise<BlueskyStatus> =>
+  (await request<BlueskyStatus>('/api/iori/v1/bluesky/status')).body;
 
 const BLUESKY_LIKES_PATH = '/api/iori/v1/bluesky/likes';
 

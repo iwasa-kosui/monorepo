@@ -16,6 +16,7 @@ import {
   type ThreadResolver,
 } from '../../domain/post/post.ts';
 import { PostContent } from '../../domain/post/postContent.ts';
+import { PostDestination } from '../../domain/post/postDestination.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { RepostResolver, RepostResolverById } from '../../domain/repost/repost.ts';
 import { RepostId } from '../../domain/repost/repostId.ts';
@@ -94,6 +95,10 @@ const validateStatusParams = (body: RequestBody): string | undefined => {
   if (!isOmitted(contentType) && contentType !== 'text/plain' && contentType !== 'text/markdown') {
     return 'Content type must be text/plain or text/markdown';
   }
+  const destination = body['iori_destination'];
+  if (!isOmitted(destination) && !PostDestination.parse(destination).ok) {
+    return 'Destination must be both or fediverse';
+  }
   const scheduledAt = body['scheduled_at'];
   if (typeof scheduledAt === 'string' && scheduledAt !== '') {
     return 'Scheduled statuses are not supported';
@@ -107,6 +112,11 @@ const validateStatusParams = (body: RequestBody): string | undefined => {
     return `Text character limit of ${MAX_STATUS_CHARACTERS} exceeded`;
   }
   return undefined;
+};
+
+const sendsToBluesky = (body: RequestBody): boolean => {
+  const destination = body['iori_destination'];
+  return isOmitted(destination) || PostDestination.sendsToBluesky(PostDestination.parseOrThrow(destination));
 };
 
 const spoilerSummary = (body: RequestBody): string | null => {
@@ -328,6 +338,7 @@ export const createWorkerMastodonStatusesRouter = ({
         summary,
         sensitive: bodyBoolean(body, 'sensitive') || summary !== null,
         images: medias.map((media) => ({ url: media.url, altText: media.description })),
+        crosspostToBluesky: sendsToBluesky(body),
         ctx: createContext(c.req.raw),
       };
       const created = replyTo === undefined

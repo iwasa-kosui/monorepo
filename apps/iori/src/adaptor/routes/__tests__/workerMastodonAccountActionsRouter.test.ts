@@ -305,6 +305,8 @@ describe('POST /api/v1/accounts/:id/block と /unblock', () => {
     expect(sent).toBeInstanceOf(Block);
     expect(sent.actorId?.href).toBe(`${ORIGIN}/users/kosui`);
     expect(sent.objectId?.href).toBe('https://remote.example/users/alice');
+    const blockId = (t.sqlite.prepare('SELECT blockId FROM blocks').get() as { blockId: string }).blockId;
+    expect(sent.id?.href).toBe(`${ORIGIN}/users/kosui#blocks/${blockId}`);
   });
 
   it('ブロックしている相手へのフォローを外し、Undo(Follow) のあとに Block を送る', async () => {
@@ -342,21 +344,40 @@ describe('POST /api/v1/accounts/:id/block と /unblock', () => {
     expect(t.sentActivities()).toHaveLength(2);
   });
 
-  it('ブロック済みでもエラーにせず、blocks を増やさず何も送らない', async () => {
+  it('ブロック済みでもエラーにせず、blocks を増やさず、残っていたフォローを外して Block を送り直す', async () => {
+    const t = await seedActions();
+    const existing = t.seed.addBlock(t.me.userId, t.alice.actorId);
+    t.seed.addFollow(t.me.actorId, t.alice.actorId);
+
+    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/block`);
+
+    expect(response.status).toBe(200);
+    expect(RelationshipSchema.parse(await response.json())).toMatchObject({ blocking: true, following: false });
+    expect(t.count('blocks')).toBe(1);
+    expect(t.count('domain_events', `eventName='block.blockCreated'`)).toBe(0);
+    expect(t.count('follows')).toBe(0);
+    const [undo, block] = t.sentActivities();
+    expect(undo).toBeInstanceOf(Undo);
+    expect(block).toBeInstanceOf(Block);
+    expect((block as Block).id?.href).toBe(`${ORIGIN}/users/kosui#blocks/${existing.blockId}`);
+    expect(t.sentActivities()).toHaveLength(2);
+  });
+
+  it('ブロック済みで残ったフォローがなければ、Block だけを送り直す', async () => {
     const t = await seedActions();
     t.seed.addBlock(t.me.userId, t.alice.actorId);
 
     const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/block`);
 
     expect(response.status).toBe(200);
-    expect(RelationshipSchema.parse(await response.json())).toMatchObject({ blocking: true });
     expect(t.count('blocks')).toBe(1);
-    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+    expect(t.sentActivities()).toHaveLength(1);
+    expect(t.sentActivities()[0]).toBeInstanceOf(Block);
   });
 
   it('ブロックを外し、blocking が false の Relationship を返して Undo(Block) を送り、フォローは戻さない', async () => {
     const t = await seedActions();
-    t.seed.addBlock(t.me.userId, t.alice.actorId);
+    const existing = t.seed.addBlock(t.me.userId, t.alice.actorId);
 
     const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/unblock`);
 
@@ -372,7 +393,10 @@ describe('POST /api/v1/accounts/:id/block と /unblock', () => {
     expect(t.sentActivities()).toHaveLength(1);
     const undo = t.sentActivities()[0] as Undo;
     expect(undo).toBeInstanceOf(Undo);
-    expect(await undo.getObject()).toBeInstanceOf(Block);
+    const object = await undo.getObject();
+    expect(object).toBeInstanceOf(Block);
+    expect(undo.id?.href).toBe(`${ORIGIN}/users/kosui#undo-blocks/${existing.blockId}`);
+    expect(object?.id?.href).toBe(`${ORIGIN}/users/kosui#blocks/${existing.blockId}`);
   });
 
   it('未ブロックでもエラーにせず、現在の Relationship を返して何も送らない', async () => {

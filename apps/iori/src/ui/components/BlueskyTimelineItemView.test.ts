@@ -40,6 +40,36 @@ describe('BlueskyTimelineItemView', () => {
     expect(html).toContain('src="https://cdn.example/avatar.jpg"');
   });
 
+  it('投稿者のアイコン・表示名・@handle を、DID を使った iori のプロフィール画面へのリンクにする（同じタブ）', () => {
+    const html = render({});
+
+    expect(html.match(/href="\/bluesky\/profile\/did%3Aplc%3Aauthor"/g)).toHaveLength(2);
+    expect(html).not.toContain('href="/bluesky/profile/did%3Aplc%3Aauthor" target');
+  });
+
+  it('リポストした人の名前を、その人のプロフィール画面へのリンクにする', () => {
+    const html = render({ repostedByDid: 'did:plc:bob', repostedByHandle: 'bob.bsky.social' });
+
+    expect(html).toContain('<a href="/bluesky/profile/did%3Aplc%3Abob" class="hover:underline">@bob.bsky.social</a>');
+    expect(html).toContain('がリポスト');
+  });
+
+  it('本文の mention は同じタブで iori のプロフィール画面を開き、外部リンクは別タブで開く', () => {
+    const text = '@bob https://example.com';
+    const urlStart = new TextEncoder().encode('@bob ').length;
+    const html = render({
+      text,
+      facets: [
+        { byteStart: 0, byteEnd: 4, feature: { type: 'mention', did: 'did:plc:bob' } },
+        { byteStart: urlStart, byteEnd: urlStart + 19, feature: { type: 'link', uri: 'https://example.com' } },
+      ],
+    });
+
+    expect(html).toContain('<a href="/bluesky/profile/did%3Aplc%3Abob" class="');
+    expect(html).not.toContain('<a href="/bluesky/profile/did%3Aplc%3Abob" target');
+    expect(html).toContain('<a href="https://example.com" target="_blank" rel="noopener noreferrer"');
+  });
+
   it('本文を HTML として挿入せず、facet のリンクは rel と target つきの a 要素にする', () => {
     const text = '<img src=x onerror=alert(1)> https://example.com';
     const start = new TextEncoder().encode('<img src=x onerror=alert(1)> ').length;
