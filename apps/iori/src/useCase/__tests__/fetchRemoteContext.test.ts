@@ -48,6 +48,7 @@ type Setup = Readonly<{
   stored?: ReadonlyArray<string>;
   localUris?: ReadonlyArray<string>;
   blockedActorUris?: ReadonlyArray<string>;
+  isBlockedUri?: (uri: string) => boolean;
   documentLoader?: DocumentLoader;
   failingUris?: ReadonlyArray<string>;
   lookupObject?: (uri: string) => Promise<unknown>;
@@ -98,6 +99,7 @@ const setup = (options: Setup = {}) => {
       resolve: async ({ actorUri }) => RA.ok(options.blockedActorUris?.includes(actorUri) ?? false),
     },
     fetchReplyNotesRecursiveUseCase,
+    isBlockedUri: options.isBlockedUri ?? (() => false),
     fetchTimeoutMs: options.fetchTimeoutMs,
     totalTimeoutMs: options.totalTimeoutMs,
     now: options.now,
@@ -483,6 +485,45 @@ describe('FetchRemoteContextUseCase', () => {
 
       expect(await t.run()).toBe(0);
     });
+
+    describe('ブロックしたドメイン', () => {
+      const isBlockedUri = (uri: string) => new URL(uri).hostname === 'blocked.example';
+
+      it('ブロックしたドメインの返信は取りに行かない', async () => {
+        const blockedReply = 'https://blocked.example/notes/reply';
+        const t = setup({
+          isBlockedUri,
+          notes: [
+            noteOf(ROOT_URI, { replies: repliesOf(blockedReply, replyUri(1)) }),
+            noteOf(blockedReply, { replyTo: ROOT_URI }),
+            noteOf(replyUri(1), { replyTo: ROOT_URI }),
+          ],
+        });
+
+        expect(await t.run()).toBe(1);
+        expect(storedUris(t)).toEqual([replyUri(1)]);
+        expect(t.lookupObject.mock.calls.map(([uri]) => uri)).not.toContain(blockedReply);
+      });
+
+      it('著者がブロックしたドメインにいる返信は保存しない', async () => {
+        const blockedAuthor = new Person({
+          id: new URL('https://blocked.example/users/mallory'),
+          inbox: new URL('https://blocked.example/users/mallory/inbox'),
+          preferredUsername: 'mallory',
+        });
+        const t = setup({
+          isBlockedUri,
+          notes: [
+            noteOf(ROOT_URI, { replies: repliesOf(replyUri(1), replyUri(2)) }),
+            noteOf(replyUri(1), { replyTo: ROOT_URI }).clone({ attribution: blockedAuthor }),
+            noteOf(replyUri(2), { replyTo: ROOT_URI }),
+          ],
+        });
+
+        expect(await t.run()).toBe(1);
+        expect(storedUris(t)).toEqual([replyUri(2)]);
+      });
+    });
   });
 
   describe('同じ投稿への取得', () => {
@@ -544,6 +585,7 @@ describe('FetchRemoteContextUseCase', () => {
         remotePostUpserter: { resolve: vi.fn() },
         blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
         fetchReplyNotesRecursiveUseCase: { run: vi.fn() },
+        isBlockedUri: () => false,
       });
       const input = {
         userId: 'user-1' as never,
@@ -660,6 +702,7 @@ describe('FetchRemoteContextUseCase', () => {
         remotePostUpserter: { resolve: vi.fn() },
         blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
         fetchReplyNotesRecursiveUseCase: { run: vi.fn() },
+        isBlockedUri: () => false,
       });
 
       const result = await useCase.run({
@@ -681,6 +724,7 @@ describe('FetchRemoteContextUseCase', () => {
         remotePostUpserter: { resolve: vi.fn() },
         blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
         fetchReplyNotesRecursiveUseCase: { run: vi.fn() },
+        isBlockedUri: () => false,
       });
 
       const result = await useCase.run({

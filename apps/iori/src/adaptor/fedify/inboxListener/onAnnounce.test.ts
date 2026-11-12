@@ -127,6 +127,19 @@ describe('createOnAnnounce', () => {
     );
   });
 
+  it('passes the quoted note URI of a remote Announce to addReceivedRepostUseCase', async () => {
+    const { deps, addReceivedRepostUseCase } = createDeps(undefined);
+    const note = createNote([]).clone({ quote: new URL('https://other.example/notes/quoted') });
+
+    await createOnAnnounce(deps)(createCtx(), createActivity(note));
+
+    expect(addReceivedRepostUseCase.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remotePostIdentity: expect.objectContaining({ quoteUri: 'https://other.example/notes/quoted' }),
+      }),
+    );
+  });
+
   it('fetches the object of a remote Announce with the document loader of the inbox actor resolver', async () => {
     const { deps, documentLoader } = createDeps(undefined);
     const activity = createActivity(createNote([]));

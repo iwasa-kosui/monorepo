@@ -4,6 +4,7 @@ import { getLogger } from '@logtape/logtape';
 
 import { ActorIdentity } from '../../adaptor/fedify/actorIdentity.ts';
 import { extractContentWarning } from '../../adaptor/fedify/extractContentWarning.ts';
+import { extractQuoteUri } from '../../adaptor/fedify/extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../../adaptor/fedify/extractVisibility.ts';
 import { Instant } from '../../domain/instant/instant.ts';
@@ -12,11 +13,12 @@ import type { RemotePostIdentity } from '../../domain/post/post.ts';
 type Options = Readonly<{
   origin: string;
   documentLoader: DocumentLoader;
+  isBlockedUri?: (uri: string) => boolean;
 }>;
 
 export const toRemotePostIdentity = async (
   note: Note,
-  { origin, documentLoader }: Options,
+  { origin, documentLoader, isBlockedUri }: Options,
 ): Promise<RemotePostIdentity | undefined> => {
   const uri = note.id?.href;
   if (!uri) {
@@ -24,9 +26,19 @@ export const toRemotePostIdentity = async (
     return undefined;
   }
 
+  if (isBlockedUri?.(uri) || note.attributionIds.some((id) => isBlockedUri?.(id.href))) {
+    getLogger().debug(`Ignored a Note from a blocked domain: ${uri}`);
+    return undefined;
+  }
+
   const author = await note.getAttribution({ documentLoader });
   if (!author || !isActor(author)) {
     getLogger().debug(`Could not resolve Note author: ${uri}`);
+    return undefined;
+  }
+
+  if (author.id && isBlockedUri?.(author.id.href)) {
+    getLogger().debug(`Ignored a Note whose author is on a blocked domain: ${uri}`);
     return undefined;
   }
 
@@ -45,6 +57,7 @@ export const toRemotePostIdentity = async (
     ...extractContentWarning(note),
     visibility: extractVisibility(note, author.followersId),
     recipientActorUris: extractRecipientActorUris([note], origin),
+    quoteUri: await extractQuoteUri(note),
     publishedAt: publishedMs !== undefined && Number.isSafeInteger(publishedMs) && publishedMs >= 0
       ? Instant.orThrow(publishedMs)
       : undefined,

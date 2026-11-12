@@ -63,6 +63,7 @@ type Deps = Readonly<{
   remotePostUpserter: RemotePostUpserter;
   blockedActorUriResolverByUsername: BlockedActorUriResolverByUsername;
   fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase;
+  isBlockedUri: (uri: string) => boolean;
   fetchTimeoutMs?: number;
   totalTimeoutMs?: number;
   now?: () => number;
@@ -85,6 +86,7 @@ const create = ({
   remotePostUpserter,
   blockedActorUriResolverByUsername,
   fetchReplyNotesRecursiveUseCase,
+  isBlockedUri,
   fetchTimeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
   totalTimeoutMs = DEFAULT_TOTAL_TIMEOUT_MS,
   now = Date.now,
@@ -198,6 +200,9 @@ const create = ({
         if (isStored && depth + 1 >= MAX_REPLY_DEPTH) {
           return undefined;
         }
+        if (isBlockedUri(replyUri)) {
+          return undefined;
+        }
         const reply = await lookupNote(replyUri);
         if (reply === undefined || reply.replyTargetId?.href !== parent.id?.href) {
           return undefined;
@@ -208,7 +213,7 @@ const create = ({
         if (isStored) {
           return reply;
         }
-        const identity = await toRemotePostIdentity(reply, { origin, documentLoader });
+        const identity = await toRemotePostIdentity(reply, { origin, documentLoader, isBlockedUri });
         if (identity === undefined || await isBlocked(username, identity.authorIdentity.uri) || progress.stopped) {
           return undefined;
         }
