@@ -226,21 +226,26 @@ describe('メッセージの取り込み', () => {
     const mine = status('m1', '2026-11-12T01:00:00.000Z', 'actor-me');
     const theirs = status('m2', '2026-11-12T02:00:00.000Z', ALICE.accountId!);
 
-    expect(hasIncomingFediverseMessage([mine], [ALICE])).toBe(false);
-    expect(hasIncomingFediverseMessage([mine, theirs], [ALICE])).toBe(true);
-    expect(hasIncomingFediverseMessage([], [ALICE])).toBe(false);
+    expect(hasIncomingFediverseMessage([mine], 'actor-me')).toBe(false);
+    expect(hasIncomingFediverseMessage([mine, theirs], 'actor-me')).toBe(true);
+    expect(hasIncomingFediverseMessage([], 'actor-me')).toBe(false);
+  });
+
+  it('相手の accountId が null でも、相手の投稿が新着に入っていれば既読にする対象とみなす', () => {
+    const theirs = status('m2', '2026-11-12T02:00:00.000Z', 'actor-unresolved');
+
+    expect(hasIncomingFediverseMessage([theirs], 'actor-me')).toBe(true);
   });
 });
 
 describe('isOwnFediverseMessage', () => {
-  it('相手のアカウントが書いた投稿以外を、自分の投稿にする', () => {
-    expect(isOwnFediverseMessage(status('m1', '2026-11-12T01:00:00.000Z', 'actor-me'), [ALICE, BOB])).toBe(true);
-    expect(isOwnFediverseMessage(status('m2', '2026-11-12T01:00:00.000Z', BOB.accountId!), [ALICE, BOB])).toBe(false);
+  it('閲覧者のアカウントが書いた投稿だけを、自分の投稿にする', () => {
+    expect(isOwnFediverseMessage(status('m1', '2026-11-12T01:00:00.000Z', 'actor-me'), 'actor-me')).toBe(true);
+    expect(isOwnFediverseMessage(status('m2', '2026-11-12T01:00:00.000Z', BOB.accountId!), 'actor-me')).toBe(false);
   });
 
-  it('accountId を持たない相手は、投稿の作者と一致させない', () => {
-    expect(isOwnFediverseMessage(status('m1', '2026-11-12T01:00:00.000Z', 'actor-me'), [{ ...ALICE, accountId: null }]))
-      .toBe(true);
+  it('相手の accountId が null でも、相手の投稿を自分の投稿にしない', () => {
+    expect(isOwnFediverseMessage(status('m1', '2026-11-12T01:00:00.000Z', 'actor-unresolved'), 'actor-me')).toBe(false);
   });
 });
 

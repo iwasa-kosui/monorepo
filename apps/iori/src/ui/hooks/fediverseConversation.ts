@@ -104,15 +104,11 @@ export const prependOlderFediverseMessages = (
   older: readonly Status[],
 ): readonly Status[] => mergeFediverseMessages(existing, older).messages;
 
-export const isOwnFediverseMessage = (
-  status: Status,
-  peers: readonly IoriFediverseConversationPeerBody[],
-): boolean => !peers.some((peer) => peer.accountId === status.account.id);
+export const isOwnFediverseMessage = (status: Status, viewerAccountId: string): boolean =>
+  status.account.id === viewerAccountId;
 
-export const hasIncomingFediverseMessage = (
-  added: readonly Status[],
-  peers: readonly IoriFediverseConversationPeerBody[],
-): boolean => added.some((status) => !isOwnFediverseMessage(status, peers));
+export const hasIncomingFediverseMessage = (added: readonly Status[], viewerAccountId: string): boolean =>
+  added.some((status) => !isOwnFediverseMessage(status, viewerAccountId));
 
 export const fediverseConversationTitle = (peers: readonly IoriFediverseConversationPeerBody[]): string =>
   peers.length === 0

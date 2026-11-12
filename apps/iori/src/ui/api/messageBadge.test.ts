@@ -42,7 +42,7 @@ const ok = (body: unknown) => () => Promise.resolve(jsonResponse(body));
 const status = (code: number) => () => Promise.resolve(jsonResponse({}, code));
 
 describe('fetchUnreadMessageCount', () => {
-  it('Bluesky の未読の会話とリクエストの数に、Fediverse の未読の会話の数を足し、同じオリジンへの GET で取る', async () => {
+  it('Bluesky の未読のメッセージとリクエストの数に、Fediverse の未読のメッセージの数を足し、同じオリジンへの GET で取る', async () => {
     const fetcher = fetcherOf({
       [BLUESKY_URL]: ok({ unread: 3, requests: 2 }),
       [FEDIVERSE_URL]: ok({ unread: 4 }),

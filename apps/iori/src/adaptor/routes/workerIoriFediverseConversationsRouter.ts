@@ -76,7 +76,10 @@ export type IoriFediverseConversationsResponse = Readonly<{
   cursor: string | null;
 }>;
 
-export type IoriFediverseConversationResponse = Readonly<{ conversation: IoriFediverseConversationBody }>;
+export type IoriFediverseConversationResponse = Readonly<{
+  conversation: IoriFediverseConversationBody;
+  viewerAccountId: string;
+}>;
 
 export type IoriFediverseConversationMessagesResponse = Readonly<{
   messages: readonly Status[];
@@ -309,7 +312,7 @@ export const createWorkerIoriFediverseConversationsRouter = ({
       });
       return c.json(
         {
-          unread: groupDirectMessagePosts(posts, granted.viewer.actorUri).length,
+          unread: posts.length,
         } satisfies IoriFediverseConversationUnreadCountResponse,
       );
     })
@@ -339,6 +342,7 @@ export const createWorkerIoriFediverseConversationsRouter = ({
             },
             unreadCount: unread.length,
           },
+          viewerAccountId: granted.viewer.actorId,
         } satisfies IoriFediverseConversationResponse,
       );
     })

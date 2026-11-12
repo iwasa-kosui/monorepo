@@ -213,6 +213,7 @@ describe('GET /conversations/:key', () => {
         lastMessage: { text: 'hi', sentAt: NOW - 1000, own: false },
         unreadCount: 1,
       },
+      viewerAccountId: t.me.actorId,
     });
   });
 
@@ -511,7 +512,7 @@ describe('POST /conversations/:key/read', () => {
 });
 
 describe('GET /conversations/unread_count', () => {
-  it('未読のある会話の数を返し、既読の通知と他の利用者宛の通知は数えない', async () => {
+  it('未読のメッセージの数を返し、既読の通知と他の利用者宛の通知は数えない', async () => {
     const t = await setup();
     const a1 = t.fromRemote(t.alice, NOW - 4000, [aliceUri, meUri]);
     const a2 = t.fromRemote(t.alice, NOW - 3000, [aliceUri, meUri]);
@@ -523,7 +524,7 @@ describe('GET /conversations/unread_count', () => {
     t.sqlite.prepare('UPDATE notifications SET isRead = 1 WHERE notificationId = ?').run(read);
     t.seed.addMentionNotification(t.hanako.userId, t.bob.actorId, g.postId, NOW - 1000);
 
-    expect(await (await t.get('/unread_count')).json()).toEqual({ unread: 1 });
+    expect(await (await t.get('/unread_count')).json()).toEqual({ unread: 2 });
   });
 
   it('未読が無ければ 0 を返す', async () => {

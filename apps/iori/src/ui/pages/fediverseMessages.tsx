@@ -130,7 +130,8 @@ export const FediverseConversationPage = ({ conversationKey }: Readonly<{ conver
   const [isSending, setIsSending] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const messagesRef = useRef<readonly Status[]>([]);
-  const peersRef = useRef<readonly IoriFediverseConversationPeerBody[]>([]);
+  const [viewerAccountId, setViewerAccountId] = useState<string | null>(null);
+  const viewerAccountIdRef = useRef<string | null>(null);
   const isSendingRef = useRef(false);
   const isLoadingOlderRef = useRef(false);
   const scrollToBottomRef = useRef(false);
@@ -157,7 +158,8 @@ export const FediverseConversationPage = ({ conversationKey }: Readonly<{ conver
           fetchFediverseConversation(conversationKey),
           fetchFediverseMessages(conversationKey),
         ]);
-        peersRef.current = loadedConversation.conversation.peers;
+        viewerAccountIdRef.current = loadedConversation.viewerAccountId;
+        setViewerAccountId(loadedConversation.viewerAccountId);
         setConversation(loadedConversation.conversation);
         replaceMessages(page.messages);
         setOlderCursor(page.cursor ?? undefined);
@@ -181,7 +183,8 @@ export const FediverseConversationPage = ({ conversationKey }: Readonly<{ conver
         const merged = mergeFediverseMessages(messagesRef.current ?? [], page.messages);
         scrollToBottomRef.current = merged.added.length > 0 && isNearBottom();
         replaceMessages(merged.messages);
-        if (hasIncomingFediverseMessage(merged.added, peersRef.current ?? [])) void markRead();
+        const viewer = viewerAccountIdRef.current;
+        if (viewer !== null && hasIncomingFediverseMessage(merged.added, viewer)) void markRead();
       } catch (cause) {
         console.error('Failed to refresh the Fediverse conversation:', cause);
       }
@@ -250,7 +253,7 @@ export const FediverseConversationPage = ({ conversationKey }: Readonly<{ conver
       </>
     );
   }
-  if (conversation === null || !isLoaded) return <p class={mutedClass}>Loading...</p>;
+  if (conversation === null || viewerAccountId === null || !isLoaded) return <p class={mutedClass}>Loading...</p>;
 
   const now = Date.now();
 
@@ -283,7 +286,7 @@ export const FediverseConversationPage = ({ conversationKey }: Readonly<{ conver
               <FediverseChatMessageItem
                 key={message.id}
                 message={message}
-                own={isOwnFediverseMessage(message, conversation.peers)}
+                own={isOwnFediverseMessage(message, viewerAccountId)}
                 now={now}
               />
             ))}
