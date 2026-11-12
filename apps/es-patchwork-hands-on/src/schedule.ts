@@ -3,6 +3,7 @@ export type ScheduleRow = {
   readonly title: string;
   readonly minutes: number;
   readonly parts?: string;
+  readonly pageStarts?: readonly number[];
 };
 
 export const schedule: readonly ScheduleRow[] = [
@@ -13,9 +14,16 @@ export const schedule: readonly ScheduleRow[] = [
     title: '第2章 更新と同じトランザクションで記録する',
     minutes: 14,
     parts: '説明2分、演習9分、解答の確認3分',
+    pageStarts: [0, 1, 1, 2, 7, 13],
   },
   { id: 'chapter-3', title: '第3章 記録から、誰がなぜキャンセルしたかを答える', minutes: 5 },
-  { id: 'chapter-4', title: '第4章 3パターンを比較する', minutes: 9, parts: '実演7分、判断表で比べて選ぶ2分' },
+  {
+    id: 'chapter-4',
+    title: '第4章 3パターンを比較する',
+    minutes: 9,
+    parts: '実演7分、判断表で比べて選ぶ2分',
+    pageStarts: [0, 0, 3, 5, 7, 8],
+  },
   { id: 'summary', title: 'まとめ', minutes: 3 },
 ];
 

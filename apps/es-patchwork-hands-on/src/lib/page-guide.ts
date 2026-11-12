@@ -1,6 +1,10 @@
 import { formatClock } from '../schedule';
 
-type TimedRow = { readonly id: string; readonly minutes: number };
+type TimedRow = {
+  readonly id: string;
+  readonly minutes: number;
+  readonly pageStarts?: readonly number[];
+};
 
 export const elapsedMinutes = (
   rows: readonly TimedRow[],
@@ -14,6 +18,15 @@ export const elapsedMinutes = (
     throw new Error(`schedule.ts に章がありません: ${chapter}`);
   }
   const start = rows.slice(0, index).reduce((sum, earlier) => sum + earlier.minutes, 0);
+  if (row.pageStarts !== undefined) {
+    const pageStart = row.pageStarts[number - 1];
+    if (row.pageStarts.length !== total || pageStart === undefined) {
+      throw new Error(
+        `schedule.ts の ${chapter} の pageStarts が、ページ数 ${total} と合いません`,
+      );
+    }
+    return start + pageStart;
+  }
   const within = Math.min(Math.round(row.minutes * (number - 1) / total), Math.max(row.minutes - 1, 0));
   return start + within;
 };

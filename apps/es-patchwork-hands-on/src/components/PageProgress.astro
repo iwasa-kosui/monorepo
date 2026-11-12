@@ -32,6 +32,8 @@ if (current === undefined) {
 const elapsed = formatElapsed(
   elapsedMinutes(schedule, chapter, number, current.total),
 );
+const labelOf = (member: (typeof pages)[number]) =>
+  pageLabel(member.number, firstHeading(member.entry.body));
 const groups = rows.map((row) => ({
   row,
   pages: pages.filter((page) => page.chapter === row.id),
@@ -64,12 +66,7 @@ const groups = rows.map((row) => ({
                       ? 'page'
                       : undefined}
                     >
-                      {
-                        pageLabel(
-                  member.number,
-                  firstHeading(member.entry.body),
-                )
-                      }
+                      {labelOf(member)}
                     </a>
                   </li>
                 ))
@@ -114,6 +111,11 @@ if (menu !== null) {
     if (event.key !== 'Escape' || !menu.open) return;
     close();
     menu.querySelector('summary')?.focus();
+  });
+
+  menu.addEventListener('focusout', (event) => {
+    const next = event.relatedTarget;
+    if (menu.open && next instanceof Node && !menu.contains(next)) close();
   });
 
   document.addEventListener('click', (event) => {

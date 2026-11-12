@@ -104,6 +104,18 @@ test.describe('ページ一覧', () => {
     await expect(page.locator('.page-progress__panel')).toBeHidden();
   });
 
+  test('Tab で一覧の外へフォーカスが出たら閉じ、一覧の中を移る間は閉じない', async ({ page }) => {
+    await page.goto('/chapters/chapter-2/4/');
+    await openList(page);
+    await page.locator('.page-progress__menu > summary').focus();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.page-progress__panel a').first()).toBeFocused();
+    await expect(page.locator('.page-progress__panel')).toBeVisible();
+    await page.locator('.page-progress__panel a').last().focus();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.page-progress__panel')).toBeHidden();
+  });
+
   test('ページ一覧の見出しは h1 を増やさない', async ({ page }) => {
     await page.goto('/chapters/chapter-2/4/');
     const headingsBefore = await page.getByRole('heading').count();
@@ -121,7 +133,7 @@ test.describe('ページ一覧', () => {
 });
 
 test.describe('一覧を開いても画面が動かない', () => {
-  const paths = ['/chapters/chapter-2/4/', '/chapters/intro/', '/chapters/chapter-4/3/'];
+  const paths = ['/chapters/chapter-2/4/', '/chapters/chapter-2/5/', '/chapters/intro/', '/chapters/chapter-4/3/'];
   for (const path of paths) {
     test(`1280x640 の ${path}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 640 });
@@ -147,9 +159,21 @@ test.describe('一覧を開いても画面が動かない', () => {
     });
   }
 
+  for (const path of ['/chapters/chapter-2/4/', '/chapters/chapter-2/5/']) {
+    test(`1280x640 の ${path} は、章の見出しが 1 行に収まる`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 640 });
+      await page.goto(path);
+      const heading = await page.getByRole('heading', { level: 1 }).evaluate((element) => ({
+        height: element.getBoundingClientRect().height,
+        fontSize: parseFloat(getComputedStyle(element).fontSize),
+      }));
+      expect(heading.height).toBeLessThan(heading.fontSize * 2);
+    });
+  }
+
   test('現在のページが一覧の中で見える位置に出る', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 400 });
-    await page.goto('/chapters/summary/5/');
+    await page.goto(chapterPagePaths().at(-1) ?? '/');
     await openList(page);
     const visible = await page.evaluate(() => {
       const panel = document.querySelector('.page-progress__panel')?.getBoundingClientRect();
