@@ -11,7 +11,7 @@ const LABEL_CLASS = 'block text-charcoal-light dark:text-gray-400 text-sm mb-1';
 
 export const ProfileFormFields = ({ idPrefix, displayName, note, errorText }: Props) => (
   <>
-    <label class={LABEL_CLASS} for={`${idPrefix}-display-name`}>Display name</label>
+    <label class={LABEL_CLASS} for={`${idPrefix}-display-name`}>表示名</label>
     <input
       id={`${idPrefix}-display-name`}
       type='text'
@@ -19,10 +19,10 @@ export const ProfileFormFields = ({ idPrefix, displayName, note, errorText }: Pr
       value={displayName}
       class={FIELD_CLASS}
     />
-    <label class={LABEL_CLASS} for={`${idPrefix}-note`}>Bio</label>
+    <label class={LABEL_CLASS} for={`${idPrefix}-note`}>自己紹介</label>
     <textarea id={`${idPrefix}-note`} name='note' value={note} rows={4} class={FIELD_CLASS} />
     <label class={LABEL_CLASS} for={`${idPrefix}-avatar`}>
-      Profile image (JPEG, PNG, GIF or WebP, up to 5MB)
+      プロフィール画像（JPEG、PNG、GIF、WebP のいずれか。5MB まで）
     </label>
     <input
       id={`${idPrefix}-avatar`}

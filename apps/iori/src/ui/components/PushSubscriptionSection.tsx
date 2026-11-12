@@ -84,7 +84,7 @@ export const PushSubscriptionSection = () => {
       <div class='flex items-center justify-between'>
         <div>
           <h2 class='text-sm font-medium text-charcoal dark:text-white'>
-            Push Notifications
+            プッシュ通知
           </h2>
           <p class='text-sm text-charcoal-light dark:text-gray-400'>
             {pushStatus === 'subscribed'
@@ -98,14 +98,14 @@ export const PushSubscriptionSection = () => {
                   >
                     <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M5 13l4 4L19 7' />
                   </svg>
-                  Push notifications enabled
+                  プッシュ通知は有効です
                 </span>
               )
               : pushStatus === 'unsupported'
-              ? 'Push notifications not supported on this browser'
+              ? 'このブラウザーはプッシュ通知に対応していません'
               : pushStatus === 'error'
-              ? 'Failed to enable push notifications'
-              : 'Get notified when someone likes your posts'}
+              ? 'プッシュ通知を有効にできませんでした'
+              : '投稿にいいねされたときに通知します'}
           </p>
         </div>
         {pushStatus === 'available' && (
@@ -114,7 +114,7 @@ export const PushSubscriptionSection = () => {
             onClick={handleSubscribe}
             disabled={isSubscribing}
             class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
-            title='Enable push notifications'
+            title='プッシュ通知を有効にする'
           >
             <svg
               xmlns='http://www.w3.org/2000/svg'
@@ -154,10 +154,10 @@ export const PushSubscriptionSection = () => {
             </div>
             <div class='flex-1'>
               <h3 class='text-sm font-medium text-charcoal dark:text-white mb-2'>
-                Install this app to enable notifications
+                通知を受け取るには、アプリをインストールしてください
               </h3>
               <p class='text-sm text-charcoal-light dark:text-gray-400 mb-3'>
-                iOS requires this app to be installed on your home screen to receive push notifications.
+                iOS では、アプリをホーム画面に追加しないとプッシュ通知を受け取れません。
               </p>
               <ol class='text-sm text-charcoal-light dark:text-gray-400 space-y-2'>
                 <li class='flex items-start gap-2'>
@@ -165,7 +165,7 @@ export const PushSubscriptionSection = () => {
                     1
                   </span>
                   <span>
-                    Tap the <strong>Share</strong> button at the bottom of Safari
+                    Safari の下部にある<strong>共有</strong>ボタンをタップします
                   </span>
                 </li>
                 <li class='flex items-start gap-2'>
@@ -173,7 +173,7 @@ export const PushSubscriptionSection = () => {
                     2
                   </span>
                   <span>
-                    Scroll down and tap <strong>"Add to Home Screen"</strong>
+                    下にスクロールして<strong>「ホーム画面に追加」</strong>をタップします
                   </span>
                 </li>
                 <li class='flex items-start gap-2'>
@@ -181,18 +181,18 @@ export const PushSubscriptionSection = () => {
                     3
                   </span>
                   <span>
-                    Tap <strong>"Add"</strong> in the top right
+                    右上の<strong>「追加」</strong>をタップします
                   </span>
                 </li>
                 <li class='flex items-start gap-2'>
                   <span class='flex-shrink-0 w-5 h-5 rounded-full bg-warm-gray dark:bg-gray-700 flex items-center justify-center text-xs font-medium shadow-clay-sm'>
                     4
                   </span>
-                  <span>Open the app from your home screen and return here</span>
+                  <span>ホーム画面からアプリを開き、この画面に戻ります</span>
                 </li>
               </ol>
               <p class='text-xs text-charcoal-light dark:text-gray-500 mt-3'>
-                Requires iOS 16.4 or later
+                iOS 16.4 以降が必要です
               </p>
             </div>
           </div>

@@ -2,12 +2,17 @@ import { useEffect, useState } from 'hono/jsx';
 
 import { fetchXPosts } from '../api/mastodonClient.ts';
 
-export const useIsXOwner = (): boolean => {
-  const [isOwner, setIsOwner] = useState(false);
+export type XOwnerState = Readonly<{ isOwner: boolean; isResolved: boolean }>;
+
+export const useIsXOwner = (): XOwnerState => {
+  const [state, setState] = useState<XOwnerState>({ isOwner: false, isResolved: false });
 
   useEffect(() => {
-    fetchXPosts().then(() => setIsOwner(true), () => setIsOwner(false));
+    fetchXPosts(1).then(
+      () => setState({ isOwner: true, isResolved: true }),
+      () => setState({ isOwner: false, isResolved: true }),
+    );
   }, []);
 
-  return isOwner;
+  return state;
 };

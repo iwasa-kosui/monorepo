@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { addRelay, fetchRelays, relayHost } from './relays.ts';
+import { addRelay, fetchRelays, fetchRelaysOrThrow, relayHost } from './relays.ts';
 
 const stubFetch = (response: Response | Error) =>
   vi.stubGlobal('fetch', vi.fn(() => response instanceof Error ? Promise.reject(response) : Promise.resolve(response)));
@@ -22,6 +22,21 @@ describe('fetchRelays', () => {
   });
 });
 
+describe('fetchRelaysOrThrow', () => {
+  it('returns the relays from the response', async () => {
+    const relays = [{ relayId: 'r1', actorUri: 'https://relay.example/actor', status: 'accepted' }];
+    stubFetch(Response.json({ relays }));
+
+    expect(await fetchRelaysOrThrow()).toEqual(relays);
+  });
+
+  it('rejects when the response is not ok', async () => {
+    stubFetch(new Response('{}', { status: 500 }));
+
+    await expect(fetchRelaysOrThrow()).rejects.toThrow('HTTP 500');
+  });
+});
+
 describe('addRelay', () => {
   it('reports success when the relay is accepted', async () => {
     stubFetch(Response.json({}, { status: 201 }));
@@ -29,19 +44,19 @@ describe('addRelay', () => {
     expect(await addRelay('https://relay.example/actor')).toEqual({ ok: true });
   });
 
-  it('returns the error message from the response', async () => {
+  it('does not show the error body from the server', async () => {
     stubFetch(Response.json({ error: 'Already subscribed' }, { status: 409 }));
-
-    expect(await addRelay('https://relay.example/actor')).toEqual({ ok: false, message: 'Already subscribed' });
-  });
-
-  it('falls back to a default message when the response has no error', async () => {
-    stubFetch(Response.json({}, { status: 500 }));
 
     expect(await addRelay('https://relay.example/actor')).toEqual({
       ok: false,
-      message: 'Failed to subscribe to relay',
+      message: 'リレーを追加できませんでした',
     });
+  });
+
+  it('reports a malformed URL when the response is 422', async () => {
+    stubFetch(Response.json({ error: 'Invalid URL' }, { status: 422 }));
+
+    expect(await addRelay('not a url')).toEqual({ ok: false, message: 'URL の形式が正しくありません' });
   });
 
   it('reports a network error when the request fails', async () => {
@@ -49,7 +64,7 @@ describe('addRelay', () => {
 
     expect(await addRelay('https://relay.example/actor')).toEqual({
       ok: false,
-      message: 'Network error. Please try again.',
+      message: '通信に失敗しました。もう一度お試しください',
     });
   });
 });

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'hono/jsx';
 
-import { addRelay, fetchRelays, type Relay, relayHost } from '../../api/relays.ts';
+import { addRelay, fetchRelaysOrThrow, type Relay, relayHost } from '../../api/relays.ts';
 import { SettingsSection } from './SettingsSection.tsx';
 
 type Props = Readonly<{
   relays: readonly Relay[] | undefined;
+  loadFailed: boolean;
   relayUri: string;
   isSubscribing: boolean;
   errorText: string;
@@ -14,12 +15,16 @@ type Props = Readonly<{
 }>;
 
 export const RelaysSettingsView = (
-  { relays, relayUri, isSubscribing, errorText, isRequested, onUriInput, onSubmit }: Props,
+  { relays, loadFailed, relayUri, isSubscribing, errorText, isRequested, onUriInput, onSubmit }: Props,
 ) => (
   <SettingsSection id='relays' title='リレー'>
     <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-5'>
       {relays === undefined
-        ? <p class='text-sm text-charcoal-light dark:text-gray-400'>読み込み中...</p>
+        ? (
+          <p class='text-sm text-charcoal-light dark:text-gray-400'>
+            {loadFailed ? 'リレーを読み込めませんでした' : '読み込み中...'}
+          </p>
+        )
         : relays.length === 0
         ? <p class='text-sm text-charcoal-light dark:text-gray-400'>接続しているリレーはありません</p>
         : (
@@ -72,6 +77,7 @@ export const RelaysSettingsView = (
 
 export const RelaysSettingsSection = () => {
   const [relays, setRelays] = useState<readonly Relay[] | undefined>(undefined);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [relayUri, setRelayUri] = useState('');
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [errorText, setErrorText] = useState('');
@@ -79,9 +85,10 @@ export const RelaysSettingsSection = () => {
 
   const load = useCallback(async () => {
     try {
-      setRelays(await fetchRelays());
+      setRelays(await fetchRelaysOrThrow());
+      setLoadFailed(false);
     } catch {
-      setRelays([]);
+      setLoadFailed(true);
     }
   }, []);
 
@@ -109,6 +116,7 @@ export const RelaysSettingsSection = () => {
   return (
     <RelaysSettingsView
       relays={relays}
+      loadFailed={loadFailed}
       relayUri={relayUri}
       isSubscribing={isSubscribing}
       errorText={errorText}

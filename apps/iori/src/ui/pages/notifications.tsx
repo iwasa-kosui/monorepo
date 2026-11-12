@@ -147,7 +147,7 @@ const NotificationsPage = () => {
         href='/settings#notifications'
         class='mb-6 inline-block text-sm text-terracotta hover:text-terracotta-dark dark:text-terracotta-light transition-colors'
       >
-        通知の設定
+        設定
       </a>
 
       <div class='space-y-6 py-2'>

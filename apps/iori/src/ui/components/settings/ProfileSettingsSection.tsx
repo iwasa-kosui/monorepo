@@ -55,7 +55,11 @@ export const ProfileSettingsForm = (
   </SettingsSection>
 );
 
-export const ProfileSettingsSection = () => {
+type SectionProps = Readonly<{
+  onLoaded?: (() => void) | undefined;
+}>;
+
+export const ProfileSettingsSection = ({ onLoaded }: SectionProps) => {
   const [me, setMe] = useState<CredentialAccount | undefined>(undefined);
   const [loadFailed, setLoadFailed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -64,12 +68,16 @@ export const ProfileSettingsSection = () => {
   const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
-    fetchVerifyCredentials().then(setMe, (error) => {
+    fetchVerifyCredentials().then((account) => {
+      setMe(account);
+      onLoaded?.();
+    }, (error) => {
       if (isUnauthorizedError(error)) {
         window.location.href = '/sign-in';
         return;
       }
       setLoadFailed(true);
+      onLoaded?.();
     });
   }, []);
 
@@ -81,7 +89,10 @@ export const ProfileSettingsSection = () => {
       displayName: me.display_name,
       note: me.source.note,
     });
-    if (isEmptyProfileUpdate(update)) return;
+    if (isEmptyProfileUpdate(update)) {
+      setSavedMessage('変更がありません');
+      return;
+    }
     setIsSubmitting(true);
     setErrorText(undefined);
     try {

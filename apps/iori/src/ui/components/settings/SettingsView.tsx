@@ -6,14 +6,15 @@ import { XFeedSourcesSettingsSection } from './XFeedSourcesSettingsSection.tsx';
 
 type Props = Readonly<{
   isXOwner: boolean;
+  onProfileLoaded?: () => void;
 }>;
 
-export const SettingsView = ({ isXOwner }: Props) => (
+export const SettingsView = ({ isXOwner, onProfileLoaded }: Props) => (
   <div>
     <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>設定</h1>
-    <ProfileSettingsSection />
+    <ProfileSettingsSection onLoaded={onProfileLoaded} />
     <NotificationsSettingsSection />
-    <BlueskySettingsSection />
+    <BlueskySettingsSection isOwner={isXOwner} />
     <RelaysSettingsSection />
     {isXOwner && <XFeedSourcesSettingsSection />}
   </div>

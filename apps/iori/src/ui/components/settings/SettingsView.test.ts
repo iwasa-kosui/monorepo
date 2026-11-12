@@ -21,6 +21,11 @@ describe('SettingsView', () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
+  it('hides the Bluesky secret guidance from anyone but the owner', () => {
+    expect(render(true)).toContain('secret');
+    expect(render(false)).not.toContain('secret');
+  });
+
   it('hides the X section from anyone but the owner', () => {
     expect(render(false)).not.toContain('id="x-feed-sources"');
     expect(render(false)).not.toContain('X の取り込み元');
@@ -62,19 +67,30 @@ describe('ProfileSettingsForm', () => {
 });
 
 describe('BlueskySettingsView', () => {
-  it('tells that changing the account needs the secrets and a deploy', () => {
-    const html = String(jsx(BlueskySettingsView, { status: { enabled: false }, loadFailed: false }));
+  const render = (isOwner: boolean): string =>
+    String(jsx(BlueskySettingsView, { status: { enabled: false }, loadFailed: false, isOwner }));
+
+  it('tells the owner that changing the account needs the secrets and a deploy', () => {
+    const html = render(true);
 
     expect(html).toContain('id="bluesky"');
     expect(html).toContain('Bluesky とは連携していません');
     expect(html).toContain('BLUESKY_APP_PASSWORD の secret を差し替えて、デプロイしてください');
   });
+
+  it('does not tell anyone but the owner about the secrets', () => {
+    const html = render(false);
+
+    expect(html).toContain('Bluesky とは連携していません');
+    expect(html).not.toContain('secret');
+  });
 });
 
 describe('RelaysSettingsView', () => {
-  const render = (relays: Parameters<typeof RelaysSettingsView>[0]['relays']): string =>
+  const render = (relays: Parameters<typeof RelaysSettingsView>[0]['relays'], loadFailed = false): string =>
     String(jsx(RelaysSettingsView, {
       relays,
+      loadFailed,
       relayUri: '',
       isSubscribing: false,
       errorText: '',
@@ -100,5 +116,17 @@ describe('RelaysSettingsView', () => {
 
     expect(html).toContain('接続しているリレーはありません');
     expect(html).toContain('type="url"');
+  });
+
+  it('says the relays could not be loaded instead of saying there are none', () => {
+    const html = render(undefined, true);
+
+    expect(html).toContain('リレーを読み込めませんでした');
+    expect(html).not.toContain('接続しているリレーはありません');
+    expect(html).toContain('type="url"');
+  });
+
+  it('shows the loading text while the relays are loading', () => {
+    expect(render(undefined)).toContain('読み込み中...');
   });
 });
