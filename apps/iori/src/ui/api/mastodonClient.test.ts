@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   addXUserFeedSource,
+  block,
   blueskyFailureMessage,
   createStatus,
   deleteStatus,
@@ -36,6 +37,7 @@ import {
   react,
   reblog,
   refreshXPosts,
+  report,
   repostBlueskyPost,
   requestDigest,
   saveNotificationsMarker,
@@ -44,6 +46,7 @@ import {
   setFeedSourceEnabled,
   summarizeTimeline,
   translate,
+  unblock,
   undoRepostBlueskyPost,
   unfavourite,
   unfollow,
@@ -376,6 +379,36 @@ describe('mastodon client requests', () => {
     expect((error as Error).message).toBe('Validation failed: Text can not be blank');
   });
 
+  it('posts a report as same-origin JSON and returns the report', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'r1', category: 'violation' }));
+
+    const created = await report({ account_id: 'a1', category: 'violation', comment: 'rude' });
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/v1/reports');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({
+      account_id: 'a1',
+      category: 'violation',
+      comment: 'rude',
+      forward: true,
+    });
+    expect(created).toEqual({ id: 'r1', category: 'violation' });
+  });
+
+  it('throws an unprocessable error carrying the server message when the report is refused', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: The report is not supported for local accounts' }, {
+      status: 422,
+    }));
+
+    const error = await report({ account_id: 'a1', category: 'spam', comment: '' }).catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Validation failed: The report is not supported for local accounts');
+  });
+
   it('deletes a status by encoded id and returns the deleted status', async () => {
     const fetchMock = stubFetch(jsonResponse({ id: 'a/b', text: 'bye' }));
 
@@ -418,7 +451,12 @@ describe('mastodon client requests', () => {
   it('treats a 422 from relationships as logged in without a relationship', async () => {
     stubFetch(jsonResponse({ error: 'Actor not found' }, { status: 422 }));
 
-    expect(await fetchRelationshipOrSignedOut('a1')).toEqual({ isLoggedIn: true, isFollowing: false, isMuted: false });
+    expect(await fetchRelationshipOrSignedOut('a1')).toEqual({
+      isLoggedIn: true,
+      isFollowing: false,
+      isMuted: false,
+      isBlocked: false,
+    });
   });
 
   it.each([
@@ -430,6 +468,8 @@ describe('mastodon client requests', () => {
     ['unfollow', unfollow, '/api/v1/accounts/s1/unfollow'],
     ['mute', mute, '/api/v1/accounts/s1/mute'],
     ['unmute', unmute, '/api/v1/accounts/s1/unmute'],
+    ['block', block, '/api/v1/accounts/s1/block'],
+    ['unblock', unblock, '/api/v1/accounts/s1/unblock'],
   ])('posts %s to its path with the same-origin headers and returns the body', async (_name, action, path) => {
     const fetchMock = stubFetch(jsonResponse({ id: 's1' }));
 

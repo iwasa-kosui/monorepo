@@ -1,13 +1,7 @@
-const URL_PATTERN = /https?:\/\/[A-Za-z0-9][A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]*/g;
-const TRAILING_PUNCTUATION = /[.,;:!?'"]+$/;
+import { escapeWithMentions, type ResolvedMentions } from './mention.ts';
+import { escapeHtml, URL_PATTERN } from './textSyntax.ts';
 
-const escapeHtml = (text: string): string =>
-  text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('\'', '&#39;');
+const TRAILING_PUNCTUATION = /[.,;:!?'"]+$/;
 
 const count = (text: string, char: string): number => text.split(char).length - 1;
 
@@ -23,24 +17,24 @@ const splitTrailing = (matched: string): Readonly<{ url: string; rest: string }>
   return { url, rest: matched.slice(url.length) };
 };
 
-const linkify = (line: string): string => {
+const linkify = (line: string, mentions: ResolvedMentions): string => {
   let html = '';
   let cursor = 0;
   for (const match of line.matchAll(URL_PATTERN)) {
     const { url, rest } = splitTrailing(match[0]);
-    html += escapeHtml(line.slice(cursor, match.index));
+    html += escapeWithMentions(line.slice(cursor, match.index), mentions);
     html += `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>${escapeHtml(rest)}`;
     cursor = match.index + match[0].length;
   }
-  return html + escapeHtml(line.slice(cursor));
+  return html + escapeWithMentions(line.slice(cursor), mentions);
 };
 
-export const plainTextToHtml = (text: string): string =>
+export const plainTextToHtml = (text: string, mentions: ResolvedMentions = new Map()): string =>
   text
     .replaceAll('\r\n', '\n')
     .replaceAll('\r', '\n')
     .split(/\n(?:[^\S\n]*\n)+/)
     .map((paragraph) => paragraph.replace(/^\n+|\n+$/g, ''))
     .filter((paragraph) => paragraph.trim() !== '')
-    .map((paragraph) => `<p>${paragraph.split('\n').map(linkify).join('<br>')}</p>`)
+    .map((paragraph) => `<p>${paragraph.split('\n').map((line) => linkify(line, mentions)).join('<br>')}</p>`)
     .join('');

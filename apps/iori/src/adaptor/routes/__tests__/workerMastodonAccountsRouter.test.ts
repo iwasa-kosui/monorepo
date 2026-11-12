@@ -775,6 +775,8 @@ describe('アカウントのルーターの登録順', () => {
             deleteMuteUseCase: {} as never,
             followRemoteActor: {} as never,
             unfollowRemoteActor: {} as never,
+            blockActor: {} as never,
+            unblockActor: {} as never,
             createContext: {} as never,
           }),
         );

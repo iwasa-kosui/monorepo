@@ -21,6 +21,7 @@ export const ARCHIVE_REDACTED_EVENT_NAMES = [
   'authorizationCode.consumed',
   'oauthApplication.registered',
   'pushSubscription.created',
+  'report.reportSubmitted',
   // feedEntry のイベントは情報源の kind を持たず x_user の投稿を見分けられないので、RSS の分も伏せる
   'feedEntry.bookmarkCountUpdated',
   'feedEntry.collected',
@@ -47,6 +48,8 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'article.unpublished',
   'articleBody.deleted',
   'articleBody.written',
+  'block.blockCreated',
+  'block.blockDeleted',
   'digest.created',
   'digest.expired',
   'digest.itemFeedbackGiven',

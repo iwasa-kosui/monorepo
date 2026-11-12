@@ -15,7 +15,7 @@ import { UserNotFoundError } from '../../../domain/user/user.ts';
 import type { Username } from '../../../domain/user/username.ts';
 import { createActorDispatcher } from '../actorDispatcherFactory.ts';
 import { INSTANCE_ACTOR_IDENTIFIER } from '../sharedKeyDispatcher.ts';
-import { createOnFollow } from './onFollow.ts';
+import { createOnFollow, type OnFollowDeps } from './onFollow.ts';
 
 const ORIGIN = 'https://iori.example';
 const REMOTE_ACTOR = 'https://remote.example/users/alice';
@@ -43,7 +43,10 @@ describe('createOnFollow', { timeout: 30_000 }, () => {
     vi.unstubAllGlobals();
   });
 
-  const setup = async (run: ReturnType<typeof vi.fn>) => {
+  const setup = async (
+    run: ReturnType<typeof vi.fn>,
+    blockedActorUriResolverByUsername?: OnFollowDeps['blockedActorUriResolverByUsername'],
+  ) => {
     const contextLoader = getDocumentLoader();
     const remoteActor = new Person({
       id: new URL(REMOTE_ACTOR),
@@ -93,6 +96,7 @@ describe('createOnFollow', { timeout: 30_000 }, () => {
                 documentLoaderOptions: {},
               }),
           },
+          blockedActorUriResolverByUsername,
           acceptFollowRequestUseCase: { run } as never,
         }),
       );
@@ -175,5 +179,50 @@ describe('createOnFollow', { timeout: 30_000 }, () => {
     expect(response.status).toBe(202);
     expect(run).toHaveBeenCalledOnce();
     expect(deliveries()).toHaveLength(0);
+  });
+
+  it('受信者が送信者をブロックしているとき、Follow を保存せず、そのユーザーとして Reject を1回返す', async () => {
+    const run = vi.fn(async () => RA.ok({}));
+    const resolve = vi.fn(async () => RA.ok(true));
+    const { postFollow, deliveries } = await setup(run, { resolve });
+    const userUri = `${ORIGIN}/users/bob`;
+
+    const response = await postFollow(userUri);
+
+    expect(response.status).toBe(202);
+    expect(resolve).toHaveBeenCalledWith({ username: 'bob', actorUri: REMOTE_ACTOR });
+    expect(run).not.toHaveBeenCalled();
+    expect(deliveries()).toHaveLength(1);
+    const reject = deliveries()[0];
+    expect(reject.url).toBe(REMOTE_INBOX);
+    const sent = JSON.parse(await reject.clone().text()) as Record<string, unknown>;
+    expect(sent).toMatchObject({
+      type: 'Reject',
+      actor: userUri,
+      object: { type: 'Follow', actor: REMOTE_ACTOR, object: userUri },
+    });
+  });
+
+  it('受信者が送信者をブロックしていないとき、これまでどおり Accept を返す', async () => {
+    const run = vi.fn(async () => RA.ok({}));
+    const { postFollow, deliveries } = await setup(run, { resolve: async () => RA.ok(false) });
+
+    await postFollow(`${ORIGIN}/users/bob`);
+
+    expect(run).toHaveBeenCalledOnce();
+    const sent = JSON.parse(await deliveries()[0]!.clone().text()) as Record<string, unknown>;
+    expect(sent).toMatchObject({ type: 'Accept' });
+  });
+
+  it('instance actor を対象にした Follow ではブロックを確認しない', async () => {
+    const run = vi.fn(async () => RA.err(new Error('User not found')));
+    const resolve = vi.fn(async () => RA.ok(true));
+    const { postFollow, deliveries } = await setup(run, { resolve });
+
+    await postFollow(`${ORIGIN}/users/${INSTANCE_ACTOR_IDENTIFIER}`);
+
+    expect(resolve).not.toHaveBeenCalled();
+    const sent = JSON.parse(await deliveries()[0]!.clone().text()) as Record<string, unknown>;
+    expect(sent).toMatchObject({ type: 'Accept' });
   });
 });

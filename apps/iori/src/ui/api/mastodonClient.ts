@@ -4,6 +4,7 @@ import type {
   MediaAttachment,
   Notification,
   Relationship,
+  Report,
   Status,
   Translation,
 } from '../../adaptor/mastodon/entities.ts';
@@ -204,10 +205,15 @@ export const fetchRelationships = async (accountIds: readonly string[]): Promise
 export const fetchRelationshipOrSignedOut = async (accountId: string) => {
   try {
     const [relationship] = await fetchRelationships([accountId]);
-    return { isLoggedIn: true, isFollowing: relationship?.following ?? false, isMuted: relationship?.muting ?? false };
+    return {
+      isLoggedIn: true,
+      isFollowing: relationship?.following ?? false,
+      isMuted: relationship?.muting ?? false,
+      isBlocked: relationship?.blocking ?? false,
+    };
   } catch (error) {
-    if (isUnauthorizedError(error)) return { isLoggedIn: false, isFollowing: false, isMuted: false };
-    if (isUnprocessableError(error)) return { isLoggedIn: true, isFollowing: false, isMuted: false };
+    if (isUnauthorizedError(error)) return { isLoggedIn: false, isFollowing: false, isMuted: false, isBlocked: false };
+    if (isUnprocessableError(error)) return { isLoggedIn: true, isFollowing: false, isMuted: false, isBlocked: false };
     throw error;
   }
 };
@@ -288,6 +294,30 @@ export const mute = (accountId: string): Promise<Relationship> =>
 
 export const unmute = (accountId: string): Promise<Relationship> =>
   post<Relationship>(accountActionPath(accountId, 'unmute'));
+
+export type ReportParams = Readonly<{
+  account_id: string;
+  category: Report['category'];
+  comment: string;
+  status_ids?: readonly string[];
+}>;
+
+export const report = async (params: ReportParams): Promise<Report> => {
+  const res = await fetch('/api/v1/reports', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ ...params, forward: true }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as Report;
+};
+
+export const block = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'block'));
+
+export const unblock = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'unblock'));
 
 export const searchAccount = async (acct: string): Promise<Account | undefined> =>
   (await request<{ accounts: Account[] }>('/api/v2/search', { q: acct, resolve: true, type: 'accounts' }))

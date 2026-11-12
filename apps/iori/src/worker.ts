@@ -28,6 +28,7 @@ import { createWorkerMastodonFallbackRouter } from './adaptor/routes/workerMasto
 import { createWorkerMastodonMarkersRouter } from './adaptor/routes/workerMastodonMarkersRouter.ts';
 import { createWorkerMastodonMediaRouter } from './adaptor/routes/workerMastodonMediaRouter.ts';
 import { createWorkerMastodonNotificationsRouter } from './adaptor/routes/workerMastodonNotificationsRouter.ts';
+import { createWorkerMastodonReportsRouter } from './adaptor/routes/workerMastodonReportsRouter.ts';
 import { createWorkerMastodonStatusesRouter } from './adaptor/routes/workerMastodonStatusesRouter.ts';
 import { createWorkerMastodonTimelinesRouter } from './adaptor/routes/workerMastodonTimelinesRouter.ts';
 import { createWorkerMastodonTranslateRouter } from './adaptor/routes/workerMastodonTranslateRouter.ts';
@@ -239,6 +240,7 @@ export default {
             ...runtime.mastodon,
             ...runtime.socialActions,
             createPostUseCase: runtime.posting.createPostUseCase,
+            remoteActorLookup: runtime.posting.remoteActorLookup,
             sendReplyUseCase: runtime.core.sendReplyUseCase,
             deletePostUseCase: runtime.core.deletePostUseCase,
             authn,
@@ -253,6 +255,17 @@ export default {
             deleteMuteUseCase: runtime.mutesRelays.deleteMuteUseCase,
             followRemoteActor: runtime.core.followRemoteActor,
             unfollowRemoteActor: runtime.core.unfollowRemoteActor,
+            blockActor: runtime.core.blockActor,
+            unblockActor: runtime.core.unblockActor,
+            authn,
+            createContext,
+          }),
+        );
+        app.route(
+          '/api',
+          createWorkerMastodonReportsRouter({
+            ...runtime.mastodon,
+            reportRemoteActor: runtime.core.reportRemoteActor,
             authn,
             createContext,
           }),
