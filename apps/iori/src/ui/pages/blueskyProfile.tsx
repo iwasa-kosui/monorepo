@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
+import { type PropsWithChildren, useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { blueskyProfileUrlOfActor } from '../../helper/blueskyUrl.ts';
 import { openBlueskyChatConvo } from '../api/blueskyChatClient.ts';
+import {
+  blueskyActorFeedsFailureMessage,
+  blueskyActorListsFailureMessage,
+  type BlueskySavedFeedView,
+  fetchBlueskyActorFeeds,
+  fetchBlueskyActorLists,
+} from '../api/blueskyFeedClient.ts';
 import {
   blockBlueskyActor,
   blueskyModerationFailureMessage,
@@ -24,10 +31,12 @@ import {
   followBlueskyActor,
   unfollowBlueskyActor,
 } from '../api/blueskyProfileClient.ts';
+import { BlueskyFeedRow } from '../components/BlueskyFeedRow.tsx';
 import { blueskyItemActionProps, type BlueskyPostActions } from '../components/blueskyPostActions.ts';
 import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyReportPostModal } from '../components/BlueskyReportPostModal.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
+import { PagedList } from '../components/PagedList.tsx';
 import { type ReportCategory, ReportModal } from '../components/ReportModal.tsx';
 import { appendUniqueBy } from '../hooks/appendUnique.ts';
 import { chatConvoPath, chatErrorMessageOf } from '../hooks/blueskyChat.ts';
@@ -39,6 +48,14 @@ import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { withFeedItems } from './blueskyProfileFeed.ts';
 
 export type BlueskyModerationView = Readonly<{ muted: boolean; blockUri: string | null }>;
+
+export type BlueskyProfileTab = 'posts' | 'feeds' | 'lists';
+
+const PROFILE_TABS: readonly Readonly<{ tab: BlueskyProfileTab; label: string }>[] = [
+  { tab: 'posts', label: '投稿' },
+  { tab: 'feeds', label: 'フィード' },
+  { tab: 'lists', label: 'リスト' },
+];
 
 type Props = Readonly<{
   profile: BlueskyProfile;
@@ -61,6 +78,8 @@ type Props = Readonly<{
   onReport: () => void;
   onMessage: () => Promise<void>;
   actions?: BlueskyPostActions;
+  tab?: BlueskyProfileTab;
+  onSelectTab?: (tab: BlueskyProfileTab) => void;
 }>;
 
 type ModerationButtonProps = Readonly<{
@@ -123,7 +142,10 @@ export const BlueskyProfilePage = (
     onReport,
     onMessage,
     actions,
-  }: Props,
+    tab = 'posts',
+    onSelectTab,
+    children,
+  }: PropsWithChildren<Props>,
 ) => {
   const displayName = profile.displayName ?? profile.handle;
   const profileUrl = blueskyProfileUrlOfActor(profile.did);
@@ -306,19 +328,69 @@ export const BlueskyProfilePage = (
         </div>
       </section>
 
-      <section class='space-y-6 py-2'>
-        <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>Posts</h2>
-        {isFeedLoading
-          ? <p class='text-charcoal-light dark:text-gray-400'>Loading...</p>
-          : feedNotice !== null
-          ? <p class='text-charcoal-light dark:text-gray-400'>{feedNotice}</p>
-          : items.length === 0
-          ? <p class='text-charcoal-light dark:text-gray-400'>No posts yet.</p>
-          : items.map((item) => (
-            <BlueskyTimelineItemView key={item.feedItemId} item={item} {...blueskyItemActionProps(actions, item)} />
+      {onSelectTab !== undefined && (
+        <div role='tablist' class='flex gap-2 mb-4'>
+          {PROFILE_TABS.map((entry) => (
+            <button
+              key={entry.tab}
+              type='button'
+              role='tab'
+              aria-selected={entry.tab === tab}
+              class={`rounded-clay px-4 py-2 shadow-clay-sm ${
+                entry.tab === tab
+                  ? 'bg-terracotta text-white'
+                  : 'bg-cream dark:bg-gray-800 text-charcoal dark:text-gray-100'
+              }`}
+              onClick={() => onSelectTab(entry.tab)}
+            >
+              {entry.label}
+            </button>
           ))}
-      </section>
+        </div>
+      )}
+
+      {tab === 'posts'
+        ? (
+          <section class='space-y-6 py-2'>
+            <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>Posts</h2>
+            {isFeedLoading
+              ? <p class='text-charcoal-light dark:text-gray-400'>Loading...</p>
+              : feedNotice !== null
+              ? <p class='text-charcoal-light dark:text-gray-400'>{feedNotice}</p>
+              : items.length === 0
+              ? <p class='text-charcoal-light dark:text-gray-400'>No posts yet.</p>
+              : items.map((item) => (
+                <BlueskyTimelineItemView
+                  key={item.feedItemId}
+                  item={item}
+                  {...blueskyItemActionProps(actions, item)}
+                />
+              ))}
+          </section>
+        )
+        : <section class='py-2'>{children}</section>}
     </>
+  );
+};
+
+const feedKey = (feed: BlueskySavedFeedView): string => feed.uri;
+
+export const BlueskyProfileCollection = (
+  { actor, kind }: Readonly<{ actor: string; kind: 'feeds' | 'lists' }>,
+) => {
+  const load = useCallback(
+    (cursor?: string) =>
+      kind === 'feeds' ? fetchBlueskyActorFeeds(actor, cursor) : fetchBlueskyActorLists(actor, cursor),
+    [actor, kind],
+  );
+  return (
+    <PagedList
+      load={load}
+      keyOf={feedKey}
+      failureMessage={kind === 'feeds' ? blueskyActorFeedsFailureMessage : blueskyActorListsFailureMessage}
+      emptyMessage={kind === 'feeds' ? 'フィードはありません' : 'リストはありません'}
+      renderItem={(feed: BlueskySavedFeedView) => <BlueskyFeedRow key={feed.uri} feed={feed} />}
+    />
   );
 };
 
@@ -352,6 +424,7 @@ const App = () => {
   const [messageError, setMessageError] = useState<string | null>(null);
   const [data, setData] = useState<{ error: string } | ProfileData | null>(null);
   const [feed, setFeed] = useState<FeedData | null>(null);
+  const [tab, setTab] = useState<BlueskyProfileTab>('posts');
   const actor = blueskyActorOfPath(window.location.pathname);
   const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
     setFeed((prev) => withFeedItems(prev, updater));
@@ -431,7 +504,7 @@ const App = () => {
     }
   }, [actor]);
 
-  useInfiniteScroll({ nextCursor: feed?.cursor, onLoadMore: loadMore });
+  useInfiniteScroll({ nextCursor: tab === 'posts' ? feed?.cursor : undefined, onLoadMore: loadMore });
 
   const toggleFollow = async (follow: boolean) => {
     if (loaded === undefined || isTogglingFollowRef.current) return;
@@ -579,7 +652,11 @@ const App = () => {
         onReport={() => setIsReportOpen(true)}
         onMessage={openMessage}
         actions={actions}
-      />
+        tab={tab}
+        onSelectTab={setTab}
+      >
+        {tab !== 'posts' && <BlueskyProfileCollection key={tab} actor={data.profile.did} kind={tab} />}
+      </BlueskyProfilePage>
       <BlueskyReplyModal dialog={replyDialog} />
       <BlueskyReportPostModal reportDialog={reportDialog} {...(notice === undefined ? {} : { notice })} />
       <ReportModal

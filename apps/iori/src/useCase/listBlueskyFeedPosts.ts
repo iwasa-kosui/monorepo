@@ -1,15 +1,28 @@
+import { RA } from '@iwasa-kosui/result';
+
 import type { BlueskyClientError } from '../ports/blueskyClient.ts';
-import type { BlueskyFeedPostsPage, BlueskyFeedReader } from '../ports/blueskyFeedReader.ts';
+import {
+  type BlueskyFeedNotFound,
+  type BlueskyFeedPostsPage,
+  type BlueskyFeedReader,
+  isBlueskyFeedNotFound,
+} from '../ports/blueskyFeedReader.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{ uri: string; cursor: string | undefined }>;
 
-export type ListBlueskyFeedPostsUseCase = UseCase<Input, BlueskyFeedPostsPage, BlueskyClientError>;
+type Err = BlueskyClientError | BlueskyFeedNotFound;
+
+export type ListBlueskyFeedPostsUseCase = UseCase<Input, BlueskyFeedPostsPage, Err>;
 
 type Deps = Readonly<{ reader: Pick<BlueskyFeedReader, 'getFeedPosts'> }>;
 
 const create = ({ reader }: Deps): ListBlueskyFeedPostsUseCase => ({
-  run: ({ uri, cursor }) => reader.getFeedPosts({ uri, cursor }),
+  run: async ({ uri, cursor }) => {
+    const page = await reader.getFeedPosts({ uri, cursor });
+    if (page.ok) return page;
+    return RA.err(isBlueskyFeedNotFound(page.err, cursor) ? { type: 'BlueskyFeedNotFound' } : page.err);
+  },
 });
 
 export const ListBlueskyFeedPostsUseCase = {

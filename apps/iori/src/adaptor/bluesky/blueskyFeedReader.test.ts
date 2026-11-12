@@ -328,3 +328,317 @@ describe('createBlueskyFeedReader.getFeedPosts', () => {
     });
   });
 });
+
+const memberView = (handle: string, overrides: Record<string, unknown> = {}) => ({
+  did: `did:plc:${handle.split('.')[0]}`,
+  handle,
+  displayName: handle.split('.')[0],
+  avatar: 'https://cdn.example/m.jpg',
+  description: 'bio',
+  viewer: {},
+  ...overrides,
+});
+
+describe('createBlueskyFeedReader.getFeedInfo', () => {
+  it('feed は getFeedGenerator を feed で呼び、pinned を false にした一覧の項目の形で返す', async () => {
+    const { reader, query } = readerWith(async () => RA.ok({ view: generator(FEED_A), isOnline: true, isValid: true }));
+
+    const result = await reader.getFeedInfo(FEED_A);
+
+    expect(query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getFeedGenerator', { feed: FEED_A });
+    expect(result).toEqual({
+      ok: true,
+      val: {
+        uri: FEED_A,
+        kind: 'feed',
+        pinned: false,
+        displayName: 'name a',
+        avatar: 'https://cdn.example/g.jpg',
+        description: 'about',
+        creatorHandle: 'gen.bsky.social',
+      },
+    });
+  });
+
+  it('list は getList を list と limit 1 で呼び、pinned を false にした一覧の項目の形で返す', async () => {
+    const { reader, query } = readerWith(
+      savedFeedsQuery({ preferences: [] }),
+    );
+
+    const result = await reader.getFeedInfo(LIST_A);
+
+    expect(query).toHaveBeenCalledExactlyOnceWith('app.bsky.graph.getList', { list: LIST_A, limit: '1' });
+    expect(result).toEqual({
+      ok: true,
+      val: {
+        uri: LIST_A,
+        kind: 'list',
+        pinned: false,
+        displayName: 'list a',
+        avatar: 'https://cdn.example/l.jpg',
+        description: 'list about',
+        creatorHandle: 'own.bsky.social',
+      },
+    });
+  });
+
+  it('名前やアイコンが無いときは項目に含めない', async () => {
+    const { reader } = readerWith(async () => RA.ok({ view: { uri: FEED_A, avatar: 'javascript:alert(1)' } }));
+
+    expect(await reader.getFeedInfo(FEED_A)).toEqual({ ok: true, val: { uri: FEED_A, kind: 'feed', pinned: false } });
+  });
+
+  it('feed でも list でもない URI は、Bluesky を呼ばずに invalid_response にする', async () => {
+    const { reader, query } = readerWith(async () => RA.ok({}));
+
+    expect(await reader.getFeedInfo('at://did:plc:a/app.bsky.feed.post/1')).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
+    const invalidFeed = readerWith(async () => RA.ok({ feed: {} }));
+    const invalidList = readerWith(async () => RA.ok({ items: [] }));
+    const failing = readerWith(async () => RA.err(networkError));
+
+    expect(await invalidFeed.reader.getFeedInfo(FEED_A)).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(await invalidList.reader.getFeedInfo(LIST_A)).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(await failing.reader.getFeedInfo(FEED_A)).toEqual({ ok: false, err: networkError });
+    expect(await failing.reader.getFeedInfo(LIST_A)).toEqual({ ok: false, err: networkError });
+  });
+});
+
+describe('createBlueskyFeedReader.getListMembers', () => {
+  it('getList を list と limit 50 で呼び、cursor は指定があるときだけ付ける', async () => {
+    const first = readerWith(async () => RA.ok({ list: {}, items: [] }));
+    const next = readerWith(async () => RA.ok({ list: {}, items: [] }));
+
+    await first.reader.getListMembers({ uri: LIST_A, cursor: undefined });
+    await next.reader.getListMembers({ uri: LIST_A, cursor: 'abc' });
+
+    expect(first.query).toHaveBeenCalledExactlyOnceWith('app.bsky.graph.getList', { list: LIST_A, limit: '50' });
+    expect(next.query).toHaveBeenCalledExactlyOnceWith('app.bsky.graph.getList', {
+      list: LIST_A,
+      limit: '50',
+      cursor: 'abc',
+    });
+  });
+
+  it('items の subject を検索の actor 一覧と同じ形で返し、読めない項目は飛ばす', async () => {
+    const { reader } = readerWith(async () =>
+      RA.ok({
+        list: {},
+        cursor: 'next',
+        items: [
+          { uri: 'at://x/app.bsky.graph.listitem/1', subject: memberView('bob.bsky.social') },
+          {
+            uri: 'at://x/app.bsky.graph.listitem/2',
+            subject: memberView('carol.bsky.social', { viewer: { following: 'at://f' } }),
+          },
+          { uri: 'at://x/app.bsky.graph.listitem/3', subject: { handle: 'no-did' } },
+          { uri: 'at://x/app.bsky.graph.listitem/4' },
+        ],
+      })
+    );
+
+    const result = await reader.getListMembers({ uri: LIST_A, cursor: undefined });
+
+    expect(result).toEqual({
+      ok: true,
+      val: {
+        actors: [
+          {
+            did: 'did:plc:bob',
+            handle: 'bob.bsky.social',
+            displayName: 'bob',
+            avatar: 'https://cdn.example/m.jpg',
+            description: 'bio',
+            followedByMe: false,
+          },
+          {
+            did: 'did:plc:carol',
+            handle: 'carol.bsky.social',
+            displayName: 'carol',
+            avatar: 'https://cdn.example/m.jpg',
+            description: 'bio',
+            followedByMe: true,
+          },
+        ],
+        cursor: 'next',
+      },
+    });
+  });
+
+  it('続きが無ければ cursor を undefined にする', async () => {
+    const { reader } = readerWith(async () => RA.ok({ items: [] }));
+
+    const result = await reader.getListMembers({ uri: LIST_A, cursor: undefined });
+
+    expect(result).toEqual({ ok: true, val: { actors: [], cursor: undefined } });
+  });
+
+  it('list でない URI は、Bluesky を呼ばずに invalid_response にする', async () => {
+    const { reader, query } = readerWith(async () => RA.ok({ items: [] }));
+
+    expect(await reader.getListMembers({ uri: FEED_A, cursor: undefined })).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
+    const invalid = readerWith(async () => RA.ok({ list: {} }));
+    const failing = readerWith(async () => RA.err(networkError));
+
+    expect(await invalid.reader.getListMembers({ uri: LIST_A, cursor: undefined })).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(await failing.reader.getListMembers({ uri: LIST_A, cursor: undefined })).toEqual({
+      ok: false,
+      err: networkError,
+    });
+  });
+});
+
+describe('createBlueskyFeedReader.getActorFeeds', () => {
+  it('getActorFeeds を actor で呼び、cursor は指定があるときだけ付け、一覧の項目の形で返す', async () => {
+    const first = readerWith(async () => RA.ok({ feeds: [generator(FEED_A), { nope: 1 }], cursor: 'next' }));
+    const next = readerWith(async () => RA.ok({ feeds: [] }));
+
+    const page = await first.reader.getActorFeeds({ actor: DID, cursor: undefined });
+    const end = await next.reader.getActorFeeds({ actor: DID, cursor: 'abc' });
+
+    expect(first.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getActorFeeds', { actor: DID });
+    expect(next.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getActorFeeds', { actor: DID, cursor: 'abc' });
+    expect(page).toEqual({
+      ok: true,
+      val: {
+        feeds: [{
+          uri: FEED_A,
+          kind: 'feed',
+          pinned: false,
+          displayName: 'name a',
+          avatar: 'https://cdn.example/g.jpg',
+          description: 'about',
+          creatorHandle: 'gen.bsky.social',
+        }],
+        cursor: 'next',
+      },
+    });
+    expect(end).toEqual({ ok: true, val: { feeds: [], cursor: undefined } });
+  });
+
+  it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
+    const invalid = readerWith(async () => RA.ok({ lists: [] }));
+    const failing = readerWith(async () => RA.err(networkError));
+
+    expect(await invalid.reader.getActorFeeds({ actor: DID, cursor: undefined })).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(await failing.reader.getActorFeeds({ actor: DID, cursor: undefined })).toEqual({
+      ok: false,
+      err: networkError,
+    });
+  });
+});
+
+describe('createBlueskyFeedReader.getActorLists', () => {
+  const listView = (uri: string, purpose: string) => ({
+    uri,
+    name: `list ${uri.slice(-1)}`,
+    purpose,
+    avatar: 'https://cdn.example/l.jpg',
+    description: 'list about',
+    creator: { did: 'did:plc:own', handle: 'own.bsky.social' },
+  });
+
+  it('getLists を actor で呼び、cursor は指定があるときだけ付ける', async () => {
+    const first = readerWith(async () => RA.ok({ lists: [] }));
+    const next = readerWith(async () => RA.ok({ lists: [] }));
+
+    await first.reader.getActorLists({ actor: DID, cursor: undefined });
+    await next.reader.getActorLists({ actor: DID, cursor: 'abc' });
+
+    expect(first.query).toHaveBeenCalledExactlyOnceWith('app.bsky.graph.getLists', { actor: DID });
+    expect(next.query).toHaveBeenCalledExactlyOnceWith('app.bsky.graph.getLists', { actor: DID, cursor: 'abc' });
+  });
+
+  it('curatelist だけを、一覧の項目の形で返し、cursor も返す', async () => {
+    const { reader } = readerWith(async () =>
+      RA.ok({
+        cursor: 'next',
+        lists: [
+          listView(LIST_A, 'app.bsky.graph.defs#curatelist'),
+          listView(LIST_B, 'app.bsky.graph.defs#modlist'),
+          listView('at://did:plc:own/app.bsky.graph.list/lc', 'app.bsky.graph.defs#referencelist'),
+          { name: 'no uri', purpose: 'app.bsky.graph.defs#curatelist' },
+        ],
+      })
+    );
+
+    const result = await reader.getActorLists({ actor: DID, cursor: undefined });
+
+    expect(result).toEqual({
+      ok: true,
+      val: {
+        feeds: [{
+          uri: LIST_A,
+          kind: 'list',
+          pinned: false,
+          displayName: 'list a',
+          avatar: 'https://cdn.example/l.jpg',
+          description: 'list about',
+          creatorHandle: 'own.bsky.social',
+        }],
+        cursor: 'next',
+      },
+    });
+  });
+
+  it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
+    const invalid = readerWith(async () => RA.ok({ feeds: [] }));
+    const failing = readerWith(async () => RA.err(networkError));
+
+    expect(await invalid.reader.getActorLists({ actor: DID, cursor: undefined })).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(await failing.reader.getActorLists({ actor: DID, cursor: undefined })).toEqual({
+      ok: false,
+      err: networkError,
+    });
+  });
+});
+
+describe('createBlueskyFeedReader.resolveHandle', () => {
+  it('resolveHandle を handle で呼び、did を返す', async () => {
+    const { reader, query } = readerWith(async () => RA.ok({ did: DID }));
+
+    expect(await reader.resolveHandle('alice.bsky.social')).toEqual({ ok: true, val: DID });
+    expect(query).toHaveBeenCalledExactlyOnceWith('com.atproto.identity.resolveHandle', {
+      handle: 'alice.bsky.social',
+    });
+  });
+
+  it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
+    const invalid = readerWith(async () => RA.ok({ did: '' }));
+    const failing = readerWith(async () => RA.err(networkError));
+
+    expect(await invalid.reader.resolveHandle('alice.bsky.social')).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(await failing.reader.resolveHandle('alice.bsky.social')).toEqual({ ok: false, err: networkError });
+  });
+});

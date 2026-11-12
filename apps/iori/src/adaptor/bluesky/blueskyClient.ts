@@ -148,7 +148,8 @@ export const createBlueskyClient = (
         );
       }
       const expired = name === 'ExpiredToken' || name === 'InvalidToken';
-      const unauthorized = response.status === 401
+      const relayedByFeedProvider = operation === 'app.bsky.feed.getFeed' && response.status === 401 && !expired;
+      const unauthorized = response.status === 401 && !relayedByFeedProvider
         && (!isBookmark || name !== undefined && BLUESKY_BOOKMARK_LOGIN_CODES.includes(name));
       return RA.err(
         clientError(

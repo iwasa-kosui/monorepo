@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BlueskySavedFeedView } from '../api/blueskyFeedClient.ts';
-import { fallbackFeedUriOf, feedUriOfSearch, selectedFeedOf, withFeedUri } from './blueskyFeedSelection.ts';
+import {
+  fallbackFeedUriOf,
+  feedUriOfSearch,
+  feedViewOfSearch,
+  selectedFeedOf,
+  shownFeedsOf,
+  unsavedFeedUriOf,
+  withFeedUri,
+  withFeedView,
+} from './blueskyFeedSelection.ts';
 
 const FEED = 'at://did:plc:gen/app.bsky.feed.generator/a';
 const LIST = 'at://did:plc:own/app.bsky.graph.list/b';
@@ -48,9 +57,66 @@ describe('selectedFeedOf', () => {
   });
 });
 
+describe('unsavedFeedUriOf', () => {
+  it('保存した一覧に無い feed と list の uri を返す', () => {
+    const other = 'at://did:plc:x/app.bsky.feed.generator/z';
+    const otherList = 'at://did:plc:x/app.bsky.graph.list/z';
+
+    expect(unsavedFeedUriOf(feeds, other)).toBe(other);
+    expect(unsavedFeedUriOf(feeds, otherList)).toBe(otherList);
+  });
+
+  it('保存済み、uri が無い、feed でも list でもない uri は undefined にする', () => {
+    expect(unsavedFeedUriOf(feeds, FEED)).toBeUndefined();
+    expect(unsavedFeedUriOf(feeds, undefined)).toBeUndefined();
+    expect(unsavedFeedUriOf(feeds, 'at://did:plc:x/app.bsky.feed.post/1')).toBeUndefined();
+    expect(unsavedFeedUriOf([], 'https://example.com')).toBeUndefined();
+  });
+});
+
+describe('shownFeedsOf', () => {
+  const unsaved: BlueskySavedFeedView = {
+    uri: 'at://did:plc:x/app.bsky.feed.generator/z',
+    kind: 'feed',
+    pinned: false,
+  };
+
+  it('保存していない項目を先頭に足す', () => {
+    expect(shownFeedsOf(feeds, unsaved)).toEqual([unsaved, ...feeds]);
+  });
+
+  it('保存していない項目が無い、または保存済みの一覧にあるときは一覧をそのまま返す', () => {
+    expect(shownFeedsOf(feeds, undefined)).toBe(feeds);
+    expect(shownFeedsOf(feeds, feeds[1])).toBe(feeds);
+  });
+});
+
+describe('feedViewOfSearch と withFeedView', () => {
+  it('view=members だけを members にし、それ以外は posts にする', () => {
+    expect(feedViewOfSearch('?view=members')).toBe('members');
+    expect(feedViewOfSearch('?view=posts')).toBe('posts');
+    expect(feedViewOfSearch('?view=other')).toBe('posts');
+    expect(feedViewOfSearch('')).toBe('posts');
+  });
+
+  it('members は view を付け、posts は view を外して、ほかのクエリを残す', () => {
+    expect(withFeedView(`?uri=${encodeURIComponent(LIST)}`, 'members')).toBe(
+      `?uri=${encodeURIComponent(LIST)}&view=members`,
+    );
+    expect(withFeedView('?uri=a&view=members', 'posts')).toBe('?uri=a');
+    expect(withFeedView('?view=members', 'posts')).toBe('');
+  });
+});
+
 describe('fallbackFeedUriOf', () => {
-  it('uri が一覧に無いときは先頭の項目の uri を返す', () => {
-    expect(fallbackFeedUriOf(feeds, 'at://did:plc:x/app.bsky.feed.generator/z')).toBe(FEED);
+  it('一覧に無く、feed でも list でもない uri のときは先頭の項目の uri を返す', () => {
+    expect(fallbackFeedUriOf(feeds, 'at://did:plc:x/app.bsky.feed.post/1')).toBe(FEED);
+    expect(fallbackFeedUriOf(feeds, 'https://example.com')).toBe(FEED);
+  });
+
+  it('一覧に無くても feed か list と判定できる uri は undefined にする', () => {
+    expect(fallbackFeedUriOf(feeds, 'at://did:plc:x/app.bsky.feed.generator/z')).toBeUndefined();
+    expect(fallbackFeedUriOf(feeds, 'at://did:plc:x/app.bsky.graph.list/z')).toBeUndefined();
   });
 
   it('uri が一覧にあるときは undefined にする', () => {
@@ -59,6 +125,6 @@ describe('fallbackFeedUriOf', () => {
 
   it('uri が無いとき、または一覧が空のときは undefined にする', () => {
     expect(fallbackFeedUriOf(feeds, undefined)).toBeUndefined();
-    expect(fallbackFeedUriOf([], FEED)).toBeUndefined();
+    expect(fallbackFeedUriOf([], 'https://example.com')).toBeUndefined();
   });
 });

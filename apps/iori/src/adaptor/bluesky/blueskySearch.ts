@@ -19,7 +19,7 @@ const actorZodType = z.looseObject({
 
 const nonEmptyOrNull = (value: string | undefined): string | null => value === undefined || value === '' ? null : value;
 
-const actorOf = (raw: unknown): BlueskySearchedActor | undefined => {
+export const actorOf = (raw: unknown): BlueskySearchedActor | undefined => {
   const parsed = actorZodType.safeParse(raw);
   if (!parsed.success) return undefined;
   const { did, handle, displayName, avatar, description, viewer } = parsed.data;

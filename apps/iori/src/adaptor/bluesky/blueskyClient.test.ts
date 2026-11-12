@@ -939,6 +939,39 @@ describe('createBlueskyClient の DM（chat）', () => {
     expect(await client.chatProcedure('chat.bsky.convo.acceptConvo', { convoId: 'c1' })).toEqual({ ok: true, val: {} });
   });
 
+  it('提供元が返した 401 の getFeed は auth と見なさず、refreshSession も createSession も呼ばない', async () => {
+    const { client, calls, saved } = setup(stored(), [
+      () => json({ error: 'UpstreamFailure', message: 'Unauthorized' }, 401),
+    ]);
+
+    const result = await client.query('app.bsky.feed.getFeed', { feed: 'at://did:plc:a/app.bsky.feed.generator/x' });
+
+    expect(result).toMatchObject({ ok: false, err: { kind: 'http', status: 401, code: 'UpstreamFailure' } });
+    expect(calls).toHaveLength(1);
+    expect(saved).toEqual([]);
+  });
+
+  it('getFeed でも ExpiredToken と、getFeed 以外の 401 は auth として refresh してやり直す', async () => {
+    const expired = setup(stored(), [
+      () => json({ error: 'ExpiredToken' }, 401),
+      () => json(sessionBody('fresh')),
+      () => json({ feed: [] }),
+    ]);
+    const other = setup(stored(), [
+      () => json({ error: 'UpstreamFailure' }, 401),
+      () => json(sessionBody('fresh')),
+      () => json({ feed: [] }),
+    ]);
+
+    const expiredResult = await expired.client.query('app.bsky.feed.getFeed', { feed: 'at://did:plc:a/x/1' });
+    const otherResult = await other.client.query('app.bsky.feed.getListFeed', { list: 'at://did:plc:a/x/1' });
+
+    expect(expiredResult.ok).toBe(true);
+    expect(expired.calls).toHaveLength(3);
+    expect(otherResult.ok).toBe(true);
+    expect(other.calls).toHaveLength(3);
+  });
+
   it('既存の query には atproto-proxy を付けない', async () => {
     const { client, calls } = setup(stored(), [() => json({})]);
 

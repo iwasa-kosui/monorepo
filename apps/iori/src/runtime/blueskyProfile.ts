@@ -7,12 +7,17 @@ import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverB
 import { Instant } from '../domain/instant/instant.ts';
 import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import { FollowBlueskyActorUseCase } from '../useCase/followBlueskyActor.ts';
+import { GetBlueskyFeedInfoUseCase } from '../useCase/getBlueskyFeedInfo.ts';
 import { GetBlueskyProfileUseCase } from '../useCase/getBlueskyProfile.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
+import { ListBlueskyActorFeedsUseCase } from '../useCase/listBlueskyActorFeeds.ts';
 import { ListBlueskyActorLikesUseCase } from '../useCase/listBlueskyActorLikes.ts';
+import { ListBlueskyActorListsUseCase } from '../useCase/listBlueskyActorLists.ts';
 import { ListBlueskyAuthorFeedUseCase } from '../useCase/listBlueskyAuthorFeed.ts';
 import { ListBlueskyFeedPostsUseCase } from '../useCase/listBlueskyFeedPosts.ts';
+import { ListBlueskyListMembersUseCase } from '../useCase/listBlueskyListMembers.ts';
 import { ListBlueskySavedFeedsUseCase } from '../useCase/listBlueskySavedFeeds.ts';
+import { ResolveBlueskyFeedUrlUseCase } from '../useCase/resolveBlueskyFeedUrl.ts';
 import { UnfollowBlueskyActorUseCase } from '../useCase/unfollowBlueskyActor.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createTimelineClient, resolveBlueskyTimelineConfig } from './blueskyTimeline.ts';
@@ -23,6 +28,11 @@ export type BlueskyProfileRuntimePorts = Readonly<{
   listBlueskyActorLikesUseCase: ListBlueskyActorLikesUseCase | undefined;
   listBlueskySavedFeedsUseCase: ListBlueskySavedFeedsUseCase | undefined;
   listBlueskyFeedPostsUseCase: ListBlueskyFeedPostsUseCase | undefined;
+  getBlueskyFeedInfoUseCase: GetBlueskyFeedInfoUseCase | undefined;
+  resolveBlueskyFeedUrlUseCase: ResolveBlueskyFeedUrlUseCase | undefined;
+  listBlueskyListMembersUseCase: ListBlueskyListMembersUseCase | undefined;
+  listBlueskyActorFeedsUseCase: ListBlueskyActorFeedsUseCase | undefined;
+  listBlueskyActorListsUseCase: ListBlueskyActorListsUseCase | undefined;
   followBlueskyActorUseCase: FollowBlueskyActorUseCase | undefined;
   unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase | undefined;
   viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
@@ -43,6 +53,11 @@ export const createBlueskyProfileRuntimePorts = (
       listBlueskyActorLikesUseCase: undefined,
       listBlueskySavedFeedsUseCase: undefined,
       listBlueskyFeedPostsUseCase: undefined,
+      getBlueskyFeedInfoUseCase: undefined,
+      resolveBlueskyFeedUrlUseCase: undefined,
+      listBlueskyListMembersUseCase: undefined,
+      listBlueskyActorFeedsUseCase: undefined,
+      listBlueskyActorListsUseCase: undefined,
       followBlueskyActorUseCase: undefined,
       unfollowBlueskyActorUseCase: undefined,
       viewerDid: undefined,
@@ -58,6 +73,11 @@ export const createBlueskyProfileRuntimePorts = (
     listBlueskyActorLikesUseCase: ListBlueskyActorLikesUseCase.create({ reader, viewerDid: () => client.viewerDid() }),
     listBlueskySavedFeedsUseCase: ListBlueskySavedFeedsUseCase.create({ reader: feedReader }),
     listBlueskyFeedPostsUseCase: ListBlueskyFeedPostsUseCase.create({ reader: feedReader }),
+    getBlueskyFeedInfoUseCase: GetBlueskyFeedInfoUseCase.create({ reader: feedReader }),
+    resolveBlueskyFeedUrlUseCase: ResolveBlueskyFeedUrlUseCase.create({ reader: feedReader }),
+    listBlueskyListMembersUseCase: ListBlueskyListMembersUseCase.create({ reader: feedReader }),
+    listBlueskyActorFeedsUseCase: ListBlueskyActorFeedsUseCase.create({ reader: feedReader }),
+    listBlueskyActorListsUseCase: ListBlueskyActorListsUseCase.create({ reader: feedReader }),
     followBlueskyActorUseCase: FollowBlueskyActorUseCase.create({ reader, client }),
     unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase.create({ reader, client }),
     viewerDid: () => client.viewerDid(),
