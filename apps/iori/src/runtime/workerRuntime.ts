@@ -30,6 +30,7 @@ import { createD1BlockCreatedStore } from '../adaptor/d1/block/blockCreatedStore
 import { createD1BlockDeletedStore } from '../adaptor/d1/block/blockDeletedStore.ts';
 import { createD1BlockedActorIdsResolverByUserId } from '../adaptor/d1/block/blockedActorIdsResolverByUserId.ts';
 import { createD1BlockedActorsResolverByUserIdWithPagination } from '../adaptor/d1/block/blockedActorsResolverByUserIdWithPagination.ts';
+import { createD1BlockedActorUriResolverByUsername } from '../adaptor/d1/block/blockedActorUriResolverByUsername.ts';
 import { createD1BlockResolver } from '../adaptor/d1/block/blockResolver.ts';
 import { createD1MutedOrBlockedActorIdsResolverByUserId } from '../adaptor/d1/block/mutedOrBlockedActorIdsResolverByUserId.ts';
 import { createD1BlueskyCrosspostStatusReportResolver } from '../adaptor/d1/blueskyCrosspost/blueskyCrosspostStatusReportResolver.ts';
@@ -187,6 +188,8 @@ import { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
 import { EditArticleUseCase } from '../useCase/editArticle.ts';
 import { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
+import { FetchRemoteContextUseCase } from '../useCase/fetchRemoteContext.ts';
+import { FetchReplyNotesRecursiveUseCase } from '../useCase/fetchReplyNotesRecursive.ts';
 import { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
@@ -293,6 +296,8 @@ export const createWorkerRuntimePorts = async (
     remoteActorProfileUpdatedStore: createD1RemoteActorProfileUpdatedStore(db),
     actorResolverByUri: createD1ActorResolverByUri(db),
   });
+  const postResolverByUri = createD1PostResolverByUri(db);
+  const localPostResolverByUri = createD1LocalPostResolverByUri(db, env.ORIGIN);
   const mediaUploadResolver = createD1MediaUploadResolver(db);
   const oauthApplicationResolverByClientId = createD1OAuthApplicationResolverByClientId(db);
   const accessTokenResolverByTokenHash = createD1AccessTokenResolverByTokenHash(db);
@@ -629,6 +634,21 @@ export const createWorkerRuntimePorts = async (
         emojiReactDeletedStore: createD1EmojiReactDeletedStore(db),
         emojiReactResolverByActorAndPostAndEmoji,
         postResolver,
+      }),
+      fetchRemoteContextUseCase: FetchRemoteContextUseCase.create({
+        origin: env.ORIGIN,
+        userResolver,
+        postResolver,
+        postResolverByUri,
+        localPostResolverByUri,
+        remotePostUpserter,
+        blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+        fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase.create({
+          origin: env.ORIGIN,
+          postResolverByUri,
+          localPostResolverByUri,
+          remotePostUpserter,
+        }),
       }),
     },
     articles: {

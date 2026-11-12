@@ -8,6 +8,7 @@ import type {
   Translation,
 } from '../../adaptor/mastodon/entities.ts';
 import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
+import type { IoriRemoteContextResponse } from '../../adaptor/routes/workerIoriActionsRouter.ts';
 import type {
   IoriBlueskyLikeResponse,
   IoriBlueskyRepostResponse,
@@ -281,6 +282,9 @@ const reactionPath = (id: string, emoji: string) =>
 export const react = (id: string, emoji: string): Promise<Status> => act<Status>('PUT', reactionPath(id, emoji));
 
 export const unreact = (id: string, emoji: string): Promise<Status> => act<Status>('DELETE', reactionPath(id, emoji));
+
+export const fetchRemoteContext = (id: string): Promise<IoriRemoteContextResponse> =>
+  post<IoriRemoteContextResponse>(`/api/iori/v1/statuses/${encodeURIComponent(id)}/remote-context`);
 
 export const reblog = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'reblog'));
 

@@ -30,6 +30,8 @@ import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
 import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
+import { FetchRemoteContextUseCase } from '../../../../useCase/fetchRemoteContext.ts';
+import { FetchReplyNotesRecursiveUseCase } from '../../../../useCase/fetchReplyNotesRecursive.ts';
 import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
@@ -78,6 +80,7 @@ import { createD1BlockCreatedStore } from '../../../d1/block/blockCreatedStore.t
 import { createD1BlockDeletedStore } from '../../../d1/block/blockDeletedStore.ts';
 import { createD1BlockedActorIdsResolverByUserId } from '../../../d1/block/blockedActorIdsResolverByUserId.ts';
 import { createD1BlockedActorsResolverByUserIdWithPagination } from '../../../d1/block/blockedActorsResolverByUserIdWithPagination.ts';
+import { createD1BlockedActorUriResolverByUsername } from '../../../d1/block/blockedActorUriResolverByUsername.ts';
 import { createD1BlockResolver } from '../../../d1/block/blockResolver.ts';
 import { createD1MutedOrBlockedActorIdsResolverByUserId } from '../../../d1/block/mutedOrBlockedActorIdsResolverByUserId.ts';
 import { createD1BlueskyLoginFailureResolver } from '../../../d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
@@ -261,7 +264,7 @@ export const setupReadApi = (
     ),
     getDocumentLoader: vi.fn(async (): Promise<unknown> => ({})),
     getActorKeyPairs: vi.fn(async () => []),
-    lookupObject: vi.fn(async (): Promise<unknown> => null),
+    lookupObject: vi.fn(async (_uri?: string, _options?: unknown): Promise<unknown> => null),
   };
   const createContext = () => federation as never;
   const remoteActorLookup = {
@@ -306,6 +309,15 @@ export const setupReadApi = (
   const mediaUploadResolver = createD1MediaUploadResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
   const postImageCreatedStore = createD1PostImageCreatedStore(db);
+  const remotePostUpserter = createD1RemotePostUpserter({
+    postResolverByUri: createD1PostResolverByUri(db),
+    postCreatedStore,
+    postImageCreatedStore,
+    remoteActorCreatedStore,
+    logoUriUpdatedStore,
+    remoteActorProfileUpdatedStore,
+    actorResolverByUri,
+  });
   const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
   const statusAssembler = createStatusAssembler({
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
@@ -738,6 +750,21 @@ export const setupReadApi = (
             userResolver,
             pushSubscriptionCreatedStore: createD1PushSubscriptionCreatedStore(db),
             pushSubscriptionResolverByEndpoint: createD1PushSubscriptionResolverByEndpoint(db),
+          }),
+          fetchRemoteContextUseCase: FetchRemoteContextUseCase.create({
+            origin: ORIGIN,
+            userResolver,
+            postResolver,
+            postResolverByUri: createD1PostResolverByUri(db),
+            localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
+            remotePostUpserter,
+            blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+            fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase.create({
+              origin: ORIGIN,
+              postResolverByUri: createD1PostResolverByUri(db),
+              localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
+              remotePostUpserter,
+            }),
           }),
           allRelaysResolver: createD1AllRelaysResolver(db),
           createContext,

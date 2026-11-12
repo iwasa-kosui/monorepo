@@ -1,4 +1,4 @@
-import { Emoji, EmojiReact, Image, Note, Person } from '@fedify/vocab';
+import { Collection, Emoji, EmojiReact, Image, Note, Person } from '@fedify/vocab';
 import { describe, expect, it, vi } from 'vitest';
 
 import { EMOJI_IMAGE_URL_MAX_LENGTH } from '../../../domain/emojiReact/emojiImageUrl.ts';
@@ -657,5 +657,85 @@ describe('POST /api/iori/v1/push/subscribe', () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: 'Validation failed: subscription' });
     expect(stored(t)).toEqual([]);
+  });
+});
+
+describe('POST /api/iori/v1/statuses/:id/remote-context', () => {
+  const remoteContextPath = (postId: string) => `/api/iori/v1/statuses/${postId}/remote-context`;
+  const post = (t: Awaited<ReturnType<typeof seedReactions>>, postId: string, headers: Record<string, string>) =>
+    t.request(remoteContextPath(postId), { method: 'POST', headers });
+  const remoteNote = (id: string, options: { replyTo?: string; replies?: Collection } = {}) =>
+    new Note({
+      id: new URL(id),
+      content: 'remote',
+      to: new URL('https://www.w3.org/ns/activitystreams#Public'),
+      replyTarget: options.replyTo === undefined ? null : new URL(options.replyTo),
+      replies: options.replies ?? null,
+      attribution: new Person({
+        id: new URL('https://remote.example/users/bob'),
+        inbox: new URL('https://remote.example/users/bob/inbox'),
+        preferredUsername: 'bob',
+      }),
+    });
+  const storedCount = (t: Awaited<ReturnType<typeof seedReactions>>, uri: string) =>
+    Number(
+      (t.sqlite.prepare('SELECT count(*) AS n FROM remote_posts WHERE uri = ?').get(uri) as { n: number | bigint }).n,
+    );
+
+  it('相手のサーバーから取り込んだ返信を保存し、件数を返す', async () => {
+    const t = await seedReactions();
+    const replyUri = 'https://remote.example/notes/reply-1';
+    const notes = new Map([
+      [
+        t.publicNote.uri,
+        remoteNote(t.publicNote.uri, { replies: new Collection({ items: [new URL(replyUri)] }) }),
+      ],
+      [replyUri, remoteNote(replyUri, { replyTo: t.publicNote.uri })],
+    ]);
+    t.federation.lookupObject.mockImplementation(async (uri?: string) => notes.get(uri ?? '') ?? null);
+
+    const response = await post(t, t.publicNote.postId, t.me.bearer);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ fetched: 1 });
+    expect(storedCount(t, replyUri)).toBe(1);
+    expect(t.federation.getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
+  });
+
+  it('取り込める投稿がなければ fetched を 0 にする', async () => {
+    const t = await seedReactions();
+
+    const response = await post(t, t.local.postId, t.me.bearer);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ fetched: 0 });
+  });
+
+  it('トークンがないと 401、read:statuses を満たさないスコープは 403 にする', async () => {
+    const t = await seedReactions();
+
+    const responses = await Promise.all([
+      post(t, t.publicNote.postId, {}),
+      post(t, t.publicNote.postId, { Authorization: 'Bearer invalid' }),
+      post(t, t.publicNote.postId, await t.bearerFor('write:favourites')),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 403]);
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('存在しない投稿、不正な ID、閲覧者に見えない投稿は 404 にして取得しない', async () => {
+    const t = await seedReactions();
+    const hidden = t.seed.addRemotePost(t.alice, 2_100, { visibility: 'private', timeline: false });
+
+    const responses = await Promise.all([
+      post(t, t.seed.uuid(), t.me.bearer),
+      post(t, 'not-an-id', t.me.bearer),
+      post(t, hidden.postId, t.me.bearer),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([404, 404, 404]);
+    expect(await responses[0]!.json()).toEqual(notFound);
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
   });
 });

@@ -83,6 +83,7 @@ import type { DismissNotificationUseCase } from '../useCase/dismissNotification.
 import type { EditArticleUseCase } from '../useCase/editArticle.ts';
 import type { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
+import type { FetchRemoteContextUseCase } from '../useCase/fetchRemoteContext.ts';
 import type { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
@@ -237,6 +238,7 @@ export type IoriSocialActionsRuntimePorts = Readonly<{
   undoRepostUseCase: UndoRepostUseCase;
   sendEmojiReactUseCase: SendEmojiReactUseCase;
   undoEmojiReactUseCase: UndoEmojiReactUseCase;
+  fetchRemoteContextUseCase: FetchRemoteContextUseCase;
 }>;
 export type IoriArticlesRuntimePorts = Readonly<{
   getArticleWithThreadUseCase: GetArticleWithThreadUseCase;
