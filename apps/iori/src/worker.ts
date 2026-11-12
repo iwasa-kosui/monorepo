@@ -307,10 +307,11 @@ export default {
       serveAsset: (assetRequest) => fetchAsset(env, assetRequest.url),
       servePage: async (pageRequest) => {
         const identity = await pageIdentity(pageRequest, runtime);
-        // 所有者以外には /x と Bluesky のプロフィールの存在を見せないため、404 と同じく undefined を返す。
+        // 所有者以外には /x と Bluesky のプロフィールとメッセージの存在を見せないため、404 と同じく undefined を返す。
         const pathname = new URL(pageRequest.url).pathname;
         if (
-          (pathname === '/x' || pathname.startsWith('/bluesky/profile/')) && identity.isLoggedIn
+          (pathname === '/x' || pathname.startsWith('/bluesky/profile/') || /^\/messages(?:\/|$)/.test(pathname))
+          && identity.isLoggedIn
           && !(await runtime.digest.isDigestOwner(identity.userId))
         ) return undefined;
         return createWorkerPageFallback(pageRequest, identity);

@@ -657,6 +657,118 @@ describe('createBlueskyClient の認証付き GET（query）', () => {
   });
 });
 
+describe('createBlueskyClient の DM（chat）', () => {
+  const PROXY = 'did:web:api.bsky.chat#bsky_chat';
+
+  it('chatQuery は PDS の xrpc に atproto-proxy と Bearer を付けた GET を送り、配列は同名キーで繰り返す', async () => {
+    const { client, calls } = setup(stored(), [() => json({ convo: {} })]);
+
+    const result = await client.chatQuery('chat.bsky.convo.getConvoForMembers', {
+      members: ['did:plc:a', 'did:plc:b'],
+    });
+
+    expect(result).toEqual({ ok: true, val: { convo: {} } });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe(
+      `${PDS}/xrpc/chat.bsky.convo.getConvoForMembers?members=did%3Aplc%3Aa&members=did%3Aplc%3Ab`,
+    );
+    expect(calls[0]!.init.method).toBe('GET');
+    expect(calls[0]!.init.body).toBeUndefined();
+    expect(header(calls[0]!, 'atproto-proxy')).toBe(PROXY);
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+  });
+
+  it('chatQuery はパラメータが無ければクエリ文字列を付けない', async () => {
+    const { client, calls } = setup(stored(), [() => json({ convos: [] })]);
+
+    await client.chatQuery('chat.bsky.convo.listConvos', {});
+
+    expect(calls[0]!.url).toBe(`${PDS}/xrpc/chat.bsky.convo.listConvos`);
+  });
+
+  it('chatProcedure は atproto-proxy と JSON の body を付けた POST を送る', async () => {
+    const { client, calls } = setup(stored(), [() => json({ id: 'm1' })]);
+
+    const result = await client.chatProcedure('chat.bsky.convo.sendMessage', {
+      convoId: 'c1',
+      message: { text: 'こんにちは' },
+    });
+
+    expect(result).toEqual({ ok: true, val: { id: 'm1' } });
+    expect(calls[0]!.url).toBe(`${PDS}/xrpc/chat.bsky.convo.sendMessage`);
+    expect(calls[0]!.init.method).toBe('POST');
+    expect(header(calls[0]!, 'atproto-proxy')).toBe(PROXY);
+    expect(header(calls[0]!, 'Content-Type')).toBe('application/json');
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ convoId: 'c1', message: { text: 'こんにちは' } });
+  });
+
+  it('chatProcedure は空の本文の成功応答も受け付ける', async () => {
+    const { client } = setup(stored(), [() => new Response('', { status: 200 })]);
+
+    expect(await client.chatProcedure('chat.bsky.convo.acceptConvo', { convoId: 'c1' })).toEqual({ ok: true, val: {} });
+  });
+
+  it('既存の query には atproto-proxy を付けない', async () => {
+    const { client, calls } = setup(stored(), [() => json({})]);
+
+    await client.query('app.bsky.feed.getTimeline', {});
+
+    expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
+  });
+
+  it('Bad token method は auth と見なさず、refreshSession も createSession も呼ばない', async () => {
+    const { client, calls, saved } = setup(stored(), [
+      () => json({ error: 'InvalidToken', message: 'Bad token method' }, 400),
+    ]);
+
+    const result = await client.chatProcedure('chat.bsky.convo.sendMessage', { convoId: 'c1', message: { text: 'a' } });
+
+    expect(result).toMatchObject({ ok: false, err: { kind: 'chat_not_permitted' } });
+    expect(calls).toHaveLength(1);
+    expect(saved).toEqual([]);
+  });
+
+  it('message が Bad token method でない InvalidToken は、これまでどおり auth として再ログインを試す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'InvalidToken', message: 'Token could not be verified' }, 400),
+      () => json(sessionBody('fresh')),
+      () => json({ convos: [] }),
+    ]);
+
+    const result = await client.chatQuery('chat.bsky.convo.listConvos', {});
+
+    expect(result.ok).toBe(true);
+    expect(calls.map((call) => call.url.split('?')[0]!.split('/').pop())).toEqual([
+      'chat.bsky.convo.listConvos',
+      'com.atproto.server.refreshSession',
+      'chat.bsky.convo.listConvos',
+    ]);
+    expect(header(calls[2]!, 'atproto-proxy')).toBe(PROXY);
+  });
+
+  it('InvalidConvo や MessagesDisabled などの XRPC エラーは http として、error 名を code に入れて返す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'InvalidConvo', message: 'convo not found' }, 400),
+      () => json({ error: 'MessagesDisabled' }, 400),
+    ]);
+
+    const invalidConvo = await client.chatQuery('chat.bsky.convo.getConvo', { convoId: 'x' });
+    const disabled = await client.chatQuery('chat.bsky.convo.getConvoForMembers', { members: ['did:plc:a'] });
+
+    expect(invalidConvo).toMatchObject({ ok: false, err: { kind: 'http', status: 400, code: 'InvalidConvo' } });
+    expect(disabled).toMatchObject({ ok: false, err: { kind: 'http', code: 'MessagesDisabled' } });
+    expect(calls).toHaveLength(2);
+  });
+
+  it('viewerDid は保存済みセッションの DID を返す', async () => {
+    const { client, calls } = setup(stored({ did: 'did:plc:me' }), []);
+
+    expect(await client.viewerDid()).toEqual({ ok: true, val: 'did:plc:me' });
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe('createBlueskyClient のタイムアウト', () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -813,6 +925,21 @@ describe('createBlueskyClient のログイン失敗後の待ち時間', () => {
     await client.query('app.bsky.feed.getTimeline', {});
 
     expect(events).toEqual(['read', `write:${NOW + BLUESKY_LOGIN_RETRY_COOLDOWN_MS}`]);
+  });
+
+  it('DM の許可が無い Bad token method は chat_not_permitted として返し、再ログインも失敗の記録もしない', async () => {
+    const { client, calls, events } = setupGuarded(stored(), undefined, [
+      () => json({ error: 'InvalidToken', message: 'Bad token method' }, 400),
+    ]);
+
+    const result = await client.chatQuery('chat.bsky.convo.listConvos', {});
+
+    expect(result).toMatchObject({
+      ok: false,
+      err: { kind: 'chat_not_permitted', status: 400, code: 'InvalidToken' },
+    });
+    expect(calls).toHaveLength(1);
+    expect(events).toEqual([]);
   });
 
   it('createSession が成功し、記録が無かったときは、読むだけで書き込まない', async () => {

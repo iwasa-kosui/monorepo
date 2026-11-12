@@ -8,6 +8,7 @@ import { Instant } from '../../../../domain/instant/instant.ts';
 import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
+import type { BlueskyChat } from '../../../../ports/blueskyChat.ts';
 import type { BlueskyClient, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
 import type { BlueskyPostSubject } from '../../../../ports/blueskyPostCidResolver.ts';
 import type { BlueskyPostThreadFetcher } from '../../../../ports/blueskyPostThreadFetcher.ts';
@@ -20,6 +21,7 @@ import { createWorkerReportAction } from '../../../../runtime/workerReportAction
 import { createDigestUseCases } from '../../../../scheduled/digestTasks.ts';
 import { AddDigestTopicUseCase } from '../../../../useCase/addDigestTopic.ts';
 import { AddFeedSourceUseCase } from '../../../../useCase/addFeedSource.ts';
+import { BlueskyChatUseCases } from '../../../../useCase/blueskyChat.ts';
 import { ChangeDigestTopicEnabledUseCase } from '../../../../useCase/changeDigestTopicEnabled.ts';
 import { ChangeDigestTopicMaterialWindowUseCase } from '../../../../useCase/changeDigestTopicMaterialWindow.ts';
 import { ChangeFeedSourceEnabledUseCase } from '../../../../useCase/changeFeedSourceEnabled.ts';
@@ -242,6 +244,7 @@ export const setupReadApi = (
     >;
     blueskySeenClient?: Pick<BlueskyClient, 'updateSeen'>;
     blueskySearch?: BlueskySearch;
+    blueskyChat?: BlueskyChat;
     refreshXPosts?: RefreshXPostsUseCase;
     scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   }> = {},
@@ -687,6 +690,9 @@ export const setupReadApi = (
               now: options.blueskyNow ?? Instant.now,
             }),
           blueskySearch: options.blueskySearch,
+          blueskyChat: options.blueskyChat === undefined
+            ? undefined
+            : BlueskyChatUseCases.create({ chat: options.blueskyChat }),
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );

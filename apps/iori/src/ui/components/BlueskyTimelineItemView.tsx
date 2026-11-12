@@ -26,7 +26,9 @@ type QuoteEmbed = Extract<BlueskyTimelineEmbed, { type: 'record' }>;
 const linkClass = 'text-terracotta hover:underline dark:text-terracotta-light break-all';
 const mutedClass = 'text-charcoal-light dark:text-gray-400';
 
-const BlueskyText = ({ text, facets }: Readonly<{ text: string; facets: IoriBlueskyTimelineItemBody['facets'] }>) => (
+export const BlueskyText = (
+  { text, facets }: Readonly<{ text: string; facets: IoriBlueskyTimelineItemBody['facets'] }>,
+) => (
   <p class='whitespace-pre-wrap break-words text-charcoal dark:text-gray-100'>
     {segmentBlueskyText(text, facets).map((segment) =>
       segment.href === undefined
