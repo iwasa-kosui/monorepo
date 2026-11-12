@@ -20,6 +20,8 @@ import { createD1RemoteActorProfileUpdatedStore } from '../../d1/actor/remoteAct
 import { createD1ArticleResolver } from '../../d1/article/articleResolver.ts';
 import { createD1BlockedActorUriResolverByUsername } from '../../d1/block/blockedActorUriResolverByUsername.ts';
 import { createD1BlockResolver } from '../../d1/block/blockResolver.ts';
+import { createD1BookmarkDeletedStore } from '../../d1/bookmark/bookmarkDeletedStore.ts';
+import { createD1BookmarksResolverByPostId } from '../../d1/bookmark/bookmarksResolverByPostId.ts';
 import type { IoriD1Db } from '../../d1/client.ts';
 import { createD1EmojiReactCreatedStore } from '../../d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../../d1/emojiReact/emojiReactDeletedStore.ts';
@@ -295,6 +297,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
       repostsResolverByPostId: createD1RepostsResolverByPostId(db),
       likesResolverByPostId: createD1LikesResolverByPostId(db),
       emojiReactsResolverByPostId: createD1EmojiReactsResolverByPostId(db),
+      bookmarksResolverByPostId: createD1BookmarksResolverByPostId(db),
       federatedTimelineItemsResolverByPostId: createD1FederatedTimelineItemsResolverByPostId(db),
       timelineItemDeletedStore: createD1TimelineItemDeletedStore(db),
       likeNotificationDeletedStore: createD1LikeNotificationDeletedStore(db),
@@ -305,6 +308,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
       localLikeDeletedStore: createD1LocalLikeDeletedStore(db),
       remoteLikeDeletedStore: createD1RemoteLikeDeletedStore(db),
       emojiReactDeletedStore: createD1EmojiReactDeletedStore(db),
+      bookmarkDeletedStore: createD1BookmarkDeletedStore(db),
       federatedTimelineItemDeletedStore: createD1FederatedTimelineItemDeletedStore(db),
       postDeletedStore: createD1PostDeletedStore(db),
     },

@@ -11,6 +11,8 @@ export type BlueskyPostActions = Readonly<{
   onQuote?: (item: IoriBlueskyTimelineItemBody) => void;
   onBookmark?: (item: IoriBlueskyTimelineItemBody) => void;
   onUndoBookmark?: (item: IoriBlueskyTimelineItemBody) => void;
+  onMuteThread?: (item: IoriBlueskyTimelineItemBody) => void;
+  onUnmuteThread?: (item: IoriBlueskyTimelineItemBody) => void;
   onMuteAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
   onBlockAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
   onReportPost?: (item: IoriBlueskyTimelineItemBody) => void;
@@ -28,6 +30,8 @@ export const blueskyItemActionProps = (actions: BlueskyPostActions | undefined, 
     ...(actions.onQuote === undefined ? {} : { onQuote: actions.onQuote }),
     ...(actions.onBookmark === undefined ? {} : { onBookmark: actions.onBookmark }),
     ...(actions.onUndoBookmark === undefined ? {} : { onUndoBookmark: actions.onUndoBookmark }),
+    ...(actions.onMuteThread === undefined ? {} : { onMuteThread: actions.onMuteThread }),
+    ...(actions.onUnmuteThread === undefined ? {} : { onUnmuteThread: actions.onUnmuteThread }),
     ...(actions.onMuteAuthor === undefined ? {} : { onMuteAuthor: actions.onMuteAuthor }),
     ...(actions.onBlockAuthor === undefined ? {} : { onBlockAuthor: actions.onBlockAuthor }),
     ...(actions.onReportPost === undefined ? {} : { onReportPost: actions.onReportPost }),

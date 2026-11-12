@@ -30,10 +30,8 @@ export const useBlueskyUriActions = (
   );
   const { bookmark, unbookmark } = useBlueskyBookmark(updateItems, BLUESKY_BOOKMARK_BY_URI_REQUESTS);
   const replyDialog = useBlueskyReplyDialog(sendBlueskyReplyByUri);
-  const { onMuteAuthor, onBlockAuthor, onReportPost, reportDialog, notice } = useBlueskyAuthorModeration(
-    updateItems,
-    options,
-  );
+  const { onMuteThread, onUnmuteThread, onMuteAuthor, onBlockAuthor, onReportPost, reportDialog, notice } =
+    useBlueskyAuthorModeration(updateItems, options);
   const actions: BlueskyPostActions = {
     onReply: replyDialog.open,
     onLike: like,
@@ -44,6 +42,8 @@ export const useBlueskyUriActions = (
     repostPendingUris,
     onBookmark: bookmark,
     onUndoBookmark: unbookmark,
+    onMuteThread,
+    onUnmuteThread,
     onMuteAuthor,
     onBlockAuthor,
     onReportPost,

@@ -2,13 +2,23 @@ import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { bookmarksUrl, fetchBookmarks, isUnauthorizedError } from '../api/mastodonClient.ts';
+import {
+  bookmark,
+  bookmarksUrl,
+  failureMessage,
+  fetchBookmarks,
+  isUnauthorizedError,
+  unbookmark,
+} from '../api/mastodonClient.ts';
 import { readPageCache, writePageCache } from '../api/pageCache.ts';
 import { clearAllCache } from '../api/responseCache.ts';
+import { updateStatusesByPostId } from '../api/status.ts';
 import { BlueskyBookmarksList } from '../components/BlueskyBookmarksList.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
+import { runOptimisticBookmark } from '../hooks/optimisticBookmark.ts';
+import { runExclusive } from '../hooks/optimisticFavourite.ts';
 import { useBlueskyStatus } from '../hooks/useBlueskyStatus.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import {
@@ -36,6 +46,7 @@ const FediverseBookmarks = () => {
   const [error, setError] = useState('');
   const [isFirstPageSettled, setIsFirstPageSettled] = useState(false);
   const isLoadingMoreRef = useRef(false);
+  const bookmarkInFlightRef = useRef<Set<string>>(null);
 
   useEffect(() => {
     const loadBookmarks = async () => {
@@ -75,6 +86,27 @@ const FediverseBookmarks = () => {
 
   useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore, isFirstPageSettled });
 
+  const updateStatus = (postId: string, updater: (status: Status) => Status) => {
+    setData((prev) =>
+      prev === null ? prev : { ...prev, statuses: updateStatusesByPostId(prev.statuses, postId, updater) }
+    );
+  };
+
+  const changeBookmark = (postId: string, bookmarked: boolean) =>
+    runExclusive(bookmarkInFlightRef.current ??= new Set<string>(), postId, async () => {
+      try {
+        await runOptimisticBookmark({
+          postId,
+          bookmarked,
+          request: bookmarked ? bookmark : unbookmark,
+          updateTimelineItem: updateStatus,
+        });
+      } catch (changeError) {
+        console.error('Failed to change bookmark:', changeError);
+        alert(failureMessage(bookmarked ? 'bookmark' : 'remove bookmark', changeError));
+      }
+    });
+
   if (isLoading) {
     return (
       <section class='mb-8'>
@@ -107,7 +139,15 @@ const FediverseBookmarks = () => {
       <div class='space-y-6 py-2'>
         {data.statuses.length > 0
           ? (
-            data.statuses.map((status) => <PostView key={status.id} status={status} isLoggedIn />)
+            data.statuses.map((status) => (
+              <PostView
+                key={status.id}
+                status={status}
+                isLoggedIn
+                onBookmark={(postId) => changeBookmark(postId, true)}
+                onUndoBookmark={(postId) => changeBookmark(postId, false)}
+              />
+            ))
           )
           : (
             <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-8 text-center'>

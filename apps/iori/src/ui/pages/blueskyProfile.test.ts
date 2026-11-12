@@ -42,6 +42,8 @@ const item: IoriBlueskyTimelineItemBody = {
   liked: false,
   reposted: false,
   bookmarked: false,
+  threadMuted: false,
+  replyRootUri: null,
   isOwn: false,
 };
 

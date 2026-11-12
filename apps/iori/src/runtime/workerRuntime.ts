@@ -38,6 +38,7 @@ import { createD1BookmarkCreatedStore } from '../adaptor/d1/bookmark/bookmarkCre
 import { createD1BookmarkDeletedStore } from '../adaptor/d1/bookmark/bookmarkDeletedStore.ts';
 import { createD1BookmarkedPostIdsResolverByActorIdWithPagination } from '../adaptor/d1/bookmark/bookmarkedPostIdsResolverByActorIdWithPagination.ts';
 import { createD1BookmarkResolver } from '../adaptor/d1/bookmark/bookmarkResolver.ts';
+import { createD1BookmarksResolverByPostId } from '../adaptor/d1/bookmark/bookmarksResolverByPostId.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
 import { createD1DigestHeadersResolverByArticleIds } from '../adaptor/d1/digest/digestHeadersResolverByArticleIds.ts';
@@ -872,6 +873,8 @@ export const createWorkerRuntimePorts = async (
         articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
         articleDeletedStore: createD1ArticleDeletedStore(db),
         directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
+        bookmarksResolverByPostId: createD1BookmarksResolverByPostId(db),
+        bookmarkDeletedStore: createD1BookmarkDeletedStore(db),
         removeBlueskyCrosspost: blueskyCrosspost?.remove,
       }),
       subscribePushUseCase: SubscribePushUseCase.create({

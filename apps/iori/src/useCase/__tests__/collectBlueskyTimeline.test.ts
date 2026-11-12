@@ -43,6 +43,8 @@ const itemAt = (
     liked: false,
     viewerLikeUri: null,
     reposted: false,
+    threadMuted: false,
+    replyRootUri: null,
     viewerRepostUri: null,
     bookmarked: false,
     ...overrides,
@@ -241,7 +243,7 @@ describe('CollectBlueskyTimelineUseCase', () => {
     const resolved = await createD1BlueskyTimelineItemsResolver(t.db).resolve({ limit: 10, before: undefined });
 
     const { viewerLikeUri: _viewerLikeUri, viewerRepostUri: _viewerRepostUri, ...expected } = rich;
-    expect(resolved).toEqual({ ok: true, val: [expected] });
+    expect(resolved).toEqual({ ok: true, val: [{ ...expected, threadMuted: null }] });
   });
 
   describe('viewer.like', () => {

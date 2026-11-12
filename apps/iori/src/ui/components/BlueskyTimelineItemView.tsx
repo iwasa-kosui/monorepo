@@ -26,6 +26,8 @@ type Props = Readonly<{
   isRepostPending?: boolean;
   onBookmark?: (item: IoriBlueskyTimelineItemBody) => void;
   onUndoBookmark?: (item: IoriBlueskyTimelineItemBody) => void;
+  onMuteThread?: (item: IoriBlueskyTimelineItemBody) => void;
+  onUnmuteThread?: (item: IoriBlueskyTimelineItemBody) => void;
   onMuteAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
   onBlockAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
   onReportPost?: (item: IoriBlueskyTimelineItemBody) => void;
@@ -346,6 +348,8 @@ export const BlueskyTimelineItemView = ({
   isRepostPending,
   onBookmark,
   onUndoBookmark,
+  onMuteThread,
+  onUnmuteThread,
   onMuteAuthor,
   onBlockAuthor,
   onReportPost,
@@ -378,6 +382,26 @@ export const BlueskyTimelineItemView = ({
       : onBookmark === undefined
       ? []
       : [{ key: 'bookmark', label: 'ブックマーク', kind: 'action', onSelect: () => onBookmark(item) } as const]),
+    ...(item.threadMuted === false || item.threadMuted === null || item.threadMuted === undefined
+      ? onMuteThread === undefined ? [] : [
+        {
+          key: 'mute-thread',
+          label: 'スレッドをミュート',
+          kind: 'action',
+          onSelect: () => onMuteThread(item),
+        } as const,
+      ]
+      : []),
+    ...(item.threadMuted === true || item.threadMuted === null || item.threadMuted === undefined
+      ? onUnmuteThread === undefined ? [] : [
+        {
+          key: 'unmute-thread',
+          label: 'スレッドのミュートを解除',
+          kind: 'action',
+          onSelect: () => onUnmuteThread(item),
+        } as const,
+      ]
+      : []),
     ...(canModerate && onMuteAuthor !== undefined
       ? [
         {

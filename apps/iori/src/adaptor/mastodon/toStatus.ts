@@ -20,7 +20,7 @@ export type ToStatusOptions = Readonly<{
   inReplyToId: string | null;
   inReplyToAccountId: string | null;
   myReactionEmojis: ReadonlySet<string>;
-  bookmarked?: boolean;
+  bookmarked: boolean;
   blueskyCrosspost?: BlueskyCrosspost | null;
   quote?: Readonly<{ uri: string; status: Status | null }> | null;
 }>;
@@ -141,7 +141,7 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
     favourited: post.liked,
     reblogged: post.reposted,
     muted: false,
-    bookmarked: options.bookmarked ?? false,
+    bookmarked: options.bookmarked,
     pinned: false,
     iori: {
       reactions: post.reactions.map((reaction) => ({

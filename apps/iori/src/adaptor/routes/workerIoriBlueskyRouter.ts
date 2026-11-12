@@ -108,6 +108,8 @@ export type IoriBlueskyTimelineItemBody = Readonly<{
   liked: boolean;
   reposted: boolean;
   bookmarked: boolean;
+  threadMuted: boolean | null;
+  replyRootUri: string | null;
   isOwn: boolean;
 }>;
 
@@ -269,6 +271,8 @@ export const toItemBody = (item: BlueskyTimelineItem, viewerDid: string | undefi
   liked: item.liked,
   reposted: item.reposted,
   bookmarked: item.bookmarked,
+  threadMuted: item.threadMuted,
+  replyRootUri: item.replyRootUri,
   isOwn: viewerDid !== undefined && item.authorDid === viewerDid,
 });
 

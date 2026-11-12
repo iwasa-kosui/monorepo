@@ -13,6 +13,7 @@ const otherUserId = crypto.randomUUID();
 const otherSessionId = crypto.randomUUID();
 const executionContext = {} as ExecutionContext;
 const PAGE = '/bluesky/profile/did%3Aplc%3Aalice';
+const LIKED_POSTS_API = '/api/iori/v1/bluesky/liked-posts';
 const PROFILE_API = '/api/iori/v1/bluesky/profiles/did%3Aplc%3Aalice';
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
@@ -89,5 +90,15 @@ describe('Bluesky のプロフィール画面', () => {
 
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
+  });
+
+  it('いいね一覧の API は、未ログインを 401、所有者でないユーザーを 403、取り込みが無効の所有者を 409 にする', async () => {
+    const t = setup();
+
+    expect((await t.request(LIKED_POSTS_API)).status).toBe(401);
+    expect((await t.request(LIKED_POSTS_API, { headers: { Cookie: `sessionId=${otherSessionId}` } })).status).toBe(403);
+    const disabled = await t.request(LIKED_POSTS_API, { headers: { Cookie: `sessionId=${sessionId}` } });
+    expect(disabled.status).toBe(409);
+    expect(await disabled.json()).toEqual({ error: 'Bluesky timeline is disabled' });
   });
 });

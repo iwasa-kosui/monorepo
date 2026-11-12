@@ -280,6 +280,8 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         liked: false,
         reposted: false,
         bookmarked: false,
+        threadMuted: null,
+        replyRootUri: null,
         isOwn: false,
       });
     });
@@ -524,6 +526,8 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       liked: true,
       viewerLikeUri: 'at://did:plc:me/app.bsky.feed.like/3klike',
       reposted: false,
+      threadMuted: false,
+      replyRootUri: null,
       viewerRepostUri: null,
       bookmarked: false,
     });
@@ -589,6 +593,8 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         liked: true,
         reposted: false,
         bookmarked: false,
+        threadMuted: false,
+        replyRootUri: null,
         isOwn: false,
       });
       expect(body.replies.map(({ depth, node }) => [depth, node.kind])).toEqual([[0, 'post'], [1, 'blocked']]);
@@ -1547,6 +1553,8 @@ describe('/api/iori/v1/bluesky/status', () => {
       fetchedAt: Instant.orThrow(BASE),
       liked: true,
       reposted: false,
+      threadMuted: false,
+      replyRootUri: null,
       viewerLikeUri: 'at://did:plc:me/app.bsky.feed.like/3k1',
       viewerRepostUri: null,
       bookmarked: false,

@@ -62,6 +62,8 @@ const bookmarkedItem = {
   reposted: false,
   viewerRepostUri: null,
   bookmarked: true,
+  threadMuted: false,
+  replyRootUri: null,
 };
 
 const setup = async (options: {
@@ -197,6 +199,8 @@ describe('GET /api/iori/v1/bluesky/bookmarks', () => {
         liked: false,
         reposted: false,
         bookmarked: true,
+        threadMuted: false,
+        replyRootUri: null,
         isOwn: false,
       }],
       cursor: 'next-cursor',

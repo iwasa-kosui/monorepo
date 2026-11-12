@@ -101,10 +101,13 @@ const blueskyTimelineItemZodType = z.object({
   liked: z.boolean(),
   reposted: z.boolean(),
   bookmarked: z.boolean(),
+  threadMuted: z.boolean().nullable(),
+  replyRootUri: z.string().nullable(),
 });
 const blueskyFetchedTimelineItemZodType = blueskyTimelineItemZodType.extend({
   viewerLikeUri: z.string().min(1).nullable(),
   viewerRepostUri: z.string().min(1).nullable(),
+  threadMuted: z.boolean(),
 });
 
 export type BlueskyTimelineFacet = z.infer<typeof facetZodType>;
