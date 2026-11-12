@@ -95,7 +95,7 @@ export const httpUrlOrNull = (value: string | undefined): string | null => {
   }
 };
 
-const facetOf = (raw: unknown): BlueskyTimelineFacet | undefined => {
+export const facetOf = (raw: unknown): BlueskyTimelineFacet | undefined => {
   const facet = facetZodType.safeParse(raw);
   if (!facet.success) return undefined;
   const { byteStart, byteEnd } = facet.data.index;

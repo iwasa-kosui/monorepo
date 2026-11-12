@@ -1,5 +1,11 @@
 import { type Context, Hono } from 'hono';
 
+import type {
+  BlueskyChatMember,
+  BlueskyChatMessage,
+  BlueskyChatMessageInvalid,
+  BlueskyChatTextMessage,
+} from '../../domain/blueskyChat/blueskyChat.ts';
 import type { BlueskyLoginFailureResolver } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import {
   type BlueskyConnectionStatus,
@@ -28,6 +34,7 @@ import type {
   BlueskyThreadNode,
 } from '../../ports/blueskyPostThreadFetcher.ts';
 import type { BlueskySearch, BlueskySearchedActor } from '../../ports/blueskySearch.ts';
+import type { BlueskyChatConvoSummary, BlueskyChatUseCases } from '../../useCase/blueskyChat.ts';
 import type { BlueskyPostInvalid } from '../../useCase/helper/publishBlueskyPost.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { LikeBlueskyPostUseCase } from '../../useCase/likeBlueskyPost.ts';
@@ -59,6 +66,7 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   quoteBlueskyPostUseCase: QuoteBlueskyPostUseCase | undefined;
   markBlueskyNotificationsSeenUseCase: MarkBlueskyNotificationsSeenUseCase | undefined;
   blueskySearch: BlueskySearch | undefined;
+  blueskyChat: BlueskyChatUseCases | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -100,6 +108,45 @@ export type IoriBlueskyThreadResponse = Readonly<{
   post: IoriBlueskyTimelineItemBody;
   replies: readonly Readonly<{ depth: number; node: IoriBlueskyThreadNodeBody }>[];
 }>;
+
+export type IoriBlueskyChatMemberBody = BlueskyChatMember;
+
+export type IoriBlueskyChatMessageBody = BlueskyChatMessage;
+
+export type IoriBlueskyChatConvoBody = BlueskyChatConvoSummary;
+
+export type IoriBlueskyChatConvosResponse = Readonly<{
+  convos: readonly IoriBlueskyChatConvoBody[];
+  cursor: string | null;
+}>;
+
+export type IoriBlueskyChatConvoResponse = Readonly<{ convo: IoriBlueskyChatConvoBody }>;
+
+export type IoriBlueskyChatMessagesResponse = Readonly<{
+  messages: readonly IoriBlueskyChatMessageBody[];
+  cursor: string | null;
+  order: 'oldest_first';
+}>;
+
+export type IoriBlueskyChatSendMessageRequest = Readonly<{ text: string }>;
+
+export type IoriBlueskyChatSendMessageResponse = Readonly<{ message: BlueskyChatTextMessage }>;
+
+export type IoriBlueskyChatReadRequest = Readonly<{ messageId?: string }>;
+
+export type IoriBlueskyChatReadResponse = Readonly<{ convo: IoriBlueskyChatConvoBody }>;
+
+export type IoriBlueskyChatOpenRequest = Readonly<{ did: string }>;
+
+export type IoriBlueskyChatOpenResponse = Readonly<{ convoId: string }>;
+
+export type IoriBlueskyChatUnreadCountResponse = Readonly<{ unread: number; requests: number }>;
+
+export type IoriBlueskyChatErrorBody =
+  | Readonly<{ error: 'chat_not_permitted' }>
+  | Readonly<{ error: 'InvalidConvo' }>
+  | Readonly<{ error: BlueskyChatRejection }>
+  | Readonly<{ error: 'Validation failed: text'; reason: BlueskyChatMessageInvalid['reason'] }>;
 
 type IsoInstant = string | null;
 
@@ -155,6 +202,17 @@ const writeFavourites = Scope.orThrow('write:favourites');
 const writeStatuses = Scope.orThrow('write:statuses');
 const writeNotifications = Scope.orThrow('write:notifications');
 const integerPattern = /^\d+$/;
+const didPattern = /^did:[a-z]+:[A-Za-z0-9._:%-]+$/;
+const BLUESKY_CHAT_REJECTIONS = [
+  'MessagesDisabled',
+  'NotFollowedBySender',
+  'BlockedActor',
+  'BlockedSubject',
+  'RecipientNotFound',
+  'AccountSuspended',
+  'ConvoLocked',
+] as const;
+type BlueskyChatRejection = typeof BLUESKY_CHAT_REJECTIONS[number];
 const isoInstantPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 const forbidden = { error: 'Forbidden' } as const;
 const SEARCH_LIMIT = 25;
@@ -271,6 +329,30 @@ const quoteFailure = (
   return c.json({ error: 'Bluesky request failed' }, 502);
 };
 
+const chatRejectionOf = (code: string | undefined): BlueskyChatRejection | undefined =>
+  BLUESKY_CHAT_REJECTIONS.find((rejection) => rejection === code);
+
+const chatFailure = (c: Context, error: BlueskyClientError | BlueskyChatMessageInvalid) => {
+  if (error.type === 'BlueskyChatMessageInvalid') {
+    return c.json({ error: 'Validation failed: text', reason: error.reason } satisfies IoriBlueskyChatErrorBody, 422);
+  }
+  if (error.kind === 'chat_not_permitted') {
+    return c.json({ error: 'chat_not_permitted' } satisfies IoriBlueskyChatErrorBody, 403);
+  }
+  if (error.code === 'InvalidConvo') {
+    return c.json({ error: 'InvalidConvo' } satisfies IoriBlueskyChatErrorBody, 404);
+  }
+  const rejection = chatRejectionOf(error.code);
+  return rejection === undefined
+    ? clientFailure(c, error)
+    : c.json({ error: rejection } satisfies IoriBlueskyChatErrorBody, 422);
+};
+
+const cursorOf = (c: Context): string | undefined => {
+  const cursor = c.req.query('cursor');
+  return cursor === undefined || cursor === '' ? undefined : cursor;
+};
+
 export const createWorkerIoriBlueskyRouter = ({
   authn,
   blueskyTimelineItemsResolver,
@@ -287,9 +369,14 @@ export const createWorkerIoriBlueskyRouter = ({
   quoteBlueskyPostUseCase,
   markBlueskyNotificationsSeenUseCase,
   blueskySearch,
+  blueskyChat,
   isDigestOwner,
-}: WorkerIoriBlueskyRouterDeps): Hono<MastodonAuthEnv> =>
-  new Hono<MastodonAuthEnv>()
+}: WorkerIoriBlueskyRouterDeps): Hono<MastodonAuthEnv> => {
+  const chatAccess = async (c: Context): Promise<BlueskyChatUseCases | Response> => {
+    if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+    return blueskyChat ?? c.json({ error: 'Bluesky timeline is disabled' }, 409);
+  };
+  return new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
     .get('/iori/v1/bluesky/timeline', authn.requireUser(readStatuses), async (c) => {
       const limitParam = c.req.query('limit');
@@ -567,4 +654,102 @@ export const createWorkerIoriBlueskyRouter = ({
         const marked = await markBlueskyNotificationsSeenUseCase.run({ seenAt: seenAt.val });
         return marked.ok ? c.body(null, 204) : clientFailure(c, marked.err);
       },
+    )
+    .use('/iori/v1/bluesky/chat/*', async (c, next) => {
+      await next();
+      c.res.headers.set('Cache-Control', 'private, no-store');
+    })
+    .get('/iori/v1/bluesky/chat/convos', authn.requireUser(readStatuses), async (c) => {
+      const chat = await chatAccess(c);
+      if (chat instanceof Response) return chat;
+      const listed = await chat.listConvos.run({ cursor: cursorOf(c) });
+      return listed.ok
+        ? c.json(listed.val satisfies IoriBlueskyChatConvosResponse)
+        : chatFailure(c, listed.err);
+    })
+    .get('/iori/v1/bluesky/chat/unread_count', authn.requireUser(readStatuses), async (c) => {
+      const chat = await chatAccess(c);
+      if (chat instanceof Response) return chat;
+      const counted = await chat.unreadCount.run();
+      return counted.ok
+        ? c.json(counted.val satisfies IoriBlueskyChatUnreadCountResponse)
+        : chatFailure(c, counted.err);
+    })
+    .get('/iori/v1/bluesky/chat/convos/:convoId', authn.requireUser(readStatuses), async (c) => {
+      const chat = await chatAccess(c);
+      if (chat instanceof Response) return chat;
+      const found = await chat.getConvo.run({ convoId: c.req.param('convoId') });
+      return found.ok
+        ? c.json({ convo: found.val } satisfies IoriBlueskyChatConvoResponse)
+        : chatFailure(c, found.err);
+    })
+    .get('/iori/v1/bluesky/chat/convos/:convoId/messages', authn.requireUser(readStatuses), async (c) => {
+      const chat = await chatAccess(c);
+      if (chat instanceof Response) return chat;
+      const listed = await chat.listMessages.run({ convoId: c.req.param('convoId'), cursor: cursorOf(c) });
+      return listed.ok
+        ? c.json(listed.val satisfies IoriBlueskyChatMessagesResponse)
+        : chatFailure(c, listed.err);
+    })
+    .post(
+      '/iori/v1/bluesky/chat/convos/:convoId/messages',
+      requireSameOriginForCookie,
+      authn.requireUser(writeStatuses),
+      async (c) => {
+        const chat = await chatAccess(c);
+        if (chat instanceof Response) return chat;
+        const text = bodyString(await readRequestBody(c), 'text');
+        if (text === undefined) return c.json({ error: 'Validation failed: text' }, 400);
+        const sent = await chat.sendMessage.run({ convoId: c.req.param('convoId'), text });
+        return sent.ok
+          ? c.json({ message: sent.val } satisfies IoriBlueskyChatSendMessageResponse, 201)
+          : chatFailure(c, sent.err);
+      },
+    )
+    .post(
+      '/iori/v1/bluesky/chat/convos/:convoId/read',
+      requireSameOriginForCookie,
+      authn.requireUser(writeStatuses),
+      async (c) => {
+        const chat = await chatAccess(c);
+        if (chat instanceof Response) return chat;
+        const body = await readRequestBody(c);
+        if (body.messageId !== undefined && typeof body.messageId !== 'string') {
+          return c.json({ error: 'Validation failed: messageId' }, 400);
+        }
+        const marked = await chat.markRead.run({
+          convoId: c.req.param('convoId'),
+          messageId: bodyString(body, 'messageId'),
+        });
+        return marked.ok
+          ? c.json({ convo: marked.val } satisfies IoriBlueskyChatReadResponse)
+          : chatFailure(c, marked.err);
+      },
+    )
+    .post(
+      '/iori/v1/bluesky/chat/convos/:convoId/accept',
+      requireSameOriginForCookie,
+      authn.requireUser(writeStatuses),
+      async (c) => {
+        const chat = await chatAccess(c);
+        if (chat instanceof Response) return chat;
+        const accepted = await chat.acceptConvo.run({ convoId: c.req.param('convoId') });
+        return accepted.ok ? c.body(null, 204) : chatFailure(c, accepted.err);
+      },
+    )
+    .post(
+      '/iori/v1/bluesky/chat/convos',
+      requireSameOriginForCookie,
+      authn.requireUser(writeStatuses),
+      async (c) => {
+        const chat = await chatAccess(c);
+        if (chat instanceof Response) return chat;
+        const did = bodyString(await readRequestBody(c), 'did');
+        if (did === undefined || !didPattern.test(did)) return c.json({ error: 'Validation failed: did' }, 400);
+        const opened = await chat.openConvo.run({ did });
+        return opened.ok
+          ? c.json({ convoId: opened.val.id } satisfies IoriBlueskyChatOpenResponse)
+          : chatFailure(c, opened.err);
+      },
     );
+};
