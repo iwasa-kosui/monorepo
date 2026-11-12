@@ -15,6 +15,8 @@ export const toBlueskyTimelineItemRow = (
     viewerLikeUri: _viewerLikeUri,
     reposted: _reposted,
     viewerRepostUri: _viewerRepostUri,
+    threadMuted: _threadMuted,
+    replyRootUri: _replyRootUri,
     ...item
   }: BlueskyFetchedTimelineItem,
 ): typeof blueskyTimelineItemsTable.$inferInsert => ({
@@ -36,4 +38,6 @@ export const toBlueskyTimelineItem = (row: Row, liked: boolean, reposted: boolea
     fetchedAt: row.fetchedAt.getTime() as Instant,
     liked,
     reposted,
+    threadMuted: null,
+    replyRootUri: null,
   });

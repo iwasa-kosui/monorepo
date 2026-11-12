@@ -23,11 +23,19 @@ export type BlueskyAuthorFeedPage = Readonly<{
   unavailable: 'blocked' | null;
 }>;
 
+export type BlueskyActorLikesPage = Readonly<{
+  items: readonly BlueskyFetchedTimelineItem[];
+  cursor: string | undefined;
+}>;
+
 export type BlueskyProfileReader = Readonly<{
   getProfile: (actor: string) => RA<BlueskyProfile, BlueskyClientError>;
   getAuthorFeed: (
     input: Readonly<{ actor: string; cursor: string | undefined }>,
   ) => RA<BlueskyAuthorFeedPage, BlueskyClientError>;
+  getActorLikes: (
+    input: Readonly<{ actor: string; cursor: string | undefined }>,
+  ) => RA<BlueskyActorLikesPage, BlueskyClientError>;
 }>;
 
 const BLOCKED_ACTOR_CODES: readonly string[] = ['BlockedActor', 'BlockedByActor'];

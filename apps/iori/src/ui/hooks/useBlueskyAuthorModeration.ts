@@ -5,10 +5,12 @@ import {
   blockBlueskyActor,
   blueskyModerationFailureMessage,
   muteBlueskyActor,
+  muteBlueskyThread,
   reportBlueskyActor,
+  unmuteBlueskyThread,
 } from '../api/blueskyModerationClient.ts';
 import type { ReportCategory } from '../components/ReportModal.tsx';
-import { blueskyModerationNotice, withoutBlueskyActor } from './blueskyAuthorModeration.ts';
+import { blueskyModerationNotice, withBlueskyThreadMuted, withoutBlueskyActor } from './blueskyAuthorModeration.ts';
 import type { BlueskyItemsUpdater } from './optimisticBlueskyLike.ts';
 
 const REPORTED_NOTICE_MS = 4000;
@@ -32,6 +34,8 @@ export type BlueskyReportDialog = Readonly<{
 }>;
 
 export type UseBlueskyAuthorModerationReturn = Readonly<{
+  onMuteThread: (item: IoriBlueskyTimelineItemBody) => Promise<void>;
+  onUnmuteThread: (item: IoriBlueskyTimelineItemBody) => Promise<void>;
   onMuteAuthor: (item: IoriBlueskyTimelineItemBody) => Promise<void>;
   onBlockAuthor: (item: IoriBlueskyTimelineItemBody) => Promise<void>;
   onReportPost: (item: IoriBlueskyTimelineItemBody) => void;
@@ -46,6 +50,7 @@ export const useBlueskyAuthorModeration = (
   const { onModerated, removeItems = () => true, keptItemsNote } = options;
   const inFlightRef = useRef<boolean>(false);
   const reportInFlightRef = useRef<boolean>(false);
+  const threadInFlightRef = useRef<boolean>(false);
   const [notice, setNotice] = useState<string | undefined>(undefined);
   const [target, setTarget] = useState<IoriBlueskyTimelineItemBody | null>(null);
   const [isReporting, setIsReporting] = useState(false);
@@ -63,6 +68,32 @@ export const useBlueskyAuthorModeration = (
     const timer = setTimeout(() => setNotice(undefined), REPORTED_NOTICE_MS);
     return () => clearTimeout(timer);
   }, [notice]);
+
+  const changeThreadMuted = useCallback(
+    async (item: IoriBlueskyTimelineItemBody, muted: boolean) => {
+      if (threadInFlightRef.current) return;
+      threadInFlightRef.current = true;
+      try {
+        await (muted ? muteBlueskyThread(item.uri) : unmuteBlueskyThread(item.uri));
+        updateItems((items) => withBlueskyThreadMuted(items, item.replyRootUri ?? item.uri, muted));
+        setNotice(muted ? 'スレッドをミュートしました' : 'スレッドのミュートを解除しました');
+      } catch (cause) {
+        console.error('Failed to change thread mute:', cause);
+        alert(blueskyModerationFailureMessage('muteThread', cause));
+      } finally {
+        threadInFlightRef.current = false;
+      }
+    },
+    [updateItems],
+  );
+
+  const onMuteThread = useCallback((item: IoriBlueskyTimelineItemBody) => changeThreadMuted(item, true), [
+    changeThreadMuted,
+  ]);
+
+  const onUnmuteThread = useCallback((item: IoriBlueskyTimelineItemBody) => changeThreadMuted(item, false), [
+    changeThreadMuted,
+  ]);
 
   const onMuteAuthor = useCallback(
     async (item: IoriBlueskyTimelineItemBody) => {
@@ -151,6 +182,8 @@ export const useBlueskyAuthorModeration = (
   );
 
   return {
+    onMuteThread,
+    onUnmuteThread,
     onMuteAuthor,
     onBlockAuthor,
     onReportPost: open,

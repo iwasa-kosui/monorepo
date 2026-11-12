@@ -77,7 +77,7 @@ export const blueskyModerationFailureMessage = (action: BlueskyModerationAction,
     return 'Bluesky にログインできないため、操作できませんでした。';
   }
   if (action === 'muteThread' && isNotFoundError(error)) {
-    return '投稿が見つからないため、スレッドをミュートできませんでした';
+    return '投稿が見つからないため、スレッドのミュートを変更できませんでした';
   }
   return MODERATION_FAILURE_MESSAGES[action];
 };

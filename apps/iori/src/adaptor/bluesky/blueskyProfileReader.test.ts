@@ -173,3 +173,52 @@ describe('createBlueskyProfileReader.getAuthorFeed', () => {
     expect(await failing.reader.getAuthorFeed({ actor: DID, cursor: undefined })).toEqual({ ok: false, err: error });
   });
 });
+
+describe('createBlueskyProfileReader.getActorLikes', () => {
+  it('getActorLikes を actor と limit 30 で呼び、cursor は指定があるときだけ付ける', async () => {
+    const first = clientReturning(RA.ok({ feed: [] }));
+    const next = clientReturning(RA.ok({ feed: [] }));
+
+    await first.reader.getActorLikes({ actor: DID, cursor: undefined });
+    await next.reader.getActorLikes({ actor: DID, cursor: 'abc' });
+
+    expect(first.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getActorLikes', { actor: DID, limit: '30' });
+    expect(next.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getActorLikes', {
+      actor: DID,
+      limit: '30',
+      cursor: 'abc',
+    });
+  });
+
+  it('投稿とカーソルを返す', async () => {
+    const { reader } = clientReturning(RA.ok({ feed: [postView], cursor: 'next' }));
+
+    const result = await reader.getActorLikes({ actor: DID, cursor: undefined });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.val.cursor).toBe('next');
+    expect(result.val.items).toHaveLength(1);
+    expect(result.val.items[0]).toMatchObject({ uri: postView.post.uri, authorDid: DID, fetchedAt: NOW });
+  });
+
+  it('続きが無ければ cursor を undefined にする', async () => {
+    const { reader } = clientReturning(RA.ok({ feed: [postView] }));
+
+    const result = await reader.getActorLikes({ actor: DID, cursor: undefined });
+
+    expect(result.ok && result.val.cursor).toBeUndefined();
+  });
+
+  it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
+    const invalid = clientReturning(RA.ok({ posts: [] }));
+    const error = { type: 'BlueskyClientError', kind: 'network', message: 'x' } as const;
+    const failing = clientReturning(RA.err(error));
+
+    expect(await invalid.reader.getActorLikes({ actor: DID, cursor: undefined })).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(await failing.reader.getActorLikes({ actor: DID, cursor: undefined })).toEqual({ ok: false, err: error });
+  });
+});
