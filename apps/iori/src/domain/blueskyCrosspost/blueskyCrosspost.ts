@@ -10,6 +10,7 @@ import type { Visibility } from '../post/visibility.ts';
 export const BlueskyCrosspostStatus = z.enum(['pending', 'sent', 'failed', 'skipped', 'deleting']);
 export type BlueskyCrosspostStatus = z.infer<typeof BlueskyCrosspostStatus>;
 
+// content_warning と sensitive は、送らなかった過去の行を読むために残す
 export const BlueskySkipReason = z.enum(['visibility', 'content_warning', 'sensitive', 'reply_to_unsent']);
 export type BlueskySkipReason = z.infer<typeof BlueskySkipReason>;
 
@@ -131,16 +132,9 @@ export type BlueskyReplyContext =
   | Readonly<{ kind: 'sent'; root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
 
 const decideSkip = (
-  input: Readonly<{
-    visibility: Visibility;
-    summary: string | null;
-    sensitive: boolean;
-    replyTo: BlueskyReplyContext;
-  }>,
+  input: Readonly<{ visibility: Visibility; replyTo: BlueskyReplyContext }>,
 ): BlueskySkipReason | undefined => {
   if (input.visibility !== 'public') return 'visibility';
-  if (input.summary !== null && input.summary.trim() !== '') return 'content_warning';
-  if (input.sensitive) return 'sensitive';
   if (input.replyTo.kind === 'unsent') return 'reply_to_unsent';
   return undefined;
 };

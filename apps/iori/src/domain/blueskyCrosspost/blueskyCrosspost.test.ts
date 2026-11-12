@@ -5,8 +5,6 @@ import { BlueskyCrosspost } from './blueskyCrosspost.ts';
 
 const input = (overrides: Partial<Parameters<typeof BlueskyCrosspost.decideSkip>[0]> = {}) => ({
   visibility: 'public' as Visibility,
-  summary: null,
-  sensitive: false,
   replyTo: { kind: 'none' as const },
   ...overrides,
 });
@@ -20,11 +18,12 @@ describe('BlueskyCrosspost.decideSkip', () => {
     expect(BlueskyCrosspost.decideSkip(input({ visibility }))).toBe('visibility');
   });
 
-  it('visibility を他の理由より先に判定する', () => {
-    expect(
-      BlueskyCrosspost.decideSkip(
-        input({ visibility: 'private', summary: 'CW', sensitive: true, replyTo: { kind: 'unsent' } }),
-      ),
-    ).toBe('visibility');
+  it('visibility を返信先が未送信の理由より先に判定する', () => {
+    expect(BlueskyCrosspost.decideSkip(input({ visibility: 'private', replyTo: { kind: 'unsent' } })))
+      .toBe('visibility');
+  });
+
+  it('public で返信先が未送信なら reply_to_unsent でスキップする', () => {
+    expect(BlueskyCrosspost.decideSkip(input({ replyTo: { kind: 'unsent' } }))).toBe('reply_to_unsent');
   });
 });

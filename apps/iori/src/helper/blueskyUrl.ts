@@ -1,5 +1,7 @@
 export const BSKY_APP_URL = 'https://bsky.app';
 export const BLUESKY_STATUS_ID_PREFIX = 'bluesky:';
+export const blueskyPostUriPattern =
+  /^at:\/\/did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]\/app\.bsky\.feed\.post\/[a-zA-Z0-9._~:-]+$/;
 const atUriPattern = /^at:\/\/([^/]+)\/[^/]+\/([^/]+)$/;
 const postAtUriPattern = /^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/([^/]+)$/;
 const didPattern = /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/;

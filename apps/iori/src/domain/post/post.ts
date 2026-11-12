@@ -160,6 +160,8 @@ export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostResolverByUri = Agg.Resolver<{ uri: string }, RemotePost | undefined>;
 export type LocalPostResolverByUri = Agg.Resolver<{ uri: string }, LocalPost | undefined>;
+export type RemotePostUrisResolverByUris = Agg.Resolver<{ uris: readonly string[] }, readonly string[]>;
+export type LocalPostUrisResolverByUris = Agg.Resolver<{ uris: readonly string[] }, readonly string[]>;
 export type RemotePostAttachment = Readonly<{ url: string; altText: string | null }>;
 export type RemotePostIdentity = Readonly<{
   uri: string;
@@ -178,6 +180,7 @@ export type RemotePostIdentity = Readonly<{
   visibility: Visibility | null;
   recipientActorUris?: ReadonlyArray<string>;
   attachments?: readonly RemotePostAttachment[];
+  publishedAt?: Instant;
 }>;
 export type RemotePostUpserter = Agg.Resolver<RemotePostIdentity, RemotePost>;
 export type ThreadResolver = Agg.Resolver<

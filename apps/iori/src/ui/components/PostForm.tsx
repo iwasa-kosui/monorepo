@@ -3,7 +3,7 @@ import { useState } from 'hono/jsx';
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 import { createStatus, updateMedia, uploadMedia } from '../api/mastodonClient.ts';
-import { blueskyNotSentNotice, postedMessage } from './blueskyCrosspostMark.ts';
+import { blueskyCrosspostNotice, postedMessage } from './blueskyCrosspostMark.ts';
 import { downscaleImageForUpload } from './imageDownscale.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
@@ -30,7 +30,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const hasCw = cwEnabled && cw.trim() !== '';
   const hasImages = uploaded.length > 0;
   const sensitive = hasImages && (sensitiveChecked || hasCw);
-  const notice = blueskyNotSentNotice(destination, cwEnabled ? cw : '', sensitive);
+  const notice = blueskyCrosspostNotice(destination, cwEnabled ? cw : '', sensitive);
 
   const handleContentChange = (value: string) => {
     setContent(value);
@@ -43,7 +43,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
     try {
       const result = await submitPost(
         { content, uploaded, destination, cw: cwEnabled ? cw : '', sensitive: hasImages && sensitiveChecked },
-        { create: createStatus, updateMedia, onPosted },
+        { create: createStatus, updateMedia, onDescriptionSaved: handleDescriptionSaved, onPosted },
       );
       if (result.kind === 'posted') {
         setContent('');
@@ -85,7 +85,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
     for (const file of Array.from(files)) {
       try {
         const media = await uploadMedia(await downscaleImageForUpload(file));
-        newMedia.push({ id: media.id, url: media.url, description: '' });
+        newMedia.push({ id: media.id, url: media.url, description: '', savedDescription: '' });
       } catch (err) {
         alert('Upload failed: ' + (err as Error).message);
       }
@@ -102,6 +102,10 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
 
   const handleDescriptionChange = (index: number, description: string) => {
     setUploaded((prev) => prev.map((media, i) => (i === index ? { ...media, description } : media)));
+  };
+
+  const handleDescriptionSaved = (mediaId: string, savedDescription: string) => {
+    setUploaded((prev) => prev.map((media) => (media.id === mediaId ? { ...media, savedDescription } : media)));
   };
 
   const handleCwToggle = () => {
@@ -148,8 +152,8 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
               <textarea
                 value={description}
                 onInput={(e) => handleDescriptionChange(index, (e.target as HTMLTextAreaElement).value)}
-                placeholder='画像の説明（ALT）'
-                aria-label='画像の説明（ALT）'
+                placeholder={`画像${index + 1}の説明（ALT）`}
+                aria-label={`画像${index + 1}の説明（ALT）`}
                 maxlength={1500}
                 rows={2}
                 class='flex-1 min-w-0 px-3 py-2 text-sm rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none'
@@ -194,6 +198,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         <button
           type='button'
           aria-pressed={cwEnabled}
+          aria-label='注意書き（CW）を付ける'
           onClick={handleCwToggle}
           class={`px-2 py-1 text-xs font-medium rounded-clay border transition-colors ${
             cwEnabled

@@ -40,7 +40,8 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
       actorResolverByUri: deps.actorResolverByUri,
     })(identity.authorIdentity);
     if (!actor.ok) throw new Error('Failed to upsert remote actor');
-    const event = Post.createRemotePost(now)({
+    const createdAt = identity.publishedAt !== undefined && identity.publishedAt < now ? identity.publishedAt : now;
+    const event = Post.createRemotePost(createdAt)({
       content: identity.content,
       uri: identity.uri,
       actorId: actor.val.id,
