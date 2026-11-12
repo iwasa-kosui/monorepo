@@ -2,7 +2,7 @@ import { jsx } from 'hono/jsx';
 import { describe, expect, it } from 'vitest';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import type { BlueskyProfile } from '../api/blueskyProfileClient.ts';
+import { blueskyFeedNoticeMessage, type BlueskyProfile } from '../api/blueskyProfileClient.ts';
 import { BlueskyProfilePage } from './blueskyProfile.tsx';
 
 const profile = (overrides: Partial<BlueskyProfile> = {}): BlueskyProfile => ({
@@ -17,6 +17,7 @@ const profile = (overrides: Partial<BlueskyProfile> = {}): BlueskyProfile => ({
   postsCount: 1,
   following: false,
   followedBy: false,
+  followUri: null,
   ...overrides,
 });
 
@@ -48,6 +49,8 @@ const render = (
   String(jsx(BlueskyProfilePage, {
     profile: profile(overrides),
     items: [],
+    feedNotice: null,
+    isFeedLoading: false,
     isFollowing: false,
     isTogglingFollow: false,
     onFollow: async () => {},
@@ -112,6 +115,29 @@ describe('BlueskyProfilePage', () => {
     expect(html).toContain('href="https://bsky.app/profile/did:plc:alice"');
     expect(html).toContain('title="Bluesky で開く"');
     expect(html).toContain('target="_blank"');
+  });
+
+  it('投稿の場所に、読み込み中の表示と、ブロックや失敗の文言を出し、そのときは投稿を出さない', () => {
+    expect(render({}, { isFeedLoading: true })).toContain('Loading...');
+    expect(render({}, { isFeedLoading: true })).not.toContain('No posts yet.');
+
+    const blocked = render({}, {
+      items: [item],
+      feedNotice: blueskyFeedNoticeMessage({ unavailable: 'blocked', failed: false }),
+    });
+    expect(blocked).toContain('ブロックしているか、ブロックされているため、投稿を表示できません');
+    expect(blocked).not.toContain('最初の投稿');
+    expect(blocked).not.toContain('No posts yet.');
+
+    expect(render({}, { feedNotice: blueskyFeedNoticeMessage({ unavailable: null, failed: true }) }))
+      .toContain('投稿を読み込めませんでした');
+  });
+
+  it('投稿が読めなくても、プロフィールとフォローのボタンを出す', () => {
+    const html = render({}, { feedNotice: '投稿を読み込めませんでした', isFollowing: true });
+
+    expect(html).toContain('Alice');
+    expect(html).toContain('title="フォロー解除"');
   });
 
   it('投稿が無ければ空の表示、あれば投稿を出し、いいね・リポスト・返信のボタンは出さない', () => {

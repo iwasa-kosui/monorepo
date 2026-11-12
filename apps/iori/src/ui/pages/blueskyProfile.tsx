@@ -5,6 +5,7 @@ import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIor
 import { blueskyProfileUrlOfActor } from '../../helper/blueskyUrl.ts';
 import {
   blueskyActorOfPath,
+  blueskyFeedNoticeMessage,
   blueskyFollowFailureMessage,
   type BlueskyProfile,
   blueskyProfileLoadFailureMessage,
@@ -20,13 +21,17 @@ import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 type Props = Readonly<{
   profile: BlueskyProfile;
   items: readonly IoriBlueskyTimelineItemBody[];
+  feedNotice: string | null;
+  isFeedLoading: boolean;
   isFollowing: boolean;
   isTogglingFollow: boolean;
   onFollow: () => Promise<void>;
   onUnfollow: () => Promise<void>;
 }>;
 
-export const BlueskyProfilePage = ({ profile, items, isFollowing, isTogglingFollow, onFollow, onUnfollow }: Props) => {
+export const BlueskyProfilePage = (
+  { profile, items, feedNotice, isFeedLoading, isFollowing, isTogglingFollow, onFollow, onUnfollow }: Props,
+) => {
   const displayName = profile.displayName ?? profile.handle;
   const profileUrl = blueskyProfileUrlOfActor(profile.did);
 
@@ -157,7 +162,11 @@ export const BlueskyProfilePage = ({ profile, items, isFollowing, isTogglingFoll
 
       <section class='space-y-6 py-2'>
         <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>Posts</h2>
-        {items.length === 0
+        {isFeedLoading
+          ? <p class='text-charcoal-light dark:text-gray-400'>Loading...</p>
+          : feedNotice !== null
+          ? <p class='text-charcoal-light dark:text-gray-400'>{feedNotice}</p>
+          : items.length === 0
           ? <p class='text-charcoal-light dark:text-gray-400'>No posts yet.</p>
           : items.map((item) => <BlueskyTimelineItemView key={item.feedItemId} item={item} />)}
       </section>
@@ -167,15 +176,22 @@ export const BlueskyProfilePage = ({ profile, items, isFollowing, isTogglingFoll
 
 type ProfileData = Readonly<{
   profile: BlueskyProfile;
+  followUri: string | null;
+}>;
+
+type FeedData = Readonly<{
   items: readonly IoriBlueskyTimelineItemBody[];
   cursor: string | undefined;
-  isFollowing: boolean;
+  unavailable: 'blocked' | null;
+  failed: boolean;
 }>;
 
 const App = () => {
   const isFetchingMoreRef = useRef(false);
+  const isTogglingFollowRef = useRef(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
   const [data, setData] = useState<{ error: string } | ProfileData | null>(null);
+  const [feed, setFeed] = useState<FeedData | null>(null);
   const actor = blueskyActorOfPath(window.location.pathname);
 
   useEffect(() => {
@@ -183,15 +199,25 @@ const App = () => {
       setData({ error: blueskyProfileLoadFailureMessage(undefined) });
       return;
     }
-    const fetchFirstPage = async () => {
+    const fetchProfile = async () => {
       try {
-        const [profile, page] = await Promise.all([fetchBlueskyProfile(actor), fetchBlueskyAuthorFeed(actor)]);
-        setData({ profile, items: page.items, cursor: page.cursor ?? undefined, isFollowing: profile.following });
+        const profile = await fetchBlueskyProfile(actor);
+        setData({ profile, followUri: profile.followUri });
       } catch (error) {
         console.error('Failed to load Bluesky profile:', error);
         setData({ error: blueskyProfileLoadFailureMessage(error) });
       }
     };
+    const fetchFirstPage = async () => {
+      try {
+        const page = await fetchBlueskyAuthorFeed(actor);
+        setFeed({ items: page.items, cursor: page.cursor ?? undefined, unavailable: page.unavailable, failed: false });
+      } catch (error) {
+        console.error('Failed to load Bluesky posts:', error);
+        setFeed({ items: [], cursor: undefined, unavailable: null, failed: true });
+      }
+    };
+    fetchProfile();
     fetchFirstPage();
   }, [actor]);
 
@@ -203,8 +229,8 @@ const App = () => {
     try {
       const page = await fetchBlueskyAuthorFeed(actor, cursor);
       const next = page.items.length === 0 || page.cursor === cursor ? undefined : page.cursor ?? undefined;
-      setData((prev) =>
-        prev === null || 'error' in prev
+      setFeed((prev) =>
+        prev === null
           ? prev
           : { ...prev, items: appendUniqueBy(prev.items, page.items, (item) => item.feedItemId), cursor: next }
       );
@@ -215,20 +241,26 @@ const App = () => {
     }
   }, [actor]);
 
-  useInfiniteScroll({ nextCursor: loaded?.cursor, onLoadMore: loadMore });
+  useInfiniteScroll({ nextCursor: feed?.cursor, onLoadMore: loadMore });
 
   const toggleFollow = async (follow: boolean) => {
-    if (loaded === undefined) return;
+    if (loaded === undefined || isTogglingFollowRef.current) return;
+    isTogglingFollowRef.current = true;
     setIsTogglingFollow(true);
     try {
-      const result = follow
-        ? await followBlueskyActor(loaded.profile.did)
-        : await unfollowBlueskyActor(loaded.profile.did);
-      setData((prev) => prev === null || 'error' in prev ? prev : { ...prev, isFollowing: result.following });
+      const followUri = loaded.followUri ?? undefined;
+      let nextFollowUri: string | null = null;
+      if (follow) {
+        nextFollowUri = (await followBlueskyActor(loaded.profile.did, followUri)).followUri;
+      } else {
+        await unfollowBlueskyActor(loaded.profile.did, followUri);
+      }
+      setData((prev) => prev === null || 'error' in prev ? prev : { ...prev, followUri: nextFollowUri });
     } catch (error) {
       console.error(follow ? 'Failed to follow:' : 'Failed to unfollow:', error);
       alert(blueskyFollowFailureMessage(error));
     } finally {
+      isTogglingFollowRef.current = false;
       setIsTogglingFollow(false);
     }
   };
@@ -244,8 +276,10 @@ const App = () => {
   return (
     <BlueskyProfilePage
       profile={data.profile}
-      items={data.items}
-      isFollowing={data.isFollowing}
+      items={feed?.items ?? []}
+      feedNotice={feed === null ? null : blueskyFeedNoticeMessage(feed)}
+      isFeedLoading={feed === null}
+      isFollowing={data.followUri !== null}
       isTogglingFollow={isTogglingFollow}
       onFollow={() => toggleFollow(true)}
       onUnfollow={() => toggleFollow(false)}

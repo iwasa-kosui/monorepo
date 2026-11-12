@@ -470,6 +470,24 @@ describe('createBlueskyClient の各操作', () => {
     expect(calls[0]?.init.method).toBe('GET');
   });
 
+  it('getRecord は collection に app.bsky.graph.follow を渡すと follow の uri を返す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ uri: 'at://did:plc:abc/app.bsky.graph.follow/3kf', cid: 'bafyf', value: {} }),
+    ]);
+
+    const result = await client.getRecord('3kf', 'app.bsky.graph.follow');
+
+    expect(result).toMatchObject({
+      ok: true,
+      val: { uri: 'at://did:plc:abc/app.bsky.graph.follow/3kf', cid: 'bafyf', rkey: '3kf' },
+    });
+    expect(Object.fromEntries(new URL(calls[0]!.url).searchParams)).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.graph.follow',
+      rkey: '3kf',
+    });
+  });
+
   it('getRecord は無い record を http エラーで返す', async () => {
     const { client } = setup(stored(), [() => json({ error: 'RecordNotFound' }, 400)]);
     expect(await client.getRecord('3k9')).toMatchObject({ ok: false, err: { kind: 'http', code: 'RecordNotFound' } });

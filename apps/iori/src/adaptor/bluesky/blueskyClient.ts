@@ -257,9 +257,9 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           ? RA.err(clientError('invalid_response', 'createRecord returned an unexpected uri'))
           : RA.ok({ uri: created.val.uri, cid: created.val.cid, rkey: createdRkey });
       }),
-    getRecord: (rkey) =>
+    getRecord: (rkey, collection = POST_COLLECTION) =>
       withSession(async (session) => {
-        const query = new URLSearchParams({ repo: session.did, collection: POST_COLLECTION, rkey });
+        const query = new URLSearchParams({ repo: session.did, collection, rkey });
         const found = await call(
           'getRecord',
           `${session.pdsUrl}/xrpc/com.atproto.repo.getRecord?${query.toString()}`,
@@ -267,7 +267,8 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           createRecordResponseSchema,
         );
         if (!found.ok) return found;
-        const foundRkey = recordUriPattern.exec(found.val.uri)?.[1];
+        const foundRkey = (collection === FOLLOW_COLLECTION ? followUriPattern : recordUriPattern).exec(found.val.uri)
+          ?.[1];
         return foundRkey === undefined
           ? RA.err(clientError('invalid_response', 'getRecord returned an unexpected uri'))
           : RA.ok({ uri: found.val.uri, cid: found.val.cid, rkey: foundRkey });

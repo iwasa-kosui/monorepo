@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   blueskyActorOfPath,
+  blueskyFeedNoticeMessage,
   blueskyFollowFailureMessage,
   blueskyProfileLoadFailureMessage,
   fetchBlueskyAuthorFeed,
@@ -67,6 +68,19 @@ describe('blueskyProfileClient', () => {
     expect(unfollowed.mock.calls[0]?.[1]?.method).toBe('DELETE');
   });
 
+  it('followUri があれば、フォローは body に、解除はクエリに載せる', async () => {
+    const uri = 'at://did:plc:me/app.bsky.graph.follow/3k1';
+    const followed = stubFetch(json({ following: true, followUri: uri }));
+    await followBlueskyActor('did:plc:alice', uri);
+    expect(followed.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ did: 'did:plc:alice', followUri: uri }));
+
+    const unfollowed = stubFetch(json({ following: false }));
+    await unfollowBlueskyActor('did:plc:alice', uri);
+    expect(unfollowed.mock.calls[0]?.[0]).toBe(
+      `/api/iori/v1/bluesky/follows?did=did%3Aplc%3Aalice&followUri=${encodeURIComponent(uri)}`,
+    );
+  });
+
   it('失敗した応答は status と error の文言を持つエラーにする', async () => {
     stubFetch(json({ error: 'Profile not found' }, 404));
 
@@ -78,10 +92,21 @@ describe('blueskyProfileClient', () => {
     const notFound = await failure(fetchBlueskyProfile('x'));
     stubFetch(json({ error: 'Bluesky request failed' }, 502));
     const bad = await failure(fetchBlueskyProfile('x'));
+    stubFetch(json({ error: 'Bluesky timeline is disabled' }, 409));
+    const disabled = await failure(fetchBlueskyProfile('x'));
 
     expect(blueskyProfileLoadFailureMessage(notFound)).toBe('この Bluesky のアカウントは見つかりません');
+    expect(blueskyProfileLoadFailureMessage(disabled)).toBe('Bluesky の連携が無効です');
     expect(blueskyProfileLoadFailureMessage(bad)).toBe('プロフィールを読み込めませんでした');
     expect(blueskyProfileLoadFailureMessage(new Error('x'))).toBe('プロフィールを読み込めませんでした');
+  });
+
+  it('投稿の一覧の文言を、ブロック、取得の失敗、問題なしで分ける', () => {
+    expect(blueskyFeedNoticeMessage({ unavailable: 'blocked', failed: false })).toBe(
+      'ブロックしているか、ブロックされているため、投稿を表示できません',
+    );
+    expect(blueskyFeedNoticeMessage({ unavailable: null, failed: true })).toBe('投稿を読み込めませんでした');
+    expect(blueskyFeedNoticeMessage({ unavailable: null, failed: false })).toBeNull();
   });
 
   it('フォロー・解除の失敗の文言を、ログイン失敗とそれ以外で分ける', async () => {

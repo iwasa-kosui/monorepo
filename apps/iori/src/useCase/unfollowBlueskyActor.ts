@@ -8,7 +8,7 @@ import {
 } from '../ports/blueskyProfileReader.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{ did: string }>;
+type Input = Readonly<{ did: string; followUri?: string | undefined }>;
 
 type Ok = Readonly<{ following: false }>;
 
@@ -22,13 +22,14 @@ type Deps = Readonly<{
 }>;
 
 const create = ({ reader, client }: Deps): UnfollowBlueskyActorUseCase => {
-  const run = async ({ did }: Input): RA<Ok, Err> => {
+  const run = async ({ did, followUri }: Input): RA<Ok, Err> => {
     const profile = await reader.getProfile(did);
     if (!profile.ok) {
       return RA.err(isBlueskyProfileNotFound(profile.err) ? { type: 'BlueskyProfileNotFound' } : profile.err);
     }
-    if (profile.val.viewerFollowingUri === undefined) return RA.ok({ following: false });
-    const deleted = await client.deleteFollow(profile.val.viewerFollowingUri);
+    const target = followUri ?? profile.val.viewerFollowingUri;
+    if (target === undefined) return RA.ok({ following: false });
+    const deleted = await client.deleteFollow(target);
     return deleted.ok ? RA.ok({ following: false }) : RA.err(deleted.err);
   };
 

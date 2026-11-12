@@ -26,19 +26,25 @@ export const fetchBlueskyProfile = (actor: string): Promise<BlueskyProfile> =>
 export const fetchBlueskyAuthorFeed = (actor: string, cursor?: string): Promise<BlueskyAuthorFeedPage> =>
   get<BlueskyAuthorFeedPage>(requestUrl(`${PROFILES_PATH}/${encodeURIComponent(actor)}/feed`, { cursor }));
 
-export const followBlueskyActor = async (did: string): Promise<IoriBlueskyFollowResponse> => {
+export const followBlueskyActor = async (
+  did: string,
+  followUri?: string,
+): Promise<IoriBlueskyFollowResponse> => {
   const res = await fetch(FOLLOWS_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ did }),
+    body: JSON.stringify(followUri === undefined ? { did } : { did, followUri }),
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as IoriBlueskyFollowResponse;
 };
 
-export const unfollowBlueskyActor = async (did: string): Promise<IoriBlueskyUnfollowResponse> => {
-  const res = await fetch(requestUrl(FOLLOWS_PATH, { did }), {
+export const unfollowBlueskyActor = async (
+  did: string,
+  followUri?: string,
+): Promise<IoriBlueskyUnfollowResponse> => {
+  const res = await fetch(requestUrl(FOLLOWS_PATH, { did, followUri }), {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     credentials: 'same-origin',
@@ -47,10 +53,18 @@ export const unfollowBlueskyActor = async (did: string): Promise<IoriBlueskyUnfo
   return await res.json() as IoriBlueskyUnfollowResponse;
 };
 
-export const blueskyProfileLoadFailureMessage = (error: unknown): string =>
-  isMastodonApiError(error) && error.status === 404
-    ? 'この Bluesky のアカウントは見つかりません'
-    : 'プロフィールを読み込めませんでした';
+export const blueskyProfileLoadFailureMessage = (error: unknown): string => {
+  if (isMastodonApiError(error) && error.status === 404) return 'この Bluesky のアカウントは見つかりません';
+  if (isMastodonApiError(error) && error.status === 409) return 'Bluesky の連携が無効です';
+  return 'プロフィールを読み込めませんでした';
+};
+
+export const blueskyFeedNoticeMessage = (
+  feed: Readonly<{ unavailable: 'blocked' | null; failed: boolean }>,
+): string | null => {
+  if (feed.unavailable === 'blocked') return 'ブロックしているか、ブロックされているため、投稿を表示できません';
+  return feed.failed ? '投稿を読み込めませんでした' : null;
+};
 
 export const blueskyFollowFailureMessage = (error: unknown): string =>
   isMastodonApiError(error) && error.message === LOGIN_FAILED_MESSAGE

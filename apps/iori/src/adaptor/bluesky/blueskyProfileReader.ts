@@ -3,7 +3,7 @@ import z from 'zod/v4';
 
 import type { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
-import type { BlueskyProfileReader } from '../../ports/blueskyProfileReader.ts';
+import { type BlueskyProfileReader, isBlueskyActorBlocked } from '../../ports/blueskyProfileReader.ts';
 import { httpUrlOrNull, parseBlueskyTimelineResponse } from './blueskyTimelineResponse.ts';
 
 const AUTHOR_FEED_LIMIT = '30';
@@ -60,10 +60,14 @@ export const createBlueskyProfileReader = (
       filter: AUTHOR_FEED_FILTER,
       ...(cursor === undefined ? {} : { cursor }),
     });
-    if (!response.ok) return response;
+    if (!response.ok) {
+      return isBlueskyActorBlocked(response.err)
+        ? RA.ok({ items: [], cursor: undefined, unavailable: 'blocked' })
+        : response;
+    }
     const parsed = parseBlueskyTimelineResponse(response.val, deps.now());
     return parsed.ok
-      ? RA.ok({ items: parsed.val.items, cursor: parsed.val.cursor })
+      ? RA.ok({ items: parsed.val.items, cursor: parsed.val.cursor, unavailable: null })
       : RA.err(invalidResponse('getAuthorFeed'));
   },
 });

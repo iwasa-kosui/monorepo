@@ -81,19 +81,22 @@ const setup = async (options: {
   owner?: boolean;
   enabled?: boolean;
   reader?: Partial<BlueskyProfileReader>;
-  client?: Partial<Pick<BlueskyClient, 'createFollow' | 'deleteFollow'>>;
+  client?: Partial<Pick<BlueskyClient, 'createFollow' | 'deleteFollow' | 'getRecord'>>;
 }) => {
   const harness = createOAuthHarness();
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
   const reader: BlueskyProfileReader = {
     getProfile: vi.fn(async () => RA.ok(profile())),
-    getAuthorFeed: vi.fn(async () => RA.ok({ items: [feedItem], cursor: 'next-cursor' })),
+    getAuthorFeed: vi.fn(async () => RA.ok({ items: [feedItem], cursor: 'next-cursor', unavailable: null })),
     ...options.reader,
   };
   const client = {
     createFollow: vi.fn<BlueskyClient['createFollow']>(async () => RA.ok({ uri: NEW_FOLLOW_URI })),
     deleteFollow: vi.fn<BlueskyClient['deleteFollow']>(async () => RA.ok(undefined)),
+    getRecord: vi.fn<BlueskyClient['getRecord']>(async () =>
+      RA.err(clientError({ status: 400, code: 'RecordNotFound' }))
+    ),
     ...options.client,
   };
   const enabled = options.enabled !== false;
@@ -187,8 +190,17 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor', () => {
       postsCount: 1,
       following: true,
       followedBy: true,
+      followUri: FOLLOW_URI,
     });
     expect(t.reader.getProfile).toHaveBeenCalledExactlyOnceWith(DID);
+  });
+
+  it('フォローしていなければ followUri を null にする', async () => {
+    const t = await setup({ scope: 'read:accounts' });
+
+    const response = await t.get(`${PROFILES}/${DID}`);
+
+    expect(await response.json()).toMatchObject({ following: false, followUri: null });
   });
 
   it('ハンドルでも引ける', async () => {
@@ -246,6 +258,7 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
     expect(response.status).toBe(200);
     const body = await response.json() as { items: Array<Record<string, unknown>>; cursor: string | null };
     expect(body.cursor).toBe('next-cursor');
+    expect(body).toMatchObject({ unavailable: null });
     expect(body.items).toEqual([{
       feedItemId: feedItem.feedItemId,
       uri: feedItem.uri,
@@ -272,13 +285,27 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
   it('続きが無いとき cursor を null にし、cursor を付けなければ undefined で呼ぶ', async () => {
     const t = await setup({
       scope: 'read:accounts',
-      reader: { getAuthorFeed: vi.fn(async () => RA.ok({ items: [], cursor: undefined })) },
+      reader: { getAuthorFeed: vi.fn(async () => RA.ok({ items: [], cursor: undefined, unavailable: null })) },
     });
 
     const response = await t.get(`${PROFILES}/${DID}/feed`);
 
-    expect(await response.json()).toEqual({ items: [], cursor: null });
+    expect(await response.json()).toEqual({ items: [], cursor: null, unavailable: null });
     expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: undefined });
+  });
+
+  it('ブロック関係で読めないときは 200 で空の投稿と unavailable: blocked を返す', async () => {
+    const t = await setup({
+      scope: 'read:accounts',
+      reader: {
+        getAuthorFeed: vi.fn(async () => RA.ok({ items: [], cursor: undefined, unavailable: 'blocked' as const })),
+      },
+    });
+
+    const response = await t.get(`${PROFILES}/${DID}/feed`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ items: [], cursor: null, unavailable: 'blocked' });
   });
 
   it('アカウントが無ければ 404、失敗は 502 にする', async () => {
@@ -343,6 +370,32 @@ describe('POST /api/iori/v1/bluesky/follows', () => {
     const response = await t.send('POST', FOLLOWS, { did: DID });
 
     expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ following: true, followUri: NEW_FOLLOW_URI });
+    expect(t.client.createFollow).toHaveBeenCalledExactlyOnceWith(DID);
+  });
+
+  it('body の followUri の記録が自分の repo にあれば、createFollow を呼ばずにその uri を返す', async () => {
+    const t = await setup({
+      scope: 'write:follows',
+      client: { getRecord: vi.fn(async () => RA.ok({ uri: FOLLOW_URI, cid: 'cid', rkey: '3kfollow' })) },
+    });
+
+    const response = await t.send('POST', FOLLOWS, { did: DID, followUri: FOLLOW_URI });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ following: true, followUri: FOLLOW_URI });
+    expect(t.client.getRecord).toHaveBeenCalledExactlyOnceWith('3kfollow', 'app.bsky.graph.follow');
+    expect(t.client.createFollow).not.toHaveBeenCalled();
+  });
+
+  it('getProfile が古い viewer.following を返しても、記録が無ければ createFollow を呼ぶ', async () => {
+    const t = await setup({
+      scope: 'write:follows',
+      reader: { getProfile: vi.fn(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW_URI }))) },
+    });
+
+    const response = await t.send('POST', FOLLOWS, { did: DID });
+
     expect(await response.json()).toEqual({ following: true, followUri: NEW_FOLLOW_URI });
     expect(t.client.createFollow).toHaveBeenCalledExactlyOnceWith(DID);
   });
@@ -425,6 +478,19 @@ describe('DELETE /api/iori/v1/bluesky/follows', () => {
     });
 
     const response = await unfollow(t);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ following: false });
+    expect(t.client.deleteFollow).toHaveBeenCalledExactlyOnceWith(FOLLOW_URI);
+  });
+
+  it('viewer.following が無くても、followUri をクエリで受け取れば deleteFollow を呼ぶ', async () => {
+    const t = await setup({ scope: 'write:follows' });
+
+    const response = await t.send(
+      'DELETE',
+      `${FOLLOWS}?did=${encodeURIComponent(DID)}&followUri=${encodeURIComponent(FOLLOW_URI)}`,
+    );
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ following: false });

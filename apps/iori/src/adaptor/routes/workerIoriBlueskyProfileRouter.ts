@@ -35,11 +35,13 @@ export type IoriBlueskyProfileBody = Readonly<{
   postsCount: number;
   following: boolean;
   followedBy: boolean;
+  followUri: string | null;
 }>;
 
 export type IoriBlueskyAuthorFeedResponse = Readonly<{
   items: readonly IoriBlueskyTimelineItemBody[];
   cursor: string | null;
+  unavailable: 'blocked' | null;
 }>;
 
 export type IoriBlueskyFollowResponse = Readonly<{ following: true; followUri: string }>;
@@ -63,6 +65,7 @@ const toProfileBody = (profile: BlueskyProfile): IoriBlueskyProfileBody => ({
   postsCount: profile.postsCount,
   following: profile.viewerFollowingUri !== undefined,
   followedBy: profile.viewerFollowedBy,
+  followUri: profile.viewerFollowingUri ?? null,
 });
 
 const failure = (c: Context, error: BlueskyClientError | BlueskyProfileNotFound) => {
@@ -100,6 +103,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
           {
             items: page.val.items.map(toItemBody),
             cursor: page.val.cursor ?? null,
+            unavailable: page.val.unavailable,
           } satisfies IoriBlueskyAuthorFeedResponse,
         )
         : failure(c, page.err);
@@ -111,9 +115,13 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       async (c) => {
         if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
         if (followBlueskyActorUseCase === undefined) return c.json(disabled, 409);
-        const did = bodyString(await readRequestBody(c), 'did');
+        const body = await readRequestBody(c);
+        const did = bodyString(body, 'did');
         if (!isDid(did)) return c.json({ error: 'Validation failed: did' }, 400);
-        const followed = await followBlueskyActorUseCase.run({ did });
+        const followed = await followBlueskyActorUseCase.run({
+          did,
+          followUri: bodyString(body, 'followUri') || undefined,
+        });
         return followed.ok ? c.json(followed.val satisfies IoriBlueskyFollowResponse) : failure(c, followed.err);
       },
     )
@@ -126,7 +134,10 @@ export const createWorkerIoriBlueskyProfileRouter = ({
         if (unfollowBlueskyActorUseCase === undefined) return c.json(disabled, 409);
         const did = c.req.query('did');
         if (!isDid(did)) return c.json({ error: 'Validation failed: did' }, 400);
-        const unfollowed = await unfollowBlueskyActorUseCase.run({ did });
+        const unfollowed = await unfollowBlueskyActorUseCase.run({
+          did,
+          followUri: c.req.query('followUri') || undefined,
+        });
         return unfollowed.ok
           ? c.json(unfollowed.val satisfies IoriBlueskyUnfollowResponse)
           : failure(c, unfollowed.err);

@@ -138,9 +138,28 @@ describe('createBlueskyProfileReader.getAuthorFeed', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.val.cursor).toBe('next');
+    expect(result.val.unavailable).toBeNull();
     expect(result.val.items).toHaveLength(1);
     expect(result.val.items[0]).toMatchObject({ uri: postView.post.uri, authorDid: DID, fetchedAt: NOW });
   });
+
+  it.each(['BlockedActor', 'BlockedByActor'])(
+    '400 の %s はエラーにせず、空の投稿一覧と unavailable: blocked を返す',
+    async (code) => {
+      const { reader } = clientReturning(RA.err({
+        type: 'BlueskyClientError',
+        kind: 'http',
+        message: `getAuthorFeed failed: status 400 ${code}`,
+        status: 400,
+        code,
+      }));
+
+      expect(await reader.getAuthorFeed({ actor: DID, cursor: undefined })).toEqual({
+        ok: true,
+        val: { items: [], cursor: undefined, unavailable: 'blocked' },
+      });
+    },
+  );
 
   it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
     const invalid = clientReturning(RA.ok({ posts: [] }));
