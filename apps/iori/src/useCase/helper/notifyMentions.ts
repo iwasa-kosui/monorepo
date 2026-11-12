@@ -43,6 +43,7 @@ export const notifyMentions = ({
 }: Deps) =>
 async ({ now, mentioner, mentionPostId, recipientActorUris, replyRecipientUserId }: Params): Promise<void> => {
   const created: UserId[] = [];
+  const storeFailures: unknown[] = [];
   for (const recipientUri of recipientActorUris) {
     const recipientResult = await actorResolverByUri.resolve(recipientUri);
     const recipient = recipientResult.ok ? recipientResult.val : undefined;
@@ -74,6 +75,7 @@ async ({ now, mentioner, mentionPostId, recipientActorUris, replyRecipientUserId
       await mentionNotificationCreatedStore.store(Notification.createMentionNotification(notification, now));
     } catch (error) {
       getLogger().warn(`Failed to store a mention notification for ${recipientUri}: ${String(error)}`);
+      storeFailures.push(error);
       continue;
     }
     created.push(recipient.userId);
@@ -97,5 +99,12 @@ async ({ now, mentioner, mentionPostId, recipientActorUris, replyRecipientUserId
     } catch (error) {
       getLogger().warn(`Failed to send a mention Web Push to ${userId}: ${String(error)}`);
     }
+  }
+
+  if (storeFailures.length > 0) {
+    throw new Error(
+      `Failed to store ${storeFailures.length} mention notification(s): ${storeFailures.map(String).join('; ')}`,
+      { cause: storeFailures },
+    );
   }
 };
