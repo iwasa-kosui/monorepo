@@ -47,6 +47,7 @@ describe('D1 timeline and posting adapters', () => {
       userId: event.aggregateState.userId,
       inReplyToUri: null,
       visibility: 'public',
+      sourceText: null,
     });
     expect(eventInsert.values).toMatchObject({
       eventId: event.eventId,

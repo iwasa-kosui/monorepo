@@ -35,6 +35,7 @@ type Input =
   & PostImagesInput
   & Readonly<{
     content: string;
+    sourceText?: string;
     summary?: string | null;
     sensitive?: boolean;
     visibility?: Exclude<Visibility, 'direct'>;
@@ -94,7 +95,7 @@ const create = ({
       RA.ok(input),
       RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-      RA.andBind('postEvent', ({ actor, content, summary, sensitive, visibility, quoteUri }) => {
+      RA.andBind('postEvent', ({ actor, content, sourceText, summary, sensitive, visibility, quoteUri }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content: quoteUri === undefined ? content : appendQuoteInline(content, quoteUri),
@@ -103,6 +104,7 @@ const create = ({
           sensitive,
           visibility,
           quoteUri,
+          sourceText,
         });
         return RA.ok(postEvent);
       }),

@@ -66,6 +66,7 @@ import { UndoLikeUseCase } from '../../../../useCase/undoLike.ts';
 import { UndoRepostUseCase } from '../../../../useCase/undoRepost.ts';
 import { UndoRepostBlueskyPostUseCase } from '../../../../useCase/undoRepostBlueskyPost.ts';
 import { UnlikeBlueskyPostUseCase } from '../../../../useCase/unlikeBlueskyPost.ts';
+import { UpdatePostUseCase } from '../../../../useCase/updatePost.ts';
 import type { IoriWorkerEnv } from '../../../../workerEnv.ts';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../../d1/__tests__/sqliteFixture.ts';
@@ -134,6 +135,7 @@ import { createD1FollowRequestedStore } from '../../../d1/follow/followRequested
 import { createD1FollowResolver } from '../../../d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../../../d1/follow/undoFollowingProcessedStore.ts';
 import { createD1PostImageCreatedStore } from '../../../d1/image/postImageCreatedStore.ts';
+import { createD1PostImagesResolverByPostId } from '../../../d1/image/postImagesResolver.ts';
 import { createD1InterestSourceDeletedStore } from '../../../d1/interestSource/interestSourceDeletedStore.ts';
 import { createD1InterestSourceEmbeddingCopiedStore } from '../../../d1/interestSource/interestSourceEmbeddingCopiedStore.ts';
 import { createD1InterestSourcesResolverByUserIdAndRefAndKinds } from '../../../d1/interestSource/interestSourcesResolverByUserIdAndRefAndKinds.ts';
@@ -170,6 +172,8 @@ import { createD1PostExtrasResolverByPosts } from '../../../d1/post/postExtrasRe
 import { createD1PostQuotesResolverByPostIds } from '../../../d1/post/postQuotesResolverByPostIds.ts';
 import { createD1PostResolver } from '../../../d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../../../d1/post/postResolverByUri.ts';
+import { createD1PostSourceTextResolver } from '../../../d1/post/postSourceTextResolver.ts';
+import { createD1PostUpdatedStore } from '../../../d1/post/postUpdatedStore.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../../../d1/post/remotePostUpserter.ts';
 import { createD1RemotePostUrisResolverByUris } from '../../../d1/post/remotePostUrisResolverByUris.ts';
@@ -429,6 +433,17 @@ export const setupReadApi = (
             origin: ORIGIN,
             scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),
+          updatePostUseCase: UpdatePostUseCase.create({
+            sessionResolver,
+            userResolver,
+            postResolver,
+            postUpdatedStore: createD1PostUpdatedStore(db),
+            postImagesResolver: createD1PostImagesResolverByPostId(db),
+            postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
+            acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+            origin: ORIGIN,
+          }),
+          postSourceTextResolver: createD1PostSourceTextResolver(db),
           deletePostUseCase: DeletePostUseCase.create({
             sessionResolver,
             userResolver,

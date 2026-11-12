@@ -140,6 +140,7 @@ export const enrichPostRows = async (
           ...row.posts,
           ...row.local_posts,
           visibility: Visibility.parseOrThrow(row.local_posts.visibility),
+          editedAt: row.local_posts.editedAt?.getTime(),
           type: 'local',
           createdAt: row.posts.createdAt.getTime(),
         }),

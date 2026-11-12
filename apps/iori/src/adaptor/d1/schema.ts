@@ -142,6 +142,8 @@ export const localPostsTable = sqliteTable('local_posts', {
   userId: text('userId').notNull().references(() => usersTable.userId),
   inReplyToUri: text('inReplyToUri'),
   visibility: text('visibility').notNull().default('public'),
+  sourceText: text('sourceText'),
+  editedAt: timestamp(),
 }, (table) => [
   index('local_posts_in_reply_to_uri_idx').on(table.inReplyToUri),
 ]);

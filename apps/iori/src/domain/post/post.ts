@@ -25,6 +25,7 @@ const localPostZodType = z.object({
   summary: z.nullable(z.string()),
   sensitive: z.boolean(),
   visibility: Visibility.zodTypeOrPublic,
+  editedAt: z.optional(Instant.zodType),
 });
 const remotePostZodType = z.object({
   type: z.literal('remote'),
@@ -70,27 +71,47 @@ export type PostEvent<
 
 export const PostEvent = AggregateEvent.createFactory<PostAggregate>('post');
 
-export type PostCreated = PostEvent<Post, 'post.created', Post & { quoteUri: string | null }>;
+export type PostCreated = PostEvent<
+  Post,
+  'post.created',
+  Post & { quoteUri: string | null; sourceText: string | null }
+>;
 export type RemotePostCreated = PostEvent<
   RemotePost,
   'post.remotePostCreated',
   RemotePost & { recipientActorUris: ReadonlyArray<string>; quoteUri: string | null }
+>;
+export type PostUpdated = PostEvent<
+  LocalPost,
+  'post.updated',
+  {
+    postId: PostId;
+    content: string;
+    summary: string | null;
+    sensitive: boolean;
+    sourceText: string;
+    editedAt: Instant;
+  }
 >;
 export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
 
 const createPost = (now: Instant) =>
 (
   payload:
-    & Omit<LocalPost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri' | 'summary' | 'sensitive' | 'visibility'>
+    & Omit<
+      LocalPost,
+      'type' | 'createdAt' | 'postId' | 'inReplyToUri' | 'summary' | 'sensitive' | 'visibility' | 'editedAt'
+    >
     & {
       inReplyToUri?: string | null;
       summary?: string | null;
       sensitive?: boolean;
       visibility?: Visibility;
       quoteUri?: string | null;
+      sourceText?: string | null;
     },
-): PostEvent<LocalPost, 'post.created', LocalPost & { quoteUri: string | null }> => {
-  const { quoteUri = null, ...postPayload } = payload;
+): PostEvent<LocalPost, 'post.created', LocalPost & { quoteUri: string | null; sourceText: string | null }> => {
+  const { quoteUri = null, sourceText = null, ...postPayload } = payload;
   const postId = PostId.generate();
   const post: LocalPost = {
     ...postPayload,
@@ -106,7 +127,23 @@ const createPost = (now: Instant) =>
     postId,
     post,
     'post.created',
-    { ...post, quoteUri },
+    { ...post, quoteUri, sourceText },
+    now,
+  );
+};
+
+const updatePost = (now: Instant) =>
+(
+  post: LocalPost,
+  changes: Readonly<{ content: string; summary: string | null; sensitive: boolean; sourceText: string }>,
+): PostUpdated => {
+  const { sourceText, ...fields } = changes;
+  const updated: LocalPost = { ...post, ...fields, editedAt: now };
+  return PostEvent.create(
+    post.postId,
+    updated,
+    'post.updated',
+    { postId: post.postId, ...fields, sourceText, editedAt: now },
     now,
   );
 };
@@ -159,13 +196,16 @@ export const Post = {
   ...schema,
   createPost,
   createRemotePost,
+  updatePost,
   deletePost,
   isVisibleToAnonymous,
 } as const;
 
 export type PostCreatedStore = Agg.Store<PostCreated | RemotePostCreated>;
+export type PostUpdatedStore = Agg.Store<PostUpdated>;
 export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
+export type PostSourceTextResolver = Agg.Resolver<PostId, string | null>;
 export type PostQuote = Readonly<{
   uri: string;
   author: Readonly<{ id: string; inboxUrl: string; username: string | null }> | null;

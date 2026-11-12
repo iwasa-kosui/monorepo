@@ -242,6 +242,8 @@ export default {
             createPostUseCase: runtime.posting.createPostUseCase,
             remoteActorLookup: runtime.posting.remoteActorLookup,
             sendReplyUseCase: runtime.core.sendReplyUseCase,
+            updatePostUseCase: runtime.core.updatePostUseCase,
+            postSourceTextResolver: runtime.core.postSourceTextResolver,
             deletePostUseCase: runtime.core.deletePostUseCase,
             authn,
             createContext,

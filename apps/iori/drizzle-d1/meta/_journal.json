@@ -288,6 +288,13 @@
       "when": 1794464345893,
       "tag": "0040_post_image_media_type",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1794467897224,
+      "tag": "0060_post_edit",
+      "breakpoints": true
     }
   ]
 }

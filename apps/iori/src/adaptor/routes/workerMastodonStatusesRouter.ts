@@ -12,6 +12,7 @@ import { Scope } from '../../domain/oauth/scope.ts';
 import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 import {
   Post,
+  type PostSourceTextResolver,
   type PostsWithAuthorResolverByPostIds,
   type PostWithAuthor,
   type ThreadResolver,
@@ -33,6 +34,7 @@ import type { SendReplyUseCase } from '../../useCase/sendReply.ts';
 import type { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import type { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
+import type { UpdatePostUseCase } from '../../useCase/updatePost.ts';
 import type { RemoteActorLookup } from '../fedify/remoteActorLookup.ts';
 import type { Status } from '../mastodon/entities.ts';
 import { MAX_STATUS_CHARACTERS } from '../mastodon/instance.ts';
@@ -68,6 +70,8 @@ export type WorkerMastodonStatusesRouterDeps = Readonly<{
   mediaUploadResolver: MediaUploadResolver;
   createPostUseCase: CreatePostUseCase;
   sendReplyUseCase: SendReplyUseCase;
+  updatePostUseCase: UpdatePostUseCase;
+  postSourceTextResolver: PostSourceTextResolver;
   deletePostUseCase: DeletePostUseCase;
   sendLikeUseCase: SendLikeUseCase;
   undoLikeUseCase: UndoLikeUseCase;
@@ -144,6 +148,12 @@ const spoilerSummary = (body: RequestBody): string | null => {
   return trimmed === '' ? null : trimmed;
 };
 
+const editedSummary = (body: RequestBody, current: string | null): string | null =>
+  isOmitted(body['spoiler_text']) ? current : spoilerSummary(body);
+
+const editedSensitive = (body: RequestBody, current: boolean): boolean =>
+  isOmitted(body['sensitive']) ? current : bodyBoolean(body, 'sensitive');
+
 const failed = (c: Context, err: Readonly<{ type: string }>): Response => {
   switch (err.type) {
     case 'PostNotFoundError':
@@ -174,6 +184,8 @@ export const createWorkerMastodonStatusesRouter = ({
   mediaUploadResolver,
   createPostUseCase,
   sendReplyUseCase,
+  updatePostUseCase,
+  postSourceTextResolver,
   deletePostUseCase,
   sendLikeUseCase,
   undoLikeUseCase,
@@ -302,6 +314,29 @@ export const createWorkerMastodonStatusesRouter = ({
 
   const resolveOwnedMedia = resolveOwnedMediaUpload(mediaUploadResolver);
 
+  const renderContent = async (
+    c: Context<MastodonAuthEnv>,
+    userId: UserId,
+    body: RequestBody,
+    text: string,
+  ) => {
+    const format = body['content_type'] === 'text/markdown' ? 'markdown' : 'plain';
+    const user = await userResolver.resolve(userId);
+    const mentions = user.ok && user.val !== undefined
+      ? await resolveMentions({
+        lookup: remoteActorLookup,
+        text,
+        format,
+        identifier: user.val.username,
+        request: c.req.raw,
+      })
+      : noMentions;
+    const content = format === 'markdown'
+      ? await PostContent.fromMarkdown(text, mentions.links)
+      : plainTextToHtml(text, mentions.links);
+    return { content, recipients: mentions.recipients };
+  };
+
   return new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
     .post('/v1/statuses', authn.requireUser(writeStatuses), async (c) => {
@@ -376,25 +411,13 @@ export const createWorkerMastodonStatusesRouter = ({
           ? quoted.uri
           : ctx.getObjectUri(Note, { identifier: quoted.username, id: quoted.postId }).href;
       }
-      const format = body['content_type'] === 'text/markdown' ? 'markdown' : 'plain';
-      const user = await userResolver.resolve(userId);
-      const mentions = user.ok && user.val !== undefined
-        ? await resolveMentions({
-          lookup: remoteActorLookup,
-          text,
-          format,
-          identifier: user.val.username,
-          request: c.req.raw,
-        })
-        : noMentions;
-      const content = format === 'markdown'
-        ? await PostContent.fromMarkdown(text, mentions.links)
-        : plainTextToHtml(text, mentions.links);
+      const { content, recipients } = await renderContent(c, userId, body, text);
       const summary = spoilerSummary(body);
       const input = {
         userId,
         content,
-        mentions: mentions.recipients,
+        sourceText: text,
+        mentions: recipients,
         summary,
         sensitive: bodyBoolean(body, 'sensitive') || summary !== null,
         visibility: postVisibility(body),
@@ -415,6 +438,57 @@ export const createWorkerMastodonStatusesRouter = ({
         throw new StatusAssemblyError('Failed to resolve the created status');
       }
       return c.json(status);
+    })
+    .put('/v1/statuses/:id', authn.requireUser(writeStatuses), async (c) => {
+      const acting = await resolveActingPost(c);
+      if (!acting.ok) {
+        return acting.err;
+      }
+      const { userId, post } = acting.val;
+      if (post.type !== 'local' || post.userId !== userId) {
+        return c.json(recordNotFound, 404);
+      }
+      const body = await readRequestBody(c);
+      const invalid = validateStatusParams(body);
+      if (invalid !== undefined) {
+        return c.json(validationFailed(invalid), 422);
+      }
+      const text = bodyString(body, 'status');
+      if (text === undefined || (text.trim() === '' && post.images.length === 0)) {
+        return c.json(validationFailed('Text can\'t be blank'), 422);
+      }
+      const { content, recipients } = await renderContent(c, userId, body, text);
+      const summary = editedSummary(body, post.summary);
+      const updated = await updatePostUseCase.run({
+        userId,
+        postId: post.postId,
+        content,
+        sourceText: text,
+        mentions: recipients,
+        summary,
+        sensitive: editedSensitive(body, post.sensitive) || summary !== null,
+        ctx: createContext(c.req.raw),
+      });
+      return updated.ok ? respondWithStatus(c, acting.val) : failed(c, updated.err);
+    })
+    .get('/v1/statuses/:id/source', authn.requireUser(readStatuses), async (c) => {
+      const acting = await resolveActingPost(c);
+      if (!acting.ok) {
+        return acting.err;
+      }
+      const { userId, post } = acting.val;
+      if (post.type !== 'local' || post.userId !== userId) {
+        return c.json(recordNotFound, 404);
+      }
+      const sourceText = await postSourceTextResolver.resolve(post.postId);
+      if (!sourceText.ok) {
+        return c.json(internalServerError, 500);
+      }
+      return c.json({
+        id: post.postId,
+        text: sourceText.val ?? htmlToPlainText(post.content, Number.POSITIVE_INFINITY),
+        spoiler_text: post.summary ?? '',
+      });
     })
     .delete('/v1/statuses/:id', authn.requireUser(writeStatuses), async (c) => {
       const acting = await resolveActingPost(c);

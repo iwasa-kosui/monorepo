@@ -48,6 +48,7 @@ type Input =
   & Readonly<{
     postId: PostId;
     content: string;
+    sourceText?: string;
     summary?: string | null;
     sensitive?: boolean;
     visibility?: Exclude<Visibility, 'direct'>;
@@ -158,19 +159,23 @@ const create = ({
         return RA.ok(parentPost.uri);
       }),
       // Create the reply post
-      RA.andBind('postEvent', ({ actor, content, inReplyToUri, summary, sensitive, visibility, quoteUri }) => {
-        const postEvent = Post.createPost(now)({
-          actorId: actor.id,
-          content: quoteUri === undefined ? content : appendQuoteInline(content, quoteUri),
-          userId: actor.userId,
-          inReplyToUri,
-          summary,
-          sensitive,
-          visibility,
-          quoteUri,
-        });
-        return RA.ok(postEvent);
-      }),
+      RA.andBind(
+        'postEvent',
+        ({ actor, content, sourceText, inReplyToUri, summary, sensitive, visibility, quoteUri }) => {
+          const postEvent = Post.createPost(now)({
+            actorId: actor.id,
+            content: quoteUri === undefined ? content : appendQuoteInline(content, quoteUri),
+            userId: actor.userId,
+            inReplyToUri,
+            summary,
+            sensitive,
+            visibility,
+            quoteUri,
+            sourceText,
+          });
+          return RA.ok(postEvent);
+        },
+      ),
       RA.andThrough(({ postEvent }) => postCreatedStore.store(postEvent)),
       RA.bind('replyPost', ({ postEvent }) => postEvent.aggregateState),
       // Create timeline item

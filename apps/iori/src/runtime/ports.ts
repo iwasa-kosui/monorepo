@@ -51,6 +51,7 @@ import type { OAuthApplicationResolver } from '../domain/oauth/oauthApplication.
 import type { AccountStatusItemsResolverByActorId } from '../domain/post/accountStatusItem.ts';
 import type {
   LocalPostsResolverByPage,
+  PostSourceTextResolver,
   PostsWithAuthorResolverByPostIds,
   ThreadResolver,
 } from '../domain/post/post.ts';
@@ -119,6 +120,7 @@ import type { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import type { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
 import type { UpdateAvatarUseCase } from '../useCase/updateAvatar.ts';
 import type { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescription.ts';
+import type { UpdatePostUseCase } from '../useCase/updatePost.ts';
 import type { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
@@ -269,6 +271,8 @@ export type IoriMutesRelaysRuntimePorts = Readonly<{
 export type IoriCoreRuntimePorts = Readonly<{
   signUpUseCase: ReturnType<typeof createSignUpUseCase>;
   sendReplyUseCase: SendReplyUseCase;
+  updatePostUseCase: UpdatePostUseCase;
+  postSourceTextResolver: PostSourceTextResolver;
   deletePostUseCase: DeletePostUseCase;
   subscribePushUseCase: SubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;
