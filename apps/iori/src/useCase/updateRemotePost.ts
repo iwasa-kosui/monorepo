@@ -154,6 +154,7 @@ const create = ({
         postId: post.postId,
         url: attachment.url,
         altText: attachment.altText,
+        mediaType: attachment.mediaType,
         createdAt: previous?.createdAt ?? now,
       };
     });

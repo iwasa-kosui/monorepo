@@ -52,10 +52,10 @@ export const createD1RemotePostUpdatedStore = (db: IoriD1Db): RemotePostUpdatedS
     );
     const imageInserts = chunk(images, IMAGE_ROWS_PER_INSERT).map((rows) =>
       db.insert(postImagesTable).select(sql`
-        select column1, column2, column3, column4, column5 from (values ${
+        select column1, column2, column3, column4, column5, column6 from (values ${
         sql.join(
           rows.map((image) =>
-            sql`(${image.imageId}, ${image.postId}, ${image.url}, ${image.altText}, ${image.createdAt})`
+            sql`(${image.imageId}, ${image.postId}, ${image.url}, ${image.altText}, ${image.mediaType}, ${image.createdAt})`
           ),
           sql`, `,
         )
