@@ -1,5 +1,5 @@
 import type { ExecutionContext } from '@cloudflare/workers-types';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createSqliteD1Fixture } from './adaptor/d1/__tests__/sqliteFixture.ts';
 import { admissionFixture } from './testing/admissionFixture.ts';
@@ -12,9 +12,16 @@ const sessionId = crypto.randomUUID();
 const otherUserId = crypto.randomUUID();
 const otherSessionId = crypto.randomUUID();
 const executionContext = {} as ExecutionContext;
+const NOW = Date.UTC(2026, 10, 8);
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   for (const fixture of fixtures.splice(0)) fixture.sqlite.close();
 });
 
