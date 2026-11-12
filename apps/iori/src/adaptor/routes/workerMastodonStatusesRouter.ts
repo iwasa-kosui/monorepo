@@ -18,6 +18,7 @@ import {
 import { PostContent } from '../../domain/post/postContent.ts';
 import { PostDestination } from '../../domain/post/postDestination.ts';
 import { PostId } from '../../domain/post/postId.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import type { RepostResolver, RepostResolverById } from '../../domain/repost/repost.ts';
 import { RepostId } from '../../domain/repost/repostId.ts';
 import type { UserResolver } from '../../domain/user/user.ts';
@@ -87,10 +88,20 @@ const validationFailed = (message: string) => ({ error: `Validation failed: ${me
 
 const isOmitted = (value: unknown): boolean => value === undefined || value === null;
 
+type PostableVisibility = Exclude<Visibility, 'direct'>;
+
+const isPostableVisibility = (value: unknown): value is PostableVisibility =>
+  value === 'public' || value === 'unlisted' || value === 'private';
+
+const postVisibility = (body: RequestBody): PostableVisibility => {
+  const visibility = body['visibility'];
+  return isPostableVisibility(visibility) ? visibility : 'public';
+};
+
 const validateStatusParams = (body: RequestBody): string | undefined => {
   const visibility = body['visibility'];
-  if (!isOmitted(visibility) && visibility !== 'public') {
-    return 'Only public visibility is supported';
+  if (!isOmitted(visibility) && !isPostableVisibility(visibility)) {
+    return 'Visibility must be public, unlisted or private (direct is not supported)';
   }
   const spoilerText = body['spoiler_text'];
   if (!isOmitted(spoilerText) && typeof spoilerText !== 'string') {
@@ -356,6 +367,7 @@ export const createWorkerMastodonStatusesRouter = ({
         mentions: mentions.recipients,
         summary,
         sensitive: bodyBoolean(body, 'sensitive') || summary !== null,
+        visibility: postVisibility(body),
         images: medias.map((media) => ({ url: media.url, altText: media.description })),
         crosspostToBluesky: sendsToBluesky(body),
         ctx: createContext(c.req.raw),
