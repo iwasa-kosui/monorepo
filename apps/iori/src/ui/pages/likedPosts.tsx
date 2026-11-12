@@ -161,9 +161,14 @@ const LikedPostsPage = () => {
     <section class='mb-8'>
       <div class='flex items-baseline justify-between mb-6'>
         <h1 class='text-2xl font-bold text-charcoal dark:text-white'>Liked Posts</h1>
-        <a href='/bookmarks' class='md:hidden text-sm text-terracotta hover:underline dark:text-terracotta-light'>
-          ブックマーク
-        </a>
+        <div class='flex gap-4'>
+          <a href='/bookmarks' class='md:hidden text-sm text-terracotta hover:underline dark:text-terracotta-light'>
+            ブックマーク
+          </a>
+          <a href='/feeds' class='md:hidden text-sm text-terracotta hover:underline dark:text-terracotta-light'>
+            フィード
+          </a>
+        </div>
       </div>
 
       {blueskyEnabled && (
