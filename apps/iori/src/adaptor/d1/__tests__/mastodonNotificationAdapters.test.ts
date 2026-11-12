@@ -216,6 +216,122 @@ describe('createD1NotificationCountResolverSinceMarker', () => {
   });
 });
 
+describe('ブロックした相手の通知', () => {
+  const blockedTypes: Notification['type'][] = ['like', 'mention'];
+  const seedBlocked = () => {
+    const t = seedNotifications();
+    const bob = t.seed.addRemoteActor('bob');
+    const aliceMentionPost = t.seed.addRemotePost(t.alice, 8_000, { timeline: false });
+    const bobMentionPost = t.seed.addRemotePost(bob, 8_100, { timeline: false });
+    const blocked = {
+      like: t.ids.like,
+      mention: t.seed.addMentionNotification(t.me.userId, t.alice.actorId, aliceMentionPost.postId, 9_000),
+    };
+    const visible = {
+      like: t.seed.addLikeNotification(t.me.userId, bob.actorId, t.myPost.postId, 9_500),
+      mention: t.seed.addMentionNotification(t.me.userId, bob.actorId, bobMentionPost.postId, 9_600),
+    };
+    t.seed.addBlock(t.me.userId, t.alice.actorId);
+    return { ...t, bob, blocked, visible };
+  };
+
+  it('一覧から、ブロックした相手のいいねとメンションを除く', async () => {
+    const t = seedBlocked();
+
+    expect(await t.idsOf({}, blockedTypes)).toEqual([t.visible.mention, t.visible.like]);
+  });
+
+  it('件数から、ブロックした相手のいいねとメンションを除く', async () => {
+    const t = seedBlocked();
+
+    const unread = await createD1NotificationCountResolverSinceMarker(t.db).resolve({
+      userId: UserId.orThrow(t.me.userId),
+      types: blockedTypes,
+      limit: 100,
+    });
+
+    expect(unread).toEqual({ ok: true, val: 2, err: undefined });
+  });
+
+  it('1件の取得で、ブロックした相手のいいねとメンションを返さない', async () => {
+    const t = seedBlocked();
+    const resolver = createD1NotificationResolverByUserIdAndId(t.db);
+    const resolve = (id: string) =>
+      resolver.resolve({ recipientUserId: UserId.orThrow(t.me.userId), notificationId: NotificationId.orThrow(id) });
+
+    const blockedLike = await resolve(t.blocked.like);
+    const blockedMention = await resolve(t.blocked.mention);
+    const visibleLike = await resolve(t.visible.like);
+    const visibleMention = await resolve(t.visible.mention);
+
+    expect(blockedLike.ok && blockedLike.val).toBeUndefined();
+    expect(blockedMention.ok && blockedMention.val).toBeUndefined();
+    expect(visibleLike.ok && visibleLike.val?.notification).toMatchObject({ type: 'like' });
+    expect(visibleMention.ok && visibleMention.val?.notification).toMatchObject({ type: 'mention' });
+  });
+
+  it('ほかのユーザーのブロックは、自分の通知に影響しない', async () => {
+    const t = seedBlocked();
+    t.seed.addBlock(t.other.userId, t.bob.actorId);
+
+    expect(await t.idsOf({}, blockedTypes)).toEqual([t.visible.mention, t.visible.like]);
+  });
+
+  type SeededTest = ReturnType<typeof seedNotifications>;
+  type Bob = { actorId: string };
+  const perType: ReadonlyArray<
+    [Notification['type'], (t: SeededTest, actor: Bob, createdAt: number) => string]
+  > = [
+    [
+      'like',
+      (t, actor, createdAt) => t.seed.addLikeNotification(t.me.userId, actor.actorId, t.myPost.postId, createdAt),
+    ],
+    ['follow', (t, actor, createdAt) => t.seed.addFollowNotification(t.me.userId, actor.actorId, createdAt)],
+    [
+      'emojiReact',
+      (t, actor, createdAt) => t.seed.addEmojiReactNotification(t.me.userId, actor.actorId, t.myPost.postId, createdAt),
+    ],
+    [
+      'reply',
+      (t, actor, createdAt) =>
+        t.seed.addReplyNotification(
+          t.me.userId,
+          actor.actorId,
+          t.seed.addRemotePost(actor, createdAt, { timeline: false }).postId,
+          t.myPost.postId,
+          createdAt,
+        ),
+    ],
+    [
+      'repost',
+      (t, actor, createdAt) => t.seed.addRepostNotification(t.me.userId, actor.actorId, t.myPost.postId, createdAt),
+    ],
+    [
+      'mention',
+      (t, actor, createdAt) =>
+        t.seed.addMentionNotification(
+          t.me.userId,
+          actor.actorId,
+          t.seed.addRemotePost(actor, createdAt, { timeline: false }).postId,
+          createdAt,
+        ),
+    ],
+  ];
+
+  it.each(perType)(
+    '一覧から、ブロックした相手の %s を除き、ブロックしていない相手のものを残す',
+    async (type, addNotification) => {
+      const t = seedNotifications();
+      const bob = t.seed.addRemoteActor('bob');
+      addNotification(t, t.alice, 9_000);
+      const visible = addNotification(t, bob, 9_500);
+      t.seed.addBlock(t.me.userId, t.alice.actorId);
+
+      expect(await t.idsOf({}, [type])).toEqual([visible]);
+    },
+  );
+});
+
 describe('通知の削除と notifications のマーカー', () => {
   const dismiss = (t: ReturnType<typeof seedNotifications>, notificationId: string) =>
     createD1NotificationDismissedStore(t.db).store(
