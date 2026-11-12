@@ -4,12 +4,14 @@ import type { PostDestination } from '../../domain/post/postDestination.ts';
 import { type CreateBlueskyPostParams, type CreateStatusParams, failureMessage } from '../api/mastodonClient.ts';
 import { BLUESKY_ONLY_POSTED_MESSAGE, postedMessage } from './blueskyCrosspostMark.ts';
 
-export type UploadedMedia = Readonly<{ id: string; url: string }>;
+export type UploadedMedia = Readonly<{ id: string; url: string; description: string }>;
 
 export type PostFormValue = Readonly<{
   content: string;
   uploaded: readonly UploadedMedia[];
   destination: PostDestination;
+  cw: string;
+  sensitive: boolean;
 }>;
 
 export type PostSubmitResult =
@@ -22,6 +24,7 @@ export type PostNotice = Readonly<{ message: string; href: string | null }>;
 type SubmitPostDeps = Readonly<{
   create: (params: CreateStatusParams) => Promise<Status>;
   createBlueskyPost: (params: CreateBlueskyPostParams) => Promise<IoriBlueskyPostResponse>;
+  updateMedia: (id: string, description: string) => Promise<unknown>;
   onPosted: (status: Status) => void;
 }>;
 
@@ -32,6 +35,13 @@ export const submitPost = async (
   value: PostFormValue,
   deps: SubmitPostDeps,
 ): Promise<PostSubmitResult> => {
+  try {
+    for (const media of value.uploaded) {
+      if (media.description.trim() !== '') await deps.updateMedia(media.id, media.description);
+    }
+  } catch (err) {
+    return { kind: 'failed', message: failureMessage('save the image description', err) };
+  }
   if (value.destination === 'bluesky') {
     try {
       const { url } = await deps.createBlueskyPost({
@@ -44,6 +54,7 @@ export const submitPost = async (
       return { kind: 'failed', message: failureMessage('post', err) };
     }
   }
+  const spoilerText = value.cw.trim();
   let status: Status;
   try {
     status = await deps.create({
@@ -51,6 +62,8 @@ export const submitPost = async (
       media_ids: value.uploaded.map((media) => media.id),
       content_type: 'text/markdown',
       iori_destination: value.destination,
+      ...(spoilerText === '' ? {} : { spoiler_text: spoilerText }),
+      ...(value.sensitive ? { sensitive: true } : {}),
     });
   } catch (err) {
     return { kind: 'failed', message: failureMessage('post', err) };

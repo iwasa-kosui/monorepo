@@ -69,3 +69,12 @@ export const postedMessage = (
 };
 
 export const BLUESKY_ONLY_POSTED_MESSAGE = 'Bluesky に投稿しました';
+
+export const BLUESKY_NOT_SENT_NOTICE = 'CW 付き・センシティブ指定の投稿は Bluesky に送りません';
+
+export const blueskyNotSentNotice = (
+  destination: PostDestination,
+  cw: string,
+  sensitive: boolean,
+): string | undefined =>
+  destination === 'both' && (cw.trim() !== '' || sensitive) ? BLUESKY_NOT_SENT_NOTICE : undefined;

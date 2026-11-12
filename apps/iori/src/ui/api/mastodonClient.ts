@@ -309,6 +309,8 @@ export type CreateStatusParams = Readonly<{
   media_ids?: readonly string[];
   content_type: string;
   iori_destination?: PostDestination;
+  spoiler_text?: string;
+  sensitive?: boolean;
 }>;
 
 export const createStatus = async (params: CreateStatusParams): Promise<Status> => {
