@@ -49,7 +49,7 @@ const makePost = (content: string, options: PostOptions = {}): PostWithAuthor =>
     linkPreviews: [],
   };
   return options.local === true
-    ? { ...common, type: 'local', userId: crypto.randomUUID() as UserId }
+    ? { ...common, type: 'local', visibility: 'public', userId: crypto.randomUUID() as UserId }
     : {
       ...common,
       type: 'remote',

@@ -4,13 +4,15 @@ import { type Context, Hono } from 'hono';
 import { z } from 'zod/v4';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
-import type { ActorId } from '../../domain/actor/actorId.ts';
+import { ActorId } from '../../domain/actor/actorId.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { PostsWithAuthorResolverByPostIds, PostWithAuthor } from '../../domain/post/post.ts';
 import { PostContent } from '../../domain/post/postContent.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { AllRelaysResolver } from '../../domain/relay/relay.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import type { FetchRemoteContextUseCase } from '../../useCase/fetchRemoteContext.ts';
+import type { FetchRemoteOutboxUseCase } from '../../useCase/fetchRemoteOutbox.ts';
 import type { SendEmojiReactUseCase } from '../../useCase/sendEmojiReact.ts';
 import type { SubscribePushUseCase } from '../../useCase/subscribePush.ts';
 import type { SubscribeRelayUseCase } from '../../useCase/subscribeRelay.ts';
@@ -28,11 +30,16 @@ export type WorkerIoriActionsRouterDeps = Readonly<{
   statusAssembler: StatusAssembler;
   sendEmojiReactUseCase: SendEmojiReactUseCase;
   undoEmojiReactUseCase: UndoEmojiReactUseCase;
+  fetchRemoteContextUseCase: FetchRemoteContextUseCase;
+  fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase;
   subscribeRelayUseCase: SubscribeRelayUseCase;
   subscribePushUseCase: SubscribePushUseCase;
   allRelaysResolver: AllRelaysResolver;
   createContext: (request: Request) => RequestContext<unknown>;
 }>;
+
+export type IoriRemoteContextResponse = Readonly<{ fetched: number }>;
+export type IoriRemoteStatusesResponse = Readonly<{ fetched: number }>;
 
 type ActingOnPost = Readonly<{ userId: UserId; viewerActorId: ActorId; post: PostWithAuthor; emoji: string }>;
 
@@ -80,6 +87,8 @@ export const createWorkerIoriActionsRouter = ({
   statusAssembler,
   sendEmojiReactUseCase,
   undoEmojiReactUseCase,
+  fetchRemoteContextUseCase,
+  fetchRemoteOutboxUseCase,
   subscribeRelayUseCase,
   subscribePushUseCase,
   allRelaysResolver,
@@ -181,6 +190,55 @@ export const createWorkerIoriActionsRouter = ({
       return !undone.ok && undone.err.type !== 'EmojiReactNotFoundError'
         ? failed(c, undone.err)
         : respondWithStatus(c, acting.val);
+    })
+    .post('/iori/v1/statuses/:id/remote-context', authn.requireUser(writeStatuses), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId;
+      if (userId === null || userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      const id = PostId.parse(c.req.param('id'));
+      if (!id.ok) {
+        return c.json(recordNotFound, 404);
+      }
+      const viewer = await actorResolverByUserId.resolve(userId);
+      if (!viewer.ok) {
+        return c.json(internalServerError, 500);
+      }
+      if (viewer.val === undefined) {
+        return c.json(actorNotFound, 422);
+      }
+      const post = await resolvePost(id.val, viewer.val.id);
+      if (post === undefined) {
+        return c.json(recordNotFound, 404);
+      }
+      const fetched = await fetchRemoteContextUseCase.run({
+        userId,
+        postId: post.postId,
+        ctx: createContext(c.req.raw),
+      });
+      if (!fetched.ok) {
+        return fetched.err.type === 'PostNotFoundError' ? c.json(recordNotFound, 404) : c.json(invalidToken, 401);
+      }
+      return c.json({ fetched: fetched.val.fetchedCount } satisfies IoriRemoteContextResponse);
+    })
+    .post('/iori/v1/accounts/:id/remote-statuses', authn.requireUser(writeStatuses), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId;
+      if (userId === null || userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      const id = ActorId.parse(c.req.param('id'));
+      if (!id.ok) {
+        return c.json(recordNotFound, 404);
+      }
+      const fetched = await fetchRemoteOutboxUseCase.run({
+        userId,
+        actorId: id.val,
+        ctx: createContext(c.req.raw),
+      });
+      if (!fetched.ok) {
+        return fetched.err.type === 'ActorNotFoundError' ? c.json(recordNotFound, 404) : c.json(invalidToken, 401);
+      }
+      return c.json({ fetched: fetched.val.fetchedCount } satisfies IoriRemoteStatusesResponse);
     })
     .get('/iori/v1/relays', authn.requireUser(read), async (c) => {
       const relays = await allRelaysResolver.resolve();

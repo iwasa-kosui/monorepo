@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { LocalPost, type Post, type PostResolver, RemotePost } from '../../../domain/post/post.ts';
+import { Visibility } from '../../../domain/post/visibility.ts';
 import type { IoriD1Db } from '../client.ts';
 import { fromD1 } from '../query.ts';
 import { localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
@@ -16,7 +17,7 @@ const toPost = (row: {
     summary: string | null;
     sensitive: boolean;
   };
-  local_posts: { userId: string; inReplyToUri: string | null } | null;
+  local_posts: { userId: string; inReplyToUri: string | null; visibility: string } | null;
   remote_posts: { uri: string; inReplyToUri: string | null; visibility: string | null; editedAt: Date | null } | null;
 }): Post => {
   if (row.local_posts !== null) {
@@ -29,6 +30,7 @@ const toPost = (row: {
       inReplyToUri: row.local_posts.inReplyToUri,
       summary: row.posts.summary,
       sensitive: row.posts.sensitive,
+      visibility: Visibility.parseOrThrow(row.local_posts.visibility),
       type: 'local',
     });
   }

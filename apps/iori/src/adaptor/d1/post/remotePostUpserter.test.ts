@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
+import { Instant } from '../../../domain/instant/instant.ts';
 import type { RemotePost } from '../../../domain/post/post.ts';
 import { createD1RemotePostUpserter } from './remotePostUpserter.ts';
 
@@ -14,7 +15,7 @@ const identity = {
   },
   inReplyToUri: null,
   visibility: null,
-  attachments: [{ url: 'https://remote.example/media/1.png', altText: null }],
+  attachments: [{ url: 'https://remote.example/media/1.png', altText: null, mediaType: null }],
 };
 
 const createDeps = (existing: RemotePost | undefined) => {
@@ -51,6 +52,24 @@ describe('createD1RemotePostUpserter', () => {
     ]);
   });
 
+  it('passes the mediaType of each attachment to the image store', async () => {
+    const { deps, postImageCreatedStore } = createDeps(undefined);
+
+    const result = await createD1RemotePostUpserter(deps).resolve({
+      ...identity,
+      attachments: [
+        { url: 'https://remote.example/media/1.mp4', altText: null, mediaType: 'video/mp4' },
+        { url: 'https://remote.example/media/2.png', altText: null, mediaType: null },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(postImageCreatedStore.store).toHaveBeenCalledWith([
+      expect.objectContaining({ url: 'https://remote.example/media/1.mp4', mediaType: 'video/mp4' }),
+      expect.objectContaining({ url: 'https://remote.example/media/2.png', mediaType: null }),
+    ]);
+  });
+
   it('records the visibility of a new post', async () => {
     const { deps, postCreatedStore } = createDeps(undefined);
 
@@ -83,6 +102,21 @@ describe('createD1RemotePostUpserter', () => {
     );
   });
 
+  it('passes the quoted note URI of a new post to the store', async () => {
+    const { deps, postCreatedStore } = createDeps(undefined);
+
+    await createD1RemotePostUpserter(deps).resolve({
+      ...identity,
+      quoteUri: 'https://remote.example/posts/quoted',
+    });
+
+    expect(postCreatedStore.store).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventPayload: expect.objectContaining({ quoteUri: 'https://remote.example/posts/quoted' }),
+      }),
+    );
+  });
+
   it('passes the recipients of a new post to the store', async () => {
     const { deps, postCreatedStore } = createDeps(undefined);
 
@@ -97,6 +131,54 @@ describe('createD1RemotePostUpserter', () => {
         eventPayload: expect.objectContaining({ recipientActorUris: ['https://iori.test/users/kosui'] }),
       }),
     );
+  });
+
+  describe('createdAt', () => {
+    const now = Date.parse('2026-11-12T00:00:00.000Z');
+
+    const createdAtOf = async (publishedAt: number | undefined) => {
+      const { deps, postCreatedStore } = createDeps(undefined);
+      const result = await createD1RemotePostUpserter(deps).resolve({
+        ...identity,
+        publishedAt: publishedAt === undefined ? undefined : Instant.orThrow(publishedAt),
+      });
+      expect(result.ok).toBe(true);
+      return {
+        post: result.ok ? result.val.createdAt : undefined,
+        stored:
+          ((postCreatedStore.store.mock.calls as unknown[][])[0]?.[0] as { aggregateState: { createdAt: number } })
+            .aggregateState.createdAt,
+      };
+    };
+
+    it('uses publishedAt as createdAt when it is given', async () => {
+      vi.useFakeTimers({ now });
+      try {
+        const published = Date.parse('2024-01-02T03:04:05.000Z');
+
+        expect(await createdAtOf(published)).toEqual({ post: published, stored: published });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('uses the current time when publishedAt is not given', async () => {
+      vi.useFakeTimers({ now });
+      try {
+        expect(await createdAtOf(undefined)).toEqual({ post: now, stored: now });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('uses the current time when publishedAt is in the future', async () => {
+      vi.useFakeTimers({ now });
+      try {
+        expect(await createdAtOf(now + 60_000)).toEqual({ post: now, stored: now });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it('does not store again when the post already exists', async () => {

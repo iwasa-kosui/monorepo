@@ -3,7 +3,7 @@ import { useState } from 'hono/jsx';
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 import { createStatus, updateMedia, uploadMedia } from '../api/mastodonClient.ts';
-import { blueskyNotSentNotice, postedMessage } from './blueskyCrosspostMark.ts';
+import { blueskyCrosspostNotice, postedMessage } from './blueskyCrosspostMark.ts';
 import { downscaleImageForUpload } from './imageDownscale.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
@@ -30,7 +30,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const hasCw = cwEnabled && cw.trim() !== '';
   const hasImages = uploaded.length > 0;
   const sensitive = hasImages && (sensitiveChecked || hasCw);
-  const notice = blueskyNotSentNotice(destination, cwEnabled ? cw : '', sensitive);
+  const notice = blueskyCrosspostNotice(destination, cwEnabled ? cw : '', sensitive);
 
   const handleContentChange = (value: string) => {
     setContent(value);

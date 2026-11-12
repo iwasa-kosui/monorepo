@@ -166,6 +166,51 @@ describe('AddRemotePostUseCase', () => {
       );
     });
 
+    it('受信した引用先の URI を投稿の作成イベントに渡す', async () => {
+      const deps = createDeps();
+
+      const useCase = AddRemotePostUseCase.create(deps);
+
+      await useCase.run({
+        content: 'Quote',
+        uri: 'https://remote.example.com/posts/quote',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'public',
+        quoteUri: 'https://remote.example.com/posts/quoted',
+        attachments: [],
+      });
+
+      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventPayload: expect.objectContaining({ quoteUri: 'https://remote.example.com/posts/quoted' }),
+        }),
+      );
+    });
+
+    it('引用先の URI が無ければ投稿の作成イベントに null を渡す', async () => {
+      const deps = createDeps();
+
+      const useCase = AddRemotePostUseCase.create(deps);
+
+      await useCase.run({
+        content: 'Plain',
+        uri: 'https://remote.example.com/posts/plain',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'public',
+        attachments: [],
+      });
+
+      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({ eventPayload: expect.objectContaining({ quoteUri: null }) }),
+      );
+    });
+
     it('画像付きリモート投稿を追加できる', async () => {
       const deps = createDeps();
 
@@ -182,8 +227,8 @@ describe('AddRemotePostUseCase', () => {
         },
         visibility: null,
         attachments: [
-          { url: 'https://remote.example.com/image1.png', altText: 'Image 1' },
-          { url: 'https://remote.example.com/image2.png', altText: null },
+          { url: 'https://remote.example.com/image1.png', altText: 'Image 1', mediaType: null },
+          { url: 'https://remote.example.com/image2.png', altText: null, mediaType: null },
         ],
       });
 
@@ -203,6 +248,7 @@ describe('AddRemotePostUseCase', () => {
       const attachments = Array.from({ length: attachmentCount }, (_, i) => ({
         url: `https://remote.example.com/image${i}.png`,
         altText: `Image ${i}`,
+        mediaType: null,
       }));
 
       const useCase = AddRemotePostUseCase.create(deps);
@@ -311,7 +357,7 @@ describe('AddRemotePostUseCase', () => {
         },
         visibility: null,
         attachments: [
-          { url: 'https://remote.example.com/image.png', altText: 'Test image' },
+          { url: 'https://remote.example.com/image.png', altText: 'Test image', mediaType: null },
         ],
       });
 
@@ -372,7 +418,7 @@ describe('AddRemotePostUseCase', () => {
     const actorUri = 'https://remote.example.com/users/remote';
     const postUri = 'https://remote.example.com/posts/idempotent';
     const content = '<p>reply <a href="https://news.example.org/article">link</a></p>';
-    const attachments = [{ url: 'https://remote.example.com/image.png', altText: 'Image' }];
+    const attachments = [{ url: 'https://remote.example.com/image.png', altText: 'Image', mediaType: null }];
     const actor = {
       id: 'actor-remote' as ActorId,
       type: 'remote',
@@ -412,6 +458,7 @@ describe('AddRemotePostUseCase', () => {
       postId: existingPost.postId,
       url: attachments[0].url,
       altText: 'Image',
+      mediaType: null,
       createdAt: 0 as Instant,
     };
     const linkPreview = {

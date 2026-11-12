@@ -88,6 +88,7 @@ const author = {
 const localPost: PostWithAuthor = {
   ...author,
   type: 'local',
+  visibility: 'public',
   summary: null,
   sensitive: false,
   postId: PostId.generate(),
@@ -203,6 +204,13 @@ describe('toStatus', () => {
     expect(toStatus(localPost, options).visibility).toBe('public');
   });
 
+  it.each(['public', 'unlisted', 'private'] as const)(
+    'uses the stored visibility %s of a local post',
+    (visibility) => {
+      expect(toStatus({ ...localPost, visibility } as PostWithAuthor, options).visibility).toBe(visibility);
+    },
+  );
+
   it.each(['public', 'unlisted', 'private', 'direct'] as const)(
     'uses the recorded visibility %s of a remote post',
     (visibility) => {
@@ -282,6 +290,89 @@ describe('toStatus', () => {
   });
 });
 
+describe('toStatus quote', () => {
+  const quotedStatus = toStatus(remotePost, options);
+  const quoteUri = 'https://remote.example/users/alice/statuses/1';
+
+  it('is null and has no quote_url for a post without a quote', () => {
+    const status = toStatus(localPost, options);
+
+    expect(status.quote).toBeNull();
+    expect(status.iori).not.toHaveProperty('quote_url');
+    expect(StatusSchema.safeParse(status).success).toBe(true);
+  });
+
+  it('is null and has no quote_url when the quote option is null', () => {
+    const status = toStatus(localPost, { ...options, quote: null });
+
+    expect(status.quote).toBeNull();
+    expect(status.iori).not.toHaveProperty('quote_url');
+  });
+
+  it('carries the quoted Status as an accepted quote and omits quote_url', () => {
+    const status = toStatus(localPost, { ...options, quote: { uri: quoteUri, status: quotedStatus } });
+
+    expect(StatusSchema.safeParse(status).success).toBe(true);
+    expect(status.quote).toEqual({ state: 'accepted', quoted_status: quotedStatus });
+    expect(status.iori).not.toHaveProperty('quote_url');
+  });
+
+  it('rejects a quote whose state is not accepted', () => {
+    const status = toStatus(localPost, { ...options, quote: { uri: quoteUri, status: quotedStatus } });
+
+    expect(StatusSchema.safeParse({ ...status, quote: { state: 'pending', quoted_status: quotedStatus } }).success)
+      .toBe(false);
+    expect(StatusSchema.safeParse({ ...status, quote: { state: 'accepted' } }).success).toBe(false);
+  });
+
+  it('keeps quote null inside the quoted Status', () => {
+    const status = toStatus(localPost, { ...options, quote: { uri: quoteUri, status: quotedStatus } });
+
+    expect(status.quote?.quoted_status.quote).toBeNull();
+  });
+
+  it('is null and puts the received URI in iori.quote_url when the quoted post cannot be resolved', () => {
+    const status = toStatus(localPost, { ...options, quote: { uri: quoteUri, status: null } });
+
+    expect(StatusSchema.safeParse(status).success).toBe(true);
+    expect(status.quote).toBeNull();
+    expect(status.iori?.quote_url).toBe(quoteUri);
+  });
+
+  it('omits quote_url when the received URI is not http or https', () => {
+    const status = toStatus(localPost, { ...options, quote: { uri: 'javascript:alert(1)', status: null } });
+
+    expect(status.quote).toBeNull();
+    expect(status.iori).not.toHaveProperty('quote_url');
+  });
+
+  it('keeps the quote of a boosted Status inside reblog and sets quote to null on the boost', () => {
+    const status = toStatus(localPost, { ...options, quote: { uri: quoteUri, status: quotedStatus } });
+
+    const boost = toReblogStatus({ createdAt: Date.UTC(2025, 1, 3) as Instant }, {
+      repostId: RepostId.generate(),
+      account: { ...account, id: ActorId.generate() },
+      reblog: status,
+    });
+
+    expect(StatusSchema.safeParse(boost).success).toBe(true);
+    expect(boost.quote).toBeNull();
+    expect(boost.reblog?.quote).toEqual({ state: 'accepted', quoted_status: quotedStatus });
+  });
+
+  it('keeps quote_url of a boosted Status whose quote is unresolved inside reblog', () => {
+    const status = toStatus(localPost, { ...options, quote: { uri: quoteUri, status: null } });
+
+    const boost = toReblogStatus({ createdAt: Date.UTC(2025, 1, 3) as Instant }, {
+      repostId: RepostId.generate(),
+      account: { ...account, id: ActorId.generate() },
+      reblog: status,
+    });
+
+    expect(boost.reblog?.iori?.quote_url).toBe(quoteUri);
+  });
+});
+
 describe('toStatus content sanitization', () => {
   it('sanitizes the content of the status and of the status it boosts', () => {
     const dirty = { ...localPost, content: '<p>hi<script>alert(1)</script><img src=x onerror=alert(1)></p>' };
@@ -315,6 +406,46 @@ describe('toStatus url safety', () => {
       url: 'https://iori.example/uploads/a.png',
       preview_url: 'https://iori.example/uploads/a.png',
     });
+  });
+
+  it.each([
+    { mediaType: 'video/mp4', url: 'https://remote.example/media/1.mp4', type: 'video', preview: null },
+    { mediaType: 'audio/mpeg', url: 'https://remote.example/media/1.mp3', type: 'audio', preview: null },
+    {
+      mediaType: 'image/png',
+      url: 'https://remote.example/media/1.png',
+      type: 'image',
+      preview: 'https://remote.example/media/1.png',
+    },
+    { mediaType: null, url: 'https://remote.example/media/1.webm', type: 'video', preview: null },
+    { mediaType: null, url: 'https://remote.example/media/1.ogg', type: 'audio', preview: null },
+    {
+      mediaType: null,
+      url: 'https://remote.example/media/1.jpg',
+      type: 'image',
+      preview: 'https://remote.example/media/1.jpg',
+    },
+  ])('decides the media attachment type $type from mediaType $mediaType and the url', (
+    { mediaType, url, type, preview },
+  ) => {
+    const post: PostWithAuthor = {
+      ...localPost,
+      images: [{ imageId: ImageId.generate(), url, altText: 'alt', mediaType }],
+    };
+
+    const status = toStatus(post, { ...options, mediaAttachmentIds: ['media-1'] });
+
+    expect(status.media_attachments).toEqual([{
+      id: 'media-1',
+      type,
+      url,
+      preview_url: preview,
+      remote_url: null,
+      meta: null,
+      description: 'alt',
+      blurhash: null,
+    }]);
+    expect(StatusSchema.safeParse(status).success).toBe(true);
   });
 
   it('drops a media attachment whose url is not http or https', () => {

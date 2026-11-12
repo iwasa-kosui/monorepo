@@ -90,6 +90,7 @@ describe('GetUserProfileUseCase', () => {
       const posts: PostWithAuthor[] = [
         {
           type: 'local',
+          visibility: 'public',
           summary: null,
           sensitive: false,
           postId: crypto.randomUUID() as PostId,

@@ -74,6 +74,7 @@ import { PgTimelineItemDeletedStore } from '../../pg/timeline/timelineItemDelete
 import { PgTimelineItemsResolverByPostId } from '../../pg/timeline/timelineItemsResolverByPostId.ts';
 import { PgUserResolverByUsername } from '../../pg/user/userResolverByUsername.ts';
 import { WebPushSender } from '../../webPush/webPushSender.ts';
+import { isBlockedUri } from '../blockedInboxDomain.ts';
 import { InboxActorResolver } from '../inboxActorResolver.ts';
 import { createInboxListener } from './inboxListenerFactory.ts';
 
@@ -239,6 +240,7 @@ const create = () => {
         postResolverByUri: PgPostResolverByUri.getInstance(),
         localPostResolverByUri: PgLocalPostResolverByUri.getInstance(),
         remotePostUpserter,
+        isBlockedUri: (uri) => isBlockedUri(uri),
       }),
     },
     onDelete: {

@@ -85,6 +85,25 @@ describe('saveFederatedNote', () => {
     );
   });
 
+  it('passes the quoted note URI of the Note to the upserter', async () => {
+    const { deps, remotePostUpserter } = createDeps();
+    const note = createNote().clone({ quote: new URL('https://other.example/notes/quoted') });
+
+    await saveFederatedNote(deps, { note, relayId, documentLoader });
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ quoteUri: 'https://other.example/notes/quoted' }),
+    );
+  });
+
+  it('passes null as the quoted note URI when the Note quotes nothing', async () => {
+    const { deps, remotePostUpserter } = createDeps();
+
+    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ quoteUri: null }));
+  });
+
   it('stores a federated timeline item for an existing post owned by the Note author', async () => {
     const { deps, remotePostUpserter, actorResolverByUri, federatedTimelineItemCreatedStore } = createDeps();
     remotePostUpserter.resolve.mockReturnValue(RA.ok({ postId: 'post-existing', actorId: 'actor-1' }));

@@ -22,6 +22,7 @@ describe('GetPostUseCase', () => {
       const deps = createDeps();
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -48,6 +49,7 @@ describe('GetPostUseCase', () => {
       const deps = createDeps();
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -132,6 +134,7 @@ describe('GetPostUseCase', () => {
       const deps = createDeps();
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -153,6 +156,7 @@ describe('GetPostUseCase', () => {
       const deps = createDeps();
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,

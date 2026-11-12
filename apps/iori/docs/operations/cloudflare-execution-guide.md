@@ -698,7 +698,7 @@ apply は、受信した Delete の処理（`onDelete`）と各 D1 ストアに�
 1. 対象の投稿を指す `timeline_items` に `timelineItem.deleted` のイベントを足し、`deletedAt` を立てます。
 2. 対象の投稿に付く通知（like、emojiReact、reply、repost）を消します。通知の種類ごとの表を先に、`notifications` を後に消します。like、emojiReact、reply の通知には、削除のイベントを足します。repost の通知には、ドメインに削除のイベントが無いため、イベントを足しません。
 3. `reposts`、`likes`（`local_likes` と `remote_likes` が先）、`emoji_reacts`、`federated_timeline_items` のうち、対象の投稿を指す行を、各削除のイベントを足してから消します。
-4. `post_images`、`local_posts`、`remote_post_recipients`、`remote_posts`、`posts` の順に消します。`posts` を消す前に `post.deleted` のイベントを足します。`post_translations` と `link_previews` は、外部キーの cascade で消えます。
+4. `post_images`、`post_quotes`、`local_posts`、`remote_post_recipients`、`remote_posts`、`posts` の順に消します。`posts` を消す前に `post.deleted` のイベントを足します。`post_translations` と `link_previews` は、外部キーの cascade で消えます。
 
 作業者は、どちらの operation も `environment=production`、`main_sha=<最新の main の SHA>`、対象の D1 の `generation` で dispatch します。`migration_run_id` と `repost_created_before_ms` は空にします。作業者は、先に dry-run を dispatch し、件数を確かめてから、同じ入力で `delete-blocked-domain-posts` を dispatch します。
 

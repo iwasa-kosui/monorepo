@@ -1,15 +1,16 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Create, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Create, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 import { getLogger } from '@logtape/logtape';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
-import type { PostsResolverByActorId } from '../../domain/post/post.ts';
+import { Post, type PostsResolverByActorId } from '../../domain/post/post.ts';
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
 import { toMentionNoteFields } from '../../useCase/helper/mentionNote.ts';
+import { toPostAddressing } from '../../useCase/helper/postAddressing.ts';
 
 export type OutboxDispatcherDeps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
@@ -35,14 +36,17 @@ export const createOutboxDispatcher = (
       ),
       RA.match({
         ok: (posts) => ({
-          items: posts.map((post) => {
+          items: posts.filter(Post.isVisibleToAnonymous).map((post) => {
             const content = sanitizePostContent(post.content);
             const mentionFields = toMentionNoteFields(content);
             const note = new Note({
               id: ctx.getObjectUri(Note, { identifier, id: post.postId }),
               attribution: ctx.getActorUri(identifier),
-              to: PUBLIC_COLLECTION,
-              ccs: [ctx.getFollowersUri(identifier), ...mentionFields.ccs],
+              ...toPostAddressing({
+                visibility: post.visibility ?? 'public',
+                followersUri: ctx.getFollowersUri(identifier),
+                mentionUris: mentionFields.ccs,
+              }),
               tags: mentionFields.tags,
               content,
               mediaType: 'text/html',

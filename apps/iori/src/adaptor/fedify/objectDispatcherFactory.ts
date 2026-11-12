@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Article as FedifyArticle, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Article as FedifyArticle, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 import { getLogger } from '@logtape/logtape';
@@ -15,8 +15,7 @@ import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
 import { GetPostUseCase } from '../../useCase/getPost.ts';
-import { toMentionNoteFields } from '../../useCase/helper/mentionNote.ts';
-import { toImageDocument } from '../../useCase/helper/postImageDocument.ts';
+import { buildLocalNote } from '../../useCase/helper/localNote.ts';
 import { sanitizeArticleBody } from '../routes/helper/sanitizeArticleBody.ts';
 
 export type ObjectDispatcherDeps = Readonly<{
@@ -58,25 +57,8 @@ export const createObjectDispatcher = ({
         );
       }),
       RA.match({
-        ok: ({ post, postImages }) => {
-          const content = sanitizePostContent(post.content);
-          const mentionFields = toMentionNoteFields(content);
-          return new Note({
-            id: ctx.getObjectUri(Note, values),
-            attribution: ctx.getActorUri(values.identifier),
-            to: PUBLIC_COLLECTION,
-            ccs: [ctx.getFollowersUri(values.identifier), ...mentionFields.ccs],
-            tags: mentionFields.tags,
-            content,
-            mediaType: 'text/html',
-            published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
-            url: ctx.getObjectUri(Note, values),
-            summary: post.summary,
-            sensitive: post.sensitive,
-            replyTarget: post.inReplyToUri !== null ? new URL(post.inReplyToUri) : undefined,
-            attachments: postImages.map((image) => toImageDocument(image, origin)),
-          });
-        },
+        ok: ({ post, postImages }) =>
+          buildLocalNote({ ctx, identifier: values.identifier, post, images: postImages, origin }),
         err: (error) => {
           getLogger().warn(`Failed to resolve post for federation: ${values.identifier} - ${values.id} - ${error}`);
           return null;
