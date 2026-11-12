@@ -7,6 +7,7 @@ import { safeUrl } from '../../helper/safeUrl.ts';
 import { fetchPublicTimeline, updateAvatar } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
+import { BlueskyStatusNotice } from '../components/BlueskyStatusNotice.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { Modal } from '../components/Modal.tsx';
@@ -704,7 +705,7 @@ const UpdateBioModal = () => {
 };
 
 const TimelineList = () => {
-  const { data, items, actions, blueskyLike, blueskyRepost, reply, thread, ui, reading, timeline } =
+  const { data, items, actions, blueskyLike, blueskyRepost, blueskyStatus, reply, thread, ui, reading, timeline } =
     useTimelineContext();
 
   if (!data) return null;
@@ -741,6 +742,11 @@ const TimelineList = () => {
           [${ITEM_KEY_ATTRIBUTE}] { animation: none !important; }
         }`}
       </style>
+      <BlueskyStatusNotice
+        status={blueskyStatus.status}
+        page='home'
+        clientLoadFailed={timeline.blueskyLoadFailed}
+      />
       {items.map((item, index) => {
         if (item.kind === 'bluesky') {
           return wrap(

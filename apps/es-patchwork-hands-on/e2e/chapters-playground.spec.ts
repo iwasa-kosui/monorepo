@@ -16,6 +16,15 @@ const open = async (page: Page, path: string): Promise<Locator> => {
   return playground;
 };
 
+const scene = (page: Page): Locator => page.locator('[data-play="add-record"]');
+
+const openScene = async (page: Page, path: string): Promise<Locator> => {
+  await page.goto(path);
+  const play = scene(page);
+  await expect(play).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+  return play;
+};
+
 const summary = (playground: Locator): Locator => playground.locator('[data-role="summary"]');
 
 const runTests = async (playground: Locator): Promise<void> => {
@@ -30,22 +39,10 @@ const replaceEditorText = async (playground: Locator, text: string): Promise<voi
 
 const cancelVisitFrom = (snapshot: string): string => exercise(snapshot, 'visits.ts');
 
-const insertAfterUpdate = async (playground: Locator, text: string): Promise<void> => {
-  const page = playground.page();
-  await playground.locator('.cm-content').click();
-  await page.keyboard.press('ControlOrMeta+Home');
-  for (let line = 0; line < 20; line += 1) {
-    await page.keyboard.press('ArrowDown');
-  }
-  await expect(playground.locator('.cm-activeLine')).toContainText('UPDATE visits SET status');
-  await page.keyboard.press('End');
-  await page.keyboard.insertText(`\n${text}`);
-};
-
-const stepOneInsertion = (): string => {
-  const lines = exercise('chapter-2-step-1', 'visits.ts').split('\n');
-  const start = lines.findIndex((line) => line.startsWith('    const cancelled ='));
-  const end = lines.findIndex((line, index) => index > start && line === '    );');
+const cancelVisitOf = (snapshot: string): string => {
+  const lines = cancelVisitFrom(snapshot).split('\n');
+  const start = lines.findIndex((line) => line.startsWith('export const cancelVisit ='));
+  const end = lines.findIndex((line, index) => index > start && line === '};');
   return lines.slice(start, end + 1).join('\n');
 };
 
@@ -98,65 +95,64 @@ test.describe('第2章', () => {
     await expect(log).toContainText('実行の後: status = reserved');
   });
 
-  test('ステップ1とステップ2を編集して進め、ページを移動しても編集内容が残る', async ({ page }) => {
+  test('場面でステップ1とステップ2を進め、ページを移動しても編集内容が残る', async ({ page }) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 1280, height: 640 });
-    const stepOne = await open(page, '/chapters/chapter-2/5/');
+    const stepOne = await openScene(page, '/chapters/chapter-2/4/');
     await expect(stepOne.locator('.cm-content')).toContainText('export const cancelVisit');
-    await expect.poll(() => stepOne.locator('.cm-scroller').evaluate((element) => element.scrollTop)).toBeGreaterThan(
-      0,
-    );
     await runTests(stepOne);
     await expect(summary(stepOne)).toHaveText('pass 4 / fail 4');
 
-    await insertAfterUpdate(stepOne, stepOneInsertion());
+    await stepOne.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
     await runTests(stepOne);
     await expect(summary(stepOne)).toHaveText('pass 7 / fail 1');
 
     await page.getByRole('link', { name: /次へ/ }).click();
-    await expect(page).toHaveURL(/\/chapters\/chapter-2\/6\/$/);
-    const stepTwo = box(page);
+    await expect(page).toHaveURL(/\/chapters\/chapter-2\/5\/$/);
+    const stepTwo = scene(page);
     await expect(stepTwo).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
     await expect(stepTwo.locator('.cm-content')).toContainText('VisitCancelled');
     await runTests(stepTwo);
     await expect(summary(stepTwo)).toHaveText('pass 7 / fail 1');
 
-    await replaceEditorText(stepTwo, cancelVisitFrom('chapter-2-step-2'));
+    await replaceEditorText(stepTwo, cancelVisitOf('chapter-2-step-2'));
     await runTests(stepTwo);
     await expect(summary(stepTwo)).toHaveText('pass 8 / fail 0');
 
     await page.getByRole('link', { name: /前へ/ }).click();
-    await expect(page).toHaveURL(/\/chapters\/chapter-2\/5\/$/);
-    await expect(box(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    await expect(box(page).locator('.cm-content')).toContainText('operatedBy');
-    await runTests(box(page));
-    await expect(summary(box(page))).toHaveText('pass 8 / fail 0');
+    await expect(page).toHaveURL(/\/chapters\/chapter-2\/4\/$/);
+    await expect(scene(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+    await expect(scene(page).locator('.cm-content')).toContainText('operatedBy');
+    await runTests(scene(page));
+    await expect(summary(scene(page))).toHaveText('pass 8 / fail 0');
   });
 
   test('完成コードを読み込むボタンで、ステップ1は pass 7 / fail 1、ステップ2は pass 8 / fail 0 になる', async ({ page }) => {
-    const stepOne = await open(page, '/chapters/chapter-2/5/');
+    const stepOne = await openScene(page, '/chapters/chapter-2/4/');
     await stepOne.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
     await runTests(stepOne);
     await expect(summary(stepOne)).toHaveText('pass 7 / fail 1');
 
-    const stepTwo = await open(page, '/chapters/chapter-2/6/');
+    const stepTwo = await openScene(page, '/chapters/chapter-2/5/');
     await expect(stepTwo.locator('.cm-content')).toContainText('VisitCancelled');
     await stepTwo.getByRole('button', { name: 'ステップ2の完成コードを読み込む' }).click();
     await runTests(stepTwo);
     await expect(summary(stepTwo)).toHaveText('pass 8 / fail 0');
   });
 
-  test('テストの結果が画面の中に出て、ページ全体にスクロールが出ない', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 640 });
-    const stepOne = await open(page, '/chapters/chapter-2/5/');
-    await runTests(stepOne);
-    await expect(summary(stepOne)).toHaveText('pass 4 / fail 4');
-    const result = await stepOne.locator('[data-role="output"]').boundingBox();
-    expect(result).not.toBeNull();
-    expect((result?.y ?? 0) + (result?.height ?? 0)).toBeLessThanOrEqual(640);
-    expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
-    const summaryBox = await summary(stepOne).boundingBox();
-    expect((summaryBox?.y ?? 0) + (summaryBox?.height ?? 0)).toBeLessThanOrEqual(640);
+  test('場面でコードを保存するたびに、第3章が読む chapter-1-start の保存キーにファイル全体を書く', async ({ page }) => {
+    const stepTwo = await openScene(page, '/chapters/chapter-2/5/');
+    const stored = (): Promise<string | null> => page.evaluate((key) => window.localStorage.getItem(key), storageKey);
+    expect(await stored()).toBeNull();
+
+    await stepTwo.getByRole('button', { name: 'ステップ2の完成コードを読み込む' }).click();
+    await expect.poll(stored).toBe(JSON.stringify({ 'visits.ts': cancelVisitFrom('chapter-2-step-2') }));
+
+    await stepTwo.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
+    await expect.poll(stored).toBe(JSON.stringify({ 'visits.ts': cancelVisitFrom('chapter-2-step-1') }));
+
+    await stepTwo.getByRole('button', { name: '最初のコードに戻す' }).click();
+    await expect.poll(stored).toBeNull();
   });
 });
 
@@ -195,11 +191,21 @@ test.describe('第3章', () => {
   });
 
   test('第2章で書いた visits.ts のテストがすべて成功すると、そのコードで作る', async ({ page }) => {
-    const stepTwo = await open(page, '/chapters/chapter-2/6/');
+    const stepTwo = await openScene(page, '/chapters/chapter-2/5/');
     await stepTwo.getByRole('button', { name: 'ステップ2の完成コードを読み込む' }).click();
     const playground = await open(page, '/chapters/chapter-3/');
     await expect(playground.locator('[data-role="origin"]')).toHaveText(
       '第2章で書いた visits.ts で、このデータベースを作りました。',
+    );
+    await expectAnswer(playground);
+  });
+
+  test('場面で書いたステップ1のコードはテストが成功しきらないので、ステップ2の完成コードで作る', async ({ page }) => {
+    const stepOne = await openScene(page, '/chapters/chapter-2/4/');
+    await stepOne.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
+    const playground = await open(page, '/chapters/chapter-3/');
+    await expect(playground.locator('[data-role="origin"]')).toHaveText(
+      '第2章で書いた visits.ts は全部のテストに成功していないので、ステップ2の完成コードでこのデータベースを作りました。',
     );
     await expectAnswer(playground);
   });
@@ -247,18 +253,20 @@ test.describe('読み込む前に戻すボタン', () => {
   const restore = (playground: Locator, name: string): Locator => playground.getByRole('button', { name });
 
   test('コードの欄では、内容が実際に変わった直後だけ出る', async ({ page }) => {
-    const playground = await open(page, '/chapters/chapter-2/5/');
+    await page.goto('/playground-check/');
+    const playground = page.locator('[data-playground="code"]').first();
+    await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
     const back = restore(playground, '読み込む前のコードに戻す');
     await expect(back).toBeHidden();
 
     await playground.getByRole('button', { name: '最初のコードに戻す' }).click();
     await expect(back).toBeHidden();
 
-    await playground.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
+    await playground.getByRole('button', { name: '完成コードを読み込む' }).click();
     await expect(back).toBeHidden();
 
     await replaceEditorText(playground, 'const edited = 1;');
-    await playground.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
+    await playground.getByRole('button', { name: '完成コードを読み込む' }).click();
     await expect(back).toBeVisible();
 
     await page.keyboard.press('ControlOrMeta+Home');
@@ -273,8 +281,8 @@ test.describe('読み込む前に戻すボタン', () => {
     await expect(back).toBeHidden();
 
     await page.reload();
-    await expect(box(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    await expect(restore(box(page), '読み込む前のコードに戻す')).toBeHidden();
+    await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+    await expect(restore(playground, '読み込む前のコードに戻す')).toBeHidden();
   });
 
   test('SQL の欄では、内容が実際に変わった直後だけ出る', async ({ page }) => {
