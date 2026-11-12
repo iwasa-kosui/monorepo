@@ -55,11 +55,8 @@ const recordEmbedZodType = z.object({
   uri: z.string().min(1),
   authorHandle: z.string().min(1),
   text: z.string(),
-  cid: z.string().min(1).optional(),
-  authorDid: z.string().min(1).optional(),
   authorDisplayName: z.string().min(1).optional(),
   authorAvatar: httpUrlZodType.optional(),
-  createdAt: z.string().min(1).optional(),
   media: mediaEmbedZodType.optional(),
 });
 const recordUnavailableEmbedZodType = z.object({

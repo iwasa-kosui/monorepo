@@ -272,7 +272,7 @@ describe('parseBlueskyTimelineResponse', () => {
       });
     });
 
-    it('record（引用）を uri・handle・本文と、投稿者・投稿日時の項目にする', () => {
+    it('record（引用）を uri・handle・本文と、投稿者の項目にする', () => {
       expect(embedOf({
         $type: 'app.bsky.embed.record#view',
         record: {
@@ -284,11 +284,8 @@ describe('parseBlueskyTimelineResponse', () => {
         uri: 'at://did:plc:q/app.bsky.feed.post/3kq',
         authorHandle: 'quote.bsky.social',
         text: '引用された投稿',
-        cid: 'c',
-        authorDid: 'did:plc:q',
         authorDisplayName: 'Q',
         authorAvatar: 'https://cdn.example/q.jpg',
-        createdAt: '2026-11-07T00:00:00.000Z',
       });
     });
 
@@ -299,14 +296,12 @@ describe('parseBlueskyTimelineResponse', () => {
           uri: viewRecord.uri,
           author: { handle: 'quote.bsky.social', displayName: '', avatar: 'javascript:alert(1)' },
           value: { text: '本文' },
-          indexedAt: '2026-11-07T00:00:01.000Z',
         },
       })).toEqual({
         type: 'record',
         uri: viewRecord.uri,
         authorHandle: 'quote.bsky.social',
         text: '本文',
-        createdAt: '2026-11-07T00:00:01.000Z',
       });
     });
 
@@ -346,6 +341,26 @@ describe('parseBlueskyTimelineResponse', () => {
       expect(nested).not.toHaveProperty('media', expect.anything());
       expect(broken).toMatchObject({ type: 'record', uri: viewRecord.uri });
       expect(broken).not.toHaveProperty('media', expect.anything());
+    });
+
+    it('引用先の embeds[0] が recordWithMedia なら、その media を取り出し、入れ子の引用は持たない', () => {
+      const quote = embedOf({
+        $type: 'app.bsky.embed.record#view',
+        record: {
+          ...viewRecord,
+          embeds: [{
+            $type: 'app.bsky.embed.recordWithMedia#view',
+            record: {
+              $type: 'app.bsky.embed.record#view',
+              record: { ...viewRecord, uri: 'at://did:plc:n/app.bsky.feed.post/3kn' },
+            },
+            media: imagesView,
+          }],
+        },
+      });
+
+      expect(quote).toMatchObject({ type: 'record', uri: viewRecord.uri, media: { type: 'images' } });
+      expect(quote).not.toHaveProperty('record');
     });
 
     it.each([

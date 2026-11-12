@@ -48,11 +48,8 @@ describe('toBlueskyTimelineItem', () => {
     const unavailable = { type: 'recordUnavailable', uri: oldRecord.uri, reason: 'detached' };
     const detailed = {
       ...oldRecord,
-      cid: 'c',
-      authorDid: 'did:plc:q',
       authorDisplayName: '引用者',
       authorAvatar: 'https://cdn.example/q.jpg',
-      createdAt: '2026-11-07T00:00:00.000Z',
       media: { type: 'video', thumbnail: null, playlist: 'https://video.example/q.m3u8' },
     };
 

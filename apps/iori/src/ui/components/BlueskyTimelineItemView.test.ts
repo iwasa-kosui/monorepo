@@ -181,7 +181,6 @@ describe('BlueskyTimelineItemView', () => {
           ...record,
           authorDisplayName: '引用者',
           authorAvatar: 'https://cdn.example/q.jpg',
-          authorDid: 'did:plc:q',
         },
       });
 
@@ -209,6 +208,22 @@ describe('BlueskyTimelineItemView', () => {
       expect(html).not.toMatch(nestedAnchor);
     });
 
+    it('本文が空で画像だけの引用先では、空の本文の段落を出さない', () => {
+      const html = render({
+        embed: {
+          ...record,
+          text: '',
+          media: {
+            type: 'images',
+            images: [{ thumb: 'https://cdn.example/qt.jpg', fullsize: 'https://cdn.example/qf.jpg', alt: '' }],
+          },
+        },
+      });
+
+      expect(html).toContain('src="https://cdn.example/qt.jpg"');
+      expect(html).not.toContain('<p class="text-sm whitespace-pre-wrap');
+    });
+
     it('引用先のリンクカードと動画を表示し、リンクを入れ子にしない', () => {
       const card = render({
         embed: {
@@ -219,7 +234,6 @@ describe('BlueskyTimelineItemView', () => {
       const video = render({
         embed: {
           ...record,
-          authorDid: 'did:plc:q',
           media: { type: 'video', thumbnail: null, playlist: 'https://video.example/q.m3u8' },
         },
       });

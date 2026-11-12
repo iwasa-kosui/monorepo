@@ -59,15 +59,12 @@ const recordViewZodType = z.looseObject({ record: z.unknown() });
 const quoteTargetZodType = z.looseObject({ $type: z.string().optional(), uri: z.string().min(1) });
 const viewRecordZodType = z.looseObject({
   uri: z.string().min(1),
-  cid: z.string().optional(),
   author: z.looseObject({
     handle: z.string().min(1),
-    did: z.string().optional(),
     displayName: z.string().optional(),
     avatar: z.string().optional(),
   }),
-  value: z.looseObject({ text: z.string().optional(), createdAt: z.string().optional() }),
-  indexedAt: z.string().optional(),
+  value: z.looseObject({ text: z.string().optional() }),
   embeds: z.array(z.unknown()).optional(),
 });
 const QUOTE_UNAVAILABLE_REASONS = {
@@ -153,6 +150,12 @@ const mediaOf = (raw: unknown): unknown => {
 const nonEmpty = (value: string | undefined): string | undefined =>
   value === undefined || value === '' ? undefined : value;
 
+const quoteMediaSourceOf = (raw: unknown): unknown => {
+  if (typedZodType.safeParse(raw).data?.$type !== 'app.bsky.embed.recordWithMedia#view') return raw;
+  const view = recordWithMediaViewZodType.safeParse(raw);
+  return view.success ? view.data.media : undefined;
+};
+
 const quoteOf = (raw: unknown): unknown => {
   const view = recordViewZodType.safeParse(raw);
   if (!view.success) return undefined;
@@ -170,20 +173,14 @@ const quoteOf = (raw: unknown): unknown => {
   const record = viewRecordZodType.safeParse(view.data.record);
   if (!record.success) return undefined;
   const { author, value } = record.data;
-  const createdAt = [value.createdAt, record.data.indexedAt].find((at) =>
-    at !== undefined && toInstant(at) !== undefined
-  );
-  const media = embedFrom(mediaOf(record.data.embeds?.[0]));
+  const media = embedFrom(mediaOf(quoteMediaSourceOf(record.data.embeds?.[0])));
   return {
     type: 'record',
     uri: record.data.uri,
     authorHandle: author.handle,
     text: value.text ?? '',
-    cid: nonEmpty(record.data.cid),
-    authorDid: nonEmpty(author.did),
     authorDisplayName: nonEmpty(author.displayName),
     authorAvatar: httpUrlOrNull(author.avatar) ?? undefined,
-    createdAt,
     media: media !== null && (media.type === 'images' || media.type === 'external' || media.type === 'video')
       ? media
       : undefined,

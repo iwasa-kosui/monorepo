@@ -128,7 +128,9 @@ const BlueskyQuote = ({ quote }: Readonly<{ quote: QuoteEmbed }>) => {
         )}
         <span class={`text-xs ${mutedClass} truncate`}>@{quote.authorHandle}</span>
       </div>
-      <p class='text-sm whitespace-pre-wrap break-words text-charcoal dark:text-gray-100'>{quote.text}</p>
+      {quote.text !== '' && (
+        <p class='text-sm whitespace-pre-wrap break-words text-charcoal dark:text-gray-100'>{quote.text}</p>
+      )}
     </>
   );
   const media = quote.media === undefined ? null : (
