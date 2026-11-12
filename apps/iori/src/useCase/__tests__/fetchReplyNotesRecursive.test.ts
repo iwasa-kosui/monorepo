@@ -67,4 +67,58 @@ describe('FetchReplyNotesRecursiveUseCase', () => {
       }),
     );
   });
+
+  describe('shouldSave', () => {
+    const chain = (shouldSave?: (identity: { uri: string }) => boolean | Promise<boolean>) => {
+      const parent = createNote({}).clone({ replyTarget: new URL('https://remote.example/notes/grandparent') });
+      const grandparent = createNote({}).clone({ id: new URL('https://remote.example/notes/grandparent') });
+      const notes = new Map([[parent.id!.href, parent], [grandparent.id!.href, grandparent]]);
+      const remotePostUpserter = { resolve: vi.fn(async () => RA.ok({ postId: 'post-1' } as never)) };
+      const lookupObject = vi.fn(async (uri: string) => notes.get(uri) ?? null);
+      const useCase = FetchReplyNotesRecursiveUseCase.create({
+        origin: 'https://iori.test',
+        postResolverByUri: { resolve: async () => RA.ok(undefined) },
+        localPostResolverByUri: { resolve: async () => RA.ok(undefined) },
+        remotePostUpserter,
+      });
+      const execute = () =>
+        useCase.run({
+          inReplyToUri: parent.id!.href,
+          documentLoader: vi.fn() as never,
+          lookupObject,
+          shouldSave,
+        });
+      return { execute, lookupObject, upsert: remotePostUpserter.resolve };
+    };
+
+    it('省略したときは、祖先を最後までたどって保存する', async () => {
+      const t = chain();
+
+      await t.execute();
+
+      expect(t.upsert).toHaveBeenCalledTimes(2);
+    });
+
+    it('真を返す間は保存して先へ進む', async () => {
+      const shouldSave = vi.fn(async () => true);
+      const t = chain(shouldSave);
+
+      await t.execute();
+
+      expect(shouldSave).toHaveBeenCalledTimes(2);
+      expect(t.upsert).toHaveBeenCalledTimes(2);
+    });
+
+    it('偽を返したら、その投稿を保存せず、そこで連鎖を止める', async () => {
+      const shouldSave = vi.fn(async () => false);
+      const t = chain(shouldSave);
+
+      const result = await t.execute();
+
+      expect(shouldSave).toHaveBeenCalledWith(expect.objectContaining({ uri: 'https://remote.example/notes/parent' }));
+      expect(t.upsert).not.toHaveBeenCalled();
+      expect(t.lookupObject).toHaveBeenCalledTimes(1);
+      expect(result.ok && result.val.fetchedPosts).toEqual([]);
+    });
+  });
 });
