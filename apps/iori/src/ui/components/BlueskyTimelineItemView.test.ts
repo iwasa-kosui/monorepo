@@ -720,6 +720,15 @@ describe('BlueskyTimelineItemView', () => {
       expect(html).toContain('title="引用"');
     });
 
+    it('文字ではなく、aria-label が「引用」のアイコンのボタンにする', () => {
+      const html = render({}, { onQuote: () => {} });
+      const button = html.slice(html.indexOf('<button'), html.indexOf('</button>'));
+
+      expect(button).toContain('aria-label="引用"');
+      expect(button).toContain('<svg');
+      expect(button.replace(/<[^>]*>/g, '')).not.toContain('引用');
+    });
+
     it('返信、リポスト、引用、いいねの順に並べる', () => {
       const html = render({}, { onReply: () => {}, onRepost: () => {}, onQuote: () => {}, onLike: () => {} });
 
