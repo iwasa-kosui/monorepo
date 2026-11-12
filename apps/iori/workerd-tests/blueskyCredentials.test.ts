@@ -2,14 +2,13 @@ import { RA } from '@iwasa-kosui/result';
 import { env } from 'cloudflare:test';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createAesGcmCipher } from '../src/adaptor/crypto/aesGcmCipher.ts';
+import { createAesGcmCipherFactory } from '../src/adaptor/crypto/aesGcmCipher.ts';
 import {
   createD1BlueskyStoredCredentialDeletedStore,
   createD1BlueskyStoredCredentialResolver,
   createD1BlueskyStoredCredentialSavedStore,
 } from '../src/adaptor/d1/blueskyCredential/blueskyCredentialStore.ts';
 import {
-  createD1BlueskyLoginFailureDeletedStore,
   createD1BlueskyLoginFailureResolver,
   createD1BlueskyLoginFailureSavedStore,
 } from '../src/adaptor/d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
@@ -21,7 +20,7 @@ import {
 import { createD1Db } from '../src/adaptor/d1/client.ts';
 import { createD1UserPasswordResolver } from '../src/adaptor/d1/userPassword/userPasswordResolver.ts';
 import {
-  BLUESKY_CREDENTIAL_AAD,
+  blueskyCredentialAad,
   type BlueskyStoredCredential,
 } from '../src/domain/blueskyCredential/blueskyCredential.ts';
 import type { BlueskySession } from '../src/domain/blueskyCrosspost/blueskyCrosspost.ts';
@@ -29,6 +28,7 @@ import { Instant } from '../src/domain/instant/instant.ts';
 import type { Argon2idDerive } from '../src/domain/password/argon2idDerive.ts';
 import { Password } from '../src/domain/password/password.ts';
 import { UserId } from '../src/domain/user/userId.ts';
+import { createBlueskyCredentialRegisteredStore } from '../src/runtime/blueskyCredential.ts';
 import { RegisterBlueskyCredentialUseCase } from '../src/useCase/registerBlueskyCredential.ts';
 import { VerifyCurrentPasswordUseCase } from '../src/useCase/verifyCurrentPassword.ts';
 
@@ -163,21 +163,20 @@ describe('アプリパスワードの登録', () => {
         hashed.tagHex,
       ),
     ]);
-    const cipher = createAesGcmCipher({ key: KEY, aad: BLUESKY_CREDENTIAL_AAD });
+    const cipherFor = createAesGcmCipherFactory({ key: KEY, aadOf: blueskyCredentialAad });
     return {
-      cipher,
+      cipherFor,
       useCase: RegisterBlueskyCredentialUseCase.create({
-        cipher,
+        cipherFor,
+        envCredentials: undefined,
         verifyCurrentPassword: VerifyCurrentPasswordUseCase.create({
           userPasswordResolver: createD1UserPasswordResolver(db),
           argon2idDerive: fakeDerive,
         }),
-        verifier: { login, probeChat: async () => false },
+        verifier: { login, probeChat: async () => false, logout: async () => undefined },
         storedResolver: createD1BlueskyStoredCredentialResolver(db),
-        savedStore: createD1BlueskyStoredCredentialSavedStore(db),
         sessionResolver: createD1BlueskySessionResolver(db),
-        sessionSavedStore: createD1BlueskySessionSavedStore(db),
-        loginFailureDeletedStore: createD1BlueskyLoginFailureDeletedStore(db, 'timeline'),
+        registeredStore: createBlueskyCredentialRegisteredStore(db, 'timeline'),
         now: () => NOW,
       }),
     };
@@ -192,7 +191,7 @@ describe('アプリパスワードの登録', () => {
   it('成功すると、暗号化した行を保存し、bluesky_sessions を上書きし、bluesky_login_failures を消す', async () => {
     await createD1BlueskySessionSavedStore(db).save(session({ accessJwt: 'old-access', refreshJwt: 'old-refresh' }));
     await createD1BlueskyLoginFailureSavedStore(db, 'timeline').save(NOW);
-    const { cipher, useCase } = await register(vi.fn(async () => RA.ok(session())));
+    const { cipherFor, useCase } = await register(vi.fn(async () => RA.ok(session())));
 
     const result = await useCase.run(input);
 
@@ -200,12 +199,33 @@ describe('アプリパスワードの登録', () => {
     const row = await resolveStored();
     expect(row).toMatchObject({ identifier: 'alice.bsky.social', did: 'did:plc:alice', chatPermitted: false });
     expect(row?.appPasswordCiphertext).not.toContain('abcd');
-    expect(await cipher!.decrypt({ ciphertext: row!.appPasswordCiphertext, iv: row!.appPasswordIv })).toBe(
-      'abcd-efgh-ijkl-mnop',
-    );
+    expect(
+      await cipherFor!('did:plc:alice').decrypt({ ciphertext: row!.appPasswordCiphertext, iv: row!.appPasswordIv }),
+    )
+      .toBe('abcd-efgh-ijkl-mnop');
     expect(await resolveSession()).toMatchObject({ accessJwt: 'new-access', refreshJwt: 'new-refresh' });
     const failed = await createD1BlueskyLoginFailureResolver(db, 'timeline').resolve();
     expect(failed).toEqual({ ok: true, val: undefined });
+  });
+
+  it('3 つの書き込みの途中で失敗したら、何も残さず、bluesky_sessions も変えない', async () => {
+    await createD1BlueskySessionSavedStore(db).save(session({ accessJwt: 'old-access', refreshJwt: 'old-refresh' }));
+    await createD1BlueskyLoginFailureSavedStore(db, 'timeline').save(NOW);
+    await env.DB.exec(
+      'CREATE TRIGGER fail_login_failure_delete BEFORE DELETE ON bluesky_login_failures BEGIN SELECT RAISE(ABORT, \'forced failure\'); END',
+    );
+    try {
+      const { useCase } = await register(vi.fn(async () => RA.ok(session())));
+
+      await expect(useCase.run(input)).rejects.toThrow();
+    } finally {
+      await env.DB.exec('DROP TRIGGER fail_login_failure_delete');
+    }
+
+    expect(await resolveStored()).toBeUndefined();
+    expect(await resolveSession()).toMatchObject({ accessJwt: 'old-access', refreshJwt: 'old-refresh' });
+    const failed = await createD1BlueskyLoginFailureResolver(db, 'timeline').resolve();
+    expect(failed).toEqual({ ok: true, val: NOW });
   });
 
   it('ログインに失敗したら、何も保存せず bluesky_sessions も変えない', async () => {

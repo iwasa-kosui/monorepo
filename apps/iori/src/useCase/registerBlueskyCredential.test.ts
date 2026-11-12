@@ -1,29 +1,24 @@
 import { RA, Result } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createAesGcmCipher } from '../adaptor/crypto/aesGcmCipher.ts';
+import { createAesGcmCipherFactory } from '../adaptor/crypto/aesGcmCipher.ts';
 import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts';
-import {
-  createD1BlueskyStoredCredentialResolver,
-  createD1BlueskyStoredCredentialSavedStore,
-} from '../adaptor/d1/blueskyCredential/blueskyCredentialStore.ts';
-import {
-  createD1BlueskyLoginFailureDeletedStore,
-  createD1BlueskyLoginFailureSavedStore,
-} from '../adaptor/d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
+import { createD1BlueskyStoredCredentialResolver } from '../adaptor/d1/blueskyCredential/blueskyCredentialStore.ts';
+import { createD1BlueskyLoginFailureSavedStore } from '../adaptor/d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
 import {
   createD1BlueskySessionResolver,
   createD1BlueskySessionSavedStore,
 } from '../adaptor/d1/blueskyCrosspost/blueskySessionStore.ts';
 import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPasswordResolver.ts';
-import { BLUESKY_CREDENTIAL_AAD } from '../domain/blueskyCredential/blueskyCredential.ts';
+import { blueskyCredentialAad } from '../domain/blueskyCredential/blueskyCredential.ts';
 import type { BlueskySession } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { Password } from '../domain/password/password.ts';
 import { UserId } from '../domain/user/userId.ts';
-import type { BlueskyClientError } from '../ports/blueskyClient.ts';
+import type { BlueskyClientError, BlueskyCredentials } from '../ports/blueskyClient.ts';
 import type { BlueskyCredentialVerifier } from '../ports/blueskyCredentialVerifier.ts';
+import { createBlueskyCredentialRegisteredStore } from '../runtime/blueskyCredential.ts';
 import { RegisterBlueskyCredentialUseCase } from './registerBlueskyCredential.ts';
 import { VerifyCurrentPasswordUseCase } from './verifyCurrentPassword.ts';
 
@@ -45,6 +40,11 @@ const session = (overrides: Partial<BlueskySession> = {}): BlueskySession => ({
   ...overrides,
 });
 
+const envSession = (overrides: Partial<BlueskySession> = {}): BlueskySession =>
+  session({ accessJwt: 'env-access', refreshJwt: 'env-refresh', ...overrides });
+
+const ENV_CREDENTIALS: BlueskyCredentials = { identifier: 'env.example.com', appPassword: 'env-app-password' };
+
 const loginError: BlueskyClientError = {
   type: 'BlueskyClientError',
   kind: 'auth',
@@ -61,6 +61,8 @@ const setup = async (options: {
   key?: string | undefined;
   login?: BlueskyCredentialVerifier['login'];
   chat?: boolean | null;
+  env?: BlueskyCredentials;
+  logout?: BlueskyCredentialVerifier['logout'];
 } = {}) => {
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
@@ -82,22 +84,25 @@ const setup = async (options: {
   const verifier: BlueskyCredentialVerifier = {
     login: vi.fn(options.login ?? (async () => RA.ok(session()))),
     probeChat: vi.fn(async () => options.chat === undefined ? true : options.chat),
+    logout: vi.fn(options.logout ?? (async () => undefined)),
   };
-  const cipher = createAesGcmCipher({ key: 'key' in options ? options.key : KEY, aad: BLUESKY_CREDENTIAL_AAD });
+  const cipherFor = createAesGcmCipherFactory({
+    key: 'key' in options ? options.key : KEY,
+    aadOf: blueskyCredentialAad,
+  });
   const sessionResolver = createD1BlueskySessionResolver(db);
   const storedResolver = createD1BlueskyStoredCredentialResolver(db);
   const useCase = RegisterBlueskyCredentialUseCase.create({
-    cipher,
+    cipherFor,
+    envCredentials: options.env,
     verifyCurrentPassword: VerifyCurrentPasswordUseCase.create({
       userPasswordResolver: createD1UserPasswordResolver(db),
       argon2idDerive: fakeDerive,
     }),
     verifier,
     storedResolver,
-    savedStore: createD1BlueskyStoredCredentialSavedStore(db),
     sessionResolver,
-    sessionSavedStore: createD1BlueskySessionSavedStore(db),
-    loginFailureDeletedStore: createD1BlueskyLoginFailureDeletedStore(db, 'timeline'),
+    registeredStore: createBlueskyCredentialRegisteredStore(db, 'timeline'),
     now: () => NOW,
   });
   const input = {
@@ -191,6 +196,132 @@ describe('RegisterBlueskyCredentialUseCase', () => {
     expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyDidMismatch' } });
   });
 
+  describe('比べる DID が settings にも bluesky_sessions にも無いとき', () => {
+    const loginBy =
+      (envResult: () => ReturnType<BlueskyCredentialVerifier['login']>): BlueskyCredentialVerifier['login'] =>
+      async (credentials) => credentials.identifier === ENV_CREDENTIALS.identifier ? envResult() : RA.ok(session());
+
+    it('env の資格情報でログインして得た DID と違えば、保存せず DidMismatch にする', async () => {
+      const t = await setup({
+        env: ENV_CREDENTIALS,
+        login: loginBy(async () => RA.ok(envSession({ did: 'did:plc:env' }))),
+      });
+
+      const result = await t.useCase.run(t.input);
+
+      expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyDidMismatch' } });
+      expect(t.verifier.login).toHaveBeenCalledWith(ENV_CREDENTIALS);
+      expect(t.credentialRows()).toEqual([]);
+      expect(t.sessionRows()).toEqual([]);
+    });
+
+    it('env の DID と同じなら登録でき、env で作ったセッションは bluesky_sessions に保存しない', async () => {
+      const t = await setup({ env: ENV_CREDENTIALS, login: loginBy(async () => RA.ok(envSession())) });
+
+      const result = await t.useCase.run(t.input);
+
+      expect(result.ok).toBe(true);
+      expect(t.credentialRows()).toHaveLength(1);
+      expect(t.sessionRows()).toMatchObject([{ accessJwt: 'new-access', refreshJwt: 'new-refresh' }]);
+    });
+
+    it('env でのログインに失敗したら、DID を比べずに登録できる', async () => {
+      const t = await setup({ env: ENV_CREDENTIALS, login: loginBy(async () => RA.err(loginError)) });
+
+      const result = await t.useCase.run(t.input);
+
+      expect(result.ok).toBe(true);
+      expect(t.credentialRows()).toHaveLength(1);
+      expect(t.verifier.logout).not.toHaveBeenCalled();
+    });
+
+    it('env の資格情報が無ければ、DID を比べずに登録できる', async () => {
+      const t = await setup();
+
+      const result = await t.useCase.run(t.input);
+
+      expect(result.ok).toBe(true);
+      expect(t.verifier.login).toHaveBeenCalledTimes(1);
+    });
+
+    it('settings の行か bluesky_sessions の行があれば、env でログインしない', async () => {
+      const t = await setup({ env: ENV_CREDENTIALS });
+      await t.seedSession('did:plc:alice');
+
+      const result = await t.useCase.run(t.input);
+
+      expect(result.ok).toBe(true);
+      expect(t.verifier.login).toHaveBeenCalledTimes(1);
+      expect(t.verifier.login).not.toHaveBeenCalledWith(ENV_CREDENTIALS);
+    });
+  });
+
+  describe('検証のために作ったセッションの片付け', () => {
+    it('DID が違って拒むときは、新しい資格情報のセッションを logout する', async () => {
+      const t = await setup();
+      await t.seedSession('did:plc:someone-else');
+
+      const result = await t.useCase.run(t.input);
+
+      expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyDidMismatch' } });
+      expect(t.verifier.logout).toHaveBeenCalledTimes(1);
+      expect(t.verifier.logout).toHaveBeenCalledWith(session());
+    });
+
+    it('env でログインしていたときは、新しい資格情報と env のセッションの両方を logout する', async () => {
+      const t = await setup({
+        env: ENV_CREDENTIALS,
+        login: async (credentials) =>
+          credentials.identifier === ENV_CREDENTIALS.identifier
+            ? RA.ok(envSession({ did: 'did:plc:env' }))
+            : RA.ok(session()),
+      });
+
+      const result = await t.useCase.run(t.input);
+
+      expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyDidMismatch' } });
+      expect(t.verifier.logout).toHaveBeenCalledTimes(2);
+      expect(t.verifier.logout).toHaveBeenCalledWith(session());
+      expect(t.verifier.logout).toHaveBeenCalledWith(envSession({ did: 'did:plc:env' }));
+    });
+
+    it('DID が一致して登録に進むときは、env のセッションだけを logout する', async () => {
+      const t = await setup({
+        env: ENV_CREDENTIALS,
+        login: async (credentials) =>
+          credentials.identifier === ENV_CREDENTIALS.identifier ? RA.ok(envSession()) : RA.ok(session()),
+      });
+
+      const result = await t.useCase.run(t.input);
+
+      expect(result.ok).toBe(true);
+      expect(t.verifier.logout).toHaveBeenCalledTimes(1);
+      expect(t.verifier.logout).toHaveBeenCalledWith(envSession());
+    });
+
+    it('登録に進むときに env のセッションが無ければ、logout しない', async () => {
+      const t = await setup();
+
+      await t.useCase.run(t.input);
+
+      expect(t.verifier.logout).not.toHaveBeenCalled();
+    });
+
+    it('logout が失敗しても、応答は DidMismatch のままにする', async () => {
+      const t = await setup({
+        logout: async () => {
+          throw new Error('offline');
+        },
+      });
+      await t.seedSession('did:plc:someone-else');
+
+      const result = await t.useCase.run(t.input);
+
+      expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyDidMismatch' } });
+      expect(t.verifier.logout).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it.each([
     [true, true],
     [false, false],
@@ -236,13 +367,10 @@ describe('RegisterBlueskyCredentialUseCase', () => {
       updatedAt: NOW,
     });
     expect(JSON.stringify(rows)).not.toContain('abcd-efgh-ijkl-mnop');
-    const cipher = createAesGcmCipher({ key: KEY, aad: BLUESKY_CREDENTIAL_AAD })!;
-    expect(
-      await cipher.decrypt({
-        ciphertext: rows[0]!.appPasswordCiphertext as string,
-        iv: rows[0]!.appPasswordIv as string,
-      }),
-    ).toBe('abcd-efgh-ijkl-mnop');
+    const cipherFor = createAesGcmCipherFactory({ key: KEY, aadOf: blueskyCredentialAad })!;
+    const secret = { ciphertext: rows[0]!.appPasswordCiphertext as string, iv: rows[0]!.appPasswordIv as string };
+    expect(await cipherFor('did:plc:alice').decrypt(secret)).toBe('abcd-efgh-ijkl-mnop');
+    expect(await cipherFor('did:plc:other').decrypt(secret)).toBeUndefined();
     expect(t.sessionRows()).toMatchObject([{ id: 'default', accessJwt: 'new-access', refreshJwt: 'new-refresh' }]);
     expect(t.loginFailureRows()).toEqual([]);
   });

@@ -215,6 +215,15 @@ export const createBlueskyCredentialVerifier = (
       if (listed.ok) return true;
       return listed.err.kind === 'chat_not_permitted' ? false : null;
     },
+    logout: async (session) => {
+      await callXrpc(
+        fetchRequest,
+        'deleteSession',
+        `${session.pdsUrl}/xrpc/com.atproto.server.deleteSession`,
+        { method: 'POST', headers: { Authorization: `Bearer ${session.refreshJwt}` } },
+        emptyResponseSchema,
+      );
+    },
   };
 };
 

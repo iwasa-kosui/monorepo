@@ -1,20 +1,27 @@
+import { RA } from '@iwasa-kosui/result';
+
 import { createBlueskyCredentialVerifier } from '../adaptor/bluesky/blueskyClient.ts';
-import { createAesGcmCipher, decodeAesGcmKey } from '../adaptor/crypto/aesGcmCipher.ts';
+import { createAesGcmCipherFactory, decodeAesGcmKey } from '../adaptor/crypto/aesGcmCipher.ts';
 import {
-  createD1BlueskyStoredCredentialDeletedStore,
+  blueskyStoredCredentialDeleteQuery,
+  blueskyStoredCredentialSaveQuery,
   createD1BlueskyStoredCredentialResolver,
-  createD1BlueskyStoredCredentialSavedStore,
 } from '../adaptor/d1/blueskyCredential/blueskyCredentialStore.ts';
-import { createD1BlueskyLoginFailureDeletedStore } from '../adaptor/d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
+import { blueskyLoginFailureDeleteQuery } from '../adaptor/d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
 import {
-  createD1BlueskySessionDeletedStore,
+  blueskySessionDeleteQuery,
+  blueskySessionSaveQuery,
   createD1BlueskySessionResolver,
-  createD1BlueskySessionSavedStore,
 } from '../adaptor/d1/blueskyCrosspost/blueskySessionStore.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
+import { runBatch } from '../adaptor/d1/runBatch.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPasswordResolver.ts';
-import { BLUESKY_CREDENTIAL_AAD } from '../domain/blueskyCredential/blueskyCredential.ts';
+import {
+  blueskyCredentialAad,
+  type BlueskyCredentialRegisteredStore,
+  type BlueskyCredentialRemovedStore,
+} from '../domain/blueskyCredential/blueskyCredential.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import type { BlueskyCredentials } from '../ports/blueskyClient.ts';
@@ -49,14 +56,37 @@ export const resolveBlueskyRuntimeConfig = (
   env: Pick<IoriWorkerEnv, 'BLUESKY_IDENTIFIER' | 'BLUESKY_APP_PASSWORD' | 'BLUESKY_CREDENTIAL_KEY'>,
 ): BlueskyRuntimeConfig | undefined => {
   const envCredentials = resolveBlueskyCredentials(env);
-  const credentialKey = decodeAesGcmKey(env.BLUESKY_CREDENTIAL_KEY) === undefined
-    ? undefined
-    : env.BLUESKY_CREDENTIAL_KEY;
+  const rawKey = env.BLUESKY_CREDENTIAL_KEY;
+  const credentialKey = decodeAesGcmKey(rawKey) === undefined ? undefined : rawKey;
+  if (credentialKey === undefined && (rawKey?.trim() ?? '') !== '') {
+    console.warn(JSON.stringify({ event: 'bluesky_credential_key_invalid' }));
+  }
   return envCredentials === undefined && credentialKey === undefined ? undefined : { envCredentials, credentialKey };
 };
 
-const createCipher = (credentialKey: string | undefined) =>
-  createAesGcmCipher({ key: credentialKey, aad: BLUESKY_CREDENTIAL_AAD });
+const createCipherFor = (credentialKey: string | undefined) =>
+  createAesGcmCipherFactory({ key: credentialKey, aadOf: blueskyCredentialAad });
+
+export const createBlueskyCredentialRegisteredStore = (
+  db: IoriD1Db,
+  loginFailureScope: string,
+): BlueskyCredentialRegisteredStore => ({
+  store: async ({ credential, session }) => {
+    await runBatch(db, [
+      blueskyStoredCredentialSaveQuery(db, credential),
+      blueskySessionSaveQuery(db, session),
+      blueskyLoginFailureDeleteQuery(db, loginFailureScope),
+    ]);
+    return RA.ok(undefined);
+  },
+});
+
+export const createBlueskyCredentialRemovedStore = (db: IoriD1Db): BlueskyCredentialRemovedStore => ({
+  delete: async () => {
+    await runBatch(db, [blueskyStoredCredentialDeleteQuery(db), blueskySessionDeleteQuery(db)]);
+    return RA.ok(undefined);
+  },
+});
 
 const logDecryptFailed = (): void => {
   console.warn(JSON.stringify({ event: 'bluesky_credential_decrypt_failed' }));
@@ -65,7 +95,7 @@ const logDecryptFailed = (): void => {
 const createResolveCredential = (config: BlueskyRuntimeConfig, db: IoriD1Db) =>
   ResolveBlueskyCredentialUseCase.create({
     storedResolver: createD1BlueskyStoredCredentialResolver(db),
-    cipher: createCipher(config.credentialKey),
+    cipherFor: createCipherFor(config.credentialKey),
     envCredentials: config.envCredentials,
     onDecryptFailed: logDecryptFailed,
   });
@@ -94,32 +124,30 @@ export const createBlueskyCredentialRuntimePorts = (
     envCredentials: resolveBlueskyCredentials(env),
     credentialKey: env.BLUESKY_CREDENTIAL_KEY,
   };
-  const cipher = createCipher(config.credentialKey);
+  const cipherFor = createCipherFor(config.credentialKey);
   const sessionResolver = createD1BlueskySessionResolver(db);
   const getCredential = GetBlueskyCredentialUseCase.create({
     resolveCredential: createResolveCredential(config, db),
     sessionResolver,
-    registrable: cipher !== undefined,
+    registrable: cipherFor !== undefined,
   });
   return {
     getBlueskyCredentialUseCase: getCredential,
     registerBlueskyCredentialUseCase: RegisterBlueskyCredentialUseCase.create({
-      cipher,
+      cipherFor,
+      envCredentials: config.envCredentials,
       verifyCurrentPassword: VerifyCurrentPasswordUseCase.create({
         userPasswordResolver: createD1UserPasswordResolver(db),
         argon2idDerive: deps.argon2idDerive,
       }),
       verifier: createBlueskyCredentialVerifier({ fetch: deps.fetch, now: Instant.now }),
       storedResolver: createD1BlueskyStoredCredentialResolver(db),
-      savedStore: createD1BlueskyStoredCredentialSavedStore(db),
       sessionResolver,
-      sessionSavedStore: createD1BlueskySessionSavedStore(db),
-      loginFailureDeletedStore: createD1BlueskyLoginFailureDeletedStore(db, BLUESKY_CREDENTIAL_LOGIN_FAILURE_SCOPE),
+      registeredStore: createBlueskyCredentialRegisteredStore(db, BLUESKY_CREDENTIAL_LOGIN_FAILURE_SCOPE),
       now: Instant.now,
     }),
     deleteBlueskyCredentialUseCase: DeleteBlueskyCredentialUseCase.create({
-      credentialDeletedStore: createD1BlueskyStoredCredentialDeletedStore(db),
-      sessionDeletedStore: createD1BlueskySessionDeletedStore(db),
+      removedStore: createBlueskyCredentialRemovedStore(db),
       getCredential,
     }),
     isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),

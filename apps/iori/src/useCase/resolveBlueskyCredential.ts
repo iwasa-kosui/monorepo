@@ -3,7 +3,7 @@ import type {
   BlueskyStoredCredentialResolver,
 } from '../domain/blueskyCredential/blueskyCredential.ts';
 import type { BlueskyCredentials } from '../ports/blueskyClient.ts';
-import type { SecretCipher } from '../ports/secretCipher.ts';
+import type { BlueskyCredentialCipherFactory } from '../ports/blueskyCredentialCipher.ts';
 
 export type BlueskyCredentialResolution =
   | Readonly<{ source: 'settings'; credentials: BlueskyCredentials; stored: BlueskyStoredCredential }>
@@ -16,17 +16,19 @@ export type ResolveBlueskyCredentialUseCase = Readonly<{
 
 type Deps = Readonly<{
   storedResolver: BlueskyStoredCredentialResolver;
-  cipher: SecretCipher | undefined;
+  cipherFor: BlueskyCredentialCipherFactory | undefined;
   envCredentials: BlueskyCredentials | undefined;
   onDecryptFailed: () => void;
 }>;
 
-const create = ({ storedResolver, cipher, envCredentials, onDecryptFailed }: Deps): ResolveBlueskyCredentialUseCase => {
+const create = (
+  { storedResolver, cipherFor, envCredentials, onDecryptFailed }: Deps,
+): ResolveBlueskyCredentialUseCase => {
   const fromSettings = async (): Promise<BlueskyCredentialResolution | undefined> => {
-    if (cipher === undefined) return undefined;
+    if (cipherFor === undefined) return undefined;
     const stored = await storedResolver.resolve();
     if (!stored.ok || stored.val === undefined) return undefined;
-    const appPassword = await cipher.decrypt({
+    const appPassword = await cipherFor(stored.val.did).decrypt({
       ciphertext: stored.val.appPasswordCiphertext,
       iv: stored.val.appPasswordIv,
     });

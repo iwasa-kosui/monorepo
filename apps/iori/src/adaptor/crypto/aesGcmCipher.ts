@@ -24,12 +24,8 @@ export const decodeAesGcmKey = (base64: string | undefined): Uint8Array | undefi
   return bytes?.length === KEY_BYTES ? bytes : undefined;
 };
 
-export const createAesGcmCipher = (
-  input: Readonly<{ key: string | undefined; aad: string }>,
-): SecretCipher | undefined => {
-  const keyBytes = decodeAesGcmKey(input.key);
-  if (keyBytes === undefined) return undefined;
-  const additionalData = encoder.encode(input.aad);
+const buildCipher = (keyBytes: Uint8Array, aad: string): SecretCipher => {
+  const additionalData = encoder.encode(aad);
   let cryptoKey: Promise<CryptoKey> | undefined;
   const loadKey = (): Promise<CryptoKey> =>
     cryptoKey ??= crypto.subtle.importKey('raw', keyBytes.slice().buffer, 'AES-GCM', false, ['encrypt', 'decrypt']);
@@ -59,4 +55,18 @@ export const createAesGcmCipher = (
       }
     },
   };
+};
+
+export const createAesGcmCipher = (
+  input: Readonly<{ key: string | undefined; aad: string }>,
+): SecretCipher | undefined => {
+  const keyBytes = decodeAesGcmKey(input.key);
+  return keyBytes === undefined ? undefined : buildCipher(keyBytes, input.aad);
+};
+
+export const createAesGcmCipherFactory = (
+  input: Readonly<{ key: string | undefined; aadOf: (scope: string) => string }>,
+): ((scope: string) => SecretCipher) | undefined => {
+  const keyBytes = decodeAesGcmKey(input.key);
+  return keyBytes === undefined ? undefined : (scope) => buildCipher(keyBytes, input.aadOf(scope));
 };

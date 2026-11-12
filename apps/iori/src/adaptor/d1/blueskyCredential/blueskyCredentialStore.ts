@@ -32,24 +32,31 @@ export const createD1BlueskyStoredCredentialResolver = (db: IoriD1Db): BlueskySt
   },
 });
 
+export const blueskyStoredCredentialSaveQuery = (db: IoriD1Db, credential: BlueskyStoredCredential) => {
+  const values = {
+    ...credential,
+    verifiedAt: new Date(credential.verifiedAt),
+    updatedAt: new Date(credential.updatedAt),
+  };
+  return db.insert(blueskyCredentialsTable).values({ id: BLUESKY_CREDENTIAL_ID, ...values }).onConflictDoUpdate({
+    target: blueskyCredentialsTable.id,
+    set: values,
+  });
+};
+
+export const blueskyStoredCredentialDeleteQuery = (db: IoriD1Db) =>
+  db.delete(blueskyCredentialsTable).where(eq(blueskyCredentialsTable.id, BLUESKY_CREDENTIAL_ID));
+
 export const createD1BlueskyStoredCredentialSavedStore = (db: IoriD1Db): BlueskyStoredCredentialSavedStore => ({
   save: async (credential) => {
-    const values = {
-      ...credential,
-      verifiedAt: new Date(credential.verifiedAt),
-      updatedAt: new Date(credential.updatedAt),
-    };
-    await db.insert(blueskyCredentialsTable).values({ id: BLUESKY_CREDENTIAL_ID, ...values }).onConflictDoUpdate({
-      target: blueskyCredentialsTable.id,
-      set: values,
-    });
+    await blueskyStoredCredentialSaveQuery(db, credential);
     return RA.ok(undefined);
   },
 });
 
 export const createD1BlueskyStoredCredentialDeletedStore = (db: IoriD1Db): BlueskyStoredCredentialDeletedStore => ({
   delete: async () => {
-    await db.delete(blueskyCredentialsTable).where(eq(blueskyCredentialsTable.id, BLUESKY_CREDENTIAL_ID));
+    await blueskyStoredCredentialDeleteQuery(db);
     return RA.ok(undefined);
   },
 });

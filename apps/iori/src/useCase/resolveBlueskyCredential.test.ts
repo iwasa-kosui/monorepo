@@ -1,24 +1,26 @@
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAesGcmCipher } from '../adaptor/crypto/aesGcmCipher.ts';
+import { createAesGcmCipherFactory } from '../adaptor/crypto/aesGcmCipher.ts';
 import {
-  BLUESKY_CREDENTIAL_AAD,
   BLUESKY_CREDENTIAL_KEY_VERSION,
+  blueskyCredentialAad,
   type BlueskyStoredCredential,
 } from '../domain/blueskyCredential/blueskyCredential.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import { ResolveBlueskyCredentialUseCase } from './resolveBlueskyCredential.ts';
 
 const keyOf = (fill: number): string => btoa(String.fromCharCode(...new Uint8Array(32).fill(fill)));
-const cipher = createAesGcmCipher({ key: keyOf(1), aad: BLUESKY_CREDENTIAL_AAD })!;
+const cipherFor = createAesGcmCipherFactory({ key: keyOf(1), aadOf: blueskyCredentialAad })!;
 const envCredentials = { identifier: 'env.example.com', appPassword: 'env-app-password' };
 
-const storedWith = async (appPassword: string, encryptedBy = cipher): Promise<BlueskyStoredCredential> => {
-  const encrypted = await encryptedBy.encrypt(appPassword);
+const STORED_DID = 'did:plc:stored';
+
+const storedWith = async (appPassword: string, encryptedBy = cipherFor): Promise<BlueskyStoredCredential> => {
+  const encrypted = await encryptedBy(STORED_DID).encrypt(appPassword);
   return {
     identifier: 'stored.example.com',
-    did: 'did:plc:stored',
+    did: STORED_DID,
     handle: 'stored.example.com',
     appPasswordCiphertext: encrypted.ciphertext,
     appPasswordIv: encrypted.iv,
@@ -31,14 +33,14 @@ const storedWith = async (appPassword: string, encryptedBy = cipher): Promise<Bl
 
 const setup = (options: {
   stored?: BlueskyStoredCredential;
-  cipher?: typeof cipher | undefined;
+  cipherFor?: typeof cipherFor | undefined;
   env?: typeof envCredentials | undefined;
 }) => {
   const resolve = vi.fn(() => RA.ok(options.stored));
   const onDecryptFailed = vi.fn();
   const useCase = ResolveBlueskyCredentialUseCase.create({
     storedResolver: { resolve },
-    cipher: 'cipher' in options ? options.cipher : cipher,
+    cipherFor: 'cipherFor' in options ? options.cipherFor : cipherFor,
     envCredentials: options.env,
     onDecryptFailed,
   });
@@ -57,8 +59,18 @@ describe('ResolveBlueskyCredentialUseCase', () => {
   });
 
   it('復号に失敗したら記録して env の資格情報に戻る', async () => {
-    const other = createAesGcmCipher({ key: keyOf(2), aad: BLUESKY_CREDENTIAL_AAD })!;
+    const other = createAesGcmCipherFactory({ key: keyOf(2), aadOf: blueskyCredentialAad })!;
     const t = setup({ stored: await storedWith('stored-app-password', other), env: envCredentials });
+
+    const resolution = await t.useCase.run();
+
+    expect(resolution).toEqual({ source: 'secret', credentials: envCredentials });
+    expect(t.onDecryptFailed).toHaveBeenCalledTimes(1);
+  });
+
+  it('行の DID を書き換えた暗号文は復号できず、env の資格情報に戻る', async () => {
+    const stored = await storedWith('stored-app-password');
+    const t = setup({ stored: { ...stored, did: 'did:plc:other' }, env: envCredentials });
 
     const resolution = await t.useCase.run();
 
@@ -74,7 +86,7 @@ describe('ResolveBlueskyCredentialUseCase', () => {
   });
 
   it('鍵が無ければ D1 を読まず env の資格情報を使う', async () => {
-    const t = setup({ stored: await storedWith('stored-app-password'), cipher: undefined, env: envCredentials });
+    const t = setup({ stored: await storedWith('stored-app-password'), cipherFor: undefined, env: envCredentials });
 
     expect(await t.useCase.run()).toEqual({ source: 'secret', credentials: envCredentials });
     expect(t.resolve).not.toHaveBeenCalled();

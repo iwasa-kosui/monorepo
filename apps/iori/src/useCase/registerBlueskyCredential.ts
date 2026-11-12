@@ -2,20 +2,16 @@ import { RA } from '@iwasa-kosui/result';
 
 import {
   BLUESKY_CREDENTIAL_KEY_VERSION,
+  type BlueskyCredentialRegisteredStore,
   type BlueskyCredentialView,
   type BlueskyStoredCredentialResolver,
-  type BlueskyStoredCredentialSavedStore,
 } from '../domain/blueskyCredential/blueskyCredential.ts';
-import type {
-  BlueskyLoginFailureDeletedStore,
-  BlueskySessionResolver,
-  BlueskySessionSavedStore,
-} from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import type { BlueskySession, BlueskySessionResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { UserId } from '../domain/user/userId.ts';
-import type { BlueskyClientError } from '../ports/blueskyClient.ts';
+import type { BlueskyClientError, BlueskyCredentials } from '../ports/blueskyClient.ts';
+import type { BlueskyCredentialCipherFactory } from '../ports/blueskyCredentialCipher.ts';
 import type { BlueskyCredentialVerifier } from '../ports/blueskyCredentialVerifier.ts';
-import type { SecretCipher } from '../ports/secretCipher.ts';
 import type { UseCase } from './useCase.ts';
 import type { InvalidCurrentPassword, VerifyCurrentPasswordUseCase } from './verifyCurrentPassword.ts';
 
@@ -51,30 +47,32 @@ export type RegisterBlueskyCredentialError =
 export type RegisterBlueskyCredentialUseCase = UseCase<Input, BlueskyCredentialView, RegisterBlueskyCredentialError>;
 
 type Deps = Readonly<{
-  cipher: SecretCipher | undefined;
+  cipherFor: BlueskyCredentialCipherFactory | undefined;
+  envCredentials: BlueskyCredentials | undefined;
   verifyCurrentPassword: VerifyCurrentPasswordUseCase;
   verifier: BlueskyCredentialVerifier;
   storedResolver: BlueskyStoredCredentialResolver;
-  savedStore: BlueskyStoredCredentialSavedStore;
   sessionResolver: BlueskySessionResolver;
-  sessionSavedStore: BlueskySessionSavedStore;
-  loginFailureDeletedStore: BlueskyLoginFailureDeletedStore;
+  registeredStore: BlueskyCredentialRegisteredStore;
   now: () => Instant;
 }>;
 
 const create = ({
-  cipher,
+  cipherFor,
+  envCredentials,
   verifyCurrentPassword,
   verifier,
   storedResolver,
-  savedStore,
   sessionResolver,
-  sessionSavedStore,
-  loginFailureDeletedStore,
+  registeredStore,
   now,
 }: Deps): RegisterBlueskyCredentialUseCase => {
+  const discard = async (session: BlueskySession | undefined): Promise<void> => {
+    if (session !== undefined) await verifier.logout(session).catch(() => undefined);
+  };
+
   const run = async (input: Input): RA<BlueskyCredentialView, RegisterBlueskyCredentialError> => {
-    if (cipher === undefined) {
+    if (cipherFor === undefined) {
       return RA.err({ type: 'BlueskyCredentialKeyMissing', message: 'Credential key is not configured.' });
     }
     const verified = await verifyCurrentPassword.run({ userId: input.userId, password: input.currentPassword });
@@ -89,31 +87,39 @@ const create = ({
 
     const stored = await storedResolver.resolve();
     const currentSession = await sessionResolver.resolve();
-    const currentDid = stored.ok && stored.val !== undefined
+    const knownDid = stored.ok && stored.val !== undefined
       ? stored.val.did
       : currentSession.ok
       ? currentSession.val?.did
       : undefined;
+    const envLogin = knownDid === undefined && envCredentials !== undefined
+      ? await verifier.login(envCredentials)
+      : undefined;
+    const envSession = envLogin?.ok ? envLogin.val : undefined;
+    const currentDid = knownDid ?? envSession?.did;
     if (currentDid !== undefined && currentDid !== session.did) {
+      await Promise.all([discard(session), discard(envSession)]);
       return RA.err({ type: 'BlueskyDidMismatch', message: 'The account differs from the connected one.' });
     }
+    await discard(envSession);
 
     const chatPermitted = await verifier.probeChat(session);
-    const encrypted = await cipher.encrypt(input.appPassword);
+    const encrypted = await cipherFor(session.did).encrypt(input.appPassword);
     const at = now();
-    await savedStore.save({
-      identifier,
-      did: session.did,
-      handle: session.handle,
-      appPasswordCiphertext: encrypted.ciphertext,
-      appPasswordIv: encrypted.iv,
-      keyVersion: BLUESKY_CREDENTIAL_KEY_VERSION,
-      chatPermitted,
-      verifiedAt: at,
-      updatedAt: at,
+    await registeredStore.store({
+      credential: {
+        identifier,
+        did: session.did,
+        handle: session.handle,
+        appPasswordCiphertext: encrypted.ciphertext,
+        appPasswordIv: encrypted.iv,
+        keyVersion: BLUESKY_CREDENTIAL_KEY_VERSION,
+        chatPermitted,
+        verifiedAt: at,
+        updatedAt: at,
+      },
+      session,
     });
-    await sessionSavedStore.save(session);
-    await loginFailureDeletedStore.delete();
     return RA.ok({
       source: 'settings',
       handle: session.handle,

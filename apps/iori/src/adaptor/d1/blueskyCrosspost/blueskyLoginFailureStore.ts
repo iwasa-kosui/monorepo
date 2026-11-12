@@ -29,12 +29,15 @@ export const createD1BlueskyLoginFailureSavedStore = (db: IoriD1Db, scope: strin
   },
 });
 
+export const blueskyLoginFailureDeleteQuery = (db: IoriD1Db, scope: string) =>
+  db.delete(blueskyLoginFailuresTable).where(eq(blueskyLoginFailuresTable.scope, scope));
+
 export const createD1BlueskyLoginFailureDeletedStore = (
   db: IoriD1Db,
   scope: string,
 ): BlueskyLoginFailureDeletedStore => ({
   delete: async () => {
-    await db.delete(blueskyLoginFailuresTable).where(eq(blueskyLoginFailuresTable.scope, scope));
+    await blueskyLoginFailureDeleteQuery(db, scope);
     return RA.ok(undefined);
   },
 });

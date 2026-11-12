@@ -85,6 +85,36 @@ describe('createBlueskyCredentialVerifier', () => {
   });
 });
 
+describe('createBlueskyCredentialVerifier の logout', () => {
+  const session = { ...sessionBody, pdsUrl: 'https://pds.example', updatedAt: NOW };
+
+  it('deleteSession を、セッションの refreshJwt を Bearer にして pdsUrl に POST する', async () => {
+    const fetchMock = vi.fn(async () => json({}));
+    const verifier = createBlueskyCredentialVerifier({ fetch: fetchMock as unknown as typeof fetch });
+
+    await verifier.logout(session);
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://pds.example/xrpc/com.atproto.server.deleteSession');
+    expect(init.method).toBe('POST');
+    expect(init.headers).toEqual({ Authorization: 'Bearer refresh' });
+  });
+
+  it('通信やサーバーが失敗しても例外にしない', async () => {
+    const failing = createBlueskyCredentialVerifier({
+      fetch: (async () => json({ error: 'ExpiredToken' }, 400)) as unknown as typeof fetch,
+    });
+    const offline = createBlueskyCredentialVerifier({
+      fetch: (async () => {
+        throw new Error('offline');
+      }) as unknown as typeof fetch,
+    });
+
+    await expect(failing.logout(session)).resolves.toBeUndefined();
+    await expect(offline.logout(session)).resolves.toBeUndefined();
+  });
+});
+
 describe('createBlueskyClient の資格情報の解決', () => {
   const sessionStore = { save: vi.fn(() => RA.ok(undefined)) };
 
