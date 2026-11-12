@@ -47,6 +47,7 @@ const render = (a: Account, overrides: Partial<Parameters<typeof RemoteUserPage>
     isMuting: false,
     isBlocking: false,
     isTogglingFollow: false,
+    isLoadingRemoteStatuses: false,
     isReportOpen: false,
     isReporting: false,
     isReported: false,
@@ -155,6 +156,19 @@ describe('RemoteUserPage block button', () => {
 
   it('hides the block button when signed out', () => {
     expect(render(account())).not.toContain('ブロック');
+  });
+});
+
+describe('RemoteUserPage remote statuses loading', () => {
+  it('shows the loading status below the posts while the past posts are being fetched', () => {
+    const html = render(account(), { isLoadingRemoteStatuses: true });
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain('相手のサーバーから過去の投稿を読み込んでいます');
+  });
+
+  it('hides the loading status when nothing is being fetched', () => {
+    expect(render(account())).not.toContain('相手のサーバーから過去の投稿を読み込んでいます');
   });
 });
 

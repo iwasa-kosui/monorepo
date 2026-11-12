@@ -1,4 +1,16 @@
-import { Collection, Emoji, EmojiReact, Image, Note, Person } from '@fedify/vocab';
+import {
+  Announce,
+  Collection,
+  Create,
+  Emoji,
+  EmojiReact,
+  Image,
+  Note,
+  OrderedCollection,
+  OrderedCollectionPage,
+  Person,
+} from '@fedify/vocab';
+import { Temporal } from '@js-temporal/polyfill';
 import { describe, expect, it, vi } from 'vitest';
 
 import { EMOJI_IMAGE_URL_MAX_LENGTH } from '../../../domain/emojiReact/emojiImageUrl.ts';
@@ -737,6 +749,130 @@ describe('POST /api/iori/v1/statuses/:id/remote-context', () => {
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([404, 404, 404]);
+    expect(await responses[0]!.json()).toEqual(notFound);
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/iori/v1/accounts/:id/remote-statuses', () => {
+  const remoteStatusesPath = (actorId: string) => `/api/iori/v1/accounts/${actorId}/remote-statuses`;
+  const post = (t: Awaited<ReturnType<typeof seedReactions>>, actorId: string, headers: Record<string, string>) =>
+    t.request(remoteStatusesPath(actorId), { method: 'POST', headers });
+  const authorOf = (name: string) =>
+    new Person({
+      id: new URL(`https://remote.example/users/${name}`),
+      inbox: new URL(`https://remote.example/users/${name}/inbox`),
+      preferredUsername: name,
+    });
+  const outboxNote = (id: string, published: string) =>
+    new Note({
+      id: new URL(id),
+      content: id,
+      published: Temporal.Instant.from(published),
+      to: new URL('https://www.w3.org/ns/activitystreams#Public'),
+      attribution: authorOf('alice'),
+    });
+  const serveOutbox = (
+    t: Awaited<ReturnType<typeof seedReactions>>,
+    items: ReadonlyArray<Create | Announce>,
+    notes: ReadonlyArray<Note>,
+  ) => {
+    const alice = new Person({
+      id: new URL('https://remote.example/users/alice'),
+      inbox: new URL('https://remote.example/users/alice/inbox'),
+      outbox: new OrderedCollection({
+        id: new URL('https://remote.example/users/alice/outbox'),
+        first: new OrderedCollectionPage({
+          id: new URL('https://remote.example/users/alice/outbox?page=1'),
+          items: [...items],
+        }),
+      }),
+    });
+    const byUri = new Map<string, unknown>([
+      [alice.id!.href, alice],
+      ...notes.map((note): [string, Note] => [note.id!.href, note]),
+    ]);
+    t.federation.lookupObject.mockImplementation(async (uri?: string) => byUri.get(uri ?? '') ?? null);
+  };
+  const createOf = (note: Note) =>
+    new Create({ id: new URL(`${note.id!.href}/activity`), actor: authorOf('alice'), object: note });
+  const storedRow = (t: Awaited<ReturnType<typeof seedReactions>>, uri: string) =>
+    t.sqlite.prepare(
+      'SELECT p.createdAt AS createdAt FROM remote_posts r JOIN posts p ON p.postId = r.postId WHERE r.uri = ?',
+    ).get(uri) as { createdAt: number | bigint } | undefined;
+
+  it('相手の outbox の Note を投稿日時つきで保存し、件数を返す。Announce は保存しない', async () => {
+    const t = await seedReactions();
+    const older = outboxNote('https://remote.example/notes/older', '2024-01-02T03:04:05.000Z');
+    const newer = outboxNote('https://remote.example/notes/newer', '2024-03-04T05:06:07.000Z');
+    const boosted = outboxNote('https://remote.example/notes/boosted', '2024-05-06T07:08:09.000Z');
+    serveOutbox(
+      t,
+      [
+        createOf(newer),
+        new Announce({ id: new URL('https://remote.example/announces/1'), actor: authorOf('alice'), object: boosted }),
+        createOf(older),
+      ],
+      [older, newer, boosted],
+    );
+
+    const response = await post(t, t.alice.actorId, t.me.bearer);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ fetched: 2 });
+    expect(Number(storedRow(t, older.id!.href)?.createdAt)).toBe(Date.parse('2024-01-02T03:04:05.000Z'));
+    expect(Number(storedRow(t, newer.id!.href)?.createdAt)).toBe(Date.parse('2024-03-04T05:06:07.000Z'));
+    expect(storedRow(t, boosted.id!.href)).toBeUndefined();
+    expect(t.federation.getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
+  });
+
+  it('取り込んだ過去の投稿を、投稿日時の順にアカウントの投稿一覧へ出す', async () => {
+    const t = await seedReactions();
+    const older = outboxNote('https://remote.example/notes/older', '2020-01-02T03:04:05.000Z');
+    const newer = outboxNote('https://remote.example/notes/newer', '2020-03-04T05:06:07.000Z');
+    serveOutbox(t, [createOf(older), createOf(newer)], [older, newer]);
+
+    await post(t, t.alice.actorId, t.me.bearer);
+    const response = await t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`, { headers: t.me.bearer });
+
+    const statuses = await response.json() as { uri: string }[];
+    expect(statuses.map((status) => status.uri)).toEqual([newer.id!.href, older.id!.href, t.publicNote.uri]);
+  });
+
+  it('ローカルのアクターなら何も取らず fetched を 0 にする', async () => {
+    const t = await seedReactions();
+
+    const response = await post(t, t.me.actorId, t.me.bearer);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ fetched: 0 });
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('トークンがないと 401、write:statuses を満たさないスコープは 403 にする', async () => {
+    const t = await seedReactions();
+
+    const responses = await Promise.all([
+      post(t, t.alice.actorId, {}),
+      post(t, t.alice.actorId, { Authorization: 'Bearer invalid' }),
+      post(t, t.alice.actorId, await t.bearerFor('read')),
+      post(t, t.alice.actorId, await t.bearerFor('read:statuses')),
+      post(t, t.alice.actorId, await t.bearerFor('write:favourites')),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403, 403]);
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('存在しないアクターと不正な ID は 404 にして取得しない', async () => {
+    const t = await seedReactions();
+
+    const responses = await Promise.all([
+      post(t, t.seed.uuid(), t.me.bearer),
+      post(t, 'not-an-id', t.me.bearer),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([404, 404]);
     expect(await responses[0]!.json()).toEqual(notFound);
     expect(t.federation.lookupObject).not.toHaveBeenCalled();
   });

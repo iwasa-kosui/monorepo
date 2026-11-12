@@ -33,6 +33,7 @@ import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
 import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
 import { FetchRemoteContextUseCase } from '../../../../useCase/fetchRemoteContext.ts';
+import { FetchRemoteOutboxUseCase } from '../../../../useCase/fetchRemoteOutbox.ts';
 import { FetchReplyNotesRecursiveUseCase } from '../../../../useCase/fetchReplyNotesRecursive.ts';
 import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
@@ -824,6 +825,15 @@ export const setupReadApi = (
               localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
               remotePostUpserter,
             }),
+          }),
+          fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase.create({
+            origin: ORIGIN,
+            userResolver,
+            actorResolverById: createD1ActorResolverById(db),
+            remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+            localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, ORIGIN),
+            remotePostUpserter,
+            blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
           }),
           allRelaysResolver: createD1AllRelaysResolver(db),
           createContext,

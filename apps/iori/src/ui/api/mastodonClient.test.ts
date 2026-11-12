@@ -23,6 +23,7 @@ import {
   fetchRelationshipOrSignedOut,
   fetchRelationships,
   fetchRemoteContext,
+  fetchRemoteStatuses,
   fetchStatus,
   fetchStatusContext,
   follow,
@@ -538,6 +539,18 @@ describe('mastodon client requests', () => {
     expect(init.method).toBe('POST');
     expect(init.credentials).toBe('same-origin');
     expect(result).toEqual({ fetched: 3 });
+  });
+
+  it('posts to the remote statuses path with the encoded id and returns the fetched count', async () => {
+    const fetchMock = stubFetch(jsonResponse({ fetched: 2 }));
+
+    const result = await fetchRemoteStatuses('a/b');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/accounts/a%2Fb/remote-statuses');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual({ fetched: 2 });
   });
 
   it('encodes the id in a write path', async () => {

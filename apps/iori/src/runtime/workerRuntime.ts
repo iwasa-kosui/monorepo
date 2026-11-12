@@ -191,6 +191,7 @@ import { EditArticleUseCase } from '../useCase/editArticle.ts';
 import { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
 import { FetchRemoteContextUseCase } from '../useCase/fetchRemoteContext.ts';
+import { FetchRemoteOutboxUseCase } from '../useCase/fetchRemoteOutbox.ts';
 import { FetchReplyNotesRecursiveUseCase } from '../useCase/fetchReplyNotesRecursive.ts';
 import { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
@@ -658,6 +659,15 @@ export const createWorkerRuntimePorts = async (
           localPostResolverByUri,
           remotePostUpserter,
         }),
+      }),
+      fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase.create({
+        origin: env.ORIGIN,
+        userResolver,
+        actorResolverById: createD1ActorResolverById(db),
+        remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+        localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, env.ORIGIN),
+        remotePostUpserter,
+        blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
       }),
     },
     articles: {

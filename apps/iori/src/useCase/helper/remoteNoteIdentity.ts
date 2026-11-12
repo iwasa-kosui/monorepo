@@ -6,6 +6,7 @@ import { ActorIdentity } from '../../adaptor/fedify/actorIdentity.ts';
 import { extractContentWarning } from '../../adaptor/fedify/extractContentWarning.ts';
 import { extractRecipientActorUris } from '../../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../../adaptor/fedify/extractVisibility.ts';
+import { Instant } from '../../domain/instant/instant.ts';
 import type { RemotePostIdentity } from '../../domain/post/post.ts';
 
 type Options = Readonly<{
@@ -35,6 +36,7 @@ export const toRemotePostIdentity = async (
     return undefined;
   }
 
+  const publishedMs = note.published?.epochMilliseconds;
   return {
     uri,
     content: String(note.content ?? ''),
@@ -43,5 +45,8 @@ export const toRemotePostIdentity = async (
     ...extractContentWarning(note),
     visibility: extractVisibility(note, author.followersId),
     recipientActorUris: extractRecipientActorUris([note], origin),
+    publishedAt: publishedMs !== undefined && Number.isSafeInteger(publishedMs) && publishedMs >= 0
+      ? Instant.orThrow(publishedMs)
+      : undefined,
   };
 };
