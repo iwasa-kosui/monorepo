@@ -22,6 +22,7 @@ import { resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
 const MAX_SAVED = 20;
+const MAX_LOOKUPS_IN_FLIGHT = 4;
 const MAX_PAGES = 3;
 const MAX_ITEMS_PER_PAGE = 100;
 const DEFAULT_FETCH_TIMEOUT_MS = 5_000;
@@ -127,19 +128,14 @@ const create = ({
     }
   };
 
-  const saveItem = async (
-    create: Create,
+  const saveNote = async (
+    note: Note | undefined,
+    noteUri: string,
     actorUri: string,
-    ctx: FederationContext,
     documentLoader: DocumentLoader,
     progress: Progress,
   ): Promise<void> => {
-    const noteUri = create.objectId!.href;
     try {
-      if (progress.stopped) {
-        return;
-      }
-      const note = await lookupNote(ctx, noteUri, documentLoader, progress);
       if (note === undefined || note.attributionId?.href !== actorUri) {
         return;
       }
@@ -153,6 +149,48 @@ const create = ({
       }
     } catch (error) {
       getLogger().debug(`Failed to save a note: ${noteUri} - ${error}`);
+    }
+  };
+
+  const saveCreates = async (
+    creates: readonly Create[],
+    actorUri: string,
+    ctx: FederationContext,
+    documentLoader: DocumentLoader,
+    progress: Progress,
+  ): Promise<void> => {
+    const lookups: Promise<Note | undefined>[] = [];
+    let running = 0;
+    let consumed = 0;
+    const startLookups = (): void => {
+      while (
+        running < MAX_LOOKUPS_IN_FLIGHT
+        && lookups.length < creates.length
+        && !progress.stopped
+        && progress.fetched + (lookups.length - consumed) < MAX_SAVED
+      ) {
+        running++;
+        lookups.push(
+          lookupNote(ctx, creates[lookups.length]!.objectId!.href, documentLoader, progress).finally(() => {
+            running--;
+            startLookups();
+          }),
+        );
+      }
+    };
+
+    for (let index = 0; index < creates.length; index++) {
+      startLookups();
+      const lookup = lookups[index];
+      if (lookup === undefined || progress.stopped || progress.fetched >= MAX_SAVED) {
+        return;
+      }
+      const note = await lookup;
+      if (progress.stopped || progress.fetched >= MAX_SAVED) {
+        return;
+      }
+      await saveNote(note, creates[index]!.objectId!.href, actorUri, documentLoader, progress);
+      consumed++;
     }
   };
 
@@ -191,13 +229,10 @@ const create = ({
       for await (const page of outboxPages(outbox, documentLoader)) {
         const creates = await pageCreates(page, documentLoader, progress);
         const stored = await storedUris(creates.map((create) => create.objectId!.href));
-        for (const create of creates) {
-          if (progress.stopped || progress.fetched >= MAX_SAVED) {
-            return;
-          }
-          if (!stored.has(create.objectId!.href)) {
-            await saveItem(create, actorUri, ctx, documentLoader, progress);
-          }
+        const fresh = creates.filter((create) => !stored.has(create.objectId!.href));
+        await saveCreates(fresh, actorUri, ctx, documentLoader, progress);
+        if (progress.stopped || progress.fetched >= MAX_SAVED) {
+          return;
         }
       }
     } catch (error) {

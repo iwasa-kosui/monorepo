@@ -247,6 +247,71 @@ describe('FetchRemoteOutboxUseCase', () => {
     expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
   });
 
+  describe('Note の取得の並列', () => {
+    const delayNoteLookups = (t: ReturnType<typeof setup>, delayOf: (uri: string) => number) => {
+      const original = t.lookupObject.getMockImplementation()!;
+      const state = { active: 0, maxActive: 0, completed: [] as string[] };
+      t.lookupObject.mockImplementation(async (uri, options) => {
+        if (uri === ACTOR_URI) {
+          return original(uri, options);
+        }
+        state.active++;
+        state.maxActive = Math.max(state.maxActive, state.active);
+        await new Promise((resolve) => setTimeout(resolve, delayOf(uri)));
+        state.active--;
+        state.completed.push(uri);
+        return original(uri, options);
+      });
+      return state;
+    };
+
+    it('Note の取得は同時に最大 4 件まで走らせる', async () => {
+      const notes = Array.from({ length: 10 }, (_, index) => noteOf(index));
+      const t = setup({ outbox: outboxOf(notes.map(createOf)), notes });
+      const state = delayNoteLookups(t, () => 5);
+
+      expect(await t.run()).toBe(10);
+      expect(state.maxActive).toBe(4);
+    });
+
+    it('取得の完了順が前後しても、保存は outbox の順に行う', async () => {
+      const notes = Array.from({ length: 4 }, (_, index) => noteOf(index));
+      const t = setup({ outbox: outboxOf(notes.map(createOf)), notes });
+      const delays = new Map(notes.map((note, index) => [note.id!.href, (4 - index) * 10]));
+      const state = delayNoteLookups(t, (uri) => delays.get(uri)!);
+
+      expect(await t.run()).toBe(4);
+      expect(state.completed).toEqual([noteUri(3), noteUri(2), noteUri(1), noteUri(0)]);
+      expect(storedUris(t)).toEqual([noteUri(0), noteUri(1), noteUri(2), noteUri(3)]);
+    });
+
+    it('保存が 20 件に達する分だけ取得を始め、21 件目以降の取得は始めない', async () => {
+      const notes = Array.from({ length: 25 }, (_, index) => noteOf(index));
+      const t = setup({ outbox: outboxOf(notes.map(createOf)), notes });
+      const state = delayNoteLookups(t, () => 1);
+
+      expect(await t.run()).toBe(20);
+      expect(state.maxActive).toBe(4);
+      expect(lookedUpUris(t).filter((uri) => uri !== ACTOR_URI)).toEqual(
+        notes.slice(0, 20).map((note) => note.id!.href),
+      );
+    });
+
+    it('取れなかった Note の分は、保存が 20 件に達するまで後ろの Note で補う', async () => {
+      const notes = Array.from({ length: 25 }, (_, index) => noteOf(index));
+      const t = setup({
+        outbox: outboxOf(notes.map(createOf)),
+        notes,
+        failingUris: [noteUri(0), noteUri(1), noteUri(2)],
+      });
+      delayNoteLookups(t, () => 1);
+
+      expect(await t.run()).toBe(20);
+      expect(lookedUpUris(t)).toContain(noteUri(22));
+      expect(lookedUpUris(t)).not.toContain(noteUri(23));
+    });
+  });
+
   describe('保存済みの判定', () => {
     it('1 ページ分の Create の object の URI をまとめて、リモートとローカルそれぞれ 1 回の問い合わせで調べる', async () => {
       const notes = [noteOf(1), noteOf(2), noteOf(3)];
@@ -422,7 +487,6 @@ describe('FetchRemoteOutboxUseCase', () => {
       expect(await t.run()).toBe(1);
       await new Promise((resolve) => setTimeout(resolve, 30));
       expect(storedUris(t)).toEqual([noteUri(1)]);
-      expect(lookedUpUris(t)).not.toContain(noteUri(3));
     });
 
     it('全体の時間切れで、実行中の取得に渡した signal を abort する', async () => {
