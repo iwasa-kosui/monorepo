@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4e2ead34-c26d-4455-baa1-e06d4e766193",
-  "prevId": "8fbeb500-cd99-47df-a115-74705f0bfc18",
+  "id": "81c8fc22-325c-4f4d-a849-2baa7684c024",
+  "prevId": "37856fe0-6e5a-4b4b-86e8-cffda7dcf294",
   "tables": {
     "actors": {
       "name": "actors",
@@ -355,6 +355,94 @@
           ],
           "columnsTo": [
             "postId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "blocks": {
+      "name": "blocks",
+      "columns": {
+        "blockId": {
+          "name": "blockId",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "blockedActorId": {
+          "name": "blockedActorId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "block_user_actor_unique": {
+          "name": "block_user_actor_unique",
+          "columns": [
+            "userId",
+            "blockedActorId"
+          ],
+          "isUnique": true
+        },
+        "blocks_user_id_idx": {
+          "name": "blocks_user_id_idx",
+          "columns": [
+            "userId"
+          ],
+          "isUnique": false
+        },
+        "blocks_blocked_actor_id_idx": {
+          "name": "blocks_blocked_actor_id_idx",
+          "columns": [
+            "blockedActorId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "blocks_userId_users_userId_fk": {
+          "name": "blocks_userId_users_userId_fk",
+          "tableFrom": "blocks",
+          "tableTo": "users",
+          "columnsFrom": [
+            "userId"
+          ],
+          "columnsTo": [
+            "userId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "blocks_blockedActorId_actors_actorId_fk": {
+          "name": "blocks_blockedActorId_actors_actorId_fk",
+          "tableFrom": "blocks",
+          "tableTo": "actors",
+          "columnsFrom": [
+            "blockedActorId"
+          ],
+          "columnsTo": [
+            "actorId"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"

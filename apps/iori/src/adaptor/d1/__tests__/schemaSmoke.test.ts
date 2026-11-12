@@ -10,6 +10,7 @@ describe('D1 schema', () => {
       'aiTranslationUsagesTable',
       'articleBodiesTable',
       'articlesTable',
+      'blocksTable',
       'blueskyCrosspostsTable',
       'blueskyLikesTable',
       'blueskyLoginFailuresTable',

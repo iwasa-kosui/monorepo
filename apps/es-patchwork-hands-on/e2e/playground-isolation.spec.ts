@@ -75,7 +75,6 @@ test('第1章から第4章では、実行欄を置いたページだけが実行
   expect(mismatches).toEqual([]);
   expect(pages.filter((file) => hasRuntimeMarkup(readDistFile(file))).sort()).toEqual([
     'chapters/chapter-1/3/index.html',
-    'chapters/chapter-1/5/index.html',
     'chapters/chapter-1/index.html',
     'chapters/chapter-2/2/index.html',
     'chapters/chapter-2/4/index.html',

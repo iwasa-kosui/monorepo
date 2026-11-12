@@ -1,3 +1,4 @@
+import { AcceptBlockUseCase } from '../../../useCase/acceptBlock.ts';
 import { AcceptFollowRequestUseCase } from '../../../useCase/acceptFollowRequest.ts';
 import { AcceptRelaySubscriptionUseCase } from '../../../useCase/acceptRelaySubscription.ts';
 import { AcceptUnfollowUseCase } from '../../../useCase/acceptUnfollow.ts';
@@ -16,6 +17,8 @@ import { createD1LogoUriUpdatedStore } from '../../d1/actor/logoUriUpdatedStore.
 import { createD1RemoteActorCreatedStore } from '../../d1/actor/remoteActorCreatedStore.ts';
 import { createD1RemoteActorProfileUpdatedStore } from '../../d1/actor/remoteActorProfileUpdatedStore.ts';
 import { createD1ArticleResolver } from '../../d1/article/articleResolver.ts';
+import { createD1BlockedActorUriResolverByUsername } from '../../d1/block/blockedActorUriResolverByUsername.ts';
+import { createD1BlockResolver } from '../../d1/block/blockResolver.ts';
 import type { IoriD1Db } from '../../d1/client.ts';
 import { createD1EmojiReactCreatedStore } from '../../d1/emojiReact/emojiReactCreatedStore.ts';
 import { createD1EmojiReactDeletedStore } from '../../d1/emojiReact/emojiReactDeletedStore.ts';
@@ -119,6 +122,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
   const emojiReactResolverByActivityUri = createD1EmojiReactResolverByActivityUri(db);
   const emojiReactNotificationCreatedStore = createD1EmojiReactNotificationCreatedStore(db);
   const timelineItemCreatedStore = createD1TimelineItemCreatedStore(db);
+  const blockResolver = createD1BlockResolver(db);
 
   const addReceivedEmojiReactUseCase = AddReceivedEmojiReactUseCase.create({
     emojiReactCreatedStore,
@@ -131,6 +135,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     actorResolverByUri,
     pushSubscriptionsResolver,
     webPushSender,
+    blockResolver,
   });
   const addReceivedLikeUseCase = AddReceivedLikeUseCase.create({
     remoteLikeCreatedStore: createD1RemoteLikeCreatedStore(db),
@@ -143,6 +148,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     actorResolverByUri,
     pushSubscriptionsResolver,
     webPushSender,
+    blockResolver,
   });
   const addReceivedRepostUseCase = AddReceivedRepostUseCase.create({
     repostCreatedStore: createD1RepostCreatedStore(db),
@@ -159,6 +165,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     timelineItemCreatedStore,
     pushSubscriptionsResolver,
     webPushSender,
+    blockResolver,
   });
 
   return createInboxListener({
@@ -182,6 +189,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
     },
     onFollow: {
       inboxActorResolver,
+      blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
       acceptFollowRequestUseCase: AcceptFollowRequestUseCase.create({
         followedStore: createD1FollowAcceptedStore(db),
         followResolver: createD1FollowResolver(db),
@@ -194,6 +202,16 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         followNotificationCreatedStore: createD1FollowNotificationCreatedStore(db),
         pushSubscriptionsResolver,
         webPushSender,
+        blockResolver,
+      }),
+    },
+    onBlock: {
+      acceptBlockUseCase: AcceptBlockUseCase.create({
+        unfollowedStore: createD1UndoFollowingProcessedStore(db),
+        followResolver: createD1FollowResolver(db),
+        actorResolverByUri,
+        actorResolverByUserId,
+        userResolverByUsername: createD1UserResolverByUsername(db),
       }),
     },
     onUndo: {
@@ -247,6 +265,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         mentionNotificationResolver: createD1MentionNotificationResolverByRecipientAndMentionPostId(db),
         pushSubscriptionsResolver,
         webPushSender,
+        blockResolver,
         linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
         linkPreviewsResolver: createD1LinkPreviewsResolverByPostId(db),
         ogpFetcher: createOgpFetcher(),

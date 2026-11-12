@@ -52,7 +52,7 @@ const { Content } = await render(page.entry);
 <BaseLayout
   title={`${row.title} ${progress}`}
   chapterPage
-  wide={page.chapter === 'intro'}
+  wide={page.chapter === 'intro' || page.entry.data.wide === true}
 >
   <header class="chapter-header">
     <h1>{row.title} <span class="chapter-progress">{progress}</span></h1>

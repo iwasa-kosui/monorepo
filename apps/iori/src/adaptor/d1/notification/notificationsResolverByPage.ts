@@ -6,6 +6,7 @@ import type { NotificationsResolverByPage } from '../../../domain/notification/n
 import type { IoriD1Db } from '../client.ts';
 import { pageConditions, pageOrderBy } from '../pageCondition.ts';
 import { notificationsTable } from '../schema.ts';
+import { notFromBlockedActor } from './notFromBlockedActor.ts';
 import { loadNotificationItems } from './notificationItems.ts';
 
 const cursorNotification = alias(notificationsTable, 'cursor_notification');
@@ -23,6 +24,7 @@ export const createD1NotificationsResolverByPage = (db: IoriD1Db): Notifications
       .where(and(
         eq(notificationsTable.recipientUserId, recipientUserId),
         inArray(notificationsTable.type, [...types]),
+        notFromBlockedActor,
         ...pageConditions(page, columns, cursorOf),
       ))
       .orderBy(...pageOrderBy(page, columns))

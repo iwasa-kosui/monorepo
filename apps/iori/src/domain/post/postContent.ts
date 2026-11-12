@@ -1,6 +1,7 @@
 import { Marked, Renderer } from 'marked';
 import type { HighlighterCore } from 'shiki/core';
 
+import { createMentionExtension, type ResolvedMentions } from './mention.ts';
 import { sanitizePostContent } from './sanitizePostContent.ts';
 
 let highlighterPromise: Promise<HighlighterCore> | null = null;
@@ -56,9 +57,15 @@ const createRenderer = (highlighter: HighlighterCore): Renderer => {
   return renderer;
 };
 
-export const renderMarkdownToUnsanitizedHtml = async (markdown: string): Promise<string> => {
+export const renderMarkdownToUnsanitizedHtml = async (
+  markdown: string,
+  mentions?: ResolvedMentions,
+): Promise<string> => {
   const highlighter = await getHighlighter();
-  const marked = new Marked({ renderer: createRenderer(highlighter) });
+  const marked = new Marked({
+    renderer: createRenderer(highlighter),
+    extensions: mentions === undefined ? [] : [createMentionExtension(mentions)],
+  });
   return marked.parse(markdown, { async: false }) as string;
 };
 
@@ -66,6 +73,6 @@ export const renderMarkdownToUnsanitizedHtml = async (markdown: string): Promise
  * PostContent - Markdown to HTML conversion service
  */
 export const PostContent = {
-  fromMarkdown: async (markdown: string): Promise<string> =>
-    sanitizePostContent(await renderMarkdownToUnsanitizedHtml(markdown)),
+  fromMarkdown: async (markdown: string, mentions?: ResolvedMentions): Promise<string> =>
+    sanitizePostContent(await renderMarkdownToUnsanitizedHtml(markdown, mentions)),
 } as const;

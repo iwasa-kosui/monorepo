@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { blueskyPostUrl, blueskyPostUrlOfUri, blueskyProfilePathOf } from './blueskyUrl.ts';
+import { blueskyPostUrl, blueskyPostUrlOfUri, blueskyProfilePathOf, ioriBlueskyPostPath } from './blueskyUrl.ts';
 
 describe('blueskyPostUrl', () => {
   it('投稿者の DID と uri の末尾の rkey から bsky.app の URL を作る', () => {
@@ -49,6 +49,23 @@ describe('blueskyPostUrl', () => {
     expect(blueskyPostUrlOfUri('at://alice.bsky.social/app.bsky.feed.post/3kq')).toBe(
       'https://bsky.app/profile/alice.bsky.social/post/3kq',
     );
+  });
+});
+
+describe('ioriBlueskyPostPath', () => {
+  it('at-uri から iori 内の詳細ページの path を作る', () => {
+    expect(ioriBlueskyPostPath('at://did:plc:q/app.bsky.feed.post/3kq')).toBe('/bluesky/profile/did:plc:q/post/3kq');
+  });
+
+  it('DID でない authority や at-uri でない文字列は undefined にする', () => {
+    expect(ioriBlueskyPostPath('at://alice.bsky.social/app.bsky.feed.post/3kq')).toBeUndefined();
+    expect(ioriBlueskyPostPath('https://example.com/x')).toBeUndefined();
+    expect(ioriBlueskyPostPath('nope')).toBeUndefined();
+  });
+
+  it('コレクションが app.bsky.feed.post でない at-uri は undefined にする', () => {
+    expect(ioriBlueskyPostPath('at://did:plc:q/app.bsky.feed.like/3kq')).toBeUndefined();
+    expect(ioriBlueskyPostPath('at://did:plc:q/app.bsky.graph.list/3kq')).toBeUndefined();
   });
 });
 

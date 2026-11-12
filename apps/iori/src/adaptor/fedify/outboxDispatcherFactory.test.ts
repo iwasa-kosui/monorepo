@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Create, Note } from '@fedify/vocab';
+import { Create, Mention, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -84,5 +84,52 @@ describe('createOutboxDispatcher', () => {
     expect(content).toContain('hi');
     expect(content).toContain('link');
     expect(content).toContain('href="https://example.com/"');
+  });
+
+  const dispatchContent = async (content: string) => {
+    const userId = UserId.generate();
+    const actorId = ActorId.generate();
+    const post: LocalPost = {
+      type: 'local',
+      summary: null,
+      sensitive: false,
+      postId: PostId.generate(),
+      actorId,
+      content,
+      createdAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
+      userId,
+      inReplyToUri: null,
+    };
+    const dispatcher = createOutboxDispatcher({
+      userResolverByUsername: {
+        resolve: vi.fn(async () => RA.ok({ id: userId, username: Username.orThrow('kosui') })),
+      } as never,
+      actorResolverByUserId: { resolve: vi.fn(async () => RA.ok({ id: actorId })) } as never,
+      postsResolverByActorId: { resolve: vi.fn(async () => RA.ok([post])) } as never,
+    });
+    const result = await dispatcher.dispatch(createContext(), 'kosui');
+    return (await (result.items[0] as Create).getObject()) as Note;
+  };
+
+  it('本文に a.mention のある投稿は、Mention タグを付け、相手の actor を followers に加えて cc に入れる', async () => {
+    const note = await dispatchContent(
+      '<p><span class="h-card"><a href="https://remote.example/users/alice" class="u-url mention">@<span>alice@remote.example</span></a></span> hi</p>',
+    );
+
+    expect(note.ccIds.map((url) => url.href)).toEqual([
+      'https://example.com/users/kosui/followers',
+      'https://remote.example/users/alice',
+    ]);
+    const tags = await Array.fromAsync(note.getTags());
+    expect(tags).toHaveLength(1);
+    expect(tags[0]).toBeInstanceOf(Mention);
+    expect((tags[0] as Mention).href?.href).toBe('https://remote.example/users/alice');
+  });
+
+  it('メンションの無い投稿は、cc に followers だけを入れ、タグを付けない', async () => {
+    const note = await dispatchContent('<p>hello</p>');
+
+    expect(note.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers']);
+    await expect(Array.fromAsync(note.getTags())).resolves.toEqual([]);
   });
 });

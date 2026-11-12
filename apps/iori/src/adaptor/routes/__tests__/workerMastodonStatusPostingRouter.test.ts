@@ -1,4 +1,4 @@
-import { Delete } from '@fedify/vocab';
+import { Delete, Endpoints, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -407,6 +407,173 @@ describe('POST /api/v1/statuses', () => {
     expect(response.status).toBe(200);
     expect(StatusSchema.parse(await response.json()).content).toBe('<p>from the web</p>');
     expect(t.count('posts', `actorId='${t.me.actorId}'`)).toBe(1);
+  });
+});
+
+describe('POST /api/v1/statuses のメンション', () => {
+  const aliceId = 'https://remote.example/users/alice';
+  const mentionLink =
+    `<span class="h-card"><a href="${aliceId}" class="u-url mention">@<span>alice@remote.example</span></a></span>`;
+
+  const withRemoteAlice = async () => {
+    const t = await setup();
+    t.remoteActorLookup.lookup.mockImplementation(
+      (({ handle }: { handle: string }) =>
+        handle === '@alice@remote.example'
+          ? RA.ok(
+            new Person({
+              id: new URL(aliceId),
+              inbox: new URL(`${aliceId}/inbox`),
+              endpoints: new Endpoints({ sharedInbox: new URL('https://remote.example/inbox') }),
+            }),
+          )
+          : RA.err({
+            type: 'RemoteActorLookupError',
+            message: 'not found',
+            detail: { handle, reason: 'not found' },
+          })) as never,
+    );
+    const storedContent = (postId: string) =>
+      (t.sqlite.prepare('SELECT content FROM posts WHERE postId = ?').get(postId) as { content: string }).content;
+    return { ...t, storedContent };
+  };
+
+  it('text/plain の本文の @user@host を解決し、リンクにして mentions として渡す', async () => {
+    const t = await withRemoteAlice();
+
+    const response = await t.json({ status: 'hi @alice@remote.example' });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(status.content).toContain(`href="${aliceId}"`);
+    expect(status.content).toContain('class="u-url mention"');
+    expect(t.storedContent(status.id)).toBe(`<p>hi ${mentionLink}</p>`);
+    expect(t.remoteActorLookup.lookup).toHaveBeenCalledTimes(1);
+    expect((t.remoteActorLookup.lookup.mock.calls[0] as unknown[] | undefined)?.[0]).toMatchObject({
+      handle: '@alice@remote.example',
+      identifier: 'kosui',
+    });
+    const sent = t.federation.sendActivity.mock.calls.map((call) => call as unknown[]);
+    expect(sent).toHaveLength(2);
+    expect(sent[0]?.[1]).toBe('followers');
+    expect(sent[1]?.[1]).toEqual([{
+      id: new URL(aliceId),
+      inboxId: new URL(`${aliceId}/inbox`),
+      endpoints: { sharedInbox: new URL('https://remote.example/inbox') },
+    }]);
+  });
+
+  it('text/markdown の本文の @user@host もリンクにして mentions として渡す', async () => {
+    const t = await withRemoteAlice();
+
+    const response = await t.json({
+      status: '**@alice@remote.example** `@bob@nowhere.example`',
+      content_type: 'text/markdown',
+    });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(t.storedContent(status.id)).toContain(`<strong>${mentionLink}</strong>`);
+    expect(t.storedContent(status.id)).toContain('<code>@bob@nowhere.example</code>');
+    expect(t.remoteActorLookup.lookup).toHaveBeenCalledTimes(1);
+    expect(t.federation.sendActivity).toHaveBeenCalledTimes(2);
+  });
+
+  it('解決できない acct は平文のまま 200 で投稿し、mentions には含めない', async () => {
+    const t = await withRemoteAlice();
+
+    const response = await t.json({ status: 'hi @bob@nowhere.example' });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(t.storedContent(status.id)).toBe('<p>hi @bob@nowhere.example</p>');
+    expect(t.remoteActorLookup.lookup).toHaveBeenCalledTimes(1);
+    expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('lookup が例外を投げても 200 で投稿する', async () => {
+    const t = await withRemoteAlice();
+    t.remoteActorLookup.lookup.mockImplementation(
+      (() => {
+        throw new Error('network down');
+      }) as never,
+    );
+
+    const response = await t.json({ status: 'hi @alice@remote.example' });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(t.storedContent(status.id)).toBe('<p>hi @alice@remote.example</p>');
+    expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('lookup が 5 秒で返らなければ未解決として 200 で投稿する', async () => {
+    const t = await withRemoteAlice();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const lookupStarted = Promise.withResolvers<void>();
+      t.remoteActorLookup.lookup.mockImplementation(
+        (() => {
+          lookupStarted.resolve();
+          return new Promise(() => {});
+        }) as never,
+      );
+
+      const responsePromise = t.json({ status: 'hi @alice@remote.example' });
+      await lookupStarted.promise;
+      await vi.advanceTimersByTimeAsync(5000);
+      const response = await responsePromise;
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(t.storedContent(status.id)).toBe('<p>hi @alice@remote.example</p>');
+      expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('自分のホストの acct は lookup せず、平文のまま mentions にも含めない', async () => {
+    const t = await withRemoteAlice();
+
+    const response = await t.json({ status: 'hi @kosui@iori.test and @Kosui@IORI.test' });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
+    expect(t.storedContent(status.id)).toBe('<p>hi @kosui@iori.test and @Kosui@IORI.test</p>');
+    expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('同じ相手を大文字小文字違いで書いても lookup は 1 回だけにする', async () => {
+    const t = await withRemoteAlice();
+
+    const response = await t.json({ status: '@alice@remote.example @Alice@Remote.Example' });
+
+    expect(response.status).toBe(200);
+    expect(t.remoteActorLookup.lookup).toHaveBeenCalledTimes(1);
+  });
+
+  it('@user@host の無い本文は lookup を呼ばない', async () => {
+    const t = await withRemoteAlice();
+
+    const response = await t.json({ status: 'hello foo@bar.example' });
+
+    expect(response.status).toBe(200);
+    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
+    expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('返信でも @user@host を解決して mentions に渡す', async () => {
+    const t = await withRemoteAlice();
+    const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
+
+    const response = await t.json({ status: '@alice@remote.example reply', in_reply_to_id: parent.postId });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(t.storedContent(status.id)).toBe(`<p>${mentionLink} reply</p>`);
+    expect(t.federation.sendActivity).toHaveBeenCalledTimes(2);
   });
 });
 

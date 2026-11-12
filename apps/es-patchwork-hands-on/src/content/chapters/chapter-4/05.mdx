@@ -1,4 +1,5 @@
 import DecisionTable from '../../../components/DecisionTable.astro';
+import OwnQuestionView from '../../../components/OwnQuestionView.astro';
 
 ## 3つのパターンを表で比べて、自分のシステムに近いものを1つ選ぶ
 
@@ -6,4 +7,6 @@ import DecisionTable from '../../../components/DecisionTable.astro';
 
 更新処理の行数は、`cancelVisit` と、`cancelVisit` から呼ぶ補助関数の差分です。読み取り関数の行数は、未実装の関数を完成させた差分です。この行数は、業務イベントの導入全体の変更量を示しません。
 
-<DecisionTable heading="比較" byAxis />
+<DecisionTable heading="比較" byAxis>
+  <OwnQuestionView />
+</DecisionTable>

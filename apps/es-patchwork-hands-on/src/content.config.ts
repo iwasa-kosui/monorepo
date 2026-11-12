@@ -5,6 +5,7 @@ const chapters = defineCollection({
   loader: glob({ pattern: '*/*.mdx', base: './src/content/chapters' }),
   schema: z.object({
     goal: z.string().optional(),
+    wide: z.boolean().optional(),
   }).strict(),
 });
 

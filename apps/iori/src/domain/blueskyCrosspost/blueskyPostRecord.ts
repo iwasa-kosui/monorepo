@@ -12,6 +12,11 @@ export type BlueskyFacet = Readonly<{
   features: readonly [Readonly<{ $type: 'app.bsky.richtext.facet#link'; uri: string }>];
 }>;
 
+export type BlueskyMentionFacet = Readonly<{
+  index: Readonly<{ byteStart: number; byteEnd: number }>;
+  features: readonly [Readonly<{ $type: 'app.bsky.richtext.facet#mention'; did: string }>];
+}>;
+
 export type BlueskyEmbed =
   | Readonly<{
     $type: 'app.bsky.embed.images';
@@ -26,7 +31,8 @@ export type BlueskyPostRecord = Readonly<{
   $type: 'app.bsky.feed.post';
   text: string;
   createdAt: string;
-  facets?: readonly BlueskyFacet[];
+  facets?: ReadonlyArray<BlueskyFacet | BlueskyMentionFacet>;
   reply?: Readonly<{ root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
   embed?: BlueskyEmbed;
+  langs?: readonly string[];
 }>;

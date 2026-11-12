@@ -1,0 +1,499 @@
+---
+import './figure.css';
+
+import { richHtml } from './rich';
+
+const start =
+  '経路を選んで「次へ」を押すと、`cancelVisit` の処理を1つずつ進めます。';
+const begin = '`withTransaction` がトランザクションを始めます。';
+const update =
+  '`UPDATE` で、`visits` の `status` が `cancelled` になります。まだ確定していません。';
+const messages = {
+  success: [
+    start,
+    begin,
+    update,
+    '`INSERT` で、`business_events` に1行を書きます。まだ確定していません。',
+    'トランザクションを確定します。来院の更新と記録の両方が残ります。',
+  ],
+  fail: [
+    start,
+    begin,
+    update,
+    '`business_events` への記録が失敗します。',
+    'トランザクションを取り消します。`visits` の `status` は `reserved` に戻ります。記録が抜けたキャンセルは残りません。',
+  ],
+};
+---
+
+<section
+  class="cfig"
+  data-transaction-figure
+  data-step="0"
+  data-path="success"
+  data-frame="idle"
+  data-update="idle"
+  data-insert="idle"
+  data-visit="reserved"
+  data-events="empty"
+  data-messages={JSON.stringify(messages)}
+  aria-label="cancelVisit の処理を1つずつ進める図"
+>
+  <div class="tx">
+    <p class="tx-name"><code>cancelVisit</code></p>
+    <div class="frame">
+      <p class="frame-head">
+        <code>withTransaction</code>
+        <span class="stamp stamp-commit">確定</span>
+        <span class="stamp stamp-rollback">取り消し</span>
+      </p>
+      <ol class="ops">
+        <li class="op op-update">
+          <span class="op-no" aria-hidden="true">1</span>
+          <code>UPDATE visits</code>
+        </li>
+        <li class="op op-insert">
+          <span class="op-no" aria-hidden="true">2</span>
+          <code>INSERT INTO business_events</code>
+          <span class="fail-mark">× 失敗</span>
+        </li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="tables">
+    <table class="cfig-table visits-table">
+      <caption><code>visits</code></caption>
+      <thead>
+        <tr>
+          <th scope="col">id</th>
+          <th scope="col">pet_name</th>
+          <th scope="col">status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>visit-pochi</td>
+          <td>ポチ</td>
+          <td>
+            <div class="status">
+              <span class="v-reserved" data-value="reserved">reserved</span>
+              <span class="v-cancelled" data-value="cancelled">
+                <span class="val">cancelled</span>
+                <span class="tag tag-pending">確定前</span>
+                <span class="tag tag-commit">確定</span>
+              </span>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <table class="cfig-table events-table">
+      <caption><code>business_events</code></caption>
+      <thead>
+        <tr>
+          <th scope="col">event_id</th>
+          <th scope="col">event_name</th>
+          <th scope="col">target_id</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-empty">
+          <td colspan="3">行がありません</td>
+        </tr>
+        <tr class="row-event">
+          <td>1</td>
+          <td>VisitCancelled</td>
+          <td>
+            visit-pochi
+            <span class="tag tag-pending">確定前</span>
+            <span class="tag tag-commit">確定</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="cfig-controls">
+    <div class="cfig-group" role="group" aria-label="経路を選ぶ">
+      <button type="button" data-path-button="success" aria-pressed="true">
+        記録に成功する場合
+      </button>
+      <button type="button" data-path-button="fail" aria-pressed="false">
+        記録に失敗する場合
+      </button>
+    </div>
+    <div class="cfig-group">
+      <button type="button" data-action="next">次へ</button>
+      <button type="button" data-action="reset" disabled>最初に戻す</button>
+    </div>
+  </div>
+
+  <p
+    class="cfig-message"
+    aria-live="polite"
+    data-message
+    set:html={richHtml(messages.success[0] ?? '')}
+  >
+  </p>
+</section>
+
+<style>
+.tx {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.tx-name {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.frame {
+  border: 2px dashed var(--gray);
+  border-radius: 0.5rem;
+  background: var(--paper);
+  padding: 0.375rem 0.625rem 0.5rem;
+  transition: border-color 0.4s ease, background-color 0.4s ease;
+}
+.frame-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.stamp {
+  display: none;
+  margin-left: auto;
+  border-radius: 0.25rem;
+  padding: 0 0.5rem;
+  color: var(--paper);
+  font-size: 0.8125rem;
+}
+.stamp-commit {
+  background: var(--ok);
+}
+.stamp-rollback {
+  background: var(--red);
+}
+.ops {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.op {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 2px solid transparent;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.9375rem;
+  transition: border-color 0.4s ease, background-color 0.4s ease;
+}
+.op-no {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.fail-mark {
+  display: none;
+  margin-left: auto;
+  color: var(--red);
+  font-weight: 700;
+}
+
+[data-frame="open"] .frame {
+  border-style: solid;
+  border-color: var(--accent);
+}
+[data-frame="committed"] .frame {
+  border-style: solid;
+  border-color: var(--ok);
+  background: #f0fdf4;
+}
+[data-frame="rolledback"] .frame {
+  border-color: var(--red);
+  background: #fef2f2;
+}
+[data-frame="committed"] .stamp-commit,
+[data-frame="rolledback"] .stamp-rollback {
+  display: inline-block;
+}
+[data-update="active"] .op-update,
+[data-insert="active"] .op-insert {
+  border-color: var(--accent);
+  background: #dbeafe;
+}
+[data-insert="failed"] .op-insert {
+  border-color: var(--red);
+  background: #fef2f2;
+}
+[data-insert="failed"] .fail-mark {
+  display: inline;
+}
+[data-update="undone"] .op-update code {
+  text-decoration: line-through;
+}
+
+.tables {
+  display: grid;
+  gap: 0.5rem;
+}
+.tag {
+  display: none;
+  margin-left: 0.375rem;
+  border-radius: 0.25rem;
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tag-pending {
+  border: 1px dashed var(--ink);
+  color: var(--ink);
+}
+.tag-commit {
+  background: var(--ok);
+  color: var(--paper);
+}
+
+.status {
+  display: grid;
+  overflow: hidden;
+}
+.status > * {
+  grid-area: 1 / 1;
+  transition: opacity 0.5s ease, transform 0.5s ease, visibility 0.5s ease;
+}
+.v-reserved {
+  font-weight: 700;
+}
+.v-cancelled {
+  color: var(--red);
+  font-weight: 700;
+  opacity: 0;
+  transform: translateX(-1.5rem);
+  visibility: hidden;
+}
+.v-cancelled .val {
+  border: 2px dashed var(--red);
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+}
+[data-visit="pending"] .v-reserved,
+[data-visit="committed"] .v-reserved {
+  opacity: 0;
+  transform: translateX(4rem);
+  visibility: hidden;
+}
+[data-visit="pending"] .v-cancelled,
+[data-visit="committed"] .v-cancelled {
+  opacity: 1;
+  transform: translateX(0);
+  visibility: visible;
+}
+[data-visit="pending"] .v-cancelled .tag-pending,
+[data-visit="committed"] .v-cancelled .tag-commit {
+  display: inline-block;
+}
+[data-visit="committed"] .v-cancelled .val {
+  border-style: solid;
+}
+
+.row-event {
+  display: none;
+}
+[data-events="pending"] .row-empty,
+[data-events="committed"] .row-empty {
+  display: none;
+}
+[data-events="pending"] .row-event,
+[data-events="committed"] .row-event {
+  display: table-row;
+}
+[data-events="pending"] .row-event td {
+  border-style: dashed;
+  border-color: var(--ink);
+}
+[data-events="pending"] .row-event .tag-pending,
+[data-events="committed"] .row-event .tag-commit {
+  display: inline-block;
+}
+.row-empty td {
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame,
+  .op,
+  .status > * {
+    transition: none;
+  }
+}
+</style>
+
+<script>
+import { richHtml } from './rich';
+
+type Path = 'success' | 'fail';
+
+type State = {
+  readonly frame: string;
+  readonly update: string;
+  readonly insert: string;
+  readonly visit: string;
+  readonly events: string;
+};
+
+const states: Record<Path, readonly State[]> = {
+  success: [
+    {
+      frame: 'idle',
+      update: 'idle',
+      insert: 'idle',
+      visit: 'reserved',
+      events: 'empty',
+    },
+    {
+      frame: 'open',
+      update: 'idle',
+      insert: 'idle',
+      visit: 'reserved',
+      events: 'empty',
+    },
+    {
+      frame: 'open',
+      update: 'active',
+      insert: 'idle',
+      visit: 'pending',
+      events: 'empty',
+    },
+    {
+      frame: 'open',
+      update: 'done',
+      insert: 'active',
+      visit: 'pending',
+      events: 'pending',
+    },
+    {
+      frame: 'committed',
+      update: 'done',
+      insert: 'done',
+      visit: 'committed',
+      events: 'committed',
+    },
+  ],
+  fail: [
+    {
+      frame: 'idle',
+      update: 'idle',
+      insert: 'idle',
+      visit: 'reserved',
+      events: 'empty',
+    },
+    {
+      frame: 'open',
+      update: 'idle',
+      insert: 'idle',
+      visit: 'reserved',
+      events: 'empty',
+    },
+    {
+      frame: 'open',
+      update: 'active',
+      insert: 'idle',
+      visit: 'pending',
+      events: 'empty',
+    },
+    {
+      frame: 'open',
+      update: 'done',
+      insert: 'failed',
+      visit: 'pending',
+      events: 'empty',
+    },
+    {
+      frame: 'rolledback',
+      update: 'undone',
+      insert: 'failed',
+      visit: 'reserved',
+      events: 'empty',
+    },
+  ],
+};
+
+const isPath = (value: string | undefined): value is Path =>
+  value === 'success' || value === 'fail';
+
+for (
+  const root of document.querySelectorAll<HTMLElement>(
+    '[data-transaction-figure]',
+  )
+) {
+  const message = root.querySelector<HTMLElement>('[data-message]');
+  const next = root.querySelector<HTMLButtonElement>('[data-action="next"]');
+  const reset = root.querySelector<HTMLButtonElement>('[data-action="reset"]');
+  const pathButtons = [
+    ...root.querySelectorAll<HTMLButtonElement>('[data-path-button]'),
+  ];
+  if (message === null || next === null || reset === null) continue;
+  const messages = JSON.parse(root.dataset.messages ?? '{}') as Record<
+    Path,
+    readonly string[]
+  >;
+
+  let path: Path = 'success';
+  let step = 0;
+
+  const show = (): void => {
+    const state = states[path][step];
+    if (state === undefined) return;
+    root.dataset.step = String(step);
+    root.dataset.path = path;
+    root.dataset.frame = state.frame;
+    root.dataset.update = state.update;
+    root.dataset.insert = state.insert;
+    root.dataset.visit = state.visit;
+    root.dataset.events = state.events;
+    message.innerHTML = richHtml(messages[path][step] ?? '');
+    next.disabled = step === states[path].length - 1;
+    reset.disabled = step === 0;
+    for (const button of pathButtons) {
+      button.setAttribute(
+        'aria-pressed',
+        String(button.dataset.pathButton === path),
+      );
+    }
+  };
+
+  for (const button of pathButtons) {
+    button.addEventListener('click', () => {
+      const chosen = button.dataset.pathButton;
+      if (!isPath(chosen)) return;
+      path = chosen;
+      step = 0;
+      show();
+    });
+  }
+  next.addEventListener('click', () => {
+    step += 1;
+    show();
+  });
+  reset.addEventListener('click', () => {
+    step = 0;
+    show();
+  });
+}
+</script>

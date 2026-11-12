@@ -257,8 +257,15 @@
     {
       "idx": 36,
       "version": "6",
+      "when": 1794448112065,
+      "tag": "0036_fediverse_blocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
       "when": 1794451311116,
-      "tag": "0039_notification_mentions",
+      "tag": "0037_notification_mentions",
       "breakpoints": true
     }
   ]

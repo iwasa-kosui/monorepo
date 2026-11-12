@@ -47,6 +47,8 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'article.unpublished',
   'articleBody.deleted',
   'articleBody.written',
+  'block.blockCreated',
+  'block.blockDeleted',
   'digest.created',
   'digest.expired',
   'digest.itemFeedbackGiven',

@@ -60,8 +60,8 @@ export type BlueskyEmbedBlobs = Readonly<{
 const encoder = new TextEncoder();
 const segmenter = new Intl.Segmenter('und', { granularity: 'grapheme' });
 
-const graphemesOf = (text: string): string[] => Array.from(segmenter.segment(text), (part) => part.segment);
-const byteLengthOf = (text: string): number => encoder.encode(text).byteLength;
+export const graphemesOf = (text: string): string[] => Array.from(segmenter.segment(text), (part) => part.segment);
+export const byteLengthOf = (text: string): number => encoder.encode(text).byteLength;
 const fits = (text: string): boolean =>
   graphemesOf(text).length <= BLUESKY_MAX_GRAPHEMES && byteLengthOf(text) <= BLUESKY_MAX_TEXT_BYTES;
 
@@ -73,11 +73,13 @@ export const selectBlueskyImages = (
   return { kept, dropped: images.filter((image) => !kept.includes(image)) };
 };
 
-const toFacet = (text: string, link: TextLink): BlueskyFacet => ({
-  index: {
-    byteStart: byteLengthOf(text.slice(0, link.start)),
-    byteEnd: byteLengthOf(text.slice(0, link.end)),
-  },
+export const toByteIndex = (text: string, start: number, end: number): BlueskyFacet['index'] => ({
+  byteStart: byteLengthOf(text.slice(0, start)),
+  byteEnd: byteLengthOf(text.slice(0, end)),
+});
+
+export const toFacet = (text: string, link: TextLink): BlueskyFacet => ({
+  index: toByteIndex(text, link.start, link.end),
   features: [{ $type: 'app.bsky.richtext.facet#link', uri: link.uri }],
 });
 

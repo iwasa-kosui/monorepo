@@ -101,6 +101,15 @@ describe('GET /api/v1/timelines/home', () => {
     expect(idsOf(await response.json())).toEqual([t.mine.postId]);
   });
 
+  it('ブロックした相手の投稿とリポストを除く', async () => {
+    const t = await seedHome();
+    t.seed.addBlock(t.me.userId, t.alice.actorId);
+
+    const response = await t.request('/api/v1/timelines/home', { headers: t.me.bearer });
+
+    expect(idsOf(await response.json())).toEqual([t.mine.postId]);
+  });
+
   it('limit と max_id と Link ヘッダーでページを送る', async () => {
     const t = await seedHome();
 
@@ -339,6 +348,17 @@ describe('GET /api/v1/timelines/public', () => {
     expect(idsOf(await anonymous.json())).toEqual([otherPost.postId, t.local.postId]);
   });
 
+  it('ログイン中はブロックしたローカルのアクターの投稿を除く', async () => {
+    const t = await seedPublic();
+    const other = t.seed.addLocalActor('other');
+    t.seed.addLocalPost(other, 4_000);
+    t.seed.addBlock(t.me.userId, other.actorId);
+
+    const response = await t.request('/api/v1/timelines/public?local=true', { headers: t.me.bearer });
+
+    expect(idsOf(await response.json())).toEqual([t.local.postId]);
+  });
+
   it('remote=true は未認証なら 401、スコープ不足なら 403、認証済みならリレーの投稿を返す', async () => {
     const t = await seedPublic();
     const writeOnly = await t.bearerFor('write');
@@ -387,6 +407,18 @@ describe('GET /api/v1/timelines/public', () => {
     expect(idsOf(await first.json())).toEqual([t.remote.postId]);
     expect(idsOf(await rest.json())).toEqual([second.postId]);
     expect(idsOf(await muted.json())).toEqual([t.remote.postId]);
+  });
+
+  it('remote=true はブロックした相手のリレーの投稿を除く', async () => {
+    const t = await seedPublic();
+    const bob = t.seed.addRemoteActor('bob');
+    const second = t.seed.addRemotePost(bob, 1_500, { visibility: 'public' });
+    t.seed.addFederatedItem(second.postId, t.seed.addRelay(), 2_000);
+    t.seed.addBlock(t.me.userId, bob.actorId);
+
+    const response = await t.request('/api/v1/timelines/public?remote=true', { headers: t.me.bearer });
+
+    expect(idsOf(await response.json())).toEqual([t.remote.postId]);
   });
 });
 
