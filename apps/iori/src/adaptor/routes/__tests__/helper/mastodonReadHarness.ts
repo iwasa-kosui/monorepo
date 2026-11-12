@@ -7,6 +7,7 @@ import { createIoriApp } from '../../../../appFactory.tsx';
 import { Instant } from '../../../../domain/instant/instant.ts';
 import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
+import type { PostVersionsResolverByPostId } from '../../../../domain/post/post.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
 import type { BlueskyChat } from '../../../../ports/blueskyChat.ts';
 import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
@@ -271,6 +272,7 @@ export const setupReadApi = (
     blueskyViewerDid?: () => RA<string, BlueskyClientError>;
     refreshXPosts?: RefreshXPostsUseCase;
     scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
+    postVersionsResolver?: PostVersionsResolverByPostId;
   }> = {},
 ) => {
   const harness = createOAuthHarness();
@@ -461,6 +463,7 @@ export const setupReadApi = (
             actorResolverById: createD1ActorResolverById(db),
             actorResolverByUri: createD1ActorResolverByUri(db),
             postUpdatedStore: createD1PostUpdatedStore(db),
+            postVersionsResolver: options.postVersionsResolver ?? createD1PostVersionsResolverByPostId(db),
             postImagesResolver: createD1PostImagesResolverByPostId(db),
             postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
             acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),

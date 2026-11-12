@@ -1,10 +1,12 @@
 import { test as fcTest } from '@fast-check/vitest';
+import type { RequestContext } from '@fedify/fedify';
+import { Article, Like, Person, Question } from '@fedify/vocab';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { AlreadyLikedError, LocalLike } from '../../domain/like/like.ts';
 import type { LikeId } from '../../domain/like/likeId.ts';
-import type { LocalPost } from '../../domain/post/post.ts';
+import type { LocalPost, Post } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
@@ -356,6 +358,53 @@ describe('SendLikeUseCase', () => {
         expect(err.detail.actorId).toBe(actor.id);
         expect(err.detail.postId).toBe(post.postId);
       }
+    });
+  });
+
+  describe('取り込んだ Article と Question へのいいね', () => {
+    const author = new Person({
+      id: new URL('https://remote.example/users/alice'),
+      inbox: new URL('https://remote.example/users/alice/inbox'),
+      preferredUsername: 'alice',
+    });
+    const objectUri = 'https://remote.example/objects/1';
+
+    it.each([
+      ['Question', () => new Question({ id: new URL(objectUri), content: 'q', attribution: author })],
+      ['Article', () => new Article({ id: new URL(objectUri), content: 'a', attribution: author })],
+    ])('リモートの %s にいいねを保存し、投稿者へ Like を送る', async (_type, toObject) => {
+      const deps = createDeps();
+      const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
+      const actor: LocalActor = {
+        id: crypto.randomUUID() as LocalActor['id'],
+        userId: user.id,
+        uri: 'https://example.com/users/kosui',
+        inboxUrl: 'https://example.com/inbox',
+        type: 'local',
+        logoUri: undefined,
+      };
+      deps.userResolver.setUser(user);
+      deps.actorResolverByUserId.setActor(actor);
+      const postId = crypto.randomUUID() as PostId;
+      deps.postResolver.setPost({ type: 'remote', postId, uri: objectUri } as unknown as Post);
+      const ctx = createMockRequestContext();
+      const lookupObject = vi.fn().mockResolvedValue(toObject());
+      Object.assign(ctx, { getDocumentLoader: vi.fn().mockResolvedValue({}), lookupObject });
+
+      const result = await SendLikeUseCase.create(deps).run({
+        userId: user.id,
+        postId,
+        request: new Request('https://example.com'),
+        ctx: ctx as RequestContext<unknown>,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(deps.localLikeCreatedStore.store).toHaveBeenCalledOnce();
+      expect(ctx.sendActivity).toHaveBeenCalledOnce();
+      const [, recipient, activity] = vi.mocked(ctx.sendActivity).mock.calls[0]!;
+      expect(recipient).toBe(author);
+      expect(activity).toBeInstanceOf(Like);
+      expect((activity as Like).objectId?.href).toBe(objectUri);
     });
   });
 

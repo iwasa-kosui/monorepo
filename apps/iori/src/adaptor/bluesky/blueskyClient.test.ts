@@ -1293,3 +1293,144 @@ describe('resolveBlueskyPdsUrl', () => {
     expect(resolveBlueskyPdsUrl(value)).toBeUndefined();
   });
 });
+
+describe('createBlueskyClient のブックマーク', () => {
+  const POST_URI = 'at://did:plc:author/app.bsky.feed.post/3kpost';
+
+  it('createBookmark は app.bsky.bookmark.createBookmark に uri と cid を POST し、空の応答を成功にする', async () => {
+    const { client, calls } = setup(stored(), [() => new Response('', { status: 200 })]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result).toEqual({ ok: true, val: undefined });
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.bookmark.createBookmark`);
+    expect(calls[0]?.init.method).toBe('POST');
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ uri: POST_URI, cid: 'bafycid' });
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+    expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
+  });
+
+  it('deleteBookmark は app.bsky.bookmark.deleteBookmark に uri だけを POST する', async () => {
+    const { client, calls } = setup(stored(), [() => json({})]);
+
+    const result = await client.deleteBookmark(POST_URI);
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.bookmark.deleteBookmark`);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ uri: POST_URI });
+  });
+
+  it('createBookmark は期限切れの認証を更新してからやり直す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'ExpiredToken' }, 400),
+      () => json(sessionBody('new')),
+      () => json({}),
+    ]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
+    expect(header(calls[2]!, 'Authorization')).toBe('Bearer access-new');
+  });
+
+  it('権限が無い 403 は再ログインせず、status と code を持つ http の失敗で返す', async () => {
+    const { client, calls } = setup(stored(), [() => json({ error: 'Forbidden' }, 403)]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result).toMatchObject({ ok: false, err: { kind: 'http', status: 403, code: 'Forbidden' } });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('未実装の 501 は http の失敗で返す', async () => {
+    const { client } = setup(stored(), [() => json({ error: 'MethodNotImplemented' }, 501)]);
+
+    expect(await client.deleteBookmark(POST_URI)).toMatchObject({
+      ok: false,
+      err: { kind: 'http', status: 501, code: 'MethodNotImplemented' },
+    });
+  });
+
+  it('400 InvalidToken の Bad token scope は再ログインせず、message を含む http の失敗で返す', async () => {
+    const { client, calls, saved } = setup(stored(), [
+      () => json({ error: 'InvalidToken', message: 'Bad token scope' }, 400),
+    ]);
+
+    const created = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(created).toMatchObject({
+      ok: false,
+      err: { kind: 'http', status: 400, code: 'InvalidToken', message: expect.stringContaining('Bad token scope') },
+    });
+    expect(calls).toHaveLength(1);
+    expect(saved).toEqual([]);
+  });
+
+  it('deleteBookmark と getBookmarks でも Bad token scope で再ログインしない', async () => {
+    const rejected = () => json({ error: 'InvalidToken', message: 'Bad token scope' }, 400);
+    const deleting = setup(stored(), [rejected]);
+    const listing = setup(stored(), [rejected]);
+
+    const deleted = await deleting.client.deleteBookmark(POST_URI);
+    const listed = await listing.client.query('app.bsky.bookmark.getBookmarks', { limit: '30' });
+
+    expect(deleted).toMatchObject({ ok: false, err: { kind: 'http', code: 'InvalidToken' } });
+    expect(listed).toMatchObject({ ok: false, err: { kind: 'http', code: 'InvalidToken' } });
+    expect(deleting.calls).toHaveLength(1);
+    expect(listing.calls).toHaveLength(1);
+  });
+
+  it.each([
+    ['code の無い 401', {}],
+    ['401 Unauthorized', { error: 'Unauthorized' }],
+  ])('ブックマークの %s は認証の更新をせず、http の失敗で返す', async (_name, body) => {
+    const { client, calls, saved } = setup(stored(), [() => json(body, 401)]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result).toMatchObject({ ok: false, err: { kind: 'http', status: 401 } });
+    expect(calls).toHaveLength(1);
+    expect(saved).toEqual([]);
+  });
+
+  it('ブックマークの 401 ExpiredToken は、これまでどおり認証を更新してやり直す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'ExpiredToken' }, 401),
+      () => json(sessionBody('new')),
+      () => json({}),
+    ]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
+    expect(header(calls[2]!, 'Authorization')).toBe('Bearer access-new');
+  });
+
+  it('Bad token scope を含まない InvalidToken は、これまでどおり認証の更新をしてやり直す', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'InvalidToken', message: 'Bad token' }, 400),
+      () => json(sessionBody('new')),
+      () => json({}),
+    ]);
+
+    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
+
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
+  });
+
+  it('ブックマーク以外の API の Bad token scope は、これまでどおり認証の失敗として更新を試みる', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ error: 'InvalidToken', message: 'Bad token scope' }, 400),
+      () => json(sessionBody('new')),
+      () => json({}),
+    ]);
+
+    const result = await client.muteActor('did:plc:target');
+
+    expect(result.ok).toBe(true);
+    expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
+  });
+});
