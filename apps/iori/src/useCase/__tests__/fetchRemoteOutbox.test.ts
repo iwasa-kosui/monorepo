@@ -60,6 +60,7 @@ type Setup = Readonly<{
   localUris?: ReadonlyArray<string>;
   blocked?: boolean;
   blockedAfterFirstCheck?: boolean;
+  blockedCheckRejectsAfterFirst?: boolean;
   failingUris?: ReadonlyArray<string>;
   hangingUris?: ReadonlyArray<string>;
   documentLoader?: DocumentLoader;
@@ -95,6 +96,12 @@ const setup = (options: Setup = {}) => {
   if (options.blockedAfterFirstCheck) {
     blockedActorUriResolverByUsername.resolve.mockImplementationOnce(async () => RA.ok(false));
     blockedActorUriResolverByUsername.resolve.mockImplementation(async () => RA.ok(true));
+  }
+  if (options.blockedCheckRejectsAfterFirst) {
+    blockedActorUriResolverByUsername.resolve.mockImplementationOnce(async () => RA.ok(false));
+    blockedActorUriResolverByUsername.resolve.mockImplementation(async () => {
+      throw new Error('D1 is down');
+    });
   }
   const remotePostUrisResolverByUris = {
     resolve: vi.fn(async ({ uris }: { uris: readonly string[] }) => RA.ok(uris.filter((uri) => stored.has(uri)))),
@@ -319,6 +326,16 @@ describe('FetchRemoteOutboxUseCase', () => {
       username: 'kosui',
       actorUri: ACTOR_URI,
     });
+  });
+
+  it('保存前のブロックの判定が失敗したときは、その相手の投稿を保存しない', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const notes = [noteOf(1), noteOf(2)];
+    const t = setup({ outbox: outboxOf(notes.map(createOf)), notes, blockedCheckRejectsAfterFirst: true });
+
+    expect(await t.run()).toBe(0);
+    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('ローカルのアクターなら何も取らず 0 件を返す', async () => {

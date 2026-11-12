@@ -25,12 +25,13 @@ import {
   unfollowBlueskyActor,
 } from '../api/blueskyProfileClient.ts';
 import { blueskyItemActionProps, type BlueskyPostActions } from '../components/blueskyPostActions.ts';
-import { BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
+import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { type ReportCategory, ReportModal } from '../components/ReportModal.tsx';
 import { appendUniqueBy } from '../hooks/appendUnique.ts';
 import { chatConvoPath, chatErrorMessageOf } from '../hooks/blueskyChat.ts';
 import type { BlueskyItemsUpdater } from '../hooks/optimisticBlueskyLike.ts';
+import { useBlueskyQuoteDialog } from '../hooks/useBlueskyQuoteDialog.ts';
 import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { withFeedItems } from './blueskyProfileFeed.ts';
@@ -353,7 +354,9 @@ const App = () => {
   const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
     setFeed((prev) => withFeedItems(prev, updater));
   }, []);
-  const { actions, replyDialog } = useBlueskyUriActions(updateItems);
+  const { actions: uriActions, replyDialog } = useBlueskyUriActions(updateItems);
+  const quoteDialog = useBlueskyQuoteDialog();
+  const actions: BlueskyPostActions = { ...uriActions, onQuote: quoteDialog.open };
 
   useEffect(() => {
     if (actor === undefined) {
@@ -566,6 +569,7 @@ const App = () => {
         onSubmit={submitReport}
         onClose={closeReport}
       />
+      <BlueskyQuoteModal dialog={quoteDialog} />
     </>
   );
 };
