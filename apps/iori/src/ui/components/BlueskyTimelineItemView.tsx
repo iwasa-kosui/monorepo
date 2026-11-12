@@ -1,7 +1,12 @@
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { BlueskyTimelineEmbed } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import { blueskyPostUrl, blueskyProfilePathOf, ioriBlueskyPostPath } from '../../helper/blueskyUrl.ts';
+import {
+  blueskyPostUrl,
+  blueskyPostUrlOfUri,
+  blueskyProfilePathOf,
+  ioriBlueskyPostPath,
+} from '../../helper/blueskyUrl.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { segmentBlueskyText } from './blueskyRichText.ts';
 import { BlueskyVideoPlayer } from './BlueskyVideoPlayer.tsx';
@@ -22,6 +27,14 @@ type Props = Readonly<{
 }>;
 type MediaEmbed = Extract<BlueskyTimelineEmbed, { type: 'images' | 'external' | 'video' }>;
 type QuoteEmbed = Extract<BlueskyTimelineEmbed, { type: 'record' }>;
+type QuoteUnavailableEmbed = Extract<BlueskyTimelineEmbed, { type: 'recordUnavailable' }>;
+
+const quoteCardClass = 'block rounded-xl border border-warm-gray dark:border-gray-700';
+const quoteUnavailableMessages: Record<QuoteUnavailableEmbed['reason'], string> = {
+  notFound: '引用された投稿は削除されています',
+  blocked: 'ブロックにより引用された投稿を表示できません',
+  detached: '引用元の投稿者が引用を外しました',
+};
 
 const linkClass = 'text-terracotta hover:underline dark:text-terracotta-light break-all';
 const mutedClass = 'text-charcoal-light dark:text-gray-400';
@@ -37,26 +50,6 @@ const BlueskyText = ({ text, facets }: Readonly<{ text: string; facets: IoriBlue
     )}
   </p>
 );
-
-const BlueskyQuote = ({ quote }: Readonly<{ quote: QuoteEmbed }>) => {
-  const href = ioriBlueskyPostPath(quote.uri);
-  const body = (
-    <>
-      <div class={`text-xs ${mutedClass} mb-1`}>@{quote.authorHandle}</div>
-      <p class='text-sm whitespace-pre-wrap break-words text-charcoal dark:text-gray-100'>{quote.text}</p>
-    </>
-  );
-  return href === undefined
-    ? <div class='block rounded-xl border border-warm-gray dark:border-gray-700 p-3'>{body}</div>
-    : (
-      <a
-        href={href}
-        class='block rounded-xl border border-warm-gray dark:border-gray-700 p-3 hover:bg-sand-light/50 dark:hover:bg-gray-700/50 transition-colors'
-      >
-        {body}
-      </a>
-    );
-};
 
 const BlueskyMedia = ({ media, bskyHref }: Readonly<{ media: MediaEmbed; bskyHref: string | undefined }>) => {
   switch (media.type) {
@@ -113,13 +106,61 @@ const BlueskyMedia = ({ media, bskyHref }: Readonly<{ media: MediaEmbed; bskyHre
   }
 };
 
+const BlueskyQuote = ({ quote }: Readonly<{ quote: QuoteEmbed }>) => {
+  const href = ioriBlueskyPostPath(quote.uri);
+  const avatar = safeAbsoluteUrl(quote.authorAvatar);
+  const body = (
+    <>
+      <div class='flex items-center gap-2 mb-1 min-w-0'>
+        {avatar !== undefined && (
+          <img src={avatar} alt='' class='w-5 h-5 blob-avatar object-cover flex-shrink-0' loading='lazy' />
+        )}
+        {quote.authorDisplayName !== undefined && (
+          <span class='text-sm font-semibold text-charcoal dark:text-white truncate'>{quote.authorDisplayName}</span>
+        )}
+        <span class={`text-xs ${mutedClass} truncate`}>@{quote.authorHandle}</span>
+      </div>
+      {quote.text !== '' && (
+        <p class='text-sm whitespace-pre-wrap break-words text-charcoal dark:text-gray-100'>{quote.text}</p>
+      )}
+    </>
+  );
+  const media = quote.media === undefined ? null : (
+    <div class='px-3 pb-3'>
+      <BlueskyMedia media={quote.media} bskyHref={blueskyPostUrlOfUri(quote.uri)} />
+    </div>
+  );
+  return (
+    <div class={quoteCardClass}>
+      {href === undefined
+        ? <div class='p-3'>{body}</div>
+        : (
+          <a
+            href={href}
+            class='block rounded-xl p-3 hover:bg-sand-light/50 dark:hover:bg-gray-700/50 transition-colors'
+          >
+            {body}
+          </a>
+        )}
+      {media}
+    </div>
+  );
+};
+
+const BlueskyQuoteUnavailable = ({ quote }: Readonly<{ quote: QuoteUnavailableEmbed }>) => (
+  <div class={`${quoteCardClass} p-3 text-sm ${mutedClass}`}>{quoteUnavailableMessages[quote.reason]}</div>
+);
+
+const BlueskyQuoteCard = ({ quote }: Readonly<{ quote: QuoteEmbed | QuoteUnavailableEmbed }>) =>
+  quote.type === 'record' ? <BlueskyQuote quote={quote} /> : <BlueskyQuoteUnavailable quote={quote} />;
+
 const BlueskyEmbed = ({ embed, bskyHref }: Readonly<{ embed: BlueskyTimelineEmbed; bskyHref: string | undefined }>) => {
-  if (embed.type === 'record') return <BlueskyQuote quote={embed} />;
+  if (embed.type === 'record' || embed.type === 'recordUnavailable') return <BlueskyQuoteCard quote={embed} />;
   if (embed.type === 'recordWithMedia') {
     return (
       <div class='space-y-2'>
         <BlueskyMedia media={embed.media} bskyHref={bskyHref} />
-        <BlueskyQuote quote={embed.record} />
+        <BlueskyQuoteCard quote={embed.record} />
       </div>
     );
   }
