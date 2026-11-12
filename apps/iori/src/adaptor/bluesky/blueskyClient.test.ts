@@ -661,6 +661,15 @@ describe('createBlueskyClient のミュート、ブロック、通報', () => {
     expect(calls).toEqual([]);
   });
 
+  it('deleteBlock は uri の repo がセッションの did と違うとき、送らずに invalid_response として返す', async () => {
+    const { client, calls } = setup(stored(), []);
+
+    const result = await client.deleteBlock('at://did:plc:other/app.bsky.graph.block/3kblock');
+
+    expect(result).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
+    expect(calls).toEqual([]);
+  });
+
   it('createReport は Bluesky 公式のモデレーションを atproto-proxy に指定して、repoRef の通報を POST する', async () => {
     const { client, calls } = setup(stored(), [() => json({ id: 1 })]);
 

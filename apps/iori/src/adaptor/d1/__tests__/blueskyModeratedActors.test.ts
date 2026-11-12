@@ -34,7 +34,7 @@ const setup = () => {
     muteDeleted: createD1BlueskyMuteDeletedStore(db),
     blockSaved: createD1BlueskyBlockSavedStore(db),
     blockDeleted: createD1BlueskyBlockDeletedStore(db),
-    excluded: async () => [...Result.unsafeUnwrap(await resolver.resolveExcludedDids())].sort(),
+    updatedAt: async (did: string) => Result.unsafeUnwrap(await resolver.resolveUpdatedAt(did)),
     state: async (did: string) => Result.unsafeUnwrap(await resolver.resolveState(did)),
     rows: () =>
       sqlite.prepare('SELECT did, muted, blockUri, updatedAt FROM bluesky_moderated_actors ORDER BY did').all(),
@@ -46,27 +46,24 @@ describe('D1 の bluesky_moderated_actors', () => {
     const t = setup();
 
     expect(await t.state(ALICE)).toEqual({ muted: false, blockUri: null });
-    expect(await t.excluded()).toEqual([]);
   });
 
-  it('ミュートを保存すると、除外する DID と状態に反映し、もう一度保存しても行を増やさない', async () => {
+  it('ミュートを保存すると状態に反映し、もう一度保存しても行を増やさない', async () => {
     const t = setup();
 
     await t.muteSaved.save(ALICE, T1);
     await t.muteSaved.save(ALICE, T2);
 
     expect(await t.state(ALICE)).toEqual({ muted: true, blockUri: null });
-    expect(await t.excluded()).toEqual([ALICE]);
     expect(t.rows()).toEqual([{ did: ALICE, muted: 1, blockUri: null, updatedAt: T2 }]);
   });
 
-  it('ブロックを保存すると、除外する DID と状態に反映する', async () => {
+  it('ブロックを保存すると状態に反映する', async () => {
     const t = setup();
 
     await t.blockSaved.save(BOB, BLOCK, T1);
 
     expect(await t.state(BOB)).toEqual({ muted: false, blockUri: BLOCK });
-    expect(await t.excluded()).toEqual([BOB]);
   });
 
   it('ミュートの保存はブロックの列を、ブロックの保存はミュートの列を変えない', async () => {
@@ -89,15 +86,13 @@ describe('D1 の bluesky_moderated_actors', () => {
 
     await t.muteDeleted.delete(ALICE, T2);
     expect(await t.state(ALICE)).toEqual({ muted: false, blockUri: BLOCK });
-    expect(await t.excluded()).toEqual([ALICE]);
 
     await t.muteSaved.save(ALICE, T2);
     await t.blockDeleted.delete(ALICE, T3);
     expect(await t.state(ALICE)).toEqual({ muted: true, blockUri: null });
-    expect(await t.excluded()).toEqual([ALICE]);
   });
 
-  it('ミュートもブロックも無くなった行は消し、他の DID の行は残す', async () => {
+  it('ミュートもブロックも無くなっても行は残し、updatedAt を解除した時刻にして、他の DID の行を変えない', async () => {
     const t = setup();
     await t.muteSaved.save(ALICE, T1);
     await t.blockSaved.save(ALICE, BLOCK, T1);
@@ -106,8 +101,22 @@ describe('D1 の bluesky_moderated_actors', () => {
     await t.muteDeleted.delete(ALICE, T2);
     await t.blockDeleted.delete(ALICE, T3);
 
-    expect(t.rows()).toEqual([{ did: BOB, muted: 1, blockUri: null, updatedAt: T1 }]);
-    expect(await t.excluded()).toEqual([BOB]);
+    expect(t.rows()).toEqual([
+      { did: ALICE, muted: 0, blockUri: null, updatedAt: T3 },
+      { did: BOB, muted: 1, blockUri: null, updatedAt: T1 },
+    ]);
+    expect(await t.state(ALICE)).toEqual({ muted: false, blockUri: null });
+  });
+
+  it('最後に保存・解除した時刻を返し、行が無い DID は undefined にする', async () => {
+    const t = setup();
+
+    expect(await t.updatedAt(ALICE)).toBeUndefined();
+    await t.muteSaved.save(ALICE, T1);
+    await t.blockSaved.save(ALICE, BLOCK, T2);
+
+    expect(await t.updatedAt(ALICE)).toBe(T2);
+    expect(await t.updatedAt(BOB)).toBeUndefined();
   });
 
   it('行が無い DID の解除は何もしない', async () => {
@@ -119,12 +128,11 @@ describe('D1 の bluesky_moderated_actors', () => {
     expect(t.rows()).toEqual([]);
   });
 
-  it('muted が 0 で blockUri が NULL の行は、除外する DID に含めない', async () => {
+  it('muted が 0 で blockUri が NULL の行は、ミュートもブロックもしていない状態にする', async () => {
     const t = setup();
     t.sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
       .run(ALICE, 0, null, T1);
 
-    expect(await t.excluded()).toEqual([]);
     expect(await t.state(ALICE)).toEqual({ muted: false, blockUri: null });
   });
 });

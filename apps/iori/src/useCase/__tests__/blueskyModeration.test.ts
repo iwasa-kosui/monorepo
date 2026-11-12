@@ -9,7 +9,10 @@ import {
   createD1BlueskyMuteDeletedStore,
   createD1BlueskyMuteSavedStore,
 } from '../../adaptor/d1/blueskyModeration/blueskyModeratedActorsStore.ts';
-import { BLUESKY_REPORT_COMMENT_MAX_LENGTH } from '../../domain/blueskyModeration/blueskyModeration.ts';
+import {
+  BLUESKY_MODERATION_SYNC_GRACE_MS,
+  BLUESKY_REPORT_COMMENT_MAX_LENGTH,
+} from '../../domain/blueskyModeration/blueskyModeration.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type { BlueskyModerationReader } from '../../ports/blueskyModerationReader.ts';
@@ -24,6 +27,7 @@ const NOW = Instant.orThrow(Date.UTC(2026, 10, 12, 12));
 const DID = 'did:plc:target';
 const OLD_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3kold';
 const NEW_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3knew';
+const STORED_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3kstored';
 const failure: BlueskyClientError = {
   type: 'BlueskyClientError',
   kind: 'http',
@@ -60,19 +64,35 @@ const setup = (viewer: Readonly<{ muted?: boolean; blockUri?: string | null; has
     reader,
     mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
     unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
-    block: BlockBlueskyActorUseCase.create({ client, reader, savedStore: createD1BlueskyBlockSavedStore(db), now }),
+    block: BlockBlueskyActorUseCase.create({
+      client,
+      reader,
+      resolver,
+      savedStore: createD1BlueskyBlockSavedStore(db),
+      now,
+    }),
     unblock: UnblockBlueskyActorUseCase.create({
       client,
       reader,
+      resolver,
       deletedStore: createD1BlueskyBlockDeletedStore(db),
       now,
     }),
     report: ReportBlueskyActorUseCase.create({ client }),
-    getState: GetBlueskyModerationStateUseCase.create({ reader }),
+    getState: GetBlueskyModerationStateUseCase.create({
+      reader,
+      resolver,
+      muteSavedStore: createD1BlueskyMuteSavedStore(db),
+      muteDeletedStore: createD1BlueskyMuteDeletedStore(db),
+      blockSavedStore: createD1BlueskyBlockSavedStore(db),
+      blockDeletedStore: createD1BlueskyBlockDeletedStore(db),
+      now,
+    }),
+    sqlite,
     rows: () => sqlite.prepare('SELECT did, muted, blockUri FROM bluesky_moderated_actors').all(),
-    seed: (muted: number, blockUri: string | null) =>
+    seed: (muted: number, blockUri: string | null, updatedAt = 1) =>
       sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
-        .run(DID, muted, blockUri, 1),
+        .run(DID, muted, blockUri, updatedAt),
     state: async () => (await resolver.resolveState(DID)).val,
   };
 };
@@ -142,6 +162,51 @@ describe('BlockBlueskyActorUseCase', () => {
     expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: OLD_BLOCK }]);
   });
 
+  it('AppView の反映が遅れて viewer.blocking が無くても、D1 に blockUri があれば createBlock を呼ばずその uri を返す', async () => {
+    const t = setup({ blockUri: null, hasRecord: true });
+    t.seed(0, STORED_BLOCK);
+
+    const result = await t.block.run({ did: DID });
+
+    expect(result).toEqual({ ok: true, val: { blockUri: STORED_BLOCK } });
+    expect(t.reader.hasBlockRecord).toHaveBeenCalledExactlyOnceWith(STORED_BLOCK);
+    expect(t.client.createBlock).not.toHaveBeenCalled();
+    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: STORED_BLOCK }]);
+  });
+
+  it('D1 の blockUri のレコードが無くても viewer.blocking のレコードがあれば、その uri を返す', async () => {
+    const t = setup({ blockUri: OLD_BLOCK });
+    t.reader.hasBlockRecord.mockImplementation(async (uri) => RA.ok(uri === OLD_BLOCK));
+    t.seed(0, STORED_BLOCK);
+
+    const result = await t.block.run({ did: DID });
+
+    expect(result).toEqual({ ok: true, val: { blockUri: OLD_BLOCK } });
+    expect(t.reader.hasBlockRecord.mock.calls.map(([uri]) => uri)).toEqual([STORED_BLOCK, OLD_BLOCK]);
+    expect(t.client.createBlock).not.toHaveBeenCalled();
+    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: OLD_BLOCK }]);
+  });
+
+  it('D1 と viewer.blocking が同じ uri なら、一度だけ確かめる', async () => {
+    const t = setup({ blockUri: OLD_BLOCK });
+    t.seed(0, OLD_BLOCK);
+
+    await t.block.run({ did: DID });
+
+    expect(t.reader.hasBlockRecord).toHaveBeenCalledExactlyOnceWith(OLD_BLOCK);
+  });
+
+  it('候補のレコードがどれも自分の repo に無ければ、createBlock で作る', async () => {
+    const t = setup({ blockUri: OLD_BLOCK, hasRecord: false });
+    t.seed(0, STORED_BLOCK);
+
+    const result = await t.block.run({ did: DID });
+
+    expect(result).toEqual({ ok: true, val: { blockUri: NEW_BLOCK } });
+    expect(t.reader.hasBlockRecord).toHaveBeenCalledTimes(2);
+    expect(t.client.createBlock).toHaveBeenCalledExactlyOnceWith(DID);
+  });
+
   it('viewer.blocking のレコードが自分の repo に無ければ、createBlock で作る', async () => {
     const t = setup({ blockUri: OLD_BLOCK, hasRecord: false });
 
@@ -187,16 +252,15 @@ describe('BlockBlueskyActorUseCase', () => {
 });
 
 describe('UnblockBlueskyActorUseCase', () => {
-  it('blockUri が渡されたら getProfile を呼ばずその uri を削除し、D1 のブロックを解除する', async () => {
-    const t = setup();
+  it('blockUri が渡されたら、その uri を削除し、D1 のブロックを解除する', async () => {
+    const t = setup({ blockUri: null });
     t.seed(0, OLD_BLOCK);
 
     const result = await t.unblock.run({ did: DID, blockUri: OLD_BLOCK });
 
     expect(result).toEqual({ ok: true, val: { blockUri: null } });
-    expect(t.reader.resolveViewerState).not.toHaveBeenCalled();
     expect(t.client.deleteBlock).toHaveBeenCalledExactlyOnceWith(OLD_BLOCK);
-    expect(t.rows()).toEqual([]);
+    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: null }]);
   });
 
   it('blockUri が無ければ、getProfile の viewer.blocking を削除する', async () => {
@@ -210,15 +274,57 @@ describe('UnblockBlueskyActorUseCase', () => {
     expect(t.rows()).toEqual([{ did: DID, muted: 1, blockUri: null }]);
   });
 
-  it('blockUri も viewer.blocking も無ければ、Bluesky を呼ばず D1 だけ解除する', async () => {
-    const t = setup({ blockUri: null });
+  it('blockUri、viewer.blocking、D1 の blockUri が違うときは、重複を除いた全件を削除する', async () => {
+    const t = setup({ blockUri: NEW_BLOCK });
+    t.seed(0, STORED_BLOCK);
+
+    const result = await t.unblock.run({ did: DID, blockUri: OLD_BLOCK });
+
+    expect(result).toEqual({ ok: true, val: { blockUri: null } });
+    expect(t.client.deleteBlock.mock.calls.map(([uri]) => uri)).toEqual([OLD_BLOCK, NEW_BLOCK, STORED_BLOCK]);
+    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: null }]);
+  });
+
+  it('同じ uri は一度だけ削除する', async () => {
+    const t = setup({ blockUri: OLD_BLOCK });
     t.seed(0, OLD_BLOCK);
+
+    await t.unblock.run({ did: DID, blockUri: OLD_BLOCK });
+
+    expect(t.client.deleteBlock).toHaveBeenCalledExactlyOnceWith(OLD_BLOCK);
+  });
+
+  it('AppView の反映が遅れて viewer.blocking が無くても、D1 の blockUri を削除する', async () => {
+    const t = setup({ blockUri: null });
+    t.seed(0, STORED_BLOCK);
+
+    await t.unblock.run({ did: DID });
+
+    expect(t.client.deleteBlock).toHaveBeenCalledExactlyOnceWith(STORED_BLOCK);
+    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: null }]);
+  });
+
+  it('候補の片方の deleteBlock が失敗したら、その失敗を返し D1 のブロックを残す', async () => {
+    const t = setup({ blockUri: NEW_BLOCK });
+    t.seed(0, STORED_BLOCK);
+    t.client.deleteBlock.mockReturnValueOnce(RA.err(failure));
+
+    const result = await t.unblock.run({ did: DID });
+
+    expect(result).toEqual({ ok: false, err: failure });
+    expect(t.client.deleteBlock).toHaveBeenCalledTimes(2);
+    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: STORED_BLOCK }]);
+  });
+
+  it('blockUri、viewer.blocking、D1 の blockUri のどれも無ければ、Bluesky を呼ばず D1 だけ解除する', async () => {
+    const t = setup({ blockUri: null });
+    t.seed(1, null);
 
     const result = await t.unblock.run({ did: DID });
 
     expect(result).toEqual({ ok: true, val: { blockUri: null } });
     expect(t.client.deleteBlock).not.toHaveBeenCalled();
-    expect(t.rows()).toEqual([]);
+    expect(t.rows()).toEqual([{ did: DID, muted: 1, blockUri: null }]);
   });
 
   it('deleteBlock が失敗したら、その失敗を返し D1 のブロックを残す', async () => {
@@ -303,10 +409,115 @@ describe('GetBlueskyModerationStateUseCase', () => {
     expect(t.reader.resolveViewerState).toHaveBeenCalledExactlyOnceWith(DID);
   });
 
-  it('取得に失敗したら、その失敗を返す', async () => {
+  it('取得に失敗したら、その失敗を返し D1 を変えない', async () => {
     const t = setup();
+    t.seed(1, OLD_BLOCK);
     t.reader.resolveViewerState.mockReturnValueOnce(RA.err(failure));
 
     expect(await t.getState.run({ did: DID })).toEqual({ ok: false, err: failure });
+    expect(t.rows()).toEqual([{ did: DID, muted: 1, blockUri: OLD_BLOCK }]);
+  });
+
+  it('公式アプリでミュートとブロックが解除されていたら、D1 の行を解除する', async () => {
+    const t = setup({ muted: false, blockUri: null });
+    t.seed(1, OLD_BLOCK);
+
+    const result = await t.getState.run({ did: DID });
+
+    expect(result).toEqual({ ok: true, val: { muted: false, blockUri: null } });
+    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: null }]);
+  });
+
+  it('公式アプリでミュートとブロックがされていたら、D1 に保存する', async () => {
+    const t = setup({ muted: true, blockUri: OLD_BLOCK });
+
+    const result = await t.getState.run({ did: DID });
+
+    expect(result).toEqual({ ok: true, val: { muted: true, blockUri: OLD_BLOCK } });
+    expect(t.rows()).toEqual([{ did: DID, muted: 1, blockUri: OLD_BLOCK }]);
+  });
+
+  it('ミュートだけ、ブロックだけが食い違うときは、食い違う方だけを D1 に合わせる', async () => {
+    const mute = setup({ muted: false, blockUri: OLD_BLOCK });
+    mute.seed(1, OLD_BLOCK);
+    const block = setup({ muted: true, blockUri: NEW_BLOCK });
+    block.seed(1, OLD_BLOCK);
+
+    await mute.getState.run({ did: DID });
+    await block.getState.run({ did: DID });
+
+    expect(mute.rows()).toEqual([{ did: DID, muted: 0, blockUri: OLD_BLOCK }]);
+    expect(block.rows()).toEqual([{ did: DID, muted: 1, blockUri: NEW_BLOCK }]);
+  });
+
+  it('D1 と viewer の状態が一致していれば、D1 に書き込まない', async () => {
+    const t = setup({ muted: true, blockUri: OLD_BLOCK });
+    t.seed(1, OLD_BLOCK);
+
+    await t.getState.run({ did: DID });
+
+    expect(t.rows()).toEqual([{ did: DID, muted: 1, blockUri: OLD_BLOCK }]);
+    expect(t.sqlite.prepare('SELECT updatedAt FROM bluesky_moderated_actors').all()).toEqual([{ updatedAt: 1 }]);
+  });
+
+  it('D1 の行の updatedAt が5分以内なら、viewer と食い違っても D1 に書き込まない', async () => {
+    const t = setup({ muted: false, blockUri: null });
+    t.seed(1, STORED_BLOCK, NOW - BLUESKY_MODERATION_SYNC_GRACE_MS);
+
+    const result = await t.getState.run({ did: DID });
+
+    expect(result).toEqual({ ok: true, val: { muted: false, blockUri: null } });
+    expect(t.rows()).toEqual([{ did: DID, muted: 1, blockUri: STORED_BLOCK }]);
+  });
+
+  it('D1 の行の updatedAt が5分を過ぎていれば、viewer に合わせる', async () => {
+    const t = setup({ muted: false, blockUri: null });
+    t.seed(1, STORED_BLOCK, NOW - BLUESKY_MODERATION_SYNC_GRACE_MS - 1);
+
+    await t.getState.run({ did: DID });
+
+    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: null }]);
+  });
+
+  it('iori で解除した直後に viewer に古いミュートとブロックが残っていても、保存し直さない', async () => {
+    const t = setup({ muted: true, blockUri: OLD_BLOCK });
+    t.seed(1, OLD_BLOCK);
+    await t.unmute.run({ did: DID });
+    await t.unblock.run({ did: DID });
+
+    const result = await t.getState.run({ did: DID });
+
+    expect(result).toEqual({ ok: true, val: { muted: true, blockUri: OLD_BLOCK } });
+    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: null }]);
+  });
+
+  it('解除しても行は残り、updatedAt を解除した時刻に更新する', async () => {
+    const t = setup({ blockUri: null });
+    t.seed(0, OLD_BLOCK);
+
+    await t.unblock.run({ did: DID });
+
+    expect(t.sqlite.prepare('SELECT updatedAt FROM bluesky_moderated_actors').all()).toEqual([{ updatedAt: NOW }]);
+  });
+
+  it('ブロックリスト経由の uri は blockUri として保存しない', async () => {
+    const t = setup({ muted: false, blockUri: null });
+
+    const result = await t.getState.run({ did: DID });
+
+    expect(result).toEqual({ ok: true, val: { muted: false, blockUri: null } });
+    expect(t.rows()).toEqual([]);
+  });
+
+  it('D1 の更新が失敗しても、viewer の状態を返し、失敗を console.error に出す', async () => {
+    const t = setup({ muted: true, blockUri: null });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    t.sqlite.exec('DROP TABLE bluesky_moderated_actors');
+
+    const result = await t.getState.run({ did: DID });
+
+    expect(result).toEqual({ ok: true, val: { muted: true, blockUri: null } });
+    expect(error).toHaveBeenCalledTimes(1);
+    error.mockRestore();
   });
 });

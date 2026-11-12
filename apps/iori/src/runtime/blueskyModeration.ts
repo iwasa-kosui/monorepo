@@ -1,4 +1,5 @@
 import { createBlueskyModerationReader } from '../adaptor/bluesky/blueskyModerationReader.ts';
+import { createD1BlueskyModeratedActorsResolver } from '../adaptor/d1/blueskyModeration/blueskyModeratedActorsResolver.ts';
 import {
   createD1BlueskyBlockDeletedStore,
   createD1BlueskyBlockSavedStore,
@@ -41,15 +42,31 @@ export const createBlueskyModerationUseCases = (
   if (config === undefined) return undefined;
   const client = createTimelineClient(config, db, deps);
   const reader = createBlueskyModerationReader({ client });
+  const resolver = createD1BlueskyModeratedActorsResolver(db);
   const now = Instant.now;
   return {
-    getState: GetBlueskyModerationStateUseCase.create({ reader }),
+    getState: GetBlueskyModerationStateUseCase.create({
+      reader,
+      resolver,
+      muteSavedStore: createD1BlueskyMuteSavedStore(db),
+      muteDeletedStore: createD1BlueskyMuteDeletedStore(db),
+      blockSavedStore: createD1BlueskyBlockSavedStore(db),
+      blockDeletedStore: createD1BlueskyBlockDeletedStore(db),
+      now,
+    }),
     mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
     unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
-    block: BlockBlueskyActorUseCase.create({ client, reader, savedStore: createD1BlueskyBlockSavedStore(db), now }),
+    block: BlockBlueskyActorUseCase.create({
+      client,
+      reader,
+      resolver,
+      savedStore: createD1BlueskyBlockSavedStore(db),
+      now,
+    }),
     unblock: UnblockBlueskyActorUseCase.create({
       client,
       reader,
+      resolver,
       deletedStore: createD1BlueskyBlockDeletedStore(db),
       now,
     }),

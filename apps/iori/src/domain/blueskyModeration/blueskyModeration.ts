@@ -30,6 +30,8 @@ export const blueskyReportReasonType = (category: BlueskyReportCategory): Bluesk
   }
 };
 
+export const BLUESKY_MODERATION_SYNC_GRACE_MS = 5 * 60 * 1000;
+
 export const BLUESKY_BLOCK_COLLECTION = 'app.bsky.graph.block';
 
 const blockUriPattern = /^at:\/\/([^/]+)\/app\.bsky\.graph\.block\/([^/]+)$/;
@@ -53,8 +55,8 @@ export type BlueskyModerationValidationError = Readonly<{
 }>;
 
 export type BlueskyModeratedActorsResolver = Readonly<{
-  resolveExcludedDids: () => RA<ReadonlySet<string>, never>;
   resolveState: (did: string) => RA<BlueskyModerationState, never>;
+  resolveUpdatedAt: (did: string) => RA<Instant | undefined, never>;
 }>;
 export type BlueskyMuteSavedStore = Readonly<{
   save: (did: string, at: Instant) => RA<void, never>;

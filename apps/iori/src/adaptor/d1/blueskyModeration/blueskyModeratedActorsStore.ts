@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, eq, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import type {
   BlueskyBlockDeletedStore,
@@ -9,13 +9,6 @@ import type {
 } from '../../../domain/blueskyModeration/blueskyModeration.ts';
 import type { IoriD1Db } from '../client.ts';
 import { blueskyModeratedActorsTable } from '../schema.ts';
-
-const deleteEmptyRow = (db: IoriD1Db, did: string) =>
-  db.delete(blueskyModeratedActorsTable).where(and(
-    eq(blueskyModeratedActorsTable.did, did),
-    eq(blueskyModeratedActorsTable.muted, 0),
-    isNull(blueskyModeratedActorsTable.blockUri),
-  ));
 
 export const createD1BlueskyMuteSavedStore = (db: IoriD1Db): BlueskyMuteSavedStore => ({
   save: async (did, at) => {
@@ -33,7 +26,6 @@ export const createD1BlueskyMuteDeletedStore = (db: IoriD1Db): BlueskyMuteDelete
     await db.update(blueskyModeratedActorsTable)
       .set({ muted: 0, updatedAt: new Date(at) })
       .where(eq(blueskyModeratedActorsTable.did, did));
-    await deleteEmptyRow(db, did);
     return RA.ok(undefined);
   },
 });
@@ -54,7 +46,6 @@ export const createD1BlueskyBlockDeletedStore = (db: IoriD1Db): BlueskyBlockDele
     await db.update(blueskyModeratedActorsTable)
       .set({ blockUri: null, updatedAt: new Date(at) })
       .where(eq(blueskyModeratedActorsTable.did, did));
-    await deleteEmptyRow(db, did);
     return RA.ok(undefined);
   },
 });

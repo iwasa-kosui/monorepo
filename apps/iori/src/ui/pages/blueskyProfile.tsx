@@ -402,7 +402,12 @@ const App = () => {
 
   const toggleBlock = async (block: boolean) => {
     if (loaded === undefined || isTogglingBlockRef.current) return;
-    if (block && !confirm(`@${loaded.profile.handle} をブロックしますか？フォローとフォロワーの関係も解除されます`)) {
+    if (
+      block
+      && !confirm(
+        `@${loaded.profile.handle} をブロックしますか？お互いの投稿が表示されなくなり、返信やメンションもできなくなります`,
+      )
+    ) {
       return;
     }
     isTogglingBlockRef.current = true;
@@ -417,7 +422,6 @@ const App = () => {
           ? prev
           : {
             ...prev,
-            followUri: block ? null : prev.followUri,
             moderation: { ...prev.moderation, blockUri: result.blockUri },
           }
       );

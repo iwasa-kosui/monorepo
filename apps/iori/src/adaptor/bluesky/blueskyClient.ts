@@ -236,8 +236,11 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
       return done.ok ? RA.ok(undefined) : done;
     });
 
-  const removeRecord = (collection: string, rkey: string): RA<void, BlueskyClientError> =>
+  const removeRecord = (collection: string, rkey: string, repo?: string): RA<void, BlueskyClientError> =>
     withSession(async (session) => {
+      if (repo !== undefined && repo !== session.did) {
+        return RA.err(clientError('invalid_response', 'deleteRecord received a uri of another repo'));
+      }
       const deleted = await call(
         'deleteRecord',
         `${session.pdsUrl}/xrpc/com.atproto.repo.deleteRecord`,
@@ -391,7 +394,7 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
       const parsed = parseBlueskyBlockUri(blockUri);
       return parsed === undefined
         ? RA.err(clientError('invalid_response', 'deleteBlock received an unexpected uri'))
-        : removeRecord(BLUESKY_BLOCK_COLLECTION, parsed.rkey);
+        : removeRecord(BLUESKY_BLOCK_COLLECTION, parsed.rkey, parsed.repo);
     },
     createReport: ({ subjectDid, reasonType, reason }) =>
       postProcedure(

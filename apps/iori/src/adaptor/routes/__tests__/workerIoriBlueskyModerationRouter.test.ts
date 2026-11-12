@@ -15,6 +15,7 @@ import { UnblockBlueskyActorUseCase } from '../../../useCase/unblockBlueskyActor
 import { UnmuteBlueskyActorUseCase } from '../../../useCase/unmuteBlueskyActor.ts';
 import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../d1/__tests__/sqliteFixture.ts';
+import { createD1BlueskyModeratedActorsResolver } from '../../d1/blueskyModeration/blueskyModeratedActorsResolver.ts';
 import {
   createD1BlueskyBlockDeletedStore,
   createD1BlueskyBlockSavedStore,
@@ -65,15 +66,31 @@ const setup = async (
     hasBlockRecord: vi.fn<BlueskyModerationReader['hasBlockRecord']>(async () => RA.ok(true)),
   };
   const { db, sqlite } = fixture;
+  const resolver = createD1BlueskyModeratedActorsResolver(db);
   const now = Instant.now;
   const useCases: BlueskyModerationUseCases = {
-    getState: GetBlueskyModerationStateUseCase.create({ reader }),
+    getState: GetBlueskyModerationStateUseCase.create({
+      reader,
+      resolver,
+      muteSavedStore: createD1BlueskyMuteSavedStore(db),
+      muteDeletedStore: createD1BlueskyMuteDeletedStore(db),
+      blockSavedStore: createD1BlueskyBlockSavedStore(db),
+      blockDeletedStore: createD1BlueskyBlockDeletedStore(db),
+      now,
+    }),
     mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
     unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
-    block: BlockBlueskyActorUseCase.create({ client, reader, savedStore: createD1BlueskyBlockSavedStore(db), now }),
+    block: BlockBlueskyActorUseCase.create({
+      client,
+      reader,
+      resolver,
+      savedStore: createD1BlueskyBlockSavedStore(db),
+      now,
+    }),
     unblock: UnblockBlueskyActorUseCase.create({
       client,
       reader,
+      resolver,
       deletedStore: createD1BlueskyBlockDeletedStore(db),
       now,
     }),
@@ -265,7 +282,7 @@ describe('/api/iori/v1/bluesky/mutes', () => {
     expect(t.rows()).toEqual([{ did: DID, muted: 1, blockUri: null }]);
   });
 
-  it('DELETE はミュートを解除して D1 の行を消し、muted: false を返す', async () => {
+  it('DELETE はミュートを解除して D1 の行を残したまま muted を 0 にし、muted: false を返す', async () => {
     const t = await setup();
     await t.send('POST', MUTES, { did: DID });
 
@@ -274,7 +291,7 @@ describe('/api/iori/v1/bluesky/mutes', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ muted: false });
     expect(t.client.unmuteActor).toHaveBeenCalledExactlyOnceWith(DID);
-    expect(t.rows()).toEqual([]);
+    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: null }]);
   });
 
   it('auth の失敗は 502 の Bluesky login failed、それ以外は 502 の Bluesky request failed にし、D1 に保存しない', async () => {
@@ -328,7 +345,7 @@ describe('/api/iori/v1/bluesky/blocks', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ blockUri: null });
     expect(t.client.deleteBlock).toHaveBeenCalledExactlyOnceWith(OLD_BLOCK);
-    expect(t.rows()).toEqual([]);
+    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: null }]);
   });
 
   it('DELETE は blockUri が無ければ viewer.blocking を削除する', async () => {
