@@ -1,3 +1,4 @@
+import type { RA } from '@iwasa-kosui/result';
 import { type Context, Hono } from 'hono';
 
 import { Scope } from '../../domain/oauth/scope.ts';
@@ -20,6 +21,7 @@ export type WorkerIoriBlueskyProfileRouterDeps = Readonly<{
   listBlueskyAuthorFeedUseCase: ListBlueskyAuthorFeedUseCase | undefined;
   followBlueskyActorUseCase: FollowBlueskyActorUseCase | undefined;
   unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase | undefined;
+  viewerDid?: (() => RA<string, BlueskyClientError>) | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -36,6 +38,7 @@ export type IoriBlueskyProfileBody = Readonly<{
   following: boolean;
   followedBy: boolean;
   followUri: string | null;
+  isSelf: boolean;
 }>;
 
 export type IoriBlueskyAuthorFeedResponse = Readonly<{
@@ -53,7 +56,7 @@ const writeFollows = Scope.orThrow('write:follows');
 const forbidden = { error: 'Forbidden' } as const;
 const disabled = { error: 'Bluesky timeline is disabled' } as const;
 
-const toProfileBody = (profile: BlueskyProfile): IoriBlueskyProfileBody => ({
+const toProfileBody = (profile: BlueskyProfile, isSelf: boolean): IoriBlueskyProfileBody => ({
   did: profile.did,
   handle: profile.handle,
   displayName: profile.displayName,
@@ -66,6 +69,7 @@ const toProfileBody = (profile: BlueskyProfile): IoriBlueskyProfileBody => ({
   following: profile.viewerFollowingUri !== undefined,
   followedBy: profile.viewerFollowedBy,
   followUri: profile.viewerFollowingUri ?? null,
+  isSelf,
 });
 
 const failure = (c: Context, error: BlueskyClientError | BlueskyProfileNotFound) => {
@@ -81,6 +85,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
   listBlueskyAuthorFeedUseCase,
   followBlueskyActorUseCase,
   unfollowBlueskyActorUseCase,
+  viewerDid,
   isDigestOwner,
 }: WorkerIoriBlueskyProfileRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
@@ -89,7 +94,14 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
       if (getBlueskyProfileUseCase === undefined) return c.json(disabled, 409);
       const profile = await getBlueskyProfileUseCase.run({ actor: c.req.param('actor') });
-      return profile.ok ? c.json(toProfileBody(profile.val) satisfies IoriBlueskyProfileBody) : failure(c, profile.err);
+      if (!profile.ok) return failure(c, profile.err);
+      const viewer = viewerDid === undefined ? undefined : await viewerDid();
+      return c.json(
+        toProfileBody(
+          profile.val,
+          viewer?.ok === true && viewer.val === profile.val.did,
+        ) satisfies IoriBlueskyProfileBody,
+      );
     })
     .get('/iori/v1/bluesky/profiles/:actor/feed', authn.requireUser(readAccounts), async (c) => {
       if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);

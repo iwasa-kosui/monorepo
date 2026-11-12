@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "c7834475-2259-480f-9dfc-0a7acdeedc7b",
-  "prevId": "88820695-8180-4257-9ea1-5506b66e0750",
+  "id": "a8351662-ad19-4103-a1af-288987a98721",
+  "prevId": "9115e9b7-ad85-4165-a73d-87e6e8759718",
   "tables": {
     "actors": {
       "name": "actors",
@@ -4097,6 +4097,13 @@
         },
         "altText": {
           "name": "altText",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "mediaType": {
+          "name": "mediaType",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

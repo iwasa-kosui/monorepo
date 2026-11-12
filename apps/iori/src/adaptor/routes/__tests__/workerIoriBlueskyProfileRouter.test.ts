@@ -82,6 +82,7 @@ const setup = async (options: {
   enabled?: boolean;
   reader?: Partial<BlueskyProfileReader>;
   client?: Partial<Pick<BlueskyClient, 'createFollow' | 'deleteFollow' | 'getRecord'>>;
+  viewerDid?: () => RA<string, BlueskyClientError>;
 }) => {
   const harness = createOAuthHarness();
   const fixture = createSqliteD1Fixture();
@@ -111,6 +112,7 @@ const setup = async (options: {
       listBlueskyAuthorFeedUseCase: enabled ? ListBlueskyAuthorFeedUseCase.create({ reader }) : undefined,
       followBlueskyActorUseCase: enabled ? FollowBlueskyActorUseCase.create({ reader, client }) : undefined,
       unfollowBlueskyActorUseCase: enabled ? UnfollowBlueskyActorUseCase.create({ reader, client }) : undefined,
+      viewerDid: options.viewerDid,
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
     }),
   );
@@ -191,6 +193,7 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor', () => {
       following: true,
       followedBy: true,
       followUri: FOLLOW_URI,
+      isSelf: false,
     });
     expect(t.reader.getProfile).toHaveBeenCalledExactlyOnceWith(DID);
   });
@@ -201,6 +204,20 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor', () => {
     const response = await t.get(`${PROFILES}/${DID}`);
 
     expect(await response.json()).toMatchObject({ following: false, followUri: null });
+  });
+
+  it('自分の DID のプロフィールだけ isSelf を true にする。自分の DID が取れなければ false にする', async () => {
+    const own = await setup({ scope: 'read:accounts', viewerDid: async () => RA.ok(DID) });
+    const other = await setup({ scope: 'read:accounts', viewerDid: async () => RA.ok('did:plc:me') });
+    const failed = await setup({
+      scope: 'read:accounts',
+      viewerDid: async () => RA.err(clientError({ status: 500 })),
+    });
+
+    expect(await (await own.get(`${PROFILES}/${DID}`)).json()).toMatchObject({ isSelf: true });
+    expect(await (await other.get(`${PROFILES}/${DID}`)).json()).toMatchObject({ isSelf: false });
+    expect((await failed.get(`${PROFILES}/${DID}`)).status).toBe(200);
+    expect(await (await failed.get(`${PROFILES}/${DID}`)).json()).toMatchObject({ isSelf: false });
   });
 
   it('ハンドルでも引ける', async () => {

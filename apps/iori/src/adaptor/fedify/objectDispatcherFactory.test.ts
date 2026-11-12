@@ -383,6 +383,7 @@ describe('createObjectDispatcher ofNote', () => {
     postId: post.postId,
     url,
     altText,
+    mediaType: null,
     createdAt: post.createdAt,
   });
 

@@ -10,6 +10,7 @@ const createImages = (count: number): PostImage[] =>
     postId: 'post-1',
     url: `https://remote.example/media/${i}.png`,
     altText: null,
+    mediaType: null,
     createdAt: 0,
   })) as unknown as PostImage[];
 
@@ -39,6 +40,18 @@ describe('createD1PostImageCreatedStore', () => {
 
     expect(db.insert).not.toHaveBeenCalled();
     expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it('writes the mediaType of each image to the row', async () => {
+    const { values, store } = createDb();
+    const [first, second] = createImages(2);
+
+    await store.store([{ ...first, mediaType: 'video/mp4' }, { ...second, mediaType: null }] as PostImage[]);
+
+    expect(values.mock.calls[0]?.[0]).toEqual([
+      expect.objectContaining({ mediaType: 'video/mp4' }),
+      expect.objectContaining({ mediaType: null }),
+    ]);
   });
 
   it('inserts 20 images in a single statement without batch', async () => {

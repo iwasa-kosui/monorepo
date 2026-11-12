@@ -84,7 +84,7 @@ export const resolveDids = async (
   return new Map(entries.flat());
 };
 
-const buildFacets = async (
+export const buildFacets = async (
   text: string,
   query: PublishBlueskyPostDeps['query'],
 ): Promise<Array<BlueskyFacet | BlueskyMentionFacet>> => {

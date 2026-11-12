@@ -180,6 +180,7 @@ export const postImagesTable = sqliteTable('post_images', {
   postId: text('postId').notNull().references(() => postsTable.postId),
   url: text('url').notNull(),
   altText: text('altText'),
+  mediaType: text('mediaType'),
   createdAt: timestamp().notNull(),
 });
 

@@ -1,0 +1,1 @@
+ALTER TABLE `post_images` ADD `mediaType` text;

@@ -17,6 +17,7 @@ const profile = (overrides: Partial<BlueskyProfile> = {}): BlueskyProfile => ({
   postsCount: 1,
   following: false,
   followedBy: false,
+  isSelf: false,
   followUri: null,
   ...overrides,
 });
@@ -53,8 +54,11 @@ const render = (
     isFeedLoading: false,
     isFollowing: false,
     isTogglingFollow: false,
+    isOpeningMessage: false,
+    messageError: null,
     onFollow: async () => {},
     onUnfollow: async () => {},
+    onMessage: async () => {},
     ...props,
   }));
 
@@ -107,6 +111,19 @@ describe('BlueskyProfilePage', () => {
 
     expect(render({}, { isTogglingFollow: true })).toMatch(disabledAttribute);
     expect(render({}, { isTogglingFollow: false })).not.toMatch(disabledAttribute);
+  });
+
+  it('自分以外のプロフィールには「メッセージ」のボタンを出し、自分のプロフィールには出さない', () => {
+    expect(render({ isSelf: false })).toContain('title="メッセージ"');
+    expect(render({ isSelf: true })).not.toContain('title="メッセージ"');
+  });
+
+  it('メッセージを開く操作中はボタンを無効にし、失敗の文言を出す', () => {
+    const disabledAttribute = /\sdisabled(?=[\s>=])/;
+
+    expect(render({}, { isOpeningMessage: true })).toMatch(disabledAttribute);
+    expect(render({}, { messageError: '相手が DM を受け付けていません' })).toContain('相手が DM を受け付けていません');
+    expect(render({}, { messageError: null })).not.toContain('role="alert"');
   });
 
   it('「Bluesky で開く」の外部リンクを bsky.app のプロフィールに向ける', () => {

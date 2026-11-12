@@ -14,6 +14,7 @@ import { blueskyLikeRkey } from '../../domain/blueskyTimeline/blueskyLike.ts';
 import { blueskyRepostRkey } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type {
+  BlueskyChatClient,
   BlueskyClient,
   BlueskyClientError,
   BlueskyClientErrorKind,
@@ -25,6 +26,7 @@ const POST_COLLECTION = 'app.bsky.feed.post';
 const LIKE_COLLECTION = 'app.bsky.feed.like';
 const REPOST_COLLECTION = 'app.bsky.feed.repost';
 const FOLLOW_COLLECTION = 'app.bsky.graph.follow';
+const CHAT_PROXY_HEADERS = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' } as const;
 const REQUEST_TIMEOUT_MS = 10_000;
 const UPLOAD_TIMEOUT_MS = 30_000;
 export const BLUESKY_LOGIN_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
@@ -63,7 +65,7 @@ const uploadBlobResponseSchema = z.object({ blob: blobSchema });
 const createRecordResponseSchema = z.object({ uri: z.string().min(1), cid: z.string().min(1) });
 const emptyResponseSchema = z.looseObject({});
 const queryResponseSchema = z.record(z.string(), z.unknown());
-const errorBodySchema = z.object({ error: z.string().optional() });
+const errorBodySchema = z.object({ error: z.string().optional(), message: z.string().optional() });
 const recordUriPattern = /^at:\/\/[^/]+\/app\.bsky\.feed\.post\/([^/]+)$/;
 const followUriPattern = /^at:\/\/[^/]+\/app\.bsky\.graph\.follow\/([^/]+)$/;
 
@@ -93,7 +95,9 @@ export const resolveBlueskyPdsUrl = (didDoc: unknown): string | undefined => {
   }
 };
 
-export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & BlueskyQueryClient => {
+export const createBlueskyClient = (
+  deps: BlueskyClientDeps,
+): BlueskyClient & BlueskyQueryClient & BlueskyChatClient => {
   const fetchRequest = deps.fetch ?? globalThis.fetch;
   const now = deps.now ?? Instant.now;
 
@@ -103,6 +107,7 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
     init: RequestInit,
     schema: S,
     timeoutMs: number = REQUEST_TIMEOUT_MS,
+    viaChatProxy = false,
   ): RA<z.output<S>, BlueskyClientError> => {
     let response: Response;
     try {
@@ -113,6 +118,10 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
     if (!response.ok) {
       const body = errorBodySchema.safeParse(await response.json().catch(() => undefined));
       const name = body.success ? body.data.error : undefined;
+      if (viaChatProxy && response.status === 400 && name === 'InvalidToken') {
+        // DM の許可が無いアプリパスワードで再ログインしても直らないため
+        return RA.err(clientError('chat_not_permitted', `${operation} failed: status 400 InvalidToken`, 400, name));
+      }
       const expired = name === 'ExpiredToken' || name === 'InvalidToken';
       return RA.err(
         clientError(
@@ -383,5 +392,37 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           queryResponseSchema,
         );
       }),
+    chatQuery: (nsid, params) =>
+      withSession((session) => {
+        const search = new URLSearchParams(
+          Object.entries(params).flatMap(([key, value]): [string, string][] =>
+            typeof value === 'string' ? [[key, value]] : value.map((item): [string, string] => [key, item])
+          ),
+        ).toString();
+        return call(
+          nsid,
+          `${session.pdsUrl}/xrpc/${nsid}${search === '' ? '' : `?${search}`}`,
+          { method: 'GET', headers: authorized(session, CHAT_PROXY_HEADERS) },
+          queryResponseSchema,
+          REQUEST_TIMEOUT_MS,
+          true,
+        );
+      }),
+    chatProcedure: (nsid, body) =>
+      withSession((session) =>
+        call(
+          nsid,
+          `${session.pdsUrl}/xrpc/${nsid}`,
+          {
+            method: 'POST',
+            headers: authorized(session, { 'Content-Type': 'application/json', ...CHAT_PROXY_HEADERS }),
+            body: JSON.stringify(body),
+          },
+          queryResponseSchema,
+          REQUEST_TIMEOUT_MS,
+          true,
+        )
+      ),
+    viewerDid: () => withSession(async (session) => RA.ok(session.did)),
   };
 };
