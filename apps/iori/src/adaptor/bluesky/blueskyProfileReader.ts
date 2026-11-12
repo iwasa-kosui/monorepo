@@ -71,4 +71,16 @@ export const createBlueskyProfileReader = (
       ? RA.ok({ items: parsed.val.items, cursor: parsed.val.cursor, unavailable: null })
       : RA.err(invalidResponse('getAuthorFeed'));
   },
+  getActorLikes: async ({ actor, cursor }) => {
+    const response = await deps.client.query('app.bsky.feed.getActorLikes', {
+      actor,
+      limit: AUTHOR_FEED_LIMIT,
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+    if (!response.ok) return response;
+    const parsed = parseBlueskyTimelineResponse(response.val, deps.now());
+    return parsed.ok
+      ? RA.ok({ items: parsed.val.items, cursor: parsed.val.cursor })
+      : RA.err(invalidResponse('getActorLikes'));
+  },
 });

@@ -8,6 +8,7 @@ import type { BlueskyProfile, BlueskyProfileReader } from '../../../ports/bluesk
 import { FollowBlueskyActorUseCase } from '../../../useCase/followBlueskyActor.ts';
 import { GetBlueskyProfileUseCase } from '../../../useCase/getBlueskyProfile.ts';
 import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
+import { ListBlueskyActorLikesUseCase } from '../../../useCase/listBlueskyActorLikes.ts';
 import { ListBlueskyAuthorFeedUseCase } from '../../../useCase/listBlueskyAuthorFeed.ts';
 import { UnfollowBlueskyActorUseCase } from '../../../useCase/unfollowBlueskyActor.ts';
 import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
@@ -18,10 +19,12 @@ import { createWorkerIoriBlueskyProfileRouter } from '../workerIoriBlueskyProfil
 import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 
 const DID = 'did:plc:alice';
+const OWN_DID = 'did:plc:me';
 const FOLLOW_URI = 'at://did:plc:me/app.bsky.graph.follow/3kfollow';
 const NEW_FOLLOW_URI = 'at://did:plc:me/app.bsky.graph.follow/3knew';
 const PROFILES = '/api/iori/v1/bluesky/profiles';
 const FOLLOWS = '/api/iori/v1/bluesky/follows';
+const LIKED_POSTS = '/api/iori/v1/bluesky/liked-posts';
 const NOW = Date.UTC(2026, 10, 12);
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
@@ -83,6 +86,7 @@ const setup = async (options: {
   reader?: Partial<BlueskyProfileReader>;
   client?: Partial<Pick<BlueskyClient, 'createFollow' | 'deleteFollow' | 'getRecord'>>;
   viewerDid?: () => RA<string, BlueskyClientError>;
+  ownDid?: () => RA<string, BlueskyClientError>;
 }) => {
   const harness = createOAuthHarness();
   const fixture = createSqliteD1Fixture();
@@ -90,6 +94,7 @@ const setup = async (options: {
   const reader: BlueskyProfileReader = {
     getProfile: vi.fn(async () => RA.ok(profile())),
     getAuthorFeed: vi.fn(async () => RA.ok({ items: [feedItem], cursor: 'next-cursor', unavailable: null })),
+    getActorLikes: vi.fn(async () => RA.ok({ items: [feedItem], cursor: 'next-cursor' })),
     ...options.reader,
   };
   const client = {
@@ -110,6 +115,9 @@ const setup = async (options: {
       }),
       getBlueskyProfileUseCase: enabled ? GetBlueskyProfileUseCase.create({ reader }) : undefined,
       listBlueskyAuthorFeedUseCase: enabled ? ListBlueskyAuthorFeedUseCase.create({ reader }) : undefined,
+      listBlueskyActorLikesUseCase: enabled
+        ? ListBlueskyActorLikesUseCase.create({ reader, viewerDid: options.ownDid ?? (async () => RA.ok(OWN_DID)) })
+        : undefined,
       followBlueskyActorUseCase: enabled ? FollowBlueskyActorUseCase.create({ reader, client }) : undefined,
       unfollowBlueskyActorUseCase: enabled ? UnfollowBlueskyActorUseCase.create({ reader, client }) : undefined,
       viewerDid: options.viewerDid,
@@ -338,6 +346,84 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
 
     expect((await missing.get(`${PROFILES}/${DID}/feed`)).status).toBe(404);
     expect((await failing.get(`${PROFILES}/${DID}/feed`)).status).toBe(502);
+  });
+});
+
+describe('GET /api/iori/v1/bluesky/liked-posts', () => {
+  it('いいねした投稿を IoriBlueskyTimelineItemBody の形で返し、自分の DID と cursor を渡す', async () => {
+    const t = await setup({ scope: 'read:accounts' });
+
+    const response = await t.get(`${LIKED_POSTS}?cursor=abc`);
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { items: Array<Record<string, unknown>>; cursor: string | null };
+    expect(body.cursor).toBe('next-cursor');
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({ uri: feedItem.uri, authorDid: DID, text: 'post 1', liked: false });
+    expect(t.reader.getActorLikes).toHaveBeenCalledExactlyOnceWith({ actor: OWN_DID, cursor: 'abc' });
+  });
+
+  it('続きが無いとき cursor を null にし、cursor を付けなければ undefined で呼ぶ', async () => {
+    const t = await setup({
+      scope: 'read:accounts',
+      reader: { getActorLikes: vi.fn(async () => RA.ok({ items: [], cursor: undefined })) },
+    });
+
+    const response = await t.get(LIKED_POSTS);
+
+    expect(await response.json()).toEqual({ items: [], cursor: null });
+    expect(t.reader.getActorLikes).toHaveBeenCalledExactlyOnceWith({ actor: OWN_DID, cursor: undefined });
+  });
+
+  it('認証なしは 401、read:accounts を満たさない scope は 403 にする', async () => {
+    const t = await setup({ scope: 'read:statuses' });
+
+    expect((await t.anonymous(LIKED_POSTS)).status).toBe(401);
+    expect((await t.get(LIKED_POSTS)).status).toBe(403);
+    expect(t.reader.getActorLikes).not.toHaveBeenCalled();
+  });
+
+  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
+    const t = await setup({ scope: 'read:accounts', owner: false });
+
+    const response = await t.get(LIKED_POSTS);
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Forbidden' });
+    expect(t.reader.getActorLikes).not.toHaveBeenCalled();
+  });
+
+  it('無効のときは 409 を返す', async () => {
+    const t = await setup({ scope: 'read:accounts', enabled: false });
+
+    const response = await t.get(LIKED_POSTS);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
+  });
+
+  it('Bluesky のログイン失敗と、それ以外の失敗を 502 にする', async () => {
+    const login = await setup({
+      scope: 'read:accounts',
+      reader: { getActorLikes: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
+    });
+    const failing = await setup({
+      scope: 'read:accounts',
+      reader: { getActorLikes: vi.fn(async () => RA.err(clientError())) },
+    });
+    const noDid = await setup({
+      scope: 'read:accounts',
+      ownDid: async () => RA.err(clientError({ kind: 'network' })),
+    });
+
+    const loginResponse = await login.get(LIKED_POSTS);
+    expect(loginResponse.status).toBe(502);
+    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
+    const failingResponse = await failing.get(LIKED_POSTS);
+    expect(failingResponse.status).toBe(502);
+    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
+    expect((await noDid.get(LIKED_POSTS)).status).toBe(502);
+    expect(noDid.reader.getActorLikes).not.toHaveBeenCalled();
   });
 });
 

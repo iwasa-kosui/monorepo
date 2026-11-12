@@ -1,6 +1,7 @@
 import type {
   IoriBlueskyAuthorFeedResponse,
   IoriBlueskyFollowResponse,
+  IoriBlueskyLikedPostsResponse,
   IoriBlueskyProfileBody,
   IoriBlueskyUnfollowResponse,
 } from '../../adaptor/routes/workerIoriBlueskyProfileRouter.ts';
@@ -10,8 +11,11 @@ export type BlueskyProfile = IoriBlueskyProfileBody;
 
 export type BlueskyAuthorFeedPage = IoriBlueskyAuthorFeedResponse;
 
+export type BlueskyLikedPostsPage = IoriBlueskyLikedPostsResponse;
+
 const PROFILES_PATH = '/api/iori/v1/bluesky/profiles';
 const FOLLOWS_PATH = '/api/iori/v1/bluesky/follows';
+const LIKED_POSTS_PATH = '/api/iori/v1/bluesky/liked-posts';
 const LOGIN_FAILED_MESSAGE = 'Bluesky login failed';
 
 const get = async <T>(path: string): Promise<T> => {
@@ -25,6 +29,9 @@ export const fetchBlueskyProfile = (actor: string): Promise<BlueskyProfile> =>
 
 export const fetchBlueskyAuthorFeed = (actor: string, cursor?: string): Promise<BlueskyAuthorFeedPage> =>
   get<BlueskyAuthorFeedPage>(requestUrl(`${PROFILES_PATH}/${encodeURIComponent(actor)}/feed`, { cursor }));
+
+export const fetchBlueskyLikedPosts = (cursor?: string): Promise<BlueskyLikedPostsPage> =>
+  get<BlueskyLikedPostsPage>(requestUrl(LIKED_POSTS_PATH, { cursor }));
 
 export const followBlueskyActor = async (
   did: string,
@@ -70,6 +77,16 @@ export const blueskyFollowFailureMessage = (error: unknown): string =>
   isMastodonApiError(error) && error.message === LOGIN_FAILED_MESSAGE
     ? 'Bluesky にログインできないため、操作できませんでした。'
     : 'フォローを変更できませんでした';
+
+export const blueskyLikedPostsFailureMessage = (error: unknown, kind: 'first' | 'more'): string => {
+  if (isMastodonApiError(error) && error.message === LOGIN_FAILED_MESSAGE) {
+    return kind === 'first'
+      ? 'Bluesky にログインできないため、いいねした投稿を読み込めませんでした'
+      : 'Bluesky にログインできないため、続きを読み込めませんでした';
+  }
+  if (isMastodonApiError(error) && error.status === 409) return 'Bluesky 連携が無効です';
+  return kind === 'first' ? 'Bluesky でいいねした投稿を読み込めませんでした' : '続きを読み込めませんでした';
+};
 
 export const blueskyActorOfPath = (pathname: string): string | undefined => {
   const encoded = /^\/bluesky\/profile\/([^/]+)\/?$/.exec(pathname)?.[1];
