@@ -736,6 +736,25 @@ describe('POST /api/v1/statuses の引用', () => {
     expect(t.count('posts', `postId != '${quoted.postId}'`)).toBe(0);
   });
 
+  it.each(['block', 'mute'] as const)('引用先の作者を %s していると 422 にし、引用も配送も作らない', async (kind) => {
+    const t = await setup();
+    const bob = t.seed.addRemoteActor('bob');
+    const quoted = t.seed.addRemotePost(bob, 1_000, { visibility: 'public' });
+    if (kind === 'block') {
+      t.seed.addBlock(t.me.userId, bob.actorId);
+    } else {
+      t.seed.addMute(t.me.userId, bob.actorId);
+    }
+
+    const response = await t.json({ status: 'hi', quoted_status_id: quoted.postId });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual(quoteNotAllowed);
+    expect(t.count('posts', `postId != '${quoted.postId}'`)).toBe(0);
+    expect(t.count('post_quotes')).toBe(0);
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+
   it('Bluesky の投稿の ID は 422 にし、投稿を作らない', async () => {
     const t = await setup();
 

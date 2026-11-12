@@ -808,6 +808,7 @@ export const createWorkerRuntimePorts = async (
         userResolver,
         actorResolverByUserId,
         postResolver,
+        postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
         postDeletedStore: createD1PostDeletedStore(db),
         articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
         articleDeletedStore: createD1ArticleDeletedStore(db),

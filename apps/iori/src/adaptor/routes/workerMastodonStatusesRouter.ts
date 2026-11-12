@@ -354,6 +354,13 @@ export const createWorkerMastodonStatusesRouter = ({
         if (!Post.isVisibleToAnonymous(quoted)) {
           return c.json(quoteNotAllowed, 422);
         }
+        const mutedOrBlocked = await mutedActorIdsResolverByUserId.resolve(userId);
+        if (!mutedOrBlocked.ok) {
+          return c.json(internalServerError, 500);
+        }
+        if (mutedOrBlocked.val.includes(quoted.actorId)) {
+          return c.json(quoteNotAllowed, 422);
+        }
         quoteUri = quoted.type === 'remote'
           ? quoted.uri
           : ctx.getObjectUri(Note, { identifier: quoted.username, id: quoted.postId }).href;
