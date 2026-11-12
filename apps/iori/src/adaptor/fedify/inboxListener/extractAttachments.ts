@@ -1,12 +1,13 @@
-import { Document, Image, type Note } from '@fedify/vocab';
+import { Document, Image } from '@fedify/vocab';
 import { type DocumentLoader } from '@fedify/vocab-runtime';
 
 import type { RemotePostAttachment } from '../../../domain/post/post.ts';
+import type { RemotePostObject } from '../../../useCase/helper/remotePostObject.ts';
 
 const ALLOWED_PROTOCOLS = new Set(['https:', 'http:']);
 
 export const extractAttachments = async (
-  note: Note,
+  note: RemotePostObject,
   documentLoader: DocumentLoader,
 ): Promise<RemotePostAttachment[]> => {
   const attachments: RemotePostAttachment[] = [];

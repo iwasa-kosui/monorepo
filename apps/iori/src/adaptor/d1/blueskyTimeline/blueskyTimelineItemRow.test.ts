@@ -34,7 +34,7 @@ const oldRecord = {
 
 describe('toBlueskyTimelineItem', () => {
   it('新しい項目を持たない旧形式の引用 embed を読める', () => {
-    expect(toBlueskyTimelineItem(row(oldRecord), false, false).embed).toEqual(oldRecord);
+    expect(toBlueskyTimelineItem(row(oldRecord), false, false, false).embed).toEqual(oldRecord);
   });
 
   it('新しい項目を持たない旧形式の引用を持つ recordWithMedia を読める', () => {
@@ -44,7 +44,7 @@ describe('toBlueskyTimelineItem', () => {
       record: oldRecord,
     };
 
-    expect(toBlueskyTimelineItem(row(embed), false, false).embed).toEqual(embed);
+    expect(toBlueskyTimelineItem(row(embed), false, false, false).embed).toEqual(embed);
   });
 
   it('recordUnavailable と、新しい項目を持つ引用を読める', () => {
@@ -56,8 +56,8 @@ describe('toBlueskyTimelineItem', () => {
       media: { type: 'video', thumbnail: null, playlist: 'https://video.example/q.m3u8', aspectRatio: null, alt: null },
     };
 
-    expect(toBlueskyTimelineItem(row(unavailable), false, false).embed).toEqual(unavailable);
-    expect(toBlueskyTimelineItem(row(detailed), false, false).embed).toEqual(detailed);
+    expect(toBlueskyTimelineItem(row(unavailable), false, false, false).embed).toEqual(unavailable);
+    expect(toBlueskyTimelineItem(row(detailed), false, false, false).embed).toEqual(detailed);
     expect(
       toBlueskyTimelineItem(
         row({
@@ -71,6 +71,7 @@ describe('toBlueskyTimelineItem', () => {
           },
           record: unavailable,
         }),
+        false,
         false,
         false,
       ).embed,

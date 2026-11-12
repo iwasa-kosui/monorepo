@@ -1,5 +1,5 @@
 import { type InboxContext } from '@fedify/fedify';
-import { Create, Note } from '@fedify/vocab';
+import { type Create } from '@fedify/vocab';
 import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
@@ -15,6 +15,11 @@ import { Visibility } from '../../../domain/post/visibility.ts';
 import type { AcceptedRelaysResolver } from '../../../domain/relay/relay.ts';
 import type { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
 import type { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
+import {
+  buildRemotePostContent,
+  isRemotePostObject,
+  type RemotePostObject,
+} from '../../../useCase/helper/remotePostObject.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractMentionedActorUris } from '../extractMentionedActorUris.ts';
 import { extractNoteUrl } from '../extractNoteUrl.ts';
@@ -45,7 +50,7 @@ export type OnCreateDeps = Readonly<{
 const saveForwardedCreate = async (
   deps: OnCreateDeps,
   { note, actorId, visibility, documentLoader, inReplyToUri }: Readonly<{
-    note: Note;
+    note: RemotePostObject;
     actorId: URL;
     visibility: Visibility | null;
     documentLoader: DocumentLoader;
@@ -103,7 +108,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
   }
 
   const object = await activity.getObject({ documentLoader });
-  if (!(object instanceof Note)) {
+  if (!isRemotePostObject(object)) {
     return;
   }
   if (!object.id) {
@@ -149,7 +154,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
 
   return RA.flow(
     deps.addRemotePostUseCase.run({
-      content: String(object.content),
+      content: await buildRemotePostContent(object),
       uri: objectUri,
       url: extractNoteUrl(object),
       actorIdentity,

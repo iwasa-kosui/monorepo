@@ -24,6 +24,8 @@ type Props = Readonly<{
   onRepost?: (item: IoriBlueskyTimelineItemBody) => void;
   onUndoRepost?: (item: IoriBlueskyTimelineItemBody) => void;
   isRepostPending?: boolean;
+  onBookmark?: (item: IoriBlueskyTimelineItemBody) => void;
+  onUndoBookmark?: (item: IoriBlueskyTimelineItemBody) => void;
   onMuteThread?: (item: IoriBlueskyTimelineItemBody) => void;
   onUnmuteThread?: (item: IoriBlueskyTimelineItemBody) => void;
   onMuteAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
@@ -344,6 +346,8 @@ export const BlueskyTimelineItemView = ({
   onRepost,
   onUndoRepost,
   isRepostPending,
+  onBookmark,
+  onUndoBookmark,
   onMuteThread,
   onUnmuteThread,
   onMuteAuthor,
@@ -366,6 +370,18 @@ export const BlueskyTimelineItemView = ({
       { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: bskyHref } as const,
       { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: bskyHref } as const,
     ]),
+    ...(item.bookmarked
+      ? onUndoBookmark === undefined ? [] : [
+        {
+          key: 'bookmark',
+          label: 'ブックマークを外す',
+          kind: 'action',
+          onSelect: () => onUndoBookmark(item),
+        } as const,
+      ]
+      : onBookmark === undefined
+      ? []
+      : [{ key: 'bookmark', label: 'ブックマーク', kind: 'action', onSelect: () => onBookmark(item) } as const]),
     ...(item.threadMuted === false || item.threadMuted === null || item.threadMuted === undefined
       ? onMuteThread === undefined ? [] : [
         {

@@ -1,3 +1,5 @@
+import Quote from '../../../components/Quote.astro';
+
 ## 記録を足すと visits.ts は何行変わるか
 
 `chapter-1-start` から `chapter-2-step-2` への `visits.ts` の変更量は、+13/-1 行です。変更した関数は `cancelVisit` だけです。`business_events` テーブルの作成は `CREATE TABLE` 1つで、9行です。`visits` テーブルは変えていません。
@@ -13,3 +15,15 @@
 - 記録のコードを書いていない更新は、`business_events` に行を増やしません。この演習の `completeVisit` には記録のコードがありません。SQL で直接 `UPDATE` した変更も `business_events` に残りません。
 
 この行数は演習の題材の数字です。自分のシステムで増える行数は、記録を足す更新処理の数で変わります。
+
+<Quote source="SRE Kaigi 2026 の発表より">
+
+また、最初は集約やイベントごとにテーブルを分割していましたが、運用負荷が高かったため、必要になるまでは単一テーブルに寄せるようにしました。過剰な設計を避けるという判断です。
+
+</Quote>
+
+<Quote source="SRE Kaigi 2026 の発表より">
+
+フルリプレイスは全機能を一斉に移行するため、ダウンタイムやバグのリスクが大きすぎます。私たちは段階的導入を選びました。
+
+</Quote>

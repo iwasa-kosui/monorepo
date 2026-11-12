@@ -4,12 +4,25 @@ goal: 判断表で3つのパターンを比べて、第1章で挙げた問いに
 
 import DecisionTable from '../../../components/DecisionTable.astro';
 import OwnQuestionView from '../../../components/OwnQuestionView.astro';
+import Quote from '../../../components/Quote.astro';
 
 ## この章の進め方
 
 講師は3つのパターンの完成コードと実行結果を順に見せます。参加者はこの章でコードを書きません。最後に、参加者は判断表で3つのパターンを比べ、第1章で挙げた問いに近いパターンを1つ選びます。各パターンの実装は持ち帰りの演習です。
 
 3つのパターンは第2章の続きです。どのパターンも `business_events` に記録します。
+
+<Quote source="kosui.me の記事より" href="https://kosui.me/posts/2026/03/03/service-based-architecture">
+
+なお、イベント駆動アーキテクチャを採用しない場合でも、監査証跡の確保は重要です。
+
+</Quote>
+
+<Quote source="kosui.me の記事より" href="https://kosui.me/posts/2026/03/03/service-based-architecture">
+
+サービスベースアーキテクチャであっても、各サービスのユースケース層でイベントをDBに記録すれば、非同期メッセージングの複雑さを避けつつ監査証跡を確保できます。
+
+</Quote>
 
 <OwnQuestionView />
 

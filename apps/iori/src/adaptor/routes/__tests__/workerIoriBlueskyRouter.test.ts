@@ -281,6 +281,7 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         indexedAt: BASE + 5000,
         liked: false,
         reposted: false,
+        bookmarked: false,
         threadMuted: null,
         replyRootUri: null,
         isOwn: false,
@@ -532,6 +533,7 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       threadMuted: false,
       replyRootUri: null,
       viewerRepostUri: null,
+      bookmarked: false,
     });
     const fetcherReturning = (result: ReturnType<BlueskyPostThreadFetcher['fetch']>) => ({
       fetch: vi.fn<BlueskyPostThreadFetcher['fetch']>(() => result),
@@ -596,6 +598,7 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         indexedAt: BASE,
         liked: true,
         reposted: false,
+        bookmarked: false,
         threadMuted: false,
         replyRootUri: null,
         isOwn: false,
@@ -1562,6 +1565,7 @@ describe('/api/iori/v1/bluesky/status', () => {
       replyRootUri: null,
       viewerLikeUri: 'at://did:plc:me/app.bsky.feed.like/3k1',
       viewerRepostUri: null,
+      bookmarked: false,
     };
     const ACTOR = {
       did: 'did:plc:a',

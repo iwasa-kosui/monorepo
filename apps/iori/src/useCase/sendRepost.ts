@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { isActor, Note } from '@fedify/vocab';
+import { isActor } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 
@@ -33,6 +33,7 @@ import type { SessionExpiredError, SessionResolver } from '../domain/session/ses
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
+import { buildRemotePostContent, isRemotePostObject } from './helper/remotePostObject.ts';
 import { createRepostAnnounce, repostAnnounceUri, resolveLocalPostObjectUri } from './helper/repostAnnounce.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
@@ -215,9 +216,9 @@ const create = ({
             documentLoader,
           });
 
-          if (!(result instanceof Note)) {
+          if (!isRemotePostObject(result)) {
             return RA.err(
-              RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'),
+              RemoteNoteLookupError.create(objectUri, 'Not a valid Note, Article or Question object'),
             );
           }
 
@@ -254,7 +255,7 @@ const create = ({
           const remotePostResult = await remotePostUpserter.resolve({
             uri: objectUri,
             url: extractNoteUrl(result),
-            content: String(result.content ?? ''),
+            content: await buildRemotePostContent(result),
             ...extractContentWarning(result),
             visibility: fetchedVisibility,
             recipientActorUris: extractRecipientActorUris([result], origin),

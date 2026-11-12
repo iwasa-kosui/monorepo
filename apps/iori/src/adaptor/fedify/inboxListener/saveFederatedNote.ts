@@ -1,4 +1,4 @@
-import { isActor, type Note } from '@fedify/vocab';
+import { isActor } from '@fedify/vocab';
 import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { getLogger } from '@logtape/logtape';
 
@@ -12,6 +12,8 @@ import { FederatedTimelineItemId } from '../../../domain/federatedTimeline/feder
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/post/post.ts';
 import type { RelayId } from '../../../domain/relay/relayId.ts';
+import { isBlockedRemoteObject } from '../../../useCase/helper/isBlockedRemoteObject.ts';
+import { buildRemotePostContent, type RemotePostObject } from '../../../useCase/helper/remotePostObject.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractNoteUrl } from '../extractNoteUrl.ts';
@@ -26,10 +28,11 @@ export type SaveFederatedNoteDeps = Readonly<{
   actorResolverByUri: ActorResolverByUri;
   federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
   federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
+  isBlockedUri?: (uri: string) => boolean;
 }>;
 
 export type SaveFederatedNoteInput = Readonly<{
-  note: Note;
+  note: RemotePostObject;
   relayId: RelayId;
   documentLoader: DocumentLoader;
   actorId?: URL;
@@ -37,7 +40,7 @@ export type SaveFederatedNoteInput = Readonly<{
 }>;
 
 const extractAttachmentsOrEmpty = async (
-  note: Note,
+  note: RemotePostObject,
   documentLoader: DocumentLoader,
 ): Promise<RemotePostAttachment[]> => {
   try {
@@ -56,6 +59,11 @@ export const saveFederatedNote = async (
 
   if (!note.id) {
     getLogger().warn('Federated Note has no id');
+    return;
+  }
+
+  if (deps.isBlockedUri && isBlockedRemoteObject(note, deps.isBlockedUri)) {
+    getLogger().info(`Ignoring a federated Note from a blocked domain: ${note.id.href}`);
     return;
   }
 
@@ -78,7 +86,7 @@ export const saveFederatedNote = async (
     return;
   }
 
-  const contentText = String(note.content ?? '');
+  const contentText = await buildRemotePostContent(note);
   const authorIdentity = await ActorIdentity.fromFedifyActor(author, { documentLoader });
   if (!authorIdentity.ok) {
     getLogger().warn(`Could not read Note author for federated timeline: ${note.id.href}`);

@@ -28,6 +28,7 @@ const item = (
   indexedAt: 0,
   liked: false,
   reposted: false,
+  bookmarked: false,
   threadMuted: false,
   replyRootUri: null,
   isOwn: false,

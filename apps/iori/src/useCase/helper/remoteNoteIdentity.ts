@@ -1,4 +1,4 @@
-import { isActor, type Note } from '@fedify/vocab';
+import { isActor } from '@fedify/vocab';
 import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { getLogger } from '@logtape/logtape';
 
@@ -11,6 +11,7 @@ import { extractRecipientActorUris } from '../../adaptor/fedify/extractRecipient
 import { extractVisibility } from '../../adaptor/fedify/extractVisibility.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { RemotePostIdentity } from '../../domain/post/post.ts';
+import { buildRemotePostContent, type RemotePostObject } from './remotePostObject.ts';
 
 type Options = Readonly<{
   origin: string;
@@ -19,7 +20,7 @@ type Options = Readonly<{
 }>;
 
 export const toRemotePostIdentity = async (
-  note: Note,
+  note: RemotePostObject,
   { origin, documentLoader, isBlockedUri }: Options,
 ): Promise<RemotePostIdentity | undefined> => {
   const uri = note.id?.href;
@@ -54,7 +55,7 @@ export const toRemotePostIdentity = async (
   return {
     uri,
     url: extractNoteUrl(note),
-    content: String(note.content ?? ''),
+    content: await buildRemotePostContent(note),
     authorIdentity: actorIdentityResult.val,
     inReplyToUri: note.replyTargetId?.href ?? null,
     ...extractContentWarning(note),

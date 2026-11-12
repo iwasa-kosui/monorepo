@@ -48,6 +48,8 @@ export type BlueskyClient = Readonly<{
   createFollow: (subjectDid: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;
   deleteFollow: (followUri: string) => RA<void, BlueskyClientError>;
   updateSeen: (seenAt: Instant) => RA<void, BlueskyClientError>;
+  createBookmark: (subject: BlueskyLikeSubject) => RA<void, BlueskyClientError>;
+  deleteBookmark: (uri: string) => RA<void, BlueskyClientError>;
 }>;
 
 export type BlueskyQueryClient = Readonly<{

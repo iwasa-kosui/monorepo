@@ -15,6 +15,8 @@ export const toBlueskyTimelineItemRow = (
     viewerLikeUri: _viewerLikeUri,
     reposted: _reposted,
     viewerRepostUri: _viewerRepostUri,
+    bookmarked: _bookmarked,
+    bookmarkUnknown: _bookmarkUnknown,
     threadMuted: _threadMuted,
     replyRootUri: _replyRootUri,
     bridgedFromPostId: _bridgedFromPostId,
@@ -29,7 +31,12 @@ export const toBlueskyTimelineItemRow = (
   fetchedAt: new Date(item.fetchedAt),
 });
 
-export const toBlueskyTimelineItem = (row: Row, liked: boolean, reposted: boolean): BlueskyTimelineItem =>
+export const toBlueskyTimelineItem = (
+  row: Row,
+  liked: boolean,
+  reposted: boolean,
+  bookmarked: boolean,
+): BlueskyTimelineItem =>
   BlueskyTimelineItem.orThrow({
     ...row,
     facets: BlueskyTimelineFacets.parseOrThrow(JSON.parse(row.facets)),
@@ -39,6 +46,7 @@ export const toBlueskyTimelineItem = (row: Row, liked: boolean, reposted: boolea
     fetchedAt: row.fetchedAt.getTime() as Instant,
     liked,
     reposted,
+    bookmarked,
     threadMuted: null,
     replyRootUri: null,
     bridgedFromPostId: null,
