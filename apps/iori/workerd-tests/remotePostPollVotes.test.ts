@@ -124,15 +124,17 @@ describe('remote_post_poll_votes on workerd D1', () => {
     }));
   });
 
-  it('同じ選択肢への 2 回目の保存は失敗し、票数を増やさない', async () => {
+  it('同じ利用者の 2 回目の保存は何も書かず、written を false で返し、票数を増やさない', async () => {
     const created = createRemote(poll());
     await createD1PostCreatedStore(db).store(created);
     const { postId } = created.aggregateState;
     await createD1RemotePostPollVotedStore(db).store(vote(postId, [1]));
 
-    await expect(createD1RemotePostPollVotedStore(db).store(vote(postId, [1]))).rejects.toThrow();
+    const second = await createD1RemotePostPollVotedStore(db).store(vote(postId, [1]));
 
+    expect(second).toMatchObject({ ok: true, val: { written: false } });
     expect((await resolvePoll(postId))?.votersCount).toBe(9);
+    expect(await resolveOwnVotes(postId)).toEqual([1]);
   });
 
   it('投票していない投稿は、自分の投票を読み出さない', async () => {

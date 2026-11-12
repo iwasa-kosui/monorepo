@@ -11,6 +11,7 @@ import { RemoveReceivedEmojiReactUseCase } from '../../../useCase/removeReceived
 import { RemoveReceivedLikeUseCase } from '../../../useCase/removeReceivedLike.ts';
 import { RemoveReceivedRepostUseCase } from '../../../useCase/removeReceivedRepost.ts';
 import { UpdateRemotePostUseCase } from '../../../useCase/updateRemotePost.ts';
+import { UpdateRemotePostPollUseCase } from '../../../useCase/updateRemotePostPoll.ts';
 import { createD1ActorResolverById } from '../../d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUri } from '../../d1/actor/actorResolverByUri.ts';
 import { createD1ActorResolverByUserId } from '../../d1/actor/actorResolverByUserId.ts';
@@ -69,6 +70,7 @@ import { createD1PostCreatedStore } from '../../d1/post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../../d1/post/postDeletedStore.ts';
 import { createD1PostResolver } from '../../d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../../d1/post/postResolverByUri.ts';
+import { createD1RemotePostPollUpdatedStore } from '../../d1/post/remotePostPollUpdatedStore.ts';
 import { createD1RemotePostRecipientsResolverByPostId } from '../../d1/post/remotePostRecipientsResolverByPostId.ts';
 import { createD1RemotePostUpdatedStore } from '../../d1/post/remotePostUpdatedStore.ts';
 import { createD1RemotePostUpserter } from '../../d1/post/remotePostUpserter.ts';
@@ -331,6 +333,11 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         pushSubscriptionsResolver,
         webPushSender,
         blockResolver,
+      }),
+      updateRemotePostPollUseCase: UpdateRemotePostPollUseCase.create({
+        postResolverByUri,
+        actorResolverByUri,
+        remotePostPollUpdatedStore: createD1RemotePostPollUpdatedStore(db),
       }),
     },
     onLike: { inboxActorResolver, addReceivedEmojiReactUseCase, addReceivedLikeUseCase },

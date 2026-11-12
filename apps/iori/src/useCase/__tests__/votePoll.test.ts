@@ -33,6 +33,7 @@ const setup = (
   options: Readonly<{
     poll?: RemotePostPoll | null;
     ownChoices?: ReadonlyArray<number>;
+    written?: boolean;
     isBlockedUri?: (uri: string) => boolean;
     blockedActor?: boolean;
     lookup?: unknown;
@@ -79,7 +80,7 @@ const setup = (
     remotePostPollVotesResolver: {
       resolve: vi.fn(() => RA.ok(new Map([[postId, options.ownChoices ?? []]]))),
     },
-    remotePostPollVotedStore: { store: vi.fn(() => RA.ok(undefined)) },
+    remotePostPollVotedStore: { store: vi.fn(() => RA.ok({ written: options.written ?? true })) },
     blockedActorUriResolverByUsername: { resolve: vi.fn(() => RA.ok(options.blockedActor ?? false)) },
     isBlockedUri: options.isBlockedUri ?? (() => false),
   };
@@ -144,6 +145,17 @@ describe('VotePollUseCase', () => {
 
     it('既に投票済みなら AlreadyVotedError を返す', async () => {
       await expectRejected(setup({ ownChoices: [1] }), [0], 'AlreadyVotedError');
+    });
+
+    it('読んでから保存するまでの間に別の投票が入っていたら AlreadyVotedError を返し、送信しない', async () => {
+      const t = setup({ written: false });
+
+      const result = await t.run([0]);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.err.type).toBe('AlreadyVotedError');
+      expect(t.deps.remotePostPollVotedStore.store).toHaveBeenCalledOnce();
+      expect(t.ctx.sendActivity).not.toHaveBeenCalled();
     });
 
     it('choices が空なら InvalidPollChoicesError を返す', async () => {

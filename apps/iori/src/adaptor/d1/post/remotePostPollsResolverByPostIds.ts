@@ -1,7 +1,7 @@
 import { RA } from '@iwasa-kosui/result';
+import { getLogger } from '@logtape/logtape';
 import { inArray, sql } from 'drizzle-orm';
 
-import { Instant } from '../../../domain/instant/instant.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
 import { RemotePostPoll, type RemotePostPollsResolverByPostIds } from '../../../domain/post/remotePostPoll.ts';
 import type { IoriD1Db } from '../client.ts';
@@ -22,16 +22,20 @@ export const createD1RemotePostPollsResolverByPostIds = (db: IoriD1Db): RemotePo
           .from(remotePostPollsTable)
           .where(inArray(remotePostPollsTable.postId, jsonEach(postIds)));
         for (const row of rows) {
-          polls.set(
-            row.postId as PostId,
-            RemotePostPoll.orThrow({
-              multiple: row.multiple,
-              options: JSON.parse(row.options),
-              votersCount: row.votersCount,
-              expiresAt: row.expiresAt === null ? null : Instant.orThrow(row.expiresAt.getTime()),
-              closed: row.closed,
-            }),
-          );
+          try {
+            polls.set(
+              row.postId as PostId,
+              RemotePostPoll.parseOrThrow({
+                multiple: row.multiple,
+                options: JSON.parse(row.options),
+                votersCount: row.votersCount,
+                expiresAt: row.expiresAt === null ? null : row.expiresAt.getTime(),
+                closed: row.closed,
+              }),
+            );
+          } catch (error) {
+            getLogger().warn(`Skipped a broken remote post poll for post ${row.postId}: ${String(error)}`);
+          }
         }
         return polls;
       }),

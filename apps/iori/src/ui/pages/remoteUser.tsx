@@ -20,8 +20,9 @@ import {
   unblock,
   unfollow,
   unmute,
+  votePoll,
 } from '../api/mastodonClient.ts';
-import { isLocalAccount, updateStatusesByPostId } from '../api/status.ts';
+import { isLocalAccount, updateStatusesByPostId, withPoll } from '../api/status.ts';
 import { CustomEmojiText } from '../components/CustomEmojiText.tsx';
 import { PostView } from '../components/PostView.tsx';
 import type { ReportCategory } from '../components/ReportModal.tsx';
@@ -40,6 +41,7 @@ type Props = Readonly<{
   isBlocked: boolean;
   isLoggedIn: boolean;
   onLike: (postId: string) => Promise<void>;
+  onVote: (postId: string, choices: readonly number[]) => Promise<void>;
   onFollow: () => Promise<void>;
   onUnfollow: () => Promise<void>;
   onMute: () => Promise<void>;
@@ -79,6 +81,7 @@ export const RemoteUserPage = ({
   isBlocked,
   isLoggedIn,
   onLike,
+  onVote,
   onFollow,
   onUnfollow,
   onMute,
@@ -458,6 +461,7 @@ export const RemoteUserPage = ({
               key={status.id}
               status={status}
               onLike={onLike}
+              onVote={onVote}
               isLiking={likingPostId === status.id}
               isLoggedIn={isLoggedIn}
             />
@@ -621,6 +625,11 @@ const App = () => {
       }
     });
 
+  const handleVote = async (postId: string, choices: readonly number[]) => {
+    const poll = await votePoll(postId, choices);
+    updateStatus(postId, (status) => withPoll(status, poll));
+  };
+
   const handleFollow = async () => {
     if (!data || 'error' in data) return;
     setIsTogglingFollow(true);
@@ -778,6 +787,7 @@ const App = () => {
       isBlocked={data.isBlocked}
       isLoggedIn={data.isLoggedIn}
       onLike={handleLike}
+      onVote={handleVote}
       onFollow={handleFollow}
       onUnfollow={handleUnfollow}
       onMute={handleMute}

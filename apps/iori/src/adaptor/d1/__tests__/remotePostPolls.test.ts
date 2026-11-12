@@ -9,6 +9,7 @@ import type { RemotePostPoll } from '../../../domain/post/remotePostPoll.ts';
 import { createD1PostCreatedStore } from '../post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../post/postDeletedStore.ts';
 import { createD1RemotePostPollsResolverByPostIds } from '../post/remotePostPollsResolverByPostIds.ts';
+import { createD1RemotePostPollUpdatedStore } from '../post/remotePostPollUpdatedStore.ts';
 import { createD1RemotePostsPrunedStore } from '../post/remotePostsPrunedStore.ts';
 import { createD1RemotePostUpdatedStore } from '../post/remotePostUpdatedStore.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
@@ -144,6 +145,30 @@ describe('remote_post_polls の保存と読み出し', () => {
     );
   });
 
+  it('壊れた行は飛ばし、他の投稿の投票は返す', async () => {
+    const t = setup();
+    const good = createRemote(t.alice.actorId, poll());
+    const brokenJson = createRemote(t.alice.actorId, poll());
+    const negativeVoters = createRemote(t.alice.actorId, poll());
+    for (const event of [good, brokenJson, negativeVoters]) await createD1PostCreatedStore(t.db).store(event);
+    t.sqlite.prepare('UPDATE remote_post_polls SET options = ? WHERE postId = ?').run(
+      '{broken',
+      brokenJson.aggregateState.postId,
+    );
+    t.sqlite.prepare('UPDATE remote_post_polls SET votersCount = -1 WHERE postId = ?').run(
+      negativeVoters.aggregateState.postId,
+    );
+
+    const resolved = await createD1RemotePostPollsResolverByPostIds(t.db).resolve([
+      good.aggregateState.postId,
+      brokenJson.aggregateState.postId,
+      negativeVoters.aggregateState.postId,
+    ]);
+
+    expect(resolved.ok && [...resolved.val.keys()]).toEqual([good.aggregateState.postId]);
+    expect(resolved.ok && resolved.val.get(good.aggregateState.postId)).toEqual(poll());
+  });
+
   it('投稿の ID が空なら問い合わせない', async () => {
     const t = setup();
     const before = t.queries.length;
@@ -209,6 +234,58 @@ describe('Update での投票の上書き', () => {
     expect(result).toMatchObject({ ok: true, val: { written: false } });
     const resolved = await createD1RemotePostPollsResolverByPostIds(t.db).resolve([created.aggregateState.postId]);
     expect(resolved.ok && resolved.val.get(created.aggregateState.postId)).toEqual(poll({ closed: true }));
+  });
+});
+
+describe('投票だけの更新', () => {
+  const postRow = (t: ReturnType<typeof setup>, postId: string) =>
+    t.sqlite.prepare(
+      'SELECT p.content, r.editedAt FROM posts p JOIN remote_posts r ON r.postId = p.postId WHERE p.postId = ?',
+    ).get(postId);
+
+  it('投票だけを上書きし、本文と編集時刻は変えず、イベントを記録する', async () => {
+    const t = setup();
+    const created = createRemote(t.alice.actorId, poll());
+    await createD1PostCreatedStore(t.db).store(created);
+    const before = postRow(t, created.aggregateState.postId);
+    const next = poll({ options: [{ title: '赤', votesCount: 4 }, { title: '青', votesCount: 5 }], votersCount: 9 });
+
+    await createD1RemotePostPollUpdatedStore(t.db).store(
+      Post.updateRemotePostPoll(Instant.now())(created.aggregateState, next),
+    );
+
+    const resolved = await createD1RemotePostPollsResolverByPostIds(t.db).resolve([created.aggregateState.postId]);
+    expect(resolved.ok && resolved.val.get(created.aggregateState.postId)).toEqual(next);
+    expect(postRow(t, created.aggregateState.postId)).toEqual(before);
+    expect(
+      t.sqlite.prepare('SELECT count(*) AS n FROM domain_events WHERE eventName = ?').get('post.remotePostPollUpdated'),
+    ).toEqual({ n: 1 });
+  });
+
+  it('届いた順に上書きする', async () => {
+    const t = setup();
+    const created = createRemote(t.alice.actorId, poll());
+    await createD1PostCreatedStore(t.db).store(created);
+    const store = createD1RemotePostPollUpdatedStore(t.db);
+
+    await store.store(Post.updateRemotePostPoll(Instant.now())(created.aggregateState, poll({ votersCount: 20 })));
+    await store.store(Post.updateRemotePostPoll(Instant.now())(created.aggregateState, poll({ votersCount: 30 })));
+
+    const resolved = await createD1RemotePostPollsResolverByPostIds(t.db).resolve([created.aggregateState.postId]);
+    expect(resolved.ok && resolved.val.get(created.aggregateState.postId)?.votersCount).toBe(30);
+    expect(pollRows(t, created.aggregateState.postId)).toHaveLength(1);
+  });
+
+  it('投稿が無ければ、何も書かない', async () => {
+    const t = setup();
+    const created = createRemote(t.alice.actorId);
+
+    await createD1RemotePostPollUpdatedStore(t.db).store(
+      Post.updateRemotePostPoll(Instant.now())(created.aggregateState, poll()),
+    );
+
+    expect(pollRows(t, created.aggregateState.postId)).toEqual([]);
+    expect(t.sqlite.prepare('SELECT count(*) AS n FROM domain_events').get()).toEqual({ n: 0 });
   });
 });
 

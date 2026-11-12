@@ -18,6 +18,7 @@ import {
 import { blueskyLikeRkey } from '../../domain/blueskyTimeline/blueskyLike.ts';
 import { blueskyRepostRkey } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { BLUESKY_BAD_TOKEN_SCOPE, BLUESKY_BOOKMARK_LOGIN_CODES } from '../../ports/blueskyBookmarkReader.ts';
 import type {
   BlueskyChatClient,
   BlueskyClient,
@@ -33,6 +34,7 @@ const REPOST_COLLECTION = 'app.bsky.feed.repost';
 const FOLLOW_COLLECTION = 'app.bsky.graph.follow';
 const REPORT_PROXY = 'did:plc:ar7c4by46qjdydhdevvrndac#atproto_labeler';
 const CHAT_PROXY_HEADERS = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' } as const;
+const BOOKMARK_NSID_PREFIX = 'app.bsky.bookmark.';
 const REQUEST_TIMEOUT_MS = 10_000;
 const UPLOAD_TIMEOUT_MS = 30_000;
 export const BLUESKY_LOGIN_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
@@ -115,6 +117,7 @@ export const createBlueskyClient = (
     schema: S,
     timeoutMs: number = REQUEST_TIMEOUT_MS,
     viaChatProxy = false,
+    isBookmark = false,
   ): RA<z.output<S>, BlueskyClientError> => {
     let response: Response;
     try {
@@ -129,10 +132,20 @@ export const createBlueskyClient = (
         // DM の許可が無いアプリパスワードで再ログインしても直らないため
         return RA.err(clientError('chat_not_permitted', `${operation} failed: status 400 InvalidToken`, 400, name));
       }
+      if (
+        isBookmark && response.status === 400 && name === 'InvalidToken'
+        && body.data?.message?.includes(BLUESKY_BAD_TOKEN_SCOPE)
+      ) {
+        return RA.err(
+          clientError('http', `${operation} failed: status 400 InvalidToken ${BLUESKY_BAD_TOKEN_SCOPE}`, 400, name),
+        );
+      }
       const expired = name === 'ExpiredToken' || name === 'InvalidToken';
+      const unauthorized = response.status === 401
+        && (!isBookmark || name !== undefined && BLUESKY_BOOKMARK_LOGIN_CODES.includes(name));
       return RA.err(
         clientError(
-          response.status === 401 || expired ? 'auth' : 'http',
+          unauthorized || expired ? 'auth' : 'http',
           `${operation} failed: status ${response.status}${name === undefined ? '' : ` ${name}`}`,
           response.status,
           name,
@@ -230,6 +243,7 @@ export const createBlueskyClient = (
     nsid: string,
     body: unknown,
     headers: Record<string, string> = {},
+    isBookmark = false,
   ): RA<void, BlueskyClientError> =>
     withSession(async (session) => {
       const done = await call(
@@ -241,6 +255,9 @@ export const createBlueskyClient = (
           body: JSON.stringify(body),
         },
         emptyResponseSchema,
+        REQUEST_TIMEOUT_MS,
+        false,
+        isBookmark,
       );
       return done.ok ? RA.ok(undefined) : done;
     });
@@ -465,6 +482,9 @@ export const createBlueskyClient = (
         );
         return updated.ok ? RA.ok(undefined) : updated;
       }),
+    createBookmark: ({ uri, cid }) =>
+      postProcedure('createBookmark', 'app.bsky.bookmark.createBookmark', { uri, cid }, {}, true),
+    deleteBookmark: (uri) => postProcedure('deleteBookmark', 'app.bsky.bookmark.deleteBookmark', { uri }, {}, true),
     query: (nsid, params) =>
       withSession((session) => {
         const search = new URLSearchParams(params).toString();
@@ -473,6 +493,9 @@ export const createBlueskyClient = (
           `${session.pdsUrl}/xrpc/${nsid}${search === '' ? '' : `?${search}`}`,
           { method: 'GET', headers: authorized(session) },
           queryResponseSchema,
+          REQUEST_TIMEOUT_MS,
+          false,
+          nsid.startsWith(BOOKMARK_NSID_PREFIX),
         );
       }),
     chatQuery: (nsid, params) =>

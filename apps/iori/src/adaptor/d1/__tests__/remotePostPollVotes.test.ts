@@ -11,6 +11,7 @@ import { RemotePostPollVote } from '../../../domain/post/remotePostPollVote.ts';
 import { createD1PostCreatedStore } from '../post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../post/postDeletedStore.ts';
 import { createD1RemotePostPollsResolverByPostIds } from '../post/remotePostPollsResolverByPostIds.ts';
+import { createD1RemotePostPollUpdatedStore } from '../post/remotePostPollUpdatedStore.ts';
 import { createD1RemotePostPollVotedStore } from '../post/remotePostPollVotedStore.ts';
 import { createD1RemotePostPollVotesResolverByPostIds } from '../post/remotePostPollVotesResolverByPostIds.ts';
 import { createD1RemotePostsPrunedStore } from '../post/remotePostsPrunedStore.ts';
@@ -181,18 +182,75 @@ describe('remote_post_poll_votes の保存と読み出し', () => {
     });
   });
 
-  it('同じ利用者が同じ選択肢に 2 回保存しようとすると失敗し、票数も増やさない', async () => {
+  it('同じ利用者の 2 回目の投票は何も書かず、written を false で返す', async () => {
+    const t = setup();
+    const created = createRemote(t.alice.actorId, poll());
+    await createD1PostCreatedStore(t.db).store(created);
+    const { postId } = created.aggregateState;
+    const store = createD1RemotePostPollVotedStore(t.db);
+    const first = await store.store(vote(postId, t.me.actorId, [1], poll()));
+    const eventsAfterFirst = t.sqlite.prepare('SELECT count(*) AS n FROM domain_events').get();
+
+    const second = await store.store(vote(postId, t.me.actorId, [1], poll()));
+
+    expect(first).toMatchObject({ ok: true, val: { written: true } });
+    expect(second).toMatchObject({ ok: true, val: { written: false } });
+    expect((await resolvePoll(t, postId))?.votersCount).toBe(9);
+    expect(voteRows(t, postId)).toHaveLength(1);
+    expect(t.sqlite.prepare('SELECT count(*) AS n FROM domain_events').get()).toEqual(eventsAfterFirst);
+  });
+
+  it('複数選択でも、投票した後に別の選択肢を足す投票は何も書かない', async () => {
+    const t = setup();
+    const created = createRemote(t.alice.actorId, poll());
+    await createD1PostCreatedStore(t.db).store(created);
+    const { postId } = created.aggregateState;
+    const store = createD1RemotePostPollVotedStore(t.db);
+    await store.store(vote(postId, t.me.actorId, [0], poll()));
+
+    const second = await store.store(vote(postId, t.me.actorId, [2], poll()));
+
+    expect(second).toMatchObject({ ok: true, val: { written: false } });
+    expect(voteRows(t, postId)).toEqual([{ postId, actorId: t.me.actorId, choice: 0 }]);
+    expect((await resolvePoll(t, postId))?.options.map((option) => option.votesCount)).toEqual([4, 5, 0]);
+  });
+
+  it('別の利用者の投票は、先の投票があっても書く', async () => {
+    const t = setup();
+    const created = createRemote(t.alice.actorId, poll());
+    await createD1PostCreatedStore(t.db).store(created);
+    const { postId } = created.aggregateState;
+    const store = createD1RemotePostPollVotedStore(t.db);
+    await store.store(vote(postId, t.me.actorId, [1], poll()));
+
+    const other = await store.store(vote(postId, t.other.actorId, [1], poll()));
+
+    expect(other).toMatchObject({ ok: true, val: { written: true } });
+    expect((await resolvePoll(t, postId))?.votersCount).toBe(10);
+  });
+
+  it('相手の Update が投票を上書きしても、自分の投票の記録は残る', async () => {
     const t = setup();
     const created = createRemote(t.alice.actorId, poll());
     await createD1PostCreatedStore(t.db).store(created);
     const { postId } = created.aggregateState;
     await createD1RemotePostPollVotedStore(t.db).store(vote(postId, t.me.actorId, [1], poll()));
+    const theirs = poll({
+      options: [{ title: '赤', votesCount: 10 }, { title: '青', votesCount: 20 }, { title: '緑', votesCount: 1 }],
+      votersCount: 31,
+    });
 
-    await expect(createD1RemotePostPollVotedStore(t.db).store(vote(postId, t.me.actorId, [1], poll()))).rejects
-      .toThrow();
+    await createD1RemotePostPollUpdatedStore(t.db).store(
+      Post.updateRemotePostPoll(Instant.now())(created.aggregateState, theirs),
+    );
 
-    expect((await resolvePoll(t, postId))?.votersCount).toBe(9);
-    expect(voteRows(t, postId)).toHaveLength(1);
+    expect(await resolvePoll(t, postId)).toEqual(theirs);
+    expect(voteRows(t, postId)).toEqual([{ postId, actorId: t.me.actorId, choice: 1 }]);
+    const resolved = await createD1RemotePostPollVotesResolverByPostIds(t.db).resolve({
+      actorId: ActorId.orThrow(t.me.actorId),
+      postIds: [postId],
+    });
+    expect(resolved.ok && resolved.val.get(postId)).toEqual([1]);
   });
 
   it('複数の投稿の自分の投票を 1 回の問い合わせで読み、他の利用者の投票は読まない', async () => {
@@ -201,11 +259,10 @@ describe('remote_post_poll_votes の保存と読み出し', () => {
     const second = createRemote(t.alice.actorId, poll());
     const none = createRemote(t.alice.actorId, poll());
     for (const event of [first, second, none]) await createD1PostCreatedStore(t.db).store(event);
-    await createD1RemotePostPollVotedStore(t.db).store(
-      vote(first.aggregateState.postId, t.me.actorId, [1], poll()),
-      vote(second.aggregateState.postId, t.me.actorId, [0, 2], poll()),
-      vote(none.aggregateState.postId, t.other.actorId, [0], poll()),
-    );
+    const votedStore = createD1RemotePostPollVotedStore(t.db);
+    await votedStore.store(vote(first.aggregateState.postId, t.me.actorId, [1], poll()));
+    await votedStore.store(vote(second.aggregateState.postId, t.me.actorId, [0, 2], poll()));
+    await votedStore.store(vote(none.aggregateState.postId, t.other.actorId, [0], poll()));
     const before = t.queries.length;
 
     const resolved = await createD1RemotePostPollVotesResolverByPostIds(t.db).resolve({

@@ -1,4 +1,4 @@
-import { err, ok, type Result } from '@iwasa-kosui/result';
+import { err, ok, type RA, type Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
@@ -38,7 +38,9 @@ export type RemotePostPollVoted = DomainEvent<
   'remotePostPollVote.voted',
   RemotePostPollVote
 >;
-export type RemotePostPollVotedStore = Agg.Store<RemotePostPollVoted>;
+export type RemotePostPollVotedStore = Readonly<{
+  store: (event: RemotePostPollVoted) => RA<Readonly<{ written: boolean }>, never>;
+}>;
 
 export type RemotePostPollVotesResolverByPostIds = Agg.Resolver<
   Readonly<{ actorId: ActorId; postIds: ReadonlyArray<PostId> }>,

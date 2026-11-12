@@ -452,6 +452,30 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "bluesky_bookmarks": {
+      "name": "bluesky_bookmarks",
+      "columns": {
+        "subjectUri": {
+          "name": "subjectUri",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "bluesky_crossposts": {
       "name": "bluesky_crossposts",
       "columns": {

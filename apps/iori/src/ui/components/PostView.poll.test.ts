@@ -74,6 +74,41 @@ describe('PostView の投票', () => {
     expect(html).toContain('width:25%');
   });
 
+  it('複数選択の投票は、投票者数で割った割合を出す', () => {
+    const html = render(
+      withPoll(
+        poll({
+          multiple: true,
+          votes_count: 7,
+          voters_count: 4,
+          options: [{ title: '赤', votes_count: 3 }, { title: '青', votes_count: 4 }],
+        }),
+      ),
+    );
+
+    expect(html).toContain('75%');
+    expect(html).toContain('100%');
+    expect(html).toContain('7 票');
+  });
+
+  it('複数選択の投票でも、投票者数が null か 0 なら合計の票数で割る', () => {
+    const options = [{ title: '赤', votes_count: 3 }, { title: '青', votes_count: 1 }];
+
+    for (const votersCount of [null, 0]) {
+      const html = render(withPoll(poll({ multiple: true, voters_count: votersCount, options })));
+
+      expect(html).toContain('75%');
+      expect(html).toContain('25%');
+    }
+  });
+
+  it('単一選択の投票は、投票者数が違っても合計の票数で割る', () => {
+    const html = render(withPoll(poll({ voters_count: 2 })));
+
+    expect(html).toContain('75%');
+    expect(html).toContain('25%');
+  });
+
   it('選択肢の title をエスケープする', () => {
     const html = render(withPoll(poll()));
 

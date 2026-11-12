@@ -34,6 +34,7 @@ const render = (a: Account, overrides: Partial<Parameters<typeof RemoteUserPage>
     isBlocked: false,
     isLoggedIn: false,
     onLike: async () => {},
+    onVote: async () => {},
     onFollow: async () => {},
     onUnfollow: async () => {},
     onMute: async () => {},

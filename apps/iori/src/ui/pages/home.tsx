@@ -746,6 +746,7 @@ const TimelineList = () => {
     reportPost,
     blueskyLike,
     blueskyRepost,
+    blueskyBookmark,
     blueskyReply,
     blueskyQuote,
     blueskyModeration,
@@ -815,6 +816,8 @@ const TimelineList = () => {
               onRepost={blueskyRepost.repost}
               onUndoRepost={blueskyRepost.undoRepost}
               isRepostPending={blueskyRepost.pendingUris.has(item.item.uri)}
+              onBookmark={blueskyBookmark.bookmark}
+              onUndoBookmark={blueskyBookmark.unbookmark}
               onMuteThread={blueskyModeration.onMuteThread}
               onUnmuteThread={blueskyModeration.onUnmuteThread}
               onMuteAuthor={blueskyModeration.onMuteAuthor}

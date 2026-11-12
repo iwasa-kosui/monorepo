@@ -1,7 +1,7 @@
 import { Article, Link, Note, type Object as ActivityPubObject, Question } from '@fedify/vocab';
 
 import { Instant } from '../../domain/instant/instant.ts';
-import type { RemotePostPoll } from '../../domain/post/remotePostPoll.ts';
+import { RemotePostPoll } from '../../domain/post/remotePostPoll.ts';
 import { escapeHtml } from '../../domain/post/textSyntax.ts';
 
 export type RemotePostObject = Note | Article | Question;
@@ -19,6 +19,8 @@ const toLinkHref = (post: RemotePostObject): string | undefined => {
 };
 
 const isBlank = (text: string): boolean => text.trim() === '';
+
+const MAX_POLL_OPTIONS = 50;
 
 type PollOption = Readonly<{ title: string; votesCount: number }>;
 type LoaderOptions = Readonly<{ documentLoader: () => Promise<never>; suppressError: true }>;
@@ -55,18 +57,22 @@ const readPoll = async (post: Question): Promise<RemotePostPoll | undefined> => 
   const options: LoaderOptions = { documentLoader: embeddedOnlyDocumentLoader, suppressError: true };
   const exclusive = await collectOptions(post.getExclusiveOptions(options), options);
   const inclusive = await collectOptions(post.getInclusiveOptions(options), options);
-  const pollOptions = [...exclusive, ...inclusive];
+  const pollOptions = [...exclusive, ...inclusive].slice(0, MAX_POLL_OPTIONS);
   if (pollOptions.length === 0) return undefined;
   const endTime = post.endTime?.epochMilliseconds;
   const expiresAt = endTime === undefined ? null : Instant.of(endTime);
   const closed = post.closed;
-  return {
+  const candidate = {
     multiple: exclusive.length === 0 && inclusive.length > 0,
     options: pollOptions,
     votersCount: post.voters,
     expiresAt: expiresAt?.ok ? expiresAt.val : null,
     closed: (closed !== null && closed !== false) || (expiresAt?.ok === true && expiresAt.val <= Instant.now()),
   };
+  const parsed = RemotePostPoll.parse(candidate);
+  if (parsed.ok) return parsed.val;
+  const withoutVoters = RemotePostPoll.parse({ ...candidate, votersCount: null });
+  return withoutVoters.ok ? withoutVoters.val : undefined;
 };
 
 const buildArticleContent = (post: Article): string => {

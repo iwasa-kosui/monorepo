@@ -110,6 +110,7 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'post.remotePostCreated',
   'post.updated',
   'post.remotePostUpdated',
+  'post.remotePostPollUpdated',
   'pushSubscription.deleted',
   'relay.subscriptionAccepted',
   'relay.subscriptionRequested',

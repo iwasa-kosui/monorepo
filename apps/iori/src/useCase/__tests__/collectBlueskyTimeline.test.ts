@@ -5,6 +5,7 @@ import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.
 import { createD1BlueskyTimelineExistingFeedItemIdsResolver } from '../../adaptor/d1/blueskyTimeline/blueskyTimelineExistingFeedItemIdsResolver.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../../adaptor/d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1BlueskyTimelineItemsSavedStore } from '../../adaptor/d1/blueskyTimeline/blueskyTimelineItemsSavedStore.ts';
+import { createD1BlueskyViewerBookmarksSyncedStore } from '../../adaptor/d1/blueskyTimeline/blueskyViewerBookmarksSyncedStore.ts';
 import { createD1BlueskyViewerLikesSyncedStore } from '../../adaptor/d1/blueskyTimeline/blueskyViewerLikesSyncedStore.ts';
 import { createD1BlueskyViewerRepostsSyncedStore } from '../../adaptor/d1/blueskyTimeline/blueskyViewerRepostsSyncedStore.ts';
 import { BlueskyFetchedTimelineItem } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
@@ -45,6 +46,7 @@ const itemAt = (
     threadMuted: false,
     replyRootUri: null,
     viewerRepostUri: null,
+    bookmarked: false,
     ...overrides,
   });
 
@@ -71,6 +73,7 @@ const setup = (pages: ReadonlyArray<BlueskyTimelinePage | BlueskyClientError>) =
     savedStore,
     viewerLikesStore: createD1BlueskyViewerLikesSyncedStore(db),
     viewerRepostsStore: createD1BlueskyViewerRepostsSyncedStore(db),
+    viewerBookmarksStore: createD1BlueskyViewerBookmarksSyncedStore(db),
     now: () => NOW,
   });
   const stored = () =>
@@ -168,7 +171,7 @@ describe('CollectBlueskyTimelineUseCase', () => {
 
     expect(result).toEqual({ ok: true, val: { pages: 1, fetched: 2, saved: 0, dropped: 0 } });
     expect(t.save).not.toHaveBeenCalled();
-    expect(t.queries).toHaveLength(2);
+    expect(t.queries).toHaveLength(3);
     expect(t.queries.every(({ sql }) => /^select /i.test(sql))).toBe(true);
     expect(t.queries.filter(({ sql }) => /^\s*(insert|update|delete)\b/i.test(sql))).toEqual([]);
     expect(t.stored()).toEqual([recent(1).feedItemId, recent(2).feedItemId]);
@@ -202,7 +205,11 @@ describe('CollectBlueskyTimelineUseCase', () => {
     const result = await t.useCase.run();
 
     expect(result).toMatchObject({ ok: true, val: { pages: 2, fetched: 5, saved: 5 } });
-    expect(t.queries.filter(({ sql }) => /^\s*select /i.test(sql) && !sql.includes('bluesky_reposts'))).toHaveLength(2);
+    expect(
+      t.queries.filter(({ sql }) =>
+        /^\s*select /i.test(sql) && !sql.includes('bluesky_reposts') && !sql.includes('bluesky_bookmarks')
+      ),
+    ).toHaveLength(2);
   });
 
   it('保存済みの feedItemId の確認は D1 のバインド数の上限（100）を超えない', async () => {
@@ -382,6 +389,7 @@ describe('CollectBlueskyTimelineUseCase', () => {
         repostedByHandle: 'bob.example',
         reposted: true,
         viewerRepostUri: repostUri(1),
+        bookmarked: false,
       });
       const t = setup([pageOf([plain, repostRow], undefined)]);
 
@@ -508,6 +516,7 @@ describe('CollectBlueskyTimelineUseCase', () => {
           repostedByHandle: 'bob.example',
           reposted: true,
           viewerRepostUri: repostUri(1),
+          bookmarked: false,
         });
         const t = setup([pageOf([plain, repostRow], undefined)]);
         seedRepost(t, 1, NOW - 10 * MINUTE);
@@ -583,6 +592,133 @@ describe('CollectBlueskyTimelineUseCase', () => {
       await t.useCase.run();
 
       expect(repostRows(t)).toHaveLength(100);
+    });
+  });
+  describe('viewer.bookmarked', () => {
+    const MINUTE = 60 * 1000;
+    const bookmarkRows = (t: ReturnType<typeof setup>) =>
+      t.sqlite.prepare('SELECT subjectUri, createdAt FROM bluesky_bookmarks ORDER BY subjectUri').all();
+    const bookmarkQueries = (t: ReturnType<typeof setup>) =>
+      t.queries.filter(({ sql }) => sql.includes('bluesky_bookmarks')).map(({ sql }) =>
+        sql.trim().split(/\s/)[0]?.toLowerCase()
+      );
+    const seedBookmark = (t: ReturnType<typeof setup>, n: number, createdAt: number) =>
+      t.sqlite.prepare('INSERT INTO bluesky_bookmarks(subjectUri,createdAt) VALUES (?,?)').run(
+        recent(n).uri,
+        createdAt,
+      );
+
+    it('bookmarked の項目の uri を bluesky_bookmarks に保存し、bookmarked として読める', async () => {
+      const t = setup([pageOf([recent(1), itemAt(2, NOW - 2000, { bookmarked: true })], undefined)]);
+
+      await t.useCase.run();
+
+      expect(bookmarkRows(t)).toEqual([{ subjectUri: recent(2).uri, createdAt: NOW }]);
+      const resolver = createD1BlueskyTimelineItemsResolver(t.db);
+      const items = Result.unsafeUnwrap(await resolver.resolve({ limit: 10, before: undefined }));
+      expect(items.map((item) => [item.feedItemId, item.bookmarked])).toEqual([
+        [recent(1).feedItemId, false],
+        [recent(2).feedItemId, true],
+      ]);
+    });
+
+    it('同じ uri の通常の行と repost の行が両方 bookmarked でも 1 行だけ保存する', async () => {
+      const t = setup([
+        pageOf([
+          itemAt(1, NOW - 1000, { bookmarked: true }),
+          itemAt(1, NOW - 2000, {
+            feedItemId: 'at://did:plc:a/app.bsky.feed.post/1#repost:did:plc:b',
+            repostedByDid: 'did:plc:b',
+            repostedByHandle: 'bob.example',
+            bookmarked: true,
+          }),
+        ], undefined),
+      ]);
+
+      await t.useCase.run();
+
+      expect(bookmarkRows(t)).toEqual([{ subjectUri: recent(1).uri, createdAt: NOW }]);
+    });
+
+    it('保存済みの uri は書き直さない', async () => {
+      const t = setup([pageOf([itemAt(1, NOW - 1000, { bookmarked: true })], undefined)]);
+      seedBookmark(t, 1, 5);
+      t.queries.length = 0;
+
+      await t.useCase.run();
+
+      expect(bookmarkRows(t)).toEqual([{ subjectUri: recent(1).uri, createdAt: 5 }]);
+      expect(bookmarkQueries(t)).toEqual(['select']);
+    });
+
+    it('bookmarked でない投稿の、取得開始の 5 分より前の行を消す', async () => {
+      const t = setup([pageOf([recent(1), recent(2)], undefined)]);
+      seedBookmark(t, 1, NOW - 10 * MINUTE);
+      seedBookmark(t, 2, NOW - MINUTE);
+      t.queries.length = 0;
+
+      await t.useCase.run();
+
+      expect(bookmarkRows(t)).toEqual([{ subjectUri: recent(2).uri, createdAt: NOW - MINUTE }]);
+      expect(bookmarkQueries(t)).toEqual(['select', 'delete']);
+    });
+
+    it('bookmarked の投稿の古い行は消さない', async () => {
+      const t = setup([pageOf([itemAt(1, NOW - 1000, { bookmarked: true })], undefined)]);
+      seedBookmark(t, 1, NOW - 10 * MINUTE);
+
+      await t.useCase.run();
+
+      expect(bookmarkRows(t)).toEqual([{ subjectUri: recent(1).uri, createdAt: NOW - 10 * MINUTE }]);
+    });
+
+    it('同じ uri の通常の行と repost の行の片方だけが bookmarked のときは消さない', async () => {
+      const t = setup([
+        pageOf([
+          itemAt(1, NOW - 1000, { bookmarked: true }),
+          itemAt(1, NOW - 2000, {
+            feedItemId: 'at://did:plc:a/app.bsky.feed.post/1#repost:did:plc:b',
+            repostedByDid: 'did:plc:b',
+            repostedByHandle: 'bob.example',
+          }),
+        ], undefined),
+      ]);
+      seedBookmark(t, 1, NOW - 10 * MINUTE);
+
+      await t.useCase.run();
+
+      expect(bookmarkRows(t)).toHaveLength(1);
+    });
+
+    it('bookmarkUnknown の投稿の古い行は消さない', async () => {
+      const t = setup([pageOf([itemAt(1, NOW - 1000, { bookmarkUnknown: true }), recent(2)], undefined)]);
+      seedBookmark(t, 1, NOW - 10 * MINUTE);
+      seedBookmark(t, 2, NOW - 10 * MINUTE);
+
+      await t.useCase.run();
+
+      expect(bookmarkRows(t)).toEqual([{ subjectUri: recent(1).uri, createdAt: NOW - 10 * MINUTE }]);
+    });
+
+    it('削除対象が無いページでは bluesky_bookmarks への SELECT だけを発行する', async () => {
+      const t = setup([pageOf([recent(1), recent(2)], undefined)]);
+
+      await t.useCase.run();
+
+      expect(bookmarkQueries(t)).toEqual(['select']);
+    });
+
+    it('同じページの 100 件がすべて bookmarked でも、すべて bookmarked でなくても D1 のバインド上限に当たらない', async () => {
+      const bookmarked = Array.from({ length: 100 }, (_, n) => itemAt(n, NOW - 1000, { bookmarked: true }));
+      const t = setup([pageOf(bookmarked, undefined)]);
+
+      const first = await t.useCase.run();
+      t.enqueue(pageOf(bookmarked.map((item) => ({ ...item, bookmarked: false })), undefined));
+      const second = await t.useCase.run();
+
+      expect(first.ok).toBe(true);
+      expect(second.ok).toBe(true);
+      expect(bookmarkRows(t)).toHaveLength(100);
     });
   });
 });

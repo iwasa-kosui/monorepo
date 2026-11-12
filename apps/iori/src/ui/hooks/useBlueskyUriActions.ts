@@ -5,6 +5,7 @@ import {
   useBlueskyAuthorModeration,
   type UseBlueskyAuthorModerationOptions,
 } from './useBlueskyAuthorModeration.ts';
+import { BLUESKY_BOOKMARK_BY_URI_REQUESTS, useBlueskyBookmark } from './useBlueskyBookmark.ts';
 import { BLUESKY_LIKE_BY_URI_REQUESTS, useBlueskyLike } from './useBlueskyLike.ts';
 import {
   sendBlueskyReplyByUri,
@@ -27,6 +28,7 @@ export const useBlueskyUriActions = (
     updateItems,
     BLUESKY_REPOST_BY_URI_REQUESTS,
   );
+  const { bookmark, unbookmark } = useBlueskyBookmark(updateItems, BLUESKY_BOOKMARK_BY_URI_REQUESTS);
   const replyDialog = useBlueskyReplyDialog(sendBlueskyReplyByUri);
   const { onMuteThread, onUnmuteThread, onMuteAuthor, onBlockAuthor, onReportPost, reportDialog, notice } =
     useBlueskyAuthorModeration(updateItems, options);
@@ -38,6 +40,8 @@ export const useBlueskyUriActions = (
     onRepost: repost,
     onUndoRepost: undoRepost,
     repostPendingUris,
+    onBookmark: bookmark,
+    onUndoBookmark: unbookmark,
     onMuteThread,
     onUnmuteThread,
     onMuteAuthor,

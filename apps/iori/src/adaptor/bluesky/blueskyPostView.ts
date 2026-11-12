@@ -37,6 +37,7 @@ export const postViewZodType = z.looseObject({
   viewer: z.looseObject({
     like: z.string().optional(),
     repost: z.string().optional(),
+    bookmarked: z.boolean().optional(),
     threadMuted: z.boolean().optional(),
   }).optional(),
 });
@@ -272,6 +273,8 @@ export const itemFromPostView = (
     viewerLikeUri,
     reposted: viewerRepostUri !== null,
     viewerRepostUri,
+    bookmarked: post.viewer?.bookmarked === true,
+    ...(post.viewer?.bookmarked === undefined ? { bookmarkUnknown: true } : {}),
     threadMuted: post.viewer?.threadMuted === true,
     replyRootUri: post.record.reply?.root?.uri ?? null,
   });

@@ -1,14 +1,16 @@
 import { type InboxContext } from '@fedify/fedify';
-import { type Update } from '@fedify/vocab';
+import { Question, type Update } from '@fedify/vocab';
 import { getLogger } from '@logtape/logtape';
 
 import { Instant } from '../../../domain/instant/instant.ts';
 import {
   buildRemotePostBody,
   isRemotePostObject,
+  readRemotePostPoll,
   type RemotePostObject,
 } from '../../../useCase/helper/remotePostObject.ts';
 import type { UpdateRemotePostUseCase } from '../../../useCase/updateRemotePost.ts';
+import type { UpdateRemotePostPollUseCase } from '../../../useCase/updateRemotePostPoll.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractMentionedActorUris } from '../extractMentionedActorUris.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
@@ -19,6 +21,7 @@ import { extractAttachments } from './extractAttachments.ts';
 export type OnUpdateDeps = Readonly<{
   origin: string;
   updateRemotePostUseCase: UpdateRemotePostUseCase;
+  updateRemotePostPollUseCase: UpdateRemotePostPollUseCase;
 }>;
 
 const toEditedAt = (note: RemotePostObject): Instant => {
@@ -60,6 +63,29 @@ export const createOnUpdate = (deps: OnUpdateDeps) => async (ctx: InboxContext<u
       `Ignored Update activity whose actor does not match the object origin: actor=${senderId.href} object=${objectUri}`,
     );
     return;
+  }
+
+  if (object instanceof Question && !object.updated) {
+    const poll = await readRemotePostPoll(object);
+    if (!poll) {
+      logger.info(`Ignored Update activity for a poll that has no readable options: ${objectUri}`);
+      return;
+    }
+    const pollResult = await deps.updateRemotePostPollUseCase.run({ uri: objectUri, actorUri: senderId.href, poll });
+    if (!pollResult.ok) {
+      logger.warn(
+        `Ignored Update activity for a post owned by another actor: ${objectUri} actor=${pollResult.err.detail.actorUri}`,
+      );
+      return;
+    }
+    switch (pollResult.val.type) {
+      case 'updated':
+        logger.info(`Processed poll Update activity: ${objectUri} by ${senderId.href}`);
+        return;
+      case 'postNotFound':
+        logger.info(`No remote post found for poll Update activity: ${objectUri}`);
+        return;
+    }
   }
 
   const attachments = await extractAttachments(object, documentLoader);

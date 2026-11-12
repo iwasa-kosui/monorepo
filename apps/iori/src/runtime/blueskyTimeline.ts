@@ -29,6 +29,7 @@ import { createD1BlueskyTimelineExistingFeedItemIdsResolver } from '../adaptor/d
 import { createD1BlueskyTimelineItemsExpiredStore } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsExpiredStore.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1BlueskyTimelineItemsSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsSavedStore.ts';
+import { createD1BlueskyViewerBookmarksSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyViewerBookmarksSyncedStore.ts';
 import { createD1BlueskyViewerLikesSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyViewerLikesSyncedStore.ts';
 import { createD1BlueskyViewerRepostsSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyViewerRepostsSyncedStore.ts';
 import { createD1Db, type IoriD1Db } from '../adaptor/d1/client.ts';
@@ -228,6 +229,7 @@ export const createCollectBlueskyTimelineUseCase = (
     savedStore: createD1BlueskyTimelineItemsSavedStore(db),
     viewerLikesStore: createD1BlueskyViewerLikesSyncedStore(db),
     viewerRepostsStore: createD1BlueskyViewerRepostsSyncedStore(db),
+    viewerBookmarksStore: createD1BlueskyViewerBookmarksSyncedStore(db),
     now,
   });
 };

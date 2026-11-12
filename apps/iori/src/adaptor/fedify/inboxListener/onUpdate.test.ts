@@ -7,6 +7,7 @@ import {
   RemotePostUpdateAuthorMismatchError,
   type UpdateRemotePostUseCase,
 } from '../../../useCase/updateRemotePost.ts';
+import type { UpdateRemotePostPollUseCase } from '../../../useCase/updateRemotePostPoll.ts';
 import { createOnUpdate } from './onUpdate.ts';
 
 const origin = 'https://iori.test';
@@ -22,8 +23,13 @@ const createCtx = () =>
 
 const setup = (result: unknown = RA.ok({ type: 'updated' })) => {
   const run = vi.fn<UpdateRemotePostUseCase['run']>(async () => result as never);
-  const listener = createOnUpdate({ origin, updateRemotePostUseCase: { run } });
-  return { run, listener };
+  const pollRun = vi.fn<UpdateRemotePostPollUseCase['run']>(async () => RA.ok({ type: 'postNotFound' }) as never);
+  const listener = createOnUpdate({
+    origin,
+    updateRemotePostUseCase: { run },
+    updateRemotePostPollUseCase: { run: pollRun },
+  });
+  return { run, pollRun, listener };
 };
 
 const followersId = new URL('https://remote.example/users/alice/followers');
@@ -103,6 +109,88 @@ describe('createOnUpdate', () => {
         closed: true,
       },
     });
+  });
+
+  it('updated が無い Question の Update は、投票だけを更新し、編集としては扱わない', async () => {
+    const { run, pollRun, listener } = setup();
+    const question = new Question({
+      id: noteId,
+      attribution: actorId,
+      content: '<p>q</p>',
+      endTime: Temporal.Instant.fromEpochMilliseconds(6_000),
+      tos: [kosuiId],
+      exclusiveOptions: [
+        new Note({ name: 'a', replies: new Collection({ totalItems: 11 }) }),
+        new Note({ name: 'b', replies: new Collection({ totalItems: 6 }) }),
+      ],
+      voters: 17,
+    });
+
+    await listener(createCtx(), updateOf(question));
+
+    expect(run).not.toHaveBeenCalled();
+    expect(pollRun).toHaveBeenCalledExactlyOnceWith({
+      uri: noteId.href,
+      actorUri: actorId.href,
+      poll: {
+        multiple: false,
+        options: [{ title: 'a', votesCount: 11 }, { title: 'b', votesCount: 6 }],
+        votersCount: 17,
+        expiresAt: 6_000,
+        closed: true,
+      },
+    });
+  });
+
+  it('updated がある Question の Update は、これまでどおり編集として扱う', async () => {
+    const { run, pollRun, listener } = setup();
+    const question = new Question({
+      id: noteId,
+      attribution: actorId,
+      content: '<p>q</p>',
+      updated: Temporal.Instant.fromEpochMilliseconds(5_000),
+      tos: [kosuiId],
+      exclusiveOptions: [new Note({ name: 'a', replies: new Collection({ totalItems: 1 }) })],
+    });
+
+    await listener(createCtx(), updateOf(question));
+
+    expect(pollRun).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledOnce();
+    expect(run.mock.calls[0]?.[0]).toMatchObject({ editedAt: 5_000 });
+  });
+
+  it('updated が無くても、Note の Update は投票だけの更新にしない', async () => {
+    const { run, pollRun, listener } = setup();
+
+    await listener(createCtx(), updateOf(noteOf({ updated: null })));
+
+    expect(pollRun).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it('updated が無い Question に読める選択肢が無ければ、何も更新しない', async () => {
+    const { run, pollRun, listener } = setup();
+
+    await listener(createCtx(), updateOf(new Question({ id: noteId, attribution: actorId, content: '<p>q</p>' })));
+
+    expect(run).not.toHaveBeenCalled();
+    expect(pollRun).not.toHaveBeenCalled();
+  });
+
+  it('updated が無い Question の作者が違うと判定されても例外にしない', async () => {
+    const { pollRun, listener } = setup();
+    pollRun.mockResolvedValue(
+      RA.err(RemotePostUpdateAuthorMismatchError.create({ uri: noteId.href, actorUri: actorId.href })) as never,
+    );
+    const question = new Question({
+      id: noteId,
+      attribution: actorId,
+      exclusiveOptions: [new Note({ name: 'a' })],
+    });
+
+    await expect(listener(createCtx(), updateOf(question))).resolves.toBeUndefined();
+    expect(pollRun).toHaveBeenCalledOnce();
   });
 
   it('Note の Update には poll を渡さない', async () => {

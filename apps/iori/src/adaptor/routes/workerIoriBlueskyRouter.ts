@@ -107,6 +107,7 @@ export type IoriBlueskyTimelineItemBody = Readonly<{
   indexedAt: number;
   liked: boolean;
   reposted: boolean;
+  bookmarked: boolean;
   threadMuted: boolean | null;
   replyRootUri: string | null;
   isOwn: boolean;
@@ -241,7 +242,7 @@ const forbidden = { error: 'Forbidden' } as const;
 const SEARCH_LIMIT = 25;
 const SEARCH_QUERY_MAX_LENGTH = 300;
 
-const postTargetOf = (
+export const postTargetOf = (
   feedItemId: string | undefined,
   uri: string | undefined,
 ): { target: IoriBlueskyPostTargetBody } | { invalid: 'feedItemId' | 'uri' } => {
@@ -269,6 +270,7 @@ export const toItemBody = (item: BlueskyTimelineItem, viewerDid: string | undefi
   indexedAt: item.indexedAt,
   liked: item.liked,
   reposted: item.reposted,
+  bookmarked: item.bookmarked,
   threadMuted: item.threadMuted,
   replyRootUri: item.replyRootUri,
   isOwn: viewerDid !== undefined && item.authorDid === viewerDid,

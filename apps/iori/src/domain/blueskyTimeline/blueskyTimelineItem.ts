@@ -100,12 +100,14 @@ const blueskyTimelineItemZodType = z.object({
   fetchedAt: Instant.zodType,
   liked: z.boolean(),
   reposted: z.boolean(),
+  bookmarked: z.boolean(),
   threadMuted: z.boolean().nullable(),
   replyRootUri: z.string().nullable(),
 });
 const blueskyFetchedTimelineItemZodType = blueskyTimelineItemZodType.extend({
   viewerLikeUri: z.string().min(1).nullable(),
   viewerRepostUri: z.string().min(1).nullable(),
+  bookmarkUnknown: z.literal(true).optional(),
   threadMuted: z.boolean(),
 });
 

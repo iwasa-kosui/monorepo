@@ -42,6 +42,7 @@ const item: IoriBlueskyTimelineItemBody = {
   indexedAt: Date.UTC(2026, 10, 8, 1),
   liked: false,
   reposted: false,
+  bookmarked: false,
   threadMuted: false,
   replyRootUri: null,
   isOwn: false,

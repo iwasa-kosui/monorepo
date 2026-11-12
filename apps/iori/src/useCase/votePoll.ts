@@ -11,7 +11,7 @@ import { PostNotFoundError, type PostResolver, type RemotePost } from '../domain
 import type { PostId } from '../domain/post/postId.ts';
 import type { RemotePostPoll, RemotePostPollsResolverByPostIds } from '../domain/post/remotePostPoll.ts';
 import {
-  type AlreadyVotedError,
+  AlreadyVotedError,
   type InvalidPollChoicesError,
   PollAuthorBlockedError,
   type PollClosedError,
@@ -161,7 +161,19 @@ const create = ({
       }),
       RA.andThrough(({ post, user }) => errIfAuthorBlocked(post, user.username)),
       RA.andBind('remote', ({ ctx, user, post }) => lookupQuestion(ctx, user.username, post.uri)),
-      RA.andThrough(({ voted }) => remotePostPollVotedStore.store(voted)),
+      RA.andThrough(({ voted }) =>
+        RA.flow(
+          remotePostPollVotedStore.store(voted),
+          RA.andThen(({ written }): RA<void, AlreadyVotedError> =>
+            written
+              ? RA.ok(undefined)
+              : RA.err(AlreadyVotedError.create({
+                actorId: voted.aggregateState.actorId,
+                postId: voted.aggregateState.postId,
+              }))
+          ),
+        )
+      ),
       RA.andThrough(async ({ ctx, user, poll, voted, remote }) => {
         const actorUri = ctx.getActorUri(user.username);
         for (const choice of voted.aggregateState.choices) {

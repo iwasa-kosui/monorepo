@@ -11,6 +11,9 @@ type Props = Readonly<{
 export const pollPercent = (votesCount: number, totalVotes: number): number =>
   totalVotes <= 0 ? 0 : Math.round((votesCount / totalVotes) * 100);
 
+const pollDenominator = (poll: Poll): number =>
+  poll.multiple && poll.voters_count !== null && poll.voters_count > 0 ? poll.voters_count : poll.votes_count;
+
 const pollDeadlineLabel = (poll: Poll): string | null => {
   if (poll.expired) return '終了';
   if (poll.expires_at === null) return null;
@@ -105,11 +108,12 @@ export const PollView = ({ poll, onVote }: Props) => {
     );
   }
 
+  const denominator = pollDenominator(poll);
   return (
     <div class='mt-3 space-y-2' data-poll>
       <ul class='space-y-2'>
         {poll.options.map((option, index) => {
-          const percent = pollPercent(option.votes_count ?? 0, poll.votes_count);
+          const percent = pollPercent(option.votes_count ?? 0, denominator);
           const isOwnVote = poll.own_votes.includes(index);
           return (
             <li

@@ -21,20 +21,22 @@ paths:
 | **Key** | `KeyId` | ActivityPub署名用鍵ペア | `/domain/key/` |
 | **PushSubscription** | `PushSubscriptionId` | Web Push購読 | `/domain/pushSubscription/` |
 | **Image** | `ImageId` | 投稿添付画像 | `/domain/image/` |
+| **RemotePostPollVote** | 複合ID（`postId` と `actorId`） | リモートの投票に、ローカルのアクターがした投票の記録 | `/domain/post/` |
 
 ## 集約間の参照関係
 
 ```
 User → LocalActor, Key, Session, PushSubscription (userId)
-Actor → Post, Like, Repost, Notification, Follow (actorId)
-Post → Image [1:N], TimelineItem, Repost [1:N], Notification [1:N] (postId)
+Actor → Post, Like, Repost, Notification, Follow, RemotePostPollVote (actorId)
+Post → Image [1:N], TimelineItem, Repost [1:N], Notification [1:N], RemotePostPollVote [1:N] (postId)
 ```
 
 ## 主要なドメインイベント
 
 | 集約 | イベント名 | aggregateState |
 |-----|-----------|----------------|
-| Post | `post.created` / `post.remotePostCreated` / `post.deleted` | `LocalPost` / `RemotePost` / `undefined` |
+| Post | `post.created` / `post.remotePostCreated` / `post.remotePostPollUpdated` / `post.deleted` | `LocalPost` / `RemotePost` / `RemotePost` / `undefined` |
+| RemotePostPollVote | `remotePostPollVote.voted` | `RemotePostPollVote` |
 | Repost | `repost.repostCreated` / `repost.repostDeleted` | `Repost` / `undefined` |
 | Notification | `notification.likeNotificationCreated` / `notification.likeNotificationDeleted` | `LikeNotification` / `undefined` |
 | TimelineItem | `timelineItem.created` / `timelineItem.deleted` | `TimelineItem` / `undefined` |
