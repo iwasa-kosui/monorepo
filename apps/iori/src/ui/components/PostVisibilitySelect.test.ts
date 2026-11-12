@@ -69,4 +69,16 @@ describe('PostVisibilitySelect', () => {
       expect(checked).toEqual([value]);
     },
   );
+
+  it('disabled のとき、3つの選択肢をすべて無効にする', () => {
+    const html = String(
+      jsx(PostVisibilitySelect, { value: 'public', onChange: () => {}, name: 'visibility', disabled: true }),
+    );
+
+    expect(html.match(/<input[^>]*disabled=""/g)).toHaveLength(3);
+  });
+
+  it('disabled を渡さなければ、選択肢を無効にしない', () => {
+    expect(render('public')).not.toContain('disabled');
+  });
 });

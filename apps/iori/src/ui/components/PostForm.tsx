@@ -2,14 +2,14 @@ import { useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
-import { createStatus, updateMedia, uploadMedia } from '../api/mastodonClient.ts';
-import { blueskyCrosspostNotice, postedMessage } from './blueskyCrosspostMark.ts';
+import { createBlueskyPost, createStatus, updateMedia, uploadMedia } from '../api/mastodonClient.ts';
+import { blueskyCrosspostNotice } from './blueskyCrosspostMark.ts';
 import { downscaleImageForUpload } from './imageDownscale.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
-import { canSubmitPost, submitPost, type UploadedMedia } from './postSubmission.ts';
-import { DEFAULT_POST_VISIBILITY, type PostVisibility } from './postVisibility.ts';
+import { canSubmitPost, postedNotice, type PostNotice, submitPost, type UploadedMedia } from './postSubmission.ts';
+import { DEFAULT_POST_VISIBILITY, type PostVisibility, visibilityForDestination } from './postVisibility.ts';
 import { PostVisibilitySelect } from './PostVisibilitySelect.tsx';
 
 type Props = Readonly<{
@@ -25,7 +25,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [isPosting, setIsPosting] = useState(false);
   const [destination, setDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
   const [visibility, setVisibility] = useState<PostVisibility>(DEFAULT_POST_VISIBILITY);
-  const [resultMessage, setResultMessage] = useState('');
+  const [notice, setNotice] = useState<PostNotice | undefined>(undefined);
   const [cwEnabled, setCwEnabled] = useState(false);
   const [cw, setCw] = useState('');
   const [sensitiveChecked, setSensitiveChecked] = useState(false);
@@ -33,11 +33,12 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const hasCw = cwEnabled && cw.trim() !== '';
   const hasImages = uploaded.length > 0;
   const sensitive = hasImages && (sensitiveChecked || hasCw);
-  const notice = blueskyCrosspostNotice(destination, cwEnabled ? cw : '', sensitive, visibility);
+  const isBlueskyOnly = destination === 'bluesky';
+  const crosspostNotice = blueskyCrosspostNotice(destination, cwEnabled ? cw : '', sensitive, visibility);
 
   const handleContentChange = (value: string) => {
     setContent(value);
-    setResultMessage('');
+    setNotice(undefined);
   };
 
   const handleSubmit = async () => {
@@ -53,9 +54,11 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           cw: cwEnabled ? cw : '',
           sensitive: hasImages && sensitiveChecked,
         },
-        { create: createStatus, updateMedia, onDescriptionSaved: handleDescriptionSaved, onPosted },
+        { create: createStatus, createBlueskyPost, updateMedia, onDescriptionSaved: handleDescriptionSaved, onPosted },
       );
-      if (result.kind === 'posted') {
+      if (result.kind === 'failed') {
+        alert(result.message);
+      } else {
         setContent('');
         setUploaded([]);
         setDestination(DEFAULT_POST_DESTINATION);
@@ -63,9 +66,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         setCwEnabled(false);
         setCw('');
         setSensitiveChecked(false);
-        setResultMessage(postedMessage(destination, result.status.iori?.bluesky_crosspost, result.status.visibility));
-      } else {
-        alert(result.message);
+        setNotice(postedNotice(destination, result));
       }
     } finally {
       setIsPosting(false);
@@ -115,6 +116,16 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
     setUploaded((prev) => prev.map((media, i) => (i === index ? { ...media, description } : media)));
   };
 
+  const handleDestinationChange = (next: PostDestination) => {
+    if (next === 'bluesky') {
+      setCwEnabled(false);
+      setCw('');
+      setSensitiveChecked(false);
+    }
+    setVisibility((current) => visibilityForDestination(next, current));
+    setDestination(next);
+  };
+
   const handleDescriptionSaved = (mediaId: string, savedDescription: string) => {
     setUploaded((prev) => prev.map((media) => (media.id === mediaId ? { ...media, savedDescription } : media)));
   };
@@ -126,7 +137,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
 
   return (
     <form id={formId ?? id} onSubmit={handleFormSubmit} class='flex flex-col flex-1 min-h-0'>
-      {cwEnabled && (
+      {cwEnabled && !isBlueskyOnly && (
         <input
           type='text'
           name='spoiler_text'
@@ -175,7 +186,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
             <input
               type='checkbox'
               checked={sensitive}
-              disabled={hasCw}
+              disabled={hasCw || isBlueskyOnly}
               onChange={(e) => setSensitiveChecked((e.target as HTMLInputElement).checked)}
             />
             画像をセンシティブにする
@@ -188,10 +199,16 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           onChange={setVisibility}
           name='visibility'
           id={`${formId ?? id ?? 'post-form'}-visibility`}
+          disabled={isBlueskyOnly}
         />
       </div>
       <div class='mt-2 flex flex-wrap justify-end items-center gap-3 flex-shrink-0'>
-        <PostDestinationSelect value={destination} onChange={setDestination} name='destination' />
+        <PostDestinationSelect
+          value={destination}
+          onChange={handleDestinationChange}
+          name='destination'
+          allowBlueskyOnly
+        />
         <label class='cursor-pointer text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
           {isUploading
             ? <span class='text-xs'>Uploading...</span>
@@ -217,6 +234,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         <button
           type='button'
           aria-pressed={cwEnabled}
+          disabled={isBlueskyOnly}
           aria-label='注意書き（CW）を付ける'
           onClick={handleCwToggle}
           class={`px-2 py-1 text-xs font-medium rounded-clay border transition-colors ${
@@ -235,11 +253,22 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           投稿する
         </button>
       </div>
-      {notice !== undefined && <p class='mt-2 text-xs text-charcoal-light dark:text-gray-400 flex-shrink-0'>{notice}
-      </p>}
-      {resultMessage !== '' && (
+      {crosspostNotice !== undefined && (
+        <p class='mt-2 text-xs text-charcoal-light dark:text-gray-400 flex-shrink-0'>{crosspostNotice}</p>
+      )}
+      {notice !== undefined && (
         <p role='status' class='mt-2 text-sm text-charcoal-light dark:text-gray-400 flex-shrink-0'>
-          {resultMessage}
+          {notice.message}
+          {notice.href !== null && (
+            <a
+              href={notice.href}
+              target='_blank'
+              rel='noopener noreferrer'
+              class='ml-2 underline hover:text-terracotta dark:hover:text-terracotta-light'
+            >
+              Bluesky で開く
+            </a>
+          )}
         </p>
       )}
     </form>

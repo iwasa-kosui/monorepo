@@ -81,6 +81,8 @@ export const postedMessage = (
   return destination === 'fediverse' ? 'Fediverse に投稿しました' : '投稿しました';
 };
 
+export const BLUESKY_ONLY_POSTED_MESSAGE = 'Bluesky に投稿しました';
+
 export const BLUESKY_CONTENT_WARNING_NOTICE = 'Bluesky には CW の文と投稿へのリンクだけを送ります';
 export const BLUESKY_SENSITIVE_NOTICE = 'Bluesky には画像に注意のラベルを付けて送ります';
 export const BLUESKY_NOT_SENT_VISIBILITY_NOTICE = '公開範囲が公開ではないので、Bluesky には送りません';

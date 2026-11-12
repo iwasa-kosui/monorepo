@@ -278,7 +278,15 @@ export default {
         app.route('/api', createWorkerMastodonTranslateRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
         app.route('/api', createWorkerIoriXPostsRouter({ ...runtime.digest, authn }));
-        app.route('/api', createWorkerIoriBlueskyRouter({ ...runtime.blueskyTimeline, authn }));
+        app.route(
+          '/api',
+          createWorkerIoriBlueskyRouter({
+            ...runtime.blueskyTimeline,
+            mediaUploadResolver: runtime.mastodon.mediaUploadResolver,
+            uploads: runtime.uploads,
+            authn,
+          }),
+        );
         app.route('/api', createWorkerIoriBlueskyModerationRouter({ ...runtime.blueskyModeration, authn }));
         app.route('/api', createWorkerIoriBlueskyProfileRouter({ ...runtime.blueskyProfile, authn }));
         app.route('/api', createWorkerIoriBlueskyCrosspostStatusRouter({ ...runtime.blueskyCrosspostStatus, authn }));

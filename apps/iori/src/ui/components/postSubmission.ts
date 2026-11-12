@@ -1,7 +1,14 @@
 import type { Status } from '../../adaptor/mastodon/entities.ts';
+import type { IoriBlueskyPostResponse } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
-import { type CreateStatusParams, failureMessage } from '../api/mastodonClient.ts';
-import type { PostVisibility } from './postVisibility.ts';
+import {
+  blueskyFailureMessage,
+  type CreateBlueskyPostParams,
+  type CreateStatusParams,
+  failureMessage,
+} from '../api/mastodonClient.ts';
+import { BLUESKY_ONLY_POSTED_MESSAGE, postedMessage } from './blueskyCrosspostMark.ts';
+import { BLUESKY_ONLY_VISIBILITY_ERROR, type PostVisibility } from './postVisibility.ts';
 
 export type UploadedMedia = Readonly<{ id: string; url: string; description: string; savedDescription: string }>;
 
@@ -16,10 +23,14 @@ export type PostFormValue = Readonly<{
 
 export type PostSubmitResult =
   | Readonly<{ kind: 'posted'; status: Status }>
+  | Readonly<{ kind: 'postedToBluesky'; url: string | null }>
   | Readonly<{ kind: 'failed'; message: string }>;
+
+export type PostNotice = Readonly<{ message: string; href: string | null }>;
 
 type SubmitPostDeps = Readonly<{
   create: (params: CreateStatusParams) => Promise<Status>;
+  createBlueskyPost: (params: CreateBlueskyPostParams) => Promise<IoriBlueskyPostResponse>;
   updateMedia: (id: string, description: string) => Promise<unknown>;
   onDescriptionSaved: (id: string, description: string) => void;
   onPosted: (status: Status) => void;
@@ -42,6 +53,19 @@ export const submitPost = async (
   } catch (err) {
     return { kind: 'failed', message: failureMessage('save the image description', err) };
   }
+  if (value.destination === 'bluesky') {
+    if (value.visibility !== 'public') return { kind: 'failed', message: BLUESKY_ONLY_VISIBILITY_ERROR };
+    try {
+      const { url } = await deps.createBlueskyPost({
+        status: value.content,
+        media_ids: value.uploaded.map((media) => media.id),
+        content_type: 'text/markdown',
+      });
+      return { kind: 'postedToBluesky', url };
+    } catch (err) {
+      return { kind: 'failed', message: blueskyFailureMessage('post', err) };
+    }
+  }
   const spoilerText = value.cw.trim();
   let status: Status;
   try {
@@ -60,6 +84,17 @@ export const submitPost = async (
   deps.onPosted(status);
   return { kind: 'posted', status };
 };
+
+export const postedNotice = (
+  destination: PostDestination,
+  result: Exclude<PostSubmitResult, Readonly<{ kind: 'failed' }>>,
+): PostNotice =>
+  result.kind === 'postedToBluesky'
+    ? { message: BLUESKY_ONLY_POSTED_MESSAGE, href: result.url }
+    : {
+      message: postedMessage(destination, result.status.iori?.bluesky_crosspost, result.status.visibility),
+      href: null,
+    };
 
 export const replyParams = (
   postId: string,
