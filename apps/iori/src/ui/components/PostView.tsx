@@ -4,7 +4,7 @@ import type { Status, Translation } from '../../adaptor/mastodon/entities.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { isMastodonApiError, translate } from '../api/mastodonClient.ts';
-import { accountHandle, accountHref, displayStatus, isLocalAccount, statusHref } from '../api/status.ts';
+import { accountHandle, accountHref, detailHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { translationErrorMessage } from '../api/translation.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
@@ -90,7 +90,7 @@ export const PostView = (
   const isMediaConcealed = !hasSpoiler && post.sensitive && !isSensitiveMediaShown;
 
   // Generate link to post detail page
-  const postDetailLink = isLocalPost ? statusHref(post) : `/posts/${post.id}`;
+  const postDetailLink = detailHref(post);
 
   const triggerLike = () => {
     if (onLike && !post.favourited && !isLiking) {

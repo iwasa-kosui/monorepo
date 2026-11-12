@@ -26,6 +26,9 @@ export const accountHref = (account: Account): string => {
 export const statusHref = (status: Status): string =>
   isLocalAccount(status.account) ? `/users/${status.account.username}/posts/${status.id}` : status.uri;
 
+export const detailHref = (status: Status): string =>
+  isLocalAccount(status.account) ? statusHref(status) : `/posts/${status.id}`;
+
 export const isOwnBoost = (status: Status, accountId: string): boolean =>
   status.reblog !== null && status.account.id === accountId;
 

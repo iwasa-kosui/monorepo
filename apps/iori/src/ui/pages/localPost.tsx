@@ -2,7 +2,6 @@ import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import {
   createStatus,
   deleteStatus,
@@ -172,8 +171,14 @@ const LocalPostPage = () => {
 
   if (!threadData) {
     return (
-      <div class='text-charcoal-light dark:text-gray-400 text-center py-8'>
-        Post not found
+      <div class='text-center py-8'>
+        <p class='text-charcoal-light dark:text-gray-400 mb-4'>Post not found</p>
+        <a
+          href='/'
+          class='text-terracotta hover:text-terracotta-dark transition-colors'
+        >
+          ホームに戻る
+        </a>
       </div>
     );
   }
@@ -181,7 +186,7 @@ const LocalPostPage = () => {
   const focusedPost = threadData.currentPost === null ? undefined : displayStatus(threadData.currentPost);
   const originalPostUrl = focusedPost === undefined || isLocalAccount(focusedPost.account)
     ? undefined
-    : safeAbsoluteUrl(focusedPost.uri);
+    : focusedPost.url ?? undefined;
 
   return (
     <div class='flex flex-col h-full'>
