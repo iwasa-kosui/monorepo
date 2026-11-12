@@ -9,6 +9,7 @@ import {
   localPostsTable,
   postQuotesTable,
   postsTable,
+  remotePostPollsTable,
   remotePostRecipientsTable,
   remotePostsTable,
 } from '../schema.ts';
@@ -51,6 +52,22 @@ const quoteInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated) => {
   return [db.insert(postQuotesTable).values({ postId: event.aggregateState.postId, quoteUri })];
 };
 
+const pollInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated) => {
+  if (event.eventName !== 'post.remotePostCreated') return [];
+  const { poll } = event.eventPayload;
+  if (poll === null) return [];
+  return [
+    db.insert(remotePostPollsTable).values({
+      postId: event.aggregateState.postId,
+      multiple: poll.multiple,
+      options: JSON.stringify(poll.options),
+      votersCount: poll.votersCount,
+      expiresAt: poll.expiresAt === null ? null : new Date(poll.expiresAt),
+      closed: poll.closed,
+    }),
+  ];
+};
+
 export const createD1PostCreatedStore = (db: IoriD1Db): PostCreatedStore => ({
   store: (event: PostCreated | RemotePostCreated) =>
     RA.flow(
@@ -87,6 +104,7 @@ export const createD1PostCreatedStore = (db: IoriD1Db): PostCreatedStore => ({
           ...recipientInserts(db, event),
           ...participantInserts(db, event),
           ...quoteInserts(db, event),
+          ...pollInserts(db, event),
           db.insert(domainEventsTable).values({
             eventId: event.eventId,
             aggregateId: event.aggregateId,

@@ -420,6 +420,45 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain('"href_matches":{"pathname":"/bookmarks"}');
   });
 
+  it('redirects the private feeds page to /sign-in when logged out, without caching', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/feeds'));
+
+    expect(response?.status).toBe(302);
+    expect(response?.headers.get('Location')).toBe('/sign-in');
+    expect(response?.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('renders the feeds entry for a logged-in user with a Japanese title, no-store and noindex', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/feeds?uri=at%3A%2F%2Fx'), {
+      isLoggedIn: true,
+      userId: UserId.generate(),
+    });
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('Cache-Control')).toBe('no-store');
+    expect(response?.headers.get('X-Robots-Tag')).toBe('noindex');
+    const html = await response?.text();
+    expect(html).toContain('/static/blueskyFeeds.js');
+    expect(html).toContain('<title>フィード | blog.kosui.me</title>');
+  });
+
+  it('does not claim feeds paths with extra segments', async () => {
+    for (const path of ['/feeds/a', '/feedsx']) {
+      expect(
+        await createWorkerPageFallback(new Request(`https://worker.test${path}`), {
+          isLoggedIn: true,
+          userId: UserId.generate(),
+        }),
+      ).toBeUndefined();
+    }
+  });
+
+  it('shows the feeds link in the Sidebar only when logged in, and not in the BottomNav', async () => {
+    expect(await renderSidebar(true)).toContain('href="/feeds"');
+    expect(await renderSidebar(false)).not.toContain('href="/feeds"');
+    expect(await renderBottomNav(true)).not.toContain('href="/feeds"');
+  });
+
   it('does not claim unknown GET routes', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/not-a-page'));
     expect(response).toBeUndefined();

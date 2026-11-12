@@ -25,7 +25,7 @@ const setup = () => {
     RA.ok({ $type: 'blob', ref: { $link: 'bafyblob' }, mimeType, size: 3 })
   );
   const query = vi.fn<BlueskyQueryClient['query']>(async (_nsid, params) => {
-    const did = DIDS[params.handle ?? ''];
+    const did = DIDS[String(params.handle ?? '')];
     return did === undefined
       ? RA.err({ type: 'BlueskyClientError', kind: 'http', message: 'resolveHandle failed', status: 400 })
       : RA.ok({ did });

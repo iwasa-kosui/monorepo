@@ -138,6 +138,7 @@ import { createD1PostSourceTextResolver } from '../adaptor/d1/post/postSourceTex
 import { createD1PostUpdatedStore } from '../adaptor/d1/post/postUpdatedStore.ts';
 import { createD1PostVersionsResolverByPostId } from '../adaptor/d1/post/postVersionsResolverByPostId.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../adaptor/d1/post/postWithAuthorBatch.ts';
+import { createD1RemotePostPollsResolverByPostIds } from '../adaptor/d1/post/remotePostPollsResolverByPostIds.ts';
 import { createD1RemotePostUpserter } from '../adaptor/d1/post/remotePostUpserter.ts';
 import { createD1RemotePostUrisResolverByUris } from '../adaptor/d1/post/remotePostUrisResolverByUris.ts';
 import { createD1ThreadResolver } from '../adaptor/d1/post/threadResolver.ts';
@@ -439,6 +440,7 @@ export const createWorkerRuntimePorts = async (
       statusAssembler: createStatusAssembler({
         accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
         postExtrasResolver: createD1PostExtrasResolverByPosts(db, env.ORIGIN),
+        remotePostPollsResolver: createD1RemotePostPollsResolverByPostIds(db),
       }),
       searchTimeline,
       summarizeTimeline: createSummarizeTimelineUseCase({

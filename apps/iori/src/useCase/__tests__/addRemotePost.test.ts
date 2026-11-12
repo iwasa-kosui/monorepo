@@ -272,6 +272,52 @@ describe('AddRemotePostUseCase', () => {
       );
     });
 
+    it('投票を投稿の作成イベントに渡す', async () => {
+      const deps = createDeps();
+      const poll = {
+        multiple: true,
+        options: [{ title: 'a', votesCount: 1 }, { title: 'b', votesCount: 0 }],
+        votersCount: 1,
+        expiresAt: null,
+        closed: false,
+      };
+
+      await AddRemotePostUseCase.create(deps).run({
+        content: 'Question',
+        uri: 'https://remote.example.com/posts/question',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'public',
+        attachments: [],
+        poll,
+      });
+
+      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({ eventPayload: expect.objectContaining({ poll }) }),
+      );
+    });
+
+    it('投票が無ければ投稿の作成イベントに null を渡す', async () => {
+      const deps = createDeps();
+
+      await AddRemotePostUseCase.create(deps).run({
+        content: 'Plain',
+        uri: 'https://remote.example.com/posts/plain-poll',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'public',
+        attachments: [],
+      });
+
+      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({ eventPayload: expect.objectContaining({ poll: null }) }),
+      );
+    });
+
     it('画像付きリモート投稿を追加できる', async () => {
       const deps = createDeps();
 

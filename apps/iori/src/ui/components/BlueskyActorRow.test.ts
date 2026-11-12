@@ -33,6 +33,14 @@ describe('BlueskyActorRow', () => {
     expect(html).toContain('rel="noopener noreferrer"');
   });
 
+  it('href を渡したときは、そのサイト内のパスへ同じタブで開くリンクにする', () => {
+    const html = String(jsx(BlueskyActorRow, { actor: base, href: '/bluesky/profile/alice.bsky.social' }));
+
+    expect(html).toContain('href="/bluesky/profile/alice.bsky.social"');
+    expect(html).not.toContain('target="_blank"');
+    expect(html).not.toContain('bsky.app');
+  });
+
   it('フォロー中のときだけ「フォロー中」を出す', () => {
     expect(render({ followedByMe: true })).toContain('フォロー中');
     expect(render({ followedByMe: false })).not.toContain('フォロー中');

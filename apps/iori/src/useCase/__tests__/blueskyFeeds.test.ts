@@ -1,0 +1,254 @@
+import { RA } from '@iwasa-kosui/result';
+import { describe, expect, it, vi } from 'vitest';
+
+import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
+import { type BlueskyFeedReader, isBlueskyFeedNotFound } from '../../ports/blueskyFeedReader.ts';
+import { GetBlueskyFeedInfoUseCase } from '../getBlueskyFeedInfo.ts';
+import { ListBlueskyActorFeedsUseCase } from '../listBlueskyActorFeeds.ts';
+import { ListBlueskyActorListsUseCase } from '../listBlueskyActorLists.ts';
+import { ListBlueskyFeedPostsUseCase } from '../listBlueskyFeedPosts.ts';
+import { ListBlueskyListMembersUseCase } from '../listBlueskyListMembers.ts';
+import { ListBlueskySavedFeedsUseCase } from '../listBlueskySavedFeeds.ts';
+import { ResolveBlueskyFeedUrlUseCase } from '../resolveBlueskyFeedUrl.ts';
+
+const FEED = 'at://did:plc:gen/app.bsky.feed.generator/a';
+const LIST = 'at://did:plc:own/app.bsky.graph.list/b';
+const failure: BlueskyClientError = {
+  type: 'BlueskyClientError',
+  kind: 'http',
+  message: 'getFeed failed: status 500',
+  status: 500,
+};
+
+describe('ListBlueskySavedFeedsUseCase', () => {
+  it('保存したフィードとリストを返す', async () => {
+    const saved = { feeds: [{ uri: FEED, kind: 'feed', pinned: true, displayName: 'Hot' }] } as const;
+    const listSavedFeeds = vi.fn<BlueskyFeedReader['listSavedFeeds']>(async () => RA.ok(saved));
+
+    const result = await ListBlueskySavedFeedsUseCase.create({ reader: { listSavedFeeds } }).run();
+
+    expect(result).toEqual({ ok: true, val: saved });
+    expect(listSavedFeeds).toHaveBeenCalledOnce();
+  });
+
+  it('reader の失敗をそのまま返す', async () => {
+    const useCase = ListBlueskySavedFeedsUseCase.create({ reader: { listSavedFeeds: async () => RA.err(failure) } });
+
+    expect(await useCase.run()).toEqual({ ok: false, err: failure });
+  });
+});
+
+describe('ListBlueskyFeedPostsUseCase', () => {
+  it('uri と cursor を渡して投稿とカーソルを返す', async () => {
+    const page = { items: [], cursor: 'next' };
+    const getFeedPosts = vi.fn<BlueskyFeedReader['getFeedPosts']>(async () => RA.ok(page));
+
+    const result = await ListBlueskyFeedPostsUseCase.create({ reader: { getFeedPosts } }).run({
+      uri: FEED,
+      cursor: 'abc',
+    });
+
+    expect(result).toEqual({ ok: true, val: page });
+    expect(getFeedPosts).toHaveBeenCalledExactlyOnceWith({ uri: FEED, cursor: 'abc' });
+  });
+
+  it('reader の失敗をそのまま返す', async () => {
+    const useCase = ListBlueskyFeedPostsUseCase.create({ reader: { getFeedPosts: async () => RA.err(failure) } });
+
+    expect(await useCase.run({ uri: FEED, cursor: undefined })).toEqual({ ok: false, err: failure });
+  });
+
+  it('UnknownFeed、UnknownList、NotFound と 404 は BlueskyFeedNotFound にし、UpstreamFailure はそのまま返す', async () => {
+    const errorOf = (status: number, code: string): BlueskyClientError => ({ ...failure, status, code });
+    const run = (err: BlueskyClientError) =>
+      ListBlueskyFeedPostsUseCase.create({ reader: { getFeedPosts: async () => RA.err(err) } }).run({
+        uri: FEED,
+        cursor: undefined,
+      });
+    const missing = { ok: false, err: { type: 'BlueskyFeedNotFound' } };
+    const upstream = errorOf(502, 'UpstreamFailure');
+
+    expect(await run(errorOf(400, 'UnknownFeed'))).toEqual(missing);
+    expect(await run(errorOf(400, 'UnknownList'))).toEqual(missing);
+    expect(await run(errorOf(400, 'NotFound'))).toEqual(missing);
+    expect(await run({ ...failure, status: 404 })).toEqual(missing);
+    expect(await run(upstream)).toEqual({ ok: false, err: upstream });
+    expect(await run(errorOf(400, 'UpstreamFailure'))).toEqual({ ok: false, err: errorOf(400, 'UpstreamFailure') });
+  });
+
+  it('cursor ありの InvalidRequest は BlueskyFeedNotFound にせず、そのまま返す', async () => {
+    const invalid: BlueskyClientError = { ...failure, status: 400, code: 'InvalidRequest' };
+    const run = (cursor: string | undefined) =>
+      ListBlueskyFeedPostsUseCase.create({ reader: { getFeedPosts: async () => RA.err(invalid) } }).run({
+        uri: FEED,
+        cursor,
+      });
+
+    expect(await run('abc')).toEqual({ ok: false, err: invalid });
+    expect(await run(undefined)).toEqual({ ok: false, err: { type: 'BlueskyFeedNotFound' } });
+  });
+});
+
+const notFound: BlueskyClientError = {
+  type: 'BlueskyClientError',
+  kind: 'http',
+  message: 'not found',
+  status: 400,
+  code: 'InvalidRequest',
+};
+
+describe('isBlueskyFeedNotFound', () => {
+  const errorOf = (status: number, code: string): BlueskyClientError => ({ ...failure, status, code });
+
+  it('cursor なしの InvalidRequest は見つからない失敗にし、cursor ありの InvalidRequest は通常の失敗にする', () => {
+    expect(isBlueskyFeedNotFound(errorOf(400, 'InvalidRequest'), undefined)).toBe(true);
+    expect(isBlueskyFeedNotFound(errorOf(400, 'InvalidRequest'), 'abc')).toBe(false);
+  });
+
+  it('UnknownFeed、UnknownList、NotFound と 404 は cursor の有無にかかわらず見つからない失敗にする', () => {
+    for (const cursor of [undefined, 'abc']) {
+      expect(isBlueskyFeedNotFound(errorOf(400, 'UnknownFeed'), cursor)).toBe(true);
+      expect(isBlueskyFeedNotFound(errorOf(400, 'UnknownList'), cursor)).toBe(true);
+      expect(isBlueskyFeedNotFound(errorOf(400, 'NotFound'), cursor)).toBe(true);
+      expect(isBlueskyFeedNotFound({ ...failure, status: 404 }, cursor)).toBe(true);
+    }
+  });
+});
+
+describe('GetBlueskyFeedInfoUseCase', () => {
+  it('uri を渡して一覧の項目を返す', async () => {
+    const info = { uri: FEED, kind: 'feed', pinned: false, displayName: 'Hot' } as const;
+    const getFeedInfo = vi.fn<BlueskyFeedReader['getFeedInfo']>(async () => RA.ok(info));
+
+    const result = await GetBlueskyFeedInfoUseCase.create({ reader: { getFeedInfo } }).run({ uri: FEED });
+
+    expect(result).toEqual({ ok: true, val: info });
+    expect(getFeedInfo).toHaveBeenCalledExactlyOnceWith(FEED);
+  });
+
+  it('見つからない失敗は BlueskyFeedNotFound にし、それ以外はそのまま返す', async () => {
+    const missing = GetBlueskyFeedInfoUseCase.create({ reader: { getFeedInfo: async () => RA.err(notFound) } });
+    const failing = GetBlueskyFeedInfoUseCase.create({ reader: { getFeedInfo: async () => RA.err(failure) } });
+
+    expect(await missing.run({ uri: FEED })).toEqual({ ok: false, err: { type: 'BlueskyFeedNotFound' } });
+    expect(await failing.run({ uri: FEED })).toEqual({ ok: false, err: failure });
+  });
+});
+
+describe('ListBlueskyListMembersUseCase', () => {
+  it('uri と cursor を渡してメンバーとカーソルを返す', async () => {
+    const page = { actors: [], cursor: 'next' };
+    const getListMembers = vi.fn<BlueskyFeedReader['getListMembers']>(async () => RA.ok(page));
+
+    const result = await ListBlueskyListMembersUseCase.create({ reader: { getListMembers } }).run({
+      uri: LIST,
+      cursor: 'abc',
+    });
+
+    expect(result).toEqual({ ok: true, val: page });
+    expect(getListMembers).toHaveBeenCalledExactlyOnceWith({ uri: LIST, cursor: 'abc' });
+  });
+
+  it('見つからない失敗は BlueskyFeedNotFound にし、それ以外はそのまま返す', async () => {
+    const missing = ListBlueskyListMembersUseCase.create({
+      reader: { getListMembers: async () => RA.err(notFound) },
+    });
+    const failing = ListBlueskyListMembersUseCase.create({
+      reader: { getListMembers: async () => RA.err(failure) },
+    });
+
+    expect(await missing.run({ uri: LIST, cursor: undefined })).toEqual({
+      ok: false,
+      err: { type: 'BlueskyFeedNotFound' },
+    });
+    expect(await failing.run({ uri: LIST, cursor: undefined })).toEqual({ ok: false, err: failure });
+  });
+
+  it('cursor ありの InvalidRequest は BlueskyFeedNotFound にせず、そのまま返す', async () => {
+    const useCase = ListBlueskyListMembersUseCase.create({
+      reader: { getListMembers: async () => RA.err(notFound) },
+    });
+
+    expect(await useCase.run({ uri: LIST, cursor: 'abc' })).toEqual({ ok: false, err: notFound });
+  });
+});
+
+describe('ListBlueskyActorFeedsUseCase と ListBlueskyActorListsUseCase', () => {
+  const page = { feeds: [{ uri: FEED, kind: 'feed', pinned: false }], cursor: 'next' } as const;
+
+  it('actor と cursor を渡して一覧とカーソルを返す', async () => {
+    const getActorFeeds = vi.fn<BlueskyFeedReader['getActorFeeds']>(async () => RA.ok(page));
+    const getActorLists = vi.fn<BlueskyFeedReader['getActorLists']>(async () => RA.ok(page));
+
+    const feeds = await ListBlueskyActorFeedsUseCase.create({ reader: { getActorFeeds } }).run({
+      actor: 'did:plc:a',
+      cursor: 'abc',
+    });
+    const lists = await ListBlueskyActorListsUseCase.create({ reader: { getActorLists } }).run({
+      actor: 'did:plc:a',
+      cursor: undefined,
+    });
+
+    expect(feeds).toEqual({ ok: true, val: page });
+    expect(lists).toEqual({ ok: true, val: page });
+    expect(getActorFeeds).toHaveBeenCalledExactlyOnceWith({ actor: 'did:plc:a', cursor: 'abc' });
+    expect(getActorLists).toHaveBeenCalledExactlyOnceWith({ actor: 'did:plc:a', cursor: undefined });
+  });
+
+  it('アカウントが無い失敗は BlueskyProfileNotFound にし、それ以外はそのまま返す', async () => {
+    const feeds = (err: BlueskyClientError) =>
+      ListBlueskyActorFeedsUseCase.create({ reader: { getActorFeeds: async () => RA.err(err) } });
+    const lists = (err: BlueskyClientError) =>
+      ListBlueskyActorListsUseCase.create({ reader: { getActorLists: async () => RA.err(err) } });
+    const input = { actor: 'did:plc:a', cursor: undefined };
+
+    expect(await feeds(notFound).run(input)).toEqual({ ok: false, err: { type: 'BlueskyProfileNotFound' } });
+    expect(await lists(notFound).run(input)).toEqual({ ok: false, err: { type: 'BlueskyProfileNotFound' } });
+    expect(await feeds(failure).run(input)).toEqual({ ok: false, err: failure });
+    expect(await lists(failure).run(input)).toEqual({ ok: false, err: failure });
+  });
+});
+
+describe('ResolveBlueskyFeedUrlUseCase', () => {
+  it('did の URL は Bluesky を呼ばずに at-uri にする', async () => {
+    const resolveHandle = vi.fn<BlueskyFeedReader['resolveHandle']>(async () => RA.ok('did:plc:x'));
+    const useCase = ResolveBlueskyFeedUrlUseCase.create({ reader: { resolveHandle } });
+
+    expect(await useCase.run({ url: 'https://bsky.app/profile/did:plc:gen/feed/a' })).toEqual({
+      ok: true,
+      val: { uri: FEED },
+    });
+    expect(resolveHandle).not.toHaveBeenCalled();
+  });
+
+  it('ハンドルの URL は did に解決して at-uri にする', async () => {
+    const resolveHandle = vi.fn<BlueskyFeedReader['resolveHandle']>(async () => RA.ok('did:plc:own'));
+    const useCase = ResolveBlueskyFeedUrlUseCase.create({ reader: { resolveHandle } });
+
+    expect(await useCase.run({ url: 'https://bsky.app/profile/own.bsky.social/lists/b' })).toEqual({
+      ok: true,
+      val: { uri: LIST },
+    });
+    expect(resolveHandle).toHaveBeenCalledExactlyOnceWith('own.bsky.social');
+  });
+
+  it('形の違う URL は BlueskyFeedUrlInvalid にし、Bluesky を呼ばない', async () => {
+    const resolveHandle = vi.fn<BlueskyFeedReader['resolveHandle']>(async () => RA.ok('did:plc:x'));
+    const useCase = ResolveBlueskyFeedUrlUseCase.create({ reader: { resolveHandle } });
+
+    expect(await useCase.run({ url: 'https://example.com' })).toEqual({
+      ok: false,
+      err: { type: 'BlueskyFeedUrlInvalid' },
+    });
+    expect(resolveHandle).not.toHaveBeenCalled();
+  });
+
+  it('ハンドルを解決できない失敗は BlueskyFeedNotFound にし、それ以外はそのまま返す', async () => {
+    const url = 'https://bsky.app/profile/own.bsky.social/feed/a';
+    const missing = ResolveBlueskyFeedUrlUseCase.create({ reader: { resolveHandle: async () => RA.err(notFound) } });
+    const failing = ResolveBlueskyFeedUrlUseCase.create({ reader: { resolveHandle: async () => RA.err(failure) } });
+
+    expect(await missing.run({ url })).toEqual({ ok: false, err: { type: 'BlueskyFeedNotFound' } });
+    expect(await failing.run({ url })).toEqual({ ok: false, err: failure });
+  });
+});

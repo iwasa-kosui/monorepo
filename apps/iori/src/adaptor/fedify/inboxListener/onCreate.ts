@@ -16,7 +16,7 @@ import type { AcceptedRelaysResolver } from '../../../domain/relay/relay.ts';
 import type { AddRemotePostUseCase } from '../../../useCase/addRemotePost.ts';
 import type { FetchReplyNotesRecursiveUseCase } from '../../../useCase/fetchReplyNotesRecursive.ts';
 import {
-  buildRemotePostContent,
+  buildRemotePostBody,
   isRemotePostObject,
   type RemotePostObject,
 } from '../../../useCase/helper/remotePostObject.ts';
@@ -154,7 +154,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
 
   return RA.flow(
     deps.addRemotePostUseCase.run({
-      content: await buildRemotePostContent(object),
+      ...await buildRemotePostBody(object),
       uri: objectUri,
       url: extractNoteUrl(object),
       actorIdentity,

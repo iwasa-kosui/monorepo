@@ -228,4 +228,25 @@ describe('BlueskyProfilePage', () => {
     expect(html).not.toContain('title="いいね"');
     expect(html).not.toContain('title="リポスト"');
   });
+
+  it('onSelectTab があるときだけ「投稿」「フィード」「リスト」の切り替えを出し、選んでいるタブを aria-selected にする', () => {
+    expect(render()).not.toContain('role="tablist"');
+
+    const html = render({}, { onSelectTab: () => {}, tab: 'feeds' });
+
+    expect(html).toContain('role="tablist"');
+    expect(html).toMatch(/aria-selected="false"[^>]*>投稿/);
+    expect(html).toMatch(/aria-selected="true"[^>]*>フィード/);
+    expect(html).toMatch(/aria-selected="false"[^>]*>リスト/);
+  });
+
+  it('フィードとリストのタブでは、投稿の代わりに子の要素を出す', () => {
+    const feeds = render({}, { onSelectTab: () => {}, tab: 'feeds', items: [item], children: 'フィードの一覧' });
+
+    expect(feeds).toContain('フィードの一覧');
+    expect(feeds).not.toContain('最初の投稿');
+    expect(feeds).not.toContain('No posts yet.');
+    expect(render({}, { onSelectTab: () => {}, tab: 'posts', items: [item], children: 'フィードの一覧' })).not
+      .toContain('フィードの一覧');
+  });
 });

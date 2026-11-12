@@ -1,4 +1,4 @@
-import { Article, Create, Mention, Note, Person, Question } from '@fedify/vocab';
+import { Article, Collection, Create, Mention, Note, Person, Question } from '@fedify/vocab';
 import { FetchError } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
@@ -252,21 +252,39 @@ describe('createOnCreate', () => {
     expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ summary: null, sensitive: true }));
   });
 
-  it('records a Question with its options and a link to vote', async () => {
+  it('records a Question with a link to vote and its poll', async () => {
     const question = new Question({
       id: new URL('https://remote.example/posts/1'),
       content: '<p>q</p>',
-      exclusiveOptions: [new Note({ name: 'a' }), new Note({ name: 'b' })],
+      exclusiveOptions: [
+        new Note({ name: 'a', replies: new Collection({ totalItems: 2 }) }),
+        new Note({ name: 'b' }),
+      ],
+      voters: 2,
     });
 
     const addRemotePost = await run(question);
 
     expect(addRemotePost).toHaveBeenCalledWith(
       expect.objectContaining({
-        content:
-          '<p>q</p><ul><li>a</li><li>b</li></ul><p><a href="https://remote.example/posts/1">元の投稿で投票する</a></p>',
+        content: '<p>q</p><p><a href="https://remote.example/posts/1">元の投稿で投票する</a></p>',
+        poll: {
+          multiple: false,
+          options: [{ title: 'a', votesCount: 2 }, { title: 'b', votesCount: 0 }],
+          votersCount: 2,
+          expiresAt: null,
+          closed: false,
+        },
       }),
     );
+  });
+
+  it('records no poll for a Note', async () => {
+    const note = new Note({ id: new URL('https://remote.example/posts/1'), content: 'hi', tos: [publicUri] });
+
+    const addRemotePost = await run(note);
+
+    expect(addRemotePost).toHaveBeenCalledWith(expect.not.objectContaining({ poll: expect.anything() }));
   });
 
   it('ignores an object that is not a Note, an Article or a Question', async () => {

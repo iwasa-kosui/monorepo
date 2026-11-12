@@ -13,7 +13,7 @@ import { Instant } from '../../../domain/instant/instant.ts';
 import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/post/post.ts';
 import type { RelayId } from '../../../domain/relay/relayId.ts';
 import { isBlockedRemoteObject } from '../../../useCase/helper/isBlockedRemoteObject.ts';
-import { buildRemotePostContent, type RemotePostObject } from '../../../useCase/helper/remotePostObject.ts';
+import { buildRemotePostBody, type RemotePostObject } from '../../../useCase/helper/remotePostObject.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractNoteUrl } from '../extractNoteUrl.ts';
@@ -86,7 +86,7 @@ export const saveFederatedNote = async (
     return;
   }
 
-  const contentText = await buildRemotePostContent(note);
+  const { content: contentText, poll } = await buildRemotePostBody(note);
   const authorIdentity = await ActorIdentity.fromFedifyActor(author, { documentLoader });
   if (!authorIdentity.ok) {
     getLogger().warn(`Could not read Note author for federated timeline: ${note.id.href}`);
@@ -98,6 +98,7 @@ export const saveFederatedNote = async (
     uri: note.id.href,
     url: extractNoteUrl(note),
     content: contentText,
+    poll,
     ...extractContentWarning(note),
     visibility: extractVisibility(note, author.followersId),
     recipientActorUris: extractRecipientActorUris([note], deps.origin),
