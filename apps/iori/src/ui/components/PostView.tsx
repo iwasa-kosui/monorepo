@@ -36,6 +36,8 @@ type Props = Readonly<{
   onReply?: (postId: string) => void;
   onShowThread?: (postId: string) => void;
   onMute?: (accountId: string, acct: string) => void;
+  onBlock?: (accountId: string, acct: string) => void;
+  onReport?: (target: Readonly<{ accountId: string; acct: string; statusId: string }>) => void;
 }>;
 
 const isOriginUri = (uri: string): boolean => uri.startsWith('https:') && !uri.includes('/api/v1/statuses/');
@@ -66,6 +68,8 @@ export const PostView = (
     onReply,
     onShowThread,
     onMute,
+    onBlock,
+    onReport,
   }: Props,
 ) => {
   const post = displayStatus(status);
@@ -80,10 +84,12 @@ export const PostView = (
   const linkPreviews = post.iori?.link_previews ?? [];
   const reactions = post.iori?.reactions ?? [];
   const postUrl = post.url ?? (!isLocalPost && isOriginUri(post.uri) ? post.uri : undefined);
-  const canMute = onMute !== undefined
-    && isLoggedIn === true
+  const isOtherAccount = isLoggedIn === true
     && currentAccountId !== undefined
     && post.account.id !== currentAccountId;
+  const canMute = onMute !== undefined && isOtherAccount;
+  const canBlock = onBlock !== undefined && isOtherAccount && !isLocalAccount(post.account);
+  const canReport = onReport !== undefined && isOtherAccount && !isLocalAccount(post.account);
   const menuItems: readonly PostMenuItem[] = [
     ...(postUrl !== undefined && !isLocalPost
       ? [{ key: 'open-original', label: '元の投稿を開く', kind: 'link', href: postUrl } as const]
@@ -99,6 +105,28 @@ export const PostView = (
           kind: 'action',
           danger: true,
           onSelect: () => onMute?.(post.account.id, post.account.acct),
+        } as const,
+      ]
+      : []),
+    ...(canBlock
+      ? [
+        {
+          key: 'block',
+          label: `@${post.account.acct} をブロック`,
+          kind: 'action',
+          danger: true,
+          onSelect: () => onBlock?.(post.account.id, post.account.acct),
+        } as const,
+      ]
+      : []),
+    ...(canReport
+      ? [
+        {
+          key: 'report',
+          label: 'この投稿を通報',
+          kind: 'action',
+          danger: true,
+          onSelect: () => onReport?.({ accountId: post.account.id, acct: post.account.acct, statusId: post.id }),
         } as const,
       ]
       : []),
