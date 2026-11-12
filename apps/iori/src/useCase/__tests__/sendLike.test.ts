@@ -163,6 +163,7 @@ describe('SendLikeUseCase', () => {
 
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -260,6 +261,7 @@ describe('SendLikeUseCase', () => {
 
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -317,6 +319,7 @@ describe('SendLikeUseCase', () => {
 
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,
@@ -372,6 +375,7 @@ describe('SendLikeUseCase', () => {
       deps.actorResolverByUserId.setActor(actor);
       const post: LocalPost = {
         type: 'local',
+        visibility: 'public',
         summary: null,
         sensitive: false,
         postId: crypto.randomUUID() as PostId,

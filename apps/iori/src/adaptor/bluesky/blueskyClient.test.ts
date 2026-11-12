@@ -377,6 +377,32 @@ describe('createBlueskyClient の各操作', () => {
     expect(invalid.calls).toHaveLength(0);
   });
 
+  it('updateSeen は app.bsky.notification.updateSeen に seenAt を ISO 文字列で POST し、空の応答を成功にする', async () => {
+    const { client, calls } = setup(stored(), [() => new Response(null, { status: 200 })]);
+
+    const result = await client.updateSeen(Instant.orThrow(Date.UTC(2026, 10, 12, 3, 4, 5, 678)));
+
+    expect(result).toEqual({ ok: true, val: undefined });
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.notification.updateSeen`);
+    expect(calls[0]?.init.method).toBe('POST');
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+    expect(header(calls[0]!, 'Content-Type')).toBe('application/json');
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ seenAt: '2026-11-12T03:04:05.678Z' });
+  });
+
+  it('updateSeen は期限切れのトークンを更新してやり直し、HTTP の失敗を返す', async () => {
+    const retried = setup(stored(), [
+      () => json({ error: 'ExpiredToken' }, 400),
+      () => json(sessionBody('fresh')),
+      () => json({}),
+    ]);
+    const failed = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+
+    expect((await retried.client.updateSeen(NOW)).ok).toBe(true);
+    expect(header(retried.calls[2]!, 'Authorization')).toBe('Bearer access-fresh');
+    expect(await failed.client.updateSeen(NOW)).toMatchObject({ ok: false, err: { kind: 'http', status: 500 } });
+  });
+
   it('createRepost は putRecord で app.bsky.feed.repost のレコードを指定の rkey で書き、応答の uri を返す', async () => {
     const repostUri = 'at://did:plc:abc/app.bsky.feed.repost/2222222222222';
     const { client, calls } = setup(stored(), [() => json({ uri: repostUri, cid: 'bafyrepost' })]);

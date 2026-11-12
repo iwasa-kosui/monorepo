@@ -46,6 +46,7 @@ describe('D1 timeline and posting adapters', () => {
       postId: event.aggregateState.postId,
       userId: event.aggregateState.userId,
       inReplyToUri: null,
+      visibility: 'public',
     });
     expect(eventInsert.values).toMatchObject({
       eventId: event.eventId,
@@ -161,7 +162,7 @@ describe('D1 timeline and posting adapters', () => {
           createdAt,
         },
         posts: { postId, actorId, content: 'Hello timeline', createdAt, summary: null, sensitive: false },
-        local_posts: { userId, inReplyToUri: null },
+        local_posts: { userId, inReplyToUri: null, visibility: 'public' },
         remote_posts: null,
         actors: { actorId, logoUri: null },
         users: { username: 'kosui' },

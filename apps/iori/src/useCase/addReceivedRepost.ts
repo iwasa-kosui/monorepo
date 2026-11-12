@@ -55,6 +55,7 @@ type RemotePostIdentity = Readonly<{
   sensitive?: boolean;
   visibility: Visibility | null;
   recipientActorUris?: ReadonlyArray<string>;
+  quoteUri?: string | null;
   attachments?: readonly RemotePostAttachment[];
 }>;
 

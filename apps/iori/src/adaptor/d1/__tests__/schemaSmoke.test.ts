@@ -59,6 +59,7 @@ describe('D1 schema', () => {
       'oauthApplicationsTable',
       'oauthAuthorizationCodesTable',
       'postImagesTable',
+      'postQuotesTable',
       'postTranslationsTable',
       'postsTable',
       'pushSubscriptionsTable',

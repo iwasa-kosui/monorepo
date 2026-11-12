@@ -23,6 +23,7 @@ export const createD1LocalPostsResolverByPage = (db: IoriD1Db): LocalPostsResolv
       .innerJoin(localPostsTable, eq(postsTable.postId, localPostsTable.postId))
       .where(and(
         isNull(postsTable.deletedAt),
+        eq(localPostsTable.visibility, 'public'),
         mutedActorIds.length === 0
           ? undefined
           : notInArray(postsTable.actorId, sql`(select value from json_each(${idsJson(mutedActorIds)}))`),

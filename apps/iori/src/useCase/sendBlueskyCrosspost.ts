@@ -5,6 +5,7 @@ import {
   type BlueskyImageInput,
   type BlueskyLinkPreviewInput,
   buildBlueskyPostDraft,
+  hasContentWarning,
   selectBlueskyImages,
   toBlueskyPostRecord,
 } from '../adaptor/bluesky/blueskyPostRecord.ts';
@@ -23,10 +24,12 @@ import type { LinkPreviewsResolverByPostId } from '../domain/linkPreview/linkPre
 import type { LocalPostResolverByUri, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { UserResolver } from '../domain/user/user.ts';
-import type { BlueskyClient, BlueskyThumbnailFetcher } from '../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyQueryClient, BlueskyThumbnailFetcher } from '../ports/blueskyClient.ts';
 import type { PostImageObjectStore } from '../ports/postImageObjectStore.ts';
+import { findMentionHandles, withMentionFacets } from './helper/blueskyMentionFacets.ts';
 import { resolveBlueskyReplyContextWith } from './helper/blueskyReplyContext.ts';
 import { deleteBlueskyRecordWith } from './helper/deleteBlueskyRecord.ts';
+import { resolveDids } from './helper/publishBlueskyPost.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{ postId: PostId }>;
@@ -48,6 +51,7 @@ type Deps = Readonly<{
   uploads: PostImageObjectStore;
   thumbnailFetcher: BlueskyThumbnailFetcher;
   client: BlueskyClient;
+  query: BlueskyQueryClient['query'];
   origin: string;
   now: () => Instant;
 }>;
@@ -80,6 +84,16 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     }
   };
 
+  const resolveMentionDids = async (handles: readonly string[]): Promise<Map<string, string>> => {
+    if (handles.length === 0) return new Map();
+    try {
+      return await resolveDids(deps.query, handles);
+    } catch (error) {
+      getLogger().warn('Bluesky mention handles could not be resolved.', { errorName: errorNameOf(error) });
+      return new Map();
+    }
+  };
+
   const execute = async (postId: PostId): Promise<SendBlueskyCrosspostOutcome> => {
     const crosspost = Result.unsafeUnwrap(await deps.crosspostResolver.resolve(postId));
     if (crosspost === undefined || (crosspost.status !== 'pending' && crosspost.status !== 'failed')) return 'noop';
@@ -91,7 +105,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     }
 
     const replyTo = await resolveReplyContext(post);
-    const skipReason = BlueskyCrosspost.decideSkip({ summary: post.summary, sensitive: post.sensitive, replyTo });
+    const skipReason = BlueskyCrosspost.decideSkip({ visibility: post.visibility, replyTo });
     if (skipReason !== undefined) {
       await deps.crosspostSavedStore.update(BlueskyCrosspost.markSkipped(crosspost, skipReason, deps.now()));
       return 'skipped';
@@ -105,8 +119,10 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     if (user === undefined) return failWith(attempting, 'user not found');
     const postUrl = new URL(`/users/${user.username}/posts/${post.postId}`, deps.origin).href;
 
-    const storedImages = [...Result.unsafeUnwrap(await deps.postImagesResolver.resolve(postId))]
-      .sort((a, b) => a.createdAt - b.createdAt);
+    const storedImages = hasContentWarning(post.summary)
+      ? []
+      : [...Result.unsafeUnwrap(await deps.postImagesResolver.resolve(postId))]
+        .sort((a, b) => a.createdAt - b.createdAt);
     const loaded = await Promise.all(storedImages.map(loadImage));
     const images = loaded.filter((image) => image !== undefined);
     const unavailableImageUrls = storedImages
@@ -115,7 +131,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
 
     const preview = Result.unsafeUnwrap(await deps.linkPreviewsResolver.resolve(postId))[0];
     let linkPreview: BlueskyLinkPreviewInput | undefined;
-    if (preview !== undefined) {
+    if (preview !== undefined && !hasContentWarning(post.summary)) {
       const needsThumb = selectBlueskyImages(images).kept.length === 0 && preview.imageUrl !== null;
       const thumb = needsThumb
         ? await deps.thumbnailFetcher.fetch(new URL(preview.imageUrl!, preview.url).href).catch(() => undefined)
@@ -129,6 +145,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     }
 
     const draft = buildBlueskyPostDraft({
+      visibility: post.visibility,
       html: post.content,
       summary: post.summary,
       sensitive: post.sensitive,
@@ -144,6 +161,13 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       return 'skipped';
     }
 
+    const mentionOptions = { excludeTruncated: true };
+    const facets = withMentionFacets(
+      draft.val.text,
+      draft.val.facets,
+      await resolveMentionDids(findMentionHandles(draft.val.text, draft.val.facets, mentionOptions)),
+      mentionOptions,
+    );
     const imageBlobs = [];
     for (const image of draft.val.images) {
       const uploaded = await deps.client.uploadBlob(image);
@@ -155,7 +179,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
 
     const rkey = blueskyRkeyOf({ postId, createdAt: post.createdAt });
     let created = await deps.client.createRecord(
-      toBlueskyPostRecord(draft.val, {
+      toBlueskyPostRecord({ ...draft.val, facets }, {
         images: imageBlobs,
         ...(thumbUploaded?.ok ? { thumb: thumbUploaded.val } : {}),
       }),

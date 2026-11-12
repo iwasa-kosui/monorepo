@@ -8,6 +8,7 @@ import {
   followsTable,
   linkPreviewsTable,
   localActorsTable,
+  localPostsTable,
   mutesTable,
   postsTable,
   remotePostsTable,
@@ -34,10 +35,12 @@ export const createD1TimelineLinkTrendsResolverByUserId = (
       .from(linkPreviewsTable)
       .innerJoin(postsTable, eq(linkPreviewsTable.postId, postsTable.postId))
       .leftJoin(remotePostsTable, eq(remotePostsTable.postId, postsTable.postId))
+      .leftJoin(localPostsTable, eq(localPostsTable.postId, postsTable.postId))
       .where(and(
         gte(linkPreviewsTable.createdAt, new Date(createdSince)),
         isNull(postsTable.deletedAt),
         or(isNull(remotePostsTable.visibility), notInArray(remotePostsTable.visibility, ['private', 'direct'])),
+        or(isNull(localPostsTable.visibility), notInArray(localPostsTable.visibility, ['private', 'direct'])),
         or(inArray(postsTable.actorId, ownActorIds), inArray(postsTable.actorId, followingActorIds)),
         notInArray(postsTable.actorId, mutedActorIds),
         notInArray(postsTable.actorId, blockedActorIds),

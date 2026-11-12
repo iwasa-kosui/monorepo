@@ -9,6 +9,7 @@ import { LinkPreview } from '../../../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../../../domain/linkPreview/linkPreviewId.ts';
 import { LocalPost, RemotePost } from '../../../domain/post/post.ts';
 import type { PostId } from '../../../domain/post/postId.ts';
+import { Visibility } from '../../../domain/post/visibility.ts';
 import { RepostId } from '../../../domain/repost/repostId.ts';
 import type {
   PostTimelineItem,
@@ -217,6 +218,7 @@ export const createD1TimelineItemsResolverByActorIds = (
             inReplyToUri: row.local_posts.inReplyToUri,
             summary: row.posts.summary,
             sensitive: row.posts.sensitive,
+            visibility: Visibility.parseOrThrow(row.local_posts.visibility),
             type: 'local',
           })
           : row.remote_posts !== null

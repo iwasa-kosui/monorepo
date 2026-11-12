@@ -105,6 +105,20 @@ describe('postToStatus', () => {
   });
 });
 
+describe('postToStatus の visibility', () => {
+  it.each(['public', 'unlisted', 'private'] as const)('ローカルの投稿の visibility %s をそのまま返す', (visibility) => {
+    const post = {
+      ...basePost,
+      type: 'local',
+      userId: 'user-1',
+      inReplyToUri: null,
+      visibility,
+    } as unknown as PostWithAuthor;
+
+    expect(postToStatus(post).visibility).toBe(visibility);
+  });
+});
+
 describe('actorToAccount', () => {
   it('converts a local actor into a local account', () => {
     const actor = {

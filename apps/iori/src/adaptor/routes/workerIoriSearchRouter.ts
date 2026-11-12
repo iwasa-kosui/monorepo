@@ -1,16 +1,21 @@
+import type { RequestContext } from '@fedify/fedify';
 import { Result } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 import { type Context, Hono } from 'hono';
 
+import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import { ActorId } from '../../domain/actor/actorId.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { PostsWithAuthorResolverByPostIds } from '../../domain/post/post.ts';
+import type { PostId } from '../../domain/post/postId.ts';
 import {
   DEFAULT_QUERY_LIMIT,
   MAX_QUERY_LIMIT,
   TimelineSearchQuery,
 } from '../../domain/timelineSearch/timelineSearchQuery.ts';
+import { timedOut, withTimeout } from '../../helper/withTimeout.ts';
 import type { ResolveRemoteAccountUseCase } from '../../useCase/resolveRemoteAccount.ts';
+import type { ResolveRemotePostUseCase } from '../../useCase/resolveRemotePost.ts';
 import type { SearchTimelineUseCase, TimelineSearchExpansion } from '../../useCase/searchTimeline.ts';
 import type { Account, Status } from '../mastodon/entities.ts';
 import type { StatusAssembler, StatusSource } from '../mastodon/statusAssembler.ts';
@@ -20,10 +25,13 @@ import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from '
 
 export type WorkerIoriSearchRouterDeps = Readonly<{
   authn: MastodonAuthn;
+  actorResolverByUserId: ActorResolverByUserId;
   searchTimeline: SearchTimelineUseCase;
   postsWithAuthorResolverByPostIds: PostsWithAuthorResolverByPostIds;
   statusAssembler: StatusAssembler;
   resolveRemoteAccountUseCase: ResolveRemoteAccountUseCase;
+  resolveRemotePostUseCase: ResolveRemotePostUseCase;
+  createContext: (request: Request) => RequestContext<unknown>;
 }>;
 
 export type IoriSearchStatusesResponse = Readonly<{
@@ -46,6 +54,8 @@ type SearchedStatuses = Readonly<{
   expansion: TimelineSearchExpansion;
   serverTiming: string;
 }>;
+
+const ACCOUNTS_TIMEOUT_MS = 10_000;
 
 const invalidToken = { error: 'The access token is invalid' } as const;
 const readSearch = Scope.orThrow('read:search');
@@ -78,12 +88,7 @@ const parseQuery = (
   return Result.err(TimelineSearchQuery.of({ text }).ok ? 'limit' : 'q');
 };
 
-const remoteHandleOf = (q: string, ownHost: string): string | undefined => {
-  const acct = acctPattern.exec(q.replace(/^acct:/i, ''));
-  if (acct !== null) {
-    const [, username, host] = acct;
-    return host!.toLowerCase() === ownHost.toLowerCase() ? undefined : `${username}@${host}`;
-  }
+const remoteUrlOf = (q: string, ownHost: string): string | undefined => {
   if (!httpsUrlPattern.test(q)) {
     return undefined;
   }
@@ -98,15 +103,27 @@ const remoteHandleOf = (q: string, ownHost: string): string | undefined => {
   }
 };
 
+const remoteHandleOf = (q: string, ownHost: string): string | undefined => {
+  const acct = acctPattern.exec(q.replace(/^acct:/i, ''));
+  if (acct !== null) {
+    const [, username, host] = acct;
+    return host!.toLowerCase() === ownHost.toLowerCase() ? undefined : `${username}@${host}`;
+  }
+  return remoteUrlOf(q, ownHost);
+};
+
 const formatTiming = (searchMs: number, assembleMs: number, totalMs: number): string =>
   `search;dur=${searchMs}, assemble;dur=${assembleMs}, total;dur=${totalMs}`;
 
 export const createWorkerIoriSearchRouter = ({
   authn,
+  actorResolverByUserId,
   searchTimeline,
   postsWithAuthorResolverByPostIds,
   statusAssembler,
   resolveRemoteAccountUseCase,
+  resolveRemotePostUseCase,
+  createContext,
 }: WorkerIoriSearchRouterDeps): Hono<MastodonAuthEnv> => {
   const resolveAccounts = async (c: Context<MastodonAuthEnv>): Promise<Result<Account[], Response>> => {
     const userId = getMastodonPrincipal(c)?.userId;
@@ -126,11 +143,65 @@ export const createWorkerIoriSearchRouter = ({
 
   const resolveAccountsOrEmpty = async (c: Context<MastodonAuthEnv>): Promise<Result<Account[], Response>> => {
     try {
-      return await resolveAccounts(c);
+      const resolved = await withTimeout(resolveAccounts(c), ACCOUNTS_TIMEOUT_MS);
+      if (resolved === timedOut) {
+        getLogger().warn('Timed out while resolving remote accounts for search');
+        return Result.ok([]);
+      }
+      return resolved;
     } catch (error) {
       getLogger().warn(`Failed to resolve remote accounts for search: ${String(error)}`);
       return Result.ok([]);
     }
+  };
+
+  const remotePostUrlOf = (c: Context<MastodonAuthEnv>): string | undefined =>
+    isTrue(c.req.query('resolve')) ? remoteUrlOf((c.req.query('q') ?? '').trim(), new URL(c.req.url).host) : undefined;
+
+  const resolvePostId = async (c: Context<MastodonAuthEnv>, url: string): Promise<PostId | undefined> => {
+    const userId = getMastodonPrincipal(c)?.userId;
+    if (userId === null || userId === undefined) {
+      return undefined;
+    }
+    try {
+      const resolved = await resolveRemotePostUseCase.run({ userId, url, ctx: createContext(c.req.raw) });
+      return resolved.ok ? resolved.val : undefined;
+    } catch (error) {
+      getLogger().warn(`Failed to resolve a remote post for search: ${String(error)}`);
+      return undefined;
+    }
+  };
+
+  const resolveStatus = async (c: Context<MastodonAuthEnv>, url: string): Promise<Result<Status[], Response>> => {
+    const userId = getMastodonPrincipal(c)?.userId;
+    if (userId === null || userId === undefined) {
+      return Result.err(c.json(invalidToken, 401));
+    }
+    const actor = await actorResolverByUserId.resolve(userId);
+    if (!actor.ok || actor.val === undefined) {
+      return Result.err(c.json(actorNotFound, 422));
+    }
+    const viewerActorId = actor.val.id;
+    const postId = await resolvePostId(c, url);
+    if (postId === undefined) {
+      return Result.ok([]);
+    }
+    const resolved = await postsWithAuthorResolverByPostIds.resolve({
+      postIds: [postId],
+      currentActorId: viewerActorId,
+      onlyVisibleToViewer: true,
+    });
+    const post = resolved.ok ? resolved.val.get(postId) : undefined;
+    if (post === undefined) {
+      return Result.ok([]);
+    }
+    return Result.ok(
+      await statusAssembler.assemble({
+        sources: [{ type: 'post', post }],
+        viewerActorId,
+        requestUrl: c.req.url,
+      }),
+    );
   };
 
   const searchStatuses = async (
@@ -217,6 +288,19 @@ export const createWorkerIoriSearchRouter = ({
       if (type === 'hashtags' || isPaging) {
         return c.json(empty);
       }
+      const accountId = c.req.query('account_id');
+      const onlyActorId = accountId === undefined ? undefined : ActorId.parse(accountId);
+      const remotePostUrl = type === 'accounts' || onlyActorId !== undefined ? undefined : remotePostUrlOf(c);
+      if (remotePostUrl !== undefined) {
+        const [accounts, resolved] = await Promise.all([
+          type === 'statuses' ? Result.ok<Account[]>([]) : resolveAccountsOrEmpty(c),
+          resolveStatus(c, remotePostUrl),
+        ]);
+        if (!accounts.ok) {
+          return accounts.err;
+        }
+        return resolved.ok ? c.json({ ...empty, accounts: accounts.val, statuses: resolved.val }) : resolved.err;
+      }
       const accounts = type === 'statuses' ? Result.ok<Account[]>([]) : await resolveAccountsOrEmpty(c);
       if (!accounts.ok) {
         return accounts.err;
@@ -227,8 +311,6 @@ export const createWorkerIoriSearchRouter = ({
       if ((c.req.query('q') ?? '').trim() === '') {
         return c.json(validationFailed('q'), 400);
       }
-      const accountId = c.req.query('account_id');
-      const onlyActorId = accountId === undefined ? undefined : ActorId.parse(accountId);
       if (onlyActorId !== undefined && !onlyActorId.ok) {
         return c.json({ ...empty, accounts: accounts.val });
       }

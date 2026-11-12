@@ -81,6 +81,7 @@ import { createD1TimelineItemsResolverByPostId } from '../../d1/timeline/timelin
 import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
 import { createOgpFetcher } from '../../ogp/ogpFetcher.ts';
 import { createCloudflareWebPushSender } from '../../webPush/cloudflareWebPushSender.ts';
+import { isBlockedUri } from '../blockedInboxDomain.ts';
 import { InboxActorResolver } from '../inboxActorResolver.ts';
 import { createInboxListener } from './inboxListenerFactory.ts';
 
@@ -275,6 +276,7 @@ export const createCloudflareInboxListener = (db: IoriD1Db, config: CloudflareIn
         postResolverByUri,
         localPostResolverByUri,
         remotePostUpserter,
+        isBlockedUri: (uri) => isBlockedUri(uri),
       }),
     },
     onDelete: {

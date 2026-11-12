@@ -1,5 +1,5 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Create, isActor, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Create, isActor, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 
@@ -24,12 +24,14 @@ import {
   type RemotePost,
 } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
+import type { Visibility } from '../domain/post/visibility.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { User, UserNotFoundError, UserResolver } from '../domain/user/user.ts';
 import { toMentionNoteFields } from './helper/mentionNote.ts';
+import { toPostAddressing } from './helper/postAddressing.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
@@ -45,6 +47,7 @@ type Input =
     content: string;
     summary?: string | null;
     sensitive?: boolean;
+    visibility?: Exclude<Visibility, 'direct'>;
     crosspostToBluesky?: boolean;
     mentions?: ReadonlyArray<MentionRecipient>;
     request: Request;
@@ -149,7 +152,7 @@ const create = ({
         return RA.ok(parentPost.uri);
       }),
       // Create the reply post
-      RA.andBind('postEvent', ({ actor, content, inReplyToUri, summary, sensitive }) => {
+      RA.andBind('postEvent', ({ actor, content, inReplyToUri, summary, sensitive, visibility }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content,
@@ -157,6 +160,7 @@ const create = ({
           inReplyToUri,
           summary,
           sensitive,
+          visibility,
         });
         return RA.ok(postEvent);
       }),
@@ -191,8 +195,11 @@ const create = ({
           const replyNote = new Note({
             id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
             attribution: ctx.getActorUri(user.username),
-            to: PUBLIC_COLLECTION,
-            ccs: [ctx.getFollowersUri(user.username), ...mentionFields.ccs],
+            ...toPostAddressing({
+              visibility: replyPost.visibility,
+              followersUri: ctx.getFollowersUri(user.username),
+              mentionUris: mentionFields.ccs,
+            }),
             tags: mentionFields.tags,
             content: replyPost.content,
             mediaType: 'text/html',
@@ -263,8 +270,11 @@ const create = ({
         const replyNote = new Note({
           id: ctx.getObjectUri(Note, { identifier: user.username, id: replyPost.postId }),
           attribution: ctx.getActorUri(user.username),
-          to: PUBLIC_COLLECTION,
-          ccs: [ctx.getFollowersUri(user.username), ...mentionFields.ccs],
+          ...toPostAddressing({
+            visibility: replyPost.visibility,
+            followersUri: ctx.getFollowersUri(user.username),
+            mentionUris: mentionFields.ccs,
+          }),
           tags: mentionFields.tags,
           content: replyPost.content,
           mediaType: 'text/html',

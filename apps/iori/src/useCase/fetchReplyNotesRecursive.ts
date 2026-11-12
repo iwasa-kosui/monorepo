@@ -1,14 +1,16 @@
-import { isActor, Note } from '@fedify/vocab';
+import { Note } from '@fedify/vocab';
 import { type DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
-import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
-import { extractContentWarning } from '../adaptor/fedify/extractContentWarning.ts';
-import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
-import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
-import type { LocalPostResolverByUri, PostResolverByUri, RemotePost, RemotePostUpserter } from '../domain/post/post.ts';
-import type { Visibility } from '../domain/post/visibility.ts';
+import type {
+  LocalPostResolverByUri,
+  PostResolverByUri,
+  RemotePost,
+  RemotePostIdentity,
+  RemotePostUpserter,
+} from '../domain/post/post.ts';
+import { toRemotePostIdentity } from './helper/remoteNoteIdentity.ts';
 
 const MAX_DEPTH = 10;
 
@@ -18,6 +20,8 @@ type Input = Readonly<{
   inReplyToUri: string;
   documentLoader: DocumentLoader;
   lookupObject: LookupObject;
+  shouldSave?: (identity: RemotePostIdentity) => boolean | Promise<boolean>;
+  maxDepth?: number;
 }>;
 
 type Ok = Readonly<{
@@ -35,6 +39,7 @@ type Deps = Readonly<{
   postResolverByUri: PostResolverByUri;
   localPostResolverByUri: LocalPostResolverByUri;
   remotePostUpserter: RemotePostUpserter;
+  isBlockedUri: (uri: string) => boolean;
 }>;
 
 const create = ({
@@ -42,20 +47,13 @@ const create = ({
   postResolverByUri,
   localPostResolverByUri,
   remotePostUpserter,
+  isBlockedUri,
 }: Deps): FetchReplyNotesRecursiveUseCase => {
   const fetchNote = async (
     uri: string,
     documentLoader: DocumentLoader,
     lookupObject: LookupObject,
-  ): Promise<
-    | {
-      note: Note;
-      authorIdentity: ActorIdentity;
-      visibility: Visibility | null;
-      recipientActorUris: string[];
-    }
-    | undefined
-  > => {
+  ): Promise<RemotePostIdentity | undefined> => {
     try {
       const result = await lookupObject(uri, { documentLoader });
       if (!(result instanceof Note)) {
@@ -66,25 +64,7 @@ const create = ({
         getLogger().debug(`Note has no id: ${uri}`);
         return undefined;
       }
-
-      const author = await result.getAttribution({ documentLoader });
-      if (!author || !isActor(author)) {
-        getLogger().debug(`Could not resolve Note author: ${uri}`);
-        return undefined;
-      }
-
-      const actorIdentityResult = await ActorIdentity.fromFedifyActor(author, { documentLoader });
-      if (!actorIdentityResult.ok) {
-        getLogger().debug(`Could not parse actor identity: ${uri}`);
-        return undefined;
-      }
-
-      return {
-        note: result,
-        authorIdentity: actorIdentityResult.val,
-        visibility: extractVisibility(result, author.followersId),
-        recipientActorUris: extractRecipientActorUris([result], origin),
-      };
+      return await toRemotePostIdentity(result, { origin, documentLoader, isBlockedUri });
     } catch (error) {
       getLogger().debug(`Failed to fetch note: ${uri} - ${error}`);
       return undefined;
@@ -92,14 +72,14 @@ const create = ({
   };
 
   const run = async (input: Input): RA<Ok, Err> => {
-    const { inReplyToUri, documentLoader, lookupObject } = input;
+    const { inReplyToUri, documentLoader, lookupObject, shouldSave, maxDepth = MAX_DEPTH } = input;
     const fetchedPosts: RemotePost[] = [];
     const visited = new Set<string>();
 
     let currentUri: string | null = inReplyToUri;
     let depth = 0;
 
-    while (currentUri && depth < MAX_DEPTH) {
+    while (currentUri && depth < maxDepth) {
       if (visited.has(currentUri)) {
         getLogger().debug(`Already visited: ${currentUri}, stopping to prevent cycle`);
         break;
@@ -126,6 +106,11 @@ const create = ({
         continue;
       }
 
+      if (isBlockedUri(currentUri)) {
+        getLogger().debug(`Skipped a blocked domain: ${currentUri}, stopping chain`);
+        break;
+      }
+
       // Fetch the note from remote
       const fetchResult = await fetchNote(currentUri, documentLoader, lookupObject);
       if (!fetchResult) {
@@ -133,24 +118,16 @@ const create = ({
         break;
       }
 
-      const { note, authorIdentity, visibility, recipientActorUris } = fetchResult;
-      const noteUri = note.id?.href;
-      if (!noteUri) {
+      const noteUri = fetchResult.uri;
+      const noteInReplyToUri = fetchResult.inReplyToUri ?? null;
+
+      if (shouldSave !== undefined && !(await shouldSave(fetchResult))) {
+        getLogger().debug(`Skipped saving note: ${noteUri}, stopping chain`);
         break;
       }
 
-      const noteInReplyToUri = note.replyTargetId?.href ?? null;
-
       // Upsert the remote post
-      const upsertResult = await remotePostUpserter.resolve({
-        uri: noteUri,
-        content: String(note.content ?? ''),
-        authorIdentity,
-        inReplyToUri: noteInReplyToUri,
-        ...extractContentWarning(note),
-        visibility,
-        recipientActorUris,
-      });
+      const upsertResult = await remotePostUpserter.resolve(fetchResult);
 
       if (upsertResult.ok) {
         fetchedPosts.push(upsertResult.val);
@@ -162,8 +139,8 @@ const create = ({
       depth++;
     }
 
-    if (depth >= MAX_DEPTH) {
-      getLogger().debug(`Reached max depth (${MAX_DEPTH}) while fetching reply chain`);
+    if (depth >= maxDepth) {
+      getLogger().debug(`Reached max depth (${maxDepth}) while fetching reply chain`);
     }
 
     return RA.ok({ fetchedPosts });

@@ -166,6 +166,51 @@ describe('AddRemotePostUseCase', () => {
       );
     });
 
+    it('受信した引用先の URI を投稿の作成イベントに渡す', async () => {
+      const deps = createDeps();
+
+      const useCase = AddRemotePostUseCase.create(deps);
+
+      await useCase.run({
+        content: 'Quote',
+        uri: 'https://remote.example.com/posts/quote',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'public',
+        quoteUri: 'https://remote.example.com/posts/quoted',
+        attachments: [],
+      });
+
+      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventPayload: expect.objectContaining({ quoteUri: 'https://remote.example.com/posts/quoted' }),
+        }),
+      );
+    });
+
+    it('引用先の URI が無ければ投稿の作成イベントに null を渡す', async () => {
+      const deps = createDeps();
+
+      const useCase = AddRemotePostUseCase.create(deps);
+
+      await useCase.run({
+        content: 'Plain',
+        uri: 'https://remote.example.com/posts/plain',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'public',
+        attachments: [],
+      });
+
+      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({ eventPayload: expect.objectContaining({ quoteUri: null }) }),
+      );
+    });
+
     it('画像付きリモート投稿を追加できる', async () => {
       const deps = createDeps();
 

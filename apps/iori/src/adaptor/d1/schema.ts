@@ -130,10 +130,18 @@ export const remotePostRecipientsTable = sqliteTable('remote_post_recipients', {
   index('remote_post_recipients_actor_uri_idx').on(table.actorUri),
 ]);
 
+export const postQuotesTable = sqliteTable('post_quotes', {
+  postId: text('postId').primaryKey().references(() => postsTable.postId),
+  quoteUri: text('quoteUri').notNull(),
+}, (table) => [
+  index('post_quotes_quote_uri_idx').on(table.quoteUri),
+]);
+
 export const localPostsTable = sqliteTable('local_posts', {
   postId: text('postId').primaryKey().references(() => postsTable.postId),
   userId: text('userId').notNull().references(() => usersTable.userId),
   inReplyToUri: text('inReplyToUri'),
+  visibility: text('visibility').notNull().default('public'),
 }, (table) => [
   index('local_posts_in_reply_to_uri_idx').on(table.inReplyToUri),
 ]);
@@ -741,6 +749,7 @@ export const schema = {
   postsTable,
   remotePostsTable,
   remotePostRecipientsTable,
+  postQuotesTable,
   localPostsTable,
   likesTable,
   localLikesTable,

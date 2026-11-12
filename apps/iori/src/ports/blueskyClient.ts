@@ -1,6 +1,7 @@
 import type { RA } from '@iwasa-kosui/result';
 
 import type { BlueskyBlob, BlueskyPostRecord } from '../domain/blueskyCrosspost/blueskyPostRecord.ts';
+import type { Instant } from '../domain/instant/instant.ts';
 
 export type BlueskyClientErrorKind = 'auth' | 'http' | 'network' | 'invalid_response';
 
@@ -29,6 +30,7 @@ export type BlueskyClient = Readonly<{
   deleteRepost: (rkey: string) => RA<void, BlueskyClientError>;
   createFollow: (subjectDid: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;
   deleteFollow: (followUri: string) => RA<void, BlueskyClientError>;
+  updateSeen: (seenAt: Instant) => RA<void, BlueskyClientError>;
 }>;
 
 export type BlueskyQueryClient = Readonly<{

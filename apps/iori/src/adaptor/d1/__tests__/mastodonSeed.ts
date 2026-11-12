@@ -40,7 +40,13 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
   const addLocalPost = (
     actor: { actorId: string; userId: string; username: string },
     createdAt: number,
-    options: { content?: string; inReplyToUri?: string | null; timeline?: boolean; deletedAt?: number | null } = {},
+    options: {
+      content?: string;
+      inReplyToUri?: string | null;
+      timeline?: boolean;
+      deletedAt?: number | null;
+      visibility?: string;
+    } = {},
   ) => {
     const postId = uuid();
     sqlite.prepare('INSERT INTO posts(postId,actorId,content,createdAt,type,deletedAt) VALUES (?,?,?,?,?,?)').run(
@@ -51,10 +57,11 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
       'local',
       options.deletedAt ?? null,
     );
-    sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri) VALUES (?,?,?)').run(
+    sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri,visibility) VALUES (?,?,?,?)').run(
       postId,
       actor.userId,
       options.inReplyToUri ?? null,
+      options.visibility ?? 'public',
     );
     const timelineItemId = options.timeline === false ? undefined : addTimelineItem(actor.actorId, postId, createdAt);
     return { postId, timelineItemId, uri: `${SEED_ORIGIN}/users/${actor.username}/posts/${postId}` };

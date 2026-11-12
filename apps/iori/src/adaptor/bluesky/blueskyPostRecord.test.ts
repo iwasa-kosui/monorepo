@@ -7,7 +7,9 @@ import {
   BLUESKY_MAX_IMAGE_BYTES,
   BLUESKY_MAX_TEXT_BYTES,
   BLUESKY_MAX_THUMB_BYTES,
+  BLUESKY_SENSITIVE_SELF_LABEL,
   type BlueskyImageInput,
+  type BlueskyPostDraft,
   buildBlueskyPostDraft,
   type BuildBlueskyPostInput,
   selectBlueskyImages,
@@ -20,6 +22,11 @@ const segmenter = new Intl.Segmenter('und', { granularity: 'grapheme' });
 const graphemeCount = (text: string) => Array.from(segmenter.segment(text)).length;
 const utf8 = (text: string) => new TextEncoder().encode(text);
 
+const uriOf = (facet: BlueskyPostDraft['facets'][number]) => {
+  const feature = facet.features[0];
+  return feature.$type === 'app.bsky.richtext.facet#link' ? feature.uri : undefined;
+};
+
 const imageUrl = (alt: string | null) => `https://iori.example/uploads/${alt ?? 'image'}.png`;
 
 const image = (size: number, alt: string | null = null): BlueskyImageInput => ({
@@ -30,6 +37,7 @@ const image = (size: number, alt: string | null = null): BlueskyImageInput => ({
 });
 
 const input = (overrides: Partial<BuildBlueskyPostInput> = {}): BuildBlueskyPostInput => ({
+  visibility: 'public',
   html: '<p>hello</p>',
   summary: null,
   sensitive: false,
@@ -85,7 +93,7 @@ describe('buildBlueskyPostDraft の切り詰め', () => {
     expect(draft.text.endsWith(`…\n${POST_URL}`)).toBe(true);
     const last = draft.facets.at(-1)!;
     expect(sliceBytes(draft.text, last.index.byteStart, last.index.byteEnd)).toBe(POST_URL);
-    expect(last.features[0].uri).toBe(POST_URL);
+    expect(uriOf(last)).toBe(POST_URL);
     expect(graphemeCount(draft.text)).toBe(BLUESKY_MAX_GRAPHEMES);
   });
 
@@ -111,7 +119,7 @@ describe('buildBlueskyPostDraft の切り詰め', () => {
       'y'.repeat(150)
     }</a></p>`;
     const draft = build({ html });
-    const uris = draft.facets.map((facet) => facet.features[0].uri);
+    const uris = draft.facets.map((facet) => uriOf(facet));
     expect(uris).toEqual(['https://example.com/keep', POST_URL]);
     for (const facet of draft.facets) {
       expect(facet.index.byteEnd).toBeLessThanOrEqual(utf8(draft.text).byteLength);
@@ -133,13 +141,13 @@ describe('buildBlueskyPostDraft の画像', () => {
     expect(draft.text).toBe(`hello\n${imageUrl('big')}`);
     const last = draft.facets.at(-1)!;
     expect(sliceBytes(draft.text, last.index.byteStart, last.index.byteEnd)).toBe(imageUrl('big'));
-    expect(last.features[0].uri).toBe(imageUrl('big'));
+    expect(uriOf(last)).toBe(imageUrl('big'));
   });
 
   it('外した画像が複数あれば、それぞれの URL を行ごとに付ける', () => {
     const draft = build({ images: [image(BLUESKY_MAX_IMAGE_BYTES + 1, 'a'), image(BLUESKY_MAX_IMAGE_BYTES + 1, 'b')] });
     expect(draft.text).toBe(`hello\n${imageUrl('a')}\n${imageUrl('b')}`);
-    expect(draft.facets.map((facet) => facet.features[0].uri)).toEqual([imageUrl('a'), imageUrl('b')]);
+    expect(draft.facets.map((facet) => uriOf(facet))).toEqual([imageUrl('a'), imageUrl('b')]);
   });
 
   it('外した画像が無ければ URL を付けない', () => {
@@ -156,7 +164,7 @@ describe('buildBlueskyPostDraft の画像', () => {
     const draft = build({ html: `<p>${'あ'.repeat(400)}</p>`, images: [image(BLUESKY_MAX_IMAGE_BYTES + 1, 'big')] });
     expect(draft.text.split(POST_URL)).toHaveLength(2);
     expect(draft.text).not.toContain(imageUrl('big'));
-    expect(draft.facets.filter((facet) => facet.features[0].uri === POST_URL)).toHaveLength(1);
+    expect(draft.facets.filter((facet) => uriOf(facet) === POST_URL)).toHaveLength(1);
   });
 
   it('画像の URL を付けると上限を超える本文は、投稿 URL での切り詰めの形にする', () => {
@@ -254,11 +262,19 @@ describe('buildBlueskyPostDraft の返信とスキップ', () => {
   });
 
   it.each([
-    ['content_warning', { summary: 'CW' }],
-    ['sensitive', { sensitive: true }],
-    ['reply_to_unsent', { replyTo: { kind: 'unsent' as const } }],
-  ])('%s をスキップにする', (reason, overrides) => {
-    expect(buildBlueskyPostDraft(input(overrides))).toEqual(Result.err(reason));
+    ['unlisted' as const],
+    ['private' as const],
+  ])('公開範囲が %s なら visibility をスキップにする', (visibility) => {
+    expect(buildBlueskyPostDraft(input({ visibility }))).toEqual(Result.err('visibility'));
+  });
+
+  it('reply_to_unsent をスキップにする', () => {
+    expect(buildBlueskyPostDraft(input({ replyTo: { kind: 'unsent' } }))).toEqual(Result.err('reply_to_unsent'));
+  });
+
+  it('公開なら CW と sensitive はスキップにしない', () => {
+    expect(buildBlueskyPostDraft(input({ summary: 'CW' })).ok).toBe(true);
+    expect(buildBlueskyPostDraft(input({ sensitive: true })).ok).toBe(true);
   });
 
   it('summary が空文字や空白だけならスキップしない', () => {
@@ -266,12 +282,97 @@ describe('buildBlueskyPostDraft の返信とスキップ', () => {
     expect(buildBlueskyPostDraft(input({ summary: '  ' })).ok).toBe(true);
   });
 
-  it('CW を sensitive と reply_to_unsent より先に判定する', () => {
+  it('CW 付きでも、公開でなければ visibility をスキップにする', () => {
+    expect(buildBlueskyPostDraft(input({ visibility: 'private', summary: 'CW', sensitive: true }))).toEqual(
+      Result.err('visibility'),
+    );
+    expect(buildBlueskyPostDraft(input({ visibility: 'unlisted', summary: 'CW' }))).toEqual(Result.err('visibility'));
+  });
+
+  it('公開範囲が公開でなければ、返信先が未送信でも visibility を先に判定する', () => {
+    expect(buildBlueskyPostDraft(input({ visibility: 'unlisted', replyTo: { kind: 'unsent' } }))).toEqual(
+      Result.err('visibility'),
+    );
+  });
+
+  it('公開の CW 付きなら、CW の文と投稿 URL だけを送る', () => {
+    const draft = build({ visibility: 'public', summary: ' 注意 ', html: '<p>本文</p>' });
+    expect(draft.text).toBe(`注意\n${POST_URL}`);
+  });
+
+  it('CW 付きでも、返信先が未送信なら reply_to_unsent をスキップにする', () => {
     expect(buildBlueskyPostDraft(input({ summary: 'CW', sensitive: true, replyTo: { kind: 'unsent' } }))).toEqual(
-      Result.err('content_warning'),
+      Result.err('reply_to_unsent'),
     );
-    expect(buildBlueskyPostDraft(input({ sensitive: true, replyTo: { kind: 'unsent' } }))).toEqual(
-      Result.err('sensitive'),
-    );
+  });
+});
+
+describe('buildBlueskyPostDraft の CW', () => {
+  it('本文を summary と投稿 URL だけにし、投稿 URL に link facet を付ける', () => {
+    const draft = build({ summary: ' 注意 ', html: '<p>本文 <a href="https://example.com/x">x</a></p>' });
+    expect(draft.text).toBe(`注意\n${POST_URL}`);
+    expect(draft.facets).toHaveLength(1);
+    const [facet] = draft.facets;
+    expect(sliceBytes(draft.text, facet!.index.byteStart, facet!.index.byteEnd)).toBe(POST_URL);
+    expect(uriOf(facet!)).toBe(POST_URL);
+  });
+
+  it('画像と linkPreview を渡しても、images を空にして embed を作らない', () => {
+    const draft = build({
+      summary: '注意',
+      images: [image(10, 'a')],
+      unavailableImageUrls: ['https://iori.example/uploads/gone.png'],
+      linkPreview: {
+        url: 'https://example.com/x',
+        title: 't',
+        description: 'd',
+        thumb: { bytes: utf8('x'), mimeType: 'image/png' },
+      },
+    });
+    expect(draft.text).toBe(`注意\n${POST_URL}`);
+    expect(draft.images).toEqual([]);
+    expect(draft.external).toBeUndefined();
+    expect('embed' in toBlueskyPostRecord(draft, { images: [] })).toBe(false);
+  });
+
+  it('長い summary を …\\n{postUrl} で終わるよう切り詰める', () => {
+    const draft = build({ summary: 'あ'.repeat(500) });
+    expect(draft.text.endsWith(`…\n${POST_URL}`)).toBe(true);
+    expect(graphemeCount(draft.text)).toBeLessThanOrEqual(BLUESKY_MAX_GRAPHEMES);
+    expect(utf8(draft.text).byteLength).toBeLessThanOrEqual(BLUESKY_MAX_TEXT_BYTES);
+    const facet = draft.facets.at(-1)!;
+    expect(sliceBytes(draft.text, facet.index.byteStart, facet.index.byteEnd)).toBe(POST_URL);
+  });
+
+  it('record に labels を付けない', () => {
+    const record = toBlueskyPostRecord(build({ summary: '注意', sensitive: true }), { images: [] });
+    expect('labels' in record).toBe(false);
+  });
+
+  it('返信の root と parent を CW の draft にも付ける', () => {
+    const root = { uri: 'at://did:plc:x/app.bsky.feed.post/root', cid: 'cidroot' };
+    const parent = { uri: 'at://did:plc:x/app.bsky.feed.post/parent', cid: 'cidparent' };
+    expect(build({ summary: '注意', replyTo: { kind: 'sent', root, parent } }).reply).toEqual({ root, parent });
+  });
+});
+
+describe('buildBlueskyPostDraft の sensitive', () => {
+  it('画像を保ち、record に self-label を付ける', () => {
+    const draft = build({ sensitive: true, images: [image(10, 'a')] });
+    expect(draft.images).toHaveLength(1);
+    expect(toBlueskyPostRecord(draft, { images: [] }).labels).toEqual({
+      $type: 'com.atproto.label.defs#selfLabels',
+      values: [{ val: BLUESKY_SENSITIVE_SELF_LABEL }],
+    });
+  });
+
+  it('画像の無い sensitive の投稿には labels を付けない', () => {
+    const record = toBlueskyPostRecord(build({ sensitive: true, images: [] }), { images: [] });
+    expect('labels' in record).toBe(false);
+  });
+
+  it('sensitive が false なら record に labels を付けない', () => {
+    const record = toBlueskyPostRecord(build({ sensitive: false }), { images: [] });
+    expect('labels' in record).toBe(false);
   });
 });
