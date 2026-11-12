@@ -63,6 +63,20 @@ describe('publishBlueskyPost', () => {
     expect(t.record().reply).toEqual({ root: ROOT, parent: PARENT });
   });
 
+  it('langs が指定されて空でなければ record に付け、指定なしや空なら付けない', async () => {
+    const withLangs = setup();
+    const without = setup();
+    const empty = setup();
+
+    await withLangs.publish({ text: 'hi', langs: ['ja', 'en'] });
+    await without.publish({ text: 'hi' });
+    await empty.publish({ text: 'hi', langs: [] });
+
+    expect(withLangs.record().langs).toEqual(['ja', 'en']);
+    expect(without.record()).not.toHaveProperty('langs');
+    expect(empty.record()).not.toHaveProperty('langs');
+  });
+
   it('前後の空白を除いた本文を送る', async () => {
     const t = setup();
 
@@ -156,6 +170,51 @@ describe('publishBlueskyPost', () => {
 
     expect(t.query).not.toHaveBeenCalled();
     expect(t.record().facets?.map((facet) => facet.features[0].$type)).toEqual(['app.bsky.richtext.facet#link']);
+  });
+
+  it('@ の直前が文字のときは mention にせず、空白か ( のときは mention にする', async () => {
+    const t = setup();
+
+    await t.publish({ text: 'こんにちは@alice.bsky.social' });
+
+    expect(t.query).not.toHaveBeenCalled();
+    expect(t.record()).not.toHaveProperty('facets');
+
+    const spaced = setup();
+    await spaced.publish({ text: 'こんにちは @alice.bsky.social' });
+    const paren = setup();
+    await paren.publish({ text: '(@alice.bsky.social)' });
+
+    expect(spaced.record().facets?.map((facet) => facet.features[0])).toEqual([
+      { $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' },
+    ]);
+    expect(paren.record().facets?.map((facet) => facet.features[0])).toEqual([
+      { $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' },
+    ]);
+  });
+
+  it('サロゲートペアや ZWJ の絵文字を前に含む本文でも、link と mention のバイト位置が UTF-8 で正しい', async () => {
+    const t = setup();
+    const prefix = '👍🏽 👨‍👩‍👧‍👦 ';
+    const url = 'https://example.com/a';
+    const mention = '@alice.bsky.social';
+    const text = `${prefix}${url} ${mention}`;
+
+    await t.publish({ text });
+
+    const encoder = new TextEncoder();
+    const urlStart = encoder.encode(prefix).byteLength;
+    const mentionStart = encoder.encode(`${prefix}${url} `).byteLength;
+    expect(t.record().facets).toEqual([
+      {
+        index: { byteStart: urlStart, byteEnd: urlStart + encoder.encode(url).byteLength },
+        features: [{ $type: 'app.bsky.richtext.facet#link', uri: url }],
+      },
+      {
+        index: { byteStart: mentionStart, byteEnd: mentionStart + encoder.encode(mention).byteLength },
+        features: [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' }],
+      },
+    ]);
   });
 
   it('URL と mention が混在しても byteStart の昇順に並べる', async () => {

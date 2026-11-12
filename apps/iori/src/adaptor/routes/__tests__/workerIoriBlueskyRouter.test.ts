@@ -816,6 +816,30 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       expect(client.createRecord).not.toHaveBeenCalled();
     });
 
+    it('入力不正のときは 400 に reason を付けて返す', async () => {
+      const t = setupReadApi({ blueskyReplyClient: replyClient() });
+      const me = await t.signIn('write:statuses');
+      seedItem(t, 1);
+
+      const response = await reply(t, me.bearer, { feedItemId: ITEM, text: 'a'.repeat(301) });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'Validation failed: text', reason: 'too_many_graphemes' });
+    });
+
+    it('返信できない投稿は 422 にし、投稿しない', async () => {
+      const client = replyClient([{ uri: ITEM, cid: 'cid1', viewer: { replyDisabled: true } }]);
+      const t = setupReadApi({ blueskyReplyClient: client });
+      const me = await t.signIn('write:statuses');
+      seedItem(t, 1);
+
+      const response = await reply(t, me.bearer);
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: 'Reply not allowed' });
+      expect(client.createRecord).not.toHaveBeenCalled();
+    });
+
     it('未知の feedItemId と、Bluesky 側で削除済みの投稿を 404 にし、投稿しない', async () => {
       const client = replyClient([]);
       const t = setupReadApi({ blueskyReplyClient: client });

@@ -34,4 +34,5 @@ export type BlueskyPostRecord = Readonly<{
   facets?: ReadonlyArray<BlueskyFacet | BlueskyMentionFacet>;
   reply?: Readonly<{ root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
   embed?: BlueskyEmbed;
+  langs?: readonly string[];
 }>;

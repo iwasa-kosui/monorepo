@@ -1,7 +1,7 @@
 import { type Context, Hono } from 'hono';
 
 import type { BlueskyLikeTargetNotFound } from '../../domain/blueskyTimeline/blueskyLike.ts';
-import type { BlueskyReplyTargetNotFound } from '../../domain/blueskyTimeline/blueskyReply.ts';
+import type { BlueskyReplyNotAllowed, BlueskyReplyTargetNotFound } from '../../domain/blueskyTimeline/blueskyReply.ts';
 import type { BlueskyRepostTargetNotFound } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import {
   BLUESKY_TIMELINE_DEFAULT_LIMIT,
@@ -111,10 +111,13 @@ const repostFailure = (c: Context, error: BlueskyClientError | BlueskyRepostTarg
 
 const replyFailure = (
   c: Context,
-  error: BlueskyClientError | BlueskyPostInvalid | BlueskyReplyTargetNotFound,
+  error: BlueskyClientError | BlueskyPostInvalid | BlueskyReplyTargetNotFound | BlueskyReplyNotAllowed,
 ) => {
   if (error.type === 'BlueskyReplyTargetNotFound') return c.json({ error: 'Record not found' }, 404);
-  if (error.type === 'BlueskyPostInvalid') return c.json({ error: 'Validation failed: text' }, 400);
+  if (error.type === 'BlueskyReplyNotAllowed') return c.json({ error: 'Reply not allowed' }, 422);
+  if (error.type === 'BlueskyPostInvalid') {
+    return c.json({ error: 'Validation failed: text', reason: error.reason }, 400);
+  }
   return c.json({ error: 'Bluesky request failed' }, 502);
 };
 

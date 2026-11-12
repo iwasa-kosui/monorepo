@@ -39,6 +39,12 @@ describe('canSendBlueskyReply', () => {
     expect(canSendBlueskyReply('a'.repeat(300), false)).toBe(true);
     expect(canSendBlueskyReply('a'.repeat(301), false)).toBe(false);
   });
+
+  it('前後の空白を除いた本文で数え、空白つきの 300 grapheme は送れる', () => {
+    expect(blueskyReplyRemaining(`  ${'a'.repeat(300)} \n`)).toBe(0);
+    expect(canSendBlueskyReply(`  ${'a'.repeat(300)} \n`, false)).toBe(true);
+    expect(canSendBlueskyReply(` ${'a'.repeat(301)} `, false)).toBe(false);
+  });
 });
 
 describe('blueskyReplyExcerpt', () => {
@@ -50,9 +56,10 @@ describe('blueskyReplyExcerpt', () => {
 });
 
 describe('blueskyReplyErrorMessage', () => {
-  it('404、409、それ以外でステータスに応じた文言を返す', () => {
+  it('404、409、422、それ以外でステータスに応じた文言を返す', () => {
     expect(blueskyReplyErrorMessage(apiError(404))).toBe('返信先の投稿が見つかりません');
     expect(blueskyReplyErrorMessage(apiError(409))).toBe('Bluesky のタイムラインが無効です');
+    expect(blueskyReplyErrorMessage(apiError(422))).toBe('この投稿には返信できません');
     expect(blueskyReplyErrorMessage(apiError(400))).toBe('Bluesky に返信できませんでした');
     expect(blueskyReplyErrorMessage(new TypeError('network'))).toBe('Bluesky に返信できませんでした');
   });

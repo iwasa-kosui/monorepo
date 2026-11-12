@@ -42,6 +42,7 @@ export type PublishBlueskyPostInput = Readonly<{
   text: string;
   reply?: Readonly<{ root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
   images?: readonly BlueskyPostImage[];
+  langs?: readonly string[];
 }>;
 
 export type PublishBlueskyPostDeps = Readonly<{
@@ -57,8 +58,9 @@ export type PublishBlueskyPostError = BlueskyClientError | BlueskyPostInvalid;
 type Span = Readonly<{ start: number; end: number }>;
 
 const urlPattern = /https?:\/\/[\x21-\x7E]+/g;
+// 公式アプリの検出に合わせ、@ の直前が先頭・空白・( のときだけ mention にする
 const mentionPattern =
-  /(?<![A-Za-z0-9_./@])@((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)/g;
+  /(?<=^|\s|\()@((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)/g;
 const trailingPunctuation = /[.,;:!?'"\]}>]$/;
 const resolveHandleResponseSchema = z.object({ did: z.string().startsWith('did:') });
 
@@ -160,6 +162,7 @@ export const publishBlueskyPost = async (
     ...(facets.length === 0 ? {} : { facets }),
     ...(input.reply === undefined ? {} : { reply: input.reply }),
     ...(images.val.length === 0 ? {} : { embed: { $type: 'app.bsky.embed.images', images: images.val } }),
+    ...(input.langs === undefined || input.langs.length === 0 ? {} : { langs: input.langs }),
   };
   return client.createRecord(record, blueskyTidOf({ createdAt, clockId: clockIdOf() }));
 };

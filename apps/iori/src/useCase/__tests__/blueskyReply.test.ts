@@ -169,6 +169,33 @@ describe('ReplyToBlueskyPostUseCase', () => {
     expect(t.createRecord).not.toHaveBeenCalled();
   });
 
+  describe('返信できない投稿', () => {
+    const notAllowed = { ok: false, err: { type: 'BlueskyReplyNotAllowed' } };
+    const target = (extra: Record<string, unknown>) => ({ [TOP]: { uri: TOP, cid: 'bafytop-fresh', ...extra } });
+
+    it.each([
+      ['返信が無効', { viewer: { replyDisabled: true } }],
+      ['相手にブロックされている', { author: { viewer: { blockedBy: true } } }],
+      ['相手をブロックしている', { author: { viewer: { blocking: 'at://did:plc:me/app.bsky.graph.block/1' } } }],
+    ])('%s ときは NotAllowed にし、投稿しない', async (_label, extra) => {
+      const t = setup(target(extra));
+
+      const result = await t.reply.run({ feedItemId: TOP, text: 'hi' });
+
+      expect(result).toEqual(notAllowed);
+      expect(t.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('viewer が付いていても、どれにも当たらなければ投稿する', async () => {
+      const t = setup(target({
+        viewer: { replyDisabled: false },
+        author: { viewer: { blockedBy: false, muted: false } },
+      }));
+
+      expect((await t.reply.run({ feedItemId: TOP, text: 'hi' })).ok).toBe(true);
+    });
+  });
+
   it('createRecord の失敗を返す', async () => {
     const t = setup();
     t.createRecord.mockReturnValueOnce(RA.err(failure));
