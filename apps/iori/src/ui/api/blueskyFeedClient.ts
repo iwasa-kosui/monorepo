@@ -6,6 +6,7 @@ import { BLUESKY_LOGIN_FAILED_ERROR, isMastodonApiError, requestUrl, toApiError 
 const FEEDS_PATH = '/api/iori/v1/bluesky/feeds';
 const FEED_POSTS_PATH = '/api/iori/v1/bluesky/feeds/posts';
 const UNNAMED_FEED_LABEL = '名前を取得できなかったフィード';
+const UNNAMED_LIST_LABEL = '名前を取得できなかったリスト';
 
 const savedFeedsZodType = z.object({
   feeds: z.array(z.object({
@@ -38,8 +39,10 @@ export const fetchBlueskySavedFeeds = async (): Promise<readonly BlueskySavedFee
 export const fetchBlueskyFeedPosts = async (uri: string, cursor?: string): Promise<BlueskyFeedPostsPage> =>
   await getJson(requestUrl(FEED_POSTS_PATH, { uri, cursor })) as BlueskyFeedPostsPage;
 
-export const blueskyFeedLabel = (feed: BlueskySavedFeedView): string =>
-  feed.displayName === undefined || feed.displayName === '' ? UNNAMED_FEED_LABEL : feed.displayName;
+export const blueskyFeedLabel = (feed: BlueskySavedFeedView): string => {
+  if (feed.displayName !== undefined && feed.displayName !== '') return feed.displayName;
+  return feed.kind === 'list' ? UNNAMED_LIST_LABEL : UNNAMED_FEED_LABEL;
+};
 
 export const blueskySavedFeedsFailureMessage = (error: unknown): string => {
   if (isMastodonApiError(error) && error.message === BLUESKY_LOGIN_FAILED_ERROR) {

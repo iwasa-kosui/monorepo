@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BlueskySavedFeedView } from '../api/blueskyFeedClient.ts';
-import { feedUriOfSearch, selectedFeedOf, withFeedUri } from './blueskyFeedSelection.ts';
+import { fallbackFeedUriOf, feedUriOfSearch, selectedFeedOf, withFeedUri } from './blueskyFeedSelection.ts';
 
 const FEED = 'at://did:plc:gen/app.bsky.feed.generator/a';
 const LIST = 'at://did:plc:own/app.bsky.graph.list/b';
@@ -45,5 +45,20 @@ describe('selectedFeedOf', () => {
 
   it('一覧が空なら undefined にする', () => {
     expect(selectedFeedOf([], FEED)).toBeUndefined();
+  });
+});
+
+describe('fallbackFeedUriOf', () => {
+  it('uri が一覧に無いときは先頭の項目の uri を返す', () => {
+    expect(fallbackFeedUriOf(feeds, 'at://did:plc:x/app.bsky.feed.generator/z')).toBe(FEED);
+  });
+
+  it('uri が一覧にあるときは undefined にする', () => {
+    expect(fallbackFeedUriOf(feeds, LIST)).toBeUndefined();
+  });
+
+  it('uri が無いとき、または一覧が空のときは undefined にする', () => {
+    expect(fallbackFeedUriOf(feeds, undefined)).toBeUndefined();
+    expect(fallbackFeedUriOf([], FEED)).toBeUndefined();
   });
 });

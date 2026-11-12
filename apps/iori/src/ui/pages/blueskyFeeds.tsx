@@ -14,7 +14,7 @@ import { BlueskyPostList } from '../components/BlueskyPostList.tsx';
 import { BlueskyStatusNotice } from '../components/BlueskyStatusNotice.tsx';
 import { isStaleGeneration, startGeneration } from '../hooks/generation.ts';
 import { useBlueskyStatus } from '../hooks/useBlueskyStatus.ts';
-import { feedUriOfSearch, selectedFeedOf, withFeedUri } from './blueskyFeedSelection.ts';
+import { fallbackFeedUriOf, feedUriOfSearch, selectedFeedOf, withFeedUri } from './blueskyFeedSelection.ts';
 
 type FeedsState =
   | Readonly<{ kind: 'loading' }>
@@ -109,6 +109,18 @@ const FeedsContent = () => {
     (cursor?: string) => fetchBlueskyFeedPosts(selectedUri ?? '', cursor),
     [selectedUri],
   );
+
+  useEffect(() => {
+    if (state.kind !== 'ready') return;
+    const fallbackUri = fallbackFeedUriOf(state.feeds, requestedUri);
+    if (fallbackUri === undefined) return;
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${withFeedUri(window.location.search, fallbackUri)}`,
+    );
+    setRequestedUri(fallbackUri);
+  }, [state, requestedUri]);
 
   const handleSelect = (feed: BlueskySavedFeedView) => {
     if (feed.uri === selectedUri) return;
