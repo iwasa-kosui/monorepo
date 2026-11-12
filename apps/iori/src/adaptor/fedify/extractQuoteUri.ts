@@ -1,4 +1,6 @@
-import { Hashtag, Link, Mention, type Note } from '@fedify/vocab';
+import { Hashtag, Link, Mention } from '@fedify/vocab';
+
+import type { RemotePostObject } from '../../useCase/helper/remotePostObject.ts';
 
 const MISSKEY_QUOTE_REL = 'https://misskey-hub.net/ns#_misskey_quote';
 const ACTIVITY_STREAMS_MEDIA_TYPE = 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
@@ -14,7 +16,7 @@ const isQuoteLink = (link: Link): boolean =>
 
 const embeddedOnlyDocumentLoader = (): Promise<never> => Promise.reject(new Error('remote tags are not fetched'));
 
-const findQuoteLinkUri = async (note: Note): Promise<string | null> => {
+const findQuoteLinkUri = async (note: RemotePostObject): Promise<string | null> => {
   try {
     for await (const tag of note.getTags({ documentLoader: embeddedOnlyDocumentLoader, suppressError: true })) {
       if (!(tag instanceof Link) || tag instanceof Mention || tag instanceof Hashtag || !isQuoteLink(tag)) continue;
@@ -27,5 +29,5 @@ const findQuoteLinkUri = async (note: Note): Promise<string | null> => {
   return null;
 };
 
-export const extractQuoteUri = async (note: Note): Promise<string | null> =>
+export const extractQuoteUri = async (note: RemotePostObject): Promise<string | null> =>
   toHttpUri(note.quoteId) ?? toHttpUri(note.quoteUrl) ?? await findQuoteLinkUri(note);
