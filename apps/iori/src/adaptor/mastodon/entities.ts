@@ -124,6 +124,23 @@ export const PreviewCardSchema = z.object({
 });
 export type PreviewCard = z.infer<typeof PreviewCardSchema>;
 
+export const PollSchema = z.object({
+  id: z.string(),
+  expires_at: z.string().nullable(),
+  expired: z.boolean(),
+  multiple: z.boolean(),
+  votes_count: z.number().int().nonnegative(),
+  voters_count: z.number().int().nonnegative().nullable(),
+  options: z.array(z.object({
+    title: z.string(),
+    votes_count: z.number().int().nonnegative().nullable(),
+  })),
+  emojis: z.array(CustomEmojiSchema),
+  voted: z.boolean(),
+  own_votes: z.array(z.number().int().nonnegative()),
+});
+export type Poll = z.infer<typeof PollSchema>;
+
 export const IoriBlueskyCrosspostSchema = z.object({
   status: z.enum(['pending', 'sent', 'failed', 'skipped', 'deleting']),
   skip_reason: z.enum(['visibility', 'content_warning', 'sensitive', 'reply_to_unsent']).nullable(),
@@ -184,7 +201,7 @@ export const StatusSchema = z.object({
   get quote() {
     return QuoteSchema.nullable();
   },
-  poll: z.null(),
+  poll: PollSchema.nullable(),
   card: PreviewCardSchema.nullable(),
   language: z.string().nullable(),
   edited_at: z.string().nullable(),

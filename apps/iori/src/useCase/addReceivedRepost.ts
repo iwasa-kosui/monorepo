@@ -22,6 +22,7 @@ import {
   type RemotePostUpserter,
 } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
+import type { RemotePostPoll } from '../domain/post/remotePostPoll.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import {
@@ -57,6 +58,7 @@ type RemotePostIdentity = Readonly<{
   recipientActorUris?: ReadonlyArray<string>;
   quoteUri?: string | null;
   attachments?: readonly RemotePostAttachment[];
+  poll?: RemotePostPoll;
 }>;
 
 type LocalPostInput = Readonly<{

@@ -182,6 +182,7 @@ import { createD1PostSourceTextResolver } from '../../../d1/post/postSourceTextR
 import { createD1PostUpdatedStore } from '../../../d1/post/postUpdatedStore.ts';
 import { createD1PostVersionsResolverByPostId } from '../../../d1/post/postVersionsResolverByPostId.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
+import { createD1RemotePostPollsResolverByPostIds } from '../../../d1/post/remotePostPollsResolverByPostIds.ts';
 import { createD1RemotePostUpserter } from '../../../d1/post/remotePostUpserter.ts';
 import { createD1RemotePostUrisResolverByUris } from '../../../d1/post/remotePostUrisResolverByUris.ts';
 import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
@@ -372,6 +373,7 @@ export const setupReadApi = (
   const statusAssembler = createStatusAssembler({
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
     postExtrasResolver: createD1PostExtrasResolverByPosts(db, ORIGIN),
+    remotePostPollsResolver: createD1RemotePostPollsResolverByPostIds(db),
   });
   const searchTimeline = createSearchTimelineUseCase({
     actorResolverByUserId,

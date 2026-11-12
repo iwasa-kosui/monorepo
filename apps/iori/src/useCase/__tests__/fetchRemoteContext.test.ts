@@ -181,7 +181,14 @@ describe('FetchRemoteContextUseCase', () => {
         { uri: replyUri(1), content: '<p><strong>Title</strong></p><p>body</p>' },
         {
           uri: replyUri(2),
-          content: `<p>q</p><ul><li>a</li></ul><p><a href="${replyUri(2)}">元の投稿で投票する</a></p>`,
+          content: `<p>q</p><p><a href="${replyUri(2)}">元の投稿で投票する</a></p>`,
+          poll: {
+            multiple: false,
+            options: [{ title: 'a', votesCount: 0 }],
+            votersCount: null,
+            expiresAt: null,
+            closed: false,
+          },
         },
       ]);
     });

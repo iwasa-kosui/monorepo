@@ -15,6 +15,7 @@ import { UserId } from '../user/userId.ts';
 import type { Username } from '../user/username.ts';
 import { DirectPostParticipants } from './directPostParticipants.ts';
 import { PostId } from './postId.ts';
+import type { RemotePostPoll } from './remotePostPoll.ts';
 import { Visibility } from './visibility.ts';
 
 const localPostZodType = z.object({
@@ -87,6 +88,7 @@ export type RemotePostCreated = PostEvent<
     recipientActorUris: ReadonlyArray<string>;
     quoteUri: string | null;
     participantActorUris: ReadonlyArray<string>;
+    poll: RemotePostPoll | null;
   }
 >;
 export type PostUpdated = PostEvent<
@@ -110,6 +112,7 @@ export type RemotePostUpdated = PostEvent<
     previousRecipientActorUris: ReadonlyArray<string>;
     participantActorUris: ReadonlyArray<string>;
     images: ReadonlyArray<StoredPostImage>;
+    poll: RemotePostPoll | null;
   }
 >;
 export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
@@ -201,6 +204,7 @@ const createRemotePost = (now: Instant) =>
       quoteUri?: string | null;
       authorActorUri?: string;
       mentionedActorUris?: ReadonlyArray<string>;
+      poll?: RemotePostPoll;
     },
 ): RemotePostCreated => {
   const {
@@ -208,6 +212,7 @@ const createRemotePost = (now: Instant) =>
     quoteUri = null,
     authorActorUri,
     mentionedActorUris = [],
+    poll = null,
     ...postPayload
   } = payload;
   const postId = PostId.generate();
@@ -233,6 +238,7 @@ const createRemotePost = (now: Instant) =>
         ...mentionedActorUris,
         ...recipientActorUris,
       ]),
+      poll,
     },
     Instant.now(),
   );
@@ -249,6 +255,7 @@ export type RemotePostEdit = Readonly<{
   authorActorUri?: string;
   mentionedActorUris?: ReadonlyArray<string>;
   images: ReadonlyArray<StoredPostImage>;
+  poll?: RemotePostPoll;
 }>;
 
 const isNewerEdit = (post: RemotePost, editedAt: Instant): boolean =>
@@ -262,6 +269,7 @@ const updateRemotePost = (now: Instant) => (post: RemotePost, edit: RemotePostEd
     mentionedActorUris = [],
     images,
     visibility,
+    poll = null,
     ...changed
   } = edit;
   const updated: RemotePost = { ...post, ...changed, visibility: Visibility.narrow(post.visibility, visibility) };
@@ -279,6 +287,7 @@ const updateRemotePost = (now: Instant) => (post: RemotePost, edit: RemotePostEd
         ...recipientActorUris,
       ]),
       images,
+      poll,
     },
     now,
   );
@@ -353,6 +362,7 @@ export type RemotePostIdentity = Readonly<{
   quoteUri?: string | null;
   attachments?: readonly RemotePostAttachment[];
   publishedAt?: Instant;
+  poll?: RemotePostPoll;
 }>;
 export type RemotePostUpserter = Agg.Resolver<RemotePostIdentity, RemotePost>;
 export type ThreadResolver = Agg.Resolver<

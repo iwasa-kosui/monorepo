@@ -172,6 +172,37 @@ const setup = (
 };
 
 describe('リモート投稿の編集の保存', () => {
+  it('Question の Update では、票数・投票者数・締め切り・closed を上書きする', async () => {
+    const t = setup();
+    const pollRow = () => t.sqlite.prepare('SELECT * FROM remote_post_polls WHERE postId = ?').get(t.post.postId);
+    t.sqlite.prepare(
+      'INSERT INTO remote_post_polls(postId,multiple,options,votersCount,expiresAt,closed) VALUES (?,?,?,?,?,?)',
+    )
+      .run(t.post.postId, 0, JSON.stringify([{ title: 'a', votesCount: 1 }]), 1, 9_000_000_000_000, 0);
+
+    const result = await t.useCase.run(
+      t.input({
+        poll: {
+          multiple: false,
+          options: [{ title: 'a', votesCount: 7 }],
+          votersCount: 7,
+          expiresAt: Instant.orThrow(6_000),
+          closed: true,
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
+    expect(pollRow()).toEqual({
+      postId: t.post.postId,
+      multiple: 0,
+      options: JSON.stringify([{ title: 'a', votesCount: 7 }]),
+      votersCount: 7,
+      expiresAt: 6_000,
+      closed: 1,
+    });
+  });
+
   it('本文、CW、センシティブ、添付、宛先、編集時刻を更新し、公開範囲と作成時刻は変えない', async () => {
     const t = setup();
 

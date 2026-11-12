@@ -4,7 +4,7 @@ import { getLogger } from '@logtape/logtape';
 
 import { Instant } from '../../../domain/instant/instant.ts';
 import {
-  buildRemotePostContent,
+  buildRemotePostBody,
   isRemotePostObject,
   type RemotePostObject,
 } from '../../../useCase/helper/remotePostObject.ts';
@@ -69,7 +69,7 @@ export const createOnUpdate = (deps: OnUpdateDeps) => async (ctx: InboxContext<u
   const result = await deps.updateRemotePostUseCase.run({
     uri: objectUri,
     actorUri: senderId.href,
-    content: await buildRemotePostContent(object),
+    ...await buildRemotePostBody(object),
     ...extractContentWarning(object),
     attachments,
     recipientActorUris: extractRecipientActorUris([object, activity], deps.origin),

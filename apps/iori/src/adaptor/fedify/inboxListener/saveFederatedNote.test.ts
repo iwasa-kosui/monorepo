@@ -1,4 +1,4 @@
-import { Note, Person } from '@fedify/vocab';
+import { Collection, Note, Person, Question } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -102,6 +102,44 @@ describe('saveFederatedNote', () => {
     await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
 
     expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ quoteUri: null }));
+  });
+
+  it('passes the poll of a Question to the upserter and leaves the options out of the content', async () => {
+    const { deps, remotePostUpserter } = createDeps();
+    const note = createNote();
+    const question = new Question({
+      id: new URL('https://remote.example/notes/2'),
+      content: '<p>q</p>',
+      attribution: await note.getAttribution(),
+      exclusiveOptions: [new Note({ name: 'a', replies: new Collection({ totalItems: 3 }) })],
+      voters: 3,
+    });
+
+    await saveFederatedNote(deps, { note: question, relayId, documentLoader });
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: '<p>q</p><p><a href="https://remote.example/notes/2">元の投稿で投票する</a></p>',
+        poll: {
+          multiple: false,
+          options: [{ title: 'a', votesCount: 3 }],
+          votersCount: 3,
+          expiresAt: null,
+          closed: false,
+        },
+      }),
+    );
+  });
+
+  it('passes no poll to the upserter for a Note', async () => {
+    const { deps, remotePostUpserter } = createDeps();
+
+    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
+
+    expect(remotePostUpserter.resolve).toHaveBeenCalledOnce();
+    expect(remotePostUpserter.resolve.mock.calls[0]).toEqual([
+      expect.not.objectContaining({ poll: expect.anything() }),
+    ]);
   });
 
   it('stores a federated timeline item for an existing post owned by the Note author', async () => {

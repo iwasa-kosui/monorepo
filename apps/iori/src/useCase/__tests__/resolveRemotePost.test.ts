@@ -170,7 +170,7 @@ describe('ResolveRemotePostUseCase', () => {
     });
   });
 
-  it('Question は選択肢と投票のリンクを組み立てて保存し、その postId を返す', async () => {
+  it('Question は投票のリンクを組み立て、選択肢を poll にして保存し、その postId を返す', async () => {
     const t = setup({
       lookupObject: async () =>
         new Question({
@@ -184,7 +184,14 @@ describe('ResolveRemotePostUseCase', () => {
     expect(await t.run(HTML_URL)).toBe(`saved:${NOTE_URI}`);
     expect(t.remotePostUpserter.resolve.mock.calls[0]![0]).toMatchObject({
       uri: NOTE_URI,
-      content: `<p>q</p><ul><li>a</li><li>b</li></ul><p><a href="${NOTE_URI}">元の投稿で投票する</a></p>`,
+      content: `<p>q</p><p><a href="${NOTE_URI}">元の投稿で投票する</a></p>`,
+      poll: {
+        multiple: false,
+        options: [{ title: 'a', votesCount: 0 }, { title: 'b', votesCount: 0 }],
+        votersCount: null,
+        expiresAt: null,
+        closed: false,
+      },
     });
   });
 

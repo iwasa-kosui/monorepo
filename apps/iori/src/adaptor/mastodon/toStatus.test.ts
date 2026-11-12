@@ -3,16 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { ActorId } from '../../domain/actor/actorId.ts';
 import type { BlueskyCrosspost } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import { ImageId } from '../../domain/image/imageId.ts';
-import type { Instant } from '../../domain/instant/instant.ts';
+import { Instant } from '../../domain/instant/instant.ts';
 import { LinkPreviewId } from '../../domain/linkPreview/linkPreviewId.ts';
 import type { LocalPost, PostWithAuthor, RemotePost } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
+import type { RemotePostPoll } from '../../domain/post/remotePostPoll.ts';
 import { RepostId } from '../../domain/repost/repostId.ts';
 import type { RepostTimelineItem } from '../../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../../domain/timeline/timelineItemId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import { Username } from '../../domain/user/username.ts';
-import { type Account, AccountSchema, StatusSchema } from './entities.ts';
+import { type Account, AccountSchema, PollSchema, StatusSchema } from './entities.ts';
 import { toAccount } from './toAccount.ts';
 import { toIoriBlueskyCrosspost, toReblogStatus, toStatus } from './toStatus.ts';
 
@@ -582,5 +583,101 @@ describe('toIoriBlueskyCrosspost', () => {
     expect(toStatus(localPost, { ...options, blueskyCrosspost: null }).iori?.bluesky_crosspost).toBeUndefined();
     expect(toStatus(localPost, { ...options, blueskyCrosspost: crosspost({}) }).iori?.bluesky_crosspost)
       .toMatchObject({ status: 'pending' });
+  });
+});
+
+describe('toStatus の poll', () => {
+  const poll = (overrides: Partial<RemotePostPoll> = {}): RemotePostPoll => ({
+    multiple: false,
+    options: [{ title: '赤', votesCount: 3 }, { title: '青', votesCount: 5 }],
+    votersCount: 8,
+    expiresAt: Instant.orThrow(Date.now() + 86_400_000),
+    closed: false,
+    ...overrides,
+  });
+
+  it('投票を渡さなければ null を返す', () => {
+    expect(toStatus(remotePost, options).poll).toBeNull();
+    expect(toStatus(remotePost, { ...options, poll: null }).poll).toBeNull();
+  });
+
+  it('投票を Mastodon の Poll にする', () => {
+    const expiresAt = Instant.orThrow(Date.now() + 86_400_000);
+
+    const status = toStatus(remotePost, { ...options, poll: poll({ expiresAt }) });
+
+    expect(StatusSchema.safeParse(status).success).toBe(true);
+    expect(status.poll).toEqual({
+      id: remotePost.postId,
+      expires_at: new Date(expiresAt).toISOString(),
+      expired: false,
+      multiple: false,
+      votes_count: 8,
+      voters_count: 8,
+      options: [{ title: '赤', votes_count: 3 }, { title: '青', votes_count: 5 }],
+      emojis: [],
+      voted: false,
+      own_votes: [],
+    });
+  });
+
+  it('votes_count は選択肢の票数の合計にし、投票者数が不明なら voters_count を null にする', () => {
+    const status = toStatus(remotePost, { ...options, poll: poll({ multiple: true, votersCount: null }) });
+
+    expect(status.poll).toMatchObject({ multiple: true, votes_count: 8, voters_count: null });
+  });
+
+  it('締め切りが無ければ expires_at を null にし、期限切れとみなさない', () => {
+    expect(toStatus(remotePost, { ...options, poll: poll({ expiresAt: null }) }).poll).toMatchObject({
+      expires_at: null,
+      expired: false,
+    });
+  });
+
+  it('closed なら、締め切り前でも expired にする', () => {
+    expect(toStatus(remotePost, { ...options, poll: poll({ closed: true }) }).poll?.expired).toBe(true);
+  });
+
+  it('締め切りが現在より前なら expired にする', () => {
+    const status = toStatus(remotePost, { ...options, poll: poll({ expiresAt: Instant.orThrow(1_000) }) });
+
+    expect(status.poll?.expired).toBe(true);
+  });
+
+  it('リブログの外側の status は poll を持たない', () => {
+    const reblog = toStatus(remotePost, { ...options, poll: poll() });
+
+    expect(
+      toReblogStatus({ createdAt: Instant.orThrow(1_000) } as Pick<RepostTimelineItem, 'createdAt'>, {
+        repostId: RepostId.generate(),
+        account,
+        reblog,
+      }).poll,
+    ).toBeNull();
+  });
+});
+
+describe('PollSchema', () => {
+  const valid = {
+    id: 'poll-1',
+    expires_at: null,
+    expired: false,
+    multiple: false,
+    votes_count: 0,
+    voters_count: null,
+    options: [{ title: 'a', votes_count: 0 }],
+    emojis: [],
+    voted: false,
+    own_votes: [],
+  };
+
+  it('Mastodon の Poll を受け付ける', () => {
+    expect(PollSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it('負の票数と、項目の欠けた Poll を受け付けない', () => {
+    expect(PollSchema.safeParse({ ...valid, votes_count: -1 }).success).toBe(false);
+    expect(PollSchema.safeParse({ ...valid, options: [{ title: 'a', votes_count: -1 }] }).success).toBe(false);
+    expect(PollSchema.safeParse({ ...valid, expired: undefined }).success).toBe(false);
   });
 });

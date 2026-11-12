@@ -1,4 +1,4 @@
-import { Image, Mention, Note, Person, Update } from '@fedify/vocab';
+import { Collection, Image, Mention, Note, Person, Question, Update } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 import { describe, expect, it, vi } from 'vitest';
@@ -71,6 +71,46 @@ describe('createOnUpdate', () => {
       visibility: 'direct',
       editedAt: 5_000,
     });
+  });
+
+  it('Question の Update から、本文と更新後の票数・締め切り・closed を取り出して渡す', async () => {
+    const { run, listener } = setup();
+    const question = new Question({
+      id: noteId,
+      attribution: actorId,
+      content: '<p>q</p>',
+      updated: Temporal.Instant.fromEpochMilliseconds(5_000),
+      endTime: Temporal.Instant.fromEpochMilliseconds(6_000),
+      closed: Temporal.Instant.fromEpochMilliseconds(6_000),
+      tos: [kosuiId],
+      exclusiveOptions: [
+        new Note({ name: 'a', replies: new Collection({ totalItems: 10 }) }),
+        new Note({ name: 'b', replies: new Collection({ totalItems: 6 }) }),
+      ],
+      voters: 16,
+    });
+
+    await listener(createCtx(), updateOf(question));
+
+    expect(run).toHaveBeenCalledOnce();
+    expect(run.mock.calls[0]?.[0]).toMatchObject({
+      content: `<p>q</p><p><a href="${noteId.href}">元の投稿で投票する</a></p>`,
+      poll: {
+        multiple: false,
+        options: [{ title: 'a', votesCount: 10 }, { title: 'b', votesCount: 6 }],
+        votersCount: 16,
+        expiresAt: 6_000,
+        closed: true,
+      },
+    });
+  });
+
+  it('Note の Update には poll を渡さない', async () => {
+    const { run, listener } = setup();
+
+    await listener(createCtx(), updateOf(noteOf()));
+
+    expect(run.mock.calls[0]?.[0]).not.toHaveProperty('poll');
   });
 
   it('Note のメンションのタグから、メンションされた actor の URI を取り出して渡す', async () => {

@@ -32,7 +32,7 @@ import type { SessionExpiredError, SessionResolver } from '../domain/session/ses
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
-import { buildRemotePostContent, isRemotePostObject } from './helper/remotePostObject.ts';
+import { buildRemotePostBody, isRemotePostObject } from './helper/remotePostObject.ts';
 import { createRepostAnnounce, repostAnnounceUri, resolveLocalPostObjectUri } from './helper/repostAnnounce.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith, resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
@@ -253,7 +253,7 @@ const create = ({
           }
           const remotePostResult = await remotePostUpserter.resolve({
             uri: objectUri,
-            content: await buildRemotePostContent(result),
+            ...await buildRemotePostBody(result),
             ...extractContentWarning(result),
             visibility: fetchedVisibility,
             recipientActorUris: extractRecipientActorUris([result], origin),

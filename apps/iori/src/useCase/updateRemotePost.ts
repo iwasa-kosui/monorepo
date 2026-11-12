@@ -29,6 +29,7 @@ import {
   type RemotePostRecipientsResolverByPostId,
   type RemotePostUpdatedStore,
 } from '../domain/post/post.ts';
+import type { RemotePostPoll } from '../domain/post/remotePostPoll.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import type { UserId } from '../domain/user/userId.ts';
@@ -46,6 +47,7 @@ type Input = Readonly<{
   mentionedActorUris?: ReadonlyArray<string>;
   visibility: Visibility | null;
   editedAt: Instant;
+  poll?: RemotePostPoll;
 }>;
 
 type Ok = Readonly<
@@ -214,6 +216,7 @@ const create = ({
       authorActorUri: input.actorUri,
       mentionedActorUris: input.mentionedActorUris,
       images,
+      poll: input.poll,
     });
     const stored = await remotePostUpdatedStore.store(event);
     if (!stored.ok) throw new Error(`Failed to store the edit of ${input.uri}`);

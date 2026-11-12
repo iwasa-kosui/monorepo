@@ -1,13 +1,15 @@
 import { containsKana } from '../../domain/aiTranslation/isJapanese.ts';
 import { BlueskyCrosspost } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import { attachmentKindOf } from '../../domain/image/attachmentKind.ts';
+import { Instant } from '../../domain/instant/instant.ts';
 import type { PostWithAuthor } from '../../domain/post/post.ts';
+import { RemotePostPoll } from '../../domain/post/remotePostPoll.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import type { RepostId } from '../../domain/repost/repostId.ts';
 import type { RepostTimelineItem } from '../../domain/timeline/timelineItem.ts';
 import { blueskyPostUrlOfUri } from '../../helper/blueskyUrl.ts';
 import { htmlToPlainText } from '../text/htmlToPlainText.ts';
-import type { Account, IoriBlueskyCrosspost, MediaAttachment, PreviewCard, Status } from './entities.ts';
+import type { Account, IoriBlueskyCrosspost, MediaAttachment, Poll, PreviewCard, Status } from './entities.ts';
 import { toSafeApiUrl } from './safeApiUrl.ts';
 import { sanitizeStatusContent } from './sanitizeContent.ts';
 import { toIsoString } from './time.ts';
@@ -22,6 +24,7 @@ export type ToStatusOptions = Readonly<{
   myReactionEmojis: ReadonlySet<string>;
   blueskyCrosspost?: BlueskyCrosspost | null;
   quote?: Readonly<{ uri: string; status: Status | null }> | null;
+  poll?: RemotePostPoll | null;
 }>;
 
 type LinkPreviews = PostWithAuthor['linkPreviews'];
@@ -88,6 +91,22 @@ const toPostUrls = (
   };
 };
 
+const toPoll = (post: PostWithAuthor, poll: RemotePostPoll | null | undefined): Poll | null => {
+  if (poll == null) return null;
+  return {
+    id: post.postId,
+    expires_at: poll.expiresAt === null ? null : toIsoString(poll.expiresAt),
+    expired: RemotePostPoll.isExpired(poll, Instant.now()),
+    multiple: poll.multiple,
+    votes_count: RemotePostPoll.totalVotes(poll),
+    voters_count: poll.votersCount,
+    options: poll.options.map((option) => ({ title: option.title, votes_count: option.votesCount })),
+    emojis: [],
+    voted: false,
+    own_votes: [],
+  };
+};
+
 const toLanguage = (html: string): string | null => {
   const text = htmlToPlainText(html, Number.MAX_SAFE_INTEGER);
   if (text === '') return null;
@@ -133,7 +152,7 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
     in_reply_to_account_id: options.inReplyToAccountId,
     reblog: null,
     quote: options.quote?.status == null ? null : { state: 'accepted', quoted_status: options.quote.status },
-    poll: null,
+    poll: toPoll(post, options.poll),
     card: toCard(post.linkPreviews, options.baseUrl),
     language: toLanguage(post.content),
     edited_at: post.editedAt != null ? toIsoString(post.editedAt) : null,
