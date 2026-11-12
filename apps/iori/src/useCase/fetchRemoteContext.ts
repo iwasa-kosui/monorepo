@@ -32,7 +32,7 @@ const MAX_TRACKED_POSTS = 200;
 const DEFAULT_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_TOTAL_TIMEOUT_MS = 10_000;
 
-type FederationContext = Readonly<{
+export type FederationContext = Readonly<{
   getDocumentLoader: (params: { identifier: string }) => Promise<DocumentLoader>;
   lookupObject: (
     uri: string,

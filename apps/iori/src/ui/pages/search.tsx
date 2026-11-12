@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
 import {
   isMastodonApiError,
   isUnauthorizedError,
+  searchRemoteStatuses,
   searchStatuses,
   type SearchStatusesResult,
   summarizeTimeline,
@@ -13,6 +15,7 @@ import { buildSummaryRequest, summaryErrorMessage, summaryResultLabel, summaryTa
 import { BlueskyActorSearchResults, BlueskyPostSearchResults } from '../components/BlueskySearchResults.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { SummaryText } from '../components/SummaryText.tsx';
+import { remoteSearchUrl } from './searchRemoteUrl.ts';
 import {
   parseSearchSource,
   SEARCH_SOURCE_TABS,
@@ -43,6 +46,9 @@ const SearchPage = () => {
   const lastIoriQueryRef = useRef<string | undefined>(undefined);
   const isSummarizingRef = useRef(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [remoteStatuses, setRemoteStatuses] = useState<readonly Status[]>([]);
+  const [isLoadingRemote, setIsLoadingRemote] = useState(false);
+  const remoteSeqRef = useRef(0);
   const [searchError, setSearchError] = useState('');
   const [summary, setSummary] = useState<{ result: TimelineSummary; target: string } | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -60,12 +66,43 @@ const SearchPage = () => {
     setSource(next);
   };
 
+  const nextRemoteSeq = (): number => {
+    const next = (remoteSeqRef.current ?? 0) + 1;
+    remoteSeqRef.current = next;
+    return next;
+  };
+
+  const loadRemoteStatuses = async (url: string) => {
+    const seq = nextRemoteSeq();
+    setRemoteStatuses([]);
+    setIsLoadingRemote(true);
+    try {
+      const statuses = await searchRemoteStatuses(url);
+      if (seq === remoteSeqRef.current) setRemoteStatuses(statuses);
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        redirectToSignIn();
+      }
+    } finally {
+      if (seq === remoteSeqRef.current) setIsLoadingRemote(false);
+    }
+  };
+
+  const clearRemoteStatuses = () => {
+    nextRemoteSeq();
+    setRemoteStatuses([]);
+    setIsLoadingRemote(false);
+  };
+
   const runSearch = async (q: string) => {
     if (isSearchingRef.current) return;
     lastIoriQueryRef.current = q;
     isSearchingRef.current = true;
     setIsSearching(true);
     setSearchError('');
+    const remoteUrl = remoteSearchUrl(q, window.location.host);
+    if (remoteUrl === undefined) clearRemoteStatuses();
+    else void loadRemoteStatuses(remoteUrl);
     try {
       setSearched(await searchStatuses(q));
       setSearchedQuery(q);
@@ -113,6 +150,7 @@ const SearchPage = () => {
   const handleClearSearch = () => {
     setSearched(null);
     setSearchedQuery('');
+    clearRemoteStatuses();
   };
 
   const handleSummarize = async () => {
@@ -145,6 +183,9 @@ const SearchPage = () => {
       setIsSummarizing(false);
     }
   };
+
+  const remoteIds = new Set(remoteStatuses.map((status) => status.id));
+  const ownStatuses = searched === null ? [] : searched.statuses.filter((status) => !remoteIds.has(status.id));
 
   return (
     <section class='mb-8'>
@@ -252,14 +293,27 @@ const SearchPage = () => {
 
           {searchError !== '' && <p class='text-charcoal-light dark:text-gray-400 mb-4'>{searchError}</p>}
           {isSearching && <p class='text-charcoal-light dark:text-gray-400 mb-4'>検索しています</p>}
+          {isLoadingRemote && (
+            <p role='status' class='text-charcoal-light dark:text-gray-400 mb-4'>
+              相手のサーバーから投稿を読み込んでいます
+            </p>
+          )}
+          {remoteStatuses.length > 0 && (
+            <div class='space-y-6 py-2 mb-6'>
+              <h2 class='font-bold text-charcoal dark:text-white'>相手のサーバーの投稿</h2>
+              {remoteStatuses.map((status) => <PostView key={status.id} status={status} isLoggedIn />)}
+            </div>
+          )}
           {searched !== null && !isSearching && (
             <div class='space-y-6 py-2'>
               <div class={noticeClass}>
                 <p>使った語: {[...searched.terms.original, ...searched.terms.expanded].join(' / ')}</p>
                 {searched.expansion === 'failed' && <p>検索語の展開に失敗したため、入力した語だけで検索しました</p>}
               </div>
-              {searched.statuses.length > 0
-                ? searched.statuses.map((status) => <PostView key={status.id} status={status} isLoggedIn />)
+              {ownStatuses.length > 0
+                ? ownStatuses.map((status) => <PostView key={status.id} status={status} isLoggedIn />)
+                : remoteStatuses.length > 0
+                ? null
                 : (
                   <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-8 text-center'>
                     <p class='text-charcoal-light dark:text-gray-400'>該当する投稿はありません</p>

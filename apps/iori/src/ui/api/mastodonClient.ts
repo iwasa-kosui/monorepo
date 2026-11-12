@@ -410,6 +410,10 @@ export type SearchStatusesResult = IoriSearchStatusesResponse;
 export const searchStatuses = async (q: string, limit?: number): Promise<SearchStatusesResult> =>
   (await request<SearchStatusesResult>('/api/iori/v1/search/statuses', { q, limit })).body;
 
+export const searchRemoteStatuses = async (url: string): Promise<readonly Status[]> =>
+  (await request<{ statuses: Status[] }>('/api/v2/search', { q: url, resolve: true, type: 'statuses' }))
+    .body.statuses;
+
 export const fetchXPosts = async (): Promise<IoriXPostsResponse> =>
   (await request<IoriXPostsResponse>('/api/iori/v1/x-posts')).body;
 

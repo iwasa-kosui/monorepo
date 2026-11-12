@@ -1,4 +1,4 @@
-import { Person } from '@fedify/vocab';
+import { Note, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -642,5 +642,226 @@ describe('GET /api/v2/search の resolve=true', () => {
     const idsOf = async (response: Response) =>
       ((await response.json()) as { statuses: Array<{ id: string }> }).statuses.map((status) => status.id);
     expect(await idsOf(withResolve)).toEqual(await idsOf(without));
+  });
+});
+
+describe('GET /api/v2/search の投稿の URL の解決', () => {
+  const HTML_URL = 'https://remote.example/@erin/123';
+  const NOTE_URI = 'https://remote.example/notes/erin-123';
+  const publicUri = new URL('https://www.w3.org/ns/activitystreams#Public');
+
+  const erinNote = (id = NOTE_URI) =>
+    new Note({
+      id: new URL(id),
+      content: '<p>erin の投稿</p>',
+      to: publicUri,
+      attribution: new Person({
+        id: new URL('https://remote.example/users/erin'),
+        inbox: new URL('https://remote.example/users/erin/inbox'),
+        preferredUsername: 'erin',
+        url: new URL('https://remote.example/@erin'),
+      }),
+    });
+
+  const seedUrl = async (options: Parameters<typeof seedTimeline>[0] = {}) => {
+    const t = await seedTimeline(options);
+    t.federation.lookupObject.mockImplementation(async (uri?: string) =>
+      uri === HTML_URL || uri === NOTE_URI ? erinNote() : null
+    );
+    const search = (params: Record<string, string>, headers: Record<string, string> = t.me.bearer) =>
+      t.request(searchUrl('/api/v2/search', params), { headers });
+    const statusesOf = async (response: Response) =>
+      parseStatuses(((await response.json()) as { statuses: unknown[] }).statuses);
+    const remotePostCount = () =>
+      Number((t.sqlite.prepare('SELECT count(*) AS n FROM remote_posts').get() as { n: number | bigint }).n);
+    return { ...t, search, statusesOf, remotePostCount };
+  };
+
+  it('resolve=true で URL の投稿を相手のサーバーから取り込み、statuses の先頭に出す', async () => {
+    const t = await seedUrl();
+    const before = t.remotePostCount();
+
+    const response = await t.search({ q: HTML_URL, resolve: 'true' });
+
+    expect(response.status).toBe(200);
+    const statuses = await t.statusesOf(response);
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]).toMatchObject({ account: { username: 'erin' } });
+    expect(t.remotePostCount()).toBe(before + 1);
+    expect(t.federation.lookupObject).toHaveBeenCalledWith(HTML_URL, expect.anything());
+    expect(t.federation.getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
+  });
+
+  it('type=statuses でも解決し、取り込んだ投稿は詳細で引ける ID の Status にする', async () => {
+    const t = await seedUrl();
+
+    const statuses = await t.statusesOf(await t.search({ q: NOTE_URI, resolve: 'true', type: 'statuses' }));
+
+    const saved = t.sqlite.prepare('SELECT postId FROM remote_posts WHERE uri = ?').get(NOTE_URI) as {
+      postId: string;
+    };
+    expect(statuses.map((status) => status.id)).toEqual([saved.postId]);
+  });
+
+  it('同じ URL をもう一度検索しても、保存した投稿を重複させず取得もしない', async () => {
+    const t = await seedUrl();
+    await t.search({ q: NOTE_URI, resolve: 'true' });
+    const before = t.remotePostCount();
+    t.federation.lookupObject.mockClear();
+
+    const statuses = await t.statusesOf(await t.search({ q: NOTE_URI, resolve: 'true' }));
+
+    expect(statuses).toHaveLength(1);
+    expect(t.remotePostCount()).toBe(before);
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('解決した投稿だけを返し、通常の検索に当たる投稿は混ぜない', async () => {
+    const t = await seedUrl();
+    const q = 'https://remote.example/@alice/travel';
+    t.seed.addRemotePost(t.alice, 1_000, { content: `<p>${q}</p>` });
+    t.federation.lookupObject.mockImplementation(async (uri?: string) => uri === q ? erinNote() : null);
+
+    const resolved = await t.statusesOf(await t.search({ q, resolve: 'true' }));
+
+    const saved = t.sqlite.prepare('SELECT postId FROM remote_posts WHERE uri = ?').get(NOTE_URI) as {
+      postId: string;
+    };
+    expect(resolved.map((status) => status.id)).toEqual([saved.postId]);
+  });
+
+  it('解決した投稿が通常の検索にも当たるときは、その投稿を 1 件だけ返す', async () => {
+    const t = await seedUrl();
+    const q = 'https://remote.example/@alice/travel';
+    const same = t.seed.addRemotePost(t.alice, 1_000, { content: `<p>${q}</p>` });
+    t.federation.lookupObject.mockImplementation(async (uri?: string) => uri === q ? erinNote(same.uri) : null);
+    const normal = await t.statusesOf(await t.search({ q }));
+    expect(normal.map((status) => status.id)).toContain(same.postId);
+
+    const resolved = await t.statusesOf(await t.search({ q, resolve: 'true' }));
+
+    expect(resolved.map((status) => status.id)).toEqual([same.postId]);
+  });
+
+  it('resolve がないか true でないときは、取り込まず通常の検索を返す', async () => {
+    const t = await seedUrl();
+    const q = 'https://remote.example/@alice/travel';
+    const mention = t.seed.addRemotePost(t.alice, 1_000, { content: `<p>${q}</p>` });
+    const before = t.remotePostCount();
+
+    const responses = await Promise.all([
+      t.search({ q }),
+      t.search({ q, resolve: 'false' }),
+    ]);
+
+    for (const response of responses) {
+      expect((await t.statusesOf(response)).map((status) => status.id)).toEqual([mention.postId]);
+    }
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+    expect(t.remotePostCount()).toBe(before);
+  });
+
+  it('type=accounts と type=hashtags では投稿を解決しない', async () => {
+    const t = await seedUrl();
+    const before = t.remotePostCount();
+
+    await Promise.all([
+      t.search({ q: HTML_URL, resolve: 'true', type: 'accounts' }),
+      t.search({ q: HTML_URL, resolve: 'true', type: 'hashtags' }),
+    ]);
+
+    expect(t.federation.lookupObject).not.toHaveBeenCalledWith(HTML_URL, expect.anything());
+    expect(t.remotePostCount()).toBe(before);
+  });
+
+  it('ページ送りのときは解決しない', async () => {
+    const t = await seedUrl();
+
+    await Promise.all([
+      t.search({ q: HTML_URL, resolve: 'true', offset: '20' }),
+      t.search({ q: HTML_URL, resolve: 'true', max_id: 'x' }),
+    ]);
+
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('URL でない q、http の URL、自サーバーの URL では解決しない', async () => {
+    const t = await seedUrl();
+
+    await Promise.all([
+      t.search({ q: '京都 旅行', resolve: 'true' }),
+      t.search({ q: 'http://remote.example/@erin/123', resolve: 'true' }),
+      t.search({ q: 'https://iori.test/users/kosui/posts/none', resolve: 'true' }),
+      t.search({ q: 'https://user:pw@remote.example/@erin/123', resolve: 'true' }),
+    ]);
+
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('閲覧者に見えない保存済みの投稿は出さない', async () => {
+    const t = await seedUrl();
+    const hidden = t.seed.addRemotePost(t.bob, 2_000, { visibility: 'private', timeline: false });
+
+    const response = await t.search({ q: hidden.uri, resolve: 'true' });
+
+    expect(response.status).toBe(200);
+    expect(await t.statusesOf(response)).toEqual([]);
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('ブロックした相手の投稿は取り込まず、statuses を空にして 200 を返す', async () => {
+    const t = await seedUrl();
+    const erin = t.seed.addRemoteActor('erin');
+    t.seed.addBlock(t.me.userId, erin.actorId);
+    t.seed.addRemotePost(t.alice, 1_000, { content: `<p>${HTML_URL}</p>` });
+    const before = t.remotePostCount();
+
+    const response = await t.search({ q: HTML_URL, resolve: 'true' });
+
+    expect(response.status).toBe(200);
+    expect(await t.statusesOf(response)).toEqual([]);
+    expect(t.remotePostCount()).toBe(before);
+  });
+
+  it('取得できなかったときは、取り込まず statuses を空にして 200 を返す', async () => {
+    const t = await seedUrl();
+    t.federation.lookupObject.mockImplementation(async () => null);
+    t.seed.addRemotePost(t.alice, 1_000, { content: `<p>${HTML_URL}</p>` });
+    const before = t.remotePostCount();
+
+    const response = await t.search({ q: HTML_URL, resolve: 'true' });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
+    expect(t.remotePostCount()).toBe(before);
+  });
+
+  it('取得が例外を投げても、検索全体を 500 にしない', async () => {
+    const t = await seedUrl();
+    t.federation.lookupObject.mockImplementation(async () => {
+      throw new Error('network down');
+    });
+
+    const response = await t.search({ q: HTML_URL, resolve: 'true' });
+
+    expect(response.status).toBe(200);
+    expect(await t.statusesOf(response)).toEqual([]);
+  });
+
+  it('account_id を指定したときは解決しない', async () => {
+    const t = await seedUrl();
+
+    await t.search({ q: HTML_URL, resolve: 'true', account_id: t.alice.actorId });
+
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('ログインしていないと 401 にして解決しない', async () => {
+    const t = await seedUrl();
+
+    const response = await t.request(searchUrl('/api/v2/search', { q: HTML_URL, resolve: 'true' }));
+
+    expect(response.status).toBe(401);
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
   });
 });

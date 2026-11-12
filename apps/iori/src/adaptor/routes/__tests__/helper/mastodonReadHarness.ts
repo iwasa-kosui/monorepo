@@ -44,6 +44,7 @@ import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts'
 import { ReplyToBlueskyPostUseCase } from '../../../../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../../useCase/repostBlueskyPost.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
+import { ResolveRemotePostUseCase } from '../../../../useCase/resolveRemotePost.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
 import type { ScheduleBlueskyCrosspostUseCase } from '../../../../useCase/scheduleBlueskyCrosspost.ts';
@@ -537,6 +538,7 @@ export const setupReadApi = (
         '/api',
         createWorkerIoriSearchRouter({
           authn,
+          actorResolverByUserId,
           searchTimeline,
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,
@@ -548,6 +550,15 @@ export const setupReadApi = (
             remoteActorProfileUpdatedStore,
             actorResolverByUri,
           }),
+          resolveRemotePostUseCase: ResolveRemotePostUseCase.create({
+            origin: ORIGIN,
+            userResolver,
+            postResolverByUri: createD1PostResolverByUri(db),
+            localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
+            remotePostUpserter,
+            blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+          }),
+          createContext,
         }),
       );
       root.route(
