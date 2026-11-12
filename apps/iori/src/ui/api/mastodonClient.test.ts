@@ -22,6 +22,7 @@ import {
   fetchPublicTimeline,
   fetchRelationshipOrSignedOut,
   fetchRelationships,
+  fetchRemoteContext,
   fetchStatus,
   fetchStatusContext,
   follow,
@@ -524,6 +525,18 @@ describe('mastodon client requests', () => {
 
     expect(isNotFoundError(error)).toBe(true);
     expect(failureMessage('add reaction', error)).toBe('Failed to add reaction: Record not found');
+  });
+
+  it('posts to the remote context path with the encoded id and returns the fetched count', async () => {
+    const fetchMock = stubFetch(jsonResponse({ fetched: 3 }));
+
+    const result = await fetchRemoteContext('a/b');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/statuses/a%2Fb/remote-context');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual({ fetched: 3 });
   });
 
   it('encodes the id in a write path', async () => {
