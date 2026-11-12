@@ -224,3 +224,26 @@ describe('RemoteUserPage report', () => {
     expect(render(account(), { isLoggedIn: true, isReported: true })).toContain('通報しました');
   });
 });
+
+describe('RemoteUserPage message button', () => {
+  it('shows the メッセージ button only to a signed-in viewer who can open a conversation', () => {
+    expect(render(account(), { isLoggedIn: true, onMessage: async () => {} })).toContain('title="メッセージ"');
+    expect(render(account(), { isLoggedIn: true })).not.toContain('title="メッセージ"');
+    expect(render(account(), { isLoggedIn: false })).not.toContain('title="メッセージ"');
+  });
+
+  it('disables the button while a conversation is opening and shows the error', () => {
+    const idle = render(account(), { isLoggedIn: true, onMessage: async () => {} });
+    const opening = render(account(), { isLoggedIn: true, onMessage: async () => {}, isOpeningMessage: true });
+    const failed = render(account(), {
+      isLoggedIn: true,
+      onMessage: async () => {},
+      messageError: 'この相手のアカウントが見つかりません。',
+    });
+
+    expect(idle).not.toMatch(/<button[^>]*title="メッセージ"[^>]*disabled/);
+    expect(opening).toMatch(/disabled[^>]*title="メッセージ"|title="メッセージ"[^>]*disabled/);
+    expect(failed).toContain('role="alert"');
+    expect(failed).toContain('この相手のアカウントが見つかりません。');
+  });
+});

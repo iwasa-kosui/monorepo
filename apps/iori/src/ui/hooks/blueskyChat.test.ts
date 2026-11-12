@@ -230,6 +230,16 @@ describe('chatRouteOfPath / chatConvoPath', () => {
     expect(chatRouteOfPath('/messages/a%2Fb/')).toEqual({ kind: 'convo', convoId: 'a/b' });
   });
 
+  it('Fediverse の会話のパスは、Bluesky の convoId と見分けて key を取り出す', () => {
+    expect(chatRouteOfPath('/messages/fediverse/WyJhIl0')).toEqual({ kind: 'fediverseConvo', key: 'WyJhIl0' });
+    expect(chatRouteOfPath('/messages/fediverse/WyJhIl0/')).toEqual({ kind: 'fediverseConvo', key: 'WyJhIl0' });
+    expect(chatRouteOfPath('/messages/fediverse')).toBeUndefined();
+    expect(chatRouteOfPath('/messages/fediverse/')).toBeUndefined();
+    expect(chatRouteOfPath('/messages/fediverse/a/b')).toBeUndefined();
+    expect(chatRouteOfPath('/messages/fediverse/%E0%A4%A')).toBeUndefined();
+    expect(chatRouteOfPath('/messages/fediversex')).toEqual({ kind: 'convo', convoId: 'fediversex' });
+  });
+
   it('対象外のパスと壊れたエンコードは undefined にする', () => {
     expect(chatRouteOfPath('/messages/a/b')).toBeUndefined();
     expect(chatRouteOfPath('/messagesx')).toBeUndefined();

@@ -36,7 +36,7 @@ const pageForPath = (pathname: string): WorkerPage | undefined => {
   if (/^\/remote-users\/[^/]+\/?$/.test(pathname)) {
     return { entry: 'remoteUser', title: 'Profile | blog.kosui.me' };
   }
-  if (/^\/messages\/[^/]+\/?$/.test(pathname)) {
+  if (/^\/messages\/fediverse\/[^/]+\/?$/.test(pathname) || /^\/messages\/(?!fediverse\/?$)[^/]+\/?$/.test(pathname)) {
     return { entry: 'messages', title: 'メッセージ | blog.kosui.me', private: true };
   }
   if (/^\/bluesky\/profile\/[^/]+\/?$/.test(pathname)) {

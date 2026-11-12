@@ -18,6 +18,7 @@ import { createWorkerIoriBlueskyCrosspostStatusRouter } from './adaptor/routes/w
 import { createWorkerIoriBlueskyProfileRouter } from './adaptor/routes/workerIoriBlueskyProfileRouter.ts';
 import { createWorkerIoriBlueskyRouter } from './adaptor/routes/workerIoriBlueskyRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
+import { createWorkerIoriFediverseConversationsRouter } from './adaptor/routes/workerIoriFediverseConversationsRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from './adaptor/routes/workerIoriSummaryRouter.ts';
 import { createWorkerIoriXPostsRouter } from './adaptor/routes/workerIoriXPostsRouter.ts';
@@ -277,6 +278,17 @@ export default {
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
         app.route('/api', createWorkerIoriXPostsRouter({ ...runtime.digest, authn }));
         app.route('/api', createWorkerIoriBlueskyRouter({ ...runtime.blueskyTimeline, authn }));
+        app.route(
+          '/api',
+          createWorkerIoriFediverseConversationsRouter({
+            ...runtime.mastodon,
+            ...runtime.fediverseConversations,
+            createPostUseCase: runtime.posting.createPostUseCase,
+            sendReplyUseCase: runtime.core.sendReplyUseCase,
+            authn,
+            createContext,
+          }),
+        );
         app.route('/api', createWorkerIoriBlueskyProfileRouter({ ...runtime.blueskyProfile, authn }));
         app.route('/api', createWorkerIoriBlueskyCrosspostStatusRouter({ ...runtime.blueskyCrosspostStatus, authn }));
         app.route(
