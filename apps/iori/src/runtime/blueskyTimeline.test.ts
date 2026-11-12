@@ -209,6 +209,7 @@ describe('createBlueskyTimelineRuntimePorts', () => {
     expect(ports.blueskyTimelineEnabled).toBe(false);
     expect(ports.blueskyTimelineItemsResolver.resolve).toBeTypeOf('function');
     expect(ports.replyToBlueskyPostUseCase).toBeUndefined();
+    expect(ports.markBlueskyNotificationsSeenUseCase).toBeUndefined();
     expect(ports.blueskySearch).toBeUndefined();
   });
 
@@ -218,6 +219,7 @@ describe('createBlueskyTimelineRuntimePorts', () => {
 
     expect(ports.blueskyTimelineEnabled).toBe(true);
     expect(ports.replyToBlueskyPostUseCase?.run).toBeTypeOf('function');
+    expect(ports.markBlueskyNotificationsSeenUseCase?.run).toBeTypeOf('function');
     expect(ports.blueskySearch?.searchPosts).toBeTypeOf('function');
   });
 });

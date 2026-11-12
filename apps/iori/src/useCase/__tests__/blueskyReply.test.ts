@@ -45,7 +45,7 @@ const setup = (posts: Record<string, unknown> = {
     now: () => NOW,
   });
   const record = () => createRecord.mock.calls[0]![0];
-  return { reply, createRecord, query, record };
+  return { reply, createRecord, query, record, sqlite };
 };
 
 describe('ReplyToBlueskyPostUseCase', () => {
@@ -110,6 +110,38 @@ describe('ReplyToBlueskyPostUseCase', () => {
         features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://example.com/x' }],
       },
     ]);
+  });
+
+  it('uri で指定したら、D1 の行を引かず、その uri を getPosts で取り直して返信先にする', async () => {
+    const t = setup();
+    t.sqlite.exec('DELETE FROM bluesky_timeline_items');
+
+    const result = await t.reply.run({ uri: TOP, text: 'uri からの返信' });
+
+    expect(result.ok).toBe(true);
+    expect(t.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getPosts', { uris: TOP });
+    expect(t.record().reply).toEqual({
+      root: { uri: TOP, cid: 'bafytop-fresh' },
+      parent: { uri: TOP, cid: 'bafytop-fresh' },
+    });
+  });
+
+  it('uri の投稿が getPosts に無ければ NotFound にし、投稿しない', async () => {
+    const t = setup({});
+
+    const result = await t.reply.run({ uri: TOP, text: 'hi' });
+
+    expect(result).toEqual({ ok: false, err: { type: 'BlueskyReplyTargetNotFound' } });
+    expect(t.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('uri でも、空文字は入力不正にし、getPosts を呼ばない', async () => {
+    const t = setup();
+
+    const result = await t.reply.run({ uri: TOP, text: ' ' });
+
+    expect(result).toEqual({ ok: false, err: { type: 'BlueskyPostInvalid', reason: 'empty' } });
+    expect(t.query).not.toHaveBeenCalled();
   });
 
   it('空文字と 301 grapheme を入力不正にし、返信先の取得も投稿もしない', async () => {
