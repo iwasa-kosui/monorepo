@@ -31,7 +31,7 @@ const WebAuthnChallengeEvent = AggregateEvent.createFactory<WebAuthnChallengeAgg
 export type WebAuthnChallengeIssued = WebAuthnChallengeEvent<
   WebAuthnChallenge,
   'webAuthnChallenge.issued',
-  Omit<WebAuthnChallenge, 'challengeId'>
+  Omit<WebAuthnChallenge, 'challengeId' | 'challenge'>
 >;
 export type WebAuthnChallengeConsumed = WebAuthnChallengeEvent<
   undefined,
@@ -60,7 +60,7 @@ const issue = (now: Instant) =>
     challengeId,
     { ...payload, challengeId, expires },
     'webAuthnChallenge.issued',
-    { ...payload, expires },
+    { purpose: payload.purpose, userId: payload.userId, expires },
     now,
   );
 };
