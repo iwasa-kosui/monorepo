@@ -7,6 +7,7 @@ import { createD1ActorResolverByUserId } from '../adaptor/d1/actor/actorResolver
 import { createD1ActorsResolverByFollowerId } from '../adaptor/d1/actor/actorsResolverByFollowerId.ts';
 import { createD1ActorsResolverByFollowingId } from '../adaptor/d1/actor/actorsResolverByFollowingId.ts';
 import { createD1LocalActorCreatedStore } from '../adaptor/d1/actor/localActorCreatedStore.ts';
+import { createD1LocalActorProfileUpdatedStore } from '../adaptor/d1/actor/localActorProfileUpdatedStore.ts';
 import { createD1LogoUriUpdatedStore } from '../adaptor/d1/actor/logoUriUpdatedStore.ts';
 import { createD1RemoteActorCreatedStore } from '../adaptor/d1/actor/remoteActorCreatedStore.ts';
 import { createD1RemoteActorProfileUpdatedStore } from '../adaptor/d1/actor/remoteActorProfileUpdatedStore.ts';
@@ -231,6 +232,7 @@ import { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
 import { UpdateAvatarUseCase } from '../useCase/updateAvatar.ts';
 import { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescription.ts';
+import { UpdateProfileUseCase } from '../useCase/updateProfile.ts';
 import { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
@@ -485,11 +487,16 @@ export const createWorkerRuntimePorts = async (
         mediaUploadResolver,
         mediaUploadDescriptionUpdatedStore: createD1MediaUploadDescriptionUpdatedStore(db),
       }),
-      updateAvatarUseCase: UpdateAvatarUseCase.create({
+      updateProfileUseCase: UpdateProfileUseCase.create({
+        userResolver,
         actorResolverByUserId,
-        uploads,
-        logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
-        origin: env.ORIGIN,
+        updateAvatarUseCase: UpdateAvatarUseCase.create({
+          actorResolverByUserId,
+          uploads,
+          logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
+          origin: env.ORIGIN,
+        }),
+        localActorProfileUpdatedStore: createD1LocalActorProfileUpdatedStore(db),
       }),
     },
     blueskyTimeline: createBlueskyTimelineRuntimePorts(env, db),

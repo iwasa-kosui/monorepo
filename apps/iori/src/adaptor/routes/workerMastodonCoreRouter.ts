@@ -1,3 +1,4 @@
+import type { RequestContext } from '@fedify/fedify';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 
@@ -7,7 +8,7 @@ import { Scope } from '../../domain/oauth/scope.ts';
 import type { User, UserResolver, UserResolverByUsername } from '../../domain/user/user.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import type { Username } from '../../domain/user/username.ts';
-import type { UpdateAvatarUseCase } from '../../useCase/updateAvatar.ts';
+import type { UpdateProfileUseCase } from '../../useCase/updateProfile.ts';
 import { defaultImageUrls } from '../mastodon/defaultImages.ts';
 import type { Account, CredentialAccount, ExtendedDescription, Preferences } from '../mastodon/entities.ts';
 import { buildInstanceV1, buildInstanceV2 } from '../mastodon/instance.ts';
@@ -23,7 +24,8 @@ export type WorkerMastodonCoreRouterDeps = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   actorResolverByUserId: ActorResolverByUserId;
   accountStatsResolver: AccountStatsResolverByActorId;
-  updateAvatarUseCase: UpdateAvatarUseCase;
+  updateProfileUseCase: UpdateProfileUseCase;
+  createContext: (request: Request) => RequestContext<unknown>;
   instance: Readonly<{
     domain: string;
     title: string;
@@ -73,7 +75,8 @@ export const createWorkerMastodonCoreRouter = ({
   userResolverByUsername,
   actorResolverByUserId,
   accountStatsResolver,
-  updateAvatarUseCase,
+  updateProfileUseCase,
+  createContext,
   instance,
 }: WorkerMastodonCoreRouterDeps): Hono<MastodonAuthEnv> => {
   const resolveAccount = async (user: User, requestUrl: string): Promise<AccountLookup> => {
@@ -101,7 +104,7 @@ export const createWorkerMastodonCoreRouter = ({
           privacy: 'public',
           sensitive: false,
           language: null,
-          note: '',
+          note: actor.val.bio ?? '',
           fields: [],
           discoverable: null,
           indexable: false,
@@ -168,37 +171,17 @@ export const createWorkerMastodonCoreRouter = ({
       if ('avatar' in body && !(avatar instanceof File)) {
         return c.json({ error: 'Validation failed: avatar must be a file' }, 422);
       }
-      const displayName = bodyString(body, 'display_name');
-      const note = bodyString(body, 'note');
-      if (displayName !== undefined || note !== undefined) {
-        const user = await userResolver.resolve(userId);
-        if (!user.ok) {
-          return c.json(internalServerError, 500);
-        }
-        if (user.val === undefined) {
-          return c.json(invalidToken, 401);
-        }
-        const lookup = await resolveAccount(user.val, c.req.url);
-        if (lookup.kind === 'failed') {
-          return c.json(internalServerError, 500);
-        }
-        if (lookup.kind === 'noActor') {
-          return c.json(actorNotFound, 422);
-        }
-        if (
-          (displayName !== undefined && displayName !== lookup.account.display_name)
-          || (note !== undefined && note !== lookup.account.source.note)
-        ) {
-          return c.json({ error: 'Validation failed: display_name and note cannot be changed' }, 422);
-        }
-      }
-      if (avatar instanceof File) {
-        const updated = await updateAvatarUseCase.run({ userId, bytes: new Uint8Array(await avatar.arrayBuffer()) });
-        if (!updated.ok) {
-          return updated.err.type === 'UserNotFoundError'
-            ? c.json(actorNotFound, 422)
-            : c.json({ error: `Validation failed: ${updated.err.message}` }, 422);
-        }
+      const updated = await updateProfileUseCase.run({
+        userId,
+        displayName: bodyString(body, 'display_name'),
+        bio: bodyString(body, 'note'),
+        avatar: avatar instanceof File ? new Uint8Array(await avatar.arrayBuffer()) : undefined,
+        ctx: createContext(c.req.raw),
+      });
+      if (!updated.ok) {
+        return updated.err.type === 'UserNotFoundError'
+          ? c.json(actorNotFound, 422)
+          : c.json({ error: `Validation failed: ${updated.err.message}` }, 422);
       }
       return respondWithCredentials(c, userId);
     })

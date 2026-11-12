@@ -77,6 +77,25 @@ describe('toAccount', () => {
     expect(account.last_status_at).toBeNull();
   });
 
+  it('uses the display name and bio of a local actor, turning the bio into HTML', () => {
+    const account = toAccount(
+      { type: 'local', user, actor: { ...localActor, displayName: '岩佐', bio: '行1\n<b>https://example.com</b>' } },
+      options,
+    );
+
+    expect(account.display_name).toBe('岩佐');
+    expect(account.note).toBe(
+      '<p>行1<br>&lt;b&gt;<a href="https://example.com">https://example.com</a>&lt;/b&gt;</p>',
+    );
+  });
+
+  it('falls back to the username and an empty note when a local actor has no profile', () => {
+    const account = toAccount({ type: 'local', user, actor: localActor }, options);
+
+    expect(account.display_name).toBe('kosui');
+    expect(account.note).toBe('');
+  });
+
   it('converts a remote actor into user@host', () => {
     const account = toAccount({ type: 'remote', actor: remoteActor }, options);
 

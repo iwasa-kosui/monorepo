@@ -117,8 +117,8 @@ import type { UndoLikeUseCase } from '../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import type { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import type { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
-import type { UpdateAvatarUseCase } from '../useCase/updateAvatar.ts';
 import type { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescription.ts';
+import type { UpdateProfileUseCase } from '../useCase/updateProfile.ts';
 import type { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
@@ -188,7 +188,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   mediaUploadResolver: MediaUploadResolver;
   getMediaUploadUseCase: GetMediaUploadUseCase;
   updateMediaDescriptionUseCase: UpdateMediaDescriptionUseCase;
-  updateAvatarUseCase: UpdateAvatarUseCase;
+  updateProfileUseCase: UpdateProfileUseCase;
   dismissNotificationUseCase: DismissNotificationUseCase;
   clearNotificationsUseCase: ClearNotificationsUseCase;
   resolveRemoteAccountUseCase: ResolveRemoteAccountUseCase;
