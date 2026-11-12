@@ -178,7 +178,10 @@ describe('FetchRemoteContextUseCase', () => {
 
       expect(await t.run()).toBe(2);
       expect(t.remotePostUpserter.resolve.mock.calls.map(([identity]) => identity)).toMatchObject([
-        { uri: replyUri(1), content: '<p><strong>Title</strong></p><p>body</p>' },
+        {
+          uri: replyUri(1),
+          content: `<p><strong>Title</strong></p><p>body</p><p><a href="${replyUri(1)}">元の記事を読む</a></p>`,
+        },
         {
           uri: replyUri(2),
           content: `<p>q</p><p><a href="${replyUri(2)}">元の投稿で投票する</a></p>`,

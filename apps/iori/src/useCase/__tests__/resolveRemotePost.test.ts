@@ -165,7 +165,7 @@ describe('ResolveRemotePostUseCase', () => {
     expect(await t.run(HTML_URL)).toBe(`saved:${NOTE_URI}`);
     expect(t.remotePostUpserter.resolve.mock.calls[0]![0]).toMatchObject({
       uri: NOTE_URI,
-      content: '<p><strong>Title</strong></p><p>body</p>',
+      content: `<p><strong>Title</strong></p><p>body</p><p><a href="${NOTE_URI}">元の記事を読む</a></p>`,
       authorIdentity: { uri: ALICE_URI },
     });
   });

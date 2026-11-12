@@ -171,7 +171,7 @@ const create = ({
     const result = await ctx.lookupObject(objectUri.trim(), { documentLoader });
 
     if (!isRemotePostObject(result)) {
-      return RA.err(RemoteNoteLookupError.create(objectUri, 'Not a valid Note object'));
+      return RA.err(RemoteNoteLookupError.create(objectUri, 'Not a valid Note, Article or Question object'));
     }
     if (!result.id) {
       return RA.err(RemoteNoteLookupError.create(objectUri, 'Could not resolve Note ID'));

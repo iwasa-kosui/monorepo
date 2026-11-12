@@ -230,10 +230,26 @@ describe('createOnCreate', () => {
     expect(addRemotePost).toHaveBeenCalledWith(
       expect.objectContaining({
         uri: 'https://remote.example/posts/1',
-        content: '<p><strong>Title</strong></p><p>body</p>',
+        content:
+          '<p><strong>Title</strong></p><p>body</p><p><a href="https://remote.example/posts/1">元の記事を読む</a></p>',
         visibility: 'public',
       }),
     );
+  });
+
+  it('does not treat the summary of an Article as a content warning', async () => {
+    const article = new Article({
+      id: new URL('https://remote.example/posts/1'),
+      name: 'Title',
+      content: '<p>body</p>',
+      summary: '<p>excerpt</p>',
+      sensitive: true,
+      tos: [publicUri],
+    });
+
+    const addRemotePost = await run(article);
+
+    expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ summary: null, sensitive: true }));
   });
 
   it('records a Question with a link to vote and its poll', async () => {
