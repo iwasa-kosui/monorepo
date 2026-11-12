@@ -72,6 +72,20 @@ describe('trimPagingForSnapshot', () => {
     expect(trimmed.bluesky.items.map((item) => item.feedItemId)).toEqual(['b1']);
   });
 
+  it('ブリッジの status が隠れただけで、何も切っていないときは nextMaxId を変えない', () => {
+    const postUri = 'at://did:plc:x/app.bsky.feed.post/real';
+    const paging: HomeFeedPaging = {
+      statuses: [status('s3', 30), status('bridged', 20, `https://bsky.brid.gy/convert/ap/${postUri}`)],
+      nextMaxId: 'older-status',
+      bluesky: { items: [bluesky('b1', 21, postUri)], cursor: undefined },
+    };
+
+    const trimmed = trimPagingForSnapshot(paging, undefined);
+
+    expect(trimmed.statuses.map((item) => item.id)).toEqual(['s3']);
+    expect(trimmed.nextMaxId).toBe('older-status');
+  });
+
   it('上限を超えるときは上限で切る', () => {
     const trimmed = trimPagingForSnapshot(pagingOf(500), 's10', 300);
 

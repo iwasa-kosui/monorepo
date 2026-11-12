@@ -1,7 +1,14 @@
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { BlueskyTimelinePage, Page } from '../api/mastodonClient.ts';
-import { type BlueskyCursor, blueskyCursorOf, type BlueskySource, type HomeFeedPaging } from './homeFeed.ts';
+import {
+  type BlueskyCursor,
+  blueskyCursorOf,
+  type BlueskySource,
+  type HomeFeedPaging,
+  homeItemKey,
+  mergeHomeFeed,
+} from './homeFeed.ts';
 
 /**
  * 最新側の取得結果。
@@ -102,6 +109,16 @@ export type RefreshedPaging = Readonly<{
   newCount: number | undefined;
 }>;
 
+const shownKeysOf = (paging: HomeFeedPaging): ReadonlySet<string> =>
+  new Set(
+    mergeHomeFeed({
+      statuses: paging.statuses,
+      hasMoreStatuses: paging.nextMaxId !== undefined,
+      bluesky: paging.bluesky.items,
+      hasMoreBluesky: paging.bluesky.cursor !== undefined,
+    }).map(homeItemKey),
+  );
+
 /**
  * 最新側の取得結果を手元のページングに反映する。
  * Bluesky が失敗したとき（bluesky === undefined）は手元の Bluesky をそのまま残す。
@@ -125,8 +142,9 @@ export const pagingAfterRefresh = (
   // 空だった情報源の置き換えは「全部が新着」として数えられる。中身があった情報源の置き換えだけは数えられない
   const isReplaced = (statuses.kind === 'replaced' && prev.statuses.length > 0)
     || (bluesky?.kind === 'replaced' && prev.bluesky.items.length > 0);
-  const newCount = isReplaced
-    ? undefined
-    : nextStatuses.statuses.length - prev.statuses.length + nextBluesky.items.length - prev.bluesky.items.length;
-  return { paging: { ...nextStatuses, bluesky: nextBluesky }, newCount };
+  const paging: HomeFeedPaging = { ...nextStatuses, bluesky: nextBluesky };
+  if (isReplaced) return { paging, newCount: undefined };
+  const before = shownKeysOf(prev);
+  const newCount = [...shownKeysOf(paging)].filter((key) => !before.has(key)).length;
+  return { paging, newCount };
 };
