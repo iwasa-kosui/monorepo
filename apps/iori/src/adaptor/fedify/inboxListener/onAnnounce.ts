@@ -16,6 +16,7 @@ import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/p
 import { PostId } from '../../../domain/post/postId.ts';
 import type { AcceptedRelaysResolver, RelayResolverByActorUri } from '../../../domain/relay/relay.ts';
 import type { AddReceivedRepostUseCase } from '../../../useCase/addReceivedRepost.ts';
+import { isBlockedRemoteObject } from '../../../useCase/helper/isBlockedRemoteObject.ts';
 import {
   buildRemotePostContent,
   isRemotePostObject,
@@ -46,6 +47,7 @@ export type OnAnnounceDeps = Readonly<{
   actorResolverByUri: ActorResolverByUri;
   federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
   federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
+  isBlockedUri: (uri: string) => boolean;
 }>;
 
 const extractAttachmentsOrEmpty = async (
@@ -94,6 +96,12 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
   const actorId = activity.actorId;
   if (!actorId) {
     getLogger().warn('Announce activity has no actorId');
+    return;
+  }
+
+  const blockedUri = [actorId, activity.objectId].find((uri) => uri && deps.isBlockedUri(uri.href));
+  if (blockedUri) {
+    getLogger().info(`Ignoring an Announce from or of a blocked domain: ${blockedUri.href} (${activity.id?.href})`);
     return;
   }
 
@@ -211,6 +219,11 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
 
   if (!note.id) {
     getLogger().warn('Announce activity Note has no id');
+    return;
+  }
+
+  if (isBlockedRemoteObject(note, deps.isBlockedUri)) {
+    getLogger().info(`Ignoring an Announce of a Note from a blocked domain: ${note.id.href}`);
     return;
   }
 
