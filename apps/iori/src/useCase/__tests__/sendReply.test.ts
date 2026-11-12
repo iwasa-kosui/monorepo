@@ -962,7 +962,7 @@ describe('SendReplyUseCase の元の投稿の公開範囲', () => {
   });
 
   it.each(['private', 'direct'] as const)(
-    '親がローカルの %s の投稿への返信を省略指定で作ると、followers に送らず、Public をどこにも入れない',
+    '親がローカルの %s の投稿への返信を省略指定で作ると、direct では送らず private では followers だけに送り、どちらも Public を入れない',
     async (parentVisibility) => {
       const { ctx, reply } = setup('local', parentVisibility);
 

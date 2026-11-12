@@ -40,7 +40,7 @@ const narrow = (stored: Visibility | null, incoming: Visibility | null): Visibil
   return narrowness[incoming] > narrowness[stored] ? incoming : stored;
 };
 
-const narrower = (a: Visibility, b: Visibility): Visibility => (narrowness[b] > narrowness[a] ? b : a);
+const narrowestOf = (a: Visibility, b: Visibility): Visibility => (narrowness[b] > narrowness[a] ? b : a);
 
 const isVisibleToAnonymous = (visibility: Visibility | null): boolean =>
   visibility === 'public' || visibility === 'unlisted';
@@ -50,6 +50,6 @@ export const Visibility = {
   zodTypeOrPublic,
   fromAddressing,
   narrow,
-  narrower,
+  narrowestOf,
   isVisibleToAnonymous,
 } as const;

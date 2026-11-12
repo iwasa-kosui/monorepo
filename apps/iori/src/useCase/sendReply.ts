@@ -221,7 +221,7 @@ const create = ({
         },
       ),
       RA.andBind('replyVisibility', ({ parentPost, visibility }) =>
-        RA.ok(Visibility.narrower(visibility ?? 'public', parentPost.visibility ?? 'public'))),
+        RA.ok(Visibility.narrowestOf(visibility ?? 'public', parentPost.visibility ?? 'public'))),
       // Create the reply post
       RA.andBind('participantActorUris', async ({ user, ctx, parentPost, content, replyVisibility }) => {
         if (replyVisibility !== 'direct') {
