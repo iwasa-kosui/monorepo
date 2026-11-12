@@ -63,7 +63,8 @@ describe('blueskyStatusNotices', () => {
       expect(notices(waiting)).toEqual([
         {
           title: 'Bluesky にログインできません',
-          detail: `15:05 にログインに失敗しました。15:35 にもう一度ログインします。${PASSWORD_HINT}`,
+          detail:
+            `15:05 にログインに失敗しました。Bluesky の障害の可能性もあります。15:35 にもう一度ログインします。${PASSWORD_HINT}`,
         },
       ]);
     });
@@ -83,7 +84,9 @@ describe('blueskyStatusNotices', () => {
         },
       });
 
-      expect(notices(crossing)[0]?.detail).toContain('11/11 23:50 にログインに失敗しました。00:20 にもう一度');
+      expect(notices(crossing)[0]?.detail).toContain(
+        '11/11 23:50 にログインに失敗しました。Bluesky の障害の可能性もあります。00:20 にもう一度',
+      );
     });
 
     it('同じ scope が auth で失敗していても、ログインの通知は 1 つだけにする', () => {
@@ -178,10 +181,9 @@ describe('blueskyStatusNotices', () => {
       ]);
     });
 
-    it('状態の取得ができていなくても出す', () => {
-      expect(notices(undefined, 'notifications', true).map((notice) => notice.title)).toEqual([
-        'Bluesky を読み込めませんでした',
-      ]);
+    it('状態の取得ができていないときは出さない', () => {
+      expect(notices(undefined, 'notifications', true)).toEqual([]);
+      expect(notices(undefined, 'home', true)).toEqual([]);
     });
 
     it('ほかの通知と並べて出す', () => {

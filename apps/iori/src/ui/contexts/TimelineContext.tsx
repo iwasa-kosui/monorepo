@@ -46,7 +46,6 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
   const reply = useReplyDialog({
     onReplySent: () => {
       timeline.reload();
-      blueskyStatus.reload();
     },
   });
 
@@ -55,7 +54,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
     updateThreadPost: thread.updateThreadPost,
     removePost: timeline.removePost,
     refreshTimeline: async () => {
-      await Promise.all([timeline.reload(), blueskyStatus.reload()]);
+      await timeline.reload();
     },
     onPostDeleted: thread.removeFromThread,
   });

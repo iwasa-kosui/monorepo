@@ -62,7 +62,9 @@ export const blueskyStatusNotices = (
     if (status.login.state === 'waiting') {
       notices.push({
         title: LOGIN_FAILED_TITLE,
-        detail: `${formatTime(status.login.failedAt, now)} にログインに失敗しました。${
+        detail: `${
+          formatTime(status.login.failedAt, now)
+        } にログインに失敗しました。Bluesky の障害の可能性もあります。${
           formatTime(status.login.retryAt, now)
         } にもう一度ログインします。${REPLACE_PASSWORD_HINT}`,
       });
@@ -72,7 +74,7 @@ export const blueskyStatusNotices = (
     const unfetched = unfetchedNotice(scope, page, now);
     if (unfetched !== undefined) notices.push(unfetched);
   }
-  if (clientLoadFailed) {
+  if (clientLoadFailed && status?.enabled === true) {
     notices.push({
       title: 'Bluesky を読み込めませんでした',
       detail: 'iori のサーバーから Bluesky の投稿を読み込めませんでした。',

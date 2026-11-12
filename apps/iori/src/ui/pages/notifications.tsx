@@ -333,7 +333,7 @@ const NotificationsPage = () => {
         <BlueskyStatusNotice
           status={blueskyStatus.status}
           page='notifications'
-          clientLoadFailed={blueskyStatus.loadFailed}
+          clientLoadFailed={false}
         />
       </div>
 

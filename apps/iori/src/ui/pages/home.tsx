@@ -745,7 +745,7 @@ const TimelineList = () => {
       <BlueskyStatusNotice
         status={blueskyStatus.status}
         page='home'
-        clientLoadFailed={timeline.blueskyLoadFailed || blueskyStatus.loadFailed}
+        clientLoadFailed={timeline.blueskyLoadFailed}
       />
       {items.map((item, index) => {
         if (item.kind === 'bluesky') {
