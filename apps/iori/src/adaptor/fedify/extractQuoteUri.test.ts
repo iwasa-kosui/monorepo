@@ -1,22 +1,25 @@
 import { Hashtag, Link, Mention, Note } from '@fedify/vocab';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { extractQuoteUri } from './extractQuoteUri.ts';
 
 const noteId = new URL('https://remote.example/notes/1');
-const documentLoader = () => Promise.reject(new Error('unexpected fetch'));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('extractQuoteUri', () => {
   it('reads quoteId', async () => {
     const note = new Note({ id: noteId, quote: new URL('https://remote.example/notes/quoted') });
 
-    expect(await extractQuoteUri(note, documentLoader)).toBe('https://remote.example/notes/quoted');
+    expect(await extractQuoteUri(note)).toBe('https://remote.example/notes/quoted');
   });
 
   it('reads quoteUrl', async () => {
     const note = new Note({ id: noteId, quoteUrl: new URL('https://remote.example/notes/quoted') });
 
-    expect(await extractQuoteUri(note, documentLoader)).toBe('https://remote.example/notes/quoted');
+    expect(await extractQuoteUri(note)).toBe('https://remote.example/notes/quoted');
   });
 
   it('prefers quoteId over quoteUrl', async () => {
@@ -26,7 +29,7 @@ describe('extractQuoteUri', () => {
       quoteUrl: new URL('https://remote.example/notes/by-url'),
     });
 
-    expect(await extractQuoteUri(note, documentLoader)).toBe('https://remote.example/notes/by-id');
+    expect(await extractQuoteUri(note)).toBe('https://remote.example/notes/by-id');
   });
 
   it('reads a Link tag whose rel is the Misskey quote relation', async () => {
@@ -40,7 +43,7 @@ describe('extractQuoteUri', () => {
       ],
     });
 
-    expect(await extractQuoteUri(note, documentLoader)).toBe('https://remote.example/notes/quoted');
+    expect(await extractQuoteUri(note)).toBe('https://remote.example/notes/quoted');
   });
 
   it.each([
@@ -52,7 +55,7 @@ describe('extractQuoteUri', () => {
       tags: [new Link({ href: new URL('https://remote.example/notes/quoted'), mediaType })],
     });
 
-    expect(await extractQuoteUri(note, documentLoader)).toBe('https://remote.example/notes/quoted');
+    expect(await extractQuoteUri(note)).toBe('https://remote.example/notes/quoted');
   });
 
   it('takes the first quote Link and skips Links that are not quotes', async () => {
@@ -65,7 +68,7 @@ describe('extractQuoteUri', () => {
       ],
     });
 
-    expect(await extractQuoteUri(note, documentLoader)).toBe('https://remote.example/notes/first');
+    expect(await extractQuoteUri(note)).toBe('https://remote.example/notes/first');
   });
 
   it('ignores a Mention and a Hashtag even when they look like a quote Link', async () => {
@@ -81,7 +84,7 @@ describe('extractQuoteUri', () => {
       ],
     });
 
-    expect(await extractQuoteUri(note, documentLoader)).toBeNull();
+    expect(await extractQuoteUri(note)).toBeNull();
   });
 
   it('ignores a URI that is not http or https', async () => {
@@ -92,7 +95,7 @@ describe('extractQuoteUri', () => {
       tags: [new Link({ href: new URL('ftp://remote.example/notes/linked'), mediaType: 'application/activity+json' })],
     });
 
-    expect(await extractQuoteUri(note, documentLoader)).toBeNull();
+    expect(await extractQuoteUri(note)).toBeNull();
   });
 
   it('falls back to quoteUrl when quoteId is not http or https', async () => {
@@ -102,10 +105,36 @@ describe('extractQuoteUri', () => {
       quoteUrl: new URL('https://remote.example/notes/by-url'),
     });
 
-    expect(await extractQuoteUri(note, documentLoader)).toBe('https://remote.example/notes/by-url');
+    expect(await extractQuoteUri(note)).toBe('https://remote.example/notes/by-url');
+  });
+
+  it('does not fetch tags that are only IRIs and still reads an embedded quote Link after them', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const note = new Note({
+      id: noteId,
+      tags: [
+        new URL('https://remote.example/tags/1'),
+        new URL('https://remote.example/tags/2'),
+        new Link({ href: new URL('https://remote.example/notes/quoted'), mediaType: 'application/activity+json' }),
+      ],
+    });
+
+    expect(await extractQuoteUri(note)).toBe('https://remote.example/notes/quoted');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns null without fetching when every tag is only an IRI', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const note = new Note({
+      id: noteId,
+      tags: [new URL('https://remote.example/tags/1'), new URL('https://remote.example/tags/2')],
+    });
+
+    expect(await extractQuoteUri(note)).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('returns null for a Note without a quote', async () => {
-    expect(await extractQuoteUri(new Note({ id: noteId }), documentLoader)).toBeNull();
+    expect(await extractQuoteUri(new Note({ id: noteId }))).toBeNull();
   });
 });

@@ -94,7 +94,7 @@ export const saveFederatedNote = async (
     attachments,
     authorIdentity: authorIdentity.val,
     inReplyToUri: inReplyToUri ?? null,
-    quoteUri: await extractQuoteUri(note, documentLoader),
+    quoteUri: await extractQuoteUri(note),
   });
 
   if (!postResult.ok) {

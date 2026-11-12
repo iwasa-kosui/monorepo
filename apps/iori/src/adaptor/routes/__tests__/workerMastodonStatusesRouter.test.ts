@@ -91,6 +91,25 @@ describe('GET /api/v1/statuses/:id', () => {
       expect(status.iori?.quote_url).toBe(hidden.uri);
     });
 
+    it.each(['mute', 'block'] as const)(
+      '閲覧者が%sした相手の引用先は quote を null にして iori.quote_url に URI を載せる',
+      async (kind) => {
+        const t = await seedStatuses();
+        const bob = t.seed.addRemoteActor('bob');
+        if (kind === 'mute') t.seed.addMute(t.me.userId, bob.actorId);
+        else t.seed.addBlock(t.me.userId, bob.actorId);
+        const quoted = t.seed.addRemotePost(bob, 3_000, { visibility: 'public' });
+        const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
+        addQuote(t, post.postId, quoted.uri);
+
+        const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
+
+        const status = StatusSchema.parse(await response.json());
+        expect(status.quote).toBeNull();
+        expect(status.iori?.quote_url).toBe(quoted.uri);
+      },
+    );
+
     it('引用が無い投稿は quote を null にし、quote_url を出さない', async () => {
       const t = await seedStatuses();
       const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });

@@ -37,6 +37,7 @@ type Deps = Readonly<{
   postResolverByUri: PostResolverByUri;
   localPostResolverByUri: LocalPostResolverByUri;
   remotePostUpserter: RemotePostUpserter;
+  isBlockedUri: (uri: string) => boolean;
 }>;
 
 const create = ({
@@ -44,6 +45,7 @@ const create = ({
   postResolverByUri,
   localPostResolverByUri,
   remotePostUpserter,
+  isBlockedUri,
 }: Deps): FetchReplyNotesRecursiveUseCase => {
   const fetchNote = async (
     uri: string,
@@ -69,9 +71,18 @@ const create = ({
         return undefined;
       }
 
+      if (isBlockedUri(result.id.href) || result.attributionIds.some((id) => isBlockedUri(id.href))) {
+        getLogger().debug(`Ignored a Note from a blocked domain: ${uri}`);
+        return undefined;
+      }
+
       const author = await result.getAttribution({ documentLoader });
       if (!author || !isActor(author)) {
         getLogger().debug(`Could not resolve Note author: ${uri}`);
+        return undefined;
+      }
+      if (author.id && isBlockedUri(author.id.href)) {
+        getLogger().debug(`Ignored a Note whose author is on a blocked domain: ${uri}`);
         return undefined;
       }
 
@@ -128,6 +139,11 @@ const create = ({
         continue;
       }
 
+      if (isBlockedUri(currentUri)) {
+        getLogger().debug(`Skipped a blocked domain: ${currentUri}, stopping chain`);
+        break;
+      }
+
       // Fetch the note from remote
       const fetchResult = await fetchNote(currentUri, documentLoader, lookupObject);
       if (!fetchResult) {
@@ -152,7 +168,7 @@ const create = ({
         ...extractContentWarning(note),
         visibility,
         recipientActorUris,
-        quoteUri: await extractQuoteUri(note, documentLoader),
+        quoteUri: await extractQuoteUri(note),
       });
 
       if (upsertResult.ok) {

@@ -48,6 +48,7 @@ const setup = () => {
       logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
       actorResolverByUri: createD1ActorResolverByUri(db),
     }),
+    isBlockedUri: () => false,
   });
   const fetchQuoted = (lookupObject: (uri: string) => Promise<unknown>) =>
     useCase.run({

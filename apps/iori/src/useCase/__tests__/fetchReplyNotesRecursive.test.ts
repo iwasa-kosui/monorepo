@@ -27,6 +27,7 @@ const run = async (note: Note) => {
     postResolverByUri: { resolve: async () => RA.ok(undefined) },
     localPostResolverByUri: { resolve: async () => RA.ok(undefined) },
     remotePostUpserter,
+    isBlockedUri: () => false,
   });
   await useCase.run({
     inReplyToUri: 'https://remote.example/notes/parent',
@@ -117,6 +118,7 @@ describe('FetchReplyNotesRecursiveUseCase', () => {
         },
         localPostResolverByUri: { resolve: async () => RA.ok(undefined) },
         remotePostUpserter,
+        isBlockedUri: () => false,
       });
       return { remotePostUpserter, lookupObject, useCase };
     };
@@ -182,6 +184,140 @@ describe('FetchReplyNotesRecursiveUseCase', () => {
       });
 
       expect(remotePostUpserter.resolve).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('ブロックしたドメイン', () => {
+    const person = (host: string) =>
+      new Person({
+        id: new URL(`https://${host}/users/alice`),
+        inbox: new URL(`https://${host}/users/alice/inbox`),
+        preferredUsername: 'alice',
+      });
+    const build = (notes: ReadonlyMap<string, Note>) => {
+      const remotePostUpserter = { resolve: vi.fn(async () => RA.ok({ postId: 'post-1' } as never)) };
+      const lookupObject = vi.fn(async (uri: string) => notes.get(uri) ?? null);
+      const useCase = FetchReplyNotesRecursiveUseCase.create({
+        origin: 'https://iori.test',
+        postResolverByUri: { resolve: async () => RA.ok(undefined) },
+        localPostResolverByUri: { resolve: async () => RA.ok(undefined) },
+        remotePostUpserter,
+        isBlockedUri: (uri) => new URL(uri).hostname === 'blocked.example',
+      });
+      const run = (inReplyToUri: string, maxDepth?: number) =>
+        useCase.run({ inReplyToUri, documentLoader: vi.fn() as never, lookupObject, maxDepth });
+      return { remotePostUpserter, lookupObject, run };
+    };
+
+    it('ブロックしたドメインの URI は取りに行かない', async () => {
+      const { remotePostUpserter, lookupObject, run } = build(new Map());
+
+      const result = await run('https://blocked.example/notes/quoted', 1);
+
+      expect(lookupObject).not.toHaveBeenCalled();
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+      expect(result).toEqual({ ok: true, val: { fetchedPosts: [] } });
+    });
+
+    it('取得した Note の著者がブロックしたドメインなら保存しない', async () => {
+      const uri = 'https://remote.example/notes/quoted';
+      const note = new Note({ id: new URL(uri), content: 'quoted', attribution: person('blocked.example') });
+      const { remotePostUpserter, lookupObject, run } = build(new Map([[uri, note]]));
+
+      const result = await run(uri, 1);
+
+      expect(lookupObject).toHaveBeenCalledOnce();
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+      expect(result).toEqual({ ok: true, val: { fetchedPosts: [] } });
+    });
+
+    it('取得した Note の id がブロックしたドメインなら保存しない', async () => {
+      const uri = 'https://remote.example/notes/quoted';
+      const note = new Note({
+        id: new URL('https://blocked.example/notes/quoted'),
+        content: 'quoted',
+        attribution: person('remote.example'),
+      });
+      const { remotePostUpserter, run } = build(new Map([[uri, note]]));
+
+      await run(uri, 1);
+
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+    });
+
+    it('返信の連鎖でも、ブロックしたドメインの親は取りに行かず、そこで打ち切る', async () => {
+      const childUri = 'https://remote.example/notes/child';
+      const blockedUri = 'https://blocked.example/notes/parent';
+      const grandparentUri = 'https://remote.example/notes/grandparent';
+      const notes = new Map([
+        [
+          childUri,
+          new Note({
+            id: new URL(childUri),
+            content: 'child',
+            attribution: person('remote.example'),
+            replyTarget: new URL(blockedUri),
+          }),
+        ],
+        [
+          blockedUri,
+          new Note({
+            id: new URL(blockedUri),
+            content: 'parent',
+            attribution: person('remote.example'),
+            replyTarget: new URL(grandparentUri),
+          }),
+        ],
+        [
+          grandparentUri,
+          new Note({ id: new URL(grandparentUri), content: 'grandparent', attribution: person('remote.example') }),
+        ],
+      ]);
+      const { remotePostUpserter, lookupObject, run } = build(notes);
+
+      await run(childUri);
+
+      expect(lookupObject).toHaveBeenCalledTimes(1);
+      expect(lookupObject).toHaveBeenCalledWith(childUri, expect.anything());
+      expect(remotePostUpserter.resolve).toHaveBeenCalledOnce();
+      expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ uri: childUri }));
+    });
+
+    it('返信の連鎖でも、著者がブロックしたドメインの親は保存せず、そこで打ち切る', async () => {
+      const childUri = 'https://remote.example/notes/child';
+      const parentUri = 'https://remote.example/notes/parent';
+      const grandparentUri = 'https://remote.example/notes/grandparent';
+      const notes = new Map([
+        [
+          childUri,
+          new Note({
+            id: new URL(childUri),
+            content: 'child',
+            attribution: person('remote.example'),
+            replyTarget: new URL(parentUri),
+          }),
+        ],
+        [
+          parentUri,
+          new Note({
+            id: new URL(parentUri),
+            content: 'parent',
+            attribution: person('blocked.example'),
+            replyTarget: new URL(grandparentUri),
+          }),
+        ],
+        [
+          grandparentUri,
+          new Note({ id: new URL(grandparentUri), content: 'grandparent', attribution: person('remote.example') }),
+        ],
+      ]);
+      const { remotePostUpserter, lookupObject, run } = build(notes);
+
+      await run(childUri);
+
+      expect(lookupObject).toHaveBeenCalledTimes(2);
+      expect(remotePostUpserter.resolve).toHaveBeenCalledOnce();
+      expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ uri: childUri }));
     });
   });
 });

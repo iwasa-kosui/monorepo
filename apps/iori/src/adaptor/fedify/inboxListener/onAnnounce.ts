@@ -248,7 +248,7 @@ export const createOnAnnounce = (deps: OnAnnounceDeps) => async (ctx: InboxConte
         ...extractContentWarning(note),
         visibility: extractVisibility(note, author.followersId),
         recipientActorUris: extractRecipientActorUris([note], deps.origin),
-        quoteUri: await extractQuoteUri(note, documentLoader),
+        quoteUri: await extractQuoteUri(note),
         attachments,
         authorIdentity: authorIdentity.val,
       },

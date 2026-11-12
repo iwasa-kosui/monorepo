@@ -111,7 +111,7 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
 
   const attachments = await extractAttachments(object, documentLoader);
   const inReplyToUri = object.replyTargetId?.href ?? null;
-  const quoteUri = await extractQuoteUri(object, documentLoader);
+  const quoteUri = await extractQuoteUri(object);
   const addressed = object.toIds.length + object.ccIds.length > 0 ? object : activity;
   const visibility = extractVisibility(addressed, actor.followersId);
   const recipientActorUris = extractRecipientActorUris([object, activity], deps.origin);

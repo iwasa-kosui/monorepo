@@ -10,9 +10,12 @@ import { toBlueskyCrosspost } from '../blueskyCrosspost/blueskyCrosspostRow.ts';
 import type { IoriD1Db } from '../client.ts';
 import { idsJson } from '../idsJson.ts';
 import {
+  blocksTable,
   blueskyCrosspostsTable,
   emojiReactsTable,
+  localActorsTable,
   localPostsTable,
+  mutesTable,
   postQuotesTable,
   postsTable,
   remotePostsTable,
@@ -27,6 +30,23 @@ const addTo = <K, V>(map: Map<K, V[]>, key: K, value: V): void => {
   const group = map.get(key);
   if (group === undefined) map.set(key, [value]);
   else group.push(value);
+};
+
+const selectMutedOrBlockedActorIds = async (
+  db: IoriD1Db,
+  viewerActorId: ActorId,
+  actorIds: ReadonlyArray<string>,
+): Promise<ReadonlySet<string>> => {
+  if (actorIds.length === 0) return new Set();
+  const viewerUserId = db.select({ userId: localActorsTable.userId }).from(localActorsTable)
+    .where(eq(localActorsTable.actorId, viewerActorId));
+  const rows = await db.select({ actorId: mutesTable.mutedActorId }).from(mutesTable)
+    .where(and(inArray(mutesTable.userId, viewerUserId), inArray(mutesTable.mutedActorId, jsonEach(actorIds))))
+    .union(
+      db.select({ actorId: blocksTable.blockedActorId }).from(blocksTable)
+        .where(and(inArray(blocksTable.userId, viewerUserId), inArray(blocksTable.blockedActorId, jsonEach(actorIds)))),
+    );
+  return new Set(rows.map((row) => row.actorId));
 };
 
 export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string): PostExtrasResolverByPosts => {
@@ -75,9 +95,13 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
       currentActorId,
       true,
     );
+    const hiddenAuthorIds = currentActorId === undefined
+      ? new Set<string>()
+      : await selectMutedOrBlockedActorIds(db, currentActorId, [...posts.values()].map((post) => post.actorId));
     return new Map(
       [...postIdByUri].flatMap(([uri, id]): [string, PostWithAuthor][] => {
         const post = posts.get(PostId.orThrow(id));
+        if (post !== undefined && hiddenAuthorIds.has(post.actorId)) return [];
         return post !== undefined && (currentActorId !== undefined || Post.isVisibleToAnonymous(post))
           ? [[uri, post]]
           : [];

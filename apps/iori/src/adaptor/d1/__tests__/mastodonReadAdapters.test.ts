@@ -525,6 +525,39 @@ describe('createD1PostExtrasResolverByPosts', () => {
       });
     });
 
+    it('閲覧者がミュートまたはブロックした相手の引用先は post を null にして URI は残す', async () => {
+      const t = setup();
+      const me = t.seed.addLocalActor('kosui');
+      const alice = t.seed.addRemoteActor('alice');
+      const muted = t.seed.addRemoteActor('muted');
+      const blocked = t.seed.addRemoteActor('blocked');
+      t.seed.addMute(me.userId, muted.actorId);
+      t.seed.addBlock(me.userId, blocked.actorId);
+      const cases = {
+        alice: t.seed.addRemotePost(alice, 1_000, { visibility: 'public' }),
+        muted: t.seed.addRemotePost(muted, 1_001, { visibility: 'public' }),
+        blocked: t.seed.addRemotePost(blocked, 1_002, { visibility: 'public' }),
+      };
+      const entries = Object.entries(cases).map(([name, target]) => {
+        const post = t.seed.addRemotePost(alice, 2_000, { visibility: 'public' });
+        addQuote(t, post.postId, target.uri);
+        return { name, post };
+      });
+
+      const quotes = await Promise.all(
+        entries.map(async ({ name, post }) => {
+          const quote = await quoteOf(t, post, actorId(me.actorId));
+          return [name, quote?.uri, quote?.post?.postId ?? null] as const;
+        }),
+      );
+
+      expect(quotes).toEqual([
+        ['alice', cases.alice.uri, cases.alice.postId],
+        ['muted', cases.muted.uri, null],
+        ['blocked', cases.blocked.uri, null],
+      ]);
+    });
+
     it('ローカルの URI の形でも、リモート投稿の ID を指していれば引かない', async () => {
       const t = setup();
       const me = t.seed.addLocalActor('kosui');

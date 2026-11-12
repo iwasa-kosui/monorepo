@@ -247,7 +247,7 @@ const create = ({
             ...extractContentWarning(result),
             visibility: fetchedVisibility,
             recipientActorUris: extractRecipientActorUris([result], origin),
-            quoteUri: await extractQuoteUri(result, documentLoader),
+            quoteUri: await extractQuoteUri(result),
             authorIdentity: authorIdentity.val,
           });
 
