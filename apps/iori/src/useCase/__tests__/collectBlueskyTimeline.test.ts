@@ -42,6 +42,8 @@ const itemAt = (
     liked: false,
     viewerLikeUri: null,
     reposted: false,
+    threadMuted: false,
+    replyRootUri: null,
     viewerRepostUri: null,
     ...overrides,
   });

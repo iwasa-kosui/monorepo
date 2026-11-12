@@ -24,6 +24,8 @@ const base: IoriBlueskyTimelineItemBody = {
   indexedAt: Date.UTC(2026, 10, 8, 1),
   liked: false,
   reposted: false,
+  threadMuted: false,
+  replyRootUri: null,
   isOwn: false,
 };
 const render = (
@@ -411,6 +413,75 @@ describe('BlueskyTimelineItemView', () => {
         { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: url },
         { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: url },
       ]);
+    });
+
+    describe('スレッドのミュート', () => {
+      const threadHandlers = () => ({ onMuteThread: vi.fn(), onUnmuteThread: vi.fn() });
+
+      it('ミュートしていなければ、作者のミュートの前に「スレッドをミュート」を danger なしで出す', () => {
+        const items = findMenuItems(
+          BlueskyTimelineItemView({ item: base, ...threadHandlers(), onMuteAuthor: vi.fn() }),
+        );
+
+        expect((items ?? []).map(menuSummary)).toEqual([
+          { key: 'open-bluesky', label: 'Bluesky で開く', danger: undefined },
+          { key: 'copy-link', label: 'リンクをコピー', danger: undefined },
+          { key: 'mute-thread', label: 'スレッドをミュート', danger: undefined },
+          { key: 'mute', label: '@alice.bsky.social をミュート', danger: true },
+        ]);
+      });
+
+      it('threadMuted なら「スレッドのミュートを解除」だけを出す', () => {
+        const items = findMenuItems(
+          BlueskyTimelineItemView({ item: { ...base, threadMuted: true }, ...threadHandlers() }),
+        ) ?? [];
+
+        expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link', 'unmute-thread']);
+        expect(items.map((entry) => entry.label)).toContain('スレッドのミュートを解除');
+      });
+
+      it('古いキャッシュで threadMuted が無くても、ミュートしていないものとして扱う', () => {
+        const { threadMuted: _threadMuted, ...stale } = base;
+        const items = findMenuItems(
+          BlueskyTimelineItemView({ item: stale as unknown as typeof base, ...threadHandlers() }),
+        ) ?? [];
+
+        expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link', 'mute-thread']);
+      });
+
+      it('該当するハンドラが無ければ出さない', () => {
+        const muted = findMenuItems(BlueskyTimelineItemView({ item: base, onUnmuteThread: vi.fn() })) ?? [];
+        const unmuted = findMenuItems(
+          BlueskyTimelineItemView({ item: { ...base, threadMuted: true }, onMuteThread: vi.fn() }),
+        ) ?? [];
+
+        expect(muted.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link']);
+        expect(unmuted.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link']);
+      });
+
+      it('自分の投稿でも出す', () => {
+        const items = findMenuItems(
+          BlueskyTimelineItemView({ item: { ...base, isOwn: true }, ...threadHandlers() }),
+        ) ?? [];
+
+        expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link', 'mute-thread']);
+      });
+
+      it('選ぶと、ミュートでも解除でも、対応するハンドラを item つきで呼ぶ', () => {
+        const calls = threadHandlers();
+        const mutedItem = { ...base, threadMuted: true };
+        const select = (item: typeof base) => {
+          for (const entry of findMenuItems(BlueskyTimelineItemView({ item, ...calls })) ?? []) {
+            if (entry.kind === 'action') void entry.onSelect();
+          }
+        };
+
+        select(base);
+        select(mutedItem);
+
+        expect(calls.onMuteThread).toHaveBeenCalledExactlyOnceWith(base);
+        expect(calls.onUnmuteThread).toHaveBeenCalledExactlyOnceWith(mutedItem);
+      });
     });
 
     describe('作者のモデレーション', () => {

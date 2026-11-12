@@ -27,11 +27,18 @@ export const postViewZodType = z.looseObject({
     text: z.string(),
     facets: z.array(z.unknown()).optional(),
     createdAt: z.string(),
-    reply: z.looseObject({ parent: z.looseObject({ uri: z.string().min(1) }) }).optional(),
+    reply: z.looseObject({
+      parent: z.looseObject({ uri: z.string().min(1) }),
+      root: z.looseObject({ uri: z.string().min(1) }).optional(),
+    }).optional(),
   }),
   embed: z.unknown().optional(),
   indexedAt: z.string(),
-  viewer: z.looseObject({ like: z.string().optional(), repost: z.string().optional() }).optional(),
+  viewer: z.looseObject({
+    like: z.string().optional(),
+    repost: z.string().optional(),
+    threadMuted: z.boolean().optional(),
+  }).optional(),
 });
 export type BlueskyPostView = z.infer<typeof postViewZodType>;
 
@@ -265,6 +272,8 @@ export const itemFromPostView = (
     viewerLikeUri,
     reposted: viewerRepostUri !== null,
     viewerRepostUri,
+    threadMuted: post.viewer?.threadMuted === true,
+    replyRootUri: post.record.reply?.root?.uri ?? null,
   });
   return parsed.ok ? parsed.val : undefined;
 };

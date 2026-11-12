@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import { blueskyModerationNotice, withoutBlueskyActor } from './blueskyAuthorModeration.ts';
+import { blueskyModerationNotice, withBlueskyThreadMuted, withoutBlueskyActor } from './blueskyAuthorModeration.ts';
 
 const item = (
   feedItemId: string,
@@ -26,6 +26,8 @@ const item = (
   indexedAt: 0,
   liked: false,
   reposted: false,
+  threadMuted: false,
+  replyRootUri: null,
   isOwn: false,
 });
 
@@ -45,6 +47,38 @@ describe('withoutBlueskyActor', () => {
     const items = [item('1', 'did:plc:other')];
 
     expect(withoutBlueskyActor(items, 'did:plc:target')).toBe(items);
+  });
+});
+
+describe('withBlueskyThreadMuted', () => {
+  const ROOT = 'at://did:plc:root/app.bsky.feed.post/root';
+
+  it('根の投稿と、根を replyRootUri に持つ返信の threadMuted を書き換える', () => {
+    const root = { ...item('1', 'did:plc:root'), uri: ROOT };
+    const reply = { ...item('2', 'did:plc:other'), replyRootUri: ROOT };
+    const unrelated = { ...item('3', 'did:plc:other'), replyRootUri: 'at://did:plc:x/app.bsky.feed.post/x' };
+
+    const result = withBlueskyThreadMuted([root, reply, unrelated], ROOT, true);
+
+    expect(result.map((i) => [i.feedItemId, i.threadMuted])).toEqual([['1', true], ['2', true], ['3', false]]);
+  });
+
+  it('false を渡すとミュートを解除した状態にする', () => {
+    const reply = { ...item('2', 'did:plc:other'), replyRootUri: ROOT, threadMuted: true };
+
+    expect(withBlueskyThreadMuted([reply], ROOT, false).map((i) => i.threadMuted)).toEqual([false]);
+  });
+
+  it('該当する投稿が無いときは、同じ配列をそのまま返す', () => {
+    const items = [item('1', 'did:plc:other')];
+
+    expect(withBlueskyThreadMuted(items, ROOT, true)).toBe(items);
+  });
+
+  it('すでに同じ状態なら、同じ配列をそのまま返す', () => {
+    const items = [{ ...item('1', 'did:plc:other'), replyRootUri: ROOT, threadMuted: true }];
+
+    expect(withBlueskyThreadMuted(items, ROOT, true)).toBe(items);
   });
 });
 
