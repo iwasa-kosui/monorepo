@@ -55,6 +55,12 @@ export const postedMessage = (
   crosspost: IoriBlueskyCrosspost | undefined,
 ): string => {
   if (crosspost?.status === 'pending') return '投稿しました。Bluesky には送信中です';
+  if (crosspost?.status === 'sent') return '投稿しました（Bluesky にも送りました）';
+  if (crosspost?.status === 'failed') {
+    return crosspost.retrying
+      ? '投稿しました。Bluesky への送信に失敗しました（あとで再送します）'
+      : '投稿しました。Bluesky には届いていません';
+  }
   if (crosspost?.status === 'skipped') {
     const reason = skipReasonText(crosspost.skip_reason);
     return `Fediverse に投稿しました。Bluesky には送っていません${reason === undefined ? '' : `（${reason}）`}`;

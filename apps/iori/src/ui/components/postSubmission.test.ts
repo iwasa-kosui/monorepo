@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { canSubmitPost, type PostFormValue, submitPost } from './postSubmission.ts';
+import { canSubmitPost, type PostFormValue, replyParams, submitPost } from './postSubmission.ts';
 
 const created = {
   id: 'status-1',
@@ -89,5 +89,16 @@ describe('submitPost', () => {
     });
 
     await expect(submitPost(filled, { create, onPosted })).rejects.toThrow('render');
+  });
+});
+
+describe('replyParams', () => {
+  it('passes the selected destination as iori_destination', () => {
+    expect(replyParams('post-1', 'hello', 'fediverse')).toEqual({
+      status: 'hello',
+      in_reply_to_id: 'post-1',
+      content_type: 'text/markdown',
+      iori_destination: 'fediverse',
+    });
   });
 });

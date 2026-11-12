@@ -100,6 +100,21 @@ describe('postedMessage', () => {
     expect(postedMessage('both', crosspost({ status: 'pending' }))).toBe('投稿しました。Bluesky には送信中です');
   });
 
+  it('sent なら Bluesky にも送ったと伝える', () => {
+    expect(postedMessage('both', crosspost({ status: 'sent', retrying: false, url: 'https://bsky.app/x' })))
+      .toBe('投稿しました（Bluesky にも送りました）');
+  });
+
+  it('failed で再送が残っていれば、あとで再送すると伝える', () => {
+    expect(postedMessage('both', crosspost({ status: 'failed', retrying: true })))
+      .toBe('投稿しました。Bluesky への送信に失敗しました（あとで再送します）');
+  });
+
+  it('failed で再送が残っていなければ、Bluesky に届いていないと伝える', () => {
+    expect(postedMessage('both', crosspost({ status: 'failed', retrying: false })))
+      .toBe('投稿しました。Bluesky には届いていません');
+  });
+
   it('skipped なら理由を添える', () => {
     expect(postedMessage('both', crosspost({ status: 'skipped', skip_reason: 'content_warning', retrying: false })))
       .toBe('Fediverse に投稿しました。Bluesky には送っていません（CW 付きの投稿は Bluesky に送りません）');

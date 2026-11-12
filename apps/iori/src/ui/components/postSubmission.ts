@@ -40,3 +40,14 @@ export const submitPost = async (
   deps.onPosted(status);
   return { kind: 'posted', status };
 };
+
+export const replyParams = (
+  postId: string,
+  content: string,
+  destination: PostDestination,
+): CreateStatusParams => ({
+  status: content,
+  in_reply_to_id: postId,
+  content_type: 'text/markdown',
+  iori_destination: destination,
+});

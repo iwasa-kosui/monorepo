@@ -113,8 +113,8 @@ const validateStatusParams = (body: RequestBody): string | undefined => {
 };
 
 const sendsToBluesky = (body: RequestBody): boolean => {
-  const destination = PostDestination.parse(body['iori_destination']);
-  return !destination.ok || PostDestination.sendsToBluesky(destination.val);
+  const destination = body['iori_destination'];
+  return isOmitted(destination) || PostDestination.sendsToBluesky(PostDestination.parseOrThrow(destination));
 };
 
 const spoilerSummary = (body: RequestBody): string | null => {

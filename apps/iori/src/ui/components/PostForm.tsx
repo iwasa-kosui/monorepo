@@ -7,6 +7,7 @@ import { postedMessage } from './blueskyCrosspostMark.ts';
 import { downscaleImageForUpload } from './imageDownscale.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
+import { PostDestinationSelect } from './PostDestinationSelect.tsx';
 import { canSubmitPost, submitPost } from './postSubmission.ts';
 
 type Props = Readonly<{
@@ -113,32 +114,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         </div>
       )}
       <div class='mt-2 flex justify-end items-center gap-3 flex-shrink-0'>
-        <div
-          role='radiogroup'
-          aria-label='送り先'
-          class='mr-auto flex items-center gap-3 text-xs text-charcoal-light dark:text-gray-400'
-        >
-          <label class='flex items-center gap-1 cursor-pointer'>
-            <input
-              type='radio'
-              name='destination'
-              value='both'
-              checked={destination === 'both'}
-              onChange={() => setDestination('both')}
-            />
-            両方
-          </label>
-          <label class='flex items-center gap-1 cursor-pointer'>
-            <input
-              type='radio'
-              name='destination'
-              value='fediverse'
-              checked={destination === 'fediverse'}
-              onChange={() => setDestination('fediverse')}
-            />
-            Fediverse だけ
-          </label>
-        </div>
+        <PostDestinationSelect value={destination} onChange={setDestination} name='destination' />
         <label class='cursor-pointer text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
           {isUploading
             ? <span class='text-xs'>Uploading...</span>
