@@ -2,6 +2,8 @@ import { Endpoints, Note, Person, Update } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import { Instant } from '../../../domain/instant/instant.ts';
+import type { PostVersion } from '../../../domain/post/post.ts';
 import { StatusEditSchema, StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
@@ -292,7 +294,7 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
     expect(note.summary?.toString()).toBe('warn');
     expect(note.sensitive).toBe(true);
     expect(note.updated?.epochMilliseconds).toBe(Date.parse(status.edited_at!));
-    expect(note.published?.toString()).toBe(new Date(status.created_at).toISOString());
+    expect(note.published?.epochMilliseconds).toBe(Date.parse(status.created_at));
   });
 
   it('編集後の本文のメンションの相手にも送る', async () => {
@@ -402,6 +404,60 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
       expect(sent[1]?.[1]).toHaveLength(1);
       const note = await noteOf(sent[1]?.[2]);
       expect(await tagHrefsOf(note)).toEqual([aliceId]);
+    });
+
+    it('以前の編集で外したメンションの相手にも、その後の編集の Update を送り、Note の cc と tags に残す', async () => {
+      const t = await withRemoteAlice();
+      t.seed.addRemoteActor('alice');
+      const created = StatusSchema.parse(await (await t.post({ status: 'hi @alice@remote.example' })).json());
+      await t.edit(created.id, { status: 'hi' });
+      t.federation.sendActivity.mockClear();
+
+      const response = await t.edit(created.id, { status: 'hi again' });
+
+      expect(response.status).toBe(200);
+      const sent = t.sentActivities();
+      expect(sent).toHaveLength(2);
+      expect(sent[1]?.[1]).toEqual([
+        expect.objectContaining({ id: new URL(aliceId), inboxId: new URL(`${aliceId}/inbox`) }),
+      ]);
+      const note = await noteOf(sent[1]?.[2]);
+      expect(note.content?.toString()).toBe('<p>hi again</p>');
+      expect(note.ccIds.map((id) => id.href)).toContain(aliceId);
+      expect(await tagHrefsOf(note)).toEqual([aliceId]);
+    });
+
+    describe('版を組み立てられないとき', () => {
+      const withoutVersions = async (versions: ReadonlyArray<PostVersion>) => {
+        const t = await withRemoteAlice({ postVersionsResolver: { resolve: async () => RA.ok(versions) } });
+        t.seed.addRemoteActor('alice');
+        const created = StatusSchema.parse(await (await t.post({ status: 'hi @alice@remote.example' })).json());
+        await t.edit(created.id, { status: 'hi' });
+        t.federation.sendActivity.mockClear();
+        return { t, created };
+      };
+
+      it('版が空なら、編集直前の宛先だけで送る', async () => {
+        const { t, created } = await withoutVersions([]);
+
+        await t.edit(created.id, { status: 'hi again' });
+
+        const sent = t.sentActivities();
+        expect(sent).toHaveLength(1);
+        expect(sent[0]?.[1]).toBe('followers');
+      });
+
+      it('現在の版だけなら、編集直前の宛先だけで送る', async () => {
+        const { t, created } = await withoutVersions([
+          { content: '<p>hi</p>', summary: null, sensitive: false, createdAt: Instant.now() },
+        ]);
+
+        await t.edit(created.id, { status: 'hi again' });
+
+        const sent = t.sentActivities();
+        expect(sent).toHaveLength(1);
+        expect(sent[0]?.[1]).toBe('followers');
+      });
     });
   });
 
