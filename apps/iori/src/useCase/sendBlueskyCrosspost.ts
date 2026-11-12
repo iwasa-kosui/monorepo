@@ -5,6 +5,7 @@ import {
   type BlueskyImageInput,
   type BlueskyLinkPreviewInput,
   buildBlueskyPostDraft,
+  hasContentWarning,
   selectBlueskyImages,
   toBlueskyPostRecord,
 } from '../adaptor/bluesky/blueskyPostRecord.ts';
@@ -104,7 +105,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     }
 
     const replyTo = await resolveReplyContext(post);
-    const skipReason = BlueskyCrosspost.decideSkip({ summary: post.summary, sensitive: post.sensitive, replyTo });
+    const skipReason = BlueskyCrosspost.decideSkip({ replyTo });
     if (skipReason !== undefined) {
       await deps.crosspostSavedStore.update(BlueskyCrosspost.markSkipped(crosspost, skipReason, deps.now()));
       return 'skipped';
@@ -128,7 +129,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
 
     const preview = Result.unsafeUnwrap(await deps.linkPreviewsResolver.resolve(postId))[0];
     let linkPreview: BlueskyLinkPreviewInput | undefined;
-    if (preview !== undefined) {
+    if (preview !== undefined && !hasContentWarning(post.summary)) {
       const needsThumb = selectBlueskyImages(images).kept.length === 0 && preview.imageUrl !== null;
       const thumb = needsThumb
         ? await deps.thumbnailFetcher.fetch(new URL(preview.imageUrl!, preview.url).href).catch(() => undefined)

@@ -35,4 +35,5 @@ export type BlueskyPostRecord = Readonly<{
   reply?: Readonly<{ root: BlueskyStrongRef; parent: BlueskyStrongRef }>;
   embed?: BlueskyEmbed;
   langs?: readonly string[];
+  labels?: Readonly<{ $type: 'com.atproto.label.defs#selfLabels'; values: ReadonlyArray<Readonly<{ val: string }>> }>;
 }>;

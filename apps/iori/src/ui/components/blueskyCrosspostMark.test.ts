@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { IoriBlueskyCrosspost } from '../../adaptor/mastodon/entities.ts';
 import {
-  BLUESKY_NOT_SENT_NOTICE,
-  blueskyNotSentNotice,
+  BLUESKY_CONTENT_WARNING_NOTICE,
+  BLUESKY_SENSITIVE_NOTICE,
+  blueskyCrosspostNotice,
   postedMessage,
   skipReasonText,
   toBlueskyCrosspostMark,
@@ -127,20 +128,24 @@ describe('postedMessage', () => {
   });
 });
 
-describe('blueskyNotSentNotice', () => {
-  it('送り先が両方で、CW があれば説明を返す', () => {
-    expect(blueskyNotSentNotice('both', '注意', false)).toBe(BLUESKY_NOT_SENT_NOTICE);
+describe('blueskyCrosspostNotice', () => {
+  it('送り先が両方で、CW があれば CW の文と投稿へのリンクだけを送る説明を返す', () => {
+    expect(blueskyCrosspostNotice('both', '注意', false)).toBe(BLUESKY_CONTENT_WARNING_NOTICE);
+    expect(blueskyCrosspostNotice('both', '注意', true)).toBe(BLUESKY_CONTENT_WARNING_NOTICE);
+    expect(BLUESKY_CONTENT_WARNING_NOTICE).toBe('Bluesky には CW の文と投稿へのリンクだけを送ります');
   });
 
-  it('送り先が両方で、センシティブがオンなら説明を返す', () => {
-    expect(blueskyNotSentNotice('both', '', true)).toBe(BLUESKY_NOT_SENT_NOTICE);
+  it('送り先が両方で、CW が無くセンシティブがオンなら画像に注意のラベルを付ける説明を返す', () => {
+    expect(blueskyCrosspostNotice('both', '', true)).toBe(BLUESKY_SENSITIVE_NOTICE);
+    expect(blueskyCrosspostNotice('both', '  ', true)).toBe(BLUESKY_SENSITIVE_NOTICE);
+    expect(BLUESKY_SENSITIVE_NOTICE).toBe('Bluesky には画像に注意のラベルを付けて送ります');
   });
 
   it('CW が空白だけでセンシティブがオフなら返さない', () => {
-    expect(blueskyNotSentNotice('both', '  ', false)).toBeUndefined();
+    expect(blueskyCrosspostNotice('both', '  ', false)).toBeUndefined();
   });
 
   it('送り先が Fediverse だけなら返さない', () => {
-    expect(blueskyNotSentNotice('fediverse', '注意', true)).toBeUndefined();
+    expect(blueskyCrosspostNotice('fediverse', '注意', true)).toBeUndefined();
   });
 });
