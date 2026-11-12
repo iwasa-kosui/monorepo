@@ -8,6 +8,7 @@ import { hideQuoteInline, quoteOf, quoteTargetUrls } from '../api/quote.ts';
 import { accountHandle, accountHref, detailHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { translationErrorMessage } from '../api/translation.ts';
 import { toBlueskyCrosspostMark } from './blueskyCrosspostMark.ts';
+import { DirectMark, isDirectStatus } from './DirectMark.tsx';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
@@ -390,6 +391,7 @@ export const PostView = (
                 編集済み
               </span>
             )}
+            {isDirectStatus(post) && <DirectMark />}
             {crosspostMark !== undefined && (
               crosspostMark.href === null
                 ? (

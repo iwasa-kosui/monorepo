@@ -5,10 +5,18 @@ import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { favouritesUrl, fetchFavourites, isUnauthorizedError } from '../api/mastodonClient.ts';
 import { readPageCache, writePageCache } from '../api/pageCache.ts';
 import { clearAllCache } from '../api/responseCache.ts';
+import { BlueskyLikedPosts } from '../components/BlueskyLikedPosts.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
+import { useBlueskyStatus } from '../hooks/useBlueskyStatus.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import {
+  LIKED_POSTS_SOURCE_TABS,
+  type LikedPostsSource,
+  parseLikedPostsSource,
+  withLikedPostsSource,
+} from './likedPostsSource.ts';
 
 type LikedPostsData = Readonly<{
   statuses: readonly Status[];
@@ -20,7 +28,7 @@ const readCachedLikedPosts = (): LikedPostsData | null => {
   return cached === undefined ? null : { statuses: cached.items, nextMaxId: cached.nextMaxId };
 };
 
-const LikedPostsPage = () => {
+const FediverseLikedPosts = () => {
   const [cached] = useState(readCachedLikedPosts);
   const [data, setData] = useState<LikedPostsData | null>(cached);
   const [isLoading, setIsLoading] = useState(cached === null);
@@ -68,8 +76,7 @@ const LikedPostsPage = () => {
 
   if (isLoading) {
     return (
-      <section class='mb-8'>
-        <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Liked Posts</h1>
+      <>
         <div class='flex items-center justify-center py-8'>
           <svg class='animate-spin h-8 w-8 text-terracotta' viewBox='0 0 24 24'>
             <circle class='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' stroke-width='4' fill='none' />
@@ -80,25 +87,18 @@ const LikedPostsPage = () => {
             />
           </svg>
         </div>
-      </section>
+      </>
     );
   }
 
   if (error) {
-    return (
-      <section class='mb-8'>
-        <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Liked Posts</h1>
-        <p class='text-charcoal-light dark:text-gray-400'>{error}</p>
-      </section>
-    );
+    return <p class='text-charcoal-light dark:text-gray-400'>{error}</p>;
   }
 
   if (!data) return null;
 
   return (
-    <section class='mb-8'>
-      <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Liked Posts</h1>
-
+    <>
       <div class='space-y-6 py-2'>
         {data.statuses.length > 0
           ? (
@@ -130,6 +130,59 @@ const LikedPostsPage = () => {
             </div>
           )}
       </div>
+    </>
+  );
+};
+
+const LikedPostsPage = () => {
+  const [source, setSource] = useState<LikedPostsSource>(() => parseLikedPostsSource(window.location.search));
+  const { status, loadFailed } = useBlueskyStatus();
+  const blueskyEnabled = status?.enabled === true;
+  const isBlueskyPending = source === 'bluesky' && status === undefined && !loadFailed;
+  const shown: LikedPostsSource = source === 'bluesky' && blueskyEnabled ? 'bluesky' : 'fediverse';
+
+  useEffect(() => {
+    const handlePopState = () => setSource(parseLikedPostsSource(window.location.search));
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleSelectSource = (next: LikedPostsSource) => {
+    if (next === shown) return;
+    window.history.pushState(
+      null,
+      '',
+      `${window.location.pathname}${withLikedPostsSource(window.location.search, next)}`,
+    );
+    setSource(next);
+  };
+
+  return (
+    <section class='mb-8'>
+      <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Liked Posts</h1>
+
+      {blueskyEnabled && (
+        <div role='tablist' class='flex flex-wrap gap-2 mb-6'>
+          {LIKED_POSTS_SOURCE_TABS.map((tab) => (
+            <button
+              key={tab.source}
+              type='button'
+              role='tab'
+              aria-selected={tab.source === shown}
+              class={`rounded-clay px-4 py-2 shadow-clay-sm ${
+                tab.source === shown
+                  ? 'bg-terracotta text-white'
+                  : 'bg-cream dark:bg-gray-800 text-charcoal dark:text-gray-100'
+              }`}
+              onClick={() => handleSelectSource(tab.source)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isBlueskyPending ? null : shown === 'bluesky' ? <BlueskyLikedPosts /> : <FediverseLikedPosts />}
     </section>
   );
 };

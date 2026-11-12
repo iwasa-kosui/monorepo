@@ -60,6 +60,8 @@ describe('parseBlueskyTimelineResponse', () => {
           viewerLikeUri: null,
           reposted: false,
           viewerRepostUri: null,
+          threadMuted: false,
+          replyRootUri: null,
         }],
       },
     });
@@ -95,6 +97,39 @@ describe('parseBlueskyTimelineResponse', () => {
     ['viewer.repost が repost の uri でない', { viewer: { repost: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
   ])('%s ときは reposted にしない', (_name, overrides) => {
     expect(only([{ post: postView(overrides) }])).toMatchObject({ reposted: false, viewerRepostUri: null });
+  });
+
+  it('post.viewer.threadMuted が true なら threadMuted にする', () => {
+    const item = only([{ post: postView({ viewer: { threadMuted: true } }) }]);
+
+    expect(item).toMatchObject({ threadMuted: true });
+  });
+
+  it.each([
+    ['viewer が無い', {}],
+    ['viewer.threadMuted が無い', { viewer: { like: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
+    ['viewer.threadMuted が false', { viewer: { threadMuted: false } }],
+  ])('%s と threadMuted は false になる', (_, overrides) => {
+    expect(only([{ post: postView(overrides) }])).toMatchObject({ threadMuted: false });
+  });
+
+  it('返信の record.reply.root.uri を replyRootUri に入れる', () => {
+    const parentUri = 'at://did:plc:parent/app.bsky.feed.post/3kparent';
+    const rootUri = 'at://did:plc:root/app.bsky.feed.post/3kroot';
+    const item = only([{
+      post: postView({}, { reply: { parent: { uri: parentUri, cid: 'c' }, root: { uri: rootUri, cid: 'c' } } }),
+    }]);
+
+    expect(item).toMatchObject({ replyParentUri: parentUri, replyRootUri: rootUri });
+  });
+
+  it.each([
+    ['返信ではない', {}],
+    ['reply に root が無い', {
+      reply: { parent: { uri: 'at://did:plc:parent/app.bsky.feed.post/3kparent', cid: 'c' } },
+    }],
+  ])('%s投稿の replyRootUri は null になる', (_, record) => {
+    expect(only([{ post: postView({}, record) }])).toMatchObject({ replyRootUri: null });
   });
 
   it('リポスト行でも、uri と cid は元の投稿のものにし、viewer.repost を読む', () => {

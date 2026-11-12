@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { applyMessageBadge, fetchUnreadMessageCount, MESSAGE_BADGE_SELECTOR } from './messageBadge.ts';
+import {
+  applyMessageBadge,
+  combineUnreadMessages,
+  fetchUnreadMessageCount,
+  MESSAGE_BADGE_SELECTOR,
+} from './messageBadge.ts';
 import { NOTIFICATION_BADGE_SELECTOR } from './notificationBadge.ts';
 
 const fakeBadge = () => ({ textContent: 'stale', hidden: false });
@@ -23,30 +28,98 @@ describe('MESSAGE_BADGE_SELECTOR', () => {
   });
 });
 
-describe('fetchUnreadMessageCount', () => {
-  it('未読の会話の数とリクエストの数の合計を、同じオリジンへの GET で取る', async () => {
-    const fetcher = vi.fn(() => Promise.resolve(jsonResponse({ unread: 3, requests: 2 })));
+const BLUESKY_URL = '/api/iori/v1/bluesky/chat/unread_count';
+const FEDIVERSE_URL = '/api/iori/v1/fediverse/conversations/unread_count';
 
-    expect(await fetchUnreadMessageCount(fetcher)).toBe(5);
+const fetcherOf = (responses: Readonly<Record<string, () => Promise<Response>>>) =>
+  vi.fn((input: RequestInfo | URL) => {
+    const respond = responses[String(input)];
+    if (respond === undefined) throw new Error(`unexpected url: ${String(input)}`);
+    return respond();
+  }) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+
+const ok = (body: unknown) => () => Promise.resolve(jsonResponse(body));
+const status = (code: number) => () => Promise.resolve(jsonResponse({}, code));
+
+describe('fetchUnreadMessageCount', () => {
+  it('Bluesky の未読のメッセージとリクエストの数に、Fediverse の未読のメッセージの数を足し、同じオリジンへの GET で取る', async () => {
+    const fetcher = fetcherOf({
+      [BLUESKY_URL]: ok({ unread: 3, requests: 2 }),
+      [FEDIVERSE_URL]: ok({ unread: 4 }),
+    });
+
+    expect(await fetchUnreadMessageCount(fetcher)).toBe(9);
     expect(fetcher).toHaveBeenCalledWith(
-      '/api/iori/v1/bluesky/chat/unread_count',
+      BLUESKY_URL,
+      expect.objectContaining({ credentials: 'same-origin', method: 'GET' }),
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      FEDIVERSE_URL,
       expect.objectContaining({ credentials: 'same-origin', method: 'GET' }),
     );
   });
 
-  it('403 と 409 は unavailable にする', async () => {
-    expect(await fetchUnreadMessageCount(() => Promise.resolve(jsonResponse({ error: 'chat_not_permitted' }, 403))))
+  it.each([403, 409, 500])('Bluesky が %i でも、Fediverse の数を返す', async (code) => {
+    const fetcher = fetcherOf({ [BLUESKY_URL]: status(code), [FEDIVERSE_URL]: ok({ unread: 2 }) });
+
+    expect(await fetchUnreadMessageCount(fetcher)).toBe(2);
+  });
+
+  it.each([403, 409, 500])('Fediverse が %i でも、Bluesky の数を返す', async (code) => {
+    const fetcher = fetcherOf({ [BLUESKY_URL]: ok({ unread: 1, requests: 1 }), [FEDIVERSE_URL]: status(code) });
+
+    expect(await fetchUnreadMessageCount(fetcher)).toBe(2);
+  });
+
+  it('片方の通信が失敗しても、もう片方の数を返す', async () => {
+    const fetcher = fetcherOf({
+      [BLUESKY_URL]: () => Promise.reject(new Error('offline')),
+      [FEDIVERSE_URL]: ok({ unread: 5 }),
+    });
+
+    expect(await fetchUnreadMessageCount(fetcher)).toBe(5);
+  });
+
+  it('両方が 403 か 409 のときは unavailable にする', async () => {
+    expect(await fetchUnreadMessageCount(fetcherOf({ [BLUESKY_URL]: status(403), [FEDIVERSE_URL]: status(403) })))
       .toBe('unavailable');
-    expect(await fetchUnreadMessageCount(() => Promise.resolve(jsonResponse({ error: 'disabled' }, 409))))
+    expect(await fetchUnreadMessageCount(fetcherOf({ [BLUESKY_URL]: status(409), [FEDIVERSE_URL]: status(403) })))
       .toBe('unavailable');
   });
 
-  it('その他のエラー、壊れた本文、通信失敗は undefined にする', async () => {
-    expect(await fetchUnreadMessageCount(() => Promise.resolve(jsonResponse({}, 502)))).toBeUndefined();
-    expect(await fetchUnreadMessageCount(() => Promise.resolve(jsonResponse({ unread: '3', requests: 0 }))))
+  it('数が取れず、片方が一時的な失敗のときは undefined にする', async () => {
+    expect(await fetchUnreadMessageCount(fetcherOf({ [BLUESKY_URL]: status(409), [FEDIVERSE_URL]: status(502) })))
       .toBeUndefined();
-    expect(await fetchUnreadMessageCount(() => Promise.resolve(jsonResponse({ unread: 1 })))).toBeUndefined();
-    expect(await fetchUnreadMessageCount(() => Promise.reject(new Error('offline')))).toBeUndefined();
+    expect(
+      await fetchUnreadMessageCount(
+        fetcherOf({ [BLUESKY_URL]: () => Promise.reject(new Error('offline')), [FEDIVERSE_URL]: status(500) }),
+      ),
+    ).toBeUndefined();
+  });
+
+  it('壊れた本文は数に数えない', async () => {
+    expect(
+      await fetchUnreadMessageCount(
+        fetcherOf({ [BLUESKY_URL]: ok({ unread: '3', requests: 0 }), [FEDIVERSE_URL]: ok({ unread: 1 }) }),
+      ),
+    ).toBe(1);
+    expect(
+      await fetchUnreadMessageCount(fetcherOf({ [BLUESKY_URL]: ok({ unread: 1 }), [FEDIVERSE_URL]: ok({}) })),
+    ).toBeUndefined();
+    expect(
+      await fetchUnreadMessageCount(fetcherOf({ [BLUESKY_URL]: ok(null), [FEDIVERSE_URL]: ok({ unread: 'x' }) })),
+    ).toBeUndefined();
+  });
+});
+
+describe('combineUnreadMessages', () => {
+  it('数だけを合算し、数が無いときは unavailable か undefined にする', () => {
+    expect(combineUnreadMessages([2, 3])).toBe(5);
+    expect(combineUnreadMessages([0, 'unavailable'])).toBe(0);
+    expect(combineUnreadMessages([undefined, 4])).toBe(4);
+    expect(combineUnreadMessages(['unavailable', 'unavailable'])).toBe('unavailable');
+    expect(combineUnreadMessages(['unavailable', undefined])).toBeUndefined();
+    expect(combineUnreadMessages([undefined, undefined])).toBeUndefined();
   });
 });
 

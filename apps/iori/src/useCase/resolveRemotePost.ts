@@ -11,6 +11,7 @@ import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import type { Username } from '../domain/user/username.ts';
 import { timedOut, withTimeout } from '../helper/withTimeout.ts';
+import type { LookupUrlResolver } from '../ports/lookupUrlResolver.ts';
 import type { FederationContext } from './fetchRemoteContext.ts';
 import { isBlockedActorUri } from './helper/isBlockedActorUri.ts';
 import { toRemotePostIdentity } from './helper/remoteNoteIdentity.ts';
@@ -41,6 +42,7 @@ type Deps = Readonly<{
   remotePostUpserter: RemotePostUpserter;
   blockedActorUriResolverByUsername: BlockedActorUriResolverByUsername;
   isBlockedUri: (uri: string) => boolean;
+  lookupUrlResolver: LookupUrlResolver;
   fetchTimeoutMs?: number;
   totalTimeoutMs?: number;
 }>;
@@ -54,6 +56,7 @@ const create = ({
   remotePostUpserter,
   blockedActorUriResolverByUsername,
   isBlockedUri,
+  lookupUrlResolver,
   fetchTimeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
   totalTimeoutMs = DEFAULT_TOTAL_TIMEOUT_MS,
 }: Deps): ResolveRemotePostUseCase => {
@@ -102,7 +105,13 @@ const create = ({
     if (stored !== undefined || url.origin === ownOrigin) {
       return visiblePostId(username, stored);
     }
-    const found = await ctx.lookupObject(url.href, {
+    const resolution = await lookupUrlResolver(url.href, {
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(fetchTimeoutMs)]),
+    });
+    if (resolution.type === 'blocked') {
+      return undefined;
+    }
+    const found = await ctx.lookupObject(resolution.url, {
       documentLoader,
       signal: AbortSignal.any([controller.signal, AbortSignal.timeout(fetchTimeoutMs)]),
     });

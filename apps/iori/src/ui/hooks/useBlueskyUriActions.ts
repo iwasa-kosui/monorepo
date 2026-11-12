@@ -28,10 +28,8 @@ export const useBlueskyUriActions = (
     BLUESKY_REPOST_BY_URI_REQUESTS,
   );
   const replyDialog = useBlueskyReplyDialog(sendBlueskyReplyByUri);
-  const { onMuteAuthor, onBlockAuthor, onReportPost, reportDialog, notice } = useBlueskyAuthorModeration(
-    updateItems,
-    options,
-  );
+  const { onMuteThread, onUnmuteThread, onMuteAuthor, onBlockAuthor, onReportPost, reportDialog, notice } =
+    useBlueskyAuthorModeration(updateItems, options);
   const actions: BlueskyPostActions = {
     onReply: replyDialog.open,
     onLike: like,
@@ -40,6 +38,8 @@ export const useBlueskyUriActions = (
     onRepost: repost,
     onUndoRepost: undoRepost,
     repostPendingUris,
+    onMuteThread,
+    onUnmuteThread,
     onMuteAuthor,
     onBlockAuthor,
     onReportPost,

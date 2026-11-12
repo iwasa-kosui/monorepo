@@ -806,6 +806,8 @@ const TimelineList = () => {
               onRepost={blueskyRepost.repost}
               onUndoRepost={blueskyRepost.undoRepost}
               isRepostPending={blueskyRepost.pendingUris.has(item.item.uri)}
+              onMuteThread={blueskyModeration.onMuteThread}
+              onUnmuteThread={blueskyModeration.onUnmuteThread}
               onMuteAuthor={blueskyModeration.onMuteAuthor}
               onBlockAuthor={blueskyModeration.onBlockAuthor}
               onReportPost={blueskyModeration.onReportPost}

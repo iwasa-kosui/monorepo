@@ -3,6 +3,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { BLUESKY_STATUS_ID_PREFIX } from '../../helper/blueskyUrl.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { accountHandle, accountHref, detailHref } from '../api/status.ts';
+import { DirectMark, isDirectStatus } from './DirectMark.tsx';
 import { blueskyNotificationPostHref } from './notificationPostHref.ts';
 
 type Props = Readonly<{
@@ -37,6 +38,11 @@ const PostQuote = ({
         role='button'
         class='block p-3 bg-sand-light/50 dark:bg-gray-700/50 rounded-xl hover:bg-sand-light dark:hover:bg-gray-700 transition-colors shadow-clay-inset'
       >
+        {isDirectStatus(status) && (
+          <div class='mb-1'>
+            <DirectMark />
+          </div>
+        )}
         {status.spoiler_text !== ''
           ? (
             <div class='text-sm text-charcoal dark:text-gray-200 line-clamp-2'>

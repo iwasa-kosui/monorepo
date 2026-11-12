@@ -19,6 +19,7 @@ import { createWorkerIoriBlueskyModerationRouter } from './adaptor/routes/worker
 import { createWorkerIoriBlueskyProfileRouter } from './adaptor/routes/workerIoriBlueskyProfileRouter.ts';
 import { createWorkerIoriBlueskyRouter } from './adaptor/routes/workerIoriBlueskyRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
+import { createWorkerIoriFediverseConversationsRouter } from './adaptor/routes/workerIoriFediverseConversationsRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from './adaptor/routes/workerIoriSummaryRouter.ts';
 import { createWorkerIoriXPostsRouter } from './adaptor/routes/workerIoriXPostsRouter.ts';
@@ -288,6 +289,17 @@ export default {
             mediaUploadResolver: runtime.mastodon.mediaUploadResolver,
             uploads: runtime.uploads,
             authn,
+          }),
+        );
+        app.route(
+          '/api',
+          createWorkerIoriFediverseConversationsRouter({
+            ...runtime.mastodon,
+            ...runtime.fediverseConversations,
+            createPostUseCase: runtime.posting.createPostUseCase,
+            sendReplyUseCase: runtime.core.sendReplyUseCase,
+            authn,
+            createContext,
           }),
         );
         app.route('/api', createWorkerIoriBlueskyModerationRouter({ ...runtime.blueskyModeration, authn }));

@@ -8,6 +8,7 @@ import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import { FollowBlueskyActorUseCase } from '../useCase/followBlueskyActor.ts';
 import { GetBlueskyProfileUseCase } from '../useCase/getBlueskyProfile.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
+import { ListBlueskyActorLikesUseCase } from '../useCase/listBlueskyActorLikes.ts';
 import { ListBlueskyAuthorFeedUseCase } from '../useCase/listBlueskyAuthorFeed.ts';
 import { UnfollowBlueskyActorUseCase } from '../useCase/unfollowBlueskyActor.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
@@ -16,6 +17,7 @@ import { createTimelineClient, resolveBlueskyTimelineConfig } from './blueskyTim
 export type BlueskyProfileRuntimePorts = Readonly<{
   getBlueskyProfileUseCase: GetBlueskyProfileUseCase | undefined;
   listBlueskyAuthorFeedUseCase: ListBlueskyAuthorFeedUseCase | undefined;
+  listBlueskyActorLikesUseCase: ListBlueskyActorLikesUseCase | undefined;
   followBlueskyActorUseCase: FollowBlueskyActorUseCase | undefined;
   unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase | undefined;
   viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
@@ -33,6 +35,7 @@ export const createBlueskyProfileRuntimePorts = (
     return {
       getBlueskyProfileUseCase: undefined,
       listBlueskyAuthorFeedUseCase: undefined,
+      listBlueskyActorLikesUseCase: undefined,
       followBlueskyActorUseCase: undefined,
       unfollowBlueskyActorUseCase: undefined,
       viewerDid: undefined,
@@ -44,6 +47,7 @@ export const createBlueskyProfileRuntimePorts = (
   return {
     getBlueskyProfileUseCase: GetBlueskyProfileUseCase.create({ reader }),
     listBlueskyAuthorFeedUseCase: ListBlueskyAuthorFeedUseCase.create({ reader }),
+    listBlueskyActorLikesUseCase: ListBlueskyActorLikesUseCase.create({ reader, viewerDid: () => client.viewerDid() }),
     followBlueskyActorUseCase: FollowBlueskyActorUseCase.create({ reader, client }),
     unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase.create({ reader, client }),
     viewerDid: () => client.viewerDid(),
