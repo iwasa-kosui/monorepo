@@ -31,16 +31,19 @@ export type LocalActorProfilePatch = Readonly<{ displayName?: string | null; bio
 
 const normalizeNewlines = (value: string): string => value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 
+const replaceControlCharacters = (value: string): string => value.replace(/\p{Cc}/gu, ' ');
+
 const validate = (input: LocalActorProfileInput): Result<LocalActorProfilePatch, InvalidLocalActorProfileError> => {
+  const displayName = input.displayName === undefined ? undefined : replaceControlCharacters(input.displayName);
   const bio = input.bio === undefined ? undefined : normalizeNewlines(input.bio);
-  if (input.displayName !== undefined && !displayNameSchema.safeParse(input.displayName).success) {
+  if (displayName !== undefined && !displayNameSchema.safeParse(displayName).success) {
     return Result.err(InvalidLocalActorProfileError.create('displayName'));
   }
   if (bio !== undefined && !bioSchema.safeParse(bio).success) {
     return Result.err(InvalidLocalActorProfileError.create('bio'));
   }
   return Result.ok({
-    ...(input.displayName === undefined ? {} : { displayName: input.displayName === '' ? null : input.displayName }),
+    ...(displayName === undefined ? {} : { displayName: displayName === '' ? null : displayName }),
     ...(bio === undefined ? {} : { bio: bio === '' ? null : bio }),
   });
 };

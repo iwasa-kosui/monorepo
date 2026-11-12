@@ -35,6 +35,21 @@ describe('LocalActorProfile.validate', () => {
     expect(LocalActorProfile.validate({ bio: 'a\r\nb\rc' })).toEqual({ ok: true, val: { bio: 'a\nb\nc' } });
   });
 
+  it('表示名の改行とその他の制御文字を半角空白に置き換え、長さは置き換えたあとの文字列で数える', () => {
+    expect(LocalActorProfile.validate({ displayName: 'a\r\nb\rc\nd\te\u0000f' })).toEqual({
+      ok: true,
+      val: { displayName: 'a  b c d e f' },
+    });
+    expect(LocalActorProfile.validate({ displayName: '\n' })).toEqual({ ok: true, val: { displayName: ' ' } });
+  });
+
+  it('自己紹介の改行は許し、制御文字の置き換えは表示名だけに行う', () => {
+    expect(LocalActorProfile.validate({ displayName: 'a\nb', bio: 'a\nb\tc' })).toEqual({
+      ok: true,
+      val: { displayName: 'a b', bio: 'a\nb\tc' },
+    });
+  });
+
   it('文字数は上限ちょうどまで通し、サロゲートペアも 1 文字と数える', () => {
     expect(LocalActorProfile.validate({ displayName: '😀'.repeat(LOCAL_ACTOR_DISPLAY_NAME_MAX_LENGTH) }).ok).toBe(true);
     expect(LocalActorProfile.validate({ bio: 'あ'.repeat(LOCAL_ACTOR_BIO_MAX_LENGTH) }).ok).toBe(true);

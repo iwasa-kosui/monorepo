@@ -15,7 +15,7 @@ import { Modal } from '../components/Modal.tsx';
 import { PostDestinationSelect } from '../components/PostDestinationSelect.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
-import { toProfileUpdate } from '../components/profileUpdate.ts';
+import { isEmptyProfileUpdate, toProfileUpdate } from '../components/profileUpdate.ts';
 import { QuoteModal } from '../components/QuoteModal.tsx';
 import { ReplyDialogShell } from '../components/ReplyDialogShell.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
@@ -668,7 +668,14 @@ const UpdateBioModal = () => {
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
-    const update = toProfileUpdate(new FormData(e.currentTarget as HTMLFormElement));
+    const update = toProfileUpdate(new FormData(e.currentTarget as HTMLFormElement), {
+      displayName: data.me.display_name,
+      note: data.me.source.note,
+    });
+    if (isEmptyProfileUpdate(update)) {
+      window.location.hash = '';
+      return;
+    }
     setIsSubmitting(true);
     setErrorText(undefined);
     try {

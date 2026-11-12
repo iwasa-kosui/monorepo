@@ -21,11 +21,10 @@ export const UpdateProfileModal = ({ displayName, note, isSubmitting, errorText,
         type='text'
         name='display_name'
         value={displayName}
-        maxlength={30}
         class={FIELD_CLASS}
       />
       <label class={LABEL_CLASS} for='update-bio-note'>Bio</label>
-      <textarea id='update-bio-note' name='note' value={note} maxlength={500} rows={4} class={FIELD_CLASS} />
+      <textarea id='update-bio-note' name='note' value={note} rows={4} class={FIELD_CLASS} />
       <label class={LABEL_CLASS} for='update-bio-avatar'>
         Profile image (JPEG, PNG, GIF or WebP, up to 5MB)
       </label>
