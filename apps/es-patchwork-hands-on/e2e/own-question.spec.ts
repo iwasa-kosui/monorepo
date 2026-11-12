@@ -141,6 +141,8 @@ test.describe('第1章で挙げた問い', () => {
       await input.fill(sampleQuestion);
       await expect(input).toHaveValue(sampleQuestion);
       await expect(page.getByRole('status').filter({ hasText: 'このブラウザに保存しました。' })).toHaveCount(0);
+      await expect(page.getByRole('status').filter({ hasText: 'このブラウザには保存できませんでした。' }))
+        .toBeVisible();
       expect(errors).toEqual([]);
     });
   }

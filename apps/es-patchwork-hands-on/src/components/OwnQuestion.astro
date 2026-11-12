@@ -29,7 +29,7 @@ for (
   text.addEventListener('input', () => {
     status.textContent = saveQuestion('chapter-1', text.value)
       ? 'このブラウザに保存しました。'
-      : '';
+      : 'このブラウザには保存できませんでした。';
   });
 }
 </script>
