@@ -19,5 +19,22 @@ export const withSearchSource = (search: string, source: SearchSource): string =
   return next === '' ? '' : `?${next}`;
 };
 
-export const blueskySearchErrorMessage = (status: number | undefined): string =>
-  status === 409 ? 'Bluesky のタイムラインが無効です' : 'Bluesky を検索できませんでした';
+export const blueskySearchErrorMessage = (status: number | undefined, code?: string): string => {
+  switch (status) {
+    case 400:
+      return '検索語は300文字までです';
+    case 403:
+      return 'この検索はオーナーだけが使えます';
+    case 409:
+      return 'Bluesky のタイムラインが無効です';
+    case 429:
+      return 'Bluesky の検索の上限に達しました。しばらく待ってからもう一度お試しください';
+    case 502:
+      return code === 'auth' ? 'Bluesky にログインできませんでした' : 'Bluesky を検索できませんでした';
+    default:
+      return 'Bluesky を検索できませんでした';
+  }
+};
+
+export const shouldRerunIoriSearch = (submittedQuery: string, lastIoriQuery: string | undefined): boolean =>
+  submittedQuery !== '' && submittedQuery !== lastIoriQuery;

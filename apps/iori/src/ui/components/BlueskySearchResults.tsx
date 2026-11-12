@@ -3,7 +3,7 @@ import type {
   IoriBlueskyTimelineItemBody,
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { searchBlueskyActors, searchBlueskyPosts } from '../api/mastodonClient.ts';
-import { type BlueskySearchPage, type BlueskySearchState, useBlueskySearch } from '../hooks/useBlueskySearch.ts';
+import { type BlueskySearchPage, type BlueskySearchView, useBlueskySearch } from '../hooks/useBlueskySearch.ts';
 import { blueskySearchErrorMessage } from '../pages/searchSource.ts';
 import { BlueskyActorRow } from './BlueskyActorRow.tsx';
 import { BlueskyTimelineItemView } from './BlueskyTimelineItemView.tsx';
@@ -11,6 +11,8 @@ import { BlueskyTimelineItemView } from './BlueskyTimelineItemView.tsx';
 type Submitted = Readonly<{ q: string; seq: number }>;
 
 const mutedTextClass = 'text-charcoal-light dark:text-gray-400 mb-4';
+const retryButtonClass =
+  'rounded-clay bg-terracotta text-white px-4 py-2 shadow-clay-sm disabled:opacity-50 disabled:cursor-not-allowed';
 
 const fetchPostsPage = async (
   q: string,
@@ -28,15 +30,17 @@ const fetchActorsPage = async (
 const postKey = (item: IoriBlueskyTimelineItemBody): string => item.feedItemId;
 const actorKey = (actor: IoriBlueskyActorBody): string => actor.did;
 
-const BlueskySearchList = <T,>({ state, submitted, renderItem }: Readonly<{
-  state: BlueskySearchState<T>;
+const BlueskySearchList = <T,>({ view: { state, retryLoadMore }, submitted, renderItem }: Readonly<{
+  view: BlueskySearchView<T>;
   submitted: Submitted;
   renderItem: (item: T) => unknown;
 }>) => {
   if (submitted.q === '') {
     return submitted.seq === 0 ? null : <p class={mutedTextClass}>検索語を入力してください。</p>;
   }
-  if (state.kind === 'error') return <p class={mutedTextClass}>{blueskySearchErrorMessage(state.status)}</p>;
+  if (state.kind === 'error') {
+    return <p class={mutedTextClass}>{blueskySearchErrorMessage(state.status, state.code)}</p>;
+  }
   if (state.kind !== 'ready') return <p class={mutedTextClass}>検索しています</p>;
   if (state.items.length === 0) {
     return (
@@ -45,14 +49,28 @@ const BlueskySearchList = <T,>({ state, submitted, renderItem }: Readonly<{
       </div>
     );
   }
-  return <div class='space-y-6 py-2'>{state.items.map(renderItem)}</div>;
+  return (
+    <>
+      <div class='space-y-6 py-2'>{state.items.map(renderItem)}</div>
+      {state.loadMoreFailure !== undefined && (
+        <div class='py-4 space-y-3'>
+          <p class='text-charcoal-light dark:text-gray-400'>
+            {blueskySearchErrorMessage(state.loadMoreFailure.status, state.loadMoreFailure.code)}
+          </p>
+          <button type='button' class={retryButtonClass} disabled={state.isLoadingMore} onClick={retryLoadMore}>
+            もう一度読み込む
+          </button>
+        </div>
+      )}
+    </>
+  );
 };
 
 export const BlueskyPostSearchResults = ({ submitted }: Readonly<{ submitted: Submitted }>) => {
-  const state = useBlueskySearch({ query: submitted.q, seq: submitted.seq, fetchPage: fetchPostsPage, keyOf: postKey });
+  const view = useBlueskySearch({ query: submitted.q, seq: submitted.seq, fetchPage: fetchPostsPage, keyOf: postKey });
   return (
     <BlueskySearchList
-      state={state}
+      view={view}
       submitted={submitted}
       renderItem={(item) => <BlueskyTimelineItemView key={item.feedItemId} item={item} />}
     />
@@ -60,7 +78,7 @@ export const BlueskyPostSearchResults = ({ submitted }: Readonly<{ submitted: Su
 };
 
 export const BlueskyActorSearchResults = ({ submitted }: Readonly<{ submitted: Submitted }>) => {
-  const state = useBlueskySearch({
+  const view = useBlueskySearch({
     query: submitted.q,
     seq: submitted.seq,
     fetchPage: fetchActorsPage,
@@ -68,7 +86,7 @@ export const BlueskyActorSearchResults = ({ submitted }: Readonly<{ submitted: S
   });
   return (
     <BlueskySearchList
-      state={state}
+      view={view}
       submitted={submitted}
       renderItem={(actor) => <BlueskyActorRow key={actor.did} actor={actor} />}
     />

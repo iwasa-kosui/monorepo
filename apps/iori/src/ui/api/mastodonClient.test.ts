@@ -414,6 +414,16 @@ describe('mastodon client requests', () => {
     expect((error as Error).message).toBe('HTTP 404');
   });
 
+  it('reads the code from the error body and leaves it out when the body has none', async () => {
+    stubFetch(jsonResponse({ error: 'Bluesky authentication failed', code: 'auth' }, { status: 502 }));
+    const withCode = await fetchStatus('s1').catch((e: unknown) => e);
+    stubFetch(jsonResponse({ error: 'Not found' }, { status: 404 }));
+    const withoutCode = await fetchStatus('s1').catch((e: unknown) => e);
+
+    expect((withCode as { code?: string }).code).toBe('auth');
+    expect('code' in (withoutCode as object)).toBe(false);
+  });
+
   it('treats a 422 from relationships as logged in without a relationship', async () => {
     stubFetch(jsonResponse({ error: 'Actor not found' }, { status: 422 }));
 

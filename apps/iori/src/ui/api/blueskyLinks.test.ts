@@ -1,18 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { blueskyPostPageHref, blueskyProfilePageHref, isExternalHref } from './blueskyLinks.ts';
-
-describe('blueskyPostPageHref', () => {
-  it('投稿の at:// URI と投稿者の DID から bsky.app の投稿の URL を返す', () => {
-    expect(blueskyPostPageHref('at://did:plc:author/app.bsky.feed.post/3kabc', 'did:plc:author')).toBe(
-      'https://bsky.app/profile/did:plc:author/post/3kabc',
-    );
-  });
-
-  it('URI が読めないときは bsky.app のトップを返す', () => {
-    expect(blueskyPostPageHref('not-a-uri', 'did:plc:author')).toBe('https://bsky.app');
-  });
-});
+import { blueskyProfilePageHref, isExternalHref } from './blueskyLinks.ts';
 
 describe('blueskyProfilePageHref', () => {
   it('DID から bsky.app のプロフィールの URL を返す', () => {

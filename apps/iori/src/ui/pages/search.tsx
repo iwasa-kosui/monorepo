@@ -13,7 +13,13 @@ import { buildSummaryRequest, summaryErrorMessage, summaryResultLabel, summaryTa
 import { BlueskyActorSearchResults, BlueskyPostSearchResults } from '../components/BlueskySearchResults.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { SummaryText } from '../components/SummaryText.tsx';
-import { parseSearchSource, SEARCH_SOURCE_TABS, type SearchSource, withSearchSource } from './searchSource.ts';
+import {
+  parseSearchSource,
+  SEARCH_SOURCE_TABS,
+  type SearchSource,
+  shouldRerunIoriSearch,
+  withSearchSource,
+} from './searchSource.ts';
 
 const inputClass =
   'w-full rounded-clay bg-cream dark:bg-gray-800 shadow-clay-sm dark:shadow-clay-dark px-4 py-2 text-charcoal dark:text-gray-100';
@@ -34,6 +40,7 @@ const SearchPage = () => {
   const [searched, setSearched] = useState<SearchStatusesResult | null>(null);
   const [searchedQuery, setSearchedQuery] = useState('');
   const isSearchingRef = useRef(false);
+  const lastIoriQueryRef = useRef<string | undefined>(undefined);
   const isSummarizingRef = useRef(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
@@ -53,16 +60,9 @@ const SearchPage = () => {
     setSource(next);
   };
 
-  const handleSearch = async (event: Event) => {
-    event.preventDefault();
+  const runSearch = async (q: string) => {
     if (isSearchingRef.current) return;
-    const q = query.trim();
-    if (q === '') {
-      setSearched(null);
-      setSearchedQuery('');
-      setSearchError('検索語を入力してください。');
-      return;
-    }
+    lastIoriQueryRef.current = q;
     isSearchingRef.current = true;
     setIsSearching(true);
     setSearchError('');
@@ -84,6 +84,25 @@ const SearchPage = () => {
       setIsSearching(false);
     }
   };
+
+  const handleSearch = async (event: Event) => {
+    event.preventDefault();
+    if (isSearchingRef.current) return;
+    const q = query.trim();
+    if (q === '') {
+      setSearched(null);
+      setSearchedQuery('');
+      setSearchError('検索語を入力してください。');
+      return;
+    }
+    await runSearch(q);
+  };
+
+  useEffect(() => {
+    if (source === 'iori' && shouldRerunIoriSearch(submitted.q, lastIoriQueryRef.current ?? undefined)) {
+      void runSearch(submitted.q);
+    }
+  }, [source]);
 
   const handleSubmit = (event: Event) => {
     setSubmitted((prev) => ({ q: query.trim(), seq: prev.seq + 1 }));
@@ -136,6 +155,7 @@ const SearchPage = () => {
           type='search'
           class={inputClass}
           placeholder='検索語'
+          maxLength={300}
           value={query}
           onInput={(event: Event) => setQuery((event.target as HTMLInputElement).value)}
         />

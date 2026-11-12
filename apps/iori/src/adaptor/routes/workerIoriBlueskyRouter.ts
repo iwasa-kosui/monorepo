@@ -126,6 +126,12 @@ const searchInput = (c: Context): { q: string; cursor: string | undefined } | un
   return { q, cursor: cursor === undefined || cursor === '' ? undefined : cursor };
 };
 
+const searchFailure = (c: Context, error: BlueskyClientError) => {
+  if (error.status === 429) return c.json({ error: 'Bluesky rate limited' }, 429);
+  if (error.kind === 'auth') return c.json({ error: 'Bluesky authentication failed', code: 'auth' }, 502);
+  return c.json({ error: 'Bluesky request failed', code: 'unavailable' }, 502);
+};
+
 const likeFailure = (c: Context, error: BlueskyClientError | BlueskyLikeTargetNotFound) =>
   error.type === 'BlueskyLikeTargetNotFound'
     ? c.json({ error: 'Record not found' }, 404)
@@ -206,7 +212,7 @@ export const createWorkerIoriBlueskyRouter = ({
       const input = searchInput(c);
       if (input === undefined) return c.json({ error: 'Validation failed: q' }, 400);
       const searched = await blueskySearch.searchPosts({ ...input, limit: SEARCH_LIMIT });
-      if (!searched.ok) return c.json({ error: 'Bluesky request failed' }, 502);
+      if (!searched.ok) return searchFailure(c, searched.err);
       return c.json(
         {
           items: searched.val.items.map(toItemBody),
@@ -222,7 +228,7 @@ export const createWorkerIoriBlueskyRouter = ({
       const input = searchInput(c);
       if (input === undefined) return c.json({ error: 'Validation failed: q' }, 400);
       const searched = await blueskySearch.searchActors({ ...input, limit: SEARCH_LIMIT });
-      if (!searched.ok) return c.json({ error: 'Bluesky request failed' }, 502);
+      if (!searched.ok) return searchFailure(c, searched.err);
       return c.json(
         {
           actors: searched.val.actors.map(toActorBody),

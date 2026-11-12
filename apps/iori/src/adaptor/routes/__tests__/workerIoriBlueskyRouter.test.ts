@@ -852,27 +852,50 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
     });
 
-    it('Bluesky への呼び出しが失敗したら 502 にし、詳細を返さない', async () => {
-      const error: BlueskyClientError = {
-        type: 'BlueskyClientError',
-        kind: 'http',
-        message: 'searchPosts failed: status 500 InternalServerError',
-        status: 500,
-      };
-      const t = setupReadApi({
-        blueskyTimelineEnabled: true,
-        blueskySearch: searchMock({
-          searchPosts: vi.fn<BlueskySearch['searchPosts']>(async () => RA.err(error)),
-          searchActors: vi.fn<BlueskySearch['searchActors']>(async () => RA.err(error)),
-        }),
-      });
-      const me = await t.signIn('read:search');
+    it.each(
+      [
+        [
+          'HTTP 429',
+          { type: 'BlueskyClientError', kind: 'http', message: 'searchPosts failed: status 429', status: 429 },
+          429,
+          { error: 'Bluesky rate limited' },
+        ],
+        [
+          '認証の失敗',
+          { type: 'BlueskyClientError', kind: 'auth', message: 'searchPosts failed: status 401', status: 401 },
+          502,
+          { error: 'Bluesky authentication failed', code: 'auth' },
+        ],
+        [
+          'それ以外の失敗',
+          {
+            type: 'BlueskyClientError',
+            kind: 'http',
+            message: 'searchPosts failed: status 500 InternalServerError',
+            status: 500,
+          },
+          502,
+          { error: 'Bluesky request failed', code: 'unavailable' },
+        ],
+      ] satisfies [string, BlueskyClientError, number, unknown][],
+    )(
+      'Bluesky への呼び出しが %s なら理由を区別して返し、詳細を返さない',
+      async (_name, error, expectedStatus, expectedBody) => {
+        const t = setupReadApi({
+          blueskyTimelineEnabled: true,
+          blueskySearch: searchMock({
+            searchPosts: vi.fn<BlueskySearch['searchPosts']>(async () => RA.err(error)),
+            searchActors: vi.fn<BlueskySearch['searchActors']>(async () => RA.err(error)),
+          }),
+        });
+        const me = await t.signIn('read:search');
 
-      for (const path of [POSTS, ACTORS]) {
-        const response = await t.request(`${path}?q=a`, { headers: me.bearer });
-        expect(response.status).toBe(502);
-        expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
-      }
-    });
+        for (const path of [POSTS, ACTORS]) {
+          const response = await t.request(`${path}?q=a`, { headers: me.bearer });
+          expect(response.status).toBe(expectedStatus);
+          expect(await response.json()).toEqual(expectedBody);
+        }
+      },
+    );
   });
 });

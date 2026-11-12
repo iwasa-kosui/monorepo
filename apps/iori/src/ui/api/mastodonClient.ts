@@ -38,7 +38,7 @@ export type PageParams = Readonly<{
   limit?: number;
 }>;
 
-export type MastodonApiError = Error & Readonly<{ status: number; retryAfterSeconds?: number }>;
+export type MastodonApiError = Error & Readonly<{ status: number; retryAfterSeconds?: number; code?: string }>;
 
 export const isMastodonApiError = (error: unknown): error is MastodonApiError =>
   error instanceof Error && typeof (error as { status?: unknown }).status === 'number';
@@ -89,11 +89,15 @@ const toApiError = async (res: Response): Promise<MastodonApiError> => {
   const message = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
     ? body.error
     : `HTTP ${res.status}`;
+  const code = typeof body === 'object' && body !== null && 'code' in body && typeof body.code === 'string'
+    ? body.code
+    : undefined;
   const retryAfterSeconds = parseRetryAfter(res.headers.get('Retry-After'), new Date());
   return Object.assign(
     new Error(message),
     { status: res.status },
     retryAfterSeconds === undefined ? {} : { retryAfterSeconds },
+    code === undefined ? {} : { code },
   );
 };
 

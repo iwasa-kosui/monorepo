@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { blueskySearchErrorMessage, parseSearchSource, withSearchSource } from './searchSource.ts';
+import {
+  blueskySearchErrorMessage,
+  parseSearchSource,
+  shouldRerunIoriSearch,
+  withSearchSource,
+} from './searchSource.ts';
 
 describe('parseSearchSource', () => {
   it('クエリが無いときは iori の検索にする', () => {
@@ -39,13 +44,39 @@ describe('withSearchSource', () => {
 });
 
 describe('blueskySearchErrorMessage', () => {
-  it('409 は Bluesky のタイムラインが無効という文言にする', () => {
-    expect(blueskySearchErrorMessage(409)).toBe('Bluesky のタイムラインが無効です');
+  it.each([
+    [400, undefined, '検索語は300文字までです'],
+    [403, undefined, 'この検索はオーナーだけが使えます'],
+    [409, undefined, 'Bluesky のタイムラインが無効です'],
+    [429, undefined, 'Bluesky の検索の上限に達しました。しばらく待ってからもう一度お試しください'],
+    [502, 'auth', 'Bluesky にログインできませんでした'],
+    [502, 'unavailable', 'Bluesky を検索できませんでした'],
+    [502, undefined, 'Bluesky を検索できませんでした'],
+    [500, undefined, 'Bluesky を検索できませんでした'],
+    [undefined, undefined, 'Bluesky を検索できませんでした'],
+  ])('status %s と code %s の文言を決める', (status, code, expected) => {
+    expect(blueskySearchErrorMessage(status, code)).toBe(expected);
   });
 
-  it('それ以外のステータスと通信失敗は検索できなかった文言にする', () => {
-    expect(blueskySearchErrorMessage(502)).toBe('Bluesky を検索できませんでした');
-    expect(blueskySearchErrorMessage(403)).toBe('Bluesky を検索できませんでした');
-    expect(blueskySearchErrorMessage(undefined)).toBe('Bluesky を検索できませんでした');
+  it('502 以外では code が auth でも status の文言にする', () => {
+    expect(blueskySearchErrorMessage(429, 'auth')).toBe(
+      'Bluesky の検索の上限に達しました。しばらく待ってからもう一度お試しください',
+    );
+  });
+});
+
+describe('shouldRerunIoriSearch', () => {
+  it('最後に検索した語と違う語が送信されていたらやり直す', () => {
+    expect(shouldRerunIoriSearch('bar', 'foo')).toBe(true);
+    expect(shouldRerunIoriSearch('bar', undefined)).toBe(true);
+  });
+
+  it('同じ語なら何もしない', () => {
+    expect(shouldRerunIoriSearch('foo', 'foo')).toBe(false);
+  });
+
+  it('送信された語が空なら何もしない', () => {
+    expect(shouldRerunIoriSearch('', 'foo')).toBe(false);
+    expect(shouldRerunIoriSearch('', undefined)).toBe(false);
   });
 });
