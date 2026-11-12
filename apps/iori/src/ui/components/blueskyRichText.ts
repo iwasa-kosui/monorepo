@@ -1,5 +1,5 @@
 import type { BlueskyTimelineFacet } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
-import { blueskyProfileUrlOfActor, BSKY_APP_URL } from '../../helper/blueskyUrl.ts';
+import { blueskyProfilePathOf, blueskyProfileUrlOfActor, BSKY_APP_URL } from '../../helper/blueskyUrl.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 
 export type BlueskyTextSegment = Readonly<{ text: string; href: string | undefined }>;
@@ -9,7 +9,9 @@ const hrefOf = (facet: BlueskyTimelineFacet): string | undefined => {
     case 'link':
       return safeAbsoluteUrl(facet.feature.uri);
     case 'mention':
-      return blueskyProfileUrlOfActor(facet.feature.did);
+      return blueskyProfileUrlOfActor(facet.feature.did) === undefined
+        ? undefined
+        : blueskyProfilePathOf(facet.feature.did);
     case 'tag':
       return `${BSKY_APP_URL}/hashtag/${encodeURIComponent(facet.feature.tag)}`;
   }

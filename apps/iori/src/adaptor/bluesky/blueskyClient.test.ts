@@ -317,6 +317,66 @@ describe('createBlueskyClient の各操作', () => {
     expect(await failing.client.deleteLike('3klike')).toMatchObject({ ok: false, err: { kind: 'http', status: 500 } });
   });
 
+  it('createFollow は createRecord で app.bsky.graph.follow のレコードを書き、応答の uri を返す', async () => {
+    const followUri = 'at://did:plc:abc/app.bsky.graph.follow/3kfollow';
+    const { client, calls } = setup(stored(), [() => json({ uri: followUri, cid: 'bafyfollow' })]);
+
+    const result = await client.createFollow('did:plc:other');
+
+    expect(result).toEqual({ ok: true, val: { uri: followUri } });
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.createRecord`);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.graph.follow',
+      record: {
+        $type: 'app.bsky.graph.follow',
+        subject: 'did:plc:other',
+        createdAt: new Date(NOW).toISOString(),
+      },
+    });
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+  });
+
+  it('createFollow は follow の uri でない応答を invalid_response として返し、500 は失敗として返す', async () => {
+    const wrongUri = setup(stored(), [() => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k1', cid: 'c' })]);
+    const failing = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+
+    expect(await wrongUri.client.createFollow('did:plc:other')).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(await failing.client.createFollow('did:plc:other')).toMatchObject({
+      ok: false,
+      err: { kind: 'http', status: 500 },
+    });
+  });
+
+  it('deleteFollow は uri の末尾を rkey として app.bsky.graph.follow の collection に送る', async () => {
+    const { client, calls } = setup(stored(), [() => json({})]);
+
+    const result = await client.deleteFollow('at://did:plc:abc/app.bsky.graph.follow/3kfollow');
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.deleteRecord`);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.graph.follow',
+      rkey: '3kfollow',
+    });
+  });
+
+  it('deleteFollow は既に無い record を成功として扱い、follow の uri でない値は送らずに失敗として返す', async () => {
+    const missing = setup(stored(), [() => json({ error: 'RecordNotFound' }, 400)]);
+    const invalid = setup(stored(), []);
+
+    expect((await missing.client.deleteFollow('at://did:plc:abc/app.bsky.graph.follow/3kfollow')).ok).toBe(true);
+    expect(await invalid.client.deleteFollow('at://did:plc:abc/app.bsky.feed.like/3k1')).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(invalid.calls).toHaveLength(0);
+  });
+
   it('createRepost は putRecord で app.bsky.feed.repost のレコードを指定の rkey で書き、応答の uri を返す', async () => {
     const repostUri = 'at://did:plc:abc/app.bsky.feed.repost/2222222222222';
     const { client, calls } = setup(stored(), [() => json({ uri: repostUri, cid: 'bafyrepost' })]);

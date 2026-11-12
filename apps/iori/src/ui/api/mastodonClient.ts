@@ -82,7 +82,7 @@ export const parseRetryAfter = (header: string | null, now: Date): number | unde
   return Number.isNaN(time) ? undefined : Math.max(0, Math.ceil((time - now.getTime()) / 1000));
 };
 
-const toApiError = async (res: Response): Promise<MastodonApiError> => {
+export const toApiError = async (res: Response): Promise<MastodonApiError> => {
   const body: unknown = await res.json().catch(() => undefined);
   const message = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
     ? body.error

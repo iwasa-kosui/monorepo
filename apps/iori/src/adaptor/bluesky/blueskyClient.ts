@@ -24,6 +24,7 @@ export const BLUESKY_DEFAULT_PDS_URL = 'https://bsky.social';
 const POST_COLLECTION = 'app.bsky.feed.post';
 const LIKE_COLLECTION = 'app.bsky.feed.like';
 const REPOST_COLLECTION = 'app.bsky.feed.repost';
+const FOLLOW_COLLECTION = 'app.bsky.graph.follow';
 const REQUEST_TIMEOUT_MS = 10_000;
 const UPLOAD_TIMEOUT_MS = 30_000;
 export const BLUESKY_LOGIN_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
@@ -64,6 +65,7 @@ const emptyResponseSchema = z.looseObject({});
 const queryResponseSchema = z.record(z.string(), z.unknown());
 const errorBodySchema = z.object({ error: z.string().optional() });
 const recordUriPattern = /^at:\/\/[^/]+\/app\.bsky\.feed\.post\/([^/]+)$/;
+const followUriPattern = /^at:\/\/[^/]+\/app\.bsky\.graph\.follow\/([^/]+)$/;
 
 const clientError = (
   kind: BlueskyClientErrorKind,
@@ -325,6 +327,37 @@ export const createBlueskyClient = (deps: BlueskyClientDeps): BlueskyClient & Bl
           : RA.err(clientError('invalid_response', 'createRepost returned an unexpected uri'));
       }),
     deleteRepost: (rkey) => removeRecord(REPOST_COLLECTION, rkey),
+    createFollow: (subjectDid) =>
+      withSession(async (session) => {
+        const created = await call(
+          'createFollow',
+          `${session.pdsUrl}/xrpc/com.atproto.repo.createRecord`,
+          {
+            method: 'POST',
+            headers: authorized(session, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+              repo: session.did,
+              collection: FOLLOW_COLLECTION,
+              record: {
+                $type: FOLLOW_COLLECTION,
+                subject: subjectDid,
+                createdAt: new Date(now()).toISOString(),
+              },
+            }),
+          },
+          createRecordResponseSchema,
+        );
+        if (!created.ok) return created;
+        return followUriPattern.test(created.val.uri)
+          ? RA.ok({ uri: created.val.uri })
+          : RA.err(clientError('invalid_response', 'createFollow returned an unexpected uri'));
+      }),
+    deleteFollow: async (followUri) => {
+      const rkey = followUriPattern.exec(followUri)?.[1];
+      return rkey === undefined
+        ? RA.err(clientError('invalid_response', 'deleteFollow received an unexpected uri'))
+        : removeRecord(FOLLOW_COLLECTION, rkey);
+    },
     query: (nsid, params) =>
       withSession((session) => {
         const search = new URLSearchParams(params).toString();

@@ -72,7 +72,7 @@ const writeStatuses = Scope.orThrow('write:statuses');
 const integerPattern = /^\d+$/;
 const forbidden = { error: 'Forbidden' } as const;
 
-const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBody => ({
+export const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBody => ({
   feedItemId: item.feedItemId,
   uri: item.uri,
   cid: item.cid,

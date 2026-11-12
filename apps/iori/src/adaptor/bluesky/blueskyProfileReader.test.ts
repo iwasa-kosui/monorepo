@@ -1,0 +1,156 @@
+import { RA } from '@iwasa-kosui/result';
+import { describe, expect, it, vi } from 'vitest';
+
+import { Instant } from '../../domain/instant/instant.ts';
+import type { BlueskyQueryClient } from '../../ports/blueskyClient.ts';
+import { createBlueskyProfileReader } from './blueskyProfileReader.ts';
+
+const NOW = Instant.orThrow(Date.UTC(2026, 10, 12));
+const DID = 'did:plc:alice';
+const FOLLOW = 'at://did:plc:me/app.bsky.graph.follow/3kfollow';
+const clientReturning = (response: ReturnType<BlueskyQueryClient['query']>) => {
+  const query = vi.fn(() => response);
+  return { query, reader: createBlueskyProfileReader({ client: { query }, now: () => NOW }) };
+};
+const postView = {
+  post: {
+    uri: `at://${DID}/app.bsky.feed.post/1`,
+    cid: 'bafycid',
+    author: { did: DID, handle: 'alice.bsky.social' },
+    record: { $type: 'app.bsky.feed.post', text: 'hi', createdAt: '2026-11-08T01:00:00.000Z' },
+    indexedAt: '2026-11-08T01:00:05.000Z',
+  },
+};
+
+describe('createBlueskyProfileReader.getProfile', () => {
+  it('app.bsky.actor.getProfile を actor 1 件で呼び、プロフィールに変換する', async () => {
+    const { query, reader } = clientReturning(RA.ok({
+      did: DID,
+      handle: 'alice.bsky.social',
+      displayName: 'Alice',
+      description: 'hello\nworld',
+      avatar: 'https://cdn.example/avatar.jpg',
+      banner: 'https://cdn.example/banner.jpg',
+      followersCount: 10,
+      followsCount: 20,
+      postsCount: 30,
+      viewer: { following: FOLLOW, followedBy: 'at://did:plc:alice/app.bsky.graph.follow/3kx' },
+    }));
+
+    const result = await reader.getProfile('alice.bsky.social');
+
+    expect(query).toHaveBeenCalledExactlyOnceWith('app.bsky.actor.getProfile', { actor: 'alice.bsky.social' });
+    expect(result).toEqual({
+      ok: true,
+      val: {
+        did: DID,
+        handle: 'alice.bsky.social',
+        displayName: 'Alice',
+        description: 'hello\nworld',
+        avatar: 'https://cdn.example/avatar.jpg',
+        banner: 'https://cdn.example/banner.jpg',
+        followersCount: 10,
+        followsCount: 20,
+        postsCount: 30,
+        viewerFollowingUri: FOLLOW,
+        viewerFollowedBy: true,
+      },
+    });
+  });
+
+  it('数が無ければ 0、viewer が無ければ未フォローで、文字列が無ければ null にする', async () => {
+    const { reader } = clientReturning(
+      RA.ok({ did: DID, handle: 'alice.bsky.social', displayName: '', avatar: 'javascript:alert(1)' }),
+    );
+
+    expect(await reader.getProfile(DID)).toEqual({
+      ok: true,
+      val: {
+        did: DID,
+        handle: 'alice.bsky.social',
+        displayName: null,
+        description: null,
+        avatar: null,
+        banner: null,
+        followersCount: 0,
+        followsCount: 0,
+        postsCount: 0,
+        viewerFollowingUri: undefined,
+        viewerFollowedBy: false,
+      },
+    });
+  });
+
+  it('viewer に following が無ければ viewerFollowingUri を undefined にする', async () => {
+    const { reader } = clientReturning(RA.ok({ did: DID, handle: 'a.bsky.social', viewer: { muted: false } }));
+
+    const result = await reader.getProfile(DID);
+
+    expect(result.ok && result.val.viewerFollowingUri).toBeUndefined();
+  });
+
+  it('did が無い応答を invalid_response にする', async () => {
+    const { reader } = clientReturning(RA.ok({ handle: 'a.bsky.social' }));
+
+    expect(await reader.getProfile(DID)).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
+  });
+
+  it('クエリの失敗をそのまま返す', async () => {
+    const error = {
+      type: 'BlueskyClientError',
+      kind: 'http',
+      message: 'x',
+      status: 400,
+      code: 'InvalidRequest',
+    } as const;
+    const { reader } = clientReturning(RA.err(error));
+
+    expect(await reader.getProfile(DID)).toEqual({ ok: false, err: error });
+  });
+});
+
+describe('createBlueskyProfileReader.getAuthorFeed', () => {
+  it('getAuthorFeed を limit 30 と filter 付きで呼び、cursor は指定があるときだけ付ける', async () => {
+    const first = clientReturning(RA.ok({ feed: [] }));
+    const next = clientReturning(RA.ok({ feed: [] }));
+
+    await first.reader.getAuthorFeed({ actor: DID, cursor: undefined });
+    await next.reader.getAuthorFeed({ actor: DID, cursor: 'abc' });
+
+    expect(first.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getAuthorFeed', {
+      actor: DID,
+      limit: '30',
+      filter: 'posts_and_author_threads',
+    });
+    expect(next.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getAuthorFeed', {
+      actor: DID,
+      limit: '30',
+      filter: 'posts_and_author_threads',
+      cursor: 'abc',
+    });
+  });
+
+  it('投稿とカーソルを返す', async () => {
+    const { reader } = clientReturning(RA.ok({ feed: [postView], cursor: 'next' }));
+
+    const result = await reader.getAuthorFeed({ actor: DID, cursor: undefined });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.val.cursor).toBe('next');
+    expect(result.val.items).toHaveLength(1);
+    expect(result.val.items[0]).toMatchObject({ uri: postView.post.uri, authorDid: DID, fetchedAt: NOW });
+  });
+
+  it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
+    const invalid = clientReturning(RA.ok({ posts: [] }));
+    const error = { type: 'BlueskyClientError', kind: 'network', message: 'x' } as const;
+    const failing = clientReturning(RA.err(error));
+
+    expect(await invalid.reader.getAuthorFeed({ actor: DID, cursor: undefined })).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(await failing.reader.getAuthorFeed({ actor: DID, cursor: undefined })).toEqual({ ok: false, err: error });
+  });
+});
