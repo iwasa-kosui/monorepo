@@ -575,6 +575,81 @@ describe('POST /api/v1/statuses のメンション', () => {
     expect(t.storedContent(status.id)).toBe(`<p>${mentionLink} reply</p>`);
     expect(t.federation.sendActivity).toHaveBeenCalledTimes(2);
   });
+
+  describe('visibility が direct のとき', () => {
+    const participantsOf = (t: Awaited<ReturnType<typeof withRemoteAlice>>, postId: string) =>
+      (t.sqlite.prepare('SELECT actorUri FROM direct_post_participants WHERE postId = ? ORDER BY actorUri').all(
+        postId,
+      ) as { actorUri: string }[]).map((row) => row.actorUri);
+
+    it('受け付けて direct で保存し、followers には送らず、メンション相手の inbox にだけ送る', async () => {
+      const t = await withRemoteAlice();
+
+      const response = await t.json({ status: 'hi @alice@remote.example', visibility: 'direct' });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status.visibility).toBe('direct');
+      expect(t.count('local_posts', `postId='${status.id}' AND visibility='direct'`)).toBe(1);
+      const sent = t.federation.sendActivity.mock.calls.map((call) => call as unknown[]);
+      expect(sent).toHaveLength(1);
+      expect(sent[0]?.[1]).toEqual([{
+        id: new URL(aliceId),
+        inboxId: new URL(`${aliceId}/inbox`),
+        endpoints: { sharedInbox: new URL('https://remote.example/inbox') },
+      }]);
+      expect(sent[0]?.[3]).toEqual({ preferSharedInbox: false });
+      expect(participantsOf(t, status.id)).toEqual([aliceId, `${ORIGIN}/users/kosui`].sort());
+    });
+
+    it('メンションが 1 つも無いときは 422 にして投稿を作らない', async () => {
+      const t = await withRemoteAlice();
+
+      const response = await t.json({ status: 'hi', visibility: 'direct' });
+
+      expect(response.status).toBe(422);
+      expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
+      expect(t.count('posts')).toBe(0);
+      expect(t.federation.sendActivity).not.toHaveBeenCalled();
+    });
+
+    it('解決できない acct しか無いときも 422 にして投稿を作らない', async () => {
+      const t = await withRemoteAlice();
+
+      const response = await t.json({ status: 'hi @bob@nowhere.example', visibility: 'direct' });
+
+      expect(response.status).toBe(422);
+      expect(t.count('posts')).toBe(0);
+    });
+
+    it('返信でも direct で投稿でき、followers には送らない', async () => {
+      const t = await withRemoteAlice();
+      const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
+
+      const response = await t.json({
+        status: '@alice@remote.example reply',
+        visibility: 'direct',
+        in_reply_to_id: parent.postId,
+      });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status.visibility).toBe('direct');
+      const sent = t.federation.sendActivity.mock.calls.map((call) => call as unknown[]);
+      expect(sent).toHaveLength(1);
+      expect(sent.map((call) => call[1])).not.toContain('followers');
+      expect(participantsOf(t, status.id)).toEqual([aliceId, `${ORIGIN}/users/kosui`].sort());
+    });
+
+    it('public のときは参加者を保存しない', async () => {
+      const t = await withRemoteAlice();
+
+      const response = await t.json({ status: 'hi @alice@remote.example', visibility: 'public' });
+
+      expect(response.status).toBe(200);
+      expect(t.count('direct_post_participants')).toBe(0);
+    });
+  });
 });
 
 describe('DELETE /api/v1/statuses/:id', () => {

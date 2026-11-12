@@ -4,7 +4,9 @@ import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 
 import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
-import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
+import type { Actor, ActorResolverByUserId } from '../domain/actor/actor.ts';
+import type { ActorId } from '../domain/actor/actorId.ts';
+import type { Agg } from '../domain/aggregate/index.ts';
 import type { PostImageCreatedStore } from '../domain/image/image.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import {
@@ -47,7 +49,7 @@ type Input =
     content: string;
     summary?: string | null;
     sensitive?: boolean;
-    visibility?: Exclude<Visibility, 'direct'>;
+    visibility?: Visibility;
     crosspostToBluesky?: boolean;
     mentions?: ReadonlyArray<MentionRecipient>;
     request: Request;
@@ -93,6 +95,7 @@ type Deps = Readonly<{
   pushSubscriptionsResolver: PushSubscriptionsResolverByUserId;
   webPushSender: WebPushSender;
   postResolver: PostResolver;
+  actorResolverById?: Agg.Resolver<ActorId, Actor | undefined>;
   scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   origin: string;
 }>;
@@ -109,6 +112,7 @@ const create = ({
   pushSubscriptionsResolver,
   webPushSender,
   postResolver,
+  actorResolverById,
   scheduleBlueskyCrosspost,
   origin,
 }: Deps): SendReplyUseCase => {
@@ -152,18 +156,36 @@ const create = ({
         return RA.ok(parentPost.uri);
       }),
       // Create the reply post
-      RA.andBind('postEvent', ({ actor, content, inReplyToUri, summary, sensitive, visibility }) => {
-        const postEvent = Post.createPost(now)({
-          actorId: actor.id,
-          content,
-          userId: actor.userId,
-          inReplyToUri,
-          summary,
-          sensitive,
-          visibility,
-        });
-        return RA.ok(postEvent);
+      RA.andBind('participantActorUris', async ({ user, ctx, parentPost, content, visibility }) => {
+        if (visibility !== 'direct') {
+          return RA.ok([]);
+        }
+        const parentAuthor = parentPost.type === 'remote'
+          ? await actorResolverById?.resolve(parentPost.actorId)
+          : undefined;
+        const parentAuthorUri = parentAuthor?.ok ? parentAuthor.val?.uri : undefined;
+        return RA.ok([
+          ctx.getActorUri(user.username).href,
+          ...(parentAuthorUri === undefined ? [] : [parentAuthorUri]),
+          ...toMentionNoteFields(content).ccs.map((uri) => uri.href),
+        ]);
       }),
+      RA.andBind(
+        'postEvent',
+        ({ actor, content, inReplyToUri, summary, sensitive, visibility, participantActorUris }) => {
+          const postEvent = Post.createPost(now)({
+            actorId: actor.id,
+            content,
+            userId: actor.userId,
+            inReplyToUri,
+            summary,
+            sensitive,
+            visibility,
+            participantActorUris,
+          });
+          return RA.ok(postEvent);
+        },
+      ),
       RA.andThrough(({ postEvent }) => postCreatedStore.store(postEvent)),
       RA.bind('replyPost', ({ postEvent }) => postEvent.aggregateState),
       // Create timeline item
@@ -218,12 +240,15 @@ const create = ({
             tos: replyNote.toIds,
             ccs: replyNote.ccIds,
           });
-          await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+          if (replyPost.visibility !== 'direct') {
+            await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+          }
           await sendToMentions({
             ctx,
             identifier: user.username,
             activity: createActivity,
             mentions: mentions ?? [],
+            visibility: replyPost.visibility,
           });
 
           return RA.ok(undefined);
@@ -307,13 +332,16 @@ const create = ({
           tos: replyNote.toIds,
           ccs: replyNote.ccIds,
         });
-        await ctx.sendActivity({ identifier: user.username }, 'followers', followersActivity);
+        if (replyPost.visibility !== 'direct') {
+          await ctx.sendActivity({ identifier: user.username }, 'followers', followersActivity);
+        }
         await sendToMentions({
           ctx,
           identifier: user.username,
           activity: followersActivity,
           mentions: mentions ?? [],
           excludedActorIds: [author.id.href],
+          visibility: replyPost.visibility,
         });
 
         return RA.ok(undefined);

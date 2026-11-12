@@ -115,6 +115,24 @@ describe('createD1RemotePostUpserter', () => {
     );
   });
 
+  it('passes the author and the mentioned actors of a new direct post as participants', async () => {
+    const { deps, postCreatedStore } = createDeps(undefined);
+
+    await createD1RemotePostUpserter(deps).resolve({
+      ...identity,
+      visibility: 'direct',
+      mentionedActorUris: ['https://other.example/users/bob'],
+    });
+
+    expect(postCreatedStore.store).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventPayload: expect.objectContaining({
+          participantActorUris: ['https://remote.example/users/alice', 'https://other.example/users/bob'],
+        }),
+      }),
+    );
+  });
+
   describe('createdAt', () => {
     const now = Date.parse('2026-11-12T00:00:00.000Z');
 

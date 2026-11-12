@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import type { PostDeletedStore } from '../../../domain/post/post.ts';
 import type { IoriD1Db } from '../client.ts';
 import {
+  directPostParticipantsTable,
   domainEventsTable,
   localPostsTable,
   postImagesTable,
@@ -19,6 +20,7 @@ export const createD1PostDeletedStore = (db: IoriD1Db): PostDeletedStore => ({
       db.delete(postImagesTable).where(eq(postImagesTable.postId, event.eventPayload.postId)),
       db.delete(postQuotesTable).where(eq(postQuotesTable.postId, event.eventPayload.postId)),
       db.delete(localPostsTable).where(eq(localPostsTable.postId, event.eventPayload.postId)),
+      db.delete(directPostParticipantsTable).where(eq(directPostParticipantsTable.postId, event.eventPayload.postId)),
       db.delete(remotePostRecipientsTable).where(eq(remotePostRecipientsTable.postId, event.eventPayload.postId)),
       db.delete(remotePostsTable).where(eq(remotePostsTable.postId, event.eventPayload.postId)),
       db.delete(postsTable).where(eq(postsTable.postId, event.eventPayload.postId)),

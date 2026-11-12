@@ -11,6 +11,7 @@ import type { LinkPreview } from '../linkPreview/linkPreview.ts';
 import type { PageRequest } from '../page/page.ts';
 import { UserId } from '../user/userId.ts';
 import type { Username } from '../user/username.ts';
+import { DirectPostParticipants } from './directPostParticipants.ts';
 import { PostId } from './postId.ts';
 import { Visibility } from './visibility.ts';
 
@@ -70,11 +71,15 @@ export type PostEvent<
 
 export const PostEvent = AggregateEvent.createFactory<PostAggregate>('post');
 
-export type PostCreated = PostEvent<Post, 'post.created', Post>;
+export type PostCreated = PostEvent<Post, 'post.created', Post & { participantActorUris: ReadonlyArray<string> }>;
 export type RemotePostCreated = PostEvent<
   RemotePost,
   'post.remotePostCreated',
-  RemotePost & { recipientActorUris: ReadonlyArray<string>; quoteUri: string | null }
+  RemotePost & {
+    recipientActorUris: ReadonlyArray<string>;
+    quoteUri: string | null;
+    participantActorUris: ReadonlyArray<string>;
+  }
 >;
 export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
 
@@ -82,11 +87,18 @@ const createPost = (now: Instant) =>
 (
   payload:
     & Omit<LocalPost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri' | 'summary' | 'sensitive' | 'visibility'>
-    & { inReplyToUri?: string | null; summary?: string | null; sensitive?: boolean; visibility?: Visibility },
-): PostEvent<LocalPost, 'post.created', LocalPost> => {
+    & {
+      inReplyToUri?: string | null;
+      summary?: string | null;
+      sensitive?: boolean;
+      visibility?: Visibility;
+      participantActorUris?: ReadonlyArray<string>;
+    },
+): PostEvent<LocalPost, 'post.created', LocalPost & { participantActorUris: ReadonlyArray<string> }> => {
   const postId = PostId.generate();
+  const { participantActorUris = [], ...postPayload } = payload;
   const post: LocalPost = {
-    ...payload,
+    ...postPayload,
     postId,
     type: 'local',
     createdAt: now,
@@ -99,7 +111,7 @@ const createPost = (now: Instant) =>
     postId,
     post,
     'post.created',
-    post,
+    { ...post, participantActorUris: DirectPostParticipants.of(post.visibility, participantActorUris) },
     now,
   );
 };
@@ -114,9 +126,17 @@ const createRemotePost = (now: Instant) =>
       sensitive?: boolean;
       recipientActorUris?: ReadonlyArray<string>;
       quoteUri?: string | null;
+      authorActorUri?: string;
+      mentionedActorUris?: ReadonlyArray<string>;
     },
 ): RemotePostCreated => {
-  const { recipientActorUris = [], quoteUri = null, ...postPayload } = payload;
+  const {
+    recipientActorUris = [],
+    quoteUri = null,
+    authorActorUri,
+    mentionedActorUris = [],
+    ...postPayload
+  } = payload;
   const postId = PostId.generate();
   const post: RemotePost = {
     ...postPayload,
@@ -131,7 +151,16 @@ const createRemotePost = (now: Instant) =>
     postId,
     post,
     'post.remotePostCreated',
-    { ...post, recipientActorUris, quoteUri },
+    {
+      ...post,
+      recipientActorUris,
+      quoteUri,
+      participantActorUris: DirectPostParticipants.of(post.visibility, [
+        authorActorUri,
+        ...mentionedActorUris,
+        ...recipientActorUris,
+      ]),
+    },
     Instant.now(),
   );
 };
@@ -180,6 +209,7 @@ export type RemotePostIdentity = Readonly<{
   sensitive?: boolean;
   visibility: Visibility | null;
   recipientActorUris?: ReadonlyArray<string>;
+  mentionedActorUris?: ReadonlyArray<string>;
   quoteUri?: string | null;
   attachments?: readonly RemotePostAttachment[];
   publishedAt?: Instant;

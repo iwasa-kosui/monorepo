@@ -4,6 +4,7 @@ import type { PostCreated, PostCreatedStore, RemotePostCreated } from '../../../
 import type { IoriD1Db } from '../client.ts';
 import { fromD1 } from '../query.ts';
 import {
+  directPostParticipantsTable,
   domainEventsTable,
   localPostsTable,
   postQuotesTable,
@@ -24,6 +25,20 @@ const recipientInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated) 
     inserts.push(
       db.insert(remotePostRecipientsTable).values(
         recipientActorUris.slice(i, i + RECIPIENT_ROWS_PER_INSERT).map((actorUri) => ({ postId, actorUri })),
+      ),
+    );
+  }
+  return inserts;
+};
+
+const participantInserts = (db: IoriD1Db, event: PostCreated | RemotePostCreated) => {
+  const { postId } = event.aggregateState;
+  const { participantActorUris } = event.eventPayload;
+  const inserts = [];
+  for (let i = 0; i < participantActorUris.length; i += RECIPIENT_ROWS_PER_INSERT) {
+    inserts.push(
+      db.insert(directPostParticipantsTable).values(
+        participantActorUris.slice(i, i + RECIPIENT_ROWS_PER_INSERT).map((actorUri) => ({ postId, actorUri })),
       ),
     );
   }
@@ -69,6 +84,7 @@ export const createD1PostCreatedStore = (db: IoriD1Db): PostCreatedStore => ({
           postInsert,
           subtypeInsert,
           ...recipientInserts(db, event),
+          ...participantInserts(db, event),
           ...quoteInserts(db, event),
           db.insert(domainEventsTable).values({
             eventId: event.eventId,

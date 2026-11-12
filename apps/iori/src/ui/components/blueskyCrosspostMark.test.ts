@@ -73,6 +73,21 @@ describe('toBlueskyCrosspostMark', () => {
       .toBeUndefined();
   });
 
+  it('direct の投稿の visibility の skipped は印を出さない', () => {
+    expect(
+      toBlueskyCrosspostMark(crosspost({ status: 'skipped', skip_reason: 'visibility', retrying: false }), 'direct'),
+    ).toBeUndefined();
+  });
+
+  it('direct 以外の投稿の visibility の skipped は印を出す', () => {
+    expect(
+      toBlueskyCrosspostMark(crosspost({ status: 'skipped', skip_reason: 'visibility', retrying: false }), 'private'),
+    ).toMatchObject({
+      label: 'Bluesky に未送信',
+      title: '公開範囲が公開ではないため Bluesky に送っていません',
+    });
+  });
+
   it('deleting は何も出さない', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'deleting', retrying: false }))).toBeUndefined();
   });
@@ -128,6 +143,12 @@ describe('postedMessage', () => {
       .toBe(
         'Fediverse に投稿しました。Bluesky には送っていません（この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした）',
       );
+  });
+
+  it('direct の投稿の visibility の skipped は理由を添えない', () => {
+    expect(
+      postedMessage('both', crosspost({ status: 'skipped', skip_reason: 'visibility', retrying: false }), 'direct'),
+    ).toBe('Fediverse に投稿しました。Bluesky には送っていません');
   });
 });
 

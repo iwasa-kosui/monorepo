@@ -8,6 +8,7 @@ import { MediaId } from '../../domain/mediaUpload/mediaId.ts';
 import type { MediaUpload, MediaUploadResolver } from '../../domain/mediaUpload/mediaUpload.ts';
 import type { MutedActorIdsResolverByUserId } from '../../domain/mute/mute.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
+import { mentionLinksOfHtml } from '../../domain/post/mention.ts';
 import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 import {
   Post,
@@ -89,7 +90,7 @@ const isOmitted = (value: unknown): boolean => value === undefined || value === 
 
 const validateStatusParams = (body: RequestBody): string | undefined => {
   const visibility = body['visibility'];
-  if (!isOmitted(visibility) && visibility !== 'public') {
+  if (!isOmitted(visibility) && visibility !== 'public' && visibility !== 'direct') {
     return 'Only public visibility is supported';
   }
   const spoilerText = body['spoiler_text'];
@@ -349,8 +350,13 @@ export const createWorkerMastodonStatusesRouter = ({
       const content = format === 'markdown'
         ? await PostContent.fromMarkdown(text, mentions.links)
         : plainTextToHtml(text, mentions.links);
+      const isDirect = body['visibility'] === 'direct';
+      if (isDirect && mentionLinksOfHtml(content).length === 0) {
+        return c.json(validationFailed('Direct statuses must mention at least one account'), 422);
+      }
       const summary = spoilerSummary(body);
       const input = {
+        ...(isDirect ? { visibility: 'direct' as const } : {}),
         userId,
         content,
         mentions: mentions.recipients,

@@ -159,6 +159,7 @@ import { createD1NotificationIdsResolverByUserIdAndCreatedAt } from '../../../d1
 import { createD1NotificationResolverByUserIdAndId } from '../../../d1/notification/notificationResolverByUserIdAndId.ts';
 import { createD1NotificationsResolverByPage } from '../../../d1/notification/notificationsResolverByPage.ts';
 import { createD1AccountStatusItemsResolverByActorId } from '../../../d1/post/accountStatusItemsResolverByActorId.ts';
+import { createD1DirectPostParticipantsResolverByPostId } from '../../../d1/post/directPostParticipantsResolverByPostId.ts';
 import { createD1LocalPostResolverByUri } from '../../../d1/post/localPostResolverByUri.ts';
 import { createD1LocalPostsResolverByPage } from '../../../d1/post/localPostsResolverByPage.ts';
 import { createD1LocalPostUrisResolverByUris } from '../../../d1/post/localPostUrisResolverByUris.ts';
@@ -420,6 +421,7 @@ export const setupReadApi = (
             pushSubscriptionsResolver: createD1PushSubscriptionsResolverByUserId(db),
             webPushSender: { send: () => RA.ok(undefined) },
             postResolver,
+            actorResolverById: createD1ActorResolverById(db),
             origin: ORIGIN,
             scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),
@@ -431,6 +433,7 @@ export const setupReadApi = (
             postDeletedStore: createD1PostDeletedStore(db),
             articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
             articleDeletedStore: createD1ArticleDeletedStore(db),
+            directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
           }),
           sendLikeUseCase: SendLikeUseCase.create({
             sessionResolver,

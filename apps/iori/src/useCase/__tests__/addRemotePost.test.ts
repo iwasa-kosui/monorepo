@@ -166,6 +166,35 @@ describe('AddRemotePostUseCase', () => {
       );
     });
 
+    it('direct の投稿は、作者と Mention タグの相手と宛先を参加者として作成イベントに渡す', async () => {
+      const deps = createDeps();
+
+      await AddRemotePostUseCase.create(deps).run({
+        content: 'Direct',
+        uri: 'https://remote.example.com/posts/direct',
+        actorIdentity: {
+          uri: 'https://remote.example.com/users/remote',
+          inboxUrl: 'https://remote.example.com/inbox',
+        },
+        visibility: 'direct',
+        recipientActorUris: ['https://iori.test/users/kosui'],
+        mentionedActorUris: ['https://iori.test/users/kosui', 'https://other.example/users/bob'],
+        attachments: [],
+      });
+
+      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventPayload: expect.objectContaining({
+            participantActorUris: [
+              'https://remote.example.com/users/remote',
+              'https://iori.test/users/kosui',
+              'https://other.example/users/bob',
+            ],
+          }),
+        }),
+      );
+    });
+
     it('受信した引用先の URI を投稿の作成イベントに渡す', async () => {
       const deps = createDeps();
 

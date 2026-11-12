@@ -81,7 +81,7 @@ export const PostView = (
   const isReplyPost = post.in_reply_to_id !== null;
   const crosspostMark = post.iori?.bluesky_crosspost === undefined
     ? undefined
-    : toBlueskyCrosspostMark(post.iori.bluesky_crosspost);
+    : toBlueskyCrosspostMark(post.iori.bluesky_crosspost, post.visibility);
   const images = post.media_attachments.filter((attachment) => attachment.type === 'image');
   const linkPreviews = post.iori?.link_previews ?? [];
   const reactions = post.iori?.reactions ?? [];

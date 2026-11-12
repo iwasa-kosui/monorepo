@@ -428,4 +428,75 @@ describe('SendReplyUseCase のメンション', () => {
     expect(note.toIds.map((url) => url.href)).toEqual([followersUri]);
     expect(note.ccIds.map((url) => url.href)).toEqual([alice.id]);
   });
+  it('親がリモートの direct の返信は followers に送らず、作者にだけ送り、作者と宛先を参加者に保存する', async () => {
+    const { deps, session, remoteParent, ctxWithRemoteAuthor } = setup();
+    const ctx = ctxWithRemoteAuthor();
+    const actorResolverById = {
+      resolve: vi.fn(() => RA.ok({ id: remoteParent.actorId, uri: alice.id } as never)),
+    };
+
+    const result = await SendReplyUseCase.create({ ...deps, actorResolverById }).run({
+      sessionId: session.sessionId,
+      postId: remoteParent.postId,
+      content: `<p>${mentionHtml(bob.id, 'bob@other.example')} reply</p>`,
+      imageUrls: [],
+      visibility: 'direct',
+      mentions: [bob],
+      request: new Request('https://example.com'),
+      ctx,
+    });
+
+    expect(result.ok && result.val.post.visibility).toBe('direct');
+    const calls = vi.mocked(ctx.sendActivity).mock.calls;
+    expect(calls.map((call) => call[1])).not.toContain('followers');
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.[1]).toMatchObject({ id: new URL(alice.id) });
+    expect(calls[1]?.[1]).toEqual([{ id: new URL(bob.id), inboxId: new URL(bob.inboxUrl), endpoints: null }]);
+    expect(calls[1]?.[3]).toEqual({ preferSharedInbox: false });
+    const note = await noteOf(calls[0] ?? []);
+    expect(note.toIds.map((url) => url.href)).toEqual([bob.id, alice.id]);
+    expect(note.ccIds).toEqual([]);
+    expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
+      participantActorUris: ['https://example.com/users/kosui', alice.id, bob.id],
+    });
+  });
+
+  it('親がローカルの direct の返信は followers に送らず、mentions の相手にだけ送る', async () => {
+    const { deps, session, localParent } = setup();
+    const ctx = createContext();
+
+    const result = await SendReplyUseCase.create(deps).run({
+      sessionId: session.sessionId,
+      postId: localParent.postId,
+      content: `<p>${mentionHtml(alice.id, 'alice@remote.example')} hi</p>`,
+      imageUrls: [],
+      visibility: 'direct',
+      mentions: [alice],
+      request: new Request('https://example.com'),
+      ctx,
+    });
+
+    expect(result.ok).toBe(true);
+    const calls = vi.mocked(ctx.sendActivity).mock.calls;
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.[1]).toEqual([{ id: new URL(alice.id), inboxId: new URL(alice.inboxUrl), endpoints: null }]);
+    expect(calls[0]?.[3]).toEqual({ preferSharedInbox: false });
+  });
+
+  it('public の返信の参加者は保存しない', async () => {
+    const { deps, session, localParent } = setup();
+
+    await SendReplyUseCase.create(deps).run({
+      sessionId: session.sessionId,
+      postId: localParent.postId,
+      content: `<p>${mentionHtml(alice.id, 'alice@remote.example')} hi</p>`,
+      imageUrls: [],
+      request: new Request('https://example.com'),
+      ctx: createContext(),
+    });
+
+    expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
+      participantActorUris: [],
+    });
+  });
 });

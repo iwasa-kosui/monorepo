@@ -50,6 +50,8 @@ export const createD1RemotePostUpserter = (deps: Deps): RemotePostUpserter => ({
       sensitive: identity.sensitive,
       visibility: identity.visibility,
       recipientActorUris: identity.recipientActorUris,
+      mentionedActorUris: identity.mentionedActorUris,
+      authorActorUri: identity.authorIdentity.uri,
       quoteUri: identity.quoteUri,
     });
     await deps.postCreatedStore.store(event);

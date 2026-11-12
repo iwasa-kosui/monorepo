@@ -13,6 +13,7 @@ import type { LinkPreview, LinkPreviewCreatedStore } from '../domain/linkPreview
 import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
 import type { MentionRecipient } from '../domain/post/mention.ts';
 import { Post, type PostCreatedStore } from '../domain/post/post.ts';
+import { sanitizePostContent } from '../domain/post/sanitizePostContent.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
 import type { AcceptedRelaysResolver } from '../domain/relay/relay.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
@@ -21,6 +22,7 @@ import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import { User, UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
 import { buildLocalNote } from './helper/localNote.ts';
+import { toMentionNoteFields } from './helper/mentionNote.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
@@ -35,7 +37,7 @@ type Input =
     content: string;
     summary?: string | null;
     sensitive?: boolean;
-    visibility?: Exclude<Visibility, 'direct'>;
+    visibility?: Visibility;
     crosspostToBluesky?: boolean;
     mentions?: ReadonlyArray<MentionRecipient>;
     ctx: RequestContext<unknown>;
@@ -89,7 +91,7 @@ const create = ({
       RA.ok(input),
       RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-      RA.andBind('postEvent', ({ actor, content, summary, sensitive, visibility }) => {
+      RA.andBind('postEvent', ({ actor, user, ctx, content, summary, sensitive, visibility }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content,
@@ -97,6 +99,10 @@ const create = ({
           summary,
           sensitive,
           visibility,
+          participantActorUris: [
+            ctx.getActorUri(user.username).href,
+            ...toMentionNoteFields(sanitizePostContent(content)).ccs.map((uri) => uri.href),
+          ],
         });
         return RA.ok(postEvent);
       }),
@@ -173,12 +179,15 @@ const create = ({
           ccs: note.ccIds,
           attachments: images.map((image) => toImageDocument(image, origin)),
         });
-        await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+        if (post.visibility !== 'direct') {
+          await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+        }
         await sendToMentions({
           ctx,
           identifier: user.username,
           activity: createActivity,
           mentions: mentions ?? [],
+          visibility: post.visibility,
         });
         return RA.ok(undefined);
       }),

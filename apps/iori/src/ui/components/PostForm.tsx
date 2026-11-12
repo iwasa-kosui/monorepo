@@ -52,7 +52,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         setCwEnabled(false);
         setCw('');
         setSensitiveChecked(false);
-        setResultMessage(postedMessage(destination, result.status.iori?.bluesky_crosspost));
+        setResultMessage(postedMessage(destination, result.status.iori?.bluesky_crosspost, result.status.visibility));
       } else {
         alert(result.message);
       }
