@@ -43,7 +43,7 @@ const beforeRecordMessages = [
   'タマの来院がキャンセルされます。このときは記録のコードがありません。visits の status だけが cancelled になります。',
   'cancelVisit に記録を足します。',
   'ポチの来院がキャンセルされます。visits と business_events の両方に残ります。',
-  '第3章の SELECT を実行します。タマの行は event_at から reason までが NULL です。足す前に起きたことは分かりません。',
+  '第3章の最初のページの SELECT を実行します。タマの行は event_at から reason までが NULL です。足す前に起きたことは分かりません。',
 ];
 
 type Names = { readonly next: Locator; readonly reset: Locator; readonly message: Locator };
