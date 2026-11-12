@@ -7,9 +7,9 @@ import { PostId } from '../../post/postId.ts';
 import type { Visibility } from '../../post/visibility.ts';
 import { isSummarizable } from '../isSummarizable.ts';
 
-const localPost = (): LocalPost => ({
+const localPost = (visibility: Visibility = 'public'): LocalPost => ({
   type: 'local',
-  visibility: 'public',
+  visibility,
   summary: null,
   sensitive: false,
   postId: PostId.generate(),
@@ -36,6 +36,15 @@ const remotePost = (visibility: Visibility | null): RemotePost => ({
 describe('isSummarizable', () => {
   it('ローカルの投稿は要約できる', () => {
     expect(isSummarizable(localPost())).toBe(true);
+  });
+
+  it.each<[Visibility, boolean]>([
+    ['public', true],
+    ['unlisted', true],
+    ['private', true],
+    ['direct', false],
+  ])('ローカルの投稿は公開範囲が %s のとき %s', (visibility, expected) => {
+    expect(isSummarizable(localPost(visibility))).toBe(expected);
   });
 
   it.each<[Visibility | null, boolean]>([

@@ -14,6 +14,7 @@ import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
 import type { MentionRecipient } from '../domain/post/mention.ts';
 import { Post, type PostCreatedStore, type PostQuotesResolverByPostIds } from '../domain/post/post.ts';
 import { appendQuoteInline } from '../domain/post/quoteInline.ts';
+import { sanitizePostContent } from '../domain/post/sanitizePostContent.ts';
 import type { Visibility } from '../domain/post/visibility.ts';
 import type { AcceptedRelaysResolver } from '../domain/relay/relay.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
@@ -22,6 +23,7 @@ import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import { User, UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
 import { buildLocalNote } from './helper/localNote.ts';
+import { toMentionNoteFields } from './helper/mentionNote.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { resolveQuoteNoteFields } from './helper/quoteNote.ts';
@@ -37,7 +39,7 @@ type Input =
     content: string;
     summary?: string | null;
     sensitive?: boolean;
-    visibility?: Exclude<Visibility, 'direct'>;
+    visibility?: Visibility;
     crosspostToBluesky?: boolean;
     mentions?: ReadonlyArray<MentionRecipient>;
     quoteUri?: string;
@@ -94,7 +96,7 @@ const create = ({
       RA.ok(input),
       RA.andBind('user', (requester) => resolveRequesterUser(requester)),
       RA.andBind('actor', ({ user }) => resolveLocalActor(user.id)),
-      RA.andBind('postEvent', ({ actor, content, summary, sensitive, visibility, quoteUri }) => {
+      RA.andBind('postEvent', ({ actor, user, ctx, content, summary, sensitive, visibility, quoteUri }) => {
         const postEvent = Post.createPost(now)({
           actorId: actor.id,
           content: quoteUri === undefined ? content : appendQuoteInline(content, quoteUri),
@@ -102,6 +104,10 @@ const create = ({
           summary,
           sensitive,
           visibility,
+          participantActorUris: [
+            ctx.getActorUri(user.username).href,
+            ...toMentionNoteFields(sanitizePostContent(content)).ccs.map((uri) => uri.href),
+          ],
           quoteUri,
         });
         return RA.ok(postEvent);
@@ -170,7 +176,7 @@ const create = ({
         return RA.ok(undefined);
       }),
       RA.andBind('quote', async ({ post, quoteUri }) =>
-        RA.ok(await resolveQuoteNoteFields(postQuotesResolver, post.postId, quoteUri))),
+        RA.ok(await resolveQuoteNoteFields(postQuotesResolver, post.postId, quoteUri, post.visibility))),
       RA.andThrough(async ({ post, user, ctx, images, mentions, quote }) => {
         const note = buildLocalNote({ ctx, identifier: user.username, post, images, origin, quote });
         const createActivity = new Create({
@@ -183,12 +189,15 @@ const create = ({
             toImageDocument(image, origin)
           ),
         });
-        await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+        if (post.visibility !== 'direct') {
+          await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+        }
         await sendToMentions({
           ctx,
           identifier: user.username,
           activity: createActivity,
           mentions: [...(mentions ?? []), ...quote.recipients],
+          visibility: post.visibility,
         });
         return RA.ok(undefined);
       }),

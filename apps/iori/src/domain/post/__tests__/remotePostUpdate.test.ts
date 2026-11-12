@@ -53,6 +53,47 @@ describe('Post.updateRemotePost', () => {
   });
 });
 
+describe('Post.updateRemotePost の参加者', () => {
+  const edit = {
+    content: '<p>after</p>',
+    summary: null,
+    sensitive: false,
+    editedAt: Instant.orThrow(5_000),
+    visibility: null,
+    recipientActorUris: ['https://iori.test/users/kosui'],
+    previousRecipientActorUris: [],
+    authorActorUri: 'https://remote.example/users/alice',
+    mentionedActorUris: ['https://other.example/users/bob', 'https://iori.test/users/kosui'],
+    images: [],
+  };
+
+  it('direct の投稿の更新では、作者、メンション、宛先を重複なく参加者にする', () => {
+    const event = Post.updateRemotePost(Instant.orThrow(6_000))(post, edit);
+
+    expect(event.eventPayload.participantActorUris).toEqual([
+      'https://remote.example/users/alice',
+      'https://other.example/users/bob',
+      'https://iori.test/users/kosui',
+    ]);
+  });
+
+  it('direct でない投稿の更新では、参加者を空にする', () => {
+    const publicPost = { ...post, visibility: 'public' as const };
+
+    const event = Post.updateRemotePost(Instant.orThrow(6_000))(publicPost, edit);
+
+    expect(event.eventPayload.participantActorUris).toEqual([]);
+  });
+
+  it('公開範囲が direct に狭まる更新では、参加者を入れる', () => {
+    const publicPost = { ...post, visibility: 'public' as const };
+
+    const event = Post.updateRemotePost(Instant.orThrow(6_000))(publicPost, { ...edit, visibility: 'direct' });
+
+    expect(event.eventPayload.participantActorUris).toContain('https://remote.example/users/alice');
+  });
+});
+
 describe('Post.updateRemotePost の公開範囲', () => {
   const edit = {
     content: '<p>after</p>',

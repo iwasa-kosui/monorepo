@@ -5,6 +5,7 @@ import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { MentionRecipient } from '../../domain/post/mention.ts';
 import type { PostQuote, PostQuotesResolverByPostIds } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
@@ -72,7 +73,14 @@ const setup = (quote: PostQuote | undefined = aliceQuote) => {
     postQuotesResolver,
     origin: 'https://example.com',
   });
-  const run = (input: { content: string; quoteUri?: string; mentions?: ReadonlyArray<MentionRecipient> }) => {
+  const run = (
+    input: {
+      content: string;
+      quoteUri?: string;
+      visibility?: Visibility;
+      mentions?: ReadonlyArray<MentionRecipient>;
+    },
+  ) => {
     const ctx = createMockRequestContext();
     return useCase.run({ sessionId: session.sessionId, imageUrls: [], ctx, ...input }).then((result) => ({
       result,
@@ -156,5 +164,29 @@ describe('CreatePostUseCase の引用', () => {
     const recipients = vi.mocked(ctx.sendActivity).mock.calls.map((call) => call[1]);
     expect(recipients).toHaveLength(2);
     expect(recipients[1]).toHaveLength(1);
+  });
+
+  it('direct の投稿では、引用先の作者を宛先にも参加者にも入れず、メンション先にだけ共有 inbox を使わず配送する', async () => {
+    const { run, postCreatedStore } = setup();
+    const carolId = 'https://other.example/users/carol';
+    const mentionLink =
+      `<span class="h-card"><a href="${carolId}" class="u-url mention">@<span>carol@other.example</span></a></span>`;
+
+    const { result, ctx } = await run({
+      content: `<p>${mentionLink}</p>`,
+      quoteUri,
+      visibility: 'direct',
+      mentions: [{ id: carolId, inboxUrl: `${carolId}/inbox` }],
+    });
+
+    expect(result.ok).toBe(true);
+    const calls = vi.mocked(ctx.sendActivity).mock.calls;
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.[1]).toEqual([{ id: new URL(carolId), inboxId: new URL(`${carolId}/inbox`), endpoints: null }]);
+    expect(calls[0]?.[3]).toEqual({ preferSharedInbox: false });
+    expect(postCreatedStore.items[0]?.eventPayload.quoteUri).toBe(quoteUri);
+    expect(postCreatedStore.items[0]?.eventPayload).toMatchObject({
+      participantActorUris: ['https://example.com/users/kosui', carolId],
+    });
   });
 });

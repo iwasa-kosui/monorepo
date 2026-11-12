@@ -146,12 +146,12 @@ describe('createD1HomePostsResolverByPeriod', () => {
     expect(result).toEqual({ ok: true, val: [second.postId, first.postId] });
   });
 
-  it('宛先外の direct は返さず、宛先の direct は返す', async () => {
+  it('リモートの direct は宛先であっても返さず、private と公開範囲が不明の投稿は返す', async () => {
     const { db, seed } = setup();
     const me = seed.addLocalActor('kosui');
     const alice = seed.addRemoteActor('alice');
     seed.addFollow(me.actorId, alice.actorId);
-    const toMe = seed.addRemotePost(alice, 1_000, {
+    seed.addRemotePost(alice, 1_000, {
       visibility: 'direct',
       recipientActorUris: [`${SEED_ORIGIN}/users/kosui`],
     });
@@ -159,6 +159,8 @@ describe('createD1HomePostsResolverByPeriod', () => {
       visibility: 'direct',
       recipientActorUris: ['https://remote.example/users/other'],
     });
+    const privatePost = seed.addRemotePost(alice, 3_000, { visibility: 'private' });
+    const legacy = seed.addRemotePost(alice, 4_000, { visibility: null });
 
     const result = await createD1HomePostsResolverByPeriod(db).resolve({
       actorIds: [ActorId.orThrow(me.actorId), ActorId.orThrow(alice.actorId)],
@@ -167,7 +169,23 @@ describe('createD1HomePostsResolverByPeriod', () => {
       until: instant(10_000),
     });
 
-    expect(result).toEqual({ ok: true, val: [toMe.postId] });
+    expect(result).toEqual({ ok: true, val: [legacy.postId, privatePost.postId] });
+  });
+
+  it('自分のローカルの direct は返さず、private は返す', async () => {
+    const { db, seed } = setup();
+    const me = seed.addLocalActor('kosui');
+    seed.addLocalPost(me, 1_000, { visibility: 'direct' });
+    const own = seed.addLocalPost(me, 2_000, { visibility: 'private' });
+
+    const result = await createD1HomePostsResolverByPeriod(db).resolve({
+      actorIds: [ActorId.orThrow(me.actorId)],
+      currentActorId: ActorId.orThrow(me.actorId),
+      since: instant(0),
+      until: instant(10_000),
+    });
+
+    expect(result).toEqual({ ok: true, val: [own.postId] });
   });
 
   it('最大 300 件の新しい投稿だけを返す', async () => {

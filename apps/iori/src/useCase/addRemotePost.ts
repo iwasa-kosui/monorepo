@@ -69,6 +69,7 @@ type Input = Readonly<{
   sensitive?: boolean;
   visibility: Visibility | null;
   recipientActorUris?: ReadonlyArray<string>;
+  mentionedActorUris?: ReadonlyArray<string>;
   quoteUri?: string | null;
 }>;
 
@@ -164,7 +165,21 @@ const create = ({
         })(actorIdentity)),
       RA.andBind(
         'saved',
-        async ({ actor, content, uri, inReplyToUri, summary, sensitive, visibility, recipientActorUris, quoteUri }) => {
+        async (
+          {
+            actor,
+            actorIdentity,
+            content,
+            uri,
+            inReplyToUri,
+            summary,
+            sensitive,
+            visibility,
+            recipientActorUris,
+            mentionedActorUris,
+            quoteUri,
+          },
+        ) => {
           const existing = await postResolverByUri.resolve({ uri });
           if (existing.ok && existing.val) {
             if (existing.val.actorId !== actor.id) {
@@ -183,6 +198,8 @@ const create = ({
             sensitive,
             visibility,
             recipientActorUris,
+            mentionedActorUris,
+            authorActorUri: actorIdentity.uri,
             quoteUri,
           });
           try {

@@ -131,6 +131,14 @@ export const remotePostRecipientsTable = sqliteTable('remote_post_recipients', {
   index('remote_post_recipients_actor_uri_idx').on(table.actorUri),
 ]);
 
+export const directPostParticipantsTable = sqliteTable('direct_post_participants', {
+  postId: text('postId').notNull().references(() => postsTable.postId),
+  actorUri: text('actorUri').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.postId, table.actorUri] }),
+  index('direct_post_participants_actor_uri_idx').on(table.actorUri),
+]);
+
 export const postQuotesTable = sqliteTable('post_quotes', {
   postId: text('postId').primaryKey().references(() => postsTable.postId),
   quoteUri: text('quoteUri').notNull(),

@@ -1,4 +1,4 @@
-import { Create, Note, Person } from '@fedify/vocab';
+import { Create, Mention, Note, Person } from '@fedify/vocab';
 import { FetchError } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
@@ -223,6 +223,22 @@ describe('createOnCreate', () => {
     const addRemotePost = await run(note);
 
     expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ recipientActorUris: [] }));
+  });
+
+  it('passes the hrefs of the Mention tags of the Note as the mentioned actors', async () => {
+    const bob = new URL('https://other.example/users/bob');
+    const note = new Note({
+      id: new URL('https://remote.example/posts/1'),
+      content: 'hi',
+      tos: [bob, kosuiId],
+      tags: [new Mention({ href: bob }), new Mention({ href: kosuiId })],
+    });
+
+    const addRemotePost = await run(note);
+
+    expect(addRemotePost).toHaveBeenCalledWith(
+      expect.objectContaining({ mentionedActorUris: [bob.href, kosuiId.href] }),
+    );
   });
 
   describe('Create from an actor no local actor follows', () => {

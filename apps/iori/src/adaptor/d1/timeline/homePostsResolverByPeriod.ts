@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, desc, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 
 import { PostId } from '../../../domain/post/postId.ts';
 import {
@@ -9,7 +9,7 @@ import {
 import { actorIdsJson } from '../actorIdsJson.ts';
 import type { IoriD1Db } from '../client.ts';
 import { visibleToViewer } from '../post/visibleToViewer.ts';
-import { postsTable } from '../schema.ts';
+import { localPostsTable, postsTable, remotePostsTable } from '../schema.ts';
 
 export const createD1HomePostsResolverByPeriod = (db: IoriD1Db): HomePostsResolverByPeriod => ({
   resolve: async ({ actorIds, currentActorId, since, until }) => {
@@ -19,8 +19,12 @@ export const createD1HomePostsResolverByPeriod = (db: IoriD1Db): HomePostsResolv
 
     const rows = await db.select({ postId: postsTable.postId })
       .from(postsTable)
+      .leftJoin(localPostsTable, eq(localPostsTable.postId, postsTable.postId))
+      .leftJoin(remotePostsTable, eq(remotePostsTable.postId, postsTable.postId))
       .where(and(
         isNull(postsTable.deletedAt),
+        or(isNull(localPostsTable.visibility), notInArray(localPostsTable.visibility, ['direct'])),
+        or(isNull(remotePostsTable.visibility), notInArray(remotePostsTable.visibility, ['direct'])),
         visibleToViewer({ currentActorId, onlyVisibleToViewer: true }),
         inArray(postsTable.actorId, sql`(select value from json_each(${actorIdsJson(actorIds)}))`),
         gte(postsTable.createdAt, new Date(since)),
