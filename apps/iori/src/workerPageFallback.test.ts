@@ -228,6 +228,50 @@ describe('createWorkerPageFallback', () => {
     expect(await response?.text()).toContain('/static/federatedTimeline.js');
   });
 
+  it('redirects the Bluesky post page to /sign-in when logged out, without caching', async () => {
+    const url = 'https://worker.test/bluesky/profile/did:plc:abc/post/3kxyz';
+    const anonymous = await createWorkerPageFallback(new Request(url));
+    const expired = await createWorkerPageFallback(
+      new Request(url, { headers: { Cookie: 'sessionId=expired' } }),
+      { isLoggedIn: false },
+    );
+
+    for (const response of [anonymous, expired]) {
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get('Location')).toBe('/sign-in');
+      expect(response?.headers.get('Cache-Control')).toBe('no-store');
+      expect(await response?.text()).toBe('');
+    }
+  });
+
+  it('renders the Bluesky post page for a logged-in user with noindex', async () => {
+    const response = await createWorkerPageFallback(
+      new Request('https://worker.test/bluesky/profile/did:plc:abc/post/3kxyz'),
+      { isLoggedIn: true, userId: UserId.generate() },
+    );
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('X-Robots-Tag')).toBe('noindex');
+    expect(await response?.text()).toContain('/static/blueskyPost.js');
+  });
+
+  it('does not register Bluesky post paths that are not a DID and an rkey', async () => {
+    for (
+      const path of [
+        '/bluesky/profile/alice.bsky.social/post/3kxyz',
+        '/bluesky/profile/did:plc:abc/post',
+        '/bluesky/profile/did:plc:abc/post/3kxyz/extra',
+      ]
+    ) {
+      expect(
+        await createWorkerPageFallback(new Request(`https://worker.test${path}`), {
+          isLoggedIn: true,
+          userId: UserId.generate(),
+        }),
+      ).toBeUndefined();
+    }
+  });
+
   it('does not add noindex to public pages', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
 

@@ -10,6 +10,7 @@ import {
   fetchAccount,
   fetchAccountStatuses,
   fetchBlueskyHomeTimeline,
+  fetchBlueskyPostThread,
   fetchBlueskyStatus,
   fetchBlueskyTimeline,
   fetchFavourites,
@@ -638,6 +639,18 @@ describe('mastodon client requests', () => {
 
     const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
     expect(url).toBe('/api/iori/v1/bluesky/timeline?before=1700000000000&limit=20');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual(payload);
+  });
+
+  it('fetches a Bluesky post thread by its at-uri', async () => {
+    const payload = { ancestors: [], post: { uri: 'at://did:plc:a/app.bsky.feed.post/1' }, replies: [] };
+    const fetchMock = stubFetch(jsonResponse(payload));
+
+    const result = await fetchBlueskyPostThread('at://did:plc:a/app.bsky.feed.post/1');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/thread?uri=at%3A%2F%2Fdid%3Aplc%3Aa%2Fapp.bsky.feed.post%2F1');
     expect(init.credentials).toBe('same-origin');
     expect(result).toEqual(payload);
   });
