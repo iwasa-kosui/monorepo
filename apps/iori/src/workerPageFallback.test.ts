@@ -366,6 +366,50 @@ describe('createWorkerPageFallback', () => {
     expect(html).toContain('<script type="module" src="/static/navPrefetch.js"></script>');
   });
 
+  it('redirects the private bookmarks page to /sign-in when logged out, without caching', async () => {
+    const anonymous = await createWorkerPageFallback(new Request('https://worker.test/bookmarks'));
+    const expired = await createWorkerPageFallback(
+      new Request('https://worker.test/bookmarks', { headers: { Cookie: 'sessionId=expired' } }),
+      { isLoggedIn: false },
+    );
+
+    for (const response of [anonymous, expired]) {
+      expect(response?.status).toBe(302);
+      expect(response?.headers.get('Location')).toBe('/sign-in');
+      expect(response?.headers.get('Cache-Control')).toBe('no-store');
+      expect(await response?.text()).toBe('');
+    }
+  });
+
+  it('renders the bookmarks entry for a logged-in user with no-store and noindex', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/bookmarks'), {
+      isLoggedIn: true,
+      userId: UserId.generate(),
+    });
+
+    expect(response?.status).toBe(200);
+    expect(response?.headers.get('Cache-Control')).toBe('no-store');
+    expect(response?.headers.get('X-Robots-Tag')).toBe('noindex');
+    const html = await response?.text();
+    expect(html).toContain('/static/bookmarks.js');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+  });
+
+  it('shows the bookmarks link right after the likes link in the Sidebar only when logged in', async () => {
+    const loggedIn = await renderSidebar(true);
+
+    expect(loggedIn).toContain('href="/bookmarks"');
+    expect(loggedIn.indexOf('href="/bookmarks"')).toBeGreaterThan(loggedIn.indexOf('href="/likes"'));
+    expect(await renderSidebar(false)).not.toContain('href="/bookmarks"');
+  });
+
+  it('adds the bookmarks page to the prefetch paths of the speculation rules', async () => {
+    const response = await createWorkerPageFallback(new Request('https://worker.test/about'));
+    const html = (await response?.text()) ?? '';
+
+    expect(html).toContain('"href_matches":{"pathname":"/bookmarks"}');
+  });
+
   it('does not claim unknown GET routes', async () => {
     const response = await createWorkerPageFallback(new Request('https://worker.test/not-a-page'));
     expect(response).toBeUndefined();

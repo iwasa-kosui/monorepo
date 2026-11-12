@@ -188,6 +188,109 @@ describe('GET /api/v1/favourites', () => {
   });
 });
 
+describe('GET /api/v1/bookmarks', () => {
+  const seedBookmarks = async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    const oldest = t.seed.addRemotePost(alice, 1_000, { visibility: 'public' });
+    const middle = t.seed.addLocalPost(me, 2_000);
+    const newest = t.seed.addRemotePost(alice, 3_000, { visibility: 'public' });
+    const deleted = t.seed.addLocalPost(me, 4_000, { deletedAt: 5_000 });
+    const notBookmarked = t.seed.addRemotePost(alice, 6_000, { visibility: 'public' });
+    const bookmarkOldest = t.seed.addBookmark(me.actorId, oldest.postId, 10_000);
+    const bookmarkMiddle = t.seed.addBookmark(me.actorId, middle.postId, 20_000);
+    const bookmarkNewest = t.seed.addBookmark(me.actorId, newest.postId, 30_000);
+    t.seed.addBookmark(me.actorId, deleted.postId, 40_000);
+    const bookmarkIds = [bookmarkNewest.bookmarkId, bookmarkMiddle.bookmarkId, bookmarkOldest.bookmarkId];
+    const postIds = [newest.postId, middle.postId, oldest.postId];
+    return { ...t, me, alice, notBookmarked, bookmarkIds, postIds };
+  };
+
+  it('自分のブックマークを新しい順に Status で返し、削除済みの投稿を除く', async () => {
+    const t = await seedBookmarks();
+
+    const response = await t.request('/api/v1/bookmarks', { headers: t.me.bearer });
+
+    expect(response.status).toBe(200);
+    const statuses = (await response.json() as unknown[]).map((item) => StatusSchema.parse(item));
+    expect(statuses.map((status) => status.id)).toEqual(t.postIds);
+    expect(statuses.every((status) => status.bookmarked === true)).toBe(true);
+    expect(statuses[0]).toMatchObject({ account: { id: t.alice.actorId, acct: 'alice@remote.example' } });
+  });
+
+  it('他人のブックマークを返さない', async () => {
+    const t = await seedBookmarks();
+    const other = t.seed.addLocalActor('other');
+    t.seed.addBookmark(other.actorId, t.notBookmarked.postId, 50_000);
+
+    const response = await t.request('/api/v1/bookmarks', { headers: t.me.bearer });
+
+    expect(idsOf(await response.json())).toEqual(t.postIds);
+  });
+
+  it('limit と max_id と Link ヘッダーで bookmarkId を位置にしてページを送る', async () => {
+    const t = await seedBookmarks();
+
+    const first = await t.request('/api/v1/bookmarks?limit=2', { headers: t.me.bearer });
+    const next = linkOf(first, 'next');
+    const second = await t.request(`${next?.pathname}${next?.search}`, { headers: t.me.bearer });
+
+    expect(idsOf(await first.json())).toEqual(t.postIds.slice(0, 2));
+    expect(next?.searchParams.get('max_id')).toBe(t.bookmarkIds[1]);
+    expect(linkOf(first, 'prev')?.searchParams.get('min_id')).toBe(t.bookmarkIds[0]);
+    expect(next?.searchParams.get('limit')).toBe('2');
+    expect(idsOf(await second.json())).toEqual([t.postIds[2]]);
+    expect(linkOf(second, 'next')?.searchParams.get('max_id')).toBe(t.bookmarkIds[2]);
+  });
+
+  it('他人のブックマークの ID を max_id に使っても、その時刻を位置にしない', async () => {
+    const t = await seedBookmarks();
+    const other = t.seed.addLocalActor('other');
+    const foreign = t.seed.addBookmark(other.actorId, t.notBookmarked.postId, 15_000);
+
+    const response = await t.request(`/api/v1/bookmarks?max_id=${foreign.bookmarkId}`, { headers: t.me.bearer });
+
+    expect(await response.json()).toEqual([]);
+  });
+
+  it('ブックマークしても見えない direct は返さない', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    const visible = t.seed.addRemotePost(alice, 1_000, { visibility: 'public' });
+    const direct = t.seed.addRemotePost(alice, 2_000, { visibility: 'direct' });
+    t.seed.addBookmark(me.actorId, visible.postId, 10_000);
+    t.seed.addBookmark(me.actorId, direct.postId, 20_000);
+
+    const response = await t.request('/api/v1/bookmarks', { headers: me.bearer });
+
+    expect(idsOf(await response.json())).toEqual([visible.postId]);
+  });
+
+  it('ブックマークがなければ空配列を返し、Link を付けない', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+
+    const response = await t.request('/api/v1/bookmarks', { headers: me.bearer });
+
+    expect(await response.json()).toEqual([]);
+    expect(response.headers.get('Link')).toBeNull();
+  });
+
+  it('認証がなければ 401、スコープが足りなければ 403 にし、Cookie は通す', async () => {
+    const t = await seedBookmarks();
+
+    const [anonymous, forbidden, cookie] = await Promise.all([
+      t.request('/api/v1/bookmarks'),
+      t.request('/api/v1/bookmarks', { headers: await t.bearerFor('read:favourites') }),
+      t.request('/api/v1/bookmarks', { headers: { Cookie: `sessionId=${t.me.sessionId}` } }),
+    ]);
+
+    expect([anonymous.status, forbidden.status, cookie.status]).toEqual([401, 403, 200]);
+  });
+});
+
 describe('GET /api/v1/mutes', () => {
   const seedMutes = async () => {
     const t = setupReadApi();

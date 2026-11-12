@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { BlockedActorsResolverByUserIdWithPagination } from '../../domain/block/block.ts';
+import type { BookmarkedPostIdsResolverByActorIdWithPagination } from '../../domain/bookmark/bookmark.ts';
 import type { LikedPostIdsResolverByActorIdWithPagination } from '../../domain/like/like.ts';
 import type { MutedActorsResolverByUserIdWithPagination } from '../../domain/mute/mute.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
@@ -21,6 +22,7 @@ export type WorkerMastodonViewerListsRouterDeps = Readonly<{
   authn: MastodonAuthn;
   actorResolverByUserId: ActorResolverByUserId;
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
+  bookmarkedPostIdsResolverByActorIdWithPagination: BookmarkedPostIdsResolverByActorIdWithPagination;
   mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
   blockedActorsResolverByUserIdWithPagination: BlockedActorsResolverByUserIdWithPagination;
   postsWithAuthorResolverByPostIds: PostsWithAuthorResolverByPostIds;
@@ -29,6 +31,7 @@ export type WorkerMastodonViewerListsRouterDeps = Readonly<{
 
 const invalidToken = { error: 'The access token is invalid' } as const;
 const readFavourites = Scope.orThrow('read:favourites');
+const readBookmarks = Scope.orThrow('read:bookmarks');
 const readMutes = Scope.orThrow('read:mutes');
 const readBlocks = Scope.orThrow('read:blocks');
 
@@ -36,6 +39,7 @@ export const createWorkerMastodonViewerListsRouter = ({
   authn,
   actorResolverByUserId,
   likedPostIdsResolverByActorIdWithPagination,
+  bookmarkedPostIdsResolverByActorIdWithPagination,
   mutedActorsResolverByUserIdWithPagination,
   blockedActorsResolverByUserIdWithPagination,
   postsWithAuthorResolverByPostIds,
@@ -80,6 +84,43 @@ export const createWorkerMastodonViewerListsRouter = ({
       });
       const statuses = await statusAssembler.assemble({ sources, viewerActorId, requestUrl: c.req.url });
       return respondWithPage(c, statuses, rows.map((row) => row.likeId));
+    })
+    .get('/v1/bookmarks', authn.requireUser(readBookmarks), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId;
+      if (userId === null || userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      const viewer = await actorResolverByUserId.resolve(userId);
+      if (!viewer.ok) {
+        return c.json(internalServerError, 500);
+      }
+      if (viewer.val === undefined) {
+        return c.json(actorNotFound, 422);
+      }
+      const viewerActorId = viewer.val.id;
+      const page = parsePageRequest(c, timelineLimits);
+      const bookmarks = await bookmarkedPostIdsResolverByActorIdWithPagination.resolve({
+        actorId: viewerActorId,
+        page,
+      });
+      if (!bookmarks.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const rows = toNewestFirst(bookmarks.val, page);
+      const posts = await postsWithAuthorResolverByPostIds.resolve({
+        postIds: rows.map((row) => row.postId),
+        currentActorId: viewerActorId,
+        onlyVisibleToViewer: true,
+      });
+      if (!posts.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const sources = rows.flatMap((row): StatusSource[] => {
+        const post = posts.val.get(row.postId);
+        return post === undefined ? [] : [{ type: 'post', post }];
+      });
+      const statuses = await statusAssembler.assemble({ sources, viewerActorId, requestUrl: c.req.url });
+      return respondWithPage(c, statuses, rows.map((row) => row.bookmarkId));
     })
     .get('/v1/mutes', authn.requireUser(readMutes), async (c) => {
       const userId = getMastodonPrincipal(c)?.userId;

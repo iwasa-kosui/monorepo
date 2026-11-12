@@ -51,6 +51,8 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'articleBody.written',
   'block.blockCreated',
   'block.blockDeleted',
+  'bookmark.bookmarkCreated',
+  'bookmark.bookmarkDeleted',
   'digest.created',
   'digest.expired',
   'digest.itemFeedbackGiven',

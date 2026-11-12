@@ -4,6 +4,8 @@ import {
   addXUserFeedSource,
   block,
   blueskyFailureMessage,
+  bookmark,
+  bookmarksUrl,
   createBlueskyPost,
   createStatus,
   deleteStatus,
@@ -15,6 +17,7 @@ import {
   fetchBlueskyPostThread,
   fetchBlueskyStatus,
   fetchBlueskyTimeline,
+  fetchBookmarks,
   fetchFavourites,
   fetchFeedSources,
   fetchFollowers,
@@ -54,6 +57,7 @@ import {
   summarizeTimeline,
   translate,
   unblock,
+  unbookmark,
   undoRepostBlueskyPost,
   unfavourite,
   unfollow,
@@ -311,6 +315,18 @@ describe('mastodon client requests', () => {
     expect(page).toEqual({ items: [{ id: 's1' }], nextMaxId: 'f1', prevMinId: undefined });
   });
 
+  it('requests bookmarks with max_id and returns the cursors from the Link header', async () => {
+    const fetchMock = stubFetch(jsonResponse([{ id: 's1' }], {
+      link: '<https://iori.example/api/v1/bookmarks?max_id=b1>; rel="next"',
+    }));
+
+    const page = await fetchBookmarks({ maxId: 'm1' });
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/bookmarks?max_id=m1');
+    expect(bookmarksUrl({ maxId: 'm1' })).toBe('/api/v1/bookmarks?max_id=m1');
+    expect(page).toEqual({ items: [{ id: 's1' }], nextMaxId: 'b1', prevMinId: undefined });
+  });
+
   it('requests notifications with the repeated types[] and max_id, and returns the cursors', async () => {
     const fetchMock = stubFetch(jsonResponse([{ id: 'n1' }], {
       link: '<https://iori.example/api/v1/notifications?max_id=n1>; rel="next"',
@@ -507,6 +523,8 @@ describe('mastodon client requests', () => {
   it.each([
     ['favourite', favourite, '/api/v1/statuses/s1/favourite'],
     ['unfavourite', unfavourite, '/api/v1/statuses/s1/unfavourite'],
+    ['bookmark', bookmark, '/api/v1/statuses/s1/bookmark'],
+    ['unbookmark', unbookmark, '/api/v1/statuses/s1/unbookmark'],
     ['reblog', reblog, '/api/v1/statuses/s1/reblog'],
     ['unreblog', unreblog, '/api/v1/statuses/s1/unreblog'],
     ['follow', follow, '/api/v1/accounts/s1/follow'],

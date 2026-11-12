@@ -12,6 +12,7 @@ import { idsJson } from '../idsJson.ts';
 import {
   blocksTable,
   blueskyCrosspostsTable,
+  bookmarksTable,
   emojiReactsTable,
   localActorsTable,
   localPostsTable,
@@ -125,48 +126,61 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
         ? []
         : posts.filter((post) => post.type === 'local' && post.actorId === currentActorId).map((post) => post.postId);
 
-      const [localReplies, remoteReplies, localParents, remoteParents, myReactions, crossposts, quoteRows] =
-        await Promise.all([
-          db.select({ uri: localPostsTable.inReplyToUri, replies: sql<number>`count(*)` })
-            .from(localPostsTable)
-            .innerJoin(postsTable, eq(localPostsTable.postId, postsTable.postId))
-            .where(and(isNull(postsTable.deletedAt), inArray(localPostsTable.inReplyToUri, jsonEach(ownUris))))
-            .groupBy(localPostsTable.inReplyToUri),
-          db.select({ uri: remotePostsTable.inReplyToUri, replies: sql<number>`count(*)` })
+      const [
+        localReplies,
+        remoteReplies,
+        localParents,
+        remoteParents,
+        myReactions,
+        myBookmarks,
+        crossposts,
+        quoteRows,
+      ] = await Promise.all([
+        db.select({ uri: localPostsTable.inReplyToUri, replies: sql<number>`count(*)` })
+          .from(localPostsTable)
+          .innerJoin(postsTable, eq(localPostsTable.postId, postsTable.postId))
+          .where(and(isNull(postsTable.deletedAt), inArray(localPostsTable.inReplyToUri, jsonEach(ownUris))))
+          .groupBy(localPostsTable.inReplyToUri),
+        db.select({ uri: remotePostsTable.inReplyToUri, replies: sql<number>`count(*)` })
+          .from(remotePostsTable)
+          .innerJoin(postsTable, eq(remotePostsTable.postId, postsTable.postId))
+          .where(and(isNull(postsTable.deletedAt), inArray(remotePostsTable.inReplyToUri, jsonEach(ownUris))))
+          .groupBy(remotePostsTable.inReplyToUri),
+        localParentIds.length === 0
+          ? none
+          : db.select({ postId: postsTable.postId, actorId: postsTable.actorId }).from(postsTable)
+            .where(and(isNull(postsTable.deletedAt), inArray(postsTable.postId, jsonEach(localParentIds)))),
+        remoteParentUris.length === 0
+          ? none
+          : db.select({ uri: remotePostsTable.uri, postId: postsTable.postId, actorId: postsTable.actorId })
             .from(remotePostsTable)
             .innerJoin(postsTable, eq(remotePostsTable.postId, postsTable.postId))
-            .where(and(isNull(postsTable.deletedAt), inArray(remotePostsTable.inReplyToUri, jsonEach(ownUris))))
-            .groupBy(remotePostsTable.inReplyToUri),
-          localParentIds.length === 0
-            ? none
-            : db.select({ postId: postsTable.postId, actorId: postsTable.actorId }).from(postsTable)
-              .where(and(isNull(postsTable.deletedAt), inArray(postsTable.postId, jsonEach(localParentIds)))),
-          remoteParentUris.length === 0
-            ? none
-            : db.select({ uri: remotePostsTable.uri, postId: postsTable.postId, actorId: postsTable.actorId })
-              .from(remotePostsTable)
-              .innerJoin(postsTable, eq(remotePostsTable.postId, postsTable.postId))
-              .where(and(isNull(postsTable.deletedAt), inArray(remotePostsTable.uri, jsonEach(remoteParentUris)))),
-          currentActorId === undefined
-            ? none
-            : db.select({ postId: emojiReactsTable.postId, emoji: emojiReactsTable.emoji }).from(emojiReactsTable)
-              .where(
-                and(eq(emojiReactsTable.actorId, currentActorId), inArray(emojiReactsTable.postId, jsonEach(postIds))),
-              ),
-          ownLocalPostIds.length === 0
-            ? none
-            : db.select().from(blueskyCrosspostsTable)
-              .where(inArray(blueskyCrosspostsTable.postId, jsonEach(ownLocalPostIds))),
-          db.select({ postId: postQuotesTable.postId, quoteUri: postQuotesTable.quoteUri })
-            .from(postQuotesTable)
-            .where(inArray(postQuotesTable.postId, jsonEach(postIds))),
-        ]);
+            .where(and(isNull(postsTable.deletedAt), inArray(remotePostsTable.uri, jsonEach(remoteParentUris)))),
+        currentActorId === undefined
+          ? none
+          : db.select({ postId: emojiReactsTable.postId, emoji: emojiReactsTable.emoji }).from(emojiReactsTable)
+            .where(
+              and(eq(emojiReactsTable.actorId, currentActorId), inArray(emojiReactsTable.postId, jsonEach(postIds))),
+            ),
+        currentActorId === undefined
+          ? none
+          : db.select({ postId: bookmarksTable.postId }).from(bookmarksTable)
+            .where(and(eq(bookmarksTable.actorId, currentActorId), inArray(bookmarksTable.postId, jsonEach(postIds)))),
+        ownLocalPostIds.length === 0
+          ? none
+          : db.select().from(blueskyCrosspostsTable)
+            .where(inArray(blueskyCrosspostsTable.postId, jsonEach(ownLocalPostIds))),
+        db.select({ postId: postQuotesTable.postId, quoteUri: postQuotesTable.quoteUri })
+          .from(postQuotesTable)
+          .where(inArray(postQuotesTable.postId, jsonEach(postIds))),
+      ]);
       const quotedByUri = await resolveQuotedPosts(quoteRows.map((row) => row.quoteUri), currentActorId);
 
       const reactionsByPostId = new Map<string, string[]>();
       for (const reaction of myReactions) {
         addTo(reactionsByPostId, reaction.postId, reaction.emoji);
       }
+      const bookmarkedPostIds = new Set<string>(myBookmarks.map((row) => row.postId));
       const crosspostByPostId = new Map<string, BlueskyCrosspost>();
       for (const row of crossposts) {
         crosspostByPostId.set(row.postId, toBlueskyCrosspost(row));
@@ -205,6 +219,7 @@ export const createD1PostExtrasResolverByPosts = (db: IoriD1Db, origin: string):
           repliesCount: repliesByUri.get(ownUris[index]!) ?? 0,
           inReplyTo: inReplyTo ?? null,
           myReactionEmojis: reactionsByPostId.get(post.postId) ?? [],
+          bookmarked: bookmarkedPostIds.has(post.postId),
           blueskyCrosspost: crosspostByPostId.get(post.postId) ?? null,
           quote: quoteUriByPostId.has(post.postId)
             ? {

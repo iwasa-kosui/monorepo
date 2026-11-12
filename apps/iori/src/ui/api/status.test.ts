@@ -13,6 +13,7 @@ import {
   removeStatusesByPostId,
   statusHref,
   updateStatusesByPostId,
+  withBookmarked,
   withFavourited,
   withReblogged,
   withUpdatedStatus,
@@ -134,6 +135,32 @@ describe('status updates', () => {
 
     expect(updated.favourited).toBe(true);
     expect(updated.reblog?.favourited).toBe(true);
+  });
+
+  it('sets bookmarked on both the boost and the original inside it', () => {
+    const boost = status('r1', { reblog: status('p1') });
+
+    const updated = withBookmarked(boost, true);
+
+    expect(updated.bookmarked).toBe(true);
+    expect(updated.reblog?.bookmarked).toBe(true);
+  });
+
+  it('sets bookmarked on a plain status without creating a reblog', () => {
+    const updated = withBookmarked(status('p1'), true);
+
+    expect(updated.bookmarked).toBe(true);
+    expect(updated.reblog).toBeNull();
+  });
+
+  it('copies bookmarked from the response to the boost along with the other viewer flags', () => {
+    const boost = status('r1', { reblog: status('p1') });
+    const response = status('p1', { bookmarked: true });
+
+    const updated = withUpdatedStatus(boost, response);
+
+    expect(updated.bookmarked).toBe(true);
+    expect(updated.reblog).toBe(response);
   });
 
   it('sets reblogged on a plain status without creating a reblog', () => {

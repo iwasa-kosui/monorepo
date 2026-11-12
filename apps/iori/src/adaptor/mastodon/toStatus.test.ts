@@ -536,6 +536,27 @@ describe('toReblogStatus', () => {
     expect(status.favourited).toBe(true);
     expect(status.language).toBe(reblog.language);
   });
+
+  it('copies bookmarked from the original Status to the boost, like favourited', () => {
+    const reblog = toStatus(localPost, { ...options, bookmarked: true });
+
+    const boost = toReblogStatus({ createdAt: Date.UTC(2025, 1, 3) as Instant }, {
+      repostId: RepostId.generate(),
+      account: { ...account, id: ActorId.generate() },
+      reblog,
+    });
+
+    expect(boost.bookmarked).toBe(true);
+    expect(boost.reblog?.bookmarked).toBe(true);
+  });
+});
+
+describe('toStatus bookmarked', () => {
+  it('is true only when the option says the viewer bookmarked the post', () => {
+    expect(toStatus(localPost, { ...options, bookmarked: true }).bookmarked).toBe(true);
+    expect(toStatus(localPost, { ...options, bookmarked: false }).bookmarked).toBe(false);
+    expect(toStatus(localPost, options).bookmarked).toBe(false);
+  });
 });
 
 describe('toIoriBlueskyCrosspost', () => {

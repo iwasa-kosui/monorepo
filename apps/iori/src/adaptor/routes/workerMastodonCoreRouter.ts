@@ -47,7 +47,6 @@ type AccountLookup =
 const scope = (value: string): Scope => Scope.orThrow(value);
 const readScope = scope('read');
 const readAccounts = scope('read:accounts');
-const readBookmarks = scope('read:bookmarks');
 const readBlocks = scope('read:blocks');
 const readFilters = scope('read:filters');
 const readFollows = scope('read:follows');
@@ -213,7 +212,6 @@ export const createWorkerMastodonCoreRouter = ({
     ['/v1/announcements', readScope],
     ['/v1/followed_tags', readFollows],
     ['/v1/follow_requests', readFollows],
-    ['/v1/bookmarks', readBookmarks],
     ['/v1/domain_blocks', readBlocks],
     ['/v1/featured_tags', readAccounts],
     ['/v1/conversations', readStatuses],

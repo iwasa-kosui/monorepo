@@ -19,6 +19,8 @@ type Props = Readonly<{
   isLiking?: boolean;
   onUndoLike?: (postId: string) => void;
   isUndoingLike?: boolean;
+  onBookmark?: (postId: string) => void;
+  onUndoBookmark?: (postId: string) => void;
   onRepost?: (postId: string) => void;
   isReposting?: boolean;
   onUndoRepost?: (postId: string) => void;
@@ -52,6 +54,8 @@ export const PostView = (
     isLiking,
     onUndoLike,
     isUndoingLike,
+    onBookmark,
+    onUndoBookmark,
     onRepost,
     isReposting,
     onUndoRepost,
@@ -107,6 +111,19 @@ export const PostView = (
       : []),
     ...(postUrl !== undefined && !isLocalPost
       ? [{ key: 'open-original', label: '元の投稿を開く', kind: 'link', href: postUrl } as const]
+      : []),
+    ...(post.bookmarked && onUndoBookmark !== undefined
+      ? [
+        {
+          key: 'unbookmark',
+          label: 'ブックマークを外す',
+          kind: 'action',
+          onSelect: () => onUndoBookmark(post.id),
+        } as const,
+      ]
+      : []),
+    ...(!post.bookmarked && onBookmark !== undefined
+      ? [{ key: 'bookmark', label: 'ブックマーク', kind: 'action', onSelect: () => onBookmark(post.id) } as const]
       : []),
     ...(postUrl !== undefined
       ? [{ key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: postUrl } as const]
