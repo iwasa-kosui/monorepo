@@ -4,7 +4,7 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
-import type { LocalPost, RemotePost } from '../../domain/post/post.ts';
+import type { LocalPost, PostQuote, PostQuotesResolverByPostIds, RemotePost } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
@@ -645,9 +645,24 @@ describe('DeletePostUseCase', () => {
             : null
         );
         Object.assign(ctx, { lookupObject, getDocumentLoader: vi.fn(async () => ({})) });
-        const run = () =>
-          DeletePostUseCase.create(deps).run({ sessionId: session.sessionId, postId: post.postId, ctx });
-        return { deps, ctx, lookupObject, run };
+        const run = (postQuotesResolver?: PostQuotesResolverByPostIds) =>
+          DeletePostUseCase.create({ ...deps, ...(postQuotesResolver === undefined ? {} : { postQuotesResolver }) })
+            .run({
+              sessionId: session.sessionId,
+              postId: post.postId,
+              ctx,
+            });
+        return { deps, ctx, lookupObject, run, postId: post.postId };
+      };
+
+      const quoteResolverOf = (postId: PostId, quote: PostQuote) => {
+        const resolve = vi.fn(async () => RA.ok(new Map<PostId, PostQuote>([[postId, quote]])));
+        return { resolve } as unknown as PostQuotesResolverByPostIds & { resolve: typeof resolve };
+      };
+      const bobId = 'https://remote.example/users/bob';
+      const bobQuote: PostQuote = {
+        uri: 'https://remote.example/notes/1',
+        author: { id: bobId, inboxUrl: `${bobId}/inbox`, username: 'bob' },
       };
 
       it('メンションのある投稿を消すと、相手にも同じ Delete を送る', async () => {
@@ -725,6 +740,55 @@ describe('DeletePostUseCase', () => {
         await run();
 
         expect(lookupObject).not.toHaveBeenCalled();
+        expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+      });
+
+      it('引用の投稿を消すと、引用先の作者にも同じ Delete を送る', async () => {
+        const { ctx, run, postId } = setup('<p>look</p>');
+
+        const result = await run(quoteResolverOf(postId, bobQuote));
+
+        expect(result.ok).toBe(true);
+        const calls = vi.mocked(ctx.sendActivity).mock.calls;
+        expect(calls).toHaveLength(2);
+        expect(calls[1]?.[1]).toEqual([
+          { id: new URL(bobId), inboxId: new URL(`${bobId}/inbox`), endpoints: null },
+        ]);
+        expect(calls[1]?.[2]).toBe(calls[0]?.[2]);
+      });
+
+      it('引用先の作者を、投稿を削除する前に引く', async () => {
+        const { deps, run, postId } = setup('<p>look</p>');
+        const resolver = quoteResolverOf(postId, bobQuote);
+
+        await run(resolver);
+
+        expect(resolver.resolve).toHaveBeenCalledWith([postId]);
+        expect(resolver.resolve.mock.invocationCallOrder[0]).toBeLessThan(
+          vi.mocked(deps.postDeletedStore.store).mock.invocationCallOrder[0]!,
+        );
+      });
+
+      it('引用先の作者が本文のメンションの相手と同じなら、1回だけ送る', async () => {
+        const { ctx, run, postId } = setup(`<p>${mentionOf(aliceId, 'alice@remote.example')}</p>`);
+        const quote: PostQuote = {
+          uri: 'https://remote.example/notes/2',
+          author: { id: aliceId, inboxUrl: `${aliceId}/inbox`, username: 'alice' },
+        };
+
+        await run(quoteResolverOf(postId, quote));
+
+        const calls = vi.mocked(ctx.sendActivity).mock.calls;
+        expect(calls).toHaveLength(2);
+        expect(calls[1]?.[1]).toHaveLength(1);
+      });
+
+      it('引用先の作者が分からない(ローカルの引用先や未取得)ときは、作者には送らない', async () => {
+        const { ctx, run, postId } = setup('<p>look</p>');
+
+        const result = await run(quoteResolverOf(postId, { uri: bobQuote.uri, author: null }));
+
+        expect(result.ok).toBe(true);
         expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
       });
 

@@ -70,7 +70,7 @@ export type PostEvent<
 
 export const PostEvent = AggregateEvent.createFactory<PostAggregate>('post');
 
-export type PostCreated = PostEvent<Post, 'post.created', Post>;
+export type PostCreated = PostEvent<Post, 'post.created', Post & { quoteUri: string | null }>;
 export type RemotePostCreated = PostEvent<
   RemotePost,
   'post.remotePostCreated',
@@ -82,24 +82,31 @@ const createPost = (now: Instant) =>
 (
   payload:
     & Omit<LocalPost, 'type' | 'createdAt' | 'postId' | 'inReplyToUri' | 'summary' | 'sensitive' | 'visibility'>
-    & { inReplyToUri?: string | null; summary?: string | null; sensitive?: boolean; visibility?: Visibility },
-): PostEvent<LocalPost, 'post.created', LocalPost> => {
+    & {
+      inReplyToUri?: string | null;
+      summary?: string | null;
+      sensitive?: boolean;
+      visibility?: Visibility;
+      quoteUri?: string | null;
+    },
+): PostEvent<LocalPost, 'post.created', LocalPost & { quoteUri: string | null }> => {
+  const { quoteUri = null, ...postPayload } = payload;
   const postId = PostId.generate();
   const post: LocalPost = {
-    ...payload,
+    ...postPayload,
     postId,
     type: 'local',
     createdAt: now,
-    inReplyToUri: payload.inReplyToUri ?? null,
-    summary: payload.summary ?? null,
-    sensitive: payload.sensitive ?? false,
-    visibility: payload.visibility ?? 'public',
+    inReplyToUri: postPayload.inReplyToUri ?? null,
+    summary: postPayload.summary ?? null,
+    sensitive: postPayload.sensitive ?? false,
+    visibility: postPayload.visibility ?? 'public',
   };
   return PostEvent.create(
     postId,
     post,
     'post.created',
-    post,
+    { ...post, quoteUri },
     now,
   );
 };
@@ -159,6 +166,11 @@ export const Post = {
 export type PostCreatedStore = Agg.Store<PostCreated | RemotePostCreated>;
 export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
+export type PostQuote = Readonly<{
+  uri: string;
+  author: Readonly<{ id: string; inboxUrl: string; username: string | null }> | null;
+}>;
+export type PostQuotesResolverByPostIds = Agg.Resolver<ReadonlyArray<PostId>, ReadonlyMap<PostId, PostQuote>>;
 export type PostResolverByUri = Agg.Resolver<{ uri: string }, RemotePost | undefined>;
 export type LocalPostResolverByUri = Agg.Resolver<{ uri: string }, LocalPost | undefined>;
 export type RemotePostUrisResolverByUris = Agg.Resolver<{ uris: readonly string[] }, readonly string[]>;
