@@ -366,6 +366,9 @@ const create = ({
           if (!recipient || recipient.type !== 'local' || recipient.id === actor.id) {
             continue;
           }
+          if (await isBlockedBy(blockResolver, recipient.userId, actor.id)) {
+            continue;
+          }
           if (recipient.userId === replyRecipientUserId) {
             continue;
           }

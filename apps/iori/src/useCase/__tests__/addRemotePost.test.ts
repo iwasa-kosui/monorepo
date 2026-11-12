@@ -791,6 +791,46 @@ describe('AddRemotePostUseCase', () => {
       expect(deps.webPushSender.send).toHaveBeenCalledTimes(2);
     });
 
+    it('メンションした相手を受信ユーザーがブロックしているとき、メンションの通知も Web Push も作らない', async () => {
+      const deps = createMentionDeps();
+      const blockResolver = { resolve: vi.fn(() => RA.ok({} as never)) };
+
+      const result = await AddRemotePostUseCase.create({ ...deps, blockResolver }).run(input);
+
+      expect(result.ok).toBe(true);
+      expect(blockResolver.resolve).toHaveBeenCalledWith({ userId: localActor.userId, blockedActorId: remoteActor.id });
+      expect(deps.mentionNotificationCreatedStore.store).not.toHaveBeenCalled();
+      expect(deps.webPushSender.send).not.toHaveBeenCalled();
+    });
+
+    it('宛先のうちブロックしていない別のローカルアクターには、メンションの通知を作る', async () => {
+      const deps = createMentionDeps();
+      deps.actorResolverByUri.setActor(otherLocalActor);
+      const blockResolver = {
+        resolve: vi.fn(({ userId }: { userId: UserId }) =>
+          RA.ok(userId === localActor.userId ? ({} as never) : undefined)
+        ),
+      };
+
+      await AddRemotePostUseCase.create({ ...deps, blockResolver }).run({
+        ...input,
+        recipientActorUris: [localActor.uri, otherLocalActor.uri],
+      });
+
+      expect(deps.mentionNotificationCreatedStore.items.map((event) => event.aggregateState.recipientUserId))
+        .toEqual([otherLocalActor.userId]);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('blockResolver を渡さないとき、これまでどおりメンションの通知を作る', async () => {
+      const deps = createMentionDeps();
+
+      await AddRemotePostUseCase.create(deps).run(input);
+
+      expect(deps.mentionNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
+      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
+    });
+
     it('自分の投稿への返信と宛先の両方に当たるとき、返信の通知だけを1件作る', async () => {
       const deps = createMentionDeps();
       deps.localPostResolverByUri.setPost(localPostUri, localPost);
