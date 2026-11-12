@@ -158,6 +158,7 @@ import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPas
 import { createD1UserPasswordSetStore } from '../adaptor/d1/userPassword/userPasswordSetStore.ts';
 import { isBlockedUri } from '../adaptor/fedify/blockedInboxDomain.ts';
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
+import { createLookupUrlResolver } from '../adaptor/fedify/lookupUrlResolver.ts';
 import { createStatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { createR2OgImageStore } from '../adaptor/r2/ogImageStore.ts';
@@ -468,6 +469,7 @@ export const createWorkerRuntimePorts = async (
         remotePostUpserter,
         blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
         isBlockedUri: (uri) => isBlockedUri(uri),
+        lookupUrlResolver: createLookupUrlResolver({ isBlockedUri: (uri) => isBlockedUri(uri) }),
       }),
       markersResolverByUserId,
       notificationIdsResolverByUserIdAndCreatedAt: createD1NotificationIdsResolverByUserIdAndCreatedAt(db),

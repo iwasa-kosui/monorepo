@@ -4,6 +4,7 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import { isBlockedUri } from '../../adaptor/fedify/blockedInboxDomain.ts';
+import type { LookupUrlResolver } from '../../ports/lookupUrlResolver.ts';
 import { ResolveRemotePostUseCase } from '../resolveRemotePost.ts';
 
 const ORIGIN = 'https://iori.test';
@@ -30,6 +31,7 @@ type Setup = Readonly<{
   blockedCheckRejects?: boolean;
   lookupObject?: (uri: string) => Promise<unknown>;
   documentLoader?: DocumentLoader;
+  lookupUrlResolver?: LookupUrlResolver;
   userFound?: boolean;
   fetchTimeoutMs?: number;
   totalTimeoutMs?: number;
@@ -42,6 +44,9 @@ const setup = (options: Setup = {}) => {
       options.lookupObject === undefined ? null : options.lookupObject(uri),
   );
   const documentLoader = options.documentLoader ?? (vi.fn() as unknown as DocumentLoader);
+  const lookupUrlResolver = vi.fn<LookupUrlResolver>(
+    options.lookupUrlResolver ?? (async (url) => ({ type: 'resolved', url })),
+  );
   const ctx = { getDocumentLoader: vi.fn(async () => documentLoader), lookupObject };
   const remotePostUpserter = {
     resolve: vi.fn(async (identity: { uri: string }) => {
@@ -91,6 +96,7 @@ const setup = (options: Setup = {}) => {
       },
     },
     isBlockedUri: (uri) => isBlockedUri(uri, [BLOCKED_DOMAIN]),
+    lookupUrlResolver,
     fetchTimeoutMs: options.fetchTimeoutMs,
     totalTimeoutMs: options.totalTimeoutMs,
   });
@@ -99,7 +105,7 @@ const setup = (options: Setup = {}) => {
     if (!result.ok) throw new Error(`unexpected error: ${result.err.type}`);
     return result.val;
   };
-  return { run, useCase, ctx, lookupObject, remotePostUpserter, stored, documentLoader };
+  return { run, useCase, ctx, lookupObject, remotePostUpserter, stored, documentLoader, lookupUrlResolver };
 };
 
 describe('ResolveRemotePostUseCase', () => {
@@ -237,6 +243,36 @@ describe('ResolveRemotePostUseCase', () => {
     expect(await t.run(`https://social.${BLOCKED_DOMAIN}/@alice/1`)).toBeUndefined();
     expect(t.lookupObject).not.toHaveBeenCalled();
     expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
+  });
+
+  it('最初の URL の転送先や rel=alternate の先がブロックしたドメインなら、取得せず見つからない扱いにする', async () => {
+    const t = setup({
+      lookupObject: async (uri) => noteOf(uri),
+      lookupUrlResolver: async () => ({ type: 'blocked' }),
+    });
+
+    expect(await t.run(HTML_URL)).toBeUndefined();
+    expect(t.lookupUrlResolver).toHaveBeenCalledExactlyOnceWith(HTML_URL, { signal: expect.any(AbortSignal) });
+    expect(t.lookupObject).not.toHaveBeenCalled();
+    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
+  });
+
+  it('最初の URL をたどった先の URL で、署名付きの取得をする', async () => {
+    const t = setup({
+      lookupObject: async () => noteOf(NOTE_URI),
+      lookupUrlResolver: async () => ({ type: 'resolved', url: NOTE_URI }),
+    });
+
+    expect(await t.run(HTML_URL)).toBe(`saved:${NOTE_URI}`);
+    expect(t.lookupObject.mock.calls[0]![0]).toBe(NOTE_URI);
+  });
+
+  it('保存済みの投稿と自分のサーバーの URL では、最初の URL をたどらない', async () => {
+    const t = setup({ stored: { [HTML_URL]: 'post-1' } });
+
+    expect(await t.run(HTML_URL)).toBe('post-1');
+    expect(await t.run(`${ORIGIN}/posts/1`)).toBeUndefined();
+    expect(t.lookupUrlResolver).not.toHaveBeenCalled();
   });
 
   it('取得した Note の id がブロックしたドメインなら、保存せず見つからない扱いにする', async () => {
