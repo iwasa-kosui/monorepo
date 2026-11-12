@@ -955,7 +955,7 @@ const ReportPostModal = () => {
       {reportPost.isReported && (
         <p
           role='status'
-          class='fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-clay bg-cream dark:bg-gray-800 shadow-clay dark:shadow-clay-dark text-sm text-sage-dark dark:text-sage'
+          class='fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-clay bg-cream dark:bg-gray-800 shadow-clay dark:shadow-clay-dark text-sm text-sage-dark dark:text-sage'
         >
           通報しました
         </p>

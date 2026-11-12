@@ -88,8 +88,8 @@ export const PostView = (
     && currentAccountId !== undefined
     && post.account.id !== currentAccountId;
   const canMute = onMute !== undefined && isOtherAccount;
-  const canBlock = onBlock !== undefined && isOtherAccount && !isLocalAccount(post.account);
-  const canReport = onReport !== undefined && isOtherAccount && !isLocalAccount(post.account);
+  const canBlock = onBlock !== undefined && isOtherAccount && !isLocalPost;
+  const canReport = onReport !== undefined && isOtherAccount && !isLocalPost;
   const menuItems: readonly PostMenuItem[] = [
     ...(postUrl !== undefined && !isLocalPost
       ? [{ key: 'open-original', label: '元の投稿を開く', kind: 'link', href: postUrl } as const]

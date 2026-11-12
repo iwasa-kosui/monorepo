@@ -189,7 +189,11 @@ export const usePostActions = ({
 
   const blockAccount = useCallback(
     async (accountId: string, acct: string) => {
-      if (!confirm(`@${acct} をブロックしますか？フォローとフォロワーの関係も解除されます`)) return;
+      if (
+        !confirm(
+          `@${acct} をブロックしますか？フォローとフォロワーの関係も解除されます\nブロックは相手のプロフィール画面で解除できます`,
+        )
+      ) return;
       try {
         await block(accountId);
         removeAccountPosts(accountId);
