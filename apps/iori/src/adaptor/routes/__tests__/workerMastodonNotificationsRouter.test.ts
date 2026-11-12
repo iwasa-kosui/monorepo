@@ -218,6 +218,27 @@ describe('ブロックした相手の通知', () => {
     expect(await unread.json()).toEqual({ count: 1 });
   });
 
+  it('ブロックした相手からのメンションの通知も、一覧と未読数と単体の取得から除く', async () => {
+    const t = await seedNotifications();
+    const mentionPost = t.seed.addRemotePost(t.alice, 3_500, {
+      timeline: false,
+      visibility: 'direct',
+      recipientActorUris: ['https://iori.test/users/kosui'],
+    });
+    const mention = t.seed.addMentionNotification(t.me.userId, t.alice.actorId, mentionPost.postId, 3_600);
+    t.seed.addBlock(t.me.userId, t.alice.actorId);
+
+    const [list, single, unread] = await Promise.all([
+      t.get('/api/v1/notifications'),
+      t.get(`/api/v1/notifications/${mention}`),
+      t.get('/api/v1/notifications/unread_count'),
+    ]);
+
+    expect(((await list.json()) as Array<{ id: string }>).map((item) => item.id)).toEqual([t.ids.reply]);
+    expect(single.status).toBe(404);
+    expect(await unread.json()).toEqual({ count: 1 });
+  });
+
   it('ミュートだけでは通知を除かない', async () => {
     const t = await seedNotifications();
     t.seed.addMute(t.me.userId, t.alice.actorId);
