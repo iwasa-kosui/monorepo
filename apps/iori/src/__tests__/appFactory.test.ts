@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { DrizzleQueryError } from 'drizzle-orm';
+import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createIoriApp } from '../appFactory.tsx';
 
@@ -55,5 +58,224 @@ describe('createIoriApp', () => {
     expect(html).toContain('/static/home.js');
     expect(html).not.toContain('noindex');
     expect(html).not.toContain('移行中');
+  });
+
+  describe('root error handler', () => {
+    const baseAdapters = {
+      federationMiddleware: undefined,
+      serveAsset: async () => undefined,
+      serveUpload: async () => undefined,
+      serveOgImage: async () => new Response('not implemented', { status: 501 }),
+    } as const;
+
+    const throwingApp = (path: string) =>
+      createIoriApp({
+        ...baseAdapters,
+        registerRoutes: (router) => {
+          router.get(path, () => {
+            throw new Error('boom');
+          });
+        },
+      });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('returns a JSON 500 for an uncaught error under /api/', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await throwingApp('/api/x').request('/api/x');
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: 'Internal server error' });
+    });
+
+    it('returns a JSON 500 for an uncaught error under /oauth/', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await throwingApp('/oauth/x').request('/oauth/x');
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: 'Internal server error' });
+    });
+
+    it('returns a plain text 500 for an ActivityPub Accept header', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await throwingApp('/users/x').request('/users/x', {
+        headers: { Accept: 'application/activity+json' },
+      });
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get('Content-Type')).toContain('text/plain');
+      expect(await response.text()).toBe('Internal Server Error');
+    });
+
+    it('returns an HTML error page without touching the database for a browser Accept header', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const app = createIoriApp({
+        ...baseAdapters,
+        servePage: async () => {
+          throw new Error('D1 is down');
+        },
+      });
+
+      const response = await app.request('https://worker.test/users/x', {
+        headers: { Accept: 'text/html,application/xhtml+xml' },
+      });
+      const html = await response.text();
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get('Content-Type')).toContain('text/html');
+      expect(html).toContain('ページを表示できませんでした');
+      expect(html).toContain('href=""');
+      expect(html).toContain('href="/"');
+      expect(html).toContain('<html lang="ja">');
+    });
+
+    it('does not put the request path into the error page links', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await throwingApp('//evil.example/x').request('https://worker.test//evil.example/x', {
+        headers: { Accept: 'text/html' },
+      });
+      const html = await response.text();
+
+      expect(response.status).toBe(500);
+      expect(html).toContain('href=""');
+      expect(html).not.toContain('//evil.example');
+    });
+
+    it('returns an HTML 500 for /oauth/authorize opened in a browser', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await throwingApp('/oauth/authorize').request('/oauth/authorize', {
+        headers: { Accept: 'text/html,application/xhtml+xml' },
+      });
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get('Content-Type')).toContain('text/html');
+      expect(await response.text()).toContain('ページを表示できませんでした');
+    });
+
+    it('returns a JSON 500 under /oauth/ for a non-HTML Accept header', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await throwingApp('/oauth/token').request('/oauth/token', {
+        headers: { Accept: 'application/json' },
+      });
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: 'Internal server error' });
+    });
+
+    it('returns a plain text 500 when no Accept header is sent', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await throwingApp('/users/x').request('/users/x');
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get('Content-Type')).toContain('text/plain');
+      expect(await response.text()).toBe('Internal Server Error');
+    });
+
+    it('does not treat application/json alone as ActivityPub', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const response = await throwingApp('/users/x').request('/users/x', {
+        headers: { Accept: 'application/json, text/html' },
+      });
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get('Content-Type')).toContain('text/html');
+    });
+
+    it('returns the response of an HTTPException as is', async () => {
+      const app = createIoriApp({
+        ...baseAdapters,
+        registerRoutes: (router) => {
+          router.get('/teapot', () => {
+            throw new HTTPException(418, { message: 'teapot' });
+          });
+        },
+      });
+
+      const response = await app.request('/teapot');
+
+      expect(response.status).toBe(418);
+      expect(await response.text()).toBe('teapot');
+    });
+
+    it('lets a sub-router onError take precedence', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const sub = new Hono();
+      sub.onError((_error, c) => c.json({ error: 'sub-router' }, 503));
+      sub.get('/fail', () => {
+        throw new Error('boom');
+      });
+      const app = createIoriApp({
+        ...baseAdapters,
+        registerRoutes: (router) => {
+          router.route('/sub', sub);
+        },
+      });
+
+      const response = await app.request('/sub/fail');
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: 'sub-router' });
+    });
+
+    it('does not log the query string', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      await throwingApp('/oauth/callback').request('/oauth/callback?code=secret&state=abc');
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(spy.mock.calls)).not.toContain('secret');
+      expect(spy.mock.calls[0]?.[1]).toMatchObject({ method: 'GET', path: '/oauth/callback' });
+    });
+
+    it('logs the stack of an ordinary Error as a separate field', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      await throwingApp('/users/x').request('/users/x');
+
+      const logged = spy.mock.calls[0]?.[1] as { error: unknown; stack: unknown };
+      expect(typeof logged.stack).toBe('string');
+      expect(logged.stack).toContain('Error: boom');
+      expect(logged.error).not.toContain('at ');
+    });
+
+    it('logs only the cause stack of a DrizzleQueryError, never its parameters', async () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const thrown = new DrizzleQueryError(
+        'insert into posts (content) values (?)',
+        ['secret-body'],
+        new Error('cause-message'),
+      );
+      const app = createIoriApp({
+        ...baseAdapters,
+        registerRoutes: (router) => {
+          router.get('/users/x', () => {
+            throw thrown;
+          });
+        },
+      });
+      await app.request('/users/x');
+
+      const logged = spy.mock.calls[0]?.[1] as { stack: string };
+      expect(logged.stack).toContain('cause-message');
+      expect(logged.stack).not.toContain('secret-body');
+    });
+
+    it('returns a plain text 500 when the federation middleware throws for an ActivityPub request', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const app = createIoriApp({
+        ...baseAdapters,
+        federationMiddleware: async () => {
+          throw new Error('federation failed');
+        },
+      });
+
+      const response = await app.request('/users/x', {
+        headers: { Accept: 'application/activity+json' },
+      });
+
+      expect(response.status).toBe(500);
+      expect(response.headers.get('Content-Type')).toContain('text/plain');
+      expect(await response.text()).toBe('Internal Server Error');
+    });
   });
 });

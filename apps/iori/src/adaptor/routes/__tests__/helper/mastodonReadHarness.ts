@@ -8,7 +8,7 @@ import { Instant } from '../../../../domain/instant/instant.ts';
 import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
-import type { BlueskyClient } from '../../../../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
 import type { BlueskyPostThreadFetcher } from '../../../../ports/blueskyPostThreadFetcher.ts';
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
@@ -33,10 +33,12 @@ import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
 import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts';
+import { ReplyToBlueskyPostUseCase } from '../../../../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../../useCase/repostBlueskyPost.ts';
 import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAccount.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
+import type { ScheduleBlueskyCrosspostUseCase } from '../../../../useCase/scheduleBlueskyCrosspost.ts';
 import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
 import { SendEmojiReactUseCase } from '../../../../useCase/sendEmojiReact.ts';
 import { SendLikeUseCase } from '../../../../useCase/sendLike.ts';
@@ -205,7 +207,9 @@ export const setupReadApi = (
     blueskyLikeClient?: Pick<BlueskyClient, 'createLike' | 'deleteLike'>;
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
     blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
+    blueskyReplyClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
     refreshXPosts?: RefreshXPostsUseCase;
+    scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   }> = {},
 ) => {
   const harness = createOAuthHarness();
@@ -325,6 +329,7 @@ export const setupReadApi = (
             },
             acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
             origin: ORIGIN,
+            scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),
           sendReplyUseCase: SendReplyUseCase.create({
             sessionResolver,
@@ -339,6 +344,7 @@ export const setupReadApi = (
             webPushSender: { send: () => RA.ok(undefined) },
             postResolver,
             origin: ORIGIN,
+            scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
           }),
           deletePostUseCase: DeletePostUseCase.create({
             sessionResolver,
@@ -564,6 +570,14 @@ export const setupReadApi = (
               deletedStore: createD1BlueskyRepostDeletedStore(db),
             }),
           blueskyPostThreadFetcher: options.blueskyPostThreadFetcher,
+          replyToBlueskyPostUseCase: options.blueskyReplyClient === undefined
+            ? undefined
+            : ReplyToBlueskyPostUseCase.create({
+              client: options.blueskyReplyClient,
+              query: options.blueskyReplyClient.query,
+              targetResolver: createD1BlueskyLikeTargetResolver(db),
+              now: Instant.now,
+            }),
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );

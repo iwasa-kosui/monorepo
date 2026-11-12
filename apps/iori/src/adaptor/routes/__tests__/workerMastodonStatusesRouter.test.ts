@@ -235,3 +235,100 @@ describe('GET /api/v1/statuses/:id/context', () => {
     expect(await missing.json()).toEqual(notFound);
   });
 });
+
+describe('GET /api/v1/statuses/:id の iori.bluesky_crosspost', () => {
+  type CrosspostRow = Readonly<{
+    status: string;
+    skipReason?: string | null;
+    uri?: string | null;
+    attempts?: number;
+  }>;
+
+  const setup = async (row?: CrosspostRow) => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const post = t.seed.addLocalPost(me, 1_000);
+    if (row !== undefined) {
+      t.sqlite.prepare(
+        'INSERT INTO bluesky_crossposts(postId,status,skipReason,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)',
+      ).run(post.postId, row.status, row.skipReason ?? null, row.uri ?? null, row.attempts ?? 0, 1_000, 1_000);
+    }
+    const crosspostOf = async (headers?: Record<string, string>) => {
+      const response = await t.request(`/api/v1/statuses/${post.postId}`, headers === undefined ? {} : { headers });
+      expect(response.status).toBe(200);
+      return StatusSchema.parse(await response.json()).iori?.bluesky_crosspost;
+    };
+    return { ...t, me, post, crosspostOf };
+  };
+
+  it('作者本人にだけ載せ、未認証と他のユーザーには載せない', async () => {
+    const t = await setup({ status: 'pending' });
+    const issued = await t.issueUserToken('read');
+    t.seed.addLocalActor('bob', issued.userId);
+
+    expect(await t.crosspostOf(t.me.bearer)).toEqual({
+      status: 'pending',
+      skip_reason: null,
+      retrying: true,
+      url: null,
+    });
+    expect(await t.crosspostOf()).toBeUndefined();
+    expect(await t.crosspostOf({ Authorization: `Bearer ${issued.token}` })).toBeUndefined();
+  });
+
+  it('行が無いときはフィールドを出さない', async () => {
+    const t = await setup();
+
+    expect(await t.crosspostOf(t.me.bearer)).toBeUndefined();
+  });
+
+  it('リモートの投稿には載せない', async () => {
+    const t = await setup();
+    const alice = t.seed.addRemoteActor('alice');
+    const note = t.seed.addRemotePost(alice, 2_000, { visibility: 'public' });
+    t.sqlite.prepare('INSERT INTO bluesky_crossposts(postId,status,createdAt,updatedAt) VALUES (?,?,?,?)').run(
+      note.postId,
+      'pending',
+      1_000,
+      1_000,
+    );
+
+    const response = await t.request(`/api/v1/statuses/${note.postId}`, { headers: t.me.bearer });
+
+    expect(StatusSchema.parse(await response.json()).iori?.bluesky_crosspost).toBeUndefined();
+  });
+
+  it('failed で試行が上限に達していれば retrying を false にする', async () => {
+    const t = await setup({ status: 'failed', attempts: 3 });
+
+    expect(await t.crosspostOf(t.me.bearer)).toMatchObject({ status: 'failed', retrying: false });
+  });
+
+  it('failed で試行が上限未満なら retrying を true にする', async () => {
+    const t = await setup({ status: 'failed', attempts: 2 });
+
+    expect(await t.crosspostOf(t.me.bearer)).toMatchObject({ status: 'failed', retrying: true });
+  });
+
+  it('sent なら bsky.app の投稿の URL を載せる', async () => {
+    const t = await setup({ status: 'sent', uri: 'at://did:plc:abc123/app.bsky.feed.post/3kxyz' });
+
+    expect(await t.crosspostOf(t.me.bearer)).toEqual({
+      status: 'sent',
+      skip_reason: null,
+      retrying: false,
+      url: 'https://bsky.app/profile/did:plc:abc123/post/3kxyz',
+    });
+  });
+
+  it('skipped なら理由を載せる', async () => {
+    const t = await setup({ status: 'skipped', skipReason: 'content_warning' });
+
+    expect(await t.crosspostOf(t.me.bearer)).toEqual({
+      status: 'skipped',
+      skip_reason: 'content_warning',
+      retrying: false,
+      url: null,
+    });
+  });
+});
