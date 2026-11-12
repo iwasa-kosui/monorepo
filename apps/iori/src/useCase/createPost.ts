@@ -11,6 +11,7 @@ import type { PostImageCreatedStore } from '../domain/image/image.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { LinkPreview, LinkPreviewCreatedStore } from '../domain/linkPreview/linkPreview.ts';
 import { LinkPreviewId } from '../domain/linkPreview/linkPreviewId.ts';
+import type { MentionRecipient } from '../domain/post/mention.ts';
 import { Post, type PostCreatedStore } from '../domain/post/post.ts';
 import type { AcceptedRelaysResolver } from '../domain/relay/relay.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
@@ -21,6 +22,7 @@ import { Schema } from '../helper/schema.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
+import { sendToMentions } from './helper/sendToMentions.ts';
 import type { ScheduleBlueskyCrosspostUseCase } from './scheduleBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -32,6 +34,7 @@ type Input =
     summary?: string | null;
     sensitive?: boolean;
     crosspostToBluesky?: boolean;
+    mentions?: ReadonlyArray<MentionRecipient>;
     ctx: RequestContext<unknown>;
   }>;
 
@@ -156,21 +159,24 @@ const create = ({
 
         return RA.ok(undefined);
       }),
-      RA.andThrough(async ({ post, user, ctx, images }) => {
+      RA.andThrough(async ({ post, user, ctx, images, mentions }) => {
         const noteArgs = { identifier: user.username, id: post.postId };
         const note = await ctx.getObject(Note, noteArgs);
-        await ctx.sendActivity(
-          { identifier: user.username },
-          'followers',
-          new Create({
-            id: new URL('#activity', note?.id ?? undefined),
-            object: note,
-            actors: note?.attributionIds,
-            tos: note?.toIds,
-            ccs: note?.ccIds,
-            attachments: images.map((image) => toImageDocument(image, origin)),
-          }),
-        );
+        const createActivity = new Create({
+          id: new URL('#activity', note?.id ?? undefined),
+          object: note,
+          actors: note?.attributionIds,
+          tos: note?.toIds,
+          ccs: note?.ccIds,
+          attachments: images.map((image) => toImageDocument(image, origin)),
+        });
+        await ctx.sendActivity({ identifier: user.username }, 'followers', createActivity);
+        await sendToMentions({
+          ctx,
+          identifier: user.username,
+          activity: createActivity,
+          mentions: mentions ?? [],
+        });
         return RA.ok(undefined);
       }),
       // Send to accepted relays

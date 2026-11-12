@@ -16,6 +16,14 @@ const open = async (page: Page, path: string): Promise<Locator> => {
   return playground;
 };
 
+const openSql = async (page: Page, path: string): Promise<Locator> => {
+  await page.goto(path);
+  await page.getByRole('group', { name: '実行欄' }).getByRole('button', { name: 'SQL で調べる' }).click();
+  const playground = page.locator('[data-playground="sql"]');
+  await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+  return playground;
+};
+
 const scene = (page: Page): Locator => page.locator('[data-play="add-record"]');
 
 const openScene = async (page: Page, path: string): Promise<Locator> => {
@@ -56,7 +64,7 @@ test.describe('第1章', () => {
   });
 
   test('visits テーブルに SQL を書いて実行できる。初期のデータは show-visits.ts の実行後と同じ', async ({ page }) => {
-    const playground = await open(page, '/chapters/chapter-1/3/');
+    const playground = await openSql(page, '/chapters/chapter-1/');
     const results = playground.locator('[data-role="results"]');
     await playground.getByRole('button', { name: '実行する' }).click();
     await expect(results.locator('thead th')).toHaveText(['id', 'pet_name', 'status']);
@@ -70,7 +78,7 @@ test.describe('第1章', () => {
   });
 
   test('テストを実行すると pass 4 / fail 4 になる', async ({ page }) => {
-    const playground = await open(page, '/chapters/chapter-1/5/');
+    const playground = await open(page, '/chapters/chapter-1/3/');
     await runTests(playground);
     await expect(summary(playground)).toHaveText('pass 4 / fail 4');
   });
@@ -79,7 +87,7 @@ test.describe('第1章', () => {
     await page.addInitScript(([key, value]) => {
       window.localStorage.setItem(key ?? '', JSON.stringify({ 'visits.ts': value }));
     }, [storageKey, cancelVisitFrom('chapter-2-step-2')]);
-    const playground = await open(page, '/chapters/chapter-1/5/');
+    const playground = await open(page, '/chapters/chapter-1/3/');
     await runTests(playground);
     await expect(summary(playground)).toHaveText('pass 4 / fail 4');
   });
@@ -286,7 +294,7 @@ test.describe('読み込む前に戻すボタン', () => {
   });
 
   test('SQL の欄では、内容が実際に変わった直後だけ出る', async ({ page }) => {
-    const playground = await open(page, '/chapters/chapter-1/3/');
+    const playground = await openSql(page, '/chapters/chapter-1/');
     const back = restore(playground, '読み込む前の SQL に戻す');
     await expect(back).toBeHidden();
 
@@ -307,7 +315,8 @@ test.describe('読み込む前に戻すボタン', () => {
     await expect(back).toBeHidden();
 
     await page.reload();
-    await expect(box(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    await expect(restore(box(page), '読み込む前の SQL に戻す')).toBeHidden();
+    await page.getByRole('group', { name: '実行欄' }).getByRole('button', { name: 'SQL で調べる' }).click();
+    await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+    await expect(restore(playground, '読み込む前の SQL に戻す')).toBeHidden();
   });
 });

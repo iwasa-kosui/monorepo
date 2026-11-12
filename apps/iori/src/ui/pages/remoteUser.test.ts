@@ -25,12 +25,13 @@ const account = (overrides: Partial<Account> = {}): Account =>
     ...overrides,
   }) as Account;
 
-const render = (a: Account, props: Partial<Parameters<typeof RemoteUserPage>[0]> = {}): string =>
+const render = (a: Account, overrides: Partial<Parameters<typeof RemoteUserPage>[0]> = {}): string =>
   String(jsx(RemoteUserPage, {
     account: a,
     statuses: [],
     isFollowing: false,
     isMuted: false,
+    isBlocked: false,
     isLoggedIn: false,
     onLike: async () => {},
     onFollow: async () => {},
@@ -40,13 +41,16 @@ const render = (a: Account, props: Partial<Parameters<typeof RemoteUserPage>[0]>
     onReportOpen: () => {},
     onReportClose: () => {},
     onReportSubmit: () => {},
+    onBlock: async () => {},
+    onUnblock: async () => {},
     likingPostId: null,
     isMuting: false,
+    isBlocking: false,
     isTogglingFollow: false,
     isReportOpen: false,
     isReporting: false,
     isReported: false,
-    ...props,
+    ...overrides,
   }));
 
 describe('RemoteUserPage profile', () => {
@@ -129,6 +133,28 @@ describe('RemoteUserPage profile', () => {
     const html = render(account({ display_name: 'alice :blobcat-heart:', emojis: [hyphenated] }));
 
     expect(html).toContain('<img src="https://remote.example/emoji/blobcat-heart.png"');
+  });
+});
+
+describe('RemoteUserPage block button', () => {
+  it('shows the block button after the mute button when logged in', () => {
+    const html = render(account(), { isLoggedIn: true });
+
+    expect(html).toContain('title="ブロック"');
+    expect(html).not.toContain('ブロック解除');
+    expect(html.indexOf('title="ブロック"')).toBeGreaterThan(html.indexOf('title="ミュート"'));
+  });
+
+  it('shows the unblock button in terracotta while blocked', () => {
+    const html = render(account(), { isLoggedIn: true, isBlocked: true });
+    const button = html.slice(html.lastIndexOf('<button', html.indexOf('title="ブロック解除"')));
+
+    expect(button).toContain('text-terracotta');
+    expect(html).not.toContain('title="ブロック"');
+  });
+
+  it('hides the block button when signed out', () => {
+    expect(render(account())).not.toContain('ブロック');
   });
 });
 

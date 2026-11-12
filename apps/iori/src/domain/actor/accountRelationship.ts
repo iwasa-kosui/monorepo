@@ -8,6 +8,7 @@ export type AccountRelationship = Readonly<{
   following: boolean;
   followedBy: boolean;
   muting: boolean;
+  blocking: boolean;
 }>;
 
 export type AccountRelationshipsResolverByActorIds = Agg.Resolver<

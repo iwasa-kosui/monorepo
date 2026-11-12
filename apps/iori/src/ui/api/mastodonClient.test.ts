@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   addXUserFeedSource,
+  block,
   blueskyFailureMessage,
   createStatus,
   deleteStatus,
@@ -10,6 +11,7 @@ import {
   fetchAccount,
   fetchAccountStatuses,
   fetchBlueskyHomeTimeline,
+  fetchBlueskyPostThread,
   fetchBlueskyStatus,
   fetchBlueskyTimeline,
   fetchFavourites,
@@ -44,6 +46,7 @@ import {
   setFeedSourceEnabled,
   summarizeTimeline,
   translate,
+  unblock,
   undoRepostBlueskyPost,
   unfavourite,
   unfollow,
@@ -448,7 +451,12 @@ describe('mastodon client requests', () => {
   it('treats a 422 from relationships as logged in without a relationship', async () => {
     stubFetch(jsonResponse({ error: 'Actor not found' }, { status: 422 }));
 
-    expect(await fetchRelationshipOrSignedOut('a1')).toEqual({ isLoggedIn: true, isFollowing: false, isMuted: false });
+    expect(await fetchRelationshipOrSignedOut('a1')).toEqual({
+      isLoggedIn: true,
+      isFollowing: false,
+      isMuted: false,
+      isBlocked: false,
+    });
   });
 
   it.each([
@@ -460,6 +468,8 @@ describe('mastodon client requests', () => {
     ['unfollow', unfollow, '/api/v1/accounts/s1/unfollow'],
     ['mute', mute, '/api/v1/accounts/s1/mute'],
     ['unmute', unmute, '/api/v1/accounts/s1/unmute'],
+    ['block', block, '/api/v1/accounts/s1/block'],
+    ['unblock', unblock, '/api/v1/accounts/s1/unblock'],
   ])('posts %s to its path with the same-origin headers and returns the body', async (_name, action, path) => {
     const fetchMock = stubFetch(jsonResponse({ id: 's1' }));
 
@@ -669,6 +679,18 @@ describe('mastodon client requests', () => {
 
     const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
     expect(url).toBe('/api/iori/v1/bluesky/timeline?before=1700000000000&limit=20');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual(payload);
+  });
+
+  it('fetches a Bluesky post thread by its at-uri', async () => {
+    const payload = { ancestors: [], post: { uri: 'at://did:plc:a/app.bsky.feed.post/1' }, replies: [] };
+    const fetchMock = stubFetch(jsonResponse(payload));
+
+    const result = await fetchBlueskyPostThread('at://did:plc:a/app.bsky.feed.post/1');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/thread?uri=at%3A%2F%2Fdid%3Aplc%3Aa%2Fapp.bsky.feed.post%2F1');
     expect(init.credentials).toBe('same-origin');
     expect(result).toEqual(payload);
   });

@@ -26,6 +26,12 @@ import { createD1ArticleWithDependentsDeletedStore } from '../adaptor/d1/article
 import { createD1PublishedArticlesWithAuthorResolver } from '../adaptor/d1/article/publishedArticlesWithAuthorResolver.ts';
 import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBodyResolver.ts';
 import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
+import { createD1BlockCreatedStore } from '../adaptor/d1/block/blockCreatedStore.ts';
+import { createD1BlockDeletedStore } from '../adaptor/d1/block/blockDeletedStore.ts';
+import { createD1BlockedActorIdsResolverByUserId } from '../adaptor/d1/block/blockedActorIdsResolverByUserId.ts';
+import { createD1BlockedActorsResolverByUserIdWithPagination } from '../adaptor/d1/block/blockedActorsResolverByUserIdWithPagination.ts';
+import { createD1BlockResolver } from '../adaptor/d1/block/blockResolver.ts';
+import { createD1MutedOrBlockedActorIdsResolverByUserId } from '../adaptor/d1/block/mutedOrBlockedActorIdsResolverByUserId.ts';
 import { createD1BlueskyCrosspostStatusReportResolver } from '../adaptor/d1/blueskyCrosspost/blueskyCrosspostStatusReportResolver.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
@@ -80,7 +86,6 @@ import { createD1MediaUploadCreatedStore } from '../adaptor/d1/mediaUpload/media
 import { createD1MediaUploadDescriptionUpdatedStore } from '../adaptor/d1/mediaUpload/mediaUploadDescriptionUpdatedStore.ts';
 import { createD1MediaUploadResolver } from '../adaptor/d1/mediaUpload/mediaUploadResolver.ts';
 import { createD1MuteCreatedStore } from '../adaptor/d1/mute/muteCreatedStore.ts';
-import { createD1MutedActorIdsResolverByUserId } from '../adaptor/d1/mute/mutedActorIdsResolverByUserId.ts';
 import { createD1MutedActorsResolverByUserIdWithPagination } from '../adaptor/d1/mute/mutedActorsResolverByUserIdWithPagination.ts';
 import { createD1MuteDeletedStore } from '../adaptor/d1/mute/muteDeletedStore.ts';
 import { createD1MuteResolver } from '../adaptor/d1/mute/muteResolver.ts';
@@ -172,9 +177,11 @@ import { ChangeFeedSourceEnabledUseCase } from '../useCase/changeFeedSourceEnabl
 import { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
+import { CreateBlockUseCase } from '../useCase/createBlock.ts';
 import { CreateMuteUseCase } from '../useCase/createMute.ts';
 import { createCreatePostUseCase } from '../useCase/createPost.ts';
 import { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
+import { DeleteBlockUseCase } from '../useCase/deleteBlock.ts';
 import { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
@@ -223,7 +230,7 @@ import { createBlueskyCrosspostUseCases, resolveBlueskyCrosspostConfig } from '.
 import { createBlueskyProfileRuntimePorts } from './blueskyProfile.ts';
 import { createBlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
-import { createWorkerRemoteActorActions } from './workerCoreUseCases.ts';
+import { createWorkerBlockActions, createWorkerRemoteActorActions } from './workerCoreUseCases.ts';
 import { createWorkerReportAction } from './workerReportActions.ts';
 
 const lazyWorkerArgon2idDerive: Argon2idDerive = async (params) => {
@@ -245,10 +252,11 @@ export const createWorkerRuntimePorts = async (
   const userResolver = createD1UserResolver(db);
   const actorResolverByUserId = createD1ActorResolverByUserId(db);
   const markersResolverByUserId = createD1MarkersResolverByUserId(db);
+  const mutedActorIdsResolverByUserId = createD1MutedOrBlockedActorIdsResolverByUserId(db);
   const searchTimeline = createSearchTimelineUseCase({
     actorResolverByUserId,
     actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-    mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+    mutedActorIdsResolverByUserId,
     textGenerator,
     timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
     htmlToPlainText,
@@ -307,6 +315,28 @@ export const createWorkerRuntimePorts = async (
     postResolver,
     reportSubmittedStore: createD1ReportSubmittedStore(db),
   });
+  const blockActions = createWorkerBlockActions({
+    userResolver,
+    actorResolverByUserId,
+    actorResolverById: createD1ActorResolverById(db),
+    followResolver: createD1FollowResolver(db),
+    undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
+    blockResolver: createD1BlockResolver(db),
+    createBlockUseCase: CreateBlockUseCase.create({
+      sessionResolver,
+      userResolver,
+      actorResolverByUserId,
+      blockCreatedStore: createD1BlockCreatedStore(db),
+      blockResolver: createD1BlockResolver(db),
+    }),
+    deleteBlockUseCase: DeleteBlockUseCase.create({
+      sessionResolver,
+      userResolver,
+      blockDeletedStore: createD1BlockDeletedStore(db),
+      blockResolver: createD1BlockResolver(db),
+    }),
+    unfollowRemoteActor: remoteActorActions.unfollowRemoteActor,
+  });
 
   return {
     db,
@@ -357,7 +387,7 @@ export const createWorkerRuntimePorts = async (
       actorResolverById: createD1ActorResolverById(db),
       accountStatsResolver: createD1AccountStatsResolverByActorId(db),
       actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-      mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+      mutedActorIdsResolverByUserId,
       timelineItemsResolverByActorIds: createD1TimelineItemsResolverByActorIds(db),
       localPostsResolverByPage: createD1LocalPostsResolverByPage(db),
       accountStatusItemsResolverByActorId: createD1AccountStatusItemsResolverByActorId(db),
@@ -372,6 +402,8 @@ export const createWorkerRuntimePorts = async (
       accountRelationshipsResolverByActorIds: createD1AccountRelationshipsResolverByActorIds(db),
       likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
       mutedActorsResolverByUserIdWithPagination: createD1MutedActorsResolverByUserIdWithPagination(db),
+      blockedActorsResolverByUserIdWithPagination: createD1BlockedActorsResolverByUserIdWithPagination(db),
+      blockedActorIdsResolverByUserId: createD1BlockedActorIdsResolverByUserId(db),
       statusAssembler: createStatusAssembler({
         accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
         postExtrasResolver: createD1PostExtrasResolverByPosts(db, env.ORIGIN),
@@ -380,7 +412,7 @@ export const createWorkerRuntimePorts = async (
       summarizeTimeline: createSummarizeTimelineUseCase({
         actorResolverByUserId,
         actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
-        mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+        mutedActorIdsResolverByUserId,
         searchTimeline,
         homePostsResolverByPeriod: createD1HomePostsResolverByPeriod(db),
         postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
@@ -530,7 +562,7 @@ export const createWorkerRuntimePorts = async (
         timelineItemsResolverByActorIds: createD1TimelineItemsResolverByActorIds(db),
         actorsResolverByFollowerId: createD1ActorsResolverByFollowerId(db),
         actorsResolverByFollowingId: createD1ActorsResolverByFollowingId(db),
-        mutedActorIdsResolverByUserId: createD1MutedActorIdsResolverByUserId(db),
+        mutedActorIdsResolverByUserId,
       }),
     },
     posting: {
@@ -547,6 +579,7 @@ export const createWorkerRuntimePorts = async (
         scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
         origin: env.ORIGIN,
       }),
+      remoteActorLookup: createCloudflareRemoteActorLookup(federationRuntime.federation),
     },
     socialActions: {
       sendLikeUseCase: SendLikeUseCase.create({
@@ -742,6 +775,7 @@ export const createWorkerRuntimePorts = async (
       }),
       ...remoteActorActions,
       reportRemoteActor,
+      ...blockActions,
       vapidPublicKey: env.VAPID_PUBLIC_KEY,
     },
     uploads,

@@ -7,6 +7,7 @@ import {
   toBlueskyConnectionStatus,
 } from '../../domain/blueskySyncStatus/blueskySyncStatus.ts';
 import type { BlueskyLikeTargetNotFound } from '../../domain/blueskyTimeline/blueskyLike.ts';
+import type { BlueskyReplyNotAllowed, BlueskyReplyTargetNotFound } from '../../domain/blueskyTimeline/blueskyReply.ts';
 import type { BlueskyRepostTargetNotFound } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import {
   BLUESKY_TIMELINE_DEFAULT_LIMIT,
@@ -19,8 +20,15 @@ import {
 import { Instant } from '../../domain/instant/instant.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
+import type {
+  BlueskyPostThreadFetcher,
+  BlueskyPostThreadUnavailable,
+  BlueskyThreadNode,
+} from '../../ports/blueskyPostThreadFetcher.ts';
+import type { BlueskyPostInvalid } from '../../useCase/helper/publishBlueskyPost.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { LikeBlueskyPostUseCase } from '../../useCase/likeBlueskyPost.ts';
+import type { ReplyToBlueskyPostUseCase } from '../../useCase/replyToBlueskyPost.ts';
 import type { RepostBlueskyPostUseCase } from '../../useCase/repostBlueskyPost.ts';
 import type { UndoRepostBlueskyPostUseCase } from '../../useCase/undoRepostBlueskyPost.ts';
 import type { UnlikeBlueskyPostUseCase } from '../../useCase/unlikeBlueskyPost.ts';
@@ -41,6 +49,8 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   unlikeBlueskyPostUseCase: UnlikeBlueskyPostUseCase | undefined;
   repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
   undoRepostBlueskyPostUseCase: UndoRepostBlueskyPostUseCase | undefined;
+  blueskyPostThreadFetcher: BlueskyPostThreadFetcher | undefined;
+  replyToBlueskyPostUseCase: ReplyToBlueskyPostUseCase | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -72,6 +82,17 @@ export type IoriBlueskyTimelineResponse = Readonly<{
   nextBeforeId: string | null;
 }>;
 
+export type IoriBlueskyThreadNodeBody =
+  | Readonly<{ kind: 'post'; item: IoriBlueskyTimelineItemBody }>
+  | Readonly<{ kind: 'notFound'; uri: string }>
+  | Readonly<{ kind: 'blocked'; uri: string }>;
+
+export type IoriBlueskyThreadResponse = Readonly<{
+  ancestors: readonly IoriBlueskyThreadNodeBody[];
+  post: IoriBlueskyTimelineItemBody;
+  replies: readonly Readonly<{ depth: number; node: IoriBlueskyThreadNodeBody }>[];
+}>;
+
 type IsoInstant = string | null;
 
 export type IoriBlueskyScopeStatusBody = Readonly<{
@@ -95,10 +116,13 @@ export type IoriBlueskyLikeResponse = Readonly<{ liked: boolean }>;
 
 export type IoriBlueskyRepostResponse = Readonly<{ reposted: boolean }>;
 
+export type IoriBlueskyReplyResponse = Readonly<{ uri: string; cid: string }>;
+
 const readStatuses = Scope.orThrow('read:statuses');
 const writeFavourites = Scope.orThrow('write:favourites');
 const writeStatuses = Scope.orThrow('write:statuses');
 const integerPattern = /^\d+$/;
+const postUriPattern = /^at:\/\/did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]\/app\.bsky\.feed\.post\/[a-zA-Z0-9._~:-]+$/;
 const forbidden = { error: 'Forbidden' } as const;
 
 export const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBody => ({
@@ -121,6 +145,19 @@ export const toItemBody = (item: BlueskyTimelineItem): IoriBlueskyTimelineItemBo
   liked: item.liked,
   reposted: item.reposted,
 });
+
+const toNodeBody = (node: BlueskyThreadNode): IoriBlueskyThreadNodeBody =>
+  node.kind === 'post' ? { kind: 'post', item: toItemBody(node.item) } : node;
+
+const threadFailure = (c: Context, error: BlueskyClientError | BlueskyPostThreadUnavailable) => {
+  if (error.type === 'BlueskyPostThreadUnavailable') {
+    return c.json({ error: 'Record not found', code: error.reason === 'blocked' ? 'blocked' : 'not_found' }, 404);
+  }
+  if (error.status === 429) return c.json({ error: 'Bluesky rate limited' }, 429);
+  return error.code === 'NotFound'
+    ? c.json({ error: 'Record not found', code: 'not_found' }, 404)
+    : c.json({ error: 'Bluesky request failed' }, 502);
+};
 
 const iso = (at: number | null): IsoInstant => at === null ? null : new Date(at).toISOString();
 
@@ -145,6 +182,18 @@ const repostFailure = (c: Context, error: BlueskyClientError | BlueskyRepostTarg
     ? c.json({ error: 'Record not found' }, 404)
     : clientFailure(c, error);
 
+const replyFailure = (
+  c: Context,
+  error: BlueskyClientError | BlueskyPostInvalid | BlueskyReplyTargetNotFound | BlueskyReplyNotAllowed,
+) => {
+  if (error.type === 'BlueskyReplyTargetNotFound') return c.json({ error: 'Record not found' }, 404);
+  if (error.type === 'BlueskyReplyNotAllowed') return c.json({ error: 'Reply not allowed' }, 422);
+  if (error.type === 'BlueskyPostInvalid') {
+    return c.json({ error: 'Validation failed: text', reason: error.reason }, 400);
+  }
+  return c.json({ error: 'Bluesky request failed' }, 502);
+};
+
 export const createWorkerIoriBlueskyRouter = ({
   authn,
   blueskyTimelineItemsResolver,
@@ -156,6 +205,8 @@ export const createWorkerIoriBlueskyRouter = ({
   unlikeBlueskyPostUseCase,
   repostBlueskyPostUseCase,
   undoRepostBlueskyPostUseCase,
+  blueskyPostThreadFetcher,
+  replyToBlueskyPostUseCase,
   isDigestOwner,
 }: WorkerIoriBlueskyRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
@@ -207,6 +258,27 @@ export const createWorkerIoriBlueskyRouter = ({
           nextBefore: last?.indexedAt ?? null,
           nextBeforeId: last?.feedItemId ?? null,
         } satisfies IoriBlueskyTimelineResponse,
+      );
+    })
+    .get('/iori/v1/bluesky/thread', authn.requireUser(readStatuses), async (c) => {
+      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
+        return c.json(forbidden, 403);
+      }
+      if (blueskyPostThreadFetcher === undefined) {
+        return c.json({ error: 'Bluesky timeline is disabled' }, 409);
+      }
+      const uri = c.req.query('uri');
+      if (uri === undefined || !postUriPattern.test(uri)) {
+        return c.json({ error: 'Validation failed: uri' }, 400);
+      }
+      const thread = await blueskyPostThreadFetcher.fetch({ uri });
+      if (!thread.ok) return threadFailure(c, thread.err);
+      return c.json(
+        {
+          ancestors: thread.val.ancestors.map(toNodeBody),
+          post: toItemBody(thread.val.post),
+          replies: thread.val.replies.map(({ depth, node }) => ({ depth, node: toNodeBody(node) })),
+        } satisfies IoriBlueskyThreadResponse,
       );
     })
     .get('/iori/v1/bluesky/status', authn.requireUser(readStatuses), async (c) => {
@@ -322,5 +394,29 @@ export const createWorkerIoriBlueskyRouter = ({
         return unreposted.ok
           ? c.json(unreposted.val satisfies IoriBlueskyRepostResponse)
           : repostFailure(c, unreposted.err);
+      },
+    )
+    .post(
+      '/iori/v1/bluesky/replies',
+      requireSameOriginForCookie,
+      authn.requireUser(writeStatuses),
+      async (c) => {
+        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
+          return c.json(forbidden, 403);
+        }
+        if (replyToBlueskyPostUseCase === undefined) {
+          return c.json({ error: 'Bluesky timeline is disabled' }, 409);
+        }
+        const body = await readRequestBody(c);
+        const feedItemId = bodyString(body, 'feedItemId');
+        if (feedItemId === undefined || feedItemId === '') {
+          return c.json({ error: 'Validation failed: feedItemId' }, 400);
+        }
+        const text = bodyString(body, 'text');
+        if (text === undefined) return c.json({ error: 'Validation failed: text' }, 400);
+        const replied = await replyToBlueskyPostUseCase.run({ feedItemId, text });
+        return replied.ok
+          ? c.json(replied.val satisfies IoriBlueskyReplyResponse, 201)
+          : replyFailure(c, replied.err);
       },
     );

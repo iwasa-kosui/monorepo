@@ -1,8 +1,0 @@
-import CodeBlock from '../../../components/CodeBlock.astro';
-import { cancelVisitOf } from '../../../lib/snapshots';
-
-## 開始コードを読む
-
-`visits.ts` の `cancelVisit` は、来院の状態を確かめて `status` を `cancelled` に更新します。このコードは、誰が、いつ、なぜキャンセルしたのかをどこにも残しません。
-
-<CodeBlock code={cancelVisitOf('chapter-1-start')} />
