@@ -464,6 +464,7 @@ export const setupReadApi = (
             postImagesResolver: createD1PostImagesResolverByPostId(db),
             postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
             acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+            directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
             origin: ORIGIN,
           }),
           postSourceTextResolver: createD1PostSourceTextResolver(db),

@@ -8,6 +8,7 @@ import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts
 import type { ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { PostImagesResolverByPostId } from '../domain/image/image.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { DirectPostParticipantsResolverByPostId } from '../domain/post/directPostParticipants.ts';
 import { mentionLinksOfHtml, type MentionRecipient } from '../domain/post/mention.ts';
 import {
   type LocalPost,
@@ -64,7 +65,24 @@ const UnauthorizedError = {
   }),
 } as const;
 
-type Err = SessionExpiredError | UserNotFoundError | PostNotFoundError | UnauthorizedError;
+type DirectAddresseeAddedError = Readonly<{
+  type: 'DirectAddresseeAddedError';
+  message: string;
+}>;
+
+const DirectAddresseeAddedError = {
+  create: (): DirectAddresseeAddedError => ({
+    type: 'DirectAddresseeAddedError',
+    message: 'A direct post cannot add new recipients when edited.',
+  }),
+} as const;
+
+type Err =
+  | SessionExpiredError
+  | UserNotFoundError
+  | PostNotFoundError
+  | UnauthorizedError
+  | DirectAddresseeAddedError;
 
 export type UpdatePostUseCase = UseCase<Input, Ok, Err>;
 
@@ -79,6 +97,7 @@ type Deps = Readonly<{
   postImagesResolver: PostImagesResolverByPostId;
   postQuotesResolver?: PostQuotesResolverByPostIds;
   acceptedRelaysResolver: AcceptedRelaysResolver;
+  directPostParticipantsResolverByPostId?: DirectPostParticipantsResolverByPostId;
   origin: string;
 }>;
 
@@ -95,6 +114,7 @@ const create = ({
   postImagesResolver,
   postQuotesResolver,
   acceptedRelaysResolver,
+  directPostParticipantsResolverByPostId,
   origin,
 }: Deps): UpdatePostUseCase => {
   const now = Instant.now();
@@ -182,6 +202,26 @@ const create = ({
       }),
       RA.andBind('previous', async ({ post, ctx, user }) =>
         RA.ok(await resolvePreviousAddressees(post, ctx, user.username))),
+      RA.andThrough(
+        async ({ post, user, ctx, content, previous }): Promise<Result<void, DirectAddresseeAddedError>> => {
+          if (post.visibility !== 'direct') {
+            return RA.ok(undefined);
+          }
+          const ownUri = ctx.getActorUri(user.username).href;
+          const participants = await directPostParticipantsResolverByPostId?.resolve(post.postId);
+          const recorded = participants?.ok
+            ? participants.val.filter((uri) =>
+              uri !== ownUri
+            )
+            : [];
+          const addressees = new Set(
+            recorded.length > 0 ? recorded : previous.map(({ mentioned }) => mentioned.id.href),
+          );
+          const added = toMentionNoteFields(sanitizePostContent(content)).ccs
+            .some((uri) => uri.href !== ownUri && !addressees.has(uri.href));
+          return added ? RA.err(DirectAddresseeAddedError.create()) : RA.ok(undefined);
+        },
+      ),
       RA.andBind('quoteFields', ({ post, quote }) => {
         const fields = toQuoteNoteFields(quote);
         return RA.ok(post.visibility === 'direct' ? { ...fields, actors: [], recipients: [] } : fields);
@@ -195,9 +235,7 @@ const create = ({
             sensitive,
             participantActorUris: [
               ctx.getActorUri(user.username).href,
-              ...previous.map(({ recipient }) =>
-                recipient.id
-              ),
+              ...previous.map(({ recipient }) => recipient.id),
               ...toMentionNoteFields(sanitizePostContent(content)).ccs.map((uri) => uri.href),
             ],
           }),
