@@ -523,129 +523,137 @@ const UserProfile = () => {
   const logoUrl = safeUrl(me.avatar);
 
   return (
-    <section class='hidden md:block mb-8'>
-      <header class='mb-4'>
-        <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
-          Hi, {me.username}
-        </h1>
-      </header>
-      <section class='mb-8'>
-        <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg'>
-          <div class='flex items-center gap-4 mb-4 relative z-10'>
-            <a href='#update-bio' class='relative group flex-shrink-0'>
-              <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold shadow-clay-sm'>
-                {logoUrl
-                  ? (
-                    <img
-                      src={logoUrl}
-                      alt='User Logo'
-                      class='w-16 h-16 blob-avatar object-cover'
+    <>
+      <a
+        href='/settings'
+        class='md:hidden mb-6 inline-block text-sm text-terracotta hover:text-terracotta-dark dark:text-terracotta-light transition-colors'
+      >
+        設定
+      </a>
+      <section class='hidden md:block mb-8'>
+        <header class='mb-4'>
+          <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
+            Hi, {me.username}
+          </h1>
+        </header>
+        <section class='mb-8'>
+          <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg'>
+            <div class='flex items-center gap-4 mb-4 relative z-10'>
+              <a href='#update-bio' class='relative group flex-shrink-0'>
+                <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold shadow-clay-sm'>
+                  {logoUrl
+                    ? (
+                      <img
+                        src={logoUrl}
+                        alt='User Logo'
+                        class='w-16 h-16 blob-avatar object-cover'
+                      />
+                    )
+                    : (
+                      me.username.charAt(0).toUpperCase()
+                    )}
+                </div>
+                <div class='absolute inset-0 rounded-full bg-charcoal/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity'>
+                  <svg
+                    class='w-5 h-5 text-white'
+                    fill='none'
+                    stroke='currentColor'
+                    viewBox='0 0 24 24'
+                  >
+                    <path
+                      stroke-linecap='round'
+                      stroke-linejoin='round'
+                      stroke-width='2'
+                      d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z'
                     />
-                  )
-                  : (
-                    me.username.charAt(0).toUpperCase()
-                  )}
+                  </svg>
+                </div>
+              </a>
+              <div>
+                <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
+                  {me.display_name}
+                </h1>
+                <p class='text-charcoal-light dark:text-gray-400'>{handle}</p>
               </div>
-              <div class='absolute inset-0 rounded-full bg-charcoal/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity'>
-                <svg
-                  class='w-5 h-5 text-white'
-                  fill='none'
-                  stroke='currentColor'
-                  viewBox='0 0 24 24'
+            </div>
+            {me.source.note !== '' && (
+              <p class='text-charcoal dark:text-gray-200 text-sm whitespace-pre-wrap mb-4 relative z-10'>
+                {me.source.note}
+              </p>
+            )}
+
+            <div class='flex gap-6 text-sm'>
+              <div>
+                <span class='font-semibold text-charcoal dark:text-white'>
+                  {me.followers_count}
+                </span>
+                <a
+                  class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+                  href='#followers'
                 >
-                  <path
-                    stroke-linecap='round'
-                    stroke-linejoin='round'
-                    stroke-width='2'
-                    d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z'
-                  />
-                </svg>
+                  Followers
+                </a>
               </div>
-            </a>
-            <div>
-              <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
-                {me.display_name}
-              </h1>
-              <p class='text-charcoal-light dark:text-gray-400'>{handle}</p>
+              <div>
+                <span class='font-semibold text-charcoal dark:text-white'>
+                  {me.following_count}
+                </span>
+                <a
+                  class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+                  href='#following'
+                >
+                  Following
+                </a>
+              </div>
+              <div>
+                <span class='font-semibold text-charcoal dark:text-white'>
+                  {statuses.length}
+                </span>
+                <span class='text-charcoal-light dark:text-gray-400 ml-1'>Posts</span>
+              </div>
             </div>
           </div>
-          {me.source.note !== '' && (
-            <p class='text-charcoal dark:text-gray-200 text-sm whitespace-pre-wrap mb-4 relative z-10'>
-              {me.source.note}
-            </p>
-          )}
 
-          <div class='flex gap-6 text-sm'>
-            <div>
-              <span class='font-semibold text-charcoal dark:text-white'>
-                {me.followers_count}
-              </span>
-              <a
-                class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
-                href='#followers'
-              >
+          <div>
+            <Modal id='followers'>
+              <h2 class='text-lg font-semibold text-charcoal dark:text-white mb-3'>
                 Followers
-              </a>
-            </div>
-            <div>
-              <span class='font-semibold text-charcoal dark:text-white'>
-                {me.following_count}
-              </span>
-              <a
-                class='text-charcoal-light dark:text-gray-400 ml-1 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
-                href='#following'
-              >
+              </h2>
+              {followers.length > 0
+                ? (
+                  <div class='space-y-1 max-h-48 overflow-y-auto'>
+                    {followers.map((follower) => <ActorLink key={follower.id} account={follower} />)}
+                  </div>
+                )
+                : (
+                  <p class='text-charcoal-light dark:text-gray-400 text-sm'>
+                    No followers yet
+                  </p>
+                )}
+            </Modal>
+
+            <Modal id='following'>
+              <h2 class='text-lg font-semibold text-charcoal dark:text-white mb-3'>
                 Following
-              </a>
-            </div>
-            <div>
-              <span class='font-semibold text-charcoal dark:text-white'>
-                {statuses.length}
-              </span>
-              <span class='text-charcoal-light dark:text-gray-400 ml-1'>Posts</span>
-            </div>
+              </h2>
+              {following.length > 0
+                ? (
+                  <div class='space-y-1 max-h-48 overflow-y-auto'>
+                    {following.map((followed) => <ActorLink key={followed.id} account={followed} />)}
+                  </div>
+                )
+                : (
+                  <p class='text-charcoal-light dark:text-gray-400 text-sm'>
+                    Not following anyone yet
+                  </p>
+                )}
+            </Modal>
           </div>
-        </div>
+        </section>
 
-        <div>
-          <Modal id='followers'>
-            <h2 class='text-lg font-semibold text-charcoal dark:text-white mb-3'>
-              Followers
-            </h2>
-            {followers.length > 0
-              ? (
-                <div class='space-y-1 max-h-48 overflow-y-auto'>
-                  {followers.map((follower) => <ActorLink key={follower.id} account={follower} />)}
-                </div>
-              )
-              : (
-                <p class='text-charcoal-light dark:text-gray-400 text-sm'>
-                  No followers yet
-                </p>
-              )}
-          </Modal>
-
-          <Modal id='following'>
-            <h2 class='text-lg font-semibold text-charcoal dark:text-white mb-3'>
-              Following
-            </h2>
-            {following.length > 0
-              ? (
-                <div class='space-y-1 max-h-48 overflow-y-auto'>
-                  {following.map((followed) => <ActorLink key={followed.id} account={followed} />)}
-                </div>
-              )
-              : (
-                <p class='text-charcoal-light dark:text-gray-400 text-sm'>
-                  Not following anyone yet
-                </p>
-              )}
-          </Modal>
-        </div>
+        <PostForm id='post' onPosted={handlePosted} />
       </section>
-
-      <PostForm id='post' onPosted={handlePosted} />
-    </section>
+    </>
   );
 };
 

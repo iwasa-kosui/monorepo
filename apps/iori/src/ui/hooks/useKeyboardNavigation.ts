@@ -15,7 +15,7 @@ type UseKeyboardNavigationProps = Readonly<{
   threadModalPostId: string | null;
   onLike: (postId: string) => void;
   onUndoLike: (postId: string) => void;
-  onReply: (postId: string) => void;
+  onReply: (postId: string, username: string) => void;
   onBlueskyReply: (item: IoriBlueskyTimelineItemBody) => void;
   onCancelReply: () => void;
   onCloseThread: () => void;
@@ -162,7 +162,7 @@ export const useKeyboardNavigation = ({
           }
           if (post === undefined) break;
           e.preventDefault();
-          onReply(post.id);
+          onReply(post.id, post.account.username);
           break;
         }
       }

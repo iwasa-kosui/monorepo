@@ -2,6 +2,7 @@ import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import { fetchPublicTimeline, isUnauthorizedError } from '../api/mastodonClient.ts';
+import { addRelay, fetchRelays, type Relay } from '../api/relays.ts';
 import { clearAllCache } from '../api/responseCache.ts';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { PostView } from '../components/PostView.tsx';
@@ -10,17 +11,11 @@ import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
 import { useReplyDialog } from '../hooks/useReplyDialog.ts';
 import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 
-type Relay = {
-  relayId: string;
-  actorUri: string;
-  status: string;
-};
-
 const FederatedTimelinePage = () => {
   const { items, setFirstPage, updateItem } = usePublicTimeline('remote');
   const actions = useStatusListActions(updateItem);
   const reply = useReplyDialog();
-  const [relays, setRelays] = useState<Relay[]>([]);
+  const [relays, setRelays] = useState<readonly Relay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showRelayModal, setShowRelayModal] = useState(false);
   const [relayUri, setRelayUri] = useState('');
@@ -34,11 +29,7 @@ const FederatedTimelinePage = () => {
         const page = await fetchPublicTimeline('remote');
         setFirstPage(page);
 
-        const relaysResponse = await fetch('/api/iori/v1/relays');
-        if (relaysResponse.ok) {
-          const relaysData = await relaysResponse.json();
-          setRelays(relaysData.relays);
-        }
+        setRelays(await fetchRelays());
       } catch (fetchError) {
         if (isUnauthorizedError(fetchError)) {
           clearAllCache();
@@ -70,28 +61,17 @@ const FederatedTimelinePage = () => {
     setRelaySuccess(false);
     setIsSubscribing(true);
 
-    try {
-      const response = await fetch('/api/iori/v1/relays', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: relayUri }),
-      });
-      const data = await response.json();
-
-      if (response.ok) {
-        setRelaySuccess(true);
-        setRelayUri('');
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-      } else {
-        setRelayError(data.error || 'Failed to subscribe to relay');
-      }
-    } catch {
-      setRelayError('Network error. Please try again.');
-    } finally {
-      setIsSubscribing(false);
+    const outcome = await addRelay(relayUri);
+    if (outcome.ok) {
+      setRelaySuccess(true);
+      setRelayUri('');
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } else {
+      setRelayError(outcome.message);
     }
+    setIsSubscribing(false);
   };
 
   if (isLoading) {

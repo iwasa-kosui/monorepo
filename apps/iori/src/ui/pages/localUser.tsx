@@ -12,10 +12,12 @@ import {
 } from '../api/mastodonClient.ts';
 import { accountHandle, remoteUserPathOf, updateStatusesByPostId } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
+import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { statusActionProps, type StatusActions } from '../components/statusActionProps.ts';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import { useReplyDialog, type UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
 import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 
 const ACCOUNT_LIST_LIMIT = 80;
@@ -28,6 +30,7 @@ type Props = Readonly<{
   statuses: readonly Status[];
   isLoggedIn: boolean;
   actions?: StatusActions;
+  reply?: UseReplyDialogReturn;
 }>;
 
 export const LocalUserPage = ({
@@ -38,6 +41,7 @@ export const LocalUserPage = ({
   statuses,
   isLoggedIn,
   actions,
+  reply,
 }: Props) => {
   const logoUrl = safeUrl(account.avatar);
 
@@ -252,6 +256,7 @@ export const LocalUserPage = ({
       </section>
 
       <section class='space-y-6 py-2'>
+        {reply !== undefined && <FediverseReplyModal dialog={reply} />}
         <h2 class='text-lg font-semibold text-charcoal dark:text-white'>Posts</h2>
         {statuses.length > 0
           ? (
@@ -261,6 +266,7 @@ export const LocalUserPage = ({
                 status={status}
                 isLoggedIn={isLoggedIn}
                 {...statusActionProps(isLoggedIn ? actions : undefined, status)}
+                onReply={isLoggedIn ? reply?.openReplyDialog : undefined}
               />
             ))
           )
@@ -366,6 +372,7 @@ const App = () => {
   }, []);
 
   const actions = useStatusListActions(updateStatus);
+  const reply = useReplyDialog();
 
   if (data === null) {
     return <div class='text-gray-500 dark:text-gray-400'>Loading...</div>;
@@ -384,6 +391,7 @@ const App = () => {
       statuses={data.statuses}
       isLoggedIn={isLoggedIn}
       actions={actions}
+      reply={reply}
     />
   );
 };
