@@ -30,14 +30,21 @@ const render = (
 ): string => String(jsx(BlueskyTimelineItemView, { item: { ...base, ...item }, ...props }));
 
 describe('BlueskyTimelineItemView', () => {
-  it('投稿者の表示名と @handle、本文、bsky.app の投稿へのリンクを出す', () => {
+  it('投稿者の表示名と @handle、本文、iori 内の投稿の詳細へのリンクを出す', () => {
     const html = render({});
 
     expect(html).toContain('Alice');
     expect(html).toContain('@alice.bsky.social');
     expect(html).toContain('本文です');
-    expect(html).toContain('href="https://bsky.app/profile/did:plc:author/post/3kabc"');
+    expect(html).toContain('href="/bluesky/profile/did:plc:author/post/3kabc"');
     expect(html).toContain('src="https://cdn.example/avatar.jpg"');
+  });
+
+  it('時刻のリンクは同じタブで開く', () => {
+    const html = render({});
+
+    expect(html).not.toContain('bsky.app');
+    expect(html).not.toMatch(/<a href="\/bluesky\/[^>]*target=/);
   });
 
   it('本文を HTML として挿入せず、facet のリンクは rel と target つきの a 要素にする', () => {
@@ -117,7 +124,34 @@ describe('BlueskyTimelineItemView', () => {
     expect(html).toContain('記事');
     expect(html).toContain('@q.bsky.social');
     expect(html).toContain('引用本文');
-    expect(html).toContain('href="https://bsky.app/profile/did:plc:q/post/3kq"');
+    expect(html).toMatch(/<a href="\/bluesky\/profile\/did:plc:q\/post\/3kq" class=/);
+    expect(html).not.toContain('bsky.app');
+  });
+
+  it('返信先の表示を、親の投稿の詳細へのリンクにする', () => {
+    const html = render({
+      replyParentUri: 'at://did:plc:p/app.bsky.feed.post/3kp',
+      replyParentAuthorHandle: 'carol.bsky.social',
+    });
+
+    expect(html).toMatch(
+      /<a href="\/bluesky\/profile\/did:plc:p\/post\/3kp" class="[^"]*">@carol.bsky.social への返信<\/a>/,
+    );
+  });
+
+  it('返信先の uri が at-uri として読めなければ、リンクにしない', () => {
+    const html = render({ replyParentUri: 'nope', replyParentAuthorHandle: null });
+
+    expect(html).toContain('>返信</div>');
+    expect(html).not.toMatch(/<a [^>]*>返信<\/a>/);
+  });
+
+  it('動画のカードを、同じタブで開く iori 内の詳細へのリンクにする', () => {
+    const html = render({
+      embed: { type: 'video', thumbnail: null, playlist: 'https://video.example/playlist.m3u8' },
+    });
+
+    expect(html).toMatch(/<a href="\/bluesky\/profile\/did:plc:author\/post\/3kabc" class="relative block/);
   });
 
   describe('いいねのボタン', () => {

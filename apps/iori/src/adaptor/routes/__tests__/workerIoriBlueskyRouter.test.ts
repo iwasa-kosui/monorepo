@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BlueskyTimelineItemsResolver } from '../../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../../ports/blueskyClient.ts';
+import type { BlueskyPostThread, BlueskyPostThreadFetcher } from '../../../ports/blueskyPostThreadFetcher.ts';
 import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../useCase/likeBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../useCase/repostBlueskyPost.ts';
@@ -84,6 +85,7 @@ const setupNonOwner = async (
     scope?: string;
     blueskyLikeClient?: ReturnType<typeof likeClient>;
     blueskyRepostClient?: ReturnType<typeof repostClient>;
+    blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
   } = {},
 ) => {
   const harness = createOAuthHarness();
@@ -128,6 +130,7 @@ const setupNonOwner = async (
           targetResolver: createD1BlueskyRepostTargetResolver(fixture.db),
           deletedStore: createD1BlueskyRepostDeletedStore(fixture.db),
         }),
+      blueskyPostThreadFetcher: options.blueskyPostThreadFetcher,
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
     }),
   );
@@ -379,6 +382,184 @@ describe('/api/iori/v1/bluesky/timeline', () => {
       const response = await t.request('/api/iori/v1/bluesky/timeline?scope=all', { headers: me.bearer });
 
       expect(response.status).toBe(400);
+    });
+  });
+
+  describe('スレッド', () => {
+    const THREAD = '/api/iori/v1/bluesky/thread';
+    const POST_URI = 'at://did:plc:a/app.bsky.feed.post/3kpost';
+    const threadItem = (rkey: string): BlueskyPostThread['post'] => ({
+      feedItemId: `at://did:plc:a/app.bsky.feed.post/${rkey}`,
+      uri: `at://did:plc:a/app.bsky.feed.post/${rkey}`,
+      cid: `cid-${rkey}`,
+      authorDid: 'did:plc:a',
+      authorHandle: 'alice.bsky.social',
+      authorDisplayName: 'Alice',
+      authorAvatar: null,
+      text: `post ${rkey}`,
+      facets: [],
+      embed: null,
+      replyParentUri: null,
+      replyParentAuthorHandle: null,
+      repostedByDid: null,
+      repostedByHandle: null,
+      postedAt: Instant.orThrow(BASE - 10_000),
+      indexedAt: Instant.orThrow(BASE),
+      fetchedAt: Instant.orThrow(BASE),
+      liked: true,
+      viewerLikeUri: 'at://did:plc:me/app.bsky.feed.like/3klike',
+      reposted: false,
+      viewerRepostUri: null,
+    });
+    const fetcherReturning = (result: ReturnType<BlueskyPostThreadFetcher['fetch']>) => ({
+      fetch: vi.fn<BlueskyPostThreadFetcher['fetch']>(() => result),
+    });
+    const getThread = (t: ReturnType<typeof setupReadApi>, headers: Record<string, string>, uri = POST_URI) =>
+      t.request(`${THREAD}?uri=${encodeURIComponent(uri)}`, { headers });
+
+    it('認証なしだと 401、read:statuses を満たさない scope だと 403 にする', async () => {
+      const fetcher = fetcherReturning(RA.ok({ ancestors: [], post: threadItem('3kpost'), replies: [] }));
+      const t = setupReadApi({ blueskyPostThreadFetcher: fetcher });
+      const me = await t.signIn('write:accounts');
+
+      expect((await getThread(t, {})).status).toBe(401);
+      expect((await getThread(t, me.bearer)).status).toBe(403);
+      expect(fetcher.fetch).not.toHaveBeenCalled();
+    });
+
+    it('所有者には祖先・本人の投稿・返信を画面用の形で返す', async () => {
+      const fetcher = fetcherReturning(RA.ok({
+        ancestors: [{ kind: 'post', item: threadItem('3kroot') }, {
+          kind: 'notFound',
+          uri: 'at://did:plc:a/app.bsky.feed.post/3kgone',
+        }],
+        post: threadItem('3kpost'),
+        replies: [
+          { depth: 0, node: { kind: 'post', item: threadItem('3kreply') } },
+          { depth: 1, node: { kind: 'blocked', uri: 'at://did:plc:b/app.bsky.feed.post/3kblocked' } },
+        ],
+      }));
+      const t = setupReadApi({ blueskyPostThreadFetcher: fetcher });
+      const me = await t.signIn('read:statuses');
+
+      const response = await getThread(t, me.bearer);
+
+      expect(response.status).toBe(200);
+      expect(fetcher.fetch).toHaveBeenCalledWith({ uri: POST_URI });
+      const body = await response.json() as {
+        ancestors: Array<Record<string, unknown>>;
+        post: Record<string, unknown>;
+        replies: Array<{ depth: number; node: Record<string, unknown> }>;
+      };
+      expect(body.ancestors.map((node) => node.kind)).toEqual(['post', 'notFound']);
+      expect(body.ancestors[1]).toEqual({ kind: 'notFound', uri: 'at://did:plc:a/app.bsky.feed.post/3kgone' });
+      expect(body.post).toEqual({
+        feedItemId: 'at://did:plc:a/app.bsky.feed.post/3kpost',
+        uri: 'at://did:plc:a/app.bsky.feed.post/3kpost',
+        cid: 'cid-3kpost',
+        authorDid: 'did:plc:a',
+        authorHandle: 'alice.bsky.social',
+        authorDisplayName: 'Alice',
+        authorAvatar: null,
+        text: 'post 3kpost',
+        facets: [],
+        embed: null,
+        replyParentUri: null,
+        replyParentAuthorHandle: null,
+        repostedByDid: null,
+        repostedByHandle: null,
+        postedAt: BASE - 10_000,
+        indexedAt: BASE,
+        liked: true,
+        reposted: false,
+      });
+      expect(body.replies.map(({ depth, node }) => [depth, node.kind])).toEqual([[0, 'post'], [1, 'blocked']]);
+    });
+
+    it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
+      const fetcher = fetcherReturning(RA.ok({ ancestors: [], post: threadItem('3kpost'), replies: [] }));
+      const { get } = await setupNonOwner({ blueskyPostThreadFetcher: fetcher });
+
+      const response = await get(`${THREAD}?uri=${encodeURIComponent(POST_URI)}`);
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'Forbidden' });
+      expect(fetcher.fetch).not.toHaveBeenCalled();
+    });
+
+    it('uri が無い、または投稿の at-uri でないと 400 にし、Bluesky を呼ばない', async () => {
+      const fetcher = fetcherReturning(RA.ok({ ancestors: [], post: threadItem('3kpost'), replies: [] }));
+      const t = setupReadApi({ blueskyPostThreadFetcher: fetcher });
+      const me = await t.signIn('read:statuses');
+
+      const missing = await t.request(THREAD, { headers: me.bearer });
+      const responses = await Promise.all([
+        'https://bsky.app/profile/alice.bsky.social/post/3kpost',
+        'at://did:plc:a/app.bsky.feed.like/3kpost',
+        'at://alice.bsky.social/app.bsky.feed.post/3kpost',
+        'at://did:plc:a/app.bsky.feed.post/3kpost/extra',
+        'at://did:plc:a/app.bsky.feed.post/',
+      ].map((uri) => getThread(t, me.bearer, uri)));
+
+      expect(missing.status).toBe(400);
+      expect(responses.map((response) => response.status)).toEqual([400, 400, 400, 400, 400]);
+      expect(await missing.json()).toEqual({ error: 'Validation failed: uri' });
+      expect(fetcher.fetch).not.toHaveBeenCalled();
+    });
+
+    it('投稿が見つからない、またはブロックされているときは 404 にし、区別できる code を返す', async () => {
+      const notFound = fetcherReturning(RA.err({ type: 'BlueskyPostThreadUnavailable', reason: 'notFound' }));
+      const blocked = fetcherReturning(RA.err({ type: 'BlueskyPostThreadUnavailable', reason: 'blocked' }));
+      const gone = fetcherReturning(
+        RA.err({
+          type: 'BlueskyClientError',
+          kind: 'http',
+          message: 'getPostThread failed: status 400 NotFound',
+          status: 400,
+          code: 'NotFound',
+        }),
+      );
+      const results = [];
+      for (const fetcher of [notFound, blocked, gone]) {
+        const t = setupReadApi({ blueskyPostThreadFetcher: fetcher });
+        const me = await t.signIn('read:statuses');
+        const response = await getThread(t, me.bearer);
+        results.push([response.status, await response.json()]);
+      }
+
+      expect(results).toEqual([
+        [404, { error: 'Record not found', code: 'not_found' }],
+        [404, { error: 'Record not found', code: 'blocked' }],
+        [404, { error: 'Record not found', code: 'not_found' }],
+      ]);
+    });
+
+    it('Bluesky への呼び出しが失敗したら 502 にし、詳細を返さない', async () => {
+      const fetcher = fetcherReturning(
+        RA.err({
+          type: 'BlueskyClientError',
+          kind: 'http',
+          message: 'getPostThread failed: status 500 InternalServerError',
+          status: 500,
+        }),
+      );
+      const t = setupReadApi({ blueskyPostThreadFetcher: fetcher });
+      const me = await t.signIn('read:statuses');
+
+      const response = await getThread(t, me.bearer);
+
+      expect(response.status).toBe(502);
+      expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
+    });
+
+    it('Bluesky が設定されていないと 409 にする', async () => {
+      const t = setupReadApi();
+      const me = await t.signIn('read:statuses');
+
+      const response = await getThread(t, me.bearer);
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
     });
   });
 

@@ -21,3 +21,12 @@ export const blueskyPostUrlOfUri = (uri: string): string | undefined => {
   const did = atUriPattern.exec(uri)?.[1];
   return did === undefined ? undefined : blueskyPostUrl(did, uri);
 };
+
+export const ioriBlueskyPostPath = (uri: string): string | undefined => {
+  const match = atUriPattern.exec(uri);
+  const did = match?.[1];
+  const rkey = match?.[2];
+  return did === undefined || rkey === undefined || !didPattern.test(did)
+    ? undefined
+    : `/bluesky/profile/${did}/post/${encodeURIComponent(rkey)}`;
+};

@@ -11,6 +11,7 @@ import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
 import type {
   IoriBlueskyLikeResponse,
   IoriBlueskyRepostResponse,
+  IoriBlueskyThreadResponse,
   IoriBlueskyTimelineResponse,
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { IoriDigestRequestResponse, IoriFeedSourceBody } from '../../adaptor/routes/workerIoriDigestRouter.ts';
@@ -443,6 +444,13 @@ export const fetchBlueskyHomeTimeline = (
     ...(cursor === undefined ? {} : { before: cursor.before }),
     ...(cursor === undefined || cursor.beforeId === null ? {} : { beforeId: cursor.beforeId }),
   });
+
+export type BlueskyPostThread = IoriBlueskyThreadResponse;
+
+const BLUESKY_THREAD_PATH = '/api/iori/v1/bluesky/thread';
+
+export const fetchBlueskyPostThread = async (uri: string): Promise<BlueskyPostThread> =>
+  (await request<BlueskyPostThread>(BLUESKY_THREAD_PATH, { uri })).body;
 
 const BLUESKY_LIKES_PATH = '/api/iori/v1/bluesky/likes';
 

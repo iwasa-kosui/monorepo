@@ -9,6 +9,7 @@ import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
 import type { BlueskyClient } from '../../../../ports/blueskyClient.ts';
+import type { BlueskyPostThreadFetcher } from '../../../../ports/blueskyPostThreadFetcher.ts';
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import type { TopicRelevanceJudge } from '../../../../ports/topicRelevanceJudge.ts';
@@ -200,6 +201,7 @@ export const setupReadApi = (
     blueskyTimelineEnabled?: boolean;
     blueskyLikeClient?: Pick<BlueskyClient, 'createLike' | 'deleteLike'>;
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
+    blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
     refreshXPosts?: RefreshXPostsUseCase;
   }> = {},
 ) => {
@@ -555,6 +557,7 @@ export const setupReadApi = (
               targetResolver: createD1BlueskyRepostTargetResolver(db),
               deletedStore: createD1BlueskyRepostDeletedStore(db),
             }),
+          blueskyPostThreadFetcher: options.blueskyPostThreadFetcher,
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );
