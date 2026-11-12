@@ -193,6 +193,20 @@ describe('publishBlueskyPost', () => {
     ]);
   });
 
+  it('利用者が書いた末尾の … は切り詰めとみなさず、@alice.bsky.social… にも mention を付ける', async () => {
+    const t = setup();
+
+    await t.publish({ text: '@alice.bsky.social…' });
+
+    expect(t.query).toHaveBeenCalledWith('com.atproto.identity.resolveHandle', { handle: 'alice.bsky.social' });
+    expect(t.record().facets).toEqual([
+      {
+        index: { byteStart: 0, byteEnd: 18 },
+        features: [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' }],
+      },
+    ]);
+  });
+
   it('サロゲートペアや ZWJ の絵文字を前に含む本文でも、link と mention のバイト位置が UTF-8 で正しい', async () => {
     const t = setup();
     const prefix = '👍🏽 👨‍👩‍👧‍👦 ';

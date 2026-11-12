@@ -157,10 +157,12 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       return 'skipped';
     }
 
+    const mentionOptions = { excludeTruncated: true };
     const facets = withMentionFacets(
       draft.val.text,
       draft.val.facets,
-      await resolveMentionDids(findMentionHandles(draft.val.text, draft.val.facets)),
+      await resolveMentionDids(findMentionHandles(draft.val.text, draft.val.facets, mentionOptions)),
+      mentionOptions,
     );
     const imageBlobs = [];
     for (const image of draft.val.images) {

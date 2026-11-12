@@ -29,10 +29,21 @@ describe('findMentionHandles', () => {
     expect(findMentionHandles(text, [])).toEqual(handles.slice(0, 10));
   });
 
-  it('切り詰めで途中で切れたハンドルは対象にしない', () => {
-    expect(findMentionHandles('@alice.bsky.social と @bob.example.co…\nhttps://example.com/x', [])).toEqual([
-      'alice.bsky.social',
-    ]);
+  it('excludeTruncated のとき、切り詰めで途中で切れたハンドルは対象にしない', () => {
+    expect(
+      findMentionHandles('@alice.bsky.social と @bob.example.co…\nhttps://example.com/x', [], {
+        excludeTruncated: true,
+      }),
+    ).toEqual(['alice.bsky.social']);
+  });
+
+  it('excludeTruncated のとき、ドットやハイフンの後で切れたハンドルも対象にしない', () => {
+    expect(findMentionHandles('@bob.example.co.…', [], { excludeTruncated: true })).toEqual([]);
+    expect(findMentionHandles('@a.bob-…', [], { excludeTruncated: true })).toEqual([]);
+  });
+
+  it('excludeTruncated でなければ、末尾に … があってもハンドルを対象にする', () => {
+    expect(findMentionHandles('@alice.bsky.social…', [])).toEqual(['alice.bsky.social']);
   });
 
   it('link facet と重なるハンドルは対象にせず、上限はその後に数える', () => {
@@ -71,9 +82,20 @@ describe('withMentionFacets', () => {
   it('切り詰めで途中で切れたハンドルには、解決できる DID があっても mention facet を付けない', () => {
     const dids = new Map([...DIDS, ['bob.example.co', 'did:plc:bobco']]);
 
-    expect(withMentionFacets('@alice.bsky.social と @bob.example.co…', [], dids)).toEqual([
+    expect(withMentionFacets('@alice.bsky.social と @bob.example.co…', [], dids, { excludeTruncated: true })).toEqual([
       mention(0, 18, 'did:plc:alice'),
     ]);
+  });
+
+  it('excludeTruncated のとき、ドットやハイフンの後で切れたハンドルにも mention facet を付けない', () => {
+    const dids = new Map([['bob.example.co', 'did:plc:bobco'], ['a.bob', 'did:plc:abob']]);
+
+    expect(withMentionFacets('@bob.example.co.…', [], dids, { excludeTruncated: true })).toEqual([]);
+    expect(withMentionFacets('@a.bob-…', [], dids, { excludeTruncated: true })).toEqual([]);
+  });
+
+  it('excludeTruncated でなければ、末尾に … があっても mention facet を付ける', () => {
+    expect(withMentionFacets('@alice.bsky.social…', [], DIDS)).toEqual([mention(0, 18, 'did:plc:alice')]);
   });
 
   it('byteStart の順に並べる', () => {

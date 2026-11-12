@@ -26,6 +26,7 @@ import type {
   BlueskyQueryClient,
 } from '../../ports/blueskyClient.ts';
 import { findMentionHandles, withMentionFacets } from './blueskyMentionFacets.ts';
+import { findUrls } from './blueskyTextMatches.ts';
 
 export type BlueskyPostInvalidReason =
   | 'empty'
@@ -55,13 +56,6 @@ export type PublishedBlueskyPost = BlueskyCreatedRecord;
 
 export type PublishBlueskyPostError = BlueskyClientError | BlueskyPostInvalid;
 
-type Span = Readonly<{ start: number; end: number }>;
-
-const urlPattern = /https?:\/\/[\x21-\x7E]+/g;
-// 公式アプリの検出に合わせ、@ の直前が先頭・空白・( のときだけ mention にする
-const mentionPattern =
-  /(?<=^|\s|\()@((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)/g;
-const trailingPunctuation = /[.,;:!?'"\]}>]$/;
 const resolveHandleResponseSchema = z.object({ did: z.string().startsWith('did:') });
 
 const invalid = (reason: BlueskyPostInvalidReason): BlueskyPostInvalid => ({ type: 'BlueskyPostInvalid', reason });
@@ -75,29 +69,6 @@ export const validateBlueskyPostInput = (input: PublishBlueskyPostInput): Bluesk
   if (images.some((image) => image.bytes.byteLength > BLUESKY_MAX_IMAGE_BYTES)) return invalid('image_too_large');
   return undefined;
 };
-
-const trimUrl = (url: string): string => {
-  let trimmed = url;
-  for (;;) {
-    if (trailingPunctuation.test(trimmed)) trimmed = trimmed.slice(0, -1);
-    else if (trimmed.endsWith(')') && trimmed.split(')').length > trimmed.split('(').length) {
-      trimmed = trimmed.slice(0, -1);
-    } else return trimmed;
-  }
-};
-
-export const findUrls = (text: string): Array<Span & Readonly<{ uri: string }>> =>
-  Array.from(text.matchAll(urlPattern), (match) => {
-    const uri = trimUrl(match[0]);
-    return { start: match.index, end: match.index + uri.length, uri };
-  }).filter(({ uri }) => URL.canParse(uri));
-
-export const findMentions = (text: string, urls: readonly Span[]): Array<Span & Readonly<{ handle: string }>> =>
-  Array.from(text.matchAll(mentionPattern), (match) => ({
-    start: match.index,
-    end: match.index + match[0].length,
-    handle: match[1]!.toLowerCase(),
-  })).filter((mention) => !urls.some((url) => mention.start < url.end && url.start < mention.end));
 
 export const resolveDids = async (
   query: PublishBlueskyPostDeps['query'],
