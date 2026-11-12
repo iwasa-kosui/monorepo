@@ -43,3 +43,12 @@ export const shownFeedsOf = (
   unsaved: BlueskySavedFeedView | undefined,
 ): readonly BlueskySavedFeedView[] =>
   unsaved === undefined || feeds.some((feed) => feed.uri === unsaved.uri) ? feeds : [unsaved, ...feeds];
+
+export const fallbackFeedUriOf = (
+  feeds: readonly BlueskySavedFeedView[],
+  uri: string | undefined,
+): string | undefined => {
+  if (uri === undefined || feeds.length === 0) return undefined;
+  if (feeds.some((feed) => feed.uri === uri) || blueskyFeedKindOf(uri) !== undefined) return undefined;
+  return feeds[0].uri;
+};

@@ -103,9 +103,17 @@ describe('blueskyFeedLabel', () => {
   it('名前があればそれを、無ければ名前を取得できなかったことを示す文言にする', () => {
     expect(blueskyFeedLabel({ uri: FEED, kind: 'feed', pinned: false, displayName: 'Hot' })).toBe('Hot');
     expect(blueskyFeedLabel({ uri: FEED, kind: 'feed', pinned: false })).toBe('名前を取得できなかったフィード');
-    expect(blueskyFeedLabel({ uri: FEED, kind: 'list', pinned: false, displayName: '' })).toBe(
+    expect(blueskyFeedLabel({ uri: FEED, kind: 'feed', pinned: false, displayName: '' })).toBe(
       '名前を取得できなかったフィード',
     );
+  });
+
+  it('リストで名前が無いときは、リストであることを示す文言にする', () => {
+    expect(blueskyFeedLabel({ uri: FEED, kind: 'list', pinned: false })).toBe('名前を取得できなかったリスト');
+    expect(blueskyFeedLabel({ uri: FEED, kind: 'list', pinned: false, displayName: '' })).toBe(
+      '名前を取得できなかったリスト',
+    );
+    expect(blueskyFeedLabel({ uri: FEED, kind: 'list', pinned: false, displayName: 'Friends' })).toBe('Friends');
   });
 });
 

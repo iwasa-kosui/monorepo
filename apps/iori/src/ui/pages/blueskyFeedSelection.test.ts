@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { BlueskySavedFeedView } from '../api/blueskyFeedClient.ts';
 import {
+  fallbackFeedUriOf,
   feedUriOfSearch,
   feedViewOfSearch,
   selectedFeedOf,
@@ -104,5 +105,26 @@ describe('feedViewOfSearch と withFeedView', () => {
     );
     expect(withFeedView('?uri=a&view=members', 'posts')).toBe('?uri=a');
     expect(withFeedView('?view=members', 'posts')).toBe('');
+  });
+});
+
+describe('fallbackFeedUriOf', () => {
+  it('一覧に無く、feed でも list でもない uri のときは先頭の項目の uri を返す', () => {
+    expect(fallbackFeedUriOf(feeds, 'at://did:plc:x/app.bsky.feed.post/1')).toBe(FEED);
+    expect(fallbackFeedUriOf(feeds, 'https://example.com')).toBe(FEED);
+  });
+
+  it('一覧に無くても feed か list と判定できる uri は undefined にする', () => {
+    expect(fallbackFeedUriOf(feeds, 'at://did:plc:x/app.bsky.feed.generator/z')).toBeUndefined();
+    expect(fallbackFeedUriOf(feeds, 'at://did:plc:x/app.bsky.graph.list/z')).toBeUndefined();
+  });
+
+  it('uri が一覧にあるときは undefined にする', () => {
+    expect(fallbackFeedUriOf(feeds, LIST)).toBeUndefined();
+  });
+
+  it('uri が無いとき、または一覧が空のときは undefined にする', () => {
+    expect(fallbackFeedUriOf(feeds, undefined)).toBeUndefined();
+    expect(fallbackFeedUriOf([], 'https://example.com')).toBeUndefined();
   });
 });

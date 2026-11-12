@@ -26,6 +26,7 @@ import { isStaleGeneration, startGeneration } from '../hooks/generation.ts';
 import { useBlueskyStatus } from '../hooks/useBlueskyStatus.ts';
 import {
   type BlueskyFeedView,
+  fallbackFeedUriOf,
   feedUriOfSearch,
   feedViewOfSearch,
   selectedFeedOf,
@@ -264,6 +265,18 @@ const FeedsContent = () => {
     const page = await fetchBlueskyListMembers(selectedUri ?? '', cursor);
     return { items: page.actors, cursor: page.cursor };
   }, [selectedUri]);
+
+  useEffect(() => {
+    if (state.kind !== 'ready') return;
+    const fallbackUri = fallbackFeedUriOf(state.feeds, requestedUri);
+    if (fallbackUri === undefined) return;
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${withFeedUri(window.location.search, fallbackUri)}`,
+    );
+    setRequestedUri(fallbackUri);
+  }, [state, requestedUri]);
 
   const openUri = (uri: string) => {
     if (uri === selectedUri) return;
