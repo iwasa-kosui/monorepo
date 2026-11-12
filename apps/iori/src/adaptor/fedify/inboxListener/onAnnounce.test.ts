@@ -58,6 +58,7 @@ const createDeps = (
   followed = true,
   acceptedRelays: unknown[] = [],
   article: unknown = undefined,
+  isBlockedUri: (uri: string) => boolean = () => false,
 ) => {
   const documentLoader = vi.fn();
   const addReceivedRepostUseCase = {
@@ -91,6 +92,7 @@ const createDeps = (
     actorResolverByUri,
     federatedTimelineItemResolverByPostId,
     federatedTimelineItemCreatedStore,
+    isBlockedUri,
   };
   return {
     deps: deps as never,
@@ -648,5 +650,134 @@ describe('createOnAnnounce', () => {
 
     expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
     expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+  });
+
+  describe('Announce involving a blocked domain', () => {
+    const isBlockedUri = (uri: string) => new URL(uri).hostname === 'blocked.example';
+    const relay = { status: 'accepted', actorUri: 'https://relay.example/actor', relayId: 'relay-1' };
+    const createBlockedNote = () => createNote([]).clone({ id: new URL('https://blocked.example/notes/1') });
+    const createActivityReturning = (note: Note) =>
+      ({
+        ...createActivity(createNote([])),
+        getObject: vi.fn(async () => note),
+      }) as unknown as Announce;
+
+    it.each([
+      ['remote', undefined, true, []],
+      ['relay', relay, true, []],
+      ['forwarded', undefined, false, [{ relayId: 'relay-1', actorUri: 'https://relay.example/actor' }]],
+    ])('does not fetch or save the object of a %s Announce whose objectId is on a blocked domain', async (
+      _path,
+      relayValue,
+      followed,
+      acceptedRelays,
+    ) => {
+      const { deps, addReceivedRepostUseCase, remotePostUpserter, federatedTimelineItemCreatedStore } = createDeps(
+        relayValue,
+        followed,
+        acceptedRelays,
+        undefined,
+        isBlockedUri,
+      );
+      const activity = createActivity(createBlockedNote());
+
+      await expect(createOnAnnounce(deps)(createCtx(), activity)).resolves.toBeUndefined();
+
+      expect(activity.getObject).not.toHaveBeenCalled();
+      expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+      expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('does not save a remote Announce whose Note id is on a blocked domain', async () => {
+      const { deps, addReceivedRepostUseCase, remotePostUpserter } = createDeps(
+        undefined,
+        true,
+        [],
+        undefined,
+        isBlockedUri,
+      );
+
+      await createOnAnnounce(deps)(createCtx(), createActivityReturning(createBlockedNote()));
+
+      expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+    });
+
+    it('does not fetch the author or save a remote Announce whose Note attributionIds are on a blocked domain', async () => {
+      const { deps, addReceivedRepostUseCase } = createDeps(undefined, true, [], undefined, isBlockedUri);
+      const note = createNote([]).clone({
+        attribution: new Person({
+          id: new URL('https://blocked.example/users/alice'),
+          inbox: new URL('https://blocked.example/users/alice/inbox'),
+        }),
+      });
+      const getAttribution = vi.spyOn(note, 'getAttribution');
+
+      await createOnAnnounce(deps)(createCtx(), createActivityReturning(note));
+
+      expect(getAttribution).not.toHaveBeenCalled();
+      expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+    });
+
+    it('does not save a relay Announce whose Note id is on a blocked domain', async () => {
+      const { deps, remotePostUpserter, federatedTimelineItemCreatedStore } = createDeps(
+        relay,
+        true,
+        [],
+        undefined,
+        isBlockedUri,
+      );
+      const note = createBlockedNote();
+      const getAttribution = vi.spyOn(note, 'getAttribution');
+
+      await createOnAnnounce(deps)(createCtx(), createActivityReturning(note));
+
+      expect(getAttribution).not.toHaveBeenCalled();
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+      expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('does not save a forwarded Announce whose Note id is on a blocked domain', async () => {
+      const { deps, remotePostUpserter, federatedTimelineItemCreatedStore } = createDeps(
+        undefined,
+        false,
+        [relay],
+        undefined,
+        isBlockedUri,
+      );
+      const note = createBlockedNote();
+      const getAttribution = vi.spyOn(note, 'getAttribution');
+
+      await createOnAnnounce(deps)(createCtx(), createActivityReturning(note));
+
+      expect(getAttribution).not.toHaveBeenCalled();
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+      expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    });
+
+    it('does nothing for an Announce whose actor is on a blocked domain', async () => {
+      const {
+        deps,
+        addReceivedRepostUseCase,
+        remotePostUpserter,
+        federatedTimelineItemCreatedStore,
+        followedByLocalActorResolverByActorUri,
+        inboxActorResolver,
+      } = createDeps(relay, true, [], undefined, isBlockedUri);
+      const activity = {
+        ...createActivity(createNote([])),
+        actorId: new URL('https://blocked.example/users/bob'),
+      } as unknown as Announce;
+
+      await expect(createOnAnnounce(deps)(createCtx(), activity)).resolves.toBeUndefined();
+
+      expect(activity.getObject).not.toHaveBeenCalled();
+      expect(followedByLocalActorResolverByActorUri.resolve).not.toHaveBeenCalled();
+      expect(inboxActorResolver.resolve).not.toHaveBeenCalled();
+      expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
+      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
+      expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
+    });
   });
 });

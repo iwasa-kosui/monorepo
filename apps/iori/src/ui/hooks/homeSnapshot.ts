@@ -1,6 +1,13 @@
 import type { CredentialAccount, Status } from '../../adaptor/mastodon/entities.ts';
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import { type BlueskyCursor, type HomeFeedPaging, type HomeItem, homeItemKey, mergeHomeFeed } from './homeFeed.ts';
+import {
+  type BlueskyCursor,
+  dedupeBridgedItems,
+  type HomeFeedPaging,
+  type HomeItem,
+  homeItemKey,
+  mergeHomeFeed,
+} from './homeFeed.ts';
 
 /** どこまで読んだか: 画面上端に見えているアイテムと、その上端の画面内位置。 */
 export type ReadingAnchor = Readonly<{ key: string; offset: number }>;
@@ -62,8 +69,15 @@ export const trimPagingForSnapshot = (
   const statuses = trimSource(paging.statuses, keptStatuses);
   const blueskyItems = trimSource<IoriBlueskyTimelineItemBody>(paging.bluesky.items, keptBluesky);
 
+  const visibleStatuses = new Set(
+    dedupeBridgedItems([
+      ...paging.statuses.map((status): HomeItem => ({ kind: 'status', status })),
+      ...paging.bluesky.items.map((item): HomeItem => ({ kind: 'bluesky', item })),
+    ]).flatMap((item) => item.kind === 'status' ? [item.status] : []),
+  );
+  const isStatusesCut = paging.statuses.some((status) => visibleStatuses.has(status) && !keptStatuses.has(status));
   const lastStatus = lastOf(statuses);
-  const nextMaxId = statuses.length === paging.statuses.length ? paging.nextMaxId : lastStatus?.id;
+  const nextMaxId = isStatusesCut ? lastStatus?.id : paging.nextMaxId;
   const lastBluesky = lastOf(blueskyItems);
   const blueskyCursor: BlueskyCursor | undefined =
     blueskyItems.length === paging.bluesky.items.length || lastBluesky === undefined

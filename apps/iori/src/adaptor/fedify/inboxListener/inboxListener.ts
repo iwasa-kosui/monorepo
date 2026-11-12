@@ -285,6 +285,7 @@ const create = () => {
       actorResolverByUri,
       federatedTimelineItemResolverByPostId: PgFederatedTimelineItemResolverByPostId.getInstance(),
       federatedTimelineItemCreatedStore: PgFederatedTimelineItemCreatedStore.getInstance(),
+      isBlockedUri: (uri) => isBlockedUri(uri),
     },
     onActivity: { inboxActorResolver, addReceivedEmojiReactUseCase },
   });
