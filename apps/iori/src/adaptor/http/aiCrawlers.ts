@@ -7,6 +7,7 @@ export const AI_CRAWLER_ROBOTS_TOKENS: readonly string[] = [
   'ClaudeBot',
   'Claude-User',
   'Claude-SearchBot',
+  'Claude-Agent',
   'anthropic-ai',
   'Claude-Web',
   'Google-Extended',
@@ -20,13 +21,16 @@ export const AI_CRAWLER_ROBOTS_TOKENS: readonly string[] = [
   'CCBot',
   'Amazonbot',
   'Amzn-User',
+  'Amzn-SearchBot',
   'MistralAI-User',
   'MistralAI-Training',
   'MistralAI-Index',
   'DuckAssistBot',
   'AI2Bot',
   'Diffbot',
+  'Diffbot-User',
   'Bytespider',
+  'Coherebot',
   'cohere-ai',
   'cohere-training-data-crawler',
 ];
@@ -51,9 +55,6 @@ const IMAGE_PATH_PREFIXES: readonly string[] = ['/uploads/', '/api/og/'];
 const IMAGE_PATHS: readonly string[] = [
   '/default-avatar.png',
   '/default-header.png',
-  '/favicon.ico',
-  '/icon-192.png',
-  '/icon-512.png',
 ];
 
 const IMAGE_EXTENSIONS: readonly string[] = [
@@ -112,6 +113,7 @@ export const aiCrawlerGuard = createMiddleware(async (c, next) => {
   }
   await next();
   if (c.res.headers.get('content-type')?.toLowerCase().startsWith('image/') === true) {
+    await c.res.body?.cancel();
     c.res = forbidden();
   }
 });

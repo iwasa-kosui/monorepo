@@ -27,6 +27,7 @@ describe('createIoriApp', () => {
     const facebookExternalHit = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
     const googlebot = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
     const imageResponse = () => new Response('png', { headers: { 'Content-Type': 'image/png' } });
+    const cancelImageStream = vi.fn();
     const createApp = (
       options: {
         federationMiddleware?: Parameters<typeof createIoriApp>[0]['federationMiddleware'];
@@ -37,6 +38,10 @@ describe('createIoriApp', () => {
         federationMiddleware: options.federationMiddleware,
         registerRoutes: (router) => {
           router.get('/img-no-ext', () => imageResponse());
+          router.get('/img-stream', () =>
+            new Response(new ReadableStream({ cancel: cancelImageStream }), {
+              headers: { 'Content-Type': 'image/png' },
+            }));
         },
         serveAsset: async () => undefined,
         serveUpload: options.serveUpload ?? (async () => undefined),
@@ -96,6 +101,14 @@ describe('createIoriApp', () => {
       expect(response.status).toBe(403);
       expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
       expect(await response.text()).toBe('Forbidden');
+    });
+
+    it('cancels the original image body when replacing it with 403', async () => {
+      cancelImageStream.mockClear();
+      const response = await createApp().request('/img-stream', { headers: { 'User-Agent': gptBot } });
+
+      expect(response.status).toBe(403);
+      expect(cancelImageStream).toHaveBeenCalledTimes(1);
     });
 
     it('lets a Mastodon server fetch an image from a non-image path', async () => {
