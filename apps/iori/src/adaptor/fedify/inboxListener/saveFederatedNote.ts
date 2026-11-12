@@ -12,6 +12,7 @@ import { FederatedTimelineItemId } from '../../../domain/federatedTimeline/feder
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/post/post.ts';
 import type { RelayId } from '../../../domain/relay/relayId.ts';
+import { isBlockedRemoteObject } from '../../../useCase/helper/isBlockedRemoteObject.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
 import { extractQuoteUri } from '../extractQuoteUri.ts';
@@ -25,6 +26,7 @@ export type SaveFederatedNoteDeps = Readonly<{
   actorResolverByUri: ActorResolverByUri;
   federatedTimelineItemResolverByPostId: FederatedTimelineItemResolverByPostId;
   federatedTimelineItemCreatedStore: FederatedTimelineItemCreatedStore;
+  isBlockedUri?: (uri: string) => boolean;
 }>;
 
 export type SaveFederatedNoteInput = Readonly<{
@@ -55,6 +57,11 @@ export const saveFederatedNote = async (
 
   if (!note.id) {
     getLogger().warn('Federated Note has no id');
+    return;
+  }
+
+  if (deps.isBlockedUri && isBlockedRemoteObject(note, deps.isBlockedUri)) {
+    getLogger().info(`Ignoring a federated Note from a blocked domain: ${note.id.href}`);
     return;
   }
 
