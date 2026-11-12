@@ -10,6 +10,7 @@ import type {
   BlueskyBlob,
   BlueskyEmbed,
   BlueskyFacet,
+  BlueskyMentionFacet,
   BlueskyPostRecord,
 } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
@@ -45,7 +46,7 @@ export type BuildBlueskyPostInput = Readonly<{
 
 export type BlueskyPostDraft = Readonly<{
   text: string;
-  facets: readonly BlueskyFacet[];
+  facets: ReadonlyArray<BlueskyFacet | BlueskyMentionFacet>;
   images: readonly BlueskyImageInput[];
   external?: Readonly<{ uri: string; title: string; description: string; thumb?: BlueskyThumbInput }>;
   reply?: Readonly<{ root: BlueskyStrongRef; parent: BlueskyStrongRef }>;

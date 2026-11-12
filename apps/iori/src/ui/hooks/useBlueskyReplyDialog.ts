@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'hono/jsx';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import { replyToBlueskyPost } from '../api/mastodonClient.ts';
+import { type BlueskyReplyResponse, replyToBlueskyPost, replyToBlueskyPostByUri } from '../api/mastodonClient.ts';
 import { blueskyReplyErrorMessage, canSendBlueskyReply } from './blueskyReply.ts';
 
 export type UseBlueskyReplyDialogReturn = Readonly<{
@@ -15,7 +15,15 @@ export type UseBlueskyReplyDialogReturn = Readonly<{
   send: () => Promise<boolean>;
 }>;
 
-export const useBlueskyReplyDialog = (): UseBlueskyReplyDialogReturn => {
+export type BlueskyReplySender = (item: IoriBlueskyTimelineItemBody, text: string) => Promise<BlueskyReplyResponse>;
+
+const sendByFeedItemId: BlueskyReplySender = (item, text) => replyToBlueskyPost(item.feedItemId, text);
+
+export const sendBlueskyReplyByUri: BlueskyReplySender = (item, text) => replyToBlueskyPostByUri(item.uri, text);
+
+export const useBlueskyReplyDialog = (
+  sendReply: BlueskyReplySender = sendByFeedItemId,
+): UseBlueskyReplyDialogReturn => {
   const [target, setTarget] = useState<IoriBlueskyTimelineItemBody | null>(null);
   const [content, setContent] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -42,7 +50,7 @@ export const useBlueskyReplyDialog = (): UseBlueskyReplyDialogReturn => {
     setIsSending(true);
     setErrorText(undefined);
     try {
-      await replyToBlueskyPost(target.feedItemId, content);
+      await sendReply(target, content);
       setTarget(null);
       setContent('');
       return true;
@@ -54,7 +62,7 @@ export const useBlueskyReplyDialog = (): UseBlueskyReplyDialogReturn => {
       sendingRef.current = false;
       setIsSending(false);
     }
-  }, [target, content]);
+  }, [target, content, sendReply]);
 
   return { target, content, isSending, errorText, open, close, setContent, send } as const;
 };
