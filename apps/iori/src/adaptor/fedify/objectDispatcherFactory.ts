@@ -15,6 +15,7 @@ import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
 import { GetArticleWithThreadUseCase } from '../../useCase/getArticleWithThread.ts';
 import { GetPostUseCase } from '../../useCase/getPost.ts';
+import { toMentionNoteFields } from '../../useCase/helper/mentionNote.ts';
 import { toImageDocument } from '../../useCase/helper/postImageDocument.ts';
 import { sanitizeArticleBody } from '../routes/helper/sanitizeArticleBody.ts';
 
@@ -57,13 +58,16 @@ export const createObjectDispatcher = ({
         );
       }),
       RA.match({
-        ok: ({ post, postImages }) =>
-          new Note({
+        ok: ({ post, postImages }) => {
+          const content = sanitizePostContent(post.content);
+          const mentionFields = toMentionNoteFields(content);
+          return new Note({
             id: ctx.getObjectUri(Note, values),
             attribution: ctx.getActorUri(values.identifier),
             to: PUBLIC_COLLECTION,
-            cc: ctx.getFollowersUri(values.identifier),
-            content: sanitizePostContent(post.content),
+            ccs: [ctx.getFollowersUri(values.identifier), ...mentionFields.ccs],
+            tags: mentionFields.tags,
+            content,
             mediaType: 'text/html',
             published: Temporal.Instant.fromEpochMilliseconds(post.createdAt),
             url: ctx.getObjectUri(Note, values),
@@ -71,7 +75,8 @@ export const createObjectDispatcher = ({
             sensitive: post.sensitive,
             replyTarget: post.inReplyToUri !== null ? new URL(post.inReplyToUri) : undefined,
             attachments: postImages.map((image) => toImageDocument(image, origin)),
-          }),
+          });
+        },
         err: (error) => {
           getLogger().warn(`Failed to resolve post for federation: ${values.identifier} - ${values.id} - ${error}`);
           return null;

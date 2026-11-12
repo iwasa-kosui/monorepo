@@ -7,6 +7,7 @@ import { getLogger } from '@logtape/logtape';
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import { Username } from '../../domain/user/username.ts';
 import { GetUserProfileUseCase } from '../../useCase/getUserProfile.ts';
+import { toMentionNoteFields } from '../../useCase/helper/mentionNote.ts';
 
 export { createOutboxDispatcher, type OutboxDispatcherDeps } from './outboxDispatcherFactory.ts';
 
@@ -23,16 +24,19 @@ const getInstance = () => {
             `Resolved posts for federation: ${identifier} - ${posts.length} posts`,
           );
           const notes = posts.map(
-            (post) =>
-              new Note({
+            (post) => {
+              const content = sanitizePostContent(post.content);
+              const mentionFields = toMentionNoteFields(content);
+              return new Note({
                 id: ctx.getObjectUri(Note, {
                   identifier,
                   id: post.postId,
                 }),
                 attribution: ctx.getActorUri(identifier),
                 to: PUBLIC_COLLECTION,
-                cc: ctx.getFollowersUri(identifier),
-                content: sanitizePostContent(post.content),
+                ccs: [ctx.getFollowersUri(identifier), ...mentionFields.ccs],
+                tags: mentionFields.tags,
+                content,
                 mediaType: 'text/html',
                 published: Temporal.Instant.fromEpochMilliseconds(
                   post.createdAt,
@@ -41,7 +45,8 @@ const getInstance = () => {
                   identifier,
                   id: post.postId,
                 }),
-              }),
+              });
+            },
           );
 
           return {
