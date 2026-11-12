@@ -42,6 +42,7 @@ import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../useCase/likeBlueskyPost.ts';
 import { MarkBlueskyNotificationsSeenUseCase } from '../useCase/markBlueskyNotificationsSeen.ts';
 import { PostToBlueskyUseCase } from '../useCase/postToBluesky.ts';
+import { QuoteBlueskyPostUseCase } from '../useCase/quoteBlueskyPost.ts';
 import { ReplyToBlueskyPostUseCase } from '../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../useCase/repostBlueskyPost.ts';
 import { UndoRepostBlueskyPostUseCase } from '../useCase/undoRepostBlueskyPost.ts';
@@ -69,6 +70,7 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
   blueskyPostThreadFetcher: BlueskyPostThreadFetcher | undefined;
   replyToBlueskyPostUseCase: ReplyToBlueskyPostUseCase | undefined;
   postToBlueskyUseCase: PostToBlueskyUseCase | undefined;
+  quoteBlueskyPostUseCase: QuoteBlueskyPostUseCase | undefined;
   markBlueskyNotificationsSeenUseCase: MarkBlueskyNotificationsSeenUseCase | undefined;
   blueskySearch: BlueskySearch | undefined;
   isDigestOwner: IsDigestOwner;
@@ -181,6 +183,17 @@ export const createPostToBlueskyUseCase = (
   return PostToBlueskyUseCase.create({ client, query: client.query, now: Instant.now });
 };
 
+export const createQuoteBlueskyPostUseCase = (
+  env: IoriWorkerEnv,
+  db: IoriD1Db,
+  deps: Readonly<{ fetch?: typeof fetch }> = {},
+): QuoteBlueskyPostUseCase | undefined => {
+  const config = resolveBlueskyTimelineConfig(env);
+  if (config === undefined) return undefined;
+  const client = createTimelineClient(config, db, deps);
+  return QuoteBlueskyPostUseCase.create({ client, query: client.query, now: Instant.now });
+};
+
 export const createMarkBlueskyNotificationsSeenUseCase = (
   env: IoriWorkerEnv,
   db: IoriD1Db,
@@ -245,6 +258,7 @@ export const createBlueskyTimelineRuntimePorts = (
       : createBlueskyPostThreadFetcher({ client: createTimelineClient(config, db, deps), now: Instant.now }),
     replyToBlueskyPostUseCase: createReplyToBlueskyPostUseCase(env, db, deps),
     postToBlueskyUseCase: createPostToBlueskyUseCase(env, db, deps),
+    quoteBlueskyPostUseCase: createQuoteBlueskyPostUseCase(env, db, deps),
     markBlueskyNotificationsSeenUseCase: createMarkBlueskyNotificationsSeenUseCase(env, db, deps),
     blueskySearch: config === undefined
       ? undefined

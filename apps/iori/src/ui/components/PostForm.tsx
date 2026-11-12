@@ -3,7 +3,7 @@ import { useState } from 'hono/jsx';
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 import { createBlueskyPost, createStatus, updateMedia, uploadMedia } from '../api/mastodonClient.ts';
-import { blueskyNotSentNotice } from './blueskyCrosspostMark.ts';
+import { blueskyCrosspostNotice } from './blueskyCrosspostMark.ts';
 import { downscaleImageForUpload } from './imageDownscale.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
@@ -31,7 +31,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const hasImages = uploaded.length > 0;
   const sensitive = hasImages && (sensitiveChecked || hasCw);
   const isBlueskyOnly = destination === 'bluesky';
-  const notSentNotice = blueskyNotSentNotice(destination, cwEnabled ? cw : '', sensitive);
+  const crosspostNotice = blueskyCrosspostNotice(destination, cwEnabled ? cw : '', sensitive);
 
   const handleContentChange = (value: string) => {
     setContent(value);
@@ -232,8 +232,8 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           投稿する
         </button>
       </div>
-      {notSentNotice !== undefined && (
-        <p class='mt-2 text-xs text-charcoal-light dark:text-gray-400 flex-shrink-0'>{notSentNotice}</p>
+      {crosspostNotice !== undefined && (
+        <p class='mt-2 text-xs text-charcoal-light dark:text-gray-400 flex-shrink-0'>{crosspostNotice}</p>
       )}
       {notice !== undefined && (
         <p role='status' class='mt-2 text-sm text-charcoal-light dark:text-gray-400 flex-shrink-0'>

@@ -1,8 +1,17 @@
 import { blueskyReplyExcerpt, blueskyReplyRemaining, canSendBlueskyReply } from '../hooks/blueskyReply.ts';
-import type { UseBlueskyReplyDialogReturn } from '../hooks/useBlueskyReplyDialog.ts';
+import type { UseBlueskyPostDialogReturn } from '../hooks/useBlueskyPostDialog.ts';
 import { ReplyDialogShell } from './ReplyDialogShell.tsx';
 
-export const BlueskyReplyModal = ({ dialog }: Readonly<{ dialog: UseBlueskyReplyDialogReturn }>) => {
+type Props = Readonly<{
+  dialog: UseBlueskyPostDialogReturn;
+  title?: string;
+  submitLabel?: string;
+  placeholder?: string;
+}>;
+
+export const BlueskyReplyModal = (
+  { dialog, title, submitLabel, placeholder = '返信を書く... (⌘+Enter to post)' }: Props,
+) => {
   const { target, content, isSending, errorText, close, setContent, send } = dialog;
 
   if (target === null) {
@@ -14,6 +23,8 @@ export const BlueskyReplyModal = ({ dialog }: Readonly<{ dialog: UseBlueskyReply
 
   return (
     <ReplyDialogShell
+      title={title}
+      submitLabel={submitLabel}
       onClose={close}
       onSubmit={() => void send()}
       isSending={isSending}
@@ -51,7 +62,7 @@ export const BlueskyReplyModal = ({ dialog }: Readonly<{ dialog: UseBlueskyReply
             if (canSubmit) void send();
           }
         }}
-        placeholder='返信を書く... (⌘+Enter to post)'
+        placeholder={placeholder}
         disabled={isSending}
         class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all'
         style={{ minHeight: '150px' }}
@@ -59,3 +70,12 @@ export const BlueskyReplyModal = ({ dialog }: Readonly<{ dialog: UseBlueskyReply
     </ReplyDialogShell>
   );
 };
+
+export const BlueskyQuoteModal = ({ dialog }: Readonly<{ dialog: UseBlueskyPostDialogReturn }>) => (
+  <BlueskyReplyModal
+    dialog={dialog}
+    title='引用'
+    submitLabel='引用して投稿'
+    placeholder='引用にコメントを書く... (⌘+Enter to post)'
+  />
+);

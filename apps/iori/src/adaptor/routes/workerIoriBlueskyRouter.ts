@@ -7,6 +7,7 @@ import {
   toBlueskyConnectionStatus,
 } from '../../domain/blueskySyncStatus/blueskySyncStatus.ts';
 import type { BlueskyLikeTargetNotFound } from '../../domain/blueskyTimeline/blueskyLike.ts';
+import type { BlueskyQuoteNotAllowed, BlueskyQuoteTargetNotFound } from '../../domain/blueskyTimeline/blueskyQuote.ts';
 import type { BlueskyReplyNotAllowed, BlueskyReplyTargetNotFound } from '../../domain/blueskyTimeline/blueskyReply.ts';
 import type { BlueskyRepostTargetNotFound } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import {
@@ -36,6 +37,7 @@ import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { LikeBlueskyPostUseCase } from '../../useCase/likeBlueskyPost.ts';
 import type { MarkBlueskyNotificationsSeenUseCase } from '../../useCase/markBlueskyNotificationsSeen.ts';
 import type { PostToBlueskyUseCase } from '../../useCase/postToBluesky.ts';
+import type { QuoteBlueskyPostUseCase } from '../../useCase/quoteBlueskyPost.ts';
 import type { ReplyToBlueskyPostUseCase } from '../../useCase/replyToBlueskyPost.ts';
 import type { RepostBlueskyPostUseCase } from '../../useCase/repostBlueskyPost.ts';
 import type { UndoRepostBlueskyPostUseCase } from '../../useCase/undoRepostBlueskyPost.ts';
@@ -70,6 +72,7 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   postToBlueskyUseCase: PostToBlueskyUseCase | undefined;
   mediaUploadResolver: MediaUploadResolver;
   uploads: Pick<PostImageObjectStore, 'get'>;
+  quoteBlueskyPostUseCase: QuoteBlueskyPostUseCase | undefined;
   markBlueskyNotificationsSeenUseCase: MarkBlueskyNotificationsSeenUseCase | undefined;
   blueskySearch: BlueskySearch | undefined;
   isDigestOwner: IsDigestOwner;
@@ -153,6 +156,7 @@ export type IoriBlueskyReplyResponse = Readonly<{ uri: string; cid: string }>;
 
 export type IoriBlueskyPostResponse = Readonly<{ uri: string; url: string | null }>;
 
+export type IoriBlueskyQuoteResponse = Readonly<{ uri: string; cid: string }>;
 export type IoriBlueskyPostTargetBody = Readonly<{ feedItemId: string }> | Readonly<{ uri: string }>;
 
 export type IoriBlueskyLikeRequest = IoriBlueskyPostTargetBody;
@@ -291,6 +295,18 @@ const postFailure = (c: Context, error: BlueskyClientError | BlueskyPostInvalid)
 
 const mediaUnavailable = { error: '添付した画像が見つからないか、読み込めませんでした' } as const;
 
+const quoteFailure = (
+  c: Context,
+  error: BlueskyClientError | BlueskyPostInvalid | BlueskyQuoteTargetNotFound | BlueskyQuoteNotAllowed,
+) => {
+  if (error.type === 'BlueskyQuoteTargetNotFound') return c.json({ error: 'Record not found' }, 404);
+  if (error.type === 'BlueskyQuoteNotAllowed') return c.json({ error: 'Quote not allowed' }, 422);
+  if (error.type === 'BlueskyPostInvalid') {
+    return c.json({ error: 'Validation failed: text', reason: error.reason }, 400);
+  }
+  return c.json({ error: 'Bluesky request failed' }, 502);
+};
+
 export const createWorkerIoriBlueskyRouter = ({
   authn,
   blueskyTimelineItemsResolver,
@@ -307,6 +323,7 @@ export const createWorkerIoriBlueskyRouter = ({
   postToBlueskyUseCase,
   mediaUploadResolver,
   uploads,
+  quoteBlueskyPostUseCase,
   markBlueskyNotificationsSeenUseCase,
   blueskySearch,
   isDigestOwner,
@@ -591,6 +608,30 @@ export const createWorkerIoriBlueskyRouter = ({
         return posted.ok
           ? c.json({ uri: posted.val.uri, url: posted.val.url } satisfies IoriBlueskyPostResponse)
           : postFailure(c, posted.err);
+      },
+    )
+    .post(
+      '/iori/v1/bluesky/quotes',
+      requireSameOriginForCookie,
+      authn.requireUser(writeStatuses),
+      async (c) => {
+        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
+          return c.json(forbidden, 403);
+        }
+        if (quoteBlueskyPostUseCase === undefined) {
+          return c.json({ error: 'Bluesky timeline is disabled' }, 409);
+        }
+        const body = await readRequestBody(c);
+        const uri = bodyString(body, 'uri');
+        if (uri === undefined || !blueskyPostUriPattern.test(uri)) {
+          return c.json({ error: 'Validation failed: uri' }, 400);
+        }
+        const text = bodyString(body, 'text');
+        if (text === undefined) return c.json({ error: 'Validation failed: text' }, 400);
+        const quoted = await quoteBlueskyPostUseCase.run({ uri, text });
+        return quoted.ok
+          ? c.json(quoted.val satisfies IoriBlueskyQuoteResponse, 201)
+          : quoteFailure(c, quoted.err);
       },
     )
     .post(

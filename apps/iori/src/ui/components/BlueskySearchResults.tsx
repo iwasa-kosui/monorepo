@@ -4,8 +4,11 @@ import type {
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { searchBlueskyActors, searchBlueskyPosts } from '../api/mastodonClient.ts';
 import { type BlueskySearchPage, type BlueskySearchView, useBlueskySearch } from '../hooks/useBlueskySearch.ts';
+import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
 import { blueskySearchErrorMessage } from '../pages/searchSource.ts';
 import { BlueskyActorRow } from './BlueskyActorRow.tsx';
+import { blueskyItemActionProps, type BlueskyPostActions } from './blueskyPostActions.ts';
+import { BlueskyReplyModal } from './BlueskyReplyModal.tsx';
 import { BlueskyTimelineItemView } from './BlueskyTimelineItemView.tsx';
 
 type Submitted = Readonly<{ q: string; seq: number }>;
@@ -66,14 +69,22 @@ const BlueskySearchList = <T,>({ view: { state, retryLoadMore }, submitted, rend
   );
 };
 
+export const BlueskySearchPostItem = (
+  { item, actions }: Readonly<{ item: IoriBlueskyTimelineItemBody; actions?: BlueskyPostActions }>,
+) => <BlueskyTimelineItemView item={item} {...blueskyItemActionProps(actions, item)} />;
+
 export const BlueskyPostSearchResults = ({ submitted }: Readonly<{ submitted: Submitted }>) => {
   const view = useBlueskySearch({ query: submitted.q, seq: submitted.seq, fetchPage: fetchPostsPage, keyOf: postKey });
+  const { actions, replyDialog } = useBlueskyUriActions(view.updateItems);
   return (
-    <BlueskySearchList
-      view={view}
-      submitted={submitted}
-      renderItem={(item) => <BlueskyTimelineItemView key={item.feedItemId} item={item} />}
-    />
+    <>
+      <BlueskySearchList
+        view={view}
+        submitted={submitted}
+        renderItem={(item) => <BlueskySearchPostItem key={item.feedItemId} item={item} actions={actions} />}
+      />
+      <BlueskyReplyModal dialog={replyDialog} />
+    </>
   );
 };
 

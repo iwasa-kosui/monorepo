@@ -88,7 +88,7 @@ export const postToStatus = (post: PostWithAuthor): Status => {
       logoUri: post.logoUri,
     }),
     content: post.content,
-    visibility: 'public',
+    visibility: post.type === 'local' ? post.visibility : 'public',
     sensitive: post.sensitive,
     spoiler_text: post.summary ?? '',
     media_attachments: (post.images ?? []).map((image, index) => ({
@@ -111,6 +111,7 @@ export const postToStatus = (post: PostWithAuthor): Status => {
     in_reply_to_id: post.inReplyToUri ?? null,
     in_reply_to_account_id: null,
     reblog: null,
+    quote: null,
     poll: null,
     card: null,
     language: null,

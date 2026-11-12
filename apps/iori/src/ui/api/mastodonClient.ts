@@ -10,6 +10,10 @@ import type {
 } from '../../adaptor/mastodon/entities.ts';
 import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
 import type {
+  IoriRemoteContextResponse,
+  IoriRemoteStatusesResponse,
+} from '../../adaptor/routes/workerIoriActionsRouter.ts';
+import type {
   IoriBlueskyLikeResponse,
   IoriBlueskyPostResponse,
   IoriBlueskyRepostResponse,
@@ -284,6 +288,12 @@ export const react = (id: string, emoji: string): Promise<Status> => act<Status>
 
 export const unreact = (id: string, emoji: string): Promise<Status> => act<Status>('DELETE', reactionPath(id, emoji));
 
+export const fetchRemoteContext = (id: string): Promise<IoriRemoteContextResponse> =>
+  post<IoriRemoteContextResponse>(`/api/iori/v1/statuses/${encodeURIComponent(id)}/remote-context`);
+
+export const fetchRemoteStatuses = (accountId: string): Promise<IoriRemoteStatusesResponse> =>
+  post<IoriRemoteStatusesResponse>(`/api/iori/v1/accounts/${encodeURIComponent(accountId)}/remote-statuses`);
+
 export const reblog = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'reblog'));
 
 export const unreblog = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'unreblog'));
@@ -423,6 +433,10 @@ export type SearchStatusesResult = IoriSearchStatusesResponse;
 
 export const searchStatuses = async (q: string, limit?: number): Promise<SearchStatusesResult> =>
   (await request<SearchStatusesResult>('/api/iori/v1/search/statuses', { q, limit })).body;
+
+export const searchRemoteStatuses = async (url: string): Promise<readonly Status[]> =>
+  (await request<{ statuses: Status[] }>('/api/v2/search', { q: url, resolve: true, type: 'statuses' }))
+    .body.statuses;
 
 export const fetchXPosts = async (): Promise<IoriXPostsResponse> =>
   (await request<IoriXPostsResponse>('/api/iori/v1/x-posts')).body;
@@ -568,6 +582,21 @@ export const replyToBlueskyPost = async (feedItemId: string, text: string): Prom
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as BlueskyReplyResponse;
+};
+
+const BLUESKY_QUOTES_PATH = '/api/iori/v1/bluesky/quotes';
+
+export type BlueskyQuoteResponse = Readonly<{ uri: string; cid: string }>;
+
+export const quoteBlueskyPost = async (uri: string, text: string): Promise<BlueskyQuoteResponse> => {
+  const res = await fetch(BLUESKY_QUOTES_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ uri, text }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as BlueskyQuoteResponse;
 };
 
 const postJson = async <T>(path: string, body: unknown): Promise<T> => {

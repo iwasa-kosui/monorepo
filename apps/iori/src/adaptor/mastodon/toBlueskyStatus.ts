@@ -40,6 +40,7 @@ export const toBlueskyStatus = (
     in_reply_to_id: null,
     in_reply_to_account_id: null,
     reblog: null,
+    quote: null,
     poll: null,
     card: null,
     language: null,

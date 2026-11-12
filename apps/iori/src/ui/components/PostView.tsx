@@ -4,12 +4,14 @@ import type { Status, Translation } from '../../adaptor/mastodon/entities.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { isMastodonApiError, translate } from '../api/mastodonClient.ts';
+import { hideQuoteInline, quoteOf, quoteTargetUrls } from '../api/quote.ts';
 import { accountHandle, accountHref, detailHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { translationErrorMessage } from '../api/translation.ts';
 import { toBlueskyCrosspostMark } from './blueskyCrosspostMark.ts';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
+import { QuotedPostCard } from './QuotedPostCard.tsx';
 
 type Props = Readonly<{
   status: Status;
@@ -36,6 +38,8 @@ type Props = Readonly<{
   onReply?: (postId: string) => void;
   onShowThread?: (postId: string) => void;
   onMute?: (accountId: string, acct: string) => void;
+  onBlock?: (accountId: string, acct: string) => void;
+  onReport?: (target: Readonly<{ accountId: string; acct: string; statusId: string }>) => void;
 }>;
 
 const isOriginUri = (uri: string): boolean => uri.startsWith('https:') && !uri.includes('/api/v1/statuses/');
@@ -66,6 +70,8 @@ export const PostView = (
     onReply,
     onShowThread,
     onMute,
+    onBlock,
+    onReport,
   }: Props,
 ) => {
   const post = displayStatus(status);
@@ -79,11 +85,15 @@ export const PostView = (
   const images = post.media_attachments.filter((attachment) => attachment.type === 'image');
   const linkPreviews = post.iori?.link_previews ?? [];
   const reactions = post.iori?.reactions ?? [];
+  const quote = quoteOf(post);
+  const contentHtml = quote === undefined ? post.content : hideQuoteInline(post.content, quoteTargetUrls(quote));
   const postUrl = post.url ?? (!isLocalPost && isOriginUri(post.uri) ? post.uri : undefined);
-  const canMute = onMute !== undefined
-    && isLoggedIn === true
+  const isOtherAccount = isLoggedIn === true
     && currentAccountId !== undefined
     && post.account.id !== currentAccountId;
+  const canMute = onMute !== undefined && isOtherAccount;
+  const canBlock = onBlock !== undefined && isOtherAccount && !isLocalPost;
+  const canReport = onReport !== undefined && isOtherAccount && !isLocalPost;
   const menuItems: readonly PostMenuItem[] = [
     ...(postUrl !== undefined && !isLocalPost
       ? [{ key: 'open-original', label: '元の投稿を開く', kind: 'link', href: postUrl } as const]
@@ -99,6 +109,28 @@ export const PostView = (
           kind: 'action',
           danger: true,
           onSelect: () => onMute?.(post.account.id, post.account.acct),
+        } as const,
+      ]
+      : []),
+    ...(canBlock
+      ? [
+        {
+          key: 'block',
+          label: `@${post.account.acct} をブロック`,
+          kind: 'action',
+          danger: true,
+          onSelect: () => onBlock?.(post.account.id, post.account.acct),
+        } as const,
+      ]
+      : []),
+    ...(canReport
+      ? [
+        {
+          key: 'report',
+          label: 'この投稿を通報',
+          kind: 'action',
+          danger: true,
+          onSelect: () => onReport?.({ accountId: post.account.id, acct: post.account.acct, statusId: post.id }),
         } as const,
       ]
       : []),
@@ -382,7 +414,7 @@ export const PostView = (
             <>
               <div
                 class='mt-2 text-charcoal dark:text-gray-200 prose dark:prose-invert prose-sm max-w-none [&_a]:text-terracotta dark:[&_a]:text-terracotta-light hover:[&_a]:underline [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5 break-words [&_blockquote]:border-l-4 [&_blockquote]:border-sand [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-charcoal-light dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_blockquote]:dark:mb-4 [&_p]:mb-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:p-4 [&_code]:text-sm [&_pre_code]:bg-transparent [&_.invisible]:visible [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mb-2'
-                dangerouslySetInnerHTML={{ __html: post.content }}
+                dangerouslySetInnerHTML={{ __html: contentHtml }}
               />
               {isTranslationShown && translation !== null && (
                 <div class='mt-2 border-t border-warm-gray pt-2 dark:border-gray-700'>
@@ -440,6 +472,11 @@ export const PostView = (
                   </a>
                 );
               })}
+            </div>
+          )}
+          {!isContentHidden && quote !== undefined && (
+            <div class='mt-3'>
+              <QuotedPostCard quote={quote} />
             </div>
           )}
           {/* Link previews */}

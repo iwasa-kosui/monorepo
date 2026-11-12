@@ -4,9 +4,9 @@ import { type Context, Hono } from 'hono';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import type { ActorId } from '../../domain/actor/actorId.ts';
-import type { BlockedActorIdsResolverByUserId } from '../../domain/block/block.ts';
 import { MediaId } from '../../domain/mediaUpload/mediaId.ts';
 import type { MediaUpload, MediaUploadResolver } from '../../domain/mediaUpload/mediaUpload.ts';
+import type { MutedActorIdsResolverByUserId } from '../../domain/mute/mute.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 import {
@@ -60,7 +60,7 @@ export type WorkerMastodonStatusesRouterDeps = Readonly<{
   repostResolverById: RepostResolverById;
   repostResolver: RepostResolver;
   threadResolver: ThreadResolver;
-  blockedActorIdsResolverByUserId: BlockedActorIdsResolverByUserId;
+  mutedActorIdsResolverByUserId: MutedActorIdsResolverByUserId;
   statusAssembler: StatusAssembler;
   mediaUploadResolver: MediaUploadResolver;
   createPostUseCase: CreatePostUseCase;
@@ -154,7 +154,7 @@ export const createWorkerMastodonStatusesRouter = ({
   repostResolverById,
   repostResolver,
   threadResolver,
-  blockedActorIdsResolverByUserId,
+  mutedActorIdsResolverByUserId,
   statusAssembler,
   mediaUploadResolver,
   createPostUseCase,
@@ -526,16 +526,16 @@ export const createWorkerMastodonStatusesRouter = ({
         return c.json(recordNotFound, 404);
       }
       const userId = principal?.userId;
-      const blocked = userId === null || userId === undefined
+      const hidden = userId === null || userId === undefined
         ? undefined
-        : await blockedActorIdsResolverByUserId.resolve(userId);
-      if (blocked !== undefined && !blocked.ok) {
+        : await mutedActorIdsResolverByUserId.resolve(userId);
+      if (hidden !== undefined && !hidden.ok) {
         return c.json(internalServerError, 500);
       }
-      const blockedActorIds = new Set<ActorId>(blocked?.val ?? []);
+      const hiddenActorIds = new Set<ActorId>(hidden?.val ?? []);
       const visible = (posts: ReadonlyArray<PostWithAuthor>): PostWithAuthor[] =>
         (viewerActorId === undefined ? posts.filter(Post.isVisibleToAnonymous) : [...posts])
-          .filter((post) => !blockedActorIds.has(post.actorId));
+          .filter((post) => !hiddenActorIds.has(post.actorId));
       const ancestors = visible(thread.val.ancestors);
       const descendants = visible(thread.val.descendants);
       const statuses = await statusAssembler.assemble({
