@@ -154,8 +154,8 @@ describe('blueskyNotSentNotice', () => {
     expect(BLUESKY_NOT_SENT_VISIBILITY_NOTICE).toBe('公開範囲が公開ではないので、Bluesky には送りません');
   });
 
-  it('公開範囲が公開以外でも、CW があれば CW の説明を優先する', () => {
-    expect(blueskyNotSentNotice('both', '注意', false, 'private')).toBe(BLUESKY_NOT_SENT_NOTICE);
+  it('公開範囲が公開以外のときは、CW があっても公開範囲の説明を優先する', () => {
+    expect(blueskyNotSentNotice('both', '注意', false, 'private')).toBe(BLUESKY_NOT_SENT_VISIBILITY_NOTICE);
   });
 
   it('送り先が Fediverse だけなら、公開範囲が公開以外でも返さない', () => {

@@ -81,6 +81,6 @@ export const blueskyNotSentNotice = (
   visibility: PostVisibility,
 ): string | undefined => {
   if (destination !== 'both') return undefined;
-  if (cw.trim() !== '' || sensitive) return BLUESKY_NOT_SENT_NOTICE;
-  return visibility !== 'public' ? BLUESKY_NOT_SENT_VISIBILITY_NOTICE : undefined;
+  if (visibility !== 'public') return BLUESKY_NOT_SENT_VISIBILITY_NOTICE;
+  return cw.trim() !== '' || sensitive ? BLUESKY_NOT_SENT_NOTICE : undefined;
 };

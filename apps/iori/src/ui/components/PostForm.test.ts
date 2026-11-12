@@ -22,6 +22,24 @@ describe('PostForm', () => {
     expect(html).not.toMatch(/<input[^>]*name="visibility"[^>]*value="private"[^>]*checked/);
   });
 
+  it('公開範囲の選択欄を、送り先と別の行に置く', () => {
+    const html = render();
+    const visibility = html.indexOf('aria-label="公開範囲"');
+    const destination = html.indexOf('aria-label="送り先"');
+
+    expect(visibility).toBeGreaterThan(-1);
+    expect(visibility).toBeLessThan(destination);
+    expect(html).toMatch(/<div class="mt-2 flex flex-wrap [^"]*"[^>]*><div[^>]*aria-label="送り先"/);
+  });
+
+  it('公開範囲の説明の id を、フォームの id から作る', () => {
+    const inline = String(jsx(PostForm, { id: 'post', onPosted: () => {} }));
+    const modal = String(jsx(PostForm, { formId: 'post-modal-form', onPosted: () => {} }));
+
+    expect(inline).toContain('id="post-visibility-description"');
+    expect(modal).toContain('id="post-modal-form-visibility-description"');
+  });
+
   it('公開範囲が公開の初期状態では、Bluesky に送らない案内を出さない', () => {
     expect(render()).not.toContain('Bluesky には送りません');
   });

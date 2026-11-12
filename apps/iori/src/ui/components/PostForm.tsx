@@ -178,9 +178,16 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           </label>
         </div>
       )}
-      <div class='mt-2 flex justify-end items-center gap-3 flex-shrink-0'>
+      <div class='mt-2 flex-shrink-0'>
+        <PostVisibilitySelect
+          value={visibility}
+          onChange={setVisibility}
+          name='visibility'
+          id={`${formId ?? id ?? 'post-form'}-visibility`}
+        />
+      </div>
+      <div class='mt-2 flex flex-wrap justify-end items-center gap-3 flex-shrink-0'>
         <PostDestinationSelect value={destination} onChange={setDestination} name='destination' />
-        <PostVisibilitySelect value={visibility} onChange={setVisibility} name='visibility' />
         <label class='cursor-pointer text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
           {isUploading
             ? <span class='text-xs'>Uploading...</span>

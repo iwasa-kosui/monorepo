@@ -2,6 +2,13 @@ import { Delete, Endpoints, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import { Instant } from '../../../domain/instant/instant.ts';
+import { ScheduleBlueskyCrosspostUseCase } from '../../../useCase/scheduleBlueskyCrosspost.ts';
+import type { SendBlueskyCrosspostUseCase } from '../../../useCase/sendBlueskyCrosspost.ts';
+import { createD1BlueskyCrosspostResolver } from '../../d1/blueskyCrosspost/blueskyCrosspostResolver.ts';
+import { createD1BlueskyCrosspostSavedStore } from '../../d1/blueskyCrosspost/blueskyCrosspostSavedStore.ts';
+import { createD1LocalPostResolverByUri } from '../../d1/post/localPostResolverByUri.ts';
+import { createD1PostResolver } from '../../d1/post/postResolver.ts';
 import { StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
@@ -233,6 +240,35 @@ describe('POST /api/v1/statuses の visibility', () => {
       expect(visibilityOf(t, status.id)).toBe(visibility);
     },
   );
+
+  it('visibility が unlisted で iori_destination が both のとき、実際の予約が応答の skip_reason を visibility にする', async () => {
+    const scheduled: { useCase?: ScheduleBlueskyCrosspostUseCase } = {};
+    const send = { run: vi.fn(async () => RA.ok(undefined)) };
+    const waitUntil = vi.fn();
+    const t = await setup({ scheduleBlueskyCrosspost: { run: (input) => scheduled.useCase!.run(input) } });
+    scheduled.useCase = ScheduleBlueskyCrosspostUseCase.create({
+      postResolver: createD1PostResolver(t.db),
+      localPostResolverByUri: createD1LocalPostResolverByUri(t.db, ORIGIN),
+      crosspostResolver: createD1BlueskyCrosspostResolver(t.db),
+      crosspostSavedStore: createD1BlueskyCrosspostSavedStore(t.db),
+      send: send as unknown as SendBlueskyCrosspostUseCase,
+      waitUntil,
+      now: Instant.now,
+    });
+
+    const response = await t.json({ status: 'hi', visibility: 'unlisted', iori_destination: 'both' });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(status.iori?.bluesky_crosspost).toEqual({
+      status: 'skipped',
+      skip_reason: 'visibility',
+      retrying: false,
+      url: null,
+    });
+    expect(send.run).not.toHaveBeenCalled();
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/v1/statuses の iori_destination', () => {
