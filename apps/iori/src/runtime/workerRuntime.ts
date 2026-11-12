@@ -126,6 +126,7 @@ import { createD1PostResolver } from '../adaptor/d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../adaptor/d1/post/postResolverByUri.ts';
 import { createD1PostSourceTextResolver } from '../adaptor/d1/post/postSourceTextResolver.ts';
 import { createD1PostUpdatedStore } from '../adaptor/d1/post/postUpdatedStore.ts';
+import { createD1PostVersionsResolverByPostId } from '../adaptor/d1/post/postVersionsResolverByPostId.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../adaptor/d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../adaptor/d1/post/remotePostUpserter.ts';
 import { createD1RemotePostUrisResolverByUris } from '../adaptor/d1/post/remotePostUrisResolverByUris.ts';
@@ -467,6 +468,7 @@ export const createWorkerRuntimePorts = async (
         actorResolverById: createD1ActorResolverById(db),
         remotePostUpserter,
         blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+        isBlockedUri: (uri) => isBlockedUri(uri),
       }),
       markersResolverByUserId,
       notificationIdsResolverByUserIdAndCreatedAt: createD1NotificationIdsResolverByUserIdAndCreatedAt(db),
@@ -812,6 +814,9 @@ export const createWorkerRuntimePorts = async (
         sessionResolver,
         userResolver,
         postResolver,
+        postResolverByUri: createD1PostResolverByUri(db),
+        actorResolverById: createD1ActorResolverById(db),
+        actorResolverByUri: createD1ActorResolverByUri(db),
         postUpdatedStore: createD1PostUpdatedStore(db),
         postImagesResolver: createD1PostImagesResolverByPostId(db),
         postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
@@ -819,6 +824,7 @@ export const createWorkerRuntimePorts = async (
         origin: env.ORIGIN,
       }),
       postSourceTextResolver: createD1PostSourceTextResolver(db),
+      postVersionsResolver: createD1PostVersionsResolverByPostId(db),
       deletePostUseCase: DeletePostUseCase.create({
         sessionResolver,
         userResolver,

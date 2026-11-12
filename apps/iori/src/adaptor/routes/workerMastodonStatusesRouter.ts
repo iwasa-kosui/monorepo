@@ -14,6 +14,7 @@ import {
   Post,
   type PostSourceTextResolver,
   type PostsWithAuthorResolverByPostIds,
+  type PostVersionsResolverByPostId,
   type PostWithAuthor,
   type ThreadResolver,
 } from '../../domain/post/post.ts';
@@ -36,14 +37,16 @@ import type { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
 import type { UpdatePostUseCase } from '../../useCase/updatePost.ts';
 import type { RemoteActorLookup } from '../fedify/remoteActorLookup.ts';
-import type { Status } from '../mastodon/entities.ts';
+import type { Status, StatusEdit } from '../mastodon/entities.ts';
 import { MAX_STATUS_CHARACTERS } from '../mastodon/instance.ts';
+import { sanitizeStatusContent } from '../mastodon/sanitizeContent.ts';
 import {
   isSourceVisibleToAnonymous,
   type StatusAssembler,
   StatusAssemblyError,
   type StatusSource,
 } from '../mastodon/statusAssembler.ts';
+import { toIsoString } from '../mastodon/time.ts';
 import { htmlToPlainText } from '../text/htmlToPlainText.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { resolveViewer } from './helper/mastodonViewer.ts';
@@ -72,6 +75,7 @@ export type WorkerMastodonStatusesRouterDeps = Readonly<{
   sendReplyUseCase: SendReplyUseCase;
   updatePostUseCase: UpdatePostUseCase;
   postSourceTextResolver: PostSourceTextResolver;
+  postVersionsResolver: PostVersionsResolverByPostId;
   deletePostUseCase: DeletePostUseCase;
   sendLikeUseCase: SendLikeUseCase;
   undoLikeUseCase: UndoLikeUseCase;
@@ -186,6 +190,7 @@ export const createWorkerMastodonStatusesRouter = ({
   sendReplyUseCase,
   updatePostUseCase,
   postSourceTextResolver,
+  postVersionsResolver,
   deletePostUseCase,
   sendLikeUseCase,
   undoLikeUseCase,
@@ -614,6 +619,63 @@ export const createWorkerMastodonStatusesRouter = ({
         requestUrl: c.req.url,
       });
       return status === undefined ? c.json(recordNotFound, 404) : c.json(status);
+    })
+    .get('/v1/statuses/:id/history', authn.optionalAuth, async (c) => {
+      const principal = getMastodonPrincipal(c);
+      const rejection = rejectUnlessTokenScope(c, principal, [readStatuses]);
+      if (rejection !== undefined) {
+        return rejection;
+      }
+      const id = PostId.parse(c.req.param('id'));
+      if (!id.ok) {
+        return c.json(recordNotFound, 404);
+      }
+      const viewer = await resolveViewer(actorResolverByUserId, principal);
+      if (!viewer.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const source = await resolveSource(id.val, viewer.viewerActorId);
+      if (
+        source === undefined || source.type !== 'post'
+        || (viewer.viewerActorId === undefined && !isSourceVisibleToAnonymous(source))
+      ) {
+        return c.json(recordNotFound, 404);
+      }
+      const [status] = await statusAssembler.assemble({
+        sources: [source],
+        viewerActorId: viewer.viewerActorId,
+        requestUrl: c.req.url,
+      });
+      if (status === undefined) {
+        return c.json(recordNotFound, 404);
+      }
+      const versions = source.post.type === 'local' ? await postVersionsResolver.resolve(id.val) : undefined;
+      if (versions !== undefined && !versions.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const toEdit = (
+        version: Readonly<{ content: string; summary: string | null; sensitive: boolean; createdAt: number }>,
+      ): StatusEdit => ({
+        content: sanitizeStatusContent(version.content),
+        spoiler_text: version.summary ?? '',
+        sensitive: version.sensitive,
+        created_at: toIsoString(version.createdAt),
+        account: status.account,
+        poll: null,
+        media_attachments: status.media_attachments,
+        emojis: [],
+      });
+      const history = versions?.val ?? [];
+      return c.json(
+        history.length > 0
+          ? history.map(toEdit)
+          : [toEdit({
+            content: source.post.content,
+            summary: source.post.summary,
+            sensitive: source.post.sensitive,
+            createdAt: source.post.editedAt ?? source.post.createdAt,
+          })],
+      );
     })
     .get('/v1/statuses/:id/context', authn.optionalAuth, async (c) => {
       const principal = getMastodonPrincipal(c);

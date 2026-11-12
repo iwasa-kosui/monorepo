@@ -1,18 +1,21 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Update } from '@fedify/vocab';
+import { isActor, Update } from '@fedify/vocab';
 import { RA, type Result } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 import z from 'zod/v4';
 
+import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
+import type { ActorResolverByUri } from '../domain/actor/actor.ts';
 import type { PostImagesResolverByPostId } from '../domain/image/image.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import type { MentionRecipient } from '../domain/post/mention.ts';
+import { mentionLinksOfHtml, type MentionRecipient } from '../domain/post/mention.ts';
 import {
   type LocalPost,
   Post,
   PostNotFoundError,
   type PostQuotesResolverByPostIds,
   type PostResolver,
+  type PostResolverByUri,
   type PostUpdatedStore,
 } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
@@ -22,6 +25,7 @@ import type { SessionExpiredError, SessionResolver } from '../domain/session/ses
 import { User, type UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
 import { buildLocalNote } from './helper/localNote.ts';
+import type { MentionedActor } from './helper/mentionNote.ts';
 import { toQuoteNoteFields } from './helper/quoteNote.ts';
 import { type Requester, resolveRequesterUserWith } from './helper/resolve.ts';
 import { sendToMentions } from './helper/sendToMentions.ts';
@@ -67,6 +71,9 @@ type Deps = Readonly<{
   sessionResolver: SessionResolver;
   userResolver: UserResolver;
   postResolver: PostResolver;
+  postResolverByUri: PostResolverByUri;
+  actorResolverById: ActorResolverById;
+  actorResolverByUri: ActorResolverByUri;
   postUpdatedStore: PostUpdatedStore;
   postImagesResolver: PostImagesResolverByPostId;
   postQuotesResolver?: PostQuotesResolverByPostIds;
@@ -74,10 +81,15 @@ type Deps = Readonly<{
   origin: string;
 }>;
 
+type Addressee = Readonly<{ recipient: MentionRecipient; mentioned: MentionedActor }>;
+
 const create = ({
   sessionResolver,
   userResolver,
   postResolver,
+  postResolverByUri,
+  actorResolverById,
+  actorResolverByUri,
   postUpdatedStore,
   postImagesResolver,
   postQuotesResolver,
@@ -86,6 +98,62 @@ const create = ({
 }: Deps): UpdatePostUseCase => {
   const now = Instant.now();
   const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
+
+  const lookupActor = async (
+    ctx: RequestContext<unknown>,
+    identifier: string,
+    uri: string,
+  ): Promise<MentionRecipient | undefined> => {
+    try {
+      const documentLoader = await ctx.getDocumentLoader({ identifier });
+      const found = await ctx.lookupObject(uri, { documentLoader });
+      if (!isActor(found) || found.id === null || found.inboxId === null) {
+        return undefined;
+      }
+      return {
+        id: found.id.href,
+        inboxUrl: found.inboxId.href,
+        ...(found.endpoints?.sharedInbox == null ? {} : { sharedInboxUrl: found.endpoints.sharedInbox.href }),
+      };
+    } catch (err) {
+      getLogger().warn(`Failed to look up the previous addressee ${uri}: ${err}`);
+      return undefined;
+    }
+  };
+
+  const resolvePreviousAddressees = async (
+    post: LocalPost,
+    ctx: RequestContext<unknown>,
+    identifier: string,
+  ): Promise<ReadonlyArray<Addressee>> => {
+    const addressees: Addressee[] = [];
+    for (const { href, name } of mentionLinksOfHtml(post.content)) {
+      const known = await actorResolverByUri.resolve(href);
+      const recipient = known.ok && known.val !== undefined
+        ? { id: known.val.uri, inboxUrl: known.val.inboxUrl }
+        : await lookupActor(ctx, identifier, href);
+      if (recipient !== undefined) {
+        addressees.push({ recipient, mentioned: { id: new URL(href), name } });
+      }
+    }
+    if (post.inReplyToUri !== null) {
+      const parent = await postResolverByUri.resolve({ uri: post.inReplyToUri });
+      const author = parent.ok && parent.val !== undefined
+        ? await actorResolverById.resolve(parent.val.actorId)
+        : undefined;
+      if (author?.ok && author.val !== undefined && author.val.type === 'remote') {
+        const id = new URL(author.val.uri);
+        addressees.push({
+          recipient: { id: author.val.uri, inboxUrl: author.val.inboxUrl },
+          mentioned: {
+            id,
+            ...(author.val.username === undefined ? {} : { name: `@${author.val.username}@${id.host}` }),
+          },
+        });
+      }
+    }
+    return addressees;
+  };
 
   const run = async (input: Input) =>
     RA.flow(
@@ -111,6 +179,8 @@ const create = ({
         const quotes = await postQuotesResolver?.resolve([post.postId]);
         return RA.ok(quotes?.ok ? quotes.val.get(post.postId) : undefined);
       }),
+      RA.andBind('previous', async ({ post, ctx, user }) =>
+        RA.ok(await resolvePreviousAddressees(post, ctx, user.username))),
       RA.andBind('postEvent', ({ post, content, sourceText, summary, sensitive, quote }) =>
         RA.ok(
           Post.updatePost(now)(post, {
@@ -120,18 +190,22 @@ const create = ({
             sensitive,
           }),
         )),
-      RA.andThrough(({ postEvent }) => postUpdatedStore.store(postEvent)),
+      RA.andThrough(({ postEvent }) =>
+        postUpdatedStore.store(postEvent)
+      ),
       RA.bind('updated', ({ postEvent }) => postEvent.aggregateState),
       RA.andBind('images', ({ post }) => postImagesResolver.resolve(post.postId)),
-      RA.andBind('note', ({ user, ctx, updated, images, quote }) =>
-        RA.ok(buildLocalNote({
+      RA.andBind('note', ({ user, ctx, updated, images, quote, previous }) => {
+        const quoteFields = toQuoteNoteFields(quote);
+        return RA.ok(buildLocalNote({
           ctx,
           identifier: user.username,
           post: updated,
           images,
           origin,
-          quote: toQuoteNoteFields(quote),
-        }))),
+          quote: { ...quoteFields, actors: [...quoteFields.actors, ...previous.map(({ mentioned }) => mentioned)] },
+        }));
+      }),
       RA.andBind('activity', ({ note, updated }) =>
         RA.ok(
           new Update({
@@ -142,13 +216,17 @@ const create = ({
             ccs: note.ccIds,
           }),
         )),
-      RA.andThrough(async ({ user, ctx, activity, mentions, quote }) => {
+      RA.andThrough(async ({ user, ctx, activity, mentions, quote, previous }) => {
         await ctx.sendActivity({ identifier: user.username }, 'followers', activity);
         await sendToMentions({
           ctx,
           identifier: user.username,
           activity,
-          mentions: [...(mentions ?? []), ...toQuoteNoteFields(quote).recipients],
+          mentions: [
+            ...(mentions ?? []),
+            ...previous.map(({ recipient }) => recipient),
+            ...toQuoteNoteFields(quote).recipients,
+          ],
         });
         return RA.ok(undefined);
       }),

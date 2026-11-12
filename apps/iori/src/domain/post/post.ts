@@ -5,6 +5,7 @@ import { ActorId } from '../actor/actorId.ts';
 import type { RemoteActorProfile } from '../actor/remoteActor.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
+import type { PostImage as StoredPostImage } from '../image/image.ts';
 import type { ImageId } from '../image/imageId.ts';
 import { Instant } from '../instant/instant.ts';
 import type { LinkPreview } from '../linkPreview/linkPreview.ts';
@@ -38,6 +39,7 @@ const remotePostZodType = z.object({
   visibility: z.nullable(Visibility.zodType),
   summary: z.nullable(z.string()),
   sensitive: z.boolean(),
+  editedAt: z.nullable(Instant.zodType).optional(),
 });
 
 export type LocalPost = z.infer<typeof localPostZodType>;
@@ -91,6 +93,15 @@ export type PostUpdated = PostEvent<
     sensitive: boolean;
     sourceText: string;
     editedAt: Instant;
+  }
+>;
+export type RemotePostUpdated = PostEvent<
+  RemotePost,
+  'post.remotePostUpdated',
+  RemotePost & {
+    recipientActorUris: ReadonlyArray<string>;
+    previousRecipientActorUris: ReadonlyArray<string>;
+    images: ReadonlyArray<StoredPostImage>;
   }
 >;
 export type PostDeleted = PostEvent<undefined, 'post.deleted', { postId: PostId; deletedAt: Instant }>;
@@ -180,6 +191,32 @@ const createRemotePost = (now: Instant) =>
   );
 };
 
+export type RemotePostEdit = Readonly<{
+  content: string;
+  summary: string | null;
+  sensitive: boolean;
+  editedAt: Instant;
+  visibility: Visibility | null;
+  recipientActorUris: ReadonlyArray<string>;
+  previousRecipientActorUris: ReadonlyArray<string>;
+  images: ReadonlyArray<StoredPostImage>;
+}>;
+
+const isNewerEdit = (post: RemotePost, editedAt: Instant): boolean =>
+  post.editedAt === undefined || post.editedAt === null || editedAt > post.editedAt;
+
+const updateRemotePost = (now: Instant) => (post: RemotePost, edit: RemotePostEdit): RemotePostUpdated => {
+  const { recipientActorUris, previousRecipientActorUris, images, visibility, ...changed } = edit;
+  const updated: RemotePost = { ...post, ...changed, visibility: Visibility.narrow(post.visibility, visibility) };
+  return PostEvent.create(
+    post.postId,
+    updated,
+    'post.remotePostUpdated',
+    { ...updated, recipientActorUris, previousRecipientActorUris, images },
+    now,
+  );
+};
+
 const deletePost = (now: Instant) => (postId: PostId): PostDeleted => {
   return PostEvent.create(
     postId,
@@ -197,15 +234,25 @@ export const Post = {
   createPost,
   createRemotePost,
   updatePost,
+  updateRemotePost,
+  isNewerEdit,
   deletePost,
   isVisibleToAnonymous,
 } as const;
 
 export type PostCreatedStore = Agg.Store<PostCreated | RemotePostCreated>;
 export type PostUpdatedStore = Agg.Store<PostUpdated>;
+export type RemotePostUpdatedStore = Agg.Store<RemotePostUpdated>;
 export type PostDeletedStore = Agg.Store<PostDeleted>;
 export type PostResolver = Agg.Resolver<PostId, Post | undefined>;
 export type PostSourceTextResolver = Agg.Resolver<PostId, string | null>;
+export type PostVersion = Readonly<{
+  content: string;
+  summary: string | null;
+  sensitive: boolean;
+  createdAt: Instant;
+}>;
+export type PostVersionsResolverByPostId = Agg.Resolver<PostId, ReadonlyArray<PostVersion>>;
 export type PostQuote = Readonly<{
   uri: string;
   author: Readonly<{ id: string; inboxUrl: string; username: string | null }> | null;
@@ -213,6 +260,7 @@ export type PostQuote = Readonly<{
 export type PostQuotesResolverByPostIds = Agg.Resolver<ReadonlyArray<PostId>, ReadonlyMap<PostId, PostQuote>>;
 export type PostResolverByUri = Agg.Resolver<{ uri: string }, RemotePost | undefined>;
 export type LocalPostResolverByUri = Agg.Resolver<{ uri: string }, LocalPost | undefined>;
+export type RemotePostRecipientsResolverByPostId = Agg.Resolver<PostId, ReadonlyArray<string>>;
 export type RemotePostUrisResolverByUris = Agg.Resolver<{ uris: readonly string[] }, readonly string[]>;
 export type LocalPostUrisResolverByUris = Agg.Resolver<{ uris: readonly string[] }, readonly string[]>;
 export type RemotePostAttachment = Readonly<{ url: string; altText: string | null; mediaType: string | null }>;

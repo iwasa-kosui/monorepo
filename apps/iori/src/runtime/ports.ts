@@ -53,6 +53,7 @@ import type {
   LocalPostsResolverByPage,
   PostSourceTextResolver,
   PostsWithAuthorResolverByPostIds,
+  PostVersionsResolverByPostId,
   ThreadResolver,
 } from '../domain/post/post.ts';
 import type { AllRelaysResolver } from '../domain/relay/relay.ts';
@@ -273,6 +274,7 @@ export type IoriCoreRuntimePorts = Readonly<{
   sendReplyUseCase: SendReplyUseCase;
   updatePostUseCase: UpdatePostUseCase;
   postSourceTextResolver: PostSourceTextResolver;
+  postVersionsResolver: PostVersionsResolverByPostId;
   deletePostUseCase: DeletePostUseCase;
   subscribePushUseCase: SubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;

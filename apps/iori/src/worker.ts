@@ -244,6 +244,7 @@ export default {
             sendReplyUseCase: runtime.core.sendReplyUseCase,
             updatePostUseCase: runtime.core.updatePostUseCase,
             postSourceTextResolver: runtime.core.postSourceTextResolver,
+            postVersionsResolver: runtime.core.postVersionsResolver,
             deletePostUseCase: runtime.core.deletePostUseCase,
             authn,
             createContext,

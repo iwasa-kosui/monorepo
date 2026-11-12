@@ -231,6 +231,7 @@ export const createD1TimelineItemsResolverByActorIds = (
             createdAt: row.posts.createdAt.getTime(),
             inReplyToUri: row.remote_posts.inReplyToUri,
             visibility: toVisibility(row.remote_posts.visibility),
+            editedAt: row.remote_posts.editedAt?.getTime() ?? null,
             summary: row.posts.summary,
             sensitive: row.posts.sensitive,
             type: 'remote',

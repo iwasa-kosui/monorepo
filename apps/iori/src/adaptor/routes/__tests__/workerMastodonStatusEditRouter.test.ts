@@ -2,7 +2,7 @@ import { Endpoints, Note, Person, Update } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
-import { StatusSchema } from '../../mastodon/entities.ts';
+import { StatusEditSchema, StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
 
@@ -291,7 +291,7 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
     expect(note.content?.toString()).toBe('<p>after</p>');
     expect(note.summary?.toString()).toBe('warn');
     expect(note.sensitive).toBe(true);
-    expect(note.updated?.toString()).toBe(new Date(status.edited_at!).toISOString());
+    expect(note.updated?.epochMilliseconds).toBe(Date.parse(status.edited_at!));
     expect(note.published?.toString()).toBe(new Date(status.created_at).toISOString());
   });
 
@@ -314,6 +314,95 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
     const note = await noteOf(sent[1]?.[2]);
     expect(note.content?.toString()).toContain(`href="${aliceId}"`);
     expect((await Array.fromAsync(note.getTags())).map((tag) => (tag as { href?: URL }).href?.href)).toEqual([aliceId]);
+  });
+
+  describe('編集前の宛先', () => {
+    const bobId = 'https://remote.example/users/bob';
+    const mentionOf = (href: string, acct: string) =>
+      `<span class="h-card"><a href="${href}" class="u-url mention">@<span>${acct}</span></a></span>`;
+    const tagHrefsOf = async (note: Note) =>
+      (await Array.fromAsync(note.getTags())).map((tag) => (tag as { href?: URL }).href?.href);
+
+    it('リモートの投稿への返信を @ の無い本文に編集しても、返信先の作者に Update を送り、Note の cc に残す', async () => {
+      const t = await setup();
+      const parent = t.seed.addRemotePost(t.seed.addRemoteActor('bob'), 1_000, { visibility: 'public' });
+      const reply = t.seed.addLocalPost(t.me, 2_000, { content: '<p>reply</p>', inReplyToUri: parent.uri });
+
+      const response = await t.edit(reply.postId, { status: 'edited' });
+
+      expect(response.status).toBe(200);
+      const sent = t.sentActivities();
+      expect(sent).toHaveLength(2);
+      expect(sent[1]?.[1]).toEqual([
+        expect.objectContaining({ id: new URL(bobId), inboxId: new URL(`${bobId}/inbox`) }),
+      ]);
+      const note = await noteOf(sent[1]?.[2]);
+      expect(note.content?.toString()).toBe('<p>edited</p>');
+      expect(note.ccIds.map((id) => id.href)).toContain(bobId);
+      expect(await tagHrefsOf(note)).toEqual([bobId]);
+    });
+
+    it('編集で消したメンションの相手にも Update を送り、Note の cc に残す', async () => {
+      const t = await setup();
+      t.seed.addRemoteActor('bob');
+      const own = t.seed.addLocalPost(t.me, 1_000, {
+        content: `<p>hi ${mentionOf(bobId, 'bob@remote.example')}</p>`,
+      });
+
+      const response = await t.edit(own.postId, { status: 'hi' });
+
+      expect(response.status).toBe(200);
+      const sent = t.sentActivities();
+      expect(sent).toHaveLength(2);
+      expect(sent[1]?.[1]).toEqual([
+        expect.objectContaining({ id: new URL(bobId), inboxId: new URL(`${bobId}/inbox`) }),
+      ]);
+      const note = await noteOf(sent[1]?.[2]);
+      expect(note.content?.toString()).toBe('<p>hi</p>');
+      expect(note.ccIds.map((id) => id.href)).toContain(bobId);
+      expect(await tagHrefsOf(note)).toEqual([bobId]);
+    });
+
+    it('消したメンションの相手が未保存なら、リモートから引いて送る', async () => {
+      const t = await setup();
+      const carolId = 'https://elsewhere.example/users/carol';
+      t.federation.lookupObject.mockResolvedValue(
+        new Person({
+          id: new URL(carolId),
+          inbox: new URL(`${carolId}/inbox`),
+          endpoints: new Endpoints({ sharedInbox: new URL('https://elsewhere.example/inbox') }),
+        }),
+      );
+      const own = t.seed.addLocalPost(t.me, 1_000, {
+        content: `<p>hi ${mentionOf(carolId, 'carol@elsewhere.example')}</p>`,
+      });
+
+      await t.edit(own.postId, { status: 'hi' });
+
+      const sent = t.sentActivities();
+      expect(sent).toHaveLength(2);
+      expect(sent[1]?.[1]).toEqual([{
+        id: new URL(carolId),
+        inboxId: new URL(`${carolId}/inbox`),
+        endpoints: { sharedInbox: new URL('https://elsewhere.example/inbox') },
+      }]);
+    });
+
+    it('編集前の宛先と編集後のメンションが重なっても、同じ相手に二度送らない', async () => {
+      const t = await withRemoteAlice();
+      t.seed.addRemoteActor('alice');
+      const own = t.seed.addLocalPost(t.me, 1_000, {
+        content: `<p>hi ${mentionOf(aliceId, 'alice@remote.example')}</p>`,
+      });
+
+      await t.edit(own.postId, { status: 'hello @alice@remote.example' });
+
+      const sent = t.sentActivities();
+      expect(sent).toHaveLength(2);
+      expect(sent[1]?.[1]).toHaveLength(1);
+      const note = await noteOf(sent[1]?.[2]);
+      expect(await tagHrefsOf(note)).toEqual([aliceId]);
+    });
   });
 
   it('引用先を保ち、RE: の段落を付け直して、引用先の作者にも送る', async () => {
@@ -399,5 +488,83 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
 
     expect(response.status).toBe(200);
     expect(scheduleBlueskyCrosspost.run).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('GET /api/v1/statuses/:id/history', () => {
+  const history = (t: Awaited<ReturnType<typeof setup>>, id: string) =>
+    t.request(`/api/v1/statuses/${id}/history`, { headers: t.me.bearer });
+
+  it('未編集の投稿は現在の版を 1 件返す', async () => {
+    const t = await setup();
+    const created = StatusSchema.parse(
+      await (await t.post({ status: 'only', spoiler_text: 'cw', sensitive: true })).json(),
+    );
+
+    const response = await history(t, created.id);
+
+    expect(response.status).toBe(200);
+    const edits = StatusEditSchema.array().parse(await response.json());
+    expect(edits).toHaveLength(1);
+    expect(edits[0]).toMatchObject({
+      content: '<p>only</p>',
+      spoiler_text: 'cw',
+      sensitive: true,
+      created_at: created.created_at,
+      account: created.account,
+      media_attachments: [],
+      emojis: [],
+      poll: null,
+    });
+  });
+
+  it('2 回編集した投稿は古い順に 3 件返し、版ごとに中身と日時が違う', async () => {
+    const t = await setup();
+    const created = StatusSchema.parse(await (await t.post({ status: 'v1' })).json());
+    const first = StatusSchema.parse(
+      await (await t.edit(created.id, { status: 'v2', spoiler_text: 'cw' })).json(),
+    );
+    const second = StatusSchema.parse(
+      await (await t.edit(created.id, { status: 'v3', spoiler_text: '', sensitive: true })).json(),
+    );
+
+    const edits = StatusEditSchema.array().parse(await (await history(t, created.id)).json());
+
+    expect(edits.map(({ content, spoiler_text, sensitive }) => ({ content, spoiler_text, sensitive }))).toEqual([
+      { content: '<p>v1</p>', spoiler_text: '', sensitive: false },
+      { content: '<p>v2</p>', spoiler_text: 'cw', sensitive: true },
+      { content: '<p>v3</p>', spoiler_text: '', sensitive: true },
+    ]);
+    expect(edits.map((edit) => edit.created_at)).toEqual([created.created_at, first.edited_at, second.edited_at]);
+  });
+
+  it('他人の公開の投稿とリモートの投稿は、現在の版を 1 件返す', async () => {
+    const t = await setup();
+    const theirs = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>theirs</p>' });
+    const remote = t.seed.addRemotePost(t.seed.addRemoteActor('bob'), 2_000, {
+      content: '<p>remote</p>',
+      visibility: 'public',
+    });
+
+    for (const [id, content] of [[theirs.postId, '<p>theirs</p>'], [remote.postId, '<p>remote</p>']] as const) {
+      const response = await history(t, id);
+
+      expect(response.status).toBe(200);
+      const edits = StatusEditSchema.array().parse(await response.json());
+      expect(edits).toHaveLength(1);
+      expect(edits[0]?.content).toBe(content);
+    }
+  });
+
+  it('見られない投稿と存在しない ID は 404 にする', async () => {
+    const t = await setup();
+    const hidden = t.seed.addRemotePost(t.seed.addRemoteActor('bob'), 1_000, { visibility: 'direct' });
+
+    for (const id of [hidden.postId, crypto.randomUUID(), 'nope']) {
+      const response = await history(t, id);
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual(notFound);
+    }
   });
 });

@@ -136,7 +136,7 @@ export const toStatus = (post: PostWithAuthor, options: ToStatusOptions): Status
     poll: null,
     card: toCard(post.linkPreviews, options.baseUrl),
     language: toLanguage(post.content),
-    edited_at: post.type === 'local' && post.editedAt !== undefined ? toIsoString(post.editedAt) : null,
+    edited_at: post.editedAt != null ? toIsoString(post.editedAt) : null,
     favourited: post.liked,
     reblogged: post.reposted,
     muted: false,

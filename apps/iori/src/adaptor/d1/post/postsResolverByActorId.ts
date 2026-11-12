@@ -18,7 +18,7 @@ const toPost = (row: {
     sensitive: boolean;
   };
   local_posts: { userId: string; inReplyToUri: string | null; visibility: string; editedAt: Date | null } | null;
-  remote_posts: { uri: string; inReplyToUri: string | null; visibility: string | null } | null;
+  remote_posts: { uri: string; inReplyToUri: string | null; visibility: string | null; editedAt: Date | null } | null;
 }): Post => {
   if (row.local_posts !== null) {
     return LocalPost.orThrow({
@@ -44,6 +44,7 @@ const toPost = (row: {
       uri: row.remote_posts.uri,
       inReplyToUri: row.remote_posts.inReplyToUri,
       visibility: toVisibility(row.remote_posts.visibility),
+      editedAt: row.remote_posts.editedAt?.getTime() ?? null,
       summary: row.posts.summary,
       sensitive: row.posts.sensitive,
       type: 'remote',

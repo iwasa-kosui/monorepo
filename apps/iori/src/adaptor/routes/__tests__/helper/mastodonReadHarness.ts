@@ -174,6 +174,7 @@ import { createD1PostResolver } from '../../../d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../../../d1/post/postResolverByUri.ts';
 import { createD1PostSourceTextResolver } from '../../../d1/post/postSourceTextResolver.ts';
 import { createD1PostUpdatedStore } from '../../../d1/post/postUpdatedStore.ts';
+import { createD1PostVersionsResolverByPostId } from '../../../d1/post/postVersionsResolverByPostId.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../../../d1/post/remotePostUpserter.ts';
 import { createD1RemotePostUrisResolverByUris } from '../../../d1/post/remotePostUrisResolverByUris.ts';
@@ -437,6 +438,9 @@ export const setupReadApi = (
             sessionResolver,
             userResolver,
             postResolver,
+            postResolverByUri: createD1PostResolverByUri(db),
+            actorResolverById: createD1ActorResolverById(db),
+            actorResolverByUri: createD1ActorResolverByUri(db),
             postUpdatedStore: createD1PostUpdatedStore(db),
             postImagesResolver: createD1PostImagesResolverByPostId(db),
             postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
@@ -444,6 +448,7 @@ export const setupReadApi = (
             origin: ORIGIN,
           }),
           postSourceTextResolver: createD1PostSourceTextResolver(db),
+          postVersionsResolver: createD1PostVersionsResolverByPostId(db),
           deletePostUseCase: DeletePostUseCase.create({
             sessionResolver,
             userResolver,
@@ -583,6 +588,7 @@ export const setupReadApi = (
             actorResolverById: createD1ActorResolverById(db),
             remotePostUpserter,
             blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+            isBlockedUri: () => false,
           }),
           createContext,
         }),

@@ -593,11 +593,12 @@ erDiagram
 
 ### 4.1 Post関連イベント
 
-| イベント名               | トリガー         | aggregateState |
-| ------------------------ | ---------------- | -------------- |
-| `post.created`           | ローカル投稿作成 | `LocalPost`    |
-| `post.remotePostCreated` | リモート投稿受信 | `RemotePost`   |
-| `post.deleted`           | 投稿削除         | `undefined`    |
+| イベント名               | トリガー               | aggregateState |
+| ------------------------ | ---------------------- | -------------- |
+| `post.created`           | ローカル投稿作成       | `LocalPost`    |
+| `post.remotePostCreated` | リモート投稿受信       | `RemotePost`   |
+| `post.remotePostUpdated` | リモート投稿の編集受信 | `RemotePost`   |
+| `post.deleted`           | 投稿削除               | `undefined`    |
 
 ### 4.2 Article関連イベント
 
