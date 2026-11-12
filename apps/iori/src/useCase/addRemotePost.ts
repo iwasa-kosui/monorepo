@@ -8,6 +8,7 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import type { RemoteActorCreatedStore, RemoteActorProfile } from '../domain/actor/remoteActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import type { RemoteActorProfileUpdatedStore } from '../domain/actor/updateProfile.ts';
+import type { BlockResolver } from '../domain/block/block.ts';
 import type { PostImage, PostImageCreatedStore, PostImagesResolverByPostId } from '../domain/image/image.ts';
 import { ImageId } from '../domain/image/imageId.ts';
 import { Instant } from '../domain/instant/instant.ts';
@@ -41,6 +42,7 @@ import {
   type TimelineItemsResolverByPostId,
 } from '../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
+import { isBlockedBy } from './helper/isBlockedBy.ts';
 import { upsertRemoteActor } from './helper/upsertRemoteActor.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -113,6 +115,7 @@ type Deps = Readonly<{
   linkPreviewCreatedStore: LinkPreviewCreatedStore;
   linkPreviewsResolver: LinkPreviewsResolverByPostId;
   ogpFetcher: OgpFetcher;
+  blockResolver?: BlockResolver;
 }>;
 
 const create = ({
@@ -135,6 +138,7 @@ const create = ({
   linkPreviewCreatedStore,
   linkPreviewsResolver,
   ogpFetcher,
+  blockResolver,
 }: Deps): AddRemotePostUseCase => {
   const run = async (input: Input) => {
     const now = Instant.now();
@@ -293,6 +297,9 @@ const create = ({
           existingNotifications.ok
           && existingNotifications.val.some((existing) => existing.originalPostId === originalPost.postId)
         ) {
+          return RA.ok(false);
+        }
+        if (await isBlockedBy(blockResolver, originalPost.userId, actor.id)) {
           return RA.ok(false);
         }
         // Create reply notification

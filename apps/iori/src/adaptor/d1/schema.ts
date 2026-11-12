@@ -335,6 +335,17 @@ export const mutesTable = sqliteTable('mutes', {
   index('mutes_muted_actor_id_idx').on(table.mutedActorId),
 ]);
 
+export const blocksTable = sqliteTable('blocks', {
+  blockId: text('blockId').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  blockedActorId: text('blockedActorId').notNull().references(() => actorsTable.actorId),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('block_user_actor_unique').on(table.userId, table.blockedActorId),
+  index('blocks_user_id_idx').on(table.userId),
+  index('blocks_blocked_actor_id_idx').on(table.blockedActorId),
+]);
+
 export const articlesTable = sqliteTable('articles', {
   articleId: text('articleId').primaryKey(),
   authorActorId: text('authorActorId').notNull().references(() => actorsTable.actorId),
@@ -741,6 +752,7 @@ export const schema = {
   notificationRepliesTable,
   notificationRepostsTable,
   mutesTable,
+  blocksTable,
   articlesTable,
   articleBodiesTable,
   linkPreviewsTable,

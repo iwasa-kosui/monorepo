@@ -4,6 +4,7 @@ import type {
   MediaAttachment,
   Notification,
   Relationship,
+  Report,
   Status,
   Translation,
 } from '../../adaptor/mastodon/entities.ts';
@@ -11,6 +12,8 @@ import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
 import type {
   IoriBlueskyLikeResponse,
   IoriBlueskyRepostResponse,
+  IoriBlueskySearchActorsResponse,
+  IoriBlueskySearchPostsResponse,
   IoriBlueskyStatusResponse,
   IoriBlueskyThreadResponse,
   IoriBlueskyTimelineResponse,
@@ -39,7 +42,7 @@ export type PageParams = Readonly<{
   limit?: number;
 }>;
 
-export type MastodonApiError = Error & Readonly<{ status: number; retryAfterSeconds?: number }>;
+export type MastodonApiError = Error & Readonly<{ status: number; retryAfterSeconds?: number; code?: string }>;
 
 export const isMastodonApiError = (error: unknown): error is MastodonApiError =>
   error instanceof Error && typeof (error as { status?: unknown }).status === 'number';
@@ -97,11 +100,15 @@ export const toApiError = async (res: Response): Promise<MastodonApiError> => {
   const message = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
     ? body.error
     : `HTTP ${res.status}`;
+  const code = typeof body === 'object' && body !== null && 'code' in body && typeof body.code === 'string'
+    ? body.code
+    : undefined;
   const retryAfterSeconds = parseRetryAfter(res.headers.get('Retry-After'), new Date());
   return Object.assign(
     new Error(message),
     { status: res.status },
     retryAfterSeconds === undefined ? {} : { retryAfterSeconds },
+    code === undefined ? {} : { code },
   );
 };
 
@@ -204,10 +211,15 @@ export const fetchRelationships = async (accountIds: readonly string[]): Promise
 export const fetchRelationshipOrSignedOut = async (accountId: string) => {
   try {
     const [relationship] = await fetchRelationships([accountId]);
-    return { isLoggedIn: true, isFollowing: relationship?.following ?? false, isMuted: relationship?.muting ?? false };
+    return {
+      isLoggedIn: true,
+      isFollowing: relationship?.following ?? false,
+      isMuted: relationship?.muting ?? false,
+      isBlocked: relationship?.blocking ?? false,
+    };
   } catch (error) {
-    if (isUnauthorizedError(error)) return { isLoggedIn: false, isFollowing: false, isMuted: false };
-    if (isUnprocessableError(error)) return { isLoggedIn: true, isFollowing: false, isMuted: false };
+    if (isUnauthorizedError(error)) return { isLoggedIn: false, isFollowing: false, isMuted: false, isBlocked: false };
+    if (isUnprocessableError(error)) return { isLoggedIn: true, isFollowing: false, isMuted: false, isBlocked: false };
     throw error;
   }
 };
@@ -288,6 +300,30 @@ export const mute = (accountId: string): Promise<Relationship> =>
 
 export const unmute = (accountId: string): Promise<Relationship> =>
   post<Relationship>(accountActionPath(accountId, 'unmute'));
+
+export type ReportParams = Readonly<{
+  account_id: string;
+  category: Report['category'];
+  comment: string;
+  status_ids?: readonly string[];
+}>;
+
+export const report = async (params: ReportParams): Promise<Report> => {
+  const res = await fetch('/api/v1/reports', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ ...params, forward: true }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as Report;
+};
+
+export const block = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'block'));
+
+export const unblock = (accountId: string): Promise<Relationship> =>
+  post<Relationship>(accountActionPath(accountId, 'unblock'));
 
 export const searchAccount = async (acct: string): Promise<Account | undefined> =>
   (await request<{ accounts: Account[] }>('/api/v2/search', { q: acct, resolve: true, type: 'accounts' }))
@@ -551,3 +587,13 @@ export const markBlueskyNotificationsSeen = async (seenAt: string): Promise<void
   });
   if (!res.ok) throw await toApiError(res);
 };
+
+const BLUESKY_SEARCH_POSTS_PATH = '/api/iori/v1/bluesky/search/posts';
+
+export const searchBlueskyPosts = async (q: string, cursor?: string): Promise<IoriBlueskySearchPostsResponse> =>
+  (await request<IoriBlueskySearchPostsResponse>(BLUESKY_SEARCH_POSTS_PATH, { q, cursor })).body;
+
+const BLUESKY_SEARCH_ACTORS_PATH = '/api/iori/v1/bluesky/search/actors';
+
+export const searchBlueskyActors = async (q: string, cursor?: string): Promise<IoriBlueskySearchActorsResponse> =>
+  (await request<IoriBlueskySearchActorsResponse>(BLUESKY_SEARCH_ACTORS_PATH, { q, cursor })).body;

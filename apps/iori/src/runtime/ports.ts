@@ -20,6 +20,10 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
+import type {
+  BlockedActorIdsResolverByUserId,
+  BlockedActorsResolverByUserIdWithPagination,
+} from '../domain/block/block.ts';
 import type { BlueskyCrosspostStatusReportResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type {
   DigestHeadersResolverByArticleIds,
@@ -120,6 +124,7 @@ import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAut
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { BlueskyProfileRuntimePorts } from './blueskyProfile.ts';
 import type { BlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
+import type { WorkerReportAction } from './workerReportActions.ts';
 
 export type WorkerRemoteActorAction = (
   input: Readonly<{
@@ -128,6 +133,8 @@ export type WorkerRemoteActorAction = (
     ctx: Context<unknown>;
   }>,
 ) => ResultAsync<void, Readonly<{ message: string }>>;
+
+export type WorkerBlockAction = WorkerRemoteActorAction;
 
 export type UploadObjectStore = ReturnType<typeof createPostImageR2ObjectStore>;
 export type IoriAuthRuntimePorts = Readonly<{
@@ -165,6 +172,8 @@ export type IoriMastodonRuntimePorts = Readonly<{
   accountRelationshipsResolverByActorIds: AccountRelationshipsResolverByActorIds;
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
   mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
+  blockedActorsResolverByUserIdWithPagination: BlockedActorsResolverByUserIdWithPagination;
+  blockedActorIdsResolverByUserId: BlockedActorIdsResolverByUserId;
   statusAssembler: StatusAssembler;
   searchTimeline: SearchTimelineUseCase;
   summarizeTimeline: SummarizeTimelineUseCase;
@@ -262,6 +271,9 @@ export type IoriCoreRuntimePorts = Readonly<{
   subscribePushUseCase: SubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;
   unfollowRemoteActor: WorkerRemoteActorAction;
+  reportRemoteActor: WorkerReportAction;
+  blockActor: WorkerBlockAction;
+  unblockActor: WorkerBlockAction;
   vapidPublicKey: string | undefined;
 }>;
 

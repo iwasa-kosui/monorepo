@@ -313,7 +313,13 @@ describe('toStrictlyDescending', () => {
 
 describe('toRelationship', () => {
   it('sets the given flags and leaves the others false', () => {
-    const relationship = toRelationship({ id: account.id, following: true, followedBy: false, muting: true });
+    const relationship = toRelationship({
+      id: account.id,
+      following: true,
+      followedBy: false,
+      muting: true,
+      blocking: false,
+    });
 
     expect(RelationshipSchema.safeParse(relationship).success).toBe(true);
     expect(relationship).toMatchObject({

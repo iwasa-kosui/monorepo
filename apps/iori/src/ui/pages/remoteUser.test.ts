@@ -25,21 +25,32 @@ const account = (overrides: Partial<Account> = {}): Account =>
     ...overrides,
   }) as Account;
 
-const render = (a: Account): string =>
+const render = (a: Account, overrides: Partial<Parameters<typeof RemoteUserPage>[0]> = {}): string =>
   String(jsx(RemoteUserPage, {
     account: a,
     statuses: [],
     isFollowing: false,
     isMuted: false,
+    isBlocked: false,
     isLoggedIn: false,
     onLike: async () => {},
     onFollow: async () => {},
     onUnfollow: async () => {},
     onMute: async () => {},
     onUnmute: async () => {},
+    onReportOpen: () => {},
+    onReportClose: () => {},
+    onReportSubmit: () => {},
+    onBlock: async () => {},
+    onUnblock: async () => {},
     likingPostId: null,
     isMuting: false,
+    isBlocking: false,
     isTogglingFollow: false,
+    isReportOpen: false,
+    isReporting: false,
+    isReported: false,
+    ...overrides,
   }));
 
 describe('RemoteUserPage profile', () => {
@@ -125,6 +136,28 @@ describe('RemoteUserPage profile', () => {
   });
 });
 
+describe('RemoteUserPage block button', () => {
+  it('shows the block button after the mute button when logged in', () => {
+    const html = render(account(), { isLoggedIn: true });
+
+    expect(html).toContain('title="ブロック"');
+    expect(html).not.toContain('ブロック解除');
+    expect(html.indexOf('title="ブロック"')).toBeGreaterThan(html.indexOf('title="ミュート"'));
+  });
+
+  it('shows the unblock button in terracotta while blocked', () => {
+    const html = render(account(), { isLoggedIn: true, isBlocked: true });
+    const button = html.slice(html.lastIndexOf('<button', html.indexOf('title="ブロック解除"')));
+
+    expect(button).toContain('text-terracotta');
+    expect(html).not.toContain('title="ブロック"');
+  });
+
+  it('hides the block button when signed out', () => {
+    expect(render(account())).not.toContain('ブロック');
+  });
+});
+
 describe('CustomEmojiText', () => {
   it('keeps unknown shortcodes as text', () => {
     expect(splitCustomEmojiText('hi :unknown:', [emoji])).toEqual([{ type: 'text', text: 'hi :unknown:' }]);
@@ -149,5 +182,31 @@ describe('CustomEmojiText', () => {
     const unsafe = { shortcode: 'x', url: 'javascript:alert(1)' } as Account['emojis'][number];
 
     expect(String(jsx(CustomEmojiText, { text: ':x:', emojis: [unsafe] }))).toBe(':x:');
+  });
+});
+
+describe('RemoteUserPage report', () => {
+  it('shows a report button titled 通報 for a signed-in viewer', () => {
+    const html = render(account(), { isLoggedIn: true });
+
+    expect(html).toMatch(/<button[^>]*title="通報"/);
+  });
+
+  it('does not show the report button to a signed-out viewer', () => {
+    expect(render(account())).not.toContain('title="通報"');
+  });
+
+  it('shows the report modal for the handle only while it is open', () => {
+    expect(render(account(), { isLoggedIn: true })).not.toContain('を通報');
+
+    const html = render(account(), { isLoggedIn: true, isReportOpen: true, reportError: 'Failed to report: HTTP 422' });
+
+    expect(html).toContain('@alice@remote.example を通報');
+    expect(html).toContain('Failed to report: HTTP 422');
+  });
+
+  it('shows the 通報しました notice only after a successful report', () => {
+    expect(render(account(), { isLoggedIn: true })).not.toContain('通報しました');
+    expect(render(account(), { isLoggedIn: true, isReported: true })).toContain('通報しました');
   });
 });
