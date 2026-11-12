@@ -409,6 +409,7 @@ const ThreadModal = () => {
                           onReport={reportPost.open}
                           isDeleting={actionState.deletingPostId === post.id}
                           onEmojiReact={actions.emojiReact}
+                          onVote={actions.vote}
                           onUndoEmojiReact={actions.undoEmojiReact}
                           isEmojiReacting={actionState.emojiReactingPostId === post.id}
                           myReactions={actionState.myReactions.get(post.id)}
@@ -444,6 +445,7 @@ const ThreadModal = () => {
                       onReport={reportPost.open}
                       isDeleting={actionState.deletingPostId === threadData.currentPost.id}
                       onEmojiReact={actions.emojiReact}
+                      onVote={actions.vote}
                       onUndoEmojiReact={actions.undoEmojiReact}
                       isEmojiReacting={actionState.emojiReactingPostId === threadData.currentPost.id}
                       myReactions={actionState.myReactions.get(threadData.currentPost.id)}
@@ -480,6 +482,7 @@ const ThreadModal = () => {
                             onReport={reportPost.open}
                             isDeleting={actionState.deletingPostId === post.id}
                             onEmojiReact={actions.emojiReact}
+                            onVote={actions.vote}
                             onUndoEmojiReact={actions.undoEmojiReact}
                             isEmojiReacting={actionState.emojiReactingPostId === post.id}
                             myReactions={actionState.myReactions.get(post.id)}
@@ -844,6 +847,7 @@ const TimelineList = () => {
             onReport={reportPost.open}
             isDeleting={actionState.deletingPostId === postId}
             onEmojiReact={actions.emojiReact}
+            onVote={actions.vote}
             onUndoEmojiReact={actions.undoEmojiReact}
             isEmojiReacting={actionState.emojiReactingPostId === postId}
             myReactions={actionState.myReactions.get(postId)}

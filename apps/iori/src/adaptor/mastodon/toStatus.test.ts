@@ -666,6 +666,25 @@ describe('toStatus の poll', () => {
     expect(status.poll?.expired).toBe(true);
   });
 
+  it('自分の投票があれば、voted を true にして own_votes に番号を入れる', () => {
+    const status = toStatus(remotePost, { ...options, poll: poll({ multiple: true }), ownVotes: [0, 1] });
+
+    expect(StatusSchema.safeParse(status).success).toBe(true);
+    expect(status.poll).toMatchObject({ voted: true, own_votes: [0, 1] });
+  });
+
+  it('自分の投票が無ければ、voted を false にして own_votes を空にする', () => {
+    expect(toStatus(remotePost, { ...options, poll: poll() }).poll).toMatchObject({ voted: false, own_votes: [] });
+    expect(toStatus(remotePost, { ...options, poll: poll(), ownVotes: [] }).poll).toMatchObject({
+      voted: false,
+      own_votes: [],
+    });
+  });
+
+  it('投票が無い投稿は、自分の投票があっても poll を null にする', () => {
+    expect(toStatus(remotePost, { ...options, ownVotes: [0] }).poll).toBeNull();
+  });
+
   it('リブログの外側の status は poll を持たない', () => {
     const reblog = toStatus(remotePost, { ...options, poll: poll() });
 

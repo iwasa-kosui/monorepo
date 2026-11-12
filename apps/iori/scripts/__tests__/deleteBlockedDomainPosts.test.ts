@@ -602,6 +602,7 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
       'DELETE FROM federated_timeline_items',
       'DELETE FROM post_images',
       'DELETE FROM post_quotes',
+      'DELETE FROM remote_post_poll_votes',
       'DELETE FROM remote_post_polls',
       'DELETE FROM local_posts',
       'DELETE FROM remote_post_recipients',

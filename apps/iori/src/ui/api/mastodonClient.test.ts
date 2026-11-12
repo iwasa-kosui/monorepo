@@ -70,6 +70,7 @@ import {
   updateProfile,
   updateStatus,
   uploadMedia,
+  votePoll,
 } from './mastodonClient.ts';
 
 describe('parseLinkHeader', () => {
@@ -675,6 +676,30 @@ describe('mastodon client requests', () => {
     expect((error as Error).message).toBe('Validation failed: Reblog of this status is not allowed');
     expect(failureMessage('repost', error)).toBe(
       'Failed to repost: Validation failed: Reblog of this status is not allowed',
+    );
+  });
+
+  it('votes with the chosen options as JSON and returns the updated poll', async () => {
+    const poll = { id: 'p1', voted: true, own_votes: [0, 2] };
+    const fetchMock = stubFetch(jsonResponse(poll));
+
+    const voted = await votePoll('p 1', [0, 2]);
+
+    expect(voted).toEqual(poll);
+    const [url, init] = (fetchMock.mock.calls as unknown as Array<[string, RequestInit]>)[0]!;
+    expect(url).toBe('/api/v1/polls/p%201/votes');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify({ choices: [0, 2] }));
+  });
+
+  it('throws the server message when the vote is rejected', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: You have already voted on this poll' }, { status: 422 }));
+
+    const error = await votePoll('p1', [0]).catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect(failureMessage('vote', error)).toBe(
+      'Failed to vote: Validation failed: You have already voted on this poll',
     );
   });
 

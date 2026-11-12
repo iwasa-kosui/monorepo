@@ -39,6 +39,7 @@ import type { SendRepostUseCase } from '../../useCase/sendRepost.ts';
 import type { UndoLikeUseCase } from '../../useCase/undoLike.ts';
 import type { UndoRepostUseCase } from '../../useCase/undoRepost.ts';
 import type { UpdatePostUseCase } from '../../useCase/updatePost.ts';
+import type { VotePollUseCase } from '../../useCase/votePoll.ts';
 import type { RemoteActorLookup } from '../fedify/remoteActorLookup.ts';
 import type { Status, StatusEdit } from '../mastodon/entities.ts';
 import { MAX_STATUS_CHARACTERS } from '../mastodon/instance.ts';
@@ -81,6 +82,7 @@ export type WorkerMastodonStatusesRouterDeps = Readonly<{
   postVersionsResolver: PostVersionsResolverByPostId;
   deletePostUseCase: DeletePostUseCase;
   sendLikeUseCase: SendLikeUseCase;
+  votePollUseCase: VotePollUseCase;
   undoLikeUseCase: UndoLikeUseCase;
   createBookmarkUseCase: CreateBookmarkUseCase;
   deleteBookmarkUseCase: DeleteBookmarkUseCase;
@@ -103,6 +105,15 @@ const MAX_MEDIA_ATTACHMENTS = 4;
 const validationFailed = (message: string) => ({ error: `Validation failed: ${message}` });
 
 const quoteNotAllowed = validationFailed('Quote not allowed');
+
+const toChoice = (value: unknown): number =>
+  typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : Number.NaN;
+
+const bodyChoices = (body: RequestBody): number[] =>
+  ['choices[]', 'choices'].flatMap((key) => {
+    const value = body[key];
+    return Array.isArray(value) ? value.map(toChoice) : isOmitted(value) || value === '' ? [] : [toChoice(value)];
+  });
 
 const isOmitted = (value: unknown): boolean => value === undefined || value === null;
 
@@ -175,6 +186,16 @@ const failed = (c: Context, err: Readonly<{ type: string }>): Response => {
       return c.json(validationFailed('Direct statuses can\'t add new recipients when edited'), 422);
     case 'RemoteNoteLookupError':
       return c.json({ error: 'The remote server could not be reached' }, 502);
+    case 'PollNotFoundError':
+      return c.json(recordNotFound, 404);
+    case 'PollClosedError':
+      return c.json(validationFailed('The poll has already ended'), 422);
+    case 'AlreadyVotedError':
+      return c.json(validationFailed('You have already voted on this poll'), 422);
+    case 'InvalidPollChoicesError':
+      return c.json(validationFailed('Choices are invalid'), 422);
+    case 'PollAuthorBlockedError':
+      return c.json(validationFailed('The author of this poll is blocked'), 422);
     default:
       throw new Error(`The status action failed: ${err.type}`);
   }
@@ -199,6 +220,7 @@ export const createWorkerMastodonStatusesRouter = ({
   postVersionsResolver,
   deletePostUseCase,
   sendLikeUseCase,
+  votePollUseCase,
   undoLikeUseCase,
   createBookmarkUseCase,
   deleteBookmarkUseCase,
@@ -552,6 +574,24 @@ export const createWorkerMastodonStatusesRouter = ({
         ? failed(c, liked.err)
         : respondWithStatus(c, acting.val);
     })
+    .post('/v1/polls/:id/votes', authn.requireUser(writeStatuses), async (c) => {
+      const acting = await resolveActingPost(c);
+      if (!acting.ok) {
+        return acting.err;
+      }
+      const { userId, viewerActorId, post } = acting.val;
+      const voted = await votePollUseCase.run({
+        userId,
+        postId: post.postId,
+        choices: bodyChoices(await readRequestBody(c)),
+        ctx: createContext(c.req.raw),
+      });
+      if (!voted.ok) {
+        return failed(c, voted.err);
+      }
+      const status = await assemblePost(c, post, viewerActorId);
+      return status?.poll == null ? c.json(recordNotFound, 404) : c.json(status.poll);
+    })
     .post('/v1/statuses/:id/unfavourite', authn.requireUser(writeFavourites), async (c) => {
       const acting = await resolveActingPost(c);
       if (!acting.ok) {
@@ -660,6 +700,34 @@ export const createWorkerMastodonStatusesRouter = ({
         requestUrl: c.req.url,
       });
       return status === undefined ? c.json(recordNotFound, 404) : c.json(status);
+    })
+    .get('/v1/polls/:id', authn.optionalAuth, async (c) => {
+      const principal = getMastodonPrincipal(c);
+      const rejection = rejectUnlessTokenScope(c, principal, [readStatuses]);
+      if (rejection !== undefined) {
+        return rejection;
+      }
+      const id = PostId.parse(c.req.param('id'));
+      if (!id.ok) {
+        return c.json(recordNotFound, 404);
+      }
+      const viewer = await resolveViewer(actorResolverByUserId, principal);
+      if (!viewer.ok) {
+        return c.json(internalServerError, 500);
+      }
+      const source = await resolveSource(id.val, viewer.viewerActorId);
+      if (
+        source === undefined || source.type !== 'post'
+        || (viewer.viewerActorId === undefined && !isSourceVisibleToAnonymous(source))
+      ) {
+        return c.json(recordNotFound, 404);
+      }
+      const [status] = await statusAssembler.assemble({
+        sources: [source],
+        viewerActorId: viewer.viewerActorId,
+        requestUrl: c.req.url,
+      });
+      return status?.poll == null ? c.json(recordNotFound, 404) : c.json(status.poll);
     })
     .get('/v1/statuses/:id/history', authn.optionalAuth, async (c) => {
       const principal = getMastodonPrincipal(c);

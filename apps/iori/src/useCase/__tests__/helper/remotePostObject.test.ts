@@ -130,6 +130,14 @@ describe('buildRemotePostContent', () => {
       expect(await buildRemotePostContent(post)).toBe(`<p>q</p><p><a href="${ID.href}">元の投稿で投票する</a></p>`);
     });
 
+    it('投票を保存できるなら、投票のリンクを置かない', async () => {
+      const post = question({ content: '<p>q</p>', exclusiveOptions: [new Note({ name: 'a' })] });
+      const poll = await readRemotePostPoll(post);
+
+      expect(poll).toBeDefined();
+      expect(await buildRemotePostContent(post, poll)).toBe('<p>q</p>');
+    });
+
     it('id だけの選択肢は、取りに行かず、選択肢なしで続ける', async () => {
       const post = question({
         content: '<p>q</p>',
@@ -260,8 +268,14 @@ describe('buildRemotePostBody', () => {
       new Question({ id: ID, url: URL_OF_POST, content: '<p>q</p>', exclusiveOptions: [new Note({ name: 'a' })] }),
     );
 
-    expect(body.content).toBe(`<p>q</p><p><a href="${URL_OF_POST.href}">元の投稿で投票する</a></p>`);
+    expect(body.content).toBe('<p>q</p>');
     expect(body.poll?.options).toEqual([{ title: 'a', votesCount: 0 }]);
+  });
+
+  it('投票を読めなかった Question は、投票のリンクを残して poll を返さない', async () => {
+    const body = await buildRemotePostBody(new Question({ id: ID, url: URL_OF_POST, content: '<p>q</p>' }));
+
+    expect(body).toEqual({ content: `<p>q</p><p><a href="${URL_OF_POST.href}">元の投稿で投票する</a></p>` });
   });
 
   it('Note は本文だけを返す', async () => {

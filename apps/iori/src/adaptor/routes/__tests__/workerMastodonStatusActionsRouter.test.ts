@@ -1,7 +1,7 @@
-import { Announce, Like, Note, Person, Undo } from '@fedify/vocab';
+import { Announce, Create, Like, Note, Person, Question, Undo } from '@fedify/vocab';
 import { describe, expect, it } from 'vitest';
 
-import { StatusSchema } from '../../mastodon/entities.ts';
+import { PollSchema, StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
 
@@ -643,5 +643,308 @@ describe('POST /api/v1/statuses/:id/bookmark と /unbookmark', () => {
     });
 
     expect(response.status).toBe(200);
+  });
+});
+
+describe('POST /api/v1/polls/:id/votes と GET /api/v1/polls/:id', () => {
+  const seedPolls = async () => {
+    const t = await seedActions();
+    const addPoll = (postId: string, overrides: Readonly<{ multiple?: number; closed?: number }> = {}) =>
+      t.sqlite.prepare(
+        'INSERT INTO remote_post_polls(postId,multiple,options,votersCount,expiresAt,closed) VALUES (?,?,?,?,?,?)',
+      ).run(
+        postId,
+        overrides.multiple ?? 0,
+        JSON.stringify([{ title: '赤', votesCount: 3 }, { title: '青', votesCount: 1 }, {
+          title: '緑',
+          votesCount: 0,
+        }]),
+        4,
+        4_000_000_000_000,
+        overrides.closed ?? 0,
+      );
+    const question = t.seed.addRemotePost(t.alice, 3_000, { visibility: 'public' });
+    addPoll(question.postId);
+    const serveQuestion = (target: { uri: string } = question) =>
+      t.federation.lookupObject.mockResolvedValue(
+        new Question({
+          id: new URL(target.uri),
+          attribution: new Person({
+            id: new URL(`https://remote.example/users/${t.alice.username}`),
+            inbox: t.aliceInbox,
+          }),
+        }),
+      );
+    const vote = (
+      postId: string,
+      body: string | Record<string, unknown>,
+      headers: Record<string, string> = t.me.bearer,
+    ) =>
+      t.request(`/api/v1/polls/${postId}/votes`, {
+        method: 'POST',
+        headers: typeof body === 'string'
+          ? { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' }
+          : { ...headers, 'Content-Type': 'application/json' },
+        body: typeof body === 'string' ? body : JSON.stringify(body),
+      });
+    const voteRows = () =>
+      t.sqlite.prepare('SELECT choice FROM remote_post_poll_votes WHERE postId = ? ORDER BY choice').all(
+        question.postId,
+      ).map((row) => (row as { choice: number }).choice);
+    return { ...t, question, addPoll, serveQuestion, vote, voteRows };
+  };
+
+  it('form の choices[] で投票し、voted と own_votes と票数を反映した Poll を返す', async () => {
+    const t = await seedPolls();
+    t.serveQuestion();
+
+    const response = await t.vote(t.question.postId, 'choices[]=1');
+
+    expect(response.status).toBe(200);
+    expect(PollSchema.parse(await response.json())).toEqual({
+      id: t.question.postId,
+      expires_at: new Date(4_000_000_000_000).toISOString(),
+      expired: false,
+      multiple: false,
+      votes_count: 5,
+      voters_count: 5,
+      options: [{ title: '赤', votes_count: 3 }, { title: '青', votes_count: 2 }, { title: '緑', votes_count: 0 }],
+      emojis: [],
+      voted: true,
+      own_votes: [1],
+    });
+    expect(t.voteRows()).toEqual([1]);
+  });
+
+  it('JSON の choices で投票し、作者の inbox へ Create を送る', async () => {
+    const t = await seedPolls();
+    t.serveQuestion();
+
+    const response = await t.vote(t.question.postId, { choices: [0] });
+
+    expect(response.status).toBe(200);
+    expect(PollSchema.parse(await response.json())).toMatchObject({ voted: true, own_votes: [0] });
+    const sent = t.sentActivities();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.recipient).toMatchObject({ inboxId: t.aliceInbox });
+    expect(sent[0]!.activity).toBeInstanceOf(Create);
+    const note = await (sent[0]!.activity as Create).getObject();
+    expect(note).toBeInstanceOf(Note);
+    expect((note as Note).name?.toString()).toBe('赤');
+    expect((note as Note).replyTargetId?.href).toBe(t.question.uri);
+  });
+
+  it('JSON の choices が文字列の数字でも投票できる', async () => {
+    const t = await seedPolls();
+    t.serveQuestion();
+
+    const response = await t.vote(t.question.postId, { choices: ['2'] });
+
+    expect(PollSchema.parse(await response.json())).toMatchObject({ own_votes: [2] });
+  });
+
+  it('複数選択の投票には、選んだ数だけ Create を送り、votes_count を選んだ数ずつ増やす', async () => {
+    const t = await seedPolls();
+    t.sqlite.prepare('UPDATE remote_post_polls SET multiple = 1 WHERE postId = ?').run(t.question.postId);
+    t.serveQuestion();
+
+    const response = await t.vote(t.question.postId, 'choices[]=0&choices[]=2');
+
+    expect(PollSchema.parse(await response.json())).toMatchObject({
+      multiple: true,
+      votes_count: 6,
+      voters_count: 5,
+      voted: true,
+      own_votes: [0, 2],
+    });
+    expect(t.sentActivities()).toHaveLength(2);
+    expect(t.voteRows()).toEqual([0, 2]);
+  });
+
+  it('投票後の Status の poll にも、自分の投票を反映する', async () => {
+    const t = await seedPolls();
+    t.serveQuestion();
+    await t.vote(t.question.postId, 'choices[]=1');
+
+    const response = await t.request(`/api/v1/statuses/${t.question.postId}`, { headers: t.me.bearer });
+
+    expect(StatusSchema.parse(await response.json()).poll).toMatchObject({ voted: true, own_votes: [1] });
+  });
+
+  it.each([
+    ['既に投票済み', 'choices[]=0', 'You have already voted on this poll'],
+    ['選択肢の範囲外', 'choices[]=9', 'Choices are invalid'],
+    ['数字ではない choices', 'choices[]=abc', 'Choices are invalid'],
+    ['choices が無い', '', 'Choices are invalid'],
+    ['単一選択に 2 つ', 'choices[]=0&choices[]=1', 'Choices are invalid'],
+  ])('%s なら 422 にして、投票を保存も送信もしない', async (name, body, message) => {
+    const t = await seedPolls();
+    t.serveQuestion();
+    if (name === '既に投票済み') await t.vote(t.question.postId, 'choices[]=1');
+    const sentBefore = t.sentActivities().length;
+    const rowsBefore = t.voteRows();
+
+    const response = await t.vote(t.question.postId, body);
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: `Validation failed: ${message}` });
+    expect(t.sentActivities()).toHaveLength(sentBefore);
+    expect(t.voteRows()).toEqual(rowsBefore);
+  });
+
+  it('終了した投票は 422 にする', async () => {
+    const t = await seedPolls();
+    t.serveQuestion();
+    t.sqlite.prepare('UPDATE remote_post_polls SET closed = 1 WHERE postId = ?').run(t.question.postId);
+
+    const response = await t.vote(t.question.postId, 'choices[]=0');
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'Validation failed: The poll has already ended' });
+    expect(t.voteRows()).toEqual([]);
+  });
+
+  it('ブロックした相手の投票は 422 にする', async () => {
+    const t = await seedPolls();
+    t.serveQuestion();
+    t.seed.addBlock(t.me.userId, t.alice.actorId);
+
+    const response = await t.vote(t.question.postId, 'choices[]=0');
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'Validation failed: The author of this poll is blocked' });
+    expect(t.sentActivities()).toHaveLength(0);
+  });
+
+  it('相手のサーバーから Question を取得できないときは 502 にして、投票を保存しない', async () => {
+    const t = await seedPolls();
+
+    const response = await t.vote(t.question.postId, 'choices[]=0');
+
+    expect(response.status).toBe(502);
+    expect(t.voteRows()).toEqual([]);
+  });
+
+  it('投票の無い投稿、ローカルの投稿、存在しない投稿、不正な ID は 404 にする', async () => {
+    const t = await seedPolls();
+
+    const responses = await Promise.all([
+      t.vote(t.publicNote.postId, 'choices[]=0'),
+      t.vote(t.local.postId, 'choices[]=0'),
+      t.vote(t.seed.uuid(), 'choices[]=0'),
+      t.vote('not-an-id', 'choices[]=0'),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 404]);
+    expect(await responses[0]!.json()).toEqual(notFound);
+  });
+
+  it('トークンがないと 401、write:statuses を満たさないスコープは 403 にする', async () => {
+    const t = await seedPolls();
+    t.serveQuestion();
+    const readOnly = await t.bearerFor('read');
+    const favouritesOnly = await t.bearerFor('write:favourites');
+
+    const responses = await Promise.all([
+      t.request(`/api/v1/polls/${t.question.postId}/votes`, { method: 'POST' }),
+      t.vote(t.question.postId, 'choices[]=0', readOnly),
+      t.vote(t.question.postId, 'choices[]=0', favouritesOnly),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([401, 403, 403]);
+    expect(t.voteRows()).toEqual([]);
+  });
+
+  it('write:statuses だけのトークンで投票できる', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn('write:statuses');
+    const alice = t.seed.addRemoteActor('alice');
+    const question = t.seed.addRemotePost(alice, 3_000, { visibility: 'public' });
+    t.sqlite.prepare(
+      'INSERT INTO remote_post_polls(postId,multiple,options,votersCount,expiresAt,closed) VALUES (?,?,?,?,?,?)',
+    ).run(question.postId, 0, JSON.stringify([{ title: '赤', votesCount: 0 }]), 0, 4_000_000_000_000, 0);
+    t.federation.lookupObject.mockResolvedValue(
+      new Question({
+        id: new URL(question.uri),
+        attribution: new Person({
+          id: new URL('https://remote.example/users/alice'),
+          inbox: new URL('https://remote.example/users/alice/inbox'),
+        }),
+      }),
+    );
+
+    const response = await t.request(`/api/v1/polls/${question.postId}/votes`, {
+      method: 'POST',
+      headers: { ...me.bearer, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ choices: [0] }),
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  describe('GET /api/v1/polls/:id', () => {
+    it('保存した投票を Poll で返す', async () => {
+      const t = await seedPolls();
+
+      const response = await t.request(`/api/v1/polls/${t.question.postId}`, { headers: t.me.bearer });
+
+      expect(response.status).toBe(200);
+      expect(PollSchema.parse(await response.json())).toMatchObject({
+        id: t.question.postId,
+        votes_count: 4,
+        voted: false,
+        own_votes: [],
+      });
+    });
+
+    it('投票済みなら voted と own_votes を返す', async () => {
+      const t = await seedPolls();
+      t.serveQuestion();
+      await t.vote(t.question.postId, 'choices[]=2');
+
+      const response = await t.request(`/api/v1/polls/${t.question.postId}`, { headers: t.me.bearer });
+
+      expect(PollSchema.parse(await response.json())).toMatchObject({ voted: true, own_votes: [2] });
+    });
+
+    it('未認証でも公開の投稿の投票を読め、voted は false にする', async () => {
+      const t = await seedPolls();
+
+      const response = await t.request(`/api/v1/polls/${t.question.postId}`);
+
+      expect(response.status).toBe(200);
+      expect(PollSchema.parse(await response.json())).toMatchObject({ voted: false, own_votes: [] });
+    });
+
+    it('投票の無い投稿、存在しない投稿、不正な ID は 404 にする', async () => {
+      const t = await seedPolls();
+
+      const responses = await Promise.all([
+        t.request(`/api/v1/polls/${t.publicNote.postId}`, { headers: t.me.bearer }),
+        t.request(`/api/v1/polls/${t.seed.uuid()}`, { headers: t.me.bearer }),
+        t.request('/api/v1/polls/not-an-id', { headers: t.me.bearer }),
+      ]);
+
+      expect(responses.map((response) => response.status)).toEqual([404, 404, 404]);
+    });
+
+    it('閲覧者に見えない投稿の投票は 404 にする', async () => {
+      const t = await seedPolls();
+      const hidden = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'private' });
+      t.addPoll(hidden.postId);
+
+      const response = await t.request(`/api/v1/polls/${hidden.postId}`);
+
+      expect(response.status).toBe(404);
+    });
+
+    it('read:statuses を満たさないスコープは 403 にする', async () => {
+      const t = await seedPolls();
+      const favouritesOnly = await t.bearerFor('write:favourites');
+
+      const response = await t.request(`/api/v1/polls/${t.question.postId}`, { headers: favouritesOnly });
+
+      expect(response.status).toBe(403);
+    });
   });
 });

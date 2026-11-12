@@ -3,6 +3,7 @@ import type {
   CredentialAccount,
   MediaAttachment,
   Notification,
+  Poll,
   Relationship,
   Report,
   Status,
@@ -339,6 +340,17 @@ export const report = async (params: ReportParams): Promise<Report> => {
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as Report;
+};
+
+export const votePoll = async (pollId: string, choices: readonly number[]): Promise<Poll> => {
+  const res = await fetch(`/api/v1/polls/${encodeURIComponent(pollId)}/votes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ choices }),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as Poll;
 };
 
 export const block = (accountId: string): Promise<Relationship> =>

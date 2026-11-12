@@ -32,6 +32,7 @@ type Props = Readonly<{
   onEmojiReact?: (postId: string, emoji: string) => void;
   onUndoEmojiReact?: (postId: string, emoji: string) => void;
   isEmojiReacting?: boolean;
+  onVote?: (postId: string, choices: readonly number[]) => Promise<void>;
   myReactions?: readonly string[];
   currentAccountId?: string;
   isLoggedIn?: boolean;
@@ -68,6 +69,7 @@ export const PostView = (
     onEmojiReact,
     onUndoEmojiReact,
     isEmojiReacting,
+    onVote,
     myReactions,
     currentAccountId,
     isLoggedIn,
@@ -471,7 +473,12 @@ export const PostView = (
               )}
             </>
           )}
-          {!isContentHidden && post.poll !== null && <PollView poll={post.poll} />}
+          {!isContentHidden && post.poll !== null && (
+            <PollView
+              poll={post.poll}
+              onVote={onVote === undefined ? undefined : (choices) => onVote(post.id, choices)}
+            />
+          )}
           {!isContentHidden && hasMedia && isMediaConcealed && (
             <div class='mt-3 flex items-center gap-2 rounded-2xl bg-sand/40 px-3 py-2 dark:bg-gray-700/40'>
               <p class='text-sm text-charcoal dark:text-gray-200'>

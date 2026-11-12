@@ -114,6 +114,7 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'relay.subscriptionAccepted',
   'relay.subscriptionRequested',
   'relay.unsubscribed',
+  'remotePostPollVote.voted',
   'repost.repostCreated',
   'repost.repostDeleted',
   'timelineItem.created',

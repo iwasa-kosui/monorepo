@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
+import type { Account, Poll, Status } from '../../adaptor/mastodon/entities.ts';
 import {
   accountHandle,
   accountHref,
@@ -15,6 +15,7 @@ import {
   updateStatusesByPostId,
   withBookmarked,
   withFavourited,
+  withPoll,
   withReblogged,
   withUpdatedStatus,
 } from './status.ts';
@@ -161,6 +162,25 @@ describe('status updates', () => {
 
     expect(updated.bookmarked).toBe(true);
     expect(updated.reblog).toBe(response);
+  });
+
+  it('replaces the poll of a plain status', () => {
+    const poll = { id: 'p1', voted: true, own_votes: [1] } as Poll;
+
+    const updated = withPoll(status('p1', { poll: { id: 'p1', voted: false } as Poll }), poll);
+
+    expect(updated.poll).toBe(poll);
+    expect(updated.reblog).toBeNull();
+  });
+
+  it('replaces the poll of the original inside a boost and leaves the boost as it was', () => {
+    const poll = { id: 'p1', voted: true, own_votes: [1] } as Poll;
+    const boost = status('r1', { reblog: status('p1', { poll: { id: 'p1', voted: false } as Poll }) });
+
+    const updated = withPoll(boost, poll);
+
+    expect(updated.reblog?.poll).toBe(poll);
+    expect(updated.poll).toBe(boost.poll);
   });
 
   it('sets reblogged on a plain status without creating a reblog', () => {

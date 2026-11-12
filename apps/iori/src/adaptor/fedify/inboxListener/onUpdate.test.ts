@@ -94,7 +94,7 @@ describe('createOnUpdate', () => {
 
     expect(run).toHaveBeenCalledOnce();
     expect(run.mock.calls[0]?.[0]).toMatchObject({
-      content: `<p>q</p><p><a href="${noteId.href}">元の投稿で投票する</a></p>`,
+      content: '<p>q</p>',
       poll: {
         multiple: false,
         options: [{ title: 'a', votesCount: 10 }, { title: 'b', votesCount: 6 }],
