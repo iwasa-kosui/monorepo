@@ -675,6 +675,31 @@ describe('DeletePostUseCase', () => {
         expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
       });
 
+      it('相手の lookup が返らなくても削除は成功し、時間切れの相手には送らない', async () => {
+        const { deps, ctx, lookupObject, run } = setup(`<p>${mentionOf(aliceId, 'alice@remote.example')}</p>`);
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+          const lookupStarted = Promise.withResolvers<void>();
+          lookupObject.mockImplementation(
+            (() => {
+              lookupStarted.resolve();
+              return new Promise(() => {});
+            }) as never,
+          );
+
+          const resultPromise = run();
+          await lookupStarted.promise;
+          await vi.advanceTimersByTimeAsync(5000);
+          const result = await resultPromise;
+
+          expect(result.ok).toBe(true);
+          expect(deps.postDeletedStore.store).toHaveBeenCalledTimes(1);
+          expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
       it('相手への送信が失敗しても削除は成功する', async () => {
         const { deps, ctx, run } = setup(`<p>${mentionOf(aliceId, 'alice@remote.example')}</p>`);
         vi.mocked(ctx.sendActivity).mockImplementation(async (_sender, recipients) => {

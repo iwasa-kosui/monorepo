@@ -2,19 +2,19 @@ import { getLogger } from '@logtape/logtape';
 
 import {
   extractMentionAccts,
+  MENTION_LOOKUP_TIMEOUT_MS,
   type MentionFormat,
   MentionRecipient,
   type ResolvedMentions,
 } from '../../../domain/post/mention.ts';
 import type { Username } from '../../../domain/user/username.ts';
+import { timedOut, withTimeout } from '../../../helper/withTimeout.ts';
 import type { RemoteActorLookup } from '../../fedify/remoteActorLookup.ts';
 
 export type MentionResolution = Readonly<{
   links: ResolvedMentions;
   recipients: ReadonlyArray<MentionRecipient>;
 }>;
-
-const MENTION_LOOKUP_TIMEOUT_MS = 5000;
 
 export const noMentions: MentionResolution = { links: new Map(), recipients: [] };
 
@@ -30,13 +30,12 @@ const resolveAcct = async (
   { lookup, identifier, request }: Omit<ResolveParams, 'text' | 'format'>,
   acct: string,
 ): Promise<Readonly<{ acct: string; recipient: MentionRecipient }> | undefined> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const timeout = new Promise<'timedOut'>((resolve) => {
-      timer = setTimeout(() => resolve('timedOut'), MENTION_LOOKUP_TIMEOUT_MS);
-    });
-    const result = await Promise.race([lookup.lookup({ request, handle: `@${acct}`, identifier }), timeout]);
-    if (result === 'timedOut') {
+    const result = await withTimeout(
+      lookup.lookup({ request, handle: `@${acct}`, identifier }),
+      MENTION_LOOKUP_TIMEOUT_MS,
+    );
+    if (result === timedOut) {
       getLogger().warn(`Timed out resolving the mentioned actor ${acct}`);
       return undefined;
     }
@@ -53,8 +52,6 @@ const resolveAcct = async (
   } catch (err) {
     getLogger().warn(`Failed to resolve the mentioned actor ${acct}: ${err}`);
     return undefined;
-  } finally {
-    clearTimeout(timer);
   }
 };
 

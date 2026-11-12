@@ -7,12 +7,13 @@ import z from 'zod/v4';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Article, type ArticleDeletedStore, type ArticleResolverByRootPostId } from '../domain/article/article.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { mentionLinksOfHtml, MentionRecipient } from '../domain/post/mention.ts';
+import { MENTION_LOOKUP_TIMEOUT_MS, mentionLinksOfHtml, MentionRecipient } from '../domain/post/mention.ts';
 import { Post, type PostDeletedStore, PostNotFoundError, type PostResolver } from '../domain/post/post.ts';
 import { PostId } from '../domain/post/postId.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
 import { Schema } from '../helper/schema.ts';
+import { timedOut, withTimeout } from '../helper/withTimeout.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import { sendToMentions } from './helper/sendToMentions.ts';
 import type { RemoveBlueskyCrosspostUseCase } from './removeBlueskyCrosspost.ts';
@@ -72,7 +73,14 @@ const resolveMentionRecipients = async (
       .map(async ({ href }): Promise<MentionRecipient | undefined> => {
         try {
           const documentLoader = await ctx.getDocumentLoader({ identifier });
-          const actor = await ctx.lookupObject(href, { documentLoader });
+          const actor = await withTimeout(
+            ctx.lookupObject(href, { documentLoader }),
+            MENTION_LOOKUP_TIMEOUT_MS,
+          );
+          if (actor === timedOut) {
+            getLogger().warn(`Timed out resolving the mentioned actor ${href}`);
+            return undefined;
+          }
           if (!isActor(actor) || actor.id === null || actor.inboxId === null) {
             return undefined;
           }

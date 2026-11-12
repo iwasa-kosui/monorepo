@@ -6,6 +6,8 @@ import { escapeHtml, URL_PATTERN } from './textSyntax.ts';
 
 export const MAX_MENTIONS = 10;
 
+export const MENTION_LOOKUP_TIMEOUT_MS = 5000;
+
 export type ResolvedMentions = ReadonlyMap<string, string>;
 
 export type MentionFormat = 'markdown' | 'plain';
