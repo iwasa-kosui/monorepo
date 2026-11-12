@@ -152,6 +152,7 @@ export const enrichPostRows = async (
           ...row.posts,
           ...row.remote_posts,
           visibility: toVisibility(row.remote_posts.visibility),
+          editedAt: row.remote_posts.editedAt?.getTime() ?? null,
           type: 'remote',
           createdAt: row.posts.createdAt.getTime(),
         }),

@@ -266,6 +266,11 @@ const create = () => {
       federatedTimelineItemDeletedStore: PgFederatedTimelineItemDeletedStore.getInstance(),
       postDeletedStore: PgPostDeletedStore.getInstance(),
     },
+    onUpdate: {
+      origin: Env.getInstance().ORIGIN,
+      // 旧環境（PG）はリモート投稿の編集を反映しない
+      updateRemotePostUseCase: { run: async () => RA.ok({ type: 'postNotFound' as const }) },
+    },
     onLike: { inboxActorResolver, addReceivedEmojiReactUseCase, addReceivedLikeUseCase },
     onAnnounce: {
       origin: Env.getInstance().ORIGIN,

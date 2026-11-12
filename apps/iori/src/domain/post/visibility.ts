@@ -32,6 +32,14 @@ const fromAddressing = ({ to, cc, followersUri }: VisibilityAddressing): Visibil
   return 'direct';
 };
 
+const narrowness: Readonly<Record<Visibility, number>> = { public: 0, unlisted: 1, private: 2, direct: 3 };
+
+const narrow = (stored: Visibility | null, incoming: Visibility | null): Visibility | null => {
+  if (incoming === null) return stored;
+  if (stored === null) return incoming === 'direct' ? incoming : null;
+  return narrowness[incoming] > narrowness[stored] ? incoming : stored;
+};
+
 const isVisibleToAnonymous = (visibility: Visibility | null): boolean =>
   visibility === 'public' || visibility === 'unlisted';
 
@@ -39,5 +47,6 @@ export const Visibility = {
   ...schema,
   zodTypeOrPublic,
   fromAddressing,
+  narrow,
   isVisibleToAnonymous,
 } as const;
