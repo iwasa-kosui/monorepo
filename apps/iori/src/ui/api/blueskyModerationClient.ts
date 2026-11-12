@@ -5,7 +5,13 @@ import type {
   IoriBlueskyThreadMuteResponse,
 } from '../../adaptor/routes/workerIoriBlueskyModerationRouter.ts';
 import type { ReportCategory } from '../components/ReportModal.tsx';
-import { BLUESKY_LOGIN_FAILED_ERROR, isMastodonApiError, requestUrl, toApiError } from './mastodonClient.ts';
+import {
+  BLUESKY_LOGIN_FAILED_ERROR,
+  isMastodonApiError,
+  isNotFoundError,
+  requestUrl,
+  toApiError,
+} from './mastodonClient.ts';
 
 const MODERATION_PATH = '/api/iori/v1/bluesky/moderation';
 const MUTES_PATH = '/api/iori/v1/bluesky/mutes';
@@ -66,7 +72,12 @@ const MODERATION_FAILURE_MESSAGES: Readonly<Record<BlueskyModerationAction, stri
   report: '通報できませんでした',
 };
 
-export const blueskyModerationFailureMessage = (action: BlueskyModerationAction, error: unknown): string =>
-  isMastodonApiError(error) && error.message === BLUESKY_LOGIN_FAILED_ERROR
-    ? 'Bluesky にログインできないため、操作できませんでした。'
-    : MODERATION_FAILURE_MESSAGES[action];
+export const blueskyModerationFailureMessage = (action: BlueskyModerationAction, error: unknown): string => {
+  if (isMastodonApiError(error) && error.message === BLUESKY_LOGIN_FAILED_ERROR) {
+    return 'Bluesky にログインできないため、操作できませんでした。';
+  }
+  if (action === 'muteThread' && isNotFoundError(error)) {
+    return '投稿が見つからないため、スレッドをミュートできませんでした';
+  }
+  return MODERATION_FAILURE_MESSAGES[action];
+};

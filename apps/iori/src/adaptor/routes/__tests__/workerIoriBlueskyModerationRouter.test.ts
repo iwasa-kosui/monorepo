@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Instant } from '../../../domain/instant/instant.ts';
-import type { BlueskyClient, BlueskyClientError } from '../../../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../../ports/blueskyClient.ts';
 import type { BlueskyModerationReader } from '../../../ports/blueskyModerationReader.ts';
 import type { BlueskyModerationUseCases } from '../../../runtime/blueskyModeration.ts';
 import { BlockBlueskyActorUseCase } from '../../../useCase/blockBlueskyActor.ts';
@@ -15,6 +15,7 @@ import { ReportBlueskyActorUseCase } from '../../../useCase/reportBlueskyActor.t
 import { UnblockBlueskyActorUseCase } from '../../../useCase/unblockBlueskyActor.ts';
 import { UnmuteBlueskyActorUseCase } from '../../../useCase/unmuteBlueskyActor.ts';
 import { UnmuteBlueskyThreadUseCase } from '../../../useCase/unmuteBlueskyThread.ts';
+import { createBlueskyThreadRootResolver } from '../../bluesky/blueskyThreadRootResolver.ts';
 import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../d1/__tests__/sqliteFixture.ts';
 import { createD1BlueskyModeratedActorsResolver } from '../../d1/blueskyModeration/blueskyModeratedActorsResolver.ts';
@@ -33,6 +34,7 @@ const DID = 'did:plc:target';
 const OLD_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3kold';
 const NEW_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3knew';
 const ROOT = 'at://did:plc:target/app.bsky.feed.post/3kroot';
+const REPLY = 'at://did:plc:other/app.bsky.feed.post/3kreply';
 const MUTES = '/api/iori/v1/bluesky/mutes';
 const THREAD_MUTES = '/api/iori/v1/bluesky/thread-mutes';
 const BLOCKS = '/api/iori/v1/bluesky/blocks';
@@ -65,6 +67,10 @@ const setup = async (
     deleteBlock: vi.fn<BlueskyClient['deleteBlock']>(async () => RA.ok(undefined)),
     createReport: vi.fn<BlueskyClient['createReport']>(async () => RA.ok(undefined)),
   };
+  const query = vi.fn<BlueskyQueryClient['query']>(async (_nsid, params) =>
+    RA.ok({ posts: [{ uri: params.uris, cid: 'bafypost', record: {} }] })
+  );
+  const threadRootResolver = createBlueskyThreadRootResolver({ client: { query } });
   const reader = {
     resolveViewerState: vi.fn<BlueskyModerationReader['resolveViewerState']>(async () =>
       RA.ok({ muted: true, blockUri: options.blockUri === undefined ? OLD_BLOCK : options.blockUri })
@@ -86,8 +92,8 @@ const setup = async (
     }),
     mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
     unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
-    muteThread: MuteBlueskyThreadUseCase.create({ client }),
-    unmuteThread: UnmuteBlueskyThreadUseCase.create({ client }),
+    muteThread: MuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
+    unmuteThread: UnmuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
     block: BlockBlueskyActorUseCase.create({
       client,
       reader,
@@ -134,6 +140,7 @@ const setup = async (
   return {
     send,
     client,
+    query,
     reader,
     rows,
     bearer,
@@ -154,6 +161,7 @@ const writes = [
 
 const noCalls = (t: Awaited<ReturnType<typeof setup>>) => {
   for (const mock of Object.values(t.client)) expect(mock).not.toHaveBeenCalled();
+  expect(t.query).not.toHaveBeenCalled();
   expect(t.rows()).toEqual([]);
 };
 
@@ -346,6 +354,68 @@ describe('/api/iori/v1/bluesky/thread-mutes', () => {
     expect(await response.json()).toEqual({ threadMuted: false });
     expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
     expect(t.rows()).toEqual([]);
+  });
+
+  it('POST は返信の uri を受け取ったら、根の uri でスレッドをミュートする', async () => {
+    const t = await setup();
+    t.query.mockReturnValueOnce(RA.ok({
+      posts: [{ uri: REPLY, cid: 'bafyreply', record: { reply: { root: { uri: ROOT }, parent: { uri: ROOT } } } }],
+    }));
+
+    const response = await t.send('POST', THREAD_MUTES, { root: REPLY }, t.cookie);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ threadMuted: true });
+    expect(t.client.muteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+  });
+
+  it('POST は投稿が見つからなければ 404 にし、スレッドのミュートを呼ばない', async () => {
+    const t = await setup();
+    t.query.mockReturnValueOnce(RA.ok({ posts: [] }));
+
+    const response = await t.send('POST', THREAD_MUTES, { root: ROOT }, t.cookie);
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Bluesky post not found' });
+    expect(t.client.muteThread).not.toHaveBeenCalled();
+  });
+
+  it('DELETE は返信の uri を受け取ったら、根の uri でスレッドのミュートを解除する', async () => {
+    const t = await setup();
+    t.query.mockReturnValueOnce(RA.ok({
+      posts: [{ uri: REPLY, cid: 'bafyreply', record: { reply: { root: { uri: ROOT }, parent: { uri: ROOT } } } }],
+    }));
+
+    const response = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(REPLY)}`);
+
+    expect(response.status).toBe(200);
+    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+  });
+
+  it('DELETE は投稿が見つからなければ、受け取った uri でスレッドのミュートを解除する', async () => {
+    const t = await setup();
+    t.query.mockReturnValueOnce(RA.ok({ posts: [] }));
+
+    const response = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(REPLY)}`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ threadMuted: false });
+    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(REPLY);
+  });
+
+  it('getPosts の失敗を 502 にし、スレッドのミュートも解除も呼ばない', async () => {
+    const t = await setup();
+    t.query.mockReturnValueOnce(RA.err(failure('http')));
+    t.query.mockReturnValueOnce(RA.err(failure('auth')));
+
+    const muted = await t.send('POST', THREAD_MUTES, { root: ROOT }, t.cookie);
+    const unmuted = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(ROOT)}`);
+
+    expect([muted.status, unmuted.status]).toEqual([502, 502]);
+    expect(await muted.json()).toEqual({ error: 'Bluesky request failed' });
+    expect(await unmuted.json()).toEqual({ error: 'Bluesky login failed' });
+    expect(t.client.muteThread).not.toHaveBeenCalled();
+    expect(t.client.unmuteThread).not.toHaveBeenCalled();
   });
 
   it('root が投稿の at:// URI でない、または無いときは 400 にし、Bluesky を呼ばない', async () => {
