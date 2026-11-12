@@ -19,12 +19,15 @@ import type { BlueskyModerationReader } from '../../ports/blueskyModerationReade
 import { BlockBlueskyActorUseCase } from '../blockBlueskyActor.ts';
 import { GetBlueskyModerationStateUseCase } from '../getBlueskyModerationState.ts';
 import { MuteBlueskyActorUseCase } from '../muteBlueskyActor.ts';
+import { MuteBlueskyThreadUseCase } from '../muteBlueskyThread.ts';
 import { ReportBlueskyActorUseCase } from '../reportBlueskyActor.ts';
 import { UnblockBlueskyActorUseCase } from '../unblockBlueskyActor.ts';
 import { UnmuteBlueskyActorUseCase } from '../unmuteBlueskyActor.ts';
+import { UnmuteBlueskyThreadUseCase } from '../unmuteBlueskyThread.ts';
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 12, 12));
 const DID = 'did:plc:target';
+const ROOT = 'at://did:plc:target/app.bsky.feed.post/3kroot';
 const OLD_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3kold';
 const NEW_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3knew';
 const STORED_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3kstored';
@@ -47,6 +50,8 @@ const setup = (viewer: Readonly<{ muted?: boolean; blockUri?: string | null; has
   const client = {
     muteActor: vi.fn<BlueskyClient['muteActor']>(async () => RA.ok(undefined)),
     unmuteActor: vi.fn<BlueskyClient['unmuteActor']>(async () => RA.ok(undefined)),
+    muteThread: vi.fn<BlueskyClient['muteThread']>(async () => RA.ok(undefined)),
+    unmuteThread: vi.fn<BlueskyClient['unmuteThread']>(async () => RA.ok(undefined)),
     createBlock: vi.fn<BlueskyClient['createBlock']>(async () => RA.ok({ uri: NEW_BLOCK })),
     deleteBlock: vi.fn<BlueskyClient['deleteBlock']>(async () => RA.ok(undefined)),
     createReport: vi.fn<BlueskyClient['createReport']>(async () => RA.ok(undefined)),
@@ -64,6 +69,8 @@ const setup = (viewer: Readonly<{ muted?: boolean; blockUri?: string | null; has
     reader,
     mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
     unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
+    muteThread: MuteBlueskyThreadUseCase.create({ client }),
+    unmuteThread: UnmuteBlueskyThreadUseCase.create({ client }),
     block: BlockBlueskyActorUseCase.create({
       client,
       reader,
@@ -136,6 +143,44 @@ describe('MuteBlueskyActorUseCase と UnmuteBlueskyActorUseCase', () => {
 
     expect(await t.unmute.run({ did: DID })).toEqual({ ok: false, err: failure });
     expect(t.rows()).toEqual([{ did: DID, muted: 1, blockUri: null }]);
+  });
+});
+
+describe('MuteBlueskyThreadUseCase と UnmuteBlueskyThreadUseCase', () => {
+  it('muteThread は Bluesky のスレッドのミュートを呼び、D1 に保存しない', async () => {
+    const t = setup();
+
+    const result = await t.muteThread.run({ root: ROOT });
+
+    expect(result).toEqual({ ok: true, val: { threadMuted: true } });
+    expect(t.client.muteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+    expect(t.rows()).toEqual([]);
+  });
+
+  it('muteThread は Bluesky が失敗したらその失敗を返す', async () => {
+    const t = setup();
+    t.client.muteThread.mockReturnValueOnce(RA.err(failure));
+
+    expect(await t.muteThread.run({ root: ROOT })).toEqual({ ok: false, err: failure });
+    expect(t.rows()).toEqual([]);
+  });
+
+  it('unmuteThread は Bluesky のスレッドのミュートの解除を呼び、D1 に書かない', async () => {
+    const t = setup();
+
+    const result = await t.unmuteThread.run({ root: ROOT });
+
+    expect(result).toEqual({ ok: true, val: { threadMuted: false } });
+    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+    expect(t.rows()).toEqual([]);
+  });
+
+  it('unmuteThread は Bluesky が失敗したらその失敗を返す', async () => {
+    const t = setup();
+    t.client.unmuteThread.mockReturnValueOnce(RA.err(failure));
+
+    expect(await t.unmuteThread.run({ root: ROOT })).toEqual({ ok: false, err: failure });
+    expect(t.rows()).toEqual([]);
   });
 });
 

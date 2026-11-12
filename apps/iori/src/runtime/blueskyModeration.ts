@@ -13,9 +13,11 @@ import { BlockBlueskyActorUseCase } from '../useCase/blockBlueskyActor.ts';
 import { GetBlueskyModerationStateUseCase } from '../useCase/getBlueskyModerationState.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { MuteBlueskyActorUseCase } from '../useCase/muteBlueskyActor.ts';
+import { MuteBlueskyThreadUseCase } from '../useCase/muteBlueskyThread.ts';
 import { ReportBlueskyActorUseCase } from '../useCase/reportBlueskyActor.ts';
 import { UnblockBlueskyActorUseCase } from '../useCase/unblockBlueskyActor.ts';
 import { UnmuteBlueskyActorUseCase } from '../useCase/unmuteBlueskyActor.ts';
+import { UnmuteBlueskyThreadUseCase } from '../useCase/unmuteBlueskyThread.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createTimelineClient, resolveBlueskyTimelineConfig } from './blueskyTimeline.ts';
 
@@ -23,6 +25,8 @@ export type BlueskyModerationUseCases = Readonly<{
   getState: GetBlueskyModerationStateUseCase;
   mute: MuteBlueskyActorUseCase;
   unmute: UnmuteBlueskyActorUseCase;
+  muteThread: MuteBlueskyThreadUseCase;
+  unmuteThread: UnmuteBlueskyThreadUseCase;
   block: BlockBlueskyActorUseCase;
   unblock: UnblockBlueskyActorUseCase;
   report: ReportBlueskyActorUseCase;
@@ -56,6 +60,8 @@ export const createBlueskyModerationUseCases = (
     }),
     mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
     unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
+    muteThread: MuteBlueskyThreadUseCase.create({ client }),
+    unmuteThread: UnmuteBlueskyThreadUseCase.create({ client }),
     block: BlockBlueskyActorUseCase.create({
       client,
       reader,

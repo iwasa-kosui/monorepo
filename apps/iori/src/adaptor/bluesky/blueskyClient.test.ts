@@ -586,6 +586,7 @@ describe('createBlueskyClient の各操作', () => {
 
 describe('createBlueskyClient のミュート、ブロック、通報', () => {
   const BLOCK_URI = 'at://did:plc:abc/app.bsky.graph.block/3kblock';
+  const ROOT = 'at://did:plc:abc/app.bsky.feed.post/3kroot';
 
   it('muteActor は app.bsky.graph.muteActor に actor を POST し、空の応答を成功にする', async () => {
     const { client, calls } = setup(stored(), [() => new Response('', { status: 200 })]);
@@ -628,6 +629,38 @@ describe('createBlueskyClient のミュート、ブロック、通報', () => {
     const { client } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
 
     expect(await client.muteActor('did:plc:target')).toMatchObject({
+      ok: false,
+      err: { kind: 'http', status: 500 },
+    });
+  });
+
+  it('muteThread は app.bsky.graph.muteThread に root を POST し、空の応答を成功にする', async () => {
+    const { client, calls } = setup(stored(), [() => new Response('', { status: 200 })]);
+
+    const result = await client.muteThread(ROOT);
+
+    expect(result).toEqual({ ok: true, val: undefined });
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.graph.muteThread`);
+    expect(calls[0]?.init.method).toBe('POST');
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ root: ROOT });
+    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+    expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
+  });
+
+  it('unmuteThread は app.bsky.graph.unmuteThread に root を POST する', async () => {
+    const { client, calls } = setup(stored(), [() => json({})]);
+
+    const result = await client.unmuteThread(ROOT);
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.graph.unmuteThread`);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ root: ROOT });
+  });
+
+  it('muteThread は 500 を失敗として返す', async () => {
+    const { client } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+
+    expect(await client.muteThread(ROOT)).toMatchObject({
       ok: false,
       err: { kind: 'http', status: 500 },
     });
