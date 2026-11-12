@@ -5,6 +5,7 @@ type Props = Readonly<{
   onChange: (value: PostVisibility) => void;
   name: string;
   id?: string;
+  disabled?: boolean;
 }>;
 
 const options: ReadonlyArray<Readonly<{ value: PostVisibility; label: string; description: string }>> = [
@@ -13,7 +14,7 @@ const options: ReadonlyArray<Readonly<{ value: PostVisibility; label: string; de
   { value: 'private', label: 'フォロワー限定', description: 'フォロワーだけが見られます' },
 ];
 
-export const PostVisibilitySelect = ({ value, onChange, name, id }: Props) => {
+export const PostVisibilitySelect = ({ value, onChange, name, id, disabled = false }: Props) => {
   const descriptionId = `${id ?? name}-description`;
   const selected = options.find((option) => option.value === value);
   return (
@@ -25,14 +26,18 @@ export const PostVisibilitySelect = ({ value, onChange, name, id }: Props) => {
         class='flex flex-wrap items-center gap-3 text-xs text-charcoal-light dark:text-gray-400'
       >
         {options.map((option) => (
-          <label key={option.value} title={option.description} class='flex items-center gap-1 cursor-pointer'>
+          <label
+            key={option.value}
+            title={option.description}
+            class={`flex items-center gap-1 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
             <input
               type='radio'
               name={name}
               value={option.value}
               checked={value === option.value}
-              onChange={() =>
-                onChange(option.value)}
+              disabled={disabled}
+              onChange={() => onChange(option.value)}
             />
             {option.label}
           </label>

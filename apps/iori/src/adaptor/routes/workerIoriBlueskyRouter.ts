@@ -664,6 +664,9 @@ export const createWorkerIoriBlueskyRouter = ({
         if ((bodyString(body, 'spoiler_text') ?? '').trim() !== '' || bodyBoolean(body, 'sensitive')) {
           return c.json({ error: 'Bluesky だけの投稿では CW とセンシティブ指定を使えません' }, 422);
         }
+        if (body['visibility'] !== undefined && body['visibility'] !== 'public') {
+          return c.json({ error: 'Bluesky だけの投稿は公開でしか送れません' }, 422);
+        }
         const status = bodyString(body, 'status');
         if (status === undefined) return c.json({ error: 'Validation failed: status' }, 400);
         const contentType = body['content_type'] ?? 'text/plain';

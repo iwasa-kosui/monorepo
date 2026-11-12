@@ -9,7 +9,7 @@ import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
 import { canSubmitPost, postedNotice, type PostNotice, submitPost, type UploadedMedia } from './postSubmission.ts';
-import { DEFAULT_POST_VISIBILITY, type PostVisibility } from './postVisibility.ts';
+import { DEFAULT_POST_VISIBILITY, type PostVisibility, visibilityForDestination } from './postVisibility.ts';
 import { PostVisibilitySelect } from './PostVisibilitySelect.tsx';
 
 type Props = Readonly<{
@@ -122,6 +122,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
       setCw('');
       setSensitiveChecked(false);
     }
+    setVisibility((current) => visibilityForDestination(next, current));
     setDestination(next);
   };
 
@@ -198,6 +199,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           onChange={setVisibility}
           name='visibility'
           id={`${formId ?? id ?? 'post-form'}-visibility`}
+          disabled={isBlueskyOnly}
         />
       </div>
       <div class='mt-2 flex flex-wrap justify-end items-center gap-3 flex-shrink-0'>

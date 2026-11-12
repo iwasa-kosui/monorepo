@@ -2065,6 +2065,32 @@ describe('/api/iori/v1/bluesky/posts', () => {
     expect(client.createRecord).not.toHaveBeenCalled();
   });
 
+  it('visibility が public 以外のときは 422 にし、Bluesky を呼ばない', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    for (const visibility of ['unlisted', 'private', 'direct', '', 1]) {
+      const response = await post(t, me.bearer, { status: 'hi', visibility });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: 'Bluesky だけの投稿は公開でしか送れません' });
+    }
+    expect(client.createRecord).not.toHaveBeenCalled();
+    expect(client.uploadBlob).not.toHaveBeenCalled();
+  });
+
+  it('visibility が public のときは受け付ける', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    const response = await post(t, me.bearer, { status: 'hi', visibility: 'public' });
+
+    expect(response.status).toBe(200);
+    expect(client.createRecord).toHaveBeenCalledTimes(1);
+  });
+
   it('空白だけの spoiler_text と sensitive false は受け付ける', async () => {
     const client = replyClient();
     const t = setupReadApi({ blueskyPostClient: client });

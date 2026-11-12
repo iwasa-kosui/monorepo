@@ -8,7 +8,7 @@ import {
   failureMessage,
 } from '../api/mastodonClient.ts';
 import { BLUESKY_ONLY_POSTED_MESSAGE, postedMessage } from './blueskyCrosspostMark.ts';
-import type { PostVisibility } from './postVisibility.ts';
+import { BLUESKY_ONLY_VISIBILITY_ERROR, type PostVisibility } from './postVisibility.ts';
 
 export type UploadedMedia = Readonly<{ id: string; url: string; description: string; savedDescription: string }>;
 
@@ -54,6 +54,7 @@ export const submitPost = async (
     return { kind: 'failed', message: failureMessage('save the image description', err) };
   }
   if (value.destination === 'bluesky') {
+    if (value.visibility !== 'public') return { kind: 'failed', message: BLUESKY_ONLY_VISIBILITY_ERROR };
     try {
       const { url } = await deps.createBlueskyPost({
         status: value.content,

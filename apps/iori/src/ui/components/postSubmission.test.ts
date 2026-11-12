@@ -311,6 +311,26 @@ describe('submitPost', () => {
 describe('submitPost to Bluesky only', () => {
   const blueskyOnly: PostFormValue = { ...filled, destination: 'bluesky' };
 
+  it.each(['unlisted', 'private'] as const)(
+    'fails without calling createBlueskyPost or create when the visibility is %s',
+    async (visibility) => {
+      const create = vi.fn();
+      const createBlueskyPost = vi.fn();
+
+      const result = await submitPost({ ...blueskyOnly, visibility }, {
+        create,
+        createBlueskyPost,
+        updateMedia,
+        onDescriptionSaved: vi.fn(),
+        onPosted: vi.fn(),
+      });
+
+      expect(result).toEqual({ kind: 'failed', message: 'Bluesky だけの投稿は公開でしか送れません' });
+      expect(createBlueskyPost).not.toHaveBeenCalled();
+      expect(create).not.toHaveBeenCalled();
+    },
+  );
+
   it('calls createBlueskyPost with the content and media, and does not call create or onPosted', async () => {
     const create = vi.fn();
     const createBlueskyPost = vi.fn().mockResolvedValue({
