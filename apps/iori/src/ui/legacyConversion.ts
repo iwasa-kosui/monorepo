@@ -1,5 +1,6 @@
 import type { Account, Status } from '../adaptor/mastodon/entities.ts';
 import type { Actor } from '../domain/actor/actor.ts';
+import { attachmentKindOf } from '../domain/image/attachmentKind.ts';
 import type { PostWithAuthor } from '../domain/post/post.ts';
 
 const hostOf = (uri: string): string => {
@@ -91,16 +92,19 @@ export const postToStatus = (post: PostWithAuthor): Status => {
     visibility: post.type === 'local' ? post.visibility : 'public',
     sensitive: post.sensitive,
     spoiler_text: post.summary ?? '',
-    media_attachments: (post.images ?? []).map((image, index) => ({
-      id: `${post.postId}:${index}`,
-      type: 'image',
-      url: image.url,
-      preview_url: image.url,
-      remote_url: null,
-      meta: null,
-      description: image.altText,
-      blurhash: null,
-    })),
+    media_attachments: (post.images ?? []).map((image, index) => {
+      const type = attachmentKindOf(image);
+      return {
+        id: `${post.postId}:${index}`,
+        type,
+        url: image.url,
+        preview_url: type === 'image' ? image.url : null,
+        remote_url: null,
+        meta: null,
+        description: image.altText,
+        blurhash: null,
+      };
+    }),
     mentions: [],
     tags: [],
     emojis: [],

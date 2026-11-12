@@ -112,10 +112,11 @@ export const enrichPostRows = async (
       logoUri: row.actors.logoUri ?? undefined,
       liked: likedPostIds.has(postId),
       reposted: repostedPostIds.has(postId),
-      images: (imagesByPostId.get(postId) ?? []).map(({ imageId, url, altText }) => ({
+      images: (imagesByPostId.get(postId) ?? []).map(({ imageId, url, altText, mediaType }) => ({
         imageId: ImageId.orThrow(imageId),
         url,
         altText,
+        mediaType,
       })),
       likeCount: likeCountByPostId.get(postId) ?? 0,
       repostCount: repostCountByPostId.get(postId) ?? 0,

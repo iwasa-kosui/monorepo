@@ -29,6 +29,7 @@ export default defineConfig(({ mode }) => {
             search: './src/ui/pages/search.tsx',
             xPosts: './src/ui/pages/xPosts.tsx',
             blueskyProfile: './src/ui/pages/blueskyProfile.tsx',
+            messages: './src/ui/pages/messages.tsx',
             navPrefetch: './src/ui/pages/navPrefetch.ts',
             notificationBadge: './src/ui/pages/notificationBadge.ts',
           },
