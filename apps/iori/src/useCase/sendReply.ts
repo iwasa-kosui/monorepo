@@ -29,7 +29,7 @@ import {
 import type { PostId } from '../domain/post/postId.ts';
 import { appendQuoteInline } from '../domain/post/quoteInline.ts';
 import { sanitizePostContent } from '../domain/post/sanitizePostContent.ts';
-import type { Visibility } from '../domain/post/visibility.ts';
+import { Visibility } from '../domain/post/visibility.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
 import type { SessionExpiredError, SessionResolver } from '../domain/session/session.ts';
 import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/timelineItem.ts';
@@ -220,9 +220,11 @@ const create = ({
           return stored === undefined ? lookupAuthor(parentPost.uri, ctx, user.username) : RA.ok(stored);
         },
       ),
+      RA.andBind('replyVisibility', ({ parentPost, visibility }) =>
+        RA.ok(Visibility.narrowestOf(visibility ?? 'public', parentPost.visibility ?? 'public'))),
       // Create the reply post
-      RA.andBind('participantActorUris', async ({ user, ctx, parentPost, content, visibility }) => {
-        if (visibility !== 'direct') {
+      RA.andBind('participantActorUris', async ({ user, ctx, parentPost, content, replyVisibility }) => {
+        if (replyVisibility !== 'direct') {
           return RA.ok([]);
         }
         const parentAuthor = parentPost.type === 'remote'
@@ -232,13 +234,25 @@ const create = ({
         return RA.ok([
           ctx.getActorUri(user.username).href,
           ...(parentAuthorUri === undefined ? [] : [parentAuthorUri]),
-          ...toMentionNoteFields(sanitizePostContent(content)).ccs.map((uri) => uri.href),
+          ...toMentionNoteFields(sanitizePostContent(content)).ccs.map((uri) =>
+            uri.href
+          ),
         ]);
       }),
       RA.andBind(
         'postEvent',
         (
-          { actor, content, sourceText, inReplyToUri, summary, sensitive, visibility, quoteUri, participantActorUris },
+          {
+            actor,
+            content,
+            sourceText,
+            inReplyToUri,
+            summary,
+            sensitive,
+            replyVisibility,
+            quoteUri,
+            participantActorUris,
+          },
         ) => {
           const postEvent = Post.createPost(now)({
             actorId: actor.id,
@@ -247,7 +261,7 @@ const create = ({
             inReplyToUri,
             summary,
             sensitive,
-            visibility,
+            visibility: replyVisibility,
             quoteUri,
             sourceText,
             participantActorUris,

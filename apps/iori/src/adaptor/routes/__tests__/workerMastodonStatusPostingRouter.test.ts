@@ -225,6 +225,18 @@ describe('POST /api/v1/statuses の visibility', () => {
     },
   );
 
+  it('返信で visibility が無く、元の投稿が private のとき、private で返信を保存して返す', async () => {
+    const t = await setup();
+    const parent = t.seed.addLocalPost(t.me, 1_000, { content: '<p>parent</p>', visibility: 'private' });
+
+    const response = await t.json({ status: 'reply', in_reply_to_id: parent.postId });
+
+    expect(response.status).toBe(200);
+    const status = StatusSchema.parse(await response.json());
+    expect(status.visibility).toBe('private');
+    expect(visibilityOf(t, status.id)).toBe('private');
+  });
+
   it.each([['unlisted'], ['private']])(
     'visibility が %s で iori_destination が both のとき、保存した公開範囲の投稿を Bluesky の予約に渡す',
     async (visibility) => {
