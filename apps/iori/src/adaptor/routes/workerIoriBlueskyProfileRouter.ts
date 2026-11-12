@@ -110,6 +110,12 @@ const writeFollows = Scope.orThrow('write:follows');
 const forbidden = { error: 'Forbidden' } as const;
 const disabled = { error: 'Bluesky timeline is disabled' } as const;
 
+const feedProviderFailed = { error: 'Feed provider failed' } as const;
+
+const isFeedProviderFailure = (error: BlueskyClientError | BlueskyFeedNotFound): boolean =>
+  error.type === 'BlueskyClientError' && error.kind === 'http' && error.status !== undefined
+  && (error.status >= 500 || error.status === 400 || error.status === 401);
+
 const toProfileBody = (profile: BlueskyProfile, isSelf: boolean): IoriBlueskyProfileBody => ({
   did: profile.did,
   handle: profile.handle,
@@ -215,7 +221,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
         return c.json({ error: 'Validation failed: uri' }, 400);
       }
       const page = await listBlueskyFeedPostsUseCase.run({ uri, cursor: c.req.query('cursor') || undefined });
-      if (!page.ok) return failure(c, page.err);
+      if (!page.ok) return isFeedProviderFailure(page.err) ? c.json(feedProviderFailed, 502) : failure(c, page.err);
       const viewer = await resolveViewerDid(viewerDid);
       return c.json(
         {

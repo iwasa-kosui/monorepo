@@ -57,6 +57,24 @@ describe('ListBlueskyFeedPostsUseCase', () => {
 
     expect(await useCase.run({ uri: FEED, cursor: undefined })).toEqual({ ok: false, err: failure });
   });
+
+  it('UnknownFeed、UnknownList、NotFound と 404 は BlueskyFeedNotFound にし、UpstreamFailure はそのまま返す', async () => {
+    const errorOf = (status: number, code: string): BlueskyClientError => ({ ...failure, status, code });
+    const run = (err: BlueskyClientError) =>
+      ListBlueskyFeedPostsUseCase.create({ reader: { getFeedPosts: async () => RA.err(err) } }).run({
+        uri: FEED,
+        cursor: undefined,
+      });
+    const missing = { ok: false, err: { type: 'BlueskyFeedNotFound' } };
+    const upstream = errorOf(502, 'UpstreamFailure');
+
+    expect(await run(errorOf(400, 'UnknownFeed'))).toEqual(missing);
+    expect(await run(errorOf(400, 'UnknownList'))).toEqual(missing);
+    expect(await run(errorOf(400, 'NotFound'))).toEqual(missing);
+    expect(await run({ ...failure, status: 404 })).toEqual(missing);
+    expect(await run(upstream)).toEqual({ ok: false, err: upstream });
+    expect(await run(errorOf(400, 'UpstreamFailure'))).toEqual({ ok: false, err: errorOf(400, 'UpstreamFailure') });
+  });
 });
 
 const notFound: BlueskyClientError = {

@@ -12,6 +12,7 @@ const FEED_INFO_PATH = '/api/iori/v1/bluesky/feeds/info';
 const FEED_RESOLVE_PATH = '/api/iori/v1/bluesky/feeds/resolve';
 const LIST_MEMBERS_PATH = '/api/iori/v1/bluesky/lists/members';
 const PROFILES_PATH = '/api/iori/v1/bluesky/profiles';
+const FEED_PROVIDER_FAILED_ERROR = 'Feed provider failed';
 const UNNAMED_FEED_LABEL = '名前を取得できなかったフィード';
 const UNNAMED_LIST_LABEL = '名前を取得できなかったリスト';
 
@@ -103,6 +104,12 @@ export const blueskyFeedPostsFailureMessage = (error: unknown, kind: 'first' | '
       : 'Bluesky にログインできないため、続きを読み込めませんでした';
   }
   if (isMastodonApiError(error) && error.status === 409) return 'Bluesky 連携が無効です';
+  if (isMastodonApiError(error) && error.status === 404) {
+    return 'このフィードは見つかりませんでした。削除された可能性があります。';
+  }
+  if (isMastodonApiError(error) && error.message === FEED_PROVIDER_FAILED_ERROR) {
+    return 'フィードの提供元から取得できませんでした。時間をおいて読み込み直してください。';
+  }
   return kind === 'first' ? '投稿を読み込めませんでした' : '続きを読み込めませんでした';
 };
 

@@ -52,7 +52,7 @@ export type BlueskyFeedReader = Readonly<{
 
 export type BlueskyFeedNotFound = Readonly<{ type: 'BlueskyFeedNotFound' }>;
 
-const NOT_FOUND_CODES: readonly string[] = ['InvalidRequest', 'UnknownList', 'UnknownFeed'];
+const NOT_FOUND_CODES: readonly string[] = ['InvalidRequest', 'UnknownList', 'UnknownFeed', 'NotFound'];
 
 export const isBlueskyFeedNotFound = (error: BlueskyClientError): boolean =>
   error.kind === 'http'

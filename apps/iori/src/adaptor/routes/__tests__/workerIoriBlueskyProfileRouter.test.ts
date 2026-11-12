@@ -629,7 +629,7 @@ describe('GET /api/iori/v1/bluesky/feeds/posts', () => {
     });
     const failing = await setup({
       scope: 'read:accounts',
-      feedReader: { getFeedPosts: vi.fn(async () => RA.err(clientError())) },
+      feedReader: { getFeedPosts: vi.fn(async () => RA.err(clientError({ kind: 'network', status: undefined }))) },
     });
 
     const loginResponse = await login.get(path);
@@ -638,6 +638,60 @@ describe('GET /api/iori/v1/bluesky/feeds/posts', () => {
     const failingResponse = await failing.get(path);
     expect(failingResponse.status).toBe(502);
     expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
+  });
+
+  it('見つからない失敗は 404、提供元の失敗は 502 の Feed provider failed にする', async () => {
+    const path = `${FEED_POSTS}?uri=${encodeURIComponent(FEED_URI)}`;
+    const responseOf = async (error: BlueskyClientError) => {
+      const t = await setup({
+        scope: 'read:accounts',
+        feedReader: { getFeedPosts: vi.fn(async () => RA.err(error)) },
+      });
+      return t.get(path);
+    };
+
+    for (
+      const error of [
+        clientError({ status: 400, code: 'UnknownFeed' }),
+        clientError({ status: 400, code: 'UnknownList' }),
+        clientError({ status: 400, code: 'NotFound' }),
+        clientError({ status: 404 }),
+      ]
+    ) {
+      const response = await responseOf(error);
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: 'Feed not found' });
+    }
+    for (
+      const error of [
+        clientError({ status: 502, code: 'UpstreamFailure' }),
+        clientError({ status: 500 }),
+        clientError({ status: 400, code: 'UpstreamFailure' }),
+        clientError({ status: 401, code: 'UpstreamFailure' }),
+      ]
+    ) {
+      const response = await responseOf(error);
+      expect(response.status).toBe(502);
+      expect(await response.json()).toEqual({ error: 'Feed provider failed' });
+    }
+  });
+
+  it('ネットワークの失敗と、提供元の失敗でない HTTP エラーは Bluesky request failed にする', async () => {
+    const path = `${FEED_POSTS}?uri=${encodeURIComponent(FEED_URI)}`;
+    const network = await setup({
+      scope: 'read:accounts',
+      feedReader: { getFeedPosts: vi.fn(async () => RA.err(clientError({ kind: 'network', status: undefined }))) },
+    });
+    const forbiddenByProvider = await setup({
+      scope: 'read:accounts',
+      feedReader: { getFeedPosts: vi.fn(async () => RA.err(clientError({ status: 403 }))) },
+    });
+
+    for (const t of [network, forbiddenByProvider]) {
+      const response = await t.get(path);
+      expect(response.status).toBe(502);
+      expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
+    }
   });
 });
 

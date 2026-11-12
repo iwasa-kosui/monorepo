@@ -137,9 +137,10 @@ export const createBlueskyClient = (
         return RA.err(clientError('chat_not_permitted', `${operation} failed: status 400 InvalidToken`, 400, name));
       }
       const expired = name === 'ExpiredToken' || name === 'InvalidToken';
+      const relayedByFeedProvider = operation === 'app.bsky.feed.getFeed' && response.status === 401 && !expired;
       return RA.err(
         clientError(
-          response.status === 401 || expired ? 'auth' : 'http',
+          (response.status === 401 && !relayedByFeedProvider) || expired ? 'auth' : 'http',
           `${operation} failed: status ${response.status}${name === undefined ? '' : ` ${name}`}`,
           response.status,
           name,

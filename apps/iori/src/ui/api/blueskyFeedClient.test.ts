@@ -134,14 +134,30 @@ describe('失敗の文言', () => {
     expect(blueskySavedFeedsFailureMessage(new Error('x'))).toBe('保存したフィードとリストを読み込めませんでした');
   });
 
-  it('投稿の読み込み失敗を、ログイン失敗、連携の無効、それ以外で分け、最初と続きで文言を変える', async () => {
+  it('投稿の読み込み失敗を、ログイン失敗、連携の無効、見つからない、提供元の失敗、それ以外で分け、最初と続きで文言を変える', async () => {
     stubFetch(json({ error: 'Bluesky login failed' }, 502));
     const login = await failure(fetchBlueskyFeedPosts(FEED));
     stubFetch(json({ error: 'Bluesky timeline is disabled' }, 409));
     const disabled = await failure(fetchBlueskyFeedPosts(FEED));
     stubFetch(json({ error: 'Bluesky request failed' }, 502));
     const other = await failure(fetchBlueskyFeedPosts(FEED));
+    stubFetch(json({ error: 'Feed not found' }, 404));
+    const missing = await failure(fetchBlueskyFeedPosts(FEED));
+    stubFetch(json({ error: 'Feed provider failed' }, 502));
+    const providerFailed = await failure(fetchBlueskyFeedPosts(FEED));
 
+    expect(blueskyFeedPostsFailureMessage(missing, 'first')).toBe(
+      'このフィードは見つかりませんでした。削除された可能性があります。',
+    );
+    expect(blueskyFeedPostsFailureMessage(missing, 'more')).toBe(
+      'このフィードは見つかりませんでした。削除された可能性があります。',
+    );
+    expect(blueskyFeedPostsFailureMessage(providerFailed, 'first')).toBe(
+      'フィードの提供元から取得できませんでした。時間をおいて読み込み直してください。',
+    );
+    expect(blueskyFeedPostsFailureMessage(providerFailed, 'more')).toBe(
+      'フィードの提供元から取得できませんでした。時間をおいて読み込み直してください。',
+    );
     expect(blueskyFeedPostsFailureMessage(login, 'first')).toBe(
       'Bluesky にログインできないため、投稿を読み込めませんでした',
     );
