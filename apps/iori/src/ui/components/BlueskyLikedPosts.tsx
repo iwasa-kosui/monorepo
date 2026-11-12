@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import { fetchBlueskyLikedPosts } from '../api/blueskyProfileClient.ts';
+import { blueskyLikedPostsFailureMessage, fetchBlueskyLikedPosts } from '../api/blueskyProfileClient.ts';
 import { isUnauthorizedError } from '../api/mastodonClient.ts';
 import { appendUniqueBy } from '../hooks/appendUnique.ts';
 import { isStaleGeneration, startGeneration } from '../hooks/generation.ts';
@@ -15,12 +15,12 @@ import { BlueskyTimelineItemView } from './BlueskyTimelineItemView.tsx';
 
 type LikedPostsState =
   | Readonly<{ kind: 'loading' }>
-  | Readonly<{ kind: 'error' }>
+  | Readonly<{ kind: 'error'; message: string }>
   | Readonly<{
     kind: 'ready';
     items: readonly IoriBlueskyTimelineItemBody[];
     cursor: string | undefined;
-    loadMoreFailed: boolean;
+    loadMoreFailed: string | null;
   }>;
 
 const mutedTextClass = 'text-charcoal-light dark:text-gray-400 mb-4';
@@ -56,7 +56,7 @@ export const BlueskyLikedPosts = () => {
         kind: 'ready',
         items: page.items,
         cursor: page.items.length === 0 ? undefined : page.cursor ?? undefined,
-        loadMoreFailed: false,
+        loadMoreFailed: null,
       });
     } catch (error) {
       if (isStaleGeneration(generationRef, generation)) return;
@@ -65,7 +65,7 @@ export const BlueskyLikedPosts = () => {
         return;
       }
       console.error('Failed to load Bluesky liked posts:', error);
-      setState({ kind: 'error' });
+      setState({ kind: 'error', message: blueskyLikedPostsFailureMessage(error, 'first') });
     }
   }, []);
 
@@ -83,20 +83,21 @@ export const BlueskyLikedPosts = () => {
       const next = page.items.length === 0 || page.cursor === cursor ? undefined : page.cursor ?? undefined;
       setState((prev) =>
         prev.kind === 'ready'
-          ? { ...prev, items: appendUniqueBy(prev.items, page.items, itemKey), cursor: next, loadMoreFailed: false }
+          ? { ...prev, items: appendUniqueBy(prev.items, page.items, itemKey), cursor: next, loadMoreFailed: null }
           : prev
       );
     } catch (error) {
       if (isStaleGeneration(generationRef, generation)) return;
       console.error('Failed to load more Bluesky liked posts:', error);
-      setState((prev) => prev.kind === 'ready' ? { ...prev, loadMoreFailed: true } : prev);
+      const message = blueskyLikedPostsFailureMessage(error, 'more');
+      setState((prev) => prev.kind === 'ready' ? { ...prev, loadMoreFailed: message } : prev);
     } finally {
       isFetchingMoreRef.current = false;
     }
   }, []);
 
   useInfiniteScroll({
-    nextCursor: state.kind === 'ready' && !state.loadMoreFailed ? state.cursor : undefined,
+    nextCursor: state.kind === 'ready' && state.loadMoreFailed === null ? state.cursor : undefined,
     onLoadMore: loadMore,
     isFirstPageSettled: state.kind !== 'loading',
   });
@@ -105,7 +106,7 @@ export const BlueskyLikedPosts = () => {
   if (state.kind === 'error') {
     return (
       <div class='space-y-3'>
-        <p class={mutedTextClass}>Bluesky でいいねした投稿を読み込めませんでした</p>
+        <p class={mutedTextClass}>{state.message}</p>
         <button type='button' class={retryButtonClass} onClick={loadFirstPage}>もう一度読み込む</button>
       </div>
     );
@@ -117,7 +118,7 @@ export const BlueskyLikedPosts = () => {
       </div>
     );
   }
-  const retryCursor = state.loadMoreFailed ? state.cursor : undefined;
+  const retryCursor = state.loadMoreFailed === null ? undefined : state.cursor;
   return (
     <>
       <div class='space-y-6 py-2'>
@@ -127,7 +128,7 @@ export const BlueskyLikedPosts = () => {
       </div>
       {retryCursor !== undefined && (
         <div class='py-4 space-y-3'>
-          <p class='text-charcoal-light dark:text-gray-400'>続きを読み込めませんでした</p>
+          <p class='text-charcoal-light dark:text-gray-400'>{state.loadMoreFailed}</p>
           <button type='button' class={retryButtonClass} onClick={() => void loadMore(retryCursor)}>
             もう一度読み込む
           </button>

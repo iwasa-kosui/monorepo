@@ -78,6 +78,16 @@ export const blueskyFollowFailureMessage = (error: unknown): string =>
     ? 'Bluesky にログインできないため、操作できませんでした。'
     : 'フォローを変更できませんでした';
 
+export const blueskyLikedPostsFailureMessage = (error: unknown, kind: 'first' | 'more'): string => {
+  if (isMastodonApiError(error) && error.message === LOGIN_FAILED_MESSAGE) {
+    return kind === 'first'
+      ? 'Bluesky にログインできないため、いいねした投稿を読み込めませんでした'
+      : 'Bluesky にログインできないため、続きを読み込めませんでした';
+  }
+  if (isMastodonApiError(error) && error.status === 409) return 'Bluesky 連携が無効です';
+  return kind === 'first' ? 'Bluesky でいいねした投稿を読み込めませんでした' : '続きを読み込めませんでした';
+};
+
 export const blueskyActorOfPath = (pathname: string): string | undefined => {
   const encoded = /^\/bluesky\/profile\/([^/]+)\/?$/.exec(pathname)?.[1];
   if (encoded === undefined) return undefined;

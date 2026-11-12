@@ -4,8 +4,10 @@ import {
   blueskyActorOfPath,
   blueskyFeedNoticeMessage,
   blueskyFollowFailureMessage,
+  blueskyLikedPostsFailureMessage,
   blueskyProfileLoadFailureMessage,
   fetchBlueskyAuthorFeed,
+  fetchBlueskyLikedPosts,
   fetchBlueskyProfile,
   followBlueskyActor,
   unfollowBlueskyActor,
@@ -118,6 +120,30 @@ describe('blueskyProfileClient', () => {
     expect(blueskyFollowFailureMessage(login)).toBe('Bluesky にログインできないため、操作できませんでした。');
     expect(blueskyFollowFailureMessage(other)).toBe('フォローを変更できませんでした');
     expect(blueskyFollowFailureMessage(new Error('x'))).toBe('フォローを変更できませんでした');
+  });
+
+  it('いいねした投稿の読み込み失敗の文言を、ログイン失敗、連携の無効、それ以外で分ける', async () => {
+    stubFetch(json({ error: 'Bluesky login failed' }, 502));
+    const login = await failure(fetchBlueskyLikedPosts());
+    stubFetch(json({ error: 'Bluesky timeline is disabled' }, 409));
+    const disabled = await failure(fetchBlueskyLikedPosts());
+    stubFetch(json({ error: 'Bluesky request failed' }, 502));
+    const other = await failure(fetchBlueskyLikedPosts());
+
+    expect(blueskyLikedPostsFailureMessage(login, 'first')).toBe(
+      'Bluesky にログインできないため、いいねした投稿を読み込めませんでした',
+    );
+    expect(blueskyLikedPostsFailureMessage(login, 'more')).toBe(
+      'Bluesky にログインできないため、続きを読み込めませんでした',
+    );
+    expect(blueskyLikedPostsFailureMessage(disabled, 'first')).toBe('Bluesky 連携が無効です');
+    expect(blueskyLikedPostsFailureMessage(disabled, 'more')).toBe('Bluesky 連携が無効です');
+    expect(blueskyLikedPostsFailureMessage(other, 'first')).toBe('Bluesky でいいねした投稿を読み込めませんでした');
+    expect(blueskyLikedPostsFailureMessage(other, 'more')).toBe('続きを読み込めませんでした');
+    expect(blueskyLikedPostsFailureMessage(new Error('x'), 'first')).toBe(
+      'Bluesky でいいねした投稿を読み込めませんでした',
+    );
+    expect(blueskyLikedPostsFailureMessage(new Error('x'), 'more')).toBe('続きを読み込めませんでした');
   });
 });
 
