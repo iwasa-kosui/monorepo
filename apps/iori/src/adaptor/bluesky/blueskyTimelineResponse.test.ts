@@ -243,6 +243,7 @@ describe('parseBlueskyTimelineResponse', () => {
       playlist: 'https://video.example/playlist.m3u8',
       thumbnail: 'https://video.example/thumb.jpg',
       aspectRatio: { width: 16, height: 9 },
+      alt: '走る猫',
     };
 
     it('images を thumb・fullsize・alt に整える（alt が無ければ空文字）', () => {
@@ -427,11 +428,44 @@ describe('parseBlueskyTimelineResponse', () => {
       })).toMatchObject({ type: 'external' });
     });
 
-    it('video を thumbnail と playlist の URL だけにする', () => {
+    it('video を thumbnail・playlist・aspectRatio・alt に整える', () => {
       expect(embedOf(videoView)).toEqual({
         type: 'video',
         thumbnail: 'https://video.example/thumb.jpg',
         playlist: 'https://video.example/playlist.m3u8',
+        aspectRatio: { width: 16, height: 9 },
+        alt: '走る猫',
+      });
+    });
+
+    it('video の aspectRatio と alt が無い・不正・空なら null にする', () => {
+      const bare = { $type: videoView.$type, playlist: videoView.playlist };
+      expect(embedOf(bare)).toEqual({
+        type: 'video',
+        thumbnail: null,
+        playlist: 'https://video.example/playlist.m3u8',
+        aspectRatio: null,
+        alt: null,
+      });
+      expect(embedOf({ ...videoView, aspectRatio: { width: 0, height: 9 }, alt: '' })).toMatchObject({
+        thumbnail: 'https://video.example/thumb.jpg',
+        aspectRatio: null,
+        alt: null,
+      });
+      expect(embedOf({ ...videoView, aspectRatio: { width: 1.5, height: 9 }, alt: 3 })).toMatchObject({
+        aspectRatio: null,
+        alt: null,
+      });
+    });
+
+    it('recordWithMedia の media の video も aspectRatio と alt を持つ', () => {
+      expect(embedOf({
+        $type: 'app.bsky.embed.recordWithMedia#view',
+        record: { $type: 'app.bsky.embed.record#view', record: viewRecord },
+        media: videoView,
+      })).toMatchObject({
+        type: 'recordWithMedia',
+        media: { type: 'video', aspectRatio: { width: 16, height: 9 }, alt: '走る猫' },
       });
     });
 

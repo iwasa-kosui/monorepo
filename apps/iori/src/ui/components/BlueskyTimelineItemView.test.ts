@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { BlueskyTimelineItemView } from './BlueskyTimelineItemView.tsx';
+import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
 
 const base: IoriBlueskyTimelineItemBody = {
   feedItemId: 'at://did:plc:author/app.bsky.feed.post/3kabc',
@@ -30,6 +31,15 @@ const render = (
 ): string => String(jsx(BlueskyTimelineItemView, { item: { ...base, ...item }, ...props }));
 
 type ClickableNode = Readonly<{ props: { onClick: (event: { stopPropagation: () => void }) => void } }>;
+
+const findMenuItems = (node: unknown): readonly PostMenuItem[] | undefined => {
+  if (Array.isArray(node)) return node.map(findMenuItems).find((found) => found);
+  if (typeof node !== 'object' || node === null || !('tag' in node)) return undefined;
+  const { tag, props, children } = node as { tag: unknown; props: Record<string, unknown>; children: unknown };
+  if (tag === PostMenu) return props.items as readonly PostMenuItem[];
+  if (typeof tag === 'function') return findMenuItems(tag({ ...props, children }));
+  return findMenuItems(children);
+};
 
 const findButtonByTitle = (node: unknown, title: string): ClickableNode | undefined => {
   if (Array.isArray(node)) return node.map((child) => findButtonByTitle(child, title)).find((found) => found);
@@ -337,21 +347,79 @@ describe('BlueskyTimelineItemView', () => {
     expect(html).not.toMatch(/<a [^>]*>返信<\/a>/);
   });
 
-  it('動画のカードを、bsky.app の投稿を新しいタブで開くリンクにする', () => {
+  it('動画は、押すまで読み込まないサムネイルと再生ボタンにする（bsky.app へのリンクにしない）', () => {
     const html = render({
-      embed: { type: 'video', thumbnail: null, playlist: 'https://video.example/playlist.m3u8' },
+      embed: {
+        type: 'video',
+        thumbnail: 'https://video.example/thumb.jpg',
+        playlist: 'https://video.example/playlist.m3u8',
+        aspectRatio: { width: 9, height: 16 },
+        alt: '走る猫',
+      },
     });
 
-    expect(html).toMatch(
-      /<a href="https:\/\/bsky.app\/profile\/did:plc:author\/post\/3kabc" target="_blank" rel="noopener noreferrer" class="relative block/,
-    );
+    expect(html).toContain('aria-label="動画を再生: 走る猫"');
+    expect(html).toContain('src="https://video.example/thumb.jpg"');
+    expect(html).toContain('aspect-ratio: 9 / 16');
+    expect(html).not.toContain('<video');
+    expect(html).not.toContain('bsky.app');
+    expect(html).not.toContain('m3u8');
+  });
+
+  it('recordWithMedia の動画も再生ボタンにする', () => {
+    const html = render({
+      embed: {
+        type: 'recordWithMedia',
+        media: {
+          type: 'video',
+          thumbnail: null,
+          playlist: 'https://video.example/playlist.m3u8',
+          aspectRatio: null,
+          alt: null,
+        },
+        record: {
+          type: 'record',
+          uri: 'at://did:plc:q/app.bsky.feed.post/3kq',
+          authorHandle: 'q.bsky.social',
+          text: '',
+        },
+      },
+    });
+
+    expect(html).toContain('aria-label="動画を再生"');
+    expect(html).toContain('aspect-ratio: 16 / 9');
+  });
+
+  describe('「…」メニュー', () => {
+    const url = 'https://bsky.app/profile/did:plc:author/post/3kabc';
+
+    it('「Bluesky で開く」と「リンクをコピー」を、bsky.app の投稿の URL で出す', () => {
+      expect(findMenuItems(BlueskyTimelineItemView({ item: base }))).toEqual([
+        { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: url },
+        { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: url },
+      ]);
+    });
+
+    it('ハンドラが渡されない画面でも、操作の行とトリガーを出す', () => {
+      const html = render({});
+
+      expect(html).toContain('class="flex items-center justify-end gap-4 pt-1"');
+      expect(html).toContain('aria-controls=');
+      expect(html).not.toContain('title="いいね"');
+    });
+
+    it('操作のボタンの右端に置く', () => {
+      const html = render({}, { onReply: () => {}, onRepost: () => {}, onLike: () => {} });
+
+      expect(html.indexOf('title="いいね"')).toBeLessThan(html.indexOf('aria-controls='));
+    });
   });
 
   describe('いいねのボタン', () => {
     const handlers = { onLike: () => {}, onUndoLike: () => {} };
 
-    it('ハンドラが渡されないときはボタンを出さない', () => {
-      expect(render({})).not.toContain('<button');
+    it('ハンドラが渡されないときは、いいねのボタンを出さない', () => {
+      expect(render({})).not.toContain('title="いいね"');
     });
 
     it('いいねしていなければ、塗りなしで「いいね」の title の button にする', () => {
@@ -426,11 +494,46 @@ describe('BlueskyTimelineItemView', () => {
     });
   });
 
+  describe('引用のボタン', () => {
+    it('onQuote が渡されないときはボタンを出さない', () => {
+      expect(render({})).not.toContain('title="引用"');
+      expect(render({}, { onReply: () => {}, onLike: () => {}, onRepost: () => {} })).not.toContain('title="引用"');
+    });
+
+    it('onQuote が渡されたときは、それだけでも操作の行に「引用」の button を出す', () => {
+      const html = render({}, { onQuote: () => {} });
+
+      expect(html).toContain('class="flex items-center justify-end gap-4 pt-1"');
+      expect(html).toContain('type="button"');
+      expect(html).toContain('title="引用"');
+    });
+
+    it('返信、リポスト、引用、いいねの順に並べる', () => {
+      const html = render({}, { onReply: () => {}, onRepost: () => {}, onQuote: () => {}, onLike: () => {} });
+
+      expect(html.indexOf('title="返信 (p)"')).toBeLessThan(html.indexOf('title="リポスト"'));
+      expect(html.indexOf('title="リポスト"')).toBeLessThan(html.indexOf('title="引用"'));
+      expect(html.indexOf('title="引用"')).toBeLessThan(html.indexOf('title="いいね"'));
+    });
+
+    it('押すと、その投稿を渡して onQuote を呼び、親要素へのクリックは伝えない', () => {
+      const calls: IoriBlueskyTimelineItemBody[] = [];
+      const element = BlueskyTimelineItemView({ item: base, onQuote: (item) => calls.push(item) });
+      const button = findButtonByTitle(element, '引用');
+      let stopped = false;
+
+      button?.props.onClick({ stopPropagation: () => (stopped = true) });
+
+      expect(calls).toEqual([base]);
+      expect(stopped).toBe(true);
+    });
+  });
+
   describe('リポストのボタン', () => {
     const handlers = { onRepost: () => {}, onUndoRepost: () => {} };
 
     it('onRepost が渡されないときはボタンを出さない', () => {
-      expect(render({})).not.toContain('<button');
+      expect(render({})).not.toContain('title="リポスト"');
       expect(render({}, { onLike: () => {} })).not.toContain('title="リポスト"');
     });
 

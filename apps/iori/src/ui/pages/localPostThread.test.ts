@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { StatusContext } from '../api/mastodonClient.ts';
-import { resolveLocalPostThread } from './localPostThread.ts';
+import {
+  applyContext,
+  resolveLocalPostThread,
+  shouldReloadContext,
+  showsRemoteContextLoading,
+} from './localPostThread.ts';
 
 const post = (id: string) => ({ id }) as unknown as Status;
 
@@ -82,5 +87,42 @@ describe('resolveLocalPostThread', () => {
       type: 'loaded',
       contextFailed: true,
     });
+  });
+});
+
+describe('shouldReloadContext', () => {
+  it('新しく取り込んだ投稿があるときだけ context を読み直す', () => {
+    expect([0, 1, 40].map((fetched) => shouldReloadContext({ fetched }))).toEqual([false, true, true]);
+  });
+});
+
+describe('applyContext', () => {
+  const thread = { currentPost: post('p'), ancestors: [post('old-a')], descendants: [post('old-d')] };
+
+  it('本体を残して祖先と子孫だけを新しい context に置き換える', () => {
+    expect(applyContext(thread, context)).toEqual({
+      currentPost: post('p'),
+      ancestors: [post('a1')],
+      descendants: [post('d1'), post('d2')],
+    });
+  });
+
+  it('スレッドがまだないときは null のままにする', () => {
+    expect(applyContext(null, context)).toBeNull();
+  });
+});
+
+describe('showsRemoteContextLoading', () => {
+  const statusOf = (acct: string, reblog: Status | null = null) =>
+    ({ id: 'p', account: { acct }, reblog }) as unknown as Status;
+
+  it('読み込み中で、表示中の投稿がリモートのときだけ表示する', () => {
+    expect([
+      showsRemoteContextLoading(true, statusOf('alice@remote.example')),
+      showsRemoteContextLoading(true, statusOf('kosui')),
+      showsRemoteContextLoading(false, statusOf('alice@remote.example')),
+      showsRemoteContextLoading(true, null),
+      showsRemoteContextLoading(true, statusOf('kosui', statusOf('alice@remote.example'))),
+    ]).toEqual([true, false, false, false, true]);
   });
 });

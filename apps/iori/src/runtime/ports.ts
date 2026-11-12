@@ -20,10 +20,7 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
-import type {
-  BlockedActorIdsResolverByUserId,
-  BlockedActorsResolverByUserIdWithPagination,
-} from '../domain/block/block.ts';
+import type { BlockedActorsResolverByUserIdWithPagination } from '../domain/block/block.ts';
 import type { BlueskyCrosspostStatusReportResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type {
   DigestHeadersResolverByArticleIds,
@@ -83,6 +80,7 @@ import type { DismissNotificationUseCase } from '../useCase/dismissNotification.
 import type { EditArticleUseCase } from '../useCase/editArticle.ts';
 import type { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import type { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
+import type { FetchRemoteContextUseCase } from '../useCase/fetchRemoteContext.ts';
 import type { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
@@ -173,7 +171,6 @@ export type IoriMastodonRuntimePorts = Readonly<{
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
   mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
   blockedActorsResolverByUserIdWithPagination: BlockedActorsResolverByUserIdWithPagination;
-  blockedActorIdsResolverByUserId: BlockedActorIdsResolverByUserId;
   statusAssembler: StatusAssembler;
   searchTimeline: SearchTimelineUseCase;
   summarizeTimeline: SummarizeTimelineUseCase;
@@ -238,6 +235,7 @@ export type IoriSocialActionsRuntimePorts = Readonly<{
   undoRepostUseCase: UndoRepostUseCase;
   sendEmojiReactUseCase: SendEmojiReactUseCase;
   undoEmojiReactUseCase: UndoEmojiReactUseCase;
+  fetchRemoteContextUseCase: FetchRemoteContextUseCase;
 }>;
 export type IoriArticlesRuntimePorts = Readonly<{
   getArticleWithThreadUseCase: GetArticleWithThreadUseCase;

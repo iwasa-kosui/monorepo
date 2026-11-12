@@ -62,3 +62,9 @@ export const removeStatusesByPostId = (
   statuses: readonly Status[],
   postId: string,
 ): readonly Status[] => statuses.filter((status) => displayStatus(status).id !== postId);
+
+export const removeStatusesByAccountId = (
+  statuses: readonly Status[],
+  accountId: string,
+): readonly Status[] =>
+  statuses.filter((status) => status.account.id !== accountId && displayStatus(status).account.id !== accountId);

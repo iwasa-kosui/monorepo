@@ -2,9 +2,11 @@ import { useCallback, useRef, useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import {
+  block,
   deleteStatus,
   failureMessage,
   favourite,
+  mute,
   react,
   reblog,
   unfavourite,
@@ -36,6 +38,8 @@ export type UsePostActionsReturn = Readonly<{
   repost: (postId: string) => Promise<void>;
   undoRepost: (postId: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
+  muteAccount: (accountId: string, acct: string) => Promise<void>;
+  blockAccount: (accountId: string, acct: string) => Promise<void>;
   emojiReact: (postId: string, emoji: string) => Promise<void>;
   undoEmojiReact: (postId: string, emoji: string) => Promise<void>;
 }>;
@@ -44,6 +48,7 @@ type UsePostActionsProps = Readonly<{
   updateTimelineItem: StatusUpdater;
   updateThreadPost?: StatusUpdater;
   removePost: (postId: string) => void;
+  removeAccountPosts: (accountId: string) => void;
   refreshTimeline: () => Promise<void>;
   onPostDeleted?: (postId: string) => void;
 }>;
@@ -52,6 +57,7 @@ export const usePostActions = ({
   updateTimelineItem,
   updateThreadPost,
   removePost,
+  removeAccountPosts,
   refreshTimeline,
   onPostDeleted,
 }: UsePostActionsProps): UsePostActionsReturn => {
@@ -167,6 +173,38 @@ export const usePostActions = ({
     [removePost, onPostDeleted],
   );
 
+  const muteAccount = useCallback(
+    async (accountId: string, acct: string) => {
+      if (!confirm(`@${acct} をミュートしますか？\nミュートは相手のプロフィール画面で解除できます`)) return;
+      try {
+        await mute(accountId);
+        removeAccountPosts(accountId);
+      } catch (error) {
+        console.error('Failed to mute:', error);
+        alert(failureMessage('mute', error));
+      }
+    },
+    [removeAccountPosts],
+  );
+
+  const blockAccount = useCallback(
+    async (accountId: string, acct: string) => {
+      if (
+        !confirm(
+          `@${acct} をブロックしますか？フォローとフォロワーの関係も解除されます\nブロックは相手のプロフィール画面で解除できます`,
+        )
+      ) return;
+      try {
+        await block(accountId);
+        removeAccountPosts(accountId);
+      } catch (error) {
+        console.error('Failed to block:', error);
+        alert(failureMessage('block', error));
+      }
+    },
+    [removeAccountPosts],
+  );
+
   const emojiReact = useCallback(async (postId: string, emoji: string) => {
     setEmojiReactingPostId(postId);
     try {
@@ -227,6 +265,8 @@ export const usePostActions = ({
     repost,
     undoRepost,
     deletePost,
+    muteAccount,
+    blockAccount,
     emojiReact,
     undoEmojiReact,
   } as const;
