@@ -221,7 +221,7 @@ export const createWorkerIoriActionsRouter = ({
       }
       return c.json({ fetched: fetched.val.fetchedCount } satisfies IoriRemoteContextResponse);
     })
-    .post('/iori/v1/accounts/:id/remote-statuses', authn.requireUser(readStatuses), async (c) => {
+    .post('/iori/v1/accounts/:id/remote-statuses', authn.requireUser(writeStatuses), async (c) => {
       const userId = getMastodonPrincipal(c)?.userId;
       if (userId === null || userId === undefined) {
         return c.json(invalidToken, 401);

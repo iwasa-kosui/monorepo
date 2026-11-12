@@ -7,16 +7,23 @@ import { type Actor, ActorNotFoundError } from '../domain/actor/actor.ts';
 import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Agg } from '../domain/aggregate/index.ts';
 import type { BlockedActorUriResolverByUsername } from '../domain/block/block.ts';
-import type { LocalPostResolverByUri, PostResolverByUri, RemotePostUpserter } from '../domain/post/post.ts';
+import type {
+  LocalPostUrisResolverByUris,
+  RemotePostUpserter,
+  RemotePostUrisResolverByUris,
+} from '../domain/post/post.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import { timedOut, withTimeout } from '../helper/withTimeout.ts';
+import { signalWithTimeout, withFetchTimeout } from './helper/abortableFetch.ts';
+import { createRecentRuns } from './helper/recentRuns.ts';
 import { toRemotePostIdentity } from './helper/remoteNoteIdentity.ts';
 import { resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
 
 const MAX_SAVED = 20;
 const MAX_PAGES = 3;
+const MAX_ITEMS_PER_PAGE = 100;
 const DEFAULT_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_TOTAL_TIMEOUT_MS = 10_000;
 
@@ -46,44 +53,49 @@ type Deps = Readonly<{
   origin: string;
   userResolver: UserResolver;
   actorResolverById: Agg.Resolver<ActorId, Actor | undefined>;
-  postResolverByUri: PostResolverByUri;
-  localPostResolverByUri: LocalPostResolverByUri;
+  remotePostUrisResolverByUris: RemotePostUrisResolverByUris;
+  localPostUrisResolverByUris: LocalPostUrisResolverByUris;
   remotePostUpserter: RemotePostUpserter;
   blockedActorUriResolverByUsername: BlockedActorUriResolverByUsername;
   fetchTimeoutMs?: number;
   totalTimeoutMs?: number;
+  now?: () => number;
 }>;
 
 type Progress = {
   fetched: number;
   stopped: boolean;
+  signal: AbortSignal;
 };
 
 const create = ({
   origin,
   userResolver,
   actorResolverById,
-  postResolverByUri,
-  localPostResolverByUri,
+  remotePostUrisResolverByUris,
+  localPostUrisResolverByUris,
   remotePostUpserter,
   blockedActorUriResolverByUsername,
   fetchTimeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
   totalTimeoutMs = DEFAULT_TOTAL_TIMEOUT_MS,
+  now = Date.now,
 }: Deps): FetchRemoteOutboxUseCase => {
-  const withFetchTimeout = (loader: DocumentLoader): DocumentLoader => (url, options) =>
-    loader(url, {
-      ...options,
-      signal: options?.signal === undefined
-        ? AbortSignal.timeout(fetchTimeoutMs)
-        : AbortSignal.any([options.signal, AbortSignal.timeout(fetchTimeoutMs)]),
-    });
+  const recentRuns = createRecentRuns<ActorId, Awaited<RA<Ok, Err>>>({
+    now,
+    recentResult: () => RA.ok({ fetchedCount: 0 }),
+  });
 
-  const exists = async (uri: string): Promise<boolean> => {
+  const signalFor = (progress: Progress): AbortSignal => signalWithTimeout(progress.signal, fetchTimeoutMs);
+
+  const storedUris = async (uris: readonly string[]): Promise<ReadonlySet<string>> => {
+    if (uris.length === 0) {
+      return new Set();
+    }
     const [remote, local] = await Promise.all([
-      postResolverByUri.resolve({ uri }),
-      localPostResolverByUri.resolve({ uri }),
+      remotePostUrisResolverByUris.resolve({ uris }),
+      localPostUrisResolverByUris.resolve({ uris }),
     ]);
-    return (remote.ok && remote.val !== undefined) || (local.ok && local.val !== undefined);
+    return new Set([...(remote.ok ? remote.val : []), ...(local.ok ? local.val : [])]);
   };
 
   const outboxPages = async function*(outbox: Collection, documentLoader: DocumentLoader): AsyncGenerator<Collection> {
@@ -104,9 +116,10 @@ const create = ({
     ctx: FederationContext,
     uri: string,
     documentLoader: DocumentLoader,
+    progress: Progress,
   ): Promise<Note | undefined> => {
     try {
-      const found = await ctx.lookupObject(uri, { documentLoader, signal: AbortSignal.timeout(fetchTimeoutMs) });
+      const found = await ctx.lookupObject(uri, { documentLoader, signal: signalFor(progress) });
       return found instanceof Note ? found : undefined;
     } catch (error) {
       getLogger().debug(`Failed to look up a note: ${uri} - ${error}`);
@@ -115,21 +128,18 @@ const create = ({
   };
 
   const saveItem = async (
-    item: unknown,
+    create: Create,
     actorUri: string,
     ctx: FederationContext,
     documentLoader: DocumentLoader,
     progress: Progress,
   ): Promise<void> => {
-    if (!(item instanceof Create) || item.objectId === null) {
-      return;
-    }
-    const noteUri = item.objectId.href;
+    const noteUri = create.objectId!.href;
     try {
-      if (progress.stopped || await exists(noteUri)) {
+      if (progress.stopped) {
         return;
       }
-      const note = await lookupNote(ctx, noteUri, documentLoader);
+      const note = await lookupNote(ctx, noteUri, documentLoader, progress);
       if (note === undefined || note.attributionId?.href !== actorUri) {
         return;
       }
@@ -146,6 +156,23 @@ const create = ({
     }
   };
 
+  const pageCreates = async (
+    page: Collection,
+    documentLoader: DocumentLoader,
+    progress: Progress,
+  ): Promise<Create[]> => {
+    const creates: Create[] = [];
+    for await (const item of page.getItems({ documentLoader, suppressError: true })) {
+      if (progress.stopped || creates.length >= MAX_ITEMS_PER_PAGE) {
+        break;
+      }
+      if (item instanceof Create && item.objectId !== null) {
+        creates.push(item);
+      }
+    }
+    return creates;
+  };
+
   const fetchOutbox = async (
     actorUri: string,
     ctx: FederationContext,
@@ -153,7 +180,7 @@ const create = ({
     progress: Progress,
   ): Promise<void> => {
     try {
-      const actor = await ctx.lookupObject(actorUri, { documentLoader, signal: AbortSignal.timeout(fetchTimeoutMs) });
+      const actor = await ctx.lookupObject(actorUri, { documentLoader, signal: signalFor(progress) });
       if (!isActor(actor) || actor.id?.href !== actorUri) {
         return;
       }
@@ -162,11 +189,15 @@ const create = ({
         return;
       }
       for await (const page of outboxPages(outbox, documentLoader)) {
-        for await (const item of page.getItems({ documentLoader, suppressError: true })) {
+        const creates = await pageCreates(page, documentLoader, progress);
+        const stored = await storedUris(creates.map((create) => create.objectId!.href));
+        for (const create of creates) {
           if (progress.stopped || progress.fetched >= MAX_SAVED) {
             return;
           }
-          await saveItem(item, actorUri, ctx, documentLoader, progress);
+          if (!stored.has(create.objectId!.href)) {
+            await saveItem(create, actorUri, ctx, documentLoader, progress);
+          }
         }
       }
     } catch (error) {
@@ -174,7 +205,7 @@ const create = ({
     }
   };
 
-  const run = async ({ userId, actorId, ctx }: Input): RA<Ok, Err> => {
+  const execute = async ({ userId, actorId, ctx }: Input): RA<Ok, Err> => {
     const user = await resolveUserWith(userResolver)(userId);
     if (!user.ok) {
       return RA.err(user.err);
@@ -195,15 +226,23 @@ const create = ({
       return RA.ok({ fetchedCount: 0 });
     }
 
-    const documentLoader = withFetchTimeout(await ctx.getDocumentLoader({ identifier: user.val.username }));
-    const progress: Progress = { fetched: 0, stopped: false };
+    const controller = new AbortController();
+    const documentLoader = withFetchTimeout(
+      await ctx.getDocumentLoader({ identifier: user.val.username }),
+      controller.signal,
+      fetchTimeoutMs,
+    );
+    const progress: Progress = { fetched: 0, stopped: false, signal: controller.signal };
     const finished = await withTimeout(fetchOutbox(actor.uri, ctx, documentLoader, progress), totalTimeoutMs);
     if (finished === timedOut) {
       progress.stopped = true;
+      controller.abort();
       getLogger().debug(`Timed out while fetching the outbox of the actor: ${actorId}`);
     }
     return RA.ok({ fetchedCount: progress.fetched });
   };
+
+  const run = (input: Input): RA<Ok, Err> => recentRuns(input.actorId, () => execute(input));
 
   return { run };
 };

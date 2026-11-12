@@ -18,6 +18,8 @@ import type { UserId } from '../domain/user/userId.ts';
 import type { Username } from '../domain/user/username.ts';
 import { timedOut, withTimeout } from '../helper/withTimeout.ts';
 import type { FetchReplyNotesRecursiveUseCase } from './fetchReplyNotesRecursive.ts';
+import { signalWithTimeout, withFetchTimeout } from './helper/abortableFetch.ts';
+import { createRecentRuns } from './helper/recentRuns.ts';
 import { toRemotePostIdentity } from './helper/remoteNoteIdentity.ts';
 import { resolveUserWith } from './helper/resolve.ts';
 import type { UseCase } from './useCase.ts';
@@ -27,8 +29,6 @@ const MAX_REPLIES = 40;
 const MAX_PAGES = 10;
 const MAX_LOOKUPS = 60;
 const MAX_ITEMS_PER_PAGE = 100;
-const RECENT_WINDOW_MS = 60_000;
-const MAX_TRACKED_POSTS = 200;
 const DEFAULT_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_TOTAL_TIMEOUT_MS = 10_000;
 
@@ -89,38 +89,12 @@ const create = ({
   totalTimeoutMs = DEFAULT_TOTAL_TIMEOUT_MS,
   now = Date.now,
 }: Deps): FetchRemoteContextUseCase => {
-  const inflight = new Map<PostId, RA<Ok, Err>>();
-  const completedAt = new Map<PostId, number>();
+  const recentRuns = createRecentRuns<PostId, Awaited<RA<Ok, Err>>>({
+    now,
+    recentResult: () => RA.ok({ fetchedCount: 0 }),
+  });
 
-  const remember = (postId: PostId): void => {
-    const at = now();
-    completedAt.delete(postId);
-    completedAt.set(postId, at);
-    for (const [key, completed] of completedAt) {
-      if (completedAt.size <= MAX_TRACKED_POSTS && at - completed < RECENT_WINDOW_MS) {
-        break;
-      }
-      completedAt.delete(key);
-    }
-  };
-
-  const isRecent = (postId: PostId): boolean => {
-    const completed = completedAt.get(postId);
-    return completed !== undefined && now() - completed < RECENT_WINDOW_MS;
-  };
-
-  const signalFor = (progress: Progress): AbortSignal =>
-    AbortSignal.any([progress.signal, AbortSignal.timeout(fetchTimeoutMs)]);
-
-  const withFetchTimeout = (loader: DocumentLoader, overall: AbortSignal): DocumentLoader => (url, options) =>
-    loader(url, {
-      ...options,
-      signal: AbortSignal.any(
-        options?.signal === undefined
-          ? [overall, AbortSignal.timeout(fetchTimeoutMs)]
-          : [overall, options.signal, AbortSignal.timeout(fetchTimeoutMs)],
-      ),
-    });
+  const signalFor = (progress: Progress): AbortSignal => signalWithTimeout(progress.signal, fetchTimeoutMs);
 
   const withPageLimit = (loader: DocumentLoader, progress: Progress): DocumentLoader => (url, options) => {
     if (progress.pages >= MAX_PAGES) {
@@ -294,6 +268,7 @@ const create = ({
     const documentLoader = withFetchTimeout(
       await ctx.getDocumentLoader({ identifier: user.val.username }),
       controller.signal,
+      fetchTimeoutMs,
     );
     const progress: Progress = { fetched: 0, replies: 0, pages: 0, stopped: false, signal: controller.signal };
     const finished = await withTimeout(
@@ -311,26 +286,7 @@ const create = ({
     return RA.ok({ fetchedCount: progress.fetched });
   };
 
-  const run = async (input: Input): RA<Ok, Err> => {
-    const { postId } = input;
-    if (isRecent(postId)) {
-      return RA.ok({ fetchedCount: 0 });
-    }
-    const running = inflight.get(postId);
-    if (running !== undefined) {
-      return running;
-    }
-    const started = execute(input).then((result) => {
-      if (result.ok) {
-        remember(postId);
-      }
-      return result;
-    }).finally(() => {
-      inflight.delete(postId);
-    });
-    inflight.set(postId, started);
-    return started;
-  };
+  const run = (input: Input): RA<Ok, Err> => recentRuns(input.postId, () => execute(input));
 
   return { run };
 };

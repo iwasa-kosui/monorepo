@@ -62,6 +62,7 @@ type Setup = Readonly<{
   documentLoader?: DocumentLoader;
   fetchTimeoutMs?: number;
   totalTimeoutMs?: number;
+  now?: () => number;
 }>;
 
 const setup = (options: Setup = {}) => {
@@ -88,27 +89,46 @@ const setup = (options: Setup = {}) => {
   const blockedActorUriResolverByUsername = {
     resolve: vi.fn(async (_input: { username: unknown; actorUri: string }) => RA.ok(options.blocked ?? false)),
   };
+  const remotePostUrisResolverByUris = {
+    resolve: vi.fn(async ({ uris }: { uris: readonly string[] }) => RA.ok(uris.filter((uri) => stored.has(uri)))),
+  };
+  const localPostUrisResolverByUris = {
+    resolve: vi.fn(async ({ uris }: { uris: readonly string[] }) =>
+      RA.ok(uris.filter((uri) => options.localUris?.includes(uri)))
+    ),
+  };
+  const actorResolverById = {
+    resolve: vi.fn(async () => RA.ok('actor' in options ? options.actor : remoteActor)),
+  };
   const useCase = FetchRemoteOutboxUseCase.create({
     origin: ORIGIN,
     userResolver: { resolve: async () => RA.ok({ id: 'user-1', username: 'kosui' } as never) },
-    actorResolverById: {
-      resolve: async () => RA.ok('actor' in options ? options.actor : remoteActor),
-    },
-    postResolverByUri: { resolve: async ({ uri }) => RA.ok(stored.has(uri) ? ({ uri } as never) : undefined) },
-    localPostResolverByUri: {
-      resolve: async ({ uri }) => RA.ok(options.localUris?.includes(uri) ? ({ uri } as never) : undefined),
-    },
+    actorResolverById,
+    remotePostUrisResolverByUris,
+    localPostUrisResolverByUris,
     remotePostUpserter,
     blockedActorUriResolverByUsername,
     fetchTimeoutMs: options.fetchTimeoutMs,
     totalTimeoutMs: options.totalTimeoutMs,
+    now: options.now,
   });
-  const run = async () => {
-    const result = await useCase.run({ userId: 'user-1' as never, actorId: 'actor-1' as never, ctx });
+  const run = async (actorId = 'actor-1') => {
+    const result = await useCase.run({ userId: 'user-1' as never, actorId: actorId as never, ctx });
     if (!result.ok) throw new Error(`unexpected error: ${result.err.type}`);
     return result.val.fetchedCount;
   };
-  return { run, ctx, lookupObject, remotePostUpserter, blockedActorUriResolverByUsername, stored, documentLoader };
+  return {
+    run,
+    ctx,
+    lookupObject,
+    remotePostUpserter,
+    remotePostUrisResolverByUris,
+    localPostUrisResolverByUris,
+    actorResolverById,
+    blockedActorUriResolverByUsername,
+    stored,
+    documentLoader,
+  };
 };
 
 const storedUris = (t: ReturnType<typeof setup>) =>
@@ -227,6 +247,137 @@ describe('FetchRemoteOutboxUseCase', () => {
     expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
   });
 
+  describe('保存済みの判定', () => {
+    it('1 ページ分の Create の object の URI をまとめて、リモートとローカルそれぞれ 1 回の問い合わせで調べる', async () => {
+      const notes = [noteOf(1), noteOf(2), noteOf(3)];
+      const t = setup({ outbox: outboxOf([createOf(notes[0]!), announceOf(notes[1]!), createOf(notes[2]!)]), notes });
+
+      await t.run();
+
+      expect(t.remotePostUrisResolverByUris.resolve).toHaveBeenCalledTimes(1);
+      expect(t.remotePostUrisResolverByUris.resolve).toHaveBeenCalledWith({ uris: [noteUri(1), noteUri(3)] });
+      expect(t.localPostUrisResolverByUris.resolve).toHaveBeenCalledTimes(1);
+      expect(t.localPostUrisResolverByUris.resolve).toHaveBeenCalledWith({ uris: [noteUri(1), noteUri(3)] });
+    });
+
+    it('ページごとに 1 回ずつ問い合わせる', async () => {
+      const notes = [noteOf(1), noteOf(2)];
+      const t = setup({ outbox: outboxOf([createOf(notes[0]!)], [createOf(notes[1]!)]), notes });
+
+      await t.run();
+
+      expect(t.remotePostUrisResolverByUris.resolve.mock.calls.map(([input]) => input.uris)).toEqual([
+        [noteUri(1)],
+        [noteUri(2)],
+      ]);
+      expect(t.localPostUrisResolverByUris.resolve).toHaveBeenCalledTimes(2);
+    });
+
+    it('1 ページから調べる URI は 100 件までにする', async () => {
+      const notes = Array.from({ length: 120 }, (_, index) => noteOf(index));
+      const t = setup({ outbox: outboxOf(notes.map(createOf)), notes });
+
+      await t.run();
+
+      expect(t.remotePostUrisResolverByUris.resolve.mock.calls[0]![0].uris).toHaveLength(100);
+      expect(t.localPostUrisResolverByUris.resolve.mock.calls[0]![0].uris).toHaveLength(100);
+    });
+
+    it('Create がないページでは問い合わせない', async () => {
+      const t = setup({ outbox: outboxOf([announceOf(noteOf(1))]), notes: [noteOf(1)] });
+
+      await t.run();
+
+      expect(t.remotePostUrisResolverByUris.resolve).not.toHaveBeenCalled();
+      expect(t.localPostUrisResolverByUris.resolve).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('同じアクターへの取得', () => {
+    const withNote = () => {
+      const note = noteOf(1);
+      return { outbox: outboxOf([createOf(note)]), notes: [note] };
+    };
+
+    it('同時の 2 回のリクエストは、1 回の取得にまとめて同じ結果を返す', async () => {
+      const t = setup(withNote());
+
+      const counts = await Promise.all([t.run(), t.run()]);
+
+      expect(counts).toEqual([1, 1]);
+      expect(t.ctx.getDocumentLoader).toHaveBeenCalledTimes(1);
+      expect(t.remotePostUpserter.resolve).toHaveBeenCalledTimes(1);
+    });
+
+    it('別のアクターへの同時のリクエストはまとめない', async () => {
+      const t = setup(withNote());
+
+      await Promise.all([t.run('actor-1'), t.run('actor-2')]);
+
+      expect(t.ctx.getDocumentLoader).toHaveBeenCalledTimes(2);
+    });
+
+    it('完了から 60 秒以内の再実行は、取得せずに 0 件を返す', async () => {
+      let time = 1_000_000;
+      const t = setup({ ...withNote(), now: () => time });
+
+      expect(await t.run()).toBe(1);
+      time += 59_999;
+
+      expect(await t.run()).toBe(0);
+      expect(t.ctx.getDocumentLoader).toHaveBeenCalledTimes(1);
+    });
+
+    it('完了から 60 秒たったら、もう一度取得する', async () => {
+      let time = 1_000_000;
+      const t = setup({ ...withNote(), now: () => time });
+
+      await t.run();
+      time += 60_000;
+      await t.run();
+
+      expect(t.ctx.getDocumentLoader).toHaveBeenCalledTimes(2);
+    });
+
+    it('アクターが見つからなかった実行は覚えず、続けて呼ぶと毎回調べる', async () => {
+      const actorResolverById = { resolve: vi.fn(async () => RA.ok(undefined)) };
+      const useCase = FetchRemoteOutboxUseCase.create({
+        origin: ORIGIN,
+        userResolver: { resolve: async () => RA.ok({ id: 'user-1', username: 'kosui' } as never) },
+        actorResolverById,
+        remotePostUrisResolverByUris: { resolve: async () => RA.ok([]) },
+        localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
+        remotePostUpserter: { resolve: vi.fn() },
+        blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
+      });
+      const input = {
+        userId: 'user-1' as never,
+        actorId: 'actor-1' as never,
+        ctx: { getDocumentLoader: vi.fn(), lookupObject: vi.fn() },
+      };
+
+      const results = [await useCase.run(input), await useCase.run(input)];
+
+      expect(results.map((result) => result.ok)).toEqual([false, false]);
+      expect(actorResolverById.resolve).toHaveBeenCalledTimes(2);
+    });
+
+    it('覚えておくアクターは 200 件までにし、古いものから忘れる', async () => {
+      let time = 1_000_000;
+      const t = setup({ ...withNote(), now: () => time });
+      for (let index = 0; index < 201; index++) {
+        await t.run(`actor-${index}`);
+        time += 1;
+      }
+      const loaders = t.ctx.getDocumentLoader.mock.calls.length;
+
+      await t.run('actor-200');
+      expect(t.ctx.getDocumentLoader.mock.calls.length).toBe(loaders);
+      await t.run('actor-0');
+      expect(t.ctx.getDocumentLoader.mock.calls.length).toBe(loaders + 1);
+    });
+  });
+
   describe('失敗と時間切れ', () => {
     it('一部の Note の取得に失敗しても、残りを保存する', async () => {
       const notes = [noteOf(1), noteOf(2), noteOf(3)];
@@ -274,6 +425,48 @@ describe('FetchRemoteOutboxUseCase', () => {
       expect(lookedUpUris(t)).not.toContain(noteUri(3));
     });
 
+    it('全体の時間切れで、実行中の取得に渡した signal を abort する', async () => {
+      const note = noteOf(1);
+      const t = setup({
+        outbox: outboxOf([createOf(note)]),
+        notes: [note],
+        hangingUris: [noteUri(1)],
+        totalTimeoutMs: 50,
+      });
+
+      await t.run();
+
+      const signal = t.lookupObject.mock.calls.find(([uri]) => uri === noteUri(1))![1].signal!;
+      expect(signal.aborted).toBe(true);
+    });
+
+    it('時間切れにならなければ、取得に渡した signal を abort しない', async () => {
+      const note = noteOf(1);
+      const t = setup({ outbox: outboxOf([createOf(note)]), notes: [note] });
+
+      await t.run();
+
+      expect(t.lookupObject.mock.calls.map(([, options]) => options.signal!.aborted)).toEqual([false, false]);
+    });
+
+    it('全体の時間切れで、文書の取得に渡す signal も abort する', async () => {
+      const signals: AbortSignal[] = [];
+      const documentLoader = vi.fn(async (_url: string, options?: { signal?: AbortSignal }) => {
+        signals.push(options!.signal!);
+        return new Promise(() => undefined);
+      }) as unknown as DocumentLoader;
+      const t = setup({ documentLoader, totalTimeoutMs: 50 });
+      t.lookupObject.mockImplementation(async (_uri, options) => {
+        await options.documentLoader('https://remote.example/outbox');
+        return null;
+      });
+
+      await t.run();
+
+      expect(signals).toHaveLength(1);
+      expect(signals[0]!.aborted).toBe(true);
+    });
+
     it('取得ごとに 5 秒の signal を付けて lookupObject を呼ぶ', async () => {
       const note = noteOf(1);
       const t = setup({ outbox: outboxOf([createOf(note)]), notes: [note] });
@@ -311,8 +504,8 @@ describe('FetchRemoteOutboxUseCase', () => {
         origin: ORIGIN,
         userResolver: { resolve: async () => RA.ok(undefined) },
         actorResolverById: { resolve: async () => RA.ok(remoteActor) },
-        postResolverByUri: { resolve: async () => RA.ok(undefined) },
-        localPostResolverByUri: { resolve: async () => RA.ok(undefined) },
+        remotePostUrisResolverByUris: { resolve: async () => RA.ok([]) },
+        localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
         remotePostUpserter: { resolve: vi.fn() },
         blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
       });
@@ -331,8 +524,8 @@ describe('FetchRemoteOutboxUseCase', () => {
         origin: ORIGIN,
         userResolver: { resolve: async () => RA.ok({ id: 'user-1', username: 'kosui' } as never) },
         actorResolverById: { resolve: async () => RA.ok(undefined) },
-        postResolverByUri: { resolve: async () => RA.ok(undefined) },
-        localPostResolverByUri: { resolve: async () => RA.ok(undefined) },
+        remotePostUrisResolverByUris: { resolve: async () => RA.ok([]) },
+        localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
         remotePostUpserter: { resolve: vi.fn() },
         blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
       });
