@@ -495,6 +495,34 @@ describe('Worker の Mastodon 互換 API', () => {
       expect((await favourites.json() as Array<{ id: string }>).map((status) => status.id)).toEqual([postId]);
       expect(await mutes.json()).toEqual([]);
     });
+
+    it('bookmarks を Mastodon の形で返し、bookmarked を true にする', async () => {
+      const { request, sqlite } = setup();
+      const headers = { Cookie: `sessionId=${sessionId}` };
+      const postId = crypto.randomUUID();
+      sqlite.prepare('INSERT INTO posts(postId,actorId,content,createdAt,type) VALUES (?,?,?,?,?)').run(
+        postId,
+        actorId,
+        '<p>saved</p>',
+        Date.UTC(2025, 0, 3),
+        'local',
+      );
+      sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri) VALUES (?,?,?)').run(postId, userId, null);
+      sqlite.prepare('INSERT INTO bookmarks(bookmarkId,actorId,postId,createdAt) VALUES (?,?,?,?)').run(
+        crypto.randomUUID(),
+        actorId,
+        postId,
+        Date.UTC(2025, 0, 4),
+      );
+
+      const bookmarks = await request('/api/v1/bookmarks', { headers });
+
+      expect(bookmarks.status).toBe(200);
+      const statuses = await bookmarks.json() as Array<{ id: string; bookmarked: boolean }>;
+      expect(statuses.map((status) => ({ id: status.id, bookmarked: status.bookmarked }))).toEqual([
+        { id: postId, bookmarked: true },
+      ]);
+    });
   });
 
   describe('メディアとプロフィール画像', () => {

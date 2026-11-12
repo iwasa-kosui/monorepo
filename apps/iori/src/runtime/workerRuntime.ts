@@ -34,6 +34,11 @@ import { createD1BlockedActorUriResolverByUsername } from '../adaptor/d1/block/b
 import { createD1BlockResolver } from '../adaptor/d1/block/blockResolver.ts';
 import { createD1MutedOrBlockedActorIdsResolverByUserId } from '../adaptor/d1/block/mutedOrBlockedActorIdsResolverByUserId.ts';
 import { createD1BlueskyCrosspostStatusReportResolver } from '../adaptor/d1/blueskyCrosspost/blueskyCrosspostStatusReportResolver.ts';
+import { createD1BookmarkCreatedStore } from '../adaptor/d1/bookmark/bookmarkCreatedStore.ts';
+import { createD1BookmarkDeletedStore } from '../adaptor/d1/bookmark/bookmarkDeletedStore.ts';
+import { createD1BookmarkedPostIdsResolverByActorIdWithPagination } from '../adaptor/d1/bookmark/bookmarkedPostIdsResolverByActorIdWithPagination.ts';
+import { createD1BookmarkResolver } from '../adaptor/d1/bookmark/bookmarkResolver.ts';
+import { createD1BookmarksResolverByPostId } from '../adaptor/d1/bookmark/bookmarksResolverByPostId.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
 import { createD1DigestHeadersResolverByArticleIds } from '../adaptor/d1/digest/digestHeadersResolverByArticleIds.ts';
@@ -193,10 +198,12 @@ import { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
 import { CreateBlockUseCase } from '../useCase/createBlock.ts';
+import { CreateBookmarkUseCase } from '../useCase/createBookmark.ts';
 import { CreateMuteUseCase } from '../useCase/createMute.ts';
 import { createCreatePostUseCase } from '../useCase/createPost.ts';
 import { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
 import { DeleteBlockUseCase } from '../useCase/deleteBlock.ts';
+import { DeleteBookmarkUseCase } from '../useCase/deleteBookmark.ts';
 import { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
@@ -297,6 +304,7 @@ export const createWorkerRuntimePorts = async (
   const isDigestOwner = IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) });
   const articleBodyWrittenStore = createD1ArticleBodyWrittenStore(db);
   const likeResolver = createD1LikeResolver(db);
+  const bookmarkResolver = createD1BookmarkResolver(db);
   const repostResolver = createD1RepostResolver(db);
   const emojiReactResolverByActorAndPostAndEmoji = createD1EmojiReactResolverByActorAndPostAndEmoji(db);
   const threadResolver = createD1ThreadResolver(db, env.ORIGIN);
@@ -425,6 +433,7 @@ export const createWorkerRuntimePorts = async (
       actorIdResolverByAcct: createD1ActorIdResolverByAcct(db),
       accountRelationshipsResolverByActorIds: createD1AccountRelationshipsResolverByActorIds(db),
       likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
+      bookmarkedPostIdsResolverByActorIdWithPagination: createD1BookmarkedPostIdsResolverByActorIdWithPagination(db),
       mutedActorsResolverByUserIdWithPagination: createD1MutedActorsResolverByUserIdWithPagination(db),
       blockedActorsResolverByUserIdWithPagination: createD1BlockedActorsResolverByUserIdWithPagination(db),
       statusAssembler: createStatusAssembler({
@@ -647,6 +656,20 @@ export const createWorkerRuntimePorts = async (
         localLikeDeletedStore: createD1LocalLikeDeletedStore(db),
         postResolver,
       }),
+      createBookmarkUseCase: CreateBookmarkUseCase.create({
+        sessionResolver,
+        userResolver,
+        actorResolverByUserId,
+        bookmarkCreatedStore: createD1BookmarkCreatedStore(db),
+        bookmarkResolver,
+      }),
+      deleteBookmarkUseCase: DeleteBookmarkUseCase.create({
+        sessionResolver,
+        userResolver,
+        actorResolverByUserId,
+        bookmarkDeletedStore: createD1BookmarkDeletedStore(db),
+        bookmarkResolver,
+      }),
       sendRepostUseCase: SendRepostUseCase.create({
         origin: env.ORIGIN,
         sessionResolver,
@@ -842,9 +865,11 @@ export const createWorkerRuntimePorts = async (
         actorResolverById: createD1ActorResolverById(db),
         actorResolverByUri: createD1ActorResolverByUri(db),
         postUpdatedStore: createD1PostUpdatedStore(db),
+        postVersionsResolver: createD1PostVersionsResolverByPostId(db),
         postImagesResolver: createD1PostImagesResolverByPostId(db),
         postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
         acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+        directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
         origin: env.ORIGIN,
       }),
       postSourceTextResolver: createD1PostSourceTextResolver(db),
@@ -859,6 +884,8 @@ export const createWorkerRuntimePorts = async (
         articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
         articleDeletedStore: createD1ArticleDeletedStore(db),
         directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
+        bookmarksResolverByPostId: createD1BookmarksResolverByPostId(db),
+        bookmarkDeletedStore: createD1BookmarkDeletedStore(db),
         removeBlueskyCrosspost: blueskyCrosspost?.remove,
       }),
       subscribePushUseCase: SubscribePushUseCase.create({

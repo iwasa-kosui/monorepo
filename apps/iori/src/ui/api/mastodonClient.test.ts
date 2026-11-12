@@ -4,6 +4,8 @@ import {
   addXUserFeedSource,
   block,
   blueskyFailureMessage,
+  bookmark,
+  bookmarksUrl,
   createBlueskyPost,
   createStatus,
   deleteStatus,
@@ -15,6 +17,7 @@ import {
   fetchBlueskyPostThread,
   fetchBlueskyStatus,
   fetchBlueskyTimeline,
+  fetchBookmarks,
   fetchFavourites,
   fetchFeedSources,
   fetchFollowers,
@@ -27,6 +30,7 @@ import {
   fetchRemoteStatuses,
   fetchStatus,
   fetchStatusContext,
+  fetchStatusSource,
   follow,
   isMastodonApiError,
   isNotFoundError,
@@ -54,6 +58,7 @@ import {
   summarizeTimeline,
   translate,
   unblock,
+  unbookmark,
   undoRepostBlueskyPost,
   unfavourite,
   unfollow,
@@ -63,6 +68,7 @@ import {
   unreblog,
   updateMedia,
   updateProfile,
+  updateStatus,
   uploadMedia,
 } from './mastodonClient.ts';
 
@@ -311,6 +317,18 @@ describe('mastodon client requests', () => {
     expect(page).toEqual({ items: [{ id: 's1' }], nextMaxId: 'f1', prevMinId: undefined });
   });
 
+  it('requests bookmarks with max_id and returns the cursors from the Link header', async () => {
+    const fetchMock = stubFetch(jsonResponse([{ id: 's1' }], {
+      link: '<https://iori.example/api/v1/bookmarks?max_id=b1>; rel="next"',
+    }));
+
+    const page = await fetchBookmarks({ maxId: 'm1' });
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/bookmarks?max_id=m1');
+    expect(bookmarksUrl({ maxId: 'm1' })).toBe('/api/v1/bookmarks?max_id=m1');
+    expect(page).toEqual({ items: [{ id: 's1' }], nextMaxId: 'b1', prevMinId: undefined });
+  });
+
   it('requests notifications with the repeated types[] and max_id, and returns the cursors', async () => {
     const fetchMock = stubFetch(jsonResponse([{ id: 'n1' }], {
       link: '<https://iori.example/api/v1/notifications?max_id=n1>; rel="next"',
@@ -464,6 +482,61 @@ describe('mastodon client requests', () => {
     expect(isNotFoundError(error)).toBe(true);
   });
 
+  it('requests the source of a status by encoded id', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'a/b', text: '本文', spoiler_text: 'CW' }));
+
+    const source = await fetchStatusSource('a/b');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/v1/statuses/a%2Fb/source');
+    expect(source).toEqual({ id: 'a/b', text: '本文', spoiler_text: 'CW' });
+  });
+
+  it('throws a not found error when the source of the status is missing', async () => {
+    stubFetch(jsonResponse({ error: 'Record not found' }, { status: 404 }));
+
+    const error = await fetchStatusSource('missing').catch((e: unknown) => e);
+
+    expect(isNotFoundError(error)).toBe(true);
+  });
+
+  it('puts the edited status as same-origin JSON by encoded id and returns the updated status', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'a/b', edited_at: '2026-01-02T03:04:05.000Z' }));
+
+    const status = await updateStatus('a/b', {
+      status: '直した本文',
+      spoiler_text: '',
+      sensitive: false,
+      content_type: 'text/markdown',
+    });
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/v1/statuses/a%2Fb');
+    expect(init.method).toBe('PUT');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json', Accept: 'application/json' });
+    expect(JSON.parse(String(init.body))).toEqual({
+      status: '直した本文',
+      spoiler_text: '',
+      sensitive: false,
+      content_type: 'text/markdown',
+    });
+    expect(status).toEqual({ id: 'a/b', edited_at: '2026-01-02T03:04:05.000Z' });
+  });
+
+  it('throws an unprocessable error carrying the server message when the edit is refused', async () => {
+    stubFetch(jsonResponse({ error: 'Validation failed: Text can\'t be blank' }, { status: 422 }));
+
+    const error = await updateStatus('s1', {
+      status: '',
+      spoiler_text: '',
+      sensitive: false,
+      content_type: 'text/markdown',
+    }).catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Validation failed: Text can\'t be blank');
+  });
+
   it('throws an unauthorized error carrying the server message on 401', async () => {
     stubFetch(jsonResponse({ error: 'The access token is invalid' }, { status: 401 }));
 
@@ -507,6 +580,8 @@ describe('mastodon client requests', () => {
   it.each([
     ['favourite', favourite, '/api/v1/statuses/s1/favourite'],
     ['unfavourite', unfavourite, '/api/v1/statuses/s1/unfavourite'],
+    ['bookmark', bookmark, '/api/v1/statuses/s1/bookmark'],
+    ['unbookmark', unbookmark, '/api/v1/statuses/s1/unbookmark'],
     ['reblog', reblog, '/api/v1/statuses/s1/reblog'],
     ['unreblog', unreblog, '/api/v1/statuses/s1/unreblog'],
     ['follow', follow, '/api/v1/accounts/s1/follow'],

@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "ddc13ee2-9114-49f9-a075-4cca8201deef",
-  "prevId": "3ffe37c8-1d63-4b41-be50-a135229e9027",
+  "prevId": "92152080-ccf9-4cb6-8137-f5df9418fe17",
   "tables": {
     "actors": {
       "name": "actors",
@@ -988,6 +988,80 @@
         }
       },
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "bookmarks": {
+      "name": "bookmarks",
+      "columns": {
+        "bookmarkId": {
+          "name": "bookmarkId",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actorId": {
+          "name": "actorId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "postId": {
+          "name": "postId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "bookmark_actor_post_unique": {
+          "name": "bookmark_actor_post_unique",
+          "columns": [
+            "actorId",
+            "postId"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "bookmarks_actorId_actors_actorId_fk": {
+          "name": "bookmarks_actorId_actors_actorId_fk",
+          "tableFrom": "bookmarks",
+          "tableTo": "actors",
+          "columnsFrom": [
+            "actorId"
+          ],
+          "columnsTo": [
+            "actorId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "bookmarks_postId_posts_postId_fk": {
+          "name": "bookmarks_postId_posts_postId_fk",
+          "tableFrom": "bookmarks",
+          "tableTo": "posts",
+          "columnsFrom": [
+            "postId"
+          ],
+          "columnsTo": [
+            "postId"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}

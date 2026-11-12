@@ -8,6 +8,7 @@ export type PostExtras = Readonly<{
   repliesCount: number;
   inReplyTo: Readonly<{ postId: PostId; actorId: ActorId }> | null;
   myReactionEmojis: ReadonlyArray<string>;
+  bookmarked: boolean;
   blueskyCrosspost: BlueskyCrosspost | null;
   quote: Readonly<{ uri: string; post: PostWithAuthor | null }> | null;
 }>;

@@ -6,6 +6,7 @@ import z from 'zod/v4';
 
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import { Article, type ArticleDeletedStore, type ArticleResolverByRootPostId } from '../domain/article/article.ts';
+import { Bookmark, type BookmarkDeletedStore, type BookmarksResolverByPostId } from '../domain/bookmark/bookmark.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { DirectPostParticipantsResolverByPostId } from '../domain/post/directPostParticipants.ts';
 import { MENTION_LOOKUP_TIMEOUT_MS, mentionLinksOfHtml, MentionRecipient } from '../domain/post/mention.ts';
@@ -68,6 +69,8 @@ type Deps = Readonly<{
   articleResolverByRootPostId: ArticleResolverByRootPostId;
   articleDeletedStore: ArticleDeletedStore;
   directPostParticipantsResolverByPostId?: DirectPostParticipantsResolverByPostId;
+  bookmarksResolverByPostId?: BookmarksResolverByPostId;
+  bookmarkDeletedStore?: BookmarkDeletedStore;
   removeBlueskyCrosspost?: RemoveBlueskyCrosspostUseCase;
 }>;
 
@@ -119,6 +122,8 @@ const create = ({
   articleResolverByRootPostId,
   articleDeletedStore,
   directPostParticipantsResolverByPostId,
+  bookmarksResolverByPostId,
+  bookmarkDeletedStore,
   removeBlueskyCrosspost,
 }: Deps): DeletePostUseCase => {
   const now = Instant.now();
@@ -161,6 +166,11 @@ const create = ({
           : undefined;
         const quotes = post.visibility === 'direct' ? undefined : await postQuotesResolver?.resolve([postId]);
         const quoteRecipients = toQuoteNoteFields(quotes?.ok ? quotes.val.get(postId) : undefined).recipients;
+
+        const bookmarks = await bookmarksResolverByPostId?.resolve({ postId });
+        if (bookmarks?.ok) {
+          await bookmarkDeletedStore?.store(...bookmarks.val.map((bookmark) => Bookmark.deleteBookmark(bookmark, now)));
+        }
 
         // Delete the post via event store
         const deleteEvent = Post.deletePost(now)(postId);

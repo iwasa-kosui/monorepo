@@ -28,7 +28,9 @@ import { RepostId } from '../../domain/repost/repostId.ts';
 import type { UserResolver } from '../../domain/user/user.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import { BLUESKY_STATUS_ID_PREFIX } from '../../helper/blueskyUrl.ts';
+import type { CreateBookmarkUseCase } from '../../useCase/createBookmark.ts';
 import type { CreatePostUseCase } from '../../useCase/createPost.ts';
+import type { DeleteBookmarkUseCase } from '../../useCase/deleteBookmark.ts';
 import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
 import { resolveOwnedMediaUpload } from '../../useCase/getMediaUpload.ts';
 import type { SendLikeUseCase } from '../../useCase/sendLike.ts';
@@ -80,6 +82,8 @@ export type WorkerMastodonStatusesRouterDeps = Readonly<{
   deletePostUseCase: DeletePostUseCase;
   sendLikeUseCase: SendLikeUseCase;
   undoLikeUseCase: UndoLikeUseCase;
+  createBookmarkUseCase: CreateBookmarkUseCase;
+  deleteBookmarkUseCase: DeleteBookmarkUseCase;
   sendRepostUseCase: SendRepostUseCase;
   undoRepostUseCase: UndoRepostUseCase;
   createContext: (request: Request) => RequestContext<unknown>;
@@ -93,6 +97,7 @@ const cannotReblog = { error: 'Validation failed: Private and direct statuses ca
 const readStatuses = Scope.orThrow('read:statuses');
 const writeStatuses = Scope.orThrow('write:statuses');
 const writeFavourites = Scope.orThrow('write:favourites');
+const writeBookmarks = Scope.orThrow('write:bookmarks');
 const MAX_MEDIA_ATTACHMENTS = 4;
 
 const validationFailed = (message: string) => ({ error: `Validation failed: ${message}` });
@@ -166,6 +171,8 @@ const failed = (c: Context, err: Readonly<{ type: string }>): Response => {
     case 'UserNotFoundError':
     case 'SessionExpiredError':
       return c.json(invalidToken, 401);
+    case 'DirectAddresseeAddedError':
+      return c.json(validationFailed('Direct statuses can\'t add new recipients when edited'), 422);
     case 'RemoteNoteLookupError':
       return c.json({ error: 'The remote server could not be reached' }, 502);
     default:
@@ -193,6 +200,8 @@ export const createWorkerMastodonStatusesRouter = ({
   deletePostUseCase,
   sendLikeUseCase,
   undoLikeUseCase,
+  createBookmarkUseCase,
+  deleteBookmarkUseCase,
   sendRepostUseCase,
   undoRepostUseCase,
   createContext,
@@ -557,6 +566,28 @@ export const createWorkerMastodonStatusesRouter = ({
       });
       return !unliked.ok && unliked.err.type !== 'NotLikedError'
         ? failed(c, unliked.err)
+        : respondWithStatus(c, acting.val);
+    })
+    .post('/v1/statuses/:id/bookmark', authn.requireUser(writeBookmarks), async (c) => {
+      const acting = await resolveActingPost(c);
+      if (!acting.ok) {
+        return acting.err;
+      }
+      const { userId, post } = acting.val;
+      const bookmarked = await createBookmarkUseCase.run({ userId, postId: post.postId });
+      return !bookmarked.ok && bookmarked.err.type !== 'AlreadyBookmarkedError'
+        ? failed(c, bookmarked.err)
+        : respondWithStatus(c, acting.val);
+    })
+    .post('/v1/statuses/:id/unbookmark', authn.requireUser(writeBookmarks), async (c) => {
+      const acting = await resolveActingPost(c);
+      if (!acting.ok) {
+        return acting.err;
+      }
+      const { userId, post } = acting.val;
+      const unbookmarked = await deleteBookmarkUseCase.run({ userId, postId: post.postId });
+      return !unbookmarked.ok && unbookmarked.err.type !== 'NotBookmarkedError'
+        ? failed(c, unbookmarked.err)
         : respondWithStatus(c, acting.val);
     })
     .post('/v1/statuses/:id/reblog', authn.requireUser(writeStatuses), async (c) => {

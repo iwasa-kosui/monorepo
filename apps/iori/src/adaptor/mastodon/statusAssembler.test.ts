@@ -31,6 +31,7 @@ const extras = (quotePost: PostWithAuthor | null = null): PostExtras => ({
   repliesCount: 0,
   inReplyTo: null,
   myReactionEmojis: [],
+  bookmarked: false,
   blueskyCrosspost: null,
   quote: quotePost === null ? null : { uri: 'https://remote.example/notes/quoted', post: quotePost },
 });

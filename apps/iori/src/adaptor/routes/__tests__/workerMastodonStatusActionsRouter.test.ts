@@ -539,3 +539,109 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
     expect(t.count('reposts')).toBe(1);
   });
 });
+
+describe('POST /api/v1/statuses/:id/bookmark と /unbookmark', () => {
+  it('投稿をブックマークして、bookmarked を true にした Status を返し、配送しない', async () => {
+    const t = await seedActions();
+
+    const response = await t.post(`/api/v1/statuses/${t.publicNote.postId}/bookmark`);
+
+    expect(response.status).toBe(200);
+    expect(StatusSchema.parse(await response.json())).toMatchObject({ id: t.publicNote.postId, bookmarked: true });
+    expect(t.count('bookmarks', `postId='${t.publicNote.postId}' AND actorId='${t.me.actorId}'`)).toBe(1);
+    expect(t.count('domain_events', `eventName='bookmark.bookmarkCreated'`)).toBe(1);
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('ブックマーク済みでもエラーにせず、bookmarks を増やさない', async () => {
+    const t = await seedActions();
+    await t.post(`/api/v1/statuses/${t.local.postId}/bookmark`);
+
+    const response = await t.post(`/api/v1/statuses/${t.local.postId}/bookmark`);
+
+    expect(response.status).toBe(200);
+    expect(StatusSchema.parse(await response.json())).toMatchObject({ bookmarked: true });
+    expect(t.count('bookmarks')).toBe(1);
+  });
+
+  it('ブックマークを外し、bookmarked を false に戻した Status を返す', async () => {
+    const t = await seedActions();
+    await t.post(`/api/v1/statuses/${t.local.postId}/bookmark`);
+
+    const response = await t.post(`/api/v1/statuses/${t.local.postId}/unbookmark`);
+
+    expect(response.status).toBe(200);
+    expect(StatusSchema.parse(await response.json())).toMatchObject({ bookmarked: false });
+    expect(t.count('bookmarks')).toBe(0);
+    expect(t.count('domain_events', `eventName='bookmark.bookmarkDeleted'`)).toBe(1);
+  });
+
+  it('未ブックマークでもエラーにせず、現在の状態を返す', async () => {
+    const t = await seedActions();
+
+    const response = await t.post(`/api/v1/statuses/${t.local.postId}/unbookmark`);
+
+    expect(response.status).toBe(200);
+    expect(StatusSchema.parse(await response.json())).toMatchObject({ bookmarked: false });
+  });
+
+  it('ブックマークした投稿を取得すると bookmarked が true で、未ログインでは false になる', async () => {
+    const t = await seedActions();
+    await t.post(`/api/v1/statuses/${t.local.postId}/bookmark`);
+
+    const mine = await t.request(`/api/v1/statuses/${t.local.postId}`, { headers: t.me.bearer });
+    const theirs = await t.request(`/api/v1/statuses/${t.local.postId}`);
+
+    expect(StatusSchema.parse(await mine.json())).toMatchObject({ bookmarked: true });
+    expect(StatusSchema.parse(await theirs.json())).toMatchObject({ bookmarked: false });
+  });
+
+  it('閲覧者に見えない投稿、存在しない投稿、削除済みの投稿、不正な ID は 404 にして bookmarks を増やさない', async () => {
+    const t = await seedActions();
+    const hidden = t.seed.addRemotePost(t.alice, 2_100, { visibility: 'direct', timeline: false });
+    const deleted = t.seed.addLocalPost(t.me, 3_000, { deletedAt: 4_000 });
+
+    const responses = await Promise.all([
+      t.post(`/api/v1/statuses/${hidden.postId}/bookmark`),
+      t.post(`/api/v1/statuses/${t.seed.uuid()}/bookmark`),
+      t.post(`/api/v1/statuses/${deleted.postId}/bookmark`),
+      t.post('/api/v1/statuses/not-an-id/unbookmark'),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 404]);
+    expect(await responses[0]!.json()).toEqual(notFound);
+    expect(t.count('bookmarks')).toBe(0);
+  });
+
+  it('トークンがないと 401、write:bookmarks を満たさないスコープは 403 にする', async () => {
+    const t = await seedActions();
+    const readOnly = await t.bearerFor('read');
+    const favouritesOnly = await t.bearerFor('write:favourites');
+    const readBookmarks = await t.bearerFor('read:bookmarks');
+
+    const responses = await Promise.all([
+      t.request(`/api/v1/statuses/${t.local.postId}/bookmark`, { method: 'POST' }),
+      t.post(`/api/v1/statuses/${t.local.postId}/bookmark`, { Authorization: 'Bearer invalid' }),
+      t.post(`/api/v1/statuses/${t.local.postId}/bookmark`, readOnly),
+      t.post(`/api/v1/statuses/${t.local.postId}/unbookmark`, favouritesOnly),
+      t.post(`/api/v1/statuses/${t.local.postId}/bookmark`, readBookmarks),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403, 403]);
+    expect(t.count('bookmarks')).toBe(0);
+  });
+
+  it('write:bookmarks だけのトークンでブックマークできる', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn('write:bookmarks');
+    const post = t.seed.addLocalPost(me, 1_000);
+
+    const response = await t.request(`/api/v1/statuses/${post.postId}/bookmark`, {
+      method: 'POST',
+      headers: me.bearer,
+    });
+
+    expect(response.status).toBe(200);
+  });
+});

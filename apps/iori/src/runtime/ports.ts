@@ -22,6 +22,7 @@ import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
 import type { BlockedActorsResolverByUserIdWithPagination } from '../domain/block/block.ts';
 import type { BlueskyCrosspostStatusReportResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import type { BookmarkedPostIdsResolverByActorIdWithPagination } from '../domain/bookmark/bookmark.ts';
 import type {
   DigestHeadersResolverByArticleIds,
   DigestResolverByArticleId,
@@ -77,10 +78,12 @@ import type { ChangeFeedSourceEnabledUseCase } from '../useCase/changeFeedSource
 import type { ClearNotificationsUseCase } from '../useCase/clearNotifications.ts';
 import type { CreateArticleUseCase } from '../useCase/createArticle.ts';
 import type { CreateArticleWithBodyUseCase } from '../useCase/createArticleWithBody.ts';
+import type { CreateBookmarkUseCase } from '../useCase/createBookmark.ts';
 import type { CreateMuteUseCase } from '../useCase/createMute.ts';
 import type { createCreatePostUseCase } from '../useCase/createPost.ts';
 import type { DeepDiveDigestItemUseCase } from '../useCase/deepDiveDigestItem.ts';
 import type { DeleteArticleUseCase } from '../useCase/deleteArticle.ts';
+import type { DeleteBookmarkUseCase } from '../useCase/deleteBookmark.ts';
 import type { DeleteMuteUseCase } from '../useCase/deleteMute.ts';
 import type { DeletePostUseCase } from '../useCase/deletePost.ts';
 import type { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
@@ -180,6 +183,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   actorIdResolverByAcct: ActorIdResolverByAcct;
   accountRelationshipsResolverByActorIds: AccountRelationshipsResolverByActorIds;
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
+  bookmarkedPostIdsResolverByActorIdWithPagination: BookmarkedPostIdsResolverByActorIdWithPagination;
   mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
   blockedActorsResolverByUserIdWithPagination: BlockedActorsResolverByUserIdWithPagination;
   statusAssembler: StatusAssembler;
@@ -250,6 +254,8 @@ export type IoriPostingRuntimePorts = Readonly<{
 export type IoriSocialActionsRuntimePorts = Readonly<{
   sendLikeUseCase: SendLikeUseCase;
   undoLikeUseCase: UndoLikeUseCase;
+  createBookmarkUseCase: CreateBookmarkUseCase;
+  deleteBookmarkUseCase: DeleteBookmarkUseCase;
   sendRepostUseCase: SendRepostUseCase;
   undoRepostUseCase: UndoRepostUseCase;
   sendEmojiReactUseCase: SendEmojiReactUseCase;

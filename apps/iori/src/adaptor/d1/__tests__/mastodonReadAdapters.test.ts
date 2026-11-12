@@ -399,9 +399,38 @@ describe('createD1PostExtrasResolverByPosts', () => {
       repliesCount: 2,
       inReplyTo: { postId: parent.postId, actorId: alice.actorId },
       myReactionEmojis: ['🎉'],
+      bookmarked: false,
       blueskyCrosspost: null,
       quote: null,
     });
+  });
+
+  it('bookmarked は閲覧者自身のブックマークだけを true にし、未ログインでは false にする', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const other = t.seed.addLocalActor('other');
+    const alice = t.seed.addRemoteActor('alice');
+    const saved = t.seed.addRemotePost(alice, 1_000, { visibility: 'public' });
+    const unsaved = t.seed.addRemotePost(alice, 2_000, { visibility: 'public' });
+    const savedByOther = t.seed.addRemotePost(alice, 3_000, { visibility: 'public' });
+    t.seed.addBookmark(me.actorId, saved.postId, 10_000);
+    t.seed.addBookmark(other.actorId, savedByOther.postId, 20_000);
+    const posts = await createD1PostsWithAuthorResolverByPostIds(t.db).resolve({
+      postIds: [saved, unsaved, savedByOther].map((post) => PostId.orThrow(post.postId)),
+      currentActorId: actorId(me.actorId),
+    });
+    const loaded = posts.ok ? [...posts.val.values()] : [];
+    const resolver = createD1PostExtrasResolverByPosts(t.db, SEED_ORIGIN);
+
+    const asMe = await resolver.resolve({ posts: loaded, currentActorId: actorId(me.actorId) });
+    const anonymous = await resolver.resolve({ posts: loaded, currentActorId: undefined });
+
+    const flags = (result: typeof asMe) =>
+      [saved, unsaved, savedByOther].map((post) =>
+        result.ok && result.val.get(PostId.orThrow(post.postId))?.bookmarked
+      );
+    expect(flags(asMe)).toEqual([true, false, false]);
+    expect(flags(anonymous)).toEqual([false, false, false]);
   });
 
   describe('引用', () => {

@@ -159,7 +159,12 @@ const LikedPostsPage = () => {
 
   return (
     <section class='mb-8'>
-      <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>Liked Posts</h1>
+      <div class='flex items-baseline justify-between mb-6'>
+        <h1 class='text-2xl font-bold text-charcoal dark:text-white'>Liked Posts</h1>
+        <a href='/bookmarks' class='md:hidden text-sm text-terracotta hover:underline dark:text-terracotta-light'>
+          ブックマーク
+        </a>
+      </div>
 
       {blueskyEnabled && (
         <div role='tablist' class='flex flex-wrap gap-2 mb-6'>

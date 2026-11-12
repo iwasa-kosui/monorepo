@@ -7,6 +7,7 @@ import { createIoriApp } from '../../../../appFactory.tsx';
 import { Instant } from '../../../../domain/instant/instant.ts';
 import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
+import type { PostVersionsResolverByPostId } from '../../../../domain/post/post.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
 import type { BlueskyChat } from '../../../../ports/blueskyChat.ts';
 import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
@@ -28,9 +29,11 @@ import { ChangeDigestTopicMaterialWindowUseCase } from '../../../../useCase/chan
 import { ChangeFeedSourceEnabledUseCase } from '../../../../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
 import { CreateBlockUseCase } from '../../../../useCase/createBlock.ts';
+import { CreateBookmarkUseCase } from '../../../../useCase/createBookmark.ts';
 import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
 import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
 import { DeleteBlockUseCase } from '../../../../useCase/deleteBlock.ts';
+import { DeleteBookmarkUseCase } from '../../../../useCase/deleteBookmark.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
@@ -104,6 +107,10 @@ import { createD1BlueskyRepostSavedStore } from '../../../d1/blueskyTimeline/blu
 import { createD1BlueskyRepostTargetResolver } from '../../../d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
 import { createD1BlueskyRepostUriResolver } from '../../../d1/blueskyTimeline/blueskyRepostUriResolver.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../../../d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
+import { createD1BookmarkCreatedStore } from '../../../d1/bookmark/bookmarkCreatedStore.ts';
+import { createD1BookmarkDeletedStore } from '../../../d1/bookmark/bookmarkDeletedStore.ts';
+import { createD1BookmarkedPostIdsResolverByActorIdWithPagination } from '../../../d1/bookmark/bookmarkedPostIdsResolverByActorIdWithPagination.ts';
+import { createD1BookmarkResolver } from '../../../d1/bookmark/bookmarkResolver.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestItemFeedbackGivenStore.ts';
 import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
 import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
@@ -266,6 +273,7 @@ export const setupReadApi = (
     blueskyViewerDid?: () => RA<string, BlueskyClientError>;
     refreshXPosts?: RefreshXPostsUseCase;
     scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
+    postVersionsResolver?: PostVersionsResolverByPostId;
   }> = {},
 ) => {
   const harness = createOAuthHarness();
@@ -457,9 +465,11 @@ export const setupReadApi = (
             actorResolverById: createD1ActorResolverById(db),
             actorResolverByUri: createD1ActorResolverByUri(db),
             postUpdatedStore: createD1PostUpdatedStore(db),
+            postVersionsResolver: options.postVersionsResolver ?? createD1PostVersionsResolverByPostId(db),
             postImagesResolver: createD1PostImagesResolverByPostId(db),
             postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
             acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+            directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
             origin: ORIGIN,
           }),
           postSourceTextResolver: createD1PostSourceTextResolver(db),
@@ -491,6 +501,20 @@ export const setupReadApi = (
             likeResolver: createD1LikeResolver(db),
             localLikeDeletedStore: createD1LocalLikeDeletedStore(db),
             postResolver,
+          }),
+          createBookmarkUseCase: CreateBookmarkUseCase.create({
+            sessionResolver,
+            userResolver,
+            actorResolverByUserId,
+            bookmarkCreatedStore: createD1BookmarkCreatedStore(db),
+            bookmarkResolver: createD1BookmarkResolver(db),
+          }),
+          deleteBookmarkUseCase: DeleteBookmarkUseCase.create({
+            sessionResolver,
+            userResolver,
+            actorResolverByUserId,
+            bookmarkDeletedStore: createD1BookmarkDeletedStore(db),
+            bookmarkResolver: createD1BookmarkResolver(db),
           }),
           sendRepostUseCase: SendRepostUseCase.create({
             origin: ORIGIN,
@@ -574,6 +598,9 @@ export const setupReadApi = (
           authn,
           actorResolverByUserId,
           likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
+          bookmarkedPostIdsResolverByActorIdWithPagination: createD1BookmarkedPostIdsResolverByActorIdWithPagination(
+            db,
+          ),
           mutedActorsResolverByUserIdWithPagination: createD1MutedActorsResolverByUserIdWithPagination(db),
           blockedActorsResolverByUserIdWithPagination: createD1BlockedActorsResolverByUserIdWithPagination(db),
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),

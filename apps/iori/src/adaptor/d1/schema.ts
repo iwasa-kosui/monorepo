@@ -178,6 +178,15 @@ export const likesTable = sqliteTable('likes', {
   uniqueIndex('like_actor_post_unique').on(table.actorId, table.postId),
 ]);
 
+export const bookmarksTable = sqliteTable('bookmarks', {
+  bookmarkId: text('bookmarkId').primaryKey(),
+  actorId: text('actorId').notNull().references(() => actorsTable.actorId),
+  postId: text('postId').notNull().references(() => postsTable.postId),
+  createdAt: timestamp().notNull(),
+}, (table) => [
+  uniqueIndex('bookmark_actor_post_unique').on(table.actorId, table.postId),
+]);
+
 export const localLikesTable = sqliteTable('local_likes', {
   likeId: text('likeId').primaryKey().references(() => likesTable.likeId),
 });
@@ -784,6 +793,7 @@ export const schema = {
   likesTable,
   localLikesTable,
   remoteLikesTable,
+  bookmarksTable,
   postImagesTable,
   mediaUploadsTable,
   notificationsTable,
