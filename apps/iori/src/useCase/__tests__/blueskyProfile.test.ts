@@ -5,6 +5,7 @@ import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClien
 import type { BlueskyProfile, BlueskyProfileReader } from '../../ports/blueskyProfileReader.ts';
 import { FollowBlueskyActorUseCase } from '../followBlueskyActor.ts';
 import { GetBlueskyProfileUseCase } from '../getBlueskyProfile.ts';
+import { ListBlueskyActorLikesUseCase } from '../listBlueskyActorLikes.ts';
 import { ListBlueskyAuthorFeedUseCase } from '../listBlueskyAuthorFeed.ts';
 import { UnfollowBlueskyActorUseCase } from '../unfollowBlueskyActor.ts';
 
@@ -48,7 +49,11 @@ const profile = (overrides: Partial<BlueskyProfile> = {}): BlueskyProfile => ({
 });
 
 const setup = (getProfile: BlueskyProfileReader['getProfile'] = async () => RA.ok(profile())) => {
-  const reader = { getProfile: vi.fn(getProfile), getAuthorFeed: vi.fn<BlueskyProfileReader['getAuthorFeed']>() };
+  const reader = {
+    getProfile: vi.fn(getProfile),
+    getAuthorFeed: vi.fn<BlueskyProfileReader['getAuthorFeed']>(),
+    getActorLikes: vi.fn<BlueskyProfileReader['getActorLikes']>(),
+  };
   const createFollow = vi.fn<BlueskyClient['createFollow']>(async () => RA.ok({ uri: CREATED }));
   const deleteFollow = vi.fn<BlueskyClient['deleteFollow']>(async () => RA.ok(undefined));
   const getRecord = vi.fn<BlueskyClient['getRecord']>(async () => RA.err(recordMissing));
@@ -112,6 +117,44 @@ describe('ListBlueskyAuthorFeedUseCase', () => {
       err: { type: 'BlueskyProfileNotFound' },
     });
     expect(await failing.run({ actor: DID, cursor: undefined })).toEqual({ ok: false, err: failure });
+  });
+});
+
+describe('ListBlueskyActorLikesUseCase', () => {
+  const ME = 'did:plc:me';
+
+  it('自分の DID を actor にして cursor を渡し、投稿とカーソルを返す', async () => {
+    const page = { items: [], cursor: 'next' };
+    const getActorLikes = vi.fn<BlueskyProfileReader['getActorLikes']>(async () => RA.ok(page));
+
+    const result = await ListBlueskyActorLikesUseCase.create({
+      reader: { getActorLikes },
+      viewerDid: async () => RA.ok(ME),
+    }).run({ cursor: 'abc' });
+
+    expect(result).toEqual({ ok: true, val: page });
+    expect(getActorLikes).toHaveBeenCalledExactlyOnceWith({ actor: ME, cursor: 'abc' });
+  });
+
+  it('自分の DID が取れなければその失敗を返し、reader を呼ばない', async () => {
+    const getActorLikes = vi.fn<BlueskyProfileReader['getActorLikes']>();
+
+    const result = await ListBlueskyActorLikesUseCase.create({
+      reader: { getActorLikes },
+      viewerDid: async () => RA.err(failure),
+    }).run({ cursor: undefined });
+
+    expect(result).toEqual({ ok: false, err: failure });
+    expect(getActorLikes).not.toHaveBeenCalled();
+  });
+
+  it('reader の失敗をそのまま返す', async () => {
+    const result = await ListBlueskyActorLikesUseCase.create({
+      reader: { getActorLikes: async () => RA.err(failure) },
+      viewerDid: async () => RA.ok(ME),
+    }).run({ cursor: undefined });
+
+    expect(result).toEqual({ ok: false, err: failure });
   });
 });
 

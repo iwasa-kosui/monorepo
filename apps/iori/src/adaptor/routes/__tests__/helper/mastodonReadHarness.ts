@@ -29,9 +29,11 @@ import { ChangeDigestTopicMaterialWindowUseCase } from '../../../../useCase/chan
 import { ChangeFeedSourceEnabledUseCase } from '../../../../useCase/changeFeedSourceEnabled.ts';
 import { ClearNotificationsUseCase } from '../../../../useCase/clearNotifications.ts';
 import { CreateBlockUseCase } from '../../../../useCase/createBlock.ts';
+import { CreateBookmarkUseCase } from '../../../../useCase/createBookmark.ts';
 import { CreateMuteUseCase } from '../../../../useCase/createMute.ts';
 import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
 import { DeleteBlockUseCase } from '../../../../useCase/deleteBlock.ts';
+import { DeleteBookmarkUseCase } from '../../../../useCase/deleteBookmark.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
@@ -105,6 +107,10 @@ import { createD1BlueskyRepostSavedStore } from '../../../d1/blueskyTimeline/blu
 import { createD1BlueskyRepostTargetResolver } from '../../../d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
 import { createD1BlueskyRepostUriResolver } from '../../../d1/blueskyTimeline/blueskyRepostUriResolver.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../../../d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
+import { createD1BookmarkCreatedStore } from '../../../d1/bookmark/bookmarkCreatedStore.ts';
+import { createD1BookmarkDeletedStore } from '../../../d1/bookmark/bookmarkDeletedStore.ts';
+import { createD1BookmarkedPostIdsResolverByActorIdWithPagination } from '../../../d1/bookmark/bookmarkedPostIdsResolverByActorIdWithPagination.ts';
+import { createD1BookmarkResolver } from '../../../d1/bookmark/bookmarkResolver.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestItemFeedbackGivenStore.ts';
 import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
 import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
@@ -123,6 +129,9 @@ import { createD1EmojiReactCreatedStore } from '../../../d1/emojiReact/emojiReac
 import { createD1EmojiReactDeletedStore } from '../../../d1/emojiReact/emojiReactDeletedStore.ts';
 import { createD1EmojiReactResolverByActorAndPostAndEmoji } from '../../../d1/emojiReact/emojiReactResolverByActorAndPostAndEmoji.ts';
 import { createD1FederatedTimelineItemsResolver } from '../../../d1/federatedTimeline/federatedTimelineItemsResolver.ts';
+import { createD1DirectMessageActorsResolverByUris } from '../../../d1/fediverseConversation/directMessageActorsResolverByUris.ts';
+import { createD1DirectMessageNotificationsReadMarker } from '../../../d1/fediverseConversation/directMessageNotificationsReadMarker.ts';
+import { createD1DirectMessagePostsResolver } from '../../../d1/fediverseConversation/directMessagePostsResolver.ts';
 import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../../../d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../../../d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1XFeedEntriesResolver } from '../../../d1/feedEntry/xFeedEntriesResolver.ts';
@@ -210,6 +219,7 @@ import { createMastodonAuthn } from '../../mastodonAuthn.ts';
 import { createWorkerIoriActionsRouter } from '../../workerIoriActionsRouter.ts';
 import { createWorkerIoriBlueskyRouter } from '../../workerIoriBlueskyRouter.ts';
 import { createWorkerIoriDigestRouter } from '../../workerIoriDigestRouter.ts';
+import { createWorkerIoriFediverseConversationsRouter } from '../../workerIoriFediverseConversationsRouter.ts';
 import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from '../../workerIoriSummaryRouter.ts';
 import { createWorkerIoriXPostsRouter } from '../../workerIoriXPostsRouter.ts';
@@ -380,6 +390,39 @@ export const setupReadApi = (
     htmlToPlainText,
     ...options.searchTimeline,
   });
+  const createPostUseCase = CreatePostUseCase.create({
+    sessionResolver,
+    postCreatedStore,
+    userResolver,
+    actorResolverByUserId,
+    postImageCreatedStore,
+    timelineItemCreatedStore,
+    linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
+    ogpFetcher: {
+      fetch: async () => ({ title: null, description: null, imageUrl: null, faviconUrl: null, siteName: null }),
+    },
+    acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+    postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
+    origin: ORIGIN,
+    scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
+  });
+  const sendReplyUseCase = SendReplyUseCase.create({
+    sessionResolver,
+    userResolver,
+    actorResolverByUserId,
+    postCreatedStore,
+    postImageCreatedStore,
+    timelineItemCreatedStore,
+    localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
+    replyNotificationCreatedStore: createD1ReplyNotificationCreatedStore(db),
+    pushSubscriptionsResolver: createD1PushSubscriptionsResolverByUserId(db),
+    webPushSender: { send: () => RA.ok(undefined) },
+    postResolver,
+    actorResolverById: createD1ActorResolverById(db),
+    postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
+    origin: ORIGIN,
+    scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
+  });
   const app = createIoriApp({
     federationMiddleware: undefined,
     registerRoutes: (root) => {
@@ -410,39 +453,8 @@ export const setupReadApi = (
           mutedActorIdsResolverByUserId: createD1MutedOrBlockedActorIdsResolverByUserId(db),
           statusAssembler,
           mediaUploadResolver,
-          createPostUseCase: CreatePostUseCase.create({
-            sessionResolver,
-            postCreatedStore,
-            userResolver,
-            actorResolverByUserId,
-            postImageCreatedStore,
-            timelineItemCreatedStore,
-            linkPreviewCreatedStore: createD1LinkPreviewCreatedStore(db),
-            ogpFetcher: {
-              fetch: async () => ({ title: null, description: null, imageUrl: null, faviconUrl: null, siteName: null }),
-            },
-            acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
-            postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
-            origin: ORIGIN,
-            scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
-          }),
-          sendReplyUseCase: SendReplyUseCase.create({
-            sessionResolver,
-            userResolver,
-            actorResolverByUserId,
-            postCreatedStore,
-            postImageCreatedStore,
-            timelineItemCreatedStore,
-            localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
-            replyNotificationCreatedStore: createD1ReplyNotificationCreatedStore(db),
-            pushSubscriptionsResolver: createD1PushSubscriptionsResolverByUserId(db),
-            webPushSender: { send: () => RA.ok(undefined) },
-            postResolver,
-            actorResolverById: createD1ActorResolverById(db),
-            postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
-            origin: ORIGIN,
-            scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
-          }),
+          createPostUseCase,
+          sendReplyUseCase,
           updatePostUseCase: UpdatePostUseCase.create({
             sessionResolver,
             userResolver,
@@ -455,6 +467,7 @@ export const setupReadApi = (
             postImagesResolver: createD1PostImagesResolverByPostId(db),
             postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
             acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
+            directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
             origin: ORIGIN,
           }),
           postSourceTextResolver: createD1PostSourceTextResolver(db),
@@ -486,6 +499,20 @@ export const setupReadApi = (
             likeResolver: createD1LikeResolver(db),
             localLikeDeletedStore: createD1LocalLikeDeletedStore(db),
             postResolver,
+          }),
+          createBookmarkUseCase: CreateBookmarkUseCase.create({
+            sessionResolver,
+            userResolver,
+            actorResolverByUserId,
+            bookmarkCreatedStore: createD1BookmarkCreatedStore(db),
+            bookmarkResolver: createD1BookmarkResolver(db),
+          }),
+          deleteBookmarkUseCase: DeleteBookmarkUseCase.create({
+            sessionResolver,
+            userResolver,
+            actorResolverByUserId,
+            bookmarkDeletedStore: createD1BookmarkDeletedStore(db),
+            bookmarkResolver: createD1BookmarkResolver(db),
           }),
           sendRepostUseCase: SendRepostUseCase.create({
             origin: ORIGIN,
@@ -569,6 +596,9 @@ export const setupReadApi = (
           authn,
           actorResolverByUserId,
           likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
+          bookmarkedPostIdsResolverByActorIdWithPagination: createD1BookmarkedPostIdsResolverByActorIdWithPagination(
+            db,
+          ),
           mutedActorsResolverByUserIdWithPagination: createD1MutedActorsResolverByUserIdWithPagination(db),
           blockedActorsResolverByUserIdWithPagination: createD1BlockedActorsResolverByUserIdWithPagination(db),
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
@@ -754,6 +784,22 @@ export const setupReadApi = (
             : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
           viewerDid: options.blueskyViewerDid,
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerIoriFediverseConversationsRouter({
+          authn,
+          isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
+          actorResolverByUserId,
+          postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
+          statusAssembler,
+          directMessagePostsResolver: createD1DirectMessagePostsResolver(db),
+          directMessageActorsResolverByUris: createD1DirectMessageActorsResolverByUris(db),
+          directMessageNotificationsReadMarker: createD1DirectMessageNotificationsReadMarker(db),
+          createPostUseCase,
+          sendReplyUseCase,
+          createContext,
         }),
       );
       root.route(

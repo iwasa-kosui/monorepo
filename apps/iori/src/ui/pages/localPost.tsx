@@ -12,11 +12,13 @@ import {
   fetchVerifyCredentials,
 } from '../api/mastodonClient.ts';
 import { accountHref, displayStatus, isLocalAccount } from '../api/status.ts';
+import { EditPostModal } from '../components/EditPostModal.tsx';
 import { DEFAULT_POST_DESTINATION } from '../components/postDestination.ts';
 import { replyParams } from '../components/postSubmission.ts';
 import { PostView } from '../components/PostView.tsx';
 import { QuoteModal } from '../components/QuoteModal.tsx';
 import { ReplyModal } from '../components/ReplyModal.tsx';
+import { useEditDialog } from '../hooks/useEditDialog.ts';
 import { useQuoteDialog } from '../hooks/useQuoteDialog.ts';
 import {
   applyContext,
@@ -141,6 +143,19 @@ const LocalPostPage = () => {
   };
 
   const quote = useQuoteDialog({ onQuoted: () => void fetchThread() });
+
+  const edit = useEditDialog({
+    onEdited: (updated) =>
+      setThreadData((prev) => {
+        if (prev === null) return prev;
+        const replace = (status: Status): Status => status.id === updated.id ? updated : status;
+        return {
+          currentPost: prev.currentPost === null ? null : replace(prev.currentPost),
+          ancestors: prev.ancestors.map(replace),
+          descendants: prev.descendants.map(replace),
+        };
+      }),
+  });
 
   const handleCloseReplyModal = () => {
     setReplyToPostId(null);
@@ -291,6 +306,7 @@ const LocalPostPage = () => {
                     status={post}
                     onReply={isLoggedIn ? handleReply : undefined}
                     onQuote={isLoggedIn ? quote.open : undefined}
+                    onEdit={isLoggedIn ? edit.open : undefined}
                     onDelete={isLoggedIn ? handleDelete : undefined}
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
@@ -306,6 +322,7 @@ const LocalPostPage = () => {
                 status={threadData.currentPost}
                 onReply={isLoggedIn ? handleReply : undefined}
                 onQuote={isLoggedIn ? quote.open : undefined}
+                onEdit={isLoggedIn ? edit.open : undefined}
                 onDelete={isLoggedIn ? handleDelete : undefined}
                 isDeleting={deletingPostId === threadData.currentPost.id}
                 currentAccountId={currentAccountId}
@@ -344,6 +361,7 @@ const LocalPostPage = () => {
                     status={post}
                     onReply={isLoggedIn ? handleReply : undefined}
                     onQuote={isLoggedIn ? quote.open : undefined}
+                    onEdit={isLoggedIn ? edit.open : undefined}
                     onDelete={isLoggedIn ? handleDelete : undefined}
                     isDeleting={deletingPostId === post.id}
                     currentAccountId={currentAccountId}
@@ -385,6 +403,23 @@ const LocalPostPage = () => {
           onSubmit={() => void quote.send()}
           onContentChange={quote.setContent}
           onDestinationChange={quote.setDestination}
+        />
+      )}
+
+      {isLoggedIn && edit.target !== null && (
+        <EditPostModal
+          target={edit.target}
+          loadState={edit.loadState}
+          content={edit.content}
+          cw={edit.cw}
+          sensitive={edit.sensitive}
+          isSending={edit.isSending}
+          errorText={edit.errorText}
+          onClose={edit.close}
+          onSubmit={() => void edit.send()}
+          onContentChange={edit.setContent}
+          onCwChange={edit.setCw}
+          onSensitiveChange={edit.setSensitive}
         />
       )}
 

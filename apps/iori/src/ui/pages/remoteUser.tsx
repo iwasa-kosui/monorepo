@@ -4,6 +4,7 @@ import { render } from 'hono/jsx/dom';
 import { DEFAULT_HEADER_PATH } from '../../adaptor/mastodon/defaultImages.ts';
 import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
+import { openFediverseConversation } from '../api/fediverseConversationClient.ts';
 import {
   block,
   failureMessage,
@@ -26,6 +27,7 @@ import { PostView } from '../components/PostView.tsx';
 import type { ReportCategory } from '../components/ReportModal.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
+import { fediverseChatPath, fediverseErrorMessageOf } from '../hooks/fediverseConversation.ts';
 import { runExclusive, runOptimisticFavourite } from '../hooks/optimisticFavourite.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { shouldReloadStatuses } from './remoteUserStatuses.ts';
@@ -56,6 +58,9 @@ type Props = Readonly<{
   isReporting: boolean;
   isReported: boolean;
   reportError?: string;
+  onMessage?: () => Promise<void>;
+  isOpeningMessage?: boolean;
+  messageError?: string;
 }>;
 
 const isDefaultHeader = (header: string): boolean => {
@@ -92,6 +97,9 @@ export const RemoteUserPage = ({
   isReporting,
   isReported,
   reportError,
+  onMessage,
+  isOpeningMessage,
+  messageError,
 }: Props) => {
   const handle = account.acct;
   const hasDisplayName = account.display_name.trim() !== '';
@@ -370,6 +378,31 @@ export const RemoteUserPage = ({
                       />
                     </svg>
                   </button>
+                  {onMessage !== undefined && (
+                    <button
+                      type='button'
+                      onClick={onMessage}
+                      disabled={isOpeningMessage === true}
+                      class='flex items-center justify-center gap-1 p-2 rounded-xl text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                      title='メッセージ'
+                    >
+                      <svg
+                        xmlns='http://www.w3.org/2000/svg'
+                        class='h-5 w-5'
+                        fill='none'
+                        viewBox='0 0 24 24'
+                        stroke='currentColor'
+                        stroke-width='2'
+                      >
+                        <path
+                          stroke-linecap='round'
+                          stroke-linejoin='round'
+                          d='M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
+                        />
+                      </svg>
+                      メッセージ
+                    </button>
+                  )}
                   {isReported && <span role='status' class='text-sm text-sage-dark dark:text-sage'>通報しました</span>}
                 </>
               )
@@ -409,6 +442,9 @@ export const RemoteUserPage = ({
               </a>
             )}
           </div>
+          {messageError !== undefined && (
+            <p role='alert' class='mt-3 relative z-10 text-sm text-red-600 dark:text-red-400'>{messageError}</p>
+          )}
         </div>
       </section>
 
@@ -477,6 +513,9 @@ const App = () => {
   const [isReporting, setIsReporting] = useState(false);
   const [isReported, setIsReported] = useState(false);
   const [reportError, setReportError] = useState<string | undefined>(undefined);
+  const [isOpeningMessage, setIsOpeningMessage] = useState(false);
+  const [messageError, setMessageError] = useState<string | undefined>(undefined);
+  const isOpeningMessageRef = useRef(false);
   const [data, setData] = useState<{ error: string } | RemoteUserData | null>(null);
 
   useEffect(() => {
@@ -706,6 +745,22 @@ const App = () => {
     }
   };
 
+  const handleMessage = async () => {
+    if (!data || 'error' in data || isOpeningMessageRef.current) return;
+    isOpeningMessageRef.current = true;
+    setIsOpeningMessage(true);
+    setMessageError(undefined);
+    try {
+      const { key } = await openFediverseConversation(data.account.uri);
+      window.location.href = fediverseChatPath(key);
+    } catch (error) {
+      console.error('Failed to open the Fediverse conversation:', error);
+      setMessageError(fediverseErrorMessageOf(error));
+      isOpeningMessageRef.current = false;
+      setIsOpeningMessage(false);
+    }
+  };
+
   if (data === null) {
     return <div class='text-charcoal-light dark:text-gray-400'>Loading...</div>;
   }
@@ -741,6 +796,9 @@ const App = () => {
       isReporting={isReporting}
       isReported={isReported}
       reportError={reportError}
+      onMessage={data.isLoggedIn ? handleMessage : undefined}
+      isOpeningMessage={isOpeningMessage}
+      messageError={messageError}
     />
   );
 };

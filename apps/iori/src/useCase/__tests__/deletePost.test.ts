@@ -4,6 +4,7 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
+import { BookmarkId } from '../../domain/bookmark/bookmarkId.ts';
 import type { LocalPost, PostQuote, PostQuotesResolverByPostIds, RemotePost } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { Session } from '../../domain/session/session.ts';
@@ -213,6 +214,62 @@ describe('DeletePostUseCase', () => {
       expect(removeBlueskyCrosspost.run).toHaveBeenCalledExactlyOnceWith({ postId: post.postId });
       expect(vi.mocked(deps.postDeletedStore.store).mock.invocationCallOrder[0]).toBeLessThan(
         removeBlueskyCrosspost.run.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('投稿を削除する前に、その投稿のブックマークを削除する', async () => {
+      const deps = createDeps();
+      const user: User = {
+        id: crypto.randomUUID() as User['id'],
+        username: 'kosui' as Username,
+      };
+      const session: Session = {
+        sessionId: crypto.randomUUID() as Session['sessionId'],
+        userId: user.id,
+        expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
+      };
+      const actor: LocalActor = {
+        id: crypto.randomUUID() as LocalActor['id'],
+        userId: user.id,
+        uri: 'https://example.com/users/kosui',
+        inboxUrl: 'https://example.com/inbox',
+        type: 'local',
+        logoUri: undefined,
+      };
+      const post: LocalPost = {
+        type: 'local',
+        visibility: 'public',
+        summary: null,
+        sensitive: false,
+        postId: crypto.randomUUID() as PostId,
+        actorId: actor.id,
+        content: 'Post to delete',
+        createdAt: Date.now() as LocalPost['createdAt'],
+        userId: user.id,
+        inReplyToUri: null,
+      };
+      setupValidUserSession(deps, user, session, actor);
+      deps.postResolver.setPost(post);
+      const bookmark = { bookmarkId: BookmarkId.generate(), actorId: actor.id, postId: post.postId };
+      const bookmarksResolverByPostId = { resolve: vi.fn(async () => RA.ok([bookmark])) };
+      const bookmarkDeletedStore = { store: vi.fn(async () => RA.ok(undefined)) };
+
+      const result = await DeletePostUseCase.create({ ...deps, bookmarksResolverByPostId, bookmarkDeletedStore }).run({
+        sessionId: session.sessionId,
+        postId: post.postId,
+        ctx: createMockRequestContext(),
+      });
+
+      expect(result.ok).toBe(true);
+      expect(bookmarksResolverByPostId.resolve).toHaveBeenCalledWith({ postId: post.postId });
+      expect(bookmarkDeletedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventName: 'bookmark.bookmarkDeleted',
+          eventPayload: { bookmarkId: bookmark.bookmarkId },
+        }),
+      );
+      expect(bookmarkDeletedStore.store.mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(deps.postDeletedStore.store).mock.invocationCallOrder[0]!,
       );
     });
 

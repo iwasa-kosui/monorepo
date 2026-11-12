@@ -41,6 +41,12 @@ export const withFavourited = (status: Status, favourited: boolean): Status => (
   reblog: status.reblog === null ? null : { ...status.reblog, favourited },
 });
 
+export const withBookmarked = (status: Status, bookmarked: boolean): Status => ({
+  ...status,
+  bookmarked,
+  reblog: status.reblog === null ? null : { ...status.reblog, bookmarked },
+});
+
 export const withReblogged = (status: Status, reblogged: boolean): Status => ({
   ...status,
   reblogged,
@@ -50,7 +56,13 @@ export const withReblogged = (status: Status, reblogged: boolean): Status => ({
 export const withUpdatedStatus = (status: Status, updated: Status): Status =>
   status.reblog === null
     ? updated
-    : { ...status, favourited: updated.favourited, reblogged: updated.reblogged, reblog: updated };
+    : {
+      ...status,
+      favourited: updated.favourited,
+      reblogged: updated.reblogged,
+      bookmarked: updated.bookmarked,
+      reblog: updated,
+    };
 
 export const updateStatusesByPostId = (
   statuses: readonly Status[],

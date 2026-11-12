@@ -6,6 +6,7 @@ import {
   type CreateBlueskyPostParams,
   type CreateStatusParams,
   failureMessage,
+  type UpdateStatusParams,
 } from '../api/mastodonClient.ts';
 import { BLUESKY_ONLY_POSTED_MESSAGE, postedMessage } from './blueskyCrosspostMark.ts';
 import { BLUESKY_ONLY_VISIBILITY_ERROR, type PostVisibility } from './postVisibility.ts';
@@ -105,6 +106,16 @@ export const replyParams = (
   in_reply_to_id: postId,
   content_type: 'text/markdown',
   iori_destination: destination,
+});
+
+export const editParams = (
+  value: Readonly<{ content: string; cw: string; sensitive: boolean }>,
+  hasImages: boolean,
+): UpdateStatusParams => ({
+  status: value.content,
+  spoiler_text: value.cw.trim(),
+  sensitive: hasImages && value.sensitive,
+  content_type: 'text/markdown',
 });
 
 export const quoteParams = (

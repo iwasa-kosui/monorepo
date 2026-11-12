@@ -122,6 +122,7 @@ describe('PruneFederatedPostsUseCase', () => {
         'ローカルの絵文字リアクションがある',
         ({ seed, local, post }) => seed.addEmojiReact(local.actorId, post.postId, ':wave:'),
       ],
+      ['ローカルのブックマークがある', ({ seed, local, post }) => seed.addBookmark(local.actorId, post.postId)],
       [
         '(a) 論理削除されていない timeline_items がある',
         ({ seed, local, post }) => seed.addTimelineItem(local.actorId, post.postId, OLD),

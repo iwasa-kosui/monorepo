@@ -3,17 +3,20 @@ import { useCallback, useRef, useState } from 'hono/jsx';
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import {
   block,
+  bookmark,
   deleteStatus,
   failureMessage,
   favourite,
   mute,
   react,
   reblog,
+  unbookmark,
   unfavourite,
   unreact,
   unreblog,
 } from '../api/mastodonClient.ts';
 import { withReblogged, withUpdatedStatus } from '../api/status.ts';
+import { runOptimisticBookmark } from './optimisticBookmark.ts';
 import { runExclusive, runOptimisticFavourite } from './optimisticFavourite.ts';
 
 type StatusUpdater = (
@@ -35,6 +38,8 @@ export type UsePostActionsReturn = Readonly<{
   actionState: ActionState;
   like: (postId: string) => Promise<void>;
   undoLike: (postId: string) => Promise<void>;
+  bookmarkPost: (postId: string) => Promise<void>;
+  undoBookmarkPost: (postId: string) => Promise<void>;
   repost: (postId: string) => Promise<void>;
   undoRepost: (postId: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
@@ -70,6 +75,8 @@ export const usePostActions = ({
   const [myReactions, setMyReactions] = useState<Map<string, string[]>>(new Map());
   const favouriteInFlightRef = useRef<Set<string>>(null);
   const favouriteInFlight = () => (favouriteInFlightRef.current ??= new Set<string>());
+  const bookmarkInFlightRef = useRef<Set<string>>(null);
+  const bookmarkInFlight = () => (bookmarkInFlightRef.current ??= new Set<string>());
 
   const like = useCallback(
     (postId: string) =>
@@ -110,6 +117,44 @@ export const usePostActions = ({
           alert(failureMessage('undo like', error));
         } finally {
           setUndoingLikePostId(null);
+        }
+      }),
+    [updateTimelineItem, updateThreadPost],
+  );
+
+  const bookmarkPost = useCallback(
+    (postId: string) =>
+      runExclusive(bookmarkInFlight(), postId, async () => {
+        try {
+          await runOptimisticBookmark({
+            postId,
+            bookmarked: true,
+            request: bookmark,
+            updateTimelineItem,
+            updateThreadPost,
+          });
+        } catch (error) {
+          console.error('Failed to bookmark:', error);
+          alert(failureMessage('bookmark', error));
+        }
+      }),
+    [updateTimelineItem, updateThreadPost],
+  );
+
+  const undoBookmarkPost = useCallback(
+    (postId: string) =>
+      runExclusive(bookmarkInFlight(), postId, async () => {
+        try {
+          await runOptimisticBookmark({
+            postId,
+            bookmarked: false,
+            request: unbookmark,
+            updateTimelineItem,
+            updateThreadPost,
+          });
+        } catch (error) {
+          console.error('Failed to remove bookmark:', error);
+          alert(failureMessage('remove bookmark', error));
         }
       }),
     [updateTimelineItem, updateThreadPost],
@@ -262,6 +307,8 @@ export const usePostActions = ({
     },
     like,
     undoLike,
+    bookmarkPost,
+    undoBookmarkPost,
     repost,
     undoRepost,
     deletePost,

@@ -25,6 +25,8 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.posting.createPostUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.sendLikeUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.undoLikeUseCase.run).toBeTypeOf('function');
+    expect(runtime.socialActions.createBookmarkUseCase.run).toBeTypeOf('function');
+    expect(runtime.socialActions.deleteBookmarkUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.sendRepostUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.undoRepostUseCase.run).toBeTypeOf('function');
     expect(runtime.socialActions.sendEmojiReactUseCase.run).toBeTypeOf('function');
@@ -66,6 +68,7 @@ describe('createWorkerRuntimePorts', () => {
     expect(runtime.mastodon.actorIdResolverByAcct.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.accountRelationshipsResolverByActorIds.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.likedPostIdsResolverByActorIdWithPagination.resolve).toBeTypeOf('function');
+    expect(runtime.mastodon.bookmarkedPostIdsResolverByActorIdWithPagination.resolve).toBeTypeOf('function');
     expect(runtime.mastodon.mutedActorsResolverByUserIdWithPagination.resolve).toBeTypeOf('function');
     expect(runtime.core.subscribePushUseCase.run).toBeTypeOf('function');
     expect(runtime.uploads).toBeDefined();

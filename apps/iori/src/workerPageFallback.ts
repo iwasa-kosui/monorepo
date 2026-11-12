@@ -19,6 +19,7 @@ const staticPages = new Map<string, WorkerPage>([
   ['/', { entry: 'home', title: 'blog.kosui.me' }],
   ['/about', { entry: 'about', title: 'About | blog.kosui.me' }],
   ['/articles', { entry: 'articles', title: 'Articles | blog.kosui.me' }],
+  ['/bookmarks', { entry: 'bookmarks', title: 'Bookmarks | blog.kosui.me', private: true }],
   ['/federated', { entry: 'federatedTimeline', title: 'Federated timeline | blog.kosui.me', private: true }],
   ['/follow', { entry: 'follow', title: 'Follow | blog.kosui.me' }],
   ['/likes', { entry: 'likedPosts', title: 'Liked posts | blog.kosui.me' }],
@@ -36,7 +37,7 @@ const pageForPath = (pathname: string): WorkerPage | undefined => {
   if (/^\/remote-users\/[^/]+\/?$/.test(pathname)) {
     return { entry: 'remoteUser', title: 'Profile | blog.kosui.me' };
   }
-  if (/^\/messages\/[^/]+\/?$/.test(pathname)) {
+  if (/^\/messages\/fediverse\/[^/]+\/?$/.test(pathname) || /^\/messages\/(?!fediverse\/?$)[^/]+\/?$/.test(pathname)) {
     return { entry: 'messages', title: 'メッセージ | blog.kosui.me', private: true };
   }
   if (/^\/bluesky\/profile\/[^/]+\/?$/.test(pathname)) {

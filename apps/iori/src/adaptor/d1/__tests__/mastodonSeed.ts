@@ -168,6 +168,17 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     return { likeId };
   };
 
+  const addBookmark = (actorId: string, postId: string, createdAt = 1) => {
+    const bookmarkId = uuid();
+    sqlite.prepare('INSERT INTO bookmarks(bookmarkId,actorId,postId,createdAt) VALUES (?,?,?,?)').run(
+      bookmarkId,
+      actorId,
+      postId,
+      createdAt,
+    );
+    return { bookmarkId };
+  };
+
   const addEmojiReact = (actorId: string, postId: string, emoji: string, emojiImageUrl: string | null = null) =>
     sqlite.prepare(
       'INSERT INTO emoji_reacts(emojiReactId,actorId,postId,emoji,emojiImageUrl,createdAt) VALUES (?,?,?,?,?,?)',
@@ -351,6 +362,7 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     addMute,
     addBlock,
     addLike,
+    addBookmark,
     addEmojiReact,
     addImage,
     addLinkPreview,

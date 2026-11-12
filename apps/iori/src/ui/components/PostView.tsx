@@ -8,6 +8,7 @@ import { hideQuoteInline, quoteOf, quoteTargetUrls } from '../api/quote.ts';
 import { accountHandle, accountHref, detailHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { translationErrorMessage } from '../api/translation.ts';
 import { toBlueskyCrosspostMark } from './blueskyCrosspostMark.ts';
+import { DirectMark, isDirectStatus } from './DirectMark.tsx';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
 import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
@@ -19,6 +20,8 @@ type Props = Readonly<{
   isLiking?: boolean;
   onUndoLike?: (postId: string) => void;
   isUndoingLike?: boolean;
+  onBookmark?: (postId: string) => void;
+  onUndoBookmark?: (postId: string) => void;
   onRepost?: (postId: string) => void;
   isReposting?: boolean;
   onUndoRepost?: (postId: string) => void;
@@ -37,6 +40,7 @@ type Props = Readonly<{
   onToggleEmojiPicker?: () => void;
   onReply?: (postId: string) => void;
   onQuote?: (post: Status) => void;
+  onEdit?: (post: Status) => void;
   onShowThread?: (postId: string) => void;
   onMute?: (accountId: string, acct: string) => void;
   onBlock?: (accountId: string, acct: string) => void;
@@ -52,6 +56,8 @@ export const PostView = (
     isLiking,
     onUndoLike,
     isUndoingLike,
+    onBookmark,
+    onUndoBookmark,
     onRepost,
     isReposting,
     onUndoRepost,
@@ -70,6 +76,7 @@ export const PostView = (
     onToggleEmojiPicker,
     onReply,
     onQuote,
+    onEdit,
     onShowThread,
     onMute,
     onBlock,
@@ -101,12 +108,29 @@ export const PostView = (
   const canBlock = onBlock !== undefined && isOtherAccount && !isLocalPost;
   const canReport = onReport !== undefined && isOtherAccount && !isLocalPost;
   const canQuote = onQuote !== undefined && (post.visibility === 'public' || post.visibility === 'unlisted');
+  const canEdit = onEdit !== undefined && isOwner;
   const menuItems: readonly PostMenuItem[] = [
     ...(canQuote
       ? [{ key: 'quote', label: '引用', kind: 'action', onSelect: () => onQuote?.(post) } as const]
       : []),
+    ...(canEdit
+      ? [{ key: 'edit', label: '編集', kind: 'action', onSelect: () => onEdit?.(post) } as const]
+      : []),
     ...(postUrl !== undefined && !isLocalPost
       ? [{ key: 'open-original', label: '元の投稿を開く', kind: 'link', href: postUrl } as const]
+      : []),
+    ...(post.bookmarked && onUndoBookmark !== undefined
+      ? [
+        {
+          key: 'unbookmark',
+          label: 'ブックマークを外す',
+          kind: 'action',
+          onSelect: () => onUndoBookmark(post.id),
+        } as const,
+      ]
+      : []),
+    ...(!post.bookmarked && onBookmark !== undefined
+      ? [{ key: 'bookmark', label: 'ブックマーク', kind: 'action', onSelect: () => onBookmark(post.id) } as const]
       : []),
     ...(postUrl !== undefined
       ? [{ key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: postUrl } as const]
@@ -376,6 +400,15 @@ export const PostView = (
                 {Instant.formatRelative(Date.parse(post.created_at) as Instant)}
               </time>
             </a>
+            {post.edited_at != null && (
+              <span
+                title={`${new Date(post.edited_at).toLocaleString()} に編集`}
+                class='text-xs text-charcoal-light dark:text-gray-400'
+              >
+                編集済み
+              </span>
+            )}
+            {isDirectStatus(post) && <DirectMark />}
             {crosspostMark !== undefined && (
               crosspostMark.href === null
                 ? (
