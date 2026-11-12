@@ -132,6 +132,7 @@ const setupNonOwner = async (
           client: options.blueskyLikeClient,
           targetResolver: createD1BlueskyLikeTargetResolver(fixture.db),
           likeUriResolver: createD1BlueskyLikeUriResolver(fixture.db),
+          cidResolver: { resolve: async () => RA.ok(undefined) },
           deletedStore: createD1BlueskyLikeDeletedStore(fixture.db),
         }),
       repostBlueskyPostUseCase: options.blueskyRepostClient === undefined
@@ -151,6 +152,7 @@ const setupNonOwner = async (
           client: options.blueskyRepostClient,
           targetResolver: createD1BlueskyRepostTargetResolver(fixture.db),
           repostUriResolver: createD1BlueskyRepostUriResolver(fixture.db),
+          cidResolver: { resolve: async () => RA.ok(undefined) },
           deletedStore: createD1BlueskyRepostDeletedStore(fixture.db),
         }),
       blueskyPostThreadFetcher: options.blueskyPostThreadFetcher,
@@ -1338,6 +1340,24 @@ describe('投稿の uri で操作する', () => {
       expect(rows(t, 'bluesky_likes')).toEqual([]);
     });
 
+    it('DELETE は D1 に行が無くても viewer.like があれば、その rkey で削除して liked: false を返す', async () => {
+      const client = likeClient();
+      const t = setupReadApi({
+        blueskyLikeClient: client,
+        blueskyPostCids: { [POST]: { cid: 'bafyfresh', likeUri: LIKE } },
+      });
+      const me = await t.signIn('write:favourites');
+
+      const response = await t.request(`${LIKES}?uri=${encodeURIComponent(POST)}`, {
+        method: 'DELETE',
+        headers: me.bearer,
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ liked: false });
+      expect(client.deleteLike).toHaveBeenCalledExactlyOnceWith('3kold');
+    });
+
     it('DELETE は行が無ければ Bluesky を呼ばず liked: false を返す', async () => {
       const client = likeClient();
       const t = setupReadApi({ blueskyLikeClient: client });
@@ -1427,6 +1447,24 @@ describe('投稿の uri で操作する', () => {
       expect(await response.json()).toEqual({ reposted: false });
       expect(client.deleteRepost).toHaveBeenCalledExactlyOnceWith('3kold');
       expect(rows(t, 'bluesky_reposts')).toEqual([]);
+    });
+
+    it('DELETE は D1 に行が無くても viewer.repost があれば、その rkey で削除して reposted: false を返す', async () => {
+      const client = repostClient();
+      const t = setupReadApi({
+        blueskyRepostClient: client,
+        blueskyPostCids: { [POST]: { cid: 'bafyfresh', repostUri: REPOST } },
+      });
+      const me = await t.signIn('write:statuses');
+
+      const response = await t.request(`${REPOSTS}?uri=${encodeURIComponent(POST)}`, {
+        method: 'DELETE',
+        headers: me.bearer,
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ reposted: false });
+      expect(client.deleteRepost).toHaveBeenCalledExactlyOnceWith('3kold');
     });
 
     it('feedItemId と uri が両方ある、どちらも無い、uri が投稿の at-uri でないときは 400 にする', async () => {

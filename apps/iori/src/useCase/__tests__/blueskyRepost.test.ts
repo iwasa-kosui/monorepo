@@ -39,7 +39,7 @@ const setup = () => {
   const targetResolver = createD1BlueskyRepostTargetResolver(db);
   const repostUriResolver = createD1BlueskyRepostUriResolver(db);
   const resolveCid = vi.fn<BlueskyPostCidResolver['resolve']>(async (uri) =>
-    RA.ok(uri === POST ? 'bafyfresh' : undefined)
+    RA.ok(uri === POST ? { cid: 'bafyfresh', likeUri: null, repostUri: null } : undefined)
   );
   const save = vi.fn(createD1BlueskyRepostSavedStore(db).save);
   const repost = RepostBlueskyPostUseCase.create({
@@ -55,6 +55,7 @@ const setup = () => {
     client: { deleteRepost },
     targetResolver,
     repostUriResolver,
+    cidResolver: { resolve: resolveCid },
     deletedStore: createD1BlueskyRepostDeletedStore(db),
   });
   const reposts = () => sqlite.prepare('SELECT subjectUri, repostUri, createdAt FROM bluesky_reposts').all();
@@ -247,6 +248,16 @@ describe('RepostBlueskyPostUseCase (uri)', () => {
     expect(await t.repost.run({ uri: POST })).toEqual({ ok: true, val: { reposted: true } });
     expect(t.createRepost).not.toHaveBeenCalled();
   });
+
+  it('D1 に行が無くても viewer.repost があれば、Bluesky に作成せず、その uri を保存し、viewer.repost を別に確かめない', async () => {
+    const t = setup();
+    t.resolveCid.mockReturnValueOnce(RA.ok({ cid: 'bafyfresh', likeUri: null, repostUri: REPOST }));
+
+    expect(await t.repost.run({ uri: POST })).toEqual({ ok: true, val: { reposted: true } });
+    expect(t.createRepost).not.toHaveBeenCalled();
+    expect(t.resolveViewerRepost).not.toHaveBeenCalled();
+    expect(t.reposts()).toEqual([{ subjectUri: POST, repostUri: REPOST, createdAt: NOW }]);
+  });
 });
 
 describe('UndoRepostBlueskyPostUseCase (uri)', () => {
@@ -266,6 +277,31 @@ describe('UndoRepostBlueskyPostUseCase (uri)', () => {
     const t = setup();
 
     expect(await t.undoRepost.run({ uri: POST })).toEqual({ ok: true, val: { reposted: false } });
+    expect(t.deleteRepost).not.toHaveBeenCalled();
+  });
+
+  it('D1 に行が無くても viewer.repost があれば、その rkey で削除して成功を返す', async () => {
+    const t = setup();
+    t.resolveCid.mockReturnValueOnce(RA.ok({ cid: 'bafyfresh', likeUri: null, repostUri: REPOST }));
+
+    expect(await t.undoRepost.run({ uri: POST })).toEqual({ ok: true, val: { reposted: false } });
+    expect(t.resolveCid).toHaveBeenCalledExactlyOnceWith(POST);
+    expect(t.deleteRepost).toHaveBeenCalledExactlyOnceWith('3kold');
+  });
+
+  it('D1 に行が無く viewer.repost も無ければ、Bluesky を呼ばず、成功を返す', async () => {
+    const t = setup();
+
+    expect(await t.undoRepost.run({ uri: POST })).toEqual({ ok: true, val: { reposted: false } });
+    expect(t.resolveCid).toHaveBeenCalledExactlyOnceWith(POST);
+    expect(t.deleteRepost).not.toHaveBeenCalled();
+  });
+
+  it('viewer.repost の取得が失敗したら、そのエラーを返し、Bluesky の削除を呼ばない', async () => {
+    const t = setup();
+    t.resolveCid.mockReturnValueOnce(RA.err(failure));
+
+    expect(await t.undoRepost.run({ uri: POST })).toEqual({ ok: false, err: failure });
     expect(t.deleteRepost).not.toHaveBeenCalled();
   });
 
@@ -296,6 +332,7 @@ describe('UndoRepostBlueskyPostUseCase', () => {
 
     expect(result).toEqual({ ok: true, val: { reposted: false } });
     expect(t.deleteRepost).not.toHaveBeenCalled();
+    expect(t.resolveCid).not.toHaveBeenCalled();
   });
 
   it('D1 には、行の取得 1 回と、削除の DELETE 1 回だけを発行する', async () => {

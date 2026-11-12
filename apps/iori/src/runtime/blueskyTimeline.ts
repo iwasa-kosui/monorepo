@@ -113,6 +113,7 @@ export const createLikeBlueskyPostUseCases = (
       client,
       targetResolver,
       likeUriResolver,
+      cidResolver: createBlueskyPostCidResolver({ client }),
       deletedStore: createD1BlueskyLikeDeletedStore(db),
     }),
   };
@@ -142,6 +143,7 @@ export const createRepostBlueskyPostUseCases = (
       client,
       targetResolver,
       repostUriResolver,
+      cidResolver: createBlueskyPostCidResolver({ client }),
       deletedStore: createD1BlueskyRepostDeletedStore(db),
     }),
   };

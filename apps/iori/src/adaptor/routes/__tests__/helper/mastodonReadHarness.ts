@@ -9,6 +9,7 @@ import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
 import type { BlueskyClient, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
+import type { BlueskyPostSubject } from '../../../../ports/blueskyPostCidResolver.ts';
 import type { BlueskyPostThreadFetcher } from '../../../../ports/blueskyPostThreadFetcher.ts';
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
@@ -198,6 +199,14 @@ afterEach(() => {
   for (const fixture of fixtures.splice(0)) fixture.sqlite.close();
 });
 
+const resolveBlueskyPostSubject = (
+  entry: string | Readonly<{ cid: string; likeUri?: string; repostUri?: string }> | undefined,
+): BlueskyPostSubject | undefined => {
+  if (entry === undefined) return undefined;
+  if (typeof entry === 'string') return { cid: entry, likeUri: null, repostUri: null };
+  return { cid: entry.cid, likeUri: entry.likeUri ?? null, repostUri: entry.repostUri ?? null };
+};
+
 export const setupReadApi = (
   options: Readonly<{
     textGenerator?: TextGenerator;
@@ -211,7 +220,9 @@ export const setupReadApi = (
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
     blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
     blueskyReplyClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
-    blueskyPostCids?: Readonly<Record<string, string>>;
+    blueskyPostCids?: Readonly<
+      Record<string, string | Readonly<{ cid: string; likeUri?: string; repostUri?: string }>>
+    >;
     blueskySeenClient?: Pick<BlueskyClient, 'updateSeen'>;
     refreshXPosts?: RefreshXPostsUseCase;
     scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
@@ -551,7 +562,7 @@ export const setupReadApi = (
             client: options.blueskyLikeClient,
             targetResolver: createD1BlueskyLikeTargetResolver(db),
             likeUriResolver: createD1BlueskyLikeUriResolver(db),
-            cidResolver: { resolve: async (uri) => RA.ok(options.blueskyPostCids?.[uri]) },
+            cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
             savedStore: createD1BlueskyLikeSavedStore(db),
             now: Instant.now,
           }),
@@ -561,6 +572,7 @@ export const setupReadApi = (
               client: options.blueskyLikeClient,
               targetResolver: createD1BlueskyLikeTargetResolver(db),
               likeUriResolver: createD1BlueskyLikeUriResolver(db),
+              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
               deletedStore: createD1BlueskyLikeDeletedStore(db),
             }),
           repostBlueskyPostUseCase: options.blueskyRepostClient === undefined
@@ -569,7 +581,7 @@ export const setupReadApi = (
               client: options.blueskyRepostClient,
               targetResolver: createD1BlueskyRepostTargetResolver(db),
               repostUriResolver: createD1BlueskyRepostUriResolver(db),
-              cidResolver: { resolve: async (uri) => RA.ok(options.blueskyPostCids?.[uri]) },
+              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
               viewerRepostResolver: { resolve: async () => RA.ok(null) },
               savedStore: createD1BlueskyRepostSavedStore(db),
               now: Instant.now,
@@ -580,6 +592,7 @@ export const setupReadApi = (
               client: options.blueskyRepostClient,
               targetResolver: createD1BlueskyRepostTargetResolver(db),
               repostUriResolver: createD1BlueskyRepostUriResolver(db),
+              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
               deletedStore: createD1BlueskyRepostDeletedStore(db),
             }),
           blueskyPostThreadFetcher: options.blueskyPostThreadFetcher,

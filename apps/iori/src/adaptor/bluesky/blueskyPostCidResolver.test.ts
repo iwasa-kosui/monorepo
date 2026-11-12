@@ -5,6 +5,8 @@ import type { BlueskyClientError, BlueskyQueryClient } from '../../ports/bluesky
 import { createBlueskyPostCidResolver } from './blueskyPostCidResolver.ts';
 
 const POST = 'at://did:plc:a/app.bsky.feed.post/1';
+const LIKE = 'at://did:plc:me/app.bsky.feed.like/3klike';
+const REPOST = 'at://did:plc:me/app.bsky.feed.repost/3krepost';
 const failure: BlueskyClientError = {
   type: 'BlueskyClientError',
   kind: 'http',
@@ -18,11 +20,38 @@ const setup = (response: ReturnType<BlueskyQueryClient['query']>) => {
 };
 
 describe('createBlueskyPostCidResolver', () => {
-  it('getPosts に uri を渡し、同じ uri の投稿の cid を返す', async () => {
+  it('getPosts に uri を渡し、同じ uri の投稿の cid を返す。viewer が無ければ likeUri と repostUri は null', async () => {
     const t = setup(RA.ok({ posts: [{ uri: 'at://other', cid: 'bafyother' }, { uri: POST, cid: 'bafypost' }] }));
 
-    expect(await t.resolver.resolve(POST)).toEqual({ ok: true, val: 'bafypost' });
+    expect(await t.resolver.resolve(POST)).toEqual({
+      ok: true,
+      val: { cid: 'bafypost', likeUri: null, repostUri: null },
+    });
     expect(t.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getPosts', { uris: POST });
+  });
+
+  it('viewer.like と viewer.repost を likeUri と repostUri として返す', async () => {
+    const t = setup(RA.ok({ posts: [{ uri: POST, cid: 'bafypost', viewer: { like: LIKE, repost: REPOST } }] }));
+
+    expect(await t.resolver.resolve(POST)).toEqual({
+      ok: true,
+      val: { cid: 'bafypost', likeUri: LIKE, repostUri: REPOST },
+    });
+  });
+
+  it('viewer.like と viewer.repost の形が不正なら、それぞれ null にする', async () => {
+    const t = setup(RA.ok({
+      posts: [{
+        uri: POST,
+        cid: 'bafypost',
+        viewer: { like: 'at://did:plc:me/app.bsky.feed.repost/3k', repost: 'at://did:plc:me/app.bsky.feed.like/3k' },
+      }],
+    }));
+
+    expect(await t.resolver.resolve(POST)).toEqual({
+      ok: true,
+      val: { cid: 'bafypost', likeUri: null, repostUri: null },
+    });
   });
 
   it('投稿が返らなければ undefined にする', async () => {

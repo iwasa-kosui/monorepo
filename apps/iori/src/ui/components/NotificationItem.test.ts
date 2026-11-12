@@ -308,6 +308,8 @@ describe('NotificationItem', () => {
       }));
 
       expect(follow).toContain('started following you');
+      expect(follow).toContain('href="/bluesky/profile/did%3Aplc%3Acarol"');
+      expect(follow).not.toContain('bsky.app');
       expect(reblog).toContain('boosted your post');
     });
   });

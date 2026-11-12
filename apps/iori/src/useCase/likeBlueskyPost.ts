@@ -21,6 +21,8 @@ type Err = BlueskyClientError | BlueskyLikeTargetNotFound;
 
 export type LikeBlueskyPostUseCase = UseCase<Input, Ok, Err>;
 
+type Resolved = Readonly<{ target: BlueskyLikeTarget; viewerLikeUri: string | null }>;
+
 type Deps = Readonly<{
   client: Pick<BlueskyClient, 'createLike'>;
   targetResolver: BlueskyLikeTargetResolver;
@@ -33,21 +35,35 @@ type Deps = Readonly<{
 const create = (
   { client, targetResolver, likeUriResolver, cidResolver, savedStore, now }: Deps,
 ): LikeBlueskyPostUseCase => {
-  const resolveByUri = async (uri: string): RA<BlueskyLikeTarget | undefined, BlueskyClientError> => {
-    const cid = await cidResolver.resolve(uri);
-    if (!cid.ok) return RA.err(cid.err);
-    if (cid.val === undefined) return RA.ok(undefined);
-    return RA.ok({ uri, cid: cid.val, likeUri: Result.unsafeUnwrap(await likeUriResolver.resolve(uri)) });
+  const resolveByFeedItemId = async (feedItemId: string): RA<Resolved | undefined, BlueskyClientError> => {
+    const target = Result.unsafeUnwrap(await targetResolver.resolve(feedItemId));
+    return RA.ok(target === undefined ? undefined : { target, viewerLikeUri: null });
+  };
+
+  const resolveByUri = async (
+    uri: string,
+  ): RA<Resolved | undefined, BlueskyClientError> => {
+    const subject = await cidResolver.resolve(uri);
+    if (!subject.ok) return RA.err(subject.err);
+    if (subject.val === undefined) return RA.ok(undefined);
+    return RA.ok({
+      target: { uri, cid: subject.val.cid, likeUri: Result.unsafeUnwrap(await likeUriResolver.resolve(uri)) },
+      viewerLikeUri: subject.val.likeUri,
+    });
   };
 
   const run = async (input: Input): RA<Ok, Err> => {
     const resolved = 'feedItemId' in input
-      ? Result.ok(Result.unsafeUnwrap(await targetResolver.resolve(input.feedItemId)))
+      ? await resolveByFeedItemId(input.feedItemId)
       : await resolveByUri(input.uri);
     if (!resolved.ok) return RA.err(resolved.err);
-    const target = resolved.val;
-    if (target === undefined) return RA.err({ type: 'BlueskyLikeTargetNotFound' });
+    if (resolved.val === undefined) return RA.err({ type: 'BlueskyLikeTargetNotFound' });
+    const { target, viewerLikeUri } = resolved.val;
     if (target.likeUri !== null) return RA.ok({ liked: true });
+    if (viewerLikeUri !== null) {
+      Result.unsafeUnwrap(await savedStore.save({ subjectUri: target.uri, likeUri: viewerLikeUri, createdAt: now() }));
+      return RA.ok({ liked: true });
+    }
     const created = await client.createLike(
       { uri: target.uri, cid: target.cid },
       await deriveBlueskyLikeRkey(target.uri),

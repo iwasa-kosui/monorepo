@@ -37,7 +37,7 @@ const setup = () => {
   const targetResolver = createD1BlueskyLikeTargetResolver(db);
   const likeUriResolver = createD1BlueskyLikeUriResolver(db);
   const resolveCid = vi.fn<BlueskyPostCidResolver['resolve']>(async (uri) =>
-    RA.ok(uri === POST ? 'bafyfresh' : undefined)
+    RA.ok(uri === POST ? { cid: 'bafyfresh', likeUri: null, repostUri: null } : undefined)
   );
   const save = vi.fn(createD1BlueskyLikeSavedStore(db).save);
   const like = LikeBlueskyPostUseCase.create({
@@ -52,6 +52,7 @@ const setup = () => {
     client: { deleteLike },
     targetResolver,
     likeUriResolver,
+    cidResolver: { resolve: resolveCid },
     deletedStore: createD1BlueskyLikeDeletedStore(db),
   });
   const likes = () => sqlite.prepare('SELECT subjectUri, likeUri, createdAt FROM bluesky_likes').all();
@@ -193,6 +194,17 @@ describe('LikeBlueskyPostUseCase (uri)', () => {
     expect(result).toEqual({ ok: true, val: { liked: true } });
     expect(t.createLike).not.toHaveBeenCalled();
   });
+
+  it('D1 に行が無くても viewer.like があれば、Bluesky に作成せず、その uri を保存して成功を返す', async () => {
+    const t = setup();
+    t.resolveCid.mockReturnValueOnce(RA.ok({ cid: 'bafyfresh', likeUri: LIKE, repostUri: null }));
+
+    const result = await t.like.run({ uri: POST });
+
+    expect(result).toEqual({ ok: true, val: { liked: true } });
+    expect(t.createLike).not.toHaveBeenCalled();
+    expect(t.likes()).toEqual([{ subjectUri: POST, likeUri: LIKE, createdAt: NOW }]);
+  });
 });
 
 describe('UnlikeBlueskyPostUseCase (uri)', () => {
@@ -224,6 +236,31 @@ describe('UnlikeBlueskyPostUseCase (uri)', () => {
     expect(t.deleteLike).not.toHaveBeenCalled();
   });
 
+  it('D1 に行が無くても viewer.like があれば、その rkey で削除して成功を返す', async () => {
+    const t = setup();
+    t.resolveCid.mockReturnValueOnce(RA.ok({ cid: 'bafyfresh', likeUri: LIKE, repostUri: null }));
+
+    expect(await t.unlike.run({ uri: POST })).toEqual({ ok: true, val: { liked: false } });
+    expect(t.resolveCid).toHaveBeenCalledExactlyOnceWith(POST);
+    expect(t.deleteLike).toHaveBeenCalledExactlyOnceWith('3kold');
+  });
+
+  it('D1 に行が無く viewer.like も無ければ、Bluesky を呼ばず、成功を返す', async () => {
+    const t = setup();
+
+    expect(await t.unlike.run({ uri: POST })).toEqual({ ok: true, val: { liked: false } });
+    expect(t.resolveCid).toHaveBeenCalledExactlyOnceWith(POST);
+    expect(t.deleteLike).not.toHaveBeenCalled();
+  });
+
+  it('viewer.like の取得が失敗したら、そのエラーを返し、Bluesky の削除を呼ばない', async () => {
+    const t = setup();
+    t.resolveCid.mockReturnValueOnce(RA.err(failure));
+
+    expect(await t.unlike.run({ uri: POST })).toEqual({ ok: false, err: failure });
+    expect(t.deleteLike).not.toHaveBeenCalled();
+  });
+
   it('Bluesky の削除が失敗したら、エラーを返し、行を消さない', async () => {
     const t = setup();
     t.seedLike();
@@ -251,6 +288,7 @@ describe('UnlikeBlueskyPostUseCase', () => {
 
     expect(result).toEqual({ ok: true, val: { liked: false } });
     expect(t.deleteLike).not.toHaveBeenCalled();
+    expect(t.resolveCid).not.toHaveBeenCalled();
   });
 
   it('D1 には、行の取得 1 回と、削除の DELETE 1 回だけを発行する', async () => {
