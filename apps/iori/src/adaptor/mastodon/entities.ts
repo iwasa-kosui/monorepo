@@ -124,6 +124,14 @@ export const PreviewCardSchema = z.object({
 });
 export type PreviewCard = z.infer<typeof PreviewCardSchema>;
 
+export const IoriBlueskyCrosspostSchema = z.object({
+  status: z.enum(['pending', 'sent', 'failed', 'skipped', 'deleting']),
+  skip_reason: z.enum(['content_warning', 'sensitive', 'reply_to_unsent']).nullable(),
+  retrying: z.boolean(),
+  url: z.string().nullable(),
+});
+export type IoriBlueskyCrosspost = z.infer<typeof IoriBlueskyCrosspostSchema>;
+
 export const IoriStatusExtensionSchema = z.object({
   reactions: z.array(z.object({
     emoji: z.string(),
@@ -139,6 +147,7 @@ export const IoriStatusExtensionSchema = z.object({
     site_name: z.string().nullable(),
     favicon: z.string().nullable(),
   })),
+  bluesky_crosspost: IoriBlueskyCrosspostSchema.optional(),
 });
 export type IoriStatusExtension = z.infer<typeof IoriStatusExtensionSchema>;
 

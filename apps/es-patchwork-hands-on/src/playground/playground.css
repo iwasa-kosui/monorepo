@@ -10,6 +10,23 @@
 .playground [hidden] {
   display: none;
 }
+.playground-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.content .playground-switch button {
+  border: 1px solid #1d4ed8;
+  border-radius: 0.375rem;
+  background: #fff;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.content .playground-switch button[aria-pressed="true"] {
+  background: #1d4ed8;
+  color: #fff;
+}
 .playground-status {
   display: flex;
   flex-wrap: wrap;
@@ -68,8 +85,8 @@
 }
 .playground-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
-  overflow-x: auto;
 }
 .playground-tabs button {
   flex: none;
@@ -183,6 +200,13 @@
     margin-block: 0;
     padding: 0.5rem;
   }
+  /* 第4章の02〜04は問いと説明が長く、14rem では1280x640に収まらない */
+  .content
+    .chapter-body
+    > .playground-switch[aria-label="実行欄"]
+    ~ .playground {
+    min-height: 12.5rem;
+  }
   .chapter-body .playground-status,
   .chapter-body .playground-toolbar {
     margin-bottom: 0.25rem;
@@ -226,4 +250,8 @@
     background: #fff;
     padding: 0.5rem;
   }
+}
+
+.content .chapter-body > .playground[hidden] {
+  display: none;
 }

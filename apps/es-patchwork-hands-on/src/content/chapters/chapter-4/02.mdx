@@ -1,4 +1,75 @@
-import DecisionTable from '../../../components/DecisionTable.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+import CodePlayground from '../../../components/CodePlayground.astro';
+import PlaygroundTabs from '../../../components/PlaygroundTabs.astro';
+import SqlPlayground from '../../../components/SqlPlayground.astro';
+import { readFunctionsOf } from '../../../lib/snapshots';
 
-<DecisionTable heading="自分のシステムに近いパターンを選ぶ" />
+## 集計テーブル
 
+> この集計値はなぜこの値なのか。
+
+`daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。テーブルの行には数しかありません。`cancelVisit` は業務イベントとキャンセル数を同じトランザクションで書きます。このパターンの開始と完成で、`cancelVisit` は同じです。開発者は読み取り関数だけを足します。キャンセル数の3に対して、業務イベントから再計算した値は2です。差の1は、業務イベントを導入する前から残っているキャンセルです。この比較は差があることを示しますが、差の理由は示しません。
+
+<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} label="実行欄" />
+
+<CodePlayground
+  exercise="chapter-4-summary-table-done"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'why-this-count.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  scripts={[{ file: 'why-this-count.ts', label: 'why-this-count.ts を実行する' }]}
+/>
+
+<SqlPlayground
+  hidden
+  id="chapter-4-summary-table"
+  script={{ exercise: 'chapter-4-summary-table-done', entry: 'why-this-count.ts' }}
+  initial={`SELECT
+  c.visit_date,
+  c.cancelled_count AS recorded_count,
+  (
+    SELECT count(*) FROM business_events AS e
+    WHERE e.event_name = 'VisitCancelled' AND e.target_state ->> '$.visit_date' = c.visit_date
+  ) AS recalculated_count
+FROM daily_cancellation_counts AS c;`}
+/>
+
+上の表は、キャンセル数の内訳を理由と操作者つきで示します。
+
+<div class="detail-row">
+
+<details>
+<summary>読み取り関数を見る</summary>
+
+<CodeBlock code={readFunctionsOf('chapter-4-summary-table-done', 'explainCancellationCount')} />
+
+</details>
+
+<details>
+<summary>出力例を見る</summary>
+
+```text
+┌─────────┬─────────┬────────────────────────────┬───────────┬────────────────────────┬────────────────┐
+│ (index) │ eventId │ eventAt                    │ visitId   │ reason                 │ operatedBy     │
+├─────────┼─────────┼────────────────────────────┼───────────┼────────────────────────┼────────────────┤
+│ 0       │ 1       │ '2026-11-06T10:14:12.540Z' │ 'visit-1' │ '飼い主の都合'         │ '受付スタッフ' │
+│ 1       │ 2       │ '2026-11-06T10:14:12.541Z' │ 'visit-2' │ '来院前に回復したため' │ '院長'         │
+└─────────┴─────────┴────────────────────────────┴───────────┴────────────────────────┴────────────────┘
+┌─────────┬───────────────┬───────────────────┬────────────┐
+│ (index) │ recordedCount │ recalculatedCount │ difference │
+├─────────┼───────────────┼───────────────────┼────────────┤
+│ 0       │ 3             │ 2                 │ 1          │
+└─────────┴───────────────┴───────────────────┴────────────┘
+```
+
+</details>
+
+<details>
+<summary>手元の Node で動かすとき</summary>
+
+`chapter-4-summary-table-done` で `node why-this-count.ts` を実行します。
+
+</details>
+
+</div>

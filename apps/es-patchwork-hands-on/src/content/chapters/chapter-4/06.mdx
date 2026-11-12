@@ -1,28 +1,80 @@
-import CodeBlock from '../../../components/CodeBlock.astro';
-import { readFunctionsOf } from '../../../lib/snapshots';
+import CodePlayground from '../../../components/CodePlayground.astro';
+import PlaygroundTabs from '../../../components/PlaygroundTabs.astro';
 
-`chapter-4-summary-table-done` で `node why-this-count.ts` を実行すると、次の表が出ます。時刻の値は実行のたびに変わります。
+## 持ち帰りの演習
 
-```text
-┌─────────┬─────────┬────────────────────────────┬───────────┬────────────────────────┬────────────────┐
-│ (index) │ eventId │ eventAt                    │ visitId   │ reason                 │ operatedBy     │
-├─────────┼─────────┼────────────────────────────┼───────────┼────────────────────────┼────────────────┤
-│ 0       │ 1       │ '2026-11-06T10:14:12.540Z' │ 'visit-1' │ '飼い主の都合'         │ '受付スタッフ' │
-│ 1       │ 2       │ '2026-11-06T10:14:12.541Z' │ 'visit-2' │ '来院前に回復したため' │ '院長'         │
-└─────────┴─────────┴────────────────────────────┴───────────┴────────────────────────┴────────────────┘
-┌─────────┬───────────────┬───────────────────┬────────────┐
-│ (index) │ recordedCount │ recalculatedCount │ difference │
-├─────────┼───────────────┼───────────────────┼────────────┤
-│ 0       │ 3             │ 2                 │ 1          │
-└─────────┴───────────────┴───────────────────┴────────────┘
-```
+1. 選んだパターンのボタンを押して、開始のコードを開きます。
+2. 「テストを実行する」を押します。
+3. 実行欄で `visits.ts` を編集して実装します。
+4. 「テストを実行する」を押します。`pass 15` と `fail 0` が出れば、実装は完了です。
+5. 確認用スクリプトのボタンを押して、問いに答えられることを確かめます。
 
-上の表は、キャンセル数の内訳を理由と操作者つきで示します。下の表は、`daily_cancellation_counts` テーブルのキャンセル数と、業務イベントから数え直したキャンセル数を比べた結果です。キャンセル数の3に対して、業務イベントから再計算した値は2です。差の1は、業務イベントを導入する前から残っているキャンセルです。この比較は差があることを示しますが、差の理由は示しません。
+開始の結果は、集計テーブルが `pass 10` と `fail 5`、外部システム同期と既存の監査ログが `pass 11` と `fail 4` です。
+
+<PlaygroundTabs
+  labels={[
+    '集計テーブル（chapter-4-summary-table-start）',
+    '外部システム同期（chapter-4-external-sync-start）',
+    '既存の監査ログ（chapter-4-audit-log-start）',
+  ]}
+/>
+
+<CodePlayground
+  exercise="chapter-4-summary-table-start"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'why-this-count.ts']}
+  testFile="visits.test.ts"
+  reveal="export const explainCancellationCount"
+  scripts={[{ file: 'why-this-count.ts', label: 'why-this-count.ts を実行する' }]}
+  complete={{ exercise: 'chapter-4-summary-table-done' }}
+/>
+
+<CodePlayground
+  hidden
+  exercise="chapter-4-external-sync-start"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'what-was-sent.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  scripts={[{ file: 'what-was-sent.ts', label: 'what-was-sent.ts を実行する' }]}
+  complete={{ exercise: 'chapter-4-external-sync-done' }}
+/>
+
+<CodePlayground
+  hidden
+  exercise="chapter-4-audit-log-start"
+  editable={['visits.ts']}
+  readonly={['db.ts', 'visits.test.ts', 'why-changed.ts']}
+  testFile="visits.test.ts"
+  reveal="export const cancelVisit"
+  scripts={[{ file: 'why-changed.ts', label: 'why-changed.ts を実行する' }]}
+  complete={{ exercise: 'chapter-4-audit-log-done' }}
+/>
+
+<div class="detail-row">
 
 <details>
-<summary>読み取り関数を見る</summary>
+<summary>パターンごとの実装する内容</summary>
 
-<CodeBlock code={readFunctionsOf('chapter-4-summary-table-done', 'explainCancellationCount')} />
+| 開始のコード | 実装する内容 | 確認用スクリプト |
+|---|---|---|
+| `chapter-4-summary-table-start` | `explainCancellationCount` と `verifyCancellationCount` | `why-this-count.ts` |
+| `chapter-4-external-sync-start` | `cancelVisit` の送信の予定と結果の記録、`findSendRecords`、`findUnconfirmedSends` | `what-was-sent.ts` |
+| `chapter-4-audit-log-start` | `cancelVisit` の `payload` への `auditLogId` の追加、`explainChange`、`findChangesWithoutReason` | `why-changed.ts` |
 
 </details>
 
+<details>
+<summary>手元の Node で動かすとき</summary>
+
+1. 事前準備で展開したディレクトリの中にある、選んだパターンの開始のコードへ移動します。
+2. `node --test visits.test.ts` を実行します。
+3. `visits.ts` を編集して実装します。
+4. `node --test visits.test.ts` を実行します。`pass 15` と `fail 0` が出れば、実装は完了です。
+5. 確認用スクリプトを実行して、問いに答えられることを確かめます。
+
+解答は、名前の末尾が `-done` のディレクトリにあります。
+
+</details>
+
+</div>

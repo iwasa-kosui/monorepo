@@ -12,9 +12,10 @@ interface Props {
     own?: { exercise: string; file: string; testFile: string };
   };
   initial: string;
+  hidden?: boolean;
 }
 
-const { id, setup, script, initial } = Astro.props;
+const { id, setup, script, initial, hidden = false } = Astro.props;
 if ((setup === undefined) === (script === undefined)) {
   throw new Error(
     'SqlPlayground には setup と script のどちらか一方を指定します',
@@ -42,6 +43,7 @@ const config = JSON.stringify({
   data-state="loading"
   data-config={config}
   aria-label="SQL を実行する欄"
+  hidden={hidden}
 >
   <div class="playground-status" data-role="status">
     <span data-role="status-text" role="status"

@@ -42,6 +42,7 @@ type Input =
     content: string;
     summary?: string | null;
     sensitive?: boolean;
+    crosspostToBluesky?: boolean;
     request: Request;
     ctx: RequestContext<unknown>;
   }>;
@@ -288,8 +289,10 @@ const create = ({
 
         return RA.ok(undefined);
       }),
-      RA.andThrough(async ({ replyPost }) => {
-        await scheduleBlueskyCrosspost?.run({ postId: replyPost.postId });
+      RA.andThrough(async ({ replyPost, crosspostToBluesky }) => {
+        if (crosspostToBluesky !== false) {
+          await scheduleBlueskyCrosspost?.run({ postId: replyPost.postId });
+        }
         return RA.ok(undefined);
       }),
       // Create reply notification if replying to a local post (and not self-reply)
