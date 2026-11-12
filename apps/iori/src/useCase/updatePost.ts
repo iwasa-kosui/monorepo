@@ -18,6 +18,7 @@ import {
   type PostResolver,
   type PostResolverByUri,
   type PostUpdatedStore,
+  type PostVersionsResolverByPostId,
 } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import { appendQuoteInline } from '../domain/post/quoteInline.ts';
@@ -94,6 +95,7 @@ type Deps = Readonly<{
   actorResolverById: ActorResolverById;
   actorResolverByUri: ActorResolverByUri;
   postUpdatedStore: PostUpdatedStore;
+  postVersionsResolver: PostVersionsResolverByPostId;
   postImagesResolver: PostImagesResolverByPostId;
   postQuotesResolver?: PostQuotesResolverByPostIds;
   acceptedRelaysResolver: AcceptedRelaysResolver;
@@ -111,6 +113,7 @@ const create = ({
   actorResolverById,
   actorResolverByUri,
   postUpdatedStore,
+  postVersionsResolver,
   postImagesResolver,
   postQuotesResolver,
   acceptedRelaysResolver,
@@ -148,7 +151,28 @@ const create = ({
     identifier: string,
   ): Promise<ReadonlyArray<Addressee>> => {
     const addressees: Addressee[] = [];
-    for (const { href, name } of mentionLinksOfHtml(post.content)) {
+    const previousContents = async (): Promise<ReadonlyArray<string>> => {
+      try {
+        const versions = await postVersionsResolver.resolve(post.postId);
+        if (!versions.ok) {
+          throw versions.err;
+        }
+        return versions.val.map(({ content }) => content);
+      } catch (err) {
+        getLogger().warn(`Failed to resolve the versions of post ${post.postId}: ${err}`);
+      }
+      return [];
+    };
+    const contents = [post.content, ...await previousContents()];
+    const links = new Map<string, string>();
+    for (const content of contents) {
+      for (const { href, name } of mentionLinksOfHtml(content)) {
+        if (!links.has(href)) {
+          links.set(href, name);
+        }
+      }
+    }
+    for (const [href, name] of links) {
       const known = await actorResolverByUri.resolve(href);
       const recipient = known.ok && known.val !== undefined
         ? { id: known.val.uri, inboxUrl: known.val.inboxUrl }
