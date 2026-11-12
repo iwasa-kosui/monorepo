@@ -209,6 +209,7 @@ describe('createBlueskyTimelineRuntimePorts', () => {
     expect(ports.blueskyTimelineEnabled).toBe(false);
     expect(ports.blueskyTimelineItemsResolver.resolve).toBeTypeOf('function');
     expect(ports.replyToBlueskyPostUseCase).toBeUndefined();
+    expect(ports.postToBlueskyUseCase).toBeUndefined();
     expect(ports.quoteBlueskyPostUseCase).toBeUndefined();
     expect(ports.markBlueskyNotificationsSeenUseCase).toBeUndefined();
     expect(ports.blueskySearch).toBeUndefined();
@@ -221,9 +222,25 @@ describe('createBlueskyTimelineRuntimePorts', () => {
 
     expect(ports.blueskyTimelineEnabled).toBe(true);
     expect(ports.replyToBlueskyPostUseCase?.run).toBeTypeOf('function');
+    expect(ports.postToBlueskyUseCase?.run).toBeTypeOf('function');
     expect(ports.quoteBlueskyPostUseCase?.run).toBeTypeOf('function');
     expect(ports.markBlueskyNotificationsSeenUseCase?.run).toBeTypeOf('function');
     expect(ports.blueskySearch?.searchPosts).toBeTypeOf('function');
     expect(ports.blueskyChat?.listConvos.run).toBeTypeOf('function');
+  });
+
+  it('タイムラインが無効でも、認証情報があれば Bluesky への直接投稿を使える', () => {
+    const { db } = createSqliteD1Fixture();
+    const ports = createBlueskyTimelineRuntimePorts(
+      {
+        IORI_BLUESKY_TIMELINE: 'disabled',
+        BLUESKY_IDENTIFIER: 'me.bsky.social',
+        BLUESKY_APP_PASSWORD: 'pw',
+      } as unknown as IoriWorkerEnv,
+      db,
+    );
+
+    expect(ports.replyToBlueskyPostUseCase).toBeUndefined();
+    expect(ports.postToBlueskyUseCase?.run).toBeTypeOf('function');
   });
 });

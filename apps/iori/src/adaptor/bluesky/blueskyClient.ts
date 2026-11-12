@@ -405,14 +405,16 @@ export const createBlueskyClient = (
         ? RA.err(clientError('invalid_response', 'deleteBlock received an unexpected uri'))
         : removeRecord(BLUESKY_BLOCK_COLLECTION, parsed.rkey, parsed.repo);
     },
-    createReport: ({ subjectDid, reasonType, reason }) =>
+    createReport: ({ subjectDid, reasonType, reason, subjectPost }) =>
       postProcedure(
         'createReport',
         'com.atproto.moderation.createReport',
         {
           reasonType,
           ...(reason === undefined || reason === '' ? {} : { reason }),
-          subject: { $type: 'com.atproto.admin.defs#repoRef', did: subjectDid },
+          subject: subjectPost === undefined
+            ? { $type: 'com.atproto.admin.defs#repoRef', did: subjectDid }
+            : { $type: 'com.atproto.repo.strongRef', uri: subjectPost.uri, cid: subjectPost.cid },
         },
         { 'atproto-proxy': REPORT_PROXY },
       ),

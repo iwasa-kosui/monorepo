@@ -1,3 +1,4 @@
+import { Person, Update } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +10,7 @@ import type { Instant } from '../../../domain/instant/instant.ts';
 import type { User } from '../../../domain/user/user.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { UpdateAvatarUseCase } from '../../../useCase/updateAvatar.ts';
+import { UpdateProfileUseCase } from '../../../useCase/updateProfile.ts';
 import {
   CredentialAccountSchema,
   ExtendedDescriptionSchema,
@@ -48,33 +50,65 @@ const setup = (
   const actorResolverByUserId = { resolve: (userId: string) => RA.ok(actors.get(userId)) } as never;
   const bucket = { put: vi.fn(async () => undefined), get: vi.fn() };
   const logoUriStored = vi.fn();
+  const profileStored = vi.fn();
+  const sendActivity = vi.fn(async (..._args: unknown[]) => undefined);
+  const userUri = (identifier: string, suffix = '') => new URL(`${ORIGIN}/users/${identifier}${suffix}`);
+  const ctx = {
+    getActorUri: (identifier: string) => userUri(identifier),
+    getInboxUri: (identifier?: string) =>
+      identifier === undefined ? new URL(`${ORIGIN}/inbox`) : userUri(identifier, '/inbox'),
+    getOutboxUri: (identifier: string) => userUri(identifier, '/outbox'),
+    getFollowersUri: (identifier: string) => userUri(identifier, '/followers'),
+    getActorKeyPairs: async () => [],
+    sendActivity,
+  };
+  const userResolver = {
+    resolve: (userId: string) => {
+      if (failUserResolve) {
+        throw new Error('boom');
+      }
+      return RA.ok(users.get(userId));
+    },
+  } as never;
   const router = createWorkerMastodonCoreRouter({
     authn,
-    userResolver: {
-      resolve: (userId: string) => {
-        if (failUserResolve) {
-          throw new Error('boom');
-        }
-        return RA.ok(users.get(userId));
-      },
-    } as never,
+    userResolver,
     userResolverByUsername: {
       resolve: (username: string) => RA.ok([...users.values()].find((user) => user.username === username)),
     } as never,
     actorResolverByUserId,
-    updateAvatarUseCase: UpdateAvatarUseCase.create({
+    updateProfileUseCase: UpdateProfileUseCase.create({
+      userResolver,
       actorResolverByUserId,
-      uploads: createPostImageR2ObjectStore({ bucket: bucket as never }),
-      logoUriUpdatedStore: {
+      updateAvatarUseCase: UpdateAvatarUseCase.create({
+        actorResolverByUserId,
+        uploads: createPostImageR2ObjectStore({ bucket: bucket as never }),
+        logoUriUpdatedStore: {
+          store: async (event) => {
+            logoUriStored(event);
+            const actor = [...actors.values()].find((candidate) => candidate.id === event.aggregateId);
+            if (actor !== undefined) actors.set(actor.userId, { ...actor, logoUri: event.aggregateState.logoUri });
+            return RA.ok(undefined);
+          },
+        },
+        origin: ORIGIN,
+      }),
+      localActorProfileUpdatedStore: {
         store: async (event) => {
-          logoUriStored(event);
+          profileStored(event);
           const actor = [...actors.values()].find((candidate) => candidate.id === event.aggregateId);
-          if (actor !== undefined) actors.set(actor.userId, { ...actor, logoUri: event.aggregateState.logoUri });
+          if (actor !== undefined) {
+            actors.set(actor.userId, {
+              ...actor,
+              displayName: event.aggregateState.displayName,
+              bio: event.aggregateState.bio,
+            });
+          }
           return RA.ok(undefined);
         },
       },
-      origin: ORIGIN,
     }),
+    createContext: () => ctx as never,
     accountStatsResolver: {
       resolve: () =>
         RA.ok({
@@ -105,7 +139,7 @@ const setup = (
     serveOgImage: async () => new Response('og', { status: 200 }),
   });
   const request = (path: string, init?: RequestInit) => app.request(`${ORIGIN}${path}`, init);
-  return { ...h, addUser, request, app, bucket, logoUriStored, actors };
+  return { ...h, addUser, request, app, bucket, logoUriStored, profileStored, sendActivity, actors };
 };
 
 describe('createWorkerMastodonCoreRouter', () => {
@@ -292,12 +326,10 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(h.actors.get(userId)?.logoUri).toBeUndefined();
     });
 
-    it('iori にない項目は受け付けて無視し、現在と同じ display_name と note も通す', async () => {
+    it('iori にない項目は受け付けて無視する', async () => {
       const { h, token } = await setupUser();
 
       const response = await patch(h, token, {
-        display_name: 'kosui',
-        note: '',
         locked: 'true',
         bot: 'true',
         discoverable: 'true',
@@ -317,6 +349,8 @@ describe('createWorkerMastodonCoreRouter', () => {
       });
       expect(h.bucket.put).not.toHaveBeenCalled();
       expect(h.logoUriStored).not.toHaveBeenCalled();
+      expect(h.profileStored).not.toHaveBeenCalled();
+      expect(h.sendActivity).not.toHaveBeenCalled();
     });
 
     it('header が File なら 422 にして、何も保存しない', async () => {
@@ -330,16 +364,125 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(h.logoUriStored).not.toHaveBeenCalled();
     });
 
-    it('display_name か note が現在の値と違えば 422 にして、何も保存しない', async () => {
+    it('display_name と note を保存し、verify_credentials と Account に出す', async () => {
+      const { h, token, userId } = await setupUser('read:accounts write:accounts');
+
+      const response = await patch(h, token, { display_name: '岩佐', note: 'こんにちは\nhttps://example.com' });
+
+      expect(response.status).toBe(200);
+      const body = CredentialAccountSchema.parse(await response.json());
+      expect(body).toMatchObject({
+        username: 'kosui',
+        display_name: '岩佐',
+        note: '<p>こんにちは<br><a href="https://example.com">https://example.com</a></p>',
+        source: { note: 'こんにちは\nhttps://example.com' },
+      });
+      expect(h.actors.get(userId)).toMatchObject({ displayName: '岩佐', bio: 'こんにちは\nhttps://example.com' });
+      expect(h.profileStored).toHaveBeenCalledWith(expect.objectContaining({ eventName: 'actor.localProfileUpdated' }));
+      const verified = await h.request('/api/v1/accounts/verify_credentials', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(await verified.json()).toMatchObject({
+        display_name: '岩佐',
+        source: { note: 'こんにちは\nhttps://example.com' },
+      });
+    });
+
+    it('送らなかった項目は変えず、空文字を送った項目は未設定に戻す', async () => {
+      const { h, token } = await setupUser('read:accounts write:accounts');
+      await patch(h, token, { display_name: '岩佐', note: '自己紹介' });
+
+      const onlyNote = await patch(h, token, { note: '' });
+
+      expect(await onlyNote.json()).toMatchObject({ display_name: '岩佐', note: '', source: { note: '' } });
+      const onlyName = await patch(h, token, { display_name: '' });
+      expect(await onlyName.json()).toMatchObject({ display_name: 'kosui', note: '' });
+    });
+
+    it('display_name と note と avatar を同時に送れば、すべて反映して Update を 1 回だけ送る', async () => {
       const { h, token } = await setupUser();
 
-      const changedName = await patch(h, token, { display_name: '別名' });
-      const changedNote = await patch(h, token, { note: '自己紹介' });
+      const response = await patch(h, token, {
+        display_name: '岩佐',
+        note: '自己紹介',
+        avatar: new File([png()], 'a.png', { type: 'image/png' }),
+      });
 
-      expect([changedName.status, changedNote.status]).toEqual([422, 422]);
-      expect(await changedName.json()).toEqual({ error: expect.stringContaining('Validation failed') });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ display_name: '岩佐', source: { note: '自己紹介' } });
+      expect(h.logoUriStored).toHaveBeenCalledTimes(1);
+      expect(h.profileStored).toHaveBeenCalledTimes(1);
+      expect(h.sendActivity).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ['display_name が 31 文字', { display_name: 'あ'.repeat(31) }],
+      ['note が 501 文字', { note: 'あ'.repeat(501) }],
+    ])('%sなら 422 にして、avatar も含めて何も保存しない', async (_name, values) => {
+      const { h, token, userId } = await setupUser();
+
+      const response = await patch(h, token, {
+        ...values,
+        avatar: new File([png()], 'a.png', { type: 'image/png' }),
+      });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: expect.stringContaining('Validation failed') });
       expect(h.bucket.put).not.toHaveBeenCalled();
       expect(h.logoUriStored).not.toHaveBeenCalled();
+      expect(h.profileStored).not.toHaveBeenCalled();
+      expect(h.sendActivity).not.toHaveBeenCalled();
+      expect(h.actors.get(userId)?.displayName).toBeUndefined();
+      expect(h.actors.get(userId)?.bio).toBeUndefined();
+    });
+
+    it('display_name が 30 文字、note が 500 文字ちょうどなら保存する', async () => {
+      const { h, token } = await setupUser();
+
+      const response = await patch(h, token, { display_name: 'あ'.repeat(30), note: 'あ'.repeat(500) });
+
+      expect(response.status).toBe(200);
+    });
+
+    it('表示名・自己紹介・avatar のどれを更新しても、followers に Update(Person) を送る', async () => {
+      const cases: ReadonlyArray<Record<string, string | File>> = [
+        { display_name: '岩佐' },
+        { note: '自己紹介' },
+        { avatar: new File([png()], 'a.png', { type: 'image/png' }) },
+      ];
+      for (const values of cases) {
+        const { h, token } = await setupUser();
+
+        await patch(h, token, values);
+
+        expect(h.sendActivity).toHaveBeenCalledTimes(1);
+        const [sender, recipients, activity] = h.sendActivity.mock.calls[0] as unknown as [
+          { identifier: string },
+          string,
+          Update,
+        ];
+        expect(sender).toEqual({ identifier: 'kosui' });
+        expect(recipients).toBe('followers');
+        expect(activity).toBeInstanceOf(Update);
+        expect(activity.id?.href).toMatch(new RegExp(`^${ORIGIN}/users/kosui#updates/`));
+        expect(await activity.getObject()).toBeInstanceOf(Person);
+      }
+    });
+
+    it('Update の Person に、保存した name と summary と icon を入れる', async () => {
+      const { h, token } = await setupUser();
+
+      await patch(h, token, {
+        display_name: '岩佐',
+        note: '自己紹介',
+        avatar: new File([png()], 'a.png', { type: 'image/png' }),
+      });
+
+      const activity = h.sendActivity.mock.calls[0]?.[2] as Update;
+      const person = await activity.getObject() as Person;
+      expect(person.name?.toString()).toBe('岩佐');
+      expect(person.summary?.toString()).toBe('<p>自己紹介</p>');
+      expect((await person.getIcon())?.url?.href).toMatch(new RegExp(`^${ORIGIN}/uploads/`));
     });
 
     it('avatar のキーがあるのに File でなければ 422 にして、何も保存しない', async () => {

@@ -15,6 +15,7 @@ import type {
 } from '../../adaptor/routes/workerIoriActionsRouter.ts';
 import type {
   IoriBlueskyLikeResponse,
+  IoriBlueskyPostResponse,
   IoriBlueskyRepostResponse,
   IoriBlueskySearchActorsResponse,
   IoriBlueskySearchPostsResponse,
@@ -372,6 +373,23 @@ export const createStatus = async (params: CreateStatusParams): Promise<Status> 
   return await res.json() as Status;
 };
 
+export type CreateBlueskyPostParams = Readonly<{
+  status: string;
+  media_ids?: readonly string[];
+  content_type: 'text/plain' | 'text/markdown';
+}>;
+
+export const createBlueskyPost = async (params: CreateBlueskyPostParams): Promise<IoriBlueskyPostResponse> => {
+  const res = await fetch('/api/iori/v1/bluesky/posts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as IoriBlueskyPostResponse;
+};
+
 export const deleteStatus = async (id: string): Promise<Status> => {
   const res = await fetch(`/api/v1/statuses/${encodeURIComponent(id)}`, {
     method: 'DELETE',
@@ -407,9 +425,13 @@ export const updateMedia = (id: string, description: string): Promise<MediaAttac
   return send<MediaAttachment>('PUT', `/api/v1/media/${encodeURIComponent(id)}`, body);
 };
 
-export const updateAvatar = (file: File): Promise<CredentialAccount> => {
+export const updateProfile = (
+  { displayName, note, avatar }: Readonly<{ displayName?: string; note?: string; avatar?: File | undefined }>,
+): Promise<CredentialAccount> => {
   const body = new FormData();
-  body.append('avatar', file);
+  if (displayName !== undefined) body.append('display_name', displayName);
+  if (note !== undefined) body.append('note', note);
+  if (avatar !== undefined) body.append('avatar', avatar);
   return send<CredentialAccount>('PATCH', '/api/v1/accounts/update_credentials', body);
 };
 

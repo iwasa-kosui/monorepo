@@ -15,6 +15,7 @@ import type { BlueskySearch } from '../../../ports/blueskySearch.ts';
 import { BlueskyChatUseCases } from '../../../useCase/blueskyChat.ts';
 import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../useCase/likeBlueskyPost.ts';
+import { PostToBlueskyUseCase } from '../../../useCase/postToBluesky.ts';
 import { QuoteBlueskyPostUseCase } from '../../../useCase/quoteBlueskyPost.ts';
 import { ReplyToBlueskyPostUseCase } from '../../../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../useCase/repostBlueskyPost.ts';
@@ -32,6 +33,7 @@ import { createD1BlueskyRepostDeletedStore } from '../../d1/blueskyTimeline/blue
 import { createD1BlueskyRepostSavedStore } from '../../d1/blueskyTimeline/blueskyRepostSavedStore.ts';
 import { createD1BlueskyRepostTargetResolver } from '../../d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
 import { createD1BlueskyRepostUriResolver } from '../../d1/blueskyTimeline/blueskyRepostUriResolver.ts';
+import { createD1MediaUploadResolver } from '../../d1/mediaUpload/mediaUploadResolver.ts';
 import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerIoriBlueskyRouter } from '../workerIoriBlueskyRouter.ts';
@@ -109,6 +111,7 @@ const setupNonOwner = async (
     blueskyRepostClient?: ReturnType<typeof repostClient>;
     blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
     blueskyReplyClient?: ReturnType<typeof replyClient>;
+    blueskyPostClient?: ReturnType<typeof replyClient>;
     blueskyQuoteClient?: ReturnType<typeof replyClient>;
     blueskySearch?: BlueskySearch;
     blueskyChat?: BlueskyChat;
@@ -175,6 +178,15 @@ const setupNonOwner = async (
           targetResolver: createD1BlueskyLikeTargetResolver(fixture.db),
           now: Instant.now,
         }),
+      postToBlueskyUseCase: options.blueskyPostClient === undefined
+        ? undefined
+        : PostToBlueskyUseCase.create({
+          client: options.blueskyPostClient,
+          query: options.blueskyPostClient.query,
+          now: Instant.now,
+        }),
+      mediaUploadResolver: createD1MediaUploadResolver(fixture.db),
+      uploads: { get: async () => undefined },
       quoteBlueskyPostUseCase: options.blueskyQuoteClient === undefined
         ? undefined
         : QuoteBlueskyPostUseCase.create({
@@ -187,6 +199,7 @@ const setupNonOwner = async (
       blueskyChat: options.blueskyChat === undefined
         ? undefined
         : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
+      viewerDid: undefined,
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
     }),
   );
@@ -266,7 +279,52 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         indexedAt: BASE + 5000,
         liked: false,
         reposted: false,
+        isOwn: false,
       });
+    });
+
+    it('viewer の DID が投稿の作者と同じ行だけ isOwn を true にする', async () => {
+      const t = setupReadApi({ blueskyViewerDid: () => RA.ok('did:plc:a') });
+      const me = await t.signIn('read:statuses');
+      seedItem(t, 1);
+      t.sqlite.prepare('UPDATE bluesky_timeline_items SET authorDid = ? WHERE uri = ?').run(
+        'did:plc:b',
+        'at://did:plc:a/app.bsky.feed.post/1',
+      );
+      seedItem(t, 2);
+
+      const response = await t.request('/api/iori/v1/bluesky/timeline', { headers: me.bearer });
+
+      const body = await response.json() as { items: Array<{ uri: string; isOwn: boolean }> };
+      expect(body.items.map((item) => [item.uri, item.isOwn])).toEqual([
+        ['at://did:plc:a/app.bsky.feed.post/1', false],
+        ['at://did:plc:a/app.bsky.feed.post/2', true],
+      ]);
+    });
+
+    it('viewer の DID が自分の投稿と別なら、すべての行の isOwn を false にする', async () => {
+      const t = setupReadApi({ blueskyViewerDid: () => RA.ok('did:plc:me') });
+      const me = await t.signIn('read:statuses');
+      seedItem(t, 1);
+
+      const response = await t.request('/api/iori/v1/bluesky/timeline', { headers: me.bearer });
+
+      const body = await response.json() as { items: Array<{ isOwn: boolean }> };
+      expect(body.items.map((item) => item.isOwn)).toEqual([false]);
+    });
+
+    it('viewer の DID の取得に失敗しても、200 で返して isOwn を false にする', async () => {
+      const t = setupReadApi({
+        blueskyViewerDid: () => RA.err({ type: 'BlueskyClientError', kind: 'http', message: 'failed' }),
+      });
+      const me = await t.signIn('read:statuses');
+      seedItem(t, 1);
+
+      const response = await t.request('/api/iori/v1/bluesky/timeline', { headers: me.bearer });
+
+      expect(response.status).toBe(200);
+      const body = await response.json() as { items: Array<{ isOwn: boolean }> };
+      expect(body.items.map((item) => item.isOwn)).toEqual([false]);
     });
 
     it('scope なしでは所有者でない利用者を 403 にし、一覧のクエリを実行しない', async () => {
@@ -528,6 +586,7 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         indexedAt: BASE,
         liked: true,
         reposted: false,
+        isOwn: false,
       });
       expect(body.replies.map(({ depth, node }) => [depth, node.kind])).toEqual([[0, 'post'], [1, 'blocked']]);
     });
@@ -1519,7 +1578,7 @@ describe('/api/iori/v1/bluesky/status', () => {
 
       expect(response.status).toBe(200);
       const { viewerLikeUri: _like, viewerRepostUri: _repost, fetchedAt: _fetchedAt, ...item } = POST_ITEM;
-      expect(await response.json()).toEqual({ items: [item], cursor: 'next' });
+      expect(await response.json()).toEqual({ items: [{ ...item, isOwn: false }], cursor: 'next' });
       expect(blueskySearch.searchPosts).toHaveBeenCalledWith({ q: 'hello world', cursor: 'abc', limit: 25 });
     });
 
@@ -1973,6 +2032,289 @@ describe('/api/iori/v1/bluesky/notifications/seen', () => {
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
+  });
+});
+
+describe('/api/iori/v1/bluesky/posts', () => {
+  const POSTS = '/api/iori/v1/bluesky/posts';
+  const post = (t: ReturnType<typeof setupReadApi>, headers: Record<string, string>, body: unknown = {
+    status: 'こんにちは',
+  }) =>
+    t.request(POSTS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+    });
+  const record = (client: ReturnType<typeof replyClient>) => client.createRecord.mock.calls[0]![0];
+  const uploadsOf = (bytes: Uint8Array | undefined) => ({
+    get: vi.fn(async () =>
+      bytes === undefined ? undefined : {
+        key: 'post-images/x/original',
+        body: new Response(bytes as BodyInit).body as never,
+        contentType: 'image/png',
+      }
+    ),
+  });
+
+  it('認証なしだと 401、Origin が違う Cookie だと 403 にし、Bluesky を呼ばない', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    expect((await post(t, { Origin: ORIGIN })).status).toBe(401);
+    const evil = { Cookie: `sessionId=${me.sessionId}`, Origin: 'https://evil.example' };
+    expect((await post(t, evil)).status).toBe(403);
+    expect(client.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('write:statuses を満たさない scope のトークンを 403 にする', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('read:statuses');
+
+    expect((await post(t, me.bearer)).status).toBe(403);
+    expect(client.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
+    const client = replyClient();
+    const t = await setupNonOwner({ scope: 'write:statuses', blueskyPostClient: client });
+
+    const response = await t.send('POST', POSTS, { status: 'hi' });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Forbidden' });
+    expect(client.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('Bluesky の認証情報がないときは 409 を返す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn('write:statuses');
+
+    const response = await post(t, me.bearer);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Bluesky のアカウントが設定されていないため、投稿できません' });
+  });
+
+  it('spoiler_text か sensitive があるときは 422 にし、Bluesky を呼ばない', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+    const error = { error: 'Bluesky だけの投稿では CW とセンシティブ指定を使えません' };
+
+    for (const extra of [{ spoiler_text: '注意' }, { sensitive: true }, { sensitive: 'true' }]) {
+      const response = await post(t, me.bearer, { status: 'hi', ...extra });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual(error);
+    }
+    expect(client.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('visibility が public 以外のときは 422 にし、Bluesky を呼ばない', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    for (const visibility of ['unlisted', 'private', 'direct', '', 1]) {
+      const response = await post(t, me.bearer, { status: 'hi', visibility });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: 'Bluesky だけの投稿は公開でしか送れません' });
+    }
+    expect(client.createRecord).not.toHaveBeenCalled();
+    expect(client.uploadBlob).not.toHaveBeenCalled();
+  });
+
+  it('visibility が public のときは受け付ける', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    const response = await post(t, me.bearer, { status: 'hi', visibility: 'public' });
+
+    expect(response.status).toBe(200);
+    expect(client.createRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('空白だけの spoiler_text と sensitive false は受け付ける', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    const response = await post(t, me.bearer, { status: 'hi', spoiler_text: '  ', sensitive: false });
+
+    expect(response.status).toBe(200);
+    expect(client.createRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('status が文字列でない、または content_type が不正なときは 400 にし、Bluesky を呼ばない', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    expect((await post(t, me.bearer, {})).status).toBe(400);
+    expect((await post(t, me.bearer, { status: 1 })).status).toBe(400);
+    expect((await post(t, me.bearer, { status: 'hi', content_type: 'text/html' })).status).toBe(400);
+    expect(client.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('成功したら 200 で uri と url を返し、ローカル投稿も Fediverse への配送も作らない', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    const response = await post(t, { Cookie: `sessionId=${me.sessionId}`, Origin: ORIGIN });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      uri: POSTED_URI,
+      url: 'https://bsky.app/profile/did:plc:me/post/3kreply',
+    });
+    expect(record(client)).toMatchObject({ $type: 'app.bsky.feed.post', text: 'こんにちは' });
+    expect(t.sqlite.prepare('SELECT count(*) AS n FROM posts').get()).toEqual({ n: 0 });
+    expect(t.sqlite.prepare('SELECT count(*) AS n FROM bluesky_crossposts').get()).toEqual({ n: 0 });
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+
+  it('text/plain の本文はそのまま送る', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    await post(t, me.bearer, { status: '*強調* [リンク](https://example.com)', content_type: 'text/plain' });
+
+    expect(record(client)).toMatchObject({ text: '*強調* [リンク](https://example.com)' });
+  });
+
+  it('text/markdown の本文は平文にし、表示文字列が URL と違うリンクには URL を残す', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    await post(t, me.bearer, {
+      status: '**強調** は [この記事](https://example.com/a) と https://example.com/b を見てください',
+      content_type: 'text/markdown',
+    });
+
+    expect(record(client)).toMatchObject({
+      text: '強調 は この記事 (https://example.com/a) と https://example.com/b を見てください',
+    });
+  });
+
+  it('本文が長すぎるときは 422 に日本語の error と reason を付けて返し、Bluesky に投稿しない', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    const response = await post(t, me.bearer, { status: 'a'.repeat(301) });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      error: 'Bluesky に送れる本文は 300 文字までです',
+      reason: 'too_many_graphemes',
+    });
+    expect(client.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('本文も画像もないときは 422 にする', async () => {
+    const t = setupReadApi({ blueskyPostClient: replyClient() });
+    const me = await t.signIn('write:statuses');
+
+    const response = await post(t, me.bearer, { status: '  ' });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ reason: 'empty' });
+  });
+
+  it('自分の画像を R2 から読み、alt を付けて Bluesky に送る', async () => {
+    const client = replyClient();
+    client.uploadBlob.mockReturnValueOnce(
+      RA.ok({ $type: 'blob', ref: { $link: 'bafyblob' }, mimeType: 'image/png', size: 3 }),
+    );
+    const uploads = uploadsOf(new Uint8Array([1, 2, 3]));
+    const t = setupReadApi({ blueskyPostClient: client, uploads });
+    const me = await t.signIn('write:statuses');
+    const media = await t.addMedia(me.userId, '猫の写真');
+
+    const response = await post(t, me.bearer, { status: '', media_ids: [media.mediaId] });
+
+    expect(response.status).toBe(200);
+    expect(client.uploadBlob).toHaveBeenCalledExactlyOnceWith({
+      bytes: new Uint8Array([1, 2, 3]),
+      mimeType: 'image/png',
+    });
+    expect(record(client)).toMatchObject({
+      embed: { $type: 'app.bsky.embed.images', images: [{ alt: '猫の写真' }] },
+    });
+  });
+
+  it('他人の画像と存在しない画像は 422 にし、Bluesky に投稿しない', async () => {
+    const client = replyClient();
+    const uploads = uploadsOf(new Uint8Array([1]));
+    const t = setupReadApi({ blueskyPostClient: client, uploads });
+    const me = await t.signIn('write:statuses');
+    const bob = t.seed.addLocalActor('bob');
+    const others = await t.addMedia(bob.userId);
+
+    const foreign = await post(t, me.bearer, { status: 'hi', media_ids: [others.mediaId] });
+    const unknown = await post(t, me.bearer, { status: 'hi', media_ids: ['unknown'] });
+
+    expect(foreign.status).toBe(422);
+    expect(await foreign.json()).toEqual({ error: '添付した画像が見つからないか、読み込めませんでした' });
+    expect(unknown.status).toBe(422);
+    expect(uploads.get).not.toHaveBeenCalled();
+    expect(client.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('R2 から読めない画像があるときは 422 にし、Bluesky に投稿しない', async () => {
+    const client = replyClient();
+    const t = setupReadApi({ blueskyPostClient: client, uploads: uploadsOf(undefined) });
+    const me = await t.signIn('write:statuses');
+    const media = await t.addMedia(me.userId);
+
+    const response = await post(t, me.bearer, { status: 'hi', media_ids: [media.mediaId] });
+
+    expect(response.status).toBe(422);
+    expect(client.uploadBlob).not.toHaveBeenCalled();
+    expect(client.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('Bluesky への呼び出しが失敗したら 502 にし、詳細を返さない', async () => {
+    const error: BlueskyClientError = {
+      type: 'BlueskyClientError',
+      kind: 'http',
+      message: 'createRecord failed: status 500 InternalServerError',
+      status: 500,
+    };
+    const client = replyClient();
+    client.createRecord.mockReturnValueOnce(RA.err(error));
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    const response = await post(t, me.bearer);
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
+  });
+
+  it('Bluesky がレート制限を返したら 429 にする', async () => {
+    const error: BlueskyClientError = {
+      type: 'BlueskyClientError',
+      kind: 'http',
+      message: 'createRecord failed: status 429 RateLimitExceeded',
+      status: 429,
+    };
+    const client = replyClient();
+    client.createRecord.mockReturnValueOnce(RA.err(error));
+    const t = setupReadApi({ blueskyPostClient: client });
+    const me = await t.signIn('write:statuses');
+
+    const response = await post(t, me.bearer);
+
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: 'Bluesky rate limited' });
   });
 });
 

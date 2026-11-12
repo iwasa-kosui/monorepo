@@ -295,6 +295,7 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
       indexedAt: NOW - 500,
       liked: false,
       reposted: false,
+      isOwn: false,
     }]);
     expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: 'abc' });
   });

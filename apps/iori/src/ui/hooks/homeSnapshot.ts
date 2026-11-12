@@ -12,7 +12,7 @@ export type HomeSnapshot = Readonly<{
   anchor: ReadingAnchor | undefined;
 }>;
 
-const SNAPSHOT_VERSION = 1;
+const SNAPSHOT_VERSION = 2;
 const KEY_PREFIX = `iori:home-snapshot:v${SNAPSHOT_VERSION}:`;
 
 /** これより古いスナップショットは読み捨てる。 */

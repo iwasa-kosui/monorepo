@@ -44,7 +44,7 @@ export const unblockBlueskyActor = async (did: string, blockUri?: string): Promi
   await (await send('DELETE', requestUrl(BLOCKS_PATH, { did, blockUri }))).json() as IoriBlueskyBlockResponse;
 
 export const reportBlueskyActor = async (
-  input: Readonly<{ did: string; category: ReportCategory; comment: string }>,
+  input: Readonly<{ did: string; category: ReportCategory; comment: string; uri?: string; cid?: string }>,
 ): Promise<void> => {
   await send('POST', REPORTS_PATH, input);
 };

@@ -4,6 +4,7 @@ import {
   addXUserFeedSource,
   block,
   blueskyFailureMessage,
+  createBlueskyPost,
   createStatus,
   deleteStatus,
   failureMessage,
@@ -60,8 +61,8 @@ import {
   unmute,
   unreact,
   unreblog,
-  updateAvatar,
   updateMedia,
+  updateProfile,
   uploadMedia,
 } from './mastodonClient.ts';
 
@@ -365,6 +366,34 @@ describe('mastodon client requests', () => {
       content_type: 'text/markdown',
     });
     expect(status).toEqual({ id: 's2' });
+  });
+
+  it('posts only to Bluesky with a same-origin JSON post and returns the uri and url', async () => {
+    const fetchMock = stubFetch(
+      jsonResponse({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', url: 'https://bsky.app/x' }),
+    );
+
+    const posted = await createBlueskyPost({ status: 'hello', media_ids: ['m1'], content_type: 'text/markdown' });
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/posts');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(String(init.body))).toEqual({
+      status: 'hello',
+      media_ids: ['m1'],
+      content_type: 'text/markdown',
+    });
+    expect(posted).toEqual({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', url: 'https://bsky.app/x' });
+  });
+
+  it('throws an unprocessable error carrying the Japanese server message when Bluesky refuses the post', async () => {
+    stubFetch(jsonResponse({ error: 'Bluesky に送れる本文は 300 文字までです' }, { status: 422 }));
+
+    const error = await createBlueskyPost({ status: 'x', content_type: 'text/plain' }).catch((e: unknown) => e);
+
+    expect(isUnprocessableError(error)).toBe(true);
+    expect((error as Error).message).toBe('Bluesky に送れる本文は 300 文字までです');
   });
 
   it('omits the optional fields of a status that is not a reply and has no media', async () => {
@@ -1095,7 +1124,7 @@ describe('mastodon client media and avatar writes', () => {
     const fetchMock = stubFetch(jsonResponse(account));
     const file = image();
 
-    const result = await updateAvatar(file);
+    const result = await updateProfile({ avatar: file });
 
     const [url, init] = callOf(fetchMock);
     expect(url).toBe('/api/v1/accounts/update_credentials');
@@ -1103,7 +1132,21 @@ describe('mastodon client media and avatar writes', () => {
     expect(init.credentials).toBe('same-origin');
     expect(init.headers).toEqual({ Accept: 'application/json' });
     expect((init.body as FormData).get('avatar')).toBe(file);
+    expect((init.body as FormData).has('display_name')).toBe(false);
+    expect((init.body as FormData).has('note')).toBe(false);
     expect(result).toEqual(account);
+  });
+
+  it('sends display_name and note, including empty strings, and omits the avatar when none is chosen', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'a1' }));
+
+    await updateProfile({ displayName: '岩佐', note: '', avatar: undefined });
+
+    const [, init] = callOf(fetchMock);
+    const body = init.body as FormData;
+    expect(body.get('display_name')).toBe('岩佐');
+    expect(body.get('note')).toBe('');
+    expect(body.has('avatar')).toBe(false);
   });
 
   it('rejects an avatar update with the server message', async () => {
@@ -1113,7 +1156,7 @@ describe('mastodon client media and avatar writes', () => {
       }),
     );
 
-    const error = await updateAvatar(image()).catch((e: unknown) => e);
+    const error = await updateProfile({ avatar: image() }).catch((e: unknown) => e);
 
     expect((error as Error).message).toBe('Validation failed: Unsupported file type. Allowed: JPEG, PNG, GIF, WebP');
   });

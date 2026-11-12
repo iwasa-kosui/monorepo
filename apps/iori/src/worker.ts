@@ -218,11 +218,14 @@ export default {
         });
         app.route('/', createWorkerOAuthRouter(runtime.oauth));
         app.route('/api', createWorkerMastodonAppsRouter({ ...runtime.oauth, authn }));
+        const createContext = (mastodonRequest: Request) =>
+          runtime.federation.createContext(mastodonRequest, undefined);
         app.route(
           '/api',
           createWorkerMastodonCoreRouter({
             ...runtime.mastodon,
             authn,
+            createContext,
             instance: {
               domain: admission.identity.hostname,
               title: admission.identity.hostname,
@@ -234,8 +237,6 @@ export default {
           }),
         );
         app.route('/api', createWorkerMastodonTimelinesRouter({ ...runtime.mastodon, authn }));
-        const createContext = (mastodonRequest: Request) =>
-          runtime.federation.createContext(mastodonRequest, undefined);
         app.route(
           '/api',
           createWorkerMastodonStatusesRouter({
@@ -278,7 +279,15 @@ export default {
         app.route('/api', createWorkerMastodonTranslateRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
         app.route('/api', createWorkerIoriXPostsRouter({ ...runtime.digest, authn }));
-        app.route('/api', createWorkerIoriBlueskyRouter({ ...runtime.blueskyTimeline, authn }));
+        app.route(
+          '/api',
+          createWorkerIoriBlueskyRouter({
+            ...runtime.blueskyTimeline,
+            mediaUploadResolver: runtime.mastodon.mediaUploadResolver,
+            uploads: runtime.uploads,
+            authn,
+          }),
+        );
         app.route(
           '/api',
           createWorkerIoriFediverseConversationsRouter({

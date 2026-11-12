@@ -9,10 +9,11 @@ import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
 import type { BlueskyChat } from '../../../../ports/blueskyChat.ts';
-import type { BlueskyClient, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
 import type { BlueskyPostSubject } from '../../../../ports/blueskyPostCidResolver.ts';
 import type { BlueskyPostThreadFetcher } from '../../../../ports/blueskyPostThreadFetcher.ts';
 import type { BlueskySearch } from '../../../../ports/blueskySearch.ts';
+import type { PostImageObjectStore } from '../../../../ports/postImageObjectStore.ts';
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import type { TopicRelevanceJudge } from '../../../../ports/topicRelevanceJudge.ts';
@@ -42,6 +43,7 @@ import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestIte
 import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
 import { MarkBlueskyNotificationsSeenUseCase } from '../../../../useCase/markBlueskyNotificationsSeen.ts';
+import { PostToBlueskyUseCase } from '../../../../useCase/postToBluesky.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
 import { QuoteBlueskyPostUseCase } from '../../../../useCase/quoteBlueskyPost.ts';
 import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts';
@@ -246,6 +248,8 @@ export const setupReadApi = (
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
     blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
     blueskyReplyClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
+    blueskyPostClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
+    uploads?: Pick<PostImageObjectStore, 'get'>;
     blueskyQuoteClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
     blueskyPostCids?: Readonly<
       Record<string, string | Readonly<{ cid: string; likeUri?: string; repostUri?: string }>>
@@ -253,6 +257,7 @@ export const setupReadApi = (
     blueskySeenClient?: Pick<BlueskyClient, 'updateSeen'>;
     blueskySearch?: BlueskySearch;
     blueskyChat?: BlueskyChat;
+    blueskyViewerDid?: () => RA<string, BlueskyClientError>;
     refreshXPosts?: RefreshXPostsUseCase;
     scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   }> = {},
@@ -703,6 +708,15 @@ export const setupReadApi = (
               targetResolver: createD1BlueskyLikeTargetResolver(db),
               now: Instant.now,
             }),
+          postToBlueskyUseCase: options.blueskyPostClient === undefined
+            ? undefined
+            : PostToBlueskyUseCase.create({
+              client: options.blueskyPostClient,
+              query: options.blueskyPostClient.query,
+              now: Instant.now,
+            }),
+          mediaUploadResolver,
+          uploads: options.uploads ?? { get: async () => undefined },
           quoteBlueskyPostUseCase: options.blueskyQuoteClient === undefined
             ? undefined
             : QuoteBlueskyPostUseCase.create({
@@ -720,6 +734,7 @@ export const setupReadApi = (
           blueskyChat: options.blueskyChat === undefined
             ? undefined
             : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
+          viewerDid: options.blueskyViewerDid,
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );

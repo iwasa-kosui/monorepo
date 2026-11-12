@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { canSubmitPost, type PostFormValue, quoteParams, replyParams, submitPost } from './postSubmission.ts';
+import {
+  canSubmitPost,
+  postedNotice,
+  type PostFormValue,
+  quoteParams,
+  replyParams,
+  submitPost,
+} from './postSubmission.ts';
 
 const created = {
   id: 'status-1',
@@ -45,7 +52,13 @@ describe('submitPost', () => {
     const create = vi.fn().mockResolvedValue(created);
     const onPosted = vi.fn();
 
-    const result = await submitPost(filled, { create, updateMedia, onDescriptionSaved: vi.fn(), onPosted });
+    const result = await submitPost(filled, {
+      create,
+      createBlueskyPost: vi.fn(),
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted,
+    });
 
     expect(create).toHaveBeenCalledWith({
       status: 'hello',
@@ -65,6 +78,7 @@ describe('submitPost', () => {
 
     await submitPost({ ...filled, destination: 'fediverse' }, {
       create,
+      createBlueskyPost: vi.fn(),
       updateMedia,
       onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
@@ -78,6 +92,7 @@ describe('submitPost', () => {
 
     await submitPost({ ...filled, visibility }, {
       create,
+      createBlueskyPost: vi.fn(),
       updateMedia,
       onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
@@ -91,6 +106,7 @@ describe('submitPost', () => {
 
     await submitPost({ ...filled, cw: ' 注意 ', sensitive: true }, {
       create,
+      createBlueskyPost: vi.fn(),
       updateMedia,
       onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
@@ -102,7 +118,13 @@ describe('submitPost', () => {
   it('omits spoiler_text and sensitive when the CW is blank and sensitive is off', async () => {
     const create = vi.fn().mockResolvedValue(created);
 
-    await submitPost({ ...filled, cw: '  ' }, { create, updateMedia, onDescriptionSaved: vi.fn(), onPosted: vi.fn() });
+    await submitPost({ ...filled, cw: '  ' }, {
+      create,
+      createBlueskyPost: vi.fn(),
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted: vi.fn(),
+    });
 
     const params = create.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(params).not.toHaveProperty('spoiler_text');
@@ -126,6 +148,7 @@ describe('submitPost', () => {
 
     await submitPost({ ...filled, uploaded }, {
       create,
+      createBlueskyPost: vi.fn(),
       updateMedia: update,
       onDescriptionSaved: vi.fn(),
       onPosted: vi.fn(),
@@ -147,7 +170,7 @@ describe('submitPost', () => {
 
     await submitPost(
       { ...filled, uploaded },
-      { create, updateMedia: update, onDescriptionSaved: vi.fn(), onPosted: vi.fn() },
+      { create, createBlueskyPost: vi.fn(), updateMedia: update, onDescriptionSaved: vi.fn(), onPosted: vi.fn() },
     );
 
     expect(update).toHaveBeenCalledTimes(1);
@@ -162,7 +185,13 @@ describe('submitPost', () => {
       { id: 'media-1', url: 'https://example.com/a.png', description: '', savedDescription: '猫の写真' },
     ];
 
-    await submitPost({ ...filled, uploaded }, { create, updateMedia: update, onDescriptionSaved, onPosted: vi.fn() });
+    await submitPost({ ...filled, uploaded }, {
+      create,
+      createBlueskyPost: vi.fn(),
+      updateMedia: update,
+      onDescriptionSaved,
+      onPosted: vi.fn(),
+    });
 
     expect(update).toHaveBeenCalledWith('media-1', '');
     expect(onDescriptionSaved).toHaveBeenCalledWith('media-1', '');
@@ -178,7 +207,7 @@ describe('submitPost', () => {
 
     const result = await submitPost(
       { ...filled, uploaded },
-      { create, updateMedia: update, onDescriptionSaved, onPosted: vi.fn() },
+      { create, createBlueskyPost: vi.fn(), updateMedia: update, onDescriptionSaved, onPosted: vi.fn() },
     );
 
     expect(result.kind).toBe('failed');
@@ -198,7 +227,7 @@ describe('submitPost', () => {
 
     const result = await submitPost(
       { ...filled, uploaded },
-      { create, updateMedia: update, onDescriptionSaved, onPosted: vi.fn() },
+      { create, createBlueskyPost: vi.fn(), updateMedia: update, onDescriptionSaved, onPosted: vi.fn() },
     );
 
     expect(result.kind).toBe('failed');
@@ -219,6 +248,7 @@ describe('submitPost', () => {
 
     const result = await submitPost({ ...filled, uploaded }, {
       create,
+      createBlueskyPost: vi.fn(),
       updateMedia: update,
       onDescriptionSaved: vi.fn(),
       onPosted,
@@ -236,7 +266,13 @@ describe('submitPost', () => {
     const create = vi.fn().mockRejectedValue(new Error('network'));
     const onPosted = vi.fn();
 
-    const result = await submitPost(filled, { create, updateMedia, onDescriptionSaved: vi.fn(), onPosted });
+    const result = await submitPost(filled, {
+      create,
+      createBlueskyPost: vi.fn(),
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted,
+    });
 
     expect(result).toEqual({ kind: 'failed', message: 'Failed to post. Please try again.' });
     expect(onPosted).not.toHaveBeenCalled();
@@ -246,7 +282,13 @@ describe('submitPost', () => {
     const create = vi.fn().mockRejectedValue(Object.assign(new Error('Validation failed'), { status: 422 }));
     const onPosted = vi.fn();
 
-    const result = await submitPost(filled, { create, updateMedia, onDescriptionSaved: vi.fn(), onPosted });
+    const result = await submitPost(filled, {
+      create,
+      createBlueskyPost: vi.fn(),
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted,
+    });
 
     expect(result).toEqual({ kind: 'failed', message: 'Failed to post: Validation failed' });
     expect(onPosted).not.toHaveBeenCalled();
@@ -258,9 +300,214 @@ describe('submitPost', () => {
       throw new Error('render');
     });
 
-    await expect(submitPost(filled, { create, updateMedia, onDescriptionSaved: vi.fn(), onPosted })).rejects.toThrow(
+    await expect(
+      submitPost(filled, { create, createBlueskyPost: vi.fn(), updateMedia, onDescriptionSaved: vi.fn(), onPosted }),
+    ).rejects.toThrow(
       'render',
     );
+  });
+});
+
+describe('submitPost to Bluesky only', () => {
+  const blueskyOnly: PostFormValue = { ...filled, destination: 'bluesky' };
+
+  it.each(['unlisted', 'private'] as const)(
+    'fails without calling createBlueskyPost or create when the visibility is %s',
+    async (visibility) => {
+      const create = vi.fn();
+      const createBlueskyPost = vi.fn();
+
+      const result = await submitPost({ ...blueskyOnly, visibility }, {
+        create,
+        createBlueskyPost,
+        updateMedia,
+        onDescriptionSaved: vi.fn(),
+        onPosted: vi.fn(),
+      });
+
+      expect(result).toEqual({ kind: 'failed', message: 'Bluesky だけの投稿は公開でしか送れません' });
+      expect(createBlueskyPost).not.toHaveBeenCalled();
+      expect(create).not.toHaveBeenCalled();
+    },
+  );
+
+  it('calls createBlueskyPost with the content and media, and does not call create or onPosted', async () => {
+    const create = vi.fn();
+    const createBlueskyPost = vi.fn().mockResolvedValue({
+      uri: 'at://did:plc:me/app.bsky.feed.post/3k',
+      url: 'https://bsky.app/x',
+    });
+    const onPosted = vi.fn();
+
+    const result = await submitPost(blueskyOnly, {
+      create,
+      createBlueskyPost,
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted,
+    });
+
+    expect(createBlueskyPost).toHaveBeenCalledExactlyOnceWith({
+      status: 'hello',
+      media_ids: ['media-1'],
+      content_type: 'text/markdown',
+    });
+    expect(result).toEqual({ kind: 'postedToBluesky', url: 'https://bsky.app/x' });
+    expect(create).not.toHaveBeenCalled();
+    expect(onPosted).not.toHaveBeenCalled();
+  });
+
+  it('reports the server message when Bluesky refuses the post', async () => {
+    const create = vi.fn();
+    const createBlueskyPost = vi.fn().mockRejectedValue(
+      Object.assign(new Error('Bluesky に送れる本文は 300 文字までです'), { status: 422 }),
+    );
+    const onPosted = vi.fn();
+
+    const result = await submitPost(blueskyOnly, {
+      create,
+      createBlueskyPost,
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted,
+    });
+
+    expect(result).toEqual({ kind: 'failed', message: 'Failed to post: Bluesky に送れる本文は 300 文字までです' });
+    expect(create).not.toHaveBeenCalled();
+    expect(onPosted).not.toHaveBeenCalled();
+  });
+
+  it('reports the login message when Bluesky login fails', async () => {
+    const createBlueskyPost = vi.fn().mockRejectedValue(
+      Object.assign(new Error('Bluesky login failed'), { status: 502 }),
+    );
+
+    const result = await submitPost(blueskyOnly, {
+      create: vi.fn(),
+      createBlueskyPost,
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted: vi.fn(),
+    });
+
+    expect(result).toEqual({ kind: 'failed', message: 'Bluesky にログインできないため、操作できませんでした。' });
+  });
+
+  it('saves descriptions before calling createBlueskyPost', async () => {
+    const order: string[] = [];
+    const update = vi.fn(async (id: string) => {
+      order.push(`update:${id}`);
+    });
+    const createBlueskyPost = vi.fn(async () => {
+      order.push('createBlueskyPost');
+      return { uri: 'at://did:plc:me/app.bsky.feed.post/3k', url: 'https://bsky.app/x' };
+    });
+    const uploaded = [
+      { id: 'media-1', url: 'https://example.com/a.png', description: '猫の写真', savedDescription: '' },
+      { id: 'media-2', url: 'https://example.com/b.png', description: '', savedDescription: '' },
+    ];
+
+    await submitPost({ ...blueskyOnly, uploaded }, {
+      create: vi.fn(),
+      createBlueskyPost,
+      updateMedia: update,
+      onDescriptionSaved: vi.fn(),
+      onPosted: vi.fn(),
+    });
+
+    expect(update).toHaveBeenCalledExactlyOnceWith('media-1', '猫の写真');
+    expect(order).toEqual(['update:media-1', 'createBlueskyPost']);
+  });
+
+  it('does not call createBlueskyPost and reports failure when saving a description fails', async () => {
+    const createBlueskyPost = vi.fn();
+    const update = vi.fn().mockRejectedValue(new Error('network'));
+    const uploaded = [{
+      id: 'media-1',
+      url: 'https://example.com/a.png',
+      description: '猫の写真',
+      savedDescription: '',
+    }];
+
+    const result = await submitPost({ ...blueskyOnly, uploaded }, {
+      create: vi.fn(),
+      createBlueskyPost,
+      updateMedia: update,
+      onDescriptionSaved: vi.fn(),
+      onPosted: vi.fn(),
+    });
+
+    expect(result).toEqual({
+      kind: 'failed',
+      message: 'Failed to save the image description. Please try again.',
+    });
+    expect(createBlueskyPost).not.toHaveBeenCalled();
+  });
+
+  it('does not pass cw or sensitive to createBlueskyPost', async () => {
+    const createBlueskyPost = vi.fn().mockResolvedValue({ uri: 'at://x', url: null });
+
+    await submitPost({ ...blueskyOnly, cw: '注意', sensitive: true }, {
+      create: vi.fn(),
+      createBlueskyPost,
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted: vi.fn(),
+    });
+
+    const params = createBlueskyPost.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(params).not.toHaveProperty('spoiler_text');
+    expect(params).not.toHaveProperty('sensitive');
+  });
+
+  it('does not call createBlueskyPost for the other destinations', async () => {
+    const createBlueskyPost = vi.fn();
+
+    await submitPost(filled, {
+      create: vi.fn().mockResolvedValue(created),
+      createBlueskyPost,
+      updateMedia,
+      onDescriptionSaved: vi.fn(),
+      onPosted: vi.fn(),
+    });
+
+    expect(createBlueskyPost).not.toHaveBeenCalled();
+  });
+});
+
+describe('postedNotice', () => {
+  it('says the post went to Bluesky and carries the URL', () => {
+    expect(postedNotice('bluesky', { kind: 'postedToBluesky', url: 'https://bsky.app/x' })).toEqual({
+      message: 'Bluesky に投稿しました',
+      href: 'https://bsky.app/x',
+    });
+  });
+
+  it('has no link when the URL is unknown', () => {
+    expect(postedNotice('bluesky', { kind: 'postedToBluesky', url: null })).toEqual({
+      message: 'Bluesky に投稿しました',
+      href: null,
+    });
+  });
+
+  it('keeps the existing message for a Fediverse post', () => {
+    expect(postedNotice('fediverse', { kind: 'posted', status: created })).toEqual({
+      message: 'Fediverse に投稿しました',
+      href: null,
+    });
+  });
+
+  it('passes the visibility of the created status, so a DM skip does not show the visibility reason', () => {
+    const direct = {
+      ...created,
+      visibility: 'direct',
+      iori: { bluesky_crosspost: { status: 'skipped', skip_reason: 'visibility' } },
+    } as unknown as Status;
+
+    expect(postedNotice('both', { kind: 'posted', status: direct })).toEqual({
+      message: 'Fediverse に投稿しました。Bluesky には送っていません',
+      href: null,
+    });
   });
 });
 

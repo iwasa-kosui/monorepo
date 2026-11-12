@@ -115,7 +115,7 @@ const validateStatusParams = (body: RequestBody): string | undefined => {
     return 'Content type must be text/plain or text/markdown';
   }
   const destination = body['iori_destination'];
-  if (!isOmitted(destination) && !PostDestination.parse(destination).ok) {
+  if (!isOmitted(destination) && (destination === 'bluesky' || !PostDestination.parse(destination).ok)) {
     return 'Destination must be both or fediverse';
   }
   const scheduledAt = body['scheduled_at'];

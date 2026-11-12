@@ -3,6 +3,10 @@ import { createContext, useContext, useMemo, useState } from 'hono/jsx';
 
 import { homeFeedCursor, type HomeItem, mergeHomeFeed } from '../hooks/homeFeed.ts';
 import { readHomeSnapshot } from '../hooks/homeSnapshot.ts';
+import {
+  useBlueskyAuthorModeration,
+  type UseBlueskyAuthorModerationReturn,
+} from '../hooks/useBlueskyAuthorModeration.ts';
 import { useBlueskyLike, type UseBlueskyLikeReturn } from '../hooks/useBlueskyLike.ts';
 import { useBlueskyQuoteDialog, type UseBlueskyQuoteDialogReturn } from '../hooks/useBlueskyQuoteDialog.ts';
 import { useBlueskyReplyDialog, type UseBlueskyReplyDialogReturn } from '../hooks/useBlueskyReplyDialog.ts';
@@ -29,6 +33,7 @@ export type TimelineContextValue = Readonly<{
   blueskyRepost: UseBlueskyRepostReturn;
   blueskyReply: UseBlueskyReplyDialogReturn;
   blueskyQuote: UseBlueskyQuoteDialogReturn;
+  blueskyModeration: UseBlueskyAuthorModerationReturn;
   blueskyStatus: UseBlueskyStatusReturn;
   thread: UseThreadModalReturn;
   reply: UseReplyDialogReturn;
@@ -80,6 +85,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
   const blueskyRepost = useBlueskyRepost(timeline.updateBlueskyItems);
   const blueskyReply = useBlueskyReplyDialog();
   const blueskyQuote = useBlueskyQuoteDialog();
+  const blueskyModeration = useBlueskyAuthorModeration(timeline.updateBlueskyItems);
 
   const pullToRefresh = usePullToRefresh({
     onRefresh: async () => {
@@ -143,6 +149,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       blueskyRepost,
       blueskyReply,
       blueskyQuote,
+      blueskyModeration,
       blueskyStatus,
       thread,
       reply,
@@ -162,6 +169,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       blueskyRepost,
       blueskyReply,
       blueskyQuote,
+      blueskyModeration,
       blueskyStatus,
       thread,
       reply,

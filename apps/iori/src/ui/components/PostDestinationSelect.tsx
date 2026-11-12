@@ -4,9 +4,10 @@ type Props = Readonly<{
   value: PostDestination;
   onChange: (value: PostDestination) => void;
   name: string;
+  allowBlueskyOnly?: boolean;
 }>;
 
-export const PostDestinationSelect = ({ value, onChange, name }: Props) => (
+export const PostDestinationSelect = ({ value, onChange, name, allowBlueskyOnly = false }: Props) => (
   <div
     role='radiogroup'
     aria-label='送り先'
@@ -32,5 +33,17 @@ export const PostDestinationSelect = ({ value, onChange, name }: Props) => (
       />
       Fediverse だけ
     </label>
+    {allowBlueskyOnly && (
+      <label class='flex items-center gap-1 cursor-pointer'>
+        <input
+          type='radio'
+          name={name}
+          value='bluesky'
+          checked={value === 'bluesky'}
+          onChange={() => onChange('bluesky')}
+        />
+        Bluesky だけ
+      </label>
+    )}
   </div>
 );
