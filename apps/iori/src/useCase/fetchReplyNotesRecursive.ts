@@ -20,6 +20,7 @@ type Input = Readonly<{
   inReplyToUri: string;
   documentLoader: DocumentLoader;
   lookupObject: LookupObject;
+  shouldSave?: (identity: RemotePostIdentity) => boolean | Promise<boolean>;
 }>;
 
 type Ok = Readonly<{
@@ -68,7 +69,7 @@ const create = ({
   };
 
   const run = async (input: Input): RA<Ok, Err> => {
-    const { inReplyToUri, documentLoader, lookupObject } = input;
+    const { inReplyToUri, documentLoader, lookupObject, shouldSave } = input;
     const fetchedPosts: RemotePost[] = [];
     const visited = new Set<string>();
 
@@ -111,6 +112,11 @@ const create = ({
 
       const noteUri = fetchResult.uri;
       const noteInReplyToUri = fetchResult.inReplyToUri ?? null;
+
+      if (shouldSave !== undefined && !(await shouldSave(fetchResult))) {
+        getLogger().debug(`Skipped saving note: ${noteUri}, stopping chain`);
+        break;
+      }
 
       // Upsert the remote post
       const upsertResult = await remotePostUpserter.resolve(fetchResult);

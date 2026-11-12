@@ -723,16 +723,18 @@ describe('POST /api/iori/v1/statuses/:id/remote-context', () => {
     expect(await response.json()).toEqual({ fetched: 0 });
   });
 
-  it('トークンがないと 401、read:statuses を満たさないスコープは 403 にする', async () => {
+  it('トークンがないと 401、write:statuses を満たさないスコープは 403 にする', async () => {
     const t = await seedReactions();
 
     const responses = await Promise.all([
       post(t, t.publicNote.postId, {}),
       post(t, t.publicNote.postId, { Authorization: 'Bearer invalid' }),
+      post(t, t.publicNote.postId, await t.bearerFor('read')),
+      post(t, t.publicNote.postId, await t.bearerFor('read:statuses')),
       post(t, t.publicNote.postId, await t.bearerFor('write:favourites')),
     ]);
 
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 403]);
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403, 403]);
     expect(t.federation.lookupObject).not.toHaveBeenCalled();
   });
 

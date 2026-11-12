@@ -79,7 +79,6 @@ import { createD1ArticleResolver } from '../../../d1/article/articleResolver.ts'
 import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
 import { createD1BlockCreatedStore } from '../../../d1/block/blockCreatedStore.ts';
 import { createD1BlockDeletedStore } from '../../../d1/block/blockDeletedStore.ts';
-import { createD1BlockedActorIdsResolverByUserId } from '../../../d1/block/blockedActorIdsResolverByUserId.ts';
 import { createD1BlockedActorsResolverByUserIdWithPagination } from '../../../d1/block/blockedActorsResolverByUserIdWithPagination.ts';
 import { createD1BlockedActorUriResolverByUsername } from '../../../d1/block/blockedActorUriResolverByUsername.ts';
 import { createD1BlockResolver } from '../../../d1/block/blockResolver.ts';
@@ -155,6 +154,7 @@ import { createD1NotificationsResolverByPage } from '../../../d1/notification/no
 import { createD1AccountStatusItemsResolverByActorId } from '../../../d1/post/accountStatusItemsResolverByActorId.ts';
 import { createD1LocalPostResolverByUri } from '../../../d1/post/localPostResolverByUri.ts';
 import { createD1LocalPostsResolverByPage } from '../../../d1/post/localPostsResolverByPage.ts';
+import { createD1LocalPostUrisResolverByUris } from '../../../d1/post/localPostUrisResolverByUris.ts';
 import { createD1PostCreatedStore } from '../../../d1/post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../../../d1/post/postDeletedStore.ts';
 import { createD1PostExtrasResolverByPosts } from '../../../d1/post/postExtrasResolverByPosts.ts';
@@ -162,6 +162,7 @@ import { createD1PostResolver } from '../../../d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../../../d1/post/postResolverByUri.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../../../d1/post/remotePostUpserter.ts';
+import { createD1RemotePostUrisResolverByUris } from '../../../d1/post/remotePostUrisResolverByUris.ts';
 import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../../../d1/pushSubscription/pushSubscriptionCreatedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../../../d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
@@ -360,7 +361,7 @@ export const setupReadApi = (
           repostResolverById: createD1RepostResolverById(db),
           repostResolver,
           threadResolver: createD1ThreadResolver(db, ORIGIN),
-          blockedActorIdsResolverByUserId: createD1BlockedActorIdsResolverByUserId(db),
+          mutedActorIdsResolverByUserId: createD1MutedOrBlockedActorIdsResolverByUserId(db),
           statusAssembler,
           mediaUploadResolver,
           createPostUseCase: CreatePostUseCase.create({
@@ -756,8 +757,8 @@ export const setupReadApi = (
             origin: ORIGIN,
             userResolver,
             postResolver,
-            postResolverByUri: createD1PostResolverByUri(db),
-            localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
+            remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+            localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, ORIGIN),
             remotePostUpserter,
             blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
             fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase.create({

@@ -20,10 +20,7 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import type { Article, PublishedArticlesWithAuthorResolver } from '../domain/article/article.ts';
 import type { ArticleId } from '../domain/article/articleId.ts';
 import type { ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
-import type {
-  BlockedActorIdsResolverByUserId,
-  BlockedActorsResolverByUserIdWithPagination,
-} from '../domain/block/block.ts';
+import type { BlockedActorsResolverByUserIdWithPagination } from '../domain/block/block.ts';
 import type { BlueskyCrosspostStatusReportResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type {
   DigestHeadersResolverByArticleIds,
@@ -174,7 +171,6 @@ export type IoriMastodonRuntimePorts = Readonly<{
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
   mutedActorsResolverByUserIdWithPagination: MutedActorsResolverByUserIdWithPagination;
   blockedActorsResolverByUserIdWithPagination: BlockedActorsResolverByUserIdWithPagination;
-  blockedActorIdsResolverByUserId: BlockedActorIdsResolverByUserId;
   statusAssembler: StatusAssembler;
   searchTimeline: SearchTimelineUseCase;
   summarizeTimeline: SummarizeTimelineUseCase;

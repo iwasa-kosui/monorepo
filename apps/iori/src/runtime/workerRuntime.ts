@@ -28,7 +28,6 @@ import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBo
 import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
 import { createD1BlockCreatedStore } from '../adaptor/d1/block/blockCreatedStore.ts';
 import { createD1BlockDeletedStore } from '../adaptor/d1/block/blockDeletedStore.ts';
-import { createD1BlockedActorIdsResolverByUserId } from '../adaptor/d1/block/blockedActorIdsResolverByUserId.ts';
 import { createD1BlockedActorsResolverByUserIdWithPagination } from '../adaptor/d1/block/blockedActorsResolverByUserIdWithPagination.ts';
 import { createD1BlockedActorUriResolverByUsername } from '../adaptor/d1/block/blockedActorUriResolverByUsername.ts';
 import { createD1BlockResolver } from '../adaptor/d1/block/blockResolver.ts';
@@ -117,6 +116,7 @@ import {
 import { createD1AccountStatusItemsResolverByActorId } from '../adaptor/d1/post/accountStatusItemsResolverByActorId.ts';
 import { createD1LocalPostResolverByUri } from '../adaptor/d1/post/localPostResolverByUri.ts';
 import { createD1LocalPostsResolverByPage } from '../adaptor/d1/post/localPostsResolverByPage.ts';
+import { createD1LocalPostUrisResolverByUris } from '../adaptor/d1/post/localPostUrisResolverByUris.ts';
 import { createD1PostCreatedStore } from '../adaptor/d1/post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../adaptor/d1/post/postDeletedStore.ts';
 import { createD1PostExtrasResolverByPosts } from '../adaptor/d1/post/postExtrasResolverByPosts.ts';
@@ -124,6 +124,7 @@ import { createD1PostResolver } from '../adaptor/d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../adaptor/d1/post/postResolverByUri.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../adaptor/d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../adaptor/d1/post/remotePostUpserter.ts';
+import { createD1RemotePostUrisResolverByUris } from '../adaptor/d1/post/remotePostUrisResolverByUris.ts';
 import { createD1ThreadResolver } from '../adaptor/d1/post/threadResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../adaptor/d1/pushSubscription/pushSubscriptionCreatedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../adaptor/d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
@@ -400,7 +401,6 @@ export const createWorkerRuntimePorts = async (
       likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
       mutedActorsResolverByUserIdWithPagination: createD1MutedActorsResolverByUserIdWithPagination(db),
       blockedActorsResolverByUserIdWithPagination: createD1BlockedActorsResolverByUserIdWithPagination(db),
-      blockedActorIdsResolverByUserId: createD1BlockedActorIdsResolverByUserId(db),
       statusAssembler: createStatusAssembler({
         accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
         postExtrasResolver: createD1PostExtrasResolverByPosts(db, env.ORIGIN),
@@ -640,8 +640,8 @@ export const createWorkerRuntimePorts = async (
         origin: env.ORIGIN,
         userResolver,
         postResolver,
-        postResolverByUri,
-        localPostResolverByUri,
+        remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+        localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, env.ORIGIN),
         remotePostUpserter,
         blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
         fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase.create({

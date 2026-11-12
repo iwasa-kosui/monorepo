@@ -5,12 +5,12 @@ import { getLogger } from '@logtape/logtape';
 
 import type { BlockedActorUriResolverByUsername } from '../domain/block/block.ts';
 import {
-  type LocalPostResolverByUri,
+  type LocalPostUrisResolverByUris,
   type Post,
   PostNotFoundError,
   type PostResolver,
-  type PostResolverByUri,
   type RemotePostUpserter,
+  type RemotePostUrisResolverByUris,
 } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
@@ -25,6 +25,10 @@ import type { UseCase } from './useCase.ts';
 const MAX_REPLY_DEPTH = 3;
 const MAX_REPLIES = 40;
 const MAX_PAGES = 10;
+const MAX_LOOKUPS = 60;
+const MAX_ITEMS_PER_PAGE = 100;
+const RECENT_WINDOW_MS = 60_000;
+const MAX_TRACKED_POSTS = 200;
 const DEFAULT_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_TOTAL_TIMEOUT_MS = 10_000;
 
@@ -54,13 +58,14 @@ type Deps = Readonly<{
   origin: string;
   userResolver: UserResolver;
   postResolver: PostResolver;
-  postResolverByUri: PostResolverByUri;
-  localPostResolverByUri: LocalPostResolverByUri;
+  remotePostUrisResolverByUris: RemotePostUrisResolverByUris;
+  localPostUrisResolverByUris: LocalPostUrisResolverByUris;
   remotePostUpserter: RemotePostUpserter;
   blockedActorUriResolverByUsername: BlockedActorUriResolverByUsername;
   fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase;
   fetchTimeoutMs?: number;
   totalTimeoutMs?: number;
+  now?: () => number;
 }>;
 
 type Progress = {
@@ -68,26 +73,53 @@ type Progress = {
   replies: number;
   pages: number;
   stopped: boolean;
+  signal: AbortSignal;
 };
 
 const create = ({
   origin,
   userResolver,
   postResolver,
-  postResolverByUri,
-  localPostResolverByUri,
+  remotePostUrisResolverByUris,
+  localPostUrisResolverByUris,
   remotePostUpserter,
   blockedActorUriResolverByUsername,
   fetchReplyNotesRecursiveUseCase,
   fetchTimeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
   totalTimeoutMs = DEFAULT_TOTAL_TIMEOUT_MS,
+  now = Date.now,
 }: Deps): FetchRemoteContextUseCase => {
-  const withFetchTimeout = (loader: DocumentLoader): DocumentLoader => (url, options) =>
+  const inflight = new Map<PostId, RA<Ok, Err>>();
+  const completedAt = new Map<PostId, number>();
+
+  const remember = (postId: PostId): void => {
+    const at = now();
+    completedAt.delete(postId);
+    completedAt.set(postId, at);
+    for (const [key, completed] of completedAt) {
+      if (completedAt.size <= MAX_TRACKED_POSTS && at - completed < RECENT_WINDOW_MS) {
+        break;
+      }
+      completedAt.delete(key);
+    }
+  };
+
+  const isRecent = (postId: PostId): boolean => {
+    const completed = completedAt.get(postId);
+    return completed !== undefined && now() - completed < RECENT_WINDOW_MS;
+  };
+
+  const signalFor = (progress: Progress): AbortSignal =>
+    AbortSignal.any([progress.signal, AbortSignal.timeout(fetchTimeoutMs)]);
+
+  const withFetchTimeout = (loader: DocumentLoader, overall: AbortSignal): DocumentLoader => (url, options) =>
     loader(url, {
       ...options,
-      signal: options?.signal === undefined
-        ? AbortSignal.timeout(fetchTimeoutMs)
-        : AbortSignal.any([options.signal, AbortSignal.timeout(fetchTimeoutMs)]),
+      signal: AbortSignal.any(
+        options?.signal === undefined
+          ? [overall, AbortSignal.timeout(fetchTimeoutMs)]
+          : [overall, options.signal, AbortSignal.timeout(fetchTimeoutMs)],
+      ),
     });
 
   const withPageLimit = (loader: DocumentLoader, progress: Progress): DocumentLoader => (url, options) => {
@@ -98,12 +130,17 @@ const create = ({
     return loader(url, options);
   };
 
-  const exists = async (uri: string): Promise<boolean> => {
+  const storedUris = async (uris: readonly string[]): Promise<ReadonlySet<string>> => {
     const [remote, local] = await Promise.all([
-      postResolverByUri.resolve({ uri }),
-      localPostResolverByUri.resolve({ uri }),
+      remotePostUrisResolverByUris.resolve({ uris }),
+      localPostUrisResolverByUris.resolve({ uris }),
     ]);
-    return (remote.ok && remote.val !== undefined) || (local.ok && local.val !== undefined);
+    return new Set([...(remote.ok ? remote.val : []), ...(local.ok ? local.val : [])]);
+  };
+
+  const isBlocked = async (username: Username, actorUri: string): Promise<boolean> => {
+    const blocked = await blockedActorUriResolverByUsername.resolve({ username, actorUri });
+    return blocked.ok && blocked.val;
   };
 
   const replyItemIds = async function*(
@@ -125,6 +162,7 @@ const create = ({
 
   const fetchAncestors = async (
     post: Post,
+    username: Username,
     ctx: FederationContext,
     documentLoader: DocumentLoader,
     progress: Progress,
@@ -136,7 +174,8 @@ const create = ({
       inReplyToUri: post.inReplyToUri,
       documentLoader,
       lookupObject: async (uri, options) =>
-        progress.stopped ? null : ctx.lookupObject(uri, { ...options, signal: AbortSignal.timeout(fetchTimeoutMs) }),
+        progress.stopped ? null : ctx.lookupObject(uri, { ...options, signal: signalFor(progress) }),
+      shouldSave: async (identity) => !progress.stopped && !(await isBlocked(username, identity.authorIdentity.uri)),
     });
     if (result.ok) {
       progress.fetched += result.val.fetchedPosts.length;
@@ -156,14 +195,17 @@ const create = ({
     const pageLoader = withPageLimit(documentLoader, progress);
     const visited = new Set<string>([post.uri]);
 
+    let lookups = 0;
+
     const lookupNote = async (uri: string): Promise<Note | undefined> => {
-      if (progress.stopped) {
+      if (progress.stopped || lookups >= MAX_LOOKUPS) {
         return undefined;
       }
+      lookups++;
       try {
         const found = await ctx.lookupObject(uri, {
           documentLoader,
-          signal: AbortSignal.timeout(fetchTimeoutMs),
+          signal: signalFor(progress),
         });
         return found instanceof Note ? found : undefined;
       } catch (error) {
@@ -172,26 +214,28 @@ const create = ({
       }
     };
 
-    const isBlocked = async (actorUri: string): Promise<boolean> => {
-      const blocked = await blockedActorUriResolverByUsername.resolve({ username, actorUri });
-      return blocked.ok && blocked.val;
-    };
-
-    const saveReply = async (replyUri: string, parent: Note): Promise<Note | undefined> => {
+    const visitReply = async (
+      replyUri: string,
+      parent: Note,
+      depth: number,
+      isStored: boolean,
+    ): Promise<Note | undefined> => {
       try {
-        if (visited.has(replyUri) || await exists(replyUri)) {
+        if (isStored && depth + 1 >= MAX_REPLY_DEPTH) {
           return undefined;
         }
-        visited.add(replyUri);
         const reply = await lookupNote(replyUri);
         if (reply === undefined || reply.replyTargetId?.href !== parent.id?.href) {
           return undefined;
         }
-        if (reply.attributionId !== null && await isBlocked(reply.attributionId.href)) {
+        if (reply.attributionId !== null && await isBlocked(username, reply.attributionId.href)) {
           return undefined;
         }
+        if (isStored) {
+          return reply;
+        }
         const identity = await toRemotePostIdentity(reply, { origin, documentLoader });
-        if (identity === undefined || await isBlocked(identity.authorIdentity.uri) || progress.stopped) {
+        if (identity === undefined || await isBlocked(username, identity.authorIdentity.uri) || progress.stopped) {
           return undefined;
         }
         const upserted = await remotePostUpserter.resolve(identity);
@@ -202,7 +246,7 @@ const create = ({
         progress.fetched++;
         return reply;
       } catch (error) {
-        getLogger().debug(`Failed to save a reply: ${replyUri} - ${error}`);
+        getLogger().debug(`Failed to visit a reply: ${replyUri} - ${error}`);
         return undefined;
       }
     };
@@ -216,13 +260,17 @@ const create = ({
       const { note, depth } = queue[head]!;
       try {
         for await (const ids of replyItemIds(note, pageLoader)) {
-          for (const id of ids) {
-            if (progress.stopped || progress.replies >= MAX_REPLIES) {
+          const uris = [...new Set(ids.slice(0, MAX_ITEMS_PER_PAGE).map((id) => id.href))]
+            .filter((uri) => !visited.has(uri));
+          const stored = await storedUris(uris);
+          for (const uri of uris) {
+            if (progress.stopped || progress.replies >= MAX_REPLIES || lookups >= MAX_LOOKUPS) {
               return;
             }
-            const saved = await saveReply(id.href, note);
-            if (saved !== undefined && depth + 1 < MAX_REPLY_DEPTH) {
-              queue.push({ note: saved, depth: depth + 1 });
+            visited.add(uri);
+            const reply = await visitReply(uri, note, depth, stored.has(uri));
+            if (reply !== undefined && depth + 1 < MAX_REPLY_DEPTH) {
+              queue.push({ note: reply, depth: depth + 1 });
             }
           }
         }
@@ -232,7 +280,7 @@ const create = ({
     }
   };
 
-  const run = async ({ userId, postId, ctx }: Input): RA<Ok, Err> => {
+  const execute = async ({ userId, postId, ctx }: Input): RA<Ok, Err> => {
     const user = await resolveUserWith(userResolver)(userId);
     if (!user.ok) {
       return RA.err(user.err);
@@ -242,20 +290,46 @@ const create = ({
       return RA.err(PostNotFoundError.create(postId));
     }
 
-    const documentLoader = withFetchTimeout(await ctx.getDocumentLoader({ identifier: user.val.username }));
-    const progress: Progress = { fetched: 0, replies: 0, pages: 0, stopped: false };
+    const controller = new AbortController();
+    const documentLoader = withFetchTimeout(
+      await ctx.getDocumentLoader({ identifier: user.val.username }),
+      controller.signal,
+    );
+    const progress: Progress = { fetched: 0, replies: 0, pages: 0, stopped: false, signal: controller.signal };
     const finished = await withTimeout(
       Promise.all([
-        fetchAncestors(post.val, ctx, documentLoader, progress),
+        fetchAncestors(post.val, user.val.username, ctx, documentLoader, progress),
         fetchReplies(post.val, user.val.username, ctx, documentLoader, progress),
       ]),
       totalTimeoutMs,
     );
     if (finished === timedOut) {
       progress.stopped = true;
+      controller.abort();
       getLogger().debug(`Timed out while fetching the remote context of the post: ${postId}`);
     }
     return RA.ok({ fetchedCount: progress.fetched });
+  };
+
+  const run = async (input: Input): RA<Ok, Err> => {
+    const { postId } = input;
+    if (isRecent(postId)) {
+      return RA.ok({ fetchedCount: 0 });
+    }
+    const running = inflight.get(postId);
+    if (running !== undefined) {
+      return running;
+    }
+    const started = execute(input).then((result) => {
+      if (result.ok) {
+        remember(postId);
+      }
+      return result;
+    }).finally(() => {
+      inflight.delete(postId);
+    });
+    inflight.set(postId, started);
+    return started;
   };
 
   return { run };
