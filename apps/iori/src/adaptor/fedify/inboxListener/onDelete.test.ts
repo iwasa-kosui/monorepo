@@ -318,4 +318,103 @@ describe('createOnDelete', () => {
       expect(postDeletedStore.store).not.toHaveBeenCalled();
     });
   });
+
+  describe('mention notifications', () => {
+    const buildDeps = (
+      mention?: Pick<OnDeleteDeps, 'mentionNotificationsResolverByMentionPostId' | 'mentionNotificationDeletedStore'>,
+    ) => {
+      const postId = PostId.generate();
+      const actorId = ActorId.generate();
+      const empty = { resolve: async () => RA.ok([]) };
+      const noopStore = { store: vi.fn(async () => RA.ok(undefined)) };
+      const postDeletedStore = { store: vi.fn(async () => RA.ok(undefined)) };
+      const deps = {
+        remotePostResolverByUri: {
+          resolve: async () =>
+            RA.ok({
+              type: 'remote' as const,
+              postId,
+              actorId,
+              content: 'remote post',
+              createdAt: Date.now() as never,
+              uri: 'https://remote.example/posts/1',
+              inReplyToUri: null,
+              visibility: null,
+              summary: null,
+              sensitive: false,
+            }),
+        },
+        actorResolverById: { resolve: async () => RA.ok({ ...remoteAuthor, id: actorId }) },
+        timelineItemsResolverByPostId: empty,
+        likeNotificationsResolverByPostId: empty,
+        emojiReactNotificationsResolverByPostId: empty,
+        replyNotificationsResolverByReplyPostId: empty,
+        replyNotificationsResolverByOriginalPostId: empty,
+        ...mention,
+        repostsResolverByPostId: empty,
+        likesResolverByPostId: empty,
+        emojiReactsResolverByPostId: empty,
+        federatedTimelineItemsResolverByPostId: empty,
+        timelineItemDeletedStore: noopStore,
+        likeNotificationDeletedStore: noopStore,
+        emojiReactNotificationDeletedStore: noopStore,
+        replyNotificationDeletedStore: noopStore,
+        repostDeletedStore: noopStore,
+        localLikeDeletedStore: noopStore,
+        remoteLikeDeletedStore: noopStore,
+        emojiReactDeletedStore: noopStore,
+        federatedTimelineItemDeletedStore: noopStore,
+        postDeletedStore,
+      } satisfies OnDeleteDeps;
+      return { deps, postId, actorId, postDeletedStore };
+    };
+    const activity = {
+      actorId: new URL('https://remote.example/users/alice'),
+      objectId: new URL('https://remote.example/posts/1'),
+    } as never;
+
+    it('deletes the mention notifications that point at the deleted post', async () => {
+      const mentionNotificationDeletedStore = { store: vi.fn(async () => RA.ok(undefined)) };
+      const mentionPostId = PostId.generate();
+      const notification = {
+        type: 'mention' as const,
+        notificationId: NotificationId.generate(),
+        recipientUserId: UserId.generate(),
+        isRead: false,
+        mentionerActorId: ActorId.generate(),
+        mentionPostId,
+      };
+      const mentionNotificationsResolverByMentionPostId = {
+        resolve: vi.fn(async () => RA.ok([notification])),
+      };
+      const { deps, postId, postDeletedStore } = buildDeps({
+        mentionNotificationsResolverByMentionPostId,
+        mentionNotificationDeletedStore,
+      });
+
+      await createOnDelete(deps)({} as never, activity);
+
+      expect(mentionNotificationsResolverByMentionPostId.resolve).toHaveBeenCalledWith({ mentionPostId: postId });
+      expect(mentionNotificationDeletedStore.store).toHaveBeenCalledTimes(1);
+      expect(mentionNotificationDeletedStore.store).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventName: 'notification.mentionNotificationDeleted',
+          eventPayload: {
+            notificationId: notification.notificationId,
+            mentionerActorId: notification.mentionerActorId,
+            mentionPostId,
+          },
+        }),
+      );
+      expect(postDeletedStore.store).toHaveBeenCalledTimes(1);
+    });
+
+    it('deletes the post without the mention dependencies', async () => {
+      const { deps, postDeletedStore } = buildDeps();
+
+      await createOnDelete(deps)({} as never, activity);
+
+      expect(postDeletedStore.store).toHaveBeenCalledTimes(1);
+    });
+  });
 });

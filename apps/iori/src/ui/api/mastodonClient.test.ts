@@ -42,6 +42,8 @@ import {
   requestDigest,
   saveNotificationsMarker,
   searchAccount,
+  searchBlueskyActors,
+  searchBlueskyPosts,
   searchStatuses,
   setFeedSourceEnabled,
   summarizeTimeline,
@@ -448,6 +450,16 @@ describe('mastodon client requests', () => {
     expect((error as Error).message).toBe('HTTP 404');
   });
 
+  it('reads the code from the error body and leaves it out when the body has none', async () => {
+    stubFetch(jsonResponse({ error: 'Bluesky authentication failed', code: 'auth' }, { status: 502 }));
+    const withCode = await fetchStatus('s1').catch((e: unknown) => e);
+    stubFetch(jsonResponse({ error: 'Not found' }, { status: 404 }));
+    const withoutCode = await fetchStatus('s1').catch((e: unknown) => e);
+
+    expect((withCode as { code?: string }).code).toBe('auth');
+    expect('code' in (withoutCode as object)).toBe(false);
+  });
+
   it('treats a 422 from relationships as logged in without a relationship', async () => {
     stubFetch(jsonResponse({ error: 'Actor not found' }, { status: 422 }));
 
@@ -763,6 +775,31 @@ describe('mastodon client requests', () => {
     const error = await likeBlueskyPost('x').catch((e: unknown) => e);
 
     expect(isMastodonApiError(error) && error.status).toBe(502);
+  });
+
+  it('searches Bluesky posts with the query and the cursor', async () => {
+    const fetchMock = stubFetch(jsonResponse({ items: [], cursor: null }));
+
+    const result = await searchBlueskyPosts('猫 犬', 'c1');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/iori/v1/bluesky/search/posts?q=%E7%8C%AB+%E7%8A%AC&cursor=c1');
+    expect(result).toEqual({ items: [], cursor: null });
+  });
+
+  it('searches Bluesky actors without a cursor on the first page', async () => {
+    const fetchMock = stubFetch(jsonResponse({ actors: [], cursor: null }));
+
+    await searchBlueskyActors('alice');
+
+    expect(requestedUrl(fetchMock)).toBe('/api/iori/v1/bluesky/search/actors?q=alice');
+  });
+
+  it('carries the status of a failed Bluesky search', async () => {
+    stubFetch(jsonResponse({ error: 'Bluesky timeline is disabled' }, { status: 409 }));
+
+    const error = await searchBlueskyPosts('x').catch((e: unknown) => e);
+
+    expect(isMastodonApiError(error) && error.status).toBe(409);
   });
 
   it('uses the login message for a Bluesky like that failed to log in, and keeps the generic message otherwise', async () => {

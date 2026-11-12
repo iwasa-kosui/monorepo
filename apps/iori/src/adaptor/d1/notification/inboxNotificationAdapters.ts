@@ -15,6 +15,11 @@ import type {
   LikeNotificationDeletedStore,
   LikeNotificationResolverByActorIdAndPostId,
   LikeNotificationsResolverByPostId,
+  MentionNotification,
+  MentionNotificationCreatedStore,
+  MentionNotificationDeletedStore,
+  MentionNotificationResolverByRecipientAndMentionPostId,
+  MentionNotificationsResolverByMentionPostId,
   NotificationDismissedStore,
   NotificationsClearedStore,
   ReplyNotification,
@@ -38,6 +43,7 @@ import {
   notificationEmojiReactsTable,
   notificationFollowsTable,
   notificationLikesTable,
+  notificationMentionsTable,
   notificationRepliesTable,
   notificationRepostsTable,
   notificationsTable,
@@ -134,6 +140,22 @@ export const createD1ReplyNotificationCreatedStore = (db: IoriD1Db): ReplyNotifi
   },
 });
 
+export const createD1MentionNotificationCreatedStore = (db: IoriD1Db): MentionNotificationCreatedStore => ({
+  store: async (event) => {
+    await db.batch([
+      db.insert(notificationsTable).values(notificationRow(event.aggregateState, event.occurredAt)),
+      db.insert(notificationMentionsTable).values({
+        notificationId: event.aggregateState.notificationId,
+        recipientUserId: event.aggregateState.recipientUserId,
+        mentionerActorId: event.aggregateState.mentionerActorId,
+        mentionPostId: event.aggregateState.mentionPostId,
+      }),
+      db.insert(domainEventsTable).values(eventRow(event)),
+    ]);
+    return RA.ok(undefined);
+  },
+});
+
 export const createD1RepostNotificationCreatedStore = (db: IoriD1Db): RepostNotificationCreatedStore => ({
   store: async (event) => {
     await db.batch([
@@ -161,7 +183,11 @@ const createDeletedStore = <
   },
 >(
   db: IoriD1Db,
-  subtypeTable: typeof notificationLikesTable | typeof notificationEmojiReactsTable | typeof notificationRepliesTable,
+  subtypeTable:
+    | typeof notificationLikesTable
+    | typeof notificationEmojiReactsTable
+    | typeof notificationRepliesTable
+    | typeof notificationMentionsTable,
 ) =>
 async (...events: readonly TEvent[]) => {
   if (events.length === 0) return RA.ok(undefined);
@@ -183,12 +209,16 @@ export const createD1EmojiReactNotificationDeletedStore = (db: IoriD1Db): EmojiR
 export const createD1ReplyNotificationDeletedStore = (db: IoriD1Db): ReplyNotificationDeletedStore => ({
   store: createDeletedStore(db, notificationRepliesTable),
 });
+export const createD1MentionNotificationDeletedStore = (db: IoriD1Db): MentionNotificationDeletedStore => ({
+  store: createDeletedStore(db, notificationMentionsTable),
+});
 
 const subtypeTables = [
   notificationLikesTable,
   notificationFollowsTable,
   notificationEmojiReactsTable,
   notificationRepliesTable,
+  notificationMentionsTable,
   notificationRepostsTable,
   notificationBlueskyTable,
 ] as const;
@@ -361,6 +391,45 @@ export const createD1ReplyNotificationsResolverByOriginalPostId = (
 ): ReplyNotificationsResolverByOriginalPostId => ({
   resolve: async ({ originalPostId }) =>
     RA.ok((await replyQuery(db).where(eq(notificationRepliesTable.originalPostId, originalPostId))).map(toReply)),
+});
+
+type MentionRow = {
+  notifications: typeof notificationsTable.$inferSelect;
+  notification_mentions: typeof notificationMentionsTable.$inferSelect;
+};
+const toMention = (row: MentionRow): MentionNotification => ({
+  type: 'mention',
+  notificationId: NotificationId.orThrow(row.notifications.notificationId),
+  recipientUserId: row.notifications.recipientUserId as UserId,
+  isRead: row.notifications.isRead === 1,
+  mentionerActorId: row.notification_mentions.mentionerActorId as ActorId,
+  mentionPostId: row.notification_mentions.mentionPostId as PostId,
+});
+
+export const createD1MentionNotificationResolverByRecipientAndMentionPostId = (
+  db: IoriD1Db,
+): MentionNotificationResolverByRecipientAndMentionPostId => ({
+  resolve: async ({ recipientUserId, mentionPostId }) => {
+    const [row] = await db.select().from(notificationMentionsTable)
+      .innerJoin(notificationsTable, eq(notificationMentionsTable.notificationId, notificationsTable.notificationId))
+      .where(
+        and(
+          eq(notificationMentionsTable.recipientUserId, recipientUserId),
+          eq(notificationMentionsTable.mentionPostId, mentionPostId),
+        ),
+      ).limit(1);
+    return RA.ok(row === undefined ? undefined : toMention(row));
+  },
+});
+export const createD1MentionNotificationsResolverByMentionPostId = (
+  db: IoriD1Db,
+): MentionNotificationsResolverByMentionPostId => ({
+  resolve: async ({ mentionPostId }) =>
+    RA.ok(
+      (await db.select().from(notificationMentionsTable)
+        .innerJoin(notificationsTable, eq(notificationMentionsTable.notificationId, notificationsTable.notificationId))
+        .where(eq(notificationMentionsTable.mentionPostId, mentionPostId))).map(toMention),
+    ),
 });
 
 type RepostRow = {

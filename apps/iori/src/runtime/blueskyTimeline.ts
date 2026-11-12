@@ -1,5 +1,6 @@
 import { createBlueskyClient } from '../adaptor/bluesky/blueskyClient.ts';
 import { createBlueskyPostThreadFetcher } from '../adaptor/bluesky/blueskyPostThreadFetcher.ts';
+import { createBlueskySearch } from '../adaptor/bluesky/blueskySearch.ts';
 import { createBlueskyTimelineFetcher } from '../adaptor/bluesky/blueskyTimelineFetcher.ts';
 import { createBlueskyViewerRepostResolver } from '../adaptor/bluesky/blueskyViewerRepostResolver.ts';
 import {
@@ -31,6 +32,7 @@ import type { BlueskySyncStatusResolver } from '../domain/blueskySyncStatus/blue
 import type { BlueskyTimelineItemsResolver } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { BlueskyPostThreadFetcher } from '../ports/blueskyPostThreadFetcher.ts';
+import type { BlueskySearch } from '../ports/blueskySearch.ts';
 import { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline.ts';
 import { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
@@ -61,6 +63,7 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
   undoRepostBlueskyPostUseCase: UndoRepostBlueskyPostUseCase | undefined;
   blueskyPostThreadFetcher: BlueskyPostThreadFetcher | undefined;
   replyToBlueskyPostUseCase: ReplyToBlueskyPostUseCase | undefined;
+  blueskySearch: BlueskySearch | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -200,6 +203,9 @@ export const createBlueskyTimelineRuntimePorts = (
       ? undefined
       : createBlueskyPostThreadFetcher({ client: createTimelineClient(config, db, deps), now: Instant.now }),
     replyToBlueskyPostUseCase: createReplyToBlueskyPostUseCase(env, db, deps),
+    blueskySearch: config === undefined
+      ? undefined
+      : createBlueskySearch({ client: createTimelineClient(config, db, deps), now: Instant.now }),
     isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
   };
 };
