@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => {
             bookmarks: './src/ui/pages/bookmarks.tsx',
             federatedTimeline: './src/ui/pages/federatedTimeline.tsx',
             search: './src/ui/pages/search.tsx',
+            settings: './src/ui/pages/settings.tsx',
             xPosts: './src/ui/pages/xPosts.tsx',
             blueskyProfile: './src/ui/pages/blueskyProfile.tsx',
             messages: './src/ui/pages/messages.tsx',
