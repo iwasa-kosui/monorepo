@@ -23,10 +23,12 @@ import type { LinkPreviewsResolverByPostId } from '../domain/linkPreview/linkPre
 import type { LocalPostResolverByUri, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { UserResolver } from '../domain/user/user.ts';
-import type { BlueskyClient, BlueskyThumbnailFetcher } from '../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyQueryClient, BlueskyThumbnailFetcher } from '../ports/blueskyClient.ts';
 import type { PostImageObjectStore } from '../ports/postImageObjectStore.ts';
+import { findMentionHandles, withMentionFacets } from './helper/blueskyMentionFacets.ts';
 import { resolveBlueskyReplyContextWith } from './helper/blueskyReplyContext.ts';
 import { deleteBlueskyRecordWith } from './helper/deleteBlueskyRecord.ts';
+import { resolveDids } from './helper/publishBlueskyPost.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{ postId: PostId }>;
@@ -48,6 +50,7 @@ type Deps = Readonly<{
   uploads: PostImageObjectStore;
   thumbnailFetcher: BlueskyThumbnailFetcher;
   client: BlueskyClient;
+  query: BlueskyQueryClient['query'];
   origin: string;
   now: () => Instant;
 }>;
@@ -77,6 +80,16 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       return { bytes, mimeType: object.contentType, alt: image.altText, url: url.href };
     } catch {
       return undefined;
+    }
+  };
+
+  const resolveMentionDids = async (handles: readonly string[]): Promise<Map<string, string>> => {
+    if (handles.length === 0) return new Map();
+    try {
+      return await resolveDids(deps.query, handles);
+    } catch (error) {
+      getLogger().warn('Bluesky mention handles could not be resolved.', { errorName: errorNameOf(error) });
+      return new Map();
     }
   };
 
@@ -144,6 +157,11 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       return 'skipped';
     }
 
+    const facets = withMentionFacets(
+      draft.val.text,
+      draft.val.facets,
+      await resolveMentionDids(findMentionHandles(draft.val.text)),
+    );
     const imageBlobs = [];
     for (const image of draft.val.images) {
       const uploaded = await deps.client.uploadBlob(image);
@@ -155,7 +173,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
 
     const rkey = blueskyRkeyOf({ postId, createdAt: post.createdAt });
     let created = await deps.client.createRecord(
-      toBlueskyPostRecord(draft.val, {
+      toBlueskyPostRecord({ ...draft.val, facets }, {
         images: imageBlobs,
         ...(thumbUploaded?.ok ? { thumb: thumbUploaded.val } : {}),
       }),

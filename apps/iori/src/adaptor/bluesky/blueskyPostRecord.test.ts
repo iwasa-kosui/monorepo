@@ -8,6 +8,7 @@ import {
   BLUESKY_MAX_TEXT_BYTES,
   BLUESKY_MAX_THUMB_BYTES,
   type BlueskyImageInput,
+  type BlueskyPostDraft,
   buildBlueskyPostDraft,
   type BuildBlueskyPostInput,
   selectBlueskyImages,
@@ -19,6 +20,11 @@ const CREATED_AT = Instant.orThrow(Date.UTC(2026, 10, 8, 3, 4, 5));
 const segmenter = new Intl.Segmenter('und', { granularity: 'grapheme' });
 const graphemeCount = (text: string) => Array.from(segmenter.segment(text)).length;
 const utf8 = (text: string) => new TextEncoder().encode(text);
+
+const uriOf = (facet: BlueskyPostDraft['facets'][number]) => {
+  const feature = facet.features[0];
+  return feature.$type === 'app.bsky.richtext.facet#link' ? feature.uri : undefined;
+};
 
 const imageUrl = (alt: string | null) => `https://iori.example/uploads/${alt ?? 'image'}.png`;
 
@@ -85,7 +91,7 @@ describe('buildBlueskyPostDraft の切り詰め', () => {
     expect(draft.text.endsWith(`…\n${POST_URL}`)).toBe(true);
     const last = draft.facets.at(-1)!;
     expect(sliceBytes(draft.text, last.index.byteStart, last.index.byteEnd)).toBe(POST_URL);
-    expect(last.features[0].uri).toBe(POST_URL);
+    expect(uriOf(last)).toBe(POST_URL);
     expect(graphemeCount(draft.text)).toBe(BLUESKY_MAX_GRAPHEMES);
   });
 
@@ -111,7 +117,7 @@ describe('buildBlueskyPostDraft の切り詰め', () => {
       'y'.repeat(150)
     }</a></p>`;
     const draft = build({ html });
-    const uris = draft.facets.map((facet) => facet.features[0].uri);
+    const uris = draft.facets.map((facet) => uriOf(facet));
     expect(uris).toEqual(['https://example.com/keep', POST_URL]);
     for (const facet of draft.facets) {
       expect(facet.index.byteEnd).toBeLessThanOrEqual(utf8(draft.text).byteLength);
@@ -133,13 +139,13 @@ describe('buildBlueskyPostDraft の画像', () => {
     expect(draft.text).toBe(`hello\n${imageUrl('big')}`);
     const last = draft.facets.at(-1)!;
     expect(sliceBytes(draft.text, last.index.byteStart, last.index.byteEnd)).toBe(imageUrl('big'));
-    expect(last.features[0].uri).toBe(imageUrl('big'));
+    expect(uriOf(last)).toBe(imageUrl('big'));
   });
 
   it('外した画像が複数あれば、それぞれの URL を行ごとに付ける', () => {
     const draft = build({ images: [image(BLUESKY_MAX_IMAGE_BYTES + 1, 'a'), image(BLUESKY_MAX_IMAGE_BYTES + 1, 'b')] });
     expect(draft.text).toBe(`hello\n${imageUrl('a')}\n${imageUrl('b')}`);
-    expect(draft.facets.map((facet) => facet.features[0].uri)).toEqual([imageUrl('a'), imageUrl('b')]);
+    expect(draft.facets.map((facet) => uriOf(facet))).toEqual([imageUrl('a'), imageUrl('b')]);
   });
 
   it('外した画像が無ければ URL を付けない', () => {
@@ -156,7 +162,7 @@ describe('buildBlueskyPostDraft の画像', () => {
     const draft = build({ html: `<p>${'あ'.repeat(400)}</p>`, images: [image(BLUESKY_MAX_IMAGE_BYTES + 1, 'big')] });
     expect(draft.text.split(POST_URL)).toHaveLength(2);
     expect(draft.text).not.toContain(imageUrl('big'));
-    expect(draft.facets.filter((facet) => facet.features[0].uri === POST_URL)).toHaveLength(1);
+    expect(draft.facets.filter((facet) => uriOf(facet) === POST_URL)).toHaveLength(1);
   });
 
   it('画像の URL を付けると上限を超える本文は、投稿 URL での切り詰めの形にする', () => {

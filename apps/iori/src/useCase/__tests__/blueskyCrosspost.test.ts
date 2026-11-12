@@ -19,7 +19,7 @@ import type { BlueskyBlob, BlueskyPostRecord } from '../../domain/blueskyCrosspo
 import { blueskyRkeyOf } from '../../domain/blueskyCrosspost/blueskyRkey.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { PostId } from '../../domain/post/postId.ts';
-import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import type { PostImageObjectStore } from '../../ports/postImageObjectStore.ts';
 import { RemoveBlueskyCrosspostUseCase } from '../removeBlueskyCrosspost.ts';
 import { RetryBlueskyCrosspostsUseCase } from '../retryBlueskyCrossposts.ts';
@@ -96,6 +96,14 @@ const setup = () => {
     deleteFollow: async () => RA.err(failure('deleteFollow is not used')),
   };
 
+  const handleDids = new Map<string, string>([['alice.bsky.social', 'did:plc:alice']]);
+  const queryBehavior = { throws: false };
+  const query = vi.fn<BlueskyQueryClient['query']>(async (_nsid, params) => {
+    if (queryBehavior.throws) throw new Error('network down');
+    const did = handleDids.get(params.handle ?? '');
+    return did === undefined ? RA.err(failure('resolveHandle failed: status 400')) : RA.ok({ did });
+  });
+
   const stored = new Map<string, { bytes: Uint8Array; contentType: string }>();
   const uploads: PostImageObjectStore = {
     put: async () => ({ key: 'unused', url: 'unused' }),
@@ -131,6 +139,7 @@ const setup = () => {
     uploads,
     thumbnailFetcher,
     client,
+    query,
     origin: SEED_ORIGIN,
     now: () => NOW,
   });
@@ -203,6 +212,8 @@ const setup = () => {
     deleted,
     rkeys,
     behavior,
+    query,
+    queryBehavior,
     stored,
     thumbnails,
     thumbnailFetcher,
@@ -453,6 +464,81 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
       $type: 'app.bsky.embed.external',
       external: { uri: 'https://example.com/a', title: 'タイトル', description: '' },
     });
+  });
+
+  it('本文の Bluesky のハンドルを、DID に解決して mention facet にして送る', async () => {
+    const t = setup();
+    const post = t.addPost({
+      content: '<p>こんにちは @alice.bsky.social さん <a href="https://example.com/x">example.com/x</a></p>',
+    });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.query).toHaveBeenCalledTimes(1);
+    expect(t.query).toHaveBeenCalledWith('com.atproto.identity.resolveHandle', { handle: 'alice.bsky.social' });
+    expect(t.created[0]?.facets).toEqual([
+      {
+        index: { byteStart: 16, byteEnd: 34 },
+        features: [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' }],
+      },
+      {
+        index: { byteStart: 42, byteEnd: 55 },
+        features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://example.com/x' }],
+      },
+    ]);
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
+  });
+
+  it('リンクと重なるハンドルには mention facet を付けない', async () => {
+    const t = setup();
+    const post = t.addPost({
+      content: '<p><a href="https://mastodon.example/@alice.bsky.social">@alice.bsky.social</a></p>',
+    });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.created[0]?.facets).toEqual([{
+      index: { byteStart: 0, byteEnd: 18 },
+      features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://mastodon.example/@alice.bsky.social' }],
+    }]);
+  });
+
+  it('解決できないハンドルには facet を付けず、sent にする', async () => {
+    const t = setup();
+    const post = t.addPost({ content: '<p>@nobody.bsky.social こんにちは</p>' });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.query).toHaveBeenCalledTimes(1);
+    expect(t.created[0]?.text).toBe('@nobody.bsky.social こんにちは');
+    expect(t.created[0]).not.toHaveProperty('facets');
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
+  });
+
+  it('ハンドルの解決で例外が起きても、mention facet なしで sent にする', async () => {
+    const t = setup();
+    t.queryBehavior.throws = true;
+    const post = t.addPost({ content: '<p>@alice.bsky.social こんにちは</p>' });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.created[0]?.text).toBe('@alice.bsky.social こんにちは');
+    expect(t.created[0]).not.toHaveProperty('facets');
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
+  });
+
+  it('本文にハンドルが無ければ、ハンドルを解決しない', async () => {
+    const t = setup();
+    const post = t.addPost();
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.query).not.toHaveBeenCalled();
   });
 
   it('予約の途中で例外が起きても reject せず error を返す', async () => {
