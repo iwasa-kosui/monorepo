@@ -216,11 +216,14 @@ export default {
         });
         app.route('/', createWorkerOAuthRouter(runtime.oauth));
         app.route('/api', createWorkerMastodonAppsRouter({ ...runtime.oauth, authn }));
+        const createContext = (mastodonRequest: Request) =>
+          runtime.federation.createContext(mastodonRequest, undefined);
         app.route(
           '/api',
           createWorkerMastodonCoreRouter({
             ...runtime.mastodon,
             authn,
+            createContext,
             instance: {
               domain: admission.identity.hostname,
               title: admission.identity.hostname,
@@ -232,8 +235,6 @@ export default {
           }),
         );
         app.route('/api', createWorkerMastodonTimelinesRouter({ ...runtime.mastodon, authn }));
-        const createContext = (mastodonRequest: Request) =>
-          runtime.federation.createContext(mastodonRequest, undefined);
         app.route(
           '/api',
           createWorkerMastodonStatusesRouter({

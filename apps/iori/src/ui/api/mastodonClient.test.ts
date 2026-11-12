@@ -60,8 +60,8 @@ import {
   unmute,
   unreact,
   unreblog,
-  updateAvatar,
   updateMedia,
+  updateProfile,
   uploadMedia,
 } from './mastodonClient.ts';
 
@@ -1095,7 +1095,7 @@ describe('mastodon client media and avatar writes', () => {
     const fetchMock = stubFetch(jsonResponse(account));
     const file = image();
 
-    const result = await updateAvatar(file);
+    const result = await updateProfile({ avatar: file });
 
     const [url, init] = callOf(fetchMock);
     expect(url).toBe('/api/v1/accounts/update_credentials');
@@ -1103,7 +1103,21 @@ describe('mastodon client media and avatar writes', () => {
     expect(init.credentials).toBe('same-origin');
     expect(init.headers).toEqual({ Accept: 'application/json' });
     expect((init.body as FormData).get('avatar')).toBe(file);
+    expect((init.body as FormData).has('display_name')).toBe(false);
+    expect((init.body as FormData).has('note')).toBe(false);
     expect(result).toEqual(account);
+  });
+
+  it('sends display_name and note, including empty strings, and omits the avatar when none is chosen', async () => {
+    const fetchMock = stubFetch(jsonResponse({ id: 'a1' }));
+
+    await updateProfile({ displayName: '岩佐', note: '', avatar: undefined });
+
+    const [, init] = callOf(fetchMock);
+    const body = init.body as FormData;
+    expect(body.get('display_name')).toBe('岩佐');
+    expect(body.get('note')).toBe('');
+    expect(body.has('avatar')).toBe(false);
   });
 
   it('rejects an avatar update with the server message', async () => {
@@ -1113,7 +1127,7 @@ describe('mastodon client media and avatar writes', () => {
       }),
     );
 
-    const error = await updateAvatar(image()).catch((e: unknown) => e);
+    const error = await updateProfile({ avatar: image() }).catch((e: unknown) => e);
 
     expect((error as Error).message).toBe('Validation failed: Unsupported file type. Allowed: JPEG, PNG, GIF, WebP');
   });

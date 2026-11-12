@@ -407,9 +407,13 @@ export const updateMedia = (id: string, description: string): Promise<MediaAttac
   return send<MediaAttachment>('PUT', `/api/v1/media/${encodeURIComponent(id)}`, body);
 };
 
-export const updateAvatar = (file: File): Promise<CredentialAccount> => {
+export const updateProfile = (
+  { displayName, note, avatar }: Readonly<{ displayName?: string; note?: string; avatar?: File | undefined }>,
+): Promise<CredentialAccount> => {
   const body = new FormData();
-  body.append('avatar', file);
+  if (displayName !== undefined) body.append('display_name', displayName);
+  if (note !== undefined) body.append('note', note);
+  if (avatar !== undefined) body.append('avatar', avatar);
   return send<CredentialAccount>('PATCH', '/api/v1/accounts/update_credentials', body);
 };
 

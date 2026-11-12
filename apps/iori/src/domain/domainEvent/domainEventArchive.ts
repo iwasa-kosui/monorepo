@@ -39,6 +39,7 @@ export const ARCHIVE_FEED_SOURCE_KIND_CHECKED_EVENT_NAMES = [
 
 export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'actor.created',
+  'actor.localProfileUpdated',
   'actor.logoUriUpdated',
   'actor.profileUpdated',
   'article.created',
