@@ -1,7 +1,7 @@
 import { useEffect } from 'hono/jsx';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
-import { detailHref, displayStatus } from '../api/status.ts';
+import { accountHandle, detailHref, displayStatus } from '../api/status.ts';
 import type { HomeItem } from './homeFeed.ts';
 
 type UseKeyboardNavigationProps = Readonly<{
@@ -162,7 +162,7 @@ export const useKeyboardNavigation = ({
           }
           if (post === undefined) break;
           e.preventDefault();
-          onReply(post.id, post.account.username);
+          onReply(post.id, accountHandle(post.account));
           break;
         }
       }
