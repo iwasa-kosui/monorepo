@@ -221,14 +221,14 @@ describe('BlueskyTimelineItemView', () => {
       const html = render({});
 
       expect(html).toContain('class="flex items-center justify-end gap-4 pt-1"');
-      expect(html).toContain('aria-haspopup="menu"');
+      expect(html).toContain('aria-controls=');
       expect(html).not.toContain('title="いいね"');
     });
 
     it('操作のボタンの右端に置く', () => {
       const html = render({}, { onReply: () => {}, onRepost: () => {}, onLike: () => {} });
 
-      expect(html.indexOf('title="いいね"')).toBeLessThan(html.indexOf('aria-haspopup="menu"'));
+      expect(html.indexOf('title="いいね"')).toBeLessThan(html.indexOf('aria-controls='));
     });
   });
 

@@ -37,7 +37,7 @@ export type UsePostActionsReturn = Readonly<{
   repost: (postId: string) => Promise<void>;
   undoRepost: (postId: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
-  muteAccount: (accountId: string) => Promise<void>;
+  muteAccount: (accountId: string, acct: string) => Promise<void>;
   emojiReact: (postId: string, emoji: string) => Promise<void>;
   undoEmojiReact: (postId: string, emoji: string) => Promise<void>;
 }>;
@@ -172,7 +172,8 @@ export const usePostActions = ({
   );
 
   const muteAccount = useCallback(
-    async (accountId: string) => {
+    async (accountId: string, acct: string) => {
+      if (!confirm(`@${acct} をミュートしますか？\nミュートは相手のプロフィール画面で解除できます`)) return;
       try {
         await mute(accountId);
         removeAccountPosts(accountId);

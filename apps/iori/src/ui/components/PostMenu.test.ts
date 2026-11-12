@@ -17,9 +17,20 @@ const findAll = (node: unknown, predicate: (element: Tree) => boolean): Tree[] =
 const byRole = (node: unknown, role: string): Tree[] => findAll(node, (element) => element.props.role === role);
 
 const trigger = (node: unknown): Tree => {
-  const [button] = findAll(node, (element) => element.props['aria-haspopup'] === 'menu');
+  const [button] = findAll(node, (element) => 'aria-controls' in element.props);
   if (button === undefined) throw new Error('trigger not found');
   return button;
+};
+
+const menu = (node: unknown): Tree | undefined => {
+  const id = trigger(node).props['aria-controls'];
+  return findAll(node, (element) => element.props.id === id)[0];
+};
+
+const focusTarget = (node: unknown): ReturnType<typeof vi.fn> => {
+  const focus = vi.fn();
+  (trigger(node).props.ref as { current: unknown }).current = { focus };
+  return focus;
 };
 
 const container = (node: unknown): Tree => {
@@ -28,8 +39,11 @@ const container = (node: unknown): Tree => {
   return element;
 };
 
+const menuItems = (node: unknown): Tree[] =>
+  findAll(menu(node), (element) => element.tag === 'a' || element.tag === 'button');
+
 const menuItem = (node: unknown, index: number): Tree => {
-  const item = byRole(node, 'menuitem')[index];
+  const item = menuItems(node)[index];
   if (item === undefined) throw new Error('menuitem not found');
   return item;
 };
@@ -60,30 +74,49 @@ describe('PostMenu', () => {
     const html = render();
 
     expect(html).toContain('aria-label="その他の操作"');
-    expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-controls=');
     expect(html).toContain('class="h-5 w-5"');
-    expect(html).not.toContain('role="menu"');
-    expect(html).not.toContain('role="status"');
+    expect(html).not.toContain('aria-haspopup');
+    expect(html).not.toContain('role="menu');
+    expect(html).not.toContain('リンクをコピー');
+  });
+
+  it('コピー結果の role=status は、通知が無いときも空のまま常に描く', () => {
+    const [status] = byRole(PostMenu({ items }), 'status');
+
+    expect(status?.tag).toBe('p');
+    expect(status?.children).toEqual(['']);
+    expect(render()).toContain('role="status"');
   });
 
   it('label を渡すとトリガーの aria-label になる', () => {
     expect(render({ label: '投稿のメニュー' })).toContain('aria-label="投稿のメニュー"');
   });
 
-  it('開いた状態では aria-expanded を true にして、role=menu の中に role=menuitem を項目の数だけ並べる', () => {
+  it('開いた状態では aria-expanded を true にして、aria-controls の id を持つ要素に項目を並べる', () => {
     const element = PostMenu({ items, defaultOpen: true });
 
     expect(trigger(element).props['aria-expanded']).toBe('true');
-    expect(byRole(element, 'menu')).toHaveLength(1);
-    expect(byRole(element, 'menuitem').map((item) => item.tag)).toEqual(['a', 'button', 'button']);
+    expect(typeof trigger(element).props['aria-controls']).toBe('string');
+    expect(menu(element)).toBeDefined();
+    expect(menuItems(element).map((item) => item.tag)).toEqual(['a', 'button', 'button']);
+    expect(byRole(element, 'menu')).toHaveLength(0);
+    expect(byRole(element, 'menuitem')).toHaveLength(0);
+  });
+
+  it('メニューの id はカードごとに異なる', () => {
+    const first = trigger(PostMenu({ items })).props['aria-controls'];
+    const second = trigger(PostMenu({ items })).props['aria-controls'];
+
+    expect(first).not.toBe(second);
   });
 
   it('link は別タブで開く a 要素にする', () => {
     const html = render({ defaultOpen: true });
 
     expect(html).toContain(
-      'href="https://remote.example/notes/1" target="_blank" rel="noopener noreferrer" role="menuitem"',
+      'href="https://remote.example/notes/1" target="_blank" rel="noopener noreferrer"',
     );
     expect(html).toContain('元の投稿を開く');
   });
@@ -94,7 +127,7 @@ describe('PostMenu', () => {
     expect(html).toContain('リンクをコピー');
     expect(html).toContain('@alice をミュート');
     expect(html.match(/text-terracotta-dark dark:text-terracotta"/g)).toHaveLength(1);
-    expect(html.match(/type="button" role="menuitem"/g)).toHaveLength(2);
+    expect(html.match(/<button type="button" class="flex w-full/g)).toHaveLength(2);
   });
 
   it('トリガーを押すと、親要素にクリックを伝えない', () => {
@@ -162,13 +195,82 @@ describe('PostMenu', () => {
       expect(event.stopPropagation).not.toHaveBeenCalled();
     });
 
-    it.each(['Enter', ' '])('%j は詳細への遷移などへ伝えない', (key) => {
+    it.each(['Enter', ' ', 'j', 'k', 'n'])('閉じているときの %j は、カードのキー操作のために伝える', (key) => {
       const event = { key, preventDefault: vi.fn(), stopPropagation: vi.fn() };
 
       call(container(PostMenu({ items })), 'onKeyDown', event);
 
+      expect(event.stopPropagation).not.toHaveBeenCalled();
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it.each(['Enter', ' ', 'j'])('開いているときの %j は詳細への遷移などへ伝えない', (key) => {
+      const event = { key, preventDefault: vi.fn(), stopPropagation: vi.fn() };
+
+      call(container(PostMenu({ items, defaultOpen: true })), 'onKeyDown', event);
+
       expect(event.stopPropagation).toHaveBeenCalledOnce();
       expect(event.preventDefault).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('フォーカスの戻し先', () => {
+    it('開いているときに Escape で閉じると、トリガーへフォーカスを戻す', () => {
+      const element = PostMenu({ items, defaultOpen: true });
+      const focus = focusTarget(element);
+
+      call(container(element), 'onKeyDown', { key: 'Escape', preventDefault: () => {}, stopPropagation: () => {} });
+
+      expect(focus).toHaveBeenCalledOnce();
+    });
+
+    it('閉じているときの Escape では、フォーカスを動かさない', () => {
+      const element = PostMenu({ items });
+      const focus = focusTarget(element);
+
+      call(container(element), 'onKeyDown', { key: 'Escape', preventDefault: () => {}, stopPropagation: () => {} });
+
+      expect(focus).not.toHaveBeenCalled();
+    });
+
+    it('link を選ぶと、トリガーへフォーカスを戻す', () => {
+      const element = PostMenu({ items, defaultOpen: true });
+      const focus = focusTarget(element);
+
+      call(menuItem(element, 0), 'onClick');
+
+      expect(focus).toHaveBeenCalledOnce();
+    });
+
+    it('action を選ぶと、トリガーへフォーカスを戻す', () => {
+      const element = PostMenu({ items, defaultOpen: true });
+      const focus = focusTarget(element);
+
+      call(menuItem(element, 2), 'onClick');
+
+      expect(focus).toHaveBeenCalledOnce();
+    });
+
+    it('copy に成功すると、トリガーへフォーカスを戻す', async () => {
+      vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+      const element = PostMenu({ items, defaultOpen: true });
+      const focus = focusTarget(element);
+
+      call(menuItem(element, 1), 'onClick');
+
+      await vi.waitFor(() => expect(focus).toHaveBeenCalledOnce());
+    });
+
+    it('copy に失敗したときは、メニューを開いたままフォーカスを動かさない', async () => {
+      vi.stubGlobal('navigator', {});
+      const element = PostMenu({ items, defaultOpen: true });
+      const focus = focusTarget(element);
+
+      call(menuItem(element, 1), 'onClick');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(focus).not.toHaveBeenCalled();
     });
   });
 });

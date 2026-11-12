@@ -33,6 +33,8 @@ const remote = postToStatus({
 } as unknown as PostWithAuthor);
 const local = postToStatus({ ...source, type: 'local' } as unknown as PostWithAuthor);
 
+const apiUri = 'https://iori.example/api/v1/statuses/post-1';
+
 const findMenu = (node: unknown): { items: readonly PostMenuItem[] } | undefined => {
   if (Array.isArray(node)) return node.map(findMenu).find((found) => found !== undefined);
   if (typeof node !== 'object' || node === null || !('tag' in node)) return undefined;
@@ -62,9 +64,30 @@ describe('PostView の「…」メニュー', () => {
     ]);
   });
 
-  it('url が null なら、リモートでもどちらも出さない', () => {
-    expect(keys({ status: { ...remote, url: null } })).toEqual([]);
+  it('url が null で uri も使えないなら、リモートでもどちらも出さない', () => {
+    expect(keys({ status: { ...remote, url: null, uri: apiUri } })).toEqual([]);
     expect(keys({ status: { ...local, url: null } })).toEqual([]);
+  });
+
+  it('リモートで url が null でも、uri が元サーバーの https の URL ならどちらも出す', () => {
+    const origin = 'https://origin.example/notes/9';
+
+    expect(menuItems({ status: { ...remote, url: null, uri: origin } })).toEqual([
+      { key: 'open-original', label: '元の投稿を開く', kind: 'link', href: origin },
+      { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: origin },
+    ]);
+  });
+
+  it('リモートで url が null のとき、uri が iori の API の URL なら出さない', () => {
+    expect(keys({ status: { ...remote, url: null, uri: apiUri } })).toEqual([]);
+  });
+
+  it('リモートで url が null のとき、uri が https でなければ出さない', () => {
+    expect(keys({ status: { ...remote, url: null, uri: 'http://origin.example/notes/9' } })).toEqual([]);
+  });
+
+  it('ローカルの投稿では url が null なら、uri が https でも出さない', () => {
+    expect(keys({ status: { ...local, url: null, uri: 'https://origin.example/notes/9' } })).toEqual([]);
   });
 
   it('リポストは中身の投稿を対象にする', () => {
@@ -85,7 +108,7 @@ describe('PostView の「…」メニュー', () => {
       expect(mute).toMatchObject({ label: '@alice@remote.example をミュート', kind: 'action', danger: true });
     });
 
-    it('選ぶと、投稿者のアカウント ID を渡して onMute を呼ぶ', () => {
+    it('選ぶと、投稿者のアカウント ID と acct を渡して onMute を呼ぶ', () => {
       const onMute = vi.fn();
       const mute = menuItems({ ...base, onMute }).find((item) => item.kind === 'action');
 
@@ -93,7 +116,7 @@ describe('PostView の「…」メニュー', () => {
       void mute.onSelect();
 
       expect(onMute).toHaveBeenCalledTimes(1);
-      expect(onMute).toHaveBeenCalledWith('actor-1');
+      expect(onMute).toHaveBeenCalledWith('actor-1', 'alice@remote.example');
     });
 
     it('リポストは中身の投稿者をミュートの対象にする', () => {
@@ -105,7 +128,7 @@ describe('PostView の「…」メニュー', () => {
       void mute.onSelect();
 
       expect(onMute).toHaveBeenCalledTimes(1);
-      expect(onMute).toHaveBeenCalledWith('actor-1');
+      expect(onMute).toHaveBeenCalledWith('actor-1', 'alice@remote.example');
     });
 
     it('自分の投稿には出さない', () => {
@@ -126,7 +149,7 @@ describe('PostView の「…」メニュー', () => {
     });
 
     it('url が null でもミュートだけは出す', () => {
-      expect(keys({ ...base, status: { ...remote, url: null } })).toEqual(['mute']);
+      expect(keys({ ...base, status: { ...remote, url: null, uri: apiUri } })).toEqual(['mute']);
     });
   });
 });

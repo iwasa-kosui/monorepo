@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'hono/jsx';
+import { useEffect, useId, useRef, useState } from 'hono/jsx';
 
 export type PostMenuItem =
   | Readonly<{ key: string; label: string; kind: 'link'; href: string }>
@@ -28,7 +28,14 @@ export const PostMenu = ({ items, label = 'その他の操作', defaultOpen = fa
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [notice, setNotice] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const closeAndFocusTrigger = () => {
+    setIsOpen(false);
+    triggerRef.current?.focus();
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -43,7 +50,7 @@ export const PostMenu = ({ items, label = 'その他の操作', defaultOpen = fa
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        setIsOpen(false);
+        closeAndFocusTrigger();
       }
     };
 
@@ -68,7 +75,7 @@ export const PostMenu = ({ items, label = 'その他の操作', defaultOpen = fa
   const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setIsOpen(false);
+      closeAndFocusTrigger();
       showNotice('コピーしました');
     } catch {
       showNotice('コピーできませんでした');
@@ -76,10 +83,10 @@ export const PostMenu = ({ items, label = 'その他の操作', defaultOpen = fa
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    if (!isOpen) return;
     if (e.key === 'Escape') {
-      if (!isOpen) return;
       e.preventDefault();
-      setIsOpen(false);
+      closeAndFocusTrigger();
     }
     e.stopPropagation();
   };
@@ -87,16 +94,22 @@ export const PostMenu = ({ items, label = 'その他の操作', defaultOpen = fa
   return (
     <div
       ref={containerRef}
-      class='relative flex items-center gap-2'
+      class='relative flex items-center'
       onClick={(e: Event) => e.stopPropagation()}
       onKeyDown={handleKeyDown}
     >
-      {notice !== null && <p role='status' class='text-xs text-charcoal-light dark:text-gray-400'>{notice}</p>}
+      <p
+        role='status'
+        class={`text-xs text-charcoal-light dark:text-gray-400${notice === null ? '' : ' mr-2'}`}
+      >
+        {notice ?? ''}
+      </p>
       <button
+        ref={triggerRef}
         type='button'
         aria-label={label}
-        aria-haspopup='menu'
         aria-expanded={isOpen ? 'true' : 'false'}
+        aria-controls={menuId}
         onClick={() => setIsOpen(!isOpen)}
         class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
       >
@@ -117,7 +130,7 @@ export const PostMenu = ({ items, label = 'その他の操作', defaultOpen = fa
       </button>
       {isOpen && (
         <div
-          role='menu'
+          id={menuId}
           class='absolute right-0 bottom-full mb-2 w-max bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark border border-warm-gray-dark dark:border-gray-700 p-2 z-50'
         >
           {items.map((item) =>
@@ -128,8 +141,7 @@ export const PostMenu = ({ items, label = 'その他の操作', defaultOpen = fa
                   href={item.href}
                   target='_blank'
                   rel='noopener noreferrer'
-                  role='menuitem'
-                  onClick={() => setIsOpen(false)}
+                  onClick={closeAndFocusTrigger}
                   class={itemClass(false)}
                 >
                   {item.label}
@@ -139,13 +151,12 @@ export const PostMenu = ({ items, label = 'その他の操作', defaultOpen = fa
                 <button
                   key={item.key}
                   type='button'
-                  role='menuitem'
                   onClick={() => {
                     if (item.kind === 'copy') {
                       void copy(item.text);
                       return;
                     }
-                    setIsOpen(false);
+                    closeAndFocusTrigger();
                     void item.onSelect();
                   }}
                   class={itemClass(item.kind === 'action' && item.danger === true)}

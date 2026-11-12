@@ -35,8 +35,10 @@ type Props = Readonly<{
   onToggleEmojiPicker?: () => void;
   onReply?: (postId: string) => void;
   onShowThread?: (postId: string) => void;
-  onMute?: (accountId: string) => void;
+  onMute?: (accountId: string, acct: string) => void;
 }>;
+
+const isOriginUri = (uri: string): boolean => uri.startsWith('https:') && !uri.includes('/api/v1/statuses/');
 
 export const PostView = (
   {
@@ -77,7 +79,7 @@ export const PostView = (
   const images = post.media_attachments.filter((attachment) => attachment.type === 'image');
   const linkPreviews = post.iori?.link_previews ?? [];
   const reactions = post.iori?.reactions ?? [];
-  const postUrl = post.url ?? undefined;
+  const postUrl = post.url ?? (!isLocalPost && isOriginUri(post.uri) ? post.uri : undefined);
   const canMute = onMute !== undefined
     && isLoggedIn === true
     && currentAccountId !== undefined
@@ -96,7 +98,7 @@ export const PostView = (
           label: `@${post.account.acct} をミュート`,
           kind: 'action',
           danger: true,
-          onSelect: () => onMute?.(post.account.id),
+          onSelect: () => onMute?.(post.account.id, post.account.acct),
         } as const,
       ]
       : []),
