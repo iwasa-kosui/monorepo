@@ -313,19 +313,27 @@ describe('GET /api/v1/statuses/:id/context', () => {
     expect(blockedFocus.status).toBe(200);
   });
 
-  it('ミュートした相手は祖先と子孫から除かない', async () => {
+  it('ミュートした相手の祖先と子孫を除き、起点がミュートした相手でも 404 にしない', async () => {
     const t = setupReadApi();
     const me = await t.signIn();
     const alice = t.seed.addRemoteActor('alice');
+    const bob = t.seed.addRemoteActor('bob');
     t.seed.addFollow(me.actorId, alice.actorId);
+    t.seed.addFollow(me.actorId, bob.actorId);
     const root = t.seed.addRemotePost(alice, 1_000);
-    const mid = t.seed.addLocalPost(me, 2_000, { inReplyToUri: root.uri });
+    const mid = t.seed.addRemotePost(bob, 2_000, { inReplyToUri: root.uri });
+    const fromAlice = t.seed.addRemotePost(alice, 3_000, { inReplyToUri: mid.uri });
+    const fromMe = t.seed.addLocalPost(me, 4_000, { inReplyToUri: mid.uri });
     t.seed.addMute(me.userId, alice.actorId);
 
     const response = await t.request(`/api/v1/statuses/${mid.postId}/context`, { headers: me.bearer });
+    const mutedFocus = await t.request(`/api/v1/statuses/${fromAlice.postId}/context`, { headers: me.bearer });
 
-    const body = await response.json() as { ancestors: unknown[] };
-    expect(body.ancestors.map((item) => StatusSchema.parse(item).id)).toEqual([root.postId]);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ancestors: unknown[]; descendants: unknown[] };
+    expect(body.ancestors).toEqual([]);
+    expect(body.descendants.map((item) => StatusSchema.parse(item).id)).toEqual([fromMe.postId]);
+    expect(mutedFocus.status).toBe(200);
   });
 
   it('未認証では public と unlisted のリモートの投稿だけを祖先と子孫に含め、起点が private なら 404 にする', async () => {

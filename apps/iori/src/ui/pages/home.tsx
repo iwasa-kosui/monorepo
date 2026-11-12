@@ -7,6 +7,7 @@ import { safeUrl } from '../../helper/safeUrl.ts';
 import { fetchPublicTimeline, updateAvatar } from '../api/mastodonClient.ts';
 import { displayStatus, isOwnBoost } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
+import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyStatusNotice } from '../components/BlueskyStatusNotice.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
@@ -15,8 +16,8 @@ import { PostDestinationSelect } from '../components/PostDestinationSelect.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { ReplyDialogShell } from '../components/ReplyDialogShell.tsx';
+import { ReportModal } from '../components/ReportModal.tsx';
 import { TimelineProvider, useTimelineContext } from '../contexts/TimelineContext.tsx';
-import { blueskyReplyExcerpt, blueskyReplyRemaining, canSendBlueskyReply } from '../hooks/blueskyReply.ts';
 import { homeItemKey } from '../hooks/homeFeed.ts';
 import { pullProgress, refreshResultLabel } from '../hooks/pullGesture.ts';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
@@ -228,67 +229,8 @@ const ReplyModal = () => {
   );
 };
 
-const BlueskyReplyModal = () => {
-  const { blueskyReply } = useTimelineContext();
-  const { target, content, isSending, errorText, close, setContent, send } = blueskyReply;
-
-  if (target === null) {
-    return null;
-  }
-
-  const remaining = blueskyReplyRemaining(content);
-  const canSubmit = canSendBlueskyReply(content, isSending);
-
-  return (
-    <ReplyDialogShell
-      onClose={close}
-      onSubmit={() => void send()}
-      isSending={isSending}
-      canSubmit={canSubmit}
-      errorText={errorText}
-      target={
-        <div class='mb-3 rounded-xl border border-warm-gray dark:border-gray-700 p-3 text-sm'>
-          <div class='flex flex-wrap items-baseline gap-x-2'>
-            <span class='font-semibold text-charcoal dark:text-white'>
-              {target.authorDisplayName ?? target.authorHandle}
-            </span>
-            <span class='text-charcoal-light dark:text-gray-400'>@{target.authorHandle}</span>
-          </div>
-          <p class='mt-1 whitespace-pre-wrap break-words text-charcoal-light dark:text-gray-400'>
-            {blueskyReplyExcerpt(target.text)}
-          </p>
-        </div>
-      }
-      counter={
-        <span
-          class={`mr-auto self-center text-sm ${
-            remaining < 0 ? 'text-terracotta font-medium' : 'text-charcoal-light dark:text-gray-400'
-          }`}
-        >
-          {remaining}
-        </span>
-      }
-    >
-      <textarea
-        value={content}
-        onInput={(e) => setContent((e.target as HTMLTextAreaElement).value)}
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-            e.preventDefault();
-            if (canSubmit) void send();
-          }
-        }}
-        placeholder='返信を書く... (⌘+Enter to post)'
-        disabled={isSending}
-        class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all'
-        style={{ minHeight: '150px' }}
-      />
-    </ReplyDialogShell>
-  );
-};
-
 const ThreadModal = () => {
-  const { thread, actions, reply, data } = useTimelineContext();
+  const { thread, actions, reply, reportPost, data } = useTimelineContext();
   const {
     threadModalPostId,
     threadData,
@@ -407,6 +349,8 @@ const ThreadModal = () => {
                           isUndoingRepost={actionState.undoingRepostPostId === post.id}
                           onDelete={actions.deletePost}
                           onMute={actions.muteAccount}
+                          onBlock={actions.blockAccount}
+                          onReport={reportPost.open}
                           isDeleting={actionState.deletingPostId === post.id}
                           onEmojiReact={actions.emojiReact}
                           onUndoEmojiReact={actions.undoEmojiReact}
@@ -436,6 +380,8 @@ const ThreadModal = () => {
                       isUndoingRepost={actionState.undoingRepostPostId === threadData.currentPost.id}
                       onDelete={actions.deletePost}
                       onMute={actions.muteAccount}
+                      onBlock={actions.blockAccount}
+                      onReport={reportPost.open}
                       isDeleting={actionState.deletingPostId === threadData.currentPost.id}
                       onEmojiReact={actions.emojiReact}
                       onUndoEmojiReact={actions.undoEmojiReact}
@@ -466,6 +412,8 @@ const ThreadModal = () => {
                             isUndoingRepost={actionState.undoingRepostPostId === post.id}
                             onDelete={actions.deletePost}
                             onMute={actions.muteAccount}
+                            onBlock={actions.blockAccount}
+                            onReport={reportPost.open}
                             isDeleting={actionState.deletingPostId === post.id}
                             onEmojiReact={actions.emojiReact}
                             onUndoEmojiReact={actions.undoEmojiReact}
@@ -745,9 +693,11 @@ const TimelineList = () => {
     data,
     items,
     actions,
+    reportPost,
     blueskyLike,
     blueskyRepost,
     blueskyReply,
+    blueskyQuote,
     blueskyStatus,
     reply,
     thread,
@@ -805,6 +755,7 @@ const TimelineList = () => {
               dataIndex={index}
               isSelected={selectedIndex === index}
               onReply={blueskyReply.open}
+              onQuote={blueskyQuote.open}
               onLike={blueskyLike.like}
               onUndoLike={blueskyLike.undoLike}
               isLikePending={blueskyLike.pendingUris.has(item.item.uri)}
@@ -832,6 +783,8 @@ const TimelineList = () => {
             isUndoingRepost={actionState.undoingRepostPostId === postId}
             onDelete={actions.deletePost}
             onMute={actions.muteAccount}
+            onBlock={actions.blockAccount}
+            onReport={reportPost.open}
             isDeleting={actionState.deletingPostId === postId}
             onEmojiReact={actions.emojiReact}
             onUndoEmojiReact={actions.undoEmojiReact}
@@ -929,8 +882,33 @@ const ServerTimeline = () => {
   );
 };
 
+const ReportPostModal = () => {
+  const { reportPost } = useTimelineContext();
+
+  return (
+    <>
+      <ReportModal
+        targetLabel={reportPost.target === null ? '' : `@${reportPost.target.acct} の投稿`}
+        isOpen={reportPost.target !== null}
+        isSubmitting={reportPost.isReporting}
+        error={reportPost.error}
+        onSubmit={reportPost.submit}
+        onClose={reportPost.close}
+      />
+      {reportPost.isReported && (
+        <p
+          role='status'
+          class='fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-clay bg-cream dark:bg-gray-800 shadow-clay dark:shadow-clay-dark text-sm text-sage-dark dark:text-sage'
+        >
+          通報しました
+        </p>
+      )}
+    </>
+  );
+};
+
 const HomePage = () => {
-  const { timeline } = useTimelineContext();
+  const { timeline, blueskyReply, blueskyQuote } = useTimelineContext();
   const handlePosted = usePostedHandler();
   const isTimelineReady = timeline.state.status === 'success';
 
@@ -965,8 +943,10 @@ const HomePage = () => {
       <PullToRefreshIndicator />
       <NewPostsPill />
       <ReplyModal />
-      <BlueskyReplyModal />
+      <BlueskyReplyModal dialog={blueskyReply} />
+      <BlueskyQuoteModal dialog={blueskyQuote} />
       <ThreadModal />
+      <ReportPostModal />
       <TimelineList />
       <script src='https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js'></script>
     </>

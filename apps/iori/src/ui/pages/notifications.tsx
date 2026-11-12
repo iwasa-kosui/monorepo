@@ -6,6 +6,7 @@ import {
   fetchNotifications,
   fetchVerifyCredentials,
   isUnauthorizedError,
+  markBlueskyNotificationsSeen,
   NOTIFICATION_TYPES,
   notificationsUrl,
   saveNotificationsMarker,
@@ -18,6 +19,7 @@ import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
 import { useBlueskyStatus } from '../hooks/useBlueskyStatus.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import { latestBlueskyNotificationAt } from './notificationSeen.ts';
 
 type NotificationsData = Readonly<{
   username: string;
@@ -258,6 +260,12 @@ const NotificationsPage = () => {
         if (newest !== undefined) {
           saveNotificationsMarker(newest.id).catch((markerError) => {
             console.error('Failed to save the notifications marker:', markerError);
+          });
+        }
+        const seenAt = latestBlueskyNotificationAt(page.items);
+        if (seenAt !== undefined) {
+          markBlueskyNotificationsSeen(seenAt).catch((seenError) => {
+            console.error('Failed to mark the Bluesky notifications as seen:', seenError);
           });
         }
       } catch (fetchError) {

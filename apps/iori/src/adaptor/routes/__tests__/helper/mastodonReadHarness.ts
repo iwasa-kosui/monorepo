@@ -9,6 +9,7 @@ import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
 import type { BlueskyClient, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
+import type { BlueskyPostSubject } from '../../../../ports/blueskyPostCidResolver.ts';
 import type { BlueskyPostThreadFetcher } from '../../../../ports/blueskyPostThreadFetcher.ts';
 import type { BlueskySearch } from '../../../../ports/blueskySearch.ts';
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
@@ -31,11 +32,16 @@ import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
 import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
 import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
+import { FetchRemoteContextUseCase } from '../../../../useCase/fetchRemoteContext.ts';
+import { FetchRemoteOutboxUseCase } from '../../../../useCase/fetchRemoteOutbox.ts';
+import { FetchReplyNotesRecursiveUseCase } from '../../../../useCase/fetchReplyNotesRecursive.ts';
 import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
+import { MarkBlueskyNotificationsSeenUseCase } from '../../../../useCase/markBlueskyNotificationsSeen.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
+import { QuoteBlueskyPostUseCase } from '../../../../useCase/quoteBlueskyPost.ts';
 import type { RefreshXPostsUseCase } from '../../../../useCase/refreshXPosts.ts';
 import { ReplyToBlueskyPostUseCase } from '../../../../useCase/replyToBlueskyPost.ts';
 import { RepostBlueskyPostUseCase } from '../../../../useCase/repostBlueskyPost.ts';
@@ -77,8 +83,8 @@ import { createD1ArticleResolver } from '../../../d1/article/articleResolver.ts'
 import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
 import { createD1BlockCreatedStore } from '../../../d1/block/blockCreatedStore.ts';
 import { createD1BlockDeletedStore } from '../../../d1/block/blockDeletedStore.ts';
-import { createD1BlockedActorIdsResolverByUserId } from '../../../d1/block/blockedActorIdsResolverByUserId.ts';
 import { createD1BlockedActorsResolverByUserIdWithPagination } from '../../../d1/block/blockedActorsResolverByUserIdWithPagination.ts';
+import { createD1BlockedActorUriResolverByUsername } from '../../../d1/block/blockedActorUriResolverByUsername.ts';
 import { createD1BlockResolver } from '../../../d1/block/blockResolver.ts';
 import { createD1MutedOrBlockedActorIdsResolverByUserId } from '../../../d1/block/mutedOrBlockedActorIdsResolverByUserId.ts';
 import { createD1BlueskyLoginFailureResolver } from '../../../d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
@@ -86,9 +92,11 @@ import { createD1BlueskySyncStatusResolver } from '../../../d1/blueskySyncStatus
 import { createD1BlueskyLikeDeletedStore } from '../../../d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../../../d1/blueskyTimeline/blueskyLikeSavedStore.ts';
 import { createD1BlueskyLikeTargetResolver } from '../../../d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
+import { createD1BlueskyLikeUriResolver } from '../../../d1/blueskyTimeline/blueskyLikeUriResolver.ts';
 import { createD1BlueskyRepostDeletedStore } from '../../../d1/blueskyTimeline/blueskyRepostDeletedStore.ts';
 import { createD1BlueskyRepostSavedStore } from '../../../d1/blueskyTimeline/blueskyRepostSavedStore.ts';
 import { createD1BlueskyRepostTargetResolver } from '../../../d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
+import { createD1BlueskyRepostUriResolver } from '../../../d1/blueskyTimeline/blueskyRepostUriResolver.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../../../d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestItemFeedbackGivenStore.ts';
 import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
@@ -152,6 +160,7 @@ import { createD1NotificationsResolverByPage } from '../../../d1/notification/no
 import { createD1AccountStatusItemsResolverByActorId } from '../../../d1/post/accountStatusItemsResolverByActorId.ts';
 import { createD1LocalPostResolverByUri } from '../../../d1/post/localPostResolverByUri.ts';
 import { createD1LocalPostsResolverByPage } from '../../../d1/post/localPostsResolverByPage.ts';
+import { createD1LocalPostUrisResolverByUris } from '../../../d1/post/localPostUrisResolverByUris.ts';
 import { createD1PostCreatedStore } from '../../../d1/post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../../../d1/post/postDeletedStore.ts';
 import { createD1PostExtrasResolverByPosts } from '../../../d1/post/postExtrasResolverByPosts.ts';
@@ -159,6 +168,7 @@ import { createD1PostResolver } from '../../../d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../../../d1/post/postResolverByUri.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../../../d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../../../d1/post/remotePostUpserter.ts';
+import { createD1RemotePostUrisResolverByUris } from '../../../d1/post/remotePostUrisResolverByUris.ts';
 import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../../../d1/pushSubscription/pushSubscriptionCreatedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../../../d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
@@ -206,6 +216,14 @@ afterEach(() => {
   for (const fixture of fixtures.splice(0)) fixture.sqlite.close();
 });
 
+const resolveBlueskyPostSubject = (
+  entry: string | Readonly<{ cid: string; likeUri?: string; repostUri?: string }> | undefined,
+): BlueskyPostSubject | undefined => {
+  if (entry === undefined) return undefined;
+  if (typeof entry === 'string') return { cid: entry, likeUri: null, repostUri: null };
+  return { cid: entry.cid, likeUri: entry.likeUri ?? null, repostUri: entry.repostUri ?? null };
+};
+
 export const setupReadApi = (
   options: Readonly<{
     textGenerator?: TextGenerator;
@@ -219,6 +237,11 @@ export const setupReadApi = (
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
     blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
     blueskyReplyClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
+    blueskyQuoteClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
+    blueskyPostCids?: Readonly<
+      Record<string, string | Readonly<{ cid: string; likeUri?: string; repostUri?: string }>>
+    >;
+    blueskySeenClient?: Pick<BlueskyClient, 'updateSeen'>;
     blueskySearch?: BlueskySearch;
     refreshXPosts?: RefreshXPostsUseCase;
     scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
@@ -264,7 +287,7 @@ export const setupReadApi = (
     ),
     getDocumentLoader: vi.fn(async (): Promise<unknown> => ({})),
     getActorKeyPairs: vi.fn(async () => []),
-    lookupObject: vi.fn(async (): Promise<unknown> => null),
+    lookupObject: vi.fn(async (_uri?: string, _options?: unknown): Promise<unknown> => null),
   };
   const createContext = () => federation as never;
   const remoteActorLookup = {
@@ -316,6 +339,15 @@ export const setupReadApi = (
   const mediaUploadResolver = createD1MediaUploadResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
   const postImageCreatedStore = createD1PostImageCreatedStore(db);
+  const remotePostUpserter = createD1RemotePostUpserter({
+    postResolverByUri: createD1PostResolverByUri(db),
+    postCreatedStore,
+    postImageCreatedStore,
+    remoteActorCreatedStore,
+    logoUriUpdatedStore,
+    remoteActorProfileUpdatedStore,
+    actorResolverByUri,
+  });
   const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
   const statusAssembler = createStatusAssembler({
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
@@ -357,7 +389,7 @@ export const setupReadApi = (
           repostResolverById: createD1RepostResolverById(db),
           repostResolver,
           threadResolver: createD1ThreadResolver(db, ORIGIN),
-          blockedActorIdsResolverByUserId: createD1BlockedActorIdsResolverByUserId(db),
+          mutedActorIdsResolverByUserId: createD1MutedOrBlockedActorIdsResolverByUserId(db),
           statusAssembler,
           mediaUploadResolver,
           createPostUseCase: CreatePostUseCase.create({
@@ -599,6 +631,8 @@ export const setupReadApi = (
           likeBlueskyPostUseCase: options.blueskyLikeClient === undefined ? undefined : LikeBlueskyPostUseCase.create({
             client: options.blueskyLikeClient,
             targetResolver: createD1BlueskyLikeTargetResolver(db),
+            likeUriResolver: createD1BlueskyLikeUriResolver(db),
+            cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
             savedStore: createD1BlueskyLikeSavedStore(db),
             now: Instant.now,
           }),
@@ -607,6 +641,8 @@ export const setupReadApi = (
             : UnlikeBlueskyPostUseCase.create({
               client: options.blueskyLikeClient,
               targetResolver: createD1BlueskyLikeTargetResolver(db),
+              likeUriResolver: createD1BlueskyLikeUriResolver(db),
+              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
               deletedStore: createD1BlueskyLikeDeletedStore(db),
             }),
           repostBlueskyPostUseCase: options.blueskyRepostClient === undefined
@@ -614,6 +650,8 @@ export const setupReadApi = (
             : RepostBlueskyPostUseCase.create({
               client: options.blueskyRepostClient,
               targetResolver: createD1BlueskyRepostTargetResolver(db),
+              repostUriResolver: createD1BlueskyRepostUriResolver(db),
+              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
               viewerRepostResolver: { resolve: async () => RA.ok(null) },
               savedStore: createD1BlueskyRepostSavedStore(db),
               now: Instant.now,
@@ -623,6 +661,8 @@ export const setupReadApi = (
             : UndoRepostBlueskyPostUseCase.create({
               client: options.blueskyRepostClient,
               targetResolver: createD1BlueskyRepostTargetResolver(db),
+              repostUriResolver: createD1BlueskyRepostUriResolver(db),
+              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
               deletedStore: createD1BlueskyRepostDeletedStore(db),
             }),
           blueskyPostThreadFetcher: options.blueskyPostThreadFetcher,
@@ -633,6 +673,19 @@ export const setupReadApi = (
               query: options.blueskyReplyClient.query,
               targetResolver: createD1BlueskyLikeTargetResolver(db),
               now: Instant.now,
+            }),
+          quoteBlueskyPostUseCase: options.blueskyQuoteClient === undefined
+            ? undefined
+            : QuoteBlueskyPostUseCase.create({
+              client: options.blueskyQuoteClient,
+              query: options.blueskyQuoteClient.query,
+              now: Instant.now,
+            }),
+          markBlueskyNotificationsSeenUseCase: options.blueskySeenClient === undefined
+            ? undefined
+            : MarkBlueskyNotificationsSeenUseCase.create({
+              client: options.blueskySeenClient,
+              now: options.blueskyNow ?? Instant.now,
             }),
           blueskySearch: options.blueskySearch,
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
@@ -757,6 +810,32 @@ export const setupReadApi = (
             userResolver,
             pushSubscriptionCreatedStore: createD1PushSubscriptionCreatedStore(db),
             pushSubscriptionResolverByEndpoint: createD1PushSubscriptionResolverByEndpoint(db),
+          }),
+          fetchRemoteContextUseCase: FetchRemoteContextUseCase.create({
+            origin: ORIGIN,
+            userResolver,
+            postResolver,
+            remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+            localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, ORIGIN),
+            remotePostUpserter,
+            blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+            fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase.create({
+              origin: ORIGIN,
+              postResolverByUri: createD1PostResolverByUri(db),
+              localPostResolverByUri: createD1LocalPostResolverByUri(db, ORIGIN),
+              remotePostUpserter,
+              isBlockedUri: () => false,
+            }),
+            isBlockedUri: () => false,
+          }),
+          fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase.create({
+            origin: ORIGIN,
+            userResolver,
+            actorResolverById: createD1ActorResolverById(db),
+            remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+            localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, ORIGIN),
+            remotePostUpserter,
+            blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
           }),
           allRelaysResolver: createD1AllRelaysResolver(db),
           createContext,

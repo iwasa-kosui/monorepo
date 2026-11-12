@@ -175,12 +175,14 @@ test.describe('一覧を開いても画面が動かない', () => {
     await page.setViewportSize({ width: 1280, height: 400 });
     await page.goto(chapterPagePaths().at(-1) ?? '/');
     await openList(page);
-    const visible = await page.evaluate(() => {
-      const panel = document.querySelector('.page-progress__panel')?.getBoundingClientRect();
-      const here = document.querySelector('.page-progress__panel [aria-current="page"]')?.getBoundingClientRect();
-      return panel !== undefined && here !== undefined && here.top >= panel.top - 1 && here.bottom <= panel.bottom + 1;
-    });
-    expect(visible).toBe(true);
+    await expect.poll(() =>
+      page.evaluate(() => {
+        const panel = document.querySelector('.page-progress__panel')?.getBoundingClientRect();
+        const here = document.querySelector('.page-progress__panel [aria-current="page"]')?.getBoundingClientRect();
+        return panel !== undefined && here !== undefined && here.top >= panel.top - 1
+          && here.bottom <= panel.bottom + 1;
+      })
+    ).toBe(true);
   });
 });
 

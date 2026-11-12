@@ -28,8 +28,8 @@ import { createD1ArticleBodyResolver } from '../adaptor/d1/articleBody/articleBo
 import { createD1ArticleBodyWrittenStore } from '../adaptor/d1/articleBody/articleBodyWrittenStore.ts';
 import { createD1BlockCreatedStore } from '../adaptor/d1/block/blockCreatedStore.ts';
 import { createD1BlockDeletedStore } from '../adaptor/d1/block/blockDeletedStore.ts';
-import { createD1BlockedActorIdsResolverByUserId } from '../adaptor/d1/block/blockedActorIdsResolverByUserId.ts';
 import { createD1BlockedActorsResolverByUserIdWithPagination } from '../adaptor/d1/block/blockedActorsResolverByUserIdWithPagination.ts';
+import { createD1BlockedActorUriResolverByUsername } from '../adaptor/d1/block/blockedActorUriResolverByUsername.ts';
 import { createD1BlockResolver } from '../adaptor/d1/block/blockResolver.ts';
 import { createD1MutedOrBlockedActorIdsResolverByUserId } from '../adaptor/d1/block/mutedOrBlockedActorIdsResolverByUserId.ts';
 import { createD1BlueskyCrosspostStatusReportResolver } from '../adaptor/d1/blueskyCrosspost/blueskyCrosspostStatusReportResolver.ts';
@@ -116,6 +116,7 @@ import {
 import { createD1AccountStatusItemsResolverByActorId } from '../adaptor/d1/post/accountStatusItemsResolverByActorId.ts';
 import { createD1LocalPostResolverByUri } from '../adaptor/d1/post/localPostResolverByUri.ts';
 import { createD1LocalPostsResolverByPage } from '../adaptor/d1/post/localPostsResolverByPage.ts';
+import { createD1LocalPostUrisResolverByUris } from '../adaptor/d1/post/localPostUrisResolverByUris.ts';
 import { createD1PostCreatedStore } from '../adaptor/d1/post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../adaptor/d1/post/postDeletedStore.ts';
 import { createD1PostExtrasResolverByPosts } from '../adaptor/d1/post/postExtrasResolverByPosts.ts';
@@ -123,6 +124,7 @@ import { createD1PostResolver } from '../adaptor/d1/post/postResolver.ts';
 import { createD1PostResolverByUri } from '../adaptor/d1/post/postResolverByUri.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../adaptor/d1/post/postWithAuthorBatch.ts';
 import { createD1RemotePostUpserter } from '../adaptor/d1/post/remotePostUpserter.ts';
+import { createD1RemotePostUrisResolverByUris } from '../adaptor/d1/post/remotePostUrisResolverByUris.ts';
 import { createD1ThreadResolver } from '../adaptor/d1/post/threadResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../adaptor/d1/pushSubscription/pushSubscriptionCreatedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../adaptor/d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
@@ -151,6 +153,7 @@ import { createD1UserResolver } from '../adaptor/d1/user/userResolver.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPasswordResolver.ts';
 import { createD1UserPasswordSetStore } from '../adaptor/d1/userPassword/userPasswordSetStore.ts';
+import { isBlockedUri } from '../adaptor/fedify/blockedInboxDomain.ts';
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
 import { createStatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
@@ -188,6 +191,9 @@ import { DismissNotificationUseCase } from '../useCase/dismissNotification.ts';
 import { EditArticleUseCase } from '../useCase/editArticle.ts';
 import { EditDigestTopicUseCase } from '../useCase/editDigestTopic.ts';
 import { ExchangeTokenUseCase } from '../useCase/exchangeToken.ts';
+import { FetchRemoteContextUseCase } from '../useCase/fetchRemoteContext.ts';
+import { FetchRemoteOutboxUseCase } from '../useCase/fetchRemoteOutbox.ts';
+import { FetchReplyNotesRecursiveUseCase } from '../useCase/fetchReplyNotesRecursive.ts';
 import { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
@@ -295,6 +301,8 @@ export const createWorkerRuntimePorts = async (
     remoteActorProfileUpdatedStore: createD1RemoteActorProfileUpdatedStore(db),
     actorResolverByUri: createD1ActorResolverByUri(db),
   });
+  const postResolverByUri = createD1PostResolverByUri(db);
+  const localPostResolverByUri = createD1LocalPostResolverByUri(db, env.ORIGIN);
   const mediaUploadResolver = createD1MediaUploadResolver(db);
   const oauthApplicationResolverByClientId = createD1OAuthApplicationResolverByClientId(db);
   const accessTokenResolverByTokenHash = createD1AccessTokenResolverByTokenHash(db);
@@ -403,7 +411,6 @@ export const createWorkerRuntimePorts = async (
       likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
       mutedActorsResolverByUserIdWithPagination: createD1MutedActorsResolverByUserIdWithPagination(db),
       blockedActorsResolverByUserIdWithPagination: createD1BlockedActorsResolverByUserIdWithPagination(db),
-      blockedActorIdsResolverByUserId: createD1BlockedActorIdsResolverByUserId(db),
       statusAssembler: createStatusAssembler({
         accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
         postExtrasResolver: createD1PostExtrasResolverByPosts(db, env.ORIGIN),
@@ -638,6 +645,32 @@ export const createWorkerRuntimePorts = async (
         emojiReactDeletedStore: createD1EmojiReactDeletedStore(db),
         emojiReactResolverByActorAndPostAndEmoji,
         postResolver,
+      }),
+      fetchRemoteContextUseCase: FetchRemoteContextUseCase.create({
+        origin: env.ORIGIN,
+        userResolver,
+        postResolver,
+        remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+        localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, env.ORIGIN),
+        remotePostUpserter,
+        blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+        fetchReplyNotesRecursiveUseCase: FetchReplyNotesRecursiveUseCase.create({
+          origin: env.ORIGIN,
+          postResolverByUri,
+          localPostResolverByUri,
+          remotePostUpserter,
+          isBlockedUri: (uri) => isBlockedUri(uri),
+        }),
+        isBlockedUri: (uri) => isBlockedUri(uri),
+      }),
+      fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase.create({
+        origin: env.ORIGIN,
+        userResolver,
+        actorResolverById: createD1ActorResolverById(db),
+        remotePostUrisResolverByUris: createD1RemotePostUrisResolverByUris(db),
+        localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, env.ORIGIN),
+        remotePostUpserter,
+        blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
       }),
     },
     articles: {
