@@ -1,4 +1,5 @@
 import { createBlueskyModerationReader } from '../adaptor/bluesky/blueskyModerationReader.ts';
+import { createBlueskyThreadRootResolver } from '../adaptor/bluesky/blueskyThreadRootResolver.ts';
 import { createD1BlueskyModeratedActorsResolver } from '../adaptor/d1/blueskyModeration/blueskyModeratedActorsResolver.ts';
 import {
   createD1BlueskyBlockDeletedStore,
@@ -13,9 +14,11 @@ import { BlockBlueskyActorUseCase } from '../useCase/blockBlueskyActor.ts';
 import { GetBlueskyModerationStateUseCase } from '../useCase/getBlueskyModerationState.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { MuteBlueskyActorUseCase } from '../useCase/muteBlueskyActor.ts';
+import { MuteBlueskyThreadUseCase } from '../useCase/muteBlueskyThread.ts';
 import { ReportBlueskyActorUseCase } from '../useCase/reportBlueskyActor.ts';
 import { UnblockBlueskyActorUseCase } from '../useCase/unblockBlueskyActor.ts';
 import { UnmuteBlueskyActorUseCase } from '../useCase/unmuteBlueskyActor.ts';
+import { UnmuteBlueskyThreadUseCase } from '../useCase/unmuteBlueskyThread.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createTimelineClient, resolveBlueskyTimelineConfig } from './blueskyTimeline.ts';
 
@@ -23,6 +26,8 @@ export type BlueskyModerationUseCases = Readonly<{
   getState: GetBlueskyModerationStateUseCase;
   mute: MuteBlueskyActorUseCase;
   unmute: UnmuteBlueskyActorUseCase;
+  muteThread: MuteBlueskyThreadUseCase;
+  unmuteThread: UnmuteBlueskyThreadUseCase;
   block: BlockBlueskyActorUseCase;
   unblock: UnblockBlueskyActorUseCase;
   report: ReportBlueskyActorUseCase;
@@ -43,6 +48,7 @@ export const createBlueskyModerationUseCases = (
   const client = createTimelineClient(config, db, deps);
   const reader = createBlueskyModerationReader({ client });
   const resolver = createD1BlueskyModeratedActorsResolver(db);
+  const threadRootResolver = createBlueskyThreadRootResolver({ client });
   const now = Instant.now;
   return {
     getState: GetBlueskyModerationStateUseCase.create({
@@ -56,6 +62,8 @@ export const createBlueskyModerationUseCases = (
     }),
     mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
     unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
+    muteThread: MuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
+    unmuteThread: UnmuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
     block: BlockBlueskyActorUseCase.create({
       client,
       reader,

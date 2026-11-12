@@ -198,6 +198,18 @@ export const StatusSchema = z.object({
 });
 export type Status = z.infer<typeof StatusSchema>;
 
+export const StatusEditSchema = z.object({
+  content: z.string(),
+  spoiler_text: z.string(),
+  sensitive: z.boolean(),
+  created_at: z.string(),
+  account: AccountSchema,
+  poll: z.null(),
+  media_attachments: z.array(MediaAttachmentSchema),
+  emojis: z.array(CustomEmojiSchema),
+});
+export type StatusEdit = z.infer<typeof StatusEditSchema>;
+
 export const TranslationSchema = z.object({
   content: z.string(),
   spoiler_text: z.string(),

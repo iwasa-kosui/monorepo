@@ -10,6 +10,7 @@ import { UserId } from '../../../domain/user/userId.ts';
 import { createD1DirectPostParticipantsResolverByPostId } from '../post/directPostParticipantsResolverByPostId.ts';
 import { createD1PostCreatedStore } from '../post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../post/postDeletedStore.ts';
+import { createD1PostUpdatedStore } from '../post/postUpdatedStore.ts';
 import { createD1RemotePostsPrunedStore } from '../post/remotePostsPrunedStore.ts';
 import { createMastodonSeed, SEED_ORIGIN } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
@@ -130,6 +131,46 @@ describe('direct_post_participants の保存', () => {
 
     expect(directResult.ok && [...directResult.val].sort()).toEqual([aliceUri, kosuiUri].sort());
     expect(publicResult.ok && publicResult.val).toEqual([]);
+  });
+});
+
+describe('direct_post_participants の編集', () => {
+  it('ローカルの direct の投稿を編集すると、新しい参加者を足し、既存の参加者は残す', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const created = createLocal(me, 'direct', [kosuiUri, aliceUri]);
+    await createD1PostCreatedStore(t.db).store(created);
+
+    await createD1PostUpdatedStore(t.db).store(
+      Post.updatePost(Instant.now())(created.aggregateState, {
+        content: '<p>edited</p>',
+        summary: null,
+        sensitive: false,
+        sourceText: 'edited',
+        participantActorUris: [kosuiUri, bobUri],
+      }),
+    );
+
+    expect(participantRows(t, created.aggregateState.postId)).toEqual([aliceUri, bobUri, kosuiUri].sort());
+  });
+
+  it('ローカルの public の投稿を編集しても参加者は保存しない', async () => {
+    const t = setup();
+    const me = t.seed.addLocalActor('kosui');
+    const created = createLocal(me, 'public', []);
+    await createD1PostCreatedStore(t.db).store(created);
+
+    await createD1PostUpdatedStore(t.db).store(
+      Post.updatePost(Instant.now())(created.aggregateState, {
+        content: '<p>edited</p>',
+        summary: null,
+        sensitive: false,
+        sourceText: 'edited',
+        participantActorUris: [kosuiUri, bobUri],
+      }),
+    );
+
+    expect(rowCount(t)).toEqual({ n: 0 });
   });
 });
 

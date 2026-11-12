@@ -51,6 +51,7 @@ type Input =
   & Readonly<{
     postId: PostId;
     content: string;
+    sourceText?: string;
     summary?: string | null;
     sensitive?: boolean;
     visibility?: Visibility;
@@ -235,7 +236,9 @@ const create = ({
       }),
       RA.andBind(
         'postEvent',
-        ({ actor, content, inReplyToUri, summary, sensitive, visibility, quoteUri, participantActorUris }) => {
+        (
+          { actor, content, sourceText, inReplyToUri, summary, sensitive, visibility, quoteUri, participantActorUris },
+        ) => {
           const postEvent = Post.createPost(now)({
             actorId: actor.id,
             content: quoteUri === undefined ? content : appendQuoteInline(content, quoteUri),
@@ -245,6 +248,7 @@ const create = ({
             sensitive,
             visibility,
             quoteUri,
+            sourceText,
             participantActorUris,
           });
           return RA.ok(postEvent);
