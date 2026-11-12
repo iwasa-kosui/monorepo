@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'hono/jsx';
 
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import {
+  createOffscreenObserver,
   type HlsConstructor,
+  type ObserveOffscreen,
+  playButtonLabel,
   startVideoPlayback,
   type VideoAspectRatio,
   videoAspectRatioStyle,
@@ -22,6 +25,11 @@ const frameClass = 'relative block w-full max-h-96 overflow-hidden rounded-xl';
 const posterBackgroundClass = 'bg-sand dark:bg-gray-700';
 const posterClass = 'absolute inset-0 h-full w-full object-cover';
 
+const observeOffscreen: ObserveOffscreen = (target, onOffscreen) =>
+  createOffscreenObserver(
+    typeof IntersectionObserver === 'undefined' ? undefined : (callback) => new IntersectionObserver(callback),
+  )(target, onOffscreen);
+
 const loadHls = async (): Promise<HlsConstructor> => (await import('hls.js')).default as unknown as HlsConstructor;
 
 export const BlueskyVideoPlayer = ({ thumbnail, playlist, aspectRatio, alt, bskyHref }: Props) => {
@@ -29,8 +37,11 @@ export const BlueskyVideoPlayer = ({ thumbnail, playlist, aspectRatio, alt, bsky
   const playlistUrl = safeAbsoluteUrl(playlist);
   const [phase, setPhase] = useState<Phase>(playlistUrl === undefined ? 'link' : 'poster');
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fallbackRef = useRef<HTMLElement>(null);
+  const failedWhilePlaying = useRef(false);
   const label = videoLabel(alt);
   const style = videoAspectRatioStyle(aspectRatio);
+  const linkHref = bskyHref ?? playlistUrl;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -39,9 +50,20 @@ export const BlueskyVideoPlayer = ({ thumbnail, playlist, aspectRatio, alt, bsky
       video,
       playlist: playlistUrl,
       loadHls,
-      onFail: () => setPhase('link'),
+      observeOffscreen,
+      onFail: () => {
+        failedWhilePlaying.current = true;
+        setPhase('link');
+      },
     });
+    video.focus();
     return () => playback.stop();
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== 'link' || !failedWhilePlaying.current) return;
+    failedWhilePlaying.current = false;
+    fallbackRef.current?.focus();
   }, [phase]);
 
   if (phase === 'playing') {
@@ -59,27 +81,44 @@ export const BlueskyVideoPlayer = ({ thumbnail, playlist, aspectRatio, alt, bsky
     );
   }
   if (phase === 'link') {
-    return (
-      <a
-        href={bskyHref ?? playlistUrl}
-        target='_blank'
-        rel='noopener noreferrer'
-        class={`${frameClass} ${posterBackgroundClass}`}
-        style={style}
-      >
+    const content = (
+      <>
         {thumbnailUrl !== undefined && <img src={thumbnailUrl} alt={label} class={posterClass} loading='lazy' />}
         <span class='absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white'>
-          動画を Bluesky で開く
+          {linkHref === undefined ? '動画を再生できません' : '動画を Bluesky で開く'}
         </span>
-      </a>
+      </>
     );
+    return linkHref === undefined
+      ? (
+        <div
+          ref={fallbackRef}
+          tabindex={-1}
+          class={`${frameClass} ${posterBackgroundClass}`}
+          style={style}
+        >
+          {content}
+        </div>
+      )
+      : (
+        <a
+          ref={fallbackRef}
+          href={linkHref}
+          target='_blank'
+          rel='noopener noreferrer'
+          class={`${frameClass} ${posterBackgroundClass}`}
+          style={style}
+        >
+          {content}
+        </a>
+      );
   }
   return (
     <div class={`${frameClass} ${posterBackgroundClass}`} style={style}>
       {thumbnailUrl !== undefined && <img src={thumbnailUrl} alt={label} class={posterClass} loading='lazy' />}
       <button
         type='button'
-        aria-label='動画を再生'
+        aria-label={playButtonLabel(alt)}
         onClick={() => setPhase('playing')}
         class='absolute inset-0 flex h-full w-full items-center justify-center bg-black/10 transition-colors hover:bg-black/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white'
       >

@@ -18,7 +18,7 @@ describe('BlueskyVideoPlayer', () => {
     const html = render();
 
     expect(html).toContain('<img src="https://video.example/thumb.jpg"');
-    expect(html).toMatch(/<button type="button" aria-label="動画を再生"/);
+    expect(html).toMatch(/<button type="button" aria-label="動画を再生: 走る猫"/);
     expect(html).not.toContain('<video');
     expect(html).not.toContain('m3u8');
     expect(html).not.toContain('bsky.app');
@@ -42,15 +42,28 @@ describe('BlueskyVideoPlayer', () => {
     const html = render({ thumbnail: null });
 
     expect(html).not.toContain('<img');
-    expect(html).toContain('aria-label="動画を再生"');
+    expect(html).toContain('aria-label="動画を再生: 走る猫"');
+  });
+
+  it('alt が無ければ再生ボタンの名前は「動画を再生」だけにする', () => {
+    expect(render({ alt: null })).toContain('aria-label="動画を再生"');
   });
 
   it('playlist が http/https でなければ再生ボタンを出さず、bsky.app のリンクにする', () => {
     const html = render({ playlist: 'javascript:alert(1)' });
 
     expect(html).not.toContain('<button');
-    expect(html).toContain(
-      '<a href="https://bsky.app/profile/did:plc:author/post/3kabc" target="_blank" rel="noopener noreferrer"',
+    expect(html).toMatch(
+      /<a [^>]*href="https:\/\/bsky\.app\/profile\/did:plc:author\/post\/3kabc" target="_blank" rel="noopener noreferrer"/,
     );
+  });
+
+  it('playlist も bsky.app の URL も無ければ、href の無い a ではなく tabindex 付きの div にする', () => {
+    const html = render({ playlist: 'javascript:alert(1)', bskyHref: undefined });
+
+    expect(html).not.toContain('<a');
+    expect(html).not.toContain('<button');
+    expect(html).toMatch(/<div [^>]*tabindex="-1"/);
+    expect(html).toContain('動画を再生できません');
   });
 });

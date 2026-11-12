@@ -147,8 +147,8 @@ importers:
         specifier: 5.11.2
         version: 5.11.2
       hls.js:
-        specifier: 1.5.20
-        version: 1.5.20
+        specifier: 1.7.4
+        version: 1.7.4
       hono:
         specifier: 4.11.1
         version: 4.11.1
@@ -6299,8 +6299,8 @@ packages:
   hey-listen@1.0.8:
     resolution: {integrity: sha512-COpmrF2NOg4TBWUJ5UVyaCU2A88wEMkUPK4hNqyCkqHbxT92BbvfjoSozkAIIm6XhicGlJHhFdullInrdhwU8Q==}
 
-  hls.js@1.5.20:
-    resolution: {integrity: sha512-uu0VXUK52JhihhnN/MVVo1lvqNNuhoxkonqgO3IpjvQiGpJBdIXMGkofjQb/j9zvV7a1SW8U9g1FslWx/1HOiQ==}
+  hls.js@1.7.4:
+    resolution: {integrity: sha512-3GlxGdPvT2YHvQYOt+yOzT/DEior/qJVNIylHA77kgeoBTdQQqi70GwefNEUmHQeNGyjC8U62+bruqW/Tpm+tg==}
 
   hono@4.11.1:
     resolution: {integrity: sha512-KsFcH0xxHes0J4zaQgWbYwmz3UPOOskdqZmItstUG93+Wk1ePBLkLGwbP9zlmh1BFUiL8Qp+Xfu9P7feJWpGNg==}
@@ -16400,7 +16400,7 @@ snapshots:
 
   hey-listen@1.0.8: {}
 
-  hls.js@1.5.20: {}
+  hls.js@1.7.4: {}
 
   hono@4.11.1: {}
 
