@@ -2,25 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import {
-  bookmark,
-  bookmarksUrl,
-  failureMessage,
-  fetchBookmarks,
-  isUnauthorizedError,
-  unbookmark,
-} from '../api/mastodonClient.ts';
+import { bookmarksUrl, fetchBookmarks, isUnauthorizedError } from '../api/mastodonClient.ts';
 import { readPageCache, writePageCache } from '../api/pageCache.ts';
 import { clearAllCache } from '../api/responseCache.ts';
 import { updateStatusesByPostId } from '../api/status.ts';
 import { BlueskyBookmarksList } from '../components/BlueskyBookmarksList.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { statusActionProps } from '../components/statusActionProps.ts';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
-import { runOptimisticBookmark } from '../hooks/optimisticBookmark.ts';
-import { runExclusive } from '../hooks/optimisticFavourite.ts';
 import { useBlueskyStatus } from '../hooks/useBlueskyStatus.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 import {
   BOOKMARKS_SOURCE_TABS,
   type BookmarksSource,
@@ -46,7 +39,6 @@ const FediverseBookmarks = () => {
   const [error, setError] = useState('');
   const [isFirstPageSettled, setIsFirstPageSettled] = useState(false);
   const isLoadingMoreRef = useRef(false);
-  const bookmarkInFlightRef = useRef<Set<string>>(null);
 
   useEffect(() => {
     const loadBookmarks = async () => {
@@ -92,20 +84,7 @@ const FediverseBookmarks = () => {
     );
   };
 
-  const changeBookmark = (postId: string, bookmarked: boolean) =>
-    runExclusive(bookmarkInFlightRef.current ??= new Set<string>(), postId, async () => {
-      try {
-        await runOptimisticBookmark({
-          postId,
-          bookmarked,
-          request: bookmarked ? bookmark : unbookmark,
-          updateTimelineItem: updateStatus,
-        });
-      } catch (changeError) {
-        console.error('Failed to change bookmark:', changeError);
-        alert(failureMessage(bookmarked ? 'bookmark' : 'remove bookmark', changeError));
-      }
-    });
+  const actions = useStatusListActions(updateStatus);
 
   if (isLoading) {
     return (
@@ -144,8 +123,7 @@ const FediverseBookmarks = () => {
                 key={status.id}
                 status={status}
                 isLoggedIn
-                onBookmark={(postId) => changeBookmark(postId, true)}
-                onUndoBookmark={(postId) => changeBookmark(postId, false)}
+                {...statusActionProps(actions, status)}
               />
             ))
           )

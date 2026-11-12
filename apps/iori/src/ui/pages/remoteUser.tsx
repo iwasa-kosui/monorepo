@@ -8,7 +8,6 @@ import { openFediverseConversation } from '../api/fediverseConversationClient.ts
 import {
   block,
   failureMessage,
-  favourite,
   fetchAccount,
   fetchAccountStatuses,
   fetchRelationshipOrSignedOut,
@@ -20,17 +19,17 @@ import {
   unblock,
   unfollow,
   unmute,
-  votePoll,
 } from '../api/mastodonClient.ts';
-import { isLocalAccount, updateStatusesByPostId, withPoll } from '../api/status.ts';
+import { isLocalAccount, updateStatusesByPostId } from '../api/status.ts';
 import { CustomEmojiText } from '../components/CustomEmojiText.tsx';
 import { PostView } from '../components/PostView.tsx';
 import type { ReportCategory } from '../components/ReportModal.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
+import { statusActionProps, type StatusActions } from '../components/statusActionProps.ts';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { fediverseChatPath, fediverseErrorMessageOf } from '../hooks/fediverseConversation.ts';
-import { runExclusive, runOptimisticFavourite } from '../hooks/optimisticFavourite.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 import { shouldReloadStatuses } from './remoteUserStatuses.ts';
 
 type Props = Readonly<{
@@ -40,8 +39,7 @@ type Props = Readonly<{
   isMuted: boolean;
   isBlocked: boolean;
   isLoggedIn: boolean;
-  onLike: (postId: string) => Promise<void>;
-  onVote: (postId: string, choices: readonly number[]) => Promise<void>;
+  actions?: StatusActions;
   onFollow: () => Promise<void>;
   onUnfollow: () => Promise<void>;
   onMute: () => Promise<void>;
@@ -51,7 +49,6 @@ type Props = Readonly<{
   onReportSubmit: (input: { category: ReportCategory; comment: string }) => void;
   onBlock: () => Promise<void>;
   onUnblock: () => Promise<void>;
-  likingPostId: string | null;
   isMuting: boolean;
   isBlocking: boolean;
   isTogglingFollow: boolean;
@@ -80,8 +77,7 @@ export const RemoteUserPage = ({
   isMuted,
   isBlocked,
   isLoggedIn,
-  onLike,
-  onVote,
+  actions,
   onFollow,
   onUnfollow,
   onMute,
@@ -91,7 +87,6 @@ export const RemoteUserPage = ({
   onReportSubmit,
   onBlock,
   onUnblock,
-  likingPostId,
   isMuting,
   isBlocking,
   isTogglingFollow,
@@ -460,10 +455,8 @@ export const RemoteUserPage = ({
             <PostView
               key={status.id}
               status={status}
-              onLike={onLike}
-              onVote={onVote}
-              isLiking={likingPostId === status.id}
               isLoggedIn={isLoggedIn}
+              {...statusActionProps(isLoggedIn ? actions : undefined, status)}
             />
           ))
         )}
@@ -507,8 +500,6 @@ const getActorIdFromUrl = () => {
 const App = () => {
   const isFetchingMoreRef = useRef(false);
   const hasLoadedMoreRef = useRef(false);
-  const favouriteInFlightRef = useRef<Set<string>>(null);
-  const [likingPostId, setLikingPostId] = useState<string | null>(null);
   const [isMuting, setIsMuting] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
@@ -607,28 +598,7 @@ const App = () => {
     );
   };
 
-  const handleLike = (postId: string) =>
-    runExclusive(favouriteInFlightRef.current ??= new Set<string>(), postId, async () => {
-      setLikingPostId(postId);
-      try {
-        await runOptimisticFavourite({
-          postId,
-          favourited: true,
-          request: favourite,
-          updateTimelineItem: updateStatus,
-        });
-      } catch (error) {
-        console.error('Failed to like:', error);
-        alert(failureMessage('like', error));
-      } finally {
-        setLikingPostId(null);
-      }
-    });
-
-  const handleVote = async (postId: string, choices: readonly number[]) => {
-    const poll = await votePoll(postId, choices);
-    updateStatus(postId, (status) => withPoll(status, poll));
-  };
+  const actions = useStatusListActions(updateStatus);
 
   const handleFollow = async () => {
     if (!data || 'error' in data) return;
@@ -786,8 +756,7 @@ const App = () => {
       isMuted={data.isMuted}
       isBlocked={data.isBlocked}
       isLoggedIn={data.isLoggedIn}
-      onLike={handleLike}
-      onVote={handleVote}
+      actions={actions}
       onFollow={handleFollow}
       onUnfollow={handleUnfollow}
       onMute={handleMute}
@@ -797,7 +766,6 @@ const App = () => {
       onReportSubmit={handleReportSubmit}
       onBlock={handleBlock}
       onUnblock={handleUnblock}
-      likingPostId={likingPostId}
       isMuting={isMuting}
       isBlocking={isBlocking}
       isTogglingFollow={isTogglingFollow}

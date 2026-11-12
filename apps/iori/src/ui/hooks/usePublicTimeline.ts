@@ -6,6 +6,7 @@ import {
   emptyPublicTimeline,
   type PublicTimelineState,
   stateAfterLoadMore,
+  stateAfterUpdate,
   stateFromFirstPage,
 } from './publicTimelinePages.ts';
 import { useInfiniteScroll } from './useInfiniteScroll.ts';
@@ -13,6 +14,7 @@ import { useInfiniteScroll } from './useInfiniteScroll.ts';
 export type UsePublicTimelineReturn = Readonly<{
   items: readonly Status[];
   setFirstPage: (page: Page<Status>) => void;
+  updateItem: (postId: string, updater: (status: Status) => Status) => void;
 }>;
 
 export const usePublicTimeline = (scope: PublicTimelineScope): UsePublicTimelineReturn => {
@@ -21,6 +23,10 @@ export const usePublicTimeline = (scope: PublicTimelineScope): UsePublicTimeline
 
   const setFirstPage = useCallback((page: Page<Status>) => {
     setState(stateFromFirstPage(page));
+  }, []);
+
+  const updateItem = useCallback((postId: string, updater: (status: Status) => Status) => {
+    setState((prev) => stateAfterUpdate(prev, postId, updater));
   }, []);
 
   const loadMore = useCallback(async (maxId: string) => {
@@ -38,5 +44,5 @@ export const usePublicTimeline = (scope: PublicTimelineScope): UsePublicTimeline
 
   useInfiniteScroll({ nextCursor: state.nextMaxId, onLoadMore: loadMore });
 
-  return { items: state.items, setFirstPage };
+  return { items: state.items, setFirstPage, updateItem };
 };

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { Page } from '../api/mastodonClient.ts';
-import { stateAfterLoadMore, stateFromFirstPage } from './publicTimelinePages.ts';
+import { stateAfterLoadMore, stateAfterUpdate, stateFromFirstPage } from './publicTimelinePages.ts';
 
 const status = (id: string) => ({ id }) as Status;
 
@@ -61,5 +61,28 @@ describe('stateAfterLoadMore', () => {
     const state = stateAfterLoadMore(first, page(['c'], undefined), 'b');
 
     expect(state.nextMaxId).toBeUndefined();
+  });
+});
+
+describe('stateAfterUpdate', () => {
+  const first = stateFromFirstPage(page(['a', 'b'], 'b'));
+
+  it('updates only the status with the post id and keeps the next cursor', () => {
+    const state = stateAfterUpdate(first, 'b', (s) => ({ ...s, favourited: true }));
+
+    expect(state.items.map((s) => s.favourited)).toEqual([undefined, true]);
+    expect(state.nextMaxId).toBe('b');
+  });
+
+  it('finds a boosted post by the id of the original post', () => {
+    const boosted = { ...first, items: [{ id: 'boost', reblog: status('a') } as Status] };
+
+    const state = stateAfterUpdate(boosted, 'a', (s) => ({ ...s, reblogged: true }));
+
+    expect(state.items[0]?.reblogged).toBe(true);
+  });
+
+  it('keeps the items as they are when no status has the post id', () => {
+    expect(ids(stateAfterUpdate(first, 'x', (s) => ({ ...s, favourited: true })).items)).toEqual(['a', 'b']);
   });
 });

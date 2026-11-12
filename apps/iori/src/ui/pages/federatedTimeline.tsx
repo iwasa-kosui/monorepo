@@ -4,7 +4,9 @@ import { render } from 'hono/jsx/dom';
 import { fetchPublicTimeline, isUnauthorizedError } from '../api/mastodonClient.ts';
 import { clearAllCache } from '../api/responseCache.ts';
 import { PostView } from '../components/PostView.tsx';
+import { statusActionProps } from '../components/statusActionProps.ts';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
+import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 
 type Relay = {
   relayId: string;
@@ -13,7 +15,8 @@ type Relay = {
 };
 
 const FederatedTimelinePage = () => {
-  const { items, setFirstPage } = usePublicTimeline('remote');
+  const { items, setFirstPage, updateItem } = usePublicTimeline('remote');
+  const actions = useStatusListActions(updateItem);
   const [relays, setRelays] = useState<Relay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showRelayModal, setShowRelayModal] = useState(false);
@@ -167,7 +170,9 @@ const FederatedTimelinePage = () => {
 
       {items.length > 0
         ? (
-          items.map((status) => <PostView key={status.id} status={status} isLoggedIn />)
+          items.map((status) => (
+            <PostView key={status.id} status={status} isLoggedIn {...statusActionProps(actions, status)} />
+          ))
         )
         : (
           <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 text-center'>

@@ -1,5 +1,6 @@
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { Page } from '../api/mastodonClient.ts';
+import { updateStatusesByPostId } from '../api/status.ts';
 import { appendUniqueById } from './appendUnique.ts';
 
 export type PublicTimelineState = Readonly<{
@@ -22,3 +23,9 @@ export const stateAfterLoadMore = (
   items: appendUniqueById(prev.items, page.items),
   nextMaxId: page.items.length === 0 || page.nextMaxId === maxId ? undefined : page.nextMaxId,
 });
+
+export const stateAfterUpdate = (
+  prev: PublicTimelineState,
+  postId: string,
+  updater: (status: Status) => Status,
+): PublicTimelineState => ({ ...prev, items: updateStatusesByPostId(prev.items, postId, updater) });

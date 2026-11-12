@@ -5,12 +5,15 @@ import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { favouritesUrl, fetchFavourites, isUnauthorizedError } from '../api/mastodonClient.ts';
 import { readPageCache, writePageCache } from '../api/pageCache.ts';
 import { clearAllCache } from '../api/responseCache.ts';
+import { updateStatusesByPostId } from '../api/status.ts';
 import { BlueskyLikedPosts } from '../components/BlueskyLikedPosts.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { statusActionProps } from '../components/statusActionProps.ts';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
 import { canStartPageLoadMore } from '../hooks/loadMoreGuard.ts';
 import { useBlueskyStatus } from '../hooks/useBlueskyStatus.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
+import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 import {
   LIKED_POSTS_SOURCE_TABS,
   type LikedPostsSource,
@@ -74,6 +77,14 @@ const FediverseLikedPosts = () => {
 
   useInfiniteScroll({ nextCursor: data?.nextMaxId, onLoadMore: loadMore, isFirstPageSettled });
 
+  const updateStatus = (postId: string, updater: (status: Status) => Status) => {
+    setData((prev) =>
+      prev === null ? prev : { ...prev, statuses: updateStatusesByPostId(prev.statuses, postId, updater) }
+    );
+  };
+
+  const actions = useStatusListActions(updateStatus);
+
   if (isLoading) {
     return (
       <>
@@ -102,7 +113,9 @@ const FediverseLikedPosts = () => {
       <div class='space-y-6 py-2'>
         {data.statuses.length > 0
           ? (
-            data.statuses.map((status) => <PostView key={status.id} status={status} isLoggedIn />)
+            data.statuses.map((status) => (
+              <PostView key={status.id} status={status} isLoggedIn {...statusActionProps(actions, status)} />
+            ))
           )
           : (
             <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-8 text-center'>
