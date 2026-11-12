@@ -400,6 +400,140 @@ describe('createD1PostExtrasResolverByPosts', () => {
       inReplyTo: { postId: parent.postId, actorId: alice.actorId },
       myReactionEmojis: ['🎉'],
       blueskyCrosspost: null,
+      quote: null,
+    });
+  });
+
+  describe('引用', () => {
+    const quoteOf = async (
+      t: ReturnType<typeof setup>,
+      post: { postId: string },
+      currentActorId: ActorId | undefined,
+    ) => {
+      const posts = await createD1PostsWithAuthorResolverByPostIds(t.db).resolve({
+        postIds: [PostId.orThrow(post.postId)],
+        currentActorId,
+      });
+      const loaded = posts.ok ? [...posts.val.values()] : [];
+      const extras = await createD1PostExtrasResolverByPosts(t.db, SEED_ORIGIN).resolve({
+        posts: loaded,
+        currentActorId,
+      });
+      return extras.ok ? extras.val.get(PostId.orThrow(post.postId))?.quote : undefined;
+    };
+    const addQuote = (t: ReturnType<typeof setup>, postId: string, quoteUri: string) =>
+      t.sqlite.prepare('INSERT INTO post_quotes(postId,quoteUri) VALUES (?,?)').run(postId, quoteUri);
+
+    it('リモートの引用先を remote_posts.uri で引く', async () => {
+      const t = setup();
+      const me = t.seed.addLocalActor('kosui');
+      const alice = t.seed.addRemoteActor('alice');
+      const quoted = t.seed.addRemotePost(alice, 1_000, { visibility: 'public' });
+      const post = t.seed.addRemotePost(alice, 2_000, { visibility: 'public' });
+      addQuote(t, post.postId, quoted.uri);
+
+      const quote = await quoteOf(t, post, actorId(me.actorId));
+
+      expect(quote).toMatchObject({ uri: quoted.uri, post: { postId: quoted.postId } });
+    });
+
+    it('ローカル投稿の URI の引用先を投稿 ID で引く', async () => {
+      const t = setup();
+      const me = t.seed.addLocalActor('kosui');
+      const alice = t.seed.addRemoteActor('alice');
+      const quoted = t.seed.addLocalPost(me, 1_000);
+      const post = t.seed.addRemotePost(alice, 2_000, { visibility: 'public' });
+      addQuote(t, post.postId, quoted.uri);
+
+      const quote = await quoteOf(t, post, actorId(me.actorId));
+
+      expect(quote).toMatchObject({ uri: quoted.uri, post: { postId: quoted.postId } });
+    });
+
+    it('引用が無い投稿は quote を null にする', async () => {
+      const t = setup();
+      const me = t.seed.addLocalActor('kosui');
+      const post = t.seed.addLocalPost(me, 1_000);
+
+      expect(await quoteOf(t, post, actorId(me.actorId))).toBeNull();
+    });
+
+    it('引用先が未取得、削除済み、見えない投稿のとき post を null にして URI は残す', async () => {
+      const t = setup();
+      const me = t.seed.addLocalActor('kosui');
+      const alice = t.seed.addRemoteActor('alice');
+      const deleted = t.seed.addRemotePost(alice, 1_000, { visibility: 'public' });
+      t.sqlite.prepare('UPDATE posts SET deletedAt = ? WHERE postId = ?').run(1_500, deleted.postId);
+      const hidden = t.seed.addRemotePost(alice, 1_100, { visibility: 'private' });
+      const unknownUri = 'https://remote.example/notes/unknown';
+      const cases = [deleted.uri, hidden.uri, unknownUri];
+      const posts = cases.map((uri, index) => {
+        const post = t.seed.addRemotePost(alice, 2_000 + index, { visibility: 'public' });
+        addQuote(t, post.postId, uri);
+        return post;
+      });
+
+      const quotes = await Promise.all(posts.map((post) => quoteOf(t, post, actorId(me.actorId))));
+
+      expect(quotes).toEqual(cases.map((uri) => ({ uri, post: null })));
+    });
+
+    it('フォローしている相手のフォロワー限定の引用先は見え、フォローしていなければ見えない', async () => {
+      const t = setup();
+      const me = t.seed.addLocalActor('kosui');
+      const alice = t.seed.addRemoteActor('alice');
+      const quoted = t.seed.addRemotePost(alice, 1_000, { visibility: 'private' });
+      const post = t.seed.addRemotePost(alice, 2_000, { visibility: 'public' });
+      addQuote(t, post.postId, quoted.uri);
+
+      expect((await quoteOf(t, post, actorId(me.actorId)))?.post).toBeNull();
+      t.seed.addFollow(me.actorId, alice.actorId);
+      expect((await quoteOf(t, post, actorId(me.actorId)))?.post?.postId).toBe(quoted.postId);
+    });
+
+    it('閲覧者が無いときは public と unlisted の引用先だけ出す', async () => {
+      const t = setup();
+      const me = t.seed.addLocalActor('kosui');
+      const alice = t.seed.addRemoteActor('alice');
+      const targets = {
+        public: t.seed.addRemotePost(alice, 1_000, { visibility: 'public' }),
+        unlisted: t.seed.addRemotePost(alice, 1_001, { visibility: 'unlisted' }),
+        private: t.seed.addRemotePost(alice, 1_002, { visibility: 'private' }),
+        direct: t.seed.addRemotePost(alice, 1_003, { visibility: 'direct' }),
+        unknown: t.seed.addRemotePost(alice, 1_004, { visibility: null }),
+        local: t.seed.addLocalPost(me, 1_005),
+      };
+      const entries = Object.entries(targets).map(([name, target]) => {
+        const post = t.seed.addRemotePost(alice, 2_000, { visibility: 'public' });
+        addQuote(t, post.postId, target.uri);
+        return { name, post, target };
+      });
+
+      const visible = await Promise.all(
+        entries.map(async ({ name, post, target }) =>
+          [name, (await quoteOf(t, post, undefined))?.post?.postId === target.postId] as const
+        ),
+      );
+
+      expect(Object.fromEntries(visible)).toEqual({
+        public: true,
+        unlisted: true,
+        private: false,
+        direct: false,
+        unknown: false,
+        local: true,
+      });
+    });
+
+    it('ローカルの URI の形でも、リモート投稿の ID を指していれば引かない', async () => {
+      const t = setup();
+      const me = t.seed.addLocalActor('kosui');
+      const alice = t.seed.addRemoteActor('alice');
+      const remote = t.seed.addRemotePost(alice, 1_000, { visibility: 'public' });
+      const post = t.seed.addRemotePost(alice, 2_000, { visibility: 'public' });
+      addQuote(t, post.postId, `${SEED_ORIGIN}/users/kosui/posts/${remote.postId}`);
+
+      expect((await quoteOf(t, post, actorId(me.actorId)))?.post).toBeNull();
     });
   });
 

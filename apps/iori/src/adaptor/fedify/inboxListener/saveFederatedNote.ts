@@ -14,6 +14,7 @@ import type { RemotePostAttachment, RemotePostUpserter } from '../../../domain/p
 import type { RelayId } from '../../../domain/relay/relayId.ts';
 import { ActorIdentity } from '../actorIdentity.ts';
 import { extractContentWarning } from '../extractContentWarning.ts';
+import { extractQuoteUri } from '../extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import { extractAttachments } from './extractAttachments.ts';
@@ -93,6 +94,7 @@ export const saveFederatedNote = async (
     attachments,
     authorIdentity: authorIdentity.val,
     inReplyToUri: inReplyToUri ?? null,
+    quoteUri: await extractQuoteUri(note, documentLoader),
   });
 
   if (!postResult.ok) {

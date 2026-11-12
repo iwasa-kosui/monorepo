@@ -5,6 +5,7 @@ import { getLogger } from '@logtape/logtape';
 
 import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
 import { extractContentWarning } from '../adaptor/fedify/extractContentWarning.ts';
+import { extractQuoteUri } from '../adaptor/fedify/extractQuoteUri.ts';
 import { extractRecipientActorUris } from '../adaptor/fedify/extractRecipients.ts';
 import { extractVisibility } from '../adaptor/fedify/extractVisibility.ts';
 import type { LocalPostResolverByUri, PostResolverByUri, RemotePost, RemotePostUpserter } from '../domain/post/post.ts';
@@ -18,6 +19,7 @@ type Input = Readonly<{
   inReplyToUri: string;
   documentLoader: DocumentLoader;
   lookupObject: LookupObject;
+  maxDepth?: number;
 }>;
 
 type Ok = Readonly<{
@@ -92,14 +94,14 @@ const create = ({
   };
 
   const run = async (input: Input): RA<Ok, Err> => {
-    const { inReplyToUri, documentLoader, lookupObject } = input;
+    const { inReplyToUri, documentLoader, lookupObject, maxDepth = MAX_DEPTH } = input;
     const fetchedPosts: RemotePost[] = [];
     const visited = new Set<string>();
 
     let currentUri: string | null = inReplyToUri;
     let depth = 0;
 
-    while (currentUri && depth < MAX_DEPTH) {
+    while (currentUri && depth < maxDepth) {
       if (visited.has(currentUri)) {
         getLogger().debug(`Already visited: ${currentUri}, stopping to prevent cycle`);
         break;
@@ -150,6 +152,7 @@ const create = ({
         ...extractContentWarning(note),
         visibility,
         recipientActorUris,
+        quoteUri: await extractQuoteUri(note, documentLoader),
       });
 
       if (upsertResult.ok) {
@@ -162,8 +165,8 @@ const create = ({
       depth++;
     }
 
-    if (depth >= MAX_DEPTH) {
-      getLogger().debug(`Reached max depth (${MAX_DEPTH}) while fetching reply chain`);
+    if (depth >= maxDepth) {
+      getLogger().debug(`Reached max depth (${maxDepth}) while fetching reply chain`);
     }
 
     return RA.ok({ fetchedPosts });
