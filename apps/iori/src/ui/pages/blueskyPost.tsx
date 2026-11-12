@@ -5,6 +5,7 @@ import { blueskyPostUrl } from '../../helper/blueskyUrl.ts';
 import { type BlueskyPostThread, fetchBlueskyPostThread, isMastodonApiError } from '../api/mastodonClient.ts';
 import { blueskyItemActionProps, type BlueskyPostActions } from '../components/blueskyPostActions.ts';
 import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
+import { BlueskyReportPostModal } from '../components/BlueskyReportPostModal.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import type { BlueskyItemsUpdater } from '../hooks/optimisticBlueskyLike.ts';
 import { useBlueskyQuoteDialog } from '../hooks/useBlueskyQuoteDialog.ts';
@@ -66,7 +67,7 @@ const BlueskyPostPage = () => {
   const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
     setThread((prev) => prev === null ? prev : updateThreadItems(prev, updater));
   }, []);
-  const { actions: uriActions, replyDialog } = useBlueskyUriActions(updateItems);
+  const { actions: uriActions, replyDialog, reportDialog } = useBlueskyUriActions(updateItems);
   const quoteDialog = useBlueskyQuoteDialog();
   const actions: BlueskyPostActions = { ...uriActions, onQuote: quoteDialog.open };
 
@@ -192,6 +193,7 @@ const BlueskyPostPage = () => {
       )}
 
       <BlueskyReplyModal dialog={{ ...replyDialog, send: sendReply }} />
+      <BlueskyReportPostModal reportDialog={reportDialog} />
       <BlueskyQuoteModal dialog={quoteDialog} />
     </div>
   );

@@ -716,6 +716,26 @@ describe('createBlueskyClient のミュート、ブロック、通報', () => {
     });
   });
 
+  it('createReport は subjectPost があるとき、subject を strongRef にして投稿を通報する', async () => {
+    const { client, calls } = setup(stored(), [() => json({ id: 1 })]);
+
+    const result = await client.createReport({
+      subjectDid: 'did:plc:target',
+      reasonType: 'com.atproto.moderation.defs#reasonSpam',
+      subjectPost: { uri: 'at://did:plc:target/app.bsky.feed.post/3kpost', cid: 'bafycid' },
+    });
+
+    expect(result).toEqual({ ok: true, val: undefined });
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      reasonType: 'com.atproto.moderation.defs#reasonSpam',
+      subject: {
+        $type: 'com.atproto.repo.strongRef',
+        uri: 'at://did:plc:target/app.bsky.feed.post/3kpost',
+        cid: 'bafycid',
+      },
+    });
+  });
+
   it('createReport は reason が空または無いとき、本文に reason を入れない', async () => {
     const { client, calls } = setup(stored(), [() => json({}), () => json({})]);
 

@@ -9,7 +9,7 @@ import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
 import type { BlueskyChat } from '../../../../ports/blueskyChat.ts';
-import type { BlueskyClient, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
 import type { BlueskyPostSubject } from '../../../../ports/blueskyPostCidResolver.ts';
 import type { BlueskyPostThreadFetcher } from '../../../../ports/blueskyPostThreadFetcher.ts';
 import type { BlueskySearch } from '../../../../ports/blueskySearch.ts';
@@ -248,6 +248,7 @@ export const setupReadApi = (
     blueskySeenClient?: Pick<BlueskyClient, 'updateSeen'>;
     blueskySearch?: BlueskySearch;
     blueskyChat?: BlueskyChat;
+    blueskyViewerDid?: () => RA<string, BlueskyClientError>;
     refreshXPosts?: RefreshXPostsUseCase;
     scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
   }> = {},
@@ -711,6 +712,7 @@ export const setupReadApi = (
           blueskyChat: options.blueskyChat === undefined
             ? undefined
             : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
+          viewerDid: options.blueskyViewerDid,
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
         }),
       );

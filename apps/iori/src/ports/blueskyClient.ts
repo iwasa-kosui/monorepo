@@ -24,6 +24,7 @@ export type BlueskyReportInput = Readonly<{
   subjectDid: string;
   reasonType: BlueskyReportReasonType;
   reason?: string;
+  subjectPost?: Readonly<{ uri: string; cid: string }>;
 }>;
 
 export type BlueskyRecordCollection = 'app.bsky.feed.post' | 'app.bsky.graph.follow';

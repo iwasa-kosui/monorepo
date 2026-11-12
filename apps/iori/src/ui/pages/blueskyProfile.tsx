@@ -26,11 +26,13 @@ import {
 } from '../api/blueskyProfileClient.ts';
 import { blueskyItemActionProps, type BlueskyPostActions } from '../components/blueskyPostActions.ts';
 import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
+import { BlueskyReportPostModal } from '../components/BlueskyReportPostModal.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { type ReportCategory, ReportModal } from '../components/ReportModal.tsx';
 import { appendUniqueBy } from '../hooks/appendUnique.ts';
 import { chatConvoPath, chatErrorMessageOf } from '../hooks/blueskyChat.ts';
 import type { BlueskyItemsUpdater } from '../hooks/optimisticBlueskyLike.ts';
+import type { BlueskyModerationChange } from '../hooks/useBlueskyAuthorModeration.ts';
 import { useBlueskyQuoteDialog } from '../hooks/useBlueskyQuoteDialog.ts';
 import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
@@ -354,7 +356,20 @@ const App = () => {
   const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
     setFeed((prev) => withFeedItems(prev, updater));
   }, []);
-  const { actions: uriActions, replyDialog } = useBlueskyUriActions(updateItems);
+  const onModerated = useCallback((did: string, change: BlueskyModerationChange) => {
+    setData((prev) =>
+      prev === null || 'error' in prev || prev.moderation === null || prev.profile.did !== did
+        ? prev
+        : {
+          ...prev,
+          moderation: {
+            muted: change.muted ?? prev.moderation.muted,
+            blockUri: change.blockUri === undefined ? prev.moderation.blockUri : change.blockUri,
+          },
+        }
+    );
+  }, []);
+  const { actions: uriActions, replyDialog, reportDialog } = useBlueskyUriActions(updateItems, { onModerated });
   const quoteDialog = useBlueskyQuoteDialog();
   const actions: BlueskyPostActions = { ...uriActions, onQuote: quoteDialog.open };
 
@@ -561,6 +576,7 @@ const App = () => {
         actions={actions}
       />
       <BlueskyReplyModal dialog={replyDialog} />
+      <BlueskyReportPostModal reportDialog={reportDialog} />
       <ReportModal
         targetLabel={`@${data.profile.handle}`}
         isOpen={isReportOpen}

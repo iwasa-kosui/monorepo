@@ -187,6 +187,7 @@ const setupNonOwner = async (
       blueskyChat: options.blueskyChat === undefined
         ? undefined
         : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
+      viewerDid: undefined,
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
     }),
   );
@@ -266,7 +267,52 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         indexedAt: BASE + 5000,
         liked: false,
         reposted: false,
+        isOwn: false,
       });
+    });
+
+    it('viewer の DID が投稿の作者と同じ行だけ isOwn を true にする', async () => {
+      const t = setupReadApi({ blueskyViewerDid: () => RA.ok('did:plc:a') });
+      const me = await t.signIn('read:statuses');
+      seedItem(t, 1);
+      t.sqlite.prepare('UPDATE bluesky_timeline_items SET authorDid = ? WHERE uri = ?').run(
+        'did:plc:b',
+        'at://did:plc:a/app.bsky.feed.post/1',
+      );
+      seedItem(t, 2);
+
+      const response = await t.request('/api/iori/v1/bluesky/timeline', { headers: me.bearer });
+
+      const body = await response.json() as { items: Array<{ uri: string; isOwn: boolean }> };
+      expect(body.items.map((item) => [item.uri, item.isOwn])).toEqual([
+        ['at://did:plc:a/app.bsky.feed.post/1', false],
+        ['at://did:plc:a/app.bsky.feed.post/2', true],
+      ]);
+    });
+
+    it('viewer の DID が自分の投稿と別なら、すべての行の isOwn を false にする', async () => {
+      const t = setupReadApi({ blueskyViewerDid: () => RA.ok('did:plc:me') });
+      const me = await t.signIn('read:statuses');
+      seedItem(t, 1);
+
+      const response = await t.request('/api/iori/v1/bluesky/timeline', { headers: me.bearer });
+
+      const body = await response.json() as { items: Array<{ isOwn: boolean }> };
+      expect(body.items.map((item) => item.isOwn)).toEqual([false]);
+    });
+
+    it('viewer の DID の取得に失敗しても、200 で返して isOwn を false にする', async () => {
+      const t = setupReadApi({
+        blueskyViewerDid: () => RA.err({ type: 'BlueskyClientError', kind: 'http', message: 'failed' }),
+      });
+      const me = await t.signIn('read:statuses');
+      seedItem(t, 1);
+
+      const response = await t.request('/api/iori/v1/bluesky/timeline', { headers: me.bearer });
+
+      expect(response.status).toBe(200);
+      const body = await response.json() as { items: Array<{ isOwn: boolean }> };
+      expect(body.items.map((item) => item.isOwn)).toEqual([false]);
     });
 
     it('scope なしでは所有者でない利用者を 403 にし、一覧のクエリを実行しない', async () => {
@@ -528,6 +574,7 @@ describe('/api/iori/v1/bluesky/timeline', () => {
         indexedAt: BASE,
         liked: true,
         reposted: false,
+        isOwn: false,
       });
       expect(body.replies.map(({ depth, node }) => [depth, node.kind])).toEqual([[0, 'post'], [1, 'blocked']]);
     });
@@ -1519,7 +1566,7 @@ describe('/api/iori/v1/bluesky/status', () => {
 
       expect(response.status).toBe(200);
       const { viewerLikeUri: _like, viewerRepostUri: _repost, fetchedAt: _fetchedAt, ...item } = POST_ITEM;
-      expect(await response.json()).toEqual({ items: [item], cursor: 'next' });
+      expect(await response.json()).toEqual({ items: [{ ...item, isOwn: false }], cursor: 'next' });
       expect(blueskySearch.searchPosts).toHaveBeenCalledWith({ q: 'hello world', cursor: 'abc', limit: 25 });
     });
 

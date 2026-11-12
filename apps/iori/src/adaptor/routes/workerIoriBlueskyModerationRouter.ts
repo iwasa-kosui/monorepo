@@ -6,6 +6,7 @@ import {
   BlueskyReportCategory,
 } from '../../domain/blueskyModeration/blueskyModeration.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
+import { blueskyPostUriPattern } from '../../helper/blueskyUrl.ts';
 import type { BlueskyModerationUseCases } from '../../runtime/blueskyModeration.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import { handleInternalError } from './helper/mastodonErrors.ts';
@@ -100,7 +101,24 @@ export const createWorkerIoriBlueskyModerationRouter = ({
       if (!category.ok) return invalid(c, 'category');
       const comment = body.comment === undefined ? '' : bodyString(body, 'comment');
       if (comment === undefined) return invalid(c, 'comment');
-      const reported = await blueskyModeration.report.run({ did, category: category.val, comment });
+      if ((body.uri === undefined) !== (body.cid === undefined)) {
+        return invalid(c, body.uri === undefined ? 'uri' : 'cid');
+      }
+      const uri = bodyString(body, 'uri');
+      const cid = bodyString(body, 'cid');
+      if (
+        body.uri !== undefined && (uri === undefined || !blueskyPostUriPattern.test(uri) || uri.split('/')[2] !== did)
+      ) {
+        return invalid(c, 'uri');
+      }
+      if (body.cid !== undefined && (cid === undefined || cid === '')) return invalid(c, 'cid');
+      const post = uri === undefined || cid === undefined ? undefined : { uri, cid };
+      const reported = await blueskyModeration.report.run({
+        did,
+        category: category.val,
+        comment,
+        ...(post === undefined ? {} : { post }),
+      });
       if (reported.ok) return c.json({}, 201);
       return reported.err.type === 'BlueskyModerationValidationError'
         ? invalid(c, reported.err.field)
