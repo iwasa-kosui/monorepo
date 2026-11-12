@@ -153,6 +153,55 @@ describe('PostView の「…」メニュー', () => {
     });
   });
 
+  describe('ブックマーク', () => {
+    it('未ブックマークで onBookmark があるなら「ブックマーク」を「リンクをコピー」の直前に出す', () => {
+      const onBookmark = vi.fn();
+      const items = menuItems({ status: { ...remote, bookmarked: false }, onBookmark, onUndoBookmark: () => {} });
+
+      expect(items.map((item) => item.key)).toEqual(['open-original', 'bookmark', 'copy-link']);
+      const item = items.find((candidate) => candidate.key === 'bookmark');
+      if (item?.kind !== 'action') throw new Error('bookmark not found');
+      expect(item.label).toBe('ブックマーク');
+      void item.onSelect();
+      expect(onBookmark).toHaveBeenCalledExactlyOnceWith('post-1');
+    });
+
+    it('ブックマーク済みで onUndoBookmark があるなら「ブックマークを外す」に切り替える', () => {
+      const onUndoBookmark = vi.fn();
+      const items = menuItems({ status: { ...remote, bookmarked: true }, onBookmark: () => {}, onUndoBookmark });
+
+      expect(items.map((item) => item.key)).toEqual(['open-original', 'unbookmark', 'copy-link']);
+      const item = items.find((candidate) => candidate.key === 'unbookmark');
+      if (item?.kind !== 'action') throw new Error('unbookmark not found');
+      expect(item.label).toBe('ブックマークを外す');
+      void item.onSelect();
+      expect(onUndoBookmark).toHaveBeenCalledExactlyOnceWith('post-1');
+    });
+
+    it('リポストは中身の投稿のブックマーク状態と ID を使う', () => {
+      const onUndoBookmark = vi.fn();
+      const boost = {
+        ...local,
+        id: 'boost-1',
+        bookmarked: false,
+        account: { ...local.account, id: 'actor-9' },
+        reblog: { ...remote, bookmarked: true },
+      };
+
+      const item = menuItems({ status: boost, onUndoBookmark }).find((candidate) => candidate.key === 'unbookmark');
+
+      if (item?.kind !== 'action') throw new Error('unbookmark not found');
+      void item.onSelect();
+      expect(onUndoBookmark).toHaveBeenCalledExactlyOnceWith('post-1');
+    });
+
+    it('状態に合うハンドラが渡されないときは出さない', () => {
+      expect(keys({ status: { ...remote, bookmarked: false }, onUndoBookmark: () => {} })).not.toContain('bookmark');
+      expect(keys({ status: { ...remote, bookmarked: true }, onBookmark: () => {} })).not.toContain('unbookmark');
+      expect(keys({ status: remote })).toEqual(['open-original', 'copy-link']);
+    });
+  });
+
   describe('ブロック', () => {
     const base = { status: remote, onBlock: () => {}, isLoggedIn: true, currentAccountId: 'viewer' };
     const boost = { ...local, id: 'boost-1', account: { ...local.account, id: 'actor-9' }, reblog: remote };

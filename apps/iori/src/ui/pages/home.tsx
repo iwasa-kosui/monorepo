@@ -369,6 +369,8 @@ const ThreadModal = () => {
                           onLike={actions.like}
                           isLiking={actionState.likingPostId === post.id}
                           onUndoLike={actions.undoLike}
+                          onBookmark={actions.bookmarkPost}
+                          onUndoBookmark={actions.undoBookmarkPost}
                           isUndoingLike={actionState.undoingLikePostId === post.id}
                           onRepost={actions.repost}
                           isReposting={actionState.repostingPostId === post.id}
@@ -401,6 +403,8 @@ const ThreadModal = () => {
                       onLike={actions.like}
                       isLiking={actionState.likingPostId === threadData.currentPost.id}
                       onUndoLike={actions.undoLike}
+                      onBookmark={actions.bookmarkPost}
+                      onUndoBookmark={actions.undoBookmarkPost}
                       isUndoingLike={actionState.undoingLikePostId === threadData.currentPost.id}
                       onRepost={actions.repost}
                       isReposting={actionState.repostingPostId === threadData.currentPost.id}
@@ -434,6 +438,8 @@ const ThreadModal = () => {
                             onLike={actions.like}
                             isLiking={actionState.likingPostId === post.id}
                             onUndoLike={actions.undoLike}
+                            onBookmark={actions.bookmarkPost}
+                            onUndoBookmark={actions.undoBookmarkPost}
                             isUndoingLike={actionState.undoingLikePostId === post.id}
                             onRepost={actions.repost}
                             isReposting={actionState.repostingPostId === post.id}
@@ -795,6 +801,8 @@ const TimelineList = () => {
             onLike={actions.like}
             isLiking={actionState.likingPostId === postId}
             onUndoLike={actions.undoLike}
+            onBookmark={actions.bookmarkPost}
+            onUndoBookmark={actions.undoBookmarkPost}
             isUndoingLike={actionState.undoingLikePostId === postId}
             onRepost={actions.repost}
             isReposting={actionState.repostingPostId === postId}

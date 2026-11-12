@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => {
             about: './src/ui/pages/about.tsx',
             notifications: './src/ui/pages/notifications.tsx',
             likedPosts: './src/ui/pages/likedPosts.tsx',
+            bookmarks: './src/ui/pages/bookmarks.tsx',
             federatedTimeline: './src/ui/pages/federatedTimeline.tsx',
             search: './src/ui/pages/search.tsx',
             xPosts: './src/ui/pages/xPosts.tsx',

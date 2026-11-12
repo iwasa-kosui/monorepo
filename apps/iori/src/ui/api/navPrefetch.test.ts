@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { favouritesUrl, homeTimelineUrl, NOTIFICATION_TYPES, notificationsUrl } from './mastodonClient.ts';
+import {
+  bookmarksUrl,
+  favouritesUrl,
+  homeTimelineUrl,
+  NOTIFICATION_TYPES,
+  notificationsUrl,
+} from './mastodonClient.ts';
 import { createPrefetcher, PREFETCH_FRESH_MS, type PrefetchDeps, readSaveData } from './navPrefetch.ts';
 import { prefetchUrlsFor } from './prefetchTargets.ts';
 import { readCache, writeCache } from './responseCache.ts';
@@ -29,6 +35,7 @@ describe('prefetchUrlsFor', () => {
       '/api/iori/v1/bluesky/timeline?scope=home',
     ]);
     expect(prefetchUrlsFor('/likes')).toEqual(['/api/v1/favourites']);
+    expect(prefetchUrlsFor('/bookmarks')).toEqual(['/api/v1/bookmarks']);
     expect(prefetchUrlsFor('/notifications')).toEqual([
       notificationsUrl(NOTIFICATION_TYPES),
       '/api/v1/accounts/verify_credentials',
@@ -39,6 +46,7 @@ describe('prefetchUrlsFor', () => {
   it('uses the same URL builders as the screens', () => {
     expect(prefetchUrlsFor('/')[0]).toBe(homeTimelineUrl());
     expect(prefetchUrlsFor('/likes')[0]).toBe(favouritesUrl());
+    expect(prefetchUrlsFor('/bookmarks')[0]).toBe(bookmarksUrl());
     expect(notificationsUrl(NOTIFICATION_TYPES)).toBe(
       '/api/v1/notifications?types%5B%5D=favourite&types%5B%5D=mention&types%5B%5D=follow&types%5B%5D=reblog&types%5B%5D=iori%3Aemoji_reaction',
     );

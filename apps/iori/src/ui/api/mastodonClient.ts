@@ -236,6 +236,13 @@ export const favouritesUrl = (params: PageParams = {}): string => requestUrl(FAV
 export const fetchFavourites = (params: PageParams = {}): Promise<Page<Status>> =>
   getPage<Status>(FAVOURITES_PATH, pageQuery(params));
 
+const BOOKMARKS_PATH = '/api/v1/bookmarks';
+
+export const bookmarksUrl = (params: PageParams = {}): string => requestUrl(BOOKMARKS_PATH, pageQuery(params));
+
+export const fetchBookmarks = (params: PageParams = {}): Promise<Page<Status>> =>
+  getPage<Status>(BOOKMARKS_PATH, pageQuery(params));
+
 export const fetchFollowers = (accountId: string, params: PageParams = {}): Promise<Page<Account>> =>
   getPage<Account>(`/api/v1/accounts/${encodeURIComponent(accountId)}/followers`, pageQuery(params));
 
@@ -280,6 +287,10 @@ const accountActionPath = (id: string, action: string) => `/api/v1/accounts/${en
 export const favourite = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'favourite'));
 
 export const unfavourite = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'unfavourite'));
+
+export const bookmark = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'bookmark'));
+
+export const unbookmark = (id: string): Promise<Status> => post<Status>(statusActionPath(id, 'unbookmark'));
 
 const reactionPath = (id: string, emoji: string) =>
   `/api/iori/v1/statuses/${encodeURIComponent(id)}/reactions/${encodeURIComponent(emoji)}`;
