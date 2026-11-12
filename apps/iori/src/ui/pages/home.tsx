@@ -5,13 +5,14 @@ import { render } from 'hono/jsx/dom';
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { fetchPublicTimeline, fetchVerifyCredentials, updateProfile } from '../api/mastodonClient.ts';
-import { displayStatus, isOwnBoost } from '../api/status.ts';
+import { displayStatus } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyReportPostModal } from '../components/BlueskyReportPostModal.tsx';
 import { BlueskyStatusNotice } from '../components/BlueskyStatusNotice.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { EditPostModal } from '../components/EditPostModal.tsx';
+import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { Modal } from '../components/Modal.tsx';
 import { PostDestinationSelect } from '../components/PostDestinationSelect.tsx';
@@ -19,7 +20,6 @@ import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { isEmptyProfileUpdate, toProfileUpdate } from '../components/profileUpdate.ts';
 import { QuoteModal } from '../components/QuoteModal.tsx';
-import { ReplyDialogShell } from '../components/ReplyDialogShell.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
 import { statusActionProps } from '../components/statusActionProps.ts';
 import { UpdateProfileModal } from '../components/UpdateProfileModal.tsx';
@@ -28,6 +28,7 @@ import { homeItemKey } from '../hooks/homeFeed.ts';
 import { pullProgress, refreshResultLabel } from '../hooks/pullGesture.ts';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
 import { ITEM_KEY_ATTRIBUTE } from '../hooks/useReadingPosition.ts';
+import { useReplyDialog } from '../hooks/useReplyDialog.ts';
 import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 
 const usePostedHandler = () => {
@@ -181,58 +182,6 @@ const NewPostsPill = () => {
         <span>{count}件の新しい投稿</span>
       </button>
     </div>
-  );
-};
-
-const ReplyModal = () => {
-  const { reply } = useTimelineContext();
-  const {
-    replyingToPostId,
-    replyContent,
-    replyDestination,
-    isSendingReply,
-    closeReplyDialog,
-    setReplyContent,
-    setReplyDestination,
-    sendReply,
-  } = reply;
-
-  if (!replyingToPostId) {
-    return null;
-  }
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      if (replyContent.trim() && replyingToPostId) {
-        sendReply(replyingToPostId, replyContent);
-      }
-    }
-  };
-
-  return (
-    <ReplyDialogShell
-      onClose={closeReplyDialog}
-      onSubmit={() => {
-        if (replyContent.trim() && replyingToPostId) {
-          sendReply(replyingToPostId, replyContent);
-        }
-      }}
-      isSending={isSendingReply}
-      canSubmit={!isSendingReply && replyContent.trim() !== ''}
-      leadingActions={
-        <PostDestinationSelect value={replyDestination} onChange={setReplyDestination} name='reply-destination' />
-      }
-    >
-      <MarkdownEditor
-        value={replyContent}
-        onChange={setReplyContent}
-        onKeyDown={handleKeyDown}
-        placeholder='返信を書く... (⌘+Enter to post)'
-        minHeight='150px'
-        disabled={isSendingReply}
-      />
-    </ReplyDialogShell>
   );
 };
 
@@ -830,14 +779,12 @@ const TimelineList = () => {
         }
         const { status } = item;
         const postId = displayStatus(status).id;
-        const isMyRepost = isOwnBoost(status, me.id);
 
         return wrap(
           homeItemKey(item),
           <PostView
             status={status}
             {...statusActionProps(actions, status)}
-            onUndoRepost={isMyRepost ? actions.undoRepost : undefined}
             onDelete={actions.deletePost}
             onMute={actions.muteAccount}
             onBlock={actions.blockAccount}
@@ -877,6 +824,7 @@ const TimelineList = () => {
 const ServerTimeline = () => {
   const { items: posts, setFirstPage, updateItem } = usePublicTimeline('local');
   const actions = useStatusListActions(updateItem);
+  const reply = useReplyDialog();
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
@@ -915,6 +863,7 @@ const ServerTimeline = () => {
 
   return (
     <section class='space-y-6 py-2'>
+      <FediverseReplyModal dialog={reply} />
       <div class='flex items-center justify-between mb-2'>
         <h1 class='text-2xl font-bold text-charcoal dark:text-white'>
           blog.kosui.me
@@ -937,7 +886,12 @@ const ServerTimeline = () => {
       {posts.length > 0
         ? (
           posts.map((post) => (
-            <PostView key={post.id} status={post} {...statusActionProps(isLoggedIn ? actions : undefined, post)} />
+            <PostView
+              key={post.id}
+              status={post}
+              {...statusActionProps(isLoggedIn ? actions : undefined, post)}
+              onReply={isLoggedIn ? reply.openReplyDialog : undefined}
+            />
           ))
         )
         : (
@@ -975,7 +929,7 @@ const ReportPostModal = () => {
 };
 
 const HomePage = () => {
-  const { timeline, blueskyReply, blueskyQuote, blueskyModeration } = useTimelineContext();
+  const { timeline, reply, blueskyReply, blueskyQuote, blueskyModeration } = useTimelineContext();
   const handlePosted = usePostedHandler();
   const isTimelineReady = timeline.state.status === 'success';
 
@@ -1009,7 +963,7 @@ const HomePage = () => {
       <UpdateBioModal />
       <PullToRefreshIndicator />
       <NewPostsPill />
-      <ReplyModal />
+      <FediverseReplyModal dialog={reply} />
       <BlueskyReplyModal dialog={blueskyReply} />
       <BlueskyQuoteModal dialog={blueskyQuote} />
       <ThreadModal />

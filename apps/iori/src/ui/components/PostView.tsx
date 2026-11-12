@@ -653,7 +653,7 @@ export const PostView = (
                 </svg>
               </button>
             )}
-            {
+            {(onRepost || onUndoRepost) && (
               <button
                 type='button'
                 onClick={handleRepostClick}
@@ -689,8 +689,8 @@ export const PostView = (
                 </svg>
                 {post.reblogs_count > 0 && <span class='text-sm'>{post.reblogs_count}</span>}
               </button>
-            }
-            {
+            )}
+            {(onLike || onUndoLike) && (
               <button
                 type='button'
                 onClick={handleLikeClick}
@@ -726,7 +726,7 @@ export const PostView = (
                 </svg>
                 {post.favourites_count > 0 && <span class='text-sm'>{post.favourites_count}</span>}
               </button>
-            }
+            )}
             {/* Emoji reaction button */}
             {onEmojiReact && (
               <div class='relative'>

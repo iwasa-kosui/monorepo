@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { PostView } from './PostView.tsx';
-import { statusActionProps, type StatusActions } from './statusActionProps.ts';
+import { likeRepostActionProps, statusActionProps, type StatusActions } from './statusActionProps.ts';
 
 const status = (id: string, overrides: Partial<Status> = {}): Status =>
   ({
@@ -101,5 +101,38 @@ describe('statusActionProps', () => {
 
     expect(html).toContain('いいね中...');
     expect(html).not.toContain('リポスト中...');
+  });
+});
+
+describe('likeRepostActionProps', () => {
+  it('操作が渡されなければ何も渡さない', () => {
+    expect(likeRepostActionProps(undefined, status('p1'))).toEqual({});
+  });
+
+  it('いいね・いいね取り消し・リポスト・リポスト取り消しだけを渡す', () => {
+    const all = actions();
+    const props = likeRepostActionProps(all, status('p1'));
+
+    expect(props.onLike).toBe(all.like);
+    expect(props.onUndoLike).toBe(all.undoLike);
+    expect(props.onRepost).toBe(all.repost);
+    expect(props.onUndoRepost).toBe(all.undoRepost);
+    expect(Object.keys(props).sort()).toEqual([
+      'isLiking',
+      'isReposting',
+      'isUndoingLike',
+      'isUndoingRepost',
+      'onLike',
+      'onRepost',
+      'onUndoLike',
+      'onUndoRepost',
+    ]);
+  });
+
+  it('送信中の状態は、リポストなら元の投稿の id と一致するときだけ true にする', () => {
+    const boost = status('boost-1', { reblog: status('p1') });
+
+    expect(likeRepostActionProps(actions({ likingPostId: 'p1' }), boost).isLiking).toBe(true);
+    expect(likeRepostActionProps(actions({ likingPostId: 'boost-1' }), boost).isLiking).toBe(false);
   });
 });
