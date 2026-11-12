@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FeedSourceFetchCooldownError } from '../../../domain/feedSource/feedSource.ts';
 import type { RefreshXPostsUseCase } from '../../../useCase/refreshXPosts.ts';
@@ -10,6 +10,7 @@ const PATH = '/api/iori/v1/x-posts';
 const USER_SOURCE_ID = '11111111-1111-4111-8111-111111111111';
 const DISABLED_SOURCE_ID = '22222222-2222-4222-8222-222222222222';
 const RSS_SOURCE_ID = '33333333-3333-4333-8333-333333333333';
+const NOW = Date.UTC(2026, 10, 8);
 
 const seed = (t: ReturnType<typeof setupReadApi>) => {
   const addSource = (feedSourceId: string, kind: string, title: string, enabled: boolean) =>
@@ -44,6 +45,15 @@ const refresher = (result: ReturnType<RefreshXPostsUseCase['run']>) => {
 };
 
 describe('GET /api/iori/v1/x-posts', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('認証なしだと 401 にし、投稿を返さない', async () => {
     const t = setupReadApi();
     seed(t);
