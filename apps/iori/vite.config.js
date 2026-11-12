@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process';
 import build from '@hono/vite-build/node';
 import devServer from '@hono/vite-dev-server';
+import { execFileSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 
 export default defineConfig(({ mode }) => {

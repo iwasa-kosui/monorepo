@@ -8,6 +8,8 @@ import {
   resolveBlueskyTimelineConfig,
 } from './blueskyTimeline.ts';
 
+const VALID_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
+
 const enabled = {
   IORI_BLUESKY_TIMELINE: 'enabled',
   BLUESKY_IDENTIFIER: ' kosui.me ',
@@ -16,11 +18,24 @@ const enabled = {
 
 describe('resolveBlueskyTimelineConfig', () => {
   it('IORI_BLUESKY_TIMELINE が enabled で、2 つの secret が空でないときだけ設定を返す', () => {
-    expect(resolveBlueskyTimelineConfig(enabled)).toEqual({ identifier: 'kosui.me', appPassword: 'app-pass' });
+    expect(resolveBlueskyTimelineConfig(enabled)).toEqual({
+      envCredentials: { identifier: 'kosui.me', appPassword: 'app-pass' },
+      credentialKey: undefined,
+    });
     expect(resolveBlueskyTimelineConfig({ ...enabled, IORI_BLUESKY_TIMELINE: 'disabled' })).toBeUndefined();
     expect(resolveBlueskyTimelineConfig({ ...enabled, IORI_BLUESKY_TIMELINE: undefined })).toBeUndefined();
     expect(resolveBlueskyTimelineConfig({ ...enabled, BLUESKY_IDENTIFIER: '' })).toBeUndefined();
     expect(resolveBlueskyTimelineConfig({ ...enabled, BLUESKY_APP_PASSWORD: undefined })).toBeUndefined();
+  });
+
+  it('secret が無くても、有効な鍵があれば設定を返す。鍵が不正なら返さない', () => {
+    const withoutSecrets = { IORI_BLUESKY_TIMELINE: 'enabled' };
+    expect(resolveBlueskyTimelineConfig({ ...withoutSecrets, BLUESKY_CREDENTIAL_KEY: VALID_KEY })).toEqual({
+      envCredentials: undefined,
+      credentialKey: VALID_KEY,
+    });
+    expect(resolveBlueskyTimelineConfig({ ...withoutSecrets, BLUESKY_CREDENTIAL_KEY: 'not-a-key' })).toBeUndefined();
+    expect(resolveBlueskyTimelineConfig(withoutSecrets)).toBeUndefined();
   });
 
   it('IORI_BLUESKY_CROSSPOST とは独立している', () => {

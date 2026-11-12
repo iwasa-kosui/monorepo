@@ -271,6 +271,7 @@ import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import { VotePollUseCase } from '../useCase/votePoll.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createBlueskyBookmarkRuntimePorts } from './blueskyBookmark.ts';
+import { createBlueskyCredentialRuntimePorts } from './blueskyCredential.ts';
 import { createBlueskyCrosspostUseCases, resolveBlueskyCrosspostConfig } from './blueskyCrosspost.ts';
 import { createBlueskyModerationRuntimePorts } from './blueskyModeration.ts';
 import { createBlueskyProfileRuntimePorts } from './blueskyProfile.ts';
@@ -581,6 +582,7 @@ export const createWorkerRuntimePorts = async (
     blueskyModeration: createBlueskyModerationRuntimePorts(env, db),
     blueskyProfile: createBlueskyProfileRuntimePorts(env, db),
     blueskyBookmark: createBlueskyBookmarkRuntimePorts(env, db),
+    blueskyCredential: createBlueskyCredentialRuntimePorts(env, db, { argon2idDerive: lazyWorkerArgon2idDerive }),
     digest: {
       digestResolverByUserIdAndDigestDate,
       digestResolverByUserId: createD1DigestResolverByUserId(db),

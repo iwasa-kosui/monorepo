@@ -141,6 +141,7 @@ import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAut
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import type { VotePollUseCase } from '../useCase/votePoll.ts';
 import type { BlueskyBookmarkRuntimePorts } from './blueskyBookmark.ts';
+import type { BlueskyCredentialRuntimePorts } from './blueskyCredential.ts';
 import type { BlueskyModerationRuntimePorts } from './blueskyModeration.ts';
 import type { BlueskyProfileRuntimePorts } from './blueskyProfile.ts';
 import type { BlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
@@ -250,6 +251,7 @@ export type IoriBlueskyTimelineRuntimePorts = BlueskyTimelineRuntimePorts;
 export type IoriBlueskyModerationRuntimePorts = BlueskyModerationRuntimePorts;
 export type IoriBlueskyProfileRuntimePorts = BlueskyProfileRuntimePorts;
 export type IoriBlueskyBookmarkRuntimePorts = BlueskyBookmarkRuntimePorts;
+export type IoriBlueskyCredentialRuntimePorts = BlueskyCredentialRuntimePorts;
 export type IoriBlueskyCrosspostStatusRuntimePorts = Readonly<{
   userResolverByUsername: UserResolverByUsername;
   blueskyCrosspostStatusReportResolver: BlueskyCrosspostStatusReportResolver;
@@ -333,6 +335,7 @@ export type IoriRuntimePorts = Readonly<{
   blueskyModeration: IoriBlueskyModerationRuntimePorts;
   blueskyProfile: IoriBlueskyProfileRuntimePorts;
   blueskyBookmark: IoriBlueskyBookmarkRuntimePorts;
+  blueskyCredential: IoriBlueskyCredentialRuntimePorts;
   blueskyCrosspostStatus: IoriBlueskyCrosspostStatusRuntimePorts;
   fediverseConversations: IoriFediverseConversationsRuntimePorts;
   timeline: IoriTimelineRuntimePorts;

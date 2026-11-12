@@ -24,8 +24,10 @@ import type {
   BlueskyClient,
   BlueskyClientError,
   BlueskyClientErrorKind,
+  BlueskyCredentials,
   BlueskyQueryClient,
 } from '../../ports/blueskyClient.ts';
+import type { BlueskyCredentialVerifier } from '../../ports/blueskyCredentialVerifier.ts';
 
 export const BLUESKY_DEFAULT_PDS_URL = 'https://bsky.social';
 const POST_COLLECTION = 'app.bsky.feed.post';
@@ -40,8 +42,7 @@ const UPLOAD_TIMEOUT_MS = 30_000;
 export const BLUESKY_LOGIN_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
 
 type BlueskyClientDeps = Readonly<{
-  identifier: string;
-  appPassword: string;
+  resolveCredentials: () => Promise<BlueskyCredentials | undefined>;
   sessionResolver: BlueskySessionResolver;
   sessionStore: BlueskySessionSavedStore;
   loginFailure?: Readonly<{
@@ -111,13 +112,128 @@ export const resolveBlueskyPdsUrl = (didDoc: unknown): string | undefined => {
   }
 };
 
+const callXrpc = async <S extends z.ZodType>(
+  fetchRequest: typeof fetch,
+  operation: string,
+  url: string,
+  init: RequestInit,
+  schema: S,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
+  viaChatProxy = false,
+  isBookmark = false,
+): RA<z.output<S>, BlueskyClientError> => {
+  let response: Response;
+  try {
+    response = await fetchRequest(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+  } catch {
+    return RA.err(clientError('network', `${operation} request failed`));
+  }
+  if (!response.ok) {
+    const body = errorBodySchema.safeParse(await response.json().catch(() => undefined));
+    const name = body.success ? body.data.error : undefined;
+    if (viaChatProxy && response.status === 400 && name === 'InvalidToken') {
+      // DM の許可が無いアプリパスワードで再ログインしても直らないため
+      return RA.err(clientError('chat_not_permitted', `${operation} failed: status 400 InvalidToken`, 400, name));
+    }
+    if (
+      isBookmark && response.status === 400 && name === 'InvalidToken'
+      && body.data?.message?.includes(BLUESKY_BAD_TOKEN_SCOPE)
+    ) {
+      return RA.err(
+        clientError('http', `${operation} failed: status 400 InvalidToken ${BLUESKY_BAD_TOKEN_SCOPE}`, 400, name),
+      );
+    }
+    const expired = name === 'ExpiredToken' || name === 'InvalidToken';
+    const relayedByFeedProvider = operation === 'app.bsky.feed.getFeed' && response.status === 401 && !expired;
+    const unauthorized = response.status === 401 && !relayedByFeedProvider
+      && (!isBookmark || name !== undefined && BLUESKY_BOOKMARK_LOGIN_CODES.includes(name));
+    return RA.err(
+      clientError(
+        unauthorized || expired ? 'auth' : 'http',
+        `${operation} failed: status ${response.status}${name === undefined ? '' : ` ${name}`}`,
+        response.status,
+        name,
+      ),
+    );
+  }
+  const text = await response.text().catch(() => undefined);
+  let payload: unknown;
+  try {
+    payload = text === undefined ? undefined : text === '' ? {} : JSON.parse(text);
+  } catch {
+    payload = undefined;
+  }
+  const parsed = schema.safeParse(payload);
+  return parsed.success
+    ? RA.ok(parsed.data)
+    : RA.err(clientError('invalid_response', `${operation} returned an unexpected response`));
+};
+
+export type BlueskyCredentialVerifierDeps = Readonly<{
+  fetch?: typeof fetch;
+  now?: () => Instant;
+}>;
+
+export const createBlueskyCredentialVerifier = (
+  deps: BlueskyCredentialVerifierDeps = {},
+): BlueskyCredentialVerifier => {
+  const fetchRequest = deps.fetch ?? globalThis.fetch;
+  const now = deps.now ?? Instant.now;
+  return {
+    login: async (credentials) => {
+      const created = await callXrpc(
+        fetchRequest,
+        'createSession',
+        `${BLUESKY_DEFAULT_PDS_URL}/xrpc/com.atproto.server.createSession`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: credentials.identifier, password: credentials.appPassword }),
+        },
+        sessionResponseSchema,
+      );
+      if (!created.ok) return created;
+      return RA.ok({
+        did: created.val.did,
+        handle: created.val.handle,
+        pdsUrl: resolveBlueskyPdsUrl(created.val.didDoc) ?? BLUESKY_DEFAULT_PDS_URL,
+        accessJwt: created.val.accessJwt,
+        refreshJwt: created.val.refreshJwt,
+        updatedAt: now(),
+      });
+    },
+    probeChat: async (session) => {
+      const listed = await callXrpc(
+        fetchRequest,
+        'chat.bsky.convo.listConvos',
+        `${session.pdsUrl}/xrpc/chat.bsky.convo.listConvos?limit=1`,
+        { method: 'GET', headers: { Authorization: `Bearer ${session.accessJwt}`, ...CHAT_PROXY_HEADERS } },
+        queryResponseSchema,
+        REQUEST_TIMEOUT_MS,
+        true,
+      );
+      if (listed.ok) return true;
+      return listed.err.kind === 'chat_not_permitted' ? false : null;
+    },
+    logout: async (session) => {
+      await callXrpc(
+        fetchRequest,
+        'deleteSession',
+        `${session.pdsUrl}/xrpc/com.atproto.server.deleteSession`,
+        { method: 'POST', headers: { Authorization: `Bearer ${session.refreshJwt}` } },
+        emptyResponseSchema,
+      );
+    },
+  };
+};
+
 export const createBlueskyClient = (
   deps: BlueskyClientDeps,
 ): BlueskyClient & BlueskyQueryClient & BlueskyChatClient => {
   const fetchRequest = deps.fetch ?? globalThis.fetch;
   const now = deps.now ?? Instant.now;
 
-  const call = async <S extends z.ZodType>(
+  const call = <S extends z.ZodType>(
     operation: string,
     url: string,
     init: RequestInit,
@@ -125,53 +241,8 @@ export const createBlueskyClient = (
     timeoutMs: number = REQUEST_TIMEOUT_MS,
     viaChatProxy = false,
     isBookmark = false,
-  ): RA<z.output<S>, BlueskyClientError> => {
-    let response: Response;
-    try {
-      response = await fetchRequest(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
-    } catch {
-      return RA.err(clientError('network', `${operation} request failed`));
-    }
-    if (!response.ok) {
-      const body = errorBodySchema.safeParse(await response.json().catch(() => undefined));
-      const name = body.success ? body.data.error : undefined;
-      if (viaChatProxy && response.status === 400 && name === 'InvalidToken') {
-        // DM の許可が無いアプリパスワードで再ログインしても直らないため
-        return RA.err(clientError('chat_not_permitted', `${operation} failed: status 400 InvalidToken`, 400, name));
-      }
-      if (
-        isBookmark && response.status === 400 && name === 'InvalidToken'
-        && body.data?.message?.includes(BLUESKY_BAD_TOKEN_SCOPE)
-      ) {
-        return RA.err(
-          clientError('http', `${operation} failed: status 400 InvalidToken ${BLUESKY_BAD_TOKEN_SCOPE}`, 400, name),
-        );
-      }
-      const expired = name === 'ExpiredToken' || name === 'InvalidToken';
-      const relayedByFeedProvider = operation === 'app.bsky.feed.getFeed' && response.status === 401 && !expired;
-      const unauthorized = response.status === 401 && !relayedByFeedProvider
-        && (!isBookmark || name !== undefined && BLUESKY_BOOKMARK_LOGIN_CODES.includes(name));
-      return RA.err(
-        clientError(
-          unauthorized || expired ? 'auth' : 'http',
-          `${operation} failed: status ${response.status}${name === undefined ? '' : ` ${name}`}`,
-          response.status,
-          name,
-        ),
-      );
-    }
-    const text = await response.text().catch(() => undefined);
-    let payload: unknown;
-    try {
-      payload = text === undefined ? undefined : text === '' ? {} : JSON.parse(text);
-    } catch {
-      payload = undefined;
-    }
-    const parsed = schema.safeParse(payload);
-    return parsed.success
-      ? RA.ok(parsed.data)
-      : RA.err(clientError('invalid_response', `${operation} returned an unexpected response`));
-  };
+  ): RA<z.output<S>, BlueskyClientError> =>
+    callXrpc(fetchRequest, operation, url, init, schema, timeoutMs, viaChatProxy, isBookmark);
 
   const saveSession = async (
     data: z.output<typeof sessionResponseSchema>,
@@ -197,13 +268,19 @@ export const createBlueskyClient = (
     if (failedAt !== undefined && now() - failedAt < BLUESKY_LOGIN_RETRY_COOLDOWN_MS) {
       return RA.err(clientError('auth', 'createSession skipped: waiting after a recent login failure'));
     }
+    const credentials = await deps.resolveCredentials();
+    if (credentials === undefined) {
+      return RA.err(
+        clientError('auth', 'createSession skipped: credentials are not configured', undefined, 'not_configured'),
+      );
+    }
     const created = await call(
       'createSession',
       `${BLUESKY_DEFAULT_PDS_URL}/xrpc/com.atproto.server.createSession`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: deps.identifier, password: deps.appPassword }),
+        body: JSON.stringify({ identifier: credentials.identifier, password: credentials.appPassword }),
       },
       sessionResponseSchema,
     );

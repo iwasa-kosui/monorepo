@@ -716,6 +716,19 @@ export const blueskySessionsTable = sqliteTable('bluesky_sessions', {
   updatedAt: timestamp().notNull(),
 });
 
+export const blueskyCredentialsTable = sqliteTable('bluesky_credentials', {
+  id: text('id').primaryKey(),
+  identifier: text('identifier').notNull(),
+  did: text('did').notNull(),
+  handle: text('handle').notNull(),
+  appPasswordCiphertext: text('appPasswordCiphertext').notNull(),
+  appPasswordIv: text('appPasswordIv').notNull(),
+  keyVersion: integer('keyVersion').notNull(),
+  chatPermitted: integer('chatPermitted', { mode: 'boolean' }),
+  verifiedAt: timestamp().notNull(),
+  updatedAt: timestamp().notNull(),
+});
+
 export const blueskyLoginFailuresTable = sqliteTable('bluesky_login_failures', {
   scope: text('scope').primaryKey(),
   failedAt: timestamp().notNull(),
@@ -885,6 +898,7 @@ export const schema = {
   digestXPostsTable,
   interestSourcesTable,
   blueskySessionsTable,
+  blueskyCredentialsTable,
   blueskyLoginFailuresTable,
   blueskySyncStatusTable,
   blueskyCrosspostsTable,

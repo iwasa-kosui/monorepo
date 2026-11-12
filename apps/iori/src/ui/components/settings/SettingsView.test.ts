@@ -21,6 +21,20 @@ describe('SettingsView', () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
+  it('shows the Bluesky credential section to the owner only', () => {
+    expect(render(true)).toContain('読み込んでいます');
+    expect(render(false)).not.toContain('読み込んでいます');
+  });
+
+  it('never tells anyone to replace secrets or deploy for Bluesky', () => {
+    for (const isOwner of [true, false]) {
+      const html = render(isOwner);
+      expect(html).not.toContain('BLUESKY_IDENTIFIER');
+      expect(html).not.toContain('BLUESKY_APP_PASSWORD');
+      expect(html).not.toContain('デプロイ');
+    }
+  });
+
   it('shows the security section with a link to manage passkeys after the relays', () => {
     const html = render(false);
 
@@ -28,11 +42,6 @@ describe('SettingsView', () => {
     expect(html).toContain('セキュリティ');
     expect(html).toMatch(/<a href="\/settings\/passkeys"[^>]*>\s*パスキーを管理する\s*<\/a>/);
     expect(html.indexOf('id="security"')).toBeGreaterThan(html.indexOf('id="relays"'));
-  });
-
-  it('hides the Bluesky secret guidance from anyone but the owner', () => {
-    expect(render(true)).toContain('secret');
-    expect(render(false)).not.toContain('secret');
   });
 
   it('hides the X section from anyone but the owner', () => {
@@ -79,18 +88,26 @@ describe('BlueskySettingsView', () => {
   const render = (isOwner: boolean): string =>
     String(jsx(BlueskySettingsView, { status: { enabled: false }, loadFailed: false, isOwner }));
 
-  it('tells the owner that changing the account needs the secrets and a deploy', () => {
+  it('shows the credential section instead of the connection label to the owner', () => {
     const html = render(true);
 
     expect(html).toContain('id="bluesky"');
-    expect(html).toContain('Bluesky とは連携していません');
-    expect(html).toContain('BLUESKY_APP_PASSWORD の secret を差し替えて、デプロイしてください');
+    expect(html).toContain('読み込んでいます');
+    expect(html).not.toContain('Bluesky とは連携していません');
   });
 
-  it('does not tell anyone but the owner about the secrets', () => {
+  it('does not show the secret guidance to the owner', () => {
+    const html = render(true);
+
+    expect(html).not.toContain('secret');
+    expect(html).not.toContain('デプロイ');
+  });
+
+  it('shows only the connection label to anyone but the owner', () => {
     const html = render(false);
 
     expect(html).toContain('Bluesky とは連携していません');
+    expect(html).not.toContain('読み込んでいます');
     expect(html).not.toContain('secret');
   });
 });

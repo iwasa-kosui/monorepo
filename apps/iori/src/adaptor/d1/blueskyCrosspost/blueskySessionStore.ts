@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 
 import {
   BlueskySession,
+  type BlueskySessionDeletedStore,
   type BlueskySessionResolver,
   type BlueskySessionSavedStore,
 } from '../../../domain/blueskyCrosspost/blueskyCrosspost.ts';
@@ -28,13 +29,27 @@ export const createD1BlueskySessionResolver = (db: IoriD1Db): BlueskySessionReso
   },
 });
 
+export const blueskySessionSaveQuery = (db: IoriD1Db, session: BlueskySession) => {
+  const values = { ...session, updatedAt: new Date(session.updatedAt) };
+  return db.insert(blueskySessionsTable).values({ id: BLUESKY_SESSION_ID, ...values }).onConflictDoUpdate({
+    target: blueskySessionsTable.id,
+    set: values,
+  });
+};
+
+export const blueskySessionDeleteQuery = (db: IoriD1Db) =>
+  db.delete(blueskySessionsTable).where(eq(blueskySessionsTable.id, BLUESKY_SESSION_ID));
+
 export const createD1BlueskySessionSavedStore = (db: IoriD1Db): BlueskySessionSavedStore => ({
   save: async (session) => {
-    const values = { ...session, updatedAt: new Date(session.updatedAt) };
-    await db.insert(blueskySessionsTable).values({ id: BLUESKY_SESSION_ID, ...values }).onConflictDoUpdate({
-      target: blueskySessionsTable.id,
-      set: values,
-    });
+    await blueskySessionSaveQuery(db, session);
+    return RA.ok(undefined);
+  },
+});
+
+export const createD1BlueskySessionDeletedStore = (db: IoriD1Db): BlueskySessionDeletedStore => ({
+  delete: async () => {
+    await blueskySessionDeleteQuery(db);
     return RA.ok(undefined);
   },
 });

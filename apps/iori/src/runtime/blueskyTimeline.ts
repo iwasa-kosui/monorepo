@@ -54,15 +54,23 @@ import { RepostBlueskyPostUseCase } from '../useCase/repostBlueskyPost.ts';
 import { UndoRepostBlueskyPostUseCase } from '../useCase/undoRepostBlueskyPost.ts';
 import { UnlikeBlueskyPostUseCase } from '../useCase/unlikeBlueskyPost.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
-import { type BlueskyCredentials, resolveBlueskyCredentials } from './blueskyCrosspost.ts';
+import {
+  BLUESKY_CREDENTIAL_LOGIN_FAILURE_SCOPE,
+  type BlueskyRuntimeConfig,
+  createBlueskyCredentialResolver,
+  resolveBlueskyRuntimeConfig,
+} from './blueskyCredential.ts';
 
 export const BLUESKY_TIMELINE_ENABLED_VALUE = 'enabled';
-export const BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE = 'timeline';
+export const BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE = BLUESKY_CREDENTIAL_LOGIN_FAILURE_SCOPE;
 
 export const resolveBlueskyTimelineConfig = (
-  env: Pick<IoriWorkerEnv, 'IORI_BLUESKY_TIMELINE' | 'BLUESKY_IDENTIFIER' | 'BLUESKY_APP_PASSWORD'>,
-): BlueskyCredentials | undefined =>
-  env.IORI_BLUESKY_TIMELINE === BLUESKY_TIMELINE_ENABLED_VALUE ? resolveBlueskyCredentials(env) : undefined;
+  env: Pick<
+    IoriWorkerEnv,
+    'IORI_BLUESKY_TIMELINE' | 'BLUESKY_IDENTIFIER' | 'BLUESKY_APP_PASSWORD' | 'BLUESKY_CREDENTIAL_KEY'
+  >,
+): BlueskyRuntimeConfig | undefined =>
+  env.IORI_BLUESKY_TIMELINE === BLUESKY_TIMELINE_ENABLED_VALUE ? resolveBlueskyRuntimeConfig(env) : undefined;
 
 export type BlueskyTimelineRuntimePorts = Readonly<{
   blueskyTimelineItemsResolver: BlueskyTimelineItemsResolver;
@@ -85,13 +93,12 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
 }>;
 
 export const createTimelineClient = (
-  config: BlueskyCredentials,
+  config: BlueskyRuntimeConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch; holdLoginAfterFailure?: boolean }>,
 ) =>
   createBlueskyClient({
-    identifier: config.identifier,
-    appPassword: config.appPassword,
+    resolveCredentials: createBlueskyCredentialResolver(config, db),
     sessionResolver: createD1BlueskySessionResolver(db),
     sessionStore: createD1BlueskySessionSavedStore(db),
     loginFailure: deps.holdLoginAfterFailure === true
@@ -185,7 +192,7 @@ export const createPostToBlueskyUseCase = (
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch }> = {},
 ): PostToBlueskyUseCase | undefined => {
-  const config = resolveBlueskyCredentials(env);
+  const config = resolveBlueskyRuntimeConfig(env);
   if (config === undefined) return undefined;
   const client = createTimelineClient(config, db, deps);
   return PostToBlueskyUseCase.create({ client, query: client.query, now: Instant.now });

@@ -151,7 +151,7 @@ it('gives put-worker-secrets only the deploy token, the account and admission id
     (workflow.on as { workflow_dispatch: { inputs: Record<string, { options?: string[] }> } }).workflow_dispatch.inputs;
   expect(inputs.operation.options).toContain('put-worker-secrets');
 });
-it('gives put-bluesky-secrets only the deploy token, the account and admission identity, and the two Bluesky secrets', async () => {
+it('gives put-bluesky-secrets only the deploy token, the account and admission identity, and the three Bluesky secrets', async () => {
   const workflow = await readWorkflow('deploy-iori-worker.yml');
   const job = workflow.jobs['put-bluesky-secrets'];
   const secret = (name: string) => `\${{ secrets.${name} }}`;
@@ -164,8 +164,9 @@ it('gives put-bluesky-secrets only the deploy token, the account and admission i
     CLOUDFLARE_API_TOKEN: secret('IORI_CLOUDFLARE_DEPLOY_API_TOKEN'),
     BLUESKY_IDENTIFIER: secret('BLUESKY_IDENTIFIER'),
     BLUESKY_APP_PASSWORD: secret('BLUESKY_APP_PASSWORD'),
+    BLUESKY_CREDENTIAL_KEY: secret('BLUESKY_CREDENTIAL_KEY'),
   });
-  expect(Object.keys(operation(job).env!).filter(key => key.startsWith('BLUESKY_'))).toHaveLength(2);
+  expect(Object.keys(operation(job).env!).filter(key => key.startsWith('BLUESKY_'))).toHaveLength(3);
   expect(JSON.stringify(job.steps.filter(step => step !== operation(job)))).not.toContain('secrets.');
   expect(JSON.stringify(job)).not.toMatch(/VAPID|SMOKE_QUEUE_TOKEN|TWITTERAPI_IO_API_KEY/);
   expect(JSON.stringify(job)).not.toMatch(/SSH|RECEIPT|R2|TERRAFORM|AWS_|STAGING_ACCESS_TOKEN|setup-terraform/);

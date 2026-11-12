@@ -37,7 +37,7 @@ const notices = (
 ) => blueskyStatusNotices({ status, page, clientLoadFailed, now: NOW });
 
 const PASSWORD_HINT =
-  'アプリパスワードを取り消したか変更した場合は、BLUESKY_APP_PASSWORD を新しいアプリパスワードに替えてデプロイしてください。';
+  'アプリパスワードを取り消したか変更した場合は、設定画面の「Bluesky の連携」で新しいアプリパスワードを登録し直してください。';
 
 describe('blueskyStatusNotices', () => {
   it('何も問題が無ければ空の配列を返す', () => {
@@ -48,6 +48,20 @@ describe('blueskyStatusNotices', () => {
 
   it('無効なときは、読み込みの失敗があっても何も出さない', () => {
     expect(notices({ enabled: false }, 'home', true)).toEqual([]);
+  });
+
+  it('ログインの通知に BLUESKY_APP_PASSWORD やデプロイを出さない', () => {
+    const waiting = enabled({
+      login: { state: 'waiting', failedAt: ago(0), retryAt: ago(0) },
+    });
+    const expired = enabled({ timeline: scope({ state: 'failing', failureKind: 'auth' }) });
+
+    for (const result of [notices(waiting), notices(expired)]) {
+      const text = result.map((notice) => notice.detail).join('');
+      expect(text).toContain('設定画面の「Bluesky の連携」で新しいアプリパスワードを登録し直してください');
+      expect(text).not.toContain('BLUESKY_APP_PASSWORD');
+      expect(text).not.toContain('デプロイ');
+    }
   });
 
   describe('ログインの待ち時間（a）', () => {
