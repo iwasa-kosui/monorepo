@@ -1,6 +1,6 @@
 import { type RequestContext } from '@fedify/fedify';
 import { Create, isActor, Note, Question } from '@fedify/vocab';
-import { RA, type Result } from '@iwasa-kosui/result';
+import { err, ok, RA, type Result } from '@iwasa-kosui/result';
 
 import type { Actor, ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { ActorId } from '../domain/actor/actorId.ts';
@@ -12,7 +12,7 @@ import type { PostId } from '../domain/post/postId.ts';
 import type { RemotePostPoll, RemotePostPollsResolverByPostIds } from '../domain/post/remotePostPoll.ts';
 import {
   AlreadyVotedError,
-  type InvalidPollChoicesError,
+  InvalidPollChoicesError,
   PollAuthorBlockedError,
   type PollClosedError,
   PollNotFoundError,
@@ -25,6 +25,7 @@ import type { SessionExpiredError, SessionResolver } from '../domain/session/ses
 import type { UserNotFoundError, UserResolver } from '../domain/user/user.ts';
 import type { Username } from '../domain/user/username.ts';
 import { isBlockedActorUri } from './helper/isBlockedActorUri.ts';
+import { readRemotePostPoll } from './helper/remotePostObject.ts';
 import { type Requester, resolveLocalActorWith, resolveRequesterUserWith } from './helper/resolve.ts';
 import { RemoteNoteLookupError } from './sendLike.ts';
 import type { UseCase } from './useCase.ts';
@@ -111,14 +112,36 @@ const create = ({
   const errIfAuthorBlocked = async (
     post: RemotePost,
     username: Username,
-  ): Promise<Result<void, PollAuthorBlockedError | RemoteNoteLookupError>> => {
+  ): Promise<Result<string, PollAuthorBlockedError | RemoteNoteLookupError>> => {
     const author = await actorResolverById.resolve(post.actorId);
     if (!author.ok || author.val === undefined) {
       return RA.err(RemoteNoteLookupError.create(post.uri, 'Could not resolve poll author'));
     }
     const blocked = isBlockedUri(post.uri) || isBlockedUri(author.val.uri)
       || await isBlockedActorUri(blockedActorUriResolverByUsername, username, author.val.uri);
-    return blocked ? RA.err(PollAuthorBlockedError.create(post.postId)) : RA.ok(undefined);
+    return blocked ? RA.err(PollAuthorBlockedError.create(post.postId)) : RA.ok(author.val.uri);
+  };
+
+  const matchRemoteQuestion = (
+    post: RemotePost,
+    poll: RemotePostPoll,
+    choices: ReadonlyArray<number>,
+    authorUri: string,
+    remote: Readonly<{ authorId: URL; optionTitles: ReadonlyArray<string> }>,
+  ): Result<ReadonlyArray<string>, RemoteNoteLookupError | InvalidPollChoicesError> => {
+    if (remote.authorId.href !== authorUri) {
+      return err(RemoteNoteLookupError.create(post.uri, 'Question author mismatch'));
+    }
+    const names: string[] = [];
+    for (const choice of choices) {
+      const name = remote.optionTitles[choice];
+      if (name === undefined) return err(InvalidPollChoicesError.create(post.postId, 'outOfRange'));
+      if (name !== poll.options[choice]?.title) {
+        return err(InvalidPollChoicesError.create(post.postId, 'optionChanged'));
+      }
+      names.push(name);
+    }
+    return ok(names);
   };
 
   const lookupQuestion = async (
@@ -141,7 +164,9 @@ const create = ({
     if (!author.id || !author.inboxId) {
       return RA.err(RemoteNoteLookupError.create(objectUri, 'Question author has no inbox'));
     }
-    return RA.ok({ questionId: result.id, author, authorId: author.id });
+    const remotePoll = await readRemotePostPoll(result);
+    const optionTitles = remotePoll?.options.map((option) => option.title) ?? [];
+    return RA.ok({ questionId: result.id, author, authorId: author.id, optionTitles });
   };
 
   const run = async (input: Input) =>
@@ -159,8 +184,10 @@ const create = ({
         const voted = RemotePostPollVote.vote({ postId, actorId: actor.id, choices }, poll, ownChoices, now);
         return voted.ok ? RA.ok(voted.val) : RA.err(voted.err);
       }),
-      RA.andThrough(({ post, user }) => errIfAuthorBlocked(post, user.username)),
+      RA.andBind('authorUri', ({ post, user }) => errIfAuthorBlocked(post, user.username)),
       RA.andBind('remote', ({ ctx, user, post }) => lookupQuestion(ctx, user.username, post.uri)),
+      RA.andBind('optionNames', ({ post, poll, voted, authorUri, remote }) =>
+        matchRemoteQuestion(post, poll, voted.aggregateState.choices, authorUri, remote)),
       RA.andThrough(({ voted }) =>
         RA.flow(
           remotePostPollVotedStore.store(voted),
@@ -174,12 +201,12 @@ const create = ({
           ),
         )
       ),
-      RA.andThrough(async ({ ctx, user, poll, voted, remote }) => {
+      RA.andThrough(async ({ ctx, user, optionNames, remote }) => {
         const actorUri = ctx.getActorUri(user.username);
-        for (const choice of voted.aggregateState.choices) {
+        for (const name of optionNames) {
           const note = new Note({
             id: ctx.getObjectUri(Note, { identifier: user.username, id: crypto.randomUUID() }),
-            name: poll.options[choice]?.title ?? '',
+            name,
             replyTarget: remote.questionId,
             attribution: actorUri,
             to: remote.authorId,
@@ -197,7 +224,9 @@ const create = ({
         }
         return RA.ok(undefined);
       }),
-      RA.map(() => undefined),
+      RA.map(() =>
+        undefined
+      ),
     );
 
   return { run };

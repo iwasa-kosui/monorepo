@@ -89,7 +89,7 @@ export const AlreadyVotedError = {
   }),
 } as const;
 
-export type InvalidPollChoicesReason = 'empty' | 'outOfRange' | 'duplicated' | 'tooMany';
+export type InvalidPollChoicesReason = 'empty' | 'outOfRange' | 'duplicated' | 'tooMany' | 'optionChanged';
 
 export type InvalidPollChoicesError = Readonly<{
   type: 'InvalidPollChoicesError';

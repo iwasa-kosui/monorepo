@@ -37,6 +37,7 @@ const setup = (
     isBlockedUri?: (uri: string) => boolean;
     blockedActor?: boolean;
     lookup?: unknown;
+    remoteTitles?: ReadonlyArray<string>;
     postType?: 'remote' | 'local' | 'none';
   }> = {},
 ) => {
@@ -85,11 +86,15 @@ const setup = (
     isBlockedUri: options.isBlockedUri ?? (() => false),
   };
   const authorPerson = new Person({ id: new URL(AUTHOR_URI), inbox: new URL(`${AUTHOR_URI}/inbox`) });
-  const lookupObject = vi.fn().mockResolvedValue(
-    options.lookup === undefined
-      ? new Question({ id: new URL(QUESTION_URI), content: 'q', attribution: authorPerson })
-      : options.lookup,
-  );
+  const remoteOptions = (options.remoteTitles ?? savedPoll?.options.map((option) => option.title) ?? [])
+    .map((title) => new Note({ name: title }));
+  const remoteQuestion = new Question({
+    id: new URL(QUESTION_URI),
+    content: 'q',
+    attribution: authorPerson,
+    ...(savedPoll?.multiple ? { inclusiveOptions: remoteOptions } : { exclusiveOptions: remoteOptions }),
+  });
+  const lookupObject = vi.fn().mockResolvedValue(options.lookup === undefined ? remoteQuestion : options.lookup);
   const ctx = createMockRequestContext();
   Object.assign(ctx, { getDocumentLoader: vi.fn().mockResolvedValue({}), lookupObject });
   const run = (choices: ReadonlyArray<number>) =>
@@ -232,6 +237,51 @@ describe('VotePollUseCase', () => {
       });
 
       await expectRejected(setup({ lookup: question }), [0], 'RemoteNoteLookupError');
+    });
+
+    it('取得した Question の作者が、保存した投稿の作者と違えば RemoteNoteLookupError を返し、保存も送信もしない', async () => {
+      const otherAuthor = new Person({
+        id: new URL('https://remote.example/users/mallory'),
+        inbox: new URL('https://remote.example/users/mallory/inbox'),
+      });
+      const question = new Question({
+        id: new URL(QUESTION_URI),
+        attribution: otherAuthor,
+        exclusiveOptions: [new Note({ name: '赤' }), new Note({ name: '青' }), new Note({ name: '緑' })],
+      });
+
+      const t = setup({ lookup: question });
+      const result = await t.run([0]);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.err.type).toBe('RemoteNoteLookupError');
+        expect(result.err).toMatchObject({ detail: { reason: 'Question author mismatch' } });
+      }
+      expect(t.deps.remotePostPollVotedStore.store).not.toHaveBeenCalled();
+      expect(t.ctx.sendActivity).not.toHaveBeenCalled();
+    });
+
+    it('取得した Question の選択肢が、選んだ番号で存在しなければ InvalidPollChoicesError を返す', async () => {
+      await expectRejected(setup({ remoteTitles: ['赤', '青'] }), [2], 'InvalidPollChoicesError', 'outOfRange');
+    });
+
+    it('取得した Question の選択肢の名前が、保存した title と違えば InvalidPollChoicesError を返す', async () => {
+      await expectRejected(
+        setup({ remoteTitles: ['赤', '水色', '緑'] }),
+        [1],
+        'InvalidPollChoicesError',
+        'optionChanged',
+      );
+    });
+
+    it('複数選択で、選んだ選択肢のどれかの名前が違えば、1 通も送らない', async () => {
+      await expectRejected(
+        setup({ poll: poll({ multiple: true }), remoteTitles: ['赤', '青', '深緑'] }),
+        [0, 2],
+        'InvalidPollChoicesError',
+        'optionChanged',
+      );
     });
 
     it('作者を保存していなければ RemoteNoteLookupError を返す', async () => {

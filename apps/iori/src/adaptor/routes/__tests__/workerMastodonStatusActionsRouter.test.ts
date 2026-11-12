@@ -673,6 +673,7 @@ describe('POST /api/v1/polls/:id/votes と GET /api/v1/polls/:id', () => {
             id: new URL(`https://remote.example/users/${t.alice.username}`),
             inbox: t.aliceInbox,
           }),
+          exclusiveOptions: [new Note({ name: '赤' }), new Note({ name: '青' }), new Note({ name: '緑' })],
         }),
       );
     const vote = (
@@ -870,6 +871,7 @@ describe('POST /api/v1/polls/:id/votes と GET /api/v1/polls/:id', () => {
           id: new URL('https://remote.example/users/alice'),
           inbox: new URL('https://remote.example/users/alice/inbox'),
         }),
+        exclusiveOptions: [new Note({ name: '赤' })],
       }),
     );
 
