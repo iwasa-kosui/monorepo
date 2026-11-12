@@ -3,16 +3,19 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Instant } from '../../../domain/instant/instant.ts';
-import type { BlueskyClient, BlueskyClientError } from '../../../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../../ports/blueskyClient.ts';
 import type { BlueskyModerationReader } from '../../../ports/blueskyModerationReader.ts';
 import type { BlueskyModerationUseCases } from '../../../runtime/blueskyModeration.ts';
 import { BlockBlueskyActorUseCase } from '../../../useCase/blockBlueskyActor.ts';
 import { GetBlueskyModerationStateUseCase } from '../../../useCase/getBlueskyModerationState.ts';
 import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
 import { MuteBlueskyActorUseCase } from '../../../useCase/muteBlueskyActor.ts';
+import { MuteBlueskyThreadUseCase } from '../../../useCase/muteBlueskyThread.ts';
 import { ReportBlueskyActorUseCase } from '../../../useCase/reportBlueskyActor.ts';
 import { UnblockBlueskyActorUseCase } from '../../../useCase/unblockBlueskyActor.ts';
 import { UnmuteBlueskyActorUseCase } from '../../../useCase/unmuteBlueskyActor.ts';
+import { UnmuteBlueskyThreadUseCase } from '../../../useCase/unmuteBlueskyThread.ts';
+import { createBlueskyThreadRootResolver } from '../../bluesky/blueskyThreadRootResolver.ts';
 import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../d1/__tests__/sqliteFixture.ts';
 import { createD1BlueskyModeratedActorsResolver } from '../../d1/blueskyModeration/blueskyModeratedActorsResolver.ts';
@@ -30,7 +33,10 @@ import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 const DID = 'did:plc:target';
 const OLD_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3kold';
 const NEW_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3knew';
+const ROOT = 'at://did:plc:target/app.bsky.feed.post/3kroot';
+const REPLY = 'at://did:plc:other/app.bsky.feed.post/3kreply';
 const MUTES = '/api/iori/v1/bluesky/mutes';
+const THREAD_MUTES = '/api/iori/v1/bluesky/thread-mutes';
 const BLOCKS = '/api/iori/v1/bluesky/blocks';
 const REPORTS = '/api/iori/v1/bluesky/reports';
 const MODERATION = `/api/iori/v1/bluesky/moderation/${encodeURIComponent(DID)}`;
@@ -55,10 +61,16 @@ const setup = async (
   const client = {
     muteActor: vi.fn<BlueskyClient['muteActor']>(async () => RA.ok(undefined)),
     unmuteActor: vi.fn<BlueskyClient['unmuteActor']>(async () => RA.ok(undefined)),
+    muteThread: vi.fn<BlueskyClient['muteThread']>(async () => RA.ok(undefined)),
+    unmuteThread: vi.fn<BlueskyClient['unmuteThread']>(async () => RA.ok(undefined)),
     createBlock: vi.fn<BlueskyClient['createBlock']>(async () => RA.ok({ uri: NEW_BLOCK })),
     deleteBlock: vi.fn<BlueskyClient['deleteBlock']>(async () => RA.ok(undefined)),
     createReport: vi.fn<BlueskyClient['createReport']>(async () => RA.ok(undefined)),
   };
+  const query = vi.fn<BlueskyQueryClient['query']>(async (_nsid, params) =>
+    RA.ok({ posts: [{ uri: params.uris, cid: 'bafypost', record: {} }] })
+  );
+  const threadRootResolver = createBlueskyThreadRootResolver({ client: { query } });
   const reader = {
     resolveViewerState: vi.fn<BlueskyModerationReader['resolveViewerState']>(async () =>
       RA.ok({ muted: true, blockUri: options.blockUri === undefined ? OLD_BLOCK : options.blockUri })
@@ -80,6 +92,8 @@ const setup = async (
     }),
     mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
     unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
+    muteThread: MuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
+    unmuteThread: UnmuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
     block: BlockBlueskyActorUseCase.create({
       client,
       reader,
@@ -126,6 +140,7 @@ const setup = async (
   return {
     send,
     client,
+    query,
     reader,
     rows,
     bearer,
@@ -140,10 +155,13 @@ const writes = [
   ['POST', BLOCKS, { did: DID }],
   ['DELETE', `${BLOCKS}?did=${DID}`, undefined],
   ['POST', REPORTS, { did: DID, category: 'spam', comment: '' }],
+  ['POST', THREAD_MUTES, { root: ROOT }],
+  ['DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(ROOT)}`, undefined],
 ] as const;
 
 const noCalls = (t: Awaited<ReturnType<typeof setup>>) => {
   for (const mock of Object.values(t.client)) expect(mock).not.toHaveBeenCalled();
+  expect(t.query).not.toHaveBeenCalled();
   expect(t.rows()).toEqual([]);
 };
 
@@ -185,21 +203,24 @@ describe('/api/iori/v1/bluesky の共通のガード', () => {
     noCalls(t);
   });
 
-  it.each(writes)('%s %s は did が did: で始まらない、または無いとき 400 にする', async (method, path) => {
-    const t = await setup();
-    const base = path.split('?')[0]!;
-    const requests = method === 'POST'
-      ? [{ did: 'alice.bsky.social' }, { did: '' }, {}, { did: 1 }]
-      : [undefined];
+  it.each(writes.filter(([, path]) => !path.startsWith(THREAD_MUTES)))(
+    '%s %s は did が did: で始まらない、または無いとき 400 にする',
+    async (method, path) => {
+      const t = await setup();
+      const base = path.split('?')[0]!;
+      const requests = method === 'POST'
+        ? [{ did: 'alice.bsky.social' }, { did: '' }, {}, { did: 1 }]
+        : [undefined];
 
-    for (const body of requests) {
-      const target = method === 'POST' ? base : `${base}?did=alice.bsky.social`;
-      const payload = body === undefined ? undefined : { category: 'spam', ...body };
-      expect((await t.send(method, target, payload)).status).toBe(400);
-    }
-    expect((await t.send(method, base)).status).toBe(400);
-    noCalls(t);
-  });
+      for (const body of requests) {
+        const target = method === 'POST' ? base : `${base}?did=alice.bsky.social`;
+        const payload = body === undefined ? undefined : { category: 'spam', ...body };
+        expect((await t.send(method, target, payload)).status).toBe(400);
+      }
+      expect((await t.send(method, base)).status).toBe(400);
+      noCalls(t);
+    },
+  );
 
   it('write のスコープを満たさないトークンを、スコープごとに 403 にする', async () => {
     const mutesOnly = await setup({ scope: 'write:mutes' });
@@ -312,6 +333,137 @@ describe('/api/iori/v1/bluesky/mutes', () => {
   });
 });
 
+describe('/api/iori/v1/bluesky/thread-mutes', () => {
+  it('POST はスレッドをミュートし、threadMuted: true を返して D1 に書かない', async () => {
+    const t = await setup();
+
+    const response = await t.send('POST', THREAD_MUTES, { root: ROOT }, t.cookie);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ threadMuted: true });
+    expect(t.client.muteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+    expect(t.rows()).toEqual([]);
+  });
+
+  it('DELETE はスレッドのミュートを解除し、threadMuted: false を返す', async () => {
+    const t = await setup();
+
+    const response = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(ROOT)}`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ threadMuted: false });
+    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+    expect(t.rows()).toEqual([]);
+  });
+
+  it('POST は返信の uri を受け取ったら、根の uri でスレッドをミュートする', async () => {
+    const t = await setup();
+    t.query.mockReturnValueOnce(RA.ok({
+      posts: [{ uri: REPLY, cid: 'bafyreply', record: { reply: { root: { uri: ROOT }, parent: { uri: ROOT } } } }],
+    }));
+
+    const response = await t.send('POST', THREAD_MUTES, { root: REPLY }, t.cookie);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ threadMuted: true });
+    expect(t.client.muteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+  });
+
+  it('POST は投稿が見つからなければ 404 にし、スレッドのミュートを呼ばない', async () => {
+    const t = await setup();
+    t.query.mockReturnValueOnce(RA.ok({ posts: [] }));
+
+    const response = await t.send('POST', THREAD_MUTES, { root: ROOT }, t.cookie);
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Bluesky post not found' });
+    expect(t.client.muteThread).not.toHaveBeenCalled();
+  });
+
+  it('DELETE は返信の uri を受け取ったら、根の uri でスレッドのミュートを解除する', async () => {
+    const t = await setup();
+    t.query.mockReturnValueOnce(RA.ok({
+      posts: [{ uri: REPLY, cid: 'bafyreply', record: { reply: { root: { uri: ROOT }, parent: { uri: ROOT } } } }],
+    }));
+
+    const response = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(REPLY)}`);
+
+    expect(response.status).toBe(200);
+    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
+  });
+
+  it('DELETE は投稿が見つからなければ、受け取った uri でスレッドのミュートを解除する', async () => {
+    const t = await setup();
+    t.query.mockReturnValueOnce(RA.ok({ posts: [] }));
+
+    const response = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(REPLY)}`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ threadMuted: false });
+    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(REPLY);
+  });
+
+  it('getPosts の失敗を 502 にし、スレッドのミュートも解除も呼ばない', async () => {
+    const t = await setup();
+    t.query.mockReturnValueOnce(RA.err(failure('http')));
+    t.query.mockReturnValueOnce(RA.err(failure('auth')));
+
+    const muted = await t.send('POST', THREAD_MUTES, { root: ROOT }, t.cookie);
+    const unmuted = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(ROOT)}`);
+
+    expect([muted.status, unmuted.status]).toEqual([502, 502]);
+    expect(await muted.json()).toEqual({ error: 'Bluesky request failed' });
+    expect(await unmuted.json()).toEqual({ error: 'Bluesky login failed' });
+    expect(t.client.muteThread).not.toHaveBeenCalled();
+    expect(t.client.unmuteThread).not.toHaveBeenCalled();
+  });
+
+  it('root が投稿の at:// URI でない、または無いときは 400 にし、Bluesky を呼ばない', async () => {
+    const t = await setup();
+    const bad = [
+      { root: 'did:plc:target' },
+      { root: 'at://did:plc:target/app.bsky.graph.block/3kblock' },
+      { root: '' },
+      { root: 1 },
+      {},
+    ];
+
+    for (const body of bad) {
+      const response = await t.send('POST', THREAD_MUTES, body);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'Validation failed: root' });
+    }
+    const deleted = await t.send('DELETE', `${THREAD_MUTES}?root=did:plc:target`);
+    expect(deleted.status).toBe(400);
+    expect(await deleted.json()).toEqual({ error: 'Validation failed: root' });
+    expect((await t.send('DELETE', THREAD_MUTES)).status).toBe(400);
+    noCalls(t);
+  });
+
+  it('write:mutes を満たさないトークンを 403 にし、Bluesky を呼ばない', async () => {
+    const t = await setup({ scope: 'read:statuses write:blocks' });
+
+    expect((await t.send('POST', THREAD_MUTES, { root: ROOT })).status).toBe(403);
+    noCalls(t);
+  });
+
+  it('Bluesky の失敗を 502 にする', async () => {
+    const t = await setup();
+    t.client.muteThread.mockReturnValueOnce(RA.err(failure('auth')));
+    t.client.muteThread.mockReturnValueOnce(RA.err(failure('http')));
+    t.client.unmuteThread.mockReturnValueOnce(RA.err(failure('network')));
+
+    const auth = await t.send('POST', THREAD_MUTES, { root: ROOT });
+    const http = await t.send('POST', THREAD_MUTES, { root: ROOT });
+    const network = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(ROOT)}`);
+
+    expect([auth.status, http.status, network.status]).toEqual([502, 502, 502]);
+    expect(await auth.json()).toEqual({ error: 'Bluesky login failed' });
+    expect(await http.json()).toEqual({ error: 'Bluesky request failed' });
+    expect(await network.json()).toEqual({ error: 'Bluesky request failed' });
+  });
+});
+
 describe('/api/iori/v1/bluesky/blocks', () => {
   it('POST は block して D1 に保存し、blockUri を返す', async () => {
     const t = await setup({ blockUri: null });
@@ -405,6 +557,64 @@ describe('POST /api/iori/v1/bluesky/reports', () => {
       reasonType: 'com.atproto.moderation.defs#reasonSpam',
       reason: '',
     });
+  });
+
+  it('uri と cid がそろっているとき、投稿を対象にして通報に渡す', async () => {
+    const t = await setup();
+    const uri = `at://${DID}/app.bsky.feed.post/3kpost`;
+
+    const response = await t.send('POST', REPORTS, { did: DID, category: 'spam', uri, cid: 'bafycid' });
+
+    expect(response.status).toBe(201);
+    expect(t.client.createReport).toHaveBeenCalledExactlyOnceWith({
+      subjectDid: DID,
+      reasonType: 'com.atproto.moderation.defs#reasonSpam',
+      reason: '',
+      subjectPost: { uri, cid: 'bafycid' },
+    });
+  });
+
+  it('uri と cid の片方だけのときは 400 にする', async () => {
+    const t = await setup();
+    const uri = `at://${DID}/app.bsky.feed.post/3kpost`;
+
+    const onlyUri = await t.send('POST', REPORTS, { did: DID, category: 'spam', uri });
+    const onlyCid = await t.send('POST', REPORTS, { did: DID, category: 'spam', cid: 'bafycid' });
+
+    expect(onlyUri.status).toBe(400);
+    expect(await onlyUri.json()).toEqual({ error: 'Validation failed: cid' });
+    expect(onlyCid.status).toBe(400);
+    expect(await onlyCid.json()).toEqual({ error: 'Validation failed: uri' });
+    expect(t.client.createReport).not.toHaveBeenCalled();
+  });
+
+  it('uri が投稿の形でない、または did と作者が違うとき、cid が空のときは 400 にする', async () => {
+    const t = await setup();
+    const uri = `at://${DID}/app.bsky.feed.post/3kpost`;
+
+    const badUri = await t.send('POST', REPORTS, {
+      did: DID,
+      category: 'spam',
+      uri: `at://${DID}/app.bsky.graph.block/3kblock`,
+      cid: 'bafycid',
+    });
+    const otherAuthor = await t.send('POST', REPORTS, {
+      did: DID,
+      category: 'spam',
+      uri: 'at://did:plc:other/app.bsky.feed.post/3kpost',
+      cid: 'bafycid',
+    });
+    const notString = await t.send('POST', REPORTS, { did: DID, category: 'spam', uri: 1, cid: 'bafycid' });
+    const emptyCid = await t.send('POST', REPORTS, { did: DID, category: 'spam', uri, cid: '' });
+
+    expect(badUri.status).toBe(400);
+    expect(await badUri.json()).toEqual({ error: 'Validation failed: uri' });
+    expect(otherAuthor.status).toBe(400);
+    expect(await otherAuthor.json()).toEqual({ error: 'Validation failed: uri' });
+    expect(notString.status).toBe(400);
+    expect(emptyCid.status).toBe(400);
+    expect(await emptyCid.json()).toEqual({ error: 'Validation failed: cid' });
+    expect(t.client.createReport).not.toHaveBeenCalled();
   });
 
   it('category が不正、または無いときは 400 にする', async () => {

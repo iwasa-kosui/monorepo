@@ -1,3 +1,5 @@
+import type { RA } from '@iwasa-kosui/result';
+
 import { createBlueskyChat } from '../adaptor/bluesky/blueskyChat.ts';
 import { createBlueskyClient } from '../adaptor/bluesky/blueskyClient.ts';
 import { createBlueskyPostCidResolver } from '../adaptor/bluesky/blueskyPostCidResolver.ts';
@@ -35,6 +37,7 @@ import type { BlueskyLoginFailureResolver } from '../domain/blueskyCrosspost/blu
 import type { BlueskySyncStatusResolver } from '../domain/blueskySyncStatus/blueskySyncStatus.ts';
 import type { BlueskyTimelineItemsResolver } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import type { BlueskyPostThreadFetcher } from '../ports/blueskyPostThreadFetcher.ts';
 import type { BlueskySearch } from '../ports/blueskySearch.ts';
 import { BlueskyChatUseCases } from '../useCase/blueskyChat.ts';
@@ -76,6 +79,7 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
   markBlueskyNotificationsSeenUseCase: MarkBlueskyNotificationsSeenUseCase | undefined;
   blueskySearch: BlueskySearch | undefined;
   blueskyChat: BlueskyChatUseCases | undefined;
+  viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -270,6 +274,7 @@ export const createBlueskyTimelineRuntimePorts = (
       ? undefined
       : createBlueskySearch({ client: createTimelineClient(config, db, deps), now: Instant.now }),
     blueskyChat: config === undefined ? undefined : createChatUseCases(createTimelineClient(config, db, deps)),
+    viewerDid: config === undefined ? undefined : createTimelineClient(config, db, deps).viewerDid,
     isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
   };
 };

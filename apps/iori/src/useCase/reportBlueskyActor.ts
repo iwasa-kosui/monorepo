@@ -9,7 +9,12 @@ import {
 import type { BlueskyClient, BlueskyClientError } from '../ports/blueskyClient.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{ did: string; category: BlueskyReportCategory; comment: string }>;
+type Input = Readonly<{
+  did: string;
+  category: BlueskyReportCategory;
+  comment: string;
+  post?: Readonly<{ uri: string; cid: string }>;
+}>;
 
 type Ok = Readonly<{ reported: true }>;
 
@@ -22,13 +27,14 @@ type Deps = Readonly<{
 }>;
 
 const create = ({ client }: Deps): ReportBlueskyActorUseCase => {
-  const run = async ({ did, category, comment }: Input): RA<Ok, Err> => {
+  const run = async ({ did, category, comment, post }: Input): RA<Ok, Err> => {
     const reason = BlueskyReportComment.parse(comment);
     if (!reason.ok) return RA.err({ type: 'BlueskyModerationValidationError', field: 'comment' });
     const reported = await client.createReport({
       subjectDid: did,
       reasonType: blueskyReportReasonType(category),
       reason: reason.val,
+      ...(post === undefined ? {} : { subjectPost: post }),
     });
     return reported.ok ? RA.ok({ reported: true }) : RA.err(reported.err);
   };

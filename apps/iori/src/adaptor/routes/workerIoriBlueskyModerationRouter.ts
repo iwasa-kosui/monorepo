@@ -6,6 +6,7 @@ import {
   BlueskyReportCategory,
 } from '../../domain/blueskyModeration/blueskyModeration.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
+import { blueskyPostUriPattern } from '../../helper/blueskyUrl.ts';
 import type { BlueskyModerationUseCases } from '../../runtime/blueskyModeration.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import { handleInternalError } from './helper/mastodonErrors.ts';
@@ -22,6 +23,7 @@ export type WorkerIoriBlueskyModerationRouterDeps = Readonly<{
 
 export type IoriBlueskyModerationStateResponse = Readonly<{ muted: boolean; blockUri: string | null }>;
 export type IoriBlueskyMuteResponse = Readonly<{ muted: boolean }>;
+export type IoriBlueskyThreadMuteResponse = Readonly<{ threadMuted: boolean }>;
 export type IoriBlueskyBlockResponse = Readonly<{ blockUri: string | null }>;
 
 const readStatuses = Scope.orThrow('read:statuses');
@@ -32,6 +34,9 @@ const forbidden = { error: 'Forbidden' } as const;
 const disabled = { error: 'Bluesky timeline is disabled' } as const;
 
 const validDid = (value: string | undefined): value is string => value !== undefined && BlueskyDid.parse(value).ok;
+
+const validPostUri = (value: string | undefined): value is string =>
+  value !== undefined && blueskyPostUriPattern.test(value);
 
 const invalid = (c: Context, field: string) => c.json({ error: `Validation failed: ${field}` }, 400);
 
@@ -70,6 +75,25 @@ export const createWorkerIoriBlueskyModerationRouter = ({
       const unmuted = await blueskyModeration.unmute.run({ did });
       return unmuted.ok ? c.json(unmuted.val satisfies IoriBlueskyMuteResponse) : clientFailure(c, unmuted.err);
     })
+    .post('/iori/v1/bluesky/thread-mutes', requireSameOriginForCookie, authn.requireUser(writeMutes), async (c) => {
+      if (!await isOwner(c)) return c.json(forbidden, 403);
+      if (blueskyModeration === undefined) return c.json(disabled, 409);
+      const root = bodyString(await readRequestBody(c), 'root');
+      if (!validPostUri(root)) return invalid(c, 'root');
+      const muted = await blueskyModeration.muteThread.run({ uri: root });
+      if (muted.ok) return c.json(muted.val satisfies IoriBlueskyThreadMuteResponse);
+      return muted.err.type === 'BlueskyThreadTargetNotFound'
+        ? c.json({ error: 'Bluesky post not found' }, 404)
+        : clientFailure(c, muted.err);
+    })
+    .delete('/iori/v1/bluesky/thread-mutes', requireSameOriginForCookie, authn.requireUser(writeMutes), async (c) => {
+      if (!await isOwner(c)) return c.json(forbidden, 403);
+      if (blueskyModeration === undefined) return c.json(disabled, 409);
+      const root = c.req.query('root');
+      if (!validPostUri(root)) return invalid(c, 'root');
+      const unmuted = await blueskyModeration.unmuteThread.run({ uri: root });
+      return unmuted.ok ? c.json(unmuted.val satisfies IoriBlueskyThreadMuteResponse) : clientFailure(c, unmuted.err);
+    })
     .post('/iori/v1/bluesky/blocks', requireSameOriginForCookie, authn.requireUser(writeBlocks), async (c) => {
       if (!await isOwner(c)) return c.json(forbidden, 403);
       if (blueskyModeration === undefined) return c.json(disabled, 409);
@@ -100,7 +124,24 @@ export const createWorkerIoriBlueskyModerationRouter = ({
       if (!category.ok) return invalid(c, 'category');
       const comment = body.comment === undefined ? '' : bodyString(body, 'comment');
       if (comment === undefined) return invalid(c, 'comment');
-      const reported = await blueskyModeration.report.run({ did, category: category.val, comment });
+      if ((body.uri === undefined) !== (body.cid === undefined)) {
+        return invalid(c, body.uri === undefined ? 'uri' : 'cid');
+      }
+      const uri = bodyString(body, 'uri');
+      const cid = bodyString(body, 'cid');
+      if (
+        body.uri !== undefined && (uri === undefined || !blueskyPostUriPattern.test(uri) || uri.split('/')[2] !== did)
+      ) {
+        return invalid(c, 'uri');
+      }
+      if (body.cid !== undefined && (cid === undefined || cid === '')) return invalid(c, 'cid');
+      const post = uri === undefined || cid === undefined ? undefined : { uri, cid };
+      const reported = await blueskyModeration.report.run({
+        did,
+        category: category.val,
+        comment,
+        ...(post === undefined ? {} : { post }),
+      });
       if (reported.ok) return c.json({}, 201);
       return reported.err.type === 'BlueskyModerationValidationError'
         ? invalid(c, reported.err.field)

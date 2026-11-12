@@ -374,6 +374,8 @@ export const createBlueskyClient = (
     deleteRepost: (rkey) => removeRecord(REPOST_COLLECTION, rkey),
     muteActor: (actor) => postProcedure('muteActor', 'app.bsky.graph.muteActor', { actor }),
     unmuteActor: (actor) => postProcedure('unmuteActor', 'app.bsky.graph.unmuteActor', { actor }),
+    muteThread: (root) => postProcedure('muteThread', 'app.bsky.graph.muteThread', { root }),
+    unmuteThread: (root) => postProcedure('unmuteThread', 'app.bsky.graph.unmuteThread', { root }),
     createBlock: (subjectDid) =>
       withSession(async (session) => {
         const created = await call(
@@ -405,14 +407,16 @@ export const createBlueskyClient = (
         ? RA.err(clientError('invalid_response', 'deleteBlock received an unexpected uri'))
         : removeRecord(BLUESKY_BLOCK_COLLECTION, parsed.rkey, parsed.repo);
     },
-    createReport: ({ subjectDid, reasonType, reason }) =>
+    createReport: ({ subjectDid, reasonType, reason, subjectPost }) =>
       postProcedure(
         'createReport',
         'com.atproto.moderation.createReport',
         {
           reasonType,
           ...(reason === undefined || reason === '' ? {} : { reason }),
-          subject: { $type: 'com.atproto.admin.defs#repoRef', did: subjectDid },
+          subject: subjectPost === undefined
+            ? { $type: 'com.atproto.admin.defs#repoRef', did: subjectDid }
+            : { $type: 'com.atproto.repo.strongRef', uri: subjectPost.uri, cid: subjectPost.cid },
         },
         { 'atproto-proxy': REPORT_PROXY },
       ),

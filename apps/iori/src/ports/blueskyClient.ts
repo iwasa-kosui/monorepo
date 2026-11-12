@@ -24,6 +24,7 @@ export type BlueskyReportInput = Readonly<{
   subjectDid: string;
   reasonType: BlueskyReportReasonType;
   reason?: string;
+  subjectPost?: Readonly<{ uri: string; cid: string }>;
 }>;
 
 export type BlueskyRecordCollection = 'app.bsky.feed.post' | 'app.bsky.graph.follow';
@@ -39,6 +40,8 @@ export type BlueskyClient = Readonly<{
   deleteRepost: (rkey: string) => RA<void, BlueskyClientError>;
   muteActor: (actor: string) => RA<void, BlueskyClientError>;
   unmuteActor: (actor: string) => RA<void, BlueskyClientError>;
+  muteThread: (root: string) => RA<void, BlueskyClientError>;
+  unmuteThread: (root: string) => RA<void, BlueskyClientError>;
   createBlock: (subjectDid: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;
   deleteBlock: (blockUri: string) => RA<void, BlueskyClientError>;
   createReport: (input: BlueskyReportInput) => RA<void, BlueskyClientError>;

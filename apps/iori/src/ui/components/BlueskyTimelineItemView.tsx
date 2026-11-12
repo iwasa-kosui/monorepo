@@ -24,6 +24,9 @@ type Props = Readonly<{
   onRepost?: (item: IoriBlueskyTimelineItemBody) => void;
   onUndoRepost?: (item: IoriBlueskyTimelineItemBody) => void;
   isRepostPending?: boolean;
+  onMuteAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
+  onBlockAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
+  onReportPost?: (item: IoriBlueskyTimelineItemBody) => void;
 }>;
 type MediaEmbed = Extract<BlueskyTimelineEmbed, { type: 'images' | 'external' | 'video' }>;
 type QuoteEmbed = Extract<BlueskyTimelineEmbed, { type: 'record' }>;
@@ -339,6 +342,9 @@ export const BlueskyTimelineItemView = ({
   onRepost,
   onUndoRepost,
   isRepostPending,
+  onMuteAuthor,
+  onBlockAuthor,
+  onReportPost,
 }: Props) => {
   const avatar = safeAbsoluteUrl(item.authorAvatar);
   const postHref = ioriBlueskyPostPath(item.uri);
@@ -350,9 +356,45 @@ export const BlueskyTimelineItemView = ({
       {Instant.formatRelative(item.postedAt as Instant)}
     </time>
   );
-  const menuItems: readonly PostMenuItem[] = bskyHref === undefined ? [] : [
-    { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: bskyHref },
-    { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: bskyHref },
+  const canModerate = !item.isOwn;
+  const menuItems: readonly PostMenuItem[] = [
+    ...(bskyHref === undefined ? [] : [
+      { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: bskyHref } as const,
+      { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: bskyHref } as const,
+    ]),
+    ...(canModerate && onMuteAuthor !== undefined
+      ? [
+        {
+          key: 'mute',
+          label: `@${item.authorHandle} をミュート`,
+          kind: 'action',
+          danger: true,
+          onSelect: () => onMuteAuthor(item),
+        } as const,
+      ]
+      : []),
+    ...(canModerate && onBlockAuthor !== undefined
+      ? [
+        {
+          key: 'block',
+          label: `@${item.authorHandle} をブロック`,
+          kind: 'action',
+          danger: true,
+          onSelect: () => onBlockAuthor(item),
+        } as const,
+      ]
+      : []),
+    ...(canModerate && onReportPost !== undefined
+      ? [
+        {
+          key: 'report',
+          label: 'この投稿を通報',
+          kind: 'action',
+          danger: true,
+          onSelect: () => onReportPost(item),
+        } as const,
+      ]
+      : []),
   ];
   return (
     <article

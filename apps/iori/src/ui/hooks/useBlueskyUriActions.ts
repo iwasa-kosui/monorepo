@@ -1,5 +1,10 @@
 import type { BlueskyPostActions } from '../components/blueskyPostActions.ts';
 import type { BlueskyItemsUpdater } from './optimisticBlueskyLike.ts';
+import {
+  type BlueskyReportDialog,
+  useBlueskyAuthorModeration,
+  type UseBlueskyAuthorModerationOptions,
+} from './useBlueskyAuthorModeration.ts';
 import { BLUESKY_LIKE_BY_URI_REQUESTS, useBlueskyLike } from './useBlueskyLike.ts';
 import {
   sendBlueskyReplyByUri,
@@ -10,13 +15,23 @@ import { BLUESKY_REPOST_BY_URI_REQUESTS, useBlueskyRepost } from './useBlueskyRe
 
 export const useBlueskyUriActions = (
   updateItems: BlueskyItemsUpdater,
-): Readonly<{ actions: BlueskyPostActions; replyDialog: UseBlueskyReplyDialogReturn }> => {
+  options?: UseBlueskyAuthorModerationOptions,
+): Readonly<{
+  actions: BlueskyPostActions;
+  replyDialog: UseBlueskyReplyDialogReturn;
+  reportDialog: BlueskyReportDialog;
+  notice: string | undefined;
+}> => {
   const { pendingUris: likePendingUris, like, undoLike } = useBlueskyLike(updateItems, BLUESKY_LIKE_BY_URI_REQUESTS);
   const { pendingUris: repostPendingUris, repost, undoRepost } = useBlueskyRepost(
     updateItems,
     BLUESKY_REPOST_BY_URI_REQUESTS,
   );
   const replyDialog = useBlueskyReplyDialog(sendBlueskyReplyByUri);
+  const { onMuteAuthor, onBlockAuthor, onReportPost, reportDialog, notice } = useBlueskyAuthorModeration(
+    updateItems,
+    options,
+  );
   const actions: BlueskyPostActions = {
     onReply: replyDialog.open,
     onLike: like,
@@ -25,6 +40,9 @@ export const useBlueskyUriActions = (
     onRepost: repost,
     onUndoRepost: undoRepost,
     repostPendingUris,
+    onMuteAuthor,
+    onBlockAuthor,
+    onReportPost,
   };
-  return { actions, replyDialog };
+  return { actions, replyDialog, reportDialog, notice };
 };

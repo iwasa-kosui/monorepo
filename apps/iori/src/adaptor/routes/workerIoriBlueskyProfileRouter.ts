@@ -14,7 +14,7 @@ import { handleInternalError } from './helper/mastodonErrors.ts';
 import { bodyString, readRequestBody } from './helper/requestBody.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
-import { type IoriBlueskyTimelineItemBody, toItemBody } from './workerIoriBlueskyRouter.ts';
+import { type IoriBlueskyTimelineItemBody, resolveViewerDid, toItemBody } from './workerIoriBlueskyRouter.ts';
 
 export type WorkerIoriBlueskyProfileRouterDeps = Readonly<{
   authn: MastodonAuthn;
@@ -118,15 +118,15 @@ export const createWorkerIoriBlueskyProfileRouter = ({
         actor: c.req.param('actor'),
         cursor: c.req.query('cursor') || undefined,
       });
-      return page.ok
-        ? c.json(
-          {
-            items: page.val.items.map(toItemBody),
-            cursor: page.val.cursor ?? null,
-            unavailable: page.val.unavailable,
-          } satisfies IoriBlueskyAuthorFeedResponse,
-        )
-        : failure(c, page.err);
+      if (!page.ok) return failure(c, page.err);
+      const viewer = await resolveViewerDid(viewerDid);
+      return c.json(
+        {
+          items: page.val.items.map((item) => toItemBody(item, viewer)),
+          cursor: page.val.cursor ?? null,
+          unavailable: page.val.unavailable,
+        } satisfies IoriBlueskyAuthorFeedResponse,
+      );
     })
     .get('/iori/v1/bluesky/liked-posts', authn.requireUser(readAccounts), async (c) => {
       if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);

@@ -51,7 +51,9 @@ import type { OAuthApplicationResolver } from '../domain/oauth/oauthApplication.
 import type { AccountStatusItemsResolverByActorId } from '../domain/post/accountStatusItem.ts';
 import type {
   LocalPostsResolverByPage,
+  PostSourceTextResolver,
   PostsWithAuthorResolverByPostIds,
+  PostVersionsResolverByPostId,
   ThreadResolver,
 } from '../domain/post/post.ts';
 import type { AllRelaysResolver } from '../domain/relay/relay.ts';
@@ -118,6 +120,7 @@ import type { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import type { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import type { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
 import type { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescription.ts';
+import type { UpdatePostUseCase } from '../useCase/updatePost.ts';
 import type { UpdateProfileUseCase } from '../useCase/updateProfile.ts';
 import type { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
@@ -271,6 +274,9 @@ export type IoriMutesRelaysRuntimePorts = Readonly<{
 export type IoriCoreRuntimePorts = Readonly<{
   signUpUseCase: ReturnType<typeof createSignUpUseCase>;
   sendReplyUseCase: SendReplyUseCase;
+  updatePostUseCase: UpdatePostUseCase;
+  postSourceTextResolver: PostSourceTextResolver;
+  postVersionsResolver: PostVersionsResolverByPostId;
   deletePostUseCase: DeletePostUseCase;
   subscribePushUseCase: SubscribePushUseCase;
   followRemoteActor: WorkerRemoteActorAction;

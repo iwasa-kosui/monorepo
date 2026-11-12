@@ -5,12 +5,15 @@ import {
   blueskyModerationFailureMessage,
   fetchBlueskyModeration,
   muteBlueskyActor,
+  muteBlueskyThread,
   reportBlueskyActor,
   unblockBlueskyActor,
   unmuteBlueskyActor,
+  unmuteBlueskyThread,
 } from './blueskyModerationClient.ts';
 
 const DID = 'did:plc:target';
+const ROOT = 'at://did:plc:target/app.bsky.feed.post/3kroot';
 const BLOCK = 'at://did:plc:me/app.bsky.graph.block/3kblock';
 
 const stubFetch = (response: Response) => {
@@ -62,6 +65,37 @@ describe('Bluesky のミュート、ブロック、通報の API', () => {
     expect(result).toEqual({ muted: false });
   });
 
+  it('muteBlueskyThread は root を JSON 本文で POST する', async () => {
+    const fetchMock = stubFetch(json({ threadMuted: true }));
+
+    const result = await muteBlueskyThread(ROOT);
+
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toBe('/api/iori/v1/bluesky/thread-mutes');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ root: ROOT });
+    expect(result).toEqual({ threadMuted: true });
+  });
+
+  it('unmuteBlueskyThread は root をクエリにして DELETE する', async () => {
+    const fetchMock = stubFetch(json({ threadMuted: false }));
+
+    const result = await unmuteBlueskyThread(ROOT);
+
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toBe(
+      '/api/iori/v1/bluesky/thread-mutes?root=at%3A%2F%2Fdid%3Aplc%3Atarget%2Fapp.bsky.feed.post%2F3kroot',
+    );
+    expect(init.method).toBe('DELETE');
+    expect(result).toEqual({ threadMuted: false });
+  });
+
+  it('muteBlueskyThread は失敗した応答を status つきのエラーにする', async () => {
+    stubFetch(json({ error: 'Bluesky request failed' }, 502));
+
+    await expect(muteBlueskyThread(ROOT)).rejects.toMatchObject({ message: 'Bluesky request failed', status: 502 });
+  });
+
   it('blockBlueskyActor は did を JSON 本文で POST する', async () => {
     const fetchMock = stubFetch(json({ blockUri: BLOCK }));
 
@@ -98,6 +132,26 @@ describe('Bluesky のミュート、ブロック、通報の API', () => {
     expect(JSON.parse(init.body as string)).toEqual({ did: DID, category: 'spam', comment: '宣伝' });
   });
 
+  it('reportBlueskyActor は uri と cid があれば本文に入れる', async () => {
+    const fetchMock = stubFetch(json({}, 201));
+
+    await reportBlueskyActor({
+      did: DID,
+      category: 'spam',
+      comment: '',
+      uri: 'at://did:plc:target/app.bsky.feed.post/3kpost',
+      cid: 'bafycid',
+    });
+
+    expect(JSON.parse(firstCall(fetchMock)[1].body as string)).toEqual({
+      did: DID,
+      category: 'spam',
+      comment: '',
+      uri: 'at://did:plc:target/app.bsky.feed.post/3kpost',
+      cid: 'bafycid',
+    });
+  });
+
   it('失敗した応答は、サーバーの error を message にした status つきのエラーにする', async () => {
     stubFetch(json({ error: 'Bluesky login failed' }, 502));
 
@@ -110,14 +164,30 @@ describe('Bluesky のミュート、ブロック、通報の API', () => {
     stubFetch(json({ error: 'Bluesky request failed' }, 502));
     const other = await muteBlueskyActor(DID).catch((error: unknown) => error);
 
-    for (const action of ['mute', 'block', 'report'] as const) {
+    for (const action of ['mute', 'muteThread', 'block', 'report'] as const) {
       expect(blueskyModerationFailureMessage(action, login)).toBe(
         'Bluesky にログインできないため、操作できませんでした。',
       );
     }
     expect(blueskyModerationFailureMessage('mute', other)).toBe('ミュートを変更できませんでした');
+    expect(blueskyModerationFailureMessage('muteThread', other)).toBe('スレッドのミュートを変更できませんでした');
     expect(blueskyModerationFailureMessage('block', other)).toBe('ブロックを変更できませんでした');
     expect(blueskyModerationFailureMessage('report', other)).toBe('通報できませんでした');
     expect(blueskyModerationFailureMessage('report', new Error('Bluesky login failed'))).toBe('通報できませんでした');
+  });
+
+  it('スレッドのミュートが 404 なら、投稿が見つからない文言にする。ほかの操作と認証切れは変えない', async () => {
+    stubFetch(json({ error: 'Bluesky post not found' }, 404));
+    const notFound = await muteBlueskyThread(ROOT).catch((error: unknown) => error);
+    stubFetch(json({ error: 'Bluesky login failed' }, 404));
+    const login = await muteBlueskyThread(ROOT).catch((error: unknown) => error);
+
+    expect(blueskyModerationFailureMessage('muteThread', notFound)).toBe(
+      '投稿が見つからないため、スレッドをミュートできませんでした',
+    );
+    expect(blueskyModerationFailureMessage('mute', notFound)).toBe('ミュートを変更できませんでした');
+    expect(blueskyModerationFailureMessage('muteThread', login)).toBe(
+      'Bluesky にログインできないため、操作できませんでした。',
+    );
   });
 });

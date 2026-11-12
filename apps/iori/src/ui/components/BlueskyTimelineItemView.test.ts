@@ -1,5 +1,5 @@
 import { jsx } from 'hono/jsx';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { BlueskyTimelineItemView } from './BlueskyTimelineItemView.tsx';
@@ -24,6 +24,7 @@ const base: IoriBlueskyTimelineItemBody = {
   indexedAt: Date.UTC(2026, 10, 8, 1),
   liked: false,
   reposted: false,
+  isOwn: false,
 };
 const render = (
   item: Partial<IoriBlueskyTimelineItemBody>,
@@ -40,6 +41,12 @@ const findMenuItems = (node: unknown): readonly PostMenuItem[] | undefined => {
   if (typeof tag === 'function') return findMenuItems(tag({ ...props, children }));
   return findMenuItems(children);
 };
+
+const menuSummary = (entry: PostMenuItem) => ({
+  key: entry.key,
+  label: entry.label,
+  danger: entry.kind === 'action' ? entry.danger : undefined,
+});
 
 const findButtonByTitle = (node: unknown, title: string): ClickableNode | undefined => {
   if (Array.isArray(node)) return node.map((child) => findButtonByTitle(child, title)).find((found) => found);
@@ -404,6 +411,43 @@ describe('BlueskyTimelineItemView', () => {
         { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: url },
         { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: url },
       ]);
+    });
+
+    describe('作者のモデレーション', () => {
+      const handlers = () => ({ onMuteAuthor: vi.fn(), onBlockAuthor: vi.fn(), onReportPost: vi.fn() });
+
+      it('ハンドラがあり他人の投稿なら、ミュート・ブロック・通報を danger で足す', () => {
+        expect((findMenuItems(BlueskyTimelineItemView({ item: base, ...handlers() })) ?? []).map(menuSummary)).toEqual([
+          { key: 'open-bluesky', label: 'Bluesky で開く', danger: undefined },
+          { key: 'copy-link', label: 'リンクをコピー', danger: undefined },
+          { key: 'mute', label: '@alice.bsky.social をミュート', danger: true },
+          { key: 'block', label: '@alice.bsky.social をブロック', danger: true },
+          { key: 'report', label: 'この投稿を通報', danger: true },
+        ]);
+      });
+
+      it('自分の投稿には出さない', () => {
+        const items = findMenuItems(BlueskyTimelineItemView({ item: { ...base, isOwn: true }, ...handlers() })) ?? [];
+
+        expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link']);
+      });
+
+      it('渡されたハンドラの項目だけを出す', () => {
+        const items = findMenuItems(BlueskyTimelineItemView({ item: base, onReportPost: vi.fn() })) ?? [];
+
+        expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link', 'report']);
+      });
+
+      it('選ぶと、ハンドラを item つきで呼ぶ', () => {
+        const calls = handlers();
+        const items = findMenuItems(BlueskyTimelineItemView({ item: base, ...calls })) ?? [];
+
+        for (const entry of items) if (entry.kind === 'action') void entry.onSelect();
+
+        expect(calls.onMuteAuthor).toHaveBeenCalledExactlyOnceWith(base);
+        expect(calls.onBlockAuthor).toHaveBeenCalledExactlyOnceWith(base);
+        expect(calls.onReportPost).toHaveBeenCalledExactlyOnceWith(base);
+      });
     });
 
     it('ハンドラが渡されない画面でも、操作の行とトリガーを出す', () => {
