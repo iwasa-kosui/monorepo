@@ -1,14 +1,18 @@
 import type { RA } from '@iwasa-kosui/result';
 import { type Context, Hono } from 'hono';
 
+import { blueskyFeedKindOf } from '../../domain/blueskyFeed/blueskyFeedUri.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
+import type { BlueskySavedFeed } from '../../ports/blueskyFeedReader.ts';
 import type { BlueskyProfile, BlueskyProfileNotFound } from '../../ports/blueskyProfileReader.ts';
 import type { FollowBlueskyActorUseCase } from '../../useCase/followBlueskyActor.ts';
 import type { GetBlueskyProfileUseCase } from '../../useCase/getBlueskyProfile.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { ListBlueskyActorLikesUseCase } from '../../useCase/listBlueskyActorLikes.ts';
 import type { ListBlueskyAuthorFeedUseCase } from '../../useCase/listBlueskyAuthorFeed.ts';
+import type { ListBlueskyFeedPostsUseCase } from '../../useCase/listBlueskyFeedPosts.ts';
+import type { ListBlueskySavedFeedsUseCase } from '../../useCase/listBlueskySavedFeeds.ts';
 import type { UnfollowBlueskyActorUseCase } from '../../useCase/unfollowBlueskyActor.ts';
 import { handleInternalError } from './helper/mastodonErrors.ts';
 import { bodyString, readRequestBody } from './helper/requestBody.ts';
@@ -21,6 +25,8 @@ export type WorkerIoriBlueskyProfileRouterDeps = Readonly<{
   getBlueskyProfileUseCase: GetBlueskyProfileUseCase | undefined;
   listBlueskyAuthorFeedUseCase: ListBlueskyAuthorFeedUseCase | undefined;
   listBlueskyActorLikesUseCase: ListBlueskyActorLikesUseCase | undefined;
+  listBlueskySavedFeedsUseCase: ListBlueskySavedFeedsUseCase | undefined;
+  listBlueskyFeedPostsUseCase: ListBlueskyFeedPostsUseCase | undefined;
   followBlueskyActorUseCase: FollowBlueskyActorUseCase | undefined;
   unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase | undefined;
   viewerDid?: (() => RA<string, BlueskyClientError>) | undefined;
@@ -50,6 +56,13 @@ export type IoriBlueskyAuthorFeedResponse = Readonly<{
 }>;
 
 export type IoriBlueskyLikedPostsResponse = Readonly<{
+  items: readonly IoriBlueskyTimelineItemBody[];
+  cursor: string | null;
+}>;
+
+export type IoriBlueskySavedFeedsResponse = Readonly<{ feeds: readonly BlueskySavedFeed[] }>;
+
+export type IoriBlueskyFeedPostsResponse = Readonly<{
   items: readonly IoriBlueskyTimelineItemBody[];
   cursor: string | null;
 }>;
@@ -91,6 +104,8 @@ export const createWorkerIoriBlueskyProfileRouter = ({
   getBlueskyProfileUseCase,
   listBlueskyAuthorFeedUseCase,
   listBlueskyActorLikesUseCase,
+  listBlueskySavedFeedsUseCase,
+  listBlueskyFeedPostsUseCase,
   followBlueskyActorUseCase,
   unfollowBlueskyActorUseCase,
   viewerDid,
@@ -139,6 +154,30 @@ export const createWorkerIoriBlueskyProfileRouter = ({
           items: page.val.items.map((item) => toItemBody(item, viewer)),
           cursor: page.val.cursor ?? null,
         } satisfies IoriBlueskyLikedPostsResponse,
+      );
+    })
+    .get('/iori/v1/bluesky/feeds', authn.requireUser(readAccounts), async (c) => {
+      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      if (listBlueskySavedFeedsUseCase === undefined) return c.json(disabled, 409);
+      const saved = await listBlueskySavedFeedsUseCase.run();
+      if (!saved.ok) return failure(c, saved.err);
+      return c.json({ feeds: saved.val.feeds } satisfies IoriBlueskySavedFeedsResponse);
+    })
+    .get('/iori/v1/bluesky/feeds/posts', authn.requireUser(readAccounts), async (c) => {
+      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      if (listBlueskyFeedPostsUseCase === undefined) return c.json(disabled, 409);
+      const uri = c.req.query('uri');
+      if (uri === undefined || blueskyFeedKindOf(uri) === undefined) {
+        return c.json({ error: 'Validation failed: uri' }, 400);
+      }
+      const page = await listBlueskyFeedPostsUseCase.run({ uri, cursor: c.req.query('cursor') || undefined });
+      if (!page.ok) return failure(c, page.err);
+      const viewer = await resolveViewerDid(viewerDid);
+      return c.json(
+        {
+          items: page.val.items.map((item) => toItemBody(item, viewer)),
+          cursor: page.val.cursor ?? null,
+        } satisfies IoriBlueskyFeedPostsResponse,
       );
     })
     .post(
