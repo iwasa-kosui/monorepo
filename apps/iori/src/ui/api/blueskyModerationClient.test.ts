@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   blockBlueskyActor,
+  blueskyModerationFailureMessage,
   fetchBlueskyModeration,
   muteBlueskyActor,
   reportBlueskyActor,
@@ -101,5 +102,22 @@ describe('Bluesky のミュート、ブロック、通報の API', () => {
     stubFetch(json({ error: 'Bluesky login failed' }, 502));
 
     await expect(muteBlueskyActor(DID)).rejects.toMatchObject({ message: 'Bluesky login failed', status: 502 });
+  });
+
+  it('失敗の文言は、ログイン失敗なら共通の文言、それ以外は操作ごとの文言にする', async () => {
+    stubFetch(json({ error: 'Bluesky login failed' }, 502));
+    const login = await muteBlueskyActor(DID).catch((error: unknown) => error);
+    stubFetch(json({ error: 'Bluesky request failed' }, 502));
+    const other = await muteBlueskyActor(DID).catch((error: unknown) => error);
+
+    for (const action of ['mute', 'block', 'report'] as const) {
+      expect(blueskyModerationFailureMessage(action, login)).toBe(
+        'Bluesky にログインできないため、操作できませんでした。',
+      );
+    }
+    expect(blueskyModerationFailureMessage('mute', other)).toBe('ミュートを変更できませんでした');
+    expect(blueskyModerationFailureMessage('block', other)).toBe('ブロックを変更できませんでした');
+    expect(blueskyModerationFailureMessage('report', other)).toBe('通報できませんでした');
+    expect(blueskyModerationFailureMessage('report', new Error('Bluesky login failed'))).toBe('通報できませんでした');
   });
 });

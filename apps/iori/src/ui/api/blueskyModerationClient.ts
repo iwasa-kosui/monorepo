@@ -4,7 +4,7 @@ import type {
   IoriBlueskyMuteResponse,
 } from '../../adaptor/routes/workerIoriBlueskyModerationRouter.ts';
 import type { ReportCategory } from '../components/ReportModal.tsx';
-import { requestUrl, toApiError } from './mastodonClient.ts';
+import { BLUESKY_LOGIN_FAILED_ERROR, isMastodonApiError, requestUrl, toApiError } from './mastodonClient.ts';
 
 const MODERATION_PATH = '/api/iori/v1/bluesky/moderation';
 const MUTES_PATH = '/api/iori/v1/bluesky/mutes';
@@ -48,3 +48,16 @@ export const reportBlueskyActor = async (
 ): Promise<void> => {
   await send('POST', REPORTS_PATH, input);
 };
+
+export type BlueskyModerationAction = 'mute' | 'block' | 'report';
+
+const MODERATION_FAILURE_MESSAGES: Readonly<Record<BlueskyModerationAction, string>> = {
+  mute: 'ミュートを変更できませんでした',
+  block: 'ブロックを変更できませんでした',
+  report: '通報できませんでした',
+};
+
+export const blueskyModerationFailureMessage = (action: BlueskyModerationAction, error: unknown): string =>
+  isMastodonApiError(error) && error.message === BLUESKY_LOGIN_FAILED_ERROR
+    ? 'Bluesky にログインできないため、操作できませんでした。'
+    : MODERATION_FAILURE_MESSAGES[action];

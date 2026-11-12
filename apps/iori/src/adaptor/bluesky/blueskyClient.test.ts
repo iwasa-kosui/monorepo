@@ -470,16 +470,22 @@ describe('createBlueskyClient の各操作', () => {
     expect(calls[0]?.init.method).toBe('GET');
   });
 
-  it('getRecord は collection に app.bsky.graph.follow を渡すと follow の uri を返す', async () => {
+  it('getRecord は collection に app.bsky.graph.follow を渡すと follow の uri と value を返す', async () => {
     const { client, calls } = setup(stored(), [
-      () => json({ uri: 'at://did:plc:abc/app.bsky.graph.follow/3kf', cid: 'bafyf', value: {} }),
+      () =>
+        json({ uri: 'at://did:plc:abc/app.bsky.graph.follow/3kf', cid: 'bafyf', value: { subject: 'did:plc:bob' } }),
     ]);
 
     const result = await client.getRecord('3kf', 'app.bsky.graph.follow');
 
     expect(result).toMatchObject({
       ok: true,
-      val: { uri: 'at://did:plc:abc/app.bsky.graph.follow/3kf', cid: 'bafyf', rkey: '3kf' },
+      val: {
+        uri: 'at://did:plc:abc/app.bsky.graph.follow/3kf',
+        cid: 'bafyf',
+        rkey: '3kf',
+        value: { subject: 'did:plc:bob' },
+      },
     });
     expect(Object.fromEntries(new URL(calls[0]!.url).searchParams)).toEqual({
       repo: 'did:plc:abc',
