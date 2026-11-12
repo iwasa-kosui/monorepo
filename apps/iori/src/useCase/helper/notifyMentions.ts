@@ -1,3 +1,5 @@
+import { getLogger } from '@logtape/logtape';
+
 import type { PushPayload, WebPushSender } from '../../adaptor/webPush/webPush.ts';
 import type { Actor, ActorResolverByUri } from '../../domain/actor/actor.ts';
 import type { BlockResolver } from '../../domain/block/block.ts';
@@ -68,7 +70,12 @@ async ({ now, mentioner, mentionPostId, recipientActorUris, replyRecipientUserId
       mentionerActorId: mentioner.id,
       mentionPostId,
     };
-    await mentionNotificationCreatedStore.store(Notification.createMentionNotification(notification, now));
+    try {
+      await mentionNotificationCreatedStore.store(Notification.createMentionNotification(notification, now));
+    } catch (error) {
+      getLogger().warn(`Failed to store a mention notification for ${recipientUri}: ${String(error)}`);
+      continue;
+    }
     created.push(recipient.userId);
   }
 
@@ -79,12 +86,16 @@ async ({ now, mentioner, mentionPostId, recipientActorUris, replyRecipientUserId
     url: '/notifications',
   };
   for (const userId of created) {
-    const subscriptionsResult = await pushSubscriptionsResolver.resolve(userId);
-    if (!subscriptionsResult.ok) {
-      continue;
-    }
-    for (const subscription of subscriptionsResult.val) {
-      await webPushSender.send(subscription, payload);
+    try {
+      const subscriptionsResult = await pushSubscriptionsResolver.resolve(userId);
+      if (!subscriptionsResult.ok) {
+        continue;
+      }
+      for (const subscription of subscriptionsResult.val) {
+        await webPushSender.send(subscription, payload);
+      }
+    } catch (error) {
+      getLogger().warn(`Failed to send a mention Web Push to ${userId}: ${String(error)}`);
     }
   }
 };

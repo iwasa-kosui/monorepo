@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import type { MentionNotificationCreatedStore } from '../../../domain/notification/notification.ts';
 import { Post, type RemotePost, type RemotePostUpdatedStore } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import { UpdateRemotePostUseCase } from '../../../useCase/updateRemotePost.ts';
@@ -33,7 +34,10 @@ afterEach(() => {
 const kosuiUri = `${SEED_ORIGIN}/users/kosui`;
 const hanakoUri = `${SEED_ORIGIN}/users/hanako`;
 
-const setup = (wrapStore: (store: RemotePostUpdatedStore) => RemotePostUpdatedStore = (store) => store) => {
+const setup = (
+  wrapStore: (store: RemotePostUpdatedStore) => RemotePostUpdatedStore = (store) => store,
+  wrapMentionStore: (store: MentionNotificationCreatedStore) => MentionNotificationCreatedStore = (store) => store,
+) => {
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
   const seed = createMastodonSeed(fixture);
@@ -77,7 +81,7 @@ const setup = (wrapStore: (store: RemotePostUpdatedStore) => RemotePostUpdatedSt
     linkPreviewsDeletedStore: createD1LinkPreviewsDeletedStore(db),
     ogpFetcher,
     localPostResolverByUri: createD1LocalPostResolverByUri(db, SEED_ORIGIN),
-    mentionNotificationCreatedStore: createD1MentionNotificationCreatedStore(db),
+    mentionNotificationCreatedStore: wrapMentionStore(createD1MentionNotificationCreatedStore(db)),
     mentionNotificationResolver: createD1MentionNotificationResolverByRecipientAndMentionPostId(db),
     pushSubscriptionsResolver: createD1PushSubscriptionsResolverByUserId(db),
     webPushSender,
@@ -665,6 +669,54 @@ describe('編集で新しく足された宛先への通知', () => {
 
     expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
     expect(t.row()).toMatchObject({ content: '<p>after</p>', editedAt: 5_000 });
+  });
+
+  it('1人目の宛先の通知の保存が例外を投げても、2人目の宛先には通知と Web Push を出す', async () => {
+    const failingUserIds = new Set<string>();
+    const t = setup(undefined, (real) => ({
+      store: (event) => {
+        if (failingUserIds.has(event.aggregateState.recipientUserId)) {
+          throw new Error('UNIQUE constraint failed: notification_mentions_recipient_post_unique');
+        }
+        return real.store(event);
+      },
+    }));
+    const taro = t.seed.addLocalActor('taro');
+    failingUserIds.add(t.hanako.userId);
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+    t.addPushSubscription(taro.userId, 'https://push.example/taro');
+
+    const result = await t.useCase.run(t.input({ recipientActorUris: [hanakoUri, `${SEED_ORIGIN}/users/taro`] }));
+
+    expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
+    expect(t.mentionNotifications()).toEqual([
+      { recipientUserId: taro.userId, mentionerActorId: t.alice.actorId, mentionPostId: t.post.postId },
+    ]);
+    expect(t.webPushSender.send).toHaveBeenCalledTimes(1);
+    expect(t.webPushSender.send).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'https://push.example/taro' }),
+      mentionPayload,
+    );
+  });
+
+  it('1人目の宛先への Web Push が例外を投げても、2人目の宛先には Web Push を出す', async () => {
+    const t = setup();
+    const taro = t.seed.addLocalActor('taro');
+    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
+    t.addPushSubscription(taro.userId, 'https://push.example/taro');
+    t.webPushSender.send.mockImplementationOnce(() => {
+      throw new Error('push failed');
+    });
+
+    const result = await t.useCase.run(t.input({ recipientActorUris: [hanakoUri, `${SEED_ORIGIN}/users/taro`] }));
+
+    expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
+    expect(t.mentionNotifications()).toHaveLength(2);
+    expect(t.webPushSender.send).toHaveBeenCalledTimes(2);
+    expect(t.webPushSender.send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ endpoint: 'https://push.example/taro' }),
+      mentionPayload,
+    );
   });
 
   it('use case の古さの判定を通っても、同時の新しい Update で store が何も書かなかったときは、通知を出さず staleEdit を返す', async () => {
