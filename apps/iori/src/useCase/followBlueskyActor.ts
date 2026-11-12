@@ -27,6 +27,9 @@ const followUriPattern = /^at:\/\/[^/]+\/app\.bsky\.graph\.follow\/([^/]+)$/;
 const isRecordMissing = (error: BlueskyClientError): boolean =>
   error.kind === 'http' && (error.status === 404 || error.code === 'RecordNotFound');
 
+const isFollowOf = (value: unknown, did: string): boolean =>
+  typeof value === 'object' && value !== null && 'subject' in value && value.subject === did;
+
 const create = ({ reader, client }: Deps): FollowBlueskyActorUseCase => {
   const run = async ({ did, followUri }: Input): RA<Ok, Err> => {
     const profile = await reader.getProfile(did);
@@ -38,7 +41,10 @@ const create = ({ reader, client }: Deps): FollowBlueskyActorUseCase => {
       const rkey = candidate === undefined ? undefined : followUriPattern.exec(candidate)?.[1];
       if (rkey === undefined) continue;
       const found = await client.getRecord(rkey, FOLLOW_COLLECTION);
-      if (found.ok) return RA.ok({ following: true, followUri: found.val.uri });
+      if (found.ok) {
+        if (isFollowOf(found.val.value, did)) return RA.ok({ following: true, followUri: found.val.uri });
+        continue;
+      }
       if (!isRecordMissing(found.err)) return RA.err(found.err);
     }
     const created = await client.createFollow(did);

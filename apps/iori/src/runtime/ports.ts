@@ -122,6 +122,7 @@ import type { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescri
 import type { UploadMediaUseCase } from '../useCase/uploadMedia.ts';
 import type { ValidateAuthorizationRequestUseCase } from '../useCase/validateAuthorizationRequest.ts';
 import type { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
+import type { BlueskyModerationRuntimePorts } from './blueskyModeration.ts';
 import type { BlueskyProfileRuntimePorts } from './blueskyProfile.ts';
 import type { BlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
 import type { WorkerReportAction } from './workerReportActions.ts';
@@ -218,6 +219,7 @@ export type IoriDigestRuntimePorts = Readonly<{
   isDigestOwner: IsDigestOwner;
 }>;
 export type IoriBlueskyTimelineRuntimePorts = BlueskyTimelineRuntimePorts;
+export type IoriBlueskyModerationRuntimePorts = BlueskyModerationRuntimePorts;
 export type IoriBlueskyProfileRuntimePorts = BlueskyProfileRuntimePorts;
 export type IoriBlueskyCrosspostStatusRuntimePorts = Readonly<{
   userResolverByUsername: UserResolverByUsername;
@@ -286,6 +288,7 @@ export type IoriRuntimePorts = Readonly<{
   mastodon: IoriMastodonRuntimePorts;
   digest: IoriDigestRuntimePorts;
   blueskyTimeline: IoriBlueskyTimelineRuntimePorts;
+  blueskyModeration: IoriBlueskyModerationRuntimePorts;
   blueskyProfile: IoriBlueskyProfileRuntimePorts;
   blueskyCrosspostStatus: IoriBlueskyCrosspostStatusRuntimePorts;
   timeline: IoriTimelineRuntimePorts;
