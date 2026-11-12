@@ -251,6 +251,50 @@ describe('NotificationItem', () => {
       });
     });
 
+    describe('with the post uri', () => {
+      const uri = 'at://did:plc:me/app.bsky.feed.post/3kpost';
+      const url = 'https://bsky.app/profile/did:plc:me/post/3kpost';
+
+      it('links a favourite and a reblog to the post page in iori', () => {
+        const like = render(notification({
+          type: 'favourite',
+          account: blueskyAccount,
+          iori: { bluesky: { reason: 'like', url, uri } },
+        }));
+        const repost = render(notification({
+          type: 'reblog',
+          account: blueskyAccount,
+          iori: { bluesky: { reason: 'repost', url, uri } },
+        }));
+
+        expect(like).toContain('href="/bluesky/profile/did:plc:me/post/3kpost"');
+        expect(repost).toContain('href="/bluesky/profile/did:plc:me/post/3kpost"');
+        expect(like).not.toContain('bsky.app');
+      });
+
+      it('links a mention to the post page in iori', () => {
+        const html = render(notification({
+          type: 'mention',
+          account: blueskyAccount,
+          iori: {
+            bluesky: { reason: 'reply', url, uri: 'at://did:plc:carol/app.bsky.feed.post/3kreply', text: 'hi' },
+          },
+        }));
+
+        expect(html).toContain('href="/bluesky/profile/did:plc:carol/post/3kreply"');
+      });
+
+      it('keeps the bsky.app link when the uri is not a post uri', () => {
+        const html = render(notification({
+          type: 'favourite',
+          account: blueskyAccount,
+          iori: { bluesky: { reason: 'like', url, uri: 'at://did:plc:me/app.bsky.feed.like/3klike' } },
+        }));
+
+        expect(html).toContain(`href="${url}"`);
+      });
+    });
+
     it('renders a follow and a reblog without a status', () => {
       const follow = render(notification({
         type: 'follow',

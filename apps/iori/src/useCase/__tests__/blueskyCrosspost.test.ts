@@ -94,6 +94,7 @@ const setup = () => {
     deleteRepost: async () => RA.err(failure('deleteRepost is not used')),
     createFollow: async () => RA.err(failure('createFollow is not used')),
     deleteFollow: async () => RA.err(failure('deleteFollow is not used')),
+    updateSeen: async () => RA.err(failure('updateSeen is not used')),
   };
 
   const stored = new Map<string, { bytes: Uint8Array; contentType: string }>();

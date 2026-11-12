@@ -209,6 +209,7 @@ describe('createBlueskyTimelineRuntimePorts', () => {
     expect(ports.blueskyTimelineEnabled).toBe(false);
     expect(ports.blueskyTimelineItemsResolver.resolve).toBeTypeOf('function');
     expect(ports.replyToBlueskyPostUseCase).toBeUndefined();
+    expect(ports.markBlueskyNotificationsSeenUseCase).toBeUndefined();
   });
 
   it('有効なときは取り込みを有効として扱う', () => {
@@ -217,5 +218,6 @@ describe('createBlueskyTimelineRuntimePorts', () => {
 
     expect(ports.blueskyTimelineEnabled).toBe(true);
     expect(ports.replyToBlueskyPostUseCase?.run).toBeTypeOf('function');
+    expect(ports.markBlueskyNotificationsSeenUseCase?.run).toBeTypeOf('function');
   });
 });

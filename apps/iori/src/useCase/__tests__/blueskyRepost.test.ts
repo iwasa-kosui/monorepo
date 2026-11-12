@@ -5,9 +5,11 @@ import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.
 import { createD1BlueskyRepostDeletedStore } from '../../adaptor/d1/blueskyTimeline/blueskyRepostDeletedStore.ts';
 import { createD1BlueskyRepostSavedStore } from '../../adaptor/d1/blueskyTimeline/blueskyRepostSavedStore.ts';
 import { createD1BlueskyRepostTargetResolver } from '../../adaptor/d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
+import { createD1BlueskyRepostUriResolver } from '../../adaptor/d1/blueskyTimeline/blueskyRepostUriResolver.ts';
 import { deriveBlueskyRepostRkey } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
+import type { BlueskyPostCidResolver } from '../../ports/blueskyPostCidResolver.ts';
 import type { BlueskyViewerRepostResolver } from '../../ports/blueskyViewerRepostResolver.ts';
 import { RepostBlueskyPostUseCase } from '../repostBlueskyPost.ts';
 import { UndoRepostBlueskyPostUseCase } from '../undoRepostBlueskyPost.ts';
@@ -35,10 +37,16 @@ const setup = () => {
   const deleteRepost = vi.fn<BlueskyClient['deleteRepost']>(async () => RA.ok(undefined));
   const resolveViewerRepost = vi.fn<BlueskyViewerRepostResolver['resolve']>(async () => RA.ok(null));
   const targetResolver = createD1BlueskyRepostTargetResolver(db);
+  const repostUriResolver = createD1BlueskyRepostUriResolver(db);
+  const resolveCid = vi.fn<BlueskyPostCidResolver['resolve']>(async (uri) =>
+    RA.ok(uri === POST ? 'bafyfresh' : undefined)
+  );
   const save = vi.fn(createD1BlueskyRepostSavedStore(db).save);
   const repost = RepostBlueskyPostUseCase.create({
     client: { createRepost },
     targetResolver,
+    repostUriResolver,
+    cidResolver: { resolve: resolveCid },
     viewerRepostResolver: { resolve: resolveViewerRepost },
     savedStore: { save },
     now: () => NOW,
@@ -46,6 +54,7 @@ const setup = () => {
   const undoRepost = UndoRepostBlueskyPostUseCase.create({
     client: { deleteRepost },
     targetResolver,
+    repostUriResolver,
     deletedStore: createD1BlueskyRepostDeletedStore(db),
   });
   const reposts = () => sqlite.prepare('SELECT subjectUri, repostUri, createdAt FROM bluesky_reposts').all();
@@ -55,7 +64,19 @@ const setup = () => {
       repostUri,
       1,
     );
-  return { repost, undoRepost, createRepost, deleteRepost, resolveViewerRepost, save, reposts, seedRepost, queries };
+  return {
+    repost,
+    undoRepost,
+    createRepost,
+    deleteRepost,
+    resolveCid,
+    resolveViewerRepost,
+    save,
+    reposts,
+    seedRepost,
+    queries,
+    sqlite,
+  };
 };
 
 describe('RepostBlueskyPostUseCase', () => {
@@ -183,6 +204,78 @@ describe('RepostBlueskyPostUseCase', () => {
 
     expect(result).toEqual({ ok: false, err: failure });
     expect(t.reposts()).toEqual([]);
+  });
+});
+
+describe('RepostBlueskyPostUseCase (uri)', () => {
+  it('cid を取得して、タイムラインの行が無くても作成し保存する', async () => {
+    const t = setup();
+    t.sqlite.exec('DELETE FROM bluesky_timeline_items');
+
+    const result = await t.repost.run({ uri: POST });
+
+    expect(result).toEqual({ ok: true, val: { reposted: true } });
+    expect(t.resolveCid).toHaveBeenCalledExactlyOnceWith(POST);
+    expect(t.createRepost).toHaveBeenCalledExactlyOnceWith(
+      { uri: POST, cid: 'bafyfresh' },
+      await deriveBlueskyRepostRkey(POST),
+    );
+    expect(t.reposts()).toEqual([{ subjectUri: POST, repostUri: CREATED, createdAt: NOW }]);
+  });
+
+  it('投稿が見つからなければ NotFound にし、Bluesky を呼ばない', async () => {
+    const t = setup();
+
+    const result = await t.repost.run({ uri: 'at://did:plc:a/app.bsky.feed.post/gone' });
+
+    expect(result).toEqual({ ok: false, err: { type: 'BlueskyRepostTargetNotFound' } });
+    expect(t.createRepost).not.toHaveBeenCalled();
+  });
+
+  it('cid の取得が失敗したら、そのエラーを返し、Bluesky に書かない', async () => {
+    const t = setup();
+    t.resolveCid.mockReturnValueOnce(RA.err(failure));
+
+    expect(await t.repost.run({ uri: POST })).toEqual({ ok: false, err: failure });
+    expect(t.createRepost).not.toHaveBeenCalled();
+  });
+
+  it('リポスト済みなら Bluesky を呼ばず、成功を返す', async () => {
+    const t = setup();
+    t.seedRepost();
+
+    expect(await t.repost.run({ uri: POST })).toEqual({ ok: true, val: { reposted: true } });
+    expect(t.createRepost).not.toHaveBeenCalled();
+  });
+});
+
+describe('UndoRepostBlueskyPostUseCase (uri)', () => {
+  it('bluesky_reposts を subjectUri で引き、repostUri の rkey で削除して行を消す', async () => {
+    const t = setup();
+    t.seedRepost();
+
+    const result = await t.undoRepost.run({ uri: POST });
+
+    expect(result).toEqual({ ok: true, val: { reposted: false } });
+    expect(t.deleteRepost).toHaveBeenCalledExactlyOnceWith('3kold');
+    expect(t.reposts()).toEqual([]);
+    expect(t.resolveCid).not.toHaveBeenCalled();
+  });
+
+  it('行がなければ Bluesky を呼ばず、成功を返す', async () => {
+    const t = setup();
+
+    expect(await t.undoRepost.run({ uri: POST })).toEqual({ ok: true, val: { reposted: false } });
+    expect(t.deleteRepost).not.toHaveBeenCalled();
+  });
+
+  it('Bluesky の削除が失敗したら、エラーを返し、行を消さない', async () => {
+    const t = setup();
+    t.seedRepost();
+    t.deleteRepost.mockReturnValueOnce(RA.err(failure));
+
+    expect(await t.undoRepost.run({ uri: POST })).toEqual({ ok: false, err: failure });
+    expect(t.reposts()).toEqual([{ subjectUri: POST, repostUri: REPOST, createdAt: 1 }]);
   });
 });
 

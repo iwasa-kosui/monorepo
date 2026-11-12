@@ -6,7 +6,7 @@ import type {
   Notification as DomainNotification,
 } from '../../domain/notification/notification.ts';
 import type { PostId } from '../../domain/post/postId.ts';
-import { blueskyPostUrlOfUri } from '../../helper/blueskyUrl.ts';
+import { blueskyPostUriPattern, blueskyPostUrlOfUri } from '../../helper/blueskyUrl.ts';
 import {
   type Account,
   IORI_EMOJI_REACTION_TYPE,
@@ -99,21 +99,33 @@ const BLUESKY_POST_COLLECTION = '/app.bsky.feed.post/';
 const blueskyPostUrlOf = (uri: string): string | undefined =>
   uri.includes(BLUESKY_POST_COLLECTION) ? blueskyPostUrlOfUri(uri) : undefined;
 
+const blueskyPostUriOf = (uri: string): { uri: string } | Record<string, never> =>
+  blueskyPostUriPattern.test(uri) ? { uri } : {};
+
 export const blueskyExtensionOf = (
   notification: BlueskyNotification,
 ): NonNullable<IoriNotificationExtension['bluesky']> => {
   const profileUrl = blueskyProfileUrlOf(notification.author);
   switch (notification.type) {
     case 'blueskyLike':
-      return { reason: 'like', url: blueskyPostUrlOf(notification.subjectUri) ?? profileUrl };
+      return {
+        reason: 'like',
+        url: blueskyPostUrlOf(notification.subjectUri) ?? profileUrl,
+        ...blueskyPostUriOf(notification.subjectUri),
+      };
     case 'blueskyRepost':
-      return { reason: 'repost', url: blueskyPostUrlOf(notification.subjectUri) ?? profileUrl };
+      return {
+        reason: 'repost',
+        url: blueskyPostUrlOf(notification.subjectUri) ?? profileUrl,
+        ...blueskyPostUriOf(notification.subjectUri),
+      };
     case 'blueskyFollow':
       return { reason: 'follow', url: profileUrl };
     case 'blueskyMention':
       return {
         reason: notification.reason,
         url: blueskyPostUrlOf(notification.blueskyUri) ?? profileUrl,
+        ...blueskyPostUriOf(notification.blueskyUri),
         text: notification.text,
       };
   }
