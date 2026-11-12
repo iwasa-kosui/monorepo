@@ -1,0 +1,326 @@
+---
+import './figure.css';
+
+import { richHtml } from './rich';
+
+const messages = [
+  '「次へ」を押して、時間を進めます。2件の来院は、どちらも `reserved` です。',
+  'タマの来院がキャンセルされます。このときは記録のコードがありません。`visits` の `status` だけが `cancelled` になります。',
+  '`cancelVisit` に記録を足します。',
+  'ポチの来院がキャンセルされます。`visits` と `business_events` の両方に残ります。',
+  '第3章の SELECT を実行します。タマの行は `event_at` から `reason` までが `NULL` です。足す前に起きたことは分かりません。',
+];
+const points = [
+  'タマの来院のキャンセル',
+  '`cancelVisit` に記録を足す',
+  'ポチの来院のキャンセル',
+];
+---
+
+<section
+  class="cfig"
+  data-before-record-figure
+  data-step="0"
+  data-tama="reserved"
+  data-pochi="reserved"
+  data-events="empty"
+  data-messages={JSON.stringify(messages)}
+  aria-label="記録を足す前と後の来院を時間順に見る図"
+>
+  <ol class="timeline">
+    {
+      points.map((point) => (
+        <li class="point" data-state="future">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="point-label" set:html={richHtml(point)} />
+        </li>
+      ))
+    }
+  </ol>
+
+  <div class="tables">
+    <table class="cfig-table">
+      <caption><code>visits</code></caption>
+      <thead>
+        <tr>
+          <th scope="col">id</th>
+          <th scope="col">status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>visit-tama</td>
+          <td class="status" data-row="tama">
+            <span class="s-reserved">reserved</span>
+            <span class="s-cancelled">cancelled</span>
+          </td>
+        </tr>
+        <tr>
+          <td>visit-pochi</td>
+          <td class="status" data-row="pochi">
+            <span class="s-reserved">reserved</span>
+            <span class="s-cancelled">cancelled</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <table class="cfig-table">
+      <caption><code>business_events</code></caption>
+      <thead>
+        <tr>
+          <th scope="col">event_name</th>
+          <th scope="col">target_id</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="row-empty">
+          <td colspan="2">行がありません</td>
+        </tr>
+        <tr class="row-event">
+          <td>VisitCancelled</td>
+          <td>visit-pochi</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="result">
+    <table class="cfig-table">
+      <caption class="cfig-sr">SELECT の結果</caption>
+      <thead>
+        <tr>
+          <th scope="col">id</th>
+          <th scope="col">status</th>
+          <th scope="col">event_at</th>
+          <th scope="col">event_name</th>
+          <th scope="col">operated_by</th>
+          <th scope="col">reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>visit-pochi</td>
+          <td>cancelled</td>
+          <td class="wrap">2026-11-06T<wbr />18:11:58.846Z</td>
+          <td>VisitCancelled</td>
+          <td>受付スタッフ</td>
+          <td>飼い主の都合</td>
+        </tr>
+        <tr>
+          <td>visit-tama</td>
+          <td>cancelled</td>
+          <td class="null">NULL</td>
+          <td class="null">NULL</td>
+          <td class="null">NULL</td>
+          <td class="null">NULL</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="cfig-controls">
+    <button type="button" data-action="next">次へ</button>
+    <button type="button" data-action="reset" disabled>最初に戻す</button>
+  </div>
+
+  <p
+    class="cfig-message"
+    aria-live="polite"
+    data-message
+    set:html={richHtml(messages[0] ?? '')}
+  >
+  </p>
+</section>
+
+<style>
+.timeline {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  top: 0.4375rem;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--ink);
+}
+.point {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding-inline: 0.25rem;
+  text-align: center;
+}
+.dot {
+  position: relative;
+  width: 1rem;
+  height: 1rem;
+  box-sizing: border-box;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+  transition: background-color 0.4s ease, box-shadow 0.4s ease;
+}
+.point-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.point[data-state="done"] .dot {
+  background: var(--ink);
+}
+.point[data-state="current"] .dot {
+  background: var(--red);
+  box-shadow: 0 0 0 4px var(--yellow);
+}
+.point[data-state="current"] .point-label {
+  color: var(--ink);
+}
+.point[data-state="future"] .point-label {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.tables {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 0.5rem;
+}
+.status {
+  position: relative;
+  white-space: nowrap;
+}
+.s-cancelled {
+  display: none;
+  border: 2px solid var(--red);
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  color: var(--red);
+  font-weight: 700;
+}
+[data-tama="cancelled"] [data-row="tama"] .s-reserved,
+[data-pochi="cancelled"] [data-row="pochi"] .s-reserved {
+  display: none;
+}
+[data-tama="cancelled"] [data-row="tama"] .s-cancelled,
+[data-pochi="cancelled"] [data-row="pochi"] .s-cancelled {
+  display: inline-block;
+}
+.row-event {
+  display: none;
+}
+[data-events="row"] .row-empty {
+  display: none;
+}
+[data-events="row"] .row-event {
+  display: table-row;
+  background: var(--soft-yellow);
+  font-weight: 700;
+}
+.row-empty td {
+  color: var(--muted);
+}
+.result {
+  display: none;
+  overflow-x: auto;
+}
+[data-step="4"] .result {
+  display: block;
+}
+.result .cfig-table {
+  font-size: 0.8125rem;
+}
+.result .cfig-table th,
+.result .cfig-table td {
+  padding-inline: 0.25rem;
+  white-space: nowrap;
+}
+.result .cfig-table td.wrap {
+  white-space: normal;
+  overflow-wrap: normal;
+}
+.result td.null {
+  background: #fee2e2;
+  color: var(--red);
+  font-style: italic;
+  font-weight: 700;
+}
+
+@media (max-height: 700px) {
+  .point-label {
+    font-size: 0.75rem;
+    line-height: 1.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    transition: none;
+  }
+}
+</style>
+
+<script>
+import { richHtml } from './rich';
+
+const last = 4;
+
+for (
+  const root of document.querySelectorAll<HTMLElement>(
+    '[data-before-record-figure]',
+  )
+) {
+  const message = root.querySelector<HTMLElement>('[data-message]');
+  const next = root.querySelector<HTMLButtonElement>('[data-action="next"]');
+  const reset = root.querySelector<HTMLButtonElement>('[data-action="reset"]');
+  const points = [...root.querySelectorAll<HTMLElement>('.point')];
+  if (message === null || next === null || reset === null) continue;
+  const messages = JSON.parse(
+    root.dataset.messages ?? '[]',
+  ) as readonly string[];
+
+  let step = 0;
+
+  const show = (): void => {
+    root.dataset.step = String(step);
+    root.dataset.tama = step >= 1
+      ? 'cancelled'
+      : 'reserved';
+    root.dataset.pochi = step >= 3
+      ? 'cancelled'
+      : 'reserved';
+    root.dataset.events = step >= 3
+      ? 'row'
+      : 'empty';
+    points.forEach((point, index) => {
+      const order = index + 1;
+      point.dataset.state = step === order
+        ? 'current'
+        : step > order
+        ? 'done'
+        : 'future';
+    });
+    message.innerHTML = richHtml(messages[step] ?? '');
+    next.disabled = step === last;
+    reset.disabled = step === 0;
+  };
+
+  next.addEventListener('click', () => {
+    step += 1;
+    show();
+  });
+  reset.addEventListener('click', () => {
+    step = 0;
+    show();
+  });
+}
+</script>
