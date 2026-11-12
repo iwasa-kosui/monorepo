@@ -195,10 +195,17 @@
     flex: 1 1 auto;
     flex-shrink: 1;
     flex-direction: column;
-    min-height: 12.5rem;
+    min-height: 14rem;
     max-height: 28rem;
     margin-block: 0;
     padding: 0.5rem;
+  }
+  /* 第4章の02〜04は問いと説明が長く、14rem では1280x640に収まらない */
+  .content
+    .chapter-body
+    > .playground-switch[aria-label="実行欄"]
+    ~ .playground {
+    min-height: 12.5rem;
   }
   .chapter-body .playground-status,
   .chapter-body .playground-toolbar {
