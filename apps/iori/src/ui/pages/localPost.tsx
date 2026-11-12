@@ -2,6 +2,7 @@ import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
+import type { PostDestination } from '../../domain/post/postDestination.ts';
 import {
   createStatus,
   deleteStatus,
@@ -11,6 +12,8 @@ import {
   isNotFoundError,
 } from '../api/mastodonClient.ts';
 import { accountHref, displayStatus, isLocalAccount } from '../api/status.ts';
+import { DEFAULT_POST_DESTINATION } from '../components/postDestination.ts';
+import { replyParams } from '../components/postSubmission.ts';
 import { PostView } from '../components/PostView.tsx';
 import { ReplyModal } from '../components/ReplyModal.tsx';
 
@@ -33,6 +36,7 @@ const LocalPostPage = () => {
   const [currentAccountId, setCurrentAccountId] = useState<string | undefined>(undefined);
 
   const [replyToPostId, setReplyToPostId] = useState<string | null>(null);
+  const [replyDestination, setReplyDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
 
@@ -103,8 +107,9 @@ const LocalPostPage = () => {
 
     setIsSendingReply(true);
     try {
-      await createStatus({ status: content, in_reply_to_id: replyToPostId, content_type: 'text/markdown' });
+      await createStatus(replyParams(replyToPostId, content, replyDestination));
       setReplyToPostId(null);
+      setReplyDestination(DEFAULT_POST_DESTINATION);
       fetchThread();
     } catch (err) {
       alert((err as Error).message);
@@ -289,6 +294,8 @@ const LocalPostPage = () => {
           onSubmit={handleSubmitReply}
           replyToUsername={replyToPost?.account.username}
           isSubmitting={isSendingReply}
+          destination={replyDestination}
+          onDestinationChange={setReplyDestination}
         />
       )}
 
