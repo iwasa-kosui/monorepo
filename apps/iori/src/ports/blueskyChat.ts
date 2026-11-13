@@ -5,7 +5,11 @@ import type {
   BlueskyChatMessage,
   BlueskyChatTextMessage,
 } from '../domain/blueskyChat/blueskyChat.ts';
-import type { BlueskyFacet, BlueskyMentionFacet } from '../domain/blueskyCrosspost/blueskyPostRecord.ts';
+import type {
+  BlueskyFacet,
+  BlueskyMentionFacet,
+  BlueskyTagFacet,
+} from '../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import type { BlueskyClientError } from './blueskyClient.ts';
 
 export type BlueskyChatPage<T> = Readonly<{ items: readonly T[]; cursor: string | undefined }>;
@@ -24,7 +28,7 @@ export type BlueskyChat = Readonly<{
     input: Readonly<{
       convoId: string;
       text: string;
-      facets?: ReadonlyArray<BlueskyFacet | BlueskyMentionFacet> | undefined;
+      facets?: ReadonlyArray<BlueskyFacet | BlueskyMentionFacet | BlueskyTagFacet> | undefined;
     }>,
   ) => RA<BlueskyChatTextMessage, BlueskyClientError>;
   updateRead: (

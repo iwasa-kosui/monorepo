@@ -4,6 +4,9 @@ const urlPattern = /https?:\/\/[\x21-\x7E]+/g;
 // 公式アプリの検出に合わせ、@ の直前が先頭・空白・( のときだけ mention にする
 const mentionPattern =
   /(?<=^|\s|\()@((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)/g;
+// @atproto/api の detectFacets と同じ規則
+const hashtagPattern =
+  /(^|\s)[#＃]((?!\uFE0F)[^\u20E2\s\u00AD\u2060\u200A\u200B\u200C\u200D]*[^\u20E2\d\s\p{P}\u00AD\u2060\u200A\u200B\u200C\u200D]+[^\u20E2\s\u00AD\u2060\u200A\u200B\u200C\u200D]*)?/gu;
 const trailingPunctuation = /[.,;:!?'"\]}>]$/;
 
 const trimUrl = (url: string): string => {
@@ -28,3 +31,11 @@ export const findMentions = (text: string, urls: readonly Span[]): Array<Span & 
     end: match.index + match[0].length,
     handle: match[1]!.toLowerCase(),
   })).filter((mention) => !urls.some((url) => mention.start < url.end && url.start < mention.end));
+
+export const findHashtags = (text: string): Array<Span & Readonly<{ tag: string }>> =>
+  Array.from(text.matchAll(hashtagPattern)).flatMap((match) => {
+    const tag = match[2]?.trim().replace(/\p{P}+$/gu, '');
+    if (tag === undefined || tag.length === 0 || tag.length > 64) return [];
+    const start = match.index + match[1]!.length;
+    return [{ start, end: start + 1 + tag.length, tag }];
+  });

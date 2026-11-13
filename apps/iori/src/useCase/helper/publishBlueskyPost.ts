@@ -20,6 +20,7 @@ import type {
   BlueskyFacet,
   BlueskyMentionFacet,
   BlueskyPostRecord,
+  BlueskyTagFacet,
 } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import { blueskyTidOf } from '../../domain/blueskyCrosspost/blueskyRkey.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
@@ -31,6 +32,7 @@ import type {
 } from '../../ports/blueskyClient.ts';
 import { type BlueskyLinkPreviewDeps, resolveBlueskyLinkPreview } from './blueskyLinkPreview.ts';
 import { findMentionHandles, withMentionFacets } from './blueskyMentionFacets.ts';
+import { withTagFacets } from './blueskyTagFacets.ts';
 import { findUrls } from './blueskyTextMatches.ts';
 
 export type BlueskyPostInvalidReason =
@@ -92,10 +94,10 @@ export const resolveDids = async (
 export const buildFacets = async (
   text: string,
   query: PublishBlueskyPostDeps['query'],
-): Promise<Array<BlueskyFacet | BlueskyMentionFacet>> => {
+): Promise<Array<BlueskyFacet | BlueskyMentionFacet | BlueskyTagFacet>> => {
   const urlFacets = findUrls(text).map((url) => toFacet(text, url));
   const dids = await resolveDids(query, findMentionHandles(text, urlFacets));
-  return withMentionFacets(text, urlFacets, dids);
+  return withTagFacets(text, withMentionFacets(text, urlFacets, dids));
 };
 
 const uploadImages = async (
