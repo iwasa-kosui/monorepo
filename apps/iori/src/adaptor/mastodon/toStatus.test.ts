@@ -209,6 +209,13 @@ describe('toStatus', () => {
     expect(status.uri).toBe(remotePost.uri);
   });
 
+  it('falls back to the uri when the url of a remote post is a relative path', () => {
+    const status = toStatus({ ...remotePost, url: '/@alice/1' }, options);
+
+    expect(status.url).toBe(remotePost.uri);
+    expect(status.uri).toBe(remotePost.uri);
+  });
+
   it('puts the summary and sensitive flag of a remote post into spoiler_text and sensitive', () => {
     const status = toStatus({ ...remotePost, summary: 'ネタバレ注意', sensitive: true }, options);
 

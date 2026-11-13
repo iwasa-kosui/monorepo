@@ -8,6 +8,7 @@ import type { Visibility } from '../../domain/post/visibility.ts';
 import type { RepostId } from '../../domain/repost/repostId.ts';
 import type { RepostTimelineItem } from '../../domain/timeline/timelineItem.ts';
 import { blueskyPostUrlOfUri } from '../../helper/blueskyUrl.ts';
+import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { htmlToPlainText } from '../text/htmlToPlainText.ts';
 import type { Account, IoriBlueskyCrosspost, MediaAttachment, Poll, PreviewCard, Status } from './entities.ts';
 import { toSafeApiUrl } from './safeApiUrl.ts';
@@ -90,7 +91,7 @@ const toPostUrls = (
   return {
     uri: safe ?? new URL(`/api/v1/statuses/${post.postId}`, options.baseUrl).href,
     // Mastodon の url は人が開くページなので、Note の url を AP の id より優先する
-    url: toSafeApiUrl(post.url, options.baseUrl) ?? safe ?? null,
+    url: safeAbsoluteUrl(post.url) ?? safe ?? null,
   };
 };
 
