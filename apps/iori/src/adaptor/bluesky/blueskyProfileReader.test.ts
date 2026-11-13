@@ -222,3 +222,72 @@ describe('createBlueskyProfileReader.getActorLikes', () => {
     expect(await failing.reader.getActorLikes({ actor: DID, cursor: undefined })).toEqual({ ok: false, err: error });
   });
 });
+
+describe.each(
+  [
+    { method: 'getFollows', nsid: 'app.bsky.graph.getFollows', key: 'follows' },
+    { method: 'getFollowers', nsid: 'app.bsky.graph.getFollowers', key: 'followers' },
+  ] as const,
+)('createBlueskyProfileReader.$method', ({ method, nsid, key }) => {
+  const bob = { did: 'did:plc:bob', handle: 'bob.bsky.social', displayName: 'Bob', viewer: { following: FOLLOW } };
+
+  it(`${nsid} を actor と limit 50 で呼び、cursor は指定があるときだけ付ける`, async () => {
+    const first = clientReturning(RA.ok({ subject: { did: DID, handle: 'alice.bsky.social' }, [key]: [] }));
+    const next = clientReturning(RA.ok({ subject: { did: DID, handle: 'alice.bsky.social' }, [key]: [] }));
+
+    await first.reader[method]({ actor: DID, cursor: undefined });
+    await next.reader[method]({ actor: DID, cursor: 'abc' });
+
+    expect(first.query).toHaveBeenCalledExactlyOnceWith(nsid, { actor: DID, limit: '50' });
+    expect(next.query).toHaveBeenCalledExactlyOnceWith(nsid, { actor: DID, limit: '50', cursor: 'abc' });
+  });
+
+  it('アカウントとカーソルを返し、読めないアカウントは捨てる', async () => {
+    const { reader } = clientReturning(RA.ok({
+      subject: { did: DID, handle: 'alice.bsky.social' },
+      cursor: 'next',
+      [key]: [bob, { handle: 'no-did.bsky.social' }, 'invalid'],
+    }));
+
+    expect(await reader[method]({ actor: DID, cursor: undefined })).toEqual({
+      ok: true,
+      val: {
+        actors: [{
+          did: 'did:plc:bob',
+          handle: 'bob.bsky.social',
+          displayName: 'Bob',
+          avatar: null,
+          description: null,
+          followedByMe: true,
+        }],
+        cursor: 'next',
+      },
+    });
+  });
+
+  it('続きが無ければ cursor を undefined にする', async () => {
+    const { reader } = clientReturning(RA.ok({ [key]: [bob] }));
+
+    const result = await reader[method]({ actor: DID, cursor: undefined });
+
+    expect(result.ok && result.val.cursor).toBeUndefined();
+  });
+
+  it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
+    const invalid = clientReturning(RA.ok({ actors: [] }));
+    const notFound = {
+      type: 'BlueskyClientError',
+      kind: 'http',
+      message: 'Profile not found',
+      status: 400,
+      code: 'InvalidRequest',
+    } as const;
+    const failing = clientReturning(RA.err(notFound));
+
+    expect(await invalid.reader[method]({ actor: DID, cursor: undefined })).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+    expect(await failing.reader[method]({ actor: DID, cursor: undefined })).toEqual({ ok: false, err: notFound });
+  });
+});

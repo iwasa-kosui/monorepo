@@ -12,6 +12,8 @@ import { GetBlueskyFeedInfoUseCase } from '../../../useCase/getBlueskyFeedInfo.t
 import { GetBlueskyProfileUseCase } from '../../../useCase/getBlueskyProfile.ts';
 import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
 import { ListBlueskyActorFeedsUseCase } from '../../../useCase/listBlueskyActorFeeds.ts';
+import { ListBlueskyActorFollowersUseCase } from '../../../useCase/listBlueskyActorFollowers.ts';
+import { ListBlueskyActorFollowsUseCase } from '../../../useCase/listBlueskyActorFollows.ts';
 import { ListBlueskyActorLikesUseCase } from '../../../useCase/listBlueskyActorLikes.ts';
 import { ListBlueskyActorListsUseCase } from '../../../useCase/listBlueskyActorLists.ts';
 import { ListBlueskyAuthorFeedUseCase } from '../../../useCase/listBlueskyAuthorFeed.ts';
@@ -126,6 +128,12 @@ const setup = async (options: {
     getProfile: vi.fn(async () => RA.ok(profile())),
     getAuthorFeed: vi.fn(async () => RA.ok({ items: [feedItem], cursor: 'next-cursor', unavailable: null })),
     getActorLikes: vi.fn(async () => RA.ok({ items: [feedItem], cursor: 'next-cursor' })),
+    getFollows: vi.fn<BlueskyProfileReader['getFollows']>(async () =>
+      RA.ok({ actors: [member], cursor: 'next-cursor' })
+    ),
+    getFollowers: vi.fn<BlueskyProfileReader['getFollowers']>(async () =>
+      RA.ok({ actors: [member], cursor: 'next-cursor' })
+    ),
     ...options.reader,
   };
   const feedReader: BlueskyFeedReader = {
@@ -187,6 +195,8 @@ const setup = async (options: {
       listBlueskyListMembersUseCase: enabled ? ListBlueskyListMembersUseCase.create({ reader: feedReader }) : undefined,
       listBlueskyActorFeedsUseCase: enabled ? ListBlueskyActorFeedsUseCase.create({ reader: feedReader }) : undefined,
       listBlueskyActorListsUseCase: enabled ? ListBlueskyActorListsUseCase.create({ reader: feedReader }) : undefined,
+      listBlueskyActorFollowsUseCase: enabled ? ListBlueskyActorFollowsUseCase.create({ reader }) : undefined,
+      listBlueskyActorFollowersUseCase: enabled ? ListBlueskyActorFollowersUseCase.create({ reader }) : undefined,
       followBlueskyActorUseCase: enabled ? FollowBlueskyActorUseCase.create({ reader, client }) : undefined,
       unfollowBlueskyActorUseCase: enabled ? UnfollowBlueskyActorUseCase.create({ reader, client }) : undefined,
       viewerDid: options.viewerDid,
@@ -1063,6 +1073,101 @@ describe.each(
     const failing = await setup({
       scope: 'read:accounts',
       feedReader: { [method]: vi.fn(async () => RA.err(clientError())) },
+    });
+
+    const missingResponse = await missing.get(path);
+    expect(missingResponse.status).toBe(404);
+    expect(await missingResponse.json()).toEqual({ error: 'Profile not found' });
+    const loginResponse = await login.get(path);
+    expect(loginResponse.status).toBe(502);
+    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
+    const failingResponse = await failing.get(path);
+    expect(failingResponse.status).toBe(502);
+    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
+  });
+});
+
+describe.each(
+  [
+    { name: 'follows', method: 'getFollows' },
+    { name: 'followers', method: 'getFollowers' },
+  ] as const,
+)('GET /api/iori/v1/bluesky/profiles/:actor/$name', ({ name, method }) => {
+  const path = `${PROFILES}/${DID}/${name}`;
+
+  it('アカウントの一覧と cursor と自分の DID を返し、actor と cursor を渡す', async () => {
+    const t = await setup({ scope: 'read:accounts', viewerDid: async () => RA.ok(OWN_DID) });
+
+    const response = await t.get(`${path}?cursor=abc`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ actors: [member], cursor: 'next-cursor', viewerDid: OWN_DID });
+    expect(t.reader[method]).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: 'abc' });
+  });
+
+  it('続きが無いとき cursor を null にし、cursor を付けなければ undefined で呼ぶ', async () => {
+    const t = await setup({
+      scope: 'read:accounts',
+      viewerDid: async () => RA.ok(OWN_DID),
+      reader: { [method]: vi.fn(async () => RA.ok({ actors: [], cursor: undefined })) },
+    });
+
+    const response = await t.get(path);
+
+    expect(await response.json()).toEqual({ actors: [], cursor: null, viewerDid: OWN_DID });
+    expect(t.reader[method]).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: undefined });
+  });
+
+  it('自分の DID が取れなければ viewerDid を空文字にする', async () => {
+    const failed = await setup({
+      scope: 'read:accounts',
+      viewerDid: async () => RA.err(clientError({ status: 500 })),
+    });
+    const unset = await setup({ scope: 'read:accounts' });
+
+    expect(await (await failed.get(path)).json()).toMatchObject({ viewerDid: '' });
+    expect(await (await unset.get(path)).json()).toMatchObject({ viewerDid: '' });
+  });
+
+  it('認証なしは 401、read:accounts を満たさない scope は 403 にする', async () => {
+    const t = await setup({ scope: 'read:statuses' });
+
+    expect((await t.anonymous(path)).status).toBe(401);
+    expect((await t.get(path)).status).toBe(403);
+    expect(t.reader[method]).not.toHaveBeenCalled();
+  });
+
+  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
+    const t = await setup({ scope: 'read:accounts', owner: false });
+
+    const response = await t.get(path);
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Forbidden' });
+    expect(t.reader[method]).not.toHaveBeenCalled();
+  });
+
+  it('無効のときは 409 を返す', async () => {
+    const t = await setup({ scope: 'read:accounts', enabled: false });
+
+    const response = await t.get(path);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
+  });
+
+  it('アカウントが無いとき 404、Bluesky のログイン失敗とそれ以外の失敗は 502 にする', async () => {
+    const missing = await setup({
+      scope: 'read:accounts',
+      reader: { [method]: vi.fn(async () => RA.err(NOT_FOUND)) },
+    });
+    const login = await setup({
+      scope: 'read:accounts',
+      reader: { [method]: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
+    });
+    const failing = await setup({
+      scope: 'read:accounts',
+      reader: { [method]: vi.fn(async () => RA.err(clientError())) },
     });
 
     const missingResponse = await missing.get(path);

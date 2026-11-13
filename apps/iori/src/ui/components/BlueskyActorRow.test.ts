@@ -46,6 +46,40 @@ describe('BlueskyActorRow', () => {
     expect(render({ followedByMe: false })).not.toContain('フォロー中');
   });
 
+  it('trailing が無いときは、行全体を 1 つのリンクにする', () => {
+    const html = render({});
+
+    expect(html.startsWith('<a ')).toBe(true);
+    expect(html).not.toContain('<div');
+    expect(html).not.toContain('<button');
+  });
+
+  it('trailing があるときは、外枠を div にして、リンクの外に trailing を置く', () => {
+    const html = String(
+      jsx(BlueskyActorRow, {
+        actor: base,
+        href: '/bluesky/profile/alice.bsky.social',
+        trailing: jsx('button', { type: 'button' }, 'フォロー'),
+      }),
+    );
+
+    expect(html.startsWith('<div ')).toBe(true);
+    expect(html).toContain('href="/bluesky/profile/alice.bsky.social"');
+    expect(html).toContain('Alice');
+    expect(html).toContain('<button type="button">フォロー</button>');
+    const link = /<a [^>]*>[\s\S]*<\/a>/.exec(html)?.[0] ?? '';
+    expect(link).toContain('Alice');
+    expect(link).not.toContain('<button');
+  });
+
+  it('trailing があるときは、ボタンと状態が食い違わないよう「フォロー中」を出さない', () => {
+    const html = String(
+      jsx(BlueskyActorRow, { actor: { ...base, followedByMe: true }, trailing: jsx('button', { type: 'button' }) }),
+    );
+
+    expect(html).not.toContain('フォロー中');
+  });
+
   it('表示名が無いときは handle を名前として出し、アバターが無いときは頭文字を出す', () => {
     const html = render({ displayName: null, avatar: null });
 
