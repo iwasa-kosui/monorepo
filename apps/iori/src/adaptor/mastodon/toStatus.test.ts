@@ -187,6 +187,28 @@ describe('toStatus', () => {
     expect(status.uri).toBe('https://remote.example/users/alice/statuses/1');
   });
 
+  it('uses the url of a remote post as status.url and keeps status.uri', () => {
+    const status = toStatus({ ...remotePost, url: 'https://remote.example/@alice/1' }, options);
+
+    expect(StatusSchema.safeParse(status).success).toBe(true);
+    expect(status.url).toBe('https://remote.example/@alice/1');
+    expect(status.uri).toBe(remotePost.uri);
+  });
+
+  it.each([null, undefined])('falls back to the uri when the url of a remote post is %s', (url) => {
+    const status = toStatus({ ...remotePost, url }, options);
+
+    expect(status.url).toBe(remotePost.uri);
+    expect(status.uri).toBe(remotePost.uri);
+  });
+
+  it('falls back to the uri when the url of a remote post is unsafe', () => {
+    const status = toStatus({ ...remotePost, url: 'javascript:alert(1)' }, options);
+
+    expect(status.url).toBe(remotePost.uri);
+    expect(status.uri).toBe(remotePost.uri);
+  });
+
   it('puts the summary and sensitive flag of a remote post into spoiler_text and sensitive', () => {
     const status = toStatus({ ...remotePost, summary: 'ネタバレ注意', sensitive: true }, options);
 
@@ -550,6 +572,19 @@ describe('toReblogStatus', () => {
 
     expect(boost.bookmarked).toBe(true);
     expect(boost.reblog?.bookmarked).toBe(true);
+  });
+
+  it('keeps the url of the Note on the reblogged Status', () => {
+    const reblog = toStatus({ ...remotePost, url: 'https://remote.example/@alice/1' }, options);
+
+    const boost = toReblogStatus({ createdAt: Date.UTC(2025, 1, 3) as Instant }, {
+      repostId: RepostId.generate(),
+      account: { ...account, id: ActorId.generate() },
+      reblog,
+    });
+
+    expect(boost.reblog?.url).toBe('https://remote.example/@alice/1');
+    expect(boost.reblog?.uri).toBe(remotePost.uri);
   });
 });
 

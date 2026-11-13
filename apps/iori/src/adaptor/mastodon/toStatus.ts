@@ -89,7 +89,8 @@ const toPostUrls = (
   const safe = toSafeApiUrl(post.uri, options.baseUrl);
   return {
     uri: safe ?? new URL(`/api/v1/statuses/${post.postId}`, options.baseUrl).href,
-    url: safe ?? null,
+    // Mastodon の url は人が開くページなので、Note の url を AP の id より優先する
+    url: toSafeApiUrl(post.url, options.baseUrl) ?? safe ?? null,
   };
 };
 
