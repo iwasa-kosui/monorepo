@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import type { SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { PageRequest } from '../../../domain/page/page.ts';
-import { createD1LocalPostsResolverByPage } from '../post/localPostsResolverByPage.ts';
+import { createD1LocalPostsResolverByPage, localPostIdsPageQuery } from '../post/localPostsResolverByPage.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
@@ -94,15 +95,34 @@ describe('local_posts.createdAt の migration', () => {
     expect(await resolve(page({ newerThanId: postId(7), order: 'oldestFirst' }))).toEqual([postId(1), postId(4)]);
   });
 
-  it('public の1ページ目の取得が local_posts_visibility_created_at_post_id_idx を使い、local_posts を全件走査しない', () => {
-    const t = setupBeforeMigration();
+  it.each<{ name: string; mutedActorIds: ReadonlyArray<ActorId>; page: Partial<PageRequest> }>([
+    {
+      name: 'newestFirst、mutedActorIds あり、olderThanId あり',
+      mutedActorIds: [ActorId.orThrow('00000000-0000-4000-8000-000000000001')],
+      page: { olderThanId: postId(1) },
+    },
+    {
+      name: 'oldestFirst、newerThanId あり、mutedActorIds なし',
+      mutedActorIds: [],
+      page: { newerThanId: postId(7), order: 'oldestFirst' },
+    },
+  ])(
+    'resolver が作る SQL が local_posts_visibility_created_at_post_id_idx を使い、全件走査も一時ソートもしない: $name',
+    (testCase) => {
+      const t = setupBeforeMigration();
 
-    const plan = t.sqlite.prepare(
-      'EXPLAIN QUERY PLAN select posts.postId from local_posts cross join posts where posts.postId = local_posts.postId and posts.deletedAt is null and local_posts.visibility = \'public\' order by local_posts.createdAt desc, local_posts.postId desc limit 40',
-    ).all() as Array<{ detail: string }>;
-    const details = plan.map((row) => row.detail);
+      const { sql, params } = localPostIdsPageQuery(t.db, {
+        mutedActorIds: testCase.mutedActorIds,
+        page: page(testCase.page),
+      }).toSQL();
+      const plan = t.sqlite.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(params as SQLInputValue[])) as Array<
+        { detail: string }
+      >;
+      const details = plan.map((row) => row.detail);
 
-    expect(details.some((detail) => detail.includes('local_posts_visibility_created_at_post_id_idx'))).toBe(true);
-    expect(details.some((detail) => detail.includes('SCAN local_posts'))).toBe(false);
-  });
+      expect(details.some((detail) => detail.includes('local_posts_visibility_created_at_post_id_idx'))).toBe(true);
+      expect(details.some((detail) => detail.includes('SCAN local_posts'))).toBe(false);
+      expect(details.some((detail) => detail.includes('USE TEMP B-TREE'))).toBe(false);
+    },
+  );
 });
