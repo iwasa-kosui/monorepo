@@ -13,6 +13,7 @@ import type { AllRelaysResolver } from '../../domain/relay/relay.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import type { FetchRemoteContextUseCase } from '../../useCase/fetchRemoteContext.ts';
 import type { FetchRemoteOutboxUseCase } from '../../useCase/fetchRemoteOutbox.ts';
+import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { SendEmojiReactUseCase } from '../../useCase/sendEmojiReact.ts';
 import type { SubscribePushUseCase } from '../../useCase/subscribePush.ts';
 import type { SubscribeRelayUseCase } from '../../useCase/subscribeRelay.ts';
@@ -35,6 +36,7 @@ export type WorkerIoriActionsRouterDeps = Readonly<{
   subscribeRelayUseCase: SubscribeRelayUseCase;
   subscribePushUseCase: SubscribePushUseCase;
   allRelaysResolver: AllRelaysResolver;
+  isDigestOwner: IsDigestOwner;
   createContext: (request: Request) => RequestContext<unknown>;
 }>;
 
@@ -45,6 +47,7 @@ type ActingOnPost = Readonly<{ userId: UserId; viewerActorId: ActorId; post: Pos
 
 const invalidToken = { error: 'The access token is invalid' } as const;
 const recordNotFound = { error: 'Record not found' } as const;
+const forbidden = { error: 'Forbidden' } as const;
 const read = Scope.orThrow('read');
 const write = Scope.orThrow('write');
 const writeStatuses = Scope.orThrow('write:statuses');
@@ -92,8 +95,11 @@ export const createWorkerIoriActionsRouter = ({
   subscribeRelayUseCase,
   subscribePushUseCase,
   allRelaysResolver,
+  isDigestOwner,
   createContext,
 }: WorkerIoriActionsRouterDeps): Hono<MastodonAuthEnv> => {
+  const isOwner = (c: Context<MastodonAuthEnv>) => isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined);
+
   const resolvePost = async (id: PostId, viewerActorId: ActorId): Promise<PostWithAuthor | undefined> => {
     const posts = await postsWithAuthorResolverByPostIds.resolve({
       postIds: [id],
@@ -241,10 +247,12 @@ export const createWorkerIoriActionsRouter = ({
       return c.json({ fetched: fetched.val.fetchedCount } satisfies IoriRemoteStatusesResponse);
     })
     .get('/iori/v1/relays', authn.requireUser(read), async (c) => {
+      if (!await isOwner(c)) return c.json(forbidden, 403);
       const relays = await allRelaysResolver.resolve();
       return relays.ok ? c.json({ relays: relays.val }) : c.json(internalServerError, 500);
     })
     .post('/iori/v1/relays', authn.requireUser(write), async (c) => {
+      if (!await isOwner(c)) return c.json(forbidden, 403);
       const url = urlSchema.safeParse((await readRequestBody(c)).url);
       if (!url.success) {
         return c.json(validationFailed('url'), 422);

@@ -541,7 +541,7 @@ describe('GET と POST /api/iori/v1/relays', () => {
   });
 
   it('POST はリレーの購読を始め、success と relay を返す', async () => {
-    const t = await seedReactions('write');
+    const t = await seedReactions('read write');
     serveRelayActor(t);
 
     const response = await subscribe(t, t.me.bearer, { url: relayActor });
@@ -552,7 +552,7 @@ describe('GET と POST /api/iori/v1/relays', () => {
       relay: { actorUri: relayActor, inboxUrl: 'https://relay.example/inbox', status: 'pending' },
     });
     expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
-    const listed = await t.request('/api/iori/v1/relays', { headers: await t.bearerFor('read') });
+    const listed = await t.request('/api/iori/v1/relays', { headers: t.me.bearer });
     expect(await listed.json()).toMatchObject({ relays: [{ actorUri: relayActor }] });
   });
 
@@ -563,6 +563,45 @@ describe('GET と POST /api/iori/v1/relays', () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: expect.stringContaining('Failed to subscribe to relay') });
+  });
+
+  it('所有者でないユーザーの POST は 403 にし、購読しない', async () => {
+    const t = await seedReactions('read write');
+    serveRelayActor(t);
+    const other = await t.issueUserToken('write');
+    t.seed.addLocalActor('other', other.userId);
+
+    const response = await subscribe(t, { Authorization: `Bearer ${other.token}` }, { url: relayActor });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Forbidden' });
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+    const listed = await t.request('/api/iori/v1/relays', { headers: t.me.bearer });
+    expect(await listed.json()).toEqual({ relays: [] });
+  });
+
+  it('所有者でないユーザーの GET は 403 にする', async () => {
+    const t = await seedReactions('read');
+    t.seed.addRelay();
+    const other = await t.issueUserToken('read');
+    t.seed.addLocalActor('other', other.userId);
+
+    const response = await t.request('/api/iori/v1/relays', { headers: { Authorization: `Bearer ${other.token}` } });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Forbidden' });
+  });
+
+  it('所有者でないユーザーが不正な url を POST しても、422 ではなく 403 にする', async () => {
+    const t = await seedReactions('write');
+    const other = await t.issueUserToken('write');
+    t.seed.addLocalActor('other', other.userId);
+
+    const response = await subscribe(t, { Authorization: `Bearer ${other.token}` }, { url: 'not a url' });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Forbidden' });
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
   });
 
   it('トークンがないと 401、スコープが足りないと 403 にする', async () => {

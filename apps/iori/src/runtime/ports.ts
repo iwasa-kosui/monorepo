@@ -307,6 +307,7 @@ export type IoriMutesRelaysRuntimePorts = Readonly<{
   deleteMuteUseCase: DeleteMuteUseCase;
   subscribeRelayUseCase: SubscribeRelayUseCase;
   allRelaysResolver: AllRelaysResolver;
+  isDigestOwner: IsDigestOwner;
 }>;
 export type IoriCoreRuntimePorts = Readonly<{
   signUpUseCase: ReturnType<typeof createSignUpUseCase>;

@@ -903,6 +903,7 @@ export const createWorkerRuntimePorts = async (
         relaySubscriptionRequestedStore: createD1RelaySubscriptionRequestedStore(db),
       }),
       allRelaysResolver: createD1AllRelaysResolver(db),
+      isDigestOwner,
     },
     core: {
       signUpUseCase: createSignUpUseCase({
