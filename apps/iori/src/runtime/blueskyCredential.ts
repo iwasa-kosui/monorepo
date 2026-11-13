@@ -2,6 +2,9 @@ import { RA } from '@iwasa-kosui/result';
 
 import { createBlueskyCredentialVerifier } from '../adaptor/bluesky/blueskyClient.ts';
 import { createAesGcmCipherFactory, decodeAesGcmKey } from '../adaptor/crypto/aesGcmCipher.ts';
+import { createD1BlueskyAccountSwitchPreviewResolver } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchPreviewResolver.ts';
+import { createD1BlueskyAccountSwitchResolver } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchResolver.ts';
+import { createD1BlueskyAccountSwitchStartedStore } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchStartedStore.ts';
 import {
   blueskyStoredCredentialDeleteQuery,
   blueskyStoredCredentialSaveQuery,
@@ -26,10 +29,13 @@ import { Instant } from '../domain/instant/instant.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import type { BlueskyCredentials } from '../ports/blueskyClient.ts';
 import { DeleteBlueskyCredentialUseCase } from '../useCase/deleteBlueskyCredential.ts';
+import { GetBlueskyAccountSwitchUseCase } from '../useCase/getBlueskyAccountSwitch.ts';
 import { GetBlueskyCredentialUseCase } from '../useCase/getBlueskyCredential.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
+import { PreviewBlueskyAccountSwitchUseCase } from '../useCase/previewBlueskyAccountSwitch.ts';
 import { RegisterBlueskyCredentialUseCase } from '../useCase/registerBlueskyCredential.ts';
 import { ResolveBlueskyCredentialUseCase } from '../useCase/resolveBlueskyCredential.ts';
+import { SwitchBlueskyAccountUseCase } from '../useCase/switchBlueskyAccount.ts';
 import { VerifyCurrentPasswordUseCase } from '../useCase/verifyCurrentPassword.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 
@@ -112,6 +118,9 @@ export type BlueskyCredentialRuntimePorts = Readonly<{
   getBlueskyCredentialUseCase: GetBlueskyCredentialUseCase;
   registerBlueskyCredentialUseCase: RegisterBlueskyCredentialUseCase;
   deleteBlueskyCredentialUseCase: DeleteBlueskyCredentialUseCase;
+  switchBlueskyAccountUseCase: SwitchBlueskyAccountUseCase;
+  getBlueskyAccountSwitchUseCase: GetBlueskyAccountSwitchUseCase;
+  previewBlueskyAccountSwitchUseCase: PreviewBlueskyAccountSwitchUseCase;
   isDigestOwner: IsDigestOwner;
 }>;
 
@@ -126,6 +135,13 @@ export const createBlueskyCredentialRuntimePorts = (
   };
   const cipherFor = createCipherFor(config.credentialKey);
   const sessionResolver = createD1BlueskySessionResolver(db);
+  const storedResolver = createD1BlueskyStoredCredentialResolver(db);
+  const accountSwitchResolver = createD1BlueskyAccountSwitchResolver(db);
+  const verifier = createBlueskyCredentialVerifier({ fetch: deps.fetch, now: Instant.now });
+  const verifyCurrentPassword = VerifyCurrentPasswordUseCase.create({
+    userPasswordResolver: createD1UserPasswordResolver(db),
+    argon2idDerive: deps.argon2idDerive,
+  });
   const getCredential = GetBlueskyCredentialUseCase.create({
     resolveCredential: createResolveCredential(config, db),
     sessionResolver,
@@ -136,19 +152,36 @@ export const createBlueskyCredentialRuntimePorts = (
     registerBlueskyCredentialUseCase: RegisterBlueskyCredentialUseCase.create({
       cipherFor,
       envCredentials: config.envCredentials,
-      verifyCurrentPassword: VerifyCurrentPasswordUseCase.create({
-        userPasswordResolver: createD1UserPasswordResolver(db),
-        argon2idDerive: deps.argon2idDerive,
-      }),
-      verifier: createBlueskyCredentialVerifier({ fetch: deps.fetch, now: Instant.now }),
-      storedResolver: createD1BlueskyStoredCredentialResolver(db),
+      verifyCurrentPassword,
+      verifier,
+      storedResolver,
       sessionResolver,
       registeredStore: createBlueskyCredentialRegisteredStore(db, BLUESKY_CREDENTIAL_LOGIN_FAILURE_SCOPE),
+      accountSwitchResolver,
       now: Instant.now,
     }),
     deleteBlueskyCredentialUseCase: DeleteBlueskyCredentialUseCase.create({
       removedStore: createBlueskyCredentialRemovedStore(db),
       getCredential,
+      accountSwitchResolver,
+      storedResolver,
+      envCredentials: config.envCredentials,
+      verifier,
+    }),
+    switchBlueskyAccountUseCase: SwitchBlueskyAccountUseCase.create({
+      cipherFor,
+      envCredentials: config.envCredentials,
+      verifyCurrentPassword,
+      verifier,
+      storedResolver,
+      sessionResolver,
+      accountSwitchResolver,
+      startedStore: createD1BlueskyAccountSwitchStartedStore(db, BLUESKY_CREDENTIAL_LOGIN_FAILURE_SCOPE),
+      now: Instant.now,
+    }),
+    getBlueskyAccountSwitchUseCase: GetBlueskyAccountSwitchUseCase.create({ accountSwitchResolver }),
+    previewBlueskyAccountSwitchUseCase: PreviewBlueskyAccountSwitchUseCase.create({
+      previewResolver: createD1BlueskyAccountSwitchPreviewResolver(db),
     }),
     isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
   };

@@ -2,7 +2,9 @@ import { RA, Result } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAesGcmCipherFactory } from '../adaptor/crypto/aesGcmCipher.ts';
+import { insertBlueskyAccountSwitch } from '../adaptor/d1/__tests__/blueskyAccountSwitchFixture.ts';
 import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts';
+import { createD1BlueskyAccountSwitchResolver } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchResolver.ts';
 import { createD1BlueskyStoredCredentialResolver } from '../adaptor/d1/blueskyCredential/blueskyCredentialStore.ts';
 import { createD1BlueskyLoginFailureSavedStore } from '../adaptor/d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
 import {
@@ -103,6 +105,7 @@ const setup = async (options: {
     storedResolver,
     sessionResolver,
     registeredStore: createBlueskyCredentialRegisteredStore(db, 'timeline'),
+    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db),
     now: () => NOW,
   });
   const input = {
@@ -127,6 +130,7 @@ const setup = async (options: {
     seedLoginFailure,
     loginFailureRows,
     storedResolver,
+    sqlite,
   };
 };
 
@@ -180,9 +184,48 @@ describe('RegisterBlueskyCredentialUseCase', () => {
 
     const result = await t.useCase.run(t.input);
 
-    expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyDidMismatch' } });
+    expect(result).toMatchObject({
+      ok: false,
+      err: {
+        type: 'BlueskyDidMismatch',
+        current: { did: 'did:plc:someone-else', handle: 'alice.bsky.social' },
+        next: { did: 'did:plc:alice', handle: 'alice.bsky.social' },
+      },
+    });
     expect(t.credentialRows()).toEqual([]);
     expect(t.sessionRows()).toMatchObject([{ did: 'did:plc:someone-else', accessJwt: 'old-access' }]);
+  });
+
+  it('保存済みの資格情報と違う DID のときは、保存済みのハンドルを current に載せる', async () => {
+    const t = await setup();
+    expect((await t.useCase.run(t.input)).ok).toBe(true);
+    vi.mocked(t.verifier.login).mockResolvedValueOnce(
+      Result.ok(session({ did: 'did:plc:bob', handle: 'bob.bsky.social' })),
+    );
+
+    const result = await t.useCase.run(t.input);
+
+    expect(result).toMatchObject({
+      ok: false,
+      err: {
+        type: 'BlueskyDidMismatch',
+        current: { did: 'did:plc:alice', handle: 'alice.bsky.social' },
+        next: { did: 'did:plc:bob', handle: 'bob.bsky.social' },
+      },
+    });
+  });
+
+  it('アカウントの切り替え中は、パスワードの確認の後で BlueskyAccountSwitchInProgress にし、Bluesky を呼ばない', async () => {
+    const t = await setup();
+    insertBlueskyAccountSwitch(t.sqlite);
+
+    const wrong = await t.useCase.run({ ...t.input, currentPassword: 'wrong-password-value' });
+    const result = await t.useCase.run(t.input);
+
+    expect(wrong).toMatchObject({ ok: false, err: { type: 'InvalidCurrentPassword' } });
+    expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyAccountSwitchInProgress' } });
+    expect(t.verifier.login).not.toHaveBeenCalled();
+    expect(t.credentialRows()).toEqual([]);
   });
 
   it('保存済みの資格情報があるときは、そちらの DID と比べる', async () => {

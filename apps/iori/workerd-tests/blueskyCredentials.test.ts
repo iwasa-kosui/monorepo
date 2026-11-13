@@ -3,6 +3,7 @@ import { env } from 'cloudflare:test';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAesGcmCipherFactory } from '../src/adaptor/crypto/aesGcmCipher.ts';
+import { createD1BlueskyAccountSwitchResolver } from '../src/adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchResolver.ts';
 import {
   createD1BlueskyStoredCredentialDeletedStore,
   createD1BlueskyStoredCredentialResolver,
@@ -177,6 +178,7 @@ describe('アプリパスワードの登録', () => {
         storedResolver: createD1BlueskyStoredCredentialResolver(db),
         sessionResolver: createD1BlueskySessionResolver(db),
         registeredStore: createBlueskyCredentialRegisteredStore(db, 'timeline'),
+        accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db),
         now: () => NOW,
       }),
     };

@@ -1,6 +1,10 @@
 import { RA } from '@iwasa-kosui/result';
 
 import {
+  BlueskyAccountSwitchInProgress,
+  type BlueskyAccountSwitchResolver,
+} from '../domain/blueskyAccountSwitch/blueskyAccountSwitch.ts';
+import {
   BLUESKY_CREDENTIAL_KEY_VERSION,
   type BlueskyCredentialRegisteredStore,
   type BlueskyCredentialView,
@@ -12,6 +16,7 @@ import type { UserId } from '../domain/user/userId.ts';
 import type { BlueskyClientError, BlueskyCredentials } from '../ports/blueskyClient.ts';
 import type { BlueskyCredentialCipherFactory } from '../ports/blueskyCredentialCipher.ts';
 import type { BlueskyCredentialVerifier } from '../ports/blueskyCredentialVerifier.ts';
+import { resolveCurrentBlueskyAccount } from './helper/resolveCurrentBlueskyAccount.ts';
 import type { UseCase } from './useCase.ts';
 import type { InvalidCurrentPassword, VerifyCurrentPasswordUseCase } from './verifyCurrentPassword.ts';
 
@@ -36,13 +41,16 @@ export type BlueskyLoginFailed = Readonly<{
 export type BlueskyDidMismatch = Readonly<{
   type: 'BlueskyDidMismatch';
   message: string;
+  current: Readonly<{ did: string; handle: string | null }>;
+  next: Readonly<{ did: string; handle: string }>;
 }>;
 
 export type RegisterBlueskyCredentialError =
   | BlueskyCredentialKeyMissing
   | InvalidCurrentPassword
   | BlueskyLoginFailed
-  | BlueskyDidMismatch;
+  | BlueskyDidMismatch
+  | BlueskyAccountSwitchInProgress;
 
 export type RegisterBlueskyCredentialUseCase = UseCase<Input, BlueskyCredentialView, RegisterBlueskyCredentialError>;
 
@@ -54,6 +62,7 @@ type Deps = Readonly<{
   storedResolver: BlueskyStoredCredentialResolver;
   sessionResolver: BlueskySessionResolver;
   registeredStore: BlueskyCredentialRegisteredStore;
+  accountSwitchResolver: BlueskyAccountSwitchResolver;
   now: () => Instant;
 }>;
 
@@ -65,6 +74,7 @@ const create = ({
   storedResolver,
   sessionResolver,
   registeredStore,
+  accountSwitchResolver,
   now,
 }: Deps): RegisterBlueskyCredentialUseCase => {
   const discard = async (session: BlueskySession | undefined): Promise<void> => {
@@ -77,6 +87,8 @@ const create = ({
     }
     const verified = await verifyCurrentPassword.run({ userId: input.userId, password: input.currentPassword });
     if (!verified.ok) return RA.err(verified.err);
+    const switching = await accountSwitchResolver.resolve();
+    if (switching.ok && switching.val !== undefined) return RA.err(BlueskyAccountSwitchInProgress.create());
 
     const identifier = input.identifier.trim();
     const login = await verifier.login({ identifier, appPassword: input.appPassword });
@@ -85,21 +97,20 @@ const create = ({
     }
     const session = login.val;
 
-    const stored = await storedResolver.resolve();
-    const currentSession = await sessionResolver.resolve();
-    const knownDid = stored.ok && stored.val !== undefined
-      ? stored.val.did
-      : currentSession.ok
-      ? currentSession.val?.did
-      : undefined;
-    const envLogin = knownDid === undefined && envCredentials !== undefined
-      ? await verifier.login(envCredentials)
-      : undefined;
-    const envSession = envLogin?.ok ? envLogin.val : undefined;
-    const currentDid = knownDid ?? envSession?.did;
-    if (currentDid !== undefined && currentDid !== session.did) {
+    const { current, envSession } = await resolveCurrentBlueskyAccount({
+      storedResolver,
+      sessionResolver,
+      envCredentials,
+      verifier,
+    });
+    if (current !== undefined && current.did !== session.did) {
       await Promise.all([discard(session), discard(envSession)]);
-      return RA.err({ type: 'BlueskyDidMismatch', message: 'The account differs from the connected one.' });
+      return RA.err({
+        type: 'BlueskyDidMismatch',
+        message: 'The account differs from the connected one.',
+        current,
+        next: { did: session.did, handle: session.handle },
+      });
     }
     await discard(envSession);
 

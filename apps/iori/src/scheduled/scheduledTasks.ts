@@ -1,4 +1,5 @@
 import type { IoriWorkerEnv } from '../workerEnv.ts';
+import { purgeBlueskyAccountSwitchTask, skipWhileBlueskyAccountSwitching } from './blueskyAccountSwitchTasks.ts';
 import { retryBlueskyCrosspostsTask } from './blueskyCrosspostTasks.ts';
 import { collectBlueskyNotificationsTask, expireBlueskyNotificationReceiptsTask } from './blueskyNotificationTasks.ts';
 import { collectBlueskyTimelineTask, expireBlueskyTimelineTask } from './blueskyTimelineTasks.ts';
@@ -31,13 +32,14 @@ export const scheduledTasks: ScheduledTaskTable = {
     syncOwnInterestSourcesTask,
     { ...embedOwnInterestSourcesTask, after: syncOwnInterestSourcesTask.name },
     pruneFederatedPostsTask,
-    retryBlueskyCrosspostsTask,
+    skipWhileBlueskyAccountSwitching(retryBlueskyCrosspostsTask),
     expireBlueskyTimelineTask,
     expireBlueskyNotificationReceiptsTask,
   ],
   '* * * * *': [
-    collectBlueskyTimelineTask,
-    { ...collectBlueskyNotificationsTask, after: collectBlueskyTimelineTask.name },
+    skipWhileBlueskyAccountSwitching(collectBlueskyTimelineTask),
+    skipWhileBlueskyAccountSwitching({ ...collectBlueskyNotificationsTask, after: collectBlueskyTimelineTask.name }),
+    purgeBlueskyAccountSwitchTask,
   ],
   '0 21 * * *': [syncKosuiInterestSourcesTask],
   '15 20 * * 1': [detectRadarVolumeTask],

@@ -56,6 +56,8 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'articleBody.written',
   'block.blockCreated',
   'block.blockDeleted',
+  'blueskyAccountSwitch.completed',
+  'blueskyAccountSwitch.started',
   'bookmark.bookmarkCreated',
   'bookmark.bookmarkDeleted',
   'digest.created',

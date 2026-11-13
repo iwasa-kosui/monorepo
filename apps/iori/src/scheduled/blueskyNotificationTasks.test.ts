@@ -145,6 +145,7 @@ describe('collectBlueskyNotificationsTask', () => {
     expect(everyMinute.map((task) => [task.name, task.after])).toEqual([
       ['collectBlueskyTimeline', undefined],
       ['collectBlueskyNotifications', 'collectBlueskyTimeline'],
+      ['purgeBlueskyAccountSwitch', undefined],
     ]);
     const threeHourly = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
     expect(threeHourly).not.toContain('collectBlueskyNotifications');
