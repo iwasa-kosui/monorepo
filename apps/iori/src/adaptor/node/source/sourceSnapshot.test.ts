@@ -1,6 +1,6 @@
-import { chmod, mkdir, readdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, open, readdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, expect, it, vi } from 'vitest';
 
 import { createFixtureDirectory } from '../../../../scripts/__tests__/fixtureTemp.ts';
 import { SOURCE_LIMITS } from '../../../../scripts/source-transfer-protocol.mjs';
@@ -9,6 +9,13 @@ import { SourceSnapshot } from './sourceSnapshot.ts';
 vi.mock('../../../../scripts/source-transfer-protocol.mjs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../scripts/source-transfer-protocol.mjs')>();
   return { ...actual, SOURCE_LIMITS: Object.freeze({ ...actual.SOURCE_LIMITS, inventoryFiles: 35 }) };
+});
+
+// macOS の fsync は F_FULLFSYNC でドライブの書き込みキャッシュ全体を flush させ、全体実行の I/O と重なると 5 秒の timeout を超える。
+beforeAll(async () => {
+  const handle = await open(import.meta.filename, 'r');
+  vi.spyOn(Object.getPrototypeOf(handle), 'sync').mockResolvedValue(undefined);
+  await handle.close();
 });
 
 const roots: string[] = [];
