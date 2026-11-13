@@ -15,7 +15,9 @@ const ME = 'did:plc:me';
 const POST = `at://${ME}/app.bsky.feed.post/3kmine`;
 const CROSSPOSTED = `at://${ME}/app.bsky.feed.post/3kcross`;
 const OTHERS = 'at://did:plc:other/app.bsky.feed.post/3kother';
+const DELETING = `at://${ME}/app.bsky.feed.post/3kdeleting`;
 const POST_ID = PostId.orThrow('0198a2b4-6d7e-7c3f-8a1b-2c3d4e5f6a7b');
+const DELETING_POST_ID = PostId.orThrow('0198a2b4-6d7e-7c3f-8a1b-2c3d4e5f6a7d');
 const USER_ID = UserId.orThrow('0198a2b4-6d7e-7c3f-8a1b-2c3d4e5f6a7c');
 const ctx = {} as RequestContext<unknown>;
 const failure: BlueskyClientError = {
@@ -30,12 +32,15 @@ const setup = () => {
   const insertItem = sqlite.prepare(
     'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
   );
-  for (const uri of [POST, CROSSPOSTED, OTHERS]) {
+  for (const uri of [POST, CROSSPOSTED, OTHERS, DELETING]) {
     insertItem.run(uri, uri, 'bafy', uri.split('/')[2], 'handle.bsky.social', 't', '[]', null, 1, 1, 1);
   }
   sqlite.prepare(
     'INSERT INTO bluesky_crossposts(postId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
   ).run(POST_ID, 'sent', CROSSPOSTED, 1, 1, 1);
+  sqlite.prepare(
+    'INSERT INTO bluesky_crossposts(postId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+  ).run(DELETING_POST_ID, 'deleting', DELETING, 1, 1, 1);
   const deleteRecord = vi.fn<BlueskyClient['deleteRecord']>(async () => RA.ok(undefined));
   const viewerDid = vi.fn<BlueskyChatClient['viewerDid']>(async () => RA.ok(ME));
   const deletePost = vi.fn<DeletePostUseCase['run']>(async () => RA.ok({ success: true }));
@@ -63,7 +68,7 @@ describe('DeleteOwnBlueskyPostUseCase', () => {
     expect(result).toEqual({ ok: true, val: { viaCrosspost: false } });
     expect(t.deleteRecord).toHaveBeenCalledExactlyOnceWith('3kmine');
     expect(t.deletePost).not.toHaveBeenCalled();
-    expect(t.uris()).toEqual([CROSSPOSTED, OTHERS].sort());
+    expect(t.uris()).toEqual([CROSSPOSTED, OTHERS, DELETING].sort());
   });
 
   it('自分の DID と違う repo の投稿は拒否し、Bluesky を削除せず行も残す', async () => {
@@ -123,9 +128,20 @@ describe('DeleteOwnBlueskyPostUseCase', () => {
 
     const result = await run(t, CROSSPOSTED);
 
-    expect(result).toEqual({ ok: true, val: { viaCrosspost: true } });
+    expect(result).toEqual({ ok: true, val: { viaCrosspost: true, postId: POST_ID } });
     expect(t.deletePost).toHaveBeenCalledExactlyOnceWith({ userId: USER_ID, postId: POST_ID, ctx });
     expect(t.deleteRecord).not.toHaveBeenCalled();
+  });
+
+  it('クロスポストの行が deleting のときは、iori の投稿の削除に委ねず、Bluesky を削除してタイムラインの行も消す', async () => {
+    const t = setup();
+
+    const result = await run(t, DELETING);
+
+    expect(result).toEqual({ ok: true, val: { viaCrosspost: false } });
+    expect(t.deleteRecord).toHaveBeenCalledExactlyOnceWith('3kdeleting');
+    expect(t.deletePost).not.toHaveBeenCalled();
+    expect(t.uris()).not.toContain(DELETING);
   });
 
   it('iori の投稿の削除が失敗したら、そのエラーを返す', async () => {

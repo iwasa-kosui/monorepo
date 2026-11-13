@@ -1,5 +1,5 @@
 import type { FC, PropsWithChildren } from 'hono/jsx';
-import { createContext, useContext, useMemo, useState } from 'hono/jsx';
+import { createContext, useCallback, useContext, useMemo, useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import { withUpdatedStatus } from '../api/status.ts';
@@ -103,7 +103,16 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
   const blueskyReply = useBlueskyReplyDialog();
   const blueskyQuote = useBlueskyQuoteDialog();
   const blueskyModeration = useBlueskyAuthorModeration(timeline.updateBlueskyItems);
-  const blueskyDelete = useBlueskyDeletePost(timeline.updateBlueskyItems);
+  const { removePost } = timeline;
+  const { removeFromThread } = thread;
+  const onCrosspostDeleted = useCallback(
+    (postId: string) => {
+      removePost(postId);
+      removeFromThread(postId);
+    },
+    [removePost, removeFromThread],
+  );
+  const blueskyDelete = useBlueskyDeletePost(timeline.updateBlueskyItems, { onCrosspostDeleted });
 
   const pullToRefresh = usePullToRefresh({
     onRefresh: async () => {

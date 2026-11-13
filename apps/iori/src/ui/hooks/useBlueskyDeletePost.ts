@@ -10,6 +10,7 @@ export const BLUESKY_DELETE_POST_CONFIRMATION =
 
 export type UseBlueskyDeletePostOptions = Readonly<{
   onPostDeleted?: (item: IoriBlueskyTimelineItemBody) => void;
+  onCrosspostDeleted?: (postId: string) => void;
 }>;
 
 export type UseBlueskyDeletePostReturn = Readonly<{
@@ -28,7 +29,7 @@ export const useBlueskyDeletePost = (
   updateItems: BlueskyItemsUpdater,
   options: UseBlueskyDeletePostOptions = {},
 ): UseBlueskyDeletePostReturn => {
-  const { onPostDeleted } = options;
+  const { onPostDeleted, onCrosspostDeleted } = options;
   const inFlightRef = useRef<Set<string>>(null);
   const inFlight = () => (inFlightRef.current ??= new Set<string>());
 
@@ -36,17 +37,19 @@ export const useBlueskyDeletePost = (
     (item: IoriBlueskyTimelineItemBody) =>
       runExclusive(inFlight(), item.uri, async () => {
         if (!confirm(BLUESKY_DELETE_POST_CONFIRMATION)) return;
+        let deleted;
         try {
-          await deleteBlueskyPost(item.uri);
+          deleted = await deleteBlueskyPost(item.uri);
         } catch (error) {
           console.error('Failed to delete post:', error);
           alert(blueskyFailureMessage('delete post', error));
           return;
         }
         updateItems((items) => withoutBlueskyPost(items, item.uri));
+        if (deleted.viaCrosspost) onCrosspostDeleted?.(deleted.postId);
         onPostDeleted?.(item);
       }),
-    [updateItems, onPostDeleted],
+    [updateItems, onPostDeleted, onCrosspostDeleted],
   );
 
   return { onDeletePost } as const;

@@ -85,8 +85,7 @@ const BlueskyPostPage = () => {
       reloadThread();
       return;
     }
-    if (window.history.length > 1) window.history.back();
-    else window.location.href = '/';
+    window.location.href = '/';
   }, [reloadThread]);
   const { actions: uriActions, replyDialog, reportDialog, notice } = useBlueskyUriActions(updateItems, {
     ...moderationOptions,
