@@ -141,7 +141,12 @@ describe('collectBlueskyTimelineTask', () => {
 
   it('1 分ごとの cron にだけ登録されている', () => {
     const everyMinute = scheduledTasks['* * * * *']!.map((task) => task.name);
-    expect(everyMinute).toEqual(['collectBlueskyTimeline', 'collectBlueskyNotifications', 'purgeBlueskyAccountSwitch']);
+    expect(everyMinute).toEqual([
+      'collectBlueskyTimeline',
+      'collectBlueskyNotifications',
+      'collectBlueskyChatPush',
+      'purgeBlueskyAccountSwitch',
+    ]);
     const threeHourly = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
     expect(threeHourly).not.toContain('collectBlueskyTimeline');
   });
@@ -197,6 +202,7 @@ describe('dispatchScheduled with the registered table', () => {
       'collectBlueskyTimeline',
       'purgeBlueskyAccountSwitch',
       'collectBlueskyNotifications',
+      'collectBlueskyChatPush',
     ]);
   });
 

@@ -400,6 +400,13 @@
       "when": 1794600000000,
       "tag": "0056_local_posts_created_at",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1794600000001,
+      "tag": "0057_bluesky_chat_push_receipts",
+      "breakpoints": true
     }
   ]
 }

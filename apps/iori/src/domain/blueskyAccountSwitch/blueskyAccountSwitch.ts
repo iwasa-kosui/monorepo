@@ -25,6 +25,7 @@ export const BLUESKY_ACCOUNT_SWITCH_PURGE_TARGETS = [
   'moderatedActors',
   'notificationReceipts',
   'notificationSyncState',
+  'chatPushReceipts',
   'notifications',
 ] as const;
 export type BlueskyAccountSwitchPurgeTarget = (typeof BLUESKY_ACCOUNT_SWITCH_PURGE_TARGETS)[number];
@@ -40,6 +41,7 @@ const deletedCountsZodType = z.object({
   moderatedActors: count,
   notificationReceipts: count,
   notificationSyncState: count,
+  chatPushReceipts: count.default(0),
   notifications: count,
 });
 export type BlueskyAccountSwitchDeletedCounts = z.output<typeof deletedCountsZodType>;
@@ -58,6 +60,7 @@ const emptyCounts: BlueskyAccountSwitchDeletedCounts = {
   moderatedActors: 0,
   notificationReceipts: 0,
   notificationSyncState: 0,
+  chatPushReceipts: 0,
   notifications: 0,
 };
 

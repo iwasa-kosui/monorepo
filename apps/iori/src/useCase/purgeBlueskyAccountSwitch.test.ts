@@ -77,6 +77,7 @@ const emptied = {
   moderatedActors: 0,
   notificationReceipts: 0,
   notificationSyncState: 0,
+  chatPushReceipts: 0,
 };
 
 describe('PurgeBlueskyAccountSwitchUseCase', () => {
@@ -126,6 +127,7 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
       moderatedActors: 6,
       notificationReceipts: 7,
       notificationSyncState: 1,
+      chatPushReceipts: 3,
     });
 
     const result = await t.useCase.run();
@@ -140,6 +142,7 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
       moderatedActors: 6,
       notificationReceipts: 7,
       notificationSyncState: 1,
+      chatPushReceipts: 3,
       notifications: 0,
     };
     expect(result).toEqual({

@@ -14,6 +14,7 @@ import { moveMarkersBeforeDismissed } from '../notification/inboxNotificationAda
 import { runBatch } from '../runBatch.ts';
 import {
   blueskyBookmarksTable,
+  blueskyChatPushReceiptsTable,
   blueskyCrosspostsTable,
   blueskyLikesTable,
   blueskyModeratedActorsTable,
@@ -40,6 +41,7 @@ const sources: Readonly<Record<Exclude<BlueskyAccountSwitchPurgeTarget, 'notific
   moderatedActors: { table: blueskyModeratedActorsTable, createdBefore: blueskyModeratedActorsTable.updatedAt },
   notificationReceipts: { table: blueskyNotificationReceiptsTable },
   notificationSyncState: { table: blueskyNotificationSyncStateTable },
+  chatPushReceipts: { table: blueskyChatPushReceiptsTable },
 };
 
 const purgeRows = async (db: IoriD1Db, source: PurgeSource, startedAt: Instant): Promise<number> => {

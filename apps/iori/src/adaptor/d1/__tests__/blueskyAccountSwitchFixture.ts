@@ -48,6 +48,7 @@ export type BlueskyDataSizes = Readonly<{
   moderatedActors?: number;
   notificationReceipts?: number;
   notificationSyncState?: number;
+  chatPushReceipts?: number;
 }>;
 
 const AT = 1_000_000_000_000;
@@ -62,6 +63,7 @@ export const BLUESKY_DATA_TABLES = {
   moderatedActors: 'bluesky_moderated_actors',
   notificationReceipts: 'bluesky_notification_receipts',
   notificationSyncState: 'bluesky_notification_sync_state',
+  chatPushReceipts: 'bluesky_chat_push_receipts',
 } as const;
 
 const inserts: Readonly<Record<keyof typeof BLUESKY_DATA_TABLES, { sql: string; values: (i: number) => unknown[] }>> = {
@@ -114,6 +116,10 @@ const inserts: Readonly<Record<keyof typeof BLUESKY_DATA_TABLES, { sql: string; 
   notificationSyncState: {
     sql: 'INSERT INTO bluesky_notification_sync_state(id,initialSyncCompletedAt) VALUES (?,?)',
     values: (i) => [`state-${i}`, AT],
+  },
+  chatPushReceipts: {
+    sql: 'INSERT INTO bluesky_chat_push_receipts(convoId,lastMessageId,notifiedAt) VALUES (?,?,?)',
+    values: (i) => [`convo-${i}`, `message-${i}`, AT],
   },
 };
 

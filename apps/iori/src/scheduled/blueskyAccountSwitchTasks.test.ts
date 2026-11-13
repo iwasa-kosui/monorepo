@@ -87,10 +87,11 @@ describe('毎分の cron', () => {
     );
   });
 
-  it('取り込みの 2 つのタスクと、切り替えの削除のタスクを登録する', () => {
+  it('取り込みの 3 つのタスクと、切り替えの削除のタスクを登録する', () => {
     expect(scheduledTasks['* * * * *']?.map((task) => task.name)).toEqual([
       'collectBlueskyTimeline',
       'collectBlueskyNotifications',
+      'collectBlueskyChatPush',
       'purgeBlueskyAccountSwitch',
     ]);
   });
