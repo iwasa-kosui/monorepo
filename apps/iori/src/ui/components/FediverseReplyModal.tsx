@@ -85,7 +85,9 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
         {isParentDirect
           ? (
             <p class='text-xs text-charcoal-light dark:text-gray-400'>
-              返信先がダイレクトなので、返信もダイレクトになります
+              {replyDestination === 'both'
+                ? '返信先がダイレクトなので、返信もダイレクトになり、Bluesky には送りません'
+                : '返信先がダイレクトなので、返信もダイレクトになります'}
             </p>
           )
           : (

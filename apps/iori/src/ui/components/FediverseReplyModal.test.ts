@@ -83,13 +83,18 @@ describe('FediverseReplyModal', () => {
   });
 
   it('返信先がダイレクトなら、選択欄の代わりに、返信もダイレクトになる文を出す', () => {
-    const html = render({ replyingToPostId: 'post-1', replyParentVisibility: 'direct', replyVisibility: 'private' });
+    const html = render({
+      replyingToPostId: 'post-1',
+      replyParentVisibility: 'direct',
+      replyVisibility: 'private',
+      replyDestination: 'fediverse',
+    });
 
     expect(html).toContain('返信先がダイレクトなので、返信もダイレクトになります');
     expect(html).not.toContain('name="reply-visibility"');
   });
 
-  it('返信先がダイレクトなら、送り先が both でも Bluesky に送らない案内を出さない', () => {
+  it('返信先がダイレクトで送り先が both なら、Bluesky には送らない旨を同じ文に含め、別の案内は出さない', () => {
     const html = render({
       replyingToPostId: 'post-1',
       replyParentVisibility: 'direct',
@@ -97,6 +102,19 @@ describe('FediverseReplyModal', () => {
       replyDestination: 'both',
     });
 
+    expect(html).toContain('返信先がダイレクトなので、返信もダイレクトになり、Bluesky には送りません');
+    expect(html).not.toContain('公開範囲が公開ではないので、Bluesky には送りません');
+  });
+
+  it('返信先がダイレクトで送り先が fediverse なら、返信もダイレクトになる文だけを出す', () => {
+    const html = render({
+      replyingToPostId: 'post-1',
+      replyParentVisibility: 'direct',
+      replyVisibility: 'private',
+      replyDestination: 'fediverse',
+    });
+
+    expect(html).toContain('返信先がダイレクトなので、返信もダイレクトになります');
     expect(html).not.toContain('Bluesky には送りません');
   });
 
