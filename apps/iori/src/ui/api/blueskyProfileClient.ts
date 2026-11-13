@@ -87,6 +87,7 @@ export type OwnBlueskyProfile = Readonly<{
   description: string | null;
   avatar: string | null;
   banner: string | null;
+  cid: string | null;
 }>;
 
 export type OwnBlueskyProfileSaveResult = Readonly<{ uri: string; cid: string }>;
@@ -104,8 +105,11 @@ export const updateOwnBlueskyProfile = async (body: FormData): Promise<OwnBluesk
   return await res.json() as OwnBlueskyProfileSaveResult;
 };
 
+export const isBlueskyProfileConflictError = (error: unknown): boolean =>
+  isMastodonApiError(error) && error.status === 409 && error.code === 'profile_conflict';
+
 export const ownBlueskyProfileSaveFailureMessage = (error: unknown): string =>
-  isUnprocessableError(error) && error instanceof Error
+  (isUnprocessableError(error) || isBlueskyProfileConflictError(error)) && error instanceof Error
     ? error.message
     : 'Bluesky のプロフィールを保存できませんでした';
 

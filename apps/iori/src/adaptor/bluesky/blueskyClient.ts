@@ -639,7 +639,7 @@ export const createBlueskyClient = (
               collection: PROFILE_COLLECTION,
               rkey: PROFILE_RKEY,
               record,
-              ...(swapCid === undefined ? {} : { swapRecord: swapCid }),
+              swapRecord: swapCid,
             }),
           },
           createRecordResponseSchema,

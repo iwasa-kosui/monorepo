@@ -14,7 +14,13 @@ const input = (overrides: Partial<Parameters<typeof BlueskyProfileInput.validate
   description: '自己紹介',
   ...overrides,
 });
-const image = (size: number, mimeType = 'image/png') => ({ bytes: new Uint8Array(size), mimeType });
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
+const image = (size: number, mimeType = 'image/png') => {
+  const bytes = new Uint8Array(size);
+  bytes.set((mimeType === 'image/jpeg' ? JPEG_SIGNATURE : PNG_SIGNATURE).slice(0, size));
+  return { bytes, mimeType };
+};
 
 describe('BlueskyProfileInput.validate', () => {
   it('前後の空白を取った表示名と自己紹介を返す', () => {
@@ -98,8 +104,29 @@ describe('BlueskyProfileInput.validate', () => {
   });
 
   it('画像は JPEG と PNG の 1 バイト以上 1,000,000 バイト以下だけ通す', () => {
-    expect(BlueskyProfileInput.validate(input({ avatar: image(1, 'image/jpeg') })).ok).toBe(true);
+    expect(BlueskyProfileInput.validate(input({ avatar: image(3, 'image/jpeg') })).ok).toBe(true);
     expect(BlueskyProfileInput.validate(input({ banner: image(BLUESKY_PROFILE_IMAGE_MAX_BYTES) })).ok).toBe(true);
+  });
+
+  it('先頭バイトが mimeType と合わない画像は、アバターかバナーかを伝えて失敗する', () => {
+    const jpegAsPng = { bytes: image(16, 'image/jpeg').bytes, mimeType: 'image/png' };
+    const pngAsJpeg = { bytes: image(16).bytes, mimeType: 'image/jpeg' };
+
+    expect(BlueskyProfileInput.validate(input({ avatar: jpegAsPng }))).toEqual({
+      ok: false,
+      err: { type: 'BlueskyProfileInvalid', reason: 'アバターの画像は JPEG か PNG にしてください' },
+    });
+    expect(BlueskyProfileInput.validate(input({ banner: pngAsJpeg }))).toMatchObject({
+      ok: false,
+      err: { reason: 'バナーの画像は JPEG か PNG にしてください' },
+    });
+    expect(BlueskyProfileInput.validate(input({ avatar: { bytes: new Uint8Array(16), mimeType: 'image/png' } })).ok)
+      .toBe(false);
+    expect(
+      BlueskyProfileInput.validate(input({ avatar: { bytes: new Uint8Array([0x89, 0x50]), mimeType: 'image/png' } }))
+        .ok,
+    )
+      .toBe(false);
   });
 
   it('画像の形式が違う、空、大きすぎるときは、アバターかバナーかを伝えて失敗する', () => {

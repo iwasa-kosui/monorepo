@@ -569,14 +569,25 @@ describe('createBlueskyClient の各操作', () => {
     });
   });
 
-  it('putProfileRecord は swapCid が無ければ swapRecord を送らない', async () => {
+  it('putProfileRecord は swapCid が null なら swapRecord: null を送る', async () => {
     const { client, calls } = setup(stored(), [
       () => json({ uri: 'at://did:plc:abc/app.bsky.actor.profile/self', cid: 'bafynew' }),
     ]);
 
-    await client.putProfileRecord({ $type: 'app.bsky.actor.profile' });
+    await client.putProfileRecord({ $type: 'app.bsky.actor.profile' }, null);
 
-    expect(Object.keys(JSON.parse(calls[0]!.init.body as string))).not.toContain('swapRecord');
+    const sent = JSON.parse(calls[0]!.init.body as string);
+    expect(Object.keys(sent)).toContain('swapRecord');
+    expect(sent.swapRecord).toBeNull();
+  });
+
+  it('putProfileRecord は PDS の 400 InvalidSwap を code つきのエラーで返す', async () => {
+    const { client } = setup(stored(), [() => json({ error: 'InvalidSwap', message: 'Record was at bafyother' }, 400)]);
+
+    expect(await client.putProfileRecord({ $type: 'app.bsky.actor.profile' }, 'bafyold')).toMatchObject({
+      ok: false,
+      err: { kind: 'http', status: 400, code: 'InvalidSwap' },
+    });
   });
 
   it('putProfileRecord は profile の uri でない応答を invalid_response として返す', async () => {
@@ -584,7 +595,7 @@ describe('createBlueskyClient の各操作', () => {
       () => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k1', cid: 'c' }),
     ]);
 
-    expect(await client.putProfileRecord({ $type: 'app.bsky.actor.profile' })).toMatchObject({
+    expect(await client.putProfileRecord({ $type: 'app.bsky.actor.profile' }, null)).toMatchObject({
       ok: false,
       err: { kind: 'invalid_response' },
     });

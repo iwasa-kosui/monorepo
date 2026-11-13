@@ -14,6 +14,7 @@ import {
   fetchBlueskyProfile,
   fetchOwnBlueskyProfile,
   followBlueskyActor,
+  isBlueskyProfileConflictError,
   ownBlueskyProfileSaveFailureMessage,
   unfollowBlueskyActor,
   updateOwnBlueskyProfile,
@@ -227,6 +228,7 @@ describe('own Bluesky profile', () => {
       description: null,
       avatar: null,
       banner: null,
+      cid: null,
     };
     const fetchStub = stubFetch(json(profile));
 
@@ -258,6 +260,23 @@ describe('own Bluesky profile', () => {
     const upstream = await failure(updateOwnBlueskyProfile(new FormData()));
     expect(ownBlueskyProfileSaveFailureMessage(upstream)).toBe('Bluesky のプロフィールを保存できませんでした');
     expect(ownBlueskyProfileSaveFailureMessage(new Error('x'))).toBe('Bluesky のプロフィールを保存できませんでした');
+  });
+
+  it('409 で code が profile_conflict のときだけ競合と判定し、その error の文言を保存の失敗の文言にする', async () => {
+    const message = 'ほかの場所でプロフィールが更新されました。読み込み直してから保存してください';
+    stubFetch(json({ error: message, code: 'profile_conflict' }, 409));
+    const conflict = await failure(updateOwnBlueskyProfile(new FormData()));
+    stubFetch(json({ error: 'Bluesky timeline is disabled' }, 409));
+    const disabled = await failure(updateOwnBlueskyProfile(new FormData()));
+    stubFetch(json({ error: 'x', code: 'profile_conflict' }, 422));
+    const otherStatus = await failure(updateOwnBlueskyProfile(new FormData()));
+
+    expect(isBlueskyProfileConflictError(conflict)).toBe(true);
+    expect(isBlueskyProfileConflictError(disabled)).toBe(false);
+    expect(isBlueskyProfileConflictError(otherStatus)).toBe(false);
+    expect(isBlueskyProfileConflictError(new Error('x'))).toBe(false);
+    expect(ownBlueskyProfileSaveFailureMessage(conflict)).toBe(message);
+    expect(ownBlueskyProfileSaveFailureMessage(disabled)).toBe('Bluesky のプロフィールを保存できませんでした');
   });
 });
 

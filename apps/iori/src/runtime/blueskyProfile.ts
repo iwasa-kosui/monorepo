@@ -94,7 +94,11 @@ export const createBlueskyProfileRuntimePorts = (
     listBlueskyActorFollowersUseCase: ListBlueskyActorFollowersUseCase.create({ reader }),
     followBlueskyActorUseCase: FollowBlueskyActorUseCase.create({ reader, client }),
     unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase.create({ reader, client }),
-    getOwnBlueskyProfileUseCase: GetOwnBlueskyProfileUseCase.create({ reader, viewerDid: () => client.viewerDid() }),
+    getOwnBlueskyProfileUseCase: GetOwnBlueskyProfileUseCase.create({
+      reader,
+      client,
+      viewerDid: () => client.viewerDid(),
+    }),
     updateBlueskyProfileUseCase: UpdateBlueskyProfileUseCase.create({ client, now: Instant.now }),
     viewerDid: () => client.viewerDid(),
     isDigestOwner,

@@ -16,11 +16,14 @@ type Input = Readonly<{
   banner?: BlueskyProfileImageInput | undefined;
   removeAvatar: boolean;
   removeBanner: boolean;
+  expectedCid: string | null;
 }>;
 
 type Ok = Readonly<{ uri: string; cid: string }>;
 
-type Err = BlueskyClientError | BlueskyProfileInvalid;
+export type BlueskyProfileConflict = Readonly<{ type: 'BlueskyProfileConflict' }>;
+
+type Err = BlueskyClientError | BlueskyProfileInvalid | BlueskyProfileConflict;
 
 export type UpdateBlueskyProfileUseCase = UseCase<Input, Ok, Err>;
 
@@ -30,6 +33,8 @@ type Deps = Readonly<{
 }>;
 
 const PROFILE_COLLECTION = 'app.bsky.actor.profile';
+
+const conflict: BlueskyProfileConflict = { type: 'BlueskyProfileConflict' };
 
 const withField = (
   record: Readonly<Record<string, unknown>>,
@@ -46,6 +51,8 @@ const create = ({ client, now }: Deps): UpdateBlueskyProfileUseCase => {
     if (!validated.ok) return RA.err(validated.err);
     const current = await client.getProfileRecord();
     if (!current.ok) return RA.err(current.err);
+    const currentCid = current.val?.cid ?? null;
+    if (currentCid !== input.expectedCid) return RA.err(conflict);
     let record: Readonly<Record<string, unknown>> = {
       ...(current.val === undefined ? { createdAt: new Date(now()).toISOString() } : current.val.value),
       $type: PROFILE_COLLECTION,
@@ -66,7 +73,8 @@ const create = ({ client, now }: Deps): UpdateBlueskyProfileUseCase => {
         record = withField(record, key, undefined);
       }
     }
-    return client.putProfileRecord(record, current.val?.cid);
+    const put = await client.putProfileRecord(record, currentCid);
+    return !put.ok && put.err.code === 'InvalidSwap' ? RA.err(conflict) : put;
   };
 
   return { run };

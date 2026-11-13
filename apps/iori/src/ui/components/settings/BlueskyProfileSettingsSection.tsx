@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'hono/jsx';
 
 import {
   fetchOwnBlueskyProfile,
+  isBlueskyProfileConflictError,
   type OwnBlueskyProfile,
   ownBlueskyProfileSaveFailureMessage,
   updateOwnBlueskyProfile,
@@ -11,8 +12,11 @@ import { useBlueskyStatus } from '../../hooks/useBlueskyStatus.ts';
 import {
   BLUESKY_DESCRIPTION_MAX_GRAPHEMES,
   BLUESKY_DISPLAY_NAME_MAX_GRAPHEMES,
+  type BlueskyProfileEditState,
   blueskyProfileImageProblem,
   buildBlueskyProfileFormData,
+  editStateAfterSave,
+  editStateOfLoaded,
   graphemeCounterLabel,
   isWithinGraphemeLimit,
   selectedImageFile,
@@ -42,6 +46,7 @@ type Props = Readonly<{
   description: string;
   isSubmitting: boolean;
   errorText: string | undefined;
+  isConflict: boolean;
   savedMessage: string | undefined;
   formKey: number;
   onReload: () => void;
@@ -58,6 +63,7 @@ export const BlueskyProfileSettingsForm = (
     description,
     isSubmitting,
     errorText,
+    isConflict,
     savedMessage,
     formKey,
     onReload,
@@ -149,6 +155,11 @@ export const BlueskyProfileSettingsForm = (
             </label>
           )}
           {errorText !== undefined && <p class='text-terracotta text-sm mb-3'>{errorText}</p>}
+          {isConflict && (
+            <div class='mb-3'>
+              <button type='button' class={RETRY_BUTTON_CLASS} onClick={onReload}>読み込み直す</button>
+            </div>
+          )}
           {savedMessage !== undefined && (
             <p role='status' class='text-sage-dark dark:text-sage text-sm mb-3'>{savedMessage}</p>
           )}
@@ -169,21 +180,27 @@ export const BlueskyProfileSettingsForm = (
 );
 
 const BlueskyProfileSettingsEditor = () => {
-  const [profile, setProfile] = useState<OwnBlueskyProfile | undefined>(undefined);
+  const [edit, setEdit] = useState<BlueskyProfileEditState<OwnBlueskyProfile> | undefined>(undefined);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [displayName, setDisplayName] = useState('');
-  const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorText, setErrorText] = useState<string | undefined>(undefined);
+  const [isConflict, setIsConflict] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | undefined>(undefined);
   const [formKey, setFormKey] = useState(0);
 
+  const profile = edit?.profile;
+  const displayName = edit?.form.displayName ?? '';
+  const description = edit?.form.description ?? '';
+
+  const setFormValue = (patch: Partial<BlueskyProfileEditState<OwnBlueskyProfile>['form']>) =>
+    setEdit((prev) => prev === undefined ? prev : { ...prev, form: { ...prev.form, ...patch } });
+
   const load = useCallback(async () => {
-    const next = await fetchOwnBlueskyProfile();
-    setProfile(next);
-    setDisplayName(next.displayName ?? '');
-    setDescription(next.description ?? '');
+    setEdit(editStateOfLoaded(await fetchOwnBlueskyProfile()));
     setLoadFailed(false);
+    setIsConflict(false);
+    setErrorText(undefined);
+    setFormKey((key) => key + 1);
   }, []);
 
   const reload = useCallback(() => {
@@ -191,6 +208,7 @@ const BlueskyProfileSettingsEditor = () => {
     load().catch((error) => {
       console.error('Failed to load the Bluesky profile:', error);
       setLoadFailed(true);
+      setErrorText(LOAD_FAILED_MESSAGE);
     });
   }, [load]);
 
@@ -210,10 +228,11 @@ const BlueskyProfileSettingsEditor = () => {
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || profile === undefined) return;
     const form = new FormData(e.currentTarget as HTMLFormElement);
     setSavedMessage(undefined);
     setErrorText(undefined);
+    setIsConflict(false);
     setIsSubmitting(true);
     try {
       const avatar = await prepareImage(form.get('avatar'), 'アバター');
@@ -223,20 +242,25 @@ const BlueskyProfileSettingsEditor = () => {
         setErrorText(problem);
         return;
       }
-      await updateOwnBlueskyProfile(buildBlueskyProfileFormData({
+      const saved = await updateOwnBlueskyProfile(buildBlueskyProfileFormData({
         displayName,
         description,
         avatar: avatar.file,
         banner: banner.file,
         removeAvatar: form.get('remove_avatar') !== null,
         removeBanner: form.get('remove_banner') !== null,
+        swapCid: profile.cid,
       }));
       setFormKey((key) => key + 1);
       setSavedMessage(SAVED_MESSAGE);
-      // 反映に時間差がありうるので、取り直しに失敗しても成功メッセージは残す
-      await load().catch((error) => console.error('Failed to reload the Bluesky profile:', error));
+      const refetched = await fetchOwnBlueskyProfile().catch((error) => {
+        console.error('Failed to reload the Bluesky profile:', error);
+        return undefined;
+      });
+      setEdit((prev) => prev === undefined ? prev : editStateAfterSave(prev, saved, refetched));
     } catch (error) {
       setErrorText(ownBlueskyProfileSaveFailureMessage(error));
+      setIsConflict(isBlueskyProfileConflictError(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -250,11 +274,12 @@ const BlueskyProfileSettingsEditor = () => {
       description={description}
       isSubmitting={isSubmitting}
       errorText={errorText}
+      isConflict={isConflict}
       savedMessage={savedMessage}
       formKey={formKey}
       onReload={reload}
-      onDisplayNameInput={setDisplayName}
-      onDescriptionInput={setDescription}
+      onDisplayNameInput={(value) => setFormValue({ displayName: value })}
+      onDescriptionInput={(value) => setFormValue({ description: value })}
       onSubmit={handleSubmit}
     />
   );

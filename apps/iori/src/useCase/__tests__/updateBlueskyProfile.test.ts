@@ -28,7 +28,20 @@ const failure: BlueskyClientError = {
   message: 'uploadBlob failed: status 500',
   status: 500,
 };
-const base = { displayName: '新名', description: '新紹介', removeAvatar: false, removeBanner: false };
+const base = {
+  displayName: '新名',
+  description: '新紹介',
+  removeAvatar: false,
+  removeBanner: false,
+  expectedCid: 'bafycurrent',
+};
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
+const imageBytes = (size: number, signature: readonly number[]) => {
+  const bytes = new Uint8Array(size);
+  bytes.set(signature);
+  return bytes;
+};
 
 const setup = (current: Record<string, unknown> | null = existing) => {
   const getProfileRecord = vi.fn<BlueskyClient['getProfileRecord']>(async () =>
@@ -58,6 +71,46 @@ describe('UpdateBlueskyProfileUseCase', () => {
     expect(t.uploadBlob).not.toHaveBeenCalled();
   });
 
+  it('expectedCid が現行レコードの cid と違えば、画像を上げず PDS に書き込まずに BlueskyProfileConflict を返す', async () => {
+    const t = setup();
+
+    const result = await t.useCase.run({
+      ...base,
+      expectedCid: 'bafystale',
+      avatar: { bytes: imageBytes(8, PNG_SIGNATURE), mimeType: 'image/png' },
+    });
+
+    expect(result).toEqual({ ok: false, err: { type: 'BlueskyProfileConflict' } });
+    expect(t.uploadBlob).not.toHaveBeenCalled();
+    expect(t.putProfileRecord).not.toHaveBeenCalled();
+  });
+
+  it('レコードがあるのに expectedCid が null なら、レコードが無い前提のフォームなので Conflict を返す', async () => {
+    const t = setup();
+
+    expect(await t.useCase.run({ ...base, expectedCid: null })).toEqual({
+      ok: false,
+      err: { type: 'BlueskyProfileConflict' },
+    });
+    expect(t.putProfileRecord).not.toHaveBeenCalled();
+  });
+
+  it('レコードが無いのに expectedCid が cid なら、Conflict を返す', async () => {
+    const t = setup(null);
+
+    expect(await t.useCase.run(base)).toEqual({ ok: false, err: { type: 'BlueskyProfileConflict' } });
+    expect(t.putProfileRecord).not.toHaveBeenCalled();
+  });
+
+  it('putProfileRecord が InvalidSwap を返したら BlueskyProfileConflict に変換する', async () => {
+    const t = setup();
+    t.putProfileRecord.mockResolvedValueOnce(
+      Result.err({ ...failure, status: 400, code: 'InvalidSwap', message: 'putProfileRecord failed: status 400' }),
+    );
+
+    expect(await t.useCase.run(base)).toEqual({ ok: false, err: { type: 'BlueskyProfileConflict' } });
+  });
+
   it('trim 後に空の表示名と自己紹介は、キーごと削除する', async () => {
     const t = setup();
 
@@ -71,13 +124,13 @@ describe('UpdateBlueskyProfileUseCase', () => {
 
   it('画像を送ると uploadBlob で上げて、その blob に差し替える。送らなかった側は既存を保持する', async () => {
     const t = setup();
-    const avatar = { bytes: new Uint8Array(3), mimeType: 'image/png' };
+    const avatar = { bytes: imageBytes(9, PNG_SIGNATURE), mimeType: 'image/png' };
 
     await t.useCase.run({ ...base, avatar });
 
     expect(t.uploadBlob).toHaveBeenCalledExactlyOnceWith(avatar);
     expect(t.putRecord()).toMatchObject({
-      avatar: { $type: 'blob', ref: { $link: 'new-3' }, mimeType: 'image/png', size: 3 },
+      avatar: { $type: 'blob', ref: { $link: 'new-9' }, mimeType: 'image/png', size: 9 },
       banner: OLD_BANNER,
     });
   });
@@ -85,7 +138,7 @@ describe('UpdateBlueskyProfileUseCase', () => {
   it('バナーも差し替えられる', async () => {
     const t = setup();
 
-    await t.useCase.run({ ...base, banner: { bytes: new Uint8Array(5), mimeType: 'image/jpeg' } });
+    await t.useCase.run({ ...base, banner: { bytes: imageBytes(5, JPEG_SIGNATURE), mimeType: 'image/jpeg' } });
 
     expect(t.putRecord()).toMatchObject({
       avatar: OLD_AVATAR,
@@ -106,15 +159,19 @@ describe('UpdateBlueskyProfileUseCase', () => {
   it('ファイルと remove が両方あればファイルを優先する', async () => {
     const t = setup();
 
-    await t.useCase.run({ ...base, avatar: { bytes: new Uint8Array(2), mimeType: 'image/png' }, removeAvatar: true });
+    await t.useCase.run({
+      ...base,
+      avatar: { bytes: imageBytes(8, PNG_SIGNATURE), mimeType: 'image/png' },
+      removeAvatar: true,
+    });
 
-    expect(t.putRecord()).toMatchObject({ avatar: { ref: { $link: 'new-2' } } });
+    expect(t.putRecord()).toMatchObject({ avatar: { ref: { $link: 'new-8' } } });
   });
 
-  it('既存のレコードが無ければ createdAt を現在時刻にして、swapCid を付けずに作る', async () => {
+  it('既存のレコードが無く expectedCid も null なら、createdAt を現在時刻にして、swapCid を null にして作る', async () => {
     const t = setup(null);
 
-    const result = await t.useCase.run(base);
+    const result = await t.useCase.run({ ...base, expectedCid: null });
 
     expect(result.ok).toBe(true);
     expect(t.putRecord()).toEqual({
@@ -123,7 +180,7 @@ describe('UpdateBlueskyProfileUseCase', () => {
       displayName: '新名',
       description: '新紹介',
     });
-    expect(t.putProfileRecord).toHaveBeenCalledExactlyOnceWith(t.putRecord(), undefined);
+    expect(t.putProfileRecord).toHaveBeenCalledExactlyOnceWith(t.putRecord(), null);
   });
 
   it('入力が不正なら PDS を呼ばずに BlueskyProfileInvalid を返す', async () => {
@@ -149,11 +206,30 @@ describe('UpdateBlueskyProfileUseCase', () => {
     expect(t.getProfileRecord).not.toHaveBeenCalled();
   });
 
+  it('先頭バイトが mimeType と合わない画像は PDS を呼ばずに拒否する', async () => {
+    const t = setup();
+
+    const result = await t.useCase.run({
+      ...base,
+      avatar: { bytes: imageBytes(16, JPEG_SIGNATURE), mimeType: 'image/png' },
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      err: { type: 'BlueskyProfileInvalid', reason: 'アバターの画像は JPEG か PNG にしてください' },
+    });
+    expect(t.getProfileRecord).not.toHaveBeenCalled();
+    expect(t.uploadBlob).not.toHaveBeenCalled();
+  });
+
   it('uploadBlob の失敗はそのまま返し、putProfileRecord を呼ばない', async () => {
     const t = setup();
     t.uploadBlob.mockResolvedValueOnce(Result.err(failure));
 
-    const result = await t.useCase.run({ ...base, avatar: { bytes: new Uint8Array(1), mimeType: 'image/png' } });
+    const result = await t.useCase.run({
+      ...base,
+      avatar: { bytes: imageBytes(8, PNG_SIGNATURE), mimeType: 'image/png' },
+    });
 
     expect(result).toEqual({ ok: false, err: failure });
     expect(t.putProfileRecord).not.toHaveBeenCalled();

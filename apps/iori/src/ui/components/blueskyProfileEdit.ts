@@ -38,15 +38,40 @@ export type BlueskyProfileSubmission = Readonly<{
   banner: File | undefined;
   removeAvatar: boolean;
   removeBanner: boolean;
+  swapCid: string | null;
 }>;
 
 export const buildBlueskyProfileFormData = (input: BlueskyProfileSubmission): FormData => {
   const body = new FormData();
   body.append('display_name', input.displayName);
   body.append('description', input.description);
+  body.append('swap_cid', input.swapCid ?? '');
   if (input.avatar !== undefined && input.avatar.size > 0) body.append('avatar', input.avatar);
   else if (input.removeAvatar) body.append('remove_avatar', 'true');
   if (input.banner !== undefined && input.banner.size > 0) body.append('banner', input.banner);
   else if (input.removeBanner) body.append('remove_banner', 'true');
   return body;
 };
+
+export type BlueskyProfileFormValues = Readonly<{ displayName: string; description: string }>;
+
+type EditableBlueskyProfile = Readonly<{ displayName: string | null; description: string | null; cid: string | null }>;
+
+export type BlueskyProfileEditState<P extends EditableBlueskyProfile> = Readonly<{
+  profile: P;
+  form: BlueskyProfileFormValues;
+}>;
+
+export const editStateOfLoaded = <P extends EditableBlueskyProfile>(loaded: P): BlueskyProfileEditState<P> => ({
+  profile: loaded,
+  form: { displayName: loaded.displayName ?? '', description: loaded.description ?? '' },
+});
+
+export const editStateAfterSave = <P extends EditableBlueskyProfile>(
+  current: BlueskyProfileEditState<P>,
+  saved: Readonly<{ cid: string }>,
+  refetched: P | undefined,
+): BlueskyProfileEditState<P> => ({
+  profile: refetched ?? { ...current.profile, cid: saved.cid },
+  form: current.form,
+});

@@ -7,6 +7,11 @@ export const BLUESKY_PROFILE_DESCRIPTION_MAX_BYTES = 2560;
 export const BLUESKY_PROFILE_IMAGE_MAX_BYTES = 1_000_000;
 export const BLUESKY_PROFILE_IMAGE_MIME_TYPES: readonly string[] = ['image/jpeg', 'image/png'];
 
+const IMAGE_SIGNATURES: Readonly<Record<string, readonly number[]>> = {
+  'image/jpeg': [0xff, 0xd8, 0xff],
+  'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+};
+
 export type BlueskyProfileInvalid = Readonly<{ type: 'BlueskyProfileInvalid'; reason: string }>;
 
 export type BlueskyProfileImageInput = Readonly<{ bytes: Uint8Array; mimeType: string }>;
@@ -42,6 +47,10 @@ const textProblem = (
 const imageProblem = (label: string, image: BlueskyProfileImageInput | undefined): string | undefined => {
   if (image === undefined) return undefined;
   if (!BLUESKY_PROFILE_IMAGE_MIME_TYPES.includes(image.mimeType)) return `${label}の画像は JPEG か PNG にしてください`;
+  const signature = IMAGE_SIGNATURES[image.mimeType] ?? [];
+  if (image.bytes.byteLength > 0 && !signature.every((byte, index) => image.bytes[index] === byte)) {
+    return `${label}の画像は JPEG か PNG にしてください`;
+  }
   if (image.bytes.byteLength === 0) return `${label}の画像が空です`;
   if (image.bytes.byteLength > BLUESKY_PROFILE_IMAGE_MAX_BYTES) {
     return `${label}の画像は1MB以下にしてください`;

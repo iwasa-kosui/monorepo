@@ -57,7 +57,7 @@ export type BlueskyClient = Readonly<{
   getProfileRecord: () => RA<BlueskyProfileRecord | undefined, BlueskyClientError>;
   putProfileRecord: (
     record: Readonly<Record<string, unknown>>,
-    swapCid?: string,
+    swapCid: string | null,
   ) => RA<Readonly<{ uri: string; cid: string }>, BlueskyClientError>;
 }>;
 

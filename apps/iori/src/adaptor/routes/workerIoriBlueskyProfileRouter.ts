@@ -132,6 +132,7 @@ export type IoriBlueskyOwnProfileResponse = Readonly<{
   description: string | null;
   avatar: string | null;
   banner: string | null;
+  cid: string | null;
 }>;
 
 export type IoriBlueskyProfileUpdateResponse = Readonly<{ uri: string; cid: string }>;
@@ -177,6 +178,15 @@ const failure = (
 
 const profileInvalid = (c: Context, reason: string) => c.json({ error: reason, code: 'profile_invalid' }, 422);
 
+const profileConflict = (c: Context) =>
+  c.json(
+    {
+      error: 'ほかの場所でプロフィールが更新されました。読み込み直してから保存してください',
+      code: 'profile_conflict',
+    },
+    409,
+  );
+
 const uploadedImage = async (value: unknown): Promise<BlueskyProfileImageInput | undefined> =>
   value instanceof File && value.size > 0
     ? { bytes: new Uint8Array(await value.arrayBuffer()), mimeType: value.type }
@@ -220,6 +230,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
           description: profile.val.description,
           avatar: profile.val.avatar,
           banner: profile.val.banner,
+          cid: profile.val.cid,
         } satisfies IoriBlueskyOwnProfileResponse,
       );
     })
@@ -233,9 +244,11 @@ export const createWorkerIoriBlueskyProfileRouter = ({
         const body = await readRequestBody(c);
         const displayName = bodyString(body, 'display_name');
         const description = bodyString(body, 'description');
+        const swapCid = bodyString(body, 'swap_cid');
         if (displayName === undefined || description === undefined) {
           return profileInvalid(c, '表示名と自己紹介を指定してください');
         }
+        if (swapCid === undefined) return profileInvalid(c, 'プロフィールを読み込み直してから保存してください');
         const updated = await updateBlueskyProfileUseCase.run({
           displayName,
           description,
@@ -243,15 +256,16 @@ export const createWorkerIoriBlueskyProfileRouter = ({
           banner: await uploadedImage(body['banner']),
           removeAvatar: bodyString(body, 'remove_avatar') === 'true',
           removeBanner: bodyString(body, 'remove_banner') === 'true',
+          expectedCid: swapCid === '' ? null : swapCid,
         });
         if (updated.ok) {
           return c.json(
             { uri: updated.val.uri, cid: updated.val.cid } satisfies IoriBlueskyProfileUpdateResponse,
           );
         }
-        return updated.err.type === 'BlueskyProfileInvalid'
-          ? profileInvalid(c, updated.err.reason)
-          : failure(c, updated.err);
+        if (updated.err.type === 'BlueskyProfileInvalid') return profileInvalid(c, updated.err.reason);
+        if (updated.err.type === 'BlueskyProfileConflict') return profileConflict(c);
+        return failure(c, updated.err);
       },
     )
     .get('/iori/v1/bluesky/profiles/:actor', authn.requireUser(readAccounts), async (c) => {

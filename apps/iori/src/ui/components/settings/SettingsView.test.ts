@@ -204,6 +204,7 @@ describe('BlueskyProfileSettingsForm', () => {
     description: '自己紹介',
     avatar: 'https://cdn.example/avatar.jpg',
     banner: null,
+    cid: 'bafycurrent',
   };
   const render = (props: Partial<Parameters<typeof BlueskyProfileSettingsForm>[0]> = {}): string =>
     String(jsx(BlueskyProfileSettingsForm, {
@@ -213,6 +214,7 @@ describe('BlueskyProfileSettingsForm', () => {
       description: '自己紹介',
       isSubmitting: false,
       errorText: undefined,
+      isConflict: false,
       savedMessage: undefined,
       formKey: 0,
       onReload: () => {},
@@ -253,6 +255,14 @@ describe('BlueskyProfileSettingsForm', () => {
       'Bluesky のプロフィールを保存しました',
     );
     expect(render({ errorText: '保存できません' })).toContain('保存できません');
+  });
+
+  it('offers a reload button only when the save conflicted', () => {
+    expect(render({ errorText: '保存できません' })).not.toContain('読み込み直す');
+
+    const conflict = render({ errorText: 'ほかの場所でプロフィールが更新されました', isConflict: true });
+    expect(conflict).toContain('ほかの場所でプロフィールが更新されました');
+    expect(conflict).toContain('読み込み直す');
   });
 
   it('shows a loading or failure text with a reload button until the profile arrives', () => {

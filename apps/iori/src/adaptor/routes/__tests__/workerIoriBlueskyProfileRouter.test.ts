@@ -221,7 +221,11 @@ const setup = async (options: {
       followBlueskyActorUseCase: enabled ? FollowBlueskyActorUseCase.create({ reader, client }) : undefined,
       unfollowBlueskyActorUseCase: enabled ? UnfollowBlueskyActorUseCase.create({ reader, client }) : undefined,
       getOwnBlueskyProfileUseCase: enabled
-        ? GetOwnBlueskyProfileUseCase.create({ reader, viewerDid: options.ownDid ?? (async () => RA.ok(OWN_DID)) })
+        ? GetOwnBlueskyProfileUseCase.create({
+          reader,
+          client,
+          viewerDid: options.ownDid ?? (async () => RA.ok(OWN_DID)),
+        })
         : undefined,
       updateBlueskyProfileUseCase: enabled
         ? UpdateBlueskyProfileUseCase.create({ client, now: () => Instant.orThrow(NOW) })
@@ -1465,12 +1469,20 @@ describe('GET /api/iori/v1/bluesky/profile', () => {
     expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
   });
 
-  it('自分の DID のプロフィールから、編集に使う項目だけを返す', async () => {
+  it('表示名・自己紹介・cid を PDS のレコードから、DID・ハンドル・画像を AppView から返す', async () => {
     const t = await setup({
       scope: 'read:accounts',
       reader: {
         getProfile: vi.fn(async () =>
           RA.ok(profile({ did: OWN_DID, banner: 'https://cdn.example/banner.jpg', viewerFollowingUri: FOLLOW_URI }))
+        ),
+      },
+      client: {
+        getProfileRecord: vi.fn(async () =>
+          RA.ok({
+            cid: 'bafyrecord',
+            value: { $type: 'app.bsky.actor.profile', displayName: '最新の名前', description: '最新の紹介' },
+          })
         ),
       },
     });
@@ -1481,12 +1493,26 @@ describe('GET /api/iori/v1/bluesky/profile', () => {
     expect(await response.json()).toEqual({
       did: OWN_DID,
       handle: 'alice.bsky.social',
-      displayName: 'Alice',
-      description: 'hello\nworld',
+      displayName: '最新の名前',
+      description: '最新の紹介',
       avatar: 'https://cdn.example/avatar.jpg',
       banner: 'https://cdn.example/banner.jpg',
+      cid: 'bafyrecord',
     });
     expect(t.reader.getProfile).toHaveBeenCalledExactlyOnceWith(OWN_DID);
+  });
+
+  it('レコードが無ければ、表示名・自己紹介・cid を null にする', async () => {
+    const t = await setup({
+      scope: 'read:accounts',
+      client: { getProfileRecord: vi.fn(async () => RA.ok(undefined)) },
+    });
+
+    expect(await (await t.get(OWN_PROFILE)).json()).toMatchObject({
+      displayName: null,
+      description: null,
+      cid: null,
+    });
   });
 
   it('Bluesky のログインに失敗したら 502 と Bluesky login failed、それ以外の失敗は Bluesky request failed を返す', async () => {
@@ -1495,6 +1521,10 @@ describe('GET /api/iori/v1/bluesky/profile', () => {
       scope: 'read:accounts',
       reader: { getProfile: vi.fn(async () => RA.err(clientError())) },
     });
+    const recordFailing = await setup({
+      scope: 'read:accounts',
+      client: { getProfileRecord: vi.fn(async () => RA.err(clientError())) },
+    });
 
     const loginResponse = await login.get(OWN_PROFILE);
     expect(loginResponse.status).toBe(502);
@@ -1502,6 +1532,7 @@ describe('GET /api/iori/v1/bluesky/profile', () => {
     const failingResponse = await failing.get(OWN_PROFILE);
     expect(failingResponse.status).toBe(502);
     expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
+    expect((await recordFailing.get(OWN_PROFILE)).status).toBe(502);
   });
 });
 
@@ -1510,10 +1541,16 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
     const data = new FormData();
     data.set('display_name', '新名');
     data.set('description', '新紹介');
+    data.set('swap_cid', 'bafycurrent');
     for (const [key, value] of Object.entries(fields)) data.set(key, value);
     return data;
   };
-  const png = (size: number, name = 'a.png', type = 'image/png') => new File([new Uint8Array(size)], name, { type });
+  const pngBytes = (size: number) => {
+    const bytes = new Uint8Array(size);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].slice(0, size));
+    return bytes;
+  };
+  const png = (size: number, name = 'a.png', type = 'image/png') => new File([pngBytes(size)], name, { type });
 
   it('認証なしだと 401、Origin が違う Cookie だと 403 にし、Bluesky を呼ばない', async () => {
     const t = await setup({ scope: 'write:accounts' });
@@ -1543,7 +1580,10 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
   it('無効のときは 409 を返す', async () => {
     const t = await setup({ scope: 'write:accounts', enabled: false });
 
-    expect((await t.put(OWN_PROFILE, form())).status).toBe(409);
+    const response = await t.put(OWN_PROFILE, form());
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
   });
 
   it('入力が不正なら 422 と profile_invalid、理由を返し、Bluesky を呼ばない', async () => {
@@ -1564,12 +1604,68 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
     const t = await setup({ scope: 'write:accounts' });
     const data = new FormData();
     data.set('description', '新紹介');
+    data.set('swap_cid', 'bafycurrent');
 
     const response = await t.put(OWN_PROFILE, data);
 
     expect(response.status).toBe(422);
     expect(await response.json()).toMatchObject({ code: 'profile_invalid' });
     expect(t.client.putProfileRecord).not.toHaveBeenCalled();
+  });
+
+  it('swap_cid が無ければ 422 と profile_invalid にし、Bluesky を呼ばない', async () => {
+    const t = await setup({ scope: 'write:accounts' });
+    const data = form();
+    data.delete('swap_cid');
+
+    const response = await t.put(OWN_PROFILE, data);
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ code: 'profile_invalid' });
+    expect(t.client.getProfileRecord).not.toHaveBeenCalled();
+    expect(t.client.putProfileRecord).not.toHaveBeenCalled();
+  });
+
+  it('swap_cid が空文字でレコードも無ければ、swapCid を null にして putProfileRecord を呼ぶ', async () => {
+    const t = await setup({
+      scope: 'write:accounts',
+      client: { getProfileRecord: vi.fn(async () => RA.ok(undefined)) },
+    });
+
+    const response = await t.put(OWN_PROFILE, form({ swap_cid: '' }));
+
+    expect(response.status).toBe(200);
+    expect(t.client.putProfileRecord).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ displayName: '新名', description: '新紹介' }),
+      null,
+    );
+  });
+
+  it('swap_cid が現行レコードの cid と違えば、409 と profile_conflict を返し、書き込まない', async () => {
+    const t = await setup({ scope: 'write:accounts' });
+
+    const response = await t.put(OWN_PROFILE, form({ swap_cid: 'bafystale' }));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: 'ほかの場所でプロフィールが更新されました。読み込み直してから保存してください',
+      code: 'profile_conflict',
+    });
+    expect(t.client.putProfileRecord).not.toHaveBeenCalled();
+  });
+
+  it('PDS が InvalidSwap を返したときも、409 と profile_conflict を返す', async () => {
+    const t = await setup({
+      scope: 'write:accounts',
+      client: {
+        putProfileRecord: vi.fn(async () => RA.err(clientError({ status: 400, code: 'InvalidSwap' }))),
+      },
+    });
+
+    const response = await t.put(OWN_PROFILE, form());
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'profile_conflict' });
   });
 
   it('文字列だけなら既存のキーを保持して putProfileRecord を呼び、uri と cid を返す', async () => {
@@ -1594,12 +1690,12 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
   it('avatar と banner のファイルを uploadBlob で上げて record に入れる。サイズ 0 のファイルは未指定として扱う', async () => {
     const t = await setup({ scope: 'write:accounts' });
 
-    const response = await t.put(OWN_PROFILE, form({ avatar: png(4), banner: png(0, 'empty.png') }));
+    const response = await t.put(OWN_PROFILE, form({ avatar: png(9), banner: png(0, 'empty.png') }));
 
     expect(response.status).toBe(200);
-    expect(t.client.uploadBlob).toHaveBeenCalledExactlyOnceWith({ bytes: new Uint8Array(4), mimeType: 'image/png' });
+    expect(t.client.uploadBlob).toHaveBeenCalledExactlyOnceWith({ bytes: pngBytes(9), mimeType: 'image/png' });
     const record = vi.mocked(t.client.putProfileRecord).mock.calls[0]![0];
-    expect(record).toMatchObject({ avatar: { $type: 'blob', ref: { $link: 'bafyblob' }, size: 4 } });
+    expect(record).toMatchObject({ avatar: { $type: 'blob', ref: { $link: 'bafyblob' }, size: 9 } });
     expect(record).not.toHaveProperty('banner');
   });
 
@@ -1608,7 +1704,10 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
       scope: 'write:accounts',
       client: {
         getProfileRecord: vi.fn(async () =>
-          RA.ok({ cid: 'c', value: { avatar: { $type: 'blob' }, banner: { $type: 'blob' }, pinnedPost: 'keep' } })
+          RA.ok({
+            cid: 'bafycurrent',
+            value: { avatar: { $type: 'blob' }, banner: { $type: 'blob' }, pinnedPost: 'keep' },
+          })
         ),
       },
     });
@@ -1638,7 +1737,7 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
     const loginResponse = await login.put(OWN_PROFILE, form());
     expect(loginResponse.status).toBe(502);
     expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
-    const failingResponse = await failing.put(OWN_PROFILE, form({ avatar: png(2) }));
+    const failingResponse = await failing.put(OWN_PROFILE, form({ avatar: png(9) }));
     expect(failingResponse.status).toBe(502);
     expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
   });

@@ -6,6 +6,8 @@ import {
   blueskyProfileImageProblem,
   buildBlueskyProfileFormData,
   countGraphemes,
+  editStateAfterSave,
+  editStateOfLoaded,
   graphemeCounterLabel,
   isWithinGraphemeLimit,
   selectedImageFile,
@@ -83,6 +85,7 @@ describe('buildBlueskyProfileFormData', () => {
     banner: undefined,
     removeAvatar: false,
     removeBanner: false,
+    swapCid: 'bafycurrent',
   } as const;
 
   it('表示名と自己紹介は常に入れ、画像と削除フラグは指定がなければ入れない', () => {
@@ -93,6 +96,11 @@ describe('buildBlueskyProfileFormData', () => {
     );
     expect(body.get('display_name')).toBe('岩佐');
     expect(body.get('description')).toBe('自己紹介');
+  });
+
+  it('swap_cid に、フォームを開いたときの cid を入れる。レコードが無かった（null）ときは空文字にする', () => {
+    expect(buildBlueskyProfileFormData(base).get('swap_cid')).toBe('bafycurrent');
+    expect(buildBlueskyProfileFormData({ ...base, swapCid: null }).get('swap_cid')).toBe('');
   });
 
   it('選んだ画像を avatar と banner に入れる', () => {
@@ -135,5 +143,37 @@ describe('buildBlueskyProfileFormData', () => {
 
     expect(body.has('avatar')).toBe(false);
     expect(body.has('banner')).toBe(false);
+  });
+});
+
+describe('editStateOfLoaded', () => {
+  it('取得したプロフィールの表示名と自己紹介をフォームの値にし、null は空文字にする', () => {
+    const loaded = { displayName: '岩佐', description: null, cid: 'bafy1' };
+
+    expect(editStateOfLoaded(loaded)).toEqual({
+      profile: loaded,
+      form: { displayName: '岩佐', description: '' },
+    });
+  });
+});
+
+describe('editStateAfterSave', () => {
+  const profile = { displayName: '旧名', description: '旧紹介', cid: 'bafyold', avatar: 'old.jpg' };
+  const current = { profile, form: { displayName: '送った名前', description: '送った紹介' } };
+
+  it('取り直したプロフィールで cid と画像を更新し、フォームの値は送った値のまま維持する', () => {
+    const refetched = { displayName: '古い反映', description: '古い反映', cid: 'bafynew', avatar: 'new.jpg' };
+
+    expect(editStateAfterSave(current, { cid: 'bafynew' }, refetched)).toEqual({
+      profile: refetched,
+      form: { displayName: '送った名前', description: '送った紹介' },
+    });
+  });
+
+  it('取り直しに失敗したら、現在のプロフィールの cid だけを保存の応答の cid にする', () => {
+    expect(editStateAfterSave(current, { cid: 'bafynew' }, undefined)).toEqual({
+      profile: { ...profile, cid: 'bafynew' },
+      form: { displayName: '送った名前', description: '送った紹介' },
+    });
   });
 });
