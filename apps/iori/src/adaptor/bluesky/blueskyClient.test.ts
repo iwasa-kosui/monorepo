@@ -524,6 +524,72 @@ describe('createBlueskyClient の各操作', () => {
     expect(await client.getRecord('3k9')).toMatchObject({ ok: false, err: { kind: 'http', code: 'RecordNotFound' } });
   });
 
+  it('getProfileRecord は自分の repo の app.bsky.actor.profile/self を取り、cid と value を返す', async () => {
+    const value = { $type: 'app.bsky.actor.profile', displayName: 'Iori', pinnedPost: { uri: 'at://x', cid: 'c' } };
+    const { client, calls } = setup(stored(), [
+      () => json({ uri: 'at://did:plc:abc/app.bsky.actor.profile/self', cid: 'bafyprofile', value }),
+    ]);
+
+    const result = await client.getProfileRecord();
+
+    expect(result).toEqual({ ok: true, val: { cid: 'bafyprofile', value } });
+    const url = new URL(calls[0]!.url);
+    expect(url.origin + url.pathname).toBe(`${PDS}/xrpc/com.atproto.repo.getRecord`);
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.actor.profile',
+      rkey: 'self',
+    });
+    expect(calls[0]?.init.method).toBe('GET');
+  });
+
+  it('getProfileRecord は record が無ければ undefined を返し、それ以外の失敗はエラーにする', async () => {
+    const missing = setup(stored(), [() => json({ error: 'RecordNotFound' }, 400)]);
+    const failing = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+
+    expect(await missing.client.getProfileRecord()).toEqual({ ok: true, val: undefined });
+    expect(await failing.client.getProfileRecord()).toMatchObject({ ok: false, err: { kind: 'http', status: 500 } });
+  });
+
+  it('putProfileRecord は putRecord に swapRecord を付けて送り、uri と cid を返す', async () => {
+    const uri = 'at://did:plc:abc/app.bsky.actor.profile/self';
+    const { client, calls } = setup(stored(), [() => json({ uri, cid: 'bafynew' })]);
+    const record = { $type: 'app.bsky.actor.profile', displayName: 'Iori' };
+
+    const result = await client.putProfileRecord(record, 'bafyold');
+
+    expect(result).toEqual({ ok: true, val: { uri, cid: 'bafynew' } });
+    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.putRecord`);
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+      repo: 'did:plc:abc',
+      collection: 'app.bsky.actor.profile',
+      rkey: 'self',
+      record,
+      swapRecord: 'bafyold',
+    });
+  });
+
+  it('putProfileRecord は swapCid が無ければ swapRecord を送らない', async () => {
+    const { client, calls } = setup(stored(), [
+      () => json({ uri: 'at://did:plc:abc/app.bsky.actor.profile/self', cid: 'bafynew' }),
+    ]);
+
+    await client.putProfileRecord({ $type: 'app.bsky.actor.profile' });
+
+    expect(Object.keys(JSON.parse(calls[0]!.init.body as string))).not.toContain('swapRecord');
+  });
+
+  it('putProfileRecord は profile の uri でない応答を invalid_response として返す', async () => {
+    const { client } = setup(stored(), [
+      () => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k1', cid: 'c' }),
+    ]);
+
+    expect(await client.putProfileRecord({ $type: 'app.bsky.actor.profile' })).toMatchObject({
+      ok: false,
+      err: { kind: 'invalid_response' },
+    });
+  });
+
   it.each([
     ['RecordNotFound の 400', json({ error: 'RecordNotFound' }, 400)],
     ['404', json({ error: 'NotFound' }, 404)],

@@ -2,6 +2,7 @@ import type { RA } from '@iwasa-kosui/result';
 import { type Context, Hono } from 'hono';
 
 import { blueskyFeedKindOf } from '../../domain/blueskyFeed/blueskyFeedUri.ts';
+import type { BlueskyProfileImageInput } from '../../domain/blueskyProfile/blueskyProfileInput.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type { BlueskyFeedNotFound, BlueskySavedFeed } from '../../ports/blueskyFeedReader.ts';
@@ -9,6 +10,7 @@ import type { BlueskyProfile, BlueskyProfileNotFound } from '../../ports/bluesky
 import type { FollowBlueskyActorUseCase } from '../../useCase/followBlueskyActor.ts';
 import type { GetBlueskyFeedInfoUseCase } from '../../useCase/getBlueskyFeedInfo.ts';
 import type { GetBlueskyProfileUseCase } from '../../useCase/getBlueskyProfile.ts';
+import type { GetOwnBlueskyProfileUseCase } from '../../useCase/getOwnBlueskyProfile.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { ListBlueskyActorFeedsUseCase } from '../../useCase/listBlueskyActorFeeds.ts';
 import type { ListBlueskyActorFollowersUseCase } from '../../useCase/listBlueskyActorFollowers.ts';
@@ -21,6 +23,7 @@ import type { ListBlueskyListMembersUseCase } from '../../useCase/listBlueskyLis
 import type { ListBlueskySavedFeedsUseCase } from '../../useCase/listBlueskySavedFeeds.ts';
 import type { BlueskyFeedUrlInvalid, ResolveBlueskyFeedUrlUseCase } from '../../useCase/resolveBlueskyFeedUrl.ts';
 import type { UnfollowBlueskyActorUseCase } from '../../useCase/unfollowBlueskyActor.ts';
+import type { UpdateBlueskyProfileUseCase } from '../../useCase/updateBlueskyProfile.ts';
 import { logBlueskyFailure } from './helper/blueskyFailureLog.ts';
 import { handleInternalError } from './helper/mastodonErrors.ts';
 import { bodyString, readRequestBody } from './helper/requestBody.ts';
@@ -49,6 +52,8 @@ export type WorkerIoriBlueskyProfileRouterDeps = Readonly<{
   listBlueskyActorFollowersUseCase: ListBlueskyActorFollowersUseCase | undefined;
   followBlueskyActorUseCase: FollowBlueskyActorUseCase | undefined;
   unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase | undefined;
+  getOwnBlueskyProfileUseCase: GetOwnBlueskyProfileUseCase | undefined;
+  updateBlueskyProfileUseCase: UpdateBlueskyProfileUseCase | undefined;
   viewerDid?: (() => RA<string, BlueskyClientError>) | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
@@ -116,8 +121,20 @@ export type IoriBlueskyFollowResponse = Readonly<{ following: true; followUri: s
 
 export type IoriBlueskyUnfollowResponse = Readonly<{ following: false }>;
 
+export type IoriBlueskyOwnProfileResponse = Readonly<{
+  did: string;
+  handle: string;
+  displayName: string | null;
+  description: string | null;
+  avatar: string | null;
+  banner: string | null;
+}>;
+
+export type IoriBlueskyProfileUpdateResponse = Readonly<{ uri: string; cid: string }>;
+
 const readAccounts = Scope.orThrow('read:accounts');
 const writeFollows = Scope.orThrow('write:follows');
+const writeAccounts = Scope.orThrow('write:accounts');
 const forbidden = { error: 'Forbidden' } as const;
 const disabled = { error: 'Bluesky timeline is disabled' } as const;
 
@@ -154,6 +171,13 @@ const failure = (
   return c.json({ error: error.kind === 'auth' ? 'Bluesky login failed' : 'Bluesky request failed' }, 502);
 };
 
+const profileInvalid = (c: Context, reason: string) => c.json({ error: reason, code: 'profile_invalid' }, 422);
+
+const uploadedImage = async (value: unknown): Promise<BlueskyProfileImageInput | undefined> =>
+  value instanceof File && value.size > 0
+    ? { bytes: new Uint8Array(await value.arrayBuffer()), mimeType: value.type }
+    : undefined;
+
 const isDid = (value: string | undefined): value is string => value !== undefined && value.startsWith('did:');
 
 export const createWorkerIoriBlueskyProfileRouter = ({
@@ -172,11 +196,60 @@ export const createWorkerIoriBlueskyProfileRouter = ({
   listBlueskyActorFollowersUseCase,
   followBlueskyActorUseCase,
   unfollowBlueskyActorUseCase,
+  getOwnBlueskyProfileUseCase,
+  updateBlueskyProfileUseCase,
   viewerDid,
   isDigestOwner,
 }: WorkerIoriBlueskyProfileRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
+    .get('/iori/v1/bluesky/profile', authn.requireUser(readAccounts), async (c) => {
+      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      if (getOwnBlueskyProfileUseCase === undefined) return c.json(disabled, 409);
+      const profile = await getOwnBlueskyProfileUseCase.run();
+      if (!profile.ok) return failure(c, profile.err);
+      return c.json(
+        {
+          did: profile.val.did,
+          handle: profile.val.handle,
+          displayName: profile.val.displayName,
+          description: profile.val.description,
+          avatar: profile.val.avatar,
+          banner: profile.val.banner,
+        } satisfies IoriBlueskyOwnProfileResponse,
+      );
+    })
+    .put(
+      '/iori/v1/bluesky/profile',
+      requireSameOriginForCookie,
+      authn.requireUser(writeAccounts),
+      async (c) => {
+        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+        if (updateBlueskyProfileUseCase === undefined) return c.json(disabled, 409);
+        const body = await readRequestBody(c);
+        const displayName = bodyString(body, 'display_name');
+        const description = bodyString(body, 'description');
+        if (displayName === undefined || description === undefined) {
+          return profileInvalid(c, '表示名と自己紹介を指定してください');
+        }
+        const updated = await updateBlueskyProfileUseCase.run({
+          displayName,
+          description,
+          avatar: await uploadedImage(body['avatar']),
+          banner: await uploadedImage(body['banner']),
+          removeAvatar: bodyString(body, 'remove_avatar') === 'true',
+          removeBanner: bodyString(body, 'remove_banner') === 'true',
+        });
+        if (updated.ok) {
+          return c.json(
+            { uri: updated.val.uri, cid: updated.val.cid } satisfies IoriBlueskyProfileUpdateResponse,
+          );
+        }
+        return updated.err.type === 'BlueskyProfileInvalid'
+          ? profileInvalid(c, updated.err.reason)
+          : failure(c, updated.err);
+      },
+    )
     .get('/iori/v1/bluesky/profiles/:actor', authn.requireUser(readAccounts), async (c) => {
       if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
       if (getBlueskyProfileUseCase === undefined) return c.json(disabled, 409);

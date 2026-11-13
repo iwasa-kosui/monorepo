@@ -12,8 +12,11 @@ import {
   fetchBlueskyFollows,
   fetchBlueskyLikedPosts,
   fetchBlueskyProfile,
+  fetchOwnBlueskyProfile,
   followBlueskyActor,
+  ownBlueskyProfileSaveFailureMessage,
   unfollowBlueskyActor,
+  updateOwnBlueskyProfile,
 } from './blueskyProfileClient.ts';
 
 const json = (body: unknown, status = 200) =>
@@ -194,6 +197,49 @@ describe('blueskyProfileClient', () => {
       'Bluesky でいいねした投稿を読み込めませんでした',
     );
     expect(blueskyLikedPostsFailureMessage(new Error('x'), 'more')).toBe('続きを読み込めませんでした');
+  });
+});
+
+describe('own Bluesky profile', () => {
+  it('自分のプロフィールを取る', async () => {
+    const profile = {
+      did: 'did:plc:me',
+      handle: 'me.bsky.social',
+      displayName: null,
+      description: null,
+      avatar: null,
+      banner: null,
+    };
+    const fetchStub = stubFetch(json(profile));
+
+    expect(await fetchOwnBlueskyProfile()).toEqual(profile);
+    expect(fetchStub.mock.calls[0]?.[0]).toBe('/api/iori/v1/bluesky/profile');
+  });
+
+  it('保存は FormData を PUT し、Content-Type は付けない', async () => {
+    const fetchStub = stubFetch(json({ uri: 'at://did:plc:me/app.bsky.actor.profile/self', cid: 'bafy' }));
+    const body = new FormData();
+    body.append('display_name', '岩佐');
+
+    expect(await updateOwnBlueskyProfile(body)).toEqual({
+      uri: 'at://did:plc:me/app.bsky.actor.profile/self',
+      cid: 'bafy',
+    });
+    const init = fetchStub.mock.calls[0]?.[1];
+    expect(init?.method).toBe('PUT');
+    expect(init?.body).toBe(body);
+    expect(init?.headers).toEqual({ Accept: 'application/json' });
+  });
+
+  it('保存の失敗は、422 なら error をそのまま、それ以外は固定の文言にする', async () => {
+    stubFetch(json({ error: '表示名が長すぎます', code: 'profile_invalid' }, 422));
+    const invalid = await failure(updateOwnBlueskyProfile(new FormData()));
+    expect(ownBlueskyProfileSaveFailureMessage(invalid)).toBe('表示名が長すぎます');
+
+    stubFetch(json({ error: 'upstream' }, 502));
+    const upstream = await failure(updateOwnBlueskyProfile(new FormData()));
+    expect(ownBlueskyProfileSaveFailureMessage(upstream)).toBe('Bluesky のプロフィールを保存できませんでした');
+    expect(ownBlueskyProfileSaveFailureMessage(new Error('x'))).toBe('Bluesky のプロフィールを保存できませんでした');
   });
 });
 

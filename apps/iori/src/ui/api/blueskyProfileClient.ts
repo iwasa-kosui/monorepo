@@ -6,7 +6,7 @@ import type {
   IoriBlueskyProfileBody,
   IoriBlueskyUnfollowResponse,
 } from '../../adaptor/routes/workerIoriBlueskyProfileRouter.ts';
-import { isMastodonApiError, requestUrl, toApiError } from './mastodonClient.ts';
+import { isMastodonApiError, isUnprocessableError, requestUrl, toApiError } from './mastodonClient.ts';
 
 export type BlueskyProfile = IoriBlueskyProfileBody;
 
@@ -19,6 +19,7 @@ export type BlueskyFollowListPage = IoriBlueskyFollowListResponse;
 const PROFILES_PATH = '/api/iori/v1/bluesky/profiles';
 const FOLLOWS_PATH = '/api/iori/v1/bluesky/follows';
 const LIKED_POSTS_PATH = '/api/iori/v1/bluesky/liked-posts';
+const OWN_PROFILE_PATH = '/api/iori/v1/bluesky/profile';
 const LOGIN_FAILED_MESSAGE = 'Bluesky login failed';
 
 const get = async <T>(path: string): Promise<T> => {
@@ -68,6 +69,35 @@ export const unfollowBlueskyActor = async (
   if (!res.ok) throw await toApiError(res);
   return await res.json() as IoriBlueskyUnfollowResponse;
 };
+
+export type OwnBlueskyProfile = Readonly<{
+  did: string;
+  handle: string;
+  displayName: string | null;
+  description: string | null;
+  avatar: string | null;
+  banner: string | null;
+}>;
+
+export type OwnBlueskyProfileSaveResult = Readonly<{ uri: string; cid: string }>;
+
+export const fetchOwnBlueskyProfile = (): Promise<OwnBlueskyProfile> => get<OwnBlueskyProfile>(OWN_PROFILE_PATH);
+
+export const updateOwnBlueskyProfile = async (body: FormData): Promise<OwnBlueskyProfileSaveResult> => {
+  const res = await fetch(OWN_PROFILE_PATH, {
+    method: 'PUT',
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+    body,
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as OwnBlueskyProfileSaveResult;
+};
+
+export const ownBlueskyProfileSaveFailureMessage = (error: unknown): string =>
+  isUnprocessableError(error) && error instanceof Error
+    ? error.message
+    : 'Bluesky のプロフィールを保存できませんでした';
 
 export const blueskyProfileLoadFailureMessage = (error: unknown): string => {
   if (isMastodonApiError(error) && error.status === 404) return 'この Bluesky のアカウントは見つかりません';

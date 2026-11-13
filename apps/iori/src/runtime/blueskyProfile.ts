@@ -9,6 +9,7 @@ import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import { FollowBlueskyActorUseCase } from '../useCase/followBlueskyActor.ts';
 import { GetBlueskyFeedInfoUseCase } from '../useCase/getBlueskyFeedInfo.ts';
 import { GetBlueskyProfileUseCase } from '../useCase/getBlueskyProfile.ts';
+import { GetOwnBlueskyProfileUseCase } from '../useCase/getOwnBlueskyProfile.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { ListBlueskyActorFeedsUseCase } from '../useCase/listBlueskyActorFeeds.ts';
 import { ListBlueskyActorFollowersUseCase } from '../useCase/listBlueskyActorFollowers.ts';
@@ -21,6 +22,7 @@ import { ListBlueskyListMembersUseCase } from '../useCase/listBlueskyListMembers
 import { ListBlueskySavedFeedsUseCase } from '../useCase/listBlueskySavedFeeds.ts';
 import { ResolveBlueskyFeedUrlUseCase } from '../useCase/resolveBlueskyFeedUrl.ts';
 import { UnfollowBlueskyActorUseCase } from '../useCase/unfollowBlueskyActor.ts';
+import { UpdateBlueskyProfileUseCase } from '../useCase/updateBlueskyProfile.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createTimelineClient, resolveBlueskyTimelineConfig } from './blueskyTimeline.ts';
 
@@ -39,6 +41,8 @@ export type BlueskyProfileRuntimePorts = Readonly<{
   listBlueskyActorFollowersUseCase: ListBlueskyActorFollowersUseCase | undefined;
   followBlueskyActorUseCase: FollowBlueskyActorUseCase | undefined;
   unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase | undefined;
+  getOwnBlueskyProfileUseCase: GetOwnBlueskyProfileUseCase | undefined;
+  updateBlueskyProfileUseCase: UpdateBlueskyProfileUseCase | undefined;
   viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
@@ -66,6 +70,8 @@ export const createBlueskyProfileRuntimePorts = (
       listBlueskyActorFollowersUseCase: undefined,
       followBlueskyActorUseCase: undefined,
       unfollowBlueskyActorUseCase: undefined,
+      getOwnBlueskyProfileUseCase: undefined,
+      updateBlueskyProfileUseCase: undefined,
       viewerDid: undefined,
       isDigestOwner,
     };
@@ -88,6 +94,8 @@ export const createBlueskyProfileRuntimePorts = (
     listBlueskyActorFollowersUseCase: ListBlueskyActorFollowersUseCase.create({ reader }),
     followBlueskyActorUseCase: FollowBlueskyActorUseCase.create({ reader, client }),
     unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase.create({ reader, client }),
+    getOwnBlueskyProfileUseCase: GetOwnBlueskyProfileUseCase.create({ reader, viewerDid: () => client.viewerDid() }),
+    updateBlueskyProfileUseCase: UpdateBlueskyProfileUseCase.create({ client, now: Instant.now }),
     viewerDid: () => client.viewerDid(),
     isDigestOwner,
   };
