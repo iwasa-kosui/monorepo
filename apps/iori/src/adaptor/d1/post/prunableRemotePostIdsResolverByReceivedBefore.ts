@@ -29,7 +29,7 @@ export const createD1PrunableRemotePostIdsResolverByReceivedBefore = (
         AND p.postId NOT IN (
           SELECT postId FROM emoji_reacts WHERE actorId IN (SELECT actorId FROM local_actors)
         )
-        AND p.postId NOT IN (SELECT postId FROM timeline_items WHERE deletedAt IS NULL)
+        AND NOT EXISTS (SELECT 1 FROM timeline_items ti WHERE ti.postId = p.postId AND ti.deletedAt IS NULL)
         AND p.postId NOT IN (
           SELECT postId FROM reposts WHERE actorId IN (SELECT actorId FROM local_actors)
         )

@@ -198,8 +198,10 @@ export const localPostsTable = sqliteTable('local_posts', {
   visibility: text('visibility').notNull().default('public'),
   sourceText: text('sourceText'),
   editedAt: timestamp(),
+  createdAt: timestamp().notNull(),
 }, (table) => [
   index('local_posts_in_reply_to_uri_idx').on(table.inReplyToUri),
+  index('local_posts_visibility_created_at_post_id_idx').on(table.visibility, table.createdAt, table.postId),
 ]);
 
 export const likesTable = sqliteTable('likes', {

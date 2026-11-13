@@ -57,11 +57,12 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
       'local',
       options.deletedAt ?? null,
     );
-    sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri,visibility) VALUES (?,?,?,?)').run(
+    sqlite.prepare('INSERT INTO local_posts(postId,userId,inReplyToUri,visibility,createdAt) VALUES (?,?,?,?,?)').run(
       postId,
       actor.userId,
       options.inReplyToUri ?? null,
       options.visibility ?? 'public',
+      createdAt,
     );
     const timelineItemId = options.timeline === false ? undefined : addTimelineItem(actor.actorId, postId, createdAt);
     return { postId, timelineItemId, uri: `${SEED_ORIGIN}/users/${actor.username}/posts/${postId}` };

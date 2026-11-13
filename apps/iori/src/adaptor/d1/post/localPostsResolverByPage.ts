@@ -17,7 +17,7 @@ const cursorOf = (id: string) =>
 
 export const createD1LocalPostsResolverByPage = (db: IoriD1Db): LocalPostsResolverByPage => ({
   resolve: async ({ currentActorId, mutedActorIds, page }) => {
-    const columns = { createdAt: postsTable.createdAt, id: postsTable.postId };
+    const columns = { createdAt: localPostsTable.createdAt, id: localPostsTable.postId };
     const rows = await db.select({ postId: postsTable.postId })
       .from(localPostsTable)
       .crossJoin(postsTable)

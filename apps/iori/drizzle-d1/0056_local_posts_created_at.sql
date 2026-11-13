@@ -1,0 +1,3 @@
+ALTER TABLE `local_posts` ADD `createdAt` integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+UPDATE `local_posts` SET `createdAt` = (SELECT `posts`.`createdAt` FROM `posts` WHERE `posts`.`postId` = `local_posts`.`postId`) WHERE EXISTS (SELECT 1 FROM `posts` WHERE `posts`.`postId` = `local_posts`.`postId`);--> statement-breakpoint
+CREATE INDEX `local_posts_visibility_created_at_post_id_idx` ON `local_posts` (`visibility`,`createdAt`,`postId`);
