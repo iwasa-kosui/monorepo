@@ -114,8 +114,8 @@ describe('createBlueskyProfileReader.getAuthorFeed', () => {
     const first = clientReturning(RA.ok({ feed: [] }));
     const next = clientReturning(RA.ok({ feed: [] }));
 
-    await first.reader.getAuthorFeed({ actor: DID, cursor: undefined });
-    await next.reader.getAuthorFeed({ actor: DID, cursor: 'abc' });
+    await first.reader.getAuthorFeed({ actor: DID, cursor: undefined, filter: 'posts_and_author_threads' });
+    await next.reader.getAuthorFeed({ actor: DID, cursor: 'abc', filter: 'posts_and_author_threads' });
 
     expect(first.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getAuthorFeed', {
       actor: DID,
@@ -130,10 +130,24 @@ describe('createBlueskyProfileReader.getAuthorFeed', () => {
     });
   });
 
+  it.each(
+    ['posts_and_author_threads', 'posts_with_replies', 'posts_with_media', 'posts_with_video'] as const,
+  )('filter %s を入力どおり query に渡す', async (filter) => {
+    const { reader, query } = clientReturning(RA.ok({ feed: [] }));
+
+    await reader.getAuthorFeed({ actor: DID, cursor: undefined, filter });
+
+    expect(query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getAuthorFeed', {
+      actor: DID,
+      limit: '30',
+      filter,
+    });
+  });
+
   it('投稿とカーソルを返す', async () => {
     const { reader } = clientReturning(RA.ok({ feed: [postView], cursor: 'next' }));
 
-    const result = await reader.getAuthorFeed({ actor: DID, cursor: undefined });
+    const result = await reader.getAuthorFeed({ actor: DID, cursor: undefined, filter: 'posts_and_author_threads' });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -154,10 +168,12 @@ describe('createBlueskyProfileReader.getAuthorFeed', () => {
         code,
       }));
 
-      expect(await reader.getAuthorFeed({ actor: DID, cursor: undefined })).toEqual({
-        ok: true,
-        val: { items: [], cursor: undefined, unavailable: 'blocked' },
-      });
+      expect(await reader.getAuthorFeed({ actor: DID, cursor: undefined, filter: 'posts_and_author_threads' })).toEqual(
+        {
+          ok: true,
+          val: { items: [], cursor: undefined, unavailable: 'blocked' },
+        },
+      );
     },
   );
 
@@ -166,11 +182,13 @@ describe('createBlueskyProfileReader.getAuthorFeed', () => {
     const error = { type: 'BlueskyClientError', kind: 'network', message: 'x' } as const;
     const failing = clientReturning(RA.err(error));
 
-    expect(await invalid.reader.getAuthorFeed({ actor: DID, cursor: undefined })).toMatchObject({
-      ok: false,
-      err: { kind: 'invalid_response' },
-    });
-    expect(await failing.reader.getAuthorFeed({ actor: DID, cursor: undefined })).toEqual({ ok: false, err: error });
+    expect(await invalid.reader.getAuthorFeed({ actor: DID, cursor: undefined, filter: 'posts_and_author_threads' }))
+      .toMatchObject({
+        ok: false,
+        err: { kind: 'invalid_response' },
+      });
+    expect(await failing.reader.getAuthorFeed({ actor: DID, cursor: undefined, filter: 'posts_and_author_threads' }))
+      .toEqual({ ok: false, err: error });
   });
 });
 

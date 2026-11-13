@@ -9,7 +9,6 @@ import { actorOf } from './blueskySearch.ts';
 import { parseBlueskyTimelineResponse } from './blueskyTimelineResponse.ts';
 
 const AUTHOR_FEED_LIMIT = '30';
-const AUTHOR_FEED_FILTER = 'posts_and_author_threads';
 const FOLLOW_LIST_LIMIT = '50';
 
 const profileZodType = z.looseObject({
@@ -59,11 +58,11 @@ export const createBlueskyProfileReader = (
       viewerFollowedBy: profile.viewer?.followedBy !== undefined,
     });
   },
-  getAuthorFeed: async ({ actor, cursor }) => {
+  getAuthorFeed: async ({ actor, cursor, filter }) => {
     const response = await deps.client.query('app.bsky.feed.getAuthorFeed', {
       actor,
       limit: AUTHOR_FEED_LIMIT,
-      filter: AUTHOR_FEED_FILTER,
+      filter,
       ...(cursor === undefined ? {} : { cursor }),
     });
     if (!response.ok) {

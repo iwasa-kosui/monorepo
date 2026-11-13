@@ -123,8 +123,37 @@ describe('BlueskyProfilePage', () => {
   it('フォローとフォロワーのタブでも、投稿・フィード・リストの切り替えにタブを増やさず、どれも選ばれていない状態にする', () => {
     const html = render({}, { onSelectTab: () => {}, tab: 'follows' });
 
-    expect(html.match(/role="tab"/g)).toHaveLength(3);
+    expect(html.match(/role="tab"/g)).toHaveLength(6);
     expect(html).not.toContain('aria-selected="true"');
+  });
+
+  it('返信・メディア・動画のタブでも、そのタブの見出しで投稿を描画し、空のときはそのタブの文言を出す', () => {
+    for (
+      const [tab, heading, empty] of [
+        ['replies', 'Replies', 'No replies yet.'],
+        ['media', 'Media', 'No media posts yet.'],
+        ['videos', 'Videos', 'No videos yet.'],
+      ] as const
+    ) {
+      const withItems = render({}, { onSelectTab: () => {}, tab, items: [item] });
+      expect(withItems).toContain(`>${heading}</h2>`);
+      expect(withItems).toContain('最初の投稿');
+      expect(withItems).toContain('aria-selected="true"');
+
+      const emptyHtml = render({}, { onSelectTab: () => {}, tab });
+      expect(emptyHtml).toContain(empty);
+      expect(emptyHtml).not.toContain('No posts yet.');
+    }
+  });
+
+  it('タブの並びは、投稿・返信・メディア・動画・フィード・リストにする', () => {
+    const html = render({}, { onSelectTab: () => {} });
+
+    const labels = ['投稿', '返信', 'メディア', '動画', 'フィード', 'リスト'].map((label) =>
+      html.indexOf(`>${label}</button>`)
+    );
+    expect(labels.every((index) => index >= 0)).toBe(true);
+    expect(labels).toEqual([...labels].sort((a, b) => a - b));
   });
 
   it('フィードとリストのタブには、フォロー・フォロワーの見出しを出さない', () => {

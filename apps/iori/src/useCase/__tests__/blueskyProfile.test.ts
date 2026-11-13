@@ -95,17 +95,18 @@ describe('GetBlueskyProfileUseCase', () => {
 });
 
 describe('ListBlueskyAuthorFeedUseCase', () => {
-  it('actor と cursor を渡して投稿とカーソルを返す', async () => {
+  it('actor と cursor と filter を渡して投稿とカーソルを返す', async () => {
     const page = { items: [], cursor: 'next', unavailable: null };
     const getAuthorFeed = vi.fn<BlueskyProfileReader['getAuthorFeed']>(async () => RA.ok(page));
 
     const result = await ListBlueskyAuthorFeedUseCase.create({ reader: { getAuthorFeed } }).run({
       actor: DID,
       cursor: 'abc',
+      filter: 'posts_with_media',
     });
 
     expect(result).toEqual({ ok: true, val: page });
-    expect(getAuthorFeed).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: 'abc' });
+    expect(getAuthorFeed).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: 'abc', filter: 'posts_with_media' });
   });
 
   it('見つからない応答を BlueskyProfileNotFound にし、それ以外の失敗はそのまま返す', async () => {
@@ -114,11 +115,14 @@ describe('ListBlueskyAuthorFeedUseCase', () => {
     });
     const failing = ListBlueskyAuthorFeedUseCase.create({ reader: { getAuthorFeed: async () => RA.err(failure) } });
 
-    expect(await missing.run({ actor: DID, cursor: undefined })).toEqual({
+    expect(await missing.run({ actor: DID, cursor: undefined, filter: 'posts_and_author_threads' })).toEqual({
       ok: false,
       err: { type: 'BlueskyProfileNotFound' },
     });
-    expect(await failing.run({ actor: DID, cursor: undefined })).toEqual({ ok: false, err: failure });
+    expect(await failing.run({ actor: DID, cursor: undefined, filter: 'posts_and_author_threads' })).toEqual({
+      ok: false,
+      err: failure,
+    });
   });
 });
 

@@ -6,6 +6,7 @@ import type {
   IoriBlueskyProfileBody,
   IoriBlueskyUnfollowResponse,
 } from '../../adaptor/routes/workerIoriBlueskyProfileRouter.ts';
+import type { BlueskyAuthorFeedFilter } from '../../ports/blueskyProfileReader.ts';
 import { isMastodonApiError, requestUrl, toApiError } from './mastodonClient.ts';
 
 export type BlueskyProfile = IoriBlueskyProfileBody;
@@ -30,8 +31,17 @@ const get = async <T>(path: string): Promise<T> => {
 export const fetchBlueskyProfile = (actor: string): Promise<BlueskyProfile> =>
   get<BlueskyProfile>(`${PROFILES_PATH}/${encodeURIComponent(actor)}`);
 
-export const fetchBlueskyAuthorFeed = (actor: string, cursor?: string): Promise<BlueskyAuthorFeedPage> =>
-  get<BlueskyAuthorFeedPage>(requestUrl(`${PROFILES_PATH}/${encodeURIComponent(actor)}/feed`, { cursor }));
+export const fetchBlueskyAuthorFeed = (
+  actor: string,
+  cursor?: string,
+  filter?: BlueskyAuthorFeedFilter,
+): Promise<BlueskyAuthorFeedPage> =>
+  get<BlueskyAuthorFeedPage>(
+    requestUrl(`${PROFILES_PATH}/${encodeURIComponent(actor)}/feed`, {
+      cursor,
+      filter: filter === 'posts_and_author_threads' ? undefined : filter,
+    }),
+  );
 
 export const fetchBlueskyFollows = (actor: string, cursor?: string): Promise<BlueskyFollowListPage> =>
   get<BlueskyFollowListPage>(requestUrl(`${PROFILES_PATH}/${encodeURIComponent(actor)}/follows`, { cursor }));
