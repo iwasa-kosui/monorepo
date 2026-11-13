@@ -21,10 +21,16 @@ const reasonOf = (notification: BlueskyNotification): string => {
       return 'like';
     case 'blueskyRepost':
       return 'repost';
+    case 'blueskyLikeViaRepost':
+      return 'like-via-repost';
+    case 'blueskyRepostViaRepost':
+      return 'repost-via-repost';
     case 'blueskyFollow':
       return 'follow';
     case 'blueskyMention':
       return notification.reason;
+    case 'blueskySubscribedPost':
+      return 'subscribed-post';
   }
 };
 
@@ -38,7 +44,9 @@ const subtypeRow = (notification: BlueskyNotification) => ({
   authorAvatar: notification.author.avatarUrl,
   subjectUri: notification.type === 'blueskyFollow' ? null : notification.subjectUri,
   targetPostId: notification.type === 'blueskyFollow' ? null : notification.targetPostId,
-  text: notification.type === 'blueskyMention' ? notification.text : null,
+  text: notification.type === 'blueskyMention' || notification.type === 'blueskySubscribedPost'
+    ? notification.text
+    : null,
 });
 
 export const createD1BlueskyNotificationCreatedStore = (

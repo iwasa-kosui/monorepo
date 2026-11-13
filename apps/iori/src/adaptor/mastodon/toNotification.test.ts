@@ -176,6 +176,80 @@ describe('Bluesky notifications', () => {
     expect(targetPostIdOf(notification)).toBeUndefined();
   });
 
+  it('maps blueskyLikeViaRepost to favourite with a link to the original post', () => {
+    const original = 'at://did:plc:other/app.bsky.feed.post/3korig';
+    const targetPostId = PostId.generate();
+    const notification: Notification = {
+      ...blueskyBase,
+      type: 'blueskyLikeViaRepost',
+      subjectUri: original,
+      targetPostId,
+    };
+
+    const result = toNotification(notification, options);
+
+    expect(NotificationSchema.safeParse(result).success).toBe(true);
+    expect(result).toMatchObject({
+      type: 'favourite',
+      iori: {
+        bluesky: {
+          reason: 'like-via-repost',
+          url: 'https://bsky.app/profile/did:plc:other/post/3korig',
+          uri: original,
+        },
+      },
+    });
+    expect(triggerOf(notification)).toEqual({ kind: 'bluesky', author });
+    expect(targetPostIdOf(notification)).toBe(targetPostId);
+  });
+
+  it('maps blueskyRepostViaRepost to reblog with a link to the original post', () => {
+    const original = 'at://did:plc:other/app.bsky.feed.post/3korig';
+    const notification: Notification = {
+      ...blueskyBase,
+      type: 'blueskyRepostViaRepost',
+      subjectUri: original,
+      targetPostId: null,
+    };
+
+    const result = toNotification(notification, options);
+
+    expect(NotificationSchema.safeParse(result).success).toBe(true);
+    expect(result.type).toBe('reblog');
+    expect(result.iori?.bluesky).toEqual({
+      reason: 'repost-via-repost',
+      url: 'https://bsky.app/profile/did:plc:other/post/3korig',
+      uri: original,
+    });
+    expect(targetPostIdOf(notification)).toBeUndefined();
+  });
+
+  it('maps blueskySubscribedPost to status with the text and a link to the post itself', () => {
+    const notification: Notification = {
+      ...blueskyBase,
+      blueskyUri: 'at://did:plc:alice/app.bsky.feed.post/3knew',
+      type: 'blueskySubscribedPost',
+      subjectUri: null,
+      targetPostId: null,
+      text: 'new post',
+    };
+
+    const result = toNotification(notification, options);
+
+    expect(NotificationSchema.safeParse(result).success).toBe(true);
+    expect(result).toMatchObject({
+      type: 'status',
+      iori: {
+        bluesky: {
+          reason: 'subscribed-post',
+          url: 'https://bsky.app/profile/did:plc:alice/post/3knew',
+          uri: 'at://did:plc:alice/app.bsky.feed.post/3knew',
+          text: 'new post',
+        },
+      },
+    });
+  });
+
   it('maps blueskyFollow to follow with a link to the profile', () => {
     const notification: Notification = { ...blueskyBase, type: 'blueskyFollow' };
 
@@ -255,39 +329,50 @@ describe('Bluesky notifications', () => {
 describe('selectDomainTypes', () => {
   const select = (types: string[], excludeTypes: string[] = []) => selectDomainTypes({ types, excludeTypes });
 
-  it('returns like, reply, mention, follow and repost by default and leaves emojiReact out', () => {
+  it('returns like, reply, mention, status, follow and repost by default and leaves emojiReact out', () => {
     expect(select([])).toEqual([
       'like',
       'blueskyLike',
+      'blueskyLikeViaRepost',
       'reply',
       'mention',
       'blueskyMention',
+      'blueskySubscribedPost',
       'follow',
       'blueskyFollow',
       'repost',
       'blueskyRepost',
+      'blueskyRepostViaRepost',
     ]);
   });
 
   it('returns emojiReact only when iori:emoji_reaction is named', () => {
     expect(select(['iori:emoji_reaction'])).toEqual(['emojiReact']);
-    expect(select(['favourite', 'iori:emoji_reaction'])).toEqual(['like', 'blueskyLike', 'emojiReact']);
+    expect(select(['favourite', 'iori:emoji_reaction'])).toEqual([
+      'like',
+      'blueskyLike',
+      'blueskyLikeViaRepost',
+      'emojiReact',
+    ]);
   });
 
   it('ignores unknown values and applies the exclusions', () => {
     expect(select(['bogus'])).toEqual(select([]));
-    expect(select(['favourite', 'bogus'])).toEqual(['like', 'blueskyLike']);
+    expect(select(['favourite', 'bogus'])).toEqual(['like', 'blueskyLike', 'blueskyLikeViaRepost']);
     expect(select([], ['follow', 'bogus'])).toEqual([
       'like',
       'blueskyLike',
+      'blueskyLikeViaRepost',
       'reply',
       'mention',
       'blueskyMention',
+      'blueskySubscribedPost',
       'repost',
       'blueskyRepost',
+      'blueskyRepostViaRepost',
     ]);
-    expect(select(['reblog'])).toEqual(['repost', 'blueskyRepost']);
-    expect(select(['status'])).toEqual([]);
+    expect(select(['reblog'])).toEqual(['repost', 'blueskyRepost', 'blueskyRepostViaRepost']);
+    expect(select(['status'])).toEqual(['blueskySubscribedPost']);
   });
 });
 

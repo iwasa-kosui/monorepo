@@ -252,7 +252,14 @@ export const fetchFollowers = (accountId: string, params: PageParams = {}): Prom
 export const fetchFollowing = (accountId: string, params: PageParams = {}): Promise<Page<Account>> =>
   getPage<Account>(`/api/v1/accounts/${encodeURIComponent(accountId)}/following`, pageQuery(params));
 
-export const NOTIFICATION_TYPES = ['favourite', 'mention', 'follow', 'reblog', IORI_EMOJI_REACTION_TYPE] as const;
+export const NOTIFICATION_TYPES = [
+  'favourite',
+  'mention',
+  'status',
+  'follow',
+  'reblog',
+  IORI_EMOJI_REACTION_TYPE,
+] as const;
 
 const NOTIFICATIONS_PATH = '/api/v1/notifications';
 

@@ -120,7 +120,7 @@ const LikeNotificationItem = ({ notification, recipientUsername }: Props) => {
               </span>
             </a>
             <span class='text-sm text-charcoal-light dark:text-gray-400 flex-shrink-0'>
-              liked your post
+              {notification.iori?.bluesky?.reason === 'like-via-repost' ? 'liked your repost' : 'liked your post'}
             </span>
           </div>
 
@@ -183,7 +183,7 @@ const ReblogNotificationItem = ({ notification, recipientUsername }: Props) => {
               </span>
             </a>
             <span class='text-sm text-charcoal-light dark:text-gray-400 flex-shrink-0'>
-              boosted your post
+              {notification.iori?.bluesky?.reason === 'repost-via-repost' ? 'boosted your repost' : 'boosted your post'}
             </span>
           </div>
 
@@ -320,6 +320,8 @@ const mentionLabelOf = (notification: Notification): string => {
       return 'mentioned you';
     case 'quote':
       return 'quoted your post';
+    case 'subscribed-post':
+      return 'posted';
     default:
       return 'replied to your post';
   }
@@ -399,6 +401,7 @@ export const NotificationItem = ({ notification, recipientUsername }: Props) => 
     case IORI_EMOJI_REACTION_TYPE:
       return <EmojiReactNotificationItem notification={notification} recipientUsername={recipientUsername} />;
     case 'mention':
+    case 'status':
       return <MentionNotificationItem notification={notification} recipientUsername={recipientUsername} />;
     default:
       return null;

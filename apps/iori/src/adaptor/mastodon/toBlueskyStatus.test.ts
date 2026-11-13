@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { Instant } from '../../domain/instant/instant.ts';
 import type {
   BlueskyLikeNotification,
+  BlueskyLikeViaRepostNotification,
   BlueskyMentionNotification,
   BlueskyRepostNotification,
+  BlueskyRepostViaRepostNotification,
 } from '../../domain/notification/notification.ts';
 import { NotificationId } from '../../domain/notification/notificationId.ts';
 import { UserId } from '../../domain/user/userId.ts';
@@ -80,6 +82,35 @@ describe('toBlueskyStatus', () => {
     expect(StatusSchema.safeParse(status).success).toBe(true);
     expect(status.id).toBe(`bluesky:${subjectUri}`);
     expect(status.content).toBe('');
+  });
+
+  it('blueskyLikeViaRepost と blueskyRepostViaRepost は元の投稿の AT-URI を id にし、本文を空にする', () => {
+    const original = 'at://did:plc:other/app.bsky.feed.post/3korig';
+    const likeViaRepost: BlueskyLikeViaRepostNotification = {
+      ...base,
+      type: 'blueskyLikeViaRepost',
+      blueskyUri: 'at://did:plc:alice/app.bsky.feed.like/3k3',
+      subjectUri: original,
+      targetPostId: null,
+    };
+    const repostViaRepost: BlueskyRepostViaRepostNotification = {
+      ...base,
+      type: 'blueskyRepostViaRepost',
+      blueskyUri: 'at://did:plc:alice/app.bsky.feed.repost/3k4',
+      subjectUri: original,
+      targetPostId: null,
+    };
+
+    for (const notification of [likeViaRepost, repostViaRepost]) {
+      const status = toBlueskyStatus(notification, { createdAt, account });
+
+      expect(StatusSchema.safeParse(status).success).toBe(true);
+      expect(status).toMatchObject({
+        id: `bluesky:${original}`,
+        url: 'https://bsky.app/profile/did:plc:other/post/3korig',
+        content: '',
+      });
+    }
   });
 
   it('対象が投稿でないときは相手のプロフィールを URL にする', () => {

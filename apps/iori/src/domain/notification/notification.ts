@@ -143,6 +143,30 @@ const blueskyRepostNotificationZodType = z
 export type BlueskyRepostNotification = z.output<typeof blueskyRepostNotificationZodType>;
 export const BlueskyRepostNotification = Schema.create(blueskyRepostNotificationZodType);
 
+const blueskyLikeViaRepostNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyLikeViaRepost'),
+    subjectUri: z.string().min(1),
+    targetPostId: z.nullable(PostId.zodType),
+  })
+  .describe('BlueskyLikeViaRepostNotification');
+
+export type BlueskyLikeViaRepostNotification = z.output<typeof blueskyLikeViaRepostNotificationZodType>;
+export const BlueskyLikeViaRepostNotification = Schema.create(blueskyLikeViaRepostNotificationZodType);
+
+const blueskyRepostViaRepostNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyRepostViaRepost'),
+    subjectUri: z.string().min(1),
+    targetPostId: z.nullable(PostId.zodType),
+  })
+  .describe('BlueskyRepostViaRepostNotification');
+
+export type BlueskyRepostViaRepostNotification = z.output<typeof blueskyRepostViaRepostNotificationZodType>;
+export const BlueskyRepostViaRepostNotification = Schema.create(blueskyRepostViaRepostNotificationZodType);
+
 const blueskyFollowNotificationZodType = z
   .object({
     ...blueskyNotificationBaseShape,
@@ -167,6 +191,19 @@ const blueskyMentionNotificationZodType = z
 export type BlueskyMentionNotification = z.output<typeof blueskyMentionNotificationZodType>;
 export const BlueskyMentionNotification = Schema.create(blueskyMentionNotificationZodType);
 
+const blueskySubscribedPostNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskySubscribedPost'),
+    subjectUri: z.string().min(1).nullable(),
+    targetPostId: z.nullable(PostId.zodType),
+    text: z.string(),
+  })
+  .describe('BlueskySubscribedPostNotification');
+
+export type BlueskySubscribedPostNotification = z.output<typeof blueskySubscribedPostNotificationZodType>;
+export const BlueskySubscribedPostNotification = Schema.create(blueskySubscribedPostNotificationZodType);
+
 const notificationZodType = z.discriminatedUnion('type', [
   likeNotificationZodType,
   followNotificationZodType,
@@ -176,8 +213,11 @@ const notificationZodType = z.discriminatedUnion('type', [
   repostNotificationZodType,
   blueskyLikeNotificationZodType,
   blueskyRepostNotificationZodType,
+  blueskyLikeViaRepostNotificationZodType,
+  blueskyRepostViaRepostNotificationZodType,
   blueskyFollowNotificationZodType,
   blueskyMentionNotificationZodType,
+  blueskySubscribedPostNotificationZodType,
 ]);
 
 export type Notification = z.output<typeof notificationZodType>;
@@ -506,8 +546,11 @@ export type RepostNotificationResolverByRecipientAndActorIdAndPostId = Agg.Resol
 export type BlueskyNotification =
   | BlueskyLikeNotification
   | BlueskyRepostNotification
+  | BlueskyLikeViaRepostNotification
+  | BlueskyRepostViaRepostNotification
   | BlueskyFollowNotification
-  | BlueskyMentionNotification;
+  | BlueskyMentionNotification
+  | BlueskySubscribedPostNotification;
 
 export type BlueskyNotificationCreated = NotificationEvent<
   BlueskyNotification,

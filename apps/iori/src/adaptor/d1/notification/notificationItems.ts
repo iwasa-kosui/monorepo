@@ -21,7 +21,15 @@ import {
 type NotificationRow = typeof notificationsTable.$inferSelect;
 type BlueskyRow = typeof notificationBlueskyTable.$inferSelect;
 
-const blueskyTypes: ReadonlyArray<string> = ['blueskyLike', 'blueskyRepost', 'blueskyFollow', 'blueskyMention'];
+const blueskyTypes: ReadonlyArray<string> = [
+  'blueskyLike',
+  'blueskyRepost',
+  'blueskyLikeViaRepost',
+  'blueskyRepostViaRepost',
+  'blueskyFollow',
+  'blueskyMention',
+  'blueskySubscribedPost',
+];
 const mentionReasons: ReadonlyArray<string> = ['mention', 'reply', 'quote'];
 
 const toBlueskyNotification = (
@@ -53,7 +61,12 @@ const toBlueskyNotification = (
       }
       : undefined;
   }
-  return row.subjectUri === null || (type !== 'blueskyLike' && type !== 'blueskyRepost')
+  if (type === 'blueskySubscribedPost') {
+    return { ...common, type, subjectUri: row.subjectUri, targetPostId, text: row.text ?? '' };
+  }
+  return row.subjectUri === null
+      || (type !== 'blueskyLike' && type !== 'blueskyRepost' && type !== 'blueskyLikeViaRepost'
+        && type !== 'blueskyRepostViaRepost')
     ? undefined
     : { ...common, type, subjectUri: row.subjectUri, targetPostId };
 };

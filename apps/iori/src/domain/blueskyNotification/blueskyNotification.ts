@@ -22,10 +22,12 @@ const fetchedBaseShape = {
 const blueskyFetchedNotificationZodType = z.discriminatedUnion('reason', [
   z.object({ ...fetchedBaseShape, reason: z.literal('like'), subjectUri: z.string().min(1) }),
   z.object({ ...fetchedBaseShape, reason: z.literal('repost'), subjectUri: z.string().min(1) }),
+  z.object({ ...fetchedBaseShape, reason: z.literal('like-via-repost'), subjectUri: z.string().min(1) }),
+  z.object({ ...fetchedBaseShape, reason: z.literal('repost-via-repost'), subjectUri: z.string().min(1) }),
   z.object({ ...fetchedBaseShape, reason: z.literal('follow') }),
   z.object({
     ...fetchedBaseShape,
-    reason: z.enum(['mention', 'reply', 'quote']),
+    reason: z.enum(['mention', 'reply', 'quote', 'subscribed-post']),
     subjectUri: z.string().min(1).nullable(),
     text: z.string(),
   }),

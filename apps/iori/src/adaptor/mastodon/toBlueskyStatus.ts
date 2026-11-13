@@ -1,8 +1,11 @@
 import type { Instant } from '../../domain/instant/instant.ts';
 import type {
   BlueskyLikeNotification,
+  BlueskyLikeViaRepostNotification,
   BlueskyMentionNotification,
   BlueskyRepostNotification,
+  BlueskyRepostViaRepostNotification,
+  BlueskySubscribedPostNotification,
 } from '../../domain/notification/notification.ts';
 import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 import { BLUESKY_STATUS_ID_PREFIX } from '../../helper/blueskyUrl.ts';
@@ -10,10 +13,21 @@ import type { Account, Status } from './entities.ts';
 import { toIsoString } from './time.ts';
 import { blueskyExtensionOf } from './toNotification.ts';
 
-type BlueskyStatusSource = BlueskyLikeNotification | BlueskyRepostNotification | BlueskyMentionNotification;
+type BlueskyStatusSource =
+  | BlueskyLikeNotification
+  | BlueskyRepostNotification
+  | BlueskyLikeViaRepostNotification
+  | BlueskyRepostViaRepostNotification
+  | BlueskyMentionNotification
+  | BlueskySubscribedPostNotification;
+
+const isPostNotification = (
+  notification: BlueskyStatusSource,
+): notification is BlueskyMentionNotification | BlueskySubscribedPostNotification =>
+  notification.type === 'blueskyMention' || notification.type === 'blueskySubscribedPost';
 
 const targetUriOf = (notification: BlueskyStatusSource): string =>
-  notification.type === 'blueskyMention' ? notification.blueskyUri : notification.subjectUri;
+  isPostNotification(notification) ? notification.blueskyUri : notification.subjectUri;
 
 export const toBlueskyStatus = (
   notification: BlueskyStatusSource,
@@ -25,7 +39,7 @@ export const toBlueskyStatus = (
     uri: url,
     created_at: toIsoString(options.createdAt),
     account: options.account,
-    content: notification.type === 'blueskyMention' ? plainTextToHtml(notification.text) : '',
+    content: isPostNotification(notification) ? plainTextToHtml(notification.text) : '',
     visibility: 'public',
     sensitive: false,
     spoiler_text: '',

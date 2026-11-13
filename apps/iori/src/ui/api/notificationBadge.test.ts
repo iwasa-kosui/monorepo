@@ -38,7 +38,7 @@ describe('formatNotificationBadge', () => {
 describe('unreadNotificationCountUrl', () => {
   it('counts the same notification types the notifications page lists', () => {
     expect(unreadNotificationCountUrl()).toBe(
-      '/api/v1/notifications/unread_count?types%5B%5D=favourite&types%5B%5D=mention&types%5B%5D=follow&types%5B%5D=reblog&types%5B%5D=iori%3Aemoji_reaction',
+      '/api/v1/notifications/unread_count?types%5B%5D=favourite&types%5B%5D=mention&types%5B%5D=status&types%5B%5D=follow&types%5B%5D=reblog&types%5B%5D=iori%3Aemoji_reaction',
     );
   });
 });

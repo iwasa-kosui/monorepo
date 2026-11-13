@@ -40,13 +40,17 @@ export const toType = (notification: DomainNotification): ResponseNotificationTy
     case 'repost':
       return 'reblog';
     case 'blueskyLike':
+    case 'blueskyLikeViaRepost':
       return 'favourite';
     case 'blueskyRepost':
+    case 'blueskyRepostViaRepost':
       return 'reblog';
     case 'blueskyFollow':
       return 'follow';
     case 'blueskyMention':
       return 'mention';
+    case 'blueskySubscribedPost':
+      return 'status';
   }
 };
 
@@ -70,8 +74,11 @@ export const triggerOf = (notification: DomainNotification): NotificationTrigger
       return { kind: 'actor', actorId: notification.reposterActorId };
     case 'blueskyLike':
     case 'blueskyRepost':
+    case 'blueskyLikeViaRepost':
+    case 'blueskyRepostViaRepost':
     case 'blueskyFollow':
     case 'blueskyMention':
+    case 'blueskySubscribedPost':
       return { kind: 'bluesky', author: notification.author };
   }
 };
@@ -92,8 +99,11 @@ export const targetPostIdOf = (notification: DomainNotification): PostId | undef
       return notification.repostedPostId;
     case 'blueskyLike':
     case 'blueskyRepost':
+    case 'blueskyLikeViaRepost':
+    case 'blueskyRepostViaRepost':
       return notification.targetPostId ?? undefined;
     case 'blueskyMention':
+    case 'blueskySubscribedPost':
     case 'blueskyFollow':
       return undefined;
   }
@@ -124,11 +134,30 @@ export const blueskyExtensionOf = (
         url: blueskyPostUrlOf(notification.subjectUri) ?? profileUrl,
         ...blueskyPostUriOf(notification.subjectUri),
       };
+    case 'blueskyLikeViaRepost':
+      return {
+        reason: 'like-via-repost',
+        url: blueskyPostUrlOf(notification.subjectUri) ?? profileUrl,
+        ...blueskyPostUriOf(notification.subjectUri),
+      };
+    case 'blueskyRepostViaRepost':
+      return {
+        reason: 'repost-via-repost',
+        url: blueskyPostUrlOf(notification.subjectUri) ?? profileUrl,
+        ...blueskyPostUriOf(notification.subjectUri),
+      };
     case 'blueskyFollow':
       return { reason: 'follow', url: profileUrl };
     case 'blueskyMention':
       return {
         reason: notification.reason,
+        url: blueskyPostUrlOf(notification.blueskyUri) ?? profileUrl,
+        ...blueskyPostUriOf(notification.blueskyUri),
+        text: notification.text,
+      };
+    case 'blueskySubscribedPost':
+      return {
+        reason: 'subscribed-post',
         url: blueskyPostUrlOf(notification.blueskyUri) ?? profileUrl,
         ...blueskyPostUriOf(notification.blueskyUri),
         text: notification.text,
@@ -146,8 +175,11 @@ export const toExtension = (notification: DomainNotification): IoriNotificationE
       return { fediverse: { reason: 'mention' } };
     case 'blueskyLike':
     case 'blueskyRepost':
+    case 'blueskyLikeViaRepost':
+    case 'blueskyRepostViaRepost':
     case 'blueskyFollow':
     case 'blueskyMention':
+    case 'blueskySubscribedPost':
       return { bluesky: blueskyExtensionOf(notification) };
     default:
       return undefined;
@@ -155,12 +187,12 @@ export const toExtension = (notification: DomainNotification): IoriNotificationE
 };
 
 const domainTypesOf: Readonly<Record<ResponseNotificationType, ReadonlyArray<DomainNotification['type']>>> = {
-  favourite: ['like', 'blueskyLike'],
+  favourite: ['like', 'blueskyLike', 'blueskyLikeViaRepost'],
   mention: ['reply', 'mention', 'blueskyMention'],
   follow: ['follow', 'blueskyFollow'],
   [IORI_EMOJI_REACTION_TYPE]: ['emojiReact'],
-  status: [],
-  reblog: ['repost', 'blueskyRepost'],
+  status: ['blueskySubscribedPost'],
+  reblog: ['repost', 'blueskyRepost', 'blueskyRepostViaRepost'],
   follow_request: [],
   poll: [],
   update: [],
@@ -171,7 +203,7 @@ const domainTypesOf: Readonly<Record<ResponseNotificationType, ReadonlyArray<Dom
 };
 
 const knownTypes = new Set<string>([...NotificationTypeSchema.options, IORI_EMOJI_REACTION_TYPE]);
-const defaultTypes: ReadonlyArray<ResponseNotificationType> = ['favourite', 'mention', 'follow', 'reblog'];
+const defaultTypes: ReadonlyArray<ResponseNotificationType> = ['favourite', 'mention', 'status', 'follow', 'reblog'];
 
 const known = (values: ReadonlyArray<string>): ResponseNotificationType[] =>
   values.filter((value): value is ResponseNotificationType => knownTypes.has(value));

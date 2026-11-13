@@ -26,8 +26,11 @@ const allTypes: ReadonlyArray<Notification['type']> = [
   'mention',
   'blueskyLike',
   'blueskyRepost',
+  'blueskyLikeViaRepost',
+  'blueskyRepostViaRepost',
   'blueskyFollow',
   'blueskyMention',
+  'blueskySubscribedPost',
 ];
 
 const create = ({ notificationsResolverByPage, notificationsClearedStore }: Deps): ClearNotificationsUseCase => {
