@@ -117,6 +117,16 @@ const replyClient = (posts: unknown[] = [{ uri: 'at://did:plc:a/app.bsky.feed.po
   query: vi.fn<BlueskyQueryClient['query']>(async () => RA.ok({ posts })),
 });
 
+const uploadsOf = (bytes: Uint8Array | undefined) => ({
+  get: vi.fn(async () =>
+    bytes === undefined ? undefined : {
+      key: 'post-images/x/original',
+      body: new Response(bytes as BodyInit).body as never,
+      contentType: 'image/png',
+    }
+  ),
+});
+
 const setupNonOwner = async (
   options: {
     scope?: string;
@@ -1401,6 +1411,116 @@ describe('/api/iori/v1/bluesky/status', () => {
       expect(response.status).toBe(502);
       expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
     });
+
+    it('media_ids の自分の画像を alt 付きで上げて images embed にし、本文が空でも返信する', async () => {
+      const client = replyClient();
+      client.uploadBlob.mockReturnValueOnce(
+        RA.ok({ $type: 'blob', ref: { $link: 'bafyblob' }, mimeType: 'image/png', size: 3 } as const),
+      );
+      const uploads = uploadsOf(new Uint8Array([1, 2, 3]));
+      const t = setupReadApi({ blueskyReplyClient: client, uploads });
+      const me = await t.signIn('write:statuses');
+      seedItem(t, 1);
+      const media = await t.addMedia(me.userId, '猫の写真');
+
+      const response = await reply(t, me.bearer, { feedItemId: ITEM, text: '', media_ids: [media.mediaId] });
+
+      expect(response.status).toBe(201);
+      expect(client.uploadBlob).toHaveBeenCalledExactlyOnceWith({
+        bytes: new Uint8Array([1, 2, 3]),
+        mimeType: 'image/png',
+      });
+      expect(client.createRecord.mock.calls[0]![0]).toMatchObject({
+        text: '',
+        reply: { parent: { uri: ITEM, cid: 'cid1' } },
+        embed: { $type: 'app.bsky.embed.images', images: [{ alt: '猫の写真' }] },
+      });
+    });
+
+    it('他人の画像と存在しない画像は 422 にし、返信先の取得も投稿もしない', async () => {
+      const client = replyClient();
+      const uploads = uploadsOf(new Uint8Array([1]));
+      const t = setupReadApi({ blueskyReplyClient: client, uploads });
+      const me = await t.signIn('write:statuses');
+      seedItem(t, 1);
+      const bob = t.seed.addLocalActor('bob');
+      const others = await t.addMedia(bob.userId);
+
+      const foreign = await reply(t, me.bearer, { feedItemId: ITEM, text: 'hi', media_ids: [others.mediaId] });
+      const unknown = await reply(t, me.bearer, { feedItemId: ITEM, text: 'hi', media_ids: ['unknown'] });
+
+      expect(foreign.status).toBe(422);
+      expect(await foreign.json()).toEqual({
+        error: '添付した画像が見つからないか、読み込めませんでした',
+        code: 'media_invalid',
+      });
+      expect(unknown.status).toBe(422);
+      expect(uploads.get).not.toHaveBeenCalled();
+      expect(client.query).not.toHaveBeenCalled();
+      expect(client.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('画像が 5 枚だと、画像の理由を付けて 422 にする', async () => {
+      const client = replyClient();
+      const t = setupReadApi({ blueskyReplyClient: client, uploads: uploadsOf(new Uint8Array([1])) });
+      const me = await t.signIn('write:statuses');
+      seedItem(t, 1);
+      const medias = [];
+      for (let index = 0; index < 5; index++) medias.push(await t.addMedia(me.userId));
+
+      const response = await reply(t, me.bearer, {
+        feedItemId: ITEM,
+        text: 'hi',
+        media_ids: medias.map(({ mediaId }) => mediaId),
+      });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        error: 'Bluesky に送れる画像は 4 枚までです',
+        reason: 'too_many_images',
+        code: 'media_invalid',
+      });
+      expect(client.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('画像が 5 枚だと、R2 から読む前に 422 にする', async () => {
+      const client = replyClient();
+      const uploads = uploadsOf(new Uint8Array([1]));
+      const t = setupReadApi({ blueskyReplyClient: client, uploads });
+      const me = await t.signIn('write:statuses');
+      seedItem(t, 1);
+      const medias = [];
+      for (let index = 0; index < 5; index++) medias.push(await t.addMedia(me.userId));
+
+      const response = await reply(t, me.bearer, {
+        feedItemId: ITEM,
+        text: 'hi',
+        media_ids: medias.map(({ mediaId }) => mediaId),
+      });
+
+      expect(response.status).toBe(422);
+      expect((await response.json() as { code: string }).code).toBe('media_invalid');
+      expect(uploads.get).not.toHaveBeenCalled();
+      expect(client.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('画像が 1 枚 1 MB を超えると、画像の理由を付けて 422 にする', async () => {
+      const client = replyClient();
+      const t = setupReadApi({ blueskyReplyClient: client, uploads: uploadsOf(new Uint8Array(1_000_001)) });
+      const me = await t.signIn('write:statuses');
+      seedItem(t, 1);
+      const media = await t.addMedia(me.userId);
+
+      const response = await reply(t, me.bearer, { feedItemId: ITEM, text: 'hi', media_ids: [media.mediaId] });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        error: 'Bluesky に送れる画像は 1 枚 1 MB までです',
+        reason: 'image_too_large',
+        code: 'media_invalid',
+      });
+      expect(client.createRecord).not.toHaveBeenCalled();
+    });
   });
 
   describe('引用', () => {
@@ -1556,6 +1676,114 @@ describe('/api/iori/v1/bluesky/status', () => {
 
       expect(response.status).toBe(502);
       expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
+    });
+
+    it('media_ids の自分の画像を alt 付きで上げて recordWithMedia にし、本文が空でも引用する', async () => {
+      const client = replyClient();
+      client.uploadBlob.mockReturnValueOnce(
+        RA.ok({ $type: 'blob', ref: { $link: 'bafyblob' }, mimeType: 'image/png', size: 3 } as const),
+      );
+      const uploads = uploadsOf(new Uint8Array([1, 2, 3]));
+      const t = setupReadApi({ blueskyQuoteClient: client, uploads });
+      const me = await t.signIn('write:statuses');
+      const media = await t.addMedia(me.userId, '猫の写真');
+
+      const response = await quote(t, me.bearer, { uri: TARGET, text: '', media_ids: [media.mediaId] });
+
+      expect(response.status).toBe(201);
+      expect(client.uploadBlob).toHaveBeenCalledExactlyOnceWith({
+        bytes: new Uint8Array([1, 2, 3]),
+        mimeType: 'image/png',
+      });
+      expect(client.createRecord.mock.calls[0]![0]).toMatchObject({
+        text: '',
+        embed: {
+          $type: 'app.bsky.embed.recordWithMedia',
+          record: { record: { uri: TARGET, cid: 'cid1' } },
+          media: { $type: 'app.bsky.embed.images', images: [{ alt: '猫の写真' }] },
+        },
+      });
+    });
+
+    it('他人の画像と存在しない画像は 422 にし、対象の取得も投稿もしない', async () => {
+      const client = replyClient();
+      const uploads = uploadsOf(new Uint8Array([1]));
+      const t = setupReadApi({ blueskyQuoteClient: client, uploads });
+      const me = await t.signIn('write:statuses');
+      const bob = t.seed.addLocalActor('bob');
+      const others = await t.addMedia(bob.userId);
+
+      const foreign = await quote(t, me.bearer, { uri: TARGET, text: 'hi', media_ids: [others.mediaId] });
+      const unknown = await quote(t, me.bearer, { uri: TARGET, text: 'hi', media_ids: ['unknown'] });
+
+      expect(foreign.status).toBe(422);
+      expect(await foreign.json()).toEqual({
+        error: '添付した画像が見つからないか、読み込めませんでした',
+        code: 'media_invalid',
+      });
+      expect(unknown.status).toBe(422);
+      expect(uploads.get).not.toHaveBeenCalled();
+      expect(client.query).not.toHaveBeenCalled();
+      expect(client.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('画像が 5 枚だと、画像の理由を付けて 422 にする', async () => {
+      const client = replyClient();
+      const t = setupReadApi({ blueskyQuoteClient: client, uploads: uploadsOf(new Uint8Array([1])) });
+      const me = await t.signIn('write:statuses');
+      const medias = [];
+      for (let index = 0; index < 5; index++) medias.push(await t.addMedia(me.userId));
+
+      const response = await quote(t, me.bearer, {
+        uri: TARGET,
+        text: 'hi',
+        media_ids: medias.map(({ mediaId }) => mediaId),
+      });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        error: 'Bluesky に送れる画像は 4 枚までです',
+        reason: 'too_many_images',
+        code: 'media_invalid',
+      });
+      expect(client.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('画像が 5 枚だと、R2 から読む前に 422 にする', async () => {
+      const client = replyClient();
+      const uploads = uploadsOf(new Uint8Array([1]));
+      const t = setupReadApi({ blueskyQuoteClient: client, uploads });
+      const me = await t.signIn('write:statuses');
+      const medias = [];
+      for (let index = 0; index < 5; index++) medias.push(await t.addMedia(me.userId));
+
+      const response = await quote(t, me.bearer, {
+        uri: TARGET,
+        text: 'hi',
+        media_ids: medias.map(({ mediaId }) => mediaId),
+      });
+
+      expect(response.status).toBe(422);
+      expect((await response.json() as { code: string }).code).toBe('media_invalid');
+      expect(uploads.get).not.toHaveBeenCalled();
+      expect(client.createRecord).not.toHaveBeenCalled();
+    });
+
+    it('画像が 1 枚 1 MB を超えると、画像の理由を付けて 422 にする', async () => {
+      const client = replyClient();
+      const t = setupReadApi({ blueskyQuoteClient: client, uploads: uploadsOf(new Uint8Array(1_000_001)) });
+      const me = await t.signIn('write:statuses');
+      const media = await t.addMedia(me.userId);
+
+      const response = await quote(t, me.bearer, { uri: TARGET, text: 'hi', media_ids: [media.mediaId] });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({
+        error: 'Bluesky に送れる画像は 1 枚 1 MB までです',
+        reason: 'image_too_large',
+        code: 'media_invalid',
+      });
+      expect(client.createRecord).not.toHaveBeenCalled();
     });
   });
 
@@ -2089,15 +2317,6 @@ describe('/api/iori/v1/bluesky/posts', () => {
       body: JSON.stringify(body),
     });
   const record = (client: ReturnType<typeof replyClient>) => client.createRecord.mock.calls[0]![0];
-  const uploadsOf = (bytes: Uint8Array | undefined) => ({
-    get: vi.fn(async () =>
-      bytes === undefined ? undefined : {
-        key: 'post-images/x/original',
-        body: new Response(bytes as BodyInit).body as never,
-        contentType: 'image/png',
-      }
-    ),
-  });
 
   it('認証なしだと 401、Origin が違う Cookie だと 403 にし、Bluesky を呼ばない', async () => {
     const client = replyClient();
@@ -2305,8 +2524,31 @@ describe('/api/iori/v1/bluesky/posts', () => {
     const unknown = await post(t, me.bearer, { status: 'hi', media_ids: ['unknown'] });
 
     expect(foreign.status).toBe(422);
-    expect(await foreign.json()).toEqual({ error: '添付した画像が見つからないか、読み込めませんでした' });
+    expect(await foreign.json()).toEqual({
+      error: '添付した画像が見つからないか、読み込めませんでした',
+      code: 'media_invalid',
+    });
     expect(unknown.status).toBe(422);
+    expect(uploads.get).not.toHaveBeenCalled();
+    expect(client.createRecord).not.toHaveBeenCalled();
+  });
+
+  it('画像が 5 枚だと、R2 から読む前に画像の理由を付けて 422 にする', async () => {
+    const client = replyClient();
+    const uploads = uploadsOf(new Uint8Array([1]));
+    const t = setupReadApi({ blueskyPostClient: client, uploads });
+    const me = await t.signIn('write:statuses');
+    const medias = [];
+    for (let index = 0; index < 5; index++) medias.push(await t.addMedia(me.userId));
+
+    const response = await post(t, me.bearer, { status: 'hi', media_ids: medias.map(({ mediaId }) => mediaId) });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      error: 'Bluesky に送れる画像は 4 枚までです',
+      reason: 'too_many_images',
+      code: 'media_invalid',
+    });
     expect(uploads.get).not.toHaveBeenCalled();
     expect(client.createRecord).not.toHaveBeenCalled();
   });

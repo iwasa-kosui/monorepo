@@ -25,7 +25,7 @@ const setup = (posts: Record<string, unknown> = { [TOP]: { uri: TOP, cid: 'bafyt
   });
   const quote = QuoteBlueskyPostUseCase.create({ client: { createRecord, uploadBlob }, query, now: () => NOW });
   const record = () => createRecord.mock.calls[0]![0];
-  return { quote, createRecord, query, record };
+  return { quote, createRecord, uploadBlob, query, record };
 };
 
 describe('QuoteBlueskyPostUseCase', () => {
@@ -43,6 +43,38 @@ describe('QuoteBlueskyPostUseCase', () => {
       createdAt: '2026-11-12T03:00:00.000Z',
       embed: { $type: 'app.bsky.embed.record', record: { uri: TOP, cid: 'bafytop' } },
     });
+  });
+
+  it('画像を上げ、引用と images を recordWithMedia にして、空本文でも投稿する', async () => {
+    const t = setup();
+    const uploaded = { $type: 'blob', ref: { $link: 'bafyblob' }, mimeType: 'image/png', size: 3 } as const;
+    t.uploadBlob.mockImplementationOnce(async () => RA.ok(uploaded));
+
+    const result = await t.quote.run({
+      uri: TOP,
+      text: '',
+      images: [{ bytes: new Uint8Array([1, 2, 3]), mimeType: 'image/png', alt: '猫' }],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(t.record().embed).toEqual({
+      $type: 'app.bsky.embed.recordWithMedia',
+      record: { record: { uri: TOP, cid: 'bafytop' } },
+      media: { $type: 'app.bsky.embed.images', images: [{ alt: '猫', image: uploaded }] },
+    });
+  });
+
+  it('5 枚の画像は入力不正にし、対象の取得も投稿もしない', async () => {
+    const t = setup();
+
+    const result = await t.quote.run({
+      uri: TOP,
+      text: 'hi',
+      images: Array.from({ length: 5 }, () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png', alt: '' })),
+    });
+
+    expect(result).toEqual({ ok: false, err: { type: 'BlueskyPostInvalid', reason: 'too_many_images' } });
+    expect(t.query).not.toHaveBeenCalled();
   });
 
   it('空文字と 301 grapheme を入力不正にし、対象の取得も投稿もしない', async () => {

@@ -45,7 +45,7 @@ const setup = (posts: Record<string, unknown> = {
     now: () => NOW,
   });
   const record = () => createRecord.mock.calls[0]![0];
-  return { reply, createRecord, query, record, sqlite };
+  return { reply, createRecord, uploadBlob, query, record, sqlite };
 };
 
 describe('ReplyToBlueskyPostUseCase', () => {
@@ -66,6 +66,34 @@ describe('ReplyToBlueskyPostUseCase', () => {
         parent: { uri: TOP, cid: 'bafytop-fresh' },
       },
     });
+  });
+
+  it('画像を上げ、alt 付きの images embed を付けて、空本文でも返信する', async () => {
+    const t = setup();
+    const uploaded = { $type: 'blob', ref: { $link: 'bafyblob' }, mimeType: 'image/png', size: 3 } as const;
+    t.uploadBlob.mockImplementationOnce(async () => RA.ok(uploaded));
+
+    const result = await t.reply.run({
+      uri: TOP,
+      text: '',
+      images: [{ bytes: new Uint8Array([1, 2, 3]), mimeType: 'image/png', alt: '猫' }],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(t.record().embed).toEqual({ $type: 'app.bsky.embed.images', images: [{ alt: '猫', image: uploaded }] });
+  });
+
+  it('5 枚の画像は入力不正にし、返信先の取得も投稿もしない', async () => {
+    const t = setup();
+
+    const result = await t.reply.run({
+      uri: TOP,
+      text: 'hi',
+      images: Array.from({ length: 5 }, () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png', alt: '' })),
+    });
+
+    expect(result).toEqual({ ok: false, err: { type: 'BlueskyPostInvalid', reason: 'too_many_images' } });
+    expect(t.query).not.toHaveBeenCalled();
   });
 
   it('返信への返信は、親の record.reply.root を root にし、親を parent にする', async () => {

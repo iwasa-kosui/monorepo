@@ -188,26 +188,39 @@ export const buildBlueskyPostDraft = (
     ...(input.unavailableImageUrls ?? []),
   ]);
   const preview = kept.length === 0 ? input.linkPreview : undefined;
-  const thumb = preview?.thumb !== undefined && preview.thumb.bytes.byteLength <= BLUESKY_MAX_THUMB_BYTES
-    ? preview.thumb
-    : undefined;
   return Result.ok({
     text,
     facets: links.map((link) => toFacet(text, link)).sort((a, b) => a.index.byteStart - b.index.byteStart),
     images: kept,
     ...(input.sensitive && kept.length > 0 ? { selfLabeled: true } : {}),
-    ...(preview === undefined ? {} : {
-      external: {
-        uri: preview.url,
-        title: preview.title ?? preview.url,
-        description: preview.description ?? '',
-        ...(thumb === undefined ? {} : { thumb }),
-      },
-    }),
+    ...(preview === undefined ? {} : { external: toExternalDraft(preview) }),
     ...(quote === undefined ? {} : { quote }),
     ...reply,
     createdAt,
   });
+};
+
+export const toExternalDraft = (preview: BlueskyLinkPreviewInput): NonNullable<BlueskyPostDraft['external']> => {
+  const thumb = preview.thumb !== undefined && preview.thumb.bytes.byteLength <= BLUESKY_MAX_THUMB_BYTES
+    ? preview.thumb
+    : undefined;
+  return {
+    uri: preview.url,
+    title: preview.title ?? preview.url,
+    description: preview.description ?? '',
+    ...(thumb === undefined ? {} : { thumb }),
+  };
+};
+
+export const toExternalEmbed = (
+  external: NonNullable<BlueskyPostDraft['external']>,
+  thumb: BlueskyBlob | undefined,
+): Extract<BlueskyEmbed, { $type: 'app.bsky.embed.external' }> => {
+  const { uri, title, description } = external;
+  return {
+    $type: 'app.bsky.embed.external',
+    external: { uri, title, description, ...(thumb === undefined ? {} : { thumb }) },
+  };
 };
 
 const toMedia = (
@@ -223,13 +236,7 @@ const toMedia = (
       }),
     };
   }
-  if (draft.external !== undefined) {
-    const { uri, title, description } = draft.external;
-    return {
-      $type: 'app.bsky.embed.external',
-      external: { uri, title, description, ...(blobs.thumb === undefined ? {} : { thumb: blobs.thumb }) },
-    };
-  }
+  if (draft.external !== undefined) return toExternalEmbed(draft.external, blobs.thumb);
   return undefined;
 };
 

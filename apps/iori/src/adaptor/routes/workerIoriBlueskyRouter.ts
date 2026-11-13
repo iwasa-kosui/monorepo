@@ -30,6 +30,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { MediaId } from '../../domain/mediaUpload/mediaId.ts';
 import type { MediaUpload, MediaUploadResolver } from '../../domain/mediaUpload/mediaUpload.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
+import type { UserId } from '../../domain/user/userId.ts';
 import { blueskyPostUriPattern } from '../../helper/blueskyUrl.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type {
@@ -69,7 +70,7 @@ import { logBlueskyFailure } from './helper/blueskyFailureLog.ts';
 import { blueskyPostTextOf } from './helper/blueskyPostText.ts';
 import { loadBlueskyPostImage } from './helper/loadBlueskyPostImage.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
-import { bodyBoolean, bodyString, bodyStringList, readRequestBody } from './helper/requestBody.ts';
+import { bodyBoolean, bodyString, bodyStringList, readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
 import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
@@ -373,19 +374,6 @@ const repostFailure = (c: Context, error: BlueskyClientError | BlueskyRepostTarg
     ? c.json({ error: 'Record not found' }, 404)
     : clientFailure(c, error);
 
-const replyFailure = (
-  c: Context,
-  error: BlueskyClientError | BlueskyPostInvalid | BlueskyReplyTargetNotFound | BlueskyReplyNotAllowed,
-) => {
-  if (error.type === 'BlueskyReplyTargetNotFound') return c.json({ error: 'Record not found' }, 404);
-  if (error.type === 'BlueskyReplyNotAllowed') return c.json({ error: 'Reply not allowed' }, 422);
-  if (error.type === 'BlueskyPostInvalid') {
-    return c.json({ error: 'Validation failed: text', reason: error.reason }, 400);
-  }
-  logBlueskyFailure(error, 502);
-  return c.json({ error: 'Bluesky request failed' }, 502);
-};
-
 const postInvalidMessages: Readonly<Record<BlueskyPostInvalid['reason'], string>> = {
   empty: 'Bluesky に送る本文か画像がありません',
   too_many_graphemes: `Bluesky に送れる本文は ${BLUESKY_MAX_GRAPHEMES} 文字までです`,
@@ -394,9 +382,37 @@ const postInvalidMessages: Readonly<Record<BlueskyPostInvalid['reason'], string>
   image_too_large: `Bluesky に送れる画像は 1 枚 ${BLUESKY_MAX_IMAGE_BYTES / 1_000_000} MB までです`,
 };
 
+const imageInvalidReasons: ReadonlyArray<BlueskyPostInvalid['reason']> = ['too_many_images', 'image_too_large'];
+
+const MEDIA_INVALID_CODE = 'media_invalid';
+
+const imageInvalidBody = (reason: BlueskyPostInvalid['reason']) => ({
+  error: postInvalidMessages[reason],
+  reason,
+  code: MEDIA_INVALID_CODE,
+});
+
+const replyOrQuoteInvalidFailure = (c: Context, error: BlueskyPostInvalid) =>
+  imageInvalidReasons.includes(error.reason)
+    ? c.json(imageInvalidBody(error.reason), 422)
+    : c.json({ error: 'Validation failed: text', reason: error.reason }, 400);
+
+const replyFailure = (
+  c: Context,
+  error: BlueskyClientError | BlueskyPostInvalid | BlueskyReplyTargetNotFound | BlueskyReplyNotAllowed,
+) => {
+  if (error.type === 'BlueskyReplyTargetNotFound') return c.json({ error: 'Record not found' }, 404);
+  if (error.type === 'BlueskyReplyNotAllowed') return c.json({ error: 'Reply not allowed' }, 422);
+  if (error.type === 'BlueskyPostInvalid') return replyOrQuoteInvalidFailure(c, error);
+  logBlueskyFailure(error, 502);
+  return c.json({ error: 'Bluesky request failed' }, 502);
+};
+
 const postFailure = (c: Context, error: BlueskyClientError | BlueskyPostInvalid) => {
   if (error.type === 'BlueskyPostInvalid') {
-    return c.json({ error: postInvalidMessages[error.reason], reason: error.reason }, 422);
+    return imageInvalidReasons.includes(error.reason)
+      ? c.json(imageInvalidBody(error.reason), 422)
+      : c.json({ error: postInvalidMessages[error.reason], reason: error.reason }, 422);
   }
   if (error.status === 429) {
     logBlueskyFailure(error, 429);
@@ -405,6 +421,17 @@ const postFailure = (c: Context, error: BlueskyClientError | BlueskyPostInvalid)
   return clientFailure(c, error);
 };
 
+const mediaUnavailable = {
+  error: '添付した画像が見つからないか、読み込めませんでした',
+  code: MEDIA_INVALID_CODE,
+} as const;
+
+type MediaImagesLoad =
+  | Readonly<{ images: readonly BlueskyPostImage[] }>
+  | Readonly<{ failure: 'unavailable' | 'too_many_images' }>;
+
+const mediaFailure = (c: Context, failure: 'unavailable' | 'too_many_images') =>
+  failure === 'unavailable' ? c.json(mediaUnavailable, 422) : c.json(imageInvalidBody(failure), 422);
 const deleteFailure = (
   c: Context,
   error: BlueskyClientError | BlueskyPostUriInvalid | BlueskyPostNotOwned | InferUseCaseError<DeletePostUseCase>,
@@ -425,17 +452,13 @@ const deleteFailure = (
   }
 };
 
-const mediaUnavailable = { error: '添付した画像が見つからないか、読み込めませんでした' } as const;
-
 const quoteFailure = (
   c: Context,
   error: BlueskyClientError | BlueskyPostInvalid | BlueskyQuoteTargetNotFound | BlueskyQuoteNotAllowed,
 ) => {
   if (error.type === 'BlueskyQuoteTargetNotFound') return c.json({ error: 'Record not found' }, 404);
   if (error.type === 'BlueskyQuoteNotAllowed') return c.json({ error: 'Quote not allowed' }, 422);
-  if (error.type === 'BlueskyPostInvalid') {
-    return c.json({ error: 'Validation failed: text', reason: error.reason }, 400);
-  }
+  if (error.type === 'BlueskyPostInvalid') return replyOrQuoteInvalidFailure(c, error);
   logBlueskyFailure(error, 502);
   return c.json({ error: 'Bluesky request failed' }, 502);
 };
@@ -494,6 +517,30 @@ export const createWorkerIoriBlueskyRouter = ({
   const chatAccess = async (c: Context): Promise<BlueskyChatUseCases | Response> => {
     if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
     return blueskyChat ?? c.json({ error: 'Bluesky timeline is disabled' }, 409);
+  };
+  const loadMediaImages = async (
+    body: RequestBody,
+    userId: UserId,
+  ): Promise<MediaImagesLoad> => {
+    const mediaIds = [...new Set(bodyStringList(body, 'media_ids[]', 'media_ids').filter((id) => id !== ''))];
+    if (mediaIds.length > BLUESKY_MAX_IMAGES) return { failure: 'too_many_images' };
+    const medias: MediaUpload[] = [];
+    for (const mediaId of mediaIds) {
+      const parsed = MediaId.parse(mediaId);
+      const media = parsed.ok
+        ? await resolveOwnedMediaUpload(mediaUploadResolver)({ userId, mediaId: parsed.val })
+        : undefined;
+      if (media === undefined || !media.ok) {
+        if (media !== undefined && media.err.type !== 'MediaNotFoundError') {
+          throw new Error('Failed to resolve the media');
+        }
+        return { failure: 'unavailable' };
+      }
+      medias.push(media.val);
+    }
+    const loaded = await Promise.all(medias.map((media) => loadBlueskyPostImage(uploads, media)));
+    const images = loaded.filter((image): image is BlueskyPostImage => image !== undefined);
+    return images.length === medias.length ? { images } : { failure: 'unavailable' };
   };
   return new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
@@ -716,18 +763,20 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeStatuses),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
-          return c.json(forbidden, 403);
-        }
+        const userId = getMastodonPrincipal(c)?.userId ?? undefined;
+        if (userId === undefined || !await isDigestOwner(userId)) return c.json(forbidden, 403);
         if (replyToBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
         const body = await readRequestBody(c);
         const resolved = postTargetOf(bodyString(body, 'feedItemId'), bodyString(body, 'uri'));
         if ('invalid' in resolved) return c.json({ error: `Validation failed: ${resolved.invalid}` }, 400);
-        const text = bodyString(body, 'text');
+        const loadedImages = await loadMediaImages(body, userId);
+        if ('failure' in loadedImages) return mediaFailure(c, loadedImages.failure);
+        const { images } = loadedImages;
+        const text = bodyString(body, 'text') ?? (images.length > 0 ? '' : undefined);
         if (text === undefined) return c.json({ error: 'Validation failed: text' }, 400);
-        const replied = await replyToBlueskyPostUseCase.run({ ...resolved.target, text });
+        const replied = await replyToBlueskyPostUseCase.run({ ...resolved.target, text, images });
         return replied.ok
           ? c.json(replied.val satisfies IoriBlueskyReplyResponse, 201)
           : replyFailure(c, replied.err);
@@ -756,24 +805,9 @@ export const createWorkerIoriBlueskyRouter = ({
         if (contentType !== 'text/plain' && contentType !== 'text/markdown') {
           return c.json({ error: 'Validation failed: content_type' }, 400);
         }
-        const mediaIds = [...new Set(bodyStringList(body, 'media_ids[]', 'media_ids').filter((id) => id !== ''))];
-        const medias: MediaUpload[] = [];
-        for (const mediaId of mediaIds) {
-          const parsed = MediaId.parse(mediaId);
-          const media = parsed.ok
-            ? await resolveOwnedMediaUpload(mediaUploadResolver)({ userId, mediaId: parsed.val })
-            : undefined;
-          if (media === undefined || !media.ok) {
-            if (media !== undefined && media.err.type !== 'MediaNotFoundError') {
-              throw new Error('Failed to resolve the media');
-            }
-            return c.json(mediaUnavailable, 422);
-          }
-          medias.push(media.val);
-        }
-        const loaded = await Promise.all(medias.map((media) => loadBlueskyPostImage(uploads, media)));
-        const images = loaded.filter((image): image is BlueskyPostImage => image !== undefined);
-        if (images.length !== medias.length) return c.json(mediaUnavailable, 422);
+        const loadedImages = await loadMediaImages(body, userId);
+        if ('failure' in loadedImages) return mediaFailure(c, loadedImages.failure);
+        const { images } = loadedImages;
         const posted = await postToBlueskyUseCase.run({
           text: await blueskyPostTextOf(status, contentType),
           images,
@@ -808,9 +842,8 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeStatuses),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
-          return c.json(forbidden, 403);
-        }
+        const userId = getMastodonPrincipal(c)?.userId ?? undefined;
+        if (userId === undefined || !await isDigestOwner(userId)) return c.json(forbidden, 403);
         if (quoteBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
@@ -819,9 +852,12 @@ export const createWorkerIoriBlueskyRouter = ({
         if (uri === undefined || !blueskyPostUriPattern.test(uri)) {
           return c.json({ error: 'Validation failed: uri' }, 400);
         }
-        const text = bodyString(body, 'text');
+        const loadedImages = await loadMediaImages(body, userId);
+        if ('failure' in loadedImages) return mediaFailure(c, loadedImages.failure);
+        const { images } = loadedImages;
+        const text = bodyString(body, 'text') ?? (images.length > 0 ? '' : undefined);
         if (text === undefined) return c.json({ error: 'Validation failed: text' }, 400);
-        const quoted = await quoteBlueskyPostUseCase.run({ uri, text });
+        const quoted = await quoteBlueskyPostUseCase.run({ uri, text, images });
         return quoted.ok
           ? c.json(quoted.val satisfies IoriBlueskyQuoteResponse, 201)
           : quoteFailure(c, quoted.err);

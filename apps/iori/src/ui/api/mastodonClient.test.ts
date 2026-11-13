@@ -46,6 +46,8 @@ import {
   react,
   reblog,
   refreshXPosts,
+  replyToBlueskyPost,
+  replyToBlueskyPostByUri,
   report,
   repostBlueskyPost,
   requestDigest,
@@ -1065,6 +1067,32 @@ describe('mastodon client requests', () => {
     expect(init.credentials).toBe('same-origin');
     expect(JSON.parse(init.body as string)).toEqual({ uri: 'at://did:plc:a/app.bsky.feed.post/1', text: '引用です' });
     expect(result).toEqual({ uri: 'at://did:plc:me/app.bsky.feed.post/3k', cid: 'bafy' });
+  });
+
+  it.each([
+    ['quote', () => quoteBlueskyPost('at://x', 't', ['m1', 'm2']), { uri: 'at://x', text: 't' }],
+    ['reply by feed item', () => replyToBlueskyPost('f1', 't', ['m1', 'm2']), { feedItemId: 'f1', text: 't' }],
+    ['reply by uri', () => replyToBlueskyPostByUri('at://x', 't', ['m1', 'm2']), { uri: 'at://x', text: 't' }],
+  ])('sends media_ids with a Bluesky %s', async (_name, send, base) => {
+    const fetchMock = stubFetch(jsonResponse({ uri: 'at://me/1', cid: 'bafy' }, { status: 201 }));
+
+    await send();
+
+    const [, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ ...base, media_ids: ['m1', 'm2'] });
+  });
+
+  it.each([
+    ['quote', () => quoteBlueskyPost('at://x', 't', []), { uri: 'at://x', text: 't' }],
+    ['reply by feed item', () => replyToBlueskyPost('f1', 't', []), { feedItemId: 'f1', text: 't' }],
+    ['reply by uri', () => replyToBlueskyPostByUri('at://x', 't'), { uri: 'at://x', text: 't' }],
+  ])('omits media_ids from a Bluesky %s without images', async (_name, send, base) => {
+    const fetchMock = stubFetch(jsonResponse({ uri: 'at://me/1', cid: 'bafy' }, { status: 201 }));
+
+    await send();
+
+    const [, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual(base);
   });
 
   it('carries the status of a failed Bluesky quote', async () => {

@@ -7,6 +7,7 @@ import { createBlueskyPostThreadFetcher } from '../adaptor/bluesky/blueskyPostTh
 import { createBlueskySearch } from '../adaptor/bluesky/blueskySearch.ts';
 import { createBlueskyTimelineFetcher } from '../adaptor/bluesky/blueskyTimelineFetcher.ts';
 import { createBlueskyViewerRepostResolver } from '../adaptor/bluesky/blueskyViewerRepostResolver.ts';
+import { createBlueskyThumbnailFetcher } from '../adaptor/bluesky/thumbnailFetcher.ts';
 import {
   createD1BlueskyLoginFailureDeletedStore,
   createD1BlueskyLoginFailureResolver,
@@ -36,6 +37,7 @@ import { createD1BlueskyViewerLikesSyncedStore } from '../adaptor/d1/blueskyTime
 import { createD1BlueskyViewerRepostsSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyViewerRepostsSyncedStore.ts';
 import { createD1Db, type IoriD1Db } from '../adaptor/d1/client.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
+import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import type { BlueskyLoginFailureResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskySyncStatusResolver } from '../domain/blueskySyncStatus/blueskySyncStatus.ts';
 import type { BlueskyTimelineItemsResolver } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
@@ -176,6 +178,11 @@ export const createRepostBlueskyPostUseCases = (
   };
 };
 
+const createLinkPreviewDeps = (deps: Readonly<{ fetch?: typeof fetch }>) => ({
+  ogpFetcher: createOgpFetcher(),
+  thumbnailFetcher: createBlueskyThumbnailFetcher({ fetch: deps.fetch }),
+});
+
 export const createReplyToBlueskyPostUseCase = (
   env: IoriWorkerEnv,
   db: IoriD1Db,
@@ -189,6 +196,7 @@ export const createReplyToBlueskyPostUseCase = (
     query: client.query,
     targetResolver: createD1BlueskyLikeTargetResolver(db),
     now: Instant.now,
+    linkPreview: createLinkPreviewDeps(deps),
   });
 };
 
@@ -200,7 +208,12 @@ export const createPostToBlueskyUseCase = (
   const config = resolveBlueskyRuntimeConfig(env);
   if (config === undefined) return undefined;
   const client = createTimelineClient(config, db, deps);
-  return PostToBlueskyUseCase.create({ client, query: client.query, now: Instant.now });
+  return PostToBlueskyUseCase.create({
+    client,
+    query: client.query,
+    now: Instant.now,
+    linkPreview: createLinkPreviewDeps(deps),
+  });
 };
 
 export const createDeleteOwnBlueskyPostUseCase = (
@@ -226,7 +239,12 @@ export const createQuoteBlueskyPostUseCase = (
   const config = resolveBlueskyTimelineConfig(env);
   if (config === undefined) return undefined;
   const client = createTimelineClient(config, db, deps);
-  return QuoteBlueskyPostUseCase.create({ client, query: client.query, now: Instant.now });
+  return QuoteBlueskyPostUseCase.create({
+    client,
+    query: client.query,
+    now: Instant.now,
+    linkPreview: createLinkPreviewDeps(deps),
+  });
 };
 
 export const createMarkBlueskyNotificationsSeenUseCase = (

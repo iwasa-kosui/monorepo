@@ -5,6 +5,7 @@ import type { BlueskyLikeTargetResolver } from '../domain/blueskyTimeline/bluesk
 import type { BlueskyReplyNotAllowed, BlueskyReplyTargetNotFound } from '../domain/blueskyTimeline/blueskyReply.ts';
 import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import {
+  type BlueskyPostImage,
   type BlueskyPostInvalid,
   publishBlueskyPost,
   type PublishBlueskyPostDeps,
@@ -12,7 +13,9 @@ import {
 } from './helper/publishBlueskyPost.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{ feedItemId: string; text: string }> | Readonly<{ uri: string; text: string }>;
+type Input =
+  | Readonly<{ feedItemId: string; text: string; images?: readonly BlueskyPostImage[] }>
+  | Readonly<{ uri: string; text: string; images?: readonly BlueskyPostImage[] }>;
 
 type Ok = Readonly<{ uri: string; cid: string }>;
 
@@ -37,8 +40,8 @@ const getPostsResponseSchema = z.object({
 
 const create = (deps: Deps): ReplyToBlueskyPostUseCase => {
   const run = async (input: Input): RA<Ok, Err> => {
-    const { text } = input;
-    const problem = validateBlueskyPostInput({ text });
+    const { text, images } = input;
+    const problem = validateBlueskyPostInput({ text, images });
     if (problem !== undefined) return RA.err(problem);
     const target = 'feedItemId' in input
       ? Result.unsafeUnwrap(await deps.targetResolver.resolve(input.feedItemId))
@@ -66,6 +69,7 @@ const create = (deps: Deps): ReplyToBlueskyPostUseCase => {
     const published = await publishBlueskyPost(deps, {
       text,
       reply: { root: post.record?.reply?.root ?? parent, parent },
+      images,
     });
     return published.ok ? RA.ok({ uri: published.val.uri, cid: published.val.cid }) : RA.err(published.err);
   };

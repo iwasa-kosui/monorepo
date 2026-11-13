@@ -40,17 +40,32 @@ type SubmitPostDeps = Readonly<{
 export const canSubmitPost = (content: string, isUploading: boolean, isPosting: boolean): boolean =>
   content.trim() !== '' && !isUploading && !isPosting;
 
+export const mediaSlotsLeft = (count: number, max: number): number => Math.max(0, max - count);
+
+export const mediaOverflowNotice = (selectedCount: number, slotsLeft: number, max: number): string | null =>
+  selectedCount > slotsLeft ? `画像は${max}枚までです。${selectedCount - slotsLeft}枚は追加しませんでした` : null;
+
+export const saveMediaDescriptions = async (
+  uploaded: readonly UploadedMedia[],
+  deps: Readonly<{
+    updateMedia: (id: string, description: string) => Promise<unknown>;
+    onDescriptionSaved: (id: string, description: string) => void;
+  }>,
+): Promise<void> => {
+  for (const media of uploaded) {
+    const description = media.description.trim() === '' ? '' : media.description;
+    if (description === media.savedDescription) continue;
+    await deps.updateMedia(media.id, description);
+    deps.onDescriptionSaved(media.id, description);
+  }
+};
+
 export const submitPost = async (
   value: PostFormValue,
   deps: SubmitPostDeps,
 ): Promise<PostSubmitResult> => {
   try {
-    for (const media of value.uploaded) {
-      const description = media.description.trim() === '' ? '' : media.description;
-      if (description === media.savedDescription) continue;
-      await deps.updateMedia(media.id, description);
-      deps.onDescriptionSaved(media.id, description);
-    }
+    await saveMediaDescriptions(value.uploaded, deps);
   } catch (err) {
     return { kind: 'failed', message: failureMessage('save the image description', err) };
   }

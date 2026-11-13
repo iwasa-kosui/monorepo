@@ -5,11 +5,12 @@ import {
   blueskyReplyErrorMessage,
   blueskyReplyExcerpt,
   blueskyReplyRemaining,
+  canSendBlueskyPost,
   canSendBlueskyReply,
   countGraphemes,
 } from './blueskyReply.ts';
 
-const apiError = (status: number): Error => Object.assign(new Error('x'), { status });
+const apiError = (status: number, code?: string): Error => Object.assign(new Error('x'), { status, code });
 
 describe('countGraphemes', () => {
   it('絵文字の連結や結合文字を 1 つに数える', () => {
@@ -47,6 +48,26 @@ describe('canSendBlueskyReply', () => {
   });
 });
 
+describe('canSendBlueskyPost', () => {
+  const idle = { isSending: false, isUploading: false };
+
+  it('本文が空でも画像があれば送れる', () => {
+    expect(canSendBlueskyPost('', 0, idle)).toBe(false);
+    expect(canSendBlueskyPost(' \n', 0, idle)).toBe(false);
+    expect(canSendBlueskyPost('', 1, idle)).toBe(true);
+    expect(canSendBlueskyPost('こんにちは', 0, idle)).toBe(true);
+  });
+
+  it('送信中とアップロード中は送れない', () => {
+    expect(canSendBlueskyPost('a', 1, { isSending: true, isUploading: false })).toBe(false);
+    expect(canSendBlueskyPost('a', 1, { isSending: false, isUploading: true })).toBe(false);
+  });
+
+  it('画像があっても 300 grapheme を超える本文は送れない', () => {
+    expect(canSendBlueskyPost('a'.repeat(301), 1, idle)).toBe(false);
+  });
+});
+
 describe('blueskyReplyExcerpt', () => {
   it('短い本文はそのまま返し、長い本文は 80 grapheme で切って省略記号を付ける', () => {
     expect(blueskyReplyExcerpt('短い')).toBe('短い');
@@ -60,7 +81,23 @@ describe('blueskyReplyErrorMessage', () => {
     expect(blueskyReplyErrorMessage(apiError(404))).toBe('返信先の投稿が見つかりません');
     expect(blueskyReplyErrorMessage(apiError(409))).toBe('Bluesky のタイムラインが無効です');
     expect(blueskyReplyErrorMessage(apiError(422))).toBe('この投稿には返信できません');
+    expect(blueskyReplyErrorMessage(apiError(422, 'other'))).toBe('この投稿には返信できません');
     expect(blueskyReplyErrorMessage(apiError(400))).toBe('Bluesky に返信できませんでした');
     expect(blueskyReplyErrorMessage(new TypeError('network'))).toBe('Bluesky に返信できませんでした');
+  });
+});
+
+describe('blueskyReplyErrorMessage の画像のエラー', () => {
+  it('422 で code が media_invalid のときはサーバーの文言を返す', () => {
+    const error = Object.assign(new Error('Bluesky に送れる画像は 4 枚までです'), {
+      status: 422,
+      code: 'media_invalid',
+    });
+    expect(blueskyReplyErrorMessage(error)).toBe('Bluesky に送れる画像は 4 枚までです');
+  });
+
+  it('code がない 422 は従来の文言のままにする', () => {
+    const error = Object.assign(new Error('Reply not allowed'), { status: 422 });
+    expect(blueskyReplyErrorMessage(error)).toBe('この投稿には返信できません');
   });
 });
