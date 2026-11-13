@@ -81,6 +81,68 @@ describe('createD1BlueskyNotificationCreatedStore', () => {
     expect(t.count('domain_events')).toBe(2);
   });
 
+  it('like-via-repost、repost-via-repost、subscribed-post を reason 文字列で保存し、読み出しで元の type に戻す', async () => {
+    const t = setup();
+    const original = 'at://did:plc:other/app.bsky.feed.post/3korig';
+    const base = {
+      recipientUserId: UserId.orThrow(t.me.userId),
+      isRead: false,
+      author: AUTHOR,
+    };
+    const likeViaRepost: BlueskyNotification = {
+      ...base,
+      notificationId: NotificationId.generate(),
+      type: 'blueskyLikeViaRepost',
+      blueskyUri: 'at://did:plc:alice/app.bsky.feed.like/1',
+      subjectUri: original,
+      targetPostId: null,
+    };
+    const repostViaRepost: BlueskyNotification = {
+      ...base,
+      notificationId: NotificationId.generate(),
+      type: 'blueskyRepostViaRepost',
+      blueskyUri: 'at://did:plc:alice/app.bsky.feed.repost/2',
+      subjectUri: original,
+      targetPostId: null,
+    };
+    const subscribed: BlueskyNotification = {
+      ...base,
+      notificationId: NotificationId.generate(),
+      type: 'blueskyMention',
+      blueskyUri: 'at://did:plc:alice/app.bsky.feed.post/3',
+      reason: 'subscribed-post',
+      subjectUri: null,
+      targetPostId: null,
+      text: 'new post',
+    };
+
+    await t.store.store(
+      t.eventAt(likeViaRepost, 5_000),
+      t.eventAt(repostViaRepost, 6_000),
+      t.eventAt(subscribed, 7_000),
+    );
+
+    expect(
+      t.sqlite.prepare(
+        'SELECT b.reason FROM notification_bluesky b JOIN notifications n ON n.notificationId = b.notificationId ORDER BY n.createdAt',
+      ).all(),
+    ).toEqual([
+      { reason: 'like-via-repost' },
+      { reason: 'repost-via-repost' },
+      { reason: 'subscribed-post' },
+    ]);
+    const items = await createD1NotificationsResolverByPage(t.db).resolve({
+      recipientUserId: UserId.orThrow(t.me.userId),
+      page: { limit: 10, olderThanId: undefined, newerThanId: undefined, order: 'newestFirst' },
+      types: ['blueskyLikeViaRepost', 'blueskyRepostViaRepost', 'blueskyMention'],
+    });
+    expect(items.ok && items.val.map((item) => item.notification)).toEqual([
+      subscribed,
+      repostViaRepost,
+      likeViaRepost,
+    ]);
+  });
+
   it('1 バッチに 20 件以上を渡しても、各文の束縛が D1 の上限に収まる', async () => {
     const t = setup();
     const events = Array.from({ length: 45 }, (_, index) => t.eventAt(t.like(index), 1_000 + index));

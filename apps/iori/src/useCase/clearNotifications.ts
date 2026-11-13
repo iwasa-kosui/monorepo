@@ -26,6 +26,8 @@ const allTypes: ReadonlyArray<Notification['type']> = [
   'mention',
   'blueskyLike',
   'blueskyRepost',
+  'blueskyLikeViaRepost',
+  'blueskyRepostViaRepost',
   'blueskyFollow',
   'blueskyMention',
 ];

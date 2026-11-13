@@ -91,11 +91,26 @@ const buildBlueskyNotificationFromFetched = (
         subjectUri: item.subjectUri,
         targetPostId: postIds.get(item.subjectUri) ?? null,
       };
+    case 'like-via-repost':
+      return {
+        ...base,
+        type: 'blueskyLikeViaRepost',
+        subjectUri: item.subjectUri,
+        targetPostId: postIds.get(item.subjectUri) ?? null,
+      };
+    case 'repost-via-repost':
+      return {
+        ...base,
+        type: 'blueskyRepostViaRepost',
+        subjectUri: item.subjectUri,
+        targetPostId: postIds.get(item.subjectUri) ?? null,
+      };
     case 'follow':
       return { ...base, type: 'blueskyFollow' };
     case 'mention':
     case 'reply':
     case 'quote':
+    case 'subscribed-post':
       return {
         ...base,
         type: 'blueskyMention',
@@ -126,6 +141,10 @@ const pushPayloadOf = (item: BlueskyFetchedNotification): PushPayload => {
       return { title: '新しいいいね', body: `${name} があなたの投稿にいいねしました`, url: NOTIFICATIONS_URL };
     case 'repost':
       return { title: '新しいリポスト', body: `${name} があなたの投稿をリポストしました`, url: NOTIFICATIONS_URL };
+    case 'like-via-repost':
+      return { title: '新しいいいね', body: `${name} があなたのリポストにいいねしました`, url: NOTIFICATIONS_URL };
+    case 'repost-via-repost':
+      return { title: '新しいリポスト', body: `${name} があなたのリポストをリポストしました`, url: NOTIFICATIONS_URL };
     case 'follow':
       return { title: '新しいフォロー', body: `${name} があなたをフォローしました`, url: NOTIFICATIONS_URL };
     case 'mention':
@@ -134,6 +153,8 @@ const pushPayloadOf = (item: BlueskyFetchedNotification): PushPayload => {
       return { title: '新しい返信', body: `${name} があなたの投稿に返信しました`, url: NOTIFICATIONS_URL };
     case 'quote':
       return { title: '新しい引用', body: `${name} があなたの投稿を引用しました`, url: NOTIFICATIONS_URL };
+    case 'subscribed-post':
+      return { title: '新しい投稿', body: `${name} が投稿しました`, url: NOTIFICATIONS_URL };
   }
 };
 

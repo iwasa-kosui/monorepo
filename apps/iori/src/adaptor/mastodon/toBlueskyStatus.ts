@@ -1,8 +1,10 @@
 import type { Instant } from '../../domain/instant/instant.ts';
 import type {
   BlueskyLikeNotification,
+  BlueskyLikeViaRepostNotification,
   BlueskyMentionNotification,
   BlueskyRepostNotification,
+  BlueskyRepostViaRepostNotification,
 } from '../../domain/notification/notification.ts';
 import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 import { BLUESKY_STATUS_ID_PREFIX } from '../../helper/blueskyUrl.ts';
@@ -10,7 +12,12 @@ import type { Account, Status } from './entities.ts';
 import { toIsoString } from './time.ts';
 import { blueskyExtensionOf } from './toNotification.ts';
 
-type BlueskyStatusSource = BlueskyLikeNotification | BlueskyRepostNotification | BlueskyMentionNotification;
+type BlueskyStatusSource =
+  | BlueskyLikeNotification
+  | BlueskyRepostNotification
+  | BlueskyLikeViaRepostNotification
+  | BlueskyRepostViaRepostNotification
+  | BlueskyMentionNotification;
 
 const targetUriOf = (notification: BlueskyStatusSource): string =>
   notification.type === 'blueskyMention' ? notification.blueskyUri : notification.subjectUri;

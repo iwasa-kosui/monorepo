@@ -27,6 +27,11 @@ export const blueskyPostUrlOfUri = (uri: string): string | undefined => {
   return did === undefined ? undefined : blueskyPostUrl(did, uri);
 };
 
+export const blueskyDidOfUri = (uri: string): string | undefined => {
+  const did = atUriPattern.exec(uri)?.[1];
+  return did !== undefined && didPattern.test(did) ? did : undefined;
+};
+
 export const ioriBlueskyPostPath = (uri: string): string | undefined => {
   const match = postAtUriPattern.exec(uri);
   const did = match?.[1];

@@ -54,6 +54,23 @@ const reply = (n: number, indexedAt: number, subjectUri: string | null, text = `
     indexedAt: Instant.orThrow(indexedAt),
     author: AUTHOR,
   });
+const viaRepost = (reason: 'like-via-repost' | 'repost-via-repost', n: number, indexedAt: number, subjectUri: string) =>
+  BlueskyFetchedNotification.orThrow({
+    uri: `at://did:plc:alice/app.bsky.feed.${reason === 'like-via-repost' ? 'like' : 'repost'}/${n}`,
+    reason,
+    subjectUri,
+    indexedAt: Instant.orThrow(indexedAt),
+    author: AUTHOR,
+  });
+const subscribedPost = (n: number, indexedAt: number, text = `post ${n}`) =>
+  BlueskyFetchedNotification.orThrow({
+    uri: `at://did:plc:alice/app.bsky.feed.post/${n}`,
+    reason: 'subscribed-post',
+    subjectUri: null,
+    text,
+    indexedAt: Instant.orThrow(indexedAt),
+    author: AUTHOR,
+  });
 const fresh = (n: number) => like(n, NOW - n * 1000);
 
 const pageOf = (
@@ -195,6 +212,31 @@ describe('CollectBlueskyNotificationsUseCase', () => {
     expect(payloads.slice(2)).toEqual([
       { title: '新しいフォロー', body: 'Alice があなたをフォローしました', url: '/notifications' },
       { title: '新しいフォロー', body: 'Alice があなたをフォローしました', url: '/notifications' },
+    ]);
+  });
+
+  it('like-via-repost、repost-via-repost、subscribed-post を保存し、既存と同じ形式で Push で送る', async () => {
+    const original = 'at://did:plc:other/app.bsky.feed.post/3korig';
+    const t = setup([pageOf([like(1, NOW - 30 * MINUTE)], undefined)]);
+    await t.useCase.run();
+    t.enqueue(pageOf([
+      viaRepost('like-via-repost', 2, NOW - 3 * MINUTE, original),
+      viaRepost('repost-via-repost', 3, NOW - 2 * MINUTE, original),
+      subscribedPost(4, NOW - MINUTE, 'new post'),
+    ], undefined));
+
+    const result = await t.useCase.run();
+
+    expect(result).toMatchObject({ ok: true, val: { saved: 3, pushed: 3 } });
+    expect(t.rows().slice(1).map((row) => [row.type, row.reason, row.subjectUri, row.targetPostId, row.text])).toEqual([
+      ['blueskyLikeViaRepost', 'like-via-repost', original, null, null],
+      ['blueskyRepostViaRepost', 'repost-via-repost', original, null, null],
+      ['blueskyMention', 'subscribed-post', null, null, 'new post'],
+    ]);
+    expect(t.send.mock.calls.map(([, payload]) => payload)).toEqual([
+      { title: '新しい投稿', body: 'Alice が投稿しました', url: '/notifications' },
+      { title: '新しいリポスト', body: 'Alice があなたのリポストをリポストしました', url: '/notifications' },
+      { title: '新しいいいね', body: 'Alice があなたのリポストにいいねしました', url: '/notifications' },
     ]);
   });
 

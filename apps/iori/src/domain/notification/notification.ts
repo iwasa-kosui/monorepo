@@ -143,6 +143,30 @@ const blueskyRepostNotificationZodType = z
 export type BlueskyRepostNotification = z.output<typeof blueskyRepostNotificationZodType>;
 export const BlueskyRepostNotification = Schema.create(blueskyRepostNotificationZodType);
 
+const blueskyLikeViaRepostNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyLikeViaRepost'),
+    subjectUri: z.string().min(1),
+    targetPostId: z.nullable(PostId.zodType),
+  })
+  .describe('BlueskyLikeViaRepostNotification');
+
+export type BlueskyLikeViaRepostNotification = z.output<typeof blueskyLikeViaRepostNotificationZodType>;
+export const BlueskyLikeViaRepostNotification = Schema.create(blueskyLikeViaRepostNotificationZodType);
+
+const blueskyRepostViaRepostNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskyRepostViaRepost'),
+    subjectUri: z.string().min(1),
+    targetPostId: z.nullable(PostId.zodType),
+  })
+  .describe('BlueskyRepostViaRepostNotification');
+
+export type BlueskyRepostViaRepostNotification = z.output<typeof blueskyRepostViaRepostNotificationZodType>;
+export const BlueskyRepostViaRepostNotification = Schema.create(blueskyRepostViaRepostNotificationZodType);
+
 const blueskyFollowNotificationZodType = z
   .object({
     ...blueskyNotificationBaseShape,
@@ -157,7 +181,7 @@ const blueskyMentionNotificationZodType = z
   .object({
     ...blueskyNotificationBaseShape,
     type: z.literal('blueskyMention'),
-    reason: z.enum(['mention', 'reply', 'quote']),
+    reason: z.enum(['mention', 'reply', 'quote', 'subscribed-post']),
     subjectUri: z.string().min(1).nullable(),
     targetPostId: z.nullable(PostId.zodType),
     text: z.string(),
@@ -176,6 +200,8 @@ const notificationZodType = z.discriminatedUnion('type', [
   repostNotificationZodType,
   blueskyLikeNotificationZodType,
   blueskyRepostNotificationZodType,
+  blueskyLikeViaRepostNotificationZodType,
+  blueskyRepostViaRepostNotificationZodType,
   blueskyFollowNotificationZodType,
   blueskyMentionNotificationZodType,
 ]);
@@ -506,6 +532,8 @@ export type RepostNotificationResolverByRecipientAndActorIdAndPostId = Agg.Resol
 export type BlueskyNotification =
   | BlueskyLikeNotification
   | BlueskyRepostNotification
+  | BlueskyLikeViaRepostNotification
+  | BlueskyRepostViaRepostNotification
   | BlueskyFollowNotification
   | BlueskyMentionNotification;
 

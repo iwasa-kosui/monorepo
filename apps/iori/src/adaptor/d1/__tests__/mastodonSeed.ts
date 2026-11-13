@@ -305,7 +305,13 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
 
   const addBlueskyNotification = (
     recipientUserId: string,
-    type: 'blueskyLike' | 'blueskyRepost' | 'blueskyFollow' | 'blueskyMention',
+    type:
+      | 'blueskyLike'
+      | 'blueskyRepost'
+      | 'blueskyLikeViaRepost'
+      | 'blueskyRepostViaRepost'
+      | 'blueskyFollow'
+      | 'blueskyMention',
     createdAt: number,
     options: {
       blueskyUri?: string;
@@ -324,7 +330,14 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
       notificationId,
       blueskyUri,
       options.reason
-        ?? { blueskyLike: 'like', blueskyRepost: 'repost', blueskyFollow: 'follow', blueskyMention: 'mention' }[type],
+        ?? {
+          blueskyLike: 'like',
+          blueskyRepost: 'repost',
+          blueskyLikeViaRepost: 'like-via-repost',
+          blueskyRepostViaRepost: 'repost-via-repost',
+          blueskyFollow: 'follow',
+          blueskyMention: 'mention',
+        }[type],
       'did:plc:alice',
       'alice.bsky.social',
       'Alice',

@@ -21,8 +21,15 @@ import {
 type NotificationRow = typeof notificationsTable.$inferSelect;
 type BlueskyRow = typeof notificationBlueskyTable.$inferSelect;
 
-const blueskyTypes: ReadonlyArray<string> = ['blueskyLike', 'blueskyRepost', 'blueskyFollow', 'blueskyMention'];
-const mentionReasons: ReadonlyArray<string> = ['mention', 'reply', 'quote'];
+const blueskyTypes: ReadonlyArray<string> = [
+  'blueskyLike',
+  'blueskyRepost',
+  'blueskyLikeViaRepost',
+  'blueskyRepostViaRepost',
+  'blueskyFollow',
+  'blueskyMention',
+];
+const mentionReasons: ReadonlyArray<string> = ['mention', 'reply', 'quote', 'subscribed-post'];
 
 const toBlueskyNotification = (
   base: Readonly<{ notificationId: NotificationId; recipientUserId: UserId; isRead: boolean }>,
@@ -46,14 +53,16 @@ const toBlueskyNotification = (
       ? {
         ...common,
         type,
-        reason: row.reason as 'mention' | 'reply' | 'quote',
+        reason: row.reason as 'mention' | 'reply' | 'quote' | 'subscribed-post',
         subjectUri: row.subjectUri,
         targetPostId,
         text: row.text ?? '',
       }
       : undefined;
   }
-  return row.subjectUri === null || (type !== 'blueskyLike' && type !== 'blueskyRepost')
+  return row.subjectUri === null
+      || (type !== 'blueskyLike' && type !== 'blueskyRepost' && type !== 'blueskyLikeViaRepost'
+        && type !== 'blueskyRepostViaRepost')
     ? undefined
     : { ...common, type, subjectUri: row.subjectUri, targetPostId };
 };

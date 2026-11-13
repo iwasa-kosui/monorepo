@@ -267,7 +267,17 @@ const IoriBlueskyNotificationExtensionSchema = z.object({
   emoji: z.undefined().optional(),
   url: z.undefined().optional(),
   bluesky: z.object({
-    reason: z.enum(['like', 'repost', 'follow', 'mention', 'reply', 'quote']),
+    reason: z.enum([
+      'like',
+      'repost',
+      'like-via-repost',
+      'repost-via-repost',
+      'follow',
+      'mention',
+      'reply',
+      'quote',
+      'subscribed-post',
+    ]),
     url: z.string(),
     uri: z.string().optional(),
     text: z.string().optional(),

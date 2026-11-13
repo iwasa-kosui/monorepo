@@ -105,6 +105,65 @@ describe('Bluesky の通知の Mastodon 互換 API', () => {
     });
   });
 
+  it('リポスト経由の通知は、元の投稿の作者を DID から表した合成 Status で返し、受信者を作者にしない', async () => {
+    const t = await seedBluesky();
+    const original = 'at://did:plc:other/app.bsky.feed.post/3korig';
+    const likeViaRepost = t.seed.addBlueskyNotification(t.me.userId, 'blueskyLikeViaRepost', 7_400, {
+      subjectUri: original,
+    });
+    const repostViaRepost = t.seed.addBlueskyNotification(t.me.userId, 'blueskyRepostViaRepost', 7_500, {
+      subjectUri: original,
+    });
+
+    const response = await t.get('/api/v1/notifications?limit=2');
+
+    const body = ((await response.json()) as unknown[]).map((item) => NotificationSchema.parse(item));
+    expect(body.map((item) => [item.id, item.type, item.account.id])).toEqual([
+      [repostViaRepost, 'reblog', ALICE_ACCOUNT_ID],
+      [likeViaRepost, 'favourite', ALICE_ACCOUNT_ID],
+    ]);
+    for (const item of body) {
+      expect(item.status).toMatchObject({
+        id: `bluesky:${original}`,
+        account: { id: 'bluesky:did:plc:other', acct: 'did:plc:other' },
+        content: '',
+        url: 'https://bsky.app/profile/did:plc:other/post/3korig',
+      });
+      expect(item.status?.account.id).not.toBe(t.me.actorId);
+    }
+    expect(body[1]?.iori?.bluesky).toEqual({
+      reason: 'like-via-repost',
+      url: 'https://bsky.app/profile/did:plc:other/post/3korig',
+      uri: original,
+    });
+    expect(await t.typesOf(await t.get('/api/v1/notifications?types[]=favourite'))).toEqual([
+      'favourite',
+      'favourite',
+    ]);
+  });
+
+  it('subscribed-post は mention として本文つきで返し、types[]=mention で絞り込める', async () => {
+    const t = await seedBluesky();
+    const subscribed = t.seed.addBlueskyNotification(t.me.userId, 'blueskyMention', 7_400, {
+      blueskyUri: 'at://did:plc:alice/app.bsky.feed.post/3knew',
+      reason: 'subscribed-post',
+      subjectUri: null,
+      text: 'new post',
+    });
+
+    const response = await t.get(`/api/v1/notifications/${subscribed}`);
+    const mentions = await t.get('/api/v1/notifications?types[]=mention');
+
+    expect(NotificationSchema.parse(await response.json())).toMatchObject({
+      id: subscribed,
+      type: 'mention',
+      account: { id: ALICE_ACCOUNT_ID },
+      status: { id: 'bluesky:at://did:plc:alice/app.bsky.feed.post/3knew', content: '<p>new post</p>' },
+      iori: { bluesky: { reason: 'subscribed-post', text: 'new post' } },
+    });
+    expect(await t.typesOf(mentions)).toEqual(['mention', 'mention']);
+  });
+
   it('types[] で絞り込め、GET /v1/notifications/:id でも返す', async () => {
     const t = await seedBluesky();
 

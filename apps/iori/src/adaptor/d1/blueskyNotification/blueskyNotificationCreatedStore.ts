@@ -21,6 +21,10 @@ const reasonOf = (notification: BlueskyNotification): string => {
       return 'like';
     case 'blueskyRepost':
       return 'repost';
+    case 'blueskyLikeViaRepost':
+      return 'like-via-repost';
+    case 'blueskyRepostViaRepost':
+      return 'repost-via-repost';
     case 'blueskyFollow':
       return 'follow';
     case 'blueskyMention':

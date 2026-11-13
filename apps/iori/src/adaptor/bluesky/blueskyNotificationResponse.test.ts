@@ -115,6 +115,48 @@ describe('parseBlueskyNotificationResponse', () => {
     expect(none).toMatchObject({ subjectUri: null });
   });
 
+  it('like-via-repost と repost-via-repost は record.subject.uri の元の投稿を subjectUri にする', () => {
+    const original = 'at://did:plc:other/app.bsky.feed.post/3korig';
+    const viaRepost = 'at://did:plc:me/app.bsky.feed.repost/3kmyrepost';
+    const record = { subject: { uri: original, cid: 'c' }, via: { uri: viaRepost, cid: 'c2' } };
+
+    const like = only([entry({ reason: 'like-via-repost', reasonSubject: viaRepost, record })]);
+    const repost = only([entry({ reason: 'repost-via-repost', reasonSubject: viaRepost, record })]);
+
+    expect(like).toMatchObject({ reason: 'like-via-repost', subjectUri: original });
+    expect(repost).toMatchObject({ reason: 'repost-via-repost', subjectUri: original });
+  });
+
+  it('like-via-repost は record.subject.uri が取れなければ reasonSubject にフォールバックし、どちらもなければ dropped に数える', () => {
+    const viaRepost = 'at://did:plc:me/app.bsky.feed.repost/3kmyrepost';
+
+    expect(only([entry({ reason: 'like-via-repost', reasonSubject: viaRepost })])).toMatchObject({
+      reason: 'like-via-repost',
+      subjectUri: viaRepost,
+    });
+    expect(parse([entry({ reason: 'repost-via-repost', reasonSubject: undefined })])).toMatchObject({
+      ok: true,
+      val: { items: [], dropped: 1 },
+    });
+  });
+
+  it('subscribed-post の subjectUri は reasonSubject があっても null にし、本文は record.text にする', () => {
+    const subscribed = only([
+      entry({
+        uri: 'at://did:plc:alice/app.bsky.feed.post/3knew',
+        reason: 'subscribed-post',
+        record: { text: 'new post' },
+      }),
+    ]);
+
+    expect(subscribed).toMatchObject({
+      uri: 'at://did:plc:alice/app.bsky.feed.post/3knew',
+      reason: 'subscribed-post',
+      subjectUri: null,
+      text: 'new post',
+    });
+  });
+
   it('mention の subjectUri は reasonSubject があっても null にし、本文は record.text にする', () => {
     const mention = only([entry({ reason: 'mention', record: { text: 'hello @me' } })]);
 
@@ -128,12 +170,9 @@ describe('parseBlueskyNotificationResponse', () => {
 
   it('未知の reason と対象外の reason は検証を失敗させず、dropped に数える', () => {
     const reasons = [
-      'like-via-repost',
-      'repost-via-repost',
       'starterpack-joined',
       'verified',
       'unverified',
-      'subscribed-post',
       'contact-match',
       'something-new',
     ];

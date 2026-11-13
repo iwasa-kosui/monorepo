@@ -319,6 +319,48 @@ describe('NotificationItem', () => {
         expect(html).toContain('href="/bluesky/profile/did:plc:carol/post/3kreply"');
       });
 
+      it('labels a favourite and a reblog via a repost and links them to the original post in iori', () => {
+        const original = 'at://did:plc:other/app.bsky.feed.post/3korig';
+        const originalUrl = 'https://bsky.app/profile/did:plc:other/post/3korig';
+        const like = render(notification({
+          type: 'favourite',
+          account: blueskyAccount,
+          iori: { bluesky: { reason: 'like-via-repost', url: originalUrl, uri: original } },
+        }));
+        const repost = render(notification({
+          type: 'reblog',
+          account: blueskyAccount,
+          iori: { bluesky: { reason: 'repost-via-repost', url: originalUrl, uri: original } },
+        }));
+
+        expect(like).toContain('liked your repost');
+        expect(like).not.toContain('liked your post');
+        expect(like).toContain('href="/bluesky/profile/did:plc:other/post/3korig"');
+        expect(repost).toContain('boosted your repost');
+        expect(repost).not.toContain('boosted your post');
+        expect(repost).toContain('href="/bluesky/profile/did:plc:other/post/3korig"');
+      });
+
+      it('labels a subscribed post as posted, shows its text and links to the post page in iori', () => {
+        const html = render(notification({
+          type: 'mention',
+          account: blueskyAccount,
+          iori: {
+            bluesky: {
+              reason: 'subscribed-post',
+              url: 'https://bsky.app/profile/did:plc:carol/post/3knew',
+              uri: 'at://did:plc:carol/app.bsky.feed.post/3knew',
+              text: 'a new post',
+            },
+          },
+        }));
+
+        expect(html).toContain('posted');
+        expect(html).not.toContain('replied to your post');
+        expect(html).toContain('a new post');
+        expect(html).toContain('href="/bluesky/profile/did:plc:carol/post/3knew"');
+      });
+
       it('keeps the bsky.app link when the uri is not a post uri', () => {
         const html = render(notification({
           type: 'favourite',

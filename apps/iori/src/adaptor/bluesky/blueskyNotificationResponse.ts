@@ -6,7 +6,17 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import type { BlueskyNotificationPage } from '../../ports/blueskyNotificationFetcher.ts';
 
-const SUPPORTED_REASONS = ['like', 'repost', 'follow', 'mention', 'reply', 'quote'] as const;
+const SUPPORTED_REASONS = [
+  'like',
+  'repost',
+  'like-via-repost',
+  'repost-via-repost',
+  'follow',
+  'mention',
+  'reply',
+  'quote',
+  'subscribed-post',
+] as const;
 type SupportedReason = (typeof SUPPORTED_REASONS)[number];
 
 const pageZodType = z.object({ cursor: z.string().optional(), notifications: z.array(z.unknown()) });
@@ -29,6 +39,9 @@ const notificationZodType = z.looseObject({
 const recordTextZodType = z.looseObject({ text: z.unknown() });
 const replyRecordZodType = z.looseObject({
   reply: z.looseObject({ parent: z.looseObject({ uri: z.string().min(1) }) }),
+});
+const viaRepostRecordZodType = z.looseObject({
+  subject: z.looseObject({ uri: z.string().min(1) }),
 });
 const quoteRecordZodType = z.looseObject({
   embed: z.looseObject({ record: z.looseObject({ uri: z.string().min(1) }) }),
@@ -68,7 +81,11 @@ const subjectUriOf = (
     return reply.success ? reply.data.reply.parent.uri : fallback;
   }
   if (reason === 'quote') return quotedUriOf(record) ?? fallback;
-  return reason === 'mention' ? undefined : fallback;
+  if (reason === 'like-via-repost' || reason === 'repost-via-repost') {
+    const viaRepost = viaRepostRecordZodType.safeParse(record);
+    return viaRepost.success ? viaRepost.data.subject.uri : fallback;
+  }
+  return reason === 'mention' || reason === 'subscribed-post' ? undefined : fallback;
 };
 
 const itemOf = (raw: unknown): BlueskyFetchedNotification | undefined => {
@@ -90,7 +107,7 @@ const itemOf = (raw: unknown): BlueskyFetchedNotification | undefined => {
   };
   const subject = subjectUriOf(reason, reasonSubject, record);
   const parsed = BlueskyFetchedNotification.parse(
-    reason === 'mention' || reason === 'reply' || reason === 'quote'
+    reason === 'mention' || reason === 'reply' || reason === 'quote' || reason === 'subscribed-post'
       ? { ...base, subjectUri: subject ?? null, text: textOf(record) }
       : reason === 'follow'
       ? base

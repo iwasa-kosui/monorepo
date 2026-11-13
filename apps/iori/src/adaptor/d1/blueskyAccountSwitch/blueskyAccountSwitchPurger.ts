@@ -27,7 +27,14 @@ import {
   notificationsTable,
 } from '../schema.ts';
 
-export const BLUESKY_NOTIFICATION_TYPES = ['blueskyLike', 'blueskyRepost', 'blueskyFollow', 'blueskyMention'] as const;
+export const BLUESKY_NOTIFICATION_TYPES = [
+  'blueskyLike',
+  'blueskyRepost',
+  'blueskyLikeViaRepost',
+  'blueskyRepostViaRepost',
+  'blueskyFollow',
+  'blueskyMention',
+] as const;
 
 type PurgeSource = Readonly<{ table: SQLiteTable; createdBefore?: SQLiteColumn }>;
 

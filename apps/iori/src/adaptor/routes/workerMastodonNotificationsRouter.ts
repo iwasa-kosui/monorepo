@@ -15,6 +15,7 @@ import { Scope } from '../../domain/oauth/scope.ts';
 import type { PostsWithAuthorResolverByPostIds } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import { blueskyDidOfUri } from '../../helper/blueskyUrl.ts';
 import type { ClearNotificationsUseCase } from '../../useCase/clearNotifications.ts';
 import type { DismissNotificationUseCase } from '../../useCase/dismissNotification.ts';
 import { defaultImageUrls } from '../mastodon/defaultImages.ts';
@@ -100,7 +101,12 @@ const isBlueskyTargetNotification = (notification: DomainNotification): boolean 
 
 const synthesizeBlueskyStatus = (
   notification: DomainNotification,
-  options: Readonly<{ createdAt: Instant; account: Account; recipientAccount: Account | undefined }>,
+  options: Readonly<{
+    createdAt: Instant;
+    account: Account;
+    recipientAccount: Account | undefined;
+    defaultImages: Parameters<typeof toBlueskyAccount>[1];
+  }>,
 ): Status | null => {
   switch (notification.type) {
     case 'blueskyLike':
@@ -109,6 +115,17 @@ const synthesizeBlueskyStatus = (
         createdAt: options.createdAt,
         account: options.recipientAccount ?? options.account,
       });
+    case 'blueskyLikeViaRepost':
+    case 'blueskyRepostViaRepost': {
+      const did = blueskyDidOfUri(notification.subjectUri);
+      return did === undefined ? null : toBlueskyStatus(notification, {
+        createdAt: options.createdAt,
+        account: toBlueskyAccount(
+          { did, handle: did, displayName: null, avatarUrl: null },
+          options.defaultImages,
+        ),
+      });
+    }
     case 'blueskyMention':
       return toBlueskyStatus(notification, { createdAt: options.createdAt, account: options.account });
     default:
@@ -194,7 +211,8 @@ export const createWorkerMastodonNotificationsRouter = ({
         return [];
       }
       const recipientAccount = viewerActorId === undefined ? undefined : accountById.get(viewerActorId);
-      const status = resolved ?? synthesizeBlueskyStatus(notification, { createdAt, account, recipientAccount });
+      const status = resolved
+        ?? synthesizeBlueskyStatus(notification, { createdAt, account, recipientAccount, defaultImages });
       return [toNotification(notification, { createdAt, account, status })];
     });
   };
