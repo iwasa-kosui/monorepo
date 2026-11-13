@@ -224,7 +224,9 @@ export type IoriBlueskyPostResponse = Readonly<{ uri: string; url: string | null
 
 export type IoriBlueskyQuoteResponse = Readonly<{ uri: string; cid: string }>;
 
-export type IoriBlueskyDeletePostResponse = Readonly<{ viaCrosspost: boolean }>;
+export type IoriBlueskyDeletePostResponse =
+  | Readonly<{ viaCrosspost: false }>
+  | Readonly<{ viaCrosspost: true; postId: string }>;
 
 export type IoriBlueskyPostTargetBody = Readonly<{ feedItemId: string }> | Readonly<{ uri: string }>;
 

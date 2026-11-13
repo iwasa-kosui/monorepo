@@ -103,7 +103,12 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
   const blueskyReply = useBlueskyReplyDialog();
   const blueskyQuote = useBlueskyQuoteDialog();
   const blueskyModeration = useBlueskyAuthorModeration(timeline.updateBlueskyItems);
-  const blueskyDelete = useBlueskyDeletePost(timeline.updateBlueskyItems);
+  const blueskyDelete = useBlueskyDeletePost(timeline.updateBlueskyItems, {
+    onCrosspostDeleted: (postId) => {
+      timeline.removePost(postId);
+      thread.removeFromThread(postId);
+    },
+  });
 
   const pullToRefresh = usePullToRefresh({
     onRefresh: async () => {

@@ -2401,7 +2401,7 @@ describe('DELETE /api/iori/v1/bluesky/posts', () => {
     const response = await remove(t, me.bearer, CROSSPOSTED);
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ viaCrosspost: true });
+    expect(await response.json()).toEqual({ viaCrosspost: true, postId: local.postId });
     expect(client.deleteRecord).not.toHaveBeenCalled();
     expect(t.sqlite.prepare('SELECT deletedAt FROM posts WHERE postId = ?').get(local.postId)).not.toEqual({
       deletedAt: null,
