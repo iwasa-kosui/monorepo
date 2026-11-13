@@ -221,6 +221,24 @@ describe('BlueskyChatUseCases', () => {
       });
     });
 
+    it('ハッシュタグを含む本文には tag facet を付けて送る', async () => {
+      const t = setup();
+      const text = 'こんにちは #iori';
+
+      await t.useCases.sendMessage.run({ convoId: 'c1', text });
+
+      expect(t.chat.sendMessage).toHaveBeenCalledExactlyOnceWith({
+        convoId: 'c1',
+        text,
+        facets: [
+          {
+            index: { byteStart: 16, byteEnd: 21 },
+            features: [{ $type: 'app.bsky.richtext.facet#tag', tag: 'iori' }],
+          },
+        ],
+      });
+    });
+
     it('URL もメンションも含まない本文には facets を付けない', async () => {
       const t = setup();
 

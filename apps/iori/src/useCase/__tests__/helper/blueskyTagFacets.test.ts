@@ -62,6 +62,24 @@ describe('withTagFacets', () => {
     expect(withTagFacets(text, [link])).toEqual([tag(16, 21, 'iori')]);
   });
 
+  it('範囲が同じでも、ハッシュタグのページではない link は残し、tag facet を足さない', () => {
+    const link = toFacet('#iori', { start: 0, end: 5, uri: 'https://example.com/x' });
+
+    expect(withTagFacets('#iori', [link])).toEqual([link]);
+  });
+
+  it('ハッシュタグのページの URL は大文字と小文字・パーセントエンコードの違いを無視して置き換える', () => {
+    const encoded = toFacet('#日本語', {
+      start: 0,
+      end: 4,
+      uri: 'https://mastodon.example/tags/%E6%97%A5%E6%9C%AC%E8%AA%9E',
+    });
+    const cased = toFacet('#IORI', { start: 0, end: 5, uri: 'https://mastodon.example/tags/iori' });
+
+    expect(withTagFacets('#日本語', [encoded])).toEqual([tag(0, 10, '日本語')]);
+    expect(withTagFacets('#IORI', [cased])).toEqual([tag(0, 5, 'IORI')]);
+  });
+
   it('同じ範囲でも link 以外の facet とは重なりとして扱い、tag facet を足さない', () => {
     const mention = {
       index: { byteStart: 0, byteEnd: 5 },
