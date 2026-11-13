@@ -1,25 +1,26 @@
 import { RA } from '@iwasa-kosui/result';
 
+import type { BlueskyInteraction } from '../domain/blueskyCrosspost/blueskyInteraction.ts';
 import { blueskyPostUrlOfUri } from '../helper/blueskyUrl.ts';
 import {
   type BlueskyPostImage,
-  publishBlueskyPost,
-  type PublishBlueskyPostDeps,
   type PublishBlueskyPostError,
+  publishBlueskyPostWithInteraction,
+  type PublishBlueskyPostWithInteractionDeps,
 } from './helper/publishBlueskyPost.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{ text: string; images: readonly BlueskyPostImage[] }>;
+type Input = Readonly<{ text: string; images: readonly BlueskyPostImage[]; interaction?: BlueskyInteraction }>;
 
 type Ok = Readonly<{ uri: string; cid: string; url: string | null }>;
 
 export type PostToBlueskyUseCase = UseCase<Input, Ok, PublishBlueskyPostError>;
 
-type Deps = PublishBlueskyPostDeps;
+type Deps = PublishBlueskyPostWithInteractionDeps;
 
 const create = (deps: Deps): PostToBlueskyUseCase => {
-  const run = async ({ text, images }: Input): RA<Ok, PublishBlueskyPostError> => {
-    const published = await publishBlueskyPost(deps, { text, images });
+  const run = async ({ text, images, interaction }: Input): RA<Ok, PublishBlueskyPostError> => {
+    const published = await publishBlueskyPostWithInteraction(deps, { text, images, interaction });
     return published.ok
       ? RA.ok({
         uri: published.val.uri,

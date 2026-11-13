@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { UseBlueskyReplyDialogReturn } from '../hooks/useBlueskyReplyDialog.ts';
-import { BlueskyReplyModal } from './BlueskyReplyModal.tsx';
+import { DEFAULT_BLUESKY_INTERACTION_DRAFT } from './blueskyInteractionDraft.ts';
+import { BlueskyQuoteModal, BlueskyReplyModal } from './BlueskyReplyModal.tsx';
 
 const target = (overrides: Partial<IoriBlueskyTimelineItemBody> = {}): IoriBlueskyTimelineItemBody =>
   ({
@@ -32,11 +33,14 @@ const render = (overrides: Partial<UseBlueskyReplyDialogReturn> = {}): string =>
           markDescriptionSaved: () => {},
           clear: () => {},
         },
+        interaction: DEFAULT_BLUESKY_INTERACTION_DRAFT,
+        interactionEnabled: false,
         isSending: false,
         errorText: undefined,
         open: () => {},
         close: () => {},
         setContent: () => {},
+        setInteraction: () => {},
         send: async () => true,
         ...overrides,
       },
@@ -148,5 +152,58 @@ describe('BlueskyReplyModal', () => {
 
     expect(html).toContain('Uploading...');
     expect(html).toContain('cursor-not-allowed');
+  });
+
+  describe('返信できる人と引用の設定', () => {
+    it('返信モーダルには出さない', () => {
+      const html = render();
+
+      expect(html).not.toContain('aria-label="返信できる人"');
+      expect(html).not.toContain('引用を許可しない');
+    });
+
+    it('interactionEnabled の引用モーダルには出す', () => {
+      const html = String(jsx(BlueskyQuoteModal as never, {
+        dialog: {
+          target: target(),
+          content: '',
+          media: {
+            uploaded: [],
+            isUploading: false,
+            hasImages: false,
+            slotsLeft: 4,
+            notice: null,
+            select: async () => {},
+            remove: () => {},
+            setDescription: () => {},
+            markDescriptionSaved: () => {},
+            clear: () => {},
+          },
+          interaction: DEFAULT_BLUESKY_INTERACTION_DRAFT,
+          interactionEnabled: true,
+          isSending: false,
+          errorText: undefined,
+          open: () => {},
+          close: () => {},
+          setContent: () => {},
+          setInteraction: () => {},
+          send: async () => true,
+        },
+      }));
+
+      expect(html).toContain('引用して投稿');
+      expect(html).toContain('aria-label="返信できる人"');
+      expect(html).toContain('引用を許可しない');
+    });
+
+    it('interactionEnabled のとき、フックが持つ設定の状態を描画する', () => {
+      const html = render({
+        interactionEnabled: true,
+        interaction: { replyMode: 'selected', audiences: ['mention'], quoteDisabled: true },
+      });
+
+      expect(html).toContain('メンションした人');
+      expect(html).toMatch(/<input[^>]*name="bluesky-quote-interaction-quote-disabled"[^>]*checked/);
+    });
   });
 });

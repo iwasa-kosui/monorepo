@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
+import { DEFAULT_BLUESKY_INTERACTION_DRAFT } from './blueskyInteractionDraft.ts';
 import {
   canSubmitPost,
   editParams,
@@ -414,6 +415,71 @@ describe('submitPost to Bluesky only', () => {
     expect(result).toEqual({ kind: 'postedToBluesky', url: 'https://bsky.app/x' });
     expect(create).not.toHaveBeenCalled();
     expect(onPosted).not.toHaveBeenCalled();
+  });
+
+  describe('Bluesky だけの投稿の返信の制限と引用の禁止', () => {
+    const submit = async (value: PostFormValue) => {
+      const createBlueskyPost = vi.fn().mockResolvedValue({ uri: 'at://x', url: null });
+      await submitPost(value, {
+        create: vi.fn(),
+        createBlueskyPost,
+        updateMedia,
+        onDescriptionSaved: vi.fn(),
+        onPosted: vi.fn(),
+      });
+      return createBlueskyPost.mock.calls[0]?.[0] as Record<string, unknown>;
+    };
+
+    it('設定が既定のときは reply_allow も quote_disabled も送らない', async () => {
+      const params = await submit({ ...blueskyOnly, blueskyInteraction: DEFAULT_BLUESKY_INTERACTION_DRAFT });
+
+      expect(params).toEqual({ status: 'hello', media_ids: ['media-1'], content_type: 'text/markdown' });
+      expect(params).not.toHaveProperty('reply_allow');
+      expect(params).not.toHaveProperty('quote_disabled');
+    });
+
+    it('設定が無いときも reply_allow も quote_disabled も送らない', async () => {
+      const params = await submit(blueskyOnly);
+
+      expect(params).not.toHaveProperty('reply_allow');
+      expect(params).not.toHaveProperty('quote_disabled');
+    });
+
+    it('指定した人だけと引用の禁止を reply_allow と quote_disabled で送る', async () => {
+      const params = await submit({
+        ...blueskyOnly,
+        blueskyInteraction: { replyMode: 'selected', audiences: ['followers', 'mention'], quoteDisabled: true },
+      });
+
+      expect(params).toMatchObject({ reply_allow: ['mention', 'followers'], quote_disabled: true });
+    });
+
+    it('返信を受け付けない設定は reply_allow を空配列で送る', async () => {
+      const params = await submit({
+        ...blueskyOnly,
+        blueskyInteraction: { replyMode: 'nobody', audiences: [], quoteDisabled: false },
+      });
+
+      expect(params['reply_allow']).toEqual([]);
+      expect(params).not.toHaveProperty('quote_disabled');
+    });
+
+    it('送り先が両方か Fediverse のときは、設定があっても送らない', async () => {
+      for (const destination of ['both', 'fediverse'] as const) {
+        const create = vi.fn().mockResolvedValue(created);
+        const createBlueskyPost = vi.fn();
+
+        await submitPost({
+          ...filled,
+          destination,
+          blueskyInteraction: { replyMode: 'nobody', audiences: [], quoteDisabled: true },
+        }, { create, createBlueskyPost, updateMedia, onDescriptionSaved: vi.fn(), onPosted: vi.fn() });
+
+        expect(createBlueskyPost).not.toHaveBeenCalled();
+        expect(create.mock.calls[0]?.[0]).not.toHaveProperty('reply_allow');
+        expect(create.mock.calls[0]?.[0]).not.toHaveProperty('quote_disabled');
+      }
+    });
   });
 
   it('reports the server message when Bluesky refuses the post', async () => {

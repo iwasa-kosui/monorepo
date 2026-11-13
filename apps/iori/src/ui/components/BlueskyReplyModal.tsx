@@ -1,5 +1,6 @@
 import { blueskyReplyExcerpt, blueskyReplyRemaining, canSendBlueskyPost } from '../hooks/blueskyReply.ts';
 import type { UseBlueskyPostDialogReturn } from '../hooks/useBlueskyPostDialog.ts';
+import { BlueskyInteractionSettings } from './BlueskyInteractionSettings.tsx';
 import { MediaAttachButton, MediaPreviewList } from './MediaAttachments.tsx';
 import { ReplyDialogShell } from './ReplyDialogShell.tsx';
 
@@ -13,7 +14,19 @@ type Props = Readonly<{
 export const BlueskyReplyModal = (
   { dialog, title, submitLabel, placeholder = '返信を書く... (⌘+Enter to post)' }: Props,
 ) => {
-  const { target, content, media, isSending, errorText, close, setContent, send } = dialog;
+  const {
+    target,
+    content,
+    media,
+    interaction,
+    interactionEnabled,
+    isSending,
+    errorText,
+    close,
+    setContent,
+    setInteraction,
+    send,
+  } = dialog;
 
   if (target === null) {
     return null;
@@ -87,6 +100,14 @@ export const BlueskyReplyModal = (
         />
         {media.notice !== null && <p role='status' class='mt-2 text-sm text-terracotta'>{media.notice}</p>}
       </div>
+      {interactionEnabled && (
+        <BlueskyInteractionSettings
+          value={interaction}
+          onChange={setInteraction}
+          name='bluesky-quote-interaction'
+          disabled={isSending}
+        />
+      )}
     </ReplyDialogShell>
   );
 };

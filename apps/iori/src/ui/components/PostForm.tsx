@@ -6,6 +6,8 @@ import { createBlueskyPost, createStatus, updateMedia } from '../api/mastodonCli
 import { useDefaultPostVisibility } from '../hooks/useDefaultPostVisibility.ts';
 import { useMediaAttachments } from '../hooks/useMediaAttachments.ts';
 import { blueskyCrosspostNotice } from './blueskyCrosspostMark.ts';
+import { type BlueskyInteractionDraft, DEFAULT_BLUESKY_INTERACTION_DRAFT } from './blueskyInteractionDraft.ts';
+import { BlueskyInteractionSettings } from './BlueskyInteractionSettings.tsx';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { MediaAttachButton, MediaPreviewList } from './MediaAttachments.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
@@ -37,6 +39,9 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [cwEnabled, setCwEnabled] = useState(false);
   const [cw, setCw] = useState('');
   const [sensitiveChecked, setSensitiveChecked] = useState(false);
+  const [blueskyInteraction, setBlueskyInteraction] = useState<BlueskyInteractionDraft>(
+    DEFAULT_BLUESKY_INTERACTION_DRAFT,
+  );
 
   const hasCw = cwEnabled && cw.trim() !== '';
   const sensitive = hasImages && (sensitiveChecked || hasCw);
@@ -74,6 +79,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           visibility,
           cw: cwEnabled ? cw : '',
           sensitive: hasImages && sensitiveChecked,
+          ...(isBlueskyOnly ? { blueskyInteraction } : {}),
         },
         {
           create: createStatus,
@@ -94,6 +100,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         setCwEnabled(false);
         setCw('');
         setSensitiveChecked(false);
+        setBlueskyInteraction(DEFAULT_BLUESKY_INTERACTION_DRAFT);
         setNotice(postedNotice(destination, result));
       }
     } finally {
@@ -177,6 +184,16 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           disabled={isBlueskyOnly || isPosting}
         />
       </div>
+      {isBlueskyOnly && (
+        <div class='mt-2 flex-shrink-0'>
+          <BlueskyInteractionSettings
+            value={blueskyInteraction}
+            onChange={setBlueskyInteraction}
+            name={`${formId ?? id ?? 'post-form'}-bluesky-interaction`}
+            disabled={isPosting}
+          />
+        </div>
+      )}
       <div class='mt-2 flex flex-wrap justify-end items-center gap-3 flex-shrink-0'>
         <PostDestinationSelect
           value={destination}

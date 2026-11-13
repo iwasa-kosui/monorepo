@@ -30,6 +30,7 @@ import type { IoriPreferencesResponse } from '../../adaptor/routes/workerIoriPre
 import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
 import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
 import type { IoriXPostsRefreshResponse, IoriXPostsResponse } from '../../adaptor/routes/workerIoriXPostsRouter.ts';
+import type { BlueskyReplyAudience } from '../../domain/blueskyCrosspost/blueskyInteraction.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 
 export type PageCursors = Readonly<{
@@ -432,11 +433,18 @@ export const updateStatus = async (id: string, params: UpdateStatusParams): Prom
   return await res.json() as Status;
 };
 
-export type CreateBlueskyPostParams = Readonly<{
-  status: string;
-  media_ids?: readonly string[];
-  content_type: 'text/plain' | 'text/markdown';
+export type BlueskyInteractionParams = Readonly<{
+  reply_allow?: readonly BlueskyReplyAudience[];
+  quote_disabled?: boolean;
 }>;
+
+export type CreateBlueskyPostParams =
+  & Readonly<{
+    status: string;
+    media_ids?: readonly string[];
+    content_type: 'text/plain' | 'text/markdown';
+  }>
+  & BlueskyInteractionParams;
 
 export const createBlueskyPost = async (params: CreateBlueskyPostParams): Promise<IoriBlueskyPostResponse> => {
   const res = await fetch('/api/iori/v1/bluesky/posts', {
@@ -685,12 +693,13 @@ export const quoteBlueskyPost = async (
   uri: string,
   text: string,
   mediaIds?: readonly string[],
+  interaction?: BlueskyInteractionParams,
 ): Promise<BlueskyQuoteResponse> => {
   const res = await fetch(BLUESKY_QUOTES_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ uri, text, ...mediaIdsBody(mediaIds) }),
+    body: JSON.stringify({ uri, text, ...mediaIdsBody(mediaIds), ...interaction }),
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as BlueskyQuoteResponse;

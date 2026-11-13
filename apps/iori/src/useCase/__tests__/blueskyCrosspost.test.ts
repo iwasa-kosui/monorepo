@@ -86,6 +86,7 @@ const setup = () => {
       if (result.ok) created.push(record);
       return result;
     },
+    createPostWithGates: async () => RA.err(failure('createPostWithGates is not used')),
     getRecord: async (rkey) => behavior.getRecord(rkey),
     deleteRecord: async (rkey) => {
       deleted.push(rkey);

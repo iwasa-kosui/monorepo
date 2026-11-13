@@ -249,6 +249,168 @@ describe('createBlueskyClient の各操作', () => {
     });
   });
 
+  describe('createPostWithGates', () => {
+    const POST_URI = `at://did:plc:abc/app.bsky.feed.post/${RKEY}`;
+    const applied = (...collections: string[]) =>
+      json({
+        results: collections.map((collection) => ({
+          $type: 'com.atproto.repo.applyWrites#createResult',
+          uri: `at://did:plc:abc/${collection}/${RKEY}`,
+          cid: `bafy-${collection}`,
+        })),
+      });
+
+    it('返信の制限と引用の禁止があれば、投稿と threadgate と postgate を applyWrites 1 回で作る', async () => {
+      const { client, calls } = setup(stored(), [
+        () => applied('app.bsky.feed.post', 'app.bsky.feed.threadgate', 'app.bsky.feed.postgate'),
+      ]);
+
+      const result = await client.createPostWithGates({
+        record,
+        rkey: RKEY,
+        interaction: { replyRestriction: ['mention', 'followers'], quoteDisabled: true },
+      });
+
+      expect(result).toEqual({ ok: true, val: { uri: POST_URI, cid: 'bafy-app.bsky.feed.post', rkey: RKEY } });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.applyWrites`);
+      expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
+      expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
+        repo: 'did:plc:abc',
+        writes: [
+          { $type: 'com.atproto.repo.applyWrites#create', collection: 'app.bsky.feed.post', rkey: RKEY, value: record },
+          {
+            $type: 'com.atproto.repo.applyWrites#create',
+            collection: 'app.bsky.feed.threadgate',
+            rkey: RKEY,
+            value: {
+              $type: 'app.bsky.feed.threadgate',
+              post: POST_URI,
+              allow: [
+                { $type: 'app.bsky.feed.threadgate#mentionRule' },
+                { $type: 'app.bsky.feed.threadgate#followerRule' },
+              ],
+              createdAt: record.createdAt,
+            },
+          },
+          {
+            $type: 'com.atproto.repo.applyWrites#create',
+            collection: 'app.bsky.feed.postgate',
+            rkey: RKEY,
+            value: {
+              $type: 'app.bsky.feed.postgate',
+              post: POST_URI,
+              embeddingRules: [{ $type: 'app.bsky.feed.postgate#disableRule' }],
+              createdAt: record.createdAt,
+            },
+          },
+        ],
+      });
+    });
+
+    it('誰も返信できないときは allow が空の threadgate だけを書く', async () => {
+      const { client, calls } = setup(stored(), [() => applied('app.bsky.feed.post', 'app.bsky.feed.threadgate')]);
+
+      const result = await client.createPostWithGates({
+        record,
+        rkey: RKEY,
+        interaction: { replyRestriction: [], quoteDisabled: false },
+      });
+
+      expect(result.ok).toBe(true);
+      const writes = JSON.parse(calls[0]!.init.body as string).writes as Array<{ collection: string; value: unknown }>;
+      expect(writes.map((write) => write.collection)).toEqual(['app.bsky.feed.post', 'app.bsky.feed.threadgate']);
+      expect(writes[1]?.value).toEqual({
+        $type: 'app.bsky.feed.threadgate',
+        post: POST_URI,
+        allow: [],
+        createdAt: record.createdAt,
+      });
+    });
+
+    it('引用の禁止だけなら postgate だけを書く', async () => {
+      const { client, calls } = setup(stored(), [() => applied('app.bsky.feed.post', 'app.bsky.feed.postgate')]);
+
+      await client.createPostWithGates({
+        record,
+        rkey: RKEY,
+        interaction: { replyRestriction: 'everyone', quoteDisabled: true },
+      });
+
+      const writes = JSON.parse(calls[0]!.init.body as string).writes as Array<{ collection: string }>;
+      expect(writes.map((write) => write.collection)).toEqual(['app.bsky.feed.post', 'app.bsky.feed.postgate']);
+    });
+
+    it('応答の results[0] の uri が投稿の uri でなければ invalid_response にする', async () => {
+      const { client } = setup(stored(), [() => applied('app.bsky.feed.threadgate')]);
+
+      const result = await client.createPostWithGates({
+        record,
+        rkey: RKEY,
+        interaction: { replyRestriction: [], quoteDisabled: false },
+      });
+
+      expect(result).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
+    });
+
+    it('results が空の応答は invalid_response にする', async () => {
+      const { client } = setup(stored(), [() => json({ results: [] })]);
+
+      const result = await client.createPostWithGates({
+        record,
+        rkey: RKEY,
+        interaction: { replyRestriction: [], quoteDisabled: false },
+      });
+
+      expect(result).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
+    });
+
+    it('PDS のエラーを http エラーとして返す', async () => {
+      const { client } = setup(stored(), [() => json({ error: 'InvalidRecord' }, 400)]);
+
+      const result = await client.createPostWithGates({
+        record,
+        rkey: RKEY,
+        interaction: { replyRestriction: [], quoteDisabled: false },
+      });
+
+      expect(result).toMatchObject({ ok: false, err: { kind: 'http', status: 400, code: 'InvalidRecord' } });
+    });
+
+    it('トークンが期限切れなら refreshSession をしてから applyWrites をやり直す', async () => {
+      const { client, calls } = setup(stored(), [
+        () => json({ error: 'ExpiredToken' }, 400),
+        () => json(sessionBody('fresh')),
+        () => applied('app.bsky.feed.post', 'app.bsky.feed.threadgate'),
+      ]);
+
+      const result = await client.createPostWithGates({
+        record,
+        rkey: RKEY,
+        interaction: { replyRestriction: [], quoteDisabled: false },
+      });
+
+      expect(result.ok).toBe(true);
+      expect(calls.map((call) => call.url.split('/').pop())).toEqual([
+        'com.atproto.repo.applyWrites',
+        'com.atproto.server.refreshSession',
+        'com.atproto.repo.applyWrites',
+      ]);
+    });
+  });
+
+  it('deleteRecord は collection を渡せば threadgate と postgate の collection で削除する', async () => {
+    const { client, calls } = setup(stored(), [() => json({}), () => json({})]);
+
+    await client.deleteRecord('3kabc', 'app.bsky.feed.threadgate');
+    await client.deleteRecord('3kabc', 'app.bsky.feed.postgate');
+
+    expect(calls.map((call) => JSON.parse(call.init.body as string))).toEqual([
+      { repo: 'did:plc:abc', collection: 'app.bsky.feed.threadgate', rkey: '3kabc' },
+      { repo: 'did:plc:abc', collection: 'app.bsky.feed.postgate', rkey: '3kabc' },
+    ]);
+  });
+
   it('createLike は putRecord で app.bsky.feed.like のレコードを指定の rkey で書き、応答の uri を返す', async () => {
     const likeUri = 'at://did:plc:abc/app.bsky.feed.like/2222222222222';
     const { client, calls } = setup(stored(), [() => json({ uri: likeUri, cid: 'bafylike' })]);

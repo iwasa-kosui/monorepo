@@ -18,14 +18,21 @@ const setup = (posts: Record<string, unknown> = { [TOP]: { uri: TOP, cid: 'bafyt
   const createRecord = vi.fn<BlueskyClient['createRecord']>(async (_record, rkey) =>
     RA.ok({ uri: `at://did:plc:me/app.bsky.feed.post/${rkey}`, cid: 'bafynew', rkey })
   );
+  const createPostWithGates = vi.fn<BlueskyClient['createPostWithGates']>(async ({ rkey }) =>
+    RA.ok({ uri: `at://did:plc:me/app.bsky.feed.post/${rkey}`, cid: 'bafygated', rkey })
+  );
   const uploadBlob = vi.fn<BlueskyClient['uploadBlob']>();
   const query = vi.fn<BlueskyQueryClient['query']>(async (_nsid, params) => {
     const post = posts[String(params.uris ?? '')];
     return RA.ok({ posts: post === undefined ? [] : [post] });
   });
-  const quote = QuoteBlueskyPostUseCase.create({ client: { createRecord, uploadBlob }, query, now: () => NOW });
+  const quote = QuoteBlueskyPostUseCase.create({
+    client: { createRecord, createPostWithGates, uploadBlob },
+    query,
+    now: () => NOW,
+  });
   const record = () => createRecord.mock.calls[0]![0];
-  return { quote, createRecord, uploadBlob, query, record };
+  return { quote, createRecord, createPostWithGates, uploadBlob, query, record };
 };
 
 describe('QuoteBlueskyPostUseCase', () => {
@@ -157,5 +164,77 @@ describe('QuoteBlueskyPostUseCase', () => {
     t.createRecord.mockReturnValueOnce(RA.err(failure));
 
     expect(await t.quote.run({ uri: TOP, text: 'hi' })).toEqual({ ok: false, err: failure });
+  });
+
+  describe('返信の制限と引用の禁止', () => {
+    it('interaction が無いか既定なら createRecord だけを呼び、gate を作らない', async () => {
+      const t = setup();
+
+      await t.quote.run({ uri: TOP, text: 'a' });
+      await t.quote.run({
+        uri: TOP,
+        text: 'b',
+        interaction: { replyRestriction: 'everyone', quoteDisabled: false },
+      });
+
+      expect(t.createRecord).toHaveBeenCalledTimes(2);
+      expect(t.createPostWithGates).not.toHaveBeenCalled();
+    });
+
+    it.each(
+      [
+        ['mention だけ', { replyRestriction: ['mention'], quoteDisabled: false }],
+        ['following と followers', { replyRestriction: ['following', 'followers'], quoteDisabled: false }],
+        ['空集合 (誰も返信できない)', { replyRestriction: [], quoteDisabled: false }],
+        ['引用の禁止だけ', { replyRestriction: 'everyone', quoteDisabled: true }],
+        ['返信の制限と引用の禁止', { replyRestriction: ['mention', 'followers'], quoteDisabled: true }],
+      ] as const,
+    )(
+      '%s なら引用の embed を付けた投稿と interaction を createPostWithGates に渡し、createRecord を呼ばない',
+      async (_name, interaction) => {
+        const t = setup();
+
+        const result = await t.quote.run({ uri: TOP, text: '引用です', interaction });
+
+        expect(t.createRecord).not.toHaveBeenCalled();
+        expect(t.createPostWithGates).toHaveBeenCalledTimes(1);
+        const input = t.createPostWithGates.mock.calls[0]![0];
+        expect(input.interaction).toEqual(interaction);
+        expect(input.record).toMatchObject({
+          text: '引用です',
+          embed: { $type: 'app.bsky.embed.record', record: { uri: TOP, cid: 'bafytop' } },
+        });
+        expect(result).toEqual({
+          ok: true,
+          val: { uri: `at://did:plc:me/app.bsky.feed.post/${input.rkey}`, cid: 'bafygated' },
+        });
+      },
+    );
+
+    it('引用できない投稿には、interaction があっても投稿しない', async () => {
+      const t = setup({ [TOP]: { uri: TOP, cid: 'bafytop', viewer: { embeddingDisabled: true } } });
+
+      const result = await t.quote.run({
+        uri: TOP,
+        text: 'hi',
+        interaction: { replyRestriction: [], quoteDisabled: true },
+      });
+
+      expect(result).toEqual({ ok: false, err: { type: 'BlueskyQuoteNotAllowed' } });
+      expect(t.createPostWithGates).not.toHaveBeenCalled();
+    });
+
+    it('createPostWithGates の失敗を返す', async () => {
+      const t = setup();
+      t.createPostWithGates.mockReturnValueOnce(RA.err(failure));
+
+      const result = await t.quote.run({
+        uri: TOP,
+        text: 'hi',
+        interaction: { replyRestriction: [], quoteDisabled: false },
+      });
+
+      expect(result).toEqual({ ok: false, err: failure });
+    });
   });
 });

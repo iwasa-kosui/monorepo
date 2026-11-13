@@ -276,10 +276,12 @@ export const setupReadApi = (
     blueskyRepostClient?: Pick<BlueskyClient, 'createRepost' | 'deleteRepost'>;
     blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
     blueskyReplyClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
-    blueskyPostClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
+    blueskyPostClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob' | 'createPostWithGates'> & BlueskyQueryClient;
     blueskyDeleteClient?: Pick<BlueskyClient, 'deleteRecord'> & Pick<BlueskyChatClient, 'viewerDid'>;
     uploads?: Pick<PostImageObjectStore, 'get'>;
-    blueskyQuoteClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
+    blueskyQuoteClient?:
+      & Pick<BlueskyClient, 'createRecord' | 'uploadBlob' | 'createPostWithGates'>
+      & BlueskyQueryClient;
     blueskyPostCids?: Readonly<
       Record<string, string | Readonly<{ cid: string; likeUri?: string; repostUri?: string }>>
     >;

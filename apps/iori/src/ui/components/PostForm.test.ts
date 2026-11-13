@@ -45,6 +45,13 @@ describe('PostForm', () => {
     expect(render()).not.toContain('Bluesky には送りません');
   });
 
+  it('送り先が両方の初期状態では、返信できる人と引用の設定を出さない', () => {
+    const html = render();
+
+    expect(html).not.toContain('aria-label="返信できる人"');
+    expect(html).not.toContain('引用を許可しない');
+  });
+
   it('画像がなければ ALT の欄とセンシティブのチェックボックスを出さない', () => {
     const html = render();
 
