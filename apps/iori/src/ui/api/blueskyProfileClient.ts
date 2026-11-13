@@ -1,5 +1,6 @@
 import type {
   IoriBlueskyAuthorFeedResponse,
+  IoriBlueskyFollowListResponse,
   IoriBlueskyFollowResponse,
   IoriBlueskyLikedPostsResponse,
   IoriBlueskyProfileBody,
@@ -12,6 +13,8 @@ export type BlueskyProfile = IoriBlueskyProfileBody;
 export type BlueskyAuthorFeedPage = IoriBlueskyAuthorFeedResponse;
 
 export type BlueskyLikedPostsPage = IoriBlueskyLikedPostsResponse;
+
+export type BlueskyFollowListPage = IoriBlueskyFollowListResponse;
 
 const PROFILES_PATH = '/api/iori/v1/bluesky/profiles';
 const FOLLOWS_PATH = '/api/iori/v1/bluesky/follows';
@@ -29,6 +32,12 @@ export const fetchBlueskyProfile = (actor: string): Promise<BlueskyProfile> =>
 
 export const fetchBlueskyAuthorFeed = (actor: string, cursor?: string): Promise<BlueskyAuthorFeedPage> =>
   get<BlueskyAuthorFeedPage>(requestUrl(`${PROFILES_PATH}/${encodeURIComponent(actor)}/feed`, { cursor }));
+
+export const fetchBlueskyFollows = (actor: string, cursor?: string): Promise<BlueskyFollowListPage> =>
+  get<BlueskyFollowListPage>(requestUrl(`${PROFILES_PATH}/${encodeURIComponent(actor)}/follows`, { cursor }));
+
+export const fetchBlueskyFollowers = (actor: string, cursor?: string): Promise<BlueskyFollowListPage> =>
+  get<BlueskyFollowListPage>(requestUrl(`${PROFILES_PATH}/${encodeURIComponent(actor)}/followers`, { cursor }));
 
 export const fetchBlueskyLikedPosts = (cursor?: string): Promise<BlueskyLikedPostsPage> =>
   get<BlueskyLikedPostsPage>(requestUrl(LIKED_POSTS_PATH, { cursor }));
@@ -77,6 +86,22 @@ export const blueskyFollowFailureMessage = (error: unknown): string =>
   isMastodonApiError(error) && error.message === LOGIN_FAILED_MESSAGE
     ? 'Bluesky にログインできないため、操作できませんでした。'
     : 'フォローを変更できませんでした';
+
+export const blueskyFollowListFailureMessage = (
+  error: unknown,
+  kind: 'follows' | 'followers',
+  position: 'first' | 'more',
+): string => {
+  if (isMastodonApiError(error) && error.message === LOGIN_FAILED_MESSAGE) {
+    return position === 'first'
+      ? `Bluesky にログインできないため、${kind === 'follows' ? 'フォロー' : 'フォロワー'}を読み込めませんでした`
+      : 'Bluesky にログインできないため、続きを読み込めませんでした';
+  }
+  if (isMastodonApiError(error) && error.status === 409) return 'Bluesky 連携が無効です';
+  return position === 'first'
+    ? `${kind === 'follows' ? 'フォロー' : 'フォロワー'}を読み込めませんでした`
+    : '続きを読み込めませんでした';
+};
 
 export const blueskyLikedPostsFailureMessage = (error: unknown, kind: 'first' | 'more'): string => {
   if (isMastodonApiError(error) && error.message === LOGIN_FAILED_MESSAGE) {

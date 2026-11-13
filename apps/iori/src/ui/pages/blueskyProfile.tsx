@@ -1,7 +1,10 @@
 import { type PropsWithChildren, useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
+import type {
+  IoriBlueskyActorBody,
+  IoriBlueskyTimelineItemBody,
+} from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { blueskyProfileUrlOfActor } from '../../helper/blueskyUrl.ts';
 import { openBlueskyChatConvo } from '../api/blueskyChatClient.ts';
 import {
@@ -11,6 +14,7 @@ import {
   fetchBlueskyActorFeeds,
   fetchBlueskyActorLists,
 } from '../api/blueskyFeedClient.ts';
+import { blueskyActorPagePath } from '../api/blueskyLinks.ts';
 import {
   blockBlueskyActor,
   blueskyModerationFailureMessage,
@@ -24,14 +28,18 @@ import {
   blueskyActorOfPath,
   blueskyFeedNoticeMessage,
   blueskyFollowFailureMessage,
+  blueskyFollowListFailureMessage,
   type BlueskyProfile,
   blueskyProfileLoadFailureMessage,
   fetchBlueskyAuthorFeed,
+  fetchBlueskyFollowers,
+  fetchBlueskyFollows,
   fetchBlueskyProfile,
   followBlueskyActor,
   unfollowBlueskyActor,
 } from '../api/blueskyProfileClient.ts';
 import { BlueskyFeedRow } from '../components/BlueskyFeedRow.tsx';
+import { BlueskyFollowListRow } from '../components/BlueskyFollowListRow.tsx';
 import { blueskyItemActionProps, type BlueskyPostActions } from '../components/blueskyPostActions.ts';
 import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyReportPostModal } from '../components/BlueskyReportPostModal.tsx';
@@ -46,10 +54,17 @@ import { useBlueskyQuoteDialog } from '../hooks/useBlueskyQuoteDialog.ts';
 import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { withFeedItems } from './blueskyProfileFeed.ts';
+import {
+  type BlueskyFollowListKind,
+  type BlueskyProfileTab,
+  isBlueskyFollowListTab,
+  profileTabOfSearch,
+  withProfileTab,
+} from './blueskyProfileTab.ts';
 
 export type BlueskyModerationView = Readonly<{ muted: boolean; blockUri: string | null }>;
 
-export type BlueskyProfileTab = 'posts' | 'feeds' | 'lists';
+export type { BlueskyProfileTab };
 
 const PROFILE_TABS: readonly Readonly<{ tab: BlueskyProfileTab; label: string }>[] = [
   { tab: 'posts', label: '投稿' },
@@ -112,6 +127,26 @@ const ModerationButton = ({ title, active, disabled, onClick, paths }: Moderatio
     </svg>
   </button>
 );
+
+type CountButtonProps = Readonly<{ selected: boolean; onClick: () => void }>;
+
+const CountButton = ({ selected, onClick, children }: PropsWithChildren<CountButtonProps>) => (
+  <button
+    type='button'
+    aria-pressed={selected}
+    onClick={onClick}
+    class={selected
+      ? 'font-semibold text-terracotta dark:text-terracotta-light'
+      : 'hover:text-terracotta dark:hover:text-terracotta-light transition-colors'}
+  >
+    {children}
+  </button>
+);
+
+const FOLLOW_LIST_HEADINGS: Readonly<Record<BlueskyFollowListKind, string>> = {
+  follows: 'フォロー',
+  followers: 'フォロワー',
+};
 
 const MUTE_PATHS = [
   'M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z',
@@ -190,8 +225,12 @@ export const BlueskyProfilePage = (
           )}
 
           <p class='mb-4 relative z-10 flex flex-wrap gap-x-4 text-sm text-charcoal-light dark:text-gray-400'>
-            <span>フォロー {profile.followsCount}</span>
-            <span>フォロワー {profile.followersCount}</span>
+            <CountButton selected={tab === 'follows'} onClick={() => onSelectTab?.('follows')}>
+              フォロー {profile.followsCount}
+            </CountButton>
+            <CountButton selected={tab === 'followers'} onClick={() => onSelectTab?.('followers')}>
+              フォロワー {profile.followersCount}
+            </CountButton>
             <span>投稿 {profile.postsCount}</span>
           </p>
 
@@ -368,7 +407,14 @@ export const BlueskyProfilePage = (
               ))}
           </section>
         )
-        : <section class='py-2'>{children}</section>}
+        : (
+          <section class='py-2'>
+            {isBlueskyFollowListTab(tab) && (
+              <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>{FOLLOW_LIST_HEADINGS[tab]}</h2>
+            )}
+            {children}
+          </section>
+        )}
     </>
   );
 };
@@ -390,6 +436,48 @@ export const BlueskyProfileCollection = (
       failureMessage={kind === 'feeds' ? blueskyActorFeedsFailureMessage : blueskyActorListsFailureMessage}
       emptyMessage={kind === 'feeds' ? 'フィードはありません' : 'リストはありません'}
       renderItem={(feed: BlueskySavedFeedView) => <BlueskyFeedRow key={feed.uri} feed={feed} />}
+    />
+  );
+};
+
+const FOLLOW_LIST_EMPTY_MESSAGES: Readonly<Record<BlueskyFollowListKind, string>> = {
+  follows: 'フォローしているアカウントはありません',
+  followers: 'フォロワーはいません',
+};
+
+const actorKey = (actor: IoriBlueskyActorBody): string => actor.did;
+
+const followsFailureMessage = (error: unknown, position: 'first' | 'more'): string =>
+  blueskyFollowListFailureMessage(error, 'follows', position);
+
+const followersFailureMessage = (error: unknown, position: 'first' | 'more'): string =>
+  blueskyFollowListFailureMessage(error, 'followers', position);
+
+export const BlueskyProfileFollowList = (
+  { actor, kind }: Readonly<{ actor: string; kind: BlueskyFollowListKind }>,
+) => {
+  const viewerDidRef = useRef('');
+  const load = useCallback(async (cursor?: string) => {
+    const page = kind === 'follows'
+      ? await fetchBlueskyFollows(actor, cursor)
+      : await fetchBlueskyFollowers(actor, cursor);
+    viewerDidRef.current = page.viewerDid;
+    return { items: page.actors, cursor: page.cursor };
+  }, [actor, kind]);
+  return (
+    <PagedList
+      load={load}
+      keyOf={actorKey}
+      failureMessage={kind === 'follows' ? followsFailureMessage : followersFailureMessage}
+      emptyMessage={FOLLOW_LIST_EMPTY_MESSAGES[kind]}
+      renderItem={(item: IoriBlueskyActorBody) => (
+        <BlueskyFollowListRow
+          key={item.did}
+          actor={item}
+          href={blueskyActorPagePath(item)}
+          viewerDid={viewerDidRef.current ?? ''}
+        />
+      )}
     />
   );
 };
@@ -424,7 +512,7 @@ const App = () => {
   const [messageError, setMessageError] = useState<string | null>(null);
   const [data, setData] = useState<{ error: string } | ProfileData | null>(null);
   const [feed, setFeed] = useState<FeedData | null>(null);
-  const [tab, setTab] = useState<BlueskyProfileTab>('posts');
+  const [tab, setTab] = useState<BlueskyProfileTab>(() => profileTabOfSearch(window.location.search));
   const actor = blueskyActorOfPath(window.location.pathname);
   const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
     setFeed((prev) => withFeedItems(prev, updater));
@@ -505,6 +593,11 @@ const App = () => {
   }, [actor]);
 
   useInfiniteScroll({ nextCursor: tab === 'posts' ? feed?.cursor : undefined, onLoadMore: loadMore });
+
+  const selectTab = useCallback((next: BlueskyProfileTab) => {
+    setTab(next);
+    window.history.replaceState(null, '', `${window.location.pathname}${withProfileTab(window.location.search, next)}`);
+  }, []);
 
   const toggleFollow = async (follow: boolean) => {
     if (loaded === undefined || isTogglingFollowRef.current) return;
@@ -653,9 +746,11 @@ const App = () => {
         onMessage={openMessage}
         actions={actions}
         tab={tab}
-        onSelectTab={setTab}
+        onSelectTab={selectTab}
       >
-        {tab !== 'posts' && <BlueskyProfileCollection key={tab} actor={data.profile.did} kind={tab} />}
+        {isBlueskyFollowListTab(tab)
+          ? <BlueskyProfileFollowList key={`${tab}:${data.profile.did}`} actor={data.profile.did} kind={tab} />
+          : tab !== 'posts' && <BlueskyProfileCollection key={tab} actor={data.profile.did} kind={tab} />}
       </BlueskyProfilePage>
       <BlueskyReplyModal dialog={replyDialog} />
       <BlueskyReportPostModal reportDialog={reportDialog} {...(notice === undefined ? {} : { notice })} />

@@ -91,6 +91,49 @@ describe('BlueskyProfilePage', () => {
     expect(html).toContain('投稿 1');
   });
 
+  it('フォロー数とフォロワー数をボタンにし、選んでいるほうだけ aria-pressed を true にする', () => {
+    const none = render();
+    expect(none).toMatch(/<button[^>]*aria-pressed="false"[^>]*>\s*フォロー 2/);
+    expect(none).toMatch(/<button[^>]*aria-pressed="false"[^>]*>\s*フォロワー 3/);
+    expect(none).not.toContain('aria-pressed="true"');
+
+    const follows = render({}, { onSelectTab: () => {}, tab: 'follows' });
+    expect(follows).toMatch(/<button[^>]*aria-pressed="true"[^>]*>\s*フォロー 2/);
+    expect(follows).toMatch(/<button[^>]*aria-pressed="false"[^>]*>\s*フォロワー 3/);
+
+    const followers = render({}, { onSelectTab: () => {}, tab: 'followers' });
+    expect(followers).toMatch(/<button[^>]*aria-pressed="false"[^>]*>\s*フォロー 2/);
+    expect(followers).toMatch(/<button[^>]*aria-pressed="true"[^>]*>\s*フォロワー 3/);
+  });
+
+  it('フォローとフォロワーのタブでは、見出しと子の要素を出し、投稿は出さない', () => {
+    const follows = render({}, { onSelectTab: () => {}, tab: 'follows', items: [item], children: 'フォローの一覧' });
+
+    expect(follows).toContain('>フォロー</h2>');
+    expect(follows).not.toContain('>フォロワー</h2>');
+    expect(follows).toContain('フォローの一覧');
+    expect(follows).not.toContain('最初の投稿');
+    expect(follows).not.toContain('No posts yet.');
+
+    const followers = render({}, { onSelectTab: () => {}, tab: 'followers', children: 'フォロワーの一覧' });
+    expect(followers).toContain('>フォロワー</h2>');
+    expect(followers).toContain('フォロワーの一覧');
+  });
+
+  it('フォローとフォロワーのタブでも、投稿・フィード・リストの切り替えにタブを増やさず、どれも選ばれていない状態にする', () => {
+    const html = render({}, { onSelectTab: () => {}, tab: 'follows' });
+
+    expect(html.match(/role="tab"/g)).toHaveLength(3);
+    expect(html).not.toContain('aria-selected="true"');
+  });
+
+  it('フィードとリストのタブには、フォロー・フォロワーの見出しを出さない', () => {
+    const html = render({}, { onSelectTab: () => {}, tab: 'feeds', children: 'フィードの一覧' });
+
+    expect(html).not.toContain('>フォロー</h2>');
+    expect(html).not.toContain('>フォロワー</h2>');
+  });
+
   it('表示名が無ければ handle を出し、バナーとアイコンが無ければ出さない', () => {
     const html = render({ displayName: null, banner: null, avatar: null, description: null });
 

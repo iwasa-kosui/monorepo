@@ -11,6 +11,8 @@ import type { GetBlueskyFeedInfoUseCase } from '../../useCase/getBlueskyFeedInfo
 import type { GetBlueskyProfileUseCase } from '../../useCase/getBlueskyProfile.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { ListBlueskyActorFeedsUseCase } from '../../useCase/listBlueskyActorFeeds.ts';
+import type { ListBlueskyActorFollowersUseCase } from '../../useCase/listBlueskyActorFollowers.ts';
+import type { ListBlueskyActorFollowsUseCase } from '../../useCase/listBlueskyActorFollows.ts';
 import type { ListBlueskyActorLikesUseCase } from '../../useCase/listBlueskyActorLikes.ts';
 import type { ListBlueskyActorListsUseCase } from '../../useCase/listBlueskyActorLists.ts';
 import type { ListBlueskyAuthorFeedUseCase } from '../../useCase/listBlueskyAuthorFeed.ts';
@@ -43,6 +45,8 @@ export type WorkerIoriBlueskyProfileRouterDeps = Readonly<{
   listBlueskyListMembersUseCase: ListBlueskyListMembersUseCase | undefined;
   listBlueskyActorFeedsUseCase: ListBlueskyActorFeedsUseCase | undefined;
   listBlueskyActorListsUseCase: ListBlueskyActorListsUseCase | undefined;
+  listBlueskyActorFollowsUseCase: ListBlueskyActorFollowsUseCase | undefined;
+  listBlueskyActorFollowersUseCase: ListBlueskyActorFollowersUseCase | undefined;
   followBlueskyActorUseCase: FollowBlueskyActorUseCase | undefined;
   unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase | undefined;
   viewerDid?: (() => RA<string, BlueskyClientError>) | undefined;
@@ -102,6 +106,12 @@ export type IoriBlueskyActorListsResponse = Readonly<{
   cursor: string | null;
 }>;
 
+export type IoriBlueskyFollowListResponse = Readonly<{
+  actors: readonly IoriBlueskyActorBody[];
+  cursor: string | null;
+  viewerDid: string;
+}>;
+
 export type IoriBlueskyFollowResponse = Readonly<{ following: true; followUri: string }>;
 
 export type IoriBlueskyUnfollowResponse = Readonly<{ following: false }>;
@@ -158,6 +168,8 @@ export const createWorkerIoriBlueskyProfileRouter = ({
   listBlueskyListMembersUseCase,
   listBlueskyActorFeedsUseCase,
   listBlueskyActorListsUseCase,
+  listBlueskyActorFollowsUseCase,
+  listBlueskyActorFollowersUseCase,
   followBlueskyActorUseCase,
   unfollowBlueskyActorUseCase,
   viewerDid,
@@ -289,6 +301,38 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       });
       if (!page.ok) return failure(c, page.err);
       return c.json({ lists: page.val.feeds, cursor: page.val.cursor ?? null } satisfies IoriBlueskyActorListsResponse);
+    })
+    .get('/iori/v1/bluesky/profiles/:actor/follows', authn.requireUser(readAccounts), async (c) => {
+      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      if (listBlueskyActorFollowsUseCase === undefined) return c.json(disabled, 409);
+      const page = await listBlueskyActorFollowsUseCase.run({
+        actor: c.req.param('actor'),
+        cursor: c.req.query('cursor') || undefined,
+      });
+      if (!page.ok) return failure(c, page.err);
+      return c.json(
+        {
+          actors: page.val.actors,
+          cursor: page.val.cursor ?? null,
+          viewerDid: await resolveViewerDid(viewerDid) ?? '',
+        } satisfies IoriBlueskyFollowListResponse,
+      );
+    })
+    .get('/iori/v1/bluesky/profiles/:actor/followers', authn.requireUser(readAccounts), async (c) => {
+      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      if (listBlueskyActorFollowersUseCase === undefined) return c.json(disabled, 409);
+      const page = await listBlueskyActorFollowersUseCase.run({
+        actor: c.req.param('actor'),
+        cursor: c.req.query('cursor') || undefined,
+      });
+      if (!page.ok) return failure(c, page.err);
+      return c.json(
+        {
+          actors: page.val.actors,
+          cursor: page.val.cursor ?? null,
+          viewerDid: await resolveViewerDid(viewerDid) ?? '',
+        } satisfies IoriBlueskyFollowListResponse,
+      );
     })
     .post(
       '/iori/v1/bluesky/follows',

@@ -2,6 +2,7 @@ import type { RA } from '@iwasa-kosui/result';
 
 import type { BlueskyFetchedTimelineItem } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import type { BlueskyClientError } from './blueskyClient.ts';
+import type { BlueskyListMembersPage } from './blueskyFeedReader.ts';
 
 export type BlueskyProfile = Readonly<{
   did: string;
@@ -36,6 +37,12 @@ export type BlueskyProfileReader = Readonly<{
   getActorLikes: (
     input: Readonly<{ actor: string; cursor: string | undefined }>,
   ) => RA<BlueskyActorLikesPage, BlueskyClientError>;
+  getFollows: (
+    input: Readonly<{ actor: string; cursor: string | undefined }>,
+  ) => RA<BlueskyListMembersPage, BlueskyClientError>;
+  getFollowers: (
+    input: Readonly<{ actor: string; cursor: string | undefined }>,
+  ) => RA<BlueskyListMembersPage, BlueskyClientError>;
 }>;
 
 const BLOCKED_ACTOR_CODES: readonly string[] = ['BlockedActor', 'BlockedByActor'];
