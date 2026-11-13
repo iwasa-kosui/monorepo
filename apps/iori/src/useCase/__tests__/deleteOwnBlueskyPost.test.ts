@@ -15,6 +15,7 @@ const ME = 'did:plc:me';
 const POST = `at://${ME}/app.bsky.feed.post/3kmine`;
 const CROSSPOSTED = `at://${ME}/app.bsky.feed.post/3kcross`;
 const OTHERS = 'at://did:plc:other/app.bsky.feed.post/3kother';
+const DELETING = `at://${ME}/app.bsky.feed.post/3kdeleting`;
 const POST_ID = PostId.orThrow('0198a2b4-6d7e-7c3f-8a1b-2c3d4e5f6a7b');
 const DELETING_POST_ID = PostId.orThrow('0198a2b4-6d7e-7c3f-8a1b-2c3d4e5f6a7d');
 const USER_ID = UserId.orThrow('0198a2b4-6d7e-7c3f-8a1b-2c3d4e5f6a7c');
@@ -25,8 +26,6 @@ const failure: BlueskyClientError = {
   message: 'deleteRecord failed: status 500',
   status: 500,
 };
-
-const DELETING = `at://${ME}/app.bsky.feed.post/3kdeleting`;
 
 const setup = () => {
   const { db, sqlite } = createSqliteD1Fixture();
