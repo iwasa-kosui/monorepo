@@ -3,6 +3,7 @@ import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
+import type { PostDestination } from '../../domain/post/postDestination.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { fetchPublicTimeline, fetchVerifyCredentials, updateProfile } from '../api/mastodonClient.ts';
 import { displayStatus } from '../api/status.ts';
@@ -15,6 +16,7 @@ import { EditPostModal } from '../components/EditPostModal.tsx';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { MarkdownEditor } from '../components/MarkdownEditor.tsx';
 import { Modal } from '../components/Modal.tsx';
+import { DEFAULT_POST_DESTINATION } from '../components/postDestination.ts';
 import { PostDestinationSelect } from '../components/PostDestinationSelect.tsx';
 import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
@@ -242,15 +244,10 @@ const ThreadModal = () => {
     isLoadingThread,
     closeThread,
   } = thread;
-  const {
-    replyContent,
-    replyDestination,
-    isSendingReply,
-    setReplyContent,
-    setReplyDestination,
-    sendReply,
-  } = reply;
+  const { isSendingReply, sendReply } = reply;
   const { actionState } = actions;
+  const [replyContent, setReplyContent] = useState('');
+  const [replyDestination, setReplyDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
   const [threadEmojiPickerPostId, setThreadEmojiPickerPostId] = useState<string | null>(null);
   const threadReplyVisibility = useReplyVisibility();
   const { resetFor: resetThreadReplyVisibility } = threadReplyVisibility;
@@ -259,6 +256,11 @@ const ThreadModal = () => {
   useEffect(() => {
     resetThreadReplyVisibility(threadParentVisibility);
   }, [threadModalPostId, threadParentVisibility, resetThreadReplyVisibility]);
+
+  useEffect(() => {
+    setReplyContent('');
+    setReplyDestination(DEFAULT_POST_DESTINATION);
+  }, [threadModalPostId]);
 
   if (!threadModalPostId) {
     return null;
@@ -274,8 +276,13 @@ const ThreadModal = () => {
     const sent = await sendReply(threadModalPostId, replyContent, {
       visibility: threadReplyVisibility.visibility,
       parentVisibility: threadReplyVisibility.parentVisibility,
+      destination: replyDestination,
     });
-    if (sent) resetThreadReplyVisibility(threadParentVisibility);
+    if (sent) {
+      setReplyContent('');
+      setReplyDestination(DEFAULT_POST_DESTINATION);
+      resetThreadReplyVisibility(threadParentVisibility);
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
