@@ -10,7 +10,12 @@ import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import type { PostVersionsResolverByPostId } from '../../../../domain/post/post.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
 import type { BlueskyChat } from '../../../../ports/blueskyChat.ts';
-import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../../../ports/blueskyClient.ts';
+import type {
+  BlueskyChatClient,
+  BlueskyClient,
+  BlueskyClientError,
+  BlueskyQueryClient,
+} from '../../../../ports/blueskyClient.ts';
 import type { BlueskyPostSubject } from '../../../../ports/blueskyPostCidResolver.ts';
 import type { BlueskyPostThreadFetcher } from '../../../../ports/blueskyPostThreadFetcher.ts';
 import type { BlueskySearch } from '../../../../ports/blueskySearch.ts';
@@ -35,6 +40,7 @@ import { CreatePostUseCase } from '../../../../useCase/createPost.ts';
 import { DeleteBlockUseCase } from '../../../../useCase/deleteBlock.ts';
 import { DeleteBookmarkUseCase } from '../../../../useCase/deleteBookmark.ts';
 import { DeleteMuteUseCase } from '../../../../useCase/deleteMute.ts';
+import { DeleteOwnBlueskyPostUseCase } from '../../../../useCase/deleteOwnBlueskyPost.ts';
 import { DeletePostUseCase } from '../../../../useCase/deletePost.ts';
 import { DismissNotificationUseCase } from '../../../../useCase/dismissNotification.ts';
 import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
@@ -99,6 +105,7 @@ import { createD1BlockedActorUriResolverByUsername } from '../../../d1/block/blo
 import { createD1BlockResolver } from '../../../d1/block/blockResolver.ts';
 import { createD1MutedOrBlockedActorIdsResolverByUserId } from '../../../d1/block/mutedOrBlockedActorIdsResolverByUserId.ts';
 import { createD1BlueskyLoginFailureResolver } from '../../../d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
+import { createD1PostIdsResolverByBlueskyUris } from '../../../d1/blueskyNotification/postIdsResolverByBlueskyUris.ts';
 import { createD1BlueskySyncStatusResolver } from '../../../d1/blueskySyncStatus/blueskySyncStatusStore.ts';
 import { createD1BlueskyLikeDeletedStore } from '../../../d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../../../d1/blueskyTimeline/blueskyLikeSavedStore.ts';
@@ -108,6 +115,7 @@ import { createD1BlueskyRepostDeletedStore } from '../../../d1/blueskyTimeline/b
 import { createD1BlueskyRepostSavedStore } from '../../../d1/blueskyTimeline/blueskyRepostSavedStore.ts';
 import { createD1BlueskyRepostTargetResolver } from '../../../d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
 import { createD1BlueskyRepostUriResolver } from '../../../d1/blueskyTimeline/blueskyRepostUriResolver.ts';
+import { createD1BlueskyTimelineItemsDeletedStore } from '../../../d1/blueskyTimeline/blueskyTimelineItemsDeletedStore.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../../../d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1BookmarkCreatedStore } from '../../../d1/bookmark/bookmarkCreatedStore.ts';
 import { createD1BookmarkDeletedStore } from '../../../d1/bookmark/bookmarkDeletedStore.ts';
@@ -269,6 +277,7 @@ export const setupReadApi = (
     blueskyPostThreadFetcher?: BlueskyPostThreadFetcher;
     blueskyReplyClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
     blueskyPostClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
+    blueskyDeleteClient?: Pick<BlueskyClient, 'deleteRecord'> & Pick<BlueskyChatClient, 'viewerDid'>;
     uploads?: Pick<PostImageObjectStore, 'get'>;
     blueskyQuoteClient?: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'> & BlueskyQueryClient;
     blueskyPostCids?: Readonly<
@@ -434,6 +443,17 @@ export const setupReadApi = (
     origin: ORIGIN,
     scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
   });
+  const deletePostUseCase = DeletePostUseCase.create({
+    sessionResolver,
+    userResolver,
+    actorResolverByUserId,
+    postResolver,
+    postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
+    postDeletedStore: createD1PostDeletedStore(db),
+    articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
+    articleDeletedStore: createD1ArticleDeletedStore(db),
+    directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
+  });
   const app = createIoriApp({
     federationMiddleware: undefined,
     registerRoutes: (root) => {
@@ -483,17 +503,7 @@ export const setupReadApi = (
           }),
           postSourceTextResolver: createD1PostSourceTextResolver(db),
           postVersionsResolver: createD1PostVersionsResolverByPostId(db),
-          deletePostUseCase: DeletePostUseCase.create({
-            sessionResolver,
-            userResolver,
-            actorResolverByUserId,
-            postResolver,
-            postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
-            postDeletedStore: createD1PostDeletedStore(db),
-            articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
-            articleDeletedStore: createD1ArticleDeletedStore(db),
-            directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
-          }),
+          deletePostUseCase,
           sendLikeUseCase: SendLikeUseCase.create({
             sessionResolver,
             userResolver,
@@ -786,6 +796,14 @@ export const setupReadApi = (
               query: options.blueskyPostClient.query,
               now: Instant.now,
             }),
+          deleteOwnBlueskyPostUseCase: options.blueskyDeleteClient === undefined
+            ? undefined
+            : DeleteOwnBlueskyPostUseCase.create({
+              client: options.blueskyDeleteClient,
+              postIdsResolver: createD1PostIdsResolverByBlueskyUris(db),
+              deletePost: deletePostUseCase,
+              timelineItemsDeletedStore: createD1BlueskyTimelineItemsDeletedStore(db),
+            }),
           mediaUploadResolver,
           uploads: options.uploads ?? { get: async () => undefined },
           quoteBlueskyPostUseCase: options.blueskyQuoteClient === undefined
@@ -807,6 +825,7 @@ export const setupReadApi = (
             : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
           viewerDid: options.blueskyViewerDid,
           isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
+          createContext,
         }),
       );
       root.route(

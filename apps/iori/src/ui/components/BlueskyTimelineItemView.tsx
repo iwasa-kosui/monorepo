@@ -32,6 +32,7 @@ type Props = Readonly<{
   onMuteAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
   onBlockAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
   onReportPost?: (item: IoriBlueskyTimelineItemBody) => void;
+  onDeletePost?: (item: IoriBlueskyTimelineItemBody) => void;
 }>;
 type MediaEmbed = Extract<BlueskyTimelineEmbed, { type: 'images' | 'external' | 'video' }>;
 type QuoteEmbed = Extract<BlueskyTimelineEmbed, { type: 'record' }>;
@@ -358,6 +359,7 @@ export const BlueskyTimelineItemView = ({
   onMuteAuthor,
   onBlockAuthor,
   onReportPost,
+  onDeletePost,
 }: Props) => {
   const avatar = safeAbsoluteUrl(item.authorAvatar);
   const postHref = ioriBlueskyPostPath(item.uri);
@@ -437,6 +439,17 @@ export const BlueskyTimelineItemView = ({
           kind: 'action',
           danger: true,
           onSelect: () => onReportPost(item),
+        } as const,
+      ]
+      : []),
+    ...(item.isOwn && onDeletePost !== undefined
+      ? [
+        {
+          key: 'delete',
+          label: 'この投稿を削除',
+          kind: 'action',
+          danger: true,
+          onSelect: () => onDeletePost(item),
         } as const,
       ]
       : []),

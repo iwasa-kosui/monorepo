@@ -8,6 +8,7 @@ import {
   bookmarksUrl,
   createBlueskyPost,
   createStatus,
+  deleteBlueskyPost,
   deleteStatus,
   failureMessage,
   favourite,
@@ -949,6 +950,18 @@ describe('mastodon client requests', () => {
     expect(url).toBe('/api/iori/v1/bluesky/likes?feedItemId=at%3A%2F%2Fdid%3Aplc%3Aa%2Fapp.bsky.feed.post%2F1');
     expect(init.method).toBe('DELETE');
     expect(result).toEqual({ liked: false });
+  });
+
+  it('deletes a Bluesky post with the uri in the query', async () => {
+    const fetchMock = stubFetch(jsonResponse({ viaCrosspost: false }));
+
+    const result = await deleteBlueskyPost('at://did:plc:me/app.bsky.feed.post/3kmine');
+
+    const [url, init] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe('/api/iori/v1/bluesky/posts?uri=at%3A%2F%2Fdid%3Aplc%3Ame%2Fapp.bsky.feed.post%2F3kmine');
+    expect(init.method).toBe('DELETE');
+    expect(init.credentials).toBe('same-origin');
+    expect(result).toEqual({ viaCrosspost: false });
   });
 
   it('carries the status of a failed Bluesky like', async () => {
