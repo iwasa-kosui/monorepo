@@ -6,7 +6,6 @@ import type {
   IoriBlueskyTimelineItemBody,
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { blueskyProfileUrlOfActor } from '../../helper/blueskyUrl.ts';
-import type { BlueskyAuthorFeedFilter } from '../../ports/blueskyProfileReader.ts';
 import { openBlueskyChatConvo } from '../api/blueskyChatClient.ts';
 import {
   blueskyActorFeedsFailureMessage,
@@ -54,7 +53,16 @@ import type { BlueskyModerationChange } from '../hooks/useBlueskyAuthorModeratio
 import { useBlueskyQuoteDialog } from '../hooks/useBlueskyQuoteDialog.ts';
 import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
-import { withFeedItems } from './blueskyProfileFeed.ts';
+import {
+  cachedFeedOf,
+  emptyFeedCache,
+  type FeedCache,
+  shouldFetchFeed,
+  withCachedFeed,
+  withCachedFeedItems,
+  withoutCachedFeed,
+  withUpdatedCachedFeed,
+} from './blueskyProfileFeed.ts';
 import {
   authorFeedFilterOfTab,
   type BlueskyFollowListKind,
@@ -381,7 +389,7 @@ export const BlueskyProfilePage = (
       </section>
 
       {onSelectTab !== undefined && (
-        <div role='tablist' class='flex gap-2 mb-4'>
+        <div role='tablist' class='flex flex-wrap gap-2 mb-4'>
           {PROFILE_TABS.map((entry) => (
             <button
               key={entry.tab}
@@ -502,7 +510,6 @@ type ProfileData = Readonly<{
 }>;
 
 type FeedData = Readonly<{
-  filter: BlueskyAuthorFeedFilter;
   items: readonly IoriBlueskyTimelineItemBody[];
   cursor: string | undefined;
   unavailable: 'blocked' | null;
@@ -526,12 +533,14 @@ const App = () => {
   const [isOpeningMessage, setIsOpeningMessage] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
   const [data, setData] = useState<{ error: string } | ProfileData | null>(null);
-  const [feed, setFeed] = useState<FeedData | null>(null);
+  const [feedCache, setFeedCache] = useState<FeedCache<FeedData>>(emptyFeedCache);
+  const feedCacheRef = useRef(feedCache);
+  feedCacheRef.current = feedCache;
   const [tab, setTab] = useState<BlueskyProfileTab>(() => profileTabOfSearch(window.location.search));
   const actor = blueskyActorOfPath(window.location.pathname);
   const filter = authorFeedFilterOfTab(tab);
   const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
-    setFeed((prev) => withFeedItems(prev, updater));
+    setFeedCache((prev) => withCachedFeedItems(prev, updater));
   }, []);
   const onModerated = useCallback((did: string, change: BlueskyModerationChange) => {
     setData((prev) =>
@@ -582,30 +591,34 @@ const App = () => {
     feedGenerationRef.current = (feedGenerationRef.current ?? 0) + 1;
     isFetchingMoreRef.current = false;
     if (actor === undefined || filter === undefined) return;
+    if (!shouldFetchFeed(feedCacheRef.current, actor, filter)) return;
     const generation = feedGenerationRef.current;
-    setFeed(null);
+    setFeedCache((prev) => withoutCachedFeed(prev, actor, filter));
     const fetchFirstPage = async () => {
       try {
         const page = await fetchBlueskyAuthorFeed(actor, undefined, filter);
         if (feedGenerationRef.current !== generation) return;
-        setFeed({
-          filter,
-          items: page.items,
-          cursor: page.cursor ?? undefined,
-          unavailable: page.unavailable,
-          failed: false,
-        });
+        setFeedCache((prev) =>
+          withCachedFeed(prev, actor, filter, {
+            items: page.items,
+            cursor: page.cursor ?? undefined,
+            unavailable: page.unavailable,
+            failed: false,
+          })
+        );
       } catch (error) {
         console.error('Failed to load Bluesky posts:', error);
         if (feedGenerationRef.current !== generation) return;
-        setFeed({ filter, items: [], cursor: undefined, unavailable: null, failed: true });
+        setFeedCache((prev) =>
+          withCachedFeed(prev, actor, filter, { items: [], cursor: undefined, unavailable: null, failed: true })
+        );
       }
     };
     fetchFirstPage();
   }, [actor, filter]);
 
   const loaded = data !== null && !('error' in data) ? data : undefined;
-  const currentFeed = filter !== undefined && feed?.filter === filter ? feed : undefined;
+  const currentFeed = cachedFeedOf(feedCache, actor, filter);
 
   const loadMore = useCallback(async (cursor: string) => {
     if (actor === undefined || filter === undefined || isFetchingMoreRef.current) return;
@@ -615,10 +628,12 @@ const App = () => {
       const page = await fetchBlueskyAuthorFeed(actor, cursor, filter);
       if (feedGenerationRef.current !== generation) return;
       const next = page.items.length === 0 || page.cursor === cursor ? undefined : page.cursor ?? undefined;
-      setFeed((prev) =>
-        prev === null || prev.filter !== filter
-          ? prev
-          : { ...prev, items: appendUniqueBy(prev.items, page.items, (item) => item.feedItemId), cursor: next }
+      setFeedCache((prev) =>
+        withUpdatedCachedFeed(prev, actor, filter, (prevFeed) => ({
+          ...prevFeed,
+          items: appendUniqueBy(prevFeed.items, page.items, (item) => item.feedItemId),
+          cursor: next,
+        }))
       );
     } catch (error) {
       console.error('Failed to load more posts:', error);
@@ -628,7 +643,7 @@ const App = () => {
   }, [actor, filter]);
 
   useInfiniteScroll({
-    nextCursor: filter !== undefined && feed?.filter === filter ? feed.cursor : undefined,
+    nextCursor: currentFeed?.cursor,
     onLoadMore: loadMore,
   });
 
