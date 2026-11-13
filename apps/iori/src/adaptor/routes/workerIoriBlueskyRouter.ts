@@ -450,7 +450,6 @@ const deleteFailure = (
   }
 };
 
-
 const quoteFailure = (
   c: Context,
   error: BlueskyClientError | BlueskyPostInvalid | BlueskyQuoteTargetNotFound | BlueskyQuoteNotAllowed,
