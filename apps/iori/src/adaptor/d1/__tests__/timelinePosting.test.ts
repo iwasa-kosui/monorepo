@@ -48,6 +48,7 @@ describe('D1 timeline and posting adapters', () => {
       inReplyToUri: null,
       visibility: 'public',
       sourceText: null,
+      createdAt: postInsert.values.createdAt,
     });
     expect(eventInsert.values).toMatchObject({
       eventId: event.eventId,
