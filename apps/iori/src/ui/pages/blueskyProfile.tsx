@@ -447,6 +447,12 @@ const FOLLOW_LIST_EMPTY_MESSAGES: Readonly<Record<BlueskyFollowListKind, string>
 
 const actorKey = (actor: IoriBlueskyActorBody): string => actor.did;
 
+const followsFailureMessage = (error: unknown, position: 'first' | 'more'): string =>
+  blueskyFollowListFailureMessage(error, 'follows', position);
+
+const followersFailureMessage = (error: unknown, position: 'first' | 'more'): string =>
+  blueskyFollowListFailureMessage(error, 'followers', position);
+
 export const BlueskyProfileFollowList = (
   { actor, kind }: Readonly<{ actor: string; kind: BlueskyFollowListKind }>,
 ) => {
@@ -462,7 +468,7 @@ export const BlueskyProfileFollowList = (
     <PagedList
       load={load}
       keyOf={actorKey}
-      failureMessage={(error, position) => blueskyFollowListFailureMessage(error, kind, position)}
+      failureMessage={kind === 'follows' ? followsFailureMessage : followersFailureMessage}
       emptyMessage={FOLLOW_LIST_EMPTY_MESSAGES[kind]}
       renderItem={(item: IoriBlueskyActorBody) => (
         <BlueskyFollowListRow
