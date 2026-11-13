@@ -23,14 +23,14 @@ const setup = () => {
 
 describe('D1 の bluesky_bookmarks', () => {
   describe('保存', () => {
-    it('subjectUri と createdAt を保存し、同じ subjectUri の保存では行を増やさず createdAt も変えない', async () => {
+    it('subjectUri と createdAt を保存し、同じ subjectUri の保存では行を増やさず createdAt を上書きする', async () => {
       const t = setup();
       const store = createD1BlueskyBookmarkSavedStore(t.db);
 
       await store.save({ subjectUri: POST, createdAt: at(10) });
       await store.save({ subjectUri: POST, createdAt: at(20) });
 
-      expect(t.bookmarks()).toEqual([{ subjectUri: POST, createdAt: 10 }]);
+      expect(t.bookmarks()).toEqual([{ subjectUri: POST, createdAt: 20 }]);
     });
   });
 

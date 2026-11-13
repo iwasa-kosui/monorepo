@@ -6,6 +6,7 @@ import {
   type BlueskyAccountSwitchResolver,
   type BlueskyAccountSwitchStartedStore,
   type BlueskyAccountSwitchView,
+  BlueskyDidChanged,
 } from '../domain/blueskyAccountSwitch/blueskyAccountSwitch.ts';
 import {
   BLUESKY_CREDENTIAL_KEY_VERSION,
@@ -31,11 +32,6 @@ type Input = Readonly<{
   toDid: string;
 }>;
 
-export type BlueskyDidChanged = Readonly<{
-  type: 'BlueskyDidChanged';
-  message: string;
-}>;
-
 export type SwitchBlueskyAccountError =
   | BlueskyCredentialKeyMissing
   | InvalidCurrentPassword
@@ -56,11 +52,6 @@ type Deps = Readonly<{
   startedStore: BlueskyAccountSwitchStartedStore;
   now: () => Instant;
 }>;
-
-const didChanged = (): BlueskyDidChanged => ({
-  type: 'BlueskyDidChanged',
-  message: 'The connected account or the account to switch to has changed.',
-});
 
 const create = ({
   cipherFor,
@@ -106,7 +97,7 @@ const create = ({
       : undefined;
     if (started === undefined || !started.ok) {
       await discard(session);
-      return RA.err(didChanged());
+      return RA.err(BlueskyDidChanged.create());
     }
 
     const chatPermitted = await verifier.probeChat(session);
@@ -126,6 +117,9 @@ const create = ({
         updatedAt: at,
       },
       session,
+    }).catch(async (error: unknown) => {
+      await discard(session);
+      throw error;
     });
     if (!stored.ok) {
       await discard(session);

@@ -2,6 +2,7 @@ import type { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
+import type { BlueskyAccountSwitchInProgress } from '../blueskyAccountSwitch/blueskyAccountSwitch.ts';
 import type { BlueskySession } from '../blueskyCrosspost/blueskyCrosspost.ts';
 import { Instant } from '../instant/instant.ts';
 
@@ -34,10 +35,12 @@ export type BlueskyStoredCredentialDeletedStore = Readonly<{
 }>;
 
 export type BlueskyCredentialRegisteredStore = Readonly<{
-  store: (registered: Readonly<{ credential: BlueskyStoredCredential; session: BlueskySession }>) => RA<void, never>;
+  store: (
+    registered: Readonly<{ credential: BlueskyStoredCredential; session: BlueskySession }>,
+  ) => RA<void, BlueskyAccountSwitchInProgress>;
 }>;
 export type BlueskyCredentialRemovedStore = Readonly<{
-  delete: () => RA<void, never>;
+  delete: () => RA<void, BlueskyAccountSwitchInProgress>;
 }>;
 
 export type BlueskyCredentialSource = 'settings' | 'secret' | 'none';

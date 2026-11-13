@@ -243,6 +243,18 @@ describe('SwitchBlueskyAccountUseCase の失敗では何も変わらない', () 
 
     expect(t.snapshot()).toEqual(before);
   });
+
+  it('1段目の書き込みが想定外のエラーで失敗したときは、新しいセッションを logout する', async () => {
+    const t = await setup();
+    await t.seedPrevious();
+    t.sqlite.exec(
+      'CREATE TRIGGER fail_event_insert BEFORE INSERT ON domain_events BEGIN SELECT RAISE(ABORT, \'forced failure\'); END',
+    );
+
+    await expect(t.useCase.run(t.input)).rejects.toThrow();
+
+    expect(t.verifier.logout).toHaveBeenCalledWith(session());
+  });
 });
 
 describe('SwitchBlueskyAccountUseCase の成功', () => {
@@ -301,6 +313,24 @@ describe('SwitchBlueskyAccountUseCase の成功', () => {
     const event = snapshot.events[0] as { aggregateId: string; eventPayload: string };
     expect(JSON.parse(event.aggregateId)).toBe((snapshot.switches[0] as { switchId: string }).switchId);
     expect(JSON.parse(event.eventPayload)).toEqual({ fromDid: 'did:plc:prev', toDid: 'did:plc:next', startedAt: NOW });
+  });
+
+  it('前のアカウントのミュートとブロックの行を1段目で消し、消した件数を切り替えの行とイベントの件数に入れる', async () => {
+    const t = await setup();
+    await t.seedPrevious();
+    t.sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
+      .run('did:plc:muted', 1, null, 1);
+    t.sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
+      .run('did:plc:blocked', 0, 'at://did:plc:prev/app.bsky.graph.block/1', 1);
+
+    expect((await t.useCase.run(t.input)).ok).toBe(true);
+
+    expect(t.sqlite.prepare('SELECT did FROM bluesky_moderated_actors').all()).toEqual([]);
+    const snapshot = t.snapshot();
+    const switchRow = snapshot.switches[0] as { deletedCounts: string };
+    expect(JSON.parse(switchRow.deletedCounts)).toMatchObject({ moderatedActors: 2, timelineItems: 0 });
+    const event = snapshot.events[0] as { aggregateState: string };
+    expect(JSON.parse(event.aggregateState).deletedCounts).toMatchObject({ moderatedActors: 2 });
   });
 
   it('アプリパスワードは、暗号化した列にだけ入り、他の行にもイベントにも入らない', async () => {

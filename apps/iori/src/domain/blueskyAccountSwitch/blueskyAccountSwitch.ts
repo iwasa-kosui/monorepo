@@ -120,6 +120,18 @@ export const BlueskyAccountSwitchInProgress = {
   }),
 } as const;
 
+export type BlueskyDidChanged = Readonly<{
+  type: 'BlueskyDidChanged';
+  message: string;
+}>;
+
+export const BlueskyDidChanged = {
+  create: (): BlueskyDidChanged => ({
+    type: 'BlueskyDidChanged',
+    message: 'The connected account or the account to switch to has changed.',
+  }),
+} as const;
+
 export type BlueskyAccountSwitchResolver = Readonly<{
   resolve: () => RA<BlueskyAccountSwitch | undefined, never>;
 }>;
@@ -130,7 +142,7 @@ export type BlueskyAccountSwitchStartedStore = Readonly<{
       credential: BlueskyStoredCredential;
       session: BlueskySession;
     }>,
-  ) => RA<void, BlueskyAccountSwitchInProgress>;
+  ) => RA<void, BlueskyAccountSwitchInProgress | BlueskyDidChanged>;
 }>;
 export type BlueskyAccountSwitchPurger = Readonly<{
   purge: (target: BlueskyAccountSwitchPurgeTarget, startedAt: Instant) => RA<number, never>;

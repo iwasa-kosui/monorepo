@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { eq } from 'drizzle-orm';
+import { and, eq, type SQL, sql } from 'drizzle-orm';
 
 import {
   BlueskyStoredCredential,
@@ -8,6 +8,7 @@ import {
   type BlueskyStoredCredentialSavedStore,
 } from '../../../domain/blueskyCredential/blueskyCredential.ts';
 import type { IoriD1Db } from '../client.ts';
+import { guardedInsert } from '../guardedInsert.ts';
 import { blueskyCredentialsTable } from '../schema.ts';
 
 export const BLUESKY_CREDENTIAL_ID = 'default';
@@ -32,20 +33,22 @@ export const createD1BlueskyStoredCredentialResolver = (db: IoriD1Db): BlueskySt
   },
 });
 
-export const blueskyStoredCredentialSaveQuery = (db: IoriD1Db, credential: BlueskyStoredCredential) => {
+export const blueskyStoredCredentialSaveQuery = (
+  db: IoriD1Db,
+  credential: BlueskyStoredCredential,
+  guard: SQL = sql`true`,
+) => {
   const values = {
     ...credential,
     verifiedAt: new Date(credential.verifiedAt),
     updatedAt: new Date(credential.updatedAt),
   };
-  return db.insert(blueskyCredentialsTable).values({ id: BLUESKY_CREDENTIAL_ID, ...values }).onConflictDoUpdate({
-    target: blueskyCredentialsTable.id,
-    set: values,
-  });
+  return guardedInsert(db, blueskyCredentialsTable, { id: BLUESKY_CREDENTIAL_ID, ...values }, guard)
+    .onConflictDoUpdate({ target: blueskyCredentialsTable.id, set: values });
 };
 
-export const blueskyStoredCredentialDeleteQuery = (db: IoriD1Db) =>
-  db.delete(blueskyCredentialsTable).where(eq(blueskyCredentialsTable.id, BLUESKY_CREDENTIAL_ID));
+export const blueskyStoredCredentialDeleteQuery = (db: IoriD1Db, guard?: SQL) =>
+  db.delete(blueskyCredentialsTable).where(and(eq(blueskyCredentialsTable.id, BLUESKY_CREDENTIAL_ID), guard));
 
 export const createD1BlueskyStoredCredentialSavedStore = (db: IoriD1Db): BlueskyStoredCredentialSavedStore => ({
   save: async (credential) => {

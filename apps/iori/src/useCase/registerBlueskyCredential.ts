@@ -117,7 +117,7 @@ const create = ({
     const chatPermitted = await verifier.probeChat(session);
     const encrypted = await cipherFor(session.did).encrypt(input.appPassword);
     const at = now();
-    await registeredStore.store({
+    const stored = await registeredStore.store({
       credential: {
         identifier,
         did: session.did,
@@ -131,6 +131,10 @@ const create = ({
       },
       session,
     });
+    if (!stored.ok) {
+      await discard(session);
+      return RA.err(stored.err);
+    }
     return RA.ok({
       source: 'settings',
       handle: session.handle,

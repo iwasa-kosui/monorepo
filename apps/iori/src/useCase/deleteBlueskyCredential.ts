@@ -54,7 +54,8 @@ const create = (
         message: 'The account of the secret credentials differs from the connected one.',
       });
     }
-    await removedStore.delete();
+    const deleted = await removedStore.delete();
+    if (!deleted.ok) return RA.err(deleted.err);
     return getCredential.run();
   };
 

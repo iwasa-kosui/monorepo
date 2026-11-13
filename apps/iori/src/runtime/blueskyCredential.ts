@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 
 import { createBlueskyCredentialVerifier } from '../adaptor/bluesky/blueskyClient.ts';
 import { createAesGcmCipherFactory, decodeAesGcmKey } from '../adaptor/crypto/aesGcmCipher.ts';
+import { blueskyAccountSwitchAbsent } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchGuard.ts';
 import { createD1BlueskyAccountSwitchPreviewResolver } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchPreviewResolver.ts';
 import { createD1BlueskyAccountSwitchResolver } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchResolver.ts';
 import { createD1BlueskyAccountSwitchStartedStore } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchStartedStore.ts';
@@ -17,9 +18,10 @@ import {
   createD1BlueskySessionResolver,
 } from '../adaptor/d1/blueskyCrosspost/blueskySessionStore.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
-import { runBatch } from '../adaptor/d1/runBatch.ts';
+import { runBatchChanges } from '../adaptor/d1/runBatch.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPasswordResolver.ts';
+import { BlueskyAccountSwitchInProgress } from '../domain/blueskyAccountSwitch/blueskyAccountSwitch.ts';
 import {
   blueskyCredentialAad,
   type BlueskyCredentialRegisteredStore,
@@ -78,19 +80,28 @@ export const createBlueskyCredentialRegisteredStore = (
   loginFailureScope: string,
 ): BlueskyCredentialRegisteredStore => ({
   store: async ({ credential, session }) => {
-    await runBatch(db, [
-      blueskyStoredCredentialSaveQuery(db, credential),
-      blueskySessionSaveQuery(db, session),
-      blueskyLoginFailureDeleteQuery(db, loginFailureScope),
+    const guard = blueskyAccountSwitchAbsent(db);
+    const [credentialChanges] = await runBatchChanges(db, [
+      blueskyStoredCredentialSaveQuery(db, credential, guard),
+      blueskySessionSaveQuery(db, session, guard),
+      blueskyLoginFailureDeleteQuery(db, loginFailureScope, guard),
     ]);
-    return RA.ok(undefined);
+    return credentialChanges === 0 ? RA.err(BlueskyAccountSwitchInProgress.create()) : RA.ok(undefined);
   },
 });
 
 export const createBlueskyCredentialRemovedStore = (db: IoriD1Db): BlueskyCredentialRemovedStore => ({
   delete: async () => {
-    await runBatch(db, [blueskyStoredCredentialDeleteQuery(db), blueskySessionDeleteQuery(db)]);
-    return RA.ok(undefined);
+    const guard = blueskyAccountSwitchAbsent(db);
+    const changes = await runBatchChanges(db, [
+      blueskyStoredCredentialDeleteQuery(db, guard),
+      blueskySessionDeleteQuery(db, guard),
+    ]);
+    if (changes.some((count) => count > 0)) return RA.ok(undefined);
+    const switching = await createD1BlueskyAccountSwitchResolver(db).resolve();
+    return switching.ok && switching.val !== undefined
+      ? RA.err(BlueskyAccountSwitchInProgress.create())
+      : RA.ok(undefined);
   },
 });
 
