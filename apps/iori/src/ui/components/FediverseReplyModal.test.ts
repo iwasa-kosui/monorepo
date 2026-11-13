@@ -12,11 +12,14 @@ const dialog = (overrides: Partial<UseReplyDialogReturn> = {}): UseReplyDialogRe
   replyingToUsername: null,
   replyContent: '',
   replyDestination: DEFAULT_POST_DESTINATION,
+  replyVisibility: 'public',
+  replyParentVisibility: undefined,
   isSendingReply: false,
   openReplyDialog: noop,
   closeReplyDialog: noop,
   setReplyContent: noop,
   setReplyDestination: noop,
+  setReplyVisibility: noop,
   sendReply: () => Promise.resolve(true),
   ...overrides,
 });
@@ -61,6 +64,52 @@ describe('FediverseReplyModal', () => {
 
   it('送信中は「送信中...」を出す', () => {
     expect(render({ replyingToPostId: 'post-1', replyContent: 'hi', isSendingReply: true })).toContain('送信中...');
+  });
+
+  it('公開範囲の欄を出す', () => {
+    const html = render({ replyingToPostId: 'post-1' });
+
+    expect(html).toContain('aria-label="公開範囲"');
+    expect(html).toContain('name="reply-visibility"');
+  });
+
+  it('返信先が未収載なら、公開の選択肢を無効にする', () => {
+    const html = render({ replyingToPostId: 'post-1', replyParentVisibility: 'unlisted', replyVisibility: 'unlisted' });
+    const disabled = [...html.matchAll(/<input[^>]*name="reply-visibility"[^>]*value="(\w+)"[^>]*disabled=""/g)].map((
+      match,
+    ) => match[1]);
+
+    expect(disabled).toEqual(['public']);
+  });
+
+  it('返信先がダイレクトなら、選択欄の代わりに、返信もダイレクトになる文を出す', () => {
+    const html = render({ replyingToPostId: 'post-1', replyParentVisibility: 'direct', replyVisibility: 'private' });
+
+    expect(html).toContain('返信先がダイレクトなので、返信もダイレクトになります');
+    expect(html).not.toContain('name="reply-visibility"');
+  });
+
+  it('返信先がダイレクトなら、送り先が both でも Bluesky に送らない案内を出さない', () => {
+    const html = render({
+      replyingToPostId: 'post-1',
+      replyParentVisibility: 'direct',
+      replyVisibility: 'private',
+      replyDestination: 'both',
+    });
+
+    expect(html).not.toContain('Bluesky には送りません');
+  });
+
+  it('送り先が both で公開範囲が公開ではないとき、Bluesky に送らない案内を出す', () => {
+    const html = render({ replyingToPostId: 'post-1', replyDestination: 'both', replyVisibility: 'unlisted' });
+
+    expect(html).toContain('公開範囲が公開ではないので、Bluesky には送りません');
+  });
+
+  it('送り先が both でも公開範囲が公開なら、Bluesky に送らない案内を出さない', () => {
+    const html = render({ replyingToPostId: 'post-1', replyDestination: 'both', replyVisibility: 'public' });
+
+    expect(html).not.toContain('Bluesky には送りません');
   });
 });
 
