@@ -6,6 +6,7 @@ import { createStatus, failureMessage } from '../api/mastodonClient.ts';
 import { DEFAULT_POST_DESTINATION } from '../components/postDestination.ts';
 import { replyParams } from '../components/postSubmission.ts';
 import type { PostVisibility } from '../components/postVisibility.ts';
+import { resolveReplySubmission, type SendReplyOptions } from './replySubmission.ts';
 import { useReplyVisibility } from './useReplyVisibility.ts';
 
 export type UseReplyDialogReturn = Readonly<{
@@ -22,11 +23,6 @@ export type UseReplyDialogReturn = Readonly<{
   setReplyDestination: (destination: PostDestination) => void;
   setReplyVisibility: (visibility: PostVisibility) => void;
   sendReply: (postId: string, content: string, options?: SendReplyOptions) => Promise<boolean>;
-}>;
-
-export type SendReplyOptions = Readonly<{
-  visibility?: PostVisibility;
-  parentVisibility?: Visibility;
 }>;
 
 type UseReplyDialogProps = Readonly<{
@@ -66,22 +62,26 @@ export const useReplyDialog = ({
   const sendReply = useCallback(
     async (postId: string, content: string, options?: SendReplyOptions): Promise<boolean> => {
       setIsSendingReply(true);
-      const parentVisibility = options ? options.parentVisibility : replyParentVisibility;
-      const visibility = options ? options.visibility : replyVisibility;
+      const { destination, visibility, parentVisibility, resetsSharedDraft } = resolveReplySubmission(
+        { replyDestination, replyVisibility, replyParentVisibility },
+        options,
+      );
       try {
         await createStatus(
           replyParams(
             postId,
             content,
-            replyDestination,
+            destination,
             parentVisibility === 'direct' ? undefined : visibility,
           ),
         );
-        setReplyingToPostId(null);
-        setReplyingToUsername(null);
-        setReplyContent('');
-        setReplyDestination(DEFAULT_POST_DESTINATION);
-        clearVisibility();
+        if (resetsSharedDraft) {
+          setReplyingToPostId(null);
+          setReplyingToUsername(null);
+          setReplyContent('');
+          setReplyDestination(DEFAULT_POST_DESTINATION);
+          clearVisibility();
+        }
         onReplySent?.();
         return true;
       } catch (error) {
