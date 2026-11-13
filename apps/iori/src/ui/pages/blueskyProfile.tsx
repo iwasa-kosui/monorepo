@@ -53,8 +53,18 @@ import type { BlueskyModerationChange } from '../hooks/useBlueskyAuthorModeratio
 import { useBlueskyQuoteDialog } from '../hooks/useBlueskyQuoteDialog.ts';
 import { useBlueskyUriActions } from '../hooks/useBlueskyUriActions.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
-import { withFeedItems } from './blueskyProfileFeed.ts';
 import {
+  cachedFeedOf,
+  emptyFeedCache,
+  type FeedCache,
+  shouldFetchFeed,
+  withCachedFeed,
+  withCachedFeedItems,
+  withoutCachedFeed,
+  withUpdatedCachedFeed,
+} from './blueskyProfileFeed.ts';
+import {
+  authorFeedFilterOfTab,
   type BlueskyFollowListKind,
   type BlueskyProfileTab,
   isBlueskyFollowListTab,
@@ -68,6 +78,9 @@ export type { BlueskyProfileTab };
 
 const PROFILE_TABS: readonly Readonly<{ tab: BlueskyProfileTab; label: string }>[] = [
   { tab: 'posts', label: '投稿' },
+  { tab: 'replies', label: '返信' },
+  { tab: 'media', label: 'メディア' },
+  { tab: 'videos', label: '動画' },
   { tab: 'feeds', label: 'フィード' },
   { tab: 'lists', label: 'リスト' },
 ];
@@ -143,6 +156,13 @@ const CountButton = ({ selected, onClick, children }: PropsWithChildren<CountBut
   </button>
 );
 
+const POST_TAB_TEXTS: Readonly<Partial<Record<BlueskyProfileTab, Readonly<{ heading: string; empty: string }>>>> = {
+  posts: { heading: 'Posts', empty: 'No posts yet.' },
+  replies: { heading: 'Replies', empty: 'No replies yet.' },
+  media: { heading: 'Media', empty: 'No media posts yet.' },
+  videos: { heading: 'Videos', empty: 'No videos yet.' },
+};
+
 const FOLLOW_LIST_HEADINGS: Readonly<Record<BlueskyFollowListKind, string>> = {
   follows: 'フォロー',
   followers: 'フォロワー',
@@ -184,6 +204,7 @@ export const BlueskyProfilePage = (
 ) => {
   const displayName = profile.displayName ?? profile.handle;
   const profileUrl = blueskyProfileUrlOfActor(profile.did);
+  const postTexts = authorFeedFilterOfTab(tab) === undefined ? undefined : POST_TAB_TEXTS[tab];
 
   return (
     <>
@@ -368,7 +389,7 @@ export const BlueskyProfilePage = (
       </section>
 
       {onSelectTab !== undefined && (
-        <div role='tablist' class='flex gap-2 mb-4'>
+        <div role='tablist' class='flex flex-wrap gap-2 mb-4'>
           {PROFILE_TABS.map((entry) => (
             <button
               key={entry.tab}
@@ -388,16 +409,16 @@ export const BlueskyProfilePage = (
         </div>
       )}
 
-      {tab === 'posts'
+      {postTexts !== undefined
         ? (
           <section class='space-y-6 py-2'>
-            <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>Posts</h2>
+            <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>{postTexts.heading}</h2>
             {isFeedLoading
               ? <p class='text-charcoal-light dark:text-gray-400'>Loading...</p>
               : feedNotice !== null
               ? <p class='text-charcoal-light dark:text-gray-400'>{feedNotice}</p>
               : items.length === 0
-              ? <p class='text-charcoal-light dark:text-gray-400'>No posts yet.</p>
+              ? <p class='text-charcoal-light dark:text-gray-400'>{postTexts.empty}</p>
               : items.map((item) => (
                 <BlueskyTimelineItemView
                   key={item.feedItemId}
@@ -497,6 +518,7 @@ type FeedData = Readonly<{
 
 const App = () => {
   const isFetchingMoreRef = useRef(false);
+  const feedGenerationRef = useRef(0);
   const isTogglingFollowRef = useRef(false);
   const isOpeningMessageRef = useRef(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
@@ -511,11 +533,14 @@ const App = () => {
   const [isOpeningMessage, setIsOpeningMessage] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
   const [data, setData] = useState<{ error: string } | ProfileData | null>(null);
-  const [feed, setFeed] = useState<FeedData | null>(null);
+  const [feedCache, setFeedCache] = useState<FeedCache<FeedData>>(emptyFeedCache);
+  const feedCacheRef = useRef(feedCache);
+  feedCacheRef.current = feedCache;
   const [tab, setTab] = useState<BlueskyProfileTab>(() => profileTabOfSearch(window.location.search));
   const actor = blueskyActorOfPath(window.location.pathname);
+  const filter = authorFeedFilterOfTab(tab);
   const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
-    setFeed((prev) => withFeedItems(prev, updater));
+    setFeedCache((prev) => withCachedFeedItems(prev, updater));
   }, []);
   const onModerated = useCallback((did: string, change: BlueskyModerationChange) => {
     setData((prev) =>
@@ -559,40 +584,68 @@ const App = () => {
         setData({ error: blueskyProfileLoadFailureMessage(error) });
       }
     };
-    const fetchFirstPage = async () => {
-      try {
-        const page = await fetchBlueskyAuthorFeed(actor);
-        setFeed({ items: page.items, cursor: page.cursor ?? undefined, unavailable: page.unavailable, failed: false });
-      } catch (error) {
-        console.error('Failed to load Bluesky posts:', error);
-        setFeed({ items: [], cursor: undefined, unavailable: null, failed: true });
-      }
-    };
     fetchProfile();
-    fetchFirstPage();
   }, [actor]);
 
+  useEffect(() => {
+    feedGenerationRef.current = (feedGenerationRef.current ?? 0) + 1;
+    isFetchingMoreRef.current = false;
+    if (actor === undefined || filter === undefined) return;
+    if (!shouldFetchFeed(feedCacheRef.current, actor, filter)) return;
+    const generation = feedGenerationRef.current;
+    setFeedCache((prev) => withoutCachedFeed(prev, actor, filter));
+    const fetchFirstPage = async () => {
+      try {
+        const page = await fetchBlueskyAuthorFeed(actor, undefined, filter);
+        if (feedGenerationRef.current !== generation) return;
+        setFeedCache((prev) =>
+          withCachedFeed(prev, actor, filter, {
+            items: page.items,
+            cursor: page.cursor ?? undefined,
+            unavailable: page.unavailable,
+            failed: false,
+          })
+        );
+      } catch (error) {
+        console.error('Failed to load Bluesky posts:', error);
+        if (feedGenerationRef.current !== generation) return;
+        setFeedCache((prev) =>
+          withCachedFeed(prev, actor, filter, { items: [], cursor: undefined, unavailable: null, failed: true })
+        );
+      }
+    };
+    fetchFirstPage();
+  }, [actor, filter]);
+
   const loaded = data !== null && !('error' in data) ? data : undefined;
+  const currentFeed = cachedFeedOf(feedCache, actor, filter);
 
   const loadMore = useCallback(async (cursor: string) => {
-    if (actor === undefined || isFetchingMoreRef.current) return;
+    if (actor === undefined || filter === undefined || isFetchingMoreRef.current) return;
     isFetchingMoreRef.current = true;
+    const generation = feedGenerationRef.current;
     try {
-      const page = await fetchBlueskyAuthorFeed(actor, cursor);
+      const page = await fetchBlueskyAuthorFeed(actor, cursor, filter);
+      if (feedGenerationRef.current !== generation) return;
       const next = page.items.length === 0 || page.cursor === cursor ? undefined : page.cursor ?? undefined;
-      setFeed((prev) =>
-        prev === null
-          ? prev
-          : { ...prev, items: appendUniqueBy(prev.items, page.items, (item) => item.feedItemId), cursor: next }
+      setFeedCache((prev) =>
+        withUpdatedCachedFeed(prev, actor, filter, (prevFeed) => ({
+          ...prevFeed,
+          items: appendUniqueBy(prevFeed.items, page.items, (item) => item.feedItemId),
+          cursor: next,
+        }))
       );
     } catch (error) {
       console.error('Failed to load more posts:', error);
     } finally {
-      isFetchingMoreRef.current = false;
+      if (feedGenerationRef.current === generation) isFetchingMoreRef.current = false;
     }
-  }, [actor]);
+  }, [actor, filter]);
 
-  useInfiniteScroll({ nextCursor: tab === 'posts' ? feed?.cursor : undefined, onLoadMore: loadMore });
+  useInfiniteScroll({
+    nextCursor: currentFeed?.cursor,
+    onLoadMore: loadMore,
+  });
 
   const selectTab = useCallback((next: BlueskyProfileTab) => {
     setTab(next);
@@ -726,9 +779,9 @@ const App = () => {
     <>
       <BlueskyProfilePage
         profile={data.profile}
-        items={feed?.items ?? []}
-        feedNotice={feed === null ? null : blueskyFeedNoticeMessage(feed)}
-        isFeedLoading={feed === null}
+        items={currentFeed?.items ?? []}
+        feedNotice={currentFeed === undefined ? null : blueskyFeedNoticeMessage(currentFeed)}
+        isFeedLoading={currentFeed === undefined}
         isFollowing={data.followUri !== null}
         isTogglingFollow={isTogglingFollow}
         moderation={data.moderation}
@@ -750,7 +803,8 @@ const App = () => {
       >
         {isBlueskyFollowListTab(tab)
           ? <BlueskyProfileFollowList key={`${tab}:${data.profile.did}`} actor={data.profile.did} kind={tab} />
-          : tab !== 'posts' && <BlueskyProfileCollection key={tab} actor={data.profile.did} kind={tab} />}
+          : (tab === 'feeds' || tab === 'lists')
+            && <BlueskyProfileCollection key={tab} actor={data.profile.did} kind={tab} />}
       </BlueskyProfilePage>
       <BlueskyReplyModal dialog={replyDialog} />
       <BlueskyReportPostModal reportDialog={reportDialog} {...(notice === undefined ? {} : { notice })} />

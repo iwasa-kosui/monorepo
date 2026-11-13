@@ -18,6 +18,18 @@ export type BlueskyProfile = Readonly<{
   viewerFollowedBy: boolean;
 }>;
 
+export const BLUESKY_AUTHOR_FEED_FILTERS = [
+  'posts_and_author_threads',
+  'posts_with_replies',
+  'posts_with_media',
+  'posts_with_video',
+] as const;
+
+export type BlueskyAuthorFeedFilter = typeof BLUESKY_AUTHOR_FEED_FILTERS[number];
+
+export const isBlueskyAuthorFeedFilter = (value: string): value is BlueskyAuthorFeedFilter =>
+  (BLUESKY_AUTHOR_FEED_FILTERS as readonly string[]).includes(value);
+
 export type BlueskyAuthorFeedPage = Readonly<{
   items: readonly BlueskyFetchedTimelineItem[];
   cursor: string | undefined;
@@ -32,7 +44,7 @@ export type BlueskyActorLikesPage = Readonly<{
 export type BlueskyProfileReader = Readonly<{
   getProfile: (actor: string) => RA<BlueskyProfile, BlueskyClientError>;
   getAuthorFeed: (
-    input: Readonly<{ actor: string; cursor: string | undefined }>,
+    input: Readonly<{ actor: string; cursor: string | undefined; filter: BlueskyAuthorFeedFilter }>,
   ) => RA<BlueskyAuthorFeedPage, BlueskyClientError>;
   getActorLikes: (
     input: Readonly<{ actor: string; cursor: string | undefined }>,

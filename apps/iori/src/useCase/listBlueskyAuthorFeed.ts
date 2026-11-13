@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 
 import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import {
+  type BlueskyAuthorFeedFilter,
   type BlueskyAuthorFeedPage,
   type BlueskyProfileNotFound,
   type BlueskyProfileReader,
@@ -9,7 +10,7 @@ import {
 } from '../ports/blueskyProfileReader.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{ actor: string; cursor: string | undefined }>;
+type Input = Readonly<{ actor: string; cursor: string | undefined; filter: BlueskyAuthorFeedFilter }>;
 
 type Err = BlueskyClientError | BlueskyProfileNotFound;
 
