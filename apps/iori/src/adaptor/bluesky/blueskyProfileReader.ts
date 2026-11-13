@@ -5,10 +5,12 @@ import type { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import { type BlueskyProfileReader, isBlueskyActorBlocked } from '../../ports/blueskyProfileReader.ts';
 import { httpUrlOrNull } from './blueskyPostView.ts';
+import { actorOf } from './blueskySearch.ts';
 import { parseBlueskyTimelineResponse } from './blueskyTimelineResponse.ts';
 
 const AUTHOR_FEED_LIMIT = '30';
 const AUTHOR_FEED_FILTER = 'posts_and_author_threads';
+const FOLLOW_LIST_LIMIT = '50';
 
 const profileZodType = z.looseObject({
   did: z.string().min(1),
@@ -22,6 +24,9 @@ const profileZodType = z.looseObject({
   postsCount: z.number().int().nonnegative().optional(),
   viewer: z.looseObject({ following: z.string().optional(), followedBy: z.string().optional() }).optional(),
 });
+
+const followsZodType = z.looseObject({ cursor: z.string().optional(), follows: z.array(z.unknown()) });
+const followersZodType = z.looseObject({ cursor: z.string().optional(), followers: z.array(z.unknown()) });
 
 const invalidResponse = (operation: string): BlueskyClientError => ({
   type: 'BlueskyClientError',
@@ -82,5 +87,27 @@ export const createBlueskyProfileReader = (
     return parsed.ok
       ? RA.ok({ items: parsed.val.items, cursor: parsed.val.cursor })
       : RA.err(invalidResponse('getActorLikes'));
+  },
+  getFollows: async ({ actor, cursor }) => {
+    const response = await deps.client.query('app.bsky.graph.getFollows', {
+      actor,
+      limit: FOLLOW_LIST_LIMIT,
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+    if (!response.ok) return response;
+    const parsed = followsZodType.safeParse(response.val);
+    if (!parsed.success) return RA.err(invalidResponse('getFollows'));
+    return RA.ok({ actors: parsed.data.follows.flatMap((raw) => actorOf(raw) ?? []), cursor: parsed.data.cursor });
+  },
+  getFollowers: async ({ actor, cursor }) => {
+    const response = await deps.client.query('app.bsky.graph.getFollowers', {
+      actor,
+      limit: FOLLOW_LIST_LIMIT,
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+    if (!response.ok) return response;
+    const parsed = followersZodType.safeParse(response.val);
+    if (!parsed.success) return RA.err(invalidResponse('getFollowers'));
+    return RA.ok({ actors: parsed.data.followers.flatMap((raw) => actorOf(raw) ?? []), cursor: parsed.data.cursor });
   },
 });

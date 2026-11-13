@@ -11,6 +11,8 @@ import { GetBlueskyFeedInfoUseCase } from '../useCase/getBlueskyFeedInfo.ts';
 import { GetBlueskyProfileUseCase } from '../useCase/getBlueskyProfile.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { ListBlueskyActorFeedsUseCase } from '../useCase/listBlueskyActorFeeds.ts';
+import { ListBlueskyActorFollowersUseCase } from '../useCase/listBlueskyActorFollowers.ts';
+import { ListBlueskyActorFollowsUseCase } from '../useCase/listBlueskyActorFollows.ts';
 import { ListBlueskyActorLikesUseCase } from '../useCase/listBlueskyActorLikes.ts';
 import { ListBlueskyActorListsUseCase } from '../useCase/listBlueskyActorLists.ts';
 import { ListBlueskyAuthorFeedUseCase } from '../useCase/listBlueskyAuthorFeed.ts';
@@ -33,6 +35,8 @@ export type BlueskyProfileRuntimePorts = Readonly<{
   listBlueskyListMembersUseCase: ListBlueskyListMembersUseCase | undefined;
   listBlueskyActorFeedsUseCase: ListBlueskyActorFeedsUseCase | undefined;
   listBlueskyActorListsUseCase: ListBlueskyActorListsUseCase | undefined;
+  listBlueskyActorFollowsUseCase: ListBlueskyActorFollowsUseCase | undefined;
+  listBlueskyActorFollowersUseCase: ListBlueskyActorFollowersUseCase | undefined;
   followBlueskyActorUseCase: FollowBlueskyActorUseCase | undefined;
   unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase | undefined;
   viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
@@ -58,6 +62,8 @@ export const createBlueskyProfileRuntimePorts = (
       listBlueskyListMembersUseCase: undefined,
       listBlueskyActorFeedsUseCase: undefined,
       listBlueskyActorListsUseCase: undefined,
+      listBlueskyActorFollowsUseCase: undefined,
+      listBlueskyActorFollowersUseCase: undefined,
       followBlueskyActorUseCase: undefined,
       unfollowBlueskyActorUseCase: undefined,
       viewerDid: undefined,
@@ -78,6 +84,8 @@ export const createBlueskyProfileRuntimePorts = (
     listBlueskyListMembersUseCase: ListBlueskyListMembersUseCase.create({ reader: feedReader }),
     listBlueskyActorFeedsUseCase: ListBlueskyActorFeedsUseCase.create({ reader: feedReader }),
     listBlueskyActorListsUseCase: ListBlueskyActorListsUseCase.create({ reader: feedReader }),
+    listBlueskyActorFollowsUseCase: ListBlueskyActorFollowsUseCase.create({ reader }),
+    listBlueskyActorFollowersUseCase: ListBlueskyActorFollowersUseCase.create({ reader }),
     followBlueskyActorUseCase: FollowBlueskyActorUseCase.create({ reader, client }),
     unfollowBlueskyActorUseCase: UnfollowBlueskyActorUseCase.create({ reader, client }),
     viewerDid: () => client.viewerDid(),

@@ -4,9 +4,12 @@ import {
   blueskyActorOfPath,
   blueskyFeedNoticeMessage,
   blueskyFollowFailureMessage,
+  blueskyFollowListFailureMessage,
   blueskyLikedPostsFailureMessage,
   blueskyProfileLoadFailureMessage,
   fetchBlueskyAuthorFeed,
+  fetchBlueskyFollowers,
+  fetchBlueskyFollows,
   fetchBlueskyLikedPosts,
   fetchBlueskyProfile,
   followBlueskyActor,
@@ -52,6 +55,30 @@ describe('blueskyProfileClient', () => {
     const withoutCursor = stubFetch(json({ items: [], cursor: null }));
     await fetchBlueskyAuthorFeed('alice.bsky.social');
     expect(withoutCursor.mock.calls[0]?.[0]).toBe('/api/iori/v1/bluesky/profiles/alice.bsky.social/feed');
+  });
+
+  it('フォロー一覧とフォロワー一覧を actor をエンコードして取り、cursor が無ければクエリを付けない', async () => {
+    const page = { actors: [], cursor: null, viewerDid: 'did:plc:me' };
+
+    const follows = stubFetch(json(page));
+    expect(await fetchBlueskyFollows('did:plc:alice')).toEqual(page);
+    expect(follows.mock.calls[0]?.[0]).toBe('/api/iori/v1/bluesky/profiles/did%3Aplc%3Aalice/follows');
+
+    const followers = stubFetch(json(page));
+    await fetchBlueskyFollowers('did:plc:alice');
+    expect(followers.mock.calls[0]?.[0]).toBe('/api/iori/v1/bluesky/profiles/did%3Aplc%3Aalice/followers');
+  });
+
+  it('フォロー一覧とフォロワー一覧を cursor つきで取る', async () => {
+    const follows = stubFetch(json({ actors: [], cursor: null, viewerDid: 'did:plc:me' }));
+    await fetchBlueskyFollows('alice.bsky.social', 'abc def');
+    expect(follows.mock.calls[0]?.[0]).toBe('/api/iori/v1/bluesky/profiles/alice.bsky.social/follows?cursor=abc+def');
+
+    const followers = stubFetch(json({ actors: [], cursor: null, viewerDid: 'did:plc:me' }));
+    await fetchBlueskyFollowers('alice.bsky.social', 'abc def');
+    expect(followers.mock.calls[0]?.[0]).toBe(
+      '/api/iori/v1/bluesky/profiles/alice.bsky.social/followers?cursor=abc+def',
+    );
   });
 
   it('フォローは did を JSON で POST し、解除は did をクエリにして DELETE する', async () => {
@@ -120,6 +147,29 @@ describe('blueskyProfileClient', () => {
     expect(blueskyFollowFailureMessage(login)).toBe('Bluesky にログインできないため、操作できませんでした。');
     expect(blueskyFollowFailureMessage(other)).toBe('フォローを変更できませんでした');
     expect(blueskyFollowFailureMessage(new Error('x'))).toBe('フォローを変更できませんでした');
+  });
+
+  it('フォロー一覧の読み込み失敗の文言を、ログイン失敗、連携の無効、それ以外と、一覧の種類で分ける', async () => {
+    stubFetch(json({ error: 'Bluesky login failed' }, 502));
+    const login = await failure(fetchBlueskyFollows('x'));
+    stubFetch(json({ error: 'Bluesky timeline is disabled' }, 409));
+    const disabled = await failure(fetchBlueskyFollowers('x'));
+    stubFetch(json({ error: 'Bluesky request failed' }, 502));
+    const other = await failure(fetchBlueskyFollows('x'));
+
+    expect(blueskyFollowListFailureMessage(login, 'follows', 'first')).toBe(
+      'Bluesky にログインできないため、フォローを読み込めませんでした',
+    );
+    expect(blueskyFollowListFailureMessage(login, 'followers', 'first')).toBe(
+      'Bluesky にログインできないため、フォロワーを読み込めませんでした',
+    );
+    expect(blueskyFollowListFailureMessage(login, 'follows', 'more')).toBe(
+      'Bluesky にログインできないため、続きを読み込めませんでした',
+    );
+    expect(blueskyFollowListFailureMessage(disabled, 'followers', 'first')).toBe('Bluesky 連携が無効です');
+    expect(blueskyFollowListFailureMessage(other, 'follows', 'first')).toBe('フォローを読み込めませんでした');
+    expect(blueskyFollowListFailureMessage(other, 'followers', 'first')).toBe('フォロワーを読み込めませんでした');
+    expect(blueskyFollowListFailureMessage(other, 'followers', 'more')).toBe('続きを読み込めませんでした');
   });
 
   it('いいねした投稿の読み込み失敗の文言を、ログイン失敗、連携の無効、それ以外で分ける', async () => {

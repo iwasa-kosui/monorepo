@@ -53,6 +53,8 @@ const setup = (getProfile: BlueskyProfileReader['getProfile'] = async () => RA.o
     getProfile: vi.fn(getProfile),
     getAuthorFeed: vi.fn<BlueskyProfileReader['getAuthorFeed']>(),
     getActorLikes: vi.fn<BlueskyProfileReader['getActorLikes']>(),
+    getFollows: vi.fn<BlueskyProfileReader['getFollows']>(),
+    getFollowers: vi.fn<BlueskyProfileReader['getFollowers']>(),
   };
   const createFollow = vi.fn<BlueskyClient['createFollow']>(async () => RA.ok({ uri: CREATED }));
   const deleteFollow = vi.fn<BlueskyClient['deleteFollow']>(async () => RA.ok(undefined));
