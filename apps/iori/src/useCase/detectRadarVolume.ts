@@ -32,7 +32,7 @@ type Deps = Readonly<{
   feedSourceFetchedStore: FeedSourceFetchedStore;
   feedSourceFetchFailedStore: FeedSourceFetchFailedStore;
   feedEntryCollectedStore: FeedEntryCollectedStore;
-  safeFetcher: SafeFetcher;
+  safeFetcher: Pick<SafeFetcher, 'fetchText'>;
   now: () => Instant;
 }>;
 

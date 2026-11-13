@@ -1,28 +1,29 @@
-import { blockedReason } from '../../domain/feedSource/feedSourceUrl.ts';
 import type { BlueskyThumbnailFetcher } from '../../ports/blueskyClient.ts';
+import { createSafeFetcher } from '../http/safeFetch.ts';
 import { BLUESKY_MAX_THUMB_BYTES } from './blueskyPostRecord.ts';
 
 const FETCH_TIMEOUT_MS = 5000;
 
 type ThumbnailFetcherDeps = Readonly<{ fetch?: typeof fetch }>;
 
+const mimeTypeOf = (contentType: string | undefined): string | undefined =>
+  contentType?.split(';')[0]?.trim().toLowerCase();
+
 export const createBlueskyThumbnailFetcher = (deps: ThumbnailFetcherDeps = {}): BlueskyThumbnailFetcher => {
-  const fetchRequest = deps.fetch ?? globalThis.fetch;
+  const safeFetcher = createSafeFetcher({ fetch: deps.fetch });
   return {
     fetch: async (url) => {
       try {
-        const target = new URL(url);
-        if (blockedReason(target) !== undefined) return undefined;
-        const response = await fetchRequest(target.href, {
-          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-          redirect: 'manual',
+        const fetched = await safeFetcher.fetchBytes(url, {
+          timeoutMs: FETCH_TIMEOUT_MS,
+          maxBytes: BLUESKY_MAX_THUMB_BYTES,
+          maxRedirects: 0,
+          acceptContentType: (contentType) => mimeTypeOf(contentType)?.startsWith('image/') === true,
         });
-        const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
-        if (!response.ok || mimeType === undefined || !mimeType.startsWith('image/')) return undefined;
-        const declared = Number(response.headers.get('content-length'));
-        if (Number.isFinite(declared) && declared > BLUESKY_MAX_THUMB_BYTES) return undefined;
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        return bytes.byteLength <= BLUESKY_MAX_THUMB_BYTES ? { bytes, mimeType } : undefined;
+        if (!fetched.ok) return undefined;
+        const mimeType = mimeTypeOf(fetched.val.contentType);
+        const { bytes } = fetched.val;
+        return bytes === undefined || mimeType === undefined ? undefined : { bytes, mimeType };
       } catch {
         return undefined;
       }

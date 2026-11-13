@@ -63,7 +63,7 @@ type Deps = Readonly<{
   feedEntryBookmarkCountUpdatedStore: FeedEntryBookmarkCountUpdatedStore;
   feedEntryExpiredStore: FeedEntryExpiredStore;
   feedEntryMaxGuidResolverByFeedSourceId: FeedEntryMaxGuidResolverByFeedSourceId;
-  safeFetcher: SafeFetcher;
+  safeFetcher: Pick<SafeFetcher, 'fetchText'>;
   twitterApiIoClient?: TwitterApiIoClient;
   now: () => Instant;
 }>;

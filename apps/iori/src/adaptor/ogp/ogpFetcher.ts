@@ -2,7 +2,7 @@
  * OGP（Open Graph Protocol）情報を取得するフェッチャー
  */
 
-import { decodeBody } from '../http/decodeBody.ts';
+import { createSafeFetcher } from '../http/safeFetch.ts';
 
 export type OgpData = Readonly<{
   title: string | null;
@@ -16,7 +16,13 @@ export type OgpFetcher = Readonly<{
   fetch: (url: string) => Promise<OgpData>;
 }>;
 
-const FETCH_TIMEOUT_MS = 5000;
+const OGP_FETCH_TIMEOUT_MS = 5000;
+const OGP_FETCH_MAX_BYTES = 5 * 1024 * 1024;
+const OGP_FETCH_MAX_REDIRECTS = 3;
+
+const isHtmlContentType = (contentType: string | undefined): boolean =>
+  contentType !== undefined
+  && (contentType.toLowerCase().includes('text/html') || contentType.toLowerCase().includes('application/xhtml'));
 
 const emptyOgpData: OgpData = {
   title: null,
@@ -113,33 +119,31 @@ const decodeHtmlEntities = (text: string): string => {
 /**
  * OGPフェッチャーのインスタンスを作成する
  */
-export const createOgpFetcher = (): OgpFetcher => {
+export const createOgpFetcher = (deps: Readonly<{ fetch?: typeof fetch }> = {}): OgpFetcher => {
+  const safeFetcher = createSafeFetcher({ fetch: deps.fetch });
+
   const fetchOgp = async (url: string): Promise<OgpData> => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-      const response = await fetch(url, {
-        signal: controller.signal,
+      const fetched = await safeFetcher.fetchText(url, {
+        timeoutMs: OGP_FETCH_TIMEOUT_MS,
+        maxBytes: OGP_FETCH_MAX_BYTES,
+        maxRedirects: OGP_FETCH_MAX_REDIRECTS,
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; MicroblogBot/1.0)',
           'Accept': 'text/html,application/xhtml+xml',
         },
+        acceptContentType: isHtmlContentType,
       });
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        console.warn(`OGP fetch failed for ${url}: HTTP ${response.status}`);
+      if (!fetched.ok) {
+        console.warn(`OGP fetch failed for ${url}: ${fetched.err.reason}: ${fetched.err.message}`);
         return emptyOgpData;
       }
 
-      const contentType = response.headers.get('content-type') ?? '';
-      if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
+      const { status, body: html, finalUrl } = fetched.val;
+      if (status < 200 || status >= 300 || html === undefined) {
         return emptyOgpData;
       }
-
-      const html = decodeBody(new Uint8Array(await response.arrayBuffer()), response.headers.get('content-type'));
 
       // OGP情報を抽出
       const ogTitle = extractMetaContent(html, 'og:title');
@@ -157,11 +161,11 @@ export const createOgpFetcher = (): OgpFetcher => {
       const htmlTitle = extractTitle(html);
 
       // favicon
-      const faviconUrl = extractFaviconUrl(html, url);
+      const faviconUrl = extractFaviconUrl(html, finalUrl);
 
       // 画像URLを絶対URLに解決
       const imageUrl = ogImage ?? twitterImage;
-      const resolvedImageUrl = imageUrl ? resolveUrl(imageUrl, url) : null;
+      const resolvedImageUrl = imageUrl ? resolveUrl(imageUrl, finalUrl) : null;
 
       return {
         title: ogTitle ?? twitterTitle ?? htmlTitle,

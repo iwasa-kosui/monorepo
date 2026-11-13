@@ -57,7 +57,7 @@ const isOriginalPost = (tweet: SearchResponse['tweets'][number]): boolean =>
 const isNumericId = (value: string): boolean => /^\d+$/.test(value);
 
 type Deps = Readonly<{
-  safeFetcher: SafeFetcher;
+  safeFetcher: Pick<SafeFetcher, 'fetchText'>;
   apiKey: string;
   sleep: (ms: number) => Promise<void>;
   now: () => Instant;

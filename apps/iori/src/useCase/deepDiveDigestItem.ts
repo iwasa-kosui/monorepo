@@ -148,7 +148,7 @@ type Deps = Readonly<{
   interestSourceResolverByUserIdAndInterestSourceId: InterestSourceResolverByUserIdAndInterestSourceId;
   postContentsResolverByPostIds: PostContentsResolverByPostIds;
   likedPostContentsResolverByLikeIds: LikedPostContentsResolverByLikeIds;
-  safeFetcher: SafeFetcher;
+  safeFetcher: Pick<SafeFetcher, 'fetchText'>;
   textGenerator: TextGenerator | undefined;
   htmlToMarkdown: (html: string) => string;
   renderMarkdown: (markdown: string) => Promise<string>;

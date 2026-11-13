@@ -17,7 +17,7 @@ const toBodyText = (fetched: SafeFetchResult, maxChars: number): string => {
 };
 
 export const fetchArticleBodyText = async (
-  safeFetcher: SafeFetcher,
+  safeFetcher: Pick<SafeFetcher, 'fetchText'>,
   url: string,
   options: Readonly<{ timeoutMs: number; maxChars: number }>,
 ): Promise<string> => {

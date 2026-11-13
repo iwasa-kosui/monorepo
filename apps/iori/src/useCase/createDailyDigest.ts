@@ -167,7 +167,7 @@ type Deps = Readonly<{
   isDigestOwner: IsDigestOwner;
   interestVectorsResolverByUserId: InterestVectorsResolverByUserId;
   recommendableArticlesResolverByFetchedSince: RecommendableArticlesResolverByFetchedSince;
-  safeFetcher: SafeFetcher;
+  safeFetcher: Pick<SafeFetcher, 'fetchText'>;
   textGenerator: TextGenerator | undefined;
   createArticleWithBodyUseCase: CreateArticleWithBodyUseCase;
   digestCreatedStore: DigestCreatedStore;

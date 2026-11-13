@@ -41,7 +41,7 @@ export type RefreshHatenaBookmarkCountsUseCase = UseCase<Input, Ok, Err>;
 type Deps = Readonly<{
   feedEntriesResolverByFetchedSinceExcludingKinds: FeedEntriesResolverByFetchedSinceExcludingKinds;
   feedEntryBookmarkCountUpdatedStore: FeedEntryBookmarkCountUpdatedStore;
-  safeFetcher: SafeFetcher;
+  safeFetcher: Pick<SafeFetcher, 'fetchText'>;
   sleep: (ms: number) => Promise<void>;
   now: () => Instant;
 }>;
