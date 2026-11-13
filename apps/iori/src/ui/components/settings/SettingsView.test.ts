@@ -3,18 +3,19 @@ import { describe, expect, it } from 'vitest';
 
 import type { CredentialAccount } from '../../../adaptor/mastodon/entities.ts';
 import { BlueskySettingsView } from './BlueskySettingsSection.tsx';
+import { PostingSettingsView } from './PostingSettingsSection.tsx';
 import { ProfileSettingsForm } from './ProfileSettingsSection.tsx';
 import { RelaysSettingsView } from './RelaysSettingsSection.tsx';
 import { SettingsView } from './SettingsView.tsx';
 
-const render = (isXOwner: boolean): string => String(jsx(SettingsView, { isXOwner }));
+const render = (isOwner: boolean): string => String(jsx(SettingsView, { isOwner }));
 
 describe('SettingsView', () => {
   it('shows the heading and every section anchor in order', () => {
     const html = render(true);
 
     expect(html).toContain('<h1 class="text-2xl font-bold text-charcoal dark:text-white mb-6">設定</h1>');
-    const positions = ['profile', 'notifications', 'bluesky', 'relays', 'x-feed-sources'].map((id) =>
+    const positions = ['profile', 'notifications', 'posting', 'bluesky', 'relays', 'x-feed-sources'].map((id) =>
       html.indexOf(`id="${id}"`)
     );
     expect(positions.every((position) => position >= 0)).toBe(true);
@@ -49,9 +50,60 @@ describe('SettingsView', () => {
     expect(render(false)).not.toContain('id="relays"');
   });
 
+  it('shows the posting section and the sign-out button whether or not the user is the owner', () => {
+    for (const isOwner of [true, false]) {
+      const html = render(isOwner);
+
+      expect(html).toContain('id="posting"');
+      expect(html).toContain('>投稿</h2>');
+      expect(html).toMatch(
+        /<form method="post" action="\/auth\/sign-out">\s*<button type="submit"[^>]*>\s*ログアウト\s*<\/button>/,
+      );
+    }
+  });
+
   it('hides the X section from anyone but the owner', () => {
     expect(render(false)).not.toContain('id="x-feed-sources"');
     expect(render(false)).not.toContain('X の取り込み元');
+  });
+});
+
+describe('PostingSettingsView', () => {
+  const render = (props: Partial<Parameters<typeof PostingSettingsView>[0]> = {}): string =>
+    String(jsx(PostingSettingsView, {
+      visibility: 'public',
+      loadFailed: false,
+      isSaving: false,
+      savedMessage: undefined,
+      errorText: undefined,
+      onChange: () => {},
+      onSave: () => {},
+      ...props,
+    }));
+
+  it('offers the three visibilities and checks the current one', () => {
+    const html = render({ visibility: 'unlisted' });
+
+    expect(html.match(/type="radio"/g)).toHaveLength(3);
+    expect(html).toMatch(/<input[^>]*name="defaultPostVisibility"[^>]*value="unlisted"[^>]*checked/);
+    expect(html).not.toMatch(/<input[^>]*name="defaultPostVisibility"[^>]*value="public"[^>]*checked/);
+    expect(html).not.toMatch(/<input[^>]*name="defaultPostVisibility"[^>]*value="private"[^>]*checked/);
+  });
+
+  it('tells that posts other than public are not sent to Bluesky', () => {
+    expect(render()).toContain('公開以外を選んだ投稿は Bluesky に送られません。');
+  });
+
+  it('shows the save button, then the saving label while saving', () => {
+    expect(render()).toMatch(/<button type="button"[^>]*>保存<\/button>/);
+    expect(render({ isSaving: true })).toMatch(/<button type="button" disabled[^>]*>保存中...<\/button>/);
+  });
+
+  it('shows the saved message, the error and the load failure', () => {
+    expect(render({ savedMessage: '保存しました' })).toContain('保存しました');
+    expect(render({ errorText: '保存できません' })).toContain('保存できません');
+    expect(render({ loadFailed: true })).toContain('設定を読み込めませんでした');
+    expect(render()).not.toContain('設定を読み込めませんでした');
   });
 });
 

@@ -164,6 +164,7 @@ import { createD1RepostCreatedStore } from '../adaptor/d1/repost/repostCreatedSt
 import { createD1RepostDeletedStore } from '../adaptor/d1/repost/repostDeletedStore.ts';
 import { createD1RepostResolver } from '../adaptor/d1/repost/repostResolver.ts';
 import { createD1RepostResolverById } from '../adaptor/d1/repost/repostResolverById.ts';
+import { createD1SessionEndedStore } from '../adaptor/d1/session/sessionEndedStore.ts';
 import { createD1SessionResolver } from '../adaptor/d1/session/sessionResolver.ts';
 import { createD1SessionStartedStore } from '../adaptor/d1/session/sessionStartedStore.ts';
 import { createD1SessionWithUserAndActorResolver } from '../adaptor/d1/session/sessionWithUserAndActorResolver.ts';
@@ -178,6 +179,8 @@ import { createD1UserResolver } from '../adaptor/d1/user/userResolver.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createD1UserPasswordResolver } from '../adaptor/d1/userPassword/userPasswordResolver.ts';
 import { createD1UserPasswordSetStore } from '../adaptor/d1/userPassword/userPasswordSetStore.ts';
+import { createD1UserPreferencesResolverByUserId } from '../adaptor/d1/userPreferences/userPreferencesResolverByUserId.ts';
+import { createD1UserPreferencesSavedStore } from '../adaptor/d1/userPreferences/userPreferencesSavedStore.ts';
 import { isBlockedUri } from '../adaptor/fedify/blockedInboxDomain.ts';
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
 import { createLookupUrlResolver } from '../adaptor/fedify/lookupUrlResolver.ts';
@@ -243,12 +246,14 @@ import { ResolveRemotePostUseCase } from '../useCase/resolveRemotePost.ts';
 import { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import { SaveDigestSubscriptionUseCase } from '../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
+import { SaveUserPreferencesUseCase } from '../useCase/saveUserPreferences.ts';
 import { createSearchTimelineUseCase } from '../useCase/searchTimeline.ts';
 import { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
 import { SendLikeUseCase } from '../useCase/sendLike.ts';
 import { SendReplyUseCase } from '../useCase/sendReply.ts';
 import { SendRepostUseCase } from '../useCase/sendRepost.ts';
 import { createSignInUseCase } from '../useCase/signIn.ts';
+import { SignOutUseCase } from '../useCase/signOut.ts';
 import { createSignUpUseCase } from '../useCase/signUp.ts';
 import { StartPasskeyAuthenticationUseCase } from '../useCase/startPasskeyAuthentication.ts';
 import { StartPasskeyRegistrationUseCase } from '../useCase/startPasskeyRegistration.ts';
@@ -315,6 +320,7 @@ export const createWorkerRuntimePorts = async (
   });
   const digestResolverByUserIdAndDigestDate = createD1DigestResolverByUserIdAndDigestDate(db);
   const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
+  const userPreferencesResolverByUserId = createD1UserPreferencesResolverByUserId(db);
   const allFeedSourcesResolver = createD1AllFeedSourcesResolver(db);
   const digestTopicsResolverByUserId = createD1DigestTopicsResolverByUserId(db);
   const digestTopicEmbeddedStore = createD1DigestTopicEmbeddedStore(db);
@@ -401,6 +407,10 @@ export const createWorkerRuntimePorts = async (
         userPasswordResolver: createD1UserPasswordResolver(db),
         sessionStartedStore: createD1SessionStartedStore(db),
         argon2idDerive: lazyWorkerArgon2idDerive,
+      }),
+      signOutUseCase: SignOutUseCase.create({
+        sessionResolver,
+        sessionEndedStore: createD1SessionEndedStore(db),
       }),
     },
     passkey: {
@@ -576,6 +586,13 @@ export const createWorkerRuntimePorts = async (
           origin: env.ORIGIN,
         }),
         localActorProfileUpdatedStore: createD1LocalActorProfileUpdatedStore(db),
+      }),
+    },
+    preferences: {
+      userPreferencesResolverByUserId,
+      saveUserPreferencesUseCase: SaveUserPreferencesUseCase.create({
+        userPreferencesResolverByUserId,
+        userPreferencesSavedStore: createD1UserPreferencesSavedStore(db),
       }),
     },
     blueskyTimeline: createBlueskyTimelineRuntimePorts(env, db),

@@ -581,6 +581,13 @@ export const digestSubscriptionsTable = sqliteTable('digest_subscriptions', {
   updatedAt: timestamp().notNull(),
 });
 
+export const userPreferencesTable = sqliteTable('user_preferences', {
+  userId: text('userId').primaryKey().references(() => usersTable.userId),
+  defaultPostVisibility: text('defaultPostVisibility').notNull(),
+  createdAt: timestamp().notNull(),
+  updatedAt: timestamp().notNull(),
+});
+
 export const digestsTable = sqliteTable('digests', {
   digestId: text('digestId').primaryKey(),
   userId: text('userId').notNull().references(() => usersTable.userId),
@@ -899,6 +906,7 @@ export const schema = {
   feedSourcesTable,
   feedEntriesTable,
   digestSubscriptionsTable,
+  userPreferencesTable,
   digestsTable,
   digestTopicsTable,
   digestRequestUsagesTable,

@@ -1,15 +1,20 @@
-import { useState } from 'hono/jsx';
+import { useEffect, useRef, useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 import { createBlueskyPost, createStatus, updateMedia, uploadMedia } from '../api/mastodonClient.ts';
+import { useDefaultPostVisibility } from '../hooks/useDefaultPostVisibility.ts';
 import { blueskyCrosspostNotice } from './blueskyCrosspostMark.ts';
 import { downscaleImageForUpload } from './imageDownscale.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
 import { canSubmitPost, postedNotice, type PostNotice, submitPost, type UploadedMedia } from './postSubmission.ts';
-import { DEFAULT_POST_VISIBILITY, type PostVisibility, visibilityForDestination } from './postVisibility.ts';
+import {
+  type PostVisibility,
+  visibilityWhenDefaultLoaded,
+  visibilityWhenDestinationChanged,
+} from './postVisibility.ts';
 import { PostVisibilitySelect } from './PostVisibilitySelect.tsx';
 
 type Props = Readonly<{
@@ -24,7 +29,9 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [destination, setDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
-  const [visibility, setVisibility] = useState<PostVisibility>(DEFAULT_POST_VISIBILITY);
+  const { defaultVisibility, isLoading: isLoadingDefault } = useDefaultPostVisibility();
+  const [visibility, setVisibility] = useState<PostVisibility>(defaultVisibility);
+  const visibilityTouched = useRef(false);
   const [notice, setNotice] = useState<PostNotice | undefined>(undefined);
   const [cwEnabled, setCwEnabled] = useState(false);
   const [cw, setCw] = useState('');
@@ -36,13 +43,27 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const isBlueskyOnly = destination === 'bluesky';
   const crosspostNotice = blueskyCrosspostNotice(destination, cwEnabled ? cw : '', sensitive, visibility);
 
+  useEffect(() => {
+    setVisibility((current) =>
+      visibilityWhenDefaultLoaded(current, defaultVisibility, {
+        touched: visibilityTouched.current === true,
+        destination,
+      })
+    );
+  }, [defaultVisibility]);
+
+  const handleVisibilityChange = (next: PostVisibility) => {
+    visibilityTouched.current = true;
+    setVisibility(next);
+  };
+
   const handleContentChange = (value: string) => {
     setContent(value);
     setNotice(undefined);
   };
 
   const handleSubmit = async () => {
-    if (!canSubmitPost(content, isUploading, isPosting)) return;
+    if (isLoadingDefault || !canSubmitPost(content, isUploading, isPosting)) return;
     setIsPosting(true);
     try {
       const result = await submitPost(
@@ -62,7 +83,8 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         setContent('');
         setUploaded([]);
         setDestination(DEFAULT_POST_DESTINATION);
-        setVisibility(DEFAULT_POST_VISIBILITY);
+        visibilityTouched.current = false;
+        setVisibility(defaultVisibility);
         setCwEnabled(false);
         setCw('');
         setSensitiveChecked(false);
@@ -122,7 +144,9 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
       setCw('');
       setSensitiveChecked(false);
     }
-    setVisibility((current) => visibilityForDestination(next, current));
+    setVisibility((current) =>
+      visibilityWhenDestinationChanged(current, next, defaultVisibility, visibilityTouched.current === true)
+    );
     setDestination(next);
   };
 
@@ -196,7 +220,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
       <div class='mt-2 flex-shrink-0'>
         <PostVisibilitySelect
           value={visibility}
-          onChange={setVisibility}
+          onChange={handleVisibilityChange}
           name='visibility'
           id={`${formId ?? id ?? 'post-form'}-visibility`}
           disabled={isBlueskyOnly}
@@ -247,7 +271,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         </button>
         <button
           type='submit'
-          disabled={isPosting}
+          disabled={isPosting || isLoadingDefault}
           class='px-5 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
         >
           投稿する

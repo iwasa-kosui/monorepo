@@ -16,7 +16,7 @@ const SettingsPage = () => {
     if (id !== '') document.getElementById(id)?.scrollIntoView();
   }, [isResolved, isProfileLoaded]);
 
-  return <SettingsView isXOwner={isOwner} onProfileLoaded={() => setIsProfileLoaded(true)} />;
+  return <SettingsView isOwner={isOwner} onProfileLoaded={() => setIsProfileLoaded(true)} />;
 };
 
 if (globalThis.window) {

@@ -22,6 +22,7 @@ import { createWorkerIoriBlueskyProfileRouter } from './adaptor/routes/workerIor
 import { createWorkerIoriBlueskyRouter } from './adaptor/routes/workerIoriBlueskyRouter.ts';
 import { createWorkerIoriDigestRouter } from './adaptor/routes/workerIoriDigestRouter.ts';
 import { createWorkerIoriFediverseConversationsRouter } from './adaptor/routes/workerIoriFediverseConversationsRouter.ts';
+import { createWorkerIoriPreferencesRouter } from './adaptor/routes/workerIoriPreferencesRouter.ts';
 import { createWorkerIoriSearchRouter } from './adaptor/routes/workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from './adaptor/routes/workerIoriSummaryRouter.ts';
 import { createWorkerIoriXPostsRouter } from './adaptor/routes/workerIoriXPostsRouter.ts';
@@ -200,6 +201,7 @@ export default {
           createWorkerAuthFormRouter({
             signInUseCase: runtime.auth.signInUseCase,
             signUpUseCase: runtime.core.signUpUseCase,
+            signOutUseCase: runtime.auth.signOutUseCase,
             createContext: (authRequest) => runtime.federation.createContext(authRequest, undefined),
           }),
         );
@@ -285,6 +287,7 @@ export default {
         app.route('/api', createWorkerIoriSummaryRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerMastodonTranslateRouter({ ...runtime.mastodon, authn }));
         app.route('/api', createWorkerIoriDigestRouter({ ...runtime.digest, authn }));
+        app.route('/api', createWorkerIoriPreferencesRouter({ ...runtime.preferences, authn }));
         app.route('/api', createWorkerIoriXPostsRouter({ ...runtime.digest, authn }));
         app.route(
           '/api',

@@ -80,6 +80,7 @@ describe('D1 schema', () => {
       'sessionsTable',
       'timelineItemsTable',
       'userPasswordsTable',
+      'userPreferencesTable',
       'usersTable',
       'webauthnChallengesTable',
     ].sort());

@@ -68,6 +68,7 @@ import type { SessionResolver } from '../domain/session/session.ts';
 import type { TimelineItemsResolverByActorIds } from '../domain/timeline/timelineItem.ts';
 import type { UserResolver, UserResolverByUsername } from '../domain/user/user.ts';
 import type { UserId } from '../domain/user/userId.ts';
+import type { UserPreferencesResolverByUserId } from '../domain/userPreferences/userPreferences.ts';
 import type { TextEmbedder } from '../ports/textEmbedder.ts';
 import type { TextGenerator } from '../ports/textGenerator.ts';
 import type { AddDigestTopicUseCase } from '../useCase/addDigestTopic.ts';
@@ -115,12 +116,14 @@ import type { ResolveRemotePostUseCase } from '../useCase/resolveRemotePost.ts';
 import type { RevokeTokenUseCase } from '../useCase/revokeToken.ts';
 import type { SaveDigestSubscriptionUseCase } from '../useCase/saveDigestSubscription.ts';
 import type { SaveMarkersUseCase } from '../useCase/saveMarkers.ts';
+import type { SaveUserPreferencesUseCase } from '../useCase/saveUserPreferences.ts';
 import type { SearchTimelineUseCase } from '../useCase/searchTimeline.ts';
 import type { SendEmojiReactUseCase } from '../useCase/sendEmojiReact.ts';
 import type { SendLikeUseCase } from '../useCase/sendLike.ts';
 import type { SendReplyUseCase } from '../useCase/sendReply.ts';
 import type { SendRepostUseCase } from '../useCase/sendRepost.ts';
 import type { createSignInUseCase } from '../useCase/signIn.ts';
+import type { SignOutUseCase } from '../useCase/signOut.ts';
 import type { createSignUpUseCase } from '../useCase/signUp.ts';
 import type { StartPasskeyAuthenticationUseCase } from '../useCase/startPasskeyAuthentication.ts';
 import type { StartPasskeyRegistrationUseCase } from '../useCase/startPasskeyRegistration.ts';
@@ -160,6 +163,7 @@ export type WorkerBlockAction = WorkerRemoteActorAction;
 export type UploadObjectStore = ReturnType<typeof createPostImageR2ObjectStore>;
 export type IoriAuthRuntimePorts = Readonly<{
   signInUseCase: ReturnType<typeof createSignInUseCase>;
+  signOutUseCase: SignOutUseCase;
 }>;
 export type IoriPasskeyRuntimePorts = Readonly<{
   startPasskeyRegistrationUseCase: StartPasskeyRegistrationUseCase;
@@ -222,6 +226,10 @@ export type IoriMastodonRuntimePorts = Readonly<{
   clearNotificationsUseCase: ClearNotificationsUseCase;
   resolveRemoteAccountUseCase: ResolveRemoteAccountUseCase;
   resolveRemotePostUseCase: ResolveRemotePostUseCase;
+}>;
+export type IoriPreferencesRuntimePorts = Readonly<{
+  userPreferencesResolverByUserId: UserPreferencesResolverByUserId;
+  saveUserPreferencesUseCase: SaveUserPreferencesUseCase;
 }>;
 export type IoriDigestRuntimePorts = Readonly<{
   digestResolverByUserIdAndDigestDate: DigestResolverByUserIdAndDigestDate;
@@ -332,6 +340,7 @@ export type IoriRuntimePorts = Readonly<{
   oauth: IoriOAuthRuntimePorts;
   mastodon: IoriMastodonRuntimePorts;
   digest: IoriDigestRuntimePorts;
+  preferences: IoriPreferencesRuntimePorts;
   blueskyTimeline: IoriBlueskyTimelineRuntimePorts;
   blueskyModeration: IoriBlueskyModerationRuntimePorts;
   blueskyProfile: IoriBlueskyProfileRuntimePorts;

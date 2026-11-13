@@ -2,19 +2,23 @@ import type { Context } from '@fedify/fedify';
 import { sValidator } from '@hono/standard-validator';
 import { RA } from '@iwasa-kosui/result';
 import { Hono } from 'hono';
+import { getCookie } from 'hono/cookie';
 import { z } from 'zod/v4';
 
 import { Password } from '../../domain/password/password.ts';
+import { SessionId } from '../../domain/session/sessionId.ts';
 import { Username } from '../../domain/user/username.ts';
 import { resolveNextPath } from '../../helper/signInNext.ts';
 import type { createSignInUseCase } from '../../useCase/signIn.ts';
+import type { SignOutUseCase } from '../../useCase/signOut.ts';
 import type { createSignUpUseCase } from '../../useCase/signUp.ts';
-import { setSessionCookie } from './helper/sessionCookie.ts';
+import { deleteSessionCookie, setSessionCookie } from './helper/sessionCookie.ts';
 import { isSameOriginRequest } from './mastodonAuthn.ts';
 
 export type WorkerAuthFormRouterDeps = Readonly<{
   signInUseCase: ReturnType<typeof createSignInUseCase>;
   signUpUseCase: ReturnType<typeof createSignUpUseCase>;
+  signOutUseCase: SignOutUseCase;
   createContext: (request: Request) => Context<unknown>;
 }>;
 
@@ -29,6 +33,7 @@ const rawNext = (data: unknown): string | null => {
 export const createWorkerAuthFormRouter = ({
   signInUseCase,
   signUpUseCase,
+  signOutUseCase,
   createContext,
 }: WorkerAuthFormRouterDeps): Hono =>
   new Hono()
@@ -90,5 +95,18 @@ export const createWorkerAuthFormRouter = ({
           ? 'username_taken'
           : 'failed';
         return c.redirect(`/sign-up?error=${code}`, 303);
+      },
+    )
+    .post(
+      '/sign-out',
+      async (c, next) => {
+        if (!isSameOriginRequest(c.req.raw)) return c.json({ error: 'Forbidden' }, 403);
+        await next();
+      },
+      async (c) => {
+        const parsed = SessionId.parse(getCookie(c, 'sessionId'));
+        await signOutUseCase.run({ sessionId: parsed.ok ? parsed.val : undefined });
+        deleteSessionCookie(c);
+        return c.redirect('/sign-in', 303);
       },
     );
