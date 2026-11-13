@@ -64,7 +64,12 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
       isSending={isSendingReply}
       canSubmit={!isSendingReply && replyContent.trim() !== ''}
       leadingActions={
-        <PostDestinationSelect value={replyDestination} onChange={setReplyDestination} name='reply-destination' />
+        <PostDestinationSelect
+          value={replyDestination}
+          onChange={setReplyDestination}
+          name='reply-destination'
+          disabled={isSendingReply}
+        />
       }
     >
       <MarkdownEditor

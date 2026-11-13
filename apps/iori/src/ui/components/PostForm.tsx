@@ -223,7 +223,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           onChange={handleVisibilityChange}
           name='visibility'
           id={`${formId ?? id ?? 'post-form'}-visibility`}
-          disabled={isBlueskyOnly}
+          disabled={isBlueskyOnly || isPosting}
         />
       </div>
       <div class='mt-2 flex flex-wrap justify-end items-center gap-3 flex-shrink-0'>
@@ -232,6 +232,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           onChange={handleDestinationChange}
           name='destination'
           allowBlueskyOnly
+          disabled={isPosting}
         />
         <label class='cursor-pointer text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
           {isUploading

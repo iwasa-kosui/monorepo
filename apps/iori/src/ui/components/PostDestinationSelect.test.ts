@@ -30,4 +30,14 @@ describe('PostDestinationSelect', () => {
     expect(html).toMatch(/value="bluesky"[^>]*checked|checked[^>]*value="bluesky"/);
     expect(html).not.toMatch(/value="both"[^>]*checked|checked[^>]*value="both"/);
   });
+
+  it('disabled のとき、すべての選択肢を無効にする', () => {
+    const html = render({ allowBlueskyOnly: true, disabled: true });
+
+    expect(html.match(/<input[^>]*disabled=""/g)).toHaveLength(3);
+  });
+
+  it('disabled を渡さなければ、選択肢を無効にしない', () => {
+    expect(render()).not.toContain('disabled');
+  });
 });
