@@ -60,7 +60,7 @@ describe('ReplyDialogShell', () => {
     const html = render();
 
     expect(html).not.toContain('<select');
-    expect(html).toContain('<div class="mt-3 flex gap-2 justify-end"><button');
+    expect(html).toContain('<div class="mt-3 flex flex-wrap items-center gap-2 justify-end"><button');
   });
 
   it('title と submitLabel を渡さないときは、見出しを返信、ボタンを返信するにする', () => {

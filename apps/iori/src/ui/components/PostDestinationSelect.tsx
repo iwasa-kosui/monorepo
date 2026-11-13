@@ -11,9 +11,9 @@ export const PostDestinationSelect = ({ value, onChange, name, allowBlueskyOnly 
   <div
     role='radiogroup'
     aria-label='送り先'
-    class='mr-auto flex items-center gap-3 text-xs text-charcoal-light dark:text-gray-400'
+    class='mr-auto flex flex-wrap items-center gap-3 text-xs text-charcoal-light dark:text-gray-400'
   >
-    <label class='flex items-center gap-1 cursor-pointer'>
+    <label class='flex items-center gap-1 whitespace-nowrap cursor-pointer'>
       <input
         type='radio'
         name={name}
@@ -23,7 +23,7 @@ export const PostDestinationSelect = ({ value, onChange, name, allowBlueskyOnly 
       />
       両方
     </label>
-    <label class='flex items-center gap-1 cursor-pointer'>
+    <label class='flex items-center gap-1 whitespace-nowrap cursor-pointer'>
       <input
         type='radio'
         name={name}
@@ -34,7 +34,7 @@ export const PostDestinationSelect = ({ value, onChange, name, allowBlueskyOnly 
       Fediverse だけ
     </label>
     {allowBlueskyOnly && (
-      <label class='flex items-center gap-1 cursor-pointer'>
+      <label class='flex items-center gap-1 whitespace-nowrap cursor-pointer'>
         <input
           type='radio'
           name={name}

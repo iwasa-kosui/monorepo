@@ -1,6 +1,7 @@
 import { useEffect } from 'hono/jsx';
 
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import { detailHref, displayStatus } from '../api/status.ts';
 import { shouldCloseReplyModalOnKey } from '../components/FediverseReplyModal.tsx';
 import type { HomeItem } from './homeFeed.ts';
@@ -17,7 +18,7 @@ type UseKeyboardNavigationProps = Readonly<{
   threadModalPostId: string | null;
   onLike: (postId: string) => void;
   onUndoLike: (postId: string) => void;
-  onReply: (postId: string, username: string) => void;
+  onReply: (postId: string, username: string, visibility?: Visibility) => void;
   onBlueskyReply: (item: IoriBlueskyTimelineItemBody) => void;
   onCancelReply: () => void;
   onCloseThread: () => void;
@@ -166,7 +167,7 @@ export const useKeyboardNavigation = ({
           }
           if (post === undefined) break;
           e.preventDefault();
-          onReply(post.id, post.account.acct);
+          onReply(post.id, post.account.acct, post.visibility);
           break;
         }
       }
