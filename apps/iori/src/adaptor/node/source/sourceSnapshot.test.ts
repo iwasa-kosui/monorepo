@@ -1,6 +1,6 @@
 import { chmod, mkdir, open, readdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { afterEach, beforeAll, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, expect, it, type MockInstance, vi } from 'vitest';
 
 import { createFixtureDirectory } from '../../../../scripts/__tests__/fixtureTemp.ts';
 import { SOURCE_LIMITS } from '../../../../scripts/source-transfer-protocol.mjs';
@@ -11,11 +11,15 @@ vi.mock('../../../../scripts/source-transfer-protocol.mjs', async (importOrigina
   return { ...actual, SOURCE_LIMITS: Object.freeze({ ...actual.SOURCE_LIMITS, inventoryFiles: 35 }) };
 });
 
-// macOS の fsync は F_FULLFSYNC でドライブの書き込みキャッシュ全体を flush させ、全体実行の I/O と重なると 5 秒の timeout を超える。
+// macOS の fsync は F_FULLFSYNC でドライブの書き込みキャッシュ全体を flush させ、全体実行の I/O と重なると 5 秒の timeout を超えることがある。
+let syncSpy: MockInstance | undefined;
 beforeAll(async () => {
   const handle = await open(import.meta.filename, 'r');
-  vi.spyOn(Object.getPrototypeOf(handle), 'sync').mockResolvedValue(undefined);
+  syncSpy = vi.spyOn(Object.getPrototypeOf(handle), 'sync').mockResolvedValue(undefined);
   await handle.close();
+});
+afterAll(() => {
+  syncSpy?.mockRestore();
 });
 
 const roots: string[] = [];
