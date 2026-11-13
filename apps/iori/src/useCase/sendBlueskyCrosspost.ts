@@ -29,6 +29,7 @@ import type { PostImageObjectStore } from '../ports/postImageObjectStore.ts';
 import { findMentionHandles, withMentionFacets } from './helper/blueskyMentionFacets.ts';
 import { resolveBlueskyQuoteContextWith } from './helper/blueskyQuoteContext.ts';
 import { resolveBlueskyReplyContextWith } from './helper/blueskyReplyContext.ts';
+import { withTagFacets } from './helper/blueskyTagFacets.ts';
 import { deleteBlueskyRecordWith } from './helper/deleteBlueskyRecord.ts';
 import { resolveDids } from './helper/publishBlueskyPost.ts';
 import type { UseCase } from './useCase.ts';
@@ -167,10 +168,14 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     }
 
     const mentionOptions = { excludeTruncated: true };
-    const facets = withMentionFacets(
+    const facets = withTagFacets(
       draft.val.text,
-      draft.val.facets,
-      await resolveMentionDids(findMentionHandles(draft.val.text, draft.val.facets, mentionOptions)),
+      withMentionFacets(
+        draft.val.text,
+        draft.val.facets,
+        await resolveMentionDids(findMentionHandles(draft.val.text, draft.val.facets, mentionOptions)),
+        mentionOptions,
+      ),
       mentionOptions,
     );
     const imageBlobs = [];

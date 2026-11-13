@@ -548,6 +548,24 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
   });
 
+  it('Mastodon 形式のハッシュタグは、link facet ではなく tag facet にして送る', async () => {
+    const t = setup();
+    const post = t.addPost({
+      content:
+        '<p>こんにちは <a href="https://mastodon.example/tags/iori" class="mention hashtag" rel="tag">#<span>iori</span></a></p>',
+    });
+
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+
+    expect(t.created[0]?.text).toBe('こんにちは #iori');
+    expect(t.created[0]?.facets).toEqual([{
+      index: { byteStart: 16, byteEnd: 21 },
+      features: [{ $type: 'app.bsky.richtext.facet#tag', tag: 'iori' }],
+    }]);
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
+  });
+
   it('リンクと重なるハンドルには mention facet を付けない', async () => {
     const t = setup();
     const post = t.addPost({

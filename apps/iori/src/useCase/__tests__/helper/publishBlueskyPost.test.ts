@@ -267,6 +267,31 @@ describe('publishBlueskyPost', () => {
     expect(starts).toHaveLength(3);
   });
 
+  it('URL・mention・ハッシュタグが混在する本文で、byteStart の昇順の facet にする', async () => {
+    const t = setup();
+
+    await t.publish({ text: '#日本語 @alice.bsky.social https://example.com #iori' });
+
+    expect(t.record().facets).toEqual([
+      {
+        index: { byteStart: 0, byteEnd: 10 },
+        features: [{ $type: 'app.bsky.richtext.facet#tag', tag: '日本語' }],
+      },
+      {
+        index: { byteStart: 11, byteEnd: 29 },
+        features: [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' }],
+      },
+      {
+        index: { byteStart: 30, byteEnd: 49 },
+        features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://example.com' }],
+      },
+      {
+        index: { byteStart: 50, byteEnd: 55 },
+        features: [{ $type: 'app.bsky.richtext.facet#tag', tag: 'iori' }],
+      },
+    ]);
+  });
+
   it('画像を uploadBlob で上げ、alt 付きの images embed にする', async () => {
     const t = setup();
 
