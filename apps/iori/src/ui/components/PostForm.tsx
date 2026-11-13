@@ -223,7 +223,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           onChange={handleVisibilityChange}
           name='visibility'
           id={`${formId ?? id ?? 'post-form'}-visibility`}
-          disabled={isBlueskyOnly}
+          disabled={isBlueskyOnly || isPosting}
         />
       </div>
       <div class='mt-2 flex flex-wrap justify-end items-center gap-3 flex-shrink-0'>
