@@ -494,7 +494,7 @@ const ThreadModal = () => {
               onChange={threadReplyVisibility.setVisibility}
               parentVisibility={threadReplyVisibility.parentVisibility}
               destination={replyDestination}
-              disabled={isSendingReply}
+              disabled={isSendingReply || isLoadingThread}
               name='thread-reply-visibility'
               id='thread-reply-visibility'
             />
