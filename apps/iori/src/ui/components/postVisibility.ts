@@ -15,3 +15,15 @@ export const visibilityWhenDefaultLoaded = (
 
 export const visibilityForDestination = (destination: PostDestination, current: PostVisibility): PostVisibility =>
   destination === 'bluesky' ? 'public' : current;
+
+export const visibilityWhenDestinationChanged = (
+  current: PostVisibility,
+  nextDestination: PostDestination,
+  defaultVisibility: PostVisibility,
+  touched: boolean,
+): PostVisibility =>
+  nextDestination === 'bluesky'
+    ? visibilityForDestination(nextDestination, current)
+    : touched
+    ? current
+    : defaultVisibility;

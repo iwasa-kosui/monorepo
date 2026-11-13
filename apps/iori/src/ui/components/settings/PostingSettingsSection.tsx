@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'hono/jsx';
 
 import { fetchPreferences, isUnauthorizedError, savePreferences } from '../../api/mastodonClient.ts';
+import { replaceDefaultPostVisibility } from '../../hooks/useDefaultPostVisibility.ts';
 import { DEFAULT_POST_VISIBILITY, type PostVisibility } from '../postVisibility.ts';
 import { PostVisibilitySelect } from '../PostVisibilitySelect.tsx';
 import { SettingsSection } from './SettingsSection.tsx';
@@ -84,6 +85,7 @@ export const PostingSettingsSection = () => {
     try {
       const saved = await savePreferences({ defaultPostVisibility: visibility });
       setVisibility(saved.defaultPostVisibility);
+      replaceDefaultPostVisibility(saved.defaultPostVisibility);
       setSavedMessage('保存しました');
     } catch (error) {
       if (isUnauthorizedError(error)) {
