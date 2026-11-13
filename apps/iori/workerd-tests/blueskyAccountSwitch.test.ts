@@ -50,6 +50,7 @@ const BLUESKY_TABLES = [
   'bluesky_moderated_actors',
   'bluesky_notification_receipts',
   'bluesky_notification_sync_state',
+  'bluesky_chat_push_receipts',
 ] as const;
 
 const countOf = async (table: string, where = '1 = 1') =>
@@ -81,6 +82,8 @@ const seedBlueskyTables = (sizes: { timeline: number; likes: number }) =>
       .bind(`at://receipt/${run}`, 1, 1),
     env.DB.prepare('INSERT INTO bluesky_notification_sync_state(id,initialSyncCompletedAt) VALUES (?,?)')
       .bind(`default-${run}`, 1),
+    env.DB.prepare('INSERT INTO bluesky_chat_push_receipts(convoId,lastMessageId,notifiedAt) VALUES (?,?,?)')
+      .bind(`convo-${run}`, 'message-1', 1),
   ]);
 
 const seedNotifications = (blueskyCount: number) =>
@@ -242,6 +245,7 @@ describe('アカウントの切り替えの削除（実 D1）', () => {
         moderatedActors: 1,
         notificationReceipts: 1,
         notificationSyncState: 1,
+        chatPushReceipts: 1,
         notifications: 3,
       },
     });

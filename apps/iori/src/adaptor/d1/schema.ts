@@ -842,6 +842,12 @@ export const blueskyNotificationSyncStateTable = sqliteTable('bluesky_notificati
   initialSyncCompletedAt: timestamp().notNull(),
 });
 
+export const blueskyChatPushReceiptsTable = sqliteTable('bluesky_chat_push_receipts', {
+  convoId: text('convoId').primaryKey(),
+  lastMessageId: text('lastMessageId').notNull(),
+  notifiedAt: timestamp().notNull(),
+});
+
 export const blueskyAccountSwitchTable = sqliteTable('bluesky_account_switch', {
   id: text('id').primaryKey(),
   switchId: text('switchId').notNull(),
