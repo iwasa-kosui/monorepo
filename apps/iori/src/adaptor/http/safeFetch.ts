@@ -10,6 +10,7 @@ export type SafeFetchOptions = Readonly<{
   maxBytes: number;
   maxRedirects: number;
   headers?: Readonly<Record<string, string>>;
+  acceptContentType?: (contentType: string | undefined) => boolean;
 }>;
 
 export type SafeFetchResult = Readonly<{
@@ -21,11 +22,21 @@ export type SafeFetchResult = Readonly<{
   contentType?: string;
 }>;
 
+export type SafeFetchBytesResult = Readonly<{
+  status: number;
+  bytes?: Uint8Array;
+  etag: string | null;
+  lastModified: string | null;
+  finalUrl: string;
+  contentType?: string;
+}>;
+
 export type SafeFetchErrorReason =
   | 'invalid_url'
   | 'blocked_url'
   | 'too_many_redirects'
   | 'too_large'
+  | 'unsupported_content_type'
   | 'timeout'
   | 'http_status'
   | 'network';
@@ -39,6 +50,7 @@ export type SafeFetchError = Readonly<{
 
 export type SafeFetcher = Readonly<{
   fetchText: (url: string, options: SafeFetchOptions) => RA<SafeFetchResult, SafeFetchError>;
+  fetchBytes: (url: string, options: SafeFetchOptions) => RA<SafeFetchBytesResult, SafeFetchError>;
 }>;
 
 type Deps = Readonly<{
@@ -65,16 +77,16 @@ const parseTarget = (value: string): URL | SafeFetchError => {
 
 const isRedirect = (status: number): boolean => status >= 300 && status < 400 && status !== 304;
 
-const readBody = async (
+const readBytes = async (
   response: Response,
   maxBytes: number,
-): Promise<string | SafeFetchError> => {
+): Promise<Uint8Array | SafeFetchError> => {
   const declared = Number(response.headers.get('Content-Length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
     await response.body?.cancel();
     return safeFetchError('too_large', `Response is larger than ${maxBytes} bytes.`);
   }
-  if (response.body === null) return '';
+  if (response.body === null) return new Uint8Array(0);
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let received = 0;
@@ -94,16 +106,16 @@ const readBody = async (
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return decodeBody(bytes, response.headers.get('Content-Type'));
+  return bytes;
 };
 
 export const createSafeFetcher = (deps: Deps = {}): SafeFetcher => {
   const fetchImpl: typeof fetch = deps.fetch ?? ((input, init) => fetch(input, init));
 
-  const fetchText = async (
+  const fetchBytes = async (
     url: string,
     options: SafeFetchOptions,
-  ): RA<SafeFetchResult, SafeFetchError> => {
+  ): RA<SafeFetchBytesResult, SafeFetchError> => {
     const controller = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -153,8 +165,14 @@ export const createSafeFetcher = (deps: Deps = {}): SafeFetcher => {
           await response.body?.cancel();
           return RA.err(safeFetchError('http_status', `Unexpected status ${response.status}.`, response.status));
         }
-        const body = await readBody(response, options.maxBytes);
-        return typeof body === 'string' ? RA.ok({ ...meta, body }) : RA.err(body);
+        if (options.acceptContentType !== undefined && !options.acceptContentType(contentType)) {
+          await response.body?.cancel();
+          return RA.err(
+            safeFetchError('unsupported_content_type', `Unsupported content type: ${contentType ?? 'none'}.`),
+          );
+        }
+        const bytes = await readBytes(response, options.maxBytes);
+        return bytes instanceof Uint8Array ? RA.ok({ ...meta, bytes }) : RA.err(bytes);
       }
     } catch (error) {
       if (timedOut) return RA.err(safeFetchError('timeout', `Timed out after ${options.timeoutMs} ms.`));
@@ -164,5 +182,15 @@ export const createSafeFetcher = (deps: Deps = {}): SafeFetcher => {
     }
   };
 
-  return { fetchText };
+  const fetchText = async (
+    url: string,
+    options: SafeFetchOptions,
+  ): RA<SafeFetchResult, SafeFetchError> => {
+    const fetched = await fetchBytes(url, options);
+    if (!fetched.ok) return fetched;
+    const { bytes, ...meta } = fetched.val;
+    return RA.ok(bytes === undefined ? meta : { ...meta, body: decodeBody(bytes, meta.contentType) });
+  };
+
+  return { fetchText, fetchBytes };
 };

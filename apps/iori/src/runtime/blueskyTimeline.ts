@@ -179,7 +179,7 @@ export const createRepostBlueskyPostUseCases = (
 };
 
 const createLinkPreviewDeps = (deps: Readonly<{ fetch?: typeof fetch }>) => ({
-  ogpFetcher: createOgpFetcher(),
+  ogpFetcher: createOgpFetcher({ fetch: deps.fetch }),
   thumbnailFetcher: createBlueskyThumbnailFetcher({ fetch: deps.fetch }),
 });
 

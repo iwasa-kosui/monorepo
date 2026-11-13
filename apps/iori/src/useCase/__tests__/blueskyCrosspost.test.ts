@@ -1360,6 +1360,22 @@ describe('createBlueskyThumbnailFetcher', () => {
     expect(await fetcherFor(response).fetch('https://example.com/a.png')).toBeUndefined();
   });
 
+  it('Content-Length なしで上限を超えるストリームは途中で中断して undefined を返す', async () => {
+    const cancel = vi.fn();
+    let pulls = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        pulls += 1;
+        controller.enqueue(new Uint8Array(400_000));
+      },
+      cancel,
+    });
+    const response = new Response(stream, { status: 200, headers: { 'content-type': 'image/png' } });
+    expect(await fetcherFor(response).fetch('https://example.com/a.png')).toBeUndefined();
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(pulls).toBeLessThan(10);
+  });
+
   it('リダイレクトを追わず、3xx は thumb なしとして扱う', async () => {
     const fetchStub = vi.fn(async () =>
       new Response(null, { status: 302, headers: { location: 'https://127.0.0.1/a.png', 'content-type': 'image/png' } })

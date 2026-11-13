@@ -61,7 +61,7 @@ type Deps = Readonly<{
   interestSourceContentChangedStore: InterestSourceContentChangedStore;
   interestSourceDeletedStore: InterestSourceDeletedStore;
   interestSourceEmbeddedStore: InterestSourceEmbeddedStore;
-  safeFetcher: SafeFetcher;
+  safeFetcher: Pick<SafeFetcher, 'fetchText'>;
   textEmbedder: TextEmbedder | undefined;
   now: () => Instant;
 }>;
