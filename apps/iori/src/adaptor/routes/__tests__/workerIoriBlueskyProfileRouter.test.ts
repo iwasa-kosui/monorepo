@@ -418,7 +418,11 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
       replyRootUri: null,
       isOwn: false,
     }]);
-    expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: 'abc' });
+    expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({
+      actor: DID,
+      cursor: 'abc',
+      filter: 'posts_and_author_threads',
+    });
   });
 
   it('続きが無いとき cursor を null にし、cursor を付けなければ undefined で呼ぶ', async () => {
@@ -430,8 +434,36 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
     const response = await t.get(`${PROFILES}/${DID}/feed`);
 
     expect(await response.json()).toEqual({ items: [], cursor: null, unavailable: null });
-    expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: undefined });
+    expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({
+      actor: DID,
+      cursor: undefined,
+      filter: 'posts_and_author_threads',
+    });
   });
+
+  it.each(
+    ['posts_and_author_threads', 'posts_with_replies', 'posts_with_media', 'posts_with_video'] as const,
+  )('クエリの filter=%s を reader に渡す', async (filter) => {
+    const t = await setup({ scope: 'read:accounts' });
+
+    const response = await t.get(`${PROFILES}/${DID}/feed?filter=${filter}`);
+
+    expect(response.status).toBe(200);
+    expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: undefined, filter });
+  });
+
+  it.each(['', 'unknown', 'posts_with_likes', 'POSTS_WITH_MEDIA'])(
+    '不正な filter=%j は 400 にし、reader を呼ばない',
+    async (filter) => {
+      const t = await setup({ scope: 'read:accounts' });
+
+      const response = await t.get(`${PROFILES}/${DID}/feed?filter=${filter}`);
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'Validation failed: filter' });
+      expect(t.reader.getAuthorFeed).not.toHaveBeenCalled();
+    },
+  );
 
   it('ブロック関係で読めないときは 200 で空の投稿と unavailable: blocked を返す', async () => {
     const t = await setup({

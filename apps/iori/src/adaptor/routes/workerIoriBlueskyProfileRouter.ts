@@ -6,7 +6,11 @@ import type { BlueskyProfileImageInput } from '../../domain/blueskyProfile/blues
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type { BlueskyFeedNotFound, BlueskySavedFeed } from '../../ports/blueskyFeedReader.ts';
-import type { BlueskyProfile, BlueskyProfileNotFound } from '../../ports/blueskyProfileReader.ts';
+import {
+  type BlueskyProfile,
+  type BlueskyProfileNotFound,
+  isBlueskyAuthorFeedFilter,
+} from '../../ports/blueskyProfileReader.ts';
 import type { FollowBlueskyActorUseCase } from '../../useCase/followBlueskyActor.ts';
 import type { GetBlueskyFeedInfoUseCase } from '../../useCase/getBlueskyFeedInfo.ts';
 import type { GetBlueskyProfileUseCase } from '../../useCase/getBlueskyProfile.ts';
@@ -266,9 +270,12 @@ export const createWorkerIoriBlueskyProfileRouter = ({
     .get('/iori/v1/bluesky/profiles/:actor/feed', authn.requireUser(readAccounts), async (c) => {
       if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
       if (listBlueskyAuthorFeedUseCase === undefined) return c.json(disabled, 409);
+      const filter = c.req.query('filter') ?? 'posts_and_author_threads';
+      if (!isBlueskyAuthorFeedFilter(filter)) return c.json({ error: 'Validation failed: filter' }, 400);
       const page = await listBlueskyAuthorFeedUseCase.run({
         actor: c.req.param('actor'),
         cursor: c.req.query('cursor') || undefined,
+        filter,
       });
       if (!page.ok) return failure(c, page.err);
       const viewer = await resolveViewerDid(viewerDid);

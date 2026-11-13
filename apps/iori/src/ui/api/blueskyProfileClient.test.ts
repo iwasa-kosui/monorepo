@@ -60,6 +60,24 @@ describe('blueskyProfileClient', () => {
     expect(withoutCursor.mock.calls[0]?.[0]).toBe('/api/iori/v1/bluesky/profiles/alice.bsky.social/feed');
   });
 
+  it('filter を付けて投稿の一覧を取り、既定の posts_and_author_threads のときはクエリに付けない', async () => {
+    const media = stubFetch(json({ items: [], cursor: null }));
+    await fetchBlueskyAuthorFeed('alice.bsky.social', undefined, 'posts_with_media');
+    expect(media.mock.calls[0]?.[0]).toBe(
+      '/api/iori/v1/bluesky/profiles/alice.bsky.social/feed?filter=posts_with_media',
+    );
+
+    const withCursor = stubFetch(json({ items: [], cursor: null }));
+    await fetchBlueskyAuthorFeed('alice.bsky.social', 'abc', 'posts_with_replies');
+    expect(withCursor.mock.calls[0]?.[0]).toBe(
+      '/api/iori/v1/bluesky/profiles/alice.bsky.social/feed?cursor=abc&filter=posts_with_replies',
+    );
+
+    const defaults = stubFetch(json({ items: [], cursor: null }));
+    await fetchBlueskyAuthorFeed('alice.bsky.social', undefined, 'posts_and_author_threads');
+    expect(defaults.mock.calls[0]?.[0]).toBe('/api/iori/v1/bluesky/profiles/alice.bsky.social/feed');
+  });
+
   it('フォロー一覧とフォロワー一覧を actor をエンコードして取り、cursor が無ければクエリを付けない', async () => {
     const page = { actors: [], cursor: null, viewerDid: 'did:plc:me' };
 
