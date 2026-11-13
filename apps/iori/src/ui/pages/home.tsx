@@ -513,6 +513,7 @@ const ThreadModal = () => {
               value={replyDestination}
               onChange={setReplyDestination}
               name='thread-reply-destination'
+              disabled={isSendingReply}
             />
             <button
               type='button'

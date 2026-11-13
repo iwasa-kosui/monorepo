@@ -48,7 +48,12 @@ export const QuoteModal = ({
         </div>
       }
       leadingActions={
-        <PostDestinationSelect value={destination} onChange={onDestinationChange} name='quote-destination' />
+        <PostDestinationSelect
+          value={destination}
+          onChange={onDestinationChange}
+          name='quote-destination'
+          disabled={isSending}
+        />
       }
     >
       <MarkdownEditor

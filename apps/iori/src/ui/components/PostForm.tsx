@@ -232,6 +232,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           onChange={handleDestinationChange}
           name='destination'
           allowBlueskyOnly
+          disabled={isPosting}
         />
         <label class='cursor-pointer text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
           {isUploading
