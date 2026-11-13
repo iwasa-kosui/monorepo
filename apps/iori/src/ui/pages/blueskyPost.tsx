@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
+import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import { blueskyPostUrl } from '../../helper/blueskyUrl.ts';
 import { type BlueskyPostThread, fetchBlueskyPostThread, isMastodonApiError } from '../api/mastodonClient.ts';
 import { blueskyItemActionProps, type BlueskyPostActions } from '../components/blueskyPostActions.ts';
@@ -72,10 +73,25 @@ const BlueskyPostPage = () => {
   const updateItems: BlueskyItemsUpdater = useCallback((updater) => {
     setThread((prev) => prev === null ? prev : updateThreadItems(prev, updater));
   }, []);
-  const { actions: uriActions, replyDialog, reportDialog, notice } = useBlueskyUriActions(
-    updateItems,
-    moderationOptions,
-  );
+  const reloadThread = useCallback(() => {
+    const uri = postUriFromLocation();
+    if (uri === undefined) return;
+    fetchBlueskyPostThread(uri)
+      .then(setThread)
+      .catch((err) => console.error('Failed to reload the Bluesky thread:', err));
+  }, []);
+  const onPostDeleted = useCallback((item: IoriBlueskyTimelineItemBody) => {
+    if (item.uri !== postUriFromLocation()) {
+      reloadThread();
+      return;
+    }
+    if (window.history.length > 1) window.history.back();
+    else window.location.href = '/';
+  }, [reloadThread]);
+  const { actions: uriActions, replyDialog, reportDialog, notice } = useBlueskyUriActions(updateItems, {
+    ...moderationOptions,
+    onPostDeleted,
+  });
   const quoteDialog = useBlueskyQuoteDialog();
   const actions: BlueskyPostActions = { ...uriActions, onQuote: quoteDialog.open };
 
@@ -97,14 +113,6 @@ const BlueskyPostPage = () => {
     hasScrolledRef.current = true;
     if (thread.ancestors.length > 0) focusRef.current?.scrollIntoView({ block: 'start' });
   }, [thread]);
-
-  const reloadThread = useCallback(() => {
-    const uri = postUriFromLocation();
-    if (uri === undefined) return;
-    fetchBlueskyPostThread(uri)
-      .then(setThread)
-      .catch((err) => console.error('Failed to reload the Bluesky thread:', err));
-  }, []);
 
   const { send: sendReplyOnly } = replyDialog;
   const sendReply = useCallback(async (): Promise<boolean> => {

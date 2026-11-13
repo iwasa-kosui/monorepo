@@ -17,6 +17,7 @@ import {
   createD1BlueskySessionResolver,
   createD1BlueskySessionSavedStore,
 } from '../adaptor/d1/blueskyCrosspost/blueskySessionStore.ts';
+import { createD1PostIdsResolverByBlueskyUris } from '../adaptor/d1/blueskyNotification/postIdsResolverByBlueskyUris.ts';
 import { createD1BlueskySyncStatusResolver } from '../adaptor/d1/blueskySyncStatus/blueskySyncStatusStore.ts';
 import { createD1BlueskyLikeDeletedStore } from '../adaptor/d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyLikeSavedStore.ts';
@@ -27,6 +28,7 @@ import { createD1BlueskyRepostSavedStore } from '../adaptor/d1/blueskyTimeline/b
 import { createD1BlueskyRepostTargetResolver } from '../adaptor/d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
 import { createD1BlueskyRepostUriResolver } from '../adaptor/d1/blueskyTimeline/blueskyRepostUriResolver.ts';
 import { createD1BlueskyTimelineExistingFeedItemIdsResolver } from '../adaptor/d1/blueskyTimeline/blueskyTimelineExistingFeedItemIdsResolver.ts';
+import { createD1BlueskyTimelineItemsDeletedStore } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsDeletedStore.ts';
 import { createD1BlueskyTimelineItemsExpiredStore } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsExpiredStore.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
 import { createD1BlueskyTimelineItemsSavedStore } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsSavedStore.ts';
@@ -45,6 +47,8 @@ import type { BlueskyPostThreadFetcher } from '../ports/blueskyPostThreadFetcher
 import type { BlueskySearch } from '../ports/blueskySearch.ts';
 import { BlueskyChatUseCases } from '../useCase/blueskyChat.ts';
 import { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline.ts';
+import { DeleteOwnBlueskyPostUseCase } from '../useCase/deleteOwnBlueskyPost.ts';
+import type { DeletePostUseCase } from '../useCase/deletePost.ts';
 import { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../useCase/likeBlueskyPost.ts';
@@ -86,6 +90,7 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
   blueskyPostThreadFetcher: BlueskyPostThreadFetcher | undefined;
   replyToBlueskyPostUseCase: ReplyToBlueskyPostUseCase | undefined;
   postToBlueskyUseCase: PostToBlueskyUseCase | undefined;
+  deleteOwnBlueskyPostUseCase: DeleteOwnBlueskyPostUseCase | undefined;
   quoteBlueskyPostUseCase: QuoteBlueskyPostUseCase | undefined;
   markBlueskyNotificationsSeenUseCase: MarkBlueskyNotificationsSeenUseCase | undefined;
   blueskySearch: BlueskySearch | undefined;
@@ -211,6 +216,21 @@ export const createPostToBlueskyUseCase = (
   });
 };
 
+export const createDeleteOwnBlueskyPostUseCase = (
+  env: IoriWorkerEnv,
+  db: IoriD1Db,
+  deps: Readonly<{ fetch?: typeof fetch; deletePost: DeletePostUseCase }>,
+): DeleteOwnBlueskyPostUseCase | undefined => {
+  const config = resolveBlueskyRuntimeConfig(env);
+  if (config === undefined) return undefined;
+  return DeleteOwnBlueskyPostUseCase.create({
+    client: createTimelineClient(config, db, deps),
+    postIdsResolver: createD1PostIdsResolverByBlueskyUris(db),
+    deletePost: deps.deletePost,
+    timelineItemsDeletedStore: createD1BlueskyTimelineItemsDeletedStore(db),
+  });
+};
+
 export const createQuoteBlueskyPostUseCase = (
   env: IoriWorkerEnv,
   db: IoriD1Db,
@@ -276,7 +296,7 @@ const createChatUseCases = (client: ReturnType<typeof createTimelineClient>) =>
 export const createBlueskyTimelineRuntimePorts = (
   env: IoriWorkerEnv,
   db: IoriD1Db,
-  deps: Readonly<{ fetch?: typeof fetch }> = {},
+  deps: Readonly<{ fetch?: typeof fetch; deletePost?: DeletePostUseCase }> = {},
 ): BlueskyTimelineRuntimePorts => {
   const likes = createLikeBlueskyPostUseCases(env, db, deps);
   const reposts = createRepostBlueskyPostUseCases(env, db, deps);
@@ -295,6 +315,9 @@ export const createBlueskyTimelineRuntimePorts = (
       : createBlueskyPostThreadFetcher({ client: createTimelineClient(config, db, deps), now: Instant.now }),
     replyToBlueskyPostUseCase: createReplyToBlueskyPostUseCase(env, db, deps),
     postToBlueskyUseCase: createPostToBlueskyUseCase(env, db, deps),
+    deleteOwnBlueskyPostUseCase: deps.deletePost === undefined
+      ? undefined
+      : createDeleteOwnBlueskyPostUseCase(env, db, { fetch: deps.fetch, deletePost: deps.deletePost }),
     quoteBlueskyPostUseCase: createQuoteBlueskyPostUseCase(env, db, deps),
     markBlueskyNotificationsSeenUseCase: createMarkBlueskyNotificationsSeenUseCase(env, db, deps),
     blueskySearch: config === undefined

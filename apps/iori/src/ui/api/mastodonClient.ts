@@ -15,6 +15,7 @@ import type {
   IoriRemoteStatusesResponse,
 } from '../../adaptor/routes/workerIoriActionsRouter.ts';
 import type {
+  IoriBlueskyDeletePostResponse,
   IoriBlueskyLikeResponse,
   IoriBlueskyPostResponse,
   IoriBlueskyRepostResponse,
@@ -625,6 +626,11 @@ export const likeBlueskyPost = async (feedItemId: string): Promise<IoriBlueskyLi
 
 export const unlikeBlueskyPost = (feedItemId: string): Promise<IoriBlueskyLikeResponse> =>
   act<IoriBlueskyLikeResponse>('DELETE', requestUrl(BLUESKY_LIKES_PATH, { feedItemId }));
+
+const BLUESKY_POSTS_PATH = '/api/iori/v1/bluesky/posts';
+
+export const deleteBlueskyPost = (uri: string): Promise<IoriBlueskyDeletePostResponse> =>
+  act<IoriBlueskyDeletePostResponse>('DELETE', requestUrl(BLUESKY_POSTS_PATH, { uri }));
 
 const BLUESKY_REPOSTS_PATH = '/api/iori/v1/bluesky/reposts';
 

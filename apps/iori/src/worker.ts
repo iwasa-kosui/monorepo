@@ -296,6 +296,7 @@ export default {
             mediaUploadResolver: runtime.mastodon.mediaUploadResolver,
             uploads: runtime.uploads,
             authn,
+            createContext,
           }),
         );
         app.route(

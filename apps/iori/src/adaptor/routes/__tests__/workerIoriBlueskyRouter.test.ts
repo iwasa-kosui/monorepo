@@ -9,10 +9,16 @@ import type {
 } from '../../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { BlueskyChat } from '../../../ports/blueskyChat.ts';
-import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../../ports/blueskyClient.ts';
+import type {
+  BlueskyChatClient,
+  BlueskyClient,
+  BlueskyClientError,
+  BlueskyQueryClient,
+} from '../../../ports/blueskyClient.ts';
 import type { BlueskyPostThread, BlueskyPostThreadFetcher } from '../../../ports/blueskyPostThreadFetcher.ts';
 import type { BlueskySearch } from '../../../ports/blueskySearch.ts';
 import { BlueskyChatUseCases } from '../../../useCase/blueskyChat.ts';
+import { DeleteOwnBlueskyPostUseCase } from '../../../useCase/deleteOwnBlueskyPost.ts';
 import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../useCase/likeBlueskyPost.ts';
 import { PostToBlueskyUseCase } from '../../../useCase/postToBluesky.ts';
@@ -24,6 +30,7 @@ import { UnlikeBlueskyPostUseCase } from '../../../useCase/unlikeBlueskyPost.ts'
 import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../d1/__tests__/sqliteFixture.ts';
 import { createD1BlueskyLoginFailureResolver } from '../../d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
+import { createD1PostIdsResolverByBlueskyUris } from '../../d1/blueskyNotification/postIdsResolverByBlueskyUris.ts';
 import { createD1BlueskySyncStatusResolver } from '../../d1/blueskySyncStatus/blueskySyncStatusStore.ts';
 import { createD1BlueskyLikeDeletedStore } from '../../d1/blueskyTimeline/blueskyLikeDeletedStore.ts';
 import { createD1BlueskyLikeSavedStore } from '../../d1/blueskyTimeline/blueskyLikeSavedStore.ts';
@@ -33,6 +40,7 @@ import { createD1BlueskyRepostDeletedStore } from '../../d1/blueskyTimeline/blue
 import { createD1BlueskyRepostSavedStore } from '../../d1/blueskyTimeline/blueskyRepostSavedStore.ts';
 import { createD1BlueskyRepostTargetResolver } from '../../d1/blueskyTimeline/blueskyRepostTargetResolver.ts';
 import { createD1BlueskyRepostUriResolver } from '../../d1/blueskyTimeline/blueskyRepostUriResolver.ts';
+import { createD1BlueskyTimelineItemsDeletedStore } from '../../d1/blueskyTimeline/blueskyTimelineItemsDeletedStore.ts';
 import { createD1MediaUploadResolver } from '../../d1/mediaUpload/mediaUploadResolver.ts';
 import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
@@ -95,6 +103,11 @@ const repostClient = (overrides: Partial<Pick<BlueskyClient, 'createRepost' | 'd
   ...overrides,
 });
 
+const deleteClient = (viewer = 'did:plc:me') => ({
+  deleteRecord: vi.fn<BlueskyClient['deleteRecord']>(async () => RA.ok(undefined)),
+  viewerDid: vi.fn<BlueskyChatClient['viewerDid']>(async () => RA.ok(viewer)),
+});
+
 const POSTED_URI = 'at://did:plc:me/app.bsky.feed.post/3kreply';
 const replyClient = (posts: unknown[] = [{ uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'cid1' }]) => ({
   createRecord: vi.fn<BlueskyClient['createRecord']>(async () =>
@@ -123,6 +136,7 @@ const setupNonOwner = async (
     blueskyReplyClient?: ReturnType<typeof replyClient>;
     blueskyPostClient?: ReturnType<typeof replyClient>;
     blueskyQuoteClient?: ReturnType<typeof replyClient>;
+    blueskyDeleteClient?: ReturnType<typeof deleteClient>;
     blueskySearch?: BlueskySearch;
     blueskyChat?: BlueskyChat;
   } = {},
@@ -195,6 +209,14 @@ const setupNonOwner = async (
           query: options.blueskyPostClient.query,
           now: Instant.now,
         }),
+      deleteOwnBlueskyPostUseCase: options.blueskyDeleteClient === undefined
+        ? undefined
+        : DeleteOwnBlueskyPostUseCase.create({
+          client: options.blueskyDeleteClient,
+          postIdsResolver: createD1PostIdsResolverByBlueskyUris(fixture.db),
+          deletePost: { run: async () => RA.ok({ success: true }) },
+          timelineItemsDeletedStore: createD1BlueskyTimelineItemsDeletedStore(fixture.db),
+        }),
       mediaUploadResolver: createD1MediaUploadResolver(fixture.db),
       uploads: { get: async () => undefined },
       quoteBlueskyPostUseCase: options.blueskyQuoteClient === undefined
@@ -211,6 +233,7 @@ const setupNonOwner = async (
         : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
       viewerDid: undefined,
       isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
+      createContext: () => undefined as never,
     }),
   );
   const issued = await harness.issueUserToken(options.scope ?? 'read:statuses');
@@ -2577,6 +2600,127 @@ describe('/api/iori/v1/bluesky/posts', () => {
 
     expect(response.status).toBe(429);
     expect(await response.json()).toEqual({ error: 'Bluesky rate limited' });
+  });
+});
+
+describe('DELETE /api/iori/v1/bluesky/posts', () => {
+  const POSTS = '/api/iori/v1/bluesky/posts';
+  const MINE = 'at://did:plc:me/app.bsky.feed.post/3kmine';
+  const CROSSPOSTED = 'at://did:plc:me/app.bsky.feed.post/3kcross';
+  const OTHERS = 'at://did:plc:other/app.bsky.feed.post/3kother';
+  const remove = (t: ReturnType<typeof setupReadApi>, headers: Record<string, string>, uri?: string) =>
+    t.request(uri === undefined ? POSTS : `${POSTS}?uri=${encodeURIComponent(uri)}`, { method: 'DELETE', headers });
+  const seedRow = (t: ReturnType<typeof setupReadApi>, uri: string) =>
+    t.sqlite.prepare(
+      'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    ).run(uri, uri, 'bafy', uri.split('/')[2], 'handle.bsky.social', 't', '[]', 1, 1, 1);
+  const uris = (t: ReturnType<typeof setupReadApi>) =>
+    t.sqlite.prepare('SELECT uri FROM bluesky_timeline_items').all().map((row) => (row as { uri: string }).uri);
+
+  it('自分の投稿を Bluesky から削除し、タイムラインの行を消して 200 を返す', async () => {
+    const client = deleteClient();
+    const t = setupReadApi({ blueskyDeleteClient: client });
+    const me = await t.signIn('write:statuses');
+    seedRow(t, MINE);
+
+    const response = await remove(t, me.bearer, MINE);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ viaCrosspost: false });
+    expect(client.deleteRecord).toHaveBeenCalledExactlyOnceWith('3kmine');
+    expect(uris(t)).toEqual([]);
+  });
+
+  it('iori からクロスポストした投稿は、Bluesky を直接削除せず、iori の投稿として削除する', async () => {
+    const client = deleteClient();
+    const t = setupReadApi({ blueskyDeleteClient: client });
+    const me = await t.signIn('write:statuses');
+    const local = t.seed.addLocalPost(me, BASE);
+    t.sqlite.prepare(
+      'INSERT INTO bluesky_crossposts(postId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+    ).run(local.postId, 'sent', CROSSPOSTED, 1, BASE, BASE);
+
+    const response = await remove(t, me.bearer, CROSSPOSTED);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ viaCrosspost: true });
+    expect(client.deleteRecord).not.toHaveBeenCalled();
+    expect(t.sqlite.prepare('SELECT deletedAt FROM posts WHERE postId = ?').get(local.postId)).not.toEqual({
+      deletedAt: null,
+    });
+  });
+
+  it('他人の投稿は 403 にし、Bluesky を呼ばない', async () => {
+    const client = deleteClient();
+    const t = setupReadApi({ blueskyDeleteClient: client });
+    const me = await t.signIn('write:statuses');
+    seedRow(t, OTHERS);
+
+    const response = await remove(t, me.bearer, OTHERS);
+
+    expect(response.status).toBe(403);
+    expect(client.deleteRecord).not.toHaveBeenCalled();
+    expect(uris(t)).toEqual([OTHERS]);
+  });
+
+  it('uri が無いか、投稿の uri でないときは 400 にし、Bluesky を呼ばない', async () => {
+    const client = deleteClient();
+    const t = setupReadApi({ blueskyDeleteClient: client });
+    const me = await t.signIn('write:statuses');
+
+    for (const uri of [undefined, 'not-a-uri', 'at://did:plc:me/app.bsky.feed.like/3kmine']) {
+      const response = await remove(t, me.bearer, uri);
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'Validation failed: uri' });
+    }
+    expect(client.deleteRecord).not.toHaveBeenCalled();
+  });
+
+  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
+    const client = deleteClient();
+    const t = await setupNonOwner({ scope: 'write:statuses', blueskyDeleteClient: client });
+
+    const response = await t.send('DELETE', `${POSTS}?uri=${encodeURIComponent(MINE)}`);
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Forbidden' });
+    expect(client.deleteRecord).not.toHaveBeenCalled();
+  });
+
+  it('認証なしだと 401、write:statuses を満たさない scope だと 403 にする', async () => {
+    const client = deleteClient();
+    const t = setupReadApi({ blueskyDeleteClient: client });
+    const me = await t.signIn('read:statuses');
+
+    expect((await remove(t, { Origin: ORIGIN }, MINE)).status).toBe(401);
+    expect((await remove(t, me.bearer, MINE)).status).toBe(403);
+    expect(client.deleteRecord).not.toHaveBeenCalled();
+  });
+
+  it('Bluesky の認証情報がないときは 409 を返す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn('write:statuses');
+
+    const response = await remove(t, me.bearer, MINE);
+
+    expect(response.status).toBe(409);
+  });
+
+  it('Bluesky の削除が失敗したら 502 にし、タイムラインの行を残す', async () => {
+    const client = deleteClient();
+    client.deleteRecord.mockReturnValueOnce(
+      RA.err({ type: 'BlueskyClientError', kind: 'http', message: 'deleteRecord failed: status 500', status: 500 }),
+    );
+    const t = setupReadApi({ blueskyDeleteClient: client });
+    const me = await t.signIn('write:statuses');
+    seedRow(t, MINE);
+
+    const response = await remove(t, me.bearer, MINE);
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
+    expect(uris(t)).toEqual([MINE]);
   });
 });
 

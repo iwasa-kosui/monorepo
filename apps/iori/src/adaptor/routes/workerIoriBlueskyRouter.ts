@@ -1,3 +1,4 @@
+import type { RequestContext } from '@fedify/fedify';
 import type { RA } from '@iwasa-kosui/result';
 import { type Context, Hono } from 'hono';
 
@@ -40,6 +41,12 @@ import type {
 import type { BlueskySearch, BlueskySearchedActor } from '../../ports/blueskySearch.ts';
 import type { PostImageObjectStore } from '../../ports/postImageObjectStore.ts';
 import type { BlueskyChatConvoSummary, BlueskyChatUseCases } from '../../useCase/blueskyChat.ts';
+import {
+  type BlueskyPostNotOwned,
+  type BlueskyPostUriInvalid,
+  type DeleteOwnBlueskyPostUseCase,
+} from '../../useCase/deleteOwnBlueskyPost.ts';
+import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
 import { resolveOwnedMediaUpload } from '../../useCase/getMediaUpload.ts';
 import type { BlueskyPostImage, BlueskyPostInvalid } from '../../useCase/helper/publishBlueskyPost.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
@@ -51,6 +58,7 @@ import type { ReplyToBlueskyPostUseCase } from '../../useCase/replyToBlueskyPost
 import type { RepostBlueskyPostUseCase } from '../../useCase/repostBlueskyPost.ts';
 import type { UndoRepostBlueskyPostUseCase } from '../../useCase/undoRepostBlueskyPost.ts';
 import type { UnlikeBlueskyPostUseCase } from '../../useCase/unlikeBlueskyPost.ts';
+import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import { BLUESKY_LOGIN_RETRY_COOLDOWN_MS } from '../bluesky/blueskyClient.ts';
 import {
   BLUESKY_MAX_GRAPHEMES,
@@ -80,6 +88,7 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   blueskyPostThreadFetcher: BlueskyPostThreadFetcher | undefined;
   replyToBlueskyPostUseCase: ReplyToBlueskyPostUseCase | undefined;
   postToBlueskyUseCase: PostToBlueskyUseCase | undefined;
+  deleteOwnBlueskyPostUseCase: DeleteOwnBlueskyPostUseCase | undefined;
   mediaUploadResolver: MediaUploadResolver;
   uploads: Pick<PostImageObjectStore, 'get'>;
   quoteBlueskyPostUseCase: QuoteBlueskyPostUseCase | undefined;
@@ -88,6 +97,7 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   blueskyChat: BlueskyChatUseCases | undefined;
   viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
   isDigestOwner: IsDigestOwner;
+  createContext: (request: Request) => RequestContext<unknown>;
 }>;
 
 export type IoriBlueskyTimelineItemBody = Readonly<{
@@ -214,6 +224,9 @@ export type IoriBlueskyReplyResponse = Readonly<{ uri: string; cid: string }>;
 export type IoriBlueskyPostResponse = Readonly<{ uri: string; url: string | null }>;
 
 export type IoriBlueskyQuoteResponse = Readonly<{ uri: string; cid: string }>;
+
+export type IoriBlueskyDeletePostResponse = Readonly<{ viaCrosspost: boolean }>;
+
 export type IoriBlueskyPostTargetBody = Readonly<{ feedItemId: string }> | Readonly<{ uri: string }>;
 
 export type IoriBlueskyLikeRequest = IoriBlueskyPostTargetBody;
@@ -417,6 +430,26 @@ type MediaImagesLoad =
 
 const mediaFailure = (c: Context, failure: 'unavailable' | 'too_many_images') =>
   failure === 'unavailable' ? c.json(mediaUnavailable, 422) : c.json(imageInvalidBody(failure), 422);
+const deleteFailure = (
+  c: Context,
+  error: BlueskyClientError | BlueskyPostUriInvalid | BlueskyPostNotOwned | InferUseCaseError<DeletePostUseCase>,
+) => {
+  switch (error.type) {
+    case 'BlueskyPostUriInvalid':
+      return c.json({ error: 'Validation failed: uri' }, 400);
+    case 'BlueskyPostNotOwned':
+      return c.json(forbidden, 403);
+    case 'PostNotFoundError':
+    case 'UnauthorizedError':
+      return c.json({ error: 'Record not found' }, 404);
+    case 'UserNotFoundError':
+    case 'SessionExpiredError':
+      return c.json({ error: 'The access token is invalid' }, 401);
+    case 'BlueskyClientError':
+      return clientFailure(c, error);
+  }
+};
+
 
 const quoteFailure = (
   c: Context,
@@ -469,6 +502,7 @@ export const createWorkerIoriBlueskyRouter = ({
   blueskyPostThreadFetcher,
   replyToBlueskyPostUseCase,
   postToBlueskyUseCase,
+  deleteOwnBlueskyPostUseCase,
   mediaUploadResolver,
   uploads,
   quoteBlueskyPostUseCase,
@@ -477,6 +511,7 @@ export const createWorkerIoriBlueskyRouter = ({
   blueskyChat,
   viewerDid,
   isDigestOwner,
+  createContext,
 }: WorkerIoriBlueskyRouterDeps): Hono<MastodonAuthEnv> => {
   const chatAccess = async (c: Context): Promise<BlueskyChatUseCases | Response> => {
     if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
@@ -779,6 +814,26 @@ export const createWorkerIoriBlueskyRouter = ({
         return posted.ok
           ? c.json({ uri: posted.val.uri, url: posted.val.url } satisfies IoriBlueskyPostResponse)
           : postFailure(c, posted.err);
+      },
+    )
+    .delete(
+      '/iori/v1/bluesky/posts',
+      requireSameOriginForCookie,
+      authn.requireUser(writeStatuses),
+      async (c) => {
+        const userId = getMastodonPrincipal(c)?.userId ?? undefined;
+        if (userId === undefined || !await isDigestOwner(userId)) return c.json(forbidden, 403);
+        if (deleteOwnBlueskyPostUseCase === undefined) {
+          return c.json({ error: 'Bluesky のアカウントが設定されていないため、削除できません' }, 409);
+        }
+        const uri = c.req.query('uri');
+        if (uri === undefined || !blueskyPostUriPattern.test(uri)) {
+          return c.json({ error: 'Validation failed: uri' }, 400);
+        }
+        const deleted = await deleteOwnBlueskyPostUseCase.run({ uri, userId, ctx: createContext(c.req.raw) });
+        return deleted.ok
+          ? c.json(deleted.val satisfies IoriBlueskyDeletePostResponse)
+          : deleteFailure(c, deleted.err);
       },
     )
     .post(

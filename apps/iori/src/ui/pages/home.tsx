@@ -741,6 +741,7 @@ const TimelineList = () => {
     blueskyReply,
     blueskyQuote,
     blueskyModeration,
+    blueskyDelete,
     blueskyStatus,
     reply,
     quote,
@@ -814,6 +815,7 @@ const TimelineList = () => {
               onMuteAuthor={blueskyModeration.onMuteAuthor}
               onBlockAuthor={blueskyModeration.onBlockAuthor}
               onReportPost={blueskyModeration.onReportPost}
+              onDeletePost={blueskyDelete.onDeletePost}
             />,
           );
         }
