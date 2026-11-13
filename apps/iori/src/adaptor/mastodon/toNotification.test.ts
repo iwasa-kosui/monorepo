@@ -224,12 +224,11 @@ describe('Bluesky notifications', () => {
     expect(targetPostIdOf(notification)).toBeUndefined();
   });
 
-  it('maps a subscribed-post blueskyMention to mention with the text and a link to the post itself', () => {
+  it('maps blueskySubscribedPost to status with the text and a link to the post itself', () => {
     const notification: Notification = {
       ...blueskyBase,
       blueskyUri: 'at://did:plc:alice/app.bsky.feed.post/3knew',
-      type: 'blueskyMention',
-      reason: 'subscribed-post',
+      type: 'blueskySubscribedPost',
       subjectUri: null,
       targetPostId: null,
       text: 'new post',
@@ -239,7 +238,7 @@ describe('Bluesky notifications', () => {
 
     expect(NotificationSchema.safeParse(result).success).toBe(true);
     expect(result).toMatchObject({
-      type: 'mention',
+      type: 'status',
       iori: {
         bluesky: {
           reason: 'subscribed-post',
@@ -330,7 +329,7 @@ describe('Bluesky notifications', () => {
 describe('selectDomainTypes', () => {
   const select = (types: string[], excludeTypes: string[] = []) => selectDomainTypes({ types, excludeTypes });
 
-  it('returns like, reply, mention, follow and repost by default and leaves emojiReact out', () => {
+  it('returns like, reply, mention, status, follow and repost by default and leaves emojiReact out', () => {
     expect(select([])).toEqual([
       'like',
       'blueskyLike',
@@ -338,6 +337,7 @@ describe('selectDomainTypes', () => {
       'reply',
       'mention',
       'blueskyMention',
+      'blueskySubscribedPost',
       'follow',
       'blueskyFollow',
       'repost',
@@ -366,12 +366,13 @@ describe('selectDomainTypes', () => {
       'reply',
       'mention',
       'blueskyMention',
+      'blueskySubscribedPost',
       'repost',
       'blueskyRepost',
       'blueskyRepostViaRepost',
     ]);
     expect(select(['reblog'])).toEqual(['repost', 'blueskyRepost', 'blueskyRepostViaRepost']);
-    expect(select(['status'])).toEqual([]);
+    expect(select(['status'])).toEqual(['blueskySubscribedPost']);
   });
 });
 

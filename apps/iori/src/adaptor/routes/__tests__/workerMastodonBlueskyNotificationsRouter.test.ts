@@ -142,26 +142,31 @@ describe('Bluesky の通知の Mastodon 互換 API', () => {
     ]);
   });
 
-  it('subscribed-post は mention として本文つきで返し、types[]=mention で絞り込める', async () => {
+  it('subscribed-post は status として本文つきで返し、types[]=status で絞り込めて types[]=mention には出さない', async () => {
     const t = await seedBluesky();
-    const subscribed = t.seed.addBlueskyNotification(t.me.userId, 'blueskyMention', 7_400, {
+    const subscribed = t.seed.addBlueskyNotification(t.me.userId, 'blueskySubscribedPost', 7_400, {
       blueskyUri: 'at://did:plc:alice/app.bsky.feed.post/3knew',
-      reason: 'subscribed-post',
       subjectUri: null,
       text: 'new post',
     });
 
-    const response = await t.get(`/api/v1/notifications/${subscribed}`);
-    const mentions = await t.get('/api/v1/notifications?types[]=mention');
+    const [single, statuses, mentions, defaults] = await Promise.all([
+      t.get(`/api/v1/notifications/${subscribed}`),
+      t.get('/api/v1/notifications?types[]=status'),
+      t.get('/api/v1/notifications?types[]=mention'),
+      t.get('/api/v1/notifications?limit=1'),
+    ]);
 
-    expect(NotificationSchema.parse(await response.json())).toMatchObject({
+    expect(NotificationSchema.parse(await single.json())).toMatchObject({
       id: subscribed,
-      type: 'mention',
+      type: 'status',
       account: { id: ALICE_ACCOUNT_ID },
       status: { id: 'bluesky:at://did:plc:alice/app.bsky.feed.post/3knew', content: '<p>new post</p>' },
       iori: { bluesky: { reason: 'subscribed-post', text: 'new post' } },
     });
-    expect(await t.typesOf(mentions)).toEqual(['mention', 'mention']);
+    expect(((await statuses.json()) as Array<{ id: string }>).map((item) => item.id)).toEqual([subscribed]);
+    expect(((await mentions.json()) as Array<{ id: string }>).map((item) => item.id)).toEqual([t.bluesky.mention]);
+    expect(((await defaults.json()) as Array<{ id: string }>).map((item) => item.id)).toEqual([subscribed]);
   });
 
   it('types[] で絞り込め、GET /v1/notifications/:id でも返す', async () => {

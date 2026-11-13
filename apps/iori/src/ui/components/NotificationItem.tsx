@@ -401,6 +401,7 @@ export const NotificationItem = ({ notification, recipientUsername }: Props) => 
     case IORI_EMOJI_REACTION_TYPE:
       return <EmojiReactNotificationItem notification={notification} recipientUsername={recipientUsername} />;
     case 'mention':
+    case 'status':
       return <MentionNotificationItem notification={notification} recipientUsername={recipientUsername} />;
     default:
       return null;

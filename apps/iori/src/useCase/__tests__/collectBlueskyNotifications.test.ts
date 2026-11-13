@@ -231,7 +231,7 @@ describe('CollectBlueskyNotificationsUseCase', () => {
     expect(t.rows().slice(1).map((row) => [row.type, row.reason, row.subjectUri, row.targetPostId, row.text])).toEqual([
       ['blueskyLikeViaRepost', 'like-via-repost', original, null, null],
       ['blueskyRepostViaRepost', 'repost-via-repost', original, null, null],
-      ['blueskyMention', 'subscribed-post', null, null, 'new post'],
+      ['blueskySubscribedPost', 'subscribed-post', null, null, 'new post'],
     ]);
     expect(t.send.mock.calls.map(([, payload]) => payload)).toEqual([
       { title: '新しい投稿', body: 'Alice が投稿しました', url: '/notifications' },

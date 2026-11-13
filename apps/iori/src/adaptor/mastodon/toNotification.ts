@@ -49,6 +49,8 @@ export const toType = (notification: DomainNotification): ResponseNotificationTy
       return 'follow';
     case 'blueskyMention':
       return 'mention';
+    case 'blueskySubscribedPost':
+      return 'status';
   }
 };
 
@@ -76,6 +78,7 @@ export const triggerOf = (notification: DomainNotification): NotificationTrigger
     case 'blueskyRepostViaRepost':
     case 'blueskyFollow':
     case 'blueskyMention':
+    case 'blueskySubscribedPost':
       return { kind: 'bluesky', author: notification.author };
   }
 };
@@ -100,6 +103,7 @@ export const targetPostIdOf = (notification: DomainNotification): PostId | undef
     case 'blueskyRepostViaRepost':
       return notification.targetPostId ?? undefined;
     case 'blueskyMention':
+    case 'blueskySubscribedPost':
     case 'blueskyFollow':
       return undefined;
   }
@@ -151,6 +155,13 @@ export const blueskyExtensionOf = (
         ...blueskyPostUriOf(notification.blueskyUri),
         text: notification.text,
       };
+    case 'blueskySubscribedPost':
+      return {
+        reason: 'subscribed-post',
+        url: blueskyPostUrlOf(notification.blueskyUri) ?? profileUrl,
+        ...blueskyPostUriOf(notification.blueskyUri),
+        text: notification.text,
+      };
   }
 };
 
@@ -168,6 +179,7 @@ export const toExtension = (notification: DomainNotification): IoriNotificationE
     case 'blueskyRepostViaRepost':
     case 'blueskyFollow':
     case 'blueskyMention':
+    case 'blueskySubscribedPost':
       return { bluesky: blueskyExtensionOf(notification) };
     default:
       return undefined;
@@ -179,7 +191,7 @@ const domainTypesOf: Readonly<Record<ResponseNotificationType, ReadonlyArray<Dom
   mention: ['reply', 'mention', 'blueskyMention'],
   follow: ['follow', 'blueskyFollow'],
   [IORI_EMOJI_REACTION_TYPE]: ['emojiReact'],
-  status: [],
+  status: ['blueskySubscribedPost'],
   reblog: ['repost', 'blueskyRepost', 'blueskyRepostViaRepost'],
   follow_request: [],
   poll: [],
@@ -191,7 +203,7 @@ const domainTypesOf: Readonly<Record<ResponseNotificationType, ReadonlyArray<Dom
 };
 
 const knownTypes = new Set<string>([...NotificationTypeSchema.options, IORI_EMOJI_REACTION_TYPE]);
-const defaultTypes: ReadonlyArray<ResponseNotificationType> = ['favourite', 'mention', 'follow', 'reblog'];
+const defaultTypes: ReadonlyArray<ResponseNotificationType> = ['favourite', 'mention', 'status', 'follow', 'reblog'];
 
 const known = (values: ReadonlyArray<string>): ResponseNotificationType[] =>
   values.filter((value): value is ResponseNotificationType => knownTypes.has(value));

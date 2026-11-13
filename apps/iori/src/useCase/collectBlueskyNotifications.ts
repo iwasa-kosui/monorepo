@@ -110,11 +110,18 @@ const buildBlueskyNotificationFromFetched = (
     case 'mention':
     case 'reply':
     case 'quote':
-    case 'subscribed-post':
       return {
         ...base,
         type: 'blueskyMention',
         reason: item.reason,
+        subjectUri: item.subjectUri,
+        targetPostId: item.subjectUri === null ? null : postIds.get(item.subjectUri) ?? null,
+        text: item.text,
+      };
+    case 'subscribed-post':
+      return {
+        ...base,
+        type: 'blueskySubscribedPost',
         subjectUri: item.subjectUri,
         targetPostId: item.subjectUri === null ? null : postIds.get(item.subjectUri) ?? null,
         text: item.text,

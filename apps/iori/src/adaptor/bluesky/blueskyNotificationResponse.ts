@@ -83,7 +83,7 @@ const subjectUriOf = (
   if (reason === 'quote') return quotedUriOf(record) ?? fallback;
   if (reason === 'like-via-repost' || reason === 'repost-via-repost') {
     const viaRepost = viaRepostRecordZodType.safeParse(record);
-    return viaRepost.success ? viaRepost.data.subject.uri : fallback;
+    return viaRepost.success ? viaRepost.data.subject.uri : undefined;
   }
   return reason === 'mention' || reason === 'subscribed-post' ? undefined : fallback;
 };

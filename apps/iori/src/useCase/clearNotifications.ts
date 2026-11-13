@@ -30,6 +30,7 @@ const allTypes: ReadonlyArray<Notification['type']> = [
   'blueskyRepostViaRepost',
   'blueskyFollow',
   'blueskyMention',
+  'blueskySubscribedPost',
 ];
 
 const create = ({ notificationsResolverByPage, notificationsClearedStore }: Deps): ClearNotificationsUseCase => {

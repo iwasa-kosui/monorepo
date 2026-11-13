@@ -127,6 +127,7 @@ const synthesizeBlueskyStatus = (
       });
     }
     case 'blueskyMention':
+    case 'blueskySubscribedPost':
       return toBlueskyStatus(notification, { createdAt: options.createdAt, account: options.account });
     default:
       return null;

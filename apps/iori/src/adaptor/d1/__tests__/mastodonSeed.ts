@@ -311,7 +311,8 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
       | 'blueskyLikeViaRepost'
       | 'blueskyRepostViaRepost'
       | 'blueskyFollow'
-      | 'blueskyMention',
+      | 'blueskyMention'
+      | 'blueskySubscribedPost',
     createdAt: number,
     options: {
       blueskyUri?: string;
@@ -337,6 +338,7 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
           blueskyRepostViaRepost: 'repost-via-repost',
           blueskyFollow: 'follow',
           blueskyMention: 'mention',
+          blueskySubscribedPost: 'subscribed-post',
         }[type],
       'did:plc:alice',
       'alice.bsky.social',

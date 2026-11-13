@@ -28,8 +28,9 @@ const blueskyTypes: ReadonlyArray<string> = [
   'blueskyRepostViaRepost',
   'blueskyFollow',
   'blueskyMention',
+  'blueskySubscribedPost',
 ];
-const mentionReasons: ReadonlyArray<string> = ['mention', 'reply', 'quote', 'subscribed-post'];
+const mentionReasons: ReadonlyArray<string> = ['mention', 'reply', 'quote'];
 
 const toBlueskyNotification = (
   base: Readonly<{ notificationId: NotificationId; recipientUserId: UserId; isRead: boolean }>,
@@ -53,12 +54,15 @@ const toBlueskyNotification = (
       ? {
         ...common,
         type,
-        reason: row.reason as 'mention' | 'reply' | 'quote' | 'subscribed-post',
+        reason: row.reason as 'mention' | 'reply' | 'quote',
         subjectUri: row.subjectUri,
         targetPostId,
         text: row.text ?? '',
       }
       : undefined;
+  }
+  if (type === 'blueskySubscribedPost') {
+    return { ...common, type, subjectUri: row.subjectUri, targetPostId, text: row.text ?? '' };
   }
   return row.subjectUri === null
       || (type !== 'blueskyLike' && type !== 'blueskyRepost' && type !== 'blueskyLikeViaRepost'

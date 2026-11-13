@@ -181,7 +181,7 @@ const blueskyMentionNotificationZodType = z
   .object({
     ...blueskyNotificationBaseShape,
     type: z.literal('blueskyMention'),
-    reason: z.enum(['mention', 'reply', 'quote', 'subscribed-post']),
+    reason: z.enum(['mention', 'reply', 'quote']),
     subjectUri: z.string().min(1).nullable(),
     targetPostId: z.nullable(PostId.zodType),
     text: z.string(),
@@ -190,6 +190,19 @@ const blueskyMentionNotificationZodType = z
 
 export type BlueskyMentionNotification = z.output<typeof blueskyMentionNotificationZodType>;
 export const BlueskyMentionNotification = Schema.create(blueskyMentionNotificationZodType);
+
+const blueskySubscribedPostNotificationZodType = z
+  .object({
+    ...blueskyNotificationBaseShape,
+    type: z.literal('blueskySubscribedPost'),
+    subjectUri: z.string().min(1).nullable(),
+    targetPostId: z.nullable(PostId.zodType),
+    text: z.string(),
+  })
+  .describe('BlueskySubscribedPostNotification');
+
+export type BlueskySubscribedPostNotification = z.output<typeof blueskySubscribedPostNotificationZodType>;
+export const BlueskySubscribedPostNotification = Schema.create(blueskySubscribedPostNotificationZodType);
 
 const notificationZodType = z.discriminatedUnion('type', [
   likeNotificationZodType,
@@ -204,6 +217,7 @@ const notificationZodType = z.discriminatedUnion('type', [
   blueskyRepostViaRepostNotificationZodType,
   blueskyFollowNotificationZodType,
   blueskyMentionNotificationZodType,
+  blueskySubscribedPostNotificationZodType,
 ]);
 
 export type Notification = z.output<typeof notificationZodType>;
@@ -535,7 +549,8 @@ export type BlueskyNotification =
   | BlueskyLikeViaRepostNotification
   | BlueskyRepostViaRepostNotification
   | BlueskyFollowNotification
-  | BlueskyMentionNotification;
+  | BlueskyMentionNotification
+  | BlueskySubscribedPostNotification;
 
 export type BlueskyNotificationCreated = NotificationEvent<
   BlueskyNotification,

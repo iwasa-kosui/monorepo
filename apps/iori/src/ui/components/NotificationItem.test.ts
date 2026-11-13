@@ -341,9 +341,9 @@ describe('NotificationItem', () => {
         expect(repost).toContain('href="/bluesky/profile/did:plc:other/post/3korig"');
       });
 
-      it('labels a subscribed post as posted, shows its text and links to the post page in iori', () => {
+      it('labels a status notification of a subscribed post as posted, shows its text and links to the post page in iori', () => {
         const html = render(notification({
-          type: 'mention',
+          type: 'status',
           account: blueskyAccount,
           iori: {
             bluesky: {
@@ -357,6 +357,7 @@ describe('NotificationItem', () => {
 
         expect(html).toContain('posted');
         expect(html).not.toContain('replied to your post');
+        expect(html).not.toContain('mentioned you');
         expect(html).toContain('a new post');
         expect(html).toContain('href="/bluesky/profile/did:plc:carol/post/3knew"');
       });

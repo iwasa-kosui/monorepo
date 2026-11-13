@@ -127,17 +127,13 @@ describe('parseBlueskyNotificationResponse', () => {
     expect(repost).toMatchObject({ reason: 'repost-via-repost', subjectUri: original });
   });
 
-  it('like-via-repost は record.subject.uri が取れなければ reasonSubject にフォールバックし、どちらもなければ dropped に数える', () => {
+  it('record.subject が無い via 系の通知は reasonSubject があっても dropped に数える', () => {
     const viaRepost = 'at://did:plc:me/app.bsky.feed.repost/3kmyrepost';
 
-    expect(only([entry({ reason: 'like-via-repost', reasonSubject: viaRepost })])).toMatchObject({
-      reason: 'like-via-repost',
-      subjectUri: viaRepost,
-    });
-    expect(parse([entry({ reason: 'repost-via-repost', reasonSubject: undefined })])).toMatchObject({
-      ok: true,
-      val: { items: [], dropped: 1 },
-    });
+    expect(parse([
+      entry({ reason: 'like-via-repost', reasonSubject: viaRepost }),
+      entry({ reason: 'repost-via-repost', reasonSubject: viaRepost, record: {} }),
+    ])).toMatchObject({ ok: true, val: { items: [], dropped: 2 } });
   });
 
   it('subscribed-post の subjectUri は reasonSubject があっても null にし、本文は record.text にする', () => {

@@ -34,6 +34,7 @@ export const BLUESKY_NOTIFICATION_TYPES = [
   'blueskyRepostViaRepost',
   'blueskyFollow',
   'blueskyMention',
+  'blueskySubscribedPost',
 ] as const;
 
 type PurgeSource = Readonly<{ table: SQLiteTable; createdBefore?: SQLiteColumn }>;

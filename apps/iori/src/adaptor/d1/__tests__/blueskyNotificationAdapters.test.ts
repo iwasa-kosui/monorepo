@@ -108,9 +108,8 @@ describe('createD1BlueskyNotificationCreatedStore', () => {
     const subscribed: BlueskyNotification = {
       ...base,
       notificationId: NotificationId.generate(),
-      type: 'blueskyMention',
+      type: 'blueskySubscribedPost',
       blueskyUri: 'at://did:plc:alice/app.bsky.feed.post/3',
-      reason: 'subscribed-post',
       subjectUri: null,
       targetPostId: null,
       text: 'new post',
@@ -134,7 +133,7 @@ describe('createD1BlueskyNotificationCreatedStore', () => {
     const items = await createD1NotificationsResolverByPage(t.db).resolve({
       recipientUserId: UserId.orThrow(t.me.userId),
       page: { limit: 10, olderThanId: undefined, newerThanId: undefined, order: 'newestFirst' },
-      types: ['blueskyLikeViaRepost', 'blueskyRepostViaRepost', 'blueskyMention'],
+      types: ['blueskyLikeViaRepost', 'blueskyRepostViaRepost', 'blueskySubscribedPost'],
     });
     expect(items.ok && items.val.map((item) => item.notification)).toEqual([
       subscribed,

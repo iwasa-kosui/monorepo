@@ -48,7 +48,7 @@ describe('prefetchUrlsFor', () => {
     expect(prefetchUrlsFor('/likes')[0]).toBe(favouritesUrl());
     expect(prefetchUrlsFor('/bookmarks')[0]).toBe(bookmarksUrl());
     expect(notificationsUrl(NOTIFICATION_TYPES)).toBe(
-      '/api/v1/notifications?types%5B%5D=favourite&types%5B%5D=mention&types%5B%5D=follow&types%5B%5D=reblog&types%5B%5D=iori%3Aemoji_reaction',
+      '/api/v1/notifications?types%5B%5D=favourite&types%5B%5D=mention&types%5B%5D=status&types%5B%5D=follow&types%5B%5D=reblog&types%5B%5D=iori%3Aemoji_reaction',
     );
   });
 
