@@ -118,8 +118,8 @@ describe('CollectBlueskyChatPushUseCase', () => {
 
     expect(result).toEqual({ ok: true, val: { skipped: null, fetched: 1, notified: 1, pushed: 1 } });
     expect(t.payloads()).toEqual([{
-      title: 'Alice からのメッセージ',
-      body: 'text convo/1-m1',
+      title: 'Bluesky のメッセージ',
+      body: 'Alice からメッセージが届きました',
       url: '/messages/convo%2F1',
     }]);
     expect(t.receipts()).toEqual([{ convoId: 'convo/1', lastMessageId: 'convo/1-m1', notifiedAt: NOW }]);
@@ -133,7 +133,7 @@ describe('CollectBlueskyChatPushUseCase', () => {
 
     await t.useCase.run();
 
-    expect(t.payloads()[0]!.title).toBe('bob.bsky.social からのメッセージ');
+    expect(t.payloads()[0]!.body).toBe('bob.bsky.social からメッセージが届きました');
   });
 
   it('保存済みの id と同じメッセージは送らず、新しいメッセージに変わったら送る', async () => {
@@ -200,28 +200,26 @@ describe('CollectBlueskyChatPushUseCase', () => {
     expect(t.receipts()).toEqual([{ convoId: 'edge', lastMessageId: 'm2', notifiedAt: NOW }]);
   });
 
-  it('メッセージリクエストは、未読数が 0 でも、リクエストであることがわかる title で送る', async () => {
+  it('メッセージリクエストは、未読数が 0 でも、リクエストであることがわかる title と body で送る', async () => {
     const t = setup([convoOf('c1', { status: 'request', unreadCount: 0 })]);
 
     await t.useCase.run();
 
-    expect(t.payloads()[0]!.title).toBe('Alice からのメッセージリクエスト');
+    expect(t.payloads()[0]).toMatchObject({
+      title: 'Bluesky のメッセージリクエスト',
+      body: 'Alice からメッセージリクエストが届きました',
+    });
   });
 
-  it('本文は 100 文字で切って末尾に … を付け、空なら定型文にする', async () => {
-    const t = setup([
-      convoOf('long', { lastMessage: messageOf('m1', { text: 'あ'.repeat(101), sentAt: NOW - 1 * MINUTE }) }),
-      convoOf('exact', { lastMessage: messageOf('m2', { text: 'い'.repeat(100), sentAt: NOW - 2 * MINUTE }) }),
-      convoOf('blank', { lastMessage: messageOf('m3', { text: '  ', sentAt: NOW - 3 * MINUTE }) }),
-    ]);
+  it('メッセージの本文を payload の title と body に含めない', async () => {
+    const secret = 'SECRET-TEXT-9f3a';
+    const t = setup([convoOf('c1', { lastMessage: messageOf('m1', { text: secret }) })]);
 
     await t.useCase.run();
 
-    expect(t.payloads().map((payload) => payload.body)).toEqual([
-      `${'あ'.repeat(100)}…`,
-      'い'.repeat(100),
-      '新しいメッセージがあります',
-    ]);
+    const [payload] = t.payloads();
+    expect(payload!.title).not.toContain(secret);
+    expect(payload!.body).not.toContain(secret);
   });
 
   it('6 会話以上は新しい 5 会話を個別に送り、残りを 1 通にまとめ、まとめた分も記録する', async () => {

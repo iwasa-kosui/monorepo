@@ -1,6 +1,5 @@
 import { RA, Result } from '@iwasa-kosui/result';
 
-import { graphemesOf } from '../adaptor/bluesky/blueskyPostRecord.ts';
 import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import {
   BLUESKY_CHAT_PAGE_LIMIT,
@@ -8,7 +7,6 @@ import {
   type BlueskyChatTextMessage,
 } from '../domain/blueskyChat/blueskyChat.ts';
 import {
-  BLUESKY_CHAT_PUSH_BODY_MAX_GRAPHEMES,
   type BlueskyChatPushReceiptsResolverByConvoIds,
   type BlueskyChatPushReceiptsSavedStore,
 } from '../domain/blueskyChatPush/blueskyChatPush.ts';
@@ -29,7 +27,6 @@ import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import type { UseCase } from './useCase.ts';
 
 const MESSAGES_URL = '/messages';
-const EMPTY_BODY = '新しいメッセージがあります';
 
 type Input = void;
 
@@ -62,21 +59,13 @@ type Candidate = Readonly<{
 
 const skipped = (reason: Skipped): Ok => ({ skipped: reason, fetched: 0, notified: 0, pushed: 0 });
 
-const bodyOf = (text: string): string => {
-  const trimmed = text.trim();
-  if (trimmed === '') return EMPTY_BODY;
-  const graphemes = graphemesOf(trimmed);
-  return graphemes.length > BLUESKY_CHAT_PUSH_BODY_MAX_GRAPHEMES
-    ? `${graphemes.slice(0, BLUESKY_CHAT_PUSH_BODY_MAX_GRAPHEMES).join('')}…`
-    : trimmed;
-};
-
 const payloadOf = (convo: BlueskyChatConvo, message: BlueskyChatTextMessage): PushPayload => {
   const sender = convo.members.find((member) => member.did === message.senderDid);
   const name = sender === undefined ? message.senderDid : sender.displayName ?? sender.handle;
+  const isRequest = convo.status === 'request';
   return {
-    title: convo.status === 'request' ? `${name} からのメッセージリクエスト` : `${name} からのメッセージ`,
-    body: bodyOf(message.text),
+    title: isRequest ? 'Bluesky のメッセージリクエスト' : 'Bluesky のメッセージ',
+    body: isRequest ? `${name} からメッセージリクエストが届きました` : `${name} からメッセージが届きました`,
     url: `${MESSAGES_URL}/${encodeURIComponent(convo.id)}`,
   };
 };
