@@ -521,6 +521,20 @@ describe('replyParams', () => {
       iori_destination: 'fediverse',
     });
   });
+
+  it('passes the selected visibility as visibility', () => {
+    expect(replyParams('post-1', 'hello', 'both', 'unlisted')).toEqual({
+      status: 'hello',
+      in_reply_to_id: 'post-1',
+      content_type: 'text/markdown',
+      iori_destination: 'both',
+      visibility: 'unlisted',
+    });
+  });
+
+  it('omits visibility when none is given, as for a reply to a direct post', () => {
+    expect(replyParams('post-1', 'hello', 'fediverse', undefined)).not.toHaveProperty('visibility');
+  });
 });
 
 describe('quoteParams', () => {

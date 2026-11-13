@@ -1,5 +1,5 @@
 import type { PostDestination } from '../../domain/post/postDestination.ts';
-import type { Visibility } from '../../domain/post/visibility.ts';
+import { Visibility } from '../../domain/post/visibility.ts';
 
 export type PostVisibility = Exclude<Visibility, 'direct'>;
 
@@ -27,3 +27,16 @@ export const visibilityWhenDestinationChanged = (
     : touched
     ? current
     : defaultVisibility;
+
+export const replyVisibilityDefault = (
+  parent: Visibility | undefined,
+  defaultVisibility: PostVisibility = DEFAULT_POST_VISIBILITY,
+): PostVisibility => {
+  const narrowest = parent === undefined
+    ? defaultVisibility
+    : Visibility.narrowestOf(defaultVisibility, parent);
+  return narrowest === 'direct' ? 'private' : narrowest;
+};
+
+export const isWiderThan = (option: Visibility, parent: Visibility): boolean =>
+  Visibility.narrowestOf(option, parent) !== option;

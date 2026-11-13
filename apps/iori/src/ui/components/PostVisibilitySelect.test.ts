@@ -1,6 +1,7 @@
 import { jsx } from 'hono/jsx';
 import { describe, expect, it } from 'vitest';
 
+import type { Visibility } from '../../domain/post/visibility.ts';
 import type { PostVisibility } from './postVisibility.ts';
 import { PostVisibilitySelect } from './PostVisibilitySelect.tsx';
 
@@ -80,5 +81,26 @@ describe('PostVisibilitySelect', () => {
 
   it('disabled を渡さなければ、選択肢を無効にしない', () => {
     expect(render('public')).not.toContain('disabled');
+  });
+
+  it.each(
+    [
+      ['unlisted', ['public']],
+      ['private', ['public', 'unlisted']],
+      ['public', []],
+      ['direct', ['public', 'unlisted', 'private']],
+    ] as const,
+  )('maxVisibility が %s のとき、それより広い選択肢 %j だけを無効にする', (maxVisibility, disabledValues) => {
+    const html = String(
+      jsx(PostVisibilitySelect, {
+        value: 'private',
+        onChange: () => {},
+        name: 'visibility',
+        maxVisibility: maxVisibility as Visibility,
+      }),
+    );
+    const disabled = [...html.matchAll(/<input[^>]*value="(\w+)"[^>]*disabled=""/g)].map((match) => match[1]);
+
+    expect(disabled).toEqual(disabledValues);
   });
 });

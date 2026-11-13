@@ -56,13 +56,13 @@ export const ReplyDialogShell = ({
 
       {errorText !== undefined && <p role='alert' class='mt-3 text-terracotta text-sm'>{errorText}</p>}
 
-      <div class='mt-3 flex gap-2 justify-end'>
+      <div class='mt-3 flex flex-wrap items-center gap-2 justify-end'>
         {leadingActions}
         {counter}
         <button
           type='button'
           onClick={onClose}
-          class='px-4 py-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
+          class='px-4 py-2 whitespace-nowrap text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
           disabled={isSending}
         >
           キャンセル
@@ -70,7 +70,7 @@ export const ReplyDialogShell = ({
         <button
           type='button'
           onClick={onSubmit}
-          class={`px-5 py-2 text-white text-sm font-medium rounded-clay transition-all ${
+          class={`px-5 py-2 whitespace-nowrap text-white text-sm font-medium rounded-clay transition-all ${
             canSubmit
               ? 'bg-terracotta hover:bg-terracotta-dark shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
               : 'bg-warm-gray-dark cursor-not-allowed'

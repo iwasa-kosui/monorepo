@@ -1,4 +1,5 @@
-import type { PostVisibility } from './postVisibility.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
+import { isWiderThan, type PostVisibility } from './postVisibility.ts';
 
 type Props = Readonly<{
   value: PostVisibility;
@@ -6,6 +7,7 @@ type Props = Readonly<{
   name: string;
   id?: string;
   disabled?: boolean;
+  maxVisibility?: Visibility;
 }>;
 
 const options: ReadonlyArray<Readonly<{ value: PostVisibility; label: string; description: string }>> = [
@@ -14,7 +16,7 @@ const options: ReadonlyArray<Readonly<{ value: PostVisibility; label: string; de
   { value: 'private', label: 'フォロワー限定', description: 'フォロワーだけが見られます' },
 ];
 
-export const PostVisibilitySelect = ({ value, onChange, name, id, disabled = false }: Props) => {
+export const PostVisibilitySelect = ({ value, onChange, name, id, disabled = false, maxVisibility }: Props) => {
   const descriptionId = `${id ?? name}-description`;
   const selected = options.find((option) => option.value === value);
   return (
@@ -25,23 +27,26 @@ export const PostVisibilitySelect = ({ value, onChange, name, id, disabled = fal
         aria-describedby={descriptionId}
         class='flex flex-wrap items-center gap-3 text-xs text-charcoal-light dark:text-gray-400'
       >
-        {options.map((option) => (
-          <label
-            key={option.value}
-            title={option.description}
-            class={`flex items-center gap-1 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-          >
-            <input
-              type='radio'
-              name={name}
-              value={option.value}
-              checked={value === option.value}
-              disabled={disabled}
-              onChange={() => onChange(option.value)}
-            />
-            {option.label}
-          </label>
-        ))}
+        {options.map((option) => {
+          const optionDisabled = disabled || (maxVisibility !== undefined && isWiderThan(option.value, maxVisibility));
+          return (
+            <label
+              key={option.value}
+              title={option.description}
+              class={`flex items-center gap-1 ${optionDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <input
+                type='radio'
+                name={name}
+                value={option.value}
+                checked={value === option.value}
+                disabled={optionDisabled}
+                onChange={() => onChange(option.value)}
+              />
+              {option.label}
+            </label>
+          );
+        })}
       </div>
       <p id={descriptionId} class='mt-1 text-xs text-charcoal-light dark:text-gray-400'>
         {selected?.description}

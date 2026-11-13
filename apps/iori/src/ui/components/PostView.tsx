@@ -2,6 +2,7 @@ import { useRef, useState } from 'hono/jsx';
 
 import type { Status, Translation } from '../../adaptor/mastodon/entities.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { isMastodonApiError, translate } from '../api/mastodonClient.ts';
 import { hideQuoteInline, quoteOf, quoteTargetUrls } from '../api/quote.ts';
@@ -42,7 +43,7 @@ type Props = Readonly<{
   dataIndex?: number;
   isEmojiPickerOpen?: boolean;
   onToggleEmojiPicker?: () => void;
-  onReply?: (postId: string, username: string) => void;
+  onReply?: (postId: string, username: string, visibility?: Visibility) => void;
   onQuote?: (post: Status) => void;
   onEdit?: (post: Status) => void;
   onShowThread?: (postId: string) => void;
@@ -623,7 +624,7 @@ export const PostView = (
             {onReply && (
               <button
                 type='button'
-                onClick={() => onReply(post.id, post.account.acct)}
+                onClick={() => onReply(post.id, post.account.acct, post.visibility)}
                 class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
                 title='Reply (p)'
               >
