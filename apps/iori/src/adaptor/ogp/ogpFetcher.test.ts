@@ -169,6 +169,12 @@ describe('createOgpFetcher content type and status', () => {
     expect(data.title).toBe('Xhtml');
   });
 
+  it('accepts a Content-Type with different letter case', async () => {
+    const fetchMock = htmlFetch(page('Mixed case'), 'Text/HTML; charset=utf-8');
+    const data = await createOgpFetcher({ fetch: asFetch(fetchMock) }).fetch('https://example.com/page');
+    expect(data.title).toBe('Mixed case');
+  });
+
   it('returns empty data for a failing status', async () => {
     const fetchMock = vi.fn(async () => new Response(page('Gone'), { status: 404, headers: HTML_HEADERS }));
     const data = await createOgpFetcher({ fetch: asFetch(fetchMock) }).fetch('https://example.com/page');

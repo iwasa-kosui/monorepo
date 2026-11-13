@@ -21,7 +21,8 @@ const OGP_FETCH_MAX_BYTES = 5 * 1024 * 1024;
 const OGP_FETCH_MAX_REDIRECTS = 3;
 
 const isHtmlContentType = (contentType: string | undefined): boolean =>
-  contentType !== undefined && (contentType.includes('text/html') || contentType.includes('application/xhtml'));
+  contentType !== undefined
+  && (contentType.toLowerCase().includes('text/html') || contentType.toLowerCase().includes('application/xhtml'));
 
 const emptyOgpData: OgpData = {
   title: null,
