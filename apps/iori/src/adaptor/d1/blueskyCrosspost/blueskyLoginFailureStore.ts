@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { eq } from 'drizzle-orm';
+import { and, eq, type SQL } from 'drizzle-orm';
 
 import type {
   BlueskyLoginFailureDeletedStore,
@@ -29,8 +29,8 @@ export const createD1BlueskyLoginFailureSavedStore = (db: IoriD1Db, scope: strin
   },
 });
 
-export const blueskyLoginFailureDeleteQuery = (db: IoriD1Db, scope: string) =>
-  db.delete(blueskyLoginFailuresTable).where(eq(blueskyLoginFailuresTable.scope, scope));
+export const blueskyLoginFailureDeleteQuery = (db: IoriD1Db, scope: string, guard?: SQL) =>
+  db.delete(blueskyLoginFailuresTable).where(and(eq(blueskyLoginFailuresTable.scope, scope), guard));
 
 export const createD1BlueskyLoginFailureDeletedStore = (
   db: IoriD1Db,

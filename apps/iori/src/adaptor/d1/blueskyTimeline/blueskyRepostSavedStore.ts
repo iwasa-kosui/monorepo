@@ -6,9 +6,10 @@ import { blueskyRepostsTable } from '../schema.ts';
 
 export const createD1BlueskyRepostSavedStore = (db: IoriD1Db): BlueskyRepostSavedStore => ({
   save: async ({ subjectUri, repostUri, createdAt }) => {
+    const values = { repostUri, createdAt: new Date(createdAt) };
     await db.insert(blueskyRepostsTable)
-      .values({ subjectUri, repostUri, createdAt: new Date(createdAt) })
-      .onConflictDoNothing();
+      .values({ subjectUri, ...values })
+      .onConflictDoUpdate({ target: blueskyRepostsTable.subjectUri, set: values });
     return RA.ok(undefined);
   },
 });

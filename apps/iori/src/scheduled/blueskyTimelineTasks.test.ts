@@ -141,7 +141,7 @@ describe('collectBlueskyTimelineTask', () => {
 
   it('1 分ごとの cron にだけ登録されている', () => {
     const everyMinute = scheduledTasks['* * * * *']!.map((task) => task.name);
-    expect(everyMinute).toEqual(['collectBlueskyTimeline', 'collectBlueskyNotifications']);
+    expect(everyMinute).toEqual(['collectBlueskyTimeline', 'collectBlueskyNotifications', 'purgeBlueskyAccountSwitch']);
     const threeHourly = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
     expect(threeHourly).not.toContain('collectBlueskyTimeline');
   });
@@ -192,8 +192,12 @@ describe('dispatchScheduled with the registered table', () => {
     return ran;
   };
 
-  it('* * * * * では取り込みだけが動く', async () => {
-    expect(await ranNames('* * * * *')).toEqual(['collectBlueskyTimeline', 'collectBlueskyNotifications']);
+  it('* * * * * では取り込みと切り替えの削除だけが動く', async () => {
+    expect(await ranNames('* * * * *')).toEqual([
+      'collectBlueskyTimeline',
+      'purgeBlueskyAccountSwitch',
+      'collectBlueskyNotifications',
+    ]);
   });
 
   it('3 時間ごとの式では、期限切れの削除と crosspost の再試行が動き、取り込みは動かない', async () => {

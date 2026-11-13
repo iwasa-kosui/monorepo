@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, desc, eq, exists, inArray, lt, notInArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, lt, notInArray, or, sql, type SQLWrapper } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 
 import type { ActorId } from '../../../domain/actor/actorId.ts';
@@ -225,7 +225,10 @@ const subtypeTables = [
 
 const markerNotifications = eq(mastodonMarkersTable.timeline, 'notifications');
 
-const moveMarkersBeforeDismissed = (db: IoriD1Db, userIds: readonly string[], ids: readonly string[]) => {
+type IdSelection = readonly string[] | SQLWrapper;
+const listOf = (selection: IdSelection) => Array.isArray(selection) ? [...selection] : selection as SQLWrapper;
+
+export const moveMarkersBeforeDismissed = (db: IoriD1Db, userIds: IdSelection, ids: IdSelection) => {
   const dismissed = alias(notificationsTable, 'dismissed');
   const previous = alias(notificationsTable, 'previous');
   const previousId = db.select({ id: previous.notificationId }).from(dismissed)
@@ -233,7 +236,7 @@ const moveMarkersBeforeDismissed = (db: IoriD1Db, userIds: readonly string[], id
     .where(and(
       eq(dismissed.notificationId, mastodonMarkersTable.lastReadId),
       eq(dismissed.recipientUserId, mastodonMarkersTable.userId),
-      notInArray(previous.notificationId, [...ids]),
+      notInArray(previous.notificationId, listOf(ids)),
       or(
         lt(previous.createdAt, dismissed.createdAt),
         and(eq(previous.createdAt, dismissed.createdAt), lt(previous.notificationId, dismissed.notificationId)),
@@ -243,8 +246,8 @@ const moveMarkersBeforeDismissed = (db: IoriD1Db, userIds: readonly string[], id
     .limit(1);
   const pointsAtDismissed = and(
     markerNotifications,
-    inArray(mastodonMarkersTable.userId, [...userIds]),
-    inArray(mastodonMarkersTable.lastReadId, [...ids]),
+    inArray(mastodonMarkersTable.userId, listOf(userIds)),
+    inArray(mastodonMarkersTable.lastReadId, listOf(ids)),
   );
   return [
     db.update(mastodonMarkersTable)

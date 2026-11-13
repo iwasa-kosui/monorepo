@@ -6,9 +6,10 @@ import { blueskyLikesTable } from '../schema.ts';
 
 export const createD1BlueskyLikeSavedStore = (db: IoriD1Db): BlueskyLikeSavedStore => ({
   save: async ({ subjectUri, likeUri, createdAt }) => {
+    const values = { likeUri, createdAt: new Date(createdAt) };
     await db.insert(blueskyLikesTable)
-      .values({ subjectUri, likeUri, createdAt: new Date(createdAt) })
-      .onConflictDoNothing();
+      .values({ subjectUri, ...values })
+      .onConflictDoUpdate({ target: blueskyLikesTable.subjectUri, set: values });
     return RA.ok(undefined);
   },
 });

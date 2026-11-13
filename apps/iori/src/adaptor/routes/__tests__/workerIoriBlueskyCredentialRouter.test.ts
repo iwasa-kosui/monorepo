@@ -5,6 +5,11 @@ import type { Argon2idDerive } from '../../../domain/password/argon2idDerive.ts'
 import { Password } from '../../../domain/password/password.ts';
 import { createBlueskyCredentialRuntimePorts } from '../../../runtime/blueskyCredential.ts';
 import type { IoriWorkerEnv } from '../../../workerEnv.ts';
+import {
+  insertBlueskyAccountSwitch,
+  seedBlueskyData,
+  seedNotifications,
+} from '../../d1/__tests__/blueskyAccountSwitchFixture.ts';
 import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../d1/__tests__/sqliteFixture.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
@@ -92,9 +97,28 @@ const setup = async (
       headers: { ...headers, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+  const sendTo = (path: string, method: string, body?: unknown, headers: Record<string, string> = bearer) =>
+    app.request(`${ORIGIN}/api/iori/v1/bluesky/${path}`, {
+      method,
+      headers: { ...headers, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
   const put = (body: unknown) => send('PUT', body);
+  const seedCurrent = (did = 'did:plc:other', handle = 'other.example') =>
+    sqlite.prepare(
+      'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
+    ).run('default', did, handle, 'https://pds.example', 'old', 'old', 1_000);
+  const seedStoredCredential = (did = 'did:plc:alice') =>
+    sqlite.prepare(
+      'INSERT INTO bluesky_credentials(id,identifier,did,handle,appPasswordCiphertext,appPasswordIv,keyVersion,chatPermitted,verifiedAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    ).run('default', 'alice.bsky.social', did, 'alice.bsky.social', 'Y2lwaGVy', 'aXY=', 1, 1, 1_000, 1_000);
+  const switchBody = {
+    ...{ identifier: 'alice.bsky.social', appPassword: 'abcd-efgh-ijkl-mnop', currentPassword: PASSWORD },
+    fromDid: 'did:plc:other',
+    toDid: 'did:plc:alice',
+  };
   const validBody = { identifier: 'alice.bsky.social', appPassword: 'abcd-efgh-ijkl-mnop', currentPassword: PASSWORD };
-  return { send, put, validBody, fetchMock, sqlite };
+  return { send, sendTo, put, validBody, switchBody, seedCurrent, seedStoredCredential, fetchMock, sqlite };
 };
 
 describe('認証と所有者の確認', () => {
@@ -235,7 +259,11 @@ describe('PUT /api/iori/v1/bluesky/credential', () => {
     const response = await t.put(t.validBody);
 
     expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'did_mismatch' });
+    expect(await response.json()).toEqual({
+      error: 'did_mismatch',
+      current: { did: 'did:plc:other', handle: 'other.example' },
+      next: { did: 'did:plc:alice', handle: 'alice.bsky.social' },
+    });
     expect(t.sqlite.prepare('SELECT * FROM bluesky_credentials').all()).toEqual([]);
     expect(t.sqlite.prepare('SELECT accessJwt FROM bluesky_sessions').all()).toEqual([{ accessJwt: 'old' }]);
   });
@@ -304,5 +332,257 @@ describe('DELETE /api/iori/v1/bluesky/credential', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ source: 'none' });
+  });
+});
+
+describe('切り替え中の PUT と DELETE', () => {
+  it('PUT は 409 switch_in_progress で、Bluesky を呼ばない', async () => {
+    const t = await setup();
+    insertBlueskyAccountSwitch(t.sqlite);
+
+    const response = await t.put(t.validBody);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'switch_in_progress' });
+    expect(t.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('DELETE は 409 switch_in_progress で、何も消さない', async () => {
+    const t = await setup();
+    t.seedStoredCredential();
+    insertBlueskyAccountSwitch(t.sqlite);
+
+    const response = await t.send('DELETE');
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'switch_in_progress' });
+    expect(t.sqlite.prepare('SELECT * FROM bluesky_credentials').all()).toHaveLength(1);
+  });
+
+  it('DELETE は secret の DID が現在の DID と違えば 409 env_account_differs で、何も消さない', async () => {
+    const t = await setup({
+      env: { BLUESKY_IDENTIFIER: 'env.example.com', BLUESKY_APP_PASSWORD: 'env-secret' },
+      fetch: () => json({ ...sessionBody, did: 'did:plc:env', handle: 'env.example.com' }),
+    });
+    t.seedStoredCredential('did:plc:alice');
+    t.seedCurrent('did:plc:alice', 'alice.bsky.social');
+
+    const response = await t.send('DELETE');
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'env_account_differs' });
+    expect(t.sqlite.prepare('SELECT * FROM bluesky_credentials').all()).toHaveLength(1);
+    expect(t.sqlite.prepare('SELECT accessJwt FROM bluesky_sessions').all()).toEqual([{ accessJwt: 'old' }]);
+  });
+});
+
+describe('アカウントの切り替えの認証と所有者の確認', () => {
+  const targets = [
+    ['account-switch/preview', 'GET'],
+    ['account-switch', 'GET'],
+    ['account-switch', 'POST'],
+  ] as const;
+
+  it.each(targets)('%s の %s は認証が無いと 401', async (path, method) => {
+    const t = await setup();
+
+    const response = await t.sendTo(path, method, method === 'POST' ? t.switchBody : undefined, { Origin: ORIGIN });
+
+    expect(response.status).toBe(401);
+    expect(t.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each(targets)('%s の %s は所有者以外だと 403 で、何も変えない', async (path, method) => {
+    const t = await setup({ owner: false });
+    t.seedCurrent();
+
+    const response = await t.sendTo(path, method, method === 'POST' ? t.switchBody : undefined);
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Forbidden' });
+    expect(t.fetchMock).not.toHaveBeenCalled();
+    expect(t.sqlite.prepare('SELECT * FROM bluesky_account_switch').all()).toEqual([]);
+  });
+});
+
+describe('GET /api/iori/v1/bluesky/account-switch/preview', () => {
+  it('削除される件数を返し、通知は Bluesky の type だけを数える', async () => {
+    const t = await setup();
+    seedBlueskyData(t.sqlite, {
+      timelineItems: 3,
+      likes: 2,
+      reposts: 1,
+      bookmarks: 4,
+      moderatedActors: 5,
+      crossposts: 6,
+    });
+    const userId = (t.sqlite.prepare('SELECT userId FROM users').get() as { userId: string }).userId;
+    seedNotifications(t.sqlite, userId, [
+      { id: 'n1', type: 'blueskyLike', createdAt: 1 },
+      { id: 'n2', type: 'blueskyMention', createdAt: 2 },
+      { id: 'n3', type: 'follow', createdAt: 3 },
+    ]);
+
+    const response = await t.sendTo('account-switch/preview', 'GET');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      counts: {
+        timelineItems: 3,
+        notifications: 2,
+        likes: 2,
+        reposts: 1,
+        bookmarks: 4,
+        moderatedActors: 5,
+        crossposts: 6,
+      },
+    });
+  });
+});
+
+describe('GET /api/iori/v1/bluesky/account-switch', () => {
+  it('印が無ければ idle を返す', async () => {
+    const t = await setup();
+
+    const response = await t.sendTo('account-switch', 'GET');
+
+    expect(await response.json()).toEqual({ state: 'idle' });
+  });
+
+  it('印があれば purging と進捗を返し、試行が 30 回を超えたら stalled にする', async () => {
+    const t = await setup();
+    insertBlueskyAccountSwitch(t.sqlite, {
+      startedAt: Date.UTC(2026, 10, 12, 3, 4, 5),
+      attempts: 31,
+      lastError: 'Error: boom',
+    });
+
+    const response = await t.sendTo('account-switch', 'GET');
+
+    expect(await response.json()).toEqual({
+      state: 'purging',
+      fromDid: 'did:plc:old',
+      toDid: 'did:plc:alice',
+      startedAt: '2026-11-12T03:04:05.000Z',
+      attempts: 31,
+      lastError: 'Error: boom',
+      stalled: true,
+    });
+  });
+
+  it('試行が 30 回ちょうどなら stalled にしない', async () => {
+    const t = await setup();
+    insertBlueskyAccountSwitch(t.sqlite, { attempts: 30 });
+
+    expect(await (await t.sendTo('account-switch', 'GET')).json()).toMatchObject({ attempts: 30, stalled: false });
+  });
+});
+
+describe('POST /api/iori/v1/bluesky/account-switch', () => {
+  it.each([
+    [{}],
+    [{ identifier: 'a', appPassword: 'a', currentPassword: 'b', fromDid: 'did:plc:a' }],
+    [{ identifier: 'a', appPassword: 'a', currentPassword: 'b', fromDid: '', toDid: 'did:plc:b' }],
+  ])('入力が不正なら 400 invalid_input（%j）', async (body) => {
+    const t = await setup();
+
+    const response = await t.sendTo('account-switch', 'POST', body);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'invalid_input' });
+    expect(t.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('鍵が無ければ 503 credential_key_missing', async () => {
+    const t = await setup({ env: { BLUESKY_CREDENTIAL_KEY: undefined } });
+
+    const response = await t.sendTo('account-switch', 'POST', t.switchBody);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'credential_key_missing' });
+  });
+
+  it('パスワードが違えば 403 invalid_password', async () => {
+    const t = await setup();
+
+    const response = await t.sendTo('account-switch', 'POST', {
+      ...t.switchBody,
+      currentPassword: 'wrong-password-value',
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'invalid_password' });
+    expect(t.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('Bluesky へのログインに失敗したら 422 bluesky_login_failed で、何も変えない', async () => {
+    const t = await setup({ fetch: () => json({ error: 'AuthenticationRequired' }, 401) });
+    t.seedCurrent();
+
+    const response = await t.sendTo('account-switch', 'POST', t.switchBody);
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'bluesky_login_failed' });
+    expect(t.sqlite.prepare('SELECT * FROM bluesky_account_switch').all()).toEqual([]);
+  });
+
+  it.each([
+    ['fromDid が現在の DID と違う', { fromDid: 'did:plc:someone-else' }, 'did:plc:other'],
+    ['toDid がログインで得た DID と違う', { toDid: 'did:plc:another' }, 'did:plc:other'],
+    ['現在の DID と同じアカウント', { fromDid: 'did:plc:alice', toDid: 'did:plc:alice' }, 'did:plc:alice'],
+  ])('%s と 409 did_changed で、何も変えない', async (_name, override, currentDid) => {
+    const t = await setup();
+    t.seedCurrent(currentDid);
+
+    const response = await t.sendTo('account-switch', 'POST', { ...t.switchBody, ...override });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'did_changed' });
+    expect(t.sqlite.prepare('SELECT * FROM bluesky_account_switch').all()).toEqual([]);
+    expect(t.sqlite.prepare('SELECT accessJwt FROM bluesky_sessions').all()).toEqual([{ accessJwt: 'old' }]);
+  });
+
+  it('現在の DID が決まらなければ 409 did_changed', async () => {
+    const t = await setup();
+
+    const response = await t.sendTo('account-switch', 'POST', t.switchBody);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'did_changed' });
+  });
+
+  it('切り替え中は 409 switch_in_progress', async () => {
+    const t = await setup();
+    t.seedCurrent();
+    insertBlueskyAccountSwitch(t.sqlite);
+
+    const response = await t.sendTo('account-switch', 'POST', t.switchBody);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'switch_in_progress' });
+  });
+
+  it('成功したら 202 で purging を返し、アプリパスワードを応答に含めない', async () => {
+    const t = await setup();
+    t.seedCurrent();
+
+    const response = await t.sendTo('account-switch', 'POST', t.switchBody);
+    const text = await response.text();
+
+    expect(response.status).toBe(202);
+    expect(JSON.parse(text)).toEqual({
+      state: 'purging',
+      fromDid: 'did:plc:other',
+      toDid: 'did:plc:alice',
+      startedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
+      attempts: 0,
+      lastError: null,
+      stalled: false,
+    });
+    expect(text).not.toContain('abcd-efgh-ijkl-mnop');
+    expect(text).not.toContain(PASSWORD);
+    expect(t.sqlite.prepare('SELECT did FROM bluesky_credentials').all()).toEqual([{ did: 'did:plc:alice' }]);
+    expect(t.sqlite.prepare('SELECT accessJwt FROM bluesky_sessions').all()).toEqual([{ accessJwt: 'new-access' }]);
+    expect(await (await t.sendTo('account-switch', 'GET')).json()).toMatchObject({ state: 'purging' });
   });
 });

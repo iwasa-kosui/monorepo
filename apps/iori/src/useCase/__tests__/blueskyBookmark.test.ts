@@ -128,7 +128,7 @@ describe('BookmarkBlueskyPostUseCase', () => {
     expect(t.bookmarks()).toEqual([]);
   });
 
-  it('保存済みでも Bluesky に作成し、行を増やさない', async () => {
+  it('保存済みでも Bluesky に作成し、行を増やさず createdAt を保存し直す', async () => {
     const t = setup();
     t.seedBookmark();
 
@@ -136,7 +136,7 @@ describe('BookmarkBlueskyPostUseCase', () => {
 
     expect(result).toEqual({ ok: true, val: { bookmarked: true } });
     expect(t.createBookmark).toHaveBeenCalledOnce();
-    expect(t.bookmarks()).toEqual([{ subjectUri: POST, createdAt: 1 }]);
+    expect(t.bookmarks()).toEqual([{ subjectUri: POST, createdAt: NOW }]);
   });
 });
 

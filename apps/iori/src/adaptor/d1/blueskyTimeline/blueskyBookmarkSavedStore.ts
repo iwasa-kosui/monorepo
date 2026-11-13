@@ -6,9 +6,10 @@ import { blueskyBookmarksTable } from '../schema.ts';
 
 export const createD1BlueskyBookmarkSavedStore = (db: IoriD1Db): BlueskyBookmarkSavedStore => ({
   save: async ({ subjectUri, createdAt }) => {
+    const values = { createdAt: new Date(createdAt) };
     await db.insert(blueskyBookmarksTable)
-      .values({ subjectUri, createdAt: new Date(createdAt) })
-      .onConflictDoNothing();
+      .values({ subjectUri, ...values })
+      .onConflictDoUpdate({ target: blueskyBookmarksTable.subjectUri, set: values });
     return RA.ok(undefined);
   },
 });

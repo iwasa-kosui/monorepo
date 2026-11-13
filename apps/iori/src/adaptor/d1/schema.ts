@@ -833,6 +833,18 @@ export const blueskyNotificationSyncStateTable = sqliteTable('bluesky_notificati
   initialSyncCompletedAt: timestamp().notNull(),
 });
 
+export const blueskyAccountSwitchTable = sqliteTable('bluesky_account_switch', {
+  id: text('id').primaryKey(),
+  switchId: text('switchId').notNull(),
+  fromDid: text('fromDid').notNull(),
+  toDid: text('toDid').notNull(),
+  startedAt: timestamp().notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('lastError'),
+  deletedCounts: text('deletedCounts').notNull(),
+  updatedAt: timestamp().notNull(),
+});
+
 export const schema = {
   usersTable,
   keysTable,
@@ -910,4 +922,5 @@ export const schema = {
   blueskyModeratedActorsTable,
   blueskyNotificationReceiptsTable,
   blueskyNotificationSyncStateTable,
+  blueskyAccountSwitchTable,
 } as const;
