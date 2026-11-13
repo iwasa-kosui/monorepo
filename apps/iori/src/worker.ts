@@ -319,6 +319,7 @@ export default {
             subscribeRelayUseCase: runtime.mutesRelays.subscribeRelayUseCase,
             subscribePushUseCase: runtime.core.subscribePushUseCase,
             allRelaysResolver: runtime.mutesRelays.allRelaysResolver,
+            isDigestOwner: runtime.mutesRelays.isDigestOwner,
             authn,
             createContext,
           }),

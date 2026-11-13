@@ -911,6 +911,7 @@ export const setupReadApi = (
         '/api',
         createWorkerIoriActionsRouter({
           authn,
+          isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
           actorResolverByUserId,
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           statusAssembler,
