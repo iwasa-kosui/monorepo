@@ -16,6 +16,7 @@ export type BlueskyPostActions = Readonly<{
   onMuteAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
   onBlockAuthor?: (item: IoriBlueskyTimelineItemBody) => void;
   onReportPost?: (item: IoriBlueskyTimelineItemBody) => void;
+  onDeletePost?: (item: IoriBlueskyTimelineItemBody) => void;
 }>;
 
 export const blueskyItemActionProps = (actions: BlueskyPostActions | undefined, item: IoriBlueskyTimelineItemBody) =>
@@ -35,4 +36,5 @@ export const blueskyItemActionProps = (actions: BlueskyPostActions | undefined, 
     ...(actions.onMuteAuthor === undefined ? {} : { onMuteAuthor: actions.onMuteAuthor }),
     ...(actions.onBlockAuthor === undefined ? {} : { onBlockAuthor: actions.onBlockAuthor }),
     ...(actions.onReportPost === undefined ? {} : { onReportPost: actions.onReportPost }),
+    ...(actions.onDeletePost === undefined ? {} : { onDeletePost: actions.onDeletePost }),
   };

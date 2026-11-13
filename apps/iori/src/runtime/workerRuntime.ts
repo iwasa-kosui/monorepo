@@ -399,6 +399,21 @@ export const createWorkerRuntimePorts = async (
     unfollowRemoteActor: remoteActorActions.unfollowRemoteActor,
   });
 
+  const deletePostUseCase = DeletePostUseCase.create({
+    sessionResolver,
+    userResolver,
+    actorResolverByUserId,
+    postResolver,
+    postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
+    postDeletedStore: createD1PostDeletedStore(db),
+    articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
+    articleDeletedStore: createD1ArticleDeletedStore(db),
+    directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
+    bookmarksResolverByPostId: createD1BookmarksResolverByPostId(db),
+    bookmarkDeletedStore: createD1BookmarkDeletedStore(db),
+    removeBlueskyCrosspost: blueskyCrosspost?.remove,
+  });
+
   return {
     db,
     auth: {
@@ -595,7 +610,7 @@ export const createWorkerRuntimePorts = async (
         userPreferencesSavedStore: createD1UserPreferencesSavedStore(db),
       }),
     },
-    blueskyTimeline: createBlueskyTimelineRuntimePorts(env, db),
+    blueskyTimeline: createBlueskyTimelineRuntimePorts(env, db, { deletePost: deletePostUseCase }),
     blueskyModeration: createBlueskyModerationRuntimePorts(env, db),
     blueskyProfile: createBlueskyProfileRuntimePorts(env, db),
     blueskyBookmark: createBlueskyBookmarkRuntimePorts(env, db),
@@ -964,20 +979,7 @@ export const createWorkerRuntimePorts = async (
       }),
       postSourceTextResolver: createD1PostSourceTextResolver(db),
       postVersionsResolver: createD1PostVersionsResolverByPostId(db),
-      deletePostUseCase: DeletePostUseCase.create({
-        sessionResolver,
-        userResolver,
-        actorResolverByUserId,
-        postResolver,
-        postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
-        postDeletedStore: createD1PostDeletedStore(db),
-        articleResolverByRootPostId: createD1ArticleResolverByRootPostId(db),
-        articleDeletedStore: createD1ArticleDeletedStore(db),
-        directPostParticipantsResolverByPostId: createD1DirectPostParticipantsResolverByPostId(db),
-        bookmarksResolverByPostId: createD1BookmarksResolverByPostId(db),
-        bookmarkDeletedStore: createD1BookmarkDeletedStore(db),
-        removeBlueskyCrosspost: blueskyCrosspost?.remove,
-      }),
+      deletePostUseCase,
       subscribePushUseCase: SubscribePushUseCase.create({
         sessionResolver,
         userResolver,

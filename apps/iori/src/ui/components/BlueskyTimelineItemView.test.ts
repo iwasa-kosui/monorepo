@@ -612,6 +612,42 @@ describe('BlueskyTimelineItemView', () => {
       });
     });
 
+    describe('投稿の削除', () => {
+      it('自分の投稿でハンドラがあれば、「この投稿を削除」を danger で出す', () => {
+        const items = findMenuItems(
+          BlueskyTimelineItemView({ item: { ...base, isOwn: true }, onDeletePost: vi.fn() }),
+        ) ?? [];
+
+        expect(items.map(menuSummary)).toEqual([
+          { key: 'open-bluesky', label: 'Bluesky で開く', danger: undefined },
+          { key: 'copy-link', label: 'リンクをコピー', danger: undefined },
+          { key: 'delete', label: 'この投稿を削除', danger: true },
+        ]);
+      });
+
+      it('他人の投稿には、ハンドラがあっても出さない', () => {
+        const items = findMenuItems(BlueskyTimelineItemView({ item: base, onDeletePost: vi.fn() })) ?? [];
+
+        expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link']);
+      });
+
+      it('ハンドラが渡されなければ、自分の投稿でも出さない', () => {
+        const items = findMenuItems(BlueskyTimelineItemView({ item: { ...base, isOwn: true } })) ?? [];
+
+        expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link']);
+      });
+
+      it('選ぶと、ハンドラを item つきで呼ぶ', () => {
+        const onDeletePost = vi.fn();
+        const own = { ...base, isOwn: true };
+        const items = findMenuItems(BlueskyTimelineItemView({ item: own, onDeletePost })) ?? [];
+
+        for (const entry of items) if (entry.kind === 'action') void entry.onSelect();
+
+        expect(onDeletePost).toHaveBeenCalledExactlyOnceWith(own);
+      });
+    });
+
     it('ハンドラが渡されない画面でも、操作の行とトリガーを出す', () => {
       const html = render({});
 

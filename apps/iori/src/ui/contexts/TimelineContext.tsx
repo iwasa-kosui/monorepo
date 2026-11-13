@@ -10,6 +10,7 @@ import {
   type UseBlueskyAuthorModerationReturn,
 } from '../hooks/useBlueskyAuthorModeration.ts';
 import { useBlueskyBookmark, type UseBlueskyBookmarkReturn } from '../hooks/useBlueskyBookmark.ts';
+import { useBlueskyDeletePost, type UseBlueskyDeletePostReturn } from '../hooks/useBlueskyDeletePost.ts';
 import { useBlueskyLike, type UseBlueskyLikeReturn } from '../hooks/useBlueskyLike.ts';
 import { useBlueskyQuoteDialog, type UseBlueskyQuoteDialogReturn } from '../hooks/useBlueskyQuoteDialog.ts';
 import { useBlueskyReplyDialog, type UseBlueskyReplyDialogReturn } from '../hooks/useBlueskyReplyDialog.ts';
@@ -39,6 +40,7 @@ export type TimelineContextValue = Readonly<{
   blueskyReply: UseBlueskyReplyDialogReturn;
   blueskyQuote: UseBlueskyQuoteDialogReturn;
   blueskyModeration: UseBlueskyAuthorModerationReturn;
+  blueskyDelete: UseBlueskyDeletePostReturn;
   blueskyStatus: UseBlueskyStatusReturn;
   thread: UseThreadModalReturn;
   reply: UseReplyDialogReturn;
@@ -101,6 +103,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
   const blueskyReply = useBlueskyReplyDialog();
   const blueskyQuote = useBlueskyQuoteDialog();
   const blueskyModeration = useBlueskyAuthorModeration(timeline.updateBlueskyItems);
+  const blueskyDelete = useBlueskyDeletePost(timeline.updateBlueskyItems);
 
   const pullToRefresh = usePullToRefresh({
     onRefresh: async () => {
@@ -168,6 +171,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       blueskyReply,
       blueskyQuote,
       blueskyModeration,
+      blueskyDelete,
       blueskyStatus,
       thread,
       reply,
@@ -190,6 +194,7 @@ export const TimelineProvider: FC<PropsWithChildren> = ({ children }) => {
       blueskyReply,
       blueskyQuote,
       blueskyModeration,
+      blueskyDelete,
       blueskyStatus,
       thread,
       reply,
