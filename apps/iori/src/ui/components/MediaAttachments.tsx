@@ -58,7 +58,7 @@ export const MediaPreviewList = (
               type='button'
               onClick={() => onRemove(index)}
               disabled={disabled}
-              class='absolute -top-1 -right-1 w-5 h-5 bg-terracotta text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow-clay-sm'
+              class='absolute -top-1 -right-1 w-5 h-5 bg-terracotta text-white rounded-full flex items-center justify-center text-xs md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100 transition-opacity shadow-clay-sm'
             >
               &times;
             </button>

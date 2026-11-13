@@ -25,6 +25,7 @@ const render = (overrides: Partial<UseBlueskyReplyDialogReturn> = {}): string =>
           isUploading: false,
           hasImages: false,
           slotsLeft: 4,
+          notice: null,
           select: async () => {},
           remove: () => {},
           setDescription: () => {},
@@ -87,6 +88,7 @@ describe('BlueskyReplyModal', () => {
         isUploading: false,
         hasImages: count > 0,
         slotsLeft: 4 - count,
+        notice: null,
         select: async () => {},
         remove: () => {},
         setDescription: () => {},
@@ -111,6 +113,13 @@ describe('BlueskyReplyModal', () => {
     expect(html).toContain('aria-label="画像2の説明（ALT）"');
     expect(html).toContain('maxlength="1500"');
     expect(html).toContain('value="cat"');
+  });
+
+  it('shows the notice only when the hook has one', () => {
+    const notice = '画像は4枚までです。2枚は追加しませんでした';
+
+    expect(render(withMedia(0))).not.toContain('role="status"');
+    expect(render(withMedia(4, { notice }))).toContain(notice);
   });
 
   it('allows submitting an empty body when an image is attached', () => {

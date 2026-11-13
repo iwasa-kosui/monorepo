@@ -85,6 +85,7 @@ export const BlueskyReplyModal = (
           onRemove={media.remove}
           onDescriptionChange={media.setDescription}
         />
+        {media.notice !== null && <p role='status' class='mt-2 text-sm text-terracotta'>{media.notice}</p>}
       </div>
     </ReplyDialogShell>
   );

@@ -37,6 +37,7 @@ export const blueskyReplyErrorMessage = (error: unknown): string => {
   if (isMastodonApiError(error)) {
     if (error.status === 404) return '返信先の投稿が見つかりません';
     if (error.status === 409) return 'Bluesky のタイムラインが無効です';
+    if (error.status === 422 && error.code === 'media_invalid') return error.message;
     if (error.status === 422) return 'この投稿には返信できません';
   }
   return 'Bluesky に返信できませんでした';

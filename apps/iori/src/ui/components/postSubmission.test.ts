@@ -4,6 +4,7 @@ import type { Status } from '../../adaptor/mastodon/entities.ts';
 import {
   canSubmitPost,
   editParams,
+  mediaOverflowNotice,
   mediaSlotsLeft,
   postedNotice,
   type PostFormValue,
@@ -54,6 +55,15 @@ describe('mediaSlotsLeft', () => {
     expect(mediaSlotsLeft(4, 4)).toBe(0);
     expect(mediaSlotsLeft(5, 4)).toBe(0);
     expect(mediaSlotsLeft(10, Number.POSITIVE_INFINITY)).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('mediaOverflowNotice', () => {
+  it('残りの枠を超えて選んだ枚数を知らせ、収まるときと上限なしのときは null にする', () => {
+    expect(mediaOverflowNotice(6, 4, 4)).toBe('画像は4枚までです。2枚は追加しませんでした');
+    expect(mediaOverflowNotice(3, 2, 4)).toBe('画像は4枚までです。1枚は追加しませんでした');
+    expect(mediaOverflowNotice(4, 4, 4)).toBeNull();
+    expect(mediaOverflowNotice(10, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY)).toBeNull();
   });
 });
 

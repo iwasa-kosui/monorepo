@@ -2,13 +2,14 @@ import { useCallback, useRef, useState } from 'hono/jsx';
 
 import { uploadMedia } from '../api/mastodonClient.ts';
 import { downscaleImageForUpload } from '../components/imageDownscale.ts';
-import { mediaSlotsLeft, type UploadedMedia } from '../components/postSubmission.ts';
+import { mediaOverflowNotice, mediaSlotsLeft, type UploadedMedia } from '../components/postSubmission.ts';
 
 export type UseMediaAttachmentsReturn = Readonly<{
   uploaded: readonly UploadedMedia[];
   isUploading: boolean;
   hasImages: boolean;
   slotsLeft: number;
+  notice: string | null;
   select: (e: Event) => Promise<void>;
   remove: (index: number) => void;
   setDescription: (index: number, description: string) => void;
@@ -19,6 +20,7 @@ export type UseMediaAttachmentsReturn = Readonly<{
 export const useMediaAttachments = (max: number = Number.POSITIVE_INFINITY): UseMediaAttachmentsReturn => {
   const [uploaded, setUploaded] = useState<UploadedMedia[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   // Drops uploads that finish after clear()
   const generation = useRef(0);
   const slotsLeft = mediaSlotsLeft(uploaded.length, max);
@@ -28,6 +30,7 @@ export const useMediaAttachments = (max: number = Number.POSITIVE_INFINITY): Use
     const files = target.files;
     if (!files || files.length === 0) return;
 
+    setNotice(mediaOverflowNotice(files.length, slotsLeft, max));
     const chosen = Array.from(files).slice(0, slotsLeft);
     const started = generation.current;
     setIsUploading(true);
@@ -47,9 +50,10 @@ export const useMediaAttachments = (max: number = Number.POSITIVE_INFINITY): Use
       setIsUploading(false);
     }
     target.value = '';
-  }, [slotsLeft]);
+  }, [slotsLeft, max]);
 
   const remove = useCallback((index: number) => {
+    setNotice(null);
     setUploaded((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
@@ -64,6 +68,7 @@ export const useMediaAttachments = (max: number = Number.POSITIVE_INFINITY): Use
   const clear = useCallback(() => {
     generation.current = (generation.current ?? 0) + 1;
     setUploaded([]);
+    setNotice(null);
     setIsUploading(false);
   }, []);
 
@@ -72,6 +77,7 @@ export const useMediaAttachments = (max: number = Number.POSITIVE_INFINITY): Use
     isUploading,
     hasImages: uploaded.length > 0,
     slotsLeft,
+    notice,
     select,
     remove,
     setDescription,

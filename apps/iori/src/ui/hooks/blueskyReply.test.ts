@@ -10,7 +10,7 @@ import {
   countGraphemes,
 } from './blueskyReply.ts';
 
-const apiError = (status: number): Error => Object.assign(new Error('x'), { status });
+const apiError = (status: number, code?: string): Error => Object.assign(new Error('x'), { status, code });
 
 describe('countGraphemes', () => {
   it('絵文字の連結や結合文字を 1 つに数える', () => {
@@ -81,7 +81,23 @@ describe('blueskyReplyErrorMessage', () => {
     expect(blueskyReplyErrorMessage(apiError(404))).toBe('返信先の投稿が見つかりません');
     expect(blueskyReplyErrorMessage(apiError(409))).toBe('Bluesky のタイムラインが無効です');
     expect(blueskyReplyErrorMessage(apiError(422))).toBe('この投稿には返信できません');
+    expect(blueskyReplyErrorMessage(apiError(422, 'other'))).toBe('この投稿には返信できません');
     expect(blueskyReplyErrorMessage(apiError(400))).toBe('Bluesky に返信できませんでした');
     expect(blueskyReplyErrorMessage(new TypeError('network'))).toBe('Bluesky に返信できませんでした');
+  });
+});
+
+describe('blueskyReplyErrorMessage の画像のエラー', () => {
+  it('422 で code が media_invalid のときはサーバーの文言を返す', () => {
+    const error = Object.assign(new Error('Bluesky に送れる画像は 4 枚までです'), {
+      status: 422,
+      code: 'media_invalid',
+    });
+    expect(blueskyReplyErrorMessage(error)).toBe('Bluesky に送れる画像は 4 枚までです');
+  });
+
+  it('code がない 422 は従来の文言のままにする', () => {
+    const error = Object.assign(new Error('Reply not allowed'), { status: 422 });
+    expect(blueskyReplyErrorMessage(error)).toBe('この投稿には返信できません');
   });
 });

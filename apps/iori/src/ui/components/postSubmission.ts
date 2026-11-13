@@ -42,6 +42,9 @@ export const canSubmitPost = (content: string, isUploading: boolean, isPosting: 
 
 export const mediaSlotsLeft = (count: number, max: number): number => Math.max(0, max - count);
 
+export const mediaOverflowNotice = (selectedCount: number, slotsLeft: number, max: number): string | null =>
+  selectedCount > slotsLeft ? `画像は${max}枚までです。${selectedCount - slotsLeft}枚は追加しませんでした` : null;
+
 export const saveMediaDescriptions = async (
   uploaded: readonly UploadedMedia[],
   deps: Readonly<{

@@ -369,9 +369,17 @@ const postInvalidMessages: Readonly<Record<BlueskyPostInvalid['reason'], string>
 
 const imageInvalidReasons: ReadonlyArray<BlueskyPostInvalid['reason']> = ['too_many_images', 'image_too_large'];
 
+const MEDIA_INVALID_CODE = 'media_invalid';
+
+const imageInvalidBody = (reason: BlueskyPostInvalid['reason']) => ({
+  error: postInvalidMessages[reason],
+  reason,
+  code: MEDIA_INVALID_CODE,
+});
+
 const replyOrQuoteInvalidFailure = (c: Context, error: BlueskyPostInvalid) =>
   imageInvalidReasons.includes(error.reason)
-    ? c.json({ error: postInvalidMessages[error.reason], reason: error.reason }, 422)
+    ? c.json(imageInvalidBody(error.reason), 422)
     : c.json({ error: 'Validation failed: text', reason: error.reason }, 400);
 
 const replyFailure = (
@@ -387,7 +395,9 @@ const replyFailure = (
 
 const postFailure = (c: Context, error: BlueskyClientError | BlueskyPostInvalid) => {
   if (error.type === 'BlueskyPostInvalid') {
-    return c.json({ error: postInvalidMessages[error.reason], reason: error.reason }, 422);
+    return imageInvalidReasons.includes(error.reason)
+      ? c.json(imageInvalidBody(error.reason), 422)
+      : c.json({ error: postInvalidMessages[error.reason], reason: error.reason }, 422);
   }
   if (error.status === 429) {
     logBlueskyFailure(error, 429);
@@ -396,7 +406,17 @@ const postFailure = (c: Context, error: BlueskyClientError | BlueskyPostInvalid)
   return clientFailure(c, error);
 };
 
-const mediaUnavailable = { error: '添付した画像が見つからないか、読み込めませんでした' } as const;
+const mediaUnavailable = {
+  error: '添付した画像が見つからないか、読み込めませんでした',
+  code: MEDIA_INVALID_CODE,
+} as const;
+
+type MediaImagesLoad =
+  | Readonly<{ images: readonly BlueskyPostImage[] }>
+  | Readonly<{ failure: 'unavailable' | 'too_many_images' }>;
+
+const mediaFailure = (c: Context, failure: 'unavailable' | 'too_many_images') =>
+  failure === 'unavailable' ? c.json(mediaUnavailable, 422) : c.json(imageInvalidBody(failure), 422);
 
 const quoteFailure = (
   c: Context,
@@ -465,8 +485,9 @@ export const createWorkerIoriBlueskyRouter = ({
   const loadMediaImages = async (
     body: RequestBody,
     userId: UserId,
-  ): Promise<readonly BlueskyPostImage[] | undefined> => {
+  ): Promise<MediaImagesLoad> => {
     const mediaIds = [...new Set(bodyStringList(body, 'media_ids[]', 'media_ids').filter((id) => id !== ''))];
+    if (mediaIds.length > BLUESKY_MAX_IMAGES) return { failure: 'too_many_images' };
     const medias: MediaUpload[] = [];
     for (const mediaId of mediaIds) {
       const parsed = MediaId.parse(mediaId);
@@ -477,13 +498,13 @@ export const createWorkerIoriBlueskyRouter = ({
         if (media !== undefined && media.err.type !== 'MediaNotFoundError') {
           throw new Error('Failed to resolve the media');
         }
-        return undefined;
+        return { failure: 'unavailable' };
       }
       medias.push(media.val);
     }
     const loaded = await Promise.all(medias.map((media) => loadBlueskyPostImage(uploads, media)));
     const images = loaded.filter((image): image is BlueskyPostImage => image !== undefined);
-    return images.length === medias.length ? images : undefined;
+    return images.length === medias.length ? { images } : { failure: 'unavailable' };
   };
   return new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
@@ -714,8 +735,9 @@ export const createWorkerIoriBlueskyRouter = ({
         const body = await readRequestBody(c);
         const resolved = postTargetOf(bodyString(body, 'feedItemId'), bodyString(body, 'uri'));
         if ('invalid' in resolved) return c.json({ error: `Validation failed: ${resolved.invalid}` }, 400);
-        const images = await loadMediaImages(body, userId);
-        if (images === undefined) return c.json(mediaUnavailable, 422);
+        const loadedImages = await loadMediaImages(body, userId);
+        if ('failure' in loadedImages) return mediaFailure(c, loadedImages.failure);
+        const { images } = loadedImages;
         const text = bodyString(body, 'text') ?? (images.length > 0 ? '' : undefined);
         if (text === undefined) return c.json({ error: 'Validation failed: text' }, 400);
         const replied = await replyToBlueskyPostUseCase.run({ ...resolved.target, text, images });
@@ -747,8 +769,9 @@ export const createWorkerIoriBlueskyRouter = ({
         if (contentType !== 'text/plain' && contentType !== 'text/markdown') {
           return c.json({ error: 'Validation failed: content_type' }, 400);
         }
-        const images = await loadMediaImages(body, userId);
-        if (images === undefined) return c.json(mediaUnavailable, 422);
+        const loadedImages = await loadMediaImages(body, userId);
+        if ('failure' in loadedImages) return mediaFailure(c, loadedImages.failure);
+        const { images } = loadedImages;
         const posted = await postToBlueskyUseCase.run({
           text: await blueskyPostTextOf(status, contentType),
           images,
@@ -773,8 +796,9 @@ export const createWorkerIoriBlueskyRouter = ({
         if (uri === undefined || !blueskyPostUriPattern.test(uri)) {
           return c.json({ error: 'Validation failed: uri' }, 400);
         }
-        const images = await loadMediaImages(body, userId);
-        if (images === undefined) return c.json(mediaUnavailable, 422);
+        const loadedImages = await loadMediaImages(body, userId);
+        if ('failure' in loadedImages) return mediaFailure(c, loadedImages.failure);
+        const { images } = loadedImages;
         const text = bodyString(body, 'text') ?? (images.length > 0 ? '' : undefined);
         if (text === undefined) return c.json({ error: 'Validation failed: text' }, 400);
         const quoted = await quoteBlueskyPostUseCase.run({ uri, text, images });
