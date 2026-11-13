@@ -121,6 +121,9 @@ export const PostView = (
     ...(postUrl !== undefined && !isLocalPost
       ? [{ key: 'open-original', label: '元の投稿を開く', kind: 'link', href: postUrl } as const]
       : []),
+    ...(post.iori?.bluesky_crosspost?.status === 'sent' && post.iori.bluesky_crosspost.url !== null
+      ? [{ key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: post.iori.bluesky_crosspost.url } as const]
+      : []),
     ...(post.bookmarked && onUndoBookmark !== undefined
       ? [
         {
@@ -412,33 +415,18 @@ export const PostView = (
             )}
             {isDirectStatus(post) && <DirectMark />}
             {crosspostMark !== undefined && (
-              crosspostMark.href === null
-                ? (
-                  <span
-                    role='img'
-                    title={crosspostMark.title}
-                    aria-label={crosspostMark.label}
-                    class={`inline-flex flex-shrink-0 items-center ${
-                      crosspostMark.emphasized
-                        ? 'text-red-600 dark:text-red-400'
-                        : 'text-charcoal-light dark:text-gray-400'
-                    }`}
-                  >
-                    <BlueskyCrosspostIcon kind={crosspostMark.kind} />
-                  </span>
-                )
-                : (
-                  <a
-                    href={crosspostMark.href}
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    title={crosspostMark.title}
-                    aria-label={crosspostMark.label}
-                    class='inline-flex flex-shrink-0 items-center text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
-                  >
-                    <BlueskyCrosspostIcon kind={crosspostMark.kind} />
-                  </a>
-                )
+              <span
+                role='img'
+                title={crosspostMark.title}
+                aria-label={crosspostMark.label}
+                class={`inline-flex flex-shrink-0 items-center ${
+                  crosspostMark.emphasized
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-charcoal-light dark:text-gray-400'
+                }`}
+              >
+                <BlueskyCrosspostIcon kind={crosspostMark.kind} />
+              </span>
             )}
           </div>
         </div>

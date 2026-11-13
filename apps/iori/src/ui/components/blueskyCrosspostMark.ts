@@ -2,14 +2,13 @@ import type { IoriBlueskyCrosspost, Status } from '../../adaptor/mastodon/entiti
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 import type { PostVisibility } from './postVisibility.ts';
 
-export type BlueskyCrosspostKind = 'sent' | 'pending' | 'retrying' | 'failed' | 'skipped';
+export type BlueskyCrosspostKind = 'pending' | 'retrying' | 'failed' | 'skipped';
 
 export type BlueskyCrosspostMark = Readonly<{
   kind: BlueskyCrosspostKind;
   label: string;
   title: string;
   emphasized: boolean;
-  href: string | null;
 }>;
 
 const skipReasonTexts: Readonly<Record<NonNullable<IoriBlueskyCrosspost['skip_reason']>, string>> = {
@@ -33,20 +32,13 @@ export const toBlueskyCrosspostMark = (
 ): BlueskyCrosspostMark | undefined => {
   switch (crosspost.status) {
     case 'sent':
-      return {
-        kind: 'sent',
-        label: 'Bluesky',
-        title: 'Bluesky に投稿しました',
-        emphasized: false,
-        href: crosspost.url,
-      };
+      return undefined;
     case 'pending':
       return {
         kind: 'pending',
         label: 'Bluesky 送信中',
         title: 'Bluesky に送信しています',
         emphasized: false,
-        href: null,
       };
     case 'failed':
       return crosspost.retrying
@@ -55,14 +47,12 @@ export const toBlueskyCrosspostMark = (
           label: 'Bluesky 再送待ち',
           title: 'Bluesky への送信に失敗しました。あとで再送します',
           emphasized: false,
-          href: null,
         }
         : {
           kind: 'failed',
           label: 'Bluesky に届いていません',
           title: 'Bluesky への送信に失敗し、再送も終わりました',
           emphasized: true,
-          href: null,
         };
     case 'skipped':
       if (crosspost.skip_reason === 'reply_to_unsent' || isDirectVisibilitySkip(crosspost, visibility)) {
@@ -73,7 +63,6 @@ export const toBlueskyCrosspostMark = (
         label: 'Bluesky に未送信',
         title: skipReasonText(crosspost.skip_reason) ?? 'Bluesky には送っていません',
         emphasized: false,
-        href: null,
       };
     case 'deleting':
       return undefined;

@@ -53,17 +53,14 @@ describe('PostView の Bluesky の印', () => {
     expect(render()).not.toContain('Bluesky');
   });
 
-  it('sent は URL への別タブのリンクにする', () => {
+  it('sent では見出しに Bluesky のアイコンを出さない', () => {
     const html = render(
       crosspost({ status: 'sent', retrying: false, url: 'https://bsky.app/profile/did:plc:a/post/b' }),
     );
 
-    expect(html).toContain('href="https://bsky.app/profile/did:plc:a/post/b"');
-    expect(html).toContain('target="_blank"');
-    expect(html).toContain('rel="noopener noreferrer"');
-    expect(html).toContain('aria-label="Bluesky"');
-    expect(html).toContain('<svg');
-    expect(textOf(html)).not.toContain('Bluesky');
+    expect(html).not.toContain('aria-label="Bluesky');
+    expect(html).not.toContain('bsky.app');
+    expect(html).not.toContain('Bluesky');
   });
 
   it('pending は「Bluesky 送信中」をアイコンの aria-label に入れる', () => {
