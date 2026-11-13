@@ -22,6 +22,8 @@ describe('createBlueskyProfileRuntimePorts', () => {
     expect(ports.listBlueskyAuthorFeedUseCase).toBeUndefined();
     expect(ports.followBlueskyActorUseCase).toBeUndefined();
     expect(ports.unfollowBlueskyActorUseCase).toBeUndefined();
+    expect(ports.getOwnBlueskyProfileUseCase).toBeUndefined();
+    expect(ports.updateBlueskyProfileUseCase).toBeUndefined();
     expect(ports.isDigestOwner).toBeTypeOf('function');
   });
 
@@ -33,5 +35,7 @@ describe('createBlueskyProfileRuntimePorts', () => {
     expect(ports.listBlueskyAuthorFeedUseCase?.run).toBeTypeOf('function');
     expect(ports.followBlueskyActorUseCase?.run).toBeTypeOf('function');
     expect(ports.unfollowBlueskyActorUseCase?.run).toBeTypeOf('function');
+    expect(ports.getOwnBlueskyProfileUseCase?.run).toBeTypeOf('function');
+    expect(ports.updateBlueskyProfileUseCase?.run).toBeTypeOf('function');
   });
 });

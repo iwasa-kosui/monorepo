@@ -1,3 +1,4 @@
+import { BlueskyProfileSettingsSection } from './BlueskyProfileSettingsSection.tsx';
 import { BlueskySettingsSection } from './BlueskySettingsSection.tsx';
 import { NotificationsSettingsSection } from './NotificationsSettingsSection.tsx';
 import { PostingSettingsSection } from './PostingSettingsSection.tsx';
@@ -18,6 +19,7 @@ export const SettingsView = ({ isOwner, onProfileLoaded }: Props) => (
     <NotificationsSettingsSection />
     <PostingSettingsSection />
     <BlueskySettingsSection isOwner={isOwner} />
+    <BlueskyProfileSettingsSection isOwner={isOwner} />
     {isOwner && <RelaysSettingsSection />}
     <SecuritySettingsSection />
     {isOwner && <XFeedSourcesSettingsSection />}

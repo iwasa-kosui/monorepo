@@ -25,6 +25,8 @@ export type BlueskyCreatedRecord = Readonly<{ uri: string; cid: string; rkey: st
 
 export type BlueskyFetchedRecord = BlueskyCreatedRecord & Readonly<{ value?: unknown }>;
 
+export type BlueskyProfileRecord = Readonly<{ cid: string; value: Readonly<Record<string, unknown>> }>;
+
 export type BlueskyLikeSubject = Readonly<{ uri: string; cid: string }>;
 
 export type BlueskyReportInput = Readonly<{
@@ -69,6 +71,11 @@ export type BlueskyClient = Readonly<{
   updateSeen: (seenAt: Instant) => RA<void, BlueskyClientError>;
   createBookmark: (subject: BlueskyLikeSubject) => RA<void, BlueskyClientError>;
   deleteBookmark: (uri: string) => RA<void, BlueskyClientError>;
+  getProfileRecord: () => RA<BlueskyProfileRecord | undefined, BlueskyClientError>;
+  putProfileRecord: (
+    record: Readonly<Record<string, unknown>>,
+    swapCid: string | null,
+  ) => RA<Readonly<{ uri: string; cid: string }>, BlueskyClientError>;
 }>;
 
 export type BlueskyQueryClient = Readonly<{

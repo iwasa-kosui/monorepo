@@ -41,6 +41,8 @@ const POST_COLLECTION = 'app.bsky.feed.post';
 const LIKE_COLLECTION = 'app.bsky.feed.like';
 const REPOST_COLLECTION = 'app.bsky.feed.repost';
 const FOLLOW_COLLECTION = 'app.bsky.graph.follow';
+const PROFILE_COLLECTION = 'app.bsky.actor.profile';
+const PROFILE_RKEY = 'self';
 const REPORT_PROXY = 'did:plc:ar7c4by46qjdydhdevvrndac#atproto_labeler';
 const CHAT_PROXY_HEADERS = { 'atproto-proxy': 'did:web:api.bsky.chat#bsky_chat' } as const;
 const BOOKMARK_NSID_PREFIX = 'app.bsky.bookmark.';
@@ -83,11 +85,13 @@ const applyWritesResponseSchema = z.object({
   results: z.array(z.looseObject({ uri: z.string().min(1), cid: z.string().min(1) })).min(1),
 });
 const getRecordResponseSchema = createRecordResponseSchema.extend({ value: z.unknown().optional() });
+const getProfileRecordResponseSchema = createRecordResponseSchema.extend({ value: z.record(z.string(), z.unknown()) });
 const emptyResponseSchema = z.looseObject({});
 const queryResponseSchema = z.record(z.string(), z.unknown());
 const errorBodySchema = z.object({ error: z.string().optional(), message: z.string().optional() });
 const recordUriPattern = /^at:\/\/[^/]+\/app\.bsky\.feed\.post\/([^/]+)$/;
 const followUriPattern = /^at:\/\/[^/]+\/app\.bsky\.graph\.follow\/([^/]+)$/;
+const profileUriPattern = /^at:\/\/[^/]+\/app\.bsky\.actor\.profile\/self$/;
 
 const clientError = (
   kind: BlueskyClientErrorKind,
@@ -665,6 +669,41 @@ export const createBlueskyClient = (
           true,
         )
       ),
+    getProfileRecord: () =>
+      withSession(async (session) => {
+        const query = new URLSearchParams({ repo: session.did, collection: PROFILE_COLLECTION, rkey: PROFILE_RKEY });
+        const found = await call(
+          'getProfileRecord',
+          `${session.pdsUrl}/xrpc/com.atproto.repo.getRecord?${query.toString()}`,
+          { method: 'GET', headers: authorized(session) },
+          getProfileRecordResponseSchema,
+        );
+        if (found.ok) return RA.ok({ cid: found.val.cid, value: found.val.value });
+        return found.err.status === 404 || found.err.code === 'RecordNotFound' ? RA.ok(undefined) : found;
+      }),
+    putProfileRecord: (record, swapCid) =>
+      withSession(async (session) => {
+        const put = await call(
+          'putProfileRecord',
+          `${session.pdsUrl}/xrpc/com.atproto.repo.putRecord`,
+          {
+            method: 'POST',
+            headers: authorized(session, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+              repo: session.did,
+              collection: PROFILE_COLLECTION,
+              rkey: PROFILE_RKEY,
+              record,
+              swapRecord: swapCid,
+            }),
+          },
+          createRecordResponseSchema,
+        );
+        if (!put.ok) return put;
+        return profileUriPattern.test(put.val.uri)
+          ? RA.ok({ uri: put.val.uri, cid: put.val.cid })
+          : RA.err(clientError('invalid_response', 'putProfileRecord returned an unexpected uri'));
+      }),
     viewerDid: () => withSession(async (session) => RA.ok(session.did)),
   };
 };

@@ -2,6 +2,8 @@ import { jsx } from 'hono/jsx';
 import { describe, expect, it } from 'vitest';
 
 import type { CredentialAccount } from '../../../adaptor/mastodon/entities.ts';
+import type { BlueskyStatus } from '../../api/mastodonClient.ts';
+import { BlueskyProfileSettingsForm, BlueskyProfileSettingsGate } from './BlueskyProfileSettingsSection.tsx';
 import { BlueskySettingsView } from './BlueskySettingsSection.tsx';
 import { PostingSettingsView } from './PostingSettingsSection.tsx';
 import { ProfileSettingsForm } from './ProfileSettingsSection.tsx';
@@ -166,6 +168,111 @@ describe('BlueskySettingsView', () => {
     expect(html).toContain('Bluesky とは連携していません');
     expect(html).not.toContain('読み込んでいます');
     expect(html).not.toContain('secret');
+  });
+});
+
+describe('BlueskyProfileSettingsGate', () => {
+  const scope = {
+    state: 'ok',
+    lastSucceededAt: null,
+    lastFailedAt: null,
+    failureKind: null,
+    failureCode: null,
+  } as const;
+  const enabled: BlueskyStatus = { enabled: true, timeline: scope, notifications: scope, login: { state: 'ok' } };
+  const render = (status: Parameters<typeof BlueskyProfileSettingsGate>[0]['status'], isOwner: boolean): string =>
+    String(jsx(BlueskyProfileSettingsGate, { status, isOwner }));
+
+  it('shows the section only when Bluesky is connected and the user is the owner', () => {
+    expect(render(enabled, true)).toContain('id="bluesky-profile"');
+    expect(render(enabled, true)).toContain('Bluesky のプロフィール');
+    expect(render(enabled, false)).not.toContain('id="bluesky-profile"');
+    expect(render({ enabled: false }, true)).not.toContain('id="bluesky-profile"');
+    expect(render(undefined, true)).not.toContain('id="bluesky-profile"');
+  });
+
+  it('does not show the section before the status arrives', () => {
+    expect(String(jsx(SettingsView, { isOwner: true }))).not.toContain('id="bluesky-profile"');
+  });
+});
+
+describe('BlueskyProfileSettingsForm', () => {
+  const profile = {
+    did: 'did:plc:me',
+    handle: 'me.bsky.social',
+    displayName: '岩佐',
+    description: '自己紹介',
+    avatar: 'https://cdn.example/avatar.jpg',
+    banner: null,
+    cid: 'bafycurrent',
+  };
+  const render = (props: Partial<Parameters<typeof BlueskyProfileSettingsForm>[0]> = {}): string =>
+    String(jsx(BlueskyProfileSettingsForm, {
+      profile,
+      loadFailed: false,
+      displayName: '岩佐',
+      description: '自己紹介',
+      isSubmitting: false,
+      errorText: undefined,
+      isConflict: false,
+      savedMessage: undefined,
+      formKey: 0,
+      onReload: () => {},
+      onDisplayNameInput: () => {},
+      onDescriptionInput: () => {},
+      onSubmit: () => {},
+      ...props,
+    }));
+
+  it('puts the current profile into the form and offers to delete only the images that exist', () => {
+    const html = render();
+
+    expect(html).toMatch(/<input[^>]*name="display_name"[^>]*value="岩佐"/);
+    expect(html).toMatch(/<textarea[^>]*name="description"[^>]*value="自己紹介"/);
+    expect(html).toContain('src="https://cdn.example/avatar.jpg"');
+    expect(html).toContain('name="remove_avatar"');
+    expect(html).not.toContain('name="remove_banner"');
+    expect(html).toMatch(/<input[^>]*name="banner"[^>]*accept="image\/jpeg,image\/png"/);
+  });
+
+  it('shows the remaining characters, and disables saving when a limit is exceeded', () => {
+    const within = render();
+    expect(within).toContain('残り 62 文字');
+    expect(within).toContain('残り 252 文字');
+    expect(within).toMatch(/<button type="submit" class=[^>]*>保存<\/button>/);
+
+    const over = render({ displayName: 'あ'.repeat(65) });
+    expect(over).toContain('1 文字超えています');
+    expect(over).toMatch(/<button type="submit" disabled[^>]*>保存<\/button>/);
+  });
+
+  it('disables saving while saving', () => {
+    expect(render({ isSubmitting: true })).toMatch(/<button type="submit" disabled[^>]*>保存中...<\/button>/);
+  });
+
+  it('shows the saved message and the error', () => {
+    expect(render({ savedMessage: 'Bluesky のプロフィールを保存しました' })).toContain(
+      'Bluesky のプロフィールを保存しました',
+    );
+    expect(render({ errorText: '保存できません' })).toContain('保存できません');
+  });
+
+  it('offers a reload button only when the save conflicted', () => {
+    expect(render({ errorText: '保存できません' })).not.toContain('読み込み直す');
+
+    const conflict = render({ errorText: 'ほかの場所でプロフィールが更新されました', isConflict: true });
+    expect(conflict).toContain('ほかの場所でプロフィールが更新されました');
+    expect(conflict).toContain('読み込み直す');
+  });
+
+  it('shows a loading or failure text with a reload button until the profile arrives', () => {
+    const loading = render({ profile: undefined });
+    expect(loading).toContain('読み込み中...');
+    expect(loading).not.toContain('もう一度読み込む');
+
+    const failed = render({ profile: undefined, loadFailed: true });
+    expect(failed).toContain('Bluesky のプロフィールを読み込めませんでした');
+    expect(failed).toContain('もう一度読み込む');
   });
 });
 
