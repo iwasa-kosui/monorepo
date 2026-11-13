@@ -41,6 +41,13 @@ describe('DomainEventArchive.redact', () => {
     expect(redacted).toMatchObject({ aggregateState: null, eventPayload: null });
   });
 
+  it('session.ended も aggregate_id をハッシュし、内容を伏せる', async () => {
+    const redacted = await redact(event('session.ended', sessionId));
+
+    expect(redacted.aggregateId).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(redacted).toMatchObject({ aggregateState: null, eventPayload: null });
+  });
+
   it('JSON 文字列全体をハッシュする', async () => {
     const redacted = await redact(event('session.started', '"abc"'));
 

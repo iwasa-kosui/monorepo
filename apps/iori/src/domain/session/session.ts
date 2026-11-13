@@ -27,6 +27,8 @@ export type SessionEvent<
 export const SessionEvent = AggregateEvent.createFactory<SessionAggregate>('session');
 export type SessionStarted = SessionEvent<Session, 'session.started', Omit<Session, 'sessionId'>>;
 export type SessionStartedStore = Agg.Store<SessionStarted>;
+export type SessionEnded = SessionEvent<undefined, 'session.ended', Pick<Session, 'sessionId' | 'userId'>>;
+export type SessionEndedStore = Agg.Store<SessionEnded>;
 export type SessionResolver = Agg.Resolver<SessionId, Session | undefined>;
 export type SessionWithUserAndActor = Readonly<{
   session: Session;
@@ -46,9 +48,19 @@ const startSession = (now: Instant) => (payload: Omit<Session, 'sessionId'>): Se
   );
 };
 
+const endSession = (now: Instant) => (session: Session): SessionEnded =>
+  SessionEvent.create(
+    session.sessionId,
+    undefined,
+    'session.ended',
+    { sessionId: session.sessionId, userId: session.userId },
+    now,
+  );
+
 export const Session = {
   ...schema,
   startSession,
+  endSession,
   verify: (session: Session, now: Instant): boolean => {
     return session.expires > now;
   },

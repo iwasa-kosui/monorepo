@@ -1,15 +1,16 @@
-import { useState } from 'hono/jsx';
+import { useEffect, useRef, useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 import { createBlueskyPost, createStatus, updateMedia, uploadMedia } from '../api/mastodonClient.ts';
+import { useDefaultPostVisibility } from '../hooks/useDefaultPostVisibility.ts';
 import { blueskyCrosspostNotice } from './blueskyCrosspostMark.ts';
 import { downscaleImageForUpload } from './imageDownscale.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
 import { canSubmitPost, postedNotice, type PostNotice, submitPost, type UploadedMedia } from './postSubmission.ts';
-import { DEFAULT_POST_VISIBILITY, type PostVisibility, visibilityForDestination } from './postVisibility.ts';
+import { type PostVisibility, visibilityForDestination, visibilityWhenDefaultLoaded } from './postVisibility.ts';
 import { PostVisibilitySelect } from './PostVisibilitySelect.tsx';
 
 type Props = Readonly<{
@@ -24,7 +25,9 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [destination, setDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
-  const [visibility, setVisibility] = useState<PostVisibility>(DEFAULT_POST_VISIBILITY);
+  const defaultVisibility = useDefaultPostVisibility();
+  const [visibility, setVisibility] = useState<PostVisibility>(defaultVisibility);
+  const visibilityTouched = useRef(false);
   const [notice, setNotice] = useState<PostNotice | undefined>(undefined);
   const [cwEnabled, setCwEnabled] = useState(false);
   const [cw, setCw] = useState('');
@@ -35,6 +38,20 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const sensitive = hasImages && (sensitiveChecked || hasCw);
   const isBlueskyOnly = destination === 'bluesky';
   const crosspostNotice = blueskyCrosspostNotice(destination, cwEnabled ? cw : '', sensitive, visibility);
+
+  useEffect(() => {
+    setVisibility((current) =>
+      visibilityWhenDefaultLoaded(current, defaultVisibility, {
+        touched: visibilityTouched.current === true,
+        destination,
+      })
+    );
+  }, [defaultVisibility]);
+
+  const handleVisibilityChange = (next: PostVisibility) => {
+    visibilityTouched.current = true;
+    setVisibility(next);
+  };
 
   const handleContentChange = (value: string) => {
     setContent(value);
@@ -62,7 +79,8 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         setContent('');
         setUploaded([]);
         setDestination(DEFAULT_POST_DESTINATION);
-        setVisibility(DEFAULT_POST_VISIBILITY);
+        visibilityTouched.current = false;
+        setVisibility(defaultVisibility);
         setCwEnabled(false);
         setCw('');
         setSensitiveChecked(false);
@@ -196,7 +214,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
       <div class='mt-2 flex-shrink-0'>
         <PostVisibilitySelect
           value={visibility}
-          onChange={setVisibility}
+          onChange={handleVisibilityChange}
           name='visibility'
           id={`${formId ?? id ?? 'post-form'}-visibility`}
           disabled={isBlueskyOnly}

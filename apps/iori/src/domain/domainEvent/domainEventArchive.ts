@@ -15,6 +15,7 @@ export const ARCHIVE_REDACTED_EVENT_NAMES = [
   'key.created',
   'userPassword.set',
   'session.started',
+  'session.ended',
   'accessToken.issued',
   'accessToken.revoked',
   'authorizationCode.issued',
@@ -128,10 +129,12 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'timelineItem.created',
   'timelineItem.deleted',
   'user.created',
+  'userPreferences.saved',
 ] as const;
 
 export const ARCHIVE_HASHED_AGGREGATE_ID_EVENT_NAMES = [
   'session.started',
+  'session.ended',
   'passkeyCredential.registered',
   'passkeyCredential.used',
   'passkeyCredential.deleted',

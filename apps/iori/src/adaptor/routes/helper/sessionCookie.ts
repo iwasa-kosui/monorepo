@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import { setCookie } from 'hono/cookie';
+import { deleteCookie, setCookie } from 'hono/cookie';
 
 import type { SessionId } from '../../../domain/session/sessionId.ts';
 
@@ -11,4 +11,8 @@ export const setSessionCookie = (c: Context, sessionId: SessionId): void => {
     sameSite: 'lax',
     secure: true,
   });
+};
+
+export const deleteSessionCookie = (c: Context): void => {
+  deleteCookie(c, 'sessionId', { path: '/', secure: true });
 };

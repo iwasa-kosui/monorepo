@@ -7,6 +7,14 @@ export const SecuritySettingsSection = () => (
       <a href='/settings/passkeys' class='text-sm text-terracotta hover:underline dark:text-terracotta-light'>
         パスキーを管理する
       </a>
+      <form method='post' action='/auth/sign-out'>
+        <button
+          type='submit'
+          class='px-4 py-2 text-sm font-medium rounded-clay border border-warm-gray-dark dark:border-gray-600 text-charcoal dark:text-white hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
+        >
+          ログアウト
+        </button>
+      </form>
     </div>
   </SettingsSection>
 );

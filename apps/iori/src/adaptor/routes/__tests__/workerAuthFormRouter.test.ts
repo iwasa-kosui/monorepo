@@ -14,16 +14,18 @@ const AUTHORIZE_NEXT = '/oauth/authorize?client_id=a&state=b';
 const createApp = (overrides: Partial<WorkerAuthFormRouterDeps> = {}) => {
   const signInUseCase = { run: vi.fn(async () => RA.ok({ sessionId: SessionId.generate() })) };
   const signUpUseCase = { run: vi.fn(async () => RA.ok({ user: { username: Username.orThrow('kosui') } })) };
+  const signOutUseCase = { run: vi.fn(async () => RA.ok(undefined)) };
   const app = new Hono().route(
     '/auth',
     createWorkerAuthFormRouter({
       signInUseCase,
       signUpUseCase,
+      signOutUseCase,
       createContext: () => ({}) as never,
       ...overrides,
     } as WorkerAuthFormRouterDeps),
   );
-  return { app, signInUseCase, signUpUseCase };
+  return { app, signInUseCase, signUpUseCase, signOutUseCase };
 };
 
 const post = (
@@ -235,6 +237,56 @@ describe('createWorkerAuthFormRouter', () => {
       const response = await post(app, '/auth/sign-up', { username: 'kosui', password: PASSWORD });
 
       expect(response.headers.get('Location')).toBe('/sign-up?error=failed');
+    });
+  });
+
+  describe('POST /auth/sign-out', () => {
+    it('Origin が違うと 403 にし、ユースケースを呼ばない', async () => {
+      const { app, signOutUseCase } = createApp();
+      const sessionId = SessionId.generate();
+
+      const response = await post(app, '/auth/sign-out', {}, {
+        Origin: 'https://evil.example',
+        Cookie: `sessionId=${sessionId}`,
+      });
+
+      expect(response.status).toBe(403);
+      expect(signOutUseCase.run).not.toHaveBeenCalled();
+    });
+
+    it('Cookie のセッションを終了し、Cookie を消して /sign-in へ 303 にする', async () => {
+      const { app, signOutUseCase } = createApp();
+      const sessionId = SessionId.generate();
+
+      const response = await post(app, '/auth/sign-out', {}, { Origin: ORIGIN, Cookie: `sessionId=${sessionId}` });
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get('Location')).toBe('/sign-in');
+      expect(signOutUseCase.run).toHaveBeenCalledWith({ sessionId });
+      const cookie = response.headers.get('Set-Cookie') ?? '';
+      expect(cookie).toContain('sessionId=;');
+      expect(cookie).toContain('Max-Age=0');
+      expect(cookie).toContain('Path=/');
+      expect(cookie).toContain('Secure');
+    });
+
+    it('Cookie が無くても /sign-in へ 303 にする', async () => {
+      const { app, signOutUseCase } = createApp();
+
+      const response = await post(app, '/auth/sign-out', {});
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get('Location')).toBe('/sign-in');
+      expect(signOutUseCase.run).toHaveBeenCalledWith({ sessionId: undefined });
+    });
+
+    it('Cookie が不正な値でもセッションを指定せずに 303 にする', async () => {
+      const { app, signOutUseCase } = createApp();
+
+      const response = await post(app, '/auth/sign-out', {}, { Origin: ORIGIN, Cookie: 'sessionId=not-a-uuid' });
+
+      expect(response.status).toBe(303);
+      expect(signOutUseCase.run).toHaveBeenCalledWith({ sessionId: undefined });
     });
   });
 });

@@ -56,6 +56,7 @@ import { ResolveRemoteAccountUseCase } from '../../../../useCase/resolveRemoteAc
 import { ResolveRemotePostUseCase } from '../../../../useCase/resolveRemotePost.ts';
 import { SaveDigestSubscriptionUseCase } from '../../../../useCase/saveDigestSubscription.ts';
 import { SaveMarkersUseCase } from '../../../../useCase/saveMarkers.ts';
+import { SaveUserPreferencesUseCase } from '../../../../useCase/saveUserPreferences.ts';
 import type { ScheduleBlueskyCrosspostUseCase } from '../../../../useCase/scheduleBlueskyCrosspost.ts';
 import { createSearchTimelineUseCase } from '../../../../useCase/searchTimeline.ts';
 import { SendEmojiReactUseCase } from '../../../../useCase/sendEmojiReact.ts';
@@ -217,6 +218,8 @@ import { createD1TimelineItemsResolverByActorIds } from '../../../d1/timeline/ti
 import { createD1TimelineSearchCandidatesResolver } from '../../../d1/timelineSearch/timelineSearchCandidatesResolver.ts';
 import { createD1UserResolver } from '../../../d1/user/userResolver.ts';
 import { createD1UserResolverByUsername } from '../../../d1/user/userResolverByUsername.ts';
+import { createD1UserPreferencesResolverByUserId } from '../../../d1/userPreferences/userPreferencesResolverByUserId.ts';
+import { createD1UserPreferencesSavedStore } from '../../../d1/userPreferences/userPreferencesSavedStore.ts';
 import { createStatusAssembler } from '../../../mastodon/statusAssembler.ts';
 import { htmlToPlainText } from '../../../text/htmlToPlainText.ts';
 import { createMastodonAuthn } from '../../mastodonAuthn.ts';
@@ -224,6 +227,7 @@ import { createWorkerIoriActionsRouter } from '../../workerIoriActionsRouter.ts'
 import { createWorkerIoriBlueskyRouter } from '../../workerIoriBlueskyRouter.ts';
 import { createWorkerIoriDigestRouter } from '../../workerIoriDigestRouter.ts';
 import { createWorkerIoriFediverseConversationsRouter } from '../../workerIoriFediverseConversationsRouter.ts';
+import { createWorkerIoriPreferencesRouter } from '../../workerIoriPreferencesRouter.ts';
 import { createWorkerIoriSearchRouter } from '../../workerIoriSearchRouter.ts';
 import { createWorkerIoriSummaryRouter } from '../../workerIoriSummaryRouter.ts';
 import { createWorkerIoriXPostsRouter } from '../../workerIoriXPostsRouter.ts';
@@ -381,6 +385,7 @@ export const setupReadApi = (
     actorResolverByUri,
   });
   const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
+  const userPreferencesResolverByUserId = createD1UserPreferencesResolverByUserId(db);
   const statusAssembler = createStatusAssembler({
     accountProfilesResolver: createD1AccountProfilesResolverByActorIds(db),
     postExtrasResolver: createD1PostExtrasResolverByPosts(db, ORIGIN),
@@ -818,6 +823,17 @@ export const setupReadApi = (
           createPostUseCase,
           sendReplyUseCase,
           createContext,
+        }),
+      );
+      root.route(
+        '/api',
+        createWorkerIoriPreferencesRouter({
+          authn,
+          userPreferencesResolverByUserId,
+          saveUserPreferencesUseCase: SaveUserPreferencesUseCase.create({
+            userPreferencesResolverByUserId,
+            userPreferencesSavedStore: createD1UserPreferencesSavedStore(db),
+          }),
         }),
       );
       root.route(

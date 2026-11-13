@@ -25,6 +25,7 @@ import type {
   IoriBlueskyTimelineResponse,
 } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { IoriDigestRequestResponse, IoriFeedSourceBody } from '../../adaptor/routes/workerIoriDigestRouter.ts';
+import type { IoriPreferencesResponse } from '../../adaptor/routes/workerIoriPreferencesRouter.ts';
 import type { IoriSearchStatusesResponse } from '../../adaptor/routes/workerIoriSearchRouter.ts';
 import type { IoriTimelineSummaryResponse } from '../../adaptor/routes/workerIoriSummaryRouter.ts';
 import type { IoriXPostsRefreshResponse, IoriXPostsResponse } from '../../adaptor/routes/workerIoriXPostsRouter.ts';
@@ -534,6 +535,22 @@ export const addXUserFeedSource = (username: string): Promise<FeedSource> =>
 
 export const setFeedSourceEnabled = (feedSourceId: string, enabled: boolean): Promise<FeedSource> =>
   sendFeedSourceJson('PATCH', `/api/iori/v1/feed-sources/${encodeURIComponent(feedSourceId)}`, { enabled });
+
+export type UserPreferencesBody = IoriPreferencesResponse['preferences'];
+
+export const fetchPreferences = async (): Promise<UserPreferencesBody> =>
+  (await request<IoriPreferencesResponse>('/api/iori/v1/preferences')).body.preferences;
+
+export const savePreferences = async (preferences: UserPreferencesBody): Promise<UserPreferencesBody> => {
+  const res = await fetch('/api/iori/v1/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(preferences),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json() as IoriPreferencesResponse).preferences;
+};
 
 export type SummarizeTimelineBody = Readonly<{ q?: string; since?: string; until?: string }>;
 
