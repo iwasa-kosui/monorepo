@@ -1,5 +1,10 @@
 import type { RA } from '@iwasa-kosui/result';
 
+import type {
+  BLUESKY_POSTGATE_COLLECTION,
+  BLUESKY_THREADGATE_COLLECTION,
+  BlueskyInteraction,
+} from '../domain/blueskyCrosspost/blueskyInteraction.ts';
 import type { BlueskyBlob, BlueskyPostRecord } from '../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import type { BlueskyReportReasonType } from '../domain/blueskyModeration/blueskyModeration.ts';
 import type { Instant } from '../domain/instant/instant.ts';
@@ -31,11 +36,23 @@ export type BlueskyReportInput = Readonly<{
 
 export type BlueskyRecordCollection = 'app.bsky.feed.post' | 'app.bsky.graph.follow';
 
+export type BlueskyDeletableCollection =
+  | 'app.bsky.feed.post'
+  | typeof BLUESKY_THREADGATE_COLLECTION
+  | typeof BLUESKY_POSTGATE_COLLECTION;
+
+export type BlueskyPostWithGatesInput = Readonly<{
+  record: BlueskyPostRecord;
+  rkey: string;
+  interaction: BlueskyInteraction;
+}>;
+
 export type BlueskyClient = Readonly<{
   uploadBlob: (input: Readonly<{ bytes: Uint8Array; mimeType: string }>) => RA<BlueskyBlob, BlueskyClientError>;
   createRecord: (record: BlueskyPostRecord, rkey: string) => RA<BlueskyCreatedRecord, BlueskyClientError>;
+  createPostWithGates: (input: BlueskyPostWithGatesInput) => RA<BlueskyCreatedRecord, BlueskyClientError>;
   getRecord: (rkey: string, collection?: BlueskyRecordCollection) => RA<BlueskyFetchedRecord, BlueskyClientError>;
-  deleteRecord: (rkey: string) => RA<void, BlueskyClientError>;
+  deleteRecord: (rkey: string, collection?: BlueskyDeletableCollection) => RA<void, BlueskyClientError>;
   createLike: (subject: BlueskyLikeSubject, rkey: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;
   deleteLike: (rkey: string) => RA<void, BlueskyClientError>;
   createRepost: (subject: BlueskyLikeSubject, rkey: string) => RA<Readonly<{ uri: string }>, BlueskyClientError>;

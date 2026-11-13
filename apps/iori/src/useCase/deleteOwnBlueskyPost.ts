@@ -1,6 +1,10 @@
 import type { RequestContext } from '@fedify/fedify';
 import { RA, Result } from '@iwasa-kosui/result';
 
+import {
+  BLUESKY_POSTGATE_COLLECTION,
+  BLUESKY_THREADGATE_COLLECTION,
+} from '../domain/blueskyCrosspost/blueskyInteraction.ts';
 import type { PostIdsResolverByBlueskyUris } from '../domain/blueskyNotification/blueskyNotification.ts';
 import type { BlueskyTimelineItemsDeletedStore } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import type { PostId } from '../domain/post/postId.ts';
@@ -57,6 +61,10 @@ const create = (
     }
     const deleted = await client.deleteRecord(rkey);
     if (!deleted.ok) return RA.err(deleted.err);
+    for (const gate of [BLUESKY_THREADGATE_COLLECTION, BLUESKY_POSTGATE_COLLECTION] as const) {
+      const gateDeleted = await client.deleteRecord(rkey, gate);
+      if (!gateDeleted.ok) return RA.err(gateDeleted.err);
+    }
     Result.unsafeUnwrap(await timelineItemsDeletedStore.deleteByUri(uri));
     return RA.ok({ viaCrosspost: false });
   };

@@ -1,18 +1,24 @@
 import { RA } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
+import type { BlueskyInteraction } from '../domain/blueskyCrosspost/blueskyInteraction.ts';
 import type { BlueskyQuoteNotAllowed, BlueskyQuoteTargetNotFound } from '../domain/blueskyTimeline/blueskyQuote.ts';
 import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import {
   type BlueskyPostImage,
   type BlueskyPostInvalid,
-  publishBlueskyPost,
-  type PublishBlueskyPostDeps,
+  publishBlueskyPostWithInteraction,
+  type PublishBlueskyPostWithInteractionDeps,
   validateBlueskyPostInput,
 } from './helper/publishBlueskyPost.ts';
 import type { UseCase } from './useCase.ts';
 
-type Input = Readonly<{ uri: string; text: string; images?: readonly BlueskyPostImage[] }>;
+type Input = Readonly<{
+  uri: string;
+  text: string;
+  images?: readonly BlueskyPostImage[];
+  interaction?: BlueskyInteraction;
+}>;
 
 type Ok = Readonly<{ uri: string; cid: string }>;
 
@@ -20,7 +26,7 @@ type Err = BlueskyClientError | BlueskyPostInvalid | BlueskyQuoteTargetNotFound 
 
 export type QuoteBlueskyPostUseCase = UseCase<Input, Ok, Err>;
 
-type Deps = PublishBlueskyPostDeps;
+type Deps = PublishBlueskyPostWithInteractionDeps;
 
 const getPostsResponseSchema = z.object({
   posts: z.array(z.looseObject({
@@ -38,7 +44,7 @@ const getPostsResponseSchema = z.object({
 });
 
 const create = (deps: Deps): QuoteBlueskyPostUseCase => {
-  const run = async ({ uri, text, images }: Input): RA<Ok, Err> => {
+  const run = async ({ uri, text, images, interaction }: Input): RA<Ok, Err> => {
     const problem = validateBlueskyPostInput({ text, images });
     if (problem !== undefined) return RA.err(problem);
     const response = await deps.query('app.bsky.feed.getPosts', { uris: uri });
@@ -60,7 +66,12 @@ const create = (deps: Deps): QuoteBlueskyPostUseCase => {
     ) {
       return RA.err({ type: 'BlueskyQuoteNotAllowed' });
     }
-    const published = await publishBlueskyPost(deps, { text, quote: { uri: post.uri, cid: post.cid }, images });
+    const published = await publishBlueskyPostWithInteraction(deps, {
+      text,
+      quote: { uri: post.uri, cid: post.cid },
+      images,
+      interaction,
+    });
     return published.ok ? RA.ok({ uri: published.val.uri, cid: published.val.cid }) : RA.err(published.err);
   };
 

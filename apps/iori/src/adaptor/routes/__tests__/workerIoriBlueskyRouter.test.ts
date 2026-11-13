@@ -113,6 +113,9 @@ const replyClient = (posts: unknown[] = [{ uri: 'at://did:plc:a/app.bsky.feed.po
   createRecord: vi.fn<BlueskyClient['createRecord']>(async () =>
     RA.ok({ uri: POSTED_URI, cid: 'bafyreply', rkey: '3kreply' })
   ),
+  createPostWithGates: vi.fn<BlueskyClient['createPostWithGates']>(async () =>
+    RA.ok({ uri: POSTED_URI, cid: 'bafyreply', rkey: '3kreply' })
+  ),
   uploadBlob: vi.fn<BlueskyClient['uploadBlob']>(),
   query: vi.fn<BlueskyQueryClient['query']>(async () => RA.ok({ posts })),
 });
@@ -1785,6 +1788,77 @@ describe('/api/iori/v1/bluesky/status', () => {
       });
       expect(client.createRecord).not.toHaveBeenCalled();
     });
+
+    describe('返信の制限と引用の禁止', () => {
+      it('reply_allow と quote_disabled が無ければ createRecord だけを呼ぶ', async () => {
+        const client = replyClient();
+        const t = setupReadApi({ blueskyQuoteClient: client });
+        const me = await t.signIn('write:statuses');
+
+        const response = await quote(t, me.bearer);
+
+        expect(response.status).toBe(201);
+        expect(client.createRecord).toHaveBeenCalledTimes(1);
+        expect(client.createPostWithGates).not.toHaveBeenCalled();
+      });
+
+      it('reply_allow と quote_disabled を interaction として createPostWithGates に渡す', async () => {
+        const client = replyClient([{ uri: TARGET, cid: 'cid1' }]);
+        const t = setupReadApi({ blueskyQuoteClient: client });
+        const me = await t.signIn('write:statuses');
+
+        const response = await quote(t, me.bearer, {
+          uri: TARGET,
+          text: '引用です',
+          reply_allow: ['following'],
+          quote_disabled: true,
+        });
+
+        expect(response.status).toBe(201);
+        expect(await response.json()).toEqual({ uri: POSTED_URI, cid: 'bafyreply' });
+        expect(client.createRecord).not.toHaveBeenCalled();
+        expect(client.createPostWithGates).toHaveBeenCalledExactlyOnceWith({
+          record: expect.objectContaining({
+            text: '引用です',
+            embed: { $type: 'app.bsky.embed.record', record: { uri: TARGET, cid: 'cid1' } },
+          }),
+          rkey: expect.any(String),
+          interaction: { replyRestriction: ['following'], quoteDisabled: true },
+        });
+      });
+
+      it('reply_allow が空配列なら、誰も返信できない設定にする', async () => {
+        const client = replyClient([{ uri: TARGET, cid: 'cid1' }]);
+        const t = setupReadApi({ blueskyQuoteClient: client });
+        const me = await t.signIn('write:statuses');
+
+        const response = await quote(t, me.bearer, { uri: TARGET, text: 'hi', reply_allow: [] });
+
+        expect(response.status).toBe(201);
+        expect(client.createPostWithGates.mock.calls[0]![0].interaction).toEqual({
+          replyRestriction: [],
+          quoteDisabled: false,
+        });
+      });
+
+      it.each([
+        ['reply_allow が未知の値', { reply_allow: ['everyone'] }],
+        ['reply_allow が配列でも文字列でもない', { reply_allow: 1 }],
+        ['quote_disabled が真偽でない', { quote_disabled: 'maybe' }],
+      ])('%s なら 422 にし、対象の取得も投稿もしない', async (_name, extra) => {
+        const client = replyClient();
+        const t = setupReadApi({ blueskyQuoteClient: client });
+        const me = await t.signIn('write:statuses');
+
+        const response = await quote(t, me.bearer, { uri: TARGET, text: 'hi', ...extra });
+
+        expect(response.status).toBe(422);
+        expect(await response.json()).toEqual({ error: expect.any(String) });
+        expect(client.query).not.toHaveBeenCalled();
+        expect(client.createRecord).not.toHaveBeenCalled();
+        expect(client.createPostWithGates).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('検索', () => {
@@ -2601,6 +2675,104 @@ describe('/api/iori/v1/bluesky/posts', () => {
     expect(response.status).toBe(429);
     expect(await response.json()).toEqual({ error: 'Bluesky rate limited' });
   });
+
+  describe('返信の制限と引用の禁止', () => {
+    it('reply_allow と quote_disabled が無ければ createRecord だけを呼び、gate を作らない', async () => {
+      const client = replyClient();
+      const t = setupReadApi({ blueskyPostClient: client });
+      const me = await t.signIn('write:statuses');
+
+      const response = await post(t, me.bearer);
+
+      expect(response.status).toBe(200);
+      expect(client.createRecord).toHaveBeenCalledTimes(1);
+      expect(client.createPostWithGates).not.toHaveBeenCalled();
+    });
+
+    it('quote_disabled が false で reply_allow が無いときも gate を作らない', async () => {
+      const client = replyClient();
+      const t = setupReadApi({ blueskyPostClient: client });
+      const me = await t.signIn('write:statuses');
+
+      const response = await post(t, me.bearer, { status: 'hi', quote_disabled: false });
+
+      expect(response.status).toBe(200);
+      expect(client.createPostWithGates).not.toHaveBeenCalled();
+    });
+
+    it('reply_allow の配列を interaction として createPostWithGates に渡し、uri を返す', async () => {
+      const client = replyClient();
+      const t = setupReadApi({ blueskyPostClient: client });
+      const me = await t.signIn('write:statuses');
+
+      const response = await post(t, me.bearer, {
+        status: 'こんにちは',
+        reply_allow: ['followers', 'mention'],
+        quote_disabled: true,
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        uri: POSTED_URI,
+        url: 'https://bsky.app/profile/did:plc:me/post/3kreply',
+      });
+      expect(client.createRecord).not.toHaveBeenCalled();
+      expect(client.createPostWithGates).toHaveBeenCalledExactlyOnceWith({
+        record: expect.objectContaining({ text: 'こんにちは' }),
+        rkey: expect.any(String),
+        interaction: { replyRestriction: ['mention', 'followers'], quoteDisabled: true },
+      });
+    });
+
+    it('reply_allow が空配列なら、誰も返信できない設定にする（フィールドが無いときと区別する）', async () => {
+      const client = replyClient();
+      const t = setupReadApi({ blueskyPostClient: client });
+      const me = await t.signIn('write:statuses');
+
+      const response = await post(t, me.bearer, { status: 'hi', reply_allow: [] });
+
+      expect(response.status).toBe(200);
+      expect(client.createPostWithGates.mock.calls[0]![0].interaction).toEqual({
+        replyRestriction: [],
+        quoteDisabled: false,
+      });
+    });
+
+    it('quote_disabled だけでも createPostWithGates を呼ぶ', async () => {
+      const client = replyClient();
+      const t = setupReadApi({ blueskyPostClient: client });
+      const me = await t.signIn('write:statuses');
+
+      const response = await post(t, me.bearer, { status: 'hi', quote_disabled: 'true' });
+
+      expect(response.status).toBe(200);
+      expect(client.createPostWithGates.mock.calls[0]![0].interaction).toEqual({
+        replyRestriction: 'everyone',
+        quoteDisabled: true,
+      });
+    });
+
+    it.each([
+      ['reply_allow が未知の値', { reply_allow: ['everyone'] }],
+      ['reply_allow に未知の値が混ざる', { reply_allow: ['mention', 'list'] }],
+      ['reply_allow が文字列でない要素を含む', { reply_allow: ['mention', 1] }],
+      ['reply_allow が数値', { reply_allow: 1 }],
+      ['reply_allow がオブジェクト', { reply_allow: { mention: true } }],
+      ['quote_disabled が文字列で真偽でない', { quote_disabled: 'maybe' }],
+      ['quote_disabled が数値', { quote_disabled: 1 }],
+    ])('%s なら 422 にし、Bluesky を呼ばない', async (_name, extra) => {
+      const client = replyClient();
+      const t = setupReadApi({ blueskyPostClient: client });
+      const me = await t.signIn('write:statuses');
+
+      const response = await post(t, me.bearer, { status: 'hi', ...extra });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ error: expect.any(String) });
+      expect(client.createRecord).not.toHaveBeenCalled();
+      expect(client.createPostWithGates).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('DELETE /api/iori/v1/bluesky/posts', () => {
@@ -2627,7 +2799,11 @@ describe('DELETE /api/iori/v1/bluesky/posts', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ viaCrosspost: false });
-    expect(client.deleteRecord).toHaveBeenCalledExactlyOnceWith('3kmine');
+    expect(client.deleteRecord.mock.calls).toEqual([
+      ['3kmine'],
+      ['3kmine', 'app.bsky.feed.threadgate'],
+      ['3kmine', 'app.bsky.feed.postgate'],
+    ]);
     expect(uris(t)).toEqual([]);
   });
 

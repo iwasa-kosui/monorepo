@@ -66,9 +66,45 @@ describe('DeleteOwnBlueskyPostUseCase', () => {
     const result = await run(t, POST);
 
     expect(result).toEqual({ ok: true, val: { viaCrosspost: false } });
-    expect(t.deleteRecord).toHaveBeenCalledExactlyOnceWith('3kmine');
+    expect(t.deleteRecord).toHaveBeenNthCalledWith(1, '3kmine');
     expect(t.deletePost).not.toHaveBeenCalled();
     expect(t.uris()).toEqual([CROSSPOSTED, OTHERS, DELETING].sort());
+  });
+
+  it('投稿に加えて、同じ rkey の threadgate と postgate も削除する', async () => {
+    const t = setup();
+
+    await run(t, POST);
+
+    expect(t.deleteRecord.mock.calls).toEqual([
+      ['3kmine'],
+      ['3kmine', 'app.bsky.feed.threadgate'],
+      ['3kmine', 'app.bsky.feed.postgate'],
+    ]);
+  });
+
+  it('threadgate の削除が失敗したら、エラーを返し、postgate を削除せずタイムラインの行を残す', async () => {
+    const t = setup();
+    t.deleteRecord.mockReturnValueOnce(RA.ok(undefined)).mockReturnValueOnce(RA.err(failure));
+
+    const result = await run(t, POST);
+
+    expect(result).toEqual({ ok: false, err: failure });
+    expect(t.deleteRecord).toHaveBeenCalledTimes(2);
+    expect(t.uris()).toContain(POST);
+  });
+
+  it('postgate の削除が失敗したら、エラーを返し、タイムラインの行を残す', async () => {
+    const t = setup();
+    t.deleteRecord
+      .mockReturnValueOnce(RA.ok(undefined))
+      .mockReturnValueOnce(RA.ok(undefined))
+      .mockReturnValueOnce(RA.err(failure));
+
+    const result = await run(t, POST);
+
+    expect(result).toEqual({ ok: false, err: failure });
+    expect(t.uris()).toContain(POST);
   });
 
   it('自分の DID と違う repo の投稿は拒否し、Bluesky を削除せず行も残す', async () => {
@@ -120,6 +156,7 @@ describe('DeleteOwnBlueskyPostUseCase', () => {
     const result = await run(t, POST);
 
     expect(result).toEqual({ ok: false, err: failure });
+    expect(t.deleteRecord).toHaveBeenCalledTimes(1);
     expect(t.uris()).toContain(POST);
   });
 
@@ -139,7 +176,8 @@ describe('DeleteOwnBlueskyPostUseCase', () => {
     const result = await run(t, DELETING);
 
     expect(result).toEqual({ ok: true, val: { viaCrosspost: false } });
-    expect(t.deleteRecord).toHaveBeenCalledExactlyOnceWith('3kdeleting');
+    expect(t.deleteRecord).toHaveBeenNthCalledWith(1, '3kdeleting');
+    expect(t.deleteRecord).toHaveBeenCalledTimes(3);
     expect(t.deletePost).not.toHaveBeenCalled();
     expect(t.uris()).not.toContain(DELETING);
   });

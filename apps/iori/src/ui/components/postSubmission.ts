@@ -9,6 +9,7 @@ import {
   type UpdateStatusParams,
 } from '../api/mastodonClient.ts';
 import { BLUESKY_ONLY_POSTED_MESSAGE, postedMessage } from './blueskyCrosspostMark.ts';
+import { type BlueskyInteractionDraft, blueskyInteractionParamsOf } from './blueskyInteractionDraft.ts';
 import { BLUESKY_ONLY_VISIBILITY_ERROR, type PostVisibility } from './postVisibility.ts';
 
 export type UploadedMedia = Readonly<{ id: string; url: string; description: string; savedDescription: string }>;
@@ -20,6 +21,7 @@ export type PostFormValue = Readonly<{
   visibility: PostVisibility;
   cw: string;
   sensitive: boolean;
+  blueskyInteraction?: BlueskyInteractionDraft;
 }>;
 
 export type PostSubmitResult =
@@ -76,6 +78,7 @@ export const submitPost = async (
         status: value.content,
         media_ids: value.uploaded.map((media) => media.id),
         content_type: 'text/markdown',
+        ...(value.blueskyInteraction === undefined ? {} : blueskyInteractionParamsOf(value.blueskyInteraction)),
       });
       return { kind: 'postedToBluesky', url };
     } catch (err) {

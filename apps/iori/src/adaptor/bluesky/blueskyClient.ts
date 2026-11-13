@@ -9,6 +9,13 @@ import type {
   BlueskySessionResolver,
   BlueskySessionSavedStore,
 } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import {
+  BLUESKY_POSTGATE_COLLECTION,
+  BLUESKY_THREADGATE_COLLECTION,
+  blueskyPostgateRecordOf,
+  blueskyPostUriOf,
+  blueskyThreadgateRecordOf,
+} from '../../domain/blueskyCrosspost/blueskyInteraction.ts';
 import type { BlueskyBlob } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import {
   BLUESKY_BLOCK_COLLECTION,
@@ -72,6 +79,9 @@ const blobSchema = z.object({
 });
 const uploadBlobResponseSchema = z.object({ blob: blobSchema });
 const createRecordResponseSchema = z.object({ uri: z.string().min(1), cid: z.string().min(1) });
+const applyWritesResponseSchema = z.object({
+  results: z.array(z.looseObject({ uri: z.string().min(1), cid: z.string().min(1) })).min(1),
+});
 const getRecordResponseSchema = createRecordResponseSchema.extend({ value: z.unknown().optional() });
 const emptyResponseSchema = z.looseObject({});
 const queryResponseSchema = z.record(z.string(), z.unknown());
@@ -398,6 +408,51 @@ export const createBlueskyClient = (
           ? RA.err(clientError('invalid_response', 'createRecord returned an unexpected uri'))
           : RA.ok({ uri: created.val.uri, cid: created.val.cid, rkey: createdRkey });
       }),
+    createPostWithGates: ({ record, rkey, interaction }) =>
+      withSession(async (session) => {
+        const post = blueskyPostUriOf({ did: session.did, rkey });
+        const threadgate = blueskyThreadgateRecordOf({
+          post,
+          replyRestriction: interaction.replyRestriction,
+          createdAt: record.createdAt,
+        });
+        const postgate = blueskyPostgateRecordOf({
+          post,
+          quoteDisabled: interaction.quoteDisabled,
+          createdAt: record.createdAt,
+        });
+        const writes = [
+          { $type: 'com.atproto.repo.applyWrites#create', collection: POST_COLLECTION, rkey, value: record },
+          ...(threadgate === undefined ? [] : [{
+            $type: 'com.atproto.repo.applyWrites#create',
+            collection: BLUESKY_THREADGATE_COLLECTION,
+            rkey,
+            value: threadgate,
+          }]),
+          ...(postgate === undefined ? [] : [{
+            $type: 'com.atproto.repo.applyWrites#create',
+            collection: BLUESKY_POSTGATE_COLLECTION,
+            rkey,
+            value: postgate,
+          }]),
+        ];
+        const applied = await call(
+          'applyWrites',
+          `${session.pdsUrl}/xrpc/com.atproto.repo.applyWrites`,
+          {
+            method: 'POST',
+            headers: authorized(session, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ repo: session.did, writes }),
+          },
+          applyWritesResponseSchema,
+        );
+        if (!applied.ok) return applied;
+        const created = applied.val.results[0]!;
+        const createdRkey = recordUriPattern.exec(created.uri)?.[1];
+        return createdRkey === undefined
+          ? RA.err(clientError('invalid_response', 'applyWrites returned an unexpected uri'))
+          : RA.ok({ uri: created.uri, cid: created.cid, rkey: createdRkey });
+      }),
     getRecord: (rkey, collection = POST_COLLECTION) =>
       withSession(async (session) => {
         const query = new URLSearchParams({ repo: session.did, collection, rkey });
@@ -419,7 +474,7 @@ export const createBlueskyClient = (
             ...(found.val.value === undefined ? {} : { value: found.val.value }),
           });
       }),
-    deleteRecord: (rkey) => removeRecord(POST_COLLECTION, rkey),
+    deleteRecord: (rkey, collection = POST_COLLECTION) => removeRecord(collection, rkey),
     createLike: (subject, rkey) =>
       withSession(async (session) => {
         const created = await call(

@@ -67,6 +67,7 @@ import {
   BLUESKY_MAX_TEXT_BYTES,
 } from '../bluesky/blueskyPostRecord.ts';
 import { logBlueskyFailure } from './helper/blueskyFailureLog.ts';
+import { blueskyInteractionOf } from './helper/blueskyInteractionBody.ts';
 import { blueskyPostTextOf } from './helper/blueskyPostText.ts';
 import { loadBlueskyPostImage } from './helper/loadBlueskyPostImage.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
@@ -808,9 +809,12 @@ export const createWorkerIoriBlueskyRouter = ({
         const loadedImages = await loadMediaImages(body, userId);
         if ('failure' in loadedImages) return mediaFailure(c, loadedImages.failure);
         const { images } = loadedImages;
+        const interaction = blueskyInteractionOf(body);
+        if ('error' in interaction) return c.json({ error: interaction.error }, 422);
         const posted = await postToBlueskyUseCase.run({
           text: await blueskyPostTextOf(status, contentType),
           images,
+          interaction: interaction.interaction,
         });
         return posted.ok
           ? c.json({ uri: posted.val.uri, url: posted.val.url } satisfies IoriBlueskyPostResponse)
@@ -857,7 +861,9 @@ export const createWorkerIoriBlueskyRouter = ({
         const { images } = loadedImages;
         const text = bodyString(body, 'text') ?? (images.length > 0 ? '' : undefined);
         if (text === undefined) return c.json({ error: 'Validation failed: text' }, 400);
-        const quoted = await quoteBlueskyPostUseCase.run({ uri, text, images });
+        const interaction = blueskyInteractionOf(body);
+        if ('error' in interaction) return c.json({ error: interaction.error }, 422);
+        const quoted = await quoteBlueskyPostUseCase.run({ uri, text, images, interaction: interaction.interaction });
         return quoted.ok
           ? c.json(quoted.val satisfies IoriBlueskyQuoteResponse, 201)
           : quoteFailure(c, quoted.err);

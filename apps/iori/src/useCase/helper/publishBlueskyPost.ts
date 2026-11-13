@@ -14,6 +14,7 @@ import {
   toFacet,
 } from '../../adaptor/bluesky/blueskyPostRecord.ts';
 import type { BlueskyStrongRef } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import { BlueskyInteraction } from '../../domain/blueskyCrosspost/blueskyInteraction.ts';
 import type {
   BlueskyBlob,
   BlueskyEmbed,
@@ -54,12 +55,24 @@ export type PublishBlueskyPostInput = Readonly<{
   langs?: readonly string[];
 }>;
 
+export type PublishBlueskyPostInteractionInput =
+  & PublishBlueskyPostInput
+  & Readonly<{
+    interaction?: BlueskyInteraction;
+  }>;
+
 export type PublishBlueskyPostDeps = Readonly<{
   client: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'>;
   query: BlueskyQueryClient['query'];
   now: () => Instant;
   linkPreview?: BlueskyLinkPreviewDeps;
 }>;
+
+export type PublishBlueskyPostWithInteractionDeps =
+  & Omit<PublishBlueskyPostDeps, 'client'>
+  & Readonly<{
+    client: PublishBlueskyPostDeps['client'] & Pick<BlueskyClient, 'createPostWithGates'>;
+  }>;
 
 export type PublishedBlueskyPost = BlueskyCreatedRecord;
 
@@ -135,10 +148,10 @@ const embedOf = (
 
 const clockIdOf = (): number => crypto.getRandomValues(new Uint16Array(1))[0]! & 1023;
 
-export const publishBlueskyPost = async (
+const buildBlueskyPost = async (
   { client, query, now, linkPreview }: PublishBlueskyPostDeps,
   input: PublishBlueskyPostInput,
-): RA<PublishedBlueskyPost, PublishBlueskyPostError> => {
+): RA<Readonly<{ record: BlueskyPostRecord; rkey: string }>, PublishBlueskyPostError> => {
   const problem = validateBlueskyPostInput(input);
   if (problem !== undefined) return RA.err(problem);
   const text = input.text.trim();
@@ -160,5 +173,24 @@ export const publishBlueskyPost = async (
     ...(embed === undefined ? {} : { embed }),
     ...(input.langs === undefined || input.langs.length === 0 ? {} : { langs: input.langs }),
   };
-  return client.createRecord(record, blueskyTidOf({ createdAt, clockId: clockIdOf() }));
+  return RA.ok({ record, rkey: blueskyTidOf({ createdAt, clockId: clockIdOf() }) });
+};
+
+export const publishBlueskyPost = async (
+  deps: PublishBlueskyPostDeps,
+  input: PublishBlueskyPostInput,
+): RA<PublishedBlueskyPost, PublishBlueskyPostError> => {
+  const built = await buildBlueskyPost(deps, input);
+  return built.ok ? deps.client.createRecord(built.val.record, built.val.rkey) : RA.err(built.err);
+};
+
+export const publishBlueskyPostWithInteraction = async (
+  deps: PublishBlueskyPostWithInteractionDeps,
+  { interaction, ...input }: PublishBlueskyPostInteractionInput,
+): RA<PublishedBlueskyPost, PublishBlueskyPostError> => {
+  const built = await buildBlueskyPost(deps, input);
+  if (!built.ok) return RA.err(built.err);
+  return interaction === undefined || BlueskyInteraction.isDefault(interaction)
+    ? deps.client.createRecord(built.val.record, built.val.rkey)
+    : deps.client.createPostWithGates({ ...built.val, interaction });
 };

@@ -18,10 +18,17 @@ const setup = () => {
   const createRecord = vi.fn<BlueskyClient['createRecord']>(async (_record, rkey) =>
     RA.ok({ uri: `at://did:plc:me/app.bsky.feed.post/${rkey}`, cid: 'bafynew', rkey })
   );
+  const createPostWithGates = vi.fn<BlueskyClient['createPostWithGates']>(async ({ rkey }) =>
+    RA.ok({ uri: `at://did:plc:me/app.bsky.feed.post/${rkey}`, cid: 'bafygated', rkey })
+  );
   const uploadBlob = vi.fn<BlueskyClient['uploadBlob']>(async () => RA.ok(BLOB));
   const query = vi.fn<BlueskyQueryClient['query']>(async () => RA.ok({}));
-  const postToBluesky = PostToBlueskyUseCase.create({ client: { createRecord, uploadBlob }, query, now: () => NOW });
-  return { postToBluesky, createRecord, uploadBlob, query };
+  const postToBluesky = PostToBlueskyUseCase.create({
+    client: { createRecord, createPostWithGates, uploadBlob },
+    query,
+    now: () => NOW,
+  });
+  return { postToBluesky, createRecord, createPostWithGates, uploadBlob, query };
 };
 
 describe('PostToBlueskyUseCase', () => {
@@ -87,5 +94,89 @@ describe('PostToBlueskyUseCase', () => {
 
     expect(result).toEqual({ ok: false, err: failure });
     expect(t.createRecord).not.toHaveBeenCalled();
+  });
+
+  describe('返信の制限と引用の禁止', () => {
+    it('interaction が無ければ createRecord だけを呼ぶ', async () => {
+      const t = setup();
+
+      await t.postToBluesky.run({ text: 'hi', images: [] });
+
+      expect(t.createRecord).toHaveBeenCalledTimes(1);
+      expect(t.createPostWithGates).not.toHaveBeenCalled();
+    });
+
+    it('既定の interaction なら createRecord だけを呼び、gate を作らない', async () => {
+      const t = setup();
+
+      const result = await t.postToBluesky.run({
+        text: 'hi',
+        images: [],
+        interaction: { replyRestriction: 'everyone', quoteDisabled: false },
+      });
+
+      expect(result.ok).toBe(true);
+      expect(t.createRecord).toHaveBeenCalledTimes(1);
+      expect(t.createPostWithGates).not.toHaveBeenCalled();
+    });
+
+    it.each(
+      [
+        ['mention と following', { replyRestriction: ['mention', 'following'], quoteDisabled: false }],
+        ['followers だけ', { replyRestriction: ['followers'], quoteDisabled: false }],
+        ['3 つすべて', { replyRestriction: ['mention', 'following', 'followers'], quoteDisabled: false }],
+        ['空集合 (誰も返信できない)', { replyRestriction: [], quoteDisabled: false }],
+        ['引用の禁止だけ', { replyRestriction: 'everyone', quoteDisabled: true }],
+        ['返信の制限と引用の禁止', { replyRestriction: ['following'], quoteDisabled: true }],
+      ] as const,
+    )(
+      '%s なら createPostWithGates に同じ interaction と投稿と rkey を渡し、createRecord を呼ばない',
+      async (_name, interaction) => {
+        const t = setup();
+
+        const result = await t.postToBluesky.run({ text: 'こんにちは', images: [], interaction });
+
+        expect(t.createRecord).not.toHaveBeenCalled();
+        expect(t.createPostWithGates).toHaveBeenCalledTimes(1);
+        const input = t.createPostWithGates.mock.calls[0]![0];
+        expect(input.interaction).toEqual(interaction);
+        expect(input.record).toMatchObject({ $type: 'app.bsky.feed.post', text: 'こんにちは' });
+        expect(result).toEqual({
+          ok: true,
+          val: {
+            uri: `at://did:plc:me/app.bsky.feed.post/${input.rkey}`,
+            cid: 'bafygated',
+            url: `https://bsky.app/profile/did:plc:me/post/${input.rkey}`,
+          },
+        });
+      },
+    );
+
+    it('createPostWithGates の失敗をそのまま返す', async () => {
+      const t = setup();
+      t.createPostWithGates.mockReturnValueOnce(RA.err(failure));
+
+      const result = await t.postToBluesky.run({
+        text: 'hi',
+        images: [],
+        interaction: { replyRestriction: [], quoteDisabled: false },
+      });
+
+      expect(result).toEqual({ ok: false, err: failure });
+    });
+
+    it('入力が不正なら、interaction があっても Bluesky を呼ばない', async () => {
+      const t = setup();
+
+      const result = await t.postToBluesky.run({
+        text: '',
+        images: [],
+        interaction: { replyRestriction: [], quoteDisabled: true },
+      });
+
+      expect(result).toEqual({ ok: false, err: { type: 'BlueskyPostInvalid', reason: 'empty' } });
+      expect(t.createPostWithGates).not.toHaveBeenCalled();
+      expect(t.createRecord).not.toHaveBeenCalled();
+    });
   });
 });
