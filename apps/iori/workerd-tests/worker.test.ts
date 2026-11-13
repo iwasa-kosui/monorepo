@@ -41,6 +41,27 @@ describe('iori Worker on workerd', () => {
     expect(await response.text()).toBe('OK');
   });
 
+  it('serves robots.txt and blocks an AI crawler only for images', async () => {
+    const gptBot =
+      'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.4; +https://openai.com/gptbot)';
+    const mastodon = 'Mastodon/4.3.2 (http.rb/5.2.0; +https://mastodon.social/)';
+
+    const robots = await SELF.fetch(`${origin}/robots.txt`);
+    expect(robots.status).toBe(200);
+    const robotsTxt = await robots.text();
+    expect(robotsTxt).toContain('User-agent: GPTBot');
+    expect(robotsTxt).toContain('Disallow: /uploads/');
+
+    const page = await SELF.fetch(`${origin}/health`, { headers: { 'User-Agent': gptBot } });
+    expect(page.status).toBe(200);
+
+    const blocked = await SELF.fetch(`${origin}/default-avatar.png`, { headers: { 'User-Agent': gptBot } });
+    expect(blocked.status).toBe(403);
+
+    const allowed = await SELF.fetch(`${origin}/default-avatar.png`, { headers: { 'User-Agent': mastodon } });
+    expect(allowed.status).not.toBe(403);
+  });
+
   it('signs up and signs in with an argon2 password hash', async () => {
     const signedUp = await SELF.fetch(`${origin}/auth/sign-up`, {
       method: 'POST',

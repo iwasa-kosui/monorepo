@@ -1,10 +1,13 @@
 import { Hono } from 'hono';
 
+import { aiCrawlerGuard } from './adaptor/http/aiCrawlers.ts';
 import { rootErrorHandler } from './adaptor/routes/helper/rootErrorHandler.ts';
 import type { IoriAppAdapters } from './runtime/ioriRuntime.ts';
 
 export const createIoriApp = (adapters: IoriAppAdapters): Hono => {
   const app = new Hono();
+
+  app.use(aiCrawlerGuard);
 
   if (adapters.federationMiddleware !== undefined) {
     app.use(adapters.federationMiddleware);
