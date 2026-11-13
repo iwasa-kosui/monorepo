@@ -1,11 +1,10 @@
 import { useEffect } from 'hono/jsx';
 
 import type { UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
-import { blueskyCrosspostNotice } from './blueskyCrosspostMark.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
-import { PostVisibilitySelect } from './PostVisibilitySelect.tsx';
 import { ReplyDialogShell } from './ReplyDialogShell.tsx';
+import { ReplyVisibilityField } from './ReplyVisibilityField.tsx';
 
 type Props = Readonly<{
   dialog: UseReplyDialogReturn;
@@ -50,11 +49,6 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
     }
   };
 
-  const isParentDirect = replyParentVisibility === 'direct';
-  const crosspostNotice = isParentDirect
-    ? undefined
-    : blueskyCrosspostNotice(replyDestination, '', false, replyVisibility);
-
   const handleKeyDown = (e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
@@ -82,28 +76,16 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
         disabled={isSendingReply}
       />
       <div class='mt-2 flex-shrink-0'>
-        {isParentDirect
-          ? (
-            <p class='text-xs text-charcoal-light dark:text-gray-400'>
-              {replyDestination === 'both'
-                ? '返信先がダイレクトなので、返信もダイレクトになり、Bluesky には送りません'
-                : '返信先がダイレクトなので、返信もダイレクトになります'}
-            </p>
-          )
-          : (
-            <PostVisibilitySelect
-              value={replyVisibility}
-              onChange={setReplyVisibility}
-              name='reply-visibility'
-              id='reply-visibility'
-              disabled={isSendingReply}
-              maxVisibility={replyParentVisibility}
-            />
-          )}
+        <ReplyVisibilityField
+          value={replyVisibility}
+          onChange={setReplyVisibility}
+          parentVisibility={replyParentVisibility}
+          destination={replyDestination}
+          disabled={isSendingReply}
+          name='reply-visibility'
+          id='reply-visibility'
+        />
       </div>
-      {crosspostNotice !== undefined && (
-        <p class='mt-2 text-xs text-charcoal-light dark:text-gray-400 flex-shrink-0'>{crosspostNotice}</p>
-      )}
     </ReplyDialogShell>
   );
 };

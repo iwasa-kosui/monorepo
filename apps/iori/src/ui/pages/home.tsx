@@ -20,6 +20,7 @@ import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { isEmptyProfileUpdate, toProfileUpdate } from '../components/profileUpdate.ts';
 import { QuoteModal } from '../components/QuoteModal.tsx';
+import { ReplyVisibilityField } from '../components/ReplyVisibilityField.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
 import { statusActionProps } from '../components/statusActionProps.ts';
 import { UpdateProfileModal } from '../components/UpdateProfileModal.tsx';
@@ -29,6 +30,7 @@ import { pullProgress, refreshResultLabel } from '../hooks/pullGesture.ts';
 import { usePublicTimeline } from '../hooks/usePublicTimeline.ts';
 import { ITEM_KEY_ATTRIBUTE } from '../hooks/useReadingPosition.ts';
 import { useReplyDialog } from '../hooks/useReplyDialog.ts';
+import { useReplyVisibility } from '../hooks/useReplyVisibility.ts';
 import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 
 const usePostedHandler = () => {
@@ -250,6 +252,13 @@ const ThreadModal = () => {
   } = reply;
   const { actionState } = actions;
   const [threadEmojiPickerPostId, setThreadEmojiPickerPostId] = useState<string | null>(null);
+  const threadReplyVisibility = useReplyVisibility();
+  const { resetFor: resetThreadReplyVisibility } = threadReplyVisibility;
+  const threadParentVisibility = threadData?.currentPost?.visibility;
+
+  useEffect(() => {
+    resetThreadReplyVisibility(threadParentVisibility);
+  }, [threadModalPostId, threadParentVisibility, resetThreadReplyVisibility]);
 
   if (!threadModalPostId) {
     return null;
@@ -260,12 +269,19 @@ const ThreadModal = () => {
     setThreadEmojiPickerPostId((prev) => (prev === postId ? null : postId));
   };
 
+  const submitThreadReply = async () => {
+    if (!replyContent.trim() || !threadModalPostId) return;
+    const sent = await sendReply(threadModalPostId, replyContent, {
+      visibility: threadReplyVisibility.visibility,
+      parentVisibility: threadReplyVisibility.parentVisibility,
+    });
+    if (sent) resetThreadReplyVisibility(threadParentVisibility);
+  };
+
   const handleKeyDown = (e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
-      if (replyContent.trim() && threadModalPostId) {
-        sendReply(threadModalPostId, replyContent);
-      }
+      void submitThreadReply();
     }
   };
 
@@ -472,8 +488,20 @@ const ThreadModal = () => {
             disabled={isSendingReply}
           />
 
+          <div class='mt-2'>
+            <ReplyVisibilityField
+              value={threadReplyVisibility.visibility}
+              onChange={threadReplyVisibility.setVisibility}
+              parentVisibility={threadReplyVisibility.parentVisibility}
+              destination={replyDestination}
+              disabled={isSendingReply}
+              name='thread-reply-visibility'
+              id='thread-reply-visibility'
+            />
+          </div>
+
           {/* Action Buttons */}
-          <div class='mt-3 flex gap-2 justify-end'>
+          <div class='mt-3 flex flex-wrap items-center gap-2 justify-end'>
             <PostDestinationSelect
               value={replyDestination}
               onChange={setReplyDestination}
@@ -482,19 +510,15 @@ const ThreadModal = () => {
             <button
               type='button'
               onClick={closeThread}
-              class='px-4 py-2 text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
+              class='px-4 py-2 whitespace-nowrap text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
               disabled={isSendingReply}
             >
               Cancel
             </button>
             <button
               type='button'
-              onClick={() => {
-                if (replyContent.trim() && threadModalPostId) {
-                  sendReply(threadModalPostId, replyContent);
-                }
-              }}
-              class={`px-5 py-2 text-white text-sm font-medium rounded-clay transition-all ${
+              onClick={() => void submitThreadReply()}
+              class={`px-5 py-2 whitespace-nowrap text-white text-sm font-medium rounded-clay transition-all ${
                 isSendingReply || !replyContent.trim()
                   ? 'bg-warm-gray-dark cursor-not-allowed'
                   : 'bg-terracotta hover:bg-terracotta-dark shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
