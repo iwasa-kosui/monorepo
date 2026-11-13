@@ -6,8 +6,11 @@ import {
   BLUESKY_MAX_IMAGE_BYTES,
   BLUESKY_MAX_IMAGES,
   BLUESKY_MAX_TEXT_BYTES,
+  type BlueskyLinkPreviewInput,
   byteLengthOf,
   graphemesOf,
+  toExternalDraft,
+  toExternalEmbed,
   toFacet,
 } from '../../adaptor/bluesky/blueskyPostRecord.ts';
 import type { BlueskyStrongRef } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
@@ -26,6 +29,7 @@ import type {
   BlueskyCreatedRecord,
   BlueskyQueryClient,
 } from '../../ports/blueskyClient.ts';
+import { type BlueskyLinkPreviewDeps, resolveBlueskyLinkPreview } from './blueskyLinkPreview.ts';
 import { findMentionHandles, withMentionFacets } from './blueskyMentionFacets.ts';
 import { findUrls } from './blueskyTextMatches.ts';
 
@@ -52,6 +56,7 @@ export type PublishBlueskyPostDeps = Readonly<{
   client: Pick<BlueskyClient, 'createRecord' | 'uploadBlob'>;
   query: BlueskyQueryClient['query'];
   now: () => Instant;
+  linkPreview?: BlueskyLinkPreviewDeps;
 }>;
 
 export type PublishedBlueskyPost = BlueskyCreatedRecord;
@@ -106,20 +111,30 @@ const uploadImages = async (
   return RA.ok(uploaded);
 };
 
+const uploadLinkPreview = async (
+  client: PublishBlueskyPostDeps['client'],
+  preview: BlueskyLinkPreviewInput,
+): Promise<Extract<BlueskyEmbed, { $type: 'app.bsky.embed.external' }>> => {
+  const external = toExternalDraft(preview);
+  const thumb = external.thumb === undefined ? undefined : await client.uploadBlob(external.thumb);
+  return toExternalEmbed(external, thumb?.ok ? thumb.val : undefined);
+};
+
 const embedOf = (
   quote: BlueskyStrongRef | undefined,
   images: ReadonlyArray<Readonly<{ alt: string; image: BlueskyBlob }>>,
+  external: Extract<BlueskyEmbed, { $type: 'app.bsky.embed.external' }> | undefined,
 ): BlueskyEmbed | undefined => {
-  const imagesEmbed = images.length === 0 ? undefined : { $type: 'app.bsky.embed.images', images } as const;
-  if (quote === undefined) return imagesEmbed;
-  if (imagesEmbed === undefined) return { $type: 'app.bsky.embed.record', record: quote };
-  return { $type: 'app.bsky.embed.recordWithMedia', record: { record: quote }, media: imagesEmbed };
+  const media = images.length === 0 ? external : { $type: 'app.bsky.embed.images', images } as const;
+  if (quote === undefined) return media;
+  if (media === undefined) return { $type: 'app.bsky.embed.record', record: quote };
+  return { $type: 'app.bsky.embed.recordWithMedia', record: { record: quote }, media };
 };
 
 const clockIdOf = (): number => crypto.getRandomValues(new Uint16Array(1))[0]! & 1023;
 
 export const publishBlueskyPost = async (
-  { client, query, now }: PublishBlueskyPostDeps,
+  { client, query, now, linkPreview }: PublishBlueskyPostDeps,
   input: PublishBlueskyPostInput,
 ): RA<PublishedBlueskyPost, PublishBlueskyPostError> => {
   const problem = validateBlueskyPostInput(input);
@@ -127,9 +142,13 @@ export const publishBlueskyPost = async (
   const text = input.text.trim();
   const images = await uploadImages(client, input.images ?? []);
   if (!images.ok) return RA.err(images.err);
+  const preview = images.val.length === 0 && linkPreview !== undefined
+    ? await resolveBlueskyLinkPreview(linkPreview, text)
+    : undefined;
+  const external = preview === undefined ? undefined : await uploadLinkPreview(client, preview);
   const createdAt = now();
   const facets = await buildFacets(text, query);
-  const embed = embedOf(input.quote, images.val);
+  const embed = embedOf(input.quote, images.val, external);
   const record: BlueskyPostRecord = {
     $type: 'app.bsky.feed.post',
     text,

@@ -4,10 +4,12 @@ import type { Status } from '../../adaptor/mastodon/entities.ts';
 import {
   canSubmitPost,
   editParams,
+  mediaSlotsLeft,
   postedNotice,
   type PostFormValue,
   quoteParams,
   replyParams,
+  saveMediaDescriptions,
   submitPost,
 } from './postSubmission.ts';
 
@@ -43,6 +45,52 @@ describe('canSubmitPost', () => {
   it('rejects while uploading or posting', () => {
     expect(canSubmitPost('hello', true, false)).toBe(false);
     expect(canSubmitPost('hello', false, true)).toBe(false);
+  });
+});
+
+describe('mediaSlotsLeft', () => {
+  it('returns the remaining slots and never goes negative', () => {
+    expect(mediaSlotsLeft(1, 4)).toBe(3);
+    expect(mediaSlotsLeft(4, 4)).toBe(0);
+    expect(mediaSlotsLeft(5, 4)).toBe(0);
+    expect(mediaSlotsLeft(10, Number.POSITIVE_INFINITY)).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('saveMediaDescriptions', () => {
+  const media = (id: string, description: string, savedDescription: string) => ({
+    id,
+    url: `https://example.com/${id}.png`,
+    description,
+    savedDescription,
+  });
+
+  it('saves only the changed descriptions and normalizes blank ones', async () => {
+    const update = vi.fn().mockResolvedValue({});
+    const saved = vi.fn();
+
+    await saveMediaDescriptions(
+      [media('a', 'cat', ''), media('b', 'same', 'same'), media('c', '  ', 'old')],
+      { updateMedia: update, onDescriptionSaved: saved },
+    );
+
+    expect(update.mock.calls).toEqual([['a', 'cat'], ['c', '']]);
+    expect(saved.mock.calls).toEqual([['a', 'cat'], ['c', '']]);
+  });
+
+  it('stops at the first failure and keeps the earlier saves', async () => {
+    const update = vi.fn().mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('boom'));
+    const saved = vi.fn();
+
+    await expect(
+      saveMediaDescriptions(
+        [media('a', 'x', ''), media('b', 'y', ''), media('c', 'z', '')],
+        { updateMedia: update, onDescriptionSaved: saved },
+      ),
+    ).rejects.toThrow('boom');
+
+    expect(saved.mock.calls).toEqual([['a', 'x']]);
+    expect(update).toHaveBeenCalledTimes(2);
   });
 });
 

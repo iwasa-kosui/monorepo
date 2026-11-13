@@ -1,9 +1,15 @@
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { OgpData } from '../../../adaptor/ogp/ogpFetcher.ts';
 import type { BlueskyPostRecord } from '../../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
-import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../../ports/blueskyClient.ts';
+import type {
+  BlueskyClient,
+  BlueskyClientError,
+  BlueskyQueryClient,
+  BlueskyThumbnailFetcher,
+} from '../../../ports/blueskyClient.ts';
 import { publishBlueskyPost } from '../../helper/publishBlueskyPost.ts';
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 12, 3));
@@ -16,6 +22,16 @@ const failure: BlueskyClientError = {
   message: 'createRecord failed: status 500',
   status: 500,
 };
+
+const ogp: OgpData = {
+  title: 'タイトル',
+  description: '説明',
+  imageUrl: '/og.jpg',
+  faviconUrl: null,
+  siteName: null,
+};
+const blob = (mimeType: string) => ({ $type: 'blob', ref: { $link: 'bafyblob' }, mimeType, size: 3 });
+const pngImage = { bytes: new Uint8Array([1, 2, 3]), mimeType: 'image/png', alt: '猫' };
 
 const setup = () => {
   const createRecord = vi.fn<BlueskyClient['createRecord']>(async (_record, rkey) =>
@@ -30,10 +46,20 @@ const setup = () => {
       ? RA.err({ type: 'BlueskyClientError', kind: 'http', message: 'resolveHandle failed', status: 400 })
       : RA.ok({ did });
   });
+  const ogpFetch = vi.fn<(url: string) => Promise<OgpData>>(async () => ogp);
+  const thumbFetch = vi.fn<BlueskyThumbnailFetcher['fetch']>(async () => ({
+    bytes: new Uint8Array([9, 9]),
+    mimeType: 'image/jpeg',
+  }));
   const publish = (input: Parameters<typeof publishBlueskyPost>[1]) =>
-    publishBlueskyPost({ client: { createRecord, uploadBlob }, query, now: () => NOW }, input);
+    publishBlueskyPost({
+      client: { createRecord, uploadBlob },
+      query,
+      now: () => NOW,
+      linkPreview: { ogpFetcher: { fetch: ogpFetch }, thumbnailFetcher: { fetch: thumbFetch } },
+    }, input);
   const record = (): BlueskyPostRecord => createRecord.mock.calls[0]![0];
-  return { publish, createRecord, uploadBlob, query, record };
+  return { publish, createRecord, uploadBlob, query, record, ogpFetch, thumbFetch };
 };
 
 describe('publishBlueskyPost', () => {
@@ -287,6 +313,128 @@ describe('publishBlueskyPost', () => {
         $type: 'app.bsky.embed.images',
         images: [{ alt: '猫', image: { $type: 'blob', ref: { $link: 'bafyblob' }, mimeType: 'image/png', size: 3 } }],
       },
+    });
+  });
+
+  it('返信と画像があれば、reply と images embed を両方付ける', async () => {
+    const t = setup();
+
+    await t.publish({ text: 'photo', reply: { root: ROOT, parent: PARENT }, images: [pngImage] });
+
+    expect(t.record().reply).toEqual({ root: ROOT, parent: PARENT });
+    expect(t.record().embed).toEqual({
+      $type: 'app.bsky.embed.images',
+      images: [{ alt: '猫', image: blob('image/png') }],
+    });
+  });
+
+  describe('リンクカード', () => {
+    const text = '見て https://example.com/a と https://example.org/b';
+
+    it('画像が無ければ、本文の最初の URL の OGP から external embed を作り、thumb を上げて付ける', async () => {
+      const t = setup();
+
+      await t.publish({ text });
+
+      expect(t.ogpFetch).toHaveBeenCalledExactlyOnceWith('https://example.com/a');
+      expect(t.thumbFetch).toHaveBeenCalledExactlyOnceWith('https://example.com/og.jpg');
+      expect(t.uploadBlob).toHaveBeenCalledExactlyOnceWith({ bytes: new Uint8Array([9, 9]), mimeType: 'image/jpeg' });
+      expect(t.record().embed).toEqual({
+        $type: 'app.bsky.embed.external',
+        external: {
+          uri: 'https://example.com/a',
+          title: 'タイトル',
+          description: '説明',
+          thumb: blob('image/jpeg'),
+        },
+      });
+    });
+
+    it('引用と一緒なら、recordWithMedia の media に external を入れる', async () => {
+      const t = setup();
+
+      await t.publish({ text, quote: ROOT });
+
+      expect(t.record().embed).toEqual({
+        $type: 'app.bsky.embed.recordWithMedia',
+        record: { record: ROOT },
+        media: {
+          $type: 'app.bsky.embed.external',
+          external: {
+            uri: 'https://example.com/a',
+            title: 'タイトル',
+            description: '説明',
+            thumb: blob('image/jpeg'),
+          },
+        },
+      });
+    });
+
+    it('画像があれば、OGP を取らずカードを付けない', async () => {
+      const t = setup();
+
+      await t.publish({ text, images: [pngImage] });
+
+      expect(t.ogpFetch).not.toHaveBeenCalled();
+      expect(t.record().embed).toEqual({
+        $type: 'app.bsky.embed.images',
+        images: [{ alt: '猫', image: blob('image/png') }],
+      });
+    });
+
+    it('OGP を取得できなければ（タイトルも説明も無い）カードなしで投稿する', async () => {
+      const t = setup();
+      t.ogpFetch.mockResolvedValueOnce({ ...ogp, title: null, description: null, imageUrl: null });
+
+      const result = await t.publish({ text });
+
+      expect(result.ok).toBe(true);
+      expect(t.record()).not.toHaveProperty('embed');
+    });
+
+    it('OGP の取得が例外で失敗してもカードなしで投稿する', async () => {
+      const t = setup();
+      t.ogpFetch.mockRejectedValueOnce(new Error('boom'));
+
+      const result = await t.publish({ text });
+
+      expect(result.ok).toBe(true);
+      expect(t.record()).not.toHaveProperty('embed');
+    });
+
+    it('thumb を取得できなくても、thumb なしでカードを付ける', async () => {
+      const t = setup();
+      t.thumbFetch.mockResolvedValueOnce(undefined);
+
+      await t.publish({ text });
+
+      expect(t.uploadBlob).not.toHaveBeenCalled();
+      expect(t.record().embed).toEqual({
+        $type: 'app.bsky.embed.external',
+        external: { uri: 'https://example.com/a', title: 'タイトル', description: '説明' },
+      });
+    });
+
+    it('thumb の upload に失敗しても、thumb なしでカードを付ける', async () => {
+      const t = setup();
+      t.uploadBlob.mockReturnValueOnce(RA.err(failure));
+
+      const result = await t.publish({ text });
+
+      expect(result.ok).toBe(true);
+      expect(t.record().embed).toEqual({
+        $type: 'app.bsky.embed.external',
+        external: { uri: 'https://example.com/a', title: 'タイトル', description: '説明' },
+      });
+    });
+
+    it('本文に URL が無ければ OGP を取らない', async () => {
+      const t = setup();
+
+      await t.publish({ text: 'plain' });
+
+      expect(t.ogpFetch).not.toHaveBeenCalled();
+      expect(t.record()).not.toHaveProperty('embed');
     });
   });
 

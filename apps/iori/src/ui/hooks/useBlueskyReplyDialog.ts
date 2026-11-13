@@ -5,11 +5,17 @@ import { useBlueskyPostDialog, type UseBlueskyPostDialogReturn } from './useBlue
 
 export type UseBlueskyReplyDialogReturn = UseBlueskyPostDialogReturn;
 
-export type BlueskyReplySender = (item: IoriBlueskyTimelineItemBody, text: string) => Promise<BlueskyReplyResponse>;
+export type BlueskyReplySender = (
+  item: IoriBlueskyTimelineItemBody,
+  text: string,
+  mediaIds?: readonly string[],
+) => Promise<BlueskyReplyResponse>;
 
-const sendByFeedItemId: BlueskyReplySender = (item, text) => replyToBlueskyPost(item.feedItemId, text);
+const sendByFeedItemId: BlueskyReplySender = (item, text, mediaIds) =>
+  replyToBlueskyPost(item.feedItemId, text, mediaIds);
 
-export const sendBlueskyReplyByUri: BlueskyReplySender = (item, text) => replyToBlueskyPostByUri(item.uri, text);
+export const sendBlueskyReplyByUri: BlueskyReplySender = (item, text, mediaIds) =>
+  replyToBlueskyPostByUri(item.uri, text, mediaIds);
 
 export const useBlueskyReplyDialog = (
   sendReply: BlueskyReplySender = sendByFeedItemId,

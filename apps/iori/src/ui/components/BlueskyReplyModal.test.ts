@@ -20,6 +20,17 @@ const render = (overrides: Partial<UseBlueskyReplyDialogReturn> = {}): string =>
       dialog: {
         target: target(),
         content: '',
+        media: {
+          uploaded: [],
+          isUploading: false,
+          hasImages: false,
+          slotsLeft: 4,
+          select: async () => {},
+          remove: () => {},
+          setDescription: () => {},
+          markDescriptionSaved: () => {},
+          clear: () => {},
+        },
         isSending: false,
         errorText: undefined,
         open: () => {},
@@ -60,5 +71,73 @@ describe('BlueskyReplyModal', () => {
   it('shows the sending label and the error text', () => {
     expect(render({ isSending: true, content: 'abc' })).toContain('送信中...');
     expect(render({ errorText: 'この投稿には返信できません' })).toContain('この投稿には返信できません');
+  });
+
+  const uploaded = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({
+      id: `m${i}`,
+      url: `https://example.com/${i}.png`,
+      description: i === 0 ? 'cat' : '',
+      savedDescription: '',
+    }));
+  const withMedia = (count: number, overrides: Partial<UseBlueskyReplyDialogReturn['media']> = {}) =>
+    ({
+      media: {
+        uploaded: uploaded(count),
+        isUploading: false,
+        hasImages: count > 0,
+        slotsLeft: 4 - count,
+        select: async () => {},
+        remove: () => {},
+        setDescription: () => {},
+        markDescriptionSaved: () => {},
+        clear: () => {},
+        ...overrides,
+      },
+    }) satisfies Partial<UseBlueskyReplyDialogReturn>;
+
+  it('shows the attach button but no ALT field without images', () => {
+    const html = render();
+
+    expect(html).toContain('type="file"');
+    expect(html).not.toContain('説明（ALT）');
+  });
+
+  it('shows the previews and the ALT fields with a 1500 character limit', () => {
+    const html = render(withMedia(2));
+
+    expect(html).toContain('src="https://example.com/0.png"');
+    expect(html).toContain('aria-label="画像1の説明（ALT）"');
+    expect(html).toContain('aria-label="画像2の説明（ALT）"');
+    expect(html).toContain('maxlength="1500"');
+    expect(html).toContain('value="cat"');
+  });
+
+  it('allows submitting an empty body when an image is attached', () => {
+    const empty = render({ content: '' });
+    const withImage = render({ content: '', ...withMedia(1) });
+
+    expect(empty).toMatch(/<button[^>]*class="[^"]*cursor-not-allowed[^"]*"[^>]*disabled/);
+    expect(withImage).not.toContain('cursor-not-allowed');
+  });
+
+  it('disables the attach button at four images', () => {
+    expect(render(withMedia(4))).toMatch(/<input[^>]*type="file"[^>]*disabled/);
+    expect(render(withMedia(3))).not.toMatch(/<input[^>]*type="file"[^>]*disabled/);
+  });
+
+  it('disables attaching, removing and ALT editing while sending', () => {
+    const html = render({ isSending: true, ...withMedia(1) });
+
+    expect(html).toMatch(/<input[^>]*type="file"[^>]*disabled/);
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>×/);
+    expect(html).toMatch(/<textarea[^>]*aria-label="画像1の説明（ALT）"[^>]*disabled/);
+  });
+
+  it('disables submitting while uploading', () => {
+    const html = render({ content: 'abc', ...withMedia(0, { isUploading: true }) });
+
+    expect(html).toContain('Uploading...');
+    expect(html).toContain('cursor-not-allowed');
   });
 });

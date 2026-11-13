@@ -5,6 +5,7 @@ import {
   blueskyReplyErrorMessage,
   blueskyReplyExcerpt,
   blueskyReplyRemaining,
+  canSendBlueskyPost,
   canSendBlueskyReply,
   countGraphemes,
 } from './blueskyReply.ts';
@@ -44,6 +45,26 @@ describe('canSendBlueskyReply', () => {
     expect(blueskyReplyRemaining(`  ${'a'.repeat(300)} \n`)).toBe(0);
     expect(canSendBlueskyReply(`  ${'a'.repeat(300)} \n`, false)).toBe(true);
     expect(canSendBlueskyReply(` ${'a'.repeat(301)} `, false)).toBe(false);
+  });
+});
+
+describe('canSendBlueskyPost', () => {
+  const idle = { isSending: false, isUploading: false };
+
+  it('本文が空でも画像があれば送れる', () => {
+    expect(canSendBlueskyPost('', 0, idle)).toBe(false);
+    expect(canSendBlueskyPost(' \n', 0, idle)).toBe(false);
+    expect(canSendBlueskyPost('', 1, idle)).toBe(true);
+    expect(canSendBlueskyPost('こんにちは', 0, idle)).toBe(true);
+  });
+
+  it('送信中とアップロード中は送れない', () => {
+    expect(canSendBlueskyPost('a', 1, { isSending: true, isUploading: false })).toBe(false);
+    expect(canSendBlueskyPost('a', 1, { isSending: false, isUploading: true })).toBe(false);
+  });
+
+  it('画像があっても 300 grapheme を超える本文は送れない', () => {
+    expect(canSendBlueskyPost('a'.repeat(301), 1, idle)).toBe(false);
   });
 });
 

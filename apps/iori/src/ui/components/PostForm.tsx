@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from 'hono/jsx';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
-import { createBlueskyPost, createStatus, updateMedia, uploadMedia } from '../api/mastodonClient.ts';
+import { createBlueskyPost, createStatus, updateMedia } from '../api/mastodonClient.ts';
 import { useDefaultPostVisibility } from '../hooks/useDefaultPostVisibility.ts';
+import { useMediaAttachments } from '../hooks/useMediaAttachments.ts';
 import { blueskyCrosspostNotice } from './blueskyCrosspostMark.ts';
-import { downscaleImageForUpload } from './imageDownscale.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
+import { MediaAttachButton, MediaPreviewList } from './MediaAttachments.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
-import { canSubmitPost, postedNotice, type PostNotice, submitPost, type UploadedMedia } from './postSubmission.ts';
+import { canSubmitPost, postedNotice, type PostNotice, submitPost } from './postSubmission.ts';
 import {
   type PostVisibility,
   visibilityWhenDefaultLoaded,
@@ -25,8 +26,8 @@ type Props = Readonly<{
 
 export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [content, setContent] = useState('');
-  const [uploaded, setUploaded] = useState<UploadedMedia[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  const media = useMediaAttachments();
+  const { uploaded, isUploading, hasImages } = media;
   const [isPosting, setIsPosting] = useState(false);
   const [destination, setDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
   const { defaultVisibility, isLoading: isLoadingDefault } = useDefaultPostVisibility();
@@ -38,7 +39,6 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
   const [sensitiveChecked, setSensitiveChecked] = useState(false);
 
   const hasCw = cwEnabled && cw.trim() !== '';
-  const hasImages = uploaded.length > 0;
   const sensitive = hasImages && (sensitiveChecked || hasCw);
   const isBlueskyOnly = destination === 'bluesky';
   const crosspostNotice = blueskyCrosspostNotice(destination, cwEnabled ? cw : '', sensitive, visibility);
@@ -75,13 +75,19 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           cw: cwEnabled ? cw : '',
           sensitive: hasImages && sensitiveChecked,
         },
-        { create: createStatus, createBlueskyPost, updateMedia, onDescriptionSaved: handleDescriptionSaved, onPosted },
+        {
+          create: createStatus,
+          createBlueskyPost,
+          updateMedia,
+          onDescriptionSaved: media.markDescriptionSaved,
+          onPosted,
+        },
       );
       if (result.kind === 'failed') {
         alert(result.message);
       } else {
         setContent('');
-        setUploaded([]);
+        media.clear();
         setDestination(DEFAULT_POST_DESTINATION);
         visibilityTouched.current = false;
         setVisibility(defaultVisibility);
@@ -108,36 +114,6 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
     }
   };
 
-  const handleFileChange = async (e: Event) => {
-    const target = e.target as HTMLInputElement;
-    const files = target.files;
-    if (!files || files.length === 0) return;
-
-    setIsUploading(true);
-    const newMedia: UploadedMedia[] = [];
-
-    for (const file of Array.from(files)) {
-      try {
-        const media = await uploadMedia(await downscaleImageForUpload(file));
-        newMedia.push({ id: media.id, url: media.url, description: '', savedDescription: '' });
-      } catch (err) {
-        alert('Upload failed: ' + (err as Error).message);
-      }
-    }
-
-    setUploaded((prev) => [...prev, ...newMedia]);
-    setIsUploading(false);
-    target.value = '';
-  };
-
-  const handleRemoveImage = (index: number) => {
-    setUploaded((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleDescriptionChange = (index: number, description: string) => {
-    setUploaded((prev) => prev.map((media, i) => (i === index ? { ...media, description } : media)));
-  };
-
   const handleDestinationChange = (next: PostDestination) => {
     if (next === 'bluesky') {
       setCwEnabled(false);
@@ -148,10 +124,6 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
       visibilityWhenDestinationChanged(current, next, defaultVisibility, visibilityTouched.current === true)
     );
     setDestination(next);
-  };
-
-  const handleDescriptionSaved = (mediaId: string, savedDescription: string) => {
-    setUploaded((prev) => prev.map((media) => (media.id === mediaId ? { ...media, savedDescription } : media)));
   };
 
   const handleCwToggle = () => {
@@ -181,42 +153,21 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         name='content'
       />
 
-      {hasImages && (
-        <div class='mt-3 flex flex-col gap-2 flex-shrink-0'>
-          {uploaded.map(({ id: mediaId, url, description }, index) => (
-            <div key={mediaId} class='flex items-start gap-2'>
-              <div class='relative group flex-shrink-0'>
-                <img src={url} alt='Preview' class='w-16 h-16 object-cover rounded-xl shadow-clay-sm' />
-                <button
-                  type='button'
-                  onClick={() => handleRemoveImage(index)}
-                  class='absolute -top-1 -right-1 w-5 h-5 bg-terracotta text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow-clay-sm'
-                >
-                  &times;
-                </button>
-              </div>
-              <textarea
-                value={description}
-                onInput={(e) => handleDescriptionChange(index, (e.target as HTMLTextAreaElement).value)}
-                placeholder={`画像${index + 1}の説明（ALT）`}
-                aria-label={`画像${index + 1}の説明（ALT）`}
-                maxlength={1500}
-                rows={2}
-                class='flex-1 min-w-0 px-3 py-2 text-sm rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none'
-              />
-            </div>
-          ))}
-          <label class='flex items-center gap-1 text-xs text-charcoal-light dark:text-gray-400 cursor-pointer'>
-            <input
-              type='checkbox'
-              checked={sensitive}
-              disabled={hasCw || isBlueskyOnly}
-              onChange={(e) => setSensitiveChecked((e.target as HTMLInputElement).checked)}
-            />
-            画像をセンシティブにする
-          </label>
-        </div>
-      )}
+      <MediaPreviewList
+        uploaded={uploaded}
+        onRemove={media.remove}
+        onDescriptionChange={media.setDescription}
+      >
+        <label class='flex items-center gap-1 text-xs text-charcoal-light dark:text-gray-400 cursor-pointer'>
+          <input
+            type='checkbox'
+            checked={sensitive}
+            disabled={hasCw || isBlueskyOnly}
+            onChange={(e) => setSensitiveChecked((e.target as HTMLInputElement).checked)}
+          />
+          画像をセンシティブにする
+        </label>
+      </MediaPreviewList>
       <div class='mt-2 flex-shrink-0'>
         <PostVisibilitySelect
           value={visibility}
@@ -234,28 +185,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           allowBlueskyOnly
           disabled={isPosting}
         />
-        <label class='cursor-pointer text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'>
-          {isUploading
-            ? <span class='text-xs'>Uploading...</span>
-            : (
-              <svg class='h-5 w-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-                <path
-                  stroke-linecap='round'
-                  stroke-linejoin='round'
-                  stroke-width='2'
-                  d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'
-                />
-              </svg>
-            )}
-          <input
-            type='file'
-            accept='image/jpeg,image/png,image/gif,image/webp'
-            multiple
-            class='hidden'
-            onChange={handleFileChange}
-            disabled={isUploading}
-          />
-        </label>
+        <MediaAttachButton isUploading={isUploading} onChange={media.select} />
         <button
           type='button'
           aria-pressed={cwEnabled}

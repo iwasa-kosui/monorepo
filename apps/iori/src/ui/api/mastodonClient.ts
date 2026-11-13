@@ -646,12 +646,19 @@ const BLUESKY_REPLIES_PATH = '/api/iori/v1/bluesky/replies';
 
 export type BlueskyReplyResponse = Readonly<{ uri: string; cid: string }>;
 
-export const replyToBlueskyPost = async (feedItemId: string, text: string): Promise<BlueskyReplyResponse> => {
+const mediaIdsBody = (mediaIds: readonly string[] | undefined) =>
+  mediaIds === undefined || mediaIds.length === 0 ? {} : { media_ids: mediaIds };
+
+export const replyToBlueskyPost = async (
+  feedItemId: string,
+  text: string,
+  mediaIds?: readonly string[],
+): Promise<BlueskyReplyResponse> => {
   const res = await fetch(BLUESKY_REPLIES_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ feedItemId, text }),
+    body: JSON.stringify({ feedItemId, text, ...mediaIdsBody(mediaIds) }),
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as BlueskyReplyResponse;
@@ -661,12 +668,16 @@ const BLUESKY_QUOTES_PATH = '/api/iori/v1/bluesky/quotes';
 
 export type BlueskyQuoteResponse = Readonly<{ uri: string; cid: string }>;
 
-export const quoteBlueskyPost = async (uri: string, text: string): Promise<BlueskyQuoteResponse> => {
+export const quoteBlueskyPost = async (
+  uri: string,
+  text: string,
+  mediaIds?: readonly string[],
+): Promise<BlueskyQuoteResponse> => {
   const res = await fetch(BLUESKY_QUOTES_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ uri, text }),
+    body: JSON.stringify({ uri, text, ...mediaIdsBody(mediaIds) }),
   });
   if (!res.ok) throw await toApiError(res);
   return await res.json() as BlueskyQuoteResponse;
@@ -695,8 +706,12 @@ export const repostBlueskyPostByUri = (uri: string): Promise<IoriBlueskyRepostRe
 export const undoRepostBlueskyPostByUri = (uri: string): Promise<IoriBlueskyRepostResponse> =>
   act<IoriBlueskyRepostResponse>('DELETE', requestUrl(BLUESKY_REPOSTS_PATH, { uri }));
 
-export const replyToBlueskyPostByUri = (uri: string, text: string): Promise<BlueskyReplyResponse> =>
-  postJson<BlueskyReplyResponse>(BLUESKY_REPLIES_PATH, { uri, text });
+export const replyToBlueskyPostByUri = (
+  uri: string,
+  text: string,
+  mediaIds?: readonly string[],
+): Promise<BlueskyReplyResponse> =>
+  postJson<BlueskyReplyResponse>(BLUESKY_REPLIES_PATH, { uri, text, ...mediaIdsBody(mediaIds) });
 
 export const markBlueskyNotificationsSeen = async (seenAt: string): Promise<void> => {
   const res = await fetch('/api/iori/v1/bluesky/notifications/seen', {

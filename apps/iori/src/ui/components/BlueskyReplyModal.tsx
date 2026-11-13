@@ -1,5 +1,6 @@
-import { blueskyReplyExcerpt, blueskyReplyRemaining, canSendBlueskyReply } from '../hooks/blueskyReply.ts';
+import { blueskyReplyExcerpt, blueskyReplyRemaining, canSendBlueskyPost } from '../hooks/blueskyReply.ts';
 import type { UseBlueskyPostDialogReturn } from '../hooks/useBlueskyPostDialog.ts';
+import { MediaAttachButton, MediaPreviewList } from './MediaAttachments.tsx';
 import { ReplyDialogShell } from './ReplyDialogShell.tsx';
 
 type Props = Readonly<{
@@ -12,14 +13,17 @@ type Props = Readonly<{
 export const BlueskyReplyModal = (
   { dialog, title, submitLabel, placeholder = '返信を書く... (⌘+Enter to post)' }: Props,
 ) => {
-  const { target, content, isSending, errorText, close, setContent, send } = dialog;
+  const { target, content, media, isSending, errorText, close, setContent, send } = dialog;
 
   if (target === null) {
     return null;
   }
 
   const remaining = blueskyReplyRemaining(content);
-  const canSubmit = canSendBlueskyReply(content, isSending);
+  const canSubmit = canSendBlueskyPost(content, media.uploaded.length, {
+    isSending,
+    isUploading: media.isUploading,
+  });
 
   return (
     <ReplyDialogShell
@@ -42,6 +46,13 @@ export const BlueskyReplyModal = (
             {blueskyReplyExcerpt(target.text)}
           </p>
         </div>
+      }
+      leadingActions={
+        <MediaAttachButton
+          isUploading={media.isUploading}
+          disabled={isSending || media.slotsLeft === 0}
+          onChange={media.select}
+        />
       }
       counter={
         <span
@@ -67,6 +78,14 @@ export const BlueskyReplyModal = (
         class='w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all'
         style={{ minHeight: '150px' }}
       />
+      <div class='min-h-0 overflow-y-auto'>
+        <MediaPreviewList
+          uploaded={media.uploaded}
+          disabled={isSending}
+          onRemove={media.remove}
+          onDescriptionChange={media.setDescription}
+        />
+      </div>
     </ReplyDialogShell>
   );
 };

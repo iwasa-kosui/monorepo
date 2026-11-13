@@ -5,7 +5,8 @@ import { useBlueskyPostDialog, type UseBlueskyPostDialogReturn } from './useBlue
 
 export type UseBlueskyQuoteDialogReturn = UseBlueskyPostDialogReturn;
 
-const submit = (target: IoriBlueskyTimelineItemBody, content: string) => quoteBlueskyPost(target.uri, content);
+const submit = (target: IoriBlueskyTimelineItemBody, content: string, mediaIds: readonly string[]) =>
+  quoteBlueskyPost(target.uri, content, mediaIds);
 
 export const useBlueskyQuoteDialog = (): UseBlueskyQuoteDialogReturn =>
   useBlueskyPostDialog({

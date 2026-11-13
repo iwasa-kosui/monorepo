@@ -16,6 +16,18 @@ export const blueskyReplyRemaining = (text: string): number =>
 export const canSendBlueskyReply = (text: string, isSending: boolean): boolean =>
   !isSending && text.trim() !== '' && blueskyReplyRemaining(text) >= 0;
 
+export const BLUESKY_MAX_IMAGES = 4;
+
+export const canSendBlueskyPost = (
+  text: string,
+  imageCount: number,
+  state: Readonly<{ isSending: boolean; isUploading: boolean }>,
+): boolean =>
+  !state.isSending
+  && !state.isUploading
+  && blueskyReplyRemaining(text) >= 0
+  && (text.trim() !== '' || imageCount > 0);
+
 export const blueskyReplyExcerpt = (text: string): string => {
   const graphemes = graphemesOf(text);
   return graphemes.length <= EXCERPT_GRAPHEMES ? text : `${graphemes.slice(0, EXCERPT_GRAPHEMES).join('')}…`;
