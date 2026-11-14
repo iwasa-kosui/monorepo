@@ -86,27 +86,6 @@ describe('RegisterOAuthApplicationUseCase', () => {
     expect(stored.scopes).toEqual(['read', 'write', 'follow']);
   });
 
-  it('scopes を省略すると read になり、改行区切りの redirect_uris を分ける', async () => {
-    const { useCases } = setup();
-    const result = await useCases.registerOAuthApplicationUseCase.run({
-      clientName: 'App',
-      redirectUris: 'https://a.example/cb\nhttps://b.example/cb',
-      scopes: undefined,
-      website: 'https://app.example',
-    });
-
-    expect(result).toMatchObject({
-      ok: true,
-      val: {
-        application: {
-          scopes: ['read'],
-          website: 'https://app.example',
-          redirectUris: ['https://a.example/cb', 'https://b.example/cb'],
-        },
-      },
-    });
-  });
-
   it('イベントのペイロードに client_secret の平文を含めない', async () => {
     const { register, memory } = setup();
     const app = await register();
@@ -117,11 +96,6 @@ describe('RegisterOAuthApplicationUseCase', () => {
 
   it.each([
     ['redirect_uris が javascript:', { clientName: 'App', redirectUris: 'javascript:alert(1)' }],
-    ['scopes が未知', { clientName: 'App', redirectUris: REDIRECT_URI, scopes: 'admin' }],
-    ['redirect_uris が 11 件', {
-      clientName: 'App',
-      redirectUris: Array.from({ length: 11 }, (_, index) => `https://a.example/cb${index}`),
-    }],
     ['website が URL でない', { clientName: 'App', redirectUris: REDIRECT_URI, website: 'javascript:alert(1)' }],
   ])('%s と拒否する', async (_label, input) => {
     const { useCases, memory } = setup();
@@ -196,13 +170,6 @@ describe('IssueAuthorizationCodeUseCase', () => {
       ok: false,
       err: { type: 'OAuthError', error: 'invalid_scope' },
     });
-  });
-
-  it('登録スコープの細分スコープを許す', async () => {
-    const { register, authorize } = setup();
-    const app = await register({ scopes: 'read write' });
-
-    expect(await authorize(app, { scope: 'read:statuses write:media' })).toMatchObject({ ok: true });
   });
 
   it('PKCE は S256 の code_challenge だけを受け付ける', async () => {

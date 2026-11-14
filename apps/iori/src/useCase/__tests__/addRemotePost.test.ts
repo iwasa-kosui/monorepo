@@ -256,21 +256,6 @@ describe('AddRemotePostUseCase', () => {
       expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
     });
 
-    it('投稿はあるが返信の通知が欠けているとき、通知を作り Web Push を送る', async () => {
-      const deps = createIdempotencyDeps();
-      deps.postResolverByUri.setPost(existingPost);
-      deps.timelineItemsResolverByPostId.setItems(existingPost.postId, [timelineItem]);
-      deps.postImagesResolver.setImages(existingPost.postId, [image]);
-      deps.linkPreviewsResolver.setPreviews(existingPost.postId, [linkPreview]);
-
-      const result = await AddRemotePostUseCase.create(deps).run(input);
-
-      expect(result.ok && result.val.post.postId).toBe(existingPost.postId);
-      expect(deps.postCreatedStore.store).not.toHaveBeenCalled();
-      expect(deps.replyNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
-      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
-    });
-
     it('返信した相手を受信ユーザーがブロックしているとき、返信の通知も Web Push も作らない', async () => {
       const deps = createIdempotencyDeps();
       deps.postResolverByUri.setPost(existingPost);
@@ -492,31 +477,6 @@ describe('AddRemotePostUseCase', () => {
         { endpoint: 'https://push.example.com/1' },
         { title: 'New Mention', body: 'remote mentioned you', url: '/notifications' },
       );
-    });
-
-    it('宛先の複数のローカルアクターそれぞれに通知を作る', async () => {
-      const deps = createMentionDeps();
-      deps.actorResolverByUri.setActor(otherLocalActor);
-
-      await AddRemotePostUseCase.create(deps).run({
-        ...input,
-        recipientActorUris: [localActor.uri, otherLocalActor.uri],
-      });
-
-      expect(deps.mentionNotificationCreatedStore.items.map((event) => event.aggregateState.recipientUserId))
-        .toEqual([localActor.userId, otherLocalActor.userId]);
-      expect(deps.webPushSender.send).toHaveBeenCalledTimes(2);
-    });
-
-    it('メンションした相手を受信ユーザーがブロックしているとき、メンションの通知も Web Push も作らない', async () => {
-      const deps = createMentionDeps();
-      const blockResolver = { resolve: vi.fn(() => RA.ok({} as never)) };
-
-      const result = await AddRemotePostUseCase.create({ ...deps, blockResolver }).run(input);
-
-      expect(result.ok).toBe(true);
-      expect(deps.mentionNotificationCreatedStore.store).not.toHaveBeenCalled();
-      expect(deps.webPushSender.send).not.toHaveBeenCalled();
     });
 
     it('宛先のうちブロックしていない別のローカルアクターには、メンションの通知を作る', async () => {

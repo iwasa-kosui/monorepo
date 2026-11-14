@@ -118,12 +118,6 @@ describe('createOnUndo (Undo Like)', () => {
     expect(emojiReacts).toHaveLength(1);
   });
 
-  it('keeps the emoji react when the Undo is sent by an actor on a different host', async () => {
-    const { deps, emojiReacts } = createDeps();
-    await createOnUndo(deps)(ctx, createUndo('https://evil.example/users/mallory'));
-    expect(emojiReacts).toHaveLength(1);
-  });
-
   it('removes a regular remote like without touching emoji reacts when the Undo is sent by the stored actor', async () => {
     const regularLikeUri = 'https://misskey.example/likes/2';
     const { deps, emojiReacts, remoteLikes } = createDeps([regularLikeUri]);

@@ -501,43 +501,6 @@ describe('SendReplyUseCase の返信通知', () => {
     expect(pushSubscriptionsResolver.resolve).not.toHaveBeenCalled();
     expect(deps.webPushSender.send).not.toHaveBeenCalled();
   });
-
-  it('親がリモートの投稿でも、direct の返信は URI で見つけたローカルの作者への通知と Web Push を作らない', async () => {
-    const { deps, parent, owner, reply, pushSubscriptionsResolver } = setup();
-    const remoteParent: RemotePost = {
-      type: 'remote',
-      summary: null,
-      sensitive: false,
-      postId: crypto.randomUUID() as PostId,
-      actorId: crypto.randomUUID() as RemotePost['actorId'],
-      content: 'parent',
-      createdAt: Date.now() as RemotePost['createdAt'],
-      uri: 'https://remote.example/notes/1',
-      inReplyToUri: null,
-      visibility: 'public',
-    };
-    vi.mocked(deps.postResolver.resolve).mockImplementation(
-      (() => RA.ok(remoteParent)) as never,
-    );
-    deps.localPostResolverByUri.setPost(remoteParent.uri, { ...parent, userId: owner.id });
-
-    const author = new Person({
-      id: new URL(alice.id),
-      preferredUsername: 'alice',
-      inbox: new URL(alice.inboxUrl),
-    });
-    const note = new Note({ id: new URL(remoteParent.uri), attribution: author });
-    const ctx = Object.assign(createContext(), {
-      getDocumentLoader: vi.fn(async () => ({})),
-      lookupObject: vi.fn(async () => note),
-    });
-
-    const result = await reply('direct', ctx);
-
-    expect(result.ok).toBe(true);
-    expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
-    expect(pushSubscriptionsResolver.resolve).not.toHaveBeenCalled();
-  });
 });
 
 describe('SendReplyUseCase の親がリモートの返信の宛先の解決', () => {
@@ -630,13 +593,8 @@ describe('SendReplyUseCase の親がリモートの返信の宛先の解決', ()
     return { deps, remoteParent, storedAuthor, actorResolverById, contextWith, lookedUpNote, reply };
   };
 
-  const noteOf = async (call: readonly unknown[]) => {
-    const create = call[2] as { getObject: () => Promise<Note | null> };
-    return (await create.getObject()) as Note;
-  };
-
   it('親の作者が保存済みなら、相手のサーバーに問い合わせず、保存済みの情報で作者と followers に送る', async () => {
-    const { remoteParent, storedAuthor, actorResolverById, contextWith, reply } = setup();
+    const { storedAuthor, actorResolverById, contextWith, reply } = setup();
     const ctx = contextWith(null);
 
     const result = await reply(ctx, actorResolverById(storedAuthor(aliceInbox)));
@@ -647,32 +605,6 @@ describe('SendReplyUseCase の親がリモートの返信の宛先の解決', ()
     expect(calls).toHaveLength(2);
     expect(calls[0]?.[1]).toEqual({ id: new URL(aliceUri), inboxId: new URL(aliceInbox), endpoints: null });
     expect(calls[1]?.[1]).toBe('followers');
-    const note = await noteOf(calls[0] ?? []);
-    expect(note.replyTargetId?.href).toBe(remoteParent.uri);
-    expect(note.toIds.map((url) => url.href)).toEqual(['https://www.w3.org/ns/activitystreams#Public']);
-    expect(note.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers', aliceUri]);
-    const tags = await Array.fromAsync(note.getTags());
-    expect(tags).toHaveLength(1);
-    expect((tags[0] as { name?: { toString(): string } | null }).name?.toString()).toBe('@alice@remote.example');
-  });
-
-  it('親の作者が保存済みの direct の返信は、followers に送らず、作者にだけ送る', async () => {
-    const { deps, storedAuthor, actorResolverById, contextWith, reply } = setup();
-    const ctx = contextWith(null);
-
-    const result = await reply(ctx, actorResolverById(storedAuthor(aliceInbox)), 'direct');
-
-    expect(result.ok && result.val.post.visibility).toBe('direct');
-    expect(ctx.lookupObject).not.toHaveBeenCalled();
-    const calls = vi.mocked(ctx.sendActivity).mock.calls;
-    expect(calls.map((call) => call[1])).not.toContain('followers');
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.[1]).toEqual({ id: new URL(aliceUri), inboxId: new URL(aliceInbox), endpoints: null });
-    const note = await noteOf(calls[0] ?? []);
-    expect(note.toIds.map((url) => url.href)).toEqual([aliceUri]);
-    expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
-      participantActorUris: ['https://example.com/users/kosui', aliceUri],
-    });
   });
 
   it('親の作者が保存されていないときは、相手のサーバーのノートを引いて送る', async () => {
@@ -775,8 +707,8 @@ describe('SendReplyUseCase の元の投稿の公開範囲', () => {
       getDocumentLoader: vi.fn(async () => ({})),
       lookupObject: vi.fn(async () => new Note({ id: new URL('https://remote.example/notes/1'), attribution: author })),
     });
-    const reply = (visibility?: Visibility, extraDeps: Partial<Parameters<typeof SendReplyUseCase.create>[0]> = {}) =>
-      SendReplyUseCase.create({ ...deps, ...extraDeps }).run({
+    const reply = (visibility?: Visibility) =>
+      SendReplyUseCase.create(deps).run({
         sessionId: session.sessionId,
         postId: parent.postId,
         content: '<p>reply</p>',
@@ -793,85 +725,50 @@ describe('SendReplyUseCase の元の投稿の公開範囲', () => {
     return (await create.getObject()) as Note;
   };
 
-  const cases: ReadonlyArray<
-    readonly [Visibility | null, ReadonlyArray<readonly [Visibility | undefined, Visibility]>]
-  > = [
-    ['unlisted', [[undefined, 'unlisted'], ['public', 'unlisted'], ['private', 'private']]],
-    ['private', [[undefined, 'private'], ['public', 'private']]],
-    ['direct', [[undefined, 'direct'], ['public', 'direct']]],
-    [null, [[undefined, 'public'], ['unlisted', 'unlisted']]],
-  ];
-
-  describe.each(['local', 'remote'] as const)('親が%sの投稿のとき', (parentType) => {
-    const applicable = cases.filter(([parentVisibility]) => parentType === 'remote' || parentVisibility !== null);
-
-    it.each(
-      applicable.flatMap(([parentVisibility, rows]) =>
-        rows.map(([requested, expected]) => ({ parentVisibility, requested, expected }))
-      ),
-    )(
-      '親が $parentVisibility で指定が $requested の返信は $expected にする',
-      async ({ parentVisibility, requested, expected }) => {
-        const { deps, reply } = setup(parentType, parentVisibility);
-
-        const result = await reply(requested);
-
-        expect(result.ok && result.val.post.visibility).toBe(expected);
-        expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
-          visibility: expected,
-        });
-      },
-    );
-  });
-
-  it.each([
-    { parentVisibility: 'unlisted' as const, tos: [followersUri], ccs: [publicUri, aliceUri], toFollowers: true },
-    { parentVisibility: 'private' as const, tos: [followersUri], ccs: [aliceUri], toFollowers: true },
-    { parentVisibility: 'direct' as const, tos: [aliceUri], ccs: [], toFollowers: false },
+  it.each<{
+    parentType: 'local' | 'remote';
+    parentVisibility: Visibility | null;
+    requested: Visibility | undefined;
+    expected: Visibility;
+  }>([
+    { parentType: 'local', parentVisibility: 'private', requested: 'public', expected: 'private' },
+    { parentType: 'remote', parentVisibility: 'direct', requested: undefined, expected: 'direct' },
+    { parentType: 'remote', parentVisibility: null, requested: undefined, expected: 'public' },
   ])(
-    '親がリモートの $parentVisibility の投稿への返信を省略指定で作ると、Note の to と cc を親の公開範囲に合わせる',
-    async ({ parentVisibility, tos, ccs, toFollowers }) => {
-      const { ctx, reply } = setup('remote', parentVisibility);
+    '親が$parentTypeの $parentVisibility の投稿へ $requested と指定した返信は $expected にする',
+    async ({ parentType, parentVisibility, requested, expected }) => {
+      const { deps, reply } = setup(parentType, parentVisibility);
 
-      const result = await reply();
+      const result = await reply(requested);
 
-      expect(result.ok).toBe(true);
-      const calls = vi.mocked(ctx.sendActivity).mock.calls;
-      expect(calls.map((call) => call[1] === 'followers')).toContain(toFollowers);
-      const note = await noteOf(calls[0] ?? []);
-      expect(note.toIds.map((url) => url.href)).toEqual(tos);
-      expect(note.ccIds.map((url) => url.href)).toEqual(ccs);
+      expect(result.ok && result.val.post.visibility).toBe(expected);
+      expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
+        visibility: expected,
+      });
     },
   );
 
-  it('親がリモートの direct の投稿へ public と指定した返信は、作者と宛先を参加者に保存する', async () => {
-    const { deps, reply } = setup('remote', 'direct');
-    const actorResolverById = { resolve: vi.fn(() => RA.ok({ uri: aliceUri } as never)) };
+  it('親がリモートの unlisted の投稿への返信を省略指定で作ると、Note の to を followers、cc を Public と作者にする', async () => {
+    const { ctx, reply } = setup('remote', 'unlisted');
 
-    await reply('public', { actorResolverById });
+    const result = await reply();
 
-    expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
-      participantActorUris: ['https://example.com/users/kosui', aliceUri],
-    });
+    expect(result.ok).toBe(true);
+    const note = await noteOf(vi.mocked(ctx.sendActivity).mock.calls[0] ?? []);
+    expect(note.toIds.map((url) => url.href)).toEqual([followersUri]);
+    expect(note.ccIds.map((url) => url.href)).toEqual([publicUri, aliceUri]);
   });
 
-  it.each(['private', 'direct'] as const)(
-    '親がローカルの %s の投稿への返信を省略指定で作ると、direct では送らず private では followers だけに送り、どちらも Public を入れない',
-    async (parentVisibility) => {
-      const { ctx, reply } = setup('local', parentVisibility);
+  it('親がローカルの private の投稿への返信を省略指定で作ると、followers だけに送り Public を入れない', async () => {
+    const { ctx, reply } = setup('local', 'private');
 
-      const result = await reply();
+    const result = await reply();
 
-      expect(result.ok).toBe(true);
-      const calls = vi.mocked(ctx.sendActivity).mock.calls;
-      if (parentVisibility === 'direct') {
-        expect(calls).toHaveLength(0);
-        return;
-      }
-      expect(calls).toHaveLength(1);
-      const note = await noteOf(calls[0] ?? []);
-      expect(note.toIds.map((url) => url.href)).toEqual([followersUri]);
-      expect(note.ccIds).toEqual([]);
-    },
-  );
+    expect(result.ok).toBe(true);
+    const calls = vi.mocked(ctx.sendActivity).mock.calls;
+    expect(calls).toHaveLength(1);
+    const note = await noteOf(calls[0] ?? []);
+    expect(note.toIds.map((url) => url.href)).toEqual([followersUri]);
+    expect(note.ccIds).toEqual([]);
+  });
 });

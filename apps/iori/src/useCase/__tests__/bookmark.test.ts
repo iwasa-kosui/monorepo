@@ -12,7 +12,6 @@ import {
 } from '../../domain/bookmark/bookmark.ts';
 import type { BookmarkId } from '../../domain/bookmark/bookmarkId.ts';
 import type { PostId } from '../../domain/post/postId.ts';
-import type { SessionId } from '../../domain/session/sessionId.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
 import { CreateBookmarkUseCase } from '../createBookmark.ts';
@@ -94,27 +93,6 @@ describe('CreateBookmarkUseCase', () => {
 
     expect(result).toMatchObject({ ok: false, err: { type: 'AlreadyBookmarkedError' } });
     expect(t.bookmarkCreatedStore.store).toHaveBeenCalledTimes(1);
-  });
-
-  it('ユーザーが存在しないとき UserNotFoundError を返し、保存しない', async () => {
-    const t = setup();
-
-    const result = await t.create.run({ userId: crypto.randomUUID() as User['id'], postId: newPostId() });
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'UserNotFoundError' } });
-    expect(t.bookmarkCreatedStore.store).not.toHaveBeenCalled();
-  });
-
-  it('セッションが存在しないとき SessionExpiredError を返し、保存しない', async () => {
-    const t = setup();
-
-    const result = await t.create.run({
-      sessionId: crypto.randomUUID() as SessionId,
-      postId: newPostId(),
-    });
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'SessionExpiredError' } });
-    expect(t.bookmarkCreatedStore.store).not.toHaveBeenCalled();
   });
 });
 

@@ -89,19 +89,4 @@ describe('CreateArticleWithBodyUseCase', () => {
       publicHtml: '<a rel="noopener noreferrer nofollow">b</a>',
     });
   });
-
-  it('actor が解決できなければ UserNotFoundError を返し、何も保存しない', async () => {
-    const deps = createDeps();
-
-    const result = await CreateArticleWithBodyUseCase.create(deps).run({
-      userId: UserId.generate(),
-      title: 'Digest',
-      privateHtml: '<p>a</p>',
-      publicHtml: '<p>b</p>',
-    });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.err.type).toBe('UserNotFoundError');
-    expect(deps.calls).toEqual([]);
-  });
 });

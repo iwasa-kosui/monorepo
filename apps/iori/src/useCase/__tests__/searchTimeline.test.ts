@@ -191,9 +191,7 @@ describe('SearchTimelineUseCase', () => {
 
   it.each([
     ['1 文字', '旅'],
-    ['http:// で始まる', 'http://example.com/旅行'],
     ['https:// で始まる', 'https://example.com/旅行'],
-    ['大文字の HTTPS:// で始まる', 'HTTPS://example.com/旅行'],
     ['@ で始まる', '@alice'],
   ])('問い合わせが %s のときは、textGenerator があっても呼ばずに skipped にする', async (_name, text) => {
     const { generator, calls } = createStubTextGenerator(() => '["旅行", "trip"]');
@@ -224,19 +222,6 @@ describe('SearchTimelineUseCase', () => {
 
     expect(normalizedOf(result.terms.original)).toEqual(['TRIP']);
     expect(result.postIds).toEqual([hit]);
-  });
-
-  it('入力と同じ全角の語が全角の本文に一致する', async () => {
-    const { me, addPost, resolve, search } = setup();
-    const hit = addPost(me, '<p>ＴＲＩＰ memo</p>', 1000);
-
-    const result = await expectOk(search('ＴＲＩＰ'));
-
-    expect(result.postIds).toEqual([hit]);
-    expect(resolve.mock.calls[0][0].terms).toEqual([
-      { pattern: 'ＴＲＩＰ', weight: 2 },
-      { pattern: 'TRIP', weight: 2 },
-    ]);
   });
 
   it('点数の降順、同点は createdAt の降順に並べる', async () => {

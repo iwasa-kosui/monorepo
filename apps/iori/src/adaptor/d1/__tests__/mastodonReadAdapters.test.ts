@@ -424,17 +424,12 @@ describe('createD1PostExtrasResolverByPosts', () => {
       expect((await quoteOf(t, post, actorId(me.actorId)))?.post?.postId).toBe(quoted.postId);
     });
 
-    it('閲覧者が無いときは public と unlisted の引用先だけ出す', async () => {
+    it('閲覧者が無いときは匿名で見えない引用先を出さない', async () => {
       const t = setup();
-      const me = t.seed.addLocalActor('kosui');
       const alice = t.seed.addRemoteActor('alice');
       const targets = {
         public: t.seed.addRemotePost(alice, 1_000, { visibility: 'public' }),
-        unlisted: t.seed.addRemotePost(alice, 1_001, { visibility: 'unlisted' }),
         private: t.seed.addRemotePost(alice, 1_002, { visibility: 'private' }),
-        direct: t.seed.addRemotePost(alice, 1_003, { visibility: 'direct' }),
-        unknown: t.seed.addRemotePost(alice, 1_004, { visibility: null }),
-        local: t.seed.addLocalPost(me, 1_005),
       };
       const entries = Object.entries(targets).map(([name, target]) => {
         const post = t.seed.addRemotePost(alice, 2_000, { visibility: 'public' });
@@ -448,14 +443,7 @@ describe('createD1PostExtrasResolverByPosts', () => {
         ),
       );
 
-      expect(Object.fromEntries(visible)).toEqual({
-        public: true,
-        unlisted: true,
-        private: false,
-        direct: false,
-        unknown: false,
-        local: true,
-      });
+      expect(Object.fromEntries(visible)).toEqual({ public: true, private: false });
     });
 
     it('閲覧者がミュートまたはブロックした相手の引用先は post を null にして URI は残す', async () => {

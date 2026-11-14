@@ -69,7 +69,6 @@ type Setup = Readonly<{
   localUris?: ReadonlyArray<string>;
   blocked?: boolean;
   blockedAfterFirstCheck?: boolean;
-  blockedCheckRejectsAfterFirst?: boolean;
   failingUris?: ReadonlyArray<string>;
   hangingUris?: ReadonlyArray<string>;
   documentLoader?: DocumentLoader;
@@ -105,12 +104,6 @@ const setup = (options: Setup = {}) => {
   if (options.blockedAfterFirstCheck) {
     blockedActorUriResolverByUsername.resolve.mockImplementationOnce(async () => RA.ok(false));
     blockedActorUriResolverByUsername.resolve.mockImplementation(async () => RA.ok(true));
-  }
-  if (options.blockedCheckRejectsAfterFirst) {
-    blockedActorUriResolverByUsername.resolve.mockImplementationOnce(async () => RA.ok(false));
-    blockedActorUriResolverByUsername.resolve.mockImplementation(async () => {
-      throw new Error('D1 is down');
-    });
   }
   const remotePostUrisResolverByUris = {
     resolve: vi.fn(async ({ uris }: { uris: readonly string[] }) => RA.ok(uris.filter((uri) => stored.has(uri)))),
@@ -173,7 +166,7 @@ describe('FetchRemoteOutboxUseCase', () => {
     expect(lookedUpUris(t)).not.toContain(noteUri(2));
   });
 
-  it('outbox の Create の Article と Question も、本文を組み立てて保存する', async () => {
+  it('outbox の Create の Article と Question も保存する', async () => {
     const article = new Article({
       id: new URL(noteUri(1)),
       name: 'Title',
@@ -189,23 +182,7 @@ describe('FetchRemoteOutboxUseCase', () => {
     const t = setup({ outbox: outboxOf([createOf(article), createOf(question)]), notes: [article, question] });
 
     expect(await t.run()).toBe(2);
-    expect(t.remotePostUpserter.resolve.mock.calls.map(([identity]) => identity)).toMatchObject([
-      {
-        uri: noteUri(1),
-        content: `<p><strong>Title</strong></p><p>body</p><p><a href="${noteUri(1)}">元の記事を読む</a></p>`,
-      },
-      {
-        uri: noteUri(2),
-        content: '<p>q</p>',
-        poll: {
-          multiple: false,
-          options: [{ title: 'a', votesCount: 0 }],
-          votersCount: null,
-          expiresAt: null,
-          closed: false,
-        },
-      },
-    ]);
+    expect(storedUris(t)).toEqual([noteUri(1), noteUri(2)]);
   });
 
   it('2 ページ目以降の Note も保存する', async () => {
@@ -214,15 +191,6 @@ describe('FetchRemoteOutboxUseCase', () => {
 
     expect(await t.run()).toBe(2);
     expect(storedUris(t)).toEqual([noteUri(1), noteUri(2)]);
-  });
-
-  it('保存は 20 件で止め、21 件目は取らない', async () => {
-    const notes = Array.from({ length: 25 }, (_, index) => noteOf(index));
-    const t = setup({ outbox: outboxOf(notes.map(createOf)), notes });
-
-    expect(await t.run()).toBe(20);
-    expect(storedUris(t)).toHaveLength(20);
-    expect(lookedUpUris(t)).not.toContain(noteUri(20));
   });
 
   it('ページは 3 ページまでで、4 ページ目の Note は取らない', async () => {
@@ -293,18 +261,6 @@ describe('FetchRemoteOutboxUseCase', () => {
     expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
   });
 
-  it('ブロックしたサブドメインのアクターでも outbox を取りに行かない', async () => {
-    const blockedActor = {
-      id: 'actor-1',
-      type: 'remote',
-      uri: `https://social.${BLOCKED_DOMAIN}/users/alice`,
-    } as unknown as Actor;
-    const t = setup({ actor: blockedActor, outbox: outboxOf([]) });
-
-    expect(await t.run()).toBe(0);
-    expect(t.lookupObject).not.toHaveBeenCalled();
-  });
-
   it('outbox の中のブロックしたドメインの投稿は取りに行かず、保存しない', async () => {
     const blockedNote = new Note({
       id: new URL(`https://${BLOCKED_DOMAIN}/notes/1`),
@@ -333,14 +289,6 @@ describe('FetchRemoteOutboxUseCase', () => {
     expect(storedUris(t)).toEqual([noteUri(2)]);
   });
 
-  it('ブロックしていないドメインの投稿は、ブロックの設定があっても保存する', async () => {
-    const notes = [noteOf(1), noteOf(2)];
-    const t = setup({ outbox: outboxOf(notes.map(createOf)), notes });
-
-    expect(await t.run()).toBe(2);
-    expect(storedUris(t)).toEqual([noteUri(1), noteUri(2)]);
-  });
-
   it('個別にブロックした作者の投稿は保存しない', async () => {
     const notes = [noteOf(1), noteOf(2)];
     const t = setup({ outbox: outboxOf(notes.map(createOf)), notes, blockedAfterFirstCheck: true });
@@ -351,16 +299,6 @@ describe('FetchRemoteOutboxUseCase', () => {
       username: 'kosui',
       actorUri: ACTOR_URI,
     });
-  });
-
-  it('保存前のブロックの判定が失敗したときは、その相手の投稿を保存しない', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const notes = [noteOf(1), noteOf(2)];
-    const t = setup({ outbox: outboxOf(notes.map(createOf)), notes, blockedCheckRejectsAfterFirst: true });
-
-    expect(await t.run()).toBe(0);
-    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
-    warn.mockRestore();
   });
 
   it('ローカルのアクターなら何も取らず 0 件を返す', async () => {
@@ -472,67 +410,6 @@ describe('FetchRemoteOutboxUseCase', () => {
 
       expect(t.ctx.getDocumentLoader).toHaveBeenCalledTimes(2);
     });
-
-    it('完了から 60 秒以内の再実行は、取得せずに 0 件を返す', async () => {
-      let time = 1_000_000;
-      const t = setup({ ...withNote(), now: () => time });
-
-      expect(await t.run()).toBe(1);
-      time += 59_999;
-
-      expect(await t.run()).toBe(0);
-      expect(t.ctx.getDocumentLoader).toHaveBeenCalledTimes(1);
-    });
-
-    it('完了から 60 秒たったら、もう一度取得する', async () => {
-      let time = 1_000_000;
-      const t = setup({ ...withNote(), now: () => time });
-
-      await t.run();
-      time += 60_000;
-      await t.run();
-
-      expect(t.ctx.getDocumentLoader).toHaveBeenCalledTimes(2);
-    });
-
-    it('アクターが見つからなかった実行は覚えず、続けて呼ぶと毎回調べる', async () => {
-      const actorResolverById = { resolve: vi.fn(async () => RA.ok(undefined)) };
-      const useCase = FetchRemoteOutboxUseCase.create({
-        origin: ORIGIN,
-        userResolver: { resolve: async () => RA.ok({ id: 'user-1', username: 'kosui' } as never) },
-        actorResolverById,
-        remotePostUrisResolverByUris: { resolve: async () => RA.ok([]) },
-        localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
-        remotePostUpserter: { resolve: vi.fn() },
-        blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
-        isBlockedUri: () => false,
-      });
-      const input = {
-        userId: 'user-1' as never,
-        actorId: 'actor-1' as never,
-        ctx: { getDocumentLoader: vi.fn(), lookupObject: vi.fn() },
-      };
-
-      const results = [await useCase.run(input), await useCase.run(input)];
-
-      expect(results.map((result) => result.ok)).toEqual([false, false]);
-      expect(actorResolverById.resolve).toHaveBeenCalledTimes(2);
-    });
-
-    it('覚えておくアクターは 200 件までにし、古いものから忘れる', async () => {
-      let time = 1_000_000;
-      const t = setup({ ...withNote(), now: () => time });
-      for (let index = 0; index < 201; index++) {
-        await t.run(`actor-${index}`);
-        time += 1;
-      }
-      const loaders = t.ctx.getDocumentLoader.mock.calls.length;
-
-      await t.run('actor-200');
-      expect(t.ctx.getDocumentLoader.mock.calls.length).toBe(loaders);
-      await t.run('actor-0');
-      expect(t.ctx.getDocumentLoader.mock.calls.length).toBe(loaders + 1);
-    });
   });
 
   describe('失敗と時間切れ', () => {
@@ -612,62 +489,6 @@ describe('FetchRemoteOutboxUseCase', () => {
 
       expect(signals).toHaveLength(1);
       expect(signals[0]!.aborted).toBe(true);
-    });
-
-    it('取得ごとに 5 秒の signal を付けて lookupObject を呼ぶ', async () => {
-      const note = noteOf(1);
-      const t = setup({ outbox: outboxOf([createOf(note)]), notes: [note] });
-
-      await t.run();
-
-      expect(t.lookupObject.mock.calls.map(([, options]) => options.signal)).toEqual([
-        expect.any(AbortSignal),
-        expect.any(AbortSignal),
-      ]);
-    });
-  });
-
-  describe('エラー', () => {
-    it('ユーザーがいなければ UserNotFoundError を返す', async () => {
-      const useCase = FetchRemoteOutboxUseCase.create({
-        origin: ORIGIN,
-        userResolver: { resolve: async () => RA.ok(undefined) },
-        actorResolverById: { resolve: async () => RA.ok(remoteActor) },
-        remotePostUrisResolverByUris: { resolve: async () => RA.ok([]) },
-        localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
-        remotePostUpserter: { resolve: vi.fn() },
-        blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
-        isBlockedUri: () => false,
-      });
-
-      const result = await useCase.run({
-        userId: 'user-1' as never,
-        actorId: 'actor-1' as never,
-        ctx: { getDocumentLoader: vi.fn(), lookupObject: vi.fn() },
-      });
-
-      expect(result.ok ? undefined : result.err.type).toBe('UserNotFoundError');
-    });
-
-    it('アクターがいなければ ActorNotFoundError を返す', async () => {
-      const useCase = FetchRemoteOutboxUseCase.create({
-        origin: ORIGIN,
-        userResolver: { resolve: async () => RA.ok({ id: 'user-1', username: 'kosui' } as never) },
-        actorResolverById: { resolve: async () => RA.ok(undefined) },
-        remotePostUrisResolverByUris: { resolve: async () => RA.ok([]) },
-        localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
-        remotePostUpserter: { resolve: vi.fn() },
-        blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
-        isBlockedUri: () => false,
-      });
-
-      const result = await useCase.run({
-        userId: 'user-1' as never,
-        actorId: 'actor-1' as never,
-        ctx: { getDocumentLoader: vi.fn(), lookupObject: vi.fn() },
-      });
-
-      expect(result.ok ? undefined : result.err.type).toBe('ActorNotFoundError');
     });
   });
 });

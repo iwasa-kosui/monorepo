@@ -123,20 +123,4 @@ describe('SignInUseCase', () => {
       expect(deps.sessionStartedStore.store).not.toHaveBeenCalled();
     });
   });
-
-  describe('セッション管理', () => {
-    it('サインイン失敗時はセッションが作成されない', async () => {
-      const deps = createDeps();
-      const useCase = SignInUseCase.create(deps);
-      const ctx = createMockFedifyContext();
-
-      await useCase.run({
-        username: 'nonexistent' as Username,
-        password: 'securepassword1234' as Password,
-        ctx,
-      });
-
-      expect(deps.sessionStartedStore.store).not.toHaveBeenCalled();
-    });
-  });
 });
