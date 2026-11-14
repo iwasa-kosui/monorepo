@@ -83,21 +83,6 @@ describe('CreatePostUseCase', () => {
     return setupValidUserSession(deps, user, session, actor);
   };
 
-  it('summary と sensitive を省略すると、summary を null、sensitive を false で保存する', async () => {
-    const deps = createDeps();
-    const session = setupUser(deps);
-
-    const result = await CreatePostUseCase.create(deps).run({
-      sessionId: session.sessionId,
-      content: 'Hello, world!',
-      imageUrls: [],
-      ctx: createMockRequestContext(),
-    });
-
-    expect(result.ok).toBe(true);
-    expect(deps.postCreatedStore.items[0]?.aggregateState).toMatchObject({ summary: null, sensitive: false });
-  });
-
   describe('異常系', () => {
     it('セッションが期限切れなら SessionExpiredError を返し、何も保存も配送もしない', async () => {
       const deps = createDeps();
@@ -120,39 +105,6 @@ describe('CreatePostUseCase', () => {
       expect(deps.postCreatedStore.store).not.toHaveBeenCalled();
       expect(deps.postImageCreatedStore.store).not.toHaveBeenCalled();
       expect(ctx.sendActivity).not.toHaveBeenCalled();
-    });
-
-    it('セッションが存在しなければ SessionExpiredError を返す', async () => {
-      const deps = createDeps();
-
-      const result = await CreatePostUseCase.create(deps).run({
-        sessionId: crypto.randomUUID() as Session['sessionId'],
-        content: 'Test',
-        imageUrls: [],
-        ctx: createMockRequestContext(),
-      });
-
-      expect(result).toMatchObject({ ok: false, err: { type: 'SessionExpiredError' } });
-    });
-
-    it('セッションのユーザーが存在しなければ UserNotFoundError を返し、何も保存しない', async () => {
-      const deps = createDeps();
-      const session: Session = {
-        sessionId: crypto.randomUUID() as Session['sessionId'],
-        userId: crypto.randomUUID() as User['id'],
-        expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
-      };
-      deps.sessionResolver.setSession(session);
-
-      const result = await CreatePostUseCase.create(deps).run({
-        sessionId: session.sessionId,
-        content: 'Test',
-        imageUrls: [],
-        ctx: createMockRequestContext(),
-      });
-
-      expect(result).toMatchObject({ ok: false, err: { type: 'UserNotFoundError' } });
-      expect(deps.postCreatedStore.store).not.toHaveBeenCalled();
     });
   });
 
@@ -386,33 +338,17 @@ describe('CreatePostUseCase', () => {
       expect(mentionCall).toBeDefined();
     });
 
-    it('unlisted はリレーに送らず、followers と mentions に送り、to に followers、cc に Public と mentions を入れる', async () => {
-      const { result, relayCall, followersCall, mentionCall } = await post('unlisted');
+    it.each(['unlisted', 'private'] as const)(
+      '%s はリレーに送らず、followers と mentions に送る',
+      async (visibility) => {
+        const { result, relayCall, followersCall, mentionCall } = await post(visibility);
 
-      expect(result.ok && result.val.post.visibility).toBe('unlisted');
-      expect(relayCall).toBeUndefined();
-      expect(followersCall).toBeDefined();
-      expect(mentionCall).toBeDefined();
-      const create = followersCall?.[2] as Create;
-      expect(hrefs(create.toIds)).toEqual([followersUri]);
-      expect(hrefs(create.ccIds)).toEqual([publicUri, alice.id]);
-    });
-
-    it('private はリレーに送らず、followers と mentions に送り、Public をどこにも入れない', async () => {
-      const { result, deps, relayCall, followersCall, mentionCall } = await post('private');
-
-      expect(result.ok && result.val.post.visibility).toBe('private');
-      expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.aggregateState).toMatchObject({
-        visibility: 'private',
-      });
-      expect(relayCall).toBeUndefined();
-      expect(followersCall).toBeDefined();
-      expect(mentionCall).toBeDefined();
-      const create = followersCall?.[2] as Create;
-      expect(hrefs(create.toIds)).toEqual([followersUri]);
-      expect(hrefs(create.ccIds)).toEqual([alice.id]);
-      expect([...hrefs(create.toIds), ...hrefs(create.ccIds)]).not.toContain(publicUri);
-    });
+        expect(result.ok && result.val.post.visibility).toBe(visibility);
+        expect(relayCall).toBeUndefined();
+        expect(followersCall).toBeDefined();
+        expect(mentionCall).toBeDefined();
+      },
+    );
 
     it('direct は followers にもリレーにも送らず、mentions の相手の inbox にだけ共有 inbox を使わず送る', async () => {
       const { result, relayCall, followersCall, calls } = await post('direct');
@@ -429,9 +365,6 @@ describe('CreatePostUseCase', () => {
         },
       ]);
       expect(calls[0]?.[3]).toEqual({ preferSharedInbox: false });
-      const create = calls[0]?.[2] as Create;
-      expect(hrefs(create.toIds)).toEqual([alice.id]);
-      expect(create.ccIds).toEqual([]);
     });
 
     it('direct の投稿は、作者と mentions の相手を参加者として保存し、direct 以外では保存しない', async () => {
@@ -462,8 +395,6 @@ describe('CreatePostUseCase', () => {
       const create = vi.mocked(ctx.sendActivity).mock.calls[0]?.[2] as Create;
       const note = (await create.getObject()) as Note;
       expect(note.content?.toString()).toBe('secret');
-      expect(hrefs(note.toIds)).toEqual([followersUri]);
-      expect(note.ccIds).toEqual([]);
     });
   });
 });

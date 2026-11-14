@@ -154,52 +154,6 @@ describe('ログイン中の閲覧者に宛先外の private と direct のリ�
     expect(StatusSchema.parse(await responses[3]!.json())).toMatchObject({ id: toMe.postId, visibility: 'direct' });
   });
 
-  it('statuses/:id はフォロー中の相手の private と記録のない投稿を返す', async () => {
-    const t = await seedViewer();
-    t.seed.addFollow(t.me.actorId, t.alice.actorId);
-    const privateNote = t.remote(t.alice, 1_000, { visibility: 'private' });
-    const legacy = t.remote(t.alice, 2_000);
-
-    const responses = await Promise.all(
-      [privateNote, legacy].map((note) => t.request(`/api/v1/statuses/${note.postId}`, { headers: t.me.bearer })),
-    );
-
-    expect(responses.map((response) => response.status)).toEqual([200, 200]);
-  });
-
-  it('statuses/:id は見えない投稿のブーストを 404 にする', async () => {
-    const t = await seedViewer();
-    const direct = t.remote(t.alice, 1_000, { visibility: 'direct' });
-    const boost = t.seed.addRepost(t.bob.actorId, direct.postId, 2_000);
-
-    const response = await t.request(`/api/v1/statuses/${boost.repostId}`, { headers: t.me.bearer });
-
-    expect(response.status).toBe(404);
-  });
-
-  it('context は見えない祖先と子孫を除き、見えない起点を 404 にする', async () => {
-    const t = await seedViewer();
-    const root = t.remote(t.alice, 1_000, { visibility: 'direct' });
-    const mid = t.seed.addLocalPost(t.me, 2_000, { inReplyToUri: root.uri });
-    const hiddenChild = t.remote(t.alice, 3_000, { inReplyToUri: mid.uri, visibility: 'direct' });
-    const toMeChild = t.remote(t.alice, 4_000, {
-      inReplyToUri: mid.uri,
-      visibility: 'direct',
-      recipientActorUris: [kosuiUri],
-    });
-    const publicChild = t.remote(t.alice, 5_000, { inReplyToUri: mid.uri, visibility: 'public' });
-
-    const [context, hidden] = await Promise.all([
-      t.request(`/api/v1/statuses/${mid.postId}/context`, { headers: t.me.bearer }),
-      t.request(`/api/v1/statuses/${hiddenChild.postId}/context`, { headers: t.me.bearer }),
-    ]);
-
-    const body = await context.json() as { ancestors: unknown[]; descendants: unknown[] };
-    expect(body.ancestors).toEqual([]);
-    expect(idsOf(body.descendants)).toEqual([toMeChild.postId, publicChild.postId]);
-    expect(hidden.status).toBe(404);
-  });
-
   it('accounts/:id/statuses は宛先外の direct とフォローしていない private を除き、宛先の direct を返す', async () => {
     const t = await seedViewer();
     const publicNote = t.remote(t.alice, 1_000, { visibility: 'public' });

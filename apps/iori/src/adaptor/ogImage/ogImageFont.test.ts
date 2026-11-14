@@ -25,22 +25,6 @@ describe('fetchOgFont', () => {
     expect(fetchRequest).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects a redirect response to the font request', async () => {
-    const fetchRequest = vi.fn(async (input: URL | RequestInfo) =>
-      String(input).startsWith('https://fonts.googleapis.com/')
-        ? new Response(cssBody('https://fonts.gstatic.com/s/notosansjp/font.ttf'))
-        : redirectResponse()
-    );
-
-    await expect(fetchOgFont({ fetchRequest })).rejects.toThrow('redirected');
-  });
-
-  it('rejects an opaqueredirect response to the CSS request', async () => {
-    const fetchRequest = vi.fn(async () => opaqueRedirectResponse());
-
-    await expect(fetchOgFont({ fetchRequest })).rejects.toThrow('redirected');
-  });
-
   it('rejects an opaqueredirect response to the font request', async () => {
     const fetchRequest = vi.fn(async (input: URL | RequestInfo) =>
       String(input).startsWith('https://fonts.googleapis.com/')

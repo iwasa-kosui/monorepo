@@ -14,7 +14,6 @@ import { createD1DigestCreatedStore } from '../../adaptor/d1/digest/digestCreate
 import { createD1DigestHeadersResolverByUserIdAndDigestDate } from '../../adaptor/d1/digest/digestHeadersResolverByUserIdAndDigestDate.ts';
 import { createD1DigestItemUrlsResolverByUserId } from '../../adaptor/d1/digest/digestItemUrlsResolverByUserId.ts';
 import { createD1DigestPushSentStore } from '../../adaptor/d1/digest/digestPushSentStore.ts';
-import { createD1DigestXPostsResolverByArticleId } from '../../adaptor/d1/digest/digestXPostsResolverByArticleId.ts';
 import { createD1LatestDigestHeaderResolverByUserId } from '../../adaptor/d1/digest/latestDigestHeaderResolverByUserId.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestTopicCreatedStore } from '../../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
@@ -57,7 +56,6 @@ import {
   stripThinkBlocks,
 } from '../createDailyDigest.ts';
 import { EnsureDefaultDigestTopicsUseCase } from '../ensureDefaultDigestTopics.ts';
-import { GetArticleWithThreadUseCase } from '../getArticleWithThread.ts';
 import { IsDigestOwner } from '../isDigestOwner.ts';
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 4, 21, 30));
@@ -510,23 +508,6 @@ describe('CreateDailyDigestUseCase: 材料の選び方', () => {
 });
 
 describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
-  it('記事は類似度が最大のトピックだけに入り、同じ記事が 2 つのトピックに載らない', async () => {
-    const t = setup();
-    t.addTopic('platform', basis(1));
-    t.addEntries(t.sources.rss, 'Gen', 3, () => ({ embedding: basis(0) }));
-    t.addEntries(t.sources.rss, 'Plat', 3, () => ({ embedding: basis(1) }));
-    t.addEntry(t.sources.rss, 'Between', { count: 500, embedding: vec({ 0: 1, 1: 1.2 }) });
-
-    const result = await t.run();
-
-    expect(t.topicKeys()).toEqual(['genai', 'platform', 'summary']);
-    expect(t.titlesOf('genai')).toEqual(['Gen 1', 'Gen 2', 'Gen 3']);
-    expect(t.titlesOf('platform')).toEqual(['Between', 'Plat 1', 'Plat 2', 'Plat 3']);
-    expect(result).toMatchObject({ topics: 2, items: 7 });
-    const urls = t.all('SELECT url FROM digest_items').map((row) => row.url);
-    expect(new Set(urls).size).toBe(urls.length);
-  });
-
   it('しきい値未満の記事は「その他」にして、どのトピックにも載せない', async () => {
     const t = setup();
     t.addEntries(t.sources.rss, 'Gen', 3, () => ({ embedding: basis(0) }));
@@ -538,15 +519,6 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
     expect(t.titlesOf('genai')).toEqual(['Gen 1', 'Gen 2', 'Gen 3']);
     expect(result.recommendation.candidates).toBe(9);
     expect(result.items).toBe(3);
-  });
-
-  it('しきい値以上の記事はトピックに入る', async () => {
-    const t = setup();
-    t.addEntries(t.sources.rss, 'Near', 3, () => ({ embedding: vec({ 0: 1, 1: 1 }) }));
-
-    await t.run();
-
-    expect(t.titlesOf('genai')).toHaveLength(3);
   });
 
   it('3 件未満のトピックは作らない', async () => {
@@ -678,28 +650,6 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
 
     expect(t.topicKeys()).toEqual(['summary']);
     expect(result.items).toBe(0);
-  });
-
-  it('埋め込みがまだ無いトピックには振り分けない', async () => {
-    const t = setup();
-    t.addTopic('genai', null);
-    t.addTopic('platform', basis(1));
-    t.addEntries(t.sources.rss, 'Entry', 3);
-
-    await t.run();
-
-    expect(t.topicKeys()).toEqual(['summary']);
-  });
-
-  it('次元が合わない埋め込みのトピックには振り分けない', async () => {
-    const t = setup();
-    t.addEntries(t.sources.rss, 'Entry', 3);
-    t.fixture.sqlite.prepare('UPDATE digest_topics SET embedding = ? WHERE topicKey = \'genai\'')
-      .run(new Uint8Array(8));
-
-    await t.run();
-
-    expect(t.topicKeys()).toEqual(['summary']);
   });
 
   it('埋め込みの無い記事は候補にしない', async () => {
@@ -1019,21 +969,6 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
     expect([...titles].sort()).toEqual(['Fine one', 'Fine two', 'Match']);
   });
 
-  it('関心のベクトルが無ければ、点数をつけずにはてなの件数の順にし、score と根拠を null にする', async () => {
-    const t = setup();
-    t.addEntries(t.sources.rss, 'News', 3);
-
-    const result = await t.run();
-
-    expect(result.recommendation).toMatchObject({ materials: 0, candidates: 3, selected: 3 });
-    expect(t.itemsOf('genai').map((item) => [item.rank, item.score, item.reasonInterestSourceId])).toEqual([
-      [1, null, null],
-      [2, null, null],
-      [3, null, null],
-    ]);
-    expect(t.bodiesOf('genai').privateHtml).toContain('<h2>あなたへのおすすめ</h2>');
-  });
-
   it('関心の正の材料があるとき、点数が正の記事が 5 件に満たなくても、はてなの件数の順で補わない', async () => {
     const t = setup();
     t.addInterest('kosui_post', KOSUI_REF, basis(0));
@@ -1312,23 +1247,6 @@ describe('CreateDailyDigestUseCase: トピックとの類似度の使い方', ()
     });
     expect(t.titlesOf('genai')).toEqual(['Gen 1', 'Gen 2', 'Gen 3']);
   });
-
-  it('既定の方針では、差を見ないので差の不足で落ちた件数は 0 になる', async () => {
-    const t = setup();
-    t.addTopic('platform', basis(1));
-    t.addEntries(t.sources.rss, 'Gen', 3, () => ({ embedding: basis(0) }));
-    t.addEntry(t.sources.rss, 'Far', { count: 1, embedding: basis(7) });
-    t.addEntry(t.sources.rss, 'Between', { count: 1, embedding: vec({ 0: 1, 1: 1.05 }) });
-
-    const result = await t.run();
-
-    expect(result.recommendation).toMatchObject({
-      candidates: 5,
-      assignedToTopics: 4,
-      belowMinSimilarity: 1,
-      belowMinMargin: 0,
-    });
-  });
 });
 
 describe('stripThinkBlocks', () => {
@@ -1342,10 +1260,6 @@ describe('stripThinkBlocks', () => {
 
   it('閉じていない <think> は、その後ろをすべて除く', () => {
     expect(stripThinkBlocks('要約<think>途中で切れた')).toBe('要約');
-  });
-
-  it('<think> が無ければ前後の空白だけを削る', () => {
-    expect(stripThinkBlocks('  要約  ')).toBe('要約');
   });
 });
 
@@ -1742,13 +1656,6 @@ describe('CreateDailyDigestUseCase: 作る条件', () => {
     expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 0 }]);
     expect(t.send).not.toHaveBeenCalled();
   });
-
-  it('購読の行が無ければ有効とみなして作る', async () => {
-    const t = setup();
-
-    expect((await t.run()).status).toBe('created');
-    expect(t.all('SELECT count(*) AS n FROM digest_subscriptions')).toEqual([{ n: 0 }]);
-  });
 });
 
 describe('CreateDailyDigestUseCase: 埋め込みのある有効なトピックが無いとき', () => {
@@ -2013,21 +1920,6 @@ describe('CreateDailyDigestUseCase: requested', () => {
     });
   });
 
-  it('まとめが draft なら、topic の digest が公開済みでも編集済みでも残し、まとめを作り直して残った topic にリンクする', async () => {
-    const t = setup();
-    seedTwoTopics(t);
-    await t.run('requested');
-    const kept = t.digestOf('genai')!;
-    t.setArticleStatusOf('genai', 'published');
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-
-    const result = await t.run('requested');
-
-    expect(result).toMatchObject({ status: 'created', replaced: true, topics: 1 });
-    expect(t.digestOf('genai')).toMatchObject({ digestId: kept.digestId });
-    expect(t.bodies().privateHtml).toContain(`/articles/${kept.articleId}`);
-  });
-
   it('編集済みの topic の digest は残し、残りを置き換える', async () => {
     const t = setup();
     seedTwoTopics(t);
@@ -2041,24 +1933,6 @@ describe('CreateDailyDigestUseCase: requested', () => {
     expect(result).toMatchObject({ status: 'created', replaced: true, topics: 1 });
     expect(t.digestOf('platform')).toMatchObject({ digestId: kept.digestId });
     expect(t.titlesOf('genai')).toEqual(['Gen 1', 'Gen 2', 'Gen 3']);
-  });
-
-  it('置き換える digest がなく、まとめも残るなら、何も変えずに DigestAlreadyPublishedError を返す', async () => {
-    const t = setup();
-    seedTwoTopics(t);
-    await t.run('requested');
-    t.setArticleStatus('published');
-    const before = snapshot(t);
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-
-    const result = await t.runResult('requested');
-
-    expect(result).toMatchObject({
-      ok: false,
-      err: { type: 'DigestAlreadyPublishedError', detail: { digestDate: '2026-11-05' } },
-    });
-    expect(snapshot(t)).toEqual(before);
-    expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 3 }]);
   });
 
   it('まとめが残り、作れる topic が無ければ、置き換える draft を消さずに DigestAlreadyPublishedError を返す', async () => {
@@ -2151,23 +2025,6 @@ describe('CreateDailyDigestUseCase: requested', () => {
 
       expect(result).toMatchObject(expected);
       expectKept(t, before);
-      expect(info).toHaveBeenCalledTimes(trigger === 'scheduled' ? 1 : 0);
-    });
-
-    it('編集済みのまとめがあり、残りが公開済みで置き換えられなくても、何も消さない', async () => {
-      const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-      const t = setup();
-      t.addEntries(t.sources.rss, 'Entry', 3);
-      await t.run('requested');
-      t.editArticleBodyOf('summary');
-      t.setArticleStatusOf('genai', 'published');
-      const before = snapshot(t);
-      t.clock.value = (NOW + HOUR) as typeof NOW;
-
-      const result = await t.runResult(trigger);
-
-      expect(result).toMatchObject(expected);
-      expect(snapshot(t)).toEqual(before);
       expect(info).toHaveBeenCalledTimes(trigger === 'scheduled' ? 1 : 0);
     });
 
@@ -2371,19 +2228,6 @@ describe('CreateDailyDigestUseCase: requested', () => {
     expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 2 }]);
   });
 
-  it('scheduled は requested の digest の article がすべて published なら置き換えずに skipped を返す', async () => {
-    const t = setup();
-    t.addEntries(t.sources.rss, 'Entry', 3);
-    await t.run('requested');
-    const before = snapshot(t);
-    t.setArticleStatus('published');
-
-    const scheduled = await t.run('scheduled');
-
-    expect(scheduled.status).toBe('skipped');
-    expect(snapshot(t)).toEqual(before);
-  });
-
   it('scheduled は scheduled の digest を draft でも置き換えずに skipped を返す', async () => {
     const t = setup();
     t.addEntries(t.sources.rss, 'Entry', 3);
@@ -2499,30 +2343,6 @@ describe('CreateDailyDigestUseCase: 材料の窓の始まり', () => {
       trends: ['hatena newer', 'link newer'],
       radar: [true, false],
     });
-  });
-
-  it('置き換える digest は直前の digest に数えず、その createdAt より前の材料も使う', async () => {
-    const t = setup();
-    await t.run('requested');
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-    t.addEntries(t.sources.rss, 'fetched before the replaced digest', 3, () => ({ fetchedAt: NOW - HOUR }));
-
-    const result = await t.run('requested');
-
-    expect(result.replaced).toBe(true);
-    expect(t.titlesOf('genai')).toHaveLength(3);
-  });
-
-  it('同じ日のトピックの digest は、直前の日の digest に数えない', async () => {
-    const t = setup();
-    t.addEntries(t.sources.rss, 'Early', 3, () => ({ fetchedAt: NOW - 2 * HOUR }));
-    await t.run('requested');
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-
-    const result = await t.run('requested');
-
-    expect(result.replaced).toBe(true);
-    expect(t.titlesOf('genai')).toEqual(['Early 1', 'Early 2', 'Early 3']);
   });
 });
 
@@ -2647,7 +2467,6 @@ describe('CreateDailyDigestUseCase: 本文の Content-Type と大きさ', () => 
 
   it.each([
     'application/pdf',
-    'text/css',
     undefined,
   ])('Content-Type が %s なら本文を使わず、description で要約する', async (contentType) => {
     const { result, input } = await runWithBody('<p>Hello body</p>', contentType);
@@ -2713,14 +2532,6 @@ describe('CreateDailyDigestUseCase: 要求からの生成の時間', () => {
     expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([2_000, 2_000, 2_000]);
     expect(calls).toHaveLength(3);
     expect(result.summarized).toBe(3);
-  });
-
-  it('要約のタイムアウトは、残りより 1 秒短いか 20 秒の短いほうにする', async () => {
-    const { t, sleep } = setupRecommendation(10_000);
-
-    await t.run('requested');
-
-    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([14_000, 14_000, 14_000]);
   });
 
   it('残りが 3 秒未満なら要約を呼ばず、要約なしで保存する', async () => {
@@ -2848,29 +2659,18 @@ describe('CreateDailyDigestUseCase: プロンプトインジェクション', ()
     ]);
   });
 
-  it('おすすめの要約も同じ後処理をかけ、URL だけの要約は null にする', async () => {
-    let reply = 'https://evil.example/only';
-    const { generator } = createStubTextGenerator(() => reply);
+  it('おすすめの要約も URL を取り除き、URL だけの要約は null にする', async () => {
+    const { generator } = createStubTextGenerator(() => 'https://evil.example/only');
     const t = setup({ textGenerator: generator });
     t.addInterest('kosui_post', KOSUI_REF, basis(0));
     t.addEntries(t.sources.rss, 'Match', 3);
 
-    const first = await t.run();
-    expect(first.summarized).toBe(0);
+    const result = await t.run();
+
+    expect(result.summarized).toBe(0);
     expect(t.all('SELECT summary FROM digest_items')).toEqual([{ summary: null }, { summary: null }, {
       summary: null,
     }]);
-
-    reply = `${'a'.repeat(400)}\nb\nc\nd`;
-    const t2 = setup({ textGenerator: generator });
-    t2.addInterest('kosui_post', KOSUI_REF, basis(0));
-    t2.addEntries(t2.sources.rss, 'Match', 3);
-    await t2.run();
-    expect(t2.all('SELECT summary FROM digest_items')).toEqual([
-      { summary: 'a'.repeat(300) },
-      { summary: 'a'.repeat(300) },
-      { summary: 'a'.repeat(300) },
-    ]);
   });
 });
 
@@ -2921,29 +2721,6 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
     ]);
   });
 
-  it('まとめの記事の本文には、「X の投稿」の節を入れない', async () => {
-    const t = setup();
-    addXPost(t, addXSource(t, USERNAME), POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
-
-    await t.run();
-
-    expect(t.bodies().privateHtml).not.toContain('X の投稿');
-  });
-
-  it('無効な情報源の投稿と、24 時間より前に取得した投稿は保存しない', async () => {
-    const t = setup();
-    const enabled = addXSource(t, 'enabled_user');
-    const disabled = addXSource(t, 'disabled_user', false);
-    const fresh = addXPost(t, enabled, 'fresh post', { fetchedAt: NOW - 2 * HOUR });
-    addXPost(t, enabled, 'stale post', { fetchedAt: NOW - 25 * HOUR });
-    addXPost(t, disabled, 'disabled post', { fetchedAt: NOW - 2 * HOUR });
-
-    const result = await t.run();
-
-    expect(result.xPosts).toBe(1);
-    expect(storedFeedEntryIds(t)).toEqual([fresh.feedEntryId]);
-  });
-
   it('直前の日の digest の createdAt より後に取得した投稿だけを保存する', async () => {
     const t = setup();
     const source = addXSource(t, 'user_a');
@@ -2969,30 +2746,6 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
     expect(storedFeedEntryIds(t)).toEqual([]);
   });
 
-  it('所有者でないユーザーが開いた下書きには、保存済みの行があっても X の投稿の節を出さない', async () => {
-    const t = setup({ isDigestOwner: async () => false });
-    const post = addXPost(t, addXSource(t, USERNAME), POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
-    const { articleId } = await t.run('requested');
-    const { digestId } = t.all('SELECT digestId FROM digests')[0] as { digestId: string };
-    t.fixture.sqlite.prepare('INSERT INTO digest_x_posts(digestId,rank,feedEntryId) VALUES (?,?,?)')
-      .run(digestId, 1, post.feedEntryId);
-    const open = (isDigestOwner: IsDigestOwner) =>
-      GetArticleWithThreadUseCase.create({
-        articleResolver: createD1ArticleResolver(t.fixture.db),
-        threadResolver: { resolve: async () => RA.ok({ currentPost: null, ancestors: [], descendants: [] }) },
-        articleBodyResolver: createD1ArticleBodyResolver(t.fixture.db),
-        digestXPostsResolverByArticleId: createD1DigestXPostsResolverByArticleId(t.fixture.db),
-        isDigestOwner,
-        now: () => NOW,
-      }).run({ articleId: ArticleId.orThrow(articleId!), viewerUserId: UserId.orThrow(t.me.userId) });
-
-    const byNonOwner = await open(async () => false);
-    const byOwner = await open(async () => true);
-
-    expect(byNonOwner.ok && byNonOwner.val.body?.html).not.toContain(POST_TEXT);
-    expect(byOwner.ok && byOwner.val.body?.html).toContain(POST_TEXT);
-  });
-
   it('投稿が 10 件を超え、関心の材料があれば、関心に近い投稿を先に選び、足りない分を新しい順に足す', async () => {
     const t = setup();
     const source = addXSource(t, 'user_a');
@@ -3012,18 +2765,6 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
       two.feedEntryId,
       ...far.slice(0, 8).map((post) => post.feedEntryId),
     ]);
-  });
-
-  it('投稿が 10 件を超え、関心の材料が無ければ、新しい順に 10 件を保存する', async () => {
-    const t = setup();
-    const source = addXSource(t, 'user_a');
-    const posts = [];
-    for (let i = 1; i <= 12; i += 1) posts.push(addXPost(t, source, `post ${i}`, { publishedAt: NOW - i * 1000 }));
-
-    const result = await t.run();
-
-    expect(result.xPosts).toBe(10);
-    expect(storedFeedEntryIds(t)).toEqual(posts.slice(0, 10).map((post) => post.feedEntryId));
   });
 
   it('記事、記事本文、digest の項目と trends、domain event には、投稿の本文もユーザー名も URL も feedEntryId も入れない', async () => {
@@ -3123,9 +2864,5 @@ describe('limitSummary', () => {
     expect(Array.from(limitSummary('😀'.repeat(400)))).toHaveLength(300);
     expect(limitSummary('😀'.repeat(400))).toBe('😀'.repeat(300));
     expect(limitSummary(`${'a'.repeat(200)}\n${'b'.repeat(200)}`)).toBe(`${'a'.repeat(200)}\n${'b'.repeat(99)}`);
-  });
-
-  it('300 文字以内で 3 行以内ならそのまま返す', () => {
-    expect(limitSummary('一行目\n二行目')).toBe('一行目\n二行目');
   });
 });

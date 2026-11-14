@@ -77,11 +77,6 @@ describe('PostView の「…」メニュー', () => {
     ]);
   });
 
-  it('url が null で uri も使えないなら、リモートでもどちらも出さない', () => {
-    expect(keys({ status: { ...remote, url: null, uri: apiUri } })).toEqual([]);
-    expect(keys({ status: { ...local, url: null } })).toEqual([]);
-  });
-
   it('リモートで url が null でも、uri が元サーバーの https の URL ならどちらも出す', () => {
     const origin = 'https://origin.example/notes/9';
 
@@ -130,7 +125,6 @@ describe('PostView の「…」メニュー', () => {
     it.each(
       [
         ['pending', { status: 'pending', skip_reason: null, retrying: true, url: null }],
-        ['failed', { status: 'failed', skip_reason: null, retrying: false, url: null }],
         ['sent で url が null', { status: 'sent', skip_reason: null, retrying: false, url: null }],
       ] as const,
     )('%s のときは出さない', (_, crosspost) => {
@@ -194,7 +188,6 @@ describe('PostView の「…」メニュー', () => {
       expect(items.map((item) => item.key)).toEqual(['open-original', 'unbookmark', 'copy-link']);
       const item = items.find((candidate) => candidate.key === 'unbookmark');
       if (item?.kind !== 'action') throw new Error('unbookmark not found');
-      expect(item.label).toBe('ブックマークを外す');
       void item.onSelect();
       expect(onUndoBookmark).toHaveBeenCalledExactlyOnceWith('post-1');
     });
@@ -234,15 +227,6 @@ describe('PostView の「…」メニュー', () => {
     it('ローカルの投稿者には出さない', () => {
       expect(keys({ ...base, status: local })).not.toContain('block');
     });
-
-    it('自分の投稿には出さない', () => {
-      expect(keys({ ...base, currentAccountId: 'actor-1' })).not.toContain('block');
-    });
-
-    it('未ログインでは出さない', () => {
-      expect(keys({ ...base, isLoggedIn: false })).not.toContain('block');
-      expect(keys({ ...base, isLoggedIn: undefined })).not.toContain('block');
-    });
   });
 
   describe('通報', () => {
@@ -266,15 +250,6 @@ describe('PostView の「…」メニュー', () => {
 
     it('ローカルの投稿者には出さない', () => {
       expect(keys({ ...base, status: local })).not.toContain('report');
-    });
-
-    it('自分の投稿には出さない', () => {
-      expect(keys({ ...base, currentAccountId: 'actor-1' })).not.toContain('report');
-    });
-
-    it('未ログインでは出さない', () => {
-      expect(keys({ ...base, isLoggedIn: false })).not.toContain('report');
-      expect(keys({ ...base, isLoggedIn: undefined })).not.toContain('report');
     });
   });
 

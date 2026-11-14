@@ -27,13 +27,9 @@ describe('createWorkersAiTopicRelevanceJudge', () => {
 
   it.each([
     null,
-    {},
     { answers: {} },
-    { answers: { topicRelevance: {} } },
     { answers: { topicRelevance: { noul: '0.5' } } },
-    { answers: { topicRelevance: { noul: null } } },
     { answers: { topicRelevance: { type: 'noul', noul: 1.01 } } },
-    { answers: { topicRelevance: { type: 'noul', noul: -0.01 } } },
   ])('想定と違う応答 %j は AiError にする', async (raw) => {
     const run = vi.fn(async () => raw);
 

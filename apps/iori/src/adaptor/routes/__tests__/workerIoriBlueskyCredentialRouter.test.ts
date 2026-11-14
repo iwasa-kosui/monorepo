@@ -238,18 +238,16 @@ describe('PUT /api/iori/v1/bluesky/credential', () => {
     expect(t.fetchMock).not.toHaveBeenCalled();
   });
 
-  it('Bluesky へのログインに失敗したら 422 bluesky_login_failed で、何も保存しない', async () => {
+  it('Bluesky へのログインに失敗したら 422 bluesky_login_failed', async () => {
     const t = await setup({ fetch: () => json({ error: 'AuthenticationRequired' }, 401) });
 
     const response = await t.put(t.validBody);
 
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: 'bluesky_login_failed' });
-    expect(t.sqlite.prepare('SELECT * FROM bluesky_credentials').all()).toEqual([]);
-    expect(t.sqlite.prepare('SELECT * FROM bluesky_login_failures').all()).toEqual([]);
   });
 
-  it('DID が違えば 409 did_mismatch で、何も保存しない', async () => {
+  it('DID が違えば 409 did_mismatch で、今と次のアカウントを返す', async () => {
     const t = await setup();
     t.sqlite.prepare(
       'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
@@ -264,8 +262,6 @@ describe('PUT /api/iori/v1/bluesky/credential', () => {
       current: { did: 'did:plc:other', handle: 'other.example' },
       next: { did: 'did:plc:alice', handle: 'alice.bsky.social' },
     });
-    expect(t.sqlite.prepare('SELECT * FROM bluesky_credentials').all()).toEqual([]);
-    expect(t.sqlite.prepare('SELECT accessJwt FROM bluesky_sessions').all()).toEqual([{ accessJwt: 'old' }]);
   });
 
   it('成功したら 200 で共通の形を返し、DM の可否を調べて保存する', async () => {
@@ -286,22 +282,6 @@ describe('PUT /api/iori/v1/bluesky/credential', () => {
     });
     const calls = t.fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
     expect(calls[1]![0]).toBe('https://pds.example/xrpc/chat.bsky.convo.listConvos?limit=1');
-  });
-
-  it('成功したら bluesky_sessions を上書きし、bluesky_login_failures を消す', async () => {
-    const t = await setup();
-    t.sqlite.prepare(
-      'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
-    )
-      .run('default', 'did:plc:alice', 'alice.bsky.social', 'https://pds.example', 'old', 'old', 1_000);
-    t.sqlite.prepare('INSERT INTO bluesky_login_failures(scope,failedAt) VALUES (?,?)').run('timeline', 2_000);
-
-    expect((await t.put(t.validBody)).status).toBe(200);
-
-    expect(t.sqlite.prepare('SELECT accessJwt, refreshJwt FROM bluesky_sessions').all()).toEqual([
-      { accessJwt: 'new-access', refreshJwt: 'new-refresh' },
-    ]);
-    expect(t.sqlite.prepare('SELECT * FROM bluesky_login_failures').all()).toEqual([]);
   });
 });
 

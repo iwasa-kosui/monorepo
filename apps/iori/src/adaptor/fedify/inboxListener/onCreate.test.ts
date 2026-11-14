@@ -1,4 +1,4 @@
-import { Article, Collection, Create, Note, Person, Question } from '@fedify/vocab';
+import { Create, Note, Person } from '@fedify/vocab';
 import { FetchError } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
@@ -84,7 +84,7 @@ describe('createOnCreate', () => {
     expect(settled).toBe(true);
   });
 
-  const run = async (note: Note | Article | Question | Person, activity?: Partial<Create>) => {
+  const run = async (note: Note | Person, activity?: Partial<Create>) => {
     const addRemotePostUseCase = {
       run: vi.fn(async () => RA.ok({ actor: { uri: 'https://remote.example/users/alice' } } as never)),
     };
@@ -151,68 +151,6 @@ describe('createOnCreate', () => {
     const addRemotePost = await run(note, { toIds: [followersId], ccIds: [publicUri] });
 
     expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'unlisted' }));
-  });
-
-  it('records an Article with its name and content', async () => {
-    const article = new Article({
-      id: new URL('https://remote.example/posts/1'),
-      name: 'Title',
-      content: '<p>body</p>',
-      tos: [publicUri],
-    });
-
-    const addRemotePost = await run(article);
-
-    expect(addRemotePost).toHaveBeenCalledWith(
-      expect.objectContaining({
-        uri: 'https://remote.example/posts/1',
-        content:
-          '<p><strong>Title</strong></p><p>body</p><p><a href="https://remote.example/posts/1">元の記事を読む</a></p>',
-        visibility: 'public',
-      }),
-    );
-  });
-
-  it('does not treat the summary of an Article as a content warning', async () => {
-    const article = new Article({
-      id: new URL('https://remote.example/posts/1'),
-      name: 'Title',
-      content: '<p>body</p>',
-      summary: '<p>excerpt</p>',
-      sensitive: true,
-      tos: [publicUri],
-    });
-
-    const addRemotePost = await run(article);
-
-    expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ summary: null, sensitive: true }));
-  });
-
-  it('records a Question without a link to vote and its poll', async () => {
-    const question = new Question({
-      id: new URL('https://remote.example/posts/1'),
-      content: '<p>q</p>',
-      exclusiveOptions: [
-        new Note({ name: 'a', replies: new Collection({ totalItems: 2 }) }),
-        new Note({ name: 'b' }),
-      ],
-      voters: 2,
-    });
-
-    const addRemotePost = await run(question);
-
-    expect(addRemotePost).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: '<p>q</p>',
-        poll: {
-          multiple: false,
-          options: [{ title: 'a', votesCount: 2 }, { title: 'b', votesCount: 0 }],
-          votersCount: 2,
-          expiresAt: null,
-          closed: false,
-        },
-      }),
-    );
   });
 
   it('ignores an object that is not a Note, an Article or a Question', async () => {

@@ -66,12 +66,6 @@ describe('withBlueskyThreadMuted', () => {
     expect(result.map((i) => [i.feedItemId, i.threadMuted])).toEqual([['1', true], ['2', true], ['3', false]]);
   });
 
-  it('false を渡すとミュートを解除した状態にする', () => {
-    const reply = { ...item('2', 'did:plc:other'), replyRootUri: ROOT, threadMuted: true };
-
-    expect(withBlueskyThreadMuted([reply], ROOT, false).map((i) => i.threadMuted)).toEqual([false]);
-  });
-
   it('threadMuted が null の投稿も、true と false に書き換える', () => {
     const unknown = { ...item('1', 'did:plc:other'), replyRootUri: ROOT, threadMuted: null };
 

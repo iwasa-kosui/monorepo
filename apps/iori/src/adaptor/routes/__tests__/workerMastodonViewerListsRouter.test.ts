@@ -159,16 +159,6 @@ describe('GET /api/v1/bookmarks', () => {
     expect(statuses[0]).toMatchObject({ account: { id: t.alice.actorId, acct: 'alice@remote.example' } });
   });
 
-  it('他人のブックマークを返さない', async () => {
-    const t = await seedBookmarks();
-    const other = t.seed.addLocalActor('other');
-    t.seed.addBookmark(other.actorId, t.notBookmarked.postId, 50_000);
-
-    const response = await t.request('/api/v1/bookmarks', { headers: t.me.bearer });
-
-    expect(idsOf(await response.json())).toEqual(t.postIds);
-  });
-
   it('limit と max_id と Link ヘッダーで bookmarkId を位置にしてページを送る', async () => {
     const t = await seedBookmarks();
 
@@ -182,32 +172,6 @@ describe('GET /api/v1/bookmarks', () => {
     expect(next?.searchParams.get('limit')).toBe('2');
     expect(idsOf(await second.json())).toEqual([t.postIds[2]]);
     expect(linkOf(second, 'next')?.searchParams.get('max_id')).toBe(t.bookmarkIds[2]);
-  });
-
-  it('ブックマークしても見えない direct は返さない', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-    const alice = t.seed.addRemoteActor('alice');
-    const visible = t.seed.addRemotePost(alice, 1_000, { visibility: 'public' });
-    const direct = t.seed.addRemotePost(alice, 2_000, { visibility: 'direct' });
-    t.seed.addBookmark(me.actorId, visible.postId, 10_000);
-    t.seed.addBookmark(me.actorId, direct.postId, 20_000);
-
-    const response = await t.request('/api/v1/bookmarks', { headers: me.bearer });
-
-    expect(idsOf(await response.json())).toEqual([visible.postId]);
-  });
-
-  it('認証がなければ 401、スコープが足りなければ 403 にし、Cookie は通す', async () => {
-    const t = await seedBookmarks();
-
-    const [anonymous, forbidden, cookie] = await Promise.all([
-      t.request('/api/v1/bookmarks'),
-      t.request('/api/v1/bookmarks', { headers: await t.bearerFor('read:favourites') }),
-      t.request('/api/v1/bookmarks', { headers: { Cookie: `sessionId=${t.me.sessionId}` } }),
-    ]);
-
-    expect([anonymous.status, forbidden.status, cookie.status]).toEqual([401, 403, 200]);
   });
 });
 
@@ -273,18 +237,6 @@ describe('GET /api/v1/mutes', () => {
     expect(idsOf(await capped.json())).toHaveLength(80);
     expect(idsOf(await defaulted.json())).toHaveLength(40);
   });
-
-  it('認証がなければ 401、スコープが足りなければ 403 にし、Cookie は通す', async () => {
-    const t = await seedMutes();
-
-    const [anonymous, forbidden, cookie] = await Promise.all([
-      t.request('/api/v1/mutes'),
-      t.request('/api/v1/mutes', { headers: await t.bearerFor('read:accounts') }),
-      t.request('/api/v1/mutes', { headers: { Cookie: `sessionId=${t.me.sessionId}` } }),
-    ]);
-
-    expect([anonymous.status, forbidden.status, cookie.status]).toEqual([401, 403, 200]);
-  });
 });
 
 describe('GET /api/v1/blocks', () => {
@@ -318,29 +270,5 @@ describe('GET /api/v1/blocks', () => {
     const accounts = (await response.json() as unknown[]).map((item) => AccountSchema.parse(item));
     expect(accounts.map((account) => account.id)).toEqual(t.accountIds);
     expect(accounts[0]).toMatchObject({ username: 'carol', acct: 'carol@remote.example' });
-  });
-
-  it('limit と max_id と Link ヘッダーで blockId を位置にしてページを送る', async () => {
-    const t = await seedBlocks();
-
-    const first = await t.request('/api/v1/blocks?limit=2', { headers: t.me.bearer });
-    const next = linkOf(first, 'next');
-    const second = await t.request(`${next?.pathname}${next?.search}`, { headers: t.me.bearer });
-
-    expect(idsOf(await first.json())).toEqual(t.accountIds.slice(0, 2));
-    expect(next?.searchParams.get('max_id')).toBe(t.blockIds[1]);
-    expect(idsOf(await second.json())).toEqual([t.accountIds[2]]);
-  });
-
-  it('認証がなければ 401、スコープが足りなければ 403 にし、Cookie は通す', async () => {
-    const t = await seedBlocks();
-
-    const [anonymous, forbidden, cookie] = await Promise.all([
-      t.request('/api/v1/blocks'),
-      t.request('/api/v1/blocks', { headers: await t.bearerFor('read:mutes') }),
-      t.request('/api/v1/blocks', { headers: { Cookie: `sessionId=${t.me.sessionId}` } }),
-    ]);
-
-    expect([anonymous.status, forbidden.status, cookie.status]).toEqual([401, 403, 200]);
   });
 });

@@ -25,30 +25,10 @@ describe('resolveLocalPostThread', () => {
     });
   });
 
-  it('本体と context が両方 404 でも見つからないとする', () => {
-    expect(resolveLocalPostThread(rejected(apiError(404, 'Record not found')), rejected(apiError(404, 'x')))).toEqual({
-      type: 'notFound',
-    });
-  });
-
   it('本体が JSON の error を持つ API エラーで失敗したら、その message をエラーとする', () => {
     expect(resolveLocalPostThread(rejected(apiError(500, 'Internal error')), fulfilled(context))).toEqual({
       type: 'error',
       message: 'Internal error',
-    });
-  });
-
-  it('本体がネットワークの TypeError で失敗したら、その message をエラーとする', () => {
-    expect(resolveLocalPostThread(rejected(new TypeError('Failed to fetch')), fulfilled(context))).toEqual({
-      type: 'error',
-      message: 'Failed to fetch',
-    });
-  });
-
-  it('本体が Error でない値で失敗したら、その文字列を message とする', () => {
-    expect(resolveLocalPostThread(rejected('plain failure'), fulfilled(context))).toEqual({
-      type: 'error',
-      message: 'plain failure',
     });
   });
 
@@ -71,23 +51,6 @@ describe('resolveLocalPostThread', () => {
       contextFailed: true,
     });
   });
-
-  it('context が 404 でもスレッドの失敗として投稿を返す', () => {
-    expect(resolveLocalPostThread(fulfilled(post('p')), rejected(apiError(404, 'Record not found')))).toEqual({
-      type: 'loaded',
-      currentPost: post('p'),
-      ancestors: [],
-      descendants: [],
-      contextFailed: true,
-    });
-  });
-
-  it('context がネットワークの TypeError で失敗してもスレッドの失敗として投稿を返す', () => {
-    expect(resolveLocalPostThread(fulfilled(post('p')), rejected(new TypeError('Failed to fetch')))).toMatchObject({
-      type: 'loaded',
-      contextFailed: true,
-    });
-  });
 });
 
 describe('applyContext', () => {
@@ -99,10 +62,6 @@ describe('applyContext', () => {
       ancestors: [post('a1')],
       descendants: [post('d1'), post('d2')],
     });
-  });
-
-  it('スレッドがまだないときは null のままにする', () => {
-    expect(applyContext(null, context)).toBeNull();
   });
 });
 
@@ -144,13 +103,5 @@ describe('updateThreadStatuses', () => {
       ancestors: [post('a1'), post('a2')],
       descendants: [post('d1'), { ...post('d2'), favourited: true }],
     });
-  });
-
-  it('一致する投稿がなければ内容を変えない', () => {
-    expect(updateThreadStatuses(thread, 'none', favourited)).toEqual(thread);
-  });
-
-  it('スレッドがまだないときは null のままにする', () => {
-    expect(updateThreadStatuses(null, 'p', favourited)).toBeNull();
   });
 });

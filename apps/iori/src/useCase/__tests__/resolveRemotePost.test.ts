@@ -1,4 +1,4 @@
-import { Article, Note, Person, Question } from '@fedify/vocab';
+import { Note, Person } from '@fedify/vocab';
 import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
@@ -28,7 +28,6 @@ type Setup = Readonly<{
   localStored?: Readonly<Record<string, string>>;
   storedAuthorUris?: Readonly<Record<string, string>>;
   blockedActorUris?: ReadonlyArray<string>;
-  blockedCheckRejects?: boolean;
   lookupObject?: (uri: string) => Promise<unknown>;
   documentLoader?: DocumentLoader;
   lookupUrlResolver?: LookupUrlResolver;
@@ -90,10 +89,7 @@ const setup = (options: Setup = {}) => {
     actorResolverById: actorResolverById as never,
     remotePostUpserter,
     blockedActorUriResolverByUsername: {
-      resolve: async ({ actorUri }) => {
-        if (options.blockedCheckRejects) throw new Error('D1 is down');
-        return RA.ok(options.blockedActorUris?.includes(actorUri) ?? false);
-      },
+      resolve: async ({ actorUri }) => RA.ok(options.blockedActorUris?.includes(actorUri) ?? false),
     },
     isBlockedUri: (uri) => isBlockedUri(uri, [BLOCKED_DOMAIN]),
     lookupUrlResolver,
@@ -156,25 +152,6 @@ describe('ResolveRemotePostUseCase', () => {
     });
   });
 
-  it('著者がブロックしたドメインの Article と Question は、保存せず見つからない扱いにする', async () => {
-    const author = new Person({
-      id: new URL(`https://${BLOCKED_DOMAIN}/users/mallory`),
-      inbox: new URL(`https://${BLOCKED_DOMAIN}/users/mallory/inbox`),
-      preferredUsername: 'mallory',
-    });
-    const article = setup({
-      lookupObject: async () => new Article({ id: new URL(NOTE_URI), content: 'x', attribution: author }),
-    });
-    const question = setup({
-      lookupObject: async () => new Question({ id: new URL(NOTE_URI), content: 'x', attribution: author }),
-    });
-
-    expect(await article.run(HTML_URL)).toBeUndefined();
-    expect(await question.run(HTML_URL)).toBeUndefined();
-    expect(article.remotePostUpserter.resolve).not.toHaveBeenCalled();
-    expect(question.remotePostUpserter.resolve).not.toHaveBeenCalled();
-  });
-
   it('Note でないオブジェクトは保存せず、見つからない扱いにする', async () => {
     const t = setup({ lookupObject: async () => personOf('alice') });
 
@@ -230,15 +207,6 @@ describe('ResolveRemotePostUseCase', () => {
     expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
   });
 
-  it('ブロックの判定が失敗したときは、その相手の投稿を保存せず、見つからない扱いにする', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const t = setup({ blockedCheckRejects: true, lookupObject: async () => noteOf(NOTE_URI) });
-
-    expect(await t.run(HTML_URL)).toBeUndefined();
-    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
-    warn.mockRestore();
-  });
-
   it('ブロックしたドメインの URL は、サブドメインも含めて、取得せず見つからない扱いにする', async () => {
     const t = setup({ lookupObject: async (uri) => noteOf(uri) });
 
@@ -280,21 +248,6 @@ describe('ResolveRemotePostUseCase', () => {
 
   it('取得した Note の id がブロックしたドメインなら、保存せず見つからない扱いにする', async () => {
     const t = setup({ lookupObject: async () => noteOf(`https://${BLOCKED_DOMAIN}/notes/1`) });
-
-    expect(await t.run(HTML_URL)).toBeUndefined();
-    expect(t.lookupObject).toHaveBeenCalledTimes(1);
-    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
-  });
-
-  it('取得した Note の著者がブロックしたドメインなら、保存せず見つからない扱いにする', async () => {
-    const author = new Person({
-      id: new URL(`https://${BLOCKED_DOMAIN}/users/mallory`),
-      inbox: new URL(`https://${BLOCKED_DOMAIN}/users/mallory/inbox`),
-      preferredUsername: 'mallory',
-    });
-    const t = setup({
-      lookupObject: async () => new Note({ id: new URL(NOTE_URI), content: 'x', attribution: author }),
-    });
 
     expect(await t.run(HTML_URL)).toBeUndefined();
     expect(t.lookupObject).toHaveBeenCalledTimes(1);

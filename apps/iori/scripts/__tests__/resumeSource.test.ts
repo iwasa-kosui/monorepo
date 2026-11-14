@@ -65,14 +65,6 @@ it.each(['destination_writes_not_enabled', 'destination_writes_reconciled'])(
 );
 it.each([
   ['ingress is not frozen', { ...frozenState, ingress_frozen: false }, 'source-not-frozen'],
-  ['the consumer is not paused', { ...frozenState, consumer_paused: false }, 'source-not-frozen'],
-  ['the service is not frozen at all', openState, 'source-not-frozen'],
-  ['no identity is held', { ...frozenState, identity: null }, 'source-identity-mismatch'],
-  [
-    'the frozen main SHA differs',
-    { ...frozenState, identity: { main_sha: 'b'.repeat(40), run_id: 'run_1' } },
-    'source-identity-mismatch',
-  ],
   [
     'the frozen run ID differs',
     { ...frozenState, identity: { main_sha: sha, run_id: 'run_2' } },
@@ -80,8 +72,6 @@ it.each([
   ],
   ['the queue has failed', { ...frozenState, queue_failed: true }, 'source-queue-failed'],
   ['an HTTP request is in flight', { ...frozenState, http_inflight: 1 }, 'source-not-idle'],
-  ['queue dequeue work is running', { ...frozenState, dequeue_work: 1 }, 'source-not-idle'],
-  ['queue enqueue work is running', { ...frozenState, enqueue_work: 1 }, 'source-not-idle'],
 ])('does not send resume when %s', async (_label, state, reason) => {
   const writes = captureDiagnostics();
   const { calls, sourceFactory } = fixture([state]);

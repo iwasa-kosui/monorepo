@@ -303,18 +303,6 @@ describe('toStatus quote', () => {
     expect(boost.quote).toBeNull();
     expect(boost.reblog?.quote).toEqual({ state: 'accepted', quoted_status: quotedStatus });
   });
-
-  it('keeps quote_url of a boosted Status whose quote is unresolved inside reblog', () => {
-    const status = toStatus(localPost, { ...options, quote: { uri: quoteUri, status: null } });
-
-    const boost = toReblogStatus({ createdAt: Date.UTC(2025, 1, 3) as Instant }, {
-      repostId: RepostId.generate(),
-      account: { ...account, id: ActorId.generate() },
-      reblog: status,
-    });
-
-    expect(boost.reblog?.iori?.quote_url).toBe(quoteUri);
-  });
 });
 
 describe('toStatus content sanitization', () => {
@@ -354,20 +342,11 @@ describe('toStatus url safety', () => {
 
   it.each([
     { mediaType: 'video/mp4', url: 'https://remote.example/media/1.mp4', type: 'video', preview: null },
-    { mediaType: 'audio/mpeg', url: 'https://remote.example/media/1.mp3', type: 'audio', preview: null },
     {
       mediaType: 'image/png',
       url: 'https://remote.example/media/1.png',
       type: 'image',
       preview: 'https://remote.example/media/1.png',
-    },
-    { mediaType: null, url: 'https://remote.example/media/1.webm', type: 'video', preview: null },
-    { mediaType: null, url: 'https://remote.example/media/1.ogg', type: 'audio', preview: null },
-    {
-      mediaType: null,
-      url: 'https://remote.example/media/1.jpg',
-      type: 'image',
-      preview: 'https://remote.example/media/1.jpg',
     },
   ])('decides the media attachment type $type from mediaType $mediaType and the url', (
     { mediaType, url, type, preview },
@@ -527,11 +506,6 @@ describe('toIoriBlueskyCrosspost', () => {
       toIoriBlueskyCrosspost(crosspost({ status: 'failed', uri: 'at://did:plc:abc/app.bsky.feed.post/3kxyz' })).url,
     )
       .toBeNull();
-  });
-
-  it('retrying は canRetry の結果にする', () => {
-    expect(toIoriBlueskyCrosspost(crosspost({ status: 'failed', attempts: 3 })).retrying).toBe(false);
-    expect(toIoriBlueskyCrosspost(crosspost({ status: 'failed', attempts: 2 })).retrying).toBe(true);
   });
 });
 

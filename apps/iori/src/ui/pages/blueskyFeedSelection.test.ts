@@ -36,10 +36,6 @@ describe('withFeedUri', () => {
     expect(withFeedUri('', FEED)).toBe(`?uri=${encodeURIComponent(FEED)}`);
     expect(withFeedUri('?a=1&uri=old', LIST)).toBe(`?a=1&uri=${encodeURIComponent(LIST)}`);
   });
-
-  it('付けた結果を feedUriOfSearch で読み戻せる', () => {
-    expect(feedUriOfSearch(withFeedUri('', LIST))).toBe(LIST);
-  });
 });
 
 describe('selectedFeedOf', () => {

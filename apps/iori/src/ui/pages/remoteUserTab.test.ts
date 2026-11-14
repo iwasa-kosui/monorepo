@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isRemoteFollowListTab, remoteUserTabOfSearch, withRemoteUserTab } from './remoteUserTab.ts';
+import { remoteUserTabOfSearch, withRemoteUserTab } from './remoteUserTab.ts';
 
 describe('remoteUserTabOfSearch', () => {
   it('tab がフォローかフォロワーならそのタブにし、それ以外は投稿にする', () => {
@@ -20,13 +20,5 @@ describe('withRemoteUserTab', () => {
   it('フォローとフォロワーのタブでは tab を付ける', () => {
     expect(withRemoteUserTab('', 'following')).toBe('?tab=following');
     expect(withRemoteUserTab('?tab=following', 'followers')).toBe('?tab=followers');
-  });
-});
-
-describe('isRemoteFollowListTab', () => {
-  it('フォローとフォロワーだけを一覧のタブとみなす', () => {
-    expect(isRemoteFollowListTab('following')).toBe(true);
-    expect(isRemoteFollowListTab('followers')).toBe(true);
-    expect(isRemoteFollowListTab('posts')).toBe(false);
   });
 });

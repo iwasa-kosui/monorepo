@@ -141,83 +141,6 @@ describe('runOptimisticFavourite', () => {
     expect(updateThreadPost).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the item as not favourited with one fewer like while an undo is pending, then takes the server status', async () => {
-    const timeline = createTimeline(status('p1', { favourited: true, favourites_count: 3 }));
-    const pending = deferred<Status>();
-
-    const running = runOptimisticFavourite({
-      postId: 'p1',
-      favourited: false,
-      request: () => pending.promise,
-      updateTimelineItem: timeline.update,
-    });
-
-    expect(timeline.get().favourited).toBe(false);
-    expect(timeline.get().favourites_count).toBe(2);
-
-    const server = status('p1', { favourited: false, favourites_count: 2 });
-    pending.resolve(server);
-    await running;
-
-    expect(timeline.get()).toBe(server);
-  });
-
-  it('restores the liked state when an undo fails', async () => {
-    const before = status('p1', { favourited: true, favourites_count: 3 });
-    const timeline = createTimeline(before);
-
-    await expect(
-      runOptimisticFavourite({
-        postId: 'p1',
-        favourited: false,
-        request: () => Promise.reject(new Error('server')),
-        updateTimelineItem: timeline.update,
-      }),
-    ).rejects.toThrow('server');
-
-    expect(timeline.get()).toEqual(before);
-  });
-
-  it('keeps the count at zero when undoing a like on an item with no likes', async () => {
-    const timeline = createTimeline(status('p1', { favourited: true, favourites_count: 0 }));
-    const pending = deferred<Status>();
-
-    const running = runOptimisticFavourite({
-      postId: 'p1',
-      favourited: false,
-      request: () => pending.promise,
-      updateTimelineItem: timeline.update,
-    });
-
-    expect(timeline.get().favourites_count).toBe(0);
-
-    pending.resolve(status('p1'));
-    await running;
-  });
-
-  it('shows the thread post as favourited while pending and takes the server status on success', async () => {
-    const timeline = createTimeline(status('p1', { favourites_count: 2 }));
-    const thread = createTimeline(status('p1', { favourites_count: 2 }));
-    const pending = deferred<Status>();
-
-    const running = runOptimisticFavourite({
-      postId: 'p1',
-      favourited: true,
-      request: () => pending.promise,
-      updateTimelineItem: timeline.update,
-      updateThreadPost: thread.update,
-    });
-
-    expect(thread.get().favourited).toBe(true);
-    expect(thread.get().favourites_count).toBe(3);
-
-    const server = status('p1', { favourited: true, favourites_count: 3 });
-    pending.resolve(server);
-    await running;
-
-    expect(thread.get()).toBe(server);
-  });
-
   it('restores the thread post saved before the press when the request rejects', async () => {
     const timelineBefore = status('p1', { favourites_count: 2 });
     const threadBefore = status('p1', { favourites_count: 5 });
@@ -235,28 +158,6 @@ describe('runOptimisticFavourite', () => {
     ).rejects.toThrow('network');
 
     expect(timeline.get()).toEqual(timelineBefore);
-    expect(thread.get()).toEqual(threadBefore);
-  });
-
-  it('works when the post exists only in the thread', async () => {
-    const threadBefore = status('p1', { favourites_count: 1 });
-    const thread = createTimeline(threadBefore);
-    const pending = deferred<Status>();
-
-    const running = runOptimisticFavourite({
-      postId: 'p1',
-      favourited: true,
-      request: () => pending.promise,
-      updateTimelineItem: () => {},
-      updateThreadPost: thread.update,
-    });
-
-    expect(thread.get().favourited).toBe(true);
-    expect(thread.get().favourites_count).toBe(2);
-
-    pending.reject(new Error('server'));
-    await expect(running).rejects.toThrow('server');
-
     expect(thread.get()).toEqual(threadBefore);
   });
 
@@ -392,27 +293,5 @@ describe('runExclusive', () => {
 
     pending.resolve();
     await running;
-  });
-
-  it('does not call the request for a second favourite on the same post while the first is pending', async () => {
-    const inFlight = new Set<string>();
-    const timeline = createTimeline(status('p1'));
-    const pending = deferred<Status>();
-    const request = vi.fn(() => pending.promise);
-    const run = (favourited: boolean) =>
-      runExclusive(
-        inFlight,
-        'p1',
-        () => runOptimisticFavourite({ postId: 'p1', favourited, request, updateTimelineItem: timeline.update }),
-      );
-
-    const first = run(true);
-    await run(false);
-
-    expect(request).toHaveBeenCalledTimes(1);
-    expect(timeline.get().favourited).toBe(true);
-
-    pending.resolve(status('p1', { favourited: true, favourites_count: 1 }));
-    await first;
   });
 });

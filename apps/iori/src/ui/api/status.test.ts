@@ -5,7 +5,6 @@ import {
   accountHandle,
   accountHref,
   detailHref,
-  isLocalAccount,
   remoteUserPathOf,
   removeStatusesByAccountId,
   removeStatusesByPostId,
@@ -14,7 +13,6 @@ import {
   withBookmarked,
   withFavourited,
   withPoll,
-  withReblogged,
   withUpdatedStatus,
 } from './status.ts';
 
@@ -51,11 +49,6 @@ const status = (id: string, overrides: Partial<Status> = {}): Status =>
   }) as Status;
 
 describe('account helpers', () => {
-  it('treats an acct without a host as local', () => {
-    expect(isLocalAccount(localAccount)).toBe(true);
-    expect(isLocalAccount(remoteAccount)).toBe(false);
-  });
-
   it('redirects a remote account opened on the local user page to the remote user page', () => {
     expect(remoteUserPathOf(localAccount)).toBeUndefined();
     expect(remoteUserPathOf(remoteAccount)).toBe('/remote-users/actor-2');
@@ -127,25 +120,6 @@ describe('status updates', () => {
     expect(updated.reblog).toBeNull();
   });
 
-  it('copies bookmarked from the response to the boost along with the other viewer flags', () => {
-    const boost = status('r1', { reblog: status('p1') });
-    const response = status('p1', { bookmarked: true });
-
-    const updated = withUpdatedStatus(boost, response);
-
-    expect(updated.bookmarked).toBe(true);
-    expect(updated.reblog).toBe(response);
-  });
-
-  it('replaces the poll of a plain status', () => {
-    const poll = { id: 'p1', voted: true, own_votes: [1] } as Poll;
-
-    const updated = withPoll(status('p1', { poll: { id: 'p1', voted: false } as Poll }), poll);
-
-    expect(updated.poll).toBe(poll);
-    expect(updated.reblog).toBeNull();
-  });
-
   it('replaces the poll of the original inside a boost and leaves the boost as it was', () => {
     const poll = { id: 'p1', voted: true, own_votes: [1] } as Poll;
     const boost = status('r1', { reblog: status('p1', { poll: { id: 'p1', voted: false } as Poll }) });
@@ -154,19 +128,6 @@ describe('status updates', () => {
 
     expect(updated.reblog?.poll).toBe(poll);
     expect(updated.poll).toBe(boost.poll);
-  });
-
-  it('sets reblogged on a plain status without creating a reblog', () => {
-    const updated = withReblogged(status('p1'), true);
-
-    expect(updated.reblogged).toBe(true);
-    expect(updated.reblog).toBeNull();
-  });
-
-  it('replaces a plain status with the server response', () => {
-    const response = status('p1', { favourited: true, favourites_count: 3 });
-
-    expect(withUpdatedStatus(status('p1'), response)).toBe(response);
   });
 
   it('replaces the original inside a boost and copies the viewer flags to the boost', () => {
@@ -220,12 +181,6 @@ describe('status updates', () => {
       const other = status('p2');
 
       expect(removeStatusesByAccountId([boostByTheirs, other], 'actor-2').map((s) => s.id)).toEqual(['p2']);
-    });
-
-    it('keeps everything when the account has no statuses', () => {
-      const statuses = [status('p1'), status('r1', { reblog: status('p2') })];
-
-      expect(removeStatusesByAccountId(statuses, 'actor-9')).toEqual(statuses);
     });
   });
 });

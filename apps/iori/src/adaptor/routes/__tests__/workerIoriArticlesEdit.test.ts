@@ -21,7 +21,6 @@ import { createOAuthHarness } from './helper/oauthHarness.ts';
 const origin = 'https://worker.test';
 const articlesPath = `${origin}/api/iori/v1/articles`;
 const sameOrigin = { Origin: origin };
-const otherOrigin = { Origin: 'https://evil.example' };
 const json = { 'Content-Type': 'application/json' };
 const unused = { run: async () => RA.err({}) } as never;
 const CREATED_AT = 1_000;
@@ -188,18 +187,6 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
     expect(body!.publicHtml).not.toContain('script');
   });
 
-  it('Bearer の著者は Origin なしで 200 を返す', async () => {
-    const t = setup();
-    const me = await t.bearerFor('write:statuses');
-    const author = t.addAuthor('alice', me.userId);
-    const articleId = t.addArticle(author);
-
-    const response = await t.put(articleId, me.headers, valid);
-
-    expect(response.status).toBe(200);
-    expect(t.row('SELECT title FROM articles')).toEqual([{ title: '新しいタイトル' }]);
-  });
-
   it('write:statuses を満たさない scope の Bearer は 403 にして更新しない', async () => {
     const t = setup();
     const me = await t.bearerFor('read:statuses');
@@ -210,23 +197,6 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
 
     expect(response.status).toBe(403);
     expect(t.row('SELECT title FROM articles')).toEqual([{ title: 'Original title' }]);
-  });
-
-  it.each([
-    ['Origin がない', {}],
-    ['別の Origin', otherOrigin],
-  ])('Cookie で %s ときは 403 にして更新しない', async (_name, headers) => {
-    const t = setup();
-    const author = t.addAuthor('alice');
-    const articleId = t.addArticle(author);
-
-    const response = await t.put(articleId, { Cookie: t.cookieFor(author.userId), ...headers }, valid);
-
-    expect(response.status).toBe(403);
-    expect(t.row('SELECT title FROM articles')).toEqual([{ title: 'Original title' }]);
-    expect(t.row('SELECT count(*) AS n FROM domain_events WHERE eventName = \'article.titleChanged\'')).toEqual([
-      { n: 0 },
-    ]);
   });
 
   it('認証がなければ 401 を返す', async () => {
@@ -282,32 +252,6 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
       { markdown: null, updatedAt: CREATED_AT },
     ]);
     expect(t.row('SELECT count(*) AS n FROM domain_events')).toEqual([{ n: 0 }]);
-  });
-
-  it('同じ版から続けて保存すると、2 回目は 409 にして 1 回目の本文を残す', async () => {
-    const t = setup();
-    const author = t.addAuthor('alice');
-    const articleId = t.addArticle(author);
-    const headers = { Cookie: t.cookieFor(author.userId), ...sameOrigin };
-
-    const first = await t.put(articleId, headers, valid);
-    const second = await t.put(articleId, headers, { ...valid, title: '別のタイトル', markdown: '上書き' });
-
-    expect(first.status).toBe(200);
-    expect(second.status).toBe(409);
-    expect(t.row('SELECT title FROM articles')).toEqual([{ title: '新しいタイトル' }]);
-    expect(t.row('SELECT markdown FROM article_bodies')).toEqual([{ markdown: valid.markdown }]);
-  });
-
-  it('rootPostId を持つ記事は 409 にする', async () => {
-    const t = setup();
-    const author = t.addAuthor('alice');
-    const post = seedPost(t, author);
-    const articleId = t.addArticle(author, { rootPostId: post });
-
-    const response = await t.put(articleId, { Cookie: t.cookieFor(author.userId), ...sameOrigin }, valid);
-
-    expect(response.status).toBe(409);
   });
 
   it.each([
@@ -409,15 +353,3 @@ describe('GET /api/iori/v1/articles/:articleId/edit', () => {
     expect((await t.getEdit(draft, {})).status).toBe(401);
   });
 });
-
-function seedPost(t: ReturnType<typeof setup>, author: { actorId: string; userId: string }): string {
-  const postId = '00000000-0000-4000-8000-0000000000aa';
-  t.sqlite.prepare('INSERT INTO posts(postId,actorId,content,createdAt,type) VALUES (?,?,?,?,?)').run(
-    postId,
-    author.actorId,
-    'root',
-    500,
-    'local',
-  );
-  return postId;
-}

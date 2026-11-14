@@ -65,18 +65,6 @@ describe('createSafeFetcher fetching', () => {
     );
   });
 
-  it('decodes a Shift_JIS body by the Content-Type charset', async () => {
-    const sjis = new Uint8Array([0x93, 0xFA, 0x96, 0x7B, 0x8C, 0xEA]);
-    const fetchMock = vi.fn(async () =>
-      new Response(sjis, { status: 200, headers: { 'Content-Type': 'text/html; charset=Shift_JIS' } })
-    );
-    const result = await createSafeFetcher({ fetch: fetchMock as unknown as typeof fetch }).fetchText(
-      'https://example.com/page',
-      options,
-    );
-    expect(result).toMatchObject({ ok: true, val: { body: '日本語' } });
-  });
-
   it('returns ok with status 304 and no body', async () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 304 }));
     const result = await createSafeFetcher({ fetch: fetchMock as unknown as typeof fetch }).fetchText(

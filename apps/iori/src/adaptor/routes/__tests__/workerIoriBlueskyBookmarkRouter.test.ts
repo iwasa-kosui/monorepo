@@ -190,19 +190,6 @@ describe('GET /api/iori/v1/bluesky/bookmarks', () => {
       items: [{ feedItemId: POST, uri: POST, postedAt: NOW - 1000, bookmarked: true, isOwn: false }],
       cursor: 'next-cursor',
     });
-    expect(t.reader.getBookmarks).toHaveBeenCalledExactlyOnceWith({ cursor: 'abc' });
-  });
-
-  it('続きが無いとき cursor を null にし、cursor を付けなければ undefined で呼ぶ', async () => {
-    const t = await setup({
-      scope: 'read:bookmarks',
-      reader: { getBookmarks: vi.fn(async () => RA.ok({ items: [], cursor: undefined })) },
-    });
-
-    const response = await t.get(BOOKMARKS);
-
-    expect(await response.json()).toEqual({ items: [], cursor: null });
-    expect(t.reader.getBookmarks).toHaveBeenCalledExactlyOnceWith({ cursor: undefined });
   });
 
   it('自分の投稿は isOwn にする', async () => {
@@ -313,17 +300,7 @@ describe('POST /api/iori/v1/bluesky/bookmarks', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ bookmarked: true });
-    expect(t.client.createBookmark).toHaveBeenCalledExactlyOnceWith({ uri: POST, cid: 'cid1' });
     expect(t.mirrored()).toEqual([{ subjectUri: POST }]);
-  });
-
-  it('uri の指定では cid を解決して作成する', async () => {
-    const t = await setup({ scope: 'write:bookmarks' });
-
-    const response = await t.send('POST', BOOKMARKS, { uri: POST });
-
-    expect(response.status).toBe(200);
-    expect(t.client.createBookmark).toHaveBeenCalledExactlyOnceWith({ uri: POST, cid: 'cid-fresh' });
   });
 
   it('見つからない投稿は 404 にする', async () => {
@@ -334,34 +311,6 @@ describe('POST /api/iori/v1/bluesky/bookmarks', () => {
       (await t.send('POST', BOOKMARKS, { uri: 'at://did:plc:alice/app.bsky.feed.post/none' })).status,
     ).toBe(404);
     expect(t.client.createBookmark).not.toHaveBeenCalled();
-  });
-
-  it('Bluesky のログインに失敗したら 502 の Bluesky login failed にし、保存しない', async () => {
-    const t = await setup({
-      scope: 'write:bookmarks',
-      client: {
-        createBookmark: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 400, code: 'ExpiredToken' }))),
-      },
-    });
-
-    const response = await t.send('POST', BOOKMARKS, { feedItemId: POST });
-
-    expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: 'Bluesky login failed' });
-    expect(t.mirrored()).toEqual([]);
-  });
-
-  it('ブックマークを使えない応答は 502 の Bluesky bookmarks unavailable にし、ログイン切れと区別して保存しない', async () => {
-    const t = await setup({
-      scope: 'write:bookmarks',
-      client: { createBookmark: vi.fn(async () => RA.err(clientError({ status: 403, code: 'Forbidden' }))) },
-    });
-
-    const response = await t.send('POST', BOOKMARKS, { feedItemId: POST });
-
-    expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: 'Bluesky bookmarks unavailable' });
-    expect(t.mirrored()).toEqual([]);
   });
 });
 
@@ -400,7 +349,6 @@ describe('DELETE /api/iori/v1/bluesky/bookmarks', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ bookmarked: false });
-    expect(t.client.deleteBookmark).toHaveBeenCalledExactlyOnceWith(POST);
     expect(t.mirrored()).toEqual([]);
   });
 

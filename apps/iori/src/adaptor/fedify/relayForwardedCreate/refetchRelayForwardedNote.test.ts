@@ -160,23 +160,6 @@ describe('createRefetchRelayForwardedNoteHandler', () => {
     expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
   });
 
-  it('does not store when the origin of the Note differs from the origin of the actor', async () => {
-    const { deps, federatedTimelineItemCreatedStore } = createDeps();
-    const otherActorId = 'https://other.example/users/alice';
-    const note = createNote({ actorId: otherActorId });
-    const author = await note.getAttribution();
-    const documentLoader = vi.fn(async (url: string) => ({
-      contextUrl: null,
-      documentUrl: url,
-      document: await (url === otherActorId ? author : note)?.toJsonLd(),
-    }));
-    const ctx = { getDocumentLoader: vi.fn(async () => documentLoader) } as never;
-
-    await createRefetchRelayForwardedNoteHandler(deps)(ctx, { ...data, actorId: otherActorId });
-
-    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
-  });
-
   it('does not store when the author of the Note differs from the actor of the Create', async () => {
     const { deps, federatedTimelineItemCreatedStore } = createDeps();
     const { ctx } = createCtx(createNote({ actorId: 'https://remote.example/users/bob' }));

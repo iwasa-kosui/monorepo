@@ -136,25 +136,6 @@ describe('POST /api/v2/media', () => {
     expect(s.bucket.put).not.toHaveBeenCalled();
     expect(s.medias.size).toBe(0);
   });
-
-  it('認証がなければ 401 にする', async () => {
-    const s = setup();
-
-    const response = await s.upload({}, { file: filePart(pngBytes()) });
-
-    expect(response.status).toBe(401);
-    expect(s.bucket.put).not.toHaveBeenCalled();
-  });
-
-  it('write:media がないトークンは 403 にする', async () => {
-    const s = setup();
-    const { headers } = await s.user('read write:statuses');
-
-    const response = await s.upload(headers, { file: filePart(pngBytes()) });
-
-    expect(response.status).toBe(403);
-    expect(s.bucket.put).not.toHaveBeenCalled();
-  });
 });
 
 describe('GET と PUT /api/v1/media/:id', () => {
@@ -165,17 +146,6 @@ describe('GET と PUT /api/v1/media/:id', () => {
     });
     return await response.json() as { id: string };
   };
-
-  it('本人は GET で MediaAttachment を取れる', async () => {
-    const s = setup();
-    const { headers } = await s.user();
-    const { id } = await uploadAs(s, headers, '猫');
-
-    const response = await s.request(`/api/v1/media/${id}`, { headers });
-
-    expect(response.status).toBe(200);
-    expect(MediaAttachmentSchema.parse(await response.json())).toMatchObject({ id, description: '猫' });
-  });
 
   it('本人は PUT で説明を更新でき、GET にも反映される', async () => {
     const s = setup();

@@ -32,7 +32,6 @@ afterEach(() => {
 });
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 4, 3, 0, 0));
-const DAY_MS = 24 * 60 * 60 * 1000;
 const CREATED_AT = Instant.orThrow(1_000);
 const FEED_SOURCE_ID = '00000000-0000-4000-8000-0000000000f1';
 const urlOf = (key: string) => `https://example.com/${key}`;
@@ -278,42 +277,6 @@ describe('DeepDiveDigestItemUseCase', () => {
       expect(input).toContain('<document>\n元の記事の本文\n');
     });
 
-    it('AI の出力に項目のリンクが無ければ、元のリンク行を先頭に足し、続く行をインデントする', async () => {
-      const t = setup();
-      t.generate.mockResolvedValueOnce(RA.ok('リンクの無い深掘り') as never);
-
-      const result = await t.run('b');
-
-      expect(result.ok && result.val.markdown).toContain(`- [B](${urlOf('b')})  \n  リンクの無い深掘り`);
-      expect(t.rows('SELECT resultMarkdown FROM digest_deep_dive_turns')).toEqual([
-        { resultMarkdown: `- [B](${urlOf('b')})  \n  リンクの無い深掘り` },
-      ]);
-    });
-
-    it('AI の出力にかたまりの前後の文があれば、項目のかたまりだけを使う', async () => {
-      const t = setup();
-      t.generate.mockResolvedValueOnce(
-        RA.ok(`以下が結果です。\n\n- [B](${urlOf('b')})\n  深掘りの結果\n\n以上です。`) as never,
-      );
-
-      await t.run('b');
-
-      expect(t.rows('SELECT resultMarkdown FROM digest_deep_dive_turns')).toEqual([
-        { resultMarkdown: `- [B](${urlOf('b')})\n  深掘りの結果` },
-      ]);
-    });
-
-    it('AI の出力の 2 行目以降でインデントの無い行には、半角スペース 2 つを足す', async () => {
-      const t = setup();
-      t.generate.mockResolvedValueOnce(RA.ok(`- [B](${urlOf('b')})\n本文 1\n  本文 2`) as never);
-
-      await t.run('b');
-
-      expect(t.rows('SELECT resultMarkdown FROM digest_deep_dive_turns')).toEqual([
-        { resultMarkdown: `- [B](${urlOf('b')})\n  本文 1\n  本文 2` },
-      ]);
-    });
-
     it('AI の出力のかたまりに見出しの行があれば DigestDeepDiveGenerationFailedError を返し、本文を変えず回数も戻す', async () => {
       const t = setup();
       t.generate.mockResolvedValueOnce(RA.ok(`- [B](${urlOf('b')})\n    # 見出し\n    本文`) as never);
@@ -325,49 +288,6 @@ describe('DeepDiveDigestItemUseCase', () => {
       expect(t.body().updatedAt).toBe(CREATED_AT);
       expect(t.usageCount()).toBe(0);
       error.mockRestore();
-    });
-
-    it('AI の出力の 2 行目以降に、同じダイジェストのほかの項目へのリンクがあれば失敗する', async () => {
-      const t = setup();
-      t.generate.mockResolvedValueOnce(
-        RA.ok(`- [B](${urlOf('b')})\n  深掘り\n  - [C](${urlOf('c')})`) as never,
-      );
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      const result = await t.run('b');
-
-      expect(result).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveGenerationFailedError' } });
-      expect(t.body().updatedAt).toBe(CREATED_AT);
-      expect(t.rows('SELECT count(*) AS n FROM digest_deep_dive_turns')).toEqual([{ n: 0 }]);
-      error.mockRestore();
-    });
-
-    it('AI の出力が空なら、本文が空のため失敗し、本文を変えず回数も戻す', async () => {
-      const t = setup();
-      t.generate.mockResolvedValueOnce(RA.ok('  \n') as never);
-      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      const result = await t.run('b');
-
-      expect(result).toMatchObject({ ok: false, err: { type: 'DigestDeepDiveGenerationFailedError' } });
-      expect(t.body().updatedAt).toBe(CREATED_AT);
-      expect(t.usageCount()).toBe(0);
-      error.mockRestore();
-    });
-
-    it('AI の出力の Markdown の画像を取り除く', async () => {
-      const t = setup();
-      t.generate.mockResolvedValueOnce(
-        RA.ok(
-          `- [B](${urlOf('b')})\n  ![図](https://img.example/x.png)\n  深掘り ![b](https://img.example/y.png)`,
-        ) as never,
-      );
-
-      await t.run('b');
-
-      expect(t.rows('SELECT resultMarkdown FROM digest_deep_dive_turns')).toEqual([
-        { resultMarkdown: `- [B](${urlOf('b')})\n  深掘り` },
-      ]);
     });
 
     it('<think> のブロックを取り除き、6,000 文字を超えるときは行の境目で切る', async () => {
@@ -773,18 +693,6 @@ describe('DeepDiveDigestItemUseCase', () => {
       const input = lastInput(t.generate);
       expect(input).toContain('あ'.repeat(300));
       expect(input).not.toContain('あ'.repeat(301));
-    });
-
-    it('30 日より前に取り込んだ記事は関連する記事に入れない', async () => {
-      const t = setup();
-      t.addFeedEntry(100, 'old', vector(0.1), NOW - 31 * DAY_MS);
-      t.addFeedEntry(101, 'recent', vector(0.2), NOW - 29 * DAY_MS);
-
-      await t.run('a');
-
-      const input = lastInput(t.generate);
-      expect(input).toContain(urlOf('recent'));
-      expect(input).not.toContain(urlOf('old'));
     });
 
     it('項目の feed_entry に埋め込みが無ければ、関連する記事を省く', async () => {

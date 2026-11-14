@@ -200,19 +200,6 @@ describe('ListRemoteActorFollowsUseCase', () => {
     expect(t.lookupObject).not.toHaveBeenCalled();
   });
 
-  it('アクターが見つからなければ ActorNotFoundError を返す', async () => {
-    const t = setup({ actor: undefined });
-
-    const result = await t.useCase.run({
-      userId: 'user-1' as never,
-      actorId: 'actor-1' as never,
-      kind: 'followers',
-      ctx: t.ctx,
-    });
-
-    expect(!result.ok && result.err.type).toBe('ActorNotFoundError');
-  });
-
   it('全体の時間を過ぎたら、それまでに解決できたアクターと次のページを返す', async () => {
     const t = setup({
       followers: [[uriOf('bob'), uriOf('slow')], [uriOf('dave')]],

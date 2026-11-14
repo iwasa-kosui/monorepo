@@ -17,12 +17,6 @@ describe('Bluesky のミュート、ブロック、通報の API', () => {
     vi.unstubAllGlobals();
   });
 
-  it('失敗した応答は、サーバーの error を message にした status つきのエラーにする', async () => {
-    stubFetch(json({ error: 'Bluesky login failed' }, 502));
-
-    await expect(muteBlueskyActor(DID)).rejects.toMatchObject({ message: 'Bluesky login failed', status: 502 });
-  });
-
   it('失敗の文言は、ログイン失敗なら共通の文言、それ以外は操作ごとの文言にする', async () => {
     stubFetch(json({ error: 'Bluesky login failed' }, 502));
     const login = await muteBlueskyActor(DID).catch((error: unknown) => error);

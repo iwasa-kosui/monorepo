@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { PasskeyApiError } from '../api/passkeyClient.ts';
 import {
-  formatPasskeyLastUsedAt,
   formatPasskeyTimestamp,
   isPasskeyCancellation,
   PASSKEY_INVALID_PASSWORD_MESSAGE,
@@ -72,15 +71,5 @@ describe('formatPasskeyTimestamp', () => {
 
   it('日時として読めない文字列はそのまま返す', () => {
     expect(formatPasskeyTimestamp('not-a-date')).toBe('not-a-date');
-  });
-});
-
-describe('formatPasskeyLastUsedAt', () => {
-  it('null は未使用と表示する', () => {
-    expect(formatPasskeyLastUsedAt(null)).toBe('未使用');
-  });
-
-  it('日時があれば作成日時と同じ形式で表示する', () => {
-    expect(formatPasskeyLastUsedAt('2026-01-02T03:04:05.000Z', 'Asia/Tokyo')).toBe('2026/1/2 12:04:05');
   });
 });

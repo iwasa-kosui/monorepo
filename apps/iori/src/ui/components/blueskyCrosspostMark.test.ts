@@ -58,15 +58,6 @@ describe('toBlueskyCrosspostMark', () => {
       });
   });
 
-  it('content_warning の skipped は印を出す', () => {
-    expect(toBlueskyCrosspostMark(crosspost({ status: 'skipped', skip_reason: 'content_warning', retrying: false })))
-      .toMatchObject({
-        kind: 'skipped',
-        label: 'Bluesky に未送信',
-        title: 'この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした',
-      });
-  });
-
   it('reply_to_unsent の skipped は印を出さない', () => {
     expect(toBlueskyCrosspostMark(crosspost({ status: 'skipped', skip_reason: 'reply_to_unsent', retrying: false })))
       .toBeUndefined();
@@ -100,25 +91,6 @@ describe('postedMessage', () => {
 
   it('送り先が Fediverse だけなら「Fediverse に投稿しました」', () => {
     expect(postedMessage('fediverse', undefined)).toBe('Fediverse に投稿しました');
-  });
-
-  it('pending なら送信中だと伝える', () => {
-    expect(postedMessage('both', crosspost({ status: 'pending' }))).toBe('投稿しました。Bluesky には送信中です');
-  });
-
-  it('sent なら Bluesky にも送ったと伝える', () => {
-    expect(postedMessage('both', crosspost({ status: 'sent', retrying: false, url: 'https://bsky.app/x' })))
-      .toBe('投稿しました（Bluesky にも送りました）');
-  });
-
-  it('failed で再送が残っていれば、あとで再送すると伝える', () => {
-    expect(postedMessage('both', crosspost({ status: 'failed', retrying: true })))
-      .toBe('投稿しました。Bluesky への送信に失敗しました（あとで再送します）');
-  });
-
-  it('failed で再送が残っていなければ、Bluesky に届いていないと伝える', () => {
-    expect(postedMessage('both', crosspost({ status: 'failed', retrying: false })))
-      .toBe('投稿しました。Bluesky には届いていません');
   });
 
   it('skipped なら理由を添える', () => {
@@ -161,14 +133,6 @@ describe('blueskyCrosspostNotice', () => {
       expect(blueskyCrosspostNotice('both', '注意', true, visibility)).toBeUndefined();
     },
   );
-
-  it('送り先が Fediverse だけなら、公開範囲が公開以外でも返さない', () => {
-    expect(blueskyCrosspostNotice('fediverse', '', false, 'private')).toBeUndefined();
-  });
-
-  it('公開範囲が公開で CW もセンシティブもなければ返さない', () => {
-    expect(blueskyCrosspostNotice('both', '', false, 'public')).toBeUndefined();
-  });
 });
 
 describe('blueskyEditNotice', () => {

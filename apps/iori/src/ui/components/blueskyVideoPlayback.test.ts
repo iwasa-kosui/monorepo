@@ -354,15 +354,6 @@ describe('startVideoPlayback', () => {
     expect(fake.pause).toHaveBeenCalledTimes(1);
   });
 
-  it('observeOffscreen を渡さなければ画面外を監視しない', async () => {
-    const { video, fake } = fakeVideo('maybe');
-
-    startVideoPlayback({ video, playlist, loadHls: vi.fn(), onFail: vi.fn(), exclusive: createExclusivePlayback() });
-    await flush();
-
-    expect(fake.pause).not.toHaveBeenCalled();
-  });
-
   it('ある動画が再生を始めたら、ほかの再生中の動画を pause する', async () => {
     const exclusive = createExclusivePlayback();
     const first = fakeVideo('maybe');

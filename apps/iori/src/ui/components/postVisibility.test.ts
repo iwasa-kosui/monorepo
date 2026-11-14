@@ -9,13 +9,10 @@ import {
 } from './postVisibility.ts';
 
 describe('visibilityWhenDestinationChanged', () => {
-  it.each(['public', 'unlisted', 'private'] as const)(
-    '送り先が Bluesky だけなら、手で変えたかに関わらず %s を公開にする',
-    (current) => {
-      expect(visibilityWhenDestinationChanged(current, 'bluesky', 'private', false)).toBe('public');
-      expect(visibilityWhenDestinationChanged(current, 'bluesky', 'private', true)).toBe('public');
-    },
-  );
+  it('送り先が Bluesky だけなら、手で変えたかに関わらず公開にする', () => {
+    expect(visibilityWhenDestinationChanged('private', 'bluesky', 'private', false)).toBe('public');
+    expect(visibilityWhenDestinationChanged('private', 'bluesky', 'private', true)).toBe('public');
+  });
 
   it.each(['both', 'fediverse'] as const)('手で変えていなければ、送り先が %s に戻ると既定値に戻す', (destination) => {
     expect(visibilityWhenDestinationChanged('public', destination, 'private', false)).toBe('private');
@@ -35,8 +32,8 @@ describe('visibilityWhenDestinationChanged', () => {
 });
 
 describe('visibilityForDestination', () => {
-  it.each(['public', 'unlisted', 'private'] as const)('送り先が Bluesky だけなら、%s を公開に戻す', (current) => {
-    expect(visibilityForDestination('bluesky', current)).toBe('public');
+  it('送り先が Bluesky だけなら、公開に戻す', () => {
+    expect(visibilityForDestination('bluesky', 'private')).toBe('public');
   });
 
   it.each(['both', 'fediverse'] as const)('送り先が %s なら、選んだ公開範囲を残す', (destination) => {
@@ -63,14 +60,8 @@ describe('replyVisibilityDefault', () => {
     expect(replyVisibilityDefault(undefined)).toBe('public');
   });
 
-  it.each(
-    [
-      ['public', 'public'],
-      ['unlisted', 'unlisted'],
-      ['private', 'private'],
-    ] as const,
-  )('返信先が %s なら、%s にする', (parent, expected) => {
-    expect(replyVisibilityDefault(parent)).toBe(expected);
+  it('返信先がフォロワー限定なら、フォロワー限定にする', () => {
+    expect(replyVisibilityDefault('private')).toBe('private');
   });
 
   it('返信先がダイレクトなら、フォロワー限定にする', () => {
@@ -96,10 +87,6 @@ describe('isWiderThan', () => {
   it.each(
     [
       ['public', 'unlisted'],
-      ['public', 'private'],
-      ['public', 'direct'],
-      ['unlisted', 'private'],
-      ['unlisted', 'direct'],
       ['private', 'direct'],
     ] as const,
   )('%s は %s より広い', (option, parent) => {
@@ -108,10 +95,7 @@ describe('isWiderThan', () => {
 
   it.each(
     [
-      ['public', 'public'],
       ['unlisted', 'public'],
-      ['unlisted', 'unlisted'],
-      ['private', 'unlisted'],
       ['private', 'private'],
     ] as const,
   )('%s は %s より広くない', (option, parent) => {

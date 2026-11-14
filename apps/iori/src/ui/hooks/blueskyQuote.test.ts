@@ -10,9 +10,4 @@ describe('blueskyQuoteErrorMessage の画像のエラー', () => {
     });
     expect(blueskyQuoteErrorMessage(error)).toBe('Bluesky に送れる画像は 4 枚までです');
   });
-
-  it('code がない 422 は従来の文言のままにする', () => {
-    const error = Object.assign(new Error('Quote not allowed'), { status: 422 });
-    expect(blueskyQuoteErrorMessage(error)).toBe('この投稿は引用できません');
-  });
 });

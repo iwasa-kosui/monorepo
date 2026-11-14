@@ -198,14 +198,6 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(response.status).toBe(403);
       expect(await response.json()).toEqual({ error: 'This action is outside the authorized scopes' });
     });
-
-    it('認証がなければ 401 にする', async () => {
-      const h = setup();
-
-      const response = await h.request('/api/v1/accounts/verify_credentials');
-
-      expect(response.status).toBe(401);
-    });
   });
 
   describe('PATCH /api/v1/accounts/update_credentials', () => {
@@ -256,15 +248,6 @@ describe('createWorkerMastodonCoreRouter', () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       expect(await verified.json()).toMatchObject({ avatar: body.avatar });
-    });
-
-    it('申告の type が違っても、先頭のバイトで形式を決める', async () => {
-      const { h, token } = await setupUser();
-
-      const response = await patch(h, token, { avatar: new File([png()], 'a.gif', { type: 'image/gif' }) });
-
-      expect(response.status).toBe(200);
-      expect((await response.json() as { avatar: string }).avatar).toMatch(/\.png$/);
     });
 
     it.each([

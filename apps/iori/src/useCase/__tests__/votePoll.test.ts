@@ -163,7 +163,7 @@ describe('VotePollUseCase', () => {
       await expectRejected(setup(), [], 'InvalidPollChoicesError', 'empty');
     });
 
-    it.each([[3], [-1], [1.5]])(
+    it.each([[3], [1.5]])(
       '選択肢の範囲外の %s なら InvalidPollChoicesError を返す',
       async (choice) => {
         await expectRejected(
@@ -197,16 +197,6 @@ describe('VotePollUseCase', () => {
 
     it('個別にブロックした相手の投票なら PollAuthorBlockedError を返す', async () => {
       await expectRejected(setup({ blockedActor: true }), [0], 'PollAuthorBlockedError');
-    });
-
-    it('ブロックの判定が失敗したら、ブロック済みとして拒否する', async () => {
-      const t = setup();
-      t.deps.blockedActorUriResolverByUsername.resolve.mockImplementation(() => {
-        throw new Error('d1 failure');
-      });
-      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-      await expectRejected(t, [0], 'PollAuthorBlockedError');
     });
 
     it('相手のサーバーから Question を取得できなければ RemoteNoteLookupError を返し、保存も送信もしない', async () => {

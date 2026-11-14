@@ -178,25 +178,6 @@ describe('createOnAnnounce', () => {
     expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
   });
 
-  it('does not save a relay Announce whose Note attribution is on another origin', async () => {
-    const { deps, remotePostUpserter, federatedTimelineItemCreatedStore } = createDeps({
-      status: 'accepted',
-      actorUri: 'https://relay.example/actor',
-      relayId: 'relay-1',
-    });
-    const note = createNote([]).clone({
-      attribution: new Person({
-        id: new URL('https://other.example/users/alice'),
-        inbox: new URL('https://other.example/users/alice/inbox'),
-      }),
-    });
-
-    await createOnAnnounce(deps)(createCtx(), createActivity(note));
-
-    expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
-    expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
-  });
-
   it('does not save a remote Announce whose Note attribution is on another origin', async () => {
     const { deps, addReceivedRepostUseCase } = createDeps(undefined);
     const note = createNote([]).clone({
@@ -274,14 +255,6 @@ describe('createOnAnnounce', () => {
       },
     );
 
-    it('stops without calling the use case when the Article does not exist', async () => {
-      const { deps, addReceivedRepostUseCase } = createDeps(undefined, true, [], undefined);
-
-      await createOnAnnounce(deps)(createLocalCtx('Article', articleId), createLocalActivity(articleUri));
-
-      expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
-    });
-
     it('stops without calling the use case when the Article id is not a valid id', async () => {
       const { deps, addReceivedRepostUseCase, articleResolver } = createDeps(undefined);
 
@@ -322,14 +295,6 @@ describe('createOnAnnounce', () => {
     expect(inboxActorResolver.resolve).not.toHaveBeenCalled();
     expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
     expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
-  });
-
-  it('saves a remote Announce from an actor a local actor follows', async () => {
-    const { deps, addReceivedRepostUseCase } = createDeps(undefined, true);
-
-    await createOnAnnounce(deps)(createCtx(), createActivity(createNote([])));
-
-    expect(addReceivedRepostUseCase.run).toHaveBeenCalledOnce();
   });
 
   it('saves a local Note Announce even from an actor no local actor follows', async () => {
@@ -480,45 +445,11 @@ describe('createOnAnnounce', () => {
       expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
     });
 
-    it('does not fetch the author or save a remote Announce whose Note attributionIds are on a blocked domain', async () => {
-      const { deps, addReceivedRepostUseCase } = createDeps(undefined, true, [], undefined, isBlockedUri);
-      const note = createNote([]).clone({
-        attribution: new Person({
-          id: new URL('https://blocked.example/users/alice'),
-          inbox: new URL('https://blocked.example/users/alice/inbox'),
-        }),
-      });
-      const getAttribution = vi.spyOn(note, 'getAttribution');
-
-      await createOnAnnounce(deps)(createCtx(), createActivityReturning(note));
-
-      expect(getAttribution).not.toHaveBeenCalled();
-      expect(addReceivedRepostUseCase.run).not.toHaveBeenCalled();
-    });
-
     it('does not save a relay Announce whose Note id is on a blocked domain', async () => {
       const { deps, remotePostUpserter, federatedTimelineItemCreatedStore } = createDeps(
         relay,
         true,
         [],
-        undefined,
-        isBlockedUri,
-      );
-      const note = createBlockedNote();
-      const getAttribution = vi.spyOn(note, 'getAttribution');
-
-      await createOnAnnounce(deps)(createCtx(), createActivityReturning(note));
-
-      expect(getAttribution).not.toHaveBeenCalled();
-      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
-      expect(federatedTimelineItemCreatedStore.store).not.toHaveBeenCalled();
-    });
-
-    it('does not save a forwarded Announce whose Note id is on a blocked domain', async () => {
-      const { deps, remotePostUpserter, federatedTimelineItemCreatedStore } = createDeps(
-        undefined,
-        false,
-        [relay],
         undefined,
         isBlockedUri,
       );

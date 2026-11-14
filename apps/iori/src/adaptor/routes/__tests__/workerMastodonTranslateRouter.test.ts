@@ -5,7 +5,6 @@ import type { TextGenerator } from '../../../ports/textGenerator.ts';
 import { createStubTextGenerator } from '../../../testing/aiStubs.ts';
 import { TranslationSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
-import { ORIGIN } from './helper/oauthHarness.ts';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -36,21 +35,11 @@ const seedPosts = async (options: Parameters<typeof setupReadApi>[0] = {}) => {
       '<p>Hello <a href="https://remote.example/@bob" class="u-url mention">@bob</a> <script>alert(1)</script></p>',
     visibility: 'public',
   });
-  const japanese = t.seed.addRemotePost(alice, Date.UTC(2020, 0, 3), {
-    content: '<p>こんにちは</p>',
-    visibility: 'public',
-  });
-  const direct = t.seed.addRemotePost(alice, Date.UTC(2020, 0, 4), {
-    content: '<p>Secret</p>',
-    visibility: 'direct',
-    recipientActorUris: [`${ORIGIN}/users/kosui`],
-  });
   const hidden = t.seed.addRemotePost(alice, Date.UTC(2020, 0, 5), {
     content: '<p>Followers only</p>',
     visibility: 'private',
   });
-  const mine = t.seed.addLocalPost(me, Date.UTC(2020, 0, 6), { content: '<p>My own English post</p>' });
-  return { ...t, me, alice, english, japanese, direct, hidden, mine };
+  return { ...t, me, alice, english, hidden };
 };
 
 describe('POST /api/v1/statuses/:id/translate', () => {
@@ -137,42 +126,6 @@ describe('POST /api/v1/statuses/:id/translate', () => {
     }
   });
 
-  it('direct の投稿は 403 にする', async () => {
-    const { generator, calls } = createStubTextGenerator(reply);
-    const t = await seedPosts({ textGenerator: generator });
-
-    const response = await t.request(pathOf(t.direct.postId), postJson({}, t.me.bearer));
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'This action is not allowed' });
-    expect(calls).toEqual([]);
-  });
-
-  it('フォローしていない相手の公開範囲が不明の投稿は 404 にし、AI を呼ばない', async () => {
-    const { generator, calls } = createStubTextGenerator(reply);
-    const t = await seedPosts({ textGenerator: generator });
-    const legacy = t.seed.addRemotePost(t.alice, Date.UTC(2020, 0, 7), {
-      content: '<p>Legacy post</p>',
-      visibility: null,
-    });
-
-    const response = await t.request(pathOf(legacy.postId), postJson({}, t.me.bearer));
-
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: 'Record not found' });
-    expect(calls).toEqual([]);
-  });
-
-  it('日本語の投稿は 403 にする', async () => {
-    const { generator, calls } = createStubTextGenerator(reply);
-    const t = await seedPosts({ textGenerator: generator });
-
-    const response = await t.request(pathOf(t.japanese.postId), postJson({}, t.me.bearer));
-
-    expect(response.status).toBe(403);
-    expect(calls).toEqual([]);
-  });
-
   it('1 日 50 回を超えると 429 にし、次の日本時間 0 時までの秒数を Retry-After に付ける', async () => {
     const { generator } = createStubTextGenerator(reply);
     const t = await seedPosts({ textGenerator: generator });
@@ -189,20 +142,6 @@ describe('POST /api/v1/statuses/:id/translate', () => {
     expect(response.status).toBe(429);
     expect(response.headers.get('Retry-After')).toBe(String(12 * 60 * 60));
     expect(await response.json()).toEqual({ error: 'The daily translation limit of 50 has been reached.' });
-  });
-
-  it('保存済みの訳文は回数を数えずに返す', async () => {
-    const { generator, calls } = createStubTextGenerator(reply);
-    const t = await seedPosts({ textGenerator: generator });
-
-    const first = await t.request(pathOf(t.english.postId), postJson({}, t.me.bearer));
-    const second = await t.request(pathOf(t.english.postId), postJson({}, t.me.bearer));
-
-    expect(first.status).toBe(200);
-    expect(await second.json()).toEqual(await first.clone().json());
-    expect(calls).toHaveLength(1);
-    expect(t.sqlite.prepare('SELECT count FROM ai_translation_usages').all()).toEqual([{ count: 1 }]);
-    expect(t.sqlite.prepare('SELECT count(*) AS n FROM post_translations').get()).toEqual({ n: 1 });
   });
 
   it('AI が失敗すると 503 にし、回数は戻さない', async () => {

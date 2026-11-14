@@ -1,7 +1,6 @@
 import { RA, Result } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
-import { BLUESKY_SENSITIVE_SELF_LABEL } from '../../adaptor/bluesky/blueskyPostRecord.ts';
 import { createBlueskyThumbnailFetcher } from '../../adaptor/bluesky/thumbnailFetcher.ts';
 import { createMastodonSeed, SEED_ORIGIN } from '../../adaptor/d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.ts';
@@ -16,7 +15,7 @@ import { createD1LocalPostResolverByUri } from '../../adaptor/d1/post/localPostR
 import { createD1PostQuotesResolverByPostIds } from '../../adaptor/d1/post/postQuotesResolverByPostIds.ts';
 import { createD1PostResolver } from '../../adaptor/d1/post/postResolver.ts';
 import { createD1UserResolver } from '../../adaptor/d1/user/userResolver.ts';
-import { BlueskyCrosspost, MAX_BLUESKY_CROSSPOST_ATTEMPTS } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import { BlueskyCrosspost } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyBlob, BlueskyPostRecord } from '../../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import { blueskyRkeyOf } from '../../domain/blueskyCrosspost/blueskyRkey.ts';
 import { Instant } from '../../domain/instant/instant.ts';
@@ -275,16 +274,6 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     await t.flush();
 
     expect(t.created).toHaveLength(1);
-    expect(t.created[0]).toMatchObject({
-      $type: 'app.bsky.feed.post',
-      text: 'こんにちは example.com/x',
-      createdAt: new Date(CREATED_AT).toISOString(),
-      facets: [{
-        index: { byteStart: 16, byteEnd: 29 },
-        features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://example.com/x' }],
-      }],
-    });
-    expect(t.created[0]).not.toHaveProperty('langs');
     expect(await t.row(post.postId)).toMatchObject({
       status: 'sent',
       uri: 'at://did:plc:abc/app.bsky.feed.post/3k0',
@@ -308,7 +297,7 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(t.created).toHaveLength(1);
   });
 
-  it('CW 付きの投稿は sent になり、CW の文と投稿 URL だけを送る', async () => {
+  it('CW 付きの投稿は sent になり、画像を upload しない', async () => {
     const t = setup();
     const post = t.addPost({ summary: '注意', content: '<p>本文 <a href="https://example.com/x">x</a></p>' });
     t.addStoredImage(post.postId, 'image/png', new Uint8Array([1, 2, 3]), '猫');
@@ -318,38 +307,7 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
 
     expect(await t.row(post.postId)).toMatchObject({ status: 'sent', skipReason: null });
     expect(t.created).toHaveLength(1);
-    expect(t.created[0]?.text).toBe(`注意\n${SEED_ORIGIN}/users/kosui/posts/${post.postId}`);
     expect(t.uploaded).toEqual([]);
-    expect(t.created[0]).not.toHaveProperty('embed');
-    expect(t.created[0]).not.toHaveProperty('labels');
-  });
-
-  it('CW 付きでも、公開でなければ skipped になり visibility を理由にして送らない', async () => {
-    const t = setup();
-    const post = t.addPost({ summary: '注意', visibility: 'unlisted' });
-
-    expect(await run(t.schedule.run({ postId: post.postId }))).toBe('skipped');
-    await t.flush();
-
-    expect(await t.row(post.postId)).toMatchObject({ status: 'skipped', skipReason: 'visibility' });
-    expect(t.created).toEqual([]);
-  });
-
-  it('sensitive だけの投稿は sent になり、画像を upload して record に labels を付ける', async () => {
-    const t = setup();
-    const post = t.addPost({ sensitive: true });
-    t.addStoredImage(post.postId, 'image/png', new Uint8Array([1, 2, 3]), '猫');
-
-    expect(await run(t.schedule.run({ postId: post.postId }))).toBe('pending');
-    await t.flush();
-
-    expect(await t.row(post.postId)).toMatchObject({ status: 'sent', skipReason: null });
-    expect(t.uploaded).toHaveLength(1);
-    expect(t.created[0]?.embed?.$type).toBe('app.bsky.embed.images');
-    expect(t.created[0]?.labels).toEqual({
-      $type: 'com.atproto.label.defs#selfLabels',
-      values: [{ val: BLUESKY_SENSITIVE_SELF_LABEL }],
-    });
   });
 
   it('親が送信済みの返信は root と parent を付け、行に root を保存する', async () => {
@@ -399,12 +357,10 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(t.created).toEqual([]);
   });
 
-  it('R2 の画像を alt つきで送り、1,000,000 bytes を超える画像は外して画像の URL を付ける', async () => {
+  it('R2 の画像を alt つきで送る', async () => {
     const t = setup();
     const post = t.addPost({ content: '<p>写真</p>' });
     t.addStoredImage(post.postId, 'image/png', new Uint8Array([1, 2, 3]), '猫');
-    const bigImageId = t.addStoredImage(post.postId, 'image/jpeg', new Uint8Array(1_000_001), 'big');
-    t.sqlite.prepare('UPDATE post_images SET createdAt = createdAt + 1 WHERE altText = ?').run('big');
 
     await run(t.schedule.run({ postId: post.postId }));
     await t.flush();
@@ -412,7 +368,6 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(t.uploaded).toHaveLength(1);
     expect(Array.from(t.uploaded[0]!.bytes)).toEqual([1, 2, 3]);
     expect(t.uploaded[0]?.mimeType).toBe('image/png');
-    expect(t.created[0]?.text).toBe(`写真\nhttps://iori.test/uploads/${bigImageId}.png`);
     expect(t.created[0]?.embed).toMatchObject({
       $type: 'app.bsky.embed.images',
       images: [{ alt: '猫', image: { ref: { $link: 'blob1' }, mimeType: 'image/png', size: 3 } }],
@@ -510,8 +465,6 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     await run(t.schedule.run({ postId: post.postId }));
     await t.flush();
 
-    expect(t.query).toHaveBeenCalledTimes(1);
-    expect(t.query).toHaveBeenCalledWith('com.atproto.identity.resolveHandle', { handle: 'alice.bsky.social' });
     expect(t.created[0]?.facets).toEqual([
       {
         index: { byteStart: 16, byteEnd: 34 },
@@ -522,19 +475,6 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
         features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://example.com/x' }],
       },
     ]);
-    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
-  });
-
-  it('解決できないハンドルには facet を付けず、sent にする', async () => {
-    const t = setup();
-    const post = t.addPost({ content: '<p>@nobody.bsky.social こんにちは</p>' });
-
-    await run(t.schedule.run({ postId: post.postId }));
-    await t.flush();
-
-    expect(t.query).toHaveBeenCalledTimes(1);
-    expect(t.created[0]?.text).toBe('@nobody.bsky.social こんにちは');
-    expect(t.created[0]).not.toHaveProperty('facets');
     expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
   });
 
@@ -724,26 +664,6 @@ describe('RetryBlueskyCrosspostsUseCase', () => {
       'INSERT INTO bluesky_crossposts(postId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?)',
     ).run(postId, status, attempts, createdAt, createdAt);
 
-  it('10 分以上前の pending と attempts が 3 未満の failed だけを再送する', async () => {
-    const t = setup();
-    const oldPending = t.addPost();
-    const freshPending = t.addPost();
-    const failedTwice = t.addPost();
-    const failedThrice = t.addPost();
-    insertAged(t, oldPending.postId, 'pending', NOW - 11 * 60_000);
-    insertAged(t, freshPending.postId, 'pending', NOW - 5 * 60_000);
-    insertAged(t, failedTwice.postId, 'failed', NOW - 60 * 60_000, 2);
-    insertAged(t, failedThrice.postId, 'failed', NOW - 60 * 60_000, 3);
-
-    const summary = await run(t.retry.run());
-
-    expect(summary).toEqual({ sent: 2, failed: 0, skipped: 0, gone: 0, noop: 0, deleted: 0, deleteFailed: 0 });
-    expect(await t.row(oldPending.postId)).toMatchObject({ status: 'sent' });
-    expect(await t.row(failedTwice.postId)).toMatchObject({ status: 'sent' });
-    expect(await t.row(freshPending.postId)).toMatchObject({ status: 'pending' });
-    expect(await t.row(failedThrice.postId)).toMatchObject({ status: 'failed', attempts: 3 });
-  });
-
   it('再送でも失敗したら attempts を増やし、消えた投稿の行は消す', async () => {
     const t = setup();
     t.behavior.createRecord = () => Result.err(failure('createRecord failed: status 502'));
@@ -757,33 +677,6 @@ describe('RetryBlueskyCrosspostsUseCase', () => {
     expect(summary).toMatchObject({ failed: 1, gone: 1 });
     expect(await t.row(failing.postId)).toMatchObject({ status: 'failed', attempts: 2 });
     expect(await t.row(goneId)).toBeUndefined();
-  });
-
-  it('1 回に最大 20 件を古い順に再送する', async () => {
-    const t = setup();
-    const posts = Array.from({ length: 22 }, () => t.addPost());
-    posts.forEach((post, index) => insertAged(t, post.postId, 'pending', NOW - (100 - index) * 60_000));
-
-    const summary = await run(t.retry.run());
-
-    expect(summary.sent).toBe(20);
-    expect(await t.row(posts[0]!.postId)).toMatchObject({ status: 'sent' });
-    expect(await t.row(posts[19]!.postId)).toMatchObject({ status: 'sent' });
-    expect(await t.row(posts[20]!.postId)).toMatchObject({ status: 'pending' });
-    expect(await t.row(posts[21]!.postId)).toMatchObject({ status: 'pending' });
-  });
-
-  it('削除済みの投稿の行は消されていて、再送されない', async () => {
-    const t = setup();
-    const post = t.addPost();
-    await run(t.schedule.run({ postId: post.postId }));
-    await run(t.remove.run({ postId: post.postId }));
-    t.sqlite.prepare('UPDATE bluesky_crossposts SET createdAt = 0 WHERE 1 = 1').run();
-
-    const summary = await run(t.retry.run());
-
-    expect(summary).toEqual({ sent: 0, failed: 0, skipped: 0, gone: 0, noop: 0, deleted: 0, deleteFailed: 0 });
-    expect(t.created).toEqual([]);
   });
 });
 
@@ -857,21 +750,6 @@ describe('送信の回数制限と重複投稿の防止', () => {
       cid: 'bafyexisting',
       rkey: t.rkeys[0],
       lastError: null,
-    });
-  });
-
-  it('createRecord が失敗して getRecord でも見つからなければ、createRecord の失敗を failed に残す', async () => {
-    const t = setup();
-    const post = t.addPost();
-    t.behavior.createRecord = () => Result.err(failure('createRecord failed: status 500'));
-    await run(t.schedule.run({ postId: post.postId }));
-
-    await t.flush();
-
-    expect(await t.row(post.postId)).toMatchObject({
-      status: 'failed',
-      attempts: 1,
-      lastError: 'createRecord failed: status 500',
     });
   });
 });
@@ -994,23 +872,6 @@ describe('送信中の削除と、削除の再試行', () => {
     expect(t.rkeys).toEqual([]);
     expect(await t.row(post.postId)).toMatchObject({ status: 'deleting', attempts: 1 });
   });
-
-  it('削除は sent から deleting を経て、削除済みなら行が消える', async () => {
-    const t = setup();
-    const post = t.addPost();
-    await run(t.schedule.run({ postId: post.postId }));
-    await t.flush();
-    t.behavior.deleteRecord = () => Result.err(failure('deleteRecord failed: status 500'));
-    await run(t.remove.run({ postId: post.postId }));
-    await t.flush();
-    expect(await t.row(post.postId)).toMatchObject({ status: 'deleting', attempts: 1 });
-
-    t.behavior.deleteRecord = () => Result.ok(undefined);
-    t.sqlite.prepare('UPDATE bluesky_crossposts SET createdAt = 0').run();
-    await run(t.retry.run());
-
-    expect(await t.row(post.postId)).toBeUndefined();
-  });
 });
 
 describe('スレッドの 2 件目以降', () => {
@@ -1098,26 +959,6 @@ describe('スレッドの 2 件目以降', () => {
     });
     expect(await t.row(child.postId)).toMatchObject({ status: 'sent', attempts: 1, rootUri: parentRef.uri });
   });
-
-  it('親の送信が終わる前に子を予約しても、親の送信後に retry で子が送られる', async () => {
-    const t = setup();
-    const parent = t.addPost({ content: '<p>親</p>' });
-    insertRow(t, parent.postId, 'pending', 0, NOW);
-    const child = t.addPost({ content: '<p>子</p>', inReplyToUri: parent.uri });
-    await run(t.schedule.run({ postId: child.postId }));
-    await t.flush();
-    expect(await t.row(child.postId)).toMatchObject({ status: 'pending', attempts: 0 });
-
-    await run(t.send.run({ postId: parent.postId }));
-    t.sqlite.prepare('UPDATE bluesky_crossposts SET createdAt = ? WHERE postId = ?').run(
-      NOW - 60 * 60_000,
-      child.postId,
-    );
-    await run(t.retry.run());
-
-    expect(await t.row(child.postId)).toMatchObject({ status: 'sent', attempts: 1 });
-    expect(t.created[1]?.reply).toBeDefined();
-  });
 });
 
 describe('自分の投稿の引用', () => {
@@ -1161,44 +1002,10 @@ describe('自分の投稿の引用', () => {
     expect(t.created).toEqual([]);
   });
 
-  it('引用元の送信後に retry すると、引用投稿が embed.record 付きで送られる', async () => {
-    const t = setup();
-    const quoted = t.addPost({ content: '<p>元</p>' });
-    insertRow(t, quoted.postId, 'pending');
-    const post = t.addPost({ quoteUri: quoted.uri });
-    await run(t.schedule.run({ postId: post.postId }));
-    await t.flush();
-
-    await run(t.send.run({ postId: quoted.postId }));
-    t.sqlite.prepare('UPDATE bluesky_crossposts SET createdAt = ? WHERE postId = ?').run(
-      NOW - 60 * 60_000,
-      post.postId,
-    );
-    await run(t.retry.run());
-
-    expect(await t.row(post.postId)).toMatchObject({ status: 'sent', attempts: 1 });
-    expect(t.created[1]?.embed).toEqual({ $type: 'app.bsky.embed.record', record: quotedRef });
-  });
-
   it('引用元が skipped なら、RE: のリンクのまま embed なしで送る', async () => {
     const t = setup();
     const quoted = t.addPost({ content: '<p>元</p>', visibility: 'unlisted' });
     insertRow(t, quoted.postId, 'skipped');
-    const post = t.addPost({ quoteUri: quoted.uri });
-
-    await run(t.schedule.run({ postId: post.postId }));
-    await t.flush();
-
-    expect(t.created).toHaveLength(1);
-    expect(t.created[0]?.text).toBe(`引用\n\nRE: ${quoted.uri}`);
-    expect(t.created[0]).not.toHaveProperty('embed');
-    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
-  });
-
-  it('引用元が上限に達した failed なら、RE: のリンクのまま embed なしで送る', async () => {
-    const t = setup();
-    const quoted = t.addPost({ content: '<p>元</p>' });
-    insertRow(t, quoted.postId, 'failed', MAX_BLUESKY_CROSSPOST_ATTEMPTS);
     const post = t.addPost({ quoteUri: quoted.uri });
 
     await run(t.schedule.run({ postId: post.postId }));

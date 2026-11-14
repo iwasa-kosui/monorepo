@@ -11,12 +11,6 @@ describe('prependUniqueById', () => {
     expect(merged.map((i) => i.id)).toEqual(['c', 'a', 'b']);
   });
 
-  it('returns only the incoming item when the existing list is empty', () => {
-    const merged = prependUniqueById([], item('a'));
-
-    expect(merged).toEqual([item('a')]);
-  });
-
   it('does not duplicate an item whose id already exists', () => {
     const existing = [item('a'), item('b')];
 

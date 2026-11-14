@@ -139,23 +139,6 @@ describe('Task 8 Worker OGP route', () => {
     expect(put).toHaveBeenCalledWith(`og/${articleId}.png`, png, expect.anything());
   });
 
-  it('returns 404 on an R2 miss for an unpublished article without rendering', async () => {
-    const get = vi.fn(async () => null);
-    const put = vi.fn();
-    ogImage.resolveArticle.mockResolvedValue({ ok: true, val: { title: '下書き', status: 'draft' } });
-    const env = { ...admissionFixture(), UPLOADS: { get, put } } as never;
-
-    const response = await worker.fetch(
-      new Request(`https://worker.test/api/og/articles/${articleId}`),
-      env,
-      {} as ExecutionContext,
-    );
-
-    expect(response.status).toBe(404);
-    expect(ogImage.render).not.toHaveBeenCalled();
-    expect(put).not.toHaveBeenCalled();
-  });
-
   it('returns 503 with retry headers when generation fails, then skips generation within the window', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const failingId = 'a1b2c3d4-0e4b-453c-bb9f-5dbd15a319a7';

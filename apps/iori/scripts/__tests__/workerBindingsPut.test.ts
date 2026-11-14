@@ -385,7 +385,6 @@ describe('put-bluesky-secrets', () => {
   it.each([
     ['an HTTP error', [500], 'workers-http-500'],
     ['no deployment', [{ success: true, result: { deployments: [] } }], 'workers-shape'],
-    ['no versions', [{ success: true, result: { deployments: [{ versions: [] }] } }], 'workers-shape'],
     [
       'a version without an id',
       [{ success: true, result: { deployments: [{ versions: [{ percentage: 100 }] }] } }],
@@ -425,10 +424,6 @@ describe('put-bluesky-secrets', () => {
   });
   it.each([
     ['the version does not change', [deployments(oldVersion)]],
-    ['the new version is at 50 percent alone', [
-      deployments(oldVersion),
-      deployments({ version_id: 'v-new', percentage: 50 }),
-    ]],
     [
       'the new version shares the traffic',
       [

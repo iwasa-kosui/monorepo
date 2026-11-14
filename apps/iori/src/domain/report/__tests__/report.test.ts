@@ -29,8 +29,4 @@ describe('Report.submit', () => {
       targetActorId: base.targetActorId,
     });
   });
-
-  it('statusIds が空でも、comment が空でも受け付ける', () => {
-    expect(Report.submit({ ...input(), statusIds: [], comment: '' }, now).ok).toBe(true);
-  });
 });

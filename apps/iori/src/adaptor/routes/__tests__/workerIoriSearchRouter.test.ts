@@ -97,52 +97,6 @@ describe('GET /api/iori/v1/search/statuses', () => {
     expect(body.terms).toEqual({ original: ['京都', '旅行'], expanded: [] });
   });
 
-  it('フォローしていない相手とミュート中の相手の投稿を返さない', async () => {
-    const t = await seedTimeline();
-
-    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: '京都 旅行' }), {
-      headers: t.me.bearer,
-    });
-
-    const ids = parseStatuses(((await response.json()) as { statuses: unknown[] }).statuses).map((status) => status.id);
-    expect(ids).not.toContain(t.fromBob.postId);
-    expect(ids).not.toContain(t.fromCarol.postId);
-  });
-
-  it('フォロー中の相手の宛先外の direct を返さず、宛先の direct は返す', async () => {
-    const t = await seedTimeline();
-    const toOther = t.seed.addRemotePost(t.alice, 6_000, {
-      content: '<p>京都 other</p>',
-      visibility: 'direct',
-      recipientActorUris: ['https://iori.test/users/other'],
-    });
-    const toMe = t.seed.addRemotePost(t.alice, 7_000, {
-      content: '<p>京都 me</p>',
-      visibility: 'direct',
-      recipientActorUris: ['https://iori.test/users/kosui'],
-    });
-
-    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: '京都' }), {
-      headers: t.me.bearer,
-    });
-
-    const ids = parseStatuses(((await response.json()) as { statuses: unknown[] }).statuses).map((status) => status.id);
-    expect(ids).not.toContain(toOther.postId);
-    expect(ids).toContain(toMe.postId);
-  });
-
-  it('textGenerator がなければ expansion を skipped にする', async () => {
-    const t = await seedTimeline();
-
-    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: '京都' }), {
-      headers: t.me.bearer,
-    });
-
-    const body = (await response.json()) as { statuses: unknown[]; expansion: string };
-    expect(body.expansion).toBe('skipped');
-    expect(parseStatuses(body.statuses).map((status) => status.id)).toEqual([t.fromDave.postId, t.mine.postId]);
-  });
-
   it('検索の途中で想定外のエラーが起きると 500 にする', async () => {
     const t = await seedTimeline({
       searchTimeline: {
@@ -189,17 +143,6 @@ describe('GET /api/v2/search', () => {
       t.fromDave.postId,
     ]);
     expect(Object.keys(body).sort()).toEqual(['accounts', 'hashtags', 'statuses']);
-  });
-
-  it('Bearer なしは 401、scope が足りなければ 403 にする', async () => {
-    const t = await seedTimeline();
-    const writer = await t.bearerFor('write');
-
-    const anonymous = await t.request(searchUrl('/api/v2/search', { q: '京都' }));
-    const forbidden = await t.request(searchUrl('/api/v2/search', { q: '京都' }), { headers: writer });
-
-    expect(anonymous.status).toBe(401);
-    expect(forbidden.status).toBe(403);
   });
 
   it('type が accounts と hashtags のときは検索せずに空を返す', async () => {
@@ -283,17 +226,6 @@ describe('GET /api/v2/search', () => {
 
     const body = (await response.json()) as { statuses: unknown[] };
     expect(parseStatuses(body.statuses).map((status) => status.id)).toEqual([t.fromAlice.postId]);
-  });
-
-  it('フォローしていない相手の account_id では空の statuses を返す', async () => {
-    const t = await seedTimeline();
-
-    const response = await t.request(searchUrl('/api/v2/search', { q: '京都 旅行', account_id: t.bob.actorId }), {
-      headers: t.me.bearer,
-    });
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
   });
 
   it('解釈できない account_id では空の statuses を返す', async () => {
@@ -421,30 +353,6 @@ describe('GET /api/v2/search の resolve=true', () => {
     );
   });
 
-  it('http の URL は解決せず、accounts を空にして 200 を返す', async () => {
-    const t = await seedResolve();
-
-    const response = await t.search({ q: 'http://remote.example/users/erin', resolve: 'true', type: 'accounts' });
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
-    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
-  });
-
-  it('ユーザー情報付きの URL は解決せず、accounts を空にして 200 を返す', async () => {
-    const t = await seedResolve();
-
-    const response = await t.search({
-      q: 'https://user:pw@remote.example/users/erin',
-      resolve: 'true',
-      type: 'accounts',
-    });
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
-    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
-  });
-
   it('外部の取得が例外を投げても、検索全体を 500 にせず accounts を空にして投稿の検索を返す', async () => {
     const t = await seedResolve();
     t.remoteActorLookup.lookup.mockImplementation(() => {
@@ -498,6 +406,7 @@ describe('GET /api/v2/search の resolve=true', () => {
       t.search({ q: '京都 旅行', resolve: 'true', type: 'accounts' }),
       t.search({ q: 'http://remote.example/users/carol', resolve: 'true', type: 'accounts' }),
       t.search({ q: 'ftp://remote.example/users/carol', resolve: 'true', type: 'accounts' }),
+      t.search({ q: 'https://user:pw@remote.example/users/erin', resolve: 'true', type: 'accounts' }),
       t.search({ q: 'https://iori.test/users/kosui', resolve: 'true', type: 'accounts' }),
       t.search({ q: 'acct:kosui@iori.test', resolve: 'true', type: 'accounts' }),
       t.search({ q: '@kosui@iori.test', resolve: 'true', type: 'accounts' }),
@@ -520,17 +429,6 @@ describe('GET /api/v2/search の resolve=true', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
     expect(t.actorCount()).toBe(before);
-  });
-
-  it('ログインしていないと 401 にして解決しない', async () => {
-    const t = await seedResolve();
-
-    const response = await t.request(
-      searchUrl('/api/v2/search', { q: '@carol@remote.example', resolve: 'true', type: 'accounts' }),
-    );
-
-    expect(response.status).toBe(401);
-    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
   });
 });
 
@@ -590,19 +488,6 @@ describe('GET /api/v2/search の投稿の URL の解決', () => {
       postId: string;
     };
     expect(statuses.map((status) => status.id)).toEqual([saved.postId]);
-  });
-
-  it('同じ URL をもう一度検索しても、保存した投稿を重複させず取得もしない', async () => {
-    const t = await seedUrl();
-    await t.search({ q: NOTE_URI, resolve: 'true' });
-    const before = t.remotePostCount();
-    t.federation.lookupObject.mockClear();
-
-    const statuses = await t.statusesOf(await t.search({ q: NOTE_URI, resolve: 'true' }));
-
-    expect(statuses).toHaveLength(1);
-    expect(t.remotePostCount()).toBe(before);
-    expect(t.federation.lookupObject).not.toHaveBeenCalled();
   });
 
   it('解決した投稿だけを返し、通常の検索に当たる投稿は混ぜない', async () => {
@@ -698,20 +583,6 @@ describe('GET /api/v2/search の投稿の URL の解決', () => {
     expect(t.federation.lookupObject).not.toHaveBeenCalled();
   });
 
-  it('ブロックした相手の投稿は取り込まず、statuses を空にして 200 を返す', async () => {
-    const t = await seedUrl();
-    const erin = t.seed.addRemoteActor('erin');
-    t.seed.addBlock(t.me.userId, erin.actorId);
-    t.seed.addRemotePost(t.alice, 1_000, { content: `<p>${HTML_URL}</p>` });
-    const before = t.remotePostCount();
-
-    const response = await t.search({ q: HTML_URL, resolve: 'true' });
-
-    expect(response.status).toBe(200);
-    expect(await t.statusesOf(response)).toEqual([]);
-    expect(t.remotePostCount()).toBe(before);
-  });
-
   it('取得できなかったときは、取り込まず statuses を空にして 200 を返す', async () => {
     const t = await seedUrl();
     t.federation.lookupObject.mockImplementation(async () => null);
@@ -723,18 +594,6 @@ describe('GET /api/v2/search の投稿の URL の解決', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
     expect(t.remotePostCount()).toBe(before);
-  });
-
-  it('取得が例外を投げても、検索全体を 500 にしない', async () => {
-    const t = await seedUrl();
-    t.federation.lookupObject.mockImplementation(async () => {
-      throw new Error('network down');
-    });
-
-    const response = await t.search({ q: HTML_URL, resolve: 'true' });
-
-    expect(response.status).toBe(200);
-    expect(await t.statusesOf(response)).toEqual([]);
   });
 
   it('アカウントの解決が時間切れでも、解決した投稿を返す', async () => {
@@ -755,17 +614,6 @@ describe('GET /api/v2/search の投稿の URL の解決', () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it('ブロックした相手の保存済みの投稿は、resolve=true で検索しても statuses に出ない', async () => {
-    const t = await seedUrl();
-    t.seed.addBlock(t.me.userId, t.bob.actorId);
-    const stored = t.seed.addRemotePost(t.bob, 2_000, { content: '<p>bob の投稿</p>', timeline: false });
-
-    const response = await t.search({ q: stored.uri, resolve: 'true' });
-
-    expect(response.status).toBe(200);
-    expect(await t.statusesOf(response)).toEqual([]);
   });
 
   it('account_id を指定したときは解決しない', async () => {

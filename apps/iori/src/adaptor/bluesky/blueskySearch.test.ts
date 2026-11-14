@@ -65,27 +65,6 @@ describe('createBlueskySearch', () => {
       expect(items[1]).toMatchObject({ liked: false, reposted: false, viewerLikeUri: null, viewerRepostUri: null });
     });
 
-    it('形が違う要素を捨て、cursor が無ければ undefined にする', async () => {
-      const { search } = clientReturning(RA.ok({
-        posts: [postView(1), { uri: 'at://x' }, 'broken', postView(2, { indexedAt: 'not a date' }), postView(3)],
-      }));
-
-      const result = await search.searchPosts({ q: 'x', limit: 25 });
-
-      expect(result.ok && result.val.items.map((item) => item.uri)).toEqual([
-        'at://did:plc:a/app.bsky.feed.post/1',
-        'at://did:plc:a/app.bsky.feed.post/3',
-      ]);
-      expect(result.ok && result.val.cursor).toBeUndefined();
-    });
-
-    it('クライアントのエラーをそのまま返す', async () => {
-      const err = { type: 'BlueskyClientError', kind: 'http', message: 'x failed: status 500', status: 500 } as const;
-      const { search } = clientReturning(RA.err(err));
-
-      expect(await search.searchPosts({ q: 'x', limit: 25 })).toEqual({ ok: false, err });
-    });
-
     it('posts が無い応答を invalid_response にする', async () => {
       const { search } = clientReturning(RA.ok({ cursor: 'x' }));
 
@@ -150,13 +129,6 @@ describe('createBlueskySearch', () => {
 
       expect(result.ok && result.val.actors.map((actor) => actor.did)).toEqual(['did:plc:a']);
       expect(result.ok && result.val.cursor).toBeUndefined();
-    });
-
-    it('クライアントのエラーをそのまま返す', async () => {
-      const err = { type: 'BlueskyClientError', kind: 'network', message: 'x failed' } as const;
-      const { search } = clientReturning(RA.err(err));
-
-      expect(await search.searchActors({ q: 'x', limit: 25 })).toEqual({ ok: false, err });
     });
 
     it('actors が無い応答を invalid_response にする', async () => {

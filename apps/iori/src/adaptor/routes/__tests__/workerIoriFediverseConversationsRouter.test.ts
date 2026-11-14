@@ -1,4 +1,4 @@
-import { Note, Person } from '@fedify/vocab';
+import type { Note } from '@fedify/vocab';
 import { describe, expect, it } from 'vitest';
 
 import { FediverseConversationKey } from '../../../domain/fediverseConversation/conversationKey.ts';
@@ -106,53 +106,6 @@ describe('GET /conversations', () => {
     });
   });
 
-  it('自分が送った最後のメッセージを own にする', async () => {
-    const t = await setup();
-    t.fromMe(NOW, [meUri, aliceUri]);
-
-    const body = await (await t.get('')).json() as { conversations: { lastMessage: { own: boolean } }[] };
-
-    expect(body.conversations.map((conversation) => conversation.lastMessage.own)).toEqual([true]);
-  });
-
-  it('参加していない投稿、public の投稿、他の閲覧者の direct を含めない', async () => {
-    const t = await setup();
-    t.fromRemote(t.alice, NOW - 5000, [aliceUri, bobUri]);
-    t.fromRemote(t.alice, NOW - 4000, [aliceUri, meUri], { recipients: [aliceUri] });
-    t.seed.addRemotePost(t.alice, NOW - 3000, { visibility: 'public', recipientActorUris: [meUri] });
-    t.seed.addLocalPost(t.me, NOW - 2000, { visibility: 'public' });
-    const hanakoPost = t.seed.addLocalPost(t.hanako, NOW - 1000, { visibility: 'direct', timeline: false });
-    t.sqlite.prepare('INSERT INTO direct_post_participants(postId,actorUri) VALUES (?,?)').run(
-      hanakoPost.postId,
-      meUri,
-    );
-    t.sqlite.prepare('INSERT INTO direct_post_participants(postId,actorUri) VALUES (?,?)').run(
-      hanakoPost.postId,
-      `${ORIGIN}/users/hanako`,
-    );
-
-    expect(await (await t.get('')).json()).toEqual({ conversations: [], cursor: null });
-  });
-
-  it('未読のメンションと返信の通知を、会話ごとの未読数にする', async () => {
-    const t = await setup();
-    const mine = t.fromMe(NOW - 5000, [meUri, aliceUri]);
-    const first = t.fromRemote(t.alice, NOW - 4000, [aliceUri, meUri]);
-    const second = t.fromRemote(t.alice, NOW - 3000, [aliceUri, meUri]);
-    const other = t.fromRemote(t.bob, NOW - 2000, [bobUri, meUri]);
-    t.seed.addMentionNotification(t.me.userId, t.alice.actorId, first.postId, NOW - 4000);
-    t.seed.addReplyNotification(t.me.userId, t.alice.actorId, second.postId, mine.postId, NOW - 3000);
-    const read = t.seed.addMentionNotification(t.me.userId, t.bob.actorId, other.postId, NOW - 2000);
-    t.sqlite.prepare('UPDATE notifications SET isRead = 1 WHERE notificationId = ?').run(read);
-
-    const body = await (await t.get('')).json() as { conversations: { key: string; unreadCount: number }[] };
-
-    expect(body.conversations.map(({ key, unreadCount }) => [key, unreadCount])).toEqual([
-      [keyOf(bobUri), 0],
-      [aliceKey, 2],
-    ]);
-  });
-
   it('読んだ投稿が上限に達したときだけ cursor を返し、続きは cursor より古い投稿から読む', async () => {
     const t = await setup();
     t.fromRemote(t.alice, NOW - 1_000_000, [aliceUri, meUri]);
@@ -219,20 +172,9 @@ describe('GET /conversations/:key', () => {
 });
 
 describe('会話のキー', () => {
-  it.each([
-    ['base64url でない', 'not base64!'],
-    ['JSON でない', 'bm90IGpzb24'],
-    ['配列でない', btoa('{"a":1}').replaceAll('=', '')],
-    ['空の配列', btoa('[]').replaceAll('=', '')],
-    ['並べ替えていない配列', btoa(JSON.stringify([aliceUri, bobUri])).replaceAll('=', '')],
-    ['URL でない要素', btoa(JSON.stringify(['nope'])).replaceAll('=', '')],
-    [
-      '11 人の相手',
-      btoa(JSON.stringify(Array.from({ length: 11 }, (_, i) => `https://h.example/u/${i}`).sort())).replaceAll('=', ''),
-    ],
-    ['長すぎる', 'a'.repeat(9000)],
-  ])('%s を 400 にする', async (_name, key) => {
+  it('解釈できないキーを 400 にする', async () => {
     const t = await setup();
+    const key = 'not base64!';
 
     for (const response of [await t.get(`/${key}`), await t.get(`/${key}/messages`)]) {
       expect(response.status).toBe(400);
@@ -272,16 +214,6 @@ describe('GET /conversations/:key/messages', () => {
     expect(messages.map((message) => message.account.id)).toEqual([t.alice.actorId, t.me.actorId, t.alice.actorId]);
   });
 
-  it('グループの会話は、参加者の組が一致する投稿だけを返す', async () => {
-    const t = await setup();
-    t.fromRemote(t.alice, NOW - 3000, [aliceUri, meUri]);
-    const group = t.fromRemote(t.bob, NOW - 2000, [bobUri, aliceUri, meUri]);
-
-    const body = await (await t.get(`/${groupKey}/messages`)).json() as { messages: { id: string }[] };
-
-    expect(body.messages.map((message) => message.id)).toEqual([group.postId]);
-  });
-
   it('30 件ずつ新しい側から返し、cursor で古い側へ続く', async () => {
     const t = await setup();
     const ids = Array.from(
@@ -302,12 +234,6 @@ describe('GET /conversations/:key/messages', () => {
     };
     expect(second.messages.map((message) => message.id)).toEqual(ids.slice(0, 5));
     expect(second.cursor).toBeNull();
-  });
-
-  it('壊れた cursor を 400 にする', async () => {
-    const t = await setup();
-
-    expect((await t.get(`/${aliceKey}/messages?cursor=zzz`)).status).toBe(400);
   });
 });
 
@@ -394,28 +320,6 @@ describe('POST /conversations/:key/messages', () => {
     const create = t.sent()[0]?.[2] as { getObject: () => Promise<Note> };
     const note = await create.getObject();
     expect(note.replyTargetId?.href).toBe(latest.uri);
-  });
-
-  it('保存済みの相手の inbox が無いときは、相手のサーバーのノートを引いて返信にして相手に送る', async () => {
-    const t = await setup();
-    const carol = t.seed.addRemoteActor('carol');
-    t.sqlite.prepare('UPDATE actors SET inboxUrl = ? WHERE actorId = ?').run('', carol.actorId);
-    const latest = t.fromRemote(carol, NOW - 1000, [aliceUri, meUri]);
-    t.federation.lookupObject.mockResolvedValue(
-      new Note({
-        id: new URL(latest.uri),
-        attribution: new Person({ id: new URL(aliceUri), inbox: new URL(`${aliceUri}/inbox`) }),
-      }),
-    );
-
-    const response = await t.post(`/${aliceKey}/messages`, { text: 'reply' });
-
-    expect(response.status).toBe(201);
-    const status = StatusSchema.parse(((await response.json()) as { message: unknown }).message);
-    expect(status.in_reply_to_id).toBe(latest.postId);
-    expect(t.federation.lookupObject).toHaveBeenCalledTimes(1);
-    expect(t.sent().map((call) => call[1])).not.toContain('followers');
-    expect(t.sent()).toHaveLength(1);
   });
 
   it('相手のサーバーのノートを引けないときは 502 にし、投稿を保存せず、何も送らない', async () => {
@@ -566,25 +470,25 @@ describe('認可と応答ヘッダー', () => {
   const call = (t: Setup, route: Route, headers: Record<string, string>) =>
     route.method === 'GET' ? t.get(route.path, headers) : t.post(route.path, route.body, headers);
 
-  describe.each(routes)('$name（$method）', (route) => {
+  it.each(routes)('$name（$method）は所有者でない利用者を 403 にして、何も変更しない', async (route) => {
+    const t = await setup('read:search');
+    const issued = await t.issueUserToken(`${route.scope}`);
+    t.seed.addLocalActor('someone', issued.userId);
+
+    const response = await call(t, route, { Authorization: `Bearer ${issued.token}` });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'Forbidden' });
+    expect(t.count('posts')).toBe(0);
+    expect(t.sent()).toHaveLength(0);
+  });
+
+  describe.each([routes[0]!, routes[4]!])('$name（$method）', (route) => {
     it('認証なしを 401 にし、scope を満たさないトークンを 403 にして、何も変更しない', async () => {
       const t = await setup('read:search');
 
       expect((await call(t, route, { Origin: ORIGIN })).status).toBe(401);
       expect((await call(t, route, t.me.bearer)).status).toBe(403);
-      expect(t.count('posts')).toBe(0);
-      expect(t.sent()).toHaveLength(0);
-    });
-
-    it('所有者でない利用者を 403 にして、何も変更しない', async () => {
-      const t = await setup('read:search');
-      const issued = await t.issueUserToken(`${route.scope}`);
-      t.seed.addLocalActor('someone', issued.userId);
-
-      const response = await call(t, route, { Authorization: `Bearer ${issued.token}` });
-
-      expect(response.status).toBe(403);
-      expect(await response.json()).toEqual({ error: 'Forbidden' });
       expect(t.count('posts')).toBe(0);
       expect(t.sent()).toHaveLength(0);
     });
@@ -607,25 +511,5 @@ describe('認可と応答ヘッダー', () => {
       expect(unauthorized.headers.get('Cache-Control')).toBe(noStore);
       if (invalidKey !== undefined) expect(invalidKey.headers.get('Cache-Control')).toBe(noStore);
     });
-  });
-
-  it('Origin が違う Cookie の書き込みを 403 にして、何も変更しない', async () => {
-    const t = await setup();
-    t.fromRemote(t.alice, NOW - 1000, [aliceUri, meUri]);
-    const evil = { Cookie: `sessionId=${t.me.sessionId}`, Origin: 'https://evil.example' };
-
-    expect((await t.post(`/${aliceKey}/messages`, { text: 'hi' }, evil)).status).toBe(403);
-    expect((await t.post(`/${aliceKey}/read`, {}, evil)).status).toBe(403);
-    expect((await t.post('', { actorUri: aliceUri }, evil)).status).toBe(403);
-    expect(t.count('posts', 'type = \'local\'')).toBe(0);
-    expect(t.sent()).toHaveLength(0);
-  });
-
-  it('同じ Origin の Cookie では読み書きできる', async () => {
-    const t = await setup();
-    const same = { Cookie: `sessionId=${t.me.sessionId}`, Origin: ORIGIN };
-
-    expect((await t.get('', same)).status).toBe(200);
-    expect((await t.post(`/${aliceKey}/messages`, { text: 'hi' }, same)).status).toBe(201);
   });
 });

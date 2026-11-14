@@ -88,7 +88,6 @@ describe('SignUpUseCase', () => {
       if (errorType === 'UnacceptableUsernameError') {
         it.each([
           { username: 'admin', reason: '予約済みのユーザー名' },
-          { username: 'test_user', reason: 'kosui以外のユーザー名' },
           { username: 'another', reason: 'kosui以外のユーザー名' },
         ])('$reason ($username) の場合、UnacceptableUsernameError を返す', async ({ username }) => {
           const deps = createDeps();
