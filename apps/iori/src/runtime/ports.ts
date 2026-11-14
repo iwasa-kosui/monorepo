@@ -106,6 +106,7 @@ import type { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFee
 import type { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import type { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import type { ListPasskeysUseCase } from '../useCase/listPasskeys.ts';
+import type { ListRemoteActorFollowsUseCase } from '../useCase/listRemoteActorFollows.ts';
 import type { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import type { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import type { RefreshXPostsUseCase } from '../useCase/refreshXPosts.ts';
@@ -290,6 +291,7 @@ export type IoriSocialActionsRuntimePorts = Readonly<{
   undoEmojiReactUseCase: UndoEmojiReactUseCase;
   fetchRemoteContextUseCase: FetchRemoteContextUseCase;
   fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase;
+  listRemoteActorFollowsUseCase: ListRemoteActorFollowsUseCase;
 }>;
 export type IoriArticlesRuntimePorts = Readonly<{
   getArticleWithThreadUseCase: GetArticleWithThreadUseCase;
