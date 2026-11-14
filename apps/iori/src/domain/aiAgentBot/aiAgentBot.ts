@@ -9,8 +9,12 @@ import type { UserId } from '../user/userId.ts';
 /**
  * AI エージェントの bot のユーザー名。パスワードもパスキーも持たないので、誰もこのユーザーでログインできない。
  * bot の操作は、cron から Workers AI のエージェントが行う。
+ *
+ * GitHub のユーザー名には使えない `_` を含める。GitHub の PR やコミットメッセージで bot のハンドルを
+ * 素のまま書いても、同名の GitHub アカウントの持ち主へメンションの通知が飛ばないようにするため。
+ * Fediverse（Mastodon など）のユーザー名では `_` を使える。
  */
-export const AI_AGENT_BOT_USERNAME = 'iori';
+export const AI_AGENT_BOT_USERNAME = 'iori_bot';
 
 export const AI_AGENT_BOT_PROFILE = {
   displayName: 'iori (AI)',

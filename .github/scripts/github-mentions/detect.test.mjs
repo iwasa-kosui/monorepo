@@ -27,6 +27,15 @@ test("メールアドレスや URL のパスは対象外", () => {
   assert.deepEqual(mentions("HEAD@{1}"), []);
 });
 
+test("直後に _ や語の続く . があればメンションにならない", () => {
+  assert.deepEqual(mentions("bot の @iori_bot に返信"), []);
+  assert.deepEqual(mentions("@iori_bot@iori.example"), []);
+  assert.deepEqual(mentions("@iori.example"), []);
+  assert.deepEqual(mentions("@foo-bar_baz"), []);
+  assert.deepEqual(mentions("@iori. 次の文"), ["@iori"]);
+  assert.deepEqual(mentions("@iori、こんにちは"), ["@iori"]);
+});
+
 test("行番号を返す", () => {
   assert.deepEqual(findMentions("a\nb @iori"), [{ mention: "@iori", line: 2 }]);
 });

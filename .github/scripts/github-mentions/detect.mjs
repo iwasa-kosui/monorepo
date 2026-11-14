@@ -22,8 +22,11 @@ export const maskNonMentionable = (text) => {
   return masked.join("\n");
 };
 
-// GitHub のユーザー名: 英数字と（連続しない）ハイフン、最大 39 文字。@org/team も通知対象。
-const MENTION = /(^|[^A-Za-z0-9_`/.@\\-])@([A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38})(\/[A-Za-z0-9_.-]+)?/g;
+// GitHub のユーザー名: 英数字とハイフン。@org/team も通知対象。
+// 名前の直後が英数字・`_`・（語が続く）`.` のときはメンションにならない（例: @iori_bot、@iori.example）。
+// 名前はバックトラックで短く切らない（lookahead + 後方参照で原子的に取る）。
+const MENTION =
+  /(^|[^A-Za-z0-9_`/.@\\-])@(?=([A-Za-z0-9][A-Za-z0-9-]*))\2(?:(\/[A-Za-z0-9_.-]+)|(?=\.+(?:[\s\W]|$)|[^A-Za-z0-9_./]|$))/g;
 
 /**
  * @param {string} text
