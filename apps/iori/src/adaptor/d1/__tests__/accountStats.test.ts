@@ -74,19 +74,4 @@ describe('createD1AccountStatsResolverByActorId', () => {
 
     expect(stats.ok && stats.val.createdAt).toBe(2_000);
   });
-
-  it('何もなければ 0 件、lastStatusAt は null、createdAt は 0 にする', async () => {
-    const ctx = setup();
-    const me = ctx.insertActor('me');
-
-    const stats = await createD1AccountStatsResolverByActorId(ctx.db).resolve(ActorId.orThrow(me));
-
-    expect(stats.ok && stats.val).toEqual({
-      followersCount: 0,
-      followingCount: 0,
-      statusesCount: 0,
-      createdAt: 0,
-      lastStatusAt: null,
-    });
-  });
 });

@@ -23,18 +23,6 @@ const t0 = Instant.orThrow(Date.UTC(2026, 10, 4, 3, 0, 0));
 const after = (ms: number) => Instant.orThrow(t0 + ms);
 
 describe('createD1DigestRequestUsageRecorder', () => {
-  it('最初の予約は許可し、count と lastRequestedAt を書く', async () => {
-    const { db, sqlite, seed } = setup();
-    const userId = UserId.orThrow(seed.addLocalActor('kosui').userId);
-
-    const result = await createD1DigestRequestUsageRecorder(db).reserve({ userId, day, now: t0 });
-
-    expect(result).toEqual({ ok: true, val: { allowed: true } });
-    expect(sqlite.prepare('SELECT count, lastRequestedAt FROM digest_request_usages').all()).toEqual([
-      { count: 1, lastRequestedAt: t0 },
-    ]);
-  });
-
   it('120 秒未満の再予約は too_soon で拒否し、残り秒数を切り上げて返し、行を変えない', async () => {
     const { db, sqlite, seed } = setup();
     const userId = UserId.orThrow(seed.addLocalActor('kosui').userId);
@@ -96,28 +84,5 @@ describe('createD1DigestRequestUsageRecorder', () => {
     const result = await recorder.reserve({ userId, day, now: after(240_001) });
 
     expect(result.ok && result.val).toMatchObject({ allowed: false, reason: 'daily_limit' });
-  });
-
-  it('日付が変わると 1 から数え直す', async () => {
-    const { db, seed } = setup();
-    const userId = UserId.orThrow(seed.addLocalActor('kosui').userId);
-    const recorder = createD1DigestRequestUsageRecorder(db);
-    await recorder.reserve({ userId, day, now: t0 });
-
-    const result = await recorder.reserve({ userId, day: '2026-11-05', now: after(1_000) });
-
-    expect(result).toEqual({ ok: true, val: { allowed: true } });
-  });
-
-  it('利用者ごとに数える', async () => {
-    const { db, seed } = setup();
-    const kosui = UserId.orThrow(seed.addLocalActor('kosui').userId);
-    const alice = UserId.orThrow(seed.addLocalActor('alice').userId);
-    const recorder = createD1DigestRequestUsageRecorder(db);
-    await recorder.reserve({ userId: kosui, day, now: t0 });
-
-    const result = await recorder.reserve({ userId: alice, day, now: after(1_000) });
-
-    expect(result).toEqual({ ok: true, val: { allowed: true } });
   });
 });

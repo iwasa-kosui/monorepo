@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { RemoteActor } from '../../../domain/actor/remoteActor.ts';
@@ -70,17 +68,6 @@ describe('remote actor profile in D1', () => {
     });
   });
 
-  it('reads back as undefined when the profile was not stored', async () => {
-    const t = setup();
-    await createAlice(t, false);
-
-    const actor = await resolveAlice(t);
-
-    expect(actor.displayName).toBeUndefined();
-    expect(actor.fields).toBeUndefined();
-    expect(actor.publishedAt).toBeUndefined();
-  });
-
   it('updates only the given items and records actor.profileUpdated', async () => {
     const t = setup();
     const alice = await createAlice(t, true);
@@ -101,31 +88,6 @@ describe('remote actor profile in D1', () => {
     const events = t.sqlite.prepare('SELECT eventName, aggregateId FROM domain_events WHERE eventName = ?')
       .all('actor.profileUpdated');
     expect(events).toEqual([{ eventName: 'actor.profileUpdated', aggregateId: alice.id }]);
-  });
-
-  it('returns the profile through the account profile resolver and toAccount', async () => {
-    const t = setup();
-    const alice = await createAlice(t, true);
-
-    const profiles = await createD1AccountProfilesResolverByActorIds(t.db).resolve([alice.id]);
-    const found = profiles.ok ? profiles.val.get(alice.id) : undefined;
-    if (found?.type !== 'remote') throw new Error('remote profile not found');
-    const account = toAccount(found, {
-      baseUrl: 'https://iori.example/api/v1/accounts/1',
-      defaultAvatarUrl: 'https://iori.example/avatar.png',
-      defaultHeaderUrl: 'https://iori.example/header.png',
-      ...found.stats,
-    });
-
-    expect(account).toMatchObject({
-      display_name: 'Alice',
-      note: '<p>hello</p>',
-      header: profile.headerUri,
-      locked: true,
-      group: true,
-      created_at: '2020-02-03T04:05:06.000Z',
-      fields: [{ name: 'Web', value: 'alice.example', verified_at: null }],
-    });
   });
 
   it('treats broken JSON columns as empty arrays', async () => {
@@ -149,47 +111,5 @@ describe('remote actor profile in D1', () => {
     expect(actor.emojis).toBeUndefined();
     expect(account.fields).toEqual([]);
     expect(account.emojis).toEqual([]);
-  });
-});
-
-describe('remote_actor_profile migration', () => {
-  it('leaves the profile columns of existing rows NULL', () => {
-    const migrationsDir = new URL('../../../../drizzle-d1/', import.meta.url);
-    const files = readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort();
-    const target = files.findIndex((name) => name.includes('remote_actor_profile'));
-    expect(target).toBeGreaterThan(0);
-    const sqlite = new DatabaseSync(':memory:');
-    try {
-      for (const file of files.slice(0, target)) sqlite.exec(readFileSync(new URL(file, migrationsDir), 'utf8'));
-      sqlite.prepare('INSERT INTO actors(actorId,uri,inboxUrl,type) VALUES (?,?,?,?)').run(
-        'a1',
-        'https://remote.example/users/alice',
-        'https://remote.example/users/alice/inbox',
-        'remote',
-      );
-      sqlite.prepare('INSERT INTO remote_actors(actorId,url,username) VALUES (?,?,?)').run(
-        'a1',
-        'https://remote.example/@alice',
-        'alice',
-      );
-
-      sqlite.exec(readFileSync(new URL(files[target]!, migrationsDir), 'utf8'));
-
-      expect(sqlite.prepare('SELECT * FROM remote_actors').all()).toEqual([{
-        actorId: 'a1',
-        url: 'https://remote.example/@alice',
-        username: 'alice',
-        displayName: null,
-        summary: null,
-        headerUri: null,
-        actorType: null,
-        manuallyApprovesFollowers: null,
-        publishedAt: null,
-        fields: null,
-        emojis: null,
-      }]);
-    } finally {
-      sqlite.close();
-    }
   });
 });

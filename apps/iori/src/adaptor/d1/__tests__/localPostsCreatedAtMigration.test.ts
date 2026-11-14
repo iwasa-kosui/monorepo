@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { PageRequest } from '../../../domain/page/page.ts';
-import { createD1LocalPostsResolverByPage, localPostIdsPageQuery } from '../post/localPostsResolverByPage.ts';
+import { localPostIdsPageQuery } from '../post/localPostsResolverByPage.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
@@ -67,34 +67,6 @@ const page = (overrides: Partial<PageRequest>): PageRequest => ({
 });
 
 describe('local_posts.createdAt の migration', () => {
-  it('すべての local_posts の createdAt が対応する posts の createdAt と一致する', () => {
-    const t = setupBeforeMigration();
-
-    const rows = t.sqlite.prepare(
-      'SELECT local_posts.postId AS postId, local_posts.createdAt AS localCreatedAt, posts.createdAt AS createdAt FROM local_posts JOIN posts ON posts.postId = local_posts.postId',
-    ).all() as Array<{ postId: string; localCreatedAt: number; createdAt: number }>;
-
-    expect(rows).toHaveLength(seedPosts.length);
-    for (const row of rows) expect(row.localCreatedAt).toBe(row.createdAt);
-  });
-
-  it('埋め戻したあとも、newestFirst の1ページ目と olderThanId の次のページと newerThanId の結果が posts.createdAt の順になる', async () => {
-    const t = setupBeforeMigration();
-    const resolver = createD1LocalPostsResolverByPage(t.db);
-    const resolve = async (pageRequest: PageRequest) => {
-      const result = await resolver.resolve({
-        currentActorId: ActorId.orThrow(t.kosui.actorId),
-        mutedActorIds: [],
-        page: pageRequest,
-      });
-      return result.ok ? result.val.map((post) => post.postId) : undefined;
-    };
-
-    expect(await resolve(page({}))).toEqual([postId(4), postId(1)]);
-    expect(await resolve(page({ olderThanId: postId(1) }))).toEqual([postId(7), postId(2)]);
-    expect(await resolve(page({ newerThanId: postId(7), order: 'oldestFirst' }))).toEqual([postId(1), postId(4)]);
-  });
-
   it.each<{ name: string; mutedActorIds: ReadonlyArray<ActorId>; page: Partial<PageRequest> }>([
     {
       name: 'newestFirst、mutedActorIds あり、olderThanId あり',

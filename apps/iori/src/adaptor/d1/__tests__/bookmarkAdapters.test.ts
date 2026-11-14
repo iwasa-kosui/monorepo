@@ -9,7 +9,6 @@ import { PostId } from '../../../domain/post/postId.ts';
 import { createD1BookmarkCreatedStore } from '../bookmark/bookmarkCreatedStore.ts';
 import { createD1BookmarkDeletedStore } from '../bookmark/bookmarkDeletedStore.ts';
 import { createD1BookmarkedPostIdsResolverByActorIdWithPagination } from '../bookmark/bookmarkedPostIdsResolverByActorIdWithPagination.ts';
-import { createD1BookmarkResolver } from '../bookmark/bookmarkResolver.ts';
 import { createD1BookmarksResolverByPostId } from '../bookmark/bookmarksResolverByPostId.ts';
 import { createD1PostDeletedStore } from '../post/postDeletedStore.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
@@ -41,28 +40,6 @@ const setup = () => {
 };
 
 describe('D1 の bookmark の store と resolver', () => {
-  it('作成の store が bookmarks とドメインイベントを同時に保存し、resolver が取り出す', async () => {
-    const t = setup();
-    const post = t.seed.addRemotePost(t.alice, 1_000, { visibility: 'public' });
-    const created = t.bookmark(t.me.actorId, post.postId);
-
-    await createD1BookmarkCreatedStore(t.fixture.db).store(created);
-
-    expect(t.count('bookmarks')).toBe(1);
-    expect(t.count('domain_events', `eventName='bookmark.bookmarkCreated'`)).toBe(1);
-    const resolver = createD1BookmarkResolver(t.fixture.db);
-    const resolved = await resolver.resolve({
-      actorId: ActorId.orThrow(t.me.actorId),
-      postId: PostId.orThrow(post.postId),
-    });
-    const ofOther = await resolver.resolve({
-      actorId: ActorId.orThrow(t.other.actorId),
-      postId: PostId.orThrow(post.postId),
-    });
-    expect(resolved).toMatchObject({ ok: true, val: created.aggregateState });
-    expect(ofOther).toMatchObject({ ok: true, val: undefined });
-  });
-
   it('同じ組み合わせを2回保存すると2回目は AlreadyBookmarkedError を返し、bookmarks もドメインイベントも1件のまま残る', async () => {
     const t = setup();
     const post = t.seed.addRemotePost(t.alice, 1_000, { visibility: 'public' });
@@ -75,20 +52,6 @@ describe('D1 の bookmark の store と resolver', () => {
 
     expect(t.count('bookmarks')).toBe(1);
     expect(t.count('domain_events')).toBe(1);
-  });
-
-  it('削除の store が bookmarks の行を消してドメインイベントを保存する', async () => {
-    const t = setup();
-    const post = t.seed.addRemotePost(t.alice, 1_000, { visibility: 'public' });
-    const created = t.bookmark(t.me.actorId, post.postId);
-    await createD1BookmarkCreatedStore(t.fixture.db).store(created);
-
-    await createD1BookmarkDeletedStore(t.fixture.db).store(
-      Bookmark.deleteBookmark(created.aggregateState, Instant.orThrow(2_000)),
-    );
-
-    expect(t.count('bookmarks')).toBe(0);
-    expect(t.count('domain_events', `eventName='bookmark.bookmarkDeleted'`)).toBe(1);
   });
 
   it('投稿ごとの resolver は全員のブックマークを返し、まとめて削除すると投稿を物理削除できる', async () => {

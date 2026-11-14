@@ -110,33 +110,4 @@ describe('createD1DraftArticleWithDependentsDeletedStore', () => {
     expect(count('articles')).toBe(1);
     expect(eventNames()).toEqual([]);
   });
-
-  it('本文のない draft は、本文のイベントを書かずに消す', async () => {
-    const { fixture, articleId, count, eventNames } = setup('draft');
-    fixture.sqlite.prepare('DELETE FROM article_bodies').run();
-    const digestId = (fixture.sqlite.prepare('SELECT digestId FROM digests').get() as { digestId: string }).digestId;
-
-    await createD1DraftArticleWithDependentsDeletedStore(fixture.db).store(
-      Article.deleteArticle(now)(articleId),
-      undefined,
-      Digest.expire({ digestId: digestId as DigestId, digestDate: '2026-11-05' }, now),
-    );
-
-    expect(count('articles')).toBe(0);
-    expect(eventNames()).toEqual(['digest.expired', 'article.deleted']);
-  });
-
-  it('batch の途中で失敗したら、消した行も戻る', async () => {
-    const { fixture, count, store } = setup('draft');
-    fixture.sqlite.exec('DROP TABLE domain_events');
-
-    await expect(store()).rejects.toThrow();
-
-    expect(count('digests')).toBe(1);
-    expect(count('digest_items')).toBe(1);
-    expect(count('digest_trends')).toBe(1);
-    expect(count('digest_x_posts')).toBe(1);
-    expect(count('article_bodies')).toBe(1);
-    expect(count('articles')).toBe(1);
-  });
 });

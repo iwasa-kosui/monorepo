@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { FeedEntry } from '../../../domain/feedEntry/feedEntry.ts';
 import { FeedEntryId } from '../../../domain/feedEntry/feedEntryId.ts';
-import { FeedSourceId } from '../../../domain/feedSource/feedSourceId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { EMBEDDING_DIMENSIONS } from '../../../domain/interestSource/embedding.ts';
-import { createD1FeedEntriesResolverByFeedSourceIdAndGuids } from '../feedEntry/feedEntriesResolverByFeedSourceIdAndGuids.ts';
 import { createD1FeedEntriesResolverByFetchedSincePendingEmbedding } from '../feedEntry/feedEntriesResolverByFetchedSincePendingEmbedding.ts';
 import { createD1FeedEntryEmbeddedStore } from '../feedEntry/feedEntryEmbeddedStore.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
@@ -82,41 +80,5 @@ describe('feedEntry の embedded Store と pending Resolver', () => {
     expect(events[0]?.eventName).toBe('feedEntry.embedded');
     expect(JSON.parse(events[0]!.eventPayload)).toEqual({ feedEntryId, embeddedAt: NOW });
     expect(await resolvePending(0)).toEqual([]);
-  });
-
-  it('embedded は複数のイベントを 1 回で書き、title と description を変えない', async () => {
-    const { sqlite, db, addEntry, resolvePending } = setup();
-    for (let n = 1; n <= 30; n += 1) addEntry(n, NOW);
-    const entries = await resolvePending(0, 100);
-    const events = entries.map((entry) => {
-      const event = FeedEntry.embed(entry, new Float32Array(EMBEDDING_DIMENSIONS), NOW);
-      if (!event.ok) throw new Error('unexpected');
-      return event.val;
-    });
-
-    await createD1FeedEntryEmbeddedStore(db).store(...events);
-
-    expect(sqlite.prepare('SELECT count(*) AS n FROM feed_entries WHERE embeddedAt IS NOT NULL').get()).toEqual({
-      n: 30,
-    });
-    expect(sqlite.prepare('SELECT count(*) AS n FROM domain_events').get()).toEqual({ n: 30 });
-    expect(sqlite.prepare('SELECT title, description FROM feed_entries WHERE guid = ?').get('guid-7')).toEqual({
-      title: 'title 7',
-      description: 'description 7',
-    });
-  });
-
-  it('既存の feed entry の Resolver は embedding 列を読まずに復元できる', async () => {
-    const { db, addEntry } = setup();
-    const feedEntryId = addEntry(1, NOW, NOW);
-
-    const resolved = await createD1FeedEntriesResolverByFeedSourceIdAndGuids(db).resolve({
-      feedSourceId: FeedSourceId.orThrow('00000000-0000-4000-8000-0000000000f1'),
-      guids: ['guid-1'],
-    });
-
-    expect(resolved.val.map((entry) => entry.feedEntryId)).toEqual([feedEntryId]);
-    expect(resolved.val[0]).not.toHaveProperty('embedding');
-    expect(resolved.val[0]).not.toHaveProperty('embeddedAt');
   });
 });

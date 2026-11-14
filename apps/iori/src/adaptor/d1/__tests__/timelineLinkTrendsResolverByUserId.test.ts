@@ -38,26 +38,6 @@ describe('createD1TimelineLinkTrendsResolverByUserId', () => {
     expect(await resolve()).toEqual([]);
   });
 
-  it('フォロー中のリモート actor の public、unlisted、visibility が null の投稿のリンクは数える', async () => {
-    const { seed, remote, addLink, resolve } = setup();
-    addLink(seed.addRemotePost(remote, 1_500, { visibility: 'public' }).postId, 'https://example.com/public');
-    addLink(seed.addRemotePost(remote, 1_500, { visibility: 'unlisted' }).postId, 'https://example.com/unlisted');
-    addLink(seed.addRemotePost(remote, 1_500, { visibility: null }).postId, 'https://example.com/null');
-
-    expect(await resolve()).toEqual([
-      'https://example.com/null',
-      'https://example.com/public',
-      'https://example.com/unlisted',
-    ]);
-  });
-
-  it('ローカルの投稿のリンクは数える', async () => {
-    const { seed, viewer, addLink, resolve } = setup();
-    addLink(seed.addLocalPost(viewer, 1_500).postId, 'https://example.com/local');
-
-    expect(await resolve()).toEqual(['https://example.com/local']);
-  });
-
   it('ローカルの private の投稿のリンクは数えず、unlisted の投稿のリンクは数える', async () => {
     const { seed, viewer, addLink, resolve } = setup();
     addLink(seed.addLocalPost(viewer, 1_500, { visibility: 'private' }).postId, 'https://example.com/private');

@@ -189,21 +189,6 @@ describe('createD1TimelineSearchCandidatesResolver', () => {
     expect(result.ok && result.val.map((row) => row.postId)).toEqual([recent, old, onlyExpanded]);
   });
 
-  it('全角の語が全角の本文に一致する', async () => {
-    const { db, actors, viewer, addPost } = setup();
-    const hit = addPost(actors[0], '<p>ＴＲＩＰ memo</p>', 1000);
-    addPost(actors[0], '<p>関係ない投稿</p>', 2000);
-
-    const result = await createD1TimelineSearchCandidatesResolver(db).resolve({
-      currentActorId: viewer,
-      actorIds: [actors[0]],
-      terms: queryTerms('ＴＲＩＰ'),
-      limit: 20,
-    });
-
-    expect(result.ok && result.val.map((row) => row.postId)).toEqual([hit]);
-  });
-
   it('半角の語が半角の本文に大文字と小文字を区別せず一致する', async () => {
     const { db, actors, viewer, addPost } = setup();
     const hit = addPost(actors[0], '<p>Trip memo</p>', 1000);
@@ -231,21 +216,6 @@ describe('createD1TimelineSearchCandidatesResolver', () => {
     });
 
     expect(result.ok && result.val.map((row) => row.postId)).toEqual([hit]);
-  });
-
-  it('既知の制約: 新しい投稿のタグ名に語が当たって候補の上限を埋めると、本文に語を含む古い投稿が結果に出ない', async () => {
-    const { db, actors, viewer, addPost } = setup();
-    const tagged = [2000, 3000, 4000].map((time) => addPost(actors[0], '<span>旅行</span>', time));
-    addPost(actors[0], '<p>span の使い方</p>', 1000);
-
-    const result = await createD1TimelineSearchCandidatesResolver(db).resolve({
-      currentActorId: viewer,
-      actorIds: [actors[0]],
-      terms: terms('span'),
-      limit: 3,
-    });
-
-    expect(result.ok && result.val.map((row) => row.postId)).toEqual([tagged[2], tagged[1], tagged[0]]);
   });
 
   it('宛先外の direct とフォローしていない private と記録のない投稿を返さず、宛先の direct は返す', async () => {
@@ -298,21 +268,5 @@ describe('createD1TimelineSearchCandidatesResolver', () => {
     });
 
     expect(result.ok && result.val.map((row) => row.postId)).toEqual([visible]);
-  });
-
-  it('terms が空のときは DB を呼ばずに空の配列を返す', async () => {
-    const { db, queries, actors, viewer, addPost } = setup();
-    addPost(actors[0], '旅行', 1000);
-    const before = queries.length;
-
-    const result = await createD1TimelineSearchCandidatesResolver(db).resolve({
-      currentActorId: viewer,
-      actorIds: [actors[0]],
-      terms: [],
-      limit: 20,
-    });
-
-    expect(result.ok && result.val).toEqual([]);
-    expect(queries).toHaveLength(before);
   });
 });

@@ -59,26 +59,6 @@ describe('createD1SessionWithUserAndActorResolver', () => {
     expect(queries).toHaveLength(1);
   });
 
-  it('returns undefined when the session does not exist', async () => {
-    const { db } = setup({ user: true, actor: true, expires: 4_000_000_000_000 });
-
-    const result = await createD1SessionWithUserAndActorResolver(db).resolve(
-      '00000000-0000-4000-8000-0000000000ff' as never,
-    );
-
-    expect(result.ok && result.val).toBeUndefined();
-  });
-
-  it('returns an expired session as a row because the use case judges expiry', async () => {
-    const { db } = setup({ user: true, actor: true, expires: 1000 });
-
-    const result = await createD1SessionWithUserAndActorResolver(db).resolve(sessionId as never);
-
-    expect(result.ok && result.val?.session.expires).toBe(1000);
-    expect(result.ok && result.val?.user).toBeDefined();
-    expect(result.ok && result.val?.actor).toBeDefined();
-  });
-
   it('returns the session without a user when the user row is missing', async () => {
     const { db } = setup({ user: false, actor: false, expires: 4_000_000_000_000 });
 

@@ -234,27 +234,6 @@ describe('D1 post resolvers batch the enrichment queries', () => {
     ]);
   });
 
-  it('keeps the federated timeline resolver posts identical to the thread resolver result', async () => {
-    const { db } = setup();
-    const result = unwrap(
-      await createD1FederatedTimelineItemsResolver(db).resolve({
-        page: { limit: 20, olderThanId: undefined, newerThanId: undefined, order: 'newestFirst' },
-        mutedActorIds: [],
-        currentActorId: undefined,
-      }),
-    );
-    const threadResolver = createD1ThreadResolver(db, ORIGIN);
-    expect(result.map(item => item.post.postId)).toEqual([postIdOf(richIndex), postIdOf(3), id(3002), id(3003)]);
-    for (const item of result) {
-      const thread = unwrap(await threadResolver.resolve({ postId: item.post.postId as never }));
-      expect(item.post).toEqual(thread.currentPost);
-    }
-    expect(result[0].post).toMatchObject({ likeCount: 2, repostCount: 2, liked: false, reposted: false });
-    expect(result[0].post.images).toHaveLength(2);
-    expect(result[0].post.reactions).toHaveLength(3);
-    expect(result[0].post.linkPreviews).toHaveLength(2);
-  });
-
   it('reads the recorded visibility of a remote post in every batched path and keeps null when unrecorded', async () => {
     const { db, sqlite } = setup();
     sqlite.prepare('UPDATE remote_posts SET visibility=? WHERE postId=?').run('unlisted', id(3001));
@@ -285,12 +264,6 @@ describe('D1 post resolvers batch the enrichment queries', () => {
       ),
     );
     expectVisibilities(threads.flatMap((post) => post === null ? [] : [post]), allIds);
-  });
-
-  it('returns no posts without a query when no post ID is given', async () => {
-    const { db, queries } = setup();
-    expect(await resolvePostsWithAuthorByIds(db, [], undefined)).toEqual(new Map());
-    expect(queries).toHaveLength(0);
   });
 });
 

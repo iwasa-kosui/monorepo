@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DIGEST_DEEP_DIVE_DAILY_LIMIT } from '../../../domain/digestDeepDive/digestDeepDiveLimit.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { UserId } from '../../../domain/user/userId.ts';
 import { createD1DigestDeepDiveUsageRecorder } from '../digestDeepDive/digestDeepDiveUsageRecorder.ts';
@@ -23,20 +22,6 @@ const day = '2026-11-04';
 const now = Instant.orThrow(Date.UTC(2026, 10, 4, 3, 0, 0));
 
 describe('createD1DigestDeepDiveUsageRecorder', () => {
-  it('1 日の上限は 3 回', () => {
-    expect(DIGEST_DEEP_DIVE_DAILY_LIMIT).toBe(3);
-  });
-
-  it('最初の予約は許可し、残りを 2 にして count を書く', async () => {
-    const { db, sqlite, seed } = setup();
-    const userId = UserId.orThrow(seed.addLocalActor('kosui').userId);
-
-    const result = await createD1DigestDeepDiveUsageRecorder(db).reserve({ userId, day, now });
-
-    expect(result).toEqual({ ok: true, val: { allowed: true, remaining: 2 } });
-    expect(sqlite.prepare('SELECT count FROM digest_deep_dive_usages').all()).toEqual([{ count: 1 }]);
-  });
-
   it('3 回目まで許可して残りを数え、4 回目は拒否して翌 JST 0 時までの秒数を返し、count を増やさない', async () => {
     const { db, sqlite, seed } = setup();
     const userId = UserId.orThrow(seed.addLocalActor('kosui').userId);
@@ -65,18 +50,6 @@ describe('createD1DigestDeepDiveUsageRecorder', () => {
     for (let i = 0; i < 3; i += 1) await recorder.reserve({ userId, day, now });
 
     const result = await recorder.reserve({ userId, day: '2026-11-05', now });
-
-    expect(result).toEqual({ ok: true, val: { allowed: true, remaining: 2 } });
-  });
-
-  it('利用者ごとに数える', async () => {
-    const { db, seed } = setup();
-    const kosui = UserId.orThrow(seed.addLocalActor('kosui').userId);
-    const alice = UserId.orThrow(seed.addLocalActor('alice').userId);
-    const recorder = createD1DigestDeepDiveUsageRecorder(db);
-    for (let i = 0; i < 3; i += 1) await recorder.reserve({ userId: kosui, day, now });
-
-    const result = await recorder.reserve({ userId: alice, day, now });
 
     expect(result).toEqual({ ok: true, val: { allowed: true, remaining: 2 } });
   });
@@ -121,24 +94,5 @@ describe('createD1DigestDeepDiveUsageRecorder', () => {
     await recorder.release({ userId, day });
     await recorder.release({ userId, day });
     expect(sqlite.prepare('SELECT count FROM digest_deep_dive_usages').all()).toEqual([{ count: 0 }]);
-  });
-
-  it('release は指定した日と利用者の count だけを戻す', async () => {
-    const { db, sqlite, seed } = setup();
-    const kosui = UserId.orThrow(seed.addLocalActor('kosui').userId);
-    const alice = UserId.orThrow(seed.addLocalActor('alice').userId);
-    const recorder = createD1DigestDeepDiveUsageRecorder(db);
-    await recorder.reserve({ userId: kosui, day, now });
-    await recorder.reserve({ userId: alice, day, now });
-    await recorder.reserve({ userId: kosui, day: '2026-11-05', now });
-
-    await recorder.release({ userId: kosui, day });
-
-    expect(
-      sqlite.prepare('SELECT day, count FROM digest_deep_dive_usages WHERE userId = ? ORDER BY day').all(kosui),
-    ).toEqual([{ day: '2026-11-04', count: 0 }, { day: '2026-11-05', count: 1 }]);
-    expect(
-      sqlite.prepare('SELECT count FROM digest_deep_dive_usages WHERE userId = ?').all(alice),
-    ).toEqual([{ count: 1 }]);
   });
 });

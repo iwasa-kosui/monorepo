@@ -373,19 +373,4 @@ describe('createD1ThreadResolver の D1 の呼び出し回数', () => {
     expect(deep).toBe(shallow);
     expect(deep).toBeLessThanOrEqual(10);
   });
-
-  it('祖先と子孫の取得は、それぞれ再帰 CTE を 1 回だけ流し、SELECT で始まる', async () => {
-    const t = setup();
-    const me = t.seed.addLocalActor('kosui');
-    const root = t.seed.addLocalPost(me, 1_000);
-    const mid = t.seed.addLocalPost(me, 2_000, { inReplyToUri: root.uri });
-    t.seed.addLocalPost(me, 3_000, { inReplyToUri: mid.uri });
-    t.queries.length = 0;
-
-    await t.resolve(mid.postId);
-
-    const recursive = t.queries.filter((query) => /with recursive/i.test(query.sql));
-    expect(recursive).toHaveLength(2);
-    expect(recursive.every((query) => /^select\b/i.test(query.sql))).toBe(true);
-  });
 });

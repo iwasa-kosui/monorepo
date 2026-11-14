@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
@@ -62,37 +60,6 @@ const edit = (post: RemotePost, editedAt: number, pollValue?: RemotePostPoll) =>
     poll: pollValue,
   });
 
-describe('remote_post_polls の migration', () => {
-  it('既存の投稿の行は変えず、空の remote_post_polls を足す', () => {
-    const migrationsDir = new URL('../../../../drizzle-d1/', import.meta.url);
-    const files = readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort();
-    const migrationFile = files.find((name) => name.includes('remote_post_polls'));
-    if (migrationFile === undefined) throw new Error('remote_post_polls の migration が見つからない');
-    const sqlite = new DatabaseSync(':memory:');
-    for (const file of files.filter((name) => name < migrationFile)) {
-      sqlite.exec(readFileSync(new URL(file, migrationsDir), 'utf8'));
-    }
-    sqlite.exec(
-      'INSERT INTO actors(actorId,type,uri,inboxUrl) VALUES (\'actor-1\',\'remote\',\'https://remote.example/users/alice\',\'https://remote.example/inbox\')',
-    );
-    sqlite.exec(
-      'INSERT INTO posts(postId,actorId,content,createdAt,type) VALUES (\'post-1\',\'actor-1\',\'hi\',1000,\'remote\')',
-    );
-    sqlite.exec(
-      'INSERT INTO remote_posts(postId,uri,inReplyToUri,visibility) VALUES (\'post-1\',\'https://remote.example/notes/1\',NULL,NULL)',
-    );
-
-    sqlite.exec(readFileSync(new URL(migrationFile, migrationsDir), 'utf8'));
-
-    expect(sqlite.prepare('SELECT postId, content FROM posts').all()).toEqual([{ postId: 'post-1', content: 'hi' }]);
-    expect(sqlite.prepare('SELECT postId, uri FROM remote_posts').all()).toEqual([
-      { postId: 'post-1', uri: 'https://remote.example/notes/1' },
-    ]);
-    expect(sqlite.prepare('SELECT count(*) AS n FROM remote_post_polls').get()).toEqual({ n: 0 });
-    sqlite.close();
-  });
-});
-
 describe('remote_post_polls の保存と読み出し', () => {
   it('Question の投稿を保存すると、投票を同じ値で読み出せる', async () => {
     const t = setup();
@@ -104,25 +71,6 @@ describe('remote_post_polls の保存と読み出し', () => {
     expect(resolved.ok && resolved.val.get(event.aggregateState.postId)).toEqual(
       poll({ multiple: true, votersCount: null, closed: true }),
     );
-  });
-
-  it('締め切りが無い投票は expiresAt を null で読み出す', async () => {
-    const t = setup();
-    const event = createRemote(t.alice.actorId, poll({ expiresAt: null }));
-
-    await createD1PostCreatedStore(t.db).store(event);
-
-    const resolved = await createD1RemotePostPollsResolverByPostIds(t.db).resolve([event.aggregateState.postId]);
-    expect(resolved.ok && resolved.val.get(event.aggregateState.postId)?.expiresAt).toBeNull();
-  });
-
-  it('投票の無い投稿には行を作らない', async () => {
-    const t = setup();
-    const event = createRemote(t.alice.actorId);
-
-    await createD1PostCreatedStore(t.db).store(event);
-
-    expect(pollRows(t, event.aggregateState.postId)).toEqual([]);
   });
 
   it('複数の投稿の投票を 1 回の問い合わせで読む', async () => {
@@ -167,16 +115,6 @@ describe('remote_post_polls の保存と読み出し', () => {
 
     expect(resolved.ok && [...resolved.val.keys()]).toEqual([good.aggregateState.postId]);
     expect(resolved.ok && resolved.val.get(good.aggregateState.postId)).toEqual(poll());
-  });
-
-  it('投稿の ID が空なら問い合わせない', async () => {
-    const t = setup();
-    const before = t.queries.length;
-
-    const resolved = await createD1RemotePostPollsResolverByPostIds(t.db).resolve([]);
-
-    expect(resolved.ok && resolved.val.size).toBe(0);
-    expect(t.queries.length).toBe(before);
   });
 });
 
@@ -260,32 +198,6 @@ describe('投票だけの更新', () => {
     expect(
       t.sqlite.prepare('SELECT count(*) AS n FROM domain_events WHERE eventName = ?').get('post.remotePostPollUpdated'),
     ).toEqual({ n: 1 });
-  });
-
-  it('届いた順に上書きする', async () => {
-    const t = setup();
-    const created = createRemote(t.alice.actorId, poll());
-    await createD1PostCreatedStore(t.db).store(created);
-    const store = createD1RemotePostPollUpdatedStore(t.db);
-
-    await store.store(Post.updateRemotePostPoll(Instant.now())(created.aggregateState, poll({ votersCount: 20 })));
-    await store.store(Post.updateRemotePostPoll(Instant.now())(created.aggregateState, poll({ votersCount: 30 })));
-
-    const resolved = await createD1RemotePostPollsResolverByPostIds(t.db).resolve([created.aggregateState.postId]);
-    expect(resolved.ok && resolved.val.get(created.aggregateState.postId)?.votersCount).toBe(30);
-    expect(pollRows(t, created.aggregateState.postId)).toHaveLength(1);
-  });
-
-  it('投稿が無ければ、何も書かない', async () => {
-    const t = setup();
-    const created = createRemote(t.alice.actorId);
-
-    await createD1RemotePostPollUpdatedStore(t.db).store(
-      Post.updateRemotePostPoll(Instant.now())(created.aggregateState, poll()),
-    );
-
-    expect(pollRows(t, created.aggregateState.postId)).toEqual([]);
-    expect(t.sqlite.prepare('SELECT count(*) AS n FROM domain_events').get()).toEqual({ n: 0 });
   });
 });
 

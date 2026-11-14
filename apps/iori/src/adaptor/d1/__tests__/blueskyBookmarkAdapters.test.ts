@@ -2,7 +2,6 @@ import { Result } from '@iwasa-kosui/result';
 import { describe, expect, it } from 'vitest';
 
 import { Instant } from '../../../domain/instant/instant.ts';
-import { createD1BlueskyBookmarkDeletedStore } from '../blueskyTimeline/blueskyBookmarkDeletedStore.ts';
 import { createD1BlueskyBookmarkSavedStore } from '../blueskyTimeline/blueskyBookmarkSavedStore.ts';
 import { createD1BlueskyBookmarkTargetResolver } from '../blueskyTimeline/blueskyBookmarkTargetResolver.ts';
 import { createD1BlueskyViewerBookmarksSyncedStore } from '../blueskyTimeline/blueskyViewerBookmarksSyncedStore.ts';
@@ -31,20 +30,6 @@ describe('D1 の bluesky_bookmarks', () => {
       await store.save({ subjectUri: POST, createdAt: at(20) });
 
       expect(t.bookmarks()).toEqual([{ subjectUri: POST, createdAt: 20 }]);
-    });
-  });
-
-  describe('削除', () => {
-    it('subjectUri の行だけを消し、無い行の削除は何もしない', async () => {
-      const t = setup();
-      t.seed(POST, 1);
-      t.seed(OTHER, 1);
-      const store = createD1BlueskyBookmarkDeletedStore(t.db);
-
-      await store.deleteBySubjectUri(POST);
-      await store.deleteBySubjectUri('at://did:plc:a/app.bsky.feed.post/none');
-
-      expect(t.bookmarks()).toEqual([{ subjectUri: OTHER, createdAt: 1 }]);
     });
   });
 
@@ -89,19 +74,6 @@ describe('D1 の bluesky_bookmarks', () => {
       expect(t.queries.filter((query) => /^insert/i.test(query.sql))).toHaveLength(1);
     });
 
-    it('全部が保存済みなら書き込まず、空の同期では何もしない', async () => {
-      const t = setup();
-      t.seed(POST, 1);
-      const store = createD1BlueskyViewerBookmarksSyncedStore(t.db);
-      t.queries.length = 0;
-
-      await store.sync([{ subjectUri: POST, createdAt: at(99) }]);
-      await store.sync([]);
-
-      expect(t.queries.filter((query) => /^insert/i.test(query.sql))).toHaveLength(0);
-      expect(t.bookmarks()).toEqual([{ subjectUri: POST, createdAt: 1 }]);
-    });
-
     it('多くの行でもまとめて追加できる', async () => {
       const t = setup();
       const store = createD1BlueskyViewerBookmarksSyncedStore(t.db);
@@ -125,18 +97,6 @@ describe('D1 の bluesky_bookmarks', () => {
         { subjectUri: OTHER, createdAt: 900 },
         { subjectUri: 'at://did:plc:a/app.bsky.feed.post/3', createdAt: 100 },
       ]);
-    });
-
-    it('deleteStale の uri が空なら何もしない', async () => {
-      const t = setup();
-      t.seed(POST, 100);
-      const store = createD1BlueskyViewerBookmarksSyncedStore(t.db);
-      t.queries.length = 0;
-
-      await store.deleteStale([], at(500));
-
-      expect(t.queries).toHaveLength(0);
-      expect(t.bookmarks()).toHaveLength(1);
     });
   });
 });

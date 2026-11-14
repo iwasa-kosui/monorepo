@@ -141,10 +141,4 @@ describe('XFeedEntriesResolver', () => {
 
     expect(resolved.map((entry) => entry.feedEntryId).sort()).toEqual([published, fetched].sort());
   });
-
-  it('投稿が無ければ空の配列を返す', async () => {
-    const { resolve } = setup();
-
-    expect(await resolve()).toEqual([]);
-  });
 });

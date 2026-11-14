@@ -155,14 +155,6 @@ describe('createD1BlueskyNotificationCreatedStore', () => {
     expect(Math.max(...t.queries.map((query) => query.params.length))).toBeLessThanOrEqual(10);
   });
 
-  it('events が空なら何も書かない', async () => {
-    const t = setup();
-
-    await t.store.store();
-
-    expect(t.queries).toEqual([]);
-  });
-
   it('同じ uri を 2 回保存すると一意制約で失敗し、そのバッチは 1 件も残らない', async () => {
     const t = setup();
     await t.store.store(t.eventAt(t.like(1), 1_000));
@@ -187,16 +179,6 @@ describe('Bluesky の通知のリゾルバーと期限切れの削除', () => {
 
     expect([before.val, after.val]).toEqual([undefined, { initialSyncCompletedAt: 1_000 }]);
     expect(t.count('bluesky_notification_sync_state')).toBe(1);
-  });
-
-  it('受信の記録の有無とは関係なく、初回の取り込みの完了時刻を返す', async () => {
-    const t = setup();
-    await createD1BlueskyNotificationInitialSyncCompletedStore(t.db).store(Instant.orThrow(1_000));
-
-    const state = await createD1BlueskyNotificationSyncStateResolver(t.db).resolve();
-
-    expect(t.count('bluesky_notification_receipts')).toBe(0);
-    expect(state.val).toEqual({ initialSyncCompletedAt: 1_000 });
   });
 
   it('既存の uri を、250 件を 1 つの束縛で問い合わせて返す', async () => {

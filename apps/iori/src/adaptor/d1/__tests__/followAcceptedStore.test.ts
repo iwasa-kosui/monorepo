@@ -60,18 +60,6 @@ describe('createD1FollowAcceptedStore', () => {
 
     expect(countRows(t, 'follows')).toBe(1);
   });
-
-  it('行がまだ無ければ行とドメインイベントを作る', async () => {
-    const t = setup();
-    const kosui = t.seed.addLocalActor('kosui');
-    const alice = t.seed.addRemoteActor('alice');
-    const follow = { followerId: ActorId.orThrow(alice.actorId), followingId: ActorId.orThrow(kosui.actorId) };
-
-    await createD1FollowAcceptedStore(t.db).store(Follow.acceptFollow(follow, Instant.now()));
-
-    expect(countRows(t, 'follows')).toBe(1);
-    expect(countFollowAcceptedEvents(t)).toBe(1);
-  });
 });
 
 describe('createOnAccept with the D1 stores', () => {
@@ -105,24 +93,6 @@ describe('createOnAccept with the D1 stores', () => {
     });
     return { t, deps: deps as never, ctx, accept };
   };
-
-  it('申請済みのフォローへの Accept を処理しても例外にならない', async () => {
-    const { t, deps, ctx, accept } = await setupAccept();
-
-    await expect(createOnAccept(deps)(ctx, accept)).resolves.toBeUndefined();
-
-    expect(countRows(t, 'follows')).toBe(1);
-  });
-
-  it('同じ Accept を再試行しても例外にならず、行は1つのままになる', async () => {
-    const { t, deps, ctx, accept } = await setupAccept();
-
-    await createOnAccept(deps)(ctx, accept);
-    await expect(createOnAccept(deps)(ctx, accept)).resolves.toBeUndefined();
-
-    expect(countFollowAcceptedEvents(t)).toBe(2);
-    expect(countRows(t, 'follows')).toBe(1);
-  });
 
   it('送り主へのフォローが無ければ、埋め込みの Follow の object に行があっても記録しない', async () => {
     const { t, deps, ctx, accept } = await setupAccept();

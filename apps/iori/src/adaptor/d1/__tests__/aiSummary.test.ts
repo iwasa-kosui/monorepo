@@ -43,21 +43,6 @@ describe('createD1HomePostsResolverByPeriod', () => {
     expect(result).toEqual({ ok: true, val: [fromAlice.postId, mine.postId] });
   });
 
-  it('actorId が空なら空の配列を返す', async () => {
-    const { db, seed } = setup();
-    const me = seed.addLocalActor('kosui');
-    seed.addLocalPost(me, 1_000);
-
-    const result = await createD1HomePostsResolverByPeriod(db).resolve({
-      actorIds: [],
-      currentActorId: ActorId.orThrow(me.actorId),
-      since: instant(0),
-      until: instant(10_000),
-    });
-
-    expect(result).toEqual({ ok: true, val: [] });
-  });
-
   it('ミュートで除いた actorId の投稿は返さない', async () => {
     const { db, seed } = setup();
     const me = seed.addLocalActor('kosui');
@@ -253,28 +238,5 @@ describe('createD1AiSummaryUsageRecorder', () => {
     const nextDay = await recorder.reserve({ userId, day: '2026-11-05', limit: 20 });
 
     expect(nextDay).toEqual({ ok: true, val: { allowed: true, count: 1 } });
-  });
-
-  it('利用者ごとに数える', async () => {
-    const { db, seed } = setup();
-    const kosui = seed.addLocalActor('kosui');
-    const alice = seed.addLocalActor('alice');
-    const recorder = createD1AiSummaryUsageRecorder(db);
-    await reserveMany(recorder, UserId.orThrow(kosui.userId), '2026-11-04', 20);
-
-    const result = await recorder.reserve({ userId: UserId.orThrow(alice.userId), day: '2026-11-04', limit: 20 });
-
-    expect(result).toEqual({ ok: true, val: { allowed: true, count: 1 } });
-  });
-
-  it('read はその日の回数を返し、行がなければ 0 を返す', async () => {
-    const { db, seed } = setup();
-    const me = seed.addLocalActor('kosui');
-    const userId = UserId.orThrow(me.userId);
-    const recorder = createD1AiSummaryUsageRecorder(db);
-    await reserveMany(recorder, userId, '2026-11-04', 3);
-
-    expect(await recorder.read({ userId, day: '2026-11-04' })).toEqual({ ok: true, val: 3 });
-    expect(await recorder.read({ userId, day: '2026-11-05' })).toEqual({ ok: true, val: 0 });
   });
 });

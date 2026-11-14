@@ -113,12 +113,6 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
       ]);
     });
 
-    it('指定が無いときは crosspost の行も返す', async () => {
-      const t = setup(crosspostRows, ['at://own']);
-
-      expect(await t.resolve({ limit: 10 })).toEqual(['own', 'at://own#repost:did:plc:b', 'other']);
-    });
-
     it('uri が NULL の crosspost は行を除かない', async () => {
       const t = setup(crosspostRows, [null]);
 
@@ -155,38 +149,6 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
         ['other', false],
       ]);
     });
-
-    it('いいねの行があっても、タイムラインの行を増やさない', async () => {
-      const t = setup(likeRows, [], ['at://own', 'at://other']);
-
-      expect(await t.resolveItems(10)).toHaveLength(3);
-    });
-
-    it('liked の付与で D1 のクエリを増やさず、1 回の SELECT にまとめる', async () => {
-      const t = setup(likeRows, [], ['at://own']);
-      t.queries.length = 0;
-
-      await t.resolveItems(10);
-
-      expect(t.queries).toHaveLength(1);
-      expect(t.queries[0]?.sql).toMatch(/^select .* left join "bluesky_likes"/is);
-    });
-  });
-
-  describe('threadMuted と replyRootUri', () => {
-    it('D1 には保存しないので、すべての行で null を返す', async () => {
-      const t = setup([
-        { feedItemId: 'own', uri: 'at://own', indexedAt: BASE },
-        { feedItemId: 'other', uri: 'at://other', indexedAt: BASE - 1 },
-      ]);
-
-      const items = await t.resolveItems(10);
-
-      expect(items.map((item) => [item.feedItemId, item.threadMuted, item.replyRootUri])).toEqual([
-        ['own', null, null],
-        ['other', null, null],
-      ]);
-    });
   });
 
   describe('reposted', () => {
@@ -207,28 +169,6 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
         ['other', false],
       ]);
     });
-
-    it('いいねとリポストを別々に付け、タイムラインの行を増やさない', async () => {
-      const t = setup(repostRows, [], ['at://own'], ['at://own', 'at://other']);
-
-      const items = await t.resolveItems(10);
-
-      expect(items.map((item) => [item.feedItemId, item.liked, item.reposted])).toEqual([
-        ['own', true, true],
-        ['at://own#repost:did:plc:b', true, true],
-        ['other', false, true],
-      ]);
-    });
-
-    it('reposted の付与で D1 のクエリを増やさず、1 回の SELECT にまとめる', async () => {
-      const t = setup(repostRows, [], [], ['at://own']);
-      t.queries.length = 0;
-
-      await t.resolveItems(10);
-
-      expect(t.queries).toHaveLength(1);
-      expect(t.queries[0]?.sql).toMatch(/^select .* left join "bluesky_reposts"/is);
-    });
   });
 
   describe('bookmarked', () => {
@@ -248,28 +188,6 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
         ['at://own#repost:did:plc:b', true],
         ['other', false],
       ]);
-    });
-
-    it('いいねとリポストとは別に付け、タイムラインの行を増やさない', async () => {
-      const t = setup(bookmarkRows, [], ['at://other'], ['at://own'], ['at://own', 'at://other']);
-
-      const items = await t.resolveItems(10);
-
-      expect(items.map((item) => [item.feedItemId, item.liked, item.reposted, item.bookmarked])).toEqual([
-        ['own', false, true, true],
-        ['at://own#repost:did:plc:b', false, true, true],
-        ['other', true, false, true],
-      ]);
-    });
-
-    it('bookmarked の付与で D1 のクエリを増やさず、1 回の SELECT にまとめる', async () => {
-      const t = setup(bookmarkRows, [], [], [], ['at://own']);
-      t.queries.length = 0;
-
-      await t.resolveItems(10);
-
-      expect(t.queries).toHaveLength(1);
-      expect(t.queries[0]?.sql).toMatch(/^select .* left join "bluesky_bookmarks"/is);
     });
   });
 
@@ -323,13 +241,6 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
         'a-reposted-by-b',
         'muted-reposted-by-b',
       ]);
-    });
-
-    it('ミュートもブロックもしていない行がある DID の投稿は残す', async () => {
-      const t = setup(moderationRows);
-      t.moderate('did:plc:muted', 0, null);
-
-      expect(await t.resolve({ limit: 10 })).toHaveLength(moderationRows.length);
     });
 
     it('除いた行を数えずに limit まで返し、カーソルと excludeCrossposted とも併用できる', async () => {

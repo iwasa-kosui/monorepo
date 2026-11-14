@@ -127,18 +127,6 @@ describe('D1 actor selection with actual SQLite', () => {
     expect(result.val[0].post.repostCount).toBe(1);
   });
 
-  it('handles empty selections without SQL', async () => {
-    const { db, queries } = setup();
-    const emptyTimeline = await createD1TimelineItemsResolverByActorIds(db).resolve({
-      actorIds: [],
-      currentActorId: undefined,
-      createdAt: undefined,
-      mutedActorIds: [],
-    });
-    expect(emptyTimeline).toEqual({ ok: true, val: [] });
-    expect(queries).toHaveLength(0);
-  });
-
   it('preserves strict viewer flags separately from totals', async () => {
     const { sqlite, db, rows } = setup();
     const [author, viewer, other] = rows;

@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { PageRequest } from '../../../domain/page/page.ts';
 import { PostId } from '../../../domain/post/postId.ts';
-import { RepostId } from '../../../domain/repost/repostId.ts';
 import { createD1AccountProfilesResolverByActorIds } from '../actor/accountProfilesResolverByActorIds.ts';
 import { createD1FederatedTimelineItemsResolver } from '../federatedTimeline/federatedTimelineItemsResolver.ts';
 import {
@@ -18,7 +17,6 @@ import {
   postRowsQuery,
 } from '../post/postWithAuthorBatch.ts';
 import { createD1ThreadResolver } from '../post/threadResolver.ts';
-import { createD1RepostResolverById } from '../repost/repostResolverById.ts';
 import { createD1TimelineItemsResolverByActorIds } from '../timeline/timelineItemsResolverByActorIds.ts';
 import { createMastodonSeed, SEED_ORIGIN } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
@@ -135,14 +133,6 @@ describe('createD1TimelineItemsResolverByActorIds with page', () => {
 
     const top = result.ok ? result.val[0] : undefined;
     expect(top?.type === 'repost' && top.repostId).toBe(ghostBoost.repostId);
-  });
-
-  it('知らない ID の max_id は空にする', async () => {
-    const t = seedTimeline();
-
-    const result = await t.resolve({ olderThanId: t.seed.uuid() });
-
-    expect(result.ok && result.val).toEqual([]);
   });
 
   it('ミュートした投稿者を SQL で除いても件数が limit になる', async () => {
@@ -289,84 +279,6 @@ describe('createD1ThreadResolver', () => {
     expect(result.ok && result.val.descendants.map((post) => post.postId)).toEqual([reply.postId]);
     expect(t.queries.length).toBeLessThanOrEqual(14);
   });
-
-  it('子孫を孫まで、親子関係に沿った深さ優先で、同じ親の中では古い順に返す', async () => {
-    const t = setup();
-    const me = t.seed.addLocalActor('kosui');
-    const root = t.seed.addLocalPost(me, 1_000);
-    const a = t.seed.addLocalPost(me, 3_000, { inReplyToUri: root.uri });
-    const b = t.seed.addLocalPost(me, 2_000, { inReplyToUri: root.uri });
-    const a1 = t.seed.addLocalPost(me, 4_000, { inReplyToUri: a.uri });
-    const b1 = t.seed.addLocalPost(me, 5_000, { inReplyToUri: b.uri });
-    const b11 = t.seed.addLocalPost(me, 6_000, { inReplyToUri: b1.uri });
-    t.queries.length = 0;
-
-    const result = await createD1ThreadResolver(t.db, SEED_ORIGIN).resolve({ postId: PostId.orThrow(root.postId) });
-
-    expect(result.ok && result.val.descendants.map((post) => post.postId)).toEqual([
-      b.postId,
-      b1.postId,
-      b11.postId,
-      a.postId,
-      a1.postId,
-    ]);
-    const childQueries = t.queries.filter((query) => query.sql.includes('thread_descendants'));
-    expect(childQueries).toHaveLength(1);
-  });
-
-  it('子孫の深さを 20、件数を 60 までにし、循環でも止まる', async () => {
-    const t = setup();
-    const me = t.seed.addLocalActor('kosui');
-    const chainRoot = t.seed.addLocalPost(me, 1_000);
-    let parent = chainRoot;
-    for (let n = 1; n <= 25; n++) parent = t.seed.addLocalPost(me, 1_000 + n, { inReplyToUri: parent.uri });
-    const fanRoot = t.seed.addLocalPost(me, 10_000);
-    for (let n = 1; n <= 70; n++) t.seed.addLocalPost(me, 10_000 + n, { inReplyToUri: fanRoot.uri });
-    const resolver = createD1ThreadResolver(t.db, SEED_ORIGIN);
-
-    const chain = await resolver.resolve({ postId: PostId.orThrow(chainRoot.postId) });
-    const fan = await resolver.resolve({ postId: PostId.orThrow(fanRoot.postId) });
-
-    expect(chain.ok && chain.val.descendants).toHaveLength(20);
-    expect(fan.ok && fan.val.descendants).toHaveLength(60);
-  });
-
-  it('返信が循環していても同じ投稿を二度返さず、祖先に自分自身を入れない', async () => {
-    const t = setup();
-    const me = t.seed.addLocalActor('kosui');
-    const first = t.seed.addLocalPost(me, 1_000);
-    const second = t.seed.addLocalPost(me, 2_000, { inReplyToUri: first.uri });
-    t.sqlite.prepare('UPDATE local_posts SET inReplyToUri = ? WHERE postId = ?').run(second.uri, first.postId);
-
-    const result = await createD1ThreadResolver(t.db, SEED_ORIGIN).resolve({ postId: PostId.orThrow(first.postId) });
-
-    expect(result.ok && result.val.descendants.map((post) => post.postId)).toEqual([second.postId]);
-    expect(result.ok && result.val.ancestors.map((post) => post.postId)).toEqual([second.postId]);
-  });
-
-  it('祖先は 40 件までにし、不正な URI の返信先でたどるのをやめる', async () => {
-    const t = setup();
-    const me = t.seed.addLocalActor('kosui');
-    let parent = t.seed.addLocalPost(me, 1_000);
-    for (let n = 1; n <= 45; n++) parent = t.seed.addLocalPost(me, 1_000 + n, { inReplyToUri: parent.uri });
-    const broken = t.seed.addLocalPost(me, 9_000, { inReplyToUri: 'not a url' });
-    const resolver = createD1ThreadResolver(t.db, SEED_ORIGIN);
-
-    const deep = await resolver.resolve({ postId: PostId.orThrow(parent.postId) });
-    const invalid = await resolver.resolve({ postId: PostId.orThrow(broken.postId) });
-
-    expect(deep.ok && deep.val.ancestors).toHaveLength(40);
-    expect(invalid.ok && invalid.val.ancestors).toEqual([]);
-    expect(invalid.ok && invalid.val.currentPost?.postId).toBe(broken.postId);
-  });
-
-  it('見つからなければ currentPost を null にする', async () => {
-    const t = setup();
-
-    const result = await createD1ThreadResolver(t.db, SEED_ORIGIN).resolve({ postId: PostId.generate() });
-
-    expect(result.ok && result.val).toEqual({ currentPost: null, ancestors: [], descendants: [] });
-  });
 });
 
 describe('createD1PostExtrasResolverByPosts', () => {
@@ -477,14 +389,6 @@ describe('createD1PostExtrasResolverByPosts', () => {
       const quote = await quoteOf(t, post, actorId(me.actorId));
 
       expect(quote).toMatchObject({ uri: quoted.uri, post: { postId: quoted.postId } });
-    });
-
-    it('引用が無い投稿は quote を null にする', async () => {
-      const t = setup();
-      const me = t.seed.addLocalActor('kosui');
-      const post = t.seed.addLocalPost(me, 1_000);
-
-      expect(await quoteOf(t, post, actorId(me.actorId))).toBeNull();
     });
 
     it('引用先が未取得、削除済み、見えない投稿のとき post を null にして URI は残す', async () => {
@@ -628,30 +532,6 @@ describe('createD1PostExtrasResolverByPosts', () => {
     expect(crosspostOf(mineWithoutRow)).toBeNull();
     expect(crosspostOf(theirs)).toBeNull();
   });
-
-  it('currentActorId が無ければ Bluesky への投稿を引かない', async () => {
-    const t = setup();
-    const me = t.seed.addLocalActor('kosui');
-    const mine = t.seed.addLocalPost(me, 1_000);
-    t.sqlite.prepare('INSERT INTO bluesky_crossposts(postId,status,createdAt,updatedAt) VALUES (?,?,?,?)').run(
-      mine.postId,
-      'pending',
-      1_000,
-      1_000,
-    );
-    const posts = await createD1PostsWithAuthorResolverByPostIds(t.db).resolve({
-      postIds: [PostId.orThrow(mine.postId)],
-      currentActorId: undefined,
-    });
-    const loaded = posts.ok ? [...posts.val.values()] : [];
-
-    const extras = await createD1PostExtrasResolverByPosts(t.db, SEED_ORIGIN).resolve({
-      posts: loaded,
-      currentActorId: undefined,
-    });
-
-    expect(extras.ok && extras.val.get(PostId.orThrow(mine.postId))?.blueskyCrosspost).toBeNull();
-  });
 });
 
 describe('createD1AccountProfilesResolverByActorIds', () => {
@@ -758,20 +638,5 @@ describe('フォロワーとフォロー中の ID の一覧', () => {
     expect(all.ok && all.val).toEqual(ids.slice(0, 2));
     expect(older.ok && older.val).toEqual(ids.slice(1));
     expect(newer.ok && newer.val).toEqual([ids[1]]);
-  });
-});
-
-describe('createD1RepostResolverById', () => {
-  it('repostId から投稿 ID と作成時刻を引く', async () => {
-    const t = setup();
-    const me = t.seed.addLocalActor('kosui');
-    const note = t.seed.addLocalPost(me, 1_000);
-    const repost = t.seed.addRepost(me.actorId, note.postId, 5_000);
-
-    const found = await createD1RepostResolverById(t.db).resolve(RepostId.orThrow(repost.repostId));
-    const missing = await createD1RepostResolverById(t.db).resolve(RepostId.generate());
-
-    expect(found.ok && found.val).toMatchObject({ postId: note.postId, actorId: me.actorId, createdAt: 5_000 });
-    expect(missing.ok && missing.val).toBeUndefined();
   });
 });

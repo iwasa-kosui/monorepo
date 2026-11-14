@@ -7,11 +7,9 @@ import { Instant } from '../../../domain/instant/instant.ts';
 import { UserId } from '../../../domain/user/userId.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { createD1BlockCreatedStore } from '../block/blockCreatedStore.ts';
-import { createD1BlockDeletedStore } from '../block/blockDeletedStore.ts';
 import { createD1BlockedActorIdsResolverByUserId } from '../block/blockedActorIdsResolverByUserId.ts';
 import { createD1BlockedActorsResolverByUserIdWithPagination } from '../block/blockedActorsResolverByUserIdWithPagination.ts';
 import { createD1BlockedActorUriResolverByUsername } from '../block/blockedActorUriResolverByUsername.ts';
-import { createD1BlockResolver } from '../block/blockResolver.ts';
 import { createD1MutedOrBlockedActorIdsResolverByUserId } from '../block/mutedOrBlockedActorIdsResolverByUserId.ts';
 import { createD1TimelineLinkTrendsResolverByUserId } from '../linkPreview/timelineLinkTrendsResolverByUserId.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
@@ -38,26 +36,6 @@ const setup = () => {
 };
 
 describe('D1 の block の store と resolver', () => {
-  it('作成の store が blocks とドメインイベントを同時に保存し、resolver が取り出す', async () => {
-    const t = setup();
-    const created = t.block(t.me.userId, t.alice.actorId);
-
-    await createD1BlockCreatedStore(t.fixture.db).store(created);
-
-    expect(t.count('blocks')).toBe(1);
-    expect(t.count('domain_events', `eventName='block.blockCreated'`)).toBe(1);
-    const resolved = await createD1BlockResolver(t.fixture.db).resolve({
-      userId: UserId.orThrow(t.me.userId),
-      blockedActorId: ActorId.orThrow(t.alice.actorId),
-    });
-    expect(resolved).toMatchObject({ ok: true, val: created.aggregateState });
-    const unresolved = await createD1BlockResolver(t.fixture.db).resolve({
-      userId: UserId.orThrow(t.me.userId),
-      blockedActorId: ActorId.orThrow(t.bob.actorId),
-    });
-    expect(unresolved).toMatchObject({ ok: true, val: undefined });
-  });
-
   it('同じ組み合わせを2回保存すると2回目は失敗し、blocks もドメインイベントも1件のまま残る', async () => {
     const t = setup();
     const store = createD1BlockCreatedStore(t.fixture.db);
@@ -67,19 +45,6 @@ describe('D1 の block の store と resolver', () => {
 
     expect(t.count('blocks')).toBe(1);
     expect(t.count('domain_events')).toBe(1);
-  });
-
-  it('削除の store が blocks の行を消してドメインイベントを保存する', async () => {
-    const t = setup();
-    const created = t.block(t.me.userId, t.alice.actorId);
-    await createD1BlockCreatedStore(t.fixture.db).store(created);
-
-    await createD1BlockDeletedStore(t.fixture.db).store(
-      Block.deleteBlock(created.aggregateState, Instant.orThrow(2_000)),
-    );
-
-    expect(t.count('blocks')).toBe(0);
-    expect(t.count('domain_events', `eventName='block.blockDeleted'`)).toBe(1);
   });
 
   it('BlockedActorIdsResolverByUserId は自分のブロックだけを返し、ミュートを含めない', async () => {

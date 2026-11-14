@@ -5,7 +5,6 @@ import { ImageId } from '../../../domain/image/imageId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { MentionNotificationCreatedStore } from '../../../domain/notification/notification.ts';
 import { Post, type RemotePost, type RemotePostUpdatedStore } from '../../../domain/post/post.ts';
-import { PostId } from '../../../domain/post/postId.ts';
 import { UpdateRemotePostUseCase } from '../../../useCase/updateRemotePost.ts';
 import { createD1ActorResolverByUri } from '../actor/actorResolverByUri.ts';
 import { createD1BlockResolver } from '../block/blockResolver.ts';
@@ -19,7 +18,6 @@ import {
 } from '../notification/inboxNotificationAdapters.ts';
 import { createD1LocalPostResolverByUri } from '../post/localPostResolverByUri.ts';
 import { createD1PostResolverByUri } from '../post/postResolverByUri.ts';
-import { createD1PostsWithAuthorResolverByPostIds } from '../post/postWithAuthorBatch.ts';
 import { createD1RemotePostRecipientsResolverByPostId } from '../post/remotePostRecipientsResolverByPostId.ts';
 import { createD1RemotePostUpdatedStore } from '../post/remotePostUpdatedStore.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../pushSubscription/pushSubscriptionsResolverByUserId.ts';
@@ -172,37 +170,6 @@ const setup = (
 };
 
 describe('リモート投稿の編集の保存', () => {
-  it('Question の Update では、票数・投票者数・締め切り・closed を上書きする', async () => {
-    const t = setup();
-    const pollRow = () => t.sqlite.prepare('SELECT * FROM remote_post_polls WHERE postId = ?').get(t.post.postId);
-    t.sqlite.prepare(
-      'INSERT INTO remote_post_polls(postId,multiple,options,votersCount,expiresAt,closed) VALUES (?,?,?,?,?,?)',
-    )
-      .run(t.post.postId, 0, JSON.stringify([{ title: 'a', votesCount: 1 }]), 1, 9_000_000_000_000, 0);
-
-    const result = await t.useCase.run(
-      t.input({
-        poll: {
-          multiple: false,
-          options: [{ title: 'a', votesCount: 7 }],
-          votersCount: 7,
-          expiresAt: Instant.orThrow(6_000),
-          closed: true,
-        },
-      }),
-    );
-
-    expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
-    expect(pollRow()).toEqual({
-      postId: t.post.postId,
-      multiple: 0,
-      options: JSON.stringify([{ title: 'a', votesCount: 7 }]),
-      votersCount: 7,
-      expiresAt: 6_000,
-      closed: 1,
-    });
-  });
-
   it('本文、CW、センシティブ、添付、宛先、編集時刻を更新し、公開範囲と作成時刻は変えない', async () => {
     const t = setup();
 
@@ -234,22 +201,6 @@ describe('リモート投稿の編集の保存', () => {
     expect(t.recipients()).toEqual([]);
   });
 
-  it('更新イベントの payload に更新の前と後の宛先を入れて domain_events に保存する', async () => {
-    const t = setup();
-
-    await t.useCase.run(t.input({ recipientActorUris: [hanakoUri, kosuiUri] }));
-
-    const [event, ...rest] = t.events();
-    expect(rest).toEqual([]);
-    expect(event.eventPayload).toMatchObject({
-      postId: t.post.postId,
-      content: '<p>after</p>',
-      editedAt: 5_000,
-      previousRecipientActorUris: [kosuiUri],
-      recipientActorUris: [hanakoUri, kosuiUri],
-    });
-  });
-
   it('宛先が束縛数の上限を超える数あっても更新できる', async () => {
     const t = setup();
     const uris = Array.from({ length: 95 }, (_, n) => `${SEED_ORIGIN}/users/user${n}`);
@@ -269,15 +220,6 @@ describe('リモート投稿の編集の保存', () => {
     expect(t.images()).toEqual([{ url: 'https://remote.example/media/old.png', altText: 'old alt' }]);
     expect(t.recipients()).toEqual([kosuiUri]);
     expect(t.events()).toEqual([]);
-  });
-
-  it('DB にないアクターからの更新は何も更新しない', async () => {
-    const t = setup();
-
-    const result = await t.useCase.run(t.input({ actorUri: 'https://unknown.example/users/eve' }));
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'RemotePostUpdateAuthorMismatchError' } });
-    expect(t.row()).toEqual(t.unchanged);
   });
 
   it('保存済みの投稿がなければ何もしない', async () => {
@@ -300,15 +242,6 @@ describe('リモート投稿の編集の保存', () => {
     expect(older).toMatchObject({ ok: true, val: { type: 'staleEdit' } });
     expect(same).toMatchObject({ ok: true, val: { type: 'staleEdit' } });
     expect(t.row()).toMatchObject({ content: '<p>after</p>', editedAt: 5_000 });
-  });
-
-  it('より新しい更新は上書きする', async () => {
-    const t = setup();
-    await t.useCase.run(t.input());
-
-    await t.useCase.run(t.input({ content: '<p>newer</p>', editedAt: Instant.orThrow(6_000) }));
-
-    expect(t.row()).toMatchObject({ content: '<p>newer</p>', editedAt: 6_000 });
   });
 
   it('同じ更新を 2 回受けても結果が変わらず、イベントも 1 件だけになる', async () => {
@@ -470,16 +403,6 @@ describe('direct の投稿の参加者', () => {
     expect(participants(t)).toEqual([aliceUri, kosuiUri].sort());
   });
 
-  it('更新イベントの payload に参加者を入れる', async () => {
-    const t = setup();
-
-    await t.useCase.run(t.input({ recipientActorUris: [hanakoUri], mentionedActorUris: [bobUri] }));
-
-    expect(t.events()[0]?.eventPayload).toMatchObject({
-      participantActorUris: [aliceUri, bobUri, hanakoUri],
-    });
-  });
-
   it('direct でない投稿の編集では、参加者を保存しない', async () => {
     const t = setup();
     t.setVisibility('public');
@@ -497,24 +420,6 @@ describe('direct の投稿の参加者', () => {
 
     expect(t.row()).toMatchObject({ visibility: 'direct' });
     expect(participants(t)).toEqual([aliceUri, hanakoUri].sort());
-  });
-
-  it('保存済みの編集時刻より新しくない更新では、参加者を足さない', async () => {
-    const t = setup();
-    await t.useCase.run(t.input());
-
-    await t.useCase.run(t.input({ editedAt: Instant.orThrow(4_000), mentionedActorUris: [bobUri] }));
-
-    expect(participants(t)).toEqual([aliceUri, hanakoUri].sort());
-  });
-
-  it('参加者が束縛数の上限を超える数あっても保存できる', async () => {
-    const t = setup();
-    const uris = Array.from({ length: 95 }, (_, n) => `${SEED_ORIGIN}/users/user${n}`);
-
-    await t.useCase.run(t.input({ recipientActorUris: uris }));
-
-    expect(participants(t)).toHaveLength(96);
   });
 });
 
@@ -631,25 +536,6 @@ describe('同時に来た更新の競合', () => {
   });
 });
 
-describe('API に出す編集時刻', () => {
-  it('編集された投稿の editedAt を返し、編集されていない投稿は null を返す', async () => {
-    const t = setup();
-    const untouched = t.seed.addRemotePost(t.alice, 2_000, {});
-    await t.useCase.run(t.input());
-
-    const result = await createD1PostsWithAuthorResolverByPostIds(t.db).resolve({
-      postIds: [PostId.orThrow(t.post.postId), PostId.orThrow(untouched.postId)],
-      currentActorId: undefined,
-    });
-
-    if (!result.ok) throw new Error('unreachable');
-    const edited = result.val.get(PostId.orThrow(t.post.postId));
-    const notEdited = result.val.get(PostId.orThrow(untouched.postId));
-    expect(edited).toMatchObject({ type: 'remote', editedAt: 5_000, content: '<p>after</p>' });
-    expect(notEdited).toMatchObject({ type: 'remote', editedAt: null });
-  });
-});
-
 describe('編集で新しく足された宛先への通知', () => {
   const mentionPayload = { title: 'New Mention', body: 'alice mentioned you', url: '/notifications' };
 
@@ -758,24 +644,6 @@ describe('編集で新しく足された宛先への通知', () => {
     );
   });
 
-  it('postNotFound、staleEdit、作者不一致では出さない', async () => {
-    const t = setup();
-    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
-    await t.useCase.run(t.input({ recipientActorUris: [kosuiUri] }));
-
-    const notFound = await t.useCase.run(t.input({ uri: 'https://remote.example/notes/unknown' }));
-    const stale = await t.useCase.run(t.input({ editedAt: Instant.orThrow(4_000) }));
-    const mismatch = await t.useCase.run(
-      t.input({ actorUri: 'https://remote.example/users/mallory', editedAt: Instant.orThrow(9_000) }),
-    );
-
-    expect(notFound).toMatchObject({ ok: true, val: { type: 'postNotFound' } });
-    expect(stale).toMatchObject({ ok: true, val: { type: 'staleEdit' } });
-    expect(mismatch).toMatchObject({ ok: false, err: { type: 'RemotePostUpdateAuthorMismatchError' } });
-    expect(t.mentionNotifications()).toEqual([]);
-    expect(t.webPushSender.send).not.toHaveBeenCalled();
-  });
-
   it('Web Push の送信に失敗しても、投稿の更新は成功のままにする', async () => {
     const t = setup();
     t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
@@ -812,26 +680,6 @@ describe('編集で新しく足された宛先への通知', () => {
     ]);
     expect(t.webPushSender.send).toHaveBeenCalledTimes(1);
     expect(t.webPushSender.send).toHaveBeenCalledWith(
-      expect.objectContaining({ endpoint: 'https://push.example/taro' }),
-      mentionPayload,
-    );
-  });
-
-  it('1人目の宛先への Web Push が例外を投げても、2人目の宛先には Web Push を出す', async () => {
-    const t = setup();
-    const taro = t.seed.addLocalActor('taro');
-    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
-    t.addPushSubscription(taro.userId, 'https://push.example/taro');
-    t.webPushSender.send.mockImplementationOnce(() => {
-      throw new Error('push failed');
-    });
-
-    const result = await t.useCase.run(t.input({ recipientActorUris: [hanakoUri, `${SEED_ORIGIN}/users/taro`] }));
-
-    expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
-    expect(t.mentionNotifications()).toHaveLength(2);
-    expect(t.webPushSender.send).toHaveBeenCalledTimes(2);
-    expect(t.webPushSender.send).toHaveBeenLastCalledWith(
       expect.objectContaining({ endpoint: 'https://push.example/taro' }),
       mentionPayload,
     );

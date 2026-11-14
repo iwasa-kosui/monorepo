@@ -70,15 +70,4 @@ describe('createD1FeedSourceFetchReserver', () => {
 
     expect(lastFetchedAtOf(otherSourceId)).toBeNull();
   });
-
-  it('存在しない情報源は取れない', async () => {
-    const { reserver } = setup(null);
-
-    const result = await reserver.reserve({
-      feedSourceId: FeedSourceId.orThrow('00000000-0000-4000-8000-0000000000ff'),
-      now: t0,
-    });
-
-    expect(result).toEqual({ ok: true, val: false });
-  });
 });

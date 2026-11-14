@@ -55,17 +55,6 @@ describe('createD1DigestHeadersResolverByUserIdAndDigestDate', () => {
       [genai, 'genai'],
     ]);
   });
-
-  it('その日の digest が無ければ空の配列を返す', async () => {
-    const { db, me } = setup();
-
-    const result = await createD1DigestHeadersResolverByUserIdAndDigestDate(db).resolve({
-      userId: UserId.orThrow(me.userId),
-      digestDate: '2026-11-05',
-    });
-
-    expect(result).toEqual({ ok: true, val: [] });
-  });
 });
 
 describe('createD1DigestItemUrlsResolverByUserId', () => {

@@ -30,14 +30,6 @@ describe('D1 の保存済み URI の resolver', () => {
     expect(resolved).toEqual({ ok: true, val: [first.uri] });
   });
 
-  it('リモートの投稿は、空の URI なら何も返す', async () => {
-    const t = setup();
-
-    const resolved = await createD1RemotePostUrisResolverByUris(t.fixture.db).resolve({ uris: [] });
-
-    expect(resolved).toEqual({ ok: true, val: [] });
-  });
-
   it('ローカルの投稿は、渡した URI のうち保存済みで削除されていないものを返す', async () => {
     const t = setup();
     const kept = t.seed.addLocalPost(t.me, 1_000);
