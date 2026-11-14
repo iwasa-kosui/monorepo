@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 import { ActorId } from '../domain/actor/actorId.ts';
 import type { AiAgentBotTrigger, AiAgentBotTriggerHandled } from '../domain/aiAgentBot/aiAgentBot.ts';
+import { MAX_PENDING_FOLLOWUPS } from '../domain/aiAgentBot/aiAgentBotFollowup.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { PostId } from '../domain/post/postId.ts';
 import { UserId } from '../domain/user/userId.ts';
 import type { AgentChatModel, AgentChatRequest, AgentChatResponse } from '../ports/agentChatModel.ts';
+import { createInMemoryFollowups } from './aiAgent/__tests__/inMemoryFollowups.ts';
 import type { AgentPostView, AiAgentBotCapabilities } from './aiAgent/agentTools.ts';
 import { AI_AGENT_BOT_MAX_STEPS } from './aiAgent/aiAgentBotPrompts.ts';
 import { type AiAgentBotReply, RespondToAiAgentMentionsUseCase } from './respondToAiAgentMentions.ts';
@@ -53,7 +55,12 @@ const scriptedModel = (script: (request: AgentChatRequest, call: number) => Agen
   return { model, requests };
 };
 
-const run = async (chatModel: AgentChatModel, replyResult: Result<void, string> = Result.ok(undefined)) => {
+const run = async (
+  chatModel: AgentChatModel,
+  replyResult: Result<void, string> = Result.ok(undefined),
+  pendingFollowups = 0,
+) => {
+  const followups = createInMemoryFollowups(() => NOW, pendingFollowups);
   const stored: AiAgentBotTriggerHandled[] = [];
   const replies: AiAgentBotReply[] = [];
   const useCase = RespondToAiAgentMentionsUseCase.create({
@@ -67,7 +74,7 @@ const run = async (chatModel: AgentChatModel, replyResult: Result<void, string> 
     repliedCountResolverSince: { resolve: () => RA.ok(0) },
     actorResolverById: { resolve: () => RA.ok(undefined) },
     chatModel,
-    now: () => NOW,
+    ...followups.deps,
   });
   const summary = await useCase.run({
     bot: BOT,
@@ -79,7 +86,7 @@ const run = async (chatModel: AgentChatModel, replyResult: Result<void, string> 
       },
     },
   });
-  return { summary: summary.val, stored, replies };
+  return { summary: summary.val, stored, replies, scheduled: followups.scheduled };
 };
 
 describe('RespondToAiAgentMentionsUseCase', () => {
@@ -128,5 +135,35 @@ describe('RespondToAiAgentMentionsUseCase', () => {
     );
     const { stored } = await run(model, Result.err('配送できません'));
     expect(stored).toMatchObject([{ outcome: 'failed', reason: '配送できません' }]);
+  });
+
+  it('schedule_followup で、もとの投稿に続報する予定を入れられる', async () => {
+    const { model } = scriptedModel((_, call) =>
+      call === 0
+        ? toolCall('schedule_followup', { note: '公式発表を確かめる', afterMinutes: 60 })
+        : call === 1
+        ? toolCall('reply', { text: 'あとで続報します。' })
+        : { content: undefined, toolCalls: [] }
+    );
+    const { scheduled, stored } = await run(model);
+    expect(scheduled).toMatchObject([{
+      postId: TRIGGER_POST_ID,
+      authorActorId: AUTHOR_ACTOR_ID,
+      note: '公式発表を確かめる',
+      round: 1,
+      dueAt: NOW + 60 * 60 * 1000,
+    }]);
+    expect(stored).toMatchObject([{ outcome: 'replied' }]);
+  });
+
+  it('処理を待つ予定が上限まで溜まっていたら、予定を入れない', async () => {
+    const { model, requests } = scriptedModel((_, call) =>
+      call === 0
+        ? toolCall('schedule_followup', { note: 'あとで確かめる', afterMinutes: 60 })
+        : { content: undefined, toolCalls: [] }
+    );
+    const { scheduled } = await run(model, Result.ok(undefined), MAX_PENDING_FOLLOWUPS);
+    expect(scheduled).toEqual([]);
+    expect(requests[1]?.messages.at(-1)).toMatchObject({ role: 'tool', content: expect.stringMatching(/^エラー/) });
   });
 });

@@ -35,6 +35,7 @@ import {
   mentionSystemPrompt,
   mentionUserPrompt,
 } from './aiAgent/aiAgentBotPrompts.ts';
+import { createFollowupTools, type FollowupSchedulerDeps } from './aiAgent/followupScheduler.ts';
 import type { UseCase } from './useCase.ts';
 
 /** 1 回の実行で答えるトリガーの数。cron は 1 分ごとに動くので、少しずつ片付ける */
@@ -71,7 +72,7 @@ export type RespondToAiAgentMentionsUseCase = UseCase<Input, RespondToAiAgentMen
 
 type ActorResolverById = Agg.Resolver<ActorId, Actor | undefined>;
 
-type Deps = Readonly<{
+type Deps = FollowupSchedulerDeps & Readonly<{
   pendingTriggersResolver: AiAgentBotPendingTriggersResolver;
   triggersHandledStore: AiAgentBotTriggersHandledStore;
   repliedCountResolverSince: AiAgentBotRepliedCountResolverSince;
@@ -80,7 +81,7 @@ type Deps = Readonly<{
   now: () => Instant;
 }>;
 
-const handleOf = (actor: Actor | undefined): string => {
+export const handleOf = (actor: Actor | undefined): string => {
   if (actor === undefined) return '(不明なアカウント)';
   if (actor.type === 'local') return actor.displayName ?? actor.uri;
   const host = URL.canParse(actor.uri) ? new URL(actor.uri).host : undefined;
@@ -145,7 +146,11 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
         trigger: formatPost(triggerPost),
         author: handleOf(author),
       }),
-      tools: [...createAgentTools(capabilities), replyTool.tool],
+      tools: [
+        ...createAgentTools(capabilities),
+        replyTool.tool,
+        ...createFollowupTools(deps, { postId: trigger.postId, authorActorId: trigger.authorActorId, round: 1 }),
+      ],
       finalTools: [replyTool.tool],
       maxSteps: AI_AGENT_BOT_MAX_STEPS,
       maxOutputTokens: AI_AGENT_BOT_MAX_OUTPUT_TOKENS,

@@ -1,5 +1,5 @@
 import type { IoriWorkerEnv } from '../workerEnv.ts';
-import { postAiAgentMusingTask, respondToAiAgentMentionsTask } from './aiAgentBotTasks.ts';
+import { postAiAgentMusingTask, respondToAiAgentMentionsTask, runAiAgentFollowupsTask } from './aiAgentBotTasks.ts';
 import { purgeBlueskyAccountSwitchTask, skipWhileBlueskyAccountSwitching } from './blueskyAccountSwitchTasks.ts';
 import { collectBlueskyChatPushTask } from './blueskyChatPushTasks.ts';
 import { retryBlueskyCrosspostsTask } from './blueskyCrosspostTasks.ts';
@@ -48,6 +48,8 @@ export const scheduledTasks: ScheduledTaskTable = {
     }),
     purgeBlueskyAccountSwitchTask,
     respondToAiAgentMentionsTask,
+    // メンションへの返信と同じ上限（24 時間の返信数）を数えるので、返信を終えてから動かす
+    { ...runAiAgentFollowupsTask, after: respondToAiAgentMentionsTask.name },
   ],
   '0 21 * * *': [syncKosuiInterestSourcesTask],
   '15 20 * * 1': [detectRadarVolumeTask],

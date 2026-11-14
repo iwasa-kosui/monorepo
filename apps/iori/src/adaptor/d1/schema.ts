@@ -869,6 +869,23 @@ export const aiAgentBotTriggersTable = sqliteTable('ai_agent_bot_triggers', {
   index('ai_agent_bot_triggers_outcome_handled_at_idx').on(table.outcome, table.handledAt),
 ]);
 
+/** AI エージェントの bot が「あとで続きを調べる」と入れた予定。処理したら outcome と handledAt を埋める */
+export const aiAgentBotFollowupsTable = sqliteTable('ai_agent_bot_followups', {
+  followupId: text('followupId').primaryKey(),
+  postId: text('postId').notNull(),
+  authorActorId: text('authorActorId').notNull(),
+  note: text('note').notNull(),
+  round: integer('round').notNull(),
+  dueAt: timestamp().notNull(),
+  scheduledAt: timestamp().notNull(),
+  outcome: text('outcome', { enum: ['replied', 'ignored', 'failed'] }),
+  reason: text('reason'),
+  handledAt: timestamp(),
+}, (table) => [
+  index('ai_agent_bot_followups_handled_at_due_at_idx').on(table.handledAt, table.dueAt),
+  index('ai_agent_bot_followups_outcome_handled_at_idx').on(table.outcome, table.handledAt),
+]);
+
 export const schema = {
   usersTable,
   keysTable,
@@ -949,4 +966,5 @@ export const schema = {
   blueskyNotificationSyncStateTable,
   blueskyAccountSwitchTable,
   aiAgentBotTriggersTable,
+  aiAgentBotFollowupsTable,
 } as const;
