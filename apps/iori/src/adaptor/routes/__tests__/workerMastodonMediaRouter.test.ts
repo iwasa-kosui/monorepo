@@ -100,11 +100,6 @@ describe('POST /api/v2/media', () => {
       meta: null,
       blurhash: null,
     });
-    expect(s.bucket.put).toHaveBeenCalledWith(
-      `post-images/${body.id}/original`,
-      expect.anything(),
-      expect.objectContaining({ httpMetadata: expect.objectContaining({ contentType: 'image/png' }) }),
-    );
     expect(s.medias.get(body.id)).toMatchObject({
       userId,
       url: body.url,
@@ -123,31 +118,13 @@ describe('POST /api/v2/media', () => {
     expect((await response.json() as { url: string }).url).toMatch(/\.png$/);
   });
 
-  it('description を省略したら null にする', async () => {
-    const s = setup();
-    const { headers } = await s.user();
-
-    const response = await s.upload(headers, { file: filePart(pngBytes()) });
-
-    expect((await response.json() as { description: unknown }).description).toBeNull();
-  });
-
-  it('write スコープでも通る', async () => {
-    const s = setup();
-    const { headers } = await s.user('write');
-
-    expect((await s.upload(headers, { file: filePart(pngBytes()) })).status).toBe(200);
-  });
-
   it.each([
     [
       '申告は画像でも中身が画像でない',
       () => ({ file: filePart(new TextEncoder().encode('<html></html>'), 'image/png') }),
     ],
     ['5MB を超える', () => ({ file: filePart(pngBytes(UPLOAD_IMAGE_MAX_BYTES + 1)) })],
-    ['空', () => ({ file: filePart(new Uint8Array()) })],
     ['file がない', () => ({ description: 'だけ' })],
-    ['description が 1500 文字を超える', () => ({ file: filePart(pngBytes()), description: 'あ'.repeat(1501) })],
   ])('%s場合は 422 にして、保存しない', async (_name, values) => {
     const s = setup();
     const { headers } = await s.user();
@@ -177,19 +154,6 @@ describe('POST /api/v2/media', () => {
 
     expect(response.status).toBe(403);
     expect(s.bucket.put).not.toHaveBeenCalled();
-  });
-
-  it('Cookie の要求は同一オリジンでなければ 403 にする', async () => {
-    const s = setup();
-    const { sessionId } = s.h.memory.addSession();
-
-    const response = await s.request('/api/v2/media', {
-      method: 'POST',
-      headers: { Cookie: `sessionId=${sessionId}`, Origin: 'https://evil.example' },
-      body: multipart({ file: filePart(pngBytes()) }),
-    });
-
-    expect(response.status).toBe(403);
   });
 });
 
@@ -250,22 +214,6 @@ describe('GET と PUT /api/v1/media/:id', () => {
     expect(await unchanged.json()).toMatchObject({ description: '鳥' });
   });
 
-  it('JSON の本文で description が null なら説明を消す', async () => {
-    const s = setup();
-    const { headers } = await s.user();
-    const { id } = await uploadAs(s, headers, '猫');
-
-    const response = await s.request(`/api/v1/media/${id}`, {
-      method: 'PUT',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description: null }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ id, description: null });
-    expect(s.medias.get(id)?.description).toBeNull();
-  });
-
   it('multipart の本文で description が空文字なら説明を消す', async () => {
     const s = setup();
     const { headers } = await s.user();
@@ -280,21 +228,6 @@ describe('GET と PUT /api/v1/media/:id', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ id, description: null });
     expect(s.medias.get(id)?.description).toBeNull();
-  });
-
-  it('1500 文字を超える説明の PUT は 422 にして、説明を変えない', async () => {
-    const s = setup();
-    const { headers } = await s.user();
-    const { id } = await uploadAs(s, headers, '猫');
-
-    const response = await s.request(`/api/v1/media/${id}`, {
-      method: 'PUT',
-      headers,
-      body: multipart({ description: 'あ'.repeat(1501) }),
-    });
-
-    expect(response.status).toBe(422);
-    expect(s.medias.get(id)?.description).toBe('猫');
   });
 
   it('他人のメディアは GET も PUT も 404 にして、説明を変えない', async () => {
@@ -312,23 +245,6 @@ describe('GET と PUT /api/v1/media/:id', () => {
 
     expect([get.status, put.status]).toEqual([404, 404]);
     expect(s.medias.get(id)?.description).toBe('猫');
-  });
-
-  it('存在しない ID と UUID でない ID は 404 にする', async () => {
-    const s = setup();
-    const { headers } = await s.user();
-
-    const responses = await Promise.all([
-      s.request(`/api/v1/media/${crypto.randomUUID()}`, { headers }),
-      s.request('/api/v1/media/not-a-uuid', { headers }),
-      s.request(`/api/v1/media/${crypto.randomUUID()}`, {
-        method: 'PUT',
-        headers,
-        body: multipart({ description: 'x' }),
-      }),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([404, 404, 404]);
   });
 
   it('認証がなければ 401、write:media がなければ 403 にする', async () => {

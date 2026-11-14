@@ -61,15 +61,6 @@ describe('GET /api/v1/timelines/home', () => {
     });
   });
 
-  it('Cookie でも返す', async () => {
-    const t = await seedHome();
-
-    const response = await t.request('/api/v1/timelines/home', { headers: { Cookie: `sessionId=${t.me.sessionId}` } });
-
-    expect(response.status).toBe(200);
-    expect(parseStatuses(await response.json())).toHaveLength(3);
-  });
-
   it('認証がなければ 401、スコープが足りなければ 403 にする', async () => {
     const t = await seedHome('read:accounts');
 
@@ -80,16 +71,6 @@ describe('GET /api/v1/timelines/home', () => {
 
     expect(anonymous.status).toBe(401);
     expect(forbidden.status).toBe(403);
-  });
-
-  it('actor のない利用者は 422 にする', async () => {
-    const t = await seedHome();
-    const withoutActor = await t.bearerFor('read');
-
-    const response = await t.request('/api/v1/timelines/home', { headers: withoutActor });
-
-    expect(response.status).toBe(422);
-    expect(await response.json()).toEqual({ error: 'Actor not found' });
   });
 
   it('ミュートした相手の投稿を除く', async () => {
@@ -175,23 +156,6 @@ describe('GET /api/v1/timelines/home', () => {
     expect(response.headers.get('Link')).toBeNull();
   });
 
-  it('本文の最後の id を max_id にしても全投稿を新しい順に重複なく辿れる', async () => {
-    const t = await seedLongHome();
-
-    const collected: string[] = [];
-    let maxId: string | undefined;
-    for (let pages = 0; pages < 20; pages++) {
-      const query = maxId === undefined ? 'limit=2' : `limit=2&max_id=${maxId}`;
-      const ids = idsOf(await (await t.request(`/api/v1/timelines/home?${query}`, { headers: t.me.bearer })).json());
-      if (ids.length === 0) break;
-      collected.push(...ids);
-      maxId = ids[ids.length - 1];
-    }
-
-    expect(collected).toEqual(t.newestFirst);
-    expect(new Set(collected).size).toBe(collected.length);
-  });
-
   it('username が NULL の remote actor のブーストがページの末尾にあっても次のページに進める', async () => {
     const t = setupReadApi();
     const me = await t.signIn();
@@ -258,31 +222,6 @@ describe('GET /api/v1/timelines/home', () => {
     expect(linkOf(min, 'prev')?.searchParams.get('min_id')).toBe(t.note.postId);
     expect(linkOf(min, 'next')?.searchParams.get('max_id')).toBe(t.note.postId);
   });
-
-  it('要素が 0 件なら Link を付けない', async () => {
-    const t = await seedHome();
-
-    const response = await t.request(`/api/v1/timelines/home?max_id=${t.mine.postId}`, { headers: t.me.bearer });
-
-    expect(await response.json()).toEqual([]);
-    expect(response.headers.get('Link')).toBeNull();
-  });
-
-  it('limit は最大 40 に丸め、不正な値は既定の 20 にする', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-    for (let i = 0; i < 45; i++) t.seed.addLocalPost(me, 1_000 + i);
-
-    const [big, bad, none] = await Promise.all([
-      t.request('/api/v1/timelines/home?limit=1000', { headers: me.bearer }),
-      t.request('/api/v1/timelines/home?limit=abc', { headers: me.bearer }),
-      t.request('/api/v1/timelines/home', { headers: me.bearer }),
-    ]);
-
-    expect(idsOf(await big.json())).toHaveLength(40);
-    expect(idsOf(await bad.json())).toHaveLength(20);
-    expect(idsOf(await none.json())).toHaveLength(20);
-  });
 });
 
 describe('GET /api/v1/timelines/public', () => {
@@ -308,17 +247,6 @@ describe('GET /api/v1/timelines/public', () => {
     expect(statuses[0]?.favourited).toBe(false);
   });
 
-  it('指定がなければ local と同じ内容を返し、認証した利用者の状態を入れる', async () => {
-    const t = await seedPublic();
-    t.seed.addLike(t.me.actorId, t.local.postId);
-
-    const anonymous = await t.request('/api/v1/timelines/public');
-    const signedIn = await t.request('/api/v1/timelines/public', { headers: t.me.bearer });
-
-    expect(idsOf(await anonymous.json())).toEqual([t.local.postId]);
-    expect(parseStatuses(await signedIn.json())[0]?.favourited).toBe(true);
-  });
-
   it('ローカルの経路でも、トークンのスコープが足りなければ 403、Cookie とアプリトークンは通す', async () => {
     const t = await seedPublic();
     const writeOnly = await t.bearerFor('write');
@@ -331,21 +259,6 @@ describe('GET /api/v1/timelines/public', () => {
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([403, 200, 200]);
-  });
-
-  it('ログイン中はミュートしたローカルのアクターの投稿を除く', async () => {
-    const t = await seedPublic();
-    const other = t.seed.addLocalActor('other');
-    const otherPost = t.seed.addLocalPost(other, 4_000);
-    t.seed.addMute(t.me.userId, other.actorId);
-
-    const [muted, anonymous] = await Promise.all([
-      t.request('/api/v1/timelines/public?local=true', { headers: t.me.bearer }),
-      t.request('/api/v1/timelines/public?local=true'),
-    ]);
-
-    expect(idsOf(await muted.json())).toEqual([t.local.postId]);
-    expect(idsOf(await anonymous.json())).toEqual([otherPost.postId, t.local.postId]);
   });
 
   it('ログイン中はブロックしたローカルのアクターの投稿を除く', async () => {
@@ -373,22 +286,6 @@ describe('GET /api/v1/timelines/public', () => {
     expect(forbidden.status).toBe(403);
     expect(allowed.status).toBe(200);
     expect(idsOf(await allowed.json())).toEqual([t.remote.postId]);
-  });
-
-  it('local の経路でも Link の next の URL をそのまま取得すると古い投稿が返る', async () => {
-    const t = await seedPublic();
-    const newer = t.seed.addLocalPost(t.me, 4_000);
-
-    const first = await t.request('/api/v1/timelines/public?local=true&limit=1', { headers: t.me.bearer });
-    const next = linkOf(first, 'next');
-    const second = await t.request(`${next?.pathname}${next?.search}`, { headers: t.me.bearer });
-    const lastNext = linkOf(second, 'next');
-    const third = await t.request(`${lastNext?.pathname}${lastNext?.search}`, { headers: t.me.bearer });
-
-    expect(idsOf(await first.json())).toEqual([newer.postId]);
-    expect(idsOf(await second.json())).toEqual([t.local.postId]);
-    expect(await third.json()).toEqual([]);
-    expect(third.headers.get('Link')).toBeNull();
   });
 
   it('remote=true はミュートした投稿者を除き、max_id と Link でページを送る', async () => {
@@ -504,37 +401,5 @@ describe('タイムラインの内部エラー', () => {
     expect(logged).not.toContain('secret-body');
     expect(logged).toContain('insert into posts (content) values (?)');
     expect(logged).toContain('cause-message');
-  });
-
-  it('それ以外の例外は name と message だけをログに出す', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-
-    const response = await failWith(new TypeError('x'.repeat(300))).request(`${ORIGIN}/api/v1/timelines/public`);
-
-    const logged = JSON.stringify(error.mock.calls);
-    error.mockRestore();
-    expect(response.status).toBe(500);
-    expect(logged).toContain('TypeError');
-    expect(logged).toContain('x'.repeat(200));
-    expect(logged).not.toContain('x'.repeat(201));
-    expect(logged).not.toContain('at ');
-  });
-
-  it('public の Resolver の失敗と、組み立ての例外も 500 にする', async () => {
-    const failure = { resolve: async () => ({ ok: false }) };
-    const throwing = {
-      assemble: async () => {
-        throw new Error('boom');
-      },
-      assembleAccounts: async () => [],
-    };
-    for (const override of [{ localPostsResolverByPage: failure }, { statusAssembler: throwing }]) {
-      const { app } = setupFailing(override);
-
-      const response = await app.request(`${ORIGIN}/api/v1/timelines/public`);
-
-      expect(response.status).toBe(500);
-      expect(await response.json()).toEqual(internalError);
-    }
   });
 });

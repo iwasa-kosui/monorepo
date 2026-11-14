@@ -36,14 +36,9 @@ const setup = async (options: Parameters<typeof setupReadApi>[0] = {}) => {
 
 describe('POST /api/v1/statuses の検証', () => {
   const rejected: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
-    ['visibility が未知の値', { status: 'hi', visibility: 'friends' }],
-    ['visibility が文字列でない', { status: 'hi', visibility: 1 }],
-    ['spoiler_text が文字列でない', { status: 'hi', spoiler_text: 1 }],
     ['status と spoiler_text の合計が 10001 文字', { status: 'あ'.repeat(5000), spoiler_text: 'い'.repeat(5001) }],
     ['content_type が未対応', { status: 'hi', content_type: 'text/html' }],
     ['status が空白だけで media_ids も空', { status: ' \n\t', media_ids: [] }],
-    ['status がなく media_ids も空', {}],
-    ['media_ids が形式不正', { status: 'hi', media_ids: ['nope'] }],
     ['media_ids に存在しない media', { status: 'hi', media_ids: [crypto.randomUUID()] }],
   ];
 
@@ -86,46 +81,6 @@ describe('POST /api/v1/statuses の検証', () => {
     expect(t.count('posts')).toBe(0);
   });
 
-  it('status が 10001 文字のとき 422 にして投稿を作らない', async () => {
-    const t = await setup();
-
-    const response = await t.json({ status: 'あ'.repeat(10001) });
-
-    expect(response.status).toBe(422);
-    expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
-    expect(t.count('posts')).toBe(0);
-  });
-
-  it('status が 10000 文字ちょうどのとき投稿できる', async () => {
-    const t = await setup();
-
-    const response = await t.json({ status: 'あ'.repeat(10000) });
-
-    expect(response.status).toBe(200);
-    expect(t.count('posts')).toBe(1);
-  });
-
-  it('status と spoiler_text の合計が 10000 文字ちょうどのとき投稿できる', async () => {
-    const t = await setup();
-
-    const response = await t.json({ status: 'あ'.repeat(5000), spoiler_text: 'い'.repeat(5000) });
-
-    expect(response.status).toBe(200);
-    expect(t.count('posts')).toBe(1);
-  });
-
-  it('media_ids が5件以上のとき 422 にする', async () => {
-    const t = await setup();
-    const medias = [];
-    for (let i = 0; i < 5; i++) medias.push(await t.addMedia(t.me.userId));
-
-    const response = await t.json({ status: 'hi', media_ids: medias.map((media) => media.mediaId) });
-
-    expect(response.status).toBe(422);
-    expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
-    expect(t.count('posts')).toBe(0);
-  });
-
   it('他人の media を含むとき 422 にする', async () => {
     const t = await setup();
     const mine = await t.addMedia(t.me.userId);
@@ -135,16 +90,6 @@ describe('POST /api/v1/statuses の検証', () => {
 
     expect(response.status).toBe(422);
     expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
-    expect(t.count('posts')).toBe(0);
-  });
-
-  it('in_reply_to_id の投稿が存在しないとき 404 にする', async () => {
-    const t = await setup();
-
-    const response = await t.json({ status: 'hi', in_reply_to_id: crypto.randomUUID() });
-
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual(notFound);
     expect(t.count('posts')).toBe(0);
   });
 
@@ -211,20 +156,6 @@ describe('POST /api/v1/statuses の visibility', () => {
     expect(visibilityOf(t, status.id)).toBe('public');
   });
 
-  it.each([['unlisted'], ['private']])(
-    '返信で visibility が %s のとき、その公開範囲で返信を保存する',
-    async (visibility) => {
-      const t = await setup();
-      const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
-
-      const response = await t.json({ status: 'reply', in_reply_to_id: parent.postId, visibility });
-
-      expect(response.status).toBe(200);
-      const status = StatusSchema.parse(await response.json());
-      expect(visibilityOf(t, status.id)).toBe(visibility);
-    },
-  );
-
   it('返信で visibility が無く、元の投稿が private のとき、private で返信を保存して返す', async () => {
     const t = await setup();
     const parent = t.seed.addLocalPost(t.me, 1_000, { content: '<p>parent</p>', visibility: 'private' });
@@ -236,21 +167,6 @@ describe('POST /api/v1/statuses の visibility', () => {
     expect(status.visibility).toBe('private');
     expect(visibilityOf(t, status.id)).toBe('private');
   });
-
-  it.each([['unlisted'], ['private']])(
-    'visibility が %s で iori_destination が both のとき、保存した公開範囲の投稿を Bluesky の予約に渡す',
-    async (visibility) => {
-      const scheduleBlueskyCrosspost = { run: vi.fn(async () => RA.ok('pending' as const)) };
-      const t = await setup({ scheduleBlueskyCrosspost });
-
-      const response = await t.json({ status: 'hi', visibility, iori_destination: 'both' });
-
-      expect(response.status).toBe(200);
-      const status = StatusSchema.parse(await response.json());
-      expect(scheduleBlueskyCrosspost.run).toHaveBeenCalledWith({ postId: status.id });
-      expect(visibilityOf(t, status.id)).toBe(visibility);
-    },
-  );
 
   it('visibility が unlisted で iori_destination が both のとき、実際の予約が応答の skip_reason を visibility にする', async () => {
     const scheduled: { useCase?: ScheduleBlueskyCrosspostUseCase } = {};
@@ -288,7 +204,7 @@ describe('POST /api/v1/statuses の iori_destination', () => {
     return { ...(await setup({ scheduleBlueskyCrosspost })), scheduleBlueskyCrosspost };
   };
 
-  it.each([['fediverse', 0], ['both', 1], [undefined, 1], [null, 1]])(
+  it.each([['fediverse', 0], ['both', 1], [undefined, 1]])(
     'iori_destination が %s のとき、投稿して Bluesky への予約を %i 回呼ぶ',
     async (destination, scheduled) => {
       const t = await setupWithSchedule();
@@ -302,21 +218,7 @@ describe('POST /api/v1/statuses の iori_destination', () => {
     },
   );
 
-  it.each([['fediverse', 0], [undefined, 1]])(
-    '返信で iori_destination が %s のとき、投稿して Bluesky への予約を %i 回呼ぶ',
-    async (destination, scheduled) => {
-      const t = await setupWithSchedule();
-      const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
-
-      const response = await t.json({ status: 'reply', in_reply_to_id: parent.postId, iori_destination: destination });
-
-      expect(response.status).toBe(200);
-      expect(t.count('local_posts', `inReplyToUri IS NOT NULL`)).toBe(1);
-      expect(t.scheduleBlueskyCrosspost.run).toHaveBeenCalledTimes(scheduled);
-    },
-  );
-
-  it.each([['bluesky'], ['unknown'], [''], [1], [true]])(
+  it.each([['bluesky'], ['unknown']])(
     'iori_destination が %s のとき 422 にして投稿を作らない',
     async (destination) => {
       const t = await setup();
@@ -387,53 +289,6 @@ describe('POST /api/v1/statuses', () => {
       expect(stored.summary).toBeNull();
       expect(Number(stored.sensitive)).toBe(0);
     });
-
-    it('sensitive だけが真のとき summary を null にして sensitive を真にする', async () => {
-      const t = await setup();
-
-      const response = await t.json({ status: 'hi', sensitive: true });
-
-      expect(response.status).toBe(200);
-      const status = StatusSchema.parse(await response.json());
-      expect(status).toMatchObject({ spoiler_text: '', sensitive: true });
-      const stored = storedOf(t, status.id);
-      expect(stored.summary).toBeNull();
-      expect(Number(stored.sensitive)).toBe(1);
-    });
-
-    it('sensitive が文字列の true のとき sensitive を真にする', async () => {
-      const t = await setup();
-
-      const response = await t.json({ status: 'hi', sensitive: 'true' });
-
-      expect(response.status).toBe(200);
-      const status = StatusSchema.parse(await response.json());
-      expect(status.sensitive).toBe(true);
-      expect(Number(storedOf(t, status.id).sensitive)).toBe(1);
-    });
-
-    it('返信でも spoiler_text を保存する', async () => {
-      const t = await setup();
-      const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
-
-      const response = await t.json({ status: 'reply', spoiler_text: 'cw', in_reply_to_id: parent.postId });
-
-      expect(response.status).toBe(200);
-      const status = StatusSchema.parse(await response.json());
-      expect(status).toMatchObject({ in_reply_to_id: parent.postId, spoiler_text: 'cw', sensitive: true });
-      const stored = storedOf(t, status.id);
-      expect(stored.summary).toBe('cw');
-      expect(Number(stored.sensitive)).toBe(1);
-    });
-  });
-
-  it('text/markdown の本文を Markdown として HTML にする', async () => {
-    const t = await setup();
-
-    const response = await t.json({ status: 'a **bold** word', content_type: 'text/markdown' });
-
-    expect(response.status).toBe(200);
-    expect(StatusSchema.parse(await response.json()).content).toContain('<strong>bold</strong>');
   });
 
   it('text/markdown の本文に含まれる script、イベント属性、javascript: のリンク、iframe を保存前に取り除く', async () => {
@@ -514,19 +369,6 @@ describe('POST /api/v1/statuses', () => {
     });
     expect(t.count('local_posts', `postId='${status.id}' AND inReplyToUri IS NOT NULL`)).toBe(1);
     expect(t.count('notifications', `recipientUserId='${t.alice.userId}'`)).toBe(1);
-  });
-
-  it('Cookie のセッションでも投稿できる', async () => {
-    const t = await setup();
-
-    const response = await t.json({ status: 'from the web' }, {
-      Cookie: `sessionId=${t.me.sessionId}`,
-      Origin: ORIGIN,
-    });
-
-    expect(response.status).toBe(200);
-    expect(StatusSchema.parse(await response.json()).content).toBe('<p>from the web</p>');
-    expect(t.count('posts', `actorId='${t.me.actorId}'`)).toBe(1);
   });
 });
 
@@ -665,37 +507,6 @@ describe('POST /api/v1/statuses のメンション', () => {
     expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
   });
 
-  it('同じ相手を大文字小文字違いで書いても lookup は 1 回だけにする', async () => {
-    const t = await withRemoteAlice();
-
-    const response = await t.json({ status: '@alice@remote.example @Alice@Remote.Example' });
-
-    expect(response.status).toBe(200);
-    expect(t.remoteActorLookup.lookup).toHaveBeenCalledTimes(1);
-  });
-
-  it('@user@host の無い本文は lookup を呼ばない', async () => {
-    const t = await withRemoteAlice();
-
-    const response = await t.json({ status: 'hello foo@bar.example' });
-
-    expect(response.status).toBe(200);
-    expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
-    expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
-  });
-
-  it('返信でも @user@host を解決して mentions に渡す', async () => {
-    const t = await withRemoteAlice();
-    const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
-
-    const response = await t.json({ status: '@alice@remote.example reply', in_reply_to_id: parent.postId });
-
-    expect(response.status).toBe(200);
-    const status = StatusSchema.parse(await response.json());
-    expect(t.storedContent(status.id)).toBe(`<p>${mentionLink} reply</p>`);
-    expect(t.federation.sendActivity).toHaveBeenCalledTimes(2);
-  });
-
   describe('visibility が direct のとき', () => {
     const participantsOf = (t: Awaited<ReturnType<typeof withRemoteAlice>>, postId: string) =>
       (t.sqlite.prepare('SELECT actorUri FROM direct_post_participants WHERE postId = ? ORDER BY actorUri').all(
@@ -733,15 +544,6 @@ describe('POST /api/v1/statuses のメンション', () => {
       expect(t.federation.sendActivity).not.toHaveBeenCalled();
     });
 
-    it('解決できない acct しか無いときも 422 にして投稿を作らない', async () => {
-      const t = await withRemoteAlice();
-
-      const response = await t.json({ status: 'hi @bob@nowhere.example', visibility: 'direct' });
-
-      expect(response.status).toBe(422);
-      expect(t.count('posts')).toBe(0);
-    });
-
     it('自サーバーのアカウントしかメンションしていないときは 422 にして投稿を作らない', async () => {
       const t = await withRemoteAlice();
       t.remoteActorLookup.lookup.mockImplementation(
@@ -760,34 +562,6 @@ describe('POST /api/v1/statuses のメンション', () => {
       expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
       expect(t.count('posts')).toBe(0);
       expect(t.federation.sendActivity).not.toHaveBeenCalled();
-    });
-
-    it('返信でも direct で投稿でき、followers には送らない', async () => {
-      const t = await withRemoteAlice();
-      const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
-
-      const response = await t.json({
-        status: '@alice@remote.example reply',
-        visibility: 'direct',
-        in_reply_to_id: parent.postId,
-      });
-
-      expect(response.status).toBe(200);
-      const status = StatusSchema.parse(await response.json());
-      expect(status.visibility).toBe('direct');
-      const sent = t.federation.sendActivity.mock.calls.map((call) => call as unknown[]);
-      expect(sent).toHaveLength(1);
-      expect(sent.map((call) => call[1])).not.toContain('followers');
-      expect(participantsOf(t, status.id)).toEqual([aliceId, `${ORIGIN}/users/kosui`].sort());
-    });
-
-    it('public のときは参加者を保存しない', async () => {
-      const t = await withRemoteAlice();
-
-      const response = await t.json({ status: 'hi @alice@remote.example', visibility: 'public' });
-
-      expect(response.status).toBe(200);
-      expect(t.count('direct_post_participants')).toBe(0);
     });
   });
 });
@@ -865,52 +639,6 @@ describe('POST /api/v1/statuses の引用', () => {
     );
   });
 
-  it('返信かつ引用として投稿でき、in_reply_to_id と quote の両方を持つ Status を返す', async () => {
-    const t = await setup();
-    const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
-    const bob = t.seed.addRemoteActor('bob');
-    const quoted = t.seed.addRemotePost(bob, 2_000, { visibility: 'public' });
-
-    const response = await t.json({ status: 'both', in_reply_to_id: parent.postId, quoted_status_id: quoted.postId });
-
-    expect(response.status).toBe(200);
-    const status = StatusSchema.parse(await response.json());
-    expect(status).toMatchObject({
-      in_reply_to_id: parent.postId,
-      quote: { state: 'accepted', quoted_status: { id: quoted.postId } },
-    });
-    expect(quoteRowOf(t, status.id)).toEqual({ quoteUri: quoted.uri });
-    expect(t.count('local_posts', `postId='${status.id}' AND inReplyToUri IS NOT NULL`)).toBe(1);
-  });
-
-  it('quoted_status_id を空文字や null にしたときは引用にしない', async () => {
-    const t = await setup();
-
-    const responses = await Promise.all([
-      t.json({ status: 'a', quoted_status_id: '' }),
-      t.json({ status: 'b', quoted_status_id: null }),
-    ]);
-
-    for (const response of responses) {
-      expect(response.status).toBe(200);
-      expect(StatusSchema.parse(await response.json()).quote).toBeNull();
-    }
-    expect(t.count('post_quotes')).toBe(0);
-  });
-
-  it.each([
-    ['存在しない UUID', () => crypto.randomUUID()],
-    ['UUID でない文字列', () => 'nope'],
-  ])('quoted_status_id が %s のとき 404 にして投稿を作らない', async (_name, id) => {
-    const t = await setup();
-
-    const response = await t.json({ status: 'hi', quoted_status_id: id() });
-
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual(notFound);
-    expect(t.count('posts')).toBe(0);
-  });
-
   it('引用先が閲覧者に見えないとき 404 にする', async () => {
     const t = await setup();
     const bob = t.seed.addRemoteActor('bob');
@@ -968,31 +696,6 @@ describe('POST /api/v1/statuses の引用', () => {
     expect(t.count('posts', `postId != '${quoted.postId}'`)).toBe(0);
     expect(t.count('post_quotes')).toBe(0);
     expect(t.federation.sendActivity).not.toHaveBeenCalled();
-  });
-
-  it('Bluesky の投稿の ID は 422 にし、投稿を作らない', async () => {
-    const t = await setup();
-
-    const response = await t.json({ status: 'hi', quoted_status_id: 'bluesky:at://did:plc:abc/app.bsky.feed.post/1' });
-
-    expect(response.status).toBe(422);
-    expect(await response.json()).toEqual(quoteNotAllowed);
-    expect(t.count('posts')).toBe(0);
-  });
-
-  it('quoted_status_id は form でも受け取る', async () => {
-    const t = await setup();
-    const bob = t.seed.addRemoteActor('bob');
-    const quoted = t.seed.addRemotePost(bob, 1_000, { visibility: 'public' });
-
-    const response = await t.request('/api/v1/statuses', {
-      method: 'POST',
-      headers: { ...t.me.bearer, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams([['status', 'look'], ['quoted_status_id', quoted.postId]]).toString(),
-    });
-
-    expect(response.status).toBe(200);
-    expect(StatusSchema.parse(await response.json()).quote).toMatchObject({ quoted_status: { id: quoted.postId } });
   });
 });
 

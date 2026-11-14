@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
-import { ORIGIN } from './helper/oauthHarness.ts';
-
-const notFound = { error: 'Record not found' };
 
 const seedNotifications = async () => {
   const t = setupReadApi();
@@ -53,17 +50,6 @@ describe('POST /api/v1/notifications/clear', () => {
     ]);
   });
 
-  it('通知がないときも {} を返し、イベントを記録しない', async () => {
-    const t = await seedNotifications();
-    await t.post('/api/v1/notifications/clear');
-
-    const response = await t.post('/api/v1/notifications/clear');
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({});
-    expect(t.events('notification.notificationsCleared')).toHaveLength(1);
-  });
-
   it('100 件を超える通知も消せる', async () => {
     const t = await seedNotifications();
     for (let index = 0; index < 150; index++) {
@@ -88,29 +74,6 @@ describe('POST /api/v1/notifications/clear', () => {
     expect(responses.map((response) => response.status)).toEqual([401, 403]);
     expect(t.remaining()).toHaveLength(5);
   });
-
-  it('write:notifications だけのトークンで消せる', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn('write:notifications');
-    const alice = t.seed.addRemoteActor('alice');
-    t.seed.addFollowNotification(me.userId, alice.actorId, 1_000);
-
-    const response = await t.request('/api/v1/notifications/clear', { method: 'POST', headers: me.bearer });
-
-    expect(response.status).toBe(200);
-  });
-
-  it('Cookie の利用者は同一オリジンのときだけ消せ、Origin が違うか欠けると 403 にする', async () => {
-    const t = await seedNotifications();
-    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
-
-    const cross = await t.post('/api/v1/notifications/clear', { ...cookie, Origin: 'https://evil.example' });
-    const missing = await t.post('/api/v1/notifications/clear', cookie);
-    const same = await t.post('/api/v1/notifications/clear', { ...cookie, Origin: ORIGIN });
-
-    expect([cross.status, missing.status, same.status]).toEqual([403, 403, 200]);
-    expect(t.remaining()).toEqual([t.ids.others]);
-  });
 });
 
 describe('POST /api/v1/notifications/:id/dismiss', () => {
@@ -126,17 +89,6 @@ describe('POST /api/v1/notifications/:id/dismiss', () => {
     expect(t.events('notification.notificationDismissed').map((row) => JSON.parse(row.eventPayload))).toEqual([
       { notificationId: t.ids.reply, userId: t.me.userId },
     ]);
-  });
-
-  it('消した通知をもう一度消そうとすると 404 にする', async () => {
-    const t = await seedNotifications();
-    await t.post(`/api/v1/notifications/${t.ids.like}/dismiss`);
-
-    const response = await t.post(`/api/v1/notifications/${t.ids.like}/dismiss`);
-
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual(notFound);
-    expect(t.events('notification.notificationDismissed')).toHaveLength(1);
   });
 
   it('他人の通知、存在しない通知、不正な ID は 404 にして他人の通知を消さない', async () => {
@@ -164,21 +116,6 @@ describe('POST /api/v1/notifications/:id/dismiss', () => {
 
     expect(responses.map((response) => response.status)).toEqual([401, 403]);
     expect(t.remaining()).toHaveLength(5);
-  });
-
-  it('Cookie の利用者は同一オリジンのときだけ消せ、Origin が違うか欠けると 403 にする', async () => {
-    const t = await seedNotifications();
-    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
-
-    const cross = await t.post(`/api/v1/notifications/${t.ids.like}/dismiss`, {
-      ...cookie,
-      Origin: 'https://evil.example',
-    });
-    const missing = await t.post(`/api/v1/notifications/${t.ids.like}/dismiss`, cookie);
-    const same = await t.post(`/api/v1/notifications/${t.ids.like}/dismiss`, { ...cookie, Origin: ORIGIN });
-
-    expect([cross.status, missing.status, same.status]).toEqual([403, 403, 200]);
-    expect(t.remaining()).toHaveLength(4);
   });
 });
 

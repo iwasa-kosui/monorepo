@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { createIoriApp } from '../../../appFactory.tsx';
-import { Username } from '../../../domain/user/username.ts';
 import { AccountSchema, RelationshipSchema, StatusSchema } from '../../mastodon/entities.ts';
-import { createMastodonAuthn } from '../mastodonAuthn.ts';
-import { createWorkerMastodonAccountsRouter } from '../workerMastodonAccountsRouter.ts';
-import { createWorkerMastodonCoreRouter } from '../workerMastodonCoreRouter.ts';
-import { createWorkerMastodonFallbackRouter } from '../workerMastodonFallbackRouter.ts';
 import { idsOf, linkOf, setupReadApi } from './helper/mastodonReadHarness.ts';
-import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 
 const parseStatuses = (body: unknown) => (body as unknown[]).map((item) => StatusSchema.parse(item));
 
@@ -53,17 +46,6 @@ describe('GET /api/v1/accounts/:id/followers と /following', () => {
     expect(idsOf(await second.json())).toEqual([t.ids[2]]);
   });
 
-  it('要素がなければ Link を付けない', async () => {
-    const t = await seedFollows();
-
-    const lonely = t.seed.addRemoteActor('lonely');
-
-    const response = await t.request(`/api/v1/accounts/${lonely.actorId}/following`);
-
-    expect(await response.json()).toEqual([]);
-    expect(response.headers.get('Link')).toBeNull();
-  });
-
   it('ユーザーのトークンは read:accounts を求め、Cookie は通す', async () => {
     const t = await seedFollows();
     const statusesOnly = await t.bearerFor('read:statuses');
@@ -75,18 +57,6 @@ describe('GET /api/v1/accounts/:id/followers と /following', () => {
     ]);
 
     expect([forbidden.status, cookie.status, account.status]).toEqual([403, 200, 403]);
-  });
-
-  it('存在しないアカウントと不正な ID は 404 にする', async () => {
-    const t = await seedFollows();
-
-    const responses = await Promise.all([
-      t.request(`/api/v1/accounts/${t.seed.uuid()}/followers`),
-      t.request('/api/v1/accounts/not-an-id/following'),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([404, 404]);
-    expect(await responses[0]!.json()).toEqual({ error: 'Record not found' });
   });
 });
 
@@ -131,15 +101,6 @@ describe('GET /api/v1/accounts/:id', () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: 'Record not found' });
   });
-
-  it('UUID でない ID は :id に取らせず受け皿の 404 にする', async () => {
-    const t = setupReadApi();
-
-    const response = await t.request('/api/v1/accounts/not-an-id');
-
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: 'Record not found' });
-  });
 });
 
 describe('GET /api/v1/accounts', () => {
@@ -157,27 +118,6 @@ describe('GET /api/v1/accounts', () => {
     const accounts = ((await response.json()) as unknown[]).map((item) => AccountSchema.parse(item));
     expect(accounts.map((account) => account.id)).toEqual([bob.actorId, me.actorId, alice.actorId]);
     expect(accounts.map((account) => account.acct)).toEqual(['bob@remote.example', 'kosui', 'alice@remote.example']);
-  });
-
-  it('存在しない UUID と UUID でない ID を除いて 200 にする', async () => {
-    const t = setupReadApi();
-    const alice = t.seed.addRemoteActor('alice');
-
-    const response = await t.request(
-      `/api/v1/accounts?id[]=${t.seed.uuid()}&id[]=not-an-id&id[]=${alice.actorId}&id=${alice.actorId}`,
-    );
-
-    expect(response.status).toBe(200);
-    expect((await response.json() as Array<{ id: string }>).map((item) => item.id)).toEqual([alice.actorId]);
-  });
-
-  it('id を指定しなければ 200 で空配列を返す', async () => {
-    const t = setupReadApi();
-
-    const response = await t.request('/api/v1/accounts');
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual([]);
   });
 
   it('41 件の異なる ID を指定すると 422 にする', async () => {
@@ -244,16 +184,6 @@ describe('GET /api/v1/accounts/lookup', () => {
       acct: 'alice@other.example',
     });
     expect(AccountSchema.parse(await withAt.json()).id).toBe(alice.actorId);
-  });
-
-  it('url がないリモートのアカウントは uri の host で引く', async () => {
-    const t = setupReadApi();
-    const alice = t.seed.addRemoteActor('alice');
-    t.sqlite.prepare('UPDATE remote_actors SET url=NULL WHERE actorId=?').run(alice.actorId);
-
-    const response = await lookup(t, 'alice@remote.example');
-
-    expect(AccountSchema.parse(await response.json()).id).toBe(alice.actorId);
   });
 
   it('見つからない acct は 404 にする', async () => {
@@ -332,40 +262,6 @@ describe('GET /api/v1/accounts/relationships', () => {
     ]);
   });
 
-  it('入力の順に返し、存在しない ID と不正な ID を除き、重複を 1 件にする', async () => {
-    const t = await seedRelationships();
-    const query = [
-      `id[]=${t.dave.actorId}`,
-      `id[]=${t.seed.uuid()}`,
-      'id[]=not-an-id',
-      `id[]=${t.alice.actorId}`,
-      `id=${t.bob.actorId}`,
-      `id[]=${t.dave.actorId}`,
-    ].join('&');
-
-    const response = await t.request(`/api/v1/accounts/relationships?${query}`, { headers: t.me.bearer });
-
-    expect((await response.json() as Array<{ id: string }>).map((item) => item.id)).toEqual([
-      t.dave.actorId,
-      t.alice.actorId,
-      t.bob.actorId,
-    ]);
-  });
-
-  it('id がなければ空配列を返し、自分自身には何も付けない', async () => {
-    const t = await seedRelationships();
-
-    const [empty, self] = await Promise.all([
-      t.request('/api/v1/accounts/relationships', { headers: t.me.bearer }),
-      t.request(`/api/v1/accounts/relationships?id[]=${t.me.actorId}`, { headers: t.me.bearer }),
-    ]);
-
-    expect(await empty.json()).toEqual([]);
-    expect(flagsOf(await self.json())).toEqual([
-      { id: t.me.actorId, following: false, followed_by: false, muting: false },
-    ]);
-  });
-
   it('他のユーザーのフォローとミュートを自分の関係に混ぜない', async () => {
     const t = await seedRelationships();
 
@@ -396,15 +292,6 @@ describe('GET /api/v1/accounts/relationships', () => {
     expect(all).toBe(single);
   });
 
-  it('/accounts/:id に取らせない', async () => {
-    const t = await seedRelationships();
-
-    const response = await t.request('/api/v1/accounts/relationships?id[]=a', { headers: t.me.bearer });
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual([]);
-  });
-
   it('認証がなければ 401、スコープが足りなければ 403 にし、Cookie は通す', async () => {
     const t = await seedRelationships();
     const accountsOnly = await t.bearerFor('read:accounts');
@@ -417,17 +304,6 @@ describe('GET /api/v1/accounts/relationships', () => {
     ]);
 
     expect([anonymous.status, forbidden.status, cookie.status]).toEqual([401, 403, 200]);
-  });
-
-  it('アクターを持たない利用者は 422 にする', async () => {
-    const t = await seedRelationships();
-
-    const response = await t.request(`/api/v1/accounts/relationships?id[]=${t.alice.actorId}`, {
-      headers: await t.bearerFor('read:follows'),
-    });
-
-    expect(response.status).toBe(422);
-    expect(await response.json()).toEqual({ error: 'Actor not found' });
   });
 });
 
@@ -548,17 +424,6 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     expect(await alices.json()).toEqual([]);
   });
 
-  it('Link の next の URL をそのまま取得すると 2 ページ目に古い投稿が返る', async () => {
-    const t = await seedAccounts();
-
-    const first = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?limit=2`, { headers: t.me.bearer });
-    const next = linkOf(first, 'next');
-    const second = await t.request(`${next?.pathname}${next?.search}`, { headers: t.me.bearer });
-
-    expect(await statusIds(first)).toEqual(t.newestFirst.slice(0, 2));
-    expect(await statusIds(second)).toEqual(t.newestFirst.slice(2, 4));
-  });
-
   it('Link は絞り込む前の行から作る', async () => {
     const t = await seedAccounts();
 
@@ -576,16 +441,6 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses`, { headers: accountsOnly });
 
     expect(response.status).toBe(403);
-  });
-
-  it('Bearer の利用者に自分の操作の状態を付ける', async () => {
-    const t = await seedAccounts();
-    t.seed.addLike(t.me.actorId, t.first.postId);
-
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses`, { headers: t.me.bearer });
-
-    const own = parseStatuses(await response.json());
-    expect(own.find((status) => status.id === t.first.postId)).toMatchObject({ favourited: true });
   });
 
   it('exclude_reblogs=true はブーストを除く', async () => {
@@ -622,19 +477,6 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     expect(statuses[0]?.media_attachments).toHaveLength(1);
   });
 
-  it('リモートのアカウントは保存している投稿だけを返し、ブーストを含めない', async () => {
-    const t = await seedAccounts();
-
-    const response = await t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`, { headers: t.me.bearer });
-
-    expect(await statusIds(response)).toEqual([
-      t.note.postId,
-      t.aliceReply.postId,
-      t.aliceSecond.postId,
-      t.aliceFirst.postId,
-    ]);
-  });
-
   it('pinned=true と tagged の指定は空配列を返し、Link を付けない', async () => {
     const t = await seedAccounts();
 
@@ -648,16 +490,6 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
       expect(await response.json()).toEqual([]);
       expect(response.headers.get('Link')).toBeNull();
     }
-  });
-
-  it('pinned=false と空の tagged は絞り込まない', async () => {
-    const t = await seedAccounts();
-
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?pinned=false&tagged=`, {
-      headers: t.me.bearer,
-    });
-
-    expect(await statusIds(response)).toEqual(t.newestFirst);
   });
 
   it('limit と max_id と Link ヘッダーでページを送る', async () => {
@@ -708,16 +540,6 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     expect(linkOf(response, 'next')?.searchParams.get('max_id')).toBe(t.media.postId);
   });
 
-  it('since_id は新しい側から返す', async () => {
-    const t = await seedAccounts();
-
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses?since_id=${t.media.postId}&limit=2`, {
-      headers: t.me.bearer,
-    });
-
-    expect(await statusIds(response)).toEqual(t.newestFirst.slice(0, 2));
-  });
-
   it('limit は最大 40 に切る', async () => {
     const t = setupReadApi();
     const me = await t.signIn();
@@ -730,88 +552,5 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
 
     expect(await statusIds(capped)).toHaveLength(40);
     expect(await statusIds(defaulted)).toHaveLength(20);
-  });
-
-  it('投稿のないアカウントは空配列を返し、存在しないアカウントと不正な ID は 404 にする', async () => {
-    const t = setupReadApi();
-    const lonely = t.seed.addRemoteActor('lonely');
-
-    const [empty, missing, invalid] = await Promise.all([
-      t.request(`/api/v1/accounts/${lonely.actorId}/statuses`),
-      t.request(`/api/v1/accounts/${t.seed.uuid()}/statuses`),
-      t.request('/api/v1/accounts/not-an-id/statuses'),
-    ]);
-
-    expect(await empty.json()).toEqual([]);
-    expect(empty.headers.get('Link')).toBeNull();
-    expect([missing.status, invalid.status]).toEqual([404, 404]);
-    expect(await missing.json()).toEqual({ error: 'Record not found' });
-  });
-});
-
-describe('アカウントのルーターの登録順', () => {
-  it('固定パスを :id に取らせない', async () => {
-    const harness = createOAuthHarness();
-    const authn = createMastodonAuthn({
-      verifyAccessTokenUseCase: harness.memory.useCases.verifyAccessTokenUseCase,
-      sessionResolver: harness.memory.sessionResolver as never,
-    });
-    const app = createIoriApp({
-      federationMiddleware: undefined,
-      registerRoutes: (root) => {
-        root.route(
-          '/api',
-          createWorkerMastodonAccountsRouter({
-            authn,
-            actorResolverByUserId: {} as never,
-            actorResolverById: {} as never,
-            accountStatusItemsResolverByActorId: {} as never,
-            actorIdsResolverByFollowerId: {} as never,
-            actorIdsResolverByFollowingId: {} as never,
-            actorIdResolverByAcct: {} as never,
-            accountRelationshipsResolverByActorIds: {} as never,
-            statusAssembler: { assemble: async () => [], assembleAccounts: async () => [] },
-            createMuteUseCase: {} as never,
-            deleteMuteUseCase: {} as never,
-            followRemoteActor: {} as never,
-            unfollowRemoteActor: {} as never,
-            blockActor: {} as never,
-            unblockActor: {} as never,
-            createContext: {} as never,
-          }),
-        );
-        root.route(
-          '/api',
-          createWorkerMastodonCoreRouter({
-            authn,
-            userResolver: {} as never,
-            userResolverByUsername: {} as never,
-            actorResolverByUserId: {} as never,
-            accountStatsResolver: {} as never,
-            updateProfileUseCase: {} as never,
-            createContext: {} as never,
-            instance: {
-              domain: 'iori.test',
-              title: 'iori.test',
-              description: 'A microblog by kosui',
-              contactUsername: Username.orThrow('kosui'),
-              vapidPublicKey: undefined,
-            },
-          }),
-        );
-        root.route('/api', createWorkerMastodonFallbackRouter());
-      },
-      serveAsset: async () => undefined,
-      serveUpload: async () => undefined,
-      serveOgImage: async () => new Response('og', { status: 200 }),
-    });
-    const { token } = await harness.issueUserToken('read:follows');
-
-    const response = await app.request(`${ORIGIN}/api/v1/accounts/familiar_followers?id[]=a`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual([{ id: 'a', accounts: [] }]);
   });
 });

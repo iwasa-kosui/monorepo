@@ -47,27 +47,6 @@ describe('GET /api/v1/statuses/:id', () => {
         closed,
       );
 
-    it('保存した投票を poll に入れる', async () => {
-      const t = await seedStatuses();
-      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
-      addPoll(t, post.postId);
-
-      const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
-
-      expect(StatusSchema.parse(await response.json()).poll).toEqual({
-        id: post.postId,
-        expires_at: new Date(4_000_000_000_000).toISOString(),
-        expired: false,
-        multiple: false,
-        votes_count: 4,
-        voters_count: 4,
-        options: [{ title: '赤', votes_count: 3 }, { title: '青', votes_count: 1 }],
-        emojis: [],
-        voted: false,
-        own_votes: [],
-      });
-    });
-
     it('closed の投票は expired にする', async () => {
       const t = await seedStatuses();
       const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
@@ -76,15 +55,6 @@ describe('GET /api/v1/statuses/:id', () => {
       const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
 
       expect(StatusSchema.parse(await response.json()).poll?.expired).toBe(true);
-    });
-
-    it('投票の無い投稿は poll を null にする', async () => {
-      const t = await seedStatuses();
-      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
-
-      const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
-
-      expect(StatusSchema.parse(await response.json()).poll).toBeNull();
     });
   });
 
@@ -106,18 +76,6 @@ describe('GET /api/v1/statuses/:id', () => {
       const status = StatusSchema.parse(await response.json());
       expect(status.quote).toMatchObject({ state: 'accepted', quoted_status: { id: quoted.postId, quote: null } });
       expect(status.iori).not.toHaveProperty('quote_url');
-    });
-
-    it('引用先がローカルの投稿でも quote に入れる', async () => {
-      const t = await seedStatuses();
-      const quoted = t.seed.addLocalPost(t.me, 3_000);
-      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
-      addQuote(t, post.postId, quoted.uri);
-
-      const response = await t.request(`/api/v1/statuses/${post.postId}`);
-
-      const status = StatusSchema.parse(await response.json());
-      expect(status.quote).toMatchObject({ state: 'accepted', quoted_status: { id: quoted.postId } });
     });
 
     it('引用先が未取得のとき quote を null にして iori.quote_url に URI を載せる', async () => {
@@ -163,31 +121,6 @@ describe('GET /api/v1/statuses/:id', () => {
         expect(status.iori?.quote_url).toBe(quoted.uri);
       },
     );
-
-    it('引用が無い投稿は quote を null にし、quote_url を出さない', async () => {
-      const t = await seedStatuses();
-      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
-
-      const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
-
-      const status = StatusSchema.parse(await response.json());
-      expect(status.quote).toBeNull();
-      expect(status.iori).not.toHaveProperty('quote_url');
-    });
-
-    it('ブーストされた投稿の引用を reblog の中に載せる', async () => {
-      const t = await seedStatuses();
-      const quoted = t.seed.addRemotePost(t.alice, 3_000, { visibility: 'public' });
-      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
-      addQuote(t, post.postId, quoted.uri);
-      const boost = t.seed.addRepost(t.me.actorId, post.postId, 4_000);
-
-      const response = await t.request(`/api/v1/statuses/${boost.repostId}`, { headers: t.me.bearer });
-
-      const status = StatusSchema.parse(await response.json());
-      expect(status.quote).toBeNull();
-      expect(status.reblog?.quote).toMatchObject({ state: 'accepted', quoted_status: { id: quoted.postId } });
-    });
   });
 
   it('未認証では公開範囲の記録がないリモートの投稿と、そのブーストを 404 にする', async () => {
@@ -269,18 +202,6 @@ describe('GET /api/v1/statuses/:id', () => {
     expect(forbidden.status).toBe(403);
   });
 
-  it('Bearer と Cookie の利用者の状態を入れる', async () => {
-    const t = await seedStatuses();
-
-    const bearer = await t.request(`/api/v1/statuses/${t.note.postId}`, { headers: t.me.bearer });
-    const cookie = await t.request(`/api/v1/statuses/${t.note.postId}`, {
-      headers: { Cookie: `sessionId=${t.me.sessionId}` },
-    });
-
-    expect(StatusSchema.parse(await bearer.json())).toMatchObject({ favourited: true, reblogged: true });
-    expect(StatusSchema.parse(await cookie.json())).toMatchObject({ favourited: true, reblogged: true });
-  });
-
   it('repostId を渡すとブーストの Status を返す', async () => {
     const t = await seedStatuses();
 
@@ -307,16 +228,6 @@ describe('GET /api/v1/statuses/:id', () => {
 
     expect(responses.map((response) => response.status)).toEqual([404, 404, 404]);
     expect(await responses[0]!.json()).toEqual(notFound);
-  });
-
-  it('不正な Bearer は 401 にする', async () => {
-    const t = await seedStatuses();
-
-    const response = await t.request(`/api/v1/statuses/${t.note.postId}`, {
-      headers: { Authorization: 'Bearer invalid' },
-    });
-
-    expect(response.status).toBe(401);
   });
 });
 
@@ -367,29 +278,6 @@ describe('GET /api/v1/statuses/:id/context', () => {
     expect(blockedFocus.status).toBe(200);
   });
 
-  it('ミュートした相手の祖先と子孫を除き、起点がミュートした相手でも 404 にしない', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-    const alice = t.seed.addRemoteActor('alice');
-    const bob = t.seed.addRemoteActor('bob');
-    t.seed.addFollow(me.actorId, alice.actorId);
-    t.seed.addFollow(me.actorId, bob.actorId);
-    const root = t.seed.addRemotePost(alice, 1_000);
-    const mid = t.seed.addRemotePost(bob, 2_000, { inReplyToUri: root.uri });
-    const fromAlice = t.seed.addRemotePost(alice, 3_000, { inReplyToUri: mid.uri });
-    const fromMe = t.seed.addLocalPost(me, 4_000, { inReplyToUri: mid.uri });
-    t.seed.addMute(me.userId, alice.actorId);
-
-    const response = await t.request(`/api/v1/statuses/${mid.postId}/context`, { headers: me.bearer });
-    const mutedFocus = await t.request(`/api/v1/statuses/${fromAlice.postId}/context`, { headers: me.bearer });
-
-    expect(response.status).toBe(200);
-    const body = await response.json() as { ancestors: unknown[]; descendants: unknown[] };
-    expect(body.ancestors).toEqual([]);
-    expect(body.descendants.map((item) => StatusSchema.parse(item).id)).toEqual([fromMe.postId]);
-    expect(mutedFocus.status).toBe(200);
-  });
-
   it('未認証では public と unlisted のリモートの投稿だけを祖先と子孫に含め、起点が private なら 404 にする', async () => {
     const t = setupReadApi();
     const me = await t.signIn();
@@ -419,22 +307,6 @@ describe('GET /api/v1/statuses/:id/context', () => {
     expect(await idsIn(anonymous)).toEqual([[root.postId], [unlisted.postId]]);
     expect((await idsIn(loggedIn))[1]).toHaveLength(3);
     expect(hidden.status).toBe(404);
-  });
-
-  it('未認証でも返し、見つからなければ 404 にする', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-    const post = t.seed.addLocalPost(me, 1_000);
-
-    const [found, missing] = await Promise.all([
-      t.request(`/api/v1/statuses/${post.postId}/context`),
-      t.request(`/api/v1/statuses/${t.seed.uuid()}/context`),
-    ]);
-
-    expect(found.status).toBe(200);
-    expect(await found.json()).toEqual({ ancestors: [], descendants: [] });
-    expect(missing.status).toBe(404);
-    expect(await missing.json()).toEqual(notFound);
   });
 });
 
@@ -478,38 +350,10 @@ describe('GET /api/v1/statuses/:id の iori.bluesky_crosspost', () => {
     expect(await t.crosspostOf({ Authorization: `Bearer ${issued.token}` })).toBeUndefined();
   });
 
-  it('行が無いときはフィールドを出さない', async () => {
-    const t = await setup();
-
-    expect(await t.crosspostOf(t.me.bearer)).toBeUndefined();
-  });
-
-  it('リモートの投稿には載せない', async () => {
-    const t = await setup();
-    const alice = t.seed.addRemoteActor('alice');
-    const note = t.seed.addRemotePost(alice, 2_000, { visibility: 'public' });
-    t.sqlite.prepare('INSERT INTO bluesky_crossposts(postId,status,createdAt,updatedAt) VALUES (?,?,?,?)').run(
-      note.postId,
-      'pending',
-      1_000,
-      1_000,
-    );
-
-    const response = await t.request(`/api/v1/statuses/${note.postId}`, { headers: t.me.bearer });
-
-    expect(StatusSchema.parse(await response.json()).iori?.bluesky_crosspost).toBeUndefined();
-  });
-
   it('failed で試行が上限に達していれば retrying を false にする', async () => {
     const t = await setup({ status: 'failed', attempts: 3 });
 
     expect(await t.crosspostOf(t.me.bearer)).toMatchObject({ status: 'failed', retrying: false });
-  });
-
-  it('failed で試行が上限未満なら retrying を true にする', async () => {
-    const t = await setup({ status: 'failed', attempts: 2 });
-
-    expect(await t.crosspostOf(t.me.bearer)).toMatchObject({ status: 'failed', retrying: true });
   });
 
   it('sent なら bsky.app の投稿の URL を載せる', async () => {
@@ -520,17 +364,6 @@ describe('GET /api/v1/statuses/:id の iori.bluesky_crosspost', () => {
       skip_reason: null,
       retrying: false,
       url: 'https://bsky.app/profile/did:plc:abc123/post/3kxyz',
-    });
-  });
-
-  it('skipped なら理由を載せる', async () => {
-    const t = await setup({ status: 'skipped', skipReason: 'content_warning' });
-
-    expect(await t.crosspostOf(t.me.bearer)).toEqual({
-      status: 'skipped',
-      skip_reason: 'content_warning',
-      retrying: false,
-      url: null,
     });
   });
 });

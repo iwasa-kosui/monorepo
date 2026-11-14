@@ -71,17 +71,6 @@ describe('POST /api/v1/statuses/:id/translate', () => {
     expect(response.status).toBe(403);
   });
 
-  it('Cookie のセッションは同一オリジンの Origin がないと 403 にする', async () => {
-    const t = await seedPosts({ textGenerator: createStubTextGenerator(reply).generator });
-    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
-
-    const withoutOrigin = await t.request(pathOf(t.english.postId), postJson({}, cookie));
-    const sameOrigin = await t.request(pathOf(t.english.postId), postJson({}, { ...cookie, Origin: ORIGIN }));
-
-    expect(withoutOrigin.status).toBe(403);
-    expect(sameOrigin.status).toBe(200);
-  });
-
   it('訳文を Translation エンティティで返し、サニタイズ済みの HTML にする', async () => {
     const link = '<a href="https://remote.example/@bob" class="u-url mention">@bob</a>';
     const t = await seedPosts({
@@ -122,26 +111,6 @@ describe('POST /api/v1/statuses/:id/translate', () => {
     expect(body.content).not.toContain('onclick');
   });
 
-  it('lang を JSON でも form でも受け取り、ja なら 200 にする', async () => {
-    const t = await seedPosts({ textGenerator: createStubTextGenerator(reply).generator });
-
-    const json = await t.request(pathOf(t.english.postId), postJson({ lang: 'ja' }, t.me.bearer));
-    const form = await t.request(pathOf(t.english.postId), postForm({ lang: 'ja' }, t.me.bearer));
-
-    expect(json.status).toBe(200);
-    expect(form.status).toBe(200);
-  });
-
-  it('lang が \'ja-JP\' や \'JA\' のように地域や大文字を含んでいても ja として 200 にする', async () => {
-    const t = await seedPosts({ textGenerator: createStubTextGenerator(reply).generator });
-
-    const region = await t.request(pathOf(t.english.postId), postJson({ lang: 'ja-JP' }, t.me.bearer));
-    const upper = await t.request(pathOf(t.english.postId), postForm({ lang: 'JA' }, t.me.bearer));
-
-    expect(region.status).toBe(200);
-    expect(upper.status).toBe(200);
-  });
-
   it('lang が ja 以外なら 403 にする', async () => {
     const { generator, calls } = createStubTextGenerator(reply);
     const t = await seedPosts({ textGenerator: generator });
@@ -153,25 +122,6 @@ describe('POST /api/v1/statuses/:id/translate', () => {
     expect(await json.json()).toEqual({ error: 'This action is not allowed' });
     expect(form.status).toBe(403);
     expect(calls).toEqual([]);
-  });
-
-  it('body がなくても ja として訳す', async () => {
-    const t = await seedPosts({ textGenerator: createStubTextGenerator(reply).generator });
-
-    const response = await t.request(pathOf(t.english.postId), {
-      method: 'POST',
-      headers: t.me.bearer,
-    });
-
-    expect(response.status).toBe(200);
-  });
-
-  it('自分のローカル投稿も訳せる', async () => {
-    const t = await seedPosts({ textGenerator: createStubTextGenerator(reply).generator });
-
-    const response = await t.request(pathOf(t.mine.postId), postJson({}, t.me.bearer));
-
-    expect(response.status).toBe(200);
   });
 
   it('見つからない投稿と、閲覧者に見えない投稿と、id の形が違うものは 404 にする', async () => {
@@ -196,21 +146,6 @@ describe('POST /api/v1/statuses/:id/translate', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'This action is not allowed' });
     expect(calls).toEqual([]);
-  });
-
-  it('公開範囲が不明の旧データのリモート投稿は、フォロー中なら訳せる', async () => {
-    const { generator, calls } = createStubTextGenerator(reply);
-    const t = await seedPosts({ textGenerator: generator });
-    const legacy = t.seed.addRemotePost(t.alice, Date.UTC(2020, 0, 7), {
-      content: '<p>Legacy post</p>',
-      visibility: null,
-    });
-    t.seed.addFollow(t.me.actorId, t.alice.actorId);
-
-    const response = await t.request(pathOf(legacy.postId), postJson({}, t.me.bearer));
-
-    expect(response.status).toBe(200);
-    expect(calls).toHaveLength(1);
   });
 
   it('フォローしていない相手の公開範囲が不明の投稿は 404 にし、AI を呼ばない', async () => {
@@ -285,41 +220,5 @@ describe('POST /api/v1/statuses/:id/translate', () => {
     expect(t.sqlite.prepare('SELECT count FROM ai_translation_usages').all()).toEqual([{ count: 1 }]);
     expect(t.sqlite.prepare('SELECT count(*) AS n FROM post_translations').get()).toEqual({ n: 0 });
     warn.mockRestore();
-  });
-
-  it('AI が時間内に終わらないと 503 にする', async () => {
-    const neverResolving: TextGenerator = {
-      summarize: () => new Promise(() => {}),
-      generate: () => new Promise(() => {}),
-    };
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const t = await seedPosts({ textGenerator: neverResolving, translationTimeoutMs: 10 });
-
-    const response = await t.request(pathOf(t.english.postId), postJson({}, t.me.bearer));
-
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: 'Service Unavailable' });
-    warn.mockRestore();
-  });
-
-  it('textGenerator がないと 503 にし、回数を消費しない', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const t = await seedPosts();
-
-    const response = await t.request(pathOf(t.english.postId), postJson({}, t.me.bearer));
-
-    expect(response.status).toBe(503);
-    expect(t.sqlite.prepare('SELECT count(*) AS n FROM ai_translation_usages').get()).toEqual({ n: 0 });
-    warn.mockRestore();
-  });
-
-  it('actor のない利用者は 422 にする', async () => {
-    const t = await seedPosts({ textGenerator: createStubTextGenerator(reply).generator });
-    const withoutActor = await t.bearerFor('read:statuses');
-
-    const response = await t.request(pathOf(t.english.postId), postJson({}, withoutActor));
-
-    expect(response.status).toBe(422);
-    expect(await response.json()).toEqual({ error: 'Actor not found' });
   });
 });

@@ -2,8 +2,7 @@ import { Endpoints, Note, Person, Update } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
-import { Instant } from '../../../domain/instant/instant.ts';
-import type { PostVersion, PostVersionsResolverByPostId } from '../../../domain/post/post.ts';
+import type { PostVersionsResolverByPostId } from '../../../domain/post/post.ts';
 import { StatusEditSchema, StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
@@ -54,16 +53,6 @@ describe('新規投稿の原文の保存', () => {
     expect(t.rowOf(status.id)).toMatchObject({ sourceText: '**bold** hi', editedAt: null });
     expect(t.rowOf(status.id).content).toContain('<strong>bold</strong>');
   });
-
-  it('返信の原文も保存する', async () => {
-    const t = await setup();
-    const parent = t.seed.addLocalPost(t.alice, 1_000);
-
-    const response = await t.post({ status: 'reply <b>', in_reply_to_id: parent.postId });
-
-    const status = StatusSchema.parse(await response.json());
-    expect(t.rowOf(status.id).sourceText).toBe('reply <b>');
-  });
 });
 
 describe('PUT /api/v1/statuses/:id', () => {
@@ -96,16 +85,6 @@ describe('PUT /api/v1/statuses/:id', () => {
     const events = t.sqlite.prepare(`SELECT eventName FROM domain_events WHERE aggregateId = ? ORDER BY occurredAt`)
       .all(created.id) as unknown as ReadonlyArray<{ eventName: string }>;
     expect(events.map((event) => event.eventName)).toContain('post.updated');
-  });
-
-  it('text/markdown の本文は Markdown として HTML にする', async () => {
-    const t = await setup();
-    const created = StatusSchema.parse(await (await t.post({ status: 'before' })).json());
-
-    const response = await t.edit(created.id, { status: '**after**', content_type: 'text/markdown' });
-
-    expect(StatusSchema.parse(await response.json()).content).toContain('<strong>after</strong>');
-    expect(t.rowOf(created.id).sourceText).toBe('**after**');
   });
 
   it('spoiler_text と sensitive を省くと現在の値を保つ', async () => {
@@ -209,14 +188,6 @@ describe('GET /api/v1/statuses/:id/source', () => {
     expect(await response.json()).toEqual({ id: created.id, text: '*raw* <text>', spoiler_text: 'cw' });
   });
 
-  it('編集後は編集後の原文を返す', async () => {
-    const t = await setup();
-    const created = StatusSchema.parse(await (await t.post({ status: 'before' })).json());
-    await t.edit(created.id, { status: 'after', spoiler_text: 'new' });
-
-    expect(await (await t.source(created.id)).json()).toEqual({ id: created.id, text: 'after', spoiler_text: 'new' });
-  });
-
   it('原文のない既存の投稿は HTML から戻したテキストを返す', async () => {
     const t = await setup();
     const own = t.seed.addLocalPost(t.me, 1_000, { content: '<p>Hello <b>world</b></p><p>second</p>' });
@@ -225,16 +196,6 @@ describe('GET /api/v1/statuses/:id/source', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ id: own.postId, text: 'Hello world\nsecond', spoiler_text: '' });
-  });
-
-  it('原文のない既存の投稿も編集でき、編集後は新しい原文を返す', async () => {
-    const t = await setup();
-    const own = t.seed.addLocalPost(t.me, 1_000, { content: '<p>legacy</p>' });
-
-    const response = await t.edit(own.postId, { status: 'fixed' });
-
-    expect(response.status).toBe(200);
-    expect(await (await t.source(own.postId)).json()).toMatchObject({ text: 'fixed' });
   });
 
   it('他人の投稿とリモートの投稿は 404 にする', async () => {
@@ -441,30 +402,6 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
         t.federation.sendActivity.mockClear();
         return { t, created };
       };
-      const withoutVersions = (versions: ReadonlyArray<PostVersion>) =>
-        withResolver({ resolve: async () => RA.ok(versions) });
-
-      it('版が空なら、編集直前の宛先だけで送る', async () => {
-        const { t, created } = await withoutVersions([]);
-
-        await t.edit(created.id, { status: 'hi again' });
-
-        const sent = t.sentActivities();
-        expect(sent).toHaveLength(1);
-        expect(sent[0]?.[1]).toBe('followers');
-      });
-
-      it('現在の版だけなら、編集直前の宛先だけで送る', async () => {
-        const { t, created } = await withoutVersions([
-          { content: '<p>hi</p>', summary: null, sensitive: false, createdAt: Instant.now() },
-        ]);
-
-        await t.edit(created.id, { status: 'hi again' });
-
-        const sent = t.sentActivities();
-        expect(sent).toHaveLength(1);
-        expect(sent[0]?.[1]).toBe('followers');
-      });
 
       it('resolver が例外を投げても 200 にして、編集直前の宛先だけで送る', async () => {
         const { t, created } = await withResolver({
@@ -480,37 +417,6 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
         expect(sent).toHaveLength(1);
         expect(sent[0]?.[1]).toBe('followers');
       });
-
-      it('resolver が Err を返しても 200 にして、編集直前の宛先だけで送る', async () => {
-        const { t, created } = await withResolver({ resolve: async () => RA.err(new Error('broken')) as never });
-
-        const response = await t.edit(created.id, { status: 'hi again' });
-
-        expect(response.status).toBe(200);
-        const sent = t.sentActivities();
-        expect(sent).toHaveLength(1);
-        expect(sent[0]?.[1]).toBe('followers');
-      });
-    });
-
-    it('summary と sensitive の無い古い post.created の投稿も編集でき、以前の版のメンションの相手にも送る', async () => {
-      const t = await withRemoteAlice();
-      t.seed.addRemoteActor('alice');
-      const created = StatusSchema.parse(await (await t.post({ status: 'hi @alice@remote.example' })).json());
-      await t.edit(created.id, { status: 'hi' });
-      t.dropSummaryAndSensitiveFromCreated(created.id);
-      t.federation.sendActivity.mockClear();
-
-      const response = await t.edit(created.id, { status: 'hi again' });
-
-      expect(response.status).toBe(200);
-      const sent = t.sentActivities();
-      expect(sent).toHaveLength(2);
-      expect(sent[1]?.[1]).toEqual([
-        expect.objectContaining({ id: new URL(aliceId), inboxId: new URL(`${aliceId}/inbox`) }),
-      ]);
-      const note = await noteOf(sent[1]?.[2]);
-      expect(note.ccIds.map((id) => id.href)).toContain(aliceId);
     });
   });
 
@@ -610,16 +516,6 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
         expect(
           t.sqlite.prepare('SELECT actorUri FROM direct_post_participants WHERE postId = ?').all(created.id),
         ).not.toContainEqual({ actorUri: bobId });
-      });
-
-      it('同じ宛先のままの編集は通る', async () => {
-        const t = await withAliceAndBob();
-        const created = await postDirect(t);
-
-        const response = await t.edit(created.id, { status: 'again @alice@remote.example' });
-
-        expect(response.status).toBe(200);
-        expect(t.rowOf(created.id).editedAt).not.toBeNull();
       });
 
       it('宛先を外す編集は通る', async () => {

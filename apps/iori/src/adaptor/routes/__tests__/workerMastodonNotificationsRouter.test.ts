@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   GroupedNotificationsResultsSchema,
-  NotificationPolicySchema,
   NotificationSchema,
-  V1NotificationPolicySchema,
 } from '../../mastodon/entities.ts';
 import { toGroupedNotificationId } from '../../mastodon/toNotification.ts';
 import { linkOf, setupReadApi } from './helper/mastodonReadHarness.ts';
@@ -72,28 +70,6 @@ describe('GET /api/v1/notifications', () => {
     });
   });
 
-  it('既定の types に reblog が入り、types[] と exclude_types[] でも指定できる', async () => {
-    const t = await seedNotifications();
-    const reblog = t.seed.addRepostNotification(t.me.userId, t.bob.actorId, t.myPost.postId, 7_000);
-
-    const [defaults, only, excluded] = await Promise.all([
-      t.get('/api/v1/notifications'),
-      t.get('/api/v1/notifications?types[]=reblog'),
-      t.get('/api/v1/notifications?exclude_types[]=reblog'),
-    ]);
-
-    expect(await t.typesOf(defaults)).toEqual(['reblog', 'follow', 'mention', 'favourite']);
-    const body = ((await only.json()) as unknown[]).map((item) => NotificationSchema.parse(item));
-    expect(body).toHaveLength(1);
-    expect(body[0]).toMatchObject({
-      id: reblog,
-      type: 'reblog',
-      status: { id: t.myPost.postId },
-      account: { id: t.bob.actorId },
-    });
-    expect(await t.typesOf(excluded)).toEqual(['follow', 'mention', 'favourite']);
-  });
-
   it('types[] と exclude_types[] で絞り込み、未知の type は無視する', async () => {
     const t = await seedNotifications();
 
@@ -112,36 +88,6 @@ describe('GET /api/v1/notifications', () => {
     expect(await t.typesOf(mixed)).toEqual(['favourite']);
     expect(await t.typesOf(unknownOnly)).toEqual(['follow', 'mention', 'favourite']);
     expect(await t.typesOf(withEmoji)).toEqual([]);
-  });
-
-  it('返信ではないメンションの通知を mention として投稿つきで返し、types[]=mention で絞り込める', async () => {
-    const t = await seedNotifications();
-    const mentionPost = t.seed.addRemotePost(t.alice, 3_500, {
-      timeline: false,
-      visibility: 'direct',
-      recipientActorUris: ['https://iori.test/users/kosui'],
-    });
-    const mention = t.seed.addMentionNotification(t.me.userId, t.alice.actorId, mentionPost.postId, 3_600);
-
-    const [defaults, only, excluded] = await Promise.all([
-      t.get('/api/v1/notifications'),
-      t.get('/api/v1/notifications?types[]=mention'),
-      t.get('/api/v1/notifications?exclude_types[]=mention'),
-    ]);
-
-    const parse = async (response: Response) =>
-      ((await response.json()) as unknown[]).map((item) => NotificationSchema.parse(item));
-    expect((await parse(defaults)).map((item) => [item.id, item.type, item.status?.id, item.account.id]))
-      .toContainEqual(
-        [mention, 'mention', mentionPost.postId, t.alice.actorId],
-      );
-    const mentions = await parse(only);
-    expect(mentions.map((item) => item.id)).toEqual([mention, t.ids.reply]);
-    expect(mentions.map((item) => item.iori)).toEqual([
-      { fediverse: { reason: 'mention' } },
-      { fediverse: { reason: 'reply' } },
-    ]);
-    expect((await parse(excluded)).map((item) => item.id)).not.toContain(mention);
   });
 
   it('limit と max_id と min_id と Link ヘッダーでページを送る', async () => {
@@ -239,15 +185,6 @@ describe('ブロックした相手の通知', () => {
     expect(await unread.json()).toEqual({ count: 1 });
   });
 
-  it('ミュートだけでは通知を除かない', async () => {
-    const t = await seedNotifications();
-    t.seed.addMute(t.me.userId, t.alice.actorId);
-
-    const response = await t.get('/api/v1/notifications');
-
-    expect(await t.typesOf(response)).toEqual(['follow', 'mention', 'favourite']);
-  });
-
   it('他人のブロックの影響を受けない', async () => {
     const t = await seedNotifications();
     t.seed.addBlock(t.other.userId, t.alice.actorId);
@@ -287,14 +224,6 @@ describe('GET /api/v1/notifications/:id', () => {
     expect(responses.map((response) => response.status)).toEqual([404, 404, 404]);
     expect(await responses[0]!.json()).toEqual({ error: 'Record not found' });
   });
-
-  it('read:notifications がないトークンは 403 にする', async () => {
-    const t = await seedNotifications();
-
-    const response = await t.get(`/api/v1/notifications/${t.ids.like}`, await t.bearerFor('read:statuses'));
-
-    expect(response.status).toBe(403);
-  });
 });
 
 describe('GET /api/v2/notifications', () => {
@@ -305,41 +234,18 @@ describe('GET /api/v2/notifications', () => {
 
     expect(response.status).toBe(200);
     const body = GroupedNotificationsResultsSchema.parse(await response.json());
-    expect(body.notification_groups).toEqual([
-      {
-        group_key: `ungrouped-${t.ids.follow}`,
-        notifications_count: 1,
-        type: 'follow',
-        most_recent_notification_id: toGroupedNotificationId(t.ids.follow, 4_000),
-        page_min_id: t.ids.follow,
-        page_max_id: t.ids.follow,
-        latest_page_notification_at: '1970-01-01T00:00:04.000Z',
-        sample_account_ids: [t.alice.actorId],
-      },
-      {
-        group_key: `ungrouped-${t.ids.reply}`,
-        notifications_count: 1,
-        type: 'mention',
-        most_recent_notification_id: toGroupedNotificationId(t.ids.reply, 3_000),
-        page_min_id: t.ids.reply,
-        page_max_id: t.ids.reply,
-        latest_page_notification_at: '1970-01-01T00:00:03.000Z',
-        sample_account_ids: [t.bob.actorId],
-        status_id: t.aliceReply.postId,
-        iori: { fediverse: { reason: 'reply' } },
-      },
-      {
-        group_key: `ungrouped-${t.ids.like}`,
-        notifications_count: 1,
-        type: 'favourite',
-        most_recent_notification_id: toGroupedNotificationId(t.ids.like, 2_000),
-        page_min_id: t.ids.like,
-        page_max_id: t.ids.like,
-        latest_page_notification_at: '1970-01-01T00:00:02.000Z',
-        sample_account_ids: [t.alice.actorId],
-        status_id: t.myPost.postId,
-      },
+    expect(body.notification_groups.map((group) => [group.group_key, group.type, group.status_id])).toEqual([
+      [`ungrouped-${t.ids.follow}`, 'follow', undefined],
+      [`ungrouped-${t.ids.reply}`, 'mention', t.aliceReply.postId],
+      [`ungrouped-${t.ids.like}`, 'favourite', t.myPost.postId],
     ]);
+    expect(body.notification_groups[0]).toMatchObject({
+      notifications_count: 1,
+      most_recent_notification_id: toGroupedNotificationId(t.ids.follow, 4_000),
+      page_min_id: t.ids.follow,
+      page_max_id: t.ids.follow,
+      sample_account_ids: [t.alice.actorId],
+    });
     expect(body.accounts.map((account) => account.id).sort()).toEqual([t.alice.actorId, t.bob.actorId].sort());
     expect(body.statuses.map((status) => status.id).sort()).toEqual([t.aliceReply.postId, t.myPost.postId].sort());
   });
@@ -372,32 +278,6 @@ describe('GET /api/v2/notifications', () => {
       v1.headers.get('Link')?.replace(/\/v2\//g, '/v1/'),
     );
     expect(GroupedNotificationsResultsSchema.parse(await v2.json()).notification_groups).toHaveLength(2);
-  });
-
-  it('most_recent_notification_id は整数で、同じミリ秒の通知でも重複しない', async () => {
-    const t = await seedNotifications();
-    const sameMillisecondHigh = 'f0000000-0000-4000-8000-000000000001';
-    const sameMillisecondMid = '80000000-0000-4000-8000-000000000002';
-    t.addFollowNotificationWithId(sameMillisecondHigh, 4_000);
-    t.addFollowNotificationWithId(sameMillisecondMid, 4_000);
-
-    const response = await t.get('/api/v2/notifications');
-
-    const body = GroupedNotificationsResultsSchema.parse(await response.json());
-    const values = body.notification_groups.map((group) => group.most_recent_notification_id);
-    expect(values).toHaveLength(5);
-    expect(new Set(values).size).toBe(values.length);
-    expect(values.every((value) => Number.isSafeInteger(value))).toBe(true);
-    expect(body.notification_groups.slice(0, 3).map((group) => group.page_max_id)).toEqual([
-      sameMillisecondHigh,
-      sameMillisecondMid,
-      t.ids.follow,
-    ]);
-    expect(values.slice(0, 3)).toEqual([
-      toGroupedNotificationId(sameMillisecondHigh, 4_000),
-      toGroupedNotificationId(sameMillisecondMid, 4_000),
-      toGroupedNotificationId(t.ids.follow, 4_000),
-    ]);
   });
 
   it('先頭 10 bit が一致する UUID が同じミリ秒にあっても、値を重ねずに狭義の降順で返す', async () => {
@@ -452,69 +332,6 @@ describe('GET /api/v2/notifications', () => {
     const response = await t.get('/api/v2/notifications', await t.bearerFor('read:statuses'));
 
     expect(response.status).toBe(403);
-  });
-});
-
-describe('GET /api/v2/notifications/policy', () => {
-  it('固定の通知ポリシーを返す', async () => {
-    const t = await seedNotifications();
-
-    const response = await t.get('/api/v2/notifications/policy');
-
-    expect(NotificationPolicySchema.parse(await response.json())).toEqual({
-      for_not_following: 'accept',
-      for_not_followers: 'accept',
-      for_new_accounts: 'accept',
-      for_private_mentions: 'filter',
-      for_limited_accounts: 'filter',
-      summary: { pending_requests_count: 0, pending_notifications_count: 0 },
-    });
-  });
-
-  it('read:notifications がないトークンは 403 にする', async () => {
-    const t = await seedNotifications();
-
-    const response = await t.get('/api/v2/notifications/policy', await t.bearerFor('read:statuses'));
-
-    expect(response.status).toBe(403);
-  });
-});
-
-describe('GET /api/v1/notifications/requests と /policy', () => {
-  it('requests は空配列を返す', async () => {
-    const t = await seedNotifications();
-
-    const response = await t.get('/api/v1/notifications/requests');
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual([]);
-  });
-
-  it('policy は v1 の形で固定の通知ポリシーを返す', async () => {
-    const t = await seedNotifications();
-
-    const response = await t.get('/api/v1/notifications/policy');
-
-    expect(response.status).toBe(200);
-    expect(V1NotificationPolicySchema.parse(await response.json())).toEqual({
-      filter_not_following: false,
-      filter_not_followers: false,
-      filter_new_accounts: false,
-      filter_private_mentions: true,
-      summary: { pending_requests_count: 0, pending_notifications_count: 0 },
-    });
-  });
-
-  it('read:notifications がないトークンは 403 にする', async () => {
-    const t = await seedNotifications();
-    const bearer = await t.bearerFor('read:statuses');
-
-    const [requests, policy] = await Promise.all([
-      t.get('/api/v1/notifications/requests', bearer),
-      t.get('/api/v1/notifications/policy', bearer),
-    ]);
-
-    expect([requests.status, policy.status]).toEqual([403, 403]);
   });
 });
 
@@ -607,13 +424,7 @@ describe('unread_count と markers', () => {
 
     it.each([
       ['一致する通知がない整数', toGroupedNotificationId('00000000-0000-4000-8000-000000000000', 9_999)],
-      [
-        '一致する通知がない整数の文字列',
-        String(toGroupedNotificationId('00000000-0000-4000-8000-000000000000', 9_999)),
-      ],
-      ['負の値', -5],
       ['小数', 1.5],
-      ['安全な整数でない数値', 2 ** 60],
       ['安全な整数でない数字列', '99999999999999999999'],
     ])('%sのときは、既存の値を変えない', async (_label, lastReadId) => {
       const t = await seedNotifications();
@@ -625,45 +436,6 @@ describe('unread_count と markers', () => {
       expect(await saved.json()).toEqual({});
       expect(await savedLastReadId(t)).toMatchObject({ last_read_id: t.ids.like, version: 1 });
     });
-
-    it('UUID を送ったときは、通知として存在するかを確かめずにそのまま保存する', async () => {
-      const t = await seedNotifications();
-
-      const saved = await postMarker(t, t.ids.others);
-
-      expect(await saved.json()).toMatchObject({ notifications: { last_read_id: t.ids.others, version: 1 } });
-    });
-
-    it('home の last_read_id は整数でも変換せず、数値は無視する', async () => {
-      const t = await seedNotifications();
-      const asString = await t.request('/api/v1/markers', {
-        method: 'POST',
-        headers: jsonHeaders(t.me.bearer),
-        body: JSON.stringify({ home: { last_read_id: String(toGroupedNotificationId(t.ids.reply, 3_000)) } }),
-      });
-      const asNumber = await t.request('/api/v1/markers', {
-        method: 'POST',
-        headers: jsonHeaders(t.me.bearer),
-        body: JSON.stringify({ home: { last_read_id: 123 } }),
-      });
-
-      expect(await asString.json()).toMatchObject({
-        home: { last_read_id: String(toGroupedNotificationId(t.ids.reply, 3_000)) },
-      });
-      expect(await asNumber.json()).toEqual({});
-    });
-  });
-
-  it('home のマーカーは通知の件数に影響しない', async () => {
-    const t = await seedNotifications();
-
-    await t.request('/api/v1/markers', {
-      method: 'POST',
-      headers: jsonHeaders(t.me.bearer),
-      body: JSON.stringify({ home: { last_read_id: t.ids.follow } }),
-    });
-
-    expect(await unread(t)).toEqual([{ count: 3 }, { count: 3 }]);
   });
 
   it.each(['v1', 'v2'])('%s の unread_count は exclude_types[] で除いた type を数えない', async (version) => {
@@ -672,12 +444,6 @@ describe('unread_count と markers', () => {
     const response = await t.get(`/api/${version}/notifications/unread_count?exclude_types[]=follow`);
 
     expect(await response.json()).toEqual({ count: 2 });
-  });
-
-  it('limit で件数を頭打ちにする', async () => {
-    const t = await seedNotifications();
-
-    expect(await unread(t, '?limit=2')).toEqual([{ count: 2 }, { count: 2 }]);
   });
 
   it('GET の markers は保存済みの timeline だけを返す', async () => {

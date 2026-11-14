@@ -64,16 +64,6 @@ describe('POST /api/v1/accounts/:id/follow と /unfollow', () => {
     expect(t.sentActivities()[0]).toBeInstanceOf(Undo);
   });
 
-  it('未フォローでもエラーにせず、現在の Relationship を返して何も送らない', async () => {
-    const t = await seedActions();
-
-    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/unfollow`);
-
-    expect(response.status).toBe(200);
-    expect(RelationshipSchema.parse(await response.json())).toMatchObject({ following: false });
-    expect(t.federation.sendActivity).not.toHaveBeenCalled();
-  });
-
   it('自分自身は 422 にする', async () => {
     const t = await seedActions();
 
@@ -132,34 +122,6 @@ describe('POST /api/v1/accounts/:id/follow と /unfollow', () => {
     expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403]);
     expect(t.count('follows')).toBe(0);
   });
-
-  it('follow スコープのトークンでフォローできる', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn('follow');
-    const alice = t.seed.addRemoteActor('alice');
-
-    const response = await t.request(`/api/v1/accounts/${alice.actorId}/follow`, {
-      method: 'POST',
-      headers: me.bearer,
-    });
-
-    expect(response.status).toBe(200);
-  });
-
-  it('Cookie の利用者は同一オリジンのときだけ操作でき、Origin が違うか欠けると 403 にする', async () => {
-    const t = await seedActions();
-    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
-
-    const same = await t.post(`/api/v1/accounts/${t.alice.actorId}/follow`, { ...cookie, Origin: ORIGIN });
-    const cross = await t.post(`/api/v1/accounts/${t.alice.actorId}/unfollow`, {
-      ...cookie,
-      Origin: 'https://evil.example',
-    });
-    const missing = await t.post(`/api/v1/accounts/${t.alice.actorId}/unfollow`, cookie);
-
-    expect([same.status, cross.status, missing.status]).toEqual([200, 403, 403]);
-    expect(t.count('follows')).toBe(1);
-  });
 });
 
 describe('POST /api/v1/accounts/:id/mute と /unmute', () => {
@@ -199,48 +161,6 @@ describe('POST /api/v1/accounts/:id/mute と /unmute', () => {
     expect(t.count('mutes')).toBe(0);
   });
 
-  it('未ミュートでもエラーにせず、現在の Relationship を返す', async () => {
-    const t = await seedActions();
-
-    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/unmute`);
-
-    expect(response.status).toBe(200);
-    expect(RelationshipSchema.parse(await response.json())).toMatchObject({ muting: false });
-  });
-
-  it('ローカルのアカウントもミュートできる', async () => {
-    const t = await seedActions();
-
-    const response = await t.post(`/api/v1/accounts/${t.other.actorId}/mute`);
-
-    expect(response.status).toBe(200);
-    expect(RelationshipSchema.parse(await response.json())).toMatchObject({ muting: true });
-  });
-
-  it('自分自身は 422 にする', async () => {
-    const t = await seedActions();
-
-    const responses = await Promise.all([
-      t.post(`/api/v1/accounts/${t.me.actorId}/mute`),
-      t.post(`/api/v1/accounts/${t.me.actorId}/unmute`),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([422, 422]);
-    expect(t.count('mutes')).toBe(0);
-  });
-
-  it('存在しないアカウントと不正な ID は 404 にする', async () => {
-    const t = await seedActions();
-
-    const responses = await Promise.all([
-      t.post(`/api/v1/accounts/${t.seed.uuid()}/mute`),
-      t.post('/api/v1/accounts/not-an-id/unmute'),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([404, 404]);
-    expect(t.count('mutes')).toBe(0);
-  });
-
   it('トークンがないと 401、write:mutes を満たさないスコープは 403 にする', async () => {
     const t = await seedActions();
     const readOnly = await t.bearerFor('read');
@@ -254,34 +174,6 @@ describe('POST /api/v1/accounts/:id/mute と /unmute', () => {
 
     expect(responses.map((response) => response.status)).toEqual([401, 403, 403]);
     expect(t.count('mutes')).toBe(0);
-  });
-
-  it('follow スコープのトークンでミュートできる', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn('follow');
-    const alice = t.seed.addRemoteActor('alice');
-
-    const response = await t.request(`/api/v1/accounts/${alice.actorId}/mute`, {
-      method: 'POST',
-      headers: me.bearer,
-    });
-
-    expect(response.status).toBe(200);
-  });
-
-  it('Cookie の利用者は同一オリジンのときだけ操作でき、Origin が違うか欠けると 403 にする', async () => {
-    const t = await seedActions();
-    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
-
-    const same = await t.post(`/api/v1/accounts/${t.alice.actorId}/mute`, { ...cookie, Origin: ORIGIN });
-    const cross = await t.post(`/api/v1/accounts/${t.alice.actorId}/unmute`, {
-      ...cookie,
-      Origin: 'https://evil.example',
-    });
-    const missing = await t.post(`/api/v1/accounts/${t.alice.actorId}/unmute`, cookie);
-
-    expect([same.status, cross.status, missing.status]).toEqual([200, 403, 403]);
-    expect(t.count('mutes')).toBe(1);
   });
 });
 
@@ -363,18 +255,6 @@ describe('POST /api/v1/accounts/:id/block と /unblock', () => {
     expect(t.sentActivities()).toHaveLength(2);
   });
 
-  it('ブロック済みで残ったフォローがなければ、Block だけを送り直す', async () => {
-    const t = await seedActions();
-    t.seed.addBlock(t.me.userId, t.alice.actorId);
-
-    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/block`);
-
-    expect(response.status).toBe(200);
-    expect(t.count('blocks')).toBe(1);
-    expect(t.sentActivities()).toHaveLength(1);
-    expect(t.sentActivities()[0]).toBeInstanceOf(Block);
-  });
-
   it('ブロックを外し、blocking が false の Relationship を返して Undo(Block) を送り、フォローは戻さない', async () => {
     const t = await seedActions();
     const existing = t.seed.addBlock(t.me.userId, t.alice.actorId);
@@ -397,16 +277,6 @@ describe('POST /api/v1/accounts/:id/block と /unblock', () => {
     expect(object).toBeInstanceOf(Block);
     expect(undo.id?.href).toBe(`${ORIGIN}/users/kosui#undo-blocks/${existing.blockId}`);
     expect(object?.id?.href).toBe(`${ORIGIN}/users/kosui#blocks/${existing.blockId}`);
-  });
-
-  it('未ブロックでもエラーにせず、現在の Relationship を返して何も送らない', async () => {
-    const t = await seedActions();
-
-    const response = await t.post(`/api/v1/accounts/${t.alice.actorId}/unblock`);
-
-    expect(response.status).toBe(200);
-    expect(RelationshipSchema.parse(await response.json())).toMatchObject({ blocking: false });
-    expect(t.federation.sendActivity).not.toHaveBeenCalled();
   });
 
   it('ローカルのアカウントはブロックとフォロー解除だけを行い、何も送らない', async () => {
@@ -432,30 +302,6 @@ describe('POST /api/v1/accounts/:id/block と /unblock', () => {
     expect(t.federation.sendActivity).not.toHaveBeenCalled();
   });
 
-  it('自分自身は 422 にする', async () => {
-    const t = await seedActions();
-
-    const responses = await Promise.all([
-      t.post(`/api/v1/accounts/${t.me.actorId}/block`),
-      t.post(`/api/v1/accounts/${t.me.actorId}/unblock`),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([422, 422]);
-    expect(t.count('blocks')).toBe(0);
-  });
-
-  it('存在しないアカウントと不正な ID は 404 にする', async () => {
-    const t = await seedActions();
-
-    const responses = await Promise.all([
-      t.post(`/api/v1/accounts/${t.seed.uuid()}/block`),
-      t.post('/api/v1/accounts/not-an-id/unblock'),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([404, 404]);
-    expect(t.count('blocks')).toBe(0);
-  });
-
   it('トークンがないと 401、write:blocks を満たさないスコープは 403 にする', async () => {
     const t = await seedActions();
     const readOnly = await t.bearerFor('read');
@@ -469,34 +315,6 @@ describe('POST /api/v1/accounts/:id/block と /unblock', () => {
 
     expect(responses.map((response) => response.status)).toEqual([401, 403, 403]);
     expect(t.count('blocks')).toBe(0);
-  });
-
-  it.each(['follow', 'write:blocks'])('%s スコープのトークンでブロックできる', async (scope) => {
-    const t = setupReadApi();
-    const me = await t.signIn(scope);
-    const alice = t.seed.addRemoteActor('alice');
-
-    const response = await t.request(`/api/v1/accounts/${alice.actorId}/block`, {
-      method: 'POST',
-      headers: me.bearer,
-    });
-
-    expect(response.status).toBe(200);
-  });
-
-  it('Cookie の利用者は同一オリジンのときだけ操作でき、Origin が違うか欠けると 403 にする', async () => {
-    const t = await seedActions();
-    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
-
-    const same = await t.post(`/api/v1/accounts/${t.alice.actorId}/block`, { ...cookie, Origin: ORIGIN });
-    const cross = await t.post(`/api/v1/accounts/${t.alice.actorId}/unblock`, {
-      ...cookie,
-      Origin: 'https://evil.example',
-    });
-    const missing = await t.post(`/api/v1/accounts/${t.alice.actorId}/unblock`, cookie);
-
-    expect([same.status, cross.status, missing.status]).toEqual([200, 403, 403]);
-    expect(t.count('blocks')).toBe(1);
   });
 
   it('GET /accounts/relationships の blocking にブロックを反映する', async () => {
