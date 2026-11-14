@@ -1,16 +1,19 @@
 import type { Context } from '@fedify/fedify';
-import { Endpoints, Image, Person } from '@fedify/vocab';
+import { Endpoints, Image, Person, Service } from '@fedify/vocab';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
+import { AiAgentBot } from '../../domain/aiAgentBot/aiAgentBot.ts';
 import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 
 export const buildLocalPerson = async (
   ctx: Context<unknown>,
   identifier: string,
   actor: LocalActor,
-): Promise<Person> => {
+): Promise<Person | Service> => {
   const keys = await ctx.getActorKeyPairs(identifier);
-  return new Person({
+  // AI エージェントの bot は Service として公開し、Mastodon などで bot と表示されるようにする
+  const ActorClass = AiAgentBot.isBotUsername(identifier) ? Service : Person;
+  return new ActorClass({
     id: ctx.getActorUri(identifier),
     preferredUsername: identifier,
     name: actor.displayName,

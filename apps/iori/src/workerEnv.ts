@@ -21,6 +21,7 @@ export type IoriWorkerEnv = Readonly<{
   IORI_PRUNE_FEDERATED_POSTS?: string;
   IORI_BLUESKY_CROSSPOST?: string;
   IORI_BLUESKY_TIMELINE?: string;
+  IORI_AI_AGENT_BOT?: string;
   BLUESKY_IDENTIFIER?: string;
   BLUESKY_APP_PASSWORD?: string;
   BLUESKY_CREDENTIAL_KEY?: string;

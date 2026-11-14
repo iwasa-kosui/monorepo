@@ -18,7 +18,7 @@ export const MarkdownEditor = ({
   value,
   onChange,
   onKeyDown,
-  placeholder = 'What\'s on your mind?',
+  placeholder = 'いまどうしてる？',
   minHeight = '150px',
   disabled = false,
   name,
@@ -79,34 +79,8 @@ export const MarkdownEditor = ({
 
   return (
     <div class='flex flex-col flex-1 min-h-0'>
-      {/* Tab Bar */}
-      <div class='flex gap-1 mb-3 flex-shrink-0 bg-warm-gray dark:bg-gray-700 p-1 rounded-xl w-fit'>
-        <button
-          type='button'
-          onClick={() => handleTabChange('markdown')}
-          class={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
-            activeTab === 'markdown'
-              ? 'bg-cream dark:bg-gray-600 text-terracotta dark:text-terracotta-light shadow-clay-sm'
-              : 'text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-300'
-          }`}
-        >
-          Markdown
-        </button>
-        <button
-          type='button'
-          onClick={() => handleTabChange('preview')}
-          class={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
-            activeTab === 'preview'
-              ? 'bg-cream dark:bg-gray-600 text-terracotta dark:text-terracotta-light shadow-clay-sm'
-              : 'text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-300'
-          }`}
-        >
-          Preview
-        </button>
-      </div>
-
       {/* Content Area */}
-      <div class='flex-1 min-h-0'>
+      <div class='relative flex-1 min-h-0'>
         {activeTab === 'markdown'
           ? (
             <textarea
@@ -117,19 +91,19 @@ export const MarkdownEditor = ({
               onInput={handleInput}
               onKeyDown={onKeyDown}
               disabled={disabled}
-              class='w-full h-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all'
+              class='w-full h-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all pb-9'
               style={{ minHeight }}
             />
           )
           : (
             <div
-              class='h-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset overflow-y-auto'
+              class='h-full px-4 py-3 pb-9 rounded-clay bg-warm-gray dark:bg-gray-700 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset overflow-y-auto'
               style={{ minHeight }}
             >
               {isLoadingPreview
                 ? (
                   <p class='text-charcoal-light dark:text-gray-500'>
-                    Loading preview...
+                    プレビューを読み込んでいます...
                   </p>
                 )
                 : previewError
@@ -147,11 +121,23 @@ export const MarkdownEditor = ({
                 )
                 : (
                   <p class='text-charcoal-light dark:text-gray-500'>
-                    Nothing to preview
+                    プレビューする内容がありません
                   </p>
                 )}
             </div>
           )}
+        <button
+          type='button'
+          aria-pressed={activeTab === 'preview'}
+          onClick={() => handleTabChange(activeTab === 'preview' ? 'markdown' : 'preview')}
+          class={`absolute bottom-2 right-2 px-2 py-0.5 text-xs rounded-full transition-colors ${
+            activeTab === 'preview'
+              ? 'bg-terracotta/10 text-terracotta dark:text-terracotta-light'
+              : 'text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light'
+          }`}
+        >
+          {activeTab === 'preview' ? '編集に戻る' : 'プレビュー'}
+        </button>
       </div>
 
       {/* Hidden input for form submission when in preview mode */}
