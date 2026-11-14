@@ -96,7 +96,7 @@
     "compose:up": "dotenvx run -- docker compose up -d",
     "compose:down": "dotenvx run -- docker compose down --volumes --remove-orphans",
     "test": "vitest",
-    "test:ci": "vitest --run",
+    "test:ci": "vitest --run --project isolated && vitest --run --project shared --no-isolate",
     "build:workerd-test": "node scripts/build-workerd-test-bundle.mjs",
     "test:workerd": "pnpm run build:workerd-test && vitest --run --config vitest.workerd.config.ts",
     "typecheck": "tsc",
