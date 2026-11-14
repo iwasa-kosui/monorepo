@@ -888,6 +888,12 @@ export const aiAgentBotFollowupsTable = sqliteTable('ai_agent_bot_followups', {
   index('ai_agent_bot_followups_outcome_handled_at_idx').on(table.outcome, table.handledAt),
 ]);
 
+/** AI エージェントの bot が、フォローしてくれた人にフォローを返そうとした記録。同じ人に何度も送らないために使う */
+export const aiAgentBotFollowBacksTable = sqliteTable('ai_agent_bot_follow_backs', {
+  actorId: text('actorId').primaryKey(),
+  attemptedAt: timestamp().notNull(),
+});
+
 export const schema = {
   usersTable,
   keysTable,
@@ -969,4 +975,5 @@ export const schema = {
   blueskyAccountSwitchTable,
   aiAgentBotTriggersTable,
   aiAgentBotFollowupsTable,
+  aiAgentBotFollowBacksTable,
 } as const;

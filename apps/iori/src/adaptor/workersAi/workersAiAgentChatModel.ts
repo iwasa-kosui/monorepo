@@ -28,6 +28,8 @@ const choicesSchema = z.object({
     z.object({
       message: z.object({
         content: z.string().nullish(),
+        reasoning: z.string().nullish(),
+        reasoning_content: z.string().nullish(),
         tool_calls: z.array(z.object({
           id: z.string().optional(),
           function: z.object({ name: z.string(), arguments: z.unknown() }),
@@ -39,12 +41,22 @@ const choicesSchema = z.object({
 
 const toolCallId = (index: number, id: string | undefined): string => id ?? `call_${index}`;
 
-const readResponse = (raw: unknown): Readonly<{ content: string | undefined; toolCalls: AgentToolCall[] }> => {
+/**
+ * 推論するモデルが本文に混ぜた考えの部分（<think>…</think>）を取り除く。
+ * 考えを本文に書いてくるモデルでも、考えが投稿されないようにする。
+ */
+export const stripThinking = (content: string): string => content.replace(/<think>[\s\S]*?(?:<\/think>|$)/g, '').trim();
+
+const readResponse = (
+  raw: unknown,
+): Readonly<{ content: string | undefined; toolCalls: AgentToolCall[]; reasoning: string | undefined }> => {
   const choices = choicesSchema.safeParse(raw);
   if (choices.success) {
     const message = choices.data.choices[0].message;
+    const reasoning = message.reasoning ?? message.reasoning_content ?? undefined;
     return {
-      content: message.content ?? undefined,
+      content: message.content === null || message.content === undefined ? undefined : stripThinking(message.content),
+      reasoning: reasoning === undefined || reasoning.trim().length === 0 ? undefined : reasoning,
       toolCalls: (message.tool_calls ?? []).map((call, index) => ({
         id: toolCallId(index, call.id),
         name: call.function.name,
@@ -56,8 +68,9 @@ const readResponse = (raw: unknown): Readonly<{ content: string | undefined; too
   if (native.success) {
     const { response } = native.data;
     return {
+      reasoning: undefined,
       content: typeof response === 'string'
-        ? response
+        ? stripThinking(response)
         : response === undefined || response === null
         ? undefined
         : JSON.stringify(response),
@@ -68,7 +81,7 @@ const readResponse = (raw: unknown): Readonly<{ content: string | undefined; too
       })),
     };
   }
-  return { content: undefined, toolCalls: [] };
+  return { content: undefined, toolCalls: [], reasoning: undefined };
 };
 
 const toWorkersAiMessage = (message: AgentMessage): Record<string, unknown> => {
@@ -82,6 +95,7 @@ const toWorkersAiMessage = (message: AgentMessage): Record<string, unknown> => {
         : {
           role: 'assistant',
           content: message.content,
+          ...(message.reasoning === undefined ? {} : { reasoning_content: message.reasoning }),
           tool_calls: message.toolCalls.map((call) => ({
             id: call.id,
             type: 'function',
@@ -94,7 +108,7 @@ const toWorkersAiMessage = (message: AgentMessage): Record<string, unknown> => {
 };
 
 export const createWorkersAiAgentChatModel = (ai: WorkersAiRunner): AgentChatModel => ({
-  chat: async ({ model, messages, tools, maxOutputTokens }) => {
+  chat: async ({ model, messages, tools, maxOutputTokens, reasoningEffort }) => {
     try {
       const raw = await ai.run(model, {
         messages: messages.map(toWorkersAiMessage),
@@ -107,13 +121,18 @@ export const createWorkersAiAgentChatModel = (ai: WorkersAiRunner): AgentChatMod
             })),
           }),
         max_tokens: maxOutputTokens,
+        ...(reasoningEffort === undefined ? {} : { reasoning_effort: reasoningEffort }),
       });
-      const { content, toolCalls } = readResponse(raw);
+      const { content, toolCalls, reasoning } = readResponse(raw);
       const text = content?.trim();
       if ((text === undefined || text.length === 0) && toolCalls.length === 0) {
         return RA.err(aiError('Workers AI returned neither text nor tool calls.'));
       }
-      return RA.ok({ content: text === undefined || text.length === 0 ? undefined : text, toolCalls });
+      return RA.ok({
+        content: text === undefined || text.length === 0 ? undefined : text,
+        toolCalls,
+        ...(reasoning === undefined ? {} : { reasoning }),
+      });
     } catch (error) {
       return RA.err(aiError(error instanceof Error ? error.message : String(error)));
     }

@@ -10,16 +10,23 @@ import type { UserId } from '../user/userId.ts';
  * AI エージェントの bot のユーザー名。パスワードもパスキーも持たないので、誰もこのユーザーでログインできない。
  * bot の操作は、cron から Workers AI のエージェントが行う。
  *
- * GitHub のユーザー名には使えない `_` を含める。GitHub の PR やコミットメッセージで bot のハンドルを
- * 素のまま書いても、同名の GitHub アカウントの持ち主へメンションの通知が飛ばないようにするため。
- * Fediverse（Mastodon など）のユーザー名では `_` を使える。
+ * GitHub にも同名のアカウントがありうるので、GitHub の PR やコミットメッセージでハンドルを書くときは
+ * バッククォートで囲む（AGENTS.md の「GitHub のメンションを書かない」を参照）。
  */
-export const AI_AGENT_BOT_USERNAME = 'iori_bot';
+export const AI_AGENT_BOT_USERNAME = 'agent';
+
+/**
+ * 以前 bot に使っていたユーザー名。これらのアカウントは削除し、Delete を配送してから
+ * データを消す。消したあとは、ActivityPub のアクターとして 410 Gone（Tombstone）を返す。
+ */
+export const RETIRED_AI_AGENT_BOT_USERNAMES = ['iori_bot', 'iori', 'ior'] as const;
 
 export const AI_AGENT_BOT_PROFILE = {
-  displayName: 'iori (AI)',
-  bio: 'iori に住む AI エージェントの bot です。メンションや返信には、スレッドや URL の中身を調べて答えます。'
-    + 'ときどき自分からも投稿します。発言はすべて AI が自動で生成しているので、誤りを含むことがあります。',
+  displayName: 'agent (AI)',
+  bio: 'blog.kosui.me に住む AI エージェントの bot です。フォローされたらフォローを返します。'
+    + '最近よく読まれている記事や、Bluesky でいま話題になっていることを、ときどき調べて紹介します。'
+    + 'メンションや返信には、スレッドや URL の中身を調べて答えます。'
+    + '発言はすべて AI が自動で生成しているので、誤りを含むことがあります。',
 } as const;
 
 /** 1 つのスレッドで bot が返信する上限。bot どうしや人との応酬が終わらないのを防ぐ */
@@ -38,6 +45,36 @@ export const MAX_BOT_REPLIES_PER_TRIGGER = 6;
 export const BOT_TRIGGER_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 export const isAiAgentBotUsername = (username: string): boolean => username === AI_AGENT_BOT_USERNAME;
+
+export const isRetiredAiAgentBotUsername = (username: string): boolean =>
+  (RETIRED_AI_AGENT_BOT_USERNAMES as readonly string[]).includes(username);
+
+/**
+ * bot が自分から投稿するときの話題。
+ * - popularArticle: 最近よく読まれている記事（はてなブックマークの多い記事）を紹介する
+ * - blueskyTopic: Bluesky でいま話題になっていることを見つけて、調べて書く
+ * - timeline: フォローしている人のタイムラインから話題を選ぶ
+ */
+export type AiAgentBotMusingTheme = 'popularArticle' | 'blueskyTopic' | 'timeline';
+
+const MUSING_THEMES: readonly AiAgentBotMusingTheme[] = ['popularArticle', 'blueskyTopic', 'timeline'];
+
+/** 自分から投稿する cron の間隔。この間隔ごとに話題を順に入れ替える */
+export const MUSING_INTERVAL_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * いつの投稿で、どの話題を扱うかを決める。cron の間隔ごとに順に入れ替えて、同じ種類の投稿が続かないようにする。
+ * 選んだ話題の材料が無ければ、タイムラインから話題を選ぶ。
+ */
+const decideMusingTheme = (
+  input: Readonly<{ now: Instant; hasPopularArticles: boolean; hasBlueskyTopics: boolean }>,
+): AiAgentBotMusingTheme => {
+  const slot = Math.floor(input.now / MUSING_INTERVAL_MS);
+  const theme = MUSING_THEMES[((slot % MUSING_THEMES.length) + MUSING_THEMES.length) % MUSING_THEMES.length]!;
+  if (theme === 'popularArticle' && !input.hasPopularArticles) return 'timeline';
+  if (theme === 'blueskyTopic' && !input.hasBlueskyTopics) return 'timeline';
+  return theme;
+};
 
 /** bot に返事を求める投稿（bot へのメンションか、bot の投稿への返信） */
 export type AiAgentBotTrigger = Readonly<{
@@ -155,8 +192,11 @@ const isRepeatOf = (text: string, recentTexts: readonly string[]): boolean => {
 
 export const AiAgentBot = {
   username: AI_AGENT_BOT_USERNAME,
+  retiredUsernames: RETIRED_AI_AGENT_BOT_USERNAMES,
   profile: AI_AGENT_BOT_PROFILE,
   isBotUsername: isAiAgentBotUsername,
+  isRetiredUsername: isRetiredAiAgentBotUsername,
+  decideMusingTheme,
   decideResponse,
   normalizePostText,
   isRepeatOf,

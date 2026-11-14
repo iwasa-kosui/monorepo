@@ -3,18 +3,32 @@ import { describe, expect, it } from 'vitest';
 import { ActorId } from '../../actor/actorId.ts';
 import { Instant } from '../../instant/instant.ts';
 import { PostId } from '../../post/postId.ts';
-import { AiAgentBot } from '../aiAgentBot.ts';
-
-// GitHub のユーザー名: 英数字と（連続しない・先頭末尾でない）ハイフン、最大 39 文字
-const GITHUB_USERNAME = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+import { AiAgentBot, MUSING_INTERVAL_MS } from '../aiAgentBot.ts';
 
 describe('AiAgentBot.username', () => {
-  it('is not a valid GitHub username, so writing the handle on GitHub never notifies anyone', () => {
-    expect(GITHUB_USERNAME.test(AiAgentBot.username)).toBe(false);
-  });
-
   it('is a valid Fediverse username', () => {
     expect(AiAgentBot.username).toMatch(/^[A-Za-z0-9_]+$/);
+  });
+
+  it('is not one of the retired usernames, so the new bot is never deleted', () => {
+    expect(AiAgentBot.isRetiredUsername(AiAgentBot.username)).toBe(false);
+  });
+});
+
+describe('AiAgentBot.decideMusingTheme', () => {
+  const slot = (n: number) => Instant.orThrow(n * MUSING_INTERVAL_MS);
+  const all = { hasPopularArticles: true, hasBlueskyTopics: true };
+
+  it('rotates the theme every musing interval so the same kind of post does not continue', () => {
+    const themes = [0, 1, 2, 3].map((n) => AiAgentBot.decideMusingTheme({ now: slot(n), ...all }));
+    expect(new Set(themes.slice(0, 3)).size).toBe(3);
+    expect(themes[3]).toBe(themes[0]);
+  });
+
+  it('falls back to the timeline when there is no material for the chosen theme', () => {
+    const none = { hasPopularArticles: false, hasBlueskyTopics: false };
+    const themes = [0, 1, 2].map((n) => AiAgentBot.decideMusingTheme({ now: slot(n), ...none }));
+    expect(themes).toEqual(['timeline', 'timeline', 'timeline']);
   });
 });
 

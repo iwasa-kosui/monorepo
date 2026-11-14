@@ -1,4 +1,4 @@
-import { createAiAgentBotRuntime } from '../runtime/aiAgentBot.ts';
+import { createAiAgentBotRuntime, createRetireAiAgentBotAccounts } from '../runtime/aiAgentBot.ts';
 import { createWorkerRuntimePorts } from '../runtime/workerRuntime.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import type { ScheduledTask, ScheduledTaskContext } from './scheduledTasks.ts';
@@ -62,6 +62,34 @@ export const createPostAiAgentMusingTask = (createBotRuntime: CreateBotRuntime):
   },
 });
 
+export const createFollowBackAiAgentFollowersTask = (createBotRuntime: CreateBotRuntime): ScheduledTask => ({
+  name: 'followBackAiAgentFollowers',
+  run: async ({ env, waitUntil }) => {
+    const bot = await createBotRuntime(env, waitUntil);
+    if (bot === undefined) {
+      console.info('iori ai agent bot is disabled.');
+      return;
+    }
+    const result = await bot.followBack.run({ botActorId: bot.bot.actor.id, follower: bot.follower });
+    if (result.val.followed > 0 || result.val.failed > 0) {
+      console.info('iori ai agent bot followed back.', result.val);
+    }
+  },
+});
+
+/** 以前 bot に使っていたアカウントを消す。bot が無効でも、残っているアカウントは消す */
+export const retireAiAgentBotAccountsTask: ScheduledTask = {
+  name: 'retireAiAgentBotAccounts',
+  run: async ({ env, waitUntil }) => {
+    const retire = await createRetireAiAgentBotAccounts(env, () => createWorkerRuntimePorts(env, waitUntil));
+    const result = await retire();
+    if (result.val.retired.length > 0 || result.val.failed.length > 0) {
+      console.info('iori ai agent bot: retired old accounts.', result.val);
+    }
+  },
+};
+
 export const respondToAiAgentMentionsTask = createRespondToAiAgentMentionsTask(defaultCreateBotRuntime);
 export const runAiAgentFollowupsTask = createRunAiAgentFollowupsTask(defaultCreateBotRuntime);
 export const postAiAgentMusingTask = createPostAiAgentMusingTask(defaultCreateBotRuntime);
+export const followBackAiAgentFollowersTask = createFollowBackAiAgentFollowersTask(defaultCreateBotRuntime);

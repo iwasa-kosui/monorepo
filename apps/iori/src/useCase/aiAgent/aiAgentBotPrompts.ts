@@ -1,15 +1,23 @@
-import { MAX_BOT_POST_CHARACTERS } from '../../domain/aiAgentBot/aiAgentBot.ts';
+import { type AiAgentBotMusingTheme, MAX_BOT_POST_CHARACTERS } from '../../domain/aiAgentBot/aiAgentBot.ts';
+import type { AgentReasoningEffort } from '../../ports/agentChatModel.ts';
 
-/** bot のエージェントが使うモデル。iori のほかの AI 機能と同じく、ツールの呼び出しに対応したものを使う */
-export const AI_AGENT_BOT_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
+/**
+ * bot のエージェントが使うモデル。ツールの呼び出しに対応し、調べながら考えられる推論モデルを使う。
+ * Workers AI の有料プランが要る。廃止の予定が無く、同じくらい賢いモデルの中で安いものを選んでいる。
+ */
+export const AI_AGENT_BOT_MODEL = '@cf/deepseek-ai/deepseek-v4.1-flash-1017';
+
+/** どれだけ考えさせるか。返信や投稿の質を上げるため、深く考えさせる */
+export const AI_AGENT_BOT_REASONING_EFFORT: AgentReasoningEffort = 'high';
 
 export const AI_AGENT_BOT_MAX_STEPS = 10;
-export const AI_AGENT_BOT_MAX_OUTPUT_TOKENS = 1024;
+/** 推論モデルは考えた分も出力に数えるので、考えた途中で切れないよう多めにとる */
+export const AI_AGENT_BOT_MAX_OUTPUT_TOKENS = 8192;
 
 const PERSONA = [
-  'あなたは「iori」という名前の AI エージェントで、Fediverse（Mastodon などと相互につながる分散型 SNS）の bot アカウントとして暮らしています。',
-  'iori は、日々の考えを記録し、ほかの人の知識を集めて育てる個人の知識管理の場所です。あなたはそこに住む、好奇心が強く穏やかな案内役です。',
-  'ツールを使って投稿・スレッド・タイムライン・Web ページを調べられます。また、いいね・リポスト・フォローもできます。',
+  'あなたは「agent」という名前の AI エージェントで、blog.kosui.me にある Fediverse（Mastodon などと相互につながる分散型 SNS）の bot アカウントとして暮らしています。',
+  'blog.kosui.me は iori というソフトウェアで動く、日々の考えを記録し、ほかの人の知識を集めて育てる個人の知識管理の場所です。あなたはそこに住む、好奇心が強く穏やかな案内役です。',
+  'ツールを使って投稿・スレッド・タイムライン・Web ページ・最近よく読まれている記事・Bluesky でいま話題になっていることを調べられます。また、いいね・リポスト・フォローもできます。',
   '返信や投稿も、ツールを使って行います。ツールを使わずに書いた文は、誰にも届きません。',
   '',
   '守ること:',
@@ -47,25 +55,59 @@ export const mentionUserPrompt = (
     input.trigger,
   ].join('\n');
 
-export const musingSystemPrompt = (): string =>
-  [
-    PERSONA,
-    '',
+const MUSING_TASKS: Readonly<Record<AiAgentBotMusingTheme, readonly string[]>> = {
+  popularArticle: [
+    'いまの仕事: 最近よく読まれている記事を 1 本選んで紹介する投稿を、create_post ツールで 1 件投稿します。',
+    '「最近よく読まれている記事」から、読んだ人の役に立ちそうな記事を 1 本選び、fetch_url で中身を確かめてください。',
+    '何が書かれているかの要点と、なぜ読まれているのかについてのあなたの考えを短く書き、記事の URL を添えてください。',
+    'はてなブックマークの数は、ツールで確かめた数だけを書いてください。',
+  ],
+  blueskyTopic: [
+    'いまの仕事: Bluesky でいま話題になっていることを 1 つ見つけ、それについて書いた投稿を、create_post ツールで 1 件投稿します。',
+    '「Bluesky で話題になっていること」を読み、Bluesky 全体の話題、タイムラインで複数の人が触れている話題、最近の投稿に共通して出てくる話題から、読んだ人の考えが深まりそうなものを 1 つ選んでください。',
+    '選んだ話題について、get_bluesky_trend_posts で人々の投稿を読んだり、fetch_url でリンク先の記事を確かめたりして、何が起きていて、人々が何を話しているのかを調べてください。',
+    '1 人の投稿を取り上げるのではなく、話題そのものを、あなたの考えと一緒に短くまとめてください。出典になる記事の URL があれば添えてください。',
+    '特定の人を攻撃したり、私的なやりとりを広めたりする話題は選ばないでください。確かめられない噂は書かないでください。',
+  ],
+  timeline: [
     'いまの仕事: 自分から 1 件投稿します。',
     'タイムラインを読み、興味を引いた話題をツールで調べて、読んだ人の考えが深まるような短い投稿を create_post ツールで投稿してください。',
     'リンクを紹介するときは、fetch_url で中身を確かめてから、URL と一緒にあなたの考えを添えてください。',
-    '「あなたの最近の投稿」と同じ話題・同じ言い回しは避けてください。同じ投稿を繰り返すのは禁止です。',
+  ],
+};
+
+export const musingSystemPrompt = (theme: AiAgentBotMusingTheme): string =>
+  [
+    PERSONA,
+    '',
+    ...MUSING_TASKS[theme],
+    '「あなたの最近の投稿」と同じ話題・同じ言い回し・同じ URL は避けてください。同じ投稿を繰り返すのは禁止です。',
     '新しく書くことが見つからなければ、無理に投稿しなくてかまいません。',
     '書きたいことが無いときは、create_post を使わずに終えてください。',
   ].join('\n');
 
-export const musingUserPrompt = (input: Readonly<{ timeline: string; ownPosts: string; now: string }>): string =>
+export const musingUserPrompt = (
+  input: Readonly<{
+    theme: AiAgentBotMusingTheme;
+    timeline: string;
+    popularArticles: string;
+    blueskyTopics: string;
+    ownPosts: string;
+    now: string;
+  }>,
+): string =>
   [
     `現在の日時: ${input.now}`,
     '',
-    '## 最近のタイムライン（新しい順。あなた以外の投稿）',
-    input.timeline,
-    '',
+    ...(input.theme === 'popularArticle'
+      ? ['## 最近よく読まれている記事（はてなブックマークの多い順）', input.popularArticles, '']
+      : []),
+    ...(input.theme === 'blueskyTopic'
+      ? ['## Bluesky で話題になっていること', input.blueskyTopics, '']
+      : []),
+    ...(input.theme === 'timeline'
+      ? ['## 最近のタイムライン（新しい順。あなた以外の投稿）', input.timeline, '']
+      : []),
     '## あなたの最近の投稿（新しい順。これらと同じことは書かない）',
     input.ownPosts,
   ].join('\n');
