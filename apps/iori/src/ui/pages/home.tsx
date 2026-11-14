@@ -22,7 +22,7 @@ import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { isEmptyProfileUpdate, toProfileUpdate } from '../components/profileUpdate.ts';
 import { QuoteModal } from '../components/QuoteModal.tsx';
-import { ReplyVisibilityField } from '../components/ReplyVisibilityField.tsx';
+import { ReplyVisibilityControl } from '../components/ReplyVisibilityField.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
 import { statusActionProps } from '../components/statusActionProps.ts';
 import { UpdateProfileModal } from '../components/UpdateProfileModal.tsx';
@@ -304,7 +304,7 @@ const ThreadModal = () => {
         {/* Header */}
         <div class='flex items-center justify-between mb-4 flex-shrink-0'>
           <h2 class='text-lg font-semibold text-charcoal dark:text-white'>
-            Thread
+            スレッド
           </h2>
           <button
             type='button'
@@ -471,7 +471,7 @@ const ThreadModal = () => {
                     threadData.ancestors.length === 0
                     && !threadData.currentPost && (
                       <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
-                        No replies in this thread yet
+                        このスレッドにはまだ返信がありません
                       </p>
                     )
                   )}
@@ -479,50 +479,40 @@ const ThreadModal = () => {
             )
             : (
               <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
-                Failed to load thread
+                スレッドを読み込めませんでした
               </p>
             )}
         </div>
 
         {/* Reply Form - Fixed at bottom */}
-        <div class='flex-shrink-0 border-t border-warm-gray dark:border-gray-700 pt-4'>
+        <div class='flex-shrink-0 border-t border-warm-gray dark:border-gray-700 pt-3'>
           <MarkdownEditor
             value={replyContent}
             onChange={setReplyContent}
             onKeyDown={handleKeyDown}
-            placeholder='返信を書く... (⌘+Enter to post)'
+            placeholder='返信を書く（⌘+Enter で送信）'
             minHeight='100px'
             disabled={isSendingReply}
           />
 
-          <div class='mt-2'>
-            <ReplyVisibilityField
-              value={threadReplyVisibility.visibility}
-              onChange={threadReplyVisibility.setVisibility}
-              parentVisibility={threadReplyVisibility.parentVisibility}
-              destination={replyDestination}
-              disabled={isSendingReply || isLoadingThread}
-              name='thread-reply-visibility'
-              id='thread-reply-visibility'
-            />
-          </div>
-
           {/* Action Buttons */}
           <div class='mt-3 flex flex-wrap items-center gap-2 justify-end'>
-            <PostDestinationSelect
-              value={replyDestination}
-              onChange={setReplyDestination}
-              name='thread-reply-destination'
-              disabled={isSendingReply}
-            />
-            <button
-              type='button'
-              onClick={closeThread}
-              class='px-4 py-2 whitespace-nowrap text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
-              disabled={isSendingReply}
-            >
-              Cancel
-            </button>
+            <div class='mr-auto flex flex-wrap items-center gap-2'>
+              <ReplyVisibilityControl
+                value={threadReplyVisibility.visibility}
+                onChange={threadReplyVisibility.setVisibility}
+                parentVisibility={threadReplyVisibility.parentVisibility}
+                disabled={isSendingReply || isLoadingThread}
+                name='thread-reply-visibility'
+                id='thread-reply-visibility'
+              />
+              <PostDestinationSelect
+                value={replyDestination}
+                onChange={setReplyDestination}
+                name='thread-reply-destination'
+                disabled={isSendingReply}
+              />
+            </div>
             <button
               type='button'
               onClick={() => void submitThreadReply()}

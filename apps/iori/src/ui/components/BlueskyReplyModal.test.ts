@@ -150,7 +150,7 @@ describe('BlueskyReplyModal', () => {
   it('disables submitting while uploading', () => {
     const html = render({ content: 'abc', ...withMedia(0, { isUploading: true }) });
 
-    expect(html).toContain('Uploading...');
+    expect(html).toContain('アップロード中...');
     expect(html).toContain('cursor-not-allowed');
   });
 

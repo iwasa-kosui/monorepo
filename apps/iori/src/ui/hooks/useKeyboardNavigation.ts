@@ -1,5 +1,6 @@
 import { useEffect } from 'hono/jsx';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { IoriBlueskyTimelineItemBody } from '../../adaptor/routes/workerIoriBlueskyRouter.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import { detailHref, displayStatus } from '../api/status.ts';
@@ -18,7 +19,7 @@ type UseKeyboardNavigationProps = Readonly<{
   threadModalPostId: string | null;
   onLike: (postId: string) => void;
   onUndoLike: (postId: string) => void;
-  onReply: (postId: string, username: string, visibility?: Visibility) => void;
+  onReply: (postId: string, username: string, visibility?: Visibility, status?: Status) => void;
   onBlueskyReply: (item: IoriBlueskyTimelineItemBody) => void;
   onCancelReply: () => void;
   onCloseThread: () => void;
@@ -167,7 +168,7 @@ export const useKeyboardNavigation = ({
           }
           if (post === undefined) break;
           e.preventDefault();
-          onReply(post.id, post.account.acct, post.visibility);
+          onReply(post.id, post.account.acct, post.visibility, post);
           break;
         }
       }

@@ -65,7 +65,7 @@ export const QuoteModal = ({
             if (canSubmit) onSubmit();
           }
         }}
-        placeholder='引用にコメントを書く... (⌘+Enter to post)'
+        placeholder='引用にコメントを書く（⌘+Enter で送信）'
         minHeight='150px'
         disabled={isSending}
       />

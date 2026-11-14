@@ -155,7 +155,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         value={content}
         onChange={handleContentChange}
         onKeyDown={handleKeyDown}
-        placeholder="What's on your mind? (⌘+Enter to post)"
+        placeholder='いまどうしてる？（⌘+Enter で投稿）'
         minHeight='150px'
         name='content'
       />
@@ -175,15 +175,6 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           画像をセンシティブにする
         </label>
       </MediaPreviewList>
-      <div class='mt-2 flex-shrink-0'>
-        <PostVisibilitySelect
-          value={visibility}
-          onChange={handleVisibilityChange}
-          name='visibility'
-          id={`${formId ?? id ?? 'post-form'}-visibility`}
-          disabled={isBlueskyOnly || isPosting}
-        />
-      </div>
       {isBlueskyOnly && (
         <div class='mt-2 flex-shrink-0'>
           <BlueskyInteractionSettings
@@ -194,29 +185,39 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
           />
         </div>
       )}
-      <div class='mt-2 flex flex-wrap justify-end items-center gap-3 flex-shrink-0'>
-        <PostDestinationSelect
-          value={destination}
-          onChange={handleDestinationChange}
-          name='destination'
-          allowBlueskyOnly
-          disabled={isPosting}
-        />
-        <MediaAttachButton isUploading={isUploading} onChange={media.select} />
-        <button
-          type='button'
-          aria-pressed={cwEnabled}
-          disabled={isBlueskyOnly}
-          aria-label='注意書き（CW）を付ける'
-          onClick={handleCwToggle}
-          class={`px-2 py-1 text-xs font-medium rounded-clay border transition-colors ${
-            cwEnabled
-              ? 'bg-terracotta text-white border-terracotta'
-              : 'text-charcoal-light dark:text-gray-400 border-warm-gray-dark dark:border-gray-600 hover:text-terracotta dark:hover:text-terracotta-light'
-          }`}
-        >
-          CW
-        </button>
+      <div class='mt-2 flex flex-wrap justify-end items-center gap-2 flex-shrink-0'>
+        <div class='mr-auto flex flex-wrap items-center gap-2'>
+          <MediaAttachButton isUploading={isUploading} onChange={media.select} />
+          <button
+            type='button'
+            aria-pressed={cwEnabled}
+            disabled={isBlueskyOnly}
+            aria-label='注意書き（CW）を付ける'
+            onClick={handleCwToggle}
+            class={`px-2 py-1 text-xs font-medium rounded-full border transition-colors ${
+              cwEnabled
+                ? 'bg-terracotta text-white border-terracotta'
+                : 'text-charcoal-light dark:text-gray-400 border-warm-gray-dark dark:border-gray-600 hover:text-terracotta dark:hover:text-terracotta-light'
+            }`}
+          >
+            CW
+          </button>
+          <PostVisibilitySelect
+            value={visibility}
+            onChange={handleVisibilityChange}
+            name='visibility'
+            id={`${formId ?? id ?? 'post-form'}-visibility`}
+            disabled={isBlueskyOnly || isPosting}
+            variant='compact'
+          />
+          <PostDestinationSelect
+            value={destination}
+            onChange={handleDestinationChange}
+            name='destination'
+            allowBlueskyOnly
+            disabled={isPosting}
+          />
+        </div>
         <button
           type='submit'
           disabled={isPosting || isLoadingDefault}

@@ -1,4 +1,5 @@
 import type { Visibility } from '../../domain/post/visibility.ts';
+import { CompactSelect, GlobeIcon } from './CompactSelect.tsx';
 import { isWiderThan, type PostVisibility } from './postVisibility.ts';
 
 type Props = Readonly<{
@@ -8,6 +9,8 @@ type Props = Readonly<{
   id?: string;
   disabled?: boolean;
   maxVisibility?: Visibility;
+  /** radios: 設定画面向けに選択肢と説明を並べる。compact: 投稿欄のツールバー向けの小さなセレクト */
+  variant?: 'radios' | 'compact';
 }>;
 
 const options: ReadonlyArray<Readonly<{ value: PostVisibility; label: string; description: string }>> = [
@@ -16,9 +19,36 @@ const options: ReadonlyArray<Readonly<{ value: PostVisibility; label: string; de
   { value: 'private', label: 'フォロワー限定', description: 'フォロワーだけが見られます' },
 ];
 
-export const PostVisibilitySelect = ({ value, onChange, name, id, disabled = false, maxVisibility }: Props) => {
+export const PostVisibilitySelect = (
+  { value, onChange, name, id, disabled = false, maxVisibility, variant = 'radios' }: Props,
+) => {
   const descriptionId = `${id ?? name}-description`;
   const selected = options.find((option) => option.value === value);
+  const isOptionDisabled = (option: PostVisibility): boolean =>
+    maxVisibility !== undefined && isWiderThan(option, maxVisibility);
+  if (variant === 'compact') {
+    return (
+      <>
+        <CompactSelect
+          value={value}
+          options={options.map((option) => ({
+            value: option.value,
+            label: option.label,
+            disabled: isOptionDisabled(option.value),
+          }))}
+          onChange={onChange}
+          name={name}
+          id={id}
+          ariaLabel='公開範囲'
+          title={selected?.description}
+          describedBy={descriptionId}
+          icon={<GlobeIcon />}
+          disabled={disabled}
+        />
+        <span id={descriptionId} class='sr-only'>{selected?.description}</span>
+      </>
+    );
+  }
   return (
     <div>
       <div
@@ -28,7 +58,7 @@ export const PostVisibilitySelect = ({ value, onChange, name, id, disabled = fal
         class='flex flex-wrap items-center gap-3 text-xs text-charcoal-light dark:text-gray-400'
       >
         {options.map((option) => {
-          const optionDisabled = disabled || (maxVisibility !== undefined && isWiderThan(option.value, maxVisibility));
+          const optionDisabled = disabled || isOptionDisabled(option.value);
           return (
             <label
               key={option.value}

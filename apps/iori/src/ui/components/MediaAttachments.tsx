@@ -15,7 +15,7 @@ export const MediaAttachButton = ({ isUploading, disabled = false, onChange }: A
     }`}
   >
     {isUploading
-      ? <span class='text-xs'>Uploading...</span>
+      ? <span class='text-xs'>アップロード中...</span>
       : (
         <svg class='h-5 w-5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
           <path

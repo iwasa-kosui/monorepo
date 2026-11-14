@@ -57,12 +57,16 @@ export const ReplyDialogShell = ({
       {errorText !== undefined && <p role='alert' class='mt-3 text-terracotta text-sm'>{errorText}</p>}
 
       <div class='mt-3 flex flex-wrap items-center gap-2 justify-end'>
-        {leadingActions}
-        {counter}
+        {(leadingActions !== undefined || counter !== undefined) && (
+          <div class='mr-auto flex flex-wrap items-center gap-2'>
+            {leadingActions}
+            {counter}
+          </div>
+        )}
         <button
           type='button'
           onClick={onClose}
-          class='px-4 py-2 whitespace-nowrap text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
+          class='hidden md:inline-block px-4 py-2 whitespace-nowrap text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
           disabled={isSending}
         >
           キャンセル

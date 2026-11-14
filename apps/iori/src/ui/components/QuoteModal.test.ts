@@ -55,7 +55,7 @@ describe('QuoteModal', () => {
   });
 
   it('コメント欄の placeholder を出す', () => {
-    expect(render()).toContain('引用にコメントを書く... (⌘+Enter to post)');
+    expect(render()).toContain('引用にコメントを書く（⌘+Enter で送信）');
   });
 
   it('エラー文を alert として出す', () => {

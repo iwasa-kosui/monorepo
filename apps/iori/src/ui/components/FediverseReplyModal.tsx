@@ -4,7 +4,8 @@ import type { UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
 import { ReplyDialogShell } from './ReplyDialogShell.tsx';
-import { ReplyVisibilityField } from './ReplyVisibilityField.tsx';
+import { ReplyTargetCard } from './ReplyTargetCard.tsx';
+import { ReplyVisibilityControl } from './ReplyVisibilityField.tsx';
 
 type Props = Readonly<{
   dialog: UseReplyDialogReturn;
@@ -16,6 +17,7 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
   const {
     replyingToPostId,
     replyingToUsername,
+    replyingToStatus,
     replyContent,
     replyDestination,
     replyVisibility,
@@ -63,34 +65,34 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
       onSubmit={submit}
       isSending={isSendingReply}
       canSubmit={!isSendingReply && replyContent.trim() !== ''}
+      target={replyingToStatus === null ? undefined : <ReplyTargetCard status={replyingToStatus} />}
       leadingActions={
-        <PostDestinationSelect
-          value={replyDestination}
-          onChange={setReplyDestination}
-          name='reply-destination'
-          disabled={isSendingReply}
-        />
+        <>
+          <ReplyVisibilityControl
+            value={replyVisibility}
+            onChange={setReplyVisibility}
+            parentVisibility={replyParentVisibility}
+            disabled={isSendingReply}
+            name='reply-visibility'
+            id='reply-visibility'
+          />
+          <PostDestinationSelect
+            value={replyDestination}
+            onChange={setReplyDestination}
+            name='reply-destination'
+            disabled={isSendingReply}
+          />
+        </>
       }
     >
       <MarkdownEditor
         value={replyContent}
         onChange={setReplyContent}
         onKeyDown={handleKeyDown}
-        placeholder='返信を書く... (⌘+Enter to post)'
+        placeholder='返信を書く（⌘+Enter で送信）'
         minHeight='150px'
         disabled={isSendingReply}
       />
-      <div class='mt-2 flex-shrink-0'>
-        <ReplyVisibilityField
-          value={replyVisibility}
-          onChange={setReplyVisibility}
-          parentVisibility={replyParentVisibility}
-          destination={replyDestination}
-          disabled={isSendingReply}
-          name='reply-visibility'
-          id='reply-visibility'
-        />
-      </div>
     </ReplyDialogShell>
   );
 };
