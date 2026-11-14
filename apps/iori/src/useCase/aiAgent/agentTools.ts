@@ -26,6 +26,10 @@ export type AiAgentBotCapabilities = Readonly<{
   readPost: (postId: PostId) => Promise<AgentPostView | undefined>;
   readThread: (postId: PostId) => Promise<readonly AgentPostView[]>;
   searchTimeline: (query: string) => Promise<readonly AgentPostView[]>;
+  /**
+   * bot が読めるタイムラインの最近の投稿（新しい順）。bot のホームタイムラインに加えて、
+   * ローカルのユーザーのタイムラインに出ているリモートの公開投稿も含む
+   */
   readRecentTimeline: (limit: number) => Promise<readonly AgentPostView[]>;
   /** bot 自身の最近の投稿（新しい順） */
   readOwnRecentPosts: (limit: number) => Promise<readonly AgentPostView[]>;
@@ -107,7 +111,8 @@ const readingTools = (capabilities: AiAgentBotCapabilities): AgentTool[] => [
   },
   {
     name: 'get_recent_timeline',
-    description: 'bot のホームタイムライン（フォローしている人と bot 自身の投稿）の最近の投稿を新しい順に読む。',
+    description: 'bot のタイムラインの最近の投稿を新しい順に読む。bot がフォローしている人と bot 自身の投稿に加えて、'
+      + 'iori のユーザーがフォローしている Fediverse のアカウントの公開投稿も含む。',
     parameters: {
       type: 'object',
       properties: { limit: { type: 'number', description: `読む件数（1〜${MAX_RECENT_TIMELINE}）` } },

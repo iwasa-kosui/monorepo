@@ -7,6 +7,7 @@ import { createD1AiAgentBotPendingTriggersResolver } from '../adaptor/d1/aiAgent
 import { createD1AiAgentBotRepliedCountResolverSince } from '../adaptor/d1/aiAgentBot/aiAgentBotRepliedCountResolverSince.ts';
 import { createD1AiAgentBotTriggerClaimedStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggerClaimedStore.ts';
 import { createD1AiAgentBotTriggersHandledStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggersHandledStore.ts';
+import { createD1PublicRemotePostIdsResolverByLocalFollows } from '../adaptor/d1/timeline/publicRemotePostIdsResolverByLocalFollows.ts';
 import { createD1UserCreatedStore } from '../adaptor/d1/user/userCreatedStore.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createSafeFetcher, type SafeFetcher } from '../adaptor/http/safeFetch.ts';
@@ -108,6 +109,8 @@ export const createAiAgentBotCapabilities = (
     return [bot.actor.id, ...(following.ok ? following.val.map((actor) => actor.id) : [])];
   };
 
+  const publicRemotePostIdsResolver = createD1PublicRemotePostIdsResolverByLocalFollows(runtime.db);
+
   const readTimeline = async (actorIds: readonly ActorId[], limit: number): Promise<AgentPostView[]> => {
     const items = await mastodon.timelineItemsResolverByActorIds.resolve({
       actorIds: [...actorIds],
@@ -133,7 +136,17 @@ export const createAiAgentBotCapabilities = (
       const found = await mastodon.searchTimeline.run({ userId: bot.user.id, query: query.val });
       return found.ok ? resolvePosts(found.val.postIds) : [];
     },
-    readRecentTimeline: async (limit) => readTimeline(await homeActorIds(), limit),
+    readRecentTimeline: async (limit) => {
+      const [home, publicRemotePostIds] = await Promise.all([
+        homeActorIds().then((actorIds) => readTimeline(actorIds, limit)),
+        publicRemotePostIdsResolver.resolve({ limit }),
+      ]);
+      const publicRemote = await resolvePosts(publicRemotePostIds.val);
+      const byPostId = new Map([...home, ...publicRemote].map((post) => [post.postId, post]));
+      return [...byPostId.values()]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, limit);
+    },
     readOwnRecentPosts: async (limit) =>
       (await readTimeline([bot.actor.id], limit)).filter((post) => post.authorActorId === bot.actor.id),
     fetchUrl: fetchPage(safeFetcher),
