@@ -44,6 +44,7 @@ import { blueskyItemActionProps, type BlueskyPostActions } from '../components/b
 import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
 import { BlueskyReportPostModal } from '../components/BlueskyReportPostModal.tsx';
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
+import { FollowToggleButton } from '../components/FollowToggleButton.tsx';
 import { PagedList } from '../components/PagedList.tsx';
 import { type ReportCategory, ReportModal } from '../components/ReportModal.tsx';
 import { appendUniqueBy } from '../hooks/appendUnique.ts';
@@ -256,57 +257,11 @@ export const BlueskyProfilePage = (
           </p>
 
           <div class='flex items-center gap-3'>
-            {isFollowing
-              ? (
-                <button
-                  type='button'
-                  onClick={onUnfollow}
-                  disabled={isTogglingFollow}
-                  class='flex items-center justify-center p-2 rounded-xl text-sage-dark dark:text-sage hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
-                  title='フォロー解除'
-                >
-                  <svg
-                    xmlns='http://www.w3.org/2000/svg'
-                    class='h-5 w-5'
-                    fill='none'
-                    viewBox='0 0 24 24'
-                    stroke='currentColor'
-                    stroke-width='2'
-                  >
-                    <path
-                      stroke-linecap='round'
-                      stroke-linejoin='round'
-                      d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
-                    />
-                    <path stroke-linecap='round' stroke-linejoin='round' d='M15 11l2 2 4-4' />
-                  </svg>
-                </button>
-              )
-              : (
-                <button
-                  type='button'
-                  onClick={onFollow}
-                  disabled={isTogglingFollow}
-                  class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-sage-dark dark:hover:text-sage hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
-                  title='フォロー'
-                >
-                  <svg
-                    xmlns='http://www.w3.org/2000/svg'
-                    class='h-5 w-5'
-                    fill='none'
-                    viewBox='0 0 24 24'
-                    stroke='currentColor'
-                    stroke-width='2'
-                  >
-                    <path
-                      stroke-linecap='round'
-                      stroke-linejoin='round'
-                      d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
-                    />
-                    <path stroke-linecap='round' stroke-linejoin='round' d='M19 10h-2m-2 0h2m0 0V8m0 2v2' />
-                  </svg>
-                </button>
-              )}
+            <FollowToggleButton
+              following={isFollowing}
+              disabled={isTogglingFollow}
+              onClick={isFollowing ? onUnfollow : onFollow}
+            />
             {moderation !== null && (
               <>
                 <ModerationButton
