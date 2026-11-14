@@ -327,8 +327,8 @@ export type IoriCoreRuntimePorts = Readonly<{
   postVersionsResolver: PostVersionsResolverByPostId;
   deletePostUseCase: DeletePostUseCase;
   subscribePushUseCase: SubscribePushUseCase;
-  followRemoteActor: WorkerRemoteActorAction;
-  unfollowRemoteActor: WorkerRemoteActorAction;
+  followActor: WorkerRemoteActorAction;
+  unfollowActor: WorkerRemoteActorAction;
   reportRemoteActor: WorkerReportAction;
   blockActor: WorkerBlockAction;
   unblockActor: WorkerBlockAction;

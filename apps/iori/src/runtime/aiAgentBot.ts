@@ -144,7 +144,7 @@ export const createAiAgentBotCapabilities = (
       const [post] = await resolvePosts([postId]);
       if (post === undefined) return Result.err('投稿が見つかりません');
       if (post.authorActorId === bot.actor.id) return Result.err('自分はフォローできません');
-      const followed = await core.followRemoteActor({ userId: bot.user.id, actorId: post.authorActorId, ctx });
+      const followed = await core.followActor({ userId: bot.user.id, actorId: post.authorActorId, ctx });
       return followed.ok ? Result.ok(undefined) : Result.err(followed.err.message);
     },
   };

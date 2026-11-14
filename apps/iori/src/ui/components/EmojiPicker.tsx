@@ -1,6 +1,16 @@
 import { useEffect, useRef } from 'hono/jsx';
 
-const EMOJI_LIST = ['👍', '❤️', '😂', '🎉', '🔥', '👀', '🤔', '😢', '😱', '🥹', '✨', '👏'] as const;
+import { LOCAL_CUSTOM_EMOJIS } from '../../domain/emojiReact/localCustomEmoji.ts';
+
+const UNICODE_EMOJI_LIST = ['👍', '❤️', '😂', '🎉', '🔥', '👀', '🤔', '😢', '😱', '🥹', '✨', '👏'] as const;
+
+const EMOJI_LIST: readonly string[] = [
+  ...UNICODE_EMOJI_LIST,
+  ...LOCAL_CUSTOM_EMOJIS.map((custom) => custom.shortcode),
+];
+
+const customEmojiPath = (emoji: string): string | undefined =>
+  LOCAL_CUSTOM_EMOJIS.find((custom) => custom.shortcode === emoji)?.path;
 
 type Props = Readonly<{
   isOpen: boolean;
@@ -30,7 +40,7 @@ export const EmojiPicker = ({ isOpen, onClose, onSelect, isLoading }: Props) => 
       const num = parseInt(e.key, 10);
       if (num >= 1 && num <= 9 && num <= EMOJI_LIST.length) {
         e.preventDefault();
-        onSelect(EMOJI_LIST[num - 1]);
+        onSelect(EMOJI_LIST[num - 1]!);
       }
     };
 
@@ -56,23 +66,26 @@ export const EmojiPicker = ({ isOpen, onClose, onSelect, isLoading }: Props) => 
           </div>
         )
         : (
-          <div class='grid grid-cols-4 gap-1'>
-            {EMOJI_LIST.map((emoji, index) => (
-              <button
-                key={emoji}
-                type='button'
-                onClick={() => onSelect(emoji)}
-                class='w-10 h-10 flex items-center justify-center text-xl hover:bg-sand-light dark:hover:bg-gray-700 rounded-xl transition-colors relative group'
-                title={`${emoji} (${index + 1})`}
-              >
-                {emoji}
-                {index < 9 && (
-                  <span class='absolute bottom-0 right-0.5 text-[10px] text-charcoal-light dark:text-gray-500 opacity-0 group-hover:opacity-100'>
-                    {index + 1}
-                  </span>
-                )}
-              </button>
-            ))}
+          <div class='grid grid-cols-8 gap-1'>
+            {EMOJI_LIST.map((emoji, index) => {
+              const imagePath = customEmojiPath(emoji);
+              return (
+                <button
+                  key={emoji}
+                  type='button'
+                  onClick={() => onSelect(emoji)}
+                  class='w-9 h-9 flex items-center justify-center text-xl hover:bg-sand-light dark:hover:bg-gray-700 rounded-xl transition-colors relative group'
+                  title={`${emoji} (${index + 1})`}
+                >
+                  {imagePath === undefined ? emoji : <img src={imagePath} alt={emoji} class='w-6 h-6 object-contain' />}
+                  {index < 9 && (
+                    <span class='absolute bottom-0 right-0.5 text-[10px] text-charcoal-light dark:text-gray-500 opacity-0 group-hover:opacity-100'>
+                      {index + 1}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
     </div>

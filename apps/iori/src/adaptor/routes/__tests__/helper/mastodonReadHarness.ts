@@ -23,9 +23,11 @@ import type { PostImageObjectStore } from '../../../../ports/postImageObjectStor
 import type { TextEmbedder } from '../../../../ports/textEmbedder.ts';
 import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import type { TopicRelevanceJudge } from '../../../../ports/topicRelevanceJudge.ts';
-import { createWorkerBlockActions, createWorkerRemoteActorActions } from '../../../../runtime/workerCoreUseCases.ts';
+import { createWorkerBlockActions, createWorkerFollowActions } from '../../../../runtime/workerCoreUseCases.ts';
 import { createWorkerReportAction } from '../../../../runtime/workerReportActions.ts';
 import { createDigestUseCases } from '../../../../scheduled/digestTasks.ts';
+import { AcceptFollowRequestUseCase } from '../../../../useCase/acceptFollowRequest.ts';
+import { AcceptUnfollowUseCase } from '../../../../useCase/acceptUnfollow.ts';
 import { AddDigestTopicUseCase } from '../../../../useCase/addDigestTopic.ts';
 import { AddFeedSourceUseCase } from '../../../../useCase/addFeedSource.ts';
 import { BlueskyChatUseCases } from '../../../../useCase/blueskyChat.ts';
@@ -154,6 +156,7 @@ import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
   createD1ActorIdsResolverByFollowingIdWithPagination,
 } from '../../../d1/follow/actorIdsResolverByFollowsWithPagination.ts';
+import { createD1FollowAcceptedStore } from '../../../d1/follow/followAcceptedStore.ts';
 import { createD1FollowRequestedStore } from '../../../d1/follow/followRequestedStore.ts';
 import { createD1FollowResolver } from '../../../d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../../../d1/follow/undoFollowingProcessedStore.ts';
@@ -181,6 +184,7 @@ import {
   createD1NotificationsClearedStore,
   createD1ReplyNotificationCreatedStore,
 } from '../../../d1/notification/inboxNotificationAdapters.ts';
+import { createD1FollowNotificationCreatedStore } from '../../../d1/notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../../../d1/notification/notificationCountResolverSinceMarker.ts';
 import { createD1NotificationIdsResolverByUserIdAndCreatedAt } from '../../../d1/notification/notificationIdsResolverByUserIdAndCreatedAt.ts';
 import { createD1NotificationResolverByUserIdAndId } from '../../../d1/notification/notificationResolverByUserIdAndId.ts';
@@ -347,13 +351,34 @@ export const setupReadApi = (
       } as never)
     ),
   };
-  const remoteActorActions = createWorkerRemoteActorActions({
+  const followActions = createWorkerFollowActions({
     userResolver,
     actorResolverByUserId,
     actorResolverById: createD1ActorResolverById(db),
     followResolver: createD1FollowResolver(db),
     followRequestedStore: createD1FollowRequestedStore(db),
     undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
+    blockResolver: createD1BlockResolver(db),
+    acceptFollowRequestUseCase: AcceptFollowRequestUseCase.create({
+      followedStore: createD1FollowAcceptedStore(db),
+      followResolver: createD1FollowResolver(db),
+      actorResolverByUri,
+      actorResolverByUserId,
+      remoteActorCreatedStore,
+      userResolverByUsername: createD1UserResolverByUsername(db),
+      logoUriUpdatedStore,
+      followNotificationCreatedStore: createD1FollowNotificationCreatedStore(db),
+      pushSubscriptionsResolver: createD1PushSubscriptionsResolverByUserId(db),
+      webPushSender: { send: () => RA.ok(undefined) },
+      blockResolver: createD1BlockResolver(db),
+    }),
+    acceptUnfollowUseCase: AcceptUnfollowUseCase.create({
+      unfollowedStore: createD1UndoFollowingProcessedStore(db),
+      followResolver: createD1FollowResolver(db),
+      actorResolverByUri,
+      actorResolverByUserId,
+      userResolverByUsername: createD1UserResolverByUsername(db),
+    }),
   });
   const reportRemoteActor = createWorkerReportAction({
     userResolver,
@@ -382,7 +407,7 @@ export const setupReadApi = (
       blockDeletedStore: createD1BlockDeletedStore(db),
       blockResolver: createD1BlockResolver(db),
     }),
-    unfollowRemoteActor: remoteActorActions.unfollowRemoteActor,
+    unfollowActor: followActions.unfollowActor,
   });
   const mediaUploadResolver = createD1MediaUploadResolver(db);
   const postCreatedStore = createD1PostCreatedStore(db);
@@ -610,8 +635,8 @@ export const setupReadApi = (
             muteDeletedStore: createD1MuteDeletedStore(db),
             muteResolver: createD1MuteResolver(db),
           }),
-          followRemoteActor: remoteActorActions.followRemoteActor,
-          unfollowRemoteActor: remoteActorActions.unfollowRemoteActor,
+          followActor: followActions.followActor,
+          unfollowActor: followActions.unfollowActor,
           blockActor: blockActions.blockActor,
           unblockActor: blockActions.unblockActor,
           createContext,
@@ -960,6 +985,7 @@ export const setupReadApi = (
             emojiReactCreatedStore: createD1EmojiReactCreatedStore(db),
             emojiReactResolverByActorAndPostAndEmoji: createD1EmojiReactResolverByActorAndPostAndEmoji(db),
             postResolver,
+            origin: ORIGIN,
           }),
           undoEmojiReactUseCase: UndoEmojiReactUseCase.create({
             sessionResolver,

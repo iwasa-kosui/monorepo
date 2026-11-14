@@ -36,7 +36,16 @@ describe('parseFollowTarget', () => {
     '@user@iori.test',
     'acct:user@IORI.test',
     'https://iori.test/users/user',
-  ])('%s は自サーバーのアカウントとして検索しない', (input) => {
-    expect(parseFollowTarget(input, OWN_HOST)).toEqual({ type: 'local' });
+    'https://iori.test/@user',
+  ])('%s は自サーバーのアカウントとしてユーザー名を取り出す', (input) => {
+    expect(parseFollowTarget(input, OWN_HOST)).toEqual({ type: 'local', username: 'user' });
+  });
+
+  it.each([
+    'https://iori.test/',
+    'https://iori.test/users/user/posts/1',
+    '@@iori.test',
+  ])('%s は自サーバーのプロフィールを指していないので解決しない', (input) => {
+    expect(parseFollowTarget(input, OWN_HOST)).toEqual({ type: 'unsupported' });
   });
 });

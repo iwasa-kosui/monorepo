@@ -9,8 +9,67 @@ on:
       - main
 
 jobs:
+  # 変更のあったアプリのジョブだけを走らせる。スキップしたジョブは必須チェックでは成功として扱われる。
+  # ルートの依存やツールの設定、このワークフロー自体が変わったときは、すべてのジョブを走らせる。
+  changes:
+    name: "changes"
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.filter.outputs.result }}
+      iori: ${{ steps.filter.outputs.iori }}
+      nen-diagnosis: ${{ steps.filter.outputs.nen-diagnosis }}
+      kosui-me: ${{ steps.filter.outputs.kosui-me }}
+      es-patchwork-hands-on: ${{ steps.filter.outputs.es-patchwork-hands-on }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed apps
+        id: filter
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PUSH_AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          all=false
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            files="$(git diff --name-only "$PR_BASE_SHA...$PR_HEAD_SHA")"
+          elif [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ] \
+            && git cat-file -e "$PUSH_BEFORE_SHA^{commit}" 2>/dev/null; then
+            files="$(git diff --name-only "$PUSH_BEFORE_SHA" "$PUSH_AFTER_SHA")"
+          else
+            files=""
+            all=true
+          fi
+          result=$all iori=$all nen=$all kosui=$all patchwork=$all
+          while IFS= read -r file; do
+            case "$file" in
+              package.json|pnpm-lock.yaml|pnpm-workspace.yaml|.npmrc|dprint.json|.github/workflows/ci.yml)
+                result=true iori=true nen=true kosui=true patchwork=true ;;
+            esac
+            case "$file" in packages/result/*) result=true iori=true ;; esac
+            case "$file" in apps/iori/*|apps/nen-diagnosis/scripts/fonts/*) iori=true ;; esac
+            case "$file" in apps/nen-diagnosis/*) nen=true ;; esac
+            case "$file" in apps/kosui-me/*|talks/*) kosui=true ;; esac
+            case "$file" in apps/es-patchwork-hands-on/*) patchwork=true ;; esac
+          done <<< "$files"
+          {
+            echo "result=$result"
+            echo "iori=$iori"
+            echo "nen-diagnosis=$nen"
+            echo "kosui-me=$kosui"
+            echo "es-patchwork-hands-on=$patchwork"
+          } | tee -a "$GITHUB_OUTPUT"
   result:
     name: "packages/result"
+    needs: changes
+    if: needs.changes.outputs.result == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -45,6 +104,8 @@ jobs:
 
   iori:
     name: "apps/iori"
+    needs: changes
+    if: needs.changes.outputs.iori == 'true'
     runs-on: ubuntu-latest
     env:
       VAPID_PUBLIC_KEY: "dummy-public-key-for-ci"
@@ -128,6 +189,8 @@ jobs:
 
   iori-terraform:
     name: "apps/iori terraform"
+    needs: changes
+    if: needs.changes.outputs.iori == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -175,6 +238,8 @@ jobs:
 
   nen-diagnosis:
     name: "apps/nen-diagnosis"
+    needs: changes
+    if: needs.changes.outputs.nen-diagnosis == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -209,6 +274,8 @@ jobs:
 
   es-patchwork-exercises:
     name: "apps/es-patchwork-hands-on/exercises (node ${{ matrix.node-version }})"
+    needs: changes
+    if: needs.changes.outputs.es-patchwork-hands-on == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -235,6 +302,8 @@ jobs:
 
   kosui-me:
     name: "apps/kosui-me"
+    needs: changes
+    if: needs.changes.outputs.kosui-me == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -269,6 +338,8 @@ jobs:
 
   es-patchwork-hands-on:
     name: "apps/es-patchwork-hands-on"
+    needs: changes
+    if: needs.changes.outputs.es-patchwork-hands-on == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
