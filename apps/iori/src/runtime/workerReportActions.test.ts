@@ -10,7 +10,7 @@ import type { Post } from '../domain/post/post.ts';
 import { PostId } from '../domain/post/postId.ts';
 import type { User } from '../domain/user/user.ts';
 import { UserId } from '../domain/user/userId.ts';
-import type { Username } from '../domain/user/username.ts';
+import { Username } from '../domain/user/username.ts';
 import { createWorkerReportAction } from './workerReportActions.ts';
 
 const setup = () => {
@@ -21,6 +21,7 @@ const setup = () => {
     uri: 'https://blog.test/users/kosui',
     inboxUrl: 'https://blog.test/users/kosui/inbox',
     type: 'local',
+    username: Username.orThrow('kosui'),
   };
   const target: RemoteActor = {
     id: ActorId.generate(),
@@ -35,6 +36,7 @@ const setup = () => {
     uri: 'https://blog.test/users/other',
     inboxUrl: 'https://blog.test/users/other/inbox',
     type: 'local',
+    username: Username.orThrow('other'),
   };
   const otherRemote: RemoteActor = { ...target, id: ActorId.generate(), uri: 'https://remote.test/users/other' };
   const remotePost = (actorId: ActorId, uri: string): Post => ({

@@ -6,7 +6,7 @@ import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { Relay } from '../../domain/relay/relay.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
-import type { Username } from '../../domain/user/username.ts';
+import { Username } from '../../domain/user/username.ts';
 import { CreatePostUseCase } from '../createPost.ts';
 import {
   createMockAcceptedRelaysResolver,
@@ -78,6 +78,7 @@ describe('CreatePostUseCase', () => {
       uri: 'https://example.com/users/kosui',
       inboxUrl: 'https://example.com/inbox',
       type: 'local',
+      username: Username.orThrow('kosui'),
       logoUri: undefined,
     };
     return setupValidUserSession(deps, user, session, actor);
@@ -219,6 +220,7 @@ describe('CreatePostUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       };
       setupValidUserSession(deps, user, session, actor);
@@ -340,6 +342,7 @@ describe('CreatePostUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       };
       setupValidUserSession(deps, user, session, actor);

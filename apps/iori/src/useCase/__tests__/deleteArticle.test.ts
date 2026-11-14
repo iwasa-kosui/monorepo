@@ -10,7 +10,7 @@ import { DigestId } from '../../domain/digest/digestId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
-import type { Username } from '../../domain/user/username.ts';
+import { Username } from '../../domain/user/username.ts';
 import { DeleteArticleUseCase } from '../deleteArticle.ts';
 import {
   createMockActorResolverByUserId,
@@ -32,6 +32,7 @@ const setup = (options: Readonly<{ hasBody: boolean; hasDigest: boolean }>) => {
     uri: 'https://example.com/users/kosui',
     inboxUrl: 'https://example.com/inbox',
     type: 'local',
+    username: Username.orThrow('kosui'),
     logoUri: undefined,
   };
   const article: Article = {

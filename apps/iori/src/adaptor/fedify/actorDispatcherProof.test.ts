@@ -31,6 +31,7 @@ describe('ユーザーの actor が送る活動の proof', () => {
     id: actorId,
     userId,
     type: 'local' as const,
+    username: Username.orThrow('kosui'),
     uri: `${ORIGIN}/users/kosui`,
     inboxUrl: `${ORIGIN}/users/kosui/inbox`,
   };

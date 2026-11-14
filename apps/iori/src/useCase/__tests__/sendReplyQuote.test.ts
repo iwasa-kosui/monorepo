@@ -8,7 +8,7 @@ import type { PostId } from '../../domain/post/postId.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
-import type { Username } from '../../domain/user/username.ts';
+import { Username } from '../../domain/user/username.ts';
 import { SendReplyUseCase } from '../sendReply.ts';
 import {
   createMockActorResolverByUserId,
@@ -52,6 +52,7 @@ const setup = (parent: 'local' | 'remote', quote: PostQuote | undefined = aliceQ
     uri: 'https://example.com/users/kosui',
     inboxUrl: 'https://example.com/inbox',
     type: 'local',
+    username: Username.orThrow('kosui'),
     logoUri: undefined,
   };
   const base = {

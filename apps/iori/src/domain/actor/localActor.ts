@@ -1,6 +1,7 @@
 import z from 'zod/v4';
 
 import { UserId } from '../user/userId.ts';
+import { Username } from '../user/username.ts';
 import { ActorId } from './actorId.ts';
 import { createLocalActor } from './createLocalActor.ts';
 import { LocalActorProfile } from './localActorProfile.ts';
@@ -8,6 +9,7 @@ import { LocalActorProfile } from './localActorProfile.ts';
 const zodType = z.object({
   id: ActorId.zodType,
   userId: UserId.zodType,
+  username: Username.zodType,
   uri: z.string(),
   inboxUrl: z.string(),
   type: z.literal('local'),

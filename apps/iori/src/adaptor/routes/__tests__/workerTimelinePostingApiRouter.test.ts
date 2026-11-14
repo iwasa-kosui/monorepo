@@ -21,6 +21,7 @@ describe('createWorkerTimelinePostingApiRouter', () => {
       uri: 'https://worker.test/users/kosui',
       inboxUrl: 'https://worker.test/inbox',
       type: 'local',
+      username: Username.orThrow('kosui'),
     };
     const post = {
       postId: PostId.generate(),

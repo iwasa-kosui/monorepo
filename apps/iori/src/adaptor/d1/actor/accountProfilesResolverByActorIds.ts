@@ -5,8 +5,6 @@ import type { AccountProfile, AccountProfilesResolverByActorIds } from '../../..
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { User } from '../../../domain/user/user.ts';
-import { UserId } from '../../../domain/user/userId.ts';
-import { Username } from '../../../domain/user/username.ts';
 import type { IoriD1Db } from '../client.ts';
 import { idsJson } from '../idsJson.ts';
 import {
@@ -18,6 +16,7 @@ import {
   remoteActorsTable,
   usersTable,
 } from '../schema.ts';
+import { toLocalActor } from './actorResolverByUserId.ts';
 import { toRemoteActorProfileFields } from './remoteActorProfileColumns.ts';
 
 const toInstant = (value: Date | number | null | undefined): Instant | null => {
@@ -89,20 +88,11 @@ export const createD1AccountProfilesResolverByActorIds = (db: IoriD1Db): Account
         lastStatusAt: toInstant(status?.lastAt),
       };
       if (row.local_actors !== null && row.users !== null) {
-        const userId = UserId.orThrow(row.users.userId);
+        const actor = toLocalActor(row.actors, row.local_actors, row.users);
         profiles.set(id, {
           type: 'local',
-          user: User.orThrow({ id: userId, username: Username.orThrow(row.users.username) }),
-          actor: {
-            id,
-            userId,
-            uri: row.actors.uri,
-            inboxUrl: row.actors.inboxUrl,
-            type: 'local',
-            logoUri: row.actors.logoUri ?? undefined,
-            displayName: row.local_actors.displayName ?? undefined,
-            bio: row.local_actors.bio ?? undefined,
-          },
+          user: User.orThrow({ id: actor.userId, username: actor.username }),
+          actor,
           stats,
         });
       } else if (row.remote_actors !== null) {

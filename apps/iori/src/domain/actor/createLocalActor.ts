@@ -18,6 +18,7 @@ export const createLocalActor = (
   const actor = {
     id: ActorId.generate(),
     userId: user.id,
+    username: user.username,
     uri: ctx.getActorUri(user.username).href,
     inboxUrl: ctx.getInboxUri(user.username).href,
     type: 'local' as const,

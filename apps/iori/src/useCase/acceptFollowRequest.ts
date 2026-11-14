@@ -151,9 +151,9 @@ const create = ({
         if (!notifiable || !isLocalActor(followingActor)) {
           return RA.ok(undefined);
         }
-        const followerName = followerActor.type === 'remote' && followerActor.username
+        const followerName = followerActor.type === 'local'
           ? followerActor.username
-          : 'Someone';
+          : followerActor.username ?? 'Someone';
         const payload: PushPayload = {
           title: 'New Follower',
           body: `${followerName} started following you`,

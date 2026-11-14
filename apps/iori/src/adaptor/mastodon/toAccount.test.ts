@@ -25,6 +25,7 @@ const localActor: LocalActor = {
   id: ActorId.generate(),
   userId,
   type: 'local',
+  username: Username.orThrow('kosui'),
   uri: 'https://iori.example/users/kosui',
   inboxUrl: 'https://iori.example/users/kosui/inbox',
 };

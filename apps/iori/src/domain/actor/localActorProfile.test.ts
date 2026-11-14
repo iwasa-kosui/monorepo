@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { Username } from '../../domain/user/username.ts';
 import type { Instant } from '../instant/instant.ts';
 import { UserId } from '../user/userId.ts';
 import { ActorId } from './actorId.ts';
@@ -15,6 +16,7 @@ const actor: LocalActor = {
   id: ActorId.generate(),
   userId: UserId.generate(),
   type: 'local',
+  username: Username.orThrow('kosui'),
   uri: 'https://iori.example/users/kosui',
   inboxUrl: 'https://iori.example/users/kosui/inbox',
   displayName: '岩佐',

@@ -8,7 +8,7 @@ import type { LocalPost, PostQuote, PostQuotesResolverByPostIds, RemotePost } fr
 import type { PostId } from '../../domain/post/postId.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
-import type { Username } from '../../domain/user/username.ts';
+import { Username } from '../../domain/user/username.ts';
 import { DeletePostUseCase } from '../deletePost.ts';
 import {
   createMockActorResolverByUserId,
@@ -134,6 +134,7 @@ describe('DeletePostUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       };
       const post: LocalPost = {
@@ -184,6 +185,7 @@ describe('DeletePostUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       };
       const post: LocalPost = {
@@ -232,6 +234,7 @@ describe('DeletePostUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       };
       const post: LocalPost = {
@@ -339,6 +342,7 @@ describe('DeletePostUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       };
       setupValidUserSession(deps, user, session, actor);
@@ -376,6 +380,7 @@ describe('DeletePostUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       };
       const otherPost: LocalPost = {
@@ -427,6 +432,7 @@ describe('DeletePostUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       };
       const remotePost: RemotePost = {
@@ -484,6 +490,7 @@ describe('DeletePostUseCase', () => {
           uri: selfId,
           inboxUrl: 'https://example.com/inbox',
           type: 'local',
+          username: Username.orThrow('kosui'),
           logoUri: undefined,
         };
         const post: LocalPost = {

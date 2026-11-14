@@ -16,6 +16,7 @@ const baseActor: LocalActor = {
   id: ActorId.generate(),
   userId,
   type: 'local',
+  username: Username.orThrow('kosui'),
   uri: `${ORIGIN}/users/kosui`,
   inboxUrl: `${ORIGIN}/users/kosui/inbox`,
 };

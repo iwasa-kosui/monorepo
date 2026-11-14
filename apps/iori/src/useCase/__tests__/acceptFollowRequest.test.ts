@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { BlockResolver } from '../../domain/block/block.ts';
 import type { User } from '../../domain/user/user.ts';
-import type { Username } from '../../domain/user/username.ts';
+import { Username } from '../../domain/user/username.ts';
 import { AcceptFollowRequestUseCase } from '../acceptFollowRequest.ts';
 import {
   createMockActorResolverByUri,
@@ -69,6 +69,7 @@ describe('AcceptFollowRequestUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       });
       const result = await AcceptFollowRequestUseCase.create(deps as never).run({

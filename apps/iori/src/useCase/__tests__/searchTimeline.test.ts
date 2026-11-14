@@ -12,6 +12,7 @@ import type {
 } from '../../domain/timelineSearch/timelineSearchCandidatesResolver.ts';
 import { TimelineSearchQuery } from '../../domain/timelineSearch/timelineSearchQuery.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import { Username } from '../../domain/user/username.ts';
 import type { TextGenerator } from '../../ports/textGenerator.ts';
 import { createStubTextGenerator } from '../../testing/aiStubs.ts';
 import { SearchTimelineUseCase } from '../searchTimeline.ts';
@@ -27,6 +28,7 @@ const localActor = (userId: UserId): LocalActor => ({
   uri: `https://example.com/users/${userId}`,
   inboxUrl: 'https://example.com/inbox',
   type: 'local',
+  username: Username.orThrow('kosui'),
   logoUri: undefined,
 });
 

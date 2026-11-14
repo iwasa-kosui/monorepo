@@ -582,6 +582,7 @@ describe('createWorkerIoriArticlesRouter', () => {
               uri: 'https://worker.test/users/kosui',
               inboxUrl: 'https://worker.test/users/kosui/inbox',
               type: 'local' as const,
+              username: Username.orThrow('kosui'),
               logoUri: undefined,
             }),
         },

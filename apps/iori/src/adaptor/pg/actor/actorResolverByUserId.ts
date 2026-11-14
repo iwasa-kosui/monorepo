@@ -5,9 +5,10 @@ import type { Actor, ActorResolverByUserId } from '../../../domain/actor/actor.t
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { LocalActor } from '../../../domain/actor/localActor.ts';
 import { UserId } from '../../../domain/user/userId.ts';
+import { Username } from '../../../domain/user/username.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
-import { actorsTable, localActorsTable } from '../schema.ts';
+import { actorsTable, localActorsTable, usersTable } from '../schema.ts';
 
 const getInstance = singleton((): ActorResolverByUserId => {
   const resolve = async (userId: UserId): RA<LocalActor | undefined, never> => {
@@ -19,6 +20,7 @@ const getInstance = singleton((): ActorResolverByUserId => {
         localActorsTable,
         eq(actorsTable.actorId, localActorsTable.actorId),
       )
+      .leftJoin(usersTable, eq(localActorsTable.userId, usersTable.userId))
       .where(eq(localActorsTable.userId, userId));
     if (!row) {
       return RA.ok(undefined);
@@ -35,6 +37,7 @@ const getInstance = singleton((): ActorResolverByUserId => {
         inboxUrl: row.actors.inboxUrl,
         type: 'local',
         userId: UserId.orThrow(row.local_actors.userId),
+        username: Username.orThrow(row.users?.username ?? ''),
         logoUri: row.actors.logoUri ?? undefined,
       };
       return RA.ok(actor);

@@ -5,6 +5,7 @@ import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { ArticleCreated, ArticleWithBodyCreatedStore } from '../../domain/article/article.ts';
 import type { ArticleBodyWritten } from '../../domain/articleBody/articleBody.ts';
 import { UserId } from '../../domain/user/userId.ts';
+import { Username } from '../../domain/user/username.ts';
 import { CreateArticleWithBodyUseCase } from '../createArticleWithBody.ts';
 import { createMockActorResolverByUserId } from './helper/mockAdaptors.ts';
 
@@ -16,6 +17,7 @@ const createDeps = () => {
     uri: 'https://example.com/users/kosui',
     inboxUrl: 'https://example.com/inbox',
     type: 'local',
+    username: Username.orThrow('kosui'),
     logoUri: undefined,
   };
   const actorResolverByUserId = createMockActorResolverByUserId();

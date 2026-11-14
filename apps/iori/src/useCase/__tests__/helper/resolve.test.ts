@@ -7,7 +7,7 @@ import type { Session, SessionWithUserAndActor } from '../../../domain/session/s
 import type { SessionId } from '../../../domain/session/sessionId.ts';
 import type { User } from '../../../domain/user/user.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
-import type { Username } from '../../../domain/user/username.ts';
+import { Username } from '../../../domain/user/username.ts';
 import {
   composeSessionWithUserAndActorResolver,
   resolveSessionWithUserAndActorWith,
@@ -25,6 +25,7 @@ const actor: LocalActor = {
   uri: 'https://blog.test/users/kosui',
   inboxUrl: 'https://blog.test/users/kosui/inbox',
   type: 'local',
+  username: Username.orThrow('kosui'),
 };
 
 const resolverOf = (found: SessionWithUserAndActor | undefined) => ({ resolve: vi.fn(async () => RA.ok(found)) });

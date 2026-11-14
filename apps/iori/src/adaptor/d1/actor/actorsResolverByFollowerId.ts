@@ -3,13 +3,14 @@ import { eq } from 'drizzle-orm';
 
 import type { Actor, ActorsResolverByFollowerId } from '../../../domain/actor/actor.ts';
 import { ActorId } from '../../../domain/actor/actorId.ts';
-import { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
-import { actorsTable, followsTable, localActorsTable, remoteActorsTable } from '../schema.ts';
+import { actorsTable, followsTable, localActorsTable, remoteActorsTable, usersTable } from '../schema.ts';
+import { toLocalActor } from './actorResolverByUserId.ts';
 
 const toActor = (row: {
   actors: { actorId: string; uri: string; inboxUrl: string; logoUri: string | null };
   local_actors: { userId: string; displayName: string | null; bio: string | null } | null;
+  users: { username: string } | null;
   remote_actors: { url: string | null; username: string | null } | null;
 }): Actor => {
   if (row.remote_actors !== null) {
@@ -24,16 +25,7 @@ const toActor = (row: {
     };
   }
   if (row.local_actors !== null) {
-    return {
-      id: ActorId.orThrow(row.actors.actorId),
-      uri: row.actors.uri,
-      inboxUrl: row.actors.inboxUrl,
-      type: 'local',
-      userId: UserId.orThrow(row.local_actors.userId),
-      logoUri: row.actors.logoUri ?? undefined,
-      displayName: row.local_actors.displayName ?? undefined,
-      bio: row.local_actors.bio ?? undefined,
-    };
+    return toLocalActor(row.actors, row.local_actors, row.users);
   }
   throw new Error(`Actor type could not be determined for actorId: ${row.actors.actorId}`);
 };
@@ -45,6 +37,7 @@ export const createD1ActorsResolverByFollowerId = (db: IoriD1Db): ActorsResolver
       .leftJoin(followsTable, eq(actorsTable.actorId, followsTable.followingId))
       .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
       .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+      .leftJoin(usersTable, eq(localActorsTable.userId, usersTable.userId))
       .where(eq(followsTable.followerId, followerId));
     return RA.ok(rows.map(toActor));
   },

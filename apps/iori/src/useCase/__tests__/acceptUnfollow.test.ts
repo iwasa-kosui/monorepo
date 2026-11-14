@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { RemoteActor } from '../../domain/actor/remoteActor.ts';
 import type { User } from '../../domain/user/user.ts';
-import type { Username } from '../../domain/user/username.ts';
+import { Username } from '../../domain/user/username.ts';
 import { AcceptUnfollowUseCase } from '../acceptUnfollow.ts';
 import {
   createMockActorResolverByUri,
@@ -32,6 +32,7 @@ describe('AcceptUnfollowUseCase', () => {
       uri: 'https://example.com/users/kosui',
       inboxUrl: 'https://example.com/inbox',
       type: 'local',
+      username: Username.orThrow('kosui'),
       logoUri: undefined,
     };
     const remoteActor: RemoteActor = {

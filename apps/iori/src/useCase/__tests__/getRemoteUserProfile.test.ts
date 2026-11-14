@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { RemoteActor } from '../../domain/actor/remoteActor.ts';
+import { Username } from '../../domain/user/username.ts';
 import { GetRemoteUserProfileUseCase } from '../getRemoteUserProfile.ts';
 import { createMockActorResolverById, createMockFollowResolver } from './helper/mockAdaptors.ts';
 
@@ -33,6 +34,7 @@ describe('GetRemoteUserProfileUseCase', () => {
         uri: 'https://example.com/users/current',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('current'),
         logoUri: undefined,
       };
       deps.actorResolverById.setActor(remoteActor);
@@ -91,6 +93,7 @@ describe('GetRemoteUserProfileUseCase', () => {
         uri: 'https://example.com/users/local',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('local'),
         logoUri: undefined,
       };
       deps.actorResolverById.setActor(localActor);

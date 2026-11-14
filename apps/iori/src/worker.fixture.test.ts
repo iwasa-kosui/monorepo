@@ -136,7 +136,19 @@ class FixtureD1 {
     if (query.includes('from "actors"') && query.includes('"local_actors"')) {
       const { actor, user } = this.rows;
       return params[0] === user.userId
-        ? [[actor.actorId, actor.uri, actor.logoUri, actor.inboxUrl, actor.type, actor.actorId, user.userId]]
+        ? [[
+          actor.actorId,
+          actor.uri,
+          actor.logoUri,
+          actor.inboxUrl,
+          actor.type,
+          actor.actorId,
+          user.userId,
+          null,
+          null,
+          user.userId,
+          user.username,
+        ]]
         : [];
     }
     if (query.includes('from "keys"')) {

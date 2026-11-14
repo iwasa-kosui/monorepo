@@ -51,6 +51,7 @@ describe('createD1SessionWithUserAndActorResolver', () => {
           inboxUrl: 'https://blog.test/users/kosui/inbox',
           type: 'local',
           userId,
+          username: 'kosui',
           logoUri: 'https://blog.test/logo.png',
         },
       },

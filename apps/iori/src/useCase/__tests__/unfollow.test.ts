@@ -4,6 +4,7 @@ import type { ActorId } from '../../domain/actor/actorId.ts';
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { Follow } from '../../domain/follow/follow.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import { Username } from '../../domain/user/username.ts';
 import { UnfollowUseCase } from '../unfollow.ts';
 import {
   createMockActorResolverByUserId,
@@ -47,6 +48,7 @@ describe('UnfollowUseCase', () => {
         uri: 'https://example.com/users/follower',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('follower'),
         logoUri: undefined,
       };
       const followingActorId = crypto.randomUUID() as ActorId;
@@ -78,6 +80,7 @@ describe('UnfollowUseCase', () => {
         uri: 'https://example.com/users/follower',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('follower'),
         logoUri: undefined,
       };
       deps.actorResolverByUserId.setActor(followerActor);

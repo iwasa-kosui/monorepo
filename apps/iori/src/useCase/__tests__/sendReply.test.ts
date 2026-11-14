@@ -8,7 +8,7 @@ import type { PostId } from '../../domain/post/postId.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
-import type { Username } from '../../domain/user/username.ts';
+import { Username } from '../../domain/user/username.ts';
 import { SendReplyUseCase } from '../sendReply.ts';
 import {
   createMockActorResolverByUserId,
@@ -44,6 +44,7 @@ describe('SendReplyUseCase の Bluesky への投稿の予約', () => {
       uri: 'https://example.com/users/kosui',
       inboxUrl: 'https://example.com/inbox',
       type: 'local',
+      username: Username.orThrow('kosui'),
       logoUri: undefined,
     };
     const parent: LocalPost = {
@@ -151,6 +152,7 @@ describe('SendReplyUseCase のメンション', () => {
       uri: 'https://example.com/users/kosui',
       inboxUrl: 'https://example.com/inbox',
       type: 'local',
+      username: Username.orThrow('kosui'),
       logoUri: undefined,
     };
     const localParent: LocalPost = {
@@ -430,6 +432,7 @@ describe('SendReplyUseCase の返信通知', () => {
       uri: 'https://example.com/users/kosui',
       inboxUrl: 'https://example.com/inbox',
       type: 'local',
+      username: Username.orThrow('kosui'),
       logoUri: undefined,
     };
     const parent: LocalPost = {
@@ -557,6 +560,7 @@ describe('SendReplyUseCase の親がリモートの返信の宛先の解決', ()
       uri: 'https://example.com/users/kosui',
       inboxUrl: 'https://example.com/inbox',
       type: 'local',
+      username: Username.orThrow('kosui'),
       logoUri: undefined,
     };
     const remoteParent: RemotePost = {
@@ -729,6 +733,7 @@ describe('SendReplyUseCase の元の投稿の公開範囲', () => {
       uri: 'https://example.com/users/kosui',
       inboxUrl: 'https://example.com/inbox',
       type: 'local',
+      username: Username.orThrow('kosui'),
       logoUri: undefined,
     };
     const common = {

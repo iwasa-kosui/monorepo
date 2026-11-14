@@ -22,6 +22,7 @@ import { NotificationId } from '../../../domain/notification/notificationId.ts';
 import { LocalPost, type Post, RemotePost } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
+import { Username } from '../../../domain/user/username.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
 import {
@@ -49,6 +50,7 @@ const reconstructActor = (row: {
   };
   remote_actors: { actorId: string; url: string | null; username: string | null } | null;
   local_actors: { actorId: string; userId: string } | null;
+  users: { username: string } | null;
 }): Actor => {
   if (row.remote_actors) {
     const actor: RemoteActor = {
@@ -69,6 +71,7 @@ const reconstructActor = (row: {
       inboxUrl: row.actors.inboxUrl,
       type: 'local',
       userId: row.local_actors.userId as UserId,
+      username: Username.orThrow(row.users?.username ?? ''),
       logoUri: row.actors.logoUri ?? undefined,
     };
     return actor;
@@ -166,6 +169,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         actors: row.likerActors,
         remote_actors: row.likerRemoteActors,
         local_actors: row.likerLocalActors,
+        users: row.likerUsers,
       });
 
       const likedPost = reconstructPost({
@@ -190,6 +194,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         followerActors: actorsTable,
         followerRemoteActors: remoteActorsTable,
         followerLocalActors: localActorsTable,
+        followerUsers: usersTable,
       })
       .from(notificationsTable)
       .innerJoin(
@@ -199,6 +204,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       .innerJoin(actorsTable, eq(notificationFollowsTable.followerActorId, actorsTable.actorId))
       .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
       .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+      .leftJoin(usersTable, eq(localActorsTable.userId, usersTable.userId))
       .where(eq(notificationsTable.recipientUserId, userId))
       .orderBy(desc(notificationsTable.createdAt))
       .limit(50)
@@ -217,6 +223,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         actors: row.followerActors,
         remote_actors: row.followerRemoteActors,
         local_actors: row.followerLocalActors,
+        users: row.followerUsers,
       });
 
       return {
@@ -272,6 +279,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         actors: row.reactorActors,
         remote_actors: row.reactorRemoteActors,
         local_actors: row.reactorLocalActors,
+        users: row.reactorUsers,
       });
 
       const reactedPost = reconstructPost({
@@ -304,6 +312,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         replierActors: actorsTable,
         replierRemoteActors: remoteActorsTable,
         replierLocalActors: localActorsTable,
+        replierUsers: usersTable,
         replyPosts: replyPostsAlias,
         replyLocalPosts: replyLocalPostsAlias,
         replyRemotePosts: replyRemotePostsAlias,
@@ -320,6 +329,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
       .innerJoin(actorsTable, eq(notificationRepliesTable.replierActorId, actorsTable.actorId))
       .leftJoin(remoteActorsTable, eq(actorsTable.actorId, remoteActorsTable.actorId))
       .leftJoin(localActorsTable, eq(actorsTable.actorId, localActorsTable.actorId))
+      .leftJoin(usersTable, eq(localActorsTable.userId, usersTable.userId))
       .innerJoin(replyPostsAlias, eq(notificationRepliesTable.replyPostId, replyPostsAlias.postId))
       .leftJoin(replyLocalPostsAlias, eq(replyPostsAlias.postId, replyLocalPostsAlias.postId))
       .leftJoin(replyRemotePostsAlias, eq(replyPostsAlias.postId, replyRemotePostsAlias.postId))
@@ -347,6 +357,7 @@ const getInstance = singleton((): NotificationsResolverByUserId => {
         actors: row.replierActors,
         remote_actors: row.replierRemoteActors,
         local_actors: row.replierLocalActors,
+        users: row.replierUsers,
       });
 
       const replyPost = reconstructPost({

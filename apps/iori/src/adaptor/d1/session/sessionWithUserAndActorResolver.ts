@@ -30,7 +30,7 @@ export const createD1SessionWithUserAndActorResolver = (db: IoriD1Db): SessionWi
           user: row.users === null ? undefined : toUser(row.users),
           actor: row.local_actors === null || row.actors === null
             ? undefined
-            : toLocalActor(row.actors, row.local_actors),
+            : toLocalActor(row.actors, row.local_actors, row.users),
         };
       }),
       RA.mapErr((error): never => {

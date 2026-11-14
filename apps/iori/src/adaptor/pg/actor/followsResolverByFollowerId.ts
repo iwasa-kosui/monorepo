@@ -4,9 +4,10 @@ import { eq } from 'drizzle-orm';
 import type { Actor } from '../../../domain/actor/actor.ts';
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import { UserId } from '../../../domain/user/userId.ts';
+import { Username } from '../../../domain/user/username.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
-import { actorsTable, followsTable, localActorsTable, remoteActorsTable } from '../schema.ts';
+import { actorsTable, followsTable, localActorsTable, remoteActorsTable, usersTable } from '../schema.ts';
 
 const getInstance = singleton(() => ({
   resolve: async (followerId: ActorId): RA<Actor[], never> => {
@@ -20,6 +21,7 @@ const getInstance = singleton(() => ({
         localActorsTable,
         eq(actorsTable.actorId, localActorsTable.actorId),
       )
+      .leftJoin(usersTable, eq(localActorsTable.userId, usersTable.userId))
       .where(
         eq(followsTable.followerId, followerId),
       ).execute();
@@ -44,6 +46,7 @@ const getInstance = singleton(() => ({
           inboxUrl: row.actors.inboxUrl,
           type: 'local',
           userId: UserId.orThrow(row.local_actors.userId),
+          username: Username.orThrow(row.users?.username ?? ''),
           logoUri: row.actors.logoUri ?? undefined,
         };
         return actor;

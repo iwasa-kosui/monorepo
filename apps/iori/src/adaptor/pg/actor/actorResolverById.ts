@@ -6,9 +6,10 @@ import { ActorId } from '../../../domain/actor/actorId.ts';
 import type { RemoteActor } from '../../../domain/actor/remoteActor.ts';
 import type { Agg } from '../../../domain/aggregate/index.ts';
 import { UserId } from '../../../domain/user/userId.ts';
+import { Username } from '../../../domain/user/username.ts';
 import { singleton } from '../../../helper/singleton.ts';
 import { DB } from '../db.ts';
-import { actorsTable, localActorsTable, remoteActorsTable } from '../schema.ts';
+import { actorsTable, localActorsTable, remoteActorsTable, usersTable } from '../schema.ts';
 
 export type ActorResolverById = Agg.Resolver<ActorId, Actor | undefined>;
 
@@ -26,6 +27,7 @@ const getInstance = singleton((): ActorResolverById => {
         localActorsTable,
         eq(actorsTable.actorId, localActorsTable.actorId),
       )
+      .leftJoin(usersTable, eq(localActorsTable.userId, usersTable.userId))
       .where(eq(actorsTable.actorId, actorId));
     if (!row) {
       return RA.ok(undefined);
@@ -54,6 +56,7 @@ const getInstance = singleton((): ActorResolverById => {
         inboxUrl: row.actors.inboxUrl,
         type: 'local',
         userId: UserId.orThrow(row.local_actors.userId),
+        username: Username.orThrow(row.users?.username ?? ''),
         logoUri: row.actors.logoUri ?? undefined,
       };
       return RA.ok(actor);

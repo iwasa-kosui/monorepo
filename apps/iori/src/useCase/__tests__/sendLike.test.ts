@@ -9,7 +9,7 @@ import type { LocalPost, Post } from '../../domain/post/post.ts';
 import type { PostId } from '../../domain/post/postId.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
-import type { Username } from '../../domain/user/username.ts';
+import { Username } from '../../domain/user/username.ts';
 import { SendLikeUseCase } from '../sendLike.ts';
 import {
   createMockActorResolverByUserId,
@@ -87,6 +87,7 @@ describe('SendLikeUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       };
       setupValidUserSession(deps, user, session, actor);
@@ -151,6 +152,7 @@ describe('SendLikeUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       };
       deps.userResolver.setUser(user);
@@ -188,6 +190,7 @@ describe('SendLikeUseCase', () => {
         uri: 'https://example.com/users/kosui',
         inboxUrl: 'https://example.com/inbox',
         type: 'local',
+        username: Username.orThrow('kosui'),
         logoUri: undefined,
       };
       deps.userResolver.setUser(user);
