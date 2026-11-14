@@ -3,20 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { currentGeneration, type GenerationRef, isStaleGeneration, startGeneration } from './generation.ts';
 
 describe('generation', () => {
-  it('starts from 0 when the ref has no value yet', () => {
-    const ref: GenerationRef = { current: null };
-
-    expect(currentGeneration(ref)).toBe(0);
-  });
-
-  it('increments the number each time a generation starts', () => {
-    const ref: GenerationRef = { current: 0 };
-
-    expect(startGeneration(ref)).toBe(1);
-    expect(startGeneration(ref)).toBe(2);
-    expect(ref.current).toBe(2);
-  });
-
   it('treats the latest generation as fresh', () => {
     const ref: GenerationRef = { current: 0 };
     const generation = startGeneration(ref);

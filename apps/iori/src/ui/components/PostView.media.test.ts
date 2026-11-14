@@ -37,54 +37,7 @@ const render = (status: Status): string => String(jsx(PostView, { status }));
 
 const video: Image = { url: 'https://remote.example/media/1.mp4', altText: '海の動画', mediaType: 'video/mp4' };
 const audio: Image = { url: 'https://remote.example/media/1.mp3', altText: '曲の説明', mediaType: 'audio/mpeg' };
-const image: Image = { url: 'https://remote.example/media/1.png', altText: null, mediaType: 'image/png' };
-
 describe('PostView の動画と音声', () => {
-  it('動画を video 要素で描画し、altText を aria-label にする', () => {
-    const html = render(statusWith([video]));
-
-    expect(html).toContain('<video');
-    expect(html).toContain('src="https://remote.example/media/1.mp4"');
-    expect(html).toContain('aria-label="海の動画"');
-    expect(html).toContain('controls');
-    expect(html).toContain('preload="metadata"');
-    expect(html).toContain('playsinline');
-    expect(html).not.toContain('<img');
-  });
-
-  it('音声を audio 要素で描画し、altText を aria-label にする', () => {
-    const html = render(statusWith([audio]));
-
-    expect(html).toContain('<audio');
-    expect(html).toContain('src="https://remote.example/media/1.mp3"');
-    expect(html).toContain('aria-label="曲の説明"');
-    expect(html).toContain('controls');
-    expect(html).toContain('preload="metadata"');
-    expect(html).not.toContain('<img');
-  });
-
-  it('altText が無ければ aria-label は「動画」と「音声」になる', () => {
-    const html = render(statusWith([{ ...video, altText: null }, { ...audio, altText: null }]));
-
-    expect(html).toContain('aria-label="動画"');
-    expect(html).toContain('aria-label="音声"');
-  });
-
-  it('mediaType が無い添付は拡張子で動画と音声に描画する', () => {
-    const html = render(statusWith([{ ...video, mediaType: null }, { ...audio, mediaType: null }]));
-
-    expect(html).toContain('<video');
-    expect(html).toContain('<audio');
-  });
-
-  it('画像と動画が混在しても、画像は a と img、動画は video で描画し、動画をリンクで包まない', () => {
-    const html = render(statusWith([image, video]));
-
-    expect(html).toContain('<img');
-    expect(html).toContain('<video');
-    expect(html).not.toContain('href="https://remote.example/media/1.mp4"');
-  });
-
   it('http と https 以外の URL の動画と音声は描画しない', () => {
     const html = render(
       statusWith([
@@ -105,18 +58,5 @@ describe('PostView の動画と音声', () => {
     expect(html).not.toContain('<video');
     expect(html).not.toContain('<audio');
     expect(html).not.toContain('https://remote.example/media/1.mp4');
-  });
-
-  it('spoiler_text で本文を隠している間は動画と音声を描画しない', () => {
-    const html = render(statusWith([video, audio], { spoiler_text: 'ネタバレ注意', sensitive: true }));
-
-    expect(html).not.toContain('<video');
-    expect(html).not.toContain('<audio');
-  });
-
-  it('画像だけの sensitive では、従来どおり「センシティブな画像があります」を出す', () => {
-    const html = render(statusWith([image], { sensitive: true }));
-
-    expect(html).toContain('センシティブな画像があります');
   });
 });

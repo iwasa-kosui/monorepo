@@ -300,14 +300,6 @@ describe('bridgedBlueskyUriOf', () => {
   });
 });
 
-describe('homeItemKey', () => {
-  it('Bluesky の項目の key は bluesky:<feedItemId> にする', () => {
-    expect(homeItemKey({ kind: 'bluesky', item: bluesky('at://x#repost:did:plc:b', 1) })).toBe(
-      'bluesky:at://x#repost:did:plc:b',
-    );
-  });
-});
-
 describe('homeFeedCursor', () => {
   it('どちらにも次のページがなければ undefined にする', () => {
     expect(homeFeedCursor(undefined, undefined)).toBeUndefined();

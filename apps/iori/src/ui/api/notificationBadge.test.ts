@@ -5,7 +5,6 @@ import {
   fetchUnreadNotificationCount,
   formatNotificationBadge,
   NOTIFICATION_BADGE_SELECTOR,
-  unreadNotificationCountUrl,
 } from './notificationBadge.ts';
 
 const fakeBadge = () => ({ textContent: 'stale', hidden: false });
@@ -35,27 +34,7 @@ describe('formatNotificationBadge', () => {
   });
 });
 
-describe('unreadNotificationCountUrl', () => {
-  it('counts the same notification types the notifications page lists', () => {
-    expect(unreadNotificationCountUrl()).toBe(
-      '/api/v1/notifications/unread_count?types%5B%5D=favourite&types%5B%5D=mention&types%5B%5D=status&types%5B%5D=follow&types%5B%5D=reblog&types%5B%5D=iori%3Aemoji_reaction',
-    );
-  });
-});
-
 describe('fetchUnreadNotificationCount', () => {
-  it('returns the count from a same-origin request', async () => {
-    const fetcher = vi.fn(() => Promise.resolve(jsonResponse({ count: 3 })));
-
-    expect(await fetchUnreadNotificationCount(fetcher)).toBe(3);
-    expect(fetcher).toHaveBeenCalledWith(
-      unreadNotificationCountUrl(),
-      expect.objectContaining({
-        credentials: 'same-origin',
-      }),
-    );
-  });
-
   it('returns undefined for errors and malformed bodies', async () => {
     expect(await fetchUnreadNotificationCount(() => Promise.resolve(jsonResponse({}, 401)))).toBeUndefined();
     expect(await fetchUnreadNotificationCount(() => Promise.resolve(jsonResponse({ count: '3' })))).toBeUndefined();

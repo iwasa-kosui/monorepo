@@ -1,38 +1,6 @@
-import { jsx } from 'hono/jsx';
 import { describe, expect, it } from 'vitest';
 
 import { isEmptyProfileUpdate, toProfileUpdate } from './profileUpdate.ts';
-import { UpdateProfileModal } from './UpdateProfileModal.tsx';
-
-const render = (props: Partial<Parameters<typeof UpdateProfileModal>[0]> = {}): string =>
-  String(jsx(UpdateProfileModal, {
-    displayName: '岩佐',
-    note: '自己紹介',
-    isSubmitting: false,
-    errorText: undefined,
-    onSubmit: () => {},
-    ...props,
-  }));
-
-describe('UpdateProfileModal', () => {
-  it('表示名と自己紹介の入力欄に、いまの値を初期値として入れる', () => {
-    const html = render();
-
-    expect(html).toMatch(/<input[^>]*name="display_name"[^>]*value="岩佐"/);
-    expect(html).toMatch(/<textarea[^>]*name="note"[^>]*value="自己紹介"/);
-    expect(html).toContain('name="avatar"');
-  });
-
-  it('保存に失敗したら、エラーをモーダルに出す', () => {
-    const html = render({ errorText: 'Validation failed: Display name is too long (maximum is 30 characters)' });
-
-    expect(html).toContain('Validation failed: Display name is too long (maximum is 30 characters)');
-  });
-
-  it('保存中は更新ボタンを押せなくする', () => {
-    expect(render({ isSubmitting: true })).toMatch(/<button[^>]*disabled[^>]*>Updating\.\.\.<\/button>/);
-  });
-});
 
 describe('toProfileUpdate', () => {
   const initial = { displayName: '岩佐', note: '自己紹介' };

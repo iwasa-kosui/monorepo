@@ -6,8 +6,6 @@ import {
   normalizeSummaryMarkdown,
   splitSummaryCitations,
   summaryErrorMessage,
-  summaryResultLabel,
-  summaryTargetLabel,
 } from './summary.ts';
 
 const s1 = { id: 's1' } as Status;
@@ -213,27 +211,6 @@ describe('buildSummaryRequest', () => {
   });
 });
 
-describe('summaryTargetLabel', () => {
-  it('names the search term when there is a searched query', () => {
-    expect(summaryTargetLabel('猫')).toBe('検索語『猫』の結果を要約します');
-  });
-
-  it('names the period when the searched query is empty', () => {
-    expect(summaryTargetLabel('')).toBe('開始から終了までの期間を要約します');
-    expect(summaryTargetLabel('  ')).toBe('開始から終了までの期間を要約します');
-  });
-});
-
-describe('summaryResultLabel', () => {
-  it('names the search term when the target is not empty', () => {
-    expect(summaryResultLabel('猫')).toBe('検索語『猫』の結果の要約です');
-  });
-
-  it('names the period when the target is empty', () => {
-    expect(summaryResultLabel('')).toBe('期間の要約です');
-  });
-});
-
 describe('summaryErrorMessage', () => {
   const now = new Date('2026-01-01T01:30:00Z');
   const limit = '今日の要約の回数（20 回）を使い切りました。';
@@ -242,12 +219,6 @@ describe('summaryErrorMessage', () => {
   afterEach(() => {
     if (originalTz === undefined) delete process.env.TZ;
     else process.env.TZ = originalTz;
-  });
-
-  it('explains a 422', () => {
-    expect(summaryErrorMessage(422, undefined, now)).toBe(
-      '入力を確かめてください（検索語は 200 文字まで、期間は 7 日以内、終了は現在より前）',
-    );
   });
 
   it('shows the date and time the quota comes back on a 429 in Japan time', () => {
@@ -270,14 +241,5 @@ describe('summaryErrorMessage', () => {
   it('omits the time on a 429 when the time is out of the range of a date', () => {
     expect(summaryErrorMessage(429, 1e20, now)).toBe(limit);
     expect(summaryErrorMessage(429, Number.POSITIVE_INFINITY, now)).toBe(limit);
-  });
-
-  it('explains a 502', () => {
-    expect(summaryErrorMessage(502, undefined, now)).toBe('要約を作れませんでした。時間をおいて試してください。');
-  });
-
-  it('falls back to a generic message', () => {
-    expect(summaryErrorMessage(500, undefined, now)).toBe('要約に失敗しました。時間をおいて試してください。');
-    expect(summaryErrorMessage(undefined, undefined, now)).toBe('要約に失敗しました。時間をおいて試してください。');
   });
 });

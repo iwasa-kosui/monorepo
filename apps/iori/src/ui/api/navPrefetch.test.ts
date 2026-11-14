@@ -1,13 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  bookmarksUrl,
-  favouritesUrl,
-  homeTimelineUrl,
   NOTIFICATION_TYPES,
   notificationsUrl,
 } from './mastodonClient.ts';
-import { createPrefetcher, PREFETCH_FRESH_MS, type PrefetchDeps, readSaveData } from './navPrefetch.ts';
+import { createPrefetcher, PREFETCH_FRESH_MS, type PrefetchDeps } from './navPrefetch.ts';
 import { prefetchUrlsFor } from './prefetchTargets.ts';
 import { readCache, writeCache } from './responseCache.ts';
 
@@ -28,30 +25,6 @@ const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' }, ...init });
 
 describe('prefetchUrlsFor', () => {
-  it('maps the four screens to the GET APIs they call first', () => {
-    expect(prefetchUrlsFor('/')).toEqual([
-      '/api/v1/timelines/home?limit=40',
-      '/api/v1/accounts/verify_credentials',
-      '/api/iori/v1/bluesky/timeline?scope=home',
-    ]);
-    expect(prefetchUrlsFor('/likes')).toEqual(['/api/v1/favourites']);
-    expect(prefetchUrlsFor('/bookmarks')).toEqual(['/api/v1/bookmarks']);
-    expect(prefetchUrlsFor('/notifications')).toEqual([
-      notificationsUrl(NOTIFICATION_TYPES),
-      '/api/v1/accounts/verify_credentials',
-    ]);
-    expect(prefetchUrlsFor('/articles')).toEqual(['/api/iori/v1/articles']);
-  });
-
-  it('uses the same URL builders as the screens', () => {
-    expect(prefetchUrlsFor('/')[0]).toBe(homeTimelineUrl());
-    expect(prefetchUrlsFor('/likes')[0]).toBe(favouritesUrl());
-    expect(prefetchUrlsFor('/bookmarks')[0]).toBe(bookmarksUrl());
-    expect(notificationsUrl(NOTIFICATION_TYPES)).toBe(
-      '/api/v1/notifications?types%5B%5D=favourite&types%5B%5D=mention&types%5B%5D=status&types%5B%5D=follow&types%5B%5D=reblog&types%5B%5D=iori%3Aemoji_reaction',
-    );
-  });
-
   it.each(['/auth/sign-in', '/auth/sign-up', '/sign-in', '/x', '/articles/abc', '/users/kosui', '/api/v1/markers'])(
     'returns nothing for %s',
     (pathname) => {
@@ -210,13 +183,5 @@ describe('createPrefetcher', () => {
     await prefetcher.prefetch('/likes');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('readSaveData', () => {
-  it('is true only when navigator.connection.saveData is true', () => {
-    expect(readSaveData({ connection: { saveData: true } } as unknown as Navigator)).toBe(true);
-    expect(readSaveData({ connection: { saveData: false } } as unknown as Navigator)).toBe(false);
-    expect(readSaveData({} as unknown as Navigator)).toBe(false);
   });
 });

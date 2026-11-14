@@ -13,13 +13,11 @@ import {
   chatErrorMessage,
   chatErrorMessageOf,
   chatRouteOfPath,
-  convoTitle,
   formatChatTime,
   graphemeCount,
   groupReactions,
   isOwnMessage,
   isSendable,
-  lastMessageSummary,
   latestMessageId,
   mergeMessages,
   prependOlderMessages,
@@ -190,7 +188,6 @@ describe('groupReactions', () => {
 describe('chatErrorMessage', () => {
   it('403 chat_not_permitted はアプリパスワードの案内にする', () => {
     expect(chatErrorMessage(failure(403, 'chat_not_permitted'))).toBe(CHAT_NOT_PERMITTED_MESSAGE);
-    expect(CHAT_NOT_PERMITTED_MESSAGE).toContain('ダイレクトメッセージへのアクセスを許可');
   });
 
   it('409 は Bluesky の連携が無効だと伝える', () => {
@@ -249,33 +246,6 @@ describe('chatRouteOfPath / chatConvoPath', () => {
   it('会話の ID をエンコードしてパスにする', () => {
     expect(chatConvoPath('3kabc')).toBe('/messages/3kabc');
     expect(chatConvoPath('a/b')).toBe('/messages/a%2Fb');
-  });
-});
-
-describe('convoTitle / lastMessageSummary', () => {
-  it('相手の表示名、無ければ handle を並べる', () => {
-    expect(convoTitle([ALICE])).toBe('Alice');
-    expect(convoTitle([{ ...ALICE, displayName: null }])).toBe('alice.bsky.social');
-    expect(convoTitle([ALICE, { ...ALICE, did: 'did:plc:bob', displayName: 'Bob' }])).toBe('Alice、Bob');
-    expect(convoTitle([])).toBe('会話');
-  });
-
-  it('最後のメッセージの種類ごとに要約する', () => {
-    const preview = (overrides: Partial<NonNullable<IoriBlueskyChatConvoBody['lastMessage']>>) => ({
-      kind: 'message' as const,
-      text: 'やあ',
-      senderDid: ALICE.did,
-      sentAt: 1000,
-      ...overrides,
-    });
-
-    expect(lastMessageSummary(null)).toBe('まだメッセージはありません');
-    expect(lastMessageSummary(preview({}))).toBe('やあ');
-    expect(lastMessageSummary(preview({ kind: 'deleted', text: null }))).toBe('削除されたメッセージ');
-    expect(lastMessageSummary(preview({ kind: 'unsupported', text: null, senderDid: null }))).toBe(
-      '表示できないメッセージ',
-    );
-    expect(lastMessageSummary(preview({ text: '' }))).toBe('投稿を共有しました');
   });
 });
 

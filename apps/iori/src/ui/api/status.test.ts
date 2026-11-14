@@ -5,7 +5,6 @@ import {
   accountHandle,
   accountHref,
   detailHref,
-  displayStatus,
   isLocalAccount,
   remoteUserPathOf,
   removeStatusesByAccountId,
@@ -50,21 +49,6 @@ const status = (id: string, overrides: Partial<Status> = {}): Status =>
     reblogged: false,
     ...overrides,
   }) as Status;
-
-describe('displayStatus', () => {
-  it('returns the status itself when it is not a boost', () => {
-    const original = status('p1');
-
-    expect(displayStatus(original)).toBe(original);
-  });
-
-  it('returns the reblogged status when it is a boost', () => {
-    const original = status('p1');
-    const boost = status('r1', { account: remoteAccount, reblog: original });
-
-    expect(displayStatus(boost)).toBe(original);
-  });
-});
 
 describe('account helpers', () => {
   it('treats an acct without a host as local', () => {

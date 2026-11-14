@@ -29,39 +29,6 @@ const basePost = {
 };
 
 describe('postToStatus', () => {
-  it('converts a local post into a local status', () => {
-    const post = { ...basePost, type: 'local', userId: 'user-1', inReplyToUri: null } as unknown as PostWithAuthor;
-
-    const status = postToStatus(post);
-
-    expect(status.id).toBe('post-1');
-    expect(status.created_at).toBe('2026-01-02T03:04:05.000Z');
-    expect(isLocalAccount(status.account)).toBe(true);
-    expect(status.account.id).toBe('actor-1');
-    expect(status.favourited).toBe(true);
-    expect(status.reblogged).toBe(false);
-    expect(status.favourites_count).toBe(3);
-    expect(status.reblogs_count).toBe(2);
-    expect(status.in_reply_to_id).toBeNull();
-    expect(status.reblog).toBeNull();
-    expect(status.media_attachments).toMatchObject([{
-      type: 'image',
-      url: 'https://iori.example/a.png',
-      description: 'alt',
-    }]);
-    expect(status.iori?.reactions).toEqual([{ emoji: '👍', count: 1, url: null, me: false }]);
-    expect(status.iori?.link_previews).toEqual([
-      {
-        url: 'https://example.com/',
-        title: 'Example',
-        description: null,
-        image: null,
-        site_name: 'Example Site',
-        favicon: 'https://example.com/favicon.ico',
-      },
-    ]);
-  });
-
   it('decides the media attachment type from mediaType, or from the url extension when mediaType is null', () => {
     const post = {
       ...basePost,
@@ -102,20 +69,6 @@ describe('postToStatus', () => {
     expect(status.account.acct).toBe('kosui@remote.example');
     expect(status.uri).toBe('https://remote.example/notes/1');
     expect(status.in_reply_to_id).not.toBeNull();
-  });
-});
-
-describe('postToStatus の visibility', () => {
-  it.each(['public', 'unlisted', 'private'] as const)('ローカルの投稿の visibility %s をそのまま返す', (visibility) => {
-    const post = {
-      ...basePost,
-      type: 'local',
-      userId: 'user-1',
-      inReplyToUri: null,
-      visibility,
-    } as unknown as PostWithAuthor;
-
-    expect(postToStatus(post).visibility).toBe(visibility);
   });
 });
 

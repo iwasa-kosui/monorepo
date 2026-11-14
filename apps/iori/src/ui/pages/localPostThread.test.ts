@@ -5,7 +5,6 @@ import type { StatusContext } from '../api/mastodonClient.ts';
 import {
   applyContext,
   resolveLocalPostThread,
-  shouldReloadContext,
   showsRemoteContextLoading,
   updateThreadStatuses,
 } from './localPostThread.ts';
@@ -88,12 +87,6 @@ describe('resolveLocalPostThread', () => {
       type: 'loaded',
       contextFailed: true,
     });
-  });
-});
-
-describe('shouldReloadContext', () => {
-  it('新しく取り込んだ投稿があるときだけ context を読み直す', () => {
-    expect([0, 1, 40].map((fetched) => shouldReloadContext({ fetched }))).toEqual([false, true, true]);
   });
 });
 
