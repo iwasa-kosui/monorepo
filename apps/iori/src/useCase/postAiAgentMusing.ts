@@ -20,6 +20,7 @@ import {
   AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
   AI_AGENT_BOT_MAX_STEPS,
   AI_AGENT_BOT_MODEL,
+  AI_AGENT_BOT_REASONING_EFFORT,
   musingSystemPrompt,
   musingUserPrompt,
 } from './aiAgent/aiAgentBotPrompts.ts';
@@ -114,6 +115,7 @@ const create = (deps: Deps): PostAiAgentMusingUseCase => {
         finalTools: [postTool.tool],
         maxSteps: AI_AGENT_BOT_MAX_STEPS,
         maxOutputTokens: AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
+        reasoningEffort: AI_AGENT_BOT_REASONING_EFFORT,
       });
       if (postId !== undefined) return RA.ok({ posted: true, postId, theme });
       if (!result.ok) return result;

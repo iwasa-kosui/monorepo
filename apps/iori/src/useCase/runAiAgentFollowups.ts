@@ -25,6 +25,7 @@ import {
   AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
   AI_AGENT_BOT_MAX_STEPS,
   AI_AGENT_BOT_MODEL,
+  AI_AGENT_BOT_REASONING_EFFORT,
   followupSystemPrompt,
   followupUserPrompt,
 } from './aiAgent/aiAgentBotPrompts.ts';
@@ -119,6 +120,7 @@ const create = (deps: Deps): RunAiAgentFollowupsUseCase => {
       finalTools: [replyTool.tool],
       maxSteps: AI_AGENT_BOT_MAX_STEPS,
       maxOutputTokens: AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
+      reasoningEffort: AI_AGENT_BOT_REASONING_EFFORT,
     });
     if (replyTool.published() > 0) return { outcome: 'replied', reason: null };
     if (!result.ok) return { outcome: 'failed', reason: result.err.message };

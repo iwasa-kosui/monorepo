@@ -1,6 +1,13 @@
 import { RA } from '@iwasa-kosui/result';
 
-import type { AgentChatModel, AgentMessage, AgentToolCall, AgentToolSpec } from '../../ports/agentChatModel.ts';
+import type {
+  AgentChatModel,
+  AgentChatResponse,
+  AgentMessage,
+  AgentReasoningEffort,
+  AgentToolCall,
+  AgentToolSpec,
+} from '../../ports/agentChatModel.ts';
 import type { AiError, AiModelName } from '../../ports/aiError.ts';
 
 /** モデルが呼び出せるツール。run は失敗しても例外を投げず、モデルに読ませる文を返す */
@@ -17,6 +24,7 @@ export type AgentLoopInput = Readonly<{
   finalTools?: readonly AgentTool[];
   maxSteps: number;
   maxOutputTokens: number;
+  reasoningEffort?: AgentReasoningEffort;
 }>;
 
 export type AgentLoopResult = Readonly<{
@@ -73,7 +81,7 @@ const runTool = async (tools: readonly AgentTool[], name: string, args: unknown)
  */
 export const runAgentLoop = (chatModel: AgentChatModel) =>
 async (
-  { model, system, input, tools, finalTools = [], maxSteps, maxOutputTokens }: AgentLoopInput,
+  { model, system, input, tools, finalTools = [], maxSteps, maxOutputTokens, reasoningEffort }: AgentLoopInput,
 ): RA<AgentLoopResult, AiError> => {
   const messages: AgentMessage[] = [{ role: 'system', content: system }, { role: 'user', content: input }];
   const invocations: AgentToolInvocation[] = [];
@@ -81,6 +89,15 @@ async (
   const toolNames = [...tools, ...finalTools].map((tool) => tool.name);
   const isToolCallText = (content: string | undefined): boolean =>
     content !== undefined && containsToolCallText(content, toolNames);
+
+  const options = { model, maxOutputTokens, ...(reasoningEffort === undefined ? {} : { reasoningEffort }) };
+  // 推論するモデルには、ツールを呼んだときに考えた内容を返し、続きを同じ考えのまま進めさせる
+  const assistant = (response: AgentChatResponse, toolCalls: readonly AgentToolCall[]): AgentMessage => ({
+    role: 'assistant',
+    content: response.content ?? '',
+    toolCalls,
+    ...(response.reasoning === undefined ? {} : { reasoning: response.reasoning }),
+  });
 
   const runCalls = async (available: readonly AgentTool[], toolCalls: readonly AgentToolCall[]) => {
     for (const call of toolCalls) {
@@ -91,22 +108,22 @@ async (
   };
 
   for (let step = 0; step < maxSteps; step++) {
-    const response = await chatModel.chat({ model, messages, tools: specs, maxOutputTokens });
+    const response = await chatModel.chat({ ...options, messages, tools: specs });
     if (!response.ok) return response;
     const toolCalls = response.val.toolCalls.slice(0, MAX_TOOL_CALLS_PER_STEP);
     if (toolCalls.length === 0) {
       if (!isToolCallText(response.val.content)) return RA.ok({ answer: response.val.content, invocations });
-      messages.push({ role: 'assistant', content: response.val.content ?? '', toolCalls: [] });
+      messages.push(assistant(response.val, []));
       messages.push({ role: 'user', content: TOOL_CALL_AS_TEXT_INSTRUCTION });
       continue;
     }
 
-    messages.push({ role: 'assistant', content: response.val.content ?? '', toolCalls });
+    messages.push(assistant(response.val, toolCalls));
     await runCalls(tools, toolCalls);
   }
 
   messages.push({ role: 'user', content: FINAL_STEP_INSTRUCTION });
-  const final = await chatModel.chat({ model, messages, tools: toSpecs(finalTools), maxOutputTokens });
+  const final = await chatModel.chat({ ...options, messages, tools: toSpecs(finalTools) });
   if (!final.ok) return final;
   const finalCalls = final.val.toolCalls.slice(0, MAX_TOOL_CALLS_PER_STEP);
   await runCalls(finalTools, finalCalls);

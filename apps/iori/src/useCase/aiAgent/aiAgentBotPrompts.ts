@@ -1,10 +1,18 @@
 import { type AiAgentBotMusingTheme, MAX_BOT_POST_CHARACTERS } from '../../domain/aiAgentBot/aiAgentBot.ts';
+import type { AgentReasoningEffort } from '../../ports/agentChatModel.ts';
 
-/** bot のエージェントが使うモデル。iori のほかの AI 機能と同じく、ツールの呼び出しに対応したものを使う */
-export const AI_AGENT_BOT_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
+/**
+ * bot のエージェントが使うモデル。ツールの呼び出しに対応し、調べながら考えられる推論モデルを使う。
+ * Workers AI の有料プランが要る。廃止の予定が無く、同じくらい賢いモデルの中で安いものを選んでいる。
+ */
+export const AI_AGENT_BOT_MODEL = '@cf/deepseek-ai/deepseek-v4.1-flash-1017';
+
+/** どれだけ考えさせるか。返信や投稿の質を上げるため、深く考えさせる */
+export const AI_AGENT_BOT_REASONING_EFFORT: AgentReasoningEffort = 'high';
 
 export const AI_AGENT_BOT_MAX_STEPS = 10;
-export const AI_AGENT_BOT_MAX_OUTPUT_TOKENS = 1024;
+/** 推論モデルは考えた分も出力に数えるので、考えた途中で切れないよう多めにとる */
+export const AI_AGENT_BOT_MAX_OUTPUT_TOKENS = 8192;
 
 const PERSONA = [
   'あなたは「agent」という名前の AI エージェントで、blog.kosui.me にある Fediverse（Mastodon などと相互につながる分散型 SNS）の bot アカウントとして暮らしています。',
