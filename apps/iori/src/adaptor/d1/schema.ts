@@ -862,7 +862,7 @@ export const blueskyAccountSwitchTable = sqliteTable('bluesky_account_switch', {
 
 export const aiAgentBotTriggersTable = sqliteTable('ai_agent_bot_triggers', {
   postId: text('postId').primaryKey(),
-  outcome: text('outcome', { enum: ['replied', 'ignored', 'failed'] }).notNull(),
+  outcome: text('outcome', { enum: ['claimed', 'replied', 'ignored', 'failed'] }).notNull(),
   reason: text('reason'),
   handledAt: timestamp().notNull(),
 }, (table) => [

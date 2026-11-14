@@ -5,6 +5,7 @@ import { createD1LocalActorCreatedStore } from '../adaptor/d1/actor/localActorCr
 import { createD1LocalActorProfileUpdatedStore } from '../adaptor/d1/actor/localActorProfileUpdatedStore.ts';
 import { createD1AiAgentBotPendingTriggersResolver } from '../adaptor/d1/aiAgentBot/aiAgentBotPendingTriggersResolver.ts';
 import { createD1AiAgentBotRepliedCountResolverSince } from '../adaptor/d1/aiAgentBot/aiAgentBotRepliedCountResolverSince.ts';
+import { createD1AiAgentBotTriggerClaimedStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggerClaimedStore.ts';
 import { createD1AiAgentBotTriggersHandledStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggersHandledStore.ts';
 import { createD1UserCreatedStore } from '../adaptor/d1/user/userCreatedStore.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
@@ -107,6 +108,18 @@ export const createAiAgentBotCapabilities = (
     return [bot.actor.id, ...(following.ok ? following.val.map((actor) => actor.id) : [])];
   };
 
+  const readTimeline = async (actorIds: readonly ActorId[], limit: number): Promise<AgentPostView[]> => {
+    const items = await mastodon.timelineItemsResolverByActorIds.resolve({
+      actorIds: [...actorIds],
+      currentActorId: bot.actor.id,
+      createdAt: undefined,
+      mutedActorIds: [],
+      page: { limit, olderThanId: undefined, newerThanId: undefined, order: 'newestFirst' },
+      onlyVisibleToViewer: true,
+    });
+    return items.ok ? items.val.slice(0, limit).map((item) => toAgentPostView(item.post)) : [];
+  };
+
   return {
     readPost: async (postId) => (await resolvePosts([postId]))[0],
     readThread: async (postId) => {
@@ -120,17 +133,9 @@ export const createAiAgentBotCapabilities = (
       const found = await mastodon.searchTimeline.run({ userId: bot.user.id, query: query.val });
       return found.ok ? resolvePosts(found.val.postIds) : [];
     },
-    readRecentTimeline: async (limit) => {
-      const items = await mastodon.timelineItemsResolverByActorIds.resolve({
-        actorIds: await homeActorIds(),
-        currentActorId: bot.actor.id,
-        createdAt: undefined,
-        mutedActorIds: [],
-        page: { limit, olderThanId: undefined, newerThanId: undefined, order: 'newestFirst' },
-        onlyVisibleToViewer: true,
-      });
-      return items.ok ? items.val.slice(0, limit).map((item) => toAgentPostView(item.post)) : [];
-    },
+    readRecentTimeline: async (limit) => readTimeline(await homeActorIds(), limit),
+    readOwnRecentPosts: async (limit) =>
+      (await readTimeline([bot.actor.id], limit)).filter((post) => post.authorActorId === bot.actor.id),
     fetchUrl: fetchPage(safeFetcher),
     likePost: async (postId) => {
       const liked = await socialActions.sendLikeUseCase.run({ userId: bot.user.id, postId, ...context });
@@ -221,6 +226,7 @@ export const createAiAgentBotRuntime = async (
     poster: createAiAgentBotPoster(runtime, bot, context),
     respondToMentions: RespondToAiAgentMentionsUseCase.create({
       pendingTriggersResolver: createD1AiAgentBotPendingTriggersResolver(db),
+      triggerClaimedStore: createD1AiAgentBotTriggerClaimedStore(db),
       triggersHandledStore: createD1AiAgentBotTriggersHandledStore(db),
       repliedCountResolverSince: createD1AiAgentBotRepliedCountResolverSince(db),
       actorResolverById: runtime.mastodon.actorResolverById,

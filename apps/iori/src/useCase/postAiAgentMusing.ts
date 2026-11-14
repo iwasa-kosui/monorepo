@@ -10,6 +10,7 @@ import {
   type AiAgentBotCapabilities,
   createAgentTools,
   formatPosts,
+  MAX_OWN_RECENT_POSTS,
   MAX_RECENT_TIMELINE,
 } from './aiAgent/agentTools.ts';
 import {
@@ -33,7 +34,7 @@ type Input = Readonly<{
 
 export type PostAiAgentMusingResult =
   | Readonly<{ posted: true; postId: PostId }>
-  | Readonly<{ posted: false; reason: 'nothingToSay' }>;
+  | Readonly<{ posted: false; reason: 'nothingToSay' | 'repeated' }>;
 
 export type PostAiAgentMusingError = AiError | Readonly<{ type: 'AiAgentBotPostError'; message: string }>;
 
@@ -44,16 +45,29 @@ type Deps = Readonly<{
   now: () => Instant;
 }>;
 
-/** AI エージェントの bot が、タイムラインを読んで自分から 1 件投稿する */
+/**
+ * AI エージェントの bot が、タイムラインを読んで自分から 1 件投稿する。
+ * 自分の最近の投稿の繰り返しになったときは投稿しない。
+ */
 const create = (deps: Deps): PostAiAgentMusingUseCase => {
   const agent = runAgentLoop(deps.chatModel);
   return {
     run: async ({ capabilities, poster }) => {
-      const timeline = await capabilities.readRecentTimeline(MAX_RECENT_TIMELINE);
+      const [timeline, ownPosts] = await Promise.all([
+        capabilities.readRecentTimeline(MAX_RECENT_TIMELINE),
+        capabilities.readOwnRecentPosts(MAX_OWN_RECENT_POSTS),
+      ]);
+      const ownPostIds = new Set(ownPosts.map((post) => post.postId));
+      // 自分の投稿をタイムラインに混ぜると、モデルがそれを話題に選んでなぞりやすい。分けて見せる
+      const othersPosts = timeline.filter((post) => !ownPostIds.has(post.postId));
       const result = await agent({
         model: AI_AGENT_BOT_MODEL,
         system: musingSystemPrompt(),
-        input: musingUserPrompt({ timeline: formatPosts(timeline), now: new Date(deps.now()).toISOString() }),
+        input: musingUserPrompt({
+          timeline: formatPosts(othersPosts),
+          ownPosts: formatPosts(ownPosts),
+          now: new Date(deps.now()).toISOString(),
+        }),
         tools: createAgentTools(capabilities),
         maxSteps: AI_AGENT_BOT_MAX_STEPS,
         maxOutputTokens: AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
@@ -61,6 +75,9 @@ const create = (deps: Deps): PostAiAgentMusingUseCase => {
       if (!result.ok) return result;
       const text = result.val.answer === undefined ? undefined : AiAgentBot.normalizeAnswer(result.val.answer);
       if (text === undefined) return RA.ok({ posted: false, reason: 'nothingToSay' });
+      if (AiAgentBot.isRepeatOf(text, ownPosts.map((post) => post.text))) {
+        return RA.ok({ posted: false, reason: 'repeated' });
+      }
       const posted = await poster.post(text);
       if (!posted.ok) return RA.err({ type: 'AiAgentBotPostError', message: posted.err });
       return RA.ok({ posted: true, postId: posted.val });
