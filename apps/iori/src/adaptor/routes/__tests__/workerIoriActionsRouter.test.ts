@@ -15,6 +15,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
+import { ORIGIN } from './helper/oauthHarness.ts';
 
 const notFound = { error: 'Record not found' };
 
