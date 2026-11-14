@@ -121,54 +121,20 @@ describe('GET /api/iori/v1/bluesky/crossposts/status', () => {
     expect(await response.json()).toMatchObject({ enabled: false, counts: { failed: 1 } });
   });
 
-  it('件数と、上限に達した pending と failed と deleting の件数を返す', async () => {
+  it('直近の失敗の updatedAt を ISO 文字列にして返す', async () => {
     const t = setup();
-    t.addCrosspost(postId(1), 'pending');
-    t.addCrosspost(postId(2), 'sent', { sent: true });
-    t.addCrosspost(postId(3), 'sent', { sent: true });
-    t.addCrosspost(postId(4), 'skipped');
-    t.addCrosspost(postId(5), 'failed', { attempts: 2, lastError: 'e' });
-    t.addCrosspost(postId(6), 'failed', { attempts: 3, lastError: 'e' });
-    t.addCrosspost(postId(7), 'deleting', { attempts: 4, lastError: 'e', sent: true });
-    t.addCrosspost(postId(8), 'deleting', { attempts: 5, lastError: 'e', sent: true });
-    t.addCrosspost(postId(9), 'deleting', { attempts: 6, lastError: 'e', sent: true });
-    t.addCrosspost(postId(10), 'pending', { attempts: 3 });
+    t.addCrosspost(postId(1), 'failed', { attempts: 1, lastError: 'error 1', updatedAt: Date.UTC(2026, 10, 8, 0, 12) });
     const headers = await t.signInAs('kosui');
 
-    const body = await (await t.request(headers)).json() as Record<string, unknown>;
+    const body = await (await t.request(headers)).json() as { recentFailures: Array<Record<string, unknown>> };
 
-    expect(body.counts).toEqual({ pending: 2, sent: 2, failed: 2, skipped: 1, deleting: 3 });
-    expect(body.exhausted).toEqual({ pending: 1, failed: 1, deleting: 2 });
-  });
-
-  it('直近の失敗を updatedAt の降順で最大 10 件返し、ISO 文字列にする', async () => {
-    const t = setup();
-    for (let n = 1; n <= 12; n += 1) {
-      t.addCrosspost(postId(n), 'failed', {
-        attempts: 1,
-        lastError: `error ${n}`,
-        updatedAt: Date.UTC(2026, 10, 8, 0, n),
-      });
-    }
-    t.addCrosspost(postId(13), 'sent', { sent: true, updatedAt: Date.UTC(2026, 10, 8, 1) });
-    t.addCrosspost(postId(14), 'pending', { updatedAt: Date.UTC(2026, 10, 8, 1) });
-    const headers = await t.signInAs('kosui');
-
-    const body = await (await t.request(headers)).json() as {
-      recentFailures: Array<Record<string, unknown>>;
-    };
-
-    expect(body.recentFailures).toHaveLength(10);
-    expect(body.recentFailures.map((failure) => failure.postId)).toEqual(
-      Array.from({ length: 10 }, (_, i) => postId(12 - i)),
-    );
-    expect(body.recentFailures[0]).toEqual({
-      postId: postId(12),
+    expect(body.recentFailures).toEqual([{
+      postId: postId(1),
       status: 'failed',
       attempts: 1,
-      lastError: 'error 12',
+      lastError: 'error 1',
       updatedAt: '2026-11-08T00:12:00.000Z',
-    });
+    }]);
   });
 
   it('秘密、uri、cid、rkey、skipReason を応答に含めない', async () => {

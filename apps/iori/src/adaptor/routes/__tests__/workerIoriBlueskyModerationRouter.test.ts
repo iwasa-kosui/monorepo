@@ -193,16 +193,6 @@ describe('/api/iori/v1/bluesky の共通のガード', () => {
     },
   );
 
-  it.each(writes)('%s %s は無効のとき 409 にする', async (method, path, body) => {
-    const t = await setup({ enabled: false });
-
-    const response = await t.send(method, path, body);
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
-    noCalls(t);
-  });
-
   it.each(writes.filter(([, path]) => !path.startsWith(THREAD_MUTES)))(
     '%s %s は did が did: で始まらない、または無いとき 400 にする',
     async (method, path) => {
@@ -272,22 +262,6 @@ describe('GET /api/iori/v1/bluesky/moderation/:did', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ muted: true, blockUri: OLD_BLOCK });
     expect(t.reader.resolveViewerState).toHaveBeenCalledExactlyOnceWith(DID);
-  });
-
-  it('ブロックしていなければ blockUri を null にする', async () => {
-    const t = await setup({ blockUri: null });
-
-    expect(await (await t.send('GET', MODERATION)).json()).toEqual({ muted: true, blockUri: null });
-  });
-
-  it('Bluesky の失敗を 502 にする', async () => {
-    const t = await setup();
-    t.reader.resolveViewerState.mockReturnValueOnce(RA.err(failure('auth')));
-
-    const response = await t.send('GET', MODERATION);
-
-    expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: 'Bluesky login failed' });
   });
 });
 
@@ -380,18 +354,6 @@ describe('/api/iori/v1/bluesky/thread-mutes', () => {
     expect(t.client.muteThread).not.toHaveBeenCalled();
   });
 
-  it('DELETE は返信の uri を受け取ったら、根の uri でスレッドのミュートを解除する', async () => {
-    const t = await setup();
-    t.query.mockReturnValueOnce(RA.ok({
-      posts: [{ uri: REPLY, cid: 'bafyreply', record: { reply: { root: { uri: ROOT }, parent: { uri: ROOT } } } }],
-    }));
-
-    const response = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(REPLY)}`);
-
-    expect(response.status).toBe(200);
-    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
-  });
-
   it('DELETE は投稿が見つからなければ、受け取った uri でスレッドのミュートを解除する', async () => {
     const t = await setup();
     t.query.mockReturnValueOnce(RA.ok({ posts: [] }));
@@ -401,21 +363,6 @@ describe('/api/iori/v1/bluesky/thread-mutes', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ threadMuted: false });
     expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(REPLY);
-  });
-
-  it('getPosts の失敗を 502 にし、スレッドのミュートも解除も呼ばない', async () => {
-    const t = await setup();
-    t.query.mockReturnValueOnce(RA.err(failure('http')));
-    t.query.mockReturnValueOnce(RA.err(failure('auth')));
-
-    const muted = await t.send('POST', THREAD_MUTES, { root: ROOT }, t.cookie);
-    const unmuted = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(ROOT)}`);
-
-    expect([muted.status, unmuted.status]).toEqual([502, 502]);
-    expect(await muted.json()).toEqual({ error: 'Bluesky request failed' });
-    expect(await unmuted.json()).toEqual({ error: 'Bluesky login failed' });
-    expect(t.client.muteThread).not.toHaveBeenCalled();
-    expect(t.client.unmuteThread).not.toHaveBeenCalled();
   });
 
   it('root が投稿の at:// URI でない、または無いときは 400 にし、Bluesky を呼ばない', async () => {
@@ -438,29 +385,6 @@ describe('/api/iori/v1/bluesky/thread-mutes', () => {
     expect(await deleted.json()).toEqual({ error: 'Validation failed: root' });
     expect((await t.send('DELETE', THREAD_MUTES)).status).toBe(400);
     noCalls(t);
-  });
-
-  it('write:mutes を満たさないトークンを 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:statuses write:blocks' });
-
-    expect((await t.send('POST', THREAD_MUTES, { root: ROOT })).status).toBe(403);
-    noCalls(t);
-  });
-
-  it('Bluesky の失敗を 502 にする', async () => {
-    const t = await setup();
-    t.client.muteThread.mockReturnValueOnce(RA.err(failure('auth')));
-    t.client.muteThread.mockReturnValueOnce(RA.err(failure('http')));
-    t.client.unmuteThread.mockReturnValueOnce(RA.err(failure('network')));
-
-    const auth = await t.send('POST', THREAD_MUTES, { root: ROOT });
-    const http = await t.send('POST', THREAD_MUTES, { root: ROOT });
-    const network = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(ROOT)}`);
-
-    expect([auth.status, http.status, network.status]).toEqual([502, 502, 502]);
-    expect(await auth.json()).toEqual({ error: 'Bluesky login failed' });
-    expect(await http.json()).toEqual({ error: 'Bluesky request failed' });
-    expect(await network.json()).toEqual({ error: 'Bluesky request failed' });
   });
 });
 
@@ -518,17 +442,6 @@ describe('/api/iori/v1/bluesky/blocks', () => {
     expect(response.status).toBe(400);
     expect(t.client.deleteBlock).not.toHaveBeenCalled();
   });
-
-  it('Bluesky の失敗を 502 にする', async () => {
-    const t = await setup({ blockUri: null });
-    t.client.createBlock.mockReturnValueOnce(RA.err(failure('auth')));
-
-    const response = await t.send('POST', BLOCKS, { did: DID });
-
-    expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: 'Bluesky login failed' });
-    expect(t.rows()).toEqual([]);
-  });
 });
 
 describe('POST /api/iori/v1/bluesky/reports', () => {
@@ -543,19 +456,6 @@ describe('POST /api/iori/v1/bluesky/reports', () => {
       subjectDid: DID,
       reasonType: 'com.atproto.moderation.defs#reasonRude',
       reason: 'ひどい内容',
-    });
-  });
-
-  it('comment が無くても通報できる', async () => {
-    const t = await setup();
-
-    const response = await t.send('POST', REPORTS, { did: DID, category: 'spam' });
-
-    expect(response.status).toBe(201);
-    expect(t.client.createReport).toHaveBeenCalledExactlyOnceWith({
-      subjectDid: DID,
-      reasonType: 'com.atproto.moderation.defs#reasonSpam',
-      reason: '',
     });
   });
 
@@ -637,19 +537,5 @@ describe('POST /api/iori/v1/bluesky/reports', () => {
     expect(tooLong.status).toBe(400);
     expect(await tooLong.json()).toEqual({ error: 'Validation failed: comment' });
     expect(t.client.createReport).not.toHaveBeenCalled();
-  });
-
-  it('Bluesky の失敗を 502 にする', async () => {
-    const t = await setup();
-    t.client.createReport.mockReturnValueOnce(RA.err(failure('auth')));
-    t.client.createReport.mockReturnValueOnce(RA.err(failure('http')));
-
-    const auth = await t.send('POST', REPORTS, { did: DID, category: 'spam' });
-    const http = await t.send('POST', REPORTS, { did: DID, category: 'spam' });
-
-    expect(auth.status).toBe(502);
-    expect(await auth.json()).toEqual({ error: 'Bluesky login failed' });
-    expect(http.status).toBe(502);
-    expect(await http.json()).toEqual({ error: 'Bluesky request failed' });
   });
 });

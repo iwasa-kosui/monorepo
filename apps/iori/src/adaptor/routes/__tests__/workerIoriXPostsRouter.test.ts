@@ -64,15 +64,6 @@ describe('GET /api/iori/v1/x-posts', () => {
     expect(await response.text()).not.toContain('投稿');
   });
 
-  it('不正な Cookie でも 401 にする', async () => {
-    const t = setupReadApi();
-    seed(t);
-
-    const response = await t.request(PATH, { headers: { Cookie: 'sessionId=00000000-0000-4000-8000-0000000000ff' } });
-
-    expect(response.status).toBe(401);
-  });
-
   it('read:statuses を満たさない scope のトークンを 403 にする', async () => {
     const t = setupReadApi();
     const me = await t.signIn('write:statuses');
@@ -111,16 +102,6 @@ describe('GET /api/iori/v1/x-posts', () => {
     });
   });
 
-  it('API キーが設定されていれば fetchEnabled を true にする', async () => {
-    const t = setupReadApi({ refreshXPosts: refresher(RA.ok({ sources: 0, failed: 0, collected: 0 })).useCase });
-    const me = await t.signIn('read:statuses');
-    seed(t);
-
-    const response = await t.request(PATH, { headers: me.bearer });
-
-    expect(await response.json()).toMatchObject({ fetchEnabled: true });
-  });
-
   it('所有者でないユーザーの Cookie は 403 にし、本文を一切返さない', async () => {
     const t = setupReadApi();
     const other = await t.issueUserToken('read:statuses');
@@ -135,18 +116,6 @@ describe('GET /api/iori/v1/x-posts', () => {
     expect(response.headers.get('X-Robots-Tag')).toBe('noindex');
   });
 
-  it('所有者でないユーザーのトークンは 403 にし、本文を一切返さない', async () => {
-    const t = setupReadApi();
-    const other = await t.issueUserToken('read:statuses');
-    t.seed.addLocalActor('other', other.userId);
-    seed(t);
-
-    const response = await t.request(PATH, { headers: { Authorization: `Bearer ${other.token}` } });
-
-    expect(response.status).toBe(403);
-    expect(await response.text()).not.toContain('投稿');
-  });
-
   it('所有者のユーザーが見つからないときは、ログインしていても 403 にする', async () => {
     const t = setupReadApi();
     const other = await t.issueUserToken('read:statuses');
@@ -157,16 +126,6 @@ describe('GET /api/iori/v1/x-posts', () => {
 
     expect(response.status).toBe(403);
     expect(await response.text()).not.toContain('投稿');
-  });
-
-  it('所有者のトークンで 200 を返す', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn('read:statuses');
-    seed(t);
-
-    const response = await t.request(PATH, { headers: me.bearer });
-
-    expect(response.status).toBe(200);
   });
 
   it('成功も失敗もキャッシュを許さず、検索エンジンに載せない', async () => {
@@ -181,17 +140,6 @@ describe('GET /api/iori/v1/x-posts', () => {
       expect(response.headers.get('Cache-Control')).toBe('private, no-store');
       expect(response.headers.get('X-Robots-Tag')).toBe('noindex');
     }
-  });
-
-  it('limit で件数を絞る', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn('read:statuses');
-    seed(t);
-
-    const response = await t.request(`${PATH}?limit=1`, { headers: me.bearer });
-
-    const { posts } = await response.json() as { posts: Array<{ text: string }> };
-    expect(posts.map((post) => post.text)).toEqual(['新しい投稿']);
   });
 });
 

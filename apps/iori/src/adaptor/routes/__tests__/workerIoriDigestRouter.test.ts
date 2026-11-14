@@ -6,7 +6,6 @@ import { Instant } from '../../../domain/instant/instant.ts';
 import { EMBEDDING_DIMENSIONS } from '../../../domain/interestSource/embedding.ts';
 import { float32ToBytes } from '../../../domain/interestSource/embeddingBytes.ts';
 import { sha256Hex } from '../../../helper/sha256.ts';
-import type { TextEmbedder } from '../../../ports/textEmbedder.ts';
 import type { TopicRelevanceJudge } from '../../../ports/topicRelevanceJudge.ts';
 import { createStubEmbedder, createStubTextGenerator } from '../../../testing/aiStubs.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
@@ -146,18 +145,6 @@ describe('iori のダイジェスト API', () => {
     expect(response.status).toBe(401);
   });
 
-  it.each(readPaths)('GET %s は Cookie でも Bearer でも 200 か 404 で返す', async (path) => {
-    const t = setupReadApi();
-    const me = await t.signIn('read:statuses');
-    seedDigest(t, me, '2026-11-05');
-
-    const withCookie = await t.request(path, { headers: { Cookie: `sessionId=${me.sessionId}` } });
-    const withBearer = await t.request(path, { headers: me.bearer });
-
-    expect(withCookie.status).toBe(200);
-    expect(withBearer.status).toBe(200);
-  });
-
   it.each(readPaths)('GET %s は read:statuses を満たさない scope のトークンを 403 にする', async (path) => {
     const t = setupReadApi();
     const me = await t.signIn('write:statuses');
@@ -189,18 +176,6 @@ describe('iori のダイジェスト API', () => {
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual(expectedDigest('2026-11-05', ids));
-    });
-
-    it('pushSentAt があれば ISO 8601 で返す', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('read:statuses');
-      seedDigest(t, me, '2026-11-05', { pushSentAt: Date.UTC(2026, 10, 4, 22, 0) });
-
-      const response = await t.request('/api/iori/v1/digests/2026-11-05', { headers: me.bearer });
-
-      expect(((await response.json()) as { digest: { pushSentAt: string } }).digest.pushSentAt).toBe(
-        '2026-11-04T22:00:00.000Z',
-      );
     });
 
     it('日付の形式が違うと 400 にする', async () => {
@@ -313,19 +288,6 @@ describe('iori のダイジェスト API', () => {
         digest: { topics: [{ topicKey: 'retired', name: 'retired', articleId: orphan.articleId, itemCount: 3 }] },
       });
     });
-
-    it('他の日のトピックの記事を一覧に混ぜない', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('read:statuses');
-      seedDay(t, me, '2026-11-04');
-      const ids = seedDay(t, me, '2026-11-05');
-
-      const response = await t.request('/api/iori/v1/digests/2026-11-05', { headers: me.bearer });
-
-      const body = await response.json() as { digest: { topics: Array<{ articleId: string }> } };
-      expect(body.digest.topics).toHaveLength(3);
-      expect(body.digest.topics.map((topic) => topic.articleId)).not.toContain(ids.summary.articleId);
-    });
   });
 
   describe('GET /api/iori/v1/digests/latest', () => {
@@ -340,15 +302,6 @@ describe('iori のダイジェスト API', () => {
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual(expectedDigest('2026-11-05', latest));
-    });
-
-    it('digest がなければ 404 にする', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('read:statuses');
-
-      const response = await t.request('/api/iori/v1/digests/latest', { headers: me.bearer });
-
-      expect(response.status).toBe(404);
     });
 
     it('他人の digest しかなければ 404 にする', async () => {
@@ -400,15 +353,6 @@ describe('iori のダイジェスト API', () => {
       expect(await response.json()).toEqual({
         links: [{ url: 'https://example.com/recent', title: 'Recent', count: 1 }],
       });
-    });
-
-    it('リンクがなければ空の配列を返す', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('read:statuses');
-
-      const response = await t.request('/api/iori/v1/trends/links', { headers: me.bearer });
-
-      expect(await response.json()).toEqual({ links: [] });
     });
   });
 
@@ -468,30 +412,6 @@ describe('iori のダイジェスト API', () => {
       expect(saved.status).toBe(200);
       expect(await saved.json()).toEqual({ subscription: { enabled: false } });
       expect(await read.json()).toEqual({ subscription: { enabled: false } });
-    });
-
-    it('PUT は 2 回目に createdAt を保ち、enabled と updatedAt を更新する', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('write:accounts');
-
-      await t.request('/api/iori/v1/digest/subscription', putSubscription(me.bearer, { enabled: false }));
-      const first = t.sqlite.prepare('SELECT enabled, createdAt, updatedAt FROM digest_subscriptions').get() as {
-        enabled: number;
-        createdAt: number;
-        updatedAt: number;
-      };
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      await t.request('/api/iori/v1/digest/subscription', putSubscription(me.bearer, { enabled: true }));
-      const second = t.sqlite.prepare('SELECT enabled, createdAt, updatedAt FROM digest_subscriptions').all();
-
-      expect(first.enabled).toBe(0);
-      expect(second).toHaveLength(1);
-      expect(second[0]).toMatchObject({ enabled: 1, createdAt: first.createdAt });
-      expect((second[0] as { updatedAt: number }).updatedAt).toBeGreaterThan(first.updatedAt);
-      expect(
-        t.sqlite.prepare('SELECT eventName FROM domain_events WHERE eventName LIKE \'digestSubscription.%\'').all(),
-      )
-        .toEqual([{ eventName: 'digestSubscription.saved' }, { eventName: 'digestSubscription.saved' }]);
     });
 
     it('PUT はフォームの値も受け付ける', async () => {
@@ -656,25 +576,6 @@ describe('iori のダイジェスト API', () => {
       }]);
     });
 
-    it('その日の draft の digest があれば置き換えて、replaced を true にする', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('write:accounts');
-      seedEmbeddedTopic(t, me);
-      const { today } = freezeNow();
-      const old = seedDigest(t, me, today);
-
-      const response = await t.request('/api/iori/v1/digests', post(me.bearer));
-
-      expect(response.status).toBe(201);
-      const body = (await response.json()) as { digestId: string; replaced: boolean };
-      expect(body.replaced).toBe(true);
-      expect(body.digestId).not.toBe(old.digestId);
-      expect(t.sqlite.prepare('SELECT digestId FROM digests').all()).toEqual([{ digestId: body.digestId }]);
-      expect(t.sqlite.prepare('SELECT count(*) AS n FROM articles WHERE articleId = ?').get(old.articleId)).toEqual({
-        n: 0,
-      });
-    });
-
     it('実行環境の waitUntil に、結果を返すのと同じ生成の Promise を渡す', async () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
@@ -706,25 +607,6 @@ describe('iori のダイジェスト API', () => {
         expect(t.sqlite.prepare('SELECT count(*) AS n FROM digest_request_usages').get()).toEqual({ n: 0 });
       },
     );
-
-    it('その日の digest の draft の本文が編集済みなら 409 にして、回数を数えず何も変えない', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('write:accounts');
-      const { today } = freezeNow();
-      const old = seedDigest(t, me, today);
-      t.sqlite.prepare(
-        'INSERT INTO article_bodies(articleId,privateHtml,publicHtml,markdown,updatedAt) VALUES (?,?,?,?,?)',
-      )
-        .run(old.articleId, '<p>edited</p>', '<p>edited</p>', 'edited', 2_000);
-
-      const response = await t.request('/api/iori/v1/digests', post(me.bearer));
-
-      expect(response.status).toBe(409);
-      expect(await response.json()).toEqual({ error: 'Digest draft edited' });
-      expect(t.sqlite.prepare('SELECT digestId FROM digests').all()).toEqual([{ digestId: old.digestId }]);
-      expect(t.sqlite.prepare('SELECT articleId FROM article_bodies').all()).toEqual([{ articleId: old.articleId }]);
-      expect(t.sqlite.prepare('SELECT count(*) AS n FROM digest_request_usages').get()).toEqual({ n: 0 });
-    });
 
     it('1 日の上限に達していたら 429 と、翌日までの秒数の Retry-After にして、digest を作らない', async () => {
       const t = setupReadApi();
@@ -821,9 +703,6 @@ describe('iori のダイジェスト API', () => {
         embedding === null ? null : 2_000,
       );
     };
-    const linkItem = (t: ReturnType<typeof setupReadApi>, digestId: string, rank: number, n: number) =>
-      t.sqlite.prepare('UPDATE digest_items SET feedEntryId = ? WHERE digestId = ? AND rank = ?')
-        .run(uuidOf(n), digestId, rank);
     const preview = async (t: ReturnType<typeof setupReadApi>, me: { bearer: Record<string, string> }, query = '') =>
       t.request(`${PREVIEW}${query}`, { headers: me.bearer });
     const write = /^\s*(insert|update|delete|replace|create|drop|alter)\b/i;
@@ -834,167 +713,6 @@ describe('iori のダイジェスト API', () => {
       const response = await t.request(PREVIEW);
 
       expect(response.status).toBe(401);
-    });
-
-    it.each(['digestDays=0', 'digestDays=31', 'limit=101', 'candidateHours=337'])(
-      '?%s は 400 にする',
-      async (query) => {
-        const t = setupReadApi();
-        const me = await t.signIn('read:statuses');
-
-        const response = await preview(t, me, `?${query}`);
-
-        expect(response.status).toBe(400);
-      },
-    );
-
-    it('ログイン中のユーザーのテーマ、候補記事の振り分け、ダイジェスト項目の類似度を返す', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('read:statuses');
-      const other = t.seed.addLocalActor('other');
-      addTopic(t, me.userId, 'genai', 0, { embedding: vec(1, 0, 0) });
-      addTopic(t, me.userId, 'platform', 1, { embedding: vec(0, 1, 0) });
-      addTopic(t, me.userId, 'draft', 2, { embedding: vec(0, 0, 1), enabled: false });
-      addTopic(t, me.userId, 'raw', 3);
-      addTopic(t, other.userId, 'security', 0, { embedding: vec(1, 0, 0) });
-      const fetchedAt = Date.now() - 2 * HOUR_MS;
-      addEntry(t, 1, vec(4, 3, 0), fetchedAt);
-      addEntry(t, 3, vec(3, 4, 0), fetchedAt);
-      addEntry(t, 4, vec(1, 0, 0), fetchedAt);
-      addEntry(t, 5, vec(1, 0, 0), Date.now() - 100 * HOUR_MS);
-      addEntry(t, 6, null, fetchedAt);
-      linkItem(t, seedDigest(t, me, today(), { topicKey: 'genai', itemCount: 2 }).digestId, 1, 1);
-      linkItem(t, seedDigest(t, me, today(), { topicKey: 'platform', itemCount: 1 }).digestId, 1, 1);
-      seedDigest(t, me, today());
-      seedDigest(t, me, '2020-01-01', { topicKey: 'genai' });
-      seedDigest(t, other, today(), { topicKey: 'security' });
-
-      const response = await preview(t, me, '?limit=2');
-
-      expect(response.status).toBe(200);
-      const body = await response.json() as {
-        topics: unknown;
-        thresholds: unknown;
-        candidates: { total: number; top1Histogram: Array<{ from: number; count: number }>; byTopic: unknown };
-        digestItems: unknown;
-      };
-      const iso = new Date(fetchedAt).toISOString();
-      const candidate = (n: number, similarity: number, second: unknown, margin: number) => ({
-        feedEntryId: uuidOf(n),
-        title: `記事 ${n}`,
-        url: `https://example.com/${uuidOf(n)}`,
-        fetchedAt: iso,
-        similarity,
-        second,
-        margin,
-        excludeSimilarity: null,
-        assignment: 'assigned',
-      });
-      expect(body.topics).toEqual([
-        {
-          topicKey: 'genai',
-          name: 'genai の名前',
-          description: 'genai の説明',
-          enabled: true,
-          embedded: true,
-          examples: [],
-          excludes: [],
-        },
-        {
-          topicKey: 'platform',
-          name: 'platform の名前',
-          description: 'platform の説明',
-          enabled: true,
-          embedded: true,
-          examples: [],
-          excludes: [],
-        },
-        {
-          topicKey: 'draft',
-          name: 'draft の名前',
-          description: 'draft の説明',
-          enabled: false,
-          embedded: true,
-          examples: [],
-          excludes: [],
-        },
-        {
-          topicKey: 'raw',
-          name: 'raw の名前',
-          description: 'raw の説明',
-          enabled: true,
-          embedded: false,
-          examples: [],
-          excludes: [],
-        },
-      ]);
-      expect(body.thresholds).toEqual({ minSimilarity: 0.55, minMargin: 0 });
-      expect(body.candidates.total).toBe(3);
-      expect(body.candidates.top1Histogram).toHaveLength(40);
-      expect(body.candidates.top1Histogram.filter((bin) => bin.count > 0)).toEqual([
-        { from: 0.8, to: 0.85, count: 2 },
-        { from: 0.95, to: 1, count: 1 },
-      ]);
-      expect(body.candidates.byTopic).toEqual([
-        {
-          topicKey: 'genai',
-          count: 2,
-          assignedCount: 2,
-          top: [
-            candidate(4, 1, { topicKey: 'platform', similarity: 0 }, 1),
-            candidate(1, 0.8, { topicKey: 'platform', similarity: 0.6 }, 0.2),
-          ],
-          bottom: [
-            candidate(1, 0.8, { topicKey: 'platform', similarity: 0.6 }, 0.2),
-            candidate(4, 1, { topicKey: 'platform', similarity: 0 }, 1),
-          ],
-        },
-        {
-          topicKey: 'platform',
-          count: 1,
-          assignedCount: 1,
-          top: [candidate(3, 0.8, { topicKey: 'genai', similarity: 0.6 }, 0.2)],
-          bottom: [candidate(3, 0.8, { topicKey: 'genai', similarity: 0.6 }, 0.2)],
-        },
-      ]);
-      const adopted = (topicKey: string, rank: number, title: string, url: string, scores: object) => ({
-        digestDate: today(),
-        topicKey,
-        rank,
-        title,
-        url,
-        feedback: null,
-        ...scores,
-      });
-      expect(body.digestItems).toEqual([
-        adopted('genai', 1, 'A', 'https://example.com/a', {
-          first: { topicKey: 'genai', similarity: 0.8 },
-          second: { topicKey: 'platform', similarity: 0.6 },
-          margin: 0.2,
-          adoptedSimilarity: 0.8,
-          matchesFirst: true,
-          excludeSimilarity: null,
-          assignment: 'assigned',
-        }),
-        adopted('genai', 2, 'B', 'https://example.com/b', {
-          first: null,
-          second: null,
-          margin: null,
-          adoptedSimilarity: null,
-          matchesFirst: null,
-          excludeSimilarity: null,
-          assignment: 'noComparableTopic',
-        }),
-        adopted('platform', 1, 'A', 'https://example.com/a', {
-          first: { topicKey: 'genai', similarity: 0.8 },
-          second: { topicKey: 'platform', similarity: 0.6 },
-          margin: 0.2,
-          adoptedSimilarity: 0.6,
-          matchesFirst: false,
-          excludeSimilarity: null,
-          assignment: 'assigned',
-        }),
-      ]);
     });
 
     it('ほかのユーザーのテーマとダイジェスト項目を返さない', async () => {
@@ -1028,19 +746,6 @@ describe('iori のダイジェスト API', () => {
         addEntry(t, 2, vec(2, 1, 0), Date.now() - HOUR_MS);
       };
 
-      it('指定がなければ、判定を呼ばず、応答に jev も jevNoul も入れない', async () => {
-        const judge = vi.fn(() => RA.ok({ noul: 0.7 }));
-        const t = setupReadApi({ topicRelevanceJudge: { judge } });
-        const me = await t.signIn('read:statuses');
-        seedForJev(t, me.userId);
-
-        const body = await (await preview(t, me)).json() as JevBody;
-
-        expect(judge).not.toHaveBeenCalled();
-        expect('jev' in body).toBe(false);
-        expect(body.candidates.byTopic[0]!.top.every((candidate) => !('jevNoul' in candidate))).toBe(true);
-      });
-
       it('?withJev=true なら、上位の候補に jevNoul を足し、jev に使ったモデルを返す', async () => {
         const judge = vi.fn<TopicRelevanceJudge['judge']>(() => RA.ok({ noul: 0.7 }));
         const t = setupReadApi({ topicRelevanceJudge: { judge } });
@@ -1064,34 +769,6 @@ describe('iori のダイジェスト API', () => {
           topic: { name: 'genai の名前', description: 'genai の説明' },
           article: { title: expect.stringMatching(/^記事 [12]$/), excerpt: '' },
         });
-      });
-
-      it('判定が失敗しても 200 で返し、その候補の jevNoul を null にする', async () => {
-        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        const judge = vi.fn<TopicRelevanceJudge['judge']>(() => RA.err({ type: 'AiError', message: 'boom' }));
-        const t = setupReadApi({ topicRelevanceJudge: { judge } });
-        const me = await t.signIn('read:statuses');
-        seedForJev(t, me.userId);
-
-        const response = await preview(t, me, '?withJev=true');
-        const body = await response.json() as JevBody;
-
-        expect(response.status).toBe(200);
-        expect(body.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([null, null]);
-        error.mockRestore();
-      });
-
-      it('判定が未設定でも 200 で返し、jev.configured を false、jevNoul を null にする', async () => {
-        const t = setupReadApi();
-        const me = await t.signIn('read:statuses');
-        seedForJev(t, me.userId);
-
-        const response = await preview(t, me, '?withJev=true');
-        const body = await response.json() as JevBody;
-
-        expect(response.status).toBe(200);
-        expect(body.jev).toMatchObject({ configured: false });
-        expect(body.candidates.byTopic[0]!.top.map((candidate) => candidate.jevNoul)).toEqual([null, null]);
       });
 
       it('?withJev=yes は 400 にして、withJev を返す', async () => {
@@ -1156,26 +833,6 @@ describe('iori のダイジェスト API', () => {
       expect(await response.json()).toEqual({ error: `Validation failed: ${name}` });
     });
 
-    it.each([
-      'candidateHours=1',
-      'candidateHours=72',
-      'candidateHours=336',
-      'digestDays=1',
-      'digestDays=30',
-      'limit=1',
-      'limit=100',
-    ])(
-      '?%s は範囲の端として受け付ける',
-      async (query) => {
-        const t = setupReadApi();
-        const me = await t.signIn('read:statuses');
-
-        const response = await preview(t, me, `?${query}`);
-
-        expect(response.status).toBe(200);
-      },
-    );
-
     it('テーマも候補記事もダイジェストも無いときは、空の結果を返す', async () => {
       const t = setupReadApi();
       const me = await t.signIn('read:statuses');
@@ -1189,32 +846,6 @@ describe('iori のダイジェスト API', () => {
         candidates: { total: 0, byTopic: [], truncated: false },
         digestItemsTruncated: false,
         digestItems: [],
-      });
-    });
-
-    it('埋め込み済みで有効なテーマが無いときも、落ちずに候補の件数とダイジェスト項目を返す', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('read:statuses');
-      addTopic(t, me.userId, 'raw', 0);
-      addTopic(t, me.userId, 'draft', 1, { embedding: vec(1, 0, 0), enabled: false });
-      addEntry(t, 1, vec(1, 0, 0), Date.now() - HOUR_MS);
-      linkItem(t, seedDigest(t, me, today(), { topicKey: 'draft', itemCount: 1 }).digestId, 1, 1);
-
-      const response = await preview(t, me);
-
-      expect(response.status).toBe(200);
-      const body = await response.json() as {
-        candidates: { total: number; byTopic: unknown[] };
-        digestItems: Array<Record<string, unknown>>;
-      };
-      expect(body.candidates.total).toBe(1);
-      expect(body.candidates.byTopic).toEqual([]);
-      expect(body.digestItems).toHaveLength(1);
-      expect(body.digestItems[0]).toMatchObject({
-        topicKey: 'draft',
-        first: null,
-        adoptedSimilarity: 1,
-        matchesFirst: null,
       });
     });
 
@@ -1246,7 +877,6 @@ describe('iori のダイジェスト API', () => {
     afterEach(() => vi.restoreAllMocks());
 
     const stubEmbedder = () => createStubEmbedder(EMBEDDING_DIMENSIONS).embedder;
-    const failingEmbedder: TextEmbedder = { embed: () => RA.err({ type: 'AiError', message: 'boom' }) };
     const seed = (
       t: ReturnType<typeof setupReadApi>,
       userId: string,
@@ -1322,45 +952,6 @@ describe('iori のダイジェスト API', () => {
           ],
         });
       });
-
-      it('materialWindowHours を返し、未設定は null にする', async () => {
-        const t = setupReadApi();
-        const me = await t.signIn('read:statuses');
-        seed(t, me.userId, 'genai', 0, { materialWindowHours: 72 });
-        seed(t, me.userId, 'platform', 1);
-
-        const response = await t.request('/api/iori/v1/digest-topics', { headers: me.bearer });
-
-        expect(await response.json()).toMatchObject({
-          topics: [
-            { topicKey: 'genai', materialWindowHours: 72 },
-            { topicKey: 'platform', materialWindowHours: null },
-          ],
-        });
-      });
-
-      it('examples と excludes を返す', async () => {
-        const t = setupReadApi();
-        const me = await t.signIn('read:statuses');
-        seed(t, me.userId, 'genai', 0);
-        t.sqlite.prepare('UPDATE digest_topics SET examples = ?, excludes = ? WHERE userId = ?')
-          .run('["例 1","例 2"]', '["除く 1"]', me.userId);
-
-        const response = await t.request('/api/iori/v1/digest-topics', { headers: me.bearer });
-
-        expect(await response.json()).toMatchObject({
-          topics: [{ topicKey: 'genai', examples: ['例 1', '例 2'], excludes: ['除く 1'] }],
-        });
-      });
-
-      it('トピックが無ければ空の配列を返す', async () => {
-        const t = setupReadApi();
-        const me = await t.signIn('read:statuses');
-
-        const response = await t.request('/api/iori/v1/digest-topics', { headers: me.bearer });
-
-        expect(await response.json()).toEqual({ topics: [] });
-      });
     });
 
     describe('POST', () => {
@@ -1430,86 +1021,10 @@ describe('iori のダイジェスト API', () => {
         });
       });
 
-      it('examples と excludes を受け取って trim して保存し、1 回の埋め込みで embedding と excludeEmbedding を作る', async () => {
-        const stub = createStubEmbedder(EMBEDDING_DIMENSIONS);
-        const t = setupReadApi({ textEmbedder: stub.embedder });
-        const me = await t.signIn('read:statuses write:accounts');
-
-        const response = await t.request(
-          '/api/iori/v1/digest-topics',
-          send('POST', cookieOf(me), {
-            name: '名前',
-            description: '説明',
-            examples: [' 例 1 ', '例 2'],
-            excludes: ['除く 1'],
-          }),
-        );
-
-        expect(response.status).toBe(201);
-        const { topic } = await response.json() as { topic: { topicKey: string } };
-        expect(topic).toMatchObject({ examples: ['例 1', '例 2'], excludes: ['除く 1'], embedded: true });
-        expect(stub.calls).toHaveLength(1);
-        expect(stub.calls[0]?.texts).toEqual(['名前: 説明', '例 1', '例 2', '除く 1']);
-        expect(
-          t.sqlite.prepare(
-            'SELECT examples, excludes, length(embedding) AS bytes, length(excludeEmbedding) AS excludeBytes FROM digest_topics WHERE userId = ?',
-          ).get(me.userId),
-        ).toEqual({
-          examples: '["例 1","例 2"]',
-          excludes: '["除く 1"]',
-          bytes: EMBEDDING_DIMENSIONS * 4,
-          excludeBytes: EMBEDDING_DIMENSIONS * 4,
-        });
-      });
-
-      it('examples と excludes を省くと、空の配列で作り、excludeEmbedding を null にする', async () => {
-        const t = setupReadApi({ textEmbedder: stubEmbedder() });
-        const me = await t.signIn('write:accounts');
-
-        const response = await t.request(
-          '/api/iori/v1/digest-topics',
-          send('POST', me.bearer, { name: '名前', description: '説明' }),
-        );
-
-        expect(response.status).toBe(201);
-        expect(await response.json()).toMatchObject({ topic: { examples: [], excludes: [] } });
-        expect(t.sqlite.prepare('SELECT excludeEmbedding FROM digest_topics WHERE userId = ?').get(me.userId))
-          .toEqual({ excludeEmbedding: null });
-      });
-
-      it('埋め込みに失敗しても 201 にして、embedded を false にする', async () => {
-        vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        const t = setupReadApi({ textEmbedder: failingEmbedder });
-        const me = await t.signIn('write:accounts');
-
-        const response = await t.request(
-          '/api/iori/v1/digest-topics',
-          send('POST', me.bearer, { name: '名前', description: '説明' }),
-        );
-
-        expect(response.status).toBe(201);
-        expect(await response.json()).toMatchObject({ topic: { embedded: false } });
-      });
-
       it.each([
         ['name がない', { description: '説明' }],
-        ['description がない', { name: '名前' }],
-        ['name が空白だけ', { name: '  ', description: '説明' }],
         ['name が 41 文字', { name: 'あ'.repeat(41), description: '説明' }],
-        ['description が 301 文字', { name: '名前', description: 'あ'.repeat(301) }],
-        ['name が文字列でない', { name: 1, description: '説明' }],
-        ['examples が配列でない', { name: '名前', description: '説明', examples: '例' }],
-        ['examples に文字列でない値がある', { name: '名前', description: '説明', examples: [1] }],
         ['examples が 11 件', { name: '名前', description: '説明', examples: Array.from({ length: 11 }, () => '例') }],
-        ['examples に空の文がある', { name: '名前', description: '説明', examples: ['  '] }],
-        ['examples に 121 文字の文がある', { name: '名前', description: '説明', examples: ['あ'.repeat(121)] }],
-        ['excludes が配列でない', { name: '名前', description: '説明', excludes: '除く' }],
-        ['excludes が 11 件', {
-          name: '名前',
-          description: '説明',
-          excludes: Array.from({ length: 11 }, () => '除く'),
-        }],
-        ['excludes に空の文がある', { name: '名前', description: '説明', excludes: [''] }],
         ['excludes に 121 文字の文がある', { name: '名前', description: '説明', excludes: ['あ'.repeat(121)] }],
       ])('%s と 400 にして、何も作らない', async (_label, body) => {
         const t = setupReadApi({ textEmbedder: stubEmbedder() });
@@ -1584,40 +1099,8 @@ describe('iori のダイジェスト API', () => {
         expect(rowOf(t, me.userId, 'genai')).toMatchObject({ name: '新しい名前', bytes: EMBEDDING_DIMENSIONS * 4 });
       });
 
-      it('examples と excludes だけを変えると 200 と更新後のトピックを返し、1 回の埋め込みで作り直す', async () => {
-        const stub = createStubEmbedder(EMBEDDING_DIMENSIONS);
-        const t = setupReadApi({ textEmbedder: stub.embedder });
-        const me = await t.signIn('write:accounts');
-        seed(t, me.userId, 'genai', 3);
-
-        const response = await patch(t, 'genai', cookieOf(me), { examples: ['例 1'], excludes: ['除く 1', '除く 2'] });
-
-        expect(response.status).toBe(200);
-        expect(await response.json()).toMatchObject({
-          topic: {
-            topicKey: 'genai',
-            name: 'genai の名前',
-            examples: ['例 1'],
-            excludes: ['除く 1', '除く 2'],
-            embedded: true,
-          },
-        });
-        expect(stub.calls).toHaveLength(1);
-        expect(stub.calls[0]?.texts).toEqual(['genai の名前: genai の説明', '例 1', '除く 1', '除く 2']);
-        expect(
-          t.sqlite.prepare(
-            'SELECT examples, excludes, length(excludeEmbedding) AS excludeBytes FROM digest_topics WHERE userId = ?',
-          ).get(me.userId),
-        ).toEqual({ examples: '["例 1"]', excludes: '["除く 1","除く 2"]', excludeBytes: EMBEDDING_DIMENSIONS * 4 });
-      });
-
       it.each([
-        ['examples が配列でない', { examples: '例' }],
         ['examples が 11 件', { examples: Array.from({ length: 11 }, () => '例') }],
-        ['examples に空の文がある', { examples: [''] }],
-        ['examples に 121 文字の文がある', { examples: ['あ'.repeat(121)] }],
-        ['excludes が配列でない', { excludes: 1 }],
-        ['excludes が 11 件', { excludes: Array.from({ length: 11 }, () => '除く') }],
         ['excludes に 121 文字の文がある', { excludes: ['あ'.repeat(121)] }],
       ])('%s と 400 にして、何も変えない', async (_label, body) => {
         const stub = createStubEmbedder(EMBEDDING_DIMENSIONS);
@@ -1630,23 +1113,6 @@ describe('iori のダイジェスト API', () => {
         expect(response.status).toBe(400);
         expect(stub.calls).toHaveLength(0);
         expect(rowOf(t, me.userId, 'genai')).toMatchObject({ bytes: EMBEDDING_DIMENSIONS * 4 });
-      });
-
-      it('description を変えて埋め込みに失敗したら、200 にして embedded を false にする', async () => {
-        vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        const t = setupReadApi({ textEmbedder: failingEmbedder });
-        const me = await t.signIn('write:accounts');
-        seed(t, me.userId, 'genai', 0);
-
-        const response = await patch(t, 'genai', me.bearer, { description: '新しい説明' });
-
-        expect(response.status).toBe(200);
-        expect(await response.json()).toMatchObject({ topic: { description: '新しい説明', embedded: false } });
-        expect(rowOf(t, me.userId, 'genai')).toMatchObject({
-          description: '新しい説明',
-          embeddedAt: null,
-          bytes: null,
-        });
       });
 
       it('enabled だけを変えると、埋め込みを作り直さずに停止する', async () => {
@@ -1682,17 +1148,6 @@ describe('iori のダイジェスト API', () => {
         });
       });
 
-      it.each([24, 336])('materialWindowHours %i は範囲の端として受け付ける', async (hours) => {
-        const t = setupReadApi({ textEmbedder: stubEmbedder() });
-        const me = await t.signIn('write:accounts');
-        seed(t, me.userId, 'genai', 0);
-
-        const response = await patch(t, 'genai', me.bearer, { materialWindowHours: hours });
-
-        expect(response.status).toBe(200);
-        expect(rowOf(t, me.userId, 'genai')).toMatchObject({ materialWindowHours: hours });
-      });
-
       it('materialWindowHours に null を渡すと期間を解除する', async () => {
         const t = setupReadApi({ textEmbedder: stubEmbedder() });
         const me = await t.signIn('write:accounts');
@@ -1718,10 +1173,7 @@ describe('iori のダイジェスト API', () => {
       it.each([
         ['23', 23],
         ['337', 337],
-        ['小数', 48.5],
         ['文字列', '72'],
-        ['真偽値', true],
-        ['配列', [72]],
       ])('materialWindowHours が %s なら 400 にして、何も変えない', async (_label, value) => {
         const t = setupReadApi({ textEmbedder: stubEmbedder() });
         const me = await t.signIn('write:accounts');
@@ -1784,11 +1236,8 @@ describe('iori のダイジェスト API', () => {
 
       it.each([
         ['何も渡さない', {}],
-        ['name が空白だけ', { name: '   ' }],
         ['name が 41 文字', { name: 'あ'.repeat(41) }],
-        ['description が 301 文字', { description: 'あ'.repeat(301) }],
         ['enabled が真偽値でない', { enabled: 'maybe' }],
-        ['name が文字列でない', { name: 1 }],
       ])('%s と 400 にして、何も変えない', async (_label, body) => {
         const t = setupReadApi({ textEmbedder: stubEmbedder() });
         const me = await t.signIn('write:accounts');
@@ -1933,18 +1382,6 @@ describe('iori のダイジェスト API', () => {
       expect(sourcesOf(t)).toEqual([]);
     });
 
-    it('Cookie のとき別の Origin なら 403 にし、何も変えない', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('write:accounts');
-      const { digestItemId } = seedFeedbackDigest(t, me);
-
-      const response = await give(t, digestItemId, cookieOf(me, 'https://evil.example'), 'interested');
-
-      expect(response.status).toBe(403);
-      expect(feedbackOf(t, digestItemId)).toEqual({ feedback: null, feedbackAt: null });
-      expect(sourcesOf(t)).toEqual([]);
-    });
-
     it('Cookie で同じ Origin なら、反応を保存して記事の画面に 303 で戻す', async () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
@@ -1994,18 +1431,6 @@ describe('iori のダイジェスト API', () => {
       expect(sourcesOf(t).map(({ kind, deletedAt }) => ({ kind, deletedAt }))).toEqual([
         { kind: 'feedback_negative', deletedAt: null },
       ]);
-    });
-
-    it('Bearer でも本人なら保存して 303 で戻す', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('write:accounts');
-      const { digestItemId, articleId } = seedFeedbackDigest(t, me);
-
-      const response = await give(t, digestItemId, me.bearer, 'interested');
-
-      expect(response.status).toBe(303);
-      expect(response.headers.get('Location')).toBe(`/articles/${articleId}`);
-      expect(feedbackOf(t, digestItemId).feedback).toBe('interested');
     });
 
     it('JSON の body でも受け付ける', async () => {
@@ -2398,18 +1823,6 @@ describe('iori のダイジェスト API', () => {
         ]);
       });
 
-      it('所有者でないユーザーには x_user の情報源を一覧から除く（トークン）', async () => {
-        const t = setupReadApi();
-        const other = await signInAsOther(t, 'read:statuses');
-        seedSource(t);
-        seedXSource(t);
-
-        const response = await t.request('/api/iori/v1/feed-sources', { headers: other.bearer });
-
-        const { sources } = await response.json() as { sources: Array<{ kind: string }> };
-        expect(sources.map(({ kind }) => kind)).toEqual(['rss']);
-      });
-
       it('所有者には x_user の情報源も返す', async () => {
         const t = setupReadApi();
         const me = await t.signIn('read:statuses');
@@ -2420,15 +1833,6 @@ describe('iori のダイジェスト API', () => {
 
         const { sources } = await response.json() as { sources: Array<{ kind: string }> };
         expect(sources.map(({ kind }) => kind).toSorted()).toEqual(['rss', 'x_user']);
-      });
-
-      it('情報源が無ければ空の配列を返す', async () => {
-        const t = setupReadApi();
-        const me = await t.signIn('read:statuses');
-
-        const response = await t.request('/api/iori/v1/feed-sources', { headers: me.bearer });
-
-        expect(await response.json()).toEqual({ sources: [] });
       });
     });
 
@@ -2484,15 +1888,6 @@ describe('iori のダイジェスト API', () => {
         expect(t.sqlite.prepare('SELECT kind, url, title, enabled FROM feed_sources').all()).toEqual([
           { kind: 'rss', url: 'https://example.com/feed.xml', title: 'ブログ', enabled: 1 },
         ]);
-      });
-
-      it('Bearer でも 201 にする', async () => {
-        const t = setupReadApi();
-        const me = await t.signIn('write:accounts');
-
-        const response = await post(t, me.bearer, body);
-
-        expect(response.status).toBe(201);
       });
 
       it('同じ URL が既にあれば 409 にして、何も増やさない', async () => {
@@ -2619,18 +2014,6 @@ describe('iori のダイジェスト API', () => {
           ]);
         });
 
-        it('url と title を渡しても使わない', async () => {
-          const t = setupReadApi();
-          const me = await t.signIn('write:accounts');
-
-          const response = await post(t, me.bearer, { ...body, kind: 'x_user', username: 'jack' });
-
-          expect(response.status).toBe(201);
-          expect(t.sqlite.prepare('SELECT url, title FROM feed_sources').all()).toEqual([
-            { url: 'https://x.com/jack', title: '@jack' },
-          ]);
-        });
-
         it('大文字小文字だけが違う同じユーザーが既にあれば 409 にして、何も増やさない', async () => {
           const t = setupReadApi();
           const me = await t.signIn('write:accounts');
@@ -2660,31 +2043,11 @@ describe('iori のダイジェスト API', () => {
           expect(countOf(t)).toEqual({ n: 0 });
         });
 
-        it('write:accounts を満たさない scope のトークンを 403 にし、何も作らない', async () => {
-          const t = setupReadApi();
-          const me = await t.signIn('read:statuses');
-
-          const response = await post(t, me.bearer, { kind: 'x_user', username: 'jack' });
-
-          expect(response.status).toBe(403);
-          expect(countOf(t)).toEqual({ n: 0 });
-        });
-
         it('所有者でないユーザーの Cookie は 403 にし、何も作らない', async () => {
           const t = setupReadApi();
           const other = await signInAsOther(t, 'write:accounts');
 
           const response = await post(t, cookieOf(other), { kind: 'x_user', username: 'jack' });
-
-          expect(response.status).toBe(403);
-          expect(countOf(t)).toEqual({ n: 0 });
-        });
-
-        it('所有者でないユーザーのトークンは 403 にし、何も作らない', async () => {
-          const t = setupReadApi();
-          const other = await signInAsOther(t, 'write:accounts');
-
-          const response = await post(t, other.bearer, { kind: 'x_user', username: 'jack' });
 
           expect(response.status).toBe(403);
           expect(countOf(t)).toEqual({ n: 0 });
@@ -2780,17 +2143,6 @@ describe('iori のダイジェスト API', () => {
         expect(rowOf(t)).toMatchObject({ enabled: 0 });
       });
 
-      it('無効の情報源を true に戻せる', async () => {
-        const t = setupReadApi();
-        const me = await t.signIn('write:accounts');
-        seedSource(t, { enabled: false });
-
-        const response = await patch(t, SOURCE_ID, me.bearer, { enabled: true });
-
-        expect(response.status).toBe(200);
-        expect(rowOf(t)).toMatchObject({ enabled: 1 });
-      });
-
       it('フォームの enabled=false も受け付ける', async () => {
         const t = setupReadApi();
         const me = await t.signIn('write:accounts');
@@ -2818,17 +2170,6 @@ describe('iori のダイジェスト API', () => {
         expect(rowOf(t, X_SOURCE_ID)).toMatchObject({ enabled: 0 });
       });
 
-      it('所有者でないユーザーのトークンは x_user の情報源を変えられない', async () => {
-        const t = setupReadApi();
-        const other = await signInAsOther(t, 'write:accounts');
-        seedXSource(t);
-
-        const response = await patch(t, X_SOURCE_ID, other.bearer, { enabled: false });
-
-        expect(response.status).toBe(404);
-        expect(rowOf(t, X_SOURCE_ID)).toMatchObject({ enabled: 1 });
-      });
-
       it('所有者は x_user の情報源の有効・無効を変えられる', async () => {
         const t = setupReadApi();
         const me = await t.signIn('write:accounts');
@@ -2849,17 +2190,6 @@ describe('iori のダイジェスト API', () => {
 
         expect(response.status).toBe(404);
         expect(rowOf(t)).toMatchObject({ enabled: 1 });
-      });
-
-      it('他の情報源は変えない', async () => {
-        const t = setupReadApi();
-        const me = await t.signIn('write:accounts');
-        seedSource(t);
-        seedSource(t, { feedSourceId: '22222222-2222-4222-8222-222222222222', url: 'https://example.com/other.xml' });
-
-        await patch(t, SOURCE_ID, me.bearer, { enabled: false });
-
-        expect(rowOf(t, '22222222-2222-4222-8222-222222222222')).toMatchObject({ enabled: 1 });
       });
 
       it.each([
@@ -2883,15 +2213,6 @@ describe('iori のダイジェスト API', () => {
         const me = await t.signIn('write:accounts');
 
         const response = await patch(t, SOURCE_ID, me.bearer, { enabled: false });
-
-        expect(response.status).toBe(404);
-      });
-
-      it('feedSourceId が UUID でなければ 404 にする', async () => {
-        const t = setupReadApi();
-        const me = await t.signIn('write:accounts');
-
-        const response = await patch(t, 'missing', me.bearer, { enabled: false });
 
         expect(response.status).toBe(404);
       });

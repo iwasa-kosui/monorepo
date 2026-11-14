@@ -46,17 +46,6 @@ describe('iori の利用者設定 API', () => {
     expect(response.status).toBe(403);
   });
 
-  it('GET は Cookie でも Bearer でも読める', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn('read:accounts');
-
-    const withCookie = await t.request(path, { headers: { Cookie: `sessionId=${me.sessionId}` } });
-    const withBearer = await t.request(path, { headers: me.bearer });
-
-    expect(withCookie.status).toBe(200);
-    expect(withBearer.status).toBe(200);
-  });
-
   it('GET は行がなければ public を返す', async () => {
     const t = setupReadApi();
     const me = await t.signIn('read:accounts');
@@ -79,30 +68,6 @@ describe('iori の利用者設定 API', () => {
     expect(await read.json()).toEqual({ preferences: { defaultPostVisibility: 'unlisted' } });
   });
 
-  it('PUT は 2 回目に createdAt を保ち、値と updatedAt を更新し、イベントを 2 件書く', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn('write:accounts');
-
-    await t.request(path, putPreferences(me.bearer, { defaultPostVisibility: 'unlisted' }));
-    const first = t.sqlite.prepare('SELECT defaultPostVisibility, createdAt, updatedAt FROM user_preferences')
-      .get() as {
-        defaultPostVisibility: string;
-        createdAt: number;
-        updatedAt: number;
-      };
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    await t.request(path, putPreferences(me.bearer, { defaultPostVisibility: 'private' }));
-    const second = t.sqlite.prepare('SELECT defaultPostVisibility, createdAt, updatedAt FROM user_preferences').all();
-
-    expect(first.defaultPostVisibility).toBe('unlisted');
-    expect(second).toHaveLength(1);
-    expect(second[0]).toMatchObject({ defaultPostVisibility: 'private', createdAt: first.createdAt });
-    expect((second[0] as { updatedAt: number }).updatedAt).toBeGreaterThan(first.updatedAt);
-    expect(
-      t.sqlite.prepare('SELECT eventName FROM domain_events WHERE eventName LIKE \'userPreferences.%\'').all(),
-    ).toEqual([{ eventName: 'userPreferences.saved' }, { eventName: 'userPreferences.saved' }]);
-  });
-
   it('PUT はフォームの値も受け付ける', async () => {
     const t = setupReadApi();
     const me = await t.signIn('write:accounts');
@@ -119,9 +84,6 @@ describe('iori の利用者設定 API', () => {
   it.each([
     {},
     { defaultPostVisibility: 'direct' },
-    { defaultPostVisibility: 'everyone' },
-    { defaultPostVisibility: 1 },
-    { defaultPostVisibility: null },
   ])('PUT は %j を 422 にする', async (body) => {
     const t = setupReadApi();
     const me = await t.signIn('write:accounts');

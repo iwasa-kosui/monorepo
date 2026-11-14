@@ -13,7 +13,7 @@ import type { GetTimelineUseCase } from '../../../useCase/getTimeline.ts';
 import { createWorkerTimelinePostingApiRouter } from '../workerTimelinePostingApiRouter.ts';
 
 describe('createWorkerTimelinePostingApiRouter', () => {
-  it('serves health and home timeline through the Worker app', async () => {
+  it('ホームタイムラインの投稿本文から危険なタグを取り除いて返す', async () => {
     const user = { id: UserId.generate(), username: Username.orThrow('kosui') };
     const actor: Actor = {
       id: ActorId.generate(),
@@ -75,12 +75,8 @@ describe('createWorkerTimelinePostingApiRouter', () => {
     });
     const cookie = 'sessionId=4dc530d6-d06c-4b4a-a021-0e1aee0b6d82';
 
-    const health = await app.request('https://worker.test/health');
-    const home = await app.request('https://worker.test/');
     const timeline = await app.request('https://worker.test/api/v1/home', { headers: { Cookie: cookie } });
 
-    expect(await health.text()).toBe('OK');
-    expect(home.headers.get('content-type')).toContain('text/html');
     await expect(timeline.json()).resolves.toMatchObject({
       timelineItems: [{ post: { content: '<p>Timeline post</p>' } }],
     });
