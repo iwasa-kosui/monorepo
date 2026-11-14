@@ -397,6 +397,7 @@ const app = new Hono()
         emojiReactCreatedStore: PgEmojiReactCreatedStore.getInstance(),
         emojiReactResolverByActorAndPostAndEmoji: PgEmojiReactResolverByActorAndPostAndEmoji.getInstance(),
         postResolver: PgPostResolver.getInstance(),
+        origin: Env.getInstance().ORIGIN,
       });
 
       const result = await useCase.run({

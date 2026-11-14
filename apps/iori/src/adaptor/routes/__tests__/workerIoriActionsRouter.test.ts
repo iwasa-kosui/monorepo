@@ -312,6 +312,37 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
       expect(icon?.mediaType).toBeNull();
       expect(selfEmojiImageUrl(t, ':wave:')).toBe(url);
     });
+
+    it('iori が配信する :blobcat: は、投稿に同名の Emoji が無くても自前の画像を tag に付けて送る', async () => {
+      const t = await seedReactions();
+      const url = `${ORIGIN}/emoji/blobcat.png`;
+      t.serveRemoteNote(t.publicNote, [emojiTag(':blobcat:', 'https://remote.example/emoji/blobcat.png')]);
+
+      const response = await t.put(t.publicNote.postId, ':blobcat:');
+
+      expect(response.status).toBe(200);
+      expect(StatusSchema.parse(await response.json())).toMatchObject({
+        iori: { reactions: [{ emoji: ':blobcat:', count: 1, url, me: true }] },
+      });
+      const tags = await tagsOf(sentReact(t));
+      expect(tags).toHaveLength(1);
+      expect(tags[0]!.name?.toString()).toBe(':blobcat:');
+      const icon = await tags[0]!.getIcon();
+      expect(icon?.url?.toString()).toBe(url);
+      expect(icon?.mediaType).toBe('image/png');
+      expect(selfEmojiImageUrl(t, ':blobcat:')).toBe(url);
+    });
+  });
+
+  it('ローカルの投稿への :blobcat: は自前の画像の URL を付けて返す', async () => {
+    const t = await seedReactions();
+
+    const response = await t.put(t.local.postId, ':blobcat:');
+
+    expect(response.status).toBe(200);
+    expect(StatusSchema.parse(await response.json())).toMatchObject({
+      iori: { reactions: [{ emoji: ':blobcat:', count: 1, url: `${ORIGIN}/emoji/blobcat.png`, me: true }] },
+    });
   });
 
   it('リモートの投稿を取得できないときは 502 にする', async () => {
