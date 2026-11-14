@@ -25,8 +25,7 @@ const account = (overrides: Partial<Account> = {}): Account =>
     ...overrides,
   }) as Account;
 
-const render = (a: Account, overrides: Partial<Parameters<typeof RemoteUserPage>[0]> = {}): string =>
-  String(jsx(RemoteUserPage, {
+const renderProps = (a: Account) => ({
     account: a,
     statuses: [],
     isFollowing: false,
@@ -49,8 +48,10 @@ const render = (a: Account, overrides: Partial<Parameters<typeof RemoteUserPage>
     isReportOpen: false,
     isReporting: false,
     isReported: false,
-    ...overrides,
-  }));
+});
+
+const render = (a: Account, overrides: Partial<Parameters<typeof RemoteUserPage>[0]> = {}): string =>
+  String(jsx(RemoteUserPage, { ...renderProps(a), ...overrides }));
 
 describe('RemoteUserPage profile', () => {
   it('shows the display name with the handle below it', () => {
@@ -243,5 +244,40 @@ describe('RemoteUserPage message button', () => {
     expect(opening).toMatch(/disabled[^>]*title="メッセージ"|title="メッセージ"[^>]*disabled/);
     expect(failed).toContain('role="alert"');
     expect(failed).toContain('この相手のアカウントが見つかりません。');
+  });
+});
+
+describe('RemoteUserPage follow list tabs', () => {
+  it('ログインしていればフォローとフォロワーのタブを出し、選んでいるタブを示す', () => {
+    const html = render(account(), { isLoggedIn: true, tab: 'followers', onSelectTab: () => {} });
+
+    expect(html).toContain('フォロワー</button>');
+    expect(html).toMatch(/aria-pressed="true"[^>]*>フォロワー<\/button>/);
+    expect(html).toMatch(/aria-pressed="false"[^>]*>フォロー<\/button>/);
+  });
+
+  it('ログインしていなければタブを出さない', () => {
+    const html = render(account(), { isLoggedIn: false, onSelectTab: () => {} });
+
+    expect(html).not.toContain('フォロワー</button>');
+  });
+
+  it('一覧のタブでは投稿の代わりに見出しと一覧を出す', () => {
+    const html = String(jsx(RemoteUserPage, {
+      ...renderProps(account()),
+      isLoggedIn: true,
+      tab: 'following',
+      onSelectTab: () => {},
+      children: jsx('p', {}, 'follow-list-body'),
+    }));
+
+    expect(html).toContain('follow-list-body');
+    expect(html).not.toContain('No posts yet.');
+  });
+
+  it('投稿のタブでは一覧を出さない', () => {
+    const html = render(account(), { isLoggedIn: true, tab: 'posts', onSelectTab: () => {} });
+
+    expect(html).toContain('No posts yet.');
   });
 });
