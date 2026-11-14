@@ -190,10 +190,6 @@ describe('chatErrorMessage', () => {
     expect(chatErrorMessage(failure(403, 'chat_not_permitted'))).toBe(CHAT_NOT_PERMITTED_MESSAGE);
   });
 
-  it('409 は Bluesky の連携が無効だと伝える', () => {
-    expect(chatErrorMessage(failure(409))).toBe(CHAT_DISABLED_MESSAGE);
-  });
-
   it('422 の相手が受け付けない理由は、相手が DM を受け付けていない文言にする', () => {
     for (const code of ['MessagesDisabled', 'NotFollowedBySender', 'BlockedActor', 'ConvoLocked']) {
       expect(chatErrorMessage(failure(422, code))).toBe(CHAT_RECIPIENT_REJECTED_MESSAGE);

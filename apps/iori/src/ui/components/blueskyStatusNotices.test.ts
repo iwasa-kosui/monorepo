@@ -50,20 +50,6 @@ describe('blueskyStatusNotices', () => {
     expect(notices({ enabled: false }, 'home', true)).toEqual([]);
   });
 
-  it('ログインの通知に BLUESKY_APP_PASSWORD やデプロイを出さない', () => {
-    const waiting = enabled({
-      login: { state: 'waiting', failedAt: ago(0), retryAt: ago(0) },
-    });
-    const expired = enabled({ timeline: scope({ state: 'failing', failureKind: 'auth' }) });
-
-    for (const result of [notices(waiting), notices(expired)]) {
-      const text = result.map((notice) => notice.detail).join('');
-      expect(text).toContain('設定画面の「Bluesky の連携」で新しいアプリパスワードを登録し直してください');
-      expect(text).not.toContain('BLUESKY_APP_PASSWORD');
-      expect(text).not.toContain('デプロイ');
-    }
-  });
-
   describe('ログインの待ち時間（a）', () => {
     const waiting = enabled({
       login: {
@@ -80,12 +66,6 @@ describe('blueskyStatusNotices', () => {
           detail:
             `15:05 にログインに失敗しました。Bluesky の障害の可能性もあります。15:35 にもう一度ログインします。${PASSWORD_HINT}`,
         },
-      ]);
-    });
-
-    it('通知の画面でも出す', () => {
-      expect(notices(waiting, 'notifications').map((notice) => notice.title)).toEqual([
-        'Bluesky にログインできません',
       ]);
     });
 

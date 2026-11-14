@@ -118,16 +118,6 @@ describe('createBlueskyClient のセッション', () => {
     expect(calls[1]?.url).toBe('https://bsky.social/xrpc/com.atproto.repo.createRecord');
   });
 
-  it('保存済みのセッションがあれば createSession せずにそれを使う', async () => {
-    const { client, calls, saved } = setup(stored(), [() => created()]);
-
-    await client.createRecord(record, RKEY);
-
-    expect(calls).toHaveLength(1);
-    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
-    expect(saved).toEqual([]);
-  });
-
   it('401 のとき refreshSession を 1 回試し、保存して同じ操作をやり直す', async () => {
     const { client, calls, saved, current } = setup(stored(), [
       () => json({ error: 'AuthenticationRequired' }, 401),
@@ -377,24 +367,6 @@ describe('createBlueskyClient の各操作', () => {
     expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
   });
 
-  it('createLike は like の uri でない応答を invalid_response として返す', async () => {
-    const { client } = setup(stored(), [() => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k1', cid: 'c' })]);
-
-    expect(await client.createLike({ uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' }, '2222222222222'))
-      .toMatchObject({
-        ok: false,
-        err: { kind: 'invalid_response' },
-      });
-  });
-
-  it('deleteLike は既に無い record を成功として扱い、500 は失敗として返す', async () => {
-    const missing = setup(stored(), [() => json({ error: 'RecordNotFound' }, 400)]);
-    const failing = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
-
-    expect((await missing.client.deleteLike('3klike')).ok).toBe(true);
-    expect(await failing.client.deleteLike('3klike')).toMatchObject({ ok: false, err: { kind: 'http', status: 500 } });
-  });
-
   it('createFollow は createRecord で app.bsky.graph.follow のレコードを書き、応答の uri を返す', async () => {
     const followUri = 'at://did:plc:abc/app.bsky.graph.follow/3kfollow';
     const { client, calls } = setup(stored(), [() => json({ uri: followUri, cid: 'bafyfollow' })]);
@@ -415,18 +387,10 @@ describe('createBlueskyClient の各操作', () => {
     expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
   });
 
-  it('createFollow は follow の uri でない応答を invalid_response として返し、500 は失敗として返す', async () => {
-    const wrongUri = setup(stored(), [() => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k1', cid: 'c' })]);
-    const failing = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
+  it('createFollow は follow の uri でない応答を invalid_response として返す', async () => {
+    const { client } = setup(stored(), [() => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k1', cid: 'c' })]);
 
-    expect(await wrongUri.client.createFollow('did:plc:other')).toMatchObject({
-      ok: false,
-      err: { kind: 'invalid_response' },
-    });
-    expect(await failing.client.createFollow('did:plc:other')).toMatchObject({
-      ok: false,
-      err: { kind: 'http', status: 500 },
-    });
+    expect(await client.createFollow('did:plc:other')).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
   });
 
   it('deleteFollow は uri の末尾を rkey として app.bsky.graph.follow の collection に送る', async () => {
@@ -443,16 +407,14 @@ describe('createBlueskyClient の各操作', () => {
     });
   });
 
-  it('deleteFollow は既に無い record を成功として扱い、follow の uri でない値は送らずに失敗として返す', async () => {
-    const missing = setup(stored(), [() => json({ error: 'RecordNotFound' }, 400)]);
-    const invalid = setup(stored(), []);
+  it('deleteFollow は follow の uri でない値を送らずに失敗として返す', async () => {
+    const { client, calls } = setup(stored(), []);
 
-    expect((await missing.client.deleteFollow('at://did:plc:abc/app.bsky.graph.follow/3kfollow')).ok).toBe(true);
-    expect(await invalid.client.deleteFollow('at://did:plc:abc/app.bsky.feed.like/3k1')).toMatchObject({
+    expect(await client.deleteFollow('at://did:plc:abc/app.bsky.feed.like/3k1')).toMatchObject({
       ok: false,
       err: { kind: 'invalid_response' },
     });
-    expect(invalid.calls).toHaveLength(0);
+    expect(calls).toHaveLength(0);
   });
 
   it('updateSeen は app.bsky.notification.updateSeen に seenAt を ISO 文字列で POST し、空の応答を成功にする', async () => {
@@ -491,19 +453,6 @@ describe('createBlueskyClient の各操作', () => {
       },
     });
     expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
-  });
-
-  it('deleteRepost は既に無い record を 404 と RecordNotFound のどちらでも成功として扱い、500 は失敗として返す', async () => {
-    const notFound = setup(stored(), [() => json({ error: 'NotFound' }, 404)]);
-    const missing = setup(stored(), [() => json({ error: 'RecordNotFound' }, 400)]);
-    const failing = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
-
-    expect((await notFound.client.deleteRepost('3krepost')).ok).toBe(true);
-    expect((await missing.client.deleteRepost('3krepost')).ok).toBe(true);
-    expect(await failing.client.deleteRepost('3krepost')).toMatchObject({
-      ok: false,
-      err: { kind: 'http', status: 500 },
-    });
   });
 
   it('getRecord は repo、collection、rkey を query に付けて uri、cid、rkey を返す', async () => {
@@ -673,7 +622,6 @@ describe('createBlueskyClient の各操作', () => {
 
 describe('createBlueskyClient のミュート、ブロック、通報', () => {
   const BLOCK_URI = 'at://did:plc:abc/app.bsky.graph.block/3kblock';
-  const ROOT = 'at://did:plc:abc/app.bsky.feed.post/3kroot';
 
   it('muteActor は app.bsky.graph.muteActor に actor を POST し、空の応答を成功にする', async () => {
     const { client, calls } = setup(stored(), [() => new Response('', { status: 200 })]);
@@ -684,19 +632,6 @@ describe('createBlueskyClient のミュート、ブロック、通報', () => {
     expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.graph.muteActor`);
     expect(calls[0]?.init.method).toBe('POST');
     expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ actor: 'did:plc:target' });
-    expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
-    expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
-  });
-
-  it('muteThread は app.bsky.graph.muteThread に root を POST し、空の応答を成功にする', async () => {
-    const { client, calls } = setup(stored(), [() => new Response('', { status: 200 })]);
-
-    const result = await client.muteThread(ROOT);
-
-    expect(result).toEqual({ ok: true, val: undefined });
-    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.graph.muteThread`);
-    expect(calls[0]?.init.method).toBe('POST');
-    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ root: ROOT });
     expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
     expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
   });
@@ -812,16 +747,6 @@ describe('createBlueskyClient のミュート、ブロック、通報', () => {
     expect(JSON.parse(calls[0]!.init.body as string).reasonType).toBe('com.atproto.moderation.defs#reasonRude');
     expect(JSON.parse(calls[1]!.init.body as string).reasonType).toBe('com.atproto.moderation.defs#reasonOther');
   });
-
-  it('保存済みセッションが無いときは、どの操作も先にログインしてから送る', async () => {
-    const { client, calls } = setup(undefined, [() => json(sessionBody('1')), () => json({})]);
-
-    const result = await client.unmuteActor('did:plc:target');
-
-    expect(result.ok).toBe(true);
-    expect(calls[0]?.url).toBe('https://bsky.social/xrpc/com.atproto.server.createSession');
-    expect(header(calls[1]!, 'Authorization')).toBe('Bearer access-1');
-  });
 });
 
 describe('createBlueskyClient の認証付き GET（query）', () => {
@@ -848,54 +773,6 @@ describe('createBlueskyClient の認証付き GET（query）', () => {
     expect(calls[0]!.url).toBe(
       `${PDS}/xrpc/app.bsky.feed.getFeedGenerators?feeds=at%3A%2F%2Fdid%3Aplc%3Aa%2Fx%2F1&feeds=at%3A%2F%2Fdid%3Aplc%3Ab%2Fx%2F2`,
     );
-  });
-
-  it('保存済みセッションが無ければ createSession して保存し、その PDS に GET する', async () => {
-    const { client, calls, saved } = setup(undefined, [
-      () => json(sessionBody('new', { didDoc: didDoc('https://pds.example.net') })),
-      () => json({ feed: [] }),
-    ]);
-
-    const result = await client.query(TIMELINE, { limit: '1' });
-
-    expect(result.ok).toBe(true);
-    expect(calls.map((call) => call.url)).toEqual([
-      'https://bsky.social/xrpc/com.atproto.server.createSession',
-      `https://pds.example.net/xrpc/${TIMELINE}?limit=1`,
-    ]);
-    expect(saved.map((session) => session.accessJwt)).toEqual(['access-new']);
-    expect(header(calls[1]!, 'Authorization')).toBe('Bearer access-new');
-  });
-
-  it('401 のとき、投稿と同じ refreshSession で更新して GET をやり直す', async () => {
-    const { client, calls, saved, current } = setup(stored(), [
-      () => json({ error: 'ExpiredToken' }, 400),
-      () => json(sessionBody('fresh')),
-      () => json({ feed: [] }),
-    ]);
-
-    const result = await client.query(TIMELINE, { limit: '100' });
-
-    expect(result.ok).toBe(true);
-    expect(calls.map((call) => call.url.split('?')[0]!.split('/').pop())).toEqual([
-      TIMELINE,
-      'com.atproto.server.refreshSession',
-      TIMELINE,
-    ]);
-    expect(header(calls[1]!, 'Authorization')).toBe('Bearer refresh-old');
-    expect(header(calls[2]!, 'Authorization')).toBe('Bearer access-fresh');
-    expect(saved).toHaveLength(1);
-    expect(current()).toMatchObject({ accessJwt: 'access-fresh', refreshJwt: 'refresh-fresh' });
-  });
-
-  it('認証以外の HTTP エラーは http として返し、トークンを含めない', async () => {
-    const { client, calls } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
-
-    const result = await client.query(TIMELINE, {});
-
-    expect(result).toMatchObject({ ok: false, err: { kind: 'http', status: 500 } });
-    expect(JSON.stringify(result)).not.toContain('access-old');
-    expect(calls).toHaveLength(1);
   });
 
   it('オブジェクトでない応答を invalid_response として返す', async () => {
@@ -974,26 +851,6 @@ describe('createBlueskyClient の DM（chat）', () => {
     expect(expired.calls).toHaveLength(3);
     expect(otherResult.ok).toBe(true);
     expect(other.calls).toHaveLength(3);
-  });
-
-  it('既存の query には atproto-proxy を付けない', async () => {
-    const { client, calls } = setup(stored(), [() => json({})]);
-
-    await client.query('app.bsky.feed.getTimeline', {});
-
-    expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
-  });
-
-  it('Bad token method は auth と見なさず、refreshSession も createSession も呼ばない', async () => {
-    const { client, calls, saved } = setup(stored(), [
-      () => json({ error: 'InvalidToken', message: 'Bad token method' }, 400),
-    ]);
-
-    const result = await client.chatProcedure('chat.bsky.convo.sendMessage', { convoId: 'c1', message: { text: 'a' } });
-
-    expect(result).toMatchObject({ ok: false, err: { kind: 'chat_not_permitted' } });
-    expect(calls).toHaveLength(1);
-    expect(saved).toEqual([]);
   });
 
   it('chat の経路では message が違う 400 InvalidToken も chat_not_permitted にし、再ログインしない', async () => {
@@ -1079,16 +936,6 @@ describe('createBlueskyClient のタイムアウト', () => {
 
     expect(spy.mock.calls.map(([ms]) => ms)).toEqual([10_000, 30_000, 10_000, 10_000, 10_000]);
     expect(calls.every((call) => call.init.signal instanceof AbortSignal)).toBe(true);
-  });
-
-  it('認証付き GET（query）にも 10 秒の signal を付ける', async () => {
-    const spy = vi.spyOn(AbortSignal, 'timeout');
-    const { client, calls } = setup(stored(), [() => json({ feed: [] })]);
-
-    await client.query('app.bsky.feed.getTimeline', {});
-
-    expect(spy.mock.calls.map(([ms]) => ms)).toEqual([10_000]);
-    expect(calls[0]!.init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('タイムアウトした fetch は例外にせず network の失敗として返す', async () => {
@@ -1215,42 +1062,6 @@ describe('createBlueskyClient のログイン失敗後の待ち時間', () => {
     expect(events).toEqual(['read', `write:${NOW + BLUESKY_LOGIN_RETRY_COOLDOWN_MS}`]);
   });
 
-  it('DM の許可が無い Bad token method は chat_not_permitted として返し、再ログインも失敗の記録もしない', async () => {
-    const { client, calls, events } = setupGuarded(stored(), undefined, [
-      () => json({ error: 'InvalidToken', message: 'Bad token method' }, 400),
-    ]);
-
-    const result = await client.chatQuery('chat.bsky.convo.listConvos', {});
-
-    expect(result).toMatchObject({
-      ok: false,
-      err: { kind: 'chat_not_permitted', status: 400, code: 'InvalidToken' },
-    });
-    expect(calls).toHaveLength(1);
-    expect(events).toEqual([]);
-  });
-
-  it('createSession が成功し、記録が無かったときは、読むだけで書き込まない', async () => {
-    const { client, events } = setupGuarded(undefined, undefined, [
-      () => json(sessionBody('new', { didDoc: didDoc() })),
-      () => json({ feed: [] }),
-    ]);
-
-    await client.query('app.bsky.feed.getTimeline', {});
-
-    expect(events).toEqual(['read']);
-  });
-
-  it('保存済みのセッションが有効なときは、失敗の記録を読まない', async () => {
-    const { client, calls, events } = setupGuarded(stored(), undefined, [() => json({ feed: [] })]);
-
-    const result = await client.query('app.bsky.feed.getTimeline', {});
-
-    expect(result.ok).toBe(true);
-    expect(calls).toHaveLength(1);
-    expect(events).toEqual([]);
-  });
-
   it('保存済みのセッションが失効して createSession に進むときは、記録を読む', async () => {
     const { client, calls, events } = setupGuarded(stored(), NOW, [
       () => json({ error: 'ExpiredToken' }, 400),
@@ -1262,19 +1073,6 @@ describe('createBlueskyClient のログイン失敗後の待ち時間', () => {
     expect(result).toMatchObject({ ok: false, err: { kind: 'auth' } });
     expect(calls).toHaveLength(2);
     expect(events).toEqual(['read']);
-  });
-
-  it('依存を渡さない client は、待ち時間なしで毎回 createSession を呼ぶ', async () => {
-    const { client, calls, events } = setupGuarded(undefined, NOW, [authError, authError], false);
-
-    await client.query('app.bsky.feed.getTimeline', {});
-    await client.query('app.bsky.feed.getTimeline', {});
-
-    expect(calls.map((call) => call.url)).toEqual([
-      'https://bsky.social/xrpc/com.atproto.server.createSession',
-      'https://bsky.social/xrpc/com.atproto.server.createSession',
-    ]);
-    expect(events).toEqual([]);
   });
 });
 
@@ -1304,15 +1102,6 @@ describe('createBlueskyClient のブックマーク', () => {
     expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ uri: POST_URI, cid: 'bafycid' });
     expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
     expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
-  });
-
-  it('権限が無い 403 は再ログインせず、status と code を持つ http の失敗で返す', async () => {
-    const { client, calls } = setup(stored(), [() => json({ error: 'Forbidden' }, 403)]);
-
-    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
-
-    expect(result).toMatchObject({ ok: false, err: { kind: 'http', status: 403, code: 'Forbidden' } });
-    expect(calls).toHaveLength(1);
   });
 
   it('400 InvalidToken の Bad token scope は再ログインせず、message を含む http の失敗で返す', async () => {

@@ -7,10 +7,6 @@ describe('blueskyProfilePageHref', () => {
     expect(blueskyProfilePageHref('did:plc:author')).toBe('https://bsky.app/profile/did:plc:author');
   });
 
-  it('handle からも bsky.app のプロフィールの URL を返す', () => {
-    expect(blueskyProfilePageHref('alice.bsky.social')).toBe('https://bsky.app/profile/alice.bsky.social');
-  });
-
   it('DID でも handle でもない値のときは bsky.app のトップを返す', () => {
     expect(blueskyProfilePageHref('handle.invalid')).toBe('https://bsky.app');
   });

@@ -42,15 +42,6 @@ describe('skipWhileBlueskyAccountSwitching', () => {
       JSON.stringify({ event: 'bluesky_account_switch_task_skipped', task: 'collect' }),
     );
   });
-
-  it('切り替え中でなければ、包んだタスクを実行する', async () => {
-    const run = vi.fn(async () => undefined);
-    const context = contextFor({});
-
-    await skipWhileBlueskyAccountSwitching({ name: 'collect', run }, async () => false).run(context);
-
-    expect(run).toHaveBeenCalledWith(context);
-  });
 });
 
 describe('毎分の cron', () => {

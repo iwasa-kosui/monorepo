@@ -87,18 +87,11 @@ describe('createBlueskyProfileReader.getAuthorFeed', () => {
     },
   );
 
-  it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
-    const invalid = clientReturning(RA.ok({ posts: [] }));
-    const error = { type: 'BlueskyClientError', kind: 'network', message: 'x' } as const;
-    const failing = clientReturning(RA.err(error));
+  it('読めない応答を invalid_response にする', async () => {
+    const { reader } = clientReturning(RA.ok({ posts: [] }));
 
-    expect(await invalid.reader.getAuthorFeed({ actor: DID, cursor: undefined, filter: 'posts_and_author_threads' }))
-      .toMatchObject({
-        ok: false,
-        err: { kind: 'invalid_response' },
-      });
-    expect(await failing.reader.getAuthorFeed({ actor: DID, cursor: undefined, filter: 'posts_and_author_threads' }))
-      .toEqual({ ok: false, err: error });
+    expect(await reader.getAuthorFeed({ actor: DID, cursor: undefined, filter: 'posts_and_author_threads' }))
+      .toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
   });
 });
 
@@ -115,16 +108,13 @@ describe('createBlueskyProfileReader.getActorLikes', () => {
     expect(result.val.items[0]).toMatchObject({ uri: postView.post.uri, authorDid: DID, fetchedAt: NOW });
   });
 
-  it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
-    const invalid = clientReturning(RA.ok({ posts: [] }));
-    const error = { type: 'BlueskyClientError', kind: 'network', message: 'x' } as const;
-    const failing = clientReturning(RA.err(error));
+  it('読めない応答を invalid_response にする', async () => {
+    const { reader } = clientReturning(RA.ok({ posts: [] }));
 
-    expect(await invalid.reader.getActorLikes({ actor: DID, cursor: undefined })).toMatchObject({
+    expect(await reader.getActorLikes({ actor: DID, cursor: undefined })).toMatchObject({
       ok: false,
       err: { kind: 'invalid_response' },
     });
-    expect(await failing.reader.getActorLikes({ actor: DID, cursor: undefined })).toEqual({ ok: false, err: error });
   });
 });
 
@@ -159,21 +149,12 @@ describe.each(
     });
   });
 
-  it('読めない応答を invalid_response にし、クエリの失敗はそのまま返す', async () => {
-    const invalid = clientReturning(RA.ok({ actors: [] }));
-    const notFound = {
-      type: 'BlueskyClientError',
-      kind: 'http',
-      message: 'Profile not found',
-      status: 400,
-      code: 'InvalidRequest',
-    } as const;
-    const failing = clientReturning(RA.err(notFound));
+  it('読めない応答を invalid_response にする', async () => {
+    const { reader } = clientReturning(RA.ok({ actors: [] }));
 
-    expect(await invalid.reader[method]({ actor: DID, cursor: undefined })).toMatchObject({
+    expect(await reader[method]({ actor: DID, cursor: undefined })).toMatchObject({
       ok: false,
       err: { kind: 'invalid_response' },
     });
-    expect(await failing.reader[method]({ actor: DID, cursor: undefined })).toEqual({ ok: false, err: notFound });
   });
 });

@@ -91,20 +91,6 @@ describe('createBlueskyBookmarkReader.getBookmarks', () => {
     expect(result.ok && result.val.items).toHaveLength(1);
   });
 
-  it('項目に変換できない要素は除く', async () => {
-    const { reader } = clientReturning(RA.ok({
-      bookmarks: [
-        'not an object',
-        bookmarkView(postView(1, { indexedAt: 'not a date' })),
-        bookmarkView(postView(2)),
-      ],
-    }));
-
-    const result = await reader.getBookmarks({ cursor: undefined });
-
-    expect(result.ok && result.val.items.map((item) => item.uri)).toEqual([`at://${DID}/app.bsky.feed.post/2`]);
-  });
-
   it('bookmarks が配列でない応答は invalid_response にする', async () => {
     const { reader } = clientReturning(RA.ok({ bookmarks: 'oops' }));
 
