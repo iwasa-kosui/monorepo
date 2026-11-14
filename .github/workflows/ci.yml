@@ -397,7 +397,7 @@ jobs:
     name: "apps/es-patchwork-hands-on"
     needs: changes
     if: needs.changes.outputs.es-patchwork-hands-on == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

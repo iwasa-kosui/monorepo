@@ -1,0 +1,362 @@
+---
+title: "コード設計から逃げない"
+date: "2026-11-15T00:30:00+09:00"
+slug: "posts/2026/11/15/code-design-after-agents"
+description: "業務でコードを読むことがほとんどなくなった現在も、コード設計を重視している理由を説明します。開発速度は顧客の認知負荷で律速されるため、差別化要因は機能適合性という品質になります。品質を維持するには、人とエージェントが重要なロジックに注意を向けられる設計が必要です。"
+themes: ["typescript", "architecture"]
+ogIcon: typescript
+private: true
+---
+
+最近、業務でコードを読むことはほとんどなくなりました。
+
+私は現在、エンジニアというよりも PdM に近い立場で業務をしています。社内ではエージェントを組み合わせた開発の仕組みを運用しており、私が PRD とサービスブループリントを作成すると、そこからロードマップが作成され、Design Doc と ADR で論点が整理されます。私が担当するのは、整理された未決の論点に回答することです。回答に応じて、実装とテストが自動で生成されます。
+
+<figure className="fig">
+<svg viewBox="0 0 400 568" role="img" aria-labelledby="fig-ff-title fig-ff-desc">
+<title id="fig-ff-title">PRDから実装・テストまでの流れ</title>
+<desc id="fig-ff-desc">上から下へ、PRD・サービスブループリント、ロードマップ、Design Doc・ADR、未決の論点、実装・テストの順に進む流れの図です。人が作成するのは最初のPRD・サービスブループリントで、人が回答するのは未決の論点です。エージェントが動作するのは、ロードマップからDesign Doc・ADRまでと、未決の論点から実装・テストまでの区間です。</desc>
+<defs>
+<marker id="fig-ff-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path className="fig-mk" d="M0 0L10 5L0 10z" /></marker>
+<marker id="fig-ff-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path className="fig-mk-agent" d="M0 0L10 5L0 10z" /></marker>
+</defs>
+<rect className="fig-box" x="112" y="24" width="200" height="56" rx="8" />
+<rect className="fig-box" x="112" y="132" width="200" height="56" rx="8" />
+<rect className="fig-box" x="112" y="260" width="200" height="56" rx="8" />
+<rect className="fig-box" x="112" y="368" width="200" height="56" rx="8" />
+<rect className="fig-box" x="112" y="496" width="200" height="56" rx="8" />
+<text className="fig-t fig-mid" x="212" y="47">PRD・サービス</text>
+<text className="fig-t fig-mid" x="212" y="65">ブループリント</text>
+<text className="fig-t fig-mid" x="212" y="165">ロードマップ</text>
+<text className="fig-t fig-mid" x="212" y="293">Design Doc・ADR</text>
+<text className="fig-t fig-mid" x="212" y="401">未決の論点</text>
+<text className="fig-t fig-mid" x="212" y="529">実装・テスト</text>
+<path className="fig-stroke" d="M212 84V126" marker-end="url(#fig-ff-a)" />
+<path className="fig-stroke fig-stroke-agent" d="M212 192V254" marker-end="url(#fig-ff-g)" />
+<path className="fig-flow" d="M212 192V254" style={{ '--fig-dur': '3s' }} />
+<path className="fig-stroke" d="M212 320V362" marker-end="url(#fig-ff-a)" />
+<path className="fig-stroke fig-stroke-agent" d="M212 428V490" marker-end="url(#fig-ff-g)" />
+<path className="fig-flow" d="M212 428V490" style={{ '--fig-dur': '3s', '--fig-delay': '-1s' }} />
+<text className="fig-t fig-b fig-c-agent" x="228" y="228">エージェント</text>
+<text className="fig-t fig-b fig-c-agent" x="228" y="464">エージェント</text>
+<g transform="translate(56 52)"><g className="fig-fill-1"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g>
+<text className="fig-t fig-t-sm fig-mid" x="56" y="90">人が作成</text>
+<path className="fig-stroke-rule fig-dotted" d="M78 52H108" />
+<g transform="translate(56 396)"><g className="fig-fill-1"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g>
+<text className="fig-t fig-t-sm fig-mid" x="56" y="434">人が回答</text>
+<path className="fig-stroke-rule fig-dotted" d="M78 396H108" />
+</svg>
+<figcaption>人が担当するのは、PRD の作成と未決の論点への回答だけです。</figcaption>
+</figure>
+
+この状況では、「AI がコードを書くなら、コード設計は不要ではないか」という問いが生じます。コードを読まない人間がコード設計を気にする必要があるのか、という問いです。
+
+## 結論
+
+コードを読まなくなった現在のほうが、コード設計の重要性は高いと考えています。
+
+開発速度を上げても、顧客が認知できる機能の量には上限があります。そのため、差別化要因は開発速度ではなく品質、とくに機能適合性になります。機能適合性を維持するには、PRD に記述したビジネスの関心とコードの構造を一致させ、人もエージェントも重要なロジックに注意を向けられる設計にする必要があります。設計のスタイルは問いません。
+
+## 開発速度は顧客の認知負荷で律速される
+
+機能を多く開発しても、顧客がその機能を正しく認知しなければ、機能は利用されません。利用されない機能は、ビジネス上の価値を生みません。開発は顧客の認知負荷によって律速されます。
+
+エージェントの導入によって、開発できる量は増えました。一方で、顧客が新しい機能を理解して業務に組み込む速度は、開発チームのリリース頻度とは無関係に決まります。
+
+<figure className="fig">
+<svg viewBox="0 0 400 520" role="img" aria-labelledby="fig-cf-title fig-cf-desc">
+<title id="fig-cf-title">開発できる量が増えても、顧客の認知で制限される様子</title>
+<desc id="fig-cf-desc">上から「開発できる機能」の粒が多数流入しますが、下の「顧客の認知」の細い口では少量しか通過できず、「利用される機能」になるのはわずかです。口の手前で滞留して左の縁から溢れた粒は、下の「問い合わせ」の器に落ちて蓄積します。</desc>
+<path className="fig-fill-agent-soft" d="M96 36H352V150L238 250V330H210V250L96 150Z" />
+<path className="fig-edge fig-edge-line" d="M96 36V150L210 250V330" />
+<path className="fig-edge fig-edge-line" d="M352 36V150L238 250V330" />
+<text className="fig-t fig-b fig-mid" x="224" y="24">開発できる機能</text>
+<circle className="fig-fill-agent fig-pulse" cx="217" cy="240" r="4" style={{ '--fig-delay': '0s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="231" cy="240" r="4" style={{ '--fig-delay': '-0.6s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="210" cy="228" r="4" style={{ '--fig-delay': '-1.2s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="224" cy="228" r="4" style={{ '--fig-delay': '-1.7999999999999998s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="238" cy="228" r="4" style={{ '--fig-delay': '-2.4s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="203" cy="216" r="4" style={{ '--fig-delay': '0s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="217" cy="216" r="4" style={{ '--fig-delay': '-0.6s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="231" cy="216" r="4" style={{ '--fig-delay': '-1.2s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="245" cy="216" r="4" style={{ '--fig-delay': '-1.7999999999999998s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="196" cy="204" r="4" style={{ '--fig-delay': '-2.4s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="210" cy="204" r="4" style={{ '--fig-delay': '0s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="224" cy="204" r="4" style={{ '--fig-delay': '-0.6s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="238" cy="204" r="4" style={{ '--fig-delay': '-1.2s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="252" cy="204" r="4" style={{ '--fig-delay': '-1.7999999999999998s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="189" cy="192" r="4" style={{ '--fig-delay': '-2.4s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="203" cy="192" r="4" style={{ '--fig-delay': '0s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="217" cy="192" r="4" style={{ '--fig-delay': '-0.6s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="231" cy="192" r="4" style={{ '--fig-delay': '-1.2s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="245" cy="192" r="4" style={{ '--fig-delay': '-1.7999999999999998s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-pulse" cx="259" cy="192" r="4" style={{ '--fig-delay': '-2.4s', '--fig-dur': '5s' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '112px', '--fig-y0': '44px', '--fig-x1': '112px', '--fig-y1': '138px', '--fig-yr': '56px', '--fig-xr': '112px', '--fig-dur': '4s', '--fig-delay': '0s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '112px', '--fig-y0': '44px', '--fig-x1': '112px', '--fig-y1': '138px', '--fig-yr': '123px', '--fig-xr': '112px', '--fig-dur': '4s', '--fig-delay': '-1.33s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '112px', '--fig-y0': '44px', '--fig-x1': '112px', '--fig-y1': '138px', '--fig-yr': '114px', '--fig-xr': '112px', '--fig-dur': '4s', '--fig-delay': '-2.66s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '144px', '--fig-y0': '44px', '--fig-x1': '144px', '--fig-y1': '138px', '--fig-yr': '97px', '--fig-xr': '144px', '--fig-dur': '4s', '--fig-delay': '-0.47s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '144px', '--fig-y0': '44px', '--fig-x1': '144px', '--fig-y1': '138px', '--fig-yr': '88px', '--fig-xr': '144px', '--fig-dur': '4s', '--fig-delay': '-1.8s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '144px', '--fig-y0': '44px', '--fig-x1': '144px', '--fig-y1': '138px', '--fig-yr': '79px', '--fig-xr': '144px', '--fig-dur': '4s', '--fig-delay': '-3.13s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '176px', '--fig-y0': '44px', '--fig-x1': '176px', '--fig-y1': '176px', '--fig-yr': '138px', '--fig-xr': '176px', '--fig-dur': '4s', '--fig-delay': '-0.94s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '176px', '--fig-y0': '44px', '--fig-x1': '176px', '--fig-y1': '176px', '--fig-yr': '91px', '--fig-xr': '176px', '--fig-dur': '4s', '--fig-delay': '-2.27s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '176px', '--fig-y0': '44px', '--fig-x1': '176px', '--fig-y1': '176px', '--fig-yr': '158px', '--fig-xr': '176px', '--fig-dur': '4s', '--fig-delay': '-3.6s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '208px', '--fig-y0': '44px', '--fig-x1': '208px', '--fig-y1': '176px', '--fig-yr': '65px', '--fig-xr': '208px', '--fig-dur': '4s', '--fig-delay': '-1.41s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '208px', '--fig-y0': '44px', '--fig-x1': '208px', '--fig-y1': '176px', '--fig-yr': '132px', '--fig-xr': '208px', '--fig-dur': '4s', '--fig-delay': '-2.74s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '208px', '--fig-y0': '44px', '--fig-x1': '208px', '--fig-y1': '176px', '--fig-yr': '85px', '--fig-xr': '208px', '--fig-dur': '4s', '--fig-delay': '-0.07s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '240px', '--fig-y0': '44px', '--fig-x1': '240px', '--fig-y1': '176px', '--fig-yr': '106px', '--fig-xr': '240px', '--fig-dur': '4s', '--fig-delay': '-1.88s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '240px', '--fig-y0': '44px', '--fig-x1': '240px', '--fig-y1': '176px', '--fig-yr': '59px', '--fig-xr': '240px', '--fig-dur': '4s', '--fig-delay': '-3.21s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '240px', '--fig-y0': '44px', '--fig-x1': '240px', '--fig-y1': '176px', '--fig-yr': '126px', '--fig-xr': '240px', '--fig-dur': '4s', '--fig-delay': '-0.54s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '272px', '--fig-y0': '44px', '--fig-x1': '272px', '--fig-y1': '176px', '--fig-yr': '147px', '--fig-xr': '272px', '--fig-dur': '4s', '--fig-delay': '-2.35s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '272px', '--fig-y0': '44px', '--fig-x1': '272px', '--fig-y1': '176px', '--fig-yr': '100px', '--fig-xr': '272px', '--fig-dur': '4s', '--fig-delay': '-3.68s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '272px', '--fig-y0': '44px', '--fig-x1': '272px', '--fig-y1': '176px', '--fig-yr': '167px', '--fig-xr': '272px', '--fig-dur': '4s', '--fig-delay': '-1.01s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '304px', '--fig-y0': '44px', '--fig-x1': '304px', '--fig-y1': '138px', '--fig-yr': '74px', '--fig-xr': '304px', '--fig-dur': '4s', '--fig-delay': '-2.82s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '304px', '--fig-y0': '44px', '--fig-x1': '304px', '--fig-y1': '138px', '--fig-yr': '65px', '--fig-xr': '304px', '--fig-dur': '4s', '--fig-delay': '-0.15s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '304px', '--fig-y0': '44px', '--fig-x1': '304px', '--fig-y1': '138px', '--fig-yr': '56px', '--fig-xr': '304px', '--fig-dur': '4s', '--fig-delay': '-1.48s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '336px', '--fig-y0': '44px', '--fig-x1': '336px', '--fig-y1': '138px', '--fig-yr': '115px', '--fig-xr': '336px', '--fig-dur': '4s', '--fig-delay': '-3.29s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '336px', '--fig-y0': '44px', '--fig-x1': '336px', '--fig-y1': '138px', '--fig-yr': '106px', '--fig-xr': '336px', '--fig-dur': '4s', '--fig-delay': '-0.62s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '336px', '--fig-y0': '44px', '--fig-x1': '336px', '--fig-y1': '138px', '--fig-yr': '97px', '--fig-xr': '336px', '--fig-dur': '4s', '--fig-delay': '-1.95s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '224px', '--fig-y0': '246px', '--fig-x1': '224px', '--fig-y1': '326px', '--fig-xr': '224px', '--fig-yr': '270px', '--fig-dur': '8s', '--fig-delay': '0s' }} />
+<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '224px', '--fig-y0': '246px', '--fig-x1': '224px', '--fig-y1': '326px', '--fig-xr': '224px', '--fig-yr': '304px', '--fig-dur': '8s', '--fig-delay': '-4s' }} />
+<text className="fig-t fig-b" x="248" y="278">顧客の認知</text>
+<text className="fig-t fig-b fig-mid" x="224" y="356">利用される機能</text>
+<path className="fig-stroke-accent" d="M24 420V472Q24 488 40 488H108Q124 488 124 472V420" />
+<circle className="fig-fill-accent" cx="38" cy="478" r="5" />
+<circle className="fig-fill-accent" cx="50" cy="478" r="5" />
+<circle className="fig-fill-accent" cx="62" cy="478" r="5" />
+<circle className="fig-fill-accent" cx="74" cy="478" r="5" />
+<circle className="fig-fill-accent" cx="86" cy="478" r="5" />
+<circle className="fig-fill-accent" cx="98" cy="478" r="5" />
+<circle className="fig-fill-accent" cx="110" cy="478" r="5" />
+<circle className="fig-fill-accent" cx="44" cy="466" r="5" />
+<circle className="fig-fill-accent" cx="56" cy="466" r="5" />
+<circle className="fig-fill-accent" cx="68" cy="466" r="5" />
+<circle className="fig-fill-accent" cx="80" cy="466" r="5" />
+<circle className="fig-fill-accent" cx="92" cy="466" r="5" />
+<circle className="fig-fill-accent" cx="104" cy="466" r="5" />
+<circle className="fig-fill-accent fig-at-1" cx="50" cy="454" r="5" />
+<circle className="fig-fill-accent fig-at-1" cx="62" cy="454" r="5" />
+<circle className="fig-fill-accent fig-at-1" cx="74" cy="454" r="5" />
+<circle className="fig-fill-accent fig-at-1" cx="86" cy="454" r="5" />
+<circle className="fig-fill-accent fig-at-1" cx="98" cy="454" r="5" />
+<circle className="fig-fill-accent fig-at-3" cx="56" cy="442" r="5" />
+<circle className="fig-fill-accent fig-at-3" cx="68" cy="442" r="5" />
+<circle className="fig-fill-accent fig-at-3" cx="80" cy="442" r="5" />
+<circle className="fig-fill-accent fig-at-3" cx="92" cy="442" r="5" />
+<circle className="fig-fill-accent fig-at-5" cx="62" cy="430" r="5" />
+<circle className="fig-fill-accent fig-at-5" cx="74" cy="430" r="5" />
+<circle className="fig-fill-accent fig-at-5" cx="86" cy="430" r="5" />
+<circle className="fig-fill-accent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '90px', '--fig-y0': '30px', '--fig-x1': '54px', '--fig-y1': '424px', '--fig-xr': '79.94923857868021px', '--fig-yr': '110px', '--fig-dur': '4s', '--fig-delay': '0s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-accent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '90px', '--fig-y0': '30px', '--fig-x1': '74px', '--fig-y1': '424px', '--fig-xr': '81.06598984771574px', '--fig-yr': '220px', '--fig-dur': '4s', '--fig-delay': '-1.3s', '--fig-ease': 'ease-in' }} />
+<circle className="fig-fill-accent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '90px', '--fig-y0': '30px', '--fig-x1': '94px', '--fig-y1': '424px', '--fig-xr': '93.3502538071066px', '--fig-yr': '330px', '--fig-dur': '4s', '--fig-delay': '-2.6s', '--fig-ease': 'ease-in' }} />
+<text className="fig-t fig-b fig-mid" x="74" y="512">問い合わせ</text>
+</svg>
+<figcaption>開発できる量を増やしても、顧客が認知できる量は増えません。</figcaption>
+</figure>
+
+DORA の [AI Capabilities Model](https://cloud.google.com/blog/products/ai-machine-learning/introducing-doras-inaugural-ai-capabilities-model) も、ユーザー中心の視点を欠いたまま AI を導入すると、誤った方向に速く進むだけになりうると指摘しています。
+
+私が担当している薬局の業務は、この認知負荷の制約がとくに強い領域です。1台の端末を複数のユーザーが共有し、執務室には複数台の端末があり、ユーザーは複数の店舗を移動します。
+
+<figure className="fig">
+<svg viewBox="0 0 400 440" role="img" aria-labelledby="fig-ps-title fig-ps-desc">
+<title id="fig-ps-title">薬局の業務における端末、ユーザー、店舗の関係</title>
+<desc id="fig-ps-desc">店舗Aの執務室には端末が3台、店舗Bには2台あります。左の端末は2人のユーザーが共有し、中央の端末は別のユーザーが使用します。右の端末のユーザーは、店舗Aから店舗Bへ移動して店舗Bの端末を使用し、再び店舗Aへ戻ります。</desc>
+<defs>
+<marker id="fig-ps-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path className="fig-mk" d="M0 0L10 5L0 10z" /></marker>
+</defs>
+<rect className="fig-box-soft" x="16" y="16" width="368" height="192" rx="12" />
+<text className="fig-t fig-b" x="32" y="42">店舗A</text>
+<g transform="translate(100 90)"><rect className="fig-box" x="-22" y="-14" width="44" height="28" rx="4" /><path className="fig-stroke" d="M0 14V22M-10 22H10" /></g>
+<g transform="translate(200 90)"><rect className="fig-box" x="-22" y="-14" width="44" height="28" rx="4" /><path className="fig-stroke" d="M0 14V22M-10 22H10" /></g>
+<g transform="translate(300 90)"><rect className="fig-box" x="-22" y="-14" width="44" height="28" rx="4" /><path className="fig-stroke" d="M0 14V22M-10 22H10" /></g>
+<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="100" y="62">共有</text>
+<rect className="fig-box-soft" x="16" y="256" width="368" height="168" rx="12" />
+<text className="fig-t fig-b" x="32" y="282">店舗B</text>
+<g transform="translate(200 330)"><rect className="fig-box" x="-22" y="-14" width="44" height="28" rx="4" /><path className="fig-stroke" d="M0 14V22M-10 22H10" /></g>
+<g transform="translate(300 330)"><rect className="fig-box" x="-22" y="-14" width="44" height="28" rx="4" /><path className="fig-stroke" d="M0 14V22M-10 22H10" /></g>
+<path className="fig-stroke fig-dash" d="M300 214V250" marker-start="url(#fig-ps-a)" marker-end="url(#fig-ps-a)" />
+<text className="fig-t fig-t-sm fig-c-muted" x="314" y="236">店舗を移動</text>
+<g transform="translate(86 150)"><g className="fig-turn"><g className="fig-fill-1"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g></g>
+<g transform="translate(116 150)"><g className="fig-turn" style={{ '--fig-delay': '4s' }}><g className="fig-fill-2"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g></g>
+<g transform="translate(200 150)"><g className="fig-fill-3"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g>
+<g className="fig-shuttle" style={{ '--fig-x0': '300px', '--fig-y0': '150px', '--fig-x1': '300px', '--fig-y1': '390px' }}><g className="fig-fill-3"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g>
+</svg>
+<figcaption>1台の端末を複数のユーザーが共有し、端末は複数台あり、ユーザーは店舗間を移動します。</figcaption>
+</figure>
+
+このような環境で想定外の挙動が発生すると、問い合わせにつながります。問い合わせの対応には人件費がかかるため、想定外の挙動は明確なコストです。顧客シナリオがこれだけ複雑な場合、PRD でユーザーストーリーを網羅的に検討し、その内容が実装に正しく反映されている必要があります。
+
+開発速度で差別化できないのであれば、差別化要因は品質です。品質特性にはさまざまなものがありますが、ここで扱うのは機能適合性、つまりバグや想定外の挙動がないことです。
+
+## PRD を起点にした検証の限界
+
+コードを読まない状態で、私は PRD と実装の乖離を次の方法で検出しています。
+
+エージェントにロバストネス図やシーケンス図を作成させています（[以前の記事](https://kosui.me/posts/2025/05/08/011826)で手順を紹介しました）。また、事前に多数のユーザーペルソナを定義し、各ペルソナが操作に迷うケースや業務を継続できなくなるケースがないかを、エージェントに検証させています。
+
+それでも検出できなかった不具合があります。詳細は省略しますが、複数の端末で実施する作業において、あるユーザーが1台の端末で作業を開始していると、別の端末でもその作業を再開する、という振る舞いが実装に含まれていました。この振る舞いは PRD に記述されていませんでした。ユーザーが複数の端末で並行してセットアップを進めると、この振る舞いによって不整合が発生します。
+
+<figure className="fig">
+<svg viewBox="0 0 400 392" role="img" style={{ '--fig-dur': '10s' }} aria-labelledby="fig-pc-title fig-pc-desc">
+<title id="fig-pc-title">別の端末で作業を再開し、不整合が発生する流れ</title>
+<desc id="fig-pc-desc">ユーザーが端末Aで作業を開始すると、端末Aの進捗バーが伸び始めます。続けて端末Bでもセットアップを開始すると、端末Bは新規に開始せず、端末Aの作業を再開します。2台が同じ作業を競合して進捗バーが赤くなり、「不整合が発生」と表示されます。</desc>
+<defs>
+<mask id="fig-pc-mask" maskUnits="userSpaceOnUse" x="140" y="236" width="120" height="48"><path className="fig-mask-stroke fig-draw-at-3" d="M148 259H244" pathLength="100" /></mask>
+</defs>
+<g transform="translate(200 52)"><g className="fig-fill-3"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g>
+<text className="fig-t fig-t-sm fig-mid" x="200" y="90">ユーザー</text>
+<path className="fig-stroke fig-draw-at-1" pathLength="100" d="M200 104V140H84V190" />
+<path className="fig-mk fig-at-1" d="M84 200L79 190H89Z" />
+<path className="fig-stroke fig-draw-at-2" pathLength="100" d="M200 140H316V190" />
+<path className="fig-mk fig-at-2" d="M316 200L311 190H321Z" />
+<text className="fig-t fig-t-sm fig-mid fig-at-1" x="142" y="130">作業を開始</text>
+<text className="fig-t fig-t-sm fig-mid fig-at-2" x="266" y="130">セットアップを開始</text>
+<rect className="fig-box" x="16" y="204" width="136" height="96" rx="10" />
+<rect className="fig-box" x="248" y="204" width="136" height="96" rx="10" />
+<text className="fig-t fig-b" x="32" y="230">端末A</text>
+<text className="fig-t fig-b" x="264" y="230">端末B</text>
+<rect className="fig-fill-bar" x="32" y="252" width="104" height="14" rx="4" />
+<rect className="fig-fill-bar" x="264" y="252" width="104" height="14" rx="4" />
+<rect className="fig-fill-agent fig-grow-at-1" x="32" y="252" width="104" height="14" rx="4" style={{ '--fig-to': '0.6' }} />
+<rect className="fig-fill-agent fig-at-3" x="264" y="252" width="62" height="14" rx="4" />
+<path className="fig-stroke-accent fig-dash" d="M148 259H244" mask="url(#fig-pc-mask)" />
+<path className="fig-mk-accent fig-at-3" d="M246 259L236 254V264Z" />
+<text className="fig-t fig-t-sm fig-mid fig-c-accent fig-at-3" x="200" y="290">作業を再開</text>
+<rect className="fig-fill-accent fig-at-4" x="32" y="252" width="62" height="14" rx="4" />
+<rect className="fig-fill-accent fig-at-4" x="264" y="252" width="62" height="14" rx="4" />
+<rect className="fig-stroke-accent fig-at-4" x="16" y="204" width="136" height="96" rx="10" />
+<rect className="fig-stroke-accent fig-at-4" x="248" y="204" width="136" height="96" rx="10" />
+<g className="fig-hold-5"><rect className="fig-box-accent" x="112" y="334" width="176" height="40" rx="10" /><text className="fig-t fig-b fig-mid fig-c-accent" x="200" y="359">不整合が発生</text></g>
+</svg>
+<figcaption>別の端末で作業を再開する振る舞いは、並行してセットアップを進めると不整合を起こします。</figcaption>
+</figure>
+
+この不具合は、私が実際のコードを読んでいた際に、想定外の分岐に気づいたことで判明しました。ペルソナ検証やテストで検出されたものではありません。
+
+ペルソナ検証、図による検証、PRD から作成するテストが確認できるのは、PRD に記述された内容だけです。これらの検証は「PRD からコード」の方向にしか機能しません。実装には存在するが PRD には記述されていない振る舞いは、検証の対象に含まれません。
+
+<figure className="fig">
+<svg viewBox="0 0 400 400" role="img" aria-labelledby="fig-vc-title fig-vc-desc">
+<title id="fig-vc-title">PRDを起点にした検証の対象範囲</title>
+<desc id="fig-vc-desc">上にPRDの円、下にコードの円が一部重なっています。重なる部分は「PRDどおりの振る舞い」、コードの円だけの部分は「PRDにない振る舞い」です。「PRDを起点にした検証」の帯はPRDの円の内側だけを左右に走査し、「PRDにない振る舞い」の領域は対象外のままで、中の赤い点がゆっくり拍動します。</desc>
+<defs>
+<clipPath id="fig-vc-clip"><circle cx="200" cy="150" r="110" /></clipPath>
+</defs>
+<circle className="fig-fill-zone" cx="200" cy="270" r="110" />
+<circle className="fig-fill-agent-soft" cx="200" cy="150" r="110" />
+<circle className="fig-edge fig-edge-line" cx="200" cy="270" r="110" />
+<circle className="fig-edge fig-edge-agent" cx="200" cy="150" r="110" />
+<g clip-path="url(#fig-vc-clip)"><g className="fig-sweep-x" style={{ '--fig-from': '110px', '--fig-to': '290px', '--fig-rest': '200px', '--fig-dur': '7s' }}><rect className="fig-fill-band fig-sweep-band" x="-20" y="30" width="40" height="240" style={{ '--fig-spread': '5.5' }} /></g></g>
+<g className="fig-sweep-x" style={{ '--fig-from': '110px', '--fig-to': '290px', '--fig-rest': '200px', '--fig-dur': '7s' }}><text className="fig-t fig-b fig-c-agent fig-mid" x="0" y="22">PRDを起点にした検証</text></g>
+<text className="fig-t fig-mid" x="200" y="219">PRDどおりの振る舞い</text>
+<text className="fig-t fig-mid" x="200" y="310">PRDにない振る舞い</text>
+<circle className="fig-fill-accent fig-halo" cx="200" cy="346" r="6" />
+<circle className="fig-fill-accent fig-pulse" cx="200" cy="346" r="5" />
+<text className="fig-t fig-b fig-end" x="80" y="154">PRD</text>
+<text className="fig-t fig-b fig-end" x="80" y="274">コード</text>
+</svg>
+<figcaption>PRDを起点にした検証の対象は、PRDに記述された範囲に限られます。</figcaption>
+</figure>
+
+ビジネスと実装の構造が乖離していると、この問題は大きくなります。検証した PRD やモデルと実際のコードが対応しなくなり、検証結果が実装の品質を保証しなくなります。
+
+「型検査、テスト、CI があれば、設計を気にしなくても検証基盤で品質を担保できる」という反論が考えられます。検証基盤は重要です。しかし、検証基盤が検証するのも、誰かが記述した仕様です。コードから PRD への逆方向の確認には、コード内の業務上の判断を、PRD と照合できる形で抽出できる必要があります。
+
+## 設計で決まるのは、注意を向ける対象
+
+業務上の判断がデータ構造、検索条件、技術的な分岐の中に埋もれていると、人もエージェントもその判断を認識しにくくなります。
+
+エージェントのコンテキストウィンドウには上限があります。技術的な分岐の解析にコンテキストを消費すると、その分だけ業務上の判断に割り当てられるコンテキストは減ります。人間のレビュアーにも同じ制約があります。
+
+<figure className="fig">
+<svg viewBox="0 0 400 612" role="img" aria-labelledby="fig-ac-title fig-ac-desc">
+<title id="fig-ac-title">業務上の判断の配置先と、注意の向き</title>
+<desc id="fig-ac-desc">上下2枚のパネルの比較図です。上のパネルでは、業務上の判断を表す3本の赤い棒がコードの行の中に分散していて、注意を表す円がパネル内を不規則に移動します。下のパネルでは、3本の赤い棒が「業務の状態と遷移」の枠の中に集約されていて、注意を表す円はその枠へ直線的に移動して停止します。</desc>
+<text className="fig-t fig-b fig-mid" x="200" y="28">業務上の判断が分散している</text>
+<rect className="fig-box-soft" x="16" y="40" width="368" height="224" rx="12" />
+<rect className="fig-fill-bar" x="32" y="58" width="136" height="8" rx="3" />
+<rect className="fig-fill-accent" x="48" y="78" width="208" height="8" rx="3" />
+<rect className="fig-fill-bar" x="48" y="98" width="120" height="8" rx="3" />
+<rect className="fig-fill-bar" x="64" y="118" width="176" height="8" rx="3" />
+<rect className="fig-fill-accent" x="32" y="138" width="96" height="8" rx="3" />
+<rect className="fig-fill-bar" x="48" y="158" width="224" height="8" rx="3" />
+<rect className="fig-fill-bar" x="64" y="178" width="152" height="8" rx="3" />
+<rect className="fig-fill-bar" x="48" y="198" width="104" height="8" rx="3" />
+<rect className="fig-fill-accent" x="32" y="218" width="192" height="8" rx="3" />
+<rect className="fig-fill-bar" x="48" y="238" width="136" height="8" rx="3" />
+<circle className="fig-fill-spot fig-wander" cx="0" cy="0" r="34" style={{ '--fig-p0x': '96px', '--fig-p0y': '110px', '--fig-p1x': '296px', '--fig-p1y': '150px', '--fig-p2x': '160px', '--fig-p2y': '224px', '--fig-p3x': '312px', '--fig-p3y': '88px', '--fig-xr': '338px', '--fig-yr': '150px', '--fig-dur': '8s' }} />
+<text className="fig-t fig-b fig-mid" x="200" y="306">業務上の判断が集約されている</text>
+<rect className="fig-box-soft" x="16" y="318" width="368" height="248" rx="12" />
+<rect className="fig-box" x="32" y="334" width="336" height="96" rx="8" />
+<text className="fig-t fig-b" x="48" y="357">業務の状態と遷移</text>
+<rect className="fig-fill-accent" x="48" y="372" width="120" height="8" rx="3" />
+<rect className="fig-fill-accent" x="48" y="388" width="168" height="8" rx="3" />
+<rect className="fig-fill-accent" x="48" y="404" width="96" height="8" rx="3" />
+<rect className="fig-fill-bar" x="32" y="456" width="152" height="8" rx="3" />
+<rect className="fig-fill-bar" x="48" y="476" width="200" height="8" rx="3" />
+<rect className="fig-fill-bar" x="48" y="496" width="112" height="8" rx="3" />
+<rect className="fig-fill-bar" x="64" y="516" width="176" height="8" rx="3" />
+<rect className="fig-fill-bar" x="32" y="536" width="128" height="8" rx="3" />
+<circle className="fig-fill-spot fig-travel" cx="0" cy="0" r="34" style={{ '--fig-x0': '320px', '--fig-y0': '510px', '--fig-x1': '112px', '--fig-y1': '396px', '--fig-xr': '112px', '--fig-yr': '396px', '--fig-dur': '6s' }} />
+<circle className="fig-fill-spot" cx="58" cy="588" r="8" />
+<text className="fig-t fig-t-sm" x="74" y="593">注意</text>
+<rect className="fig-fill-accent" x="124" y="584" width="24" height="8" rx="3" />
+<text className="fig-t fig-t-sm" x="156" y="593">業務上の判断</text>
+<rect className="fig-fill-bar" x="262" y="584" width="24" height="8" rx="3" />
+<text className="fig-t fig-t-sm" x="294" y="593">コードの行</text>
+</svg>
+<figcaption>業務上の判断の配置先が決まっていれば、人とエージェントの注意をそこに集中できます。</figcaption>
+</figure>
+
+PRD に記述されたビジネスの関心と、コードに実装されたビジネスロジックの構造が一致しているほど、変更容易性は高くなり、PRD と実装の乖離も防ぎやすくなります。エージェントがビジネスロジックに集中できる設計、つまりエージェントにとって認知負荷の低い設計が必要なのはこのためです。
+
+業務上の判断が業務の用語で一か所に集約されていれば、人もエージェントも、コードから PRD への逆方向の確認を偶然に依存せず、定常的に実施できます。今回の不具合は、私が偶然コードを読んだことで検出されました。この確認を定常的な工程にすることが、設計の役割だと考えています。
+
+## 設計のスタイルは問わない
+
+どのような設計を採用すべきかについて、私は特定のスタイルにこだわる必要はないと考えています。
+
+たとえば、Rails で ActiveRecord を使いながらクリーンアーキテクチャを無理に適用しても、うまく機能しません。Rails に問題があるのではなく、フレームワークの前提に反する設計を採用すると、業務以外の要素に注意を割かれるためです。重要なのは、注意を向けるべきロジックに注意を向けられる設計を選択することです。
+
+私は TypeScript による関数型ドメインモデリングを採用しています。業務の状態と、状態間の遷移を一か所に集約して記述する手法です。この構造であれば、エージェントにコードから状態遷移図を生成させ、PRD の状態遷移と照合できます。前述の「別の端末で再開する」振る舞いを実装する場合は、名前を持つ遷移として定義されます。PRD に存在しない遷移が追加されたことを、状態遷移図の差分として検出できます。
+
+<figure className="fig">
+<svg viewBox="0 0 400 336" role="img" aria-labelledby="fig-st-title fig-st-desc">
+<title id="fig-st-title">業務の状態と遷移の状態遷移図</title>
+<desc id="fig-st-desc">未着手、作業中、完了の3つの状態が、「開始する」と「完了する」の矢印で上から下へ接続されています。作業中の右下には「作業中（別の端末）」の箱があり、作業中から破線の矢印「別の端末で再開する」が数秒おきに現れ、「PRDにない遷移」のラベルが追加されます。右上の凡例では、実線がPRDにある遷移、破線がPRDにない遷移です。</desc>
+<defs>
+<marker id="fig-st-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path className="fig-mk" d="M0 0L10 5L0 10z" /></marker>
+<mask id="fig-st-mask" maskUnits="userSpaceOnUse" x="190" y="150" width="200" height="100"><path className="fig-mask-stroke fig-draw-at-2" pathLength="100" d="M200 172H306V238" /></mask>
+</defs>
+<path className="fig-stroke" d="M232 48H264" />
+<text className="fig-t fig-t-sm" x="272" y="52">PRDにある遷移</text>
+<path className="fig-stroke-accent fig-dash" d="M232 72H264" />
+<text className="fig-t fig-t-sm" x="272" y="76">PRDにない遷移</text>
+<rect className="fig-box" x="40" y="40" width="160" height="56" rx="10" />
+<rect className="fig-box" x="40" y="144" width="160" height="56" rx="10" />
+<rect className="fig-box" x="40" y="248" width="160" height="56" rx="10" />
+<rect className="fig-box" x="232" y="248" width="148" height="56" rx="10" />
+<text className="fig-t fig-b fig-mid" x="120" y="73">未着手</text>
+<text className="fig-t fig-b fig-mid" x="120" y="177">作業中</text>
+<text className="fig-t fig-b fig-mid" x="120" y="281">完了</text>
+<text className="fig-t fig-b fig-mid" x="306" y="273">作業中</text>
+<text className="fig-t fig-mid" x="306" y="291">（別の端末）</text>
+<path className="fig-stroke" d="M120 100V138" marker-end="url(#fig-st-a)" />
+<text className="fig-t fig-t-sm" x="132" y="124">開始する</text>
+<path className="fig-stroke" d="M120 204V242" marker-end="url(#fig-st-a)" />
+<text className="fig-t fig-t-sm" x="132" y="228">完了する</text>
+<path className="fig-stroke-accent fig-dash" d="M200 172H306V238" mask="url(#fig-st-mask)" />
+<path className="fig-mk-accent fig-at-2" d="M306 246L301 236H311Z" />
+<text className="fig-t fig-t-sm fig-at-2" x="212" y="164">別の端末で再開する</text>
+<g className="fig-at-3"><rect className="fig-box-accent" x="186" y="208" width="116" height="28" rx="8" /><text className="fig-t fig-t-sm fig-b fig-mid fig-c-accent" x="244" y="226">PRDにない遷移</text></g>
+</svg>
+<figcaption>状態と遷移を一か所に集約すると、PRDに存在しない遷移の追加を状態遷移図で検出できます。</figcaption>
+</figure>
+
+この設計を採用しても、不適切なコードの記述を防げるわけではありません。変わるのは、業務上の判断の配置先が決まることです。配置先が決まっていれば、そこから外れたコードはレビューで検出しやすくなります。
+
+## おわりに
+
+開発速度で差別化できなくなった現在、差別化要因は機能適合性という品質です。コードを読む機会が減ったからこそ、業務上の判断の所在を人とエージェントの両方が把握できる設計を選択したいと考えています。
+
+関数型ドメインモデリングの原則は、エージェント向けのスキル [kamae](https://kosui.me/posts/2026/04/08/functional-ts-principles) として公開しています。動物病院の予約とカルテ管理を題材にした[ハンズオン教材](https://fp-with-ts-hands-on.kosui.workers.dev/)（[リポジトリ](https://github.com/iwasa-kosui/fp-with-ts-hands-on)）も公開しており、2026年8月30日にはイベントとして開催しました。設計スタイルの一例として参考にしてください。
