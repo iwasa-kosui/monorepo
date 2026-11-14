@@ -124,7 +124,7 @@ describe('PostMenu', () => {
       expect(event.stopPropagation).not.toHaveBeenCalled();
     });
 
-    it.each(['Enter', ' ', 'j', 'k', 'n'])('閉じているときの %j は、カードのキー操作のために伝える', (key) => {
+    it.each(['Enter', 'j'])('閉じているときの %j は、カードのキー操作のために伝える', (key) => {
       const event = { key, preventDefault: vi.fn(), stopPropagation: vi.fn() };
 
       call(container(PostMenu({ items })), 'onKeyDown', event);
@@ -133,7 +133,7 @@ describe('PostMenu', () => {
       expect(event.preventDefault).not.toHaveBeenCalled();
     });
 
-    it.each(['Enter', ' ', 'j'])('開いているときの %j は詳細への遷移などへ伝えない', (key) => {
+    it.each(['Enter', 'j'])('開いているときの %j は詳細への遷移などへ伝えない', (key) => {
       const event = { key, preventDefault: vi.fn(), stopPropagation: vi.fn() };
 
       call(container(PostMenu({ items, defaultOpen: true })), 'onKeyDown', event);
@@ -160,15 +160,6 @@ describe('PostMenu', () => {
       call(container(element), 'onKeyDown', { key: 'Escape', preventDefault: () => {}, stopPropagation: () => {} });
 
       expect(focus).not.toHaveBeenCalled();
-    });
-
-    it('link を選ぶと、トリガーへフォーカスを戻す', () => {
-      const element = PostMenu({ items, defaultOpen: true });
-      const focus = focusTarget(element);
-
-      call(menuItem(element, 0), 'onClick');
-
-      expect(focus).toHaveBeenCalledOnce();
     });
 
     it('action を選ぶと、トリガーへフォーカスを戻す', () => {

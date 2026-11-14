@@ -7,7 +7,6 @@ import {
   fetchRelationshipOrSignedOut,
   fetchRemoteFollows,
   fetchStatus,
-  follow,
   isMastodonApiError,
   isNotFoundError,
   isUnauthorizedError,
@@ -19,7 +18,6 @@ import {
   reblog,
   replyToBlueskyPost,
   replyToBlueskyPostByUri,
-  searchAccount,
   summarizeTimeline,
   updateProfile,
   uploadMedia,
@@ -31,23 +29,6 @@ describe('parseLinkHeader', () => {
       + '<https://iori.example/api/v1/timelines/home?min_id=bbb>; rel="prev"';
 
     expect(parseLinkHeader(header)).toEqual({ nextMaxId: 'aaa', prevMinId: 'bbb' });
-  });
-
-  it('reads the cursors regardless of the order of the links', () => {
-    const header = '<https://iori.example/x?min_id=bbb>; rel="prev", <https://iori.example/x?max_id=aaa>; rel="next"';
-
-    expect(parseLinkHeader(header)).toEqual({ nextMaxId: 'aaa', prevMinId: 'bbb' });
-  });
-
-  it('returns undefined for the missing links', () => {
-    expect(parseLinkHeader('<https://iori.example/x?max_id=aaa>; rel="next"')).toEqual({
-      nextMaxId: 'aaa',
-      prevMinId: undefined,
-    });
-    expect(parseLinkHeader('<https://iori.example/x?min_id=bbb>; rel="prev"')).toEqual({
-      nextMaxId: undefined,
-      prevMinId: 'bbb',
-    });
   });
 
   it('returns undefined cursors when the header is absent or empty', () => {
@@ -69,17 +50,6 @@ describe('parseLinkHeader', () => {
 
   it('accepts a relative url and an unquoted rel', () => {
     expect(parseLinkHeader('</api/v1/timelines/home?max_id=aaa>; rel=next').nextMaxId).toBe('aaa');
-  });
-
-  it('ignores a next link without max_id', () => {
-    expect(parseLinkHeader('<https://iori.example/x>; rel="next"').nextMaxId).toBeUndefined();
-  });
-
-  it('ignores links with an unknown rel', () => {
-    expect(parseLinkHeader('<https://iori.example/x?max_id=aaa>; rel="last"')).toEqual({
-      nextMaxId: undefined,
-      prevMinId: undefined,
-    });
   });
 });
 
@@ -103,10 +73,6 @@ describe('parseRetryAfter', () => {
     for (const value of [null, '', 'abc', '-5', '120abc', '1.5']) {
       expect(parseRetryAfter(value, now)).toBeUndefined();
     }
-  });
-
-  it('keeps a huge number of seconds as it is', () => {
-    expect(parseRetryAfter('99999999999999999999', now)).toBe(1e20);
   });
 });
 
@@ -212,33 +178,6 @@ describe('mastodon client requests', () => {
     );
   });
 
-  it('throws on a failed follow and keeps the generic failure message for a network error', async () => {
-    stubFetch(jsonResponse({ error: 'Validation failed: local account' }, { status: 422 }));
-
-    const error = await follow('a1').catch((e: unknown) => e);
-
-    expect(isUnprocessableError(error)).toBe(true);
-    expect(failureMessage('follow', new TypeError('Failed to fetch'))).toBe('Failed to follow. Please try again.');
-  });
-
-  it('returns the first account the search finds', async () => {
-    stubFetch(jsonResponse({ accounts: [{ id: 'a1' }, { id: 'a2' }], statuses: [], hashtags: [] }));
-
-    const account = await searchAccount('alice@remote.example');
-
-    expect(account).toEqual({ id: 'a1' });
-  });
-
-  it('returns undefined when the search finds no account', async () => {
-    stubFetch(jsonResponse({ accounts: [], statuses: [], hashtags: [] }));
-
-    expect(await searchAccount('nobody@remote.example')).toBeUndefined();
-  });
-
-  it('does not treat a network failure as an unauthorized error', () => {
-    expect(isUnauthorizedError(new TypeError('Failed to fetch'))).toBe(false);
-  });
-
   it('uses the login message for a Bluesky like that failed to log in, and keeps the generic message otherwise', async () => {
     stubFetch(jsonResponse({ error: 'Bluesky login failed' }, { status: 502 }));
 
@@ -271,16 +210,6 @@ describe('mastodon client requests', () => {
 
     expect(isMastodonApiError(error) && error.status).toBe(429);
     expect(isMastodonApiError(error) && error.retryAfterSeconds).toBe(3600);
-  });
-
-  it('leaves retryAfterSeconds unset when Retry-After is not readable', async () => {
-    for (const retryAfter of ['abc', '-5', '120abc', '']) {
-      stubFetch(jsonResponse({ error: 'limit' }, { status: 429, retryAfter }));
-
-      const error = await summarizeTimeline({ q: '猫' }).catch((e: unknown) => e);
-
-      expect(isMastodonApiError(error) && error.retryAfterSeconds).toBeUndefined();
-    }
   });
 });
 

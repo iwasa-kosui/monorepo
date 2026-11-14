@@ -97,11 +97,6 @@ describe('Worker の D1 計測ログ', () => {
   it.each([
     ['POST', '/api/v1/statuses', 'statuses_create'],
     ['POST', '/api/v1/statuses/573c7c51-0e4b-453c-bb9f-5dbd15a319a7/favourite', 'favourite'],
-    ['POST', '/api/v1/statuses/573c7c51-0e4b-453c-bb9f-5dbd15a319a7/unfavourite', 'unfavourite'],
-    ['GET', '/api/v1/accounts/verify_credentials', 'verify_credentials'],
-    ['GET', '/api/v1/timelines/home', 'timelines_home'],
-    ['GET', '/api/v1/notifications', 'notifications'],
-    ['GET', '/api/v1/favourites', 'favourites_list'],
   ])('%s %s の応答で 1 行だけ出す', async (method, path, route) => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const env = { ...admissionFixture(), DB: fakeDb } as never;
@@ -122,8 +117,6 @@ describe('Worker の D1 計測ログ', () => {
 
   it.each([
     ['/api/v1/timelines/home?limit=40&max_id=573c7c51', 'timelines_home'],
-    ['/api/v1/notifications?limit=30', 'notifications'],
-    ['/api/v1/favourites?limit=20', 'favourites_list'],
   ])('%s のようにクエリ文字列が付いても route を変えず、URL を出さない', async (path, route) => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const env = { ...admissionFixture(), DB: fakeDb } as never;

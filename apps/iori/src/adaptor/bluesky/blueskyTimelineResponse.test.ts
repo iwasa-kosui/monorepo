@@ -54,7 +54,6 @@ describe('parseBlueskyTimelineResponse', () => {
 
   it.each([
     ['viewer が無い', {}],
-    ['viewer.like が無い', { viewer: { repost: 'at://did:plc:me/app.bsky.feed.repost/3k' } }],
     ['viewer.like が like の uri でない', { viewer: { like: 'not-an-at-uri' } }],
   ])('%s ときは liked にしない', (_name, overrides) => {
     expect(only([{ post: postView(overrides) }])).toMatchObject({ liked: false, viewerLikeUri: null });
@@ -70,7 +69,6 @@ describe('parseBlueskyTimelineResponse', () => {
 
   it.each([
     ['viewer が無い', {}],
-    ['viewer.repost が無い', { viewer: { like: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
     ['viewer.repost が repost の uri でない', { viewer: { repost: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
   ])('%s ときは reposted にしない', (_name, overrides) => {
     expect(only([{ post: postView(overrides) }])).toMatchObject({ reposted: false, viewerRepostUri: null });

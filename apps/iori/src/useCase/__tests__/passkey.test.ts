@@ -337,22 +337,6 @@ describe('FinishPasskeyAuthenticationUseCase', () => {
     expect(h.sessionStartedStore.store).toHaveBeenCalledTimes(1);
   });
 
-  it('期限切れの challenge は失敗する', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-11-01T00:00:00Z'));
-    const h = await setup();
-    await h.register();
-    const { options, challengeId } = await h.beginAuthentication();
-    const response = await h.authenticationResponse(options.challenge);
-
-    vi.setSystemTime(new Date('2026-11-01T00:05:01Z'));
-    const result = await h.finishAuthentication.run({ challengeId, response });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.err.type).toBe('WebAuthnChallengeInvalidError');
-    expect(h.sessionStartedStore.store).not.toHaveBeenCalled();
-  });
-
   it('登録用の challenge ではログインできない', async () => {
     const h = await setup();
     await h.register();

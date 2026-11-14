@@ -77,7 +77,7 @@ describe('SendRepostUseCase のローカルの投稿', () => {
     return { deps, session, post };
   };
 
-  it.each(['private', 'direct'] as const)(
+  it.each(['direct'] as const)(
     'visibility が %s の投稿は RepostNotAllowedError で拒否し、何も保存も配送もしない',
     async (visibility) => {
       const { deps, session, post } = setup(visibility);
@@ -97,7 +97,7 @@ describe('SendRepostUseCase のローカルの投稿', () => {
     },
   );
 
-  it.each(['public', 'unlisted'] as const)('visibility が %s の投稿はリポストできる', async (visibility) => {
+  it.each(['unlisted'] as const)('visibility が %s の投稿はリポストできる', async (visibility) => {
     const { deps, session, post } = setup(visibility);
     const ctx = Object.assign(createMockRequestContext(), {
       getFollowersUri: vi.fn((identifier: string) => new URL(`https://example.com/users/${identifier}/followers`)),

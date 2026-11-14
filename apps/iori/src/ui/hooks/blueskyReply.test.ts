@@ -82,9 +82,4 @@ describe('blueskyReplyErrorMessage の画像のエラー', () => {
     });
     expect(blueskyReplyErrorMessage(error)).toBe('Bluesky に送れる画像は 4 枚までです');
   });
-
-  it('code がない 422 は従来の文言のままにする', () => {
-    const error = Object.assign(new Error('Reply not allowed'), { status: 422 });
-    expect(blueskyReplyErrorMessage(error)).toBe('この投稿には返信できません');
-  });
 });

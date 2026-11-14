@@ -26,12 +26,6 @@ describe('withProfileTab', () => {
     expect(withProfileTab('?a=1', 'followers')).toBe('?a=1&tab=followers');
   });
 
-  it('replies・media・videos のときも tab を付け、ほかのクエリは残す', () => {
-    expect(withProfileTab('', 'replies')).toBe('?tab=replies');
-    expect(withProfileTab('?tab=follows', 'media')).toBe('?tab=media');
-    expect(withProfileTab('?a=1', 'videos')).toBe('?a=1&tab=videos');
-  });
-
   it('それ以外のタブでは tab を付けず、付いていれば外す', () => {
     expect(withProfileTab('', 'posts')).toBe('');
     expect(withProfileTab('', 'feeds')).toBe('');

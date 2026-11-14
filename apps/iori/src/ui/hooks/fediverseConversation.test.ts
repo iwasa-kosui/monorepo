@@ -6,15 +6,10 @@ import type {
   IoriFediverseConversationPeerBody,
 } from '../../adaptor/routes/workerIoriFediverseConversationsRouter.ts';
 import {
-  FEDIVERSE_ACTOR_NOT_FOUND_MESSAGE,
-  FEDIVERSE_DELIVERY_FAILED_MESSAGE,
-  FEDIVERSE_NOT_FOUND_MESSAGE,
-  FEDIVERSE_NOT_PERMITTED_MESSAGE,
   FEDIVERSE_PEER_REJECTED_MESSAGE,
   FEDIVERSE_RETRY_MESSAGE,
   fediverseCharacterCount,
   fediverseChatPath,
-  fediverseErrorMessage,
   fediverseErrorMessageOf,
   fediverseMessageDisclosure,
   fediverseRemainingCharacters,
@@ -97,29 +92,7 @@ describe('fediverseRouteOfPath / fediverseChatPath', () => {
   });
 });
 
-describe('fediverseErrorMessage', () => {
-  const failure = (status: number | undefined, code?: string, reason?: string) => ({ status, code, reason });
-
-  it('ステータスごとの案内にする', () => {
-    expect(fediverseErrorMessage(failure(403, 'Forbidden'))).toBe(FEDIVERSE_NOT_PERMITTED_MESSAGE);
-    expect(fediverseErrorMessage(failure(400, 'Validation failed: key'))).toBe(FEDIVERSE_NOT_FOUND_MESSAGE);
-    expect(fediverseErrorMessage(failure(404, 'Record not found'))).toBe(FEDIVERSE_ACTOR_NOT_FOUND_MESSAGE);
-    expect(fediverseErrorMessage(failure(502))).toBe(FEDIVERSE_DELIVERY_FAILED_MESSAGE);
-    expect(fediverseErrorMessage(failure(500))).toBe(FEDIVERSE_RETRY_MESSAGE);
-    expect(fediverseErrorMessage(failure(undefined))).toBe(FEDIVERSE_RETRY_MESSAGE);
-  });
-
-  it('422 は理由ごとに案内する', () => {
-    expect(fediverseErrorMessage(failure(422, 'Validation failed: peers'))).toBe(FEDIVERSE_PEER_REJECTED_MESSAGE);
-    expect(fediverseErrorMessage(failure(422, 'Validation failed: text', 'empty'))).toBe(
-      'メッセージを入力してください。',
-    );
-    expect(fediverseErrorMessage(failure(422, 'Validation failed: text', 'too_long'))).toBe(
-      'メッセージは 10000 文字までです。',
-    );
-    expect(fediverseErrorMessage(failure(422, 'Validation failed: text', 'other'))).toBe(FEDIVERSE_RETRY_MESSAGE);
-  });
-
+describe('fediverseErrorMessageOf', () => {
   it('API のエラーだけを読み取り、それ以外は再試行の案内にする', () => {
     const apiError = Object.assign(new Error('x'), {
       status: 422,

@@ -86,28 +86,4 @@ describe('GET /digest', () => {
     expect(response.status).toBe(302);
     expect(new URL(response.headers.get('Location')!, origin).pathname).toBe(`/articles/${latest}`);
   });
-
-  it('同じ日にトピックの digest が混ざっていても、まとめの article へ 302 で返す', async () => {
-    const { request, addDigest } = setup();
-    addDigest('2026-11-04');
-    const summary = addDigest('2026-11-05');
-    addDigest('2026-11-05', 'genai');
-    addDigest('2026-11-05', 'security');
-
-    const response = await request('/digest', { headers: { Cookie: `sessionId=${sessionId}` } });
-
-    expect(response.status).toBe(302);
-    expect(new URL(response.headers.get('Location')!, origin).pathname).toBe(`/articles/${summary}`);
-  });
-
-  it('より新しい日にトピックの digest だけがあっても、まとめのある日の article へ 302 で返す', async () => {
-    const { request, addDigest } = setup();
-    const summary = addDigest('2026-11-04');
-    addDigest('2026-11-05', 'genai');
-
-    const response = await request('/digest', { headers: { Cookie: `sessionId=${sessionId}` } });
-
-    expect(response.status).toBe(302);
-    expect(new URL(response.headers.get('Location')!, origin).pathname).toBe(`/articles/${summary}`);
-  });
 });

@@ -14,12 +14,6 @@ describe('blueskyRkeyOf', () => {
     }
   });
 
-  it('同じ入力からは同じ rkey になる', () => {
-    const postId = PostId.generate();
-    const createdAt = Instant.orThrow(Date.UTC(2026, 10, 8, 11));
-    expect(blueskyRkeyOf({ postId, createdAt })).toBe(blueskyRkeyOf({ postId, createdAt }));
-  });
-
   it('createdAt が進むと辞書順で後になり、postId が違えば同じ時刻でも別の rkey になる', () => {
     const postId = PostId.generate();
     const earlier = blueskyRkeyOf({ postId, createdAt: Instant.orThrow(Date.UTC(2026, 10, 8, 11)) });

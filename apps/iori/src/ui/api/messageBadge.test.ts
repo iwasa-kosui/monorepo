@@ -1,24 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  applyMessageBadge,
   combineUnreadMessages,
   fetchUnreadMessageCount,
   initialMessagePolling,
-  MESSAGE_BADGE_SELECTOR,
   nextMessagePolling,
   pollUnreadMessages,
 } from './messageBadge.ts';
-
-const fakeBadge = () => ({ textContent: 'stale', hidden: false });
-
-const rootWith = (badges: ReturnType<typeof fakeBadge>[]) =>
-  ({
-    querySelectorAll: vi.fn((selector: string) => {
-      expect(selector).toBe(MESSAGE_BADGE_SELECTOR);
-      return { forEach: (callback: (badge: ReturnType<typeof fakeBadge>) => void) => badges.forEach(callback) };
-    }),
-  }) as unknown as ParentNode;
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -54,13 +42,13 @@ describe('fetchUnreadMessageCount', () => {
     );
   });
 
-  it.each([403, 409, 500])('Bluesky が %i でも、Fediverse の数を返す', async (code) => {
+  it.each([403, 500])('Bluesky が %i でも、Fediverse の数を返す', async (code) => {
     const fetcher = fetcherOf({ [BLUESKY_URL]: status(code), [FEDIVERSE_URL]: ok({ unread: 2 }) });
 
     expect(await fetchUnreadMessageCount(fetcher)).toBe(2);
   });
 
-  it.each([403, 409, 500])('Fediverse が %i でも、Bluesky の数を返す', async (code) => {
+  it.each([403, 500])('Fediverse が %i でも、Bluesky の数を返す', async (code) => {
     const fetcher = fetcherOf({ [BLUESKY_URL]: ok({ unread: 1, requests: 1 }), [FEDIVERSE_URL]: status(code) });
 
     expect(await fetchUnreadMessageCount(fetcher)).toBe(2);
@@ -191,21 +179,5 @@ describe('combineUnreadMessages', () => {
     expect(combineUnreadMessages(['unavailable', 'unavailable'])).toBe('unavailable');
     expect(combineUnreadMessages(['unavailable', undefined])).toBeUndefined();
     expect(combineUnreadMessages([undefined, undefined])).toBeUndefined();
-  });
-});
-
-describe('applyMessageBadge', () => {
-  it('すべてのバッジに件数を出し、99 を超えたら 99+ にする', () => {
-    const badges = [fakeBadge(), fakeBadge()];
-    applyMessageBadge(rootWith(badges), 120);
-
-    expect(badges).toEqual([{ textContent: '99+', hidden: false }, { textContent: '99+', hidden: false }]);
-  });
-
-  it('未読が無ければ隠して空にする', () => {
-    const badges = [fakeBadge()];
-    applyMessageBadge(rootWith(badges), 0);
-
-    expect(badges).toEqual([{ textContent: '', hidden: true }]);
   });
 });

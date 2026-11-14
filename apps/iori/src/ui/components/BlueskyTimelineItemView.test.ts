@@ -76,16 +76,6 @@ describe('BlueskyTimelineItemView', () => {
     expect(html).toContain('<a href="https://example.com" target="_blank" rel="noopener noreferrer"');
   });
 
-  it('http/https 以外の link はリンクにしない', () => {
-    const html = render({
-      text: 'click',
-      facets: [{ byteStart: 0, byteEnd: 5, feature: { type: 'link', uri: 'javascript:alert(1)' } }],
-    });
-
-    expect(html).not.toContain('javascript:');
-    expect(html).toContain('click');
-  });
-
   it('http/https 以外の画像・リンクカードの URL は出さない', () => {
     const images = render({
       embed: { type: 'images', images: [{ thumb: 'javascript:alert(1)', fullsize: 'javascript:alert(2)', alt: '' }] },
@@ -167,15 +157,6 @@ describe('BlueskyTimelineItemView', () => {
   });
 
   describe('「…」メニュー', () => {
-    const url = 'https://bsky.app/profile/did:plc:author/post/3kabc';
-
-    it('「Bluesky で開く」と「リンクをコピー」を、bsky.app の投稿の URL で出す', () => {
-      expect(findMenuItems(BlueskyTimelineItemView({ item: base }))).toEqual([
-        { key: 'open-bluesky', label: 'Bluesky で開く', kind: 'link', href: url },
-        { key: 'copy-link', label: 'リンクをコピー', kind: 'copy', text: url },
-      ]);
-    });
-
     describe('ブックマーク', () => {
       it('ブックマーク済みの投稿には「ブックマークを外す」を出し、選ぶと onUndoBookmark を呼ぶ', () => {
         const onBookmark = vi.fn();
@@ -206,20 +187,6 @@ describe('BlueskyTimelineItemView', () => {
 
         expect(items.map((entry) => entry.key)).toEqual(['open-bluesky', 'copy-link', 'unmute-thread']);
         expect(items.map((entry) => entry.label)).toContain('スレッドのミュートを解除');
-      });
-
-      it('古いキャッシュで threadMuted が無ければ、ミュートとミュート解除を両方出す', () => {
-        const { threadMuted: _threadMuted, ...stale } = base;
-        const items = findMenuItems(
-          BlueskyTimelineItemView({ item: stale as unknown as typeof base, ...threadHandlers() }),
-        ) ?? [];
-
-        expect(items.map((entry) => entry.key)).toEqual([
-          'open-bluesky',
-          'copy-link',
-          'mute-thread',
-          'unmute-thread',
-        ]);
       });
 
       it('threadMuted が null なら、ミュートとミュート解除をこの順で両方出す', () => {

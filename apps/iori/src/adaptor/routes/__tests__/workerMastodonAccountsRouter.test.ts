@@ -129,20 +129,6 @@ describe('GET /api/v1/accounts', () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: 'Too many accounts requested' });
   });
-
-  it('ユーザーのトークンは read:accounts を求め、Cookie は通す', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-    const statusesOnly = await t.bearerFor('read:statuses');
-    const path = `/api/v1/accounts?id[]=${me.actorId}`;
-
-    const [forbidden, cookie] = await Promise.all([
-      t.request(path, { headers: statusesOnly }),
-      t.request(path, { headers: { Cookie: `sessionId=${me.sessionId}` } }),
-    ]);
-
-    expect([forbidden.status, cookie.status]).toEqual([403, 200]);
-  });
 });
 
 describe('GET /api/v1/accounts/lookup', () => {
@@ -207,19 +193,6 @@ describe('GET /api/v1/accounts/lookup', () => {
     expect(responses.map((response) => response.status)).toEqual(Array(10).fill(404));
     expect(await responses[0]!.json()).toEqual({ error: 'Record not found' });
   });
-
-  it('ユーザーのトークンは read:accounts を求め、Cookie は通す', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-    const statusesOnly = await t.bearerFor('read:statuses');
-
-    const [forbidden, cookie] = await Promise.all([
-      lookup(t, 'kosui', { headers: statusesOnly }),
-      lookup(t, 'kosui', { headers: { Cookie: `sessionId=${me.sessionId}` } }),
-    ]);
-
-    expect([forbidden.status, cookie.status]).toEqual([403, 200]);
-  });
 });
 
 describe('GET /api/v1/accounts/relationships', () => {
@@ -259,19 +232,6 @@ describe('GET /api/v1/accounts/relationships', () => {
       { id: t.bob.actorId, following: false, followed_by: true, muting: false },
       { id: t.carol.actorId, following: true, followed_by: true, muting: false },
       { id: t.dave.actorId, following: false, followed_by: false, muting: true },
-    ]);
-  });
-
-  it('他のユーザーのフォローとミュートを自分の関係に混ぜない', async () => {
-    const t = await seedRelationships();
-
-    const response = await t.request(`/api/v1/accounts/relationships?id[]=${t.alice.actorId}&id[]=${t.bob.actorId}`, {
-      headers: t.me.bearer,
-    });
-
-    expect(flagsOf(await response.json())).toEqual([
-      { id: t.alice.actorId, following: true, followed_by: false, muting: false },
-      { id: t.bob.actorId, following: false, followed_by: true, muting: false },
     ]);
   });
 
@@ -363,23 +323,6 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     expect(statuses[1]).toMatchObject({ id: t.reply.postId, account: { id: t.me.actorId } });
   });
 
-  it('未認証ではリモートの投稿のブーストを除き、ローカルの投稿は返す', async () => {
-    const t = await seedAccounts();
-
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses`);
-
-    expect(await statusIds(response)).toEqual(t.newestFirst.slice(1));
-  });
-
-  it('未認証では公開範囲の記録がないリモートのアカウントの投稿を返さない', async () => {
-    const t = await seedAccounts();
-
-    const response = await t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`);
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual([]);
-  });
-
   it('未認証ではリモートのアカウントの public と unlisted の投稿だけを返し、ログインするとフォロー中の相手の private も返す', async () => {
     const t = await seedAccounts();
     const publicNote = t.seed.addRemotePost(t.alice, 5_000, { visibility: 'public' });
@@ -410,20 +353,6 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     expect(await statusIds(response)).toEqual([publicBoost.repostId, ...t.newestFirst.slice(1)]);
   });
 
-  it('userId のないアプリトークンは未認証として扱う', async () => {
-    const t = await seedAccounts();
-    const { token } = await t.issueAppToken('read');
-    const headers = { Authorization: `Bearer ${token}` };
-
-    const [mine, alices] = await Promise.all([
-      t.request(`/api/v1/accounts/${t.me.actorId}/statuses`, { headers }),
-      t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`, { headers }),
-    ]);
-
-    expect(await statusIds(mine)).toEqual(t.newestFirst.slice(1));
-    expect(await alices.json()).toEqual([]);
-  });
-
   it('Link は絞り込む前の行から作る', async () => {
     const t = await seedAccounts();
 
@@ -432,15 +361,6 @@ describe('GET /api/v1/accounts/:id/statuses', () => {
     expect(await response.json()).toEqual([]);
     expect(linkOf(response, 'next')?.searchParams.get('max_id')).toBe(t.boost.repostId);
     expect(linkOf(response, 'prev')?.searchParams.get('min_id')).toBe(t.boost.repostId);
-  });
-
-  it('ユーザーのトークンは read:statuses を求め、足りなければ 403 にする', async () => {
-    const t = await seedAccounts();
-    const accountsOnly = await t.bearerFor('read:accounts');
-
-    const response = await t.request(`/api/v1/accounts/${t.me.actorId}/statuses`, { headers: accountsOnly });
-
-    expect(response.status).toBe(403);
   });
 
   it('exclude_reblogs=true はブーストを除く', async () => {

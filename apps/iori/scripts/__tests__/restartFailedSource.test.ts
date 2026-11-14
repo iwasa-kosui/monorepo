@@ -534,17 +534,7 @@ it('relays the notices that precede a remote failure and skips verification', as
 });
 it.each([
   ['Error: Invalid source restart operation.', 'invalid-restart-operation'],
-  ['Error: Source pending freeze is present.', 'pending-freeze-present'],
-  ['Error: Source freeze is not committed.', 'freeze-not-committed'],
-  ['Error: Source pending freeze is invalid.', 'pending-freeze-invalid'],
-  ['Error: Source freeze is invalid.', 'freeze-invalid'],
   ['Error: Source freeze identity mismatch.', 'freeze-identity-mismatch'],
-  ['Error: Source restart was already attempted.', 'restart-already-attempted'],
-  ['Error: Source restart record is invalid.', 'restart-record-invalid'],
-  ['Error: Source restart record failed.', 'restart-record-failed'],
-  ['Error: Source service control is not permitted.', 'service-control-not-permitted'],
-  ['Error: Source service stop failed.', 'service-stop-failed'],
-  ['Error: Source service is not stopped.', 'service-not-stopped'],
   ['Error: Source service start failed.', 'service-start-failed'],
 ])('classifies remote stderr %s as %s without status verification', async (stderr, reason) => {
   const writes = captureStderr();

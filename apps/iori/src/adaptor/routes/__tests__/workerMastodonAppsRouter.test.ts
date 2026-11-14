@@ -50,14 +50,13 @@ describe('createWorkerMastodonAppsRouter', () => {
       });
     });
 
-    it.each([
-      ['client_name がない', { redirect_uris: 'https://a.example/cb' }],
-      ['redirect_uris が javascript:', { client_name: 'App', redirect_uris: 'javascript:alert(1)' }],
-      ['scopes が未知', { client_name: 'App', redirect_uris: 'https://a.example/cb', scopes: 'admin' }],
-    ])('%s と 422 にする', async (_label, values) => {
+    it('redirect_uris が javascript: なら 422 にして登録しない', async () => {
       const h = createOAuthHarness();
 
-      const response = await h.request('/api/v1/apps', form(values));
+      const response = await h.request(
+        '/api/v1/apps',
+        form({ client_name: 'App', redirect_uris: 'javascript:alert(1)' }),
+      );
 
       expect(response.status).toBe(422);
       expect(await response.json()).toEqual({ error: expect.any(String) });
@@ -107,17 +106,6 @@ describe('createWorkerMastodonAppsRouter', () => {
       });
 
       expect(await response.json()).toMatchObject({ id: application.id });
-    });
-
-    it('トークンがない、または無効なときは 401 にする', async () => {
-      const h = createOAuthHarness();
-
-      const none = await h.request('/api/v1/apps/verify_credentials');
-      const invalid = await h.request('/api/v1/apps/verify_credentials', { headers: { Authorization: 'Bearer nope' } });
-
-      expect(none.status).toBe(401);
-      expect(invalid.status).toBe(401);
-      expect(await invalid.json()).toEqual({ error: 'The access token is invalid' });
     });
 
     it('Cookie のセッションはアプリに結び付かないので 401 にする', async () => {

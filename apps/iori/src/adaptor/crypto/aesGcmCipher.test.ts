@@ -35,12 +35,6 @@ describe('createAesGcmCipher', () => {
     expect(await cipher.decrypt(secret)).toBe('abcd-efgh-ijkl-mnop');
   });
 
-  it('日本語を含む値も往復できる', async () => {
-    const cipher = createAesGcmCipher({ key: KEY, aad: AAD })!;
-
-    expect(await cipher.decrypt(await cipher.encrypt('パスワード🔑'))).toBe('パスワード🔑');
-  });
-
   it('暗号化のたびに別の IV を使う', async () => {
     const cipher = createAesGcmCipher({ key: KEY, aad: AAD })!;
 

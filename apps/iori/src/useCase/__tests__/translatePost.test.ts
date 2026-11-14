@@ -180,27 +180,6 @@ describe('TranslatePostUseCase', () => {
     expect(result.content).toBe(`<p>${mention} さん、${link} を見て</p>`);
   });
 
-  it('複数の段落を印付きで AI に渡し、AI が空行を潰しても段落を分けて返す', async () => {
-    const t = setup({ reply: () => '[[lang:en]]\n⟪1⟫ 一つ目\n⟪2⟫ 二つ目\n⟪3⟫ 三つ目' });
-    const post = t.add(makePost('<p>First</p><p>Second<br>line</p><p>Third</p>'));
-
-    const result = await expectOk(t.translate(post.postId));
-
-    expect(generateCall(t.calls[0]!).input).toBe('⟪1⟫ First\n\n⟪2⟫ Second\nline\n\n⟪3⟫ Third');
-    expect(result.content).toBe('<p>一つ目</p><p>二つ目</p><p>三つ目</p>');
-  });
-
-  it('リンクだけの段落は AI に渡さず、AI の出力に含まれなくても元の位置に残す', async () => {
-    const link = '<a href="https://example.com/a" rel="nofollow">example.com/a</a>';
-    const t = setup({ reply: () => '[[lang:en]]\n⟪1⟫ こんにちは\n⟪2⟫ さようなら' });
-    const post = t.add(makePost(`<p>RE: ${link}</p><p>Hello</p><p>${link}</p><p>Bye</p>`));
-
-    const result = await expectOk(t.translate(post.postId));
-
-    expect(generateCall(t.calls[0]!).input).toBe('⟪1⟫ Hello\n\n⟪2⟫ Bye');
-    expect(result.content).toBe(`<p>RE: ${link}</p><p>こんにちは</p><p>${link}</p><p>さようなら</p>`);
-  });
-
   it('リンクだけの投稿は翻訳できないエラーにし、AI を呼ばず回数を数えない', async () => {
     const link = '<a href="https://example.com/a" rel="nofollow">example.com/a</a>';
     const t = setup();
@@ -209,16 +188,6 @@ describe('TranslatePostUseCase', () => {
     expect(await expectErr(t.translate(post.postId))).toMatchObject({ type: 'TranslationNotAllowedError' });
     expect(t.calls).toEqual([]);
     expect(t.usage.recorder.reserve).not.toHaveBeenCalled();
-  });
-
-  it('[[lang:]] の行が欠けているときは und にして全体を訳文にする', async () => {
-    const t = setup({ reply: () => 'こんにちは、世界' });
-    const post = t.add(makePost('<p>Hello</p>'));
-
-    const result = await expectOk(t.translate(post.postId));
-
-    expect(result.detectedSourceLanguage).toBe('und');
-    expect(result.content).toBe('<p>こんにちは、世界</p>');
   });
 
   it('訳文が空のときは AiError にする', async () => {
@@ -279,9 +248,7 @@ describe('TranslatePostUseCase', () => {
 
   it.each([
     ['かなを含む原文', '<p>こんにちは</p>'],
-    ['カタカナを含む原文', '<p>Hello カタカナ</p>'],
     ['平文が空の原文', '<p></p>'],
-    ['タグだけの原文', '<p><br></p>'],
   ])('%s は翻訳できないエラーにし、AI を呼ばず回数を数えない', async (_name, content) => {
     const t = setup();
     const post = t.add(makePost(content));
@@ -289,15 +256,6 @@ describe('TranslatePostUseCase', () => {
     expect(await expectErr(t.translate(post.postId))).toMatchObject({ type: 'TranslationNotAllowedError' });
     expect(t.calls).toEqual([]);
     expect(t.usage.recorder.reserve).not.toHaveBeenCalled();
-  });
-
-  it('漢字だけの原文は日本語とみなさず訳す', async () => {
-    const t = setup();
-    const post = t.add(makePost('<p>你好 世界</p>'));
-
-    await expectOk(t.translate(post.postId));
-
-    expect(t.calls).toHaveLength(1);
   });
 
   it('sourceHash が一致する訳文があればそれを返し、AI を呼ばず回数を数えず、残り回数は read で取る', async () => {

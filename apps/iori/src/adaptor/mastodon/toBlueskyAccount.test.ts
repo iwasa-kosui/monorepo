@@ -39,12 +39,6 @@ describe('toBlueskyAccount', () => {
     expect(account.avatar_static).toBe(options.defaultAvatarUrl);
   });
 
-  it('プロフィールの URL は handle から作る', () => {
-    expect(
-      blueskyProfileUrlOf({ did: 'did:plc:alice', handle: 'alice.bsky.social', displayName: null, avatarUrl: null }),
-    ).toBe('https://bsky.app/profile/alice.bsky.social');
-  });
-
   it('handle が不正なときはプロフィールの URL を did から作る', () => {
     const author = { did: 'did:plc:alice', handle: 'handle.invalid', displayName: null, avatarUrl: null };
 

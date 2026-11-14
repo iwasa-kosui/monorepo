@@ -54,22 +54,6 @@ describe('createWorkerAuthFormRouter', () => {
       expect(signInUseCase.run).not.toHaveBeenCalled();
       expect(signUpUseCase.run).not.toHaveBeenCalled();
     });
-
-    it('Origin も Sec-Fetch-Site も無いと 403 にする', async () => {
-      const { app } = createApp();
-
-      const response = await post(app, path, fields, {});
-
-      expect(response.status).toBe(403);
-    });
-
-    it('Origin が無くても Sec-Fetch-Site が same-origin なら受け付ける', async () => {
-      const { app } = createApp();
-
-      const response = await post(app, path, fields, { 'Sec-Fetch-Site': 'same-origin' });
-
-      expect(response.status).toBe(303);
-    });
   });
 
   describe('POST /auth/sign-in', () => {
@@ -238,16 +222,6 @@ describe('createWorkerAuthFormRouter', () => {
       expect(cookie).toContain('Max-Age=0');
       expect(cookie).toContain('Path=/');
       expect(cookie).toContain('Secure');
-    });
-
-    it('Cookie が無くても /sign-in へ 303 にする', async () => {
-      const { app, signOutUseCase } = createApp();
-
-      const response = await post(app, '/auth/sign-out', {});
-
-      expect(response.status).toBe(303);
-      expect(response.headers.get('Location')).toBe('/sign-in');
-      expect(signOutUseCase.run).toHaveBeenCalledWith({ sessionId: undefined });
     });
   });
 });

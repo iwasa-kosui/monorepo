@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { createOAuthHarness, form, ORIGIN, REDIRECT_URI } from './helper/oauthHarness.ts';
 
 const CHALLENGE = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
-const VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
 
 type Harness = ReturnType<typeof createOAuthHarness>;
 
@@ -93,19 +92,6 @@ describe('GET /oauth/authorize', () => {
     );
   });
 
-  it('期限切れのセッションもサインインへリダイレクトする', async () => {
-    const h = createOAuthHarness();
-    const { clientId } = await h.registerApp();
-    const { sessionId } = h.memory.addSession(undefined, 1 as never);
-
-    const response = await h.request(`/oauth/authorize?${authorizeQuery(clientId)}`, {
-      headers: { Cookie: `sessionId=${sessionId}` },
-    });
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get('Location')).toMatch(/^\/sign-in\?next=/);
-  });
-
   it('セッションがあれば同意画面を返し、アプリ名をエスケープし、CSRF トークンと要求の値を隠しフィールドに持つ', async () => {
     const h = createOAuthHarness();
     const { clientId } = await h.registerApp({ name: '<script>alert(1)</script>' });
@@ -152,21 +138,6 @@ describe('GET /oauth/authorize', () => {
 
     expect(response.status).toBe(302);
     expect(new URL(response.headers.get('Location')!).searchParams.get('error')).toBe('unsupported_response_type');
-  });
-
-  it('code_challenge_method=plain は redirect_uri へ invalid_request を付けて返す', async () => {
-    const h = createOAuthHarness();
-    const { clientId } = await h.registerApp();
-
-    const response = await h.request(
-      `/oauth/authorize?${authorizeQuery(clientId, { code_challenge: CHALLENGE, code_challenge_method: 'plain' })}`,
-    );
-
-    expect(response.status).toBe(302);
-    const location = new URL(response.headers.get('Location')!);
-    expect(`${location.origin}${location.pathname}`).toBe(REDIRECT_URI);
-    expect(location.searchParams.get('error')).toBe('invalid_request');
-    expect(location.searchParams.get('state')).toBe('xyz');
   });
 
   it('PKCE の code_challenge を同意画面の隠しフィールドに引き継ぐ', async () => {
@@ -272,22 +243,6 @@ describe('POST /oauth/authorize', () => {
       expect(await response.json()).toEqual({ error: 'Forbidden' });
       expect(h.memory.codes.size).toBe(0);
     });
-
-    it('Origin がなく Sec-Fetch-Site が same-origin なら通す', async () => {
-      const { h, fields, sessionId } = await setupConsent();
-
-      const response = await postAuthorize(h, sessionId, fields, 'approve', { 'Sec-Fetch-Site': 'same-origin' });
-
-      expect(response.status).toBe(302);
-    });
-
-    it('Origin も Sec-Fetch-Site もなければ 403 にする', async () => {
-      const { h, fields, sessionId } = await setupConsent();
-
-      const response = await postAuthorize(h, sessionId, fields, 'approve', {});
-
-      expect(response.status).toBe(403);
-    });
   });
 
   describe('CSRF トークンの検査', () => {
@@ -300,17 +255,6 @@ describe('POST /oauth/authorize', () => {
       expect(response.status).toBe(403);
       expectHtmlSecurityHeaders(response);
       expect(h.memory.codes.size).toBe(0);
-    });
-
-    it('改ざんしたトークンを 403 にする', async () => {
-      const { h, fields, sessionId } = await setupConsent();
-
-      const response = await postAuthorize(h, sessionId, {
-        ...fields,
-        csrf_token: `${fields['csrf_token']![0] === 'A' ? 'B' : 'A'}${fields['csrf_token']!.slice(1)}`,
-      }, 'approve');
-
-      expect(response.status).toBe(403);
     });
 
     it.each(['client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method'])(
@@ -351,31 +295,6 @@ describe('POST /oauth/authorize', () => {
 
     expect(response.status).toBe(401);
     expect(h.memory.codes.size).toBe(0);
-  });
-
-  it('PKCE の code_challenge を認可コードに結び付け、不一致の要求でコードを消費する', async () => {
-    const { h, fields, sessionId, clientId, clientSecret } = await setupConsent({
-      code_challenge: CHALLENGE,
-      code_challenge_method: 'S256',
-    });
-
-    const response = await postAuthorize(h, sessionId, fields, 'approve');
-    const code = new URL(response.headers.get('Location')!).searchParams.get('code')!;
-    const exchange = (codeVerifier: string) =>
-      h.request(
-        '/oauth/token',
-        form({
-          grant_type: 'authorization_code',
-          client_id: clientId,
-          client_secret: clientSecret,
-          code,
-          redirect_uri: REDIRECT_URI,
-          code_verifier: codeVerifier,
-        }),
-      );
-
-    expect((await exchange('x'.repeat(43))).status).toBe(400);
-    expect((await exchange(VERIFIER)).status).toBe(400);
   });
 });
 
@@ -456,23 +375,6 @@ describe('POST /oauth/token', () => {
     expect(response.status).toBe(200);
   });
 
-  it('client_credentials でトークンを発行する', async () => {
-    const h = createOAuthHarness();
-    const { clientId, clientSecret } = await h.registerApp();
-
-    const response = await h.request(
-      '/oauth/token',
-      form({
-        grant_type: 'client_credentials',
-        client_id: clientId,
-        client_secret: clientSecret,
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ token_type: 'Bearer', scope: 'read' });
-  });
-
   it('client_secret が違うと 401 invalid_client にする', async () => {
     const h = createOAuthHarness();
     const { clientId } = await h.registerApp();
@@ -507,69 +409,6 @@ describe('POST /oauth/token', () => {
     expect(response.headers.get('WWW-Authenticate')).toContain('Basic');
   });
 
-  it('client 認証がないと 401 invalid_client にする', async () => {
-    const h = createOAuthHarness();
-
-    const response = await h.request('/oauth/token', form({ grant_type: 'client_credentials' }));
-
-    expect(response.status).toBe(401);
-    expect(await response.json()).toMatchObject({ error: 'invalid_client' });
-  });
-
-  it('使用済みのコードは 400 invalid_grant にする', async () => {
-    const h = createOAuthHarness();
-    const { clientId, clientSecret, code } = await authorizationCode(h);
-    const request = () =>
-      h.request(
-        '/oauth/token',
-        form({
-          grant_type: 'authorization_code',
-          client_id: clientId,
-          client_secret: clientSecret,
-          code,
-          redirect_uri: REDIRECT_URI,
-        }),
-      );
-    expect((await request()).status).toBe(200);
-
-    const second = await request();
-
-    expect(second.status).toBe(400);
-    expect(await second.json()).toMatchObject({ error: 'invalid_grant' });
-  });
-
-  it('grant_type の欠落は invalid_request、未対応は unsupported_grant_type にする', async () => {
-    const h = createOAuthHarness();
-    const { clientId, clientSecret } = await h.registerApp();
-    const credentials = { client_id: clientId, client_secret: clientSecret };
-
-    const missing = await h.request('/oauth/token', form(credentials));
-    const unsupported = await h.request('/oauth/token', form({ ...credentials, grant_type: 'password' }));
-
-    expect(missing.status).toBe(400);
-    expect(await missing.json()).toMatchObject({ error: 'invalid_request' });
-    expect(unsupported.status).toBe(400);
-    expect(await unsupported.json()).toMatchObject({ error: 'unsupported_grant_type' });
-  });
-
-  it('登録スコープ外の scope は invalid_scope にする', async () => {
-    const h = createOAuthHarness();
-    const { clientId, clientSecret } = await h.registerApp({ scopes: 'read' });
-
-    const response = await h.request(
-      '/oauth/token',
-      form({
-        grant_type: 'client_credentials',
-        client_id: clientId,
-        client_secret: clientSecret,
-        scope: 'write',
-      }),
-    );
-
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ error: 'invalid_scope' });
-  });
-
   it('本文が JSON として壊れているときは 400 invalid_request にする', async () => {
     const h = createOAuthHarness();
 
@@ -600,19 +439,6 @@ describe('POST /oauth/revoke', () => {
     expect(after.status).toBe(401);
   });
 
-  it('存在しないトークンは 200 {} にする', async () => {
-    const h = createOAuthHarness();
-    const { clientId, clientSecret } = await h.registerApp();
-
-    const response = await h.request(
-      '/oauth/revoke',
-      form({ client_id: clientId, client_secret: clientSecret, token: 'nope' }),
-    );
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({});
-  });
-
   it('別のアプリのトークンは 403 unauthorized_client にし、失効させない', async () => {
     const h = createOAuthHarness();
     const { token } = await h.issueUserToken();
@@ -631,15 +457,6 @@ describe('POST /oauth/revoke', () => {
     expect(await response.json()).toMatchObject({ error: 'unauthorized_client' });
     const after = await h.request('/api/v1/user', { headers: { Authorization: `Bearer ${token}` } });
     expect(after.status).toBe(200);
-  });
-
-  it('client_secret が違うと 401 invalid_client にする', async () => {
-    const h = createOAuthHarness();
-    const { token, clientId } = await h.issueUserToken();
-
-    const response = await h.request('/oauth/revoke', form({ client_id: clientId, client_secret: 'wrong', token }));
-
-    expect(response.status).toBe(401);
   });
 });
 

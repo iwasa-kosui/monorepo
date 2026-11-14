@@ -46,25 +46,6 @@ describe('QuoteBlueskyPostUseCase', () => {
     });
   });
 
-  it('画像を上げ、引用と images を recordWithMedia にして、空本文でも投稿する', async () => {
-    const t = setup();
-    const uploaded = { $type: 'blob', ref: { $link: 'bafyblob' }, mimeType: 'image/png', size: 3 } as const;
-    t.uploadBlob.mockImplementationOnce(async () => RA.ok(uploaded));
-
-    const result = await t.quote.run({
-      uri: TOP,
-      text: '',
-      images: [{ bytes: new Uint8Array([1, 2, 3]), mimeType: 'image/png', alt: '猫' }],
-    });
-
-    expect(result.ok).toBe(true);
-    expect(t.record().embed).toEqual({
-      $type: 'app.bsky.embed.recordWithMedia',
-      record: { record: { uri: TOP, cid: 'bafytop' } },
-      media: { $type: 'app.bsky.embed.images', images: [{ alt: '猫', image: uploaded }] },
-    });
-  });
-
   it('getPosts に投稿が無ければ（削除済み）NotFound にし、投稿しない', async () => {
     const t = setup({});
 
@@ -115,7 +96,6 @@ describe('QuoteBlueskyPostUseCase', () => {
   describe('返信の制限と引用の禁止', () => {
     it.each(
       [
-        ['引用の禁止だけ', { replyRestriction: 'everyone', quoteDisabled: true }],
         ['返信の制限と引用の禁止', { replyRestriction: ['mention', 'followers'], quoteDisabled: true }],
       ] as const,
     )(

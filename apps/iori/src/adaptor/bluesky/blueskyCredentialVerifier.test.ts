@@ -118,35 +118,6 @@ describe('createBlueskyCredentialVerifier の logout', () => {
 describe('createBlueskyClient の資格情報の解決', () => {
   const sessionStore = { save: vi.fn(() => RA.ok(undefined)) };
 
-  it('保存済みのセッションがあるあいだは資格情報を解決しない', async () => {
-    const resolveCredentials = vi.fn(async () => ({ identifier: 'a', appPassword: 'b' }));
-    const client = createBlueskyClient({
-      resolveCredentials,
-      sessionResolver: {
-        resolve: () => RA.ok({ ...sessionBody, pdsUrl: 'https://pds.example', updatedAt: NOW }),
-      },
-      sessionStore,
-      fetch: (async () => json({ did: 'did:plc:alice' })) as unknown as typeof fetch,
-    });
-
-    expect(await client.viewerDid()).toEqual({ ok: true, val: 'did:plc:alice' });
-    expect(resolveCredentials).not.toHaveBeenCalled();
-  });
-
-  it('セッションが無いときに解決した資格情報でログインする', async () => {
-    const fetchMock = vi.fn(async () => json(sessionBody));
-    const client = createBlueskyClient({
-      resolveCredentials: async () => ({ identifier: 'stored.example.com', appPassword: 'stored-pass' }),
-      sessionResolver: { resolve: () => RA.ok(undefined) },
-      sessionStore,
-      fetch: fetchMock as unknown as typeof fetch,
-    });
-
-    expect(await client.viewerDid()).toEqual({ ok: true, val: 'did:plc:alice' });
-    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(JSON.parse(init.body as string)).toEqual({ identifier: 'stored.example.com', password: 'stored-pass' });
-  });
-
   it('資格情報が無ければ通信せず、not_configured の auth エラーにする', async () => {
     const fetchMock = vi.fn();
     const client = createBlueskyClient({

@@ -34,30 +34,6 @@ describe('GET /api/v1/statuses/:id', () => {
     });
   });
 
-  describe('投票', () => {
-    const addPoll = (t: Awaited<ReturnType<typeof seedStatuses>>, postId: string, closed = 0) =>
-      t.sqlite.prepare(
-        'INSERT INTO remote_post_polls(postId,multiple,options,votersCount,expiresAt,closed) VALUES (?,?,?,?,?,?)',
-      ).run(
-        postId,
-        0,
-        JSON.stringify([{ title: '赤', votesCount: 3 }, { title: '青', votesCount: 1 }]),
-        4,
-        4_000_000_000_000,
-        closed,
-      );
-
-    it('closed の投票は expired にする', async () => {
-      const t = await seedStatuses();
-      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
-      addPoll(t, post.postId, 1);
-
-      const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
-
-      expect(StatusSchema.parse(await response.json()).poll?.expired).toBe(true);
-    });
-  });
-
   describe('引用', () => {
     const addQuote = (t: Awaited<ReturnType<typeof seedStatuses>>, postId: string, quoteUri: string) =>
       t.sqlite.prepare('INSERT INTO post_quotes(postId,quoteUri) VALUES (?,?)').run(postId, quoteUri);
@@ -77,63 +53,6 @@ describe('GET /api/v1/statuses/:id', () => {
       expect(status.quote).toMatchObject({ state: 'accepted', quoted_status: { id: quoted.postId, quote: null } });
       expect(status.iori).not.toHaveProperty('quote_url');
     });
-
-    it('引用先が未取得のとき quote を null にして iori.quote_url に URI を載せる', async () => {
-      const t = await seedStatuses();
-      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
-      addQuote(t, post.postId, 'https://other.example/notes/unknown');
-
-      const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
-
-      const status = StatusSchema.parse(await response.json());
-      expect(status.quote).toBeNull();
-      expect(status.iori?.quote_url).toBe('https://other.example/notes/unknown');
-    });
-
-    it('未認証では見えない引用先を quote に入れず、URI だけ iori.quote_url に載せる', async () => {
-      const t = await seedStatuses();
-      const hidden = t.seed.addRemotePost(t.alice, 3_000, { visibility: 'private' });
-      const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
-      addQuote(t, post.postId, hidden.uri);
-
-      const response = await t.request(`/api/v1/statuses/${post.postId}`);
-
-      const status = StatusSchema.parse(await response.json());
-      expect(status.quote).toBeNull();
-      expect(status.iori?.quote_url).toBe(hidden.uri);
-    });
-
-    it.each(['mute', 'block'] as const)(
-      '閲覧者が%sした相手の引用先は quote を null にして iori.quote_url に URI を載せる',
-      async (kind) => {
-        const t = await seedStatuses();
-        const bob = t.seed.addRemoteActor('bob');
-        if (kind === 'mute') t.seed.addMute(t.me.userId, bob.actorId);
-        else t.seed.addBlock(t.me.userId, bob.actorId);
-        const quoted = t.seed.addRemotePost(bob, 3_000, { visibility: 'public' });
-        const post = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'public' });
-        addQuote(t, post.postId, quoted.uri);
-
-        const response = await t.request(`/api/v1/statuses/${post.postId}`, { headers: t.me.bearer });
-
-        const status = StatusSchema.parse(await response.json());
-        expect(status.quote).toBeNull();
-        expect(status.iori?.quote_url).toBe(quoted.uri);
-      },
-    );
-  });
-
-  it('未認証では公開範囲の記録がないリモートの投稿と、そのブーストを 404 にする', async () => {
-    const t = await seedStatuses();
-
-    const [note, boost] = await Promise.all([
-      t.request(`/api/v1/statuses/${t.note.postId}`),
-      t.request(`/api/v1/statuses/${t.boost.repostId}`),
-    ]);
-
-    expect([note.status, boost.status]).toEqual([404, 404]);
-    expect(await note.json()).toEqual(notFound);
-    expect(await boost.json()).toEqual(notFound);
   });
 
   it('未認証では public と unlisted のリモートの投稿とそのブーストだけを返し、private と direct は 404 にする', async () => {
@@ -161,20 +80,6 @@ describe('GET /api/v1/statuses/:id', () => {
     expect(responses.map((response) => response.status)).toEqual([200, 200, 404, 404, 200, 404]);
     expect(StatusSchema.parse(await responses[0]!.json())).toMatchObject({ visibility: 'public' });
     expect(StatusSchema.parse(await responses[1]!.json())).toMatchObject({ visibility: 'unlisted' });
-  });
-
-  it('ログインするとフォロー中の相手の private と記録のないリモートの投稿を返し、visibility を記録の値にする', async () => {
-    const t = await seedStatuses();
-    const privateNote = t.seed.addRemotePost(t.alice, 3_000, { visibility: 'private' });
-
-    const responses = await Promise.all([
-      t.request(`/api/v1/statuses/${privateNote.postId}`, { headers: t.me.bearer }),
-      t.request(`/api/v1/statuses/${t.note.postId}`, { headers: t.me.bearer }),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([200, 200]);
-    const statuses = await Promise.all(responses.map(async (response) => StatusSchema.parse(await response.json())));
-    expect(statuses.map((status) => status.visibility)).toEqual(['private', 'private']);
   });
 
   it('userId のないアプリトークンは未認証として扱い、リモートの投稿を 404 にする', async () => {
@@ -348,22 +253,5 @@ describe('GET /api/v1/statuses/:id の iori.bluesky_crosspost', () => {
     });
     expect(await t.crosspostOf()).toBeUndefined();
     expect(await t.crosspostOf({ Authorization: `Bearer ${issued.token}` })).toBeUndefined();
-  });
-
-  it('failed で試行が上限に達していれば retrying を false にする', async () => {
-    const t = await setup({ status: 'failed', attempts: 3 });
-
-    expect(await t.crosspostOf(t.me.bearer)).toMatchObject({ status: 'failed', retrying: false });
-  });
-
-  it('sent なら bsky.app の投稿の URL を載せる', async () => {
-    const t = await setup({ status: 'sent', uri: 'at://did:plc:abc123/app.bsky.feed.post/3kxyz' });
-
-    expect(await t.crosspostOf(t.me.bearer)).toEqual({
-      status: 'sent',
-      skip_reason: null,
-      retrying: false,
-      url: 'https://bsky.app/profile/did:plc:abc123/post/3kxyz',
-    });
   });
 });

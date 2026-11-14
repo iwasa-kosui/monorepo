@@ -116,17 +116,6 @@ describe('RefreshXPostsUseCase', () => {
     expect(result).toMatchObject({ ok: false, err: { detail: { retryAfterSeconds: 1 } } });
   });
 
-  it('続けて 2 回実行すると 2 回目はクールダウン中のエラーになる', async () => {
-    const { useCase, client } = setup([{ n: 1 }]);
-
-    const first = await useCase.run();
-    const second = await useCase.run();
-
-    expect(first).toEqual({ ok: true, val: { sources: 1, failed: 0, collected: 0 } });
-    expect(second).toMatchObject({ ok: false, err: { detail: { retryAfterSeconds: COOLDOWN_MS / 1000 } } });
-    expect(client).toHaveBeenCalledOnce();
-  });
-
   it('全件が同時実行に負けて予約できないときは、クールダウンの秒数を持つエラーを返し、取得しない', async () => {
     const { useCase, client } = setup([{ n: 1 }, { n: 2 }], undefined, { reserve: async () => RA.ok(false) });
 

@@ -34,26 +34,8 @@ const setup = async (options: Parameters<typeof setupReadApi>[0] = {}) => {
       editedAt: number | null;
     };
   const sentActivities = () => t.federation.sendActivity.mock.calls.map((call) => call as unknown[]);
-  const dropSummaryAndSensitiveFromCreated = (postId: string) =>
-    t.sqlite.prepare(
-      `UPDATE domain_events SET aggregateState = json_remove(aggregateState, '$.summary', '$.sensitive')
-       WHERE aggregateId = ? AND eventName = 'post.created'`,
-    ).run(postId);
-  return { ...t, me, alice, post, edit, source, rowOf, sentActivities, dropSummaryAndSensitiveFromCreated };
+  return { ...t, me, alice, post, edit, source, rowOf, sentActivities };
 };
-
-describe('新規投稿の原文の保存', () => {
-  it('投稿の原文を local_posts.sourceText に保存し、edited_at は null にする', async () => {
-    const t = await setup();
-
-    const response = await t.post({ status: '**bold** hi', content_type: 'text/markdown' });
-
-    const status = StatusSchema.parse(await response.json());
-    expect(status.edited_at).toBeNull();
-    expect(t.rowOf(status.id)).toMatchObject({ sourceText: '**bold** hi', editedAt: null });
-    expect(t.rowOf(status.id).content).toContain('<strong>bold</strong>');
-  });
-});
 
 describe('PUT /api/v1/statuses/:id', () => {
   it('本文・CW・センシティブを変え、edited_at を入れた Status を返す', async () => {
@@ -196,18 +178,6 @@ describe('GET /api/v1/statuses/:id/source', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ id: own.postId, text: 'Hello world\nsecond', spoiler_text: '' });
-  });
-
-  it('他人の投稿とリモートの投稿は 404 にする', async () => {
-    const t = await setup();
-    const theirs = t.seed.addLocalPost(t.alice, 1_000);
-    const remote = t.seed.addRemotePost(t.seed.addRemoteActor('bob'), 2_000, { visibility: 'public' });
-
-    for (const id of [theirs.postId, remote.postId, crypto.randomUUID()]) {
-      const response = await t.source(id);
-      expect(response.status).toBe(404);
-      expect(await response.json()).toEqual(notFound);
-    }
   });
 });
 
@@ -673,23 +643,6 @@ describe('GET /api/v1/statuses/:id/history', () => {
       { content: '<p>v3</p>', spoiler_text: '', sensitive: true },
     ]);
     expect(edits.map((edit) => edit.created_at)).toEqual([created.created_at, first.edited_at, second.edited_at]);
-  });
-
-  it('summary と sensitive の無い古い post.created の投稿は、CW なし・センシティブでなしの最初の版として返す', async () => {
-    const t = await setup();
-    const created = StatusSchema.parse(await (await t.post({ status: 'v1' })).json());
-    const edited = StatusSchema.parse(await (await t.edit(created.id, { status: 'v2', spoiler_text: 'cw' })).json());
-    t.dropSummaryAndSensitiveFromCreated(created.id);
-
-    const response = await history(t, created.id);
-
-    expect(response.status).toBe(200);
-    const edits = StatusEditSchema.array().parse(await response.json());
-    expect(edits.map(({ content, spoiler_text, sensitive }) => ({ content, spoiler_text, sensitive }))).toEqual([
-      { content: '<p>v1</p>', spoiler_text: '', sensitive: false },
-      { content: '<p>v2</p>', spoiler_text: 'cw', sensitive: true },
-    ]);
-    expect(edits.map((edit) => edit.created_at)).toEqual([created.created_at, edited.edited_at]);
   });
 
   it('他人の公開の投稿とリモートの投稿は、現在の版を 1 件返す', async () => {

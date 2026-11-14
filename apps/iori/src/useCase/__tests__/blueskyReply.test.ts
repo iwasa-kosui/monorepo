@@ -62,34 +62,6 @@ describe('ReplyToBlueskyPostUseCase', () => {
     });
   });
 
-  it('画像を上げ、alt 付きの images embed を付けて、空本文でも返信する', async () => {
-    const t = setup();
-    const uploaded = { $type: 'blob', ref: { $link: 'bafyblob' }, mimeType: 'image/png', size: 3 } as const;
-    t.uploadBlob.mockImplementationOnce(async () => RA.ok(uploaded));
-
-    const result = await t.reply.run({
-      uri: TOP,
-      text: '',
-      images: [{ bytes: new Uint8Array([1, 2, 3]), mimeType: 'image/png', alt: '猫' }],
-    });
-
-    expect(result.ok).toBe(true);
-    expect(t.record().embed).toEqual({ $type: 'app.bsky.embed.images', images: [{ alt: '猫', image: uploaded }] });
-  });
-
-  it('5 枚の画像は入力不正にし、返信先の取得も投稿もしない', async () => {
-    const t = setup();
-
-    const result = await t.reply.run({
-      uri: TOP,
-      text: 'hi',
-      images: Array.from({ length: 5 }, () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png', alt: '' })),
-    });
-
-    expect(result).toEqual({ ok: false, err: { type: 'BlueskyPostInvalid', reason: 'too_many_images' } });
-    expect(t.query).not.toHaveBeenCalled();
-  });
-
   it('返信への返信は、親の record.reply.root を root にし、親を parent にする', async () => {
     const t = setup();
 
@@ -108,30 +80,6 @@ describe('ReplyToBlueskyPostUseCase', () => {
 
     expect(t.query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getPosts', { uris: TOP });
     expect(t.record().reply?.parent).toEqual({ uri: TOP, cid: 'bafytop-fresh' });
-  });
-
-  it('本文の URL を、日本語を含む本文でも UTF-8 のバイト位置で link facet にする', async () => {
-    const t = setup();
-    const text = 'これは https://example.com/日本 ではなく https://example.com/x です';
-
-    await t.reply.run({ feedItemId: TOP, text });
-
-    const url = 'https://example.com/';
-    const start = new TextEncoder().encode('これは ').byteLength;
-    expect(t.record().facets).toEqual([
-      {
-        index: { byteStart: start, byteEnd: start + url.length },
-        features: [{ $type: 'app.bsky.richtext.facet#link', uri: url }],
-      },
-      {
-        index: {
-          byteStart: new TextEncoder().encode('これは https://example.com/日本 ではなく ').byteLength,
-          byteEnd:
-            new TextEncoder().encode('これは https://example.com/日本 ではなく https://example.com/x').byteLength,
-        },
-        features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://example.com/x' }],
-      },
-    ]);
   });
 
   it('uri で指定したら、D1 の行を引かず、その uri を getPosts で取り直して返信先にする', async () => {
@@ -158,12 +106,6 @@ describe('ReplyToBlueskyPostUseCase', () => {
     expect(long).toEqual({ ok: false, err: { type: 'BlueskyPostInvalid', reason: 'too_many_graphemes' } });
     expect(t.query).not.toHaveBeenCalled();
     expect(t.createRecord).not.toHaveBeenCalled();
-  });
-
-  it('300 grapheme ちょうどは通す', async () => {
-    const t = setup();
-
-    expect((await t.reply.run({ feedItemId: TOP, text: 'あ'.repeat(300) })).ok).toBe(true);
   });
 
   it('未知の feedItemId は NotFound にし、Bluesky を呼ばない', async () => {

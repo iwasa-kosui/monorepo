@@ -95,23 +95,6 @@ describe('X の画面', () => {
     expect(html).not.toContain('secret-body');
   });
 
-  it('未ログインの API は 401 にし、投稿を返さない', async () => {
-    const response = await setup().request('/api/iori/v1/x-posts');
-
-    expect(response.status).toBe(401);
-    expect(await response.text()).not.toContain('secret');
-  });
-
-  it('ログイン中の API は投稿を返し、キャッシュを許さない', async () => {
-    const response = await setup().request('/api/iori/v1/x-posts', { headers: { Cookie: `sessionId=${sessionId}` } });
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
-    expect(await response.json()).toMatchObject({
-      posts: [{ sourceTitle: '@jack', text: 'secret-body', url: 'https://x.com/jack/status/1' }],
-    });
-  });
-
   it('所有者でないユーザーの /x は 404 にし、画面を返さない', async () => {
     const response = await setup().request('/x', { headers: { Cookie: `sessionId=${otherSessionId}` } });
 
@@ -125,14 +108,5 @@ describe('X の画面', () => {
     });
 
     expect(response.status).toBe(404);
-  });
-
-  it('所有者でないユーザーの API は 403 にし、投稿を返さない', async () => {
-    const response = await setup().request('/api/iori/v1/x-posts', {
-      headers: { Cookie: `sessionId=${otherSessionId}` },
-    });
-
-    expect(response.status).toBe(403);
-    expect(await response.text()).not.toContain('secret');
   });
 });

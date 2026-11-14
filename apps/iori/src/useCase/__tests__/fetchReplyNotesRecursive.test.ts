@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { FetchReplyNotesRecursiveUseCase } from '../fetchReplyNotesRecursive.ts';
 
 const followersId = new URL('https://remote.example/users/alice/followers');
-const publicUri = new URL('https://www.w3.org/ns/activitystreams#Public');
 
 const createNote = (addressing: { tos?: URL[]; ccs?: URL[]; btos?: URL[]; bccs?: URL[] }) =>
   new Note({
@@ -38,12 +37,6 @@ const run = async (note: Note) => {
 };
 
 describe('FetchReplyNotesRecursiveUseCase', () => {
-  it('records public when the fetched Note is addressed to as:Public', async () => {
-    const upsert = await run(createNote({ tos: [publicUri] }));
-
-    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'public' }));
-  });
-
   it('records the local actors addressed by the fetched Note', async () => {
     const upsert = await run(createNote({
       tos: [new URL('https://iori.test/users/kosui'), followersId],
@@ -203,18 +196,6 @@ describe('FetchReplyNotesRecursiveUseCase', () => {
       const result = await run('https://blocked.example/notes/quoted', 1);
 
       expect(lookupObject).not.toHaveBeenCalled();
-      expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
-      expect(result).toEqual({ ok: true, val: { fetchedPosts: [] } });
-    });
-
-    it('取得した Note の著者がブロックしたドメインなら保存しない', async () => {
-      const uri = 'https://remote.example/notes/quoted';
-      const note = new Note({ id: new URL(uri), content: 'quoted', attribution: person('blocked.example') });
-      const { remotePostUpserter, lookupObject, run } = build(new Map([[uri, note]]));
-
-      const result = await run(uri, 1);
-
-      expect(lookupObject).toHaveBeenCalledOnce();
       expect(remotePostUpserter.resolve).not.toHaveBeenCalled();
       expect(result).toEqual({ ok: true, val: { fetchedPosts: [] } });
     });

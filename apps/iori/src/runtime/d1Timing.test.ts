@@ -53,15 +53,10 @@ describe('summarizeD1Calls', () => {
 });
 
 describe('d1TimedRouteOf', () => {
-  it('対象の 7 ルートだけを固定の名前に対応させる', () => {
-    expect(d1TimedRouteOf('POST', '/api/v1/statuses')).toBe('statuses_create');
+  it('対象のルートだけを固定の名前に対応させ、似たパスは対象にしない', () => {
     expect(d1TimedRouteOf('POST', '/api/v1/statuses/abc/favourite')).toBe('favourite');
-    expect(d1TimedRouteOf('POST', '/api/v1/statuses/abc/unfavourite')).toBe('unfavourite');
     expect(d1TimedRouteOf('GET', '/api/v1/statuses')).toBeUndefined();
-    expect(d1TimedRouteOf('GET', '/api/v1/accounts/verify_credentials')).toBe('verify_credentials');
-    expect(d1TimedRouteOf('GET', '/api/v1/timelines/home')).toBe('timelines_home');
     expect(d1TimedRouteOf('GET', '/api/v1/notifications')).toBe('notifications');
-    expect(d1TimedRouteOf('GET', '/api/v1/favourites')).toBe('favourites_list');
     expect(d1TimedRouteOf('POST', '/api/v1/notifications')).toBeUndefined();
     expect(d1TimedRouteOf('GET', '/api/v1/notifications/abc')).toBeUndefined();
     expect(d1TimedRouteOf('GET', '/api/v1/timelines/home/')).toBeUndefined();

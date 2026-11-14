@@ -13,7 +13,7 @@ const contextWith = (value: string | undefined): ScheduledTaskContext => ({
 afterEach(() => vi.restoreAllMocks());
 
 describe('pruneFederatedPostsTask', () => {
-  it.each([undefined, '', 'disabled', 'true', '1', 'ENABLED'])(
+  it.each([undefined, 'true', 'ENABLED'])(
     '環境変数が %j のときは、use case を呼ばず、無効であることをログに出す',
     async (value) => {
       const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);

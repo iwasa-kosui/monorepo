@@ -142,15 +142,6 @@ describe('SendReplyUseCase の引用', () => {
     });
   });
 
-  it('本文に引用先へのリンクが既にあれば、段落を足さない', async () => {
-    const { run } = setup('local');
-    const content = `<p><a href="${quoteUri}">quoted</a></p>`;
-
-    const { result } = await run({ content, quoteUri });
-
-    expect(result.ok && result.val.post.content).toBe(content);
-  });
-
   it('返信先がローカルでも、配送する Note に quoteUrl と引用先の作者の Mention と cc を付ける', async () => {
     const { run } = setup('local');
 

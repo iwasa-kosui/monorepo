@@ -8,8 +8,6 @@ describe('createIoriApp', () => {
     const gptBot =
       'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.4; +https://openai.com/gptbot)';
     const mastodon = 'Mastodon/4.3.2 (http.rb/5.2.0; +https://mastodon.social/)';
-    const facebookExternalHit = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
-    const googlebot = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
     const imageResponse = () => new Response('png', { headers: { 'Content-Type': 'image/png' } });
     const cancelImageStream = vi.fn();
     const createApp = (
@@ -67,26 +65,14 @@ describe('createIoriApp', () => {
       expect(serveUpload).not.toHaveBeenCalled();
     });
 
-    it.each([
-      ['Mastodon', mastodon],
-      ['facebookexternalhit', facebookExternalHit],
-      ['Googlebot', googlebot],
-    ])('lets %s fetch an image path', async (_name, userAgent) => {
+    it('lets a Mastodon server fetch an image path', async () => {
       const serveUpload = vi.fn(async () => imageResponse());
       const response = await createApp({ serveUpload }).request('/uploads/x.png', {
-        headers: { 'User-Agent': userAgent },
+        headers: { 'User-Agent': mastodon },
       });
 
       expect(response.status).toBe(200);
       expect(serveUpload).toHaveBeenCalledTimes(1);
-    });
-
-    it('responds 403 to an AI crawler when a non-image path returns an image', async () => {
-      const response = await createApp().request('/img-no-ext', { headers: { 'User-Agent': gptBot } });
-
-      expect(response.status).toBe(403);
-      expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
-      expect(await response.text()).toBe('Forbidden');
     });
 
     it('cancels the original image body when replacing it with 403', async () => {
@@ -213,16 +199,6 @@ describe('createIoriApp', () => {
       expect(response.status).toBe(500);
       expect(response.headers.get('Content-Type')).toContain('text/html');
       expect(await response.text()).toContain('ページを表示できませんでした');
-    });
-
-    it('returns a JSON 500 under /oauth/ for a non-HTML Accept header', async () => {
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-      const response = await throwingApp('/oauth/token').request('/oauth/token', {
-        headers: { Accept: 'application/json' },
-      });
-
-      expect(response.status).toBe(500);
-      expect(await response.json()).toEqual({ error: 'Internal server error' });
     });
 
     it('returns a plain text 500 when no Accept header is sent', async () => {

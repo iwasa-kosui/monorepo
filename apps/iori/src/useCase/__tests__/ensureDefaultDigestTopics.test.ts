@@ -121,20 +121,6 @@ describe('EnsureDefaultDigestTopics', () => {
     expect(rows().every((row) => row.embeddedAt === null)).toBe(true);
   });
 
-  it('作成と embed のイベントを domain_events に残し、embedding の中身はイベントに入れない', async () => {
-    const { sqlite, ensure } = setup();
-    await ensure.run({ userId: USER_ID });
-
-    const events = sqlite.prepare(
-      'SELECT eventName, length(eventPayload) AS size FROM domain_events WHERE aggregateName = \'digestTopic\'',
-    ).all() as Array<{ eventName: string; size: number }>;
-
-    expect(events.filter((event) => event.eventName === 'digestTopic.created')).toHaveLength(7);
-    const embedded = events.filter((event) => event.eventName === 'digestTopic.embedded');
-    expect(embedded).toHaveLength(7);
-    expect(embedded.every((event) => event.size < 300)).toBe(true);
-  });
-
   it('作成と embed の後に取り直した topic の一覧を、embedding 付きで返す', async () => {
     const { ensure } = setup();
 

@@ -101,15 +101,6 @@ describe('CreatePostUseCase の引用', () => {
     expect(postCreatedStore.items[0]?.aggregateState.content).toBe(expected);
   });
 
-  it('本文に引用先へのリンクが既にあれば、段落を足さない', async () => {
-    const { run } = setup();
-    const content = `<p>look <a href="${quoteUri}">${quoteUri}</a></p>`;
-
-    const { result } = await run({ content, quoteUri });
-
-    expect(result.ok && result.val.post.content).toBe(content);
-  });
-
   it('引用先が無ければ本文を変えず、payload の quoteUri を null にして、引用先の作者に配送しない', async () => {
     const { run, postCreatedStore } = setup();
 

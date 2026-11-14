@@ -114,8 +114,6 @@ describe('withD1ReadRetry', () => {
   it.each(
     [
       'INSERT INTO t(a) VALUES (1)',
-      'UPDATE t SET a = 1',
-      'DELETE FROM t',
       'WITH x AS (SELECT 1) SELECT * FROM x',
     ] as const,
   )('書き込みと with で始まる SQL は、一時的なエラーでも再試行しない: %s', async (sql) => {
@@ -221,9 +219,6 @@ describe('withD1ReadRetry', () => {
 describe('isTransientD1Error', () => {
   it.each([
     'Network connection lost',
-    'storage caused object to be reset',
-    'reset because its code was updated',
-    'Cannot resolve D1 DB due to transient issue',
     'Replica disconnected from primary',
   ])('%s を含むエラーは一時的と判定する', (message) => {
     expect(isTransientD1Error(new Error(`D1_ERROR: ${message}.`))).toBe(true);

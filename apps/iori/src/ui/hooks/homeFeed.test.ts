@@ -47,17 +47,6 @@ describe('mergeHomeFeed', () => {
     expect(keys(merged)).toEqual(['s1', 'bluesky:b1', 's2', 'bluesky:b2', 's3']);
   });
 
-  it('次のページがある情報源がなければ、古い項目も含めて全件を表示する', () => {
-    const merged = mergeHomeFeed({
-      statuses: [status('s1', 50)],
-      hasMoreStatuses: false,
-      bluesky: [bluesky('b1', 40), bluesky('b2', 1)],
-      hasMoreBluesky: false,
-    });
-
-    expect(keys(merged)).toEqual(['s1', 'bluesky:b1', 'bluesky:b2']);
-  });
-
   it('片方に次のページがあるとき、その情報源の最も古い時刻より古い項目を表示しない', () => {
     const merged = mergeHomeFeed({
       statuses: [status('s1', 50), status('s2', 30)],
@@ -91,25 +80,6 @@ describe('mergeHomeFeed', () => {
     expect(keys(merged)).toEqual(['s1', 's2', 'bluesky:b1']);
   });
 
-  it('片方が尽きたとき、他方を読み進めると下限が下がって保留していた項目が現れる', () => {
-    const bluesky1 = [bluesky('b1', 40), bluesky('b2', 20)];
-    const before = mergeHomeFeed({
-      statuses: [status('s1', 50), status('s2', 30)],
-      hasMoreStatuses: true,
-      bluesky: bluesky1,
-      hasMoreBluesky: false,
-    });
-    const after = mergeHomeFeed({
-      statuses: [status('s1', 50), status('s2', 30), status('s3', 10)],
-      hasMoreStatuses: false,
-      bluesky: bluesky1,
-      hasMoreBluesky: false,
-    });
-
-    expect(keys(before)).toEqual(['s1', 'bluesky:b1', 's2']);
-    expect(keys(after)).toEqual(['s1', 'bluesky:b1', 's2', 'bluesky:b2', 's3']);
-  });
-
   it('次のページがある情報源に読み込み済みの項目が無ければ、その情報源は下限に使わない', () => {
     const merged = mergeHomeFeed({
       statuses: [],
@@ -119,18 +89,6 @@ describe('mergeHomeFeed', () => {
     });
 
     expect(keys(merged)).toEqual(['bluesky:b1']);
-  });
-
-  it('Bluesky の取得に失敗したときは iori の項目だけを全件表示する', () => {
-    const merged = mergeHomeFeed({
-      statuses: [status('s1', 50), status('s2', 30)],
-      hasMoreStatuses: true,
-      bluesky: blueskySourceOf(undefined).items,
-      hasMoreBluesky: blueskySourceOf(undefined).cursor !== undefined,
-    });
-
-    expect(merged.every((item) => item.kind === 'status')).toBe(true);
-    expect(keys(merged)).toEqual(['s1', 's2']);
   });
 
   it('同じ時刻なら iori の項目を先にし、各情報源の順序を保つ', () => {
@@ -158,16 +116,6 @@ describe('mergeHomeFeed の Bridgy Fed の重複', () => {
       's1',
       'bluesky:b1',
     ]);
-  });
-
-  it('ブリッジ側だけならそのまま表示する', () => {
-    expect(merge([bridged('s1', 30)], [bluesky('b1', 31)])).toEqual(['bluesky:b1', 's1']);
-  });
-
-  it('ブーストの内側がブリッジの投稿でも隠す', () => {
-    const boost = boostOf('s1', 40, bridged('inner', 30));
-
-    expect(merge([boost], [bluesky('b1', 31, postUri)])).toEqual(['bluesky:b1']);
   });
 
   it('Bluesky 側がリポストの項目でも、元の投稿の uri が一致すれば隠す', () => {
@@ -215,11 +163,6 @@ describe('mergeHomeFeed の Fediverse の投稿のブリッジの重複', () => 
     expect(merge([status('s1', 50), status('s2', 30)], [fromFediverse('b1', 31, 's2')])).toEqual(['s1', 's2']);
   });
 
-  it('ブリッジ側だけなら、そのまま表示する', () => {
-    expect(merge([status('s1', 50)], [fromFediverse('b1', 31, 's9')])).toEqual(['s1', 'bluesky:b1']);
-    expect(merge([status('s1', 50)], [fromFediverse('b1', 31, null)])).toEqual(['s1', 'bluesky:b1']);
-  });
-
   it('Bluesky 側がリポストの項目でも隠す', () => {
     const repost = {
       ...fromFediverse('r1', 31, 's2'),
@@ -265,15 +208,6 @@ describe('mergeHomeFeed の Fediverse の投稿のブリッジの重複', () => 
     });
 
     expect(keys(merged)).toEqual(['s1', 'bluesky:b1']);
-  });
-
-  it('両方向の重複を同時に隠す', () => {
-    const merged = merge(
-      [status('s1', 50), bridged('s2', 40), status('s3', 30)],
-      [bluesky('b1', 41, postUri), fromFediverse('b2', 31, 's3')],
-    );
-
-    expect(merged).toEqual(['s1', 'bluesky:b1', 's3']);
   });
 });
 

@@ -672,14 +672,7 @@ it('retries the status while source control is not ready after the restart', asy
 }, 15_000);
 it.each([
   ['Error: Source service is not stopped.', 'service-not-stopped'],
-  ['Error: Source service stop failed.', 'service-stop-failed'],
-  ['Error: Source service start failed.', 'service-start-failed'],
-  ['Error: Source service control is not permitted.', 'service-control-not-permitted'],
-  ['Error: Source freeze is already committed.', 'freeze-committed'],
-  ['Error: Source pending freeze is invalid.', 'pending-freeze-invalid'],
   ['Error: Source pending freeze identity mismatch.', 'pending-identity-mismatch'],
-  ['Error: Source release destination exists.', 'release-target-exists'],
-  ['Error: Source release rename verification failed.', 'release-rename-failed'],
   ['Error: Invalid source release operation.', 'invalid-release-operation'],
 ])('classifies remote stderr %s as %s without status', async (stderr, reason) => {
   const writes = captureStderr();

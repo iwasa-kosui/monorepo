@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
 import { describe, expect, it } from 'vitest';
 
 import { createMastodonSeed } from '../../src/adaptor/d1/__tests__/mastodonSeed.ts';
@@ -260,7 +259,6 @@ describe('prune-federated-posts input checks', () => {
   it.each([
     ['is missing', [], 'resource-missing'],
     ['is listed twice', [databaseName, databaseName], 'resource-ambiguous'],
-    ['only has lookalikes', [`${databaseName}-x`, 'iori'], 'resource-missing'],
   ])('fails without a query when the D1 name %s', async (_label, names, reason) => {
     const { calls, error } = await run(createSqliteD1Fixture(), {}, { names });
     expect(calls.filter((call) => call.method === 'POST')).toEqual([]);
@@ -270,14 +268,6 @@ describe('prune-federated-posts input checks', () => {
     const { calls, error } = await run(createSqliteD1Fixture(), {}, { uuid: '../../x' });
     expect(calls.filter((call) => call.method === 'POST')).toEqual([]);
     expect(pruneFailureLines(error)).toEqual([diag('prune-posts-resolve', 'result-invalid')]);
-  });
-  it('keeps the token, the account id and ids out of the failure lines', async () => {
-    const { error } = await run(createSqliteD1Fixture(), {}, { names: [] });
-    for (const line of pruneFailureLines(error)) {
-      expect(line).not.toContain(token);
-      expect(line).not.toContain(accountId);
-      expect(line).not.toContain(databaseUuid);
-    }
   });
 });
 

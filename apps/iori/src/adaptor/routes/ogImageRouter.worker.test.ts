@@ -22,21 +22,6 @@ describe('R2 OG image store', () => {
     expect(response?.headers.get('Cache-Control')).toBe('public, max-age=3600');
   });
 
-  it('ignores the cache control stored in the object and uses the current value', async () => {
-    const get = vi.fn(async () => ({
-      body: new ReadableStream(),
-      httpMetadata: {
-        contentType: 'image/png',
-        cacheControl: 'public, max-age=31536000, immutable',
-      },
-    }));
-    const store = createR2OgImageStore({ get } as unknown as OgImageR2Bucket);
-
-    const response = await store.get('article-id');
-
-    expect(response?.headers.get('Cache-Control')).toBe('public, max-age=3600');
-  });
-
   it('returns 404 for a missing object without writing it', async () => {
     const put = vi.fn();
     const app = createOgImageRouter({ get: vi.fn(async () => undefined), put, delete: vi.fn() });

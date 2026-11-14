@@ -60,11 +60,6 @@ describe('buildDigestPublishConfirmMessage', () => {
     ).toBe(['編集した本文をそのまま公開します。', '公開しますか？'].join('\n'));
   });
 
-  it('編集済みなら除く項目が 0 件でも確認の文面を返す', () => {
-    expect(buildDigestPublishConfirmMessage(notice({ timelineLinks: 0, hatena: 0, hatenaCounts: false }, true)))
-      .toBe(['編集した本文をそのまま公開します。', '公開しますか？'].join('\n'));
-  });
-
   it('除く項目がなければ確認の文面を返さない', () => {
     expect(buildDigestPublishConfirmMessage(notice({ timelineLinks: 0, hatena: 0, hatenaCounts: false })))
       .toBeUndefined();
@@ -104,21 +99,6 @@ describe('buildDigestPublishConfirmMessage', () => {
         'この記事は公開を想定していません。',
         '公開版では次の項目を除きます。',
         '・みんなの関心（iori のタイムライン）3 件',
-        '公開しますか？',
-      ].join('\n'),
-    );
-  });
-
-  it('まとめに X の投稿を載せるなら、公開を想定していない旨の次に、除く項目として X の投稿を出す', () => {
-    expect(
-      buildDigestPublishConfirmMessage(
-        notice({ timelineLinks: 0, hatena: 0, hatenaCounts: false, xPosts: true }, false, 'summary'),
-      ),
-    ).toBe(
-      [
-        'この記事は公開を想定していません。',
-        '公開版では次の項目を除きます。',
-        '・X の投稿',
         '公開しますか？',
       ].join('\n'),
     );

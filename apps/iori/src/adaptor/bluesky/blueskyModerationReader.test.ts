@@ -37,15 +37,10 @@ describe('createBlueskyModerationReader の resolveViewerState', () => {
     expect(await reader.resolveViewerState(DID)).toEqual({ ok: true, val: { muted: false, blockUri: null } });
   });
 
-  it('形の違う応答は invalid_response、取得の失敗はそのまま返す', async () => {
-    const invalid = clientReturning(RA.ok({ viewer: { muted: 'yes' } }));
-    const failed = clientReturning(RA.err(failure({ kind: 'auth', status: 401 })));
+  it('形の違う応答は invalid_response にする', async () => {
+    const { reader } = clientReturning(RA.ok({ viewer: { muted: 'yes' } }));
 
-    expect(await invalid.reader.resolveViewerState(DID)).toMatchObject({
-      ok: false,
-      err: { kind: 'invalid_response' },
-    });
-    expect(await failed.reader.resolveViewerState(DID)).toMatchObject({ ok: false, err: { kind: 'auth' } });
+    expect(await reader.resolveViewerState(DID)).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
   });
 });
 

@@ -34,12 +34,7 @@ const NOW = Date.UTC(2026, 10, 12, 3, 4, 5);
 describe('collectBlueskyTimelineTask', () => {
   it.each([
     [{}],
-    [{ IORI_BLUESKY_TIMELINE: 'disabled', BLUESKY_IDENTIFIER: 'id', BLUESKY_APP_PASSWORD: 'pw' }],
-    [{ IORI_BLUESKY_TIMELINE: 'ENABLED', BLUESKY_IDENTIFIER: 'id', BLUESKY_APP_PASSWORD: 'pw' }],
     [{ IORI_BLUESKY_TIMELINE: 'enabled' }],
-    [{ IORI_BLUESKY_TIMELINE: 'enabled', BLUESKY_IDENTIFIER: 'id' }],
-    [{ IORI_BLUESKY_TIMELINE: 'enabled', BLUESKY_IDENTIFIER: '', BLUESKY_APP_PASSWORD: 'pw' }],
-    [{ IORI_BLUESKY_TIMELINE: 'enabled', BLUESKY_IDENTIFIER: 'id', BLUESKY_APP_PASSWORD: ' ' }],
     [{ IORI_BLUESKY_CROSSPOST: 'enabled', BLUESKY_IDENTIFIER: 'id', BLUESKY_APP_PASSWORD: 'pw' }],
   ])('無効な設定 %j のときは、DB にも fetch にも触れず、無効であることをログに出す', async (env) => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);

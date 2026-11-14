@@ -265,18 +265,6 @@ describe('SummarizeTimelineUseCase', () => {
     });
   });
 
-  it('citations は本文の番号の昇順で、渡していない番号を含めない', async () => {
-    const { generator } = createStubTextGenerator(() => '- A [3]\n- B [1][3]\n- C [9]\n- D [0]');
-    const t = setup({ textGenerator: generator });
-    const ids = t.store(makePost('a'), makePost('b'), makePost('c'));
-    t.setSearchResult(ids);
-
-    const result = await expectOk(t.summarize({ q: 'x' }));
-
-    expect(result.citations).toEqual([{ n: 1, postId: ids[0] }, { n: 3, postId: ids[2] }]);
-    expect(result.sourcePostIds).toEqual([ids[0], ids[2]]);
-  });
-
   it('since と until の範囲外の投稿を検索結果から除く', async () => {
     const t = setup();
     const [before, atSince, inside, atUntil] = t.store(

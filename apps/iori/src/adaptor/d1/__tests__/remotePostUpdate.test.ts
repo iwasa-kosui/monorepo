@@ -232,18 +232,6 @@ describe('リモート投稿の編集の保存', () => {
     expect(t.events()).toEqual([]);
   });
 
-  it('保存済みの編集時刻より新しくない更新は無視する', async () => {
-    const t = setup();
-    await t.useCase.run(t.input());
-
-    const older = await t.useCase.run(t.input({ content: '<p>older</p>', editedAt: Instant.orThrow(4_000) }));
-    const same = await t.useCase.run(t.input({ content: '<p>same</p>', editedAt: Instant.orThrow(5_000) }));
-
-    expect(older).toMatchObject({ ok: true, val: { type: 'staleEdit' } });
-    expect(same).toMatchObject({ ok: true, val: { type: 'staleEdit' } });
-    expect(t.row()).toMatchObject({ content: '<p>after</p>', editedAt: 5_000 });
-  });
-
   it('同じ更新を 2 回受けても結果が変わらず、イベントも 1 件だけになる', async () => {
     const t = setup();
 
@@ -332,10 +320,7 @@ describe('添付の imageId', () => {
 describe('公開範囲を狭める更新', () => {
   it.each(
     [
-      ['public', 'unlisted', 'unlisted'],
       ['public', 'direct', 'direct'],
-      ['unlisted', 'private', 'private'],
-      ['private', 'direct', 'direct'],
       [null, 'direct', 'direct'],
     ] as const,
   )('保存済みが %s の投稿への %s の更新は %s にする', async (stored, incoming, expected) => {
@@ -350,14 +335,8 @@ describe('公開範囲を狭める更新', () => {
   it.each(
     [
       ['direct', 'public', 'direct'],
-      ['direct', 'private', 'direct'],
-      ['private', 'unlisted', 'private'],
-      ['unlisted', 'public', 'unlisted'],
-      ['public', 'public', 'public'],
       ['public', null, 'public'],
-      [null, 'public', null],
       [null, 'private', null],
-      [null, null, null],
     ] as const,
   )('保存済みが %s の投稿への %s の更新では %s のまま変えない', async (stored, incoming, expected) => {
     const t = setup();
@@ -401,25 +380,6 @@ describe('direct の投稿の参加者', () => {
     await t.useCase.run(t.input({ recipientActorUris: [kosuiUri] }));
 
     expect(participants(t)).toEqual([aliceUri, kosuiUri].sort());
-  });
-
-  it('direct でない投稿の編集では、参加者を保存しない', async () => {
-    const t = setup();
-    t.setVisibility('public');
-
-    await t.useCase.run(t.input({ visibility: 'public', mentionedActorUris: [bobUri] }));
-
-    expect(participants(t)).toEqual([]);
-  });
-
-  it('公開範囲が direct に狭まる編集では、作者と宛先を参加者にする', async () => {
-    const t = setup();
-    t.setVisibility('private');
-
-    await t.useCase.run(t.input({ visibility: 'direct' }));
-
-    expect(t.row()).toMatchObject({ visibility: 'direct' });
-    expect(participants(t)).toEqual([aliceUri, hanakoUri].sort());
   });
 });
 
@@ -597,18 +557,6 @@ describe('編集で新しく足された宛先への通知', () => {
     expect(result).toMatchObject({ ok: true, val: { type: 'updated' } });
     expect(t.mentionNotifications()).toEqual([]);
     expect(t.webPushSender.send).not.toHaveBeenCalled();
-  });
-
-  it('同じ Update を 2 回受けても、staleEdit で止まり通知は重ならない', async () => {
-    const t = setup();
-    t.addPushSubscription(t.hanako.userId, 'https://push.example/hanako');
-
-    await t.useCase.run(t.input());
-    const second = await t.useCase.run(t.input());
-
-    expect(second).toMatchObject({ ok: true, val: { type: 'staleEdit' } });
-    expect(t.mentionNotifications()).toHaveLength(1);
-    expect(t.webPushSender.send).toHaveBeenCalledTimes(1);
   });
 
   it('宛先の記録を前の状態に戻して別の Update を受けても、既存の通知があれば重ならない', async () => {

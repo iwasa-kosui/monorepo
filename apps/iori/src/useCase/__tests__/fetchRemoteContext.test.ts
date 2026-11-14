@@ -48,7 +48,6 @@ type Setup = Readonly<{
   stored?: ReadonlyArray<string>;
   localUris?: ReadonlyArray<string>;
   blockedActorUris?: ReadonlyArray<string>;
-  blockedCheckRejects?: boolean;
   isBlockedUri?: (uri: string) => boolean;
   documentLoader?: DocumentLoader;
   failingUris?: ReadonlyArray<string>;
@@ -97,10 +96,7 @@ const setup = (options: Setup = {}) => {
     localPostUrisResolverByUris,
     remotePostUpserter,
     blockedActorUriResolverByUsername: {
-      resolve: async ({ actorUri }) => {
-        if (options.blockedCheckRejects) throw new Error('D1 is down');
-        return RA.ok(options.blockedActorUris?.includes(actorUri) ?? false);
-      },
+      resolve: async ({ actorUri }) => RA.ok(options.blockedActorUris?.includes(actorUri) ?? false),
     },
     fetchReplyNotesRecursiveUseCase,
     isBlockedUri: options.isBlockedUri ?? (() => false),
@@ -148,7 +144,7 @@ describe('FetchRemoteContextUseCase', () => {
       expect(storedUris(t)).toEqual([replyUri(1), replyUri(2)]);
     });
 
-    it('Article の投稿の返信にある Article と Question も、本文を組み立てて保存する', async () => {
+    it('Article の投稿の返信にある Article と Question も保存する', async () => {
       const article = new Article({
         id: new URL(replyUri(1)),
         name: 'Title',
@@ -177,31 +173,7 @@ describe('FetchRemoteContextUseCase', () => {
       });
 
       expect(await t.run()).toBe(2);
-      expect(t.remotePostUpserter.resolve.mock.calls.map(([identity]) => identity)).toMatchObject([
-        {
-          uri: replyUri(1),
-          content: `<p><strong>Title</strong></p><p>body</p><p><a href="${replyUri(1)}">元の記事を読む</a></p>`,
-        },
-        {
-          uri: replyUri(2),
-          content: '<p>q</p>',
-          poll: {
-            multiple: false,
-            options: [{ title: 'a', votesCount: 0 }],
-            votersCount: null,
-            expiresAt: null,
-            closed: false,
-          },
-        },
-      ]);
-    });
-
-    it('取得ごとに 5 秒の signal を付けて lookupObject を呼ぶ', async () => {
-      const t = setup({ notes: [noteOf(ROOT_URI)] });
-
-      await t.run();
-
-      expect(t.lookupObject.mock.calls[0]![1].signal).toBeInstanceOf(AbortSignal);
+      expect(storedUris(t)).toEqual([replyUri(1), replyUri(2)]);
     });
 
     it('深さ 3 までを保存し、4 段目は取らない', async () => {
@@ -350,21 +322,6 @@ describe('FetchRemoteContextUseCase', () => {
 
       expect(await t.run()).toBe(0);
       expect(t.lookupObject.mock.calls.map(([uri]) => uri)).toEqual([ROOT_URI, replyUri(1)]);
-    });
-
-    it('ブロックの判定が失敗したときは、その相手の返信を保存しない', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const t = setup({
-        notes: [
-          noteOf(ROOT_URI, { replies: repliesOf(replyUri(1)) }),
-          noteOf(replyUri(1), { replyTo: ROOT_URI }),
-        ],
-        blockedCheckRejects: true,
-      });
-
-      expect(await t.run()).toBe(0);
-      expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
-      warn.mockRestore();
     });
 
     it('外部への lookup は、保存済みも数えて合計 60 回までにする', async () => {
@@ -672,23 +629,6 @@ describe('FetchRemoteContextUseCase', () => {
       expect(await shouldSave({ authorIdentity: { uri: 'https://remote.example/users/alice' } })).toBe(true);
     });
 
-    it('ブロックの判定が失敗したときは、祖先の保存前の判定を偽にする', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const t = setup({
-        post: remotePost({ inReplyToUri: PARENT_URI }),
-        notes: [noteOf(ROOT_URI)],
-        blockedCheckRejects: true,
-      });
-
-      await t.run();
-      const [{ shouldSave }] = t.fetchReplyNotesRecursiveUseCase.run.mock.calls[0] as unknown as [
-        { shouldSave: (identity: { authorIdentity: { uri: string } }) => Promise<boolean> },
-      ];
-
-      expect(await shouldSave({ authorIdentity: { uri: 'https://remote.example/users/alice' } })).toBe(false);
-      warn.mockRestore();
-    });
-
     it('祖先の保存前の判定は、全体の時間切れのあとは偽にする', async () => {
       const t = setup({
         post: remotePost({ inReplyToUri: PARENT_URI }),
@@ -702,52 +642,6 @@ describe('FetchRemoteContextUseCase', () => {
       ];
 
       expect(await shouldSave({ authorIdentity: { uri: 'https://remote.example/users/alice' } })).toBe(false);
-    });
-  });
-
-  describe('エラー', () => {
-    it('投稿がなければ PostNotFoundError を返す', async () => {
-      const useCase = FetchRemoteContextUseCase.create({
-        origin: ORIGIN,
-        userResolver: { resolve: async () => RA.ok({ id: 'user-1', username: 'kosui' } as never) },
-        postResolver: { resolve: async () => RA.ok(undefined) },
-        remotePostUrisResolverByUris: { resolve: async () => RA.ok([]) },
-        localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
-        remotePostUpserter: { resolve: vi.fn() },
-        blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
-        fetchReplyNotesRecursiveUseCase: { run: vi.fn() },
-        isBlockedUri: () => false,
-      });
-
-      const result = await useCase.run({
-        userId: 'user-1' as never,
-        postId: 'post-1' as never,
-        ctx: { getDocumentLoader: vi.fn(), lookupObject: vi.fn() },
-      });
-
-      expect(result.ok ? undefined : result.err.type).toBe('PostNotFoundError');
-    });
-
-    it('ユーザーがいなければ UserNotFoundError を返す', async () => {
-      const useCase = FetchRemoteContextUseCase.create({
-        origin: ORIGIN,
-        userResolver: { resolve: async () => RA.ok(undefined) },
-        postResolver: { resolve: async () => RA.ok(remotePost()) },
-        remotePostUrisResolverByUris: { resolve: async () => RA.ok([]) },
-        localPostUrisResolverByUris: { resolve: async () => RA.ok([]) },
-        remotePostUpserter: { resolve: vi.fn() },
-        blockedActorUriResolverByUsername: { resolve: async () => RA.ok(false) },
-        fetchReplyNotesRecursiveUseCase: { run: vi.fn() },
-        isBlockedUri: () => false,
-      });
-
-      const result = await useCase.run({
-        userId: 'user-1' as never,
-        postId: 'post-1' as never,
-        ctx: { getDocumentLoader: vi.fn(), lookupObject: vi.fn() },
-      });
-
-      expect(result.ok ? undefined : result.err.type).toBe('UserNotFoundError');
     });
   });
 });

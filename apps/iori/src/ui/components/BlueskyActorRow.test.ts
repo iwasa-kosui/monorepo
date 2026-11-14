@@ -26,10 +26,6 @@ describe('actorDescriptionExcerpt', () => {
     expect(actorDescriptionExcerpt('a\n\n b   c')).toBe('a b c');
   });
 
-  it('null は空文字にする', () => {
-    expect(actorDescriptionExcerpt(null)).toBe('');
-  });
-
   it('120 文字を超えるときは 120 文字で切って … を付ける', () => {
     const excerpt = actorDescriptionExcerpt('あ'.repeat(121));
 

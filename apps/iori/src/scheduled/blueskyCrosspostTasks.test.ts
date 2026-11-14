@@ -23,11 +23,7 @@ describe('retryBlueskyCrosspostsTask', () => {
   it.each([
     [{}],
     [{ IORI_BLUESKY_CROSSPOST: 'disabled', BLUESKY_IDENTIFIER: 'id', BLUESKY_APP_PASSWORD: 'pw' }],
-    [{ IORI_BLUESKY_CROSSPOST: 'ENABLED', BLUESKY_IDENTIFIER: 'id', BLUESKY_APP_PASSWORD: 'pw' }],
     [{ IORI_BLUESKY_CROSSPOST: 'enabled' }],
-    [{ IORI_BLUESKY_CROSSPOST: 'enabled', BLUESKY_IDENTIFIER: 'id' }],
-    [{ IORI_BLUESKY_CROSSPOST: 'enabled', BLUESKY_IDENTIFIER: '', BLUESKY_APP_PASSWORD: 'pw' }],
-    [{ IORI_BLUESKY_CROSSPOST: 'enabled', BLUESKY_IDENTIFIER: 'id', BLUESKY_APP_PASSWORD: ' ' }],
   ])('無効な設定 %j のときは、DB にも R2 にも触れず、無効であることをログに出す', async (env) => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
 

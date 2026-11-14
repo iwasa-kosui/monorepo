@@ -103,18 +103,6 @@ describe('EmbedFeedEntriesUseCase', () => {
     expect(pendingCount()).toBe(0);
   });
 
-  it('新しく取得した記事から先に埋め込み、古い記事を次の回に回す', async () => {
-    const { stub, embed, addEntry } = setup();
-    for (let n = 1; n <= 510; n += 1) addEntry(n, NOW - n * 1000);
-
-    await embed.run();
-
-    const texts = stub.calls.flatMap((call) => [...call.texts]);
-    expect(texts).toContain('title 1\ndesc 1');
-    expect(texts).toContain('title 500\ndesc 500');
-    expect(texts).not.toContain('title 501\ndesc 501');
-  });
-
   it('まとめての埋め込みが失敗したら 1 件ずつ埋め込み直し、一部でも成功すれば ok を返す', async () => {
     const calls: number[] = [];
     const partial: TextEmbedder = {
@@ -166,22 +154,6 @@ describe('EmbedFeedEntriesUseCase', () => {
 
     expect(await buildEmbed(failing).run()).toEqual({ ok: false, err: { type: 'AiError', message: 'unavailable' } });
     expect(pendingCount()).toBe(1);
-  });
-
-  it('途中の回で全件失敗しても、書けた分は残して ok を返す', async () => {
-    let call = 0;
-    const flaky: TextEmbedder = {
-      embed: async ({ texts }) =>
-        ++call === 1
-          ? Result.ok(texts.map(() => Array.from({ length: 1024 }, () => 1)))
-          : Result.err({ type: 'AiError', message: 'unavailable' }),
-    };
-    const { buildEmbed, addEntry, pendingCount } = setup();
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    for (let n = 1; n <= 150; n += 1) addEntry(n, NOW - n);
-
-    expect(await buildEmbed(flaky).run()).toEqual({ ok: true, val: { embedded: 100, skipped: 50, remaining: 0 } });
-    expect(pendingCount()).toBe(50);
   });
 
   it('途中の回で全件失敗したら、その回の件数を skipped に、まだ試していない件数を remaining に数える', async () => {

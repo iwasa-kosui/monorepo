@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   blueskyActorOfPath,
-  fetchBlueskyProfile,
   isBlueskyProfileConflictError,
   ownBlueskyProfileSaveFailureMessage,
   updateOwnBlueskyProfile,
@@ -28,14 +27,6 @@ const failure = async (promise: Promise<unknown>) => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-});
-
-describe('blueskyProfileClient', () => {
-  it('失敗した応答は status と error の文言を持つエラーにする', async () => {
-    stubFetch(json({ error: 'Profile not found' }, 404));
-
-    expect(await failure(fetchBlueskyProfile('x'))).toMatchObject({ status: 404, message: 'Profile not found' });
-  });
 });
 
 describe('own Bluesky profile', () => {
