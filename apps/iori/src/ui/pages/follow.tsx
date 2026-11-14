@@ -1,7 +1,7 @@
 import { useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-import { follow, isMastodonApiError, searchAccount } from '../api/mastodonClient.ts';
+import { follow, isMastodonApiError, isNotFoundError, lookupAccount, searchAccount } from '../api/mastodonClient.ts';
 import { parseFollowTarget } from './followTarget.ts';
 
 const FollowPage = () => {
@@ -21,15 +21,16 @@ const FollowPage = () => {
 
     try {
       const target = parseFollowTarget(handle, window.location.host);
-      if (target.type === 'local') {
-        setError('Local accounts cannot be followed');
-        return;
-      }
       if (target.type === 'unsupported') {
         setError('Enter a handle (e.g., @user@example.com) or an https URL');
         return;
       }
-      const account = await searchAccount(target.query);
+      const account = target.type === 'local'
+        ? await lookupAccount(target.username).catch((error: unknown) => {
+          if (isNotFoundError(error)) return undefined;
+          throw error;
+        })
+        : await searchAccount(target.query);
       if (account === undefined) {
         setError('Account not found');
         return;
