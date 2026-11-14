@@ -146,6 +146,7 @@ describe('collectBlueskyTimelineTask', () => {
       'collectBlueskyNotifications',
       'collectBlueskyChatPush',
       'purgeBlueskyAccountSwitch',
+      'respondToAiAgentMentions',
     ]);
     const threeHourly = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
     expect(threeHourly).not.toContain('collectBlueskyTimeline');
@@ -197,10 +198,11 @@ describe('dispatchScheduled with the registered table', () => {
     return ran;
   };
 
-  it('* * * * * では取り込みと切り替えの削除だけが動く', async () => {
+  it('* * * * * では取り込みと切り替えの削除と AI エージェントの bot の返信だけが動く', async () => {
     expect(await ranNames('* * * * *')).toEqual([
       'collectBlueskyTimeline',
       'purgeBlueskyAccountSwitch',
+      'respondToAiAgentMentions',
       'collectBlueskyNotifications',
       'collectBlueskyChatPush',
     ]);

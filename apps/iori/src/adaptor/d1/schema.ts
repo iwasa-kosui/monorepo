@@ -860,6 +860,15 @@ export const blueskyAccountSwitchTable = sqliteTable('bluesky_account_switch', {
   updatedAt: timestamp().notNull(),
 });
 
+export const aiAgentBotTriggersTable = sqliteTable('ai_agent_bot_triggers', {
+  postId: text('postId').primaryKey(),
+  outcome: text('outcome', { enum: ['replied', 'ignored', 'failed'] }).notNull(),
+  reason: text('reason'),
+  handledAt: timestamp().notNull(),
+}, (table) => [
+  index('ai_agent_bot_triggers_outcome_handled_at_idx').on(table.outcome, table.handledAt),
+]);
+
 export const schema = {
   usersTable,
   keysTable,
@@ -939,4 +948,5 @@ export const schema = {
   blueskyNotificationReceiptsTable,
   blueskyNotificationSyncStateTable,
   blueskyAccountSwitchTable,
+  aiAgentBotTriggersTable,
 } as const;

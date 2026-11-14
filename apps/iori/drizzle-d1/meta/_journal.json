@@ -407,6 +407,13 @@
       "when": 1794600000001,
       "tag": "0057_bluesky_chat_push_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1794618628092,
+      "tag": "0058_ai_agent_bot_triggers",
+      "breakpoints": true
     }
   ]
 }

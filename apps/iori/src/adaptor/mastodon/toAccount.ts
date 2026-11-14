@@ -1,4 +1,5 @@
 import type { LocalActor, RemoteActor } from '../../domain/actor/actor.ts';
+import { AiAgentBot } from '../../domain/aiAgentBot/aiAgentBot.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
 import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 import type { User } from '../../domain/user/user.ts';
@@ -87,6 +88,7 @@ const toAccountOf = (
       logoUri: string | undefined;
       displayName?: string;
       note?: string;
+      bot?: boolean;
       profile?: RemoteProfile;
     }
   >,
@@ -113,7 +115,7 @@ const toAccountOf = (
     locked: profile?.locked ?? false,
     fields: profile?.fields ?? [],
     emojis: profile?.emojis ?? [],
-    bot: profile?.bot ?? false,
+    bot: profile?.bot ?? props.bot ?? false,
     group: profile?.group ?? false,
     discoverable: null,
     indexable: false,
@@ -139,6 +141,7 @@ export const toAccount = (source: AccountSource, options: ToAccountOptions): Acc
       logoUri: actor.logoUri,
       displayName: actor.displayName,
       note: actor.bio === undefined ? undefined : plainTextToHtml(actor.bio),
+      bot: AiAgentBot.isBotUsername(user.username),
     }, options);
   }
   const { actor } = source;
