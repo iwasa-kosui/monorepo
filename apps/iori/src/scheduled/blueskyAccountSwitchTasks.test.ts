@@ -7,10 +7,7 @@ import {
 } from '../adaptor/d1/__tests__/blueskyAccountSwitchFixture.ts';
 import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
-import {
-  purgeBlueskyAccountSwitchTask,
-  skipWhileBlueskyAccountSwitching,
-} from './blueskyAccountSwitchTasks.ts';
+import { purgeBlueskyAccountSwitchTask, skipWhileBlueskyAccountSwitching } from './blueskyAccountSwitchTasks.ts';
 import { dispatchScheduled, type ScheduledTaskContext, scheduledTasks } from './scheduledTasks.ts';
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];

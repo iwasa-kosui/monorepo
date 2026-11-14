@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  isAiCrawlerUserAgent,
-  isImagePath,
-  renderRobotsTxt,
-} from './aiCrawlers.ts';
+import { isAiCrawlerUserAgent, isImagePath, renderRobotsTxt } from './aiCrawlers.ts';
 
 describe('isAiCrawlerUserAgent', () => {
   it.each([

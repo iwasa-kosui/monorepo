@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  blueskyBlockUri,
-  parseBlueskyBlockUri,
-} from './blueskyModeration.ts';
+import { blueskyBlockUri, parseBlueskyBlockUri } from './blueskyModeration.ts';
 
 describe('block の at-uri', () => {
   it('app.bsky.graph.block の uri だけを受け、repo と rkey に分ける', () => {

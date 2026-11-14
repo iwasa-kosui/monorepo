@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  GroupedNotificationsResultsSchema,
-  NotificationSchema,
-} from '../../mastodon/entities.ts';
+import { GroupedNotificationsResultsSchema, NotificationSchema } from '../../mastodon/entities.ts';
 import { toGroupedNotificationId } from '../../mastodon/toNotification.ts';
 import { linkOf, setupReadApi } from './helper/mastodonReadHarness.ts';
 

@@ -187,7 +187,7 @@ describe('VotePollUseCase', () => {
       const isBlockedUri = (uri: string) => uri.startsWith('https://remote.example/');
 
       await expectRejected(setup({ isBlockedUri }), [0], 'PollAuthorBlockedError');
-      });
+    });
 
     it('投票の作者のドメインがブロック対象なら PollAuthorBlockedError を返す', async () => {
       const isBlockedUri = (uri: string) => uri === AUTHOR_URI;

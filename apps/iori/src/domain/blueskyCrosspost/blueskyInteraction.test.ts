@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  blueskyPostgateRecordOf,
-  BlueskyReplyRestriction,
-  blueskyThreadgateRecordOf,
-} from './blueskyInteraction.ts';
+import { blueskyPostgateRecordOf, BlueskyReplyRestriction, blueskyThreadgateRecordOf } from './blueskyInteraction.ts';
 
 const POST = 'at://did:plc:me/app.bsky.feed.post/3kabc';
 const CREATED_AT = '2026-11-13T00:00:00.000Z';

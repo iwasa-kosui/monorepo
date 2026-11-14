@@ -6,12 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createMastodonSeed } from '../../src/adaptor/d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../src/adaptor/d1/__tests__/sqliteFixture.ts';
-import {
-  candidateSql,
-  dryRunSql,
-  pruneFailureLines,
-  pruneFederatedPosts,
-} from '../prune-federated-posts.mjs';
+import { candidateSql, dryRunSql, pruneFailureLines, pruneFederatedPosts } from '../prune-federated-posts.mjs';
 
 const accountId = 'b'.repeat(32);
 const token = 'api-token-value-for-fixture-0123456789';

@@ -11,10 +11,7 @@ import { createD1FeedSourceFetchFailedStore } from '../../adaptor/d1/feedSource/
 import { createD1FeedSourceFetchReserver } from '../../adaptor/d1/feedSource/feedSourceFetchReserver.ts';
 import { createD1FeedSourcesResolverByEnabled } from '../../adaptor/d1/feedSource/feedSourcesResolverByEnabled.ts';
 import type { Tweet, TwitterApiIoClient } from '../../adaptor/twitterApiIo/twitterApiIoClient.ts';
-import {
-  type FeedSourceFetchReserver,
-  X_MANUAL_FETCH_COOLDOWN_SECONDS,
-} from '../../domain/feedSource/feedSource.ts';
+import { type FeedSourceFetchReserver, X_MANUAL_FETCH_COOLDOWN_SECONDS } from '../../domain/feedSource/feedSource.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { RefreshXPostsUseCase } from '../refreshXPosts.ts';
 

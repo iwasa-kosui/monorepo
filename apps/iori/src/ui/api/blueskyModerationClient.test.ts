@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  blueskyModerationFailureMessage,
-  muteBlueskyActor,
-  muteBlueskyThread,
-} from './blueskyModerationClient.ts';
+import { blueskyModerationFailureMessage, muteBlueskyActor, muteBlueskyThread } from './blueskyModerationClient.ts';
 
 const DID = 'did:plc:target';
 const ROOT = 'at://did:plc:target/app.bsky.feed.post/3kroot';

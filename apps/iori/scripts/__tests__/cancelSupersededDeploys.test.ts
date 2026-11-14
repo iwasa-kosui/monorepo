@@ -46,7 +46,6 @@ const setup = (
 const cancels = (calls: Call[]) => calls.filter(call => call.method === 'POST').map(call => call.url);
 
 describe('cancelSupersededDeploys', () => {
-
   it('cancels a waiting run whose head is behind the current commit and returns 0', async () => {
     const { calls, run } = setup((url, method) => {
       const list = listResponse(url, { waiting: [{ id: 11, head_sha: oldSha }] });

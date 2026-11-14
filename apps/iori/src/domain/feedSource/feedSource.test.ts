@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { FeedSource } from './feedSource.ts';
 
-
 describe('FeedSource.parseNew', () => {
   it('http の URL は受け付けない', () => {
     expect(FeedSource.parseNew({ kind: 'rss', url: 'http://example.com/feed.xml', title: 'ブログ' }).ok).toBe(false);

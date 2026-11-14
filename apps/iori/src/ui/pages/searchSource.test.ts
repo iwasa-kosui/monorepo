@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  parseSearchSource,
-  withSearchSource,
-} from './searchSource.ts';
+import { parseSearchSource, withSearchSource } from './searchSource.ts';
 
 describe('parseSearchSource', () => {
   it('クエリが無いときは iori の検索にする', () => {

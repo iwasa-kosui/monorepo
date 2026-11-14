@@ -102,7 +102,6 @@ describe('assets.run_worker_first', () => {
 });
 
 describe('triggers', () => {
-
   it('registers a task for exactly the cron expressions in the template', async () => {
     const { crons } = (await readDeployedConfig()).triggers as { crons: string[] };
     expect(Object.keys(scheduledTasks).sort()).toEqual([...crons].sort());

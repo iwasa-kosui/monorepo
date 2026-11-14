@@ -3,11 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 
-import {
-  createWorkflowDirectory,
-  parseWorkflowInvocation,
-  writePrivateValue,
-} from '../workflow-context.mjs';
+import { createWorkflowDirectory, parseWorkflowInvocation, writePrivateValue } from '../workflow-context.mjs';
 
 const env = {
   GITHUB_EVENT_NAME: 'workflow_dispatch',

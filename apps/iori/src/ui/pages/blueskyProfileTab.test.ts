@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  profileTabOfSearch,
-  withProfileTab,
-} from './blueskyProfileTab.ts';
+import { profileTabOfSearch, withProfileTab } from './blueskyProfileTab.ts';
 
 describe('profileTabOfSearch', () => {
   it('tab が follows・followers・replies・media・videos のときだけ、そのタブにする', () => {

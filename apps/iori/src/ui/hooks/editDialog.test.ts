@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import {
-  canSendEdit,
-  editErrorMessage,
-  initialEditValue,
-} from './editDialog.ts';
+import { canSendEdit, editErrorMessage, initialEditValue } from './editDialog.ts';
 
 const apiError = (status: number, message = 'x'): Error => Object.assign(new Error(message), { status });
 

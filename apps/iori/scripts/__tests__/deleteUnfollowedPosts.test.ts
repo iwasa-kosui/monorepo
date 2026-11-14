@@ -6,12 +6,7 @@ import { createD1TimelineItemDeletedStore } from '../../src/adaptor/d1/timeline/
 import { Instant } from '../../src/domain/instant/instant.ts';
 import { TimelineItem } from '../../src/domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../../src/domain/timeline/timelineItemId.ts';
-import {
-  applySql,
-  deleteFailureLines,
-  deleteUnfollowedPosts,
-  dryRunSql,
-} from '../delete-unfollowed-posts.mjs';
+import { applySql, deleteFailureLines, deleteUnfollowedPosts, dryRunSql } from '../delete-unfollowed-posts.mjs';
 
 const accountId = 'b'.repeat(32);
 const token = 'api-token-value-for-fixture-0123456789';

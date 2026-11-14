@@ -11,11 +11,7 @@ import type { User } from '../../../domain/user/user.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { UpdateAvatarUseCase } from '../../../useCase/updateAvatar.ts';
 import { UpdateProfileUseCase } from '../../../useCase/updateProfile.ts';
-import {
-  CredentialAccountSchema,
-  InstanceV1Schema,
-  InstanceV2Schema,
-} from '../../mastodon/entities.ts';
+import { CredentialAccountSchema, InstanceV1Schema, InstanceV2Schema } from '../../mastodon/entities.ts';
 import { createPostImageR2ObjectStore } from '../../r2/postImageObjectStore.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerMastodonCoreRouter } from '../workerMastodonCoreRouter.ts';

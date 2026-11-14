@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  NOTIFICATION_TYPES,
-  notificationsUrl,
-} from './mastodonClient.ts';
+import { NOTIFICATION_TYPES, notificationsUrl } from './mastodonClient.ts';
 import { createPrefetcher, PREFETCH_FRESH_MS, type PrefetchDeps } from './navPrefetch.ts';
 import { prefetchUrlsFor } from './prefetchTargets.ts';
 import { readCache, writeCache } from './responseCache.ts';

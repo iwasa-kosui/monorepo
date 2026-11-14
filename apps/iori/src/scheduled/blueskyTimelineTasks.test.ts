@@ -3,10 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
-import {
-  collectBlueskyTimelineTask,
-  createCollectBlueskyTimelineTask,
-} from './blueskyTimelineTasks.ts';
+import { collectBlueskyTimelineTask, createCollectBlueskyTimelineTask } from './blueskyTimelineTasks.ts';
 import { type ScheduledTaskContext } from './scheduledTasks.ts';
 
 const untouchable = (name: string) =>

@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  decideLoadMore,
-  isNearDocumentEnd,
-  isNearScrollEnd,
-} from './infiniteScrollPosition.ts';
+import { decideLoadMore, isNearDocumentEnd, isNearScrollEnd } from './infiniteScrollPosition.ts';
 
 describe('isNearScrollEnd', () => {
   it('returns false far from the end of the page', () => {

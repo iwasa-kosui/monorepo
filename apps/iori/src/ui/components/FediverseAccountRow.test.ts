@@ -15,4 +15,3 @@ describe('accountNoteExcerpt', () => {
     expect(excerpt.endsWith('…')).toBe(true);
   });
 });
-

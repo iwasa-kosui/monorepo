@@ -14,11 +14,7 @@ import type { UserId } from '../../domain/user/userId.ts';
 import { Username } from '../../domain/user/username.ts';
 import type { GenerateRequest, SummarizeRequest, TextGenerator } from '../../ports/textGenerator.ts';
 import { createStubTextGenerator } from '../../testing/aiStubs.ts';
-import {
-  TranslatePostUseCase,
-  TRANSLATION_MODEL,
-  TRANSLATION_PROVIDER,
-} from '../translatePost.ts';
+import { TranslatePostUseCase, TRANSLATION_MODEL, TRANSLATION_PROVIDER } from '../translatePost.ts';
 
 afterEach(() => {
   vi.useRealTimers();

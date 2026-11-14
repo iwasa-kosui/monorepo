@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  blueskyBookmarkFailureMessage,
-  bookmarkBlueskyPost,
-} from './blueskyBookmarkClient.ts';
+import { blueskyBookmarkFailureMessage, bookmarkBlueskyPost } from './blueskyBookmarkClient.ts';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Instant } from '../../instant/instant.ts';
 import { PostId } from '../../post/postId.ts';
-import {
-  readSourceNumbers,
-  type SummaryItem,
-  toSummaryDocuments,
-  truncateSummaryItems,
-} from '../summaryItems.ts';
+import { readSourceNumbers, type SummaryItem, toSummaryDocuments, truncateSummaryItems } from '../summaryItems.ts';
 
 const item = (text: string, createdAt: number, username = 'alice'): SummaryItem => ({
   postId: PostId.generate(),

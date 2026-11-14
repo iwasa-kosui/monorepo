@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
-import {
-  createCollectBlueskyTimelineUseCase,
-  resolveBlueskyTimelineConfig,
-} from './blueskyTimeline.ts';
+import { createCollectBlueskyTimelineUseCase, resolveBlueskyTimelineConfig } from './blueskyTimeline.ts';
 
 const VALID_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
 
