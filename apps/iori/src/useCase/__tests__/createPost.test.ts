@@ -338,14 +338,17 @@ describe('CreatePostUseCase', () => {
       expect(mentionCall).toBeDefined();
     });
 
-    it.each(['unlisted', 'private'] as const)('%s はリレーに送らず、followers と mentions に送る', async (visibility) => {
-      const { result, relayCall, followersCall, mentionCall } = await post(visibility);
+    it.each(['unlisted', 'private'] as const)(
+      '%s はリレーに送らず、followers と mentions に送る',
+      async (visibility) => {
+        const { result, relayCall, followersCall, mentionCall } = await post(visibility);
 
-      expect(result.ok && result.val.post.visibility).toBe(visibility);
-      expect(relayCall).toBeUndefined();
-      expect(followersCall).toBeDefined();
-      expect(mentionCall).toBeDefined();
-    });
+        expect(result.ok && result.val.post.visibility).toBe(visibility);
+        expect(relayCall).toBeUndefined();
+        expect(followersCall).toBeDefined();
+        expect(mentionCall).toBeDefined();
+      },
+    );
 
     it('direct は followers にもリレーにも送らず、mentions の相手の inbox にだけ共有 inbox を使わず送る', async () => {
       const { result, relayCall, followersCall, calls } = await post('direct');
