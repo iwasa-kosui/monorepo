@@ -129,6 +129,7 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'timelineItem.created',
   'timelineItem.deleted',
   'user.created',
+  'user.localAccountRetired',
   'userPreferences.saved',
 ] as const;
 

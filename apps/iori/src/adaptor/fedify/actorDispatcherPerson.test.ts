@@ -1,5 +1,5 @@
 import type { RequestContext } from '@fedify/fedify';
-import { Person } from '@fedify/vocab';
+import { Person, Tombstone } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it } from 'vitest';
 
@@ -45,5 +45,24 @@ describe('Person の配信', () => {
     expect((person as Person).summary?.toString()).toBe(
       '<p>行1<br><a href="https://example.com">https://example.com</a></p>',
     );
+  });
+});
+
+describe('消した bot のアカウント', () => {
+  const missing = (identifier: string) =>
+    createActorDispatcher({
+      userResolverByUsername: { resolve: async () => RA.ok(undefined) },
+      actorResolverByUserId: { resolve: async () => RA.ok(undefined) },
+    }).dispatch(ctx, identifier);
+
+  it('以前 bot に使っていたユーザー名は Tombstone（410 Gone）を返し、アカウントが無くなったことを伝える', async () => {
+    const actor = await missing('iori_bot');
+
+    expect(actor).toBeInstanceOf(Tombstone);
+    expect((actor as Tombstone).id?.href).toBe(`${ORIGIN}/users/iori_bot`);
+  });
+
+  it('もともと無いユーザー名は 404 のままにする', async () => {
+    expect(await missing('nobody')).toBeNull();
   });
 });

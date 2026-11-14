@@ -24,6 +24,27 @@ export type AgentPostView = Readonly<{
 
 export type AgentFetchedPage = Readonly<{ finalUrl: string; text: string }>;
 
+/** 最近よく読まれている記事 */
+export type AgentArticleView = Readonly<{
+  title: string;
+  url: string;
+  bookmarkCount: number;
+  sourceTitle: string;
+}>;
+
+/** Bluesky で話題になっている投稿 */
+export type AgentBlueskyPostView = Readonly<{
+  url: string;
+  author: string;
+  text: string;
+  linkUrl: string | null;
+  createdAt: string;
+  likeCount: number;
+  repostCount: number;
+  replyCount: number;
+  quoteCount: number;
+}>;
+
 /**
  * bot が外の世界に対してできること。runtime が既存のユースケースを組み合わせて用意する。
  * 読み取りは bot から見える投稿に限る（非公開の投稿やほかの人の DM は返さない）。
@@ -36,6 +57,10 @@ export type AiAgentBotCapabilities = Readonly<{
   /** bot 自身の最近の投稿（新しい順） */
   readOwnRecentPosts: (limit: number) => Promise<readonly AgentPostView[]>;
   fetchUrl: (url: string) => Promise<Result<AgentFetchedPage, string>>;
+  /** 最近よく読まれている記事（はてなブックマークの多い順） */
+  readPopularArticles: (limit: number) => Promise<readonly AgentArticleView[]>;
+  /** Bluesky で話題になっている投稿（話題になっている順） */
+  readTrendingBlueskyPosts: (limit: number) => Promise<readonly AgentBlueskyPostView[]>;
   likePost: (postId: PostId) => Promise<Result<void, string>>;
   repostPost: (postId: PostId) => Promise<Result<void, string>>;
   followAuthor: (postId: PostId) => Promise<Result<void, string>>;
@@ -49,6 +74,8 @@ export const MAX_RECENT_TIMELINE = 20;
 /** 自分から投稿するときに、繰り返しを避けるために見返す自分の投稿の数 */
 export const MAX_OWN_RECENT_POSTS = 10;
 export const MAX_FETCHED_PAGE_CHARS = 10000;
+export const MAX_POPULAR_ARTICLES = 10;
+export const MAX_TRENDING_BLUESKY_POSTS = 10;
 
 export const formatPost = (post: AgentPostView): string =>
   [
@@ -59,10 +86,30 @@ export const formatPost = (post: AgentPostView): string =>
 export const formatPosts = (posts: readonly AgentPostView[]): string =>
   posts.length === 0 ? '該当する投稿はありません。' : posts.map(formatPost).join('\n\n');
 
+export const formatArticles = (articles: readonly AgentArticleView[]): string =>
+  articles.length === 0
+    ? '該当する記事はありません。'
+    : articles.map((article) =>
+      `- ${article.title}（${article.sourceTitle}、はてなブックマーク ${article.bookmarkCount} 件）\n  ${article.url}`
+    ).join('\n');
+
+export const formatBlueskyPosts = (posts: readonly AgentBlueskyPostView[]): string =>
+  posts.length === 0
+    ? '該当する投稿はありません。'
+    : posts.map((post) =>
+      [
+        `[${post.url}] ${post.author} (${post.createdAt})`,
+        `いいね ${post.likeCount} / リポスト ${post.repostCount} / 返信 ${post.replyCount} / 引用 ${post.quoteCount}`,
+        post.text,
+        ...(post.linkUrl === null ? [] : [`リンク: ${post.linkUrl}`]),
+      ].join('\n')
+    ).join('\n\n');
+
 const postIdArgs = z.object({ postId: z.string() });
 const queryArgs = z.object({ query: z.string().min(1).max(200) });
 const urlArgs = z.object({ url: z.string().min(1).max(2000) });
 const limitArgs = z.object({ limit: z.coerce.number().int().min(1).max(MAX_RECENT_TIMELINE).optional() });
+const materialLimitArgs = z.object({ limit: z.coerce.number().int().min(1).max(MAX_POPULAR_ARTICLES).optional() });
 
 const invalidArgs = (name: string): string => `エラー: ${name} の引数が正しくありません。`;
 
@@ -123,6 +170,35 @@ const readingTools = (capabilities: AiAgentBotCapabilities): AgentTool[] => [
       const parsed = limitArgs.safeParse(args ?? {});
       if (!parsed.success) return invalidArgs('get_recent_timeline');
       return formatPosts(await capabilities.readRecentTimeline(parsed.data.limit ?? 10));
+    },
+  },
+  {
+    name: 'get_popular_articles',
+    description: 'この 2 日ほどで、はてなブックマークを多く集めている（よく読まれている）記事を、多い順に読む。',
+    parameters: {
+      type: 'object',
+      properties: { limit: { type: 'number', description: `読む件数（1〜${MAX_POPULAR_ARTICLES}）` } },
+      required: [],
+    },
+    run: async (args) => {
+      const parsed = materialLimitArgs.safeParse(args ?? {});
+      if (!parsed.success) return invalidArgs('get_popular_articles');
+      return formatArticles(await capabilities.readPopularArticles(parsed.data.limit ?? 5));
+    },
+  },
+  {
+    name: 'get_trending_bluesky_posts',
+    description:
+      'Bluesky のタイムラインに流れてきた投稿のうち、いいね・リポストなどの反応が伸びている話題の投稿を、話題になっている順に読む。',
+    parameters: {
+      type: 'object',
+      properties: { limit: { type: 'number', description: `読む件数（1〜${MAX_TRENDING_BLUESKY_POSTS}）` } },
+      required: [],
+    },
+    run: async (args) => {
+      const parsed = materialLimitArgs.safeParse(args ?? {});
+      if (!parsed.success) return invalidArgs('get_trending_bluesky_posts');
+      return formatBlueskyPosts(await capabilities.readTrendingBlueskyPosts(parsed.data.limit ?? 5));
     },
   },
   {

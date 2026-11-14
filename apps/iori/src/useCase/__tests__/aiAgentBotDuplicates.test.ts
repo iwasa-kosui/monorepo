@@ -24,7 +24,7 @@ const now = Instant.orThrow(Date.UTC(2026, 10, 14));
 const post = (id: string, authorActorId: ActorId, text: string): AgentPostView => ({
   postId: PostId.orThrow(id),
   authorActorId,
-  author: authorActorId === botActorId ? '@iori_bot' : '@alice',
+  author: authorActorId === botActorId ? '@agent' : '@alice',
   text,
   createdAt: new Date(now).toISOString(),
 });
@@ -48,6 +48,8 @@ const capabilitiesOf = (
   readRecentTimeline: async () => [...(posts.own ?? []), ...(posts.timeline ?? [])],
   readOwnRecentPosts: async () => posts.own ?? [],
   fetchUrl: async () => Result.err('unused'),
+  readPopularArticles: async () => [],
+  readTrendingBlueskyPosts: async () => [],
   likePost: async () => Result.ok(undefined),
   repostPost: async () => Result.ok(undefined),
   followAuthor: async () => Result.ok(undefined),
@@ -68,7 +70,7 @@ describe('PostAiAgentMusingUseCase', () => {
       poster: { post: async (text) => (posted.push(text), Result.ok(PostId.orThrow(previous.postId))) },
     });
 
-    expect(result).toEqual({ ok: true, val: { posted: false, reason: 'repeated' } });
+    expect(result).toEqual({ ok: true, val: { posted: false, reason: 'repeated', theme: 'timeline' } });
     expect(posted).toEqual([]);
   });
 
@@ -88,7 +90,7 @@ describe('PostAiAgentMusingUseCase', () => {
 
 describe('RespondToAiAgentMentionsUseCase', () => {
   it('2 つの cron の実行が同じトリガーで重なっても、返信は 1 回だけ', async () => {
-    const mention = post('0192f6a0-0000-7000-8000-000000000002', aliceActorId, '@iori_bot こんにちは');
+    const mention = post('0192f6a0-0000-7000-8000-000000000002', aliceActorId, '@agent こんにちは');
     const records = new Map<string, AiAgentBotTriggerHandled | 'claimed'>();
     const triggerClaimedStore: AiAgentBotTriggerClaimedStore = {
       store: async ({ postId }) => {
