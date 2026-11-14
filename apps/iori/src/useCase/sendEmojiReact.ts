@@ -13,6 +13,7 @@ import {
   type EmojiReactResolverByActorAndPostAndEmoji,
 } from '../domain/emojiReact/emojiReact.ts';
 import { EmojiReactId } from '../domain/emojiReact/emojiReactId.ts';
+import { findLocalCustomEmoji } from '../domain/emojiReact/localCustomEmoji.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { Post, PostNotFoundError, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
@@ -50,6 +51,7 @@ type Deps = Readonly<{
   emojiReactCreatedStore: EmojiReactCreatedStore;
   emojiReactResolverByActorAndPostAndEmoji: EmojiReactResolverByActorAndPostAndEmoji;
   postResolver: PostResolver;
+  origin: string;
 }>;
 
 type EmojiImage = Readonly<{
@@ -93,6 +95,7 @@ const create = ({
   emojiReactCreatedStore,
   emojiReactResolverByActorAndPostAndEmoji,
   postResolver,
+  origin,
 }: Deps): SendEmojiReactUseCase => {
   const now = Instant.now();
   const resolveRequesterUser = resolveRequesterUserWith(sessionResolver, userResolver, now);
@@ -113,6 +116,12 @@ const create = ({
           : RA.ok(post)
       ),
     );
+
+  // iori が配信するカスタム絵文字は、相手の投稿に同名の絵文字が無くても自前の画像を付けて送る。
+  const localCustomEmojiImage = (emoji: string): EmojiImage | undefined => {
+    const custom = findLocalCustomEmoji(emoji);
+    return custom === undefined ? undefined : { url: new URL(custom.path, origin), mediaType: custom.mediaType };
+  };
 
   const run = async (input: Input) =>
     RA.flow(
@@ -177,7 +186,7 @@ const create = ({
           );
         }
 
-        const emojiImage = await findEmojiImage(result, emoji, documentLoader);
+        const emojiImage = localCustomEmojiImage(emoji) ?? await findEmojiImage(result, emoji, documentLoader);
 
         return RA.ok({ noteId: result.id, author, authorId: author.id, emojiImage });
       }),
@@ -190,7 +199,7 @@ const create = ({
             postId,
             emoji,
             emojiReactActivityUri: null,
-            emojiImageUrl: remote?.emojiImage?.url.href ?? null,
+            emojiImageUrl: (remote?.emojiImage ?? localCustomEmojiImage(emoji))?.url.href ?? null,
           },
           now,
         )),

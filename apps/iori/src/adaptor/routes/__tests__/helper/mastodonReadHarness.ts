@@ -985,6 +985,7 @@ export const setupReadApi = (
             emojiReactCreatedStore: createD1EmojiReactCreatedStore(db),
             emojiReactResolverByActorAndPostAndEmoji: createD1EmojiReactResolverByActorAndPostAndEmoji(db),
             postResolver,
+            origin: ORIGIN,
           }),
           undoEmojiReactUseCase: UndoEmojiReactUseCase.create({
             sessionResolver,

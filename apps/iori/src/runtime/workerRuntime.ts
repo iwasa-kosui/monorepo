@@ -831,6 +831,7 @@ export const createWorkerRuntimePorts = async (
         emojiReactCreatedStore: createD1EmojiReactCreatedStore(db),
         emojiReactResolverByActorAndPostAndEmoji,
         postResolver,
+        origin: env.ORIGIN,
       }),
       undoEmojiReactUseCase: UndoEmojiReactUseCase.create({
         sessionResolver,
