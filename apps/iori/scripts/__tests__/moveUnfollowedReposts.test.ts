@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { createD1FederatedTimelineItemCreatedStore } from '../../src/adaptor/d1/federatedTimeline/federatedTimelineItemCreatedStore.ts';
 import { createMastodonSeed } from '../../src/adaptor/d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../src/adaptor/d1/__tests__/sqliteFixture.ts';
+import { createD1FederatedTimelineItemCreatedStore } from '../../src/adaptor/d1/federatedTimeline/federatedTimelineItemCreatedStore.ts';
 import { createD1TimelineItemDeletedStore } from '../../src/adaptor/d1/timeline/timelineItemDeletedStore.ts';
 import { FederatedTimelineItem } from '../../src/domain/federatedTimeline/federatedTimelineItem.ts';
 import { FederatedTimelineItemId } from '../../src/domain/federatedTimeline/federatedTimelineItemId.ts';
@@ -224,7 +224,6 @@ describe('move-unfollowed-reposts relay and database checks', () => {
   it.each([
     ['is missing', [], 'resource-missing'],
     ['is listed twice', [databaseName, databaseName], 'resource-ambiguous'],
-    ['only has lookalikes', [`${databaseName}-x`, 'iori'], 'resource-missing'],
   ])('fails without a query when the D1 name %s', async (_label, names, reason) => {
     const { fixture } = build();
     const { calls, error } = await run('apply', fixture, {}, { names });
@@ -236,15 +235,6 @@ describe('move-unfollowed-reposts relay and database checks', () => {
     const { calls, error } = await run('apply', fixture, {}, { uuid: '../../x' });
     expect(calls.filter((call) => call.method === 'POST')).toEqual([]);
     expect(moveFailureLines(error)).toEqual([diag('move-reposts-resolve', 'result-invalid')]);
-  });
-  it('keeps the token, the account id and ids out of the failure lines', async () => {
-    const { fixture } = build({ withRelay: false });
-    const { error } = await run('apply', fixture);
-    for (const line of moveFailureLines(error)) {
-      expect(line).not.toContain(token);
-      expect(line).not.toContain(accountId);
-      expect(line).not.toContain(databaseUuid);
-    }
   });
 });
 

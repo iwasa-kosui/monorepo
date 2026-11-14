@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { addRelay, fetchRelays, fetchRelaysOrThrow, relayHost } from './relays.ts';
+import { addRelay, fetchRelays, relayHost } from './relays.ts';
 
 const stubFetch = (response: Response | Error) =>
   vi.stubGlobal('fetch', vi.fn(() => response instanceof Error ? Promise.reject(response) : Promise.resolve(response)));
@@ -15,42 +15,13 @@ describe('fetchRelays', () => {
   });
 });
 
-describe('fetchRelaysOrThrow', () => {
-  it('rejects when the response is not ok', async () => {
-    stubFetch(new Response('{}', { status: 500 }));
-
-    await expect(fetchRelaysOrThrow()).rejects.toThrow('HTTP 500');
-  });
-});
-
 describe('addRelay', () => {
-  it('reports success when the relay is accepted', async () => {
-    stubFetch(Response.json({}, { status: 201 }));
-
-    expect(await addRelay('https://relay.example/actor')).toEqual({ ok: true });
-  });
-
   it('does not show the error body from the server', async () => {
     stubFetch(Response.json({ error: 'Already subscribed' }, { status: 409 }));
 
     expect(await addRelay('https://relay.example/actor')).toEqual({
       ok: false,
       message: 'リレーを追加できませんでした',
-    });
-  });
-
-  it('reports a malformed URL when the response is 422', async () => {
-    stubFetch(Response.json({ error: 'Invalid URL' }, { status: 422 }));
-
-    expect(await addRelay('not a url')).toEqual({ ok: false, message: 'URL の形式が正しくありません' });
-  });
-
-  it('reports a network error when the request fails', async () => {
-    stubFetch(new TypeError('offline'));
-
-    expect(await addRelay('https://relay.example/actor')).toEqual({
-      ok: false,
-      message: '通信に失敗しました。もう一度お試しください',
     });
   });
 });

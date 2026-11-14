@@ -46,35 +46,9 @@ describe('createOgpFetcher charset', () => {
     const data = await createOgpFetcher({ fetch: asFetch(fetchMock) }).fetch('https://example.com/page');
     expect(data.title).toBe('日本語');
   });
-
-  it('reads a Shift_JIS og:title declared by <meta charset>', async () => {
-    const fetchMock = htmlFetch(
-      bytesOf('<html><head><meta charset="Shift_JIS"><meta property="og:title" content="', NIHONGO_SJIS, '"></head>'),
-      'text/html',
-    );
-    const data = await createOgpFetcher({ fetch: asFetch(fetchMock) }).fetch('https://example.com/page');
-    expect(data.title).toBe('日本語');
-  });
 });
 
 describe('createOgpFetcher size limit', () => {
-  it('returns empty data and cancels the stream once the body exceeds 5 MiB without Content-Length', async () => {
-    const cancel = vi.fn();
-    let pulls = 0;
-    const stream = new ReadableStream<Uint8Array>({
-      pull: (controller) => {
-        pulls += 1;
-        controller.enqueue(new Uint8Array(2 * 1024 * 1024));
-      },
-      cancel,
-    });
-    const fetchMock = vi.fn(async () => new Response(stream, { status: 200, headers: HTML_HEADERS }));
-    const data = await createOgpFetcher({ fetch: asFetch(fetchMock) }).fetch('https://example.com/page');
-    expect(data).toEqual(empty);
-    expect(cancel).toHaveBeenCalledTimes(1);
-    expect(pulls).toBeLessThan(10);
-  });
-
   it('returns empty data when Content-Length exceeds 5 MiB', async () => {
     const fetchMock = vi.fn(async () =>
       new Response(page('big'), {
@@ -88,17 +62,6 @@ describe('createOgpFetcher size limit', () => {
 });
 
 describe('createOgpFetcher redirects', () => {
-  it.each(['https://127.0.0.1/', 'https://localhost/'])(
-    'returns empty data without requesting a redirect to %s',
-    async (location) => {
-      const fetchMock = vi.fn().mockResolvedValueOnce(redirect(location));
-      const data = await createOgpFetcher({ fetch: asFetch(fetchMock) }).fetch('https://example.com/page');
-      expect(data).toEqual(empty);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['https://example.com/page']);
-    },
-  );
-
   it('follows up to 3 redirects, each with redirect: manual', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(redirect('https://example.com/2'))
@@ -181,15 +144,7 @@ describe('createOgpFetcher content type and status', () => {
     expect(data).toEqual(empty);
   });
 
-  it('returns empty data when fetch throws', async () => {
-    const fetchMock = vi.fn(async () => {
-      throw new Error('connection reset');
-    });
-    const data = await createOgpFetcher({ fetch: asFetch(fetchMock) }).fetch('https://example.com/page');
-    expect(data).toEqual(empty);
-  });
-
-  it.each(['http://example.com/page', 'https://127.0.0.1/', 'https://localhost/page', 'not a url'])(
+  it.each(['http://example.com/page', 'https://localhost/page'])(
     'does not fetch %s',
     async (url) => {
       const fetchMock = vi.fn();

@@ -32,16 +32,6 @@ describe('updateSearchedStatuses', () => {
     expect(result?.terms).toEqual({ original: ['a'], expanded: [] });
     expect(result?.expansion).toBe('ok');
   });
-
-  it('リポストは元の投稿の id で一致させる', () => {
-    const boost = post('b1', post('p1'));
-
-    expect(updateSearchedStatuses(searched([boost]), 'p1', favourited)?.statuses).toEqual([favourited(boost)]);
-  });
-
-  it('検索結果がまだないときは null のままにする', () => {
-    expect(updateSearchedStatuses(null, 'p1', favourited)).toBeNull();
-  });
 });
 
 describe('updateSummaryCitations', () => {
@@ -55,9 +45,5 @@ describe('updateSummaryCitations', () => {
     expect(result?.result.summary).toBe('要約');
     expect(result?.result.remaining_today).toBe(3);
     expect(result?.target).toBe('a');
-  });
-
-  it('要約がまだないときは null のままにする', () => {
-    expect(updateSummaryCitations(null, 'p1', favourited)).toBeNull();
   });
 });

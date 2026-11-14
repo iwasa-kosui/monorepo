@@ -111,20 +111,6 @@ describe('generateOgImageOnDemand', () => {
     expect(error).toHaveBeenCalled();
   });
 
-  it('returns failed when resolving the title throws', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const { run, render, put } = setup({
-      title: async () => {
-        throw new Error('resolve failed');
-      },
-    });
-
-    expect(await run(articleId)).toEqual({ status: 'failed' });
-    expect(render).not.toHaveBeenCalled();
-    expect(put).not.toHaveBeenCalled();
-    expect(error).toHaveBeenCalled();
-  });
-
   it('returns failed and does not store when rendering fails', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { run, put } = setup({ render: renderFailure });

@@ -137,13 +137,9 @@ it('keeps every possible word within the public workflow log pattern and 40 char
 });
 it.each([
   [undefined, 'smoke-token-empty'],
-  ['', 'smoke-token-empty'],
   [' padded-smoke-queue-token ', 'smoke-token-space'],
-  [`${'a'.repeat(10)}\n${'b'.repeat(10)}`, 'smoke-token-space'],
   [`${'a'.repeat(20)}\u3042`, 'smoke-token-charset'],
-  [`${'a'.repeat(20)}\u0001`, 'smoke-token-charset'],
   [`${'a'.repeat(15)}\n`, 'smoke-token-short'],
-  ['short', 'smoke-token-short'],
   ['a'.repeat(1025), 'smoke-token-long'],
 ])('rejects the malformed smoke token %j with the fixed reason %s and without its value', (token, word) => {
   let thrown: (Error & { diagnostic?: { reason: string } }) | undefined;

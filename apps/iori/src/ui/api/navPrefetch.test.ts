@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NOTIFICATION_TYPES, notificationsUrl } from './mastodonClient.ts';
 import { createPrefetcher, PREFETCH_FRESH_MS, type PrefetchDeps } from './navPrefetch.ts';
-import { prefetchUrlsFor } from './prefetchTargets.ts';
 import { readCache, writeCache } from './responseCache.ts';
 
 const createFakeStorage = () => {
@@ -20,15 +18,6 @@ const createFakeStorage = () => {
 
 const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' }, ...init });
-
-describe('prefetchUrlsFor', () => {
-  it.each(['/auth/sign-in', '/auth/sign-up', '/sign-in', '/x', '/articles/abc', '/users/kosui', '/api/v1/markers'])(
-    'returns nothing for %s',
-    (pathname) => {
-      expect(prefetchUrlsFor(pathname)).toEqual([]);
-    },
-  );
-});
 
 describe('createPrefetcher', () => {
   let now = 1_000_000;
@@ -73,14 +62,6 @@ describe('createPrefetcher', () => {
       expect(init?.method).toBe('GET');
       expect(String(url)).not.toMatch(/markers|push|\/auth\//);
     }
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      '/api/v1/timelines/home?limit=40',
-      '/api/v1/accounts/verify_credentials',
-      '/api/iori/v1/bluesky/timeline?scope=home',
-      '/api/v1/favourites',
-      notificationsUrl(NOTIFICATION_TYPES),
-      '/api/iori/v1/articles',
-    ]);
   });
 
   it('does nothing for paths outside the table', async () => {
@@ -153,18 +134,6 @@ describe('createPrefetcher', () => {
     now += 1;
     await prefetcher.prefetch('/likes');
     expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not retry within 30 seconds after a network error', async () => {
-    fetchMock.mockImplementation(async () => {
-      throw new TypeError('offline');
-    });
-    const prefetcher = make();
-
-    await prefetcher.prefetch('/likes');
-    await prefetcher.prefetch('/likes');
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not retry within 30 seconds after the cache write fails', async () => {

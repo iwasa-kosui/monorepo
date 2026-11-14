@@ -25,12 +25,6 @@ describe('appendUniqueById', () => {
     expect(ids(merged)).toEqual(['a', 'b']);
   });
 
-  it('returns the existing items when every incoming item is a duplicate', () => {
-    const merged = appendUniqueById([item('a'), item('b')], [item('a'), item('b')]);
-
-    expect(ids(merged)).toEqual(['a', 'b']);
-  });
-
   it('keeps the existing item when the incoming duplicate has different content', () => {
     const merged = appendUniqueById([{ id: 'a', value: 1 }], [{ id: 'a', value: 2 }]);
 

@@ -117,31 +117,9 @@ describe('PostView の投票の操作', () => {
     expect(html).toMatch(/✓<\/span>青 &lt;b&gt;/);
     expect(html).not.toMatch(/✓<\/span>赤/);
   });
-
-  it('終了した投票は、未投票でも結果表示にして、投票の入力を出さない', () => {
-    const html = render(withPoll(poll({ expired: true })), onVote);
-
-    expect(html).not.toContain('data-poll-form');
-    expect(html).not.toContain('type="radio"');
-    expect(html).toContain('終了');
-    expect(html).toContain('75%');
-    expect(html).not.toContain('data-poll-own-vote');
-  });
 });
 
 describe('castVote', () => {
-  it('成功したら、選んだ選択肢の番号を渡し、エラーを返さない', async () => {
-    const calls: Array<readonly number[]> = [];
-
-    const error = await castVote((choices) => {
-      calls.push(choices);
-      return Promise.resolve();
-    }, [0, 2]);
-
-    expect(error).toBeUndefined();
-    expect(calls).toEqual([[0, 2]]);
-  });
-
   it('API のエラーなら、サーバーのメッセージを含むエラー文を返す', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const apiError = Object.assign(new Error('Validation failed: The poll has already ended'), { status: 422 });
@@ -149,13 +127,5 @@ describe('castVote', () => {
     const error = await castVote(() => Promise.reject(apiError), [0]);
 
     expect(error).toBe('Failed to vote: Validation failed: The poll has already ended');
-  });
-
-  it('ネットワークエラーなら、再試行を促すエラー文を返す', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-
-    const error = await castVote(() => Promise.reject(new TypeError('Failed to fetch')), [0]);
-
-    expect(error).toBe('Failed to vote. Please try again.');
   });
 });

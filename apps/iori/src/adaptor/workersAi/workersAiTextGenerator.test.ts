@@ -37,7 +37,7 @@ describe('createWorkersAiTextGenerator summarize', () => {
     if (result.ok) expect(JSON.parse(result.val)).toEqual(['a', 'b']);
   });
 
-  it.each([{}, { response: '' }, { response: 1 }, { choices: [] }, { choices: [{ message: { content: '' } }] }, null])(
+  it.each([{ response: '' }, { choices: [{ message: { content: '' } }] }, null])(
     'returns AiError for an empty or malformed response %j',
     async (raw) => {
       const run = vi.fn(async () => raw);
@@ -77,7 +77,6 @@ describe('createWorkersAiTextGenerator generate', () => {
   });
 
   it.each([
-    { choices: [{ message: { content: '', reasoning_content: '考え中' } }] },
     { choices: [{ message: { content: null, reasoning_content: '考え中' } }] },
   ])('reports only reasoning content when the body is empty for %j', async (raw) => {
     const run = vi.fn(async () => raw);

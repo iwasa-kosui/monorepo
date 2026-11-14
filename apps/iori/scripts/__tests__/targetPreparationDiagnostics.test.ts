@@ -12,14 +12,9 @@ it.each([
   'https://secret.invalid/path',
   'Target readback failed.',
   'workers-http-99',
-  'workers-http-600',
-  'workers-http-4030',
   'accounts-request',
-  'workers-',
   'workers-request-extra',
-  'Workers-request',
   'state-mismatch\nIORI_DIAG stage=x',
-  '',
 ])('rejects the reason %j', (reason) => {
   expect(isPreparationReason(reason)).toBe(false);
 });

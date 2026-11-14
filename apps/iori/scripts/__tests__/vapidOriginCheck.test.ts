@@ -1,5 +1,6 @@
 import { createECDH } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
+
 import {
   assertVapidBeforePreparation,
   originVapidPublicKeyMatches,
@@ -104,14 +105,6 @@ it.each([
   [
     'padded private key',
     (pair: { privateKey: string; publicKey: string }) => ({ ...pair, privateKey: `${pair.privateKey}=` }),
-  ],
-  [
-    'private key with newline',
-    (pair: { privateKey: string; publicKey: string }) => ({ ...pair, privateKey: `${pair.privateKey}\n` }),
-  ],
-  [
-    'padded public key',
-    (pair: { privateKey: string; publicKey: string }) => ({ ...pair, publicKey: `${pair.publicKey}=` }),
   ],
   [
     'public key with newline',

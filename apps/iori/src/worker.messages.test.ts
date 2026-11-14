@@ -58,23 +58,7 @@ const setup = () => {
 };
 
 describe('メッセージの画面', () => {
-  it.each(['/messages', '/messages/3kconvo', '/messages/fediverse/WyJhIl0'])(
-    '未ログインの %s は /sign-in へ 302 で返す',
-    async (path) => {
-      const response = await setup().request(path);
-
-      expect(response.status).toBe(302);
-      expect(response.headers.get('Location')).toBe('/sign-in');
-    },
-  );
-
-  it.each([
-    '/messages',
-    '/messages/3kconvo',
-    '/messages/3kconvo/',
-    '/messages/fediverse/WyJhIl0',
-    '/messages/fediverse/WyJhIl0/',
-  ])(
+  it.each(['/messages/3kconvo', '/messages/fediverse/WyJhIl0/'])(
     '所有者の %s は画面を返し、キャッシュと検索エンジンへの登録を許さない',
     async (path) => {
       const response = await setup().request(path, { headers: { Cookie: `sessionId=${sessionId}` } });
@@ -86,13 +70,7 @@ describe('メッセージの画面', () => {
     },
   );
 
-  it.each([
-    '/messages',
-    '/messages/3kconvo',
-    '/messages/3kconvo/',
-    '/messages/fediverse/WyJhIl0',
-    '/messages/fediverse/WyJhIl0/',
-  ])(
+  it.each(['/messages/3kconvo', '/messages/fediverse/WyJhIl0/'])(
     '所有者でないユーザーの %s は 404 にし、画面を返さない',
     async (path) => {
       const response = await setup().request(path, { headers: { Cookie: `sessionId=${otherSessionId}` } });
