@@ -147,6 +147,7 @@ describe('collectBlueskyNotificationsTask', () => {
       ['collectBlueskyNotifications', 'collectBlueskyTimeline'],
       ['collectBlueskyChatPush', 'collectBlueskyNotifications'],
       ['purgeBlueskyAccountSwitch', undefined],
+      ['respondToAiAgentMentions', undefined],
     ]);
     const threeHourly = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
     expect(threeHourly).not.toContain('collectBlueskyNotifications');

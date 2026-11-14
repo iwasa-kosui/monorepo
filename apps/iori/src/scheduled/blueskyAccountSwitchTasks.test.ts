@@ -93,6 +93,7 @@ describe('毎分の cron', () => {
       'collectBlueskyNotifications',
       'collectBlueskyChatPush',
       'purgeBlueskyAccountSwitch',
+      'respondToAiAgentMentions',
     ]);
   });
 

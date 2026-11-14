@@ -23,6 +23,7 @@
     "IORI_PRUNE_FEDERATED_POSTS": "disabled",
     "IORI_BLUESKY_CROSSPOST": "disabled",
     "IORI_BLUESKY_TIMELINE": "disabled",
+    "IORI_AI_AGENT_BOT": "disabled",
   },
   "d1_databases": [
     {
