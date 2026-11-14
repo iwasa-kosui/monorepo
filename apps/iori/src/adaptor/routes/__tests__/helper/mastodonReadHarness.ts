@@ -51,6 +51,7 @@ import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
+import { ListRemoteActorFollowsUseCase } from '../../../../useCase/listRemoteActorFollows.ts';
 import { MarkBlueskyNotificationsSeenUseCase } from '../../../../useCase/markBlueskyNotificationsSeen.ts';
 import { PostToBlueskyUseCase } from '../../../../useCase/postToBluesky.ts';
 import { PreviewDigestTopicsUseCase } from '../../../../useCase/previewDigestTopics.ts';
@@ -1003,6 +1004,16 @@ export const setupReadApi = (
             localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, ORIGIN),
             remotePostUpserter,
             blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+            isBlockedUri: () => false,
+          }),
+          listRemoteActorFollowsUseCase: ListRemoteActorFollowsUseCase.create({
+            origin: ORIGIN,
+            userResolver,
+            actorResolverById: createD1ActorResolverById(db),
+            actorResolverByUri,
+            remoteActorCreatedStore,
+            logoUriUpdatedStore,
+            remoteActorProfileUpdatedStore,
             isBlockedUri: () => false,
           }),
           allRelaysResolver: createD1AllRelaysResolver(db),

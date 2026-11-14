@@ -5,6 +5,7 @@ import {
   failureMessage,
   fetchHomeTimeline,
   fetchRelationshipOrSignedOut,
+  fetchRemoteFollows,
   fetchStatus,
   follow,
   isMastodonApiError,
@@ -182,6 +183,21 @@ describe('mastodon client requests', () => {
       isMuted: false,
       isBlocked: false,
     });
+  });
+
+  it('gets the remote follow list with the encoded id and the cursor', async () => {
+    const body = { accounts: [], next_cursor: 'https://remote.example/f?page=2', total_items: 3 };
+    const fetchMock = stubFetch(jsonResponse(body));
+
+    const result = await fetchRemoteFollows('a/b', 'followers', 'https://remote.example/f?page=1');
+
+    const [url] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe(
+      `/api/iori/v1/accounts/a%2Fb/remote-follows/followers?cursor=${
+        encodeURIComponent('https://remote.example/f?page=1')
+      }`,
+    );
+    expect(result).toEqual(body);
   });
 
   it('throws an unprocessable error carrying the server message when the reblog is refused', async () => {

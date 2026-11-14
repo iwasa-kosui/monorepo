@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'hono/jsx';
+import { type PropsWithChildren, useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import { DEFAULT_HEADER_PATH } from '../../adaptor/mastodon/defaultImages.ts';
@@ -11,10 +11,13 @@ import {
   fetchAccount,
   fetchAccountStatuses,
   fetchRelationshipOrSignedOut,
+  fetchRemoteFollows,
   fetchRemoteStatuses,
   follow,
+  isMastodonApiError,
   isNotFoundError,
   mute,
+  type RemoteFollowListKind,
   report,
   unblock,
   unfollow,
@@ -22,8 +25,10 @@ import {
 } from '../api/mastodonClient.ts';
 import { isLocalAccount, updateStatusesByPostId } from '../api/status.ts';
 import { CustomEmojiText } from '../components/CustomEmojiText.tsx';
+import { FediverseAccountRow } from '../components/FediverseAccountRow.tsx';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { FollowToggleButton } from '../components/FollowToggleButton.tsx';
+import { PagedList } from '../components/PagedList.tsx';
 import { PostView } from '../components/PostView.tsx';
 import type { ReportCategory } from '../components/ReportModal.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
@@ -34,6 +39,12 @@ import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { useReplyDialog, type UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
 import { useStatusListActions } from '../hooks/useStatusListActions.ts';
 import { shouldReloadStatuses } from './remoteUserStatuses.ts';
+import {
+  isRemoteFollowListTab,
+  type RemoteUserTab,
+  remoteUserTabOfSearch,
+  withRemoteUserTab,
+} from './remoteUserTab.ts';
 
 type Props = Readonly<{
   account: Account;
@@ -64,7 +75,29 @@ type Props = Readonly<{
   onMessage?: () => Promise<void>;
   isOpeningMessage?: boolean;
   messageError?: string;
+  tab?: RemoteUserTab;
+  onSelectTab?: (tab: RemoteUserTab) => void;
 }>;
+
+type TabButtonProps = Readonly<{ selected: boolean; onClick: () => void }>;
+
+const TabButton = ({ selected, onClick, children }: PropsWithChildren<TabButtonProps>) => (
+  <button
+    type='button'
+    aria-pressed={selected}
+    onClick={onClick}
+    class={selected
+      ? 'font-semibold text-terracotta dark:text-terracotta-light'
+      : 'hover:text-terracotta dark:hover:text-terracotta-light transition-colors'}
+  >
+    {children}
+  </button>
+);
+
+const FOLLOW_LIST_HEADINGS: Readonly<Record<RemoteFollowListKind, string>> = {
+  following: 'フォロー',
+  followers: 'フォロワー',
+};
 
 const isDefaultHeader = (header: string): boolean => {
   try {
@@ -103,7 +136,10 @@ export const RemoteUserPage = ({
   onMessage,
   isOpeningMessage,
   messageError,
-}: Props) => {
+  tab = 'posts',
+  onSelectTab,
+  children,
+}: PropsWithChildren<Props>) => {
   const handle = account.acct;
   const hasDisplayName = account.display_name.trim() !== '';
   const displayName = hasDisplayName ? account.display_name : account.username;
@@ -187,6 +223,14 @@ export const RemoteUserPage = ({
                 ))}
               </tbody>
             </table>
+          )}
+
+          {isLoggedIn && onSelectTab !== undefined && (
+            <p class='mb-4 relative z-10 flex flex-wrap gap-x-4 text-sm text-charcoal-light dark:text-gray-400'>
+              <TabButton selected={tab === 'posts'} onClick={() => onSelectTab('posts')}>投稿</TabButton>
+              <TabButton selected={tab === 'following'} onClick={() => onSelectTab('following')}>フォロー</TabButton>
+              <TabButton selected={tab === 'followers'} onClick={() => onSelectTab('followers')}>フォロワー</TabButton>
+            </p>
           )}
 
           <div class='flex items-center gap-3'>
@@ -332,8 +376,9 @@ export const RemoteUserPage = ({
                       type='button'
                       onClick={onMessage}
                       disabled={isOpeningMessage === true}
-                      class='flex items-center justify-center gap-1 p-2 rounded-xl text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                      class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
                       title='メッセージ'
+                      aria-label='メッセージ'
                     >
                       <svg
                         xmlns='http://www.w3.org/2000/svg'
@@ -349,7 +394,6 @@ export const RemoteUserPage = ({
                           d='M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
                         />
                       </svg>
-                      メッセージ
                     </button>
                   )}
                   {isReported && <span role='status' class='text-sm text-sage-dark dark:text-sage'>通報しました</span>}
@@ -397,28 +441,37 @@ export const RemoteUserPage = ({
         </div>
       </section>
 
-      <section class='space-y-6 py-2'>
-        {reply !== undefined && <FediverseReplyModal dialog={reply} />}
-        <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>
-          Posts
-        </h2>
-        {statuses.length === 0 ? <p class='text-charcoal-light dark:text-gray-400'>No posts yet.</p> : (
-          statuses.map((status) => (
-            <PostView
-              key={status.id}
-              status={status}
-              isLoggedIn={isLoggedIn}
-              {...statusActionProps(isLoggedIn ? actions : undefined, status)}
-              onReply={isLoggedIn ? reply?.openReplyDialog : undefined}
-            />
-          ))
+      {isRemoteFollowListTab(tab)
+        ? (
+          <section class='py-2'>
+            <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>{FOLLOW_LIST_HEADINGS[tab]}</h2>
+            {children}
+          </section>
+        )
+        : (
+          <section class='space-y-6 py-2'>
+            {reply !== undefined && <FediverseReplyModal dialog={reply} />}
+            <h2 class='text-xl font-bold text-charcoal dark:text-white mb-4'>
+              Posts
+            </h2>
+            {statuses.length === 0 ? <p class='text-charcoal-light dark:text-gray-400'>No posts yet.</p> : (
+              statuses.map((status) => (
+                <PostView
+                  key={status.id}
+                  status={status}
+                  isLoggedIn={isLoggedIn}
+                  {...statusActionProps(isLoggedIn ? actions : undefined, status)}
+                  onReply={isLoggedIn ? reply?.openReplyDialog : undefined}
+                />
+              ))
+            )}
+            {isLoadingRemoteStatuses && (
+              <p role='status' class='text-sm text-charcoal-light dark:text-gray-400'>
+                相手のサーバーから過去の投稿を読み込んでいます
+              </p>
+            )}
+          </section>
         )}
-        {isLoadingRemoteStatuses && (
-          <p role='status' class='text-sm text-charcoal-light dark:text-gray-400'>
-            相手のサーバーから過去の投稿を読み込んでいます
-          </p>
-        )}
-      </section>
 
       <ReportModal
         targetLabel={`@${handle}`}
@@ -429,6 +482,36 @@ export const RemoteUserPage = ({
         onClose={onReportClose}
       />
     </>
+  );
+};
+
+const FOLLOW_LIST_EMPTY_MESSAGES: Readonly<Record<RemoteFollowListKind, string>> = {
+  following: '表示できるフォローはありません。相手のサーバーが一覧を公開していないこともあります',
+  followers: '表示できるフォロワーはいません。相手のサーバーが一覧を公開していないこともあります',
+};
+
+const accountKey = (account: Account): string => account.id;
+
+export const remoteFollowListFailureMessage = (error: unknown, position: 'first' | 'more'): string => {
+  const base = position === 'first' ? '一覧を読み込めませんでした' : '続きを読み込めませんでした';
+  return isMastodonApiError(error) ? `${base}: ${error.message}` : base;
+};
+
+export const RemoteUserFollowList = (
+  { accountId, kind }: Readonly<{ accountId: string; kind: RemoteFollowListKind }>,
+) => {
+  const load = useCallback(async (cursor?: string) => {
+    const page = await fetchRemoteFollows(accountId, kind, cursor);
+    return { items: page.accounts, cursor: page.next_cursor };
+  }, [accountId, kind]);
+  return (
+    <PagedList
+      load={load}
+      keyOf={accountKey}
+      failureMessage={remoteFollowListFailureMessage}
+      emptyMessage={FOLLOW_LIST_EMPTY_MESSAGES[kind]}
+      renderItem={(account: Account) => <FediverseAccountRow key={account.id} account={account} />}
+    />
   );
 };
 
@@ -465,6 +548,16 @@ const App = () => {
   const [messageError, setMessageError] = useState<string | undefined>(undefined);
   const isOpeningMessageRef = useRef(false);
   const [data, setData] = useState<{ error: string } | RemoteUserData | null>(null);
+  const [tab, setTab] = useState<RemoteUserTab>(() => remoteUserTabOfSearch(window.location.search));
+
+  const selectTab = useCallback((next: RemoteUserTab) => {
+    setTab(next);
+    history.replaceState(
+      history.state,
+      '',
+      `${window.location.pathname}${withRemoteUserTab(window.location.search, next)}${window.location.hash}`,
+    );
+  }, []);
 
   useEffect(() => {
     const actorId = getActorIdFromUrl();
@@ -541,7 +634,8 @@ const App = () => {
     }
   }, [accountId]);
 
-  useInfiniteScroll({ nextCursor: loaded?.nextMaxId, onLoadMore: loadMore });
+  const isShowingPosts = !(loaded?.isLoggedIn === true && isRemoteFollowListTab(tab));
+  useInfiniteScroll({ nextCursor: isShowingPosts ? loaded?.nextMaxId : undefined, onLoadMore: loadMore });
 
   const updateStatus = useCallback((postId: string, updater: (status: Status) => Status) => {
     setData((prev) =>
@@ -732,7 +826,13 @@ const App = () => {
       onMessage={data.isLoggedIn ? handleMessage : undefined}
       isOpeningMessage={isOpeningMessage}
       messageError={messageError}
-    />
+      tab={data.isLoggedIn ? tab : 'posts'}
+      onSelectTab={selectTab}
+    >
+      {data.isLoggedIn && isRemoteFollowListTab(tab) && (
+        <RemoteUserFollowList key={`${tab}:${data.account.id}`} accountId={data.account.id} kind={tab} />
+      )}
+    </RemoteUserPage>
   );
 };
 

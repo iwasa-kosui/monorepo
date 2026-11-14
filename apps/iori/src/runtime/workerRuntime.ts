@@ -238,6 +238,7 @@ import { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import { ListPasskeysUseCase } from '../useCase/listPasskeys.ts';
+import { ListRemoteActorFollowsUseCase } from '../useCase/listRemoteActorFollows.ts';
 import { PreviewDigestTopicsUseCase } from '../useCase/previewDigestTopics.ts';
 import { PublishArticleUseCase } from '../useCase/publishArticle.ts';
 import { RegisterOAuthApplicationUseCase } from '../useCase/registerOAuthApplication.ts';
@@ -839,6 +840,16 @@ export const createWorkerRuntimePorts = async (
         localPostUrisResolverByUris: createD1LocalPostUrisResolverByUris(db, env.ORIGIN),
         remotePostUpserter,
         blockedActorUriResolverByUsername: createD1BlockedActorUriResolverByUsername(db),
+        isBlockedUri: (uri) => isBlockedUri(uri),
+      }),
+      listRemoteActorFollowsUseCase: ListRemoteActorFollowsUseCase.create({
+        origin: env.ORIGIN,
+        userResolver,
+        actorResolverById: createD1ActorResolverById(db),
+        actorResolverByUri: createD1ActorResolverByUri(db),
+        remoteActorCreatedStore: createD1RemoteActorCreatedStore(db),
+        logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
+        remoteActorProfileUpdatedStore: createD1RemoteActorProfileUpdatedStore(db),
         isBlockedUri: (uri) => isBlockedUri(uri),
       }),
     },

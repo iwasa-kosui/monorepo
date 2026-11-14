@@ -714,6 +714,95 @@ describe('POST /api/iori/v1/statuses/:id/remote-context', () => {
   });
 });
 
+describe('GET /api/iori/v1/accounts/:id/remote-follows/:kind', () => {
+  const followsPath = (actorId: string, kind: string, cursor?: string) =>
+    `/api/iori/v1/accounts/${actorId}/remote-follows/${kind}${
+      cursor === undefined ? '' : `?cursor=${encodeURIComponent(cursor)}`
+    }`;
+  const personOf = (name: string) =>
+    new Person({
+      id: new URL(`https://remote.example/users/${name}`),
+      inbox: new URL(`https://remote.example/users/${name}/inbox`),
+      preferredUsername: name,
+      name: `${name} display`,
+    });
+  const serveFollowers = (t: Awaited<ReturnType<typeof seedReactions>>, names: readonly string[]) => {
+    const alice = new Person({
+      id: new URL('https://remote.example/users/alice'),
+      inbox: new URL('https://remote.example/users/alice/inbox'),
+      followers: new OrderedCollection({
+        id: new URL('https://remote.example/users/alice/followers'),
+        totalItems: 120,
+        first: new OrderedCollectionPage({
+          id: new URL('https://remote.example/users/alice/followers?page=1'),
+          items: names.map((name) => new URL(`https://remote.example/users/${name}`)),
+          next: new URL('https://remote.example/users/alice/followers?page=2'),
+        }),
+      }),
+    });
+    const byUri = new Map<string, unknown>([
+      [alice.id!.href, alice],
+      ...names.map((name): [string, Person] => [`https://remote.example/users/${name}`, personOf(name)]),
+    ]);
+    t.federation.lookupObject.mockImplementation(async (uri?: string) => byUri.get(uri ?? '') ?? null);
+  };
+
+  it('相手のサーバーのフォロワーを、アカウントとして返し、次のページと総数を付ける', async () => {
+    const t = await seedReactions();
+    serveFollowers(t, ['bob', 'carol']);
+
+    const response = await t.request(followsPath(t.alice.actorId, 'followers'), { headers: t.me.bearer });
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      accounts: { acct: string; display_name: string }[];
+      next_cursor: string | null;
+      total_items: number | null;
+    };
+    expect(body.accounts.map((account) => account.acct)).toEqual(['bob@remote.example', 'carol@remote.example']);
+    expect(body.accounts[0]!.display_name).toBe('bob display');
+    expect(body.next_cursor).toBe('https://remote.example/users/alice/followers?page=2');
+    expect(body.total_items).toBe(120);
+    expect(t.federation.getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
+  });
+
+  it('ローカルのアクターなら相手に問い合わせず空の一覧を返す', async () => {
+    const t = await seedReactions();
+
+    const response = await t.request(followsPath(t.me.actorId, 'following'), { headers: t.me.bearer });
+
+    expect(await response.json()).toEqual({ accounts: [], next_cursor: null, total_items: null });
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('知らない種類やアクターは 404、URL でない cursor は 422 にする', async () => {
+    const t = await seedReactions();
+
+    const responses = await Promise.all([
+      t.request(followsPath(t.alice.actorId, 'likes'), { headers: t.me.bearer }),
+      t.request(followsPath('not-an-actor-id', 'followers'), { headers: t.me.bearer }),
+      t.request(followsPath('00000000-0000-4000-8000-000000000000', 'followers'), { headers: t.me.bearer }),
+      t.request(followsPath(t.alice.actorId, 'followers', 'not a url'), { headers: t.me.bearer }),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 422]);
+    expect(t.federation.lookupObject).not.toHaveBeenCalled();
+  });
+
+  it('トークンがないと 401、read:accounts を満たさないスコープは 403 にする', async () => {
+    const t = await seedReactions();
+
+    const responses = await Promise.all([
+      t.request(followsPath(t.alice.actorId, 'followers'), {}),
+      t.request(followsPath(t.alice.actorId, 'followers'), { headers: { Authorization: 'Bearer invalid' } }),
+      t.request(followsPath(t.alice.actorId, 'followers'), { headers: await t.bearerFor('read:statuses') }),
+      t.request(followsPath(t.alice.actorId, 'followers'), { headers: await t.bearerFor('write') }),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403]);
+  });
+});
+
 describe('POST /api/iori/v1/accounts/:id/remote-statuses', () => {
   const remoteStatusesPath = (actorId: string) => `/api/iori/v1/accounts/${actorId}/remote-statuses`;
   const post = (t: Awaited<ReturnType<typeof seedReactions>>, actorId: string, headers: Record<string, string>) =>
