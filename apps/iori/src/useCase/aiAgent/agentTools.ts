@@ -8,6 +8,11 @@ import {
   MAX_FOLLOWUP_NOTE_CHARACTERS,
   MIN_FOLLOWUP_DELAY_MINUTES,
 } from '../../domain/aiAgentBot/aiAgentBotFollowup.ts';
+import type {
+  BlueskyTimelineTopic,
+  BlueskyTopicPost,
+  BlueskyTrend,
+} from '../../domain/aiAgentBot/aiAgentBotMaterial.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { AgentTool } from './agentLoop.ts';
 
@@ -32,17 +37,12 @@ export type AgentArticleView = Readonly<{
   sourceTitle: string;
 }>;
 
-/** Bluesky で話題になっている投稿 */
-export type AgentBlueskyPostView = Readonly<{
-  url: string;
-  author: string;
-  text: string;
-  linkUrl: string | null;
-  createdAt: string;
-  likeCount: number;
-  repostCount: number;
-  replyCount: number;
-  quoteCount: number;
+/** Bluesky でいま話題になっていること。全体の話題と、タイムラインで複数の人が触れている話題 */
+export type AgentBlueskyTopics = Readonly<{
+  trends: readonly BlueskyTrend[];
+  timelineTopics: readonly BlueskyTimelineTopic[];
+  /** 話題を探すための、タイムラインの最近の投稿 */
+  recentPosts: readonly BlueskyTopicPost[];
 }>;
 
 /**
@@ -59,8 +59,10 @@ export type AiAgentBotCapabilities = Readonly<{
   fetchUrl: (url: string) => Promise<Result<AgentFetchedPage, string>>;
   /** 最近よく読まれている記事（はてなブックマークの多い順） */
   readPopularArticles: (limit: number) => Promise<readonly AgentArticleView[]>;
-  /** Bluesky で話題になっている投稿（話題になっている順） */
-  readTrendingBlueskyPosts: (limit: number) => Promise<readonly AgentBlueskyPostView[]>;
+  /** Bluesky でいま話題になっていること */
+  readBlueskyTopics: () => Promise<AgentBlueskyTopics>;
+  /** Bluesky 全体の話題について、話題の投稿を読む。知らない話題なら undefined */
+  readBlueskyTrendPosts: (topic: string) => Promise<readonly BlueskyTopicPost[] | undefined>;
   likePost: (postId: PostId) => Promise<Result<void, string>>;
   repostPost: (postId: PostId) => Promise<Result<void, string>>;
   followAuthor: (postId: PostId) => Promise<Result<void, string>>;
@@ -75,7 +77,9 @@ export const MAX_RECENT_TIMELINE = 20;
 export const MAX_OWN_RECENT_POSTS = 10;
 export const MAX_FETCHED_PAGE_CHARS = 10000;
 export const MAX_POPULAR_ARTICLES = 10;
-export const MAX_TRENDING_BLUESKY_POSTS = 10;
+export const MAX_BLUESKY_TREND_POSTS = 10;
+/** モデルに見せる Bluesky の投稿の本文の長さ */
+const BLUESKY_POST_TEXT_CHARS = 300;
 
 export const formatPost = (post: AgentPostView): string =>
   [
@@ -93,23 +97,65 @@ export const formatArticles = (articles: readonly AgentArticleView[]): string =>
       `- ${article.title}（${article.sourceTitle}、はてなブックマーク ${article.bookmarkCount} 件）\n  ${article.url}`
     ).join('\n');
 
-export const formatBlueskyPosts = (posts: readonly AgentBlueskyPostView[]): string =>
+const clip = (text: string, max: number): string => {
+  const chars = [...text.replace(/\s+/g, ' ').trim()];
+  return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : chars.join('');
+};
+
+const authorOf = (post: BlueskyTopicPost): string =>
+  post.authorDisplayName === null ? `@${post.authorHandle}` : `${post.authorDisplayName} (@${post.authorHandle})`;
+
+export const formatBlueskyPosts = (posts: readonly BlueskyTopicPost[]): string =>
   posts.length === 0
     ? '該当する投稿はありません。'
     : posts.map((post) =>
       [
-        `[${post.url}] ${post.author} (${post.createdAt})`,
-        `いいね ${post.likeCount} / リポスト ${post.repostCount} / 返信 ${post.replyCount} / 引用 ${post.quoteCount}`,
-        post.text,
-        ...(post.linkUrl === null ? [] : [`リンク: ${post.linkUrl}`]),
+        `[${post.url}] ${authorOf(post)}${post.postedAt === null ? '' : ` (${post.postedAt})`}`,
+        ...(post.likeCount + post.repostCount > 0 ? [`いいね ${post.likeCount} / リポスト ${post.repostCount}`] : []),
+        clip(post.text, BLUESKY_POST_TEXT_CHARS),
       ].join('\n')
     ).join('\n\n');
+
+const formatTrend = (trend: BlueskyTrend): string =>
+  [
+    `- ${trend.displayName} [topic: ${trend.topic}]`,
+    [
+      trend.category,
+      trend.status,
+      trend.postCount === null ? null : `${trend.postCount} 件の投稿`,
+    ].filter((value) => value !== null).join(' / '),
+    trend.description,
+  ].filter((value) => value !== null && value.length > 0).join('\n  ');
+
+const formatTimelineTopic = (topic: BlueskyTimelineTopic): string =>
+  [
+    `- ${topic.kind === 'link' ? 'リンク' : 'ハッシュタグ'}: ${topic.label}${
+      topic.title === null ? '' : `（${topic.title}）`
+    }（${topic.people} 人が投稿・リポスト）`,
+    ...topic.posts.map((post) => `  > ${authorOf(post)}: ${clip(post.text, 120)} ${post.url}`),
+  ].join('\n');
+
+/** Bluesky の話題を、モデルが読める文にする */
+export const formatBlueskyTopics = (topics: AgentBlueskyTopics, options: Readonly<{ recentPosts: boolean }>): string =>
+  [
+    '### Bluesky 全体で話題になっていること（get_bluesky_trend_posts に topic を渡すと投稿を読める）',
+    topics.trends.length === 0 ? '読めませんでした。' : topics.trends.map(formatTrend).join('\n'),
+    '',
+    '### タイムラインで複数の人が触れている話題',
+    topics.timelineTopics.length === 0
+      ? '見つかりませんでした。'
+      : topics.timelineTopics.map(formatTimelineTopic).join('\n'),
+    ...(options.recentPosts
+      ? ['', '### タイムラインの最近の投稿（話題を探す手がかり）', formatBlueskyPosts(topics.recentPosts)]
+      : []),
+  ].join('\n');
 
 const postIdArgs = z.object({ postId: z.string() });
 const queryArgs = z.object({ query: z.string().min(1).max(200) });
 const urlArgs = z.object({ url: z.string().min(1).max(2000) });
 const limitArgs = z.object({ limit: z.coerce.number().int().min(1).max(MAX_RECENT_TIMELINE).optional() });
 const materialLimitArgs = z.object({ limit: z.coerce.number().int().min(1).max(MAX_POPULAR_ARTICLES).optional() });
+const topicArgs = z.object({ topic: z.string().min(1).max(200) });
 
 const invalidArgs = (name: string): string => `エラー: ${name} の引数が正しくありません。`;
 
@@ -187,18 +233,31 @@ const readingTools = (capabilities: AiAgentBotCapabilities): AgentTool[] => [
     },
   },
   {
-    name: 'get_trending_bluesky_posts',
+    name: 'get_bluesky_topics',
+    description: [
+      'Bluesky でいま話題になっていることを読む。',
+      'Bluesky 全体の話題と、タイムラインで複数の人が同じリンクやハッシュタグに触れている話題を返す。',
+    ].join(''),
+    parameters: { type: 'object', properties: {}, required: [] },
+    run: async () => formatBlueskyTopics(await capabilities.readBlueskyTopics(), { recentPosts: false }),
+  },
+  {
+    name: 'get_bluesky_trend_posts',
     description:
-      'Bluesky のタイムラインに流れてきた投稿のうち、いいね・リポストなどの反応が伸びている話題の投稿を、話題になっている順に読む。',
+      'get_bluesky_topics が返した Bluesky 全体の話題の topic を指定して、その話題についての投稿を読む。何が話題になっているのかを確かめるときに使う。',
     parameters: {
       type: 'object',
-      properties: { limit: { type: 'number', description: `読む件数（1〜${MAX_TRENDING_BLUESKY_POSTS}）` } },
-      required: [],
+      properties: { topic: { type: 'string', description: 'get_bluesky_topics が返した topic' } },
+      required: ['topic'],
     },
     run: async (args) => {
-      const parsed = materialLimitArgs.safeParse(args ?? {});
-      if (!parsed.success) return invalidArgs('get_trending_bluesky_posts');
-      return formatBlueskyPosts(await capabilities.readTrendingBlueskyPosts(parsed.data.limit ?? 5));
+      const parsed = topicArgs.safeParse(args);
+      if (!parsed.success) return invalidArgs('get_bluesky_trend_posts');
+      const posts = await capabilities.readBlueskyTrendPosts(parsed.data.topic.trim());
+      if (posts === undefined) {
+        return 'エラー: その topic の話題は見つかりません。get_bluesky_topics の topic を渡してください。';
+      }
+      return formatBlueskyPosts(posts.slice(0, MAX_BLUESKY_TREND_POSTS));
     },
   },
   {

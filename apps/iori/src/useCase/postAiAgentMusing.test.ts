@@ -18,7 +18,8 @@ const capabilities: AiAgentBotCapabilities = {
   readOwnRecentPosts: async () => [],
   fetchUrl: async () => Result.err('unused'),
   readPopularArticles: async () => [],
-  readTrendingBlueskyPosts: async () => [],
+  readBlueskyTopics: async () => ({ trends: [], timelineTopics: [], recentPosts: [] }),
+  readBlueskyTrendPosts: async () => undefined,
   likePost: async () => Result.ok(undefined),
   repostPost: async () => Result.ok(undefined),
   followAuthor: async () => Result.ok(undefined),
@@ -84,7 +85,7 @@ describe('PostAiAgentMusingUseCase', () => {
       AiAgentBot.decideMusingTheme({
         now: Instant.orThrow(n * MUSING_INTERVAL_MS),
         hasPopularArticles: true,
-        hasBlueskyTrends: false,
+        hasBlueskyTopics: false,
       }) === 'popularArticle'
     )!;
     const requests: AgentChatRequest[] = [];
@@ -96,5 +97,38 @@ describe('PostAiAgentMusingUseCase', () => {
     const userPrompt = requests[0]?.messages.find((message) => message.role === 'user')?.content ?? '';
     expect(userPrompt).toContain('https://example.com/a');
     expect(userPrompt).toContain('321');
+  });
+
+  it('Bluesky の話題の回では、Bluesky 全体の話題とタイムラインの話題をモデルに見せる', async () => {
+    const slot = [0, 1, 2].find((n) =>
+      AiAgentBot.decideMusingTheme({
+        now: Instant.orThrow(n * MUSING_INTERVAL_MS),
+        hasPopularArticles: false,
+        hasBlueskyTopics: true,
+      }) === 'blueskyTopic'
+    )!;
+    const requests: AgentChatRequest[] = [];
+    const { result } = await run(scriptedModel([createPost('話題のまとめ')], requests), {
+      now: Instant.orThrow(slot * MUSING_INTERVAL_MS),
+      capabilities: {
+        readBlueskyTopics: async () => ({
+          trends: [{
+            topic: 't1',
+            displayName: '大規模な通信障害',
+            description: null,
+            postCount: 500,
+            status: 'hot',
+            category: 'news',
+            feedUri: null,
+          }],
+          timelineTopics: [{ kind: 'hashtag', label: '#typescript', title: null, people: 3, posts: [] }],
+          recentPosts: [],
+        }),
+      },
+    });
+    expect(result.ok && result.val.theme).toBe('blueskyTopic');
+    const userPrompt = requests[0]?.messages.find((message) => message.role === 'user')?.content ?? '';
+    expect(userPrompt).toContain('大規模な通信障害');
+    expect(userPrompt).toContain('#typescript');
   });
 });

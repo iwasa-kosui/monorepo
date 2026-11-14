@@ -17,7 +17,7 @@ describe('AiAgentBot.username', () => {
 
 describe('AiAgentBot.decideMusingTheme', () => {
   const slot = (n: number) => Instant.orThrow(n * MUSING_INTERVAL_MS);
-  const all = { hasPopularArticles: true, hasBlueskyTrends: true };
+  const all = { hasPopularArticles: true, hasBlueskyTopics: true };
 
   it('rotates the theme every musing interval so the same kind of post does not continue', () => {
     const themes = [0, 1, 2, 3].map((n) => AiAgentBot.decideMusingTheme({ now: slot(n), ...all }));
@@ -26,7 +26,7 @@ describe('AiAgentBot.decideMusingTheme', () => {
   });
 
   it('falls back to the timeline when there is no material for the chosen theme', () => {
-    const none = { hasPopularArticles: false, hasBlueskyTrends: false };
+    const none = { hasPopularArticles: false, hasBlueskyTopics: false };
     const themes = [0, 1, 2].map((n) => AiAgentBot.decideMusingTheme({ now: slot(n), ...none }));
     expect(themes).toEqual(['timeline', 'timeline', 'timeline']);
   });

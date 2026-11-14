@@ -24,7 +24,7 @@ export const RETIRED_AI_AGENT_BOT_USERNAMES = ['iori_bot', 'iori', 'ior'] as con
 export const AI_AGENT_BOT_PROFILE = {
   displayName: 'agent (AI)',
   bio: 'blog.kosui.me に住む AI エージェントの bot です。フォローされたらフォローを返します。'
-    + '最近よく読まれている記事や、Bluesky で話題の投稿をときどき紹介します。'
+    + '最近よく読まれている記事や、Bluesky でいま話題になっていることを、ときどき調べて紹介します。'
     + 'メンションや返信には、スレッドや URL の中身を調べて答えます。'
     + '発言はすべて AI が自動で生成しているので、誤りを含むことがあります。',
 } as const;
@@ -52,12 +52,12 @@ export const isRetiredAiAgentBotUsername = (username: string): boolean =>
 /**
  * bot が自分から投稿するときの話題。
  * - popularArticle: 最近よく読まれている記事（はてなブックマークの多い記事）を紹介する
- * - blueskyTrend: Bluesky で話題になっている投稿を紹介する
+ * - blueskyTopic: Bluesky でいま話題になっていることを見つけて、調べて書く
  * - timeline: フォローしている人のタイムラインから話題を選ぶ
  */
-export type AiAgentBotMusingTheme = 'popularArticle' | 'blueskyTrend' | 'timeline';
+export type AiAgentBotMusingTheme = 'popularArticle' | 'blueskyTopic' | 'timeline';
 
-const MUSING_THEMES: readonly AiAgentBotMusingTheme[] = ['popularArticle', 'blueskyTrend', 'timeline'];
+const MUSING_THEMES: readonly AiAgentBotMusingTheme[] = ['popularArticle', 'blueskyTopic', 'timeline'];
 
 /** 自分から投稿する cron の間隔。この間隔ごとに話題を順に入れ替える */
 export const MUSING_INTERVAL_MS = 3 * 60 * 60 * 1000;
@@ -67,12 +67,12 @@ export const MUSING_INTERVAL_MS = 3 * 60 * 60 * 1000;
  * 選んだ話題の材料が無ければ、タイムラインから話題を選ぶ。
  */
 const decideMusingTheme = (
-  input: Readonly<{ now: Instant; hasPopularArticles: boolean; hasBlueskyTrends: boolean }>,
+  input: Readonly<{ now: Instant; hasPopularArticles: boolean; hasBlueskyTopics: boolean }>,
 ): AiAgentBotMusingTheme => {
   const slot = Math.floor(input.now / MUSING_INTERVAL_MS);
   const theme = MUSING_THEMES[((slot % MUSING_THEMES.length) + MUSING_THEMES.length) % MUSING_THEMES.length]!;
   if (theme === 'popularArticle' && !input.hasPopularArticles) return 'timeline';
-  if (theme === 'blueskyTrend' && !input.hasBlueskyTrends) return 'timeline';
+  if (theme === 'blueskyTopic' && !input.hasBlueskyTopics) return 'timeline';
   return theme;
 };
 

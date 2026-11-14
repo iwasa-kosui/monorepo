@@ -11,7 +11,7 @@ import {
   createAgentTools,
   createPublishTool,
   formatArticles,
-  formatBlueskyPosts,
+  formatBlueskyTopics,
   formatPosts,
   MAX_OWN_RECENT_POSTS,
   MAX_RECENT_TIMELINE,
@@ -39,7 +39,7 @@ export type PostAiAgentMusingResult =
   | Readonly<{ posted: true; postId: PostId; theme: AiAgentBotMusingTheme }>
   | Readonly<{ posted: false; reason: 'nothingToSay' | 'repeated'; theme: AiAgentBotMusingTheme }>;
 
-/** 話題の材料として見せる記事と投稿の数 */
+/** 話題の材料として見せる記事の数 */
 const MATERIAL_COUNT = 8;
 
 export type PostAiAgentMusingError = AiError | Readonly<{ type: 'AiAgentBotPostError'; message: string }>;
@@ -53,23 +53,24 @@ type Deps = Readonly<{
 
 /**
  * AI エージェントの bot が、自分から 1 件投稿する。投稿はエージェントが create_post ツールで行う。
- * 話題は実行ごとに、最近よく読まれている記事・Bluesky で話題の投稿・タイムラインの順に入れ替える。
+ * 話題は実行ごとに、最近よく読まれている記事・Bluesky でいま話題になっていること・タイムラインの順に入れ替える。
  * 自分の最近の投稿の繰り返しになる本文は投稿せず、モデルに書き直させる。
  */
 const create = (deps: Deps): PostAiAgentMusingUseCase => {
   const agent = runAgentLoop(deps.chatModel);
   return {
     run: async ({ capabilities, poster }) => {
-      const [timeline, ownPosts, popularArticles, blueskyTrends] = await Promise.all([
+      const [timeline, ownPosts, popularArticles, blueskyTopics] = await Promise.all([
         capabilities.readRecentTimeline(MAX_RECENT_TIMELINE),
         capabilities.readOwnRecentPosts(MAX_OWN_RECENT_POSTS),
         capabilities.readPopularArticles(MATERIAL_COUNT),
-        capabilities.readTrendingBlueskyPosts(MATERIAL_COUNT),
+        capabilities.readBlueskyTopics(),
       ]);
       const theme = AiAgentBot.decideMusingTheme({
         now: deps.now(),
         hasPopularArticles: popularArticles.length > 0,
-        hasBlueskyTrends: blueskyTrends.length > 0,
+        hasBlueskyTopics: blueskyTopics.trends.length > 0 || blueskyTopics.timelineTopics.length > 0
+          || blueskyTopics.recentPosts.length > 0,
       });
       const ownPostIds = new Set(ownPosts.map((post) => post.postId));
       // 自分の投稿をタイムラインに混ぜると、モデルがそれを話題に選んでなぞりやすい。分けて見せる
@@ -105,7 +106,7 @@ const create = (deps: Deps): PostAiAgentMusingUseCase => {
           theme,
           timeline: formatPosts(othersPosts),
           popularArticles: formatArticles(popularArticles),
-          blueskyTrends: formatBlueskyPosts(blueskyTrends),
+          blueskyTopics: formatBlueskyTopics(blueskyTopics, { recentPosts: true }),
           ownPosts: formatPosts(ownPosts),
           now: new Date(deps.now()).toISOString(),
         }),
