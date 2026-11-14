@@ -79,20 +79,44 @@ describe('POST /api/v1/accounts/:id/follow と /unfollow', () => {
     expect(t.count('follows')).toBe(0);
   });
 
-  it('ほかのローカルのアカウントは既存のドメインで扱えないので 422 にする', async () => {
+  it('ほかのローカルのアカウントは配送せずにフォローを成立させ、相手にフォロー通知を作る', async () => {
     const t = await seedActions();
 
-    const responses = await Promise.all([
-      t.post(`/api/v1/accounts/${t.other.actorId}/follow`),
-      t.post(`/api/v1/accounts/${t.other.actorId}/unfollow`),
-    ]);
+    const response = await t.post(`/api/v1/accounts/${t.other.actorId}/follow`);
 
-    expect(responses.map((response) => response.status)).toEqual([422, 422]);
-    expect(await responses[0]!.json()).toEqual({
-      error: 'Validation failed: The action is not supported for local accounts',
+    expect(response.status).toBe(200);
+    expect(RelationshipSchema.parse(await response.json())).toMatchObject({
+      id: t.other.actorId,
+      following: true,
+      requested: false,
     });
+    expect(t.count('follows', `followerId='${t.me.actorId}' AND followingId='${t.other.actorId}'`)).toBe(1);
+    expect(t.count('notifications', `recipientUserId='${t.other.userId}' AND type='follow'`)).toBe(1);
+    expect(t.count('remote_actors')).toBe(1);
+    expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+
+  it('ほかのローカルのアカウントのフォローを、配送せずに外す', async () => {
+    const t = await seedActions();
+    t.seed.addFollow(t.me.actorId, t.other.actorId);
+
+    const response = await t.post(`/api/v1/accounts/${t.other.actorId}/unfollow`);
+
+    expect(response.status).toBe(200);
+    expect(RelationshipSchema.parse(await response.json())).toMatchObject({ id: t.other.actorId, following: false });
     expect(t.count('follows')).toBe(0);
     expect(t.federation.sendActivity).not.toHaveBeenCalled();
+  });
+
+  it('自分をブロックしているローカルのアカウントはフォローできず 422 にする', async () => {
+    const t = await seedActions();
+    t.seed.addBlock(t.other.userId, t.me.actorId);
+
+    const response = await t.post(`/api/v1/accounts/${t.other.actorId}/follow`);
+
+    expect(response.status).toBe(422);
+    expect(t.count('follows')).toBe(0);
+    expect(t.count('notifications')).toBe(0);
   });
 
   it('存在しないアカウントと不正な ID は 404 にする', async () => {

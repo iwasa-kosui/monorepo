@@ -76,6 +76,7 @@ import {
   createD1ActorIdsResolverByFollowerIdWithPagination,
   createD1ActorIdsResolverByFollowingIdWithPagination,
 } from '../adaptor/d1/follow/actorIdsResolverByFollowsWithPagination.ts';
+import { createD1FollowAcceptedStore } from '../adaptor/d1/follow/followAcceptedStore.ts';
 import { createD1FollowRequestedStore } from '../adaptor/d1/follow/followRequestedStore.ts';
 import { createD1FollowResolver } from '../adaptor/d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../adaptor/d1/follow/undoFollowingProcessedStore.ts';
@@ -104,6 +105,7 @@ import {
   createD1NotificationsClearedStore,
   createD1ReplyNotificationCreatedStore,
 } from '../adaptor/d1/notification/inboxNotificationAdapters.ts';
+import { createD1FollowNotificationCreatedStore } from '../adaptor/d1/notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../adaptor/d1/notification/notificationCountResolverSinceMarker.ts';
 import { createD1NotificationIdsResolverByUserIdAndCreatedAt } from '../adaptor/d1/notification/notificationIdsResolverByUserIdAndCreatedAt.ts';
 import { createD1NotificationResolverByUserIdAndId } from '../adaptor/d1/notification/notificationResolverByUserIdAndId.ts';
@@ -201,6 +203,8 @@ import { renderMarkdownToUnsanitizedHtml } from '../domain/post/postContent.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
 import { createDigestUseCases } from '../scheduled/digestTasks.ts';
 import { createRefreshXPostsUseCase } from '../scheduled/feedTasks.ts';
+import { AcceptFollowRequestUseCase } from '../useCase/acceptFollowRequest.ts';
+import { AcceptUnfollowUseCase } from '../useCase/acceptUnfollow.ts';
 import { AddDigestTopicUseCase } from '../useCase/addDigestTopic.ts';
 import { AddFeedSourceUseCase } from '../useCase/addFeedSource.ts';
 import { ChangeDigestTopicEnabledUseCase } from '../useCase/changeDigestTopicEnabled.ts';
@@ -283,7 +287,7 @@ import { createBlueskyModerationRuntimePorts } from './blueskyModeration.ts';
 import { createBlueskyProfileRuntimePorts } from './blueskyProfile.ts';
 import { createBlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
-import { createWorkerBlockActions, createWorkerRemoteActorActions } from './workerCoreUseCases.ts';
+import { createWorkerBlockActions, createWorkerFollowActions } from './workerCoreUseCases.ts';
 import { createWorkerReportAction } from './workerReportActions.ts';
 
 const lazyWorkerArgon2idDerive: Argon2idDerive = async (params) => {
@@ -362,13 +366,34 @@ export const createWorkerRuntimePorts = async (
   const accessTokenResolverByTokenHash = createD1AccessTokenResolverByTokenHash(db);
   const accessTokenRevokedStore = createD1AccessTokenRevokedStore(db);
   const authorizationCodeResolverByCodeHash = createD1AuthorizationCodeResolverByCodeHash(db);
-  const remoteActorActions = createWorkerRemoteActorActions({
+  const followActions = createWorkerFollowActions({
     userResolver,
     actorResolverByUserId,
     actorResolverById: createD1ActorResolverById(db),
     followResolver: createD1FollowResolver(db),
     followRequestedStore: createD1FollowRequestedStore(db),
     undoFollowingProcessedStore: createD1UndoFollowingProcessedStore(db),
+    blockResolver: createD1BlockResolver(db),
+    acceptFollowRequestUseCase: AcceptFollowRequestUseCase.create({
+      followedStore: createD1FollowAcceptedStore(db),
+      followResolver: createD1FollowResolver(db),
+      actorResolverByUri: createD1ActorResolverByUri(db),
+      actorResolverByUserId,
+      remoteActorCreatedStore: createD1RemoteActorCreatedStore(db),
+      userResolverByUsername: createD1UserResolverByUsername(db),
+      logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
+      followNotificationCreatedStore: createD1FollowNotificationCreatedStore(db),
+      pushSubscriptionsResolver,
+      webPushSender,
+      blockResolver: createD1BlockResolver(db),
+    }),
+    acceptUnfollowUseCase: AcceptUnfollowUseCase.create({
+      unfollowedStore: createD1UndoFollowingProcessedStore(db),
+      followResolver: createD1FollowResolver(db),
+      actorResolverByUri: createD1ActorResolverByUri(db),
+      actorResolverByUserId,
+      userResolverByUsername: createD1UserResolverByUsername(db),
+    }),
   });
   const reportRemoteActor = createWorkerReportAction({
     userResolver,
@@ -397,7 +422,7 @@ export const createWorkerRuntimePorts = async (
       blockDeletedStore: createD1BlockDeletedStore(db),
       blockResolver: createD1BlockResolver(db),
     }),
-    unfollowRemoteActor: remoteActorActions.unfollowRemoteActor,
+    unfollowActor: followActions.unfollowActor,
   });
 
   const deletePostUseCase = DeletePostUseCase.create({
@@ -998,7 +1023,7 @@ export const createWorkerRuntimePorts = async (
         pushSubscriptionCreatedStore: createD1PushSubscriptionCreatedStore(db),
         pushSubscriptionResolverByEndpoint: createD1PushSubscriptionResolverByEndpoint(db),
       }),
-      ...remoteActorActions,
+      ...followActions,
       reportRemoteActor,
       ...blockActions,
       vapidPublicKey: env.VAPID_PUBLIC_KEY,

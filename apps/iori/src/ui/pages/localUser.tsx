@@ -4,15 +4,21 @@ import { render } from 'hono/jsx/dom';
 import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import {
+  failureMessage,
   fetchAccountStatuses,
   fetchFollowers,
   fetchFollowing,
+  fetchRelationshipOrSignedOut,
+  fetchVerifyCredentials,
+  follow,
   isNotFoundError,
   lookupAccount,
+  unfollow,
 } from '../api/mastodonClient.ts';
 import { accountHandle, remoteUserPathOf, updateStatusesByPostId } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
+import { FollowToggleButton } from '../components/FollowToggleButton.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { statusActionProps, type StatusActions } from '../components/statusActionProps.ts';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
@@ -31,6 +37,14 @@ type Props = Readonly<{
   isLoggedIn: boolean;
   actions?: StatusActions;
   reply?: UseReplyDialogReturn;
+  /** ログインしていて、表示中のアカウントが自分ではないときだけ渡す */
+  followToggle?: FollowToggle;
+}>;
+
+type FollowToggle = Readonly<{
+  following: boolean;
+  disabled: boolean;
+  onToggle: () => unknown;
 }>;
 
 export const LocalUserPage = ({
@@ -42,6 +56,7 @@ export const LocalUserPage = ({
   isLoggedIn,
   actions,
   reply,
+  followToggle,
 }: Props) => {
   const logoUrl = safeUrl(account.avatar);
 
@@ -116,12 +131,24 @@ export const LocalUserPage = ({
                 <span class='text-charcoal-light dark:text-gray-400 ml-1'>Posts</span>
               </div>
             </div>
-            <a
-              href='#remote-follow'
-              class='ml-auto px-4 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
-            >
-              Remote Follow
-            </a>
+            {followToggle !== undefined
+              ? (
+                <div class='ml-auto'>
+                  <FollowToggleButton
+                    following={followToggle.following}
+                    disabled={followToggle.disabled}
+                    onClick={followToggle.onToggle}
+                  />
+                </div>
+              )
+              : (
+                <a
+                  href='#remote-follow'
+                  class='ml-auto px-4 py-2 bg-terracotta hover:bg-terracotta-dark text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
+                >
+                  Remote Follow
+                </a>
+              )}
           </div>
         </div>
 
@@ -286,6 +313,8 @@ type LocalUserData = Readonly<{
   following: readonly Account[];
   statuses: readonly Status[];
   nextMaxId: string | undefined;
+  /** ログインしていて、自分以外のアカウントを見ているときのフォロー状態 */
+  isFollowing: boolean | undefined;
 }>;
 
 const getUsernameFromUrl = () => {
@@ -299,10 +328,24 @@ const getIsLoggedIn = (): boolean => {
   return root?.dataset.isLoggedIn === 'true';
 };
 
+// 自分のページではフォローボタンを出さない。取得に失敗したときもボタンを出さずにページは表示する
+const fetchFollowingState = async (accountId: string): Promise<boolean | undefined> => {
+  try {
+    const [me, relationship] = await Promise.all([
+      fetchVerifyCredentials(),
+      fetchRelationshipOrSignedOut(accountId),
+    ]);
+    return me.id === accountId || !relationship.isLoggedIn ? undefined : relationship.isFollowing;
+  } catch {
+    return undefined;
+  }
+};
+
 const App = () => {
   const [data, setData] = useState<{ error: string } | LocalUserData | null>(null);
   const [isLoggedIn] = useState(() => getIsLoggedIn());
   const isFetchingMoreRef = useRef(false);
+  const [isTogglingFollow, setIsTogglingFollow] = useState(false);
 
   useEffect(() => {
     const username = getUsernameFromUrl();
@@ -315,10 +358,11 @@ const App = () => {
           window.location.replace(remotePath);
           return;
         }
-        const [page, followers, following] = await Promise.all([
+        const [page, followers, following, isFollowing] = await Promise.all([
           fetchAccountStatuses(account.id, { excludeReblogs: true }),
           fetchFollowers(account.id, { limit: ACCOUNT_LIST_LIMIT }),
           fetchFollowing(account.id, { limit: ACCOUNT_LIST_LIMIT }),
+          isLoggedIn ? fetchFollowingState(account.id) : Promise.resolve(undefined),
         ]);
         setData({
           account,
@@ -326,6 +370,7 @@ const App = () => {
           following: following.items,
           statuses: page.items,
           nextMaxId: page.nextMaxId,
+          isFollowing,
         });
       } catch (error) {
         setData({
@@ -374,6 +419,21 @@ const App = () => {
   const actions = useStatusListActions(updateStatus);
   const reply = useReplyDialog();
 
+  const toggleFollow = async () => {
+    if (loaded === undefined || loaded.isFollowing === undefined) return;
+    const action = loaded.isFollowing ? 'unfollow' : 'follow';
+    setIsTogglingFollow(true);
+    try {
+      const relationship = await (loaded.isFollowing ? unfollow : follow)(loaded.account.id);
+      setData((prev) => prev === null || 'error' in prev ? prev : { ...prev, isFollowing: relationship.following });
+    } catch (error) {
+      console.error(`Failed to ${action}:`, error);
+      alert(failureMessage(action, error));
+    } finally {
+      setIsTogglingFollow(false);
+    }
+  };
+
   if (data === null) {
     return <div class='text-gray-500 dark:text-gray-400'>Loading...</div>;
   }
@@ -392,6 +452,9 @@ const App = () => {
       isLoggedIn={isLoggedIn}
       actions={actions}
       reply={reply}
+      followToggle={data.isFollowing === undefined
+        ? undefined
+        : { following: data.isFollowing, disabled: isTogglingFollow, onToggle: toggleFollow }}
     />
   );
 };

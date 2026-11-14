@@ -4,6 +4,7 @@ import { RA } from '@iwasa-kosui/result';
 import type { ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import type { ActorResolverByUserId } from '../domain/actor/actor.ts';
 import type { ActorId } from '../domain/actor/actorId.ts';
+import type { LocalActor } from '../domain/actor/localActor.ts';
 import type { BlockResolver } from '../domain/block/block.ts';
 import {
   Follow as DomainFollow,
@@ -13,24 +14,30 @@ import {
 } from '../domain/follow/follow.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { UserResolver } from '../domain/user/user.ts';
+import type { AcceptFollowRequestUseCase } from '../useCase/acceptFollowRequest.ts';
+import type { AcceptUnfollowUseCase } from '../useCase/acceptUnfollow.ts';
 import type { CreateBlockUseCase } from '../useCase/createBlock.ts';
 import type { DeleteBlockUseCase } from '../useCase/deleteBlock.ts';
+import { isBlockedBy } from '../useCase/helper/isBlockedBy.ts';
 import { resolveLocalActorWith, resolveUserWith } from '../useCase/helper/resolve.ts';
 import type { WorkerBlockAction, WorkerRemoteActorAction } from './ports.ts';
 
 export type WorkerRemoteActorActionInput = Parameters<WorkerRemoteActorAction>[0];
 
-type WorkerRemoteActorActionsDeps = Readonly<{
+type WorkerFollowActionsDeps = Readonly<{
   userResolver: UserResolver;
   actorResolverByUserId: ActorResolverByUserId;
   actorResolverById: ActorResolverById;
   followResolver: FollowResolver;
   followRequestedStore: FollowRequestedStore;
   undoFollowingProcessedStore: UndoFollowingProcessedStore;
+  blockResolver: BlockResolver;
+  acceptFollowRequestUseCase: ReturnType<typeof AcceptFollowRequestUseCase.create>;
+  acceptUnfollowUseCase: ReturnType<typeof AcceptUnfollowUseCase.create>;
 }>;
 
 const actionActors = async (
-  deps: Pick<WorkerRemoteActorActionsDeps, 'actorResolverById' | 'actorResolverByUserId' | 'userResolver'>,
+  deps: Pick<WorkerFollowActionsDeps, 'actorResolverById' | 'actorResolverByUserId' | 'userResolver'>,
   input: WorkerRemoteActorActionInput,
 ) => {
   const user = await resolveUserWith(deps.userResolver)(input.userId);
@@ -38,22 +45,64 @@ const actionActors = async (
   const follower = await resolveLocalActorWith(deps.actorResolverByUserId)(input.userId);
   if (!follower.ok) return RA.err({ message: follower.err.message });
   const following = await deps.actorResolverById.resolve(input.actorId);
-  if (!following.ok || following.val === undefined || following.val.type !== 'remote') {
-    return RA.err({ message: `Remote actor not found: ${input.actorId}` });
+  if (!following.ok || following.val === undefined) {
+    return RA.err({ message: `Actor not found: ${input.actorId}` });
+  }
+  if (following.val.id === follower.val.id) {
+    return RA.err({ message: 'Cannot follow yourself' });
   }
   return RA.ok({ user: user.val, follower: follower.val, following: following.val });
 };
 
-export const createWorkerRemoteActorActions = (
-  deps: WorkerRemoteActorActionsDeps,
+/**
+ * ローカルのアクター同士のフォローは、同じサーバーの中で完結する。
+ * ActivityPub の Follow を自分の inbox に配送する代わりに、受信側のユースケースを直接呼び、
+ * フォローの成立・通知・Web Push を受信時と同じ規則で行う。
+ */
+const followLocalActor = async (
+  deps: WorkerFollowActionsDeps,
+  follower: LocalActor,
+  following: LocalActor,
+) => {
+  if (await isBlockedBy(deps.blockResolver, following.userId, follower.id)) {
+    return RA.err({ message: `Blocked by the actor: ${following.id}` });
+  }
+  const followingUser = await resolveUserWith(deps.userResolver)(following.userId);
+  if (!followingUser.ok) return RA.err({ message: followingUser.err.message });
+  const accepted = await deps.acceptFollowRequestUseCase.run({
+    username: followingUser.val.username,
+    follower: { uri: follower.uri, inboxUrl: follower.inboxUrl },
+  });
+  return accepted.ok ? RA.ok(undefined) : RA.err({ message: accepted.err.message });
+};
+
+const unfollowLocalActor = async (
+  deps: WorkerFollowActionsDeps,
+  follower: LocalActor,
+  following: LocalActor,
+) => {
+  const followingUser = await resolveUserWith(deps.userResolver)(following.userId);
+  if (!followingUser.ok) return RA.err({ message: followingUser.err.message });
+  const unfollowed = await deps.acceptUnfollowUseCase.run({
+    username: followingUser.val.username,
+    follower: { uri: follower.uri },
+  });
+  return unfollowed.ok ? RA.ok(undefined) : RA.err({ message: unfollowed.err.message });
+};
+
+export const createWorkerFollowActions = (
+  deps: WorkerFollowActionsDeps,
 ): Readonly<{
-  followRemoteActor: WorkerRemoteActorAction;
-  unfollowRemoteActor: WorkerRemoteActorAction;
+  followActor: WorkerRemoteActorAction;
+  unfollowActor: WorkerRemoteActorAction;
 }> => ({
-  followRemoteActor: async (input) => {
+  followActor: async (input) => {
     const actors = await actionActors(deps, input);
     if (!actors.ok) return actors;
     const { user, follower, following } = actors.val;
+    if (following.type === 'local') {
+      return followLocalActor(deps, follower, following);
+    }
     const requested = DomainFollow.requestFollow({
       followerId: follower.id,
       followingId: following.id,
@@ -72,10 +121,13 @@ export const createWorkerRemoteActorActions = (
     );
     return RA.ok(undefined);
   },
-  unfollowRemoteActor: async (input) => {
+  unfollowActor: async (input) => {
     const actors = await actionActors(deps, input);
     if (!actors.ok) return actors;
     const { user, follower, following } = actors.val;
+    if (following.type === 'local') {
+      return unfollowLocalActor(deps, follower, following);
+    }
     const existing = await deps.followResolver.resolve({
       followerId: follower.id,
       followingId: following.id,
@@ -117,7 +169,7 @@ type WorkerBlockActionsDeps = Readonly<{
   blockResolver: BlockResolver;
   createBlockUseCase: CreateBlockUseCase;
   deleteBlockUseCase: DeleteBlockUseCase;
-  unfollowRemoteActor: WorkerRemoteActorAction;
+  unfollowActor: WorkerRemoteActorAction;
 }>;
 
 const blockActors = async (deps: WorkerBlockActionsDeps, input: WorkerRemoteActorActionInput) => {
@@ -158,7 +210,7 @@ export const createWorkerBlockActions = (
       const blockId = block.val.blockId;
       if (await hasFollow(blocker.id, target.id)) {
         const unfollowed = target.type === 'remote'
-          ? await deps.unfollowRemoteActor(input)
+          ? await deps.unfollowActor(input)
           : await removeFollow(blocker.id, target.id);
         if (!unfollowed.ok) return RA.err({ message: unfollowed.err.message });
       }

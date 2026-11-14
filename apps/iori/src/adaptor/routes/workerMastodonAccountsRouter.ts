@@ -54,8 +54,8 @@ export type WorkerMastodonAccountsRouterDeps = Readonly<{
   statusAssembler: StatusAssembler;
   createMuteUseCase: CreateMuteUseCase;
   deleteMuteUseCase: DeleteMuteUseCase;
-  followRemoteActor: WorkerRemoteActorAction;
-  unfollowRemoteActor: WorkerRemoteActorAction;
+  followActor: WorkerRemoteActorAction;
+  unfollowActor: WorkerRemoteActorAction;
   blockActor: WorkerBlockAction;
   unblockActor: WorkerBlockAction;
   createContext: (request: Request) => FedifyContext<unknown>;
@@ -80,7 +80,6 @@ const writeFollows = Scope.orThrow('write:follows');
 const writeMutes = Scope.orThrow('write:mutes');
 const writeBlocks = Scope.orThrow('write:blocks');
 const ownAccount = { error: 'Validation failed: The action cannot target your own account' } as const;
-const localTargetError = 'Validation failed: The action is not supported for local accounts';
 const actionFailed = (action: 'followed' | 'unfollowed' | 'muted' | 'unmuted' | 'blocked' | 'unblocked'): string =>
   `Validation failed: The account could not be ${action}`;
 
@@ -120,8 +119,8 @@ export const createWorkerMastodonAccountsRouter = ({
   statusAssembler,
   createMuteUseCase,
   deleteMuteUseCase,
-  followRemoteActor,
-  unfollowRemoteActor,
+  followActor,
+  unfollowActor,
   blockActor,
   unblockActor,
   createContext,
@@ -202,24 +201,18 @@ export const createWorkerMastodonAccountsRouter = ({
   };
 
   const follow: AccountAction = async ({ userId, viewerActorId, target, request }) => {
-    if (target.type !== 'remote') {
-      return localTargetError;
-    }
     if ((await resolveRelationship(viewerActorId, userId, target.id))?.following === true) {
       return undefined;
     }
-    const followed = await followRemoteActor({ userId, actorId: target.id, ctx: createContext(request) });
+    const followed = await followActor({ userId, actorId: target.id, ctx: createContext(request) });
     return followed.ok ? undefined : actionFailed('followed');
   };
 
   const unfollow: AccountAction = async ({ userId, viewerActorId, target, request }) => {
-    if (target.type !== 'remote') {
-      return localTargetError;
-    }
     if ((await resolveRelationship(viewerActorId, userId, target.id))?.following !== true) {
       return undefined;
     }
-    const unfollowed = await unfollowRemoteActor({ userId, actorId: target.id, ctx: createContext(request) });
+    const unfollowed = await unfollowActor({ userId, actorId: target.id, ctx: createContext(request) });
     return unfollowed.ok ? undefined : actionFailed('unfollowed');
   };
 
