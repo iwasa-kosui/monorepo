@@ -1,0 +1,1010 @@
+.fig {
+  --fig-ink: #293132;
+  --fig-muted: #4c5b5d;
+  --fig-line: #708588;
+  --fig-rule: #c5ced0;
+  --fig-surface: #ffffff;
+  --fig-soft: #f0f3f3;
+  --fig-agent: #2da199;
+  --fig-agent-soft: #c8f0ed;
+  --fig-accent: #e05e52;
+  --fig-accent-text: #c04a40;
+  --fig-accent-soft: #fadad6;
+  --fig-c1: #2da199;
+  --fig-c2: #faa228;
+  --fig-c3: #18a9ff;
+  --fig-spot: #faa228;
+  --fig-bar: #c5ced0;
+  --fig-zone: #c5ced0;
+
+  max-width: 640px;
+  margin: 2rem auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .fig {
+    --fig-ink: #e4e4ea;
+    --fig-muted: #a9abb8;
+    --fig-line: #8b8e9c;
+    --fig-rule: #3c3c48;
+    --fig-surface: #26262e;
+    --fig-soft: #2c2c36;
+    --fig-agent: #4fc7bd;
+    --fig-agent-soft: #1d3b3a;
+    --fig-accent: #f0887e;
+    --fig-accent-text: #f0887e;
+    --fig-accent-soft: #4a2a28;
+    --fig-c1: #4fc7bd;
+    --fig-c2: #f6b44a;
+    --fig-c3: #5cbfff;
+    --fig-spot: #f6b44a;
+    --fig-bar: #4a4a58;
+    --fig-zone: #121216;
+  }
+}
+
+.fig svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.fig figcaption {
+  margin-top: 0.75rem;
+  text-align: center;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--fig-muted);
+}
+
+.fig-t {
+  fill: var(--fig-ink);
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.fig-t-sm {
+  font-size: 13px;
+}
+
+.fig-b {
+  font-weight: 700;
+}
+
+.fig-mid {
+  text-anchor: middle;
+}
+
+.fig-end {
+  text-anchor: end;
+}
+
+.fig-c-muted {
+  fill: var(--fig-muted);
+}
+
+.fig-c-agent {
+  fill: var(--fig-agent);
+}
+
+.fig-c-accent {
+  fill: var(--fig-accent-text);
+}
+
+.fig-box {
+  fill: var(--fig-surface);
+  stroke: var(--fig-line);
+  stroke-width: 1.5;
+}
+
+.fig-box-agent {
+  fill: var(--fig-agent-soft);
+  stroke: var(--fig-agent);
+  stroke-width: 1.5;
+}
+
+.fig-box-accent {
+  fill: var(--fig-accent-soft);
+  stroke: var(--fig-accent);
+  stroke-width: 1.5;
+}
+
+.fig-box-soft {
+  fill: var(--fig-soft);
+  stroke: var(--fig-rule);
+  stroke-width: 1.5;
+}
+
+.fig-fill-surface {
+  fill: var(--fig-surface);
+}
+
+.fig-fill-soft {
+  fill: var(--fig-soft);
+}
+
+.fig-fill-agent {
+  fill: var(--fig-agent);
+}
+
+.fig-fill-agent-soft {
+  fill: var(--fig-agent-soft);
+}
+
+.fig-fill-accent {
+  fill: var(--fig-accent);
+}
+
+.fig-fill-accent-soft {
+  fill: var(--fig-accent-soft);
+}
+
+.fig-fill-bar {
+  fill: var(--fig-bar);
+}
+
+.fig-fill-zone {
+  fill: var(--fig-zone);
+}
+
+.fig-fill-spot {
+  fill: var(--fig-spot);
+  fill-opacity: 0.3;
+  stroke: var(--fig-spot);
+  stroke-width: 2;
+}
+
+.fig-fill-1 {
+  fill: var(--fig-c1);
+}
+
+.fig-fill-2 {
+  fill: var(--fig-c2);
+}
+
+.fig-fill-3 {
+  fill: var(--fig-c3);
+}
+
+.fig-fill-band {
+  fill: var(--fig-agent);
+  fill-opacity: 0.35;
+}
+
+.fig-stroke,
+.fig-stroke-agent,
+.fig-stroke-accent,
+.fig-stroke-rule {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fig-stroke {
+  stroke: var(--fig-line);
+}
+
+.fig-stroke-agent {
+  stroke: var(--fig-agent);
+}
+
+.fig-stroke-accent {
+  stroke: var(--fig-accent);
+  stroke-width: 2;
+}
+
+.fig-stroke-rule {
+  stroke: var(--fig-rule);
+}
+
+.fig-dash {
+  stroke-dasharray: 6 4;
+}
+
+.fig-dotted {
+  stroke-dasharray: 2 4;
+}
+
+.fig-edge {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fig-edge-agent {
+  stroke: var(--fig-agent);
+}
+
+.fig-edge-line {
+  stroke: var(--fig-line);
+}
+
+.fig-mask-stroke {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 40;
+}
+
+.fig-mk {
+  fill: var(--fig-line);
+}
+
+.fig-mk-agent {
+  fill: var(--fig-agent);
+}
+
+.fig-mk-accent {
+  fill: var(--fig-accent);
+}
+
+[class*="fig-flow"],
+[class*="fig-move"],
+[class*="fig-travel"],
+[class*="fig-wander"],
+[class*="fig-sweep"],
+[class*="fig-pulse"],
+[class*="fig-halo"],
+[class*="fig-turn"],
+[class*="fig-shuttle"],
+[class*="fig-hold-"],
+[class*="fig-fade"],
+[class*="fig-at-"],
+[class*="fig-draw-at-"],
+[class*="fig-grow-at-"] {
+  animation-duration: var(--fig-dur, 8s);
+  animation-delay: var(--fig-delay, 0s);
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: both;
+}
+
+.fig-flow {
+  fill: none;
+  stroke: var(--fig-agent);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 1 15;
+  animation-name: fig-flow;
+  animation-duration: var(--fig-dur, 3s);
+  animation-timing-function: linear;
+}
+
+@keyframes fig-flow {
+  from {
+    stroke-dashoffset: 160;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.fig-move {
+  transform: translate(
+    var(--fig-xr, var(--fig-x1, 0px)),
+    var(--fig-yr, var(--fig-y1, 0px))
+  );
+  animation-name: fig-move;
+  animation-timing-function: var(--fig-ease, ease-in-out);
+}
+
+@keyframes fig-move {
+  0% {
+    opacity: 0;
+    transform: translate(var(--fig-x0, 0px), var(--fig-y0, 0px));
+  }
+  12% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--fig-x1, 0px), var(--fig-y1, 0px));
+  }
+}
+
+.fig-travel {
+  transform: translate(
+    var(--fig-xr, var(--fig-x0, 0px)),
+    var(--fig-yr, var(--fig-y0, 0px))
+  );
+  animation-name: fig-travel;
+}
+
+@keyframes fig-travel {
+  0% {
+    opacity: 0;
+    transform: translate(var(--fig-x0, 0px), var(--fig-y0, 0px));
+  }
+  6%,
+  30% {
+    opacity: 1;
+    transform: translate(var(--fig-x0, 0px), var(--fig-y0, 0px));
+  }
+  55%,
+  92% {
+    opacity: 1;
+    transform: translate(var(--fig-x1, 0px), var(--fig-y1, 0px));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--fig-x1, 0px), var(--fig-y1, 0px));
+  }
+}
+
+.fig-wander {
+  transform: translate(
+    var(--fig-xr, var(--fig-p0x, 0px)),
+    var(--fig-yr, var(--fig-p0y, 0px))
+  );
+  animation-name: fig-wander;
+}
+
+@keyframes fig-wander {
+  0%,
+  100% {
+    transform: translate(var(--fig-p0x, 0px), var(--fig-p0y, 0px));
+  }
+  25% {
+    transform: translate(var(--fig-p1x, 0px), var(--fig-p1y, 0px));
+  }
+  50% {
+    transform: translate(var(--fig-p2x, 0px), var(--fig-p2y, 0px));
+  }
+  75% {
+    transform: translate(var(--fig-p3x, 0px), var(--fig-p3y, 0px));
+  }
+}
+
+.fig-sweep-x {
+  transform: translateX(var(--fig-rest, var(--fig-to, 0px)));
+  animation-name: fig-sweep-x;
+}
+
+@keyframes fig-sweep-x {
+  0%,
+  100% {
+    transform: translateX(var(--fig-from, 0px));
+  }
+  50% {
+    transform: translateX(var(--fig-to, 0px));
+  }
+}
+
+.fig-sweep-band {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.fig-pulse,
+.fig-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.fig-pulse {
+  animation-name: fig-pulse;
+  animation-duration: var(--fig-dur, 4s);
+}
+
+.fig-halo {
+  opacity: 0.3;
+  transform: scale(1.8);
+  animation-name: fig-halo;
+  animation-duration: var(--fig-dur, 4s);
+}
+
+@keyframes fig-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+}
+
+@keyframes fig-halo {
+  0%,
+  100% {
+    opacity: 0.1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(2.4);
+  }
+}
+
+.fig-turn {
+  animation-name: fig-turn;
+}
+
+@keyframes fig-turn {
+  0% {
+    opacity: 0;
+  }
+  6%,
+  50% {
+    opacity: 1;
+  }
+  56%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.fig-shuttle {
+  transform: translate(
+    var(--fig-xr, var(--fig-x1, 0px)),
+    var(--fig-yr, var(--fig-y1, 0px))
+  );
+  animation-name: fig-shuttle;
+}
+
+@keyframes fig-shuttle {
+  0%,
+  18%,
+  94%,
+  100% {
+    transform: translate(var(--fig-x0, 0px), var(--fig-y0, 0px));
+  }
+  42%,
+  70% {
+    transform: translate(var(--fig-x1, 0px), var(--fig-y1, 0px));
+  }
+}
+
+.fig-fade-in {
+  animation-name: fig-fade-in;
+  animation-iteration-count: 1;
+}
+
+@keyframes fig-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fig-fade-cycle {
+  animation-name: fig-fade-cycle;
+}
+
+@keyframes fig-fade-cycle {
+  0%,
+  8% {
+    opacity: 0;
+  }
+  20%,
+  70% {
+    opacity: 1;
+  }
+  85%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.fig-draw-at-1,
+.fig-draw-at-2,
+.fig-draw-at-3,
+.fig-draw-at-4,
+.fig-draw-at-5,
+.fig-draw-at-6 {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+}
+
+.fig-grow-at-1,
+.fig-grow-at-2,
+.fig-grow-at-3,
+.fig-grow-at-4,
+.fig-grow-at-5,
+.fig-grow-at-6 {
+  transform-box: fill-box;
+  transform-origin: left center;
+  transform: scaleX(var(--fig-to, 1));
+}
+
+.fig-at-1 {
+  animation-name: fig-at-1;
+}
+
+.fig-draw-at-1 {
+  animation-name: fig-draw-at-1;
+}
+
+.fig-hold-1 {
+  animation-name: fig-hold-1;
+}
+
+.fig-grow-at-1 {
+  animation-name: fig-grow-at-1;
+}
+
+.fig-at-2 {
+  animation-name: fig-at-2;
+}
+
+.fig-draw-at-2 {
+  animation-name: fig-draw-at-2;
+}
+
+.fig-hold-2 {
+  animation-name: fig-hold-2;
+}
+
+.fig-grow-at-2 {
+  animation-name: fig-grow-at-2;
+}
+
+.fig-at-3 {
+  animation-name: fig-at-3;
+}
+
+.fig-draw-at-3 {
+  animation-name: fig-draw-at-3;
+}
+
+.fig-hold-3 {
+  animation-name: fig-hold-3;
+}
+
+.fig-grow-at-3 {
+  animation-name: fig-grow-at-3;
+}
+
+.fig-at-4 {
+  animation-name: fig-at-4;
+}
+
+.fig-draw-at-4 {
+  animation-name: fig-draw-at-4;
+}
+
+.fig-hold-4 {
+  animation-name: fig-hold-4;
+}
+
+.fig-grow-at-4 {
+  animation-name: fig-grow-at-4;
+}
+
+.fig-at-5 {
+  animation-name: fig-at-5;
+}
+
+.fig-draw-at-5 {
+  animation-name: fig-draw-at-5;
+}
+
+.fig-hold-5 {
+  animation-name: fig-hold-5;
+}
+
+.fig-grow-at-5 {
+  animation-name: fig-grow-at-5;
+}
+
+.fig-at-6 {
+  animation-name: fig-at-6;
+}
+
+.fig-draw-at-6 {
+  animation-name: fig-draw-at-6;
+}
+
+.fig-hold-6 {
+  animation-name: fig-hold-6;
+}
+
+.fig-grow-at-6 {
+  animation-name: fig-grow-at-6;
+}
+
+@keyframes fig-at-1 {
+  0%,
+  10% {
+    opacity: 0;
+  }
+  14%,
+  90% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-hold-1 {
+  0%,
+  10% {
+    opacity: 0;
+  }
+  14%,
+  96% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-draw-at-1 {
+  0%,
+  4% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  16%,
+  90% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  97%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes fig-grow-at-1 {
+  0%,
+  4% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  18%,
+  90% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 1;
+  }
+  97%,
+  100% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 0;
+  }
+}
+
+@keyframes fig-at-2 {
+  0%,
+  24% {
+    opacity: 0;
+  }
+  28%,
+  90% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-hold-2 {
+  0%,
+  24% {
+    opacity: 0;
+  }
+  28%,
+  96% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-draw-at-2 {
+  0%,
+  18% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  30%,
+  90% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  97%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes fig-grow-at-2 {
+  0%,
+  18% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  32%,
+  90% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 1;
+  }
+  97%,
+  100% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 0;
+  }
+}
+
+@keyframes fig-at-3 {
+  0%,
+  38% {
+    opacity: 0;
+  }
+  42%,
+  90% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-hold-3 {
+  0%,
+  38% {
+    opacity: 0;
+  }
+  42%,
+  96% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-draw-at-3 {
+  0%,
+  32% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  44%,
+  90% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  97%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes fig-grow-at-3 {
+  0%,
+  32% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  46%,
+  90% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 1;
+  }
+  97%,
+  100% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 0;
+  }
+}
+
+@keyframes fig-at-4 {
+  0%,
+  52% {
+    opacity: 0;
+  }
+  56%,
+  90% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-hold-4 {
+  0%,
+  52% {
+    opacity: 0;
+  }
+  56%,
+  96% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-draw-at-4 {
+  0%,
+  46% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  58%,
+  90% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  97%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes fig-grow-at-4 {
+  0%,
+  46% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  60%,
+  90% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 1;
+  }
+  97%,
+  100% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 0;
+  }
+}
+
+@keyframes fig-at-5 {
+  0%,
+  66% {
+    opacity: 0;
+  }
+  70%,
+  90% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-hold-5 {
+  0%,
+  66% {
+    opacity: 0;
+  }
+  70%,
+  96% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-draw-at-5 {
+  0%,
+  60% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  72%,
+  90% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  97%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes fig-grow-at-5 {
+  0%,
+  60% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  74%,
+  90% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 1;
+  }
+  97%,
+  100% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 0;
+  }
+}
+
+@keyframes fig-at-6 {
+  0%,
+  80% {
+    opacity: 0;
+  }
+  84%,
+  90% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-hold-6 {
+  0%,
+  80% {
+    opacity: 0;
+  }
+  84%,
+  96% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-draw-at-6 {
+  0%,
+  74% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  86%,
+  90% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  97%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes fig-grow-at-6 {
+  0%,
+  74% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  88%,
+  90% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 1;
+  }
+  97%,
+  100% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fig *,
+  .fig-flow {
+    animation: none !important;
+  }
+
+  .fig-sweep-band {
+    transform: scaleX(var(--fig-spread, 1));
+  }
+}
