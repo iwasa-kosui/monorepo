@@ -32,7 +32,7 @@ const run = (chatModel: AgentChatModel) =>
   });
 
 describe('runAgentLoop', () => {
-  it('本文に道具の呼び出しを書いた応答は答えにせず、呼び直させた後の答えを返す', async () => {
+  it('本文にツールの呼び出しを書いた応答は答えにせず、呼び直させた後の答えを返す', async () => {
     const result = await run(scripted(
       { content: 'まずは調べます。[get_post(postId=44263481-bdcd-46bb-bba9-9fdea03dc88a)]', toolCalls: [] },
       { content: undefined, toolCalls: [{ id: '1', name: 'get_post', arguments: { postId: 'x' } }] },
@@ -42,16 +42,16 @@ describe('runAgentLoop', () => {
     expect(result.ok && result.val.answer).toBe('調べた結果です。');
   });
 
-  it('JSON の形で道具の呼び出しを本文に書き続けたら、答えなしにする', async () => {
+  it('JSON の形でツールの呼び出しを本文に書き続けたら、答えなしにする', async () => {
     const pseudo = { content: '{"name": "get_post", "parameters": {"postId": "x"}}', toolCalls: [] };
     const result = await run(scripted(pseudo, pseudo, pseudo, pseudo));
 
     expect(result.ok && result.val.answer).toBeUndefined();
   });
 
-  it('道具の名前に触れただけの本文は、そのまま答えにする', async () => {
-    const result = await run(scripted({ content: 'get_post という道具で投稿を読めます。', toolCalls: [] }));
+  it('ツールの名前に触れただけの本文は、そのまま答えにする', async () => {
+    const result = await run(scripted({ content: 'get_post というツールで投稿を読めます。', toolCalls: [] }));
 
-    expect(result.ok && result.val.answer).toBe('get_post という道具で投稿を読めます。');
+    expect(result.ok && result.val.answer).toBe('get_post というツールで投稿を読めます。');
   });
 });

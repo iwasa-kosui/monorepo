@@ -2,6 +2,12 @@ import type { Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import type { ActorId } from '../../domain/actor/actorId.ts';
+import { AiAgentBot, MAX_BOT_POST_CHARACTERS } from '../../domain/aiAgentBot/aiAgentBot.ts';
+import {
+  MAX_FOLLOWUP_DELAY_MINUTES,
+  MAX_FOLLOWUP_NOTE_CHARACTERS,
+  MIN_FOLLOWUP_DELAY_MINUTES,
+} from '../../domain/aiAgentBot/aiAgentBotFollowup.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { AgentTool } from './agentLoop.ts';
 
@@ -42,7 +48,7 @@ export const MAX_SEARCH_RESULTS = 10;
 export const MAX_RECENT_TIMELINE = 20;
 /** 自分から投稿するときに、繰り返しを避けるために見返す自分の投稿の数 */
 export const MAX_OWN_RECENT_POSTS = 10;
-export const MAX_FETCHED_PAGE_CHARS = 5000;
+export const MAX_FETCHED_PAGE_CHARS = 10000;
 
 export const formatPost = (post: AgentPostView): string =>
   [
@@ -181,8 +187,110 @@ const actionTools = (capabilities: AiAgentBotCapabilities): AgentTool[] => {
   ];
 };
 
-/** bot に渡す道具の一覧。読み取りの道具と、いいね・リポスト・フォローの道具 */
+/** bot に渡すツールの一覧。読み取りのツールと、いいね・リポスト・フォローのツール */
 export const createAgentTools = (capabilities: AiAgentBotCapabilities): AgentTool[] => [
   ...readingTools(capabilities),
   ...actionTools(capabilities),
 ];
+
+const textArgs = z.object({ text: z.string() });
+
+/** 返信や投稿のように、結果を外に出すツール。何回出したかと、失敗した理由をあとから読める */
+export type PublishTool = Readonly<{
+  tool: AgentTool;
+  published: () => number;
+  errors: () => readonly string[];
+}>;
+
+/**
+ * 本文を受け取って外に出すツールを作る。本文は投稿できる形に整えてから publish に渡す。
+ * limit 回を超えて呼ばれたら、出さずにエラーを返す。
+ */
+export const createPublishTool = (
+  spec: Readonly<{
+    name: string;
+    description: string;
+    limit: number;
+    done: string;
+    publish: (text: string) => Promise<Result<void, string>>;
+  }>,
+): PublishTool => {
+  let published = 0;
+  const errors: string[] = [];
+  return {
+    tool: {
+      name: spec.name,
+      description: spec.description,
+      parameters: {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            description: `本文（${MAX_BOT_POST_CHARACTERS} 文字以内の平文。メンションは付けない）`,
+          },
+        },
+        required: ['text'],
+      },
+      run: async (args) => {
+        const parsed = textArgs.safeParse(args);
+        if (!parsed.success) return invalidArgs(spec.name);
+        const text = AiAgentBot.normalizePostText(parsed.data.text);
+        if (text === undefined) return 'エラー: 本文が空です。';
+        if (published >= spec.limit) return `エラー: この実行で ${spec.name} を使える回数の上限に達しました。`;
+        const result = await spec.publish(text);
+        if (!result.ok) {
+          errors.push(result.err);
+          return `エラー: ${result.err}`;
+        }
+        published++;
+        return spec.done;
+      },
+    },
+    published: () => published,
+    errors: () => errors,
+  };
+};
+
+const followupArgs = z.object({ note: z.string(), afterMinutes: z.coerce.number() });
+
+/**
+ * あとで続きを調べる予定を入れるツールを作る。1 回の実行で 1 回だけ使える。
+ * schedule は予定を保存し、続きを調べる日時を返す。
+ */
+export const createFollowupTool = (
+  schedule: (input: Readonly<{ note: string; delayMinutes: number }>) => Promise<Result<Date, string>>,
+): AgentTool => {
+  let scheduled = false;
+  return {
+    name: 'schedule_followup',
+    description: [
+      'いまは調べきれないことを、あとで続きを調べる予定を入れる。',
+      '時間がたてば分かること（公開を待つ情報、続報が出そうな話題）や、この実行では調べる回数が足りないときに使う。',
+      '予定の時刻になると、あなたはメモとスレッドを読み直して続きを調べ、同じ投稿に続報を返信できる。',
+    ].join(''),
+    parameters: {
+      type: 'object',
+      properties: {
+        note: {
+          type: 'string',
+          description:
+            `あとの自分へのメモ。何を、どこで調べるつもりかを ${MAX_FOLLOWUP_NOTE_CHARACTERS} 文字以内で書く`,
+        },
+        afterMinutes: {
+          type: 'number',
+          description: `何分後に続きを調べるか（${MIN_FOLLOWUP_DELAY_MINUTES}〜${MAX_FOLLOWUP_DELAY_MINUTES}）`,
+        },
+      },
+      required: ['note', 'afterMinutes'],
+    },
+    run: async (args) => {
+      const parsed = followupArgs.safeParse(args);
+      if (!parsed.success) return invalidArgs('schedule_followup');
+      if (scheduled) return 'エラー: この実行では、すでに予定を入れています。';
+      const result = await schedule({ note: parsed.data.note, delayMinutes: Math.round(parsed.data.afterMinutes) });
+      if (!result.ok) return `エラー: ${result.err}`;
+      scheduled = true;
+      return `${result.val.toISOString()} ごろに続きを調べる予定を入れました。返信で、あとで続報すると伝えてかまいません。`;
+    },
+  };
+};

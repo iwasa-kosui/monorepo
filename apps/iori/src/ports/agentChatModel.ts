@@ -2,7 +2,7 @@ import type { RA } from '@iwasa-kosui/result';
 
 import type { AiError, AiModelName } from './aiError.ts';
 
-/** モデルに渡す道具の説明。parameters は JSON Schema の object */
+/** モデルに渡すツールの説明。parameters は JSON Schema の object */
 export type AgentToolSpec = Readonly<{
   name: string;
   description: string;
@@ -36,7 +36,7 @@ export type AgentChatResponse = Readonly<{
   toolCalls: readonly AgentToolCall[];
 }>;
 
-/** 道具を呼び出せるチャットモデル */
+/** ツールを呼び出せるチャットモデル */
 export type AgentChatModel = Readonly<{
   chat: (request: AgentChatRequest) => RA<AgentChatResponse, AiError>;
 }>;

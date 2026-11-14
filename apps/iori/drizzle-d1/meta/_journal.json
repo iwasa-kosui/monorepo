@@ -414,6 +414,13 @@
       "when": 1794618628092,
       "tag": "0058_ai_agent_bot_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1794673835291,
+      "tag": "0059_ai_agent_bot_followups",
+      "breakpoints": true
     }
   ]
 }

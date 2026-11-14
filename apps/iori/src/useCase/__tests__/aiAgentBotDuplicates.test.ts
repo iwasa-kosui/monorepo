@@ -11,6 +11,7 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import type { AgentChatModel } from '../../ports/agentChatModel.ts';
+import { createInMemoryFollowups } from '../aiAgent/__tests__/inMemoryFollowups.ts';
 import type { AgentPostView, AiAgentBotCapabilities } from '../aiAgent/agentTools.ts';
 import { PostAiAgentMusingUseCase } from '../postAiAgentMusing.ts';
 import { type AiAgentBotReply, RespondToAiAgentMentionsUseCase } from '../respondToAiAgentMentions.ts';
@@ -28,8 +29,14 @@ const post = (id: string, authorActorId: ActorId, text: string): AgentPostView =
   createdAt: new Date(now).toISOString(),
 });
 
-const answering = (answer: string): AgentChatModel => ({
-  chat: async () => RA.ok({ content: answer, toolCalls: [] }),
+/** ツールで text を出し、その結果を受け取ったら終えるモデル */
+const publishing = (toolName: 'reply' | 'create_post', text: string): AgentChatModel => ({
+  chat: async ({ messages }) =>
+    RA.ok(
+      messages.at(-1)?.role === 'tool'
+        ? { content: undefined, toolCalls: [] }
+        : { content: undefined, toolCalls: [{ id: 'call', name: toolName, arguments: { text } }] },
+    ),
 });
 
 const capabilitiesOf = (
@@ -53,9 +60,10 @@ describe('PostAiAgentMusingUseCase', () => {
     '分散型SNSの良さは、自分のデータを自分で持てることだと思います。みなさんはどう考えますか？',
   );
 
-  it('答えが自分の最近の投稿の繰り返しなら投稿しない', async () => {
+  it('自分の最近の投稿の繰り返しなら投稿しない', async () => {
     const posted: string[] = [];
-    const result = await PostAiAgentMusingUseCase.create({ chatModel: answering(previous.text), now: () => now }).run({
+    const chatModel = publishing('create_post', previous.text);
+    const result = await PostAiAgentMusingUseCase.create({ chatModel, now: () => now }).run({
       capabilities: capabilitiesOf({ own: [previous] }),
       poster: { post: async (text) => (posted.push(text), Result.ok(PostId.orThrow(previous.postId))) },
     });
@@ -64,10 +72,11 @@ describe('PostAiAgentMusingUseCase', () => {
     expect(posted).toEqual([]);
   });
 
-  it('新しい話題の答えは投稿する', async () => {
+  it('新しい話題は投稿する', async () => {
     const posted: string[] = [];
     const text = 'ActivityPub の Move アクティビティを調べました。アカウントの引っ越しの仕組みが面白いです。';
-    const result = await PostAiAgentMusingUseCase.create({ chatModel: answering(text), now: () => now }).run({
+    const chatModel = publishing('create_post', text);
+    const result = await PostAiAgentMusingUseCase.create({ chatModel, now: () => now }).run({
       capabilities: capabilitiesOf({ own: [previous] }),
       poster: { post: async (body) => (posted.push(body), Result.ok(PostId.orThrow(previous.postId))) },
     });
@@ -103,14 +112,14 @@ describe('RespondToAiAgentMentionsUseCase', () => {
       triggersHandledStore,
       repliedCountResolverSince: { resolve: async () => RA.ok(0) },
       actorResolverById: { resolve: async () => RA.ok(undefined) },
-      chatModel: answering('こんにちは！'),
-      now: () => now,
+      chatModel: publishing('reply', 'こんにちは！'),
+      ...createInMemoryFollowups(() => now).deps,
     });
     const replies: AiAgentBotReply[] = [];
     const input = {
       bot: { userId: botUserId, actorId: botActorId },
       capabilities: capabilitiesOf({ timeline: [mention] }),
-      replier: { reply: async (reply: AiAgentBotReply) => (replies.push(reply), Result.ok(undefined)) },
+      replier: { reply: async (reply: AiAgentBotReply) => (replies.push(reply), Result.ok(PostId.generate())) },
     };
 
     const [first, second] = await Promise.all([useCase.run(input), useCase.run(input)]);

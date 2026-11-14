@@ -869,6 +869,25 @@ export const aiAgentBotTriggersTable = sqliteTable('ai_agent_bot_triggers', {
   index('ai_agent_bot_triggers_outcome_handled_at_idx').on(table.outcome, table.handledAt),
 ]);
 
+/** AI エージェントの bot が「あとで続きを調べる」と入れた予定。処理したら outcome と handledAt を埋める */
+export const aiAgentBotFollowupsTable = sqliteTable('ai_agent_bot_followups', {
+  followupId: text('followupId').primaryKey(),
+  postId: text('postId').notNull(),
+  authorActorId: text('authorActorId').notNull(),
+  note: text('note').notNull(),
+  round: integer('round').notNull(),
+  dueAt: timestamp().notNull(),
+  scheduledAt: timestamp().notNull(),
+  /** 処理し始めた時刻。重なって動いた cron のうち、1 つだけが予定を処理するように付ける */
+  claimedAt: timestamp(),
+  outcome: text('outcome', { enum: ['replied', 'ignored', 'failed'] }),
+  reason: text('reason'),
+  handledAt: timestamp(),
+}, (table) => [
+  index('ai_agent_bot_followups_claimed_at_due_at_idx').on(table.claimedAt, table.dueAt),
+  index('ai_agent_bot_followups_outcome_handled_at_idx').on(table.outcome, table.handledAt),
+]);
+
 export const schema = {
   usersTable,
   keysTable,
@@ -949,4 +968,5 @@ export const schema = {
   blueskyNotificationSyncStateTable,
   blueskyAccountSwitchTable,
   aiAgentBotTriggersTable,
+  aiAgentBotFollowupsTable,
 } as const;

@@ -28,6 +28,23 @@ export const createRespondToAiAgentMentionsTask = (createBotRuntime: CreateBotRu
   },
 });
 
+export const createRunAiAgentFollowupsTask = (createBotRuntime: CreateBotRuntime): ScheduledTask => ({
+  name: 'runAiAgentFollowups',
+  run: async ({ env, waitUntil }) => {
+    const bot = await createBotRuntime(env, waitUntil);
+    if (bot === undefined) {
+      console.info('iori ai agent bot is disabled.');
+      return;
+    }
+    const result = await bot.runFollowups.run({
+      bot: { userId: bot.bot.user.id, actorId: bot.bot.actor.id },
+      capabilities: bot.capabilities,
+      replier: bot.replier,
+    });
+    console.info('iori ai agent bot ran follow-ups.', result.val);
+  },
+});
+
 export const createPostAiAgentMusingTask = (createBotRuntime: CreateBotRuntime): ScheduledTask => ({
   name: 'postAiAgentMusing',
   run: async ({ env, waitUntil }) => {
@@ -46,4 +63,5 @@ export const createPostAiAgentMusingTask = (createBotRuntime: CreateBotRuntime):
 });
 
 export const respondToAiAgentMentionsTask = createRespondToAiAgentMentionsTask(defaultCreateBotRuntime);
+export const runAiAgentFollowupsTask = createRunAiAgentFollowupsTask(defaultCreateBotRuntime);
 export const postAiAgentMusingTask = createPostAiAgentMusingTask(defaultCreateBotRuntime);

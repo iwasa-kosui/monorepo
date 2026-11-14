@@ -1,4 +1,4 @@
-import { RA, type Result } from '@iwasa-kosui/result';
+import { RA, Result } from '@iwasa-kosui/result';
 
 import { AiAgentBot } from '../domain/aiAgentBot/aiAgentBot.ts';
 import type { Instant } from '../domain/instant/instant.ts';
@@ -9,6 +9,7 @@ import { runAgentLoop } from './aiAgent/agentLoop.ts';
 import {
   type AiAgentBotCapabilities,
   createAgentTools,
+  createPublishTool,
   formatPosts,
   MAX_OWN_RECENT_POSTS,
   MAX_RECENT_TIMELINE,
@@ -46,8 +47,8 @@ type Deps = Readonly<{
 }>;
 
 /**
- * AI エージェントの bot が、タイムラインを読んで自分から 1 件投稿する。
- * 自分の最近の投稿の繰り返しになったときは投稿しない。
+ * AI エージェントの bot が、タイムラインを読んで自分から 1 件投稿する。投稿はエージェントが create_post ツールで行う。
+ * 自分の最近の投稿の繰り返しになる本文は投稿せず、モデルに書き直させる。
  */
 const create = (deps: Deps): PostAiAgentMusingUseCase => {
   const agent = runAgentLoop(deps.chatModel);
@@ -60,6 +61,30 @@ const create = (deps: Deps): PostAiAgentMusingUseCase => {
       const ownPostIds = new Set(ownPosts.map((post) => post.postId));
       // 自分の投稿をタイムラインに混ぜると、モデルがそれを話題に選んでなぞりやすい。分けて見せる
       const othersPosts = timeline.filter((post) => !ownPostIds.has(post.postId));
+      const ownTexts = ownPosts.map((post) => post.text);
+
+      let postId: PostId | undefined;
+      let repeated = false;
+      const postErrors: string[] = [];
+      const postTool = createPublishTool({
+        name: 'create_post',
+        description: '自分の投稿として公開する。投稿の本文だけを渡す。',
+        limit: 1,
+        done: '投稿しました。',
+        publish: async (text) => {
+          if (AiAgentBot.isRepeatOf(text, ownTexts)) {
+            repeated = true;
+            return Result.err('あなたの最近の投稿の繰り返しです。別のことを書くか、投稿せずに終えてください。');
+          }
+          const posted = await poster.post(text);
+          if (!posted.ok) {
+            postErrors.push(posted.err);
+            return Result.err(posted.err);
+          }
+          postId = posted.val;
+          return Result.ok(undefined);
+        },
+      });
       const result = await agent({
         model: AI_AGENT_BOT_MODEL,
         system: musingSystemPrompt(),
@@ -68,19 +93,15 @@ const create = (deps: Deps): PostAiAgentMusingUseCase => {
           ownPosts: formatPosts(ownPosts),
           now: new Date(deps.now()).toISOString(),
         }),
-        tools: createAgentTools(capabilities),
+        tools: [...createAgentTools(capabilities), postTool.tool],
+        finalTools: [postTool.tool],
         maxSteps: AI_AGENT_BOT_MAX_STEPS,
         maxOutputTokens: AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
       });
+      if (postId !== undefined) return RA.ok({ posted: true, postId });
       if (!result.ok) return result;
-      const text = result.val.answer === undefined ? undefined : AiAgentBot.normalizeAnswer(result.val.answer);
-      if (text === undefined) return RA.ok({ posted: false, reason: 'nothingToSay' });
-      if (AiAgentBot.isRepeatOf(text, ownPosts.map((post) => post.text))) {
-        return RA.ok({ posted: false, reason: 'repeated' });
-      }
-      const posted = await poster.post(text);
-      if (!posted.ok) return RA.err({ type: 'AiAgentBotPostError', message: posted.err });
-      return RA.ok({ posted: true, postId: posted.val });
+      if (postErrors.length > 0) return RA.err({ type: 'AiAgentBotPostError', message: postErrors.join('; ') });
+      return RA.ok({ posted: false, reason: repeated ? 'repeated' : 'nothingToSay' });
     },
   };
 };

@@ -1,4 +1,4 @@
-import { RA, type Result } from '@iwasa-kosui/result';
+import { RA, Result } from '@iwasa-kosui/result';
 
 import type { Actor } from '../domain/actor/actor.ts';
 import type { ActorId } from '../domain/actor/actorId.ts';
@@ -12,6 +12,8 @@ import {
   type AiAgentBotTriggerHandled,
   type AiAgentBotTriggersHandledStore,
   MAX_BOT_REPLIES_PER_DAY,
+  MAX_BOT_REPLIES_PER_THREAD,
+  MAX_BOT_REPLIES_PER_TRIGGER,
 } from '../domain/aiAgentBot/aiAgentBot.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { type MentionRecipient } from '../domain/post/mention.ts';
@@ -20,7 +22,14 @@ import type { PostId } from '../domain/post/postId.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import type { AgentChatModel } from '../ports/agentChatModel.ts';
 import { runAgentLoop } from './aiAgent/agentLoop.ts';
-import { type AiAgentBotCapabilities, createAgentTools, formatPost, formatPosts } from './aiAgent/agentTools.ts';
+import {
+  type AiAgentBotCapabilities,
+  createAgentTools,
+  createPublishTool,
+  formatPost,
+  formatPosts,
+  type PublishTool,
+} from './aiAgent/agentTools.ts';
 import {
   AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
   AI_AGENT_BOT_MAX_STEPS,
@@ -28,10 +37,11 @@ import {
   mentionSystemPrompt,
   mentionUserPrompt,
 } from './aiAgent/aiAgentBotPrompts.ts';
+import { createFollowupTools, type FollowupSchedulerDeps } from './aiAgent/followupScheduler.ts';
 import type { UseCase } from './useCase.ts';
 
 /** 1 回の実行で答えるトリガーの数。cron は 1 分ごとに動くので、少しずつ片付ける */
-export const MAX_TRIGGERS_PER_RUN = 3;
+export const MAX_TRIGGERS_PER_RUN = 5;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -41,9 +51,9 @@ export type AiAgentBotReply = Readonly<{
   mentions: readonly MentionRecipient[];
 }>;
 
-/** bot として返信を送る。runtime が SendReplyUseCase を包んで用意する */
+/** bot として返信を送り、送った返信の postId を返す。runtime が SendReplyUseCase を包んで用意する */
 export type AiAgentBotReplier = Readonly<{
-  reply: (reply: AiAgentBotReply) => Promise<Result<void, string>>;
+  reply: (reply: AiAgentBotReply) => Promise<Result<PostId, string>>;
 }>;
 
 type Input = Readonly<{
@@ -66,17 +76,19 @@ export type RespondToAiAgentMentionsUseCase = UseCase<Input, RespondToAiAgentMen
 
 type ActorResolverById = Agg.Resolver<ActorId, Actor | undefined>;
 
-type Deps = Readonly<{
-  pendingTriggersResolver: AiAgentBotPendingTriggersResolver;
-  triggerClaimedStore: AiAgentBotTriggerClaimedStore;
-  triggersHandledStore: AiAgentBotTriggersHandledStore;
-  repliedCountResolverSince: AiAgentBotRepliedCountResolverSince;
-  actorResolverById: ActorResolverById;
-  chatModel: AgentChatModel;
-  now: () => Instant;
-}>;
+type Deps =
+  & FollowupSchedulerDeps
+  & Readonly<{
+    pendingTriggersResolver: AiAgentBotPendingTriggersResolver;
+    triggerClaimedStore: AiAgentBotTriggerClaimedStore;
+    triggersHandledStore: AiAgentBotTriggersHandledStore;
+    repliedCountResolverSince: AiAgentBotRepliedCountResolverSince;
+    actorResolverById: ActorResolverById;
+    chatModel: AgentChatModel;
+    now: () => Instant;
+  }>;
 
-const handleOf = (actor: Actor | undefined): string => {
+export const handleOf = (actor: Actor | undefined): string => {
   if (actor === undefined) return '(不明なアカウント)';
   if (actor.type === 'local') return actor.displayName ?? actor.uri;
   const host = URL.canParse(actor.uri) ? new URL(actor.uri).host : undefined;
@@ -99,8 +111,35 @@ export const buildReplyContent = (
 };
 
 /**
+ * reply ツールを作る。1 回目は postId の投稿に、2 回目からは直前に送った自分の返信に返信して、スレッドにつなげる。
+ * 各返信の先頭には相手へのメンションを付ける。
+ */
+export const createThreadedReplyTool = (
+  input: Readonly<{ replier: AiAgentBotReplier; author: Actor | undefined; postId: PostId; limit: number }>,
+): PublishTool => {
+  let replyTo = input.postId;
+  return createPublishTool({
+    name: 'reply',
+    description: [
+      '答える投稿に返信する。返信の本文だけを渡す。',
+      `1 回に収まらない長い答えは、要点ごとに分けて何回か続けて呼んでよい（${input.limit} 回まで）。`,
+      '2 回目からは、自分の直前の返信への返信になり、スレッドとして読める。',
+    ].join(''),
+    limit: input.limit,
+    done: '返信しました。続きがあれば、もう一度 reply を呼べます。',
+    publish: async (text) => {
+      const sent = await input.replier.reply({ postId: replyTo, ...buildReplyContent(input.author, text) });
+      if (!sent.ok) return Result.err(sent.err);
+      replyTo = sent.val;
+      return Result.ok(undefined);
+    },
+  });
+};
+
+/**
  * bot 宛てのメンションと、bot の投稿への返信に、AI エージェントが答える。
- * 1 つのトリガーには 1 回だけ答え、結果（返信した・答えなかった・失敗した）を記録する。
+ * 返信はエージェントが reply ツールで行う。reply を使わずに終えたら、答えなかったことになる。
+ * 1 つのトリガーは 1 回だけ処理し、結果（返信した・答えなかった・失敗した）を記録する。
  * 答える前に処理中の印を付け、重なって動いた実行が同じトリガーに 2 回答えないようにする。
  */
 const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
@@ -112,11 +151,12 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
   ): Promise<Omit<AiAgentBotTriggerHandled, 'handledAt' | 'postId'>> => {
     const author = (await deps.actorResolverById.resolve(trigger.authorActorId)).val;
     const thread = await capabilities.readThread(trigger.postId);
+    const botRepliesInThread = thread.filter((post) => post.authorActorId === bot.actorId).length;
     const decision = AiAgentBot.decideResponse({
       trigger,
       botActorId: bot.actorId,
       authorActorType: author?.type === 'remote' ? author.actorType : undefined,
-      botRepliesInThread: thread.filter((post) => post.authorActorId === bot.actorId).length,
+      botRepliesInThread,
       now: deps.now(),
     });
     if (decision.type === 'ignore') return { outcome: 'ignored', reason: decision.reason };
@@ -124,6 +164,13 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
     const triggerPost = thread.find((post) => post.postId === trigger.postId)
       ?? await capabilities.readPost(trigger.postId);
     if (triggerPost === undefined) return { outcome: 'failed', reason: 'The trigger post is not visible to the bot.' };
+
+    const replyTool = createThreadedReplyTool({
+      replier,
+      author,
+      postId: trigger.postId,
+      limit: Math.min(MAX_BOT_REPLIES_PER_TRIGGER, MAX_BOT_REPLIES_PER_THREAD - botRepliesInThread),
+    });
 
     const result = await agent({
       model: AI_AGENT_BOT_MODEL,
@@ -133,17 +180,20 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
         trigger: formatPost(triggerPost),
         author: handleOf(author),
       }),
-      tools: createAgentTools(capabilities),
+      tools: [
+        ...createAgentTools(capabilities),
+        replyTool.tool,
+        ...createFollowupTools(deps, { postId: trigger.postId, authorActorId: trigger.authorActorId, round: 1 }),
+      ],
+      finalTools: [replyTool.tool],
       maxSteps: AI_AGENT_BOT_MAX_STEPS,
       maxOutputTokens: AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
     });
+    if (replyTool.published() > 0) return { outcome: 'replied', reason: null };
     if (!result.ok) return { outcome: 'failed', reason: result.err.message };
-
-    const answer = result.val.answer === undefined ? undefined : AiAgentBot.normalizeAnswer(result.val.answer);
-    if (answer === undefined) return { outcome: 'ignored', reason: 'emptyAnswer' };
-
-    const sent = await replier.reply({ postId: trigger.postId, ...buildReplyContent(author, answer) });
-    return sent.ok ? { outcome: 'replied', reason: null } : { outcome: 'failed', reason: sent.err };
+    const errors = replyTool.errors();
+    if (errors.length > 0) return { outcome: 'failed', reason: errors.join('; ') };
+    return { outcome: 'ignored', reason: 'noReply' };
   };
 
   return {

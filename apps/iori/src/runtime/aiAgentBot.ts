@@ -3,6 +3,13 @@ import { Result } from '@iwasa-kosui/result';
 
 import { createD1LocalActorCreatedStore } from '../adaptor/d1/actor/localActorCreatedStore.ts';
 import { createD1LocalActorProfileUpdatedStore } from '../adaptor/d1/actor/localActorProfileUpdatedStore.ts';
+import {
+  createD1AiAgentBotDueFollowupsResolver,
+  createD1AiAgentBotPendingFollowupsCountResolver,
+} from '../adaptor/d1/aiAgentBot/aiAgentBotDueFollowupsResolver.ts';
+import { createD1AiAgentBotFollowupClaimedStore } from '../adaptor/d1/aiAgentBot/aiAgentBotFollowupClaimedStore.ts';
+import { createD1AiAgentBotFollowupScheduledStore } from '../adaptor/d1/aiAgentBot/aiAgentBotFollowupScheduledStore.ts';
+import { createD1AiAgentBotFollowupsHandledStore } from '../adaptor/d1/aiAgentBot/aiAgentBotFollowupsHandledStore.ts';
 import { createD1AiAgentBotPendingTriggersResolver } from '../adaptor/d1/aiAgentBot/aiAgentBotPendingTriggersResolver.ts';
 import { createD1AiAgentBotRepliedCountResolverSince } from '../adaptor/d1/aiAgentBot/aiAgentBotRepliedCountResolverSince.ts';
 import { createD1AiAgentBotTriggerClaimedStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggerClaimedStore.ts';
@@ -26,6 +33,7 @@ import type { AgentPostView, AiAgentBotCapabilities } from '../useCase/aiAgent/a
 import { EnsureAiAgentBotUseCase } from '../useCase/ensureAiAgentBot.ts';
 import { type AiAgentBotPoster, PostAiAgentMusingUseCase } from '../useCase/postAiAgentMusing.ts';
 import { type AiAgentBotReplier, RespondToAiAgentMentionsUseCase } from '../useCase/respondToAiAgentMentions.ts';
+import { RunAiAgentFollowupsUseCase } from '../useCase/runAiAgentFollowups.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
 
@@ -79,7 +87,7 @@ const fetchPage = (safeFetcher: SafeFetcher) => async (url: string) => {
 
 type Bot = Readonly<{ user: User; actor: LocalActor }>;
 
-/** bot から見える範囲で読み、bot として行動する道具の中身を用意する */
+/** bot から見える範囲で読み、bot として行動するツールの中身を用意する */
 export const createAiAgentBotCapabilities = (
   runtime: WorkerRuntimePorts,
   bot: Bot,
@@ -173,7 +181,7 @@ export const createAiAgentBotReplier = (
       request: context.request,
       ctx: context.ctx,
     });
-    return sent.ok ? Result.ok(undefined) : Result.err(sent.err.message);
+    return sent.ok ? Result.ok(sent.val.post.postId) : Result.err(sent.err.message);
   },
 });
 
@@ -219,6 +227,14 @@ export const createAiAgentBotRuntime = async (
   }).run({ ctx });
   const bot = ensured.val;
   const context = { request, ctx };
+  const shared = {
+    repliedCountResolverSince: createD1AiAgentBotRepliedCountResolverSince(db),
+    followupScheduledStore: createD1AiAgentBotFollowupScheduledStore(db),
+    pendingFollowupsCountResolver: createD1AiAgentBotPendingFollowupsCountResolver(db),
+    actorResolverById: runtime.mastodon.actorResolverById,
+    chatModel,
+    now: Instant.now,
+  };
   return {
     bot,
     capabilities: createAiAgentBotCapabilities(runtime, bot, context),
@@ -228,10 +244,13 @@ export const createAiAgentBotRuntime = async (
       pendingTriggersResolver: createD1AiAgentBotPendingTriggersResolver(db),
       triggerClaimedStore: createD1AiAgentBotTriggerClaimedStore(db),
       triggersHandledStore: createD1AiAgentBotTriggersHandledStore(db),
-      repliedCountResolverSince: createD1AiAgentBotRepliedCountResolverSince(db),
-      actorResolverById: runtime.mastodon.actorResolverById,
-      chatModel,
-      now: Instant.now,
+      ...shared,
+    }),
+    runFollowups: RunAiAgentFollowupsUseCase.create({
+      dueFollowupsResolver: createD1AiAgentBotDueFollowupsResolver(db),
+      followupClaimedStore: createD1AiAgentBotFollowupClaimedStore(db),
+      followupsHandledStore: createD1AiAgentBotFollowupsHandledStore(db),
+      ...shared,
     }),
     postMusing: PostAiAgentMusingUseCase.create({ chatModel, now: Instant.now }),
   } as const;
