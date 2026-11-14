@@ -304,7 +304,7 @@ const ThreadModal = () => {
         {/* Header */}
         <div class='flex items-center justify-between mb-4 flex-shrink-0'>
           <h2 class='text-lg font-semibold text-charcoal dark:text-white'>
-            Thread
+            スレッド
           </h2>
           <button
             type='button'
@@ -471,7 +471,7 @@ const ThreadModal = () => {
                     threadData.ancestors.length === 0
                     && !threadData.currentPost && (
                       <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
-                        No replies in this thread yet
+                        このスレッドにはまだ返信がありません
                       </p>
                     )
                   )}
@@ -479,7 +479,7 @@ const ThreadModal = () => {
             )
             : (
               <p class='text-gray-500 dark:text-gray-400 text-center py-4'>
-                Failed to load thread
+                スレッドを読み込めませんでした
               </p>
             )}
         </div>
@@ -490,7 +490,7 @@ const ThreadModal = () => {
             value={replyContent}
             onChange={setReplyContent}
             onKeyDown={handleKeyDown}
-            placeholder='返信を書く... (⌘+Enter to post)'
+            placeholder='返信を書く（⌘+Enter で送信）'
             minHeight='100px'
             disabled={isSendingReply}
           />

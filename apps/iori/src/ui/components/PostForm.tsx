@@ -155,7 +155,7 @@ export const PostForm = ({ id, formId, onPosted }: Props) => {
         value={content}
         onChange={handleContentChange}
         onKeyDown={handleKeyDown}
-        placeholder="What's on your mind? (⌘+Enter to post)"
+        placeholder='いまどうしてる？（⌘+Enter で投稿）'
         minHeight='150px'
         name='content'
       />

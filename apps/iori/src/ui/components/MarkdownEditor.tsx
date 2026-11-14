@@ -18,7 +18,7 @@ export const MarkdownEditor = ({
   value,
   onChange,
   onKeyDown,
-  placeholder = 'What\'s on your mind?',
+  placeholder = 'いまどうしてる？',
   minHeight = '150px',
   disabled = false,
   name,
@@ -103,7 +103,7 @@ export const MarkdownEditor = ({
               {isLoadingPreview
                 ? (
                   <p class='text-charcoal-light dark:text-gray-500'>
-                    Loading preview...
+                    プレビューを読み込んでいます...
                   </p>
                 )
                 : previewError
@@ -121,7 +121,7 @@ export const MarkdownEditor = ({
                 )
                 : (
                   <p class='text-charcoal-light dark:text-gray-500'>
-                    Nothing to preview
+                    プレビューする内容がありません
                   </p>
                 )}
             </div>

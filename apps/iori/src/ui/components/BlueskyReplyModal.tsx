@@ -12,7 +12,7 @@ type Props = Readonly<{
 }>;
 
 export const BlueskyReplyModal = (
-  { dialog, title, submitLabel, placeholder = '返信を書く... (⌘+Enter to post)' }: Props,
+  { dialog, title, submitLabel, placeholder = '返信を書く（⌘+Enter で送信）' }: Props,
 ) => {
   const {
     target,
@@ -117,6 +117,6 @@ export const BlueskyQuoteModal = ({ dialog }: Readonly<{ dialog: UseBlueskyPostD
     dialog={dialog}
     title='引用'
     submitLabel='引用して投稿'
-    placeholder='引用にコメントを書く... (⌘+Enter to post)'
+    placeholder='引用にコメントを書く（⌘+Enter で送信）'
   />
 );

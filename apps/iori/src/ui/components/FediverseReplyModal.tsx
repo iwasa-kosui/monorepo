@@ -89,7 +89,7 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
         value={replyContent}
         onChange={setReplyContent}
         onKeyDown={handleKeyDown}
-        placeholder='返信を書く... (⌘+Enter to post)'
+        placeholder='返信を書く（⌘+Enter で送信）'
         minHeight='150px'
         disabled={isSendingReply}
       />

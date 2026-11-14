@@ -626,7 +626,7 @@ export const PostView = (
                 type='button'
                 onClick={() => onReply(post.id, post.account.acct, post.visibility, post)}
                 class='flex items-center gap-1 transition-colors text-charcoal-light hover:text-terracotta dark:text-gray-400 dark:hover:text-terracotta-light'
-                title='Reply (p)'
+                title='返信 (p)'
               >
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
