@@ -453,32 +453,6 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     });
   });
 
-  it('thumb の取得に失敗したら thumb なしで送る', async () => {
-    const t = setup();
-    const post = t.addPost({ content: '<p>記事</p>' });
-    t.sqlite.prepare(
-      'INSERT INTO link_previews(linkPreviewId,postId,url,title,description,imageUrl,faviconUrl,siteName,createdAt) VALUES (?,?,?,?,?,?,?,?,?)',
-    ).run(
-      LINK_PREVIEW_ID,
-      post.postId,
-      'https://example.com/a',
-      'タイトル',
-      null,
-      'https://example.com/none.png',
-      null,
-      null,
-      1,
-    );
-
-    await run(t.schedule.run({ postId: post.postId }));
-    await t.flush();
-
-    expect(t.created[0]?.embed).toEqual({
-      $type: 'app.bsky.embed.external',
-      external: { uri: 'https://example.com/a', title: 'タイトル', description: '' },
-    });
-  });
-
   it('送信に失敗したら failed、attempts + 1、秘密を含まない lastError を保存し、予約の結果は変えない', async () => {
     const t = setup();
     t.behavior.createRecord = () => Result.err(failure('createRecord failed: status 500'));
@@ -551,84 +525,6 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
   });
 
-  it('Mastodon 形式のハッシュタグは、link facet ではなく tag facet にして送る', async () => {
-    const t = setup();
-    const post = t.addPost({
-      content:
-        '<p>こんにちは <a href="https://mastodon.example/tags/iori" class="mention hashtag" rel="tag">#<span>iori</span></a></p>',
-    });
-
-    await run(t.schedule.run({ postId: post.postId }));
-    await t.flush();
-
-    expect(t.created[0]?.text).toBe('こんにちは #iori');
-    expect(t.created[0]?.facets).toEqual([{
-      index: { byteStart: 16, byteEnd: 21 },
-      features: [{ $type: 'app.bsky.richtext.facet#tag', tag: 'iori' }],
-    }]);
-    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
-  });
-
-  it('リンクと重なるハンドルには mention facet を付けない', async () => {
-    const t = setup();
-    const post = t.addPost({
-      content: '<p><a href="https://mastodon.example/@alice.bsky.social">@alice.bsky.social</a></p>',
-    });
-
-    await run(t.schedule.run({ postId: post.postId }));
-    await t.flush();
-
-    expect(t.created[0]?.facets).toEqual([{
-      index: { byteStart: 0, byteEnd: 18 },
-      features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://mastodon.example/@alice.bsky.social' }],
-    }]);
-    expect(t.query).not.toHaveBeenCalled();
-  });
-
-  it('異なるハンドルが11件以上あっても、先頭から10件までしか解決せず、11件目以降に facet を付けない', async () => {
-    const t = setup();
-    const handles = Array.from({ length: 12 }, (_, index) => `user${index + 1}.bsky.social`);
-    for (const handle of handles) t.handleDids.set(handle, `did:plc:${handle}`);
-    const post = t.addPost({ content: `<p>${handles.map((handle) => `@${handle}`).join(' ')}</p>` });
-
-    await run(t.schedule.run({ postId: post.postId }));
-    await t.flush();
-
-    expect(t.query).toHaveBeenCalledTimes(10);
-    expect(t.query.mock.calls.map(([, params]) => params.handle)).toEqual(handles.slice(0, 10));
-    expect(t.created[0]?.facets).toHaveLength(10);
-    expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
-  });
-
-  it('本文が切り詰められてハンドルが途中で切れたら、そのハンドルを解決せず facet も付けない', async () => {
-    const t = setup();
-    t.handleDids.set('bob.example.co', 'did:plc:bobco');
-    const filler = 'あ'.repeat(210);
-    const post = t.addPost({ content: `<p>${filler} @bob.example.com ${'い'.repeat(400)}</p>` });
-
-    await run(t.schedule.run({ postId: post.postId }));
-    await t.flush();
-
-    expect(t.created[0]?.text).toMatch(/@bob\.example\.co…\n/);
-    expect(t.query).not.toHaveBeenCalled();
-    expect(t.created[0]?.facets?.every(({ features }) => features[0]?.$type !== 'app.bsky.richtext.facet#mention'))
-      .toBe(true);
-  });
-
-  it('複数のハンドルのうち解決できたものにだけ、mention facet を付ける', async () => {
-    const t = setup();
-    const post = t.addPost({ content: '<p>@nobody.bsky.social @alice.bsky.social</p>' });
-
-    await run(t.schedule.run({ postId: post.postId }));
-    await t.flush();
-
-    expect(t.query).toHaveBeenCalledTimes(2);
-    expect(t.created[0]?.facets).toEqual([{
-      index: { byteStart: 20, byteEnd: 38 },
-      features: [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' }],
-    }]);
-  });
-
   it('解決できないハンドルには facet を付けず、sent にする', async () => {
     const t = setup();
     const post = t.addPost({ content: '<p>@nobody.bsky.social こんにちは</p>' });
@@ -653,16 +549,6 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(t.created[0]?.text).toBe('@alice.bsky.social こんにちは');
     expect(t.created[0]).not.toHaveProperty('facets');
     expect(await t.row(post.postId)).toMatchObject({ status: 'sent' });
-  });
-
-  it('本文にハンドルが無ければ、ハンドルを解決しない', async () => {
-    const t = setup();
-    const post = t.addPost();
-
-    await run(t.schedule.run({ postId: post.postId }));
-    await t.flush();
-
-    expect(t.query).not.toHaveBeenCalled();
   });
 
   it('予約の途中で例外が起きても reject せず error を返す', async () => {

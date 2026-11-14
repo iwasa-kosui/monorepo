@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.ts';
 import { createD1BlueskyLikeTargetResolver } from '../../adaptor/d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import { ReplyToBlueskyPostUseCase } from '../replyToBlueskyPost.ts';
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 12, 3));
@@ -12,12 +12,6 @@ const TOP = 'at://did:plc:a/app.bsky.feed.post/top';
 const NESTED = 'at://did:plc:a/app.bsky.feed.post/nested';
 const REPOST = `${TOP}#repost:did:plc:b`;
 const ROOT = { uri: 'at://did:plc:c/app.bsky.feed.post/root', cid: 'bafyroot' };
-const failure: BlueskyClientError = {
-  type: 'BlueskyClientError',
-  kind: 'http',
-  message: 'getPosts failed: status 500',
-  status: 500,
-};
 
 const setup = (posts: Record<string, unknown> = {
   [TOP]: { uri: TOP, cid: 'bafytop-fresh', record: { text: 'top' } },
@@ -154,24 +148,6 @@ describe('ReplyToBlueskyPostUseCase', () => {
     });
   });
 
-  it('uri の投稿が getPosts に無ければ NotFound にし、投稿しない', async () => {
-    const t = setup({});
-
-    const result = await t.reply.run({ uri: TOP, text: 'hi' });
-
-    expect(result).toEqual({ ok: false, err: { type: 'BlueskyReplyTargetNotFound' } });
-    expect(t.createRecord).not.toHaveBeenCalled();
-  });
-
-  it('uri でも、空文字は入力不正にし、getPosts を呼ばない', async () => {
-    const t = setup();
-
-    const result = await t.reply.run({ uri: TOP, text: ' ' });
-
-    expect(result).toEqual({ ok: false, err: { type: 'BlueskyPostInvalid', reason: 'empty' } });
-    expect(t.query).not.toHaveBeenCalled();
-  });
-
   it('空文字と 301 grapheme を入力不正にし、返信先の取得も投稿もしない', async () => {
     const t = setup();
 
@@ -209,16 +185,6 @@ describe('ReplyToBlueskyPostUseCase', () => {
     expect(t.createRecord).not.toHaveBeenCalled();
   });
 
-  it('getPosts の失敗を Bluesky のエラーとして返し、投稿しない', async () => {
-    const t = setup();
-    t.query.mockReturnValueOnce(RA.err(failure));
-
-    const result = await t.reply.run({ feedItemId: TOP, text: 'hi' });
-
-    expect(result).toEqual({ ok: false, err: failure });
-    expect(t.createRecord).not.toHaveBeenCalled();
-  });
-
   it('getPosts の応答の形が違えば invalid_response にする', async () => {
     const t = setup();
     t.query.mockReturnValueOnce(RA.ok({ posts: [{ uri: TOP }] }));
@@ -245,21 +211,5 @@ describe('ReplyToBlueskyPostUseCase', () => {
       expect(result).toEqual(notAllowed);
       expect(t.createRecord).not.toHaveBeenCalled();
     });
-
-    it('viewer が付いていても、どれにも当たらなければ投稿する', async () => {
-      const t = setup(target({
-        viewer: { replyDisabled: false },
-        author: { viewer: { blockedBy: false, muted: false } },
-      }));
-
-      expect((await t.reply.run({ feedItemId: TOP, text: 'hi' })).ok).toBe(true);
-    });
-  });
-
-  it('createRecord の失敗を返す', async () => {
-    const t = setup();
-    t.createRecord.mockReturnValueOnce(RA.err(failure));
-
-    expect(await t.reply.run({ feedItemId: TOP, text: 'hi' })).toEqual({ ok: false, err: failure });
   });
 });

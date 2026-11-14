@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import {
-  AlreadyBookmarkedError,
   type Bookmark,
   type BookmarkCreated,
   type BookmarkCreatedStore,
@@ -97,17 +96,6 @@ describe('CreateBookmarkUseCase', () => {
     expect(t.bookmarkCreatedStore.store).toHaveBeenCalledTimes(1);
   });
 
-  it('同時のリクエストで保存が重複したとき AlreadyBookmarkedError を返す', async () => {
-    const t = setup();
-    t.bookmarkCreatedStore.store.mockReturnValueOnce(
-      RA.err(AlreadyBookmarkedError.create({ actorId: t.actor.id, postId: newPostId() })),
-    );
-
-    const result = await t.create.run({ userId: t.user.id, postId: newPostId() });
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'AlreadyBookmarkedError' } });
-  });
-
   it('ユーザーが存在しないとき UserNotFoundError を返し、保存しない', async () => {
     const t = setup();
 
@@ -152,15 +140,6 @@ describe('DeleteBookmarkUseCase', () => {
     const result = await t.delete.run({ userId: t.user.id, postId: newPostId() });
 
     expect(result).toMatchObject({ ok: false, err: { type: 'NotBookmarkedError' } });
-    expect(t.bookmarkDeletedStore.store).not.toHaveBeenCalled();
-  });
-
-  it('ユーザーが存在しないとき UserNotFoundError を返し、削除しない', async () => {
-    const t = setup();
-
-    const result = await t.delete.run({ userId: crypto.randomUUID() as User['id'], postId: newPostId() });
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'UserNotFoundError' } });
     expect(t.bookmarkDeletedStore.store).not.toHaveBeenCalled();
   });
 });

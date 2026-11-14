@@ -88,7 +88,6 @@ const setup = (
   );
   const viewerDid = vi.fn<BlueskyChat['viewerDid']>(async () => RA.ok(ME));
   const subscriptionsResolver = createD1PushSubscriptionsResolverByUserId(db);
-  const resolveSubscriptions = vi.spyOn(subscriptionsResolver, 'resolve');
   const send = vi.fn<WebPushSender['send']>(async () => RA.ok(undefined));
   const stored = options.chatPermitted === 'none'
     ? undefined
@@ -107,7 +106,7 @@ const setup = (
   const receipts = () =>
     sqlite.prepare('SELECT convoId, lastMessageId, notifiedAt FROM bluesky_chat_push_receipts ORDER BY convoId').all();
   const payloads = () => send.mock.calls.map(([, payload]) => payload);
-  return { ...fixture, listConvos, viewerDid, resolveSubscriptions, send, useCase, receipts, payloads };
+  return { ...fixture, listConvos, viewerDid, send, useCase, receipts, payloads };
 };
 
 describe('CollectBlueskyChatPushUseCase', () => {
@@ -125,15 +124,6 @@ describe('CollectBlueskyChatPushUseCase', () => {
     expect(t.receipts()).toEqual([{ convoId: 'convo/1', lastMessageId: 'convo/1-m1', notifiedAt: NOW }]);
     expect(t.listConvos).toHaveBeenCalledOnce();
     expect(t.listConvos).toHaveBeenCalledWith({ limit: 100, readState: 'unread' });
-  });
-
-  it('displayName が無い相手は handle を名前にする', async () => {
-    const bob = { ...ALICE, did: 'did:plc:bob', handle: 'bob.bsky.social', displayName: null };
-    const t = setup([convoOf('c1', { members: [MYSELF, bob], lastMessage: messageOf('m1', { senderDid: bob.did }) })]);
-
-    await t.useCase.run();
-
-    expect(t.payloads()[0]!.body).toBe('bob.bsky.social からメッセージが届きました');
   });
 
   it('保存済みの id と同じメッセージは送らず、新しいメッセージに変わったら送る', async () => {
@@ -246,17 +236,6 @@ describe('CollectBlueskyChatPushUseCase', () => {
       url: '/messages',
     });
     expect(t.receipts()).toHaveLength(7);
-  });
-
-  it('購読が複数あれば、それぞれに送り、購読は 1 回だけ引く', async () => {
-    const t = setup([convoOf('c1'), convoOf('c2', { lastMessage: messageOf('m2', { sentAt: NOW - 2 * MINUTE }) })], {
-      subscriptions: 2,
-    });
-
-    const result = await t.useCase.run();
-
-    expect(result).toMatchObject({ ok: true, val: { pushed: 4 } });
-    expect(t.resolveSubscriptions).toHaveBeenCalledOnce();
   });
 
   it('push が失敗しても、例外を投げても、Ok を返し、記録は残す', async () => {

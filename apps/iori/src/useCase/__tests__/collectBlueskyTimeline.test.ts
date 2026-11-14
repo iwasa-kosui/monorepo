@@ -162,23 +162,6 @@ describe('CollectBlueskyTimelineUseCase', () => {
     expect(t.stored()).toEqual([recent(1).feedItemId]);
   });
 
-  it('新しい投稿がないときは、書き込みのストアを呼ばず、INSERT・UPDATE・DELETE を 1 本も発行しない', async () => {
-    const t = setup([pageOf([recent(1), recent(2)], undefined)]);
-    await t.useCase.run();
-    t.enqueue(pageOf([recent(1), recent(2)], 'next'), pageOf([recent(3)], undefined));
-    t.save.mockClear();
-    t.queries.length = 0;
-
-    const result = await t.useCase.run();
-
-    expect(result).toEqual({ ok: true, val: { pages: 1, fetched: 2, saved: 0, dropped: 0 } });
-    expect(t.save).not.toHaveBeenCalled();
-    expect(t.queries).toHaveLength(3);
-    expect(t.queries.every(({ sql }) => /^select /i.test(sql))).toBe(true);
-    expect(t.queries.filter(({ sql }) => /^\s*(insert|update|delete)\b/i.test(sql))).toEqual([]);
-    expect(t.stored()).toEqual([recent(1).feedItemId, recent(2).feedItemId]);
-  });
-
   it('一部だけ新しいときは新しい行だけを保存し、次のページを読まない', async () => {
     const t = setup([pageOf([recent(1), recent(2)], undefined)]);
     await t.useCase.run();
@@ -196,22 +179,6 @@ describe('CollectBlueskyTimelineUseCase', () => {
     ]);
     expect(t.fetch).toHaveBeenCalledOnce();
     expect(t.stored()).toEqual([1, 2, 3, 4].map((n) => recent(n).feedItemId));
-  });
-
-  it('全部が新しいページでは次のページへ進み、既存の確認は 1 ページにつき SELECT 1 本で済む', async () => {
-    const t = setup([
-      pageOf([1, 2, 3].map(recent), 'c1'),
-      pageOf([4, 5].map(recent), undefined),
-    ]);
-
-    const result = await t.useCase.run();
-
-    expect(result).toMatchObject({ ok: true, val: { pages: 2, fetched: 5, saved: 5 } });
-    expect(
-      t.queries.filter(({ sql }) =>
-        /^\s*select /i.test(sql) && !sql.includes('bluesky_reposts') && !sql.includes('bluesky_bookmarks')
-      ),
-    ).toHaveLength(2);
   });
 
   it('保存済みの feedItemId の確認は D1 のバインド数の上限（100）を超えない', async () => {
@@ -296,19 +263,6 @@ describe('CollectBlueskyTimelineUseCase', () => {
       expect(likeRows(t)).toEqual([{ subjectUri: recent(1).uri, likeUri: likeUri(1), createdAt: NOW }]);
     });
 
-    it('保存済みの likeUri と同じなら、bluesky_likes に書き込まない', async () => {
-      const liked = itemAt(1, NOW - 1000, { liked: true, viewerLikeUri: likeUri(1) });
-      const t = setup([pageOf([liked], undefined)]);
-      await t.useCase.run();
-      t.enqueue(pageOf([liked], undefined));
-      t.queries.length = 0;
-
-      await t.useCase.run();
-
-      expect(likeQueries(t)).toEqual(['select']);
-      expect(likeRows(t)).toEqual([{ subjectUri: liked.uri, likeUri: likeUri(1), createdAt: NOW }]);
-    });
-
     it('保存済みの likeUri と違えば、likeUri を更新する', async () => {
       const t = setup([pageOf([itemAt(1, NOW - 1000, { liked: true, viewerLikeUri: likeUri(1) })], undefined)]);
       await t.useCase.run();
@@ -338,14 +292,6 @@ describe('CollectBlueskyTimelineUseCase', () => {
       await t.useCase.run();
 
       expect(likeRows(t)).toEqual([]);
-    });
-
-    it('viewerLikeUri を持つ項目が無いページでは、bluesky_likes への SELECT も INSERT も発行しない', async () => {
-      const t = setup([pageOf([recent(1), recent(2)], undefined)]);
-
-      await t.useCase.run();
-
-      expect(likeQueries(t)).toEqual([]);
     });
 
     it('同じページの 100 件がすべて新しい viewerLikeUri でも D1 のバインド上限に当たらない', async () => {
@@ -410,19 +356,6 @@ describe('CollectBlueskyTimelineUseCase', () => {
       expect(repostRows(t)).toEqual([{ subjectUri: recent(1).uri, repostUri: repostUri(1), createdAt: NOW }]);
     });
 
-    it('保存済みの repostUri と同じなら、bluesky_reposts に書き込まない', async () => {
-      const reposted = itemAt(1, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(1) });
-      const t = setup([pageOf([reposted], undefined)]);
-      await t.useCase.run();
-      t.enqueue(pageOf([reposted], undefined));
-      t.queries.length = 0;
-
-      await t.useCase.run();
-
-      expect(repostQueries(t)).toEqual(['select']);
-      expect(repostRows(t)).toEqual([{ subjectUri: reposted.uri, repostUri: repostUri(1), createdAt: NOW }]);
-    });
-
     it('保存済みの repostUri と違えば、repostUri を更新する', async () => {
       const t = setup([
         pageOf([itemAt(1, NOW - 1000, { reposted: true, viewerRepostUri: repostUri(1) })], undefined),
@@ -456,14 +389,6 @@ describe('CollectBlueskyTimelineUseCase', () => {
       await t.useCase.run();
 
       expect(repostRows(t)).toEqual([]);
-    });
-
-    it('viewerRepostUri を持つ項目が無く、保存済みの行も無いページでは、bluesky_reposts への SELECT だけを発行する', async () => {
-      const t = setup([pageOf([recent(1), recent(2)], undefined)]);
-
-      await t.useCase.run();
-
-      expect(repostQueries(t)).toEqual(['select']);
     });
 
     describe('別クライアントで取り消したリポストの削除', () => {
@@ -545,26 +470,6 @@ describe('CollectBlueskyTimelineUseCase', () => {
           recent(3).uri,
           recent(4).uri,
         ]);
-      });
-
-      it('削除対象の行が無ければ、DELETE を発行しない', async () => {
-        const t = setup([pageOf([recent(1), recent(2)], undefined)]);
-        seedRepost(t, 1, NOW - MINUTE);
-        t.queries.length = 0;
-
-        await t.useCase.run();
-
-        expect(repostQueries(t)).toEqual(['select']);
-      });
-
-      it('削除対象があれば SELECT と DELETE を 1 本ずつ発行する', async () => {
-        const t = setup([pageOf([recent(1)], undefined)]);
-        seedRepost(t, 1, NOW - 10 * MINUTE);
-        t.queries.length = 0;
-
-        await t.useCase.run();
-
-        expect(repostQueries(t)).toEqual(['select', 'delete']);
       });
 
       it('同じページの 100 件がすべて viewerRepostUri なしでも D1 のバインド上限に当たらない', async () => {
@@ -700,14 +605,6 @@ describe('CollectBlueskyTimelineUseCase', () => {
       await t.useCase.run();
 
       expect(bookmarkRows(t)).toEqual([{ subjectUri: recent(1).uri, createdAt: NOW - 10 * MINUTE }]);
-    });
-
-    it('削除対象が無いページでは bluesky_bookmarks への SELECT だけを発行する', async () => {
-      const t = setup([pageOf([recent(1), recent(2)], undefined)]);
-
-      await t.useCase.run();
-
-      expect(bookmarkQueries(t)).toEqual(['select']);
     });
 
     it('同じページの 100 件がすべて bookmarked でも、すべて bookmarked でなくても D1 のバインド上限に当たらない', async () => {

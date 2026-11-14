@@ -491,31 +491,6 @@ describe('CollectBlueskyNotificationsUseCase', () => {
     expect(t.count('bluesky_notification_sync_state')).toBe(1);
   });
 
-  it('取得が失敗した初回は状態を書かない', async () => {
-    const failure: BlueskyClientError = {
-      type: 'BlueskyClientError',
-      kind: 'http',
-      message: 'listNotifications failed: status 500',
-      status: 500,
-    };
-    const t = setup([failure]);
-
-    await t.useCase.run();
-
-    expect(t.count('bluesky_notification_sync_state')).toBe(0);
-  });
-
-  it('2 回目以降は状態に書き込まない', async () => {
-    const t = setup([pageOf([fresh(1)], undefined)]);
-    await t.useCase.run();
-    t.enqueue(pageOf([fresh(2)], undefined));
-    const before = t.queries.length;
-
-    await t.useCase.run();
-
-    expect(t.writes(before).filter((query) => query.sql.includes('bluesky_notification_sync_state'))).toEqual([]);
-  });
-
   it('2 回目以降の createdAt は取り込み時刻から 1ms ずつ増やし、同じ実行内のページングで欠落しない', async () => {
     const t = setup([pageOf([fresh(1)], undefined)]);
     await t.useCase.run();

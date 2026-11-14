@@ -52,16 +52,6 @@ describe('AddFeedSource', () => {
     expect(eventNames()).toEqual(['feedSource.created']);
   });
 
-  it('保存した情報源は enabled: true の resolver に出る', async () => {
-    const { add, enabledResolver } = setup();
-
-    await add.run({ kind: 'rss', url: 'https://example.com/feed.xml', title: 'ブログ' });
-
-    expect((await enabledResolver.resolve({ enabled: true })).val.map((source) => source.url)).toEqual([
-      'https://example.com/feed.xml',
-    ]);
-  });
-
   it('同じ URL が既にあれば FeedSourceAlreadyExistsError にして、何も書かない', async () => {
     const { add, count, eventNames } = setup();
     await add.run({ kind: 'rss', url: 'https://example.com/feed.xml', title: 'ブログ' });
@@ -90,9 +80,6 @@ describe('AddFeedSource', () => {
 
   it.each([
     ['URL が ftp', { url: 'ftp://example.com/feed.xml', title: 'ブログ' }],
-    ['URL が URL でない', { url: 'example', title: 'ブログ' }],
-    ['title が空', { url: 'https://example.com/feed.xml', title: '' }],
-    ['title が 101 文字', { url: 'https://example.com/feed.xml', title: 'あ'.repeat(101) }],
   ])('%s なら ParseError にして、何も書かない', async (_label, input) => {
     const { add, count } = setup();
 

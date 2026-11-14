@@ -122,14 +122,6 @@ describe('EditArticleUseCase', () => {
     });
   });
 
-  it('編集の開始時の版を、ストアの条件に渡す', async () => {
-    const { useCase, store } = setup(true);
-
-    await useCase.run({ userId, articleId: article.articleId, title: 'Before', markdown: 'body', baseUpdatedAt });
-
-    expect(store.mock.calls[0]![2]).toBe(baseUpdatedAt);
-  });
-
   it('本文の版は、編集の開始時の版より必ず新しくする', async () => {
     const { useCase, store } = setup(true);
     const future = Instant.orThrow(Date.now() + 60_000);

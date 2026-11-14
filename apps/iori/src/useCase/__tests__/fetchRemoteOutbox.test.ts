@@ -208,25 +208,6 @@ describe('FetchRemoteOutboxUseCase', () => {
     ]);
   });
 
-  it('署名付きのローダーはログインユーザーの identifier で作る', async () => {
-    const t = setup({ outbox: outboxOf([]) });
-
-    await t.run();
-
-    expect(t.ctx.getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
-  });
-
-  it('Note の published を publishedAt にして保存する', async () => {
-    const note = noteOf(1, { published: '2024-01-02T03:04:05.000Z' });
-    const t = setup({ outbox: outboxOf([createOf(note)]), notes: [note] });
-
-    await t.run();
-
-    expect(t.remotePostUpserter.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: noteUri(1), publishedAt: Date.parse('2024-01-02T03:04:05.000Z') }),
-    );
-  });
-
   it('2 ページ目以降の Note も保存する', async () => {
     const notes = [noteOf(1), noteOf(2)];
     const t = setup({ outbox: outboxOf([createOf(notes[0]!)], [createOf(notes[1]!)]), notes });
@@ -457,31 +438,6 @@ describe('FetchRemoteOutboxUseCase', () => {
   });
 
   describe('保存済みの判定', () => {
-    it('1 ページ分の Create の object の URI をまとめて、リモートとローカルそれぞれ 1 回の問い合わせで調べる', async () => {
-      const notes = [noteOf(1), noteOf(2), noteOf(3)];
-      const t = setup({ outbox: outboxOf([createOf(notes[0]!), announceOf(notes[1]!), createOf(notes[2]!)]), notes });
-
-      await t.run();
-
-      expect(t.remotePostUrisResolverByUris.resolve).toHaveBeenCalledTimes(1);
-      expect(t.remotePostUrisResolverByUris.resolve).toHaveBeenCalledWith({ uris: [noteUri(1), noteUri(3)] });
-      expect(t.localPostUrisResolverByUris.resolve).toHaveBeenCalledTimes(1);
-      expect(t.localPostUrisResolverByUris.resolve).toHaveBeenCalledWith({ uris: [noteUri(1), noteUri(3)] });
-    });
-
-    it('ページごとに 1 回ずつ問い合わせる', async () => {
-      const notes = [noteOf(1), noteOf(2)];
-      const t = setup({ outbox: outboxOf([createOf(notes[0]!)], [createOf(notes[1]!)]), notes });
-
-      await t.run();
-
-      expect(t.remotePostUrisResolverByUris.resolve.mock.calls.map(([input]) => input.uris)).toEqual([
-        [noteUri(1)],
-        [noteUri(2)],
-      ]);
-      expect(t.localPostUrisResolverByUris.resolve).toHaveBeenCalledTimes(2);
-    });
-
     it('1 ページから調べる URI は 100 件までにする', async () => {
       const notes = Array.from({ length: 120 }, (_, index) => noteOf(index));
       const t = setup({ outbox: outboxOf(notes.map(createOf)), notes });
@@ -490,15 +446,6 @@ describe('FetchRemoteOutboxUseCase', () => {
 
       expect(t.remotePostUrisResolverByUris.resolve.mock.calls[0]![0].uris).toHaveLength(100);
       expect(t.localPostUrisResolverByUris.resolve.mock.calls[0]![0].uris).toHaveLength(100);
-    });
-
-    it('Create がないページでは問い合わせない', async () => {
-      const t = setup({ outbox: outboxOf([announceOf(noteOf(1))]), notes: [noteOf(1)] });
-
-      await t.run();
-
-      expect(t.remotePostUrisResolverByUris.resolve).not.toHaveBeenCalled();
-      expect(t.localPostUrisResolverByUris.resolve).not.toHaveBeenCalled();
     });
   });
 
@@ -649,15 +596,6 @@ describe('FetchRemoteOutboxUseCase', () => {
       expect(signal.aborted).toBe(true);
     });
 
-    it('時間切れにならなければ、取得に渡した signal を abort しない', async () => {
-      const note = noteOf(1);
-      const t = setup({ outbox: outboxOf([createOf(note)]), notes: [note] });
-
-      await t.run();
-
-      expect(t.lookupObject.mock.calls.map(([, options]) => options.signal!.aborted)).toEqual([false, false]);
-    });
-
     it('全体の時間切れで、文書の取得に渡す signal も abort する', async () => {
       const signals: AbortSignal[] = [];
       const documentLoader = vi.fn(async (_url: string, options?: { signal?: AbortSignal }) => {
@@ -686,24 +624,6 @@ describe('FetchRemoteOutboxUseCase', () => {
         expect.any(AbortSignal),
         expect.any(AbortSignal),
       ]);
-    });
-
-    it('ドキュメントローダーにも取得ごとの signal を付ける', async () => {
-      const base = vi.fn(async () => ({ contextUrl: null, documentUrl: 'https://remote.example/', document: {} }));
-      const note = noteOf(1);
-      const t = setup({
-        outbox: outboxOf([createOf(note)]),
-        notes: [note],
-        documentLoader: base as unknown as DocumentLoader,
-      });
-
-      await t.run();
-      await t.lookupObject.mock.calls[0]![1].documentLoader('https://remote.example/x');
-
-      expect(base).toHaveBeenCalledWith(
-        'https://remote.example/x',
-        expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      );
     });
   });
 

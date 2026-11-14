@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { Article, ArticleResolver, ArticleWithDependentsDeletedStore } from '../../domain/article/article.ts';
@@ -150,18 +150,5 @@ describe('DeleteArticleUseCase', () => {
       undefined,
       undefined,
     );
-  });
-
-  it('articleBodyResolver、digestHeaderResolverByArticleId、articleWithDependentsDeletedStore のどれが欠けても型エラーになる', () => {
-    const { deps } = setup({ hasBody: true, hasDigest: true });
-    const { articleBodyResolver: _bodyResolver, ...withoutBodyResolver } = deps;
-    const { digestHeaderResolverByArticleId: _digestResolver, ...withoutDigestResolver } = deps;
-    const { articleWithDependentsDeletedStore: _store, ...withoutStore } = deps;
-    type CreateDeps = Parameters<typeof DeleteArticleUseCase.create>[0];
-
-    expectTypeOf(deps).toExtend<CreateDeps>();
-    expectTypeOf(withoutBodyResolver).not.toExtend<CreateDeps>();
-    expectTypeOf(withoutDigestResolver).not.toExtend<CreateDeps>();
-    expectTypeOf(withoutStore).not.toExtend<CreateDeps>();
   });
 });

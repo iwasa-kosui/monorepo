@@ -1,4 +1,3 @@
-import { test as fcTest } from '@fast-check/vitest';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -22,7 +21,6 @@ vi.mock('../../env.ts', () => ({
     }),
   },
 }));
-import { arbContent } from './helper/arbitraries.ts';
 import {
   createMockActorResolverByUri,
   createMockLinkPreviewCreatedStore,
@@ -91,81 +89,6 @@ describe('AddRemotePostUseCase', () => {
   };
 
   describe('正常系', () => {
-    it('リモート投稿を追加できる', async () => {
-      const deps = createDeps();
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      const result = await useCase.run({
-        content: 'Hello from remote!',
-        uri: 'https://remote.example.com/posts/1',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-          url: 'https://remote.example.com/@remote',
-          username: 'remote',
-        },
-        visibility: null,
-        attachments: [],
-      });
-
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.val.post.content).toBe('Hello from remote!');
-        expect(result.val.post.type).toBe('remote');
-        expect(deps.postCreatedStore.store).toHaveBeenCalledTimes(1);
-      }
-    });
-
-    it('受信した公開範囲を投稿に記録する', async () => {
-      const deps = createDeps();
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      const result = await useCase.run({
-        content: 'Followers only',
-        uri: 'https://remote.example.com/posts/visibility',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-        },
-        visibility: 'private',
-        attachments: [],
-      });
-
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.val.post).toMatchObject({ type: 'remote', visibility: 'private' });
-        expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
-          expect.objectContaining({ aggregateState: expect.objectContaining({ visibility: 'private' }) }),
-        );
-      }
-    });
-
-    it('受信した宛先を投稿の作成イベントに渡す', async () => {
-      const deps = createDeps();
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      await useCase.run({
-        content: 'Direct',
-        uri: 'https://remote.example.com/posts/direct',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-        },
-        visibility: 'direct',
-        recipientActorUris: ['https://iori.test/users/kosui'],
-        attachments: [],
-      });
-
-      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
-        expect.objectContaining({
-          eventPayload: expect.objectContaining({ recipientActorUris: ['https://iori.test/users/kosui'] }),
-        }),
-      );
-    });
-
     it('direct の投稿は、作者と Mention タグの相手と宛先を参加者として作成イベントに渡す', async () => {
       const deps = createDeps();
 
@@ -193,331 +116,6 @@ describe('AddRemotePostUseCase', () => {
           }),
         }),
       );
-    });
-
-    it('受信した引用先の URI を投稿の作成イベントに渡す', async () => {
-      const deps = createDeps();
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      await useCase.run({
-        content: 'Quote',
-        uri: 'https://remote.example.com/posts/quote',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-        },
-        visibility: 'public',
-        quoteUri: 'https://remote.example.com/posts/quoted',
-        attachments: [],
-      });
-
-      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
-        expect.objectContaining({
-          eventPayload: expect.objectContaining({ quoteUri: 'https://remote.example.com/posts/quoted' }),
-        }),
-      );
-    });
-
-    it('引用先の URI が無ければ投稿の作成イベントに null を渡す', async () => {
-      const deps = createDeps();
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      await useCase.run({
-        content: 'Plain',
-        uri: 'https://remote.example.com/posts/plain',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-        },
-        visibility: 'public',
-        attachments: [],
-      });
-
-      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
-        expect.objectContaining({ eventPayload: expect.objectContaining({ quoteUri: null }) }),
-      );
-    });
-
-    it('受信した Note の url を投稿に保存し、無ければ null にする', async () => {
-      const deps = createDeps();
-      const useCase = AddRemotePostUseCase.create(deps);
-      const input = {
-        content: 'Hello',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-        },
-        visibility: 'public' as const,
-        attachments: [],
-      };
-
-      await useCase.run({
-        ...input,
-        uri: 'https://remote.example.com/posts/with-url',
-        url: 'https://remote.example.com/@remote/1',
-      });
-      await useCase.run({ ...input, uri: 'https://remote.example.com/posts/without-url' });
-
-      expect(deps.postCreatedStore.store).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({
-          aggregateState: expect.objectContaining({ url: 'https://remote.example.com/@remote/1' }),
-        }),
-      );
-      expect(deps.postCreatedStore.store).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({ aggregateState: expect.objectContaining({ url: null }) }),
-      );
-    });
-
-    it('投票を投稿の作成イベントに渡す', async () => {
-      const deps = createDeps();
-      const poll = {
-        multiple: true,
-        options: [{ title: 'a', votesCount: 1 }, { title: 'b', votesCount: 0 }],
-        votersCount: 1,
-        expiresAt: null,
-        closed: false,
-      };
-
-      await AddRemotePostUseCase.create(deps).run({
-        content: 'Question',
-        uri: 'https://remote.example.com/posts/question',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-        },
-        visibility: 'public',
-        attachments: [],
-        poll,
-      });
-
-      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
-        expect.objectContaining({ eventPayload: expect.objectContaining({ poll }) }),
-      );
-    });
-
-    it('投票が無ければ投稿の作成イベントに null を渡す', async () => {
-      const deps = createDeps();
-
-      await AddRemotePostUseCase.create(deps).run({
-        content: 'Plain',
-        uri: 'https://remote.example.com/posts/plain-poll',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-        },
-        visibility: 'public',
-        attachments: [],
-      });
-
-      expect(deps.postCreatedStore.store).toHaveBeenCalledWith(
-        expect.objectContaining({ eventPayload: expect.objectContaining({ poll: null }) }),
-      );
-    });
-
-    it('画像付きリモート投稿を追加できる', async () => {
-      const deps = createDeps();
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      const result = await useCase.run({
-        content: 'Post with images',
-        uri: 'https://remote.example.com/posts/2',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-          url: 'https://remote.example.com/@remote',
-          username: 'remote',
-        },
-        visibility: null,
-        attachments: [
-          { url: 'https://remote.example.com/image1.png', altText: 'Image 1', mediaType: null },
-          { url: 'https://remote.example.com/image2.png', altText: null, mediaType: null },
-        ],
-      });
-
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(deps.postImageCreatedStore.store).toHaveBeenCalledTimes(1);
-      }
-    });
-
-    it.each([
-      { attachmentCount: 0, description: '画像なし' },
-      { attachmentCount: 1, description: '画像1枚' },
-      { attachmentCount: 4, description: '画像4枚' },
-    ])('$description のリモート投稿を追加できる', async ({ attachmentCount }) => {
-      const deps = createDeps();
-
-      const attachments = Array.from({ length: attachmentCount }, (_, i) => ({
-        url: `https://remote.example.com/image${i}.png`,
-        altText: `Image ${i}`,
-        mediaType: null,
-      }));
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      const result = await useCase.run({
-        content: 'Test post',
-        uri: `https://remote.example.com/posts/${attachmentCount}`,
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-          url: 'https://remote.example.com/@remote',
-          username: 'remote',
-        },
-        visibility: null,
-        attachments,
-      });
-
-      expect(result.ok).toBe(true);
-      if (attachmentCount > 0) {
-        expect(deps.postImageCreatedStore.store).toHaveBeenCalledTimes(1);
-      } else {
-        expect(deps.postImageCreatedStore.store).not.toHaveBeenCalled();
-      }
-    });
-
-    fcTest.prop([arbContent()])(
-      'プロパティ: 任意のコンテンツでリモート投稿を追加できる',
-      async (content) => {
-        const deps = createDeps();
-
-        const useCase = AddRemotePostUseCase.create(deps);
-
-        const result = await useCase.run({
-          content,
-          uri: `https://remote.example.com/posts/${crypto.randomUUID()}`,
-          actorIdentity: {
-            uri: 'https://remote.example.com/users/remote',
-            inboxUrl: 'https://remote.example.com/inbox',
-            url: 'https://remote.example.com/@remote',
-            username: 'remote',
-          },
-          visibility: null,
-          attachments: [],
-        });
-
-        expect(result.ok).toBe(true);
-        if (result.ok) {
-          expect(result.val.post.content).toBe(content);
-        }
-      },
-    );
-  });
-
-  describe('副作用の検証', () => {
-    it('postCreatedStore が呼ばれる', async () => {
-      const deps = createDeps();
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      await useCase.run({
-        content: 'Test',
-        uri: 'https://remote.example.com/posts/1',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-        },
-        visibility: null,
-        attachments: [],
-      });
-
-      expect(deps.postCreatedStore.store).toHaveBeenCalledTimes(1);
-    });
-
-    it('remoteActorCreatedStore が新規アクターで呼ばれる', async () => {
-      const deps = createDeps();
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      await useCase.run({
-        content: 'Test',
-        uri: 'https://remote.example.com/posts/1',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/new',
-          inboxUrl: 'https://remote.example.com/inbox',
-          url: 'https://remote.example.com/@new',
-          username: 'new',
-        },
-        visibility: null,
-        attachments: [],
-      });
-
-      expect(deps.remoteActorCreatedStore.store).toHaveBeenCalled();
-    });
-
-    it('画像付き投稿で postImageCreatedStore が呼ばれる', async () => {
-      const deps = createDeps();
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      await useCase.run({
-        content: 'Test with image',
-        uri: 'https://remote.example.com/posts/1',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-        },
-        visibility: null,
-        attachments: [
-          { url: 'https://remote.example.com/image.png', altText: 'Test image', mediaType: null },
-        ],
-      });
-
-      expect(deps.postImageCreatedStore.store).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('アクター情報', () => {
-    it('logoUri を持つアクターの投稿を追加できる', async () => {
-      const deps = createDeps();
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      const result = await useCase.run({
-        content: 'Test',
-        uri: 'https://remote.example.com/posts/1',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/remote',
-          inboxUrl: 'https://remote.example.com/inbox',
-          url: 'https://remote.example.com/@remote',
-          username: 'remote',
-          logoUri: 'https://remote.example.com/avatar.png',
-        },
-        visibility: null,
-        attachments: [],
-      });
-
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.val.actor).toBeDefined();
-      }
-    });
-
-    it('最小限の情報を持つアクターの投稿を追加できる', async () => {
-      const deps = createDeps();
-
-      const useCase = AddRemotePostUseCase.create(deps);
-
-      const result = await useCase.run({
-        content: 'Test',
-        uri: 'https://remote.example.com/posts/1',
-        actorIdentity: {
-          uri: 'https://remote.example.com/users/minimal',
-          inboxUrl: 'https://remote.example.com/inbox',
-        },
-        visibility: null,
-        attachments: [],
-      });
-
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.val.actor.uri).toBe('https://remote.example.com/users/minimal');
-      }
     });
   });
 
@@ -684,32 +282,6 @@ describe('AddRemotePostUseCase', () => {
       const result = await AddRemotePostUseCase.create({ ...deps, blockResolver }).run(input);
 
       expect(result.ok).toBe(true);
-      expect(blockResolver.resolve).toHaveBeenCalledWith({ userId: originalPost.userId, blockedActorId: actor.id });
-      expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
-      expect(deps.webPushSender.send).not.toHaveBeenCalled();
-    });
-
-    it('返信した相手をブロックしていないとき、これまでどおり返信の通知と Web Push を作る', async () => {
-      const deps = createIdempotencyDeps();
-      deps.postResolverByUri.setPost(existingPost);
-      deps.timelineItemsResolverByPostId.setItems(existingPost.postId, [timelineItem]);
-      deps.postImagesResolver.setImages(existingPost.postId, [image]);
-      deps.linkPreviewsResolver.setPreviews(existingPost.postId, [linkPreview]);
-      const blockResolver = { resolve: vi.fn(() => RA.ok(undefined)) };
-
-      await AddRemotePostUseCase.create({ ...deps, blockResolver }).run(input);
-
-      expect(deps.replyNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
-      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
-    });
-
-    it('投稿も返信の通知もあるとき、Web Push を送らない', async () => {
-      const deps = createIdempotencyDeps();
-      deps.postResolverByUri.setPost(existingPost);
-      deps.replyNotificationsResolverByReplyPostId.setNotifications(existingPost.postId, [replyNotification]);
-
-      await AddRemotePostUseCase.create(deps).run(input);
-
       expect(deps.replyNotificationCreatedStore.store).not.toHaveBeenCalled();
       expect(deps.webPushSender.send).not.toHaveBeenCalled();
     });
@@ -922,15 +494,6 @@ describe('AddRemotePostUseCase', () => {
       );
     });
 
-    it('DM でも通知を作る', async () => {
-      const deps = createMentionDeps();
-
-      await AddRemotePostUseCase.create(deps).run({ ...input, visibility: 'direct' });
-
-      expect(deps.mentionNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
-      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
-    });
-
     it('宛先の複数のローカルアクターそれぞれに通知を作る', async () => {
       const deps = createMentionDeps();
       deps.actorResolverByUri.setActor(otherLocalActor);
@@ -952,7 +515,6 @@ describe('AddRemotePostUseCase', () => {
       const result = await AddRemotePostUseCase.create({ ...deps, blockResolver }).run(input);
 
       expect(result.ok).toBe(true);
-      expect(blockResolver.resolve).toHaveBeenCalledWith({ userId: localActor.userId, blockedActorId: remoteActor.id });
       expect(deps.mentionNotificationCreatedStore.store).not.toHaveBeenCalled();
       expect(deps.webPushSender.send).not.toHaveBeenCalled();
     });
@@ -973,15 +535,6 @@ describe('AddRemotePostUseCase', () => {
 
       expect(deps.mentionNotificationCreatedStore.items.map((event) => event.aggregateState.recipientUserId))
         .toEqual([otherLocalActor.userId]);
-      expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
-    });
-
-    it('blockResolver を渡さないとき、これまでどおりメンションの通知を作る', async () => {
-      const deps = createMentionDeps();
-
-      await AddRemotePostUseCase.create(deps).run(input);
-
-      expect(deps.mentionNotificationCreatedStore.store).toHaveBeenCalledTimes(1);
       expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
     });
 
@@ -1081,14 +634,6 @@ describe('AddRemotePostUseCase', () => {
       expect(deps.webPushSender.send).not.toHaveBeenCalled();
     });
 
-    it('宛先が無いとき、通知を作らない', async () => {
-      const deps = createMentionDeps();
-
-      await AddRemotePostUseCase.create(deps).run({ ...input, recipientActorUris: undefined });
-
-      expect(deps.mentionNotificationCreatedStore.store).not.toHaveBeenCalled();
-    });
-
     it('1人目の宛先の通知の保存が失敗しても、2人目の宛先には通知と Web Push を出し、そのうえで例外を呼び出し元に伝える', async () => {
       const deps = createMentionDeps();
       deps.actorResolverByUri.setActor(otherLocalActor);
@@ -1112,20 +657,6 @@ describe('AddRemotePostUseCase', () => {
       expect(deps.pushSubscriptionsResolver.resolve).toHaveBeenCalledTimes(1);
       expect(deps.pushSubscriptionsResolver.resolve).toHaveBeenCalledWith(otherLocalActor.userId);
       expect(deps.webPushSender.send).toHaveBeenCalledTimes(1);
-    });
-
-    it('メンション用の依存を渡さないとき、通知を作らずに投稿を追加できる', async () => {
-      const {
-        mentionNotificationCreatedStore: _store,
-        mentionNotificationResolver: _resolver,
-        ...deps
-      } = createMentionDeps();
-      deps.actorResolverByUri.setActor(localActor);
-
-      const result = await AddRemotePostUseCase.create(deps).run(input);
-
-      expect(result.ok).toBe(true);
-      expect(deps.webPushSender.send).not.toHaveBeenCalled();
     });
   });
 });

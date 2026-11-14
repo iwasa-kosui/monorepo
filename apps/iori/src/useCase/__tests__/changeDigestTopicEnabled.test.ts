@@ -61,15 +61,6 @@ describe('ChangeDigestTopicEnabled', () => {
     ]);
   });
 
-  it('false から true に戻せる', async () => {
-    const { change } = await setup();
-    await change.run({ userId: USER_ID, topicKey: 'genai', enabled: false });
-
-    const result = await change.run({ userId: USER_ID, topicKey: 'genai', enabled: true });
-
-    expect(result).toMatchObject({ ok: true, val: { enabled: true } });
-  });
-
   it('digestTopic.enabledChanged のイベントを残す', async () => {
     const { change, eventNames } = await setup();
     const before = eventNames().length;

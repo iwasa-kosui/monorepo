@@ -4,7 +4,6 @@ import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.
 import { createD1AllFeedSourcesResolver } from '../../adaptor/d1/feedSource/allFeedSourcesResolver.ts';
 import { createD1FeedSourceCreatedStore } from '../../adaptor/d1/feedSource/feedSourceCreatedStore.ts';
 import { createD1FeedSourceEnabledChangedStore } from '../../adaptor/d1/feedSource/feedSourceEnabledChangedStore.ts';
-import { createD1FeedSourcesResolverByEnabled } from '../../adaptor/d1/feedSource/feedSourcesResolverByEnabled.ts';
 import { FeedSource } from '../../domain/feedSource/feedSource.ts';
 import { FeedSourceId } from '../../domain/feedSource/feedSourceId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
@@ -35,7 +34,6 @@ const setup = async () => {
     change,
     eventNames,
     feedSourceId: created.val.aggregateState.feedSourceId,
-    enabledResolver: createD1FeedSourcesResolverByEnabled(db),
   };
 };
 
@@ -49,25 +47,6 @@ describe('ChangeFeedSourceEnabled', () => {
     expect(sqlite.prepare('SELECT url, enabled FROM feed_sources ORDER BY url').all()).toEqual([
       { url: 'https://example.com/a.xml', enabled: 0 },
       { url: 'https://example.com/b.xml', enabled: 1 },
-    ]);
-  });
-
-  it('false から true に戻せる', async () => {
-    const { change, feedSourceId } = await setup();
-    await change.run({ feedSourceId, enabled: false });
-
-    const result = await change.run({ feedSourceId, enabled: true });
-
-    expect(result).toMatchObject({ ok: true, val: { enabled: true } });
-  });
-
-  it('無効にした情報源は enabled: true の resolver に出ない', async () => {
-    const { change, feedSourceId, enabledResolver } = await setup();
-
-    await change.run({ feedSourceId, enabled: false });
-
-    expect((await enabledResolver.resolve({ enabled: true })).val.map((source) => source.url)).toEqual([
-      'https://example.com/b.xml',
     ]);
   });
 

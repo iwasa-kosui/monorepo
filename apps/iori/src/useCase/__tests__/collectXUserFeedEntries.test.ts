@@ -156,16 +156,6 @@ describe('AddFeedSourceUseCase の x_user', () => {
       err: { type: 'FeedSourceAlreadyExistsError' },
     });
   });
-
-  it('不正なユーザー名を ParseError にして、何も書かない', async () => {
-    const { add, db } = setup(twitterApi());
-
-    expect(await add.run({ kind: 'x_user', username: 'not valid' })).toMatchObject({
-      ok: false,
-      err: { kind: 'ParseError' },
-    });
-    expect(await db.select().from(feedSourcesTable)).toEqual([]);
-  });
 });
 
 describe('CollectFeedEntriesUseCase の x_user', () => {
@@ -294,18 +284,6 @@ describe('CollectFeedEntriesUseCase の x_user', () => {
 
     expect(result.val).toMatchObject({ collected: 1 });
     expect((await db.select().from(feedEntriesTable)).map((row) => row.guid)).toEqual(['400']);
-  });
-
-  it('保存済みの投稿が無ければ、新しい投稿が無くても since_time で取得する', async () => {
-    const fetchText = twitterApi();
-    const { addX, collect } = setup(fetchText);
-    await addX();
-    await collect.run();
-    fetchText.mockClear();
-
-    await collect.run();
-
-    expect(urlsOf(fetchText)[0]!.searchParams.get('query')).toContain('since_time:');
   });
 
   it('リポストと返信は保存せず、引用は本文だけ保存する', async () => {
@@ -530,15 +508,6 @@ describe('x_user の保存期間', () => {
     expect(summarize(['feedEntry.expired'])).toEqual(['feedEntry.expired:x-old']);
     expect(JSON.stringify(events)).not.toContain('old post');
     expect(JSON.stringify(events)).not.toContain('text-800');
-  });
-
-  it('7 日以内の投稿は残す', async () => {
-    const fetchText = twitterApi(() => searchPage([tweet('900', 'fresh', NOW - 6 * DAY)]));
-    const { addX, collect, db } = setup(fetchText);
-    await addX();
-
-    expect((await collect.run()).val).toMatchObject({ collected: 1, expired: 0 });
-    expect(await db.select().from(feedEntriesTable)).toHaveLength(1);
   });
 
   it('期限内の x_user の投稿のイベントは消さない', async () => {

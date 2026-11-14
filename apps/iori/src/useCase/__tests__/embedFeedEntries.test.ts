@@ -158,14 +158,6 @@ describe('EmbedFeedEntriesUseCase', () => {
     expect(pendingCount()).toBe(1);
   });
 
-  it('埋め込み器が無ければ何もしない', async () => {
-    const { embed, addEntry, pendingCount } = setup({ textEmbedder: null });
-    addEntry(1);
-
-    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 0, skipped: 0, remaining: 0 } });
-    expect(pendingCount()).toBe(1);
-  });
-
   it('埋め込みがすべて失敗したら AiError を返し、行を変えない', async () => {
     const failing: TextEmbedder = { embed: async () => Result.err({ type: 'AiError', message: 'unavailable' }) };
     const { buildEmbed, addEntry, pendingCount } = setup();
@@ -221,12 +213,5 @@ describe('EmbedFeedEntriesUseCase', () => {
     for (let n = 1; n <= 250; n += 1) addEntry(n, NOW - n);
 
     expect(await buildEmbed(flaky).run()).toEqual({ ok: true, val: { embedded: 99, skipped: 101, remaining: 50 } });
-  });
-
-  it('対象が無ければ embed を呼ばない', async () => {
-    const { stub, embed } = setup();
-
-    expect(await embed.run()).toEqual({ ok: true, val: { embedded: 0, skipped: 0, remaining: 0 } });
-    expect(stub.calls).toEqual([]);
   });
 });

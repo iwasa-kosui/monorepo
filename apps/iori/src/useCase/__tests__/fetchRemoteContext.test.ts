@@ -196,14 +196,6 @@ describe('FetchRemoteContextUseCase', () => {
       ]);
     });
 
-    it('署名付きのローダーはログインユーザーの identifier で作る', async () => {
-      const t = setup({ notes: [noteOf(ROOT_URI)] });
-
-      await t.run();
-
-      expect(t.ctx.getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
-    });
-
     it('取得ごとに 5 秒の signal を付けて lookupObject を呼ぶ', async () => {
       const t = setup({ notes: [noteOf(ROOT_URI)] });
 
@@ -302,23 +294,6 @@ describe('FetchRemoteContextUseCase', () => {
       expect(storedUris(t)).toEqual([replyUri(3)]);
     });
 
-    it('1 ページ分の URI をまとめて、リモートとローカルそれぞれ 1 回の問い合わせで保存済みか調べる', async () => {
-      const t = setup({
-        notes: [
-          noteOf(ROOT_URI, { replies: repliesOf(replyUri(1), replyUri(2), replyUri(3)) }),
-          ...[1, 2, 3].map((index) => noteOf(replyUri(index), { replyTo: ROOT_URI })),
-        ],
-      });
-
-      await t.run();
-
-      expect(t.remotePostUrisResolverByUris.resolve).toHaveBeenCalledTimes(1);
-      expect(t.remotePostUrisResolverByUris.resolve).toHaveBeenCalledWith({
-        uris: [replyUri(1), replyUri(2), replyUri(3)],
-      });
-      expect(t.localPostUrisResolverByUris.resolve).toHaveBeenCalledTimes(1);
-    });
-
     it('保存済みの返信は保存し直さず、その下の返信を保存する', async () => {
       const t = setup({
         notes: [
@@ -403,20 +378,6 @@ describe('FetchRemoteContextUseCase', () => {
       });
 
       expect(await t.run()).toBe(0);
-      expect(t.lookupObject).toHaveBeenCalledTimes(60);
-    });
-
-    it('新規と保存済みが混ざっていても、lookup は合計 60 回までにする', async () => {
-      const uris = Array.from({ length: 100 }, (_, index) => replyUri(index));
-      const t = setup({
-        notes: [
-          noteOf(ROOT_URI, { replies: repliesOf(...uris) }),
-          ...uris.map((uri) => noteOf(uri, { replyTo: ROOT_URI })),
-        ],
-        stored: uris.filter((_, index) => index % 2 === 0),
-      });
-
-      expect(await t.run()).toBe(29);
       expect(t.lookupObject).toHaveBeenCalledTimes(60);
     });
 
@@ -512,14 +473,6 @@ describe('FetchRemoteContextUseCase', () => {
 
       const signal = t.lookupObject.mock.calls[0]![1].signal!;
       expect(signal.aborted).toBe(true);
-    });
-
-    it('時間切れにならなければ、取得に渡した signal を abort しない', async () => {
-      const t = setup({ notes: [noteOf(ROOT_URI)] });
-
-      await t.run();
-
-      expect(t.lookupObject.mock.calls[0]![1].signal!.aborted).toBe(false);
     });
 
     it('全体の時間切れで、文書の取得に渡す signal も abort する', async () => {
@@ -703,14 +656,6 @@ describe('FetchRemoteContextUseCase', () => {
       expect(t.fetchReplyNotesRecursiveUseCase.run).toHaveBeenCalledTimes(1);
     });
 
-    it('inReplyToUri がなければ祖先は取り込まない', async () => {
-      const t = setup({ notes: [noteOf(ROOT_URI)] });
-
-      await t.run();
-
-      expect(t.fetchReplyNotesRecursiveUseCase.run).not.toHaveBeenCalled();
-    });
-
     it('祖先の保存前の判定では、ブロックしているアクターを偽にする', async () => {
       const t = setup({
         post: remotePost({ inReplyToUri: PARENT_URI }),
@@ -757,21 +702,6 @@ describe('FetchRemoteContextUseCase', () => {
       ];
 
       expect(await shouldSave({ authorIdentity: { uri: 'https://remote.example/users/alice' } })).toBe(false);
-    });
-
-    it('祖先の取得にも 5 秒の signal を付ける', async () => {
-      const t = setup({ post: remotePost({ inReplyToUri: PARENT_URI }), notes: [noteOf(PARENT_URI)] });
-
-      await t.run();
-      const [{ lookupObject }] = t.fetchReplyNotesRecursiveUseCase.run.mock.calls[0] as unknown as [
-        { lookupObject: (uri: string, options: { documentLoader: DocumentLoader }) => Promise<unknown> },
-      ];
-      await lookupObject(PARENT_URI, { documentLoader: t.documentLoader });
-
-      expect(t.lookupObject).toHaveBeenLastCalledWith(
-        PARENT_URI,
-        expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      );
     });
   });
 

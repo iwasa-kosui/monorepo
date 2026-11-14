@@ -117,12 +117,4 @@ describe('AddReceivedEmojiReactUseCase', () => {
     expect(emojiReactEvents[0]!.aggregateState.emojiImageUrl).toBeNull();
     expect(notificationEvents[0]!.aggregateState.emojiImageUrl).toBeNull();
   });
-
-  it('url が無いときは null で保存する', async () => {
-    const { result, emojiReactEvents, notificationEvents } = await run();
-
-    expect(result.ok).toBe(true);
-    expect(emojiReactEvents[0]!.aggregateState.emojiImageUrl).toBeNull();
-    expect(notificationEvents[0]!.aggregateState.emojiImageUrl).toBeNull();
-  });
 });

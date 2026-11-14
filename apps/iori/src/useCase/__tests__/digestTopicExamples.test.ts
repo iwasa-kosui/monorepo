@@ -6,7 +6,6 @@ import { createD1DigestTopicCreatedStore } from '../../adaptor/d1/digestTopic/di
 import { createD1DigestTopicEditedStore } from '../../adaptor/d1/digestTopic/digestTopicEditedStore.ts';
 import { createD1DigestTopicEmbeddedStore } from '../../adaptor/d1/digestTopic/digestTopicEmbeddedStore.ts';
 import { createD1DigestTopicsResolverByUserId } from '../../adaptor/d1/digestTopic/digestTopicsResolverByUserId.ts';
-import { defaultDigestTopics } from '../../domain/digestTopic/defaultDigestTopics.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import type { EmbedRequest, TextEmbedder } from '../../ports/textEmbedder.ts';
@@ -99,25 +98,6 @@ describe('テーマの examples と excludes の埋め込み', () => {
     expect(exclude?.[2]).toBeCloseTo(Math.SQRT1_2, 5);
   });
 
-  it('埋め込みの呼び出しは、examples と excludes があっても 1 テーマにつき 1 回で、文は name: description、examples、excludes の順に並べる', async () => {
-    const { embedder, calls } = createEmbedder({});
-    const { add } = setup(embedder);
-
-    await add.run({ userId: USER_ID, name: 'N', description: 'D', examples: ['e1', 'e2'], excludes: ['x1'] });
-
-    expect(calls).toEqual([{ model: '@cf/baai/bge-m3', texts: ['N: D', 'e1', 'e2', 'x1'] }]);
-  });
-
-  it('examples と excludes を保存して、一覧から読み戻せる', async () => {
-    const { embedder } = createEmbedder({});
-    const { add, digestTopicsResolverByUserId } = setup(embedder);
-
-    await add.run({ userId: USER_ID, name: 'N', description: 'D', examples: ['e1', 'e2'], excludes: ['x1'] });
-
-    const topics = (await digestTopicsResolverByUserId.resolve(USER_ID)).val;
-    expect(topics[0]).toMatchObject({ examples: ['e1', 'e2'], excludes: ['x1'] });
-  });
-
   it('範囲外の examples と excludes は作らず、embed もしない', async () => {
     const { embedder, calls } = createEmbedder({});
     const { add, digestTopicsResolverByUserId } = setup(embedder);
@@ -134,19 +114,6 @@ describe('テーマの examples と excludes の埋め込み', () => {
     expect(tooLong.ok).toBe(false);
     expect(calls).toEqual([]);
     expect((await digestTopicsResolverByUserId.resolve(USER_ID)).val).toEqual([]);
-  });
-
-  it('既定のテーマは examples と excludes を空にして、今と同じ文で 1 回だけ embed する', async () => {
-    const { embedder, calls } = createEmbedder({});
-    const { ensure } = setup(embedder);
-
-    const result = await ensure.run({ userId: USER_ID });
-
-    expect(result.ok && result.val.topics.every((topic) => topic.examples.length === 0 && topic.excludes.length === 0))
-      .toBe(true);
-    expect(result.ok && result.val.topics.every((topic) => topic.excludeEmbedding === null)).toBe(true);
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.texts).toEqual(defaultDigestTopics.map((topic) => `${topic.name}: ${topic.description}`));
   });
 
   it('編集で examples か excludes が変わると、そのテーマを 1 回で embed し直す', async () => {

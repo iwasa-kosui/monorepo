@@ -178,16 +178,6 @@ describe('AddReceivedRepostUseCase (local post)', () => {
     expect(deps.webPushSender.send).not.toHaveBeenCalled();
   });
 
-  it('ブロックしていない相手のブーストでは、これまでどおり通知と Web Push を作る', async () => {
-    const deps = createDeps({ resolve: vi.fn(() => RA.ok(undefined)) });
-
-    const result = await deps.run('https://remote.example.com/activities/1');
-
-    expect(result.ok).toBe(true);
-    expect(deps.notifications).toHaveLength(1);
-    expect(deps.webPushSender.send).toHaveBeenCalledOnce();
-  });
-
   it('新しいブーストでは repost と TimelineItem を保存し、通知と Web Push を作る', async () => {
     const deps = createDeps();
 

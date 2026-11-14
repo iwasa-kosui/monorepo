@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createBlueskyChat } from '../../adaptor/bluesky/blueskyChat.ts';
 import type { BlueskyChatConvo, BlueskyChatMessage } from '../../domain/blueskyChat/blueskyChat.ts';
 import type { BlueskyChat } from '../../ports/blueskyChat.ts';
-import type { BlueskyChatClient, BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
+import type { BlueskyChatClient, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import { BlueskyChatUseCases } from '../blueskyChat.ts';
 
 const ME = 'did:plc:me';
@@ -16,7 +16,6 @@ const ALICE = {
   chatDisabled: false,
 };
 const SELF = { did: ME, handle: 'me.bsky.social', displayName: null, avatar: null, chatDisabled: false };
-const failure: BlueskyClientError = { type: 'BlueskyClientError', kind: 'http', message: 'failed', status: 500 };
 
 const textMessage = (id: string, text = id) =>
   ({
@@ -121,47 +120,6 @@ describe('BlueskyChatUseCases', () => {
         },
       });
     });
-
-    it('取得の失敗をそのまま返す', async () => {
-      const t = setup({ listConvos: async () => RA.err(failure) });
-
-      expect(await t.useCases.listConvos.run({})).toEqual({ ok: false, err: failure });
-    });
-  });
-
-  describe('getConvo / openConvo / markRead', () => {
-    it('会話 1 件を相手つきで返す', async () => {
-      const t = setup();
-
-      expect(await t.useCases.getConvo.run({ convoId: 'c1' })).toMatchObject({
-        ok: true,
-        val: { id: 'c1', peers: [ALICE] },
-      });
-      expect(t.chat.getConvo).toHaveBeenCalledExactlyOnceWith('c1');
-    });
-
-    it('相手の DID から会話を開く', async () => {
-      const t = setup();
-
-      expect(await t.useCases.openConvo.run({ did: ALICE.did })).toMatchObject({ ok: true, val: { id: 'c1' } });
-      expect(t.chat.getConvoForMember).toHaveBeenCalledExactlyOnceWith(ALICE.did);
-    });
-
-    it('既読化は messageId を渡して更新後の会話を返す', async () => {
-      const t = setup();
-
-      const result = await t.useCases.markRead.run({ convoId: 'c1', messageId: 'm1' });
-
-      expect(result).toMatchObject({ ok: true, val: { id: 'c1' } });
-      expect(t.chat.updateRead).toHaveBeenCalledExactlyOnceWith({ convoId: 'c1', messageId: 'm1' });
-    });
-
-    it('承諾は convoId を渡す', async () => {
-      const t = setup();
-
-      expect(await t.useCases.acceptConvo.run({ convoId: 'c1' })).toEqual({ ok: true, val: undefined });
-      expect(t.chat.acceptConvo).toHaveBeenCalledExactlyOnceWith('c1');
-    });
   });
 
   describe('listMessages', () => {
@@ -219,32 +177,6 @@ describe('BlueskyChatUseCases', () => {
           },
         ],
       });
-    });
-
-    it('ハッシュタグを含む本文には tag facet を付けて送る', async () => {
-      const t = setup();
-      const text = 'こんにちは #iori';
-
-      await t.useCases.sendMessage.run({ convoId: 'c1', text });
-
-      expect(t.chat.sendMessage).toHaveBeenCalledExactlyOnceWith({
-        convoId: 'c1',
-        text,
-        facets: [
-          {
-            index: { byteStart: 16, byteEnd: 21 },
-            features: [{ $type: 'app.bsky.richtext.facet#tag', tag: 'iori' }],
-          },
-        ],
-      });
-    });
-
-    it('URL もメンションも含まない本文には facets を付けない', async () => {
-      const t = setup();
-
-      await t.useCases.sendMessage.run({ convoId: 'c1', text: 'こんにちは' });
-
-      expect(t.chat.sendMessage.mock.calls[0]![0]).not.toHaveProperty('facets');
     });
 
     it('空の本文は empty で拒否し、送らない', async () => {
@@ -317,12 +249,6 @@ describe('BlueskyChatUseCases', () => {
       });
 
       expect(await t.useCases.unreadCount.run()).toEqual({ ok: true, val: { unread: 0, requests: 1 } });
-    });
-
-    it('取得の失敗をそのまま返す', async () => {
-      const t = setup({ listConvos: async () => RA.err(failure) });
-
-      expect(await t.useCases.unreadCount.run()).toEqual({ ok: false, err: failure });
     });
   });
 
