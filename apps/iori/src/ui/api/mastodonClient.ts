@@ -12,6 +12,7 @@ import type {
 import { IORI_EMOJI_REACTION_TYPE } from '../../adaptor/mastodon/entities.ts';
 import type {
   IoriRemoteContextResponse,
+  IoriRemoteFollowsResponse,
   IoriRemoteStatusesResponse,
 } from '../../adaptor/routes/workerIoriActionsRouter.ts';
 import type {
@@ -252,6 +253,19 @@ export const fetchFollowers = (accountId: string, params: PageParams = {}): Prom
 
 export const fetchFollowing = (accountId: string, params: PageParams = {}): Promise<Page<Account>> =>
   getPage<Account>(`/api/v1/accounts/${encodeURIComponent(accountId)}/following`, pageQuery(params));
+
+export type RemoteFollowListKind = 'followers' | 'following';
+
+/** リモートのアカウントのフォローやフォロワーを、相手のサーバーから1ページずつ読む。 */
+export const fetchRemoteFollows = async (
+  accountId: string,
+  kind: RemoteFollowListKind,
+  cursor?: string,
+): Promise<IoriRemoteFollowsResponse> =>
+  (await request<IoriRemoteFollowsResponse>(
+    `/api/iori/v1/accounts/${encodeURIComponent(accountId)}/remote-follows/${kind}`,
+    { cursor },
+  )).body;
 
 export const NOTIFICATION_TYPES = [
   'favourite',

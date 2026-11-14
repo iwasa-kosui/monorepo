@@ -14,11 +14,13 @@ import type { UserId } from '../../domain/user/userId.ts';
 import type { FetchRemoteContextUseCase } from '../../useCase/fetchRemoteContext.ts';
 import type { FetchRemoteOutboxUseCase } from '../../useCase/fetchRemoteOutbox.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
+import type { ListRemoteActorFollowsUseCase } from '../../useCase/listRemoteActorFollows.ts';
 import type { SendEmojiReactUseCase } from '../../useCase/sendEmojiReact.ts';
 import type { SubscribePushUseCase } from '../../useCase/subscribePush.ts';
 import type { SubscribeRelayUseCase } from '../../useCase/subscribeRelay.ts';
 import type { UndoEmojiReactUseCase } from '../../useCase/undoEmojiReact.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
+import type { Account } from '../mastodon/entities.ts';
 import { type StatusAssembler, StatusAssemblyError } from '../mastodon/statusAssembler.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { readRequestBody } from './helper/requestBody.ts';
@@ -33,6 +35,7 @@ export type WorkerIoriActionsRouterDeps = Readonly<{
   undoEmojiReactUseCase: UndoEmojiReactUseCase;
   fetchRemoteContextUseCase: FetchRemoteContextUseCase;
   fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase;
+  listRemoteActorFollowsUseCase: ListRemoteActorFollowsUseCase;
   subscribeRelayUseCase: SubscribeRelayUseCase;
   subscribePushUseCase: SubscribePushUseCase;
   allRelaysResolver: AllRelaysResolver;
@@ -42,6 +45,11 @@ export type WorkerIoriActionsRouterDeps = Readonly<{
 
 export type IoriRemoteContextResponse = Readonly<{ fetched: number }>;
 export type IoriRemoteStatusesResponse = Readonly<{ fetched: number }>;
+export type IoriRemoteFollowsResponse = Readonly<{
+  accounts: readonly Account[];
+  next_cursor: string | null;
+  total_items: number | null;
+}>;
 
 type ActingOnPost = Readonly<{ userId: UserId; viewerActorId: ActorId; post: PostWithAuthor; emoji: string }>;
 
@@ -51,6 +59,9 @@ const forbidden = { error: 'Forbidden' } as const;
 const read = Scope.orThrow('read');
 const write = Scope.orThrow('write');
 const writeStatuses = Scope.orThrow('write:statuses');
+const readAccounts = Scope.orThrow('read:accounts');
+const remoteFollowKindSchema = z.enum(['followers', 'following']);
+const cursorSchema = z.url().max(2048);
 const writeFavourites = Scope.orThrow('write:favourites');
 const push = Scope.orThrow('push');
 const emojiSchema = z.string().min(1).max(128);
@@ -92,6 +103,7 @@ export const createWorkerIoriActionsRouter = ({
   undoEmojiReactUseCase,
   fetchRemoteContextUseCase,
   fetchRemoteOutboxUseCase,
+  listRemoteActorFollowsUseCase,
   subscribeRelayUseCase,
   subscribePushUseCase,
   allRelaysResolver,
@@ -245,6 +257,40 @@ export const createWorkerIoriActionsRouter = ({
         return fetched.err.type === 'ActorNotFoundError' ? c.json(recordNotFound, 404) : c.json(invalidToken, 401);
       }
       return c.json({ fetched: fetched.val.fetchedCount } satisfies IoriRemoteStatusesResponse);
+    })
+    .get('/iori/v1/accounts/:id/remote-follows/:kind', authn.requireUser(readAccounts), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId;
+      if (userId === null || userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      const id = ActorId.parse(c.req.param('id'));
+      const kind = remoteFollowKindSchema.safeParse(c.req.param('kind'));
+      if (!id.ok || !kind.success) {
+        return c.json(recordNotFound, 404);
+      }
+      const rawCursor = c.req.query('cursor');
+      const cursor = rawCursor === undefined ? undefined : cursorSchema.safeParse(rawCursor);
+      if (cursor !== undefined && !cursor.success) {
+        return c.json(validationFailed('cursor'), 422);
+      }
+      const listed = await listRemoteActorFollowsUseCase.run({
+        userId,
+        actorId: id.val,
+        kind: kind.data,
+        cursor: cursor?.data,
+        ctx: createContext(c.req.raw),
+      });
+      if (!listed.ok) {
+        return listed.err.type === 'ActorNotFoundError' ? c.json(recordNotFound, 404) : c.json(invalidToken, 401);
+      }
+      const accounts = await statusAssembler.assembleAccounts({ actorIds: listed.val.actorIds, requestUrl: c.req.url });
+      return c.json(
+        {
+          accounts,
+          next_cursor: listed.val.nextCursor ?? null,
+          total_items: listed.val.totalItems ?? null,
+        } satisfies IoriRemoteFollowsResponse,
+      );
     })
     .get('/iori/v1/relays', authn.requireUser(read), async (c) => {
       if (!await isOwner(c)) return c.json(forbidden, 403);

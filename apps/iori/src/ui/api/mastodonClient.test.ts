@@ -28,6 +28,7 @@ import {
   fetchRelationshipOrSignedOut,
   fetchRelationships,
   fetchRemoteContext,
+  fetchRemoteFollows,
   fetchRemoteStatuses,
   fetchStatus,
   fetchStatusContext,
@@ -648,6 +649,21 @@ describe('mastodon client requests', () => {
     expect(init.method).toBe('POST');
     expect(init.credentials).toBe('same-origin');
     expect(result).toEqual({ fetched: 3 });
+  });
+
+  it('gets the remote follow list with the encoded id and the cursor', async () => {
+    const body = { accounts: [], next_cursor: 'https://remote.example/f?page=2', total_items: 3 };
+    const fetchMock = stubFetch(jsonResponse(body));
+
+    const result = await fetchRemoteFollows('a/b', 'followers', 'https://remote.example/f?page=1');
+
+    const [url] = (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
+    expect(url).toBe(
+      `/api/iori/v1/accounts/a%2Fb/remote-follows/followers?cursor=${
+        encodeURIComponent('https://remote.example/f?page=1')
+      }`,
+    );
+    expect(result).toEqual(body);
   });
 
   it('posts to the remote statuses path with the encoded id and returns the fetched count', async () => {
