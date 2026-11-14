@@ -88,6 +88,11 @@ export const GlobeIcon = () => (
 
 export const SendIcon = () => (
   <svg class='h-3.5 w-3.5' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-    <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 12L3.27 3.13A59.77 59.77 0 0121.49 12 59.77 59.77 0 013.27 20.88L6 12zm0 0h7.5' />
+    <path
+      stroke-linecap='round'
+      stroke-linejoin='round'
+      stroke-width='2'
+      d='M6 12L3.27 3.13A59.77 59.77 0 0121.49 12 59.77 59.77 0 013.27 20.88L6 12zm0 0h7.5'
+    />
   </svg>
 );
