@@ -1,0 +1,4 @@
+#!/bin/sh
+# コミットメッセージに GitHub のメンション（@user）が素のまま入っていないか調べる。
+# PR の本文はコミットメッセージから作られることがあり、そのまま相手に通知が飛ぶため。
+exec node "$(git rev-parse --show-toplevel)/.github/scripts/github-mentions/cli.mjs" commit-msg "$1"

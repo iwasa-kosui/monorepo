@@ -35,6 +35,29 @@ pnpm --filter iori run test:workerd  # apps/iori を変更したとき
 
 ---
 
+## GitHub のメンションを書かない（必須）
+
+GitHub 上で素の `@name` を書くと、その名前のアカウントを持つ人に通知（メール）が飛ぶ。
+このリポジトリと無関係の人に迷惑がかかるため、次を守ること。
+
+- コミットメッセージ、PR のタイトル・本文、Issue、コメント、レビューでは、`@` で始まる語を
+  **必ずバッククォートで囲む**。例: bot のハンドル `` `@iori` ``、npm の `` `@atproto/api` ``、
+  Fediverse の `` `@user@example.com` ``
+- アプリ名や bot 名は `@` を付けずに書く（例: 「iori の bot」）
+- PR の本文はコミットメッセージから作られるので、コミットメッセージも同じ扱いにする
+- 人を呼ぶのは、ユーザーが明示的にその人を呼ぶよう頼んだときだけ
+
+機械的な検査も入れている（検出ロジックは `.github/scripts/github-mentions/`）:
+
+- Claude Code の PreToolUse フック（`.claude/settings.json`）: `git commit`・`gh pr`/`gh issue`/`gh api`・
+  GitHub MCP の書き込みツールの入力に素のメンションがあれば止める
+- git の commit-msg フック（`.githooks/`。`pnpm install` の `prepare` で `core.hooksPath` を設定する）
+- CI（`.github/workflows/github-mentions.yml`）: PR のタイトル・本文・コミットメッセージを検査する
+
+意図して人を呼ぶときだけ、コマンドの先頭に `ALLOW_GITHUB_MENTIONS=1` を付けて通す。
+
+---
+
 ## 開発方針
 
 設計パターンとドメインモデルの詳細は `.claude/rules/` に分割されています：
