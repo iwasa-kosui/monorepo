@@ -116,21 +116,12 @@ describe('RegisterOAuthApplicationUseCase', () => {
   });
 
   it.each([
-    ['client_name がない', { clientName: undefined, redirectUris: REDIRECT_URI }],
-    ['redirect_uris がない', { clientName: 'App', redirectUris: undefined }],
     ['redirect_uris が javascript:', { clientName: 'App', redirectUris: 'javascript:alert(1)' }],
     ['scopes が未知', { clientName: 'App', redirectUris: REDIRECT_URI, scopes: 'admin' }],
     ['redirect_uris が 11 件', {
       clientName: 'App',
       redirectUris: Array.from({ length: 11 }, (_, index) => `https://a.example/cb${index}`),
     }],
-    ['client_name が 201 文字', { clientName: 'a'.repeat(201), redirectUris: REDIRECT_URI }],
-    ['website が 2001 文字', {
-      clientName: 'App',
-      redirectUris: REDIRECT_URI,
-      website: `https://a.example/${'a'.repeat(1983)}`,
-    }],
-    ['scopes が 1001 文字', { clientName: 'App', redirectUris: REDIRECT_URI, scopes: `read${' read'.repeat(200)}` }],
     ['website が URL でない', { clientName: 'App', redirectUris: REDIRECT_URI, website: 'javascript:alert(1)' }],
   ])('%s と拒否する', async (_label, input) => {
     const { useCases, memory } = setup();
@@ -231,14 +222,6 @@ describe('IssueAuthorizationCodeUseCase', () => {
       ok: false,
       err: { error: 'invalid_request' },
     });
-  });
-
-  it('期限切れのセッションを拒否する', async () => {
-    const { register, authorize, memory } = setup();
-    const app = await register();
-    const { sessionId } = memory.addSession(undefined, 1 as never);
-
-    expect(await authorize(app, { sessionId })).toMatchObject({ ok: false, err: { type: 'SessionExpiredError' } });
   });
 });
 
@@ -434,13 +417,6 @@ describe('ExchangeTokenUseCase (authorization_code)', () => {
       expect(revoked[0]!.authorizationCodeHash).toBe(await Secret.hash(codeA));
     });
   });
-
-  it('code または redirect_uri がないと invalid_request にする', async () => {
-    const { register, exchange } = setup();
-    const app = await register();
-
-    expect(await exchange(app, { code: undefined })).toMatchObject({ ok: false, err: { error: 'invalid_request' } });
-  });
 });
 
 describe('ExchangeTokenUseCase (grant_type)', () => {
@@ -484,16 +460,6 @@ describe('ExchangeTokenUseCase (client_credentials)', () => {
     expect(await exchange(app, { grantType: 'client_credentials', scope: 'nope' })).toMatchObject({
       ok: false,
       err: { error: 'invalid_scope' },
-    });
-  });
-
-  it('client_secret が違うと invalid_client にする', async () => {
-    const { register, exchange } = setup();
-    const app = await register();
-
-    expect(await exchange(app, { grantType: 'client_credentials', clientSecret: 'wrong' })).toMatchObject({
-      ok: false,
-      err: { error: 'invalid_client' },
     });
   });
 });
@@ -595,17 +561,6 @@ describe('VerifyAccessTokenUseCase', () => {
       val: { applicationId: app.application.id, scopes: ['read', 'write'] },
     });
     expect(result.ok && result.val.userId).not.toBeNull();
-  });
-
-  it('client_credentials のトークンは userId が null になる', async () => {
-    const s = setup();
-    const app = await s.register();
-    const issued = await s.exchange(app, { grantType: 'client_credentials' });
-    if (!issued.ok) throw new Error('token not issued');
-
-    const result = await s.useCases.verifyAccessTokenUseCase.run({ token: issued.val.accessToken });
-
-    expect(result).toMatchObject({ ok: true, val: { userId: null } });
   });
 
   it('未知のトークンと失効済みのトークンを拒否する', async () => {

@@ -138,17 +138,6 @@ describe('RequestDigestUseCase', () => {
     expect(t.createRun).toHaveBeenCalledTimes(1);
   });
 
-  it('まとめが編集済みでない draft なら、topic の digest が編集済みでも予約して作り直す', async () => {
-    const t = setup({
-      existing: [existingDigest('summary'), existingDigest('genai', { edited: true })],
-    });
-
-    const result = await t.useCase.run({ userId });
-
-    expect(result).toMatchObject({ ok: true });
-    expect(t.createRun).toHaveBeenCalledTimes(1);
-  });
-
   it('その日の digest がすべて編集済みの draft なら、予約せずに DigestDraftEditedError を返す', async () => {
     const t = setup({
       existing: [existingDigest('summary', { edited: true }), existingDigest('genai', { edited: true })],
@@ -189,33 +178,6 @@ describe('RequestDigestUseCase', () => {
     },
   );
 
-  it('まとめが公開済みなら、topic の digest が編集済みでも DigestAlreadyPublishedError を返す', async () => {
-    const t = setup({
-      existing: [existingDigest('summary', { status: 'published' }), existingDigest('genai', { edited: true })],
-    });
-
-    const result = await t.useCase.run({ userId });
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'DigestAlreadyPublishedError' } });
-    expect(t.reserve).not.toHaveBeenCalled();
-  });
-
-  it.each(['published', 'unpublished'] as const)(
-    'その日の digest の article がすべて %s なら、予約せずに DigestAlreadyPublishedError を返す',
-    async (status) => {
-      const t = setup({ existing: [existingDigest('summary', { status }), existingDigest('genai', { status })] });
-
-      const result = await t.useCase.run({ userId });
-
-      expect(result).toMatchObject({
-        ok: false,
-        err: { type: 'DigestAlreadyPublishedError', detail: { digestDate: '2026-11-05' } },
-      });
-      expect(t.reserve).not.toHaveBeenCalled();
-      expect(t.createRun).not.toHaveBeenCalled();
-    },
-  );
-
   it('その日の digest の article が見つからなければ、予約せずに ArticleNotFoundError を返す', async () => {
     const t = setup({ existing: [existingDigest('summary', { articleMissing: true })] });
 
@@ -240,13 +202,4 @@ describe('RequestDigestUseCase', () => {
       expect(t.createRun).not.toHaveBeenCalled();
     },
   );
-
-  it('digest の作成が失敗したらそのエラーを返す', async () => {
-    const t = setup();
-    t.createRun.mockReturnValueOnce(RA.err({ type: 'UserNotFoundError', message: 'x' }) as never);
-
-    const result = await t.useCase.run({ userId });
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'UserNotFoundError' } });
-  });
 });

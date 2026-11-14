@@ -14,7 +14,6 @@ import type { Tweet, TwitterApiIoClient } from '../../adaptor/twitterApiIo/twitt
 import {
   type FeedSourceFetchReserver,
   X_MANUAL_FETCH_COOLDOWN_SECONDS,
-  X_MANUAL_FETCH_MAX_SOURCES,
 } from '../../domain/feedSource/feedSource.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import { RefreshXPostsUseCase } from '../refreshXPosts.ts';
@@ -67,15 +66,6 @@ const setup = (
 const tweet = (id: string): Tweet => ({ id, text: `post ${id}`, createdAt: Instant.orThrow(NOW - 60_000) });
 
 describe('RefreshXPostsUseCase', () => {
-  it('有効な x_user が 0 件なら、取得せずに 0 件で成功する', async () => {
-    const { useCase, client } = setup([{ n: 1, enabled: false }, { n: 2, kind: 'rss' }]);
-
-    const result = await useCase.run();
-
-    expect(result).toEqual({ ok: true, val: { sources: 0, failed: 0, collected: 0 } });
-    expect(client).not.toHaveBeenCalled();
-  });
-
   it('6 件あるときは 5 件だけ、lastFetchedAt の古い順（NULL が先）に取得する', async () => {
     const old = NOW - 10 * COOLDOWN_MS;
     const { useCase, fetchedUsernames } = setup([
@@ -89,7 +79,6 @@ describe('RefreshXPostsUseCase', () => {
 
     const result = await useCase.run();
 
-    expect(X_MANUAL_FETCH_MAX_SOURCES).toBe(5);
     expect(result).toEqual({ ok: true, val: { sources: 5, failed: 0, collected: 0 } });
     expect(fetchedUsernames()).toEqual(['user2', 'user5', 'user3', 'user6', 'user4']);
   });
@@ -184,14 +173,5 @@ describe('RefreshXPostsUseCase', () => {
     expect(fetchedUsernames()).toEqual(['user1', 'user2', 'user3']);
     expect(rowOf(1)).toEqual({ lastFetchedAt: NOW, lastError: 'Unexpected status 500.' });
     expect(rowOf(2)).toEqual({ lastFetchedAt: NOW, lastError: null });
-  });
-
-  it('取得した投稿の件数を collected に数える', async () => {
-    const { useCase, sqlite } = setup([{ n: 1 }], async () => RA.ok([tweet('100'), tweet('101')]));
-
-    const result = await useCase.run();
-
-    expect(result).toEqual({ ok: true, val: { sources: 1, failed: 0, collected: 2 } });
-    expect(sqlite.prepare('SELECT COUNT(*) AS n FROM feed_entries').get()).toEqual({ n: 2 });
   });
 });

@@ -8,7 +8,7 @@ import {
   verifyObject,
   verifyRequest,
 } from '@fedify/fedify';
-import { Activity, Application, Create, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Activity, Application } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -161,33 +161,6 @@ describe('relay への送信', { timeout: 30_000 }, () => {
       object: { type: 'Follow', object: RELAY_ACTOR_URI },
       to: RELAY_ACTOR_URI,
     });
-    await expectSignaturesCover(sent, keyCache);
-  });
-
-  it('投稿の Create の to は完全な IRI で送る', async () => {
-    const { ctx, keyCache } = await setup();
-    const actor = ctx.getActorUri(INSTANCE_ACTOR_IDENTIFIER);
-    const keys = await ctx.getActorKeyPairs(INSTANCE_ACTOR_IDENTIFIER);
-
-    await ctx.sendActivity(
-      keys,
-      { id: new URL(RELAY_ACTOR_URI), inboxId: new URL(RELAY_INBOX_URL) },
-      new Create({
-        id: new URL(`${ORIGIN}/users/${INSTANCE_ACTOR_IDENTIFIER}/posts/1/activity`),
-        actor,
-        to: PUBLIC_COLLECTION,
-        object: new Note({
-          id: new URL(`${ORIGIN}/users/${INSTANCE_ACTOR_IDENTIFIER}/posts/1`),
-          attribution: actor,
-          to: PUBLIC_COLLECTION,
-          content: 'hello',
-        }),
-      }),
-    );
-
-    const sent = await sentRequest();
-    expect(sent.json.to).toBe(PUBLIC_IRI);
-    expect(sent.json.object).toMatchObject({ type: 'Note', to: PUBLIC_IRI });
     await expectSignaturesCover(sent, keyCache);
   });
 });

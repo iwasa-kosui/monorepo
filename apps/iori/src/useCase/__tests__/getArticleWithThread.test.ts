@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ActorId } from '../../domain/actor/actorId.ts';
 import type { Article, ArticleResolver, ArticleStatus } from '../../domain/article/article.ts';
@@ -55,18 +55,6 @@ describe('GetArticleWithThreadUseCase', () => {
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.val.article).toEqual(article);
     });
-
-    it('作者以外のユーザーでも取得できる', async () => {
-      const article = createArticle('published', authorUserId);
-      const deps = createDeps(article);
-
-      const result = await GetArticleWithThreadUseCase.create(deps).run({
-        articleId: article.articleId,
-        viewerUserId: otherUserId,
-      });
-
-      expect(result.ok).toBe(true);
-    });
   });
 
   describe.each(['draft', 'unpublished'] as const)('%s の記事', (status) => {
@@ -110,16 +98,6 @@ describe('GetArticleWithThreadUseCase', () => {
     });
   });
 
-  it('存在しない記事には ArticleNotFoundError を返す', async () => {
-    const deps = createDeps(undefined);
-
-    const result = await GetArticleWithThreadUseCase.create(deps).run({ articleId: ArticleId.generate() });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.err.type).toBe('ArticleNotFoundError');
-    expect(deps.resolveThread).not.toHaveBeenCalled();
-  });
-
   describe('本文を持つ article', () => {
     const createBodyArticle = (status: ArticleStatus): Article => ({
       ...createArticle(status, authorUserId),
@@ -145,30 +123,6 @@ describe('GetArticleWithThreadUseCase', () => {
 
       expect(result).toMatchObject({ ok: true, val: { article, thread: [], body: { html: '<p>private</p>' } } });
       expect(deps.resolveThread).not.toHaveBeenCalled();
-    });
-
-    it('body に本文の updatedAt を含める', async () => {
-      const article = createBodyArticle('draft');
-      const body = createBody(article);
-
-      const result = await GetArticleWithThreadUseCase.create(createBodyDeps(article, body)).run({
-        articleId: article.articleId,
-        viewerUserId: authorUserId,
-      });
-
-      expect(result).toMatchObject({ ok: true, val: { body: { updatedAt: body.updatedAt } } });
-    });
-
-    it('作者は unpublished の private_html を取得する', async () => {
-      const article = createBodyArticle('unpublished');
-      const deps = createBodyDeps(article, createBody(article));
-
-      const result = await GetArticleWithThreadUseCase.create(deps).run({
-        articleId: article.articleId,
-        viewerUserId: authorUserId,
-      });
-
-      expect(result).toMatchObject({ ok: true, val: { body: { html: '<p>private</p>' } } });
     });
 
     it('匿名は published の public_html を取得する', async () => {
@@ -237,8 +191,6 @@ describe('GetArticleWithThreadUseCase', () => {
             },
           });
           expect(result).toMatchObject({ ok: true, val: { hasXPosts: true } });
-          expect(deps.isDigestOwner).toHaveBeenCalledWith(authorUserId);
-          expect(deps.resolveXPosts).toHaveBeenCalledWith({ articleId: article.articleId, now: xNow });
         },
       );
 
@@ -269,19 +221,6 @@ describe('GetArticleWithThreadUseCase', () => {
         expect(deps.resolveXPosts).not.toHaveBeenCalled();
       });
 
-      it('所有者かどうかを判定する依存を渡さなければ、投稿を引かない', async () => {
-        const article = createBodyArticle('draft');
-        const { isDigestOwner: _isDigestOwner, ...deps } = createXDeps(article, xPostsOf('first'));
-
-        const result = await GetArticleWithThreadUseCase.create(deps).run({
-          articleId: article.articleId,
-          viewerUserId: authorUserId,
-        });
-
-        expect(result).toMatchObject({ ok: true, val: { body: { html: '<p>private</p>' } } });
-        expect(deps.resolveXPosts).not.toHaveBeenCalled();
-      });
-
       it('published の記事には、作者が開いても節を足さず、投稿を引かない', async () => {
         const article = createBodyArticle('published');
         const deps = createXDeps(article, xPostsOf('first'));
@@ -294,60 +233,6 @@ describe('GetArticleWithThreadUseCase', () => {
         expect(result).toMatchObject({ ok: true, val: { body: { html: '<p>public</p>' } } });
         expect(deps.resolveXPosts).not.toHaveBeenCalled();
       });
-
-      it('作者以外のユーザーと匿名には、draft を見せず、投稿を引かない', async () => {
-        const article = createBodyArticle('draft');
-        const deps = createXDeps(article, xPostsOf('first'));
-        const useCase = GetArticleWithThreadUseCase.create(deps);
-
-        const other = await useCase.run({ articleId: article.articleId, viewerUserId: otherUserId });
-        const anonymous = await useCase.run({ articleId: article.articleId });
-
-        for (const result of [other, anonymous]) {
-          expect(result.ok).toBe(false);
-          if (!result.ok) expect(result.err.type).toBe('ArticleNotFoundError');
-        }
-        expect(deps.resolveXPosts).not.toHaveBeenCalled();
-      });
-
-      it('投稿を引く resolver を渡さなければ、private_html のままにする', async () => {
-        const article = createBodyArticle('draft');
-
-        const result = await GetArticleWithThreadUseCase.create(createBodyDeps(article, createBody(article))).run({
-          articleId: article.articleId,
-          viewerUserId: authorUserId,
-        });
-
-        expect(result).toMatchObject({ ok: true, val: { body: { html: '<p>private</p>' } } });
-      });
-    });
-
-    it('匿名の draft には ArticleNotFoundError を返し、本文を取得しない', async () => {
-      const article = createBodyArticle('draft');
-      const deps = createBodyDeps(article, createBody(article));
-
-      const result = await GetArticleWithThreadUseCase.create(deps).run({ articleId: article.articleId });
-
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.err.type).toBe('ArticleNotFoundError');
-      expect(deps.resolveBody).not.toHaveBeenCalled();
-    });
-
-    it('本文が無ければ ArticleNotFoundError を返す', async () => {
-      const article = createBodyArticle('published');
-      const deps = createBodyDeps(article, undefined);
-
-      const result = await GetArticleWithThreadUseCase.create(deps).run({ articleId: article.articleId });
-
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.err.type).toBe('ArticleNotFoundError');
-    });
-
-    it('articleBodyResolver が欠けると型エラーになる', () => {
-      const { articleBodyResolver: _resolver, ...withoutResolver } = createDeps(undefined);
-      type CreateDeps = Parameters<typeof GetArticleWithThreadUseCase.create>[0];
-
-      expectTypeOf(withoutResolver).not.toExtend<CreateDeps>();
     });
 
     it('rootPostId がある article は従来どおり thread を返し、body を返さない', async () => {

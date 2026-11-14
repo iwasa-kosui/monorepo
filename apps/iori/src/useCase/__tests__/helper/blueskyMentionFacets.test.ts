@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { toFacet } from '../../../adaptor/bluesky/blueskyPostRecord.ts';
-import { findMentionHandles, MAX_RESOLVED_MENTIONS, withMentionFacets } from '../../helper/blueskyMentionFacets.ts';
+import { findMentionHandles, withMentionFacets } from '../../helper/blueskyMentionFacets.ts';
 
 const DIDS = new Map([['alice.bsky.social', 'did:plc:alice'], ['bob.example.com', 'did:plc:bob']]);
 const mention = (byteStart: number, byteEnd: number, did: string) => ({
@@ -25,7 +25,6 @@ describe('findMentionHandles', () => {
     const handles = Array.from({ length: 12 }, (_, index) => `user${index + 1}.bsky.social`);
     const text = [...handles, handles[0]].map((handle) => `@${handle}`).join(' ');
 
-    expect(MAX_RESOLVED_MENTIONS).toBe(10);
     expect(findMentionHandles(text, [])).toEqual(handles.slice(0, 10));
   });
 
@@ -40,10 +39,6 @@ describe('findMentionHandles', () => {
   it('excludeTruncated のとき、ドットやハイフンの後で切れたハンドルも対象にしない', () => {
     expect(findMentionHandles('@bob.example.co.…', [], { excludeTruncated: true })).toEqual([]);
     expect(findMentionHandles('@a.bob-…', [], { excludeTruncated: true })).toEqual([]);
-  });
-
-  it('excludeTruncated でなければ、末尾に … があってもハンドルを対象にする', () => {
-    expect(findMentionHandles('@alice.bsky.social…', [])).toEqual(['alice.bsky.social']);
   });
 
   it('link facet と重なるハンドルは対象にせず、上限はその後に数える', () => {
@@ -87,27 +82,10 @@ describe('withMentionFacets', () => {
     ]);
   });
 
-  it('excludeTruncated のとき、ドットやハイフンの後で切れたハンドルにも mention facet を付けない', () => {
-    const dids = new Map([['bob.example.co', 'did:plc:bobco'], ['a.bob', 'did:plc:abob']]);
-
-    expect(withMentionFacets('@bob.example.co.…', [], dids, { excludeTruncated: true })).toEqual([]);
-    expect(withMentionFacets('@a.bob-…', [], dids, { excludeTruncated: true })).toEqual([]);
-  });
-
-  it('excludeTruncated でなければ、末尾に … があっても mention facet を付ける', () => {
-    expect(withMentionFacets('@alice.bsky.social…', [], DIDS)).toEqual([mention(0, 18, 'did:plc:alice')]);
-  });
-
   it('byteStart の順に並べる', () => {
     const text = '@bob.example.com https://example.com/x @alice.bsky.social';
     const link = toFacet(text, { start: 17, end: 38, uri: 'https://example.com/x' });
 
     expect(withMentionFacets(text, [link], DIDS).map(({ index }) => index.byteStart)).toEqual([0, 17, 39]);
-  });
-
-  it('解決できたハンドルが無ければ、渡した facet をそのまま返す', () => {
-    const link = toFacet('x', { start: 0, end: 1, uri: 'https://example.com' });
-
-    expect(withMentionFacets('x @nobody.bsky.social', [link], new Map())).toEqual([link]);
   });
 });

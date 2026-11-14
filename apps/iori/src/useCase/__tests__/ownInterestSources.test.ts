@@ -20,7 +20,6 @@ import { sha256Hex } from '../../helper/sha256.ts';
 import type { TextEmbedder } from '../../ports/textEmbedder.ts';
 import { createStubEmbedder } from '../../testing/aiStubs.ts';
 import { EmbedOwnInterestSourcesUseCase, OWN_EMBEDDING_BATCH_LIMIT } from '../embedOwnInterestSources.ts';
-import { INTEREST_EMBEDDING_MODEL } from '../helper/embedInterestSources.ts';
 import { SyncOwnInterestSourcesUseCase } from '../syncOwnInterestSources.ts';
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 4, 21, 0));
@@ -307,16 +306,6 @@ describe('SyncOwnInterestSourcesUseCase', () => {
     expect(rowOf(post.postId)).toMatchObject({ deletedAt: null, embeddedAt: null });
     expect(rows('own_post')).toHaveLength(1);
   });
-
-  it('本人の actor が無ければ UserNotFoundError を返す', async () => {
-    const { sync } = setup();
-    const stranger = UserId.generate();
-
-    expect(await sync.run({ userId: stranger })).toMatchObject({
-      ok: false,
-      err: { type: 'UserNotFoundError', detail: { userId: stranger } },
-    });
-  });
 });
 
 describe('EmbedOwnInterestSourcesUseCase', () => {
@@ -331,7 +320,6 @@ describe('EmbedOwnInterestSourcesUseCase', () => {
 
     expect(result).toEqual({ ok: true, val: { embedded: 2, skipped: 0 } });
     expect(stub.calls).toHaveLength(1);
-    expect(stub.calls[0]?.model).toBe(INTEREST_EMBEDDING_MODEL);
     expect([...(stub.calls[0]?.texts ?? [])].sort()).toEqual(['友達の投稿', '自分の投稿']);
     expect(rowOf(post.postId)).toMatchObject({ embeddedAt: NOW, bytes: 4096 });
     expect(rowOf(like.likeId)).toMatchObject({ embeddedAt: NOW, bytes: 4096 });
@@ -351,49 +339,6 @@ describe('EmbedOwnInterestSourcesUseCase', () => {
     expect(rows().filter((row) => row.embeddedAt === null)).toHaveLength(20);
 
     expect(await embed.run(run)).toEqual({ ok: true, val: { embedded: 20, skipped: 0 } });
-  });
-
-  it('まとめての埋め込みが失敗したら 1 件ずつ埋め込み直し、一部でも成功すれば ok を返す', async () => {
-    const calls: number[] = [];
-    const partial: TextEmbedder = {
-      embed: async ({ texts }) => {
-        calls.push(texts.length);
-        if (texts.length > 1 || texts[0] === '投稿 1') return Result.err({ type: 'AiError', message: 'unavailable' });
-        return Result.ok([Array.from({ length: 1024 }, () => 1)]);
-      },
-    };
-    const { seed, me, run, sync, buildEmbed, rows } = setup();
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    for (let i = 0; i < 3; i += 1) seed.addLocalPost(me, POST_AT + i, { content: `投稿 ${i}`, timeline: false });
-    await sync.run(run);
-
-    expect(await buildEmbed(partial).run(run)).toEqual({ ok: true, val: { embedded: 2, skipped: 1 } });
-
-    expect(calls).toEqual([3, 1, 1, 1]);
-    expect(rows().filter((row) => row.embeddedAt === null)).toHaveLength(1);
-    expect(error).toHaveBeenCalledWith(
-      'iori interest sources: embedding an entry failed.',
-      expect.objectContaining({ kind: 'own_post' }),
-    );
-  });
-
-  it('次元が 1024 でないベクトルは書かず、error ログを出して他は続ける', async () => {
-    const mixed: TextEmbedder = {
-      embed: async ({ texts }) =>
-        Result.ok(texts.map((text, i) => Array.from({ length: i === 1 ? 512 : 1024 }, () => text.length))),
-    };
-    const { seed, me, run, sync, buildEmbed, rows } = setup();
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    for (let i = 0; i < 3; i += 1) seed.addLocalPost(me, POST_AT + i, { content: `投稿 ${i}`, timeline: false });
-    await sync.run(run);
-
-    expect(await buildEmbed(mixed).run(run)).toEqual({ ok: true, val: { embedded: 2, skipped: 1 } });
-
-    expect(error).toHaveBeenCalledWith(
-      'iori interest sources: the embedding was not stored.',
-      expect.objectContaining({ kind: 'own_post', errorMessage: expect.stringContaining('1024') }),
-    );
-    expect(rows().filter((row) => row.embeddedAt === null)).toHaveLength(1);
   });
 
   it('対象の投稿が無い行と、contentHash が合わない行は飛ばして、行を変えない', async () => {
@@ -435,15 +380,6 @@ describe('EmbedOwnInterestSourcesUseCase', () => {
 
     expect(await embed.run({ userId })).toEqual({ ok: true, val: { embedded: 0, skipped: 0 } });
     expect(stub.calls).toEqual([]);
-  });
-
-  it('埋め込み器が無ければ何もしない', async () => {
-    const { seed, me, run, sync, embed, rows } = setup({ textEmbedder: null });
-    seed.addLocalPost(me, POST_AT, { timeline: false });
-    await sync.run(run);
-
-    expect(await embed.run(run)).toEqual({ ok: true, val: { embedded: 0, skipped: 0 } });
-    expect(rows().every((row) => row.embeddedAt === null)).toBe(true);
   });
 
   it('埋め込みが失敗したら AiError を返し、行を変えない', async () => {

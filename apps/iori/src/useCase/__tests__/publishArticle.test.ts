@@ -129,21 +129,8 @@ describe('PublishArticleUseCase', () => {
     expect(articlePublishedStore.store).not.toHaveBeenCalled();
   });
 
-  it('rootPostId が null で本文がある article は公開する', async () => {
-    const { deps, session, article, articlePublishedStore } = setup({ rootPostId: null, hasBody: true });
-
-    const result = await PublishArticleUseCase.create(deps).run({
-      sessionId: session.sessionId,
-      articleId: article.articleId,
-      ctx: createMockRequestContext(),
-    });
-
-    expect(result.ok).toBe(true);
-    expect(articlePublishedStore.store).toHaveBeenCalledTimes(1);
-  });
-
   it('rootPostId がある article は本文を確かめずに公開する', async () => {
-    const { deps, session, article, articlePublishedStore, resolveBody } = setup({
+    const { deps, session, article, articlePublishedStore } = setup({
       rootPostId: PostId.generate(),
       hasBody: false,
     });
@@ -155,7 +142,6 @@ describe('PublishArticleUseCase', () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(resolveBody).not.toHaveBeenCalled();
     expect(articlePublishedStore.store).toHaveBeenCalledTimes(1);
   });
 

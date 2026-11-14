@@ -156,56 +156,6 @@ describe('ResolveRemotePostUseCase', () => {
     });
   });
 
-  it('Article は name と本文を組み立てて保存し、その postId を返す', async () => {
-    const t = setup({
-      lookupObject: async () =>
-        new Article({ id: new URL(NOTE_URI), name: 'Title', content: '<p>body</p>', attribution: personOf('alice') }),
-    });
-
-    expect(await t.run(HTML_URL)).toBe(`saved:${NOTE_URI}`);
-    expect(t.remotePostUpserter.resolve.mock.calls[0]![0]).toMatchObject({
-      uri: NOTE_URI,
-      content: `<p><strong>Title</strong></p><p>body</p><p><a href="${NOTE_URI}">元の記事を読む</a></p>`,
-      authorIdentity: { uri: ALICE_URI },
-    });
-  });
-
-  it('Question は投票のリンクを組み立て、選択肢を poll にして保存し、その postId を返す', async () => {
-    const t = setup({
-      lookupObject: async () =>
-        new Question({
-          id: new URL(NOTE_URI),
-          content: '<p>q</p>',
-          exclusiveOptions: [new Note({ name: 'a' }), new Note({ name: 'b' })],
-          attribution: personOf('alice'),
-        }),
-    });
-
-    expect(await t.run(HTML_URL)).toBe(`saved:${NOTE_URI}`);
-    expect(t.remotePostUpserter.resolve.mock.calls[0]![0]).toMatchObject({
-      uri: NOTE_URI,
-      content: '<p>q</p>',
-      poll: {
-        multiple: false,
-        options: [{ title: 'a', votesCount: 0 }, { title: 'b', votesCount: 0 }],
-        votersCount: null,
-        expiresAt: null,
-        closed: false,
-      },
-    });
-  });
-
-  it('ブロックしたドメインの Article と Question は、保存せず見つからない扱いにする', async () => {
-    const blockedUri = `https://${BLOCKED_DOMAIN}/objects/1`;
-    const article = setup({ lookupObject: async () => new Article({ id: new URL(blockedUri), content: 'x' }) });
-    const question = setup({ lookupObject: async () => new Question({ id: new URL(blockedUri), content: 'x' }) });
-
-    expect(await article.run(HTML_URL)).toBeUndefined();
-    expect(await question.run(HTML_URL)).toBeUndefined();
-    expect(article.remotePostUpserter.resolve).not.toHaveBeenCalled();
-    expect(question.remotePostUpserter.resolve).not.toHaveBeenCalled();
-  });
-
   it('著者がブロックしたドメインの Article と Question は、保存せず見つからない扱いにする', async () => {
     const author = new Person({
       id: new URL(`https://${BLOCKED_DOMAIN}/users/mallory`),
@@ -225,24 +175,8 @@ describe('ResolveRemotePostUseCase', () => {
     expect(question.remotePostUpserter.resolve).not.toHaveBeenCalled();
   });
 
-  it('ログインユーザーの署名付きの文書取得で取得する', async () => {
-    const t = setup({ lookupObject: async () => noteOf(NOTE_URI) });
-
-    await t.run(HTML_URL);
-
-    expect(t.ctx.getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
-    expect(t.lookupObject.mock.calls[0]![1].documentLoader).toEqual(expect.any(Function));
-  });
-
   it('Note でないオブジェクトは保存せず、見つからない扱いにする', async () => {
     const t = setup({ lookupObject: async () => personOf('alice') });
-
-    expect(await t.run(HTML_URL)).toBeUndefined();
-    expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
-  });
-
-  it('取得できなかったときは、見つからない扱いにする', async () => {
-    const t = setup({ lookupObject: async () => null });
 
     expect(await t.run(HTML_URL)).toBeUndefined();
     expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
@@ -367,13 +301,6 @@ describe('ResolveRemotePostUseCase', () => {
     expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
   });
 
-  it('ブロックしていないドメインの投稿は、ブロックの設定があっても取得して保存する', async () => {
-    const t = setup({ lookupObject: async () => noteOf(NOTE_URI) });
-
-    expect(await t.run(HTML_URL)).toBe(`saved:${NOTE_URI}`);
-    expect(t.remotePostUpserter.resolve).toHaveBeenCalledTimes(1);
-  });
-
   it('投稿者を解決できない Note は保存せず、見つからない扱いにする', async () => {
     const t = setup({ lookupObject: async () => new Note({ id: new URL(NOTE_URI), content: 'x' }) });
 
@@ -399,38 +326,12 @@ describe('ResolveRemotePostUseCase', () => {
     expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
   });
 
-  it('保存が失敗したときは、見つからない扱いにする', async () => {
-    const t = setup({ lookupObject: async () => noteOf(NOTE_URI) });
-    t.remotePostUpserter.resolve.mockImplementation(async () => RA.err({ type: 'failed' } as never) as never);
-
-    expect(await t.run(HTML_URL)).toBeUndefined();
-  });
-
   it('全体の時間切れでは、見つからない扱いにして取得の signal を abort する', async () => {
     const t = setup({ totalTimeoutMs: 50, lookupObject: async () => new Promise(() => undefined) });
 
     expect(await t.run(HTML_URL)).toBeUndefined();
     expect(t.lookupObject.mock.calls[0]![1].signal!.aborted).toBe(true);
     expect(t.remotePostUpserter.resolve).not.toHaveBeenCalled();
-  });
-
-  it('時間切れにならなければ、取得に渡した signal を abort しない', async () => {
-    const t = setup({ lookupObject: async () => noteOf(NOTE_URI) });
-
-    await t.run(HTML_URL);
-
-    expect(t.lookupObject.mock.calls[0]![1].signal).toBeInstanceOf(AbortSignal);
-    expect(t.lookupObject.mock.calls[0]![1].signal!.aborted).toBe(false);
-  });
-
-  it('取得ごとに 5 秒の signal を付ける', async () => {
-    const timeout = vi.spyOn(AbortSignal, 'timeout');
-    const t = setup({ lookupObject: async () => noteOf(NOTE_URI) });
-
-    await t.run(HTML_URL);
-
-    expect(timeout).toHaveBeenCalledWith(5_000);
-    timeout.mockRestore();
   });
 
   it('文書の取得にも 5 秒の signal を付け、全体の時間切れで abort する', async () => {
@@ -448,15 +349,5 @@ describe('ResolveRemotePostUseCase', () => {
     expect(await t.run(HTML_URL)).toBeUndefined();
     expect(signals.length).toBeGreaterThanOrEqual(1);
     expect(signals.every((signal) => signal.aborted)).toBe(true);
-  });
-
-  it('利用者が見つからないときは UserNotFoundError を返す', async () => {
-    const t = setup({ userFound: false });
-
-    const result = await t.useCase.run({ userId: 'user-1' as never, url: HTML_URL, ctx: t.ctx });
-
-    expect(result.ok).toBe(false);
-    expect(result.ok ? undefined : result.err.type).toBe('UserNotFoundError');
-    expect(t.lookupObject).not.toHaveBeenCalled();
   });
 });

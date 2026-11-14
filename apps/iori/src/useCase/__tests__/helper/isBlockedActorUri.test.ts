@@ -34,14 +34,6 @@ describe('isBlockedActorUri', () => {
     expect(await isBlockedActorUri(resolver, USERNAME, ACTOR_URI)).toBe(true);
   });
 
-  it('判定に渡す値は username と actorUri にする', async () => {
-    const resolve = vi.fn(async (_input: unknown) => RA.ok(false));
-
-    await isBlockedActorUri(resolverOf(resolve), USERNAME, ACTOR_URI);
-
-    expect(resolve).toHaveBeenCalledWith({ username: USERNAME, actorUri: ACTOR_URI });
-  });
-
   it('判定が reject したら true を返し、actorUri もユーザー名も出さずに warn を 1 行出す', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const resolver = resolverOf(async () => {

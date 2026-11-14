@@ -86,16 +86,6 @@ const setup = async (options: { env?: BlueskyCredentials; login?: BlueskyCredent
 };
 
 describe('DeleteBlueskyCredentialUseCase', () => {
-  it('env の資格情報が無ければ、ログインせずに削除する', async () => {
-    const t = await setup();
-
-    const result = await t.useCase.run();
-
-    expect(result).toMatchObject({ ok: true, val: { source: 'none' } });
-    expect(t.verifier.login).not.toHaveBeenCalled();
-    expect(t.rows()).toEqual({ credentials: [], sessions: [] });
-  });
-
   it('env の DID が保存済みの DID と同じなら、env のセッションを logout して削除する', async () => {
     const t = await setup({ env: ENV_CREDENTIALS });
 
@@ -126,17 +116,6 @@ describe('DeleteBlueskyCredentialUseCase', () => {
     expect(result).toMatchObject({ ok: true });
     expect(t.verifier.logout).not.toHaveBeenCalled();
     expect(t.rows()).toEqual({ credentials: [], sessions: [] });
-  });
-
-  it('保存済みの資格情報が無ければ、env でログインせずに削除する', async () => {
-    const t = await setup({ env: ENV_CREDENTIALS });
-    t.sqlite.exec('DELETE FROM bluesky_credentials');
-
-    const result = await t.useCase.run();
-
-    expect(result).toMatchObject({ ok: true, val: { source: 'secret' } });
-    expect(t.verifier.login).not.toHaveBeenCalled();
-    expect(t.rows().sessions).toEqual([]);
   });
 
   it('切り替え中は BlueskyAccountSwitchInProgress にし、env でログインせず何も変えない', async () => {

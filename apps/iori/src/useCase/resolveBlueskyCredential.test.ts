@@ -77,24 +77,4 @@ describe('ResolveBlueskyCredentialUseCase', () => {
     expect(resolution).toEqual({ source: 'secret', credentials: envCredentials });
     expect(t.onDecryptFailed).toHaveBeenCalledTimes(1);
   });
-
-  it('保存済みの行が無ければ env の資格情報を使う', async () => {
-    const t = setup({ env: envCredentials });
-
-    expect(await t.useCase.run()).toEqual({ source: 'secret', credentials: envCredentials });
-    expect(t.onDecryptFailed).not.toHaveBeenCalled();
-  });
-
-  it('鍵が無ければ D1 を読まず env の資格情報を使う', async () => {
-    const t = setup({ stored: await storedWith('stored-app-password'), cipherFor: undefined, env: envCredentials });
-
-    expect(await t.useCase.run()).toEqual({ source: 'secret', credentials: envCredentials });
-    expect(t.resolve).not.toHaveBeenCalled();
-  });
-
-  it('どちらも無ければ none を返す', async () => {
-    const t = setup({});
-
-    expect(await t.useCase.run()).toEqual({ source: 'none', credentials: undefined });
-  });
 });

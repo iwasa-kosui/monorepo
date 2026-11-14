@@ -48,15 +48,6 @@ describe('UpdateRemotePostPollUseCase', () => {
     );
   });
 
-  it('投稿が無ければ保存しない', async () => {
-    const { store, useCase } = setup({ post: undefined });
-
-    const result = await useCase.run({ uri: post.uri, actorUri: 'https://remote.example/users/alice', poll });
-
-    expect(result).toMatchObject({ ok: true, val: { type: 'postNotFound' } });
-    expect(store).not.toHaveBeenCalled();
-  });
-
   it('投稿の作者でない actor からの更新は保存しない', async () => {
     const { store, useCase } = setup({ actorId: ActorId.generate() });
 

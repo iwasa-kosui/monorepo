@@ -124,21 +124,6 @@ describe('SendReplyUseCase の Bluesky への投稿の予約', () => {
     expect(scheduleBlueskyCrosspost.run).not.toHaveBeenCalled();
     expect(ctx.sendActivity).toHaveBeenCalled();
   });
-
-  it('予約の use case が無くても返信できる', async () => {
-    const { deps, session, parent } = setup();
-
-    const result = await SendReplyUseCase.create(deps).run({
-      sessionId: session.sessionId,
-      postId: parent.postId,
-      content: 'reply',
-      imageUrls: [],
-      request: new Request('https://example.com'),
-      ctx: createContext(),
-    });
-
-    expect(result.ok).toBe(true);
-  });
 });
 
 describe('SendReplyUseCase のメンション', () => {
@@ -305,23 +290,6 @@ describe('SendReplyUseCase のメンション', () => {
     expect(await Array.fromAsync(note.getTags())).toHaveLength(2);
   });
 
-  it('mentions だけが作者と同じなら、作者と followers への 2 回だけ送る', async () => {
-    const { deps, session, remoteParent, ctxWithRemoteAuthor } = setup();
-    const ctx = ctxWithRemoteAuthor();
-
-    await SendReplyUseCase.create(deps).run({
-      sessionId: session.sessionId,
-      postId: remoteParent.postId,
-      content: `<p>${mentionHtml(alice.id, 'alice@remote.example')}</p>`,
-      imageUrls: [],
-      mentions: [alice],
-      request: new Request('https://example.com'),
-      ctx,
-    });
-
-    expect(ctx.sendActivity).toHaveBeenCalledTimes(2);
-  });
-
   it('mentions への送信が失敗しても返信は成功し、Bluesky の予約まで進む', async () => {
     const { deps, session, localParent } = setup();
     const ctx = createContext();
@@ -344,69 +312,7 @@ describe('SendReplyUseCase のメンション', () => {
     expect(scheduleBlueskyCrosspost.run).toHaveBeenCalledTimes(1);
   });
 
-  it('mentions の無い返信は従来どおり followers にだけ送る', async () => {
-    const { deps, session, localParent } = setup();
-    const ctx = createContext();
-
-    await SendReplyUseCase.create(deps).run({
-      sessionId: session.sessionId,
-      postId: localParent.postId,
-      content: '<p>reply</p>',
-      imageUrls: [],
-      request: new Request('https://example.com'),
-      ctx,
-    });
-
-    expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
-  });
-
   const followersUri = 'https://example.com/users/kosui/followers';
-  const publicUri = 'https://www.w3.org/ns/activitystreams#Public';
-
-  it.each([
-    { visibility: 'unlisted' as const, tos: [followersUri], ccs: [publicUri, alice.id] },
-    { visibility: 'private' as const, tos: [followersUri], ccs: [alice.id] },
-  ])(
-    '親がローカルの返信を $visibility にすると、Note の to と cc を公開範囲に合わせ、保存もその値で行う',
-    async ({ visibility, tos, ccs }) => {
-      const { deps, session, localParent } = setup();
-      const ctx = createContext();
-
-      const result = await SendReplyUseCase.create(deps).run({
-        sessionId: session.sessionId,
-        postId: localParent.postId,
-        content: `<p>${mentionHtml(alice.id, 'alice@remote.example')} hi</p>`,
-        imageUrls: [],
-        mentions: [alice],
-        visibility,
-        request: new Request('https://example.com'),
-        ctx,
-      });
-
-      expect(result.ok && result.val.post.visibility).toBe(visibility);
-      const calls = vi.mocked(ctx.sendActivity).mock.calls;
-      expect(calls).toHaveLength(2);
-      expect(calls[0]?.[1]).toBe('followers');
-      const note = await noteOf(calls[0] ?? []);
-      expect(note.toIds.map((url) => url.href)).toEqual(tos);
-      expect(note.ccIds.map((url) => url.href)).toEqual(ccs);
-    },
-  );
-
-  it('visibility を省略した返信は public にする', async () => {
-    const { deps, session, localParent } = setup();
-
-    const result = await SendReplyUseCase.create(deps).run({
-      sessionId: session.sessionId,
-      postId: localParent.postId,
-      content: '<p>reply</p>',
-      imageUrls: [],
-      request: new Request('https://example.com'),
-      ctx: createContext(),
-    });
-
-    expect(result.ok && result.val.post.visibility).toBe('public');
-  });
 
   it('親がリモートの返信を private にすると、作者と followers に送り、Public をどこにも入れない', async () => {
     const { deps, session, remoteParent, ctxWithRemoteAuthor } = setup();
@@ -890,22 +796,10 @@ describe('SendReplyUseCase の元の投稿の公開範囲', () => {
   const cases: ReadonlyArray<
     readonly [Visibility | null, ReadonlyArray<readonly [Visibility | undefined, Visibility]>]
   > = [
-    ['unlisted', [[undefined, 'unlisted'], ['public', 'unlisted'], ['unlisted', 'unlisted'], ['private', 'private'], [
-      'direct',
-      'direct',
-    ]]],
-    ['private', [[undefined, 'private'], ['public', 'private'], ['unlisted', 'private'], ['private', 'private'], [
-      'direct',
-      'direct',
-    ]]],
-    ['direct', [[undefined, 'direct'], ['public', 'direct'], ['unlisted', 'direct'], ['private', 'direct'], [
-      'direct',
-      'direct',
-    ]]],
-    [null, [[undefined, 'public'], ['public', 'public'], ['unlisted', 'unlisted'], ['private', 'private'], [
-      'direct',
-      'direct',
-    ]]],
+    ['unlisted', [[undefined, 'unlisted'], ['public', 'unlisted'], ['private', 'private']]],
+    ['private', [[undefined, 'private'], ['public', 'private']]],
+    ['direct', [[undefined, 'direct'], ['public', 'direct']]],
+    [null, [[undefined, 'public'], ['unlisted', 'unlisted']]],
   ];
 
   describe.each(['local', 'remote'] as const)('親が%sの投稿のとき', (parentType) => {

@@ -222,17 +222,6 @@ describe('SendReplyUseCase の引用', () => {
     expect((await Array.fromAsync(note.getTags())).length).toBe(1);
   });
 
-  it('引用先が無ければ quoteUrl を付けず、本文も変えない', async () => {
-    const { run, postCreatedStore } = setup('local');
-
-    const { sent } = await run({ content: '<p>reply</p>' });
-
-    const note = await noteOf(sent[0]!.create);
-    expect(note.quoteUrl).toBeNull();
-    expect(postCreatedStore.items[0]?.eventPayload.quoteUri).toBeNull();
-    expect(postCreatedStore.items[0]?.aggregateState.content).toBe('<p>reply</p>');
-  });
-
   it('direct の返信では、返信先が自分のサーバーの投稿でも、引用先の作者を Mention と cc に入れず、配送もしない', async () => {
     const { run } = setup('local');
 

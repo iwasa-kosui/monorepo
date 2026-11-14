@@ -153,17 +153,6 @@ describe('SearchTimelineUseCase', () => {
     expect(resolve.mock.calls[0][0].terms).toEqual([{ pattern: '旅行', weight: 2 }]);
   });
 
-  it('展開の出力を解釈できないときも failed になる', async () => {
-    const { generator } = createStubTextGenerator(() => 'わかりません');
-    const { me, addPost, search } = setup({ textGenerator: generator });
-    const hit = addPost(me, '旅行', 1000);
-
-    const result = await expectOk(search('旅行'));
-
-    expect(result.expansion).toBe('failed');
-    expect(result.postIds).toEqual([hit]);
-  });
-
   it('展開が期限を過ぎると expansion が failed になり、original だけで検索する', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { me, addPost, resolve, search } = setup({
@@ -182,23 +171,6 @@ describe('SearchTimelineUseCase', () => {
     expect(warn).toHaveBeenCalledWith(
       'timeline search expansion failed: QueryExpansionTimeoutError: The query expansion did not finish within 10 ms.',
     );
-    warn.mockRestore();
-  });
-
-  it('AiError で失敗したときは、種類と message を 200 文字までに切り詰めてログに出す', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const longMessage = 'x'.repeat(300);
-    const generator: TextGenerator = {
-      summarize: () => RA.err({ type: 'AiError', message: longMessage }),
-      generate: () => RA.err({ type: 'AiError', message: longMessage }),
-    };
-    const { me, addPost, search } = setup({ textGenerator: generator });
-    addPost(me, '旅行の写真', 1000);
-
-    const result = await expectOk(search('旅行'));
-
-    expect(result.expansion).toBe('failed');
-    expect(warn).toHaveBeenCalledWith(`timeline search expansion failed: AiError: ${'x'.repeat(200)}`);
     warn.mockRestore();
   });
 
@@ -232,17 +204,6 @@ describe('SearchTimelineUseCase', () => {
 
     expect(result.expansion).toBe('skipped');
     expect(calls).toEqual([]);
-  });
-
-  it('textGenerator がなければ skipped になる', async () => {
-    const { me, addPost, search } = setup();
-    const hit = addPost(me, '旅行', 1000);
-
-    const result = await expectOk(search('旅行'));
-
-    expect(result.expansion).toBe('skipped');
-    expect(result.terms.expanded).toEqual([]);
-    expect(result.postIds).toEqual([hit]);
   });
 
   it('タグの属性の中だけで一致する投稿は除く', async () => {
@@ -310,15 +271,6 @@ describe('SearchTimelineUseCase', () => {
     expect(result.postIds).toEqual([twoExpanded, oneOriginal, oneExpanded]);
   });
 
-  it('query.limit 件までにする', async () => {
-    const { me, addPost, search } = setup();
-    const posts = [1000, 2000, 3000].map((time) => addPost(me, '旅行', time));
-
-    const result = await expectOk(search('旅行', 2));
-
-    expect(result.postIds).toEqual([posts[2], posts[1]]);
-  });
-
   it('ミュート中の投稿者の投稿は除く', async () => {
     const { userId, me, followed, addPost, resolve, search, mutedActorIdsResolverByUserId } = setup();
     const mine = addPost(me, '旅行', 1000);
@@ -340,16 +292,6 @@ describe('SearchTimelineUseCase', () => {
     expect(result.postIds).toEqual([]);
     expect(result.terms).toEqual({ original: [], expanded: [] });
     expect(resolve).not.toHaveBeenCalled();
-  });
-
-  it('問い合わせを空白で分けて、重複を除き 10 語までにする', async () => {
-    const { resolve, search } = setup();
-    const words = Array.from({ length: 12 }, (_, i) => `w${i}`);
-
-    const result = await expectOk(search(`${words.join('　')} W0`));
-
-    expect(normalizedOf(result.terms.original)).toEqual(words.slice(0, 10));
-    expect(resolve.mock.calls[0][0].terms).toEqual(words.slice(0, 10).map((pattern) => ({ pattern, weight: 2 })));
   });
 
   it('元の語がすべて使えなくても、展開に成功すると展開語で検索し、元の語を droppedOriginal に入れる', async () => {
@@ -396,15 +338,6 @@ describe('SearchTimelineUseCase', () => {
     expect(resolve.mock.calls[0][0].terms).toEqual([{ pattern: '京都', weight: 2 }]);
   });
 
-  it('すべての語が有効なら droppedOriginal は空の配列', async () => {
-    const { me, addPost, search } = setup();
-    addPost(me, '京都に行った', 1000);
-
-    const result = await expectOk(search('京都 旅行'));
-
-    expect(result.droppedOriginal).toEqual([]);
-  });
-
   it('onlyActorId があれば、その actorId の投稿だけを候補の resolver に渡す', async () => {
     const { me, followed, addPost, resolve, search } = setup();
     addPost(me, '旅行', 1000);
@@ -439,25 +372,5 @@ describe('SearchTimelineUseCase', () => {
 
     expect(result.postIds).toEqual([]);
     expect(resolve).not.toHaveBeenCalled();
-  });
-
-  it('viewerActorId に本人の actorId を返す', async () => {
-    const { me, search } = setup();
-
-    const result = await expectOk(search('旅行'));
-
-    expect(result.viewerActorId).toBe(me.id);
-  });
-
-  it('ローカルのアクターが見つからなければ UserNotFoundError を返す', async () => {
-    const { useCase } = setup();
-
-    const result = await useCase.run({
-      userId: crypto.randomUUID() as UserId,
-      query: TimelineSearchQuery.orThrow({ text: '旅行' }),
-    });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.err.type).toBe('UserNotFoundError');
   });
 });

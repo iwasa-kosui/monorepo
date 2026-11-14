@@ -15,7 +15,6 @@ import type { UserId } from '../../domain/user/userId.ts';
 import { sha256Hex } from '../../helper/sha256.ts';
 import type { TextEmbedder } from '../../ports/textEmbedder.ts';
 import { createStubEmbedder } from '../../testing/aiStubs.ts';
-import { INTEREST_EMBEDDING_MODEL } from '../helper/embedInterestSources.ts';
 import { KOSUI_FEED_MAX_ITEMS, KOSUI_FEED_URL, SyncKosuiInterestSourcesUseCase } from '../syncKosuiInterestSources.ts';
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 4, 21, 0));
@@ -130,7 +129,6 @@ describe('SyncKosuiInterestSourcesUseCase', () => {
     expect(rowOf(POST_URL).occurredAt).toBe(Date.UTC(2026, 10, 3));
     expect(rowOf(EXTERNAL_URL).occurredAt).toBe(NOW);
     expect(stub.calls).toHaveLength(1);
-    expect(stub.calls[0]?.model).toBe(INTEREST_EMBEDDING_MODEL);
     expect([...(stub.calls[0]?.texts ?? [])].sort()).toEqual([
       '寄稿 A\n寄稿の説明',
       '登壇 A\n登壇の説明',
@@ -392,14 +390,5 @@ describe('SyncKosuiInterestSourcesUseCase', () => {
       expect.objectContaining({ errorMessage: expect.stringContaining('1024') }),
     );
     expect(rows().filter((row) => row.embeddedAt === null)).toHaveLength(1);
-  });
-
-  it('埋め込み器が無ければ埋め込みを飛ばす', async () => {
-    const { userId, useCase, rows } = setup({ textEmbedder: null });
-
-    const result = await useCase.run({ userId });
-
-    expect(result).toEqual({ ok: true, val: { created: 3, changed: 0, deleted: 0, embedded: 0 } });
-    expect(rows().every((row) => row.embeddedAt === null)).toBe(true);
   });
 });

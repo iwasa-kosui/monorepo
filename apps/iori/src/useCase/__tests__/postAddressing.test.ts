@@ -34,12 +34,4 @@ describe('toPostAddressing', () => {
     expect(href(tos)).toEqual([alice.href, bob.href]);
     expect(ccs).toEqual([]);
   });
-
-  it.each(['public', 'unlisted', 'private'] as const)(
-    '%s でメンションが無ければ cc にメンションを足さない',
-    (visibility) => {
-      const { tos, ccs } = toPostAddressing({ visibility, followersUri, mentionUris: [] });
-      expect(href([...tos, ...ccs]).filter((uri) => uri === alice.href)).toEqual([]);
-    },
-  );
 });

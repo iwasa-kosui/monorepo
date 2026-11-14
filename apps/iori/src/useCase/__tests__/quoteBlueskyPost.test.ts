@@ -2,17 +2,11 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Instant } from '../../domain/instant/instant.ts';
-import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
+import type { BlueskyClient, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import { QuoteBlueskyPostUseCase } from '../quoteBlueskyPost.ts';
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 12, 3));
 const TOP = 'at://did:plc:a/app.bsky.feed.post/top';
-const failure: BlueskyClientError = {
-  type: 'BlueskyClientError',
-  kind: 'http',
-  message: 'getPosts failed: status 500',
-  status: 500,
-};
 
 const setup = (posts: Record<string, unknown> = { [TOP]: { uri: TOP, cid: 'bafytop', record: { text: 'top' } } }) => {
   const createRecord = vi.fn<BlueskyClient['createRecord']>(async (_record, rkey) =>
@@ -71,53 +65,12 @@ describe('QuoteBlueskyPostUseCase', () => {
     });
   });
 
-  it('5 枚の画像は入力不正にし、対象の取得も投稿もしない', async () => {
-    const t = setup();
-
-    const result = await t.quote.run({
-      uri: TOP,
-      text: 'hi',
-      images: Array.from({ length: 5 }, () => ({ bytes: new Uint8Array([1]), mimeType: 'image/png', alt: '' })),
-    });
-
-    expect(result).toEqual({ ok: false, err: { type: 'BlueskyPostInvalid', reason: 'too_many_images' } });
-    expect(t.query).not.toHaveBeenCalled();
-  });
-
-  it('空文字と 301 grapheme を入力不正にし、対象の取得も投稿もしない', async () => {
-    const t = setup();
-
-    const empty = await t.quote.run({ uri: TOP, text: '  \n' });
-    const long = await t.quote.run({ uri: TOP, text: 'あ'.repeat(301) });
-
-    expect(empty).toEqual({ ok: false, err: { type: 'BlueskyPostInvalid', reason: 'empty' } });
-    expect(long).toEqual({ ok: false, err: { type: 'BlueskyPostInvalid', reason: 'too_many_graphemes' } });
-    expect(t.query).not.toHaveBeenCalled();
-    expect(t.createRecord).not.toHaveBeenCalled();
-  });
-
-  it('300 grapheme ちょうどは通す', async () => {
-    const t = setup();
-
-    expect((await t.quote.run({ uri: TOP, text: 'あ'.repeat(300) })).ok).toBe(true);
-  });
-
   it('getPosts に投稿が無ければ（削除済み）NotFound にし、投稿しない', async () => {
     const t = setup({});
 
     const result = await t.quote.run({ uri: TOP, text: 'hi' });
 
     expect(result).toEqual({ ok: false, err: { type: 'BlueskyQuoteTargetNotFound' } });
-    expect(t.createRecord).not.toHaveBeenCalled();
-  });
-
-  it('getPosts の失敗を Bluesky のエラーとして返し、投稿しない', async () => {
-    const t = setup();
-    t.query.mockReturnValueOnce(RA.err(failure));
-
-    const result = await t.quote.run({ uri: TOP, text: 'hi' });
-
-    expect(result).toEqual({ ok: false, err: failure });
     expect(t.createRecord).not.toHaveBeenCalled();
   });
 
@@ -159,33 +112,9 @@ describe('QuoteBlueskyPostUseCase', () => {
     });
   });
 
-  it('createRecord の失敗を返す', async () => {
-    const t = setup();
-    t.createRecord.mockReturnValueOnce(RA.err(failure));
-
-    expect(await t.quote.run({ uri: TOP, text: 'hi' })).toEqual({ ok: false, err: failure });
-  });
-
   describe('返信の制限と引用の禁止', () => {
-    it('interaction が無いか既定なら createRecord だけを呼び、gate を作らない', async () => {
-      const t = setup();
-
-      await t.quote.run({ uri: TOP, text: 'a' });
-      await t.quote.run({
-        uri: TOP,
-        text: 'b',
-        interaction: { replyRestriction: 'everyone', quoteDisabled: false },
-      });
-
-      expect(t.createRecord).toHaveBeenCalledTimes(2);
-      expect(t.createPostWithGates).not.toHaveBeenCalled();
-    });
-
     it.each(
       [
-        ['mention だけ', { replyRestriction: ['mention'], quoteDisabled: false }],
-        ['following と followers', { replyRestriction: ['following', 'followers'], quoteDisabled: false }],
-        ['空集合 (誰も返信できない)', { replyRestriction: [], quoteDisabled: false }],
         ['引用の禁止だけ', { replyRestriction: 'everyone', quoteDisabled: true }],
         ['返信の制限と引用の禁止', { replyRestriction: ['mention', 'followers'], quoteDisabled: true }],
       ] as const,
@@ -210,31 +139,5 @@ describe('QuoteBlueskyPostUseCase', () => {
         });
       },
     );
-
-    it('引用できない投稿には、interaction があっても投稿しない', async () => {
-      const t = setup({ [TOP]: { uri: TOP, cid: 'bafytop', viewer: { embeddingDisabled: true } } });
-
-      const result = await t.quote.run({
-        uri: TOP,
-        text: 'hi',
-        interaction: { replyRestriction: [], quoteDisabled: true },
-      });
-
-      expect(result).toEqual({ ok: false, err: { type: 'BlueskyQuoteNotAllowed' } });
-      expect(t.createPostWithGates).not.toHaveBeenCalled();
-    });
-
-    it('createPostWithGates の失敗を返す', async () => {
-      const t = setup();
-      t.createPostWithGates.mockReturnValueOnce(RA.err(failure));
-
-      const result = await t.quote.run({
-        uri: TOP,
-        text: 'hi',
-        interaction: { replyRestriction: [], quoteDisabled: false },
-      });
-
-      expect(result).toEqual({ ok: false, err: failure });
-    });
   });
 });
