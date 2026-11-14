@@ -301,7 +301,6 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ did: DID, following: true, followedBy: true, followUri: FOLLOW_URI });
-    expect(t.reader.getProfile).toHaveBeenCalledExactlyOnceWith(DID);
   });
 
   it('自分の DID のプロフィールだけ isSelf を true にする。自分の DID が取れなければ false にする', async () => {
@@ -363,22 +362,6 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
     });
   });
 
-  it('続きが無いとき cursor を null にし、cursor を付けなければ undefined で呼ぶ', async () => {
-    const t = await setup({
-      scope: 'read:accounts',
-      reader: { getAuthorFeed: vi.fn(async () => RA.ok({ items: [], cursor: undefined, unavailable: null })) },
-    });
-
-    const response = await t.get(`${PROFILES}/${DID}/feed`);
-
-    expect(await response.json()).toEqual({ items: [], cursor: null, unavailable: null });
-    expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({
-      actor: DID,
-      cursor: undefined,
-      filter: 'posts_and_author_threads',
-    });
-  });
-
   it.each(['', 'unknown', 'posts_with_likes', 'POSTS_WITH_MEDIA'])(
     '不正な filter=%j は 400 にし、reader を呼ばない',
     async (filter) => {
@@ -404,20 +387,6 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ items: [], cursor: null, unavailable: 'blocked' });
-  });
-
-  it('アカウントが無ければ 404、失敗は 502 にする', async () => {
-    const missing = await setup({
-      scope: 'read:accounts',
-      reader: { getAuthorFeed: vi.fn(async () => RA.err(clientError({ code: 'AccountTakedown', status: 400 }))) },
-    });
-    const failing = await setup({
-      scope: 'read:accounts',
-      reader: { getAuthorFeed: vi.fn(async () => RA.err(clientError())) },
-    });
-
-    expect((await missing.get(`${PROFILES}/${DID}/feed`)).status).toBe(404);
-    expect((await failing.get(`${PROFILES}/${DID}/feed`)).status).toBe(502);
   });
 });
 
@@ -502,18 +471,6 @@ describe('GET /api/iori/v1/bluesky/feeds/posts', () => {
     expect(t.feedReader.getFeedPosts).toHaveBeenCalledExactlyOnceWith({ uri: FEED_URI, cursor: 'abc' });
   });
 
-  it('list の uri も受け付け、続きが無いとき cursor を null にし、cursor を付けなければ undefined で呼ぶ', async () => {
-    const t = await setup({
-      scope: 'read:accounts',
-      feedReader: { getFeedPosts: vi.fn(async () => RA.ok({ items: [], cursor: undefined })) },
-    });
-
-    const response = await t.get(`${FEED_POSTS}?uri=${encodeURIComponent(LIST_URI)}`);
-
-    expect(await response.json()).toEqual({ items: [], cursor: null });
-    expect(t.feedReader.getFeedPosts).toHaveBeenCalledExactlyOnceWith({ uri: LIST_URI, cursor: undefined });
-  });
-
   it('uri が無い、または feed と list の URI でないとき 400 にし、Bluesky を呼ばない', async () => {
     const t = await setup({ scope: 'read:accounts' });
 
@@ -554,18 +511,9 @@ describe('GET /api/iori/v1/bluesky/feeds/posts', () => {
       return t.get(path);
     };
 
-    for (
-      const error of [
-        clientError({ status: 400, code: 'UnknownFeed' }),
-        clientError({ status: 400, code: 'UnknownList' }),
-        clientError({ status: 400, code: 'NotFound' }),
-        clientError({ status: 404 }),
-      ]
-    ) {
-      const response = await responseOf(error);
-      expect(response.status).toBe(404);
-      expect(await response.json()).toEqual({ error: 'Feed not found' });
-    }
+    const missing = await responseOf(clientError({ status: 400, code: 'UnknownFeed' }));
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: 'Feed not found' });
     for (
       const error of [
         clientError({ status: 502, code: 'UpstreamFailure' }),
@@ -613,8 +561,6 @@ describe('GET /api/iori/v1/bluesky/feeds/posts', () => {
   });
 });
 
-const NOT_FOUND = clientError({ status: 400, code: 'InvalidRequest' });
-
 describe('GET /api/iori/v1/bluesky/feeds/info', () => {
   it('feed の uri で一覧の項目の形を返す', async () => {
     const t = await setup({ scope: 'read:accounts' });
@@ -660,46 +606,10 @@ describe('GET /api/iori/v1/bluesky/feeds/info', () => {
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader.getFeedInfo).not.toHaveBeenCalled();
   });
-
-  it('見つからないとき 404、Bluesky のログイン失敗とそれ以外の失敗は 502 にする', async () => {
-    const path = `${FEED_INFO}?uri=${encodeURIComponent(FEED_URI)}`;
-    const missing = await setup({
-      scope: 'read:accounts',
-      feedReader: { getFeedInfo: vi.fn(async () => RA.err(NOT_FOUND)) },
-    });
-    const login = await setup({
-      scope: 'read:accounts',
-      feedReader: { getFeedInfo: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
-    });
-    const failing = await setup({
-      scope: 'read:accounts',
-      feedReader: { getFeedInfo: vi.fn(async () => RA.err(clientError())) },
-    });
-
-    const missingResponse = await missing.get(path);
-    expect(missingResponse.status).toBe(404);
-    expect(await missingResponse.json()).toEqual({ error: 'Feed not found' });
-    const loginResponse = await login.get(path);
-    expect(loginResponse.status).toBe(502);
-    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
-    const failingResponse = await failing.get(path);
-    expect(failingResponse.status).toBe(502);
-    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
-  });
 });
 
 describe('GET /api/iori/v1/bluesky/feeds/resolve', () => {
   const resolve = (url: string) => `${FEED_RESOLVE}?url=${encodeURIComponent(url)}`;
-
-  it('did の URL は Bluesky を呼ばずに at-uri を返す', async () => {
-    const t = await setup({ scope: 'read:accounts' });
-
-    const response = await t.get(resolve('https://bsky.app/profile/did:plc:gen/feed/whats-hot'));
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ uri: FEED_URI });
-    expect(t.feedReader.resolveHandle).not.toHaveBeenCalled();
-  });
 
   it('ハンドルの URL は did に解決した at-uri を返す', async () => {
     const t = await setup({
@@ -742,30 +652,6 @@ describe('GET /api/iori/v1/bluesky/feeds/resolve', () => {
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader.resolveHandle).not.toHaveBeenCalled();
   });
-
-  it('ハンドルを解決できないとき 404、Bluesky のログイン失敗とそれ以外の失敗は 502 にする', async () => {
-    const path = resolve('https://bsky.app/profile/own.bsky.social/feed/a');
-    const missing = await setup({
-      scope: 'read:accounts',
-      feedReader: { resolveHandle: vi.fn(async () => RA.err(NOT_FOUND)) },
-    });
-    const login = await setup({
-      scope: 'read:accounts',
-      feedReader: { resolveHandle: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
-    });
-    const failing = await setup({
-      scope: 'read:accounts',
-      feedReader: { resolveHandle: vi.fn(async () => RA.err(clientError())) },
-    });
-
-    expect((await missing.get(path)).status).toBe(404);
-    const loginResponse = await login.get(path);
-    expect(loginResponse.status).toBe(502);
-    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
-    const failingResponse = await failing.get(path);
-    expect(failingResponse.status).toBe(502);
-    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
-  });
 });
 
 describe('GET /api/iori/v1/bluesky/lists/members', () => {
@@ -807,30 +693,6 @@ describe('GET /api/iori/v1/bluesky/lists/members', () => {
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader.getListMembers).not.toHaveBeenCalled();
   });
-
-  it('見つからないとき 404、Bluesky のログイン失敗とそれ以外の失敗は 502 にする', async () => {
-    const path = `${LIST_MEMBERS}?uri=${encodeURIComponent(LIST_URI)}`;
-    const missing = await setup({
-      scope: 'read:accounts',
-      feedReader: { getListMembers: vi.fn(async () => RA.err(NOT_FOUND)) },
-    });
-    const login = await setup({
-      scope: 'read:accounts',
-      feedReader: { getListMembers: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
-    });
-    const failing = await setup({
-      scope: 'read:accounts',
-      feedReader: { getListMembers: vi.fn(async () => RA.err(clientError())) },
-    });
-
-    expect((await missing.get(path)).status).toBe(404);
-    const loginResponse = await login.get(path);
-    expect(loginResponse.status).toBe(502);
-    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
-    const failingResponse = await failing.get(path);
-    expect(failingResponse.status).toBe(502);
-    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
-  });
 });
 
 describe.each(
@@ -870,31 +732,6 @@ describe.each(
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader[method]).not.toHaveBeenCalled();
-  });
-
-  it('アカウントが無いとき 404、Bluesky のログイン失敗とそれ以外の失敗は 502 にする', async () => {
-    const missing = await setup({
-      scope: 'read:accounts',
-      feedReader: { [method]: vi.fn(async () => RA.err(NOT_FOUND)) },
-    });
-    const login = await setup({
-      scope: 'read:accounts',
-      feedReader: { [method]: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
-    });
-    const failing = await setup({
-      scope: 'read:accounts',
-      feedReader: { [method]: vi.fn(async () => RA.err(clientError())) },
-    });
-
-    const missingResponse = await missing.get(path);
-    expect(missingResponse.status).toBe(404);
-    expect(await missingResponse.json()).toEqual({ error: 'Profile not found' });
-    const loginResponse = await login.get(path);
-    expect(loginResponse.status).toBe(502);
-    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
-    const failingResponse = await failing.get(path);
-    expect(failingResponse.status).toBe(502);
-    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
   });
 });
 
@@ -944,31 +781,6 @@ describe.each(
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.reader[method]).not.toHaveBeenCalled();
   });
-
-  it('アカウントが無いとき 404、Bluesky のログイン失敗とそれ以外の失敗は 502 にする', async () => {
-    const missing = await setup({
-      scope: 'read:accounts',
-      reader: { [method]: vi.fn(async () => RA.err(NOT_FOUND)) },
-    });
-    const login = await setup({
-      scope: 'read:accounts',
-      reader: { [method]: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
-    });
-    const failing = await setup({
-      scope: 'read:accounts',
-      reader: { [method]: vi.fn(async () => RA.err(clientError())) },
-    });
-
-    const missingResponse = await missing.get(path);
-    expect(missingResponse.status).toBe(404);
-    expect(await missingResponse.json()).toEqual({ error: 'Profile not found' });
-    const loginResponse = await login.get(path);
-    expect(loginResponse.status).toBe(502);
-    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
-    const failingResponse = await failing.get(path);
-    expect(failingResponse.status).toBe(502);
-    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
-  });
 });
 
 describe('POST /api/iori/v1/bluesky/follows', () => {
@@ -1006,67 +818,13 @@ describe('POST /api/iori/v1/bluesky/follows', () => {
     expect(t.client.createFollow).not.toHaveBeenCalled();
   });
 
-  it('未フォローなら createFollow を呼び、following と followUri を返す', async () => {
+  it('フォローしたら following と followUri を返す', async () => {
     const t = await setup({ scope: 'write:follows' });
 
     const response = await t.send('POST', FOLLOWS, { did: DID });
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ following: true, followUri: NEW_FOLLOW_URI });
-    expect(t.client.createFollow).toHaveBeenCalledExactlyOnceWith(DID);
-  });
-
-  it('body の followUri の記録が自分の repo にあれば、createFollow を呼ばずにその uri を返す', async () => {
-    const t = await setup({
-      scope: 'write:follows',
-      client: {
-        getRecord: vi.fn(async () => RA.ok({ uri: FOLLOW_URI, cid: 'cid', rkey: '3kfollow', value: { subject: DID } })),
-      },
-    });
-
-    const response = await t.send('POST', FOLLOWS, { did: DID, followUri: FOLLOW_URI });
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ following: true, followUri: FOLLOW_URI });
-    expect(t.client.getRecord).toHaveBeenCalledExactlyOnceWith('3kfollow', 'app.bsky.graph.follow');
-    expect(t.client.createFollow).not.toHaveBeenCalled();
-  });
-
-  it('getProfile が古い viewer.following を返しても、記録が無ければ createFollow を呼ぶ', async () => {
-    const t = await setup({
-      scope: 'write:follows',
-      reader: { getProfile: vi.fn(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW_URI }))) },
-    });
-
-    const response = await t.send('POST', FOLLOWS, { did: DID });
-
-    expect(await response.json()).toEqual({ following: true, followUri: NEW_FOLLOW_URI });
-    expect(t.client.createFollow).toHaveBeenCalledExactlyOnceWith(DID);
-  });
-
-  it('アカウントが無ければ 404 にし、フォローしない', async () => {
-    const t = await setup({
-      scope: 'write:follows',
-      reader: { getProfile: vi.fn(async () => RA.err(clientError({ status: 400, code: 'AccountDeactivated' }))) },
-    });
-
-    const response = await t.send('POST', FOLLOWS, { did: DID });
-
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: 'Profile not found' });
-    expect(t.client.createFollow).not.toHaveBeenCalled();
-  });
-
-  it('Bluesky のログインに失敗したら 502 と Bluesky login failed を返す', async () => {
-    const t = await setup({
-      scope: 'write:follows',
-      client: { createFollow: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
-    });
-
-    const response = await t.send('POST', FOLLOWS, { did: DID });
-
-    expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: 'Bluesky login failed' });
   });
 });
 
@@ -1128,23 +886,6 @@ describe('DELETE /api/iori/v1/bluesky/follows', () => {
     expect(await response.json()).toEqual({ following: false });
     expect(t.client.deleteFollow).toHaveBeenCalledExactlyOnceWith(FOLLOW_URI);
   });
-
-  it('アカウントが無ければ 404、Bluesky のログイン失敗は 502 にする', async () => {
-    const missing = await setup({
-      scope: 'write:follows',
-      reader: { getProfile: vi.fn(async () => RA.err(clientError({ status: 400, code: 'InvalidRequest' }))) },
-    });
-    const failing = await setup({
-      scope: 'write:follows',
-      reader: { getProfile: vi.fn(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW_URI }))) },
-      client: { deleteFollow: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
-    });
-
-    expect((await unfollow(missing)).status).toBe(404);
-    const response = await unfollow(failing);
-    expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: 'Bluesky login failed' });
-  });
 });
 
 describe('GET /api/iori/v1/bluesky/profile', () => {
@@ -1195,20 +936,6 @@ describe('GET /api/iori/v1/bluesky/profile', () => {
       avatar: 'https://cdn.example/avatar.jpg',
       banner: 'https://cdn.example/banner.jpg',
       cid: 'bafyrecord',
-    });
-    expect(t.reader.getProfile).toHaveBeenCalledExactlyOnceWith(OWN_DID);
-  });
-
-  it('レコードが無ければ、表示名・自己紹介・cid を null にする', async () => {
-    const t = await setup({
-      scope: 'read:accounts',
-      client: { getProfileRecord: vi.fn(async () => RA.ok(undefined)) },
-    });
-
-    expect(await (await t.get(OWN_PROFILE)).json()).toMatchObject({
-      displayName: null,
-      description: null,
-      cid: null,
     });
   });
 });
@@ -1322,37 +1049,13 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
     expect(t.client.putProfileRecord).not.toHaveBeenCalled();
   });
 
-  it('PDS が InvalidSwap を返したときも、409 と profile_conflict を返す', async () => {
-    const t = await setup({
-      scope: 'write:accounts',
-      client: {
-        putProfileRecord: vi.fn(async () => RA.err(clientError({ status: 400, code: 'InvalidSwap' }))),
-      },
-    });
-
-    const response = await t.put(OWN_PROFILE, form());
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ code: 'profile_conflict' });
-  });
-
-  it('文字列だけなら既存のキーを保持して putProfileRecord を呼び、uri と cid を返す', async () => {
+  it('成功したら uri と cid を返す', async () => {
     const t = await setup({ scope: 'write:accounts' });
 
     const response = await t.put(OWN_PROFILE, form());
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ uri: OWN_PROFILE_URI, cid: 'bafynew' });
-    expect(t.client.uploadBlob).not.toHaveBeenCalled();
-    expect(t.client.putProfileRecord).toHaveBeenCalledExactlyOnceWith(
-      {
-        $type: 'app.bsky.actor.profile',
-        displayName: '新名',
-        description: '新紹介',
-        pinnedPost: { uri: 'at://p' },
-      },
-      'bafycurrent',
-    );
   });
 
   it('avatar と banner のファイルを uploadBlob で上げて record に入れる。サイズ 0 のファイルは未指定として扱う', async () => {

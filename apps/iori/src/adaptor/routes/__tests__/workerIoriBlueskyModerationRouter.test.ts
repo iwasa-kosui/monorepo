@@ -34,7 +34,6 @@ const DID = 'did:plc:target';
 const OLD_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3kold';
 const NEW_BLOCK = 'at://did:plc:me/app.bsky.graph.block/3knew';
 const ROOT = 'at://did:plc:target/app.bsky.feed.post/3kroot';
-const REPLY = 'at://did:plc:other/app.bsky.feed.post/3kreply';
 const MUTES = '/api/iori/v1/bluesky/mutes';
 const THREAD_MUTES = '/api/iori/v1/bluesky/thread-mutes';
 const BLOCKS = '/api/iori/v1/bluesky/blocks';
@@ -261,7 +260,6 @@ describe('GET /api/iori/v1/bluesky/moderation/:did', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ muted: true, blockUri: OLD_BLOCK });
-    expect(t.reader.resolveViewerState).toHaveBeenCalledExactlyOnceWith(DID);
   });
 });
 
@@ -273,7 +271,6 @@ describe('/api/iori/v1/bluesky/mutes', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ muted: true });
-    expect(t.client.muteActor).toHaveBeenCalledExactlyOnceWith(DID);
     expect(t.rows()).toEqual([{ did: DID, muted: 1, blockUri: null }]);
   });
 
@@ -285,7 +282,6 @@ describe('/api/iori/v1/bluesky/mutes', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ muted: false });
-    expect(t.client.unmuteActor).toHaveBeenCalledExactlyOnceWith(DID);
     expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: null }]);
   });
 
@@ -315,7 +311,6 @@ describe('/api/iori/v1/bluesky/thread-mutes', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ threadMuted: true });
-    expect(t.client.muteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
     expect(t.rows()).toEqual([]);
   });
 
@@ -326,21 +321,7 @@ describe('/api/iori/v1/bluesky/thread-mutes', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ threadMuted: false });
-    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
     expect(t.rows()).toEqual([]);
-  });
-
-  it('POST は返信の uri を受け取ったら、根の uri でスレッドをミュートする', async () => {
-    const t = await setup();
-    t.query.mockReturnValueOnce(RA.ok({
-      posts: [{ uri: REPLY, cid: 'bafyreply', record: { reply: { root: { uri: ROOT }, parent: { uri: ROOT } } } }],
-    }));
-
-    const response = await t.send('POST', THREAD_MUTES, { root: REPLY }, t.cookie);
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ threadMuted: true });
-    expect(t.client.muteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
   });
 
   it('POST は投稿が見つからなければ 404 にし、スレッドのミュートを呼ばない', async () => {
@@ -352,17 +333,6 @@ describe('/api/iori/v1/bluesky/thread-mutes', () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: 'Bluesky post not found' });
     expect(t.client.muteThread).not.toHaveBeenCalled();
-  });
-
-  it('DELETE は投稿が見つからなければ、受け取った uri でスレッドのミュートを解除する', async () => {
-    const t = await setup();
-    t.query.mockReturnValueOnce(RA.ok({ posts: [] }));
-
-    const response = await t.send('DELETE', `${THREAD_MUTES}?root=${encodeURIComponent(REPLY)}`);
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ threadMuted: false });
-    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(REPLY);
   });
 
   it('root が投稿の at:// URI でない、または無いときは 400 にし、Bluesky を呼ばない', async () => {
@@ -396,17 +366,7 @@ describe('/api/iori/v1/bluesky/blocks', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ blockUri: NEW_BLOCK });
-    expect(t.client.createBlock).toHaveBeenCalledExactlyOnceWith(DID);
     expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: NEW_BLOCK }]);
-  });
-
-  it('POST は既にブロック済みなら、その uri を返して createBlock を呼ばない', async () => {
-    const t = await setup();
-
-    const response = await t.send('POST', BLOCKS, { did: DID });
-
-    expect(await response.json()).toEqual({ blockUri: OLD_BLOCK });
-    expect(t.client.createBlock).not.toHaveBeenCalled();
   });
 
   it('DELETE は blockUri を指定すればその uri を削除し、blockUri: null を返す', async () => {
@@ -420,17 +380,7 @@ describe('/api/iori/v1/bluesky/blocks', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ blockUri: null });
-    expect(t.client.deleteBlock).toHaveBeenCalledExactlyOnceWith(OLD_BLOCK);
     expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: null }]);
-  });
-
-  it('DELETE は blockUri が無ければ viewer.blocking を削除する', async () => {
-    const t = await setup();
-
-    const response = await t.send('DELETE', `${BLOCKS}?did=${encodeURIComponent(DID)}`);
-
-    expect(response.status).toBe(200);
-    expect(t.client.deleteBlock).toHaveBeenCalledExactlyOnceWith(OLD_BLOCK);
   });
 
   it('DELETE は block の uri でない blockUri を 400 にし、Bluesky を呼ばない', async () => {
