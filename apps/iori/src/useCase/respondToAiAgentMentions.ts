@@ -76,15 +76,17 @@ export type RespondToAiAgentMentionsUseCase = UseCase<Input, RespondToAiAgentMen
 
 type ActorResolverById = Agg.Resolver<ActorId, Actor | undefined>;
 
-type Deps = FollowupSchedulerDeps & Readonly<{
-  pendingTriggersResolver: AiAgentBotPendingTriggersResolver;
-  triggerClaimedStore: AiAgentBotTriggerClaimedStore;
-  triggersHandledStore: AiAgentBotTriggersHandledStore;
-  repliedCountResolverSince: AiAgentBotRepliedCountResolverSince;
-  actorResolverById: ActorResolverById;
-  chatModel: AgentChatModel;
-  now: () => Instant;
-}>;
+type Deps =
+  & FollowupSchedulerDeps
+  & Readonly<{
+    pendingTriggersResolver: AiAgentBotPendingTriggersResolver;
+    triggerClaimedStore: AiAgentBotTriggerClaimedStore;
+    triggersHandledStore: AiAgentBotTriggersHandledStore;
+    repliedCountResolverSince: AiAgentBotRepliedCountResolverSince;
+    actorResolverById: ActorResolverById;
+    chatModel: AgentChatModel;
+    now: () => Instant;
+  }>;
 
 export const handleOf = (actor: Actor | undefined): string => {
   if (actor === undefined) return '(不明なアカウント)';

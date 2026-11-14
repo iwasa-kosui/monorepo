@@ -20,12 +20,7 @@ import { Instant } from '../domain/instant/instant.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import type { AgentChatModel } from '../ports/agentChatModel.ts';
 import { runAgentLoop } from './aiAgent/agentLoop.ts';
-import {
-  type AiAgentBotCapabilities,
-  createAgentTools,
-  formatPost,
-  formatPosts,
-} from './aiAgent/agentTools.ts';
+import { type AiAgentBotCapabilities, createAgentTools, formatPost, formatPosts } from './aiAgent/agentTools.ts';
 import {
   AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
   AI_AGENT_BOT_MAX_STEPS,
@@ -60,14 +55,16 @@ export type RunAiAgentFollowupsSummary = Readonly<{
 
 export type RunAiAgentFollowupsUseCase = UseCase<Input, RunAiAgentFollowupsSummary, never>;
 
-type Deps = FollowupSchedulerDeps & Readonly<{
-  dueFollowupsResolver: AiAgentBotDueFollowupsResolver;
-  followupClaimedStore: AiAgentBotFollowupClaimedStore;
-  followupsHandledStore: AiAgentBotFollowupsHandledStore;
-  repliedCountResolverSince: AiAgentBotRepliedCountResolverSince;
-  actorResolverById: Agg.Resolver<ActorId, Actor | undefined>;
-  chatModel: AgentChatModel;
-}>;
+type Deps =
+  & FollowupSchedulerDeps
+  & Readonly<{
+    dueFollowupsResolver: AiAgentBotDueFollowupsResolver;
+    followupClaimedStore: AiAgentBotFollowupClaimedStore;
+    followupsHandledStore: AiAgentBotFollowupsHandledStore;
+    repliedCountResolverSince: AiAgentBotRepliedCountResolverSince;
+    actorResolverById: Agg.Resolver<ActorId, Actor | undefined>;
+    chatModel: AgentChatModel;
+  }>;
 
 /**
  * 期日を迎えたフォローアップを実行する。bot はメモとスレッドを読み直して続きを調べ、もとの投稿に続報を返信する。

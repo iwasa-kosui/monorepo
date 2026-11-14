@@ -30,8 +30,7 @@ export const MAX_TOOL_CALLS_PER_STEP = 4;
 /** ツールの結果をモデルに渡すときの文字数の上限 */
 export const MAX_TOOL_RESULT_CHARS = 11000;
 
-export const FINAL_STEP_INSTRUCTION =
-  'これ以上は調べられません。ここまでに分かったことだけで仕上げてください。';
+export const FINAL_STEP_INSTRUCTION = 'これ以上は調べられません。ここまでに分かったことだけで仕上げてください。';
 
 /** モデルがツールを正しく呼ばず、本文に呼び出しを書いてしまったときに返す指示 */
 export const TOOL_CALL_AS_TEXT_INSTRUCTION =

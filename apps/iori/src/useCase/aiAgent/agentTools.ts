@@ -224,7 +224,10 @@ export const createPublishTool = (
       parameters: {
         type: 'object',
         properties: {
-          text: { type: 'string', description: `本文（${MAX_BOT_POST_CHARACTERS} 文字以内の平文。メンションは付けない）` },
+          text: {
+            type: 'string',
+            description: `本文（${MAX_BOT_POST_CHARACTERS} 文字以内の平文。メンションは付けない）`,
+          },
         },
         required: ['text'],
       },
@@ -270,7 +273,8 @@ export const createFollowupTool = (
       properties: {
         note: {
           type: 'string',
-          description: `あとの自分へのメモ。何を、どこで調べるつもりかを ${MAX_FOLLOWUP_NOTE_CHARACTERS} 文字以内で書く`,
+          description:
+            `あとの自分へのメモ。何を、どこで調べるつもりかを ${MAX_FOLLOWUP_NOTE_CHARACTERS} 文字以内で書く`,
         },
         afterMinutes: {
           type: 'number',

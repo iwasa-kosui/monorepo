@@ -117,7 +117,9 @@ describe('RunAiAgentFollowupsUseCase', () => {
   });
 
   it('続報で、もう一度予定を入れると、回数が 1 つ増える', async () => {
-    const { model } = scriptedModel([toolCall('schedule_followup', { note: 'まだ未発表。また見る', afterMinutes: 1440 })]);
+    const { model } = scriptedModel([
+      toolCall('schedule_followup', { note: 'まだ未発表。また見る', afterMinutes: 1440 }),
+    ]);
     const { scheduled, handled } = await run(model, followupOf(1));
 
     expect(scheduled).toMatchObject([{ postId: TARGET_POST_ID, round: 2 }]);
