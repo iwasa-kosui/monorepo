@@ -332,8 +332,9 @@ export const RemoteUserPage = ({
                       type='button'
                       onClick={onMessage}
                       disabled={isOpeningMessage === true}
-                      class='flex items-center justify-center gap-1 p-2 rounded-xl text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
+                      class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
                       title='メッセージ'
+                      aria-label='メッセージ'
                     >
                       <svg
                         xmlns='http://www.w3.org/2000/svg'
@@ -349,7 +350,6 @@ export const RemoteUserPage = ({
                           d='M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
                         />
                       </svg>
-                      メッセージ
                     </button>
                   )}
                   {isReported && <span role='status' class='text-sm text-sage-dark dark:text-sage'>通報しました</span>}
