@@ -10,11 +10,16 @@ import type { UserId } from '../user/userId.ts';
  * AI エージェントの bot のユーザー名。パスワードもパスキーも持たないので、誰もこのユーザーでログインできない。
  * bot の操作は、cron から Workers AI のエージェントが行う。
  *
- * GitHub のユーザー名には使えない `_` を含める。GitHub の PR やコミットメッセージで bot のハンドルを
- * 素のまま書いても、同名の GitHub アカウントの持ち主へメンションの通知が飛ばないようにするため。
- * Fediverse（Mastodon など）のユーザー名では `_` を使える。
+ * `agent` は GitHub のユーザー名としても使える。GitHub の PR やコミットメッセージで bot のハンドルを書くときは、
+ * 同名の GitHub アカウントの持ち主へメンションの通知が飛ばないよう、必ずバッククォートで囲む。
  */
-export const AI_AGENT_BOT_USERNAME = 'iori_bot';
+export const AI_AGENT_BOT_USERNAME = 'agent';
+
+/**
+ * 以前の bot のユーザー名。アカウントは消さずに残し、もう動かさない。
+ * 残ったアカウントが人のアカウントに見えないよう、bot であることは示し続ける。
+ */
+export const RETIRED_AI_AGENT_BOT_USERNAMES: readonly string[] = ['iori_bot'];
 
 export const AI_AGENT_BOT_PROFILE = {
   displayName: 'iori (AI)',
@@ -31,7 +36,9 @@ export const MAX_BOT_REPLIES_PER_DAY = 50;
 /** これより古いメンションや返信には答えない。止まっていた間に溜まったものへ遅れて答えるのを防ぐ */
 export const BOT_TRIGGER_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
-export const isAiAgentBotUsername = (username: string): boolean => username === AI_AGENT_BOT_USERNAME;
+/** bot のアカウントかを判定する。以前の bot のアカウントも含む */
+export const isAiAgentBotUsername = (username: string): boolean =>
+  username === AI_AGENT_BOT_USERNAME || RETIRED_AI_AGENT_BOT_USERNAMES.includes(username);
 
 /** bot に返事を求める投稿（bot へのメンションか、bot の投稿への返信） */
 export type AiAgentBotTrigger = Readonly<{
