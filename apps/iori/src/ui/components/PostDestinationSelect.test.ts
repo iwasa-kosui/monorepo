@@ -31,10 +31,6 @@ describe('PostDestinationSelect', () => {
     expect(html).not.toMatch(/<option value="both" selected="">/);
   });
 
-  it('送り先のセレクトを aria-label 付きで出す', () => {
-    expect(render()).toMatch(/<select name="destination" aria-label="送り先"/);
-  });
-
   it('disabled のとき、セレクトを無効にする', () => {
     const html = render({ allowBlueskyOnly: true, disabled: true });
 

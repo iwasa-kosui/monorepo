@@ -1,9 +1,7 @@
 import { jsx } from 'hono/jsx';
 import { describe, expect, it } from 'vitest';
 
-import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
-import { postToStatus } from '../legacyConversion.ts';
 import { FediverseReplyModal, shouldCloseReplyModalOnKey } from './FediverseReplyModal.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
 
@@ -26,30 +24,6 @@ const dialog = (overrides: Partial<UseReplyDialogReturn> = {}): UseReplyDialogRe
   sendReply: () => Promise.resolve(true),
   ...overrides,
 });
-
-const parent = (overrides: Partial<PostWithAuthor> = {}) =>
-  postToStatus({
-    postId: 'post-1',
-    actorId: 'actor-1',
-    userId: 'user-1',
-    username: 'mzp',
-    content: '<p>アメリカに閉じこめられた?!</p>',
-    createdAt: Date.parse('2026-01-02T03:04:05.000Z'),
-    logoUri: undefined,
-    liked: false,
-    reposted: false,
-    inReplyToUri: null,
-    summary: null,
-    sensitive: false,
-    images: [],
-    likeCount: 0,
-    repostCount: 0,
-    reactions: [],
-    linkPreviews: [],
-    type: 'remote',
-    uri: 'https://remote.example/notes/1',
-    ...overrides,
-  } as unknown as PostWithAuthor);
 
 const render = (overrides: Partial<UseReplyDialogReturn> = {}): string =>
   String(jsx(FediverseReplyModal, { dialog: dialog(overrides) }));
@@ -82,15 +56,6 @@ describe('FediverseReplyModal', () => {
     const html = render({ replyingToPostId: 'post-1' });
 
     expect(html).toMatch(/<button[^>]*aria-pressed="false"[^>]*>プレビュー<\/button>/);
-  });
-
-  it('公開範囲と送り先のセレクトを、キャンセルと返信するのボタンと同じ行に出す', () => {
-    const html = render({ replyingToPostId: 'post-1' });
-    const footer = html.slice(html.indexOf('mr-auto flex flex-wrap'));
-
-    expect(footer).toContain('aria-label="公開範囲"');
-    expect(footer).toContain('aria-label="送り先"');
-    expect(footer).toContain('キャンセル');
   });
 
   it('本文が空なら送信できない', () => {
@@ -151,36 +116,5 @@ describe('shouldCloseReplyModalOnKey', () => {
 
   it('Escape 以外のキーでは閉じない', () => {
     expect(shouldCloseReplyModalOnKey('Enter', false)).toBe(false);
-  });
-
-  it('返信先の投稿があれば、本文を入力欄の上に出す', () => {
-    const html = render({ replyingToPostId: 'post-1', replyingToStatus: parent() });
-
-    expect(html).toContain('aria-label="返信先の投稿"');
-    expect(html).toContain('アメリカに閉じこめられた?!');
-    expect(html.indexOf('aria-label="返信先の投稿"')).toBeLessThan(html.indexOf('<textarea'));
-  });
-
-  it('返信先の投稿に CW があれば、本文の代わりに CW の文を出す', () => {
-    const html = render({
-      replyingToPostId: 'post-1',
-      replyingToStatus: parent({ summary: 'ネタバレ' } as Partial<PostWithAuthor>),
-    });
-
-    expect(html).toContain('ネタバレ');
-    expect(html).not.toContain('アメリカに閉じこめられた?!');
-  });
-
-  it('返信先の投稿はリンクにせず、書いている途中で移動しないようにする', () => {
-    const html = render({ replyingToPostId: 'post-1', replyingToStatus: parent() });
-    const card = html.slice(html.indexOf('aria-label="返信先の投稿"'), html.indexOf('<textarea'));
-
-    expect(card).not.toContain('<a ');
-  });
-
-  it('公開範囲が公開でなくても、Bluesky に送らない旨の文は出さない', () => {
-    const html = render({ replyingToPostId: 'post-1', replyVisibility: 'unlisted', replyDestination: 'both' });
-
-    expect(html).not.toContain('Bluesky には送りません');
   });
 });

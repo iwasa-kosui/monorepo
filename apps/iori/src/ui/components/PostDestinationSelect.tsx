@@ -10,7 +10,7 @@ type Props = Readonly<{
 }>;
 
 const baseOptions: ReadonlyArray<CompactSelectOption<PostDestination>> = [
-  { value: 'both', label: 'Bluesky にも' },
+  { value: 'both', label: '全体' },
   { value: 'fediverse', label: 'Fediverse のみ' },
 ];
 
