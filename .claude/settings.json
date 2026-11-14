@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|mcp__github__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.github/scripts/github-mentions/cli.mjs\" claude-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
