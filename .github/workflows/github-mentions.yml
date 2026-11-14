@@ -1,0 +1,33 @@
+name: GitHub mentions
+
+# PR のタイトル・本文・コミットメッセージに、意図しない GitHub のメンション（@user）が
+# 素のまま書かれていないか調べる。メンションされた人には通知（メール）が飛ぶ。
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+
+      - name: Test the detector
+        run: node --test .github/scripts/github-mentions/*.test.mjs
+
+      - name: Check PR title, body and commit messages
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          COMMIT_RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+        run: node .github/scripts/github-mentions/cli.mjs check-pr
