@@ -2,7 +2,11 @@ import { RA, Result } from '@iwasa-kosui/result';
 import { describe, expect, it } from 'vitest';
 
 import { ActorId } from '../domain/actor/actorId.ts';
-import type { AiAgentBotTrigger, AiAgentBotTriggerHandled } from '../domain/aiAgentBot/aiAgentBot.ts';
+import {
+  type AiAgentBotTrigger,
+  type AiAgentBotTriggerHandled,
+  MAX_BOT_REPLIES_PER_TRIGGER,
+} from '../domain/aiAgentBot/aiAgentBot.ts';
 import { MAX_PENDING_FOLLOWUPS } from '../domain/aiAgentBot/aiAgentBotFollowup.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { PostId } from '../domain/post/postId.ts';
@@ -57,8 +61,9 @@ const scriptedModel = (script: (request: AgentChatRequest, call: number) => Agen
 
 const run = async (
   chatModel: AgentChatModel,
-  replyResult: Result<void, string> = Result.ok(undefined),
+  replyResult: Result<null, string> = Result.ok(null),
   pendingFollowups = 0,
+  sentIds: PostId[] = [],
 ) => {
   const followups = createInMemoryFollowups(() => NOW, pendingFollowups);
   const stored: AiAgentBotTriggerHandled[] = [];
@@ -82,7 +87,10 @@ const run = async (
     replier: {
       reply: async (reply) => {
         replies.push(reply);
-        return replyResult;
+        if (!replyResult.ok) return Result.err(replyResult.err);
+        const sent = PostId.generate();
+        sentIds.push(sent);
+        return Result.ok(sent);
       },
     },
   });
@@ -109,11 +117,22 @@ describe('RespondToAiAgentMentionsUseCase', () => {
 
   it('1 つのトリガーに返信できる回数を超えたら、それ以上は送らない', async () => {
     const { model } = scriptedModel((_, call) =>
-      call < 3 ? toolCall('reply', { text: `返信 ${call}` }) : { content: undefined, toolCalls: [] }
+      call <= MAX_BOT_REPLIES_PER_TRIGGER
+        ? toolCall('reply', { text: `返信 ${call}` })
+        : { content: undefined, toolCalls: [] }
     );
     const { replies, stored } = await run(model);
-    expect(replies).toHaveLength(2);
+    expect(replies).toHaveLength(MAX_BOT_REPLIES_PER_TRIGGER);
     expect(stored).toMatchObject([{ outcome: 'replied' }]);
+  });
+
+  it('続けて返信すると、2 回目からは自分の直前の返信に返信して、スレッドにつなげる', async () => {
+    const { model } = scriptedModel((_, call) =>
+      call < 3 ? toolCall('reply', { text: `その ${call + 1}` }) : { content: undefined, toolCalls: [] }
+    );
+    const sentIds: PostId[] = [];
+    const { replies } = await run(model, Result.ok(null), 0, sentIds);
+    expect(replies.map((reply) => reply.postId)).toEqual([TRIGGER_POST_ID, sentIds[0], sentIds[1]]);
   });
 
   it('ステップの上限に達したら、reply ツールだけを渡して仕上げさせる', async () => {
@@ -162,7 +181,7 @@ describe('RespondToAiAgentMentionsUseCase', () => {
         ? toolCall('schedule_followup', { note: 'あとで確かめる', afterMinutes: 60 })
         : { content: undefined, toolCalls: [] }
     );
-    const { scheduled } = await run(model, Result.ok(undefined), MAX_PENDING_FOLLOWUPS);
+    const { scheduled } = await run(model, Result.ok(null), MAX_PENDING_FOLLOWUPS);
     expect(scheduled).toEqual([]);
     expect(requests[1]?.messages.at(-1)).toMatchObject({ role: 'tool', content: expect.stringMatching(/^エラー/) });
   });

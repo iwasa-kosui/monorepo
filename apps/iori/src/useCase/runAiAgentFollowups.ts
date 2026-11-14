@@ -22,7 +22,6 @@ import { runAgentLoop } from './aiAgent/agentLoop.ts';
 import {
   type AiAgentBotCapabilities,
   createAgentTools,
-  createPublishTool,
   formatPost,
   formatPosts,
 } from './aiAgent/agentTools.ts';
@@ -34,7 +33,7 @@ import {
   followupUserPrompt,
 } from './aiAgent/aiAgentBotPrompts.ts';
 import { createFollowupTools, type FollowupSchedulerDeps } from './aiAgent/followupScheduler.ts';
-import { type AiAgentBotReplier, buildReplyContent, handleOf } from './respondToAiAgentMentions.ts';
+import { type AiAgentBotReplier, createThreadedReplyTool, handleOf } from './respondToAiAgentMentions.ts';
 import type { UseCase } from './useCase.ts';
 
 /** 1 回の実行で処理するフォローアップの数。cron は 1 分ごとに動くので、少しずつ片付ける */
@@ -87,12 +86,11 @@ const create = (deps: Deps): RunAiAgentFollowupsUseCase => {
       ?? await capabilities.readPost(followup.postId);
     if (target === undefined) return { outcome: 'failed', reason: 'The follow-up post is not visible to the bot.' };
 
-    const replyTool = createPublishTool({
-      name: 'reply',
-      description: '続報を返信する投稿に返信する。返信の本文だけを渡す。ふつうは 1 回にまとめる。',
+    const replyTool = createThreadedReplyTool({
+      replier,
+      author,
+      postId: followup.postId,
       limit: Math.min(MAX_BOT_REPLIES_PER_TRIGGER, MAX_BOT_REPLIES_PER_THREAD - botRepliesInThread),
-      done: '返信しました。',
-      publish: (text) => replier.reply({ postId: followup.postId, ...buildReplyContent(author, text) }),
     });
 
     const now = deps.now();

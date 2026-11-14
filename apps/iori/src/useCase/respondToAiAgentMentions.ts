@@ -1,4 +1,4 @@
-import { RA, type Result } from '@iwasa-kosui/result';
+import { RA, Result } from '@iwasa-kosui/result';
 
 import type { Actor } from '../domain/actor/actor.ts';
 import type { ActorId } from '../domain/actor/actorId.ts';
@@ -27,6 +27,7 @@ import {
   createPublishTool,
   formatPost,
   formatPosts,
+  type PublishTool,
 } from './aiAgent/agentTools.ts';
 import {
   AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
@@ -49,9 +50,9 @@ export type AiAgentBotReply = Readonly<{
   mentions: readonly MentionRecipient[];
 }>;
 
-/** bot として返信を送る。runtime が SendReplyUseCase を包んで用意する */
+/** bot として返信を送り、送った返信の postId を返す。runtime が SendReplyUseCase を包んで用意する */
 export type AiAgentBotReplier = Readonly<{
-  reply: (reply: AiAgentBotReply) => Promise<Result<void, string>>;
+  reply: (reply: AiAgentBotReply) => Promise<Result<PostId, string>>;
 }>;
 
 type Input = Readonly<{
@@ -104,6 +105,32 @@ export const buildReplyContent = (
 };
 
 /**
+ * reply ツールを作る。1 回目は postId の投稿に、2 回目からは直前に送った自分の返信に返信して、スレッドにつなげる。
+ * 各返信の先頭には相手へのメンションを付ける。
+ */
+export const createThreadedReplyTool = (
+  input: Readonly<{ replier: AiAgentBotReplier; author: Actor | undefined; postId: PostId; limit: number }>,
+): PublishTool => {
+  let replyTo = input.postId;
+  return createPublishTool({
+    name: 'reply',
+    description: [
+      '答える投稿に返信する。返信の本文だけを渡す。',
+      `1 回に収まらない長い答えは、要点ごとに分けて何回か続けて呼んでよい（${input.limit} 回まで）。`,
+      '2 回目からは、自分の直前の返信への返信になり、スレッドとして読める。',
+    ].join(''),
+    limit: input.limit,
+    done: '返信しました。続きがあれば、もう一度 reply を呼べます。',
+    publish: async (text) => {
+      const sent = await input.replier.reply({ postId: replyTo, ...buildReplyContent(input.author, text) });
+      if (!sent.ok) return Result.err(sent.err);
+      replyTo = sent.val;
+      return Result.ok(undefined);
+    },
+  });
+};
+
+/**
  * bot 宛てのメンションと、bot の投稿への返信に、AI エージェントが答える。
  * 返信はエージェントが reply ツールで行う。reply を使わずに終えたら、答えなかったことになる。
  * 1 つのトリガーは 1 回だけ処理し、結果（返信した・答えなかった・失敗した）を記録する。
@@ -130,12 +157,11 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
       ?? await capabilities.readPost(trigger.postId);
     if (triggerPost === undefined) return { outcome: 'failed', reason: 'The trigger post is not visible to the bot.' };
 
-    const replyTool = createPublishTool({
-      name: 'reply',
-      description: '答える投稿に返信する。返信の本文だけを渡す。ふつうは 1 回にまとめる。',
+    const replyTool = createThreadedReplyTool({
+      replier,
+      author,
+      postId: trigger.postId,
       limit: Math.min(MAX_BOT_REPLIES_PER_TRIGGER, MAX_BOT_REPLIES_PER_THREAD - botRepliesInThread),
-      done: '返信しました。',
-      publish: (text) => replier.reply({ postId: trigger.postId, ...buildReplyContent(author, text) }),
     });
 
     const result = await agent({

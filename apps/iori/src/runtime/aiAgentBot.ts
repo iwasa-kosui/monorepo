@@ -175,7 +175,7 @@ export const createAiAgentBotReplier = (
       request: context.request,
       ctx: context.ctx,
     });
-    return sent.ok ? Result.ok(undefined) : Result.err(sent.err.message);
+    return sent.ok ? Result.ok(sent.val.post.postId) : Result.err(sent.err.message);
   },
 });
 

@@ -95,7 +95,7 @@ const run = async (
     replier: {
       reply: async (reply) => {
         replies.push(reply);
-        return Result.ok(undefined);
+        return Result.ok(PostId.generate());
       },
     },
   });

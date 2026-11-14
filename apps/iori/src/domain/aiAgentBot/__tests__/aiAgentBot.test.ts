@@ -14,3 +14,18 @@ describe('AiAgentBot.username', () => {
     expect(AiAgentBot.username).toMatch(/^[A-Za-z0-9_]+$/);
   });
 });
+
+describe('AiAgentBot.normalizePostText', () => {
+  it.each([
+    ['@kosui さん、こんにちは', 'さん、こんにちは'],
+    ['@kosui@mastodon.social こんにちは', 'こんにちは'],
+    ['[@kosui](https://mastodon.social/@kosui) さん、こんにちは', 'さん、こんにちは'],
+    ['[@kosui](https://mastodon.social/@kosui)\n本文', '本文'],
+  ])('先頭のメンションを取り除く: %s', (raw, expected) => {
+    expect(AiAgentBot.normalizePostText(raw)).toBe(expected);
+  });
+
+  it('本文の途中のメンションは残す', () => {
+    expect(AiAgentBot.normalizePostText('詳しくは @alice に聞いてください')).toBe('詳しくは @alice に聞いてください');
+  });
+});

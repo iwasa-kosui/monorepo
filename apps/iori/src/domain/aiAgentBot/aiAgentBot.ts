@@ -28,8 +28,11 @@ export const MAX_BOT_REPLIES_PER_THREAD = 20;
 /** 24 時間で bot が答えるトリガーの上限。Workers AI の利用量を抑える */
 export const MAX_BOT_REPLIES_PER_DAY = 200;
 
-/** 1 つのトリガーに bot が返信する上限。返信はツールで行うので、1 回で書ききれないときに続けて返信できる */
-export const MAX_BOT_REPLIES_PER_TRIGGER = 2;
+/**
+ * 1 つのトリガーに bot が返信する上限。1 回の投稿に収まらない答えは、何回かに分けてスレッドにして返信できる。
+ * 2 回目からは、bot 自身の直前の返信への返信にする
+ */
+export const MAX_BOT_REPLIES_PER_TRIGGER = 6;
 
 /** これより古いメンションや返信には答えない。止まっていた間に溜まったものへ遅れて答えるのを防ぐ */
 export const BOT_TRIGGER_EXPIRY_MS = 24 * 60 * 60 * 1000;
@@ -87,7 +90,7 @@ export const MAX_BOT_POST_CHARACTERS = 480;
 /**
  * モデルがツールに渡した本文を、投稿できる本文に整える。空なら undefined を返す。
  * - 前後の空白と、全体を囲む引用符やコードフェンスを取り除く
- * - 先頭のメンション（@user や @user@host）を取り除く。メンションは iori が付け直す
+ * - 先頭のメンション（@user、@user@host、Markdown のリンクにした [@user](URL)）を取り除く。メンションは iori が付け直す
  * - 上限を超えた分は切り詰めて「…」を付ける
  */
 const normalizePostText = (raw: string): string | undefined => {
@@ -95,7 +98,7 @@ const normalizePostText = (raw: string): string | undefined => {
   const fenced = /^```[a-z]*\n([\s\S]*?)\n```$/i.exec(text);
   if (fenced !== null) text = fenced[1]!.trim();
   if (text.length >= 2 && /^["「『]/.test(text) && /["」』]$/.test(text)) text = text.slice(1, -1).trim();
-  text = text.replace(/^(?:@[\w.-]+(?:@[\w.-]+)?(?:\s+|$))+/, '').trim();
+  text = text.replace(/^(?:(?:@[\w.-]+(?:@[\w.-]+)?|\[@[\w.-]+(?:@[\w.-]+)?\]\([^)\s]*\))(?:\s+|$))+/, '').trim();
   if (text.length === 0) return undefined;
   const chars = [...text];
   return chars.length > MAX_BOT_POST_CHARACTERS ? `${chars.slice(0, MAX_BOT_POST_CHARACTERS - 1).join('')}…` : text;
