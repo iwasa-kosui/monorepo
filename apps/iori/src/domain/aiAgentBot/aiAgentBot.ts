@@ -23,10 +23,10 @@ export const AI_AGENT_BOT_PROFILE = {
 } as const;
 
 /** 1 つのスレッドで bot が返信する上限。bot どうしや人との応酬が終わらないのを防ぐ */
-export const MAX_BOT_REPLIES_PER_THREAD = 5;
+export const MAX_BOT_REPLIES_PER_THREAD = 20;
 
 /** 24 時間で bot が答えるトリガーの上限。Workers AI の利用量を抑える */
-export const MAX_BOT_REPLIES_PER_DAY = 50;
+export const MAX_BOT_REPLIES_PER_DAY = 200;
 
 /** 1 つのトリガーに bot が返信する上限。返信はツールで行うので、1 回で書ききれないときに続けて返信できる */
 export const MAX_BOT_REPLIES_PER_TRIGGER = 2;

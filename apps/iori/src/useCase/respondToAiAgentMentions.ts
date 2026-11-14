@@ -38,7 +38,7 @@ import {
 import type { UseCase } from './useCase.ts';
 
 /** 1 回の実行で答えるトリガーの数。cron は 1 分ごとに動くので、少しずつ片付ける */
-export const MAX_TRIGGERS_PER_RUN = 3;
+export const MAX_TRIGGERS_PER_RUN = 5;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
