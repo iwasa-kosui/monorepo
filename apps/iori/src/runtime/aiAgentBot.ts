@@ -78,7 +78,7 @@ const fetchPage = (safeFetcher: SafeFetcher) => async (url: string) => {
 
 type Bot = Readonly<{ user: User; actor: LocalActor }>;
 
-/** bot から見える範囲で読み、bot として行動する道具の中身を用意する */
+/** bot から見える範囲で読み、bot として行動するツールの中身を用意する */
 export const createAiAgentBotCapabilities = (
   runtime: WorkerRuntimePorts,
   bot: Bot,

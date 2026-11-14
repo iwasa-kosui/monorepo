@@ -11,6 +11,8 @@ import {
   type AiAgentBotTriggerHandled,
   type AiAgentBotTriggersHandledStore,
   MAX_BOT_REPLIES_PER_DAY,
+  MAX_BOT_REPLIES_PER_THREAD,
+  MAX_BOT_REPLIES_PER_TRIGGER,
 } from '../domain/aiAgentBot/aiAgentBot.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { type MentionRecipient } from '../domain/post/mention.ts';
@@ -19,7 +21,13 @@ import type { PostId } from '../domain/post/postId.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import type { AgentChatModel } from '../ports/agentChatModel.ts';
 import { runAgentLoop } from './aiAgent/agentLoop.ts';
-import { type AiAgentBotCapabilities, createAgentTools, formatPost, formatPosts } from './aiAgent/agentTools.ts';
+import {
+  type AiAgentBotCapabilities,
+  createAgentTools,
+  createPublishTool,
+  formatPost,
+  formatPosts,
+} from './aiAgent/agentTools.ts';
 import {
   AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
   AI_AGENT_BOT_MAX_STEPS,
@@ -96,7 +104,8 @@ export const buildReplyContent = (
 
 /**
  * bot 宛てのメンションと、bot の投稿への返信に、AI エージェントが答える。
- * 1 つのトリガーには 1 回だけ答え、結果（返信した・答えなかった・失敗した）を記録する。
+ * 返信はエージェントが reply ツールで行う。reply を使わずに終えたら、答えなかったことになる。
+ * 1 つのトリガーは 1 回だけ処理し、結果（返信した・答えなかった・失敗した）を記録する。
  */
 const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
   const agent = runAgentLoop(deps.chatModel);
@@ -107,10 +116,11 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
   ): Promise<Omit<AiAgentBotTriggerHandled, 'handledAt' | 'postId'>> => {
     const author = (await deps.actorResolverById.resolve(trigger.authorActorId)).val;
     const thread = await capabilities.readThread(trigger.postId);
+    const botRepliesInThread = thread.filter((post) => post.authorActorId === bot.actorId).length;
     const decision = AiAgentBot.decideResponse({
       trigger,
       authorActorType: author?.type === 'remote' ? author.actorType : undefined,
-      botRepliesInThread: thread.filter((post) => post.authorActorId === bot.actorId).length,
+      botRepliesInThread,
       now: deps.now(),
     });
     if (decision.type === 'ignore') return { outcome: 'ignored', reason: decision.reason };
@@ -118,6 +128,14 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
     const triggerPost = thread.find((post) => post.postId === trigger.postId)
       ?? await capabilities.readPost(trigger.postId);
     if (triggerPost === undefined) return { outcome: 'failed', reason: 'The trigger post is not visible to the bot.' };
+
+    const replyTool = createPublishTool({
+      name: 'reply',
+      description: '答える投稿に返信する。返信の本文だけを渡す。ふつうは 1 回にまとめる。',
+      limit: Math.min(MAX_BOT_REPLIES_PER_TRIGGER, MAX_BOT_REPLIES_PER_THREAD - botRepliesInThread),
+      done: '返信しました。',
+      publish: (text) => replier.reply({ postId: trigger.postId, ...buildReplyContent(author, text) }),
+    });
 
     const result = await agent({
       model: AI_AGENT_BOT_MODEL,
@@ -127,17 +145,16 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
         trigger: formatPost(triggerPost),
         author: handleOf(author),
       }),
-      tools: createAgentTools(capabilities),
+      tools: [...createAgentTools(capabilities), replyTool.tool],
+      finalTools: [replyTool.tool],
       maxSteps: AI_AGENT_BOT_MAX_STEPS,
       maxOutputTokens: AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
     });
+    if (replyTool.published() > 0) return { outcome: 'replied', reason: null };
     if (!result.ok) return { outcome: 'failed', reason: result.err.message };
-
-    const answer = result.val.answer === undefined ? undefined : AiAgentBot.normalizeAnswer(result.val.answer);
-    if (answer === undefined) return { outcome: 'ignored', reason: 'emptyAnswer' };
-
-    const sent = await replier.reply({ postId: trigger.postId, ...buildReplyContent(author, answer) });
-    return sent.ok ? { outcome: 'replied', reason: null } : { outcome: 'failed', reason: sent.err };
+    const errors = replyTool.errors();
+    if (errors.length > 0) return { outcome: 'failed', reason: errors.join('; ') };
+    return { outcome: 'ignored', reason: 'noReply' };
   };
 
   return {

@@ -1,6 +1,5 @@
-import { RA, type Result } from '@iwasa-kosui/result';
+import { RA, Result } from '@iwasa-kosui/result';
 
-import { AiAgentBot } from '../domain/aiAgentBot/aiAgentBot.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { AgentChatModel } from '../ports/agentChatModel.ts';
@@ -9,6 +8,7 @@ import { runAgentLoop } from './aiAgent/agentLoop.ts';
 import {
   type AiAgentBotCapabilities,
   createAgentTools,
+  createPublishTool,
   formatPosts,
   MAX_RECENT_TIMELINE,
 } from './aiAgent/agentTools.ts';
@@ -44,26 +44,39 @@ type Deps = Readonly<{
   now: () => Instant;
 }>;
 
-/** AI エージェントの bot が、タイムラインを読んで自分から 1 件投稿する */
+/** AI エージェントの bot が、タイムラインを読んで自分から 1 件投稿する。投稿はエージェントが create_post ツールで行う */
 const create = (deps: Deps): PostAiAgentMusingUseCase => {
   const agent = runAgentLoop(deps.chatModel);
   return {
     run: async ({ capabilities, poster }) => {
       const timeline = await capabilities.readRecentTimeline(MAX_RECENT_TIMELINE);
+      let postId: PostId | undefined;
+      const postTool = createPublishTool({
+        name: 'create_post',
+        description: '自分の投稿として公開する。投稿の本文だけを渡す。',
+        limit: 1,
+        done: '投稿しました。',
+        publish: async (text) => {
+          const posted = await poster.post(text);
+          if (!posted.ok) return Result.err(posted.err);
+          postId = posted.val;
+          return Result.ok(undefined);
+        },
+      });
       const result = await agent({
         model: AI_AGENT_BOT_MODEL,
         system: musingSystemPrompt(),
         input: musingUserPrompt({ timeline: formatPosts(timeline), now: new Date(deps.now()).toISOString() }),
-        tools: createAgentTools(capabilities),
+        tools: [...createAgentTools(capabilities), postTool.tool],
+        finalTools: [postTool.tool],
         maxSteps: AI_AGENT_BOT_MAX_STEPS,
         maxOutputTokens: AI_AGENT_BOT_MAX_OUTPUT_TOKENS,
       });
+      if (postId !== undefined) return RA.ok({ posted: true, postId });
       if (!result.ok) return result;
-      const text = result.val.answer === undefined ? undefined : AiAgentBot.normalizeAnswer(result.val.answer);
-      if (text === undefined) return RA.ok({ posted: false, reason: 'nothingToSay' });
-      const posted = await poster.post(text);
-      if (!posted.ok) return RA.err({ type: 'AiAgentBotPostError', message: posted.err });
-      return RA.ok({ posted: true, postId: posted.val });
+      const errors = postTool.errors();
+      if (errors.length > 0) return RA.err({ type: 'AiAgentBotPostError', message: errors.join('; ') });
+      return RA.ok({ posted: false, reason: 'nothingToSay' });
     },
   };
 };

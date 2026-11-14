@@ -2,6 +2,7 @@ import type { Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import type { ActorId } from '../../domain/actor/actorId.ts';
+import { AiAgentBot, MAX_BOT_POST_CHARACTERS } from '../../domain/aiAgentBot/aiAgentBot.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { AgentTool } from './agentLoop.ts';
 
@@ -177,8 +178,63 @@ const actionTools = (capabilities: AiAgentBotCapabilities): AgentTool[] => {
   ];
 };
 
-/** bot に渡す道具の一覧。読み取りの道具と、いいね・リポスト・フォローの道具 */
+/** bot に渡すツールの一覧。読み取りのツールと、いいね・リポスト・フォローのツール */
 export const createAgentTools = (capabilities: AiAgentBotCapabilities): AgentTool[] => [
   ...readingTools(capabilities),
   ...actionTools(capabilities),
 ];
+
+const textArgs = z.object({ text: z.string() });
+
+/** 返信や投稿のように、結果を外に出すツール。何回出したかと、失敗した理由をあとから読める */
+export type PublishTool = Readonly<{
+  tool: AgentTool;
+  published: () => number;
+  errors: () => readonly string[];
+}>;
+
+/**
+ * 本文を受け取って外に出すツールを作る。本文は投稿できる形に整えてから publish に渡す。
+ * limit 回を超えて呼ばれたら、出さずにエラーを返す。
+ */
+export const createPublishTool = (
+  spec: Readonly<{
+    name: string;
+    description: string;
+    limit: number;
+    done: string;
+    publish: (text: string) => Promise<Result<void, string>>;
+  }>,
+): PublishTool => {
+  let published = 0;
+  const errors: string[] = [];
+  return {
+    tool: {
+      name: spec.name,
+      description: spec.description,
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: `本文（${MAX_BOT_POST_CHARACTERS} 文字以内の平文。メンションは付けない）` },
+        },
+        required: ['text'],
+      },
+      run: async (args) => {
+        const parsed = textArgs.safeParse(args);
+        if (!parsed.success) return invalidArgs(spec.name);
+        const text = AiAgentBot.normalizePostText(parsed.data.text);
+        if (text === undefined) return 'エラー: 本文が空です。';
+        if (published >= spec.limit) return `エラー: この実行で ${spec.name} を使える回数の上限に達しました。`;
+        const result = await spec.publish(text);
+        if (!result.ok) {
+          errors.push(result.err);
+          return `エラー: ${result.err}`;
+        }
+        published++;
+        return spec.done;
+      },
+    },
+    published: () => published,
+    errors: () => errors,
+  };
+};
