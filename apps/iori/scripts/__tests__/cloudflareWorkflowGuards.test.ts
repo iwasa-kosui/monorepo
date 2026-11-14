@@ -3,11 +3,12 @@ import { resolve } from 'node:path';
 import { expect, it } from 'vitest';
 import { parse } from 'yaml';
 
-type Workflow = { jobs: Record<string, { steps: { name?: string; run?: string }[] }> };
+type Workflow = { jobs: Record<string, { steps?: { name?: string; run?: string }[] }> };
 const repositoryRoot = resolve(process.cwd(), '..', '..');
 const guardedChecksScript = async () => {
   const ci = parse(await readFile(resolve(repositoryRoot, '.github/workflows/ci.yml'), 'utf8')) as Workflow;
-  return ci.jobs.iori.steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!;
+  const steps = Object.values(ci.jobs).flatMap(job => job.steps ?? []);
+  return steps.find(step => step.name === 'Run guarded Cloudflare checks')!.run!;
 };
 const runGuardedDefinition = async () => {
   const lines = (await guardedChecksScript()).split('\n');
