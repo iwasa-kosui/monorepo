@@ -102,7 +102,7 @@ jobs:
       - name: Test
         run: pnpm --filter result run test:ci
 
-  # iori は静的検査・単体テスト（4 分割）・workerd テストを並列のジョブに分け、
+  # iori は単体テストと、それ以外（静的検査・build・workerd テスト）の 2 つのジョブを並べて走らせ、
   # 最後の apps/iori ジョブで結果をまとめる（必須チェックの名前を変えないため）。
   iori-check:
     name: "apps/iori check"
@@ -180,16 +180,17 @@ jobs:
             printf '%s\n' '- Workflow-output redaction: passed'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Build
+        run: pnpm --filter iori run build
+
+      - name: Test on workerd
+        run: pnpm --filter iori run test:workerd
 
   iori-test:
-    name: "apps/iori test (${{ matrix.shard }}/4)"
+    name: "apps/iori test"
     needs: changes
     if: needs.changes.outputs.iori == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
     env:
       VAPID_PUBLIC_KEY: "dummy-public-key-for-ci"
       VAPID_PRIVATE_KEY: "dummy-private-key-for-ci"
@@ -214,47 +215,13 @@ jobs:
         run: pnpm --filter result run build
 
       - name: Test
-        run: pnpm --filter iori run test:ci --shard=${{ matrix.shard }}/4
-
-  iori-workerd:
-    name: "apps/iori workerd"
-    needs: changes
-    if: needs.changes.outputs.iori == 'true'
-    runs-on: ubuntu-latest
-    env:
-      VAPID_PUBLIC_KEY: "dummy-public-key-for-ci"
-      VAPID_PRIVATE_KEY: "dummy-private-key-for-ci"
-      VAPID_SUBJECT: "mailto:ci@example.com"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24.12.0"
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build packages/result
-        run: pnpm --filter result run build
-
-      - name: Build
-        run: pnpm --filter iori run build
-
-      - name: Test on workerd
-        run: pnpm --filter iori run test:workerd
+        run: pnpm --filter iori run test:ci
 
   iori:
     name: "apps/iori"
     runs-on: ubuntu-latest
     if: always()
-    needs: [changes, iori-check, iori-test, iori-workerd]
+    needs: [changes, iori-check, iori-test]
     steps:
       - name: Require every iori job to pass
         env:
