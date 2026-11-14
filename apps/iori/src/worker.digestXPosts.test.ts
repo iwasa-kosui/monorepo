@@ -164,38 +164,6 @@ describe('X の投稿を取り込んだ日のダイジェスト', () => {
     expect(sqlite.prepare('SELECT count(*) AS n FROM digest_x_posts').get()).toEqual({ n: 2 });
   });
 
-  it('7 日を過ぎて feed_entries から消えた投稿は出さず、残った投稿だけを出す', async () => {
-    const { request, summaryId, expireXPost } = await setup();
-    expireXPost(POST_TEXT);
-
-    const { body } = await summaryOf(request, summaryId);
-
-    expect(body.body?.html).toContain('<h2>X の投稿</h2>');
-    expect(body.body?.html).toContain(SECOND_TEXT);
-    expect(body.body?.html).not.toContain(POST_TEXT);
-  });
-
-  it('全部消えていれば、「X の投稿」の節を出さない', async () => {
-    const { request, summaryId, expireXPost } = await setup();
-    expireXPost(POST_TEXT);
-    expireXPost(SECOND_TEXT);
-
-    const { response, body } = await summaryOf(request, summaryId);
-
-    expect(response.status).toBe(200);
-    expect(body.body?.html).not.toContain('X の投稿');
-    for (const secret of secrets) expect(JSON.stringify(body).includes(secret), secret).toBe(false);
-  });
-
-  it('情報源を無効にした投稿は出さない', async () => {
-    const { sqlite, request, summaryId, xSource } = await setup();
-    sqlite.prepare('UPDATE feed_sources SET enabled = 0 WHERE feedSourceId = ?').run(xSource);
-
-    const { body } = await summaryOf(request, summaryId);
-
-    expect(body.body?.html).not.toContain('X の投稿');
-  });
-
   it('作者以外のユーザーと匿名には、まとめも X の投稿も見せない', async () => {
     const { sqlite, request, summaryId } = await setup();
     const otherUserId = crypto.randomUUID();

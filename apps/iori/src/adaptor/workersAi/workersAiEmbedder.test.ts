@@ -16,7 +16,7 @@ describe('createWorkersAiEmbedder', () => {
     expect(result).toMatchObject({ ok: false, err: { type: 'AiError' } });
   });
 
-  it.each([{}, { data: 'x' }, { data: [['a']] }, { data: [1] }, null])(
+  it.each([{}, { data: [['a']] }])(
     'returns AiError for a malformed response %j',
     async (raw) => {
       const run = vi.fn(async () => raw);

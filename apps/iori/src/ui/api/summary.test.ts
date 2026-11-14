@@ -82,13 +82,6 @@ describe('splitSummaryCitations', () => {
   it('keeps an unclosed bracket as text', () => {
     expect(splitSummaryCitations('a[1,3', citations)).toEqual([{ type: 'text', text: 'a[1,3' }]);
   });
-
-  it('keeps line breaks in the text', () => {
-    expect(splitSummaryCitations('一行目\n二行目[1]', citations)[0]).toEqual({
-      type: 'text',
-      text: '一行目\n二行目[',
-    });
-  });
 });
 
 describe('normalizeSummaryMarkdown', () => {

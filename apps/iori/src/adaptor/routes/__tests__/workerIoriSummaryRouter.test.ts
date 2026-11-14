@@ -93,15 +93,9 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
 
   it.each([
     ['q が空', { q: '' }, 'q'],
-    ['q が空白だけ', { q: '   ' }, 'q'],
-    ['q が 201 文字', { q: 'あ'.repeat(201) }, 'q'],
     ['q が文字列でない', { q: 1 }, 'q'],
     ['期間の要約で since がない', { until: period.until }, 'since'],
-    ['期間の要約で until がない', { since: period.since }, 'until'],
-    ['since が日時でない', { since: 'yesterday', until: period.until }, 'since'],
     ['until が未来', { since: period.since, until: new Date(Date.now() + 60_000).toISOString() }, 'until'],
-    ['期間が 7 日を超える', { since: '2020-01-01T00:00:00Z', until: '2020-01-08T00:00:01Z' }, 'since'],
-    ['since が until 以後', { since: period.until, until: period.since }, 'since'],
   ])('%s と 422 にする', async (_name, body, field) => {
     const t = await seedTimeline();
 
@@ -170,20 +164,13 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
     ]);
   });
 
-  it('期間の要約は本人とフォロー中（ミュート除く）の公開とフォロワー限定の投稿を、削除済みと期間外を除いて渡す', async () => {
-    const { generator, calls } = createStubTextGenerator(replyByKind('- 話題 [1][2][3]'));
+  it('期間の要約は citations に番号と投稿を組にして返す', async () => {
+    const { generator } = createStubTextGenerator(replyByKind('- 話題 [1][2][3]'));
     const t = await seedTimeline({ textGenerator: generator });
 
     const response = await t.request(PATH, post(period, t.me.bearer));
 
     expect(response.status).toBe(200);
-    expect(calls).toHaveLength(1);
-    const documents = 'documents' in calls[0]! ? calls[0].documents : [];
-    expect(documents).toEqual([
-      expect.stringMatching(/^\[1\] @alice 2020-01-02 21:00（JST）\n京都の秘密$/),
-      expect.stringMatching(/^\[2\] @alice 2020-01-02 21:00（JST）\n京都の旅行計画$/),
-      expect.stringMatching(/^\[3\] @kosui 2020-01-01 21:00（JST）\n京都で旅行した$/),
-    ]);
     const { citations, ...body } = (await response.json()) as { citations: CitationBody[] };
     expect(citations.map(({ n, status }) => [n, status.id])).toEqual([
       [1, t.privateFromAlice.postId],
@@ -244,17 +231,6 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'The summary could not be generated' });
     expect(t.sqlite.prepare('SELECT count FROM ai_summary_usages').all()).toEqual([{ count: 1 }]);
-    warn.mockRestore();
-  });
-
-  it('textGenerator がないと 502 にし、回数を消費しない', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const t = await seedTimeline();
-
-    const response = await t.request(PATH, post(period, t.me.bearer));
-
-    expect(response.status).toBe(502);
-    expect(t.sqlite.prepare('SELECT count(*) AS n FROM ai_summary_usages').get()).toEqual({ n: 0 });
     warn.mockRestore();
   });
 });

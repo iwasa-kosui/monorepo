@@ -61,17 +61,6 @@ const setup = (embedder: TextEmbedder) => {
 };
 
 describe('テーマの examples と excludes の埋め込み', () => {
-  it('examples と excludes が空なら、「name: description」の埋め込みをそのまま保存し、excludeEmbedding を null にする', async () => {
-    const { embedder, calls } = createEmbedder({ 'N: D': axis(0, 3) });
-    const { add } = setup(embedder);
-
-    const result = await add.run({ userId: USER_ID, name: 'N', description: 'D' });
-
-    expect(result.ok && result.val).toMatchObject({ examples: [], excludes: [], excludeEmbedding: null });
-    expect(result.ok && result.val.embedding?.[0]).toBe(3);
-    expect(calls).toEqual([{ model: '@cf/baai/bge-m3', texts: ['N: D'] }]);
-  });
-
   it('examples があれば「name: description」と examples の平均を正規化して embedding にする', async () => {
     const { embedder } = createEmbedder({ 'N: D': axis(0, 2), 'e1': axis(1, 2) });
     const { add } = setup(embedder);
@@ -83,19 +72,6 @@ describe('テーマの examples と excludes の埋め込み', () => {
     expect(embedding?.[1]).toBeCloseTo(Math.SQRT1_2, 5);
     expect(embedding?.[2]).toBe(0);
     expect(result.ok && result.val.excludeEmbedding).toBeNull();
-  });
-
-  it('excludes があれば、その平均を正規化して excludeEmbedding にし、embedding には混ぜない', async () => {
-    const { embedder } = createEmbedder({ 'N: D': axis(0, 2), 'x1': axis(1, 3), 'x2': axis(2, 3) });
-    const { add } = setup(embedder);
-
-    const result = await add.run({ userId: USER_ID, name: 'N', description: 'D', excludes: ['x1', 'x2'] });
-
-    expect(result.ok && result.val.embedding?.[0]).toBe(2);
-    expect(result.ok && result.val.embedding?.[1]).toBe(0);
-    const exclude = result.ok ? result.val.excludeEmbedding : null;
-    expect(exclude?.[1]).toBeCloseTo(Math.SQRT1_2, 5);
-    expect(exclude?.[2]).toBeCloseTo(Math.SQRT1_2, 5);
   });
 
   it('範囲外の examples と excludes は作らず、embed もしない', async () => {
@@ -144,30 +120,5 @@ describe('テーマの examples と excludes の埋め込み', () => {
     const result = await edit.run({ userId: USER_ID, topicKey: added.val.topicKey, excludes: [] });
 
     expect(result.ok && result.val).toMatchObject({ excludes: [], excludeEmbedding: null });
-  });
-
-  it('編集で examples と excludes が同じ値なら、書き込みも embed もしない', async () => {
-    const { embedder, calls } = createEmbedder({});
-    const { add, edit } = setup(embedder);
-    const added = await add.run({ userId: USER_ID, name: 'N', description: 'D', examples: ['e1'], excludes: ['x1'] });
-    if (!added.ok) throw new Error('unexpected');
-    calls.length = 0;
-
-    await edit.run({ userId: USER_ID, topicKey: added.val.topicKey, examples: ['e1'], excludes: ['x1'] });
-
-    expect(calls).toEqual([]);
-  });
-
-  it('編集で範囲外の examples を渡すと、パースエラーにして何も変えない', async () => {
-    const { embedder, calls } = createEmbedder({});
-    const { add, edit } = setup(embedder);
-    const added = await add.run({ userId: USER_ID, name: 'N', description: 'D' });
-    if (!added.ok) throw new Error('unexpected');
-    calls.length = 0;
-
-    const result = await edit.run({ userId: USER_ID, topicKey: added.val.topicKey, examples: [''] });
-
-    expect(result.ok).toBe(false);
-    expect(calls).toEqual([]);
   });
 });

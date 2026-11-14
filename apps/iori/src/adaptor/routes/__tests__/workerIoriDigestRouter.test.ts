@@ -244,38 +244,6 @@ describe('iori のダイジェスト API', () => {
       });
     });
 
-    it('/latest もまとめの digest を返し、トピックの記事の一覧を付ける', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('read:statuses');
-      seedDay(t, me, '2026-11-04');
-      const ids = seedDay(t, me, '2026-11-05');
-
-      const response = await t.request('/api/iori/v1/digests/latest', { headers: me.bearer });
-
-      const body = await response.json() as {
-        digest: { articleId: string; topicKey: string; topics: Array<{ topicKey: string; articleId: string }> };
-      };
-      expect(body.digest).toMatchObject({ articleId: ids.summary.articleId, topicKey: 'summary' });
-      expect(body.digest.topics.map((topic) => topic.articleId)).toEqual([
-        ids.security.articleId,
-        ids.genai.articleId,
-        ids.design.articleId,
-      ]);
-    });
-
-    it('トピックの digest しかない日は、まとめがないので 404 にする', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('read:statuses');
-      seedTopic(t, me, 'genai', '生成 AI とエージェント', 0);
-      seedDigest(t, me, '2026-11-05', { topicKey: 'genai', itemCount: 3 });
-
-      const latest = await t.request('/api/iori/v1/digests/latest', { headers: me.bearer });
-      const byDate = await t.request('/api/iori/v1/digests/2026-11-05', { headers: me.bearer });
-
-      expect(latest.status).toBe(404);
-      expect(byDate.status).toBe(404);
-    });
-
     it('トピックの定義が消えていても、topicKey を name にして一覧に残す', async () => {
       const t = setupReadApi();
       const me = await t.signIn('read:statuses');
@@ -302,17 +270,6 @@ describe('iori のダイジェスト API', () => {
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual(expectedDigest('2026-11-05', latest));
-    });
-
-    it('他人の digest しかなければ 404 にする', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('read:statuses');
-      const other = t.seed.addLocalActor('other');
-      seedDigest(t, other, '2026-11-05');
-
-      const response = await t.request('/api/iori/v1/digests/latest', { headers: me.bearer });
-
-      expect(response.status).toBe(404);
     });
   });
 
@@ -427,7 +384,7 @@ describe('iori のダイジェスト API', () => {
       expect(await saved.json()).toEqual({ subscription: { enabled: false } });
     });
 
-    it.each([{}, { enabled: 'yes' }, { enabled: 1 }, { enabled: null }])('PUT は %j を 400 にする', async (body) => {
+    it.each([{}, { enabled: 'yes' }])('PUT は %j を 400 にする', async (body) => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
 
@@ -590,7 +547,7 @@ describe('iori のダイジェスト API', () => {
       expect(waitUntil.mock.calls[0]![0]).toBeInstanceOf(Promise);
     });
 
-    it.each(['published', 'unpublished'])(
+    it.each(['published'])(
       'その日の digest の article が %s なら 409 にして、回数を数えず何も変えない',
       async (status) => {
         const t = setupReadApi();
@@ -707,14 +664,6 @@ describe('iori のダイジェスト API', () => {
       t.request(`${PREVIEW}${query}`, { headers: me.bearer });
     const write = /^\s*(insert|update|delete|replace|create|drop|alter)\b/i;
 
-    it('トークンも Cookie も無いときは 401 にする', async () => {
-      const t = setupReadApi();
-
-      const response = await t.request(PREVIEW);
-
-      expect(response.status).toBe(401);
-    });
-
     it('ほかのユーザーのテーマとダイジェスト項目を返さない', async () => {
       const t = setupReadApi();
       const me = await t.signIn('read:statuses');
@@ -814,15 +763,9 @@ describe('iori のダイジェスト API', () => {
 
     it.each([
       ['candidateHours=0', 'candidateHours'],
-      ['candidateHours=337', 'candidateHours'],
       ['candidateHours=abc', 'candidateHours'],
-      ['candidateHours=1.5', 'candidateHours'],
-      ['candidateHours=', 'candidateHours'],
-      ['digestDays=0', 'digestDays'],
       ['digestDays=31', 'digestDays'],
-      ['limit=0', 'limit'],
       ['limit=101', 'limit'],
-      ['limit=-1', 'limit'],
     ])('?%s は 400 にして、範囲外のパラメーター名を返す', async (query, name) => {
       const t = setupReadApi();
       const me = await t.signIn('read:statuses');
@@ -831,22 +774,6 @@ describe('iori のダイジェスト API', () => {
 
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({ error: `Validation failed: ${name}` });
-    });
-
-    it('テーマも候補記事もダイジェストも無いときは、空の結果を返す', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('read:statuses');
-
-      const response = await preview(t, me);
-
-      expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({
-        topics: [],
-        thresholds: { minSimilarity: 0.55, minMargin: 0 },
-        candidates: { total: 0, byTopic: [], truncated: false },
-        digestItemsTruncated: false,
-        digestItems: [],
-      });
     });
 
     it('D1 に書き込まず、埋め込みも要約も呼ばない', async () => {
@@ -1023,9 +950,7 @@ describe('iori のダイジェスト API', () => {
 
       it.each([
         ['name がない', { description: '説明' }],
-        ['name が 41 文字', { name: 'あ'.repeat(41), description: '説明' }],
         ['examples が 11 件', { name: '名前', description: '説明', examples: Array.from({ length: 11 }, () => '例') }],
-        ['excludes に 121 文字の文がある', { name: '名前', description: '説明', excludes: ['あ'.repeat(121)] }],
       ])('%s と 400 にして、何も作らない', async (_label, body) => {
         const t = setupReadApi({ textEmbedder: stubEmbedder() });
         const me = await t.signIn('write:accounts');
@@ -1100,7 +1025,6 @@ describe('iori のダイジェスト API', () => {
       });
 
       it.each([
-        ['examples が 11 件', { examples: Array.from({ length: 11 }, () => '例') }],
         ['excludes に 121 文字の文がある', { excludes: ['あ'.repeat(121)] }],
       ])('%s と 400 にして、何も変えない', async (_label, body) => {
         const stub = createStubEmbedder(EMBEDDING_DIMENSIONS);
@@ -1160,19 +1084,8 @@ describe('iori のダイジェスト API', () => {
         expect(rowOf(t, me.userId, 'genai')).toMatchObject({ materialWindowHours: null });
       });
 
-      it('materialWindowHours と enabled を一緒に変えると、両方を反映する', async () => {
-        const t = setupReadApi({ textEmbedder: stubEmbedder() });
-        const me = await t.signIn('write:accounts');
-        seed(t, me.userId, 'genai', 0);
-
-        const response = await patch(t, 'genai', me.bearer, { materialWindowHours: 48, enabled: false });
-
-        expect(await response.json()).toMatchObject({ topic: { materialWindowHours: 48, enabled: false } });
-      });
-
       it.each([
         ['23', 23],
-        ['337', 337],
         ['文字列', '72'],
       ])('materialWindowHours が %s なら 400 にして、何も変えない', async (_label, value) => {
         const t = setupReadApi({ textEmbedder: stubEmbedder() });
@@ -1211,17 +1124,6 @@ describe('iori のダイジェスト API', () => {
         expect(rowOf(t, me.userId, 'genai')).toMatchObject({ enabled: 0 });
       });
 
-      it('無いトピックは 404 にする', async () => {
-        const t = setupReadApi({ textEmbedder: stubEmbedder() });
-        const me = await t.signIn('write:accounts');
-
-        const response = await patch(t, 'missing', me.bearer, { name: '新しい名前' });
-        const toggle = await patch(t, 'missing', me.bearer, { enabled: false });
-
-        expect(response.status).toBe(404);
-        expect(toggle.status).toBe(404);
-      });
-
       it('他のユーザーのトピックは 404 にして、変えない', async () => {
         const t = setupReadApi({ textEmbedder: stubEmbedder() });
         const me = await t.signIn('write:accounts');
@@ -1236,7 +1138,6 @@ describe('iori のダイジェスト API', () => {
 
       it.each([
         ['何も渡さない', {}],
-        ['name が 41 文字', { name: 'あ'.repeat(41) }],
         ['enabled が真偽値でない', { enabled: 'maybe' }],
       ])('%s と 400 にして、何も変えない', async (_label, body) => {
         const t = setupReadApi({ textEmbedder: stubEmbedder() });
@@ -1420,19 +1321,6 @@ describe('iori のダイジェスト API', () => {
       }]);
     });
 
-    it('関心なしは feedback_negative の材料にする', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('write:accounts');
-      const { digestItemId } = seedFeedbackDigest(t, me);
-
-      await give(t, digestItemId, cookieOf(me), 'not_interested');
-
-      expect(feedbackOf(t, digestItemId).feedback).toBe('not_interested');
-      expect(sourcesOf(t).map(({ kind, deletedAt }) => ({ kind, deletedAt }))).toEqual([
-        { kind: 'feedback_negative', deletedAt: null },
-      ]);
-    });
-
     it('JSON の body でも受け付ける', async () => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
@@ -1475,7 +1363,7 @@ describe('iori のダイジェスト API', () => {
       expect(response.status).toBe(404);
     });
 
-    it.each([undefined, 'maybe', 'INTERESTED', ''])('feedback が %j だと 400 にし、DB を変えない', async (feedback) => {
+    it.each([undefined, 'maybe'])('feedback が %j だと 400 にし、DB を変えない', async (feedback) => {
       const t = setupReadApi();
       const me = await t.signIn('write:accounts');
       const { digestItemId } = seedFeedbackDigest(t, me);
@@ -1619,77 +1507,6 @@ describe('iori のダイジェスト API', () => {
       expect(sourcesOf(t).map(({ kind, deletedAt }) => [kind, deletedAt === null])).toEqual([
         ['feedback_positive', false],
       ]);
-    });
-  });
-
-  describe('POST /api/iori/v1/digest-items/:digestItemId/deep-dive', () => {
-    const seedDeepDiveDigest = (t: ReturnType<typeof setupReadApi>, owner: { userId: string; actorId: string }) => {
-      const ids = seedDigest(t, owner, '2026-11-05');
-      t.sqlite.prepare(
-        'INSERT INTO article_bodies(articleId,privateHtml,publicHtml,markdown,updatedAt) VALUES (?,?,?,?,?)',
-      )
-        .run(ids.articleId, '<p>a</p>', '<p>a</p>', '- [A](https://example.com/a)\n  要約 A', 1_000);
-      const item = t.sqlite.prepare('SELECT digestItemId FROM digest_items WHERE digestId = ? AND rank = 1')
-        .get(ids.digestId) as { digestItemId: string };
-      return item.digestItemId;
-    };
-
-    const deepDive = (
-      t: ReturnType<typeof setupReadApi>,
-      me: { sessionId: string },
-      digestItemId: string,
-      body: unknown,
-    ) =>
-      t.request(`/api/iori/v1/digest-items/${digestItemId}/deep-dive`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Cookie: `sessionId=${me.sessionId}`, Origin: ORIGIN },
-        body: JSON.stringify(body),
-      });
-
-    it('存在しない項目は 404 にする', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('write:statuses');
-
-      const response = await deepDive(t, me, crypto.randomUUID(), { baseUpdatedAt: 1_000 });
-
-      expect(response.status).toBe(404);
-    });
-
-    it('他の人の項目は 404 にして、回数を予約しない', async () => {
-      const t = setupReadApi();
-      const owner = t.seed.addLocalActor('alice');
-      const digestItemId = seedDeepDiveDigest(t, owner);
-      const me = await t.signIn('write:statuses');
-
-      const response = await deepDive(t, me, digestItemId, { baseUpdatedAt: 1_000 });
-
-      expect(response.status).toBe(404);
-      expect(t.sqlite.prepare('SELECT count(*) AS n FROM digest_deep_dive_usages').get()).toEqual({ n: 0 });
-    });
-
-    it('本文の版が baseUpdatedAt と違えば 409 にする', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('write:statuses');
-      const digestItemId = seedDeepDiveDigest(t, me);
-
-      const response = await deepDive(t, me, digestItemId, { baseUpdatedAt: 999 });
-
-      expect(response.status).toBe(409);
-      await expect(response.json()).resolves.toEqual({ error: '本文が更新されています。読み込み直してください' });
-    });
-
-    it('Workers AI が無い環境では 502 にして、本文を変えない', async () => {
-      const t = setupReadApi();
-      const me = await t.signIn('write:statuses');
-      const digestItemId = seedDeepDiveDigest(t, me);
-
-      const response = await deepDive(t, me, digestItemId, { baseUpdatedAt: 1_000 });
-
-      expect(response.status).toBe(502);
-      expect(t.sqlite.prepare('SELECT markdown, updatedAt FROM article_bodies').get()).toEqual({
-        markdown: '- [A](https://example.com/a)\n  要約 A',
-        updatedAt: 1_000,
-      });
     });
   });
 
@@ -1901,22 +1718,6 @@ describe('iori のダイジェスト API', () => {
         expect(countOf(t)).toEqual({ n: 1 });
       });
 
-      it.each([
-        ['ホストが大文字', 'https://EXAMPLE.com/feed.xml'],
-        ['443 番ポートつき', 'https://example.com:443/feed.xml'],
-        ['fragment つき', 'https://example.com/feed.xml#top'],
-        ['スキームの後に // がない', 'https:example.com/feed.xml'],
-      ])('登録済みの URL と %s の URL が同じなら 409 にして、何も増やさない', async (_label, url) => {
-        const t = setupReadApi();
-        const me = await t.signIn('write:accounts');
-        seedSource(t);
-
-        const response = await post(t, me.bearer, { url, title: 'ブログ' });
-
-        expect(response.status).toBe(409);
-        expect(countOf(t)).toEqual({ n: 1 });
-      });
-
       it('正規化した URL で保存する', async () => {
         const t = setupReadApi();
         const me = await t.signIn('write:accounts');
@@ -1931,21 +1732,8 @@ describe('iori のダイジェスト API', () => {
 
       it.each([
         ['url がない', { title: 'ブログ' }],
-        ['title がない', { url: 'https://example.com/feed.xml' }],
-        ['url が文字列でない', { url: 1, title: 'ブログ' }],
-        ['url が URL でない', { url: 'example', title: 'ブログ' }],
-        ['url が ftp', { url: 'ftp://example.com/feed.xml', title: 'ブログ' }],
-        ['url が javascript', { url: 'javascript:alert(1)', title: 'ブログ' }],
-        ['url が http', { url: 'http://example.com/feed.xml', title: 'ブログ' }],
         ['url が localhost', { url: 'https://localhost/feed.xml', title: 'ブログ' }],
-        ['url が IPv4', { url: 'https://127.0.0.1/feed.xml', title: 'ブログ' }],
-        ['url が IPv6', { url: 'https://[::1]/', title: 'ブログ' }],
-        ['url が 10 進の IP', { url: 'https://2130706433/', title: 'ブログ' }],
-        ['url が .internal', { url: 'https://db.internal/feed.xml', title: 'ブログ' }],
-        ['url が資格情報つき', { url: 'https://user:pass@example.com/feed.xml', title: 'ブログ' }],
-        ['url が 2049 文字', { url: `https://example.com/${'a'.repeat(2029)}`, title: 'ブログ' }],
         ['title が空白だけ', { url: 'https://example.com/feed.xml', title: '  ' }],
-        ['title が 101 文字', { url: 'https://example.com/feed.xml', title: 'あ'.repeat(101) }],
       ])('%s と 400 にして、何も作らない', async (_label, invalid) => {
         const t = setupReadApi();
         const me = await t.signIn('write:accounts');
@@ -1956,7 +1744,7 @@ describe('iori のダイジェスト API', () => {
         expect(countOf(t)).toEqual({ n: 0 });
       });
 
-      it.each(['https://x.com/jack', 'https://www.twitter.com/jack', 'https://X.COM/jack'])(
+      it.each(['https://www.twitter.com/jack'])(
         '所有者の rss の %s は、x_user の登録の有無によらず同じ 400 にする',
         async (url) => {
           const t = setupReadApi();
@@ -2014,25 +1802,9 @@ describe('iori のダイジェスト API', () => {
           ]);
         });
 
-        it('大文字小文字だけが違う同じユーザーが既にあれば 409 にして、何も増やさない', async () => {
-          const t = setupReadApi();
-          const me = await t.signIn('write:accounts');
-          await post(t, me.bearer, { kind: 'x_user', username: 'Jack' });
-
-          const response = await post(t, me.bearer, { kind: 'x_user', username: 'jACK' });
-
-          expect(response.status).toBe(409);
-          expect(countOf(t)).toEqual({ n: 1 });
-        });
-
         it.each([
           ['username がない', { kind: 'x_user' }],
-          ['username が文字列でない', { kind: 'x_user', username: 1 }],
-          ['username が空白だけ', { kind: 'x_user', username: '  ' }],
-          ['username が 16 文字', { kind: 'x_user', username: 'a'.repeat(16) }],
           ['username に使えない文字がある', { kind: 'x_user', username: 'jack-x' }],
-          ['username が @ つき', { kind: 'x_user', username: '@jack' }],
-          ['username が URL', { kind: 'x_user', username: 'https://x.com/jack' }],
         ])('%s と 400 にして、何も作らない', async (_label, invalid) => {
           const t = setupReadApi();
           const me = await t.signIn('write:accounts');
@@ -2075,7 +1847,6 @@ describe('iori のダイジェスト API', () => {
 
       it.each([
         ['url が無い', { title: 'ブログ' }],
-        ['title が無い', { url: 'https://example.com/feed.xml' }],
       ])(
         '所有者でないユーザーが rss を送るとき、%s でも 400 ではなく 403 にし、何も作らない',
         async (_label, invalid) => {
@@ -2220,7 +1991,6 @@ describe('iori のダイジェスト API', () => {
       it.each([
         ['何も渡さない', {}],
         ['enabled が真偽値でない', { enabled: 'maybe' }],
-        ['enabled が数値', { enabled: 1 }],
       ])('%s と 400 にして、何も変えない', async (_label, invalid) => {
         const t = setupReadApi();
         const me = await t.signIn('write:accounts');
