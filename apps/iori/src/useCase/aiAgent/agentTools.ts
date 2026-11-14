@@ -44,7 +44,7 @@ export const MAX_ACTIONS_PER_RUN = 3;
 
 export const MAX_SEARCH_RESULTS = 10;
 export const MAX_RECENT_TIMELINE = 20;
-export const MAX_FETCHED_PAGE_CHARS = 5000;
+export const MAX_FETCHED_PAGE_CHARS = 10000;
 
 export const formatPost = (post: AgentPostView): string =>
   [

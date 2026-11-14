@@ -3,7 +3,7 @@ import { MAX_BOT_POST_CHARACTERS } from '../../domain/aiAgentBot/aiAgentBot.ts';
 /** bot のエージェントが使うモデル。iori のほかの AI 機能と同じく、ツールの呼び出しに対応したものを使う */
 export const AI_AGENT_BOT_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 
-export const AI_AGENT_BOT_MAX_STEPS = 5;
+export const AI_AGENT_BOT_MAX_STEPS = 10;
 export const AI_AGENT_BOT_MAX_OUTPUT_TOKENS = 1024;
 
 const PERSONA = [
