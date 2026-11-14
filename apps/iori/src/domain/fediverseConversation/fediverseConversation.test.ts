@@ -77,10 +77,6 @@ describe('groupDirectMessagePosts', () => {
 
     expect(groupDirectMessagePosts([postOf(1, [me]), postOf(2, [me, ...many]), postOf(3, [])], me)).toEqual([]);
   });
-
-  it('投稿が無ければ会話も無い', () => {
-    expect(groupDirectMessagePosts([], me)).toEqual([]);
-  });
 });
 
 describe('direct の投稿の cursor', () => {

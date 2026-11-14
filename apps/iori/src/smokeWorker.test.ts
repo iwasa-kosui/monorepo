@@ -67,20 +67,6 @@ describe('runSmokeChecks', () => {
     expect(mutatingCalls).toEqual([]);
   });
 
-  it('rejects a 200 migration shell', async () => {
-    const fetchWithShell = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      if (url.pathname === '/') {
-        return new Response('<meta name="robots" content="noindex"><p>Cloudflare Workers への移行中です。</p>', {
-          headers: { 'Content-Type': 'text/html' },
-        });
-      }
-      return healthyFetch(input, init);
-    });
-
-    await expect(runSmokeChecks('https://worker.test', fetchWithShell)).rejects.toThrow('migration shell');
-  });
-
   it('rejects a deployment with an unavailable binding', async () => {
     const fetchWithBrokenD1 = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));

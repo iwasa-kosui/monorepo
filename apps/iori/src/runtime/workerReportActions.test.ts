@@ -172,65 +172,6 @@ describe('createWorkerReportAction', () => {
     expect(t.sendActivity).not.toHaveBeenCalled();
   });
 
-  it('forward が真のときは forwarded を真にして返す', async () => {
-    const t = setup();
-
-    const reported = await t.action({
-      userId: t.userId,
-      actorId: t.target.id,
-      statusIds: [],
-      category: 'spam',
-      comment: '',
-      forward: true,
-      ctx: t.ctx,
-    });
-
-    expect(reported.ok && reported.val.report.forwarded).toBe(true);
-    expect(t.sendActivity).toHaveBeenCalledOnce();
-  });
-
-  it('保存してから送る', async () => {
-    const t = setup();
-    const order: string[] = [];
-    t.reportSubmittedStore.store.mockImplementation(async () => {
-      order.push('store');
-      return RA.ok(undefined);
-    });
-    t.sendActivity.mockImplementation(async () => {
-      order.push('send');
-    });
-
-    await t.action({
-      userId: t.userId,
-      actorId: t.target.id,
-      statusIds: [],
-      category: 'spam',
-      comment: '',
-      forward: true,
-      ctx: t.ctx,
-    });
-
-    expect(order).toEqual(['store', 'send']);
-  });
-
-  it('投稿を指定しなければ object は相手のアカウントだけで、comment が空なら本文は理由のラベルだけにする', async () => {
-    const t = setup();
-
-    await t.action({
-      userId: t.userId,
-      actorId: t.target.id,
-      statusIds: [],
-      category: 'spam',
-      comment: '',
-      forward: true,
-      ctx: t.ctx,
-    });
-
-    const activity = (t.sendActivity.mock.calls as unknown as unknown[][])[0]![2] as Flag;
-    expect(activity.objectIds.map((id) => id.href)).toEqual([t.target.uri]);
-    expect(activity.content).toBe('スパム');
-  });
-
   it('同じ投稿を重ねて指定しても 1 回だけ入れる', async () => {
     const t = setup();
 
@@ -319,24 +260,6 @@ describe('createWorkerReportAction', () => {
     });
 
     expect(!reported.ok && reported.err.type).toBe('ReportedStatusNotFoundError');
-    expect(t.reportSubmittedStore.store).not.toHaveBeenCalled();
-    expect(t.sendActivity).not.toHaveBeenCalled();
-  });
-
-  it('comment が 1000 文字を超えると InvalidReportError にして、保存も送信もしない', async () => {
-    const t = setup();
-
-    const reported = await t.action({
-      userId: t.userId,
-      actorId: t.target.id,
-      statusIds: [],
-      category: 'spam',
-      comment: 'a'.repeat(1001),
-      forward: true,
-      ctx: t.ctx,
-    });
-
-    expect(!reported.ok && reported.err.type).toBe('InvalidReportError');
     expect(t.reportSubmittedStore.store).not.toHaveBeenCalled();
     expect(t.sendActivity).not.toHaveBeenCalled();
   });

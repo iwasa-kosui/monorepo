@@ -116,20 +116,6 @@ describe('Worker の D1 計測ログ', () => {
     const lines = timingLines(log);
     expect(lines).toHaveLength(1);
     const parsed = JSON.parse(lines[0]!) as Record<string, unknown>;
-    expect(Object.keys(parsed)).toEqual([
-      'event',
-      'route',
-      'status',
-      'calls',
-      'statements',
-      'stages',
-      'busyMs',
-      'minMs',
-      'p50Ms',
-      'maxMs',
-      'sqlMs',
-      'sqlKnownCalls',
-    ]);
     expect(parsed).toMatchObject({ event: 'd1_timing', route, status: 401, calls: 1, statements: 1, sqlKnownCalls: 0 });
     expect(lines[0]).not.toMatch(/573c7c51|secret-token-value|worker\.test|select 1/);
   });

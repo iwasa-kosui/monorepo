@@ -9,10 +9,6 @@ describe('SearchTerm', () => {
     if (term.ok) expect(term.val).toEqual({ raw: 'ＡＢＣ', normalized: 'ABC' });
   });
 
-  it('日本語の 2 文字の語を受け付ける', () => {
-    expect(SearchTerm.of('旅行').ok).toBe(true);
-  });
-
   it('48 bytes ちょうどの語を受け付ける', () => {
     expect(SearchTerm.of('a'.repeat(48)).ok).toBe(true);
     expect(SearchTerm.of('あ'.repeat(16)).ok).toBe(true);

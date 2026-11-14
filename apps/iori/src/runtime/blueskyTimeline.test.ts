@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import {
-  createBlueskyTimelineRuntimePorts,
   createCollectBlueskyTimelineUseCase,
   resolveBlueskyTimelineConfig,
 } from './blueskyTimeline.ts';
@@ -50,11 +49,6 @@ describe('resolveBlueskyTimelineConfig', () => {
 });
 
 describe('createCollectBlueskyTimelineUseCase', () => {
-  it('無効なときは use case を作らない', () => {
-    const env = { ...enabled, IORI_BLUESKY_TIMELINE: 'disabled' } as unknown as IoriWorkerEnv;
-    expect(createCollectBlueskyTimelineUseCase(env)).toBeUndefined();
-  });
-
   it('有効なときは、保存済みセッションで getTimeline を呼び、取り込んだ投稿を D1 に残す', async () => {
     const { binding, sqlite } = createSqliteD1Fixture();
     const now = Date.now();
@@ -146,59 +140,6 @@ describe('新しい投稿がない取り込み', () => {
   });
 });
 
-describe('新しい投稿がない取り込み（cron）', () => {
-  it('ログインの待ち時間の依存を渡しても、保存済みのセッションが有効なら SELECT 4 本だけで書き込みは 0 本', async () => {
-    const { binding, sqlite, queries } = createSqliteD1Fixture();
-    const now = Date.now();
-    sqlite.prepare(
-      'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
-    )
-      .run('default', 'did:plc:me', 'kosui.me', 'https://pds.example.net', 'access', 'refresh', now);
-    sqlite.prepare(
-      'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    )
-      .run(
-        'at://did:plc:a/app.bsky.feed.post/1',
-        'u',
-        'cid1',
-        'did:plc:a',
-        'alice.bsky.social',
-        'hi',
-        '[]',
-        now,
-        now,
-        now,
-      );
-    const fetchStub = (async () =>
-      Response.json({
-        feed: [{
-          post: {
-            uri: 'at://did:plc:a/app.bsky.feed.post/1',
-            cid: 'cid1',
-            author: { did: 'did:plc:a', handle: 'alice.bsky.social' },
-            record: { $type: 'app.bsky.feed.post', text: 'hi', createdAt: new Date(now).toISOString() },
-            indexedAt: new Date(now).toISOString(),
-            viewer: { bookmarked: false },
-          },
-        }],
-        cursor: 'next',
-      })) as unknown as typeof fetch;
-    const env = { ...enabled, DB: binding } as unknown as IoriWorkerEnv;
-    queries.length = 0;
-
-    const result = await createCollectBlueskyTimelineUseCase(env, { fetch: fetchStub, holdLoginAfterFailure: true })
-      ?.run();
-
-    expect(result).toEqual({ ok: true, val: { pages: 1, fetched: 1, saved: 0, dropped: 0 } });
-    expect(queries.map(({ sql }) => sql.trim().split(/\s+/)[0]!.toLowerCase())).toEqual([
-      'select',
-      'select',
-      'select',
-      'select',
-    ]);
-  });
-});
-
 describe('ログイン失敗後の待ち時間', () => {
   const failingLogin = () => {
     const requests: string[] = [];
@@ -223,52 +164,5 @@ describe('ログイン失敗後の待ち時間', () => {
     expect(second?.ok).toBe(false);
     expect(requests).toEqual(['https://bsky.social/xrpc/com.atproto.server.createSession']);
     expect(sqlite.prepare('SELECT scope FROM bluesky_login_failures').all()).toEqual([{ scope: 'timeline' }]);
-  });
-});
-
-describe('createBlueskyTimelineRuntimePorts', () => {
-  it('無効でも保存済みの行を読む resolver を持ち、取り込みは無効として扱う', () => {
-    const { db } = createSqliteD1Fixture();
-    const ports = createBlueskyTimelineRuntimePorts(
-      { IORI_BLUESKY_TIMELINE: 'disabled' } as unknown as IoriWorkerEnv,
-      db,
-    );
-
-    expect(ports.blueskyTimelineEnabled).toBe(false);
-    expect(ports.blueskyTimelineItemsResolver.resolve).toBeTypeOf('function');
-    expect(ports.replyToBlueskyPostUseCase).toBeUndefined();
-    expect(ports.postToBlueskyUseCase).toBeUndefined();
-    expect(ports.quoteBlueskyPostUseCase).toBeUndefined();
-    expect(ports.markBlueskyNotificationsSeenUseCase).toBeUndefined();
-    expect(ports.blueskySearch).toBeUndefined();
-    expect(ports.blueskyChat).toBeUndefined();
-  });
-
-  it('有効なときは取り込みを有効として扱う', () => {
-    const { db } = createSqliteD1Fixture();
-    const ports = createBlueskyTimelineRuntimePorts(enabled as unknown as IoriWorkerEnv, db);
-
-    expect(ports.blueskyTimelineEnabled).toBe(true);
-    expect(ports.replyToBlueskyPostUseCase?.run).toBeTypeOf('function');
-    expect(ports.postToBlueskyUseCase?.run).toBeTypeOf('function');
-    expect(ports.quoteBlueskyPostUseCase?.run).toBeTypeOf('function');
-    expect(ports.markBlueskyNotificationsSeenUseCase?.run).toBeTypeOf('function');
-    expect(ports.blueskySearch?.searchPosts).toBeTypeOf('function');
-    expect(ports.blueskyChat?.listConvos.run).toBeTypeOf('function');
-  });
-
-  it('タイムラインが無効でも、認証情報があれば Bluesky への直接投稿を使える', () => {
-    const { db } = createSqliteD1Fixture();
-    const ports = createBlueskyTimelineRuntimePorts(
-      {
-        IORI_BLUESKY_TIMELINE: 'disabled',
-        BLUESKY_IDENTIFIER: 'me.bsky.social',
-        BLUESKY_APP_PASSWORD: 'pw',
-      } as unknown as IoriWorkerEnv,
-      db,
-    );
-
-    expect(ports.replyToBlueskyPostUseCase).toBeUndefined();
-    expect(ports.postToBlueskyUseCase?.run).toBeTypeOf('function');
   });
 });

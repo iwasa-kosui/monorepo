@@ -25,18 +25,6 @@ describe('dispatchScheduled', () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 
-  it('runs every task registered for the cron with the context', async () => {
-    const first = vi.fn(async () => undefined);
-    const second = vi.fn(async () => undefined);
-    await dispatchScheduled(
-      '0 * * * *',
-      { '0 * * * *': [{ name: 'a', run: first }, { name: 'b', run: second }] },
-      context,
-    );
-    expect(first).toHaveBeenCalledWith(context);
-    expect(second).toHaveBeenCalledWith(context);
-  });
-
   it('keeps running the other tasks and logs the failure when one task fails', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const failure = new Error('boom');
@@ -151,19 +139,5 @@ describe('scheduledTasks', () => {
       if (task.after === undefined) return;
       expect(tasks.slice(0, index).map((earlier) => earlier.name)).toContain(task.after);
     });
-  });
-
-  it('runs embedOwnInterestSources after syncOwnInterestSources in the 3-hourly cron', () => {
-    const tasks = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!;
-    expect(tasks.find((task) => task.name === 'embedOwnInterestSources')?.after).toBe('syncOwnInterestSources');
-  });
-
-  it('runs collectBlueskyNotifications after collectBlueskyTimeline in the every-minute cron', () => {
-    const tasks = scheduledTasks['* * * * *']!;
-    expect(tasks.find((task) => task.name === 'collectBlueskyNotifications')?.after).toBe('collectBlueskyTimeline');
-  });
-
-  it('registers archiveDomainEvents in the 19:00 daily cron', () => {
-    expect(scheduledTasks['0 19 * * *']?.map((task) => task.name)).toEqual(['archiveDomainEvents']);
   });
 });

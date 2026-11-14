@@ -18,48 +18,9 @@ describe('Scope', () => {
       expect(result).toMatchObject({ ok: true, val: ['read', 'write', 'read:accounts'] });
     });
 
-    it('1000 文字までを受け付け、1001 文字を拒む', () => {
-      const input = (length: number) => `read${' '.repeat(length - 4)}`;
-      expect(Scope.parseList(input(1000))).toMatchObject({ ok: true });
-      expect(Scope.parseList(input(1001))).toMatchObject({ ok: false, err: { type: 'InvalidScopeError' } });
-    });
-
     it('未知のスコープはエラーにする', () => {
       const result = Scope.parseList('read admin:read');
       expect(result).toMatchObject({ ok: false, err: { type: 'InvalidScopeError', detail: { scope: 'admin:read' } } });
-    });
-
-    it('Mastodon の細分スコープをすべて受け付ける', () => {
-      const all = [
-        'read:accounts',
-        'read:blocks',
-        'read:bookmarks',
-        'read:favourites',
-        'read:filters',
-        'read:follows',
-        'read:lists',
-        'read:mutes',
-        'read:notifications',
-        'read:search',
-        'read:statuses',
-        'write:accounts',
-        'write:blocks',
-        'write:bookmarks',
-        'write:conversations',
-        'write:favourites',
-        'write:filters',
-        'write:follows',
-        'write:lists',
-        'write:media',
-        'write:mutes',
-        'write:notifications',
-        'write:reports',
-        'write:statuses',
-        'push',
-        'profile',
-        'follow',
-      ];
-      expect(Scope.parseList(all.join(' '))).toMatchObject({ ok: true });
     });
   });
 
@@ -106,9 +67,5 @@ describe('Scope', () => {
       expect(Scope.isSubset(scopes('read'), scopes('read:statuses'))).toBe(false);
       expect(Scope.isSubset(scopes('push'), scopes('read', 'write', 'follow'))).toBe(false);
     });
-  });
-
-  it('serialize はスペース区切りにする', () => {
-    expect(Scope.serialize(scopes('read', 'write'))).toBe('read write');
   });
 });

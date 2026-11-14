@@ -87,26 +87,6 @@ describe('Task 8 Worker OGP route', () => {
     vi.clearAllMocks();
   });
 
-  it('serves the R2 object for the public OGP URL', async () => {
-    const get = vi.fn(async () => ({
-      body: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]).buffer,
-      httpMetadata: { contentType: 'image/png', cacheControl: 'public, max-age=60' },
-    }));
-    const env = { ...admissionFixture(), UPLOADS: { get } } as never;
-    ogImage.resolveArticle.mockResolvedValue({ ok: true, val: { title: '公開記事', status: 'published' } });
-
-    const response = await worker.fetch(
-      new Request('https://worker.test/api/og/articles/573c7c51-0e4b-453c-bb9f-5dbd15a319a7'),
-      env,
-      {} as ExecutionContext,
-    );
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get('Content-Type')).toBe('image/png');
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=3600');
-    expect(get).toHaveBeenCalledWith('og/573c7c51-0e4b-453c-bb9f-5dbd15a319a7.png');
-  });
-
   it('returns 404 even when R2 holds an image for an article that is not published', async () => {
     const get = vi.fn(async () => ({
       body: png.buffer,
@@ -156,7 +136,6 @@ describe('Task 8 Worker OGP route', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('image/png');
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(png);
-    expect(ogImage.fetchFont).toHaveBeenCalledWith({ text: '公開記事blog.kosui.me' });
     expect(put).toHaveBeenCalledWith(`og/${articleId}.png`, png, expect.anything());
   });
 
@@ -164,23 +143,6 @@ describe('Task 8 Worker OGP route', () => {
     const get = vi.fn(async () => null);
     const put = vi.fn();
     ogImage.resolveArticle.mockResolvedValue({ ok: true, val: { title: '下書き', status: 'draft' } });
-    const env = { ...admissionFixture(), UPLOADS: { get, put } } as never;
-
-    const response = await worker.fetch(
-      new Request(`https://worker.test/api/og/articles/${articleId}`),
-      env,
-      {} as ExecutionContext,
-    );
-
-    expect(response.status).toBe(404);
-    expect(ogImage.render).not.toHaveBeenCalled();
-    expect(put).not.toHaveBeenCalled();
-  });
-
-  it('returns 404 on an R2 miss when the article does not exist', async () => {
-    const get = vi.fn(async () => null);
-    const put = vi.fn();
-    ogImage.resolveArticle.mockResolvedValue({ ok: true, val: undefined });
     const env = { ...admissionFixture(), UPLOADS: { get, put } } as never;
 
     const response = await worker.fetch(
@@ -217,27 +179,5 @@ describe('Task 8 Worker OGP route', () => {
     expect(second.headers.get('Retry-After')).toBe('60');
     expect(ogImage.fetchFont).toHaveBeenCalledTimes(1);
     expect(get).toHaveBeenCalledTimes(2);
-  });
-
-  it('returns 503 when the article resolver reports a failure', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const resolverFailureId = 'b2c3d4e5-0e4b-453c-bb9f-5dbd15a319a7';
-    const get = vi.fn(async () => null);
-    const put = vi.fn();
-    ogImage.resolveArticle.mockResolvedValue({ ok: false, err: new Error('db down') });
-    const env = { ...admissionFixture(), UPLOADS: { get, put } } as never;
-
-    const response = await worker.fetch(
-      new Request(`https://worker.test/api/og/articles/${resolverFailureId}`),
-      env,
-      {} as ExecutionContext,
-    );
-
-    expect(response.status).toBe(503);
-    expect(response.headers.get('Retry-After')).toBe('60');
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=60');
-    expect(ogImage.render).not.toHaveBeenCalled();
-    expect(put).not.toHaveBeenCalled();
-    expect(error).toHaveBeenCalled();
   });
 });

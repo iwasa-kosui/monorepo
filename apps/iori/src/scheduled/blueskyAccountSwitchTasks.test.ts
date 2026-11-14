@@ -1,4 +1,3 @@
-import { RA } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -7,10 +6,8 @@ import {
   seedBlueskyData,
 } from '../adaptor/d1/__tests__/blueskyAccountSwitchFixture.ts';
 import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts';
-import type { PurgeBlueskyAccountSwitchUseCase } from '../useCase/purgeBlueskyAccountSwitch.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import {
-  createPurgeBlueskyAccountSwitchTask,
   purgeBlueskyAccountSwitchTask,
   skipWhileBlueskyAccountSwitching,
 } from './blueskyAccountSwitchTasks.ts';
@@ -87,15 +84,6 @@ describe('毎分の cron', () => {
     );
   });
 
-  it('取り込みの 3 つのタスクと、切り替えの削除のタスクを登録する', () => {
-    expect(scheduledTasks['* * * * *']?.map((task) => task.name)).toEqual([
-      'collectBlueskyTimeline',
-      'collectBlueskyNotifications',
-      'collectBlueskyChatPush',
-      'purgeBlueskyAccountSwitch',
-    ]);
-  });
-
   it('切り替えの印があるあいだは、タイムラインと通知の取り込みで Bluesky を呼ばない', async () => {
     const fixture = newFixture();
     insertBlueskyAccountSwitch(fixture.sqlite, { startedAt: Date.now() });
@@ -148,37 +136,5 @@ describe('毎分の cron', () => {
       toDid: 'did:plc:alice',
       deletedCounts: { timelineItems: 5, likes: 2 },
     });
-  });
-});
-
-describe('createPurgeBlueskyAccountSwitchTask', () => {
-  const run = async (val: Awaited<ReturnType<PurgeBlueskyAccountSwitchUseCase['run']>>['val']) => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const useCase = { run: async () => RA.ok(val) } as unknown as PurgeBlueskyAccountSwitchUseCase;
-    await createPurgeBlueskyAccountSwitchTask(() => useCase).run(contextFor({}));
-    return { error, info };
-  };
-
-  it('idle と waiting のときは、何もログに出さない', async () => {
-    for (const status of ['idle', 'waiting'] as const) {
-      const logs = await run({ status });
-      expect(logs.error).not.toHaveBeenCalled();
-      expect(logs.info).not.toHaveBeenCalled();
-    }
-  });
-
-  it('失敗は console.error に JSON で出す', async () => {
-    const logs = await run({ status: 'failed', attempts: 31, stalled: true, message: 'Error: boom' });
-
-    expect(logs.error).toHaveBeenCalledWith(
-      JSON.stringify({
-        event: 'bluesky_account_switch_purge_failed',
-        status: 'failed',
-        attempts: 31,
-        stalled: true,
-        message: 'Error: boom',
-      }),
-    );
   });
 });

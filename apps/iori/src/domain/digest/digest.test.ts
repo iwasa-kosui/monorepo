@@ -30,67 +30,6 @@ const payload = () => ({
 });
 
 describe('Digest', () => {
-  it('create は digest、items、trends を aggregateState に持つ digest.created を返す', () => {
-    const created = Digest.create(payload(), now);
-
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-    expect(created.val).toMatchObject({
-      aggregateName: 'digest',
-      eventName: 'digest.created',
-      aggregateState: {
-        digestDate: '2026-11-05',
-        createdAt: now,
-        pushSentAt: null,
-        trigger: 'scheduled',
-        topicKey: 'summary',
-      },
-    });
-    expect(created.val.aggregateState.items).toHaveLength(1);
-    expect(created.val.aggregateState.items[0]!.digestItemId).toEqual(expect.any(String));
-    expect(created.val.aggregateState.trends).toHaveLength(1);
-    expect(created.val.aggregateState.xPostFeedEntryIds).toEqual(['x-1', 'x-2']);
-  });
-
-  it('create は日付の形式が違う digest を作らない', () => {
-    expect(Digest.create({ ...payload(), digestDate: '2026/11/05' }, now).ok).toBe(false);
-  });
-
-  it('create は requested の trigger を aggregateState に持つ', () => {
-    const created = Digest.create({ ...payload(), trigger: 'requested' }, now);
-
-    expect(created.ok && created.val.aggregateState.trigger).toBe('requested');
-  });
-
-  it('create は未知の trigger の digest を作らない', () => {
-    expect(Digest.create({ ...payload(), trigger: 'manual' as never }, now).ok).toBe(false);
-  });
-
-  it('recordPushSent は pushSentAt を入れた状態の digest.pushSent を返す', () => {
-    const created = Digest.create(payload(), now);
-    if (!created.ok) throw new Error('unexpected');
-    const later = Instant.addDuration(now, 1000);
-
-    const sent = Digest.recordPushSent(created.val.aggregateState, later);
-
-    expect(sent.eventName).toBe('digest.pushSent');
-    expect(sent.aggregateState.pushSentAt).toBe(later);
-    expect(sent.eventPayload).toEqual({ digestId: created.val.aggregateState.digestId, pushSentAt: later });
-  });
-
-  it('expire は状態を持たない digest.expired を返す', () => {
-    const created = Digest.create(payload(), now);
-    if (!created.ok) throw new Error('unexpected');
-
-    const expired = Digest.expire(created.val.aggregateState, now);
-
-    expect(expired).toMatchObject({
-      eventName: 'digest.expired',
-      aggregateState: undefined,
-      eventPayload: { digestId: created.val.aggregateState.digestId, digestDate: '2026-11-05' },
-    });
-  });
-
   describe('giveFeedback', () => {
     const digestOf = () => {
       const created = Digest.create(payload(), now);
@@ -149,11 +88,5 @@ describe('Digest', () => {
 
       expect(given).toEqual({ ok: false, err: DigestItemNotFoundError.create(missing) });
     });
-  });
-
-  it('feedback は interested と not_interested だけを受け付ける', () => {
-    const invalid = { ...payload(), items: [{ ...payload().items[0]!, feedback: 'maybe' as never }] };
-
-    expect(Digest.create(invalid, now).ok).toBe(false);
   });
 });

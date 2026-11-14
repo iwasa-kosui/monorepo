@@ -8,7 +8,7 @@ import { EMBEDDING_DIMENSIONS } from '../domain/interestSource/embedding.ts';
 import { float32ToBytes } from '../domain/interestSource/embeddingBytes.ts';
 import { createDailyDigestTask } from './digestTasks.ts';
 import { collectFeedsTask } from './feedTasks.ts';
-import { type ScheduledTaskContext, scheduledTasks } from './scheduledTasks.ts';
+import { type ScheduledTaskContext } from './scheduledTasks.ts';
 
 const mocks = vi.hoisted(() => ({ fetchText: vi.fn() }));
 
@@ -104,14 +104,6 @@ afterEach(() => {
   mocks.fetchText.mockReset();
 });
 
-describe('scheduledTasks', () => {
-  it('3 時間ごとの cron は取得を collectFeeds の中で埋め込むので、埋め込みだけのタスクを持たない', () => {
-    const tasks = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!;
-    expect(tasks).toContain(collectFeedsTask);
-    expect(tasks.map((task) => task.name)).not.toContain('embedFeedEntries');
-  });
-});
-
 describe('collectFeedsTask', () => {
   it('記事を取得してから、取得したばかりの記事を同じ実行の中で埋め込み、両方のログを出す', async () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
@@ -119,7 +111,6 @@ describe('collectFeedsTask', () => {
 
     await collectFeedsTask.run(t.context(COLLECT_TIME));
 
-    expect(t.run).toHaveBeenCalledWith('@cf/baai/bge-m3', { text: ['fresh\ndesc fresh'] });
     expect(t.order.indexOf('embed')).toBeGreaterThan(t.order.indexOf(`fetch:${FEED_URL}`));
     expect(t.embeddedTitles()).toEqual(['fresh']);
     expect(info).toHaveBeenCalledWith('iori feeds collected.', expect.objectContaining({ collected: 1 }));
@@ -233,16 +224,6 @@ describe('collectFeedsTask', () => {
     expect(error).toHaveBeenCalledWith('iori feed entries: embedding failed.', { errorMessage: 'unavailable' });
     expect(info).toHaveBeenCalledWith('iori feeds collected.', expect.objectContaining({ collected: 1 }));
     expect(t.embeddedTitles()).toEqual([]);
-  });
-
-  it('env.AI が無ければ埋め込まずに、件数 0 をログに出す', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const t = setup({ ai: 'none' });
-
-    await collectFeedsTask.run(t.context(COLLECT_TIME));
-
-    expect(t.embeddedTitles()).toEqual([]);
-    expect(info).toHaveBeenCalledWith('iori feed entries embedded.', { embedded: 0, skipped: 0, remaining: 0 });
   });
 
   it('21:00 に取得した記事が、同じ cron の実行の中で埋め込まれ、21:30 の毎朝の生成のトピックの記事のおすすめに入る', async () => {

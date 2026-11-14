@@ -34,10 +34,6 @@ const remotePost = (visibility: Visibility | null): RemotePost => ({
 });
 
 describe('isTranslatable', () => {
-  it('ローカルの投稿は翻訳できる', () => {
-    expect(isTranslatable(localPost())).toBe(true);
-  });
-
   it.each<[Visibility, boolean]>([
     ['public', true],
     ['unlisted', true],

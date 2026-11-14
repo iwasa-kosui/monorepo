@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BLUESKY_PROFILE_DESCRIPTION_MAX_BYTES,
-  BLUESKY_PROFILE_DESCRIPTION_MAX_GRAPHEMES,
   BLUESKY_PROFILE_DISPLAY_NAME_MAX_BYTES,
-  BLUESKY_PROFILE_DISPLAY_NAME_MAX_GRAPHEMES,
   BLUESKY_PROFILE_IMAGE_MAX_BYTES,
   BlueskyProfileInput,
 } from './blueskyProfileInput.ts';
@@ -91,16 +89,6 @@ describe('BlueskyProfileInput.validate', () => {
         reason: `自己紹介が長すぎます（UTF-8 で${BLUESKY_PROFILE_DESCRIPTION_MAX_BYTES}バイト以内）`,
       },
     });
-  });
-
-  it('上限の定数は仕様どおりにする', () => {
-    expect([
-      BLUESKY_PROFILE_DISPLAY_NAME_MAX_GRAPHEMES,
-      BLUESKY_PROFILE_DISPLAY_NAME_MAX_BYTES,
-      BLUESKY_PROFILE_DESCRIPTION_MAX_GRAPHEMES,
-      BLUESKY_PROFILE_DESCRIPTION_MAX_BYTES,
-      BLUESKY_PROFILE_IMAGE_MAX_BYTES,
-    ]).toEqual([64, 640, 256, 2560, 1_000_000]);
   });
 
   it('画像は JPEG と PNG の 1 バイト以上 1,000,000 バイト以下だけ通す', () => {

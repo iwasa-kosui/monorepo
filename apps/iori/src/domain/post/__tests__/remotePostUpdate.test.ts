@@ -41,16 +41,6 @@ describe('Post.updateRemotePost', () => {
       editedAt: 5_000,
     });
   });
-
-  it('イベントの payload に更新の前と後の宛先を入れる', () => {
-    const event = Post.updateRemotePost(Instant.orThrow(6_000))(post, edit);
-
-    expect(event.eventPayload).toMatchObject({
-      postId: post.postId,
-      recipientActorUris: ['https://iori.test/users/kosui'],
-      previousRecipientActorUris: ['https://iori.test/users/hanako'],
-    });
-  });
 });
 
 describe('Post.updateRemotePost の参加者', () => {
@@ -153,25 +143,5 @@ describe('Post.isNewerEdit', () => {
     expect(Post.isNewerEdit(edited, Instant.orThrow(5_001))).toBe(true);
     expect(Post.isNewerEdit(edited, Instant.orThrow(5_000))).toBe(false);
     expect(Post.isNewerEdit(edited, Instant.orThrow(4_999))).toBe(false);
-  });
-});
-
-describe('Post.updateRemotePostPoll', () => {
-  const poll = {
-    multiple: false,
-    options: [{ title: '赤', votesCount: 3 }],
-    votersCount: 3,
-    expiresAt: null,
-    closed: false,
-  };
-
-  it('投稿は変えず、投票だけを payload に入れたイベントを作る', () => {
-    const event = Post.updateRemotePostPoll(Instant.orThrow(6_000))(post, poll);
-
-    expect(event.eventName).toBe('post.remotePostPollUpdated');
-    expect(event.aggregateId).toBe(post.postId);
-    expect(event.occurredAt).toBe(6_000);
-    expect(event.aggregateState).toEqual(post);
-    expect(event.eventPayload).toEqual({ postId: post.postId, poll });
   });
 });

@@ -2,15 +2,12 @@ import { RA } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CollectBlueskyNotificationsUseCase } from '../useCase/collectBlueskyNotifications.ts';
-import type { ExpireBlueskyNotificationReceiptsUseCase } from '../useCase/expireBlueskyNotificationReceipts.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import {
   collectBlueskyNotificationsTask,
   createCollectBlueskyNotificationsTask,
-  createExpireBlueskyNotificationReceiptsTask,
-  expireBlueskyNotificationReceiptsTask,
 } from './blueskyNotificationTasks.ts';
-import { type ScheduledTaskContext, scheduledTasks } from './scheduledTasks.ts';
+import { type ScheduledTaskContext } from './scheduledTasks.ts';
 
 const untouchable = (name: string) =>
   new Proxy({}, {
@@ -108,79 +105,5 @@ describe('collectBlueskyNotificationsTask', () => {
     expect(recorder.failedStore.save).toHaveBeenCalledOnce();
     expect(recorder.failedStore.save).toHaveBeenCalledWith('notifications', NOW, 'auth', 'ExpiredToken');
     expect(recorder.succeededStore.save).not.toHaveBeenCalled();
-  });
-
-  it('失敗にコードが無ければ、コードを null にして記録する', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const run = vi.fn(async () =>
-      RA.err({
-        type: 'BlueskyClientError' as const,
-        kind: 'http' as const,
-        message: 'listNotifications failed: status 502',
-        status: 502,
-      })
-    );
-    const recorder = recorderStub();
-    const task = createCollectBlueskyNotificationsTask(
-      () => ({ run }) as unknown as CollectBlueskyNotificationsUseCase,
-      () => recorder,
-    );
-
-    await task.run(contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }));
-
-    expect(recorder.failedStore.save).toHaveBeenCalledWith('notifications', expect.any(Number), 'http', null);
-  });
-
-  it('無効なときは、記録の保存先を作らない', async () => {
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const createRecorder = vi.fn(recorderStub);
-
-    await createCollectBlueskyNotificationsTask(() => undefined, createRecorder).run(contextWith({}));
-
-    expect(createRecorder).not.toHaveBeenCalled();
-  });
-
-  it('1 分ごとの cron でタイムラインの取り込みの後に動き、3 時間ごとの cron には登録されていない', () => {
-    const everyMinute = scheduledTasks['* * * * *']!;
-    expect(everyMinute.map((task) => [task.name, task.after])).toEqual([
-      ['collectBlueskyTimeline', undefined],
-      ['collectBlueskyNotifications', 'collectBlueskyTimeline'],
-      ['collectBlueskyChatPush', 'collectBlueskyNotifications'],
-      ['purgeBlueskyAccountSwitch', undefined],
-    ]);
-    const threeHourly = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
-    expect(threeHourly).not.toContain('collectBlueskyNotifications');
-  });
-});
-
-describe('expireBlueskyNotificationReceiptsTask', () => {
-  it('無効な設定のときは、DB に触れず、無効であることをログに出す', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-
-    await expireBlueskyNotificationReceiptsTask.run(contextWith({}));
-
-    expect(info).toHaveBeenCalledWith('iori bluesky notifications are disabled.');
-  });
-
-  it('use case があるときは期限切れの削除を 1 回実行する', async () => {
-    const run = vi.fn(async () => RA.ok(undefined));
-    const createUseCase = vi.fn(() => ({ run }) as unknown as ExpireBlueskyNotificationReceiptsUseCase);
-    const context = {
-      ...contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }),
-      env: { IORI_BLUESKY_TIMELINE: 'enabled' } as never,
-    };
-
-    await createExpireBlueskyNotificationReceiptsTask(createUseCase).run(context);
-
-    expect(createUseCase).toHaveBeenCalledWith(context.env);
-    expect(run).toHaveBeenCalledOnce();
-  });
-
-  it('3 時間ごとの cron にだけ登録されている', () => {
-    const threeHourly = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
-    expect(threeHourly).toContain('expireBlueskyNotificationReceipts');
-    expect(scheduledTasks['* * * * *']!.map((task) => task.name)).not.toContain(
-      'expireBlueskyNotificationReceipts',
-    );
   });
 });

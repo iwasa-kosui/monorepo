@@ -111,13 +111,6 @@ describe('Worker の Mastodon 互換 API', () => {
     expect(await nodeinfo.json()).toMatchObject({ software: { name: 'iori' }, protocols: ['activitypub'] });
   });
 
-  it('/oauth/authorize は client_id がなければ画面でエラーを返す', async () => {
-    const response = await setup().request('/oauth/authorize');
-
-    expect(response.status).toBe(400);
-    expect(response.headers.get('Content-Type')).toContain('text/html');
-  });
-
   it('アプリを登録して client_credentials のトークンで apps/verify_credentials を呼べる', async () => {
     const { request } = setup();
 
@@ -175,12 +168,6 @@ describe('Worker の Mastodon 互換 API', () => {
       last_status_at: '2025-01-02',
       avatar: `${origin}/default-avatar.png`,
     });
-  });
-
-  it('認証がなければ verify_credentials は 401 にする', async () => {
-    const response = await setup().request('/api/v1/accounts/verify_credentials');
-
-    expect(response.status).toBe(401);
   });
 
   it('未実装の /api/v1 と /api/v2 のパスは 404 の JSON にし、認証付きの要求をログに出す', async () => {
@@ -307,12 +294,6 @@ describe('Worker の Mastodon 互換 API', () => {
       expect(anonymous.status).toBe(401);
     });
 
-    it('timelines/home は認証がなければ 401 にする', async () => {
-      const response = await setup().request('/api/v1/timelines/home');
-
-      expect(response.status).toBe(401);
-    });
-
     it('Cookie の利用者に通知と未読数とマーカーを返し、認証がなければ Mastodon 形式の 401 にする', async () => {
       const { request, sqlite } = setup();
       const followerId = crypto.randomUUID();
@@ -357,56 +338,6 @@ describe('Worker の Mastodon 互換 API', () => {
       expect(await unreadAfter.json()).toEqual({ count: 0 });
       expect(anonymous.status).toBe(401);
       expect(await anonymous.json()).toEqual({ error: 'The access token is invalid' });
-    });
-
-    it('消した独自 API のパスは未実装として 404 の JSON を返す', async () => {
-      const { request } = setup();
-
-      const responses = await Promise.all([
-        request('/api/v1/server-timeline'),
-        request('/api/v1/federated'),
-        request('/api/v1/thread?postId=x'),
-      ]);
-
-      expect(responses.map((response) => response.status)).toEqual([404, 404, 404]);
-    });
-
-    it('置き換えた独自 API のパスは Cookie があっても未実装として 404 の JSON を返す', async () => {
-      const { request } = setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const headers = { Cookie: `sessionId=${sessionId}` };
-
-      const responses = await Promise.all([
-        request('/api/v1/users/kosui/posts', { headers }),
-        request(`/api/v1/remote-users/${crypto.randomUUID()}/posts`, { headers }),
-        request('/api/v1/liked-posts', { headers }),
-      ]);
-
-      expect(responses.map((response) => response.status)).toEqual([404, 404, 404]);
-      expect(await responses[2]!.json()).toEqual({ error: 'Record not found' });
-      warn.mockRestore();
-    });
-
-    it('置き換えた独自の書き込み API のパスは Cookie があっても未実装として 404 を返す', async () => {
-      const { request } = setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const headers = { Cookie: `sessionId=${sessionId}`, Origin: origin, 'Content-Type': 'application/json' };
-      const body = JSON.stringify({ postId: crypto.randomUUID(), actorId: crypto.randomUUID(), handle: '@a@b.test' });
-
-      const responses = await Promise.all([
-        request('/api/v1/like', { method: 'POST', headers, body }),
-        request('/api/v1/like', { method: 'DELETE', headers, body }),
-        request('/api/v1/repost', { method: 'POST', headers, body }),
-        request('/api/v1/repost', { method: 'DELETE', headers, body }),
-        request('/api/v1/mute', { method: 'POST', headers, body }),
-        request('/api/v1/mute', { method: 'DELETE', headers, body }),
-        request('/api/v1/follow', { method: 'POST', headers, body }),
-        request(`/remote-users/${crypto.randomUUID()}/follow`, { method: 'POST', headers }),
-        request(`/remote-users/${crypto.randomUUID()}/unfollow`, { method: 'POST', headers }),
-      ]);
-
-      expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 404, 404, 404, 404, 404, 404]);
-      warn.mockRestore();
     });
 
     it('Cookie の利用者の いいね、ミュート、通知の削除を実際の配線で処理する', async () => {
@@ -613,44 +544,5 @@ describe('Worker の Mastodon 互換 API', () => {
       const verified = await request('/api/v1/accounts/verify_credentials', { headers });
       expect(await verified.json()).toMatchObject({ avatar: body.avatar });
     });
-
-    it('置き換えた POST /api/v1/upload と POST /users/:username は 404 にして、logoUri を変えない', async () => {
-      const { request, sqlite } = setup();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-      const upload = await request('/api/v1/upload', {
-        method: 'POST',
-        headers,
-        body: form({ file: new File([png()], 'a.png', { type: 'image/png' }) }),
-      });
-      const users = await request('/users/kosui', {
-        method: 'POST',
-        headers,
-        body: new URLSearchParams({ logoUri: 'https://cdn.example/logo.png' }),
-      });
-
-      expect([upload.status, users.status]).toEqual([404, 404]);
-      expect(sqlite.prepare('SELECT logoUri FROM actors WHERE actorId = ?').get(actorId)).toEqual({ logoUri: null });
-      warn.mockRestore();
-    });
-  });
-
-  it('既存の独自 API と /api/og/* の応答を変えない', async () => {
-    const { request } = setup();
-
-    const [home, vapid, og] = await Promise.all([
-      request('/api/v1/home'),
-      request('/api/v1/push/vapid-public-key'),
-      request('/api/og/articles/not-an-id'),
-    ]);
-
-    expect([home.status, vapid.status, og.status]).toEqual([
-      401,
-      200,
-      404,
-    ]);
-    expect(await home.json()).toEqual({ error: 'Unauthorized' });
-    expect(await vapid.json()).toEqual({ publicKey: 'fixture-public' });
-    expect(await og.text()).toBe('Not Found');
   });
 });

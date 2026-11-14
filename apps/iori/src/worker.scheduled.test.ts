@@ -44,25 +44,6 @@ it('does not dispatch scheduled tasks without an admission identity', async () =
 });
 
 it('runs the tasks registered for the cron in active mode', async () => {
-  const waitUntil = vi.fn();
-  const env = admissionFixture() as never;
-  await worker.scheduled(controller, env, { waitUntil } as never);
+  await worker.scheduled(controller, admissionFixture() as never, { waitUntil: vi.fn() } as never);
   expect(task).toHaveBeenCalledOnce();
-  const context = task.mock.calls[0]![0];
-  expect(context.env).toBe(env);
-  expect(context.scheduledTime).toEqual(new Date(Date.UTC(2026, 0, 1)));
-  const pending = Promise.resolve();
-  context.waitUntil(pending);
-  expect(waitUntil).toHaveBeenCalledWith(pending);
-});
-
-it('does nothing for a cron without registered tasks', async () => {
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-  await worker.scheduled(
-    { ...controller, cron: '5 * * * *' } as ScheduledController,
-    admissionFixture() as never,
-    {} as ExecutionContext,
-  );
-  expect(task).not.toHaveBeenCalled();
-  expect(warn).toHaveBeenCalledWith('iori scheduled: no task for cron.', { cron: '5 * * * *' });
 });

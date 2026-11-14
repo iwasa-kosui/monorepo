@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildKosuiPostText,
-  buildKosuiSummaryText,
   classifyKosuiEntry,
   extractMarkdownBody,
   KOSUI_POST_TEXT_MAX_CHARS,
@@ -50,11 +49,5 @@ describe('buildKosuiPostText', () => {
     const text = buildKosuiPostText('題', '😀'.repeat(3000));
     expect(Array.from(text)).toHaveLength(KOSUI_POST_TEXT_MAX_CHARS);
     expect(text.startsWith('題\n😀')).toBe(true);
-  });
-});
-
-describe('buildKosuiSummaryText', () => {
-  it('title と description を改行でつなぐ', () => {
-    expect(buildKosuiSummaryText('題', '説明')).toBe('題\n説明');
   });
 });

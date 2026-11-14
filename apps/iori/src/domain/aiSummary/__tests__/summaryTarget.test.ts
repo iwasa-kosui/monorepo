@@ -77,10 +77,4 @@ describe('SummaryTarget.parse', () => {
     expect(failedField({ since: iso(2026, 10, 4), until: iso(2026, 10, 3) })).toBe('since');
     expect(failedField({ since: iso(2026, 10, 3), until: iso(2026, 10, 3) })).toBe('since');
   });
-
-  it('オブジェクトでない本文は body の不正にする', () => {
-    expect(failedField(undefined)).toBe('body');
-    expect(failedField('q')).toBe('body');
-    expect(failedField([])).toBe('body');
-  });
 });

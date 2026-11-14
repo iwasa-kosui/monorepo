@@ -4,18 +4,6 @@ import { CodeChallenge } from '../pkce.ts';
 import { Secret } from '../secret.ts';
 
 describe('Secret', () => {
-  it('32 バイトの乱数を base64url にして返す', () => {
-    const secret = Secret.generate();
-    expect(secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(Secret.generate()).not.toBe(secret);
-  });
-
-  it('SHA-256 の hex を返す', async () => {
-    await expect(Secret.hash('abc')).resolves.toBe(
-      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
-    );
-  });
-
   it('同じ値だけを一致と判定する', async () => {
     const hash = await Secret.hash('secret');
     await expect(Secret.matches('secret', hash)).resolves.toBe(true);

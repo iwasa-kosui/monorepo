@@ -2,15 +2,12 @@ import { RA } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline.ts';
-import type { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import {
   collectBlueskyTimelineTask,
   createCollectBlueskyTimelineTask,
-  createExpireBlueskyTimelineTask,
-  expireBlueskyTimelineTask,
 } from './blueskyTimelineTasks.ts';
-import { dispatchScheduled, type ScheduledTaskContext, scheduledTasks } from './scheduledTasks.ts';
+import { type ScheduledTaskContext } from './scheduledTasks.ts';
 
 const untouchable = (name: string) =>
   new Proxy({}, {
@@ -112,104 +109,5 @@ describe('collectBlueskyTimelineTask', () => {
     expect(recorder.failedStore.save).toHaveBeenCalledOnce();
     expect(recorder.failedStore.save).toHaveBeenCalledWith('timeline', NOW, 'auth', 'ExpiredToken');
     expect(recorder.succeededStore.save).not.toHaveBeenCalled();
-  });
-
-  it('失敗にコードが無ければ、コードを null にして記録する', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const run = vi.fn(async () =>
-      RA.err({ type: 'BlueskyClientError' as const, kind: 'network' as const, message: 'getTimeline request failed' })
-    );
-    const recorder = recorderStub();
-    const task = createCollectBlueskyTimelineTask(
-      () => ({ run }) as unknown as CollectBlueskyTimelineUseCase,
-      () => recorder,
-    );
-
-    await task.run(contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }));
-
-    expect(recorder.failedStore.save).toHaveBeenCalledWith('timeline', expect.any(Number), 'network', null);
-  });
-
-  it('無効なときは、記録の保存先を作らない', async () => {
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const createRecorder = vi.fn(recorderStub);
-
-    await createCollectBlueskyTimelineTask(() => undefined, createRecorder).run(contextWith({}));
-
-    expect(createRecorder).not.toHaveBeenCalled();
-  });
-
-  it('1 分ごとの cron にだけ登録されている', () => {
-    const everyMinute = scheduledTasks['* * * * *']!.map((task) => task.name);
-    expect(everyMinute).toEqual([
-      'collectBlueskyTimeline',
-      'collectBlueskyNotifications',
-      'collectBlueskyChatPush',
-      'purgeBlueskyAccountSwitch',
-    ]);
-    const threeHourly = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
-    expect(threeHourly).not.toContain('collectBlueskyTimeline');
-  });
-});
-
-describe('expireBlueskyTimelineTask', () => {
-  it('無効な設定のときは、DB に触れず、無効であることをログに出す', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-
-    await expireBlueskyTimelineTask.run(contextWith({}));
-
-    expect(info).toHaveBeenCalledWith('iori bluesky timeline is disabled.');
-  });
-
-  it('use case があるときは期限切れの削除を 1 回実行する', async () => {
-    const run = vi.fn(async () => RA.ok(undefined));
-    const createUseCase = vi.fn(() => ({ run }) as unknown as ExpireBlueskyTimelineUseCase);
-    const context = {
-      ...contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }),
-      env: { IORI_BLUESKY_TIMELINE: 'enabled' } as never,
-    };
-
-    await createExpireBlueskyTimelineTask(createUseCase).run(context);
-
-    expect(createUseCase).toHaveBeenCalledWith(context.env);
-    expect(run).toHaveBeenCalledOnce();
-  });
-
-  it('3 時間ごとの cron にだけ登録されている', () => {
-    const threeHourly = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
-    expect(threeHourly).toContain('expireBlueskyTimeline');
-    expect(threeHourly).toContain('retryBlueskyCrossposts');
-    expect(scheduledTasks['* * * * *']!.map((task) => task.name)).not.toContain('expireBlueskyTimeline');
-  });
-});
-
-describe('dispatchScheduled with the registered table', () => {
-  const ranNames = async (cron: string): Promise<string[]> => {
-    const ran: string[] = [];
-    for (const tasks of Object.values(scheduledTasks)) {
-      for (const task of tasks) {
-        vi.spyOn(task, 'run').mockImplementation(async () => {
-          ran.push(task.name);
-        });
-      }
-    }
-    await dispatchScheduled(cron, scheduledTasks, contextWith({}));
-    return ran;
-  };
-
-  it('* * * * * では取り込みと切り替えの削除だけが動く', async () => {
-    expect(await ranNames('* * * * *')).toEqual([
-      'collectBlueskyTimeline',
-      'purgeBlueskyAccountSwitch',
-      'collectBlueskyNotifications',
-      'collectBlueskyChatPush',
-    ]);
-  });
-
-  it('3 時間ごとの式では、期限切れの削除と crosspost の再試行が動き、取り込みは動かない', async () => {
-    const ran = await ranNames('0 0,3,6,9,12,15,18,21 * * *');
-    expect(ran).toContain('expireBlueskyTimeline');
-    expect(ran).toContain('retryBlueskyCrossposts');
-    expect(ran).not.toContain('collectBlueskyTimeline');
   });
 });

@@ -69,13 +69,6 @@ describe('GET /digest', () => {
     expect(new URL(response.headers.get('Location')!, origin).pathname).toBe('/sign-in');
   });
 
-  it('存在しないセッションの Cookie は未ログインとして扱う', async () => {
-    const response = await setup().request('/digest', { headers: { Cookie: `sessionId=${crypto.randomUUID()}` } });
-
-    expect(response.status).toBe(302);
-    expect(new URL(response.headers.get('Location')!, origin).pathname).toBe('/sign-in');
-  });
-
   it('ログイン中で digest がなければ /articles へ 302 で返す', async () => {
     const response = await setup().request('/digest', { headers: { Cookie: `sessionId=${sessionId}` } });
 

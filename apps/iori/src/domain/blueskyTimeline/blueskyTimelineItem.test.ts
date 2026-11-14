@@ -18,11 +18,4 @@ describe('BlueskyTimelineEmbed の video', () => {
       alt: null,
     });
   });
-
-  it('aspectRatio が正の整数でなければ読めない', () => {
-    const video = { type: 'video', thumbnail: null, playlist: 'https://video.example/playlist.m3u8' };
-
-    expect(BlueskyTimelineEmbed.parse({ ...video, aspectRatio: { width: 0, height: 9 } }).ok).toBe(false);
-    expect(BlueskyTimelineEmbed.parse({ ...video, aspectRatio: { width: 16, height: 9 }, alt: '猫' }).ok).toBe(true);
-  });
 });

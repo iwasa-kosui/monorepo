@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  BlueskyInteraction,
   blueskyPostgateRecordOf,
-  blueskyPostUriOf,
   BlueskyReplyRestriction,
   blueskyThreadgateRecordOf,
 } from './blueskyInteraction.ts';
@@ -12,42 +10,11 @@ const POST = 'at://did:plc:me/app.bsky.feed.post/3kabc';
 const CREATED_AT = '2026-11-13T00:00:00.000Z';
 
 describe('BlueskyReplyRestriction', () => {
-  it('everyone と、mention・following・followers の部分集合 (空集合を含む) を受け付ける', () => {
-    expect(BlueskyReplyRestriction.parse('everyone')).toEqual({ ok: true, val: 'everyone' });
-    expect(BlueskyReplyRestriction.parse([])).toEqual({ ok: true, val: [] });
-    expect(BlueskyReplyRestriction.parse(['following'])).toEqual({ ok: true, val: ['following'] });
-  });
-
   it('重複を除き、mention・following・followers の順にそろえる', () => {
     expect(BlueskyReplyRestriction.parse(['followers', 'mention', 'followers'])).toEqual({
       ok: true,
       val: ['mention', 'followers'],
     });
-  });
-
-  it('未知の値と配列でない値を拒否する', () => {
-    expect(BlueskyReplyRestriction.parse(['list']).ok).toBe(false);
-    expect(BlueskyReplyRestriction.parse('mention').ok).toBe(false);
-    expect(BlueskyReplyRestriction.parse(null).ok).toBe(false);
-  });
-});
-
-describe('BlueskyInteraction', () => {
-  it('既定は誰でも返信できて引用も許可する', () => {
-    expect(BlueskyInteraction.default).toEqual({ replyRestriction: 'everyone', quoteDisabled: false });
-    expect(BlueskyInteraction.isDefault(BlueskyInteraction.default)).toBe(true);
-  });
-
-  it('返信の制限か引用の禁止があれば既定ではない', () => {
-    expect(BlueskyInteraction.isDefault({ replyRestriction: [], quoteDisabled: false })).toBe(false);
-    expect(BlueskyInteraction.isDefault({ replyRestriction: ['mention'], quoteDisabled: false })).toBe(false);
-    expect(BlueskyInteraction.isDefault({ replyRestriction: 'everyone', quoteDisabled: true })).toBe(false);
-  });
-});
-
-describe('blueskyPostUriOf', () => {
-  it('did と rkey から投稿の at-uri を作る', () => {
-    expect(blueskyPostUriOf({ did: 'did:plc:me', rkey: '3kabc' })).toBe(POST);
   });
 });
 

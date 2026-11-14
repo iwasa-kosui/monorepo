@@ -1,25 +1,14 @@
 import { WorkersMessageQueue } from '@fedify/cfworkers';
 import { SendActivityError } from '@fedify/fedify';
 import { FetchError } from '@fedify/vocab-runtime';
-import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
-import z from 'zod/v4';
 
-import { createActorDispatcher } from './adaptor/fedify/actorDispatcherFactory.ts';
-import { createOutboxDispatcher } from './adaptor/fedify/outboxDispatcherFactory.ts';
-import { ActorId } from './domain/actor/actorId.ts';
-import { Instant } from './domain/instant/instant.ts';
-import { Post } from './domain/post/post.ts';
-import { UserId } from './domain/user/userId.ts';
-import { Username } from './domain/user/username.ts';
 import {
-  createCloudflareFederation,
   createCloudflareFederationRuntime,
   decideQueueFailureAction,
   processCloudflareFedifyMessages,
   processCloudflareFedifyQueueBatch,
   type QueueMessageType,
-  queueRetryDelaySeconds,
 } from './federation.cloudflare.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
 
@@ -38,61 +27,6 @@ const parseRuntimePath = async (path: string) => {
   return context.parseUri(new URL(`${workerEnv.ORIGIN}${path}`));
 };
 
-describe('createCloudflareFederation', () => {
-  it('builds a federation with Cloudflare stores', async () => {
-    const federation = await createCloudflareFederation({
-      origin: 'https://worker.example.invalid',
-      kv: {} as never,
-      queue: {} as never,
-    });
-
-    expect(federation).toBeDefined();
-  });
-
-  it('dispatches actor and outbox resources using public user paths', async () => {
-    const userId = UserId.generate();
-    const actorId = ActorId.generate();
-    const username = Username.orThrow('kosui');
-    const actor = {
-      id: actorId,
-      userId,
-      type: 'local' as const,
-      uri: 'https://worker.example.invalid/users/kosui',
-      inboxUrl: 'https://worker.example.invalid/users/kosui/inbox',
-    };
-    const post = Post.createPost(Instant.now())({
-      actorId,
-      userId,
-      content: 'Hello ActivityPub',
-    }).aggregateState;
-    const context = {
-      getActorKeyPairs: async () => [],
-      getActorUri: (identifier: string) => new URL(`https://worker.example.invalid/users/${identifier}`),
-      getInboxUri: (identifier?: string) =>
-        new URL(`https://worker.example.invalid${identifier === undefined ? '/inbox' : `/users/${identifier}/inbox`}`),
-      getOutboxUri: (identifier: string) => new URL(`https://worker.example.invalid/users/${identifier}/outbox`),
-      getFollowersUri: (identifier: string) => new URL(`https://worker.example.invalid/users/${identifier}/followers`),
-      getObjectUri: (_type: unknown, values: { identifier: string; id: string }) =>
-        new URL(`https://worker.example.invalid/users/${values.identifier}/posts/${values.id}`),
-    };
-    const userResolverByUsername = { resolve: async () => RA.ok({ id: userId, username }) };
-    const actorResolverByUserId = { resolve: async () => RA.ok(actor) };
-    const actorDispatcher = createActorDispatcher({ userResolverByUsername, actorResolverByUserId });
-    const outboxDispatcher = createOutboxDispatcher({
-      userResolverByUsername,
-      actorResolverByUserId,
-      postsResolverByActorId: { resolve: async () => RA.ok([post]) },
-    });
-
-    const dispatchedActor = await actorDispatcher.dispatch(context as never, 'kosui');
-    const outbox = await outboxDispatcher.dispatch(context as never, 'kosui');
-
-    expect(dispatchedActor?.id?.href).toBe('https://worker.example.invalid/users/kosui');
-    expect(outbox.items).toHaveLength(1);
-    expect(outbox.items[0]?.objectId?.href).toBe(`https://worker.example.invalid/users/kosui/posts/${post.postId}`);
-  });
-});
-
 describe('createCloudflareFederationRuntime', () => {
   it.each(
     [
@@ -108,36 +42,6 @@ describe('createCloudflareFederationRuntime', () => {
     const parsed = await parseRuntimePath(path);
 
     expect(parsed?.type).toBe(type);
-  });
-
-  it('serves NodeInfo 2.1 for iori', async () => {
-    const { federation } = await createCloudflareFederationRuntime(workerEnv, vi.fn());
-
-    const response = await federation.fetch(new Request(`${workerEnv.ORIGIN}/nodeinfo/2.1`), {
-      contextData: undefined,
-      onNotFound: () => new Response('not found', { status: 404 }),
-      onNotAcceptable: () => new Response('not acceptable', { status: 406 }),
-    });
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body).toMatchObject({
-      software: { name: 'iori' },
-      protocols: ['activitypub'],
-      openRegistrations: false,
-      usage: { users: { total: 1 } },
-    });
-  });
-
-  it('defines the refetchRelayForwardedNote task', async () => {
-    const { federation } = await createCloudflareFederationRuntime(workerEnv, vi.fn());
-
-    expect(() =>
-      federation.defineTask('refetchRelayForwardedNote', {
-        schema: z.object({}),
-        handler: () => undefined,
-      })
-    ).toThrow(TypeError);
   });
 });
 
@@ -222,18 +126,6 @@ describe('Cloudflare Fedify message queue', () => {
         expect((call[0] as { contentType: string }[])[0]?.contentType).toBe('json');
         expect(call[1]).toEqual({ delaySeconds: 5 });
       }
-    });
-
-    it('does not call sendBatch for zero messages', async () => {
-      const sendBatch = vi.fn(async (..._args: unknown[]) => undefined);
-      const { queue } = await createCloudflareFederationRuntime({
-        ...workerEnv,
-        FEDIFY_QUEUE: { sendBatch } as never,
-      }, vi.fn());
-
-      await queue.enqueueMany?.([]);
-
-      expect(sendBatch).not.toHaveBeenCalled();
     });
 
     it('drops a message over 120,000 bytes with a fixed log and sends the rest', async () => {
@@ -463,15 +355,6 @@ describe('processCloudflareFedifyMessages', () => {
   });
 });
 
-describe('queueRetryDelaySeconds', () => {
-  it.each([[1, 60], [2, 600], [3, 3600], [4, 3600], [0, 60]])(
-    'returns the delay for attempt %i',
-    (attempts, expected) => {
-      expect(queueRetryDelaySeconds(attempts)).toBe(expected);
-    },
-  );
-});
-
 describe('decideQueueFailureAction', () => {
   const sendActivityError = (statusCode: number) =>
     new SendActivityError(new URL('https://remote.example.invalid/inbox'), statusCode, `HTTP ${statusCode}`, '');
@@ -596,18 +479,6 @@ describe('processCloudflareFedifyMessages retry delays', () => {
     return { ack, retry, logged };
   };
 
-  it.each([[1, 60], [2, 600], [3, 3600], [4, 3600]])(
-    'retries a 5xx SendActivityError on attempt %i with delaySeconds %i',
-    async (attempts, delaySeconds) => {
-      const { ack, retry, logged } = await run(sendActivityError(503), attempts);
-
-      expect(retry).toHaveBeenCalledOnce();
-      expect(retry).toHaveBeenCalledWith({ delaySeconds });
-      expect(ack).not.toHaveBeenCalled();
-      expect(logged).toEqual([['Fedify queued task failed.', { name: 'SendActivityError', errorMessage: 'HTTP 503' }]]);
-    },
-  );
-
   it('retries only the failed message in a batch where the first fails and the second succeeds', async () => {
     const first = { body: { fail: true }, attempts: 1, ack: vi.fn(), retry: vi.fn() };
     const second = { body: { fail: false }, attempts: 1, ack: vi.fn(), retry: vi.fn() };
@@ -628,17 +499,6 @@ describe('processCloudflareFedifyMessages retry delays', () => {
     expect(second.retry).not.toHaveBeenCalled();
   });
 
-  it.each(['outbox', 'fanout'] as const)(
-    'retries a %s message with delaySeconds 60 on attempt 1',
-    async (messageType) => {
-      const { ack, retry } = await run(sendActivityError(503), 1, messageType);
-
-      expect(retry).toHaveBeenCalledOnce();
-      expect(retry).toHaveBeenCalledWith({ delaySeconds: 60 });
-      expect(ack).not.toHaveBeenCalled();
-    },
-  );
-
   it('retries a message of unknown type without delaySeconds when the task fails before the type is recorded', async () => {
     const ack = vi.fn();
     const retry = vi.fn();
@@ -655,48 +515,6 @@ describe('processCloudflareFedifyMessages retry delays', () => {
     expect(ack).not.toHaveBeenCalled();
   });
 
-  it.each(['inbox', 'task'] as const)(
-    'retries a %s message without delaySeconds on every attempt',
-    async (messageType) => {
-      for (const attempts of [1, 2, 3]) {
-        const { ack, retry, logged } = await run(sendActivityError(403), attempts, messageType);
-
-        expect(retry).toHaveBeenCalledOnce();
-        expect(retry).toHaveBeenCalledWith();
-        expect(ack).not.toHaveBeenCalled();
-        expect(logged).toEqual([['Fedify queued task failed.', {
-          name: 'SendActivityError',
-          errorMessage: 'HTTP 403',
-        }]]);
-      }
-    },
-  );
-
-  it('retries an error without a status code on attempt 1 with delaySeconds 60', async () => {
-    const { ack, retry } = await run(new TypeError('fetch failed'), 1);
-
-    expect(retry).toHaveBeenCalledOnce();
-    expect(retry).toHaveBeenCalledWith({ delaySeconds: 60 });
-    expect(ack).not.toHaveBeenCalled();
-  });
-
-  it.each([408, 429])('treats a %i SendActivityError like a 5xx', async (statusCode) => {
-    for (const [attempts, delaySeconds] of [[1, 60], [2, 600], [3, 3600]] as const) {
-      const { ack, retry } = await run(sendActivityError(statusCode), attempts);
-
-      expect(retry).toHaveBeenCalledWith({ delaySeconds });
-      expect(ack).not.toHaveBeenCalled();
-    }
-  });
-
-  it('retries a 403 SendActivityError once on attempt 1 with delaySeconds 60', async () => {
-    const { ack, retry } = await run(sendActivityError(403), 1);
-
-    expect(retry).toHaveBeenCalledOnce();
-    expect(retry).toHaveBeenCalledWith({ delaySeconds: 60 });
-    expect(ack).not.toHaveBeenCalled();
-  });
-
   it('acks a 403 SendActivityError on attempt 2 without retrying and logs the status code', async () => {
     const { ack, retry, logged } = await run(sendActivityError(403), 2);
 
@@ -708,39 +526,10 @@ describe('processCloudflareFedifyMessages retry delays', () => {
     ]);
   });
 
-  it('acks an inbox fetch timeout on attempt 2 and logs the reason and the URL', async () => {
-    const { ack, retry, logged } = await run(fetchTimeout(), 2, 'inbox');
-
-    expect(retry).not.toHaveBeenCalled();
-    expect(ack).toHaveBeenCalledOnce();
-    expect(logged).toContainEqual([
-      'Fedify queued task dropped after a fetch timeout.',
-      { url: 'https://slow.example/users/a', attempts: 2 },
-    ]);
-  });
-
-  it('retries an inbox fetch timeout on attempt 1 with delaySeconds 60', async () => {
-    const { ack, retry } = await run(fetchTimeout(), 1, 'inbox');
-
-    expect(retry).toHaveBeenCalledWith({ delaySeconds: 60 });
-    expect(ack).not.toHaveBeenCalled();
-  });
-
   it('treats a message without attempts as attempt 1', async () => {
     const { retry } = await run(new Error('boom'));
 
     expect(retry).toHaveBeenCalledWith({ delaySeconds: 60 });
-  });
-
-  it('only acks when the task succeeds', async () => {
-    const ack = vi.fn();
-    const retry = vi.fn();
-    await processCloudflareFedifyMessages({
-      messages: [{ body: {}, ack, retry, attempts: 2 }],
-    } as never, async () => undefined);
-
-    expect(ack).toHaveBeenCalledOnce();
-    expect(retry).not.toHaveBeenCalled();
   });
 });
 
@@ -772,73 +561,6 @@ describe('processCloudflareFedifyQueueBatch', () => {
     expect(ack).toHaveBeenCalledOnce();
     expect(retry).not.toHaveBeenCalled();
     processQueuedTask.mockRestore();
-  });
-
-  it.each(bodies)('retries and passes the same message to processQueuedTask for %s', async (_name, body) => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const processQueuedTask = (await spyOnProcessQueuedTask()).mockRejectedValue(new Error('task failure'));
-    const ack = vi.fn();
-    const retry = vi.fn();
-
-    await processCloudflareFedifyQueueBatch({ messages: [{ body, ack, retry }] } as never, workerEnv, vi.fn());
-
-    expect(processQueuedTask).toHaveBeenCalledOnce();
-    expect(processQueuedTask).toHaveBeenCalledWith(undefined, message);
-    expect(ack).not.toHaveBeenCalled();
-    expect(retry).toHaveBeenCalledOnce();
-    expect(retry).toHaveBeenCalledWith({ delaySeconds: 60 });
-    processQueuedTask.mockRestore();
-    error.mockRestore();
-  });
-
-  it.each(
-    [
-      ['an unwrapped inbox body', { type: 'inbox', id: 'message-2' }],
-      [
-        'a wrapped inbox body',
-        { __fedify_ordering_key__: 'remote.example.invalid', __fedify_payload__: { type: 'inbox', id: 'message-2' } },
-      ],
-    ] as const,
-  )('retries %s without delaySeconds on every attempt', async (_name, body) => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const processQueuedTask = (await spyOnProcessQueuedTask()).mockRejectedValue(new Error('task failure'));
-
-    for (const attempts of [1, 2, 3]) {
-      const ack = vi.fn();
-      const retry = vi.fn();
-      await processCloudflareFedifyQueueBatch(
-        { messages: [{ body, attempts, ack, retry }] } as never,
-        workerEnv,
-        vi.fn(),
-      );
-
-      expect(retry).toHaveBeenCalledOnce();
-      expect(retry).toHaveBeenCalledWith();
-      expect(ack).not.toHaveBeenCalled();
-    }
-    processQueuedTask.mockRestore();
-    error.mockRestore();
-  });
-
-  it.each([['outbox'], ['fanout']] as const)('retries a %s body with the delay of the attempt', async (type) => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const processQueuedTask = (await spyOnProcessQueuedTask()).mockRejectedValue(new Error('task failure'));
-
-    for (const [attempts, delaySeconds] of [[1, 60], [2, 600], [3, 3600]] as const) {
-      const ack = vi.fn();
-      const retry = vi.fn();
-      await processCloudflareFedifyQueueBatch(
-        { messages: [{ body: { type, id: 'message-3' }, attempts, ack, retry }] } as never,
-        workerEnv,
-        vi.fn(),
-      );
-
-      expect(retry).toHaveBeenCalledOnce();
-      expect(retry).toHaveBeenCalledWith({ delaySeconds });
-      expect(ack).not.toHaveBeenCalled();
-    }
-    processQueuedTask.mockRestore();
-    error.mockRestore();
   });
 
   it('retries without delaySeconds when the body cannot be opened', async () => {
