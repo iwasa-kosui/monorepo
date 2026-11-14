@@ -9,6 +9,7 @@ import {
   createD1AiAgentBotDueFollowupsResolver,
   createD1AiAgentBotPendingFollowupsCountResolver,
 } from '../aiAgentBot/aiAgentBotDueFollowupsResolver.ts';
+import { createD1AiAgentBotFollowupClaimedStore } from '../aiAgentBot/aiAgentBotFollowupClaimedStore.ts';
 import { createD1AiAgentBotFollowupScheduledStore } from '../aiAgentBot/aiAgentBotFollowupScheduledStore.ts';
 import { createD1AiAgentBotFollowupsHandledStore } from '../aiAgentBot/aiAgentBotFollowupsHandledStore.ts';
 import { createD1AiAgentBotRepliedCountResolverSince } from '../aiAgentBot/aiAgentBotRepliedCountResolverSince.ts';
@@ -36,6 +37,7 @@ const setup = () => {
   return {
     sqlite,
     scheduledStore: createD1AiAgentBotFollowupScheduledStore(db),
+    claimedStore: createD1AiAgentBotFollowupClaimedStore(db),
     handledStore: createD1AiAgentBotFollowupsHandledStore(db),
     dueResolver: createD1AiAgentBotDueFollowupsResolver(db),
     pendingCountResolver: createD1AiAgentBotPendingFollowupsCountResolver(db),
@@ -45,34 +47,39 @@ const setup = () => {
 };
 
 describe('AI エージェントの bot のフォローアップの D1 アダプタ', () => {
-  it('期日を迎えて未処理の予定だけを、期日の古い順に返す', async () => {
-    const { scheduledStore, handledStore, dueResolver } = setup();
+  it('期日を迎えて、まだ処理し始めていない予定だけを、期日の古い順に返す', async () => {
+    const { scheduledStore, claimedStore, dueResolver } = setup();
     const later = followupDueIn(30);
     const earlier = followupDueIn(10);
-    const handled = followupDueIn(20);
+    const claimed = followupDueIn(20);
     const notYet = followupDueIn(120);
-    await scheduledStore.store(later, earlier, handled, notYet);
-    await handledStore.store({
-      followupId: handled.followupId,
-      outcome: 'replied',
-      reason: null,
-      handledAt: minutes(20),
-    });
+    await scheduledStore.store(later, earlier, claimed, notYet);
+    await claimedStore.store({ followupId: claimed.followupId, claimedAt: minutes(20) });
 
     const due = Result.unsafeUnwrap(await dueResolver.resolve({ now: minutes(60), limit: 10 }));
 
     expect(due).toEqual([earlier, later]);
   });
 
+  it('処理中の印は 1 回しか付けられない（重なった cron の 1 つだけが処理する）', async () => {
+    const { scheduledStore, claimedStore } = setup();
+    const followup = followupDueIn(10);
+    await scheduledStore.store(followup);
+
+    const first = await claimedStore.store({ followupId: followup.followupId, claimedAt: minutes(10) });
+    const second = await claimedStore.store({ followupId: followup.followupId, claimedAt: minutes(11) });
+
+    expect([Result.unsafeUnwrap(first), Result.unsafeUnwrap(second)]).toEqual([true, false]);
+  });
+
   it('処理済みの記録は上書きしない', async () => {
-    const { scheduledStore, handledStore, dueResolver, sqlite } = setup();
+    const { scheduledStore, handledStore, sqlite } = setup();
     const followup = followupDueIn(10);
     await scheduledStore.store(followup);
     const { followupId } = followup;
     await handledStore.store({ followupId, outcome: 'ignored', reason: 'noReply', handledAt: minutes(10) });
     await handledStore.store({ followupId, outcome: 'replied', reason: null, handledAt: minutes(11) });
 
-    expect(Result.unsafeUnwrap(await dueResolver.resolve({ now: minutes(60), limit: 10 }))).toEqual([]);
     expect(sqlite.prepare('SELECT outcome FROM ai_agent_bot_followups').all()).toEqual([{ outcome: 'ignored' }]);
   });
 

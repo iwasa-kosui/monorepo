@@ -33,6 +33,8 @@ export type AiAgentBotCapabilities = Readonly<{
   readThread: (postId: PostId) => Promise<readonly AgentPostView[]>;
   searchTimeline: (query: string) => Promise<readonly AgentPostView[]>;
   readRecentTimeline: (limit: number) => Promise<readonly AgentPostView[]>;
+  /** bot 自身の最近の投稿（新しい順） */
+  readOwnRecentPosts: (limit: number) => Promise<readonly AgentPostView[]>;
   fetchUrl: (url: string) => Promise<Result<AgentFetchedPage, string>>;
   likePost: (postId: PostId) => Promise<Result<void, string>>;
   repostPost: (postId: PostId) => Promise<Result<void, string>>;
@@ -44,6 +46,8 @@ export const MAX_ACTIONS_PER_RUN = 3;
 
 export const MAX_SEARCH_RESULTS = 10;
 export const MAX_RECENT_TIMELINE = 20;
+/** 自分から投稿するときに、繰り返しを避けるために見返す自分の投稿の数 */
+export const MAX_OWN_RECENT_POSTS = 10;
 export const MAX_FETCHED_PAGE_CHARS = 10000;
 
 export const formatPost = (post: AgentPostView): string =>

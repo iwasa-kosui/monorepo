@@ -37,6 +37,7 @@ const capabilities: AiAgentBotCapabilities = {
   readThread: async () => [triggerPost],
   searchTimeline: async () => [],
   readRecentTimeline: async () => [],
+  readOwnRecentPosts: async () => [],
   fetchUrl: async () => Result.err('unused'),
   likePost: async () => Result.ok(undefined),
   repostPost: async () => Result.ok(undefined),
@@ -70,6 +71,7 @@ const run = async (
   const replies: AiAgentBotReply[] = [];
   const useCase = RespondToAiAgentMentionsUseCase.create({
     pendingTriggersResolver: { resolve: () => RA.ok([trigger]) },
+    triggerClaimedStore: { store: () => RA.ok(true) },
     triggersHandledStore: {
       store: (...handled) => {
         stored.push(...handled);

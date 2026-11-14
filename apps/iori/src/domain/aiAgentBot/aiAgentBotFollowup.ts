@@ -124,7 +124,15 @@ export type AiAgentBotFollowupScheduledStore = Readonly<{
   store: (...followups: readonly AiAgentBotFollowup[]) => RA<void, never>;
 }>;
 
-/** 期日を迎えて、まだ処理していないフォローアップを、期日の古い順に返す */
+/**
+ * フォローアップを処理し始めた印を付ける。すでに印が付いていたら（ほかの実行が処理中か処理済みなら）false を返す。
+ * cron は 1 分ごとに動き、1 回の実行が 1 分を超えると次の実行と重なるため。
+ */
+export type AiAgentBotFollowupClaimedStore = Readonly<{
+  store: (claimed: Readonly<{ followupId: AiAgentBotFollowupId; claimedAt: Instant }>) => RA<boolean, never>;
+}>;
+
+/** 期日を迎えて、まだ誰も処理し始めていないフォローアップを、期日の古い順に返す */
 export type AiAgentBotDueFollowupsResolver = Readonly<{
   resolve: (condition: Readonly<{ now: Instant; limit: number }>) => RA<readonly AiAgentBotFollowup[], never>;
 }>;

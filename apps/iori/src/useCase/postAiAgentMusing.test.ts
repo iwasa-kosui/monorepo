@@ -14,6 +14,7 @@ const capabilities: AiAgentBotCapabilities = {
   readThread: async () => [],
   searchTimeline: async () => [],
   readRecentTimeline: async () => [],
+  readOwnRecentPosts: async () => [],
   fetchUrl: async () => Result.err('unused'),
   likePost: async () => Result.ok(undefined),
   repostPost: async () => Result.ok(undefined),

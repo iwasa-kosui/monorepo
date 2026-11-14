@@ -8,6 +8,7 @@ import {
   type AiAgentBotPendingTriggersResolver,
   type AiAgentBotRepliedCountResolverSince,
   type AiAgentBotTrigger,
+  type AiAgentBotTriggerClaimedStore,
   type AiAgentBotTriggerHandled,
   type AiAgentBotTriggersHandledStore,
   MAX_BOT_REPLIES_PER_DAY,
@@ -64,6 +65,8 @@ type Input = Readonly<{
 export type RespondToAiAgentMentionsSummary = Readonly<{
   skipped: 'dailyLimit' | null;
   pending: number;
+  /** ほかの実行が先に処理し始めていたので、答えなかった数 */
+  claimedElsewhere: number;
   replied: number;
   ignored: number;
   failed: number;
@@ -75,6 +78,7 @@ type ActorResolverById = Agg.Resolver<ActorId, Actor | undefined>;
 
 type Deps = FollowupSchedulerDeps & Readonly<{
   pendingTriggersResolver: AiAgentBotPendingTriggersResolver;
+  triggerClaimedStore: AiAgentBotTriggerClaimedStore;
   triggersHandledStore: AiAgentBotTriggersHandledStore;
   repliedCountResolverSince: AiAgentBotRepliedCountResolverSince;
   actorResolverById: ActorResolverById;
@@ -134,6 +138,7 @@ export const createThreadedReplyTool = (
  * bot 宛てのメンションと、bot の投稿への返信に、AI エージェントが答える。
  * 返信はエージェントが reply ツールで行う。reply を使わずに終えたら、答えなかったことになる。
  * 1 つのトリガーは 1 回だけ処理し、結果（返信した・答えなかった・失敗した）を記録する。
+ * 答える前に処理中の印を付け、重なって動いた実行が同じトリガーに 2 回答えないようにする。
  */
 const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
   const agent = runAgentLoop(deps.chatModel);
@@ -147,6 +152,7 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
     const botRepliesInThread = thread.filter((post) => post.authorActorId === bot.actorId).length;
     const decision = AiAgentBot.decideResponse({
       trigger,
+      botActorId: bot.actorId,
       authorActorType: author?.type === 'remote' ? author.actorType : undefined,
       botRepliesInThread,
       now: deps.now(),
@@ -193,15 +199,20 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
       const repliedToday = (await deps.repliedCountResolverSince.resolve(Instant.addDuration(deps.now(), -DAY_MS)))
         .val;
       if (repliedToday >= MAX_BOT_REPLIES_PER_DAY) {
-        return RA.ok({ skipped: 'dailyLimit', pending: 0, replied: 0, ignored: 0, failed: 0 });
+        return RA.ok({ skipped: 'dailyLimit', pending: 0, claimedElsewhere: 0, replied: 0, ignored: 0, failed: 0 });
       }
       const pending = (await deps.pendingTriggersResolver.resolve({
         botUserId: input.bot.userId,
         limit: Math.min(MAX_TRIGGERS_PER_RUN, MAX_BOT_REPLIES_PER_DAY - repliedToday),
       })).val;
 
-      const counts = { replied: 0, ignored: 0, failed: 0 };
+      const counts = { claimedElsewhere: 0, replied: 0, ignored: 0, failed: 0 };
       for (const trigger of pending) {
+        const claimed = (await deps.triggerClaimedStore.store({ postId: trigger.postId, claimedAt: deps.now() })).val;
+        if (!claimed) {
+          counts.claimedElsewhere++;
+          continue;
+        }
         let handled: Omit<AiAgentBotTriggerHandled, 'handledAt' | 'postId'>;
         try {
           handled = await respond(trigger, input);

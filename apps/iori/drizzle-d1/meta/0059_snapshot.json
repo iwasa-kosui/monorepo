@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "22d02d2a-486e-477b-8855-a1fd4bd539f1",
+  "id": "b3ac9d10-df4e-4ee9-ae99-2ed448cae566",
   "prevId": "8617e984-2aae-4c80-a973-ef9850ff7bf6",
   "tables": {
     "actors": {
@@ -116,6 +116,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "claimedAt": {
+          "name": "claimedAt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "outcome": {
           "name": "outcome",
           "type": "text",
@@ -139,10 +146,10 @@
         }
       },
       "indexes": {
-        "ai_agent_bot_followups_handled_at_due_at_idx": {
-          "name": "ai_agent_bot_followups_handled_at_due_at_idx",
+        "ai_agent_bot_followups_claimed_at_due_at_idx": {
+          "name": "ai_agent_bot_followups_claimed_at_due_at_idx",
           "columns": [
-            "handledAt",
+            "claimedAt",
             "dueAt"
           ],
           "isUnique": false

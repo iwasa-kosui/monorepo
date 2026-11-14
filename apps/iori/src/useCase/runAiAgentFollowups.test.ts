@@ -47,6 +47,7 @@ const capabilities: AiAgentBotCapabilities = {
   readThread: async () => [target],
   searchTimeline: async () => [],
   readRecentTimeline: async () => [],
+  readOwnRecentPosts: async () => [],
   fetchUrl: async () => Result.err('unused'),
   likePost: async () => Result.ok(undefined),
   repostPost: async () => Result.ok(undefined),
@@ -73,12 +74,14 @@ const run = async (
   chatModel: AgentChatModel,
   followup: AiAgentBotFollowup,
   now = followup.dueAt,
+  claimable = true,
 ) => {
   const followups = createInMemoryFollowups(() => now);
   const handled: AiAgentBotFollowupHandled[] = [];
   const replies: AiAgentBotReply[] = [];
   const summary = await RunAiAgentFollowupsUseCase.create({
     dueFollowupsResolver: { resolve: () => RA.ok([followup]) },
+    followupClaimedStore: { store: () => RA.ok(claimable) },
     followupsHandledStore: {
       store: (...entries) => {
         handled.push(...entries);
@@ -135,5 +138,16 @@ describe('RunAiAgentFollowupsUseCase', () => {
 
     expect(requests).toEqual([]);
     expect(handled).toMatchObject([{ outcome: 'ignored', reason: 'expired' }]);
+  });
+
+  it('ほかの実行が先に処理し始めた予定は、続報せずに飛ばす', async () => {
+    const { model, requests } = scriptedModel([toolCall('reply', { text: '続報です。' })]);
+    const followup = followupOf(1);
+    const { summary, replies, handled } = await run(model, followup, followup.dueAt, false);
+
+    expect(requests).toEqual([]);
+    expect(replies).toEqual([]);
+    expect(handled).toEqual([]);
+    expect(summary.claimedElsewhere).toBe(1);
   });
 });

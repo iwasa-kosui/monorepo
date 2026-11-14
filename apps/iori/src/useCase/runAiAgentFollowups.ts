@@ -12,6 +12,7 @@ import {
 import {
   type AiAgentBotDueFollowupsResolver,
   AiAgentBotFollowup,
+  type AiAgentBotFollowupClaimedStore,
   type AiAgentBotFollowupHandled,
   type AiAgentBotFollowupsHandledStore,
 } from '../domain/aiAgentBot/aiAgentBotFollowup.ts';
@@ -50,6 +51,8 @@ type Input = Readonly<{
 export type RunAiAgentFollowupsSummary = Readonly<{
   skipped: 'dailyLimit' | null;
   due: number;
+  /** ほかの実行が先に処理し始めていたので、処理しなかった数 */
+  claimedElsewhere: number;
   replied: number;
   ignored: number;
   failed: number;
@@ -59,6 +62,7 @@ export type RunAiAgentFollowupsUseCase = UseCase<Input, RunAiAgentFollowupsSumma
 
 type Deps = FollowupSchedulerDeps & Readonly<{
   dueFollowupsResolver: AiAgentBotDueFollowupsResolver;
+  followupClaimedStore: AiAgentBotFollowupClaimedStore;
   followupsHandledStore: AiAgentBotFollowupsHandledStore;
   repliedCountResolverSince: AiAgentBotRepliedCountResolverSince;
   actorResolverById: Agg.Resolver<ActorId, Actor | undefined>;
@@ -68,6 +72,7 @@ type Deps = FollowupSchedulerDeps & Readonly<{
 /**
  * 期日を迎えたフォローアップを実行する。bot はメモとスレッドを読み直して続きを調べ、もとの投稿に続報を返信する。
  * 1 つの予定は 1 回だけ処理し、結果（返信した・返信しなかった・失敗した）を記録する。
+ * 処理する前に印を付け、重なって動いた実行が同じ予定に 2 回続報しないようにする。
  */
 const create = (deps: Deps): RunAiAgentFollowupsUseCase => {
   const agent = runAgentLoop(deps.chatModel);
@@ -130,15 +135,23 @@ const create = (deps: Deps): RunAiAgentFollowupsUseCase => {
       const now = deps.now();
       const repliedToday = (await deps.repliedCountResolverSince.resolve(Instant.addDuration(now, -DAY_MS))).val;
       if (repliedToday >= MAX_BOT_REPLIES_PER_DAY) {
-        return RA.ok({ skipped: 'dailyLimit', due: 0, replied: 0, ignored: 0, failed: 0 });
+        return RA.ok({ skipped: 'dailyLimit', due: 0, claimedElsewhere: 0, replied: 0, ignored: 0, failed: 0 });
       }
       const due = (await deps.dueFollowupsResolver.resolve({
         now,
         limit: Math.min(MAX_FOLLOWUPS_PER_RUN, MAX_BOT_REPLIES_PER_DAY - repliedToday),
       })).val;
 
-      const counts = { replied: 0, ignored: 0, failed: 0 };
+      const counts = { claimedElsewhere: 0, replied: 0, ignored: 0, failed: 0 };
       for (const followup of due) {
+        const claimed = (await deps.followupClaimedStore.store({
+          followupId: followup.followupId,
+          claimedAt: deps.now(),
+        })).val;
+        if (!claimed) {
+          counts.claimedElsewhere++;
+          continue;
+        }
         let handled: Omit<AiAgentBotFollowupHandled, 'handledAt' | 'followupId'>;
         try {
           handled = await followUp(followup, input);

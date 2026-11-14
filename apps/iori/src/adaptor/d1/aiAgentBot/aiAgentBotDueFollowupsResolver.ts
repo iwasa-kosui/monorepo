@@ -16,7 +16,7 @@ export const createD1AiAgentBotDueFollowupsResolver = (db: IoriD1Db): AiAgentBot
   resolve: async ({ now, limit }) => {
     if (limit <= 0) return RA.ok([]);
     const rows = await db.select().from(aiAgentBotFollowupsTable)
-      .where(and(isNull(aiAgentBotFollowupsTable.handledAt), lte(aiAgentBotFollowupsTable.dueAt, new Date(now))))
+      .where(and(isNull(aiAgentBotFollowupsTable.claimedAt), lte(aiAgentBotFollowupsTable.dueAt, new Date(now))))
       .orderBy(asc(aiAgentBotFollowupsTable.dueAt))
       .limit(limit);
     return RA.ok(rows.map((row) => ({

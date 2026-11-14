@@ -862,7 +862,7 @@ export const blueskyAccountSwitchTable = sqliteTable('bluesky_account_switch', {
 
 export const aiAgentBotTriggersTable = sqliteTable('ai_agent_bot_triggers', {
   postId: text('postId').primaryKey(),
-  outcome: text('outcome', { enum: ['replied', 'ignored', 'failed'] }).notNull(),
+  outcome: text('outcome', { enum: ['claimed', 'replied', 'ignored', 'failed'] }).notNull(),
   reason: text('reason'),
   handledAt: timestamp().notNull(),
 }, (table) => [
@@ -878,11 +878,13 @@ export const aiAgentBotFollowupsTable = sqliteTable('ai_agent_bot_followups', {
   round: integer('round').notNull(),
   dueAt: timestamp().notNull(),
   scheduledAt: timestamp().notNull(),
+  /** 処理し始めた時刻。重なって動いた cron のうち、1 つだけが予定を処理するように付ける */
+  claimedAt: timestamp(),
   outcome: text('outcome', { enum: ['replied', 'ignored', 'failed'] }),
   reason: text('reason'),
   handledAt: timestamp(),
 }, (table) => [
-  index('ai_agent_bot_followups_handled_at_due_at_idx').on(table.handledAt, table.dueAt),
+  index('ai_agent_bot_followups_claimed_at_due_at_idx').on(table.claimedAt, table.dueAt),
   index('ai_agent_bot_followups_outcome_handled_at_idx').on(table.outcome, table.handledAt),
 ]);
 
