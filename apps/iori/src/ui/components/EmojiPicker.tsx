@@ -66,7 +66,7 @@ export const EmojiPicker = ({ isOpen, onClose, onSelect, isLoading }: Props) => 
           </div>
         )
         : (
-          <div class='grid grid-cols-4 gap-1'>
+          <div class='grid grid-cols-8 gap-1'>
             {EMOJI_LIST.map((emoji, index) => {
               const imagePath = customEmojiPath(emoji);
               return (
@@ -74,7 +74,7 @@ export const EmojiPicker = ({ isOpen, onClose, onSelect, isLoading }: Props) => 
                   key={emoji}
                   type='button'
                   onClick={() => onSelect(emoji)}
-                  class='w-10 h-10 flex items-center justify-center text-xl hover:bg-sand-light dark:hover:bg-gray-700 rounded-xl transition-colors relative group'
+                  class='w-9 h-9 flex items-center justify-center text-xl hover:bg-sand-light dark:hover:bg-gray-700 rounded-xl transition-colors relative group'
                   title={`${emoji} (${index + 1})`}
                 >
                   {imagePath === undefined ? emoji : <img src={imagePath} alt={emoji} class='w-6 h-6 object-contain' />}
