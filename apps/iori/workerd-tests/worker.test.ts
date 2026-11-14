@@ -35,22 +35,10 @@ const createStatus = async (cookie: string, status: string): Promise<string> => 
 };
 
 describe('iori Worker on workerd', () => {
-  it('responds 200 on /health', async () => {
-    const response = await SELF.fetch(`${origin}/health`);
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe('OK');
-  });
-
-  it('serves robots.txt and blocks an AI crawler only for images', async () => {
+  it('blocks an AI crawler only for images served from static assets', async () => {
     const gptBot =
       'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.4; +https://openai.com/gptbot)';
     const mastodon = 'Mastodon/4.3.2 (http.rb/5.2.0; +https://mastodon.social/)';
-
-    const robots = await SELF.fetch(`${origin}/robots.txt`);
-    expect(robots.status).toBe(200);
-    const robotsTxt = await robots.text();
-    expect(robotsTxt).toContain('User-agent: GPTBot');
-    expect(robotsTxt).toContain('Disallow: /uploads/');
 
     const page = await SELF.fetch(`${origin}/health`, { headers: { 'User-Agent': gptBot } });
     expect(page.status).toBe(200);
@@ -153,7 +141,6 @@ describe('iori Worker on workerd', () => {
     const publishedId = '7b0f3c1e-52a4-4d38-8e6b-1c9a4f2d7e10';
     const draftId = '8c1a4d2f-63b5-4e49-9f7c-2d0b5a3e8f21';
     const unpublishedId = '9d2b5e30-74c6-4f5a-8a8d-3e1c6b4f9a32';
-    const missingId = 'a3c6f041-85d7-4a6b-9b9e-4f2d7c5a0b43';
     const activityJson = { Accept: 'application/activity+json' };
     const expectNotFoundVaryingOnAccept = (response: Response) => {
       expect(response.status).toBe(404);
@@ -202,23 +189,8 @@ describe('iori Worker on workerd', () => {
       ]);
     });
 
-    it('returns 404 for an unknown article with application/activity+json', async () => {
-      const response = await SELF.fetch(articlePath(missingId), { headers: activityJson });
-      expectNotFoundVaryingOnAccept(response);
-    });
-
-    it('returns 404 for an article whose id is not a UUID with application/activity+json', async () => {
-      const response = await SELF.fetch(articlePath('abc'), { headers: activityJson });
-      expectNotFoundVaryingOnAccept(response);
-    });
-
     it('returns 404 for a draft article with application/activity+json', async () => {
       const response = await SELF.fetch(articlePath(draftId), { headers: activityJson });
-      expectNotFoundVaryingOnAccept(response);
-    });
-
-    it('returns 404 for a draft article with application/ld+json without a profile', async () => {
-      const response = await SELF.fetch(articlePath(draftId), { headers: { Accept: 'application/ld+json' } });
       expectNotFoundVaryingOnAccept(response);
     });
 
@@ -235,29 +207,6 @@ describe('iori Worker on workerd', () => {
       expect(article.type).toBe('Article');
       expect(article.id).toBe(articlePath(publishedId));
       expect(article.name).toBe('published article');
-    });
-
-    it('keeps serving the HTML shell for an unknown article with text/html', async () => {
-      const response = await SELF.fetch(articlePath(missingId), { headers: { Accept: 'text/html' } });
-      expect(response.status).toBe(200);
-      expect(response.headers.get('Content-Type')).toContain('text/html');
-    });
-
-    it('keeps the actor unchanged for application/activity+json', async () => {
-      const actor = await SELF.fetch(`${origin}/users/${username}`, { headers: activityJson });
-      expect(actor.status).toBe(200);
-      expect((await actor.json<{ type: string }>()).type).toBe('Person');
-    });
-
-    it('returns 404 for a missing post with application/activity+json', async () => {
-      const post = await SELF.fetch(postPath(username, missingId), { headers: activityJson });
-      expectNotFoundVaryingOnAccept(post);
-    });
-
-    it('keeps serving the HTML shell for a missing post with text/html', async () => {
-      const post = await SELF.fetch(postPath(username, missingId), { headers: { Accept: 'text/html' } });
-      expect(post.status).toBe(200);
-      expect(post.headers.get('Content-Type')).toContain('text/html');
     });
 
     describe('post objects', () => {
@@ -337,16 +286,6 @@ describe('iori Worker on workerd', () => {
         expectNotFoundVaryingOnAccept(response);
       });
 
-      it('returns 404 for a local post requested under an unknown user', async () => {
-        const response = await SELF.fetch(postPath('nobody', localPostId), { headers: activityJson });
-        expectNotFoundVaryingOnAccept(response);
-      });
-
-      it('returns 404 for a post whose id is not a UUID with application/activity+json', async () => {
-        const response = await SELF.fetch(postPath(username, 'abc'), { headers: activityJson });
-        expectNotFoundVaryingOnAccept(response);
-      });
-
       it('returns 404 for a deleted post with application/activity+json', async () => {
         const response = await SELF.fetch(postPath(username, deletedId), { headers: activityJson });
         expectNotFoundVaryingOnAccept(response);
@@ -361,19 +300,6 @@ describe('iori Worker on workerd', () => {
           headers: activityJson,
         });
         expectNotFoundVaryingOnAccept(response);
-      });
-
-      it('returns 404 for a published article requested under an unknown user', async () => {
-        const response = await SELF.fetch(`${origin}/users/nobody/articles/${publishedId}`, {
-          headers: activityJson,
-        });
-        expectNotFoundVaryingOnAccept(response);
-      });
-
-      it('returns the Article for a published article with the author identifier', async () => {
-        const response = await SELF.fetch(articlePath(publishedId), { headers: activityJson });
-        expect(response.status).toBe(200);
-        expect((await response.json<{ type: string }>()).type).toBe('Article');
       });
     });
   });

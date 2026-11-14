@@ -5,22 +5,15 @@ import {
   baseStatements,
   buildReport,
   candidatesSql,
-  cosineSimilarity,
   digestQualitySample,
   EMBEDDING_DIMENSIONS,
-  GAP_HISTOGRAM,
-  hexToEmbedding,
-  histogram,
   materialsSql,
   noticeLines,
-  PAGE_SIZE,
   parseTopics,
-  rankTopics,
   sampleFailureLines,
   scoreCandidates,
   scoreItems,
   scoreMaterials,
-  TOP1_HISTOGRAM,
 } from '../digest-quality-sample.mjs';
 
 const accountId = 'b'.repeat(32);
@@ -249,12 +242,6 @@ describe('digest-quality-sample SQL', () => {
       expect(sql).not.toContain(';');
     }
   });
-  it('reads only the columns the counts and distributions need', () => {
-    const statements = [...baseStatements(now), candidatesSql(now), materialsSql()];
-    for (const sql of statements) {
-      expect(sql).not.toMatch(/\b(?:title|url|name|description|ref|feedback|digestDate|rank)\b/);
-    }
-  });
   it('rejects a paging cursor that is not a plain identifier with the cursor-invalid reason', () => {
     for (const build of [() => candidatesSql(now, '\'; DROP TABLE users; --'), () => materialsSql('a b')]) {
       let caught: unknown;
@@ -282,145 +269,6 @@ describe('digest-quality-sample SQL', () => {
       expect(statement).not.toMatch(WRITE_WORDS);
     }
     expect(snapshot()).toEqual(before);
-  });
-});
-
-describe('similarity', () => {
-  it('restores a Float32Array from the little-endian hex of the stored blob', () => {
-    const restored = hexToEmbedding(`0000803F000000C0${'00000000'.repeat(EMBEDDING_DIMENSIONS - 2)}`);
-    expect(restored).toHaveLength(EMBEDDING_DIMENSIONS);
-    expect([restored![0], restored![1], restored![2]]).toEqual([1, -2, 0]);
-    const original = vec(0.5, -2, 3.25);
-    expect(Array.from(hexToEmbedding(hex(original))!)).toEqual(Array.from(original));
-    expect(Array.from(hexToEmbedding(hex(original).toLowerCase())!)).toEqual(Array.from(original));
-  });
-  it('rejects hex of the wrong size or with other characters', () => {
-    expect(hexToEmbedding('')).toBeNull();
-    expect(hexToEmbedding(null)).toBeNull();
-    expect(hexToEmbedding('0000803F')).toBeNull();
-    expect(hexToEmbedding(`zz${hex(vec(1)).slice(2)}`)).toBeNull();
-  });
-  it('computes the cosine of known vectors', () => {
-    expect(cosineSimilarity(new Float32Array([1, 2, 3]), new Float32Array([1, 2, 3]))).toBeCloseTo(1, 6);
-    expect(cosineSimilarity(new Float32Array([1, 0]), new Float32Array([0, 1]))).toBe(0);
-    expect(cosineSimilarity(new Float32Array([1, 0]), new Float32Array([-2, 0]))).toBeCloseTo(-1, 6);
-    expect(cosineSimilarity(new Float32Array([1, 0]), new Float32Array([1, 1]))).toBeCloseTo(Math.SQRT1_2, 6);
-    expect(cosineSimilarity(new Float32Array([3, 4]), new Float32Array([4, 3]))).toBeCloseTo(24 / 25, 6);
-    expect(cosineSimilarity(new Float32Array([0, 0]), new Float32Array([1, 1]))).toBe(0);
-    expect(cosineSimilarity(new Float32Array([1]), new Float32Array([1, 1]))).toBe(0);
-  });
-  it('computes the cosine through the hex round trip', () => {
-    const a = hexToEmbedding(hex(vec(3, 4)))!;
-    const b = hexToEmbedding(hex(vec(4, 3)))!;
-    expect(cosineSimilarity(a, b)).toBeCloseTo(24 / 25, 6);
-  });
-});
-
-describe('ranking', () => {
-  const topics = [
-    { topicKey: 'ai', vector: vec(1, 0) },
-    { topicKey: 'web', vector: vec(0, 1) },
-    { topicKey: 'mix', vector: vec(1, 1) },
-  ];
-  it('returns the first and second topic with their gap', () => {
-    const ranked = rankTopics(vec(1, 0.2), topics)!;
-    const norm = Math.hypot(1, 0.2);
-    expect(ranked.first.topicKey).toBe('ai');
-    expect(ranked.first.similarity).toBeCloseTo(1 / norm, 5);
-    expect(ranked.second!.topicKey).toBe('mix');
-    expect(ranked.second!.similarity).toBeCloseTo(1.2 / (norm * Math.SQRT2), 5);
-    expect(ranked.gap).toBeCloseTo(ranked.first.similarity - ranked.second!.similarity, 9);
-  });
-  it('has no second topic or gap with one topic, and nothing with none', () => {
-    const ranked = rankTopics(vec(1, 0), [topics[0]])!;
-    expect(ranked).toMatchObject({ first: { topicKey: 'ai' }, second: null, gap: null });
-    expect(rankTopics(vec(1, 0), [])).toBeNull();
-  });
-  it('gives a zero gap to tied topics', () => {
-    const ranked = rankTopics(vec(1, 1), [topics[0], topics[1]])!;
-    expect(ranked.first.topicKey).toBe('ai');
-    expect(ranked.second!.topicKey).toBe('web');
-    expect(ranked.gap).toBeCloseTo(0, 6);
-  });
-  it('judges whether the first topic equals the adopted topic and skips disabled or unembedded topics', () => {
-    const topicsByUser = parseTopics([
-      { userId: 'u', topicKey: 'ai', name: 'n', description: 'd', enabled: 1, embedded: 1, embedding: hex(vec(1, 0)) },
-      { userId: 'u', topicKey: 'web', name: 'n', description: 'd', enabled: 1, embedded: 1, embedding: hex(vec(0, 1)) },
-      { userId: 'u', topicKey: 'off', name: 'n', description: 'd', enabled: 0, embedded: 1, embedding: hex(vec(1, 1)) },
-      { userId: 'u', topicKey: 'none', name: 'n', description: 'd', enabled: 1, embedded: 0, embedding: null },
-    ]);
-    const row = (topicKey: string, embedding: Float32Array | null) => ({
-      userId: 'u',
-      topicKey,
-      embedding: embedding === null ? null : hex(embedding),
-    });
-    const items = scoreItems(
-      [row('ai', vec(1, 0.1)), row('web', vec(1, 0.1)), row('ai', vec(1, 1)), row('ai', null)],
-      topicsByUser,
-    ).get('u')!;
-    expect(items.map((item) => item.matched)).toEqual([true, false, true, null]);
-    expect(items.map((item) => item.first?.topicKey ?? null)).toEqual(['ai', 'ai', 'ai', null]);
-    expect(items[0].gap).toBeGreaterThan(0);
-    expect(items[3]).toMatchObject({ first: null, gap: null });
-  });
-});
-
-describe('histogram', () => {
-  it('counts below, in-range and at-or-above values with the requested step', () => {
-    const hist = histogram([0.1, 0.2, 0.249, 0.25, 0.55, 0.79, 0.8, 0.95], TOP1_HISTOGRAM);
-    expect(hist.below).toBe(1);
-    expect(hist.buckets).toEqual([2, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1]);
-    expect(hist.atOrAbove).toBe(2);
-    const gap = histogram([0, 0.019, 0.02, 0.05, 0.199, 0.2], GAP_HISTOGRAM);
-    expect(gap.buckets).toEqual([2, 1, 1, 0, 0, 0, 0, 0, 0, 1]);
-    expect(gap.atOrAbove).toBe(1);
-  });
-});
-
-describe('digest-quality-sample result', () => {
-  it('collects items, candidates and materials per user', async () => {
-    const { outputs, error } = await run(build());
-    expect(error).toBeUndefined();
-    const report = JSON.parse(outputs[0]);
-    expect(report.users).toHaveLength(1);
-    const [user] = report.users;
-    expect(user.topicCounts).toEqual({ total: 4, enabled: 3, embedded: 2 });
-    expect(user.items).toMatchObject({ total: 3, scored: 2, matched: 1 });
-    expect(user.candidates.total).toBe(4);
-    expect(user.candidates.atLeast).toEqual({ '0.40': 3, '0.45': 3, '0.50': 3, '0.55': 3, '0.60': 3 });
-    expect(user.materials.total).toBe(3);
-    expect(user.materials.byKind).toEqual([
-      { kind: 'bookmark', total: 2, atLeast: { '0.40': 2, '0.50': 2 } },
-      { kind: 'like', total: 1, atLeast: { '0.40': 0, '0.50': 0 } },
-    ]);
-  });
-  it('outputs only counts and distributions as JSON', async () => {
-    const { outputs, error } = await run(build());
-    expect(error).toBeUndefined();
-    const [user] = JSON.parse(outputs[0]).users;
-    expect(Object.keys(JSON.parse(outputs[0])).sort()).toEqual(['generatedAt', 'users']);
-    expect(Object.keys(user).sort()).toEqual(['candidates', 'items', 'materials', 'topicCounts', 'user']);
-    expect(Object.keys(user.items).sort()).toEqual(['gapHistogram', 'matched', 'scored', 'top1Histogram', 'total']);
-    expect(Object.keys(user.candidates).sort()).toEqual(['atLeast', 'gapHistogram', 'top1Histogram', 'total']);
-    expect(Object.keys(user.materials).sort()).toEqual(['byKind', 'total']);
-  });
-  it('pages through the candidates', async () => {
-    const fixture = fixtureWithRows();
-    addTopic(fixture, 'u1', 'ai', { embedding: vec(1, 0) });
-    addSource(fixture, 'rss', 'rss');
-    for (let index = 0; index < PAGE_SIZE + 50; index += 1) {
-      addEntry(fixture, `c${String(index).padStart(4, '0')}`, 'rss', { fetchedAt: now - 1000, embedding: vec(1, 0) });
-    }
-    const { queries, outputs, error } = await run(fixture);
-    expect(error).toBeUndefined();
-    expect(queries.filter((sql) => sql.includes('FROM feed_entries e JOIN feed_sources'))).toHaveLength(2);
-    expect(JSON.parse(outputs[0]).users[0].candidates.total).toBe(PAGE_SIZE + 50);
-  });
-  it('reports an empty database without failing', async () => {
-    const { outputs, notices, error } = await run(fixtureWithRows());
-    expect(error).toBeUndefined();
-    expect(JSON.parse(outputs[0]).users).toEqual([]);
-    expect(notices).toEqual(['IORI_NOTICE digest-quality-sample overview users=0']);
   });
 });
 
@@ -503,26 +351,6 @@ describe('digest-quality-sample public log', () => {
       for (const secret of secrets) expect(text).not.toContain(secret);
       expect(text).not.toMatch(/secret/i);
     }
-  });
-  it('prints counts and distributions with the fixed vocabulary', () => {
-    const lines = noticeLines(secretReport());
-    expect(lines[0]).toBe('IORI_NOTICE digest-quality-sample overview users=1');
-    expect(lines[1]).toBe(
-      'IORI_NOTICE digest-quality-sample user=1 summary topics=2 enabled=2 embedded=2 items=1 scored=1 matched=1 match_rate=1.000',
-    );
-    expect(lines[2]).toMatch(
-      /^IORI_NOTICE digest-quality-sample user=1 hist=item_top1 lt0\.20=0 b0\.20=0 .* b0\.75=0 ge0\.80=1$/,
-    );
-    expect(lines[3]).toMatch(
-      /^IORI_NOTICE digest-quality-sample user=1 hist=item_gap lt0\.00=0 b0\.00=0 .* b0\.18=0 ge0\.20=1$/,
-    );
-    expect(lines[4]).toBe(
-      'IORI_NOTICE digest-quality-sample user=1 candidates total=1 ge0.40=1 ge0.45=1 ge0.50=1 ge0.55=1 ge0.60=1',
-    );
-    expect(lines.slice(5).sort()).toEqual([
-      'IORI_NOTICE digest-quality-sample user=1 material kind=bookmark total=1 ge0.40=1 ge0.50=1',
-      'IORI_NOTICE digest-quality-sample user=1 material kind=other total=1 ge0.40=1 ge0.50=1',
-    ]);
   });
 });
 

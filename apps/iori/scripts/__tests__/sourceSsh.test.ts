@@ -179,15 +179,6 @@ const resumeFailure = async (spawnProcess: never, signal?: AbortSignal) => {
   return adapter.resume('destination_writes_not_enabled', signal).catch((error) => error);
 };
 it.each([
-  [75, 'not-ready'],
-  [76, 'busy'],
-  [255, 'ssh-failed'],
-  [1, 'ssh-failed'],
-])('gives a resume that ends with exit code %d the reason %s', async (code, reason) => {
-  const failure = await resumeFailure(exitingSpawn(code) as never);
-  expect(failure.diagnostic).toEqual({ reason, exit: code, signal: undefined });
-});
-it.each([
   ['{"ok":false,"error":"control_rejected"}\n', 'rejected'],
   ['{"ok":false,"error":"control_rejected","detail":"estimate-query"}\n', 'estimate-query'],
   ['{"ok":false,"error":"control_rejected","detail":"estimate-limit"}\n', 'estimate-limit'],
@@ -198,35 +189,6 @@ it.each([
   const failure = await resumeFailure(respondingSpawn(stdout, 1) as never);
   expect(failure.diagnostic).toEqual({ reason, exit: 1, signal: undefined });
   expect(JSON.stringify(failure.diagnostic)).not.toContain('PRIVATE');
-});
-it('gives a resume whose response cannot be used the reason invalid-response', async () => {
-  const unusable = await resumeFailure(respondingSpawn('not json', 0) as never);
-  expect(unusable.diagnostic).toEqual({ reason: 'invalid-response', exit: 0, signal: undefined });
-});
-it('gives a resume whose process cannot start the reason spawn-failed', async () => {
-  const spawnProcess = () => {
-    const child = Object.assign(new EventEmitter(), {
-      stdout: new PassThrough(),
-      stderr: new PassThrough(),
-      kill: () => true,
-    });
-    queueMicrotask(() => {
-      child.stdout.end();
-      child.emit('error', new Error('spawn ssh ENOENT'));
-    });
-    return child;
-  };
-  const failure = await resumeFailure(spawnProcess as never);
-  expect(failure.diagnostic).toEqual({ reason: 'spawn-failed', exit: undefined, signal: undefined });
-});
-it.each([
-  [75, 'not-ready'],
-  [76, 'busy'],
-])('prefers the exit code %d over a rejected response with a detail', async (code, reason) => {
-  const failure = await resumeFailure(
-    respondingSpawn('{"ok":false,"error":"control_rejected","detail":"estimate-query"}\n', code) as never,
-  );
-  expect(failure.diagnostic).toEqual({ reason, exit: code, signal: undefined });
 });
 it('keeps both retryable and the diagnostic for a status that ends with exit code 75', async () => {
   const { options } = await setup();

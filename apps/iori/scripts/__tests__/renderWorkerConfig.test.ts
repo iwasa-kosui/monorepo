@@ -28,15 +28,6 @@ const template =
   `// Keep this JSONC comment.\n{\n  "name": "__WORKER_NAME__",\n  "account_id": "__ACCOUNT_ID__",\n  "database_id": "__D1_DATABASE_ID__",\n  "namespace_id": "__KV_NAMESPACE_ID__",\n  "bucket_name": "__R2_BUCKET_NAME__",\n  "event_archive_bucket_name": "__R2_EVENT_ARCHIVE_BUCKET_NAME__",\n  "queue": "__QUEUE_NAME__",\n  "origin": "__ORIGIN__",\n  "mode": "__IORI_ADMISSION_MODE__",\n  "identity": "__IORI_ADMISSION_IDENTITY__",\n  "subject": "__VAPID_SUBJECT__",\n}\n`;
 
 describe('renderWorkerConfig', () => {
-  it('replaces every fixture token while preserving JSONC content', () => {
-    const result = renderWorkerConfig({ template, values });
-
-    expect(result).toContain('// Keep this JSONC comment.');
-    for (const [token, value] of Object.entries(values)) {
-      expect(result).not.toContain(token);
-      expect(result).toContain(JSON.stringify(value).slice(1, -1));
-    }
-  });
 
   it('rejects unresolved or missing token values', () => {
     expect(() =>

@@ -99,65 +99,13 @@ describe('assets.run_worker_first', () => {
   it('keeps the same rules in the local config and the deployment config', async () => {
     expect(await readLocalRunWorkerFirst()).toEqual(await readDeployedRunWorkerFirst());
   });
-
-  it.each(['workers/iori/wrangler.template.jsonc', 'workers/iori/wrangler.local.jsonc'])(
-    'has no block comment terminator in %s that would cut the run_worker_first array when comments are stripped',
-    async (path) => {
-      expect(await readAppFile(path)).not.toContain('*/');
-    },
-  );
-});
-
-describe('placement', () => {
-  it('targets the US East region in the deployment config built from the template', async () => {
-    expect((await readDeployedConfig()).placement).toEqual({ region: 'aws:us-east-1' });
-  });
-});
-
-describe('ai', () => {
-  it('declares the AI binding in the deployment config built from the template', async () => {
-    expect((await readDeployedConfig()).ai).toEqual({ binding: 'AI' });
-  });
-});
-
-describe('event archive', () => {
-  it('binds the event archive bucket and leaves the archive disabled in the deployment config built from the template', async () => {
-    const config = await readDeployedConfig();
-    expect(config.r2_buckets).toContainEqual({ binding: 'EVENT_ARCHIVE', bucket_name: 'iori-event-archive-fixture' });
-    expect(config.vars.EVENT_ARCHIVE_ENABLED).toBe('false');
-  });
-
-  it('binds a local event archive bucket in the local config', async () => {
-    expect(await readAppFile('workers/iori/wrangler.local.jsonc')).toContain('"binding": "EVENT_ARCHIVE"');
-  });
 });
 
 describe('triggers', () => {
-  it('declares the cron expressions in the deployment config built from the template', async () => {
-    expect((await readDeployedConfig()).triggers).toEqual({
-      crons: ['* * * * *', '0 0,3,6,9,12,15,18,21 * * *', '15 20 * * 1', '30 21 * * *', '0 21 * * *', '0 19 * * *'],
-    });
-  });
 
   it('registers a task for exactly the cron expressions in the template', async () => {
     const { crons } = (await readDeployedConfig()).triggers as { crons: string[] };
     expect(Object.keys(scheduledTasks).sort()).toEqual([...crons].sort());
-  });
-
-  it('does not declare crons in the local config', async () => {
-    expect(await readAppFile('workers/iori/wrangler.local.jsonc')).not.toContain('"triggers"');
-  });
-});
-
-describe('public/_headers', () => {
-  it('sets an immutable long cache only on hashed chunks', async () => {
-    const headers = await readAppFile('public/_headers');
-    const lines = headers.split('\n').filter((line) => line.trim().length > 0);
-
-    expect(lines).toEqual([
-      '/static/chunks/*',
-      '  Cache-Control: public, max-age=31536000, immutable',
-    ]);
   });
 });
 

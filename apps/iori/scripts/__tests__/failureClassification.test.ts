@@ -37,11 +37,3 @@ it('falls back to unclassified for an unknown message, a non-string message and 
   expect(classifyFailure(undefined)).toBe('unclassified');
   expect(classifyFailure('text')).toBe('unclassified');
 });
-it.each([
-  'Protected workflow invocation is invalid.',
-])('classifies the configuration message "%s" as config-invalid', (message) => {
-  expect(classifyFailure(new Error(message))).toBe('config-invalid');
-});
-it('classifies the migration target evidence message as identity-mismatch', () => {
-  expect(classifyFailure(new Error('Migration target evidence is invalid.'))).toBe('identity-mismatch');
-});

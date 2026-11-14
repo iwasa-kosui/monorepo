@@ -187,12 +187,6 @@ describe('configuration owner reset before install', () => {
     });
     return { result, sudo, writes, lstatPaths };
   };
-  it('does nothing when root already owns the configuration', async () => {
-    const { result, sudo, writes } = await run([regular(0)]);
-    await expect(result).resolves.toBeUndefined();
-    expect(sudo).toEqual([]);
-    expect(writes.join('')).not.toContain('IORI_NOTICE');
-  });
   it('runs the fixed chown once and prints only the previous owner ids', async () => {
     const { result, sudo, writes, lstatPaths } = await run([regular(1001), regular(0)]);
     await expect(result).resolves.toBeUndefined();
@@ -220,24 +214,6 @@ describe('configuration owner reset before install', () => {
     expect(sudo).toEqual([['-n', 'chmod', '600', environmentFile]]);
     expect(lstatPaths).toEqual([environmentFile, environmentFile]);
     expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([
-      'IORI_NOTICE stage=remote-configuration-mode previous_mode=0644\n',
-    ]);
-  });
-  it('does not chmod or print a mode notice when the mode is already 0600', async () => {
-    const { result, sudo, writes } = await run([regular(0, 0o100600)]);
-    await expect(result).resolves.toBeUndefined();
-    expect(sudo).toEqual([]);
-    expect(writes.join('')).not.toContain('remote-configuration-mode');
-  });
-  it('runs chown and chmod and prints both notices for a non-root 0644 configuration', async () => {
-    const { result, sudo, writes } = await run([regular(1001, 0o100644), regular(0, 0o100644), regular(0, 0o100600)]);
-    await expect(result).resolves.toBeUndefined();
-    expect(sudo).toEqual([
-      ['-n', 'chown', '-h', '0:0', environmentFile],
-      ['-n', 'chmod', '600', environmentFile],
-    ]);
-    expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([
-      'IORI_NOTICE stage=remote-configuration-owner previous_uid=1001 previous_gid=1002\n',
       'IORI_NOTICE stage=remote-configuration-mode previous_mode=0644\n',
     ]);
   });

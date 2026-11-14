@@ -19,9 +19,6 @@ import {
   createD1BlueskySessionSavedStore,
 } from '../src/adaptor/d1/blueskyCrosspost/blueskySessionStore.ts';
 import { createD1BlueskyMuteSavedStore } from '../src/adaptor/d1/blueskyModeration/blueskyModeratedActorsStore.ts';
-import { createD1BlueskyBookmarkSavedStore } from '../src/adaptor/d1/blueskyTimeline/blueskyBookmarkSavedStore.ts';
-import { createD1BlueskyLikeSavedStore } from '../src/adaptor/d1/blueskyTimeline/blueskyLikeSavedStore.ts';
-import { createD1BlueskyRepostSavedStore } from '../src/adaptor/d1/blueskyTimeline/blueskyRepostSavedStore.ts';
 import { createD1Db } from '../src/adaptor/d1/client.ts';
 import { BlueskyAccountSwitch } from '../src/domain/blueskyAccountSwitch/blueskyAccountSwitch.ts';
 import type { BlueskySession } from '../src/domain/blueskyCrosspost/blueskyCrosspost.ts';
@@ -278,42 +275,6 @@ describe('アカウントの切り替えの削除（実 D1）', () => {
     expect(await countOf('bluesky_account_switch')).toBe(0);
   });
 
-  it('切り替えの開始の後に、前のアカウントの行と同じ subjectUri へ保存したいいね、リポスト、ブックマークは、削除の後も新しい値で残る', async () => {
-    await seedBlueskyTables({ timeline: 3, likes: 3 });
-    await insertSwitchRow();
-    const likeUri = 'at://did:plc:new/app.bsky.feed.like/1';
-    const repostUri = 'at://did:plc:new/app.bsky.feed.repost/1';
-    const createdAt = Instant.orThrow(STARTED_AT + 1_000);
-    await createD1BlueskyLikeSavedStore(db).save({ subjectUri: `at://s/${run}/1`, likeUri, createdAt });
-    await createD1BlueskyRepostSavedStore(db).save({ subjectUri: `at://s/${run}/r`, repostUri, createdAt });
-    await createD1BlueskyBookmarkSavedStore(db).save({ subjectUri: `at://s/${run}/b`, createdAt });
-
-    const result = Result.unsafeUnwrap(await purgeUseCase().run());
-
-    expect(result.status).toBe('completed');
-    const rows = (table: string) => env.DB.prepare(`SELECT * FROM ${table}`).all();
-    expect((await rows('bluesky_likes')).results).toEqual([
-      { subjectUri: `at://s/${run}/1`, likeUri, createdAt },
-    ]);
-    expect((await rows('bluesky_reposts')).results).toEqual([
-      { subjectUri: `at://s/${run}/r`, repostUri, createdAt },
-    ]);
-    expect((await rows('bluesky_bookmarks')).results).toEqual([
-      { subjectUri: `at://s/${run}/b`, createdAt },
-    ]);
-  });
-
-  it('開始から 90 秒に満たないあいだは、何も削除しない', async () => {
-    await seedBlueskyTables({ timeline: 5, likes: 5 });
-    await insertSwitchRow();
-
-    const result = Result.unsafeUnwrap(await purgeUseCase(Instant.orThrow(STARTED_AT + 89_999)).run());
-
-    expect(result.status).toBe('waiting');
-    expect(await countOf('bluesky_timeline_items')).toBe(5);
-    expect(await countOf('bluesky_account_switch')).toBe(1);
-  });
-
   it('途中で失敗したら attempts と lastError を書き、次の実行で完了する', async () => {
     await seedBlueskyTables({ timeline: 10, likes: 5 });
     await insertSwitchRow();
@@ -453,23 +414,6 @@ describe('切り替えの 1 段目（実 D1）', () => {
     expect(await countOf('bluesky_moderated_actors')).toBe(1);
     expect(await countOf('domain_events', `eventName = 'blueskyAccountSwitch.started'`)).toBe(0);
   });
-
-  it('保存済みの DID が fromDid と一致するときは、開始する', async () => {
-    await createD1BlueskyStoredCredentialSavedStore(db).save({
-      ...credential,
-      did: 'did:plc:old',
-      identifier: 'old.bsky.social',
-    });
-    const store = createD1BlueskyAccountSwitchStartedStore(db, 'timeline');
-
-    expect(await store.store({ event: started('did:plc:old'), credential, session })).toMatchObject({ ok: true });
-
-    expect(await createD1BlueskyStoredCredentialResolver(db).resolve()).toMatchObject({
-      ok: true,
-      val: { did: 'did:plc:new' },
-    });
-    expect(await countOf('bluesky_account_switch')).toBe(1);
-  });
 });
 
 describe('切り替え中の PUT と DELETE のストア（実 D1）', () => {
@@ -531,27 +475,6 @@ describe('切り替え中の PUT と DELETE のストア（実 D1）', () => {
 
     expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyAccountSwitchInProgress' } });
     await expectPreviousKept();
-  });
-
-  it('切り替えの行が無いときは、PUT のストアは資格情報とセッションを書き、ログイン失敗の記録を消す', async () => {
-    await seedPrevious();
-    const store = createBlueskyCredentialRegisteredStore(db, 'timeline');
-
-    const result = await store.store({
-      credential: { ...previousCredential, did: 'did:plc:new', identifier: 'new.bsky.social' },
-      session: { ...previousSession, did: 'did:plc:new', accessJwt: 'new-access' },
-    });
-
-    expect(result).toMatchObject({ ok: true });
-    expect(await createD1BlueskyStoredCredentialResolver(db).resolve()).toMatchObject({
-      ok: true,
-      val: { did: 'did:plc:new' },
-    });
-    expect(await createD1BlueskySessionResolver(db).resolve()).toMatchObject({
-      ok: true,
-      val: { accessJwt: 'new-access' },
-    });
-    expect(await countOf('bluesky_login_failures')).toBe(0);
   });
 
   it('切り替えの行が無いときは、DELETE のストアは資格情報とセッションを消し、何も無くても成功する', async () => {

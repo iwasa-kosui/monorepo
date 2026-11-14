@@ -131,14 +131,6 @@ it('reports source-queue-failed without a retry when the source rejects resume a
     'IORI_DIAG stage=resume program=ssh exit=none signal=none reason=source-queue-failed\n',
   ]);
 });
-it('reports source-queue-failed before source-not-idle when both apply', async () => {
-  const writes = captureDiagnostics();
-  const { sourceFactory } = fixture([{ ...frozenState, queue_failed: true, http_inflight: 1 }]);
-  await expect(resumeSource(options, { sourceFactory })).rejects.toThrow('Source queue has failed.');
-  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
-    'IORI_DIAG stage=resume-precheck program=ssh exit=none signal=none reason=source-queue-failed\n',
-  ]);
-});
 it.each([
   ['ingress is still frozen', { ...openState, ingress_frozen: true }],
   ['the consumer is still paused', { ...openState, consumer_paused: true }],

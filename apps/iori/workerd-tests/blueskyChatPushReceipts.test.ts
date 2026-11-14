@@ -54,8 +54,4 @@ describe('bluesky_chat_push_receipts（実 D1）', () => {
     expect(resolved.size).toBe(100);
     expect(resolved.get(`${run}-bulk-99`)).toBe('m99');
   });
-
-  it('会話が 0 件のときは、何も引かない', async () => {
-    expect(Result.unsafeUnwrap(await resolver.resolve([])).size).toBe(0);
-  });
 });

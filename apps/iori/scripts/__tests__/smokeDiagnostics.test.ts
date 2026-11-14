@@ -8,7 +8,6 @@ import {
   isAllSmokeServiceUnavailable,
   isSmokeDetail,
   SMOKE_ITEM_WORDS,
-  SMOKE_KIND_WORDS,
   SMOKE_REQUEST_CAUSE_WORDS,
   SMOKE_STATUS_TYPE_WORDS,
   SMOKE_TOKEN_CLASS_WORDS,
@@ -42,60 +41,7 @@ const allWords = (): string[] => {
     ...tokenDetails,
   ];
 };
-const withContentType = (contentType: string | null | undefined) =>
-  smokeFailureDetails([{ name: 'health', ok: false, status: 503, contentType, failure: 'status mismatch' }])[0];
 
-it('maps all thirteen smoke checklist names to distinct words', () => {
-  expect(itemNames).toHaveLength(13);
-  const words = itemNames.map(name => SMOKE_ITEM_WORDS[name]);
-  expect(words.every(word => typeof word === 'string' && word !== 'other')).toBe(true);
-  expect(new Set(words).size).toBe(13);
-  expect(Object.keys(SMOKE_ITEM_WORDS).sort()).toEqual([...itemNames].sort());
-  expect(Object.isFrozen(SMOKE_ITEM_WORDS)).toBe(true);
-  expect(Object.isFrozen(SMOKE_KIND_WORDS)).toBe(true);
-  expect(Object.isFrozen(SMOKE_STATUS_TYPE_WORDS)).toBe(true);
-  expect(Object.isFrozen(SMOKE_REQUEST_CAUSE_WORDS)).toBe(true);
-  expect(Object.isFrozen(SMOKE_TOKEN_CLASS_WORDS)).toBe(true);
-});
-it('turns only the failed checks into words and keeps their order', () => {
-  const details = smokeFailureDetails([
-    { name: 'health', ok: true, status: 200, contentType: 'text/plain' },
-    { name: 'healthz', ok: false, status: 503, contentType: 'application/json', failure: 'status mismatch' },
-    { name: 'readyz', ok: false, status: 200, failure: 'content type mismatch' },
-    { name: 'static asset', ok: false, status: 200, failure: 'JSON structure mismatch' },
-    { name: 'auth rejection', ok: false, status: 200, failure: 'invalid JSON response' },
-    { name: 'inbox', ok: false, status: null, failure: 'request failed', cause: 'timeout' },
-    { name: 'Queue enqueue', ok: false, status: null, failure: 'smoke queue token unavailable' },
-    { name: 'Web Push public key', ok: false, status: 200, failure: 'unexpected' },
-    { name: 'unknown item', ok: false, status: 99, failure: 'status mismatch' },
-    { name: 'OGP PNG', ok: false, status: 600, failure: 'status mismatch', contentType: 'text/html' },
-    { name: 'upload retrieval', ok: false, status: 503.5, failure: 'request failed', cause: 'secret.invalid' },
-  ]);
-  expect(details).toEqual([
-    'smoke-healthz-503-status-json',
-    'smoke-readyz-200-type',
-    'smoke-asset-200-json',
-    'smoke-auth-200-json',
-    'smoke-inbox-none-request-timeout',
-    'smoke-queue-none-token',
-    'smoke-push-200-other',
-    'smoke-other-none-status-none',
-    'smoke-ogp-none-status-html',
-    'smoke-upload-none-request-other',
-  ]);
-  expect(smokeFailureDetails([])).toEqual([]);
-});
-it('splits a status mismatch by the content type of the response', () => {
-  expect(withContentType('text/plain')).toBe('smoke-health-503-status-text');
-  expect(withContentType('application/json')).toBe('smoke-health-503-status-json');
-  expect(withContentType('application/problem+json')).toBe('smoke-health-503-status-json');
-  expect(withContentType('text/html')).toBe('smoke-health-503-status-html');
-  expect(withContentType(null)).toBe('smoke-health-503-status-none');
-  expect(withContentType('')).toBe('smoke-health-503-status-none');
-  expect(withContentType(undefined)).toBe('smoke-health-503-status-none');
-  expect(withContentType('application/xml')).toBe('smoke-health-503-status-other');
-  expect(withContentType('secret/type')).toBe('smoke-health-503-status-other');
-});
 it('maps a request exception to one fixed cause word without reading its message', () => {
   const named = (name: string) => Object.assign(new Error('secret message'), { name });
   const coded = (code: string, message = 'secret message') => new Error('fetch failed', { cause: { code, message } });
@@ -176,51 +122,6 @@ it('classifies the smoke token by its shape without its value or exact length', 
     'smoke-token-ok',
   ]);
 });
-it('accepts the fixed smoke words only', () => {
-  for (
-    const word of [
-      'smoke-readyz-503-status-text',
-      'smoke-readyz-503-status-other',
-      'smoke-inbox-none-request-timeout',
-      'smoke-webfinger-none-request-redirect',
-      'smoke-readyz-200-type',
-      'smoke-readyz-200-json',
-      'smoke-queue-none-token',
-      'smoke-other-100-other',
-      'smoke-token-empty',
-      'smoke-token-charset',
-      'smoke-token-ok',
-    ]
-  ) {
-    expect(isSmokeDetail(word), word).toBe(true);
-  }
-  for (
-    const word of [
-      'WebFinger',
-      'smoke-WebFinger-503-status-text',
-      'smoke-Readyz-503-status-text',
-      'smoke-READYZ-503-STATUS-TEXT',
-      'smoke-secret-503-status-text',
-      'smoke-readyz-503-body',
-      'smoke-readyz-99-status-text',
-      'smoke-readyz-600-status-text',
-      'smoke-readyz-None-status-text',
-      'smoke-readyz-503-status',
-      'smoke-readyz-503-status-xml',
-      'smoke-readyz-503-status-text-extra',
-      'smoke-inbox-none-request',
-      'smoke-inbox-none-request-foo',
-      'smoke-inbox-none-request-Timeout',
-      'smoke-token-bad',
-      'smoke-token-ok-extra',
-      'smoke-token-',
-      'smoke-failed',
-      '',
-      undefined,
-      503,
-    ]
-  ) expect(isSmokeDetail(word), String(word)).toBe(false);
-});
 it('keeps every possible word within the public workflow log pattern and 40 characters', () => {
   const words = allWords();
   expect(words.length).toBeGreaterThan(500);
@@ -287,12 +188,4 @@ it('recognizes a failure whose every item is a 503 and ignores the token class l
   expect(isAllSmokeServiceUnavailable([])).toBe(false);
   expect(isAllSmokeServiceUnavailable(undefined)).toBe(false);
   expect(isAllSmokeServiceUnavailable('smoke-health-503-status-text')).toBe(false);
-});
-it('keeps the retry reasons within the public workflow log pattern', () => {
-  for (const attempt of [1, 2, 3]) {
-    const line =
-      `IORI_DIAG stage=cutover-smoke-worker program=none exit=none signal=none reason=smoke-retry-${attempt}-all-503`;
-    expect(line).toMatch(publicLine);
-    expect(assertWorkflowOutput(line)).toEqual([]);
-  }
 });

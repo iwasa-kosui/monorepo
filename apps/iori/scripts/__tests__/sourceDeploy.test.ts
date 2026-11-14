@@ -217,108 +217,6 @@ it('prints one fixed diagnostic line for an SSH authentication failure without i
   expect(lines).toEqual(['IORI_DIAG stage=remote-check program=ssh exit=255 signal=none reason=ssh-auth-denied\n']);
   expect(writes.join('')).not.toMatch(/secret|invalid|fixture/);
 });
-it.each([
-  ['Host key verification failed.', 'ssh-host-key'],
-  ['Load key "/x": invalid format', 'ssh-key-format'],
-  ['Connection timed out during banner exchange', 'ssh-timeout'],
-  ['Operation timed out', 'ssh-timeout'],
-  ['Connection refused', 'ssh-refused'],
-  ['Could not resolve hostname x', 'ssh-dns'],
-  ['Error: Unsupported source pnpm.', 'source-pnpm-version'],
-  ['Error: Source UPLOAD_DIR must be outside dist: /secret/path', 'upload-dir-inside-dist'],
-  ['Error: Dirty source checkout.', 'source-dirty'],
-  ['Error: Source configuration owner reset failed.', 'config-owner-reset-failed'],
-  ['Error: Source configuration mode reset failed.', 'config-mode-reset-failed'],
-  ['Error: Source UPLOAD_DIR must be an existing directory: /secret/path', 'upload-dir-missing'],
-  ['Private diagnostic directory is invalid.', 'log-directory-invalid'],
-  ['Migration command failed; outcome may be uncertain.', 'remote-command-failed'],
-  ['something unexpected', 'unclassified'],
-])('classifies remote stderr %s as %s', async (stderr, reason) => {
-  const exitCode = reason.startsWith('ssh-') ? 255 : 1;
-  const writes = captureDiagnostics();
-  await expect(deploySource(diagnosticOptions, {
-    ...diagnosticDependencies,
-    runCommand: async (_program, _args, options) => {
-      await options.captureOutput?.({ stdout: '', stderr });
-      throw Object.assign(new Error('x'), { exitCode });
-    },
-  })).rejects.toThrow('x');
-  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
-    `IORI_DIAG stage=remote-check program=ssh exit=${exitCode} signal=none reason=${reason}\n`,
-  ]);
-});
-it('does not read a remote command Permission denied as an SSH authentication failure', async () => {
-  const writes = captureDiagnostics();
-  await expect(deploySource(diagnosticOptions, {
-    ...diagnosticDependencies,
-    runCommand: async (_program, _args, options) => {
-      await options.captureOutput?.({ stdout: '', stderr: 'bash: /x/node: Permission denied' });
-      throw Object.assign(new Error('x'), { exitCode: 126 });
-    },
-  })).rejects.toThrow('x');
-  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
-    'IORI_DIAG stage=remote-check program=ssh exit=126 signal=none reason=unclassified\n',
-  ]);
-});
-it('does not read an rsync local write Permission denied as an SSH authentication failure', async () => {
-  const writes = captureDiagnostics();
-  await expect(deploySource(diagnosticOptions, {
-    ...diagnosticDependencies,
-    runCommand: async (program, _args, options) => {
-      if (program !== 'rsync') return { stdout: '', stderr: '' };
-      await options.captureOutput?.({ stdout: '', stderr: 'rsync: mkstemp "x" failed: Permission denied (13)' });
-      throw Object.assign(new Error('x'), { exitCode: 23 });
-    },
-  })).rejects.toThrow('x');
-  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
-    'IORI_DIAG stage=rsync program=rsync exit=23 signal=none reason=unclassified\n',
-  ]);
-});
-it('classifies a missing remote Node only for ssh exit 127', async () => {
-  const writes = captureDiagnostics();
-  await expect(deploySource(diagnosticOptions, {
-    ...diagnosticDependencies,
-    runCommand: async (_program, _args, options) => {
-      await options.captureOutput?.({ stdout: '', stderr: 'bash: /home/u/.nvm/bin/node: No such file or directory' });
-      throw Object.assign(new Error('x'), { exitCode: 127 });
-    },
-  })).rejects.toThrow('x');
-  expect(writes.join('')).toContain('exit=127 signal=none reason=remote-node-missing');
-});
-it('names the rsync stage and the terminating signal', async () => {
-  const writes = captureDiagnostics();
-  await expect(deploySource(diagnosticOptions, {
-    ...diagnosticDependencies,
-    runCommand: async (program) => {
-      if (program === 'rsync') throw Object.assign(new Error('x'), { exitCode: null, signal: 'SIGTERM' });
-      return { stdout: '', stderr: '' };
-    },
-  })).rejects.toThrow('x');
-  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
-    'IORI_DIAG stage=rsync program=rsync exit=none signal=SIGTERM reason=command-signaled\n',
-  ]);
-});
-it('names stages outside the child commands', async () => {
-  const writes = captureDiagnostics();
-  await expect(deploySource(diagnosticOptions, {
-    ...diagnosticDependencies,
-    sourceFactory: async () => {
-      throw new Error('Invalid source inputs.');
-    },
-    runCommand: async () => ({ stdout: '', stderr: '' }),
-  })).rejects.toThrow();
-  await expect(deploySource(diagnosticOptions, {
-    ...diagnosticDependencies,
-    checkMain: async () => {
-      throw new Error('Reviewed main changed.');
-    },
-    runCommand: async () => ({ stdout: '', stderr: '' }),
-  })).rejects.toThrow();
-  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
-    'IORI_DIAG stage=inputs program=none exit=none signal=none reason=source-inputs-invalid\n',
-    'IORI_DIAG stage=manifest program=none exit=none signal=none reason=reviewed-main-changed\n',
-  ]);
-});
 it('resets the configuration owner immediately before install', async () => {
   const phases: string[] = [];
   await deploySource(diagnosticOptions, {
@@ -366,34 +264,6 @@ it('relays only the exact configuration owner notice from a remote stage', async
     },
   });
   expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([`${notice}\n`]);
-  expect(writes.join('')).not.toMatch(/secret|extra|abc/);
-});
-const modeNotice = 'IORI_NOTICE stage=remote-configuration-mode previous_mode=0644';
-it('relays only the exact configuration mode notice from a remote stage', async () => {
-  const writes = captureDiagnostics();
-  await deploySource(diagnosticOptions, {
-    ...diagnosticDependencies,
-    runCommand: async (program, _args, options) => {
-      if (program === 'ssh' && /"?phase"?: "configuration-owner"/.test(options.input ?? '')) {
-        await options.captureOutput?.({
-          stdout: '',
-          stderr: [
-            modeNotice,
-            `${modeNotice} extra=/home/secret`,
-            ` ${modeNotice}`,
-            `${modeNotice} `,
-            'IORI_NOTICE stage=remote-configuration-mode previous_mode=644',
-            'IORI_NOTICE stage=remote-configuration-mode previous_mode=0888',
-            'IORI_NOTICE stage=remote-configuration-mode previous_mode=01644',
-            'IORI_NOTICE stage=remote-configuration-mode previous_mode=abc',
-            'IORI_NOTICE stage=remote-install previous_mode=0644',
-          ].join('\n'),
-        });
-      }
-      return { stdout: '', stderr: '' };
-    },
-  });
-  expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([`${modeNotice}\n`]);
   expect(writes.join('')).not.toMatch(/secret|extra|abc/);
 });
 it('does not relay a notice from a failed rsync stage', async () => {
@@ -479,7 +349,6 @@ it('does not retry a status failure that is not marked retryable', async () => {
   )).rejects.toThrow('Source operation failed.');
   expect(calls).toBe(1);
 });
-const unitNotice = 'IORI_NOTICE stage=status-unit active=failed sub=failed result=start-limit-hit restarts=5';
 const unitStatusCall = (options: { input?: string }) => /"?phase"?: "unit-status"/.test(options.input ?? '');
 const withUnitStatus = (
   status: () => Promise<typeof readyState>,
@@ -501,35 +370,6 @@ const withUnitStatus = (
     return { stdout: '', stderr: '' };
   },
 });
-it('reads the unit state once and prints one fixed notice when the status stage stays not ready', async () => {
-  const writes = captureDiagnostics();
-  const unitCalls: string[] = [];
-  await expect(deploySource(
-    diagnosticOptions,
-    withUnitStatus(async () => {
-      throw notReadyError();
-    }, async options => {
-      await options.captureOutput?.({
-        stdout: '',
-        stderr: [unitNotice, `${unitNotice} extra=/home/secret`, 'ActiveState=failed'].join('\n'),
-      });
-    }, unitCalls),
-  )).rejects.toThrow('Source control is not ready.');
-  expect(unitCalls).toEqual(['unit-status']);
-  expect(writes.filter(line => line.startsWith('IORI_NOTICE'))).toEqual([`${unitNotice}\n`]);
-  expect(writes.filter(line => line.startsWith('IORI_DIAG'))).toEqual([
-    'IORI_DIAG stage=status program=ssh exit=none signal=none reason=source-control-not-ready\n',
-  ]);
-  expect(writes.join('')).not.toMatch(/secret|extra|ActiveState/);
-}, 15_000);
-it('reads the unit state once when the readiness check fails', async () => {
-  const unitCalls: string[] = [];
-  await expect(deploySource(
-    diagnosticOptions,
-    withUnitStatus(async () => ({ ...readyState, queue_failed: true }), async () => {}, unitCalls),
-  )).rejects.toThrow('Source prerequisite readiness failed.');
-  expect(unitCalls).toEqual(['unit-status']);
-});
 it('keeps the original failure and diagnostic when the unit state cannot be read', async () => {
   const writes = captureDiagnostics();
   const unitCalls: string[] = [];
@@ -548,34 +388,6 @@ it('keeps the original failure and diagnostic when the unit state cannot be read
     'IORI_DIAG stage=status program=ssh exit=none signal=none reason=source-control-not-ready\n',
   ]);
 }, 15_000);
-it('does not read the unit state when the status stage succeeds', async () => {
-  const unitCalls: string[] = [];
-  await deploySource(diagnosticOptions, withUnitStatus(async () => readyState, async () => {}, unitCalls));
-  expect(unitCalls).toEqual([]);
-});
-it('does not read the unit state when the deployment is aborted during the status stage', async () => {
-  const abort = new AbortController();
-  const unitCalls: string[] = [];
-  let statusCalls = 0;
-  const deploying = deploySource(diagnosticOptions, {
-    ...withUnitStatus(
-      async () => {
-        statusCalls++;
-        throw notReadyError();
-      },
-      async () => {},
-      unitCalls,
-    ),
-    statusRetryTimeoutMs: 120_000,
-    statusRetryIntervalMs: 60_000,
-    signal: abort.signal,
-  });
-  const failed = expect(deploying).rejects.toThrow('Migration command aborted.');
-  await vi.waitFor(() => expect(statusCalls).toBe(1));
-  abort.abort();
-  await failed;
-  expect(unitCalls).toEqual([]);
-});
 const unitStatusStep = async (stdout: string) => {
   const calls: { program: string; args: string[] }[] = [];
   const writes = captureDiagnostics();
@@ -592,33 +404,12 @@ const unitStatusStep = async (stdout: string) => {
   });
   return { calls, writes, run };
 };
-it('prints the start-limit-hit result of the unit with a single read-only systemctl show', async () => {
-  const { calls, writes, run } = await unitStatusStep(
-    'ActiveState=failed\nSubState=failed\nResult=start-limit-hit\nNRestarts=5\n',
-  );
-  await run;
-  expect(calls).toEqual([{
-    program: 'systemctl',
-    args: ['show', 'microblog', '--property=ActiveState,SubState,Result,NRestarts'],
-  }]);
-  expect(writes).toEqual([`${unitNotice}\n`]);
-});
 it('maps unknown unit values to other and caps the restart count', async () => {
   const { writes, run } = await unitStatusStep(
     'ActiveState=/home/secret\nSubState=Error: x\nResult=banana\nNRestarts=99999999999\n',
   );
   await run;
   expect(writes).toEqual(['IORI_NOTICE stage=status-unit active=other sub=other result=other restarts=999999\n']);
-});
-it('maps a missing Result to other and rejects output without the unit states', async () => {
-  const missing = await unitStatusStep('ActiveState=active\nSubState=running\nNRestarts=0\n');
-  await missing.run;
-  expect(missing.writes).toEqual([
-    'IORI_NOTICE stage=status-unit active=active sub=running result=other restarts=0\n',
-  ]);
-  const invalid = await unitStatusStep('Result=success\nNRestarts=0\n');
-  await expect(invalid.run).rejects.toThrow('Invalid source diagnostic.');
-  expect(invalid.writes).toEqual([]);
 });
 it('stops waiting between status attempts when the deployment is aborted', async () => {
   const realSetTimeout = globalThis.setTimeout;

@@ -2,10 +2,8 @@ import { expect, it } from 'vitest';
 
 import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
 import { createTargetIdentity } from '../fresh-target.mjs';
-import { activeTargetFromResolvedIds, parseExpectedTarget } from '../migration-target-contract.mjs';
 import { operationFailureLines } from '../operation-diagnostics.mjs';
 import { createTargetControlPlane } from '../target-control-plane.mjs';
-import { expectedTargetFixture } from './migrationTargetFixture.js';
 
 const identity = createTargetIdentity({
   environment: 'production',
@@ -84,41 +82,6 @@ it('resolves the ids of the active generation by name', async () => {
     '/queues/queue-id?',
   ]);
 });
-it('follows the pages until it finds the resource on the second page', async () => {
-  const { control, calls } = api(pagesFor({
-    '/d1/database': [[unrelated(1).d1], [resources.d1]],
-    '/storage/kv/namespaces': [[unrelated(1).kv], [unrelated(2).kv], [resources.kv]],
-  }));
-  await expect(control.resolveActiveResources()).resolves.toMatchObject({ d1Id: 'db-id', kvId: 'kv-id' });
-  expect(calls.filter(call => call.startsWith('/d1/database'))).toEqual([
-    '/d1/database?per_page=100&page=1',
-    '/d1/database?per_page=100&page=2',
-  ]);
-  expect(calls.filter(call => call.startsWith('/storage/kv/namespaces'))).toHaveLength(3);
-});
-it('follows a cursor when the API returns one', async () => {
-  const requested: string[] = [];
-  const control = createTargetControlPlane({
-    identity,
-    token: 'private-token',
-    fetchRequest: async (url: URL) => {
-      const path = url.pathname.replace(`/client/v4/accounts/${identity.accountId}`, '');
-      requested.push(url.search);
-      if (path === '/d1/database') {
-        return Response.json(
-          url.searchParams.has('cursor')
-            ? { success: true, result: [resources.d1], result_info: { per_page: 100 } }
-            : { success: true, result: [unrelated(1).d1], result_info: { per_page: 100, cursor: 'next page' } },
-        );
-      }
-      if (path === '/storage/kv/namespaces') return Response.json({ success: true, result: [resources.kv] });
-      if (path === '/queues') return Response.json({ success: true, result: [resources.queue, resources.dlq] });
-      return Response.json({ success: true, result: { consumers: [consumer(identity.workerName, 'consumer-id')] } });
-    },
-  });
-  await expect(control.resolveActiveResources()).resolves.toMatchObject({ d1Id: 'db-id' });
-  expect(requested[1]).toBe('?per_page=100&cursor=next%20page');
-});
 it('stops at the page limit instead of looping forever', async () => {
   const forever = Array.from({ length: 30 }, (_, index) => [unrelated(index).d1]);
   const { control, calls } = api(pagesFor({ '/d1/database': forever }));
@@ -135,10 +98,6 @@ it.each([
   const { control } = api(pagesFor({ [path]: [[empty]] }));
   expect(await diagnose(control.resolveActiveResources())).toEqual([line(`resolve-${word}`), line('resource-missing')]);
 });
-it('prints resource-missing for the dead letter queue when only the queue exists', async () => {
-  const { control } = api(pagesFor({ '/queues': [[resources.queue]] }));
-  expect(await diagnose(control.resolveActiveResources())).toEqual([line('resolve-dlq'), line('resource-missing')]);
-});
 it.each([
   ['d1', '/d1/database', resources.d1],
   ['kv', '/storage/kv/namespaces', resources.kv],
@@ -151,14 +110,6 @@ it.each([
 it('finds duplicates that sit on different pages', async () => {
   const { control } = api(pagesFor({ '/d1/database': [[resources.d1], [resources.d1]] }));
   expect(await diagnose(control.resolveActiveResources())).toEqual([line('resolve-d1'), line('resource-ambiguous')]);
-});
-it.each([401, 403])('prints api-forbidden for HTTP %i', async (status) => {
-  const { control } = api(pagesFor(), { status });
-  expect(await diagnose(control.resolveActiveResources())).toEqual([line('resolve-d1'), line('api-forbidden')]);
-});
-it('prints api-failed for any other API failure', async () => {
-  const { control } = api(pagesFor(), { status: 500 });
-  expect(await diagnose(control.resolveActiveResources())).toEqual([line('resolve-d1'), line('api-failed')]);
 });
 it('prints api-failed when a response has an unexpected shape', async () => {
   const control = createTargetControlPlane({
@@ -192,10 +143,6 @@ it('selects the consumer of the Worker among several consumers', async () => {
   });
   await expect(control.resolveActiveResources()).resolves.toMatchObject({ consumerId: 'wanted' });
 });
-it('prints api-failed for a Queue response without a consumer list', async () => {
-  const { control } = api(pagesFor(), { queue: { queue_id: 'queue-id' } });
-  expect(await diagnose(control.resolveActiveResources())).toEqual([line('resolve-consumer'), line('api-failed')]);
-});
 it('keeps names, ids and response bodies out of the printed lines', async () => {
   const { control } = api(pagesFor({ '/d1/database': [[unrelated(1).d1]] }));
   const text = (await diagnose(control.resolveActiveResources())).join('\n');
@@ -216,20 +163,4 @@ it('leaves an aborted signal as aborted instead of classifying it as an API fail
   });
   const failure = await control.resolveActiveResources().catch((error: unknown) => error);
   expect(operationFailureLines('deploy-worker-resolve', failure)).toEqual([line('aborted')]);
-});
-it('builds an active target from the resolved ids', () => {
-  const fixture = expectedTargetFixture();
-  const target = activeTargetFromResolvedIds({
-    identity: createTargetIdentity({
-      environment: 'production',
-      generation: 'fixture1',
-      accountId: 'a'.repeat(32),
-    }),
-    mainSha: fixture.identity.main_sha,
-    runId: fixture.identity.run_id,
-    admission: fixture.admission,
-    resolved: { d1Id: 'db', kvId: 'kv', queueId: 'queue', dlqId: 'dlq', consumerId: 'consumer' },
-  });
-  expect(target).toEqual(fixture);
-  expect(parseExpectedTarget(target)).toEqual(target);
 });

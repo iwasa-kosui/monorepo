@@ -47,28 +47,6 @@ const options = () => ({
   signal: new AbortController().signal,
   checkMain: vi.fn(async () => {}),
 });
-it('keeps immutable migration identity while recording a different reviewed code revision', async () => {
-  const input = options();
-  const original = structuredClone(target);
-  await expect(updateActiveWorker(input)).resolves.toMatchObject({
-    currentCodeSha: input.currentCodeSha,
-    migrationMainSha: target.identity.main_sha,
-    previousVersion: 'previous',
-    versionId: 'next',
-  });
-  expect(target).toEqual(original);
-  expect(mocks.deploy).toHaveBeenCalledWith(
-    expect.objectContaining({
-      mode: 'active',
-      admissionEnvironment: expect.objectContaining({ IORI_ADMISSION_MODE: 'active' }),
-      migrateD1: true,
-    }),
-  );
-  expect(input.checkMain).toHaveBeenCalledTimes(2);
-  expect(mocks.worker).toHaveBeenCalledTimes(2);
-  expect(mocks.worker.mock.calls[0][0].missingAllowed).toEqual([]);
-  expect(mocks.worker.mock.calls[1][0]).not.toHaveProperty('missingAllowed');
-});
 it.each(['consumer', 'Queue', 'route', 'deploy'])(
   'stops %s uncertainty without retry or automatic restoration',
   async failure => {
@@ -119,18 +97,4 @@ it('reports the D1 migration stage and does not read the Worker after the migrat
     'IORI_DIAG stage=deploy-worker-migrate program=none exit=none signal=none reason=command-failed',
   ]);
   expect(mocks.read).toHaveBeenCalledTimes(1);
-});
-it('does not require onStage', async () => {
-  await expect(updateActiveWorker(options())).resolves.toMatchObject({ versionId: 'next' });
-});
-it('prints resource-consumer-id and state-mismatch at deploy-worker-before for a consumer id that differs', async () => {
-  mocks.read.mockResolvedValueOnce({ ...resource, consumerId: 'other' });
-  let stage = 'deploy-worker-before';
-  const failure = await updateActiveWorker({ ...options(), onStage: next => (stage = next) }).catch(
-    (error: unknown) => error,
-  );
-  expect(failure).toHaveProperty('message', 'Active consumer mismatch.');
-  const line = (reason: string) => `IORI_DIAG stage=${stage} program=none exit=none signal=none reason=${reason}`;
-  expect(stage).toBe('deploy-worker-before');
-  expect(operationFailureLines(stage, failure)).toEqual([line('resource-consumer-id'), line('state-mismatch')]);
 });

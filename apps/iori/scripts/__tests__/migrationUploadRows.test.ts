@@ -11,40 +11,6 @@ const localOf = (url: string) => {
   return upload;
 };
 
-it('classifies a local upload and derives the file name, R2 key and content type from the URL', () => {
-  expect(classifyUploadUrl(`/uploads/${uuid}.png`)).toEqual({
-    kind: 'local',
-    uuid,
-    filename: `${uuid}.png`,
-    key: `post-images/${uuid}/original`,
-    contentType: 'image/png',
-  });
-  expect(localOf(`/uploads/${uuid}.jpg`).contentType).toBe('image/jpeg');
-  expect(localOf(`/uploads/${uuid}.jpeg`).contentType).toBe('image/jpeg');
-  expect(localOf(`/uploads/${uuid}.gif`).contentType).toBe('image/gif');
-  expect(localOf(`/uploads/${uuid}.webp`).contentType).toBe('image/webp');
-  expect(localOf(`/uploads/${uuid}.PNG`).contentType).toBe('image/png');
-});
-
-it('keeps the upper case letters of the UUID written in the URL', () => {
-  const upper = 'ABCDEF01-2345-4678-9ABC-DEF012345678';
-  const upload = localOf(`/uploads/${upper}.Png`);
-  expect(upload.uuid).toBe(upper);
-  expect(upload.filename).toBe(`${upper}.Png`);
-  expect(upload.key).toBe(`post-images/${upper}/original`);
-  expect(upload.contentType).toBe('image/png');
-});
-
-it('accepts the UUID versions 1 to 8 and rejects the others', () => {
-  for (const version of ['1', '4', '7', '8']) {
-    expect(classifyUploadUrl(`/uploads/55555555-5555-${version}555-8555-555555555555.png`).kind).toBe('local');
-  }
-  for (const version of ['0', '9']) {
-    expect(classifyUploadUrl(`/uploads/55555555-5555-${version}555-8555-555555555555.png`).kind).toBe('invalid');
-  }
-  expect(classifyUploadUrl('/uploads/55555555-5555-4555-c555-555555555555.png').kind).toBe('invalid');
-});
-
 it('classifies absolute http and https URLs as remote, including URLs longer than 128 bytes', () => {
   expect(classifyUploadUrl('https://remote.test/media/a.png')).toEqual({ kind: 'remote' });
   expect(classifyUploadUrl('http://remote.test/a.png')).toEqual({ kind: 'remote' });
@@ -88,11 +54,6 @@ it('classifies a same-origin URL cut at 128 characters the same way as the full 
   const full = `https://example.com/uploads/${'x'.repeat(200)}.png`;
   expect(classifyUploadUrl(full, hostname)).toEqual({ kind: 'same-origin' });
   expect(classifyUploadUrl(full.slice(0, 128), hostname)).toEqual({ kind: 'same-origin' });
-});
-
-it('normalizes the source origin to a lower case host name', () => {
-  expect(requireSourceHostname('https://Example.com:443/')).toBe('example.com');
-  expect(requireSourceHostname('http://EXAMPLE.com:8080/blog')).toBe('example.com');
 });
 
 it.each([

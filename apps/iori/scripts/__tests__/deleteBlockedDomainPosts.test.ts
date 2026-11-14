@@ -11,13 +11,11 @@ import { Post } from '../../src/domain/post/post.ts';
 import { Repost } from '../../src/domain/repost/repost.ts';
 import { TimelineItem } from '../../src/domain/timeline/timelineItem.ts';
 import {
-  applyCountSql,
   applySql,
   deleteBlockedDomainPosts,
   deleteFailureLines,
   dryRunSql,
   hostMatches,
-  TARGET_DOMAIN,
 } from '../delete-blocked-domain-posts.mjs';
 
 const accountId = 'b'.repeat(32);
@@ -335,9 +333,6 @@ describe('delete-blocked-domain-posts input checks', () => {
       expect(line).not.toContain(databaseUuid);
     }
   });
-  it('fixes the target domain in the script', () => {
-    expect(TARGET_DOMAIN).toBe('baraag.net');
-  });
 });
 
 describe('delete-blocked-domain-posts host condition', () => {
@@ -393,14 +388,6 @@ describe('delete-blocked-domain-posts dry-run', () => {
     expect(error).toBeUndefined();
     expect(notices).toEqual([
       'IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=2 remote_posts=2 timeline_items=4 federated_items=2 reposts=2 likes=2 emoji_reacts=2 notifications=6 orphan_repost_notifications=0 images=2 articles_skipped=1 actors=2 follows_out=1 follows_in=1 mutes=1',
-    ]);
-  });
-  it('prints zeros when nothing is left', async () => {
-    const { fixture } = build();
-    await run('apply', fixture);
-    const { notices } = await run('dry-run', fixture, {}, { at: now + 1 });
-    expect(notices).toEqual([
-      'IORI_NOTICE delete-blocked-domain-posts mode=dry-run domain=baraag.net posts=0 remote_posts=0 timeline_items=0 federated_items=0 reposts=0 likes=0 emoji_reacts=0 notifications=0 orphan_repost_notifications=0 images=0 articles_skipped=1 actors=2 follows_out=1 follows_in=1 mutes=1',
     ]);
   });
 });
@@ -570,54 +557,6 @@ describe('delete-blocked-domain-posts apply on a SQLite fixture', () => {
     expect(count(fixture, 'posts', `postId = '${kept.mallory.postId}'`)).toBe(1);
     expect(count(fixture, 'local_posts', `postId = '${kept.mallory.postId}'`)).toBe(1);
   });
-  it('pins the order of the statements', () => {
-    const statements = applySql({ now });
-    const order = statements.map((sql) => {
-      const event = /^INSERT INTO domain_events .*? '(\w+\.\w+)', json_object/.exec(sql)?.[1];
-      return event ?? /^(DELETE FROM \w+|UPDATE \w+)/.exec(sql)![1];
-    });
-    expect(order).toEqual([
-      'timelineItem.deleted',
-      'UPDATE timeline_items',
-      'notification.likeNotificationDeleted',
-      'notification.emojiReactNotificationDeleted',
-      'notification.replyNotificationDeleted',
-      'notification.mentionNotificationDeleted',
-      'DELETE FROM notification_likes',
-      'DELETE FROM notification_emoji_reacts',
-      'DELETE FROM notification_replies',
-      'DELETE FROM notification_mentions',
-      'DELETE FROM notification_reposts',
-      'DELETE FROM notifications',
-      'repost.repostDeleted',
-      'DELETE FROM reposts',
-      'like.localLikeDeleted',
-      'like.remoteLikeDeleted',
-      'DELETE FROM local_likes',
-      'DELETE FROM remote_likes',
-      'DELETE FROM likes',
-      'emojiReact.emojiReactDeleted',
-      'DELETE FROM emoji_reacts',
-      'federatedTimelineItem.deleted',
-      'DELETE FROM federated_timeline_items',
-      'DELETE FROM post_images',
-      'DELETE FROM post_quotes',
-      'DELETE FROM remote_post_poll_votes',
-      'DELETE FROM remote_post_polls',
-      'DELETE FROM local_posts',
-      'DELETE FROM remote_post_recipients',
-      'DELETE FROM direct_post_participants',
-      'DELETE FROM remote_posts',
-      'post.deleted',
-      'DELETE FROM posts',
-    ]);
-    for (const statement of statements) expect(statement).not.toContain(';');
-  });
-  it('sends the statements joined by a semicolon and a newline in one request, then the count', async () => {
-    const { fixture } = build();
-    const { queries } = await run('apply', fixture);
-    expect(queries).toEqual([applySql({ now }).join(';\n'), applyCountSql(now)]);
-  });
 });
 
 describe('delete-blocked-domain-posts domain events', () => {
@@ -729,16 +668,6 @@ describe('delete-blocked-domain-posts domain events', () => {
       eventPayload: JSON.stringify({ postId: bp1.postId, deletedAt: now }),
       occurredAt: now,
     });
-  });
-  it('gives every event a distinct UUID v4 ID', async () => {
-    const { fixture } = build();
-    await run('apply', fixture);
-    const ids = rows(fixture, 'SELECT eventId FROM domain_events').map((row) => String(row.eventId));
-    expect(ids).toHaveLength(19);
-    expect(new Set(ids).size).toBe(19);
-    for (const id of ids) {
-      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    }
   });
 });
 

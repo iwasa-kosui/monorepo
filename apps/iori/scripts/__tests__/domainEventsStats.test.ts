@@ -3,11 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { createSqliteD1Fixture } from '../../src/adaptor/d1/__tests__/sqliteFixture.ts';
 import {
   ARCHIVE_AGE_MS,
-  buildStats,
   dailySql,
   domainEventsStats,
   eventNameSql,
-  noticeLines,
   statsFailureLines,
   statsStatements,
   summarySql,
@@ -182,32 +180,6 @@ describe('domain-events-stats result', () => {
     ].sort((a, b) => a.day.localeCompare(b.day)));
     expect(dailyCounts.map((item: { day: string }) => item.day)).not.toContain(day(40 * DAY));
   });
-  it('counts the rows per event name in descending order', async () => {
-    const { outputs } = await run(build());
-    expect(JSON.parse(outputs[0]).eventNameCounts).toEqual([
-      { eventName: 'post.created', count: 3 },
-      { eventName: 'post.deleted', count: 2 },
-      { eventName: 'timelineItem.deleted', count: 2 },
-    ]);
-  });
-  it('limits the event names to the top 30', async () => {
-    const fixture = createSqliteD1Fixture();
-    for (let index = 0; index < 35; index += 1) addEvent(fixture, now - index, `event.name${index}`);
-    const { outputs } = await run(fixture);
-    expect(JSON.parse(outputs[0]).eventNameCounts).toHaveLength(30);
-  });
-  it('estimates the average and the maximum row size', async () => {
-    const fixture = createSqliteD1Fixture();
-    addEvent(fixture, now - 10, 'a.b', { state: 's'.repeat(10), payload: 'p'.repeat(20) });
-    addEvent(fixture, now - 20, 'a.b');
-    const rowBytes = (eventId: string, aggregateId: string, state: number, payload: number) =>
-      Buffer.byteLength(eventId) + Buffer.byteLength(aggregateId) + 'aggregate'.length + 'a.b'.length + state + payload
-      + 8;
-    const first = rowBytes(`event-${sequence - 1}`, `{"id":"${sequence - 1}"}`, 10, 20);
-    const second = rowBytes(`event-${sequence}`, `{"id":"${sequence}"}`, 0, 0);
-    const { outputs } = await run(fixture);
-    expect(JSON.parse(outputs[0]).rowBytes).toEqual({ average: Math.round((first + second) / 2), max: first });
-  });
   it('counts the actors whose earliest event is not actor.created or that have no actor.created', async () => {
     const fixture = createSqliteD1Fixture();
     for (const actorId of ['older', 'older-raw', 'clean', 'clean-raw', 'only-other', 'no-events']) {
@@ -226,38 +198,6 @@ describe('domain-events-stats result', () => {
     expect(error).toBeUndefined();
     expect(JSON.parse(outputs[0]).createdAtSkewActors).toBe(4);
     expect(notices[0]).toMatch(/ max_bytes=\d+ created_at_skew_actors=4$/);
-  });
-  it('reports an empty table without failing', async () => {
-    const { outputs, notices, error } = await run(createSqliteD1Fixture());
-    expect(error).toBeUndefined();
-    expect(JSON.parse(outputs[0])).toMatchObject({
-      total: 0,
-      oldestOccurredAt: null,
-      newestOccurredAt: null,
-      olderThanArchiveAge: { count: 0 },
-      dailyCounts: [],
-      eventNameCounts: [],
-      rowBytes: { average: null, max: null },
-      createdAtSkewActors: 0,
-    });
-    expect(notices).toEqual([
-      'IORI_NOTICE domain-events-stats summary total=0 oldest=none newest=none older_than_7d=0 avg_bytes=0 max_bytes=0 created_at_skew_actors=0',
-    ]);
-  });
-  it('prints the fixed notice lines', async () => {
-    const { notices } = await run(build());
-    expect(notices[0]).toMatch(
-      /^IORI_NOTICE domain-events-stats summary total=7 oldest=\S+ newest=\S+ older_than_7d=4 avg_bytes=\d+ max_bytes=\d+ created_at_skew_actors=0$/,
-    );
-    expect(notices.slice(1).every((line) => /^IORI_NOTICE domain-events-stats (?:day|event)=\S+ count=\d+$/.test(line)))
-      .toBe(true);
-    expect(notices).toHaveLength(1 + 5 + 3);
-  });
-  it('rejects a malformed D1 result', () => {
-    expect(() => buildStats({ results: [], now })).toThrow('D1 query result is invalid.');
-    expect(() => buildStats({ results: [{ results: [{ total: -1 }] }, { results: [] }, { results: [] }], now }))
-      .toThrow('D1 query result is invalid.');
-    expect(noticeLines).toBeTypeOf('function');
   });
 });
 

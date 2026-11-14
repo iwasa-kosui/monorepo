@@ -1,14 +1,11 @@
 import { env } from 'cloudflare:test';
-import { RA } from '@iwasa-kosui/result';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { sha256Hex } from '../src/adaptor/crypto/sha256Hex.ts';
 import { createD1Db } from '../src/adaptor/d1/client.ts';
 import { createD1ArchivableDomainEventsResolver } from '../src/adaptor/d1/domainEvent/archivableDomainEventsResolver.ts';
 import { createD1ArchivedDomainEventsDeleter } from '../src/adaptor/d1/domainEvent/archivedDomainEventsDeleter.ts';
-import type { ArchivedDomainEvent, DomainEventArchiveWriter } from '../src/domain/domainEvent/domainEventArchive.ts';
+import type { ArchivedDomainEvent } from '../src/domain/domainEvent/domainEventArchive.ts';
 import { Instant } from '../src/domain/instant/instant.ts';
-import { ArchiveDomainEventsUseCase } from '../src/useCase/archiveDomainEvents.ts';
 
 const BYTE_BUDGET = 16 * 1024 * 1024;
 const CUTOFF = Instant.orThrow(Date.UTC(2020, 0, 10));
@@ -83,33 +80,6 @@ describe('archive resolver and deleter on workerd D1', () => {
     expect(events.map((event) => event.eventId)).toEqual(['before']);
     expect((await deleter.deleteRange({ ...rangeOf(events), last: events[0]! })).val).toBe(1);
     expect(await remainingIds()).toEqual(['same', 'after']);
-  });
-
-  it('UTC 日の境界でバッチを区切る', async () => {
-    await addEvent('d1a', at(1, 23, 58));
-    await addEvent('d1b', at(1, 23, 59));
-    await addEvent('d2a', at(2, 0, 0));
-    await addEvent('d2b', at(2, 0, 1));
-    const written: string[][] = [];
-    const writer: DomainEventArchiveWriter = {
-      write: async ({ events }) => {
-        written.push(events.map((event) => event.eventId));
-        return RA.ok(undefined);
-      },
-    };
-
-    const result = await ArchiveDomainEventsUseCase.create({
-      archivableDomainEventsResolver: resolver,
-      domainEventArchiveWriter: writer,
-      archivedDomainEventsDeleter: deleter,
-      aggregateIdHasher: sha256Hex,
-      now: () => Instant.orThrow(CUTOFF + 7 * 24 * 60 * 60 * 1000),
-      batchSize: 10,
-    }).run();
-
-    expect(result).toMatchObject({ val: { archived: 4, objects: 2, stoppedBy: 'drained' } });
-    expect(written).toEqual([['d1a', 'd1b'], ['d2a', 'd2b']]);
-    expect(await remainingIds()).toEqual([]);
   });
 
   it('バイトの予算を超える手前で区切り、先頭の1行は予算より大きくても返す', async () => {

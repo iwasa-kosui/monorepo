@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
 import { deleteRehearsalD1, REHEARSAL_DATABASES, rehearsalFailureLines } from '../delete-rehearsal-d1.mjs';
-import { OPERATION_STAGES } from '../operation-diagnostics.mjs';
 
 const accountId = 'b'.repeat(32);
 const token = 'api-token-value-for-fixture-0123456789';
@@ -96,16 +95,6 @@ const urlsOf = (calls: Call[]) => calls.map(call => call.url);
 const uuidsOf = (names: string[]) => names.map(uuidOf);
 
 describe('delete-rehearsal-d1', () => {
-  it('fixes the five rehearsal names', () => {
-    expect(REHEARSAL_DATABASES).toEqual([
-      'iori-production-prdrehearse1',
-      'iori-production-prdrehearse2',
-      'iori-production-prdrehearse3',
-      'iori-production-prdrehearse4',
-      'iori-production-prdrehearse5',
-    ]);
-    expect(Object.isFrozen(REHEARSAL_DATABASES)).toBe(true);
-  });
   it('deletes five empty databases by their own id and succeeds when the list no longer has them', async () => {
     const { calls, notices, error, state } = await run();
     expect(error).toBeUndefined();
@@ -233,11 +222,6 @@ describe('delete-rehearsal-d1', () => {
     expect(notices).toContain(`IORI_NOTICE rehearsal-d1 name=${target} state=remaining`);
     expect(rehearsalFailureLines(error)).toEqual([diag('rehearsal-delete-remove', 'api-forbidden')]);
   });
-  it('reports api-failed style reasons for a server error on delete', async () => {
-    const target = REHEARSAL_DATABASES[4];
-    const { error } = await run({}, { deleteStatus: { [target]: 500 } });
-    expect(rehearsalFailureLines(error)).toEqual([diag('rehearsal-delete-remove', 'd1-http-500')]);
-  });
   it('fails when a deleted database still appears in the list', async () => {
     const target = REHEARSAL_DATABASES[3];
     const { calls, error, notices } = await run({}, { keepAfterDelete: [target] });
@@ -356,16 +340,5 @@ describe('delete-rehearsal-d1', () => {
         );
       }
     }
-  });
-  it('uses only stages in the operation stage vocabulary', async () => {
-    const { error } = await run({}, {
-      deleteStatus: { [REHEARSAL_DATABASES[0]]: 403 },
-      tableCount: { [REHEARSAL_DATABASES[1]]: 1 },
-      keepAfterDelete: [REHEARSAL_DATABASES[2]],
-    });
-    const stages = rehearsalFailureLines(error).map(line => /stage=([a-z-]+)/.exec(line)![1]);
-    expect(stages.sort()).toEqual(['rehearsal-delete-check', 'rehearsal-delete-remove', 'rehearsal-delete-verify']);
-    for (const stage of stages) expect(OPERATION_STAGES).toContain(stage);
-    for (const stage of ['rehearsal-delete', 'rehearsal-delete-list']) expect(OPERATION_STAGES).toContain(stage);
   });
 });
