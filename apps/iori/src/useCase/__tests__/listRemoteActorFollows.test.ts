@@ -83,10 +83,12 @@ const setup = (options: Setup = {}) => {
     };
   }) as unknown as DocumentLoader;
 
-  const lookupObject = vi.fn(async (uri: string, _options: { documentLoader: DocumentLoader; signal?: AbortSignal }) => {
-    if (options.hangingUris?.includes(uri)) return new Promise<never>(() => {});
-    return objects.get(uri) ?? null;
-  });
+  const lookupObject = vi.fn(
+    async (uri: string, _options: { documentLoader: DocumentLoader; signal?: AbortSignal }) => {
+      if (options.hangingUris?.includes(uri)) return new Promise<never>(() => {});
+      return objects.get(uri) ?? null;
+    },
+  );
   const ctx = { getDocumentLoader: vi.fn(async () => documentLoader), lookupObject };
 
   const stored = new Map<string, string>(Object.entries(options.known ?? {}));

@@ -10,7 +10,7 @@ const ENTITIES: Readonly<Record<string, string>> = {
   lt: '<',
   gt: '>',
   quot: '"',
-  apos: "'",
+  apos: '\'',
   nbsp: ' ',
 };
 
@@ -20,7 +20,9 @@ export const accountNoteExcerpt = (note: string): string => {
     .replace(/<br\s*\/?>|<\/p>/gi, ' ')
     .replace(/<[^>]*>/g, '')
     .replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (entity, name: string) => {
-      if (name.startsWith('#x') || name.startsWith('#X')) return String.fromCodePoint(Number.parseInt(name.slice(2), 16));
+      if (name.startsWith('#x') || name.startsWith('#X')) {
+        return String.fromCodePoint(Number.parseInt(name.slice(2), 16));
+      }
       if (name.startsWith('#')) return String.fromCodePoint(Number.parseInt(name.slice(1), 10));
       return ENTITIES[name.toLowerCase()] ?? entity;
     })
