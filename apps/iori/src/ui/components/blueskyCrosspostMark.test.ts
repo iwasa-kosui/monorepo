@@ -5,7 +5,6 @@ import {
   BLUESKY_CONTENT_WARNING_NOTICE,
   BLUESKY_EDIT_NOT_APPLIED_NOTICE,
   BLUESKY_EDIT_NOT_SENT_YET_NOTICE,
-  BLUESKY_NOT_SENT_VISIBILITY_NOTICE,
   BLUESKY_SENSITIVE_NOTICE,
   blueskyCrosspostNotice,
   blueskyEditNotice,
@@ -177,17 +176,13 @@ describe('blueskyCrosspostNotice', () => {
     expect(blueskyCrosspostNotice('fediverse', '注意', true, 'public')).toBeUndefined();
   });
 
-  it.each(['unlisted', 'private'] as const)('送り先が両方で、公開範囲が %s なら公開範囲の説明を返す', (visibility) => {
-    expect(blueskyCrosspostNotice('both', '', false, visibility)).toBe(BLUESKY_NOT_SENT_VISIBILITY_NOTICE);
-  });
-
-  it('公開範囲の説明は「公開ではないので、Bluesky には送りません」にする', () => {
-    expect(BLUESKY_NOT_SENT_VISIBILITY_NOTICE).toBe('公開範囲が公開ではないので、Bluesky には送りません');
-  });
-
-  it('公開範囲が公開以外のときは、CW やセンシティブがあっても公開範囲の説明を優先する', () => {
-    expect(blueskyCrosspostNotice('both', '注意', true, 'private')).toBe(BLUESKY_NOT_SENT_VISIBILITY_NOTICE);
-  });
+  it.each(['unlisted', 'private'] as const)(
+    '公開範囲が %s なら Bluesky に送らないので、CW やセンシティブがあっても返さない',
+    (visibility) => {
+      expect(blueskyCrosspostNotice('both', '', false, visibility)).toBeUndefined();
+      expect(blueskyCrosspostNotice('both', '注意', true, visibility)).toBeUndefined();
+    },
+  );
 
   it('送り先が Fediverse だけなら、公開範囲が公開以外でも返さない', () => {
     expect(blueskyCrosspostNotice('fediverse', '', false, 'private')).toBeUndefined();

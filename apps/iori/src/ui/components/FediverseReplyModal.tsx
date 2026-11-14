@@ -4,7 +4,8 @@ import type { UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
 import { ReplyDialogShell } from './ReplyDialogShell.tsx';
-import { ReplyVisibilityControl, ReplyVisibilityNotice } from './ReplyVisibilityField.tsx';
+import { ReplyTargetCard } from './ReplyTargetCard.tsx';
+import { ReplyVisibilityControl } from './ReplyVisibilityField.tsx';
 
 type Props = Readonly<{
   dialog: UseReplyDialogReturn;
@@ -16,6 +17,7 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
   const {
     replyingToPostId,
     replyingToUsername,
+    replyingToStatus,
     replyContent,
     replyDestination,
     replyVisibility,
@@ -63,6 +65,7 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
       onSubmit={submit}
       isSending={isSendingReply}
       canSubmit={!isSendingReply && replyContent.trim() !== ''}
+      target={replyingToStatus === null ? undefined : <ReplyTargetCard status={replyingToStatus} />}
       leadingActions={
         <>
           <ReplyVisibilityControl
@@ -89,11 +92,6 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
         placeholder='返信を書く... (⌘+Enter to post)'
         minHeight='150px'
         disabled={isSendingReply}
-      />
-      <ReplyVisibilityNotice
-        value={replyVisibility}
-        parentVisibility={replyParentVisibility}
-        destination={replyDestination}
       />
     </ReplyDialogShell>
   );

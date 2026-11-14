@@ -1,7 +1,9 @@
 import { jsx } from 'hono/jsx';
 import { describe, expect, it } from 'vitest';
 
+import type { PostWithAuthor } from '../../domain/post/post.ts';
 import type { UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
+import { postToStatus } from '../legacyConversion.ts';
 import { FediverseReplyModal, shouldCloseReplyModalOnKey } from './FediverseReplyModal.tsx';
 import { DEFAULT_POST_DESTINATION } from './postDestination.ts';
 
@@ -10,6 +12,7 @@ const noop = () => {};
 const dialog = (overrides: Partial<UseReplyDialogReturn> = {}): UseReplyDialogReturn => ({
   replyingToPostId: null,
   replyingToUsername: null,
+  replyingToStatus: null,
   replyContent: '',
   replyDestination: DEFAULT_POST_DESTINATION,
   replyVisibility: 'public',
@@ -23,6 +26,30 @@ const dialog = (overrides: Partial<UseReplyDialogReturn> = {}): UseReplyDialogRe
   sendReply: () => Promise.resolve(true),
   ...overrides,
 });
+
+const parent = (overrides: Partial<PostWithAuthor> = {}) =>
+  postToStatus({
+    postId: 'post-1',
+    actorId: 'actor-1',
+    userId: 'user-1',
+    username: 'mzp',
+    content: '<p>アメリカに閉じこめられた?!</p>',
+    createdAt: Date.parse('2026-01-02T03:04:05.000Z'),
+    logoUri: undefined,
+    liked: false,
+    reposted: false,
+    inReplyToUri: null,
+    summary: null,
+    sensitive: false,
+    images: [],
+    likeCount: 0,
+    repostCount: 0,
+    reactions: [],
+    linkPreviews: [],
+    type: 'remote',
+    uri: 'https://remote.example/notes/1',
+    ...overrides,
+  } as unknown as PostWithAuthor);
 
 const render = (overrides: Partial<UseReplyDialogReturn> = {}): string =>
   String(jsx(FediverseReplyModal, { dialog: dialog(overrides) }));
@@ -89,47 +116,22 @@ describe('FediverseReplyModal', () => {
     expect(disabled).toEqual(['public']);
   });
 
-  it('返信先がダイレクトなら、選択欄の代わりに、返信もダイレクトになる文を出す', () => {
-    const html = render({
-      replyingToPostId: 'post-1',
-      replyParentVisibility: 'direct',
-      replyVisibility: 'private',
-      replyDestination: 'fediverse',
-    });
+  it.each(['both', 'fediverse'] as const)(
+    '返信先がダイレクトなら、送り先が %s でも、公開範囲のセレクトの代わりにダイレクトの印だけを出し、説明の文は出さない',
+    (replyDestination) => {
+      const html = render({
+        replyingToPostId: 'post-1',
+        replyParentVisibility: 'direct',
+        replyVisibility: 'private',
+        replyDestination,
+      });
 
-    expect(html).toContain('返信先がダイレクトなので、返信もダイレクトになります');
-    expect(html).not.toContain('name="reply-visibility"');
-  });
-
-  it('返信先がダイレクトで送り先が both なら、Bluesky には送らない旨を同じ文に含め、別の案内は出さない', () => {
-    const html = render({
-      replyingToPostId: 'post-1',
-      replyParentVisibility: 'direct',
-      replyVisibility: 'private',
-      replyDestination: 'both',
-    });
-
-    expect(html).toContain('返信先がダイレクトなので、返信もダイレクトになり、Bluesky には送りません');
-    expect(html).not.toContain('公開範囲が公開ではないので、Bluesky には送りません');
-  });
-
-  it('返信先がダイレクトで送り先が fediverse なら、返信もダイレクトになる文だけを出す', () => {
-    const html = render({
-      replyingToPostId: 'post-1',
-      replyParentVisibility: 'direct',
-      replyVisibility: 'private',
-      replyDestination: 'fediverse',
-    });
-
-    expect(html).toContain('返信先がダイレクトなので、返信もダイレクトになります');
-    expect(html).not.toContain('Bluesky には送りません');
-  });
-
-  it('送り先が both で公開範囲が公開ではないとき、Bluesky に送らない案内を出す', () => {
-    const html = render({ replyingToPostId: 'post-1', replyDestination: 'both', replyVisibility: 'unlisted' });
-
-    expect(html).toContain('公開範囲が公開ではないので、Bluesky には送りません');
-  });
+      expect(html).toContain('ダイレクト');
+      expect(html).not.toContain('name="reply-visibility"');
+      expect(html).not.toContain('返信先がダイレクトなので');
+      expect(html).not.toContain('Bluesky には送りません');
+    },
+  );
 
   it('送り先が both でも公開範囲が公開なら、Bluesky に送らない案内を出さない', () => {
     const html = render({ replyingToPostId: 'post-1', replyDestination: 'both', replyVisibility: 'public' });
@@ -149,5 +151,36 @@ describe('shouldCloseReplyModalOnKey', () => {
 
   it('Escape 以外のキーでは閉じない', () => {
     expect(shouldCloseReplyModalOnKey('Enter', false)).toBe(false);
+  });
+
+  it('返信先の投稿があれば、本文を入力欄の上に出す', () => {
+    const html = render({ replyingToPostId: 'post-1', replyingToStatus: parent() });
+
+    expect(html).toContain('aria-label="返信先の投稿"');
+    expect(html).toContain('アメリカに閉じこめられた?!');
+    expect(html.indexOf('aria-label="返信先の投稿"')).toBeLessThan(html.indexOf('<textarea'));
+  });
+
+  it('返信先の投稿に CW があれば、本文の代わりに CW の文を出す', () => {
+    const html = render({
+      replyingToPostId: 'post-1',
+      replyingToStatus: parent({ summary: 'ネタバレ' } as Partial<PostWithAuthor>),
+    });
+
+    expect(html).toContain('ネタバレ');
+    expect(html).not.toContain('アメリカに閉じこめられた?!');
+  });
+
+  it('返信先の投稿はリンクにせず、書いている途中で移動しないようにする', () => {
+    const html = render({ replyingToPostId: 'post-1', replyingToStatus: parent() });
+    const card = html.slice(html.indexOf('aria-label="返信先の投稿"'), html.indexOf('<textarea'));
+
+    expect(card).not.toContain('<a ');
+  });
+
+  it('公開範囲が公開でなくても、Bluesky に送らない旨の文は出さない', () => {
+    const html = render({ replyingToPostId: 'post-1', replyVisibility: 'unlisted', replyDestination: 'both' });
+
+    expect(html).not.toContain('Bluesky には送りません');
   });
 });

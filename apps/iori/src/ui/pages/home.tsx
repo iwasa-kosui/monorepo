@@ -22,7 +22,7 @@ import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { isEmptyProfileUpdate, toProfileUpdate } from '../components/profileUpdate.ts';
 import { QuoteModal } from '../components/QuoteModal.tsx';
-import { ReplyVisibilityControl, ReplyVisibilityNotice } from '../components/ReplyVisibilityField.tsx';
+import { ReplyVisibilityControl } from '../components/ReplyVisibilityField.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
 import { statusActionProps } from '../components/statusActionProps.ts';
 import { UpdateProfileModal } from '../components/UpdateProfileModal.tsx';
@@ -493,12 +493,6 @@ const ThreadModal = () => {
             placeholder='返信を書く... (⌘+Enter to post)'
             minHeight='100px'
             disabled={isSendingReply}
-          />
-
-          <ReplyVisibilityNotice
-            value={threadReplyVisibility.visibility}
-            parentVisibility={threadReplyVisibility.parentVisibility}
-            destination={replyDestination}
           />
 
           {/* Action Buttons */}

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'hono/jsx';
 
+import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import { createStatus, failureMessage } from '../api/mastodonClient.ts';
@@ -12,12 +13,14 @@ import { useReplyVisibility } from './useReplyVisibility.ts';
 export type UseReplyDialogReturn = Readonly<{
   replyingToPostId: string | null;
   replyingToUsername: string | null;
+  /** 返信先の投稿。返信欄の上に見せるためのもので、渡されなかったときは null */
+  replyingToStatus: Status | null;
   replyContent: string;
   replyDestination: PostDestination;
   replyVisibility: PostVisibility;
   replyParentVisibility: Visibility | undefined;
   isSendingReply: boolean;
-  openReplyDialog: (postId: string, username?: string, visibility?: Visibility) => void;
+  openReplyDialog: (postId: string, username?: string, visibility?: Visibility, status?: Status) => void;
   closeReplyDialog: () => void;
   setReplyContent: (content: string) => void;
   setReplyDestination: (destination: PostDestination) => void;
@@ -34,6 +37,7 @@ export const useReplyDialog = ({
 }: UseReplyDialogProps = {}): UseReplyDialogReturn => {
   const [replyingToPostId, setReplyingToPostId] = useState<string | null>(null);
   const [replyingToUsername, setReplyingToUsername] = useState<string | null>(null);
+  const [replyingToStatus, setReplyingToStatus] = useState<Status | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [replyDestination, setReplyDestination] = useState<PostDestination>(DEFAULT_POST_DESTINATION);
   const [isSendingReply, setIsSendingReply] = useState(false);
@@ -45,16 +49,21 @@ export const useReplyDialog = ({
     clear: clearVisibility,
   } = useReplyVisibility();
 
-  const openReplyDialog = useCallback((postId: string, username?: string, visibility?: Visibility) => {
-    setReplyingToPostId(postId);
-    setReplyingToUsername(username ?? null);
-    setReplyContent('');
-    resetVisibilityFor(visibility);
-  }, [resetVisibilityFor]);
+  const openReplyDialog = useCallback(
+    (postId: string, username?: string, visibility?: Visibility, status?: Status) => {
+      setReplyingToPostId(postId);
+      setReplyingToUsername(username ?? null);
+      setReplyingToStatus(status ?? null);
+      setReplyContent('');
+      resetVisibilityFor(visibility);
+    },
+    [resetVisibilityFor],
+  );
 
   const closeReplyDialog = useCallback(() => {
     setReplyingToPostId(null);
     setReplyingToUsername(null);
+    setReplyingToStatus(null);
     setReplyContent('');
     clearVisibility();
   }, [clearVisibility]);
@@ -78,6 +87,7 @@ export const useReplyDialog = ({
         if (resetsSharedDraft) {
           setReplyingToPostId(null);
           setReplyingToUsername(null);
+          setReplyingToStatus(null);
           setReplyContent('');
           setReplyDestination(DEFAULT_POST_DESTINATION);
           clearVisibility();
@@ -98,6 +108,7 @@ export const useReplyDialog = ({
   return {
     replyingToPostId,
     replyingToUsername,
+    replyingToStatus,
     replyContent,
     replyDestination,
     replyVisibility,
