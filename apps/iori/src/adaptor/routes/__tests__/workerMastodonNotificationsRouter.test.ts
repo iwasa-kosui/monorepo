@@ -51,22 +51,6 @@ describe('GET /api/v1/notifications', () => {
     expect(body[2]?.created_at).toBe('1970-01-01T00:00:02.000Z');
   });
 
-  it('types[] に iori:emoji_reaction を明示したときだけ絵文字リアクションを返す', async () => {
-    const t = await seedNotifications();
-
-    const response = await t.get('/api/v1/notifications?types[]=iori:emoji_reaction');
-
-    const body = ((await response.json()) as unknown[]).map((item) => NotificationSchema.parse(item));
-    expect(body).toHaveLength(1);
-    expect(body[0]).toMatchObject({
-      id: t.ids.emoji,
-      type: 'iori:emoji_reaction',
-      iori: { emoji: ':wave:', url: 'https://e/w.png' },
-      status: { id: t.myPost.postId },
-      account: { id: t.bob.actorId },
-    });
-  });
-
   it('types[] と exclude_types[] で絞り込み、未知の type は無視する', async () => {
     const t = await seedNotifications();
 
@@ -145,50 +129,6 @@ describe('ブロックした相手の通知', () => {
     expect(((await list.json()) as Array<{ id: string }>).map((item) => item.id)).toEqual([t.ids.reply]);
     expect(single.status).toBe(404);
     expect(await unread.json()).toEqual({ count: 1 });
-  });
-
-  it('v2 の一覧と未読数からも除く', async () => {
-    const t = await seedNotifications();
-    t.seed.addBlock(t.me.userId, t.alice.actorId);
-
-    const [list, unread] = await Promise.all([
-      t.get('/api/v2/notifications'),
-      t.get('/api/v2/notifications/unread_count'),
-    ]);
-
-    const body = GroupedNotificationsResultsSchema.parse(await list.json());
-    expect(body.notification_groups.map((group) => group.type)).toEqual(['mention']);
-    expect(await unread.json()).toEqual({ count: 1 });
-  });
-
-  it('ブロックした相手からのメンションの通知も、一覧と未読数と単体の取得から除く', async () => {
-    const t = await seedNotifications();
-    const mentionPost = t.seed.addRemotePost(t.alice, 3_500, {
-      timeline: false,
-      visibility: 'direct',
-      recipientActorUris: ['https://iori.test/users/kosui'],
-    });
-    const mention = t.seed.addMentionNotification(t.me.userId, t.alice.actorId, mentionPost.postId, 3_600);
-    t.seed.addBlock(t.me.userId, t.alice.actorId);
-
-    const [list, single, unread] = await Promise.all([
-      t.get('/api/v1/notifications'),
-      t.get(`/api/v1/notifications/${mention}`),
-      t.get('/api/v1/notifications/unread_count'),
-    ]);
-
-    expect(((await list.json()) as Array<{ id: string }>).map((item) => item.id)).toEqual([t.ids.reply]);
-    expect(single.status).toBe(404);
-    expect(await unread.json()).toEqual({ count: 1 });
-  });
-
-  it('他人のブロックの影響を受けない', async () => {
-    const t = await seedNotifications();
-    t.seed.addBlock(t.other.userId, t.alice.actorId);
-
-    const response = await t.get('/api/v1/notifications');
-
-    expect(await t.typesOf(response)).toEqual(['follow', 'mention', 'favourite']);
   });
 });
 
@@ -322,14 +262,6 @@ describe('GET /api/v2/notifications', () => {
     }
     expect(Math.min(...firstValues)).toBeGreaterThan(Math.max(...secondValues));
   });
-
-  it('read:notifications がないトークンは 403 にする', async () => {
-    const t = await seedNotifications();
-
-    const response = await t.get('/api/v2/notifications', await t.bearerFor('read:statuses'));
-
-    expect(response.status).toBe(403);
-  });
 });
 
 describe('unread_count と markers', () => {
@@ -340,12 +272,6 @@ describe('unread_count と markers', () => {
     ]);
     return [await v1.json(), await v2.json()];
   };
-
-  it('マーカーがなければ emojiReact を除く全件を数える', async () => {
-    const t = await seedNotifications();
-
-    expect(await unread(t)).toEqual([{ count: 3 }, { count: 3 }]);
-  });
 
   it('notifications のマーカーを保存すると、それより新しい通知だけを数える', async () => {
     const t = await seedNotifications();

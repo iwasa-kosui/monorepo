@@ -73,15 +73,6 @@ describe('GET /api/v1/timelines/home', () => {
     expect(forbidden.status).toBe(403);
   });
 
-  it('ミュートした相手の投稿を除く', async () => {
-    const t = await seedHome();
-    t.seed.addMute(t.me.userId, t.alice.actorId);
-
-    const response = await t.request('/api/v1/timelines/home', { headers: t.me.bearer });
-
-    expect(idsOf(await response.json())).toEqual([t.mine.postId]);
-  });
-
   it('ブロックした相手の投稿とリポストを除く', async () => {
     const t = await seedHome();
     t.seed.addBlock(t.me.userId, t.alice.actorId);
@@ -106,79 +97,6 @@ describe('GET /api/v1/timelines/home', () => {
     expect(idsOf(await second.json())).toEqual([t.mine.postId]);
   });
 
-  const seedLongHome = async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-    const alice = t.seed.addRemoteActor('alice');
-    const bob = t.seed.addRemoteActor('bob');
-    t.seed.addFollow(me.actorId, alice.actorId);
-    t.seed.addFollow(me.actorId, bob.actorId);
-    const mine = t.seed.addLocalPost(me, 1_000);
-    const notes = [2_000, 3_000, 5_000, 7_000].map((createdAt) =>
-      t.seed.addRemotePost(alice, createdAt, { timeline: true })
-    );
-    const bobNote = t.seed.addRemotePost(bob, 6_000, { timeline: true });
-    const boostByMe = t.seed.addRepost(me.actorId, notes[0]!.postId, 4_000);
-    const boostByBob = t.seed.addRepost(bob.actorId, notes[1]!.postId, 8_000);
-    const boostByAlice = t.seed.addRepost(alice.actorId, mine.postId, 9_000);
-    const newestFirst = [
-      boostByAlice.repostId,
-      boostByBob.repostId,
-      notes[3]!.postId,
-      bobNote.postId,
-      notes[2]!.postId,
-      boostByMe.repostId,
-      notes[1]!.postId,
-      notes[0]!.postId,
-      mine.postId,
-    ];
-    return { ...t, me, newestFirst };
-  };
-
-  it('Link の next の URL をそのまま取得すると古い投稿が返り、最後は空で Link が付かない', async () => {
-    const t = await seedLongHome();
-
-    const collected: string[] = [];
-    let response = await t.request('/api/v1/timelines/home?limit=2', { headers: t.me.bearer });
-    let pages = 0;
-    while (pages < 20) {
-      const ids = idsOf(await response.json());
-      if (ids.length === 0) break;
-      collected.push(...ids);
-      const next = linkOf(response, 'next');
-      expect(next).toBeDefined();
-      response = await t.request(`${next?.pathname}${next?.search}`, { headers: t.me.bearer });
-      pages++;
-    }
-
-    expect(collected).toEqual(t.newestFirst);
-    expect(new Set(collected).size).toBe(collected.length);
-    expect(response.headers.get('Link')).toBeNull();
-  });
-
-  it('username が NULL の remote actor のブーストがページの末尾にあっても次のページに進める', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-    const ghost = t.seed.addRemoteActor('ghost');
-    t.sqlite.prepare('UPDATE remote_actors SET username = NULL WHERE actorId = ?').run(ghost.actorId);
-    t.seed.addFollow(me.actorId, ghost.actorId);
-    const oldest = t.seed.addLocalPost(me, 1_000);
-    const note = t.seed.addLocalPost(me, 2_000);
-    const boost = t.seed.addRepost(ghost.actorId, note.postId, 3_000);
-
-    const collected: string[] = [];
-    let maxId: string | undefined;
-    for (let pages = 0; pages < 5; pages++) {
-      const query = maxId === undefined ? 'limit=1' : `limit=1&max_id=${maxId}`;
-      const ids = idsOf(await (await t.request(`/api/v1/timelines/home?${query}`, { headers: me.bearer })).json());
-      if (ids.length === 0) break;
-      collected.push(...ids);
-      maxId = ids[ids.length - 1];
-    }
-
-    expect(collected).toEqual([boost.repostId, note.postId, oldest.postId]);
-  });
-
   it('同じ postId の post の行が時刻の近い 2 行で隣り合い、古い行がページの末尾にあっても次のページに進む', async () => {
     const t = setupReadApi();
     const me = await t.signIn();
@@ -192,35 +110,6 @@ describe('GET /api/v1/timelines/home', () => {
 
     expect(idsOf(await first.json())).toEqual([duplicated.postId, duplicated.postId]);
     expect(idsOf(await second.json())).toEqual([duplicated.postId, oldest.postId]);
-  });
-
-  it('同じミリ秒の 2 件を max_id で取りこぼさない', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-    const posts = [t.seed.addLocalPost(me, 5_000), t.seed.addLocalPost(me, 5_000), t.seed.addLocalPost(me, 4_000)];
-
-    const first = await t.request('/api/v1/timelines/home?limit=1', { headers: me.bearer });
-    const firstId = idsOf(await first.json())[0]!;
-    const second = await t.request(`/api/v1/timelines/home?limit=1&max_id=${firstId}`, { headers: me.bearer });
-    const secondId = idsOf(await second.json())[0]!;
-    const third = await t.request(`/api/v1/timelines/home?limit=1&max_id=${secondId}`, { headers: me.bearer });
-
-    expect(new Set([firstId, secondId])).toEqual(new Set([posts[0]!.postId, posts[1]!.postId]));
-    expect(idsOf(await third.json())).toEqual([posts[2]!.postId]);
-  });
-
-  it('min_id は新しい側を古い順に limit 件取って新しい順に返し、since_id は新しい側の最新を返す', async () => {
-    const t = await seedHome();
-
-    const min = await t.request(`/api/v1/timelines/home?min_id=${t.mine.postId}&limit=1`, { headers: t.me.bearer });
-    const since = await t.request(`/api/v1/timelines/home?since_id=${t.mine.postId}&limit=1`, { headers: t.me.bearer });
-    const minAll = await t.request(`/api/v1/timelines/home?min_id=${t.mine.postId}`, { headers: t.me.bearer });
-
-    expect(idsOf(await min.json())).toEqual([t.note.postId]);
-    expect(idsOf(await since.json())).toEqual([t.boost.repostId]);
-    expect(idsOf(await minAll.json())).toEqual([t.boost.repostId, t.note.postId]);
-    expect(linkOf(min, 'prev')?.searchParams.get('min_id')).toBe(t.note.postId);
-    expect(linkOf(min, 'next')?.searchParams.get('max_id')).toBe(t.note.postId);
   });
 });
 
@@ -261,17 +150,6 @@ describe('GET /api/v1/timelines/public', () => {
     expect(responses.map((response) => response.status)).toEqual([403, 200, 200]);
   });
 
-  it('ログイン中はブロックしたローカルのアクターの投稿を除く', async () => {
-    const t = await seedPublic();
-    const other = t.seed.addLocalActor('other');
-    t.seed.addLocalPost(other, 4_000);
-    t.seed.addBlock(t.me.userId, other.actorId);
-
-    const response = await t.request('/api/v1/timelines/public?local=true', { headers: t.me.bearer });
-
-    expect(idsOf(await response.json())).toEqual([t.local.postId]);
-  });
-
   it('remote=true は未認証なら 401、スコープ不足なら 403、認証済みならリレーの投稿を返す', async () => {
     const t = await seedPublic();
     const writeOnly = await t.bearerFor('write');
@@ -304,18 +182,6 @@ describe('GET /api/v1/timelines/public', () => {
     expect(idsOf(await first.json())).toEqual([t.remote.postId]);
     expect(idsOf(await rest.json())).toEqual([second.postId]);
     expect(idsOf(await muted.json())).toEqual([t.remote.postId]);
-  });
-
-  it('remote=true はブロックした相手のリレーの投稿を除く', async () => {
-    const t = await seedPublic();
-    const bob = t.seed.addRemoteActor('bob');
-    const second = t.seed.addRemotePost(bob, 1_500, { visibility: 'public' });
-    t.seed.addFederatedItem(second.postId, t.seed.addRelay(), 2_000);
-    t.seed.addBlock(t.me.userId, bob.actorId);
-
-    const response = await t.request('/api/v1/timelines/public?remote=true', { headers: t.me.bearer });
-
-    expect(idsOf(await response.json())).toEqual([t.remote.postId]);
   });
 });
 

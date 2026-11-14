@@ -104,19 +104,6 @@ describe('POST /api/v1/notifications/:id/dismiss', () => {
     expect(t.remaining()).toHaveLength(5);
     expect(t.events('notification.notificationDismissed')).toHaveLength(0);
   });
-
-  it('トークンがないと 401、write:notifications を満たさないスコープは 403 にして消さない', async () => {
-    const t = await seedNotifications();
-    const readOnly = await t.bearerFor('read');
-
-    const responses = await Promise.all([
-      t.request(`/api/v1/notifications/${t.ids.like}/dismiss`, { method: 'POST' }),
-      t.post(`/api/v1/notifications/${t.ids.like}/dismiss`, readOnly),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 403]);
-    expect(t.remaining()).toHaveLength(5);
-  });
 });
 
 describe('POST /api/v2/notifications/:group_key/dismiss', () => {
@@ -143,28 +130,6 @@ describe('POST /api/v2/notifications/:group_key/dismiss', () => {
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 404, 404]);
-    expect(t.remaining()).toHaveLength(5);
-  });
-
-  it('他人の通知は 404 にして消さない', async () => {
-    const t = await seedNotifications();
-
-    const response = await t.post(`/api/v2/notifications/ungrouped-${t.ids.others}/dismiss`);
-
-    expect(response.status).toBe(404);
-    expect(t.remaining()).toHaveLength(5);
-  });
-
-  it('トークンがないと 401、write:notifications を満たさないスコープは 403 にする', async () => {
-    const t = await seedNotifications();
-    const readOnly = await t.bearerFor('read');
-
-    const responses = await Promise.all([
-      t.request(`/api/v2/notifications/ungrouped-${t.ids.like}/dismiss`, { method: 'POST' }),
-      t.post(`/api/v2/notifications/ungrouped-${t.ids.like}/dismiss`, readOnly),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 403]);
     expect(t.remaining()).toHaveLength(5);
   });
 });

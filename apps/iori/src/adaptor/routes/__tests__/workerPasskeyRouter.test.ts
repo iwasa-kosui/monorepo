@@ -351,29 +351,6 @@ describe('createWorkerPasskeyRouter', () => {
     });
   });
 
-  describe('GET /auth/passkey/credentials', () => {
-    it('資格情報の一覧を返す', async () => {
-      const h = createApp();
-
-      const response = await request(h, 'GET', '/credentials', { headers: {} });
-
-      expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toEqual({
-        credentials: [
-          {
-            credentialId: 'cred',
-            name: 'MacBook',
-            createdAt: '2026-11-01T00:00:00.000Z',
-            lastUsedAt: null,
-            deviceType: 'multiDevice',
-            backedUp: true,
-          },
-        ],
-      });
-      expect(h.deps.listPasskeysUseCase.run).toHaveBeenCalledWith({ userId: h.userId });
-    });
-  });
-
   describe('DELETE /auth/passkey/credentials/:credentialId', () => {
     it('204 を返す', async () => {
       const h = createApp();

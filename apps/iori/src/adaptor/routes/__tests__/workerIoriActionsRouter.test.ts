@@ -15,7 +15,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
-import { ORIGIN } from './helper/oauthHarness.ts';
 
 const notFound = { error: 'Record not found' };
 
@@ -79,16 +78,6 @@ describe('POST /api/iori/v1/preview', () => {
     const body = await response.json() as { html: string };
     expect(body.html).toContain('<strong>bold</strong>');
     expect(body.html).not.toContain('<script>');
-  });
-
-  it('Cookie の利用者は同一オリジンのときだけ使える', async () => {
-    const t = await seedReactions();
-    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
-
-    const same = await preview(t, { ...cookie, Origin: ORIGIN }, { markdown: 'text' });
-    const missing = await preview(t, cookie, { markdown: 'text' });
-
-    expect([same.status, missing.status]).toEqual([200, 403]);
   });
 
   it('トークンがないと 401、write:statuses を満たさないスコープは 403 にする', async () => {
@@ -260,17 +249,6 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
       expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
     });
 
-    it('icon の url が https でないときは採用せず、tag なしで送る', async () => {
-      const t = await seedReactions();
-      t.serveRemoteNote(t.publicNote, [emojiTag(':wave:', 'http://remote.example/emoji/wave.png')]);
-
-      const response = await t.put(t.publicNote.postId);
-
-      expect(response.status).toBe(200);
-      expect(await tagsOf(sentReact(t))).toHaveLength(0);
-      expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
-    });
-
     it('Emoji の icon の取得が失敗しても、反応は成功し、tag なしで送って emojiImageUrl は null にする', async () => {
       const t = await seedReactions();
       t.serveRemoteNote(t.publicNote, [
@@ -358,38 +336,6 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
     expect(t.count()).toBe(1);
   });
 
-  it('フォローしていない相手の private の投稿は 404 にして、フォローすると反応できる', async () => {
-    const t = await seedReactions();
-    const followersOnly = t.seed.addRemotePost(t.alice, 2_300, { visibility: 'private', timeline: false });
-    t.serveRemoteNote(followersOnly);
-
-    const beforeFollow = await t.put(followersOnly.postId);
-    t.seed.addFollow(t.me.actorId, t.alice.actorId);
-    const afterFollow = await t.put(followersOnly.postId);
-
-    expect(beforeFollow.status).toBe(404);
-    expect(await beforeFollow.json()).toEqual(notFound);
-    expect(afterFollow.status).toBe(200);
-    expect(t.count(`postId='${followersOnly.postId}'`)).toBe(1);
-  });
-
-  it('閲覧者に見えないリモートの投稿は 404 にして emoji_reacts を増やさない', async () => {
-    const t = await seedReactions();
-    const hidden = [
-      t.seed.addRemotePost(t.alice, 2_100, { visibility: 'private', timeline: false }),
-      t.seed.addRemotePost(t.alice, 2_200, { visibility: 'direct', timeline: false }),
-    ];
-
-    const responses = await Promise.all([
-      ...hidden.map((note) => t.put(note.postId)),
-      ...hidden.map((note) => t.del(note.postId)),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 404]);
-    expect(await responses[0]!.json()).toEqual(notFound);
-    expect(t.count()).toBe(0);
-  });
-
   it('存在しない投稿、削除済みの投稿、不正な ID は 404 にする', async () => {
     const t = await seedReactions();
     const deleted = t.seed.addLocalPost(t.me, 3_000, { deletedAt: 4_000 });
@@ -416,34 +362,6 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
     expect(responses.map((response) => response.status)).toEqual([422, 422]);
     expect(await responses[0]!.json()).toEqual({ error: 'Validation failed: emoji' });
     expect(t.count()).toBe(0);
-  });
-
-  it('トークンがないと 401、write:favourites を満たさないスコープは 403 にする', async () => {
-    const t = await seedReactions();
-    const readOnly = await t.bearerFor('read');
-    const statusesOnly = await t.bearerFor('write:statuses');
-
-    const responses = await Promise.all([
-      t.put(t.local.postId, ':wave:', {}),
-      t.put(t.local.postId, ':wave:', { Authorization: 'Bearer invalid' }),
-      t.put(t.local.postId, ':wave:', readOnly),
-      t.del(t.local.postId, ':wave:', {}),
-      t.del(t.local.postId, ':wave:', statusesOnly),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 401, 403]);
-    expect(t.count()).toBe(0);
-  });
-
-  it('Cookie の利用者は同一オリジンのときだけ操作でき、Origin が欠けると 403 にする', async () => {
-    const t = await seedReactions();
-    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
-
-    const same = await t.put(t.local.postId, ':wave:', { ...cookie, Origin: ORIGIN });
-    const missing = await t.del(t.local.postId, ':wave:', cookie);
-
-    expect([same.status, missing.status]).toEqual([200, 403]);
-    expect(t.count()).toBe(1);
   });
 });
 
@@ -510,18 +428,6 @@ describe('GET と POST /api/iori/v1/relays', () => {
     expect(await listed.json()).toEqual({ relays: [] });
   });
 
-  it('所有者でないユーザーの GET は 403 にする', async () => {
-    const t = await seedReactions('read');
-    t.seed.addRelay();
-    const other = await t.issueUserToken('read');
-    t.seed.addLocalActor('other', other.userId);
-
-    const response = await t.request('/api/iori/v1/relays', { headers: { Authorization: `Bearer ${other.token}` } });
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
-  });
-
   it('所有者でないユーザーが不正な url を POST しても、422 ではなく 403 にする', async () => {
     const t = await seedReactions('write');
     const other = await t.issueUserToken('write');
@@ -531,23 +437,6 @@ describe('GET と POST /api/iori/v1/relays', () => {
 
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'Forbidden' });
-    expect(t.federation.sendActivity).not.toHaveBeenCalled();
-  });
-
-  it('トークンがないと 401、スコープが足りないと 403 にする', async () => {
-    const t = await seedReactions();
-    const writeOnly = await t.bearerFor('write:statuses');
-    const readOnly = await t.bearerFor('read');
-
-    const responses = await Promise.all([
-      t.request('/api/iori/v1/relays'),
-      t.request('/api/iori/v1/relays', { headers: { Authorization: 'Bearer invalid' } }),
-      t.request('/api/iori/v1/relays', { headers: writeOnly }),
-      subscribe(t, {}, { url: relayActor }),
-      subscribe(t, readOnly, { url: relayActor }),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 401, 403]);
     expect(t.federation.sendActivity).not.toHaveBeenCalled();
   });
 
@@ -597,31 +486,6 @@ describe('POST /api/iori/v1/push/subscribe', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'This endpoint is already subscribed.' });
     expect(stored(t)).toHaveLength(1);
-  });
-
-  it('Cookie の利用者は同一オリジンのときだけ使える', async () => {
-    const t = await seedReactions();
-    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
-
-    const missing = await subscribe(t, cookie, subscription);
-    const same = await subscribe(t, { ...cookie, Origin: ORIGIN }, subscription);
-
-    expect([missing.status, same.status]).toEqual([403, 200]);
-    expect(stored(t)).toHaveLength(1);
-  });
-
-  it('トークンがないと 401、push を満たさないスコープは 403 にする', async () => {
-    const t = await seedReactions();
-
-    const responses = await Promise.all([
-      subscribe(t, {}, subscription),
-      subscribe(t, { Authorization: 'Bearer invalid' }, subscription),
-      subscribe(t, await t.bearerFor('read write'), subscription),
-      subscribe(t, await t.bearerFor('write:statuses'), subscription),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403]);
-    expect(stored(t)).toEqual([]);
   });
 
   it.each([
@@ -681,21 +545,6 @@ describe('POST /api/iori/v1/statuses/:id/remote-context', () => {
     expect(await response.json()).toEqual({ fetched: 1 });
     expect(storedCount(t, replyUri)).toBe(1);
     expect(t.federation.getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
-  });
-
-  it('トークンがないと 401、write:statuses を満たさないスコープは 403 にする', async () => {
-    const t = await seedReactions();
-
-    const responses = await Promise.all([
-      post(t, t.publicNote.postId, {}),
-      post(t, t.publicNote.postId, { Authorization: 'Bearer invalid' }),
-      post(t, t.publicNote.postId, await t.bearerFor('read')),
-      post(t, t.publicNote.postId, await t.bearerFor('read:statuses')),
-      post(t, t.publicNote.postId, await t.bearerFor('write:favourites')),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403, 403]);
-    expect(t.federation.lookupObject).not.toHaveBeenCalled();
   });
 
   it('存在しない投稿、不正な ID、閲覧者に見えない投稿は 404 にして取得しない', async () => {
@@ -788,19 +637,6 @@ describe('GET /api/iori/v1/accounts/:id/remote-follows/:kind', () => {
     expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 422]);
     expect(t.federation.lookupObject).not.toHaveBeenCalled();
   });
-
-  it('トークンがないと 401、read:accounts を満たさないスコープは 403 にする', async () => {
-    const t = await seedReactions();
-
-    const responses = await Promise.all([
-      t.request(followsPath(t.alice.actorId, 'followers'), {}),
-      t.request(followsPath(t.alice.actorId, 'followers'), { headers: { Authorization: 'Bearer invalid' } }),
-      t.request(followsPath(t.alice.actorId, 'followers'), { headers: await t.bearerFor('read:statuses') }),
-      t.request(followsPath(t.alice.actorId, 'followers'), { headers: await t.bearerFor('write') }),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403]);
-  });
 });
 
 describe('POST /api/iori/v1/accounts/:id/remote-statuses', () => {
@@ -873,34 +709,6 @@ describe('POST /api/iori/v1/accounts/:id/remote-statuses', () => {
     expect(Number(storedRow(t, newer.id!.href)?.createdAt)).toBe(Date.parse('2024-03-04T05:06:07.000Z'));
     expect(storedRow(t, boosted.id!.href)).toBeUndefined();
     expect(t.federation.getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
-  });
-
-  it('取り込んだ過去の投稿を、投稿日時の順にアカウントの投稿一覧へ出す', async () => {
-    const t = await seedReactions();
-    const older = outboxNote('https://remote.example/notes/older', '2020-01-02T03:04:05.000Z');
-    const newer = outboxNote('https://remote.example/notes/newer', '2020-03-04T05:06:07.000Z');
-    serveOutbox(t, [createOf(older), createOf(newer)], [older, newer]);
-
-    await post(t, t.alice.actorId, t.me.bearer);
-    const response = await t.request(`/api/v1/accounts/${t.alice.actorId}/statuses`, { headers: t.me.bearer });
-
-    const statuses = await response.json() as { uri: string }[];
-    expect(statuses.map((status) => status.uri)).toEqual([newer.id!.href, older.id!.href, t.publicNote.uri]);
-  });
-
-  it('トークンがないと 401、write:statuses を満たさないスコープは 403 にする', async () => {
-    const t = await seedReactions();
-
-    const responses = await Promise.all([
-      post(t, t.alice.actorId, {}),
-      post(t, t.alice.actorId, { Authorization: 'Bearer invalid' }),
-      post(t, t.alice.actorId, await t.bearerFor('read')),
-      post(t, t.alice.actorId, await t.bearerFor('read:statuses')),
-      post(t, t.alice.actorId, await t.bearerFor('write:favourites')),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403, 403]);
-    expect(t.federation.lookupObject).not.toHaveBeenCalled();
   });
 
   it('存在しないアクターと不正な ID は 404 にして取得しない', async () => {

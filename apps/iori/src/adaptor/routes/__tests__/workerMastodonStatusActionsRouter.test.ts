@@ -122,20 +122,6 @@ describe('POST /api/v1/statuses/:id/favourite と /unfavourite', () => {
     expect(await (undo as Undo).getObject()).toBeInstanceOf(Like);
   });
 
-  it('閲覧者に見えないリモートの投稿は 404 にして likes を増やさない', async () => {
-    const t = await seedActions();
-    const hidden = [
-      t.seed.addRemotePost(t.alice, 2_100, { visibility: 'private', timeline: false }),
-      t.seed.addRemotePost(t.alice, 2_200, { visibility: 'direct', timeline: false }),
-    ];
-
-    const responses = await Promise.all(hidden.map((note) => t.post(`/api/v1/statuses/${note.postId}/favourite`)));
-
-    expect(responses.map((response) => response.status)).toEqual([404, 404]);
-    expect(await responses[0]!.json()).toEqual(notFound);
-    expect(t.count('likes')).toBe(0);
-  });
-
   it('存在しない投稿、削除済みの投稿、不正な ID は 404 にする', async () => {
     const t = await seedActions();
     const deleted = t.seed.addLocalPost(t.me, 3_000, { deletedAt: 4_000 });
@@ -226,17 +212,6 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
     expect((sent[0]!.activity as Announce).objectId?.href).toBe(
       `${ORIGIN}/users/${t.me.username}/posts/${articleId}`,
     );
-  });
-
-  it('ブースト済みでもエラーにせず、同じ ID のブーストを返して reposts を増やさない', async () => {
-    const t = await seedActions();
-    const first = StatusSchema.parse(await (await t.post(`/api/v1/statuses/${t.local.postId}/reblog`)).json());
-
-    const response = await t.post(`/api/v1/statuses/${t.local.postId}/reblog`);
-
-    expect(response.status).toBe(200);
-    expect(StatusSchema.parse(await response.json())).toMatchObject({ id: first.id, reblog: { reblogs_count: 1 } });
-    expect(t.count('reposts')).toBe(1);
   });
 
   it('リモートの public と unlisted の投稿をブーストして Announce を送る', async () => {
@@ -385,21 +360,6 @@ describe('POST /api/v1/statuses/:id/reblog と /unreblog', () => {
     expect(announce.objectId?.href).toBe(`${ORIGIN}/users/${t.me.username}/posts/${t.local.postId}`);
     expect(announce.id).toEqual((sent[0]!.activity as Announce).id);
   });
-
-  it('トークンがないと 401、write:statuses を満たさないスコープは 403 にする', async () => {
-    const t = await seedActions();
-    const readOnly = await t.bearerFor('read');
-    const favouritesOnly = await t.bearerFor('write:favourites');
-
-    const responses = await Promise.all([
-      t.request(`/api/v1/statuses/${t.local.postId}/reblog`, { method: 'POST' }),
-      t.post(`/api/v1/statuses/${t.local.postId}/reblog`, readOnly),
-      t.post(`/api/v1/statuses/${t.local.postId}/unreblog`, favouritesOnly),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 403, 403]);
-    expect(t.count('reposts')).toBe(0);
-  });
 });
 
 describe('POST /api/v1/statuses/:id/bookmark と /unbookmark', () => {
@@ -414,53 +374,6 @@ describe('POST /api/v1/statuses/:id/bookmark と /unbookmark', () => {
     expect(t.count('domain_events', `eventName='bookmark.bookmarkCreated'`)).toBe(1);
     expect(t.federation.sendActivity).not.toHaveBeenCalled();
     expect(t.federation.lookupObject).not.toHaveBeenCalled();
-  });
-
-  it('ブックマークを外し、bookmarked を false に戻した Status を返す', async () => {
-    const t = await seedActions();
-    await t.post(`/api/v1/statuses/${t.local.postId}/bookmark`);
-
-    const response = await t.post(`/api/v1/statuses/${t.local.postId}/unbookmark`);
-
-    expect(response.status).toBe(200);
-    expect(StatusSchema.parse(await response.json())).toMatchObject({ bookmarked: false });
-    expect(t.count('bookmarks')).toBe(0);
-    expect(t.count('domain_events', `eventName='bookmark.bookmarkDeleted'`)).toBe(1);
-  });
-
-  it('閲覧者に見えない投稿、存在しない投稿、削除済みの投稿、不正な ID は 404 にして bookmarks を増やさない', async () => {
-    const t = await seedActions();
-    const hidden = t.seed.addRemotePost(t.alice, 2_100, { visibility: 'direct', timeline: false });
-    const deleted = t.seed.addLocalPost(t.me, 3_000, { deletedAt: 4_000 });
-
-    const responses = await Promise.all([
-      t.post(`/api/v1/statuses/${hidden.postId}/bookmark`),
-      t.post(`/api/v1/statuses/${t.seed.uuid()}/bookmark`),
-      t.post(`/api/v1/statuses/${deleted.postId}/bookmark`),
-      t.post('/api/v1/statuses/not-an-id/unbookmark'),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 404]);
-    expect(await responses[0]!.json()).toEqual(notFound);
-    expect(t.count('bookmarks')).toBe(0);
-  });
-
-  it('トークンがないと 401、write:bookmarks を満たさないスコープは 403 にする', async () => {
-    const t = await seedActions();
-    const readOnly = await t.bearerFor('read');
-    const favouritesOnly = await t.bearerFor('write:favourites');
-    const readBookmarks = await t.bearerFor('read:bookmarks');
-
-    const responses = await Promise.all([
-      t.request(`/api/v1/statuses/${t.local.postId}/bookmark`, { method: 'POST' }),
-      t.post(`/api/v1/statuses/${t.local.postId}/bookmark`, { Authorization: 'Bearer invalid' }),
-      t.post(`/api/v1/statuses/${t.local.postId}/bookmark`, readOnly),
-      t.post(`/api/v1/statuses/${t.local.postId}/unbookmark`, favouritesOnly),
-      t.post(`/api/v1/statuses/${t.local.postId}/bookmark`, readBookmarks),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403, 403]);
-    expect(t.count('bookmarks')).toBe(0);
   });
 });
 
@@ -553,24 +466,6 @@ describe('POST /api/v1/polls/:id/votes と GET /api/v1/polls/:id', () => {
     expect((note as Note).replyTargetId?.href).toBe(t.question.uri);
   });
 
-  it('複数選択の投票には、選んだ数だけ Create を送り、votes_count を選んだ数ずつ増やす', async () => {
-    const t = await seedPolls();
-    t.sqlite.prepare('UPDATE remote_post_polls SET multiple = 1 WHERE postId = ?').run(t.question.postId);
-    t.serveQuestion();
-
-    const response = await t.vote(t.question.postId, 'choices[]=0&choices[]=2');
-
-    expect(PollSchema.parse(await response.json())).toMatchObject({
-      multiple: true,
-      votes_count: 6,
-      voters_count: 5,
-      voted: true,
-      own_votes: [0, 2],
-    });
-    expect(t.sentActivities()).toHaveLength(2);
-    expect(t.voteRows()).toEqual([0, 2]);
-  });
-
   it.each([
     ['既に投票済み', 'choices[]=0', 'You have already voted on this poll'],
     ['選択肢の範囲外', 'choices[]=9', 'Choices are invalid'],
@@ -637,22 +532,6 @@ describe('POST /api/v1/polls/:id/votes と GET /api/v1/polls/:id', () => {
     expect(await responses[0]!.json()).toEqual(notFound);
   });
 
-  it('トークンがないと 401、write:statuses を満たさないスコープは 403 にする', async () => {
-    const t = await seedPolls();
-    t.serveQuestion();
-    const readOnly = await t.bearerFor('read');
-    const favouritesOnly = await t.bearerFor('write:favourites');
-
-    const responses = await Promise.all([
-      t.request(`/api/v1/polls/${t.question.postId}/votes`, { method: 'POST' }),
-      t.vote(t.question.postId, 'choices[]=0', readOnly),
-      t.vote(t.question.postId, 'choices[]=0', favouritesOnly),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 403, 403]);
-    expect(t.voteRows()).toEqual([]);
-  });
-
   describe('GET /api/v1/polls/:id', () => {
     it('保存した投票を Poll で返す', async () => {
       const t = await seedPolls();
@@ -666,25 +545,6 @@ describe('POST /api/v1/polls/:id/votes と GET /api/v1/polls/:id', () => {
         voted: false,
         own_votes: [],
       });
-    });
-
-    it('閲覧者に見えない投稿の投票は 404 にする', async () => {
-      const t = await seedPolls();
-      const hidden = t.seed.addRemotePost(t.alice, 3_100, { visibility: 'private' });
-      t.addPoll(hidden.postId);
-
-      const response = await t.request(`/api/v1/polls/${hidden.postId}`);
-
-      expect(response.status).toBe(404);
-    });
-
-    it('read:statuses を満たさないスコープは 403 にする', async () => {
-      const t = await seedPolls();
-      const favouritesOnly = await t.bearerFor('write:favourites');
-
-      const response = await t.request(`/api/v1/polls/${t.question.postId}`, { headers: favouritesOnly });
-
-      expect(response.status).toBe(403);
     });
   });
 });

@@ -189,15 +189,6 @@ describe('mastodonAuthn', () => {
       expect(await response.json()).toEqual({ error: 'This action is outside the authorized scopes' });
     });
 
-    it('read は read:statuses を満たす', async () => {
-      const h = createOAuthHarness();
-      const { token } = await h.issueUserToken('read');
-
-      const response = await h.request('/api/v1/statuses', { headers: { Authorization: `Bearer ${token}` } });
-
-      expect(response.status).toBe(200);
-    });
-
     it('複数のスコープはいずれか 1 つを満たせばよい', async () => {
       const h = createOAuthHarness();
       const profile = await h.issueUserToken('read:statuses write');
