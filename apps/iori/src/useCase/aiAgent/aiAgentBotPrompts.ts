@@ -19,6 +19,10 @@ const PERSONA = [
   '- 相手の言語に合わせて答える。特に指定がなければ日本語で答える。',
   `- 答えは SNS の投稿として、${MAX_BOT_POST_CHARACTERS} 文字以内の平文で書く。Markdown の見出しや表は使わない。`,
   '- 答えの先頭にメンション（@ユーザー名）を書かない。必要なメンションは iori が付ける。',
+  '- 道具は、道具の呼び出しの機能で呼ぶ。答えの本文に get_post(...) のような呼び出しを書かない。',
+  '- あなたが書いた答えは、そのまま 1 回だけ投稿される。後から続きを書くことはできない。',
+  '- 「これから調べます」「準備ができたら返信します」のような途中経過や予告は書かない。調べ終えてから、結論だけを書く。',
+  '- 長いレポートを頼まれても、要点を絞って 1 回の投稿に収める。',
 ].join('\n');
 
 export const mentionSystemPrompt = (): string =>
@@ -48,15 +52,19 @@ export const musingSystemPrompt = (): string =>
     'いまの仕事: 自分から 1 件投稿します。',
     'タイムラインを読み、興味を引いた話題を道具で調べて、読んだ人の考えが深まるような短い投稿を書いてください。',
     'リンクを紹介するときは、fetch_url で中身を確かめてから、URL と一緒にあなたの考えを添えてください。',
-    '自分の最近の投稿と同じ話題は避けてください。',
+    '「あなたの最近の投稿」と同じ話題・同じ言い回しは避けてください。同じ投稿を繰り返すのは禁止です。',
+    '新しく書くことが見つからなければ、無理に投稿しなくてかまいません。',
     `書きたいことが無いときは、${AI_AGENT_BOT_SKIP_MARKER} とだけ書いてください。`,
     '投稿の本文だけを書いてください。',
   ].join('\n');
 
-export const musingUserPrompt = (input: Readonly<{ timeline: string; now: string }>): string =>
+export const musingUserPrompt = (input: Readonly<{ timeline: string; ownPosts: string; now: string }>): string =>
   [
     `現在の日時: ${input.now}`,
     '',
-    '## 最近のタイムライン（新しい順）',
+    '## 最近のタイムライン（新しい順。あなた以外の投稿）',
     input.timeline,
+    '',
+    '## あなたの最近の投稿（新しい順。これらと同じことは書かない）',
+    input.ownPosts,
   ].join('\n');
