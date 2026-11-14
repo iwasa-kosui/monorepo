@@ -7,34 +7,38 @@ const render = (props: Partial<Parameters<typeof PostDestinationSelect>[0]> = {}
   String(jsx(PostDestinationSelect, { value: 'both', onChange: () => {}, name: 'destination', ...props }));
 
 describe('PostDestinationSelect', () => {
-  it('既定では両方と Fediverse だけの 2 つを出す', () => {
+  it('既定では両方と Fediverse のみの 2 つを出す', () => {
     const html = render();
 
     expect(html).toContain('value="both"');
     expect(html).toContain('value="fediverse"');
     expect(html).not.toContain('value="bluesky"');
-    expect(html).not.toContain('Bluesky だけ');
+    expect(html).not.toContain('Bluesky のみ');
   });
 
-  it('allowBlueskyOnly のときだけ Bluesky だけを 3 つ目に出す', () => {
+  it('allowBlueskyOnly のときだけ Bluesky のみを 3 つ目に出す', () => {
     const html = render({ allowBlueskyOnly: true });
 
     expect(html).toContain('value="bluesky"');
-    expect(html).toContain('Bluesky だけ');
+    expect(html).toContain('Bluesky のみ');
     expect(html.indexOf('value="fediverse"')).toBeLessThan(html.indexOf('value="bluesky"'));
   });
 
-  it('value が bluesky のとき、Bluesky だけを選択済みにする', () => {
+  it('value が bluesky のとき、Bluesky のみを選択済みにする', () => {
     const html = render({ allowBlueskyOnly: true, value: 'bluesky' });
 
-    expect(html).toMatch(/value="bluesky"[^>]*checked|checked[^>]*value="bluesky"/);
-    expect(html).not.toMatch(/value="both"[^>]*checked|checked[^>]*value="both"/);
+    expect(html).toMatch(/<option value="bluesky" selected="">/);
+    expect(html).not.toMatch(/<option value="both" selected="">/);
   });
 
-  it('disabled のとき、すべての選択肢を無効にする', () => {
+  it('送り先のセレクトを aria-label 付きで出す', () => {
+    expect(render()).toMatch(/<select name="destination" aria-label="送り先"/);
+  });
+
+  it('disabled のとき、セレクトを無効にする', () => {
     const html = render({ allowBlueskyOnly: true, disabled: true });
 
-    expect(html.match(/<input[^>]*disabled=""/g)).toHaveLength(3);
+    expect(html).toMatch(/<select[^>]*disabled=""/);
   });
 
   it('disabled を渡さなければ、選択肢を無効にしない', () => {

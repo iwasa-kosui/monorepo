@@ -22,7 +22,7 @@ import { PostForm } from '../components/PostForm.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { isEmptyProfileUpdate, toProfileUpdate } from '../components/profileUpdate.ts';
 import { QuoteModal } from '../components/QuoteModal.tsx';
-import { ReplyVisibilityField } from '../components/ReplyVisibilityField.tsx';
+import { ReplyVisibilityControl, ReplyVisibilityNotice } from '../components/ReplyVisibilityField.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
 import { statusActionProps } from '../components/statusActionProps.ts';
 import { UpdateProfileModal } from '../components/UpdateProfileModal.tsx';
@@ -485,7 +485,7 @@ const ThreadModal = () => {
         </div>
 
         {/* Reply Form - Fixed at bottom */}
-        <div class='flex-shrink-0 border-t border-warm-gray dark:border-gray-700 pt-4'>
+        <div class='flex-shrink-0 border-t border-warm-gray dark:border-gray-700 pt-3'>
           <MarkdownEditor
             value={replyContent}
             onChange={setReplyContent}
@@ -495,34 +495,30 @@ const ThreadModal = () => {
             disabled={isSendingReply}
           />
 
-          <div class='mt-2'>
-            <ReplyVisibilityField
-              value={threadReplyVisibility.visibility}
-              onChange={threadReplyVisibility.setVisibility}
-              parentVisibility={threadReplyVisibility.parentVisibility}
-              destination={replyDestination}
-              disabled={isSendingReply || isLoadingThread}
-              name='thread-reply-visibility'
-              id='thread-reply-visibility'
-            />
-          </div>
+          <ReplyVisibilityNotice
+            value={threadReplyVisibility.visibility}
+            parentVisibility={threadReplyVisibility.parentVisibility}
+            destination={replyDestination}
+          />
 
           {/* Action Buttons */}
           <div class='mt-3 flex flex-wrap items-center gap-2 justify-end'>
-            <PostDestinationSelect
-              value={replyDestination}
-              onChange={setReplyDestination}
-              name='thread-reply-destination'
-              disabled={isSendingReply}
-            />
-            <button
-              type='button'
-              onClick={closeThread}
-              class='px-4 py-2 whitespace-nowrap text-charcoal-light dark:text-gray-400 hover:text-charcoal dark:hover:text-gray-200 text-sm transition-colors'
-              disabled={isSendingReply}
-            >
-              Cancel
-            </button>
+            <div class='mr-auto flex flex-wrap items-center gap-2'>
+              <ReplyVisibilityControl
+                value={threadReplyVisibility.visibility}
+                onChange={threadReplyVisibility.setVisibility}
+                parentVisibility={threadReplyVisibility.parentVisibility}
+                disabled={isSendingReply || isLoadingThread}
+                name='thread-reply-visibility'
+                id='thread-reply-visibility'
+              />
+              <PostDestinationSelect
+                value={replyDestination}
+                onChange={setReplyDestination}
+                name='thread-reply-destination'
+                disabled={isSendingReply}
+              />
+            </div>
             <button
               type='button'
               onClick={() => void submitThreadReply()}

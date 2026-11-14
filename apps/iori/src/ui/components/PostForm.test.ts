@@ -14,23 +14,24 @@ describe('PostForm', () => {
     expect(html).not.toContain('name="spoiler_text"');
   });
 
-  it('公開範囲の radiogroup を出し、初期状態では「公開」を選んでおく', () => {
+  it('公開範囲のセレクトを出し、初期状態では「公開」を選んでおく', () => {
     const html = render();
+    const select = /<select[^>]*name="visibility"[\s\S]*?<\/select>/.exec(html)?.[0] ?? '';
 
-    expect(html).toContain('aria-label="公開範囲"');
-    expect(html).toMatch(/<input[^>]*name="visibility"[^>]*value="public"[^>]*checked/);
-    expect(html).not.toMatch(/<input[^>]*name="visibility"[^>]*value="unlisted"[^>]*checked/);
-    expect(html).not.toMatch(/<input[^>]*name="visibility"[^>]*value="private"[^>]*checked/);
+    expect(select).toContain('aria-label="公開範囲"');
+    expect(select).toContain('<option value="public" selected="">');
+    expect(select).not.toContain('<option value="unlisted" selected="">');
+    expect(select).not.toContain('<option value="private" selected="">');
   });
 
-  it('公開範囲の選択欄を、送り先と別の行に置く', () => {
+  it('画像・CW・公開範囲・送り先を、投稿するボタンと同じ1行のツールバーにまとめる', () => {
     const html = render();
-    const visibility = html.indexOf('aria-label="公開範囲"');
-    const destination = html.indexOf('aria-label="送り先"');
+    const toolbar = html.slice(html.indexOf('mr-auto flex flex-wrap'), html.indexOf('投稿する'));
 
-    expect(visibility).toBeGreaterThan(-1);
-    expect(visibility).toBeLessThan(destination);
-    expect(html).toMatch(/<div class="mt-2 flex flex-wrap [^"]*"[^>]*><div[^>]*aria-label="送り先"/);
+    expect(toolbar).toContain('aria-label="注意書き（CW）を付ける"');
+    expect(toolbar).toContain('aria-label="公開範囲"');
+    expect(toolbar).toContain('aria-label="送り先"');
+    expect(toolbar.indexOf('aria-label="公開範囲"')).toBeLessThan(toolbar.indexOf('aria-label="送り先"'));
   });
 
   it('公開範囲の説明の id を、フォームの id から作る', () => {

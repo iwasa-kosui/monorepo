@@ -4,7 +4,7 @@ import type { UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
 import { MarkdownEditor } from './MarkdownEditor.tsx';
 import { PostDestinationSelect } from './PostDestinationSelect.tsx';
 import { ReplyDialogShell } from './ReplyDialogShell.tsx';
-import { ReplyVisibilityField } from './ReplyVisibilityField.tsx';
+import { ReplyVisibilityControl, ReplyVisibilityNotice } from './ReplyVisibilityField.tsx';
 
 type Props = Readonly<{
   dialog: UseReplyDialogReturn;
@@ -64,12 +64,22 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
       isSending={isSendingReply}
       canSubmit={!isSendingReply && replyContent.trim() !== ''}
       leadingActions={
-        <PostDestinationSelect
-          value={replyDestination}
-          onChange={setReplyDestination}
-          name='reply-destination'
-          disabled={isSendingReply}
-        />
+        <>
+          <ReplyVisibilityControl
+            value={replyVisibility}
+            onChange={setReplyVisibility}
+            parentVisibility={replyParentVisibility}
+            disabled={isSendingReply}
+            name='reply-visibility'
+            id='reply-visibility'
+          />
+          <PostDestinationSelect
+            value={replyDestination}
+            onChange={setReplyDestination}
+            name='reply-destination'
+            disabled={isSendingReply}
+          />
+        </>
       }
     >
       <MarkdownEditor
@@ -80,17 +90,11 @@ export const FediverseReplyModal = ({ dialog }: Props) => {
         minHeight='150px'
         disabled={isSendingReply}
       />
-      <div class='mt-2 flex-shrink-0'>
-        <ReplyVisibilityField
-          value={replyVisibility}
-          onChange={setReplyVisibility}
-          parentVisibility={replyParentVisibility}
-          destination={replyDestination}
-          disabled={isSendingReply}
-          name='reply-visibility'
-          id='reply-visibility'
-        />
-      </div>
+      <ReplyVisibilityNotice
+        value={replyVisibility}
+        parentVisibility={replyParentVisibility}
+        destination={replyDestination}
+      />
     </ReplyDialogShell>
   );
 };

@@ -51,11 +51,19 @@ describe('FediverseReplyModal', () => {
     expect(html).toContain('>返信</h2>');
   });
 
-  it('Markdown とプレビューのタブを出す', () => {
+  it('プレビューの切り替えボタンを出す', () => {
     const html = render({ replyingToPostId: 'post-1' });
 
-    expect(html).toContain('>Markdown</button>');
-    expect(html).toContain('>Preview</button>');
+    expect(html).toMatch(/<button[^>]*aria-pressed="false"[^>]*>プレビュー<\/button>/);
+  });
+
+  it('公開範囲と送り先のセレクトを、キャンセルと返信するのボタンと同じ行に出す', () => {
+    const html = render({ replyingToPostId: 'post-1' });
+    const footer = html.slice(html.indexOf('mr-auto flex flex-wrap'));
+
+    expect(footer).toContain('aria-label="公開範囲"');
+    expect(footer).toContain('aria-label="送り先"');
+    expect(footer).toContain('キャンセル');
   });
 
   it('本文が空なら送信できない', () => {
@@ -75,9 +83,8 @@ describe('FediverseReplyModal', () => {
 
   it('返信先が未収載なら、公開の選択肢を無効にする', () => {
     const html = render({ replyingToPostId: 'post-1', replyParentVisibility: 'unlisted', replyVisibility: 'unlisted' });
-    const disabled = [...html.matchAll(/<input[^>]*name="reply-visibility"[^>]*value="(\w+)"[^>]*disabled=""/g)].map((
-      match,
-    ) => match[1]);
+    const select = /<select[^>]*name="reply-visibility"[\s\S]*?<\/select>/.exec(html)?.[0] ?? '';
+    const disabled = [...select.matchAll(/<option value="(\w+)" disabled="">/g)].map((match) => match[1]);
 
     expect(disabled).toEqual(['public']);
   });

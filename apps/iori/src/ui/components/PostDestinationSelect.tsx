@@ -1,4 +1,5 @@
 import type { PostDestination } from '../../domain/post/postDestination.ts';
+import { CompactSelect, type CompactSelectOption, SendIcon } from './CompactSelect.tsx';
 
 type Props = Readonly<{
   value: PostDestination;
@@ -8,51 +9,28 @@ type Props = Readonly<{
   disabled?: boolean;
 }>;
 
-export const PostDestinationSelect = ({ value, onChange, name, allowBlueskyOnly = false, disabled = false }: Props) => {
-  const labelClass = `flex items-center gap-1 whitespace-nowrap ${
-    disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-  }`;
-  return (
-    <div
-      role='radiogroup'
-      aria-label='送り先'
-      class='mr-auto flex flex-wrap items-center gap-3 text-xs text-charcoal-light dark:text-gray-400'
-    >
-      <label class={labelClass}>
-        <input
-          type='radio'
-          name={name}
-          value='both'
-          checked={value === 'both'}
-          disabled={disabled}
-          onChange={() => onChange('both')}
-        />
-        両方
-      </label>
-      <label class={labelClass}>
-        <input
-          type='radio'
-          name={name}
-          value='fediverse'
-          checked={value === 'fediverse'}
-          disabled={disabled}
-          onChange={() => onChange('fediverse')}
-        />
-        Fediverse だけ
-      </label>
-      {allowBlueskyOnly && (
-        <label class={labelClass}>
-          <input
-            type='radio'
-            name={name}
-            value='bluesky'
-            checked={value === 'bluesky'}
-            disabled={disabled}
-            onChange={() => onChange('bluesky')}
-          />
-          Bluesky だけ
-        </label>
-      )}
-    </div>
-  );
+const baseOptions: ReadonlyArray<CompactSelectOption<PostDestination>> = [
+  { value: 'both', label: 'Bluesky にも' },
+  { value: 'fediverse', label: 'Fediverse のみ' },
+];
+
+const blueskyOnlyOption: CompactSelectOption<PostDestination> = { value: 'bluesky', label: 'Bluesky のみ' };
+
+const titles: Readonly<Record<PostDestination, string>> = {
+  both: 'Fediverse に投稿し、Bluesky にも送ります',
+  fediverse: 'Fediverse にだけ投稿します',
+  bluesky: 'Bluesky にだけ投稿します',
 };
+
+export const PostDestinationSelect = ({ value, onChange, name, allowBlueskyOnly = false, disabled = false }: Props) => (
+  <CompactSelect
+    value={value}
+    options={allowBlueskyOnly ? [...baseOptions, blueskyOnlyOption] : baseOptions}
+    onChange={onChange}
+    name={name}
+    ariaLabel='送り先'
+    title={titles[value]}
+    icon={<SendIcon />}
+    disabled={disabled}
+  />
+);

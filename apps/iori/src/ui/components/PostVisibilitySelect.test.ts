@@ -104,3 +104,44 @@ describe('PostVisibilitySelect', () => {
     expect(disabled).toEqual(disabledValues);
   });
 });
+
+describe('PostVisibilitySelect (compact)', () => {
+  const renderCompact = (props: Partial<Parameters<typeof PostVisibilitySelect>[0]> = {}): string =>
+    String(
+      jsx(PostVisibilitySelect, {
+        value: 'unlisted',
+        onChange: () => {},
+        name: 'visibility',
+        variant: 'compact',
+        ...props,
+      }),
+    );
+
+  it('ラジオボタンの代わりに、公開範囲のセレクトを1つだけ出す', () => {
+    const html = renderCompact();
+
+    expect(html).not.toContain('type="radio"');
+    expect(html.match(/<select/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="公開範囲"');
+    expect(html).toContain('<option value="unlisted" selected="">未収載</option>');
+  });
+
+  it('説明は画面に出さず、スクリーンリーダーと title にだけ渡す', () => {
+    const html = renderCompact();
+
+    expect(html).toContain('title="だれでも見られますが、公開タイムラインには出ません"');
+    expect(html).toContain('aria-describedby="visibility-description"');
+    expect(html).toMatch(/<span id="visibility-description" class="sr-only">/);
+  });
+
+  it('maxVisibility より広い選択肢を無効にする', () => {
+    const html = renderCompact({ maxVisibility: 'private', value: 'private' });
+    const disabled = [...html.matchAll(/<option value="(\w+)" disabled="">/g)].map((match) => match[1]);
+
+    expect(disabled).toEqual(['public', 'unlisted']);
+  });
+
+  it('disabled のとき、セレクトを無効にする', () => {
+    expect(renderCompact({ disabled: true })).toMatch(/<select[^>]*disabled=""/);
+  });
+});
