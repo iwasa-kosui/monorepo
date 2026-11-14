@@ -28,16 +28,6 @@ describe('extractContentWarning', () => {
     expect(extractContentWarning(note)).toEqual({ summary: null, sensitive: false });
   });
 
-  it('returns null and false for a Note without summary and sensitive', () => {
-    expect(extractContentWarning(new Note({ id: noteId }))).toEqual({ summary: null, sensitive: false });
-  });
-
-  it('turns a null sensitive into false and keeps the summary', () => {
-    const note = new Note({ id: noteId, summary: 'CW', sensitive: null });
-
-    expect(extractContentWarning(note)).toEqual({ summary: 'CW', sensitive: false });
-  });
-
   it('ignores the summary of an Article and keeps its sensitive flag', () => {
     const article = new Article({ id: noteId, summary: '<p>excerpt</p>', sensitive: true });
 

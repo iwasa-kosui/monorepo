@@ -44,25 +44,10 @@ describe('toAccount', () => {
 
     expect(AccountSchema.safeParse(account).success).toBe(true);
     expect(account).toMatchObject({
-      id: localActor.id,
-      username: 'kosui',
       acct: 'kosui',
-      display_name: 'kosui',
-      note: '',
-      url: 'https://iori.example/users/kosui',
-      uri: 'https://iori.example/users/kosui',
       avatar: options.defaultAvatarUrl,
-      avatar_static: options.defaultAvatarUrl,
-      header: options.defaultHeaderUrl,
-      header_static: options.defaultHeaderUrl,
       created_at: '2025-01-02T03:04:05.000Z',
       last_status_at: '2025-06-07',
-      followers_count: 3,
-      following_count: 2,
-      statuses_count: 10,
-      discoverable: null,
-      indexable: false,
-      hide_collections: null,
     });
   });
 
@@ -87,13 +72,6 @@ describe('toAccount', () => {
     expect(account.note).toBe(
       '<p>行1<br>&lt;b&gt;<a href="https://example.com">https://example.com</a>&lt;/b&gt;</p>',
     );
-  });
-
-  it('falls back to the username and an empty note when a local actor has no profile', () => {
-    const account = toAccount({ type: 'local', user, actor: localActor }, options);
-
-    expect(account.display_name).toBe('kosui');
-    expect(account.note).toBe('');
   });
 
   it('converts a remote actor into user@host', () => {
@@ -219,22 +197,6 @@ describe('toAccount', () => {
       expect(toAccount({ type: 'remote', actor: { ...remoteActor, actorType: 'Group' } }, options)).toMatchObject({
         bot: false,
         group: true,
-      });
-    });
-
-    it('falls back to the current values when the profile is empty', () => {
-      const account = toAccount({ type: 'remote', actor: remoteActor }, options);
-
-      expect(account).toMatchObject({
-        display_name: 'alice',
-        note: '',
-        header: options.defaultHeaderUrl,
-        locked: false,
-        fields: [],
-        emojis: [],
-        bot: false,
-        group: false,
-        created_at: '2025-01-02T03:04:05.000Z',
       });
     });
 

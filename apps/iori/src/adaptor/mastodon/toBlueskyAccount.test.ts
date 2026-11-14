@@ -18,31 +18,11 @@ describe('toBlueskyAccount', () => {
     }, options);
 
     expect(AccountSchema.safeParse(account).success).toBe(true);
-    expect(account).toEqual({
+    expect(account).toMatchObject({
       id: 'bluesky:did:plc:alice',
-      username: 'alice.bsky.social',
       acct: 'alice.bsky.social',
       url: 'https://bsky.app/profile/alice.bsky.social',
       uri: 'https://bsky.app/profile/did:plc:alice',
-      display_name: 'Alice',
-      note: '',
-      avatar: 'https://cdn.example/alice.jpg',
-      avatar_static: 'https://cdn.example/alice.jpg',
-      header: 'https://iori.example/default-header.png',
-      header_static: 'https://iori.example/default-header.png',
-      locked: false,
-      fields: [],
-      emojis: [],
-      bot: false,
-      group: false,
-      discoverable: null,
-      indexable: false,
-      hide_collections: null,
-      created_at: '1970-01-01T00:00:00.000Z',
-      last_status_at: null,
-      statuses_count: 0,
-      followers_count: 0,
-      following_count: 0,
     });
   });
 

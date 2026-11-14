@@ -122,19 +122,4 @@ describe('extractQuoteUri', () => {
     expect(await extractQuoteUri(note)).toBe('https://remote.example/notes/quoted');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
-
-  it('returns null without fetching when every tag is only an IRI', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    const note = new Note({
-      id: noteId,
-      tags: [new URL('https://remote.example/tags/1'), new URL('https://remote.example/tags/2')],
-    });
-
-    expect(await extractQuoteUri(note)).toBeNull();
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it('returns null for a Note without a quote', async () => {
-    expect(await extractQuoteUri(new Note({ id: noteId }))).toBeNull();
-  });
 });

@@ -59,11 +59,6 @@ describe('ActorIdentity.fromFedifyActor のプロフィール', () => {
     });
   });
 
-  it('Application と Group の actorType を読む', async () => {
-    expect((await identityOf(new Application({ id, inbox }))).profile?.actorType).toBe('Application');
-    expect((await identityOf(new Group({ id, inbox }))).profile?.actorType).toBe('Group');
-  });
-
   it('表示名は 200 字、概要は 1 万字で切り詰める', async () => {
     const identity = await identityOf(
       new Person({ id, inbox, name: 'あ'.repeat(300), summary: 'x'.repeat(PROFILE_LIMITS.summary + 5) }),

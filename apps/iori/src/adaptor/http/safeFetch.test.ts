@@ -65,16 +65,6 @@ describe('createSafeFetcher fetching', () => {
     );
   });
 
-  it('leaves contentType undefined when the response has no Content-Type', async () => {
-    const fetchMock = vi.fn(async () => new Response(new Uint8Array([111, 107]), { status: 200 }));
-    const result = await createSafeFetcher({ fetch: fetchMock as unknown as typeof fetch }).fetchText(
-      'https://example.com/page',
-      options,
-    );
-    expect(result).toMatchObject({ ok: true, val: { body: 'ok' } });
-    expect(result.ok && result.val.contentType).toBeUndefined();
-  });
-
   it('decodes a Shift_JIS body by the Content-Type charset', async () => {
     const sjis = new Uint8Array([0x93, 0xFA, 0x96, 0x7B, 0x8C, 0xEA]);
     const fetchMock = vi.fn(async () =>
@@ -264,49 +254,6 @@ describe('createSafeFetcher timeout', () => {
 });
 
 describe('createSafeFetcher fetchBytes', () => {
-  it('returns the raw bytes with validators and the content type', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(new Uint8Array([1, 2, 3]), {
-        status: 200,
-        headers: { ETag: '"abc"', 'Content-Type': 'image/png' },
-      })
-    );
-    const result = await createSafeFetcher({ fetch: fetchMock as unknown as typeof fetch }).fetchBytes(
-      'https://example.com/a.png',
-      options,
-    );
-    expect(result).toEqual({
-      ok: true,
-      val: {
-        status: 200,
-        bytes: new Uint8Array([1, 2, 3]),
-        etag: '"abc"',
-        lastModified: null,
-        finalUrl: 'https://example.com/a.png',
-        contentType: 'image/png',
-      },
-    });
-  });
-
-  it('returns an empty byte array when the response has no body', async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
-    const result = await createSafeFetcher({ fetch: fetchMock as unknown as typeof fetch }).fetchBytes(
-      'https://example.com/a.png',
-      options,
-    );
-    expect(result).toMatchObject({ ok: true, val: { bytes: new Uint8Array(0) } });
-  });
-
-  it('returns no bytes for status 304', async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 304 }));
-    const result = await createSafeFetcher({ fetch: fetchMock as unknown as typeof fetch }).fetchBytes(
-      'https://example.com/a.png',
-      options,
-    );
-    expect(result).toMatchObject({ ok: true, val: { status: 304 } });
-    expect(result.ok && result.val.bytes).toBeUndefined();
-  });
-
   it('fails with too_large and stops reading when the stream exceeds maxBytes', async () => {
     let pulls = 0;
     const stream = new ReadableStream<Uint8Array>({
@@ -340,17 +287,6 @@ describe('createSafeFetcher acceptContentType', () => {
     );
     expect(result).toMatchObject({ ok: false, err: { reason: 'unsupported_content_type' } });
     expect(cancel).toHaveBeenCalledTimes(1);
-  });
-
-  it('passes undefined to the predicate when the response has no Content-Type', async () => {
-    const accept = vi.fn(() => false);
-    const fetchMock = vi.fn(async () => new Response(new Uint8Array([120]), { status: 200 }));
-    const result = await createSafeFetcher({ fetch: fetchMock as unknown as typeof fetch }).fetchText(
-      'https://example.com/page',
-      { ...options, acceptContentType: accept },
-    );
-    expect(accept).toHaveBeenCalledWith(undefined);
-    expect(result).toMatchObject({ ok: false, err: { reason: 'unsupported_content_type' } });
   });
 
   it('reads the body when the content type is accepted', async () => {

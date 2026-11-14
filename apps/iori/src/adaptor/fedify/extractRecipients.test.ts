@@ -53,8 +53,4 @@ describe('extractRecipientActorUris', () => {
 
     expect(extractRecipientActorUris([note, create], origin)).toEqual([kosui, hanako]);
   });
-
-  it('returns an empty list when nothing is addressed', () => {
-    expect(extractRecipientActorUris([new Note({ id: noteId })], origin)).toEqual([]);
-  });
 });

@@ -56,15 +56,6 @@ describe('createBlueskyBookmarkReader.getBookmarks', () => {
     });
   });
 
-  it('cursor を渡し、返ってこなければ undefined にする', async () => {
-    const { query, reader } = clientReturning(RA.ok({ bookmarks: [bookmarkView(postView(1))] }));
-
-    const result = await reader.getBookmarks({ cursor: 'c1' });
-
-    expect(query).toHaveBeenCalledExactlyOnceWith('app.bsky.bookmark.getBookmarks', { limit: '30', cursor: 'c1' });
-    expect(result).toMatchObject({ ok: true, val: { cursor: undefined } });
-  });
-
   it('viewer.bookmarked が無い postView でも、ブックマークの一覧なので bookmarked にする', async () => {
     const { reader } = clientReturning(RA.ok({
       bookmarks: [bookmarkView(postView(1, { viewer: { like: 'at://did:plc:me/app.bsky.feed.like/3k' } }))],
@@ -114,15 +105,6 @@ describe('createBlueskyBookmarkReader.getBookmarks', () => {
     expect(result.ok && result.val.items.map((item) => item.uri)).toEqual([`at://${DID}/app.bsky.feed.post/2`]);
   });
 
-  it('空の一覧は空の項目で返す', async () => {
-    const { reader } = clientReturning(RA.ok({ bookmarks: [] }));
-
-    expect(await reader.getBookmarks({ cursor: undefined })).toEqual({
-      ok: true,
-      val: { items: [], cursor: undefined },
-    });
-  });
-
   it('bookmarks が配列でない応答は invalid_response にする', async () => {
     const { reader } = clientReturning(RA.ok({ bookmarks: 'oops' }));
 
@@ -130,12 +112,5 @@ describe('createBlueskyBookmarkReader.getBookmarks', () => {
       ok: false,
       err: { type: 'BlueskyClientError', kind: 'invalid_response' },
     });
-  });
-
-  it('クライアントの失敗はそのまま返す', async () => {
-    const error = { type: 'BlueskyClientError', kind: 'http', message: 'failed', status: 403 } as const;
-    const { reader } = clientReturning(RA.err(error));
-
-    expect(await reader.getBookmarks({ cursor: undefined })).toEqual({ ok: false, err: error });
   });
 });

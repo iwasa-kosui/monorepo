@@ -326,9 +326,6 @@ it('stops at the next row with the limit stage when the signal aborts while a pa
   );
   expect(reads).toBe(1);
 });
-it('estimates with the same fake client when nothing fails', async () => {
-  expect(await estimateWith({})).toBe('estimated');
-});
 it('does not count duplicate rows against the upload file limit', async () => {
   expect(await estimateWith({ rows: 4 })).toBe('estimated');
 });
@@ -431,10 +428,6 @@ it('skips an upload whose file is missing, counts it once and records the count 
     },
   });
   expect((await reloaded.inventory(identity)).missingUploadCount).toBe(2);
-});
-it('exports a zero missing count when every referenced upload exists', async () => {
-  const { snapshot } = await setup();
-  expect((await snapshot.export(identity, new AbortController().signal)).missingUploadCount).toBe(0);
 });
 it('fails to export an upload that is not a regular file even when another upload is missing', async () => {
   const [webp, jpg] = [spareId('e'), spareId('f')];

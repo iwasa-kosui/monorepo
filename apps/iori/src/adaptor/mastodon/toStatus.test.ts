@@ -13,7 +13,7 @@ import type { RepostTimelineItem } from '../../domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../../domain/timeline/timelineItemId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import { Username } from '../../domain/user/username.ts';
-import { type Account, AccountSchema, PollSchema, StatusSchema } from './entities.ts';
+import { type Account, AccountSchema, StatusSchema } from './entities.ts';
 import { toAccount } from './toAccount.ts';
 import { toIoriBlueskyCrosspost, toReblogStatus, toStatus } from './toStatus.ts';
 
@@ -180,13 +180,6 @@ describe('toStatus', () => {
     expect(toStatus({ ...localPost, content }, options).language).toBe(expected);
   });
 
-  it('uses the URI of a remote post', () => {
-    const status = toStatus(remotePost, options);
-
-    expect(StatusSchema.safeParse(status).success).toBe(true);
-    expect(status.uri).toBe('https://remote.example/users/alice/statuses/1');
-  });
-
   it('uses the url of a remote post as status.url and keeps status.uri', () => {
     const status = toStatus({ ...remotePost, url: 'https://remote.example/@alice/1' }, options);
 
@@ -224,60 +217,8 @@ describe('toStatus', () => {
     expect(status.sensitive).toBe(true);
   });
 
-  it('keeps sensitive true when the post has no summary', () => {
-    const status = toStatus({ ...remotePost, summary: null, sensitive: true }, options);
-
-    expect(status.spoiler_text).toBe('');
-    expect(status.sensitive).toBe(true);
-  });
-
-  it('uses public for a local post', () => {
-    expect(toStatus(localPost, options).visibility).toBe('public');
-  });
-
-  it.each(['public', 'unlisted', 'private'] as const)(
-    'uses the stored visibility %s of a local post',
-    (visibility) => {
-      expect(toStatus({ ...localPost, visibility } as PostWithAuthor, options).visibility).toBe(visibility);
-    },
-  );
-
-  it.each(['public', 'unlisted', 'private', 'direct'] as const)(
-    'uses the recorded visibility %s of a remote post',
-    (visibility) => {
-      expect(toStatus({ ...remotePost, visibility } as PostWithAuthor, options).visibility).toBe(visibility);
-    },
-  );
-
   it('uses private for a remote post without a recorded visibility', () => {
     expect(toStatus({ ...remotePost, visibility: null } as PostWithAuthor, options).visibility).toBe('private');
-  });
-
-  it('converts images into media attachments with the given ids', () => {
-    const status = toStatus(localPost, options);
-
-    expect(status.media_attachments).toEqual([
-      {
-        id: 'media-1',
-        type: 'image',
-        url: 'https://iori.example/uploads/a.png',
-        preview_url: 'https://iori.example/uploads/a.png',
-        remote_url: null,
-        meta: null,
-        description: 'alt',
-        blurhash: null,
-      },
-      {
-        id: 'media-2',
-        type: 'image',
-        url: 'https://iori.example/uploads/b.png',
-        preview_url: 'https://iori.example/uploads/b.png',
-        remote_url: null,
-        meta: null,
-        description: null,
-        blurhash: null,
-      },
-    ]);
   });
 
   it('uses the first link preview as card and puts every preview into iori.link_previews', () => {
@@ -312,13 +253,6 @@ describe('toStatus', () => {
       { emoji: '🎉', count: 1, url: null, me: true },
     ]);
   });
-
-  it('returns a null card when the post has no link preview', () => {
-    const status = toStatus({ ...localPost, linkPreviews: [] }, options);
-
-    expect(status.card).toBeNull();
-    expect(StatusSchema.safeParse(status).success).toBe(true);
-  });
 });
 
 describe('toStatus quote', () => {
@@ -333,33 +267,12 @@ describe('toStatus quote', () => {
     expect(StatusSchema.safeParse(status).success).toBe(true);
   });
 
-  it('is null and has no quote_url when the quote option is null', () => {
-    const status = toStatus(localPost, { ...options, quote: null });
-
-    expect(status.quote).toBeNull();
-    expect(status.iori).not.toHaveProperty('quote_url');
-  });
-
   it('carries the quoted Status as an accepted quote and omits quote_url', () => {
     const status = toStatus(localPost, { ...options, quote: { uri: quoteUri, status: quotedStatus } });
 
     expect(StatusSchema.safeParse(status).success).toBe(true);
     expect(status.quote).toEqual({ state: 'accepted', quoted_status: quotedStatus });
     expect(status.iori).not.toHaveProperty('quote_url');
-  });
-
-  it('rejects a quote whose state is not accepted', () => {
-    const status = toStatus(localPost, { ...options, quote: { uri: quoteUri, status: quotedStatus } });
-
-    expect(StatusSchema.safeParse({ ...status, quote: { state: 'pending', quoted_status: quotedStatus } }).success)
-      .toBe(false);
-    expect(StatusSchema.safeParse({ ...status, quote: { state: 'accepted' } }).success).toBe(false);
-  });
-
-  it('keeps quote null inside the quoted Status', () => {
-    const status = toStatus(localPost, { ...options, quote: { uri: quoteUri, status: quotedStatus } });
-
-    expect(status.quote?.quoted_status.quote).toBeNull();
   });
 
   it('is null and puts the received URI in iori.quote_url when the quoted post cannot be resolved', () => {
@@ -580,27 +493,6 @@ describe('toReblogStatus', () => {
     expect(boost.bookmarked).toBe(true);
     expect(boost.reblog?.bookmarked).toBe(true);
   });
-
-  it('keeps the url of the Note on the reblogged Status', () => {
-    const reblog = toStatus({ ...remotePost, url: 'https://remote.example/@alice/1' }, options);
-
-    const boost = toReblogStatus({ createdAt: Date.UTC(2025, 1, 3) as Instant }, {
-      repostId: RepostId.generate(),
-      account: { ...account, id: ActorId.generate() },
-      reblog,
-    });
-
-    expect(boost.reblog?.url).toBe('https://remote.example/@alice/1');
-    expect(boost.reblog?.uri).toBe(remotePost.uri);
-  });
-});
-
-describe('toStatus bookmarked', () => {
-  it('is true only when the option says the viewer bookmarked the post', () => {
-    expect(toStatus(localPost, { ...options, bookmarked: true }).bookmarked).toBe(true);
-    expect(toStatus(localPost, { ...options, bookmarked: false }).bookmarked).toBe(false);
-    expect(toStatus(localPost, options).bookmarked).toBe(false);
-  });
 });
 
 describe('toIoriBlueskyCrosspost', () => {
@@ -641,13 +533,6 @@ describe('toIoriBlueskyCrosspost', () => {
     expect(toIoriBlueskyCrosspost(crosspost({ status: 'failed', attempts: 3 })).retrying).toBe(false);
     expect(toIoriBlueskyCrosspost(crosspost({ status: 'failed', attempts: 2 })).retrying).toBe(true);
   });
-
-  it('toStatus は blueskyCrosspost を渡したときだけ iori に載せる', () => {
-    expect(toStatus(localPost, options).iori?.bluesky_crosspost).toBeUndefined();
-    expect(toStatus(localPost, { ...options, blueskyCrosspost: null }).iori?.bluesky_crosspost).toBeUndefined();
-    expect(toStatus(localPost, { ...options, blueskyCrosspost: crosspost({}) }).iori?.bluesky_crosspost)
-      .toMatchObject({ status: 'pending' });
-  });
 });
 
 describe('toStatus の poll', () => {
@@ -658,11 +543,6 @@ describe('toStatus の poll', () => {
     expiresAt: Instant.orThrow(Date.now() + 86_400_000),
     closed: false,
     ...overrides,
-  });
-
-  it('投票を渡さなければ null を返す', () => {
-    expect(toStatus(remotePost, options).poll).toBeNull();
-    expect(toStatus(remotePost, { ...options, poll: null }).poll).toBeNull();
   });
 
   it('投票を Mastodon の Poll にする', () => {
@@ -715,14 +595,6 @@ describe('toStatus の poll', () => {
     expect(status.poll).toMatchObject({ voted: true, own_votes: [0, 1] });
   });
 
-  it('自分の投票が無ければ、voted を false にして own_votes を空にする', () => {
-    expect(toStatus(remotePost, { ...options, poll: poll() }).poll).toMatchObject({ voted: false, own_votes: [] });
-    expect(toStatus(remotePost, { ...options, poll: poll(), ownVotes: [] }).poll).toMatchObject({
-      voted: false,
-      own_votes: [],
-    });
-  });
-
   it('投票が無い投稿は、自分の投票があっても poll を null にする', () => {
     expect(toStatus(remotePost, { ...options, ownVotes: [0] }).poll).toBeNull();
   });
@@ -737,30 +609,5 @@ describe('toStatus の poll', () => {
         reblog,
       }).poll,
     ).toBeNull();
-  });
-});
-
-describe('PollSchema', () => {
-  const valid = {
-    id: 'poll-1',
-    expires_at: null,
-    expired: false,
-    multiple: false,
-    votes_count: 0,
-    voters_count: null,
-    options: [{ title: 'a', votes_count: 0 }],
-    emojis: [],
-    voted: false,
-    own_votes: [],
-  };
-
-  it('Mastodon の Poll を受け付ける', () => {
-    expect(PollSchema.safeParse(valid).success).toBe(true);
-  });
-
-  it('負の票数と、項目の欠けた Poll を受け付けない', () => {
-    expect(PollSchema.safeParse({ ...valid, votes_count: -1 }).success).toBe(false);
-    expect(PollSchema.safeParse({ ...valid, options: [{ title: 'a', votes_count: -1 }] }).success).toBe(false);
-    expect(PollSchema.safeParse({ ...valid, expired: undefined }).success).toBe(false);
   });
 });

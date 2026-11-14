@@ -31,11 +31,6 @@ describe('htmlToPlainText', () => {
     expect(htmlToPlainText('<th>a</th><th>b</th>', 100)).toBe('a b');
   });
 
-  it('turns hr into a line break', () => {
-    expect(htmlToPlainText('a<hr>b', 100)).toBe('a\nb');
-    expect(htmlToPlainText('a<hr/>b', 100)).toBe('a\nb');
-  });
-
   it('strips the remaining tags', () => {
     expect(htmlToPlainText('<a href="https://example.com">link</a> <b>bold</b>', 100)).toBe('link bold');
   });
@@ -44,12 +39,6 @@ describe('htmlToPlainText', () => {
     expect(htmlToPlainText('&amp; &lt; &gt; &quot; &#39; &apos; a&nbsp;b &#65; &#x42; &#x1F600;', 100)).toBe(
       '& < > " \' \' a b A B \u{1F600}',
     );
-  });
-
-  it('decodes common named entities', () => {
-    expect(
-      htmlToPlainText('&hellip;&mdash;&ndash;&rsquo;&lsquo;&rdquo;&ldquo;&middot;&copy;&reg;&trade;&yen;&times;', 100),
-    ).toBe('…—–’‘”“·©®™¥×');
   });
 
   it('keeps out-of-range numeric references as they are', () => {

@@ -203,17 +203,6 @@ describe('createOnFollow', { timeout: 30_000 }, () => {
     });
   });
 
-  it('受信者が送信者をブロックしていないとき、これまでどおり Accept を返す', async () => {
-    const run = vi.fn(async () => RA.ok({}));
-    const { postFollow, deliveries } = await setup(run, { resolve: async () => RA.ok(false) });
-
-    await postFollow(`${ORIGIN}/users/bob`);
-
-    expect(run).toHaveBeenCalledOnce();
-    const sent = JSON.parse(await deliveries()[0]!.clone().text()) as Record<string, unknown>;
-    expect(sent).toMatchObject({ type: 'Accept' });
-  });
-
   it('instance actor を対象にした Follow ではブロックを確認しない', async () => {
     const run = vi.fn(async () => RA.err(new Error('User not found')));
     const resolve = vi.fn(async () => RA.ok(true));

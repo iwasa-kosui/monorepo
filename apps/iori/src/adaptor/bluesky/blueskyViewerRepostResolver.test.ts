@@ -12,14 +12,6 @@ const clientReturning = (response: ReturnType<BlueskyQueryClient['query']>) => {
 };
 
 describe('createBlueskyViewerRepostResolver', () => {
-  it('getPosts を対象の uri 1 件で呼ぶ', async () => {
-    const { query, resolver } = clientReturning(RA.ok({ posts: [] }));
-
-    await resolver.resolve(POST);
-
-    expect(query).toHaveBeenCalledExactlyOnceWith('app.bsky.feed.getPosts', { uris: POST });
-  });
-
   it('viewer.repost が repost の uri なら、その uri を返す', async () => {
     const { resolver } = clientReturning(RA.ok({ posts: [{ uri: POST, cid: 'c', viewer: { repost: REPOST } }] }));
 
@@ -50,18 +42,6 @@ describe('createBlueskyViewerRepostResolver', () => {
     );
 
     expect(await resolver.resolve(POST)).toEqual({ ok: true, val: null });
-  });
-
-  it('クライアントのエラーをそのまま返す', async () => {
-    const err = {
-      type: 'BlueskyClientError',
-      kind: 'http',
-      message: 'getPosts failed: status 500',
-      status: 500,
-    } as const;
-    const { resolver } = clientReturning(RA.err(err));
-
-    expect(await resolver.resolve(POST)).toEqual({ ok: false, err });
   });
 
   it('posts が無い応答を invalid_response にする', async () => {

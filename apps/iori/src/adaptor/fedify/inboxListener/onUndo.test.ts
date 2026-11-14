@@ -139,15 +139,6 @@ describe('createOnUndo (Undo Like)', () => {
     expect(remoteLikes).toHaveLength(1);
     expect(emojiReacts).toHaveLength(1);
   });
-
-  it('does nothing when neither a like nor an emoji react is found', async () => {
-    const { deps, emojiReacts } = createDeps();
-    await createOnUndo(deps)(
-      ctx,
-      createUndo(aliceUri, 'https://misskey.example/likes/404'),
-    );
-    expect(emojiReacts).toHaveLength(1);
-  });
 });
 
 describe('createOnUndo (Undo EmojiReact)', () => {

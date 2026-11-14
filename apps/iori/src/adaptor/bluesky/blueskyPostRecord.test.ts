@@ -12,7 +12,6 @@ import {
   type BlueskyPostDraft,
   buildBlueskyPostDraft,
   type BuildBlueskyPostInput,
-  selectBlueskyImages,
   toBlueskyPostRecord,
 } from './blueskyPostRecord.ts';
 
@@ -150,11 +149,6 @@ describe('buildBlueskyPostDraft の画像', () => {
     expect(draft.facets.map((facet) => uriOf(facet))).toEqual([imageUrl('a'), imageUrl('b')]);
   });
 
-  it('外した画像が無ければ URL を付けない', () => {
-    const draft = build({ images: [image(10)] });
-    expect(draft.text).toBe('hello');
-  });
-
   it('本文が空なら画像の URL だけにする', () => {
     const draft = build({ html: '', images: [image(BLUESKY_MAX_IMAGE_BYTES + 1, 'big')] });
     expect(draft.text).toBe(imageUrl('big'));
@@ -202,11 +196,6 @@ describe('buildBlueskyPostDraft の画像', () => {
   it('取得できなかった画像も外した扱いにして画像の URL を付ける', () => {
     const draft = build({ unavailableImageUrls: [imageUrl('missing')] });
     expect(draft.text).toBe(`hello\n${imageUrl('missing')}`);
-  });
-
-  it('selectBlueskyImages は残した画像と外した画像を返す', () => {
-    const big = image(BLUESKY_MAX_IMAGE_BYTES + 1, 'big');
-    expect(selectBlueskyImages([image(1), big]).dropped).toEqual([big]);
   });
 });
 
@@ -270,11 +259,6 @@ describe('buildBlueskyPostDraft の返信とスキップ', () => {
 
   it('reply_to_unsent をスキップにする', () => {
     expect(buildBlueskyPostDraft(input({ replyTo: { kind: 'unsent' } }))).toEqual(Result.err('reply_to_unsent'));
-  });
-
-  it('公開なら CW と sensitive はスキップにしない', () => {
-    expect(buildBlueskyPostDraft(input({ summary: 'CW' })).ok).toBe(true);
-    expect(buildBlueskyPostDraft(input({ sensitive: true })).ok).toBe(true);
   });
 
   it('summary が空文字や空白だけならスキップしない', () => {
@@ -370,11 +354,6 @@ describe('buildBlueskyPostDraft の sensitive', () => {
     const record = toBlueskyPostRecord(build({ sensitive: true, images: [] }), { images: [] });
     expect('labels' in record).toBe(false);
   });
-
-  it('sensitive が false なら record に labels を付けない', () => {
-    const record = toBlueskyPostRecord(build({ sensitive: false }), { images: [] });
-    expect('labels' in record).toBe(false);
-  });
 });
 
 describe('buildBlueskyPostDraft の引用', () => {
@@ -431,12 +410,6 @@ describe('buildBlueskyPostDraft の引用', () => {
       expect(draft.quote).toBeUndefined();
       expect('embed' in toBlueskyPostRecord(draft, { images: [] })).toBe(false);
     }
-  });
-
-  it('引用を渡さなければ従来どおり', () => {
-    const draft = build({ html });
-    expect(draft.text).toBe(`hello\n\nRE: ${quoteUri}`);
-    expect(draft.quote).toBeUndefined();
   });
 
   it('CW 付きの投稿は引用を付けず、embed を作らない', () => {

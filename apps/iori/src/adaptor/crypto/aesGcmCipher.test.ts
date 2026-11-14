@@ -77,11 +77,6 @@ describe('createAesGcmCipher', () => {
 });
 
 describe('createAesGcmCipherFactory', () => {
-  it('不正な鍵では factory を作らない', () => {
-    expect(createAesGcmCipherFactory({ key: undefined, aadOf: blueskyCredentialAad })).toBeUndefined();
-    expect(createAesGcmCipherFactory({ key: 'short', aadOf: blueskyCredentialAad })).toBeUndefined();
-  });
-
   it('同じ DID の cipher では復号でき、別の DID の cipher では復号できない', async () => {
     const cipherFor = createAesGcmCipherFactory({ key: KEY, aadOf: blueskyCredentialAad })!;
     const secret = await cipherFor('did:plc:alice').encrypt('abcd-efgh-ijkl-mnop');

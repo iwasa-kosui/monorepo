@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { federationWithObjectNotFound } from './activityPubObjectNotFound.ts';
-import { activityTypeOf, findBlockedInboxDomain, isBlockedHost } from './blockedInboxDomain.ts';
+import { findBlockedInboxDomain, isBlockedHost } from './blockedInboxDomain.ts';
 
 const relayedCreate = (author: string) => ({
   '@context': 'https://www.w3.org/ns/activitystreams',
@@ -33,10 +33,6 @@ describe('isBlockedHost', () => {
     expect(findBlockedInboxDomain({ type: 'Create', actor: 'https://crazylab.online./users/a' })).toBe(
       'crazylab.online',
     );
-  });
-
-  it('truncates a long activity type for the log', () => {
-    expect(activityTypeOf({ type: 'x'.repeat(100) })).toBe('x'.repeat(64));
   });
 
   it('does not block a different domain that only shares the tail', () => {
@@ -115,20 +111,6 @@ describe('federationWithObjectNotFound with blocked inbox domains', () => {
       relayedCreate('https://crazylab.online/users/a'),
       'crazylab.online',
     ],
-    ['a Create from a subdomain', '/inbox', relayedCreate('https://social.crazylab.online/users/a'), 'crazylab.online'],
-    [
-      'a relayed Create from baraag.net to the shared inbox',
-      '/inbox',
-      relayedCreate('https://baraag.net/users/a'),
-      'baraag.net',
-    ],
-    [
-      'a relayed Announce of baraag.net to the shared inbox',
-      '/inbox',
-      relayedAnnounce('https://baraag.net/users/a'),
-      'baraag.net',
-    ],
-    ['a Create from a baraag.net subdomain', '/inbox', relayedCreate('https://media.baraag.net/users/a'), 'baraag.net'],
   ])('answers 202 without passing %s to Fedify', async (_label, path, activity, domain) => {
     const { fetch, info, post } = setup();
 

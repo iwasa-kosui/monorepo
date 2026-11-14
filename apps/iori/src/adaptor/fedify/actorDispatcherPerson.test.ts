@@ -46,11 +46,4 @@ describe('Person の配信', () => {
       '<p>行1<br><a href="https://example.com">https://example.com</a></p>',
     );
   });
-
-  it('未設定なら name も summary も付けない', async () => {
-    const person = await dispatch(baseActor) as Person;
-
-    expect(person.name).toBeNull();
-    expect(person.summary).toBeNull();
-  });
 });

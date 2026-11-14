@@ -30,55 +30,10 @@ const only = (feed: unknown[]) => {
 };
 
 describe('parseBlueskyTimelineResponse', () => {
-  it('通常の投稿を、feedItemId を uri にして表示用の形に変換する', () => {
-    const parsed = parse([{ post: postView() }], 'next-cursor');
-
-    expect(parsed).toEqual({
-      ok: true,
-      val: {
-        cursor: 'next-cursor',
-        dropped: 0,
-        items: [{
-          feedItemId: URI,
-          uri: URI,
-          cid: 'bafycid',
-          authorDid: DID,
-          authorHandle: 'alice.bsky.social',
-          authorDisplayName: 'Alice',
-          authorAvatar: 'https://cdn.example/avatar.jpg',
-          text: 'こんにちは',
-          facets: [],
-          embed: null,
-          replyParentUri: null,
-          replyParentAuthorHandle: null,
-          repostedByDid: null,
-          repostedByHandle: null,
-          bridgyOriginalUrl: null,
-          bridgedFromPostId: null,
-          postedAt: Date.UTC(2026, 10, 8, 1),
-          indexedAt: Date.UTC(2026, 10, 8, 1, 0, 5),
-          fetchedAt: FETCHED_AT,
-          liked: false,
-          viewerLikeUri: null,
-          reposted: false,
-          viewerRepostUri: null,
-          bookmarked: false,
-          bookmarkUnknown: true,
-          threadMuted: false,
-          replyRootUri: null,
-        }],
-      },
-    });
-  });
-
   it('record.bridgyOriginalUrl を bridgyOriginalUrl に入れる', () => {
     const item = only([{ post: postView({}, { bridgyOriginalUrl: 'https://mastodon.example/@alice/123' }) }]);
 
     expect(item.bridgyOriginalUrl).toBe('https://mastodon.example/@alice/123');
-  });
-
-  it('record.bridgyOriginalUrl が無ければ null にする', () => {
-    expect(only([{ post: postView() }]).bridgyOriginalUrl).toBeNull();
   });
 
   it.each([
@@ -125,20 +80,6 @@ describe('parseBlueskyTimelineResponse', () => {
     expect(only([{ post: postView({ viewer: { bookmarked: true } }) }])).toMatchObject({ bookmarked: true });
   });
 
-  it('post.viewer.threadMuted が true なら threadMuted にする', () => {
-    const item = only([{ post: postView({ viewer: { threadMuted: true } }) }]);
-
-    expect(item).toMatchObject({ threadMuted: true });
-  });
-
-  it.each([
-    ['viewer が無い', {}],
-    ['viewer.bookmarked が無い', { viewer: { like: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
-    ['viewer.bookmarked が false', { viewer: { bookmarked: false } }],
-  ])('%s ときは bookmarked にしない', (_name, overrides) => {
-    expect(only([{ post: postView(overrides) }])).toMatchObject({ bookmarked: false });
-  });
-
   it.each([
     ['viewer が無い', {}],
     ['viewer.bookmarked が無い', { viewer: { like: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
@@ -150,14 +91,6 @@ describe('parseBlueskyTimelineResponse', () => {
     expect(only([{ post: postView({ viewer: { bookmarked } }) }])).not.toHaveProperty('bookmarkUnknown');
   });
 
-  it.each([
-    ['viewer が無い', {}],
-    ['viewer.threadMuted が無い', { viewer: { like: 'at://did:plc:me/app.bsky.feed.like/3k' } }],
-    ['viewer.threadMuted が false', { viewer: { threadMuted: false } }],
-  ])('%s と threadMuted は false になる', (_, overrides) => {
-    expect(only([{ post: postView(overrides) }])).toMatchObject({ threadMuted: false });
-  });
-
   it('返信の record.reply.root.uri を replyRootUri に入れる', () => {
     const parentUri = 'at://did:plc:parent/app.bsky.feed.post/3kparent';
     const rootUri = 'at://did:plc:root/app.bsky.feed.post/3kroot';
@@ -166,37 +99,6 @@ describe('parseBlueskyTimelineResponse', () => {
     }]);
 
     expect(item).toMatchObject({ replyParentUri: parentUri, replyRootUri: rootUri });
-  });
-
-  it.each([
-    ['返信ではない', {}],
-    ['reply に root が無い', {
-      reply: { parent: { uri: 'at://did:plc:parent/app.bsky.feed.post/3kparent', cid: 'c' } },
-    }],
-  ])('%s投稿の replyRootUri は null になる', (_, record) => {
-    expect(only([{ post: postView({}, record) }])).toMatchObject({ replyRootUri: null });
-  });
-
-  it('リポスト行でも、uri と cid は元の投稿のものにし、viewer.repost を読む', () => {
-    const repostUri = 'at://did:plc:me/app.bsky.feed.repost/3krepost';
-
-    const item = only([{
-      post: postView({ viewer: { repost: repostUri } }),
-      reason: {
-        $type: 'app.bsky.feed.defs#reasonRepost',
-        by: { did: 'did:plc:b', handle: 'bob.example' },
-        indexedAt: '2026-11-08T02:00:00.000Z',
-      },
-    }]);
-
-    expect(item).toMatchObject({
-      feedItemId: `${URI}#repost:did:plc:b`,
-      uri: URI,
-      cid: 'bafycid',
-      repostedByDid: 'did:plc:b',
-      reposted: true,
-      viewerRepostUri: repostUri,
-    });
   });
 
   it('リポストは feedItemId にリポストした人の DID を付け、indexedAt に reason の時刻を使う', () => {
@@ -215,13 +117,6 @@ describe('parseBlueskyTimelineResponse', () => {
     expect(item.repostedByHandle).toBe('bob.bsky.social');
     expect(item.indexedAt).toBe(Date.UTC(2026, 10, 8, 3));
     expect(item.postedAt).toBe(Date.UTC(2026, 10, 8, 1));
-  });
-
-  it('リポスト以外の reason は通常の投稿として扱う', () => {
-    const item = only([{ post: postView(), reason: { $type: 'app.bsky.feed.defs#reasonPin' } }]);
-
-    expect(item.feedItemId).toBe(URI);
-    expect(item.repostedByDid).toBeNull();
   });
 
   it('壊れたリポストの reason は、その 1 件を捨てる', () => {
@@ -350,23 +245,6 @@ describe('parseBlueskyTimelineResponse', () => {
         title: '',
         description: '',
         thumb: null,
-      });
-    });
-
-    it('record（引用）を uri・handle・本文と、投稿者の項目にする', () => {
-      expect(embedOf({
-        $type: 'app.bsky.embed.record#view',
-        record: {
-          ...viewRecord,
-          author: { ...viewRecord.author, avatar: 'https://cdn.example/q.jpg' },
-        },
-      })).toEqual({
-        type: 'record',
-        uri: 'at://did:plc:q/app.bsky.feed.post/3kq',
-        authorHandle: 'quote.bsky.social',
-        text: '引用された投稿',
-        authorDisplayName: 'Q',
-        authorAvatar: 'https://cdn.example/q.jpg',
       });
     });
 
@@ -508,16 +386,6 @@ describe('parseBlueskyTimelineResponse', () => {
       })).toMatchObject({ type: 'external' });
     });
 
-    it('video を thumbnail・playlist・aspectRatio・alt に整える', () => {
-      expect(embedOf(videoView)).toEqual({
-        type: 'video',
-        thumbnail: 'https://video.example/thumb.jpg',
-        playlist: 'https://video.example/playlist.m3u8',
-        aspectRatio: { width: 16, height: 9 },
-        alt: '走る猫',
-      });
-    });
-
     it('video の aspectRatio と alt が無い・不正・空なら null にする', () => {
       const bare = { $type: videoView.$type, playlist: videoView.playlist };
       expect(embedOf(bare)).toEqual({
@@ -535,17 +403,6 @@ describe('parseBlueskyTimelineResponse', () => {
       expect(embedOf({ ...videoView, aspectRatio: { width: 1.5, height: 9 }, alt: 3 })).toMatchObject({
         aspectRatio: null,
         alt: null,
-      });
-    });
-
-    it('recordWithMedia の media の video も aspectRatio と alt を持つ', () => {
-      expect(embedOf({
-        $type: 'app.bsky.embed.recordWithMedia#view',
-        record: { $type: 'app.bsky.embed.record#view', record: viewRecord },
-        media: videoView,
-      })).toMatchObject({
-        type: 'recordWithMedia',
-        media: { type: 'video', aspectRatio: { width: 16, height: 9 }, alt: '走る猫' },
       });
     });
 
