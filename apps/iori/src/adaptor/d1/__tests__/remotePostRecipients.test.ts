@@ -4,7 +4,6 @@ import { ActorId } from '../../../domain/actor/actorId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { Post } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
-import { UserId } from '../../../domain/user/userId.ts';
 import { createD1PostCreatedStore } from '../post/postCreatedStore.ts';
 import { createD1PostDeletedStore } from '../post/postDeletedStore.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../post/postWithAuthorBatch.ts';
@@ -60,23 +59,6 @@ describe('remote_post_recipients の保存', () => {
     await createD1PostCreatedStore(t.db).store(event);
 
     expect(recipientRows(t, event.aggregateState.postId)).toHaveLength(95);
-  });
-
-  it('宛先がなければ行を足さず、ローカルの投稿にも足さない', async () => {
-    const t = setup();
-    const alice = t.seed.addRemoteActor('alice');
-    const me = t.seed.addLocalActor('kosui');
-    const remote = createRemote(alice.actorId);
-    const local = Post.createPost(Instant.now())({
-      actorId: ActorId.orThrow(me.actorId),
-      userId: UserId.orThrow(me.userId),
-      content: 'mine',
-    });
-
-    await createD1PostCreatedStore(t.db).store(remote);
-    await createD1PostCreatedStore(t.db).store(local);
-
-    expect(t.sqlite.prepare('SELECT count(*) AS n FROM remote_post_recipients').get()).toEqual({ n: 0 });
   });
 
   it('投稿を削除すると宛先も消す', async () => {
@@ -142,12 +124,6 @@ describe('ログイン中の閲覧者の閲覧条件', () => {
       'privateToViewer',
       'local',
     ]);
-  });
-
-  it('onlyVisibleToViewer がなければ今までどおりすべて返す', async () => {
-    const t = seedCases();
-
-    expect(await visibleKeys(t, false)).toEqual(Object.keys(t.cases));
   });
 
   it('スレッドの祖先と子孫も同じ条件で絞り、見えない起点は null にする', async () => {

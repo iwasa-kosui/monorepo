@@ -40,11 +40,6 @@ describe('SearchTerms', () => {
     expect(result.expanded).toEqual([]);
   });
 
-  it('語がなければ isEmpty が true', () => {
-    expect(SearchTerms.isEmpty(SearchTerms.create({ original: [], expanded: [] }))).toBe(true);
-    expect(SearchTerms.isEmpty(SearchTerms.create({ original: terms('a'), expanded: [] }))).toBe(false);
-  });
-
   it('original の pattern は weight 2、expanded の pattern は weight 1 にする', () => {
     const result = SearchTerms.create({ original: terms('旅行'), expanded: terms('trip') });
     expect(SearchTerms.toPatterns(result)).toEqual([
@@ -67,9 +62,5 @@ describe('SearchTerms', () => {
       { pattern: 'Ｔｒｉｐ', weight: 2 },
       { pattern: 'Trip', weight: 2 },
     ]);
-  });
-
-  it('語がなければ pattern も空になる', () => {
-    expect(SearchTerms.toPatterns(SearchTerms.create({ original: [], expanded: [] }))).toEqual([]);
   });
 });

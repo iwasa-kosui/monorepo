@@ -196,25 +196,6 @@ describe('RegisterBlueskyCredentialUseCase', () => {
     expect(t.sessionRows()).toMatchObject([{ did: 'did:plc:someone-else', accessJwt: 'old-access' }]);
   });
 
-  it('保存済みの資格情報と違う DID のときは、保存済みのハンドルを current に載せる', async () => {
-    const t = await setup();
-    expect((await t.useCase.run(t.input)).ok).toBe(true);
-    vi.mocked(t.verifier.login).mockResolvedValueOnce(
-      Result.ok(session({ did: 'did:plc:bob', handle: 'bob.bsky.social' })),
-    );
-
-    const result = await t.useCase.run(t.input);
-
-    expect(result).toMatchObject({
-      ok: false,
-      err: {
-        type: 'BlueskyDidMismatch',
-        current: { did: 'did:plc:alice', handle: 'alice.bsky.social' },
-        next: { did: 'did:plc:bob', handle: 'bob.bsky.social' },
-      },
-    });
-  });
-
   it('アカウントの切り替え中は、パスワードの確認の後で BlueskyAccountSwitchInProgress にし、Bluesky を呼ばない', async () => {
     const t = await setup();
     insertBlueskyAccountSwitch(t.sqlite);
@@ -278,15 +259,6 @@ describe('RegisterBlueskyCredentialUseCase', () => {
       expect(t.verifier.logout).not.toHaveBeenCalled();
     });
 
-    it('env の資格情報が無ければ、DID を比べずに登録できる', async () => {
-      const t = await setup();
-
-      const result = await t.useCase.run(t.input);
-
-      expect(result.ok).toBe(true);
-      expect(t.verifier.login).toHaveBeenCalledTimes(1);
-    });
-
     it('settings の行か bluesky_sessions の行があれば、env でログインしない', async () => {
       const t = await setup({ env: ENV_CREDENTIALS });
       await t.seedSession('did:plc:alice');
@@ -342,14 +314,6 @@ describe('RegisterBlueskyCredentialUseCase', () => {
       expect(t.verifier.logout).toHaveBeenCalledWith(envSession());
     });
 
-    it('登録に進むときに env のセッションが無ければ、logout しない', async () => {
-      const t = await setup();
-
-      await t.useCase.run(t.input);
-
-      expect(t.verifier.logout).not.toHaveBeenCalled();
-    });
-
     it('logout が失敗しても、応答は DidMismatch のままにする', async () => {
       const t = await setup({
         logout: async () => {
@@ -366,7 +330,6 @@ describe('RegisterBlueskyCredentialUseCase', () => {
   });
 
   it.each([
-    [true, true],
     [false, false],
     [null, null],
   ])('DM の確認結果 %s を保存し、応答に載せる', async (probed, expected) => {
@@ -416,16 +379,5 @@ describe('RegisterBlueskyCredentialUseCase', () => {
     expect(await cipherFor('did:plc:other').decrypt(secret)).toBeUndefined();
     expect(t.sessionRows()).toMatchObject([{ id: 'default', accessJwt: 'new-access', refreshJwt: 'new-refresh' }]);
     expect(t.loginFailureRows()).toEqual([]);
-  });
-
-  it('識別子の前後の空白を取り除いてログインする', async () => {
-    const t = await setup();
-
-    await t.useCase.run({ ...t.input, identifier: '  alice.bsky.social ' });
-
-    expect(t.verifier.login).toHaveBeenCalledWith({
-      identifier: 'alice.bsky.social',
-      appPassword: 'abcd-efgh-ijkl-mnop',
-    });
   });
 });

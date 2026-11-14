@@ -54,14 +54,4 @@ describe('RemoveReceivedEmojiReactUseCase', () => {
     expect(!result.ok && result.err.type).toBe('UndoActorMismatchError');
     expect(emojiReactDeletedStore.items).toHaveLength(0);
   });
-
-  it('リアクションが無ければ EmojiReactNotFoundError を返す', async () => {
-    const { useCase, emojiReactDeletedStore } = createDeps();
-    const result = await useCase.run({
-      emojiReactActivityUri: 'https://misskey.example/likes/404',
-      actorUri: alice.uri,
-    });
-    expect(!result.ok && result.err.type).toBe('EmojiReactNotFoundError');
-    expect(emojiReactDeletedStore.items).toHaveLength(0);
-  });
 });

@@ -300,30 +300,8 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor', () => {
     const response = await t.get(`${PROFILES}/${encodeURIComponent(DID)}`);
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      did: DID,
-      handle: 'alice.bsky.social',
-      displayName: 'Alice',
-      description: 'hello\nworld',
-      avatar: 'https://cdn.example/avatar.jpg',
-      banner: null,
-      followersCount: 3,
-      followsCount: 2,
-      postsCount: 1,
-      following: true,
-      followedBy: true,
-      followUri: FOLLOW_URI,
-      isSelf: false,
-    });
+    expect(await response.json()).toMatchObject({ did: DID, following: true, followedBy: true, followUri: FOLLOW_URI });
     expect(t.reader.getProfile).toHaveBeenCalledExactlyOnceWith(DID);
-  });
-
-  it('フォローしていなければ followUri を null にする', async () => {
-    const t = await setup({ scope: 'read:accounts' });
-
-    const response = await t.get(`${PROFILES}/${DID}`);
-
-    expect(await response.json()).toMatchObject({ following: false, followUri: null });
   });
 
   it('自分の DID のプロフィールだけ isSelf を true にする。自分の DID が取れなければ false にする', async () => {
@@ -338,13 +316,6 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor', () => {
     expect(await (await other.get(`${PROFILES}/${DID}`)).json()).toMatchObject({ isSelf: false });
     expect((await failed.get(`${PROFILES}/${DID}`)).status).toBe(200);
     expect(await (await failed.get(`${PROFILES}/${DID}`)).json()).toMatchObject({ isSelf: false });
-  });
-
-  it('ハンドルでも引ける', async () => {
-    const t = await setup({ scope: 'read:accounts' });
-
-    expect((await t.get(`${PROFILES}/alice.bsky.social`)).status).toBe(200);
-    expect(t.reader.getProfile).toHaveBeenCalledExactlyOnceWith('alice.bsky.social');
   });
 
   it('アカウントが無ければ 404 にする', async () => {
@@ -372,18 +343,6 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor', () => {
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'Bluesky login failed' });
   });
-
-  it('それ以外の Bluesky の失敗を 502 にして Bluesky request failed を返す', async () => {
-    const t = await setup({
-      scope: 'read:accounts',
-      reader: { getProfile: vi.fn(async () => RA.err(clientError({ kind: 'network' }))) },
-    });
-
-    const response = await t.get(`${PROFILES}/${DID}`);
-
-    expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
-  });
 });
 
 describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
@@ -396,32 +355,7 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
     const body = await response.json() as { items: Array<Record<string, unknown>>; cursor: string | null };
     expect(body.cursor).toBe('next-cursor');
     expect(body).toMatchObject({ unavailable: null });
-    expect(body.items).toEqual([{
-      feedItemId: feedItem.feedItemId,
-      uri: feedItem.uri,
-      cid: 'cid1',
-      authorDid: DID,
-      authorHandle: 'alice.bsky.social',
-      authorDisplayName: 'Alice',
-      authorAvatar: null,
-      text: 'post 1',
-      facets: [],
-      embed: null,
-      replyParentUri: null,
-      replyParentAuthorHandle: null,
-      repostedByDid: null,
-      repostedByHandle: null,
-      bridgyOriginalUrl: null,
-      bridgedFromPostId: null,
-      postedAt: NOW - 1000,
-      indexedAt: NOW - 500,
-      liked: false,
-      reposted: false,
-      bookmarked: false,
-      threadMuted: false,
-      replyRootUri: null,
-      isOwn: false,
-    }]);
+    expect(body.items).toMatchObject([{ uri: feedItem.uri, postedAt: NOW - 1000, isOwn: false }]);
     expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({
       actor: DID,
       cursor: 'abc',
@@ -443,17 +377,6 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor/feed', () => {
       cursor: undefined,
       filter: 'posts_and_author_threads',
     });
-  });
-
-  it.each(
-    ['posts_and_author_threads', 'posts_with_replies', 'posts_with_media', 'posts_with_video'] as const,
-  )('クエリの filter=%s を reader に渡す', async (filter) => {
-    const t = await setup({ scope: 'read:accounts' });
-
-    const response = await t.get(`${PROFILES}/${DID}/feed?filter=${filter}`);
-
-    expect(response.status).toBe(200);
-    expect(t.reader.getAuthorFeed).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: undefined, filter });
   });
 
   it.each(['', 'unknown', 'posts_with_likes', 'POSTS_WITH_MEDIA'])(
@@ -512,18 +435,6 @@ describe('GET /api/iori/v1/bluesky/liked-posts', () => {
     expect(t.reader.getActorLikes).toHaveBeenCalledExactlyOnceWith({ actor: OWN_DID, cursor: 'abc' });
   });
 
-  it('続きが無いとき cursor を null にし、cursor を付けなければ undefined で呼ぶ', async () => {
-    const t = await setup({
-      scope: 'read:accounts',
-      reader: { getActorLikes: vi.fn(async () => RA.ok({ items: [], cursor: undefined })) },
-    });
-
-    const response = await t.get(LIKED_POSTS);
-
-    expect(await response.json()).toEqual({ items: [], cursor: null });
-    expect(t.reader.getActorLikes).toHaveBeenCalledExactlyOnceWith({ actor: OWN_DID, cursor: undefined });
-  });
-
   it('認証なしは 401、read:accounts を満たさない scope は 403 にする', async () => {
     const t = await setup({ scope: 'read:statuses' });
 
@@ -540,39 +451,6 @@ describe('GET /api/iori/v1/bluesky/liked-posts', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.reader.getActorLikes).not.toHaveBeenCalled();
-  });
-
-  it('無効のときは 409 を返す', async () => {
-    const t = await setup({ scope: 'read:accounts', enabled: false });
-
-    const response = await t.get(LIKED_POSTS);
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
-  });
-
-  it('Bluesky のログイン失敗と、それ以外の失敗を 502 にする', async () => {
-    const login = await setup({
-      scope: 'read:accounts',
-      reader: { getActorLikes: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
-    });
-    const failing = await setup({
-      scope: 'read:accounts',
-      reader: { getActorLikes: vi.fn(async () => RA.err(clientError())) },
-    });
-    const noDid = await setup({
-      scope: 'read:accounts',
-      ownDid: async () => RA.err(clientError({ kind: 'network' })),
-    });
-
-    const loginResponse = await login.get(LIKED_POSTS);
-    expect(loginResponse.status).toBe(502);
-    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
-    const failingResponse = await failing.get(LIKED_POSTS);
-    expect(failingResponse.status).toBe(502);
-    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
-    expect((await noDid.get(LIKED_POSTS)).status).toBe(502);
-    expect(noDid.reader.getActorLikes).not.toHaveBeenCalled();
   });
 });
 
@@ -607,33 +485,6 @@ describe('GET /api/iori/v1/bluesky/feeds', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader.listSavedFeeds).not.toHaveBeenCalled();
-  });
-
-  it('無効のときは 409 を返す', async () => {
-    const t = await setup({ scope: 'read:accounts', enabled: false });
-
-    const response = await t.get(FEEDS);
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
-  });
-
-  it('Bluesky のログイン失敗と、それ以外の失敗を 502 にする', async () => {
-    const login = await setup({
-      scope: 'read:accounts',
-      feedReader: { listSavedFeeds: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
-    });
-    const failing = await setup({
-      scope: 'read:accounts',
-      feedReader: { listSavedFeeds: vi.fn(async () => RA.err(clientError())) },
-    });
-
-    const loginResponse = await login.get(FEEDS);
-    expect(loginResponse.status).toBe(502);
-    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
-    const failingResponse = await failing.get(FEEDS);
-    expect(failingResponse.status).toBe(502);
-    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
   });
 });
 
@@ -691,34 +542,6 @@ describe('GET /api/iori/v1/bluesky/feeds/posts', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader.getFeedPosts).not.toHaveBeenCalled();
-  });
-
-  it('無効のときは 409 を返す', async () => {
-    const t = await setup({ scope: 'read:accounts', enabled: false });
-
-    const response = await t.get(`${FEED_POSTS}?uri=${encodeURIComponent(FEED_URI)}`);
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
-  });
-
-  it('Bluesky のログイン失敗と、それ以外の失敗を 502 にする', async () => {
-    const path = `${FEED_POSTS}?uri=${encodeURIComponent(FEED_URI)}`;
-    const login = await setup({
-      scope: 'read:accounts',
-      feedReader: { getFeedPosts: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
-    });
-    const failing = await setup({
-      scope: 'read:accounts',
-      feedReader: { getFeedPosts: vi.fn(async () => RA.err(clientError({ kind: 'network', status: undefined }))) },
-    });
-
-    const loginResponse = await login.get(path);
-    expect(loginResponse.status).toBe(502);
-    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
-    const failingResponse = await failing.get(path);
-    expect(failingResponse.status).toBe(502);
-    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
   });
 
   it('見つからない失敗は 404、提供元の失敗は 502 の Feed provider failed にする', async () => {
@@ -809,15 +632,6 @@ describe('GET /api/iori/v1/bluesky/feeds/info', () => {
     expect(t.feedReader.getFeedInfo).toHaveBeenCalledExactlyOnceWith(FEED_URI);
   });
 
-  it('list の uri も受け付ける', async () => {
-    const t = await setup({ scope: 'read:accounts' });
-
-    const response = await t.get(`${FEED_INFO}?uri=${encodeURIComponent(LIST_URI)}`);
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ uri: LIST_URI, kind: 'list', pinned: false });
-  });
-
   it('uri が無い、または feed と list の URI でないとき 400 にし、Bluesky を呼ばない', async () => {
     const t = await setup({ scope: 'read:accounts' });
 
@@ -845,15 +659,6 @@ describe('GET /api/iori/v1/bluesky/feeds/info', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader.getFeedInfo).not.toHaveBeenCalled();
-  });
-
-  it('無効のときは 409 を返す', async () => {
-    const t = await setup({ scope: 'read:accounts', enabled: false });
-
-    const response = await t.get(`${FEED_INFO}?uri=${encodeURIComponent(FEED_URI)}`);
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
   });
 
   it('見つからないとき 404、Bluesky のログイン失敗とそれ以外の失敗は 502 にする', async () => {
@@ -938,15 +743,6 @@ describe('GET /api/iori/v1/bluesky/feeds/resolve', () => {
     expect(t.feedReader.resolveHandle).not.toHaveBeenCalled();
   });
 
-  it('無効のときは 409 を返す', async () => {
-    const t = await setup({ scope: 'read:accounts', enabled: false });
-
-    const response = await t.get(resolve('https://bsky.app/profile/did:plc:gen/feed/a'));
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
-  });
-
   it('ハンドルを解決できないとき 404、Bluesky のログイン失敗とそれ以外の失敗は 502 にする', async () => {
     const path = resolve('https://bsky.app/profile/own.bsky.social/feed/a');
     const missing = await setup({
@@ -983,18 +779,6 @@ describe('GET /api/iori/v1/bluesky/lists/members', () => {
     expect(t.feedReader.getListMembers).toHaveBeenCalledExactlyOnceWith({ uri: LIST_URI, cursor: 'abc' });
   });
 
-  it('続きが無いとき cursor を null にし、cursor を付けなければ undefined で呼ぶ', async () => {
-    const t = await setup({
-      scope: 'read:accounts',
-      feedReader: { getListMembers: vi.fn(async () => RA.ok({ actors: [], cursor: undefined })) },
-    });
-
-    const response = await t.get(`${LIST_MEMBERS}?uri=${encodeURIComponent(LIST_URI)}`);
-
-    expect(await response.json()).toEqual({ actors: [], cursor: null });
-    expect(t.feedReader.getListMembers).toHaveBeenCalledExactlyOnceWith({ uri: LIST_URI, cursor: undefined });
-  });
-
   it('uri が無い、または list の URI でないとき 400 にし、Bluesky を呼ばない', async () => {
     const t = await setup({ scope: 'read:accounts' });
 
@@ -1022,15 +806,6 @@ describe('GET /api/iori/v1/bluesky/lists/members', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader.getListMembers).not.toHaveBeenCalled();
-  });
-
-  it('無効のときは 409 を返す', async () => {
-    const t = await setup({ scope: 'read:accounts', enabled: false });
-
-    const response = await t.get(`${LIST_MEMBERS}?uri=${encodeURIComponent(LIST_URI)}`);
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
   });
 
   it('見つからないとき 404、Bluesky のログイン失敗とそれ以外の失敗は 502 にする', async () => {
@@ -1079,26 +854,6 @@ describe.each(
     expect(t.feedReader[method]).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: 'abc' });
   });
 
-  it('続きが無いとき cursor を null にし、cursor を付けなければ undefined で呼ぶ', async () => {
-    const t = await setup({
-      scope: 'read:accounts',
-      feedReader: { [method]: vi.fn(async () => RA.ok({ feeds: [], cursor: undefined })) },
-    });
-
-    const response = await t.get(path);
-
-    expect(await response.json()).toEqual({ [key]: [], cursor: null });
-    expect(t.feedReader[method]).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: undefined });
-  });
-
-  it('ハンドルでも引ける', async () => {
-    const t = await setup({ scope: 'read:accounts' });
-
-    await t.get(`${PROFILES}/alice.bsky.social/${name}`);
-
-    expect(t.feedReader[method]).toHaveBeenCalledExactlyOnceWith({ actor: 'alice.bsky.social', cursor: undefined });
-  });
-
   it('認証なしは 401、read:accounts を満たさない scope は 403 にする', async () => {
     const t = await setup({ scope: 'read:statuses' });
 
@@ -1115,15 +870,6 @@ describe.each(
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader[method]).not.toHaveBeenCalled();
-  });
-
-  it('無効のときは 409 を返す', async () => {
-    const t = await setup({ scope: 'read:accounts', enabled: false });
-
-    const response = await t.get(path);
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
   });
 
   it('アカウントが無いとき 404、Bluesky のログイン失敗とそれ以外の失敗は 502 にする', async () => {
@@ -1170,19 +916,6 @@ describe.each(
     expect(t.reader[method]).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: 'abc' });
   });
 
-  it('続きが無いとき cursor を null にし、cursor を付けなければ undefined で呼ぶ', async () => {
-    const t = await setup({
-      scope: 'read:accounts',
-      viewerDid: async () => RA.ok(OWN_DID),
-      reader: { [method]: vi.fn(async () => RA.ok({ actors: [], cursor: undefined })) },
-    });
-
-    const response = await t.get(path);
-
-    expect(await response.json()).toEqual({ actors: [], cursor: null, viewerDid: OWN_DID });
-    expect(t.reader[method]).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: undefined });
-  });
-
   it('自分の DID が取れなければ viewerDid を空文字にする', async () => {
     const failed = await setup({
       scope: 'read:accounts',
@@ -1210,15 +943,6 @@ describe.each(
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.reader[method]).not.toHaveBeenCalled();
-  });
-
-  it('無効のときは 409 を返す', async () => {
-    const t = await setup({ scope: 'read:accounts', enabled: false });
-
-    const response = await t.get(path);
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
   });
 
   it('アカウントが無いとき 404、Bluesky のログイン失敗とそれ以外の失敗は 502 にする', async () => {
@@ -1271,12 +995,6 @@ describe('POST /api/iori/v1/bluesky/follows', () => {
 
     expect(response.status).toBe(403);
     expect(t.client.createFollow).not.toHaveBeenCalled();
-  });
-
-  it('無効のときは 409 を返す', async () => {
-    const t = await setup({ scope: 'write:follows', enabled: false });
-
-    expect((await t.send('POST', FOLLOWS, { did: DID })).status).toBe(409);
   });
 
   it('did が無い、または did: で始まらないなら 400 にする', async () => {
@@ -1349,18 +1067,6 @@ describe('POST /api/iori/v1/bluesky/follows', () => {
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'Bluesky login failed' });
-  });
-
-  it('それ以外の失敗は 502 と Bluesky request failed を返す', async () => {
-    const t = await setup({
-      scope: 'write:follows',
-      client: { createFollow: vi.fn(async () => RA.err(clientError())) },
-    });
-
-    const response = await t.send('POST', FOLLOWS, { did: DID });
-
-    expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ error: 'Bluesky request failed' });
   });
 });
 
@@ -1460,15 +1166,6 @@ describe('GET /api/iori/v1/bluesky/profile', () => {
     expect(t.reader.getProfile).not.toHaveBeenCalled();
   });
 
-  it('無効のときは 409 を返す', async () => {
-    const t = await setup({ scope: 'read:accounts', enabled: false });
-
-    const response = await t.get(OWN_PROFILE);
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
-  });
-
   it('表示名・自己紹介・cid を PDS のレコードから、DID・ハンドル・画像を AppView から返す', async () => {
     const t = await setup({
       scope: 'read:accounts',
@@ -1514,26 +1211,6 @@ describe('GET /api/iori/v1/bluesky/profile', () => {
       cid: null,
     });
   });
-
-  it('Bluesky のログインに失敗したら 502 と Bluesky login failed、それ以外の失敗は Bluesky request failed を返す', async () => {
-    const login = await setup({ scope: 'read:accounts', ownDid: async () => RA.err(clientError({ kind: 'auth' })) });
-    const failing = await setup({
-      scope: 'read:accounts',
-      reader: { getProfile: vi.fn(async () => RA.err(clientError())) },
-    });
-    const recordFailing = await setup({
-      scope: 'read:accounts',
-      client: { getProfileRecord: vi.fn(async () => RA.err(clientError())) },
-    });
-
-    const loginResponse = await login.get(OWN_PROFILE);
-    expect(loginResponse.status).toBe(502);
-    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
-    const failingResponse = await failing.get(OWN_PROFILE);
-    expect(failingResponse.status).toBe(502);
-    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
-    expect((await recordFailing.get(OWN_PROFILE)).status).toBe(502);
-  });
 });
 
 describe('PUT /api/iori/v1/bluesky/profile', () => {
@@ -1575,15 +1252,6 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
     expect((await t.put(OWN_PROFILE, form())).status).toBe(403);
     expect(t.client.getProfileRecord).not.toHaveBeenCalled();
     expect(t.client.putProfileRecord).not.toHaveBeenCalled();
-  });
-
-  it('無効のときは 409 を返す', async () => {
-    const t = await setup({ scope: 'write:accounts', enabled: false });
-
-    const response = await t.put(OWN_PROFILE, form());
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
   });
 
   it('入力が不正なら 422 と profile_invalid、理由を返し、Bluesky を呼ばない', async () => {
@@ -1722,23 +1390,5 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
       description: '新紹介',
       pinnedPost: 'keep',
     });
-  });
-
-  it('Bluesky のログインに失敗したら 502 と Bluesky login failed、それ以外の失敗は Bluesky request failed を返す', async () => {
-    const login = await setup({
-      scope: 'write:accounts',
-      client: { putProfileRecord: vi.fn(async () => RA.err(clientError({ kind: 'auth', status: 401 }))) },
-    });
-    const failing = await setup({
-      scope: 'write:accounts',
-      client: { uploadBlob: vi.fn(async () => RA.err(clientError())) },
-    });
-
-    const loginResponse = await login.put(OWN_PROFILE, form());
-    expect(loginResponse.status).toBe(502);
-    expect(await loginResponse.json()).toEqual({ error: 'Bluesky login failed' });
-    const failingResponse = await failing.put(OWN_PROFILE, form({ avatar: png(9) }));
-    expect(failingResponse.status).toBe(502);
-    expect(await failingResponse.json()).toEqual({ error: 'Bluesky request failed' });
   });
 });

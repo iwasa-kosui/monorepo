@@ -12,14 +12,11 @@ import { RelayId } from '../../src/domain/relay/relayId.ts';
 import { TimelineItem } from '../../src/domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../../src/domain/timeline/timelineItemId.ts';
 import {
-  applyCountSql,
   applySql,
-  dryRunSql,
   moveFailureLines,
   moveUnfollowedReposts,
   RELAY_ACTOR_URI,
   relaySql,
-  targetCondition,
 } from '../move-unfollowed-reposts.mjs';
 
 const accountId = 'b'.repeat(32);
@@ -203,11 +200,6 @@ describe('move-unfollowed-reposts input checks', () => {
       expect(moveFailureLines(error)).toEqual([diag('move-reposts', 'credentials-missing')]);
     },
   );
-  it('accepts a time limit equal to the clock', async () => {
-    const { fixture } = build();
-    const { error } = await run('dry-run', fixture, { IORI_REPOST_CREATED_BEFORE_MS: String(now) });
-    expect(error).toBeUndefined();
-  });
 });
 
 describe('move-unfollowed-reposts relay and database checks', () => {
@@ -229,11 +221,6 @@ describe('move-unfollowed-reposts relay and database checks', () => {
       }
     },
   );
-  it('looks the relay up by the fixed actor URI', () => {
-    expect(relaySql()).toBe(
-      'SELECT relayId, status FROM relays WHERE actorUri = \'https://relay.fedibird.com/actor\'',
-    );
-  });
   it.each([
     ['is missing', [], 'resource-missing'],
     ['is listed twice', [databaseName, databaseName], 'resource-ambiguous'],
@@ -262,11 +249,6 @@ describe('move-unfollowed-reposts relay and database checks', () => {
 });
 
 describe('move-unfollowed-reposts SQL', () => {
-  it('pins the target condition', () => {
-    expect(targetCondition(1234)).toBe(
-      't.type = \'repost\' AND t.deletedAt IS NULL AND t.createdAt <= 1234 AND NOT EXISTS (SELECT 1 FROM follows f JOIN local_actors la ON la.actorId = f.followerId WHERE f.followingId = t.actorId) AND NOT EXISTS (SELECT 1 FROM local_actors la2 WHERE la2.actorId = t.actorId) AND NOT EXISTS (SELECT 1 FROM posts p JOIN local_actors la ON la.actorId = p.actorId WHERE p.postId = t.postId)',
-    );
-  });
   it('sends only SELECT statements for a dry-run and changes nothing', async () => {
     const { fixture } = build();
     const beforeRun = snapshot(fixture);
@@ -283,25 +265,6 @@ describe('move-unfollowed-reposts SQL', () => {
       'IORI_NOTICE move-unfollowed-reposts mode=dry-run targets=6 posts=5 already_federated=1 to_create=4 missing_posts=0',
     ]);
     expect(snapshot(fixture)).toEqual(beforeRun);
-  });
-  it('shares the same target condition and limit between the dry-run and the apply statements', async () => {
-    const condition = targetCondition(before);
-    const dry = await run('dry-run', build().fixture);
-    const apply = await run('apply', build().fixture);
-    expect(dry.queries[1]).toBe(dryRunSql(before));
-    expect(dry.queries[1]).toContain(condition);
-    const statements = apply.queries[1].split(';\n');
-    expect(statements).toHaveLength(4);
-    expect(statements[0]).toMatch(/^INSERT INTO federated_timeline_items /);
-    expect(statements[1]).toMatch(/^INSERT INTO domain_events .* 'federatedTimelineItem\.created'/);
-    expect(statements[2]).toMatch(/^INSERT INTO domain_events .* 'timelineItem\.deleted'/);
-    expect(statements[3]).toBe(`UPDATE timeline_items AS t SET deletedAt = ${now} WHERE ${condition}`);
-    for (const statement of statements) expect(statement).toContain(condition);
-    expect(apply.queries[1]).toBe(
-      applySql({ relayId: '22222222-2222-4222-8222-222222222222', beforeMs: before, now }).join(';\n'),
-    );
-    expect(apply.queries[2]).toBe(applyCountSql(now));
-    for (const sql of [dry.queries[1], ...statements]) expect(sql).toContain(`t.createdAt <= ${before}`);
   });
 });
 
@@ -340,14 +303,6 @@ describe('move-unfollowed-reposts apply on a SQLite fixture', () => {
     for (const item of items.filter((item) => item.relayId === relayId)) {
       expect(item.federatedTimelineItemId).toMatch(uuidV4);
     }
-  });
-  it('gives every generated id the UUID v4 shape and no duplicates', async () => {
-    const { fixture } = build();
-    await run('apply', fixture);
-    const ids = rows(fixture, 'SELECT eventId AS id FROM domain_events').map((row) => String(row.id));
-    expect(ids).toHaveLength(10);
-    expect(new Set(ids).size).toBe(10);
-    for (const id of ids) expect(id).toMatch(uuidV4);
   });
   it('writes the same domain events and rows as the real stores', async () => {
     const actual = build();

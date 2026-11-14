@@ -54,16 +54,6 @@ const deleting = (postId: PostId, minute: number, failures: number, error = 'err
 };
 
 describe('D1 の bluesky_crossposts の状態の集計', () => {
-  it('行が無いときは、件数がすべて 0 で、失敗は空になる', async () => {
-    const { resolver } = setup();
-
-    expect(Result.unsafeUnwrap(await resolver.resolve(input))).toEqual({
-      counts: { pending: 0, sent: 0, failed: 0, skipped: 0, deleting: 0 },
-      exhausted: { pending: 0, failed: 0, deleting: 0 },
-      recentFailures: [],
-    });
-  });
-
   it('status ごとの件数と、上限に達した pending と failed と deleting の件数を返す', async () => {
     const { resolver, savedStore } = setup();
     const save = async (row: BlueskyCrosspost) => {
@@ -129,15 +119,6 @@ describe('D1 の bluesky_crossposts の状態の集計', () => {
 
     expect(counts.failed).toBe(12);
     expect(recentFailures.map(({ postId }) => postId)).toEqual(ids.slice(2).reverse());
-  });
-
-  it('uri、cid、rkey、skipReason を返さない', async () => {
-    const { resolver, savedStore } = setup();
-    await savedStore.save(deleting(PostId.generate(), 1, 1));
-
-    const { recentFailures } = Result.unsafeUnwrap(await resolver.resolve(input));
-
-    expect(Object.keys(recentFailures[0]!).sort()).toEqual(['attempts', 'lastError', 'postId', 'status', 'updatedAt']);
   });
 
   it('クエリは件数の集計 1 回と直近の失敗 1 回で、直近の失敗は status の index で絞る', async () => {

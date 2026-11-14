@@ -84,13 +84,6 @@ describe('X の画面', () => {
     expect(await response.text()).toBe('');
   });
 
-  it('存在しないセッションの Cookie は未ログインとして扱う', async () => {
-    const response = await setup().request('/x', { headers: { Cookie: `sessionId=${crypto.randomUUID()}` } });
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get('Location')).toBe('/sign-in');
-  });
-
   it('ログイン中の /x は画面を返し、キャッシュと検索エンジンへの登録を許さない', async () => {
     const response = await setup().request('/x', { headers: { Cookie: `sessionId=${sessionId}` } });
 

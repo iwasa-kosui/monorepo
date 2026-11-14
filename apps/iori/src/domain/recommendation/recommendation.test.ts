@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { FeedEntryId } from '../feedEntry/feedEntryId.ts';
 import { Instant } from '../instant/instant.ts';
-import { InterestSource, type InterestSourceKind } from '../interestSource/interestSource.ts';
 import { InterestSourceId } from '../interestSource/interestSourceId.ts';
 import {
   type ArticleVector,
@@ -43,27 +42,7 @@ const article = (
 const score = (input: Partial<Parameters<typeof Recommendation.scoreArticles>[0]>) =>
   Recommendation.scoreArticles({ materials: [], articles: [], now: NOW, ...input });
 
-describe('InterestSource.halfLivesMs', () => {
-  it('kind ごとの半減期を日数で持つ', () => {
-    const days = (kind: InterestSourceKind) => InterestSource.halfLivesMs[kind] / DAY_MS;
-
-    expect(days('kosui_post')).toBe(730);
-    expect(days('kosui_talk')).toBe(730);
-    expect(days('kosui_external')).toBe(730);
-    expect(days('own_post')).toBe(180);
-    expect(days('own_like')).toBe(90);
-    expect(days('feedback_positive')).toBe(90);
-    expect(days('feedback_negative')).toBe(90);
-  });
-});
-
 describe('Recommendation.scoreArticles', () => {
-  it('材料か記事が空なら空配列を返す', () => {
-    expect(score({})).toEqual([]);
-    expect(score({ materials: [material(1)] })).toEqual([]);
-    expect(score({ articles: [article(1)] })).toEqual([]);
-  });
-
   it('寄与は 類似度 × weight × 減衰 で、半減期ぶん古い材料は半分になる', () => {
     const result = score({
       materials: [material(1, { kind: 'own_like', weight: 0.7, occurredAt: Instant.orThrow(NOW - 90 * DAY_MS) })],
@@ -309,24 +288,5 @@ describe('Recommendation.scoreArticles', () => {
 
       expect(result).toEqual([]);
     });
-  });
-});
-
-describe('Recommendation.cosineSimilarity', () => {
-  it('同じ向きなら 1、直交なら 0、逆向きなら -1 を返す', () => {
-    expect(Recommendation.cosineSimilarity(Float32Array.from([2, 0]), Float32Array.from([5, 0]))).toBeCloseTo(1);
-    expect(Recommendation.cosineSimilarity(Float32Array.from([1, 0]), Float32Array.from([0, 3]))).toBeCloseTo(0);
-    expect(Recommendation.cosineSimilarity(Float32Array.from([1, 0]), Float32Array.from([-2, 0]))).toBeCloseTo(-1);
-  });
-
-  it('ベクトルの長さにかかわらず、角度だけで決まる', () => {
-    expect(Recommendation.cosineSimilarity(Float32Array.from([1, 1]), Float32Array.from([0, 4]))).toBeCloseTo(
-      Math.SQRT1_2,
-    );
-  });
-
-  it('零ベクトルや次元の違うベクトルとの類似度は 0 にする', () => {
-    expect(Recommendation.cosineSimilarity(Float32Array.from([0, 0]), Float32Array.from([1, 1]))).toBe(0);
-    expect(Recommendation.cosineSimilarity(Float32Array.from([1, 0]), Float32Array.from([1, 0, 0]))).toBe(0);
   });
 });

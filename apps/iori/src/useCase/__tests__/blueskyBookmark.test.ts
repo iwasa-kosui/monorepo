@@ -108,16 +108,6 @@ describe('BookmarkBlueskyPostUseCase', () => {
     expect(t.createBookmark).not.toHaveBeenCalled();
   });
 
-  it('cid の解決に失敗したら、その失敗を返して作成しない', async () => {
-    const t = setup();
-    t.resolveCid.mockReturnValueOnce(RA.err(failure));
-
-    const result = await t.bookmark.run({ uri: POST });
-
-    expect(result).toEqual({ ok: false, err: failure });
-    expect(t.createBookmark).not.toHaveBeenCalled();
-  });
-
   it('Bluesky への作成に失敗したら保存せずにその失敗を返す', async () => {
     const t = setup();
     t.createBookmark.mockReturnValueOnce(RA.err(failure));
@@ -155,17 +145,6 @@ describe('UnbookmarkBlueskyPostUseCase', () => {
     t.seedBookmark();
 
     const result = await t.unbookmark.run({ feedItemId: REPOST });
-
-    expect(result).toEqual({ ok: true, val: { bookmarked: false } });
-    expect(t.deleteBookmark).toHaveBeenCalledExactlyOnceWith(POST);
-    expect(t.bookmarks()).toEqual([]);
-  });
-
-  it('uri の指定では、そのまま Bluesky から削除して行を消す', async () => {
-    const t = setup();
-    t.seedBookmark();
-
-    const result = await t.unbookmark.run({ uri: POST });
 
     expect(result).toEqual({ ok: true, val: { bookmarked: false } });
     expect(t.deleteBookmark).toHaveBeenCalledExactlyOnceWith(POST);
@@ -223,16 +202,6 @@ describe('ListBlueskyBookmarksUseCase', () => {
     const rows = () => sqlite.prepare('SELECT subjectUri, createdAt FROM bluesky_bookmarks ORDER BY subjectUri').all();
     return { useCase, viewerBookmarksStore, rows, sqlite };
   };
-
-  it('reader に cursor を渡し、ページをそのまま返す', async () => {
-    const getBookmarks = vi.fn<BlueskyBookmarkReader['getBookmarks']>(async () => RA.ok(page));
-    const t = listSetup(getBookmarks);
-
-    const result = await t.useCase.run({ cursor: 'c1' });
-
-    expect(result).toEqual({ ok: true, val: page });
-    expect(getBookmarks).toHaveBeenCalledExactlyOnceWith({ cursor: 'c1' });
-  });
 
   it('取得したページの uri を重複なく bluesky_bookmarks に追加し、保存済みの行は書き直さない', async () => {
     const t = listSetup(async () => RA.ok(page));

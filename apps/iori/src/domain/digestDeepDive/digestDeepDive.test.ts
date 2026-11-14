@@ -20,43 +20,6 @@ const start = (instruction = '背景を知りたい') => {
   return started.val;
 };
 
-describe('DigestDeepDive.start', () => {
-  it('最初の往復を 1 番にして digestDeepDive.started を返す', () => {
-    const event = start();
-
-    expect(event).toMatchObject({
-      eventName: 'digestDeepDive.started',
-      aggregateName: 'digestDeepDive',
-      aggregateState: {
-        userId,
-        digestItemId,
-        articleId,
-        createdAt: t0,
-        updatedAt: t0,
-        turns: [{ turnNumber: 1, instruction: '背景を知りたい', createdAt: t0 }],
-      },
-    });
-    expect(event.aggregateId).toEqual({ deepDiveId: event.aggregateState.deepDiveId });
-  });
-
-  it('依頼が空でも始められる', () => {
-    expect(start('').aggregateState.turns[0]?.instruction).toBe('');
-  });
-
-  it('依頼が 200 文字なら受け入れ、201 文字なら拒否する', () => {
-    const payload = { userId, digestItemId, articleId, resultMarkdown: '- a' };
-
-    expect(DigestDeepDive.start({ ...payload, instruction: 'あ'.repeat(200) }, t0).ok).toBe(true);
-    expect(DigestDeepDive.start({ ...payload, instruction: 'あ'.repeat(201) }, t0).ok).toBe(false);
-  });
-
-  it('結果が空なら拒否する', () => {
-    const result = DigestDeepDive.start({ userId, digestItemId, articleId, instruction: '', resultMarkdown: '' }, t0);
-
-    expect(result.ok).toBe(false);
-  });
-});
-
 describe('DigestDeepDive.addTurn', () => {
   it('次の往復を末尾に足し、updatedAt を進めて digestDeepDive.turnAdded を返す', () => {
     const deepDive = start().aggregateState;

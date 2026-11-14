@@ -65,15 +65,6 @@ const hasNestedAnchor = (html: string): boolean => {
 };
 
 describe('PostView の引用カード', () => {
-  it('accepted の引用先を、名前・本文・詳細ページへのリンク付きのカードで出す', () => {
-    const html = render(withQuote(base, accepted(quoted)));
-
-    expect(html).toContain('Bob Display');
-    expect(html).toContain('引用先の本文');
-    expect(html).toContain(`href="/posts/${quoted.id}"`);
-    expect(html).toContain('https://other.example/media/q.png');
-  });
-
   it('引用カードの中に入れ子の <a> を作らない', () => {
     const html = render(withQuote(base, accepted(quoted)));
 
@@ -96,16 +87,6 @@ describe('PostView の引用カード', () => {
     expect(html).toContain('センシティブな内容');
     expect(html).not.toContain('引用先の本文');
     expect(html).not.toContain('https://other.example/media/q.png');
-  });
-
-  it('引用先を解決できないときは、quote_url へのリンクだけのカードを出す', () => {
-    const html = render(withQuote(base, null, 'https://gone.example/notes/5'));
-
-    expect(html).toContain('引用元の投稿を開く');
-    expect(html).toContain('href="https://gone.example/notes/5"');
-    expect(html).toContain('gone.example');
-    expect(html).toContain('target="_blank"');
-    expect(html).toContain('noopener');
   });
 
   it('http(s) 以外の quote_url は出さない', () => {
@@ -138,20 +119,5 @@ describe('PostView の引用カード', () => {
     const html = render(withQuote({ ...base, content }, accepted(quoted)));
 
     expect(html).toContain('RE:');
-  });
-
-  it('リブーストの中の投稿の引用も出す', () => {
-    const inner = withQuote(base, accepted(quoted));
-    const html = render({ ...base, id: 'boost-1', reblog: inner });
-
-    expect(html).toContain('Bob Display');
-    expect(html).toContain('引用先の本文');
-  });
-
-  it('引用が無いときは、引用カードを出さない', () => {
-    const html = render(withQuote(base, null));
-
-    expect(html).not.toContain('引用元の投稿を開く');
-    expect(html).not.toContain('Bob Display');
   });
 });

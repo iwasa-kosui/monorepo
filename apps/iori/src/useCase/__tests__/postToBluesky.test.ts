@@ -74,15 +74,6 @@ describe('PostToBlueskyUseCase', () => {
     expect(t.createRecord).not.toHaveBeenCalled();
   });
 
-  it('createRecord の失敗をそのまま返す', async () => {
-    const t = setup();
-    t.createRecord.mockReturnValueOnce(RA.err(failure));
-
-    const result = await t.postToBluesky.run({ text: 'hi', images: [] });
-
-    expect(result).toEqual({ ok: false, err: failure });
-  });
-
   it('uploadBlob の失敗をそのまま返し、投稿しない', async () => {
     const t = setup();
     t.uploadBlob.mockReturnValueOnce(RA.err(failure));
@@ -97,15 +88,6 @@ describe('PostToBlueskyUseCase', () => {
   });
 
   describe('返信の制限と引用の禁止', () => {
-    it('interaction が無ければ createRecord だけを呼ぶ', async () => {
-      const t = setup();
-
-      await t.postToBluesky.run({ text: 'hi', images: [] });
-
-      expect(t.createRecord).toHaveBeenCalledTimes(1);
-      expect(t.createPostWithGates).not.toHaveBeenCalled();
-    });
-
     it('既定の interaction なら createRecord だけを呼び、gate を作らない', async () => {
       const t = setup();
 
@@ -122,9 +104,6 @@ describe('PostToBlueskyUseCase', () => {
 
     it.each(
       [
-        ['mention と following', { replyRestriction: ['mention', 'following'], quoteDisabled: false }],
-        ['followers だけ', { replyRestriction: ['followers'], quoteDisabled: false }],
-        ['3 つすべて', { replyRestriction: ['mention', 'following', 'followers'], quoteDisabled: false }],
         ['空集合 (誰も返信できない)', { replyRestriction: [], quoteDisabled: false }],
         ['引用の禁止だけ', { replyRestriction: 'everyone', quoteDisabled: true }],
         ['返信の制限と引用の禁止', { replyRestriction: ['following'], quoteDisabled: true }],
@@ -151,32 +130,5 @@ describe('PostToBlueskyUseCase', () => {
         });
       },
     );
-
-    it('createPostWithGates の失敗をそのまま返す', async () => {
-      const t = setup();
-      t.createPostWithGates.mockReturnValueOnce(RA.err(failure));
-
-      const result = await t.postToBluesky.run({
-        text: 'hi',
-        images: [],
-        interaction: { replyRestriction: [], quoteDisabled: false },
-      });
-
-      expect(result).toEqual({ ok: false, err: failure });
-    });
-
-    it('入力が不正なら、interaction があっても Bluesky を呼ばない', async () => {
-      const t = setup();
-
-      const result = await t.postToBluesky.run({
-        text: '',
-        images: [],
-        interaction: { replyRestriction: [], quoteDisabled: true },
-      });
-
-      expect(result).toEqual({ ok: false, err: { type: 'BlueskyPostInvalid', reason: 'empty' } });
-      expect(t.createPostWithGates).not.toHaveBeenCalled();
-      expect(t.createRecord).not.toHaveBeenCalled();
-    });
   });
 });

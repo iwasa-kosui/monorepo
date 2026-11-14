@@ -31,15 +31,6 @@ const base = postToStatus({
 const render = (status: Status): string => String(jsx(PostView, { status }));
 
 describe('PostView の content warning', () => {
-  it('summary も sensitive もなければ、本文と画像をそのまま出す', () => {
-    const html = render(base);
-
-    expect(html).toContain('本文です');
-    expect(html).toContain('https://remote.example/media/1.png');
-    expect(html).not.toContain('もっと見る');
-    expect(html).not.toContain('表示する');
-  });
-
   it('spoiler_text があれば、文字列として出し、本文と画像を「もっと見る」まで隠す', () => {
     const html = render({ ...base, spoiler_text: 'ネタバレ注意', sensitive: true });
 

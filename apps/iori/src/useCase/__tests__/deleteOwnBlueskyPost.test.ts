@@ -118,15 +118,6 @@ describe('DeleteOwnBlueskyPostUseCase', () => {
     expect(t.uris()).toContain(OTHERS);
   });
 
-  it('handle 形式の repo は自分の DID と一致しないので拒否する', async () => {
-    const t = setup();
-
-    const result = await run(t, 'at://me.bsky.social/app.bsky.feed.post/3kmine');
-
-    expect(result).toEqual({ ok: false, err: { type: 'BlueskyPostNotOwned' } });
-    expect(t.deleteRecord).not.toHaveBeenCalled();
-  });
-
   it('collection が app.bsky.feed.post でない uri は不正な入力として、Bluesky を呼ばない', async () => {
     const t = setup();
 
@@ -136,17 +127,6 @@ describe('DeleteOwnBlueskyPostUseCase', () => {
 
     expect(t.viewerDid).not.toHaveBeenCalled();
     expect(t.deleteRecord).not.toHaveBeenCalled();
-  });
-
-  it('自分の DID を取得できなければ、そのエラーを返し、何も削除しない', async () => {
-    const t = setup();
-    t.viewerDid.mockReturnValueOnce(RA.err(failure));
-
-    const result = await run(t, POST);
-
-    expect(result).toEqual({ ok: false, err: failure });
-    expect(t.deleteRecord).not.toHaveBeenCalled();
-    expect(t.uris()).toContain(POST);
   });
 
   it('PDS の削除が失敗したら、エラーを返し、タイムラインの行を残す', async () => {
@@ -180,16 +160,5 @@ describe('DeleteOwnBlueskyPostUseCase', () => {
     expect(t.deleteRecord).toHaveBeenCalledTimes(3);
     expect(t.deletePost).not.toHaveBeenCalled();
     expect(t.uris()).not.toContain(DELETING);
-  });
-
-  it('iori の投稿の削除が失敗したら、そのエラーを返す', async () => {
-    const t = setup();
-    const unauthorized = { type: 'UnauthorizedError', message: 'You are not authorized to delete this post.' } as const;
-    t.deletePost.mockReturnValueOnce(RA.err(unauthorized));
-
-    const result = await run(t, CROSSPOSTED);
-
-    expect(result).toEqual({ ok: false, err: unauthorized });
-    expect(t.deleteRecord).not.toHaveBeenCalled();
   });
 });

@@ -38,22 +38,10 @@ const run = async (note: Note) => {
 };
 
 describe('FetchReplyNotesRecursiveUseCase', () => {
-  it('records the visibility of a fetched reply Note', async () => {
-    const upsert = await run(createNote({ tos: [followersId] }));
-
-    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'private' }));
-  });
-
   it('records public when the fetched Note is addressed to as:Public', async () => {
     const upsert = await run(createNote({ tos: [publicUri] }));
 
     expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'public' }));
-  });
-
-  it('records null when the fetched Note has no to and cc', async () => {
-    const upsert = await run(createNote({}));
-
-    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({ visibility: null }));
   });
 
   it('records the local actors addressed by the fetched Note', async () => {

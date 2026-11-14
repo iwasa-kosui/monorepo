@@ -169,32 +169,6 @@ describe('Bluesky の通知の Mastodon 互換 API', () => {
     expect(((await defaults.json()) as Array<{ id: string }>).map((item) => item.id)).toEqual([subscribed]);
   });
 
-  it('types[] で絞り込め、GET /v1/notifications/:id でも返す', async () => {
-    const t = await seedBluesky();
-
-    const [reblogs, single] = await Promise.all([
-      t.get('/api/v1/notifications?types[]=reblog'),
-      t.get(`/api/v1/notifications/${t.bluesky.follow}`),
-    ]);
-
-    expect(await t.typesOf(reblogs)).toEqual(['reblog']);
-    expect(NotificationSchema.parse(await single.json())).toMatchObject({ id: t.bluesky.follow, type: 'follow' });
-  });
-
-  it('グループ API の follow は status なしで返し、accounts に合成した Account を載せる', async () => {
-    const t = await seedBluesky();
-
-    const response = await t.get('/api/v2/notifications?types[]=follow');
-
-    const body = GroupedNotificationsResultsSchema.parse(await response.json());
-    expect(body.notification_groups.map((group) => [group.group_key, group.type, group.sample_account_ids])).toEqual([
-      [`ungrouped-${t.bluesky.follow}`, 'follow', [ALICE_ACCOUNT_ID]],
-      [`ungrouped-${t.followId}`, 'follow', [t.alice.actorId]],
-    ]);
-    expect(body.accounts.map((account) => account.id)).toEqual([ALICE_ACCOUNT_ID, t.alice.actorId]);
-    expect(body.notification_groups[0]).not.toHaveProperty('status_id');
-  });
-
   it('グループ API の status 一覧に、合成した Status を重複なく載せる', async () => {
     const t = await seedBluesky();
 

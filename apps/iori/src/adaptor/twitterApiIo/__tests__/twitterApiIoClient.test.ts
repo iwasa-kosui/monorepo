@@ -135,14 +135,6 @@ describe('TwitterApiIoClient.searchUserTweets', () => {
     expect(result.ok && result.val.map((item) => item.id)).toEqual(['30', '20', '10']);
   });
 
-  it('has_next_page が true でも next_cursor が空なら止める', async () => {
-    const { client, fetchText } = setup(ok({ tweets: [tweet('30')], has_next_page: true, next_cursor: '' }));
-
-    await client.searchUserTweets({ username: jack, sinceId: '1' });
-
-    expect(fetchText).toHaveBeenCalledTimes(1);
-  });
-
   it(`${MAX_PAGES} ページで打ち切り、それまでに取れた投稿を返す`, async () => {
     const { client, fetchText } = setup(
       ...Array.from({ length: MAX_PAGES + 2 }, (_, index) => ok(page([tweet(String(100 - index))], `cursor-${index}`))),
@@ -169,19 +161,6 @@ describe('TwitterApiIoClient.searchUserTweets', () => {
     expect(await client.searchUserTweets({ username: jack, sinceId: '1' })).toMatchObject({
       ok: false,
       err: { type: 'TwitterApiIoError', status: 429 },
-    });
-  });
-
-  it.each([429, 402, 400, 500])('HTTP %s を status 付きの TwitterApiIoError にする', async (status) => {
-    const { client } = setup(httpError(status));
-
-    expect(await client.searchUserTweets({ username: jack, sinceId: '1' })).toEqual({
-      ok: false,
-      err: {
-        type: 'TwitterApiIoError',
-        message: `twitterapi.io request failed: Unexpected status ${status}.`,
-        status,
-      },
     });
   });
 

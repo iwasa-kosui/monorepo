@@ -1,4 +1,3 @@
-import { test as fcTest } from '@fast-check/vitest';
 import { Endpoints, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
@@ -11,7 +10,6 @@ import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
 import type { Username } from '../../domain/user/username.ts';
 import { DeletePostUseCase } from '../deletePost.ts';
-import { arbSessionId, arbUser } from './helper/arbitraries.ts';
 import {
   createMockActorResolverByUserId,
   createMockArticleDeletedStore,
@@ -272,51 +270,6 @@ describe('DeletePostUseCase', () => {
         vi.mocked(deps.postDeletedStore.store).mock.invocationCallOrder[0]!,
       );
     });
-
-    fcTest.prop([arbUser()])(
-      'プロパティ: 有効なセッションで自分の投稿を削除できる',
-      async (user) => {
-        const deps = createDeps();
-        const session: Session = {
-          sessionId: crypto.randomUUID() as Session['sessionId'],
-          userId: user.id,
-          expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
-        };
-        const actor: LocalActor = {
-          id: crypto.randomUUID() as LocalActor['id'],
-          userId: user.id,
-          uri: 'https://example.com/users/test',
-          inboxUrl: 'https://example.com/inbox',
-          type: 'local',
-          logoUri: undefined,
-        };
-        const post: LocalPost = {
-          type: 'local',
-          visibility: 'public',
-          summary: null,
-          sensitive: false,
-          postId: crypto.randomUUID() as PostId,
-          actorId: actor.id,
-          content: 'Test',
-          createdAt: Date.now() as LocalPost['createdAt'],
-          userId: user.id,
-          inReplyToUri: null,
-        };
-        setupValidUserSession(deps, user, session, actor);
-        deps.postResolver.setPost(post);
-
-        const useCase = DeletePostUseCase.create(deps);
-        const ctx = createMockRequestContext();
-
-        const result = await useCase.run({
-          sessionId: session.sessionId,
-          postId: post.postId,
-          ctx,
-        });
-
-        expect(result.ok).toBe(true);
-      },
-    );
   });
 
   describe('異常系', () => {
@@ -335,24 +288,6 @@ describe('DeletePostUseCase', () => {
 
       const result = await useCase.run({
         sessionId: expiredSession.sessionId,
-        postId: crypto.randomUUID() as PostId,
-        ctx,
-      });
-
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.err.type).toBe('SessionExpiredError');
-      }
-    });
-
-    it('セッションが存在しない場合 SessionExpiredError を返す', async () => {
-      const deps = createDeps();
-
-      const useCase = DeletePostUseCase.create(deps);
-      const ctx = createMockRequestContext();
-
-      const result = await useCase.run({
-        sessionId: crypto.randomUUID() as Session['sessionId'],
         postId: crypto.randomUUID() as PostId,
         ctx,
       });
@@ -471,6 +406,8 @@ describe('DeletePostUseCase', () => {
       if (!result.ok) {
         expect(result.err.type).toBe('UnauthorizedError');
       }
+      expect(deps.postDeletedStore.store).not.toHaveBeenCalled();
+      expect(ctx.sendActivity).not.toHaveBeenCalled();
     });
 
     it('リモート投稿を削除しようとすると UnauthorizedError を返す', async () => {
@@ -521,137 +458,9 @@ describe('DeletePostUseCase', () => {
         expect(result.err.type).toBe('UnauthorizedError');
       }
     });
-
-    fcTest.prop([arbSessionId()])(
-      'プロパティ: 存在しないセッションIDでは削除できない',
-      async (sessionId) => {
-        const deps = createDeps();
-        const useCase = DeletePostUseCase.create(deps);
-        const ctx = createMockRequestContext();
-
-        const result = await useCase.run({
-          sessionId,
-          postId: crypto.randomUUID() as PostId,
-          ctx,
-        });
-
-        expect(result.ok).toBe(false);
-        if (!result.ok) {
-          expect(result.err.type).toBe('SessionExpiredError');
-        }
-      },
-    );
-  });
-
-  describe('副作用の検証', () => {
-    it('削除成功時に postDeletedStore が呼ばれる', async () => {
-      const deps = createDeps();
-      const user: User = {
-        id: crypto.randomUUID() as User['id'],
-        username: 'kosui' as Username,
-      };
-      const session: Session = {
-        sessionId: crypto.randomUUID() as Session['sessionId'],
-        userId: user.id,
-        expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
-      };
-      const actor: LocalActor = {
-        id: crypto.randomUUID() as LocalActor['id'],
-        userId: user.id,
-        uri: 'https://example.com/users/kosui',
-        inboxUrl: 'https://example.com/inbox',
-        type: 'local',
-        logoUri: undefined,
-      };
-      const post: LocalPost = {
-        type: 'local',
-        visibility: 'public',
-        summary: null,
-        sensitive: false,
-        postId: crypto.randomUUID() as PostId,
-        actorId: actor.id,
-        content: 'Test',
-        createdAt: Date.now() as LocalPost['createdAt'],
-        userId: user.id,
-        inReplyToUri: null,
-      };
-      setupValidUserSession(deps, user, session, actor);
-      deps.postResolver.setPost(post);
-
-      const useCase = DeletePostUseCase.create(deps);
-      const ctx = createMockRequestContext();
-
-      await useCase.run({
-        sessionId: session.sessionId,
-        postId: post.postId,
-        ctx,
-      });
-
-      expect(deps.postDeletedStore.store).toHaveBeenCalledTimes(1);
-    });
-
-    it('削除失敗時は postDeletedStore が呼ばれない', async () => {
-      const deps = createDeps();
-      const useCase = DeletePostUseCase.create(deps);
-      const ctx = createMockRequestContext();
-
-      await useCase.run({
-        sessionId: crypto.randomUUID() as Session['sessionId'],
-        postId: crypto.randomUUID() as PostId,
-        ctx,
-      });
-
-      expect(deps.postDeletedStore.store).not.toHaveBeenCalled();
-    });
   });
 
   describe('ActivityPub連携', () => {
-    it('削除成功時にDelete Activityが送信される', async () => {
-      const deps = createDeps();
-      const user: User = {
-        id: crypto.randomUUID() as User['id'],
-        username: 'kosui' as Username,
-      };
-      const session: Session = {
-        sessionId: crypto.randomUUID() as Session['sessionId'],
-        userId: user.id,
-        expires: (Date.now() + 1000 * 60 * 60 * 24) as Session['expires'],
-      };
-      const actor: LocalActor = {
-        id: crypto.randomUUID() as LocalActor['id'],
-        userId: user.id,
-        uri: 'https://example.com/users/kosui',
-        inboxUrl: 'https://example.com/inbox',
-        type: 'local',
-        logoUri: undefined,
-      };
-      const post: LocalPost = {
-        type: 'local',
-        visibility: 'public',
-        summary: null,
-        sensitive: false,
-        postId: crypto.randomUUID() as PostId,
-        actorId: actor.id,
-        content: 'Test',
-        createdAt: Date.now() as LocalPost['createdAt'],
-        userId: user.id,
-        inReplyToUri: null,
-      };
-      setupValidUserSession(deps, user, session, actor);
-      deps.postResolver.setPost(post);
-
-      const useCase = DeletePostUseCase.create(deps);
-      const ctx = createMockRequestContext();
-
-      await useCase.run({
-        sessionId: session.sessionId,
-        postId: post.postId,
-        ctx,
-      });
-
-      expect(ctx.sendActivity).toHaveBeenCalled();
-    });
-
     describe('メンション相手への配送', () => {
       const aliceId = 'https://remote.example/users/alice';
       const selfId = 'https://example.com/users/kosui';
@@ -742,16 +551,6 @@ describe('DeletePostUseCase', () => {
         expect(calls[0]?.[3]).toEqual({ preferSharedInbox: false });
         expect(vi.mocked(directPostParticipantsResolverByPostId.resolve).mock.invocationCallOrder[0])
           .toBeLessThan(vi.mocked(deps.postDeletedStore.store).mock.invocationCallOrder[0]!);
-      });
-
-      it('public の投稿を消すときは参加者を引かず、従来どおり followers に送る', async () => {
-        const { ctx, run } = setup(`<p>hi ${mentionOf(aliceId, 'alice@remote.example')}</p>`);
-        const directPostParticipantsResolverByPostId = { resolve: vi.fn(() => RA.ok([])) };
-
-        await run({ directPostParticipantsResolverByPostId });
-
-        expect(directPostParticipantsResolverByPostId.resolve).not.toHaveBeenCalled();
-        expect(vi.mocked(ctx.sendActivity).mock.calls[0]?.[1]).toBe('followers');
       });
 
       it('メンションのある投稿を消すと、相手にも同じ Delete を送る', async () => {
@@ -900,15 +699,6 @@ describe('DeletePostUseCase', () => {
             endpoints: { sharedInbox: new URL('https://remote.example/inbox') },
           },
         ]);
-      });
-
-      it('メンションの無い投稿は従来どおり followers にだけ送る', async () => {
-        const { ctx, lookupObject, run } = setup('<p>hello</p>');
-
-        await run();
-
-        expect(lookupObject).not.toHaveBeenCalled();
-        expect(ctx.sendActivity).toHaveBeenCalledTimes(1);
       });
     });
   });

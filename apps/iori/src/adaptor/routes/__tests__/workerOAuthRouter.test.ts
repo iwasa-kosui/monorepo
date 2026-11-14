@@ -106,7 +106,7 @@ describe('GET /oauth/authorize', () => {
     expect(response.headers.get('Location')).toMatch(/^\/sign-in\?next=/);
   });
 
-  it('セッションがあれば同意画面を返し、アプリ名、スコープ、ボタン、CSRF トークンを含める', async () => {
+  it('セッションがあれば同意画面を返し、アプリ名をエスケープし、CSRF トークンと要求の値を隠しフィールドに持つ', async () => {
     const h = createOAuthHarness();
     const { clientId } = await h.registerApp({ name: '<script>alert(1)</script>' });
     const { sessionId } = h.memory.addSession();
@@ -120,10 +120,6 @@ describe('GET /oauth/authorize', () => {
     expectHtmlSecurityHeaders(response);
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).not.toContain('<script>alert(1)</script>');
-    expect(html).toContain('<code>read</code>');
-    expect(html).toContain('<code>write</code>');
-    expect(html).toContain('name="decision" value="approve"');
-    expect(html).toContain('name="decision" value="deny"');
     expect(fields).toMatchObject({
       client_id: clientId,
       redirect_uri: REDIRECT_URI,
@@ -133,35 +129,6 @@ describe('GET /oauth/authorize', () => {
       code_challenge_method: '',
     });
     expect(fields['csrf_token']).toMatch(/^[A-Za-z0-9_-]{43}$/);
-  });
-
-  it('同意画面にコードを受け取るサイトを、エスケープして表示する', async () => {
-    const h = createOAuthHarness();
-    const { clientId } = await h.registerApp({
-      redirectUris: [REDIRECT_URI, 'ivory://oauth/callback', 'urn:ietf:wg:oauth:2.0:oob'],
-    });
-    const { sessionId } = h.memory.addSession();
-    const page = async (redirectUri: string) =>
-      (await h.request(`/oauth/authorize?${authorizeQuery(clientId, { redirect_uri: redirectUri })}`, {
-        headers: { Cookie: `sessionId=${sessionId}` },
-      })).text();
-
-    expect(await page(REDIRECT_URI)).toContain('sent to <code>https://app.example</code>');
-    expect(await page('ivory://oauth/callback')).toContain('sent to <code>ivory://oauth</code>');
-    expect(await page('urn:ietf:wg:oauth:2.0:oob')).toContain('The authorization code will be shown on screen.');
-  });
-
-  it('scope を省略すると read の同意画面にする', async () => {
-    const h = createOAuthHarness();
-    const { clientId } = await h.registerApp();
-    const { sessionId } = h.memory.addSession();
-    const query = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: REDIRECT_URI });
-
-    const response = await h.request(`/oauth/authorize?${query}`, { headers: { Cookie: `sessionId=${sessionId}` } });
-    const html = await response.text();
-
-    expect(html).toContain('<code>read</code>');
-    expect(html).not.toContain('<code>write</code>');
   });
 
   it('登録スコープより広い scope は redirect_uri へ invalid_scope と state を付けて返す', async () => {

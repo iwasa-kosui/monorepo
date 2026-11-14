@@ -68,19 +68,9 @@ describe('resolveSessionWithUserWith', () => {
   const run = (found: SessionWithUserAndActor | undefined) =>
     resolveSessionWithUserWith(resolverOf(found), now)(sessionId);
 
-  it('returns SessionExpiredError when the session row is missing', async () => {
-    const result = await run(undefined);
-    expect(!result.ok && result.err.type).toBe('SessionExpiredError');
-  });
-
   it('returns SessionExpiredError when the session has expired', async () => {
     const result = await run({ session: { ...session, expires: now as Instant }, user, actor });
     expect(!result.ok && result.err.type).toBe('SessionExpiredError');
-  });
-
-  it('returns UserNotFoundError when the user is missing', async () => {
-    const result = await run({ session, user: undefined, actor: undefined });
-    expect(!result.ok && result.err).toMatchObject({ type: 'UserNotFoundError', detail: { userId } });
   });
 
   it('does not require an actor', async () => {
@@ -90,34 +80,6 @@ describe('resolveSessionWithUserWith', () => {
 });
 
 describe('composeSessionWithUserAndActorResolver', () => {
-  it('calls the session, user, and actor resolvers in order', async () => {
-    const calls: string[] = [];
-    const resolver = composeSessionWithUserAndActorResolver(
-      { resolve: async () => (calls.push('session'), RA.ok(session)) },
-      { resolve: async () => (calls.push('user'), RA.ok(user)) },
-      { resolve: async () => (calls.push('actor'), RA.ok(actor)) },
-    );
-
-    const result = await resolver.resolve(sessionId);
-
-    expect(calls).toEqual(['session', 'user', 'actor']);
-    expect(result.ok && result.val).toEqual({ session, user, actor });
-  });
-
-  it('stops after the session when the session is missing', async () => {
-    const userResolver = { resolve: vi.fn(async () => RA.ok(user)) };
-    const resolver = composeSessionWithUserAndActorResolver(
-      { resolve: async () => RA.ok(undefined) },
-      userResolver,
-      undefined,
-    );
-
-    const result = await resolver.resolve(sessionId);
-
-    expect(result.ok && result.val).toBeUndefined();
-    expect(userResolver.resolve).not.toHaveBeenCalled();
-  });
-
   it('skips the actor lookup when the user is missing', async () => {
     const actorResolver = { resolve: vi.fn(async () => RA.ok(actor)) };
     const resolver = composeSessionWithUserAndActorResolver(

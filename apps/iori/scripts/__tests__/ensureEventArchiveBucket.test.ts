@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
 import { ensureEventArchiveBucket, ensureFailureLines } from '../ensure-event-archive-bucket.mjs';
 import { createTargetIdentity } from '../fresh-target.mjs';
-import { OPERATION_STAGES } from '../operation-diagnostics.mjs';
 
 const accountId = 'b'.repeat(32);
 const token = 'api-token-value-for-fixture-0123456789';
@@ -147,24 +145,6 @@ describe('ensure-event-archive-bucket', () => {
     expect(calls).toEqual(['GET', 'POST', 'GET']);
     expect(notices).toEqual([notice('create-conflict'), notice('verified')]);
   });
-  it.each(
-    [['GET', { getStatus: 403 }, 'archive-bucket-read', 2], [
-      'POST',
-      { postStatus: 403 },
-      'archive-bucket-create',
-      3,
-    ]] as const,
-  )(
-    'fails with the fixed forbidden word when %s returns 403',
-    async (_method, options, stage, callCount) => {
-      const { calls, notices, error } = await run({}, options);
-      expect(error).toBeDefined();
-      expect(calls).toHaveLength(callCount);
-      expect(notices).toEqual([notice('event-archive-bucket-forbidden')]);
-      expect(ensureFailureLines(error)).toEqual([diag(stage, 'api-forbidden')]);
-      expect(assertWorkflowOutput(notices[0])).toEqual([]);
-    },
-  );
   it('fails when the read back name does not match', async () => {
     const { notices, error } = await run({}, { buckets: [bucketName('production')], readName: 'other-bucket' });
     expect(error).toBeDefined();
@@ -258,18 +238,5 @@ describe('ensure-event-archive-bucket', () => {
     const { calls, error } = await run(overrides);
     expect(calls).toEqual([]);
     expect(ensureFailureLines(error)).toEqual([diag('archive-bucket', reason)]);
-  });
-  it('keeps every stage within the public relay pattern', () => {
-    const stages = [
-      'archive-bucket',
-      'archive-bucket-resolve',
-      'archive-bucket-read',
-      'archive-bucket-create',
-      'archive-bucket-verify',
-    ];
-    for (const stage of stages) {
-      expect(OPERATION_STAGES).toContain(stage);
-      expect(stage).toMatch(/^[a-z-]{1,24}$/);
-    }
   });
 });

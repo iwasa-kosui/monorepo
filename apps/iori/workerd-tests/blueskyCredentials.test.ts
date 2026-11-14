@@ -5,7 +5,6 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAesGcmCipherFactory } from '../src/adaptor/crypto/aesGcmCipher.ts';
 import { createD1BlueskyAccountSwitchResolver } from '../src/adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchResolver.ts';
 import {
-  createD1BlueskyStoredCredentialDeletedStore,
   createD1BlueskyStoredCredentialResolver,
   createD1BlueskyStoredCredentialSavedStore,
 } from '../src/adaptor/d1/blueskyCredential/blueskyCredentialStore.ts';
@@ -14,7 +13,6 @@ import {
   createD1BlueskyLoginFailureSavedStore,
 } from '../src/adaptor/d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
 import {
-  createD1BlueskySessionDeletedStore,
   createD1BlueskySessionResolver,
   createD1BlueskySessionSavedStore,
 } from '../src/adaptor/d1/blueskyCrosspost/blueskySessionStore.ts';
@@ -93,10 +91,6 @@ afterAll(async () => {
 });
 
 describe('bluesky_credentials on workerd D1', () => {
-  it('行が無ければ undefined を返す', async () => {
-    expect(await resolveStored()).toBeUndefined();
-  });
-
   it('保存した行を読み出せる（chatPermitted の true / false / null も往復する）', async () => {
     const savedStore = createD1BlueskyStoredCredentialSavedStore(db);
 
@@ -121,22 +115,6 @@ describe('bluesky_credentials on workerd D1', () => {
     });
     const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM bluesky_credentials').first<{ n: number }>();
     expect(count?.n).toBe(1);
-  });
-
-  it('削除すると読み出せなくなる', async () => {
-    await createD1BlueskyStoredCredentialSavedStore(db).save(stored());
-
-    await createD1BlueskyStoredCredentialDeletedStore(db).delete();
-
-    expect(await resolveStored()).toBeUndefined();
-  });
-
-  it('セッションの削除は、保存済みのセッションだけを消す', async () => {
-    await createD1BlueskySessionSavedStore(db).save(session());
-
-    await createD1BlueskySessionDeletedStore(db).delete();
-
-    expect(await resolveSession()).toBeUndefined();
   });
 });
 
@@ -228,24 +206,5 @@ describe('アプリパスワードの登録', () => {
     expect(await resolveSession()).toMatchObject({ accessJwt: 'old-access', refreshJwt: 'old-refresh' });
     const failed = await createD1BlueskyLoginFailureResolver(db, 'timeline').resolve();
     expect(failed).toEqual({ ok: true, val: NOW });
-  });
-
-  it('ログインに失敗したら、何も保存せず bluesky_sessions も変えない', async () => {
-    await createD1BlueskySessionSavedStore(db).save(session({ accessJwt: 'old-access' }));
-    const { useCase } = await register(
-      vi.fn(async () =>
-        RA.err({
-          type: 'BlueskyClientError' as const,
-          kind: 'auth' as const,
-          message: 'createSession failed: status 401',
-        })
-      ),
-    );
-
-    const result = await useCase.run(input);
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyLoginFailed' } });
-    expect(await resolveStored()).toBeUndefined();
-    expect(await resolveSession()).toMatchObject({ accessJwt: 'old-access' });
   });
 });

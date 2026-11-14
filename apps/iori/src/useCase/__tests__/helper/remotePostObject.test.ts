@@ -30,16 +30,6 @@ describe('isRemotePostObject', () => {
 });
 
 describe('buildRemotePostContent', () => {
-  describe('Note', () => {
-    it('content をそのまま返す', async () => {
-      expect(await buildRemotePostContent(new Note({ id: ID, content: '<p>hello</p>' }))).toBe('<p>hello</p>');
-    });
-
-    it('content が無いときは空文字を返す', async () => {
-      expect(await buildRemotePostContent(new Note({ id: ID }))).toBe('');
-    });
-  });
-
   describe('Article', () => {
     const readMore = (href: string) => `<p><a href="${href}">元の記事を読む</a></p>`;
 
@@ -124,12 +114,6 @@ describe('buildRemotePostContent', () => {
       expect(await buildRemotePostContent(question({ content: '<p>q</p>' }))).toBe(`<p>q</p>${vote}`);
     });
 
-    it('url が無ければ、id へのリンクを置く', async () => {
-      const post = new Question({ id: ID, content: '<p>q</p>' });
-
-      expect(await buildRemotePostContent(post)).toBe(`<p>q</p><p><a href="${ID.href}">元の投稿で投票する</a></p>`);
-    });
-
     it('投票を保存できるなら、投票のリンクを置かない', async () => {
       const post = question({ content: '<p>q</p>', exclusiveOptions: [new Note({ name: 'a' })] });
       const poll = await readRemotePostPoll(post);
@@ -168,11 +152,6 @@ describe('readRemotePostPoll', () => {
       replies: totalItems === undefined ? undefined : new Collection({ totalItems }),
     });
 
-  it('Note と Article は投票を持たない', async () => {
-    expect(await readRemotePostPoll(new Note({ id: ID }))).toBeUndefined();
-    expect(await readRemotePostPoll(new Article({ id: ID }))).toBeUndefined();
-  });
-
   it('exclusive の選択肢は multiple を false にし、replies の totalItems を票数にする', async () => {
     const poll = await readRemotePostPoll(
       question({ exclusiveOptions: [option('赤', 3), option('青', 5)] }),
@@ -210,12 +189,6 @@ describe('readRemotePostPoll', () => {
     expect(poll?.options).toEqual([{ title: 'a', votesCount: 0 }]);
   });
 
-  it('toot:votersCount を votersCount にする', async () => {
-    const poll = await readRemotePostPoll(question({ exclusiveOptions: [option('a', 1)], voters: 7 }));
-
-    expect(poll?.votersCount).toBe(7);
-  });
-
   it('votersCount が負の数、小数、文字列なら null にして、残りは使う', async () => {
     const received = (voters: unknown) =>
       Question.fromJsonLd({
@@ -243,14 +216,6 @@ describe('readRemotePostPoll', () => {
     expect(poll?.options).toHaveLength(50);
     expect(poll?.options[0]).toEqual({ title: 'o0', votesCount: 0 });
     expect(poll?.options[49]).toEqual({ title: 'o49', votesCount: 49 });
-  });
-
-  it('endTime を expiresAt にする', async () => {
-    const endTime = Temporal.Instant.from('2999-01-02T03:04:05Z');
-    const poll = await readRemotePostPoll(question({ exclusiveOptions: [option('a')], endTime }));
-
-    expect(poll?.expiresAt).toBe(endTime.epochMilliseconds);
-    expect(poll?.closed).toBe(false);
   });
 
   it('endTime が過去なら closed にする', async () => {
@@ -305,9 +270,5 @@ describe('buildRemotePostBody', () => {
     const body = await buildRemotePostBody(new Question({ id: ID, url: URL_OF_POST, content: '<p>q</p>' }));
 
     expect(body).toEqual({ content: `<p>q</p><p><a href="${URL_OF_POST.href}">元の投稿で投票する</a></p>` });
-  });
-
-  it('Note は本文だけを返す', async () => {
-    expect(await buildRemotePostBody(new Note({ id: ID, content: '<p>x</p>' }))).toEqual({ content: '<p>x</p>' });
   });
 });

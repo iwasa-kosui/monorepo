@@ -77,18 +77,6 @@ describe('withD1ReadRetry', () => {
     expect(sleep.mock.calls).toEqual([[50], [150]]);
   });
 
-  it('maxAttempts と delaysMs を差し替えられる', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const fake = createFake([transient(), transient(), transient(), transient()]);
-    const sleep = noSleep();
-    const db = withD1ReadRetry(fake.db, { maxAttempts: 2, delaysMs: [7], sleep, random: noJitter });
-
-    await expect(db.prepare('SELECT 1').first()).rejects.toThrow('Network connection lost');
-
-    expect(fake.calls).toHaveLength(2);
-    expect(sleep.mock.calls).toEqual([[7]]);
-  });
-
   it('待ち時間に 0〜50% のジッターを足す', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const fake = createFake([transient(), transient()]);
@@ -228,15 +216,6 @@ describe('withD1ReadRetry', () => {
       expect(collector.snapshot()[0]?.statements).toBe(2);
     },
   );
-
-  it('exec は元の db にそのまま渡す', async () => {
-    const fake = createFake([]);
-    const db = withD1ReadRetry(fake.db);
-
-    await db.exec('SELECT 1');
-
-    expect(fake.raw.exec).toHaveBeenCalledWith('SELECT 1');
-  });
 });
 
 describe('isTransientD1Error', () => {

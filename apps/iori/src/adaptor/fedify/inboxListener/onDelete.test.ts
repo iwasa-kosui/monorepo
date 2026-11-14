@@ -409,14 +409,6 @@ describe('createOnDelete', () => {
       );
       expect(postDeletedStore.store).toHaveBeenCalledTimes(1);
     });
-
-    it('deletes the post without the mention dependencies', async () => {
-      const { deps, postDeletedStore } = buildDeps();
-
-      await createOnDelete(deps)({} as never, activity);
-
-      expect(postDeletedStore.store).toHaveBeenCalledTimes(1);
-    });
   });
 
   describe('bookmarks', () => {

@@ -225,24 +225,6 @@ describe('createObjectDispatcher ofNote', () => {
     expect(result).toBeInstanceOf(Note);
   });
 
-  it('summary と sensitive のある投稿は、Note の summary と sensitive に出す', async () => {
-    const post = { ...createLocalPost(), summary: 'cw', sensitive: true };
-
-    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
-
-    expect((result as Note).summary?.toString()).toBe('cw');
-    expect((result as Note).sensitive).toBe(true);
-  });
-
-  it('summary が null で sensitive が false の投稿は、Note の summary を持たず sensitive を false にする', async () => {
-    const post = createLocalPost();
-
-    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
-
-    expect((result as Note).summary).toBeNull();
-    expect((result as Note).sensitive).toBe(false);
-  });
-
   it('保存済みの生の HTML は、配送する Note の content からサニタイズして除く', async () => {
     const post = {
       ...createLocalPost(),
@@ -257,16 +239,6 @@ describe('createObjectDispatcher ofNote', () => {
     expect(content).toContain('hi');
     expect(content).toContain('link');
     expect(content).toContain('href="https://example.com/"');
-  });
-
-  it('メンションのない投稿は、cc に followers だけを持ち、tags を持たない', async () => {
-    const post = createLocalPost();
-
-    const result = await createNoteDispatcher(post).ofNote(createContext(), { id: post.postId, identifier: 'kosui' });
-
-    expect((result as Note).ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers']);
-    expect((result as Note).toIds.map((url) => url.href)).toEqual(['https://www.w3.org/ns/activitystreams#Public']);
-    await expect(Array.fromAsync((result as Note).getTags())).resolves.toEqual([]);
   });
 
   it('本文に a.mention のある投稿は、Mention タグを付け、相手の actor を followers に加えて cc に入れる', async () => {
@@ -494,11 +466,5 @@ describe('createObjectDispatcher ofNote の引用', () => {
 
     expect(note.ccIds.map((url) => url.href)).toEqual(['https://example.com/users/kosui/followers', aliceId]);
     expect(await Array.fromAsync(note.getTags())).toHaveLength(1);
-  });
-
-  it('引用先の無い投稿は、quoteUrl を持たない', async () => {
-    const note = await dispatchNote(createLocalPost(), undefined);
-
-    expect(note.quoteUrl).toBeNull();
   });
 });

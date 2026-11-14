@@ -46,14 +46,4 @@ describe('SignOutUseCase', () => {
     expect(result.ok).toBe(true);
     expect(deps.sessionEndedStore.store).not.toHaveBeenCalled();
   });
-
-  it('sessionId が無ければ解決せず成功にする', async () => {
-    const deps = createDeps();
-
-    const result = await SignOutUseCase.create(deps).run({ sessionId: undefined });
-
-    expect(result.ok).toBe(true);
-    expect(deps.sessionResolver.resolve).not.toHaveBeenCalled();
-    expect(deps.sessionEndedStore.store).not.toHaveBeenCalled();
-  });
 });

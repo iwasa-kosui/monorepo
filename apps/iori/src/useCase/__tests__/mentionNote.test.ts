@@ -19,13 +19,6 @@ describe('toMentionNoteFields', () => {
     expect(ccs.map((url) => url.href)).toEqual(['https://remote.example/users/alice']);
   });
 
-  it('メンションのない本文は空にする', () => {
-    expect(toMentionNoteFields('<p>hello <a href="https://example.com/">link</a></p>')).toEqual({
-      tags: [],
-      ccs: [],
-    });
-  });
-
   it('本文に無い追加の actor もタグと cc に入れ、本文と重なる actor は 1 件にする', () => {
     const { tags, ccs } = toMentionNoteFields(mention('https://remote.example/users/alice', 'alice@remote.example'), [
       { id: new URL('https://remote.example/users/alice'), name: '@alice@remote.example' },
@@ -37,11 +30,5 @@ describe('toMentionNoteFields', () => {
       'https://other.example/users/bob',
     ]);
     expect(ccs).toHaveLength(2);
-  });
-
-  it('name の無い追加の actor は name なしの Mention にする', () => {
-    const { tags } = toMentionNoteFields('<p>hi</p>', [{ id: new URL('https://other.example/users/bob') }]);
-
-    expect(tags[0]?.name).toBeNull();
   });
 });

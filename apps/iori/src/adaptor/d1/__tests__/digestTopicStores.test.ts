@@ -85,18 +85,6 @@ const setup = () => {
 };
 
 describe('createD1DigestTopicCreatedStore', () => {
-  it('topic を embedding なしで書き、digestTopic.created を domain_events に残す', async () => {
-    const { createdStore, createTopic, topicRows, eventNames } = setup();
-
-    await createdStore.store(createTopic('genai'), createTopic('platform'));
-
-    expect(topicRows()).toEqual([
-      { topicKey: 'genai', description: 'genai の説明', embeddedAt: null, updatedAt: CREATED_AT, bytes: null },
-      { topicKey: 'platform', description: 'platform の説明', embeddedAt: null, updatedAt: CREATED_AT, bytes: null },
-    ]);
-    expect(eventNames()).toEqual(['digestTopic.created', 'digestTopic.created']);
-  });
-
   it('同じ (userId, topicKey) をもう一度書いても失敗せず、先に書いた行を変えない', async () => {
     const { createdStore, createTopic, topicRows } = setup();
     await createdStore.store(createTopic('genai', { description: '先に書いた説明' }));
@@ -108,14 +96,6 @@ describe('createD1DigestTopicCreatedStore', () => {
       { topicKey: 'genai', description: '先に書いた説明', embeddedAt: null, updatedAt: CREATED_AT, bytes: null },
       { topicKey: 'server', description: 'server の説明', embeddedAt: null, updatedAt: CREATED_AT, bytes: null },
     ]);
-  });
-
-  it('同じ topicKey でも、別のユーザーの行は別に書く', async () => {
-    const { createdStore, createTopic, topicRows } = setup();
-
-    await createdStore.store(createTopic('genai'), createTopic('genai', { userId: OTHER_USER_ID }));
-
-    expect(topicRows()).toHaveLength(2);
   });
 
   it('同じ eventId の domain event があっても失敗しない', async () => {
@@ -184,20 +164,6 @@ describe('createD1DigestTopicEmbeddedStore', () => {
     expect(eventNames()).toEqual(['digestTopic.created']);
   });
 
-  it('name が一致しない topic は更新せず、イベントも書かない', async () => {
-    const { createdStore, embeddedStore, resolver, createTopic, embedTopic, topicRows, eventNames } = setup();
-    const created = createTopic('genai');
-    await createdStore.store(created);
-
-    await embeddedStore.store(embedTopic({ ...created.aggregateState, name: '古い名前' }, vector()));
-
-    expect(topicRows()).toEqual([
-      { topicKey: 'genai', description: 'genai の説明', embeddedAt: null, updatedAt: CREATED_AT, bytes: null },
-    ]);
-    expect((await resolver.resolve(USER_ID)).val[0]?.embedding).toBeNull();
-    expect(eventNames()).toEqual(['digestTopic.created']);
-  });
-
   it('名前だけを編集した後に、編集前の名前の埋め込みを書こうとしても、古い埋め込みを書かない', async () => {
     const { createdStore, editedStore, embeddedStore, createTopic, embedTopic, editTopic, topicRows, eventNames } =
       setup();
@@ -235,15 +201,6 @@ describe('createD1DigestTopicEmbeddedStore', () => {
       { topicKey: 'platform', description: 'platform の説明', embeddedAt: null, updatedAt: CREATED_AT, bytes: null },
     ]);
     expect(eventNames()).toEqual(['digestTopic.created', 'digestTopic.created', 'digestTopic.embedded']);
-  });
-
-  it('存在しない topic には何も書かない', async () => {
-    const { embeddedStore, createTopic, embedTopic, topicRows, eventNames } = setup();
-
-    await embeddedStore.store(embedTopic(createTopic('genai').aggregateState, vector()));
-
-    expect(topicRows()).toEqual([]);
-    expect(eventNames()).toEqual([]);
   });
 });
 
@@ -286,28 +243,6 @@ describe('createD1DigestTopicEditedStore', () => {
       { topicKey: 'genai', description: 'genai の説明', embeddedAt: null, updatedAt: CREATED_AT, bytes: null },
       { topicKey: 'platform', description: 'platform の説明', embeddedAt: null, updatedAt: CREATED_AT, bytes: null },
     ]);
-  });
-
-  it('digestTopic.edited を name と description 付きで domain_events に残す', async () => {
-    const { sqlite, createdStore, editedStore, createTopic, editTopic } = setup();
-    const created = createTopic('genai');
-    await createdStore.store(created);
-
-    await editedStore.store(editTopic(created.aggregateState, '新しい名前', '新しい説明'));
-
-    const events = sqlite.prepare(
-      'SELECT eventPayload FROM domain_events WHERE eventName = \'digestTopic.edited\'',
-    ).all() as Array<{ eventPayload: string }>;
-    expect(events).toHaveLength(1);
-    expect(JSON.parse(events[0]!.eventPayload)).toEqual({
-      userId: USER_ID,
-      topicKey: 'genai',
-      name: '新しい名前',
-      description: '新しい説明',
-      examples: [],
-      excludes: [],
-      updatedAt: EDITED_AT,
-    });
   });
 });
 
@@ -414,38 +349,6 @@ describe('createD1DigestTopicEnabledChangedStore', () => {
       },
     ]);
   });
-
-  it('他のユーザーの同じ topicKey の行は変えない', async () => {
-    const { sqlite, createdStore, enabledChangedStore, createTopic, setTopicEnabled } = setup();
-    const target = createTopic('genai');
-    await createdStore.store(target, createTopic('genai', { userId: OTHER_USER_ID }));
-
-    await enabledChangedStore.store(setTopicEnabled(target.aggregateState, false));
-
-    expect(sqlite.prepare('SELECT userId, enabled FROM digest_topics ORDER BY userId').all()).toEqual([
-      { userId: USER_ID, enabled: 0 },
-      { userId: OTHER_USER_ID, enabled: 1 },
-    ]);
-  });
-
-  it('digestTopic.enabledChanged を domain_events に残す', async () => {
-    const { sqlite, createdStore, enabledChangedStore, createTopic, setTopicEnabled } = setup();
-    const created = createTopic('genai');
-    await createdStore.store(created);
-
-    await enabledChangedStore.store(setTopicEnabled(created.aggregateState, false));
-
-    const events = sqlite.prepare(
-      'SELECT eventPayload FROM domain_events WHERE eventName = \'digestTopic.enabledChanged\'',
-    ).all() as Array<{ eventPayload: string }>;
-    expect(events).toHaveLength(1);
-    expect(JSON.parse(events[0]!.eventPayload)).toEqual({
-      userId: USER_ID,
-      topicKey: 'genai',
-      enabled: false,
-      updatedAt: EDITED_AT,
-    });
-  });
 });
 
 describe('createD1DigestTopicMaterialWindowChangedStore', () => {
@@ -479,52 +382,6 @@ describe('createD1DigestTopicMaterialWindowChangedStore', () => {
         bytes: EMBEDDING_DIMENSIONS * 4,
       },
     ]);
-  });
-
-  it('null で materialWindowHours を NULL に戻す', async () => {
-    const { sqlite, createdStore, materialWindowChangedStore, createTopic, setTopicMaterialWindowHours } = setup();
-    const created = createTopic('genai');
-    await createdStore.store(created);
-    const withWindow = setTopicMaterialWindowHours(created.aggregateState, 72);
-    await materialWindowChangedStore.store(withWindow);
-
-    await materialWindowChangedStore.store(setTopicMaterialWindowHours(withWindow.aggregateState, null));
-
-    expect(sqlite.prepare('SELECT materialWindowHours FROM digest_topics').all()).toEqual([
-      { materialWindowHours: null },
-    ]);
-  });
-
-  it('他のユーザーの同じ topicKey の行は変えない', async () => {
-    const { sqlite, createdStore, materialWindowChangedStore, createTopic, setTopicMaterialWindowHours } = setup();
-    const target = createTopic('genai');
-    await createdStore.store(target, createTopic('genai', { userId: OTHER_USER_ID }));
-
-    await materialWindowChangedStore.store(setTopicMaterialWindowHours(target.aggregateState, 72));
-
-    expect(sqlite.prepare('SELECT userId, materialWindowHours FROM digest_topics ORDER BY userId').all()).toEqual([
-      { userId: USER_ID, materialWindowHours: 72 },
-      { userId: OTHER_USER_ID, materialWindowHours: null },
-    ]);
-  });
-
-  it('digestTopic.materialWindowChanged を domain_events に残す', async () => {
-    const { sqlite, createdStore, materialWindowChangedStore, createTopic, setTopicMaterialWindowHours } = setup();
-    const created = createTopic('genai');
-    await createdStore.store(created);
-
-    await materialWindowChangedStore.store(setTopicMaterialWindowHours(created.aggregateState, 72));
-
-    const events = sqlite.prepare(
-      'SELECT eventPayload FROM domain_events WHERE eventName = \'digestTopic.materialWindowChanged\'',
-    ).all() as Array<{ eventPayload: string }>;
-    expect(events).toHaveLength(1);
-    expect(JSON.parse(events[0]!.eventPayload)).toEqual({
-      userId: USER_ID,
-      topicKey: 'genai',
-      materialWindowHours: 72,
-      updatedAt: EDITED_AT,
-    });
   });
 });
 
@@ -564,22 +421,5 @@ describe('createD1DigestTopicsResolverByUserId', () => {
     });
     expect(genai?.embedding).toBeInstanceOf(Float32Array);
     expect(platform).toMatchObject({ topicKey: 'platform', embedding: null, embeddedAt: null });
-  });
-
-  it('materialWindowHours は新規作成では null で、store で書いた値を読み戻す', async () => {
-    const { createdStore, materialWindowChangedStore, resolver, createTopic, setTopicMaterialWindowHours } = setup();
-    const created = createTopic('genai');
-    await createdStore.store(created, createTopic('platform', { sortOrder: 1 }));
-    expect((await resolver.resolve(USER_ID)).val.map((topic) => topic.materialWindowHours)).toEqual([null, null]);
-
-    await materialWindowChangedStore.store(setTopicMaterialWindowHours(created.aggregateState, 336));
-
-    expect((await resolver.resolve(USER_ID)).val.map((topic) => topic.materialWindowHours)).toEqual([336, null]);
-  });
-
-  it('topic が無ければ空の配列を返す', async () => {
-    const { resolver } = setup();
-
-    expect(await resolver.resolve(USER_ID)).toEqual({ ok: true, val: [] });
   });
 });

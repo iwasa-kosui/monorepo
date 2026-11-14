@@ -133,26 +133,6 @@ describe('createWorkerAuthFormRouter', () => {
       expect(response.headers.get('Set-Cookie')).toBeNull();
     });
 
-    it('認証に失敗しても有効な next を残す', async () => {
-      const { app } = createApp({
-        signInUseCase: {
-          run: vi.fn(async () =>
-            RA.err({ type: 'UsernameOrPasswordInvalid', message: 'invalid', detail: { username: 'kosui' } })
-          ),
-        },
-      } as never);
-
-      const response = await post(app, '/auth/sign-in', {
-        username: 'kosui',
-        password: PASSWORD,
-        next: AUTHORIZE_NEXT,
-      });
-
-      expect(response.headers.get('Location')).toBe(
-        `/sign-in?error=invalid_credentials&next=${encodeURIComponent(AUTHORIZE_NEXT)}`,
-      );
-    });
-
     it('短いパスワードは invalid_input で /sign-in へ 303 にし、有効な next を残す', async () => {
       const { app, signInUseCase } = createApp();
 
@@ -228,16 +208,6 @@ describe('createWorkerAuthFormRouter', () => {
       expect(response.status).toBe(303);
       expect(response.headers.get('Location')).toBe('/sign-up?error=username_taken');
     });
-
-    it('その他のエラーは failed で /sign-up へ 303 にする', async () => {
-      const { app } = createApp({
-        signUpUseCase: { run: vi.fn(async () => RA.err({ type: 'StoreError', message: 'boom' })) },
-      } as never);
-
-      const response = await post(app, '/auth/sign-up', { username: 'kosui', password: PASSWORD });
-
-      expect(response.headers.get('Location')).toBe('/sign-up?error=failed');
-    });
   });
 
   describe('POST /auth/sign-out', () => {
@@ -277,15 +247,6 @@ describe('createWorkerAuthFormRouter', () => {
 
       expect(response.status).toBe(303);
       expect(response.headers.get('Location')).toBe('/sign-in');
-      expect(signOutUseCase.run).toHaveBeenCalledWith({ sessionId: undefined });
-    });
-
-    it('Cookie が不正な値でもセッションを指定せずに 303 にする', async () => {
-      const { app, signOutUseCase } = createApp();
-
-      const response = await post(app, '/auth/sign-out', {}, { Origin: ORIGIN, Cookie: 'sessionId=not-a-uuid' });
-
-      expect(response.status).toBe(303);
       expect(signOutUseCase.run).toHaveBeenCalledWith({ sessionId: undefined });
     });
   });

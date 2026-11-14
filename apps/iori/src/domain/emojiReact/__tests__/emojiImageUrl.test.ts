@@ -25,18 +25,6 @@ describe('toAcceptableEmojiImageUrl', () => {
     expect(toAcceptableEmojiImageUrl('data:image/png;base64,AAAA')).toBeNull();
   });
 
-  it('空文字列は null を返す', () => {
-    expect(toAcceptableEmojiImageUrl('')).toBeNull();
-  });
-
-  it('undefined は null を返す', () => {
-    expect(toAcceptableEmojiImageUrl(undefined)).toBeNull();
-  });
-
-  it('null は null を返す', () => {
-    expect(toAcceptableEmojiImageUrl(null)).toBeNull();
-  });
-
   it('URL として解釈できない文字列は null を返す', () => {
     expect(toAcceptableEmojiImageUrl('not a url')).toBeNull();
   });

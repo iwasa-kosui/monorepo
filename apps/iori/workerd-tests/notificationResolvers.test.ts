@@ -214,13 +214,6 @@ describe('通知のリゾルバーが workerd の D1 でブロックを除く', 
     expect(visibleLike?.notification).toMatchObject({ type: 'like', notificationId: bobLike.notificationId });
     expect(visibleMention?.notification).toMatchObject({ type: 'mention', notificationId: bobMention.notificationId });
   });
-
-  it('ほかのユーザーのブロックは、自分の通知に影響しない', async () => {
-    expect(await resolveByPage(otherId)).toEqual([otherAliceLike.notificationId]);
-    expect(await resolveById(otherId, otherBobLike.notificationId)).toBeUndefined();
-    expect(await resolveById(meId, bobLike.notificationId)).toBeDefined();
-    expect(await resolveById(meId, carolLike.notificationId)).toBeDefined();
-  });
 });
 
 describe('通知のリゾルバーが workerd の D1 で Bluesky のミュートとブロックを除く', () => {

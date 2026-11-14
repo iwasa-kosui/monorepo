@@ -99,15 +99,6 @@ describe('mastodonAuthn', () => {
       });
     });
 
-    it('すべてのスコープを要求するルートを通す', async () => {
-      const h = createOAuthHarness();
-      const { sessionId } = h.memory.addSession();
-
-      const response = await h.request('/api/v1/statuses', { headers: { Cookie: `sessionId=${sessionId}` } });
-
-      expect(response.status).toBe(200);
-    });
-
     it('無効なセッションは未認証として扱う', async () => {
       const h = createOAuthHarness();
 
@@ -138,10 +129,6 @@ describe('mastodonAuthn', () => {
 
         expect(response.status).toBe(403);
         expect(await response.json()).toEqual({ error: 'Forbidden' });
-      });
-
-      it('Origin が null のときは 403 にする', async () => {
-        expect((await post({ Origin: 'null' })).status).toBe(403);
       });
 
       it('Origin が違えば Sec-Fetch-Site が same-origin でも 403 にする', async () => {

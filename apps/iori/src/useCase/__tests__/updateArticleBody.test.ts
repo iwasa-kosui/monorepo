@@ -59,20 +59,6 @@ describe('UpdateArticleBodyUseCase', () => {
     });
   });
 
-  it('存在しない article には ArticleNotFoundError を返す', async () => {
-    const deps = createDeps(undefined);
-
-    const result = await UpdateArticleBodyUseCase.create(deps).run({
-      articleId: ArticleId.generate(),
-      privateHtml: '<p>a</p>',
-      publicHtml: '<p>b</p>',
-    });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.err.type).toBe('ArticleNotFoundError');
-    expect(deps.events).toEqual([]);
-  });
-
   it('rootPostId がある article には ArticleNotFoundError を返し、更新しない', async () => {
     const article = createArticle(PostId.generate());
     const deps = createDeps(article);

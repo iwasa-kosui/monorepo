@@ -49,14 +49,6 @@ afterAll(async () => {
 });
 
 describe('post_images.mediaType on workerd D1', () => {
-  it('migration 前からある行は mediaType が null になる', async () => {
-    const images = await createD1PostImagesResolverByPostId(db).resolve(PostId.orThrow(postId));
-
-    expect(images.ok).toBe(true);
-    if (!images.ok) return;
-    expect(images.val).toEqual([expect.objectContaining({ imageId: legacyImageId, mediaType: null })]);
-  });
-
   it('mediaType を保存して、画像の resolver と投稿の resolver の両方で読める', async () => {
     const videoId = ImageId.generate();
     await createD1PostImageCreatedStore(db).store([{

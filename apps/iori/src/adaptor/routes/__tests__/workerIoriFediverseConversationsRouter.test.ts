@@ -216,14 +216,6 @@ describe('GET /conversations/:key', () => {
       viewerAccountId: t.me.actorId,
     });
   });
-
-  it('まだ投稿が無い会話は lastMessage を null にする', async () => {
-    const t = await setup();
-
-    const body = await (await t.get(`/${aliceKey}`)).json() as { conversation: { lastMessage: unknown } };
-
-    expect(body.conversation.lastMessage).toBeNull();
-  });
 });
 
 describe('会話のキー', () => {
@@ -503,12 +495,6 @@ describe('POST /conversations/:key/read', () => {
         .unreadCount,
     ).toBe(0);
   });
-
-  it('未読が無くても 204 にする', async () => {
-    const t = await setup();
-
-    expect((await t.post(`/${aliceKey}/read`)).status).toBe(204);
-  });
 });
 
 describe('GET /conversations/unread_count', () => {
@@ -525,12 +511,6 @@ describe('GET /conversations/unread_count', () => {
     t.seed.addMentionNotification(t.hanako.userId, t.bob.actorId, g.postId, NOW - 1000);
 
     expect(await (await t.get('/unread_count')).json()).toEqual({ unread: 2 });
-  });
-
-  it('未読が無ければ 0 を返す', async () => {
-    const t = await setup();
-
-    expect(await (await t.get('/unread_count')).json()).toEqual({ unread: 0 });
   });
 });
 

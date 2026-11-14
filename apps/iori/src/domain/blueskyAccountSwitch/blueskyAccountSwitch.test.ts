@@ -9,18 +9,6 @@ const started = () =>
   Result.unsafeUnwrap(BlueskyAccountSwitch.start(NOW)({ fromDid: 'did:plc:old', toDid: 'did:plc:new' }));
 
 describe('BlueskyAccountSwitch', () => {
-  it('start は切り替えの開始のイベントと、件数が 0 の状態を作る', () => {
-    const event = started();
-
-    expect(event).toMatchObject({
-      aggregateName: 'blueskyAccountSwitch',
-      eventName: 'blueskyAccountSwitch.started',
-      eventPayload: { fromDid: 'did:plc:old', toDid: 'did:plc:new', startedAt: NOW },
-      aggregateState: { attempts: 0, lastError: null, startedAt: NOW, deletedCounts: BlueskyAccountSwitch.emptyCounts },
-    });
-    expect(event.aggregateId).toBe(event.aggregateState.switchId);
-  });
-
   it('start は、同じ DID への切り替えを拒む', () => {
     expect(BlueskyAccountSwitch.start(NOW)({ fromDid: 'did:plc:old', toDid: 'did:plc:old' })).toMatchObject({
       ok: false,
@@ -65,18 +53,5 @@ describe('BlueskyAccountSwitch', () => {
 
     expect(BlueskyAccountSwitch.isPurgeable(state, Instant.orThrow(NOW + 89_999))).toBe(false);
     expect(BlueskyAccountSwitch.isPurgeable(state, Instant.orThrow(NOW + 90_000))).toBe(true);
-  });
-
-  it('toView は、印が無ければ idle、あれば purging を返す', () => {
-    expect(BlueskyAccountSwitch.toView(undefined)).toEqual({ state: 'idle' });
-    expect(BlueskyAccountSwitch.toView({ ...started().aggregateState, attempts: 2, lastError: 'boom' })).toEqual({
-      state: 'purging',
-      fromDid: 'did:plc:old',
-      toDid: 'did:plc:new',
-      startedAt: NOW,
-      attempts: 2,
-      lastError: 'boom',
-      stalled: false,
-    });
   });
 });

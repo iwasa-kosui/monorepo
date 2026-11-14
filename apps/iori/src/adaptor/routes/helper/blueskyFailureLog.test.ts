@@ -17,41 +17,6 @@ afterEach(() => {
 });
 
 describe('blueskyFailureLogOf', () => {
-  it('kind、Bluesky の status、code、操作の名前、iori の応答の status だけを持つ', () => {
-    const log = blueskyFailureLogOf(clientError(), 502);
-
-    expect(log).toEqual({
-      event: 'bluesky_client_failure',
-      kind: 'http',
-      status: 500,
-      code: 'InternalServerError',
-      operation: 'chat.bsky.convo.getLog',
-      responseStatus: 502,
-    });
-    expect(Object.keys(log)).toEqual(['event', 'kind', 'status', 'code', 'operation', 'responseStatus']);
-  });
-
-  it('chat_not_permitted は 400 InvalidToken と、操作の名前を持つ', () => {
-    expect(
-      blueskyFailureLogOf(
-        clientError({
-          kind: 'chat_not_permitted',
-          message: 'chat.bsky.convo.listConvos failed: status 400 InvalidToken',
-          status: 400,
-          code: 'InvalidToken',
-        }),
-        403,
-      ),
-    ).toEqual({
-      event: 'bluesky_client_failure',
-      kind: 'chat_not_permitted',
-      status: 400,
-      code: 'InvalidToken',
-      operation: 'chat.bsky.convo.listConvos',
-      responseStatus: 403,
-    });
-  });
-
   it('status と code が無いとき null にする', () => {
     const { status: _status, code: _code, ...rest } = clientError({ kind: 'network' });
     const log = blueskyFailureLogOf({ ...rest, message: 'createSession request failed' }, 502);

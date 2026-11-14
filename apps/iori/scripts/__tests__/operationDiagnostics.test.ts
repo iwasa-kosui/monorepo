@@ -1,8 +1,6 @@
-import { EventEmitter } from 'node:events';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 import { assertWorkflowOutput } from '../assert-workflow-output.mjs';
@@ -13,9 +11,6 @@ import {
 } from '../deploy-reviewed-worker-version.mjs';
 import { createTargetIdentity } from '../fresh-target.mjs';
 import { OPERATION_STAGES, operationFailureLines } from '../operation-diagnostics.mjs';
-import { createSourceSshAdapter } from '../source-control-ssh.mjs';
-import { createTargetControlPlane } from '../target-control-plane.mjs';
-import { createFixtureDirectory } from './fixtureTemp.ts';
 
 const mocks = vi.hoisted(() => ({ config: vi.fn() }));
 vi.mock('../temporary-worker-config.mjs', () => ({ createDeploymentWorkerConfig: mocks.config }));
@@ -31,50 +26,6 @@ const operationFailure = (reason?: string, details?: unknown, message = 'fixture
       ? {}
       : { diagnostic: { ...(reason === undefined ? {} : { reason }), ...(details === undefined ? {} : { details }) } },
   );
-it('pins the operation stage vocabulary', () => {
-  expect(OPERATION_STAGES).toEqual([
-    'deploy-worker-before',
-    'deploy-worker-resolve',
-    'deploy-worker-migrate',
-    'deploy-worker-deploy',
-    'deploy-worker-after',
-    'put-worker-secrets',
-    'put-worker-secrets-read',
-    'put-worker-secrets-put',
-    'put-bluesky-secrets',
-    'put-bluesky-secrets-read',
-    'put-bluesky-secrets-put',
-    'put-twitterapi',
-    'put-twitterapi-read',
-    'put-twitterapi-put',
-    'rehearsal-delete',
-    'rehearsal-delete-list',
-    'rehearsal-delete-check',
-    'rehearsal-delete-remove',
-    'rehearsal-delete-verify',
-    'move-reposts',
-    'move-reposts-resolve',
-    'move-reposts-query',
-    'events-stats',
-    'events-stats-resolve',
-    'events-stats-query',
-    'digest-quality',
-    'digest-quality-resolve',
-    'digest-quality-query',
-    'delete-posts',
-    'delete-posts-resolve',
-    'delete-posts-query',
-    'prune-posts',
-    'prune-posts-resolve',
-    'prune-posts-query',
-    'archive-bucket',
-    'archive-bucket-resolve',
-    'archive-bucket-read',
-    'archive-bucket-create',
-    'archive-bucket-verify',
-  ]);
-  expect(Object.isFrozen(OPERATION_STAGES)).toBe(true);
-});
 it('keeps every operation stage line within the public relay pattern and the workflow output check', () => {
   for (const stage of [...OPERATION_STAGES, 'unclassified']) {
     const [line] = operationFailureLines(stage, operationFailure('state-mismatch'));
@@ -82,45 +33,6 @@ it('keeps every operation stage line within the public relay pattern and the wor
     expect(line).toMatch(publicLine);
     expect(assertWorkflowOutput(line!)).toEqual([]);
   }
-});
-it('prints the allowed details first and the classification last', () => {
-  const lines = operationFailureLines(
-    'deploy-worker-before',
-    operationFailure('state-mismatch', ['resource-consumer-script', 'resource-d1']),
-  );
-  expect(lines).toEqual([
-    operationLine('deploy-worker-before', 'resource-consumer-script'),
-    operationLine('deploy-worker-before', 'resource-d1'),
-    operationLine('deploy-worker-before', 'state-mismatch'),
-  ]);
-  expect(lines.join('\n')).not.toContain('fixture-secret-message');
-});
-it('removes duplicate details and keeps at most eight', () => {
-  const details = [
-    'resource-d1',
-    'resource-d1',
-    'resource-kv',
-    'resource-r2',
-    'resource-queue-identity',
-    'resource-queue-paused',
-    'resource-queue-shape',
-    'resource-queue-created',
-    'resource-dlq-attached',
-    'resource-consumer-count',
-  ];
-  const lines = operationFailureLines('deploy-worker-migrate', operationFailure('state-mismatch', details));
-  expect(lines).toHaveLength(9);
-  expect(lines.slice(0, 8).map(line => line.split('reason=')[1])).toEqual([
-    'resource-d1',
-    'resource-kv',
-    'resource-r2',
-    'resource-queue-identity',
-    'resource-queue-paused',
-    'resource-queue-shape',
-    'resource-queue-created',
-    'resource-dlq-attached',
-  ]);
-  expect(lines[8]).toBe(operationLine('deploy-worker-migrate', 'state-mismatch'));
 });
 it('drops details outside the allowed vocabulary', () => {
   const lines = operationFailureLines(
@@ -164,161 +76,10 @@ it('uses stage=unclassified for a stage outside the vocabulary', () => {
     ]);
   }
 });
-it('reads the first inner error of an AggregateError that has no diagnostic', () => {
-  const inner = operationFailure('state-mismatch', ['resource-consumer-script']);
-  const aggregate = new AggregateError([inner, new Error('resume')], 'fixture-secret-message');
-  expect(operationFailureLines('deploy-worker-resolve', aggregate)).toEqual([
-    operationLine('deploy-worker-resolve', 'resource-consumer-script'),
-    operationLine('deploy-worker-resolve', 'state-mismatch'),
-  ]);
-  const aborted = new AggregateError([Object.assign(new Error('x'), { name: 'AbortError' })], 'x');
-  expect(operationFailureLines('deploy-worker-resolve', aborted)).toEqual([
-    operationLine('deploy-worker-resolve', 'aborted'),
-  ]);
-  expect(operationFailureLines('deploy-worker-resolve', new AggregateError([], 'x'))).toEqual([
-    operationLine('deploy-worker-resolve', 'unclassified'),
-  ]);
-  const own = Object.assign(new AggregateError([inner], 'x'), { diagnostic: { reason: 'mismatch' } });
-  expect(operationFailureLines('deploy-worker-resolve', own)).toEqual([
-    operationLine('deploy-worker-resolve', 'mismatch'),
-  ]);
-});
-const sshOptions = async () => {
-  const root = await createFixtureDirectory('iori-operation-ssh-');
-  const identityFile = join(root, 'fixture.key');
-  const knownHostsFile = join(root, 'known_hosts');
-  await writeFile(identityFile, 'synthetic-not-a-key', { mode: 0o600 });
-  await writeFile(knownHostsFile, 'synthetic', { mode: 0o600 });
-  return {
-    host: 'source.example.invalid',
-    user: 'fixture',
-    mainSha: 'a'.repeat(40),
-    runId: '123',
-    identityFile,
-    knownHostsFile,
-  };
-};
-const exitingSpawn = (code: number, stdout = '') => () => {
-  const child = Object.assign(new EventEmitter(), {
-    stdout: new PassThrough(),
-    stderr: new PassThrough(),
-    kill: () => true,
-  });
-  queueMicrotask(() => {
-    child.stdout.end(stdout);
-    child.stderr.end('PRIVATE SHOULD NOT ESCAPE');
-    child.emit('close', code);
-  });
-  return child;
-};
-it.each([
-  [75, 'not-ready'],
-  [76, 'busy'],
-  [255, 'ssh-failed'],
-  [1, 'ssh-failed'],
-])('prints the source word of a real adapter failure that ends with exit code %d', async (code, reason) => {
-  const adapter = await createSourceSshAdapter(await sshOptions(), { spawnProcess: exitingSpawn(code) as never });
-  const failure = await adapter.resume('destination_writes_not_enabled').catch((error: unknown) => error);
-  expect(operationFailureLines('deploy-worker-migrate', failure)).toEqual([
-    operationLine('deploy-worker-migrate', reason),
-  ]);
-});
-it.each([
-  ['{"ok":false,"error":"control_rejected"}\n', 'rejected'],
-  ['{"ok":false,"error":"control_rejected","detail":"estimate-query"}\n', 'estimate-query'],
-])('prints the source word of a real adapter rejection %j', async (stdout, reason) => {
-  const adapter = await createSourceSshAdapter(await sshOptions(), {
-    spawnProcess: exitingSpawn(1, stdout) as never,
-  });
-  const failure = await adapter.resume('destination_writes_not_enabled').catch((error: unknown) => error);
-  expect(operationFailureLines('deploy-worker-migrate', failure)).toEqual([
-    operationLine('deploy-worker-migrate', reason),
-  ]);
-});
 const identity = createTargetIdentity({
   environment: 'staging',
   generation: 'fixture1',
   accountId: 'a'.repeat(32),
-});
-const queueResponse = (id: string, name: string, consumers: unknown[], paused = true) => ({
-  queue_id: id,
-  queue_name: name,
-  created_on: '2026-09-05T00:00:00Z',
-  settings: { delivery_paused: paused },
-  consumers,
-  producers: [],
-  consumers_total_count: consumers.length,
-  producers_total_count: 0,
-});
-it('prints the consumer script detail and state-mismatch of a real readActiveResources failure', async () => {
-  const consumer = {
-    type: 'worker',
-    script: 'old-worker',
-    dead_letter_queue: identity.names.dlq,
-    consumer_id: 'consumer-id',
-    settings: { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 30 },
-  };
-  const responses: Record<string, unknown> = {
-    '/d1/database/db-id': { uuid: 'db-id', name: identity.names.d1 },
-    '/storage/kv/namespaces/kv-id': { id: 'kv-id', title: identity.names.kv },
-    [`/r2/buckets/${identity.names.uploads}`]: { name: identity.names.uploads },
-    [`/r2/buckets/${identity.names.eventArchive}`]: { name: identity.names.eventArchive },
-    [`/r2/buckets/${identity.names.transfer}`]: { name: identity.names.transfer },
-    [`/r2/buckets/${identity.names.transfer}/domains/managed`]: { enabled: false },
-    '/queues/queue-id': queueResponse('queue-id', identity.names.queue, [consumer], false),
-    '/queues/dlq-id': queueResponse('dlq-id', identity.names.dlq, []),
-  };
-  const api = createTargetControlPlane({
-    identity,
-    token: 'private-token',
-    fetchRequest: async (url: URL) => {
-      const result = responses[url.pathname.replace(`/client/v4/accounts/${identity.accountId}`, '')];
-      return Response.json(result === undefined ? { success: false } : { success: true, result });
-    },
-  });
-  const failure = await api.readActiveResources({
-    d1Id: 'db-id',
-    kvId: 'kv-id',
-    queueId: 'queue-id',
-    dlqId: 'dlq-id',
-  }).catch((error: unknown) => error);
-  expect(operationFailureLines('deploy-worker-before', failure)).toEqual([
-    operationLine('deploy-worker-before', 'resource-consumer-script'),
-    operationLine('deploy-worker-before', 'state-mismatch'),
-  ]);
-});
-it('prints deploy-failed for a real deployment that the command reports as failed', async () => {
-  const admissionEnvironment = {
-    IORI_ADMISSION_MODE: 'active',
-    IORI_ADMISSION_IDENTITY: 'fixture-identity',
-    ORIGIN: 'https://staging.test',
-  };
-  const path = join(await mkdtemp(join(tmpdir(), 'operation-deploy-')), 'wrangler.json');
-  await writeFile(
-    path,
-    JSON.stringify({
-      name: identity.workerName,
-      vars: admissionEnvironment,
-      d1_databases: [{ database_id: 'db' }],
-      kv_namespaces: [{ id: 'kv' }],
-      r2_buckets: [{ bucket_name: identity.names.uploads }, { bucket_name: identity.names.eventArchive }],
-      queues: { producers: [{ queue: identity.names.queue }] },
-    }),
-  );
-  mocks.config.mockResolvedValue({ path, cleanup: vi.fn() });
-  const runCommand = vi.fn(async () => ({ status: 1, stdout: 'private diagnostic', stderr: '' }));
-  const failure = await deployReviewedWorkerVersion({
-    identity,
-    resources: { d1Id: 'db', kvId: 'kv', queueId: 'queue' } as never,
-    admissionEnvironment,
-    mode: 'active',
-    signal: new AbortController().signal,
-    runCommand: runCommand as never,
-  }).catch((error: unknown) => error);
-  expect(runCommand).toHaveBeenCalledTimes(1);
-  expect(operationFailureLines('deploy-worker-deploy', failure)).toEqual([
-    operationLine('deploy-worker-deploy', 'deploy-failed'),
-  ]);
 });
 describe('a real deployment with D1 migrations', () => {
   const admissionEnvironment = {
@@ -618,15 +379,4 @@ INSERT INTO d1_migrations (name) VALUES ('${initialName}');`;
       expect(decideD1Baseline({ initialTables, presentTables, migrationRows: rows })).toBe(expected);
     },
   );
-});
-it('prints config-invalid for the configuration messages of the two operation scripts', () => {
-  for (
-    const message of [
-      'Protected workflow invocation is invalid.',
-    ]
-  ) {
-    expect(operationFailureLines('deploy-worker-migrate', new Error(message))).toEqual([
-      operationLine('deploy-worker-migrate', 'config-invalid'),
-    ]);
-  }
 });

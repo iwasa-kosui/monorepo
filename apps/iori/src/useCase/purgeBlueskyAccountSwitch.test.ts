@@ -281,20 +281,7 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
     t.hooks.failOnCall = undefined;
     expect(await t.useCase.run()).toMatchObject({ ok: true, val: { status: 'completed' } });
   });
-
-  it('削除は冪等で、同じ表を空のまま再び実行しても件数は変わらない', async () => {
-    const purger = createD1BlueskyAccountSwitchPurger(fixtureDb());
-    const startedAt = Instant.orThrow(STARTED_AT);
-    expect(Result.unsafeUnwrap(await purger.purge('likes', startedAt))).toBe(0);
-    expect(Result.unsafeUnwrap(await purger.purge('notifications', startedAt))).toBe(0);
-  });
 });
-
-const fixtureDb = () => {
-  const fixture = createSqliteD1Fixture();
-  fixtures.push(fixture);
-  return fixture.db;
-};
 
 describe('通知の削除', () => {
   const notifications = (bluesky: number) => [

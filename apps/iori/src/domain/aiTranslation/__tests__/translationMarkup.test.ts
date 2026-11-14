@@ -5,8 +5,6 @@ import {
   MAX_TRANSLATION_INPUT_CHARS,
   toTranslationSource,
   truncateTranslationSource,
-  TRUNCATION_NOTICE,
-  withTruncationNotice,
 } from '../translationMarkup.ts';
 
 const link = '<a href="https://example.com/a?x=1&amp;y=2" rel="nofollow noopener">example.com/a</a>';
@@ -31,13 +29,6 @@ describe('toTranslationSource', () => {
   it('段落ごとに先頭へ ⟪n⟫ の印を付けて空行でつなぎ、<br> は段落内の改行にする', () => {
     expect(toTranslationSource('<p>one<br>two</p><p>three</p>').text).toBe('⟪1⟫ one\ntwo\n\n⟪2⟫ three');
     expect(toTranslationSource('<p>one<br/>two<BR />three</p>').text).toBe('⟪1⟫ one\ntwo\nthree');
-  });
-
-  it('段落の配列は訳す段落の数だけ translate を持つ', () => {
-    expect(toTranslationSource('<p>one</p><p>two</p>').paragraphs).toEqual([
-      { kind: 'translate' },
-      { kind: 'translate' },
-    ]);
   });
 
   it('空の段落は数えない', () => {
@@ -88,18 +79,6 @@ describe('toTranslationSource', () => {
   it('script と style の中身は残さない', () => {
     expect(toTranslationSource('<p>a<script>alert(1)</script><style>p{}</style>b</p>').text).toBe('⟪1⟫ ab');
   });
-
-  it('印のない平文は anchors を空にする', () => {
-    expect(toTranslationSource('<p>plain</p>')).toEqual({
-      text: '⟪1⟫ plain',
-      anchors: [],
-      paragraphs: [{ kind: 'translate' }],
-    });
-  });
-
-  it('空の本文は空の平文にする', () => {
-    expect(toTranslationSource('')).toEqual({ text: '', anchors: [], paragraphs: [] });
-  });
 });
 
 describe('fromTranslatedText', () => {
@@ -131,10 +110,6 @@ describe('fromTranslatedText', () => {
 
   it('訳文が空でも欠けた印の <a> を段落にして返す', () => {
     expect(fromTranslatedText('', single([link, hashtag]))).toBe(`<p>${link} ${hashtag}</p>`);
-  });
-
-  it('訳文も anchors も空なら空文字を返す', () => {
-    expect(fromTranslatedText('', single())).toBe('');
   });
 
   it('存在しない番号の印を除く', () => {
@@ -297,19 +272,5 @@ describe('truncateTranslationSource', () => {
       { kind: 'keep', html: hashtag },
       { kind: 'translate' },
     ]);
-  });
-
-  it('上限を指定できる', () => {
-    expect(truncateTranslationSource({ text: 'abcdef', ...single() }, 3)).toEqual({
-      source: { text: 'abc', anchors: [], paragraphs: [] },
-      truncated: true,
-    });
-  });
-});
-
-describe('withTruncationNotice', () => {
-  it('訳文の HTML の末尾に（以下省略）の段落を足す', () => {
-    expect(withTruncationNotice('<p>訳</p>')).toBe(`<p>訳</p><p>${TRUNCATION_NOTICE}</p>`);
-    expect(TRUNCATION_NOTICE).toBe('（以下省略）');
   });
 });

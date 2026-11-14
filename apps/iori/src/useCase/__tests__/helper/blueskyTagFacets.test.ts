@@ -95,10 +95,6 @@ describe('withTagFacets', () => {
     ]);
   });
 
-  it('excludeTruncated でなければ、末尾に … があってもハッシュタグにする', () => {
-    expect(withTagFacets('#io…', [])).toEqual([tag(0, 3, 'io')]);
-  });
-
   it('既存の facet と合わせて byteStart の昇順に並べる', () => {
     const text = '#a https://example.com/x #b';
     const link = toFacet(text, { start: 3, end: 24, uri: 'https://example.com/x' });

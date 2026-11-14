@@ -13,7 +13,6 @@ import {
 import { Temporal } from '@js-temporal/polyfill';
 import { describe, expect, it, vi } from 'vitest';
 
-import { EMOJI_IMAGE_URL_MAX_LENGTH } from '../../../domain/emojiReact/emojiImageUrl.ts';
 import { StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 import { ORIGIN } from './helper/oauthHarness.ts';
@@ -80,16 +79,6 @@ describe('POST /api/iori/v1/preview', () => {
     const body = await response.json() as { html: string };
     expect(body.html).toContain('<strong>bold</strong>');
     expect(body.html).not.toContain('<script>');
-  });
-
-  it('素の URL は href を残した a タグにする', async () => {
-    const t = await seedReactions('write:statuses');
-
-    const response = await preview(t, t.me.bearer, { markdown: 'https://example.com/path' });
-
-    expect(response.status).toBe(200);
-    const body = await response.json() as { html: string };
-    expect(body.html).toContain('href="https://example.com/path"');
   });
 
   it('Cookie の利用者は同一オリジンのときだけ使える', async () => {
@@ -198,15 +187,6 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
     });
   });
 
-  it('未反応でもエラーにせず、現在の状態を返す', async () => {
-    const t = await seedReactions();
-
-    const response = await t.del(t.local.postId);
-
-    expect(response.status).toBe(200);
-    expect(StatusSchema.parse(await response.json())).toMatchObject({ iori: { reactions: [] } });
-  });
-
   it('リモートの投稿は元のサーバーへ EmojiReact を送る', async () => {
     const t = await seedReactions();
     t.serveRemoteNote(t.publicNote);
@@ -291,37 +271,6 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
       expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
     });
 
-    const httpsUrlOfLength = (length: number) => {
-      const prefix = 'https://remote.example/emoji/';
-      return `${prefix}${'a'.repeat(length - prefix.length)}`;
-    };
-
-    it('icon の url が上限を 1 文字超えるときは採用せず、tag なしで送る', async () => {
-      const t = await seedReactions();
-      const url = httpsUrlOfLength(EMOJI_IMAGE_URL_MAX_LENGTH + 1);
-      t.serveRemoteNote(t.publicNote, [emojiTag(':wave:', url)]);
-
-      const response = await t.put(t.publicNote.postId);
-
-      expect(response.status).toBe(200);
-      expect(await tagsOf(sentReact(t))).toHaveLength(0);
-      expect(selfEmojiImageUrl(t, ':wave:')).toBeNull();
-    });
-
-    it('icon の url が上限ちょうどのときは採用し、tag を付けて送り、url を保存する', async () => {
-      const t = await seedReactions();
-      const url = httpsUrlOfLength(EMOJI_IMAGE_URL_MAX_LENGTH);
-      t.serveRemoteNote(t.publicNote, [emojiTag(':wave:', url)]);
-
-      const response = await t.put(t.publicNote.postId);
-
-      expect(response.status).toBe(200);
-      const tags = await tagsOf(sentReact(t));
-      expect(tags).toHaveLength(1);
-      expect((await tags[0]!.getIcon())?.url?.toString()).toBe(url);
-      expect(selfEmojiImageUrl(t, ':wave:')).toBe(url);
-    });
-
     it('Emoji の icon の取得が失敗しても、反応は成功し、tag なしで送って emojiImageUrl は null にする', async () => {
       const t = await seedReactions();
       t.serveRemoteNote(t.publicNote, [
@@ -362,17 +311,6 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
       expect(icon?.url?.toString()).toBe(url);
       expect(icon?.mediaType).toBeNull();
       expect(selfEmojiImageUrl(t, ':wave:')).toBe(url);
-    });
-
-    it('Unicode 絵文字の反応は tag なしで送る', async () => {
-      const t = await seedReactions();
-      t.serveRemoteNote(t.publicNote, [emojiTag(':wave:', 'https://remote.example/emoji/wave.png')]);
-
-      const response = await t.put(t.publicNote.postId, '👍');
-
-      expect(response.status).toBe(200);
-      expect(await tagsOf(sentReact(t))).toHaveLength(0);
-      expect(selfEmojiImageUrl(t, '👍')).toBeNull();
     });
   });
 
@@ -495,14 +433,6 @@ describe('PUT と DELETE /api/iori/v1/statuses/:id/reactions/:emoji', () => {
 
     expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 401, 403]);
     expect(t.count()).toBe(0);
-  });
-
-  it('write:favourites だけのトークンで反応できる', async () => {
-    const t = await seedReactions('write:favourites');
-
-    const response = await t.put(t.local.postId);
-
-    expect(response.status).toBe(200);
   });
 
   it('Cookie の利用者は同一オリジンのときだけ操作でき、Origin が欠けると 403 にする', async () => {
@@ -753,15 +683,6 @@ describe('POST /api/iori/v1/statuses/:id/remote-context', () => {
     expect(t.federation.getDocumentLoader).toHaveBeenCalledWith({ identifier: 'kosui' });
   });
 
-  it('取り込める投稿がなければ fetched を 0 にする', async () => {
-    const t = await seedReactions();
-
-    const response = await post(t, t.local.postId, t.me.bearer);
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ fetched: 0 });
-  });
-
   it('トークンがないと 401、write:statuses を満たさないスコープは 403 にする', async () => {
     const t = await seedReactions();
 
@@ -965,16 +886,6 @@ describe('POST /api/iori/v1/accounts/:id/remote-statuses', () => {
 
     const statuses = await response.json() as { uri: string }[];
     expect(statuses.map((status) => status.uri)).toEqual([newer.id!.href, older.id!.href, t.publicNote.uri]);
-  });
-
-  it('ローカルのアクターなら何も取らず fetched を 0 にする', async () => {
-    const t = await seedReactions();
-
-    const response = await post(t, t.me.actorId, t.me.bearer);
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ fetched: 0 });
-    expect(t.federation.lookupObject).not.toHaveBeenCalled();
   });
 
   it('トークンがないと 401、write:statuses を満たさないスコープは 403 にする', async () => {

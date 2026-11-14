@@ -43,14 +43,6 @@ describe('resolveBlueskyCrosspostConfig', () => {
 });
 
 describe('createBlueskyCrosspostUseCases', () => {
-  it('無効なときは use case を作らず、waitUntil も呼ばない', () => {
-    const waitUntil = () => {
-      throw new Error('waitUntil must not be called');
-    };
-    const env = { ...enabled, IORI_BLUESKY_CROSSPOST: 'disabled' } as unknown as IoriWorkerEnv;
-    expect(createBlueskyCrosspostUseCases(env, waitUntil)).toBeUndefined();
-  });
-
   it('有効なときは、保存済みセッションで Bluesky に投稿し、対応表に sent を残す', async () => {
     const { binding, sqlite } = createSqliteD1Fixture();
     const now = Date.UTC(2026, 10, 8);

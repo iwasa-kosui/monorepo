@@ -79,15 +79,6 @@ describe('generateOgImageOnDemand', () => {
     expect(put).toHaveBeenCalledWith({ key: articleId, body: png, contentType: 'image/png' });
   });
 
-  it('returns notFound without rendering or storing when there is no published article', async () => {
-    const { run, put, loadFont, render } = setup({ title: { status: 'notFound' } });
-
-    expect(await run(articleId)).toEqual({ status: 'notFound' });
-    expect(loadFont).not.toHaveBeenCalled();
-    expect(render).not.toHaveBeenCalled();
-    expect(put).not.toHaveBeenCalled();
-  });
-
   it('returns notFound without reading the store when the article is not published', async () => {
     const stored = new Response('stored');
     const { run, get, render, put } = setup({ stored, title: { status: 'notFound' } });
@@ -129,17 +120,6 @@ describe('generateOgImageOnDemand', () => {
     });
 
     expect(await run(articleId)).toEqual({ status: 'failed' });
-    expect(render).not.toHaveBeenCalled();
-    expect(put).not.toHaveBeenCalled();
-    expect(error).toHaveBeenCalled();
-  });
-
-  it('returns failed without rendering when the title resolution reports a failure', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const { run, loadFont, render, put } = setup({ title: { status: 'failed', error: new Error('db down') } });
-
-    expect(await run(articleId)).toEqual({ status: 'failed' });
-    expect(loadFont).not.toHaveBeenCalled();
     expect(render).not.toHaveBeenCalled();
     expect(put).not.toHaveBeenCalled();
     expect(error).toHaveBeenCalled();

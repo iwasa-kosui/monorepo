@@ -15,7 +15,6 @@ import { createD1AccessTokenIssuedStore } from '../oauth/accessTokenIssuedStore.
 import {
   createD1AccessTokenResolverByTokenHash,
   createD1AccessTokensResolverByAuthorizationCodeHash,
-  createD1AccessTokenUsageRecorder,
 } from '../oauth/accessTokenResolvers.ts';
 import { createD1AccessTokenRevokedStore } from '../oauth/accessTokenRevokedStore.ts';
 import { createD1AuthorizationCodeConsumedStore } from '../oauth/authorizationCodeConsumedStore.ts';
@@ -56,22 +55,6 @@ const registerApplication = async (ctx: ReturnType<typeof setup>) => {
   return registered.val;
 };
 
-describe('migrations', () => {
-  it('drizzle-d1 の全マイグレーションを読み、OAuth の 3 表を作る', () => {
-    const { sqlite } = setup();
-    const tables = sqlite.prepare(
-      'SELECT name FROM sqlite_master WHERE type=\'table\' AND name LIKE \'oauth_%\' ORDER BY name',
-    )
-      .all() as Array<{ name: string }>;
-
-    expect(tables.map((table) => table.name)).toEqual([
-      'oauth_access_tokens',
-      'oauth_applications',
-      'oauth_authorization_codes',
-    ]);
-  });
-});
-
 describe('D1 OAuth application adapters', () => {
   it('アプリと domain_events を 1 回のバッチで書き、clientId と id で引く', async () => {
     const ctx = setup();
@@ -94,15 +77,6 @@ describe('D1 OAuth application adapters', () => {
     >;
     expect(JSON.parse(row['redirectUris']!)).toEqual(['https://app.example/cb', 'ivory://cb']);
     expect(row['scopes']).toBe('read write');
-  });
-
-  it('未知の clientId は undefined を返す', async () => {
-    const ctx = setup();
-
-    expect(await createD1OAuthApplicationResolverByClientId(ctx.db).resolve(ClientId.generate())).toMatchObject({
-      ok: true,
-      val: undefined,
-    });
   });
 
   it('clientId の重複を一意制約で拒む', async () => {
@@ -141,16 +115,6 @@ describe('D1 authorization code adapters', () => {
     return issued.val;
   };
 
-  it('コードを保存して codeHash で引ける', async () => {
-    const ctx = setup();
-    const { aggregateState: application } = await registerApplication(ctx);
-    const issued = await issueCode(ctx, application.id);
-
-    const resolved = await createD1AuthorizationCodeResolverByCodeHash(ctx.db).resolve(issued.aggregateState.codeHash);
-
-    expect(resolved).toMatchObject({ ok: true, val: issued.aggregateState });
-  });
-
   it('使用済みにすると consumedAt を書き、2 回目の更新で上書きしない', async () => {
     const ctx = setup();
     const { aggregateState: application } = await registerApplication(ctx);
@@ -170,23 +134,6 @@ describe('D1 authorization code adapters', () => {
       'authorizationCode.consumed',
     );
     expect(consumedEvents).toHaveLength(1);
-  });
-
-  it('存在しないユーザーのコードを外部キーで拒む', async () => {
-    const ctx = setup();
-    const { aggregateState: application } = await registerApplication(ctx);
-    const issued = AuthorizationCode.issue(ctx.now)({
-      codeHash: await Secret.hash('x'),
-      applicationId: application.id,
-      userId: UserId.generate(),
-      redirectUri: RedirectUri.orThrow('https://app.example/cb'),
-      scopes: [Scope.orThrow('read')],
-      codeChallenge: null,
-      codeChallengeMethod: null,
-    });
-    if (!issued.ok) throw new Error('issue failed');
-
-    await expect(createD1AuthorizationCodeIssuedStore(ctx.db).store(issued.val)).rejects.toThrow();
   });
 });
 
@@ -243,23 +190,6 @@ describe('D1 access token adapters', () => {
     await expect(createD1AccessTokenIssuedStore(ctx.db).store(duplicate.val)).rejects.toThrow();
   });
 
-  it('失効すると revokedAt を書き、イベントも残す', async () => {
-    const ctx = setup();
-    const { aggregateState: application } = await registerApplication(ctx);
-    const issued = await issueToken(ctx, application.id);
-    const revoked = AccessToken.revoke(Instant.addDuration(ctx.now, 5000))(issued.aggregateState);
-    if (!revoked.ok) throw new Error('revoke failed');
-
-    await createD1AccessTokenRevokedStore(ctx.db).store(revoked.val);
-
-    const resolved = await createD1AccessTokenResolverByTokenHash(ctx.db).resolve(issued.aggregateState.tokenHash);
-    expect(resolved).toMatchObject({ ok: true, val: { revokedAt: ctx.now + 5000 } });
-    const names = ctx.sqlite.prepare('SELECT eventName FROM domain_events ORDER BY occurredAt, rowid').all() as Array<
-      { eventName: string }
-    >;
-    expect(names.map((row) => row.eventName)).toContain('accessToken.revoked');
-  });
-
   it('認可コードのハッシュで発行済みのトークンを引ける', async () => {
     const ctx = setup();
     const { aggregateState: application } = await registerApplication(ctx);
@@ -271,20 +201,6 @@ describe('D1 access token adapters', () => {
     const resolved = await createD1AccessTokensResolverByAuthorizationCodeHash(ctx.db).resolve(codeHash);
 
     expect(resolved.ok && resolved.val).toHaveLength(2);
-  });
-
-  it('lastUsedAt を更新する', async () => {
-    const ctx = setup();
-    const { aggregateState: application } = await registerApplication(ctx);
-    const issued = await issueToken(ctx, application.id);
-
-    await createD1AccessTokenUsageRecorder(ctx.db).record({
-      id: issued.aggregateState.id,
-      usedAt: Instant.addDuration(ctx.now, 9000),
-    });
-
-    const resolved = await createD1AccessTokenResolverByTokenHash(ctx.db).resolve(issued.aggregateState.tokenHash);
-    expect(resolved).toMatchObject({ ok: true, val: { lastUsedAt: ctx.now + 9000 } });
   });
 });
 

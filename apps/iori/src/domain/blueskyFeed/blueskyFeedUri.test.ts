@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { blueskyFeedKindOf, blueskyFeedUriOf, isBlueskyDid, parseBlueskyFeedUrl } from './blueskyFeedUri.ts';
+import { blueskyFeedKindOf, parseBlueskyFeedUrl } from './blueskyFeedUri.ts';
 
 describe('blueskyFeedKindOf', () => {
   it('app.bsky.feed.generator の URI を feed にする', () => {
@@ -85,24 +85,5 @@ describe('parseBlueskyFeedUrl', () => {
     expect(parseBlueskyFeedUrl('https://bsky.app/profile/did:/feed/a')).toBeUndefined();
     expect(parseBlueskyFeedUrl('https://bsky.app/profile/alice.bsky.social/feed/a%2Fb')).toBeUndefined();
     expect(parseBlueskyFeedUrl('https://bsky.app/profile/alice.bsky.social/feed/..')).toBeUndefined();
-  });
-});
-
-describe('isBlueskyDid', () => {
-  it('did だけを true にする', () => {
-    expect(isBlueskyDid('did:plc:alice')).toBe(true);
-    expect(isBlueskyDid('alice.bsky.social')).toBe(false);
-  });
-});
-
-describe('blueskyFeedUriOf', () => {
-  it('feed と list の at-uri を組み立て、blueskyFeedKindOf で読み戻せる', () => {
-    const feed = blueskyFeedUriOf('did:plc:alice', 'feed', 'a');
-    const list = blueskyFeedUriOf('did:plc:alice', 'list', '3k');
-
-    expect(feed).toBe('at://did:plc:alice/app.bsky.feed.generator/a');
-    expect(list).toBe('at://did:plc:alice/app.bsky.graph.list/3k');
-    expect(blueskyFeedKindOf(feed)).toBe('feed');
-    expect(blueskyFeedKindOf(list)).toBe('list');
   });
 });

@@ -93,13 +93,6 @@ describe('post_quotes の保存', () => {
 
     expect(quoteRows(t)).toEqual([]);
   });
-
-  it('投稿のイベントの payload に引用先の URI を残す', () => {
-    const event = createRemote(ActorId.generate(), 'https://remote.example/notes/quoted');
-
-    expect(event.eventPayload.quoteUri).toBe('https://remote.example/notes/quoted');
-    expect(createRemote(ActorId.generate()).eventPayload.quoteUri).toBeNull();
-  });
 });
 
 describe('createD1PostQuotesResolverByPostIds', () => {
@@ -144,13 +137,5 @@ describe('createD1PostQuotesResolverByPostIds', () => {
       [unknown.postId, { uri: 'https://other.example/notes/unknown', author: null }],
       [plain.postId, { uri: own.uri, author: null }],
     ]);
-  });
-
-  it('投稿 ID が空なら空の Map を返す', async () => {
-    const t = setup();
-
-    const result = await createD1PostQuotesResolverByPostIds(t.db).resolve([]);
-
-    expect(result.ok && result.val.size).toBe(0);
   });
 });

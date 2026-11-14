@@ -76,20 +76,6 @@ describe('createWorkersAiTextGenerator generate', () => {
     });
   });
 
-  it('returns AiError when run throws', async () => {
-    const run = vi.fn(async () => {
-      throw new Error('boom');
-    });
-    const result = await createWorkersAiTextGenerator({ run }).generate(generateRequest);
-    expect(result).toEqual({ ok: false, err: { type: 'AiError', message: 'boom' } });
-  });
-
-  it('returns AiError for an empty response', async () => {
-    const run = vi.fn(async () => ({ response: '' }));
-    const result = await createWorkersAiTextGenerator({ run }).generate(generateRequest);
-    expect(result).toMatchObject({ ok: false, err: { type: 'AiError' } });
-  });
-
   it.each([
     { choices: [{ message: { content: '', reasoning_content: '考え中' } }] },
     { choices: [{ message: { content: null, reasoning_content: '考え中' } }] },

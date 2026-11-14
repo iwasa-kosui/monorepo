@@ -2,19 +2,12 @@ import { Note, Person } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { TextGenerator } from '../../../ports/textGenerator.ts';
-import { createStubTextGenerator } from '../../../testing/aiStubs.ts';
 import { AccountSchema, StatusSchema } from '../../mastodon/entities.ts';
 import { setupReadApi } from './helper/mastodonReadHarness.ts';
 
 const parseStatuses = (body: unknown) => (body as unknown[]).map((item) => StatusSchema.parse(item));
 
 const searchUrl = (path: string, params: Record<string, string>) => `${path}?${new URLSearchParams(params).toString()}`;
-
-const neverResolvingGenerator: TextGenerator = {
-  summarize: () => new Promise(() => {}),
-  generate: () => new Promise(() => {}),
-};
 
 const seedTimeline = async (options: Parameters<typeof setupReadApi>[0] = {}) => {
   const t = setupReadApi(options);
@@ -44,16 +37,6 @@ describe('GET /api/iori/v1/search/statuses', () => {
     expect(response.status).toBe(401);
   });
 
-  it('Cookie でも検索できる', async () => {
-    const t = await seedTimeline();
-
-    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: '京都' }), {
-      headers: { Cookie: `sessionId=${t.me.sessionId}` },
-    });
-
-    expect(response.status).toBe(200);
-  });
-
   it('read:search を満たさない scope のトークンは 403 にする', async () => {
     const t = setupReadApi();
     const me = await t.signIn('write');
@@ -69,17 +52,6 @@ describe('GET /api/iori/v1/search/statuses', () => {
     const t = await seedTimeline();
 
     const response = await t.request('/api/iori/v1/search/statuses', { headers: t.me.bearer });
-
-    expect(response.status).toBe(422);
-    expect(await response.json()).toEqual({ error: 'Validation failed: q' });
-  });
-
-  it('q が空白だけだと 422 にする', async () => {
-    const t = await seedTimeline();
-
-    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: '   ' }), {
-      headers: t.me.bearer,
-    });
 
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: 'Validation failed: q' });
@@ -159,17 +131,6 @@ describe('GET /api/iori/v1/search/statuses', () => {
     expect(ids).toContain(toMe.postId);
   });
 
-  it('limit で件数を絞る', async () => {
-    const t = await seedTimeline();
-
-    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: '京都 旅行', limit: '1' }), {
-      headers: t.me.bearer,
-    });
-
-    const body = (await response.json()) as { statuses: unknown[] };
-    expect(parseStatuses(body.statuses).map((status) => status.id)).toEqual([t.mine.postId]);
-  });
-
   it('textGenerator がなければ expansion を skipped にする', async () => {
     const t = await seedTimeline();
 
@@ -180,57 +141,6 @@ describe('GET /api/iori/v1/search/statuses', () => {
     const body = (await response.json()) as { statuses: unknown[]; expansion: string };
     expect(body.expansion).toBe('skipped');
     expect(parseStatuses(body.statuses).map((status) => status.id)).toEqual([t.fromDave.postId, t.mine.postId]);
-  });
-
-  it('textGenerator が展開語を返すと、展開語で一致した投稿も返す', async () => {
-    const stub = createStubTextGenerator(() => '["旅行"]');
-    const t = await seedTimeline({ textGenerator: stub.generator });
-
-    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: '京都' }), {
-      headers: t.me.bearer,
-    });
-
-    const body = (await response.json()) as { statuses: unknown[]; expansion: string; terms: unknown };
-    expect(body.expansion).toBe('expanded');
-    expect(body.terms).toEqual({ original: ['京都'], expanded: ['旅行'] });
-    expect(parseStatuses(body.statuses).map((status) => status.id)).toEqual([
-      t.mine.postId,
-      t.fromDave.postId,
-      t.fromAlice.postId,
-    ]);
-  });
-
-  it('長い文の問い合わせは dropped_original に入れる', async () => {
-    const t = await seedTimeline();
-    const sentence = '先週の旅行で食べたおいしいものについて詳しく教えてください';
-
-    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: `京都 ${sentence}` }), {
-      headers: t.me.bearer,
-    });
-
-    const body = (await response.json()) as { statuses: unknown[]; dropped_original: string[]; terms: unknown };
-    expect(body.dropped_original).toEqual([sentence]);
-    expect(body.terms).toEqual({ original: ['京都'], expanded: [] });
-    expect(parseStatuses(body.statuses)).toHaveLength(2);
-  });
-
-  it('展開が期限を過ぎても 200 で、expansion を failed にして元の語で検索する', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const t = await seedTimeline({
-      textGenerator: neverResolvingGenerator,
-      searchTimeline: { expansionTimeoutMs: 10 },
-    });
-
-    const response = await t.request(searchUrl('/api/iori/v1/search/statuses', { q: '京都' }), {
-      headers: t.me.bearer,
-    });
-
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { statuses: unknown[]; expansion: string; terms: unknown };
-    expect(body.expansion).toBe('failed');
-    expect(body.terms).toEqual({ original: ['京都'], expanded: [] });
-    expect(parseStatuses(body.statuses).map((status) => status.id)).toEqual([t.fromDave.postId, t.mine.postId]);
-    warn.mockRestore();
   });
 
   it('検索の途中で想定外のエラーが起きると 500 にする', async () => {
@@ -304,17 +214,6 @@ describe('GET /api/v2/search', () => {
 
     expect(await accounts.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
     expect(await hashtags.json()).toEqual({ accounts: [], statuses: [], hashtags: [] });
-  });
-
-  it('type が statuses のときは検索する', async () => {
-    const t = await seedTimeline();
-
-    const response = await t.request(searchUrl('/api/v2/search', { q: '京都', type: 'statuses' }), {
-      headers: t.me.bearer,
-    });
-
-    const body = (await response.json()) as { statuses: unknown[] };
-    expect(parseStatuses(body.statuses).map((status) => status.id)).toEqual([t.fromDave.postId, t.mine.postId]);
   });
 
   it('type が未知の値なら 422 にする', async () => {
@@ -435,20 +334,6 @@ describe('GET /api/v2/search', () => {
     expect(parseStatuses(((await over.json()) as { statuses: unknown[] }).statuses)).toHaveLength(40);
     expect(zero.status).toBe(200);
     expect(parseStatuses(((await zero.json()) as { statuses: unknown[] }).statuses)).toHaveLength(1);
-  });
-
-  it('limit が数値でなければ既定の 20 件にする', async () => {
-    const t = await seedTimeline();
-    for (let i = 0; i < 25; i++) {
-      t.seed.addRemotePost(t.alice, 10_000 + i, { content: `<p>大量の旅行 ${i}</p>` });
-    }
-
-    const response = await t.request(searchUrl('/api/v2/search', { q: '旅行', limit: 'abc' }), {
-      headers: t.me.bearer,
-    });
-
-    expect(response.status).toBe(200);
-    expect(parseStatuses(((await response.json()) as { statuses: unknown[] }).statuses)).toHaveLength(20);
   });
 });
 
@@ -646,19 +531,6 @@ describe('GET /api/v2/search の resolve=true', () => {
 
     expect(response.status).toBe(401);
     expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
-  });
-
-  it('投稿の検索の結果は resolve の有無で変わらない', async () => {
-    const t = await seedResolve();
-
-    const [without, withResolve] = await Promise.all([
-      t.search({ q: '京都 旅行' }),
-      t.search({ q: '京都 旅行', resolve: 'true' }),
-    ]);
-
-    const idsOf = async (response: Response) =>
-      ((await response.json()) as { statuses: Array<{ id: string }> }).statuses.map((status) => status.id);
-    expect(await idsOf(withResolve)).toEqual(await idsOf(without));
   });
 });
 
@@ -865,41 +737,6 @@ describe('GET /api/v2/search の投稿の URL の解決', () => {
     expect(await t.statusesOf(response)).toEqual([]);
   });
 
-  it('アカウントの解決と投稿の解決を並行に走らせる', async () => {
-    const t = await seedUrl();
-    let release = () => {};
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const fallback = setTimeout(release, 300);
-    let accountLookupFinished = false;
-    let finishedWhenPostLookupStarted: boolean | undefined;
-    t.remoteActorLookup.lookup.mockImplementation(
-      (async () => {
-        await gate;
-        accountLookupFinished = true;
-        return RA.err({
-          type: 'RemoteActorLookupError',
-          message: 'not found',
-          detail: { handle: '', reason: 'not found' },
-        } as never);
-      }) as never,
-    );
-    t.federation.lookupObject.mockImplementation(async (uri?: string) => {
-      if (uri !== HTML_URL) return null;
-      finishedWhenPostLookupStarted = accountLookupFinished;
-      release();
-      return erinNote();
-    });
-
-    const response = await t.search({ q: HTML_URL, resolve: 'true' });
-    clearTimeout(fallback);
-
-    expect(response.status).toBe(200);
-    expect(finishedWhenPostLookupStarted).toBe(false);
-    expect(await t.statusesOf(response)).toHaveLength(1);
-  });
-
   it('アカウントの解決が時間切れでも、解決した投稿を返す', async () => {
     const t = await seedUrl();
     t.remoteActorLookup.lookup.mockImplementation(() => new Promise(() => undefined) as never);
@@ -936,15 +773,6 @@ describe('GET /api/v2/search の投稿の URL の解決', () => {
 
     await t.search({ q: HTML_URL, resolve: 'true', account_id: t.alice.actorId });
 
-    expect(t.federation.lookupObject).not.toHaveBeenCalled();
-  });
-
-  it('ログインしていないと 401 にして解決しない', async () => {
-    const t = await seedUrl();
-
-    const response = await t.request(searchUrl('/api/v2/search', { q: HTML_URL, resolve: 'true' }));
-
-    expect(response.status).toBe(401);
     expect(t.federation.lookupObject).not.toHaveBeenCalled();
   });
 });

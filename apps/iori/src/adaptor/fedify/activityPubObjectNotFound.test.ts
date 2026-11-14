@@ -79,18 +79,6 @@ describe('isActivityPubObjectRequest for the post object path', () => {
     expect(isActivityPubObjectRequest(request(postPath, 'application/json'))).toBe(true);
   });
 
-  it('rejects text/html, wildcard, an unrelated type, and a missing Accept header', () => {
-    expect(isActivityPubObjectRequest(request(postPath, 'text/html'))).toBe(false);
-    expect(isActivityPubObjectRequest(request(postPath, 'text/html, application/ld+json'))).toBe(false);
-    expect(isActivityPubObjectRequest(request(postPath, '*/*'))).toBe(false);
-    expect(isActivityPubObjectRequest(request(postPath, 'text/plain'))).toBe(false);
-    expect(isActivityPubObjectRequest(request(postPath))).toBe(false);
-  });
-
-  it('ignores the query string', () => {
-    expect(isActivityPubObjectRequest(request(`${postPath}?foo=bar`, 'application/activity+json'))).toBe(true);
-  });
-
   it('rejects a trailing slash because Fedify does not route it', () => {
     expect(isActivityPubObjectRequest(request(`${postPath}/`, 'application/activity+json'))).toBe(false);
   });

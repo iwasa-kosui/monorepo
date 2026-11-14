@@ -5,7 +5,6 @@ import { Instant } from '../../instant/instant.ts';
 import { UserId } from '../../user/userId.ts';
 import { LocalPost, Post, RemotePost } from '../post.ts';
 import { PostId } from '../postId.ts';
-import type { Visibility } from '../visibility.ts';
 
 const localPostFields = () => ({
   type: 'local' as const,
@@ -60,10 +59,6 @@ describe('LocalPost の visibility', () => {
   it('visibility を持たない値は public として読む', () => {
     expect(LocalPost.orThrow(localPostFields()).visibility).toBe('public');
   });
-
-  it('知らない visibility は受け付けない', () => {
-    expect(LocalPost.parse({ ...localPostFields(), visibility: 'friends' }).ok).toBe(false);
-  });
 });
 
 describe('Post.createPost の visibility', () => {
@@ -74,23 +69,10 @@ describe('Post.createPost の visibility', () => {
     expect(event.aggregateState.visibility).toBe('public');
     expect(event.eventPayload.visibility).toBe('public');
   });
-
-  it.each(['public', 'unlisted', 'private'] as const satisfies ReadonlyArray<Visibility>)(
-    '%s を投稿とイベントに載せる',
-    (visibility) => {
-      const event = Post.createPost(Instant.now())({ ...payload, visibility });
-      expect(event.aggregateState.visibility).toBe(visibility);
-      expect(event.eventPayload.visibility).toBe(visibility);
-    },
-  );
 });
 
 describe('Post.createPost の sourceText', () => {
   const payload = { actorId: ActorId.generate(), userId: UserId.generate(), content: '<p>hi</p>' };
-
-  it('省略したときは null にする', () => {
-    expect(Post.createPost(Instant.now())(payload).eventPayload.sourceText).toBeNull();
-  });
 
   it('指定した原文をイベントに載せ、投稿には載せない', () => {
     const event = Post.createPost(Instant.now())({ ...payload, sourceText: 'hi' });

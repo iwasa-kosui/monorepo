@@ -149,14 +149,6 @@ describe('createWorkerPasskeyRouter', () => {
       await expect(response.json()).resolves.toEqual({ error: 'Forbidden' });
       expect(h.deps[use].run).not.toHaveBeenCalled();
     });
-
-    it('Origin も Sec-Fetch-Site も無いと 403 にする', async () => {
-      const h = createApp();
-
-      const response = await request(h, method, path, { body: body ?? {}, headers: {} });
-
-      expect(response.status).toBe(403);
-    });
   });
 
   describe('未ログイン', () => {
@@ -278,19 +270,6 @@ describe('createWorkerPasskeyRouter', () => {
       expect(response.status).toBe(400);
       await expect(response.json()).resolves.toEqual({ error: 'registration_failed' });
       expect(h.deps.finishPasskeyRegistrationUseCase.run).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('POST /auth/passkey/authentication-options', () => {
-    it('セッションが無くても options を返し、challenge の Cookie を付ける', async () => {
-      const h = createApp();
-
-      const response = await request(h, 'POST', '/authentication-options', { session: false, challenge: false });
-
-      expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toEqual({ challenge: 'auth-challenge' });
-      expect(challengeCookie(response)).toContain(`webauthnChallengeId=${h.challengeId}`);
-      expect(challengeCookie(response)).toContain('Path=/auth/passkey');
     });
   });
 

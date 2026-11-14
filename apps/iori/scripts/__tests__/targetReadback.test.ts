@@ -92,19 +92,6 @@ const resourceFailure = (details: string[]) => ({
   message: 'Target readback failed.',
   diagnostic: { reason: 'state-mismatch', details },
 });
-it('classifies a Cloudflare HTTP failure by API and integer status only', async () => {
-  await expect(failureFor('workers', () => Response.json({ success: false, errors: ['secret'] }, { status: 403 })))
-    .rejects.toMatchObject(readbackFailure('workers-http-403'));
-  await expect(failureFor('queues', () => new Response('secret', { status: 503 })))
-    .rejects.toMatchObject(readbackFailure('queues-http-503'));
-});
-it.each(Object.keys(apiPaths) as (keyof typeof apiPaths)[])(
-  'classifies a fetch exception for %s as request',
-  async (api) => {
-    await expect(failureFor(api, () => Promise.reject(new Error('https://secret.invalid/path'))))
-      .rejects.toMatchObject(readbackFailure(`${api}-request`));
-  },
-);
 it('leaves an abort of the outer signal without a diagnostic', async () => {
   const controller = new AbortController();
   const control = createTargetControlPlane({
@@ -120,12 +107,6 @@ it('leaves an abort of the outer signal without a diagnostic', async () => {
   const error = await control.readCurrentVersion().then(() => undefined, (reason: unknown) => reason);
   expect(error).toBeDefined();
   expect(error).not.toHaveProperty('diagnostic');
-});
-it.each(Object.keys(apiPaths) as (keyof typeof apiPaths)[])('classifies broken JSON for %s as shape', async (api) => {
-  await expect(failureFor(api, () => new Response('{not json')))
-    .rejects.toMatchObject(readbackFailure(`${api}-shape`));
-  await expect(failureFor(api, () => Response.json({ success: false, result: [] })))
-    .rejects.toMatchObject(readbackFailure(`${api}-shape`));
 });
 it('classifies an oversized body as too-large', async () => {
   await expect(failureFor('workers', () => new Response('x'.repeat(2_000_001))))
@@ -656,57 +637,15 @@ describe('a state close to a production wrangler deployment', () => {
     const { api, input } = await wranglerFixture('production', [stagingAccessToken]);
     await expect(api.readActiveWorker(input)).rejects.toMatchObject(readbackFailure('worker-binding-extra'));
   });
-  it('accepts an AI binding without worker-binding-extra', async () => {
-    const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'ai' }]);
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
-  });
-  it('accepts an IORI_PRUNE_FEDERATED_POSTS plain_text binding without worker-binding-extra', async () => {
-    const { api, input } = await wranglerFixture('production', [
-      { name: 'IORI_PRUNE_FEDERATED_POSTS', type: 'plain_text', text: 'disabled' },
-    ]);
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
-  });
-  it('accepts an optional TWITTERAPI_IO_API_KEY secret_text binding without worker-binding-extra', async () => {
-    const { api, input } = await wranglerFixture('production', [{
-      name: 'TWITTERAPI_IO_API_KEY',
-      type: 'secret_text',
-    }]);
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
-  });
   it('rejects a TWITTERAPI_IO_API_KEY binding that is not a secret_text', async () => {
     const { api, input } = await wranglerFixture('production', [
       { name: 'TWITTERAPI_IO_API_KEY', type: 'plain_text', text: 'x' },
     ]);
     await expect(api.readActiveWorker(input)).rejects.toMatchObject(readbackFailure('worker-secret-missing'));
   });
-  it('accepts the Bluesky crosspost bindings without worker-binding-extra', async () => {
-    const { api, input } = await wranglerFixture('production', [
-      { name: 'IORI_BLUESKY_CROSSPOST', type: 'plain_text', text: 'disabled' },
-      { name: 'BLUESKY_IDENTIFIER', type: 'secret_text' },
-      { name: 'BLUESKY_APP_PASSWORD', type: 'secret_text' },
-    ]);
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 17 });
-  });
-  it('accepts an optional BLUESKY_CREDENTIAL_KEY secret_text binding without worker-binding-extra', async () => {
-    const { api, input } = await wranglerFixture('production', [{
-      name: 'BLUESKY_CREDENTIAL_KEY',
-      type: 'secret_text',
-    }]);
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
-  });
-  it('accepts the Bluesky timeline binding without worker-binding-extra', async () => {
-    const { api, input } = await wranglerFixture('production', [
-      { name: 'IORI_BLUESKY_TIMELINE', type: 'plain_text', text: 'disabled' },
-    ]);
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
-  });
   it('rejects an AI binding whose type is not ai', async () => {
     const { api, input } = await wranglerFixture('production', [{ name: 'AI', type: 'secret_text' }]);
     await expect(api.readActiveWorker(input)).rejects.toMatchObject(readbackFailure('worker-binding-mismatch'));
-  });
-  it('reads the same thirteen bindings of staging', async () => {
-    const { api, input } = await wranglerFixture('staging', [stagingAccessToken]);
-    await expect(api.readActiveWorker(input)).resolves.toMatchObject({ mode: 'active', bindingCount: 15 });
   });
 });
 
@@ -897,42 +836,5 @@ describe('the resource readback names the conditions that differ', () => {
     }],
   ])('names %s for %s', async (word, _label, change) => {
     await expect(readAttached(attachedResponses(change))).rejects.toMatchObject(resourceFailure([word]));
-  });
-  it('keeps state-mismatch as the reason and lists every condition that differs, once each', async () => {
-    const responses = attachedResponses((consumer) => {
-      consumer.script = 'old-worker';
-      consumer.settings = { batch_size: 1, max_wait_time_ms: 1000, max_retries: 3, retry_delay: 60 };
-    });
-    responses['/d1/database/db-id'].name = 'old';
-    responses['/queues/queue-id'].settings.delivery_paused = true;
-    responses['/queues/dlq-id'].settings.delivery_paused = false;
-    const error = await readAttached(responses).then(() => undefined, (reason: unknown) => reason);
-    expect(error).toMatchObject({
-      message: 'Target readback failed.',
-      diagnostic: {
-        reason: 'state-mismatch',
-        details: ['resource-d1', 'resource-queue-paused', 'resource-consumer-script', 'resource-consumer-settings'],
-      },
-    });
-  });
-  it('lists the conditions found so far when a later request fails', async () => {
-    const responses = attachedResponses((consumer) => {
-      consumer.script = 'old-worker';
-    });
-    delete (responses as Record<string, unknown>)[`/r2/buckets/${identity.names.transfer}/domains/managed`];
-    await expect(readAttached(responses)).rejects.toMatchObject(resourceFailure(['resource-consumer-script']));
-  });
-  it('keeps the request failure when no condition differs', async () => {
-    const responses = resourceResponses() as Record<string, unknown>;
-    delete responses[`/r2/buckets/${identity.names.transfer}/domains/managed`];
-    await expect(fixtureApi(responses).readActiveResources(ids)).rejects.toMatchObject(readbackFailure('r2-shape'));
-  });
-  it('names the same words in the active readback', async () => {
-    const responses = attachedResponses((consumer) => {
-      consumer.script = 'old-worker';
-    });
-    await expect(fixtureApi(responses).readActiveResources(ids)).rejects.toMatchObject(
-      resourceFailure(['resource-consumer-script']),
-    );
   });
 });

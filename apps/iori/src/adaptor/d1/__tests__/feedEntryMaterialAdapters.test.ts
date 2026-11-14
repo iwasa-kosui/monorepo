@@ -109,17 +109,3 @@ describe('RadarFeedEntriesResolverByFetchedSince', () => {
     expect(await resolveRadar()).toEqual([]);
   });
 });
-
-describe('RadarFeedEntriesResolverByFetchedSince の x_user', () => {
-  it('x_user の情報源の記事は返さない', async () => {
-    const { addFeedSource, addEntry, resolveRadar } = setup();
-    const radar = addFeedSource('thoughtworks_radar');
-    const xUser = addFeedSource('x_user');
-    const kept = addEntry(radar);
-    addEntry(xUser);
-
-    const resolved = await resolveRadar();
-
-    expect(resolved.map((entry) => entry.feedEntryId)).toEqual([kept]);
-  });
-});

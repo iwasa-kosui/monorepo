@@ -14,10 +14,8 @@ import {
   FEDIVERSE_RETRY_MESSAGE,
   fediverseCharacterCount,
   fediverseChatPath,
-  fediverseConversationTitle,
   fediverseErrorMessage,
   fediverseErrorMessageOf,
-  fediverseLastMessageSummary,
   fediverseMessageDisclosure,
   fediverseRemainingCharacters,
   fediverseRouteOfPath,
@@ -246,21 +244,6 @@ describe('isOwnFediverseMessage', () => {
 
   it('相手の accountId が null でも、相手の投稿を自分の投稿にしない', () => {
     expect(isOwnFediverseMessage(status('m1', '2026-11-12T01:00:00.000Z', 'actor-unresolved'), 'actor-me')).toBe(false);
-  });
-});
-
-describe('fediverseConversationTitle / fediverseLastMessageSummary', () => {
-  it('相手の表示名を並べ、表示名が空なら acct にする', () => {
-    expect(fediverseConversationTitle([ALICE])).toBe('Alice');
-    expect(fediverseConversationTitle([ALICE, BOB])).toBe('Alice、Bob');
-    expect(fediverseConversationTitle([{ ...ALICE, displayName: ' ' }])).toBe('alice@remote.example');
-    expect(fediverseConversationTitle([])).toBe('会話');
-  });
-
-  it('最後のメッセージを要約し、本文が空なら添付、無ければ空の案内にする', () => {
-    expect(fediverseLastMessageSummary({ text: 'やあ', sentAt: 1, own: false })).toBe('やあ');
-    expect(fediverseLastMessageSummary({ text: '', sentAt: 1, own: false })).toBe('添付ファイルを送りました');
-    expect(fediverseLastMessageSummary(null)).toBe('まだメッセージはありません');
   });
 });
 

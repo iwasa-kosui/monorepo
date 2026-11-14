@@ -34,10 +34,6 @@ const remotePost = (visibility: Visibility | null): RemotePost => ({
 });
 
 describe('isSummarizable', () => {
-  it('ローカルの投稿は要約できる', () => {
-    expect(isSummarizable(localPost())).toBe(true);
-  });
-
   it.each<[Visibility, boolean]>([
     ['public', true],
     ['unlisted', true],

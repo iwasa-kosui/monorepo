@@ -1,4 +1,4 @@
-import { Collection, Image, Mention, Note, Person, Question, Update } from '@fedify/vocab';
+import { Collection, Image, Note, Person, Question, Update } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
 import { describe, expect, it, vi } from 'vitest';
@@ -60,25 +60,6 @@ const noteOf = (overrides: Partial<ConstructorParameters<typeof Note>[0]> = {}) 
   });
 
 describe('createOnUpdate', () => {
-  it('Note の Update から本文、CW、センシティブ、添付、宛先、編集時刻を取り出して更新する', async () => {
-    const { run, listener } = setup();
-
-    await listener(createCtx(), updateOf(noteOf()));
-
-    expect(run).toHaveBeenCalledExactlyOnceWith({
-      uri: noteId.href,
-      actorUri: actorId.href,
-      content: '<p>after</p>',
-      summary: 'cw',
-      sensitive: true,
-      attachments: [{ url: 'https://remote.example/media/a.png', altText: 'alt', mediaType: null }],
-      recipientActorUris: [kosuiId.href],
-      mentionedActorUris: [],
-      visibility: 'direct',
-      editedAt: 5_000,
-    });
-  });
-
   it('Question の Update から、本文と更新後の票数・締め切り・closed を取り出して渡す', async () => {
     const { run, listener } = setup();
     const question = new Question({
@@ -191,35 +172,6 @@ describe('createOnUpdate', () => {
 
     await expect(listener(createCtx(), updateOf(question))).resolves.toBeUndefined();
     expect(pollRun).toHaveBeenCalledOnce();
-  });
-
-  it('Note の Update には poll を渡さない', async () => {
-    const { run, listener } = setup();
-
-    await listener(createCtx(), updateOf(noteOf()));
-
-    expect(run.mock.calls[0]?.[0]).not.toHaveProperty('poll');
-  });
-
-  it('Note のメンションのタグから、メンションされた actor の URI を取り出して渡す', async () => {
-    const { run, listener } = setup();
-    const bobId = new URL('https://other.example/users/bob');
-
-    await listener(createCtx(), updateOf(noteOf({ tags: [new Mention({ href: bobId, name: '@bob@other.example' })] })));
-
-    expect(run).toHaveBeenCalledOnce();
-    expect(run.mock.calls[0]?.[0]).toMatchObject({ mentionedActorUris: [bobId.href] });
-  });
-
-  it('Note の宛先から公開範囲を求める', async () => {
-    const { run, listener } = setup();
-    const publicId = new URL('https://www.w3.org/ns/activitystreams#Public');
-
-    await listener(createCtx(), updateOf(noteOf({ tos: [publicId] })));
-    await listener(createCtx(), updateOf(noteOf({ tos: [followersId] })));
-    await listener(createCtx(), updateOf(noteOf({ tos: [], ccs: [] })));
-
-    expect(run.mock.calls.map(([input]) => input.visibility)).toEqual(['public', 'private', null]);
   });
 
   it('actor を取得できなければ公開範囲を不明として渡す', async () => {

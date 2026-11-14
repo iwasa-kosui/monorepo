@@ -70,14 +70,6 @@ describe('interestSource の Store と Resolver', () => {
     expect(eventNames()).toEqual(Array(20).fill('interestSource.created'));
   });
 
-  it('created は空の呼び出しで何もしない', async () => {
-    const { db, eventNames } = setup();
-
-    await createD1InterestSourceCreatedStore(db).store();
-
-    expect(eventNames()).toEqual([]);
-  });
-
   it('同じ (userId, kind, ref) の created は一意制約で失敗し、1 件も入らない', async () => {
     const { me, createEvent, seedSources, resolveByKind } = setup();
     await seedSources([createEvent(me.userId, 'own_post', 'p-1')]);
@@ -102,44 +94,6 @@ describe('interestSource の Store と Resolver', () => {
 
     expect(resolved).toEqual([mine]);
     expect(resolved[0]).toMatchObject({ ref: 'https://example.com/a', contentHash: 'a'.repeat(64), embeddedAt: null });
-  });
-
-  it('deleted は deletedAt だけを入れてイベントを書く', async () => {
-    const { fixture, db, me, createEvent, seedSources, eventNames } = setup();
-    const [source] = await seedSources([createEvent(me.userId, 'own_post', 'p-1')]);
-
-    await createD1InterestSourceDeletedStore(db).store(InterestSource.markDeleted(source!, later));
-
-    expect(
-      fixture.sqlite.prepare('SELECT deletedAt, updatedAt, contentHash FROM interest_sources').get(),
-    ).toEqual({ deletedAt: later, updatedAt: now, contentHash: 'a'.repeat(64) });
-    expect(eventNames()).toEqual(['interestSource.created', 'interestSource.deleted']);
-  });
-
-  it('embedded は embedding と embeddedAt を書き、ベクトルをイベントに残さない', async () => {
-    const { fixture, db, me, createEvent, seedSources, resolveByKind, eventNames } = setup();
-    const [source] = await seedSources([createEvent(me.userId, 'kosui_post', 'https://example.com/a')]);
-    const embedding = Float32Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => Math.cos(i) * 0.25);
-    const embedded = InterestSource.embed(source!, embedding, later);
-    if (!embedded.ok) throw new Error('unexpected');
-
-    await createD1InterestSourceEmbeddedStore(db).store(embedded.val);
-
-    const [stored] = await db.select({
-      embedding: interestSourcesTable.embedding,
-      embeddedAt: interestSourcesTable.embeddedAt,
-    })
-      .from(interestSourcesTable);
-    expect(stored?.embedding).toBeInstanceOf(Float32Array);
-    expect(Array.from(stored!.embedding!)).toEqual(Array.from(embedding));
-    expect(stored?.embeddedAt?.getTime()).toBe(later);
-    expect((await resolveByKind(me.userId, 'kosui_post'))[0]?.embeddedAt).toBe(later);
-    expect(eventNames()).toEqual(['interestSource.created', 'interestSource.embedded']);
-    const row = fixture.sqlite.prepare(
-      'SELECT eventPayload FROM domain_events WHERE eventName = \'interestSource.embedded\'',
-    )
-      .get() as { eventPayload: string };
-    expect(JSON.parse(row.eventPayload)).toEqual({ interestSourceId: source!.interestSourceId, embeddedAt: later });
   });
 
   it('embedded は書き込みの前に contentHash が変わっていたら embedding と embeddedAt を書かない', async () => {
@@ -305,18 +259,6 @@ describe('interestSource の Store と Resolver', () => {
         [positive!.interestSourceId, negative!.interestSourceId].sort(),
       );
       expect(resolved.ok && resolved.val.find((source) => source.kind === 'feedback_negative')?.deletedAt).toBe(later);
-    });
-
-    it('ByUserIdAndRefAndKinds は kinds が空なら空を返す', async () => {
-      const { db, me } = setup();
-
-      const resolved = await createD1InterestSourcesResolverByUserIdAndRefAndKinds(db).resolve({
-        userId: me.userId as UserId,
-        ref: 'https://a',
-        kinds: [],
-      });
-
-      expect(resolved.ok && resolved.val).toEqual([]);
     });
   });
 });

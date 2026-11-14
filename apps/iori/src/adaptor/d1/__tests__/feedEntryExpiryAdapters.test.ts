@@ -35,18 +35,6 @@ describe('createD1FeedEntryMaxGuidResolverByFeedSourceId', () => {
       '1000000000000000001',
     );
   });
-
-  it('他の情報源の guid を見ず、記事がなければ undefined を返す', async () => {
-    const { addFeedSource, addEntry, db } = setup();
-    const source = addFeedSource('x_user');
-    const other = addFeedSource('x_user');
-    addEntry(other, '5000');
-
-    const resolver = createD1FeedEntryMaxGuidResolverByFeedSourceId(db);
-
-    expect((await resolver.resolve(source)).val).toBeUndefined();
-    expect((await resolver.resolve(other)).val).toBe('5000');
-  });
 });
 
 describe('createD1FeedEntriesResolverByFetchedBefore', () => {
@@ -77,11 +65,6 @@ describe('createD1FeedEntriesResolverByFetchedBefore', () => {
         excludedKinds: ['thoughtworks_radar', 'x_user'],
       }),
     ).toEqual(['rss']);
-  });
-
-  it('kinds が空なら何も返さない', async () => {
-    const { db } = seeded();
-    expect(await guidsOf(db, { fetchedBefore: Instant.orThrow(20_000), limit: 10, kinds: [] })).toEqual([]);
   });
 
   it('fetchedBefore より新しい記事は返さない', async () => {

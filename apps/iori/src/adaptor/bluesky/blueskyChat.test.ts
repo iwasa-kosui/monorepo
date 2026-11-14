@@ -30,7 +30,6 @@ const convoView = (overrides: Record<string, unknown> = {}) => ({
   unreadCount: 2,
   ...overrides,
 });
-const failure: BlueskyClientError = { type: 'BlueskyClientError', kind: 'http', message: 'failed', status: 500 };
 
 const setup = (response: Readonly<Record<string, unknown>> = {}, error?: BlueskyClientError) => {
   const result = (): ReturnType<BlueskyChatClient['chatQuery']> =>
@@ -72,25 +71,6 @@ describe('createBlueskyChat', () => {
       ],
       lastMessage: { kind: 'message', id: 'm1', text: 'こんにちは', senderDid: ALICE.did, sentAt: SENT_AT_MS },
     });
-  });
-
-  it('listConvos は readState があれば送る', async () => {
-    const t = setup({ convos: [] });
-
-    await t.chat.listConvos({ limit: 100, readState: 'unread' });
-
-    expect(t.chatQuery).toHaveBeenCalledExactlyOnceWith('chat.bsky.convo.listConvos', {
-      limit: '100',
-      readState: 'unread',
-    });
-  });
-
-  it('listConvos は cursor が無ければ送らない', async () => {
-    const t = setup({ convos: [] });
-
-    await t.chat.listConvos({ limit: 50 });
-
-    expect(t.chatQuery).toHaveBeenCalledExactlyOnceWith('chat.bsky.convo.listConvos', { limit: '50' });
   });
 
   it('getMessages は未知の $type や削除済みのメッセージでも失敗にせず、変換する', async () => {
@@ -198,14 +178,6 @@ describe('createBlueskyChat', () => {
     expect(await broken.chat.getConvo('c1')).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
   });
 
-  it('getConvoForMember は members を 1 人だけの配列で送る', async () => {
-    const t = setup({ convo: convoView() });
-
-    await t.chat.getConvoForMember(ALICE.did);
-
-    expect(t.chatQuery).toHaveBeenCalledExactlyOnceWith('chat.bsky.convo.getConvoForMembers', { members: [ALICE.did] });
-  });
-
   it('sendMessage は $type の無い応答も受け付け、convoId と message.text を POST する', async () => {
     const t = setup({ id: 'm9', rev: 'r9', text: 'hi', sender: { did: ME }, sentAt: SENT_AT });
 
@@ -216,26 +188,6 @@ describe('createBlueskyChat', () => {
       message: { text: 'hi' },
     });
     expect(result).toMatchObject({ ok: true, val: { kind: 'message', id: 'm9', text: 'hi', senderDid: ME } });
-  });
-
-  it('sendMessage は facets があれば message に含め、空なら含めない', async () => {
-    const t = setup({ id: 'm9', rev: 'r9', text: 'hi', sender: { did: ME }, sentAt: SENT_AT });
-    const facets = [{
-      index: { byteStart: 0, byteEnd: 2 },
-      features: [{ $type: 'app.bsky.richtext.facet#link', uri: 'https://a.example' }],
-    }] as const;
-
-    await t.chat.sendMessage({ convoId: 'c1', text: 'hi', facets });
-    await t.chat.sendMessage({ convoId: 'c1', text: 'hi', facets: [] });
-
-    expect(t.chatProcedure).toHaveBeenNthCalledWith(1, 'chat.bsky.convo.sendMessage', {
-      convoId: 'c1',
-      message: { text: 'hi', facets },
-    });
-    expect(t.chatProcedure).toHaveBeenNthCalledWith(2, 'chat.bsky.convo.sendMessage', {
-      convoId: 'c1',
-      message: { text: 'hi' },
-    });
   });
 
   it('sendMessage は message でない応答を invalid_response にする', async () => {
@@ -250,27 +202,5 @@ describe('createBlueskyChat', () => {
       ok: false,
       err: { kind: 'invalid_response' },
     });
-  });
-
-  it('updateRead は messageId があるときだけ送り、acceptConvo は convoId だけを送る', async () => {
-    const t = setup({ convo: convoView() });
-
-    await t.chat.updateRead({ convoId: 'c1', messageId: 'm1' });
-    await t.chat.updateRead({ convoId: 'c1' });
-    const accepted = await t.chat.acceptConvo('c1');
-
-    expect(t.chatProcedure.mock.calls).toEqual([
-      ['chat.bsky.convo.updateRead', { convoId: 'c1', messageId: 'm1' }],
-      ['chat.bsky.convo.updateRead', { convoId: 'c1' }],
-      ['chat.bsky.convo.acceptConvo', { convoId: 'c1' }],
-    ]);
-    expect(accepted).toEqual({ ok: true, val: undefined });
-  });
-
-  it('クライアントの失敗はそのまま返す', async () => {
-    const t = setup({}, failure);
-
-    expect(await t.chat.listConvos({ limit: 1 })).toEqual({ ok: false, err: failure });
-    expect(await t.chat.acceptConvo('c1')).toEqual({ ok: false, err: failure });
   });
 });

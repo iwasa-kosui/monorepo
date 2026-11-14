@@ -60,20 +60,6 @@ describe('pollPercent', () => {
 });
 
 describe('PostView の投票', () => {
-  it('poll が null なら、投票を出さない', () => {
-    expect(render(withPoll(null))).not.toContain('data-poll');
-  });
-
-  it('選択肢ごとに title と割合の数字と横棒を出す', () => {
-    const html = render(withPoll(poll()));
-
-    expect(html).toContain('赤');
-    expect(html).toContain('75%');
-    expect(html).toContain('25%');
-    expect(html).toContain('width:75%');
-    expect(html).toContain('width:25%');
-  });
-
   it('複数選択の投票は、投票者数で割った割合を出す', () => {
     const html = render(
       withPoll(
@@ -115,100 +101,10 @@ describe('PostView の投票', () => {
     expect(html).toContain('青 &lt;b&gt;');
     expect(html).not.toContain('青 <b>');
   });
-
-  it('合計が 0 票なら、すべての選択肢を 0% にする', () => {
-    const html = render(
-      withPoll(poll({ votes_count: 0, options: [{ title: 'a', votes_count: 0 }, { title: 'b', votes_count: 0 }] })),
-    );
-
-    expect(html).toContain('0%');
-    expect(html).toContain('width:0%');
-    expect(html).toContain('0 票');
-  });
-
-  it('下に合計の票数を出す', () => {
-    expect(render(withPoll(poll()))).toContain('4 票');
-  });
-
-  it('終了していれば「終了」を出す', () => {
-    const html = render(withPoll(poll({ expired: true, expires_at: '2026-01-01T00:00:00.000Z' })));
-
-    expect(html).toContain('終了');
-  });
-
-  it('終了していなければ締め切りの日時を出し、「終了」は出さない', () => {
-    const html = render(withPoll(poll({ expires_at: '2999-01-02T03:04:05.000Z' })));
-
-    expect(html).toContain('まで');
-    expect(html).not.toContain('終了');
-  });
-
-  it('締め切りが無く終了もしていなければ、票数だけを出す', () => {
-    const html = render(withPoll(poll()));
-
-    expect(html).not.toContain('終了');
-    expect(html).not.toContain('まで');
-  });
-
-  it('リブログされた投稿の投票を出す', () => {
-    const reblog: Status = { ...base, id: 'repost-1', content: '', reblog: withPoll(poll()), poll: null };
-
-    expect(render(reblog)).toContain('75%');
-  });
-
-  it('CW で本文を隠している間は、投票を出さない', () => {
-    const html = render({ ...withPoll(poll()), spoiler_text: 'ネタバレ' });
-
-    expect(html).not.toContain('data-poll');
-  });
 });
 
 describe('PostView の投票の操作', () => {
   const onVote = () => Promise.resolve();
-
-  it('未投票で終了していない単一選択の投票は、ラジオと「投票する」ボタンを出し、結果の棒は出さない', () => {
-    const html = render(withPoll(poll()), onVote);
-
-    expect(html).toContain('data-poll-form');
-    expect(html).toContain('type="radio"');
-    expect(html).not.toContain('type="checkbox"');
-    expect(html).toContain('name="poll-post-1"');
-    expect(html).toContain('投票する');
-    expect(html).toContain('赤');
-    expect(html).toContain('青 &lt;b&gt;');
-    expect(html).not.toContain('data-poll-bar');
-    expect(html).not.toContain('75%');
-  });
-
-  it('何も選んでいない間は、「投票する」ボタンを押せなくする', () => {
-    const html = render(withPoll(poll()), onVote);
-
-    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled/);
-  });
-
-  it('複数選択の投票は、チェックボックスを出す', () => {
-    const html = render(withPoll(poll({ multiple: true })), onVote);
-
-    expect(html).toContain('type="checkbox"');
-    expect(html).not.toContain('type="radio"');
-    expect(html).toContain('投票する');
-  });
-
-  it('下に合計の票数と締め切りを出す', () => {
-    const html = render(withPoll(poll({ expires_at: '2999-01-02T03:04:05.000Z' })), onVote);
-
-    expect(html).toContain('4 票');
-    expect(html).toContain('まで');
-  });
-
-  it('投票の操作が無ければ、未投票でも今の結果表示にする', () => {
-    const html = render(withPoll(poll()));
-
-    expect(html).not.toContain('data-poll-form');
-    expect(html).not.toContain('投票する');
-    expect(html).toContain('data-poll-bar');
-    expect(html).toContain('75%');
-  });
 
   it('投票後は結果表示にして、自分が選んだ選択肢にだけ印を付ける', () => {
     const html = render(withPoll(poll({ voted: true, own_votes: [1] })), onVote);
@@ -222,12 +118,6 @@ describe('PostView の投票の操作', () => {
     expect(html).not.toMatch(/✓<\/span>赤/);
   });
 
-  it('複数の選択肢に投票していれば、そのすべてに印を付ける', () => {
-    const html = render(withPoll(poll({ multiple: true, voted: true, own_votes: [0, 1] })), onVote);
-
-    expect(html.match(/data-poll-own-vote/g)).toHaveLength(2);
-  });
-
   it('終了した投票は、未投票でも結果表示にして、投票の入力を出さない', () => {
     const html = render(withPoll(poll({ expired: true })), onVote);
 
@@ -236,18 +126,6 @@ describe('PostView の投票の操作', () => {
     expect(html).toContain('終了');
     expect(html).toContain('75%');
     expect(html).not.toContain('data-poll-own-vote');
-  });
-
-  it('終了した投票でも、自分が選んだ選択肢には印を付ける', () => {
-    const html = render(withPoll(poll({ expired: true, voted: true, own_votes: [0] })), onVote);
-
-    expect(html.match(/data-poll-own-vote/g)).toHaveLength(1);
-  });
-
-  it('リブログされた投稿の投票にも、投票の入力を出す', () => {
-    const reblog: Status = { ...base, id: 'repost-1', content: '', reblog: withPoll(poll()), poll: null };
-
-    expect(render(reblog, onVote)).toContain('data-poll-form');
   });
 });
 

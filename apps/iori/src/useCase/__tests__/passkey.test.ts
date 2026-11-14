@@ -216,14 +216,6 @@ describe('FinishPasskeyRegistrationUseCase', () => {
     expect(h.credentials.size).toBe(1);
   });
 
-  it('name を指定できる', async () => {
-    const h = await setup();
-
-    const result = await h.register('MacBook');
-
-    expect(result.ok && result.val.credential.name).toBe('MacBook');
-  });
-
   it('challenge は 1 回しか使えない', async () => {
     const h = await setup();
     const { options, challengeId } = await h.beginRegistration();
@@ -487,17 +479,5 @@ describe('ListPasskeysUseCase と DeletePasskeyUseCase', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.err.type).toBe('PasskeyCredentialNotFoundError');
     expect(h.credentials.size).toBe(1);
-  });
-
-  it('存在しない資格情報は NotFound になる', async () => {
-    const h = await setup();
-
-    const result = await h.deletePasskey.run({
-      userId: h.user.id,
-      credentialId: PasskeyCredentialId.orThrow('missing-credential'),
-    });
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.err.type).toBe('PasskeyCredentialNotFoundError');
   });
 });

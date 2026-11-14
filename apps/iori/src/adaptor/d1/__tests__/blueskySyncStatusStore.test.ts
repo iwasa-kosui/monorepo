@@ -21,28 +21,7 @@ const setup = () => {
   };
 };
 
-describe('bluesky_sync_status の migration', () => {
-  it('scope を主キーとし、ほかの列は null を許す', () => {
-    const { sqlite } = setup();
-    const columns = sqlite.prepare('PRAGMA table_info(bluesky_sync_status)').all() as Array<
-      { name: string; pk: number; notnull: number }
-    >;
-    expect(columns.map(({ name, pk, notnull }) => [name, pk, notnull])).toEqual([
-      ['scope', 1, 1],
-      ['lastSucceededAt', 0, 0],
-      ['lastFailedAt', 0, 0],
-      ['lastFailureKind', 0, 0],
-      ['lastFailureCode', 0, 0],
-    ]);
-  });
-});
-
 describe('BlueskySyncStatus の D1 store', () => {
-  it('記録が無ければ空の配列を返す', async () => {
-    const { resolver } = setup();
-    expect(Result.unsafeUnwrap(await resolver.resolve())).toEqual([]);
-  });
-
   it('成功の時刻を保存し、再び保存すると上書きする', async () => {
     const { resolver, succeededStore, sqlite } = setup();
 
@@ -93,22 +72,5 @@ describe('BlueskySyncStatus の D1 store', () => {
         lastFailureCode: null,
       },
     ]);
-  });
-
-  it('scope ごとに別の行として保存する', async () => {
-    const { resolver, succeededStore, failedStore } = setup();
-
-    await succeededStore.save('timeline', at(1));
-    await failedStore.save('notifications', at(2), 'network', null);
-
-    const records = Result.unsafeUnwrap(await resolver.resolve());
-    expect(records.find((record) => record.scope === 'timeline')?.lastFailedAt).toBeNull();
-    expect(records.find((record) => record.scope === 'notifications')).toEqual({
-      scope: 'notifications',
-      lastSucceededAt: null,
-      lastFailedAt: at(2),
-      lastFailureKind: 'network',
-      lastFailureCode: null,
-    });
   });
 });

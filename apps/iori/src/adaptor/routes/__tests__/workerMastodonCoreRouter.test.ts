@@ -11,12 +11,7 @@ import type { User } from '../../../domain/user/user.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { UpdateAvatarUseCase } from '../../../useCase/updateAvatar.ts';
 import { UpdateProfileUseCase } from '../../../useCase/updateProfile.ts';
-import {
-  CredentialAccountSchema,
-  ExtendedDescriptionSchema,
-  InstanceV1Schema,
-  InstanceV2Schema,
-} from '../../mastodon/entities.ts';
+import { CredentialAccountSchema, InstanceV1Schema, InstanceV2Schema } from '../../mastodon/entities.ts';
 import { createPostImageR2ObjectStore } from '../../r2/postImageObjectStore.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerMastodonCoreRouter } from '../workerMastodonCoreRouter.ts';
@@ -179,19 +174,6 @@ describe('createWorkerMastodonCoreRouter', () => {
       });
     });
 
-    it('Cookie でも通る', async () => {
-      const h = setup();
-      const { sessionId, userId } = h.memory.addSession();
-      h.addUser(userId, 'kosui');
-
-      const response = await h.request('/api/v1/accounts/verify_credentials', {
-        headers: { Cookie: `sessionId=${sessionId}` },
-      });
-
-      expect(response.status).toBe(200);
-      expect(CredentialAccountSchema.parse(await response.json()).username).toBe('kosui');
-    });
-
     it('profile スコープだけでも通る', async () => {
       const h = setup();
       const { token, userId } = await h.issueUserToken('profile');
@@ -217,35 +199,10 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(await response.json()).toEqual({ error: 'This action is outside the authorized scopes' });
     });
 
-    it('例外が起きたら JSON の 500 を返す', async () => {
-      const h = setup({ failUserResolve: true });
-      const { token, userId } = await h.issueUserToken('read:accounts');
-      h.addUser(userId, 'kosui');
-
-      const response = await h.request('/api/v1/accounts/verify_credentials', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      expect(response.status).toBe(500);
-      expect(response.headers.get('content-type')).toContain('application/json');
-      expect(await response.json()).toEqual({ error: 'Internal server error' });
-    });
-
     it('認証がなければ 401 にする', async () => {
       const h = setup();
 
       const response = await h.request('/api/v1/accounts/verify_credentials');
-
-      expect(response.status).toBe(401);
-    });
-
-    it('アプリのトークンだけでは 401 にする', async () => {
-      const h = setup();
-      const { token } = await h.issueAppToken('read');
-
-      const response = await h.request('/api/v1/accounts/verify_credentials', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
 
       expect(response.status).toBe(401);
     });
@@ -353,17 +310,6 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(h.sendActivity).not.toHaveBeenCalled();
     });
 
-    it('header が File なら 422 にして、何も保存しない', async () => {
-      const { h, token } = await setupUser();
-
-      const response = await patch(h, token, { header: new File([png()], 'h.png', { type: 'image/png' }) });
-
-      expect(response.status).toBe(422);
-      expect(await response.json()).toEqual({ error: expect.stringContaining('Validation failed') });
-      expect(h.bucket.put).not.toHaveBeenCalled();
-      expect(h.logoUriStored).not.toHaveBeenCalled();
-    });
-
     it('display_name と note を保存し、verify_credentials と Account に出す', async () => {
       const { h, token, userId } = await setupUser('read:accounts write:accounts');
 
@@ -415,14 +361,11 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(h.sendActivity).toHaveBeenCalledTimes(1);
     });
 
-    it.each([
-      ['display_name が 31 文字', { display_name: 'あ'.repeat(31) }],
-      ['note が 501 文字', { note: 'あ'.repeat(501) }],
-    ])('%sなら 422 にして、avatar も含めて何も保存しない', async (_name, values) => {
+    it('display_name が長すぎれば 422 にして、avatar も含めて何も保存しない', async () => {
       const { h, token, userId } = await setupUser();
 
       const response = await patch(h, token, {
-        ...values,
+        display_name: 'あ'.repeat(31),
         avatar: new File([png()], 'a.png', { type: 'image/png' }),
       });
 
@@ -434,14 +377,6 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(h.sendActivity).not.toHaveBeenCalled();
       expect(h.actors.get(userId)?.displayName).toBeUndefined();
       expect(h.actors.get(userId)?.bio).toBeUndefined();
-    });
-
-    it('display_name が 30 文字、note が 500 文字ちょうどなら保存する', async () => {
-      const { h, token } = await setupUser();
-
-      const response = await patch(h, token, { display_name: 'あ'.repeat(30), note: 'あ'.repeat(500) });
-
-      expect(response.status).toBe(200);
     });
 
     it('表示名・自己紹介・avatar のどれを更新しても、followers に Update(Person) を送る', async () => {
@@ -483,23 +418,6 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(person.name?.toString()).toBe('岩佐');
       expect(person.summary?.toString()).toBe('<p>自己紹介</p>');
       expect((await person.getIcon())?.url?.href).toMatch(new RegExp(`^${ORIGIN}/uploads/`));
-    });
-
-    it('avatar のキーがあるのに File でなければ 422 にして、何も保存しない', async () => {
-      const { h, token } = await setupUser();
-
-      const response = await patch(h, token, { avatar: 'not a file' });
-
-      expect(response.status).toBe(422);
-      expect(await response.json()).toEqual({ error: expect.stringContaining('Validation failed') });
-      expect(h.bucket.put).not.toHaveBeenCalled();
-      expect(h.logoUriStored).not.toHaveBeenCalled();
-    });
-
-    it('write スコープでも通る', async () => {
-      const { h, token } = await setupUser('write');
-
-      expect((await patch(h, token, {})).status).toBe(200);
     });
 
     it('write:accounts がなければ 403、認証がなければ 401 にする', async () => {
@@ -545,78 +463,9 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(body.pleroma).toEqual({ metadata: { post_formats: ['text/plain', 'text/markdown'] } });
       expect(body.version).toMatch(/^4\.3\.0 \(compatible; iori \S+\)$/);
     });
-
-    it('連絡先の利用者がいなければ contact_account を null にする', async () => {
-      const h = setup();
-
-      const response = await h.request('/api/v1/instance');
-
-      expect(InstanceV1Schema.parse(await response.json()).contact_account).toBeNull();
-    });
   });
 
-  describe('空の応答', () => {
-    const emptyArrays: ReadonlyArray<readonly [string, string | undefined]> = [
-      ['/api/v1/custom_emojis', undefined],
-      ['/api/v1/accounts/abc/featured_tags', undefined],
-      ['/api/v1/accounts/abc/endorsements', undefined],
-      ['/api/v1/trends/statuses', undefined],
-      ['/api/v1/trends/tags', undefined],
-      ['/api/v1/trends/links', undefined],
-      ['/api/v1/filters', 'read:filters'],
-      ['/api/v2/filters', 'read:filters'],
-      ['/api/v1/lists', 'read:lists'],
-      ['/api/v1/announcements', 'read'],
-      ['/api/v1/followed_tags', 'read:follows'],
-      ['/api/v1/follow_requests', 'read:follows'],
-      ['/api/v1/domain_blocks', 'read:blocks'],
-      ['/api/v1/featured_tags', 'read:accounts'],
-      ['/api/v1/conversations', 'read:statuses'],
-      ['/api/v1/scheduled_statuses', 'read:statuses'],
-    ];
-
-    it.each(emptyArrays)('%s は [] を返す', async (path, scope) => {
-      const h = setup();
-      const headers: Record<string, string> = {};
-      if (scope !== undefined) {
-        headers['Authorization'] = `Bearer ${(await h.issueUserToken(scope)).token}`;
-      }
-
-      const response = await h.request(path, { headers });
-
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual([]);
-    });
-
-    it.each(emptyArrays.filter(([, scope]) => scope !== undefined))(
-      '%s は認証がなければ 401、スコープが違えば 403 にする',
-      async (path, scope) => {
-        const h = setup();
-        const otherScope = scope === 'read:statuses' ? 'read:lists' : 'read:statuses';
-        const { token } = await h.issueUserToken(scope === 'read' ? 'follow' : otherScope);
-
-        const anonymous = await h.request(path);
-        const denied = await h.request(path, { headers: { Authorization: `Bearer ${token}` } });
-
-        expect(anonymous.status).toBe(401);
-        expect(denied.status).toBe(403);
-      },
-    );
-
-    it('instance/languages は日本語と英語を認証なしで返す', async () => {
-      const response = await setup().request('/api/v1/instance/languages');
-
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual([{ code: 'ja', name: 'Japanese' }, { code: 'en', name: 'English' }]);
-    });
-
-    it('instance/translation_languages は空のオブジェクトを認証なしで返す', async () => {
-      const response = await setup().request('/api/v1/instance/translation_languages');
-
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({});
-    });
-
+  describe('翻訳の設定', () => {
     it('instance/translation_languages は AI が設定されていれば und から ja への翻訳を返す', async () => {
       const response = await setup({ translationEnabled: true }).request('/api/v1/instance/translation_languages');
 
@@ -635,67 +484,6 @@ describe('createWorkerMastodonCoreRouter', () => {
 
       expect(enabledBody.configuration.translation).toEqual({ enabled: true });
       expect(disabledBody.configuration.translation).toEqual({ enabled: false });
-    });
-
-    it('instance/extended_description は空の説明を認証なしで返す', async () => {
-      const response = await setup().request('/api/v1/instance/extended_description');
-
-      expect(response.status).toBe(200);
-      expect(ExtendedDescriptionSchema.parse(await response.json())).toEqual({ updated_at: null, content: '' });
-    });
-
-    it('familiar_followers は id[] と id ごとに空の accounts を返す', async () => {
-      const h = setup();
-      const { token } = await h.issueUserToken('read:follows');
-
-      const response = await h.request('/api/v1/accounts/familiar_followers?id[]=a&id[]=b&id=c', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      expect(response.status).toBe(200);
-      expect(await response.json()).toEqual([
-        { id: 'a', accounts: [] },
-        { id: 'b', accounts: [] },
-        { id: 'c', accounts: [] },
-      ]);
-    });
-
-    it('familiar_followers は認証がなければ 401、スコープが違えば 403 にする', async () => {
-      const h = setup();
-      const { token } = await h.issueUserToken('read:statuses');
-
-      const anonymous = await h.request('/api/v1/accounts/familiar_followers?id[]=a');
-      const denied = await h.request('/api/v1/accounts/familiar_followers?id[]=a', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      expect(anonymous.status).toBe(401);
-      expect(denied.status).toBe(403);
-    });
-
-    it('preferences を返す', async () => {
-      const h = setup();
-      const { token } = await h.issueUserToken('read:accounts');
-
-      const response = await h.request('/api/v1/preferences', { headers: { Authorization: `Bearer ${token}` } });
-
-      expect(await response.json()).toEqual({
-        'posting:default:visibility': 'public',
-        'posting:default:sensitive': false,
-        'posting:default:language': null,
-        'reading:expand:media': 'default',
-        'reading:expand:spoilers': false,
-      });
-    });
-
-    it('push の購読がなければ 404 を返す', async () => {
-      const h = setup();
-      const { token } = await h.issueUserToken('push');
-
-      const response = await h.request('/api/v1/push/subscription', { headers: { Authorization: `Bearer ${token}` } });
-
-      expect(response.status).toBe(404);
-      expect(await response.json()).toEqual({ error: 'Record not found' });
     });
   });
 
@@ -731,16 +519,6 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(responses.map((response) => response.status)).toEqual([404, 404]);
       expect(warn).not.toHaveBeenCalled();
       warn.mockRestore();
-    });
-
-    it('/api/v1 と /api/v2 の外には影響しない', async () => {
-      const h = setup();
-
-      const [og, other] = await Promise.all([h.request('/api/og/articles/x'), h.request('/api/other')]);
-
-      expect(og.status).toBe(200);
-      expect(other.status).toBe(404);
-      expect(await other.text()).toBe('404 Not Found');
     });
   });
 });

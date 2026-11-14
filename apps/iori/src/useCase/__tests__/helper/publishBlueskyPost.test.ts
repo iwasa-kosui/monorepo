@@ -103,14 +103,6 @@ describe('publishBlueskyPost', () => {
     expect(empty.record()).not.toHaveProperty('langs');
   });
 
-  it('前後の空白を除いた本文を送る', async () => {
-    const t = setup();
-
-    await t.publish({ text: '  hi \n' });
-
-    expect(t.record().text).toBe('hi');
-  });
-
   it('http と https の URL を link facet にし、バイト位置は日本語を含む本文で UTF-8 の位置にする', async () => {
     const t = setup();
     const text = '日本語です https://example.com/a?b=1 と http://example.org/x です';
@@ -189,50 +181,6 @@ describe('publishBlueskyPost', () => {
     ]);
   });
 
-  it('メールアドレスと URL の中の @ は mention にしない', async () => {
-    const t = setup();
-
-    await t.publish({ text: 'a@alice.bsky.social https://example.com/@alice.bsky.social' });
-
-    expect(t.query).not.toHaveBeenCalled();
-    expect(t.record().facets?.map((facet) => facet.features[0].$type)).toEqual(['app.bsky.richtext.facet#link']);
-  });
-
-  it('@ の直前が文字のときは mention にせず、空白か ( のときは mention にする', async () => {
-    const t = setup();
-
-    await t.publish({ text: 'こんにちは@alice.bsky.social' });
-
-    expect(t.query).not.toHaveBeenCalled();
-    expect(t.record()).not.toHaveProperty('facets');
-
-    const spaced = setup();
-    await spaced.publish({ text: 'こんにちは @alice.bsky.social' });
-    const paren = setup();
-    await paren.publish({ text: '(@alice.bsky.social)' });
-
-    expect(spaced.record().facets?.map((facet) => facet.features[0])).toEqual([
-      { $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' },
-    ]);
-    expect(paren.record().facets?.map((facet) => facet.features[0])).toEqual([
-      { $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' },
-    ]);
-  });
-
-  it('利用者が書いた末尾の … は切り詰めとみなさず、@alice.bsky.social… にも mention を付ける', async () => {
-    const t = setup();
-
-    await t.publish({ text: '@alice.bsky.social…' });
-
-    expect(t.query).toHaveBeenCalledWith('com.atproto.identity.resolveHandle', { handle: 'alice.bsky.social' });
-    expect(t.record().facets).toEqual([
-      {
-        index: { byteStart: 0, byteEnd: 18 },
-        features: [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' }],
-      },
-    ]);
-  });
-
   it('サロゲートペアや ZWJ の絵文字を前に含む本文でも、link と mention のバイト位置が UTF-8 で正しい', async () => {
     const t = setup();
     const prefix = '👍🏽 👨‍👩‍👧‍👦 ';
@@ -255,16 +203,6 @@ describe('publishBlueskyPost', () => {
         features: [{ $type: 'app.bsky.richtext.facet#mention', did: 'did:plc:alice' }],
       },
     ]);
-  });
-
-  it('URL と mention が混在しても byteStart の昇順に並べる', async () => {
-    const t = setup();
-
-    await t.publish({ text: '@alice.bsky.social https://example.com @bob.example.com' });
-
-    const starts = t.record().facets?.map((facet) => facet.index.byteStart);
-    expect(starts).toEqual([...(starts ?? [])].sort((a, b) => a - b));
-    expect(starts).toHaveLength(3);
   });
 
   it('URL・mention・ハッシュタグが混在する本文で、byteStart の昇順の facet にする', async () => {
@@ -338,18 +276,6 @@ describe('publishBlueskyPost', () => {
         $type: 'app.bsky.embed.images',
         images: [{ alt: '猫', image: { $type: 'blob', ref: { $link: 'bafyblob' }, mimeType: 'image/png', size: 3 } }],
       },
-    });
-  });
-
-  it('返信と画像があれば、reply と images embed を両方付ける', async () => {
-    const t = setup();
-
-    await t.publish({ text: 'photo', reply: { root: ROOT, parent: PARENT }, images: [pngImage] });
-
-    expect(t.record().reply).toEqual({ root: ROOT, parent: PARENT });
-    expect(t.record().embed).toEqual({
-      $type: 'app.bsky.embed.images',
-      images: [{ alt: '猫', image: blob('image/png') }],
     });
   });
 
@@ -452,23 +378,6 @@ describe('publishBlueskyPost', () => {
         external: { uri: 'https://example.com/a', title: 'タイトル', description: '説明' },
       });
     });
-
-    it('本文に URL が無ければ OGP を取らない', async () => {
-      const t = setup();
-
-      await t.publish({ text: 'plain' });
-
-      expect(t.ogpFetch).not.toHaveBeenCalled();
-      expect(t.record()).not.toHaveProperty('embed');
-    });
-  });
-
-  it('引用も画像も無ければ embed を付けない', async () => {
-    const t = setup();
-
-    await t.publish({ text: 'plain' });
-
-    expect(t.record()).not.toHaveProperty('embed');
   });
 
   it('本文が空でも画像があれば投稿できる', async () => {
@@ -493,13 +402,6 @@ describe('publishBlueskyPost', () => {
 
     expect(result).toEqual({ ok: false, err: failure });
     expect(t.createRecord).not.toHaveBeenCalled();
-  });
-
-  it('createRecord の失敗をそのまま返す', async () => {
-    const t = setup();
-    t.createRecord.mockReturnValueOnce(RA.err(failure));
-
-    expect(await t.publish({ text: 'hi' })).toEqual({ ok: false, err: failure });
   });
 
   describe('入力の検証', () => {

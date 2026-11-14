@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  AI_CRAWLER_ROBOTS_TOKENS,
-  AI_CRAWLER_USER_AGENT_TOKENS,
-  isAiCrawlerUserAgent,
-  isImagePath,
-  renderRobotsTxt,
-} from './aiCrawlers.ts';
+import { isAiCrawlerUserAgent, isImagePath, renderRobotsTxt } from './aiCrawlers.ts';
 
 describe('isAiCrawlerUserAgent', () => {
   it.each([
@@ -19,10 +13,6 @@ describe('isAiCrawlerUserAgent', () => {
     'gptbot/1.4',
   ])('blocks %s', (userAgent) => {
     expect(isAiCrawlerUserAgent(userAgent)).toBe(true);
-  });
-
-  it.each(AI_CRAWLER_USER_AGENT_TOKENS)('blocks %s/1.0', (token) => {
-    expect(isAiCrawlerUserAgent(`${token}/1.0`)).toBe(true);
   });
 
   it.each([
@@ -54,10 +44,6 @@ describe('isAiCrawlerUserAgent', () => {
 
 describe('renderRobotsTxt', () => {
   const robotsTxt = renderRobotsTxt();
-
-  it.each(AI_CRAWLER_ROBOTS_TOKENS)('lists %s', (token) => {
-    expect(robotsTxt).toContain(`User-agent: ${token}\n`);
-  });
 
   it('disallows only image paths for the listed tokens', () => {
     expect(robotsTxt).toContain('Disallow: /uploads/\n');

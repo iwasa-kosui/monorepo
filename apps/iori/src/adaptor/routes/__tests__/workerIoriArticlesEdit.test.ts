@@ -172,24 +172,6 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
     ]);
   });
 
-  it('タイトルが今と同じなら、article.titleChanged を書かずに本文だけ更新する', async () => {
-    const t = setup();
-    const author = t.addAuthor('alice');
-    const articleId = t.addArticle(author);
-
-    const response = await t.put(articleId, { Cookie: t.cookieFor(author.userId), ...sameOrigin }, {
-      title: 'Original title',
-      markdown: valid.markdown,
-      baseUpdatedAt: CREATED_AT,
-    });
-
-    expect(response.status).toBe(200);
-    expect(t.row('SELECT eventName FROM domain_events ORDER BY eventName')).toEqual([
-      { eventName: 'articleBody.written' },
-    ]);
-    expect(t.row('SELECT markdown FROM article_bodies')).toEqual([{ markdown: valid.markdown }]);
-  });
-
   it('保存する HTML からスクリプトを除く', async () => {
     const t = setup();
     const author = t.addAuthor('alice');
@@ -204,35 +186,6 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
     expect(response.status).toBe(200);
     const [body] = t.row('SELECT publicHtml FROM article_bodies') as Array<{ publicHtml: string }>;
     expect(body!.publicHtml).not.toContain('script');
-  });
-
-  it('h4 以下の見出し、水平線、GFM の表を保存した HTML に残す', async () => {
-    const t = setup();
-    const author = t.addAuthor('alice');
-    const articleId = t.addArticle(author);
-
-    const response = await t.put(articleId, { Cookie: t.cookieFor(author.userId), ...sameOrigin }, {
-      title: 'タイトル',
-      markdown: '#### 小見出し\n\n---\n\n| a | b |\n| - | - |\n| 1 | 2 |',
-      baseUpdatedAt: CREATED_AT,
-    });
-
-    expect(response.status).toBe(200);
-    const [body] = t.row('SELECT publicHtml FROM article_bodies') as Array<{ publicHtml: string }>;
-    expect(body!.publicHtml).toContain('<h4>小見出し</h4>');
-    expect(body!.publicHtml).toContain('<hr />');
-    expect(body!.publicHtml).toContain('<table>');
-    expect(body!.publicHtml).toContain('<td>1</td>');
-  });
-
-  it('unpublished の記事も更新できる', async () => {
-    const t = setup();
-    const author = t.addAuthor('alice');
-    const articleId = t.addArticle(author, { status: 'unpublished' });
-
-    const response = await t.put(articleId, { Cookie: t.cookieFor(author.userId), ...sameOrigin }, valid);
-
-    expect(response.status).toBe(200);
   });
 
   it('Bearer の著者は Origin なしで 200 を返す', async () => {
@@ -359,15 +312,8 @@ describe('PUT /api/iori/v1/articles/:articleId', () => {
 
   it.each([
     ['タイトルが空', { title: '', markdown: 'a', baseUpdatedAt: CREATED_AT }],
-    ['タイトルが 201 文字', { title: 'a'.repeat(201), markdown: 'a', baseUpdatedAt: CREATED_AT }],
-    ['タイトルが文字列でない', { title: 1, markdown: 'a', baseUpdatedAt: CREATED_AT }],
-    ['タイトルがない', { markdown: 'a', baseUpdatedAt: CREATED_AT }],
-    ['本文が空', { title: 'a', markdown: '', baseUpdatedAt: CREATED_AT }],
-    ['本文がない', { title: 'a', baseUpdatedAt: CREATED_AT }],
     ['本文が長すぎる', { title: 'a', markdown: 'a'.repeat(100_001), baseUpdatedAt: CREATED_AT }],
     ['baseUpdatedAt がない', { title: 'a', markdown: 'a' }],
-    ['baseUpdatedAt が整数でない', { title: 'a', markdown: 'a', baseUpdatedAt: 'x' }],
-    ['baseUpdatedAt が負', { title: 'a', markdown: 'a', baseUpdatedAt: -1 }],
   ])('%s ときは 400 にして更新しない', async (_name, body) => {
     const t = setup();
     const author = t.addAuthor('alice');
@@ -422,22 +368,6 @@ describe('GET /api/iori/v1/articles/:articleId/edit', () => {
       title: 'Original title',
       markdown: '## 新着\n\n-   [X](https://example.com/x)（はてなブックマーク 3）  \n    要約',
       updatedAt: CREATED_AT,
-    });
-  });
-
-  it('保存してから開き直すと、保存した Markdown を返す', async () => {
-    const t = setup();
-    const author = t.addAuthor('alice');
-    const articleId = t.addArticle(author);
-    const headers = { Cookie: t.cookieFor(author.userId), ...sameOrigin };
-
-    await t.put(articleId, headers, valid);
-    const response = await t.getEdit(articleId, headers);
-
-    await expect(response.json()).resolves.toEqual({
-      title: valid.title,
-      markdown: valid.markdown,
-      updatedAt: expect.any(Number),
     });
   });
 

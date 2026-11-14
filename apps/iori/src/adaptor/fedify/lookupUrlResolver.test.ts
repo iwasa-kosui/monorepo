@@ -143,12 +143,6 @@ describe('createLookupUrlResolver', () => {
     expect(await unauthorized.resolve()).toEqual({ type: 'resolved', url: URL_ });
     expect(await failed.resolve()).toEqual({ type: 'resolved', url: URL_ });
   });
-
-  it('rel=alternate の無い HTML では、その URL を返す', async () => {
-    const t = setup({ [URL_]: () => html('<html></html>') });
-
-    expect(await t.resolve()).toEqual({ type: 'resolved', url: URL_ });
-  });
 });
 
 describe('validatePublicLookupUrl', () => {

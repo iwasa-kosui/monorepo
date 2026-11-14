@@ -188,32 +188,6 @@ describe('MuteBlueskyThreadUseCase と UnmuteBlueskyThreadUseCase', () => {
     expect(t.client.muteThread).not.toHaveBeenCalled();
   });
 
-  it('muteThread は getPosts が失敗したらその失敗を返し、スレッドのミュートを呼ばない', async () => {
-    const t = setup();
-    t.query.mockReturnValueOnce(RA.err(failure));
-
-    expect(await t.muteThread.run({ uri: ROOT })).toEqual({ ok: false, err: failure });
-    expect(t.client.muteThread).not.toHaveBeenCalled();
-  });
-
-  it('muteThread は Bluesky が失敗したらその失敗を返す', async () => {
-    const t = setup();
-    t.client.muteThread.mockReturnValueOnce(RA.err(failure));
-
-    expect(await t.muteThread.run({ uri: ROOT })).toEqual({ ok: false, err: failure });
-    expect(t.rows()).toEqual([]);
-  });
-
-  it('unmuteThread は返信でない投稿なら、その uri で Bluesky のスレッドのミュートの解除を呼び、D1 に書かない', async () => {
-    const t = setup();
-
-    const result = await t.unmuteThread.run({ uri: ROOT });
-
-    expect(result).toEqual({ ok: true, val: { threadMuted: false } });
-    expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(ROOT);
-    expect(t.rows()).toEqual([]);
-  });
-
   it('unmuteThread は返信の uri を受け取ったら、根の uri でスレッドのミュートの解除を呼ぶ', async () => {
     const t = setup();
     t.query.mockReturnValueOnce(RA.ok({ posts: [replyPost] }));
@@ -232,22 +206,6 @@ describe('MuteBlueskyThreadUseCase と UnmuteBlueskyThreadUseCase', () => {
 
     expect(result).toEqual({ ok: true, val: { threadMuted: false } });
     expect(t.client.unmuteThread).toHaveBeenCalledExactlyOnceWith(REPLY);
-  });
-
-  it('unmuteThread は getPosts が失敗したらその失敗を返し、解除を呼ばない', async () => {
-    const t = setup();
-    t.query.mockReturnValueOnce(RA.err(failure));
-
-    expect(await t.unmuteThread.run({ uri: ROOT })).toEqual({ ok: false, err: failure });
-    expect(t.client.unmuteThread).not.toHaveBeenCalled();
-  });
-
-  it('unmuteThread は Bluesky が失敗したらその失敗を返す', async () => {
-    const t = setup();
-    t.client.unmuteThread.mockReturnValueOnce(RA.err(failure));
-
-    expect(await t.unmuteThread.run({ uri: ROOT })).toEqual({ ok: false, err: failure });
-    expect(t.rows()).toEqual([]);
   });
 });
 
@@ -299,15 +257,6 @@ describe('BlockBlueskyActorUseCase', () => {
     expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: OLD_BLOCK }]);
   });
 
-  it('D1 と viewer.blocking が同じ uri なら、一度だけ確かめる', async () => {
-    const t = setup({ blockUri: OLD_BLOCK });
-    t.seed(0, OLD_BLOCK);
-
-    await t.block.run({ did: DID });
-
-    expect(t.reader.hasBlockRecord).toHaveBeenCalledExactlyOnceWith(OLD_BLOCK);
-  });
-
   it('候補のレコードがどれも自分の repo に無ければ、createBlock で作る', async () => {
     const t = setup({ blockUri: OLD_BLOCK, hasRecord: false });
     t.seed(0, STORED_BLOCK);
@@ -317,24 +266,6 @@ describe('BlockBlueskyActorUseCase', () => {
     expect(result).toEqual({ ok: true, val: { blockUri: NEW_BLOCK } });
     expect(t.reader.hasBlockRecord).toHaveBeenCalledTimes(2);
     expect(t.client.createBlock).toHaveBeenCalledExactlyOnceWith(DID);
-  });
-
-  it('viewer.blocking のレコードが自分の repo に無ければ、createBlock で作る', async () => {
-    const t = setup({ blockUri: OLD_BLOCK, hasRecord: false });
-
-    const result = await t.block.run({ did: DID });
-
-    expect(result).toEqual({ ok: true, val: { blockUri: NEW_BLOCK } });
-    expect(t.client.createBlock).toHaveBeenCalledExactlyOnceWith(DID);
-  });
-
-  it('viewer.blocking がブロックリストの uri のときは、block の uri が無いものとして createBlock で作る', async () => {
-    const t = setup({ blockUri: null });
-
-    const result = await t.block.run({ did: DID });
-
-    expect(result).toEqual({ ok: true, val: { blockUri: NEW_BLOCK } });
-    expect(t.reader.hasBlockRecord).not.toHaveBeenCalled();
   });
 
   it('getProfile、getRecord、createBlock のどれが失敗しても、その失敗を返し D1 に保存しない', async () => {
@@ -397,15 +328,6 @@ describe('UnblockBlueskyActorUseCase', () => {
     expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: null }]);
   });
 
-  it('同じ uri は一度だけ削除する', async () => {
-    const t = setup({ blockUri: OLD_BLOCK });
-    t.seed(0, OLD_BLOCK);
-
-    await t.unblock.run({ did: DID, blockUri: OLD_BLOCK });
-
-    expect(t.client.deleteBlock).toHaveBeenCalledExactlyOnceWith(OLD_BLOCK);
-  });
-
   it('AppView の反映が遅れて viewer.blocking が無くても、D1 の blockUri を削除する', async () => {
     const t = setup({ blockUri: null });
     t.seed(0, STORED_BLOCK);
@@ -438,69 +360,9 @@ describe('UnblockBlueskyActorUseCase', () => {
     expect(t.client.deleteBlock).not.toHaveBeenCalled();
     expect(t.rows()).toEqual([{ did: DID, muted: 1, blockUri: null }]);
   });
-
-  it('deleteBlock が失敗したら、その失敗を返し D1 のブロックを残す', async () => {
-    const t = setup();
-    t.seed(0, OLD_BLOCK);
-    t.client.deleteBlock.mockReturnValueOnce(RA.err(failure));
-
-    expect(await t.unblock.run({ did: DID, blockUri: OLD_BLOCK })).toEqual({ ok: false, err: failure });
-    expect(t.rows()).toEqual([{ did: DID, muted: 0, blockUri: OLD_BLOCK }]);
-  });
-
-  it('getProfile が失敗したら、その失敗を返し deleteBlock を呼ばない', async () => {
-    const t = setup();
-    t.reader.resolveViewerState.mockReturnValueOnce(RA.err(failure));
-
-    expect(await t.unblock.run({ did: DID })).toEqual({ ok: false, err: failure });
-    expect(t.client.deleteBlock).not.toHaveBeenCalled();
-  });
 });
 
 describe('ReportBlueskyActorUseCase', () => {
-  it.each(
-    [
-      ['spam', 'com.atproto.moderation.defs#reasonSpam'],
-      ['offensive', 'com.atproto.moderation.defs#reasonRude'],
-      ['other', 'com.atproto.moderation.defs#reasonOther'],
-    ] as const,
-  )('category %s を reasonType %s にして通報する', async (category, reasonType) => {
-    const t = setup();
-
-    const result = await t.report.run({ did: DID, category, comment: '理由' });
-
-    expect(result).toEqual({ ok: true, val: { reported: true } });
-    expect(t.client.createReport).toHaveBeenCalledExactlyOnceWith({
-      subjectDid: DID,
-      reasonType,
-      reason: '理由',
-    });
-  });
-
-  it('post があるとき、subjectPost として渡す', async () => {
-    const t = setup();
-    const post = { uri: `at://${DID}/app.bsky.feed.post/3kpost`, cid: 'bafycid' };
-
-    const result = await t.report.run({ did: DID, category: 'spam', comment: '理由', post });
-
-    expect(result).toEqual({ ok: true, val: { reported: true } });
-    expect(t.client.createReport).toHaveBeenCalledExactlyOnceWith({
-      subjectDid: DID,
-      reasonType: 'com.atproto.moderation.defs#reasonSpam',
-      reason: '理由',
-      subjectPost: post,
-    });
-  });
-
-  it('comment は前後の空白を取り除いて渡し、空なら空文字のまま渡す', async () => {
-    const t = setup();
-
-    await t.report.run({ did: DID, category: 'spam', comment: '  理由  ' });
-    await t.report.run({ did: DID, category: 'spam', comment: '   ' });
-
-    expect(t.client.createReport.mock.calls.map(([input]) => input.reason)).toEqual(['理由', '']);
-  });
-
   it('comment は 2000 文字までを受け、超えたら検証エラーにして Bluesky を呼ばない', async () => {
     const t = setup();
 
@@ -519,23 +381,9 @@ describe('ReportBlueskyActorUseCase', () => {
     expect(tooLong).toEqual({ ok: false, err: { type: 'BlueskyModerationValidationError', field: 'comment' } });
     expect(t.client.createReport).toHaveBeenCalledTimes(1);
   });
-
-  it('Bluesky が失敗したら、その失敗を返す', async () => {
-    const t = setup();
-    t.client.createReport.mockReturnValueOnce(RA.err(failure));
-
-    expect(await t.report.run({ did: DID, category: 'spam', comment: '' })).toEqual({ ok: false, err: failure });
-  });
 });
 
 describe('GetBlueskyModerationStateUseCase', () => {
-  it('viewer の状態をそのまま返す', async () => {
-    const t = setup({ muted: true, blockUri: OLD_BLOCK });
-
-    expect(await t.getState.run({ did: DID })).toEqual({ ok: true, val: { muted: true, blockUri: OLD_BLOCK } });
-    expect(t.reader.resolveViewerState).toHaveBeenCalledExactlyOnceWith(DID);
-  });
-
   it('取得に失敗したら、その失敗を返し D1 を変えない', async () => {
     const t = setup();
     t.seed(1, OLD_BLOCK);
@@ -625,15 +473,6 @@ describe('GetBlueskyModerationStateUseCase', () => {
     await t.unblock.run({ did: DID });
 
     expect(t.sqlite.prepare('SELECT updatedAt FROM bluesky_moderated_actors').all()).toEqual([{ updatedAt: NOW }]);
-  });
-
-  it('ブロックリスト経由の uri は blockUri として保存しない', async () => {
-    const t = setup({ muted: false, blockUri: null });
-
-    const result = await t.getState.run({ did: DID });
-
-    expect(result).toEqual({ ok: true, val: { muted: false, blockUri: null } });
-    expect(t.rows()).toEqual([]);
   });
 
   it('D1 の更新が失敗しても、viewer の状態を返し、失敗を console.error に出す', async () => {

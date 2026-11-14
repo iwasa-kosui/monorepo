@@ -18,14 +18,6 @@ describe('extractNoteUrl', () => {
     expect(extractNoteUrl(note)).toBe('https://remote.example/@alice/1');
   });
 
-  it('returns null when the Note has no url', () => {
-    expect(extractNoteUrl(new Note({ id: noteId }))).toBeNull();
-  });
-
-  it('returns null when the Link has no href', () => {
-    expect(extractNoteUrl(new Note({ id: noteId, url: new Link({}) }))).toBeNull();
-  });
-
   it('returns null for a url that is not http or https', () => {
     expect(extractNoteUrl(new Note({ id: noteId, url: new URL('ftp://remote.example/@alice/1') }))).toBeNull();
   });

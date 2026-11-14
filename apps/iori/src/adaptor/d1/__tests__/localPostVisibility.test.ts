@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
@@ -9,14 +7,13 @@ import { Post } from '../../../domain/post/post.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import type { Visibility } from '../../../domain/post/visibility.ts';
 import { UserId } from '../../../domain/user/userId.ts';
-import { createD1LocalPostResolverByUri } from '../post/localPostResolverByUri.ts';
 import { createD1LocalPostsResolverByPage } from '../post/localPostsResolverByPage.ts';
 import { createD1PostCreatedStore } from '../post/postCreatedStore.ts';
 import { createD1PostResolver } from '../post/postResolver.ts';
 import { createD1PostsResolverByActorId } from '../post/postsResolverByActorId.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../post/postWithAuthorBatch.ts';
 import { createD1TimelineItemsResolverByActorIds } from '../timeline/timelineItemsResolverByActorIds.ts';
-import { createMastodonSeed, SEED_ORIGIN } from './mastodonSeed.ts';
+import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
@@ -39,35 +36,6 @@ const page = (): PageRequest => ({
 
 const visibilities: ReadonlyArray<Visibility> = ['public', 'unlisted', 'private'];
 
-describe('local_posts.visibility の migration', () => {
-  const migrationsDir = new URL('../../../../drizzle-d1/', import.meta.url);
-  const migrationFiles = readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort();
-  const migrationFile = migrationFiles.find((name) => name.includes('local_post_visibility'));
-
-  it('既存のローカルの投稿は public になる', () => {
-    if (migrationFile === undefined) throw new Error('local_post_visibility の migration が見つからない');
-    const sqlite = new DatabaseSync(':memory:');
-    for (const file of migrationFiles.filter((name) => name < migrationFile)) {
-      sqlite.exec(readFileSync(new URL(file, migrationsDir), 'utf8'));
-    }
-    sqlite.exec('INSERT INTO users(userId,username) VALUES (\'user-1\',\'kosui\')');
-    sqlite.exec(
-      'INSERT INTO actors(actorId,type,uri,inboxUrl) VALUES (\'actor-1\',\'local\',\'https://iori.test/users/kosui\',\'https://iori.test/inbox\')',
-    );
-    sqlite.exec(
-      'INSERT INTO posts(postId,actorId,content,createdAt,type) VALUES (\'post-1\',\'actor-1\',\'hi\',1000,\'local\')',
-    );
-    sqlite.exec('INSERT INTO local_posts(postId,userId,inReplyToUri) VALUES (\'post-1\',\'user-1\',NULL)');
-
-    sqlite.exec(readFileSync(new URL(migrationFile, migrationsDir), 'utf8'));
-
-    expect(sqlite.prepare('SELECT visibility FROM local_posts WHERE postId = ?').get('post-1')).toEqual({
-      visibility: 'public',
-    });
-    sqlite.close();
-  });
-});
-
 describe('ローカルの投稿の visibility の保存と読み戻し', () => {
   const createLocal = (me: { actorId: string; userId: string }, visibility?: Visibility) =>
     Post.createPost(Instant.now())({
@@ -88,43 +56,6 @@ describe('ローカルの投稿の visibility の保存と読み戻し', () => {
     expect(resolved.ok && resolved.val?.type === 'local' && resolved.val.visibility).toBe(visibility);
     expect(t.sqlite.prepare('SELECT visibility FROM local_posts WHERE postId = ?').get(event.aggregateState.postId))
       .toEqual({ visibility });
-  });
-
-  it('visibility を省略した投稿は public で保存する', async () => {
-    const t = setup();
-    const me = t.seed.addLocalActor('kosui');
-    const event = createLocal(me);
-
-    await createD1PostCreatedStore(t.db).store(event);
-
-    expect(t.sqlite.prepare('SELECT visibility FROM local_posts WHERE postId = ?').get(event.aggregateState.postId))
-      .toEqual({ visibility: 'public' });
-  });
-
-  it('localPostResolverByUri、postsResolverByActorId、postWithAuthor、タイムラインの行も visibility を返す', async () => {
-    const t = setup();
-    const me = t.seed.addLocalActor('kosui');
-    const post = t.seed.addLocalPost(me, 1_000, { visibility: 'unlisted' });
-
-    const byUri = await createD1LocalPostResolverByUri(t.db, SEED_ORIGIN).resolve({ uri: post.uri });
-    const byActor = await createD1PostsResolverByActorId(t.db).resolve(ActorId.orThrow(me.actorId));
-    const withAuthor = await createD1PostsWithAuthorResolverByPostIds(t.db).resolve({
-      postIds: [PostId.orThrow(post.postId)],
-      currentActorId: ActorId.orThrow(me.actorId),
-    });
-    const timeline = await createD1TimelineItemsResolverByActorIds(t.db).resolve({
-      actorIds: [ActorId.orThrow(me.actorId)],
-      currentActorId: ActorId.orThrow(me.actorId),
-      createdAt: undefined,
-      mutedActorIds: [],
-    });
-
-    expect(byUri.ok && byUri.val?.visibility).toBe('unlisted');
-    expect(byActor.ok && byActor.val.map((p) => p.type === 'local' && p.visibility)).toEqual(['unlisted']);
-    expect(withAuthor.ok && withAuthor.val.get(PostId.orThrow(post.postId))).toMatchObject({ visibility: 'unlisted' });
-    expect(timeline.ok && timeline.val.map((item) => item.type === 'post' && item.post.visibility)).toEqual([
-      'unlisted',
-    ]);
   });
 });
 

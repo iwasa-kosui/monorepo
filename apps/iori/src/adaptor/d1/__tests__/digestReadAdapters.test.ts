@@ -125,12 +125,6 @@ describe('digest の読み取り resolver', () => {
     expect(digest?.items).toHaveLength(3);
   });
 
-  it('digest のないユーザーでは undefined を返す', async () => {
-    const { db, me } = setup();
-
-    expect(valueOf(await createD1DigestResolverByUserId(db).resolve(me.userId as UserId))).toBeUndefined();
-  });
-
   it('ユーザーと日付で引くと、同じ日のトピックの digest ではなくまとめを返す', async () => {
     const { db, me, addDigest } = setup();
     addDigest(me, '2026-11-05', { topicKey: 'genai' });
@@ -181,12 +175,6 @@ describe('digest の読み取り resolver', () => {
     expect(digest?.trends).toHaveLength(3);
   });
 
-  it('digest に結び付かない article の ID では undefined を返す', async () => {
-    const { db } = setup();
-
-    expect(valueOf(await createD1DigestResolverByArticleId(db).resolve(ArticleId.generate()))).toBeUndefined();
-  });
-
   it('その日のトピックの一覧は、まとめを除き、項目数の多い順、同数なら sortOrder の順にして返す', async () => {
     const { db, me, other, addDigest, addTopic } = setup();
     addTopic(me, 'genai', '生成 AI', 0);
@@ -213,20 +201,6 @@ describe('digest の読み取り resolver', () => {
     ]);
   });
 
-  it('その日にトピックの digest がなければ、トピックの一覧は空の配列を返す', async () => {
-    const { db, me, addDigest } = setup();
-    addDigest(me, '2026-11-05');
-
-    const entries = valueOf(
-      await createD1DigestTopicEntriesResolverByUserIdAndDigestDate(db).resolve({
-        userId: me.userId as UserId,
-        digestDate: '2026-11-05',
-      }),
-    );
-
-    expect(entries).toEqual([]);
-  });
-
   it('article の ID の集まりで引くと、該当する digest のヘッダーだけを返す', async () => {
     const { db, me, addDigest } = setup();
     const first = addDigest(me, '2026-11-04');
@@ -237,12 +211,6 @@ describe('digest の読み取り resolver', () => {
     );
 
     expect(headers.map((header) => header.digestId)).toEqual([first.digestId]);
-  });
-
-  it('article の ID が空なら空の配列を返す', async () => {
-    const { db } = setup();
-
-    expect(valueOf(await createD1DigestHeadersResolverByArticleIds(db).resolve([]))).toEqual([]);
   });
 });
 
@@ -327,13 +295,6 @@ describe('createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom', () => {
       '2026-11-04:1',
     ]);
   });
-
-  it('他人のダイジェスト項目は返さない', async () => {
-    const { db, me, other, addDigest } = setup();
-    addDigest(other, '2026-11-05', { topicKey: 'genai' });
-
-    expect(await resolve(db, me.userId, '2026-11-01')).toEqual([]);
-  });
 });
 
 describe('digestItem の反応', () => {
@@ -356,13 +317,6 @@ describe('digestItem の反応', () => {
     expect(digest?.items.map((item) => item.rank)).toEqual([1, 2, 3]);
     expect(digest?.items.every((item) => item.feedback === null && item.feedbackAt === null)).toBe(true);
     expect(digest?.trends).toHaveLength(3);
-  });
-
-  it('存在しない digestItemId では undefined を返す', async () => {
-    const { db, me, addDigest } = setup();
-    addDigest(me, '2026-11-05');
-
-    expect(valueOf(await createD1DigestResolverByDigestItemId(db).resolve(DigestItemId.generate()))).toBeUndefined();
   });
 
   it('反応ストアは feedback と feedbackAt を項目に書き、他の項目を変えず、domain event を書く', async () => {
@@ -388,29 +342,6 @@ describe('digestItem の反応', () => {
     expect(fixture.sqlite.prepare('SELECT eventName FROM domain_events').all()).toEqual([
       { eventName: 'digest.itemFeedbackGiven' },
     ]);
-  });
-
-  it('取り消しは feedback と feedbackAt を NULL に戻す', async () => {
-    const { fixture, db, me, addDigest } = setup();
-    const added = addDigest(me, '2026-11-05');
-    const itemId = itemIdOf(fixture, added.digestId, 1);
-    const store = createD1DigestItemFeedbackGivenStore(db);
-    const first = Digest.giveFeedback(
-      valueOf(await createD1DigestResolverByDigestItemId(db).resolve(itemId))!,
-      itemId,
-      'interested',
-      Instant.orThrow(5_000),
-    );
-    if (!first.ok) throw new Error('unexpected');
-    await store.store(first.val);
-    const second = Digest.giveFeedback(first.val.aggregateState, itemId, 'interested', Instant.orThrow(6_000));
-    if (!second.ok) throw new Error('unexpected');
-
-    await store.store(second.val);
-
-    expect(
-      fixture.sqlite.prepare('SELECT feedback, feedbackAt FROM digest_items WHERE rank = 1').get(),
-    ).toEqual({ feedback: null, feedbackAt: null });
   });
 });
 

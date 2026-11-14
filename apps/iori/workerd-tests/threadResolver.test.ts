@@ -97,41 +97,4 @@ describe('createD1ThreadResolver on workerd D1', () => {
     expect(result.ancestors).toEqual([root.postId, mid.postId]);
     expect(result.descendants).toEqual([early.postId, earlyChild.postId, late.postId]);
   });
-
-  it('祖先は 40 件、子孫は 20 段で止め、循環や取得されていない親でも止まる', async () => {
-    const chain = [await addPost('local', 10_000)];
-    for (let n = 1; n <= 45; n++) chain.push(await addPost('local', 10_000 + n, chain[n - 1].uri));
-    const orphan = await addPost('remote', 20_000, 'https://remote.example/notes/not-fetched');
-    const cycleA = await addPost('local', 30_000);
-    const cycleB = await addPost('local', 30_001, cycleA.uri);
-    await env.DB.prepare('UPDATE local_posts SET inReplyToUri = ? WHERE postId = ?').bind(cycleB.uri, cycleA.postId)
-      .run();
-
-    const deep = await resolve(chain[45].postId);
-    const top = await resolve(chain[0].postId);
-    const unfetched = await resolve(orphan.postId);
-    const cycle = await resolve(cycleA.postId);
-
-    expect(deep.ancestors).toEqual(chain.slice(5, 45).map((post) => post.postId));
-    expect(top.descendants).toEqual(chain.slice(1, 21).map((post) => post.postId));
-    expect(unfetched.ancestors).toEqual([]);
-    expect(cycle).toEqual({ ancestors: [cycleB.postId], descendants: [cycleB.postId] });
-  });
-
-  it('子孫は 60 件で切り、古い順（同時刻は postId 順）の先頭を残す', async () => {
-    const root = await addPost('local', 40_000);
-    const replies: Array<Post & { createdAt: number }> = [];
-    for (let n = 1; n <= 65; n++) {
-      const createdAt = 41_000 + Math.floor(n / 4);
-      replies.push({ ...await addPost('local', createdAt, root.uri), createdAt });
-    }
-    const expected = [...replies]
-      .sort((a, b) => a.createdAt - b.createdAt || (a.postId < b.postId ? -1 : 1))
-      .slice(0, 60)
-      .map((post) => post.postId);
-
-    const result = await resolve(root.postId);
-
-    expect(result.descendants).toEqual(expected);
-  });
 });

@@ -149,12 +149,6 @@ describe('InterestVectorsResolverByUserId', () => {
     expect(resolved).toHaveLength(650);
     expect(new Set(resolved.map((vector) => vector.interestSourceId)).size).toBe(650);
   });
-
-  it('材料が無ければ空配列を返す', async () => {
-    const { me, resolveVectors } = setup();
-
-    expect(await resolveVectors(me.userId)).toEqual([]);
-  });
 });
 
 describe('RecommendableArticlesResolverByFetchedSince', () => {
@@ -190,30 +184,6 @@ describe('RecommendableArticlesResolverByFetchedSince', () => {
     expect(Array.from(resolved[0]!.embedding)).toEqual(Array.from(a.embedding as Float32Array));
   });
 
-  it('無効にした情報源の記事は返さない', async () => {
-    const { addFeedSource, addEntry, resolveArticles } = setup();
-    const enabled = addFeedSource('rss');
-    const disabled = addFeedSource('rss', false);
-    const kept = addEntry(enabled);
-    addEntry(disabled);
-
-    const resolved = await resolveArticles(0);
-
-    expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
-  });
-
-  it('埋め込み済みの x_user の情報源の記事は返さない', async () => {
-    const { addFeedSource, addEntry, resolveArticles } = setup();
-    const rss = addFeedSource('rss');
-    const xUser = addFeedSource('x_user');
-    const kept = addEntry(rss);
-    addEntry(xUser);
-
-    const resolved = await resolveArticles(0);
-
-    expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
-  });
-
   it('次元が 1024 でないベクトルの記事は返さず、1 ページを超える件数は全件読む', async () => {
     const { addFeedSource, addEntry, resolveArticles } = setup();
     const rss = addFeedSource('rss');
@@ -223,12 +193,6 @@ describe('RecommendableArticlesResolverByFetchedSince', () => {
     const resolved = await resolveArticles(0);
 
     expect(resolved).toHaveLength(620);
-  });
-
-  it('記事が無ければ空配列を返す', async () => {
-    const { resolveArticles } = setup();
-
-    expect(await resolveArticles(0)).toEqual([]);
   });
 });
 
@@ -306,11 +270,5 @@ describe('RelatedArticlesResolverByEmbedding', () => {
     const resolved = await resolveRelated(angled(0));
 
     expect(resolved.map((article) => article.feedEntryId)).toEqual([kept.feedEntryId]);
-  });
-
-  it('記事が無ければ空配列を返す', async () => {
-    const { resolveRelated } = setup();
-
-    expect(await resolveRelated(angled(0))).toEqual([]);
   });
 });

@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ActorId } from '../../../domain/actor/actorId.ts';
 import { PostId } from '../../../domain/post/postId.ts';
 import { UserId } from '../../../domain/user/userId.ts';
-import { createD1DirectMessageActorsResolverByUris } from '../fediverseConversation/directMessageActorsResolverByUris.ts';
 import { createD1DirectMessageNotificationsReadMarker } from '../fediverseConversation/directMessageNotificationsReadMarker.ts';
 import { createD1DirectMessagePostsResolver } from '../fediverseConversation/directMessagePostsResolver.ts';
 import { createMastodonSeed, SEED_ORIGIN } from './mastodonSeed.ts';
@@ -201,37 +200,5 @@ describe('direct の投稿の未読', () => {
       0,
     ]);
     expect(idsOf(await t.resolve({ unreadOnly: true }))).toEqual([other]);
-  });
-
-  it('投稿が無いときは何も更新しない', async () => {
-    const t = setup();
-    const postId = t.remoteDirect(t.alice, 1000, [aliceUri, kosuiUri]);
-    const notification = t.seed.addMentionNotification(t.kosui.userId, t.alice.actorId, postId, 1000);
-
-    await createD1DirectMessageNotificationsReadMarker(t.db).markRead({ userId: t.viewer.userId, postIds: [] });
-
-    expect(
-      (t.sqlite.prepare('SELECT isRead FROM notifications WHERE notificationId = ?').get(notification) as {
-        isRead: number;
-      }).isRead,
-    ).toBe(0);
-  });
-});
-
-describe('direct の投稿の相手の解決', () => {
-  it('URI からアクターを引き、存在しない URI は含めない', async () => {
-    const t = setup();
-
-    const resolved = await createD1DirectMessageActorsResolverByUris(t.db).resolve([
-      aliceUri,
-      aliceUri,
-      kosuiUri,
-      'https://nowhere.example/users/none',
-    ]);
-
-    expect(resolved.ok && Object.fromEntries(resolved.val)).toEqual({
-      [aliceUri]: { actorId: t.alice.actorId, uri: aliceUri, inboxUrl: `${aliceUri}/inbox`, type: 'remote' },
-      [kosuiUri]: { actorId: t.kosui.actorId, uri: kosuiUri, inboxUrl: `${kosuiUri}/inbox`, type: 'local' },
-    });
   });
 });

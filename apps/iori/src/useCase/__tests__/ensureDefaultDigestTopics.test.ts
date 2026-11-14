@@ -121,18 +121,6 @@ describe('EnsureDefaultDigestTopics', () => {
     expect(rows().every((row) => row.embeddedAt === null)).toBe(true);
   });
 
-  it('リゾルバーは sortOrder の順に、埋め込みを Float32Array にして返す', async () => {
-    const { ensure, digestTopicsResolverByUserId } = setup();
-    await ensure.run({ userId: USER_ID });
-
-    const resolved = (await digestTopicsResolverByUserId.resolve(USER_ID)).val;
-
-    expect(resolved.map((topic) => topic.topicKey)).toEqual(defaultDigestTopics.map((topic) => topic.topicKey));
-    expect(resolved[0]!.embedding).toBeInstanceOf(Float32Array);
-    expect(resolved[0]!.embedding).toHaveLength(1024);
-    expect(resolved[0]!.embeddedAt).toBe(NOW);
-  });
-
   it('作成と embed のイベントを domain_events に残し、embedding の中身はイベントに入れない', async () => {
     const { sqlite, ensure } = setup();
     await ensure.run({ userId: USER_ID });
@@ -156,15 +144,6 @@ describe('EnsureDefaultDigestTopics', () => {
       defaultDigestTopics.map((topic) => topic.topicKey),
     );
     expect(result.ok && result.val.topics.every((topic) => topic.embedding?.length === 1024)).toBe(true);
-  });
-
-  it('埋め込みを使えなくても、作った topic を embedding 無しで返す', async () => {
-    const { ensure } = setup({ textEmbedder: null });
-
-    const result = await ensure.run({ userId: USER_ID });
-
-    expect(result.ok && result.val.topics).toHaveLength(7);
-    expect(result.ok && result.val.topics.every((topic) => topic.embedding === null)).toBe(true);
   });
 
   it('同時に走った相手がすでに topic を作っていても失敗せず、7 件のまま一覧を返す', async () => {

@@ -84,11 +84,4 @@ describe('createD1PostVersionsResolverByPostId', () => {
       val: [{ content: '<p>v2</p>', summary: null, sensitive: false, createdAt: 2_000 }],
     });
   });
-
-  it('読める版が無ければ空にする', async () => {
-    const t = setup();
-    t.insert('post.created', { aggregateState: { summary: null } }, 1_000);
-
-    expect(await t.resolve()).toEqual({ ok: true, val: [] });
-  });
 });

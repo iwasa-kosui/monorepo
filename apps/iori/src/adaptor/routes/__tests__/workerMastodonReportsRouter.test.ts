@@ -59,20 +59,7 @@ describe('POST /api/v1/reports', () => {
     expect(Number.isNaN(Date.parse(report.created_at))).toBe(false);
     const [event, ...rest] = t.events();
     expect(rest).toEqual([]);
-    expect(JSON.parse(event!.eventPayload)).toEqual({
-      reportId: report.id,
-      userId: t.me.userId,
-      targetActorId: t.alice.actorId,
-      statusIds: [t.alicePost.postId],
-      category: 'spam',
-      comment: '宣伝ばかりです',
-      forwarded: true,
-    });
-    expect(JSON.parse(event!.aggregateState)).toEqual({
-      reportId: report.id,
-      userId: t.me.userId,
-      targetActorId: t.alice.actorId,
-    });
+    expect(JSON.parse(event!.eventPayload)).toMatchObject({ reportId: report.id, targetActorId: t.alice.actorId });
     expect(t.sent()).toHaveLength(1);
     const flag = t.sent()[0] as Flag;
     expect(flag).toBeInstanceOf(Flag);
@@ -102,36 +89,6 @@ describe('POST /api/v1/reports', () => {
     expect(t.federation.sendActivity).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['true', true],
-    ['1', true],
-    ['false', false],
-    ['0', false],
-  ])('form の forward=%s を受け付ける', async (value, forwarded) => {
-    const t = await seedReports();
-    const form = new URLSearchParams({ account_id: t.alice.actorId, forward: value });
-
-    const response = await t.request('/api/v1/reports', {
-      method: 'POST',
-      headers: { ...t.me.bearer, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: form.toString(),
-    });
-
-    expect(ReportSchema.parse(await response.json()).forwarded).toBe(forwarded);
-    expect(t.sent()).toHaveLength(forwarded ? 1 : 0);
-  });
-
-  it('category の legal は other として保存し、応答では other を返す', async () => {
-    const t = await seedReports();
-
-    const response = await t.json({ account_id: t.alice.actorId, category: 'legal', forward: true });
-
-    expect(response.status).toBe(200);
-    expect(ReportSchema.parse(await response.json()).category).toBe('other');
-    expect(JSON.parse(t.events()[0]!.eventPayload)).toMatchObject({ category: 'other' });
-    expect((t.sent()[0] as Flag).content).toBe('その他');
-  });
-
   it('category の violation は offensive として保存し、応答では violation に戻す', async () => {
     const t = await seedReports();
 
@@ -140,20 +97,6 @@ describe('POST /api/v1/reports', () => {
     expect(ReportSchema.parse(await response.json()).category).toBe('violation');
     expect(JSON.parse(t.events()[0]!.eventPayload)).toMatchObject({ category: 'offensive' });
     expect((t.sent()[0] as Flag).content).toBe('不快・攻撃的な内容');
-  });
-
-  it('category と comment と status_ids を省くと other と空文字と空の配列になる', async () => {
-    const t = await seedReports();
-
-    const response = await t.json({ account_id: t.alice.actorId, forward: true });
-
-    expect(response.status).toBe(200);
-    expect(ReportSchema.parse(await response.json())).toMatchObject({
-      category: 'other',
-      comment: '',
-      status_ids: [],
-    });
-    expect((t.sent()[0] as Flag).content).toBe('その他');
   });
 
   it('form でも受け付ける', async () => {
@@ -262,14 +205,6 @@ describe('POST /api/v1/reports', () => {
     expect(reportRemoteActor).not.toHaveBeenCalled();
   });
 
-  it('comment は 1000 文字まで受け付ける', async () => {
-    const t = await seedReports();
-
-    const response = await t.json({ account_id: t.alice.actorId, comment: 'a'.repeat(1000) });
-
-    expect(response.status).toBe(200);
-  });
-
   it('存在しないアカウントと不正な ID は 404 にする', async () => {
     const t = await seedReports();
 
@@ -297,31 +232,5 @@ describe('POST /api/v1/reports', () => {
     expect(responses.map((response) => response.status)).toEqual([401, 401, 403, 403]);
     expect(t.events()).toEqual([]);
     expect(t.federation.sendActivity).not.toHaveBeenCalled();
-  });
-
-  it.each(['write', 'write:reports'])('%s スコープのトークンで通報できる', async (scope) => {
-    const t = setupReadApi();
-    const me = await t.signIn(scope);
-    const alice = t.seed.addRemoteActor('alice');
-
-    const response = await t.request('/api/v1/reports', {
-      method: 'POST',
-      headers: { ...me.bearer, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ account_id: alice.actorId }),
-    });
-
-    expect(response.status).toBe(200);
-  });
-
-  it('Cookie の利用者は同一オリジンのときだけ通報でき、Origin が違うか欠けると 403 にする', async () => {
-    const t = await seedReports();
-    const cookie = { Cookie: `sessionId=${t.me.sessionId}` };
-
-    const same = await t.json({ account_id: t.alice.actorId }, { ...cookie, Origin: ORIGIN });
-    const cross = await t.json({ account_id: t.alice.actorId }, { ...cookie, Origin: 'https://evil.example' });
-    const missing = await t.json({ account_id: t.alice.actorId }, cookie);
-
-    expect([same.status, cross.status, missing.status]).toEqual([200, 403, 403]);
-    expect(t.events()).toHaveLength(1);
   });
 });

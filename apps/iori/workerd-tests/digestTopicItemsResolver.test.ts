@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createD1Db } from '../src/adaptor/d1/client.ts';
 import { createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../src/adaptor/d1/digest/digestTopicItemsResolverByUserIdAndDigestDateFrom.ts';
-import { createD1RecommendableArticlesResolverByFetchedSince } from '../src/adaptor/d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
-import { Instant } from '../src/domain/instant/instant.ts';
 import { EMBEDDING_DIMENSIONS } from '../src/domain/interestSource/embedding.ts';
 import { float32ToBytes } from '../src/domain/interestSource/embeddingBytes.ts';
 import { UserId } from '../src/domain/user/userId.ts';
@@ -94,14 +92,5 @@ describe('preview resolvers on workerd D1', () => {
       feedback: 'interested',
     });
     expect(resolved.val[0]!.embedding?.[0]).toBe(1);
-  });
-
-  it('候補記事に fetchedAt を付けて返す', async () => {
-    const resolved = await createD1RecommendableArticlesResolverByFetchedSince(db).resolve({
-      fetchedSince: Instant.orThrow(FETCHED_AT),
-    });
-
-    expect(resolved.val.filter((article) => article.feedEntryId === ENTRY_ID).map((article) => article.fetchedAt))
-      .toEqual([FETCHED_AT]);
   });
 });

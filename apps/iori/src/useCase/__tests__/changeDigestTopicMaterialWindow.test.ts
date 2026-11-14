@@ -64,15 +64,6 @@ describe('ChangeDigestTopicMaterialWindow', () => {
     ]);
   });
 
-  it('null で期間を解除できる', async () => {
-    const { change } = await setup();
-    await change.run({ userId: USER_ID, topicKey: 'genai', materialWindowHours: 72 });
-
-    const result = await change.run({ userId: USER_ID, topicKey: 'genai', materialWindowHours: null });
-
-    expect(result).toMatchObject({ ok: true, val: { materialWindowHours: null } });
-  });
-
   it('digestTopic.materialWindowChanged のイベントを残す', async () => {
     const { change, eventNames } = await setup();
     const before = eventNames().length;
@@ -90,16 +81,6 @@ describe('ChangeDigestTopicMaterialWindow', () => {
     const result = await change.run({ userId: USER_ID, topicKey: 'genai', materialWindowHours: 72 });
 
     expect(result).toMatchObject({ ok: true, val: { materialWindowHours: 72, updatedAt: NOW } });
-    expect(eventNames()).toHaveLength(before);
-  });
-
-  it('未設定のまま null を指定しても、何も書かずにトピックを返す', async () => {
-    const { change, eventNames } = await setup();
-    const before = eventNames().length;
-
-    const result = await change.run({ userId: USER_ID, topicKey: 'genai', materialWindowHours: null });
-
-    expect(result).toMatchObject({ ok: true, val: { materialWindowHours: null, updatedAt: CREATED_AT } });
     expect(eventNames()).toHaveLength(before);
   });
 

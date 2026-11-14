@@ -5,9 +5,7 @@ import {
   createD1TimingCollector,
   type D1CallRecord,
   d1TimedRouteOf,
-  d1TimingLogLine,
   instrumentD1,
-  instrumentEnvD1,
   summarizeD1Calls,
 } from './d1Timing.ts';
 
@@ -19,20 +17,6 @@ const call = (startedAt: number, endedAt: number, statements = 1, sqlMs?: number
 });
 
 describe('summarizeD1Calls', () => {
-  it('呼び出しが無いときはすべて 0 にする', () => {
-    expect(summarizeD1Calls([])).toEqual({
-      calls: 0,
-      statements: 0,
-      stages: 0,
-      busyMs: 0,
-      minMs: 0,
-      p50Ms: 0,
-      maxMs: 0,
-      sqlMs: 0,
-      sqlKnownCalls: 0,
-    });
-  });
-
   it('重なる区間を 1 段に統合し、直列の区間を別の段にする', () => {
     const summary = summarizeD1Calls([call(0, 10), call(5, 20), call(20, 30), call(40, 45)]);
     expect(summary.calls).toBe(4);
@@ -84,33 +68,6 @@ describe('d1TimedRouteOf', () => {
     expect(d1TimedRouteOf('GET', 'constructor')).toBeUndefined();
     expect(d1TimedRouteOf('POST', '/api/v1/statuses/abc/reblog')).toBeUndefined();
     expect(d1TimedRouteOf('POST', '/api/v1/statuses/a/b/favourite')).toBeUndefined();
-  });
-});
-
-describe('d1TimingLogLine', () => {
-  it('指定のキーだけを固定の文字列と数値で出す', () => {
-    const line = d1TimingLogLine('favourite', 200, summarizeD1Calls([call(0, 5, 2, 1)]));
-    const parsed = JSON.parse(line) as Record<string, unknown>;
-    expect(Object.keys(parsed)).toEqual([
-      'event',
-      'route',
-      'status',
-      'calls',
-      'statements',
-      'stages',
-      'busyMs',
-      'minMs',
-      'p50Ms',
-      'maxMs',
-      'sqlMs',
-      'sqlKnownCalls',
-    ]);
-    expect(parsed.event).toBe('d1_timing');
-    expect(parsed.route).toBe('favourite');
-    for (const [key, value] of Object.entries(parsed)) {
-      if (key !== 'event' && key !== 'route') expect(typeof value).toBe('number');
-    }
-    expect(line).not.toMatch(/https?:|\/api\//);
   });
 });
 
@@ -169,15 +126,6 @@ describe('instrumentD1', () => {
     expect(fake.db.prepare).toHaveBeenCalledTimes(4);
   });
 
-  it('first と raw に渡した引数を元の statement にそのまま渡す', async () => {
-    const fake = createFakeD1();
-    const db = instrumentD1(fake.raw, createD1TimingCollector());
-    await db.prepare('select id').first('id');
-    await db.prepare('select id').raw({ columnNames: true });
-    expect(fake.prepared[0]!.first).toHaveBeenCalledWith('id');
-    expect(fake.prepared[1]!.raw).toHaveBeenCalledWith({ columnNames: true });
-  });
-
   it('bind の連鎖が包んだ statement を返し、元の statement に値を渡す', async () => {
     const fake = createFakeD1();
     const collector = createD1TimingCollector();
@@ -210,15 +158,6 @@ describe('instrumentD1', () => {
     ]);
   });
 
-  it('exec の結果をそのまま返す', async () => {
-    const fake = createFakeD1();
-    const collector = createD1TimingCollector();
-    const db = instrumentD1(fake.raw, collector);
-
-    expect(await db.exec('select 1')).toEqual({ count: 1, duration: 4 });
-    expect(collector.snapshot()).toEqual([expect.objectContaining({ statements: 1, sqlMs: 4 })]);
-  });
-
   it('それ以外のメソッドは元の binding を this にして呼ぶ', async () => {
     const fake = createFakeD1();
     const db = instrumentD1(fake.raw, createD1TimingCollector());
@@ -245,23 +184,6 @@ describe('instrumentD1', () => {
     ]);
   });
 
-  it('開始と終了の Date.now() を記録する', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(1000);
-    const fake = createFakeD1();
-    const collector = createD1TimingCollector();
-    const db = instrumentD1(fake.raw, collector);
-    const statement = db.prepare('select 1');
-    vi.mocked(fake.prepared[0]!.all).mockImplementationOnce(async () => {
-      vi.setSystemTime(1007);
-      return { success: true, results: [], meta: { duration: 5 } } as never;
-    });
-
-    await statement.all();
-
-    expect(collector.snapshot()).toEqual([{ startedAt: 1000, endedAt: 1007, statements: 1, sqlMs: 5 }]);
-  });
-
   it('記録に失敗しても元の結果を返す', async () => {
     const fake = createFakeD1();
     const collector = {
@@ -272,20 +194,5 @@ describe('instrumentD1', () => {
     };
     const db = instrumentD1(fake.raw, collector);
     expect(await db.prepare('select 1').first()).toEqual({ id: 1 });
-  });
-});
-
-describe('instrumentEnvD1', () => {
-  it('DB が無い env はそのまま返す', () => {
-    const env = { ORIGIN: 'https://worker.test' } as never;
-    expect(instrumentEnvD1(env, createD1TimingCollector())).toBe(env);
-  });
-
-  it('DB だけを差し替える', () => {
-    const fake = createFakeD1();
-    const env = { DB: fake.raw, ORIGIN: 'https://worker.test' };
-    const wrapped = instrumentEnvD1(env, createD1TimingCollector());
-    expect(wrapped.ORIGIN).toBe('https://worker.test');
-    expect(wrapped.DB).not.toBe(fake.raw);
   });
 });

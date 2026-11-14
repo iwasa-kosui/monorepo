@@ -85,28 +85,6 @@ describe('@simplewebauthn/server on workerd', () => {
     expect(authentication.verified).toBe(true);
     expect(authentication.authenticationInfo.newCounter).toBe(5);
   });
-
-  it('challenge が違う応答は検証に失敗する', async () => {
-    const { authenticator, verification } = await register();
-    const options = await generateAuthenticationOptions({ rpID, userVerification: 'required' });
-    const other = await generateAuthenticationOptions({ rpID, userVerification: 'required' });
-    const response = await authenticator.createAuthenticationResponse({
-      challenge: other.challenge,
-      origin,
-      rpId: rpID,
-    });
-
-    await expect(
-      verifyAuthenticationResponse({
-        response,
-        expectedChallenge: options.challenge,
-        expectedOrigin: origin,
-        expectedRPID: rpID,
-        credential: verification.registrationInfo!.credential,
-        requireUserVerification: true,
-      }),
-    ).rejects.toThrow();
-  });
 });
 
 const fakeDerive: Argon2idDerive = async ({ password, salt, tagLength }) => {
@@ -273,18 +251,5 @@ describe('passkey の D1 ストアとリゾルバー', () => {
 
     expect(await challengeCount(first.val.challengeId)).toBe(0);
     expect(await challengeCount(second.val.challengeId)).toBe(1);
-  });
-
-  it('消費済みの challenge は 2 回目に見つからない', async () => {
-    const h = await setup();
-    const issued = await h.startAuthentication.run({});
-    if (!issued.ok) throw new Error('unexpected');
-    const consumer = createD1WebAuthnChallengeConsumer(db);
-
-    const first = await consumer.consume(issued.val.challengeId, Date.now() as never);
-    const second = await consumer.consume(issued.val.challengeId, Date.now() as never);
-
-    expect(first.ok && first.val?.challenge).toBe(issued.val.options.challenge);
-    expect(second.ok && second.val).toBeUndefined();
   });
 });

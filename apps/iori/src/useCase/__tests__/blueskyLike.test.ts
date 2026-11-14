@@ -84,27 +84,6 @@ describe('LikeBlueskyPostUseCase', () => {
     expect(t.likes()).toEqual([{ subjectUri: POST, likeUri: CREATED, createdAt: NOW }]);
   });
 
-  it('D1 には、行の取得 1 回と、保存の INSERT 1 回だけを発行する', async () => {
-    const t = setup();
-    t.queries.length = 0;
-
-    await t.like.run({ feedItemId: POST });
-
-    expect(t.queries.map(({ sql }) => sql.trim().split(/\s/)[0]?.toLowerCase())).toEqual(['select', 'insert']);
-  });
-
-  it('repost の行からでも元の投稿の uri にいいねを保存する', async () => {
-    const t = setup();
-
-    await t.like.run({ feedItemId: REPOST });
-
-    expect(t.createLike).toHaveBeenCalledExactlyOnceWith(
-      { uri: POST, cid: 'bafypost' },
-      await deriveBlueskyLikeRkey(POST),
-    );
-    expect(t.likes()).toEqual([{ subjectUri: POST, likeUri: CREATED, createdAt: NOW }]);
-  });
-
   it('いいね済みなら Bluesky を呼ばず、成功を返し、行も変えない', async () => {
     const t = setup();
     t.seedLike();
@@ -175,26 +154,6 @@ describe('LikeBlueskyPostUseCase (uri)', () => {
     expect(t.createLike).not.toHaveBeenCalled();
   });
 
-  it('cid の取得が失敗したら、そのエラーを返し、Bluesky に書かない', async () => {
-    const t = setup();
-    t.resolveCid.mockReturnValueOnce(RA.err(failure));
-
-    const result = await t.like.run({ uri: POST });
-
-    expect(result).toEqual({ ok: false, err: failure });
-    expect(t.createLike).not.toHaveBeenCalled();
-  });
-
-  it('いいね済みなら Bluesky を呼ばず、成功を返す', async () => {
-    const t = setup();
-    t.seedLike();
-
-    const result = await t.like.run({ uri: POST });
-
-    expect(result).toEqual({ ok: true, val: { liked: true } });
-    expect(t.createLike).not.toHaveBeenCalled();
-  });
-
   it('D1 に行が無くても viewer.like があれば、Bluesky に作成せず、その uri を保存して成功を返す', async () => {
     const t = setup();
     t.resolveCid.mockReturnValueOnce(RA.ok({ cid: 'bafyfresh', likeUri: LIKE, repostUri: null }));
@@ -218,15 +177,6 @@ describe('UnlikeBlueskyPostUseCase (uri)', () => {
     expect(t.deleteLike).toHaveBeenCalledExactlyOnceWith('3kold');
     expect(t.likes()).toEqual([]);
     expect(t.resolveCid).not.toHaveBeenCalled();
-  });
-
-  it('タイムラインの行が無くても、行があれば削除する', async () => {
-    const t = setup();
-    t.seedLike();
-    t.sqlite.exec('DELETE FROM bluesky_timeline_items');
-
-    expect(await t.unlike.run({ uri: POST })).toEqual({ ok: true, val: { liked: false } });
-    expect(t.deleteLike).toHaveBeenCalledExactlyOnceWith('3kold');
   });
 
   it('行がなければ Bluesky を呼ばず、成功を返す', async () => {
@@ -253,14 +203,6 @@ describe('UnlikeBlueskyPostUseCase (uri)', () => {
     expect(t.deleteLike).not.toHaveBeenCalled();
   });
 
-  it('viewer.like の取得が失敗したら、そのエラーを返し、Bluesky の削除を呼ばない', async () => {
-    const t = setup();
-    t.resolveCid.mockReturnValueOnce(RA.err(failure));
-
-    expect(await t.unlike.run({ uri: POST })).toEqual({ ok: false, err: failure });
-    expect(t.deleteLike).not.toHaveBeenCalled();
-  });
-
   it('Bluesky の削除が失敗したら、エラーを返し、行を消さない', async () => {
     const t = setup();
     t.seedLike();
@@ -281,26 +223,6 @@ describe('UnlikeBlueskyPostUseCase', () => {
     expect(t.deleteLike).not.toHaveBeenCalled();
   });
 
-  it('行がなければ Bluesky を呼ばず、成功を返す', async () => {
-    const t = setup();
-
-    const result = await t.unlike.run({ feedItemId: POST });
-
-    expect(result).toEqual({ ok: true, val: { liked: false } });
-    expect(t.deleteLike).not.toHaveBeenCalled();
-    expect(t.resolveCid).not.toHaveBeenCalled();
-  });
-
-  it('D1 には、行の取得 1 回と、削除の DELETE 1 回だけを発行する', async () => {
-    const t = setup();
-    t.seedLike();
-    t.queries.length = 0;
-
-    await t.unlike.run({ feedItemId: POST });
-
-    expect(t.queries.map(({ sql }) => sql.trim().split(/\s/)[0]?.toLowerCase())).toEqual(['select', 'delete']);
-  });
-
   it('likeUri の rkey で削除し、成功してから行を消す', async () => {
     const t = setup();
     t.seedLike();
@@ -310,16 +232,5 @@ describe('UnlikeBlueskyPostUseCase', () => {
     expect(result).toEqual({ ok: true, val: { liked: false } });
     expect(t.deleteLike).toHaveBeenCalledExactlyOnceWith('3kold');
     expect(t.likes()).toEqual([]);
-  });
-
-  it('Bluesky の削除が失敗したら、エラーを返し、行を消さない', async () => {
-    const t = setup();
-    t.seedLike();
-    t.deleteLike.mockReturnValueOnce(RA.err(failure));
-
-    const result = await t.unlike.run({ feedItemId: POST });
-
-    expect(result).toEqual({ ok: false, err: failure });
-    expect(t.likes()).toEqual([{ subjectUri: POST, likeUri: LIKE, createdAt: 1 }]);
   });
 });

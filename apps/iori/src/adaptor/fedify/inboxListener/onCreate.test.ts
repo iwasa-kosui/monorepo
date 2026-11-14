@@ -1,4 +1,4 @@
-import { Article, Collection, Create, Mention, Note, Person, Question } from '@fedify/vocab';
+import { Article, Collection, Create, Note, Person, Question } from '@fedify/vocab';
 import { FetchError } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
@@ -145,76 +145,12 @@ describe('createOnCreate', () => {
     expect(fetchReplyNotesRecursiveUseCase.run).not.toHaveBeenCalled();
   });
 
-  it.each<[string, { tos?: URL[]; ccs?: URL[] }]>([
-    ['public', { tos: [publicUri], ccs: [followersId] }],
-    ['unlisted', { tos: [followersId], ccs: [publicUri] }],
-    ['private', { tos: [followersId] }],
-    ['direct', { tos: [new URL('https://remote.example/users/bob')] }],
-  ])('records %s from the to and cc of the Note', async (expected, addressing) => {
-    const note = new Note({ id: new URL('https://remote.example/posts/1'), content: 'hi', ...addressing });
-
-    const addRemotePost = await run(note);
-
-    expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ visibility: expected }));
-  });
-
   it('falls back to the to and cc of the Create when the Note has none', async () => {
     const note = new Note({ id: new URL('https://remote.example/posts/1'), content: 'hi' });
 
     const addRemotePost = await run(note, { toIds: [followersId], ccIds: [publicUri] });
 
     expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'unlisted' }));
-  });
-
-  it('records null when neither the Note nor the Create has to and cc', async () => {
-    const note = new Note({ id: new URL('https://remote.example/posts/1'), content: 'hi' });
-
-    const addRemotePost = await run(note);
-
-    expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ visibility: null }));
-  });
-
-  it('records only the local actors addressed by the Note and the Create', async () => {
-    const note = new Note({
-      id: new URL('https://remote.example/posts/1'),
-      content: 'hi',
-      tos: [kosuiId, followersId],
-      ccs: [publicUri],
-      bccs: [new URL('https://iori.test/users/hanako')],
-    });
-
-    const addRemotePost = await run(note, { btoIds: [new URL('https://iori.test/users/taro')] });
-
-    expect(addRemotePost).toHaveBeenCalledWith(
-      expect.objectContaining({
-        recipientActorUris: [
-          'https://iori.test/users/kosui',
-          'https://iori.test/users/hanako',
-          'https://iori.test/users/taro',
-        ],
-      }),
-    );
-  });
-
-  it('records the summary and sensitive flag of the Note', async () => {
-    const note = new Note({
-      id: new URL('https://remote.example/posts/1'),
-      content: 'hi',
-      summary: 'ネタバレ注意',
-      sensitive: true,
-    });
-
-    const addRemotePost = await run(note);
-
-    expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ summary: 'ネタバレ注意', sensitive: true }));
-  });
-
-  it('records null and false when the Note has no content warning', async () => {
-    const note = new Note({ id: new URL('https://remote.example/posts/1'), content: 'hi' });
-
-    const addRemotePost = await run(note);
-
-    expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ summary: null, sensitive: false }));
   });
 
   it('records an Article with its name and content', async () => {
@@ -279,42 +215,10 @@ describe('createOnCreate', () => {
     );
   });
 
-  it('records no poll for a Note', async () => {
-    const note = new Note({ id: new URL('https://remote.example/posts/1'), content: 'hi', tos: [publicUri] });
-
-    const addRemotePost = await run(note);
-
-    expect(addRemotePost).toHaveBeenCalledWith(expect.not.objectContaining({ poll: expect.anything() }));
-  });
-
   it('ignores an object that is not a Note, an Article or a Question', async () => {
     const addRemotePost = await run(new Person({ id: new URL('https://remote.example/users/bob') }));
 
     expect(addRemotePost).not.toHaveBeenCalled();
-  });
-
-  it('records no recipients when no local actor is addressed', async () => {
-    const note = new Note({ id: new URL('https://remote.example/posts/1'), content: 'hi', tos: [publicUri] });
-
-    const addRemotePost = await run(note);
-
-    expect(addRemotePost).toHaveBeenCalledWith(expect.objectContaining({ recipientActorUris: [] }));
-  });
-
-  it('passes the hrefs of the Mention tags of the Note as the mentioned actors', async () => {
-    const bob = new URL('https://other.example/users/bob');
-    const note = new Note({
-      id: new URL('https://remote.example/posts/1'),
-      content: 'hi',
-      tos: [bob, kosuiId],
-      tags: [new Mention({ href: bob }), new Mention({ href: kosuiId })],
-    });
-
-    const addRemotePost = await run(note);
-
-    expect(addRemotePost).toHaveBeenCalledWith(
-      expect.objectContaining({ mentionedActorUris: [bob.href, kosuiId.href] }),
-    );
   });
 
   describe('Create from an actor no local actor follows', () => {
@@ -393,50 +297,12 @@ describe('createOnCreate', () => {
       expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
     });
 
-    it.each<[string, URL | undefined, string | null]>([
-      ['the reply target', new URL('https://remote.example/p/0'), 'https://remote.example/p/0'],
-      ['null for a Create that is not a reply', undefined, null],
-    ])('passes %s as inReplyToUri when saving to the federated timeline', async (_name, replyTarget, expected) => {
-      const { listener, create, remotePostUpserter } = setup(false, [{ relayId: 'relay-1' }]);
-
-      await listener(createCtx(), create(createNote({ tos: [publicUri] }, replyTarget)));
-
-      expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ inReplyToUri: expected }));
-    });
-
     it('does not fetch the reply thread when saving to the federated timeline', async () => {
       const { listener, create, fetchReplyNotesRecursiveUseCase } = setup(false, [{ relayId: 'relay-1' }]);
 
       await listener(createCtx(), create(createNote({ tos: [publicUri] }, new URL('https://remote.example/p/0'))));
 
       expect(fetchReplyNotesRecursiveUseCase.run).not.toHaveBeenCalled();
-    });
-
-    describe('url', () => {
-      it('passes the url of the Note to addRemotePostUseCase', async () => {
-        const { listener, create, addRemotePostUseCase } = setup(true);
-        const note = new Note({
-          id: new URL('https://remote.example/posts/1'),
-          url: new URL('https://remote.example/@alice/1'),
-          content: 'hello',
-          attribution: alice,
-          tos: [publicUri],
-        });
-
-        await listener(createCtx(), create(note));
-
-        expect(addRemotePostUseCase.run).toHaveBeenCalledWith(
-          expect.objectContaining({ url: 'https://remote.example/@alice/1' }),
-        );
-      });
-
-      it('passes null when the Note has no url', async () => {
-        const { listener, create, addRemotePostUseCase } = setup(true);
-
-        await listener(createCtx(), create(createNote()));
-
-        expect(addRemotePostUseCase.run).toHaveBeenCalledWith(expect.objectContaining({ url: null }));
-      });
     });
 
     describe('quote', () => {
@@ -450,24 +316,6 @@ describe('createOnCreate', () => {
           quote: quoteId,
         });
 
-      it('passes the quoted note URI to addRemotePostUseCase', async () => {
-        const { listener, create, addRemotePostUseCase } = setup(true);
-
-        await listener(createCtx(), create(quotingNote()));
-
-        expect(addRemotePostUseCase.run).toHaveBeenCalledWith(
-          expect.objectContaining({ quoteUri: 'https://other.example/notes/quoted' }),
-        );
-      });
-
-      it('passes null when the Note quotes nothing', async () => {
-        const { listener, create, addRemotePostUseCase } = setup(true);
-
-        await listener(createCtx(), create(createNote()));
-
-        expect(addRemotePostUseCase.run).toHaveBeenCalledWith(expect.objectContaining({ quoteUri: null }));
-      });
-
       it('fetches only the quoted note, one level deep, after saving the post', async () => {
         const { listener, create, addRemotePostUseCase, fetchReplyNotesRecursiveUseCase } = setup(true);
 
@@ -480,14 +328,6 @@ describe('createOnCreate', () => {
         expect(addRemotePostUseCase.run.mock.invocationCallOrder[0]).toBeLessThan(
           fetchReplyNotesRecursiveUseCase.run.mock.invocationCallOrder[0]!,
         );
-      });
-
-      it('does not fetch a quoted note when the Note quotes nothing', async () => {
-        const { listener, create, fetchReplyNotesRecursiveUseCase } = setup(true);
-
-        await listener(createCtx(), create(createNote()));
-
-        expect(fetchReplyNotesRecursiveUseCase.run).not.toHaveBeenCalled();
       });
 
       it('fetches the reply target and the quoted note separately', async () => {

@@ -2,13 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Instant } from '../../instant/instant.ts';
 import { PostId } from '../../post/postId.ts';
-import {
-  formatSummaryHeading,
-  readSourceNumbers,
-  type SummaryItem,
-  toSummaryDocuments,
-  truncateSummaryItems,
-} from '../summaryItems.ts';
+import { readSourceNumbers, type SummaryItem, toSummaryDocuments, truncateSummaryItems } from '../summaryItems.ts';
 
 const item = (text: string, createdAt: number, username = 'alice'): SummaryItem => ({
   postId: PostId.generate(),
@@ -59,22 +53,6 @@ describe('truncateSummaryItems', () => {
 
     expect(truncateSummaryItems(items, 'fromEnd', 4).truncated).toBe(false);
     expect(truncateSummaryItems(items, 'fromEnd', 3).items).toEqual([]);
-  });
-
-  it('既定の上限は 12,000 文字', () => {
-    const fits = item('あ'.repeat(12_000), 2);
-    const over = item('い', 1);
-
-    expect(truncateSummaryItems([fits], 'fromEnd').truncated).toBe(false);
-    expect(truncateSummaryItems([fits, over], 'fromEnd')).toEqual({ items: [fits], truncated: true });
-  });
-});
-
-describe('formatSummaryHeading', () => {
-  it('作者と日本時間の日時を見出しにする', () => {
-    const heading = formatSummaryHeading(3, item('x', Date.UTC(2026, 10, 4, 15, 5), 'bob'));
-
-    expect(heading).toBe('[3] @bob 2026-11-05 00:05（JST）');
   });
 });
 

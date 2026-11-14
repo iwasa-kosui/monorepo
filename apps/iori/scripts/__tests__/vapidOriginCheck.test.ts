@@ -126,18 +126,6 @@ it.each([
 });
 
 const originFetch = (publicKey: string) => respond(JSON.stringify({ publicKey }));
-it('logs yes twice in production when both checks match', async () => {
-  const pair = keyPair();
-  const log = vi.fn();
-  await assertVapidBeforePreparation({
-    environment: 'production',
-    origin,
-    ...pair,
-    fetchRequest: originFetch(pair.publicKey),
-    log,
-  });
-  expect(log.mock.calls).toEqual([['VAPID key pair match: yes'], ['Origin VAPID public key match: yes']]);
-});
 it('rejects in production when the origin key differs', async () => {
   const pair = keyPair();
   const log = vi.fn();

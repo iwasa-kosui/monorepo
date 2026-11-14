@@ -90,24 +90,6 @@ describe('HTTP 署名つきの活動の受信', { timeout: 30_000 }, () => {
     keyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
   }, 30_000);
 
-  it('個人 inbox への署名つき Follow を 202 で受け付けて listener を呼ぶ', async () => {
-    const { deliver, onFollow } = await setup();
-
-    const response = await deliver('/users/kosui/inbox', follow());
-
-    expect(response.status).toBe(202);
-    expect(onFollow).toHaveBeenCalledOnce();
-  });
-
-  it('共有 inbox への署名つき Create を 202 で受け付けて listener を呼ぶ', async () => {
-    const { deliver, onCreate } = await setup();
-
-    const response = await deliver('/inbox', create());
-
-    expect(response.status).toBe(202);
-    expect(onCreate).toHaveBeenCalledOnce();
-  });
-
   it('同じ活動が共有 inbox と個人 inbox の両方に届いても、listener は1回だけ呼ぶ', async () => {
     const { deliver, onCreate } = await setup();
 

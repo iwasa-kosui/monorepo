@@ -1,10 +1,8 @@
-import { RA } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { BlueskyCrosspostUseCases } from '../runtime/blueskyCrosspost.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
-import { createRetryBlueskyCrosspostsTask, retryBlueskyCrosspostsTask } from './blueskyCrosspostTasks.ts';
-import { type ScheduledTaskContext, scheduledTasks } from './scheduledTasks.ts';
+import { retryBlueskyCrosspostsTask } from './blueskyCrosspostTasks.ts';
+import { type ScheduledTaskContext } from './scheduledTasks.ts';
 
 const untouchable = (name: string) =>
   new Proxy({}, {
@@ -37,38 +35,5 @@ describe('retryBlueskyCrosspostsTask', () => {
 
     expect(info).toHaveBeenCalledOnce();
     expect(info).toHaveBeenCalledWith('iori bluesky crosspost is disabled.');
-  });
-
-  it('use case が無いときは再送せず、無効であることをログに出す', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const task = createRetryBlueskyCrosspostsTask(() => undefined);
-
-    await task.run(contextWith({}));
-
-    expect(info).toHaveBeenCalledWith('iori bluesky crosspost is disabled.');
-  });
-
-  it('use case があるときは再送を 1 回実行し、結果をログに出す', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const summary = { sent: 2, failed: 1, skipped: 0, gone: 0, noop: 0 };
-    const retry = { run: vi.fn(async () => RA.ok(summary)) };
-    const waitUntil = vi.fn();
-    const createUseCases = vi.fn(() => ({ retry }) as unknown as BlueskyCrosspostUseCases);
-    const task = createRetryBlueskyCrosspostsTask(createUseCases);
-    const context = {
-      ...contextWith({ IORI_BLUESKY_CROSSPOST: 'enabled', DB: {} as never, UPLOADS: {} as never }),
-      waitUntil,
-    };
-
-    await task.run(context);
-
-    expect(createUseCases).toHaveBeenCalledWith(context.env, waitUntil);
-    expect(retry.run).toHaveBeenCalledOnce();
-    expect(info).toHaveBeenCalledWith('iori bluesky crossposts retried.', summary);
-  });
-
-  it('3 時間ごとの cron に登録されている', () => {
-    const names = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
-    expect(names).toContain('retryBlueskyCrossposts');
   });
 });

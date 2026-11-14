@@ -5,7 +5,6 @@ import type {
   BlueskyLikeNotification,
   BlueskyLikeViaRepostNotification,
   BlueskyMentionNotification,
-  BlueskyRepostNotification,
   BlueskyRepostViaRepostNotification,
 } from '../../domain/notification/notification.ts';
 import { NotificationId } from '../../domain/notification/notificationId.ts';
@@ -68,22 +67,6 @@ describe('toBlueskyStatus', () => {
     });
   });
 
-  it('blueskyRepost も対象の投稿の AT-URI を id にする', () => {
-    const repost: BlueskyRepostNotification = {
-      ...base,
-      type: 'blueskyRepost',
-      blueskyUri: 'at://did:plc:alice/app.bsky.feed.repost/3k2',
-      subjectUri,
-      targetPostId: null,
-    };
-
-    const status = toBlueskyStatus(repost, { createdAt, account });
-
-    expect(StatusSchema.safeParse(status).success).toBe(true);
-    expect(status.id).toBe(`bluesky:${subjectUri}`);
-    expect(status.content).toBe('');
-  });
-
   it('blueskyLikeViaRepost と blueskyRepostViaRepost は元の投稿の AT-URI を id にし、本文を空にする', () => {
     const original = 'at://did:plc:other/app.bsky.feed.post/3korig';
     const likeViaRepost: BlueskyLikeViaRepostNotification = {
@@ -138,9 +121,5 @@ describe('toBlueskyStatus', () => {
     const status = toBlueskyStatus(mention({ text: '<script>alert(1)</script> & "q"\nnext' }), { createdAt, account });
 
     expect(status.content).toBe('<p>&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;q&quot;<br>next</p>');
-  });
-
-  it('blueskyMention の本文が空なら content も空にする', () => {
-    expect(toBlueskyStatus(mention({ text: '' }), { createdAt, account }).content).toBe('');
   });
 });

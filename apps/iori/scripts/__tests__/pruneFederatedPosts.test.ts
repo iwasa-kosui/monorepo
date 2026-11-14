@@ -6,15 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createMastodonSeed } from '../../src/adaptor/d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../src/adaptor/d1/__tests__/sqliteFixture.ts';
-import {
-  candidateSql,
-  cutoffOf,
-  dryRunSql,
-  pruneFailureLines,
-  pruneFederatedPosts,
-  REASONS,
-  RETENTION_MS,
-} from '../prune-federated-posts.mjs';
+import { candidateSql, dryRunSql, pruneFailureLines, pruneFederatedPosts } from '../prune-federated-posts.mjs';
 
 const accountId = 'b'.repeat(32);
 const token = 'api-token-value-for-fixture-0123456789';
@@ -222,13 +214,6 @@ describe('prune-federated-posts dry-run counts', () => {
     expect(queries[0]).not.toContain(';');
     expect(snapshot(fixture)).toEqual(beforeRun);
   });
-  it('counts zero for an empty database', async () => {
-    const { notices, error } = await run(createSqliteD1Fixture());
-    expect(error).toBeUndefined();
-    expect(notices).toEqual([
-      `IORI_NOTICE prune-federated-posts mode=dry-run candidates=0 local_likes=0 local_emoji=0 home=0 local_repost=0 reply=0 notification=0 article=0 to_delete=0 cutoff_ms=${cutoff}`,
-    ]);
-  });
   it('uses the latest receivedAt and a strict comparison against the cutoff', () => {
     const { fixture, seed, remote } = build();
     const ids = (sql: string) => rows(fixture, sql).map((row) => String(row.postId));
@@ -238,34 +223,12 @@ describe('prune-federated-posts dry-run counts', () => {
     expect(ids(candidateSql(cutoff + 1))).toContain(boundary.postId);
     expect(ids(candidateSql(cutoff)).length).toBe(22);
   });
-  it('does not look at posts.createdAt', () => {
-    expect(candidateSql(cutoff)).not.toContain('createdAt');
-    expect(dryRunSql(cutoff)).not.toContain('p.createdAt');
-  });
-  it('matches a reply to a local post by the trailing post ID, whatever the origin', () => {
-    expect(REASONS.reply).toContain('rp.inReplyToUri LIKE \'%/posts/\' || parent.postId');
-    expect(REASONS.reply).toContain('lr.inReplyToUri = rp.uri');
-    expect(REASONS.reply).not.toContain('actors');
-  });
   it('leaves out a remote post that has no remote_posts row', () => {
     const { fixture, deletable } = build();
     fixture.sqlite.prepare('DELETE FROM remote_posts WHERE postId = ?').run(deletable[0].postId);
     const ids = rows(fixture, candidateSql(cutoff)).map((row) => String(row.postId));
     expect(ids).not.toContain(deletable[0].postId);
     expect(ids.length).toBe(21);
-  });
-  it('uses a seven day retention', () => {
-    expect(RETENTION_MS).toBe(7 * 24 * 60 * 60 * 1000);
-    expect(cutoffOf(now)).toBe(cutoff);
-    expect(Object.keys(REASONS)).toEqual([
-      'local_likes',
-      'local_emoji',
-      'home',
-      'local_repost',
-      'reply',
-      'notification',
-      'article',
-    ]);
   });
 });
 

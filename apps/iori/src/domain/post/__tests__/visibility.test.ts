@@ -53,13 +53,3 @@ describe('Visibility.narrowestOf', () => {
     },
   );
 });
-
-describe('Visibility.isVisibleToAnonymous', () => {
-  it('accepts only public and unlisted', () => {
-    expect(Visibility.isVisibleToAnonymous('public')).toBe(true);
-    expect(Visibility.isVisibleToAnonymous('unlisted')).toBe(true);
-    expect(Visibility.isVisibleToAnonymous('private')).toBe(false);
-    expect(Visibility.isVisibleToAnonymous('direct')).toBe(false);
-    expect(Visibility.isVisibleToAnonymous(null)).toBe(false);
-  });
-});

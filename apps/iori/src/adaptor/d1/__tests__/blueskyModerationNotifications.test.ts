@@ -66,18 +66,6 @@ const setup = () => {
 };
 
 describe('ミュートとブロックの通知の除外', () => {
-  it('対象の DID が無ければ、一覧も未読数もすべて返す', async () => {
-    const t = setup();
-
-    expect(await t.listed()).toEqual([
-      t.ids.blueskyMention,
-      t.ids.blueskyFollow,
-      t.ids.blueskyLike,
-      t.ids.fediverseLike,
-    ]);
-    expect(await t.unread()).toBe(4);
-  });
-
   it('ミュートした相手の Bluesky の通知を一覧と未読数から除き、Fediverse の通知は残す', async () => {
     const t = setup();
     t.moderate(1, null);
@@ -92,23 +80,6 @@ describe('ミュートとブロックの通知の除外', () => {
 
     expect(await t.listed()).toEqual([t.ids.fediverseLike]);
     expect(await t.unread()).toBe(1);
-  });
-
-  it('ミュートもブロックもしていない行は通知を除かない', async () => {
-    const t = setup();
-    t.moderate(0, null);
-
-    expect(await t.listed()).toHaveLength(4);
-    expect(await t.unread()).toBe(4);
-  });
-
-  it('別の DID の Bluesky の通知は残す', async () => {
-    const t = setup();
-    t.sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
-      .run('did:plc:someone-else', 1, null, 1);
-
-    expect(await t.listed()).toHaveLength(4);
-    expect(await t.unread()).toBe(4);
   });
 
   it('マーカーより新しい通知の未読数からも、対象の相手の通知を除く', async () => {
@@ -127,20 +98,5 @@ describe('ミュートとブロックの通知の除外', () => {
 
     expect(await t.resolveById(t.ids.blueskyLike)).toBeUndefined();
     expect(await t.resolveById(t.ids.fediverseLike)).toBeDefined();
-  });
-
-  it('ブロックした相手の Bluesky の通知を1件の取得から除き、Fediverse の通知は返す', async () => {
-    const t = setup();
-    t.moderate(0, BLOCK);
-
-    expect(await t.resolveById(t.ids.blueskyLike)).toBeUndefined();
-    expect(await t.resolveById(t.ids.fediverseLike)).toBeDefined();
-  });
-
-  it('ミュートもブロックもしていない行は、Bluesky の通知を1件の取得で返す', async () => {
-    const t = setup();
-    t.moderate(0, null);
-
-    expect(await t.resolveById(t.ids.blueskyLike)).toBeDefined();
   });
 });

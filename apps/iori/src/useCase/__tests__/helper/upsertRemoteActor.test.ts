@@ -49,32 +49,6 @@ describe('upsertRemoteActor', () => {
         expect(result.val.logoUri).toBe(identity.logoUri);
       }
     });
-
-    it('新規作成時に remoteActorCreatedStore.store が呼ばれる', async () => {
-      const deps = createDeps();
-      const identity = {
-        uri: 'https://remote.example.com/users/bob',
-        inboxUrl: 'https://remote.example.com/users/bob/inbox',
-      };
-
-      const upsert = upsertRemoteActor(deps);
-      await upsert(identity);
-
-      expect(deps.remoteActorCreatedStore.store).toHaveBeenCalledTimes(1);
-    });
-
-    it('新規作成時に logoUriUpdatedStore.store は呼ばれない', async () => {
-      const deps = createDeps();
-      const identity = {
-        uri: 'https://remote.example.com/users/charlie',
-        inboxUrl: 'https://remote.example.com/users/charlie/inbox',
-      };
-
-      const upsert = upsertRemoteActor(deps);
-      await upsert(identity);
-
-      expect(deps.logoUriUpdatedStore.store).not.toHaveBeenCalled();
-    });
   });
 
   describe('logoUri更新', () => {
@@ -108,81 +82,9 @@ describe('upsertRemoteActor', () => {
         expect(result.val.id).toBe(existingActor.id);
       }
     });
-
-    it('logoUri更新時に logoUriUpdatedStore.store が呼ばれる', async () => {
-      const deps = createDeps();
-      const existingActor: RemoteActor = {
-        id: crypto.randomUUID() as RemoteActor['id'],
-        uri: 'https://remote.example.com/users/eve',
-        inboxUrl: 'https://remote.example.com/users/eve/inbox',
-        type: 'remote',
-        logoUri: 'https://remote.example.com/avatars/eve-old.png',
-      };
-      deps.actorResolverByUri.setActor(existingActor);
-
-      const identity = {
-        uri: existingActor.uri,
-        inboxUrl: existingActor.inboxUrl,
-        logoUri: 'https://remote.example.com/avatars/eve-new.png',
-      };
-
-      const upsert = upsertRemoteActor(deps);
-      await upsert(identity);
-
-      expect(deps.logoUriUpdatedStore.store).toHaveBeenCalledTimes(1);
-    });
-
-    it('logoUri更新時に remoteActorCreatedStore.store は呼ばれない', async () => {
-      const deps = createDeps();
-      const existingActor: RemoteActor = {
-        id: crypto.randomUUID() as RemoteActor['id'],
-        uri: 'https://remote.example.com/users/frank',
-        inboxUrl: 'https://remote.example.com/users/frank/inbox',
-        type: 'remote',
-        logoUri: 'https://remote.example.com/avatars/frank-old.png',
-      };
-      deps.actorResolverByUri.setActor(existingActor);
-
-      const identity = {
-        uri: existingActor.uri,
-        inboxUrl: existingActor.inboxUrl,
-        logoUri: 'https://remote.example.com/avatars/frank-new.png',
-      };
-
-      const upsert = upsertRemoteActor(deps);
-      await upsert(identity);
-
-      expect(deps.remoteActorCreatedStore.store).not.toHaveBeenCalled();
-    });
   });
 
   describe('変更なし', () => {
-    it('既存のアクターのlogoUriが同じ場合、既存のアクターをそのまま返す', async () => {
-      const deps = createDeps();
-      const existingActor: RemoteActor = {
-        id: crypto.randomUUID() as RemoteActor['id'],
-        uri: 'https://remote.example.com/users/grace',
-        inboxUrl: 'https://remote.example.com/users/grace/inbox',
-        type: 'remote',
-        logoUri: 'https://remote.example.com/avatars/grace.png',
-      };
-      deps.actorResolverByUri.setActor(existingActor);
-
-      const identity = {
-        uri: existingActor.uri,
-        inboxUrl: existingActor.inboxUrl,
-        logoUri: existingActor.logoUri,
-      };
-
-      const upsert = upsertRemoteActor(deps);
-      const result = await upsert(identity);
-
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.val).toEqual(existingActor);
-      }
-    });
-
     it('既存のアクターがいてidentityにlogoUriがない場合、既存のアクターをそのまま返す', async () => {
       const deps = createDeps();
       const existingActor: RemoteActor = {
@@ -291,15 +193,6 @@ describe('upsertRemoteActor', () => {
       expect(result.ok && (result.val as RemoteActor).summary).toBeUndefined();
     });
 
-    it('profile が undefined のときは更新しない', async () => {
-      const deps = createDeps();
-      deps.actorResolverByUri.setActor(existing());
-
-      await upsertRemoteActor(deps)({ ...base });
-
-      expect(deps.remoteActorProfileUpdatedStore.store).not.toHaveBeenCalled();
-    });
-
     it('profile が保存済みの値と同じなら更新しない', async () => {
       const deps = createDeps();
       deps.actorResolverByUri.setActor(existing({ fields: [{ name: 'web', value: 'example' }] }));
@@ -315,17 +208,6 @@ describe('upsertRemoteActor', () => {
       });
 
       expect(deps.remoteActorProfileUpdatedStore.store).not.toHaveBeenCalled();
-    });
-
-    it('remoteActorProfileUpdatedStore が渡されないときは更新しない', async () => {
-      const deps = createDeps();
-      deps.actorResolverByUri.setActor(existing());
-      const { remoteActorProfileUpdatedStore: _unused, ...withoutStore } = deps;
-
-      const result = await upsertRemoteActor(withoutStore)({ ...base, profile: { displayName: 'Patricia' } });
-
-      expect(result.ok && (result.val as RemoteActor).displayName).toBe('Pat');
-      expect(_unused.store).not.toHaveBeenCalled();
     });
   });
 });

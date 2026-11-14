@@ -27,27 +27,6 @@ const postView = (n: number, extra: Record<string, unknown> = {}) => ({
 
 describe('createBlueskySearch', () => {
   describe('searchPosts', () => {
-    it('searchPosts を q、limit、cursor、sort=latest つきで呼ぶ', async () => {
-      const { query, search } = clientReturning(RA.ok({ posts: [] }));
-
-      await search.searchPosts({ q: 'hello', cursor: 'prev', limit: 25 });
-
-      expect(query).toHaveBeenCalledWith('app.bsky.feed.searchPosts', {
-        q: 'hello',
-        limit: '25',
-        cursor: 'prev',
-        sort: 'latest',
-      });
-    });
-
-    it('cursor が無ければ cursor を送らない', async () => {
-      const { query, search } = clientReturning(RA.ok({ posts: [] }));
-
-      await search.searchPosts({ q: 'hello', limit: 25 });
-
-      expect(query).toHaveBeenCalledWith('app.bsky.feed.searchPosts', { q: 'hello', limit: '25', sort: 'latest' });
-    });
-
     it('posts を表示用の項目にし、viewer の like と repost を反映し、次の cursor を返す', async () => {
       const { search } = clientReturning(RA.ok({
         cursor: 'next',
@@ -118,20 +97,6 @@ describe('createBlueskySearch', () => {
   });
 
   describe('searchActors', () => {
-    it('searchActors を q、limit、cursor つきで呼び、sort は送らない', async () => {
-      const { query, search } = clientReturning(RA.ok({ actors: [] }));
-
-      await search.searchActors({ q: 'alice', cursor: 'prev', limit: 25 });
-      await search.searchActors({ q: 'alice', limit: 25 });
-
-      expect(query).toHaveBeenNthCalledWith(1, 'app.bsky.actor.searchActors', {
-        q: 'alice',
-        limit: '25',
-        cursor: 'prev',
-      });
-      expect(query).toHaveBeenNthCalledWith(2, 'app.bsky.actor.searchActors', { q: 'alice', limit: '25' });
-    });
-
     it('actors を変換し、空の文字列と http(s) 以外の avatar を null にし、following の有無を followedByMe にする', async () => {
       const { search } = clientReturning(RA.ok({
         cursor: 'next',

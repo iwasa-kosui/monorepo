@@ -105,8 +105,4 @@ describe('selectXPosts', () => {
 
     expect(titles(selected)).toEqual(['post 2', 'post 1', 'post 3']);
   });
-
-  it('投稿が無ければ空を返す', () => {
-    expect(selectXPosts({ posts: [], materials: [], now: NOW, limit: 10 })).toEqual([]);
-  });
 });

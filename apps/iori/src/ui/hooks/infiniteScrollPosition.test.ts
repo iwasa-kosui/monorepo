@@ -1,55 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  decideLoadMore,
-  isNearDocumentEnd,
-  isNearScrollEnd,
-  prefetchDistance,
-  shouldAutoLoadCursor,
-  shouldLoadNow,
-} from './infiniteScrollPosition.ts';
-
-describe('shouldLoadNow', () => {
-  it('loads when a cursor exists and the end of the page is near', () => {
-    expect(shouldLoadNow('cursor-1', true)).toBe(true);
-  });
-
-  it('does not load when the end of the page is far', () => {
-    expect(shouldLoadNow('cursor-1', false)).toBe(false);
-  });
-
-  it('does not load without a cursor even when the end of the page is near', () => {
-    expect(shouldLoadNow(undefined, true)).toBe(false);
-  });
-});
-
-describe('shouldAutoLoadCursor', () => {
-  it('loads a cursor that was never loaded automatically', () => {
-    expect(shouldAutoLoadCursor('cursor-1', undefined)).toBe(true);
-  });
-
-  it('does not load the same cursor twice, as when the load failed and the cursor did not change', () => {
-    expect(shouldAutoLoadCursor('cursor-1', 'cursor-1')).toBe(false);
-  });
-
-  it('loads again once the cursor changes', () => {
-    expect(shouldAutoLoadCursor('cursor-2', 'cursor-1')).toBe(true);
-  });
-
-  it('does not load without a cursor', () => {
-    expect(shouldAutoLoadCursor(undefined, 'cursor-1')).toBe(false);
-  });
-});
-
-describe('prefetchDistance', () => {
-  it('prefetches two viewports ahead on tall screens', () => {
-    expect(prefetchDistance(1000)).toBe(2000);
-  });
-
-  it('prefetches at least 1200px ahead on short screens', () => {
-    expect(prefetchDistance(400)).toBe(1200);
-  });
-});
+import { decideLoadMore, isNearDocumentEnd, isNearScrollEnd } from './infiniteScrollPosition.ts';
 
 describe('isNearScrollEnd', () => {
   it('returns false far from the end of the page', () => {

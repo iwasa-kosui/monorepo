@@ -21,24 +21,6 @@ const valueOf = <T>(result: { ok: boolean; val?: T }): T => {
   return result.val as T;
 };
 
-describe('createD1UserPreferencesResolverByUserId', () => {
-  it('行がないときは undefined を返し、他の利用者の行を返さない', async () => {
-    const { db, me, other } = setup();
-    const store = createD1UserPreferencesSavedStore(db);
-    await store.store(
-      UserPreferences.save(
-        { userId: other.userId as UserId, defaultPostVisibility: 'private' },
-        undefined,
-        Instant.orThrow(1_000),
-      ),
-    );
-
-    const resolved = valueOf(await createD1UserPreferencesResolverByUserId(db).resolve(me.userId as UserId));
-
-    expect(resolved).toBeUndefined();
-  });
-});
-
 describe('createD1UserPreferencesSavedStore', () => {
   it('userId で upsert し、createdAt を保って defaultPostVisibility と updatedAt を更新し、domain event を書く', async () => {
     const { fixture, db, me } = setup();

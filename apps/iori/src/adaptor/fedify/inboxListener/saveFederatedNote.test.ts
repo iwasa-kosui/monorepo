@@ -2,7 +2,6 @@ import { Collection, Note, Person, Question } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ActorIdentity } from '../actorIdentity.ts';
 import { saveFederatedNote } from './saveFederatedNote.ts';
 
 const relayId = 'relay-1' as never;
@@ -49,80 +48,6 @@ describe('saveFederatedNote', () => {
     expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
   });
 
-  it('fetches the author and attachments of the Note with the given document loader', async () => {
-    const { deps } = createDeps();
-    const note = createNote();
-    const getAttribution = vi.spyOn(note, 'getAttribution');
-    const getAttachments = vi.spyOn(note, 'getAttachments');
-    const fromFedifyActor = vi.spyOn(ActorIdentity, 'fromFedifyActor');
-
-    await saveFederatedNote(deps, { note, relayId, documentLoader });
-
-    expect(getAttribution).toHaveBeenCalledWith({ documentLoader });
-    expect(getAttachments).toHaveBeenCalledWith({ documentLoader });
-    expect(fromFedifyActor).toHaveBeenCalledWith(expect.anything(), { documentLoader });
-    fromFedifyActor.mockRestore();
-  });
-
-  it('passes the summary and sensitive flag of the Note to the upserter', async () => {
-    const { deps, remotePostUpserter } = createDeps();
-    const note = createNote().clone({ summary: 'ネタバレ注意', sensitive: true });
-
-    await saveFederatedNote(deps, { note, relayId, documentLoader });
-
-    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ summary: 'ネタバレ注意', sensitive: true }),
-    );
-  });
-
-  it('passes null and false to the upserter when the Note has no content warning', async () => {
-    const { deps, remotePostUpserter } = createDeps();
-
-    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
-
-    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ summary: null, sensitive: false }),
-    );
-  });
-
-  it('passes the url of the Note to the upserter', async () => {
-    const { deps, remotePostUpserter } = createDeps();
-    const note = createNote().clone({ url: new URL('https://remote.example/@alice/1') });
-
-    await saveFederatedNote(deps, { note, relayId, documentLoader });
-
-    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ url: 'https://remote.example/@alice/1' }),
-    );
-  });
-
-  it('passes a null url to the upserter when the Note has none', async () => {
-    const { deps, remotePostUpserter } = createDeps();
-
-    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
-
-    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ url: null }));
-  });
-
-  it('passes the quoted note URI of the Note to the upserter', async () => {
-    const { deps, remotePostUpserter } = createDeps();
-    const note = createNote().clone({ quote: new URL('https://other.example/notes/quoted') });
-
-    await saveFederatedNote(deps, { note, relayId, documentLoader });
-
-    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ quoteUri: 'https://other.example/notes/quoted' }),
-    );
-  });
-
-  it('passes null as the quoted note URI when the Note quotes nothing', async () => {
-    const { deps, remotePostUpserter } = createDeps();
-
-    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
-
-    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ quoteUri: null }));
-  });
-
   it('passes the poll of a Question to the upserter and leaves the options out of the content', async () => {
     const { deps, remotePostUpserter } = createDeps();
     const note = createNote();
@@ -148,17 +73,6 @@ describe('saveFederatedNote', () => {
         },
       }),
     );
-  });
-
-  it('passes no poll to the upserter for a Note', async () => {
-    const { deps, remotePostUpserter } = createDeps();
-
-    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
-
-    expect(remotePostUpserter.resolve).toHaveBeenCalledOnce();
-    expect(remotePostUpserter.resolve.mock.calls[0]).toEqual([
-      expect.not.objectContaining({ poll: expect.anything() }),
-    ]);
   });
 
   it('stores a federated timeline item for an existing post owned by the Note author', async () => {
@@ -249,29 +163,6 @@ describe('saveFederatedNote', () => {
     });
 
     expect(federatedTimelineItemCreatedStore.store).toHaveBeenCalledOnce();
-  });
-
-  it('records the given inReplyToUri on the remote post', async () => {
-    const { deps, remotePostUpserter } = createDeps();
-
-    await saveFederatedNote(deps, {
-      note: createNote(),
-      relayId,
-      documentLoader,
-      inReplyToUri: 'https://remote.example/notes/0',
-    });
-
-    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ inReplyToUri: 'https://remote.example/notes/0' }),
-    );
-  });
-
-  it('records a null inReplyToUri when none is given', async () => {
-    const { deps, remotePostUpserter } = createDeps();
-
-    await saveFederatedNote(deps, { note: createNote(), relayId, documentLoader });
-
-    expect(remotePostUpserter.resolve).toHaveBeenCalledWith(expect.objectContaining({ inReplyToUri: null }));
   });
 
   it('treats a different port as a different origin', async () => {

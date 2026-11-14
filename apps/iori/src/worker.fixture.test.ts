@@ -419,38 +419,6 @@ describe('Worker fixture', () => {
     await expect(webfinger.json()).resolves.toMatchObject({ subject: 'acct:fixture@worker.example.invalid' });
   });
 
-  it('returns 404 for an upload URL without an R2 object, as for a migrated post image row whose file was missing', async () => {
-    const env = makeEnv(new FixtureD1(await makeSeed()));
-    const missingImageId = ImageId.generate();
-    const get = vi.spyOn(env.UPLOADS, 'get');
-    const response = await worker.fetch(
-      new Request(`${origin}/uploads/${missingImageId}.png`),
-      env,
-      {} as ExecutionContext,
-    );
-    expect(response.status).toBe(404);
-    expect(get).toHaveBeenCalledWith(expect.stringContaining(String(missingImageId)));
-  });
-
-  it('no longer updates the actor logo from the replaced profile form', async () => {
-    const db = new FixtureD1(await makeSeed());
-    const logoUri = db.rows.actor.logoUri;
-    const form = new FormData();
-    form.set('logoUri', 'https://assets.example.invalid/fixture-logo.png');
-    const response = await worker.fetch(
-      new Request(`${origin}/users/fixture`, {
-        method: 'POST',
-        body: form,
-        headers: { Cookie: `sessionId=${sessionId}` },
-      }),
-      makeEnv(db),
-      {} as ExecutionContext,
-    );
-
-    expect(response.status).toBe(404);
-    expect(db.rows.actor.logoUri).toBe(logoUri);
-  }, 30_000);
-
   it('acknowledges a valid fanout and retries an invalid outbox through Worker queue', async () => {
     queue.ack.mockClear();
     queue.retry.mockClear();

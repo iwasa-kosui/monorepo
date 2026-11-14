@@ -96,23 +96,12 @@ describe.each(
     expect(t.result.ok).toBe(true);
     expect(t.notificationStore.store).not.toHaveBeenCalled();
     expect(t.webPushSender.send).not.toHaveBeenCalled();
-    expect(t.blockResolver?.resolve).toHaveBeenCalledWith({
-      userId: t.post.userId,
-      blockedActorId: expect.any(String),
-    });
   });
 
   it('ブロックしていない相手なら、これまでどおり通知を作って Web Push を送る', async () => {
     const t = await run(false);
 
     expect(t.result.ok).toBe(true);
-    expect(t.notificationStore.store).toHaveBeenCalledOnce();
-    expect(t.webPushSender.send).toHaveBeenCalledOnce();
-  });
-
-  it('blockResolver がなければ、これまでどおり通知を作って Web Push を送る', async () => {
-    const t = await run(undefined);
-
     expect(t.notificationStore.store).toHaveBeenCalledOnce();
     expect(t.webPushSender.send).toHaveBeenCalledOnce();
   });

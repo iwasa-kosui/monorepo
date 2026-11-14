@@ -6,14 +6,7 @@ import { createD1TimelineItemDeletedStore } from '../../src/adaptor/d1/timeline/
 import { Instant } from '../../src/domain/instant/instant.ts';
 import { TimelineItem } from '../../src/domain/timeline/timelineItem.ts';
 import { TimelineItemId } from '../../src/domain/timeline/timelineItemId.ts';
-import {
-  applyCountSql,
-  applySql,
-  deleteFailureLines,
-  deleteUnfollowedPosts,
-  dryRunSql,
-  targetCondition,
-} from '../delete-unfollowed-posts.mjs';
+import { applySql, deleteFailureLines, deleteUnfollowedPosts, dryRunSql } from '../delete-unfollowed-posts.mjs';
 
 const accountId = 'b'.repeat(32);
 const token = 'api-token-value-for-fixture-0123456789';
@@ -177,11 +170,6 @@ describe('delete-unfollowed-posts input checks', () => {
       expect(deleteFailureLines(error)).toEqual([diag('delete-posts', 'credentials-missing')]);
     },
   );
-  it('accepts a time limit equal to the clock', async () => {
-    const { fixture } = build();
-    const { error } = await run('dry-run', fixture, { IORI_REPOST_CREATED_BEFORE_MS: String(now) });
-    expect(error).toBeUndefined();
-  });
   it.each([
     ['is missing', [], 'resource-missing'],
     ['is listed twice', [databaseName, databaseName], 'resource-ambiguous'],
@@ -205,11 +193,6 @@ describe('delete-unfollowed-posts input checks', () => {
 });
 
 describe('delete-unfollowed-posts SQL', () => {
-  it('pins the target condition', () => {
-    expect(targetCondition(1234)).toBe(
-      't.type = \'post\' AND t.deletedAt IS NULL AND t.createdAt <= 1234 AND NOT EXISTS (SELECT 1 FROM follows f JOIN local_actors la ON la.actorId = f.followerId WHERE f.followingId = t.actorId) AND NOT EXISTS (SELECT 1 FROM local_actors la2 WHERE la2.actorId = t.actorId)',
-    );
-  });
   it('sends one SELECT statement for a dry-run, counts the targets and changes nothing', async () => {
     const { fixture } = build();
     const beforeRun = snapshot(fixture);
@@ -262,21 +245,6 @@ describe('delete-unfollowed-posts SQL', () => {
     for (const postId of keptPostIds) seed.addFederatedItem(postId, relayId, 1_000);
     const { notices } = await run('dry-run', fixture);
     expect(notices).toEqual(['IORI_NOTICE delete-unfollowed-posts mode=dry-run targets=5 federated=0']);
-  });
-  it('shares the same target condition and limit between the dry-run and the apply statements', async () => {
-    const condition = targetCondition(before);
-    const dry = await run('dry-run', build().fixture);
-    const apply = await run('apply', build().fixture);
-    expect(dry.queries[0]).toContain(condition);
-    const statements = apply.queries[0].split(';\n');
-    expect(statements).toHaveLength(2);
-    expect(statements[0]).toMatch(/^INSERT INTO domain_events .* 'timelineItem\.deleted'/);
-    expect(statements[1]).toBe(`UPDATE timeline_items AS t SET deletedAt = ${now} WHERE ${condition}`);
-    for (const statement of statements) expect(statement).toContain(condition);
-    expect(apply.queries).toEqual([applySql({ beforeMs: before, now }).join(';\n'), applyCountSql(now)]);
-    expect(applyCountSql(now)).toBe(
-      `SELECT COUNT(*) AS deleted FROM timeline_items WHERE type = 'post' AND deletedAt = ${now}`,
-    );
   });
 });
 

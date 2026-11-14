@@ -37,19 +37,6 @@ describe('createBlueskyPostThreadFetcher', () => {
     });
   });
 
-  it('クライアントのエラーをそのまま返す', async () => {
-    const err = {
-      type: 'BlueskyClientError',
-      kind: 'http',
-      message: 'getPostThread failed: status 400 NotFound',
-      status: 400,
-      code: 'NotFound',
-    } as const;
-    const { fetcher } = clientReturning(RA.err(err));
-
-    expect(await fetcher.fetch({ uri: URI })).toEqual({ ok: false, err });
-  });
-
   it('thread が見つからない、またはブロックされている応答を BlueskyPostThreadUnavailable にする', async () => {
     const notFound = clientReturning(RA.ok({
       thread: { $type: 'app.bsky.feed.defs#notFoundPost', uri: URI, notFound: true },

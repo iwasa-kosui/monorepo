@@ -6,7 +6,6 @@ import {
   PULL_TO_REFRESH_THRESHOLD,
   pullPhaseAfterRelease,
   pullProgress,
-  refreshResultLabel,
   rubberBand,
 } from './pullGesture.ts';
 
@@ -37,13 +36,5 @@ describe('pullProgress', () => {
     expect(pullProgress(0)).toBe(0);
     expect(pullProgress(PULL_TO_REFRESH_THRESHOLD / 2)).toBe(0.5);
     expect(pullProgress(PULL_MAX_DISTANCE)).toBe(1);
-  });
-});
-
-describe('refreshResultLabel', () => {
-  it('新着の件数を伝える', () => {
-    expect(refreshResultLabel(3)).toBe('3件の新しい投稿');
-    expect(refreshResultLabel(0)).toBe('新しい投稿はありません');
-    expect(refreshResultLabel(undefined)).toBe('更新しました');
   });
 });

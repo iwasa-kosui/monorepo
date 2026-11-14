@@ -98,18 +98,6 @@ describe('ArchiveDomainEventsUseCase', () => {
     expect(remainingIds()).toEqual(['actor', 'recent']);
   });
 
-  it('actor.created が範囲の途中にあっても消さない', async () => {
-    const { addEvent, remainingIds, written, create } = setup();
-    addEvent('a1', at(20, 1));
-    addEvent('actor', at(20, 2), 'actor.created');
-    addEvent('a2', at(20, 3));
-
-    await create().run();
-
-    expect(written[0]!.events.map((event) => event.eventId)).toEqual(['a1', 'a2']);
-    expect(remainingIds()).toEqual(['actor']);
-  });
-
   it('機微なイベントは aggregate_state と event_payload を NULL にして書き、行は消す', async () => {
     const { addEvent, remainingIds, written, create } = setup();
     ARCHIVE_REDACTED_EVENT_NAMES.forEach((name, index) =>

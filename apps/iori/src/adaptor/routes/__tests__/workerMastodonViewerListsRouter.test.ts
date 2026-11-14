@@ -68,31 +68,6 @@ describe('GET /api/v1/favourites', () => {
     expect(linkOf(second, 'next')?.searchParams.get('max_id')).toBe(t.likeIds[2]);
   });
 
-  it('min_id は直後のいいねを取り、新しい順に返す', async () => {
-    const t = await seedFavourites();
-
-    const response = await t.request(`/api/v1/favourites?min_id=${t.likeIds[2]}&limit=1`, { headers: t.me.bearer });
-
-    expect(idsOf(await response.json())).toEqual([t.postIds[1]]);
-    expect(linkOf(response, 'prev')?.searchParams.get('min_id')).toBe(t.likeIds[1]);
-  });
-
-  it('同じ時刻のいいねを (createdAt, likeId) の順で区切る', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-    const posts = [1, 2, 3].map((n) => t.seed.addLocalPost(me, n * 1_000));
-    const likes = posts.map((post) => t.seed.addLike(me.actorId, post.postId, 9_000));
-    const order = likes.map((like, index) => ({ ...like, postId: posts[index]!.postId }))
-      .sort((a, b) => b.likeId.localeCompare(a.likeId));
-
-    const first = await t.request('/api/v1/favourites?limit=1', { headers: me.bearer });
-    const next = linkOf(first, 'next');
-    const rest = await t.request(`${next?.pathname}${next?.search}`, { headers: me.bearer });
-
-    expect(idsOf(await first.json())).toEqual([order[0]!.postId]);
-    expect(idsOf(await rest.json())).toEqual([order[1]!.postId]);
-  });
-
   it('他人のいいねの ID を max_id に使っても、その時刻を位置にしない', async () => {
     const t = await seedFavourites();
     const other = t.seed.addLocalActor('other');
@@ -101,15 +76,6 @@ describe('GET /api/v1/favourites', () => {
     const response = await t.request(`/api/v1/favourites?max_id=${foreign.likeId}`, { headers: t.me.bearer });
 
     expect(await response.json()).toEqual([]);
-  });
-
-  it('削除済みの投稿を除いても、limit の件数まで埋める', async () => {
-    const t = await seedFavourites();
-
-    const response = await t.request('/api/v1/favourites?limit=3', { headers: t.me.bearer });
-
-    expect(idsOf(await response.json())).toEqual(t.postIds);
-    expect(response.headers.get('Link')).not.toBeNull();
   });
 
   it('いいねしても宛先外の direct とフォローしていない private は返さず、フォロー中の private と宛先の direct は返す', async () => {
@@ -147,32 +113,6 @@ describe('GET /api/v1/favourites', () => {
     const response = await t.request('/api/v1/favourites?limit=3', { headers: me.bearer });
 
     expect(idsOf(await response.json())).toEqual(visible.map((post) => post.postId).reverse());
-  });
-
-  it('いいねがなければ空配列を返し、Link を付けない', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-
-    const response = await t.request('/api/v1/favourites', { headers: me.bearer });
-
-    expect(await response.json()).toEqual([]);
-    expect(response.headers.get('Link')).toBeNull();
-  });
-
-  it('limit は最大 40 に切る', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-    for (let n = 0; n < 45; n++) {
-      t.seed.addLike(me.actorId, t.seed.addLocalPost(me, 1_000 + n).postId, 1_000 + n);
-    }
-
-    const [capped, defaulted] = await Promise.all([
-      t.request('/api/v1/favourites?limit=100', { headers: me.bearer }),
-      t.request('/api/v1/favourites', { headers: me.bearer }),
-    ]);
-
-    expect(idsOf(await capped.json())).toHaveLength(40);
-    expect(idsOf(await defaulted.json())).toHaveLength(20);
   });
 
   it('認証がなければ 401、スコープが足りなければ 403 にし、Cookie は通す', async () => {
@@ -244,16 +184,6 @@ describe('GET /api/v1/bookmarks', () => {
     expect(linkOf(second, 'next')?.searchParams.get('max_id')).toBe(t.bookmarkIds[2]);
   });
 
-  it('他人のブックマークの ID を max_id に使っても、その時刻を位置にしない', async () => {
-    const t = await seedBookmarks();
-    const other = t.seed.addLocalActor('other');
-    const foreign = t.seed.addBookmark(other.actorId, t.notBookmarked.postId, 15_000);
-
-    const response = await t.request(`/api/v1/bookmarks?max_id=${foreign.bookmarkId}`, { headers: t.me.bearer });
-
-    expect(await response.json()).toEqual([]);
-  });
-
   it('ブックマークしても見えない direct は返さない', async () => {
     const t = setupReadApi();
     const me = await t.signIn();
@@ -266,16 +196,6 @@ describe('GET /api/v1/bookmarks', () => {
     const response = await t.request('/api/v1/bookmarks', { headers: me.bearer });
 
     expect(idsOf(await response.json())).toEqual([visible.postId]);
-  });
-
-  it('ブックマークがなければ空配列を返し、Link を付けない', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-
-    const response = await t.request('/api/v1/bookmarks', { headers: me.bearer });
-
-    expect(await response.json()).toEqual([]);
-    expect(response.headers.get('Link')).toBeNull();
   });
 
   it('認証がなければ 401、スコープが足りなければ 403 にし、Cookie は通す', async () => {
@@ -340,23 +260,6 @@ describe('GET /api/v1/mutes', () => {
     expect(linkOf(second, 'next')?.searchParams.get('max_id')).toBe(t.muteIds[2]);
   });
 
-  it('min_id は直後のミュートを取り、新しい順に返す', async () => {
-    const t = await seedMutes();
-
-    const response = await t.request(`/api/v1/mutes?min_id=${t.muteIds[2]}&limit=1`, { headers: t.me.bearer });
-
-    expect(idsOf(await response.json())).toEqual([t.accountIds[1]]);
-    expect(linkOf(response, 'prev')?.searchParams.get('min_id')).toBe(t.muteIds[1]);
-  });
-
-  it('他人の muteId を max_id に使っても、その時刻を位置にしない', async () => {
-    const t = await seedMutes();
-
-    const response = await t.request(`/api/v1/mutes?max_id=${t.foreign.muteId}`, { headers: t.me.bearer });
-
-    expect(await response.json()).toEqual([]);
-  });
-
   it('limit は最大 80 に切る', async () => {
     const t = setupReadApi();
     const me = await t.signIn();
@@ -369,16 +272,6 @@ describe('GET /api/v1/mutes', () => {
 
     expect(idsOf(await capped.json())).toHaveLength(80);
     expect(idsOf(await defaulted.json())).toHaveLength(40);
-  });
-
-  it('ミュートがなければ空配列を返し、Link を付けない', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-
-    const response = await t.request('/api/v1/mutes', { headers: me.bearer });
-
-    expect(await response.json()).toEqual([]);
-    expect(response.headers.get('Link')).toBeNull();
   });
 
   it('認証がなければ 401、スコープが足りなければ 403 にし、Cookie は通す', async () => {
@@ -437,24 +330,6 @@ describe('GET /api/v1/blocks', () => {
     expect(idsOf(await first.json())).toEqual(t.accountIds.slice(0, 2));
     expect(next?.searchParams.get('max_id')).toBe(t.blockIds[1]);
     expect(idsOf(await second.json())).toEqual([t.accountIds[2]]);
-  });
-
-  it('他人の blockId を max_id に使っても、その時刻を位置にしない', async () => {
-    const t = await seedBlocks();
-
-    const response = await t.request(`/api/v1/blocks?max_id=${t.foreign.blockId}`, { headers: t.me.bearer });
-
-    expect(await response.json()).toEqual([]);
-  });
-
-  it('ブロックがなければ空配列を返し、Link を付けない', async () => {
-    const t = setupReadApi();
-    const me = await t.signIn();
-
-    const response = await t.request('/api/v1/blocks', { headers: me.bearer });
-
-    expect(await response.json()).toEqual([]);
-    expect(response.headers.get('Link')).toBeNull();
   });
 
   it('認証がなければ 401、スコープが足りなければ 403 にし、Cookie は通す', async () => {

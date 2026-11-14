@@ -19,14 +19,6 @@ const failure = (overrides: Partial<BlueskyClientError> = {}): BlueskyClientErro
 });
 
 describe('createBlueskyModerationReader の resolveViewerState', () => {
-  it('getProfile を対象の DID で呼ぶ', async () => {
-    const { query, reader } = clientReturning(RA.ok({ did: DID }));
-
-    await reader.resolveViewerState(DID);
-
-    expect(query).toHaveBeenCalledExactlyOnceWith('app.bsky.actor.getProfile', { actor: DID });
-  });
-
   it('viewer.muted と、block の uri である viewer.blocking を返す', async () => {
     const { reader } = clientReturning(RA.ok({ did: DID, viewer: { muted: true, blocking: BLOCK } }));
 

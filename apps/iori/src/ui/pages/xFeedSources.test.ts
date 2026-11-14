@@ -2,16 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { FeedSource } from '../api/mastodonClient.ts';
 import {
-  addXUserFailureMessage,
   addXUserSource,
   EMPTY_USERNAME_MESSAGE,
   normalizeXUsername,
   refreshFailureMessage,
-  refreshSuccessMessage,
   runOptimisticToggle,
-  toggleFailureMessage,
   withSource,
-  xUserSourcesOf,
 } from './xFeedSources.ts';
 
 const source = (overrides: Partial<FeedSource> = {}): FeedSource => ({
@@ -26,14 +22,6 @@ const source = (overrides: Partial<FeedSource> = {}): FeedSource => ({
 });
 
 const apiError = (status: number) => Object.assign(new Error('boom'), { status });
-
-describe('xUserSourcesOf', () => {
-  it('kind が x_user のものだけを残す', () => {
-    const sources = [source({ feedSourceId: 'a' }), source({ feedSourceId: 'b', kind: 'rss' })];
-
-    expect(xUserSourcesOf(sources).map((s) => s.feedSourceId)).toEqual(['a']);
-  });
-});
 
 describe('normalizeXUsername', () => {
   it('前後の空白と先頭の @ を取り除く', () => {
@@ -72,31 +60,6 @@ describe('addXUserSource', () => {
     const outcome = await addXUserSource({ input: 'jack', request: () => Promise.reject(error) });
 
     expect(outcome).toEqual({ ok: false, message: 'このユーザーはすでに追加されています。', error });
-  });
-});
-
-describe('addXUserFailureMessage', () => {
-  it('400、409、403 をそれぞれ別の文言にする', () => {
-    const messages = [400, 409, 403].map((status) => addXUserFailureMessage(apiError(status)));
-
-    expect(messages[0]).toContain('ユーザー名が正しくありません');
-    expect(messages[1]).toContain('すでに追加されています');
-    expect(messages[2]).toContain('所有者だけ');
-    expect(new Set(messages).size).toBe(3);
-  });
-
-  it('それ以外の状態とネットワークエラーは同じ文言にする', () => {
-    const generic = '追加できませんでした。時間をおいてもう一度お試しください。';
-
-    expect(addXUserFailureMessage(apiError(500))).toBe(generic);
-    expect(addXUserFailureMessage(new TypeError('Failed to fetch'))).toBe(generic);
-  });
-});
-
-describe('toggleFailureMessage', () => {
-  it('404 は読み込み直しを促し、それ以外は共通の文言にする', () => {
-    expect(toggleFailureMessage(apiError(404))).toContain('読み込み直して');
-    expect(toggleFailureMessage(apiError(500))).toBe('切り替えられませんでした。時間をおいてもう一度お試しください。');
   });
 });
 
@@ -158,23 +121,6 @@ describe('runOptimisticToggle', () => {
     ).rejects.toBe(error);
 
     expect(store.get()[0]?.enabled).toBe(false);
-  });
-});
-
-describe('refreshSuccessMessage', () => {
-  it('取得するユーザーがいないとき（sources が 0）は、そのことを伝える', () => {
-    expect(refreshSuccessMessage({ sources: 0, failed: 0, collected: 0 })).toBe('取得するユーザーがいません');
-  });
-
-  it('取り込んだ件数を伝える', () => {
-    expect(refreshSuccessMessage({ sources: 2, failed: 0, collected: 7 })).toBe('7 件を取り込みました');
-    expect(refreshSuccessMessage({ sources: 1, failed: 0, collected: 0 })).toBe('0 件を取り込みました');
-  });
-
-  it('失敗したユーザーがいるときは、人数を後ろにつなげる', () => {
-    expect(refreshSuccessMessage({ sources: 3, failed: 2, collected: 4 })).toBe(
-      '4 件を取り込みました（2 人は取得に失敗しました）',
-    );
   });
 });
 

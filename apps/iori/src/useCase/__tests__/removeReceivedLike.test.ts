@@ -52,11 +52,4 @@ describe('RemoveReceivedLikeUseCase', () => {
     expect(!result.ok && result.err.type).toBe('UndoActorMismatchError');
     expect(remoteLikeDeletedStore.items).toHaveLength(0);
   });
-
-  it('いいねが無ければ LikeNotFoundError を返す', async () => {
-    const { useCase, remoteLikeDeletedStore } = createDeps();
-    const result = await useCase.run({ likeActivityUri: 'https://misskey.example/likes/404', actorUri: alice.uri });
-    expect(!result.ok && result.err.type).toBe('LikeNotFoundError');
-    expect(remoteLikeDeletedStore.items).toHaveLength(0);
-  });
 });

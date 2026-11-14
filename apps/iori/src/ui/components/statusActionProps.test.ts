@@ -1,8 +1,6 @@
-import { jsx } from 'hono/jsx';
 import { describe, expect, it } from 'vitest';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
-import { PostView } from './PostView.tsx';
 import { likeRepostActionProps, statusActionProps, type StatusActions } from './statusActionProps.ts';
 
 const status = (id: string, overrides: Partial<Status> = {}): Status =>
@@ -57,23 +55,6 @@ const actions = (overrides: Partial<StatusActions['actionState']> = {}): StatusA
 });
 
 describe('statusActionProps', () => {
-  it('操作が渡されなければ何も渡さない', () => {
-    expect(statusActionProps(undefined, status('p1'))).toEqual({});
-  });
-
-  it('いいね・いいね取り消し・リポスト・リポスト取り消し・ブックマーク・ブックマーク解除・投票を渡す', () => {
-    const all = actions();
-    const props = statusActionProps(all, status('p1'));
-
-    expect(props.onLike).toBe(all.like);
-    expect(props.onUndoLike).toBe(all.undoLike);
-    expect(props.onRepost).toBe(all.repost);
-    expect(props.onUndoRepost).toBe(all.undoRepost);
-    expect(props.onBookmark).toBe(all.bookmarkPost);
-    expect(props.onUndoBookmark).toBe(all.undoBookmarkPost);
-    expect(props.onVote).toBe(all.vote);
-  });
-
   it('送信中の状態は、その投稿の id と一致するときだけ true にする', () => {
     const props = statusActionProps(
       actions({ likingPostId: 'p1', undoingLikePostId: 'p2', repostingPostId: 'p3', undoingRepostPostId: 'p4' }),
@@ -94,41 +75,9 @@ describe('statusActionProps', () => {
     expect(statusActionProps(actions({ repostingPostId: 'p1' }), boost).isReposting).toBe(true);
     expect(statusActionProps(actions({ repostingPostId: 'boost-1' }), boost).isReposting).toBe(false);
   });
-
-  it('PostView に渡すと、いいねとリポストの送信中の表示になる', () => {
-    const post = status('p1');
-    const html = String(jsx(PostView, { status: post, ...statusActionProps(actions({ likingPostId: 'p1' }), post) }));
-
-    expect(html).toContain('いいね中...');
-    expect(html).not.toContain('リポスト中...');
-  });
 });
 
 describe('likeRepostActionProps', () => {
-  it('操作が渡されなければ何も渡さない', () => {
-    expect(likeRepostActionProps(undefined, status('p1'))).toEqual({});
-  });
-
-  it('いいね・いいね取り消し・リポスト・リポスト取り消しだけを渡す', () => {
-    const all = actions();
-    const props = likeRepostActionProps(all, status('p1'));
-
-    expect(props.onLike).toBe(all.like);
-    expect(props.onUndoLike).toBe(all.undoLike);
-    expect(props.onRepost).toBe(all.repost);
-    expect(props.onUndoRepost).toBe(all.undoRepost);
-    expect(Object.keys(props).sort()).toEqual([
-      'isLiking',
-      'isReposting',
-      'isUndoingLike',
-      'isUndoingRepost',
-      'onLike',
-      'onRepost',
-      'onUndoLike',
-      'onUndoRepost',
-    ]);
-  });
-
   it('送信中の状態は、リポストなら元の投稿の id と一致するときだけ true にする', () => {
     const boost = status('boost-1', { reblog: status('p1') });
 

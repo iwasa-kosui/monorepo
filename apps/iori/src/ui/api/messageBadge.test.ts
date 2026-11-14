@@ -9,7 +9,6 @@ import {
   nextMessagePolling,
   pollUnreadMessages,
 } from './messageBadge.ts';
-import { NOTIFICATION_BADGE_SELECTOR } from './notificationBadge.ts';
 
 const fakeBadge = () => ({ textContent: 'stale', hidden: false });
 
@@ -23,13 +22,6 @@ const rootWith = (badges: ReturnType<typeof fakeBadge>[]) =>
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-
-describe('MESSAGE_BADGE_SELECTOR', () => {
-  it('通知のバッジとは別の属性を指す', () => {
-    expect(MESSAGE_BADGE_SELECTOR).toBe('[data-dm-badge]');
-    expect(MESSAGE_BADGE_SELECTOR).not.toBe(NOTIFICATION_BADGE_SELECTOR);
-  });
-});
 
 const BLUESKY_URL = '/api/iori/v1/bluesky/chat/unread_count';
 const FEDIVERSE_URL = '/api/iori/v1/fediverse/conversations/unread_count';

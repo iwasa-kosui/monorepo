@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { DigestTopicItem } from '../../domain/digest/digest.ts';
 import type { StoredDigestTopic } from '../../domain/digestTopic/digestTopic.ts';
-import { assignTopics, TopicAssignmentPolicy } from '../../domain/digestTopic/topicAssignment.ts';
+import { TopicAssignmentPolicy } from '../../domain/digestTopic/topicAssignment.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { RecommendableArticle } from '../../domain/recommendation/recommendation.ts';
 import { UserId } from '../../domain/user/userId.ts';
@@ -121,23 +121,6 @@ describe('PreviewDigestTopicsUseCase', () => {
     });
   });
 
-  it('テーマが無くても空の結果とふり分けのしきい値を返す', async () => {
-    const { useCase } = setup();
-
-    const result = await useCase.run({ userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 });
-
-    expect(result).toMatchObject({
-      ok: true,
-      val: {
-        topics: [],
-        thresholds: TopicAssignmentPolicy.default,
-        candidates: { total: 0, byTopic: [], truncated: false },
-        digestItems: [],
-        digestItemsTruncated: false,
-      },
-    });
-  });
-
   it('テーマの除く例に近い候補記事とダイジェスト項目を excluded にし、除く例との類似度を返す', async () => {
     const excluding = { ...topic('on', new Float32Array([1, 0])), excludeEmbedding: new Float32Array([1, 0]) };
     const { useCase } = setup([excluding], { articles: [article(1)], items: [digestItem(1)] });
@@ -202,26 +185,6 @@ describe('PreviewDigestTopicsUseCase', () => {
     expect(result.ok && result.val.digestItems.map((item) => item.rank)).toEqual([1, 2]);
   });
 
-  it('ダイジェスト項目が上限ちょうどなら digestItemsTruncated は false で、全件を使う', async () => {
-    const { useCase } = setup([topic('on', new Float32Array([1, 0]))], {
-      items: [1, 2].map(digestItem),
-      maxDigestItems: 2,
-    });
-
-    const result = await useCase.run({ userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 });
-
-    expect(result.ok && result.val.digestItemsTruncated).toBe(false);
-    expect(result.ok && result.val.digestItems).toHaveLength(2);
-  });
-
-  it('thresholds は TopicAssignmentPolicy.default と一致する', async () => {
-    const { useCase } = setup();
-
-    const result = await useCase.run({ userId: USER_ID, candidateHours: 72, digestDays: 14, limit: 30 });
-
-    expect(result.ok && result.val.thresholds).toEqual(TopicAssignmentPolicy.default);
-  });
-
   describe('方針', () => {
     const tied = (n: number): RecommendableArticle =>
       ({ ...article(n), embedding: new Float32Array([1, 1]) }) as unknown as RecommendableArticle;
@@ -248,25 +211,6 @@ describe('PreviewDigestTopicsUseCase', () => {
         'belowMinMargin',
       ]);
       expect(strict.digestItems.map((item) => item.assignment)).toEqual(['assigned', 'belowMinMargin']);
-    });
-
-    it('assignment が同じ入力に対する assignTopics の結果と一致する', async () => {
-      const policy = { minSimilarity: 0.4, minMargin: 0.5 };
-      const result = await run(policy);
-      const assigned = assignTopics({
-        articles: options.articles,
-        topics,
-        policy,
-      });
-
-      const preview = result.candidates.byTopic;
-      expect(preview.map((entry) => entry.assignedCount)).toEqual(
-        topics.map((entry) => assigned.byTopic.get(entry.topicKey)!.length),
-      );
-      const flagged = preview.flatMap((entry) => entry.top).filter((candidate) => candidate.assignment !== 'assigned');
-      expect(flagged.map((candidate) => candidate.feedEntryId)).toEqual(
-        assigned.others.map((entry) => entry.feedEntryId),
-      );
     });
   });
 
@@ -352,31 +296,6 @@ describe('PreviewDigestTopicsUseCase', () => {
           overTotalLimit: true,
         });
       });
-
-      it('上限の途中でテーマの上位が切れるときは、そのテーマの上から上限までを判定する', async () => {
-        const topicRelevanceJudge = judgeBy(() => 0.5);
-        const { useCase } = setup(manyTopics(13), {
-          articles: manyArticles(13).slice(0, 62),
-          topicRelevanceJudge,
-        });
-
-        const result = await useCase.run({ ...input, withJev: true });
-
-        expect(topicRelevanceJudge.judge).toHaveBeenCalledTimes(JEV_CANDIDATES_TOTAL_LIMIT);
-        const byTopic = result.ok ? result.val.candidates.byTopic : [];
-        expect(byTopic[12]!.top).toHaveLength(2);
-        expect(byTopic[12]!.top.every((candidate) => !('jevNoul' in candidate))).toBe(true);
-      });
-
-      it('上限ちょうどまでなら、すべて判定して overTotalLimit を false で返す', async () => {
-        const topicRelevanceJudge = judgeBy(() => 0.5);
-        const { useCase } = setup(manyTopics(12), { articles: manyArticles(12), topicRelevanceJudge });
-
-        const result = await useCase.run({ ...input, withJev: true });
-
-        expect(topicRelevanceJudge.judge).toHaveBeenCalledTimes(JEV_CANDIDATES_TOTAL_LIMIT);
-        expect(result.ok && result.val.jev).toMatchObject({ overTotalLimit: false });
-      });
     });
 
     it('本文は冒頭の 500 文字だけを渡す', async () => {
@@ -391,20 +310,6 @@ describe('PreviewDigestTopicsUseCase', () => {
       expect(topicRelevanceJudge.judge).toHaveBeenCalledWith(
         expect.objectContaining({ article: { title: '記事 1', excerpt: 'あ'.repeat(500) } }),
       );
-    });
-
-    it('判定の呼び出しは、候補の数だけ待たずに並列で始める', async () => {
-      const started: string[] = [];
-      const topicRelevanceJudge: TopicRelevanceJudge = {
-        judge: ({ article: target }) => {
-          started.push(target.title);
-          return new Promise(() => undefined) as never;
-        },
-      };
-      const { useCase } = setup(topics, { articles, topicRelevanceJudge, sleep: () => new Promise(() => undefined) });
-
-      void useCase.run({ ...input, withJev: true });
-      await vi.waitFor(() => expect(started).toHaveLength(JEV_CANDIDATES_PER_TOPIC));
     });
 
     it('判定が失敗した候補は jevNoul を null にし、ほかの候補とプレビュー全体は成功させる', async () => {

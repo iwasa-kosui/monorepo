@@ -73,17 +73,6 @@ describe('createArgon2idDerive', () => {
     expect(setup).toHaveBeenCalledTimes(2);
   });
 
-  it('sets up a new instance for every call', async () => {
-    const realSetup = (await import('argon2id/lib/setup.js')).default;
-    const setup = vi.fn<typeof realSetup>(realSetup);
-    const derive = createArgon2idDerive({ loadModule: compileWasm, setup });
-
-    await derive(params);
-    await derive(params);
-
-    expect(setup).toHaveBeenCalledTimes(2);
-  });
-
   it('starts the next setup only after the previous computeHash has finished', async () => {
     const realSetup = (await import('argon2id/lib/setup.js')).default;
     const events: string[] = [];

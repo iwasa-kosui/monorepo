@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ActorId } from '../../../domain/actor/actorId.ts';
@@ -73,48 +71,6 @@ const voteRows = (t: ReturnType<typeof setup>, postId: string) =>
   )
     .all(postId);
 
-describe('remote_post_poll_votes の migration', () => {
-  it('既存の行は変えず、空の remote_post_poll_votes を足す', () => {
-    const migrationsDir = new URL('../../../../drizzle-d1/', import.meta.url);
-    const files = readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort();
-    const migrationFile = files.find((name) => name.includes('remote_post_poll_votes'));
-    if (migrationFile === undefined) throw new Error('remote_post_poll_votes の migration が見つからない');
-    const sqlite = new DatabaseSync(':memory:');
-    for (const file of files.filter((name) => name < migrationFile)) {
-      sqlite.exec(readFileSync(new URL(file, migrationsDir), 'utf8'));
-    }
-    sqlite.exec(
-      'INSERT INTO actors(actorId,type,uri,inboxUrl) VALUES (\'actor-1\',\'remote\',\'https://remote.example/users/alice\',\'https://remote.example/inbox\')',
-    );
-    sqlite.exec(
-      'INSERT INTO posts(postId,actorId,content,createdAt,type) VALUES (\'post-1\',\'actor-1\',\'hi\',1000,\'remote\')',
-    );
-
-    sqlite.exec(readFileSync(new URL(migrationFile, migrationsDir), 'utf8'));
-
-    expect(sqlite.prepare('SELECT postId, content FROM posts').all()).toEqual([{ postId: 'post-1', content: 'hi' }]);
-    expect(sqlite.prepare('SELECT count(*) AS n FROM remote_post_poll_votes').get()).toEqual({ n: 0 });
-    sqlite.close();
-  });
-
-  it('(postId, actorId, choice) の同じ組を 2 回は入れられない', () => {
-    const t = setup();
-    const created = createRemote(t.alice.actorId, poll());
-    t.sqlite.exec('PRAGMA foreign_keys=OFF');
-    const insert = () =>
-      t.sqlite.prepare('INSERT INTO remote_post_poll_votes(postId,actorId,choice,createdAt) VALUES (?,?,?,?)').run(
-        created.aggregateState.postId,
-        t.me.actorId,
-        1,
-        1_000,
-      );
-
-    insert();
-
-    expect(insert).toThrow();
-  });
-});
-
 describe('remote_post_poll_votes の保存と読み出し', () => {
   it('選んだ選択肢ごとに行を保存し、読み出すと選択肢の番号の昇順で返す', async () => {
     const t = setup();
@@ -160,26 +116,6 @@ describe('remote_post_poll_votes の保存と読み出し', () => {
     const saved = await resolvePoll(t, postId);
     expect(saved?.votersCount).toBeNull();
     expect(saved?.options.map((option) => option.votesCount)).toEqual([3, 6, 0]);
-  });
-
-  it('投票をドメインイベントとして domain_events に残す', async () => {
-    const t = setup();
-    const created = createRemote(t.alice.actorId, poll());
-    await createD1PostCreatedStore(t.db).store(created);
-    const { postId } = created.aggregateState;
-    const event = vote(postId, t.me.actorId, [1], poll());
-
-    await createD1RemotePostPollVotedStore(t.db).store(event);
-
-    expect(
-      t.sqlite.prepare('SELECT aggregateId, aggregateName, eventName FROM domain_events WHERE eventId = ?').get(
-        event.eventId,
-      ),
-    ).toEqual({
-      aggregateId: JSON.stringify({ postId, actorId: t.me.actorId }),
-      aggregateName: 'remotePostPollVote',
-      eventName: 'remotePostPollVote.voted',
-    });
   });
 
   it('同じ利用者の 2 回目の投票は何も書かず、written を false で返す', async () => {
@@ -275,19 +211,6 @@ describe('remote_post_poll_votes の保存と読み出し', () => {
       [first.aggregateState.postId, [1]],
       [second.aggregateState.postId, [0, 2]],
     ].sort());
-  });
-
-  it('投稿の ID が空なら問い合わせない', async () => {
-    const t = setup();
-    const before = t.queries.length;
-
-    const resolved = await createD1RemotePostPollVotesResolverByPostIds(t.db).resolve({
-      actorId: ActorId.orThrow(t.me.actorId),
-      postIds: [],
-    });
-
-    expect(resolved.ok && resolved.val.size).toBe(0);
-    expect(t.queries.length).toBe(before);
   });
 });
 

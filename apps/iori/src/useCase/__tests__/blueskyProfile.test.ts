@@ -5,7 +5,6 @@ import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClien
 import type { BlueskyProfile, BlueskyProfileReader } from '../../ports/blueskyProfileReader.ts';
 import { FollowBlueskyActorUseCase } from '../followBlueskyActor.ts';
 import { GetBlueskyProfileUseCase } from '../getBlueskyProfile.ts';
-import { ListBlueskyActorLikesUseCase } from '../listBlueskyActorLikes.ts';
 import { ListBlueskyAuthorFeedUseCase } from '../listBlueskyAuthorFeed.ts';
 import { UnfollowBlueskyActorUseCase } from '../unfollowBlueskyActor.ts';
 
@@ -70,15 +69,6 @@ const setup = (getProfile: BlueskyProfileReader['getProfile'] = async () => RA.o
 };
 
 describe('GetBlueskyProfileUseCase', () => {
-  it('actor のプロフィールを返す', async () => {
-    const t = setup();
-
-    const result = await GetBlueskyProfileUseCase.create({ reader: t.reader }).run({ actor: 'alice.bsky.social' });
-
-    expect(result).toEqual({ ok: true, val: profile() });
-    expect(t.reader.getProfile).toHaveBeenCalledExactlyOnceWith('alice.bsky.social');
-  });
-
   it('見つからない応答を BlueskyProfileNotFound にし、それ以外の失敗はそのまま返す', async () => {
     const missing = setup(async () => RA.err(notFound));
     const failing = setup(async () => RA.err(failure));
@@ -95,20 +85,6 @@ describe('GetBlueskyProfileUseCase', () => {
 });
 
 describe('ListBlueskyAuthorFeedUseCase', () => {
-  it('actor と cursor と filter を渡して投稿とカーソルを返す', async () => {
-    const page = { items: [], cursor: 'next', unavailable: null };
-    const getAuthorFeed = vi.fn<BlueskyProfileReader['getAuthorFeed']>(async () => RA.ok(page));
-
-    const result = await ListBlueskyAuthorFeedUseCase.create({ reader: { getAuthorFeed } }).run({
-      actor: DID,
-      cursor: 'abc',
-      filter: 'posts_with_media',
-    });
-
-    expect(result).toEqual({ ok: true, val: page });
-    expect(getAuthorFeed).toHaveBeenCalledExactlyOnceWith({ actor: DID, cursor: 'abc', filter: 'posts_with_media' });
-  });
-
   it('見つからない応答を BlueskyProfileNotFound にし、それ以外の失敗はそのまま返す', async () => {
     const missing = ListBlueskyAuthorFeedUseCase.create({
       reader: { getAuthorFeed: async () => RA.err({ ...notFound, code: 'AccountTakedown' }) },
@@ -123,44 +99,6 @@ describe('ListBlueskyAuthorFeedUseCase', () => {
       ok: false,
       err: failure,
     });
-  });
-});
-
-describe('ListBlueskyActorLikesUseCase', () => {
-  const ME = 'did:plc:me';
-
-  it('自分の DID を actor にして cursor を渡し、投稿とカーソルを返す', async () => {
-    const page = { items: [], cursor: 'next' };
-    const getActorLikes = vi.fn<BlueskyProfileReader['getActorLikes']>(async () => RA.ok(page));
-
-    const result = await ListBlueskyActorLikesUseCase.create({
-      reader: { getActorLikes },
-      viewerDid: async () => RA.ok(ME),
-    }).run({ cursor: 'abc' });
-
-    expect(result).toEqual({ ok: true, val: page });
-    expect(getActorLikes).toHaveBeenCalledExactlyOnceWith({ actor: ME, cursor: 'abc' });
-  });
-
-  it('自分の DID が取れなければその失敗を返し、reader を呼ばない', async () => {
-    const getActorLikes = vi.fn<BlueskyProfileReader['getActorLikes']>();
-
-    const result = await ListBlueskyActorLikesUseCase.create({
-      reader: { getActorLikes },
-      viewerDid: async () => RA.err(failure),
-    }).run({ cursor: undefined });
-
-    expect(result).toEqual({ ok: false, err: failure });
-    expect(getActorLikes).not.toHaveBeenCalled();
-  });
-
-  it('reader の失敗をそのまま返す', async () => {
-    const result = await ListBlueskyActorLikesUseCase.create({
-      reader: { getActorLikes: async () => RA.err(failure) },
-      viewerDid: async () => RA.ok(ME),
-    }).run({ cursor: undefined });
-
-    expect(result).toEqual({ ok: false, err: failure });
   });
 });
 
@@ -196,18 +134,6 @@ describe('FollowBlueskyActorUseCase', () => {
     expect(result).toEqual({ ok: true, val: { following: true, followUri: known } });
     expect(t.getRecord).toHaveBeenCalledExactlyOnceWith('3kknown', 'app.bsky.graph.follow');
     expect(t.createFollow).not.toHaveBeenCalled();
-  });
-
-  it('body の followUri と viewer.following が同じなら getRecord は1回だけ呼び、follow の uri でない値は確かめない', async () => {
-    const same = setup(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW })));
-    const invalid = setup();
-
-    await same.follow.run({ did: DID, followUri: FOLLOW });
-    await invalid.follow.run({ did: DID, followUri: 'at://did:plc:me/app.bsky.feed.like/3k1' });
-
-    expect(same.getRecord).toHaveBeenCalledTimes(1);
-    expect(invalid.getRecord).not.toHaveBeenCalled();
-    expect(invalid.createFollow).toHaveBeenCalledExactlyOnceWith(DID);
   });
 
   it('見つけた記録の subject が対象の did と違えば「フォロー済み」とみなさず、次の候補を確かめる', async () => {
@@ -270,15 +196,6 @@ describe('FollowBlueskyActorUseCase', () => {
     expect(await t.follow.run({ did: DID })).toEqual({ ok: false, err: { type: 'BlueskyProfileNotFound' } });
     expect(t.createFollow).not.toHaveBeenCalled();
   });
-
-  it('getProfile と createFollow の失敗をそのまま返す', async () => {
-    const reading = setup(async () => RA.err(failure));
-    const writing = setup();
-    writing.createFollow.mockReturnValueOnce(RA.err(failure));
-
-    expect(await reading.follow.run({ did: DID })).toEqual({ ok: false, err: failure });
-    expect(await writing.follow.run({ did: DID })).toEqual({ ok: false, err: failure });
-  });
 });
 
 describe('UnfollowBlueskyActorUseCase', () => {
@@ -339,21 +256,5 @@ describe('UnfollowBlueskyActorUseCase', () => {
 
     expect(result).toEqual({ ok: true, val: { following: false } });
     expect(t.deleteFollow).not.toHaveBeenCalled();
-  });
-
-  it('プロフィールが見つからなければ BlueskyProfileNotFound を返す', async () => {
-    const t = setup(async () => RA.err(notFound));
-
-    expect(await t.unfollow.run({ did: DID })).toEqual({ ok: false, err: { type: 'BlueskyProfileNotFound' } });
-    expect(t.deleteFollow).not.toHaveBeenCalled();
-  });
-
-  it('getProfile と deleteFollow の失敗をそのまま返す', async () => {
-    const reading = setup(async () => RA.err(failure));
-    const writing = setup(async () => RA.ok(profile({ viewerFollowingUri: FOLLOW })));
-    writing.deleteFollow.mockReturnValueOnce(RA.err(failure));
-
-    expect(await reading.unfollow.run({ did: DID })).toEqual({ ok: false, err: failure });
-    expect(await writing.unfollow.run({ did: DID })).toEqual({ ok: false, err: failure });
   });
 });

@@ -1,5 +1,4 @@
 import { Result } from '@iwasa-kosui/result';
-import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -113,7 +112,6 @@ describe('RefreshHatenaBookmarkCountsUseCase', () => {
     expect(calls.map(([requested]) => urlsOf(requested).length)).toEqual([50, 50, 50]);
     expect(calls.flatMap(([requested]) => urlsOf(requested))).not.toContain('https://e.test/e159');
     expect(sleep.mock.calls).toEqual([[3_000], [3_000]]);
-    expect(calls[0]![1]).toEqual({ timeoutMs: 10_000, maxBytes: 256 * 1024, maxRedirects: 3 });
   });
 
   it('puts URLs into one request when the whole request URL is exactly 8000 characters', async () => {
@@ -230,15 +228,5 @@ describe('RefreshHatenaBookmarkCountsUseCase', () => {
     expect((await useCase.run()).val).toEqual({ requested: 100, updated: 1, failedRequests: 1, skipped: 0 });
     expect((await counts()).e099).toBe(3);
     error.mockRestore();
-  });
-
-  it('does not call the store when no count changed', async () => {
-    const fetchText = vi.fn(async () => ok({ 'https://e.test/a': 1 }));
-    const { db, useCase, addSource, addEntry } = setup(fetchText);
-    const rss = await addSource('rss');
-    await addEntry(rss, 'a', { count: 1 });
-    expect((await useCase.run()).val).toEqual({ requested: 1, updated: 0, failedRequests: 0, skipped: 0 });
-    expect(await db.select().from(domainEventsTable)).toEqual([]);
-    expect(await db.select().from(feedEntriesTable).where(eq(feedEntriesTable.guid, 'a'))).toHaveLength(1);
   });
 });

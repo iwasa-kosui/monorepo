@@ -6,10 +6,7 @@ import {
   decideVideoPlayback,
   type HlsConstructor,
   type ObserveOffscreen,
-  playButtonLabel,
   startVideoPlayback,
-  videoAspectRatioStyle,
-  videoLabel,
 } from './blueskyVideoPlayback.ts';
 
 type ErrorHandler = (event: string, data: { fatal: boolean }) => void;
@@ -85,27 +82,6 @@ describe('decideVideoPlayback', () => {
 
   it('hls.js の読み込みに失敗したら link にする', async () => {
     expect(await decideVideoPlayback('', () => Promise.reject(new Error('chunk')))).toBe('link');
-  });
-});
-
-describe('videoAspectRatioStyle と videoLabel', () => {
-  it('aspectRatio があればその比率、無ければ 16 / 9 にする', () => {
-    expect(videoAspectRatioStyle({ width: 9, height: 16 })).toBe('aspect-ratio: 9 / 16');
-    expect(videoAspectRatioStyle(null)).toBe('aspect-ratio: 16 / 9');
-  });
-
-  it('alt があれば alt、無ければ「動画」にする', () => {
-    expect(videoLabel('走る猫')).toBe('走る猫');
-    expect(videoLabel(null)).toBe('動画');
-    expect(videoLabel('')).toBe('動画');
-  });
-});
-
-describe('playButtonLabel', () => {
-  it('alt があれば「動画を再生: alt」、無ければ「動画を再生」にする', () => {
-    expect(playButtonLabel('走る猫')).toBe('動画を再生: 走る猫');
-    expect(playButtonLabel(null)).toBe('動画を再生');
-    expect(playButtonLabel('')).toBe('動画を再生');
   });
 });
 

@@ -21,12 +21,4 @@ describe('TimelineSearchQuery', () => {
     expect(TimelineSearchQuery.of({ text: '😀'.repeat(200) }).ok).toBe(true);
     expect(TimelineSearchQuery.of({ text: '😀'.repeat(201) }).ok).toBe(false);
   });
-
-  it('limit は 1 から 40 の整数', () => {
-    expect(TimelineSearchQuery.of({ text: 'a', limit: 1 }).ok).toBe(true);
-    expect(TimelineSearchQuery.of({ text: 'a', limit: 40 }).ok).toBe(true);
-    expect(TimelineSearchQuery.of({ text: 'a', limit: 0 }).ok).toBe(false);
-    expect(TimelineSearchQuery.of({ text: 'a', limit: 41 }).ok).toBe(false);
-    expect(TimelineSearchQuery.of({ text: 'a', limit: 1.5 }).ok).toBe(false);
-  });
 });

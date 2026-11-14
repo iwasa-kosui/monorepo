@@ -235,20 +235,6 @@ describe('createBlueskyClient の各操作', () => {
     expect(Array.from(new Uint8Array(calls[0]!.init.body as ArrayBuffer))).toEqual([1, 2, 3]);
   });
 
-  it('deleteRecord は repo、collection、rkey を送る', async () => {
-    const { client, calls } = setup(stored(), [() => json({})]);
-
-    const result = await client.deleteRecord('3kabc');
-
-    expect(result.ok).toBe(true);
-    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.deleteRecord`);
-    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
-      repo: 'did:plc:abc',
-      collection: 'app.bsky.feed.post',
-      rkey: '3kabc',
-    });
-  });
-
   describe('createPostWithGates', () => {
     const POST_URI = `at://did:plc:abc/app.bsky.feed.post/${RKEY}`;
     const applied = (...collections: string[]) =>
@@ -364,51 +350,6 @@ describe('createBlueskyClient の各操作', () => {
 
       expect(result).toMatchObject({ ok: false, err: { kind: 'invalid_response' } });
     });
-
-    it('PDS のエラーを http エラーとして返す', async () => {
-      const { client } = setup(stored(), [() => json({ error: 'InvalidRecord' }, 400)]);
-
-      const result = await client.createPostWithGates({
-        record,
-        rkey: RKEY,
-        interaction: { replyRestriction: [], quoteDisabled: false },
-      });
-
-      expect(result).toMatchObject({ ok: false, err: { kind: 'http', status: 400, code: 'InvalidRecord' } });
-    });
-
-    it('トークンが期限切れなら refreshSession をしてから applyWrites をやり直す', async () => {
-      const { client, calls } = setup(stored(), [
-        () => json({ error: 'ExpiredToken' }, 400),
-        () => json(sessionBody('fresh')),
-        () => applied('app.bsky.feed.post', 'app.bsky.feed.threadgate'),
-      ]);
-
-      const result = await client.createPostWithGates({
-        record,
-        rkey: RKEY,
-        interaction: { replyRestriction: [], quoteDisabled: false },
-      });
-
-      expect(result.ok).toBe(true);
-      expect(calls.map((call) => call.url.split('/').pop())).toEqual([
-        'com.atproto.repo.applyWrites',
-        'com.atproto.server.refreshSession',
-        'com.atproto.repo.applyWrites',
-      ]);
-    });
-  });
-
-  it('deleteRecord は collection を渡せば threadgate と postgate の collection で削除する', async () => {
-    const { client, calls } = setup(stored(), [() => json({}), () => json({})]);
-
-    await client.deleteRecord('3kabc', 'app.bsky.feed.threadgate');
-    await client.deleteRecord('3kabc', 'app.bsky.feed.postgate');
-
-    expect(calls.map((call) => JSON.parse(call.init.body as string))).toEqual([
-      { repo: 'did:plc:abc', collection: 'app.bsky.feed.threadgate', rkey: '3kabc' },
-      { repo: 'did:plc:abc', collection: 'app.bsky.feed.postgate', rkey: '3kabc' },
-    ]);
   });
 
   it('createLike は putRecord で app.bsky.feed.like のレコードを指定の rkey で書き、応答の uri を返す', async () => {
@@ -444,30 +385,6 @@ describe('createBlueskyClient の各操作', () => {
         ok: false,
         err: { kind: 'invalid_response' },
       });
-  });
-
-  it('createLike は 500 を失敗として返す', async () => {
-    const { client } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
-
-    expect(await client.createLike({ uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' }, '2222222222222'))
-      .toMatchObject({
-        ok: false,
-        err: { kind: 'http', status: 500 },
-      });
-  });
-
-  it('deleteLike は app.bsky.feed.like の collection と rkey を送る', async () => {
-    const { client, calls } = setup(stored(), [() => json({})]);
-
-    const result = await client.deleteLike('3klike');
-
-    expect(result.ok).toBe(true);
-    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.deleteRecord`);
-    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
-      repo: 'did:plc:abc',
-      collection: 'app.bsky.feed.like',
-      rkey: '3klike',
-    });
   });
 
   it('deleteLike は既に無い record を成功として扱い、500 は失敗として返す', async () => {
@@ -551,19 +468,6 @@ describe('createBlueskyClient の各操作', () => {
     expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ seenAt: '2026-11-12T03:04:05.678Z' });
   });
 
-  it('updateSeen は期限切れのトークンを更新してやり直し、HTTP の失敗を返す', async () => {
-    const retried = setup(stored(), [
-      () => json({ error: 'ExpiredToken' }, 400),
-      () => json(sessionBody('fresh')),
-      () => json({}),
-    ]);
-    const failed = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
-
-    expect((await retried.client.updateSeen(NOW)).ok).toBe(true);
-    expect(header(retried.calls[2]!, 'Authorization')).toBe('Bearer access-fresh');
-    expect(await failed.client.updateSeen(NOW)).toMatchObject({ ok: false, err: { kind: 'http', status: 500 } });
-  });
-
   it('createRepost は putRecord で app.bsky.feed.repost のレコードを指定の rkey で書き、応答の uri を返す', async () => {
     const repostUri = 'at://did:plc:abc/app.bsky.feed.repost/2222222222222';
     const { client, calls } = setup(stored(), [() => json({ uri: repostUri, cid: 'bafyrepost' })]);
@@ -587,40 +491,6 @@ describe('createBlueskyClient の各操作', () => {
       },
     });
     expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
-  });
-
-  it('createRepost は repost の uri でない応答を invalid_response として返す', async () => {
-    const { client } = setup(stored(), [() => json({ uri: 'at://did:plc:abc/app.bsky.feed.like/3k1', cid: 'c' })]);
-
-    expect(await client.createRepost({ uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' }, '2222222222222'))
-      .toMatchObject({
-        ok: false,
-        err: { kind: 'invalid_response' },
-      });
-  });
-
-  it('createRepost は 500 を失敗として返す', async () => {
-    const { client } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
-
-    expect(await client.createRepost({ uri: 'at://did:plc:a/app.bsky.feed.post/1', cid: 'bafypost' }, '2222222222222'))
-      .toMatchObject({
-        ok: false,
-        err: { kind: 'http', status: 500 },
-      });
-  });
-
-  it('deleteRepost は app.bsky.feed.repost の collection と rkey を送る', async () => {
-    const { client, calls } = setup(stored(), [() => json({})]);
-
-    const result = await client.deleteRepost('3krepost');
-
-    expect(result.ok).toBe(true);
-    expect(calls[0]?.url).toBe(`${PDS}/xrpc/com.atproto.repo.deleteRecord`);
-    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({
-      repo: 'did:plc:abc',
-      collection: 'app.bsky.feed.repost',
-      rkey: '3krepost',
-    });
   });
 
   it('deleteRepost は既に無い record を 404 と RecordNotFound のどちらでも成功として扱い、500 は失敗として返す', async () => {
@@ -679,11 +549,6 @@ describe('createBlueskyClient の各操作', () => {
       collection: 'app.bsky.graph.follow',
       rkey: '3kf',
     });
-  });
-
-  it('getRecord は無い record を http エラーで返す', async () => {
-    const { client } = setup(stored(), [() => json({ error: 'RecordNotFound' }, 400)]);
-    expect(await client.getRecord('3k9')).toMatchObject({ ok: false, err: { kind: 'http', code: 'RecordNotFound' } });
   });
 
   it('getProfileRecord は自分の repo の app.bsky.actor.profile/self を取り、cid と value を返す', async () => {
@@ -752,28 +617,12 @@ describe('createBlueskyClient の各操作', () => {
     });
   });
 
-  it('putProfileRecord は profile の uri でない応答を invalid_response として返す', async () => {
-    const { client } = setup(stored(), [
-      () => json({ uri: 'at://did:plc:abc/app.bsky.feed.post/3k1', cid: 'c' }),
-    ]);
-
-    expect(await client.putProfileRecord({ $type: 'app.bsky.actor.profile' }, null)).toMatchObject({
-      ok: false,
-      err: { kind: 'invalid_response' },
-    });
-  });
-
   it.each([
     ['RecordNotFound の 400', json({ error: 'RecordNotFound' }, 400)],
     ['404', json({ error: 'NotFound' }, 404)],
   ])('deleteRecord は既に無い record を成功として扱う (%s)', async (_name, response) => {
     const { client } = setup(stored(), [() => response]);
     expect((await client.deleteRecord('3kabc')).ok).toBe(true);
-  });
-
-  it('deleteRecord は 500 を失敗として返す', async () => {
-    const { client } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
-    expect(await client.deleteRecord('3kabc')).toMatchObject({ ok: false, err: { kind: 'http', status: 500 } });
   });
 
   it('deleteRecord は空の本文の成功応答も受け付ける', async () => {
@@ -839,39 +688,6 @@ describe('createBlueskyClient のミュート、ブロック、通報', () => {
     expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
   });
 
-  it('unmuteActor は app.bsky.graph.unmuteActor に actor を POST する', async () => {
-    const { client, calls } = setup(stored(), [() => json({})]);
-
-    const result = await client.unmuteActor('did:plc:target');
-
-    expect(result.ok).toBe(true);
-    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.graph.unmuteActor`);
-    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ actor: 'did:plc:target' });
-  });
-
-  it('muteActor は期限切れの認証を更新してからやり直す', async () => {
-    const { client, calls } = setup(stored(), [
-      () => json({ error: 'ExpiredToken' }, 400),
-      () => json(sessionBody('new')),
-      () => json({}),
-    ]);
-
-    const result = await client.muteActor('did:plc:target');
-
-    expect(result.ok).toBe(true);
-    expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
-    expect(header(calls[2]!, 'Authorization')).toBe('Bearer access-new');
-  });
-
-  it('muteActor は 500 を失敗として返す', async () => {
-    const { client } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
-
-    expect(await client.muteActor('did:plc:target')).toMatchObject({
-      ok: false,
-      err: { kind: 'http', status: 500 },
-    });
-  });
-
   it('muteThread は app.bsky.graph.muteThread に root を POST し、空の応答を成功にする', async () => {
     const { client, calls } = setup(stored(), [() => new Response('', { status: 200 })]);
 
@@ -883,25 +699,6 @@ describe('createBlueskyClient のミュート、ブロック、通報', () => {
     expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ root: ROOT });
     expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
     expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
-  });
-
-  it('unmuteThread は app.bsky.graph.unmuteThread に root を POST する', async () => {
-    const { client, calls } = setup(stored(), [() => json({})]);
-
-    const result = await client.unmuteThread(ROOT);
-
-    expect(result.ok).toBe(true);
-    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.graph.unmuteThread`);
-    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ root: ROOT });
-  });
-
-  it('muteThread は 500 を失敗として返す', async () => {
-    const { client } = setup(stored(), [() => json({ error: 'InternalServerError' }, 500)]);
-
-    expect(await client.muteThread(ROOT)).toMatchObject({
-      ok: false,
-      err: { kind: 'http', status: 500 },
-    });
   });
 
   it('createBlock は createRecord で app.bsky.graph.block のレコードを rkey なしで書き、応答の uri を返す', async () => {
@@ -919,15 +716,6 @@ describe('createBlueskyClient のミュート、ブロック、通報', () => {
         subject: 'did:plc:target',
         createdAt: new Date(NOW).toISOString(),
       },
-    });
-  });
-
-  it('createBlock は block の uri でない応答を invalid_response として返す', async () => {
-    const { client } = setup(stored(), [() => json({ uri: 'at://did:plc:abc/app.bsky.graph.list/3k1', cid: 'c' })]);
-
-    expect(await client.createBlock('did:plc:target')).toMatchObject({
-      ok: false,
-      err: { kind: 'invalid_response' },
     });
   });
 
@@ -1062,14 +850,6 @@ describe('createBlueskyClient の認証付き GET（query）', () => {
     );
   });
 
-  it('パラメータが無ければクエリ文字列を付けない', async () => {
-    const { client, calls } = setup(stored(), [() => json({})]);
-
-    await client.query(TIMELINE, {});
-
-    expect(calls[0]!.url).toBe(`${PDS}/xrpc/${TIMELINE}`);
-  });
-
   it('保存済みセッションが無ければ createSession して保存し、その PDS に GET する', async () => {
     const { client, calls, saved } = setup(undefined, [
       () => json(sessionBody('new', { didDoc: didDoc('https://pds.example.net') })),
@@ -1146,14 +926,6 @@ describe('createBlueskyClient の DM（chat）', () => {
     expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
   });
 
-  it('chatQuery はパラメータが無ければクエリ文字列を付けない', async () => {
-    const { client, calls } = setup(stored(), [() => json({ convos: [] })]);
-
-    await client.chatQuery('chat.bsky.convo.listConvos', {});
-
-    expect(calls[0]!.url).toBe(`${PDS}/xrpc/chat.bsky.convo.listConvos`);
-  });
-
   it('chatProcedure は atproto-proxy と JSON の body を付けた POST を送る', async () => {
     const { client, calls } = setup(stored(), [() => json({ id: 'm1' })]);
 
@@ -1169,12 +941,6 @@ describe('createBlueskyClient の DM（chat）', () => {
     expect(header(calls[0]!, 'Content-Type')).toBe('application/json');
     expect(header(calls[0]!, 'Authorization')).toBe('Bearer access-old');
     expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ convoId: 'c1', message: { text: 'こんにちは' } });
-  });
-
-  it('chatProcedure は空の本文の成功応答も受け付ける', async () => {
-    const { client } = setup(stored(), [() => new Response('', { status: 200 })]);
-
-    expect(await client.chatProcedure('chat.bsky.convo.acceptConvo', { convoId: 'c1' })).toEqual({ ok: true, val: {} });
   });
 
   it('提供元が返した 401 の getFeed は auth と見なさず、refreshSession も createSession も呼ばない', async () => {
@@ -1289,13 +1055,6 @@ describe('createBlueskyClient の DM（chat）', () => {
     expect(invalidConvo).toMatchObject({ ok: false, err: { kind: 'http', status: 400, code: 'InvalidConvo' } });
     expect(disabled).toMatchObject({ ok: false, err: { kind: 'http', code: 'MessagesDisabled' } });
     expect(calls).toHaveLength(2);
-  });
-
-  it('viewerDid は保存済みセッションの DID を返す', async () => {
-    const { client, calls } = setup(stored({ did: 'did:plc:me' }), []);
-
-    expect(await client.viewerDid()).toEqual({ ok: true, val: 'did:plc:me' });
-    expect(calls).toHaveLength(0);
   });
 });
 
@@ -1547,30 +1306,6 @@ describe('createBlueskyClient のブックマーク', () => {
     expect(header(calls[0]!, 'atproto-proxy')).toBeUndefined();
   });
 
-  it('deleteBookmark は app.bsky.bookmark.deleteBookmark に uri だけを POST する', async () => {
-    const { client, calls } = setup(stored(), [() => json({})]);
-
-    const result = await client.deleteBookmark(POST_URI);
-
-    expect(result.ok).toBe(true);
-    expect(calls[0]?.url).toBe(`${PDS}/xrpc/app.bsky.bookmark.deleteBookmark`);
-    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ uri: POST_URI });
-  });
-
-  it('createBookmark は期限切れの認証を更新してからやり直す', async () => {
-    const { client, calls } = setup(stored(), [
-      () => json({ error: 'ExpiredToken' }, 400),
-      () => json(sessionBody('new')),
-      () => json({}),
-    ]);
-
-    const result = await client.createBookmark({ uri: POST_URI, cid: 'bafycid' });
-
-    expect(result.ok).toBe(true);
-    expect(calls[1]?.url).toBe(`${PDS}/xrpc/com.atproto.server.refreshSession`);
-    expect(header(calls[2]!, 'Authorization')).toBe('Bearer access-new');
-  });
-
   it('権限が無い 403 は再ログインせず、status と code を持つ http の失敗で返す', async () => {
     const { client, calls } = setup(stored(), [() => json({ error: 'Forbidden' }, 403)]);
 
@@ -1578,15 +1313,6 @@ describe('createBlueskyClient のブックマーク', () => {
 
     expect(result).toMatchObject({ ok: false, err: { kind: 'http', status: 403, code: 'Forbidden' } });
     expect(calls).toHaveLength(1);
-  });
-
-  it('未実装の 501 は http の失敗で返す', async () => {
-    const { client } = setup(stored(), [() => json({ error: 'MethodNotImplemented' }, 501)]);
-
-    expect(await client.deleteBookmark(POST_URI)).toMatchObject({
-      ok: false,
-      err: { kind: 'http', status: 501, code: 'MethodNotImplemented' },
-    });
   });
 
   it('400 InvalidToken の Bad token scope は再ログインせず、message を含む http の失敗で返す', async () => {

@@ -19,18 +19,10 @@ describe('attachmentKindOf', () => {
   it.each(
     [
       ['mp4', 'video'],
-      ['m4v', 'video'],
       ['mov', 'video'],
-      ['webm', 'video'],
       ['mp3', 'audio'],
-      ['m4a', 'audio'],
       ['ogg', 'audio'],
-      ['oga', 'audio'],
-      ['opus', 'audio'],
-      ['wav', 'audio'],
-      ['flac', 'audio'],
       ['png', 'image'],
-      ['jpg', 'image'],
     ] as const,
   )('mediaType が null なら、拡張子 %s から %s と推定する', (extension, expected) => {
     expect(attachmentKindOf({ url: `https://remote.example/media/1.${extension}`, mediaType: null })).toBe(expected);

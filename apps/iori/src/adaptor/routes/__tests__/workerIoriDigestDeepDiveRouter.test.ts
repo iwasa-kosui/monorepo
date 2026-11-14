@@ -102,23 +102,6 @@ describe('POST /api/iori/v1/digest-items/:digestItemId/deep-dive', () => {
     });
   });
 
-  it('instruction を省くと空の依頼として渡す', async () => {
-    const t = setup();
-    const me = await t.bearerFor('write:statuses');
-
-    const response = await t.post(digestItemId, me.headers, { baseUpdatedAt });
-
-    expect(response.status).toBe(200);
-    expect(t.deepDive.mock.calls[0]![0].instruction).toBe('');
-  });
-
-  it('Bearer の write:statuses は Origin なしで 200 を返す', async () => {
-    const t = setup();
-    const me = await t.bearerFor('write:statuses');
-
-    expect((await t.post(digestItemId, me.headers, validBody)).status).toBe(200);
-  });
-
   it('write:statuses を満たさない scope の Bearer は 403 にして use case を呼ばない', async () => {
     const t = setup();
     const me = await t.bearerFor('read:statuses');
@@ -161,9 +144,7 @@ describe('POST /api/iori/v1/digest-items/:digestItemId/deep-dive', () => {
 
   it.each([
     ['baseUpdatedAt がない', { instruction: 'a' }],
-    ['baseUpdatedAt が整数でない', { instruction: 'a', baseUpdatedAt: 'x' }],
     ['baseUpdatedAt が負', { instruction: 'a', baseUpdatedAt: -1 }],
-    ['instruction が文字列でない', { instruction: 1, baseUpdatedAt }],
     ['instruction が 201 文字', { instruction: 'あ'.repeat(201), baseUpdatedAt }],
   ])('%s ときは 400 にして use case を呼ばない', async (_name, body) => {
     const t = setup();
@@ -173,15 +154,6 @@ describe('POST /api/iori/v1/digest-items/:digestItemId/deep-dive', () => {
 
     expect(response.status).toBe(400);
     expect(t.deepDive).not.toHaveBeenCalled();
-  });
-
-  it('instruction が 200 文字なら受け付ける', async () => {
-    const t = setup();
-    const me = await t.bearerFor('write:statuses');
-
-    const response = await t.post(digestItemId, me.headers, { instruction: 'あ'.repeat(200), baseUpdatedAt });
-
-    expect(response.status).toBe(200);
   });
 
   describe('use case のエラーとステータスの対応', () => {

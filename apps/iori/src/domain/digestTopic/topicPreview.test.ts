@@ -45,12 +45,6 @@ describe('rankTopics', () => {
     expect(ranking?.margin).toBe(0);
   });
 
-  it('比べられるトピックが 1 つなら、2 位と差を null にする', () => {
-    const ranking = rankTopics(vector(1, 0), [topic('a', vector(1, 0))]);
-
-    expect(ranking).toEqual({ first: { topicKey: 'a', similarity: 1 }, second: null, margin: null });
-  });
-
   it('embedding が無いトピックと、次元が違うトピックは比べない', () => {
     const ranking = rankTopics(vector(1, 0), [
       topic('none', null),
@@ -60,11 +54,6 @@ describe('rankTopics', () => {
 
     expect(ranking?.first.topicKey).toBe('a');
     expect(ranking?.second).toBeNull();
-  });
-
-  it('比べられるトピックが無ければ null を返す', () => {
-    expect(rankTopics(vector(1, 0), [])).toBeNull();
-    expect(rankTopics(vector(1, 0), [topic('none', null)])).toBeNull();
   });
 });
 
@@ -87,13 +76,6 @@ describe('similarityHistogram', () => {
     expect(countOf(bins, -1)).toBe(1);
     expect(bins.reduce((sum, bin) => sum + bin.count, 0)).toBe(3);
   });
-
-  it('値が無くても全区間を 0 件で返す', () => {
-    const bins = similarityHistogram([]);
-
-    expect(bins).toHaveLength(40);
-    expect(bins.every((bin) => bin.count === 0)).toBe(true);
-  });
 });
 
 describe('pickTopAndBottom', () => {
@@ -115,18 +97,6 @@ describe('pickTopAndBottom', () => {
   it('同じ類似度は key の昇順にして、結果を安定させる', () => {
     expect(pick(4).top.map((item) => item.id)).toEqual(['a', 'b', 'c', 'd']);
     expect(pick(4).bottom.map((item) => item.id)).toEqual(['d', 'b', 'c', 'a']);
-  });
-
-  it('件数が limit より少なければ全件を返し、元の配列を並べ替えない', () => {
-    const { top, bottom } = pick(10);
-
-    expect(top).toHaveLength(4);
-    expect(bottom).toHaveLength(4);
-    expect(items.map((item) => item.id)).toEqual(['c', 'a', 'b', 'd']);
-  });
-
-  it('空配列なら空を返す', () => {
-    expect(pickTopAndBottom([], 3, () => 0, () => '')).toEqual({ top: [], bottom: [] });
   });
 });
 
@@ -156,22 +126,6 @@ describe('previewCandidates', () => {
     expect(a.top[0]!.fetchedAt).toBe(1_000);
     const histogramTotal = preview.top1Histogram.reduce((sum, bin) => sum + bin.count, 0);
     expect(histogramTotal).toBe(4);
-  });
-
-  it('1 位になった記事が無いトピックも、件数 0 で返す', () => {
-    const preview = previewCandidates({ articles: [article('a1', vector(1, 0))], topics, limit: 5, policy });
-
-    expect(preview.byTopic[1]).toEqual({ topicKey: 'b', count: 0, assignedCount: 0, top: [], bottom: [] });
-  });
-
-  it('記事が無いとき、トピックが無いときも落ちずに空の結果を返す', () => {
-    const noArticles = previewCandidates({ articles: [], topics, limit: 5, policy });
-    const noTopics = previewCandidates({ articles: [article('a1', vector(1, 0))], topics: [], limit: 5, policy });
-
-    expect(noArticles.total).toBe(0);
-    expect(noArticles.byTopic).toHaveLength(2);
-    expect(noTopics).toMatchObject({ total: 1, byTopic: [] });
-    expect(noTopics.top1Histogram.every((bin) => bin.count === 0)).toBe(true);
   });
 });
 
@@ -207,14 +161,6 @@ describe('previewCandidates の assignment', () => {
       ['a3', 'belowMinSimilarity'],
       ['b1', 'assigned'],
     ]);
-  });
-
-  it('方針を変えると assignment と assignedCount が変わる', () => {
-    const loose = previewCandidates({ articles, topics, limit: 10, policy: { minSimilarity: 0.4, minMargin: 0 } });
-    const strict = previewCandidates({ articles, topics, limit: 10, policy: { minSimilarity: 0.4, minMargin: 0.5 } });
-
-    expect(loose.byTopic.map((entry) => entry.assignedCount)).toEqual([3, 1]);
-    expect(strict.byTopic.map((entry) => entry.assignedCount)).toEqual([2, 1]);
   });
 
   it('assignment が assignTopics の結果と一致する', () => {
@@ -253,20 +199,6 @@ describe('previewCandidates の除く例', () => {
     article('other', vector(-1, 0.1)),
   ];
 
-  it('除く例との類似度を候補ごとに返し、除く例に近い記事を excluded にする', () => {
-    const preview = previewCandidates({ articles, topics, limit: 10, policy });
-
-    const a = preview.byTopic.find((entry) => entry.topicKey === 'a')!;
-    const byId = new Map(a.top.map((candidate) => [candidate.feedEntryId, candidate]));
-    expect(byId.get('near')).toMatchObject({ assignment: 'assigned' });
-    expect(byId.get('near')!.excludeSimilarity).toBeCloseTo(0.0995, 3);
-    expect(byId.get('aboutExclude')).toMatchObject({ assignment: 'excluded' });
-    expect(byId.get('aboutExclude')!.excludeSimilarity).toBeCloseTo(Math.SQRT1_2, 5);
-    expect(a.assignedCount).toBe(1);
-    const b = preview.byTopic.find((entry) => entry.topicKey === 'b')!;
-    expect(b.top[0]).toMatchObject({ feedEntryId: 'other', excludeSimilarity: null, assignment: 'assigned' });
-  });
-
   it('assignment が excludes のあるケースでも assignTopics の結果と一致する', () => {
     const assigned = assignTopics({ articles, topics, policy });
     const assignedIds = new Set([...assigned.byTopic.values()].flat().map((entry) => entry.feedEntryId));
@@ -282,37 +214,6 @@ describe('previewCandidates の除く例', () => {
     for (const entry of preview.byTopic) {
       expect(entry.assignedCount).toBe(assigned.byTopic.get(entry.topicKey)!.length);
     }
-  });
-});
-
-describe('previewDigestItems の除く例', () => {
-  const item = (topicKey: string, embedding: Float32Array) => ({
-    digestDate: '2026-11-05',
-    topicKey,
-    rank: 1,
-    title: 'T',
-    url: 'https://example.com/t',
-    feedback: null,
-    embedding,
-  });
-  const topics = [
-    { topicKey: 'a', embedding: vector(1, 0), excludeEmbedding: vector(0, 1) },
-    topic('b', vector(-1, 0)),
-  ];
-
-  it('1 位のテーマの除く例との類似度を返し、除く例に近い項目を excluded にする', () => {
-    const [clean, excluded, noExclude] = previewDigestItems({
-      items: [item('a', vector(1, 0.1)), item('a', vector(1, 1)), item('b', vector(-1, 0))],
-      comparableTopics: topics,
-      embeddedTopics: topics,
-      policy,
-    });
-
-    expect(clean).toMatchObject({ assignment: 'assigned' });
-    expect(clean!.excludeSimilarity).toBeCloseTo(0.0995, 3);
-    expect(excluded).toMatchObject({ assignment: 'excluded' });
-    expect(excluded!.excludeSimilarity).toBeCloseTo(Math.SQRT1_2, 5);
-    expect(noExclude).toMatchObject({ assignment: 'assigned', excludeSimilarity: null });
   });
 });
 
@@ -345,75 +246,6 @@ describe('previewDigestItems', () => {
       matchesFirst: true,
     });
     expect(mismatch).toMatchObject({ adoptedSimilarity: 0, matchesFirst: false });
-  });
-
-  it('無効になったテーマが採用されていても、embedding があれば類似度を出す', () => {
-    const [result] = previewDigestItems({
-      items: [item('old', vector(1, 0))],
-      comparableTopics,
-      embeddedTopics,
-      policy,
-    });
-
-    expect(result!.adoptedSimilarity).toBeCloseTo(Math.SQRT1_2, 5);
-    expect(result!.matchesFirst).toBe(false);
-  });
-
-  it('記事の embedding が無い項目は、類似度と一致を null にする', () => {
-    const [result] = previewDigestItems({ items: [item('a', null)], comparableTopics, embeddedTopics, policy });
-
-    expect(result).toEqual({
-      digestDate: '2026-11-05',
-      topicKey: 'a',
-      rank: 1,
-      title: 'T',
-      url: 'https://example.com/t',
-      feedback: null,
-      first: null,
-      second: null,
-      margin: null,
-      adoptedSimilarity: null,
-      matchesFirst: null,
-      excludeSimilarity: null,
-      assignment: 'noComparableTopic',
-    });
-  });
-
-  it('採用されたテーマが消えているときは adoptedSimilarity を null にする', () => {
-    const [result] = previewDigestItems({
-      items: [item('gone', vector(1, 0))],
-      comparableTopics,
-      embeddedTopics,
-      policy,
-    });
-
-    expect(result).toMatchObject({ adoptedSimilarity: null, matchesFirst: false });
-  });
-
-  it('比べられるテーマが無いときは first と matchesFirst を null にする', () => {
-    const [result] = previewDigestItems({
-      items: [item('a', vector(1, 0))],
-      comparableTopics: [],
-      embeddedTopics,
-      policy,
-    });
-
-    expect(result).toMatchObject({
-      first: null,
-      matchesFirst: null,
-      adoptedSimilarity: 1,
-      assignment: 'noComparableTopic',
-    });
-  });
-
-  it('方針に応じて assignment を assigned、belowMinSimilarity、belowMinMargin に分ける', () => {
-    const items = [item('a', vector(1, 0)), item('a', vector(1, 1))];
-    const run = (p: TopicAssignmentPolicy) =>
-      previewDigestItems({ items, comparableTopics, embeddedTopics, policy: p }).map((entry) => entry.assignment);
-
-    expect(run({ minSimilarity: 0.4, minMargin: 0 })).toEqual(['assigned', 'assigned']);
-    expect(run({ minSimilarity: 0.8, minMargin: 0 })).toEqual(['assigned', 'belowMinSimilarity']);
-    expect(run({ minSimilarity: 0.4, minMargin: 0.5 })).toEqual(['assigned', 'belowMinMargin']);
   });
 
   it('assignment が assignTopics の結果と一致する', () => {

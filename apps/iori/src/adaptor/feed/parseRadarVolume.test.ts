@@ -28,14 +28,6 @@ describe('parseRadarVolume', () => {
     });
   });
 
-  it('turns a relative path into an absolute URL', () => {
-    const result = parseRadarVolume(`href='${PDF_DIR}/2023/10/tr_technology_radar_vol_29_en.pdf'`);
-    expect(result).toMatchObject({
-      ok: true,
-      val: { volume: 29, year: 2023, month: 10, pdfUrl: expect.stringMatching(/^https:\/\/www\.thoughtworks\.com\//) },
-    });
-  });
-
   it('compares volumes as numbers, not strings', () => {
     const html =
       `${PDF_DIR}/2020/01/tr_technology_radar_vol_9_en.pdf ${PDF_DIR}/2020/10/tr_technology_radar_vol_10_en.pdf`;

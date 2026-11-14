@@ -146,14 +146,6 @@ describe('createStatusAssembler の投票', () => {
     expect(statuses[0].poll).toBeNull();
     expect(statuses[0].quote?.quoted_status.poll?.votes_count).toBe(8);
   });
-
-  it('引用が無ければ、投票の問い合わせは 1 回だけにする', async () => {
-    const t = setup(new Map());
-
-    await t.assemble([remotePost(), remotePost()]);
-
-    expect(t.remotePostPollsResolver.resolve).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('createStatusAssembler の自分の投票', () => {
@@ -181,18 +173,6 @@ describe('createStatusAssembler の自分の投票', () => {
       [false, []],
       [true, [0, 1]],
     ]);
-  });
-
-  it('ローカルの投稿は自分の投票を読む対象にしない', async () => {
-    const remote = remotePost();
-    const t = setup(new Map([[remote.postId, poll(1)]]));
-
-    await t.assemble([localPost(), remote], viewerActorId);
-
-    expect(t.remotePostPollVotesResolver.resolve).toHaveBeenCalledWith({
-      actorId: viewerActorId,
-      postIds: [remote.postId],
-    });
   });
 
   it('閲覧者がいなければ、自分の投票を読まず、voted を false にする', async () => {

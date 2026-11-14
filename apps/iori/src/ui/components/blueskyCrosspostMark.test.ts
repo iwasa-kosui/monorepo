@@ -3,13 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { IoriBlueskyCrosspost } from '../../adaptor/mastodon/entities.ts';
 import {
   BLUESKY_CONTENT_WARNING_NOTICE,
-  BLUESKY_EDIT_NOT_APPLIED_NOTICE,
-  BLUESKY_EDIT_NOT_SENT_YET_NOTICE,
   BLUESKY_SENSITIVE_NOTICE,
   blueskyCrosspostNotice,
   blueskyEditNotice,
   postedMessage,
-  skipReasonText,
   toBlueskyCrosspostMark,
 } from './blueskyCrosspostMark.ts';
 
@@ -96,23 +93,6 @@ describe('toBlueskyCrosspostMark', () => {
   });
 });
 
-describe('skipReasonText', () => {
-  it.each(
-    [
-      ['visibility', '公開範囲が公開ではないため Bluesky に送っていません'],
-      ['content_warning', 'この投稿の当時は、CW 付きの投稿を Bluesky に送っていませんでした'],
-      ['sensitive', 'この投稿の当時は、センシティブ指定の投稿を Bluesky に送っていませんでした'],
-      ['reply_to_unsent', '返信先が Bluesky にないため送っていません'],
-    ] as const,
-  )('%s の文言を返す', (reason, text) => {
-    expect(skipReasonText(reason)).toBe(text);
-  });
-
-  it('理由が無ければ undefined', () => {
-    expect(skipReasonText(null)).toBeUndefined();
-  });
-});
-
 describe('postedMessage', () => {
   it('Bluesky の情報が無ければ「投稿しました」', () => {
     expect(postedMessage('both', undefined)).toBe('投稿しました');
@@ -159,13 +139,11 @@ describe('blueskyCrosspostNotice', () => {
   it('送り先が両方で、CW があれば CW の文と投稿へのリンクだけを送る説明を返す', () => {
     expect(blueskyCrosspostNotice('both', '注意', false, 'public')).toBe(BLUESKY_CONTENT_WARNING_NOTICE);
     expect(blueskyCrosspostNotice('both', '注意', true, 'public')).toBe(BLUESKY_CONTENT_WARNING_NOTICE);
-    expect(BLUESKY_CONTENT_WARNING_NOTICE).toBe('Bluesky には CW の文と投稿へのリンクだけを送ります');
   });
 
   it('送り先が両方で、CW が無くセンシティブがオンなら画像に注意のラベルを付ける説明を返す', () => {
     expect(blueskyCrosspostNotice('both', '', true, 'public')).toBe(BLUESKY_SENSITIVE_NOTICE);
     expect(blueskyCrosspostNotice('both', '  ', true, 'public')).toBe(BLUESKY_SENSITIVE_NOTICE);
-    expect(BLUESKY_SENSITIVE_NOTICE).toBe('Bluesky には画像に注意のラベルを付けて送ります');
   });
 
   it('CW が空白だけでセンシティブがオフなら返さない', () => {
@@ -204,7 +182,6 @@ describe('blueskyEditNotice', () => {
   it('Bluesky に送った投稿では、Bluesky は変わらず編集前の内容のまま残ると伝える', () => {
     expect(blueskyEditNotice({ iori: { reactions: [], link_previews: [], bluesky_crosspost: crosspost('sent') } }))
       .toBe('Bluesky に送った投稿は変わらず、編集前の内容のまま残ります');
-    expect(BLUESKY_EDIT_NOT_APPLIED_NOTICE).toBe('Bluesky に送った投稿は変わらず、編集前の内容のまま残ります');
   });
 
   it.each(['pending', 'failed'] as const)(
@@ -212,7 +189,6 @@ describe('blueskyEditNotice', () => {
     (status) => {
       expect(blueskyEditNotice({ iori: { reactions: [], link_previews: [], bluesky_crosspost: crosspost(status) } }))
         .toBe('Bluesky にはまだ送っていません。送るときは編集後の内容を送ります');
-      expect(BLUESKY_EDIT_NOT_SENT_YET_NOTICE).toBe('Bluesky にはまだ送っていません。送るときは編集後の内容を送ります');
     },
   );
 

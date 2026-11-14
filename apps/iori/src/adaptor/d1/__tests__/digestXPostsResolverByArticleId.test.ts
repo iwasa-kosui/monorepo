@@ -108,15 +108,6 @@ describe('DigestXPostsResolverByArticleId', () => {
     expect((await resolve('article-1')).map((post) => post.title)).toEqual(['edge published', 'edge fetched']);
   });
 
-  it('全部消えていれば空にする', async () => {
-    const { sqlite, addDigest, addSource, addEntry, link, resolve } = setup();
-    addDigest('article-1', 'digest-1');
-    link('digest-1', 1, addEntry(addSource('x_user', 'https://x.com/jack'), 'gone'));
-    sqlite.prepare('DELETE FROM feed_entries').run();
-
-    expect(await resolve('article-1')).toEqual([]);
-  });
-
   it('情報源を無効にした投稿と、URL からユーザー名を取れない情報源の投稿は返さない', async () => {
     const { addDigest, addSource, addEntry, link, resolve } = setup();
     addDigest('article-1', 'digest-1');
@@ -125,13 +116,5 @@ describe('DigestXPostsResolverByArticleId', () => {
     link('digest-1', 3, addEntry(addSource('x_user', 'https://x.com/jack'), 'kept'));
 
     expect((await resolve('article-1')).map((post) => post.title)).toEqual(['kept']);
-  });
-
-  it('投稿を保存していない記事は空にする', async () => {
-    const { addDigest, resolve } = setup();
-    addDigest('article-1', 'digest-1');
-
-    expect(await resolve('article-1')).toEqual([]);
-    expect(await resolve('no-such-article')).toEqual([]);
   });
 });

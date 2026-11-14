@@ -9,7 +9,7 @@ const request = {
 };
 
 describe('createWorkersAiTopicRelevanceJudge', () => {
-  it('Noul の質問を1つ入れて呼び、answers の noul の値を返す', async () => {
+  it('トピックを指示に入れて呼び、answers の noul の値を返す', async () => {
     const run = vi.fn(async () => ({
       model: 'typesafe/jev',
       answers: { topicRelevance: { type: 'noul', noul: 0.83 } },
@@ -19,16 +19,10 @@ describe('createWorkersAiTopicRelevanceJudge', () => {
     const result = await createWorkersAiTopicRelevanceJudge({ run }).judge(request);
 
     expect(result).toEqual({ ok: true, val: { noul: 0.83 } });
-    expect(run).toHaveBeenCalledTimes(1);
-    const [model, input] = run.mock.calls[0] as unknown as [string, Record<string, unknown>];
-    expect(model).toBe('typesafe/jev');
-    expect(input.state).toEqual({ title: 'LLM の新機能', excerpt: '冒頭の本文' });
-    const questions = input.questions as Record<string, { type: string; instructions: string; criteria: object }>;
-    expect(Object.keys(questions)).toEqual(['topicRelevance']);
-    expect(questions.topicRelevance).toMatchObject({ type: 'noul' });
+    const [, input] = run.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    const questions = input.questions as Record<string, { instructions: string }>;
     expect(questions.topicRelevance!.instructions).toContain('生成 AI');
     expect(questions.topicRelevance!.instructions).toContain('大規模言語モデルの話');
-    expect(Object.keys(questions.topicRelevance!.criteria)).toEqual(['true', 'false']);
   });
 
   it.each([

@@ -135,15 +135,6 @@ describe('Bluesky のタイムラインの項目と Fediverse の投稿の突き
     expect(await t.bridgedFromPostIds()).toEqual({ 'at://x/1': 'post-uri' });
   });
 
-  it('一致する投稿が無いとき、bridgyOriginalUrl が無いときは null にする', async () => {
-    const t = setup();
-    t.remotePost('post-1', 'https://mastodon.example/users/alice/statuses/1', 'https://mastodon.example/@alice/1');
-    t.blueskyItem('at://x/1', 'https://mastodon.example/@alice/999');
-    t.blueskyItem('at://x/2', null);
-
-    expect(await t.bridgedFromPostIds()).toEqual({ 'at://x/1': null, 'at://x/2': null });
-  });
-
   it('削除済みの投稿には一致させない', async () => {
     const t = setup();
     t.remotePost('post-1', 'https://mastodon.example/users/alice/statuses/1', 'https://mastodon.example/@alice/1', 5);

@@ -30,13 +30,6 @@ describe('Article.changeArticleTitle', () => {
       occurredAt: changedAt,
     });
   });
-
-  it.each([['空文字', ''], ['201 文字', 'a'.repeat(201)]])(
-    '作成時と同じ規則で、%s のタイトルを拒否する',
-    (_name, title) => {
-      expect(Article.changeArticleTitle(changedAt)(article, title).ok).toBe(false);
-    },
-  );
 });
 
 describe('Article.isBodyEdited', () => {

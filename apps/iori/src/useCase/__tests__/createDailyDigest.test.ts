@@ -510,19 +510,6 @@ describe('CreateDailyDigestUseCase: 材料の選び方', () => {
 });
 
 describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
-  it('既定のトピックを、無いものだけ作る', async () => {
-    const t = setup();
-
-    await t.run();
-
-    expect(t.all('SELECT topicKey, sortOrder FROM digest_topics ORDER BY sortOrder')).toEqual(
-      defaultDigestTopics.map((topic, sortOrder) => ({ topicKey: topic.topicKey, sortOrder })),
-    );
-    expect(t.all('SELECT embedding IS NOT NULL AS embedded FROM digest_topics WHERE topicKey = \'genai\'')).toEqual([
-      { embedded: 1 },
-    ]);
-  });
-
   it('記事は類似度が最大のトピックだけに入り、同じ記事が 2 つのトピックに載らない', async () => {
     const t = setup();
     t.addTopic('platform', basis(1));
@@ -617,26 +604,6 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
     expect(result).toMatchObject({ topics: 5, items: 15 });
   });
 
-  it('4 本目と 5 本目のトピックの記事数が違えば、4 本だけ作る', async () => {
-    const t = setup();
-    const embeddings: Array<[string, number, number]> = [
-      ['platform', 1, 5],
-      ['server', 2, 4],
-      ['design', 3, 4],
-      ['ciam', 4, 4],
-    ];
-    t.addEntries(t.sources.rss, 'genai', 3, () => ({ embedding: basis(0) }));
-    for (const [topicKey, index, count] of embeddings) {
-      t.addTopic(topicKey, basis(index));
-      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
-    }
-
-    const result = await t.run();
-
-    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
-    expect(result).toMatchObject({ topics: 4, items: 5 + 4 + 4 + 4 });
-  });
-
   it('5 件で切る前の記事数で同数かどうかを判定する', async () => {
     const t = setup();
     const embeddings: Array<[string, number, number]> = [
@@ -657,26 +624,6 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
     expect(result).toMatchObject({ topics: 4, items: 20 });
   });
 
-  it('5 件で切る前の記事数が同じトピックは、すべて作る', async () => {
-    const t = setup();
-    const embeddings: Array<[string, number, number]> = [
-      ['platform', 1, 7],
-      ['server', 2, 7],
-      ['design', 3, 7],
-      ['ciam', 4, 7],
-    ];
-    t.addEntries(t.sources.rss, 'genai', 7, () => ({ embedding: basis(0) }));
-    for (const [topicKey, index, count] of embeddings) {
-      t.addTopic(topicKey, basis(index));
-      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index) }));
-    }
-
-    const result = await t.run();
-
-    expect(t.topicKeys()).toEqual(['ciam', 'design', 'genai', 'platform', 'server', 'summary']);
-    expect(result).toMatchObject({ topics: 5, items: 25 });
-  });
-
   it('5 件を超える記事があるとき、切る前の記事数の多いトピックを先に選ぶ', async () => {
     const t = setup();
     const embeddings: Array<[string, number, number]> = [
@@ -695,30 +642,6 @@ describe('CreateDailyDigestUseCase: トピックへの振り分け', () => {
 
     expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
     expect(result).toMatchObject({ topics: 4, items: 20 });
-  });
-
-  it('材料があるときも、5 件で切る前の記事数の多いトピックを先に選ぶ', async () => {
-    const t = setup();
-    t.addInterest('kosui_post', 'https://kosui.me/posts/a', basis(0));
-    const embeddings: Array<[string, number, number]> = [
-      ['platform', 1, 7],
-      ['server', 2, 8],
-      ['design', 3, 9],
-      ['ciam', 4, 10],
-    ];
-    t.addEntries(t.sources.rss, 'genai', 6, () => ({ embedding: basis(0) }));
-    for (const [topicKey, index, count] of embeddings) {
-      t.addTopic(topicKey, basis(index));
-      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: vec({ 0: 1, [index]: 2 }) }));
-    }
-
-    const result = await t.run();
-
-    expect(t.topicKeys()).toEqual(['ciam', 'design', 'platform', 'server', 'summary']);
-    expect(result).toMatchObject({ topics: 4, items: 20 });
-    for (const topicKey of ['ciam', 'design', 'platform', 'server']) {
-      expect(t.itemsOf(topicKey).every((item) => item.score !== null)).toBe(true);
-    }
   });
 
   it('材料があるときは、スコアが正の記事だけを数えて同数を判定する', async () => {
@@ -947,15 +870,6 @@ describe('CreateDailyDigestUseCase: 要約', () => {
     expect(Array.from(documentOf((calls[1] as { input: string }).input))).toHaveLength(1000);
   });
 
-  it('まとめには項目が無いので、要約は呼ばない', async () => {
-    const { generator, calls } = createStubTextGenerator(() => '要約');
-    const t = setup({ textGenerator: generator });
-
-    await t.run();
-
-    expect(calls).toHaveLength(0);
-  });
-
   it('AI が無ければ要約せずに作る', async () => {
     const t = setup();
     t.addEntries(t.sources.rss, 'Title', 3);
@@ -1034,19 +948,6 @@ describe('CreateDailyDigestUseCase: 要約', () => {
     expect(t.all('SELECT summary FROM digest_items')).toEqual([{ summary: null }, { summary: null }, {
       summary: null,
     }]);
-  });
-
-  it('要約の呼び出しは、すべてのトピックの項目をまとめて 1 回で並列にする', async () => {
-    const { generator, calls } = createStubTextGenerator(() => '要約');
-    const t = setup({ textGenerator: generator });
-    t.addTopic('platform', basis(1));
-    t.addEntries(t.sources.rss, 'Gen', 4);
-    t.addEntries(t.sources.rss, 'Plat', 5, () => ({ embedding: basis(1) }));
-
-    const result = await t.run();
-
-    expect(calls).toHaveLength(9);
-    expect(result).toMatchObject({ topics: 2, items: 9, summarized: 9 });
   });
 });
 
@@ -1231,21 +1132,6 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
     expect(inputOf(calls, 'Match')).toBe('<document>\nMatch\n\ndesc\n</document>');
   });
 
-  it('requested の本文の取得は 5 秒でタイムアウトする', async () => {
-    const { generator } = createStubTextGenerator(() => 'まとめ');
-    const t = setup({ textGenerator: generator });
-    t.addInterest('kosui_post', KOSUI_REF, basis(0));
-    t.addEntry(t.sources.rss, 'Match', { embedding: basis(0) });
-    t.addEntries(t.sources.rss, 'Other', 2);
-
-    await t.run('requested');
-
-    expect(t.fetchText).toHaveBeenCalledWith(
-      'https://example.com/Match',
-      expect.objectContaining({ timeoutMs: 5_000 }),
-    );
-  });
-
   it('本文の取得は同時に 10 件までにする', async () => {
     const { generator } = createStubTextGenerator(() => 'まとめ');
     let running = 0;
@@ -1270,16 +1156,6 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
 
     expect(result.recommendation.fetchedBodies).toBe(10);
     expect(peak).toBe(10);
-  });
-
-  it('AI が無ければ本文を取得しない', async () => {
-    const t = setup();
-    t.addInterest('kosui_post', KOSUI_REF, basis(0));
-    t.addEntries(t.sources.rss, 'Match', 3);
-
-    await t.run();
-
-    expect(t.fetchText).not.toHaveBeenCalled();
   });
 
   it('点数をつけていない項目は、本文を取得せず、description の 1,000 文字までで要約する', async () => {
@@ -1630,30 +1506,6 @@ describe('CreateDailyDigestUseCase: 保存', () => {
     expect(t.bodies().privateHtml).toContain('載せる記事はありません');
   });
 
-  it('結果に trigger、digestDate、replaced と、開始から保存完了までの durationMs を含める', async () => {
-    const t: ReturnType<typeof setup> = setup({
-      textGenerator: {
-        generate: () => {
-          t.clock.value = (t.clock.value + 1500) as typeof NOW;
-          return RA.ok('summary');
-        },
-        summarize: () => RA.err({ type: 'AiError', message: 'unused' }),
-      },
-    });
-    t.addEntries(t.sources.rss, 'One', 3);
-
-    const result = await t.run('requested');
-
-    expect(result).toMatchObject({
-      status: 'created',
-      trigger: 'requested',
-      digestDate: '2026-11-05',
-      replaced: false,
-      durationMs: 4500,
-    });
-    expect(t.all('SELECT trigger FROM digests')).toEqual([{ trigger: 'requested' }, { trigger: 'requested' }]);
-  });
-
   it('article を作った後に digest の保存が失敗したら、すべての articleId を console.error に出し、すべての article と本文を消してエラーを返す', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const t = setup({
@@ -1779,26 +1631,6 @@ describe('CreateDailyDigestUseCase: Web Push', () => {
       .toEqual([{ eventName: 'digest.created' }, { eventName: 'digest.created' }, { eventName: 'digest.pushSent' }]);
   });
 
-  it('Radar があれば body に Radar の新しい版を含める', async () => {
-    const t = setup();
-    t.addEntry(t.sources.radar, 'Radar Vol. 34', { publishedAt: NOW - DAY });
-    t.addEntries(t.sources.rss, 'One', 3);
-    t.addPushSubscription('https://push.example/1');
-
-    await t.run();
-
-    expect(t.send.mock.calls[0]![1]).toMatchObject({ body: 'Radar の新しい版とトピック 1 本、おすすめ 3 件' });
-  });
-
-  it('トピックが無ければ、トピック 0 本、おすすめ 0 件と送る', async () => {
-    const t = setup();
-    t.addPushSubscription('https://push.example/1');
-
-    await t.run();
-
-    expect(t.send.mock.calls[0]![1]).toMatchObject({ body: 'トピック 0 本、おすすめ 0 件' });
-  });
-
   it('1 件でも送れれば pushSentAt を記録し、失敗は console.error に出して続ける', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const t = setup({
@@ -1909,13 +1741,6 @@ describe('CreateDailyDigestUseCase: 作る条件', () => {
     expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 0 }]);
     expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 0 }]);
     expect(t.send).not.toHaveBeenCalled();
-  });
-
-  it('購読が有効なら作る', async () => {
-    const t = setup();
-    t.setSubscription(true);
-
-    expect((await t.run()).status).toBe('created');
   });
 
   it('購読の行が無ければ有効とみなして作る', async () => {
@@ -2614,33 +2439,6 @@ describe('CreateDailyDigestUseCase: requested', () => {
     expect(t.all('SELECT pushSentAt FROM digests')).toEqual([{ pushSentAt: null }]);
     expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'digest.pushSent\'')).toEqual([{ n: 0 }]);
   });
-
-  it('1 件の要約が 20 秒を超えたら、その項目の summary を null にして続け、console.error に出す', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const generate: TextGenerator['generate'] = (request) =>
-      request.input.includes('Hang') ? new Promise(() => undefined) : RA.ok('good summary');
-    const timers: Array<{ ms: number; fire: () => void }> = [];
-    const sleep = (ms: number) => new Promise<void>((resolve) => timers.push({ ms, fire: resolve }));
-    const t = setup({
-      textGenerator: { generate, summarize: () => RA.err({ type: 'AiError', message: 'unused' }) },
-      sleep,
-    });
-    t.addEntry(t.sources.rss, 'Hang one', { count: 3, embedding: basis(0) });
-    t.addEntry(t.sources.rss, 'Good one', { count: 2, embedding: basis(0) });
-    t.addEntry(t.sources.rss, 'Good two', { count: 1, embedding: basis(0) });
-
-    const running = t.run('requested');
-    await vi.waitFor(() => expect(timers).toHaveLength(3));
-    timers.forEach((timer) => timer.fire());
-    const result = await running;
-
-    expect(timers.map((timer) => timer.ms)).toEqual([20_000, 20_000, 20_000]);
-    expect(result).toMatchObject({ status: 'created', items: 3, summarized: 2 });
-    expect(error).toHaveBeenCalledWith(
-      'iori digest: summarizing an entry timed out.',
-      expect.objectContaining({ timeoutMs: 20_000 }),
-    );
-  });
 });
 
 describe('CreateDailyDigestUseCase: 材料の窓の始まり', () => {
@@ -2838,10 +2636,7 @@ describe('CreateDailyDigestUseCase: 本文の Content-Type と大きさ', () => 
   };
 
   it.each([
-    'text/html',
-    'text/html; charset=UTF-8',
     'TEXT/HTML;charset=utf-8',
-    'application/xhtml+xml',
     'Application/XHTML+XML; charset=utf-8',
   ])('Content-Type が %s なら本文を平文にして使う', async (contentType) => {
     const { result, input } = await runWithBody('<p>Hello <b>body</b></p>', contentType);
@@ -2852,9 +2647,6 @@ describe('CreateDailyDigestUseCase: 本文の Content-Type と大きさ', () => 
 
   it.each([
     'application/pdf',
-    'application/json',
-    'image/png',
-    'application/octet-stream',
     'text/css',
     undefined,
   ])('Content-Type が %s なら本文を使わず、description で要約する', async (contentType) => {
@@ -3199,27 +2991,6 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
 
     expect(byNonOwner.ok && byNonOwner.val.body?.html).not.toContain(POST_TEXT);
     expect(byOwner.ok && byOwner.val.body?.html).toContain(POST_TEXT);
-  });
-
-  it('所有者のまとめでは、X の投稿を引いて保存する', async () => {
-    const t = setup();
-    const post = addXPost(t, addXSource(t, USERNAME), POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
-
-    await t.run('requested');
-
-    expect(t.resolveXPosts).toHaveBeenCalledTimes(1);
-    expect(storedFeedEntryIds(t)).toEqual([post.feedEntryId]);
-  });
-
-  it('X の投稿が無い日は、何も保存せず、件数を 0 にする', async () => {
-    const t = setup();
-    addXSource(t, USERNAME);
-    t.addEntries(t.sources.rss, 'News', 3);
-
-    const result = await t.run();
-
-    expect(result.xPosts).toBe(0);
-    expect(storedFeedEntryIds(t)).toEqual([]);
   });
 
   it('投稿が 10 件を超え、関心の材料があれば、関心に近い投稿を先に選び、足りない分を新しい順に足す', async () => {

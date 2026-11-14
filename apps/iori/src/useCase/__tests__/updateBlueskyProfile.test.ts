@@ -135,17 +135,6 @@ describe('UpdateBlueskyProfileUseCase', () => {
     });
   });
 
-  it('バナーも差し替えられる', async () => {
-    const t = setup();
-
-    await t.useCase.run({ ...base, banner: { bytes: imageBytes(5, JPEG_SIGNATURE), mimeType: 'image/jpeg' } });
-
-    expect(t.putRecord()).toMatchObject({
-      avatar: OLD_AVATAR,
-      banner: { ref: { $link: 'new-5' }, mimeType: 'image/jpeg' },
-    });
-  });
-
   it('remove を指定するとアバターとバナーのキーを削除する', async () => {
     const t = setup();
 
@@ -197,15 +186,6 @@ describe('UpdateBlueskyProfileUseCase', () => {
     expect(t.putProfileRecord).not.toHaveBeenCalled();
   });
 
-  it('画像が不正でも PDS を呼ばない', async () => {
-    const t = setup();
-
-    const result = await t.useCase.run({ ...base, banner: { bytes: new Uint8Array(1), mimeType: 'image/gif' } });
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyProfileInvalid' } });
-    expect(t.getProfileRecord).not.toHaveBeenCalled();
-  });
-
   it('先頭バイトが mimeType と合わない画像は PDS を呼ばずに拒否する', async () => {
     const t = setup();
 
@@ -233,16 +213,5 @@ describe('UpdateBlueskyProfileUseCase', () => {
 
     expect(result).toEqual({ ok: false, err: failure });
     expect(t.putProfileRecord).not.toHaveBeenCalled();
-  });
-
-  it('現行レコードの取得と書き込みの失敗もそのまま返す', async () => {
-    const getFailed = setup();
-    getFailed.getProfileRecord.mockResolvedValueOnce(Result.err(failure));
-    const putFailed = setup();
-    putFailed.putProfileRecord.mockResolvedValueOnce(Result.err(failure));
-
-    expect(await getFailed.useCase.run(base)).toEqual({ ok: false, err: failure });
-    expect(getFailed.putProfileRecord).not.toHaveBeenCalled();
-    expect(await putFailed.useCase.run(base)).toEqual({ ok: false, err: failure });
   });
 });

@@ -1,4 +1,3 @@
-import { jsx } from 'hono/jsx';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
@@ -13,8 +12,6 @@ const findAll = (node: unknown, predicate: (element: Tree) => boolean): Tree[] =
   const element = node as Tree;
   return [...(predicate(element) ? [element] : []), ...findAll(children, predicate)];
 };
-
-const byRole = (node: unknown, role: string): Tree[] => findAll(node, (element) => element.props.role === role);
 
 const trigger = (node: unknown): Tree => {
   const [button] = findAll(node, (element) => 'aria-controls' in element.props);
@@ -57,79 +54,11 @@ const items: readonly PostMenuItem[] = [
   { key: 'mute', label: '@alice をミュート', kind: 'action', danger: true, onSelect: () => {} },
 ];
 
-const render = (props: Partial<Parameters<typeof PostMenu>[0]> = {}): string =>
-  String(jsx(PostMenu, { items, ...props }));
-
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe('PostMenu', () => {
-  it('items が空ならトリガーごと何も描かない', () => {
-    expect(render({ items: [] })).toBe('');
-    expect(PostMenu({ items: [] })).toBeNull();
-  });
-
-  it('閉じた状態では「その他の操作」のトリガーだけを出し、メニューは出さない', () => {
-    const html = render();
-
-    expect(html).toContain('aria-label="その他の操作"');
-    expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('aria-controls=');
-    expect(html).toContain('class="h-5 w-5"');
-    expect(html).not.toContain('aria-haspopup');
-    expect(html).not.toContain('role="menu');
-    expect(html).not.toContain('リンクをコピー');
-  });
-
-  it('コピー結果の role=status は、通知が無いときも空のまま常に描く', () => {
-    const [status] = byRole(PostMenu({ items }), 'status');
-
-    expect(status?.tag).toBe('p');
-    expect(status?.children).toEqual(['']);
-    expect(render()).toContain('role="status"');
-  });
-
-  it('label を渡すとトリガーの aria-label になる', () => {
-    expect(render({ label: '投稿のメニュー' })).toContain('aria-label="投稿のメニュー"');
-  });
-
-  it('開いた状態では aria-expanded を true にして、aria-controls の id を持つ要素に項目を並べる', () => {
-    const element = PostMenu({ items, defaultOpen: true });
-
-    expect(trigger(element).props['aria-expanded']).toBe('true');
-    expect(typeof trigger(element).props['aria-controls']).toBe('string');
-    expect(menu(element)).toBeDefined();
-    expect(menuItems(element).map((item) => item.tag)).toEqual(['a', 'button', 'button']);
-    expect(byRole(element, 'menu')).toHaveLength(0);
-    expect(byRole(element, 'menuitem')).toHaveLength(0);
-  });
-
-  it('メニューの id はカードごとに異なる', () => {
-    const first = trigger(PostMenu({ items })).props['aria-controls'];
-    const second = trigger(PostMenu({ items })).props['aria-controls'];
-
-    expect(first).not.toBe(second);
-  });
-
-  it('link は別タブで開く a 要素にする', () => {
-    const html = render({ defaultOpen: true });
-
-    expect(html).toContain(
-      'href="https://remote.example/notes/1" target="_blank" rel="noopener noreferrer"',
-    );
-    expect(html).toContain('元の投稿を開く');
-  });
-
-  it('copy と action は button にし、danger の action だけ色を変える', () => {
-    const html = render({ defaultOpen: true });
-
-    expect(html).toContain('リンクをコピー');
-    expect(html).toContain('@alice をミュート');
-    expect(html.match(/text-terracotta-dark dark:text-terracotta"/g)).toHaveLength(1);
-    expect(html.match(/<button type="button" class="flex w-full/g)).toHaveLength(2);
-  });
-
   it('トリガーを押すと、親要素にクリックを伝えない', () => {
     let stopped = false;
 

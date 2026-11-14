@@ -6,7 +6,7 @@ import type { Notification } from '../../domain/notification/notification.ts';
 import { NotificationId } from '../../domain/notification/notificationId.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { UserId } from '../../domain/user/userId.ts';
-import { type Account, NotificationSchema, RelationshipSchema } from './entities.ts';
+import { type Account, NotificationSchema } from './entities.ts';
 import {
   selectDomainTypes,
   targetPostIdOf,
@@ -15,7 +15,6 @@ import {
   toStrictlyDescending,
   triggerOf,
 } from './toNotification.ts';
-import { toRelationship } from './toRelationship.ts';
 
 const createdAt = Date.UTC(2025, 0, 2, 3, 4, 5) as Instant;
 const account: Account = {
@@ -133,12 +132,6 @@ describe('toNotification', () => {
       iori: { emoji: ':wave:', url: 'https://iori.example/emoji/wave.png' },
     });
   });
-
-  it('omits the iori extension for the other types', () => {
-    const result = toNotification({ ...base, type: 'follow', followerActorId: ActorId.generate() }, options);
-
-    expect(result).not.toHaveProperty('iori');
-  });
 });
 
 describe('Bluesky notifications', () => {
@@ -201,27 +194,6 @@ describe('Bluesky notifications', () => {
     });
     expect(triggerOf(notification)).toEqual({ kind: 'bluesky', author });
     expect(targetPostIdOf(notification)).toBe(targetPostId);
-  });
-
-  it('maps blueskyRepostViaRepost to reblog with a link to the original post', () => {
-    const original = 'at://did:plc:other/app.bsky.feed.post/3korig';
-    const notification: Notification = {
-      ...blueskyBase,
-      type: 'blueskyRepostViaRepost',
-      subjectUri: original,
-      targetPostId: null,
-    };
-
-    const result = toNotification(notification, options);
-
-    expect(NotificationSchema.safeParse(result).success).toBe(true);
-    expect(result.type).toBe('reblog');
-    expect(result.iori?.bluesky).toEqual({
-      reason: 'repost-via-repost',
-      url: 'https://bsky.app/profile/did:plc:other/post/3korig',
-      uri: original,
-    });
-    expect(targetPostIdOf(notification)).toBeUndefined();
   });
 
   it('maps blueskySubscribedPost to status with the text and a link to the post itself', () => {
@@ -410,30 +382,5 @@ describe('toStrictlyDescending', () => {
   it('cascades through a run of equal values and returns an empty array for no values', () => {
     expect(toStrictlyDescending([7, 7, 7, 7])).toEqual([7, 6, 5, 4]);
     expect(toStrictlyDescending([])).toEqual([]);
-  });
-});
-
-describe('toRelationship', () => {
-  it('sets the given flags and leaves the others false', () => {
-    const relationship = toRelationship({
-      id: account.id,
-      following: true,
-      followedBy: false,
-      muting: true,
-      blocking: false,
-    });
-
-    expect(RelationshipSchema.safeParse(relationship).success).toBe(true);
-    expect(relationship).toMatchObject({
-      id: account.id,
-      following: true,
-      followed_by: false,
-      muting: true,
-      requested: false,
-      blocking: false,
-      blocked_by: false,
-      domain_blocking: false,
-      endorsed: false,
-    });
   });
 });

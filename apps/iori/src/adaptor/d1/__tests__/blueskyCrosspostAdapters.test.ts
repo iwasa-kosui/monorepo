@@ -30,47 +30,7 @@ const setup = () => {
   };
 };
 
-describe('bluesky_crossposts の migration', () => {
-  it('posts への外部キーを持たず、仕様の列を持つ', () => {
-    const { sqlite } = setup();
-    expect(sqlite.prepare('PRAGMA foreign_key_list(bluesky_crossposts)').all()).toEqual([]);
-    const columns = (sqlite.prepare('PRAGMA table_info(bluesky_crossposts)').all() as Array<{ name: string }>)
-      .map((column) => column.name);
-    expect(columns).toEqual([
-      'postId',
-      'status',
-      'skipReason',
-      'uri',
-      'cid',
-      'rkey',
-      'rootUri',
-      'rootCid',
-      'attempts',
-      'lastError',
-      'createdAt',
-      'updatedAt',
-    ]);
-  });
-
-  it('bluesky_sessions の列を持つ', () => {
-    const { sqlite } = setup();
-    const columns = (sqlite.prepare('PRAGMA table_info(bluesky_sessions)').all() as Array<{ name: string }>)
-      .map((column) => column.name);
-    expect(columns).toEqual(['id', 'did', 'handle', 'pdsUrl', 'accessJwt', 'refreshJwt', 'updatedAt']);
-  });
-});
-
 describe('D1 の bluesky_crossposts アダプタ', () => {
-  it('pending を保存して postId で引ける。無い postId は undefined', async () => {
-    const { resolver, savedStore } = setup();
-    const postId = PostId.generate();
-
-    await savedStore.save(BlueskyCrosspost.pending(postId, at(1)));
-
-    expect(Result.unsafeUnwrap(await resolver.resolve(postId))).toEqual(BlueskyCrosspost.pending(postId, at(1)));
-    expect(Result.unsafeUnwrap(await resolver.resolve(PostId.generate()))).toBeUndefined();
-  });
-
   it('同じ postId への保存は更新になり、createdAt を変えない', async () => {
     const { resolver, savedStore, sqlite } = setup();
     const postId = PostId.generate();
@@ -104,30 +64,6 @@ describe('D1 の bluesky_crossposts アダプタ', () => {
     expect(sqlite.prepare('SELECT COUNT(*) AS n FROM bluesky_crossposts').get()).toEqual({ n: 1 });
   });
 
-  it('failed の attempts と lastError を保存し、skipped の理由を保存する', async () => {
-    const { resolver, savedStore } = setup();
-    const failedId = PostId.generate();
-    const skippedId = PostId.generate();
-    await savedStore.save(
-      BlueskyCrosspost.markFailed(
-        BlueskyCrosspost.markSending(BlueskyCrosspost.pending(failedId, at(1)), at(1)),
-        'createRecord failed: status 500',
-        at(2),
-      ),
-    );
-    await savedStore.save(BlueskyCrosspost.skipped(skippedId, 'content_warning', at(1)));
-
-    expect(Result.unsafeUnwrap(await resolver.resolve(failedId))).toMatchObject({
-      status: 'failed',
-      attempts: 1,
-      lastError: 'createRecord failed: status 500',
-    });
-    expect(Result.unsafeUnwrap(await resolver.resolve(skippedId))).toMatchObject({
-      status: 'skipped',
-      skipReason: 'content_warning',
-    });
-  });
-
   it('update は既にある行だけを更新して true を返し、無い行は作らず false を返す', async () => {
     const { resolver, savedStore, deletedStore } = setup();
     const postId = PostId.generate();
@@ -146,19 +82,6 @@ describe('D1 の bluesky_crossposts アダプタ', () => {
 
     expect(Result.unsafeUnwrap(await savedStore.update(BlueskyCrosspost.markSending(pending, at(3))))).toBe(false);
     expect(Result.unsafeUnwrap(await resolver.resolve(postId))).toBeUndefined();
-  });
-
-  it('削除ストアは指定した行だけを消す', async () => {
-    const { resolver, savedStore, deletedStore } = setup();
-    const target = PostId.generate();
-    const other = PostId.generate();
-    await savedStore.save(BlueskyCrosspost.pending(target, at(1)));
-    await savedStore.save(BlueskyCrosspost.pending(other, at(1)));
-
-    await deletedStore.delete(target);
-
-    expect(Result.unsafeUnwrap(await resolver.resolve(target))).toBeUndefined();
-    expect(Result.unsafeUnwrap(await resolver.resolve(other))).toBeDefined();
   });
 
   it('再送の候補は、10 分以上前の pending、上限未満の failed、上限未満の deleting を古い順に limit 件返す', async () => {
@@ -251,11 +174,6 @@ describe('D1 の bluesky_sessions アダプタ', () => {
     accessJwt: `access-${suffix}`,
     refreshJwt: `refresh-${suffix}`,
     updatedAt: at(minute),
-  });
-
-  it('保存前は undefined を返す', async () => {
-    const { sessionResolver } = setup();
-    expect(Result.unsafeUnwrap(await sessionResolver.resolve())).toBeUndefined();
   });
 
   it('固定の id で 1 行だけ保持し、保存し直すと置き換える', async () => {

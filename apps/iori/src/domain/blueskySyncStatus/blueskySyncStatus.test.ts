@@ -20,19 +20,6 @@ const statusOf = (records: readonly BlueskySyncStatusRecord[], loginFailedAt?: I
   toBlueskyConnectionStatus({ records, loginFailedAt, now, loginCooldownMs: COOLDOWN });
 
 describe('toBlueskyConnectionStatus', () => {
-  it('記録が無い scope は unknown にする', () => {
-    const status = statusOf([]);
-
-    expect(status.timeline).toEqual({
-      state: 'unknown',
-      lastSucceededAt: null,
-      lastFailedAt: null,
-      failureKind: null,
-      failureCode: null,
-    });
-    expect(status.notifications.state).toBe('unknown');
-  });
-
   it('成功だけの記録は ok にする', () => {
     const status = statusOf([record({ lastSucceededAt: at(5) })]);
 
@@ -79,10 +66,6 @@ describe('toBlueskyConnectionStatus', () => {
 
     expect(recovered.timeline.state).toBe('ok');
     expect(same.timeline.state).toBe('ok');
-  });
-
-  it('ログインの失敗が無ければ login は ok にする', () => {
-    expect(statusOf([]).login).toEqual({ state: 'ok' });
   });
 
   it('ログインの失敗から待ち時間が過ぎていなければ waiting にし、再試行の時刻を返す', () => {

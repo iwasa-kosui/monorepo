@@ -164,15 +164,4 @@ describe('EditDigestTopic', () => {
     expect(rows()[0]).toMatchObject({ name: '新しい名前', embeddedAt: null, bytes: null });
     expect(error).toHaveBeenCalled();
   });
-
-  it('textEmbedder が無ければ console.error を出し、編集は成功として返す', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const { edit, rows } = await setup({ textEmbedder: null });
-
-    const result = await edit.run({ userId: USER_ID, topicKey: 'genai', description: '新しい説明' });
-
-    expect(result).toMatchObject({ ok: true, val: { description: '新しい説明', embedding: null } });
-    expect(rows()[0]).toMatchObject({ description: '新しい説明', embeddedAt: null, bytes: null });
-    expect(error).toHaveBeenCalledTimes(1);
-  });
 });

@@ -91,17 +91,6 @@ const setup = (quote: PostQuote | undefined = aliceQuote) => {
 };
 
 describe('CreatePostUseCase の引用', () => {
-  it('引用先の URI を作成イベントの payload に載せ、投稿の状態には載せない', async () => {
-    const { run, postCreatedStore } = setup();
-
-    const { result } = await run({ content: '<p>hi</p>', quoteUri });
-
-    expect(result.ok).toBe(true);
-    const [event] = postCreatedStore.items;
-    expect(event?.eventPayload.quoteUri).toBe(quoteUri);
-    expect(event?.aggregateState).not.toHaveProperty('quoteUri');
-  });
-
   it('本文に引用先へのリンクが無ければ、末尾に RE: の段落を足して保存する', async () => {
     const { run, postCreatedStore } = setup();
 

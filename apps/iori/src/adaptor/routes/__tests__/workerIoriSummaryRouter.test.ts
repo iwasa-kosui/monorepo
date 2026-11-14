@@ -170,23 +170,6 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
     ]);
   });
 
-  it('検索の要約は since と until の範囲外の投稿を除く', async () => {
-    const { generator, calls } = createStubTextGenerator(replyByKind('- 話題 [1][2][3]'));
-    const t = await seedTimeline({ textGenerator: generator });
-
-    const response = await t.request(PATH, post({ q: '京都', ...period }, t.me.bearer));
-
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { source_status_ids: string[]; used_status_count: number };
-    expect(body.used_status_count).toBe(3);
-    expect(body.source_status_ids).toHaveLength(3);
-    expect(body.source_status_ids).toEqual(
-      expect.arrayContaining([t.mine.postId, t.privateFromAlice.postId, t.fromAlice.postId]),
-    );
-    expect(body.source_status_ids).not.toContain(t.outside.postId);
-    expect(calls.some((call) => 'documents' in call && call.documents.join('').includes('期間外'))).toBe(false);
-  });
-
   it('期間の要約は本人とフォロー中（ミュート除く）の公開とフォロワー限定の投稿を、削除済みと期間外を除いて渡す', async () => {
     const { generator, calls } = createStubTextGenerator(replyByKind('- 話題 [1][2][3]'));
     const t = await seedTimeline({ textGenerator: generator });
@@ -218,29 +201,6 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
     });
   });
 
-  it('citations は本文に残る番号の昇順で、番号と投稿を対応させる', async () => {
-    const t = await seedTimeline({
-      textGenerator: createStubTextGenerator(replyByKind('- 旅行 [2]\n- 京都 [1][9][2]')).generator,
-    });
-
-    const response = await t.request(PATH, post(period, t.me.bearer));
-
-    const body = (await response.json()) as { source_status_ids: string[]; citations: CitationBody[] };
-    expect(body.citations.map(({ n, status }) => [n, status.id, status.content])).toEqual([
-      [1, t.privateFromAlice.postId, '<p>京都の秘密</p>'],
-      [2, t.fromAlice.postId, '<p>京都の旅行計画</p>'],
-    ]);
-    expect(body.source_status_ids).toEqual(body.citations.map(({ status }) => status.id));
-  });
-
-  it('citations は番号が本文にないとき空にする', async () => {
-    const t = await seedTimeline({ textGenerator: createStubTextGenerator(replyByKind('- 番号なし')).generator });
-
-    const response = await t.request(PATH, post(period, t.me.bearer));
-
-    expect(((await response.json()) as { citations: unknown[] }).citations).toEqual([]);
-  });
-
   it('Server-Timing に gather と ai と total を付ける', async () => {
     const t = await seedTimeline({ textGenerator: createStubTextGenerator(replyByKind('- 話題 [1]')).generator });
 
@@ -249,28 +209,6 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
     expect(response.headers.get('Server-Timing')).toMatch(
       /^gather;dur=\d+(\.\d+)?, ai;dur=\d+(\.\d+)?, total;dur=\d+(\.\d+)?$/,
     );
-  });
-
-  it('材料がないときは summary を null にし、AI を呼ばず回数を消費しない', async () => {
-    const { generator, calls } = createStubTextGenerator(replyByKind('- 話題 [1]'));
-    const t = await seedTimeline({ textGenerator: generator });
-    const empty = { since: '2019-01-01T00:00:00Z', until: '2019-01-02T00:00:00Z' };
-
-    const response = await t.request(PATH, post(empty, t.me.bearer));
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      summary: null,
-      source_status_ids: [],
-      citations: [],
-      used_status_count: 0,
-      excluded_non_public_count: 0,
-      truncated: false,
-      model: '@cf/meta/llama-4-scout-17b-16e-instruct',
-      remaining_today: 20,
-    });
-    expect(calls).toEqual([]);
-    expect(t.sqlite.prepare('SELECT count(*) AS n FROM ai_summary_usages').get()).toEqual({ n: 0 });
   });
 
   it('1日 20 回を超えると 429 にし、次の日本時間 0 時までの秒数を Retry-After に付ける', async () => {

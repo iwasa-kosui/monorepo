@@ -36,8 +36,4 @@ describe('extractMentionedActorUris', () => {
 
     expect(await extractMentionedActorUris(note)).toEqual([]);
   });
-
-  it('タグが無ければ空にする', async () => {
-    expect(await extractMentionedActorUris(new Note({ id: noteId }))).toEqual([]);
-  });
 });

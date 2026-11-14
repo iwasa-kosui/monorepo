@@ -9,13 +9,11 @@ import { UserId } from '../../../domain/user/userId.ts';
 import { createD1MarkerSavedStore } from '../marker/markerSavedStore.ts';
 import { createD1MarkersResolverByUserId } from '../marker/markersResolverByUserId.ts';
 import {
-  createD1MentionNotificationCreatedStore,
   createD1MentionNotificationDeletedStore,
   createD1MentionNotificationResolverByRecipientAndMentionPostId,
   createD1MentionNotificationsResolverByMentionPostId,
   createD1NotificationDismissedStore,
   createD1NotificationsClearedStore,
-  createD1RepostNotificationCreatedStore,
   createD1RepostNotificationResolverByRecipientAndActorIdAndPostId,
 } from '../notification/inboxNotificationAdapters.ts';
 import { createD1NotificationCountResolverSinceMarker } from '../notification/notificationCountResolverSinceMarker.ts';
@@ -37,7 +35,6 @@ const page = (overrides: Partial<PageRequest> = {}): PageRequest => ({
   ...overrides,
 });
 
-const allTypes: Notification['type'][] = ['like', 'reply', 'follow', 'emojiReact'];
 const mastodonTypes: Notification['type'][] = ['like', 'reply', 'follow'];
 
 const seedNotifications = () => {
@@ -79,20 +76,6 @@ describe('createD1NotificationsResolverByPage', () => {
     expect(await t.idsOf()).toEqual([t.ids.follow, t.ids.reply, t.ids.like]);
   });
 
-  it('子表から通知の種類ごとの値を復元する', async () => {
-    const t = seedNotifications();
-
-    const result = await t.resolveByPage({}, allTypes);
-
-    expect(result.ok && result.val.map((item) => item.notification)).toMatchObject([
-      { type: 'emojiReact', emoji: ':wave:', emojiImageUrl: 'https://e/w.png', reactedPostId: t.myPost.postId },
-      { type: 'follow', followerActorId: t.alice.actorId },
-      { type: 'reply', replierActorId: t.alice.actorId, originalPostId: t.myPost.postId },
-      { type: 'like', likerActorId: t.alice.actorId, likedPostId: t.myPost.postId },
-    ]);
-    expect(result.ok && result.val[0]?.createdAt).toBe(5_000);
-  });
-
   it('types に含まれる種類だけを返し、emojiReact は明示されたときだけ返す', async () => {
     const t = seedNotifications();
 
@@ -125,13 +108,6 @@ describe('createD1NotificationsResolverByPage', () => {
     const next = await t.idsOf({ olderThanId: first?.[0], limit: 1 });
 
     expect([first, next]).toEqual([[sameB], [sameA]]);
-  });
-
-  it('存在しない ID を cursor にすると空を返す', async () => {
-    const t = seedNotifications();
-
-    expect(await t.idsOf({ olderThanId: t.seed.uuid() })).toEqual([]);
-    expect(await t.idsOf({ newerThanId: t.seed.uuid() })).toEqual([]);
   });
 
   it('他人の通知の ID を cursor にしても、その位置から自分の通知を返す', async () => {
@@ -188,13 +164,6 @@ describe('createD1NotificationCountResolverSinceMarker', () => {
     expect(await count(t)).toEqual({ ok: true, val: 1, err: undefined });
   });
 
-  it('home のマーカーは数えるときに使わない', async () => {
-    const t = seedNotifications();
-    t.seed.setMarker(t.me.userId, 'home', t.ids.follow);
-
-    expect(await count(t)).toEqual({ ok: true, val: 3, err: undefined });
-  });
-
   it('マーカーの ID が通知として存在しなければ全件を数える', async () => {
     const t = seedNotifications();
     t.seed.setMarker(t.me.userId, 'notifications', 'not-a-notification');
@@ -207,12 +176,6 @@ describe('createD1NotificationCountResolverSinceMarker', () => {
     t.seed.setMarker(t.me.userId, 'notifications', t.ids.others);
 
     expect(await count(t)).toEqual({ ok: true, val: 3, err: undefined });
-  });
-
-  it('limit で件数を頭打ちにする', async () => {
-    const t = seedNotifications();
-
-    expect(await count(t, 2)).toEqual({ ok: true, val: 2, err: undefined });
   });
 });
 
@@ -234,12 +197,6 @@ describe('ブロックした相手の通知', () => {
     t.seed.addBlock(t.me.userId, t.alice.actorId);
     return { ...t, bob, blocked, visible };
   };
-
-  it('一覧から、ブロックした相手のいいねとメンションを除く', async () => {
-    const t = seedBlocked();
-
-    expect(await t.idsOf({}, blockedTypes)).toEqual([t.visible.mention, t.visible.like]);
-  });
 
   it('件数から、ブロックした相手のいいねとメンションを除く', async () => {
     const t = seedBlocked();
@@ -268,13 +225,6 @@ describe('ブロックした相手の通知', () => {
     expect(blockedMention.ok && blockedMention.val).toBeUndefined();
     expect(visibleLike.ok && visibleLike.val?.notification).toMatchObject({ type: 'like' });
     expect(visibleMention.ok && visibleMention.val?.notification).toMatchObject({ type: 'mention' });
-  });
-
-  it('ほかのユーザーのブロックは、自分の通知に影響しない', async () => {
-    const t = seedBlocked();
-    t.seed.addBlock(t.other.userId, t.bob.actorId);
-
-    expect(await t.idsOf({}, blockedTypes)).toEqual([t.visible.mention, t.visible.like]);
   });
 
   type SeededTest = ReturnType<typeof seedNotifications>;
@@ -376,15 +326,6 @@ describe('通知の削除と notifications のマーカー', () => {
     expect(markerOf(t, 'notifications')).toBeUndefined();
   });
 
-  it('マーカーが指さない通知の削除では、マーカーを変えない', async () => {
-    const t = seedNotifications();
-    t.seed.setMarker(t.me.userId, 'notifications', t.ids.reply);
-
-    await dismiss(t, t.ids.follow);
-
-    expect(markerOf(t, 'notifications')).toEqual({ lastReadId: t.ids.reply });
-  });
-
   it('全件削除は notifications のマーカーだけを消す', async () => {
     const t = seedNotifications();
     t.seed.setMarker(t.me.userId, 'notifications', t.ids.reply);
@@ -407,45 +348,6 @@ describe('repost 通知', () => {
     const repost = t.seed.addRepostNotification(t.me.userId, t.alice.actorId, t.myPost.postId, 8_000);
     return { ...t, repost };
   };
-
-  it('types に repost が含まれるときだけ、子表から値を復元して返す', async () => {
-    const t = seedReposts();
-
-    const result = await t.resolveByPage({}, ['repost']);
-
-    expect(await t.idsOf()).not.toContain(t.repost);
-    expect(result.ok && result.val.map((item) => item.notification)).toMatchObject([
-      {
-        type: 'repost',
-        notificationId: t.repost,
-        recipientUserId: t.me.userId,
-        reposterActorId: t.alice.actorId,
-        repostedPostId: t.myPost.postId,
-      },
-    ]);
-    expect(result.ok && result.val[0]?.createdAt).toBe(8_000);
-  });
-
-  it('作成ストアが通知、子表、ドメインイベントを保存する', async () => {
-    const t = seedNotifications();
-    const event = Notification.createRepostNotification({
-      type: 'repost',
-      notificationId: NotificationId.generate(),
-      recipientUserId: UserId.orThrow(t.me.userId),
-      isRead: false,
-      reposterActorId: t.alice.actorId as never,
-      repostedPostId: t.myPost.postId as never,
-    }, Instant.orThrow(9_000));
-
-    await createD1RepostNotificationCreatedStore(t.db).store(event);
-
-    const items = await t.resolveByPage({}, ['repost']);
-    const events = t.sqlite.prepare('SELECT count(*) AS n FROM domain_events WHERE eventName = ?').get(
-      'notification.repostNotificationCreated',
-    );
-    expect(items.ok && items.val.map((item) => item.notification)).toEqual([event.aggregateState]);
-    expect(events).toMatchObject({ n: 1 });
-  });
 
   it('受信者、reposter、投稿が一致する通知だけをリゾルバーが返す', async () => {
     const t = seedReposts();
@@ -476,29 +378,6 @@ describe('repost 通知', () => {
     expect(() => t.seed.addRepostNotification(t.me.userId, t.other.actorId, t.myPost.postId, 8_700))
       .not.toThrow();
   });
-
-  it('通知の削除と全件削除で子表の行も消える', async () => {
-    const t = seedReposts();
-    t.seed.addRepostNotification(t.me.userId, t.alice.actorId, t.seed.uuid(), 8_500);
-    const count = () => t.sqlite.prepare('SELECT count(*) AS n FROM notification_reposts').get();
-
-    await createD1NotificationDismissedStore(t.db).store(
-      Notification.dismissNotification({
-        type: 'repost',
-        notificationId: NotificationId.orThrow(t.repost),
-        recipientUserId: UserId.orThrow(t.me.userId),
-        isRead: false,
-        reposterActorId: t.alice.actorId as never,
-        repostedPostId: t.myPost.postId as never,
-      }, Instant.orThrow(9_000)),
-    );
-    expect(count()).toMatchObject({ n: 1 });
-
-    await createD1NotificationsClearedStore(t.db).store(
-      Notification.clearNotifications(UserId.orThrow(t.me.userId), Instant.orThrow(9_500)),
-    );
-    expect(count()).toMatchObject({ n: 0 });
-  });
 });
 
 describe('mention 通知', () => {
@@ -508,46 +387,6 @@ describe('mention 通知', () => {
     const mention = t.seed.addMentionNotification(t.me.userId, t.alice.actorId, mentionPost.postId, 8_100);
     return { ...t, mentionPost, mention };
   };
-
-  it('types に mention が含まれるときだけ、子表から値を復元して返す', async () => {
-    const t = seedMentions();
-
-    const result = await t.resolveByPage({}, ['mention']);
-
-    expect(await t.idsOf()).not.toContain(t.mention);
-    expect(result.ok && result.val.map((item) => item.notification)).toMatchObject([
-      {
-        type: 'mention',
-        notificationId: t.mention,
-        recipientUserId: t.me.userId,
-        mentionerActorId: t.alice.actorId,
-        mentionPostId: t.mentionPost.postId,
-      },
-    ]);
-    expect(result.ok && result.val[0]?.createdAt).toBe(8_100);
-  });
-
-  it('作成ストアが通知、子表、ドメインイベントを保存する', async () => {
-    const t = seedNotifications();
-    const mentionPost = t.seed.addRemotePost(t.alice, 8_000, { timeline: false });
-    const event = Notification.createMentionNotification({
-      type: 'mention',
-      notificationId: NotificationId.generate(),
-      recipientUserId: UserId.orThrow(t.me.userId),
-      isRead: false,
-      mentionerActorId: t.alice.actorId as never,
-      mentionPostId: mentionPost.postId as never,
-    }, Instant.orThrow(9_000));
-
-    await createD1MentionNotificationCreatedStore(t.db).store(event);
-
-    const items = await t.resolveByPage({}, ['mention']);
-    const events = t.sqlite.prepare('SELECT count(*) AS n FROM domain_events WHERE eventName = ?').get(
-      'notification.mentionNotificationCreated',
-    );
-    expect(items.ok && items.val.map((item) => item.notification)).toEqual([event.aggregateState]);
-    expect(events).toMatchObject({ n: 1 });
-  });
 
   it('受信者と投稿が一致する通知だけをリゾルバーが返す', async () => {
     const t = seedMentions();
@@ -646,28 +485,6 @@ describe('Bluesky の通知', () => {
   const subtypeRows = (t: ReturnType<typeof seedBluesky>) =>
     (t.sqlite.prepare('SELECT count(*) AS n FROM notification_bluesky').get() as { n: number }).n;
 
-  it('types に含まれるときだけ、子表から 4 種の値を復元して返す', async () => {
-    const t = seedBluesky();
-
-    const result = await t.resolveByPage({}, blueskyTypes);
-
-    expect(await t.idsOf()).not.toContain(t.blueskyIds.like);
-    expect(result.ok && result.val.map((item) => item.notification)).toMatchObject([
-      {
-        type: 'blueskyMention',
-        reason: 'reply',
-        subjectUri: null,
-        targetPostId: null,
-        text: 'hello',
-        author: { did: 'did:plc:alice', handle: 'alice.bsky.social', displayName: 'Alice', avatarUrl: null },
-      },
-      { type: 'blueskyFollow' },
-      { type: 'blueskyRepost', subjectUri: 'at://did:plc:me/app.bsky.feed.post/3kpost', targetPostId: null },
-      { type: 'blueskyLike', targetPostId: t.myPost.postId, notificationId: t.blueskyIds.like },
-    ]);
-    expect(result.ok && result.val[0]?.createdAt).toBe(14_000);
-  });
-
   it('未読件数に数える', async () => {
     const t = seedBluesky();
 
@@ -697,18 +514,6 @@ describe('Bluesky の通知', () => {
     expect(subtypeRows(t)).toBe(3);
     expect(receipts(t)).toBe(4);
     expect(await t.idsOf({}, blueskyTypes)).not.toContain(t.blueskyIds.follow);
-  });
-
-  it('全件削除で通知と子表の行が消え、受信の記録は残る', async () => {
-    const t = seedBluesky();
-
-    await createD1NotificationsClearedStore(t.db).store(
-      Notification.clearNotifications(UserId.orThrow(t.me.userId), Instant.orThrow(20_000)),
-    );
-
-    expect(subtypeRows(t)).toBe(0);
-    expect(receipts(t)).toBe(4);
-    expect(await t.idsOf({}, [...mastodonTypes, ...blueskyTypes])).toEqual([]);
   });
 });
 

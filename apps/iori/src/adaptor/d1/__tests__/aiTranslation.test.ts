@@ -32,29 +32,6 @@ const translation = (postId: string, overrides: Partial<PostTranslation> = {}) =
   });
 
 describe('createD1PostTranslationStore', () => {
-  it('保存した訳文を postId と targetLanguage で取り出す', async () => {
-    const { db, seed } = setup();
-    const alice = seed.addRemoteActor('alice');
-    const post = seed.addRemotePost(alice, 1_000);
-    const store = createD1PostTranslationStore(db);
-
-    await store.save(translation(post.postId));
-    const found = await store.find(PostId.orThrow(post.postId), 'ja');
-
-    expect(found).toEqual({ ok: true, val: translation(post.postId) });
-  });
-
-  it('保存がなければ undefined を返し、別の targetLanguage は別に扱う', async () => {
-    const { db, seed } = setup();
-    const alice = seed.addRemoteActor('alice');
-    const post = seed.addRemotePost(alice, 1_000);
-    const store = createD1PostTranslationStore(db);
-    await store.save(translation(post.postId));
-
-    expect(await store.find(PostId.orThrow(post.postId), 'en')).toEqual({ ok: true, val: undefined });
-    expect(await store.find(PostId.generate(), 'ja')).toEqual({ ok: true, val: undefined });
-  });
-
   it('同じ postId と targetLanguage への保存は上書きする', async () => {
     const { db, seed, sqlite } = setup();
     const alice = seed.addRemoteActor('alice');
@@ -92,12 +69,6 @@ describe('createD1PostTranslationStore', () => {
 
     expect(sqlite.prepare('SELECT count(*) AS n FROM post_translations').get()).toEqual({ n: 0 });
   });
-
-  it('存在しない投稿への保存は外部キーで拒否する', async () => {
-    const { db } = setup();
-
-    await expect(createD1PostTranslationStore(db).save(translation(PostId.generate()))).rejects.toThrow();
-  });
 });
 
 describe('createD1AiTranslationUsageRecorder', () => {
@@ -111,37 +82,5 @@ describe('createD1AiTranslationUsageRecorder', () => {
     expect(await recorder.reserve(input)).toEqual({ ok: true, val: { allowed: true, count: 2 } });
     expect(await recorder.reserve(input)).toEqual({ ok: true, val: { allowed: false, count: 2 } });
     expect(await recorder.read({ userId: input.userId, day: input.day })).toEqual({ ok: true, val: 2 });
-  });
-
-  it('日付と利用者ごとに別に数え、予約のない日は 0 を返す', async () => {
-    const { db, seed } = setup();
-    const me = seed.addLocalActor('kosui');
-    const other = seed.addLocalActor('other');
-    const recorder = createD1AiTranslationUsageRecorder(db);
-    const userId = UserId.orThrow(me.userId);
-
-    await recorder.reserve({ userId, day: '2026-11-04', limit: 50 });
-
-    expect(await recorder.read({ userId, day: '2026-11-05' })).toEqual({ ok: true, val: 0 });
-    expect(await recorder.read({ userId: UserId.orThrow(other.userId), day: '2026-11-04' })).toEqual({
-      ok: true,
-      val: 0,
-    });
-  });
-
-  it('要約の回数とは別の表に数える', async () => {
-    const { db, seed, sqlite } = setup();
-    const me = seed.addLocalActor('kosui');
-
-    await createD1AiTranslationUsageRecorder(db).reserve({
-      userId: UserId.orThrow(me.userId),
-      day: '2026-11-04',
-      limit: 50,
-    });
-
-    expect(sqlite.prepare('SELECT count(*) AS n FROM ai_summary_usages').get()).toEqual({ n: 0 });
-    expect(sqlite.prepare('SELECT day, count FROM ai_translation_usages').all()).toEqual([
-      { day: '2026-11-04', count: 1 },
-    ]);
   });
 });

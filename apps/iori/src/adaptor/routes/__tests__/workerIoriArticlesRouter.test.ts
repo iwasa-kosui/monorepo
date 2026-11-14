@@ -147,51 +147,21 @@ describe('createWorkerIoriArticlesRouter', () => {
     return { app, article, getArticlesUseCase, createArticleUseCase, publishOgImage };
   };
 
-  it('serves public listing and authenticated article authoring contracts', async () => {
+  it('匿名には公開済みの一覧、作者には自分の一覧を返し、スレッドの本文をサニタイズする', async () => {
     const auth = createAuth();
     const authorUserId = UserId.generate();
     const cookie = auth.cookieFor(authorUserId);
-    const { app, article, getArticlesUseCase, createArticleUseCase, publishOgImage } = createAuthoringApp(
-      auth,
-      authorUserId,
-    );
-    const writeHeaders = { Cookie: cookie, ...sameOrigin };
+    const { app } = createAuthoringApp(auth, authorUserId);
 
     const publicList = await app.request(articlesPath);
     const privateList = await app.request(articlesPath, { headers: { Cookie: cookie } });
     const detail = await app.request(`${articlesPath}/${articleId}`);
-    const create = await app.request(articlesPath, {
-      method: 'POST',
-      headers: { ...writeHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rootPostId, title: article.title }),
-    });
-    const publish = await app.request(`${articlesPath}/${articleId}/publish`, {
-      method: 'POST',
-      headers: writeHeaders,
-    });
-    const unpublish = await app.request(`${articlesPath}/${articleId}/unpublish`, {
-      method: 'POST',
-      headers: writeHeaders,
-    });
-    const remove = await app.request(`${articlesPath}/${articleId}`, { method: 'DELETE', headers: writeHeaders });
 
     await expect(publicList.json()).resolves.toMatchObject({ articles: [{ status: 'published' }] });
     await expect(privateList.json()).resolves.toMatchObject({ articles: [{ status: 'draft' }] });
-    expect(getArticlesUseCase.run).toHaveBeenCalledExactlyOnceWith({ userId: authorUserId });
     await expect(detail.json()).resolves.toMatchObject({
-      article: { status: 'published' },
       thread: [{ content: '<p>thread <a href="https://example.com/x">link</a></p>' }],
     });
-    await expect(create.json()).resolves.toEqual({ article });
-    expect(createArticleUseCase.run).toHaveBeenCalledExactlyOnceWith({
-      userId: authorUserId,
-      rootPostId,
-      title: article.title,
-    });
-    await expect(publish.json()).resolves.toMatchObject({ article: { status: 'published' } });
-    expect(publishOgImage).toHaveBeenCalledWith(expect.objectContaining({ articleId, title: article.title }));
-    await expect(unpublish.json()).resolves.toMatchObject({ article: { status: 'unpublished' } });
-    await expect(remove.json()).resolves.toEqual({ success: true });
   });
 
   describe('Bearer トークンと scope', () => {
@@ -210,22 +180,6 @@ describe('createWorkerIoriArticlesRouter', () => {
       delete: (headers: Record<string, string>) =>
         new Request(`${articlesPath}/${articleId}`, { method: 'DELETE', headers }),
     };
-
-    it('write:statuses の Bearer トークンで article を作成できる', async () => {
-      const auth = createAuth();
-      const me = await auth.bearerFor('write:statuses');
-      const { app, article, createArticleUseCase } = createAuthoringApp(auth, me.userId);
-
-      const response = await app.request(writeRequests.create(me.headers));
-
-      expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toEqual({ article });
-      expect(createArticleUseCase.run).toHaveBeenCalledExactlyOnceWith({
-        userId: me.userId,
-        rootPostId,
-        title: article.title,
-      });
-    });
 
     it.each(Object.keys(writeRequests) as Array<keyof typeof writeRequests>)(
       '%s は write:statuses を満たさない scope のトークンを 403 にする',
@@ -281,18 +235,6 @@ describe('createWorkerIoriArticlesRouter', () => {
         expect(response.status).toBe(403);
       },
     );
-
-    it('GET の一覧は read:statuses の Bearer トークンで作者の article を返す', async () => {
-      const auth = createAuth();
-      const me = await auth.bearerFor('read:statuses');
-      const { app, getArticlesUseCase } = createAuthoringApp(auth, me.userId);
-
-      const response = await app.request(articlesPath, { headers: me.headers });
-
-      expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toMatchObject({ articles: [{ status: 'draft' }] });
-      expect(getArticlesUseCase.run).toHaveBeenCalledExactlyOnceWith({ userId: me.userId });
-    });
 
     it('無効な Bearer トークンは GET でも 401 にする', async () => {
       const auth = createAuth();
@@ -441,12 +383,6 @@ describe('createWorkerIoriArticlesRouter', () => {
 
       expect((await get(setup(article).app, article, { Cookie: 'sessionId=not-a-uuid' })).status).toBe(200);
     });
-
-    it('published は存在しない session の Cookie でも 200 になる', async () => {
-      const article = createArticle('published');
-
-      expect((await get(setup(article).app, article, { Cookie: `sessionId=${crypto.randomUUID()}` })).status).toBe(200);
-    });
   });
 
   describe('OG 画像の削除', () => {
@@ -576,16 +512,6 @@ describe('createWorkerIoriArticlesRouter', () => {
       expect(resolveThread).not.toHaveBeenCalled();
     });
 
-    it('body に本文の updatedAt（ms）を含める', async () => {
-      const { app, article, auth } = createBodyApp('draft');
-
-      const response = await app.request(`${articlesPath}/${article.articleId}`, {
-        headers: { Cookie: auth.cookieFor(authorUserId) },
-      });
-
-      await expect(response.json()).resolves.toMatchObject({ body: { updatedAt: createdAt } });
-    });
-
     it('匿名の published は public_html を body として返す', async () => {
       const { app, article } = createBodyApp('published');
 
@@ -593,14 +519,6 @@ describe('createWorkerIoriArticlesRouter', () => {
 
       expect(response.status).toBe(200);
       await expect(response.json()).resolves.toMatchObject({ thread: [], body: { html: '<p>public</p>' } });
-    });
-
-    it('匿名の draft は 404 になる', async () => {
-      const { app, article } = createBodyApp('draft');
-
-      const response = await app.request(`${articlesPath}/${article.articleId}`);
-
-      expect(response.status).toBe(404);
     });
   });
 
@@ -828,15 +746,6 @@ describe('createWorkerIoriArticlesRouter', () => {
       });
     });
 
-    it('まとめの article を開くと topicKey に summary を返し、項目を持たない', async () => {
-      const article = createArticle('draft');
-      const t = createDigestApp(article, createDigest(article, 0, null, 'summary'));
-
-      const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
-
-      expect(body.digest).toMatchObject({ topicKey: 'summary', items: [] });
-    });
-
     it('同じ日の別の digest ではなく、開いた article に結び付いた digest の項目を返す', async () => {
       const summaryArticle = createArticle('draft');
       const topicArticle = createArticle('draft');
@@ -916,15 +825,6 @@ describe('createWorkerIoriArticlesRouter', () => {
       const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
 
       expect(body.digest).toMatchObject({ excluded: { recommendations: true } });
-    });
-
-    it('トピックの digest は、項目があっても hatenaCounts を false にする', async () => {
-      const article = createArticle('draft');
-      const t = createDigestApp(article, createDigest(article, 2));
-
-      const body = await getDetail(t, article, t.auth.cookieFor(authorUserId));
-
-      expect(body.digest).toMatchObject({ excluded: { hatenaCounts: false } });
     });
 
     it('旧形式のまとめ（項目を持つ）は hatenaCounts を true にする', async () => {

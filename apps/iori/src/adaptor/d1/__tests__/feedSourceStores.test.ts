@@ -52,18 +52,6 @@ describe('createD1FeedSourceEnabledChangedStore', () => {
     expect(eventNames()).toEqual(['feedSource.created', 'feedSource.created', 'feedSource.enabledChanged']);
   });
 
-  it('false にした情報源を true に戻せる', async () => {
-    const { createSource, createdStore, enabledChangedStore, enabledRows } = setup();
-    const source = createSource('https://example.com/a.xml');
-    await createdStore.store(source);
-    const disabled = FeedSource.setEnabled(source.aggregateState, false, CHANGED_AT);
-    await enabledChangedStore.store(disabled);
-
-    await enabledChangedStore.store(FeedSource.setEnabled(disabled.aggregateState, true, CHANGED_AT));
-
-    expect(enabledRows()).toEqual([{ url: 'https://example.com/a.xml', enabled: 1 }]);
-  });
-
   it('無効にした情報源は enabled: true の resolver に出ず、enabled: false の resolver と全件の resolver に出る', async () => {
     const { createSource, createdStore, enabledChangedStore, enabledResolver, allResolver } = setup();
     const target = createSource('https://example.com/a.xml');

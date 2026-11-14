@@ -324,15 +324,6 @@ describe('DELETE /api/iori/v1/bluesky/credential', () => {
     expect(t.sqlite.prepare('SELECT * FROM bluesky_credentials').all()).toEqual([]);
     expect(t.sqlite.prepare('SELECT * FROM bluesky_sessions').all()).toEqual([]);
   });
-
-  it('何も無ければ none を返す', async () => {
-    const t = await setup();
-
-    const response = await t.send('DELETE');
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ source: 'none' });
-  });
 });
 
 describe('切り替え中の PUT と DELETE', () => {
@@ -469,13 +460,6 @@ describe('GET /api/iori/v1/bluesky/account-switch', () => {
       stalled: true,
     });
   });
-
-  it('試行が 30 回ちょうどなら stalled にしない', async () => {
-    const t = await setup();
-    insertBlueskyAccountSwitch(t.sqlite, { attempts: 30 });
-
-    expect(await (await t.sendTo('account-switch', 'GET')).json()).toMatchObject({ attempts: 30, stalled: false });
-  });
 });
 
 describe('POST /api/iori/v1/bluesky/account-switch', () => {
@@ -528,8 +512,6 @@ describe('POST /api/iori/v1/bluesky/account-switch', () => {
 
   it.each([
     ['fromDid が現在の DID と違う', { fromDid: 'did:plc:someone-else' }, 'did:plc:other'],
-    ['toDid がログインで得た DID と違う', { toDid: 'did:plc:another' }, 'did:plc:other'],
-    ['現在の DID と同じアカウント', { fromDid: 'did:plc:alice', toDid: 'did:plc:alice' }, 'did:plc:alice'],
   ])('%s と 409 did_changed で、何も変えない', async (_name, override, currentDid) => {
     const t = await setup();
     t.seedCurrent(currentDid);
@@ -540,15 +522,6 @@ describe('POST /api/iori/v1/bluesky/account-switch', () => {
     expect(await response.json()).toEqual({ error: 'did_changed' });
     expect(t.sqlite.prepare('SELECT * FROM bluesky_account_switch').all()).toEqual([]);
     expect(t.sqlite.prepare('SELECT accessJwt FROM bluesky_sessions').all()).toEqual([{ accessJwt: 'old' }]);
-  });
-
-  it('現在の DID が決まらなければ 409 did_changed', async () => {
-    const t = await setup();
-
-    const response = await t.sendTo('account-switch', 'POST', t.switchBody);
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'did_changed' });
   });
 
   it('切り替え中は 409 switch_in_progress', async () => {

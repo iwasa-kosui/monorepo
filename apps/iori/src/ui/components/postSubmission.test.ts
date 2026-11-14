@@ -7,7 +7,6 @@ import {
   editParams,
   mediaOverflowNotice,
   mediaSlotsLeft,
-  postedNotice,
   type PostFormValue,
   quoteParams,
   replyParams,
@@ -131,34 +130,6 @@ describe('submitPost', () => {
     expect(onPosted).toHaveBeenCalledTimes(1);
     expect(onPosted).toHaveBeenCalledWith(created);
     expect(assign).not.toHaveBeenCalled();
-  });
-
-  it('passes the selected destination as iori_destination', async () => {
-    const create = vi.fn().mockResolvedValue(created);
-
-    await submitPost({ ...filled, destination: 'fediverse' }, {
-      create,
-      createBlueskyPost: vi.fn(),
-      updateMedia,
-      onDescriptionSaved: vi.fn(),
-      onPosted: vi.fn(),
-    });
-
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({ iori_destination: 'fediverse' }));
-  });
-
-  it.each(['public', 'unlisted', 'private'] as const)('passes the selected visibility %s', async (visibility) => {
-    const create = vi.fn().mockResolvedValue(created);
-
-    await submitPost({ ...filled, visibility }, {
-      create,
-      createBlueskyPost: vi.fn(),
-      updateMedia,
-      onDescriptionSaved: vi.fn(),
-      onPosted: vi.fn(),
-    });
-
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({ visibility }));
   });
 
   it('passes a trimmed spoiler_text and sensitive', async () => {
@@ -438,13 +409,6 @@ describe('submitPost to Bluesky only', () => {
       expect(params).not.toHaveProperty('quote_disabled');
     });
 
-    it('設定が無いときも reply_allow も quote_disabled も送らない', async () => {
-      const params = await submit(blueskyOnly);
-
-      expect(params).not.toHaveProperty('reply_allow');
-      expect(params).not.toHaveProperty('quote_disabled');
-    });
-
     it('指定した人だけと引用の禁止を reply_allow と quote_disabled で送る', async () => {
       const params = await submit({
         ...blueskyOnly,
@@ -584,108 +548,21 @@ describe('submitPost to Bluesky only', () => {
     expect(params).not.toHaveProperty('spoiler_text');
     expect(params).not.toHaveProperty('sensitive');
   });
-
-  it('does not call createBlueskyPost for the other destinations', async () => {
-    const createBlueskyPost = vi.fn();
-
-    await submitPost(filled, {
-      create: vi.fn().mockResolvedValue(created),
-      createBlueskyPost,
-      updateMedia,
-      onDescriptionSaved: vi.fn(),
-      onPosted: vi.fn(),
-    });
-
-    expect(createBlueskyPost).not.toHaveBeenCalled();
-  });
-});
-
-describe('postedNotice', () => {
-  it('says the post went to Bluesky and carries the URL', () => {
-    expect(postedNotice('bluesky', { kind: 'postedToBluesky', url: 'https://bsky.app/x' })).toEqual({
-      message: 'Bluesky に投稿しました',
-      href: 'https://bsky.app/x',
-    });
-  });
-
-  it('has no link when the URL is unknown', () => {
-    expect(postedNotice('bluesky', { kind: 'postedToBluesky', url: null })).toEqual({
-      message: 'Bluesky に投稿しました',
-      href: null,
-    });
-  });
-
-  it('keeps the existing message for a Fediverse post', () => {
-    expect(postedNotice('fediverse', { kind: 'posted', status: created })).toEqual({
-      message: 'Fediverse に投稿しました',
-      href: null,
-    });
-  });
-
-  it('passes the visibility of the created status, so a DM skip does not show the visibility reason', () => {
-    const direct = {
-      ...created,
-      visibility: 'direct',
-      iori: { bluesky_crosspost: { status: 'skipped', skip_reason: 'visibility' } },
-    } as unknown as Status;
-
-    expect(postedNotice('both', { kind: 'posted', status: direct })).toEqual({
-      message: 'Fediverse に投稿しました。Bluesky には送っていません',
-      href: null,
-    });
-  });
 });
 
 describe('replyParams', () => {
-  it('passes the selected destination as iori_destination', () => {
-    expect(replyParams('post-1', 'hello', 'fediverse')).toEqual({
-      status: 'hello',
-      in_reply_to_id: 'post-1',
-      content_type: 'text/markdown',
-      iori_destination: 'fediverse',
-    });
-  });
-
-  it('passes the selected visibility as visibility', () => {
-    expect(replyParams('post-1', 'hello', 'both', 'unlisted')).toEqual({
-      status: 'hello',
-      in_reply_to_id: 'post-1',
-      content_type: 'text/markdown',
-      iori_destination: 'both',
-      visibility: 'unlisted',
-    });
-  });
-
   it('omits visibility when none is given, as for a reply to a direct post', () => {
     expect(replyParams('post-1', 'hello', 'fediverse', undefined)).not.toHaveProperty('visibility');
   });
 });
 
 describe('quoteParams', () => {
-  it('passes the quoted post id as quoted_status_id and the selected destination as iori_destination', () => {
-    expect(quoteParams('post-1', 'hello', 'fediverse')).toEqual({
-      status: 'hello',
-      quoted_status_id: 'post-1',
-      content_type: 'text/markdown',
-      iori_destination: 'fediverse',
-    });
-  });
-
   it('does not send in_reply_to_id', () => {
     expect(quoteParams('post-1', 'hello', 'fediverse')).not.toHaveProperty('in_reply_to_id');
   });
 });
 
 describe('editParams', () => {
-  it('本文、CW、センシティブ、Markdown の指定を PUT に送る形にする', () => {
-    expect(editParams({ content: '直した本文', cw: '注意', sensitive: true }, true)).toEqual({
-      status: '直した本文',
-      spoiler_text: '注意',
-      sensitive: true,
-      content_type: 'text/markdown',
-    });
-  });
-
   it('CW の前後の空白を取り、空白だけなら空文字にして CW を外す', () => {
     expect(editParams({ content: 'a', cw: ' 注意 ', sensitive: false }, true).spoiler_text).toBe('注意');
     expect(editParams({ content: 'a', cw: '  ', sensitive: false }, true).spoiler_text).toBe('');

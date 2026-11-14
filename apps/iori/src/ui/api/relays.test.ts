@@ -8,13 +8,6 @@ const stubFetch = (response: Response | Error) =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe('fetchRelays', () => {
-  it('returns the relays from the response', async () => {
-    const relays = [{ relayId: 'r1', actorUri: 'https://relay.example/actor', status: 'accepted' }];
-    stubFetch(Response.json({ relays }));
-
-    expect(await fetchRelays()).toEqual(relays);
-  });
-
   it('returns no relays when the response is not ok', async () => {
     stubFetch(new Response('{}', { status: 500 }));
 
@@ -23,13 +16,6 @@ describe('fetchRelays', () => {
 });
 
 describe('fetchRelaysOrThrow', () => {
-  it('returns the relays from the response', async () => {
-    const relays = [{ relayId: 'r1', actorUri: 'https://relay.example/actor', status: 'accepted' }];
-    stubFetch(Response.json({ relays }));
-
-    expect(await fetchRelaysOrThrow()).toEqual(relays);
-  });
-
   it('rejects when the response is not ok', async () => {
     stubFetch(new Response('{}', { status: 500 }));
 

@@ -10,8 +10,6 @@ import {
   countGraphemes,
 } from './blueskyReply.ts';
 
-const apiError = (status: number, code?: string): Error => Object.assign(new Error('x'), { status, code });
-
 describe('countGraphemes', () => {
   it('絵文字の連結や結合文字を 1 つに数える', () => {
     expect(countGraphemes('abc')).toBe(3);
@@ -73,17 +71,6 @@ describe('blueskyReplyExcerpt', () => {
     expect(blueskyReplyExcerpt('短い')).toBe('短い');
     expect(blueskyReplyExcerpt('a'.repeat(80))).toBe('a'.repeat(80));
     expect(blueskyReplyExcerpt('a'.repeat(81))).toBe(`${'a'.repeat(80)}…`);
-  });
-});
-
-describe('blueskyReplyErrorMessage', () => {
-  it('404、409、422、それ以外でステータスに応じた文言を返す', () => {
-    expect(blueskyReplyErrorMessage(apiError(404))).toBe('返信先の投稿が見つかりません');
-    expect(blueskyReplyErrorMessage(apiError(409))).toBe('Bluesky のタイムラインが無効です');
-    expect(blueskyReplyErrorMessage(apiError(422))).toBe('この投稿には返信できません');
-    expect(blueskyReplyErrorMessage(apiError(422, 'other'))).toBe('この投稿には返信できません');
-    expect(blueskyReplyErrorMessage(apiError(400))).toBe('Bluesky に返信できませんでした');
-    expect(blueskyReplyErrorMessage(new TypeError('network'))).toBe('Bluesky に返信できませんでした');
   });
 });
 

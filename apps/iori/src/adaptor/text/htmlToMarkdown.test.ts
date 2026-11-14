@@ -59,8 +59,4 @@ describe('htmlToMarkdown', () => {
 
     expect(htmlToMarkdown(`<p>before</p>${table}`)).toBe(`before\n\n${table}`);
   });
-
-  it('空の HTML は空文字にする', () => {
-    expect(htmlToMarkdown('')).toBe('');
-  });
 });

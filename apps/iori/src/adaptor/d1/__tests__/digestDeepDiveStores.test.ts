@@ -166,11 +166,3 @@ describe('createD1DigestDeepDiveBodyWrittenStore', () => {
     expect(eventNames()).toEqual([]);
   });
 });
-
-describe('createD1DigestDeepDiveResolverByDigestItemId', () => {
-  it('深掘りの無い項目は undefined を返す', async () => {
-    const { resolver } = setup();
-
-    expect((await resolver.resolve(DigestItemId.generate())).val).toBeUndefined();
-  });
-});

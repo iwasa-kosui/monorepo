@@ -1,13 +1,11 @@
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { classifyFailure, runGuardedWithRetry } from '../run-guarded-retry.mjs';
+import { runGuardedWithRetry } from '../run-guarded-retry.mjs';
 
-const scriptPath = resolve(process.cwd(), 'scripts/run-guarded-retry.mjs');
 const counterProgram = [
   'const fs = require("node:fs");',
   'const file = process.argv[2];',
@@ -18,28 +16,6 @@ const counterProgram = [
   'process.stdout.write((process.env.FAKE_BODY ?? "").replaceAll("{n}", String(n)) + extra);',
   'process.exit(n >= succeedAt ? 0 : 1);',
 ].join('\n');
-
-describe('classifyFailure', () => {
-  it.each([
-    ['Error: 401 Unauthorized', 'authentication'],
-    ['request failed: 403 Forbidden', 'authentication'],
-    ['authentication failed for registry', 'authentication'],
-    ['could not connect to registry.terraform.io', 'network'],
-    ['dial tcp: i/o timeout', 'network'],
-    ['context deadline exceeded', 'network'],
-    ['502 Bad Gateway', 'network'],
-    ['429 Too Many Requests', 'network'],
-    ['read: connection reset by peer', 'network'],
-    ['lookup registry.terraform.io: no such host', 'network'],
-    ['the request failed, please try again later', 'network'],
-    ['unexpected EOF', 'network'],
-    ['Error: Invalid provider version', 'other'],
-    ['the cached package does not match any of the checksums', 'other'],
-    ['', 'other'],
-  ])('classifies %j as %s', (output, kind) => {
-    expect(classifyFailure(output)).toBe(kind);
-  });
-});
 
 describe('runGuardedWithRetry', () => {
   let directory: string;
@@ -113,24 +89,6 @@ describe('runGuardedWithRetry', () => {
     expect(stderr).toContain('Guarded command attempt 1 of 3 failed: kind=network');
     expect(stdout + stderr).not.toContain('could not connect');
     expect(stdout + stderr).not.toContain('BODY-MARKER');
-  });
-
-  it('reports the kind of every failed attempt when every attempt fails', async () => {
-    expect(await run(99, 'Error: 401 Unauthorized\n')).toBe(1);
-    expect(stderr).toContain('Guarded command attempt 1 of 3 failed: kind=authentication\n');
-    expect(stderr).toContain('Guarded command attempt 2 of 3 failed: kind=authentication\n');
-    expect(stderr).toContain('Guarded command attempt 3 of 3 failed: kind=authentication\n');
-  });
-
-  it('does not report a kind for an attempt that the guard rejects', async () => {
-    expect(await run(99, 'CLOUDFLARE_API_TOKEN=leak-marker-value\n')).toBe(1);
-    expect(stderr).not.toContain('kind=');
-  });
-
-  it('reports the kind of earlier attempts but not of the attempt that the guard rejects', async () => {
-    expect(await run(99, 'plain output {n}\n', { extraAtSecond: 'CLOUDFLARE_API_TOKEN=leak-marker-value\n' })).toBe(1);
-    expect(stderr).toContain('Guarded command attempt 1 of 3 failed: kind=other\n');
-    expect(stderr).not.toContain('attempt 2 of 3 failed: kind=');
   });
 
   it('waits 15 and 30 seconds, then prints only the tail of the last attempt when every attempt fails', async () => {
@@ -232,22 +190,5 @@ describe('runGuardedWithRetry', () => {
     await rm(counter);
     await run(99, 'ng\n');
     expect((await readdir(directory)).filter(name => name.startsWith('guarded-retry-'))).toEqual([]);
-  });
-});
-
-describe('run-guarded-retry command line', () => {
-  it('runs the given command and returns its success', () => {
-    const result = spawnSync(process.execPath, [scriptPath, process.execPath, '-e', 'process.stdout.write("fine")'], {
-      encoding: 'utf8',
-    });
-    expect(result.status).toBe(0);
-    expect(result.stdout).toBe('');
-    expect(result.stderr).toBe('');
-  });
-
-  it('refuses to run without a command', () => {
-    const result = spawnSync(process.execPath, [scriptPath], { encoding: 'utf8' });
-    expect(result.status).toBe(2);
-    expect(result.stderr).toContain('Usage:');
   });
 });

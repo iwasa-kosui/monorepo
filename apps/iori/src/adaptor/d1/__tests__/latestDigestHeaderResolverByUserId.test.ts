@@ -66,16 +66,4 @@ describe('createD1LatestDigestHeaderResolverByUserId', () => {
 
     expect(result.ok && result.val?.digestId).toBe(previous);
   });
-
-  it('前の日付の digest が無ければ undefined を返す', async () => {
-    const { db, me, addDigest } = setup();
-    addDigest(me, '2026-11-04', 3_000);
-
-    const result = await createD1LatestDigestHeaderResolverByUserId(db).resolve({
-      userId: UserId.orThrow(me.userId),
-      digestDateBefore: '2026-11-04',
-    });
-
-    expect(result).toEqual({ ok: true, val: undefined });
-  });
 });

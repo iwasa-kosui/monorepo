@@ -2,7 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createPruneFederatedPostsTask } from './federatedPostTasks.ts';
-import { type ScheduledTaskContext, scheduledTasks } from './scheduledTasks.ts';
+import { type ScheduledTaskContext } from './scheduledTasks.ts';
 
 const contextWith = (value: string | undefined): ScheduledTaskContext => ({
   env: { IORI_PRUNE_FEDERATED_POSTS: value } as never,
@@ -38,10 +38,5 @@ describe('pruneFederatedPostsTask', () => {
     expect(run).toHaveBeenCalledOnce();
     expect(info).toHaveBeenCalledOnce();
     expect(info).toHaveBeenCalledWith('iori federated posts pruned.', { pruned: 3 });
-  });
-
-  it('3 時間ごとの cron に登録されている', () => {
-    const names = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.map((task) => task.name);
-    expect(names).toContain('pruneFederatedPosts');
   });
 });

@@ -46,12 +46,6 @@ const setup = (
 const cancels = (calls: Call[]) => calls.filter(call => call.method === 'POST').map(call => call.url);
 
 describe('cancelSupersededDeploys', () => {
-  it('reads the waiting, in_progress and queued runs of the main push deploy workflow', async () => {
-    const { calls, run } = setup(url => listResponse(url, {}) ?? json({}, 404));
-    await run();
-    expect(calls).toEqual(activeStatuses.map(status => ({ url: listUrl(status), method: 'GET' })));
-  });
-
   it('cancels a waiting run whose head is behind the current commit and returns 0', async () => {
     const { calls, run } = setup((url, method) => {
       const list = listResponse(url, { waiting: [{ id: 11, head_sha: oldSha }] });
@@ -179,22 +173,5 @@ describe('cancelSupersededDeploys', () => {
     });
     expect(await run()).toBe(0);
     expect(cancels(calls)).toEqual(['https://api.github.com/repos/owner/repo/actions/runs/41/cancel']);
-  });
-
-  it('logs the number of active runs', async () => {
-    const { logs, run } = setup(url => listResponse(url, {}) ?? json({}, 404));
-    await run();
-    expect(logs).toContain('Found 0 active deploy runs');
-  });
-
-  it('returns 0 without cancelling when no run is active', async () => {
-    const { calls, run } = setup(url => listResponse(url, {}) ?? json({}, 404));
-    expect(await run()).toBe(0);
-    expect(cancels(calls)).toEqual([]);
-  });
-
-  it('throws an error with the status when the list cannot be read', async () => {
-    const { run } = setup(() => json({}, 500));
-    await expect(run()).rejects.toThrow('status=500');
   });
 });

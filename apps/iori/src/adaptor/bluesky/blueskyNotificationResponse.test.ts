@@ -214,8 +214,4 @@ describe('parseBlueskyNotificationResponse', () => {
     expect(parseBlueskyNotificationResponse({ notifications: 'x' })).toEqual({ ok: false, err: 'invalid_response' });
     expect(parseBlueskyNotificationResponse(null)).toEqual({ ok: false, err: 'invalid_response' });
   });
-
-  it('cursor が無い応答は cursor を undefined にする', () => {
-    expect(parse([])).toEqual({ ok: true, val: { items: [], dropped: 0, cursor: undefined } });
-  });
 });

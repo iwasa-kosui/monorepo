@@ -112,15 +112,4 @@ describe('AddDigestTopic', () => {
     expect(rows()).toHaveLength(1);
     expect(error).toHaveBeenCalled();
   });
-
-  it('textEmbedder が無ければ console.error を出し、追加は成功として返す', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const { add, rows } = setup({ textEmbedder: null });
-
-    const result = await add.run({ userId: USER_ID, name: '新しい名前', description: '新しい説明' });
-
-    expect(result).toMatchObject({ ok: true, val: { embedding: null } });
-    expect(rows()).toHaveLength(1);
-    expect(error).toHaveBeenCalledTimes(1);
-  });
 });

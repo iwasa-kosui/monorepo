@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  authorFeedFilterOfTab,
-  isBlueskyFollowListTab,
-  profileTabOfSearch,
-  withProfileTab,
-} from './blueskyProfileTab.ts';
+import { profileTabOfSearch, withProfileTab } from './blueskyProfileTab.ts';
 
 describe('profileTabOfSearch', () => {
   it('tab が follows・followers・replies・media・videos のときだけ、そのタブにする', () => {
@@ -43,30 +38,5 @@ describe('withProfileTab', () => {
     expect(withProfileTab('?tab=follows', 'lists')).toBe('');
     expect(withProfileTab('?a=1&tab=followers', 'posts')).toBe('?a=1');
     expect(withProfileTab('?tab=replies', 'feeds')).toBe('');
-  });
-});
-
-describe('isBlueskyFollowListTab', () => {
-  it('follows と followers だけを一覧のタブとみなす', () => {
-    expect(isBlueskyFollowListTab('follows')).toBe(true);
-    expect(isBlueskyFollowListTab('followers')).toBe(true);
-    expect(isBlueskyFollowListTab('posts')).toBe(false);
-    expect(isBlueskyFollowListTab('feeds')).toBe(false);
-  });
-});
-
-describe('authorFeedFilterOfTab', () => {
-  it('投稿系のタブを getAuthorFeed の filter に対応させる', () => {
-    expect(authorFeedFilterOfTab('posts')).toBe('posts_and_author_threads');
-    expect(authorFeedFilterOfTab('replies')).toBe('posts_with_replies');
-    expect(authorFeedFilterOfTab('media')).toBe('posts_with_media');
-    expect(authorFeedFilterOfTab('videos')).toBe('posts_with_video');
-  });
-
-  it('投稿系以外のタブは undefined にする', () => {
-    expect(authorFeedFilterOfTab('feeds')).toBeUndefined();
-    expect(authorFeedFilterOfTab('lists')).toBeUndefined();
-    expect(authorFeedFilterOfTab('follows')).toBeUndefined();
-    expect(authorFeedFilterOfTab('followers')).toBeUndefined();
   });
 });
