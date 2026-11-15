@@ -12,41 +12,127 @@ private: true
 
 私は現在、エンジニアというよりも PdM に近い立場で業務をしています。社内ではエージェントを組み合わせた開発の仕組みを運用しており、私が PRD とサービスブループリントを作成すると、そこからロードマップが作成され、Design Doc と ADR で論点が整理されます。私が担当するのは、整理された未決の論点に回答することです。回答に応じて、実装とテストが自動で生成されます。
 
+この仕組みでは、エージェントが役割ごとに分かれています。worker は課題を取得して実装し、テストと CI を通します。reviewer は PR をレビューし、指摘は worker が修正します。このループは、指摘がなくなるまで人を介さずに回ります。未決の論点があっても、worker は回答を待たずに仮の案で実装を進めます。人は台帳のページにあるチェックリストで論点に回答します。PR ごとに解説ページが作成され、人はそれを読んでマージを判断します。retro は振り返りを記録し、スキルの改善を PR として提案します。
+
+ただし、レビュー待ちの PR の数には上限を設けています。人が読み切れない量の PR を作成しても、マージの判断が追いつかないためです。上限に達すると、worker は新しい課題を取得しません。この仕組みのスループットは、最終的に人のレビュー容量で決まります。
+
 <figure className="fig">
-<svg viewBox="0 0 400 568" role="img" aria-labelledby="fig-ff-title fig-ff-desc">
-<title id="fig-ff-title">PRDから実装・テストまでの流れ</title>
-<desc id="fig-ff-desc">上から下へ、PRD・サービスブループリント、ロードマップ、Design Doc・ADR、未決の論点、実装・テストの順に進む流れの図です。人が作成するのは最初のPRD・サービスブループリントで、人が回答するのは未決の論点です。エージェントが動作するのは、ロードマップからDesign Doc・ADRまでと、未決の論点から実装・テストまでの区間です。</desc>
+<svg viewBox="0 0 400 1120" role="img" style={{ '--fig-dur': '14s' }} aria-labelledby="fig-fs-title fig-fs-desc">
+<title id="fig-fs-title">ソフトウェアファクトリーの構造</title>
+<desc id="fig-fs-desc">人、worker、reviewer、retroの4つのレーンで、ソフトウェアファクトリーの流れを示すスイムレーン図です。人が関与するのは、PRD・サービスブループリントの作成、未決の論点へのチェックリストでの回答、解説ページを読んでのマージの判断の3点です。workerとreviewerは、レビューの指摘がなくなるまで人を介さずに実装と修正を繰り返します。作成されたPRは、上限のあるレビュー待ちの待ち行列に入り、上限に達すると新しい課題を取得しません。retroは振り返りを記録し、スキル改善のPRを作成します。</desc>
+<path className="fig-line-rule fig-dotted" d="M58 40V1090" />
+<path className="fig-line-rule fig-dotted" d="M178 40V1090" />
+<path className="fig-line-rule fig-dotted" d="M290 40V1090" />
+<path className="fig-line-rule fig-dotted" d="M350 40V1090" />
+<rect className="fig-pill" x="38" y="12" width="40" height="24" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="58" y="28.5">人</text>
+<rect className="fig-pill" x="146" y="12" width="64" height="24" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="178" y="28.5">worker</text>
+<rect className="fig-pill" x="256" y="12" width="68" height="24" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="290" y="28.5">reviewer</text>
+<rect className="fig-pill" x="326" y="12" width="48" height="24" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="350" y="28.5">retro</text>
+<rect className="fig-card-human" x="4" y="54" width="108" height="56" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="58" y="70.5">PRD・サービス</text>
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="58" y="86.5">ブループリント</text>
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="58" y="102.5">を作成</text>
+<path className="fig-line" d="M58 110V125H178V132" />
+<path className="fig-mk" d="M178 140L174 132H182Z" />
+<rect className="fig-card-agent" x="124" y="140" width="108" height="68" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="178" y="162.5">ロードマップ・</text>
+<text className="fig-t fig-t-sm fig-mid" x="178" y="178.5">Design Doc・</text>
+<text className="fig-t fig-t-sm fig-mid" x="178" y="194.5">ADR を生成</text>
+<rect className="fig-pill-agent" x="132" y="131" width="92" height="18" rx="9" />
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="178" y="144.5">エージェント</text>
+<path className="fig-line" d="M178 208V229" />
+<path className="fig-mk" d="M178 236L174 228H182Z" />
+<rect className="fig-pill" x="132" y="236" width="92" height="28" rx="14" />
+<text className="fig-t fig-t-sm fig-mid" x="178" y="254.5">未決の論点</text>
+<path className="fig-line" d="M178 264V289" />
+<path className="fig-mk" d="M178 296L174 288H182Z" />
+<path className="fig-line" d="M132 250H58V289" />
+<path className="fig-mk-human" d="M58 296L54 288H62Z" />
+<text className="fig-t fig-t-sm fig-c-muted" x="186" y="284">回答を待たずに進む</text>
+<rect className="fig-card-human" x="4" y="296" width="108" height="56" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="58" y="320.5">チェックリスト</text>
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="58" y="336.5">で回答</text>
+<rect className="fig-card-agent" x="124" y="296" width="108" height="56" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="178" y="320.5">仮の案で実装</text>
+<text className="fig-t fig-t-sm fig-mid" x="178" y="336.5">を進める</text>
+<path className="fig-line" d="M178 352V373" />
+<path className="fig-mk" d="M178 380L174 372H182Z" />
+<rect className="fig-card" x="124" y="380" width="108" height="56" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="178" y="412.5">課題を取得</text>
+<path className="fig-line" d="M178 436V457" />
+<path className="fig-mk" d="M178 464L174 456H182Z" />
+<rect className="fig-card" x="124" y="464" width="108" height="56" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="178" y="488.5">実装・</text>
+<text className="fig-t fig-t-sm fig-mid" x="178" y="504.5">テスト・CI</text>
+<path className="fig-line" d="M232 492H290V541" />
+<path className="fig-mk" d="M290 548L286 540H294Z" />
+<rect className="fig-card-agent" x="236" y="548" width="108" height="56" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="290" y="580.5">レビュー</text>
+<path className="fig-line" d="M270 604V660H240" />
+<path className="fig-mk" d="M232 660L240 656V664Z" />
+<text className="fig-t fig-t-sm fig-c-muted" x="278" y="640">指摘あり</text>
+<rect className="fig-card" x="124" y="632" width="108" height="56" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="178" y="664.5">修正</text>
+<path className="fig-line" d="M178 632V576H228" />
+<path className="fig-mk" d="M236 576L228 572V580Z" />
+<path className="fig-line" d="M334 604V744H240" />
+<path className="fig-mk" d="M232 744L240 740V748Z" />
+<text className="fig-t fig-t-sm fig-c-muted fig-end" x="326" y="724">指摘なし</text>
+<rect className="fig-card-soft" x="4" y="572" width="108" height="72" rx="12" />
+<rect className="fig-fill-agent" x="10" y="584" width="3" height="48" rx="1.5" />
+<text className="fig-t fig-t-sm" x="20" y="596.5">指摘がなくなる</text>
+<text className="fig-t fig-t-sm" x="20" y="612.5">まで人を介さず</text>
+<text className="fig-t fig-t-sm" x="20" y="628.5">に回る</text>
+<rect className="fig-card" x="124" y="716" width="108" height="56" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="178" y="740.5">PR と解説</text>
+<text className="fig-t fig-t-sm fig-mid" x="178" y="756.5">ページを作成</text>
+<path className="fig-line" d="M178 772V793" />
+<path className="fig-mk" d="M178 800L174 792H182Z" />
+<rect className="fig-card-soft" x="24" y="800" width="240" height="76" rx="12" />
+<text className="fig-t fig-t-sm fig-b" x="40" y="822">レビュー待ち</text>
+<rect className="fig-card-dash" x="40" y="836" width="56" height="28" rx="8" />
+<rect className="fig-card-dash" x="104" y="836" width="56" height="28" rx="8" />
+<rect className="fig-card-dash" x="168" y="836" width="56" height="28" rx="8" />
+<rect className="fig-card-agent fig-at-7" x="40" y="836" width="56" height="28" rx="8" />
+<rect className="fig-card-agent fig-at-8" x="104" y="836" width="56" height="28" rx="8" />
+<rect className="fig-card-agent fig-at-9" x="168" y="836" width="56" height="28" rx="8" />
+<path className="fig-line-rule fig-dash" d="M238 832V868" />
+<rect className="fig-pill" x="216" y="808" width="44" height="20" rx="10" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="238" y="822.5">上限</text>
+<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="144" y="894.5">上限に達すると新しい</text>
+<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="144" y="910.5">課題を取得しない</text>
 <defs>
-<marker id="fig-ff-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path className="fig-mk" d="M0 0L10 5L0 10z" /></marker>
-<marker id="fig-ff-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path className="fig-mk-agent" d="M0 0L10 5L0 10z" /></marker>
+<mask id="fig-fs-mask" maskUnits="userSpaceOnUse" x="0" y="380" width="400" height="500"><path className="fig-mask-stroke fig-draw-at-10" pathLength="100" d="M264 850H388V408H240" /></mask>
 </defs>
-<rect className="fig-box" x="112" y="24" width="200" height="56" rx="8" />
-<rect className="fig-box" x="112" y="132" width="200" height="56" rx="8" />
-<rect className="fig-box" x="112" y="260" width="200" height="56" rx="8" />
-<rect className="fig-box" x="112" y="368" width="200" height="56" rx="8" />
-<rect className="fig-box" x="112" y="496" width="200" height="56" rx="8" />
-<text className="fig-t fig-mid" x="212" y="47">PRD・サービス</text>
-<text className="fig-t fig-mid" x="212" y="65">ブループリント</text>
-<text className="fig-t fig-mid" x="212" y="165">ロードマップ</text>
-<text className="fig-t fig-mid" x="212" y="293">Design Doc・ADR</text>
-<text className="fig-t fig-mid" x="212" y="401">未決の論点</text>
-<text className="fig-t fig-mid" x="212" y="529">実装・テスト</text>
-<path className="fig-stroke" d="M212 84V126" marker-end="url(#fig-ff-a)" />
-<path className="fig-stroke fig-stroke-agent" d="M212 192V254" marker-end="url(#fig-ff-g)" />
-<path className="fig-flow" d="M212 192V254" style={{ '--fig-dur': '3s' }} />
-<path className="fig-stroke" d="M212 320V362" marker-end="url(#fig-ff-a)" />
-<path className="fig-stroke fig-stroke-agent" d="M212 428V490" marker-end="url(#fig-ff-g)" />
-<path className="fig-flow" d="M212 428V490" style={{ '--fig-dur': '3s', '--fig-delay': '-1s' }} />
-<text className="fig-t fig-b fig-c-agent" x="228" y="228">エージェント</text>
-<text className="fig-t fig-b fig-c-agent" x="228" y="464">エージェント</text>
-<g transform="translate(56 52)"><g className="fig-fill-1"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g>
-<text className="fig-t fig-t-sm fig-mid" x="56" y="90">人が作成</text>
-<path className="fig-stroke-rule fig-dotted" d="M78 52H108" />
-<g transform="translate(56 396)"><g className="fig-fill-1"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g>
-<text className="fig-t fig-t-sm fig-mid" x="56" y="434">人が回答</text>
-<path className="fig-stroke-rule fig-dotted" d="M78 396H108" />
+<path className="fig-line-agent fig-dash" d="M264 850H388V408H240" mask="url(#fig-fs-mask)" />
+<path className="fig-mk-agent fig-at-10" d="M232 408L240 404V412Z" />
+<path className="fig-line" d="M60 876V937" />
+<path className="fig-mk" d="M60 944L56 936H64Z" />
+<rect className="fig-card-human" x="4" y="944" width="108" height="56" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="58" y="960.5">解説ページを</text>
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="58" y="976.5">読んで</text>
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="58" y="992.5">マージを判断</text>
+<path className="fig-line" d="M112 972H297" />
+<path className="fig-mk" d="M304 972L296 968V976Z" />
+<rect className="fig-card-agent" x="304" y="944" width="92" height="56" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="350" y="968.5">振り返りを</text>
+<text className="fig-t fig-t-sm fig-mid" x="350" y="984.5">記録</text>
+<path className="fig-line" d="M350 1000V1021" />
+<path className="fig-mk" d="M350 1028L346 1020H354Z" />
+<rect className="fig-card-agent" x="304" y="1028" width="92" height="56" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="350" y="1052.5">スキル改善の</text>
+<text className="fig-t fig-t-sm fig-mid" x="350" y="1068.5">PR</text>
+<path className="fig-line" d="M304 1056H58V1007" />
+<path className="fig-mk-human" d="M58 1000L54 1008H62Z" />
+<rect className="fig-fill-human" x="24" y="1094" width="16" height="12" rx="4" />
+<text className="fig-t fig-t-sm" x="46" y="1104">人が関与する点</text>
+<circle className="fig-fill-agent fig-ring fig-route-half" cx="0" cy="0" r="7" style={{ '--fig-dur': '14s', '--fig-r0x': '224px', '--fig-r0y': '388px', '--fig-r1x': '224px', '--fig-r1y': '472px', '--fig-r2x': '336px', '--fig-r2y': '556px', '--fig-r3x': '224px', '--fig-r3y': '640px', '--fig-r4x': '336px', '--fig-r4y': '556px', '--fig-r5x': '224px', '--fig-r5y': '724px', '--fig-r6x': '68px', '--fig-r6y': '850px', '--fig-r7x': '108px', '--fig-r7y': '950px', '--fig-xr': '108px', '--fig-yr': '950px' }} />
 </svg>
-<figcaption>人が担当するのは、PRD の作成と未決の論点への回答だけです。</figcaption>
+<figcaption>人が関与するのは、意図の作成、未決の論点への回答、マージの判断の3点です。スループットは人のレビュー容量で決まります。</figcaption>
 </figure>
 
 この状況では、「AI がコードを書くなら、コード設計は不要ではないか」という問いが生じます。コードを読まない人間がコード設計を気にする必要があるのか、という問いです。
@@ -63,125 +149,59 @@ private: true
 
 エージェントの導入によって、開発できる量は増えました。一方で、顧客が新しい機能を理解して業務に組み込む速度は、開発チームのリリース頻度とは無関係に決まります。
 
-<figure className="fig">
-<svg viewBox="0 0 400 520" role="img" aria-labelledby="fig-cf-title fig-cf-desc">
-<title id="fig-cf-title">開発できる量が増えても、顧客の認知で制限される様子</title>
-<desc id="fig-cf-desc">上から「開発できる機能」の粒が多数流入しますが、下の「顧客の認知」の細い口では少量しか通過できず、「利用される機能」になるのはわずかです。口の手前で滞留して左の縁から溢れた粒は、下の「問い合わせ」の器に落ちて蓄積します。</desc>
-<path className="fig-fill-agent-soft" d="M96 36H352V150L238 250V330H210V250L96 150Z" />
-<path className="fig-edge fig-edge-line" d="M96 36V150L210 250V330" />
-<path className="fig-edge fig-edge-line" d="M352 36V150L238 250V330" />
-<text className="fig-t fig-b fig-mid" x="224" y="24">開発できる機能</text>
-<circle className="fig-fill-agent fig-pulse" cx="217" cy="240" r="4" style={{ '--fig-delay': '0s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="231" cy="240" r="4" style={{ '--fig-delay': '-0.6s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="210" cy="228" r="4" style={{ '--fig-delay': '-1.2s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="224" cy="228" r="4" style={{ '--fig-delay': '-1.7999999999999998s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="238" cy="228" r="4" style={{ '--fig-delay': '-2.4s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="203" cy="216" r="4" style={{ '--fig-delay': '0s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="217" cy="216" r="4" style={{ '--fig-delay': '-0.6s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="231" cy="216" r="4" style={{ '--fig-delay': '-1.2s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="245" cy="216" r="4" style={{ '--fig-delay': '-1.7999999999999998s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="196" cy="204" r="4" style={{ '--fig-delay': '-2.4s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="210" cy="204" r="4" style={{ '--fig-delay': '0s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="224" cy="204" r="4" style={{ '--fig-delay': '-0.6s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="238" cy="204" r="4" style={{ '--fig-delay': '-1.2s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="252" cy="204" r="4" style={{ '--fig-delay': '-1.7999999999999998s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="189" cy="192" r="4" style={{ '--fig-delay': '-2.4s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="203" cy="192" r="4" style={{ '--fig-delay': '0s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="217" cy="192" r="4" style={{ '--fig-delay': '-0.6s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="231" cy="192" r="4" style={{ '--fig-delay': '-1.2s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="245" cy="192" r="4" style={{ '--fig-delay': '-1.7999999999999998s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-pulse" cx="259" cy="192" r="4" style={{ '--fig-delay': '-2.4s', '--fig-dur': '5s' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '112px', '--fig-y0': '44px', '--fig-x1': '112px', '--fig-y1': '138px', '--fig-yr': '56px', '--fig-xr': '112px', '--fig-dur': '4s', '--fig-delay': '0s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '112px', '--fig-y0': '44px', '--fig-x1': '112px', '--fig-y1': '138px', '--fig-yr': '123px', '--fig-xr': '112px', '--fig-dur': '4s', '--fig-delay': '-1.33s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '112px', '--fig-y0': '44px', '--fig-x1': '112px', '--fig-y1': '138px', '--fig-yr': '114px', '--fig-xr': '112px', '--fig-dur': '4s', '--fig-delay': '-2.66s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '144px', '--fig-y0': '44px', '--fig-x1': '144px', '--fig-y1': '138px', '--fig-yr': '97px', '--fig-xr': '144px', '--fig-dur': '4s', '--fig-delay': '-0.47s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '144px', '--fig-y0': '44px', '--fig-x1': '144px', '--fig-y1': '138px', '--fig-yr': '88px', '--fig-xr': '144px', '--fig-dur': '4s', '--fig-delay': '-1.8s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '144px', '--fig-y0': '44px', '--fig-x1': '144px', '--fig-y1': '138px', '--fig-yr': '79px', '--fig-xr': '144px', '--fig-dur': '4s', '--fig-delay': '-3.13s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '176px', '--fig-y0': '44px', '--fig-x1': '176px', '--fig-y1': '176px', '--fig-yr': '138px', '--fig-xr': '176px', '--fig-dur': '4s', '--fig-delay': '-0.94s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '176px', '--fig-y0': '44px', '--fig-x1': '176px', '--fig-y1': '176px', '--fig-yr': '91px', '--fig-xr': '176px', '--fig-dur': '4s', '--fig-delay': '-2.27s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '176px', '--fig-y0': '44px', '--fig-x1': '176px', '--fig-y1': '176px', '--fig-yr': '158px', '--fig-xr': '176px', '--fig-dur': '4s', '--fig-delay': '-3.6s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '208px', '--fig-y0': '44px', '--fig-x1': '208px', '--fig-y1': '176px', '--fig-yr': '65px', '--fig-xr': '208px', '--fig-dur': '4s', '--fig-delay': '-1.41s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '208px', '--fig-y0': '44px', '--fig-x1': '208px', '--fig-y1': '176px', '--fig-yr': '132px', '--fig-xr': '208px', '--fig-dur': '4s', '--fig-delay': '-2.74s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '208px', '--fig-y0': '44px', '--fig-x1': '208px', '--fig-y1': '176px', '--fig-yr': '85px', '--fig-xr': '208px', '--fig-dur': '4s', '--fig-delay': '-0.07s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '240px', '--fig-y0': '44px', '--fig-x1': '240px', '--fig-y1': '176px', '--fig-yr': '106px', '--fig-xr': '240px', '--fig-dur': '4s', '--fig-delay': '-1.88s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '240px', '--fig-y0': '44px', '--fig-x1': '240px', '--fig-y1': '176px', '--fig-yr': '59px', '--fig-xr': '240px', '--fig-dur': '4s', '--fig-delay': '-3.21s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '240px', '--fig-y0': '44px', '--fig-x1': '240px', '--fig-y1': '176px', '--fig-yr': '126px', '--fig-xr': '240px', '--fig-dur': '4s', '--fig-delay': '-0.54s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '272px', '--fig-y0': '44px', '--fig-x1': '272px', '--fig-y1': '176px', '--fig-yr': '147px', '--fig-xr': '272px', '--fig-dur': '4s', '--fig-delay': '-2.35s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '272px', '--fig-y0': '44px', '--fig-x1': '272px', '--fig-y1': '176px', '--fig-yr': '100px', '--fig-xr': '272px', '--fig-dur': '4s', '--fig-delay': '-3.68s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '272px', '--fig-y0': '44px', '--fig-x1': '272px', '--fig-y1': '176px', '--fig-yr': '167px', '--fig-xr': '272px', '--fig-dur': '4s', '--fig-delay': '-1.01s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '304px', '--fig-y0': '44px', '--fig-x1': '304px', '--fig-y1': '138px', '--fig-yr': '74px', '--fig-xr': '304px', '--fig-dur': '4s', '--fig-delay': '-2.82s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '304px', '--fig-y0': '44px', '--fig-x1': '304px', '--fig-y1': '138px', '--fig-yr': '65px', '--fig-xr': '304px', '--fig-dur': '4s', '--fig-delay': '-0.15s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '304px', '--fig-y0': '44px', '--fig-x1': '304px', '--fig-y1': '138px', '--fig-yr': '56px', '--fig-xr': '304px', '--fig-dur': '4s', '--fig-delay': '-1.48s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '336px', '--fig-y0': '44px', '--fig-x1': '336px', '--fig-y1': '138px', '--fig-yr': '115px', '--fig-xr': '336px', '--fig-dur': '4s', '--fig-delay': '-3.29s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '336px', '--fig-y0': '44px', '--fig-x1': '336px', '--fig-y1': '138px', '--fig-yr': '106px', '--fig-xr': '336px', '--fig-dur': '4s', '--fig-delay': '-0.62s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '336px', '--fig-y0': '44px', '--fig-x1': '336px', '--fig-y1': '138px', '--fig-yr': '97px', '--fig-xr': '336px', '--fig-dur': '4s', '--fig-delay': '-1.95s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '224px', '--fig-y0': '246px', '--fig-x1': '224px', '--fig-y1': '326px', '--fig-xr': '224px', '--fig-yr': '270px', '--fig-dur': '8s', '--fig-delay': '0s' }} />
-<circle className="fig-fill-agent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '224px', '--fig-y0': '246px', '--fig-x1': '224px', '--fig-y1': '326px', '--fig-xr': '224px', '--fig-yr': '304px', '--fig-dur': '8s', '--fig-delay': '-4s' }} />
-<text className="fig-t fig-b" x="248" y="278">顧客の認知</text>
-<text className="fig-t fig-b fig-mid" x="224" y="356">利用される機能</text>
-<path className="fig-stroke-accent" d="M24 420V472Q24 488 40 488H108Q124 488 124 472V420" />
-<circle className="fig-fill-accent" cx="38" cy="478" r="5" />
-<circle className="fig-fill-accent" cx="50" cy="478" r="5" />
-<circle className="fig-fill-accent" cx="62" cy="478" r="5" />
-<circle className="fig-fill-accent" cx="74" cy="478" r="5" />
-<circle className="fig-fill-accent" cx="86" cy="478" r="5" />
-<circle className="fig-fill-accent" cx="98" cy="478" r="5" />
-<circle className="fig-fill-accent" cx="110" cy="478" r="5" />
-<circle className="fig-fill-accent" cx="44" cy="466" r="5" />
-<circle className="fig-fill-accent" cx="56" cy="466" r="5" />
-<circle className="fig-fill-accent" cx="68" cy="466" r="5" />
-<circle className="fig-fill-accent" cx="80" cy="466" r="5" />
-<circle className="fig-fill-accent" cx="92" cy="466" r="5" />
-<circle className="fig-fill-accent" cx="104" cy="466" r="5" />
-<circle className="fig-fill-accent fig-at-1" cx="50" cy="454" r="5" />
-<circle className="fig-fill-accent fig-at-1" cx="62" cy="454" r="5" />
-<circle className="fig-fill-accent fig-at-1" cx="74" cy="454" r="5" />
-<circle className="fig-fill-accent fig-at-1" cx="86" cy="454" r="5" />
-<circle className="fig-fill-accent fig-at-1" cx="98" cy="454" r="5" />
-<circle className="fig-fill-accent fig-at-3" cx="56" cy="442" r="5" />
-<circle className="fig-fill-accent fig-at-3" cx="68" cy="442" r="5" />
-<circle className="fig-fill-accent fig-at-3" cx="80" cy="442" r="5" />
-<circle className="fig-fill-accent fig-at-3" cx="92" cy="442" r="5" />
-<circle className="fig-fill-accent fig-at-5" cx="62" cy="430" r="5" />
-<circle className="fig-fill-accent fig-at-5" cx="74" cy="430" r="5" />
-<circle className="fig-fill-accent fig-at-5" cx="86" cy="430" r="5" />
-<circle className="fig-fill-accent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '90px', '--fig-y0': '30px', '--fig-x1': '54px', '--fig-y1': '424px', '--fig-xr': '79.94923857868021px', '--fig-yr': '110px', '--fig-dur': '4s', '--fig-delay': '0s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-accent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '90px', '--fig-y0': '30px', '--fig-x1': '74px', '--fig-y1': '424px', '--fig-xr': '81.06598984771574px', '--fig-yr': '220px', '--fig-dur': '4s', '--fig-delay': '-1.3s', '--fig-ease': 'ease-in' }} />
-<circle className="fig-fill-accent fig-move" cx="0" cy="0" r="4" style={{ '--fig-x0': '90px', '--fig-y0': '30px', '--fig-x1': '94px', '--fig-y1': '424px', '--fig-xr': '93.3502538071066px', '--fig-yr': '330px', '--fig-dur': '4s', '--fig-delay': '-2.6s', '--fig-ease': 'ease-in' }} />
-<text className="fig-t fig-b fig-mid" x="74" y="512">問い合わせ</text>
-</svg>
-<figcaption>開発できる量を増やしても、顧客が認知できる量は増えません。</figcaption>
-</figure>
-
 DORA の [AI Capabilities Model](https://cloud.google.com/blog/products/ai-machine-learning/introducing-doras-inaugural-ai-capabilities-model) も、ユーザー中心の視点を欠いたまま AI を導入すると、誤った方向に速く進むだけになりうると指摘しています。
 
 私が担当している薬局の業務は、この認知負荷の制約がとくに強い領域です。1台の端末を複数のユーザーが共有し、執務室には複数台の端末があり、ユーザーは複数の店舗を移動します。
 
 <figure className="fig">
-<svg viewBox="0 0 400 440" role="img" aria-labelledby="fig-ps-title fig-ps-desc">
-<title id="fig-ps-title">薬局の業務における端末、ユーザー、店舗の関係</title>
-<desc id="fig-ps-desc">店舗Aの執務室には端末が3台、店舗Bには2台あります。左の端末は2人のユーザーが共有し、中央の端末は別のユーザーが使用します。右の端末のユーザーは、店舗Aから店舗Bへ移動して店舗Bの端末を使用し、再び店舗Aへ戻ります。</desc>
-<defs>
-<marker id="fig-ps-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path className="fig-mk" d="M0 0L10 5L0 10z" /></marker>
-</defs>
-<rect className="fig-box-soft" x="16" y="16" width="368" height="192" rx="12" />
-<text className="fig-t fig-b" x="32" y="42">店舗A</text>
-<g transform="translate(100 90)"><rect className="fig-box" x="-22" y="-14" width="44" height="28" rx="4" /><path className="fig-stroke" d="M0 14V22M-10 22H10" /></g>
-<g transform="translate(200 90)"><rect className="fig-box" x="-22" y="-14" width="44" height="28" rx="4" /><path className="fig-stroke" d="M0 14V22M-10 22H10" /></g>
-<g transform="translate(300 90)"><rect className="fig-box" x="-22" y="-14" width="44" height="28" rx="4" /><path className="fig-stroke" d="M0 14V22M-10 22H10" /></g>
-<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="100" y="62">共有</text>
-<rect className="fig-box-soft" x="16" y="256" width="368" height="168" rx="12" />
-<text className="fig-t fig-b" x="32" y="282">店舗B</text>
-<g transform="translate(200 330)"><rect className="fig-box" x="-22" y="-14" width="44" height="28" rx="4" /><path className="fig-stroke" d="M0 14V22M-10 22H10" /></g>
-<g transform="translate(300 330)"><rect className="fig-box" x="-22" y="-14" width="44" height="28" rx="4" /><path className="fig-stroke" d="M0 14V22M-10 22H10" /></g>
-<path className="fig-stroke fig-dash" d="M300 214V250" marker-start="url(#fig-ps-a)" marker-end="url(#fig-ps-a)" />
-<text className="fig-t fig-t-sm fig-c-muted" x="314" y="236">店舗を移動</text>
-<g transform="translate(86 150)"><g className="fig-turn"><g className="fig-fill-1"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g></g>
-<g transform="translate(116 150)"><g className="fig-turn" style={{ '--fig-delay': '4s' }}><g className="fig-fill-2"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g></g>
-<g transform="translate(200 150)"><g className="fig-fill-3"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g>
-<g className="fig-shuttle" style={{ '--fig-x0': '300px', '--fig-y0': '150px', '--fig-x1': '300px', '--fig-y1': '390px' }}><g className="fig-fill-3"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g>
+<svg viewBox="0 0 400 404" role="img" style={{ '--fig-dur': '10s' }} aria-labelledby="fig-sm-title fig-sm-desc">
+<title id="fig-sm-title">薬局のシナリオの組み合わせ</title>
+<desc id="fig-sm-desc">行は「1台の端末を複数のユーザーで共有」「1人のユーザーが複数の端末を使う」「1人のユーザーが店舗を移動する」の3つ、列は「順番に使う」「並行して使う」の2つの表です。6つのセルに、PRDで検討するシナリオを置いています。「1人のユーザーが複数の端末を使う」の「並行して使う」のセル、「2台で同時にセットアップする」が、次の不具合の場面です。</desc>
+<rect className="fig-pill" x="138" y="40" width="100" height="24" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="188" y="56.5">順番に使う</text>
+<rect className="fig-pill" x="268" y="40" width="116" height="24" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="326" y="56.5">並行して使う</text>
+<rect className="fig-card-soft" x="8" y="84" width="108" height="72" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="62" y="108.5">1台の端末を</text>
+<text className="fig-t fig-t-sm fig-mid fig-b" x="62" y="124.5">複数のユーザー</text>
+<text className="fig-t fig-t-sm fig-mid fig-b" x="62" y="140.5">で共有</text>
+<rect className="fig-card" x="124" y="84" width="128" height="72" rx="12" />
+<rect className="fig-card-agent fig-step-1" x="124" y="84" width="128" height="72" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="188" y="124.5">交代でログインする</text>
+<rect className="fig-card" x="260" y="84" width="132" height="72" rx="12" />
+<rect className="fig-card-agent fig-step-2" x="260" y="84" width="132" height="72" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="326" y="116.5">別ユーザーの作業が</text>
+<text className="fig-t fig-t-sm fig-mid" x="326" y="132.5">残った端末を使う</text>
+<rect className="fig-card-soft" x="8" y="178" width="108" height="72" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="62" y="202.5">1人のユーザー</text>
+<text className="fig-t fig-t-sm fig-mid fig-b" x="62" y="218.5">が複数の端末</text>
+<text className="fig-t fig-t-sm fig-mid fig-b" x="62" y="234.5">を使う</text>
+<rect className="fig-card" x="124" y="178" width="128" height="72" rx="12" />
+<rect className="fig-card-agent fig-step-3" x="124" y="178" width="128" height="72" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="188" y="210.5">別の端末で</text>
+<text className="fig-t fig-t-sm fig-mid" x="188" y="226.5">作業を続ける</text>
+<rect className="fig-card" x="260" y="178" width="132" height="72" rx="12" />
+<rect className="fig-card-problem fig-hold-6" x="260" y="178" width="132" height="72" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="326" y="210.5">2台で同時に</text>
+<text className="fig-t fig-t-sm fig-mid" x="326" y="226.5">セットアップする</text>
+<rect className="fig-card-soft" x="8" y="272" width="108" height="72" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="62" y="296.5">1人のユーザー</text>
+<text className="fig-t fig-t-sm fig-mid fig-b" x="62" y="312.5">が店舗を</text>
+<text className="fig-t fig-t-sm fig-mid fig-b" x="62" y="328.5">移動する</text>
+<rect className="fig-card" x="124" y="272" width="128" height="72" rx="12" />
+<rect className="fig-card-agent fig-step-4" x="124" y="272" width="128" height="72" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="188" y="304.5">移動先の店舗で</text>
+<text className="fig-t fig-t-sm fig-mid" x="188" y="320.5">作業を続ける</text>
+<rect className="fig-card" x="260" y="272" width="132" height="72" rx="12" />
+<rect className="fig-card-agent fig-step-5" x="260" y="272" width="132" height="72" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="326" y="304.5">2店舗で同時に</text>
+<text className="fig-t fig-t-sm fig-mid" x="326" y="320.5">作業する</text>
+<rect className="fig-pill-problem fig-hold-6" x="264" y="240" width="124" height="22" rx="11" />
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-problem fig-hold-6" x="326" y="255.5">次の不具合の場面</text>
+<rect className="fig-card" x="124" y="372" width="18" height="14" rx="5" />
+<text className="fig-t fig-t-sm" x="150" y="383">PRD で検討するシナリオ</text>
 </svg>
-<figcaption>1台の端末を複数のユーザーが共有し、端末は複数台あり、ユーザーは店舗間を移動します。</figcaption>
+<figcaption>端末の共有、複数台の端末、店舗間の移動を掛け合わせると、PRD で検討すべきシナリオが増えます。</figcaption>
 </figure>
 
 このような環境で想定外の挙動が発生すると、問い合わせにつながります。問い合わせの対応には人件費がかかるため、想定外の挙動は明確なコストです。顧客シナリオがこれだけ複雑な場合、PRD でユーザーストーリーを網羅的に検討し、その内容が実装に正しく反映されている必要があります。
@@ -197,38 +217,63 @@ DORA の [AI Capabilities Model](https://cloud.google.com/blog/products/ai-machi
 それでも検出できなかった不具合があります。詳細は省略しますが、複数の端末で実施する作業において、あるユーザーが1台の端末で作業を開始していると、別の端末でもその作業を再開する、という振る舞いが実装に含まれていました。この振る舞いは PRD に記述されていませんでした。ユーザーが複数の端末で並行してセットアップを進めると、この振る舞いによって不整合が発生します。
 
 <figure className="fig">
-<svg viewBox="0 0 400 392" role="img" style={{ '--fig-dur': '10s' }} aria-labelledby="fig-pc-title fig-pc-desc">
-<title id="fig-pc-title">別の端末で作業を再開し、不整合が発生する流れ</title>
-<desc id="fig-pc-desc">ユーザーが端末Aで作業を開始すると、端末Aの進捗バーが伸び始めます。続けて端末Bでもセットアップを開始すると、端末Bは新規に開始せず、端末Aの作業を再開します。2台が同じ作業を競合して進捗バーが赤くなり、「不整合が発生」と表示されます。</desc>
+<svg viewBox="0 0 400 592" role="img" style={{ '--fig-dur': '16s' }} aria-labelledby="fig-cs-title fig-cs-desc">
+<title id="fig-cs-title">不具合のシーケンス図</title>
+<desc id="fig-cs-desc">ユーザー、端末A、端末B、作業の記録の4つのライフラインのシーケンス図です。ユーザーが端末Aで作業を開始し、端末Aが作業の記録に作業を作成します。続いてユーザーが端末Bでセットアップを開始すると、端末Bは進行中の作業を取得し、端末Aの作業を受け取って、作業を再開します。この振る舞いはPRDに記述がありません。その後、端末Aと端末Bが同じ作業を更新し、作業の記録に不整合が発生します。</desc>
+<path className="fig-line-rule fig-dash" d="M56 44V580" />
+<path className="fig-line-rule fig-dash" d="M152 44V580" />
+<path className="fig-line-rule fig-dash" d="M248 44V580" />
+<path className="fig-line-rule fig-dash" d="M344 44V580" />
+<rect className="fig-card" x="14" y="12" width="84" height="32" rx="16" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="56" y="32.5">ユーザー</text>
+<rect className="fig-card" x="110" y="12" width="84" height="32" rx="16" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="152" y="32.5">端末A</text>
+<rect className="fig-card" x="206" y="12" width="84" height="32" rx="16" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="248" y="32.5">端末B</text>
+<rect className="fig-card" x="302" y="12" width="84" height="32" rx="16" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="344" y="32.5">作業の記録</text>
+<path className="fig-line fig-draw-at-1" pathLength="100" d="M56 92H144" />
+<path className="fig-mk fig-at-1" d="M152 92L144 88V96Z" />
+<text className="fig-t fig-t-sm fig-mid fig-at-1" x="104" y="85">作業を開始</text>
+<path className="fig-line fig-draw-at-2" pathLength="100" d="M152 140H336" />
+<path className="fig-mk fig-at-2" d="M344 140L336 136V144Z" />
+<text className="fig-t fig-t-sm fig-mid fig-at-2" x="200" y="133">作業を作成</text>
+<path className="fig-line fig-draw-at-3" pathLength="100" d="M56 196H240" />
+<path className="fig-mk fig-at-3" d="M248 196L240 192V200Z" />
+<text className="fig-t fig-t-sm fig-mid fig-at-3" x="200" y="174">セットアップ</text>
+<text className="fig-t fig-t-sm fig-mid fig-at-3" x="200" y="189">を開始</text>
+<path className="fig-line fig-draw-at-4" pathLength="100" d="M248 262H336" />
+<path className="fig-mk fig-at-4" d="M344 262L336 258V266Z" />
+<text className="fig-t fig-t-sm fig-mid fig-at-4" x="296" y="240">進行中の</text>
+<text className="fig-t fig-t-sm fig-mid fig-at-4" x="296" y="255">作業を取得</text>
 <defs>
-<mask id="fig-pc-mask" maskUnits="userSpaceOnUse" x="140" y="236" width="120" height="48"><path className="fig-mask-stroke fig-draw-at-3" d="M148 259H244" pathLength="100" /></mask>
+<mask id="fig-cs-mask" maskUnits="userSpaceOnUse" x="0" y="292" width="400" height="40"><path className="fig-mask-stroke fig-draw-at-5" pathLength="100" d="M344 312H256" /></mask>
 </defs>
-<g transform="translate(200 52)"><g className="fig-fill-3"><circle cx="0" cy="-11" r="7" /><path d="M-12 12V8A12 10 0 0 1 12 8V12Z" /></g></g>
-<text className="fig-t fig-t-sm fig-mid" x="200" y="90">ユーザー</text>
-<path className="fig-stroke fig-draw-at-1" pathLength="100" d="M200 104V140H84V190" />
-<path className="fig-mk fig-at-1" d="M84 200L79 190H89Z" />
-<path className="fig-stroke fig-draw-at-2" pathLength="100" d="M200 140H316V190" />
-<path className="fig-mk fig-at-2" d="M316 200L311 190H321Z" />
-<text className="fig-t fig-t-sm fig-mid fig-at-1" x="142" y="130">作業を開始</text>
-<text className="fig-t fig-t-sm fig-mid fig-at-2" x="266" y="130">セットアップを開始</text>
-<rect className="fig-box" x="16" y="204" width="136" height="96" rx="10" />
-<rect className="fig-box" x="248" y="204" width="136" height="96" rx="10" />
-<text className="fig-t fig-b" x="32" y="230">端末A</text>
-<text className="fig-t fig-b" x="264" y="230">端末B</text>
-<rect className="fig-fill-bar" x="32" y="252" width="104" height="14" rx="4" />
-<rect className="fig-fill-bar" x="264" y="252" width="104" height="14" rx="4" />
-<rect className="fig-fill-agent fig-grow-at-1" x="32" y="252" width="104" height="14" rx="4" style={{ '--fig-to': '0.6' }} />
-<rect className="fig-fill-agent fig-at-3" x="264" y="252" width="62" height="14" rx="4" />
-<path className="fig-stroke-accent fig-dash" d="M148 259H244" mask="url(#fig-pc-mask)" />
-<path className="fig-mk-accent fig-at-3" d="M246 259L236 254V264Z" />
-<text className="fig-t fig-t-sm fig-mid fig-c-accent fig-at-3" x="200" y="290">作業を再開</text>
-<rect className="fig-fill-accent fig-at-4" x="32" y="252" width="62" height="14" rx="4" />
-<rect className="fig-fill-accent fig-at-4" x="264" y="252" width="62" height="14" rx="4" />
-<rect className="fig-stroke-accent fig-at-4" x="16" y="204" width="136" height="96" rx="10" />
-<rect className="fig-stroke-accent fig-at-4" x="248" y="204" width="136" height="96" rx="10" />
-<g className="fig-hold-5"><rect className="fig-box-accent" x="112" y="334" width="176" height="40" rx="10" /><text className="fig-t fig-b fig-mid fig-c-accent" x="200" y="359">不整合が発生</text></g>
+<path className="fig-line fig-dash" d="M344 312H256" mask="url(#fig-cs-mask)" />
+<path className="fig-mk fig-at-5" d="M248 312L256 308V316Z" />
+<text className="fig-t fig-t-sm fig-mid fig-at-5" x="296" y="305">端末Aの作業</text>
+<path className="fig-line fig-draw-at-6" pathLength="100" d="M248 364H284V386H256" />
+<path className="fig-mk fig-at-6" d="M248 386L256 382V390Z" />
+<text className="fig-t fig-t-sm fig-at-6" x="292" y="372">作業を</text>
+<text className="fig-t fig-t-sm fig-at-6" x="292" y="387">再開</text>
+<g className="fig-hold-6">
+<rect className="fig-card-problem" x="88" y="353" width="144" height="44" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-c-problem fig-b" x="160" y="371.5">PRD に記述のない</text>
+<text className="fig-t fig-t-sm fig-mid fig-c-problem fig-b" x="160" y="387.5">振る舞い</text>
+<path className="fig-line-problem fig-dash" d="M232 375H246" />
+</g>
+<path className="fig-line fig-draw-at-7" pathLength="100" d="M152 442H336" />
+<path className="fig-mk fig-at-7" d="M344 442L336 438V446Z" />
+<text className="fig-t fig-t-sm fig-mid fig-at-7" x="200" y="435">作業を更新</text>
+<path className="fig-line fig-draw-at-8" pathLength="100" d="M248 490H336" />
+<path className="fig-mk fig-at-8" d="M344 490L336 486V494Z" />
+<text className="fig-t fig-t-sm fig-mid fig-at-8" x="296" y="483">作業を更新</text>
+<g className="fig-hold-9">
+<rect className="fig-pill-problem" x="310" y="522" width="68" height="28" rx="14" />
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-problem" x="344" y="540.5">不整合</text>
+</g>
 </svg>
-<figcaption>別の端末で作業を再開する振る舞いは、並行してセットアップを進めると不整合を起こします。</figcaption>
+<figcaption>端末Bは新しい作業を作成せず、端末Aの作業を再開します。2台が同じ作業を更新し、不整合が発生します。</figcaption>
 </figure>
 
 この不具合は、私が実際のコードを読んでいた際に、想定外の分岐に気づいたことで判明しました。ペルソナ検証やテストで検出されたものではありません。
@@ -236,26 +281,58 @@ DORA の [AI Capabilities Model](https://cloud.google.com/blog/products/ai-machi
 ペルソナ検証、図による検証、PRD から作成するテストが確認できるのは、PRD に記述された内容だけです。これらの検証は「PRD からコード」の方向にしか機能しません。実装には存在するが PRD には記述されていない振る舞いは、検証の対象に含まれません。
 
 <figure className="fig">
-<svg viewBox="0 0 400 400" role="img" aria-labelledby="fig-vc-title fig-vc-desc">
-<title id="fig-vc-title">PRDを起点にした検証の対象範囲</title>
-<desc id="fig-vc-desc">上にPRDの円、下にコードの円が一部重なっています。重なる部分は「PRDどおりの振る舞い」、コードの円だけの部分は「PRDにない振る舞い」です。「PRDを起点にした検証」の帯はPRDの円の内側だけを左右に走査し、「PRDにない振る舞い」の領域は対象外のままで、中の赤い点がゆっくり拍動します。</desc>
-<defs>
-<clipPath id="fig-vc-clip"><circle cx="200" cy="150" r="110" /></clipPath>
-</defs>
-<circle className="fig-fill-zone" cx="200" cy="270" r="110" />
-<circle className="fig-fill-agent-soft" cx="200" cy="150" r="110" />
-<circle className="fig-edge fig-edge-line" cx="200" cy="270" r="110" />
-<circle className="fig-edge fig-edge-agent" cx="200" cy="150" r="110" />
-<g clip-path="url(#fig-vc-clip)"><g className="fig-sweep-x" style={{ '--fig-from': '110px', '--fig-to': '290px', '--fig-rest': '200px', '--fig-dur': '7s' }}><rect className="fig-fill-band fig-sweep-band" x="-20" y="30" width="40" height="240" style={{ '--fig-spread': '5.5' }} /></g></g>
-<g className="fig-sweep-x" style={{ '--fig-from': '110px', '--fig-to': '290px', '--fig-rest': '200px', '--fig-dur': '7s' }}><text className="fig-t fig-b fig-c-agent fig-mid" x="0" y="22">PRDを起点にした検証</text></g>
-<text className="fig-t fig-mid" x="200" y="219">PRDどおりの振る舞い</text>
-<text className="fig-t fig-mid" x="200" y="310">PRDにない振る舞い</text>
-<circle className="fig-fill-accent fig-halo" cx="200" cy="346" r="6" />
-<circle className="fig-fill-accent fig-pulse" cx="200" cy="346" r="5" />
-<text className="fig-t fig-b fig-end" x="80" y="154">PRD</text>
-<text className="fig-t fig-b fig-end" x="80" y="274">コード</text>
+<svg viewBox="0 0 400 400" role="img" style={{ '--fig-dur': '12s' }} aria-labelledby="fig-vc-title fig-vc-desc">
+<title id="fig-vc-title">検証の2つの方向</title>
+<desc id="fig-vc-desc">左にPRDの3つの振る舞い、右にコードの4つの振る舞いを並べた図です。PRDからコードへの検証の矢印は、対応する3つの振る舞いだけに引かれ、確認済みの印が付きます。コードの4つ目の振る舞い「別の端末で作業を再開する」には、PRDに対応する記述がありません。コードからPRDへの確認の矢印だけが、この振る舞いを「記述なし」の枠に結び付けます。</desc>
+<rect className="fig-pill" x="55" y="12" width="64" height="26" rx="13" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="87" y="29.5">PRD</text>
+<rect className="fig-pill" x="273" y="12" width="80" height="26" rx="13" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="313" y="29.5">コード</text>
+<rect className="fig-card" x="12" y="56" width="150" height="48" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="87" y="84.5">作業を開始する</text>
+<rect className="fig-card" x="12" y="116" width="150" height="48" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="87" y="144.5">作業を完了する</text>
+<rect className="fig-card" x="12" y="176" width="150" height="48" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="87" y="196.5">中断した作業を同じ</text>
+<text className="fig-t fig-t-sm fig-mid" x="87" y="212.5">端末で再開する</text>
+<rect className="fig-card-dash" x="12" y="236" width="150" height="48" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="87" y="264.5">記述なし</text>
+<rect className="fig-card" x="238" y="56" width="150" height="48" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="313" y="84.5">作業を開始する</text>
+<rect className="fig-card" x="238" y="116" width="150" height="48" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="313" y="144.5">作業を完了する</text>
+<rect className="fig-card" x="238" y="176" width="150" height="48" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="313" y="196.5">中断した作業を同じ</text>
+<text className="fig-t fig-t-sm fig-mid" x="313" y="212.5">端末で再開する</text>
+<rect className="fig-card" x="238" y="236" width="150" height="48" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="313" y="256.5">別の端末で作業を</text>
+<text className="fig-t fig-t-sm fig-mid" x="313" y="272.5">再開する</text>
+<path className="fig-line-agent fig-thick fig-draw-at-1" pathLength="100" d="M166 80H228" />
+<path className="fig-mk-agent fig-at-1" d="M238 80L230 76V84Z" />
+<g className="fig-at-1"><circle className="fig-fill-agent fig-ring" cx="378" cy="58" r="10" /><path className="fig-line-on" d="M373 58L377 62L384 53" /></g>
+<path className="fig-line-agent fig-thick fig-draw-at-2" pathLength="100" d="M166 140H228" />
+<path className="fig-mk-agent fig-at-2" d="M238 140L230 136V144Z" />
+<g className="fig-at-2"><circle className="fig-fill-agent fig-ring" cx="378" cy="118" r="10" /><path className="fig-line-on" d="M373 118L377 122L384 113" /></g>
+<path className="fig-line-agent fig-thick fig-draw-at-3" pathLength="100" d="M166 200H228" />
+<path className="fig-mk-agent fig-at-3" d="M238 200L230 196V204Z" />
+<g className="fig-at-3"><circle className="fig-fill-agent fig-ring" cx="378" cy="178" r="10" /><path className="fig-line-on" d="M373 178L377 182L384 173" /></g>
+<rect className="fig-card-problem fig-hold-6" x="238" y="236" width="150" height="48" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-hold-6" x="313" y="256.5">別の端末で作業を</text>
+<text className="fig-t fig-t-sm fig-mid fig-hold-6" x="313" y="272.5">再開する</text>
+<rect className="fig-card-problem fig-hold-6" x="12" y="236" width="150" height="48" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-c-problem fig-b fig-hold-6" x="87" y="264.5">記述なし</text>
+<mask id="fig-vc-mask" maskUnits="userSpaceOnUse" x="150" y="240" width="100" height="40"><path className="fig-mask-stroke fig-draw-at-5" pathLength="100" d="M234 260H170" /></mask>
+<path className="fig-line-problem fig-thick" d="M234 260H170" mask="url(#fig-vc-mask)" />
+<path className="fig-mk-problem fig-at-5" d="M162 260L170 256V264Z" />
+<path className="fig-line-agent fig-thick" d="M24 332H64" />
+<path className="fig-mk-agent" d="M72 332L64 328V336Z" />
+<text className="fig-t fig-t-sm" x="84" y="328.5">PRD からコードへの検証</text>
+<text className="fig-t fig-t-sm" x="84" y="344.5">（ペルソナ検証・図・テスト）</text>
+<path className="fig-line-problem fig-thick" d="M24 376H64" />
+<path className="fig-mk-problem" d="M72 376L64 372V380Z" />
+<text className="fig-t fig-t-sm" x="84" y="380.5">コードから PRD への確認</text>
 </svg>
-<figcaption>PRDを起点にした検証の対象は、PRDに記述された範囲に限られます。</figcaption>
+<figcaption>PRD からコードへの検証では、PRD に記述のない振る舞いを検出できません。検出には、コードから PRD への確認が必要です。</figcaption>
 </figure>
 
 ビジネスと実装の構造が乖離していると、この問題は大きくなります。検証した PRD やモデルと実際のコードが対応しなくなり、検証結果が実装の品質を保証しなくなります。
@@ -267,46 +344,6 @@ DORA の [AI Capabilities Model](https://cloud.google.com/blog/products/ai-machi
 業務上の判断がデータ構造、検索条件、技術的な分岐の中に埋もれていると、人もエージェントもその判断を認識しにくくなります。
 
 エージェントのコンテキストウィンドウには上限があります。技術的な分岐の解析にコンテキストを消費すると、その分だけ業務上の判断に割り当てられるコンテキストは減ります。人間のレビュアーにも同じ制約があります。
-
-<figure className="fig">
-<svg viewBox="0 0 400 612" role="img" aria-labelledby="fig-ac-title fig-ac-desc">
-<title id="fig-ac-title">業務上の判断の配置先と、注意の向き</title>
-<desc id="fig-ac-desc">上下2枚のパネルの比較図です。上のパネルでは、業務上の判断を表す3本の赤い棒がコードの行の中に分散していて、注意を表す円がパネル内を不規則に移動します。下のパネルでは、3本の赤い棒が「業務の状態と遷移」の枠の中に集約されていて、注意を表す円はその枠へ直線的に移動して停止します。</desc>
-<text className="fig-t fig-b fig-mid" x="200" y="28">業務上の判断が分散している</text>
-<rect className="fig-box-soft" x="16" y="40" width="368" height="224" rx="12" />
-<rect className="fig-fill-bar" x="32" y="58" width="136" height="8" rx="3" />
-<rect className="fig-fill-accent" x="48" y="78" width="208" height="8" rx="3" />
-<rect className="fig-fill-bar" x="48" y="98" width="120" height="8" rx="3" />
-<rect className="fig-fill-bar" x="64" y="118" width="176" height="8" rx="3" />
-<rect className="fig-fill-accent" x="32" y="138" width="96" height="8" rx="3" />
-<rect className="fig-fill-bar" x="48" y="158" width="224" height="8" rx="3" />
-<rect className="fig-fill-bar" x="64" y="178" width="152" height="8" rx="3" />
-<rect className="fig-fill-bar" x="48" y="198" width="104" height="8" rx="3" />
-<rect className="fig-fill-accent" x="32" y="218" width="192" height="8" rx="3" />
-<rect className="fig-fill-bar" x="48" y="238" width="136" height="8" rx="3" />
-<circle className="fig-fill-spot fig-wander" cx="0" cy="0" r="34" style={{ '--fig-p0x': '96px', '--fig-p0y': '110px', '--fig-p1x': '296px', '--fig-p1y': '150px', '--fig-p2x': '160px', '--fig-p2y': '224px', '--fig-p3x': '312px', '--fig-p3y': '88px', '--fig-xr': '338px', '--fig-yr': '150px', '--fig-dur': '8s' }} />
-<text className="fig-t fig-b fig-mid" x="200" y="306">業務上の判断が集約されている</text>
-<rect className="fig-box-soft" x="16" y="318" width="368" height="248" rx="12" />
-<rect className="fig-box" x="32" y="334" width="336" height="96" rx="8" />
-<text className="fig-t fig-b" x="48" y="357">業務の状態と遷移</text>
-<rect className="fig-fill-accent" x="48" y="372" width="120" height="8" rx="3" />
-<rect className="fig-fill-accent" x="48" y="388" width="168" height="8" rx="3" />
-<rect className="fig-fill-accent" x="48" y="404" width="96" height="8" rx="3" />
-<rect className="fig-fill-bar" x="32" y="456" width="152" height="8" rx="3" />
-<rect className="fig-fill-bar" x="48" y="476" width="200" height="8" rx="3" />
-<rect className="fig-fill-bar" x="48" y="496" width="112" height="8" rx="3" />
-<rect className="fig-fill-bar" x="64" y="516" width="176" height="8" rx="3" />
-<rect className="fig-fill-bar" x="32" y="536" width="128" height="8" rx="3" />
-<circle className="fig-fill-spot fig-travel" cx="0" cy="0" r="34" style={{ '--fig-x0': '320px', '--fig-y0': '510px', '--fig-x1': '112px', '--fig-y1': '396px', '--fig-xr': '112px', '--fig-yr': '396px', '--fig-dur': '6s' }} />
-<circle className="fig-fill-spot" cx="58" cy="588" r="8" />
-<text className="fig-t fig-t-sm" x="74" y="593">注意</text>
-<rect className="fig-fill-accent" x="124" y="584" width="24" height="8" rx="3" />
-<text className="fig-t fig-t-sm" x="156" y="593">業務上の判断</text>
-<rect className="fig-fill-bar" x="262" y="584" width="24" height="8" rx="3" />
-<text className="fig-t fig-t-sm" x="294" y="593">コードの行</text>
-</svg>
-<figcaption>業務上の判断の配置先が決まっていれば、人とエージェントの注意をそこに集中できます。</figcaption>
-</figure>
 
 PRD に記述されたビジネスの関心と、コードに実装されたビジネスロジックの構造が一致しているほど、変更容易性は高くなり、PRD と実装の乖離も防ぎやすくなります。エージェントがビジネスロジックに集中できる設計、つまりエージェントにとって認知負荷の低い設計が必要なのはこのためです。
 
@@ -321,36 +358,110 @@ PRD に記述されたビジネスの関心と、コードに実装されたビ�
 私は TypeScript による関数型ドメインモデリングを採用しています。業務の状態と、状態間の遷移を一か所に集約して記述する手法です。この構造であれば、エージェントにコードから状態遷移図を生成させ、PRD の状態遷移と照合できます。前述の「別の端末で再開する」振る舞いを実装する場合は、名前を持つ遷移として定義されます。PRD に存在しない遷移が追加されたことを、状態遷移図の差分として検出できます。
 
 <figure className="fig">
-<svg viewBox="0 0 400 336" role="img" aria-labelledby="fig-st-title fig-st-desc">
-<title id="fig-st-title">業務の状態と遷移の状態遷移図</title>
-<desc id="fig-st-desc">未着手、作業中、完了の3つの状態が、「開始する」と「完了する」の矢印で上から下へ接続されています。作業中の右下には「作業中（別の端末）」の箱があり、作業中から破線の矢印「別の端末で再開する」が数秒おきに現れ、「PRDにない遷移」のラベルが追加されます。右上の凡例では、実線がPRDにある遷移、破線がPRDにない遷移です。</desc>
-<defs>
-<marker id="fig-st-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path className="fig-mk" d="M0 0L10 5L0 10z" /></marker>
-<mask id="fig-st-mask" maskUnits="userSpaceOnUse" x="190" y="150" width="200" height="100"><path className="fig-mask-stroke fig-draw-at-2" pathLength="100" d="M200 172H306V238" /></mask>
-</defs>
-<path className="fig-stroke" d="M232 48H264" />
-<text className="fig-t fig-t-sm" x="272" y="52">PRDにある遷移</text>
-<path className="fig-stroke-accent fig-dash" d="M232 72H264" />
-<text className="fig-t fig-t-sm" x="272" y="76">PRDにない遷移</text>
-<rect className="fig-box" x="40" y="40" width="160" height="56" rx="10" />
-<rect className="fig-box" x="40" y="144" width="160" height="56" rx="10" />
-<rect className="fig-box" x="40" y="248" width="160" height="56" rx="10" />
-<rect className="fig-box" x="232" y="248" width="148" height="56" rx="10" />
-<text className="fig-t fig-b fig-mid" x="120" y="73">未着手</text>
-<text className="fig-t fig-b fig-mid" x="120" y="177">作業中</text>
-<text className="fig-t fig-b fig-mid" x="120" y="281">完了</text>
-<text className="fig-t fig-b fig-mid" x="306" y="273">作業中</text>
-<text className="fig-t fig-mid" x="306" y="291">（別の端末）</text>
-<path className="fig-stroke" d="M120 100V138" marker-end="url(#fig-st-a)" />
-<text className="fig-t fig-t-sm" x="132" y="124">開始する</text>
-<path className="fig-stroke" d="M120 204V242" marker-end="url(#fig-st-a)" />
-<text className="fig-t fig-t-sm" x="132" y="228">完了する</text>
-<path className="fig-stroke-accent fig-dash" d="M200 172H306V238" mask="url(#fig-st-mask)" />
-<path className="fig-mk-accent fig-at-2" d="M306 246L301 236H311Z" />
-<text className="fig-t fig-t-sm fig-at-2" x="212" y="164">別の端末で再開する</text>
-<g className="fig-at-3"><rect className="fig-box-accent" x="186" y="208" width="116" height="28" rx="8" /><text className="fig-t fig-t-sm fig-b fig-mid fig-c-accent" x="244" y="226">PRDにない遷移</text></g>
+<svg viewBox="0 0 400 740" role="img" style={{ '--fig-dur': '16s' }} aria-labelledby="fig-sd-title fig-sd-desc">
+<title id="fig-sd-title">コードの構造から PRD との差分へ</title>
+<desc id="fig-sd-desc">上下2段の図です。上段は業務上の判断が分散している構造で、画面、ハンドラ、リポジトリの3層のうちリポジトリに、進行中の作業の取得条件があります。ここから生成した状態遷移図には、未着手、作業中、完了だけが現れ、隠れた遷移は図に現れません。下段は状態と遷移を集約した構造で、業務の状態と遷移に、開始する、完了する、別の端末で再開するの遷移が並びます。生成した状態遷移図を、PRDの状態遷移図と照合すると、別の端末で再開する遷移が、PRDにない遷移として検出されます。</desc>
+<text className="fig-t fig-b fig-t" x="12" y="24">業務上の判断が分散している構造</text>
+<rect className="fig-card" x="12" y="44" width="164" height="36" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="94" y="66.5">画面</text>
+<rect className="fig-card" x="12" y="92" width="164" height="36" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="94" y="114.5">ハンドラ</text>
+<rect className="fig-card" x="12" y="140" width="164" height="96" rx="10" />
+<text className="fig-t fig-t-sm" x="24" y="163">リポジトリ</text>
+<circle className="fig-fill-problem" cx="160" cy="157" r="5" />
+<text className="fig-t fig-t-sm fig-c-problem fig-b" x="24" y="189">進行中の作業の</text>
+<text className="fig-t fig-t-sm fig-c-problem fig-b" x="24" y="205">取得条件</text>
+<path className="fig-line" d="M94 80V85" />
+<path className="fig-mk" d="M94 92L90 84H98Z" />
+<path className="fig-line" d="M94 128V133" />
+<path className="fig-mk" d="M94 140L90 132H98Z" />
+<path className="fig-line-agent fig-thick fig-draw-at-1" pathLength="100" d="M180 188H204" />
+<path className="fig-mk-agent fig-at-1" d="M212 188L204 184V192Z" />
+<text className="fig-t fig-t-sm fig-mid fig-at-1" x="196" y="178">生成</text>
+<rect className="fig-card-soft" x="212" y="44" width="180" height="192" rx="10" />
+<text className="fig-t fig-t-sm fig-b" x="224" y="66">生成した状態遷移図</text>
+<g className="fig-at-2">
+<rect className="fig-card" x="222" y="82" width="64" height="22" rx="11" />
+<text className="fig-t fig-t-sm fig-mid" x="254" y="97.5">未着手</text>
+<rect className="fig-card" x="222" y="126" width="64" height="22" rx="11" />
+<text className="fig-t fig-t-sm fig-mid" x="254" y="141.5">作業中</text>
+<rect className="fig-card" x="222" y="170" width="64" height="22" rx="11" />
+<text className="fig-t fig-t-sm fig-mid" x="254" y="185.5">完了</text>
+<path className="fig-line" d="M254 104V119" />
+<path className="fig-mk" d="M254 126L250 118H258Z" />
+<path className="fig-line" d="M254 148V163" />
+<path className="fig-mk" d="M254 170L250 162H258Z" />
+</g>
+<g className="fig-at-3"><path className="fig-line-problem fig-dash" d="M166 157H190" /><path className="fig-line-problem fig-thick" d="M192 152L200 162M200 152L192 162" /></g>
+<text className="fig-t fig-t-sm fig-mid fig-c-problem fig-b fig-at-4" x="302" y="258">隠れた遷移は図に現れない</text>
+<text className="fig-t fig-b fig-t" x="12" y="304">状態と遷移を集約した構造</text>
+<rect className="fig-card" x="12" y="320" width="164" height="144" rx="10" />
+<text className="fig-t fig-t-sm fig-b" x="24" y="343">業務の状態と遷移</text>
+<rect className="fig-card-agent" x="24" y="358" width="140" height="26" rx="13" />
+<text className="fig-t fig-t-sm fig-mid" x="94" y="375.5">開始する</text>
+<rect className="fig-card-agent" x="24" y="392" width="140" height="26" rx="13" />
+<text className="fig-t fig-t-sm fig-mid" x="94" y="409.5">完了する</text>
+<rect className="fig-card-agent" x="24" y="426" width="140" height="26" rx="13" />
+<text className="fig-t fig-t-sm fig-mid" x="94" y="443.5">別の端末で再開する</text>
+<rect className="fig-card-problem fig-hold-8" x="24" y="426" width="140" height="26" rx="13" />
+<text className="fig-t fig-t-sm fig-mid fig-hold-8" x="94" y="443.5">別の端末で再開する</text>
+<rect className="fig-card-soft" x="12" y="480" width="100" height="24" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="62" y="496.5">画面</text>
+<rect className="fig-card-soft" x="12" y="512" width="100" height="24" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="62" y="528.5">ハンドラ</text>
+<rect className="fig-card-soft" x="12" y="544" width="100" height="24" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="62" y="560.5">リポジトリ</text>
+<path className="fig-line-agent fig-thick fig-draw-at-5" pathLength="100" d="M180 392H204" />
+<path className="fig-mk-agent fig-at-5" d="M212 392L204 388V396Z" />
+<text className="fig-t fig-t-sm fig-mid fig-at-5" x="196" y="382">生成</text>
+<rect className="fig-card-soft" x="212" y="320" width="180" height="206" rx="10" />
+<text className="fig-t fig-t-sm fig-b" x="224" y="342">生成した状態遷移図</text>
+<g className="fig-at-6">
+<rect className="fig-card" x="222" y="356" width="64" height="22" rx="11" />
+<text className="fig-t fig-t-sm fig-mid" x="254" y="371.5">未着手</text>
+<rect className="fig-card" x="222" y="404" width="64" height="22" rx="11" />
+<text className="fig-t fig-t-sm fig-mid" x="254" y="419.5">作業中</text>
+<rect className="fig-card" x="222" y="452" width="64" height="22" rx="11" />
+<text className="fig-t fig-t-sm fig-mid" x="254" y="467.5">完了</text>
+<path className="fig-line" d="M254 378V397" />
+<path className="fig-mk" d="M254 404L250 396H258Z" />
+<path className="fig-line" d="M254 426V445" />
+<path className="fig-mk" d="M254 452L250 444H258Z" />
+<rect className="fig-card" x="296" y="448" width="92" height="36" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="342" y="462.5">作業中</text>
+<text className="fig-t fig-t-sm fig-mid" x="342" y="478.5">（別の端末）</text>
+<path className="fig-line" d="M286 415H342V441" />
+<path className="fig-mk" d="M342 448L338 440H346Z" />
+<text className="fig-t fig-t-sm fig-c-muted" x="294" y="396.5">別の端末で</text>
+<text className="fig-t fig-t-sm fig-c-muted" x="294" y="410.5">再開する</text>
+</g>
+<g className="fig-hold-8">
+<path className="fig-line-problem fig-thick" d="M286 415H342V441" />
+<path className="fig-mk-problem" d="M342 448L338 440H346Z" />
+<rect className="fig-card-problem" x="296" y="448" width="92" height="36" rx="12" />
+<text className="fig-t fig-t-sm fig-mid" x="342" y="462.5">作業中</text>
+<text className="fig-t fig-t-sm fig-mid" x="342" y="478.5">（別の端末）</text>
+<rect className="fig-pill-problem" x="286" y="494" width="104" height="22" rx="11" />
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-problem" x="338" y="509.5">PRD にない遷移</text>
+</g>
+<path className="fig-line-agent fig-thick fig-draw-at-7" pathLength="100" d="M302 534V556" />
+<path className="fig-mk-agent fig-at-7" d="M302 526L298 534H306Z" />
+<path className="fig-mk-agent fig-at-7" d="M302 564L298 556H306Z" />
+<text className="fig-t fig-t-sm fig-b fig-at-7" x="312" y="550">照合</text>
+<rect className="fig-card-soft" x="212" y="564" width="180" height="160" rx="10" />
+<text className="fig-t fig-t-sm fig-b" x="224" y="586">PRD の状態遷移図</text>
+<rect className="fig-card" x="222" y="602" width="64" height="22" rx="11" />
+<text className="fig-t fig-t-sm fig-mid" x="254" y="617.5">未着手</text>
+<rect className="fig-card" x="222" y="646" width="64" height="22" rx="11" />
+<text className="fig-t fig-t-sm fig-mid" x="254" y="661.5">作業中</text>
+<rect className="fig-card" x="222" y="690" width="64" height="22" rx="11" />
+<text className="fig-t fig-t-sm fig-mid" x="254" y="705.5">完了</text>
+<path className="fig-line" d="M254 624V639" />
+<path className="fig-mk" d="M254 646L250 638H258Z" />
+<path className="fig-line" d="M254 668V683" />
+<path className="fig-mk" d="M254 690L250 682H258Z" />
 </svg>
-<figcaption>状態と遷移を一か所に集約すると、PRDに存在しない遷移の追加を状態遷移図で検出できます。</figcaption>
+<figcaption>状態と遷移を集約すると、生成した状態遷移図を PRD と照合して、PRD にない遷移を検出できます。</figcaption>
 </figure>
 
 この設計を採用しても、不適切なコードの記述を防げるわけではありません。変わるのは、業務上の判断の配置先が決まることです。配置先が決まっていれば、そこから外れたコードはレビューで検出しやすくなります。

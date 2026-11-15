@@ -1,21 +1,19 @@
 .fig {
-  --fig-ink: #293132;
-  --fig-muted: #4c5b5d;
-  --fig-line: #708588;
-  --fig-rule: #c5ced0;
+  --fig-ink: #1a1a2e;
+  --fig-muted: #6b7280;
+  --fig-line: #8d91a3;
+  --fig-rule: #e5e5ea;
   --fig-surface: #ffffff;
-  --fig-soft: #f0f3f3;
-  --fig-agent: #2da199;
-  --fig-agent-soft: #c8f0ed;
-  --fig-accent: #e05e52;
-  --fig-accent-text: #c04a40;
-  --fig-accent-soft: #fadad6;
-  --fig-c1: #2da199;
-  --fig-c2: #faa228;
-  --fig-c3: #18a9ff;
-  --fig-spot: #faa228;
-  --fig-bar: #c5ced0;
-  --fig-zone: #c5ced0;
+  --fig-soft: #f6f5f9;
+  --fig-agent: #4f5bd5;
+  --fig-agent-soft: #eceefc;
+  --fig-human: #e05e52;
+  --fig-human-strong: #cf4b3f;
+  --fig-human-soft: #fdeceb;
+  --fig-on-human: #ffffff;
+  --fig-problem: #c8153f;
+  --fig-problem-soft: #fde8ee;
+  --fig-on-problem: #ffffff;
 
   max-width: 640px;
   margin: 2rem auto;
@@ -24,22 +22,20 @@
 @media (prefers-color-scheme: dark) {
   .fig {
     --fig-ink: #e4e4ea;
-    --fig-muted: #a9abb8;
-    --fig-line: #8b8e9c;
-    --fig-rule: #3c3c48;
+    --fig-muted: #9a9cab;
+    --fig-line: #7c7f92;
+    --fig-rule: #3a3a46;
     --fig-surface: #26262e;
-    --fig-soft: #2c2c36;
-    --fig-agent: #4fc7bd;
-    --fig-agent-soft: #1d3b3a;
-    --fig-accent: #f0887e;
-    --fig-accent-text: #f0887e;
-    --fig-accent-soft: #4a2a28;
-    --fig-c1: #4fc7bd;
-    --fig-c2: #f6b44a;
-    --fig-c3: #5cbfff;
-    --fig-spot: #f6b44a;
-    --fig-bar: #4a4a58;
-    --fig-zone: #121216;
+    --fig-soft: #22222a;
+    --fig-agent: #8b93f0;
+    --fig-agent-soft: #2b2e55;
+    --fig-human: #f0887e;
+    --fig-human-strong: #f0887e;
+    --fig-human-soft: #4a2a28;
+    --fig-on-human: #1c1c22;
+    --fig-problem: #ff6b8a;
+    --fig-problem-soft: #4a2230;
+    --fig-on-problem: #1c1c22;
   }
 }
 
@@ -87,32 +83,74 @@
   fill: var(--fig-agent);
 }
 
-.fig-c-accent {
-  fill: var(--fig-accent-text);
+.fig-c-human {
+  fill: var(--fig-human-strong);
 }
 
-.fig-box {
+.fig-c-problem {
+  fill: var(--fig-problem);
+}
+
+.fig-c-on-human {
+  fill: var(--fig-on-human);
+}
+
+.fig-c-on-problem {
+  fill: var(--fig-on-problem);
+}
+
+.fig-card {
   fill: var(--fig-surface);
   stroke: var(--fig-line);
-  stroke-width: 1.5;
+  stroke-width: 1.25;
 }
 
-.fig-box-agent {
-  fill: var(--fig-agent-soft);
-  stroke: var(--fig-agent);
-  stroke-width: 1.5;
-}
-
-.fig-box-accent {
-  fill: var(--fig-accent-soft);
-  stroke: var(--fig-accent);
-  stroke-width: 1.5;
-}
-
-.fig-box-soft {
+.fig-card-soft {
   fill: var(--fig-soft);
   stroke: var(--fig-rule);
-  stroke-width: 1.5;
+  stroke-width: 1.25;
+}
+
+.fig-card-agent {
+  fill: var(--fig-agent-soft);
+  stroke: var(--fig-agent);
+  stroke-width: 1.25;
+}
+
+.fig-card-human {
+  fill: var(--fig-human-strong);
+  stroke: none;
+}
+
+.fig-card-problem {
+  fill: var(--fig-problem-soft);
+  stroke: var(--fig-problem);
+  stroke-width: 1.75;
+}
+
+.fig-card-dash {
+  fill: none;
+  stroke: var(--fig-line);
+  stroke-width: 1.25;
+  stroke-dasharray: 5 4;
+}
+
+.fig-pill {
+  fill: var(--fig-soft);
+  stroke: var(--fig-rule);
+  stroke-width: 1.25;
+}
+
+.fig-pill-agent {
+  fill: var(--fig-agent);
+}
+
+.fig-pill-human {
+  fill: var(--fig-human-strong);
+}
+
+.fig-pill-problem {
+  fill: var(--fig-problem);
 }
 
 .fig-fill-surface {
@@ -123,6 +161,10 @@
   fill: var(--fig-soft);
 }
 
+.fig-fill-rule {
+  fill: var(--fig-rule);
+}
+
 .fig-fill-agent {
   fill: var(--fig-agent);
 }
@@ -131,100 +173,72 @@
   fill: var(--fig-agent-soft);
 }
 
-.fig-fill-accent {
-  fill: var(--fig-accent);
+.fig-fill-human {
+  fill: var(--fig-human-strong);
 }
 
-.fig-fill-accent-soft {
-  fill: var(--fig-accent-soft);
+.fig-fill-human-soft {
+  fill: var(--fig-human-soft);
 }
 
-.fig-fill-bar {
-  fill: var(--fig-bar);
+.fig-fill-problem {
+  fill: var(--fig-problem);
 }
 
-.fig-fill-zone {
-  fill: var(--fig-zone);
+.fig-fill-problem-soft {
+  fill: var(--fig-problem-soft);
 }
 
-.fig-fill-spot {
-  fill: var(--fig-spot);
-  fill-opacity: 0.3;
-  stroke: var(--fig-spot);
-  stroke-width: 2;
-}
-
-.fig-fill-1 {
-  fill: var(--fig-c1);
-}
-
-.fig-fill-2 {
-  fill: var(--fig-c2);
-}
-
-.fig-fill-3 {
-  fill: var(--fig-c3);
-}
-
-.fig-fill-band {
-  fill: var(--fig-agent);
-  fill-opacity: 0.35;
-}
-
-.fig-stroke,
-.fig-stroke-agent,
-.fig-stroke-accent,
-.fig-stroke-rule {
+.fig-line,
+.fig-line-agent,
+.fig-line-human,
+.fig-line-problem,
+.fig-line-rule {
   fill: none;
-  stroke-width: 1.5;
+  stroke-width: 1.25;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.fig-stroke {
+.fig-line {
   stroke: var(--fig-line);
 }
 
-.fig-stroke-agent {
+.fig-line-agent {
   stroke: var(--fig-agent);
 }
 
-.fig-stroke-accent {
-  stroke: var(--fig-accent);
-  stroke-width: 2;
+.fig-line-human {
+  stroke: var(--fig-human-strong);
 }
 
-.fig-stroke-rule {
+.fig-line-problem {
+  stroke: var(--fig-problem);
+  stroke-width: 1.75;
+}
+
+.fig-line-rule {
   stroke: var(--fig-rule);
 }
 
-.fig-dash {
-  stroke-dasharray: 6 4;
-}
-
-.fig-dotted {
-  stroke-dasharray: 2 4;
-}
-
-.fig-edge {
+.fig-line-on {
   fill: none;
-  stroke-width: 2;
+  stroke: var(--fig-on-human);
+  stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.fig-edge-agent {
-  stroke: var(--fig-agent);
+.fig-dash {
+  stroke-dasharray: 5 4;
 }
 
-.fig-edge-line {
-  stroke: var(--fig-line);
+.fig-dotted {
+  stroke-dasharray: 1.5 4;
 }
 
-.fig-mask-stroke {
-  fill: none;
-  stroke: #ffffff;
-  stroke-width: 40;
+.fig-thick {
+  stroke-width: 2;
 }
 
 .fig-mk {
@@ -235,8 +249,23 @@
   fill: var(--fig-agent);
 }
 
-.fig-mk-accent {
-  fill: var(--fig-accent);
+.fig-mk-human {
+  fill: var(--fig-human-strong);
+}
+
+.fig-mk-problem {
+  fill: var(--fig-problem);
+}
+
+.fig-ring {
+  stroke: var(--fig-surface);
+  stroke-width: 2;
+}
+
+.fig-mask-stroke {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 40;
 }
 
 [class*="fig-flow"],
@@ -248,9 +277,11 @@
 [class*="fig-halo"],
 [class*="fig-turn"],
 [class*="fig-shuttle"],
-[class*="fig-hold-"],
+[class*="fig-route"],
 [class*="fig-fade"],
 [class*="fig-at-"],
+[class*="fig-hold-"],
+[class*="fig-step-"],
 [class*="fig-draw-at-"],
 [class*="fig-grow-at-"] {
   animation-duration: var(--fig-dur, 8s);
@@ -356,6 +387,1315 @@
   }
   75% {
     transform: translate(var(--fig-p3x, 0px), var(--fig-p3y, 0px));
+  }
+}
+
+.fig-route {
+  transform: translate(
+    var(--fig-xr, var(--fig-r0x, 0px)),
+    var(--fig-yr, var(--fig-r0y, 0px))
+  );
+  animation-name: fig-route, fig-route-opacity;
+}
+
+.fig-route-half {
+  transform: translate(
+    var(--fig-xr, var(--fig-r0x, 0px)),
+    var(--fig-yr, var(--fig-r0y, 0px))
+  );
+  animation-name: fig-route-half, fig-route-half-opacity;
+}
+
+@keyframes fig-route {
+  0% {
+    transform: translate(var(--fig-r0x, 0px), var(--fig-r0y, 0px));
+  }
+  6.667% {
+    transform: translate(
+      var(--fig-r1x, var(--fig-r0x, 0px)),
+      var(--fig-r1y, var(--fig-r0y, 0px))
+    );
+  }
+  13.333% {
+    transform: translate(
+      var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px))),
+      var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+    );
+  }
+  20% {
+    transform: translate(
+      var(--fig-r3x, var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))),
+      var(--fig-r3y, var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px))))
+    );
+  }
+  26.667% {
+    transform: translate(
+      var(
+        --fig-r4x,
+        var(--fig-r3x, var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px))))
+      ),
+      var(
+        --fig-r4y,
+        var(--fig-r3y, var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px))))
+      )
+    );
+  }
+  33.333% {
+    transform: translate(
+      var(
+        --fig-r5x,
+        var(
+          --fig-r4x,
+          var(--fig-r3x, var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px))))
+        )
+      ),
+      var(
+        --fig-r5y,
+        var(
+          --fig-r4y,
+          var(--fig-r3y, var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px))))
+        )
+      )
+    );
+  }
+  40% {
+    transform: translate(
+      var(
+        --fig-r6x,
+        var(
+          --fig-r5x,
+          var(
+            --fig-r4x,
+            var(--fig-r3x, var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px))))
+          )
+        )
+      ),
+      var(
+        --fig-r6y,
+        var(
+          --fig-r5y,
+          var(
+            --fig-r4y,
+            var(--fig-r3y, var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px))))
+          )
+        )
+      )
+    );
+  }
+  46.667% {
+    transform: translate(
+      var(
+        --fig-r7x,
+        var(
+          --fig-r6x,
+          var(
+            --fig-r5x,
+            var(
+              --fig-r4x,
+              var(
+                --fig-r3x,
+                var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r7y,
+        var(
+          --fig-r6y,
+          var(
+            --fig-r5y,
+            var(
+              --fig-r4y,
+              var(
+                --fig-r3y,
+                var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  53.333% {
+    transform: translate(
+      var(
+        --fig-r8x,
+        var(
+          --fig-r7x,
+          var(
+            --fig-r6x,
+            var(
+              --fig-r5x,
+              var(
+                --fig-r4x,
+                var(
+                  --fig-r3x,
+                  var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r8y,
+        var(
+          --fig-r7y,
+          var(
+            --fig-r6y,
+            var(
+              --fig-r5y,
+              var(
+                --fig-r4y,
+                var(
+                  --fig-r3y,
+                  var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  60% {
+    transform: translate(
+      var(
+        --fig-r9x,
+        var(
+          --fig-r8x,
+          var(
+            --fig-r7x,
+            var(
+              --fig-r6x,
+              var(
+                --fig-r5x,
+                var(
+                  --fig-r4x,
+                  var(
+                    --fig-r3x,
+                    var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r9y,
+        var(
+          --fig-r8y,
+          var(
+            --fig-r7y,
+            var(
+              --fig-r6y,
+              var(
+                --fig-r5y,
+                var(
+                  --fig-r4y,
+                  var(
+                    --fig-r3y,
+                    var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  66.667% {
+    transform: translate(
+      var(
+        --fig-r10x,
+        var(
+          --fig-r9x,
+          var(
+            --fig-r8x,
+            var(
+              --fig-r7x,
+              var(
+                --fig-r6x,
+                var(
+                  --fig-r5x,
+                  var(
+                    --fig-r4x,
+                    var(
+                      --fig-r3x,
+                      var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r10y,
+        var(
+          --fig-r9y,
+          var(
+            --fig-r8y,
+            var(
+              --fig-r7y,
+              var(
+                --fig-r6y,
+                var(
+                  --fig-r5y,
+                  var(
+                    --fig-r4y,
+                    var(
+                      --fig-r3y,
+                      var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  73.333% {
+    transform: translate(
+      var(
+        --fig-r11x,
+        var(
+          --fig-r10x,
+          var(
+            --fig-r9x,
+            var(
+              --fig-r8x,
+              var(
+                --fig-r7x,
+                var(
+                  --fig-r6x,
+                  var(
+                    --fig-r5x,
+                    var(
+                      --fig-r4x,
+                      var(
+                        --fig-r3x,
+                        var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r11y,
+        var(
+          --fig-r10y,
+          var(
+            --fig-r9y,
+            var(
+              --fig-r8y,
+              var(
+                --fig-r7y,
+                var(
+                  --fig-r6y,
+                  var(
+                    --fig-r5y,
+                    var(
+                      --fig-r4y,
+                      var(
+                        --fig-r3y,
+                        var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  80% {
+    transform: translate(
+      var(
+        --fig-r12x,
+        var(
+          --fig-r11x,
+          var(
+            --fig-r10x,
+            var(
+              --fig-r9x,
+              var(
+                --fig-r8x,
+                var(
+                  --fig-r7x,
+                  var(
+                    --fig-r6x,
+                    var(
+                      --fig-r5x,
+                      var(
+                        --fig-r4x,
+                        var(
+                          --fig-r3x,
+                          var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r12y,
+        var(
+          --fig-r11y,
+          var(
+            --fig-r10y,
+            var(
+              --fig-r9y,
+              var(
+                --fig-r8y,
+                var(
+                  --fig-r7y,
+                  var(
+                    --fig-r6y,
+                    var(
+                      --fig-r5y,
+                      var(
+                        --fig-r4y,
+                        var(
+                          --fig-r3y,
+                          var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  86.667% {
+    transform: translate(
+      var(
+        --fig-r13x,
+        var(
+          --fig-r12x,
+          var(
+            --fig-r11x,
+            var(
+              --fig-r10x,
+              var(
+                --fig-r9x,
+                var(
+                  --fig-r8x,
+                  var(
+                    --fig-r7x,
+                    var(
+                      --fig-r6x,
+                      var(
+                        --fig-r5x,
+                        var(
+                          --fig-r4x,
+                          var(
+                            --fig-r3x,
+                            var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r13y,
+        var(
+          --fig-r12y,
+          var(
+            --fig-r11y,
+            var(
+              --fig-r10y,
+              var(
+                --fig-r9y,
+                var(
+                  --fig-r8y,
+                  var(
+                    --fig-r7y,
+                    var(
+                      --fig-r6y,
+                      var(
+                        --fig-r5y,
+                        var(
+                          --fig-r4y,
+                          var(
+                            --fig-r3y,
+                            var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  93.333% {
+    transform: translate(
+      var(
+        --fig-r14x,
+        var(
+          --fig-r13x,
+          var(
+            --fig-r12x,
+            var(
+              --fig-r11x,
+              var(
+                --fig-r10x,
+                var(
+                  --fig-r9x,
+                  var(
+                    --fig-r8x,
+                    var(
+                      --fig-r7x,
+                      var(
+                        --fig-r6x,
+                        var(
+                          --fig-r5x,
+                          var(
+                            --fig-r4x,
+                            var(
+                              --fig-r3x,
+                              var(
+                                --fig-r2x,
+                                var(--fig-r1x, var(--fig-r0x, 0px))
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r14y,
+        var(
+          --fig-r13y,
+          var(
+            --fig-r12y,
+            var(
+              --fig-r11y,
+              var(
+                --fig-r10y,
+                var(
+                  --fig-r9y,
+                  var(
+                    --fig-r8y,
+                    var(
+                      --fig-r7y,
+                      var(
+                        --fig-r6y,
+                        var(
+                          --fig-r5y,
+                          var(
+                            --fig-r4y,
+                            var(
+                              --fig-r3y,
+                              var(
+                                --fig-r2y,
+                                var(--fig-r1y, var(--fig-r0y, 0px))
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  100% {
+    transform: translate(
+      var(
+        --fig-r15x,
+        var(
+          --fig-r14x,
+          var(
+            --fig-r13x,
+            var(
+              --fig-r12x,
+              var(
+                --fig-r11x,
+                var(
+                  --fig-r10x,
+                  var(
+                    --fig-r9x,
+                    var(
+                      --fig-r8x,
+                      var(
+                        --fig-r7x,
+                        var(
+                          --fig-r6x,
+                          var(
+                            --fig-r5x,
+                            var(
+                              --fig-r4x,
+                              var(
+                                --fig-r3x,
+                                var(
+                                  --fig-r2x,
+                                  var(--fig-r1x, var(--fig-r0x, 0px))
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r15y,
+        var(
+          --fig-r14y,
+          var(
+            --fig-r13y,
+            var(
+              --fig-r12y,
+              var(
+                --fig-r11y,
+                var(
+                  --fig-r10y,
+                  var(
+                    --fig-r9y,
+                    var(
+                      --fig-r8y,
+                      var(
+                        --fig-r7y,
+                        var(
+                          --fig-r6y,
+                          var(
+                            --fig-r5y,
+                            var(
+                              --fig-r4y,
+                              var(
+                                --fig-r3y,
+                                var(
+                                  --fig-r2y,
+                                  var(--fig-r1y, var(--fig-r0y, 0px))
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+}
+
+@keyframes fig-route-opacity {
+  0% {
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-route-half {
+  0% {
+    transform: translate(var(--fig-r0x, 0px), var(--fig-r0y, 0px));
+  }
+  6.667% {
+    transform: translate(
+      var(--fig-r1x, var(--fig-r0x, 0px)),
+      var(--fig-r1y, var(--fig-r0y, 0px))
+    );
+  }
+  13.333% {
+    transform: translate(
+      var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px))),
+      var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+    );
+  }
+  20% {
+    transform: translate(
+      var(--fig-r3x, var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))),
+      var(--fig-r3y, var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px))))
+    );
+  }
+  26.667% {
+    transform: translate(
+      var(
+        --fig-r4x,
+        var(--fig-r3x, var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px))))
+      ),
+      var(
+        --fig-r4y,
+        var(--fig-r3y, var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px))))
+      )
+    );
+  }
+  33.333% {
+    transform: translate(
+      var(
+        --fig-r5x,
+        var(
+          --fig-r4x,
+          var(--fig-r3x, var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px))))
+        )
+      ),
+      var(
+        --fig-r5y,
+        var(
+          --fig-r4y,
+          var(--fig-r3y, var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px))))
+        )
+      )
+    );
+  }
+  40% {
+    transform: translate(
+      var(
+        --fig-r6x,
+        var(
+          --fig-r5x,
+          var(
+            --fig-r4x,
+            var(--fig-r3x, var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px))))
+          )
+        )
+      ),
+      var(
+        --fig-r6y,
+        var(
+          --fig-r5y,
+          var(
+            --fig-r4y,
+            var(--fig-r3y, var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px))))
+          )
+        )
+      )
+    );
+  }
+  46.667% {
+    transform: translate(
+      var(
+        --fig-r7x,
+        var(
+          --fig-r6x,
+          var(
+            --fig-r5x,
+            var(
+              --fig-r4x,
+              var(
+                --fig-r3x,
+                var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r7y,
+        var(
+          --fig-r6y,
+          var(
+            --fig-r5y,
+            var(
+              --fig-r4y,
+              var(
+                --fig-r3y,
+                var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  53.333% {
+    transform: translate(
+      var(
+        --fig-r8x,
+        var(
+          --fig-r7x,
+          var(
+            --fig-r6x,
+            var(
+              --fig-r5x,
+              var(
+                --fig-r4x,
+                var(
+                  --fig-r3x,
+                  var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r8y,
+        var(
+          --fig-r7y,
+          var(
+            --fig-r6y,
+            var(
+              --fig-r5y,
+              var(
+                --fig-r4y,
+                var(
+                  --fig-r3y,
+                  var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  60% {
+    transform: translate(
+      var(
+        --fig-r9x,
+        var(
+          --fig-r8x,
+          var(
+            --fig-r7x,
+            var(
+              --fig-r6x,
+              var(
+                --fig-r5x,
+                var(
+                  --fig-r4x,
+                  var(
+                    --fig-r3x,
+                    var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r9y,
+        var(
+          --fig-r8y,
+          var(
+            --fig-r7y,
+            var(
+              --fig-r6y,
+              var(
+                --fig-r5y,
+                var(
+                  --fig-r4y,
+                  var(
+                    --fig-r3y,
+                    var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  66.667% {
+    transform: translate(
+      var(
+        --fig-r10x,
+        var(
+          --fig-r9x,
+          var(
+            --fig-r8x,
+            var(
+              --fig-r7x,
+              var(
+                --fig-r6x,
+                var(
+                  --fig-r5x,
+                  var(
+                    --fig-r4x,
+                    var(
+                      --fig-r3x,
+                      var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r10y,
+        var(
+          --fig-r9y,
+          var(
+            --fig-r8y,
+            var(
+              --fig-r7y,
+              var(
+                --fig-r6y,
+                var(
+                  --fig-r5y,
+                  var(
+                    --fig-r4y,
+                    var(
+                      --fig-r3y,
+                      var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  73.333% {
+    transform: translate(
+      var(
+        --fig-r11x,
+        var(
+          --fig-r10x,
+          var(
+            --fig-r9x,
+            var(
+              --fig-r8x,
+              var(
+                --fig-r7x,
+                var(
+                  --fig-r6x,
+                  var(
+                    --fig-r5x,
+                    var(
+                      --fig-r4x,
+                      var(
+                        --fig-r3x,
+                        var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r11y,
+        var(
+          --fig-r10y,
+          var(
+            --fig-r9y,
+            var(
+              --fig-r8y,
+              var(
+                --fig-r7y,
+                var(
+                  --fig-r6y,
+                  var(
+                    --fig-r5y,
+                    var(
+                      --fig-r4y,
+                      var(
+                        --fig-r3y,
+                        var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  80% {
+    transform: translate(
+      var(
+        --fig-r12x,
+        var(
+          --fig-r11x,
+          var(
+            --fig-r10x,
+            var(
+              --fig-r9x,
+              var(
+                --fig-r8x,
+                var(
+                  --fig-r7x,
+                  var(
+                    --fig-r6x,
+                    var(
+                      --fig-r5x,
+                      var(
+                        --fig-r4x,
+                        var(
+                          --fig-r3x,
+                          var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r12y,
+        var(
+          --fig-r11y,
+          var(
+            --fig-r10y,
+            var(
+              --fig-r9y,
+              var(
+                --fig-r8y,
+                var(
+                  --fig-r7y,
+                  var(
+                    --fig-r6y,
+                    var(
+                      --fig-r5y,
+                      var(
+                        --fig-r4y,
+                        var(
+                          --fig-r3y,
+                          var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  86.667% {
+    transform: translate(
+      var(
+        --fig-r13x,
+        var(
+          --fig-r12x,
+          var(
+            --fig-r11x,
+            var(
+              --fig-r10x,
+              var(
+                --fig-r9x,
+                var(
+                  --fig-r8x,
+                  var(
+                    --fig-r7x,
+                    var(
+                      --fig-r6x,
+                      var(
+                        --fig-r5x,
+                        var(
+                          --fig-r4x,
+                          var(
+                            --fig-r3x,
+                            var(--fig-r2x, var(--fig-r1x, var(--fig-r0x, 0px)))
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r13y,
+        var(
+          --fig-r12y,
+          var(
+            --fig-r11y,
+            var(
+              --fig-r10y,
+              var(
+                --fig-r9y,
+                var(
+                  --fig-r8y,
+                  var(
+                    --fig-r7y,
+                    var(
+                      --fig-r6y,
+                      var(
+                        --fig-r5y,
+                        var(
+                          --fig-r4y,
+                          var(
+                            --fig-r3y,
+                            var(--fig-r2y, var(--fig-r1y, var(--fig-r0y, 0px)))
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  93.333% {
+    transform: translate(
+      var(
+        --fig-r14x,
+        var(
+          --fig-r13x,
+          var(
+            --fig-r12x,
+            var(
+              --fig-r11x,
+              var(
+                --fig-r10x,
+                var(
+                  --fig-r9x,
+                  var(
+                    --fig-r8x,
+                    var(
+                      --fig-r7x,
+                      var(
+                        --fig-r6x,
+                        var(
+                          --fig-r5x,
+                          var(
+                            --fig-r4x,
+                            var(
+                              --fig-r3x,
+                              var(
+                                --fig-r2x,
+                                var(--fig-r1x, var(--fig-r0x, 0px))
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r14y,
+        var(
+          --fig-r13y,
+          var(
+            --fig-r12y,
+            var(
+              --fig-r11y,
+              var(
+                --fig-r10y,
+                var(
+                  --fig-r9y,
+                  var(
+                    --fig-r8y,
+                    var(
+                      --fig-r7y,
+                      var(
+                        --fig-r6y,
+                        var(
+                          --fig-r5y,
+                          var(
+                            --fig-r4y,
+                            var(
+                              --fig-r3y,
+                              var(
+                                --fig-r2y,
+                                var(--fig-r1y, var(--fig-r0y, 0px))
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+  100% {
+    transform: translate(
+      var(
+        --fig-r15x,
+        var(
+          --fig-r14x,
+          var(
+            --fig-r13x,
+            var(
+              --fig-r12x,
+              var(
+                --fig-r11x,
+                var(
+                  --fig-r10x,
+                  var(
+                    --fig-r9x,
+                    var(
+                      --fig-r8x,
+                      var(
+                        --fig-r7x,
+                        var(
+                          --fig-r6x,
+                          var(
+                            --fig-r5x,
+                            var(
+                              --fig-r4x,
+                              var(
+                                --fig-r3x,
+                                var(
+                                  --fig-r2x,
+                                  var(--fig-r1x, var(--fig-r0x, 0px))
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      var(
+        --fig-r15y,
+        var(
+          --fig-r14y,
+          var(
+            --fig-r13y,
+            var(
+              --fig-r12y,
+              var(
+                --fig-r11y,
+                var(
+                  --fig-r10y,
+                  var(
+                    --fig-r9y,
+                    var(
+                      --fig-r8y,
+                      var(
+                        --fig-r7y,
+                        var(
+                          --fig-r6y,
+                          var(
+                            --fig-r5y,
+                            var(
+                              --fig-r4y,
+                              var(
+                                --fig-r3y,
+                                var(
+                                  --fig-r2y,
+                                  var(--fig-r1y, var(--fig-r0y, 0px))
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+  }
+}
+
+@keyframes fig-route-half-opacity {
+  0% {
+    opacity: 0;
+  }
+  2% {
+    opacity: 1;
+  }
+  44% {
+    opacity: 1;
+  }
+  48% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
@@ -496,7 +1836,11 @@
 .fig-draw-at-3,
 .fig-draw-at-4,
 .fig-draw-at-5,
-.fig-draw-at-6 {
+.fig-draw-at-6,
+.fig-draw-at-7,
+.fig-draw-at-8,
+.fig-draw-at-9,
+.fig-draw-at-10 {
   stroke-dasharray: 100;
   stroke-dashoffset: 0;
 }
@@ -506,22 +1850,43 @@
 .fig-grow-at-3,
 .fig-grow-at-4,
 .fig-grow-at-5,
-.fig-grow-at-6 {
+.fig-grow-at-6,
+.fig-grow-at-7,
+.fig-grow-at-8,
+.fig-grow-at-9,
+.fig-grow-at-10 {
   transform-box: fill-box;
   transform-origin: left center;
   transform: scaleX(var(--fig-to, 1));
+}
+
+.fig-step-1,
+.fig-step-2,
+.fig-step-3,
+.fig-step-4,
+.fig-step-5,
+.fig-step-6,
+.fig-step-7,
+.fig-step-8,
+.fig-step-9,
+.fig-step-10 {
+  opacity: 0;
 }
 
 .fig-at-1 {
   animation-name: fig-at-1;
 }
 
-.fig-draw-at-1 {
-  animation-name: fig-draw-at-1;
-}
-
 .fig-hold-1 {
   animation-name: fig-hold-1;
+}
+
+.fig-step-1 {
+  animation-name: fig-step-1;
+}
+
+.fig-draw-at-1 {
+  animation-name: fig-draw-at-1;
 }
 
 .fig-grow-at-1 {
@@ -532,12 +1897,16 @@
   animation-name: fig-at-2;
 }
 
-.fig-draw-at-2 {
-  animation-name: fig-draw-at-2;
-}
-
 .fig-hold-2 {
   animation-name: fig-hold-2;
+}
+
+.fig-step-2 {
+  animation-name: fig-step-2;
+}
+
+.fig-draw-at-2 {
+  animation-name: fig-draw-at-2;
 }
 
 .fig-grow-at-2 {
@@ -548,12 +1917,16 @@
   animation-name: fig-at-3;
 }
 
-.fig-draw-at-3 {
-  animation-name: fig-draw-at-3;
-}
-
 .fig-hold-3 {
   animation-name: fig-hold-3;
+}
+
+.fig-step-3 {
+  animation-name: fig-step-3;
+}
+
+.fig-draw-at-3 {
+  animation-name: fig-draw-at-3;
 }
 
 .fig-grow-at-3 {
@@ -564,12 +1937,16 @@
   animation-name: fig-at-4;
 }
 
-.fig-draw-at-4 {
-  animation-name: fig-draw-at-4;
-}
-
 .fig-hold-4 {
   animation-name: fig-hold-4;
+}
+
+.fig-step-4 {
+  animation-name: fig-step-4;
+}
+
+.fig-draw-at-4 {
+  animation-name: fig-draw-at-4;
 }
 
 .fig-grow-at-4 {
@@ -580,12 +1957,16 @@
   animation-name: fig-at-5;
 }
 
-.fig-draw-at-5 {
-  animation-name: fig-draw-at-5;
-}
-
 .fig-hold-5 {
   animation-name: fig-hold-5;
+}
+
+.fig-step-5 {
+  animation-name: fig-step-5;
+}
+
+.fig-draw-at-5 {
+  animation-name: fig-draw-at-5;
 }
 
 .fig-grow-at-5 {
@@ -596,25 +1977,109 @@
   animation-name: fig-at-6;
 }
 
-.fig-draw-at-6 {
-  animation-name: fig-draw-at-6;
-}
-
 .fig-hold-6 {
   animation-name: fig-hold-6;
+}
+
+.fig-step-6 {
+  animation-name: fig-step-6;
+}
+
+.fig-draw-at-6 {
+  animation-name: fig-draw-at-6;
 }
 
 .fig-grow-at-6 {
   animation-name: fig-grow-at-6;
 }
 
+.fig-at-7 {
+  animation-name: fig-at-7;
+}
+
+.fig-hold-7 {
+  animation-name: fig-hold-7;
+}
+
+.fig-step-7 {
+  animation-name: fig-step-7;
+}
+
+.fig-draw-at-7 {
+  animation-name: fig-draw-at-7;
+}
+
+.fig-grow-at-7 {
+  animation-name: fig-grow-at-7;
+}
+
+.fig-at-8 {
+  animation-name: fig-at-8;
+}
+
+.fig-hold-8 {
+  animation-name: fig-hold-8;
+}
+
+.fig-step-8 {
+  animation-name: fig-step-8;
+}
+
+.fig-draw-at-8 {
+  animation-name: fig-draw-at-8;
+}
+
+.fig-grow-at-8 {
+  animation-name: fig-grow-at-8;
+}
+
+.fig-at-9 {
+  animation-name: fig-at-9;
+}
+
+.fig-hold-9 {
+  animation-name: fig-hold-9;
+}
+
+.fig-step-9 {
+  animation-name: fig-step-9;
+}
+
+.fig-draw-at-9 {
+  animation-name: fig-draw-at-9;
+}
+
+.fig-grow-at-9 {
+  animation-name: fig-grow-at-9;
+}
+
+.fig-at-10 {
+  animation-name: fig-at-10;
+}
+
+.fig-hold-10 {
+  animation-name: fig-hold-10;
+}
+
+.fig-step-10 {
+  animation-name: fig-step-10;
+}
+
+.fig-draw-at-10 {
+  animation-name: fig-draw-at-10;
+}
+
+.fig-grow-at-10 {
+  animation-name: fig-grow-at-10;
+}
+
 @keyframes fig-at-1 {
   0%,
-  10% {
+  7% {
     opacity: 0;
   }
-  14%,
-  90% {
+  10%,
+  92% {
     opacity: 1;
   }
   97%,
@@ -625,11 +2090,11 @@
 
 @keyframes fig-hold-1 {
   0%,
-  10% {
+  7% {
     opacity: 0;
   }
-  14%,
-  96% {
+  10%,
+  97% {
     opacity: 1;
   }
   100% {
@@ -637,14 +2102,29 @@
   }
 }
 
+@keyframes fig-step-1 {
+  0%,
+  3% {
+    opacity: 0;
+  }
+  5%,
+  9% {
+    opacity: 1;
+  }
+  11%,
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes fig-draw-at-1 {
   0%,
-  4% {
+  3% {
     stroke-dashoffset: 100;
     opacity: 1;
   }
-  16%,
-  90% {
+  10%,
+  92% {
     stroke-dashoffset: 0;
     opacity: 1;
   }
@@ -657,12 +2137,12 @@
 
 @keyframes fig-grow-at-1 {
   0%,
-  4% {
+  3% {
     transform: scaleX(0);
     opacity: 1;
   }
-  18%,
-  90% {
+  11%,
+  92% {
     transform: scaleX(var(--fig-to, 1));
     opacity: 1;
   }
@@ -675,11 +2155,11 @@
 
 @keyframes fig-at-2 {
   0%,
-  24% {
+  15% {
     opacity: 0;
   }
-  28%,
-  90% {
+  18%,
+  92% {
     opacity: 1;
   }
   97%,
@@ -690,11 +2170,11 @@
 
 @keyframes fig-hold-2 {
   0%,
-  24% {
+  15% {
     opacity: 0;
   }
-  28%,
-  96% {
+  18%,
+  97% {
     opacity: 1;
   }
   100% {
@@ -702,14 +2182,29 @@
   }
 }
 
+@keyframes fig-step-2 {
+  0%,
+  11% {
+    opacity: 0;
+  }
+  13%,
+  17% {
+    opacity: 1;
+  }
+  19%,
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes fig-draw-at-2 {
   0%,
-  18% {
+  11% {
     stroke-dashoffset: 100;
     opacity: 1;
   }
-  30%,
-  90% {
+  18%,
+  92% {
     stroke-dashoffset: 0;
     opacity: 1;
   }
@@ -722,12 +2217,12 @@
 
 @keyframes fig-grow-at-2 {
   0%,
-  18% {
+  11% {
     transform: scaleX(0);
     opacity: 1;
   }
-  32%,
-  90% {
+  19%,
+  92% {
     transform: scaleX(var(--fig-to, 1));
     opacity: 1;
   }
@@ -740,11 +2235,11 @@
 
 @keyframes fig-at-3 {
   0%,
-  38% {
+  23% {
     opacity: 0;
   }
-  42%,
-  90% {
+  26%,
+  92% {
     opacity: 1;
   }
   97%,
@@ -755,11 +2250,11 @@
 
 @keyframes fig-hold-3 {
   0%,
-  38% {
+  23% {
     opacity: 0;
   }
-  42%,
-  96% {
+  26%,
+  97% {
     opacity: 1;
   }
   100% {
@@ -767,14 +2262,29 @@
   }
 }
 
+@keyframes fig-step-3 {
+  0%,
+  19% {
+    opacity: 0;
+  }
+  21%,
+  25% {
+    opacity: 1;
+  }
+  27%,
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes fig-draw-at-3 {
   0%,
-  32% {
+  19% {
     stroke-dashoffset: 100;
     opacity: 1;
   }
-  44%,
-  90% {
+  26%,
+  92% {
     stroke-dashoffset: 0;
     opacity: 1;
   }
@@ -787,12 +2297,12 @@
 
 @keyframes fig-grow-at-3 {
   0%,
-  32% {
+  19% {
     transform: scaleX(0);
     opacity: 1;
   }
-  46%,
-  90% {
+  27%,
+  92% {
     transform: scaleX(var(--fig-to, 1));
     opacity: 1;
   }
@@ -805,11 +2315,11 @@
 
 @keyframes fig-at-4 {
   0%,
-  52% {
+  31% {
     opacity: 0;
   }
-  56%,
-  90% {
+  34%,
+  92% {
     opacity: 1;
   }
   97%,
@@ -820,11 +2330,11 @@
 
 @keyframes fig-hold-4 {
   0%,
-  52% {
+  31% {
     opacity: 0;
   }
-  56%,
-  96% {
+  34%,
+  97% {
     opacity: 1;
   }
   100% {
@@ -832,14 +2342,29 @@
   }
 }
 
+@keyframes fig-step-4 {
+  0%,
+  27% {
+    opacity: 0;
+  }
+  29%,
+  33% {
+    opacity: 1;
+  }
+  35%,
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes fig-draw-at-4 {
   0%,
-  46% {
+  27% {
     stroke-dashoffset: 100;
     opacity: 1;
   }
-  58%,
-  90% {
+  34%,
+  92% {
     stroke-dashoffset: 0;
     opacity: 1;
   }
@@ -852,12 +2377,12 @@
 
 @keyframes fig-grow-at-4 {
   0%,
-  46% {
+  27% {
     transform: scaleX(0);
     opacity: 1;
   }
-  60%,
-  90% {
+  35%,
+  92% {
     transform: scaleX(var(--fig-to, 1));
     opacity: 1;
   }
@@ -870,11 +2395,11 @@
 
 @keyframes fig-at-5 {
   0%,
-  66% {
+  39% {
     opacity: 0;
   }
-  70%,
-  90% {
+  42%,
+  92% {
     opacity: 1;
   }
   97%,
@@ -885,11 +2410,11 @@
 
 @keyframes fig-hold-5 {
   0%,
-  66% {
+  39% {
     opacity: 0;
   }
-  70%,
-  96% {
+  42%,
+  97% {
     opacity: 1;
   }
   100% {
@@ -897,14 +2422,29 @@
   }
 }
 
+@keyframes fig-step-5 {
+  0%,
+  35% {
+    opacity: 0;
+  }
+  37%,
+  41% {
+    opacity: 1;
+  }
+  43%,
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes fig-draw-at-5 {
   0%,
-  60% {
+  35% {
     stroke-dashoffset: 100;
     opacity: 1;
   }
-  72%,
-  90% {
+  42%,
+  92% {
     stroke-dashoffset: 0;
     opacity: 1;
   }
@@ -917,12 +2457,12 @@
 
 @keyframes fig-grow-at-5 {
   0%,
-  60% {
+  35% {
     transform: scaleX(0);
     opacity: 1;
   }
-  74%,
-  90% {
+  43%,
+  92% {
     transform: scaleX(var(--fig-to, 1));
     opacity: 1;
   }
@@ -935,11 +2475,11 @@
 
 @keyframes fig-at-6 {
   0%,
-  80% {
+  47% {
     opacity: 0;
   }
-  84%,
-  90% {
+  50%,
+  92% {
     opacity: 1;
   }
   97%,
@@ -950,11 +2490,11 @@
 
 @keyframes fig-hold-6 {
   0%,
-  80% {
+  47% {
     opacity: 0;
   }
-  84%,
-  96% {
+  50%,
+  97% {
     opacity: 1;
   }
   100% {
@@ -962,14 +2502,29 @@
   }
 }
 
+@keyframes fig-step-6 {
+  0%,
+  43% {
+    opacity: 0;
+  }
+  45%,
+  49% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes fig-draw-at-6 {
   0%,
-  74% {
+  43% {
     stroke-dashoffset: 100;
     opacity: 1;
   }
-  86%,
-  90% {
+  50%,
+  92% {
     stroke-dashoffset: 0;
     opacity: 1;
   }
@@ -982,12 +2537,332 @@
 
 @keyframes fig-grow-at-6 {
   0%,
-  74% {
+  43% {
     transform: scaleX(0);
     opacity: 1;
   }
-  88%,
-  90% {
+  51%,
+  92% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 1;
+  }
+  97%,
+  100% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 0;
+  }
+}
+
+@keyframes fig-at-7 {
+  0%,
+  55% {
+    opacity: 0;
+  }
+  58%,
+  92% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-hold-7 {
+  0%,
+  55% {
+    opacity: 0;
+  }
+  58%,
+  97% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-step-7 {
+  0%,
+  51% {
+    opacity: 0;
+  }
+  53%,
+  57% {
+    opacity: 1;
+  }
+  59%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-draw-at-7 {
+  0%,
+  51% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  58%,
+  92% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  97%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes fig-grow-at-7 {
+  0%,
+  51% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  59%,
+  92% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 1;
+  }
+  97%,
+  100% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 0;
+  }
+}
+
+@keyframes fig-at-8 {
+  0%,
+  63% {
+    opacity: 0;
+  }
+  66%,
+  92% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-hold-8 {
+  0%,
+  63% {
+    opacity: 0;
+  }
+  66%,
+  97% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-step-8 {
+  0%,
+  59% {
+    opacity: 0;
+  }
+  61%,
+  65% {
+    opacity: 1;
+  }
+  67%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-draw-at-8 {
+  0%,
+  59% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  66%,
+  92% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  97%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes fig-grow-at-8 {
+  0%,
+  59% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  67%,
+  92% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 1;
+  }
+  97%,
+  100% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 0;
+  }
+}
+
+@keyframes fig-at-9 {
+  0%,
+  71% {
+    opacity: 0;
+  }
+  74%,
+  92% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-hold-9 {
+  0%,
+  71% {
+    opacity: 0;
+  }
+  74%,
+  97% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-step-9 {
+  0%,
+  67% {
+    opacity: 0;
+  }
+  69%,
+  73% {
+    opacity: 1;
+  }
+  75%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-draw-at-9 {
+  0%,
+  67% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  74%,
+  92% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  97%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes fig-grow-at-9 {
+  0%,
+  67% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  75%,
+  92% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 1;
+  }
+  97%,
+  100% {
+    transform: scaleX(var(--fig-to, 1));
+    opacity: 0;
+  }
+}
+
+@keyframes fig-at-10 {
+  0%,
+  79% {
+    opacity: 0;
+  }
+  82%,
+  92% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-hold-10 {
+  0%,
+  79% {
+    opacity: 0;
+  }
+  82%,
+  97% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-step-10 {
+  0%,
+  75% {
+    opacity: 0;
+  }
+  77%,
+  81% {
+    opacity: 1;
+  }
+  83%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes fig-draw-at-10 {
+  0%,
+  75% {
+    stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  82%,
+  92% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  97%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes fig-grow-at-10 {
+  0%,
+  75% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  83%,
+  92% {
     transform: scaleX(var(--fig-to, 1));
     opacity: 1;
   }
@@ -1006,5 +2881,18 @@
 
   .fig-sweep-band {
     transform: scaleX(var(--fig-spread, 1));
+  }
+
+  .fig-step-1,
+  .fig-step-2,
+  .fig-step-3,
+  .fig-step-4,
+  .fig-step-5,
+  .fig-step-6,
+  .fig-step-7,
+  .fig-step-8,
+  .fig-step-9,
+  .fig-step-10 {
+    opacity: var(--fig-rest-opacity, 0);
   }
 }
