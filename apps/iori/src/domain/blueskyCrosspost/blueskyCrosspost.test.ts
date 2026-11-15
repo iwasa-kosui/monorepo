@@ -6,6 +6,7 @@ import { BlueskyCrosspost } from './blueskyCrosspost.ts';
 const input = (overrides: Partial<Parameters<typeof BlueskyCrosspost.decideSkip>[0]> = {}) => ({
   visibility: 'public' as Visibility,
   replyTo: { kind: 'none' as const },
+  html: '<p>こんにちは</p>',
   ...overrides,
 });
 
@@ -25,5 +26,16 @@ describe('BlueskyCrosspost.decideSkip', () => {
 
   it('public で返信先が未送信なら reply_to_unsent でスキップする', () => {
     expect(BlueskyCrosspost.decideSkip(input({ replyTo: { kind: 'unsent' } }))).toBe('reply_to_unsent');
+  });
+
+  it('Fediverse のアカウントへのメンションを含むなら fediverse_mention でスキップする', () => {
+    const html =
+      '<p><span class="h-card"><a href="https://bot.example/users/bot" class="u-url mention">@<span>bot@bot.example</span></a></span> おはよう</p>';
+    expect(BlueskyCrosspost.decideSkip(input({ html }))).toBe('fediverse_mention');
+  });
+
+  it('Bluesky のハンドルやふつうのリンクだけならスキップしない', () => {
+    const html = '<p>@alice.bsky.social <a href="https://example.com/@bob">example.com/@bob</a></p>';
+    expect(BlueskyCrosspost.decideSkip(input({ html }))).toBeUndefined();
   });
 });
