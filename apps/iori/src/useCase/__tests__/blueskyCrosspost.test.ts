@@ -20,6 +20,7 @@ import type { BlueskyBlob, BlueskyPostRecord } from '../../domain/blueskyCrosspo
 import { blueskyRkeyOf } from '../../domain/blueskyCrosspost/blueskyRkey.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { PostId } from '../../domain/post/postId.ts';
+import type { UserId } from '../../domain/user/userId.ts';
 import { appendQuoteInline } from '../../domain/post/quoteInline.ts';
 import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import type { PostImageObjectStore } from '../../ports/postImageObjectStore.ts';
@@ -34,19 +35,8 @@ const LINK_PREVIEW_ID = '00000000-0000-4000-8000-0000000000aa';
 
 const failure = (message: string): BlueskyClientError => ({ type: 'BlueskyClientError', kind: 'http', message });
 
-const setup = () => {
-  const fixture = createSqliteD1Fixture();
-  const { db, sqlite } = fixture;
-  const seed = createMastodonSeed(fixture);
-  const actor = seed.addLocalActor('kosui');
-  const waiting: Promise<unknown>[] = [];
-  const waitUntil = (promise: Promise<unknown>) => {
-    waiting.push(promise);
-  };
-  const flush = async () => {
-    await Promise.all(waiting.splice(0));
-  };
-
+/** 1 人の利用者の Bluesky アカウントへのクライアント。送ったものと消したものを記録する */
+const createRecordingClient = (query: BlueskyQueryClient['query']) => {
   const uploaded: Array<{ bytes: Uint8Array; mimeType: string }> = [];
   const created: BlueskyPostRecord[] = [];
   const deleted: string[] = [];
@@ -66,7 +56,8 @@ const setup = () => {
     deleteRecord: (): Result<void, BlueskyClientError> => Result.ok(undefined),
     uploadBlob: (): Result<void, BlueskyClientError> => Result.ok(undefined),
   };
-  const client: BlueskyClient = {
+  const client: BlueskyClient & BlueskyQueryClient = {
+    query,
     uploadBlob: async (input) => {
       uploaded.push(input);
       const failed = behavior.uploadBlob();
@@ -110,6 +101,21 @@ const setup = () => {
     getProfileRecord: async () => RA.err(failure('getProfileRecord is not used')),
     putProfileRecord: async () => RA.err(failure('putProfileRecord is not used')),
   };
+  return { client, uploaded, created, deleted, rkeys, behavior };
+};
+
+const setup = () => {
+  const fixture = createSqliteD1Fixture();
+  const { db, sqlite } = fixture;
+  const seed = createMastodonSeed(fixture);
+  const actor = seed.addLocalActor('kosui');
+  const waiting: Promise<unknown>[] = [];
+  const waitUntil = (promise: Promise<unknown>) => {
+    waiting.push(promise);
+  };
+  const flush = async () => {
+    await Promise.all(waiting.splice(0));
+  };
 
   const handleDids = new Map<string, string>([['alice.bsky.social', 'did:plc:alice']]);
   const queryBehavior = { throws: false };
@@ -118,6 +124,21 @@ const setup = () => {
     const did = handleDids.get(String(params.handle ?? ''));
     return did === undefined ? RA.err(failure('resolveHandle failed: status 400')) : RA.ok({ did });
   });
+
+  const own = createRecordingClient(query);
+  const { uploaded, created, deleted, rkeys, behavior } = own;
+  const otherActor = seed.addLocalActor('alice');
+  const other = createRecordingClient(query);
+  const clients = new Map<string, BlueskyClient & BlueskyQueryClient>([
+    [actor.userId, own.client],
+    [otherActor.userId, other.client],
+  ]);
+  const clientFor = (userId: UserId) => {
+    const client = clients.get(userId);
+    if (client === undefined) throw new Error(`no Bluesky client for ${userId}`);
+    return client;
+  };
+  const linked = new Set<string>([actor.userId, otherActor.userId]);
 
   const stored = new Map<string, { bytes: Uint8Array; contentType: string }>();
   const uploads: PostImageObjectStore = {
@@ -155,8 +176,7 @@ const setup = () => {
     timelineItemsDeletedStore,
     uploads,
     thumbnailFetcher,
-    client,
-    query,
+    clientFor,
     origin: SEED_ORIGIN,
     now: () => NOW,
   });
@@ -166,6 +186,7 @@ const setup = () => {
     crosspostResolver,
     crosspostSavedStore,
     send,
+    isBlueskyLinked: async (userId) => linked.has(userId),
     waitUntil,
     now: () => NOW,
   });
@@ -174,7 +195,7 @@ const setup = () => {
     crosspostSavedStore,
     crosspostDeletedStore,
     timelineItemsDeletedStore,
-    client,
+    clientFor,
     waitUntil,
     now: () => NOW,
   });
@@ -183,7 +204,7 @@ const setup = () => {
     crosspostSavedStore,
     crosspostDeletedStore,
     timelineItemsDeletedStore,
-    client,
+    clientFor,
     send,
     now: () => NOW,
   });
@@ -196,9 +217,10 @@ const setup = () => {
       summary?: string | null;
       sensitive?: boolean;
       visibility?: 'public' | 'unlisted' | 'private';
+      author?: typeof actor;
     } = {},
   ) => {
-    const post = seed.addLocalPost(actor, CREATED_AT, {
+    const post = seed.addLocalPost(options.author ?? actor, CREATED_AT, {
       content: options.quoteUri === undefined
         ? options.content ?? '<p>こんにちは <a href="https://example.com/x">example.com/x</a></p>'
         : appendQuoteInline(options.content ?? '<p>引用</p>', options.quoteUri),
@@ -217,8 +239,21 @@ const setup = () => {
   };
   const insertTimelineItem = (feedItemId: string, uri: string, repostedByDid: string | null = null) =>
     sqlite.prepare(
-      'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-    ).run(feedItemId, uri, 'cid', 'did:plc:abc', 'kosui.bsky.social', 'text', '[]', repostedByDid, 1, 1, 1);
+      'INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+    ).run(
+      actor.userId,
+      feedItemId,
+      uri,
+      'cid',
+      'did:plc:abc',
+      'kosui.bsky.social',
+      'text',
+      '[]',
+      repostedByDid,
+      1,
+      1,
+      1,
+    );
   const timelineFeedItemIds = () =>
     (sqlite.prepare('SELECT feedItemId FROM bluesky_timeline_items ORDER BY feedItemId').all() as Array<
       { feedItemId: string }
@@ -234,6 +269,9 @@ const setup = () => {
     fixture,
     seed,
     actor,
+    otherActor,
+    other,
+    linked,
     sqlite,
     flush,
     waiting,
@@ -579,7 +617,9 @@ describe('RemoveBlueskyCrosspostUseCase', () => {
   it('uri が無い行を消すときは、取り込み済みの行に触れない', async () => {
     const t = setup();
     const post = t.addPost();
-    await createD1BlueskyCrosspostSavedStore(t.fixture.db).save(BlueskyCrosspost.pending(post.postId, NOW));
+    await createD1BlueskyCrosspostSavedStore(t.fixture.db).save(
+      BlueskyCrosspost.pending(post.postId, t.actor.userId as UserId, NOW),
+    );
     t.insertTimelineItem('at://did:plc:other/app.bsky.feed.post/1', 'at://did:plc:other/app.bsky.feed.post/1');
 
     await run(t.remove.run({ postId: post.postId }));
@@ -627,14 +667,14 @@ describe('RemoveBlueskyCrosspostUseCase', () => {
   it.each(['pending', 'failed', 'skipped'] as const)('%s の行は deleteRecord を呼ばずにすぐ消す', async (status) => {
     const t = setup();
     const post = t.addPost();
-    const base = BlueskyCrosspost.pending(post.postId, NOW);
+    const base = BlueskyCrosspost.pending(post.postId, t.actor.userId as UserId, NOW);
     const save = createD1BlueskyCrosspostSavedStore(t.fixture.db).save;
     await save(
       status === 'pending'
         ? base
         : status === 'failed'
         ? BlueskyCrosspost.markFailed(base, 'e', NOW)
-        : BlueskyCrosspost.skipped(post.postId, 'sensitive', NOW),
+        : BlueskyCrosspost.skipped(post.postId, t.actor.userId as UserId, 'sensitive', NOW),
     );
 
     expect(await run(t.remove.run({ postId: post.postId }))).toBe('removed');
@@ -661,8 +701,8 @@ describe('RetryBlueskyCrosspostsUseCase', () => {
     attempts = 0,
   ) =>
     t.sqlite.prepare(
-      'INSERT INTO bluesky_crossposts(postId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?)',
-    ).run(postId, status, attempts, createdAt, createdAt);
+      'INSERT INTO bluesky_crossposts(postId,userId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+    ).run(postId, t.actor.userId, status, attempts, createdAt, createdAt);
 
   it('再送でも失敗したら attempts を増やし、消えた投稿の行は消す', async () => {
     const t = setup();
@@ -690,8 +730,18 @@ describe('送信の回数制限と重複投稿の防止', () => {
     refs: { uri: string; cid: string; rkey: string } | undefined = undefined,
   ) =>
     t.sqlite.prepare(
-      'INSERT INTO bluesky_crossposts(postId,status,attempts,uri,cid,rkey,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?)',
-    ).run(postId, status, attempts, refs?.uri ?? null, refs?.cid ?? null, refs?.rkey ?? null, createdAt, createdAt);
+      'INSERT INTO bluesky_crossposts(postId,userId,status,attempts,uri,cid,rkey,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?)',
+    ).run(
+      postId,
+      t.actor.userId,
+      status,
+      attempts,
+      refs?.uri ?? null,
+      refs?.cid ?? null,
+      refs?.rkey ?? null,
+      createdAt,
+      createdAt,
+    );
 
   it('送信を始める前に attempts を 1 増やして保存する', async () => {
     const t = setup();
@@ -758,9 +808,10 @@ describe('送信中の削除と、削除の再試行', () => {
   const sentRefs = { uri: 'at://did:plc:abc/app.bsky.feed.post/3kdel', cid: 'bafydel', rkey: '3kdel' };
   const insertDeleting = (t: ReturnType<typeof setup>, postId: string, attempts: number) =>
     t.sqlite.prepare(
-      'INSERT INTO bluesky_crossposts(postId,status,attempts,uri,cid,rkey,lastError,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO bluesky_crossposts(postId,userId,status,attempts,uri,cid,rkey,lastError,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
     ).run(
       postId,
+      t.actor.userId,
       'deleting',
       attempts,
       sentRefs.uri,
@@ -883,8 +934,8 @@ describe('スレッドの 2 件目以降', () => {
     createdAt: number,
   ) =>
     t.sqlite.prepare(
-      'INSERT INTO bluesky_crossposts(postId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?)',
-    ).run(postId, status, attempts, createdAt, createdAt);
+      'INSERT INTO bluesky_crossposts(postId,userId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+    ).run(postId, t.actor.userId, status, attempts, createdAt, createdAt);
 
   it.each(
     [
@@ -969,8 +1020,8 @@ describe('自分の投稿の引用', () => {
     attempts = 0,
   ) =>
     t.sqlite.prepare(
-      'INSERT INTO bluesky_crossposts(postId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?)',
-    ).run(postId, status, attempts, NOW, NOW);
+      'INSERT INTO bluesky_crossposts(postId,userId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+    ).run(postId, t.actor.userId, status, attempts, NOW, NOW);
   const quotedRef = { uri: 'at://did:plc:abc/app.bsky.feed.post/3k0', cid: 'bafycid0' };
 
   it('引用元が sent なら、embed.record を付け、RE: の段落を本文から取り除いて送る', async () => {
@@ -1044,6 +1095,89 @@ describe('自分の投稿の引用', () => {
     expect(t.created).toHaveLength(1);
     expect(t.created[0]?.text).toBe(`引用\n\nRE: ${remote.uri}`);
     expect(t.created[0]).not.toHaveProperty('embed');
+  });
+});
+
+describe('投稿者ごとの Bluesky アカウント', () => {
+  it('Bluesky をつないでいない投稿者の投稿は、crosspost の行を作らず noop にする', async () => {
+    const t = setup();
+    t.linked.delete(t.otherActor.userId);
+    const post = t.addPost({ author: t.otherActor });
+
+    expect(await run(t.schedule.run({ postId: post.postId }))).toBe('noop');
+    await t.flush();
+
+    expect(await t.row(post.postId)).toBeUndefined();
+    expect(t.created).toEqual([]);
+    expect(t.other.created).toEqual([]);
+  });
+
+  it('send は、それぞれの投稿者の Bluesky アカウントに送る', async () => {
+    const t = setup();
+    const mine = t.addPost({ content: '<p>kosui</p>' });
+    const theirs = t.addPost({ content: '<p>alice</p>', author: t.otherActor });
+
+    await run(t.schedule.run({ postId: mine.postId }));
+    await run(t.schedule.run({ postId: theirs.postId }));
+    await t.flush();
+
+    expect(t.created.map((record) => record.text)).toEqual(['kosui']);
+    expect(t.other.created.map((record) => record.text)).toEqual(['alice']);
+    expect(await t.row(theirs.postId)).toMatchObject({ status: 'sent', userId: t.otherActor.userId });
+  });
+
+  it('retry は、それぞれの行の投稿者の Bluesky アカウントで再送する', async () => {
+    const t = setup();
+    const mine = t.addPost({ content: '<p>kosui</p>' });
+    const theirs = t.addPost({ content: '<p>alice</p>', author: t.otherActor });
+    const insert = t.sqlite.prepare(
+      'INSERT INTO bluesky_crossposts(postId,userId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+    );
+    insert.run(mine.postId, t.actor.userId, 'failed', 1, NOW - 60 * 60_000, NOW - 60 * 60_000);
+    insert.run(theirs.postId, t.otherActor.userId, 'failed', 1, NOW - 60 * 60_000, NOW - 60 * 60_000);
+
+    await run(t.retry.run());
+
+    expect(t.created.map((record) => record.text)).toEqual(['kosui']);
+    expect(t.other.created.map((record) => record.text)).toEqual(['alice']);
+  });
+
+  it('remove は、投稿者の Bluesky アカウントから消し、ほかの人のアカウントには触れない', async () => {
+    const t = setup();
+    const theirs = t.addPost({ author: t.otherActor });
+    await run(t.schedule.run({ postId: theirs.postId }));
+    await t.flush();
+
+    await run(t.remove.run({ postId: theirs.postId }));
+    await t.flush();
+
+    expect(t.other.deleted).toEqual(['3k0']);
+    expect(t.deleted).toEqual([]);
+    expect(await t.row(theirs.postId)).toBeUndefined();
+  });
+
+  it('retry の削除の再試行も、行の投稿者の Bluesky アカウントで消す', async () => {
+    const t = setup();
+    const theirs = t.addPost({ author: t.otherActor });
+    t.sqlite.prepare(
+      'INSERT INTO bluesky_crossposts(postId,userId,status,attempts,uri,cid,rkey,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?)',
+    ).run(
+      theirs.postId,
+      t.otherActor.userId,
+      'deleting',
+      1,
+      'at://did:plc:alice/app.bsky.feed.post/3kdel',
+      'bafydel',
+      '3kdel',
+      NOW - 60 * 60_000,
+      NOW - 60 * 60_000,
+    );
+
+    await run(t.retry.run());
+
+    expect(t.other.deleted).toEqual(['3kdel']);
+    expect(t.deleted).toEqual([]);
+    expect(await t.row(theirs.postId)).toBeUndefined();
   });
 });
 

@@ -11,7 +11,6 @@ import { createD1PostIdsResolverByBlueskyUris } from '../../adaptor/d1/blueskyNo
 import { createD1NotificationDismissedStore } from '../../adaptor/d1/notification/inboxNotificationAdapters.ts';
 import { createD1NotificationsResolverByPage } from '../../adaptor/d1/notification/notificationsResolverByPage.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
-import { createD1UserResolverByUsername } from '../../adaptor/d1/user/userResolverByUsername.ts';
 import { toGroupedNotificationId } from '../../adaptor/mastodon/toNotification.ts';
 import type { WebPushSender } from '../../adaptor/webPush/webPush.ts';
 import { BlueskyFetchedNotification } from '../../domain/blueskyNotification/blueskyNotification.ts';
@@ -19,7 +18,6 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { Notification } from '../../domain/notification/notification.ts';
 import { NotificationId } from '../../domain/notification/notificationId.ts';
 import { UserId } from '../../domain/user/userId.ts';
-import { Username } from '../../domain/user/username.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type { BlueskyNotificationFetcher, BlueskyNotificationPage } from '../../ports/blueskyNotificationFetcher.ts';
 import { CollectBlueskyNotificationsUseCase } from '../collectBlueskyNotifications.ts';
@@ -87,17 +85,22 @@ afterEach(() => {
 
 const setup = (
   pages: ReadonlyArray<BlueskyNotificationPage | BlueskyClientError>,
-  options: { owner?: boolean; subscriptions?: number } = {},
+  options: { recipient?: 'kosui' | 'alice'; subscriptions?: number } = {},
 ) => {
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
   const { db, sqlite, queries } = fixture;
   const seed = createMastodonSeed(fixture);
-  const owner = options.owner === false ? undefined : seed.addLocalActor('kosui');
-  for (let index = 0; owner !== undefined && index < (options.subscriptions ?? 1); index++) {
-    sqlite.prepare(
-      'INSERT INTO push_subscriptions(subscriptionId,userId,endpoint,p256dhKey,authKey,createdAt) VALUES (?,?,?,?,?,?)',
-    ).run(seed.uuid(), owner.userId, `https://push.example/${index}`, 'p256dh', 'auth', 1);
+  const kosui = seed.addLocalActor('kosui');
+  const alice = seed.addLocalActor('alice');
+  const owner = options.recipient === 'alice' ? alice : kosui;
+  const recipientUserId = UserId.orThrow(owner.userId);
+  for (const actor of [kosui, alice]) {
+    for (let index = 0; index < (options.subscriptions ?? 1); index++) {
+      sqlite.prepare(
+        'INSERT INTO push_subscriptions(subscriptionId,userId,endpoint,p256dhKey,authKey,createdAt) VALUES (?,?,?,?,?,?)',
+      ).run(seed.uuid(), actor.userId, `https://push.example/${actor.username}/${index}`, 'p256dh', 'auth', 1);
+    }
   }
   const queue = [...pages];
   const fetch = vi.fn(async (_input: { limit: number; cursor: string | undefined }) => {
@@ -114,12 +117,11 @@ const setup = (
   const send = vi.fn<WebPushSender['send']>(async () => RA.ok(undefined));
   const useCase = CollectBlueskyNotificationsUseCase.create({
     fetcher,
-    ownerUsername: Username.parseOrThrow('kosui'),
-    userResolverByUsername: createD1UserResolverByUsername(db),
-    syncStateResolver: createD1BlueskyNotificationSyncStateResolver(db),
-    initialSyncCompletedStore: createD1BlueskyNotificationInitialSyncCompletedStore(db),
-    existingUrisResolver: createD1BlueskyNotificationExistingUrisResolver(db),
-    postIdsResolver: createD1PostIdsResolverByBlueskyUris(db),
+    recipientUserId,
+    syncStateResolver: createD1BlueskyNotificationSyncStateResolver(db, recipientUserId),
+    initialSyncCompletedStore: createD1BlueskyNotificationInitialSyncCompletedStore(db, recipientUserId),
+    existingUrisResolver: createD1BlueskyNotificationExistingUrisResolver(db, recipientUserId),
+    postIdsResolver: createD1PostIdsResolverByBlueskyUris(db, recipientUserId),
     createdStore,
     pushSubscriptionsResolverByUserId: subscriptionsResolver,
     webPushSender: { send },
@@ -146,6 +148,8 @@ const setup = (
     ...fixture,
     seed,
     owner,
+    kosui,
+    alice,
     fetch,
     store,
     originalStore,
@@ -160,19 +164,6 @@ const setup = (
 };
 
 describe('CollectBlueskyNotificationsUseCase', () => {
-  it('所有者が見つからないときは、取得も保存もせず Ok を返す', async () => {
-    const t = setup([], { owner: false });
-
-    const result = await t.useCase.run();
-
-    expect(result).toEqual({
-      ok: true,
-      val: { pages: 0, fetched: 0, saved: 0, dropped: 0, pushed: 0 },
-      err: undefined,
-    });
-    expect(t.fetch).not.toHaveBeenCalled();
-  });
-
   it('初回の取り込みは通知、記録、イベントを保存し、Push を送らない', async () => {
     const t = setup([pageOf([like(1, NOW - MINUTE), follow(2, NOW - 2 * MINUTE)], undefined, 1)]);
 
@@ -191,6 +182,23 @@ describe('CollectBlueskyNotificationsUseCase', () => {
     expect(t.sqlite.prepare('SELECT eventName, occurredAt FROM domain_events ORDER BY occurredAt').all()).toEqual([
       { eventName: 'notification.blueskyNotificationCreated', occurredAt: NOW - 2 * MINUTE },
       { eventName: 'notification.blueskyNotificationCreated', occurredAt: NOW - MINUTE },
+    ]);
+  });
+
+  it('recipientUserId のユーザーに通知を保存し、そのユーザーの購読にだけ Push を送る', async () => {
+    const t = setup([pageOf([like(1, NOW - 30 * MINUTE)], undefined)], { recipient: 'alice' });
+    await t.useCase.run();
+    t.enqueue(pageOf([like(2, NOW - MINUTE)], undefined));
+
+    await t.useCase.run();
+
+    expect(
+      t.sqlite.prepare(
+        'SELECT DISTINCT n.recipientUserId AS notificationRecipient, b.recipientUserId AS blueskyRecipient FROM notifications n JOIN notification_bluesky b ON b.notificationId = n.notificationId',
+      ).all(),
+    ).toEqual([{ notificationRecipient: t.alice.userId, blueskyRecipient: t.alice.userId }]);
+    expect(t.send.mock.calls.map(([subscription]) => subscription.endpoint)).toEqual([
+      'https://push.example/alice/0',
     ]);
   });
 
@@ -294,10 +302,10 @@ describe('CollectBlueskyNotificationsUseCase', () => {
     const sentPostId = t.seed.uuid();
     const pendingPostId = t.seed.uuid();
     const insert = t.sqlite.prepare(
-      'INSERT INTO bluesky_crossposts(postId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+      'INSERT INTO bluesky_crossposts(postId,userId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)',
     );
-    insert.run(sentPostId, 'sent', SUBJECT, 1, 1, 1);
-    insert.run(pendingPostId, 'pending', 'at://did:plc:me/app.bsky.feed.post/3kpending', 0, 1, 1);
+    insert.run(sentPostId, t.owner.userId, 'sent', SUBJECT, 1, 1, 1);
+    insert.run(pendingPostId, t.owner.userId, 'pending', 'at://did:plc:me/app.bsky.feed.post/3kpending', 0, 1, 1);
 
     await t.useCase.run();
 
@@ -397,7 +405,7 @@ describe('CollectBlueskyNotificationsUseCase', () => {
       Notification.dismissNotification({
         type: 'blueskyFollow',
         notificationId: NotificationId.orThrow(saved!.notificationId),
-        recipientUserId: UserId.orThrow(t.owner!.userId),
+        recipientUserId: UserId.orThrow(t.owner.userId),
         isRead: false,
         blueskyUri: saved!.blueskyUri,
         author: AUTHOR,
@@ -509,7 +517,7 @@ describe('CollectBlueskyNotificationsUseCase', () => {
     let olderThanId: string | undefined;
     for (let pageIndex = 0; pageIndex < 4; pageIndex++) {
       const items = await resolver.resolve({
-        recipientUserId: UserId.orThrow(t.owner!.userId),
+        recipientUserId: UserId.orThrow(t.owner.userId),
         page: { limit: 1, olderThanId, newerThanId: undefined, order: 'newestFirst' },
         types: ['blueskyLike'],
       });

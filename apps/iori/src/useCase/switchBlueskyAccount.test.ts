@@ -7,6 +7,7 @@ import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts'
 import { createD1BlueskyAccountSwitchResolver } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchResolver.ts';
 import { createD1BlueskyAccountSwitchStartedStore } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchStartedStore.ts';
 import {
+  createD1BlueskyCredentialUserIdResolverByDid,
   createD1BlueskyStoredCredentialResolver,
   createD1BlueskyStoredCredentialSavedStore,
 } from '../adaptor/d1/blueskyCredential/blueskyCredentialStore.ts';
@@ -28,6 +29,7 @@ import { SwitchBlueskyAccountUseCase } from './switchBlueskyAccount.ts';
 import { VerifyCurrentPasswordUseCase } from './verifyCurrentPassword.ts';
 
 const USER_ID = UserId.orThrow('00000000-0000-4000-8000-000000000001');
+const OTHER_USER_ID = UserId.orThrow('00000000-0000-4000-8000-000000000002');
 const PASSWORD = 'correct-horse-battery';
 const APP_PASSWORD = 'abcd-efgh-ijkl-mnop';
 const KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(3)));
@@ -70,6 +72,7 @@ const setup = async (options: {
   fixtures.push(fixture);
   const { db, sqlite } = fixture;
   sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'kosui');
+  sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(OTHER_USER_ID, 'bob');
   const hashed = await Password.hashPassword(fakeDerive)(Password.orThrow(PASSWORD));
   sqlite.prepare(
     'INSERT INTO user_passwords(userId,algorithm,parallelism,tagLength,memory,passes,nonceHex,tagHex) VALUES (?,?,?,?,?,?,?,?)',
@@ -96,10 +99,11 @@ const setup = async (options: {
       argon2idDerive: fakeDerive,
     }),
     verifier,
-    storedResolver: createD1BlueskyStoredCredentialResolver(db),
-    sessionResolver: createD1BlueskySessionResolver(db),
-    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db),
-    startedStore: createD1BlueskyAccountSwitchStartedStore(db, 'timeline'),
+    storedResolver: createD1BlueskyStoredCredentialResolver(db, USER_ID),
+    linkedUserIdResolver: createD1BlueskyCredentialUserIdResolverByDid(db),
+    sessionResolver: createD1BlueskySessionResolver(db, USER_ID),
+    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db, USER_ID),
+    startedStore: createD1BlueskyAccountSwitchStartedStore(db, USER_ID, 'timeline'),
     now: () => NOW,
   });
   const input = {
@@ -111,7 +115,7 @@ const setup = async (options: {
     toDid: 'did:plc:next',
   };
   const seedPrevious = async () => {
-    await createD1BlueskyStoredCredentialSavedStore(db).save({
+    await createD1BlueskyStoredCredentialSavedStore(db, USER_ID).save({
       identifier: 'prev.bsky.social',
       did: 'did:plc:prev',
       handle: 'prev.bsky.social',
@@ -122,10 +126,10 @@ const setup = async (options: {
       verifiedAt: Instant.orThrow(1_000),
       updatedAt: Instant.orThrow(1_000),
     });
-    await createD1BlueskySessionSavedStore(db).save(
+    await createD1BlueskySessionSavedStore(db, USER_ID).save(
       session({ did: 'did:plc:prev', handle: 'prev.bsky.social', accessJwt: 'old-access', refreshJwt: 'old-refresh' }),
     );
-    await createD1BlueskyLoginFailureSavedStore(db, 'timeline').save(NOW);
+    await createD1BlueskyLoginFailureSavedStore(db, USER_ID, 'timeline').save(NOW);
   };
   const snapshot = () => ({
     credentials: sqlite.prepare('SELECT * FROM bluesky_credentials').all(),
@@ -134,7 +138,11 @@ const setup = async (options: {
     switches: sqlite.prepare('SELECT * FROM bluesky_account_switch').all(),
     events: sqlite.prepare('SELECT * FROM domain_events').all(),
   });
-  return { useCase, input, verifier, seedPrevious, snapshot, sqlite };
+  const linkCredential = (userId: UserId, did: string) =>
+    sqlite.prepare(
+      'INSERT INTO bluesky_credentials(userId,identifier,did,handle,appPasswordCiphertext,appPasswordIv,keyVersion,chatPermitted,verifiedAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    ).run(userId, 'linked.example', did, 'linked.example', 'ciphertext', 'iv', 1, 1, 1, 1);
+  return { useCase, input, verifier, seedPrevious, snapshot, sqlite, linkCredential };
 };
 
 describe('SwitchBlueskyAccountUseCase の失敗では何も変わらない', () => {
@@ -221,7 +229,7 @@ describe('SwitchBlueskyAccountUseCase の失敗では何も変わらない', () 
   it('切り替え中は SwitchInProgress にし、Bluesky を呼ばない', async () => {
     const t = await setup();
     await t.seedPrevious();
-    insertBlueskyAccountSwitch(t.sqlite, { fromDid: 'did:plc:prev', toDid: 'did:plc:next' });
+    insertBlueskyAccountSwitch(t.sqlite, USER_ID, { fromDid: 'did:plc:prev', toDid: 'did:plc:next' });
     const before = t.snapshot();
 
     const result = await t.useCase.run(t.input);
@@ -229,6 +237,19 @@ describe('SwitchBlueskyAccountUseCase の失敗では何も変わらない', () 
     expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyAccountSwitchInProgress' } });
     expect(t.verifier.login).not.toHaveBeenCalled();
     expect(t.snapshot()).toEqual(before);
+  });
+
+  it('切り替え先のアカウントがほかのユーザーにつながっていれば BlueskyAccountLinkedElsewhere にし、切り替えを始めない', async () => {
+    const t = await setup();
+    await t.seedPrevious();
+    t.linkCredential(OTHER_USER_ID, 'did:plc:next');
+    const before = t.snapshot();
+
+    const result = await t.useCase.run(t.input);
+
+    expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyAccountLinkedElsewhere' } });
+    expect(t.snapshot()).toEqual(before);
+    expect(t.verifier.logout).toHaveBeenCalledWith(session());
   });
 
   it('1段目の書き込みが途中で失敗したら、何も残さない', async () => {
@@ -279,7 +300,7 @@ describe('SwitchBlueskyAccountUseCase の成功', () => {
     const snapshot = t.snapshot();
     expect(snapshot.switches).toEqual([
       {
-        id: 'default',
+        userId: USER_ID,
         switchId: expect.any(String),
         fromDid: 'did:plc:prev',
         toDid: 'did:plc:next',
@@ -292,7 +313,7 @@ describe('SwitchBlueskyAccountUseCase の成功', () => {
     ]);
     expect(snapshot.credentials).toMatchObject([
       {
-        id: 'default',
+        userId: USER_ID,
         identifier: 'next.bsky.social',
         did: 'did:plc:next',
         handle: 'next.bsky.social',
@@ -318,14 +339,18 @@ describe('SwitchBlueskyAccountUseCase の成功', () => {
   it('前のアカウントのミュートとブロックの行を1段目で消し、消した件数を切り替えの行とイベントの件数に入れる', async () => {
     const t = await setup();
     await t.seedPrevious();
-    t.sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
-      .run('did:plc:muted', 1, null, 1);
-    t.sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
-      .run('did:plc:blocked', 0, 'at://did:plc:prev/app.bsky.graph.block/1', 1);
+    const insertModerated = t.sqlite.prepare(
+      'INSERT INTO bluesky_moderated_actors(userId,did,muted,blockUri,updatedAt) VALUES (?,?,?,?,?)',
+    );
+    insertModerated.run(USER_ID, 'did:plc:muted', 1, null, 1);
+    insertModerated.run(USER_ID, 'did:plc:blocked', 0, 'at://did:plc:prev/app.bsky.graph.block/1', 1);
+    insertModerated.run(OTHER_USER_ID, 'did:plc:muted-by-bob', 1, null, 1);
 
     expect((await t.useCase.run(t.input)).ok).toBe(true);
 
-    expect(t.sqlite.prepare('SELECT did FROM bluesky_moderated_actors').all()).toEqual([]);
+    expect(t.sqlite.prepare('SELECT userId, did FROM bluesky_moderated_actors').all()).toEqual([
+      { userId: OTHER_USER_ID, did: 'did:plc:muted-by-bob' },
+    ]);
     const snapshot = t.snapshot();
     const switchRow = snapshot.switches[0] as { deletedCounts: string };
     expect(JSON.parse(switchRow.deletedCounts)).toMatchObject({ moderatedActors: 2, timelineItems: 0 });

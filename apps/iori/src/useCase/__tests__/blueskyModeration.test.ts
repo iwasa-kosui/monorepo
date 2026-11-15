@@ -15,6 +15,7 @@ import {
   BLUESKY_REPORT_COMMENT_MAX_LENGTH,
 } from '../../domain/blueskyModeration/blueskyModeration.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { UserId } from '../../domain/user/userId.ts';
 import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import type { BlueskyModerationReader } from '../../ports/blueskyModerationReader.ts';
 import { BlockBlueskyActorUseCase } from '../blockBlueskyActor.ts';
@@ -40,6 +41,8 @@ const failure: BlueskyClientError = {
   status: 500,
 };
 
+const USER_ID = UserId.orThrow('00000000-0000-4000-8000-0000000000a1');
+
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
 afterEach(() => {
   for (const fixture of fixtures.splice(0)) fixture.sqlite.close();
@@ -49,6 +52,7 @@ const setup = (viewer: Readonly<{ muted?: boolean; blockUri?: string | null; has
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
   const { db, sqlite } = fixture;
+  sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'alice');
   const client = {
     muteActor: vi.fn<BlueskyClient['muteActor']>(async () => RA.ok(undefined)),
     unmuteActor: vi.fn<BlueskyClient['unmuteActor']>(async () => RA.ok(undefined)),
@@ -68,45 +72,49 @@ const setup = (viewer: Readonly<{ muted?: boolean; blockUri?: string | null; has
     ),
     hasBlockRecord: vi.fn<BlueskyModerationReader['hasBlockRecord']>(async () => RA.ok(viewer.hasRecord ?? true)),
   };
-  const resolver = createD1BlueskyModeratedActorsResolver(db);
+  const resolver = createD1BlueskyModeratedActorsResolver(db, USER_ID);
   const now = () => NOW;
   return {
     client,
     query,
     reader,
-    mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
-    unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
+    mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db, USER_ID), now }),
+    unmute: UnmuteBlueskyActorUseCase.create({
+      client,
+      deletedStore: createD1BlueskyMuteDeletedStore(db, USER_ID),
+      now,
+    }),
     muteThread: MuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
     unmuteThread: UnmuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
     block: BlockBlueskyActorUseCase.create({
       client,
       reader,
       resolver,
-      savedStore: createD1BlueskyBlockSavedStore(db),
+      savedStore: createD1BlueskyBlockSavedStore(db, USER_ID),
       now,
     }),
     unblock: UnblockBlueskyActorUseCase.create({
       client,
       reader,
       resolver,
-      deletedStore: createD1BlueskyBlockDeletedStore(db),
+      deletedStore: createD1BlueskyBlockDeletedStore(db, USER_ID),
       now,
     }),
     report: ReportBlueskyActorUseCase.create({ client }),
     getState: GetBlueskyModerationStateUseCase.create({
       reader,
       resolver,
-      muteSavedStore: createD1BlueskyMuteSavedStore(db),
-      muteDeletedStore: createD1BlueskyMuteDeletedStore(db),
-      blockSavedStore: createD1BlueskyBlockSavedStore(db),
-      blockDeletedStore: createD1BlueskyBlockDeletedStore(db),
+      muteSavedStore: createD1BlueskyMuteSavedStore(db, USER_ID),
+      muteDeletedStore: createD1BlueskyMuteDeletedStore(db, USER_ID),
+      blockSavedStore: createD1BlueskyBlockSavedStore(db, USER_ID),
+      blockDeletedStore: createD1BlueskyBlockDeletedStore(db, USER_ID),
       now,
     }),
     sqlite,
     rows: () => sqlite.prepare('SELECT did, muted, blockUri FROM bluesky_moderated_actors').all(),
     seed: (muted: number, blockUri: string | null, updatedAt = 1) =>
-      sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
-        .run(DID, muted, blockUri, updatedAt),
+      sqlite.prepare('INSERT INTO bluesky_moderated_actors(userId,did,muted,blockUri,updatedAt) VALUES (?,?,?,?,?)')
+        .run(USER_ID, DID, muted, blockUri, updatedAt),
     state: async () => (await resolver.resolveState(DID)).val,
   };
 };

@@ -13,6 +13,7 @@ import {
   createD1BlueskySessionSavedStore,
 } from '../adaptor/d1/blueskyCrosspost/blueskySessionStore.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import { UserId } from '../domain/user/userId.ts';
 import type { BlueskyClientError, BlueskyCredentials } from '../ports/blueskyClient.ts';
 import type { BlueskyCredentialVerifier } from '../ports/blueskyCredentialVerifier.ts';
 import { createBlueskyCredentialRemovedStore } from '../runtime/blueskyCredential.ts';
@@ -20,6 +21,7 @@ import { DeleteBlueskyCredentialUseCase } from './deleteBlueskyCredential.ts';
 import { GetBlueskyCredentialUseCase } from './getBlueskyCredential.ts';
 import { ResolveBlueskyCredentialUseCase } from './resolveBlueskyCredential.ts';
 
+const USER_ID = UserId.orThrow('00000000-0000-4000-8000-000000000001');
 const NOW = Instant.orThrow(1_800_000_000_000);
 const ENV_CREDENTIALS: BlueskyCredentials = { identifier: 'env.example.com', appPassword: 'env-app-password' };
 const loginError: BlueskyClientError = { type: 'BlueskyClientError', kind: 'auth', message: 'failed', status: 401 };
@@ -42,7 +44,8 @@ const setup = async (options: { env?: BlueskyCredentials; login?: BlueskyCredent
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
   const { db, sqlite } = fixture;
-  await createD1BlueskyStoredCredentialSavedStore(db).save({
+  sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'kosui');
+  await createD1BlueskyStoredCredentialSavedStore(db, USER_ID).save({
     identifier: 'next.bsky.social',
     did: 'did:plc:next',
     handle: 'next.bsky.social',
@@ -53,16 +56,16 @@ const setup = async (options: { env?: BlueskyCredentials; login?: BlueskyCredent
     verifiedAt: NOW,
     updatedAt: NOW,
   });
-  await createD1BlueskySessionSavedStore(db).save({ ...envSession('did:plc:next'), accessJwt: 'access' });
+  await createD1BlueskySessionSavedStore(db, USER_ID).save({ ...envSession('did:plc:next'), accessJwt: 'access' });
   const verifier: BlueskyCredentialVerifier = {
     login: vi.fn(options.login ?? (async () => RA.ok(envSession('did:plc:next')))),
     probeChat: vi.fn(async () => true),
     logout: vi.fn(async () => undefined),
   };
-  const storedResolver = createD1BlueskyStoredCredentialResolver(db);
-  const sessionResolver = createD1BlueskySessionResolver(db);
+  const storedResolver = createD1BlueskyStoredCredentialResolver(db, USER_ID);
+  const sessionResolver = createD1BlueskySessionResolver(db, USER_ID);
   const useCase = DeleteBlueskyCredentialUseCase.create({
-    removedStore: createBlueskyCredentialRemovedStore(db),
+    removedStore: createBlueskyCredentialRemovedStore(db, USER_ID),
     getCredential: GetBlueskyCredentialUseCase.create({
       resolveCredential: ResolveBlueskyCredentialUseCase.create({
         storedResolver,
@@ -73,7 +76,7 @@ const setup = async (options: { env?: BlueskyCredentials; login?: BlueskyCredent
       sessionResolver,
       registrable: true,
     }),
-    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db),
+    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db, USER_ID),
     storedResolver,
     envCredentials: options.env,
     verifier,
@@ -120,7 +123,7 @@ describe('DeleteBlueskyCredentialUseCase', () => {
 
   it('切り替え中は BlueskyAccountSwitchInProgress にし、env でログインせず何も変えない', async () => {
     const t = await setup({ env: ENV_CREDENTIALS });
-    insertBlueskyAccountSwitch(t.sqlite);
+    insertBlueskyAccountSwitch(t.sqlite, USER_ID);
     const before = t.rows();
 
     const result = await t.useCase.run();

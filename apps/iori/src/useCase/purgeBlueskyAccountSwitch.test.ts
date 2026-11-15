@@ -19,10 +19,12 @@ import {
 import { createD1BlueskyAccountSwitchResolver } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchResolver.ts';
 import type { BlueskyAccountSwitchPurger } from '../domain/blueskyAccountSwitch/blueskyAccountSwitch.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import { UserId } from '../domain/user/userId.ts';
 import { PurgeBlueskyAccountSwitchUseCase } from './purgeBlueskyAccountSwitch.ts';
 
 const STARTED_AT = 1_800_000_000_000;
-const USER_ID = '00000000-0000-4000-8000-000000000001';
+const USER_ID = UserId.orThrow('00000000-0000-4000-8000-000000000001');
+const OTHER_USER_ID = UserId.orThrow('00000000-0000-4000-8000-000000000002');
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
 afterEach(() => {
@@ -34,9 +36,10 @@ const setup = (options: { elapsedMs?: number; stepMs?: number; attempts?: number
   fixtures.push(fixture);
   const { db, sqlite } = fixture;
   sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'kosui');
-  const row = insertBlueskyAccountSwitch(sqlite, { startedAt: STARTED_AT, attempts: options.attempts ?? 0 });
+  sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(OTHER_USER_ID, 'bob');
+  const row = insertBlueskyAccountSwitch(sqlite, USER_ID, { startedAt: STARTED_AT, attempts: options.attempts ?? 0 });
   let clock = STARTED_AT + (options.elapsedMs ?? 90_000);
-  const real = createD1BlueskyAccountSwitchPurger(db);
+  const real = createD1BlueskyAccountSwitchPurger(db, USER_ID);
   const calls: string[] = [];
   const hooks = { failOnCall: undefined as number | undefined, error: new Error('D1_ERROR: forced failure') };
   const purger: BlueskyAccountSwitchPurger = {
@@ -49,7 +52,7 @@ const setup = (options: { elapsedMs?: number; stepMs?: number; attempts?: number
     },
   };
   const useCase = PurgeBlueskyAccountSwitchUseCase.create({
-    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db),
+    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db, USER_ID),
     purger,
     progressStore: createD1BlueskyAccountSwitchProgressStore(db),
     failedStore: createD1BlueskyAccountSwitchFailedStore(db),
@@ -84,40 +87,64 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
   it('切り替えの印が無いときは、何も削除せず idle を返す', async () => {
     const t = setup();
     t.sqlite.exec('DELETE FROM bluesky_account_switch');
-    seedBlueskyData(t.sqlite, { timelineItems: 3 });
+    seedBlueskyData(t.sqlite, USER_ID, { timelineItems: 3 });
 
     const result = await t.useCase.run();
 
     expect(result).toEqual({ ok: true, val: { status: 'idle' } });
     expect(t.calls).toEqual([]);
-    expect(countBlueskyData(t.sqlite).timelineItems).toBe(3);
+    expect(countBlueskyData(t.sqlite, USER_ID).timelineItems).toBe(3);
   });
 
   it('開始から 90 秒に満たないときは、何も削除せず waiting を返す', async () => {
     const t = setup({ elapsedMs: 89_999 });
-    seedBlueskyData(t.sqlite, { timelineItems: 3, likes: 2 });
+    seedBlueskyData(t.sqlite, USER_ID, { timelineItems: 3, likes: 2 });
 
     const result = await t.useCase.run();
 
     expect(result).toEqual({ ok: true, val: { status: 'waiting' } });
     expect(t.calls).toEqual([]);
-    expect(countBlueskyData(t.sqlite)).toMatchObject({ timelineItems: 3, likes: 2 });
+    expect(countBlueskyData(t.sqlite, USER_ID)).toMatchObject({ timelineItems: 3, likes: 2 });
     expect(t.switchRows()).toHaveLength(1);
   });
 
   it('90 秒がちょうど経ったら削除を始める', async () => {
     const t = setup({ elapsedMs: 90_000 });
-    seedBlueskyData(t.sqlite, { likes: 2 });
+    seedBlueskyData(t.sqlite, USER_ID, { likes: 2 });
 
     const result = await t.useCase.run();
 
     expect(result).toMatchObject({ ok: true, val: { status: 'completed' } });
-    expect(countBlueskyData(t.sqlite).likes).toBe(0);
+    expect(countBlueskyData(t.sqlite, USER_ID).likes).toBe(0);
+  });
+
+  it('切り替えたユーザーの行だけを消し、ほかのユーザーの行と切り替えの印には触れない', async () => {
+    const t = setup();
+    // crosspost の postId は全体で一意なので、ほかのユーザーには crosspost の行を作らない
+    const sizes = {
+      syncStatus: 1,
+      timelineItems: 3,
+      likes: 2,
+      reposts: 2,
+      bookmarks: 2,
+      moderatedActors: 2,
+    };
+    seedBlueskyData(t.sqlite, USER_ID, { ...sizes, crossposts: 2 });
+    seedBlueskyData(t.sqlite, OTHER_USER_ID, sizes);
+    insertBlueskyAccountSwitch(t.sqlite, OTHER_USER_ID, { startedAt: STARTED_AT });
+    const otherBefore = countBlueskyData(t.sqlite, OTHER_USER_ID);
+
+    const result = await t.useCase.run();
+
+    expect(result).toMatchObject({ ok: true, val: { status: 'completed' } });
+    expect(countBlueskyData(t.sqlite, USER_ID)).toEqual(emptied);
+    expect(countBlueskyData(t.sqlite, OTHER_USER_ID)).toEqual(otherBefore);
+    expect(t.sqlite.prepare('SELECT userId FROM bluesky_account_switch').all()).toEqual([{ userId: OTHER_USER_ID }]);
   });
 
   it('500 行ずつ分けて削除し、全表が空になったら印を消して完了のイベントを書く', async () => {
     const t = setup();
-    seedBlueskyData(t.sqlite, {
+    seedBlueskyData(t.sqlite, USER_ID, {
       syncStatus: 2,
       crossposts: 3,
       timelineItems: 1_203,
@@ -151,7 +178,7 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
     });
     expect(t.calls.filter((target) => target === 'timelineItems')).toHaveLength(3);
     expect(t.calls.filter((target) => target === 'likes')).toHaveLength(2);
-    expect(countBlueskyData(t.sqlite)).toEqual(emptied);
+    expect(countBlueskyData(t.sqlite, USER_ID)).toEqual(emptied);
     expect(t.switchRows()).toEqual([]);
     const events = t.events();
     expect(events).toHaveLength(1);
@@ -167,8 +194,8 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
 
   it('切り替えの開始より後に作られた行は削除せず、その行が残っていても完了する', async () => {
     const t = setup();
-    seedBlueskyData(t.sqlite, { crossposts: 2, likes: 2, reposts: 2, bookmarks: 2, moderatedActors: 2 });
-    seedPostSwitchBlueskyData(t.sqlite, STARTED_AT + 1_000);
+    seedBlueskyData(t.sqlite, USER_ID, { crossposts: 2, likes: 2, reposts: 2, bookmarks: 2, moderatedActors: 2 });
+    seedPostSwitchBlueskyData(t.sqlite, USER_ID, STARTED_AT + 1_000);
 
     const result = await t.useCase.run();
 
@@ -179,7 +206,7 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
         deletedCounts: { crossposts: 2, likes: 2, reposts: 2, bookmarks: 2, moderatedActors: 2 },
       },
     });
-    expect(countBlueskyData(t.sqlite)).toMatchObject({
+    expect(countBlueskyData(t.sqlite, USER_ID)).toMatchObject({
       crossposts: 1,
       likes: 1,
       reposts: 1,
@@ -195,16 +222,16 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
 
   it('開始と同時刻に作られた行は、新しいアカウントの行として残す', async () => {
     const t = setup();
-    seedPostSwitchBlueskyData(t.sqlite, STARTED_AT);
+    seedPostSwitchBlueskyData(t.sqlite, USER_ID, STARTED_AT);
 
     await t.useCase.run();
 
-    expect(countBlueskyData(t.sqlite)).toMatchObject({ crossposts: 1, likes: 1 });
+    expect(countBlueskyData(t.sqlite, USER_ID)).toMatchObject({ crossposts: 1, likes: 1 });
   });
 
   it('完了の後に再び実行しても、何もしない', async () => {
     const t = setup();
-    seedBlueskyData(t.sqlite, { likes: 1 });
+    seedBlueskyData(t.sqlite, USER_ID, { likes: 1 });
     await t.useCase.run();
 
     const again = await t.useCase.run();
@@ -215,25 +242,25 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
 
   it('20 秒を超えたら打ち切り、次の実行で続きから削除し終える', async () => {
     const t = setup({ stepMs: 8_000 });
-    seedBlueskyData(t.sqlite, { timelineItems: 1_200, likes: 3 });
+    seedBlueskyData(t.sqlite, USER_ID, { timelineItems: 1_200, likes: 3 });
 
     const first = await t.useCase.run();
 
     expect(first).toMatchObject({ ok: true, val: { status: 'timeBudget' } });
     expect(t.switchRows()).toHaveLength(1);
-    expect(countBlueskyData(t.sqlite)).toMatchObject({ timelineItems: 0, likes: 3 });
+    expect(countBlueskyData(t.sqlite, USER_ID)).toMatchObject({ timelineItems: 0, likes: 3 });
     let finished = first;
     for (let run = 0; run < 10 && finished.ok && finished.val.status === 'timeBudget'; run += 1) {
       finished = await t.useCase.run();
     }
     expect(finished).toMatchObject({ ok: true, val: { status: 'completed' } });
-    expect(countBlueskyData(t.sqlite)).toEqual(emptied);
+    expect(countBlueskyData(t.sqlite, USER_ID)).toEqual(emptied);
     expect(JSON.parse(t.events()[0]!.eventPayload).deletedCounts).toMatchObject({ timelineItems: 1_200, likes: 3 });
   });
 
   it('削除が途中で失敗したら attempts と lastError を書き、次の実行で完了する', async () => {
     const t = setup();
-    seedBlueskyData(t.sqlite, { timelineItems: 1_200, likes: 3 });
+    seedBlueskyData(t.sqlite, USER_ID, { timelineItems: 1_200, likes: 3 });
     t.hooks.failOnCall = 4;
 
     const failed = await t.useCase.run();
@@ -245,7 +272,7 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
     const [row] = t.switchRows();
     expect(row).toMatchObject({ attempts: 1, lastError: 'Error: D1_ERROR: forced failure' });
     expect(JSON.parse(row!.deletedCounts)).toMatchObject({ timelineItems: 500 });
-    expect(countBlueskyData(t.sqlite).timelineItems).toBe(700);
+    expect(countBlueskyData(t.sqlite, USER_ID).timelineItems).toBe(700);
     expect(t.events()).toEqual([]);
 
     t.hooks.failOnCall = undefined;
@@ -255,13 +282,13 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
       ok: true,
       val: { status: 'completed', deletedCounts: { timelineItems: 1_200, likes: 3 } },
     });
-    expect(countBlueskyData(t.sqlite)).toEqual(emptied);
+    expect(countBlueskyData(t.sqlite, USER_ID)).toEqual(emptied);
     expect(t.switchRows()).toEqual([]);
   });
 
   it('lastError は先頭の 200 文字までにする', async () => {
     const t = setup();
-    seedBlueskyData(t.sqlite, { likes: 1 });
+    seedBlueskyData(t.sqlite, USER_ID, { likes: 1 });
     t.hooks.failOnCall = 1;
     t.hooks.error = new Error('x'.repeat(500));
 
@@ -272,7 +299,7 @@ describe('PurgeBlueskyAccountSwitchUseCase', () => {
 
   it('試行が 30 回を超えたら stalled にし、削除を続ける', async () => {
     const t = setup({ attempts: 30 });
-    seedBlueskyData(t.sqlite, { likes: 1 });
+    seedBlueskyData(t.sqlite, USER_ID, { likes: 1 });
     t.hooks.failOnCall = 1;
 
     const failed = await t.useCase.run();
