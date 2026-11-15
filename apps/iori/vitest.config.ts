@@ -30,6 +30,8 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],
+    // Argon2id の導出が CI の共有 CPU で数秒かかるため、既定の 5000ms では足りない。
+    testTimeout: 30_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
