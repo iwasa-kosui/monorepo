@@ -4,5 +4,10 @@
     "quoteStyle": "alwaysSingle",
     "module.sortImportDeclarations": "maintain",
     "module.sortExportDeclarations": "maintain"
-  }
+  },
+  "excludes": [
+    "**/node_modules",
+    "**/*-lock.yaml",
+    "src/figures/**"
+  ]
 }
