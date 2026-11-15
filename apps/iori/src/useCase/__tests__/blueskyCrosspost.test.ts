@@ -772,7 +772,7 @@ describe('送信の回数制限と重複投稿の防止', () => {
     for (let i = 0; i < 5; i += 1) await run(t.retry.run());
 
     expect(await t.row(post.postId)).toMatchObject({ status: 'failed', attempts: 3 });
-    expect(t.rkeys).toHaveLength(3);
+    expect(t.rkeys).toHaveLength(1);
   });
 
   it('postId と createdAt から決まる rkey を createRecord に渡す', async () => {
@@ -801,6 +801,91 @@ describe('送信の回数制限と重複投稿の防止', () => {
       rkey: t.rkeys[0],
       lastError: null,
     });
+  });
+});
+
+describe('Bluesky 側で消された投稿を送り直さない', () => {
+  const notFound: BlueskyClientError = {
+    type: 'BlueskyClientError',
+    kind: 'http',
+    message: 'getRecord failed: status 400 RecordNotFound',
+    status: 400,
+    code: 'RecordNotFound',
+  };
+  const rkeyOf = (postId: PostId) => blueskyRkeyOf({ postId, createdAt: Instant.orThrow(CREATED_AT) });
+  /** 作成を頼んだあと、結果を残せずに試行が終わった行 */
+  const insertInterrupted = (t: ReturnType<typeof setup>, postId: PostId) =>
+    t.sqlite.prepare(
+      'INSERT INTO bluesky_crossposts(postId,userId,status,attempts,rkey,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)',
+    ).run(postId, t.actor.userId, 'pending', 1, rkeyOf(postId), NOW - 60 * 60_000, NOW - 60 * 60_000);
+
+  it('作成を頼んだまま止まった行は、Bluesky 側にレコードが無ければ作り直さず、以後も再送しない', async () => {
+    const t = setup();
+    const post = t.addPost();
+    insertInterrupted(t, post.postId);
+    t.behavior.getRecord = () => Result.err(notFound);
+
+    const summaries = [await run(t.retry.run()), await run(t.retry.run())];
+
+    expect(summaries).toMatchObject([{ skipped: 1 }, { skipped: 0, sent: 0 }]);
+    expect(t.created).toHaveLength(0);
+    expect(await t.row(post.postId)).toMatchObject({
+      status: 'skipped',
+      skipReason: 'deleted_on_bluesky',
+      rkey: null,
+    });
+  });
+
+  it('作成を頼んだまま止まった行は、Bluesky 側にレコードが残っていれば作り直さずに sent にする', async () => {
+    const t = setup();
+    const post = t.addPost();
+    insertInterrupted(t, post.postId);
+    t.behavior.getRecord = (rkey) =>
+      Result.ok({ uri: `at://did:plc:abc/app.bsky.feed.post/${rkey}`, cid: 'bafyexisting', rkey });
+
+    await run(t.retry.run());
+
+    expect(t.created).toHaveLength(0);
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent', rkey: rkeyOf(post.postId) });
+  });
+
+  it('Bluesky 側を確かめられない間は、作り直さずに failed のまま次の試行を待つ', async () => {
+    const t = setup();
+    const post = t.addPost();
+    insertInterrupted(t, post.postId);
+    t.behavior.getRecord = () => Result.err({ ...notFound, kind: 'network', status: undefined, code: undefined });
+
+    await run(t.retry.run());
+
+    expect(t.created).toHaveLength(0);
+    expect(await t.row(post.postId)).toMatchObject({ status: 'failed', attempts: 2, rkey: rkeyOf(post.postId) });
+  });
+
+  it('失敗の応答を受け取った送信は、次の試行でそのまま送り直す', async () => {
+    const t = setup();
+    const post = t.addPost();
+    t.behavior.createRecord = () => Result.err(failure('createRecord failed: status 502'));
+    t.behavior.getRecord = () => Result.err(notFound);
+    await run(t.schedule.run({ postId: post.postId }));
+    await t.flush();
+    t.behavior.createRecord = (_record, rkey) =>
+      Result.ok({ uri: `at://did:plc:abc/app.bsky.feed.post/${rkey}`, cid: 'bafyretried', rkey });
+
+    await run(t.retry.run());
+
+    expect(await t.row(post.postId)).toMatchObject({ status: 'sent', cid: 'bafyretried', attempts: 2 });
+  });
+
+  it('作成を頼んだまま止まった行の投稿を消すと、Bluesky 側のレコードも消しに行く', async () => {
+    const t = setup();
+    const post = t.addPost();
+    insertInterrupted(t, post.postId);
+
+    expect(await run(t.remove.run({ postId: post.postId }))).toBe('deleting');
+    await t.flush();
+
+    expect(t.deleted).toEqual([rkeyOf(post.postId)]);
+    expect(await t.row(post.postId)).toBeUndefined();
   });
 });
 

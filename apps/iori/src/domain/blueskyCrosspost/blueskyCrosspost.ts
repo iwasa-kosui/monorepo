@@ -12,7 +12,14 @@ export const BlueskyCrosspostStatus = z.enum(['pending', 'sent', 'failed', 'skip
 export type BlueskyCrosspostStatus = z.infer<typeof BlueskyCrosspostStatus>;
 
 // content_warning と sensitive は、送らなかった過去の行を読むために残す
-export const BlueskySkipReason = z.enum(['visibility', 'content_warning', 'sensitive', 'reply_to_unsent']);
+// deleted_on_bluesky は、送ったかもしれない投稿が Bluesky 側に無かったとき。本人が Bluesky で消したとみなし、送り直さない
+export const BlueskySkipReason = z.enum([
+  'visibility',
+  'content_warning',
+  'sensitive',
+  'reply_to_unsent',
+  'deleted_on_bluesky',
+]);
 export type BlueskySkipReason = z.infer<typeof BlueskySkipReason>;
 
 const blueskyCrosspostZodType = z.object({
@@ -102,12 +109,39 @@ const markSending = (crosspost: BlueskyCrosspost, now: Instant): BlueskyCrosspos
   updatedAt: now,
 });
 
+/**
+ * レコードの作成を Bluesky に頼む直前に、使う rkey を残す。
+ * 結果を残せないまま試行が終わっても、Bluesky 側にレコードができているかもしれないと分かるようにする
+ */
+const markCreating = (crosspost: BlueskyCrosspost, rkey: string, now: Instant): BlueskyCrosspost => ({
+  ...crosspost,
+  rkey,
+  updatedAt: now,
+});
+
+/** 失敗を記録する。rkey は変えないので、作成を頼んだあとなら次の試行で Bluesky 側を確かめる */
 const markFailed = (crosspost: BlueskyCrosspost, lastError: string, now: Instant): BlueskyCrosspost => ({
   ...crosspost,
   status: 'failed',
   lastError: lastError.slice(0, MAX_LAST_ERROR_LENGTH),
   updatedAt: now,
 });
+
+/** 作成を頼んで失敗し、Bluesky 側にもレコードが見つからなかった。次の試行はそのまま送り直してよい */
+const markFailedWithoutRecord = (crosspost: BlueskyCrosspost, lastError: string, now: Instant): BlueskyCrosspost => ({
+  ...markFailed(crosspost, lastError, now),
+  rkey: null,
+});
+
+/** 送ったかもしれないレコードが Bluesky 側に無い。Bluesky で消されたとみなし、送り直さない */
+const markDeletedOnBluesky = (crosspost: BlueskyCrosspost, now: Instant): BlueskyCrosspost => ({
+  ...markSkipped(crosspost, 'deleted_on_bluesky', now),
+  rkey: null,
+});
+
+/** 前の試行が作成を頼んだまま結果を残していない。Bluesky 側にレコードができているかもしれない */
+const mayHaveRecord = (crosspost: BlueskyCrosspost): crosspost is BlueskyCrosspost & { rkey: string } =>
+  (crosspost.status === 'pending' || crosspost.status === 'failed') && crosspost.rkey !== null;
 
 const markDeleting = (crosspost: BlueskyCrosspost, now: Instant): BlueskyCrosspost => ({
   ...crosspost,
@@ -162,7 +196,11 @@ export const BlueskyCrosspost = {
   markSkipped,
   markSent,
   markSending,
+  markCreating,
   markFailed,
+  markFailedWithoutRecord,
+  markDeletedOnBluesky,
+  mayHaveRecord,
   markDeleting,
   markDeleteFailed,
   canRetry,

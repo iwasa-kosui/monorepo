@@ -46,7 +46,10 @@ const create = (deps: Deps): RemoveBlueskyCrosspostUseCase => {
   const execute = async ({ postId }: Input): Promise<RemoveBlueskyCrosspostOutcome> => {
     const crosspost = Result.unsafeUnwrap(await deps.crosspostResolver.resolve(postId));
     if (crosspost === undefined) return 'noop';
-    if ((crosspost.status === 'sent' || crosspost.status === 'deleting') && crosspost.rkey !== null) {
+    // 送信済みになっていなくても、前の試行で Bluesky 側にレコードができているかもしれない行は消しに行く
+    const mayExistRemotely = crosspost.status === 'sent' || crosspost.status === 'deleting'
+      || BlueskyCrosspost.mayHaveRecord(crosspost);
+    if (mayExistRemotely && crosspost.rkey !== null) {
       const deleting = BlueskyCrosspost.markDeleting(crosspost, deps.now());
       Result.unsafeUnwrap(await deps.crosspostSavedStore.save(deleting));
       deps.waitUntil(deleteRemoteSafely(deleting));
