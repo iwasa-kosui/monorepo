@@ -89,6 +89,7 @@ const toAccountOf = (
       displayName?: string;
       note?: string;
       bot?: boolean;
+      headerUri?: string;
       profile?: RemoteProfile;
     }
   >,
@@ -96,7 +97,7 @@ const toAccountOf = (
 ): Account => {
   const avatar = toSafeApiUrl(props.logoUri, options.baseUrl) ?? options.defaultAvatarUrl;
   const { profile } = props;
-  const header = profile?.headerUrl ?? options.defaultHeaderUrl;
+  const header = profile?.headerUrl ?? toSafeApiUrl(props.headerUri, options.baseUrl) ?? options.defaultHeaderUrl;
   const createdAt = profile?.createdAt ?? options.createdAt;
   const fallbackUrl = new URL(props.fallbackPath, options.baseUrl).href;
   const uri = toSafeApiUrl(props.uri, options.baseUrl) ?? fallbackUrl;
@@ -142,6 +143,7 @@ export const toAccount = (source: AccountSource, options: ToAccountOptions): Acc
       displayName: actor.displayName,
       note: actor.bio === undefined ? undefined : plainTextToHtml(actor.bio),
       bot: AiAgentBot.isBotUsername(user.username),
+      headerUri: AiAgentBot.isBotUsername(user.username) ? AiAgentBot.images.headerPath : undefined,
     }, options);
   }
   const { actor } = source;

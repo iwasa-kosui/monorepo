@@ -12,7 +12,8 @@ export const buildLocalPerson = async (
 ): Promise<Person | Service> => {
   const keys = await ctx.getActorKeyPairs(identifier);
   // AI エージェントの bot は Service として公開し、Mastodon などで bot と表示されるようにする
-  const ActorClass = AiAgentBot.isBotUsername(identifier) ? Service : Person;
+  const isBot = AiAgentBot.isBotUsername(identifier);
+  const ActorClass = isBot ? Service : Person;
   return new ActorClass({
     id: ctx.getActorUri(identifier),
     preferredUsername: identifier,
@@ -26,6 +27,10 @@ export const buildLocalPerson = async (
     icon: actor.logoUri === undefined
       ? undefined
       : new Image({ url: new URL(actor.logoUri), mediaType: 'image/png' }),
+    // ローカルのアクターはカバー画像を持たないが、bot だけは決まったカバー画像を出す
+    image: isBot
+      ? new Image({ url: new URL(AiAgentBot.images.headerPath, ctx.origin), mediaType: 'image/png' })
+      : undefined,
     publicKey: keys.at(0)?.cryptographicKey,
     assertionMethods: keys.map((key) => key.multikey),
   });
