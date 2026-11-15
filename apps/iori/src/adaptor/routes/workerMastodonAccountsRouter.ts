@@ -10,9 +10,11 @@ import type {
   AccountRelationshipsResolverByActorIds,
   AcctLookup,
   ActorIdResolverByAcct,
+  ActorIdsResolverByMentionQuery,
 } from '../../domain/actor/accountRelationship.ts';
 import type { Actor, ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import { ActorId } from '../../domain/actor/actorId.ts';
+import { parseMentionQuery } from '../../domain/actor/mentionQuery.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
 import type { PageRequest } from '../../domain/page/page.ts';
 import type { AccountStatusItemsResolverByActorId } from '../../domain/post/accountStatusItem.ts';
@@ -29,6 +31,7 @@ import { actorNotFound, handleInternalError, internalServerError } from './helpe
 import {
   accountListLimits,
   isTrue,
+  parseLimit,
   parsePageRequest,
   respondWithPage,
   timelineLimits,
@@ -50,6 +53,7 @@ export type WorkerMastodonAccountsRouterDeps = Readonly<{
   actorIdsResolverByFollowerId: ActorIdsResolverByFollowerIdWithPagination;
   actorIdsResolverByFollowingId: ActorIdsResolverByFollowingIdWithPagination;
   actorIdResolverByAcct: ActorIdResolverByAcct;
+  actorIdsResolverByMentionQuery: ActorIdsResolverByMentionQuery;
   accountRelationshipsResolverByActorIds: AccountRelationshipsResolverByActorIds;
   statusAssembler: StatusAssembler;
   createMuteUseCase: CreateMuteUseCase;
@@ -115,6 +119,7 @@ export const createWorkerMastodonAccountsRouter = ({
   actorIdsResolverByFollowerId,
   actorIdsResolverByFollowingId,
   actorIdResolverByAcct,
+  actorIdsResolverByMentionQuery,
   accountRelationshipsResolverByActorIds,
   statusAssembler,
   createMuteUseCase,
@@ -258,6 +263,37 @@ export const createWorkerMastodonAccountsRouter = ({
         return parsed.ok ? [parsed.val] : [];
       });
       return c.json(await statusAssembler.assembleAccounts({ actorIds, requestUrl: c.req.url }));
+    })
+    .get('/v1/accounts/search', authn.requireUser(readAccounts), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId;
+      if (userId === null || userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      const q = c.req.query('q') ?? '';
+      if (q.trim() === '') {
+        return c.json({ error: 'Validation failed: q is missing' }, 400);
+      }
+      const offset = Number(c.req.query('offset') ?? '0');
+      const query = parseMentionQuery(q);
+      if (query === undefined || offset > 0) {
+        return c.json([]);
+      }
+      const viewer = await actorResolverByUserId.resolve(userId);
+      if (!viewer.ok) {
+        return c.json(internalServerError, 500);
+      }
+      if (viewer.val === undefined) {
+        return c.json(actorNotFound, 422);
+      }
+      const actorIds = await actorIdsResolverByMentionQuery.resolve({
+        viewerActorId: viewer.val.id,
+        ...query,
+        limit: parseLimit(c.req.query('limit'), accountListLimits),
+      });
+      if (!actorIds.ok) {
+        return c.json(internalServerError, 500);
+      }
+      return c.json(await statusAssembler.assembleAccounts({ actorIds: actorIds.val, requestUrl: c.req.url }));
     })
     .get('/v1/accounts/lookup', authn.optionalAuth, async (c) => {
       const rejection = rejectUnlessTokenScope(c, getMastodonPrincipal(c), [readAccounts]);

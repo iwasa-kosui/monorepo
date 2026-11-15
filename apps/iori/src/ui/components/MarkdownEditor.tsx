@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'hono/jsx';
+import { useEffect, useId, useState } from 'hono/jsx';
 
+import { useMentionSuggestions } from '../hooks/useMentionSuggestions.ts';
 import { shouldResetPreview } from './markdownEditorPreview.ts';
+import { mentionOptionId, MentionSuggestionList } from './MentionSuggestionList.tsx';
 
 type TabMode = 'markdown' | 'preview';
 
@@ -27,6 +29,8 @@ export const MarkdownEditor = ({
   const [previewHtml, setPreviewHtml] = useState('');
   const [previewError, setPreviewError] = useState('');
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const mention = useMentionSuggestions({ value, onChange });
+  const mentionListId = `mention-list-${useId()}`;
 
   useEffect(() => {
     if (!shouldResetPreview(value)) return;
@@ -66,6 +70,7 @@ export const MarkdownEditor = ({
   };
 
   const handleTabChange = (tab: TabMode) => {
+    mention.close();
     setActiveTab(tab);
     if (tab === 'preview') {
       fetchPreview(value);
@@ -75,6 +80,16 @@ export const MarkdownEditor = ({
   const handleInput = (e: Event) => {
     const target = e.target as HTMLTextAreaElement;
     onChange(target.value);
+    mention.refresh(target);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (mention.handleKeyDown(e)) return;
+    onKeyDown?.(e);
+  };
+
+  const handleCaretMove = (e: Event) => {
+    mention.refresh(e.target as HTMLTextAreaElement);
   };
 
   return (
@@ -84,12 +99,25 @@ export const MarkdownEditor = ({
         {activeTab === 'markdown'
           ? (
             <textarea
+              ref={mention.textareaRef}
               name={name}
               placeholder={placeholder}
               required={!!name}
               value={value}
               onInput={handleInput}
-              onKeyDown={onKeyDown}
+              onKeyDown={handleKeyDown}
+              onKeyUp={(e: KeyboardEvent) => {
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') {
+                  handleCaretMove(e);
+                }
+              }}
+              onClick={handleCaretMove}
+              onBlur={mention.close}
+              role='combobox'
+              aria-autocomplete='list'
+              aria-expanded={mention.isOpen}
+              aria-controls={mentionListId}
+              aria-activedescendant={mention.isOpen ? mentionOptionId(mentionListId, mention.activeIndex) : undefined}
               disabled={disabled}
               class='w-full h-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset resize-none transition-all pb-9'
               style={{ minHeight }}
@@ -126,6 +154,16 @@ export const MarkdownEditor = ({
                 )}
             </div>
           )}
+        {activeTab === 'markdown' && mention.isOpen && (
+          <MentionSuggestionList
+            id={mentionListId}
+            accounts={mention.accounts}
+            activeIndex={mention.activeIndex}
+            placement={mention.placement}
+            onSelect={mention.select}
+            onHover={mention.setActiveIndex}
+          />
+        )}
         <button
           type='button'
           aria-pressed={activeTab === 'preview'}
