@@ -129,7 +129,7 @@ private: false
 <div className="fig-panel">
 <svg viewBox="0 0 560 344" role="img" aria-labelledby="fig-fs-3-title fig-fs-3-desc">
 <title id="fig-fs-3-title">ループの構造</title>
-<desc id="fig-fs-3-desc">左から、人が作る意図、worker と reviewer の循環、解説ページ、人が行う判断とマージが並ぶ図です。worker と reviewer の循環は、指摘がなくなるまで人を介さずに回ります。循環で生じた未決の論点は、仮の案で進めたあとで、人が回答します。解説ページと判断・マージの間には、上限のあるレビュー待ちの列があります。上限に達すると、新しい課題を取得しない経路が worker に戻ります。下部では、retro がスキル改善の PR を作成し、その PR が判断・マージに届きます。</desc>
+<desc id="fig-fs-3-desc">左から、人が作る意図、worker と reviewer の循環、PR、人が行う判断とマージが並ぶ図です。PR の下には、PR ごとに作成する解説ページがあり、人が読んで判断する線が判断・マージに向かいます。worker と reviewer の循環は、指摘がなくなるまで人を介さずに回ります。循環で生じた未決の論点は、仮の案で進めたあとで、人が回答します。PR と判断・マージの間には、上限のあるレビュー待ちの列があります。上限に達すると、新しい課題を取得しない経路が worker に戻ります。下部では、retro がスキル改善の PR を作成し、その PR が判断・マージに届きます。</desc>
 <rect className="fig-pill" x="82" y="40" width="92" height="24" rx="12" />
 <text className="fig-t fig-t-sm fig-mid" x="128" y="57.5">未決の論点</text>
 <path className="fig-line fig-dotted" d="M128 98V66" />
@@ -153,7 +153,15 @@ private: false
 <path className="fig-line" d="M170 140L188 140" />
 <path className="fig-mk" d="M196 140L188 144L188 136Z" />
 <rect className="fig-card" x="198" y="120" width="88" height="40" rx="10" />
-<text className="fig-t fig-t-sm fig-mid" x="242" y="145.5">解説ページ</text>
+<text className="fig-t fig-t-sm fig-mid" x="242" y="145.5">PR</text>
+<path className="fig-line" d="M242 160V196" />
+<path className="fig-mk" d="M242 204L238 196L246 196Z" />
+<text className="fig-t fig-t-sm fig-c-muted" x="252" y="187">PR ごとに作成</text>
+<rect className="fig-card" x="198" y="206" width="88" height="40" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="242" y="231.5">解説ページ</text>
+<path className="fig-line-human" d="M286 226L452 226L452 170" />
+<path className="fig-mk-human" d="M452 162L456 170L448 170Z" />
+<text className="fig-t fig-t-sm fig-mid fig-c-human" x="369" y="218">人が読んで判断する</text>
 <path className="fig-line" d="M286 140L304 140" />
 <path className="fig-mk" d="M312 140L304 144L304 136Z" />
 <rect className="fig-card" x="314" y="108" width="100" height="64" rx="10" />
@@ -166,9 +174,9 @@ private: false
 <path className="fig-mk" d="M440 140L432 144L432 136Z" />
 <rect className="fig-card-human" x="442" y="120" width="104" height="40" rx="10" />
 <text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="494" y="145.5">判断・マージ</text>
-<path className="fig-line fig-dash" d="M364 172L364 246L252 246L252 176L161 176" />
-<path className="fig-mk" d="M153 176L161 172L161 180Z" />
-<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="308" y="268">上限に達すると新しい課題を取得しない</text>
+<path className="fig-line fig-dash" d="M364 108L364 90L168 90L168 119" />
+<path className="fig-mk" d="M168 127L164 119L172 119Z" />
+<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="266" y="82">上限に達すると新しい課題を取得しない</text>
 <rect className="fig-card-agent" x="8" y="292" width="68" height="40" rx="10" />
 <text className="fig-t fig-t-sm fig-mid fig-b" x="42" y="317.5">retro</text>
 <path className="fig-line" d="M76 312L92 312" />
