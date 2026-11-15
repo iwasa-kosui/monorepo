@@ -19,6 +19,10 @@ import {
 import { createD1AiAgentBotFollowupClaimedStore } from '../adaptor/d1/aiAgentBot/aiAgentBotFollowupClaimedStore.ts';
 import { createD1AiAgentBotFollowupScheduledStore } from '../adaptor/d1/aiAgentBot/aiAgentBotFollowupScheduledStore.ts';
 import { createD1AiAgentBotFollowupsHandledStore } from '../adaptor/d1/aiAgentBot/aiAgentBotFollowupsHandledStore.ts';
+import {
+  createD1AiAgentBotMemoriesResolverBySubject,
+  createD1AiAgentBotMemoryChangedStore,
+} from '../adaptor/d1/aiAgentBot/aiAgentBotMemoryAdapters.ts';
 import { createD1AiAgentBotPendingTriggersResolver } from '../adaptor/d1/aiAgentBot/aiAgentBotPendingTriggersResolver.ts';
 import { createD1AiAgentBotRepliedCountResolverSince } from '../adaptor/d1/aiAgentBot/aiAgentBotRepliedCountResolverSince.ts';
 import { createD1AiAgentBotTriggerClaimedStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggerClaimedStore.ts';
@@ -397,6 +401,8 @@ export const createAiAgentBotRuntime = async (
     repliedCountResolverSince: createD1AiAgentBotRepliedCountResolverSince(db),
     followupScheduledStore: createD1AiAgentBotFollowupScheduledStore(db),
     pendingFollowupsCountResolver: createD1AiAgentBotPendingFollowupsCountResolver(db),
+    memoriesResolverBySubject: createD1AiAgentBotMemoriesResolverBySubject(db),
+    memoryChangedStore: createD1AiAgentBotMemoryChangedStore(db),
     actorResolverById: runtime.mastodon.actorResolverById,
     chatModel,
     now: Instant.now,
@@ -424,7 +430,12 @@ export const createAiAgentBotRuntime = async (
       followupsHandledStore: createD1AiAgentBotFollowupsHandledStore(db),
       ...shared,
     }),
-    postMusing: PostAiAgentMusingUseCase.create({ chatModel, now: Instant.now }),
+    postMusing: PostAiAgentMusingUseCase.create({
+      memoriesResolverBySubject: shared.memoriesResolverBySubject,
+      memoryChangedStore: shared.memoryChangedStore,
+      chatModel,
+      now: Instant.now,
+    }),
   } as const;
 };
 

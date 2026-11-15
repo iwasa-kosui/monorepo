@@ -12,6 +12,7 @@ import { PostId } from '../../domain/post/postId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import type { AgentChatModel } from '../../ports/agentChatModel.ts';
 import { createInMemoryFollowups } from '../aiAgent/__tests__/inMemoryFollowups.ts';
+import { createInMemoryMemories } from '../aiAgent/__tests__/inMemoryMemories.ts';
 import type { AgentPostView, AiAgentBotCapabilities } from '../aiAgent/agentTools.ts';
 import { PostAiAgentMusingUseCase } from '../postAiAgentMusing.ts';
 import { type AiAgentBotReply, RespondToAiAgentMentionsUseCase } from '../respondToAiAgentMentions.ts';
@@ -66,7 +67,11 @@ describe('PostAiAgentMusingUseCase', () => {
   it('自分の最近の投稿の繰り返しなら投稿しない', async () => {
     const posted: string[] = [];
     const chatModel = publishing('create_post', previous.text);
-    const result = await PostAiAgentMusingUseCase.create({ chatModel, now: () => now }).run({
+    const result = await PostAiAgentMusingUseCase.create({
+      ...createInMemoryMemories(() => now).deps,
+      chatModel,
+      now: () => now,
+    }).run({
       capabilities: capabilitiesOf({ own: [previous] }),
       poster: { post: async (text) => (posted.push(text), Result.ok(PostId.orThrow(previous.postId))) },
     });
@@ -79,7 +84,11 @@ describe('PostAiAgentMusingUseCase', () => {
     const posted: string[] = [];
     const text = 'ActivityPub の Move アクティビティを調べました。アカウントの引っ越しの仕組みが面白いです。';
     const chatModel = publishing('create_post', text);
-    const result = await PostAiAgentMusingUseCase.create({ chatModel, now: () => now }).run({
+    const result = await PostAiAgentMusingUseCase.create({
+      ...createInMemoryMemories(() => now).deps,
+      chatModel,
+      now: () => now,
+    }).run({
       capabilities: capabilitiesOf({ own: [previous] }),
       poster: { post: async (body) => (posted.push(body), Result.ok(PostId.orThrow(previous.postId))) },
     });
@@ -117,6 +126,7 @@ describe('RespondToAiAgentMentionsUseCase', () => {
       actorResolverById: { resolve: async () => RA.ok(undefined) },
       chatModel: publishing('reply', 'こんにちは！'),
       ...createInMemoryFollowups(() => now).deps,
+      ...createInMemoryMemories(() => now).deps,
     });
     const replies: AiAgentBotReply[] = [];
     const input = {

@@ -5,6 +5,7 @@ import { AiAgentBot, MUSING_INTERVAL_MS } from '../domain/aiAgentBot/aiAgentBot.
 import { Instant } from '../domain/instant/instant.ts';
 import { PostId } from '../domain/post/postId.ts';
 import type { AgentChatModel, AgentChatRequest, AgentChatResponse } from '../ports/agentChatModel.ts';
+import { createInMemoryMemories } from './aiAgent/__tests__/inMemoryMemories.ts';
 import type { AiAgentBotCapabilities } from './aiAgent/agentTools.ts';
 import { PostAiAgentMusingUseCase } from './postAiAgentMusing.ts';
 
@@ -49,7 +50,11 @@ const run = async (
 ) => {
   const posted: string[] = [];
   const postId = PostId.generate();
-  const result = await PostAiAgentMusingUseCase.create({ chatModel, now: () => options.now ?? NOW }).run({
+  const result = await PostAiAgentMusingUseCase.create({
+    ...createInMemoryMemories(() => options.now ?? NOW).deps,
+    chatModel,
+    now: () => options.now ?? NOW,
+  }).run({
     capabilities: { ...capabilities, ...options.capabilities },
     poster: {
       post: async (text) => {

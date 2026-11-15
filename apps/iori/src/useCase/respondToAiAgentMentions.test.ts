@@ -8,11 +8,13 @@ import {
   MAX_BOT_REPLIES_PER_TRIGGER,
 } from '../domain/aiAgentBot/aiAgentBot.ts';
 import { MAX_PENDING_FOLLOWUPS } from '../domain/aiAgentBot/aiAgentBotFollowup.ts';
+import { type AiAgentBotMemory, AiAgentBotMemoryId } from '../domain/aiAgentBot/aiAgentBotMemory.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { PostId } from '../domain/post/postId.ts';
 import { UserId } from '../domain/user/userId.ts';
 import type { AgentChatModel, AgentChatRequest, AgentChatResponse } from '../ports/agentChatModel.ts';
 import { createInMemoryFollowups } from './aiAgent/__tests__/inMemoryFollowups.ts';
+import { createInMemoryMemories } from './aiAgent/__tests__/inMemoryMemories.ts';
 import type { AgentPostView, AiAgentBotCapabilities } from './aiAgent/agentTools.ts';
 import { AI_AGENT_BOT_MAX_STEPS } from './aiAgent/aiAgentBotPrompts.ts';
 import { type AiAgentBotReply, RespondToAiAgentMentionsUseCase } from './respondToAiAgentMentions.ts';
@@ -68,8 +70,10 @@ const run = async (
   replyResult: Result<null, string> = Result.ok(null),
   pendingFollowups = 0,
   sentIds: PostId[] = [],
+  initialMemories: readonly AiAgentBotMemory[] = [],
 ) => {
   const followups = createInMemoryFollowups(() => NOW, pendingFollowups);
+  const memories = createInMemoryMemories(() => NOW, initialMemories);
   const stored: AiAgentBotTriggerHandled[] = [];
   const replies: AiAgentBotReply[] = [];
   const useCase = RespondToAiAgentMentionsUseCase.create({
@@ -85,6 +89,7 @@ const run = async (
     actorResolverById: { resolve: () => RA.ok(undefined) },
     chatModel,
     ...followups.deps,
+    ...memories.deps,
   });
   const summary = await useCase.run({
     bot: BOT,
@@ -99,7 +104,7 @@ const run = async (
       },
     },
   });
-  return { summary: summary.val, stored, replies, scheduled: followups.scheduled };
+  return { summary: summary.val, stored, replies, scheduled: followups.scheduled, memories: memories.memories() };
 };
 
 describe('RespondToAiAgentMentionsUseCase', () => {
@@ -189,5 +194,62 @@ describe('RespondToAiAgentMentionsUseCase', () => {
     const { scheduled } = await run(model, Result.ok(null), MAX_PENDING_FOLLOWUPS);
     expect(scheduled).toEqual([]);
     expect(requests[1]?.messages.at(-1)).toMatchObject({ role: 'tool', content: expect.stringMatching(/^エラー/) });
+  });
+
+  describe('記憶', () => {
+    const memoryAbout = (actorId: ActorId, content: string): AiAgentBotMemory => ({
+      memoryId: AiAgentBotMemoryId.generate(),
+      subject: { type: 'actor', actorId },
+      content,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+
+    it('remember で、話している相手についての記憶を残せる', async () => {
+      const { model } = scriptedModel((_, call) =>
+        call === 0
+          ? toolCall('remember', { content: 'Rust の非同期処理に関心がある', about: 'author' })
+          : { content: undefined, toolCalls: [] }
+      );
+      const { memories } = await run(model);
+      expect(memories).toMatchObject([{
+        subject: { type: 'actor', actorId: AUTHOR_ACTOR_ID },
+        content: 'Rust の非同期処理に関心がある',
+      }]);
+    });
+
+    it('話している相手についての記憶はプロンプトに載り、ほかの人についての記憶は載らない', async () => {
+      const { model, requests } = scriptedModel(() => ({ content: undefined, toolCalls: [] }));
+      await run(model, Result.ok(null), 0, [], [
+        memoryAbout(AUTHOR_ACTOR_ID, 'alice は猫を飼っている'),
+        memoryAbout(ActorId.generate(), 'bob は来月引っ越す'),
+      ]);
+      const prompt = requests[0]?.messages.find((message) => message.role === 'user')?.content;
+      expect(prompt).toContain('alice は猫を飼っている');
+      expect(prompt).not.toContain('bob は来月引っ越す');
+    });
+
+    it('forget では、ほかの人についての記憶を忘れさせられない', async () => {
+      const others = memoryAbout(ActorId.generate(), 'bob は来月引っ越す');
+      const { model, requests } = scriptedModel((_, call) =>
+        call === 0
+          ? toolCall('forget', { memoryId: others.memoryId })
+          : { content: undefined, toolCalls: [] }
+      );
+      const { memories } = await run(model, Result.ok(null), 0, [], [others]);
+      expect(memories).toEqual([others]);
+      expect(requests[1]?.messages.at(-1)).toMatchObject({ role: 'tool', content: expect.stringMatching(/^エラー/) });
+    });
+
+    it('相手に頼まれたら、その相手についての記憶を forget で忘れられる', async () => {
+      const own = memoryAbout(AUTHOR_ACTOR_ID, 'alice は猫を飼っている');
+      const { model } = scriptedModel((_, call) =>
+        call === 0
+          ? toolCall('forget', { memoryId: own.memoryId })
+          : { content: undefined, toolCalls: [] }
+      );
+      const { memories } = await run(model, Result.ok(null), 0, [], [own]);
+      expect(memories).toEqual([]);
+    });
   });
 });

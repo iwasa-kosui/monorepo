@@ -24,6 +24,7 @@ import {
   musingSystemPrompt,
   musingUserPrompt,
 } from './aiAgent/aiAgentBotPrompts.ts';
+import { type AgentMemoryDeps, loadAgentMemory } from './aiAgent/memoryTools.ts';
 import type { UseCase } from './useCase.ts';
 
 /** bot として公開の投稿をする。runtime が CreatePostUseCase を包んで用意する */
@@ -47,10 +48,12 @@ export type PostAiAgentMusingError = AiError | Readonly<{ type: 'AiAgentBotPostE
 
 export type PostAiAgentMusingUseCase = UseCase<Input, PostAiAgentMusingResult, PostAiAgentMusingError>;
 
-type Deps = Readonly<{
-  chatModel: AgentChatModel;
-  now: () => Instant;
-}>;
+type Deps =
+  & AgentMemoryDeps
+  & Readonly<{
+    chatModel: AgentChatModel;
+    now: () => Instant;
+  }>;
 
 /**
  * AI エージェントの bot が、自分から 1 件投稿する。投稿はエージェントが create_post ツールで行う。
@@ -61,11 +64,13 @@ const create = (deps: Deps): PostAiAgentMusingUseCase => {
   const agent = runAgentLoop(deps.chatModel);
   return {
     run: async ({ capabilities, poster }) => {
-      const [timeline, ownPosts, popularArticles, blueskyTopics] = await Promise.all([
+      const [timeline, ownPosts, popularArticles, blueskyTopics, memory] = await Promise.all([
         capabilities.readRecentTimeline(MAX_RECENT_TIMELINE),
         capabilities.readOwnRecentPosts(MAX_OWN_RECENT_POSTS),
         capabilities.readPopularArticles(MATERIAL_COUNT),
         capabilities.readBlueskyTopics(),
+        // 自分から投稿するときは話す相手がいないので、自分についての記憶だけを読む
+        loadAgentMemory(deps, {}),
       ]);
       const theme = AiAgentBot.decideMusingTheme({
         now: deps.now(),
@@ -109,9 +114,10 @@ const create = (deps: Deps): PostAiAgentMusingUseCase => {
           popularArticles: formatArticles(popularArticles),
           blueskyTopics: formatBlueskyTopics(blueskyTopics, { recentPosts: true }),
           ownPosts: formatPosts(ownPosts),
+          memory: memory.section,
           now: new Date(deps.now()).toISOString(),
         }),
-        tools: [...createAgentTools(capabilities), postTool.tool],
+        tools: [...createAgentTools(capabilities), ...memory.tools, postTool.tool],
         finalTools: [postTool.tool],
         maxSteps: AI_AGENT_BOT_MAX_STEPS,
         maxOutputTokens: AI_AGENT_BOT_MAX_OUTPUT_TOKENS,

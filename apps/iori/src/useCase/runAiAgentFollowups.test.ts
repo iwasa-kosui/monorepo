@@ -12,6 +12,7 @@ import { PostId } from '../domain/post/postId.ts';
 import { UserId } from '../domain/user/userId.ts';
 import type { AgentChatModel, AgentChatRequest, AgentChatResponse } from '../ports/agentChatModel.ts';
 import { createInMemoryFollowups } from './aiAgent/__tests__/inMemoryFollowups.ts';
+import { createInMemoryMemories } from './aiAgent/__tests__/inMemoryMemories.ts';
 import type { AgentPostView, AiAgentBotCapabilities } from './aiAgent/agentTools.ts';
 import type { AiAgentBotReply } from './respondToAiAgentMentions.ts';
 import { RunAiAgentFollowupsUseCase } from './runAiAgentFollowups.ts';
@@ -95,6 +96,7 @@ const run = async (
     actorResolverById: { resolve: () => RA.ok(undefined) },
     chatModel,
     ...followups.deps,
+    ...createInMemoryMemories(() => now).deps,
   }).run({
     bot: BOT,
     capabilities,

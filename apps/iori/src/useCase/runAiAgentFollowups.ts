@@ -30,6 +30,7 @@ import {
   followupUserPrompt,
 } from './aiAgent/aiAgentBotPrompts.ts';
 import { createFollowupTools, type FollowupSchedulerDeps } from './aiAgent/followupScheduler.ts';
+import { type AgentMemoryDeps, loadAgentMemory } from './aiAgent/memoryTools.ts';
 import { type AiAgentBotReplier, createThreadedReplyTool, handleOf } from './respondToAiAgentMentions.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -58,6 +59,7 @@ export type RunAiAgentFollowupsUseCase = UseCase<Input, RunAiAgentFollowupsSumma
 
 type Deps =
   & FollowupSchedulerDeps
+  & AgentMemoryDeps
   & Readonly<{
     dueFollowupsResolver: AiAgentBotDueFollowupsResolver;
     followupClaimedStore: AiAgentBotFollowupClaimedStore;
@@ -96,6 +98,9 @@ const create = (deps: Deps): RunAiAgentFollowupsUseCase => {
       limit: Math.min(MAX_BOT_REPLIES_PER_TRIGGER, MAX_BOT_REPLIES_PER_THREAD - botRepliesInThread),
     });
 
+    const memory = await loadAgentMemory(deps, {
+      author: { actorId: followup.authorActorId, handle: handleOf(author) },
+    });
     const now = deps.now();
     const result = await agent({
       model: AI_AGENT_BOT_MODEL,
@@ -105,11 +110,13 @@ const create = (deps: Deps): RunAiAgentFollowupsUseCase => {
         target: formatPost(target),
         author: handleOf(author),
         note: followup.note,
+        memory: memory.section,
         scheduledAt: new Date(followup.scheduledAt).toISOString(),
         now: new Date(now).toISOString(),
       }),
       tools: [
         ...createAgentTools(capabilities),
+        ...memory.tools,
         replyTool.tool,
         ...createFollowupTools(deps, {
           postId: followup.postId,

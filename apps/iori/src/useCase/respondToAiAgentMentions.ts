@@ -39,6 +39,7 @@ import {
   mentionUserPrompt,
 } from './aiAgent/aiAgentBotPrompts.ts';
 import { createFollowupTools, type FollowupSchedulerDeps } from './aiAgent/followupScheduler.ts';
+import { type AgentMemoryDeps, loadAgentMemory } from './aiAgent/memoryTools.ts';
 import type { UseCase } from './useCase.ts';
 
 /** 1 回の実行で答えるトリガーの数。cron は 1 分ごとに動くので、少しずつ片付ける */
@@ -79,6 +80,7 @@ type ActorResolverById = Agg.Resolver<ActorId, Actor | undefined>;
 
 type Deps =
   & FollowupSchedulerDeps
+  & AgentMemoryDeps
   & Readonly<{
     pendingTriggersResolver: AiAgentBotPendingTriggersResolver;
     triggerClaimedStore: AiAgentBotTriggerClaimedStore;
@@ -172,6 +174,9 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
       postId: trigger.postId,
       limit: Math.min(MAX_BOT_REPLIES_PER_TRIGGER, MAX_BOT_REPLIES_PER_THREAD - botRepliesInThread),
     });
+    const memory = await loadAgentMemory(deps, {
+      author: { actorId: trigger.authorActorId, handle: handleOf(author) },
+    });
 
     const result = await agent({
       model: AI_AGENT_BOT_MODEL,
@@ -180,9 +185,11 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
         thread: formatPosts(thread.filter((post) => post.postId !== trigger.postId)),
         trigger: formatPost(triggerPost),
         author: handleOf(author),
+        memory: memory.section,
       }),
       tools: [
         ...createAgentTools(capabilities),
+        ...memory.tools,
         replyTool.tool,
         ...createFollowupTools(deps, { postId: trigger.postId, authorActorId: trigger.authorActorId, round: 1 }),
       ],
