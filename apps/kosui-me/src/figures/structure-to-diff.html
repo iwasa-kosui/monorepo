@@ -1,5 +1,5 @@
 <figure class="fig">
-<div class="fig-headline">業務上の判断の配置と PRD との照合</div>
+<div class="fig-headline">ビジネスロジックの配置と PRD との照合</div>
 <div class="fig-steps">
 <input type="radio" name="fig-sd-step" id="fig-sd-step-1" aria-label="ステップ 1 / 6" checked>
 <input type="radio" name="fig-sd-step" id="fig-sd-step-2" aria-label="ステップ 2 / 6">
@@ -25,7 +25,7 @@
 </div>
 <svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-sd-s1-title fig-sd-s1-desc">
 <title id="fig-sd-s1-title">コードの構造 ステップ 1</title>
-<desc id="fig-sd-s1-desc">左にPRDの3つの業務ルール、右にコードの4つのファイル（画面、ハンドラ、バッチ、リポジトリ）を並べた図です。各ファイルには、コードの行を表す横棒があり、業務上の判断を表す横棒は複数のファイルにあります。リポジトリの1本の横棒は灰色で、取得条件というラベルが付いています。</desc>
+<desc id="fig-sd-s1-desc">左にPRDの3つの業務ルール、右にコードの4つのファイル（画面、ハンドラ、バッチ、リポジトリ）を並べた図です。各ファイルには、コードの行を表す横棒があり、ビジネスロジックを表す横棒は複数のファイルにあります。リポジトリの1本の横棒は灰色で、取得条件というラベルが付いています。</desc>
 <rect class="fig-card" x="8" y="40" width="176" height="232" rx="12"></rect>
 <text class="fig-t fig-t-sm fig-b" x="20" y="62">PRD</text>
 <rect class="fig-card-soft" x="18" y="79" width="156" height="42" rx="8"></rect>
@@ -57,11 +57,11 @@
 <text class="fig-t fig-t-sm fig-end fig-b" x="542" y="251">リポジトリ</text>
 <text class="fig-t fig-t-sm fig-c-muted" x="340" y="264">取得条件</text>
 <rect class="fig-bar-agent" x="252" y="296" width="28" height="7" rx="3.5"></rect>
-<text class="fig-t fig-t-sm" x="290" y="304">業務上の判断</text>
-<rect class="fig-bar" x="402" y="296" width="28" height="7" rx="3.5"></rect>
-<text class="fig-t fig-t-sm" x="440" y="304">ほかのコード</text>
+<text class="fig-t fig-t-sm" x="290" y="304">ビジネスロジック</text>
+<rect class="fig-bar" x="418" y="296" width="28" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm" x="456" y="304">ほかのコード</text>
 </svg>
-<div class="fig-callout">業務上の判断が、画面、ハンドラ、リポジトリなどの複数のファイルに分散しています。</div>
+<div class="fig-callout">ビジネスロジックが、画面、ハンドラ、リポジトリなどの複数のファイルに分散しています。</div>
 </div>
 <div class="fig-step">
 <div class="fig-step-nav">
@@ -81,7 +81,7 @@
 </div>
 <svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-sd-s2-title fig-sd-s2-desc">
 <title id="fig-sd-s2-title">コードの構造 ステップ 2</title>
-<desc id="fig-sd-s2-desc">PRDの3つの業務ルールそれぞれから、コード側の業務上の判断を表す横棒へ線を引いた図です。線は、画面、ハンドラ、バッチ、リポジトリの複数のファイルにまたがります。</desc>
+<desc id="fig-sd-s2-desc">PRDの3つの業務ルールそれぞれから、コード側のビジネスロジックを表す横棒へ線を引いた図です。線は、画面、ハンドラ、バッチ、リポジトリの複数のファイルにまたがります。</desc>
 <rect class="fig-card" x="8" y="40" width="176" height="232" rx="12"></rect>
 <text class="fig-t fig-t-sm fig-b" x="20" y="62">PRD</text>
 <rect class="fig-card-soft" x="18" y="79" width="156" height="42" rx="8"></rect>
@@ -129,9 +129,9 @@
 <path class="fig-line-agent" d="M176 188L260 126.5"></path>
 <circle class="fig-fill-agent" cx="262" cy="126.5" r="2.5"></circle>
 <rect class="fig-bar-agent" x="252" y="296" width="28" height="7" rx="3.5"></rect>
-<text class="fig-t fig-t-sm" x="290" y="304">業務上の判断</text>
-<rect class="fig-bar" x="402" y="296" width="28" height="7" rx="3.5"></rect>
-<text class="fig-t fig-t-sm" x="440" y="304">ほかのコード</text>
+<text class="fig-t fig-t-sm" x="290" y="304">ビジネスロジック</text>
+<rect class="fig-bar" x="418" y="296" width="28" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm" x="456" y="304">ほかのコード</text>
 </svg>
 <div class="fig-callout">PRD の各項目に対応する箇所を見つけるには、すべてのファイルを読む必要があります。</div>
 </div>
@@ -153,7 +153,7 @@
 </div>
 <svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-sd-s3-title fig-sd-s3-desc">
 <title id="fig-sd-s3-title">コードの構造 ステップ 3</title>
-<desc id="fig-sd-s3-desc">リポジトリの取得条件の横棒を、破線の枠で囲んだ図です。吹き出しに、別の端末での再開に関する判断が、データの取得条件として記述されている、と書かれています。この横棒とPRDの間には、線がありません。</desc>
+<desc id="fig-sd-s3-desc">リポジトリの取得条件の横棒を、破線の枠で囲んだ図です。吹き出しに、別の端末での再開に関するロジックが、データの取得条件として記述されている、と書かれています。この横棒とPRDの間には、線がありません。</desc>
 <rect class="fig-card" x="8" y="40" width="176" height="232" rx="12"></rect>
 <text class="fig-t fig-t-sm fig-b" x="20" y="62">PRD</text>
 <rect class="fig-card-soft" x="18" y="79" width="156" height="42" rx="8"></rect>
@@ -193,10 +193,10 @@
 <rect class="fig-card-problem-dash" x="256" y="250" width="150" height="17" rx="4"></rect>
 <rect class="fig-card-problem" x="252" y="286" width="300" height="56" rx="12"></rect>
 <path class="fig-card-problem" d="M288 286L302 272L316 286Z"></path>
-<text class="fig-t fig-t-sm fig-b fig-c-problem" x="266" y="307">別の端末での再開に関する判断が、</text>
+<text class="fig-t fig-t-sm fig-b fig-c-problem" x="266" y="307">別の端末での再開に関するロジックが、</text>
 <text class="fig-t fig-t-sm fig-b fig-c-problem" x="266" y="326">データの取得条件として記述されている</text>
 </svg>
-<div class="fig-callout">別の端末で作業を再開する判断は、データの取得条件として記述されています。業務の用語で記述されていないため、照合の対象から漏れます。</div>
+<div class="fig-callout">別の端末で作業を再開するロジックは、データの取得条件として記述されています。業務の用語で記述されていないため、照合の対象から漏れます。</div>
 </div>
 <div class="fig-step">
 <div class="fig-step-nav">
@@ -279,7 +279,7 @@
 </div>
 <svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-sd-s5-title fig-sd-s5-desc">
 <title id="fig-sd-s5-title">コードの構造 ステップ 5</title>
-<desc id="fig-sd-s5-desc">ステップ4の配置のまま、リポジトリの札の中の取得条件の横棒が、問題色の破線の枠に囲まれ、取り消し線で薄く表示されています。そこから中央の札の4行目へ、業務上の判断を移す矢印が引かれています。中央の札には、別の端末で作業を再開する、の遷移が4行目に加わり、問題色の枠で強調されています。</desc>
+<desc id="fig-sd-s5-desc">ステップ4の配置のまま、リポジトリの札の中の取得条件の横棒が、問題色の破線の枠に囲まれ、取り消し線で薄く表示されています。そこから中央の札の4行目へ、ビジネスロジックを移す矢印が引かれています。中央の札には、別の端末で作業を再開する、の遷移が4行目に加わり、問題色の枠で強調されています。</desc>
 <g class="fig-dim">
 <rect class="fig-card-soft" x="8" y="6" width="544" height="30" rx="15"></rect>
 <text class="fig-t fig-t-sm fig-b" x="28" y="26">PRD</text>
@@ -330,10 +330,11 @@
 <path class="fig-line" d="M470 222.5H534"></path>
 <path class="fig-line-problem" d="M444 222H389V255H344"></path>
 <path class="fig-mk-problem" d="M336 255L344 259L344 251Z"></path>
-<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="389" y="276">業務上の</text>
-<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="389" y="293">判断を移す</text>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="389" y="276">ビジネス</text>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="389" y="293">ロジックを</text>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="389" y="310">移す</text>
 </svg>
-<div class="fig-callout">データの取得条件に埋もれていた『別の端末で作業を再開する』判断を、業務の遷移として中央に移します。業務上の判断が、入出力を持たない一覧に集約されます。</div>
+<div class="fig-callout">データの取得条件に埋もれていた『別の端末で作業を再開する』ロジックを、業務の遷移として中央に移します。ビジネスロジックが、入出力を持たない一覧に集約されます。</div>
 </div>
 <div class="fig-step">
 <div class="fig-step-nav">
