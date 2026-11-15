@@ -928,6 +928,20 @@ export const aiAgentBotFollowBacksTable = sqliteTable('ai_agent_bot_follow_backs
   attemptedAt: timestamp().notNull(),
 });
 
+/**
+ * AI エージェントの bot が、実行をまたいで覚えておくメモ。
+ * subjectActorId が null なら bot 自身についての記憶、そうでなければその相手についての記憶
+ */
+export const aiAgentBotMemoriesTable = sqliteTable('ai_agent_bot_memories', {
+  memoryId: text('memoryId').primaryKey(),
+  subjectActorId: text('subjectActorId'),
+  content: text('content').notNull(),
+  createdAt: timestamp().notNull(),
+  updatedAt: timestamp().notNull(),
+}, (table) => [
+  index('ai_agent_bot_memories_subject_actor_id_updated_at_idx').on(table.subjectActorId, table.updatedAt),
+]);
+
 export const schema = {
   usersTable,
   keysTable,
@@ -1010,4 +1024,5 @@ export const schema = {
   aiAgentBotTriggersTable,
   aiAgentBotFollowupsTable,
   aiAgentBotFollowBacksTable,
+  aiAgentBotMemoriesTable,
 } as const;
