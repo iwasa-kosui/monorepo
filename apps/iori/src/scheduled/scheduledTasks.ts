@@ -1,6 +1,12 @@
 import type { IoriWorkerEnv } from '../workerEnv.ts';
-import { postAiAgentMusingTask, respondToAiAgentMentionsTask } from './aiAgentBotTasks.ts';
-import { purgeBlueskyAccountSwitchTask, skipWhileBlueskyAccountSwitching } from './blueskyAccountSwitchTasks.ts';
+import {
+  followBackAiAgentFollowersTask,
+  postAiAgentMusingTask,
+  respondToAiAgentMentionsTask,
+  retireAiAgentBotAccountsTask,
+  runAiAgentFollowupsTask,
+} from './aiAgentBotTasks.ts';
+import { purgeBlueskyAccountSwitchTask } from './blueskyAccountSwitchTasks.ts';
 import { collectBlueskyChatPushTask } from './blueskyChatPushTasks.ts';
 import { retryBlueskyCrosspostsTask } from './blueskyCrosspostTasks.ts';
 import { collectBlueskyNotificationsTask, expireBlueskyNotificationReceiptsTask } from './blueskyNotificationTasks.ts';
@@ -34,20 +40,23 @@ export const scheduledTasks: ScheduledTaskTable = {
     syncOwnInterestSourcesTask,
     { ...embedOwnInterestSourcesTask, after: syncOwnInterestSourcesTask.name },
     pruneFederatedPostsTask,
-    skipWhileBlueskyAccountSwitching(retryBlueskyCrosspostsTask),
+    // アカウントを切り替えている途中の人のクロスポストは、再送の対象から外す
+    retryBlueskyCrosspostsTask,
     expireBlueskyTimelineTask,
     expireBlueskyNotificationReceiptsTask,
     postAiAgentMusingTask,
+    retireAiAgentBotAccountsTask,
   ],
   '* * * * *': [
-    skipWhileBlueskyAccountSwitching(collectBlueskyTimelineTask),
-    skipWhileBlueskyAccountSwitching({ ...collectBlueskyNotificationsTask, after: collectBlueskyTimelineTask.name }),
-    skipWhileBlueskyAccountSwitching({
-      ...collectBlueskyChatPushTask,
-      after: collectBlueskyNotificationsTask.name,
-    }),
+    // アカウントを切り替えている途中のユーザーは、それぞれのタスクの中で飛ばす
+    collectBlueskyTimelineTask,
+    { ...collectBlueskyNotificationsTask, after: collectBlueskyTimelineTask.name },
+    { ...collectBlueskyChatPushTask, after: collectBlueskyNotificationsTask.name },
     purgeBlueskyAccountSwitchTask,
     respondToAiAgentMentionsTask,
+    // メンションへの返信と同じ上限（24 時間の返信数）を数えるので、返信を終えてから動かす
+    { ...runAiAgentFollowupsTask, after: respondToAiAgentMentionsTask.name },
+    followBackAiAgentFollowersTask,
   ],
   '0 21 * * *': [syncKosuiInterestSourcesTask],
   '15 20 * * 1': [detectRadarVolumeTask],

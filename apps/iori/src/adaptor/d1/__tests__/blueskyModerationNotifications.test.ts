@@ -36,9 +36,10 @@ const setup = () => {
       text: 'hello',
     }),
   };
-  const moderate = (muted: number, blockUri: string | null) =>
-    fixture.sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
-      .run('did:plc:alice', muted, blockUri, 1);
+  const moderate = (muted: number, blockUri: string | null, userId: string = me.userId) =>
+    fixture.sqlite.prepare(
+      'INSERT INTO bluesky_moderated_actors(userId,did,muted,blockUri,updatedAt) VALUES (?,?,?,?,?)',
+    ).run(userId, 'did:plc:alice', muted, blockUri, 1);
   const listed = async () => {
     const result = await createD1NotificationsResolverByPage(fixture.db).resolve({
       recipientUserId: UserId.orThrow(me.userId),
@@ -98,5 +99,20 @@ describe('ミュートとブロックの通知の除外', () => {
 
     expect(await t.resolveById(t.ids.blueskyLike)).toBeUndefined();
     expect(await t.resolveById(t.ids.fediverseLike)).toBeDefined();
+  });
+
+  it('別のユーザーのミュート・ブロックでは、自分の通知を除かない', async () => {
+    const t = setup();
+    const other = t.seed.addLocalActor('other');
+    t.moderate(1, BLOCK, other.userId);
+
+    expect(await t.listed()).toEqual([
+      t.ids.blueskyMention,
+      t.ids.blueskyFollow,
+      t.ids.blueskyLike,
+      t.ids.fediverseLike,
+    ]);
+    expect(await t.unread()).toBe(4);
+    expect(await t.resolveById(t.ids.blueskyLike)).toBeDefined();
   });
 });

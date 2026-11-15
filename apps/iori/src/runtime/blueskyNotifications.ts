@@ -7,18 +7,17 @@ import { createD1BlueskyNotificationSyncStateResolver } from '../adaptor/d1/blue
 import { createD1PostIdsResolverByBlueskyUris } from '../adaptor/d1/blueskyNotification/postIdsResolverByBlueskyUris.ts';
 import { createD1Db, type IoriD1Db } from '../adaptor/d1/client.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
-import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createCloudflareWebPushSender } from '../adaptor/webPush/cloudflareWebPushSender.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import { Username } from '../domain/user/username.ts';
-import { DAILY_DIGEST_USERNAME } from '../scheduled/digestTasks.ts';
 import { CollectBlueskyNotificationsUseCase } from '../useCase/collectBlueskyNotifications.ts';
 import { ExpireBlueskyNotificationReceiptsUseCase } from '../useCase/expireBlueskyNotificationReceipts.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
+import type { BlueskyAccountConfig } from './blueskyCredential.ts';
 import { createTimelineClient, resolveBlueskyTimelineConfig } from './blueskyTimeline.ts';
 
 export const createCollectBlueskyNotificationsUseCase = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   deps: Readonly<{ db?: IoriD1Db; fetch?: typeof fetch; holdLoginAfterFailure?: boolean }> = {},
 ): CollectBlueskyNotificationsUseCase | undefined => {
   const config = resolveBlueskyTimelineConfig(env);
@@ -26,13 +25,12 @@ export const createCollectBlueskyNotificationsUseCase = (
   const db = deps.db ?? createD1Db(env.DB);
   const now = Instant.now;
   return CollectBlueskyNotificationsUseCase.create({
-    fetcher: createBlueskyNotificationFetcher({ client: createTimelineClient(config, db, deps) }),
-    ownerUsername: Username.parseOrThrow(DAILY_DIGEST_USERNAME),
-    userResolverByUsername: createD1UserResolverByUsername(db),
-    syncStateResolver: createD1BlueskyNotificationSyncStateResolver(db),
-    initialSyncCompletedStore: createD1BlueskyNotificationInitialSyncCompletedStore(db),
-    existingUrisResolver: createD1BlueskyNotificationExistingUrisResolver(db),
-    postIdsResolver: createD1PostIdsResolverByBlueskyUris(db),
+    fetcher: createBlueskyNotificationFetcher({ client: createTimelineClient(account, db, deps) }),
+    recipientUserId: account.userId,
+    syncStateResolver: createD1BlueskyNotificationSyncStateResolver(db, account.userId),
+    initialSyncCompletedStore: createD1BlueskyNotificationInitialSyncCompletedStore(db, account.userId),
+    existingUrisResolver: createD1BlueskyNotificationExistingUrisResolver(db, account.userId),
+    postIdsResolver: createD1PostIdsResolverByBlueskyUris(db, account.userId),
     createdStore: createD1BlueskyNotificationCreatedStore(db, { now }),
     pushSubscriptionsResolverByUserId: createD1PushSubscriptionsResolverByUserId(db),
     webPushSender: createCloudflareWebPushSender({

@@ -8,11 +8,9 @@ import {
   createD1BlueskyMuteSavedStore,
 } from '../adaptor/d1/blueskyModeration/blueskyModeratedActorsStore.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
-import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { BlockBlueskyActorUseCase } from '../useCase/blockBlueskyActor.ts';
 import { GetBlueskyModerationStateUseCase } from '../useCase/getBlueskyModerationState.ts';
-import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { MuteBlueskyActorUseCase } from '../useCase/muteBlueskyActor.ts';
 import { MuteBlueskyThreadUseCase } from '../useCase/muteBlueskyThread.ts';
 import { ReportBlueskyActorUseCase } from '../useCase/reportBlueskyActor.ts';
@@ -20,6 +18,7 @@ import { UnblockBlueskyActorUseCase } from '../useCase/unblockBlueskyActor.ts';
 import { UnmuteBlueskyActorUseCase } from '../useCase/unmuteBlueskyActor.ts';
 import { UnmuteBlueskyThreadUseCase } from '../useCase/unmuteBlueskyThread.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
+import type { BlueskyAccountConfig } from './blueskyCredential.ts';
 import { createTimelineClient, resolveBlueskyTimelineConfig } from './blueskyTimeline.ts';
 
 export type BlueskyModerationUseCases = Readonly<{
@@ -35,47 +34,55 @@ export type BlueskyModerationUseCases = Readonly<{
 
 export type BlueskyModerationRuntimePorts = Readonly<{
   blueskyModeration: BlueskyModerationUseCases | undefined;
-  isDigestOwner: IsDigestOwner;
 }>;
 
 export const createBlueskyModerationUseCases = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch }> = {},
 ): BlueskyModerationUseCases | undefined => {
   const config = resolveBlueskyTimelineConfig(env);
   if (config === undefined) return undefined;
-  const client = createTimelineClient(config, db, deps);
+  const client = createTimelineClient(account, db, deps);
   const reader = createBlueskyModerationReader({ client });
-  const resolver = createD1BlueskyModeratedActorsResolver(db);
+  const resolver = createD1BlueskyModeratedActorsResolver(db, account.userId);
   const threadRootResolver = createBlueskyThreadRootResolver({ client });
   const now = Instant.now;
   return {
     getState: GetBlueskyModerationStateUseCase.create({
       reader,
       resolver,
-      muteSavedStore: createD1BlueskyMuteSavedStore(db),
-      muteDeletedStore: createD1BlueskyMuteDeletedStore(db),
-      blockSavedStore: createD1BlueskyBlockSavedStore(db),
-      blockDeletedStore: createD1BlueskyBlockDeletedStore(db),
+      muteSavedStore: createD1BlueskyMuteSavedStore(db, account.userId),
+      muteDeletedStore: createD1BlueskyMuteDeletedStore(db, account.userId),
+      blockSavedStore: createD1BlueskyBlockSavedStore(db, account.userId),
+      blockDeletedStore: createD1BlueskyBlockDeletedStore(db, account.userId),
       now,
     }),
-    mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
-    unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
+    mute: MuteBlueskyActorUseCase.create({
+      client,
+      savedStore: createD1BlueskyMuteSavedStore(db, account.userId),
+      now,
+    }),
+    unmute: UnmuteBlueskyActorUseCase.create({
+      client,
+      deletedStore: createD1BlueskyMuteDeletedStore(db, account.userId),
+      now,
+    }),
     muteThread: MuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
     unmuteThread: UnmuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
     block: BlockBlueskyActorUseCase.create({
       client,
       reader,
       resolver,
-      savedStore: createD1BlueskyBlockSavedStore(db),
+      savedStore: createD1BlueskyBlockSavedStore(db, account.userId),
       now,
     }),
     unblock: UnblockBlueskyActorUseCase.create({
       client,
       reader,
       resolver,
-      deletedStore: createD1BlueskyBlockDeletedStore(db),
+      deletedStore: createD1BlueskyBlockDeletedStore(db, account.userId),
       now,
     }),
     report: ReportBlueskyActorUseCase.create({ client }),
@@ -84,9 +91,9 @@ export const createBlueskyModerationUseCases = (
 
 export const createBlueskyModerationRuntimePorts = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch }> = {},
 ): BlueskyModerationRuntimePorts => ({
-  blueskyModeration: createBlueskyModerationUseCases(env, db, deps),
-  isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
+  blueskyModeration: createBlueskyModerationUseCases(env, account, db, deps),
 });

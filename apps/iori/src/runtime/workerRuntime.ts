@@ -281,11 +281,15 @@ import { VerifyAccessTokenUseCase } from '../useCase/verifyAccessToken.ts';
 import { VotePollUseCase } from '../useCase/votePoll.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { createBlueskyBookmarkRuntimePorts } from './blueskyBookmark.ts';
-import { createBlueskyCredentialRuntimePorts } from './blueskyCredential.ts';
+import {
+  createBlueskyAccounts,
+  createBlueskyCredentialRuntimePorts,
+  resolveBlueskyRuntimeConfig,
+} from './blueskyCredential.ts';
 import { createBlueskyCrosspostUseCases, resolveBlueskyCrosspostConfig } from './blueskyCrosspost.ts';
 import { createBlueskyModerationRuntimePorts } from './blueskyModeration.ts';
 import { createBlueskyProfileRuntimePorts } from './blueskyProfile.ts';
-import { createBlueskyTimelineRuntimePorts } from './blueskyTimeline.ts';
+import { createBlueskyTimelineRuntimePorts, resolveBlueskyTimelineConfig } from './blueskyTimeline.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
 import { createWorkerBlockActions, createWorkerFollowActions } from './workerCoreUseCases.ts';
 import { createWorkerReportAction } from './workerReportActions.ts';
@@ -302,6 +306,10 @@ export const createWorkerRuntimePorts = async (
   const federationRuntime = await createCloudflareFederationRuntime(env, waitUntil);
   const blueskyCrosspost = createBlueskyCrosspostUseCases(env, waitUntil);
   const db = createD1Db(env.DB);
+  const blueskyAccounts = createBlueskyAccounts(
+    resolveBlueskyRuntimeConfig(env) ?? { envCredentials: undefined, credentialKey: undefined },
+    db,
+  );
   const workersAi = env.AI as unknown as WorkersAiRunner | undefined;
   const textGenerator = workersAi === undefined ? undefined : createWorkersAiTextGenerator(workersAi);
   const sessionResolver = createD1SessionResolver(db);
@@ -636,11 +644,30 @@ export const createWorkerRuntimePorts = async (
         userPreferencesSavedStore: createD1UserPreferencesSavedStore(db),
       }),
     },
-    blueskyTimeline: createBlueskyTimelineRuntimePorts(env, db, { deletePost: deletePostUseCase }),
-    blueskyModeration: createBlueskyModerationRuntimePorts(env, db),
-    blueskyProfile: createBlueskyProfileRuntimePorts(env, db),
-    blueskyBookmark: createBlueskyBookmarkRuntimePorts(env, db),
-    blueskyCredential: createBlueskyCredentialRuntimePorts(env, db, { argon2idDerive: lazyWorkerArgon2idDerive }),
+    blueskyTimeline: {
+      blueskyTimelineEnabled: resolveBlueskyTimelineConfig(env) !== undefined,
+      forUser: async (userId) => ({
+        ...createBlueskyTimelineRuntimePorts(env, await blueskyAccounts.configFor(userId), db, {
+          deletePost: deletePostUseCase,
+        }),
+        linked: await blueskyAccounts.isLinked(userId),
+      }),
+    },
+    blueskyModeration: {
+      forUser: async (userId) => createBlueskyModerationRuntimePorts(env, await blueskyAccounts.configFor(userId), db),
+    },
+    blueskyProfile: {
+      forUser: async (userId) => createBlueskyProfileRuntimePorts(env, await blueskyAccounts.configFor(userId), db),
+    },
+    blueskyBookmark: {
+      forUser: async (userId) => createBlueskyBookmarkRuntimePorts(env, await blueskyAccounts.configFor(userId), db),
+    },
+    blueskyCredential: {
+      forUser: async (userId) =>
+        createBlueskyCredentialRuntimePorts(await blueskyAccounts.configFor(userId), db, {
+          argon2idDerive: lazyWorkerArgon2idDerive,
+        }),
+    },
     digest: {
       digestResolverByUserIdAndDigestDate,
       digestResolverByUserId: createD1DigestResolverByUserId(db),
@@ -717,7 +744,6 @@ export const createWorkerRuntimePorts = async (
       }),
     },
     blueskyCrosspostStatus: {
-      userResolverByUsername: createD1UserResolverByUsername(db),
       blueskyCrosspostStatusReportResolver: createD1BlueskyCrosspostStatusReportResolver(db),
       blueskyCrosspostEnabled: resolveBlueskyCrosspostConfig(env) !== undefined,
     },

@@ -25,9 +25,7 @@ import {
 import { NotificationId } from '../domain/notification/notificationId.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
-import type { UserResolverByUsername } from '../domain/user/user.ts';
 import type { UserId } from '../domain/user/userId.ts';
-import type { Username } from '../domain/user/username.ts';
 import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import type { BlueskyNotificationFetcher } from '../ports/blueskyNotificationFetcher.ts';
 import type { UseCase } from './useCase.ts';
@@ -45,8 +43,8 @@ export type CollectBlueskyNotificationsUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
   fetcher: BlueskyNotificationFetcher;
-  ownerUsername: Username;
-  userResolverByUsername: UserResolverByUsername;
+  /** Bluesky のアカウントの持ち主。通知はこのユーザーに届ける */
+  recipientUserId: UserId;
   syncStateResolver: BlueskyNotificationSyncStateResolver;
   initialSyncCompletedStore: BlueskyNotificationInitialSyncCompletedStore;
   existingUrisResolver: BlueskyNotificationExistingUrisResolver;
@@ -56,8 +54,6 @@ type Deps = Readonly<{
   webPushSender: WebPushSender;
   now: () => Instant;
 }>;
-
-const nothingCollected: Ok = { pages: 0, fetched: 0, saved: 0, dropped: 0, pushed: 0 };
 
 const uniqueByUri = (items: readonly BlueskyFetchedNotification[]): BlueskyFetchedNotification[] => {
   const seen = new Set<string>();
@@ -168,8 +164,7 @@ const pushPayloadOf = (item: BlueskyFetchedNotification): PushPayload => {
 const create = (
   {
     fetcher,
-    ownerUsername,
-    userResolverByUsername,
+    recipientUserId,
     syncStateResolver,
     initialSyncCompletedStore,
     existingUrisResolver,
@@ -218,8 +213,6 @@ const create = (
 
   const run = async (): RA<Ok, Err> => {
     const startedAt = now();
-    const owner = Result.unsafeUnwrap(await userResolverByUsername.resolve(ownerUsername));
-    if (owner === undefined) return RA.ok(nothingCollected);
     const isFirstRun = Result.unsafeUnwrap(await syncStateResolver.resolve()) === undefined;
     const retentionStart = Instant.addDuration(startedAt, -BLUESKY_NOTIFICATION_RETENTION_DAYS * DAY_MS);
 
@@ -258,7 +251,7 @@ const create = (
     const createdAts = createdAtsOf(added, startedAt, isFirstRun);
     const events: BlueskyNotificationCreated[] = added.map((item, index) =>
       Notification.createBlueskyNotification(
-        buildBlueskyNotificationFromFetched(item, owner.id, postIds),
+        buildBlueskyNotificationFromFetched(item, recipientUserId, postIds),
         createdAts[index]!,
       )
     );
@@ -270,7 +263,7 @@ const create = (
     const freshStart = Instant.addDuration(startedAt, -BLUESKY_NOTIFICATION_PUSH_FRESH_WINDOW_MS);
     const pushed = isFirstRun
       ? 0
-      : await push(owner.id, added.filter((item) => item.indexedAt >= freshStart).reverse());
+      : await push(recipientUserId, added.filter((item) => item.indexedAt >= freshStart).reverse());
     return RA.ok({ pages, fetched: recent.length, saved: added.length, dropped, pushed });
   };
 

@@ -30,10 +30,11 @@ const setup = () => {
   const store = createD1BlueskyNotificationCreatedStore(fixture.db, { now: () => NOW });
   const eventAt = (notification: BlueskyNotification, at: number) =>
     Notification.createBlueskyNotification(notification, Instant.orThrow(at));
-  const like = (n: number): BlueskyNotification => ({
+  const userId = UserId.orThrow(me.userId);
+  const like = (n: number, recipientUserId: UserId = userId): BlueskyNotification => ({
     type: 'blueskyLike',
     notificationId: NotificationId.generate(),
-    recipientUserId: UserId.orThrow(me.userId),
+    recipientUserId,
     isRead: false,
     blueskyUri: `at://did:plc:alice/app.bsky.feed.like/${n}`,
     author: AUTHOR,
@@ -42,7 +43,7 @@ const setup = () => {
   });
   const count = (table: string) =>
     (fixture.sqlite.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
-  return { ...fixture, seed, me, store, eventAt, like, count };
+  return { ...fixture, seed, me, userId, store, eventAt, like, count };
 };
 
 describe('createD1BlueskyNotificationCreatedStore', () => {
@@ -152,7 +153,11 @@ describe('createD1BlueskyNotificationCreatedStore', () => {
     expect(t.count('notification_bluesky')).toBe(45);
     expect(t.count('bluesky_notification_receipts')).toBe(45);
     expect(t.count('domain_events')).toBe(45);
-    expect(Math.max(...t.queries.map((query) => query.params.length))).toBeLessThanOrEqual(10);
+    // 1 件ずつの文に分けているので、件数が増えても 1 文の束縛の数は増えない。
+    const maxParams = Math.max(...t.queries.map((query) => query.params.length));
+    t.queries.length = 0;
+    await t.store.store(t.eventAt(t.like(100), 9_000));
+    expect(maxParams).toBe(Math.max(...t.queries.map((query) => query.params.length)));
   });
 
   it('同じ uri を 2 回保存すると一意制約で失敗し、そのバッチは 1 件も残らない', async () => {
@@ -164,13 +169,26 @@ describe('createD1BlueskyNotificationCreatedStore', () => {
     expect(t.count('notifications')).toBe(1);
     expect(t.count('bluesky_notification_receipts')).toBe(1);
   });
+
+  it('同じ uri でも受け取り手が違えば、それぞれの通知と受信の記録として保存する', async () => {
+    const t = setup();
+    const other = UserId.orThrow(t.seed.addLocalActor('other').userId);
+
+    await t.store.store(t.eventAt(t.like(1), 1_000), t.eventAt(t.like(1, other), 1_000));
+
+    expect(
+      t.sqlite.prepare('SELECT recipientUserId FROM notification_bluesky ORDER BY recipientUserId').all(),
+    ).toEqual([t.userId, other].sort().map((recipientUserId) => ({ recipientUserId })));
+    expect(t.sqlite.prepare('SELECT userId FROM bluesky_notification_receipts ORDER BY userId').all())
+      .toEqual([t.userId, other].sort().map((userId) => ({ userId })));
+  });
 });
 
 describe('Bluesky の通知のリゾルバーと期限切れの削除', () => {
   it('初回の取り込みの完了時刻は、書き込むまで未設定で、最初の値だけが残る', async () => {
     const t = setup();
-    const resolver = createD1BlueskyNotificationSyncStateResolver(t.db);
-    const store = createD1BlueskyNotificationInitialSyncCompletedStore(t.db);
+    const resolver = createD1BlueskyNotificationSyncStateResolver(t.db, t.userId);
+    const store = createD1BlueskyNotificationInitialSyncCompletedStore(t.db, t.userId);
 
     const before = await resolver.resolve();
     await store.store(Instant.orThrow(1_000));
@@ -181,33 +199,62 @@ describe('Bluesky の通知のリゾルバーと期限切れの削除', () => {
     expect(t.count('bluesky_notification_sync_state')).toBe(1);
   });
 
-  it('既存の uri を、250 件を 1 つの束縛で問い合わせて返す', async () => {
+  it('初回の取り込みの完了はユーザーごとで、別のユーザーが済ませても自分は未完了のまま', async () => {
+    const t = setup();
+    const other = UserId.orThrow(t.seed.addLocalActor('other').userId);
+
+    await createD1BlueskyNotificationInitialSyncCompletedStore(t.db, other).store(Instant.orThrow(1_000));
+
+    expect((await createD1BlueskyNotificationSyncStateResolver(t.db, t.userId).resolve()).val).toBeUndefined();
+    await createD1BlueskyNotificationInitialSyncCompletedStore(t.db, t.userId).store(Instant.orThrow(2_000));
+    expect((await createD1BlueskyNotificationSyncStateResolver(t.db, t.userId).resolve()).val).toEqual({
+      initialSyncCompletedAt: 2_000,
+    });
+  });
+
+  it('既存の uri を、250 件を 1 つの束縛にまとめて問い合わせて返す', async () => {
     const t = setup();
     await t.store.store(t.eventAt(t.like(1), 1_000), t.eventAt(t.like(2), 1_001));
     const uris = Array.from({ length: 250 }, (_, index) => `at://did:plc:alice/app.bsky.feed.like/${index}`);
     t.queries.length = 0;
 
-    const existing = await createD1BlueskyNotificationExistingUrisResolver(t.db).resolve(uris);
+    const existing = await createD1BlueskyNotificationExistingUrisResolver(t.db, t.userId).resolve(uris);
 
     expect([...(existing.val ?? [])].sort()).toEqual([
       'at://did:plc:alice/app.bsky.feed.like/1',
       'at://did:plc:alice/app.bsky.feed.like/2',
     ]);
-    expect(t.queries.map((query) => query.params.length)).toEqual([1]);
-    expect((await createD1BlueskyNotificationExistingUrisResolver(t.db).resolve([])).val).toEqual([]);
+    // userId と、uri をまとめた JSON の 2 つ。
+    expect(t.queries.map((query) => query.params.length)).toEqual([2]);
+    expect((await createD1BlueskyNotificationExistingUrisResolver(t.db, t.userId).resolve([])).val).toEqual([]);
+  });
+
+  it('既存の uri は、受け取り手のユーザーが受信したものだけを返す', async () => {
+    const t = setup();
+    const other = UserId.orThrow(t.seed.addLocalActor('other').userId);
+    await t.store.store(t.eventAt(t.like(1, other), 1_000));
+
+    const existing = await createD1BlueskyNotificationExistingUrisResolver(t.db, t.userId).resolve([
+      'at://did:plc:alice/app.bsky.feed.like/1',
+    ]);
+
+    expect(existing.val).toEqual([]);
   });
 
   it('送信済みの crosspost だけを uri から PostId に引く', async () => {
     const t = setup();
     const insert = t.sqlite.prepare(
-      'INSERT INTO bluesky_crossposts(postId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+      'INSERT INTO bluesky_crossposts(postId,userId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)',
     );
+    const other = t.seed.addLocalActor('other').userId;
     const sent = t.seed.uuid();
-    insert.run(sent, 'sent', 'at://did:plc:me/app.bsky.feed.post/a', 1, 1, 1);
-    insert.run(t.seed.uuid(), 'failed', 'at://did:plc:me/app.bsky.feed.post/b', 1, 1, 1);
-    insert.run(t.seed.uuid(), 'sent', null, 1, 1, 1);
-    const resolver = createD1PostIdsResolverByBlueskyUris(t.db);
+    insert.run(sent, t.userId, 'sent', 'at://did:plc:me/app.bsky.feed.post/a', 1, 1, 1);
+    insert.run(t.seed.uuid(), t.userId, 'failed', 'at://did:plc:me/app.bsky.feed.post/b', 1, 1, 1);
+    insert.run(t.seed.uuid(), t.userId, 'sent', null, 1, 1, 1);
+    insert.run(t.seed.uuid(), other, 'sent', 'at://did:plc:me/app.bsky.feed.post/c', 1, 1, 1);
+    const resolver = createD1PostIdsResolverByBlueskyUris(t.db, t.userId);
 
+    // c は別のユーザーのクロスポストなので、自分の投稿として引かない。
     const found = await resolver.resolve([
       'at://did:plc:me/app.bsky.feed.post/a',
       'at://did:plc:me/app.bsky.feed.post/b',

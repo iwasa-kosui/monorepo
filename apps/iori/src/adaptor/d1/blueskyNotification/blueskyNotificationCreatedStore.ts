@@ -36,6 +36,7 @@ const reasonOf = (notification: BlueskyNotification): string => {
 
 const subtypeRow = (notification: BlueskyNotification) => ({
   notificationId: notification.notificationId,
+  recipientUserId: notification.recipientUserId,
   blueskyUri: notification.blueskyUri,
   reason: reasonOf(notification),
   authorDid: notification.author.did,
@@ -61,6 +62,7 @@ export const createD1BlueskyNotificationCreatedStore = (
         db.insert(notificationsTable).values(notificationRow(event.aggregateState, event.occurredAt)),
         db.insert(notificationBlueskyTable).values(subtypeRow(event.aggregateState)),
         db.insert(blueskyNotificationReceiptsTable).values({
+          userId: event.aggregateState.recipientUserId,
           uri: event.aggregateState.blueskyUri,
           indexedAt: new Date(event.occurredAt),
           receivedAt,

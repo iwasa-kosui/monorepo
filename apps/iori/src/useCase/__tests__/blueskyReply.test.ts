@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.ts';
 import { createD1BlueskyLikeTargetResolver } from '../../adaptor/d1/blueskyTimeline/blueskyLikeTargetResolver.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { UserId } from '../../domain/user/userId.ts';
 import type { BlueskyClient, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import { ReplyToBlueskyPostUseCase } from '../replyToBlueskyPost.ts';
+
+const USER_ID = UserId.orThrow('00000000-0000-4000-8000-0000000000a1');
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 12, 3));
 const TOP = 'at://did:plc:a/app.bsky.feed.post/top';
@@ -18,12 +21,39 @@ const setup = (posts: Record<string, unknown> = {
   [NESTED]: { uri: NESTED, cid: 'bafynested-fresh', record: { reply: { root: ROOT, parent: ROOT } } },
 }) => {
   const { db, sqlite } = createSqliteD1Fixture();
+  sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'alice');
   const insertItem = sqlite.prepare(
-    'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
   );
-  insertItem.run(TOP, TOP, 'bafytop-stale', 'did:plc:a', 'alice.bsky.social', 't', '[]', null, 1, 1, 1);
-  insertItem.run(REPOST, TOP, 'bafytop-stale', 'did:plc:a', 'alice.bsky.social', 't', '[]', 'did:plc:b', 1, 1, 1);
-  insertItem.run(NESTED, NESTED, 'bafynested-stale', 'did:plc:a', 'alice.bsky.social', 't', '[]', null, 1, 1, 1);
+  insertItem.run(USER_ID, TOP, TOP, 'bafytop-stale', 'did:plc:a', 'alice.bsky.social', 't', '[]', null, 1, 1, 1);
+  insertItem.run(
+    USER_ID,
+    REPOST,
+    TOP,
+    'bafytop-stale',
+    'did:plc:a',
+    'alice.bsky.social',
+    't',
+    '[]',
+    'did:plc:b',
+    1,
+    1,
+    1,
+  );
+  insertItem.run(
+    USER_ID,
+    NESTED,
+    NESTED,
+    'bafynested-stale',
+    'did:plc:a',
+    'alice.bsky.social',
+    't',
+    '[]',
+    null,
+    1,
+    1,
+    1,
+  );
   const createRecord = vi.fn<BlueskyClient['createRecord']>(async (_record, rkey) =>
     RA.ok({ uri: `at://did:plc:me/app.bsky.feed.post/${rkey}`, cid: 'bafynew', rkey })
   );
@@ -35,7 +65,7 @@ const setup = (posts: Record<string, unknown> = {
   const reply = ReplyToBlueskyPostUseCase.create({
     client: { createRecord, uploadBlob },
     query,
-    targetResolver: createD1BlueskyLikeTargetResolver(db),
+    targetResolver: createD1BlueskyLikeTargetResolver(db, USER_ID),
     now: () => NOW,
   });
   const record = () => createRecord.mock.calls[0]![0];

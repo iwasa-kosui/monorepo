@@ -3,12 +3,12 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Instant } from '../../../domain/instant/instant.ts';
+import type { UserId } from '../../../domain/user/userId.ts';
 import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../../ports/blueskyClient.ts';
 import type { BlueskyModerationReader } from '../../../ports/blueskyModerationReader.ts';
 import type { BlueskyModerationUseCases } from '../../../runtime/blueskyModeration.ts';
 import { BlockBlueskyActorUseCase } from '../../../useCase/blockBlueskyActor.ts';
 import { GetBlueskyModerationStateUseCase } from '../../../useCase/getBlueskyModerationState.ts';
-import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
 import { MuteBlueskyActorUseCase } from '../../../useCase/muteBlueskyActor.ts';
 import { MuteBlueskyThreadUseCase } from '../../../useCase/muteBlueskyThread.ts';
 import { ReportBlueskyActorUseCase } from '../../../useCase/reportBlueskyActor.ts';
@@ -25,7 +25,6 @@ import {
   createD1BlueskyMuteDeletedStore,
   createD1BlueskyMuteSavedStore,
 } from '../../d1/blueskyModeration/blueskyModeratedActorsStore.ts';
-import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerIoriBlueskyModerationRouter } from '../workerIoriBlueskyModerationRouter.ts';
 import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
@@ -52,7 +51,7 @@ afterEach(() => {
 });
 
 const setup = async (
-  options: Readonly<{ scope?: string; owner?: boolean; enabled?: boolean; blockUri?: string | null }> = {},
+  options: Readonly<{ scope?: string; enabled?: boolean; blockUri?: string | null }> = {},
 ) => {
   const harness = createOAuthHarness();
   const fixture = createSqliteD1Fixture();
@@ -77,37 +76,43 @@ const setup = async (
     hasBlockRecord: vi.fn<BlueskyModerationReader['hasBlockRecord']>(async () => RA.ok(true)),
   };
   const { db, sqlite } = fixture;
-  const resolver = createD1BlueskyModeratedActorsResolver(db);
   const now = Instant.now;
-  const useCases: BlueskyModerationUseCases = {
-    getState: GetBlueskyModerationStateUseCase.create({
-      reader,
-      resolver,
-      muteSavedStore: createD1BlueskyMuteSavedStore(db),
-      muteDeletedStore: createD1BlueskyMuteDeletedStore(db),
-      blockSavedStore: createD1BlueskyBlockSavedStore(db),
-      blockDeletedStore: createD1BlueskyBlockDeletedStore(db),
-      now,
-    }),
-    mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db), now }),
-    unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db), now }),
-    muteThread: MuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
-    unmuteThread: UnmuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
-    block: BlockBlueskyActorUseCase.create({
-      client,
-      reader,
-      resolver,
-      savedStore: createD1BlueskyBlockSavedStore(db),
-      now,
-    }),
-    unblock: UnblockBlueskyActorUseCase.create({
-      client,
-      reader,
-      resolver,
-      deletedStore: createD1BlueskyBlockDeletedStore(db),
-      now,
-    }),
-    report: ReportBlueskyActorUseCase.create({ client }),
+  const useCasesFor = (userId: UserId): BlueskyModerationUseCases => {
+    const resolver = createD1BlueskyModeratedActorsResolver(db, userId);
+    return {
+      getState: GetBlueskyModerationStateUseCase.create({
+        reader,
+        resolver,
+        muteSavedStore: createD1BlueskyMuteSavedStore(db, userId),
+        muteDeletedStore: createD1BlueskyMuteDeletedStore(db, userId),
+        blockSavedStore: createD1BlueskyBlockSavedStore(db, userId),
+        blockDeletedStore: createD1BlueskyBlockDeletedStore(db, userId),
+        now,
+      }),
+      mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db, userId), now }),
+      unmute: UnmuteBlueskyActorUseCase.create({
+        client,
+        deletedStore: createD1BlueskyMuteDeletedStore(db, userId),
+        now,
+      }),
+      muteThread: MuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
+      unmuteThread: UnmuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
+      block: BlockBlueskyActorUseCase.create({
+        client,
+        reader,
+        resolver,
+        savedStore: createD1BlueskyBlockSavedStore(db, userId),
+        now,
+      }),
+      unblock: UnblockBlueskyActorUseCase.create({
+        client,
+        reader,
+        resolver,
+        deletedStore: createD1BlueskyBlockDeletedStore(db, userId),
+        now,
+      }),
+      report: ReportBlueskyActorUseCase.create({ client }),
+    };
   };
   const app = new Hono().route(
     '/api',
@@ -116,18 +121,21 @@ const setup = async (
         verifyAccessTokenUseCase: harness.memory.useCases.verifyAccessTokenUseCase,
         sessionResolver: harness.memory.sessionResolver as never,
       }),
-      blueskyModeration: options.enabled === false ? undefined : useCases,
-      isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
+      forUser: async (userId) => ({
+        blueskyModeration: options.enabled === false ? undefined : useCasesFor(userId),
+      }),
     }),
   );
-  const issued = await harness.issueUserToken(options.scope ?? 'read:statuses write:mutes write:blocks write:reports');
+  const scope = options.scope ?? 'read:statuses write:mutes write:blocks write:reports';
+  const issued = await harness.issueUserToken(scope);
   const seed = createMastodonSeed(fixture);
-  if (options.owner === false) {
-    seed.addLocalActor('kosui');
-    seed.addLocalActor('alice', issued.userId);
-  } else {
-    seed.addLocalActor('kosui', issued.userId);
-  }
+  seed.addLocalActor('kosui', issued.userId);
+  /** 別のユーザーでログインする */
+  const anotherUser = async () => {
+    const other = await harness.issueUserToken(scope);
+    seed.addLocalActor('alice', other.userId);
+    return { userId: other.userId, bearer: { Authorization: `Bearer ${other.token}` } };
+  };
   const bearer = { Authorization: `Bearer ${issued.token}` };
   const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = bearer) =>
     app.request(`${ORIGIN}${path}`, {
@@ -136,12 +144,17 @@ const setup = async (
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   const rows = () => sqlite.prepare('SELECT did, muted, blockUri FROM bluesky_moderated_actors').all();
+  const rowsWithUser = () =>
+    sqlite.prepare('SELECT userId, did, muted FROM bluesky_moderated_actors ORDER BY userId').all();
   return {
     send,
     client,
     query,
     reader,
     rows,
+    rowsWithUser,
+    anotherUser,
+    userId: issued.userId,
     bearer,
     cookie: { Cookie: `sessionId=${issued.sessionId}`, Origin: ORIGIN },
     evilCookie: { Cookie: `sessionId=${issued.sessionId}`, Origin: 'https://evil.example' },
@@ -179,18 +192,18 @@ describe('/api/iori/v1/bluesky の共通のガード', () => {
     noCalls(t);
   });
 
-  it.each(writes)(
-    '%s %s は所有者でない利用者を 403 にし、Bluesky を呼ばず D1 にも書かない',
-    async (method, path, body) => {
-      const t = await setup({ owner: false });
+  it('ミュートはログイン中のユーザーのものとして保存し、別のユーザーの解除はそのユーザーの行だけを変える', async () => {
+    const t = await setup();
+    const bob = await t.anotherUser();
 
-      const response = await t.send(method, path, body);
+    expect((await t.send('POST', MUTES, { did: DID })).status).toBe(200);
+    expect((await t.send('POST', MUTES, { did: DID }, bob.bearer)).status).toBe(200);
+    expect((await t.send('DELETE', `${MUTES}?did=${DID}`, undefined, bob.bearer)).status).toBe(200);
 
-      expect(response.status).toBe(403);
-      expect(await response.json()).toEqual({ error: 'Forbidden' });
-      noCalls(t);
-    },
-  );
+    const rows = t.rowsWithUser() as Array<{ userId: string; did: string; muted: number }>;
+    expect(rows.find((row) => row.userId === t.userId)).toMatchObject({ did: DID, muted: 1 });
+    expect(rows.find((row) => row.userId === bob.userId)).toMatchObject({ did: DID, muted: 0 });
+  });
 
   it.each(writes.filter(([, path]) => !path.startsWith(THREAD_MUTES)))(
     '%s %s は did が did: で始まらない、または無いとき 400 にする',
@@ -242,12 +255,10 @@ describe('GET /api/iori/v1/bluesky/moderation/:did', () => {
     expect((await writeOnly.send('GET', MODERATION)).status).toBe(403);
   });
 
-  it('所有者でないと 403、無効だと 409、did が不正だと 400 にする', async () => {
-    const nonOwner = await setup({ owner: false });
+  it('無効だと 409、did が不正だと 400 にする', async () => {
     const disabled = await setup({ enabled: false });
     const t = await setup();
 
-    expect((await nonOwner.send('GET', MODERATION)).status).toBe(403);
     expect((await disabled.send('GET', MODERATION)).status).toBe(409);
     expect((await t.send('GET', '/api/iori/v1/bluesky/moderation/alice.bsky.social')).status).toBe(400);
     expect(t.reader.resolveViewerState).not.toHaveBeenCalled();

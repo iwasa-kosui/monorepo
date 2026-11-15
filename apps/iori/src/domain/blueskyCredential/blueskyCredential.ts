@@ -5,6 +5,7 @@ import { Schema } from '../../helper/schema.ts';
 import type { BlueskyAccountSwitchInProgress } from '../blueskyAccountSwitch/blueskyAccountSwitch.ts';
 import type { BlueskySession } from '../blueskyCrosspost/blueskyCrosspost.ts';
 import { Instant } from '../instant/instant.ts';
+import type { UserId } from '../user/userId.ts';
 
 export const BLUESKY_CREDENTIAL_KEY_VERSION = 1;
 export const blueskyCredentialAad = (did: string): string => `bluesky_credentials:default:v1:${did}`;
@@ -27,6 +28,22 @@ export const BlueskyStoredCredential = Schema.create(blueskyStoredCredentialZodT
 export type BlueskyStoredCredentialResolver = Readonly<{
   resolve: () => RA<BlueskyStoredCredential | undefined, never>;
 }>;
+/** その DID のアカウントをつないでいるユーザー。1 つのアカウントは 1 人のユーザーにしかつながない */
+export type BlueskyCredentialUserIdResolverByDid = Readonly<{
+  resolve: (did: string) => RA<UserId | undefined, never>;
+}>;
+
+export type BlueskyAccountLinkedElsewhere = Readonly<{
+  type: 'BlueskyAccountLinkedElsewhere';
+  message: string;
+}>;
+export const BlueskyAccountLinkedElsewhere = {
+  create: (): BlueskyAccountLinkedElsewhere => ({
+    type: 'BlueskyAccountLinkedElsewhere',
+    message: 'The Bluesky account is linked to another user.',
+  }),
+} as const;
+
 export type BlueskyStoredCredentialSavedStore = Readonly<{
   save: (credential: BlueskyStoredCredential) => RA<void, never>;
 }>;

@@ -1,12 +1,36 @@
 import type { RequestContext } from '@fedify/fedify';
-import { Result } from '@iwasa-kosui/result';
+import { Delete, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { RA, Result } from '@iwasa-kosui/result';
 
+import {
+  createBlueskyPublicTrendPostsResolver,
+  createBlueskyPublicTrendsResolver,
+} from '../adaptor/bluesky/blueskyPublicTopicsResolver.ts';
 import { createD1LocalActorCreatedStore } from '../adaptor/d1/actor/localActorCreatedStore.ts';
 import { createD1LocalActorProfileUpdatedStore } from '../adaptor/d1/actor/localActorProfileUpdatedStore.ts';
+import {
+  createD1AiAgentBotDueFollowupsResolver,
+  createD1AiAgentBotPendingFollowupsCountResolver,
+} from '../adaptor/d1/aiAgentBot/aiAgentBotDueFollowupsResolver.ts';
+import {
+  createD1AiAgentBotFollowBackAttemptedStore,
+  createD1AiAgentBotFollowBackCandidatesResolver,
+} from '../adaptor/d1/aiAgentBot/aiAgentBotFollowBackAdapters.ts';
+import { createD1AiAgentBotFollowupClaimedStore } from '../adaptor/d1/aiAgentBot/aiAgentBotFollowupClaimedStore.ts';
+import { createD1AiAgentBotFollowupScheduledStore } from '../adaptor/d1/aiAgentBot/aiAgentBotFollowupScheduledStore.ts';
+import { createD1AiAgentBotFollowupsHandledStore } from '../adaptor/d1/aiAgentBot/aiAgentBotFollowupsHandledStore.ts';
+import {
+  createD1AiAgentBotMemoriesResolverBySubject,
+  createD1AiAgentBotMemoryChangedStore,
+} from '../adaptor/d1/aiAgentBot/aiAgentBotMemoryAdapters.ts';
 import { createD1AiAgentBotPendingTriggersResolver } from '../adaptor/d1/aiAgentBot/aiAgentBotPendingTriggersResolver.ts';
 import { createD1AiAgentBotRepliedCountResolverSince } from '../adaptor/d1/aiAgentBot/aiAgentBotRepliedCountResolverSince.ts';
 import { createD1AiAgentBotTriggerClaimedStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggerClaimedStore.ts';
 import { createD1AiAgentBotTriggersHandledStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggersHandledStore.ts';
+import { createD1BlueskyTimelineItemsResolver } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
+import type { IoriD1Db } from '../adaptor/d1/client.ts';
+import { createD1PopularArticlesResolverByFetchedSince } from '../adaptor/d1/feedEntry/popularArticlesResolverByFetchedSince.ts';
+import { createD1LocalAccountRetiredStore } from '../adaptor/d1/user/localAccountRetiredStore.ts';
 import { createD1UserCreatedStore } from '../adaptor/d1/user/userCreatedStore.ts';
 import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createSafeFetcher, type SafeFetcher } from '../adaptor/http/safeFetch.ts';
@@ -16,16 +40,35 @@ import { createWorkersAiAgentChatModel } from '../adaptor/workersAi/workersAiAge
 import type { WorkersAiRunner } from '../adaptor/workersAi/workersAiRunner.ts';
 import type { ActorId } from '../domain/actor/actorId.ts';
 import type { LocalActor } from '../domain/actor/localActor.ts';
+import { AiAgentBot } from '../domain/aiAgentBot/aiAgentBot.ts';
+import {
+  BlueskyTopics,
+  type BlueskyTrendPostsResolver,
+  type BlueskyTrendsResolver,
+  POPULAR_ARTICLE_WINDOW_MS,
+  type PopularArticlesResolverByFetchedSince,
+} from '../domain/aiAgentBot/aiAgentBotMaterial.ts';
+import type { BlueskyTimelineItemsResolver } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { plainTextToHtml } from '../domain/post/plainTextToHtml.ts';
 import type { PostWithAuthor } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import { TimelineSearchQuery } from '../domain/timelineSearch/timelineSearchQuery.ts';
 import type { User } from '../domain/user/user.ts';
-import type { AgentPostView, AiAgentBotCapabilities } from '../useCase/aiAgent/agentTools.ts';
+import { Username } from '../domain/user/username.ts';
+import { DAILY_DIGEST_USERNAME } from '../scheduled/digestTasks.ts';
+import {
+  type AgentBlueskyTopics,
+  type AgentPostView,
+  type AiAgentBotCapabilities,
+  MAX_BLUESKY_TREND_POSTS,
+} from '../useCase/aiAgent/agentTools.ts';
 import { EnsureAiAgentBotUseCase } from '../useCase/ensureAiAgentBot.ts';
+import { type AiAgentBotFollower, FollowBackAiAgentFollowersUseCase } from '../useCase/followBackAiAgentFollowers.ts';
 import { type AiAgentBotPoster, PostAiAgentMusingUseCase } from '../useCase/postAiAgentMusing.ts';
 import { type AiAgentBotReplier, RespondToAiAgentMentionsUseCase } from '../useCase/respondToAiAgentMentions.ts';
+import { type LocalActorDeletionAnnouncer, RetireLocalAccountsUseCase } from '../useCase/retireLocalAccounts.ts';
+import { RunAiAgentFollowupsUseCase } from '../useCase/runAiAgentFollowups.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
 
@@ -79,11 +122,74 @@ const fetchPage = (safeFetcher: SafeFetcher) => async (url: string) => {
 
 type Bot = Readonly<{ user: User; actor: LocalActor }>;
 
-/** bot から見える範囲で読み、bot として行動する道具の中身を用意する */
+/** bot が話題の材料を読むところ。人気の記事と、Bluesky のタイムラインと、Bluesky 全体の話題 */
+export type AiAgentBotMaterialSources = Readonly<{
+  popularArticlesResolver: PopularArticlesResolverByFetchedSince;
+  blueskyTimelineItemsResolver: BlueskyTimelineItemsResolver;
+  blueskyTrendsResolver: BlueskyTrendsResolver;
+  blueskyTrendPostsResolver: BlueskyTrendPostsResolver;
+}>;
+
+/** 話題を探すときに読む、Bluesky のタイムラインの投稿の数 */
+const BLUESKY_TOPIC_SCAN_LIMIT = 100;
+const MAX_BLUESKY_TRENDS = 10;
+const MAX_BLUESKY_TIMELINE_TOPICS = 8;
+const MAX_BLUESKY_RECENT_POSTS = 20;
+
+const readPopularArticles = (sources: AiAgentBotMaterialSources) => async (limit: number) => {
+  const fetchedSince = Instant.addDuration(Instant.now(), -POPULAR_ARTICLE_WINDOW_MS);
+  return (await sources.popularArticlesResolver.resolve({ fetchedSince, limit })).val;
+};
+
+/** bot が話題の材料にするのは、オーナー（kosui）がつないでいる Bluesky のタイムライン */
+const createOwnerBlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimelineItemsResolver => ({
+  resolve: async (condition) => {
+    const owner = await createD1UserResolverByUsername(db).resolve(Username.parseOrThrow(DAILY_DIGEST_USERNAME));
+    if (!owner.ok || owner.val === undefined) return RA.ok([]);
+    return createD1BlueskyTimelineItemsResolver(db, owner.val.id).resolve(condition);
+  },
+});
+
+/**
+ * Bluesky の話題を読む。1 回の実行の中では、最初に読んだものを使い回す
+ * （投稿の前に読んだ話題と、ツールで読み直した話題の topic が食い違わないようにするため）
+ */
+const blueskyTopicsReader = (sources: AiAgentBotMaterialSources) => {
+  let cached: Promise<AgentBlueskyTopics> | undefined;
+  const read = async (): Promise<AgentBlueskyTopics> => {
+    const now = Instant.now();
+    const [items, trends] = await Promise.all([
+      sources.blueskyTimelineItemsResolver.resolve({ limit: BLUESKY_TOPIC_SCAN_LIMIT, before: undefined }),
+      sources.blueskyTrendsResolver.resolve(MAX_BLUESKY_TRENDS),
+    ]);
+    return {
+      trends: trends.val,
+      timelineTopics: BlueskyTopics.collectTimelineTopics(items.val, now, MAX_BLUESKY_TIMELINE_TOPICS),
+      recentPosts: BlueskyTopics.recentTimelinePosts(items.val, now, MAX_BLUESKY_RECENT_POSTS),
+    };
+  };
+  const readTopics = () => (cached ??= read());
+  return {
+    readBlueskyTopics: readTopics,
+    readBlueskyTrendPosts: async (topic: string) => {
+      const trend = (await readTopics()).trends.find((entry) => entry.topic === topic || entry.displayName === topic);
+      if (trend === undefined) return undefined;
+      if (trend.feedUri === null) return [];
+      return (await sources.blueskyTrendPostsResolver.resolve({
+        feedUri: trend.feedUri,
+        limit: MAX_BLUESKY_TREND_POSTS,
+      }))
+        .val;
+    },
+  };
+};
+
+/** bot から見える範囲で読み、bot として行動するツールの中身を用意する */
 export const createAiAgentBotCapabilities = (
   runtime: WorkerRuntimePorts,
   bot: Bot,
   context: Readonly<{ request: Request; ctx: RequestContext<unknown> }>,
+  materials: AiAgentBotMaterialSources,
   safeFetcher: SafeFetcher = createSafeFetcher(),
 ): AiAgentBotCapabilities => {
   const { mastodon, socialActions, core } = runtime;
@@ -137,6 +243,8 @@ export const createAiAgentBotCapabilities = (
     readOwnRecentPosts: async (limit) =>
       (await readTimeline([bot.actor.id], limit)).filter((post) => post.authorActorId === bot.actor.id),
     fetchUrl: fetchPage(safeFetcher),
+    readPopularArticles: readPopularArticles(materials),
+    ...blueskyTopicsReader(materials),
     likePost: async (postId) => {
       const liked = await socialActions.sendLikeUseCase.run({ userId: bot.user.id, postId, ...context });
       return liked.ok ? Result.ok(undefined) : Result.err(message(liked.err));
@@ -173,9 +281,72 @@ export const createAiAgentBotReplier = (
       request: context.request,
       ctx: context.ctx,
     });
-    return sent.ok ? Result.ok(undefined) : Result.err(sent.err.message);
+    return sent.ok ? Result.ok(sent.val.post.postId) : Result.err(sent.err.message);
   },
 });
+
+export const createAiAgentBotFollower = (
+  runtime: WorkerRuntimePorts,
+  bot: Bot,
+  context: Readonly<{ ctx: RequestContext<unknown> }>,
+): AiAgentBotFollower => ({
+  follow: async (actorId) => {
+    const followed = await runtime.core.followActor({ userId: bot.user.id, actorId, ctx: context.ctx });
+    return followed.ok ? Result.ok(undefined) : Result.err(followed.err.message);
+  },
+});
+
+/**
+ * アカウントのアクターの Delete を配送する。フォロワーと、フォローしている相手の両方に送る。
+ * Fedify は送る時点で鍵と宛先を確定してキューに積むので、このあとアカウントを消しても届く。
+ */
+export const createLocalActorDeletionAnnouncer = (
+  runtime: WorkerRuntimePorts,
+  context: Readonly<{ ctx: RequestContext<unknown> }>,
+): LocalActorDeletionAnnouncer => ({
+  announce: async ({ username, actor }) => {
+    const { ctx } = context;
+    try {
+      const actorUri = ctx.getActorUri(username);
+      const following = await runtime.mastodon.actorsResolverByFollowerId.resolve(actor.id);
+      const recipients = (following.ok ? following.val : []).flatMap((target) =>
+        target.type === 'remote' ? [{ id: new URL(target.uri), inboxId: new URL(target.inboxUrl) }] : []
+      );
+      const activity = new Delete({
+        id: new URL('#delete', actorUri),
+        actor: actorUri,
+        object: actorUri,
+        to: PUBLIC_COLLECTION,
+      });
+      await ctx.sendActivity({ identifier: username }, 'followers', activity, { preferSharedInbox: true });
+      if (recipients.length > 0) {
+        await ctx.sendActivity({ identifier: username }, recipients, activity, { preferSharedInbox: true });
+      }
+      return Result.ok(undefined);
+    } catch (error) {
+      return Result.err(error instanceof Error ? error.message : String(error));
+    }
+  },
+});
+
+/** 使わなくなった bot のアカウントを消すユースケースを用意する。bot が無効でも動かす */
+export const createRetireAiAgentBotAccounts = async (
+  env: IoriWorkerEnv,
+  createRuntime: () => Promise<WorkerRuntimePorts>,
+) => {
+  const runtime = await createRuntime();
+  const db = runtime.db;
+  const request = new Request(new URL('/', env.ORIGIN));
+  const ctx = runtime.federation.createContext(request, undefined);
+  const useCase = RetireLocalAccountsUseCase.create({
+    userResolverByUsername: createD1UserResolverByUsername(db),
+    actorResolverByUserId: runtime.mastodon.actorResolverByUserId,
+    localAccountRetiredStore: createD1LocalAccountRetiredStore(db),
+    deletionAnnouncer: createLocalActorDeletionAnnouncer(runtime, { ctx }),
+    now: Instant.now,
+  });
+  return () => useCase.run({ usernames: AiAgentBot.retiredUsernames });
+};
 
 export const createAiAgentBotPoster = (
   runtime: WorkerRuntimePorts,
@@ -219,21 +390,52 @@ export const createAiAgentBotRuntime = async (
   }).run({ ctx });
   const bot = ensured.val;
   const context = { request, ctx };
+  const safeFetcher = createSafeFetcher();
+  const materials: AiAgentBotMaterialSources = {
+    popularArticlesResolver: createD1PopularArticlesResolverByFetchedSince(db),
+    blueskyTimelineItemsResolver: createOwnerBlueskyTimelineItemsResolver(db),
+    blueskyTrendsResolver: createBlueskyPublicTrendsResolver({ safeFetcher }),
+    blueskyTrendPostsResolver: createBlueskyPublicTrendPostsResolver({ safeFetcher }),
+  };
+  const shared = {
+    repliedCountResolverSince: createD1AiAgentBotRepliedCountResolverSince(db),
+    followupScheduledStore: createD1AiAgentBotFollowupScheduledStore(db),
+    pendingFollowupsCountResolver: createD1AiAgentBotPendingFollowupsCountResolver(db),
+    memoriesResolverBySubject: createD1AiAgentBotMemoriesResolverBySubject(db),
+    memoryChangedStore: createD1AiAgentBotMemoryChangedStore(db),
+    actorResolverById: runtime.mastodon.actorResolverById,
+    chatModel,
+    now: Instant.now,
+  };
   return {
     bot,
-    capabilities: createAiAgentBotCapabilities(runtime, bot, context),
+    capabilities: createAiAgentBotCapabilities(runtime, bot, context, materials),
+    follower: createAiAgentBotFollower(runtime, bot, context),
+    followBack: FollowBackAiAgentFollowersUseCase.create({
+      candidatesResolver: createD1AiAgentBotFollowBackCandidatesResolver(db),
+      attemptedStore: createD1AiAgentBotFollowBackAttemptedStore(db),
+      now: Instant.now,
+    }),
     replier: createAiAgentBotReplier(runtime, bot, context),
     poster: createAiAgentBotPoster(runtime, bot, context),
     respondToMentions: RespondToAiAgentMentionsUseCase.create({
       pendingTriggersResolver: createD1AiAgentBotPendingTriggersResolver(db),
       triggerClaimedStore: createD1AiAgentBotTriggerClaimedStore(db),
       triggersHandledStore: createD1AiAgentBotTriggersHandledStore(db),
-      repliedCountResolverSince: createD1AiAgentBotRepliedCountResolverSince(db),
-      actorResolverById: runtime.mastodon.actorResolverById,
+      ...shared,
+    }),
+    runFollowups: RunAiAgentFollowupsUseCase.create({
+      dueFollowupsResolver: createD1AiAgentBotDueFollowupsResolver(db),
+      followupClaimedStore: createD1AiAgentBotFollowupClaimedStore(db),
+      followupsHandledStore: createD1AiAgentBotFollowupsHandledStore(db),
+      ...shared,
+    }),
+    postMusing: PostAiAgentMusingUseCase.create({
+      memoriesResolverBySubject: shared.memoriesResolverBySubject,
+      memoryChangedStore: shared.memoryChangedStore,
       chatModel,
       now: Instant.now,
     }),
-    postMusing: PostAiAgentMusingUseCase.create({ chatModel, now: Instant.now }),
   } as const;
 };
 

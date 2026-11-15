@@ -74,12 +74,14 @@ const KEY_MISSING_MESSAGE = '登録するにはサーバーの設定が必要で
 const SWITCH_IN_PROGRESS_MESSAGE = 'アカウントの切り替え中です。終わるまでお待ちください。';
 const SWITCH_FAILED_MESSAGE = '切り替えられませんでした。';
 const DELETE_FAILED_MESSAGE = '登録を消せませんでした。';
+const LINKED_ELSEWHERE_MESSAGE = 'この Bluesky アカウントは、ほかのユーザーがつないでいます。';
 
 const SAVE_FAILURE_MESSAGES: Readonly<Record<string, string>> = {
   invalid_password: 'iori のパスワードが違います。',
   bluesky_login_failed: 'Bluesky にログインできませんでした。ハンドルとアプリパスワードを確かめてください。',
   switch_in_progress: SWITCH_IN_PROGRESS_MESSAGE,
   credential_key_missing: KEY_MISSING_MESSAGE,
+  account_linked_elsewhere: LINKED_ELSEWHERE_MESSAGE,
 };
 
 export const blueskyCredentialSaveFailureMessage = (error: unknown): string =>
@@ -102,6 +104,7 @@ const SWITCH_FAILURE_MESSAGES: Readonly<Record<string, string>> = {
   did_changed: 'アカウントの状態が変わりました。もう一度やり直してください。',
   switch_in_progress: SWITCH_IN_PROGRESS_MESSAGE,
   credential_key_missing: KEY_MISSING_MESSAGE,
+  account_linked_elsewhere: LINKED_ELSEWHERE_MESSAGE,
 };
 
 export const blueskyAccountSwitchFailureMessage = (error: unknown): string =>

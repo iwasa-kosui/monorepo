@@ -7,7 +7,7 @@ import {
 } from '../adaptor/d1/__tests__/blueskyAccountSwitchFixture.ts';
 import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
-import { purgeBlueskyAccountSwitchTask, skipWhileBlueskyAccountSwitching } from './blueskyAccountSwitchTasks.ts';
+import { purgeBlueskyAccountSwitchTask } from './blueskyAccountSwitchTasks.ts';
 import { dispatchScheduled, type ScheduledTaskContext, scheduledTasks } from './scheduledTasks.ts';
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
@@ -22,27 +22,17 @@ const contextFor = (env: Partial<IoriWorkerEnv>): ScheduledTaskContext => ({
   waitUntil: () => undefined,
 });
 
+const OWNER_ID = '00000000-0000-4000-8000-000000000001';
+const OTHER_ID = '00000000-0000-4000-8000-000000000002';
+
+/** 環境変数の資格情報の持ち主（kosui）と、もう 1 人のユーザーがいる D1 */
 const newFixture = () => {
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
+  fixture.sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(OWNER_ID, 'kosui');
+  fixture.sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(OTHER_ID, 'alice');
   return fixture;
 };
-
-describe('skipWhileBlueskyAccountSwitching', () => {
-  it('切り替え中は、包んだタスクを実行せずログに出す', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const run = vi.fn(async () => undefined);
-    const task = skipWhileBlueskyAccountSwitching({ name: 'collect', after: 'before', run }, async () => true);
-
-    await task.run(contextFor({}));
-
-    expect(run).not.toHaveBeenCalled();
-    expect(task).toMatchObject({ name: 'collect', after: 'before' });
-    expect(info).toHaveBeenCalledWith(
-      JSON.stringify({ event: 'bluesky_account_switch_task_skipped', task: 'collect' }),
-    );
-  });
-});
 
 describe('毎分の cron', () => {
   const enabledEnv = (fixture: ReturnType<typeof newFixture>): Partial<IoriWorkerEnv> => ({
@@ -52,29 +42,9 @@ describe('毎分の cron', () => {
     BLUESKY_APP_PASSWORD: 'env-app-password',
   });
 
-  it('3 時間ごとの cron の crosspost の再試行も、切り替え中は実行しない', async () => {
-    const retry = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.find((task) =>
-      task.name === 'retryBlueskyCrossposts'
-    )!;
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const idle = newFixture();
-    await retry.run(contextFor({ DB: idle.binding }));
-    expect(info).not.toHaveBeenCalledWith(
-      JSON.stringify({ event: 'bluesky_account_switch_task_skipped', task: 'retryBlueskyCrossposts' }),
-    );
-
-    const switching = newFixture();
-    insertBlueskyAccountSwitch(switching.sqlite, { startedAt: Date.now() });
-    await retry.run(contextFor({ DB: switching.binding }));
-
-    expect(info).toHaveBeenCalledWith(
-      JSON.stringify({ event: 'bluesky_account_switch_task_skipped', task: 'retryBlueskyCrossposts' }),
-    );
-  });
-
   it('切り替えの印があるあいだは、タイムラインと通知の取り込みで Bluesky を呼ばない', async () => {
     const fixture = newFixture();
-    insertBlueskyAccountSwitch(fixture.sqlite, { startedAt: Date.now() });
+    insertBlueskyAccountSwitch(fixture.sqlite, OWNER_ID, { startedAt: Date.now() });
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => {
       throw new Error('fetch must not be called');
@@ -98,24 +68,24 @@ describe('毎分の cron', () => {
 
   it('開始から 90 秒に満たないあいだは、削除のタスクが何も削除しない', async () => {
     const fixture = newFixture();
-    insertBlueskyAccountSwitch(fixture.sqlite, { startedAt: Date.now() - 30_000 });
-    seedBlueskyData(fixture.sqlite, { timelineItems: 5, likes: 5 });
+    insertBlueskyAccountSwitch(fixture.sqlite, OWNER_ID, { startedAt: Date.now() - 30_000 });
+    seedBlueskyData(fixture.sqlite, OWNER_ID, { timelineItems: 5, likes: 5 });
 
     await purgeBlueskyAccountSwitchTask.run(contextFor({ DB: fixture.binding }));
 
-    expect(countBlueskyData(fixture.sqlite)).toMatchObject({ timelineItems: 5, likes: 5 });
+    expect(countBlueskyData(fixture.sqlite, OWNER_ID)).toMatchObject({ timelineItems: 5, likes: 5 });
     expect(fixture.sqlite.prepare('SELECT * FROM bluesky_account_switch').all()).toHaveLength(1);
   });
 
   it('90 秒が経っていれば削除し、完了を JSON でログに出して印を消す', async () => {
     const fixture = newFixture();
-    insertBlueskyAccountSwitch(fixture.sqlite, { startedAt: Date.now() - 100_000 });
-    seedBlueskyData(fixture.sqlite, { timelineItems: 5, likes: 2 });
+    insertBlueskyAccountSwitch(fixture.sqlite, OWNER_ID, { startedAt: Date.now() - 100_000 });
+    seedBlueskyData(fixture.sqlite, OWNER_ID, { timelineItems: 5, likes: 2 });
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
 
     await purgeBlueskyAccountSwitchTask.run(contextFor({ DB: fixture.binding }));
 
-    expect(countBlueskyData(fixture.sqlite)).toMatchObject({ timelineItems: 0, likes: 0 });
+    expect(countBlueskyData(fixture.sqlite, OWNER_ID)).toMatchObject({ timelineItems: 0, likes: 0 });
     expect(fixture.sqlite.prepare('SELECT * FROM bluesky_account_switch').all()).toEqual([]);
     const logged = JSON.parse(info.mock.calls[0]![0] as string);
     expect(logged).toMatchObject({
@@ -124,5 +94,31 @@ describe('毎分の cron', () => {
       toDid: 'did:plc:alice',
       deletedCounts: { timelineItems: 5, likes: 2 },
     });
+  });
+
+  it('削除のタスクは、切り替え中のユーザーごとにそのユーザーの行だけを消し、切り替えていないユーザーの行は残す', async () => {
+    const fixture = newFixture();
+    const third = '00000000-0000-4000-8000-000000000003';
+    fixture.sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(third, 'bob');
+    insertBlueskyAccountSwitch(fixture.sqlite, OWNER_ID, { startedAt: Date.now() - 100_000 });
+    insertBlueskyAccountSwitch(fixture.sqlite, OTHER_ID, { startedAt: Date.now() - 100_000 });
+    seedBlueskyData(fixture.sqlite, OWNER_ID, { timelineItems: 3, likes: 1 });
+    seedBlueskyData(fixture.sqlite, OTHER_ID, { timelineItems: 2, likes: 2 });
+    seedBlueskyData(fixture.sqlite, third, { timelineItems: 4, likes: 1 });
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await purgeBlueskyAccountSwitchTask.run(contextFor({ DB: fixture.binding }));
+
+    expect(countBlueskyData(fixture.sqlite, OWNER_ID)).toMatchObject({ timelineItems: 0, likes: 0 });
+    expect(countBlueskyData(fixture.sqlite, OTHER_ID)).toMatchObject({ timelineItems: 0, likes: 0 });
+    expect(countBlueskyData(fixture.sqlite, third)).toMatchObject({ timelineItems: 4, likes: 1 });
+    expect(fixture.sqlite.prepare('SELECT * FROM bluesky_account_switch').all()).toEqual([]);
+    const completed = info.mock.calls.map(([line]) => JSON.parse(line as string)).filter((logged) =>
+      logged.event === 'bluesky_account_switch_completed'
+    );
+    expect(completed.map((logged) => [logged.userId, logged.deletedCounts.timelineItems]).sort()).toEqual([
+      [OWNER_ID, 3],
+      [OTHER_ID, 2],
+    ]);
   });
 });

@@ -6,12 +6,11 @@ import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.
 import { createD1BlueskyChatPushReceiptsResolverByConvoIds } from '../../adaptor/d1/blueskyChatPush/blueskyChatPushReceiptsResolverByConvoIds.ts';
 import { createD1BlueskyChatPushReceiptsSavedStore } from '../../adaptor/d1/blueskyChatPush/blueskyChatPushReceiptsSavedStore.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
-import { createD1UserResolverByUsername } from '../../adaptor/d1/user/userResolverByUsername.ts';
 import type { WebPushSender } from '../../adaptor/webPush/webPush.ts';
 import type { BlueskyChatConvo, BlueskyChatMessage } from '../../domain/blueskyChat/blueskyChat.ts';
 import type { BlueskyStoredCredential } from '../../domain/blueskyCredential/blueskyCredential.ts';
 import { Instant } from '../../domain/instant/instant.ts';
-import { Username } from '../../domain/user/username.ts';
+import { UserId } from '../../domain/user/userId.ts';
 import type { BlueskyChat } from '../../ports/blueskyChat.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
 import { CollectBlueskyChatPushUseCase } from '../collectBlueskyChatPush.ts';
@@ -71,17 +70,21 @@ afterEach(() => {
 
 const setup = (
   response: readonly BlueskyChatConvo[] | BlueskyClientError,
-  options: { subscriptions?: number; owner?: boolean; chatPermitted?: boolean | null | 'none' } = {},
+  options: { subscriptions?: number; recipient?: 'kosui' | 'alice'; chatPermitted?: boolean | null | 'none' } = {},
 ) => {
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
   const { db, sqlite } = fixture;
   const seed = createMastodonSeed(fixture);
-  const owner = options.owner === false ? undefined : seed.addLocalActor('kosui');
-  for (let index = 0; owner !== undefined && index < (options.subscriptions ?? 1); index++) {
-    sqlite.prepare(
-      'INSERT INTO push_subscriptions(subscriptionId,userId,endpoint,p256dhKey,authKey,createdAt) VALUES (?,?,?,?,?,?)',
-    ).run(seed.uuid(), owner.userId, `https://push.example/${index}`, 'p256dh', 'auth', 1);
+  const kosui = seed.addLocalActor('kosui');
+  const alice = seed.addLocalActor('alice');
+  const recipientUserId = UserId.orThrow((options.recipient === 'alice' ? alice : kosui).userId);
+  for (const actor of [kosui, alice]) {
+    for (let index = 0; index < (options.subscriptions ?? 1); index++) {
+      sqlite.prepare(
+        'INSERT INTO push_subscriptions(subscriptionId,userId,endpoint,p256dhKey,authKey,createdAt) VALUES (?,?,?,?,?,?)',
+      ).run(seed.uuid(), actor.userId, `https://push.example/${actor.username}/${index}`, 'p256dh', 'auth', 1);
+    }
   }
   const listConvos = vi.fn<BlueskyChat['listConvos']>(async () =>
     'type' in response ? RA.err(response) : RA.ok({ items: response, cursor: 'next' })
@@ -94,11 +97,10 @@ const setup = (
     : { chatPermitted: options.chatPermitted ?? true } as BlueskyStoredCredential;
   const useCase = CollectBlueskyChatPushUseCase.create({
     chat: { listConvos, viewerDid },
-    ownerUsername: Username.parseOrThrow('kosui'),
-    userResolverByUsername: createD1UserResolverByUsername(db),
+    recipientUserId,
     storedCredentialResolver: { resolve: async () => RA.ok(stored) },
-    receiptsResolver: createD1BlueskyChatPushReceiptsResolverByConvoIds(db),
-    receiptsSavedStore: createD1BlueskyChatPushReceiptsSavedStore(db),
+    receiptsResolver: createD1BlueskyChatPushReceiptsResolverByConvoIds(db, recipientUserId),
+    receiptsSavedStore: createD1BlueskyChatPushReceiptsSavedStore(db, recipientUserId),
     pushSubscriptionsResolverByUserId: subscriptionsResolver,
     webPushSender: { send },
     now: () => NOW,
@@ -106,7 +108,7 @@ const setup = (
   const receipts = () =>
     sqlite.prepare('SELECT convoId, lastMessageId, notifiedAt FROM bluesky_chat_push_receipts ORDER BY convoId').all();
   const payloads = () => send.mock.calls.map(([, payload]) => payload);
-  return { ...fixture, listConvos, viewerDid, send, useCase, receipts, payloads };
+  return { ...fixture, kosui, alice, listConvos, viewerDid, send, useCase, receipts, payloads };
 };
 
 describe('CollectBlueskyChatPushUseCase', () => {
@@ -251,6 +253,19 @@ describe('CollectBlueskyChatPushUseCase', () => {
     expect(t.receipts()).toHaveLength(2);
   });
 
+  it('recipientUserId のユーザーの購読にだけ push し、そのユーザーの記録として残す', async () => {
+    const t = setup([convoOf('c1')], { recipient: 'alice' });
+
+    await t.useCase.run();
+
+    expect(t.send.mock.calls.map(([subscription]) => subscription.endpoint)).toEqual([
+      'https://push.example/alice/0',
+    ]);
+    expect(t.sqlite.prepare('SELECT userId, convoId FROM bluesky_chat_push_receipts').all()).toEqual([
+      { userId: t.alice.userId, convoId: 'c1' },
+    ]);
+  });
+
   it('購読が 0 件なら、API を呼ばずに終わる', async () => {
     const t = setup([convoOf('c1')], { subscriptions: 0 });
 
@@ -259,15 +274,6 @@ describe('CollectBlueskyChatPushUseCase', () => {
     expect(result).toEqual({ ok: true, val: { skipped: 'noSubscriptions', fetched: 0, notified: 0, pushed: 0 } });
     expect(t.listConvos).not.toHaveBeenCalled();
     expect(t.receipts()).toEqual([]);
-  });
-
-  it('所有者がいないときは、API を呼ばずに終わる', async () => {
-    const t = setup([convoOf('c1')], { owner: false });
-
-    const result = await t.useCase.run();
-
-    expect(result).toMatchObject({ ok: true, val: { skipped: 'noOwner' } });
-    expect(t.listConvos).not.toHaveBeenCalled();
   });
 
   it('登録済みの資格情報で DM が許可されていなければ、API を呼ばずに終わる', async () => {

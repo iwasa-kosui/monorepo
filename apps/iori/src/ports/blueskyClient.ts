@@ -8,6 +8,7 @@ import type {
 import type { BlueskyBlob, BlueskyPostRecord } from '../domain/blueskyCrosspost/blueskyPostRecord.ts';
 import type { BlueskyReportReasonType } from '../domain/blueskyModeration/blueskyModeration.ts';
 import type { Instant } from '../domain/instant/instant.ts';
+import type { UserId } from '../domain/user/userId.ts';
 
 export type BlueskyClientErrorKind = 'auth' | 'http' | 'network' | 'invalid_response' | 'chat_not_permitted';
 
@@ -77,6 +78,9 @@ export type BlueskyClient = Readonly<{
     swapCid: string | null,
   ) => RA<Readonly<{ uri: string; cid: string }>, BlueskyClientError>;
 }>;
+
+/** クロスポストは投稿者の Bluesky アカウントへ送るので、ユーザーごとのクライアントを選ぶ */
+export type BlueskyClientForUser = (userId: UserId) => BlueskyClient;
 
 export type BlueskyQueryClient = Readonly<{
   query: (

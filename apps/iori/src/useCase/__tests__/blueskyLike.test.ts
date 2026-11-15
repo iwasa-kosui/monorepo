@@ -8,10 +8,13 @@ import { createD1BlueskyLikeTargetResolver } from '../../adaptor/d1/blueskyTimel
 import { createD1BlueskyLikeUriResolver } from '../../adaptor/d1/blueskyTimeline/blueskyLikeUriResolver.ts';
 import { deriveBlueskyLikeRkey } from '../../domain/blueskyTimeline/blueskyLike.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { UserId } from '../../domain/user/userId.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type { BlueskyPostCidResolver } from '../../ports/blueskyPostCidResolver.ts';
 import { LikeBlueskyPostUseCase } from '../likeBlueskyPost.ts';
 import { UnlikeBlueskyPostUseCase } from '../unlikeBlueskyPost.ts';
+
+const USER_ID = UserId.orThrow('00000000-0000-4000-8000-0000000000a1');
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 8, 12));
 const POST = 'at://did:plc:a/app.bsky.feed.post/1';
@@ -27,19 +30,20 @@ const failure: BlueskyClientError = {
 
 const setup = () => {
   const { db, sqlite, queries } = createSqliteD1Fixture();
+  sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'alice');
   const insertItem = sqlite.prepare(
-    'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
   );
-  insertItem.run(POST, POST, 'bafypost', 'did:plc:a', 'alice.bsky.social', 't', '[]', null, 1, 1, 1);
-  insertItem.run(REPOST, POST, 'bafypost', 'did:plc:a', 'alice.bsky.social', 't', '[]', 'did:plc:b', 1, 1, 1);
+  insertItem.run(USER_ID, POST, POST, 'bafypost', 'did:plc:a', 'alice.bsky.social', 't', '[]', null, 1, 1, 1);
+  insertItem.run(USER_ID, REPOST, POST, 'bafypost', 'did:plc:a', 'alice.bsky.social', 't', '[]', 'did:plc:b', 1, 1, 1);
   const createLike = vi.fn<BlueskyClient['createLike']>(async () => RA.ok({ uri: CREATED }));
   const deleteLike = vi.fn<BlueskyClient['deleteLike']>(async () => RA.ok(undefined));
-  const targetResolver = createD1BlueskyLikeTargetResolver(db);
-  const likeUriResolver = createD1BlueskyLikeUriResolver(db);
+  const targetResolver = createD1BlueskyLikeTargetResolver(db, USER_ID);
+  const likeUriResolver = createD1BlueskyLikeUriResolver(db, USER_ID);
   const resolveCid = vi.fn<BlueskyPostCidResolver['resolve']>(async (uri) =>
     RA.ok(uri === POST ? { cid: 'bafyfresh', likeUri: null, repostUri: null } : undefined)
   );
-  const save = vi.fn(createD1BlueskyLikeSavedStore(db).save);
+  const save = vi.fn(createD1BlueskyLikeSavedStore(db, USER_ID).save);
   const like = LikeBlueskyPostUseCase.create({
     client: { createLike },
     targetResolver,
@@ -53,11 +57,16 @@ const setup = () => {
     targetResolver,
     likeUriResolver,
     cidResolver: { resolve: resolveCid },
-    deletedStore: createD1BlueskyLikeDeletedStore(db),
+    deletedStore: createD1BlueskyLikeDeletedStore(db, USER_ID),
   });
   const likes = () => sqlite.prepare('SELECT subjectUri, likeUri, createdAt FROM bluesky_likes').all();
   const seedLike = () =>
-    sqlite.prepare('INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)').run(POST, LIKE, 1);
+    sqlite.prepare('INSERT INTO bluesky_likes(userId,subjectUri,likeUri,createdAt) VALUES (?,?,?,?)').run(
+      USER_ID,
+      POST,
+      LIKE,
+      1,
+    );
   return { like, unlike, createLike, deleteLike, resolveCid, save, likes, seedLike, queries, sqlite };
 };
 

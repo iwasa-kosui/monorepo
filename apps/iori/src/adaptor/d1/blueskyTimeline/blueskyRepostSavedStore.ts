@@ -1,15 +1,16 @@
 import { RA } from '@iwasa-kosui/result';
 
 import type { BlueskyRepostSavedStore } from '../../../domain/blueskyTimeline/blueskyRepost.ts';
+import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { blueskyRepostsTable } from '../schema.ts';
 
-export const createD1BlueskyRepostSavedStore = (db: IoriD1Db): BlueskyRepostSavedStore => ({
+export const createD1BlueskyRepostSavedStore = (db: IoriD1Db, userId: UserId): BlueskyRepostSavedStore => ({
   save: async ({ subjectUri, repostUri, createdAt }) => {
     const values = { repostUri, createdAt: new Date(createdAt) };
     await db.insert(blueskyRepostsTable)
-      .values({ subjectUri, ...values })
-      .onConflictDoUpdate({ target: blueskyRepostsTable.subjectUri, set: values });
+      .values({ userId, subjectUri, ...values })
+      .onConflictDoUpdate({ target: [blueskyRepostsTable.userId, blueskyRepostsTable.subjectUri], set: values });
     return RA.ok(undefined);
   },
 });

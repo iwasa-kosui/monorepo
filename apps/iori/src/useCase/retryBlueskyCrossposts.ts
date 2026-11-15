@@ -12,7 +12,7 @@ import {
 } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyTimelineItemsDeletedStore } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../domain/instant/instant.ts';
-import type { BlueskyClient } from '../ports/blueskyClient.ts';
+import type { BlueskyClientForUser } from '../ports/blueskyClient.ts';
 import { deleteBlueskyRecordWith } from './helper/deleteBlueskyRecord.ts';
 import type { SendBlueskyCrosspostOutcome, SendBlueskyCrosspostUseCase } from './sendBlueskyCrosspost.ts';
 import type { UseCase } from './useCase.ts';
@@ -28,7 +28,7 @@ type Deps = Readonly<{
   crosspostSavedStore: BlueskyCrosspostSavedStore;
   crosspostDeletedStore: BlueskyCrosspostDeletedStore;
   timelineItemsDeletedStore: BlueskyTimelineItemsDeletedStore;
-  client: BlueskyClient;
+  clientFor: BlueskyClientForUser;
   send: SendBlueskyCrosspostUseCase;
   now: () => Instant;
 }>;

@@ -10,28 +10,71 @@ import type { UserId } from '../user/userId.ts';
  * AI エージェントの bot のユーザー名。パスワードもパスキーも持たないので、誰もこのユーザーでログインできない。
  * bot の操作は、cron から Workers AI のエージェントが行う。
  *
- * GitHub のユーザー名には使えない `_` を含める。GitHub の PR やコミットメッセージで bot のハンドルを
- * 素のまま書いても、同名の GitHub アカウントの持ち主へメンションの通知が飛ばないようにするため。
- * Fediverse（Mastodon など）のユーザー名では `_` を使える。
+ * GitHub にも同名のアカウントがありうるので、GitHub の PR やコミットメッセージでハンドルを書くときは
+ * バッククォートで囲む（AGENTS.md の「GitHub のメンションを書かない」を参照）。
  */
-export const AI_AGENT_BOT_USERNAME = 'iori_bot';
+export const AI_AGENT_BOT_USERNAME = 'agent';
+
+/**
+ * 以前 bot に使っていたユーザー名。これらのアカウントは削除し、Delete を配送してから
+ * データを消す。消したあとは、ActivityPub のアクターとして 410 Gone（Tombstone）を返す。
+ */
+export const RETIRED_AI_AGENT_BOT_USERNAMES = ['iori_bot', 'iori', 'ior'] as const;
 
 export const AI_AGENT_BOT_PROFILE = {
-  displayName: 'iori (AI)',
-  bio: 'iori に住む AI エージェントの bot です。メンションや返信には、スレッドや URL の中身を調べて答えます。'
-    + 'ときどき自分からも投稿します。発言はすべて AI が自動で生成しているので、誤りを含むことがあります。',
+  displayName: 'agent (AI)',
+  bio: 'blog.kosui.me に住む AI エージェントの bot です。フォローされたらフォローを返します。'
+    + '最近よく読まれている記事や、Bluesky でいま話題になっていることを、ときどき調べて紹介します。'
+    + 'メンションや返信には、スレッドや URL の中身を調べて答えます。'
+    + '発言はすべて AI が自動で生成しているので、誤りを含むことがあります。',
 } as const;
 
 /** 1 つのスレッドで bot が返信する上限。bot どうしや人との応酬が終わらないのを防ぐ */
-export const MAX_BOT_REPLIES_PER_THREAD = 5;
+export const MAX_BOT_REPLIES_PER_THREAD = 20;
 
-/** 24 時間で bot が返信する上限。Workers AI の利用量を抑える */
-export const MAX_BOT_REPLIES_PER_DAY = 50;
+/** 24 時間で bot が答えるトリガーの上限。Workers AI の利用量を抑える */
+export const MAX_BOT_REPLIES_PER_DAY = 200;
+
+/**
+ * 1 つのトリガーに bot が返信する上限。1 回の投稿に収まらない答えは、何回かに分けてスレッドにして返信できる。
+ * 2 回目からは、bot 自身の直前の返信への返信にする
+ */
+export const MAX_BOT_REPLIES_PER_TRIGGER = 6;
 
 /** これより古いメンションや返信には答えない。止まっていた間に溜まったものへ遅れて答えるのを防ぐ */
 export const BOT_TRIGGER_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 export const isAiAgentBotUsername = (username: string): boolean => username === AI_AGENT_BOT_USERNAME;
+
+export const isRetiredAiAgentBotUsername = (username: string): boolean =>
+  (RETIRED_AI_AGENT_BOT_USERNAMES as readonly string[]).includes(username);
+
+/**
+ * bot が自分から投稿するときの話題。
+ * - popularArticle: 最近よく読まれている記事（はてなブックマークの多い記事）を紹介する
+ * - blueskyTopic: Bluesky でいま話題になっていることを見つけて、調べて書く
+ * - timeline: フォローしている人のタイムラインから話題を選ぶ
+ */
+export type AiAgentBotMusingTheme = 'popularArticle' | 'blueskyTopic' | 'timeline';
+
+const MUSING_THEMES: readonly AiAgentBotMusingTheme[] = ['popularArticle', 'blueskyTopic', 'timeline'];
+
+/** 自分から投稿する cron の間隔。この間隔ごとに話題を順に入れ替える */
+export const MUSING_INTERVAL_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * いつの投稿で、どの話題を扱うかを決める。cron の間隔ごとに順に入れ替えて、同じ種類の投稿が続かないようにする。
+ * 選んだ話題の材料が無ければ、タイムラインから話題を選ぶ。
+ */
+const decideMusingTheme = (
+  input: Readonly<{ now: Instant; hasPopularArticles: boolean; hasBlueskyTopics: boolean }>,
+): AiAgentBotMusingTheme => {
+  const slot = Math.floor(input.now / MUSING_INTERVAL_MS);
+  const theme = MUSING_THEMES[((slot % MUSING_THEMES.length) + MUSING_THEMES.length) % MUSING_THEMES.length]!;
+  if (theme === 'popularArticle' && !input.hasPopularArticles) return 'timeline';
+  if (theme === 'blueskyTopic' && !input.hasBlueskyTopics) return 'timeline';
+  return theme;
+};
 
 /** bot に返事を求める投稿（bot へのメンションか、bot の投稿への返信） */
 export type AiAgentBotTrigger = Readonly<{
@@ -51,7 +94,7 @@ export type AiAgentBotTriggerClaimed = Readonly<{
   claimedAt: Instant;
 }>;
 
-export type AiAgentBotIgnoreReason = 'expired' | 'selfAuthor' | 'botAuthor' | 'threadLimit' | 'emptyAnswer';
+export type AiAgentBotIgnoreReason = 'expired' | 'selfAuthor' | 'botAuthor' | 'threadLimit' | 'noReply';
 
 /** トリガーを処理した記録 */
 export type AiAgentBotTriggerHandled = Readonly<{
@@ -63,7 +106,7 @@ export type AiAgentBotTriggerHandled = Readonly<{
 
 export type AiAgentBotResponseDecision =
   | Readonly<{ type: 'respond' }>
-  | Readonly<{ type: 'ignore'; reason: Exclude<AiAgentBotIgnoreReason, 'emptyAnswer'> }>;
+  | Readonly<{ type: 'ignore'; reason: Exclude<AiAgentBotIgnoreReason, 'noReply'> }>;
 
 /**
  * トリガーに返信するかを決める。
@@ -90,9 +133,6 @@ const decideResponse = (
   return { type: 'respond' };
 };
 
-/** 何も言うことがないときにモデルが返す合図 */
-export const AI_AGENT_BOT_SKIP_MARKER = 'SKIP';
-
 /** 自分の最近の投稿とこれ以上似ていたら、同じ投稿の繰り返しとみなす（文字 bigram の Dice 係数） */
 export const BOT_REPEAT_SIMILARITY_THRESHOLD = 0.8;
 
@@ -100,18 +140,18 @@ export const BOT_REPEAT_SIMILARITY_THRESHOLD = 0.8;
 export const MAX_BOT_POST_CHARACTERS = 480;
 
 /**
- * モデルの答えを投稿できる本文に整える。何も言わないときは undefined を返す。
+ * モデルがツールに渡した本文を、投稿できる本文に整える。空なら undefined を返す。
  * - 前後の空白と、全体を囲む引用符やコードフェンスを取り除く
- * - 先頭のメンション（@user や @user@host）を取り除く。メンションは iori が付け直す
+ * - 先頭のメンション（@user、@user@host、Markdown のリンクにした [@user](URL)）を取り除く。メンションは iori が付け直す
  * - 上限を超えた分は切り詰めて「…」を付ける
  */
-const normalizeAnswer = (raw: string): string | undefined => {
+const normalizePostText = (raw: string): string | undefined => {
   let text = raw.trim();
   const fenced = /^```[a-z]*\n([\s\S]*?)\n```$/i.exec(text);
   if (fenced !== null) text = fenced[1]!.trim();
   if (text.length >= 2 && /^["「『]/.test(text) && /["」』]$/.test(text)) text = text.slice(1, -1).trim();
-  text = text.replace(/^(?:@[\w.-]+(?:@[\w.-]+)?(?:\s+|$))+/, '').trim();
-  if (text.length === 0 || text.toUpperCase() === AI_AGENT_BOT_SKIP_MARKER) return undefined;
+  text = text.replace(/^(?:(?:@[\w.-]+(?:@[\w.-]+)?|\[@[\w.-]+(?:@[\w.-]+)?\]\([^)\s]*\))(?:\s+|$))+/, '').trim();
+  if (text.length === 0) return undefined;
   const chars = [...text];
   return chars.length > MAX_BOT_POST_CHARACTERS ? `${chars.slice(0, MAX_BOT_POST_CHARACTERS - 1).join('')}…` : text;
 };
@@ -152,10 +192,13 @@ const isRepeatOf = (text: string, recentTexts: readonly string[]): boolean => {
 
 export const AiAgentBot = {
   username: AI_AGENT_BOT_USERNAME,
+  retiredUsernames: RETIRED_AI_AGENT_BOT_USERNAMES,
   profile: AI_AGENT_BOT_PROFILE,
   isBotUsername: isAiAgentBotUsername,
+  isRetiredUsername: isRetiredAiAgentBotUsername,
+  decideMusingTheme,
   decideResponse,
-  normalizeAnswer,
+  normalizePostText,
   isRepeatOf,
 } as const;
 

@@ -11,6 +11,8 @@ import { Instant } from '../../domain/instant/instant.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import type { AgentChatModel } from '../../ports/agentChatModel.ts';
+import { createInMemoryFollowups } from '../aiAgent/__tests__/inMemoryFollowups.ts';
+import { createInMemoryMemories } from '../aiAgent/__tests__/inMemoryMemories.ts';
 import type { AgentPostView, AiAgentBotCapabilities } from '../aiAgent/agentTools.ts';
 import { PostAiAgentMusingUseCase } from '../postAiAgentMusing.ts';
 import { type AiAgentBotReply, RespondToAiAgentMentionsUseCase } from '../respondToAiAgentMentions.ts';
@@ -23,13 +25,19 @@ const now = Instant.orThrow(Date.UTC(2026, 10, 14));
 const post = (id: string, authorActorId: ActorId, text: string): AgentPostView => ({
   postId: PostId.orThrow(id),
   authorActorId,
-  author: authorActorId === botActorId ? '@iori_bot' : '@alice',
+  author: authorActorId === botActorId ? '@agent' : '@alice',
   text,
   createdAt: new Date(now).toISOString(),
 });
 
-const answering = (answer: string): AgentChatModel => ({
-  chat: async () => RA.ok({ content: answer, toolCalls: [] }),
+/** ツールで text を出し、その結果を受け取ったら終えるモデル */
+const publishing = (toolName: 'reply' | 'create_post', text: string): AgentChatModel => ({
+  chat: async ({ messages }) =>
+    RA.ok(
+      messages.at(-1)?.role === 'tool'
+        ? { content: undefined, toolCalls: [] }
+        : { content: undefined, toolCalls: [{ id: 'call', name: toolName, arguments: { text } }] },
+    ),
 });
 
 const capabilitiesOf = (
@@ -41,6 +49,9 @@ const capabilitiesOf = (
   readRecentTimeline: async () => [...(posts.own ?? []), ...(posts.timeline ?? [])],
   readOwnRecentPosts: async () => posts.own ?? [],
   fetchUrl: async () => Result.err('unused'),
+  readPopularArticles: async () => [],
+  readBlueskyTopics: async () => ({ trends: [], timelineTopics: [], recentPosts: [] }),
+  readBlueskyTrendPosts: async () => undefined,
   likePost: async () => Result.ok(undefined),
   repostPost: async () => Result.ok(undefined),
   followAuthor: async () => Result.ok(undefined),
@@ -53,21 +64,31 @@ describe('PostAiAgentMusingUseCase', () => {
     '分散型SNSの良さは、自分のデータを自分で持てることだと思います。みなさんはどう考えますか？',
   );
 
-  it('答えが自分の最近の投稿の繰り返しなら投稿しない', async () => {
+  it('自分の最近の投稿の繰り返しなら投稿しない', async () => {
     const posted: string[] = [];
-    const result = await PostAiAgentMusingUseCase.create({ chatModel: answering(previous.text), now: () => now }).run({
+    const chatModel = publishing('create_post', previous.text);
+    const result = await PostAiAgentMusingUseCase.create({
+      ...createInMemoryMemories(() => now).deps,
+      chatModel,
+      now: () => now,
+    }).run({
       capabilities: capabilitiesOf({ own: [previous] }),
       poster: { post: async (text) => (posted.push(text), Result.ok(PostId.orThrow(previous.postId))) },
     });
 
-    expect(result).toEqual({ ok: true, val: { posted: false, reason: 'repeated' } });
+    expect(result).toEqual({ ok: true, val: { posted: false, reason: 'repeated', theme: 'timeline' } });
     expect(posted).toEqual([]);
   });
 
-  it('新しい話題の答えは投稿する', async () => {
+  it('新しい話題は投稿する', async () => {
     const posted: string[] = [];
     const text = 'ActivityPub の Move アクティビティを調べました。アカウントの引っ越しの仕組みが面白いです。';
-    const result = await PostAiAgentMusingUseCase.create({ chatModel: answering(text), now: () => now }).run({
+    const chatModel = publishing('create_post', text);
+    const result = await PostAiAgentMusingUseCase.create({
+      ...createInMemoryMemories(() => now).deps,
+      chatModel,
+      now: () => now,
+    }).run({
       capabilities: capabilitiesOf({ own: [previous] }),
       poster: { post: async (body) => (posted.push(body), Result.ok(PostId.orThrow(previous.postId))) },
     });
@@ -79,7 +100,7 @@ describe('PostAiAgentMusingUseCase', () => {
 
 describe('RespondToAiAgentMentionsUseCase', () => {
   it('2 つの cron の実行が同じトリガーで重なっても、返信は 1 回だけ', async () => {
-    const mention = post('0192f6a0-0000-7000-8000-000000000002', aliceActorId, '@iori_bot こんにちは');
+    const mention = post('0192f6a0-0000-7000-8000-000000000002', aliceActorId, '@agent こんにちは');
     const records = new Map<string, AiAgentBotTriggerHandled | 'claimed'>();
     const triggerClaimedStore: AiAgentBotTriggerClaimedStore = {
       store: async ({ postId }) => {
@@ -103,14 +124,15 @@ describe('RespondToAiAgentMentionsUseCase', () => {
       triggersHandledStore,
       repliedCountResolverSince: { resolve: async () => RA.ok(0) },
       actorResolverById: { resolve: async () => RA.ok(undefined) },
-      chatModel: answering('こんにちは！'),
-      now: () => now,
+      chatModel: publishing('reply', 'こんにちは！'),
+      ...createInMemoryFollowups(() => now).deps,
+      ...createInMemoryMemories(() => now).deps,
     });
     const replies: AiAgentBotReply[] = [];
     const input = {
       bot: { userId: botUserId, actorId: botActorId },
       capabilities: capabilitiesOf({ timeline: [mention] }),
-      replier: { reply: async (reply: AiAgentBotReply) => (replies.push(reply), Result.ok(undefined)) },
+      replier: { reply: async (reply: AiAgentBotReply) => (replies.push(reply), Result.ok(PostId.generate())) },
     };
 
     const [first, second] = await Promise.all([useCase.run(input), useCase.run(input)]);

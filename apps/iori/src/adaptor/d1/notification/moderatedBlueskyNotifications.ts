@@ -6,7 +6,13 @@ import { blueskyModeratedActorsTable, notificationBlueskyTable, notificationsTab
 export const notFromModeratedBlueskyActor = (db: IoriD1Db) =>
   notExists(
     db.select({ one: sql`1` }).from(notificationBlueskyTable)
-      .innerJoin(blueskyModeratedActorsTable, eq(blueskyModeratedActorsTable.did, notificationBlueskyTable.authorDid))
+      .innerJoin(
+        blueskyModeratedActorsTable,
+        and(
+          eq(blueskyModeratedActorsTable.userId, notificationBlueskyTable.recipientUserId),
+          eq(blueskyModeratedActorsTable.did, notificationBlueskyTable.authorDid),
+        ),
+      )
       .where(and(
         eq(notificationBlueskyTable.notificationId, notificationsTable.notificationId),
         or(eq(blueskyModeratedActorsTable.muted, 1), isNotNull(blueskyModeratedActorsTable.blockUri)),

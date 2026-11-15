@@ -1,6 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
-
-vi.setConfig({ testTimeout: 30000 });
+import { describe, expect, it } from 'vitest';
 
 import { nobleArgon2idDerive } from '../../domain/password/argon2idDerive.ts';
 import type { Password } from '../../domain/password/password.ts';

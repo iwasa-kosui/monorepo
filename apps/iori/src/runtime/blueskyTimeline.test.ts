@@ -1,10 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
 import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts';
+import { UserId } from '../domain/user/userId.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
+import type { BlueskyAccountConfig } from './blueskyCredential.ts';
 import { createCollectBlueskyTimelineUseCase, resolveBlueskyTimelineConfig } from './blueskyTimeline.ts';
 
 const VALID_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
+const USER_ID = UserId.orThrow('00000000-0000-4000-8000-000000000001');
+const ACCOUNT: BlueskyAccountConfig = {
+  userId: USER_ID,
+  envCredentials: { identifier: 'kosui.me', appPassword: 'app-pass' },
+  credentialKey: undefined,
+};
+
+const fixtureWithUser = () => {
+  const fixture = createSqliteD1Fixture();
+  fixture.sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'kosui');
+  return fixture;
+};
 
 const enabled = {
   IORI_BLUESKY_TIMELINE: 'enabled',
@@ -47,12 +61,12 @@ describe('resolveBlueskyTimelineConfig', () => {
 
 describe('createCollectBlueskyTimelineUseCase', () => {
   it('有効なときは、保存済みセッションで getTimeline を呼び、取り込んだ投稿を D1 に残す', async () => {
-    const { binding, sqlite } = createSqliteD1Fixture();
+    const { binding, sqlite } = fixtureWithUser();
     const now = Date.now();
     sqlite.prepare(
-      'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
+      'INSERT INTO bluesky_sessions(userId,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
     )
-      .run('default', 'did:plc:me', 'kosui.me', 'https://pds.example.net', 'access', 'refresh', now);
+      .run(USER_ID, 'did:plc:me', 'kosui.me', 'https://pds.example.net', 'access', 'refresh', now);
     const requests: string[] = [];
     const fetchStub = (async (url: string | URL | Request) => {
       requests.push(String(url));
@@ -70,7 +84,7 @@ describe('createCollectBlueskyTimelineUseCase', () => {
     }) as typeof fetch;
     const env = { ...enabled, DB: binding } as unknown as IoriWorkerEnv;
 
-    const useCase = createCollectBlueskyTimelineUseCase(env, { fetch: fetchStub });
+    const useCase = createCollectBlueskyTimelineUseCase(env, ACCOUNT, { fetch: fetchStub });
     const result = await useCase?.run();
 
     expect(result).toEqual({ ok: true, val: { pages: 1, fetched: 1, saved: 1, dropped: 0 } });
@@ -83,16 +97,17 @@ describe('createCollectBlueskyTimelineUseCase', () => {
 
 describe('新しい投稿がない取り込み', () => {
   it('D1 には セッション・既存の確認・リポストとブックマークの削除対象の SELECT だけを発行し、書き込みは 1 本も発行しない', async () => {
-    const { binding, sqlite, queries } = createSqliteD1Fixture();
+    const { binding, sqlite, queries } = fixtureWithUser();
     const now = Date.now();
     sqlite.prepare(
-      'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
+      'INSERT INTO bluesky_sessions(userId,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
     )
-      .run('default', 'did:plc:me', 'kosui.me', 'https://pds.example.net', 'access', 'refresh', now);
+      .run(USER_ID, 'did:plc:me', 'kosui.me', 'https://pds.example.net', 'access', 'refresh', now);
     sqlite.prepare(
-      'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
     )
       .run(
+        USER_ID,
         'at://did:plc:a/app.bsky.feed.post/1',
         'u',
         'cid1',
@@ -121,7 +136,7 @@ describe('新しい投稿がない取り込み', () => {
     const env = { ...enabled, DB: binding } as unknown as IoriWorkerEnv;
     queries.length = 0;
 
-    const result = await createCollectBlueskyTimelineUseCase(env, { fetch: fetchStub })?.run();
+    const result = await createCollectBlueskyTimelineUseCase(env, ACCOUNT, { fetch: fetchStub })?.run();
 
     expect(result).toEqual({ ok: true, val: { pages: 1, fetched: 1, saved: 0, dropped: 0 } });
     expect(queries.map(({ sql }) => sql.trim().split(/\s+/)[0]!.toLowerCase())).toEqual([
@@ -148,13 +163,19 @@ describe('ログイン失敗後の待ち時間', () => {
   };
 
   it('cron の取り込みは、createSession が失敗したら時刻を書き、次の実行では createSession を呼ばない', async () => {
-    const { binding, sqlite } = createSqliteD1Fixture();
+    const { binding, sqlite } = fixtureWithUser();
     const { requests, fetchStub } = failingLogin();
     const env = { ...enabled, DB: binding } as unknown as IoriWorkerEnv;
 
-    const first = await createCollectBlueskyTimelineUseCase(env, { fetch: fetchStub, holdLoginAfterFailure: true })
+    const first = await createCollectBlueskyTimelineUseCase(env, ACCOUNT, {
+      fetch: fetchStub,
+      holdLoginAfterFailure: true,
+    })
       ?.run();
-    const second = await createCollectBlueskyTimelineUseCase(env, { fetch: fetchStub, holdLoginAfterFailure: true })
+    const second = await createCollectBlueskyTimelineUseCase(env, ACCOUNT, {
+      fetch: fetchStub,
+      holdLoginAfterFailure: true,
+    })
       ?.run();
 
     expect(first?.ok).toBe(false);

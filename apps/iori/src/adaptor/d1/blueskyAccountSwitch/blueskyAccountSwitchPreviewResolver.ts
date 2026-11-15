@@ -1,7 +1,8 @@
 import { RA } from '@iwasa-kosui/result';
-import { count, inArray } from 'drizzle-orm';
+import { and, count, eq, inArray } from 'drizzle-orm';
 
 import type { BlueskyAccountSwitchPreviewResolver } from '../../../domain/blueskyAccountSwitch/blueskyAccountSwitch.ts';
+import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import {
   blueskyBookmarksTable,
@@ -14,17 +15,23 @@ import {
 } from '../schema.ts';
 import { BLUESKY_NOTIFICATION_TYPES } from './blueskyAccountSwitchPurger.ts';
 
-export const createD1BlueskyAccountSwitchPreviewResolver = (db: IoriD1Db): BlueskyAccountSwitchPreviewResolver => ({
+export const createD1BlueskyAccountSwitchPreviewResolver = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyAccountSwitchPreviewResolver => ({
   resolve: async () => {
     const [timelineItems, notifications, likes, reposts, bookmarks, moderatedActors, crossposts] = await Promise.all([
-      db.select({ n: count() }).from(blueskyTimelineItemsTable),
+      db.select({ n: count() }).from(blueskyTimelineItemsTable).where(eq(blueskyTimelineItemsTable.userId, userId)),
       db.select({ n: count() }).from(notificationsTable)
-        .where(inArray(notificationsTable.type, [...BLUESKY_NOTIFICATION_TYPES])),
-      db.select({ n: count() }).from(blueskyLikesTable),
-      db.select({ n: count() }).from(blueskyRepostsTable),
-      db.select({ n: count() }).from(blueskyBookmarksTable),
-      db.select({ n: count() }).from(blueskyModeratedActorsTable),
-      db.select({ n: count() }).from(blueskyCrosspostsTable),
+        .where(and(
+          eq(notificationsTable.recipientUserId, userId),
+          inArray(notificationsTable.type, [...BLUESKY_NOTIFICATION_TYPES]),
+        )),
+      db.select({ n: count() }).from(blueskyLikesTable).where(eq(blueskyLikesTable.userId, userId)),
+      db.select({ n: count() }).from(blueskyRepostsTable).where(eq(blueskyRepostsTable.userId, userId)),
+      db.select({ n: count() }).from(blueskyBookmarksTable).where(eq(blueskyBookmarksTable.userId, userId)),
+      db.select({ n: count() }).from(blueskyModeratedActorsTable).where(eq(blueskyModeratedActorsTable.userId, userId)),
+      db.select({ n: count() }).from(blueskyCrosspostsTable).where(eq(blueskyCrosspostsTable.userId, userId)),
     ]);
     return RA.ok({
       timelineItems: timelineItems[0]?.n ?? 0,

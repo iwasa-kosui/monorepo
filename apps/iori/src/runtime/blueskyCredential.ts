@@ -9,6 +9,8 @@ import { createD1BlueskyAccountSwitchStartedStore } from '../adaptor/d1/blueskyA
 import {
   blueskyStoredCredentialDeleteQuery,
   blueskyStoredCredentialSaveQuery,
+  createD1BlueskyCredentialUserIdResolverByDid,
+  createD1BlueskyLinkedUserIdsResolver,
   createD1BlueskyStoredCredentialResolver,
 } from '../adaptor/d1/blueskyCredential/blueskyCredentialStore.ts';
 import { blueskyLoginFailureDeleteQuery } from '../adaptor/d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
@@ -29,11 +31,13 @@ import {
 } from '../domain/blueskyCredential/blueskyCredential.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
+import type { UserId } from '../domain/user/userId.ts';
+import { Username } from '../domain/user/username.ts';
 import type { BlueskyCredentials } from '../ports/blueskyClient.ts';
+import { DAILY_DIGEST_USERNAME } from '../scheduled/digestTasks.ts';
 import { DeleteBlueskyCredentialUseCase } from '../useCase/deleteBlueskyCredential.ts';
 import { GetBlueskyAccountSwitchUseCase } from '../useCase/getBlueskyAccountSwitch.ts';
 import { GetBlueskyCredentialUseCase } from '../useCase/getBlueskyCredential.ts';
-import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { PreviewBlueskyAccountSwitchUseCase } from '../useCase/previewBlueskyAccountSwitch.ts';
 import { RegisterBlueskyCredentialUseCase } from '../useCase/registerBlueskyCredential.ts';
 import { ResolveBlueskyCredentialUseCase } from '../useCase/resolveBlueskyCredential.ts';
@@ -75,30 +79,81 @@ export const resolveBlueskyRuntimeConfig = (
 const createCipherFor = (credentialKey: string | undefined) =>
   createAesGcmCipherFactory({ key: credentialKey, aadOf: blueskyCredentialAad });
 
+/**
+ * 1 人のユーザーの Bluesky のアカウントを動かすための設定。
+ * 環境変数の資格情報（BLUESKY_IDENTIFIER）は、ユーザーごとの設定ができる前からあるオーナーのものなので、オーナーにだけ渡す
+ */
+export type BlueskyAccountConfig = Readonly<{
+  userId: UserId;
+  envCredentials: BlueskyCredentials | undefined;
+  credentialKey: string | undefined;
+}>;
+
+const resolveOwnerUserId = async (db: IoriD1Db): Promise<UserId | undefined> => {
+  const owner = await createD1UserResolverByUsername(db).resolve(Username.parseOrThrow(DAILY_DIGEST_USERNAME));
+  return owner.ok ? owner.val?.id : undefined;
+};
+
+export type BlueskyAccounts = Readonly<{
+  /** そのユーザーのアカウントの設定 */
+  configFor: (userId: UserId) => Promise<BlueskyAccountConfig>;
+  /** そのユーザーが Bluesky のアカウントをつないでいるか */
+  isLinked: (userId: UserId) => Promise<boolean>;
+  /** Bluesky のアカウントをつないでいるユーザー全員の設定。定期実行で使う */
+  linkedConfigs: () => Promise<readonly BlueskyAccountConfig[]>;
+}>;
+
+export const createBlueskyAccounts = (config: BlueskyRuntimeConfig, db: IoriD1Db): BlueskyAccounts => {
+  let owner: Promise<UserId | undefined> | undefined;
+  const ownerUserId = () => owner ??= resolveOwnerUserId(db);
+  const configFor = async (userId: UserId): Promise<BlueskyAccountConfig> => ({
+    userId,
+    envCredentials: config.envCredentials !== undefined && await ownerUserId() === userId
+      ? config.envCredentials
+      : undefined,
+    credentialKey: config.credentialKey,
+  });
+  return {
+    configFor,
+    isLinked: async (userId) => {
+      if ((await configFor(userId)).envCredentials !== undefined) return true;
+      const stored = await createD1BlueskyStoredCredentialResolver(db, userId).resolve();
+      return stored.ok && stored.val !== undefined;
+    },
+    linkedConfigs: async () => {
+      const userIds = new Set(await createD1BlueskyLinkedUserIdsResolver(db).resolve());
+      const owner = config.envCredentials === undefined ? undefined : await ownerUserId();
+      if (owner !== undefined) userIds.add(owner);
+      return Promise.all([...userIds].map(configFor));
+    },
+  };
+};
+
 export const createBlueskyCredentialRegisteredStore = (
   db: IoriD1Db,
+  userId: UserId,
   loginFailureScope: string,
 ): BlueskyCredentialRegisteredStore => ({
   store: async ({ credential, session }) => {
-    const guard = blueskyAccountSwitchAbsent(db);
+    const guard = blueskyAccountSwitchAbsent(db, userId);
     const [credentialChanges] = await runBatchChanges(db, [
-      blueskyStoredCredentialSaveQuery(db, credential, guard),
-      blueskySessionSaveQuery(db, session, guard),
-      blueskyLoginFailureDeleteQuery(db, loginFailureScope, guard),
+      blueskyStoredCredentialSaveQuery(db, userId, credential, guard),
+      blueskySessionSaveQuery(db, userId, session, guard),
+      blueskyLoginFailureDeleteQuery(db, userId, loginFailureScope, guard),
     ]);
     return credentialChanges === 0 ? RA.err(BlueskyAccountSwitchInProgress.create()) : RA.ok(undefined);
   },
 });
 
-export const createBlueskyCredentialRemovedStore = (db: IoriD1Db): BlueskyCredentialRemovedStore => ({
+export const createBlueskyCredentialRemovedStore = (db: IoriD1Db, userId: UserId): BlueskyCredentialRemovedStore => ({
   delete: async () => {
-    const guard = blueskyAccountSwitchAbsent(db);
+    const guard = blueskyAccountSwitchAbsent(db, userId);
     const changes = await runBatchChanges(db, [
-      blueskyStoredCredentialDeleteQuery(db, guard),
-      blueskySessionDeleteQuery(db, guard),
+      blueskyStoredCredentialDeleteQuery(db, userId, guard),
+      blueskySessionDeleteQuery(db, userId, guard),
     ]);
     if (changes.some((count) => count > 0)) return RA.ok(undefined);
-    const switching = await createD1BlueskyAccountSwitchResolver(db).resolve();
+    const switching = await createD1BlueskyAccountSwitchResolver(db, userId).resolve();
     return switching.ok && switching.val !== undefined
       ? RA.err(BlueskyAccountSwitchInProgress.create())
       : RA.ok(undefined);
@@ -109,19 +164,19 @@ const logDecryptFailed = (): void => {
   console.warn(JSON.stringify({ event: 'bluesky_credential_decrypt_failed' }));
 };
 
-const createResolveCredential = (config: BlueskyRuntimeConfig, db: IoriD1Db) =>
+const createResolveCredential = (account: BlueskyAccountConfig, db: IoriD1Db) =>
   ResolveBlueskyCredentialUseCase.create({
-    storedResolver: createD1BlueskyStoredCredentialResolver(db),
-    cipherFor: createCipherFor(config.credentialKey),
-    envCredentials: config.envCredentials,
+    storedResolver: createD1BlueskyStoredCredentialResolver(db, account.userId),
+    cipherFor: createCipherFor(account.credentialKey),
+    envCredentials: account.envCredentials,
     onDecryptFailed: logDecryptFailed,
   });
 
 export const createBlueskyCredentialResolver = (
-  config: BlueskyRuntimeConfig,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
 ): () => Promise<BlueskyCredentials | undefined> => {
-  const resolveCredential = createResolveCredential(config, db);
+  const resolveCredential = createResolveCredential(account, db);
   return async () => (await resolveCredential.run()).credentials;
 };
 
@@ -132,29 +187,26 @@ export type BlueskyCredentialRuntimePorts = Readonly<{
   switchBlueskyAccountUseCase: SwitchBlueskyAccountUseCase;
   getBlueskyAccountSwitchUseCase: GetBlueskyAccountSwitchUseCase;
   previewBlueskyAccountSwitchUseCase: PreviewBlueskyAccountSwitchUseCase;
-  isDigestOwner: IsDigestOwner;
 }>;
 
 export const createBlueskyCredentialRuntimePorts = (
-  env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ argon2idDerive: Argon2idDerive; fetch?: typeof fetch }>,
 ): BlueskyCredentialRuntimePorts => {
-  const config: BlueskyRuntimeConfig = {
-    envCredentials: resolveBlueskyCredentials(env),
-    credentialKey: env.BLUESKY_CREDENTIAL_KEY,
-  };
-  const cipherFor = createCipherFor(config.credentialKey);
-  const sessionResolver = createD1BlueskySessionResolver(db);
-  const storedResolver = createD1BlueskyStoredCredentialResolver(db);
-  const accountSwitchResolver = createD1BlueskyAccountSwitchResolver(db);
+  const { userId } = account;
+  const cipherFor = createCipherFor(account.credentialKey);
+  const sessionResolver = createD1BlueskySessionResolver(db, userId);
+  const storedResolver = createD1BlueskyStoredCredentialResolver(db, userId);
+  const linkedUserIdResolver = createD1BlueskyCredentialUserIdResolverByDid(db);
+  const accountSwitchResolver = createD1BlueskyAccountSwitchResolver(db, userId);
   const verifier = createBlueskyCredentialVerifier({ fetch: deps.fetch, now: Instant.now });
   const verifyCurrentPassword = VerifyCurrentPasswordUseCase.create({
     userPasswordResolver: createD1UserPasswordResolver(db),
     argon2idDerive: deps.argon2idDerive,
   });
   const getCredential = GetBlueskyCredentialUseCase.create({
-    resolveCredential: createResolveCredential(config, db),
+    resolveCredential: createResolveCredential(account, db),
     sessionResolver,
     registrable: cipherFor !== undefined,
   });
@@ -162,38 +214,39 @@ export const createBlueskyCredentialRuntimePorts = (
     getBlueskyCredentialUseCase: getCredential,
     registerBlueskyCredentialUseCase: RegisterBlueskyCredentialUseCase.create({
       cipherFor,
-      envCredentials: config.envCredentials,
+      envCredentials: account.envCredentials,
       verifyCurrentPassword,
       verifier,
       storedResolver,
+      linkedUserIdResolver,
       sessionResolver,
-      registeredStore: createBlueskyCredentialRegisteredStore(db, BLUESKY_CREDENTIAL_LOGIN_FAILURE_SCOPE),
+      registeredStore: createBlueskyCredentialRegisteredStore(db, userId, BLUESKY_CREDENTIAL_LOGIN_FAILURE_SCOPE),
       accountSwitchResolver,
       now: Instant.now,
     }),
     deleteBlueskyCredentialUseCase: DeleteBlueskyCredentialUseCase.create({
-      removedStore: createBlueskyCredentialRemovedStore(db),
+      removedStore: createBlueskyCredentialRemovedStore(db, userId),
       getCredential,
       accountSwitchResolver,
       storedResolver,
-      envCredentials: config.envCredentials,
+      envCredentials: account.envCredentials,
       verifier,
     }),
     switchBlueskyAccountUseCase: SwitchBlueskyAccountUseCase.create({
       cipherFor,
-      envCredentials: config.envCredentials,
+      envCredentials: account.envCredentials,
       verifyCurrentPassword,
       verifier,
       storedResolver,
+      linkedUserIdResolver,
       sessionResolver,
       accountSwitchResolver,
-      startedStore: createD1BlueskyAccountSwitchStartedStore(db, BLUESKY_CREDENTIAL_LOGIN_FAILURE_SCOPE),
+      startedStore: createD1BlueskyAccountSwitchStartedStore(db, userId, BLUESKY_CREDENTIAL_LOGIN_FAILURE_SCOPE),
       now: Instant.now,
     }),
     getBlueskyAccountSwitchUseCase: GetBlueskyAccountSwitchUseCase.create({ accountSwitchResolver }),
     previewBlueskyAccountSwitchUseCase: PreviewBlueskyAccountSwitchUseCase.create({
-      previewResolver: createD1BlueskyAccountSwitchPreviewResolver(db),
+      previewResolver: createD1BlueskyAccountSwitchPreviewResolver(db, userId),
     }),
-    isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
   };
 };

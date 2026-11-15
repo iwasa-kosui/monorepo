@@ -29,24 +29,25 @@ const failure: BlueskyClientError = {
 
 const setup = () => {
   const { db, sqlite } = createSqliteD1Fixture();
+  sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'alice');
   const insertItem = sqlite.prepare(
-    'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
   );
   for (const uri of [POST, CROSSPOSTED, OTHERS, DELETING]) {
-    insertItem.run(uri, uri, 'bafy', uri.split('/')[2], 'handle.bsky.social', 't', '[]', null, 1, 1, 1);
+    insertItem.run(USER_ID, uri, uri, 'bafy', uri.split('/')[2], 'handle.bsky.social', 't', '[]', null, 1, 1, 1);
   }
   sqlite.prepare(
-    'INSERT INTO bluesky_crossposts(postId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
-  ).run(POST_ID, 'sent', CROSSPOSTED, 1, 1, 1);
+    'INSERT INTO bluesky_crossposts(postId,userId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)',
+  ).run(POST_ID, USER_ID, 'sent', CROSSPOSTED, 1, 1, 1);
   sqlite.prepare(
-    'INSERT INTO bluesky_crossposts(postId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
-  ).run(DELETING_POST_ID, 'deleting', DELETING, 1, 1, 1);
+    'INSERT INTO bluesky_crossposts(postId,userId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)',
+  ).run(DELETING_POST_ID, USER_ID, 'deleting', DELETING, 1, 1, 1);
   const deleteRecord = vi.fn<BlueskyClient['deleteRecord']>(async () => RA.ok(undefined));
   const viewerDid = vi.fn<BlueskyChatClient['viewerDid']>(async () => RA.ok(ME));
   const deletePost = vi.fn<DeletePostUseCase['run']>(async () => RA.ok({ success: true }));
   const useCase = DeleteOwnBlueskyPostUseCase.create({
     client: { deleteRecord, viewerDid },
-    postIdsResolver: createD1PostIdsResolverByBlueskyUris(db),
+    postIdsResolver: createD1PostIdsResolverByBlueskyUris(db, USER_ID),
     deletePost: { run: deletePost },
     timelineItemsDeletedStore: createD1BlueskyTimelineItemsDeletedStore(db),
   });

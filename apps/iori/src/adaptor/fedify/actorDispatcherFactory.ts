@@ -1,9 +1,10 @@
 import { type RequestContext } from '@fedify/fedify';
-import { Application, Endpoints } from '@fedify/vocab';
+import { Application, Endpoints, Tombstone } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { getLogger } from '@logtape/logtape';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
+import { AiAgentBot } from '../../domain/aiAgentBot/aiAgentBot.ts';
 import type { UserResolverByUsername } from '../../domain/user/user.ts';
 import { Username } from '../../domain/user/username.ts';
 import { buildLocalPerson } from '../../useCase/helper/localPerson.ts';
@@ -36,11 +37,13 @@ export const createActorDispatcher = ({ userResolverByUsername, actorResolverByU
       RA.ok(identifier),
       RA.andThen(Username.parse),
       RA.andThen((username) => userResolverByUsername.resolve(username)),
-      RA.andThen((user) =>
-        user === undefined ? RA.err(new Error(`User not found: ${identifier}`)) : actorResolverByUserId.resolve(user.id)
-      ),
+      RA.andThen((user) => user === undefined ? RA.ok(undefined) : actorResolverByUserId.resolve(user.id)),
       RA.match({
         ok: async (actor) => {
+          // 消した bot のアカウントは 410 Gone を返し、ほかのサーバーにアカウントが無くなったことを伝える
+          if (actor === undefined && AiAgentBot.isRetiredUsername(identifier)) {
+            return new Tombstone({ id: ctx.getActorUri(identifier) });
+          }
           if (actor === undefined) return null;
           return buildLocalPerson(ctx, identifier, actor);
         },

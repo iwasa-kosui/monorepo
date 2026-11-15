@@ -22,7 +22,7 @@ export const toBlueskyTimelineItemRow = (
     bridgedFromPostId: _bridgedFromPostId,
     ...item
   }: BlueskyFetchedTimelineItem,
-): typeof blueskyTimelineItemsTable.$inferInsert => ({
+): Omit<typeof blueskyTimelineItemsTable.$inferInsert, 'userId'> => ({
   ...item,
   facets: JSON.stringify(item.facets),
   embed: item.embed === null ? null : JSON.stringify(item.embed),

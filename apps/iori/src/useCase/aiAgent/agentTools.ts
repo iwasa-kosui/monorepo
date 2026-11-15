@@ -2,6 +2,17 @@ import type { Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import type { ActorId } from '../../domain/actor/actorId.ts';
+import { AiAgentBot, MAX_BOT_POST_CHARACTERS } from '../../domain/aiAgentBot/aiAgentBot.ts';
+import {
+  MAX_FOLLOWUP_DELAY_MINUTES,
+  MAX_FOLLOWUP_NOTE_CHARACTERS,
+  MIN_FOLLOWUP_DELAY_MINUTES,
+} from '../../domain/aiAgentBot/aiAgentBotFollowup.ts';
+import type {
+  BlueskyTimelineTopic,
+  BlueskyTopicPost,
+  BlueskyTrend,
+} from '../../domain/aiAgentBot/aiAgentBotMaterial.ts';
 import { PostId } from '../../domain/post/postId.ts';
 import type { AgentTool } from './agentLoop.ts';
 
@@ -18,6 +29,22 @@ export type AgentPostView = Readonly<{
 
 export type AgentFetchedPage = Readonly<{ finalUrl: string; text: string }>;
 
+/** 最近よく読まれている記事 */
+export type AgentArticleView = Readonly<{
+  title: string;
+  url: string;
+  bookmarkCount: number;
+  sourceTitle: string;
+}>;
+
+/** Bluesky でいま話題になっていること。全体の話題と、タイムラインで複数の人が触れている話題 */
+export type AgentBlueskyTopics = Readonly<{
+  trends: readonly BlueskyTrend[];
+  timelineTopics: readonly BlueskyTimelineTopic[];
+  /** 話題を探すための、タイムラインの最近の投稿 */
+  recentPosts: readonly BlueskyTopicPost[];
+}>;
+
 /**
  * bot が外の世界に対してできること。runtime が既存のユースケースを組み合わせて用意する。
  * 読み取りは bot から見える投稿に限る（非公開の投稿やほかの人の DM は返さない）。
@@ -30,6 +57,12 @@ export type AiAgentBotCapabilities = Readonly<{
   /** bot 自身の最近の投稿（新しい順） */
   readOwnRecentPosts: (limit: number) => Promise<readonly AgentPostView[]>;
   fetchUrl: (url: string) => Promise<Result<AgentFetchedPage, string>>;
+  /** 最近よく読まれている記事（はてなブックマークの多い順） */
+  readPopularArticles: (limit: number) => Promise<readonly AgentArticleView[]>;
+  /** Bluesky でいま話題になっていること */
+  readBlueskyTopics: () => Promise<AgentBlueskyTopics>;
+  /** Bluesky 全体の話題について、話題の投稿を読む。知らない話題なら undefined */
+  readBlueskyTrendPosts: (topic: string) => Promise<readonly BlueskyTopicPost[] | undefined>;
   likePost: (postId: PostId) => Promise<Result<void, string>>;
   repostPost: (postId: PostId) => Promise<Result<void, string>>;
   followAuthor: (postId: PostId) => Promise<Result<void, string>>;
@@ -42,7 +75,11 @@ export const MAX_SEARCH_RESULTS = 10;
 export const MAX_RECENT_TIMELINE = 20;
 /** 自分から投稿するときに、繰り返しを避けるために見返す自分の投稿の数 */
 export const MAX_OWN_RECENT_POSTS = 10;
-export const MAX_FETCHED_PAGE_CHARS = 5000;
+export const MAX_FETCHED_PAGE_CHARS = 10000;
+export const MAX_POPULAR_ARTICLES = 10;
+export const MAX_BLUESKY_TREND_POSTS = 10;
+/** モデルに見せる Bluesky の投稿の本文の長さ */
+const BLUESKY_POST_TEXT_CHARS = 300;
 
 export const formatPost = (post: AgentPostView): string =>
   [
@@ -53,10 +90,72 @@ export const formatPost = (post: AgentPostView): string =>
 export const formatPosts = (posts: readonly AgentPostView[]): string =>
   posts.length === 0 ? '該当する投稿はありません。' : posts.map(formatPost).join('\n\n');
 
+export const formatArticles = (articles: readonly AgentArticleView[]): string =>
+  articles.length === 0
+    ? '該当する記事はありません。'
+    : articles.map((article) =>
+      `- ${article.title}（${article.sourceTitle}、はてなブックマーク ${article.bookmarkCount} 件）\n  ${article.url}`
+    ).join('\n');
+
+const clip = (text: string, max: number): string => {
+  const chars = [...text.replace(/\s+/g, ' ').trim()];
+  return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : chars.join('');
+};
+
+const authorOf = (post: BlueskyTopicPost): string =>
+  post.authorDisplayName === null ? `@${post.authorHandle}` : `${post.authorDisplayName} (@${post.authorHandle})`;
+
+export const formatBlueskyPosts = (posts: readonly BlueskyTopicPost[]): string =>
+  posts.length === 0
+    ? '該当する投稿はありません。'
+    : posts.map((post) =>
+      [
+        `[${post.url}] ${authorOf(post)}${post.postedAt === null ? '' : ` (${post.postedAt})`}`,
+        ...(post.likeCount + post.repostCount > 0 ? [`いいね ${post.likeCount} / リポスト ${post.repostCount}`] : []),
+        clip(post.text, BLUESKY_POST_TEXT_CHARS),
+      ].join('\n')
+    ).join('\n\n');
+
+const formatTrend = (trend: BlueskyTrend): string =>
+  [
+    `- ${trend.displayName} [topic: ${trend.topic}]`,
+    [
+      trend.category,
+      trend.status,
+      trend.postCount === null ? null : `${trend.postCount} 件の投稿`,
+    ].filter((value) => value !== null).join(' / '),
+    trend.description,
+  ].filter((value) => value !== null && value.length > 0).join('\n  ');
+
+const formatTimelineTopic = (topic: BlueskyTimelineTopic): string =>
+  [
+    `- ${topic.kind === 'link' ? 'リンク' : 'ハッシュタグ'}: ${topic.label}${
+      topic.title === null ? '' : `（${topic.title}）`
+    }（${topic.people} 人が投稿・リポスト）`,
+    ...topic.posts.map((post) => `  > ${authorOf(post)}: ${clip(post.text, 120)} ${post.url}`),
+  ].join('\n');
+
+/** Bluesky の話題を、モデルが読める文にする */
+export const formatBlueskyTopics = (topics: AgentBlueskyTopics, options: Readonly<{ recentPosts: boolean }>): string =>
+  [
+    '### Bluesky 全体で話題になっていること（get_bluesky_trend_posts に topic を渡すと投稿を読める）',
+    topics.trends.length === 0 ? '読めませんでした。' : topics.trends.map(formatTrend).join('\n'),
+    '',
+    '### タイムラインで複数の人が触れている話題',
+    topics.timelineTopics.length === 0
+      ? '見つかりませんでした。'
+      : topics.timelineTopics.map(formatTimelineTopic).join('\n'),
+    ...(options.recentPosts
+      ? ['', '### タイムラインの最近の投稿（話題を探す手がかり）', formatBlueskyPosts(topics.recentPosts)]
+      : []),
+  ].join('\n');
+
 const postIdArgs = z.object({ postId: z.string() });
 const queryArgs = z.object({ query: z.string().min(1).max(200) });
 const urlArgs = z.object({ url: z.string().min(1).max(2000) });
 const limitArgs = z.object({ limit: z.coerce.number().int().min(1).max(MAX_RECENT_TIMELINE).optional() });
+const materialLimitArgs = z.object({ limit: z.coerce.number().int().min(1).max(MAX_POPULAR_ARTICLES).optional() });
+const topicArgs = z.object({ topic: z.string().min(1).max(200) });
 
 const invalidArgs = (name: string): string => `エラー: ${name} の引数が正しくありません。`;
 
@@ -117,6 +216,48 @@ const readingTools = (capabilities: AiAgentBotCapabilities): AgentTool[] => [
       const parsed = limitArgs.safeParse(args ?? {});
       if (!parsed.success) return invalidArgs('get_recent_timeline');
       return formatPosts(await capabilities.readRecentTimeline(parsed.data.limit ?? 10));
+    },
+  },
+  {
+    name: 'get_popular_articles',
+    description: 'この 2 日ほどで、はてなブックマークを多く集めている（よく読まれている）記事を、多い順に読む。',
+    parameters: {
+      type: 'object',
+      properties: { limit: { type: 'number', description: `読む件数（1〜${MAX_POPULAR_ARTICLES}）` } },
+      required: [],
+    },
+    run: async (args) => {
+      const parsed = materialLimitArgs.safeParse(args ?? {});
+      if (!parsed.success) return invalidArgs('get_popular_articles');
+      return formatArticles(await capabilities.readPopularArticles(parsed.data.limit ?? 5));
+    },
+  },
+  {
+    name: 'get_bluesky_topics',
+    description: [
+      'Bluesky でいま話題になっていることを読む。',
+      'Bluesky 全体の話題と、タイムラインで複数の人が同じリンクやハッシュタグに触れている話題を返す。',
+    ].join(''),
+    parameters: { type: 'object', properties: {}, required: [] },
+    run: async () => formatBlueskyTopics(await capabilities.readBlueskyTopics(), { recentPosts: false }),
+  },
+  {
+    name: 'get_bluesky_trend_posts',
+    description:
+      'get_bluesky_topics が返した Bluesky 全体の話題の topic を指定して、その話題についての投稿を読む。何が話題になっているのかを確かめるときに使う。',
+    parameters: {
+      type: 'object',
+      properties: { topic: { type: 'string', description: 'get_bluesky_topics が返した topic' } },
+      required: ['topic'],
+    },
+    run: async (args) => {
+      const parsed = topicArgs.safeParse(args);
+      if (!parsed.success) return invalidArgs('get_bluesky_trend_posts');
+      const posts = await capabilities.readBlueskyTrendPosts(parsed.data.topic.trim());
+      if (posts === undefined) {
+        return 'エラー: その topic の話題は見つかりません。get_bluesky_topics の topic を渡してください。';
+      }
+      return formatBlueskyPosts(posts.slice(0, MAX_BLUESKY_TREND_POSTS));
     },
   },
   {
@@ -181,8 +322,110 @@ const actionTools = (capabilities: AiAgentBotCapabilities): AgentTool[] => {
   ];
 };
 
-/** bot に渡す道具の一覧。読み取りの道具と、いいね・リポスト・フォローの道具 */
+/** bot に渡すツールの一覧。読み取りのツールと、いいね・リポスト・フォローのツール */
 export const createAgentTools = (capabilities: AiAgentBotCapabilities): AgentTool[] => [
   ...readingTools(capabilities),
   ...actionTools(capabilities),
 ];
+
+const textArgs = z.object({ text: z.string() });
+
+/** 返信や投稿のように、結果を外に出すツール。何回出したかと、失敗した理由をあとから読める */
+export type PublishTool = Readonly<{
+  tool: AgentTool;
+  published: () => number;
+  errors: () => readonly string[];
+}>;
+
+/**
+ * 本文を受け取って外に出すツールを作る。本文は投稿できる形に整えてから publish に渡す。
+ * limit 回を超えて呼ばれたら、出さずにエラーを返す。
+ */
+export const createPublishTool = (
+  spec: Readonly<{
+    name: string;
+    description: string;
+    limit: number;
+    done: string;
+    publish: (text: string) => Promise<Result<void, string>>;
+  }>,
+): PublishTool => {
+  let published = 0;
+  const errors: string[] = [];
+  return {
+    tool: {
+      name: spec.name,
+      description: spec.description,
+      parameters: {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            description: `本文（${MAX_BOT_POST_CHARACTERS} 文字以内の平文。メンションは付けない）`,
+          },
+        },
+        required: ['text'],
+      },
+      run: async (args) => {
+        const parsed = textArgs.safeParse(args);
+        if (!parsed.success) return invalidArgs(spec.name);
+        const text = AiAgentBot.normalizePostText(parsed.data.text);
+        if (text === undefined) return 'エラー: 本文が空です。';
+        if (published >= spec.limit) return `エラー: この実行で ${spec.name} を使える回数の上限に達しました。`;
+        const result = await spec.publish(text);
+        if (!result.ok) {
+          errors.push(result.err);
+          return `エラー: ${result.err}`;
+        }
+        published++;
+        return spec.done;
+      },
+    },
+    published: () => published,
+    errors: () => errors,
+  };
+};
+
+const followupArgs = z.object({ note: z.string(), afterMinutes: z.coerce.number() });
+
+/**
+ * あとで続きを調べる予定を入れるツールを作る。1 回の実行で 1 回だけ使える。
+ * schedule は予定を保存し、続きを調べる日時を返す。
+ */
+export const createFollowupTool = (
+  schedule: (input: Readonly<{ note: string; delayMinutes: number }>) => Promise<Result<Date, string>>,
+): AgentTool => {
+  let scheduled = false;
+  return {
+    name: 'schedule_followup',
+    description: [
+      'いまは調べきれないことを、あとで続きを調べる予定を入れる。',
+      '時間がたてば分かること（公開を待つ情報、続報が出そうな話題）や、この実行では調べる回数が足りないときに使う。',
+      '予定の時刻になると、あなたはメモとスレッドを読み直して続きを調べ、同じ投稿に続報を返信できる。',
+    ].join(''),
+    parameters: {
+      type: 'object',
+      properties: {
+        note: {
+          type: 'string',
+          description:
+            `あとの自分へのメモ。何を、どこで調べるつもりかを ${MAX_FOLLOWUP_NOTE_CHARACTERS} 文字以内で書く`,
+        },
+        afterMinutes: {
+          type: 'number',
+          description: `何分後に続きを調べるか（${MIN_FOLLOWUP_DELAY_MINUTES}〜${MAX_FOLLOWUP_DELAY_MINUTES}）`,
+        },
+      },
+      required: ['note', 'afterMinutes'],
+    },
+    run: async (args) => {
+      const parsed = followupArgs.safeParse(args);
+      if (!parsed.success) return invalidArgs('schedule_followup');
+      if (scheduled) return 'エラー: この実行では、すでに予定を入れています。';
+      const result = await schedule({ note: parsed.data.note, delayMinutes: Math.round(parsed.data.afterMinutes) });
+      if (!result.ok) return `エラー: ${result.err}`;
+      scheduled = true;
+      return `${result.val.toISOString()} ごろに続きを調べる予定を入れました。返信で、あとで続報すると伝えてかまいません。`;
+    },
+  };
+};
