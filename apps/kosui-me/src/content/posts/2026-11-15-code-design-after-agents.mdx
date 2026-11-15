@@ -10,7 +10,7 @@ private: false
 
 最近、業務でコードを読むことはほとんどなくなりました。
 
-私は現在、エンジニアというよりも PdM に近い立場で業務をしています。社内ではエージェントを組み合わせた開発の仕組みを運用しており、私が PRD とサービスブループリントを作成すると、そこからロードマップが作成され、Design Doc と ADR で論点が整理されます。私は、整理された未決の論点に回答します。回答に応じて、実装とテストが自動で生成されます。
+私は現在、エンジニアというよりも PdM に近い立場で業務をしています。社内ではエージェントを組み合わせた開発の仕組みを運用しています。私が PRD やサービスブループリントで意図を記述すると、その意図とナレッジベースから、バックログと論点が生成されます。私は論点に回答していき、回答に応じて実装とテストが生成されます。
 
 以前は、私がターミナルでエージェントにプロンプトを入力し、出力を確認してから次の指示を出していました。この方法では、課題ごとに人の入力が必要になり、人が離席すると開発が止まります。現在の仕組みでは、人が入力するのは意図の作成、論点への回答、マージの判断の3つに限られます。
 
@@ -77,7 +77,7 @@ private: false
 <div className="fig-panel">
 <svg viewBox="0 0 560 244" role="img" aria-labelledby="fig-fs-2-title fig-fs-2-desc">
 <title id="fig-fs-2-title">ソフトウェアファクトリーの時間軸</title>
-<desc id="fig-fs-2-desc">横軸を時間とし、上段に人、下段にエージェントを置いた図です。人は、左端で意図を作成し、中ほどで論点に回答し、右端でマージを判断します。エージェントは、実装とレビューの循環を左端から右端まで続けます。人が離席している区間でも、エージェントは止まりません。右端の手前にレビュー待ちの列があり、そこから人のマージの判断へ線が伸びます。人の関与は3点に限定されます。</desc>
+<desc id="fig-fs-2-desc">横軸を時間とし、上段に人、下段にエージェントを置いた図です。人は、左端で意図を作成し、中ほどで論点に回答し、右端でマージを判断します。エージェントは、左端でバックログと論点を生成し、その後、実装とレビューの循環を右端まで続けます。生成から最初の循環へ矢印が伸びます。人が離席している区間でも、エージェントは止まりません。右端の手前にレビュー待ちの列があり、そこから人のマージの判断へ線が伸びます。人の関与は3点に限定されます。</desc>
 <rect className="fig-card-soft" x="0" y="28" width="560" height="52" rx="12" />
 <rect className="fig-card-soft" x="0" y="130" width="560" height="52" rx="12" />
 <rect className="fig-band" x="296" y="24" width="108" height="162" rx="12" />
@@ -94,12 +94,11 @@ private: false
 <text className="fig-t fig-t-sm" x="211" y="59.5">論点に回答</text>
 <circle className="fig-fill-human" cx="529" cy="54" r="9" />
 <text className="fig-t fig-t-sm fig-end" x="514" y="59.5">マージを判断</text>
-<rect className="fig-card-agent" x="8" y="134" width="140" height="44" rx="10" />
-<path className="fig-line-agent" d="M18.1 152A8 8 0 0 1 31.9 152" />
-<path className="fig-mk-agent" d="M33.4 154.6L27.4 151.2L33.5 147.7Z" />
-<path className="fig-line-agent" d="M31.9 160A8 8 0 0 1 18.1 160" />
-<path className="fig-mk-agent" d="M16.6 157.4L22.6 160.8L16.5 164.3Z" />
-<text className="fig-t fig-t-sm" x="39" y="161.5">実装⇄レビュー</text>
+<rect className="fig-card-agent" x="8" y="134" width="112" height="44" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="64" y="151">バックログと</text>
+<text className="fig-t fig-t-sm fig-mid" x="64" y="169">論点を生成</text>
+<path className="fig-line" d="M120 156L154 156" />
+<path className="fig-mk" d="M160 156L154 159L154 153Z" />
 <rect className="fig-card-agent" x="160" y="134" width="140" height="44" rx="10" />
 <path className="fig-line-agent" d="M170.1 152A8 8 0 0 1 183.9 152" />
 <path className="fig-mk-agent" d="M185.4 154.6L179.4 151.2L185.5 147.7Z" />
@@ -112,8 +111,6 @@ private: false
 <path className="fig-line-agent" d="M335.9 160A8 8 0 0 1 322.1 160" />
 <path className="fig-mk-agent" d="M320.6 157.4L326.6 160.8L320.5 164.3Z" />
 <text className="fig-t fig-t-sm" x="343" y="161.5">実装⇄レビュー</text>
-<path className="fig-line" d="M148 156L154 156" />
-<path className="fig-mk" d="M160 156L154 159L154 153Z" />
 <path className="fig-line" d="M300 156L306 156" />
 <path className="fig-mk" d="M312 156L306 159L306 153Z" />
 <path className="fig-line" d="M452 156L458 156" />
@@ -127,65 +124,81 @@ private: false
 </svg>
 </div>
 <div className="fig-panel">
-<svg viewBox="0 0 560 344" role="img" aria-labelledby="fig-fs-3-title fig-fs-3-desc">
+<svg viewBox="0 0 568 480" role="img" aria-labelledby="fig-fs-3-title fig-fs-3-desc">
 <title id="fig-fs-3-title">ループの構造</title>
-<desc id="fig-fs-3-desc">左から、人が作る意図、worker と reviewer の循環、PR、人が行う判断とマージが並ぶ図です。PR の下には、PR ごとに作成する解説ページがあり、人が読んで判断する線が判断・マージに向かいます。worker と reviewer の循環は、指摘が解消されるまで自動で反復されます。循環で生じた未決の論点は、仮の案で実装を継続し、人が非同期に回答します。PR と判断・マージの間には、上限のあるレビュー待ちの列があります。上限に達すると、新しい課題を取得しない経路が worker に戻ります。下部では、retro がスキル改善の PR を作成し、その PR が判断・マージに届きます。</desc>
-<rect className="fig-pill" x="82" y="40" width="92" height="24" rx="12" />
-<text className="fig-t fig-t-sm fig-mid" x="128" y="57.5">未決の論点</text>
-<path className="fig-line fig-dotted" d="M128 98V66" />
-<rect className="fig-pill-human" x="440" y="40" width="36" height="24" rx="12" />
-<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="458" y="57.5">人</text>
-<path className="fig-line" d="M174 52L430 52" />
-<path className="fig-mk" d="M438 52L430 56L430 48Z" />
-<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="306" y="28">仮の案で実装を継続し、</text>
-<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="306" y="44">人は非同期に回答</text>
-<rect className="fig-card-human" x="8" y="120" width="52" height="40" rx="10" />
-<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="34" y="145.5">意図</text>
-<path className="fig-line" d="M60 140L78 140" />
-<path className="fig-mk" d="M86 140L78 144L78 136Z" />
-<circle className="fig-card-agent" cx="128" cy="140" r="42" />
-<path className="fig-mk-agent" d="M158.8 111L148.7 109.1L155.1 101.4Z" />
-<path className="fig-mk-agent" d="M97.2 169L107.3 170.9L100.9 178.6Z" />
-<text className="fig-t fig-t-sm fig-mid fig-b" x="128" y="126">worker</text>
-<text className="fig-t fig-t-sm fig-mid" x="128" y="144">⇄</text>
-<text className="fig-t fig-t-sm fig-mid fig-b" x="128" y="162">reviewer</text>
-<text className="fig-t fig-t-sm fig-mid" x="128" y="206">指摘が解消されるまで</text>
-<text className="fig-t fig-t-sm fig-mid" x="128" y="224">自動で反復</text>
-<path className="fig-line" d="M170 140L188 140" />
-<path className="fig-mk" d="M196 140L188 144L188 136Z" />
-<rect className="fig-card" x="198" y="120" width="88" height="40" rx="10" />
-<text className="fig-t fig-t-sm fig-mid" x="242" y="145.5">PR</text>
-<path className="fig-line" d="M242 160V196" />
-<path className="fig-mk" d="M242 204L238 196L246 196Z" />
-<text className="fig-t fig-t-sm fig-c-muted" x="252" y="187">PR ごとに作成</text>
-<rect className="fig-card" x="198" y="206" width="88" height="40" rx="10" />
-<text className="fig-t fig-t-sm fig-mid" x="242" y="231.5">解説ページ</text>
-<path className="fig-line-human" d="M286 226L452 226L452 170" />
-<path className="fig-mk-human" d="M452 162L456 170L448 170Z" />
-<text className="fig-t fig-t-sm fig-mid fig-c-human" x="369" y="218">人が読んで判断する</text>
-<path className="fig-line" d="M286 140L304 140" />
-<path className="fig-mk" d="M312 140L304 144L304 136Z" />
-<rect className="fig-card" x="314" y="108" width="100" height="64" rx="10" />
-<rect className="fig-card-soft" x="327" y="116" width="22" height="14" rx="4" />
-<rect className="fig-card-soft" x="353" y="116" width="22" height="14" rx="4" />
-<rect className="fig-card-soft" x="379" y="116" width="22" height="14" rx="4" />
-<text className="fig-t fig-t-sm fig-mid" x="364" y="152">レビュー待ち</text>
-<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="364" y="168">（上限あり）</text>
-<path className="fig-line" d="M414 140L432 140" />
-<path className="fig-mk" d="M440 140L432 144L432 136Z" />
-<rect className="fig-card-human" x="442" y="120" width="104" height="40" rx="10" />
-<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="494" y="145.5">判断・マージ</text>
-<path className="fig-line fig-dash" d="M364 108L364 90L168 90L168 119" />
-<path className="fig-mk" d="M168 127L164 119L172 119Z" />
-<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="266" y="82">上限に達すると新しい課題を取得しない</text>
-<rect className="fig-card-agent" x="8" y="292" width="68" height="40" rx="10" />
-<text className="fig-t fig-t-sm fig-mid fig-b" x="42" y="317.5">retro</text>
-<path className="fig-line" d="M76 312L92 312" />
-<path className="fig-mk" d="M100 312L92 316L92 308Z" />
-<rect className="fig-card" x="100" y="292" width="168" height="40" rx="10" />
-<text className="fig-t fig-t-sm fig-mid" x="184" y="317.5">スキル改善の PR</text>
-<path className="fig-line-agent" d="M268 312L494 312L494 170" />
-<path className="fig-mk-agent" d="M494 162L498 170L490 170Z" />
+<desc id="fig-fs-3-desc">上段の左に、人が記述する意図と、ナレッジベースが並ぶ図です。この2つから、エージェントがバックログと論点を生成します。バックログからは、課題を取得する線が worker と reviewer の循環へ向かいます。論点からは、人が回答する線が人へ向かい、仮の案で実装を継続する破線が worker と reviewer の循環へ向かいます。worker と reviewer の循環は、指摘が解消されるまで自動で反復されます。循環の出力は PR になり、PR の上には、PR ごとに作成する解説ページがあります。人が解説ページを読んで判断する線は、判断・マージに向かいます。PR と判断・マージの間には、上限のあるレビュー待ちの列があります。上限に達すると、新しい課題を取得しない経路が worker に戻ります。下部では、retro がスキル改善の PR を作成し、その PR が判断・マージに届きます。</desc>
+<rect className="fig-card-human" x="8" y="12" width="60" height="36" rx="10" />
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="38" y="35.5">意図</text>
+<rect className="fig-card" x="88" y="12" width="125" height="36" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="150.5" y="35.5">ナレッジベース</text>
+<path className="fig-line-agent" d="M38 48L38 58L132 58L132 72" />
+<path className="fig-mk-agent" d="M132 80L128 72L136 72Z" />
+<path className="fig-line-agent" d="M150 48L150 72" />
+<path className="fig-mk-agent" d="M150 80L146 72L154 72Z" />
+<rect className="fig-card-agent" x="119" y="80" width="50" height="28" rx="14" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="144" y="99.5">生成</text>
+<path className="fig-line-agent" d="M144 108L144 132" />
+<path className="fig-mk-agent" d="M144 140L140 132L148 132Z" />
+<path className="fig-line-agent" d="M169 94L236 94L236 132" />
+<path className="fig-mk-agent" d="M236 140L232 132L240 132Z" />
+<rect className="fig-card" x="98" y="140" width="92" height="36" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="144" y="163.5">バックログ</text>
+<rect className="fig-card" x="204" y="140" width="64" height="36" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="236" y="163.5">論点</text>
+<path className="fig-line" d="M144 176L144 266" />
+<path className="fig-mk" d="M144 274L140 266L148 266Z" />
+<text className="fig-t fig-t-sm fig-end fig-c-muted" x="136" y="232">課題を取得</text>
+<rect className="fig-pill-human" x="520" y="20" width="36" height="24" rx="12" />
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="538" y="37.5">人</text>
+<path className="fig-line-human" d="M268 158L538 158L538 54" />
+<path className="fig-mk-human" d="M538 46L534 54L542 54Z" />
+<text className="fig-t fig-t-sm fig-mid fig-c-human" x="403" y="150">人が回答</text>
+<path className="fig-line fig-dash" d="M212 176L212 288L184 288" />
+<path className="fig-mk" d="M176 288L184 284L184 292Z" />
+<text className="fig-t fig-t-sm fig-c-muted" x="220" y="200">仮の案で実装を継続</text>
+<circle className="fig-card-agent" cx="144" cy="316" r="42" />
+<path className="fig-mk-agent" d="M174.8 287L164.7 285.1L171.1 277.4Z" />
+<path className="fig-mk-agent" d="M113.2 345L123.3 346.9L116.9 354.6Z" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="144" y="302">worker</text>
+<text className="fig-t fig-t-sm fig-mid" x="144" y="320">⇄</text>
+<text className="fig-t fig-t-sm fig-mid fig-b" x="144" y="338">reviewer</text>
+<text className="fig-t fig-t-sm fig-mid" x="144" y="386">指摘が解消されるまで</text>
+<text className="fig-t fig-t-sm fig-mid" x="144" y="404">自動で反復</text>
+<path className="fig-line" d="M186 316L218 316" />
+<path className="fig-mk" d="M226 316L218 312L218 320Z" />
+<rect className="fig-card" x="226" y="296" width="88" height="40" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="270" y="321.5">PR</text>
+<path className="fig-line" d="M270 296L270 260" />
+<path className="fig-mk" d="M270 252L266 260L274 260Z" />
+<text className="fig-t fig-t-sm fig-c-muted" x="280" y="276">PR ごとに作成</text>
+<rect className="fig-card" x="226" y="216" width="88" height="36" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="270" y="239.5">解説ページ</text>
+<path className="fig-line-human" d="M314 234L466 234L466 288" />
+<path className="fig-mk-human" d="M466 296L462 288L470 288Z" />
+<text className="fig-t fig-t-sm fig-mid fig-c-human" x="390" y="226">人が読んで判断する</text>
+<path className="fig-line" d="M314 316L326 316" />
+<path className="fig-mk" d="M334 316L326 312L326 320Z" />
+<rect className="fig-card" x="334" y="284" width="100" height="64" rx="10" />
+<rect className="fig-card-soft" x="347" y="292" width="22" height="14" rx="4" />
+<rect className="fig-card-soft" x="373" y="292" width="22" height="14" rx="4" />
+<rect className="fig-card-soft" x="399" y="292" width="22" height="14" rx="4" />
+<text className="fig-t fig-t-sm fig-mid" x="384" y="328">レビュー待ち</text>
+<text className="fig-t fig-t-sm fig-mid fig-c-muted" x="384" y="344">（上限あり）</text>
+<path className="fig-line" d="M434 316L446 316" />
+<path className="fig-mk" d="M454 316L446 312L446 320Z" />
+<rect className="fig-card-human" x="454" y="296" width="104" height="40" rx="10" />
+<text className="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="506" y="321.5">判断・マージ</text>
+<path className="fig-line fig-dash" d="M384 348L384 366L206 366L206 334L191 334" />
+<path className="fig-mk" d="M183 334L191 330L191 338Z" />
+<text className="fig-t fig-t-sm fig-c-muted" x="232" y="388">上限に達すると新しい課題を取得しない</text>
+<rect className="fig-card-agent" x="8" y="424" width="68" height="40" rx="10" />
+<text className="fig-t fig-t-sm fig-mid fig-b" x="42" y="449.5">retro</text>
+<path className="fig-line" d="M76 444L92 444" />
+<path className="fig-mk" d="M100 444L92 448L92 440Z" />
+<rect className="fig-card" x="100" y="424" width="168" height="40" rx="10" />
+<text className="fig-t fig-t-sm fig-mid" x="184" y="449.5">スキル改善の PR</text>
+<path className="fig-line-agent" d="M268 444L506 444L506 344" />
+<path className="fig-mk-agent" d="M506 336L510 344L502 344Z" />
 </svg>
 </div>
 </div>
