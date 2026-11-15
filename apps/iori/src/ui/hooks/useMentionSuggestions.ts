@@ -3,13 +3,46 @@ import { useEffect, useRef, useState } from 'hono/jsx';
 import type { Account } from '../../adaptor/mastodon/entities.ts';
 import { searchMentionCandidates } from '../api/mastodonClient.ts';
 import { accountHandle } from '../api/status.ts';
-import { insertMention, type MentionToken, mentionTokenAt } from '../components/mentionSuggestion.ts';
+import {
+  insertMention,
+  MENTION_LIST_GAP_PX,
+  mentionListPlacement,
+  type MentionListSide,
+  type MentionToken,
+  mentionTokenAt,
+} from '../components/mentionSuggestion.ts';
+import { caretLineOffset } from '../components/textareaCaret.ts';
 
 const SEARCH_DELAY_MS = 150;
-// 候補の一覧（max-h-64）が収まらないほど画面の下が狭ければ、上に開く
 const LIST_HEIGHT_PX = 256;
 
-type Placement = 'above' | 'below';
+/** 候補の一覧の置き場所。`offset` は、下に開くなら一覧の上端、上に開くなら一覧の下端の、textarea の上端からの距離。 */
+export type MentionListPosition = Readonly<{ side: MentionListSide; offset: number; maxHeight: number }>;
+
+const fallbackPosition: MentionListPosition = { side: 'below', offset: 0, maxHeight: LIST_HEIGHT_PX };
+
+// スマホではキーボードが出ても window.innerHeight は縮まないので、見えている範囲は visualViewport から取る
+const visibleRange = (): Readonly<{ top: number; bottom: number }> => {
+  const viewport = window.visualViewport;
+  return viewport === null || viewport === undefined
+    ? { top: 0, bottom: window.innerHeight }
+    : { top: viewport.offsetTop, bottom: viewport.offsetTop + viewport.height };
+};
+
+const positionAtCaret = (textarea: HTMLTextAreaElement, caret: number): MentionListPosition => {
+  const line = caretLineOffset(textarea, caret);
+  const rect = textarea.getBoundingClientRect();
+  const range = visibleRange();
+  const { side, maxHeight } = mentionListPlacement({
+    caretTop: rect.top + line.top,
+    caretBottom: rect.top + line.bottom,
+    viewportTop: range.top,
+    viewportBottom: range.bottom,
+    preferredHeight: LIST_HEIGHT_PX,
+  });
+  const offset = side === 'below' ? line.bottom + MENTION_LIST_GAP_PX : line.top - MENTION_LIST_GAP_PX;
+  return { side, offset: textarea.offsetTop + offset, maxHeight };
+};
 
 type Options = Readonly<{
   value: string;
@@ -25,7 +58,7 @@ export const useMentionSuggestions = ({ value, onChange }: Options) => {
   const [token, setToken] = useState<MentionToken | undefined>(undefined);
   const [accounts, setAccounts] = useState<readonly Account[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [placement, setPlacement] = useState<Placement>('below');
+  const [position, setPosition] = useState<MentionListPosition>(fallbackPosition);
   const pendingCaret = useRef<number | null>(null);
   // 入力のたびに検索しないよう少し待ち、古い問い合わせの結果は捨てる
   const [pending] = useState<{ timer: ReturnType<typeof setTimeout> | null; seq: number; query: string | undefined }>(
@@ -91,8 +124,7 @@ export const useMentionSuggestions = ({ value, onChange }: Options) => {
       search(next.query);
     }
     setToken(next);
-    const spaceBelow = window.innerHeight - textarea.getBoundingClientRect().bottom;
-    setPlacement(spaceBelow < LIST_HEIGHT_PX ? 'above' : 'below');
+    setPosition(positionAtCaret(textarea, next.end));
   };
 
   const select = (account: Account) => {
@@ -139,7 +171,7 @@ export const useMentionSuggestions = ({ value, onChange }: Options) => {
     isOpen,
     accounts,
     activeIndex,
-    placement,
+    position,
     refresh,
     close,
     select,

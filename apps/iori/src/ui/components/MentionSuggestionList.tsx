@@ -1,27 +1,32 @@
 import type { Account } from '../../adaptor/mastodon/entities.ts';
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { accountHandle } from '../api/status.ts';
+import type { MentionListPosition } from '../hooks/useMentionSuggestions.ts';
 import { CustomEmojiText } from './CustomEmojiText.tsx';
 
 type Props = Readonly<{
   id: string;
   accounts: readonly Account[];
   activeIndex: number;
-  placement: 'above' | 'below';
+  position: MentionListPosition;
   onSelect: (account: Account) => void;
   onHover: (index: number) => void;
 }>;
 
 export const mentionOptionId = (listId: string, index: number): string => `${listId}-option-${index}`;
 
-export const MentionSuggestionList = ({ id, accounts, activeIndex, placement, onSelect, onHover }: Props) => (
+export const MentionSuggestionList = ({ id, accounts, activeIndex, position, onSelect, onHover }: Props) => (
   <ul
     id={id}
     role='listbox'
     aria-label='メンションの候補'
-    class={`absolute left-2 right-2 z-50 max-h-64 overflow-y-auto rounded-clay bg-cream dark:bg-gray-800 shadow-clay dark:shadow-clay-dark border border-warm-gray-dark dark:border-gray-600 py-1 ${
-      placement === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'
-    }`}
+    // 上に開くときは、一覧の下端をキャレットの行の上に合わせる
+    style={{
+      top: `${position.offset}px`,
+      maxHeight: `${position.maxHeight}px`,
+      transform: position.side === 'above' ? 'translateY(-100%)' : 'none',
+    }}
+    class='absolute left-2 right-2 z-50 overflow-y-auto rounded-clay bg-cream dark:bg-gray-800 shadow-clay dark:shadow-clay-dark border border-warm-gray-dark dark:border-gray-600 py-1'
   >
     {accounts.map((account, index) => {
       const avatar = safeAbsoluteUrl(account.avatar);
