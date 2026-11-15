@@ -8,7 +8,9 @@ import { blueskyLikesTable } from '../schema.ts';
 
 export const createD1BlueskyLikeDeletedStore = (db: IoriD1Db, userId: UserId): BlueskyLikeDeletedStore => ({
   deleteBySubjectUri: async (subjectUri) => {
-    await db.delete(blueskyLikesTable).where(and(eq(blueskyLikesTable.userId, userId), eq(blueskyLikesTable.subjectUri, subjectUri)));
+    await db.delete(blueskyLikesTable).where(
+      and(eq(blueskyLikesTable.userId, userId), eq(blueskyLikesTable.subjectUri, subjectUri)),
+    );
     return RA.ok(undefined);
   },
 });

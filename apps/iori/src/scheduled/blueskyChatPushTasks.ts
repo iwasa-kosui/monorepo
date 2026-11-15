@@ -21,7 +21,9 @@ export const createCollectBlueskyChatPushTask = (
       if (useCase === undefined) return;
       const collected = await useCase.run();
       if (!collected.ok) {
-        console.error(`iori bluesky chat push: collection failed. ${collected.err.message}`, { userId: account.userId });
+        console.error(`iori bluesky chat push: collection failed. ${collected.err.message}`, {
+          userId: account.userId,
+        });
         return;
       }
       console.info('iori bluesky chat push collected.', { userId: account.userId, ...collected.val });

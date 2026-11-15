@@ -34,7 +34,10 @@ export const createD1BlueskyViewerLikesSyncedStore = (db: IoriD1Db, userId: User
             createdAt: new Date(like.createdAt),
           })),
         )
-        .onConflictDoUpdate({ target: [blueskyLikesTable.userId, blueskyLikesTable.subjectUri], set: { likeUri: sql`excluded.likeUri` } });
+        .onConflictDoUpdate({
+          target: [blueskyLikesTable.userId, blueskyLikesTable.subjectUri],
+          set: { likeUri: sql`excluded.likeUri` },
+        });
     }
     return RA.ok(undefined);
   },

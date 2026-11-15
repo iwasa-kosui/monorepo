@@ -10,7 +10,10 @@ import { blueskyRepostsTable } from '../schema.ts';
 // D1 のバインド数の上限（100）に収まるよう、1 行 4 列で 24 行ずつ入れる
 const UPSERT_CHUNK_SIZE = 24;
 
-export const createD1BlueskyViewerRepostsSyncedStore = (db: IoriD1Db, userId: UserId): BlueskyViewerRepostsSyncedStore => ({
+export const createD1BlueskyViewerRepostsSyncedStore = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyViewerRepostsSyncedStore => ({
   sync: async (reposts) => {
     if (reposts.length === 0) return RA.ok(undefined);
     const stored = await db.select({
@@ -37,7 +40,10 @@ export const createD1BlueskyViewerRepostsSyncedStore = (db: IoriD1Db, userId: Us
             createdAt: new Date(repost.createdAt),
           })),
         )
-        .onConflictDoUpdate({ target: [blueskyRepostsTable.userId, blueskyRepostsTable.subjectUri], set: { repostUri: sql`excluded.repostUri` } });
+        .onConflictDoUpdate({
+          target: [blueskyRepostsTable.userId, blueskyRepostsTable.subjectUri],
+          set: { repostUri: sql`excluded.repostUri` },
+        });
     }
     return RA.ok(undefined);
   },

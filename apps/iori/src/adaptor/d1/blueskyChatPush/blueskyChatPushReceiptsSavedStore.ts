@@ -10,7 +10,10 @@ import { blueskyChatPushReceiptsTable } from '../schema.ts';
 // D1 のバインド数の上限（100）に収まるよう、1 行 4 列で 24 行ずつ入れる
 const CHUNK = 24;
 
-export const createD1BlueskyChatPushReceiptsSavedStore = (db: IoriD1Db, userId: UserId): BlueskyChatPushReceiptsSavedStore => ({
+export const createD1BlueskyChatPushReceiptsSavedStore = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyChatPushReceiptsSavedStore => ({
   store: async (...receipts) => {
     const chunks = Array.from(
       { length: Math.ceil(receipts.length / CHUNK) },

@@ -1,6 +1,8 @@
 import { RA } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { UserId } from '../domain/user/userId.ts';
+import type { BlueskyAccountConfig } from '../runtime/blueskyCredential.ts';
 import type { CollectBlueskyNotificationsUseCase } from '../useCase/collectBlueskyNotifications.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import { collectBlueskyNotificationsTask, createCollectBlueskyNotificationsTask } from './blueskyNotificationTasks.ts';
@@ -30,6 +32,16 @@ const recorderStub = () => ({
 });
 
 const NOW = Date.UTC(2026, 10, 12, 3, 4, 5);
+const SUMMARY = { pages: 1, fetched: 10, saved: 3, dropped: 1, pushed: 2 };
+const VALID_KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
+const ENABLED = { IORI_BLUESKY_TIMELINE: 'enabled', BLUESKY_CREDENTIAL_KEY: VALID_KEY };
+const ALICE = UserId.orThrow('00000000-0000-4000-8000-000000000001');
+const BOB = UserId.orThrow('00000000-0000-4000-8000-000000000002');
+const accountOf = (userId: UserId): BlueskyAccountConfig => ({
+  userId,
+  envCredentials: undefined,
+  credentialKey: VALID_KEY,
+});
 
 describe('collectBlueskyNotificationsTask', () => {
   it.each([
@@ -49,57 +61,96 @@ describe('collectBlueskyNotificationsTask', () => {
     expect(info).toHaveBeenCalledWith('iori bluesky notifications are disabled.');
   });
 
-  it('use case があるときは取り込みを 1 回実行し、結果をログに出す', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const summary = { pages: 1, fetched: 10, saved: 3, dropped: 1, pushed: 2 };
-    const run = vi.fn(async () => RA.ok(summary));
-    const createUseCase = vi.fn(() => ({ run }) as unknown as CollectBlueskyNotificationsUseCase);
-    const context = {
-      ...contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }),
-      env: { IORI_BLUESKY_TIMELINE: 'enabled' } as never,
+  describe('ユーザーごとの取り込み', () => {
+    const setupTask = (behaviors: Record<string, () => ReturnType<CollectBlueskyNotificationsUseCase['run']>>) => {
+      const recorders = new Map<string, ReturnType<typeof recorderStub>>();
+      const runs: string[] = [];
+      const task = createCollectBlueskyNotificationsTask(
+        (_env, account) =>
+          ({
+            run: () => {
+              runs.push(account.userId);
+              return behaviors[account.userId]!();
+            },
+          }) as unknown as CollectBlueskyNotificationsUseCase,
+        (_env, userId) => {
+          const recorder = recorderStub();
+          recorders.set(userId, recorder);
+          return recorder;
+        },
+        async () => [accountOf(ALICE), accountOf(BOB)],
+      );
+      return { task, recorders, runs };
     };
 
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(NOW);
-    const recorder = recorderStub();
+    it('listAccounts が返すユーザーごとに取り込み、それぞれのユーザーの同期状態に成功を記録する', async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => undefined);
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(NOW);
+      const t = setupTask({ [ALICE]: async () => RA.ok(SUMMARY), [BOB]: async () => RA.ok(SUMMARY) });
 
-    await createCollectBlueskyNotificationsTask(createUseCase, () => recorder).run(context);
+      await t.task.run(contextWith(ENABLED));
 
-    expect(createUseCase).toHaveBeenCalledWith(context.env);
-    expect(run).toHaveBeenCalledOnce();
-    expect(info).toHaveBeenCalledWith('iori bluesky notifications collected.', summary);
-    expect(recorder.succeededStore.save).toHaveBeenCalledOnce();
-    expect(recorder.succeededStore.save).toHaveBeenCalledWith('notifications', NOW);
-    expect(recorder.failedStore.save).not.toHaveBeenCalled();
-  });
+      expect(t.runs).toEqual([ALICE, BOB]);
+      for (const userId of [ALICE, BOB]) {
+        expect(t.recorders.get(userId)!.succeededStore.save).toHaveBeenCalledWith('notifications', NOW);
+        expect(t.recorders.get(userId)!.failedStore.save).not.toHaveBeenCalled();
+      }
+    });
 
-  it('取り込みが失敗したら、秘密を含まない短い文字列を console.error に 1 回だけ出す', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const run = vi.fn(async () =>
-      RA.err({
-        type: 'BlueskyClientError' as const,
-        kind: 'auth' as const,
-        message: 'app.bsky.notification.listNotifications failed: status 401 ExpiredToken',
-        status: 401,
-        code: 'ExpiredToken',
-      })
-    );
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(NOW);
-    const recorder = recorderStub();
-    const task = createCollectBlueskyNotificationsTask(
-      () => ({ run }) as unknown as CollectBlueskyNotificationsUseCase,
-      () => recorder,
-    );
+    it('1 人の取り込みが例外で失敗しても、ほかのユーザーの取り込みは続ける', async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => undefined);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(NOW);
+      const t = setupTask({
+        [ALICE]: async () => {
+          throw new Error('D1_ERROR: boom');
+        },
+        [BOB]: async () => RA.ok(SUMMARY),
+      });
 
-    await task.run(contextWith({ IORI_BLUESKY_TIMELINE: 'enabled' }));
+      await t.task.run(contextWith(ENABLED));
 
-    expect(error).toHaveBeenCalledOnce();
-    expect(error).toHaveBeenCalledWith(
-      'iori bluesky notifications: collection failed. app.bsky.notification.listNotifications failed: status 401 ExpiredToken',
-    );
-    expect(recorder.failedStore.save).toHaveBeenCalledOnce();
-    expect(recorder.failedStore.save).toHaveBeenCalledWith('notifications', NOW, 'auth', 'ExpiredToken');
-    expect(recorder.succeededStore.save).not.toHaveBeenCalled();
+      expect(t.runs).toEqual([ALICE, BOB]);
+      expect(t.recorders.get(BOB)!.succeededStore.save).toHaveBeenCalledWith('notifications', NOW);
+      expect(error).toHaveBeenCalledOnce();
+      expect(error.mock.calls[0]![1]).toMatchObject({ userId: ALICE });
+    });
+
+    it('取り込みが Err なら、秘密を含まない短い文字列を console.error に出し、そのユーザーにだけ失敗を記録する', async () => {
+      vi.spyOn(console, 'info').mockImplementation(() => undefined);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(NOW);
+      const t = setupTask({
+        [ALICE]: async () =>
+          RA.err({
+            type: 'BlueskyClientError' as const,
+            kind: 'auth' as const,
+            message: 'app.bsky.notification.listNotifications failed: status 401 ExpiredToken',
+            status: 401,
+            code: 'ExpiredToken',
+          }),
+        [BOB]: async () => RA.ok(SUMMARY),
+      });
+
+      await t.task.run(contextWith(ENABLED));
+
+      expect(error).toHaveBeenCalledOnce();
+      expect(error).toHaveBeenCalledWith(
+        'iori bluesky notifications: collection failed. app.bsky.notification.listNotifications failed: status 401 ExpiredToken',
+        { userId: ALICE },
+      );
+      expect(t.recorders.get(ALICE)!.failedStore.save).toHaveBeenCalledWith(
+        'notifications',
+        NOW,
+        'auth',
+        'ExpiredToken',
+      );
+      expect(t.recorders.get(ALICE)!.succeededStore.save).not.toHaveBeenCalled();
+      expect(t.recorders.get(BOB)!.succeededStore.save).toHaveBeenCalledWith('notifications', NOW);
+      expect(t.recorders.get(BOB)!.failedStore.save).not.toHaveBeenCalled();
+    });
   });
 });

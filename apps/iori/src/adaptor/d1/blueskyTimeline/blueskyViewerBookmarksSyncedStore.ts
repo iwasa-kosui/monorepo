@@ -9,7 +9,10 @@ import { blueskyBookmarksTable } from '../schema.ts';
 
 const INSERT_CHUNK_SIZE = 30;
 
-export const createD1BlueskyViewerBookmarksSyncedStore = (db: IoriD1Db, userId: UserId): BlueskyViewerBookmarksSyncedStore => ({
+export const createD1BlueskyViewerBookmarksSyncedStore = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyViewerBookmarksSyncedStore => ({
   sync: async (bookmarks) => {
     if (bookmarks.length === 0) return RA.ok(undefined);
     const stored = await db.select({ subjectUri: blueskyBookmarksTable.subjectUri })

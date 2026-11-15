@@ -11,7 +11,11 @@ import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { blueskyLoginFailuresTable } from '../schema.ts';
 
-export const createD1BlueskyLoginFailureResolver = (db: IoriD1Db, userId: UserId, scope: string): BlueskyLoginFailureResolver => ({
+export const createD1BlueskyLoginFailureResolver = (
+  db: IoriD1Db,
+  userId: UserId,
+  scope: string,
+): BlueskyLoginFailureResolver => ({
   resolve: async () => {
     const [row] = await db.select().from(blueskyLoginFailuresTable)
       .where(and(eq(blueskyLoginFailuresTable.userId, userId), eq(blueskyLoginFailuresTable.scope, scope))).limit(1);
@@ -19,7 +23,11 @@ export const createD1BlueskyLoginFailureResolver = (db: IoriD1Db, userId: UserId
   },
 });
 
-export const createD1BlueskyLoginFailureSavedStore = (db: IoriD1Db, userId: UserId, scope: string): BlueskyLoginFailureSavedStore => ({
+export const createD1BlueskyLoginFailureSavedStore = (
+  db: IoriD1Db,
+  userId: UserId,
+  scope: string,
+): BlueskyLoginFailureSavedStore => ({
   save: async (failedAt) => {
     const values = { failedAt: new Date(failedAt) };
     await db.insert(blueskyLoginFailuresTable).values({ userId, scope, ...values }).onConflictDoUpdate({

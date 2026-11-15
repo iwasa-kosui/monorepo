@@ -8,7 +8,9 @@ import { blueskyRepostsTable } from '../schema.ts';
 
 export const createD1BlueskyRepostDeletedStore = (db: IoriD1Db, userId: UserId): BlueskyRepostDeletedStore => ({
   deleteBySubjectUri: async (subjectUri) => {
-    await db.delete(blueskyRepostsTable).where(and(eq(blueskyRepostsTable.userId, userId), eq(blueskyRepostsTable.subjectUri, subjectUri)));
+    await db.delete(blueskyRepostsTable).where(
+      and(eq(blueskyRepostsTable.userId, userId), eq(blueskyRepostsTable.subjectUri, subjectUri)),
+    );
     return RA.ok(undefined);
   },
 });

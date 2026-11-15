@@ -42,7 +42,14 @@ export const createPurgeBlueskyAccountSwitchTask = (
   name: 'purgeBlueskyAccountSwitch',
   run: async ({ env }) => {
     for (const userId of await switchingUserIds(env)) {
-      const summary = Result.unsafeUnwrap(await createUseCase(env, userId).run());
+      let summary;
+      try {
+        summary = Result.unsafeUnwrap(await createUseCase(env, userId).run());
+      } catch (error) {
+        // 1 人の失敗で、ほかの人の後始末を止めない
+        console.error(JSON.stringify({ event: 'bluesky_account_switch_purge_failed', userId }), error);
+        continue;
+      }
       switch (summary.status) {
         case 'idle':
         case 'waiting':

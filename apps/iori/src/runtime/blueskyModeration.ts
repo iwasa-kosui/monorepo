@@ -59,8 +59,16 @@ export const createBlueskyModerationUseCases = (
       blockDeletedStore: createD1BlueskyBlockDeletedStore(db, account.userId),
       now,
     }),
-    mute: MuteBlueskyActorUseCase.create({ client, savedStore: createD1BlueskyMuteSavedStore(db, account.userId), now }),
-    unmute: UnmuteBlueskyActorUseCase.create({ client, deletedStore: createD1BlueskyMuteDeletedStore(db, account.userId), now }),
+    mute: MuteBlueskyActorUseCase.create({
+      client,
+      savedStore: createD1BlueskyMuteSavedStore(db, account.userId),
+      now,
+    }),
+    unmute: UnmuteBlueskyActorUseCase.create({
+      client,
+      deletedStore: createD1BlueskyMuteDeletedStore(db, account.userId),
+      now,
+    }),
     muteThread: MuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
     unmuteThread: UnmuteBlueskyThreadUseCase.create({ client, threadRootResolver }),
     block: BlockBlueskyActorUseCase.create({

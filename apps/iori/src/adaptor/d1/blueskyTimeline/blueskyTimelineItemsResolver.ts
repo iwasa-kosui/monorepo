@@ -66,9 +66,21 @@ export const createD1BlueskyTimelineItemsResolver = (db: IoriD1Db, userId: UserI
       bookmarkedUri: blueskyBookmarksTable.subjectUri,
     })
       .from(blueskyTimelineItemsTable)
-      .leftJoin(blueskyLikesTable, and(eq(blueskyLikesTable.userId, userId), eq(blueskyLikesTable.subjectUri, blueskyTimelineItemsTable.uri)))
-      .leftJoin(blueskyRepostsTable, and(eq(blueskyRepostsTable.userId, userId), eq(blueskyRepostsTable.subjectUri, blueskyTimelineItemsTable.uri)))
-      .leftJoin(blueskyBookmarksTable, and(eq(blueskyBookmarksTable.userId, userId), eq(blueskyBookmarksTable.subjectUri, blueskyTimelineItemsTable.uri)))
+      .leftJoin(
+        blueskyLikesTable,
+        and(eq(blueskyLikesTable.userId, userId), eq(blueskyLikesTable.subjectUri, blueskyTimelineItemsTable.uri)),
+      )
+      .leftJoin(
+        blueskyRepostsTable,
+        and(eq(blueskyRepostsTable.userId, userId), eq(blueskyRepostsTable.subjectUri, blueskyTimelineItemsTable.uri)),
+      )
+      .leftJoin(
+        blueskyBookmarksTable,
+        and(
+          eq(blueskyBookmarksTable.userId, userId),
+          eq(blueskyBookmarksTable.subjectUri, blueskyTimelineItemsTable.uri),
+        ),
+      )
       .where(and(...conditions))
       .orderBy(desc(blueskyTimelineItemsTable.indexedAt), desc(blueskyTimelineItemsTable.feedItemId))
       .limit(limit);

@@ -15,7 +15,10 @@ import {
 } from '../schema.ts';
 import { BLUESKY_NOTIFICATION_TYPES } from './blueskyAccountSwitchPurger.ts';
 
-export const createD1BlueskyAccountSwitchPreviewResolver = (db: IoriD1Db, userId: UserId): BlueskyAccountSwitchPreviewResolver => ({
+export const createD1BlueskyAccountSwitchPreviewResolver = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyAccountSwitchPreviewResolver => ({
   resolve: async () => {
     const [timelineItems, notifications, likes, reposts, bookmarks, moderatedActors, crossposts] = await Promise.all([
       db.select({ n: count() }).from(blueskyTimelineItemsTable).where(eq(blueskyTimelineItemsTable.userId, userId)),

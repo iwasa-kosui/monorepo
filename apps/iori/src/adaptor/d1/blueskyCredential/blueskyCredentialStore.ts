@@ -13,7 +13,10 @@ import type { IoriD1Db } from '../client.ts';
 import { guardedInsert } from '../guardedInsert.ts';
 import { blueskyCredentialsTable } from '../schema.ts';
 
-export const createD1BlueskyStoredCredentialResolver = (db: IoriD1Db, userId: UserId): BlueskyStoredCredentialResolver => ({
+export const createD1BlueskyStoredCredentialResolver = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyStoredCredentialResolver => ({
   resolve: async () => {
     const [row] = await db.select().from(blueskyCredentialsTable)
       .where(eq(blueskyCredentialsTable.userId, userId)).limit(1);
@@ -51,14 +54,20 @@ export const blueskyStoredCredentialSaveQuery = (
 export const blueskyStoredCredentialDeleteQuery = (db: IoriD1Db, userId: UserId, guard?: SQL) =>
   db.delete(blueskyCredentialsTable).where(and(eq(blueskyCredentialsTable.userId, userId), guard));
 
-export const createD1BlueskyStoredCredentialSavedStore = (db: IoriD1Db, userId: UserId): BlueskyStoredCredentialSavedStore => ({
+export const createD1BlueskyStoredCredentialSavedStore = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyStoredCredentialSavedStore => ({
   save: async (credential) => {
     await blueskyStoredCredentialSaveQuery(db, userId, credential);
     return RA.ok(undefined);
   },
 });
 
-export const createD1BlueskyStoredCredentialDeletedStore = (db: IoriD1Db, userId: UserId): BlueskyStoredCredentialDeletedStore => ({
+export const createD1BlueskyStoredCredentialDeletedStore = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyStoredCredentialDeletedStore => ({
   delete: async () => {
     await blueskyStoredCredentialDeleteQuery(db, userId);
     return RA.ok(undefined);

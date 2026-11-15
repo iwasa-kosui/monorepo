@@ -7,7 +7,10 @@ import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { blueskyModeratedActorsTable } from '../schema.ts';
 
-export const createD1BlueskyModeratedActorsResolver = (db: IoriD1Db, userId: UserId): BlueskyModeratedActorsResolver => ({
+export const createD1BlueskyModeratedActorsResolver = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyModeratedActorsResolver => ({
   resolveState: async (did) => {
     const [row] = await db.select({
       muted: blueskyModeratedActorsTable.muted,

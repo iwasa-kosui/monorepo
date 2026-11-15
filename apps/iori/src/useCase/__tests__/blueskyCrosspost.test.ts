@@ -20,8 +20,8 @@ import type { BlueskyBlob, BlueskyPostRecord } from '../../domain/blueskyCrosspo
 import { blueskyRkeyOf } from '../../domain/blueskyCrosspost/blueskyRkey.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { PostId } from '../../domain/post/postId.ts';
-import type { UserId } from '../../domain/user/userId.ts';
 import { appendQuoteInline } from '../../domain/post/quoteInline.ts';
+import type { UserId } from '../../domain/user/userId.ts';
 import type { BlueskyClient, BlueskyClientError, BlueskyQueryClient } from '../../ports/blueskyClient.ts';
 import type { PostImageObjectStore } from '../../ports/postImageObjectStore.ts';
 import { RemoveBlueskyCrosspostUseCase } from '../removeBlueskyCrosspost.ts';

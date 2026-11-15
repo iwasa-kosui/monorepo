@@ -42,12 +42,28 @@ type PurgeSource = Readonly<{ table: SQLiteTable; userId: SQLiteColumn; createdB
 
 const sources: Readonly<Record<Exclude<BlueskyAccountSwitchPurgeTarget, 'notifications'>, PurgeSource>> = {
   syncStatus: { table: blueskySyncStatusTable, userId: blueskySyncStatusTable.userId },
-  crossposts: { table: blueskyCrosspostsTable, userId: blueskyCrosspostsTable.userId, createdBefore: blueskyCrosspostsTable.createdAt },
+  crossposts: {
+    table: blueskyCrosspostsTable,
+    userId: blueskyCrosspostsTable.userId,
+    createdBefore: blueskyCrosspostsTable.createdAt,
+  },
   timelineItems: { table: blueskyTimelineItemsTable, userId: blueskyTimelineItemsTable.userId },
   likes: { table: blueskyLikesTable, userId: blueskyLikesTable.userId, createdBefore: blueskyLikesTable.createdAt },
-  reposts: { table: blueskyRepostsTable, userId: blueskyRepostsTable.userId, createdBefore: blueskyRepostsTable.createdAt },
-  bookmarks: { table: blueskyBookmarksTable, userId: blueskyBookmarksTable.userId, createdBefore: blueskyBookmarksTable.createdAt },
-  moderatedActors: { table: blueskyModeratedActorsTable, userId: blueskyModeratedActorsTable.userId, createdBefore: blueskyModeratedActorsTable.updatedAt },
+  reposts: {
+    table: blueskyRepostsTable,
+    userId: blueskyRepostsTable.userId,
+    createdBefore: blueskyRepostsTable.createdAt,
+  },
+  bookmarks: {
+    table: blueskyBookmarksTable,
+    userId: blueskyBookmarksTable.userId,
+    createdBefore: blueskyBookmarksTable.createdAt,
+  },
+  moderatedActors: {
+    table: blueskyModeratedActorsTable,
+    userId: blueskyModeratedActorsTable.userId,
+    createdBefore: blueskyModeratedActorsTable.updatedAt,
+  },
   notificationReceipts: { table: blueskyNotificationReceiptsTable, userId: blueskyNotificationReceiptsTable.userId },
   notificationSyncState: { table: blueskyNotificationSyncStateTable, userId: blueskyNotificationSyncStateTable.userId },
   chatPushReceipts: { table: blueskyChatPushReceiptsTable, userId: blueskyChatPushReceiptsTable.userId },

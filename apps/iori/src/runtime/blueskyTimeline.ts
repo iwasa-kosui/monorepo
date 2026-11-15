@@ -312,7 +312,11 @@ export const createBlueskyTimelineRuntimePorts = (
     blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db, account.userId),
     blueskyTimelineEnabled: config !== undefined,
     blueskySyncStatusResolver: createD1BlueskySyncStatusResolver(db, account.userId),
-    blueskyLoginFailureResolver: createD1BlueskyLoginFailureResolver(db, account.userId, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
+    blueskyLoginFailureResolver: createD1BlueskyLoginFailureResolver(
+      db,
+      account.userId,
+      BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE,
+    ),
     likeBlueskyPostUseCase: likes?.like,
     unlikeBlueskyPostUseCase: likes?.unlike,
     repostBlueskyPostUseCase: reposts?.repost,

@@ -5,7 +5,9 @@ import type { IoriD1Db } from '../client.ts';
 import { blueskyAccountSwitchTable, blueskyCredentialsTable } from '../schema.ts';
 
 export const blueskyAccountSwitchAbsent = (db: IoriD1Db, userId: UserId) =>
-  notExists(db.select({ n: sql`1` }).from(blueskyAccountSwitchTable).where(eq(blueskyAccountSwitchTable.userId, userId)));
+  notExists(
+    db.select({ n: sql`1` }).from(blueskyAccountSwitchTable).where(eq(blueskyAccountSwitchTable.userId, userId)),
+  );
 
 export const blueskyAccountSwitchStarted = (db: IoriD1Db, switchId: string) =>
   exists(
