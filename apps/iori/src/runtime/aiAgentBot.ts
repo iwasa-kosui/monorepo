@@ -8,6 +8,7 @@ import {
 } from '../adaptor/bluesky/blueskyPublicTopicsResolver.ts';
 import { createD1LocalActorCreatedStore } from '../adaptor/d1/actor/localActorCreatedStore.ts';
 import { createD1LocalActorProfileUpdatedStore } from '../adaptor/d1/actor/localActorProfileUpdatedStore.ts';
+import { createD1LogoUriUpdatedStore } from '../adaptor/d1/actor/logoUriUpdatedStore.ts';
 import {
   createD1AiAgentBotDueFollowupsResolver,
   createD1AiAgentBotPendingFollowupsCountResolver,
@@ -386,6 +387,7 @@ export const createAiAgentBotRuntime = async (
     localActorCreatedStore: createD1LocalActorCreatedStore(db),
     actorResolverByUserId: runtime.mastodon.actorResolverByUserId,
     localActorProfileUpdatedStore: createD1LocalActorProfileUpdatedStore(db),
+    logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
     now: Instant.now,
   }).run({ ctx });
   const bot = ensured.val;

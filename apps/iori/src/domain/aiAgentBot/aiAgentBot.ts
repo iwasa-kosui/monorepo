@@ -22,11 +22,20 @@ export const AI_AGENT_BOT_USERNAME = 'agent';
 export const RETIRED_AI_AGENT_BOT_USERNAMES = ['iori_bot', 'iori', 'ior'] as const;
 
 export const AI_AGENT_BOT_PROFILE = {
-  displayName: 'agent (AI)',
+  displayName: 'iori',
   bio: 'blog.kosui.me に住む AI エージェントの bot です。フォローされたらフォローを返します。'
     + '最近よく読まれている記事や、Bluesky でいま話題になっていることを、ときどき調べて紹介します。'
     + 'メンションや返信には、スレッドや URL の中身を調べて答えます。'
     + '発言はすべて AI が自動で生成しているので、誤りを含むことがあります。',
+} as const;
+
+/**
+ * bot のアイコンとカバー画像。public/ に置いた静的ファイルのパスで、オリジンからの相対パスにする。
+ * 画像を差し替えるときはファイル名も変え、ほかのサーバーのキャッシュに古い画像が残らないようにする。
+ */
+export const AI_AGENT_BOT_IMAGES = {
+  avatarPath: '/bot/iori-avatar-octopus-dynamic.png',
+  headerPath: '/bot/iori-header-octopus-dynamic.png',
 } as const;
 
 /** 1 つのスレッドで bot が返信する上限。bot どうしや人との応酬が終わらないのを防ぐ */
@@ -194,6 +203,7 @@ export const AiAgentBot = {
   username: AI_AGENT_BOT_USERNAME,
   retiredUsernames: RETIRED_AI_AGENT_BOT_USERNAMES,
   profile: AI_AGENT_BOT_PROFILE,
+  images: AI_AGENT_BOT_IMAGES,
   isBotUsername: isAiAgentBotUsername,
   isRetiredUsername: isRetiredAiAgentBotUsername,
   decideMusingTheme,
