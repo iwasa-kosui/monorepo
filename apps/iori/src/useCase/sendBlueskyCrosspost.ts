@@ -25,7 +25,13 @@ import type { LocalPostResolverByUri, PostQuotesResolverByPostIds, PostResolver 
 import type { PostId } from '../domain/post/postId.ts';
 import type { UserResolver } from '../domain/user/user.ts';
 import type { UserId } from '../domain/user/userId.ts';
-import type { BlueskyClient, BlueskyQueryClient, BlueskyThumbnailFetcher } from '../ports/blueskyClient.ts';
+import type {
+  BlueskyClient,
+  BlueskyClientError,
+  BlueskyCreatedRecord,
+  BlueskyQueryClient,
+  BlueskyThumbnailFetcher,
+} from '../ports/blueskyClient.ts';
 import type { PostImageObjectStore } from '../ports/postImageObjectStore.ts';
 import { findMentionHandles, withMentionFacets } from './helper/blueskyMentionFacets.ts';
 import { resolveBlueskyQuoteContextWith } from './helper/blueskyQuoteContext.ts';
@@ -61,6 +67,9 @@ type Deps = Readonly<{
 }>;
 
 const errorNameOf = (error: unknown): string => error instanceof Error ? error.name : typeof error;
+
+const isRecordNotFound = (error: BlueskyClientError): boolean =>
+  error.status === 404 || error.code === 'RecordNotFound';
 
 const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
   const resolveReplyContext = resolveBlueskyReplyContextWith(deps);
@@ -124,6 +133,42 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     const client = deps.clientFor(crosspost.userId);
     const attempting = BlueskyCrosspost.markSending(crosspost, deps.now());
     if (!Result.unsafeUnwrap(await deps.crosspostSavedStore.update(attempting))) return 'noop';
+
+    const root = replyTo.kind === 'sent' ? replyTo.root : undefined;
+    const finishSent = async (created: BlueskyCreatedRecord): Promise<SendBlueskyCrosspostOutcome> => {
+      const latestPost = Result.unsafeUnwrap(await deps.postResolver.resolve(postId));
+      const latestCrosspost = Result.unsafeUnwrap(await deps.crosspostResolver.resolve(postId));
+      const refs = {
+        uri: created.uri,
+        cid: created.cid,
+        rkey: created.rkey,
+        rootUri: root?.uri ?? null,
+        rootCid: root?.cid ?? null,
+      };
+      const markedSent = latestPost !== undefined && latestPost.type === 'local' && latestCrosspost !== undefined
+        && Result.unsafeUnwrap(
+          await deps.crosspostSavedStore.update(BlueskyCrosspost.markSent(latestCrosspost, refs, deps.now())),
+        );
+      if (markedSent) return 'sent';
+
+      const orphan = BlueskyCrosspost.markDeleting(
+        BlueskyCrosspost.markSent(latestCrosspost ?? attempting, refs, deps.now()),
+        deps.now(),
+      );
+      await deleteRemote(orphan);
+      return 'gone';
+    };
+
+    // 前の試行が作成を頼んだまま結果を残せずに終わっている（途中で打ち切られた、保存に失敗した）ときは、
+    // 作り直す前に Bluesky 側を確かめる。無ければ Bluesky で消されたとみなす。
+    // 同じ rkey で作り直すと、消した投稿がよみがえってしまう
+    if (BlueskyCrosspost.mayHaveRecord(attempting)) {
+      const existing = await client.getRecord(attempting.rkey);
+      if (existing.ok) return finishSent(existing.val);
+      if (!isRecordNotFound(existing.err)) return failWith(attempting, existing.err.message);
+      await deps.crosspostSavedStore.update(BlueskyCrosspost.markDeletedOnBluesky(attempting, deps.now()));
+      return 'skipped';
+    }
 
     const user = Result.unsafeUnwrap(await deps.userResolver.resolve(post.userId));
     if (user === undefined) return failWith(attempting, 'user not found');
@@ -193,35 +238,25 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     const thumbUploaded = thumbInput === undefined ? undefined : await client.uploadBlob(thumbInput);
 
     const rkey = blueskyRkeyOf({ postId, createdAt: post.createdAt });
-    let created = await client.createRecord(
+    const creating = BlueskyCrosspost.markCreating(attempting, rkey, deps.now());
+    if (!Result.unsafeUnwrap(await deps.crosspostSavedStore.update(creating))) return 'noop';
+    const created = await client.createRecord(
       toBlueskyPostRecord({ ...draft.val, facets }, {
         images: imageBlobs,
         ...(thumbUploaded?.ok ? { thumb: thumbUploaded.val } : {}),
       }),
       rkey,
     );
-    if (!created.ok && created.err.kind !== 'auth') {
+    if (created.ok) return finishSent(created.val);
+    if (created.err.kind !== 'auth') {
       const existing = await client.getRecord(rkey);
-      if (existing.ok) created = existing;
+      if (existing.ok) return finishSent(existing.val);
     }
-    if (!created.ok) return failWith(attempting, created.err.message);
-
-    const latestPost = Result.unsafeUnwrap(await deps.postResolver.resolve(postId));
-    const latestCrosspost = Result.unsafeUnwrap(await deps.crosspostResolver.resolve(postId));
-    const root = replyTo.kind === 'sent' ? replyTo.root : undefined;
-    const refs = { ...created.val, rootUri: root?.uri ?? null, rootCid: root?.cid ?? null };
-    const markedSent = latestPost !== undefined && latestPost.type === 'local' && latestCrosspost !== undefined
-      && Result.unsafeUnwrap(
-        await deps.crosspostSavedStore.update(BlueskyCrosspost.markSent(latestCrosspost, refs, deps.now())),
-      );
-    if (markedSent) return 'sent';
-
-    const orphan = BlueskyCrosspost.markDeleting(
-      BlueskyCrosspost.markSent(latestCrosspost ?? attempting, refs, deps.now()),
-      deps.now(),
+    // 失敗の応答を受け取り、Bluesky 側にも見つからなかった。作られていないとみなし、次の試行はそのまま送り直す
+    await deps.crosspostSavedStore.update(
+      BlueskyCrosspost.markFailedWithoutRecord(creating, created.err.message, deps.now()),
     );
-    await deleteRemote(orphan);
-    return 'gone';
+    return 'failed';
   };
 
   const run = async (input: Input) => {

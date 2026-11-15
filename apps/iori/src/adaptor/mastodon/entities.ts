@@ -143,7 +143,8 @@ export type Poll = z.infer<typeof PollSchema>;
 
 export const IoriBlueskyCrosspostSchema = z.object({
   status: z.enum(['pending', 'sent', 'failed', 'skipped', 'deleting']),
-  skip_reason: z.enum(['visibility', 'content_warning', 'sensitive', 'reply_to_unsent']).nullable(),
+  skip_reason: z.enum(['visibility', 'content_warning', 'sensitive', 'reply_to_unsent', 'deleted_on_bluesky'])
+    .nullable(),
   retrying: z.boolean(),
   url: z.string().nullable(),
 });
