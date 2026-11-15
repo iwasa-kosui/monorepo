@@ -1,11 +1,12 @@
 import { RA } from '@iwasa-kosui/result';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import type { BlueskyLikeTargetResolver } from '../../../domain/blueskyTimeline/blueskyLike.ts';
+import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { blueskyLikesTable, blueskyTimelineItemsTable } from '../schema.ts';
 
-export const createD1BlueskyLikeTargetResolver = (db: IoriD1Db): BlueskyLikeTargetResolver => ({
+export const createD1BlueskyLikeTargetResolver = (db: IoriD1Db, userId: UserId): BlueskyLikeTargetResolver => ({
   resolve: async (feedItemId) => {
     const [row] = await db.select({
       uri: blueskyTimelineItemsTable.uri,
@@ -13,8 +14,11 @@ export const createD1BlueskyLikeTargetResolver = (db: IoriD1Db): BlueskyLikeTarg
       likeUri: blueskyLikesTable.likeUri,
     })
       .from(blueskyTimelineItemsTable)
-      .leftJoin(blueskyLikesTable, eq(blueskyLikesTable.subjectUri, blueskyTimelineItemsTable.uri))
-      .where(eq(blueskyTimelineItemsTable.feedItemId, feedItemId))
+      .leftJoin(
+        blueskyLikesTable,
+        and(eq(blueskyLikesTable.userId, userId), eq(blueskyLikesTable.subjectUri, blueskyTimelineItemsTable.uri)),
+      )
+      .where(and(eq(blueskyTimelineItemsTable.userId, userId), eq(blueskyTimelineItemsTable.feedItemId, feedItemId)))
       .limit(1);
     return RA.ok(row);
   },

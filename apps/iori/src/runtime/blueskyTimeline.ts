@@ -36,7 +36,6 @@ import { createD1BlueskyViewerBookmarksSyncedStore } from '../adaptor/d1/bluesky
 import { createD1BlueskyViewerLikesSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyViewerLikesSyncedStore.ts';
 import { createD1BlueskyViewerRepostsSyncedStore } from '../adaptor/d1/blueskyTimeline/blueskyViewerRepostsSyncedStore.ts';
 import { createD1Db, type IoriD1Db } from '../adaptor/d1/client.ts';
-import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import type { BlueskyLoginFailureResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskySyncStatusResolver } from '../domain/blueskySyncStatus/blueskySyncStatus.ts';
@@ -50,7 +49,6 @@ import { CollectBlueskyTimelineUseCase } from '../useCase/collectBlueskyTimeline
 import { DeleteOwnBlueskyPostUseCase } from '../useCase/deleteOwnBlueskyPost.ts';
 import type { DeletePostUseCase } from '../useCase/deletePost.ts';
 import { ExpireBlueskyTimelineUseCase } from '../useCase/expireBlueskyTimeline.ts';
-import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../useCase/likeBlueskyPost.ts';
 import { MarkBlueskyNotificationsSeenUseCase } from '../useCase/markBlueskyNotificationsSeen.ts';
 import { PostToBlueskyUseCase } from '../useCase/postToBluesky.ts';
@@ -62,6 +60,7 @@ import { UnlikeBlueskyPostUseCase } from '../useCase/unlikeBlueskyPost.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import {
   BLUESKY_CREDENTIAL_LOGIN_FAILURE_SCOPE,
+  type BlueskyAccountConfig,
   type BlueskyRuntimeConfig,
   createBlueskyCredentialResolver,
   resolveBlueskyRuntimeConfig,
@@ -96,23 +95,22 @@ export type BlueskyTimelineRuntimePorts = Readonly<{
   blueskySearch: BlueskySearch | undefined;
   blueskyChat: BlueskyChatUseCases | undefined;
   viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
-  isDigestOwner: IsDigestOwner;
 }>;
 
 export const createTimelineClient = (
-  config: BlueskyRuntimeConfig,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch; holdLoginAfterFailure?: boolean }>,
 ) =>
   createBlueskyClient({
-    resolveCredentials: createBlueskyCredentialResolver(config, db),
-    sessionResolver: createD1BlueskySessionResolver(db),
-    sessionStore: createD1BlueskySessionSavedStore(db),
+    resolveCredentials: createBlueskyCredentialResolver(account, db),
+    sessionResolver: createD1BlueskySessionResolver(db, account.userId),
+    sessionStore: createD1BlueskySessionSavedStore(db, account.userId),
     loginFailure: deps.holdLoginAfterFailure === true
       ? {
-        resolver: createD1BlueskyLoginFailureResolver(db, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
-        savedStore: createD1BlueskyLoginFailureSavedStore(db, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
-        deletedStore: createD1BlueskyLoginFailureDeletedStore(db, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
+        resolver: createD1BlueskyLoginFailureResolver(db, account.userId, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
+        savedStore: createD1BlueskyLoginFailureSavedStore(db, account.userId, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
+        deletedStore: createD1BlueskyLoginFailureDeletedStore(db, account.userId, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
       }
       : undefined,
     fetch: deps.fetch,
@@ -121,21 +119,22 @@ export const createTimelineClient = (
 
 export const createLikeBlueskyPostUseCases = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch }> = {},
 ): Readonly<{ like: LikeBlueskyPostUseCase; unlike: UnlikeBlueskyPostUseCase }> | undefined => {
   const config = resolveBlueskyTimelineConfig(env);
   if (config === undefined) return undefined;
-  const client = createTimelineClient(config, db, deps);
-  const targetResolver = createD1BlueskyLikeTargetResolver(db);
-  const likeUriResolver = createD1BlueskyLikeUriResolver(db);
+  const client = createTimelineClient(account, db, deps);
+  const targetResolver = createD1BlueskyLikeTargetResolver(db, account.userId);
+  const likeUriResolver = createD1BlueskyLikeUriResolver(db, account.userId);
   return {
     like: LikeBlueskyPostUseCase.create({
       client,
       targetResolver,
       likeUriResolver,
       cidResolver: createBlueskyPostCidResolver({ client }),
-      savedStore: createD1BlueskyLikeSavedStore(db),
+      savedStore: createD1BlueskyLikeSavedStore(db, account.userId),
       now: Instant.now,
     }),
     unlike: UnlikeBlueskyPostUseCase.create({
@@ -143,21 +142,22 @@ export const createLikeBlueskyPostUseCases = (
       targetResolver,
       likeUriResolver,
       cidResolver: createBlueskyPostCidResolver({ client }),
-      deletedStore: createD1BlueskyLikeDeletedStore(db),
+      deletedStore: createD1BlueskyLikeDeletedStore(db, account.userId),
     }),
   };
 };
 
 export const createRepostBlueskyPostUseCases = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch }> = {},
 ): Readonly<{ repost: RepostBlueskyPostUseCase; undoRepost: UndoRepostBlueskyPostUseCase }> | undefined => {
   const config = resolveBlueskyTimelineConfig(env);
   if (config === undefined) return undefined;
-  const client = createTimelineClient(config, db, deps);
-  const targetResolver = createD1BlueskyRepostTargetResolver(db);
-  const repostUriResolver = createD1BlueskyRepostUriResolver(db);
+  const client = createTimelineClient(account, db, deps);
+  const targetResolver = createD1BlueskyRepostTargetResolver(db, account.userId);
+  const repostUriResolver = createD1BlueskyRepostUriResolver(db, account.userId);
   return {
     repost: RepostBlueskyPostUseCase.create({
       client,
@@ -165,7 +165,7 @@ export const createRepostBlueskyPostUseCases = (
       repostUriResolver,
       cidResolver: createBlueskyPostCidResolver({ client }),
       viewerRepostResolver: createBlueskyViewerRepostResolver({ client }),
-      savedStore: createD1BlueskyRepostSavedStore(db),
+      savedStore: createD1BlueskyRepostSavedStore(db, account.userId),
       now: Instant.now,
     }),
     undoRepost: UndoRepostBlueskyPostUseCase.create({
@@ -173,7 +173,7 @@ export const createRepostBlueskyPostUseCases = (
       targetResolver,
       repostUriResolver,
       cidResolver: createBlueskyPostCidResolver({ client }),
-      deletedStore: createD1BlueskyRepostDeletedStore(db),
+      deletedStore: createD1BlueskyRepostDeletedStore(db, account.userId),
     }),
   };
 };
@@ -185,16 +185,17 @@ const createLinkPreviewDeps = (deps: Readonly<{ fetch?: typeof fetch }>) => ({
 
 export const createReplyToBlueskyPostUseCase = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch }> = {},
 ): ReplyToBlueskyPostUseCase | undefined => {
   const config = resolveBlueskyTimelineConfig(env);
   if (config === undefined) return undefined;
-  const client = createTimelineClient(config, db, deps);
+  const client = createTimelineClient(account, db, deps);
   return ReplyToBlueskyPostUseCase.create({
     client,
     query: client.query,
-    targetResolver: createD1BlueskyLikeTargetResolver(db),
+    targetResolver: createD1BlueskyLikeTargetResolver(db, account.userId),
     now: Instant.now,
     linkPreview: createLinkPreviewDeps(deps),
   });
@@ -202,12 +203,13 @@ export const createReplyToBlueskyPostUseCase = (
 
 export const createPostToBlueskyUseCase = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch }> = {},
 ): PostToBlueskyUseCase | undefined => {
   const config = resolveBlueskyRuntimeConfig(env);
   if (config === undefined) return undefined;
-  const client = createTimelineClient(config, db, deps);
+  const client = createTimelineClient(account, db, deps);
   return PostToBlueskyUseCase.create({
     client,
     query: client.query,
@@ -218,14 +220,15 @@ export const createPostToBlueskyUseCase = (
 
 export const createDeleteOwnBlueskyPostUseCase = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch; deletePost: DeletePostUseCase }>,
 ): DeleteOwnBlueskyPostUseCase | undefined => {
   const config = resolveBlueskyRuntimeConfig(env);
   if (config === undefined) return undefined;
   return DeleteOwnBlueskyPostUseCase.create({
-    client: createTimelineClient(config, db, deps),
-    postIdsResolver: createD1PostIdsResolverByBlueskyUris(db),
+    client: createTimelineClient(account, db, deps),
+    postIdsResolver: createD1PostIdsResolverByBlueskyUris(db, account.userId),
     deletePost: deps.deletePost,
     timelineItemsDeletedStore: createD1BlueskyTimelineItemsDeletedStore(db),
   });
@@ -233,12 +236,13 @@ export const createDeleteOwnBlueskyPostUseCase = (
 
 export const createQuoteBlueskyPostUseCase = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch }> = {},
 ): QuoteBlueskyPostUseCase | undefined => {
   const config = resolveBlueskyTimelineConfig(env);
   if (config === undefined) return undefined;
-  const client = createTimelineClient(config, db, deps);
+  const client = createTimelineClient(account, db, deps);
   return QuoteBlueskyPostUseCase.create({
     client,
     query: client.query,
@@ -249,19 +253,21 @@ export const createQuoteBlueskyPostUseCase = (
 
 export const createMarkBlueskyNotificationsSeenUseCase = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch }> = {},
 ): MarkBlueskyNotificationsSeenUseCase | undefined => {
   const config = resolveBlueskyTimelineConfig(env);
   if (config === undefined) return undefined;
   return MarkBlueskyNotificationsSeenUseCase.create({
-    client: createTimelineClient(config, db, deps),
+    client: createTimelineClient(account, db, deps),
     now: Instant.now,
   });
 };
 
 export const createCollectBlueskyTimelineUseCase = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   deps: Readonly<{ db?: IoriD1Db; fetch?: typeof fetch; holdLoginAfterFailure?: boolean }> = {},
 ): CollectBlueskyTimelineUseCase | undefined => {
   const config = resolveBlueskyTimelineConfig(env);
@@ -269,12 +275,12 @@ export const createCollectBlueskyTimelineUseCase = (
   const db = deps.db ?? createD1Db(env.DB);
   const now = Instant.now;
   return CollectBlueskyTimelineUseCase.create({
-    fetcher: createBlueskyTimelineFetcher({ client: createTimelineClient(config, db, deps), now }),
-    existingResolver: createD1BlueskyTimelineExistingFeedItemIdsResolver(db),
-    savedStore: createD1BlueskyTimelineItemsSavedStore(db),
-    viewerLikesStore: createD1BlueskyViewerLikesSyncedStore(db),
-    viewerRepostsStore: createD1BlueskyViewerRepostsSyncedStore(db),
-    viewerBookmarksStore: createD1BlueskyViewerBookmarksSyncedStore(db),
+    fetcher: createBlueskyTimelineFetcher({ client: createTimelineClient(account, db, deps), now }),
+    existingResolver: createD1BlueskyTimelineExistingFeedItemIdsResolver(db, account.userId),
+    savedStore: createD1BlueskyTimelineItemsSavedStore(db, account.userId),
+    viewerLikesStore: createD1BlueskyViewerLikesSyncedStore(db, account.userId),
+    viewerRepostsStore: createD1BlueskyViewerRepostsSyncedStore(db, account.userId),
+    viewerBookmarksStore: createD1BlueskyViewerBookmarksSyncedStore(db, account.userId),
     now,
   });
 };
@@ -295,36 +301,36 @@ const createChatUseCases = (client: ReturnType<typeof createTimelineClient>) =>
 
 export const createBlueskyTimelineRuntimePorts = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch; deletePost?: DeletePostUseCase }> = {},
 ): BlueskyTimelineRuntimePorts => {
-  const likes = createLikeBlueskyPostUseCases(env, db, deps);
-  const reposts = createRepostBlueskyPostUseCases(env, db, deps);
+  const likes = createLikeBlueskyPostUseCases(env, account, db, deps);
+  const reposts = createRepostBlueskyPostUseCases(env, account, db, deps);
   const config = resolveBlueskyTimelineConfig(env);
   return {
-    blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
+    blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db, account.userId),
     blueskyTimelineEnabled: config !== undefined,
-    blueskySyncStatusResolver: createD1BlueskySyncStatusResolver(db),
-    blueskyLoginFailureResolver: createD1BlueskyLoginFailureResolver(db, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
+    blueskySyncStatusResolver: createD1BlueskySyncStatusResolver(db, account.userId),
+    blueskyLoginFailureResolver: createD1BlueskyLoginFailureResolver(db, account.userId, BLUESKY_TIMELINE_LOGIN_FAILURE_SCOPE),
     likeBlueskyPostUseCase: likes?.like,
     unlikeBlueskyPostUseCase: likes?.unlike,
     repostBlueskyPostUseCase: reposts?.repost,
     undoRepostBlueskyPostUseCase: reposts?.undoRepost,
     blueskyPostThreadFetcher: config === undefined
       ? undefined
-      : createBlueskyPostThreadFetcher({ client: createTimelineClient(config, db, deps), now: Instant.now }),
-    replyToBlueskyPostUseCase: createReplyToBlueskyPostUseCase(env, db, deps),
-    postToBlueskyUseCase: createPostToBlueskyUseCase(env, db, deps),
+      : createBlueskyPostThreadFetcher({ client: createTimelineClient(account, db, deps), now: Instant.now }),
+    replyToBlueskyPostUseCase: createReplyToBlueskyPostUseCase(env, account, db, deps),
+    postToBlueskyUseCase: createPostToBlueskyUseCase(env, account, db, deps),
     deleteOwnBlueskyPostUseCase: deps.deletePost === undefined
       ? undefined
-      : createDeleteOwnBlueskyPostUseCase(env, db, { fetch: deps.fetch, deletePost: deps.deletePost }),
-    quoteBlueskyPostUseCase: createQuoteBlueskyPostUseCase(env, db, deps),
-    markBlueskyNotificationsSeenUseCase: createMarkBlueskyNotificationsSeenUseCase(env, db, deps),
+      : createDeleteOwnBlueskyPostUseCase(env, account, db, { fetch: deps.fetch, deletePost: deps.deletePost }),
+    quoteBlueskyPostUseCase: createQuoteBlueskyPostUseCase(env, account, db, deps),
+    markBlueskyNotificationsSeenUseCase: createMarkBlueskyNotificationsSeenUseCase(env, account, db, deps),
     blueskySearch: config === undefined
       ? undefined
-      : createBlueskySearch({ client: createTimelineClient(config, db, deps), now: Instant.now }),
-    blueskyChat: config === undefined ? undefined : createChatUseCases(createTimelineClient(config, db, deps)),
-    viewerDid: config === undefined ? undefined : createTimelineClient(config, db, deps).viewerDid,
-    isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
+      : createBlueskySearch({ client: createTimelineClient(account, db, deps), now: Instant.now }),
+    blueskyChat: config === undefined ? undefined : createChatUseCases(createTimelineClient(account, db, deps)),
+    viewerDid: config === undefined ? undefined : createTimelineClient(account, db, deps).viewerDid,
   };
 };

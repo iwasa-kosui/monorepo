@@ -4,6 +4,7 @@ import type { blueskyCrosspostsTable } from '../schema.ts';
 export const toBlueskyCrosspost = (row: typeof blueskyCrosspostsTable.$inferSelect): BlueskyCrosspost =>
   BlueskyCrosspost.orThrow({
     postId: row.postId as BlueskyCrosspost['postId'],
+    userId: row.userId as BlueskyCrosspost['userId'],
     status: row.status as BlueskyCrosspost['status'],
     skipReason: row.skipReason as BlueskyCrosspost['skipReason'],
     uri: row.uri,

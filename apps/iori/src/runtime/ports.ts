@@ -256,13 +256,16 @@ export type IoriDigestRuntimePorts = Readonly<{
   refreshXPostsUseCase: RefreshXPostsUseCase | undefined;
   isDigestOwner: IsDigestOwner;
 }>;
-export type IoriBlueskyTimelineRuntimePorts = BlueskyTimelineRuntimePorts;
-export type IoriBlueskyModerationRuntimePorts = BlueskyModerationRuntimePorts;
-export type IoriBlueskyProfileRuntimePorts = BlueskyProfileRuntimePorts;
-export type IoriBlueskyBookmarkRuntimePorts = BlueskyBookmarkRuntimePorts;
-export type IoriBlueskyCredentialRuntimePorts = BlueskyCredentialRuntimePorts;
+/** Bluesky の口はユーザーごとのアカウントで動くので、ログイン中のユーザーを渡して組み立てる */
+type BlueskyPortsForUser<T> = Readonly<{ forUser: (userId: UserId) => Promise<T> }>;
+export type IoriBlueskyTimelineRuntimePorts =
+  & Readonly<{ blueskyTimelineEnabled: boolean }>
+  & BlueskyPortsForUser<BlueskyTimelineRuntimePorts & Readonly<{ linked: boolean }>>;
+export type IoriBlueskyModerationRuntimePorts = BlueskyPortsForUser<BlueskyModerationRuntimePorts>;
+export type IoriBlueskyProfileRuntimePorts = BlueskyPortsForUser<BlueskyProfileRuntimePorts>;
+export type IoriBlueskyBookmarkRuntimePorts = BlueskyPortsForUser<BlueskyBookmarkRuntimePorts>;
+export type IoriBlueskyCredentialRuntimePorts = BlueskyPortsForUser<BlueskyCredentialRuntimePorts>;
 export type IoriBlueskyCrosspostStatusRuntimePorts = Readonly<{
-  userResolverByUsername: UserResolverByUsername;
   blueskyCrosspostStatusReportResolver: BlueskyCrosspostStatusReportResolver;
   blueskyCrosspostEnabled: boolean;
 }>;

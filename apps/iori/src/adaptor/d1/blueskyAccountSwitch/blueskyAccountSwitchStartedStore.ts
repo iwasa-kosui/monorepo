@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { count } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 
 import {
   BlueskyAccountSwitch,
@@ -7,6 +7,7 @@ import {
   type BlueskyAccountSwitchStartedStore,
   BlueskyDidChanged,
 } from '../../../domain/blueskyAccountSwitch/blueskyAccountSwitch.ts';
+import type { UserId } from '../../../domain/user/userId.ts';
 import { blueskyStoredCredentialSaveQuery } from '../blueskyCredential/blueskyCredentialStore.ts';
 import { blueskyLoginFailureDeleteQuery } from '../blueskyCrosspost/blueskyLoginFailureStore.ts';
 import { blueskySessionSaveQuery } from '../blueskyCrosspost/blueskySessionStore.ts';
@@ -16,14 +17,16 @@ import { guardedInsert } from '../guardedInsert.ts';
 import { runBatchChanges } from '../runBatch.ts';
 import { blueskyAccountSwitchTable, blueskyModeratedActorsTable, domainEventsTable } from '../schema.ts';
 import { blueskyAccountSwitchStarted, blueskyCredentialUnchangedFrom } from './blueskyAccountSwitchGuard.ts';
-import { BLUESKY_ACCOUNT_SWITCH_ID, createD1BlueskyAccountSwitchResolver } from './blueskyAccountSwitchResolver.ts';
+import { createD1BlueskyAccountSwitchResolver } from './blueskyAccountSwitchResolver.ts';
 
 export const createD1BlueskyAccountSwitchStartedStore = (
   db: IoriD1Db,
+  userId: UserId,
   loginFailureScope: string,
 ): BlueskyAccountSwitchStartedStore => ({
   store: async ({ event, credential, session }) => {
-    const [moderated] = await db.select({ n: count() }).from(blueskyModeratedActorsTable);
+    const [moderated] = await db.select({ n: count() }).from(blueskyModeratedActorsTable)
+      .where(eq(blueskyModeratedActorsTable.userId, userId));
     const state = BlueskyAccountSwitch.recordDeleted(
       event.aggregateState,
       'moderatedActors',
@@ -34,7 +37,7 @@ export const createD1BlueskyAccountSwitchStartedStore = (
     try {
       const [switchChanges] = await runBatchChanges(db, [
         guardedInsert(db, blueskyAccountSwitchTable, {
-          id: BLUESKY_ACCOUNT_SWITCH_ID,
+          userId,
           switchId: state.switchId,
           fromDid: state.fromDid,
           toDid: state.toDid,
@@ -43,15 +46,15 @@ export const createD1BlueskyAccountSwitchStartedStore = (
           lastError: state.lastError,
           deletedCounts: JSON.stringify(state.deletedCounts),
           updatedAt: new Date(state.updatedAt),
-        }, blueskyCredentialUnchangedFrom(db, state.fromDid)),
-        blueskyStoredCredentialSaveQuery(db, credential, guard),
-        blueskySessionSaveQuery(db, session, guard),
-        blueskyLoginFailureDeleteQuery(db, loginFailureScope, guard),
-        db.delete(blueskyModeratedActorsTable).where(guard),
+        }, blueskyCredentialUnchangedFrom(db, userId, state.fromDid)),
+        blueskyStoredCredentialSaveQuery(db, userId, credential, guard),
+        blueskySessionSaveQuery(db, userId, session, guard),
+        blueskyLoginFailureDeleteQuery(db, userId, loginFailureScope, guard),
+        db.delete(blueskyModeratedActorsTable).where(and(eq(blueskyModeratedActorsTable.userId, userId), guard)),
         guardedInsert(db, domainEventsTable, toD1DomainEventRow({ ...event, aggregateState: state }), guard),
       ]);
       if (switchChanges === 0) {
-        const existing = await createD1BlueskyAccountSwitchResolver(db).resolve();
+        const existing = await createD1BlueskyAccountSwitchResolver(db, userId).resolve();
         return RA.err(
           existing.ok && existing.val !== undefined
             ? BlueskyAccountSwitchInProgress.create()
@@ -59,7 +62,7 @@ export const createD1BlueskyAccountSwitchStartedStore = (
         );
       }
     } catch (error) {
-      const existing = await createD1BlueskyAccountSwitchResolver(db).resolve();
+      const existing = await createD1BlueskyAccountSwitchResolver(db, userId).resolve();
       if (existing.ok && existing.val !== undefined) return RA.err(BlueskyAccountSwitchInProgress.create());
       throw error;
     }

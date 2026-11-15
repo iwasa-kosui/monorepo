@@ -6,14 +6,14 @@ import { Scope } from '../../domain/oauth/scope.ts';
 import { isBlueskyBookmarkUnavailable } from '../../ports/blueskyBookmarkReader.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type { BookmarkBlueskyPostUseCase } from '../../useCase/bookmarkBlueskyPost.ts';
-import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { ListBlueskyBookmarksUseCase } from '../../useCase/listBlueskyBookmarks.ts';
 import type { UnbookmarkBlueskyPostUseCase } from '../../useCase/unbookmarkBlueskyPost.ts';
 import { logBlueskyFailure } from './helper/blueskyFailureLog.ts';
+import { type BlueskyPortsForUser, userIdOf } from './helper/blueskyUserPorts.ts';
 import { handleInternalError } from './helper/mastodonErrors.ts';
 import { bodyString, readRequestBody } from './helper/requestBody.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
-import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
+import { type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 import {
   clientFailure,
   type IoriBlueskyTimelineItemBody,
@@ -22,13 +22,16 @@ import {
   toItemBody,
 } from './workerIoriBlueskyRouter.ts';
 
-export type WorkerIoriBlueskyBookmarkRouterDeps = Readonly<{
-  authn: MastodonAuthn;
+export type WorkerIoriBlueskyBookmarkUserDeps = Readonly<{
   bookmarkBlueskyPostUseCase: BookmarkBlueskyPostUseCase | undefined;
   unbookmarkBlueskyPostUseCase: UnbookmarkBlueskyPostUseCase | undefined;
   listBlueskyBookmarksUseCase: ListBlueskyBookmarksUseCase | undefined;
   viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
-  isDigestOwner: IsDigestOwner;
+}>;
+
+export type WorkerIoriBlueskyBookmarkRouterDeps = Readonly<{
+  authn: MastodonAuthn;
+  forUser: BlueskyPortsForUser<WorkerIoriBlueskyBookmarkUserDeps>;
 }>;
 
 export type IoriBlueskyBookmarkResponse = Readonly<{ bookmarked: boolean }>;
@@ -42,7 +45,6 @@ export const BLUESKY_BOOKMARKS_UNAVAILABLE_ERROR = 'Bluesky bookmarks unavailabl
 
 const readBookmarks = Scope.orThrow('read:bookmarks');
 const writeBookmarks = Scope.orThrow('write:bookmarks');
-const forbidden = { error: 'Forbidden' } as const;
 const disabled = { error: 'Bluesky timeline is disabled' } as const;
 
 const failure = (c: Context, error: BlueskyClientError | BlueskyBookmarkTargetNotFound) => {
@@ -56,16 +58,12 @@ const failure = (c: Context, error: BlueskyClientError | BlueskyBookmarkTargetNo
 
 export const createWorkerIoriBlueskyBookmarkRouter = ({
   authn,
-  bookmarkBlueskyPostUseCase,
-  unbookmarkBlueskyPostUseCase,
-  listBlueskyBookmarksUseCase,
-  viewerDid,
-  isDigestOwner,
+  forUser,
 }: WorkerIoriBlueskyBookmarkRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
     .get('/iori/v1/bluesky/bookmarks', authn.requireUser(readBookmarks), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { listBlueskyBookmarksUseCase, viewerDid } = await forUser(userIdOf(c));
       if (listBlueskyBookmarksUseCase === undefined) return c.json(disabled, 409);
       const page = await listBlueskyBookmarksUseCase.run({ cursor: c.req.query('cursor') || undefined });
       if (!page.ok) return failure(c, page.err);
@@ -82,7 +80,7 @@ export const createWorkerIoriBlueskyBookmarkRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeBookmarks),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+        const { bookmarkBlueskyPostUseCase } = await forUser(userIdOf(c));
         if (bookmarkBlueskyPostUseCase === undefined) return c.json(disabled, 409);
         const body = await readRequestBody(c);
         const resolved = postTargetOf(bodyString(body, 'feedItemId'), bodyString(body, 'uri'));
@@ -98,7 +96,7 @@ export const createWorkerIoriBlueskyBookmarkRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeBookmarks),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+        const { unbookmarkBlueskyPostUseCase } = await forUser(userIdOf(c));
         if (unbookmarkBlueskyPostUseCase === undefined) return c.json(disabled, 409);
         const resolved = postTargetOf(c.req.query('feedItemId'), c.req.query('uri'));
         if ('invalid' in resolved) return c.json({ error: `Validation failed: ${resolved.invalid}` }, 400);

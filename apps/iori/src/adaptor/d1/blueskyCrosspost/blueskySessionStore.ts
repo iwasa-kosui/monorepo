@@ -7,16 +7,15 @@ import {
   type BlueskySessionResolver,
   type BlueskySessionSavedStore,
 } from '../../../domain/blueskyCrosspost/blueskyCrosspost.ts';
+import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { guardedInsert } from '../guardedInsert.ts';
 import { blueskySessionsTable } from '../schema.ts';
 
-export const BLUESKY_SESSION_ID = 'default';
-
-export const createD1BlueskySessionResolver = (db: IoriD1Db): BlueskySessionResolver => ({
+export const createD1BlueskySessionResolver = (db: IoriD1Db, userId: UserId): BlueskySessionResolver => ({
   resolve: async () => {
     const [row] = await db.select().from(blueskySessionsTable)
-      .where(eq(blueskySessionsTable.id, BLUESKY_SESSION_ID)).limit(1);
+      .where(eq(blueskySessionsTable.userId, userId)).limit(1);
     return RA.ok(
       row === undefined ? undefined : BlueskySession.orThrow({
         did: row.did,
@@ -30,25 +29,30 @@ export const createD1BlueskySessionResolver = (db: IoriD1Db): BlueskySessionReso
   },
 });
 
-export const blueskySessionSaveQuery = (db: IoriD1Db, session: BlueskySession, guard: SQL = sql`true`) => {
+export const blueskySessionSaveQuery = (
+  db: IoriD1Db,
+  userId: UserId,
+  session: BlueskySession,
+  guard: SQL = sql`true`,
+) => {
   const values = { ...session, updatedAt: new Date(session.updatedAt) };
-  return guardedInsert(db, blueskySessionsTable, { id: BLUESKY_SESSION_ID, ...values }, guard)
-    .onConflictDoUpdate({ target: blueskySessionsTable.id, set: values });
+  return guardedInsert(db, blueskySessionsTable, { userId, ...values }, guard)
+    .onConflictDoUpdate({ target: blueskySessionsTable.userId, set: values });
 };
 
-export const blueskySessionDeleteQuery = (db: IoriD1Db, guard?: SQL) =>
-  db.delete(blueskySessionsTable).where(and(eq(blueskySessionsTable.id, BLUESKY_SESSION_ID), guard));
+export const blueskySessionDeleteQuery = (db: IoriD1Db, userId: UserId, guard?: SQL) =>
+  db.delete(blueskySessionsTable).where(and(eq(blueskySessionsTable.userId, userId), guard));
 
-export const createD1BlueskySessionSavedStore = (db: IoriD1Db): BlueskySessionSavedStore => ({
+export const createD1BlueskySessionSavedStore = (db: IoriD1Db, userId: UserId): BlueskySessionSavedStore => ({
   save: async (session) => {
-    await blueskySessionSaveQuery(db, session);
+    await blueskySessionSaveQuery(db, userId, session);
     return RA.ok(undefined);
   },
 });
 
-export const createD1BlueskySessionDeletedStore = (db: IoriD1Db): BlueskySessionDeletedStore => ({
+export const createD1BlueskySessionDeletedStore = (db: IoriD1Db, userId: UserId): BlueskySessionDeletedStore => ({
   delete: async () => {
-    await blueskySessionDeleteQuery(db);
+    await blueskySessionDeleteQuery(db, userId);
     return RA.ok(undefined);
   },
 });

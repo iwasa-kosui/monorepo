@@ -287,17 +287,13 @@ const BlueskyProfileSettingsEditor = () => {
 
 type GateProps = Readonly<{
   status: BlueskyStatus | undefined;
-  isOwner: boolean;
 }>;
 
-export const BlueskyProfileSettingsGate = ({ status, isOwner }: GateProps) =>
-  status?.enabled === true && isOwner ? <BlueskyProfileSettingsEditor /> : null;
+// status.enabled は、ログイン中のユーザーが Bluesky のアカウントをつないでいるときだけ true になる
+export const BlueskyProfileSettingsGate = ({ status }: GateProps) =>
+  status?.enabled === true ? <BlueskyProfileSettingsEditor /> : null;
 
-type SectionProps = Readonly<{
-  isOwner: boolean;
-}>;
-
-export const BlueskyProfileSettingsSection = ({ isOwner }: SectionProps) => {
+export const BlueskyProfileSettingsSection = () => {
   const { status } = useBlueskyStatus();
-  return <BlueskyProfileSettingsGate status={status} isOwner={isOwner} />;
+  return <BlueskyProfileSettingsGate status={status} />;
 };

@@ -6,18 +6,25 @@ import {
   createD1BlueskyAccountSwitchFailedStore,
   createD1BlueskyAccountSwitchProgressStore,
 } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchPurgeStores.ts';
-import { createD1BlueskyAccountSwitchResolver } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchResolver.ts';
+import {
+  createD1BlueskyAccountSwitchingUserIdsResolver,
+  createD1BlueskyAccountSwitchResolver,
+} from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchResolver.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
 import { Instant } from '../domain/instant/instant.ts';
+import type { UserId } from '../domain/user/userId.ts';
 import { PurgeBlueskyAccountSwitchUseCase } from '../useCase/purgeBlueskyAccountSwitch.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
 import type { ScheduledTask } from './scheduledTasks.ts';
 
-export const createPurgeBlueskyAccountSwitchUseCase = (env: IoriWorkerEnv): PurgeBlueskyAccountSwitchUseCase => {
+export const createPurgeBlueskyAccountSwitchUseCase = (
+  env: IoriWorkerEnv,
+  userId: UserId,
+): PurgeBlueskyAccountSwitchUseCase => {
   const db = createD1Db(env.DB);
   return PurgeBlueskyAccountSwitchUseCase.create({
-    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db),
-    purger: createD1BlueskyAccountSwitchPurger(db),
+    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db, userId),
+    purger: createD1BlueskyAccountSwitchPurger(db, userId),
     progressStore: createD1BlueskyAccountSwitchProgressStore(db),
     failedStore: createD1BlueskyAccountSwitchFailedStore(db),
     completedStore: createD1BlueskyAccountSwitchCompletedStore(db),
@@ -25,25 +32,31 @@ export const createPurgeBlueskyAccountSwitchUseCase = (env: IoriWorkerEnv): Purg
   });
 };
 
+const resolveSwitchingUserIds = (env: IoriWorkerEnv): Promise<readonly UserId[]> =>
+  createD1BlueskyAccountSwitchingUserIdsResolver(createD1Db(env.DB)).resolve();
+
 export const createPurgeBlueskyAccountSwitchTask = (
-  createUseCase: (env: IoriWorkerEnv) => PurgeBlueskyAccountSwitchUseCase,
+  createUseCase: (env: IoriWorkerEnv, userId: UserId) => PurgeBlueskyAccountSwitchUseCase,
+  switchingUserIds: (env: IoriWorkerEnv) => Promise<readonly UserId[]> = resolveSwitchingUserIds,
 ): ScheduledTask => ({
   name: 'purgeBlueskyAccountSwitch',
   run: async ({ env }) => {
-    const summary = Result.unsafeUnwrap(await createUseCase(env).run());
-    switch (summary.status) {
-      case 'idle':
-      case 'waiting':
-        return;
-      case 'timeBudget':
-        console.info(JSON.stringify({ event: 'bluesky_account_switch_purge_continues', ...summary }));
-        return;
-      case 'failed':
-        console.error(JSON.stringify({ event: 'bluesky_account_switch_purge_failed', ...summary }));
-        return;
-      case 'completed':
-        console.info(JSON.stringify({ event: 'bluesky_account_switch_completed', ...summary }));
-        return;
+    for (const userId of await switchingUserIds(env)) {
+      const summary = Result.unsafeUnwrap(await createUseCase(env, userId).run());
+      switch (summary.status) {
+        case 'idle':
+        case 'waiting':
+          continue;
+        case 'timeBudget':
+          console.info(JSON.stringify({ event: 'bluesky_account_switch_purge_continues', userId, ...summary }));
+          continue;
+        case 'failed':
+          console.error(JSON.stringify({ event: 'bluesky_account_switch_purge_failed', userId, ...summary }));
+          continue;
+        case 'completed':
+          console.info(JSON.stringify({ event: 'bluesky_account_switch_completed', userId, ...summary }));
+          continue;
+      }
     }
   },
 });
@@ -52,10 +65,9 @@ export const purgeBlueskyAccountSwitchTask = createPurgeBlueskyAccountSwitchTask
   createPurgeBlueskyAccountSwitchUseCase,
 );
 
-const isBlueskyAccountSwitching = async (env: IoriWorkerEnv): Promise<boolean> => {
-  const resolved = await createD1BlueskyAccountSwitchResolver(createD1Db(env.DB)).resolve();
-  return resolved.ok && resolved.val !== undefined;
-};
+/** だれかがアカウントを切り替えている途中か。クロスポストの再送は、切り替えの後始末と重ならないよう止める */
+const isBlueskyAccountSwitching = async (env: IoriWorkerEnv): Promise<boolean> =>
+  (await resolveSwitchingUserIds(env)).length > 0;
 
 export const skipWhileBlueskyAccountSwitching = (
   task: ScheduledTask,

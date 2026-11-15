@@ -15,7 +15,6 @@ import type { FollowBlueskyActorUseCase } from '../../useCase/followBlueskyActor
 import type { GetBlueskyFeedInfoUseCase } from '../../useCase/getBlueskyFeedInfo.ts';
 import type { GetBlueskyProfileUseCase } from '../../useCase/getBlueskyProfile.ts';
 import type { GetOwnBlueskyProfileUseCase } from '../../useCase/getOwnBlueskyProfile.ts';
-import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { ListBlueskyActorFeedsUseCase } from '../../useCase/listBlueskyActorFeeds.ts';
 import type { ListBlueskyActorFollowersUseCase } from '../../useCase/listBlueskyActorFollowers.ts';
 import type { ListBlueskyActorFollowsUseCase } from '../../useCase/listBlueskyActorFollows.ts';
@@ -29,10 +28,11 @@ import type { BlueskyFeedUrlInvalid, ResolveBlueskyFeedUrlUseCase } from '../../
 import type { UnfollowBlueskyActorUseCase } from '../../useCase/unfollowBlueskyActor.ts';
 import type { UpdateBlueskyProfileUseCase } from '../../useCase/updateBlueskyProfile.ts';
 import { logBlueskyFailure } from './helper/blueskyFailureLog.ts';
+import { type BlueskyPortsForUser, userIdOf } from './helper/blueskyUserPorts.ts';
 import { handleInternalError } from './helper/mastodonErrors.ts';
 import { bodyString, readRequestBody } from './helper/requestBody.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
-import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
+import { type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 import {
   type IoriBlueskyActorBody,
   type IoriBlueskyTimelineItemBody,
@@ -40,8 +40,7 @@ import {
   toItemBody,
 } from './workerIoriBlueskyRouter.ts';
 
-export type WorkerIoriBlueskyProfileRouterDeps = Readonly<{
-  authn: MastodonAuthn;
+export type WorkerIoriBlueskyProfileUserDeps = Readonly<{
   getBlueskyProfileUseCase: GetBlueskyProfileUseCase | undefined;
   listBlueskyAuthorFeedUseCase: ListBlueskyAuthorFeedUseCase | undefined;
   listBlueskyActorLikesUseCase: ListBlueskyActorLikesUseCase | undefined;
@@ -59,7 +58,11 @@ export type WorkerIoriBlueskyProfileRouterDeps = Readonly<{
   getOwnBlueskyProfileUseCase: GetOwnBlueskyProfileUseCase | undefined;
   updateBlueskyProfileUseCase: UpdateBlueskyProfileUseCase | undefined;
   viewerDid?: (() => RA<string, BlueskyClientError>) | undefined;
-  isDigestOwner: IsDigestOwner;
+}>;
+
+export type WorkerIoriBlueskyProfileRouterDeps = Readonly<{
+  authn: MastodonAuthn;
+  forUser: BlueskyPortsForUser<WorkerIoriBlueskyProfileUserDeps>;
 }>;
 
 export type IoriBlueskyProfileBody = Readonly<{
@@ -140,7 +143,6 @@ export type IoriBlueskyProfileUpdateResponse = Readonly<{ uri: string; cid: stri
 const readAccounts = Scope.orThrow('read:accounts');
 const writeFollows = Scope.orThrow('write:follows');
 const writeAccounts = Scope.orThrow('write:accounts');
-const forbidden = { error: 'Forbidden' } as const;
 const disabled = { error: 'Bluesky timeline is disabled' } as const;
 
 const feedProviderFailed = { error: 'Feed provider failed' } as const;
@@ -196,29 +198,12 @@ const isDid = (value: string | undefined): value is string => value !== undefine
 
 export const createWorkerIoriBlueskyProfileRouter = ({
   authn,
-  getBlueskyProfileUseCase,
-  listBlueskyAuthorFeedUseCase,
-  listBlueskyActorLikesUseCase,
-  listBlueskySavedFeedsUseCase,
-  listBlueskyFeedPostsUseCase,
-  getBlueskyFeedInfoUseCase,
-  resolveBlueskyFeedUrlUseCase,
-  listBlueskyListMembersUseCase,
-  listBlueskyActorFeedsUseCase,
-  listBlueskyActorListsUseCase,
-  listBlueskyActorFollowsUseCase,
-  listBlueskyActorFollowersUseCase,
-  followBlueskyActorUseCase,
-  unfollowBlueskyActorUseCase,
-  getOwnBlueskyProfileUseCase,
-  updateBlueskyProfileUseCase,
-  viewerDid,
-  isDigestOwner,
+  forUser,
 }: WorkerIoriBlueskyProfileRouterDeps): Hono<MastodonAuthEnv> =>
   new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
     .get('/iori/v1/bluesky/profile', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { getOwnBlueskyProfileUseCase } = await forUser(userIdOf(c));
       if (getOwnBlueskyProfileUseCase === undefined) return c.json(disabled, 409);
       const profile = await getOwnBlueskyProfileUseCase.run();
       if (!profile.ok) return failure(c, profile.err);
@@ -239,7 +224,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeAccounts),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+        const { updateBlueskyProfileUseCase } = await forUser(userIdOf(c));
         if (updateBlueskyProfileUseCase === undefined) return c.json(disabled, 409);
         const body = await readRequestBody(c);
         const displayName = bodyString(body, 'display_name');
@@ -269,7 +254,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       },
     )
     .get('/iori/v1/bluesky/profiles/:actor', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { getBlueskyProfileUseCase, viewerDid } = await forUser(userIdOf(c));
       if (getBlueskyProfileUseCase === undefined) return c.json(disabled, 409);
       const profile = await getBlueskyProfileUseCase.run({ actor: c.req.param('actor') });
       if (!profile.ok) return failure(c, profile.err);
@@ -282,7 +267,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       );
     })
     .get('/iori/v1/bluesky/profiles/:actor/feed', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { listBlueskyAuthorFeedUseCase, viewerDid } = await forUser(userIdOf(c));
       if (listBlueskyAuthorFeedUseCase === undefined) return c.json(disabled, 409);
       const filter = c.req.query('filter') ?? 'posts_and_author_threads';
       if (!isBlueskyAuthorFeedFilter(filter)) return c.json({ error: 'Validation failed: filter' }, 400);
@@ -302,7 +287,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       );
     })
     .get('/iori/v1/bluesky/liked-posts', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { listBlueskyActorLikesUseCase, viewerDid } = await forUser(userIdOf(c));
       if (listBlueskyActorLikesUseCase === undefined) return c.json(disabled, 409);
       const page = await listBlueskyActorLikesUseCase.run({ cursor: c.req.query('cursor') || undefined });
       if (!page.ok) return failure(c, page.err);
@@ -315,14 +300,14 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       );
     })
     .get('/iori/v1/bluesky/feeds', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { listBlueskySavedFeedsUseCase } = await forUser(userIdOf(c));
       if (listBlueskySavedFeedsUseCase === undefined) return c.json(disabled, 409);
       const saved = await listBlueskySavedFeedsUseCase.run();
       if (!saved.ok) return failure(c, saved.err);
       return c.json({ feeds: saved.val.feeds } satisfies IoriBlueskySavedFeedsResponse);
     })
     .get('/iori/v1/bluesky/feeds/posts', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { listBlueskyFeedPostsUseCase, viewerDid } = await forUser(userIdOf(c));
       if (listBlueskyFeedPostsUseCase === undefined) return c.json(disabled, 409);
       const uri = c.req.query('uri');
       const feedKind = uri === undefined ? undefined : blueskyFeedKindOf(uri);
@@ -346,7 +331,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       );
     })
     .get('/iori/v1/bluesky/feeds/info', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { getBlueskyFeedInfoUseCase } = await forUser(userIdOf(c));
       if (getBlueskyFeedInfoUseCase === undefined) return c.json(disabled, 409);
       const uri = c.req.query('uri');
       if (uri === undefined || blueskyFeedKindOf(uri) === undefined) {
@@ -356,7 +341,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       return info.ok ? c.json(info.val satisfies IoriBlueskyFeedInfoResponse) : failure(c, info.err);
     })
     .get('/iori/v1/bluesky/feeds/resolve', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { resolveBlueskyFeedUrlUseCase } = await forUser(userIdOf(c));
       if (resolveBlueskyFeedUrlUseCase === undefined) return c.json(disabled, 409);
       const resolved = await resolveBlueskyFeedUrlUseCase.run({ url: c.req.query('url') ?? '' });
       return resolved.ok
@@ -364,7 +349,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
         : failure(c, resolved.err);
     })
     .get('/iori/v1/bluesky/lists/members', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { listBlueskyListMembersUseCase } = await forUser(userIdOf(c));
       if (listBlueskyListMembersUseCase === undefined) return c.json(disabled, 409);
       const uri = c.req.query('uri');
       if (uri === undefined || blueskyFeedKindOf(uri) !== 'list') {
@@ -377,7 +362,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       );
     })
     .get('/iori/v1/bluesky/profiles/:actor/feeds', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { listBlueskyActorFeedsUseCase } = await forUser(userIdOf(c));
       if (listBlueskyActorFeedsUseCase === undefined) return c.json(disabled, 409);
       const page = await listBlueskyActorFeedsUseCase.run({
         actor: c.req.param('actor'),
@@ -387,7 +372,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       return c.json({ feeds: page.val.feeds, cursor: page.val.cursor ?? null } satisfies IoriBlueskyActorFeedsResponse);
     })
     .get('/iori/v1/bluesky/profiles/:actor/lists', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { listBlueskyActorListsUseCase } = await forUser(userIdOf(c));
       if (listBlueskyActorListsUseCase === undefined) return c.json(disabled, 409);
       const page = await listBlueskyActorListsUseCase.run({
         actor: c.req.param('actor'),
@@ -397,7 +382,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       return c.json({ lists: page.val.feeds, cursor: page.val.cursor ?? null } satisfies IoriBlueskyActorListsResponse);
     })
     .get('/iori/v1/bluesky/profiles/:actor/follows', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { listBlueskyActorFollowsUseCase, viewerDid } = await forUser(userIdOf(c));
       if (listBlueskyActorFollowsUseCase === undefined) return c.json(disabled, 409);
       const page = await listBlueskyActorFollowsUseCase.run({
         actor: c.req.param('actor'),
@@ -413,7 +398,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       );
     })
     .get('/iori/v1/bluesky/profiles/:actor/followers', authn.requireUser(readAccounts), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+      const { listBlueskyActorFollowersUseCase, viewerDid } = await forUser(userIdOf(c));
       if (listBlueskyActorFollowersUseCase === undefined) return c.json(disabled, 409);
       const page = await listBlueskyActorFollowersUseCase.run({
         actor: c.req.param('actor'),
@@ -433,7 +418,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeFollows),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+        const { followBlueskyActorUseCase } = await forUser(userIdOf(c));
         if (followBlueskyActorUseCase === undefined) return c.json(disabled, 409);
         const body = await readRequestBody(c);
         const did = bodyString(body, 'did');
@@ -450,7 +435,7 @@ export const createWorkerIoriBlueskyProfileRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeFollows),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+        const { unfollowBlueskyActorUseCase } = await forUser(userIdOf(c));
         if (unfollowBlueskyActorUseCase === undefined) return c.json(disabled, 409);
         const did = c.req.query('did');
         if (!isDid(did)) return c.json({ error: 'Validation failed: did' }, 400);

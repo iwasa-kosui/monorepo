@@ -20,8 +20,7 @@ import type {
   PushSubscription,
   PushSubscriptionsResolverByUserId,
 } from '../domain/pushSubscription/pushSubscription.ts';
-import type { UserResolverByUsername } from '../domain/user/user.ts';
-import type { Username } from '../domain/user/username.ts';
+import type { UserId } from '../domain/user/userId.ts';
 import type { BlueskyChat } from '../ports/blueskyChat.ts';
 import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import type { UseCase } from './useCase.ts';
@@ -30,7 +29,7 @@ const MESSAGES_URL = '/messages';
 
 type Input = void;
 
-type Skipped = 'noOwner' | 'noSubscriptions' | 'chatNotPermitted';
+type Skipped = 'noSubscriptions' | 'chatNotPermitted';
 
 type Ok = Readonly<{ skipped: Skipped | null; fetched: number; notified: number; pushed: number }>;
 
@@ -40,8 +39,8 @@ export type CollectBlueskyChatPushUseCase = UseCase<Input, Ok, Err>;
 
 type Deps = Readonly<{
   chat: Pick<BlueskyChat, 'viewerDid' | 'listConvos'>;
-  ownerUsername: Username;
-  userResolverByUsername: UserResolverByUsername;
+  /** Bluesky のアカウントの持ち主。通知はこのユーザーに届ける */
+  recipientUserId: UserId;
   storedCredentialResolver: BlueskyStoredCredentialResolver;
   receiptsResolver: BlueskyChatPushReceiptsResolverByConvoIds;
   receiptsSavedStore: BlueskyChatPushReceiptsSavedStore;
@@ -82,8 +81,7 @@ const candidateOf = (convo: BlueskyChatConvo, viewerDid: string, freshStart: num
 const create = (
   {
     chat,
-    ownerUsername,
-    userResolverByUsername,
+    recipientUserId,
     storedCredentialResolver,
     receiptsResolver,
     receiptsSavedStore,
@@ -135,9 +133,7 @@ const create = (
 
   const run = async (): RA<Ok, Err> => {
     const startedAt = now();
-    const owner = Result.unsafeUnwrap(await userResolverByUsername.resolve(ownerUsername));
-    if (owner === undefined) return RA.ok(skipped('noOwner'));
-    const subscriptions = Result.unsafeUnwrap(await pushSubscriptionsResolverByUserId.resolve(owner.id));
+    const subscriptions = Result.unsafeUnwrap(await pushSubscriptionsResolverByUserId.resolve(recipientUserId));
     if (subscriptions.length === 0) return RA.ok(skipped('noSubscriptions'));
     const stored = Result.unsafeUnwrap(await storedCredentialResolver.resolve());
     if (stored?.chatPermitted === false) return RA.ok(skipped('chatNotPermitted'));

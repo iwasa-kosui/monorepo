@@ -1,6 +1,6 @@
 import type { RequestContext } from '@fedify/fedify';
 import { Delete, PUBLIC_COLLECTION } from '@fedify/vocab';
-import { Result } from '@iwasa-kosui/result';
+import { RA, Result } from '@iwasa-kosui/result';
 
 import {
   createBlueskyPublicTrendPostsResolver,
@@ -24,6 +24,7 @@ import { createD1AiAgentBotRepliedCountResolverSince } from '../adaptor/d1/aiAge
 import { createD1AiAgentBotTriggerClaimedStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggerClaimedStore.ts';
 import { createD1AiAgentBotTriggersHandledStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggersHandledStore.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
+import type { IoriD1Db } from '../adaptor/d1/client.ts';
 import { createD1PopularArticlesResolverByFetchedSince } from '../adaptor/d1/feedEntry/popularArticlesResolverByFetchedSince.ts';
 import { createD1LocalAccountRetiredStore } from '../adaptor/d1/user/localAccountRetiredStore.ts';
 import { createD1UserCreatedStore } from '../adaptor/d1/user/userCreatedStore.ts';
@@ -50,6 +51,8 @@ import type { PostWithAuthor } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import { TimelineSearchQuery } from '../domain/timelineSearch/timelineSearchQuery.ts';
 import type { User } from '../domain/user/user.ts';
+import { Username } from '../domain/user/username.ts';
+import { DAILY_DIGEST_USERNAME } from '../scheduled/digestTasks.ts';
 import {
   type AgentBlueskyTopics,
   type AgentPostView,
@@ -133,6 +136,15 @@ const readPopularArticles = (sources: AiAgentBotMaterialSources) => async (limit
   const fetchedSince = Instant.addDuration(Instant.now(), -POPULAR_ARTICLE_WINDOW_MS);
   return (await sources.popularArticlesResolver.resolve({ fetchedSince, limit })).val;
 };
+
+/** bot が話題の材料にするのは、オーナー（kosui）がつないでいる Bluesky のタイムライン */
+const createOwnerBlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimelineItemsResolver => ({
+  resolve: async (condition) => {
+    const owner = await createD1UserResolverByUsername(db).resolve(Username.parseOrThrow(DAILY_DIGEST_USERNAME));
+    if (!owner.ok || owner.val === undefined) return RA.ok([]);
+    return createD1BlueskyTimelineItemsResolver(db, owner.val.id).resolve(condition);
+  },
+});
 
 /**
  * Bluesky の話題を読む。1 回の実行の中では、最初に読んだものを使い回す
@@ -377,7 +389,7 @@ export const createAiAgentBotRuntime = async (
   const safeFetcher = createSafeFetcher();
   const materials: AiAgentBotMaterialSources = {
     popularArticlesResolver: createD1PopularArticlesResolverByFetchedSince(db),
-    blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
+    blueskyTimelineItemsResolver: createOwnerBlueskyTimelineItemsResolver(db),
     blueskyTrendsResolver: createBlueskyPublicTrendsResolver({ safeFetcher }),
     blueskyTrendPostsResolver: createBlueskyPublicTrendPostsResolver({ safeFetcher }),
   };

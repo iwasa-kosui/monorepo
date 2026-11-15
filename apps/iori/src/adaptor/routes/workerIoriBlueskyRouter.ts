@@ -49,7 +49,6 @@ import {
 import type { DeletePostUseCase } from '../../useCase/deletePost.ts';
 import { resolveOwnedMediaUpload } from '../../useCase/getMediaUpload.ts';
 import type { BlueskyPostImage, BlueskyPostInvalid } from '../../useCase/helper/publishBlueskyPost.ts';
-import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { LikeBlueskyPostUseCase } from '../../useCase/likeBlueskyPost.ts';
 import type { MarkBlueskyNotificationsSeenUseCase } from '../../useCase/markBlueskyNotificationsSeen.ts';
 import type { PostToBlueskyUseCase } from '../../useCase/postToBluesky.ts';
@@ -69,19 +68,19 @@ import {
 import { logBlueskyFailure } from './helper/blueskyFailureLog.ts';
 import { blueskyInteractionOf } from './helper/blueskyInteractionBody.ts';
 import { blueskyPostTextOf } from './helper/blueskyPostText.ts';
+import { type BlueskyPortsForUser, userIdOf } from './helper/blueskyUserPorts.ts';
 import { loadBlueskyPostImage } from './helper/loadBlueskyPostImage.ts';
 import { handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { bodyBoolean, bodyString, bodyStringList, readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import { requireSameOriginForCookie } from './helper/sameOrigin.ts';
-import { getMastodonPrincipal, type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
+import { type MastodonAuthEnv, type MastodonAuthn } from './mastodonAuthn.ts';
 
-export type WorkerIoriBlueskyRouterDeps = Readonly<{
-  authn: MastodonAuthn;
+export type WorkerIoriBlueskyUserDeps = Readonly<{
+  /** そのユーザーが Bluesky のアカウントをつないでいるか */
+  linked: boolean;
   blueskyTimelineItemsResolver: BlueskyTimelineItemsResolver;
-  blueskyTimelineEnabled: boolean;
   blueskySyncStatusResolver: BlueskySyncStatusResolver;
   blueskyLoginFailureResolver: BlueskyLoginFailureResolver;
-  now?: () => Instant;
   likeBlueskyPostUseCase: LikeBlueskyPostUseCase | undefined;
   unlikeBlueskyPostUseCase: UnlikeBlueskyPostUseCase | undefined;
   repostBlueskyPostUseCase: RepostBlueskyPostUseCase | undefined;
@@ -90,15 +89,21 @@ export type WorkerIoriBlueskyRouterDeps = Readonly<{
   replyToBlueskyPostUseCase: ReplyToBlueskyPostUseCase | undefined;
   postToBlueskyUseCase: PostToBlueskyUseCase | undefined;
   deleteOwnBlueskyPostUseCase: DeleteOwnBlueskyPostUseCase | undefined;
-  mediaUploadResolver: MediaUploadResolver;
-  uploads: Pick<PostImageObjectStore, 'get'>;
   quoteBlueskyPostUseCase: QuoteBlueskyPostUseCase | undefined;
   markBlueskyNotificationsSeenUseCase: MarkBlueskyNotificationsSeenUseCase | undefined;
   blueskySearch: BlueskySearch | undefined;
   blueskyChat: BlueskyChatUseCases | undefined;
   viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
-  isDigestOwner: IsDigestOwner;
+}>;
+
+export type WorkerIoriBlueskyRouterDeps = Readonly<{
+  authn: MastodonAuthn;
+  blueskyTimelineEnabled: boolean;
+  now?: () => Instant;
+  mediaUploadResolver: MediaUploadResolver;
+  uploads: Pick<PostImageObjectStore, 'get'>;
   createContext: (request: Request) => RequestContext<unknown>;
+  forUser: BlueskyPortsForUser<WorkerIoriBlueskyUserDeps>;
 }>;
 
 export type IoriBlueskyTimelineItemBody = Readonly<{
@@ -492,31 +497,15 @@ const cursorOf = (c: Context): string | undefined => {
 
 export const createWorkerIoriBlueskyRouter = ({
   authn,
-  blueskyTimelineItemsResolver,
   blueskyTimelineEnabled,
-  blueskySyncStatusResolver,
-  blueskyLoginFailureResolver,
   now = Instant.now,
-  likeBlueskyPostUseCase,
-  unlikeBlueskyPostUseCase,
-  repostBlueskyPostUseCase,
-  undoRepostBlueskyPostUseCase,
-  blueskyPostThreadFetcher,
-  replyToBlueskyPostUseCase,
-  postToBlueskyUseCase,
-  deleteOwnBlueskyPostUseCase,
   mediaUploadResolver,
   uploads,
-  quoteBlueskyPostUseCase,
-  markBlueskyNotificationsSeenUseCase,
-  blueskySearch,
-  blueskyChat,
-  viewerDid,
-  isDigestOwner,
   createContext,
+  forUser,
 }: WorkerIoriBlueskyRouterDeps): Hono<MastodonAuthEnv> => {
-  const chatAccess = async (c: Context): Promise<BlueskyChatUseCases | Response> => {
-    if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) return c.json(forbidden, 403);
+  const chatAccess = async (c: Context<MastodonAuthEnv>): Promise<BlueskyChatUseCases | Response> => {
+    const { blueskyChat } = await forUser(userIdOf(c));
     return blueskyChat ?? c.json({ error: 'Bluesky timeline is disabled' }, 409);
   };
   const loadMediaImages = async (
@@ -546,6 +535,7 @@ export const createWorkerIoriBlueskyRouter = ({
   return new Hono<MastodonAuthEnv>()
     .onError(handleInternalError)
     .get('/iori/v1/bluesky/timeline', authn.requireUser(readStatuses), async (c) => {
+      const { linked, blueskyTimelineItemsResolver, viewerDid } = await forUser(userIdOf(c));
       const limitParam = c.req.query('limit');
       if (limitParam !== undefined && (!integerPattern.test(limitParam) || Number(limitParam) < 1)) {
         return c.json({ error: 'Validation failed: limit' }, 400);
@@ -569,9 +559,8 @@ export const createWorkerIoriBlueskyRouter = ({
         return c.json({ error: 'Validation failed: scope' }, 400);
       }
       const enabled = blueskyTimelineEnabled;
-      const isOwner = await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined);
-      if (scope === undefined && !isOwner) return c.json(forbidden, 403);
-      if (scope === 'home' && !isOwner) {
+      if (scope === undefined && !linked) return c.json(forbidden, 403);
+      if (scope === 'home' && !linked) {
         return c.json(
           { enabled, items: [], nextBefore: null, nextBeforeId: null } satisfies IoriBlueskyTimelineResponse,
         );
@@ -596,9 +585,7 @@ export const createWorkerIoriBlueskyRouter = ({
       );
     })
     .get('/iori/v1/bluesky/search/posts', authn.requireUser(readSearch), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
-        return c.json(forbidden, 403);
-      }
+      const { blueskySearch, viewerDid } = await forUser(userIdOf(c));
       if (blueskySearch === undefined) return c.json({ error: 'Bluesky timeline is disabled' }, 409);
       const input = searchInput(c);
       if (input === undefined) return c.json({ error: 'Validation failed: q' }, 400);
@@ -613,9 +600,7 @@ export const createWorkerIoriBlueskyRouter = ({
       );
     })
     .get('/iori/v1/bluesky/search/actors', authn.requireUser(readSearch), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
-        return c.json(forbidden, 403);
-      }
+      const { blueskySearch } = await forUser(userIdOf(c));
       if (blueskySearch === undefined) return c.json({ error: 'Bluesky timeline is disabled' }, 409);
       const input = searchInput(c);
       if (input === undefined) return c.json({ error: 'Validation failed: q' }, 400);
@@ -629,9 +614,7 @@ export const createWorkerIoriBlueskyRouter = ({
       );
     })
     .get('/iori/v1/bluesky/thread', authn.requireUser(readStatuses), async (c) => {
-      if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
-        return c.json(forbidden, 403);
-      }
+      const { blueskyPostThreadFetcher, viewerDid } = await forUser(userIdOf(c));
       if (blueskyPostThreadFetcher === undefined) {
         return c.json({ error: 'Bluesky timeline is disabled' }, 409);
       }
@@ -651,8 +634,8 @@ export const createWorkerIoriBlueskyRouter = ({
       );
     })
     .get('/iori/v1/bluesky/status', authn.requireUser(readStatuses), async (c) => {
-      const isOwner = await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined);
-      if (!blueskyTimelineEnabled || !isOwner) {
+      const { linked, blueskySyncStatusResolver, blueskyLoginFailureResolver } = await forUser(userIdOf(c));
+      if (!blueskyTimelineEnabled || !linked) {
         return c.json({ enabled: false } satisfies IoriBlueskyStatusResponse);
       }
       const [records, loginFailedAt] = await Promise.all([
@@ -686,9 +669,7 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeFavourites),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
-          return c.json(forbidden, 403);
-        }
+        const { likeBlueskyPostUseCase } = await forUser(userIdOf(c));
         if (likeBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
@@ -706,9 +687,7 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeFavourites),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
-          return c.json(forbidden, 403);
-        }
+        const { unlikeBlueskyPostUseCase } = await forUser(userIdOf(c));
         if (unlikeBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
@@ -725,9 +704,7 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeStatuses),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
-          return c.json(forbidden, 403);
-        }
+        const { repostBlueskyPostUseCase } = await forUser(userIdOf(c));
         if (repostBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
@@ -745,9 +722,7 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeStatuses),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
-          return c.json(forbidden, 403);
-        }
+        const { undoRepostBlueskyPostUseCase } = await forUser(userIdOf(c));
         if (undoRepostBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
@@ -764,8 +739,8 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeStatuses),
       async (c) => {
-        const userId = getMastodonPrincipal(c)?.userId ?? undefined;
-        if (userId === undefined || !await isDigestOwner(userId)) return c.json(forbidden, 403);
+        const userId = userIdOf(c);
+        const { replyToBlueskyPostUseCase } = await forUser(userId);
         if (replyToBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
@@ -788,8 +763,8 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeStatuses),
       async (c) => {
-        const userId = getMastodonPrincipal(c)?.userId ?? undefined;
-        if (userId === undefined || !await isDigestOwner(userId)) return c.json(forbidden, 403);
+        const userId = userIdOf(c);
+        const { postToBlueskyUseCase } = await forUser(userId);
         if (postToBlueskyUseCase === undefined) {
           return c.json({ error: 'Bluesky のアカウントが設定されていないため、投稿できません' }, 409);
         }
@@ -826,8 +801,8 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeStatuses),
       async (c) => {
-        const userId = getMastodonPrincipal(c)?.userId ?? undefined;
-        if (userId === undefined || !await isDigestOwner(userId)) return c.json(forbidden, 403);
+        const userId = userIdOf(c);
+        const { deleteOwnBlueskyPostUseCase } = await forUser(userId);
         if (deleteOwnBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky のアカウントが設定されていないため、削除できません' }, 409);
         }
@@ -846,8 +821,8 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeStatuses),
       async (c) => {
-        const userId = getMastodonPrincipal(c)?.userId ?? undefined;
-        if (userId === undefined || !await isDigestOwner(userId)) return c.json(forbidden, 403);
+        const userId = userIdOf(c);
+        const { quoteBlueskyPostUseCase } = await forUser(userId);
         if (quoteBlueskyPostUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }
@@ -874,9 +849,7 @@ export const createWorkerIoriBlueskyRouter = ({
       requireSameOriginForCookie,
       authn.requireUser(writeNotifications),
       async (c) => {
-        if (!await isDigestOwner(getMastodonPrincipal(c)?.userId ?? undefined)) {
-          return c.json(forbidden, 403);
-        }
+        const { markBlueskyNotificationsSeenUseCase } = await forUser(userIdOf(c));
         if (markBlueskyNotificationsSeenUseCase === undefined) {
           return c.json({ error: 'Bluesky timeline is disabled' }, 409);
         }

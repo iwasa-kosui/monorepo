@@ -47,12 +47,10 @@ export const scheduledTasks: ScheduledTaskTable = {
     retireAiAgentBotAccountsTask,
   ],
   '* * * * *': [
-    skipWhileBlueskyAccountSwitching(collectBlueskyTimelineTask),
-    skipWhileBlueskyAccountSwitching({ ...collectBlueskyNotificationsTask, after: collectBlueskyTimelineTask.name }),
-    skipWhileBlueskyAccountSwitching({
-      ...collectBlueskyChatPushTask,
-      after: collectBlueskyNotificationsTask.name,
-    }),
+    // アカウントを切り替えている途中のユーザーは、それぞれのタスクの中で飛ばす
+    collectBlueskyTimelineTask,
+    { ...collectBlueskyNotificationsTask, after: collectBlueskyTimelineTask.name },
+    { ...collectBlueskyChatPushTask, after: collectBlueskyNotificationsTask.name },
     purgeBlueskyAccountSwitchTask,
     respondToAiAgentMentionsTask,
     // メンションへの返信と同じ上限（24 時間の返信数）を数えるので、返信を終えてから動かす

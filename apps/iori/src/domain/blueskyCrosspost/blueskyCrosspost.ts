@@ -6,6 +6,7 @@ import type { Agg } from '../aggregate/index.ts';
 import { Instant } from '../instant/instant.ts';
 import { PostId } from '../post/postId.ts';
 import type { Visibility } from '../post/visibility.ts';
+import { UserId } from '../user/userId.ts';
 
 export const BlueskyCrosspostStatus = z.enum(['pending', 'sent', 'failed', 'skipped', 'deleting']);
 export type BlueskyCrosspostStatus = z.infer<typeof BlueskyCrosspostStatus>;
@@ -16,6 +17,8 @@ export type BlueskySkipReason = z.infer<typeof BlueskySkipReason>;
 
 const blueskyCrosspostZodType = z.object({
   postId: PostId.zodType,
+  // 送り先の Bluesky アカウントの持ち主（投稿者）
+  userId: UserId.zodType,
   status: BlueskyCrosspostStatus,
   skipReason: BlueskySkipReason.nullable(),
   uri: z.string().nullable(),
@@ -54,17 +57,24 @@ export type BlueskySentRefs = Readonly<{
   rootCid: string | null;
 }>;
 
-const pending = (postId: PostId, now: Instant): BlueskyCrosspost => ({
+const pending = (postId: PostId, userId: UserId, now: Instant): BlueskyCrosspost => ({
   ...empty,
   postId,
+  userId,
   status: 'pending',
   createdAt: now,
   updatedAt: now,
 });
 
-const skipped = (postId: PostId, skipReason: BlueskySkipReason, now: Instant): BlueskyCrosspost => ({
+const skipped = (
+  postId: PostId,
+  userId: UserId,
+  skipReason: BlueskySkipReason,
+  now: Instant,
+): BlueskyCrosspost => ({
   ...empty,
   postId,
+  userId,
   status: 'skipped',
   skipReason,
   createdAt: now,
@@ -190,7 +200,7 @@ export type BlueskyCrosspostStatusReport = Readonly<{
   recentFailures: readonly BlueskyCrosspostFailure[];
 }>;
 export type BlueskyCrosspostStatusReportResolver = Agg.Resolver<
-  { maxAttempts: number; maxDeleteAttempts: number; failuresLimit: number },
+  { userId: UserId; maxAttempts: number; maxDeleteAttempts: number; failuresLimit: number },
   BlueskyCrosspostStatusReport
 >;
 export type BlueskyCrosspostSavedStore = Readonly<{

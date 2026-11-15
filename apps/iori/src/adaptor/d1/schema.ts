@@ -716,7 +716,7 @@ export const interestSourcesTable = sqliteTable('interest_sources', {
 ]);
 
 export const blueskySessionsTable = sqliteTable('bluesky_sessions', {
-  id: text('id').primaryKey(),
+  userId: text('userId').primaryKey().references(() => usersTable.userId),
   did: text('did').notNull(),
   handle: text('handle').notNull(),
   pdsUrl: text('pdsUrl').notNull(),
@@ -726,7 +726,7 @@ export const blueskySessionsTable = sqliteTable('bluesky_sessions', {
 });
 
 export const blueskyCredentialsTable = sqliteTable('bluesky_credentials', {
-  id: text('id').primaryKey(),
+  userId: text('userId').primaryKey().references(() => usersTable.userId),
   identifier: text('identifier').notNull(),
   did: text('did').notNull(),
   handle: text('handle').notNull(),
@@ -736,23 +736,32 @@ export const blueskyCredentialsTable = sqliteTable('bluesky_credentials', {
   chatPermitted: integer('chatPermitted', { mode: 'boolean' }),
   verifiedAt: timestamp().notNull(),
   updatedAt: timestamp().notNull(),
-});
+}, (table) => [
+  uniqueIndex('bluesky_credentials_did_unique').on(table.did),
+]);
 
 export const blueskyLoginFailuresTable = sqliteTable('bluesky_login_failures', {
-  scope: text('scope').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  scope: text('scope').notNull(),
   failedAt: timestamp().notNull(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.scope] }),
+]);
 
 export const blueskySyncStatusTable = sqliteTable('bluesky_sync_status', {
-  scope: text('scope').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  scope: text('scope').notNull(),
   lastSucceededAt: timestamp(),
   lastFailedAt: timestamp(),
   lastFailureKind: text('lastFailureKind'),
   lastFailureCode: text('lastFailureCode'),
-});
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.scope] }),
+]);
 
 export const blueskyCrosspostsTable = sqliteTable('bluesky_crossposts', {
   postId: text('postId').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
   status: text('status').notNull(),
   skipReason: text('skipReason'),
   uri: text('uri'),
@@ -767,10 +776,12 @@ export const blueskyCrosspostsTable = sqliteTable('bluesky_crossposts', {
 }, (table) => [
   index('bluesky_crossposts_status_created_at_idx').on(table.status, table.createdAt),
   index('bluesky_crossposts_uri_idx').on(table.uri),
+  index('bluesky_crossposts_user_id_idx').on(table.userId),
 ]);
 
 export const blueskyTimelineItemsTable = sqliteTable('bluesky_timeline_items', {
-  feedItemId: text('feedItemId').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  feedItemId: text('feedItemId').notNull(),
   uri: text('uri').notNull(),
   cid: text('cid').notNull(),
   authorDid: text('authorDid').notNull(),
@@ -789,29 +800,42 @@ export const blueskyTimelineItemsTable = sqliteTable('bluesky_timeline_items', {
   indexedAt: timestamp().notNull(),
   fetchedAt: timestamp().notNull(),
 }, (table) => [
+  primaryKey({ columns: [table.userId, table.feedItemId] }),
   index('bluesky_timeline_items_indexed_at_idx').on(table.indexedAt),
+  index('bluesky_timeline_items_user_id_indexed_at_idx').on(table.userId, table.indexedAt),
+  index('bluesky_timeline_items_uri_idx').on(table.uri),
 ]);
 
 export const blueskyLikesTable = sqliteTable('bluesky_likes', {
-  subjectUri: text('subjectUri').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  subjectUri: text('subjectUri').notNull(),
   likeUri: text('likeUri').notNull(),
   createdAt: timestamp().notNull(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.subjectUri] }),
+]);
 
 export const blueskyBookmarksTable = sqliteTable('bluesky_bookmarks', {
-  subjectUri: text('subjectUri').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  subjectUri: text('subjectUri').notNull(),
   createdAt: timestamp().notNull(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.subjectUri] }),
+]);
 
 export const blueskyRepostsTable = sqliteTable('bluesky_reposts', {
-  subjectUri: text('subjectUri').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  subjectUri: text('subjectUri').notNull(),
   repostUri: text('repostUri').notNull(),
   createdAt: timestamp().notNull(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.subjectUri] }),
+]);
 
 export const notificationBlueskyTable = sqliteTable('notification_bluesky', {
   notificationId: text('notificationId').primaryKey().references(() => notificationsTable.notificationId),
-  blueskyUri: text('blueskyUri').notNull().unique(),
+  recipientUserId: text('recipientUserId').notNull().references(() => usersTable.userId),
+  blueskyUri: text('blueskyUri').notNull(),
   reason: text('reason').notNull(),
   authorDid: text('authorDid').notNull(),
   authorHandle: text('authorHandle').notNull(),
@@ -820,36 +844,46 @@ export const notificationBlueskyTable = sqliteTable('notification_bluesky', {
   subjectUri: text('subjectUri'),
   targetPostId: text('targetPostId'),
   text: text('text'),
-});
+}, (table) => [
+  uniqueIndex('notification_bluesky_recipient_user_id_bluesky_uri_unique').on(table.recipientUserId, table.blueskyUri),
+]);
 
 export const blueskyModeratedActorsTable = sqliteTable('bluesky_moderated_actors', {
-  did: text('did').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  did: text('did').notNull(),
   muted: integer('muted').notNull().default(0),
   blockUri: text('blockUri'),
   updatedAt: timestamp().notNull(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.did] }),
+]);
 
 export const blueskyNotificationReceiptsTable = sqliteTable('bluesky_notification_receipts', {
-  uri: text('uri').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  uri: text('uri').notNull(),
   indexedAt: timestamp().notNull(),
   receivedAt: timestamp().notNull(),
 }, (table) => [
+  primaryKey({ columns: [table.userId, table.uri] }),
   index('bluesky_notification_receipts_indexed_at_idx').on(table.indexedAt),
 ]);
 
 export const blueskyNotificationSyncStateTable = sqliteTable('bluesky_notification_sync_state', {
-  id: text('id').primaryKey(),
+  userId: text('userId').primaryKey().references(() => usersTable.userId),
   initialSyncCompletedAt: timestamp().notNull(),
 });
 
 export const blueskyChatPushReceiptsTable = sqliteTable('bluesky_chat_push_receipts', {
-  convoId: text('convoId').primaryKey(),
+  userId: text('userId').notNull().references(() => usersTable.userId),
+  convoId: text('convoId').notNull(),
   lastMessageId: text('lastMessageId').notNull(),
   notifiedAt: timestamp().notNull(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.convoId] }),
+]);
 
 export const blueskyAccountSwitchTable = sqliteTable('bluesky_account_switch', {
-  id: text('id').primaryKey(),
+  userId: text('userId').primaryKey().references(() => usersTable.userId),
   switchId: text('switchId').notNull(),
   fromDid: text('fromDid').notNull(),
   toDid: text('toDid').notNull(),
