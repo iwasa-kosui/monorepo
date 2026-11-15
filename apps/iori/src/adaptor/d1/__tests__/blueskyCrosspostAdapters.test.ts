@@ -14,6 +14,7 @@ import {
   createD1BlueskySessionResolver,
   createD1BlueskySessionSavedStore,
 } from '../blueskyCrosspost/blueskySessionStore.ts';
+import { insertBlueskyAccountSwitch } from './blueskyAccountSwitchFixture.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
@@ -148,6 +149,21 @@ describe('D1 の bluesky_crossposts アダプタ', () => {
       await retryable.resolve({ pendingCreatedBefore: at(50), maxAttempts: 3, maxDeleteAttempts: 5, limit: 2 }),
     );
     expect(limited.map((row) => row.postId)).toEqual([failedOld, oldPending]);
+  });
+
+  it('アカウントを切り替えている途中の人のクロスポストは再送の候補から外し、ほかの人の分は返す', async () => {
+    const { sqlite, savedStore, retryable, userId, other } = setup();
+    const switchingPost = PostId.generate();
+    const otherPost = PostId.generate();
+    await savedStore.save(BlueskyCrosspost.pending(switchingPost, userId, at(1)));
+    await savedStore.save(BlueskyCrosspost.pending(otherPost, other, at(2)));
+    insertBlueskyAccountSwitch(sqlite, userId, { startedAt: at(30) });
+
+    const candidates = Result.unsafeUnwrap(
+      await retryable.resolve({ pendingCreatedBefore: at(50), maxAttempts: 3, maxDeleteAttempts: 5, limit: 20 }),
+    );
+
+    expect(candidates.map((row) => row.postId)).toEqual([otherPost]);
   });
 
   it('deleting の行は uri、cid、rkey と試行回数、lastError を保存し直せる', async () => {

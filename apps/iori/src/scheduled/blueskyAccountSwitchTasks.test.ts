@@ -7,7 +7,7 @@ import {
 } from '../adaptor/d1/__tests__/blueskyAccountSwitchFixture.ts';
 import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
-import { purgeBlueskyAccountSwitchTask, skipWhileBlueskyAccountSwitching } from './blueskyAccountSwitchTasks.ts';
+import { purgeBlueskyAccountSwitchTask } from './blueskyAccountSwitchTasks.ts';
 import { dispatchScheduled, type ScheduledTaskContext, scheduledTasks } from './scheduledTasks.ts';
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
@@ -34,48 +34,12 @@ const newFixture = () => {
   return fixture;
 };
 
-describe('skipWhileBlueskyAccountSwitching', () => {
-  it('切り替え中は、包んだタスクを実行せずログに出す', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const run = vi.fn(async () => undefined);
-    const task = skipWhileBlueskyAccountSwitching({ name: 'collect', after: 'before', run }, async () => true);
-
-    await task.run(contextFor({}));
-
-    expect(run).not.toHaveBeenCalled();
-    expect(task).toMatchObject({ name: 'collect', after: 'before' });
-    expect(info).toHaveBeenCalledWith(
-      JSON.stringify({ event: 'bluesky_account_switch_task_skipped', task: 'collect' }),
-    );
-  });
-});
-
 describe('毎分の cron', () => {
   const enabledEnv = (fixture: ReturnType<typeof newFixture>): Partial<IoriWorkerEnv> => ({
     DB: fixture.binding,
     IORI_BLUESKY_TIMELINE: 'enabled',
     BLUESKY_IDENTIFIER: 'env.example.com',
     BLUESKY_APP_PASSWORD: 'env-app-password',
-  });
-
-  it('3 時間ごとの cron の crosspost の再試行も、切り替え中は実行しない', async () => {
-    const retry = scheduledTasks['0 0,3,6,9,12,15,18,21 * * *']!.find((task) =>
-      task.name === 'retryBlueskyCrossposts'
-    )!;
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const idle = newFixture();
-    await retry.run(contextFor({ DB: idle.binding }));
-    expect(info).not.toHaveBeenCalledWith(
-      JSON.stringify({ event: 'bluesky_account_switch_task_skipped', task: 'retryBlueskyCrossposts' }),
-    );
-
-    const switching = newFixture();
-    insertBlueskyAccountSwitch(switching.sqlite, OWNER_ID, { startedAt: Date.now() });
-    await retry.run(contextFor({ DB: switching.binding }));
-
-    expect(info).toHaveBeenCalledWith(
-      JSON.stringify({ event: 'bluesky_account_switch_task_skipped', task: 'retryBlueskyCrossposts' }),
-    );
   });
 
   it('切り替えの印があるあいだは、タイムラインと通知の取り込みで Bluesky を呼ばない', async () => {
