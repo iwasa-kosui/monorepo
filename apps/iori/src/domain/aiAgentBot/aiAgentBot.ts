@@ -35,7 +35,7 @@ export const AI_AGENT_BOT_PROFILE = {
  */
 export const AI_AGENT_BOT_IMAGES = {
   avatarPath: '/bot/iori-avatar-octopus-24.png',
-  headerPath: '/bot/iori-header-crab-vs-octopus-24.png',
+  headerPath: '/bot/iori-header-octopus-24.png',
 } as const;
 
 /** 1 つのスレッドで bot が返信する上限。bot どうしや人との応酬が終わらないのを防ぐ */
