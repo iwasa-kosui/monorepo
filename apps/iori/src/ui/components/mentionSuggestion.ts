@@ -23,3 +23,34 @@ export const insertMention = (
   const inserted = `@${acct}${/^\s/.test(after) ? '' : ' '}`;
   return { text: `${text.slice(0, token.start)}${inserted}${after}`, caret: token.start + inserted.length };
 };
+
+export type MentionListSide = 'above' | 'below';
+
+type PlacementInput = Readonly<{
+  /** キャレットのある行の上端と下端（画面上の座標） */
+  caretTop: number;
+  caretBottom: number;
+  /** キーボードなどに隠れず見えている範囲の上端と下端（画面上の座標） */
+  viewportTop: number;
+  viewportBottom: number;
+  preferredHeight: number;
+}>;
+
+const LIST_GAP_PX = 4;
+const LIST_MIN_HEIGHT_PX = 48;
+
+/**
+ * 候補の一覧をキャレットの行の下と上のどちらに開くかと、その高さを決める。
+ * 下に収まればそのまま下に、収まらなければ広く空いている側に開き、見えている範囲からはみ出さない高さにする。
+ */
+export const mentionListPlacement = (
+  { caretTop, caretBottom, viewportTop, viewportBottom, preferredHeight }: PlacementInput,
+): Readonly<{ side: MentionListSide; maxHeight: number }> => {
+  const below = viewportBottom - caretBottom - LIST_GAP_PX * 2;
+  const above = caretTop - viewportTop - LIST_GAP_PX * 2;
+  const side: MentionListSide = below >= preferredHeight || below >= above ? 'below' : 'above';
+  const space = side === 'below' ? below : above;
+  return { side, maxHeight: Math.max(LIST_MIN_HEIGHT_PX, Math.min(preferredHeight, space)) };
+};
+
+export const MENTION_LIST_GAP_PX = LIST_GAP_PX;

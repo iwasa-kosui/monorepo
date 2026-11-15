@@ -159,7 +159,7 @@ export const MarkdownEditor = ({
             id={mentionListId}
             accounts={mention.accounts}
             activeIndex={mention.activeIndex}
-            placement={mention.placement}
+            position={mention.position}
             onSelect={mention.select}
             onHover={mention.setActiveIndex}
           />
