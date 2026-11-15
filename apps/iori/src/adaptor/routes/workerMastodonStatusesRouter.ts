@@ -9,7 +9,7 @@ import { MediaId } from '../../domain/mediaUpload/mediaId.ts';
 import type { MediaUpload, MediaUploadResolver } from '../../domain/mediaUpload/mediaUpload.ts';
 import type { MutedActorIdsResolverByUserId } from '../../domain/mute/mute.ts';
 import { Scope } from '../../domain/oauth/scope.ts';
-import { mentionLinksOfHtml } from '../../domain/post/mention.ts';
+import { mentionLinksOfHtml, MentionRecipient } from '../../domain/post/mention.ts';
 import { plainTextToHtml } from '../../domain/post/plainTextToHtml.ts';
 import {
   Post,
@@ -25,8 +25,9 @@ import { PostId } from '../../domain/post/postId.ts';
 import type { Visibility } from '../../domain/post/visibility.ts';
 import type { RepostResolver, RepostResolverById } from '../../domain/repost/repost.ts';
 import { RepostId } from '../../domain/repost/repostId.ts';
-import type { UserResolver } from '../../domain/user/user.ts';
+import type { UserResolver, UserResolverByUsername } from '../../domain/user/user.ts';
 import type { UserId } from '../../domain/user/userId.ts';
+import { Username } from '../../domain/user/username.ts';
 import { BLUESKY_STATUS_ID_PREFIX } from '../../helper/blueskyUrl.ts';
 import type { CreateBookmarkUseCase } from '../../useCase/createBookmark.ts';
 import type { CreatePostUseCase } from '../../useCase/createPost.ts';
@@ -54,7 +55,7 @@ import { toIsoString } from '../mastodon/time.ts';
 import { htmlToPlainText } from '../text/htmlToPlainText.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { resolveViewer } from './helper/mastodonViewer.ts';
-import { noMentions, resolveMentions } from './helper/mentionResolution.ts';
+import { type LocalMentionRecipientResolver, noMentions, resolveMentions } from './helper/mentionResolution.ts';
 import { bodyBoolean, bodyString, bodyStringList, readRequestBody, type RequestBody } from './helper/requestBody.ts';
 import {
   getMastodonPrincipal,
@@ -67,6 +68,7 @@ export type WorkerMastodonStatusesRouterDeps = Readonly<{
   authn: MastodonAuthn;
   userResolver: UserResolver;
   remoteActorLookup: RemoteActorLookup;
+  userResolverByUsername: UserResolverByUsername;
   actorResolverByUserId: ActorResolverByUserId;
   postsWithAuthorResolverByPostIds: PostsWithAuthorResolverByPostIds;
   repostResolverById: RepostResolverById;
@@ -205,6 +207,7 @@ export const createWorkerMastodonStatusesRouter = ({
   authn,
   userResolver,
   remoteActorLookup,
+  userResolverByUsername,
   actorResolverByUserId,
   postsWithAuthorResolverByPostIds,
   repostResolverById,
@@ -349,6 +352,20 @@ export const createWorkerMastodonStatusesRouter = ({
 
   const resolveOwnedMedia = resolveOwnedMediaUpload(mediaUploadResolver);
 
+  const localMentionRecipient = (ctx: RequestContext<unknown>): LocalMentionRecipientResolver => async (name) => {
+    const username = Username.parse(name);
+    const found = username.ok ? await userResolverByUsername.resolve(username.val) : undefined;
+    if (found === undefined || !found.ok || found.val === undefined) {
+      return undefined;
+    }
+    const recipient = MentionRecipient.parse({
+      id: ctx.getActorUri(found.val.username).href,
+      inboxUrl: ctx.getInboxUri(found.val.username).href,
+      sharedInboxUrl: ctx.getInboxUri().href,
+    });
+    return recipient.ok ? recipient.val : undefined;
+  };
+
   const renderContent = async (
     c: Context<MastodonAuthEnv>,
     userId: UserId,
@@ -360,6 +377,7 @@ export const createWorkerMastodonStatusesRouter = ({
     const mentions = user.ok && user.val !== undefined
       ? await resolveMentions({
         lookup: remoteActorLookup,
+        localRecipient: localMentionRecipient(createContext(c.req.raw)),
         text,
         format,
         identifier: user.val.username,

@@ -2,6 +2,7 @@ import { type RequestContext } from '@fedify/fedify';
 import { Create, isActor, Note, type Recipient } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
 import { Temporal } from '@js-temporal/polyfill';
+import { getLogger } from '@logtape/logtape';
 
 import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { Actor, ActorResolverByUserId } from '../domain/actor/actor.ts';
@@ -36,6 +37,7 @@ import { TimelineItem, type TimelineItemCreatedStore } from '../domain/timeline/
 import { TimelineItemId } from '../domain/timeline/timelineItemId.ts';
 import type { User, UserNotFoundError, UserResolver } from '../domain/user/user.ts';
 import { type MentionedActor, toMentionNoteFields } from './helper/mentionNote.ts';
+import type { MentionNotifier } from './helper/notifyMentions.ts';
 import { toPostAddressing } from './helper/postAddressing.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
@@ -105,6 +107,7 @@ type Deps = Readonly<{
   actorResolverById?: Agg.Resolver<ActorId, Actor | undefined>;
   postQuotesResolver?: PostQuotesResolverByPostIds;
   scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
+  mentionNotifier?: MentionNotifier;
   origin: string;
 }>;
 
@@ -123,6 +126,7 @@ const create = ({
   actorResolverById,
   postQuotesResolver,
   scheduleBlueskyCrosspost,
+  mentionNotifier,
   origin,
 }: Deps): SendReplyUseCase => {
   const now = Instant.now();
@@ -460,6 +464,28 @@ const create = ({
         };
         const event = Notification.createReplyNotification(notification, now);
         await replyNotificationCreatedStore.store(event);
+        return RA.ok(undefined);
+      }),
+      // 本文でメンションしたローカルの利用者へ通知する。返信の通知を受ける相手には重ねて作らない
+      RA.andThrough(async ({ actor, replyPost, parentPost, inReplyToUri }) => {
+        const recipientActorUris = toMentionNoteFields(replyPost.content).ccs.map((uri) => uri.href);
+        if (mentionNotifier === undefined || recipientActorUris.length === 0) {
+          return RA.ok(undefined);
+        }
+        try {
+          const original = parentPost.type === 'local'
+            ? parentPost
+            : await localPostResolverByUri.resolve({ uri: inReplyToUri }).then((r) => (r.ok ? r.val : undefined));
+          await mentionNotifier({
+            now,
+            mentioner: actor,
+            mentionPostId: replyPost.postId,
+            recipientActorUris,
+            replyRecipientUserId: replyPost.visibility === 'direct' ? undefined : original?.userId,
+          });
+        } catch (error) {
+          getLogger().warn(`Failed to notify local mentions of ${replyPost.postId}: ${String(error)}`);
+        }
         return RA.ok(undefined);
       }),
       // Send web push notification for reply

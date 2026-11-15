@@ -24,6 +24,7 @@ import { User, UserNotFoundError, type UserResolver } from '../domain/user/user.
 import { Schema } from '../helper/schema.ts';
 import { buildLocalNote } from './helper/localNote.ts';
 import { toMentionNoteFields } from './helper/mentionNote.ts';
+import type { MentionNotifier } from './helper/notifyMentions.ts';
 import { toImageDocument } from './helper/postImageDocument.ts';
 import { type PostImagesInput, toPostImages } from './helper/postImages.ts';
 import { resolveQuoteNoteFields } from './helper/quoteNote.ts';
@@ -71,6 +72,7 @@ type Deps = Readonly<{
   acceptedRelaysResolver: AcceptedRelaysResolver;
   postQuotesResolver?: PostQuotesResolverByPostIds;
   scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
+  mentionNotifier?: MentionNotifier;
   origin: string;
 }>;
 
@@ -86,6 +88,7 @@ const create = ({
   acceptedRelaysResolver,
   postQuotesResolver,
   scheduleBlueskyCrosspost,
+  mentionNotifier,
   origin,
 }: Deps): CreatePostUseCase => {
   const now = Instant.now();
@@ -247,6 +250,25 @@ const create = ({
       RA.andThrough(async ({ post, crosspostToBluesky }) => {
         if (crosspostToBluesky !== false) {
           await scheduleBlueskyCrosspost?.run({ postId: post.postId });
+        }
+        return RA.ok(undefined);
+      }),
+      RA.andThrough(async ({ post, actor, content }) => {
+        // ローカルの利用者へのメンションは配送されないので、ここで通知を作る
+        const recipientActorUris = toMentionNoteFields(sanitizePostContent(content)).ccs.map((uri) => uri.href);
+        if (mentionNotifier === undefined || recipientActorUris.length === 0) {
+          return RA.ok(undefined);
+        }
+        try {
+          await mentionNotifier({
+            now,
+            mentioner: actor,
+            mentionPostId: post.postId,
+            recipientActorUris,
+            replyRecipientUserId: undefined,
+          });
+        } catch (error) {
+          getLogger().warn(`Failed to notify local mentions of ${post.postId}: ${String(error)}`);
         }
         return RA.ok(undefined);
       }),

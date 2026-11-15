@@ -433,16 +433,50 @@ describe('POST /api/v1/statuses のメンション', () => {
     }
   });
 
-  it('自分のホストの acct は lookup せず、平文のまま mentions にも含めない', async () => {
+  it('自分のホストの acct は lookup せずローカルの利用者から解決し、リンクにして相手に通知を作る', async () => {
     const t = await withRemoteAlice();
 
-    const response = await t.json({ status: 'hi @kosui@iori.test and @Kosui@IORI.test' });
+    const response = await t.json({ status: 'hi @Alice@IORI.test and @nobody@iori.test' });
 
     expect(response.status).toBe(200);
     const status = StatusSchema.parse(await response.json());
     expect(t.remoteActorLookup.lookup).not.toHaveBeenCalled();
-    expect(t.storedContent(status.id)).toBe('<p>hi @kosui@iori.test and @Kosui@IORI.test</p>');
+    expect(t.storedContent(status.id)).toBe(
+      `<p>hi <span class="h-card"><a href="${ORIGIN}/users/alice" class="u-url mention">@<span>Alice@iori.test</span></a></span> and @nobody@iori.test</p>`,
+    );
     expect(t.federation.sendActivity).toHaveBeenCalledTimes(1);
+    expect(
+      t.sqlite.prepare(
+        `SELECT n.recipientUserId FROM notification_mentions m
+         JOIN notifications n ON n.notificationId = m.notificationId WHERE m.mentionPostId = ?`,
+      ).all(status.id),
+    ).toEqual([{ recipientUserId: t.alice.userId }]);
+  });
+
+  it('自分自身へのメンションでは通知を作らない', async () => {
+    const t = await withRemoteAlice();
+
+    const response = await t.json({ status: `hi @${t.me.username}@iori.test` });
+
+    expect(response.status).toBe(200);
+    expect(t.count('notification_mentions')).toBe(0);
+  });
+
+  it('返信の本文でメンションしたローカルの利用者に通知し、返信の通知を受ける相手には重ねて作らない', async () => {
+    const t = await withRemoteAlice();
+    const bob = t.seed.addLocalActor('bob');
+    const parent = t.seed.addLocalPost(t.alice, 1_000, { content: '<p>parent</p>' });
+
+    const response = await t.json({
+      status: '@alice@iori.test @bob@iori.test hi',
+      in_reply_to_id: parent.postId,
+    });
+
+    expect(response.status).toBe(200);
+    expect(t.sqlite.prepare('SELECT recipientUserId FROM notification_mentions').all()).toEqual([
+      { recipientUserId: bob.userId },
+    ]);
+    expect(t.count('notifications', `recipientUserId='${t.alice.userId}'`)).toBe(1);
   });
 
   describe('visibility が direct のとき', () => {
