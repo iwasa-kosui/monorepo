@@ -6,7 +6,7 @@ import {
   retireAiAgentBotAccountsTask,
   runAiAgentFollowupsTask,
 } from './aiAgentBotTasks.ts';
-import { purgeBlueskyAccountSwitchTask, skipWhileBlueskyAccountSwitching } from './blueskyAccountSwitchTasks.ts';
+import { purgeBlueskyAccountSwitchTask } from './blueskyAccountSwitchTasks.ts';
 import { collectBlueskyChatPushTask } from './blueskyChatPushTasks.ts';
 import { retryBlueskyCrosspostsTask } from './blueskyCrosspostTasks.ts';
 import { collectBlueskyNotificationsTask, expireBlueskyNotificationReceiptsTask } from './blueskyNotificationTasks.ts';
@@ -40,7 +40,8 @@ export const scheduledTasks: ScheduledTaskTable = {
     syncOwnInterestSourcesTask,
     { ...embedOwnInterestSourcesTask, after: syncOwnInterestSourcesTask.name },
     pruneFederatedPostsTask,
-    skipWhileBlueskyAccountSwitching(retryBlueskyCrosspostsTask),
+    // アカウントを切り替えている途中の人のクロスポストは、再送の対象から外す
+    retryBlueskyCrosspostsTask,
     expireBlueskyTimelineTask,
     expireBlueskyNotificationReceiptsTask,
     postAiAgentMusingTask,

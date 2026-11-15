@@ -71,21 +71,3 @@ export const createPurgeBlueskyAccountSwitchTask = (
 export const purgeBlueskyAccountSwitchTask = createPurgeBlueskyAccountSwitchTask(
   createPurgeBlueskyAccountSwitchUseCase,
 );
-
-/** だれかがアカウントを切り替えている途中か。クロスポストの再送は、切り替えの後始末と重ならないよう止める */
-const isBlueskyAccountSwitching = async (env: IoriWorkerEnv): Promise<boolean> =>
-  (await resolveSwitchingUserIds(env)).length > 0;
-
-export const skipWhileBlueskyAccountSwitching = (
-  task: ScheduledTask,
-  isSwitching: (env: IoriWorkerEnv) => Promise<boolean> = isBlueskyAccountSwitching,
-): ScheduledTask => ({
-  ...task,
-  run: async (context) => {
-    if (await isSwitching(context.env)) {
-      console.info(JSON.stringify({ event: 'bluesky_account_switch_task_skipped', task: task.name }));
-      return;
-    }
-    await task.run(context);
-  },
-});
