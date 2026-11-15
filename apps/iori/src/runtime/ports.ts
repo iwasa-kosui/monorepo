@@ -13,6 +13,7 @@ import type {
 import type {
   AccountRelationshipsResolverByActorIds,
   ActorIdResolverByAcct,
+  ActorIdsResolverByMentionQuery,
 } from '../domain/actor/accountRelationship.ts';
 import type { AccountStatsResolverByActorId } from '../domain/actor/accountStats.ts';
 import type { ActorResolverByUserId, ActorsResolverByFollowerId } from '../domain/actor/actor.ts';
@@ -203,6 +204,7 @@ export type IoriMastodonRuntimePorts = Readonly<{
   actorIdsResolverByFollowerId: ActorIdsResolverByFollowerIdWithPagination;
   actorIdsResolverByFollowingId: ActorIdsResolverByFollowingIdWithPagination;
   actorIdResolverByAcct: ActorIdResolverByAcct;
+  actorIdsResolverByMentionQuery: ActorIdsResolverByMentionQuery;
   accountRelationshipsResolverByActorIds: AccountRelationshipsResolverByActorIds;
   likedPostIdsResolverByActorIdWithPagination: LikedPostIdsResolverByActorIdWithPagination;
   bookmarkedPostIdsResolverByActorIdWithPagination: BookmarkedPostIdsResolverByActorIdWithPagination;

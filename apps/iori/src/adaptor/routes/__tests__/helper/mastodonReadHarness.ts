@@ -88,6 +88,7 @@ import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../../d1/__tests__/sqliteFixture.ts';
 import { createD1AccountProfilesResolverByActorIds } from '../../../d1/actor/accountProfilesResolverByActorIds.ts';
 import { createD1ActorIdResolverByAcct } from '../../../d1/actor/actorIdResolverByAcct.ts';
+import { createD1ActorIdsResolverByMentionQuery } from '../../../d1/actor/actorIdsResolverByMentionQuery.ts';
 import { createD1ActorResolverById } from '../../../d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUri } from '../../../d1/actor/actorResolverByUri.ts';
 import { createD1ActorResolverByUserId } from '../../../d1/actor/actorResolverByUserId.ts';
@@ -622,6 +623,7 @@ export const setupReadApi = (
           actorIdsResolverByFollowerId: createD1ActorIdsResolverByFollowerIdWithPagination(db),
           actorIdsResolverByFollowingId: createD1ActorIdsResolverByFollowingIdWithPagination(db),
           actorIdResolverByAcct: createD1ActorIdResolverByAcct(db),
+          actorIdsResolverByMentionQuery: createD1ActorIdsResolverByMentionQuery(db),
           accountRelationshipsResolverByActorIds: createD1AccountRelationshipsResolverByActorIds(db),
           statusAssembler,
           createMuteUseCase: CreateMuteUseCase.create({

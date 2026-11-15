@@ -195,6 +195,38 @@ describe('GET /api/v1/accounts/lookup', () => {
   });
 });
 
+describe('GET /api/v1/accounts/search', () => {
+  it('入力途中の宛先から、フォロー中のアカウントを acct 付きの Account で返す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const alice = t.seed.addRemoteActor('alice');
+    t.seed.addFollow(me.actorId, alice.actorId);
+
+    const response = await t.request('/api/v1/accounts/search?q=%40ali&limit=5', {
+      headers: { Cookie: `sessionId=${me.sessionId}` },
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json() as unknown[]).map((item) => AccountSchema.parse(item));
+    expect(body.map((account) => [account.id, account.acct])).toEqual([[alice.actorId, 'alice@remote.example']]);
+  });
+
+  it('未認証は 401、q が空なら 400、宛先として読めない q は空の配列を返す', async () => {
+    const t = setupReadApi();
+    const me = await t.signIn();
+    const cookie = { headers: { Cookie: `sessionId=${me.sessionId}` } };
+
+    const [anonymous, empty, unreadable] = await Promise.all([
+      t.request('/api/v1/accounts/search?q=alice'),
+      t.request('/api/v1/accounts/search?q=', cookie),
+      t.request('/api/v1/accounts/search?q=a%25', cookie),
+    ]);
+
+    expect([anonymous.status, empty.status, unreadable.status]).toEqual([401, 400, 200]);
+    expect(await unreadable.json()).toEqual([]);
+  });
+});
+
 describe('GET /api/v1/accounts/relationships', () => {
   const seedRelationships = async () => {
     const t = setupReadApi();

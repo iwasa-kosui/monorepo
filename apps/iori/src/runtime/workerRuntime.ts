@@ -1,6 +1,7 @@
 import { createD1AccountProfilesResolverByActorIds } from '../adaptor/d1/actor/accountProfilesResolverByActorIds.ts';
 import { createD1AccountStatsResolverByActorId } from '../adaptor/d1/actor/accountStatsResolverByActorId.ts';
 import { createD1ActorIdResolverByAcct } from '../adaptor/d1/actor/actorIdResolverByAcct.ts';
+import { createD1ActorIdsResolverByMentionQuery } from '../adaptor/d1/actor/actorIdsResolverByMentionQuery.ts';
 import { createD1ActorResolverById } from '../adaptor/d1/actor/actorResolverById.ts';
 import { createD1ActorResolverByUri } from '../adaptor/d1/actor/actorResolverByUri.ts';
 import { createD1ActorResolverByUserId } from '../adaptor/d1/actor/actorResolverByUserId.ts';
@@ -547,6 +548,7 @@ export const createWorkerRuntimePorts = async (
       actorIdsResolverByFollowerId: createD1ActorIdsResolverByFollowerIdWithPagination(db),
       actorIdsResolverByFollowingId: createD1ActorIdsResolverByFollowingIdWithPagination(db),
       actorIdResolverByAcct: createD1ActorIdResolverByAcct(db),
+      actorIdsResolverByMentionQuery: createD1ActorIdsResolverByMentionQuery(db),
       accountRelationshipsResolverByActorIds: createD1AccountRelationshipsResolverByActorIds(db),
       likedPostIdsResolverByActorIdWithPagination: createD1LikedPostIdsResolverByActorIdWithPagination(db),
       bookmarkedPostIdsResolverByActorIdWithPagination: createD1BookmarkedPostIdsResolverByActorIdWithPagination(db),

@@ -387,6 +387,12 @@ export const searchAccount = async (acct: string): Promise<Account | undefined> 
   (await request<{ accounts: Account[] }>('/api/v2/search', { q: acct, resolve: true, type: 'accounts' }))
     .body.accounts[0];
 
+/** 投稿欄で書きかけのメンションの候補を探す。フォロー中・フォロワー・ローカルのアカウントだけが返る。 */
+export const searchMentionCandidates = async (q: string): Promise<readonly Account[]> =>
+  (await request<Account[]>('/api/v1/accounts/search', { q, limit: MENTION_CANDIDATE_LIMIT })).body;
+
+const MENTION_CANDIDATE_LIMIT = 8;
+
 export const saveNotificationsMarker = async (lastReadId: string): Promise<void> => {
   const res = await fetch('/api/v1/markers', {
     method: 'POST',
