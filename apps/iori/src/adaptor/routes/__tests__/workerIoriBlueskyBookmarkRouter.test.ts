@@ -3,11 +3,11 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Instant } from '../../../domain/instant/instant.ts';
+import type { UserId } from '../../../domain/user/userId.ts';
 import type { BlueskyBookmarkReader } from '../../../ports/blueskyBookmarkReader.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../../ports/blueskyClient.ts';
 import type { BlueskyPostCidResolver } from '../../../ports/blueskyPostCidResolver.ts';
 import { BookmarkBlueskyPostUseCase } from '../../../useCase/bookmarkBlueskyPost.ts';
-import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
 import { ListBlueskyBookmarksUseCase } from '../../../useCase/listBlueskyBookmarks.ts';
 import { UnbookmarkBlueskyPostUseCase } from '../../../useCase/unbookmarkBlueskyPost.ts';
 import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
@@ -16,9 +16,11 @@ import { createD1BlueskyBookmarkDeletedStore } from '../../d1/blueskyTimeline/bl
 import { createD1BlueskyBookmarkSavedStore } from '../../d1/blueskyTimeline/blueskyBookmarkSavedStore.ts';
 import { createD1BlueskyBookmarkTargetResolver } from '../../d1/blueskyTimeline/blueskyBookmarkTargetResolver.ts';
 import { createD1BlueskyViewerBookmarksSyncedStore } from '../../d1/blueskyTimeline/blueskyViewerBookmarksSyncedStore.ts';
-import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
-import { createWorkerIoriBlueskyBookmarkRouter } from '../workerIoriBlueskyBookmarkRouter.ts';
+import {
+  createWorkerIoriBlueskyBookmarkRouter,
+  type WorkerIoriBlueskyBookmarkUserDeps,
+} from '../workerIoriBlueskyBookmarkRouter.ts';
 import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 
 const DID = 'did:plc:alice';
@@ -69,9 +71,16 @@ const bookmarkedItem = {
   replyRootUri: null,
 };
 
+const insertTimelineItem = (fixture: ReturnType<typeof createSqliteD1Fixture>, userId: string) => {
+  const insert = fixture.sqlite.prepare(
+    'INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+  );
+  insert.run(userId, POST, POST, 'cid1', DID, 'alice.bsky.social', 't', '[]', null, 1, 1, 1);
+  insert.run(userId, REPOST, POST, 'cid1', DID, 'alice.bsky.social', 't', '[]', 'did:plc:b', 1, 1, 1);
+};
+
 const setup = async (options: {
   scope: string;
-  owner?: boolean;
   enabled?: boolean;
   reader?: Partial<BlueskyBookmarkReader>;
   client?: Partial<Pick<BlueskyClient, 'createBookmark' | 'deleteBookmark'>>;
@@ -80,12 +89,6 @@ const setup = async (options: {
   const harness = createOAuthHarness();
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
-  fixture.sqlite.prepare(
-    'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-  ).run(POST, POST, 'cid1', DID, 'alice.bsky.social', 't', '[]', null, 1, 1, 1);
-  fixture.sqlite.prepare(
-    'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-  ).run(REPOST, POST, 'cid1', DID, 'alice.bsky.social', 't', '[]', 'did:plc:b', 1, 1, 1);
   const reader: BlueskyBookmarkReader = {
     getBookmarks: vi.fn(async () => RA.ok({ items: [bookmarkedItem], cursor: 'next-cursor' })),
     ...options.reader,
@@ -95,26 +98,21 @@ const setup = async (options: {
     deleteBookmark: vi.fn<BlueskyClient['deleteBookmark']>(async () => RA.ok(undefined)),
     ...options.client,
   };
-  const targetResolver = createD1BlueskyBookmarkTargetResolver(fixture.db);
   const cidResolver: BlueskyPostCidResolver = {
     resolve: vi.fn(async (uri) =>
       RA.ok(uri === POST ? { cid: 'cid-fresh', likeUri: null, repostUri: null } : undefined)
     ),
   };
   const enabled = options.enabled !== false;
-  const app = new Hono().route(
-    '/api',
-    createWorkerIoriBlueskyBookmarkRouter({
-      authn: createMastodonAuthn({
-        verifyAccessTokenUseCase: harness.memory.useCases.verifyAccessTokenUseCase,
-        sessionResolver: harness.memory.sessionResolver as never,
-      }),
+  const forUser = async (userId: UserId): Promise<WorkerIoriBlueskyBookmarkUserDeps> => {
+    const targetResolver = createD1BlueskyBookmarkTargetResolver(fixture.db, userId);
+    return {
       bookmarkBlueskyPostUseCase: enabled
         ? BookmarkBlueskyPostUseCase.create({
           client,
           targetResolver,
           cidResolver,
-          savedStore: createD1BlueskyBookmarkSavedStore(fixture.db),
+          savedStore: createD1BlueskyBookmarkSavedStore(fixture.db, userId),
           now: () => Instant.orThrow(NOW),
         })
         : undefined,
@@ -122,35 +120,101 @@ const setup = async (options: {
         ? UnbookmarkBlueskyPostUseCase.create({
           client,
           targetResolver,
-          deletedStore: createD1BlueskyBookmarkDeletedStore(fixture.db),
+          deletedStore: createD1BlueskyBookmarkDeletedStore(fixture.db, userId),
         })
         : undefined,
       listBlueskyBookmarksUseCase: enabled
         ? ListBlueskyBookmarksUseCase.create({
           reader,
-          viewerBookmarksStore: createD1BlueskyViewerBookmarksSyncedStore(fixture.db),
+          viewerBookmarksStore: createD1BlueskyViewerBookmarksSyncedStore(fixture.db, userId),
         })
         : undefined,
       viewerDid: options.viewerDid,
-      isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
+    };
+  };
+  const app = new Hono().route(
+    '/api',
+    createWorkerIoriBlueskyBookmarkRouter({
+      authn: createMastodonAuthn({
+        verifyAccessTokenUseCase: harness.memory.useCases.verifyAccessTokenUseCase,
+        sessionResolver: harness.memory.sessionResolver as never,
+      }),
+      forUser,
     }),
   );
   const issued = await harness.issueUserToken(options.scope);
   const seed = createMastodonSeed(fixture);
-  seed.addLocalActor('kosui', options.owner === false ? undefined : issued.userId);
-  if (options.owner === false) seed.addLocalActor('alice', issued.userId);
+  seed.addLocalActor('kosui', issued.userId);
+  insertTimelineItem(fixture, issued.userId);
   const bearer = { Authorization: `Bearer ${issued.token}` };
   const get = (path: string) => app.request(`${ORIGIN}${path}`, { headers: bearer });
   const anonymous = (path: string, init: RequestInit = {}) => app.request(`${ORIGIN}${path}`, init);
-  const send = (method: 'POST' | 'DELETE', path: string, body?: unknown, headers: Record<string, string> = bearer) =>
+  const sendAs = (
+    headers: Record<string, string>,
+    method: 'POST' | 'DELETE',
+    path: string,
+    body?: unknown,
+  ) =>
     app.request(`${ORIGIN}${path}`, {
       method,
       headers: { ...headers, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+  const send = (method: 'POST' | 'DELETE', path: string, body?: unknown, headers: Record<string, string> = bearer) =>
+    sendAs(headers, method, path, body);
+  /** 別のユーザーでログインする。timeline も自分のものだけを持つ */
+  const anotherUser = async (options: { timeline: boolean }) => {
+    const other = await harness.issueUserToken('write:bookmarks');
+    seed.addLocalActor('alice', other.userId);
+    if (options.timeline) insertTimelineItem(fixture, other.userId);
+    const headers = { Authorization: `Bearer ${other.token}` };
+    return {
+      userId: other.userId,
+      send: (method: 'POST' | 'DELETE', path: string, body?: unknown) => sendAs(headers, method, path, body),
+    };
+  };
   const mirrored = () => fixture.sqlite.prepare('SELECT subjectUri FROM bluesky_bookmarks').all();
-  return { get, send, anonymous, reader, client, cidResolver, mirrored, sessionId: issued.sessionId };
+  const mirroredWithUser = () =>
+    fixture.sqlite.prepare('SELECT userId, subjectUri FROM bluesky_bookmarks ORDER BY userId').all();
+  return {
+    get,
+    send,
+    anonymous,
+    anotherUser,
+    reader,
+    client,
+    cidResolver,
+    mirrored,
+    mirroredWithUser,
+    userId: issued.userId,
+    sessionId: issued.sessionId,
+  };
 };
+
+describe('ユーザーごとの Bluesky アカウント', () => {
+  it('ログイン中のユーザーのタイムラインから投稿を探し、そのユーザーのブックマークとして保存する', async () => {
+    const t = await setup({ scope: 'write:bookmarks' });
+    const bob = await t.anotherUser({ timeline: false });
+
+    // bob のタイムラインには REPOST が無いので、kosui のタイムラインの項目は使えない
+    expect((await bob.send('POST', BOOKMARKS, { feedItemId: REPOST })).status).toBe(404);
+    expect((await t.send('POST', BOOKMARKS, { feedItemId: REPOST })).status).toBe(200);
+
+    expect(t.mirroredWithUser()).toEqual([{ userId: t.userId, subjectUri: POST }]);
+  });
+
+  it('別のユーザーがブックマークを外しても、ほかのユーザーのブックマークの行は残る', async () => {
+    const t = await setup({ scope: 'write:bookmarks' });
+    const bob = await t.anotherUser({ timeline: true });
+    await t.send('POST', BOOKMARKS, { feedItemId: POST });
+    await bob.send('POST', BOOKMARKS, { feedItemId: POST });
+
+    const response = await bob.send('DELETE', `${BOOKMARKS}?feedItemId=${encodeURIComponent(POST)}`);
+
+    expect(response.status).toBe(200);
+    expect(t.mirroredWithUser()).toEqual([{ userId: t.userId, subjectUri: POST }]);
+  });
+});
 
 describe('GET /api/iori/v1/bluesky/bookmarks', () => {
   it('認証なしだと 401、read:bookmarks を満たさない scope のトークンは 403 にする', async () => {
@@ -158,16 +222,6 @@ describe('GET /api/iori/v1/bluesky/bookmarks', () => {
 
     expect((await t.anonymous(BOOKMARKS)).status).toBe(401);
     expect((await t.get(BOOKMARKS)).status).toBe(403);
-    expect(t.reader.getBookmarks).not.toHaveBeenCalled();
-  });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:bookmarks', owner: false });
-
-    const response = await t.get(BOOKMARKS);
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.reader.getBookmarks).not.toHaveBeenCalled();
   });
 
@@ -269,15 +323,6 @@ describe('POST /api/iori/v1/bluesky/bookmarks', () => {
     expect(t.client.createBookmark).not.toHaveBeenCalled();
   });
 
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'write:bookmarks', owner: false });
-
-    const response = await t.send('POST', BOOKMARKS, { feedItemId: POST });
-
-    expect(response.status).toBe(403);
-    expect(t.client.createBookmark).not.toHaveBeenCalled();
-  });
-
   it('無効のときは 409 を返す', async () => {
     const t = await setup({ scope: 'write:bookmarks', enabled: false });
 
@@ -325,13 +370,11 @@ describe('DELETE /api/iori/v1/bluesky/bookmarks', () => {
     expect(t.client.deleteBookmark).not.toHaveBeenCalled();
   });
 
-  it('所有者でない利用者を 403、無効のときは 409 にする', async () => {
-    const notOwner = await setup({ scope: 'write:bookmarks', owner: false });
+  it('無効のときは 409 にし、Bluesky を呼ばない', async () => {
     const disabled = await setup({ scope: 'write:bookmarks', enabled: false });
 
-    expect((await notOwner.send('DELETE', `${BOOKMARKS}?uri=${POST}`)).status).toBe(403);
     expect((await disabled.send('DELETE', `${BOOKMARKS}?uri=${POST}`)).status).toBe(409);
-    expect(notOwner.client.deleteBookmark).not.toHaveBeenCalled();
+    expect(disabled.client.deleteBookmark).not.toHaveBeenCalled();
   });
 
   it('feedItemId も uri も無いなら 400 にする', async () => {

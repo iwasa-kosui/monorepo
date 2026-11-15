@@ -229,8 +229,17 @@ describe('GET /api/v1/statuses/:id の iori.bluesky_crosspost', () => {
     const post = t.seed.addLocalPost(me, 1_000);
     if (row !== undefined) {
       t.sqlite.prepare(
-        'INSERT INTO bluesky_crossposts(postId,status,skipReason,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)',
-      ).run(post.postId, row.status, row.skipReason ?? null, row.uri ?? null, row.attempts ?? 0, 1_000, 1_000);
+        'INSERT INTO bluesky_crossposts(postId,userId,status,skipReason,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?)',
+      ).run(
+        post.postId,
+        me.userId,
+        row.status,
+        row.skipReason ?? null,
+        row.uri ?? null,
+        row.attempts ?? 0,
+        1_000,
+        1_000,
+      );
     }
     const crosspostOf = async (headers?: Record<string, string>) => {
       const response = await t.request(`/api/v1/statuses/${post.postId}`, headers === undefined ? {} : { headers });

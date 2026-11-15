@@ -43,7 +43,6 @@ afterEach(() => {
 
 const setup = async (
   options: {
-    owner?: boolean;
     env?: Partial<IoriWorkerEnv>;
     fetch?: (url: string, init: RequestInit) => Response | Promise<Response>;
   } = {},
@@ -52,42 +51,54 @@ const setup = async (
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
   const { sqlite } = fixture;
-  const issued = await harness.issueUserToken('read write');
   const seed = createMastodonSeed(fixture);
-  if (options.owner === false) seed.addLocalActor('alice', issued.userId);
-  else seed.addLocalActor('kosui', issued.userId);
   const hashed = await Password.hashPassword(fakeDerive)(Password.orThrow(PASSWORD));
-  sqlite.prepare(
-    'INSERT INTO user_passwords(userId,algorithm,parallelism,tagLength,memory,passes,nonceHex,tagHex) VALUES (?,?,?,?,?,?,?,?)',
-  ).run(
-    issued.userId,
-    hashed.algorithm,
-    hashed.parallelism,
-    hashed.tagLength,
-    hashed.memory,
-    hashed.passes,
-    hashed.nonceHex,
-    hashed.tagHex,
-  );
+  const signIn = async (username: string) => {
+    const issued = await harness.issueUserToken('read write');
+    seed.addLocalActor(username, issued.userId);
+    sqlite.prepare(
+      'INSERT INTO user_passwords(userId,algorithm,parallelism,tagLength,memory,passes,nonceHex,tagHex) VALUES (?,?,?,?,?,?,?,?)',
+    ).run(
+      issued.userId,
+      hashed.algorithm,
+      hashed.parallelism,
+      hashed.tagLength,
+      hashed.memory,
+      hashed.passes,
+      hashed.nonceHex,
+      hashed.tagHex,
+    );
+    return issued;
+  };
+  const issued = await signIn('kosui');
   const fetchMock = vi.fn(
     options.fetch ?? (async (url: string) => {
       if (url.endsWith('createSession')) return json(sessionBody);
       return json({ convos: [] });
     }),
   );
-  const ports = createBlueskyCredentialRuntimePorts(
-    { BLUESKY_CREDENTIAL_KEY: KEY, ...options.env } as IoriWorkerEnv,
-    fixture.db,
-    { argon2idDerive: fakeDerive, fetch: fetchMock as unknown as typeof fetch },
-  );
+  const env = { BLUESKY_CREDENTIAL_KEY: KEY, ...options.env };
+  const envCredentials = env.BLUESKY_IDENTIFIER !== undefined && env.BLUESKY_APP_PASSWORD !== undefined
+    ? { identifier: env.BLUESKY_IDENTIFIER, appPassword: env.BLUESKY_APP_PASSWORD }
+    : undefined;
   const app = new Hono().route(
     '/api',
     createWorkerIoriBlueskyCredentialRouter({
-      ...ports,
       authn: createMastodonAuthn({
         verifyAccessTokenUseCase: harness.memory.useCases.verifyAccessTokenUseCase,
         sessionResolver: harness.memory.sessionResolver as never,
       }),
+      // 本番と同じく、env の資格情報はオーナー（最初にログインした kosui）にだけ渡す
+      forUser: async (userId) =>
+        createBlueskyCredentialRuntimePorts(
+          {
+            userId,
+            envCredentials: userId === issued.userId ? envCredentials : undefined,
+            credentialKey: env.BLUESKY_CREDENTIAL_KEY,
+          },
+          fixture.db,
+          { argon2idDerive: fakeDerive, fetch: fetchMock as unknown as typeof fetch },
+        ),
     }),
   );
   const bearer = { Authorization: `Bearer ${issued.token}` };
@@ -104,24 +115,46 @@ const setup = async (
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   const put = (body: unknown) => send('PUT', body);
-  const seedCurrent = (did = 'did:plc:other', handle = 'other.example') =>
+  const seedCurrent = (did = 'did:plc:other', handle = 'other.example', userId: string = issued.userId) =>
     sqlite.prepare(
-      'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
-    ).run('default', did, handle, 'https://pds.example', 'old', 'old', 1_000);
-  const seedStoredCredential = (did = 'did:plc:alice') =>
+      'INSERT INTO bluesky_sessions(userId,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
+    ).run(userId, did, handle, 'https://pds.example', 'old', 'old', 1_000);
+  const seedStoredCredential = (did = 'did:plc:alice', userId: string = issued.userId) =>
     sqlite.prepare(
-      'INSERT INTO bluesky_credentials(id,identifier,did,handle,appPasswordCiphertext,appPasswordIv,keyVersion,chatPermitted,verifiedAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    ).run('default', 'alice.bsky.social', did, 'alice.bsky.social', 'Y2lwaGVy', 'aXY=', 1, 1, 1_000, 1_000);
+      'INSERT INTO bluesky_credentials(userId,identifier,did,handle,appPasswordCiphertext,appPasswordIv,keyVersion,chatPermitted,verifiedAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    ).run(userId, 'alice.bsky.social', did, 'alice.bsky.social', 'Y2lwaGVy', 'aXY=', 1, 1, 1_000, 1_000);
   const switchBody = {
     ...{ identifier: 'alice.bsky.social', appPassword: 'abcd-efgh-ijkl-mnop', currentPassword: PASSWORD },
     fromDid: 'did:plc:other',
     toDid: 'did:plc:alice',
   };
   const validBody = { identifier: 'alice.bsky.social', appPassword: 'abcd-efgh-ijkl-mnop', currentPassword: PASSWORD };
-  return { send, sendTo, put, validBody, switchBody, seedCurrent, seedStoredCredential, fetchMock, sqlite };
+  /** kosui とは別のユーザーでログインする */
+  const anotherUser = async () => {
+    const other = await signIn('bob');
+    const headers = { Authorization: `Bearer ${other.token}` };
+    return {
+      userId: other.userId,
+      send: (method: string, body?: unknown) => send(method, body, headers),
+      sendTo: (path: string, method: string, body?: unknown) => sendTo(path, method, body, headers),
+    };
+  };
+  return {
+    send,
+    sendTo,
+    put,
+    anotherUser,
+    validBody,
+    switchBody,
+    seedCurrent,
+    seedStoredCredential,
+    fetchMock,
+    sqlite,
+    userId: issued.userId,
+  };
 };
 
-describe('認証と所有者の確認', () => {
+describe('認証とユーザーごとの資格情報', () => {
   it.each(['GET', 'PUT', 'DELETE'])('%s は認証が無いと 401', async (method) => {
     const t = await setup();
 
@@ -133,15 +166,36 @@ describe('認証と所有者の確認', () => {
     expect(t.fetchMock).not.toHaveBeenCalled();
   });
 
-  it.each(['GET', 'PUT', 'DELETE'])('%s は所有者以外だと 403 で、Bluesky を呼ばない', async (method) => {
-    const t = await setup({ owner: false });
+  it('登録はログイン中のユーザーのものになり、ほかのユーザーの GET には出ない', async () => {
+    const t = await setup();
+    const bob = await t.anotherUser();
 
-    const response = await t.send(method, method === 'PUT' ? t.validBody : undefined);
+    expect((await t.put(t.validBody)).status).toBe(200);
 
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
-    expect(t.fetchMock).not.toHaveBeenCalled();
-    expect(t.sqlite.prepare('SELECT * FROM bluesky_credentials').all()).toEqual([]);
+    expect(await (await t.send('GET')).json()).toMatchObject({ source: 'settings', did: 'did:plc:alice' });
+    expect(await (await bob.send('GET')).json()).toMatchObject({ source: 'none', did: null });
+    expect(t.sqlite.prepare('SELECT userId, did FROM bluesky_credentials').all()).toEqual([
+      { userId: t.userId, did: 'did:plc:alice' },
+    ]);
+  });
+
+  it('env の資格情報はオーナーにだけ使い、ほかのユーザーには secret を見せない', async () => {
+    const t = await setup({ env: { BLUESKY_IDENTIFIER: 'env.example.com', BLUESKY_APP_PASSWORD: 'env-secret' } });
+    const bob = await t.anotherUser();
+
+    expect(await (await t.send('GET')).json()).toMatchObject({ source: 'secret' });
+    expect(await (await bob.send('GET')).json()).toMatchObject({ source: 'none' });
+  });
+
+  it('ほかのユーザーの DELETE は、ログイン中のユーザーの登録を消さない', async () => {
+    const t = await setup();
+    const bob = await t.anotherUser();
+    expect((await t.put(t.validBody)).status).toBe(200);
+
+    expect((await bob.send('DELETE')).status).toBe(200);
+
+    expect(t.sqlite.prepare('SELECT userId FROM bluesky_credentials').all()).toEqual([{ userId: t.userId }]);
+    expect(t.sqlite.prepare('SELECT userId FROM bluesky_sessions').all()).toEqual([{ userId: t.userId }]);
   });
 });
 
@@ -166,10 +220,7 @@ describe('GET /api/iori/v1/bluesky/credential', () => {
     const t = await setup({
       env: { BLUESKY_CREDENTIAL_KEY: undefined, BLUESKY_IDENTIFIER: 'env.example.com', BLUESKY_APP_PASSWORD: 'x' },
     });
-    t.sqlite.prepare(
-      'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
-    )
-      .run('default', 'did:plc:env', 'env.example.com', 'https://pds.example', 'a', 'r', 1_000);
+    t.seedCurrent('did:plc:env', 'env.example.com');
 
     const response = await t.send('GET');
 
@@ -249,10 +300,7 @@ describe('PUT /api/iori/v1/bluesky/credential', () => {
 
   it('DID が違えば 409 did_mismatch で、今と次のアカウントを返す', async () => {
     const t = await setup();
-    t.sqlite.prepare(
-      'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
-    )
-      .run('default', 'did:plc:other', 'other.example', 'https://pds.example', 'old', 'old', 1_000);
+    t.seedCurrent('did:plc:other', 'other.example');
 
     const response = await t.put(t.validBody);
 
@@ -262,6 +310,19 @@ describe('PUT /api/iori/v1/bluesky/credential', () => {
       current: { did: 'did:plc:other', handle: 'other.example' },
       next: { did: 'did:plc:alice', handle: 'alice.bsky.social' },
     });
+  });
+
+  it('そのアカウントがほかのユーザーにつながっていれば 409 account_linked_elsewhere で、保存しない', async () => {
+    const t = await setup();
+    const bob = await t.anotherUser();
+    t.seedStoredCredential('did:plc:alice', bob.userId);
+
+    const response = await t.put(t.validBody);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'account_linked_elsewhere' });
+    expect(t.sqlite.prepare('SELECT userId FROM bluesky_credentials').all()).toEqual([{ userId: bob.userId }]);
+    expect(t.sqlite.prepare('SELECT * FROM bluesky_sessions').all()).toEqual([]);
   });
 
   it('成功したら 200 で共通の形を返し、DM の可否を調べて保存する', async () => {
@@ -309,7 +370,7 @@ describe('DELETE /api/iori/v1/bluesky/credential', () => {
 describe('切り替え中の PUT と DELETE', () => {
   it('PUT は 409 switch_in_progress で、Bluesky を呼ばない', async () => {
     const t = await setup();
-    insertBlueskyAccountSwitch(t.sqlite);
+    insertBlueskyAccountSwitch(t.sqlite, t.userId);
 
     const response = await t.put(t.validBody);
 
@@ -321,7 +382,7 @@ describe('切り替え中の PUT と DELETE', () => {
   it('DELETE は 409 switch_in_progress で、何も消さない', async () => {
     const t = await setup();
     t.seedStoredCredential();
-    insertBlueskyAccountSwitch(t.sqlite);
+    insertBlueskyAccountSwitch(t.sqlite, t.userId);
 
     const response = await t.send('DELETE');
 
@@ -347,7 +408,7 @@ describe('切り替え中の PUT と DELETE', () => {
   });
 });
 
-describe('アカウントの切り替えの認証と所有者の確認', () => {
+describe('アカウントの切り替えの認証とユーザーごとの状態', () => {
   const targets = [
     ['account-switch/preview', 'GET'],
     ['account-switch', 'GET'],
@@ -363,23 +424,24 @@ describe('アカウントの切り替えの認証と所有者の確認', () => {
     expect(t.fetchMock).not.toHaveBeenCalled();
   });
 
-  it.each(targets)('%s の %s は所有者以外だと 403 で、何も変えない', async (path, method) => {
-    const t = await setup({ owner: false });
-    t.seedCurrent();
+  it('切り替えの状態と削除される件数は、ログイン中のユーザーのものだけを返す', async () => {
+    const t = await setup();
+    const bob = await t.anotherUser();
+    insertBlueskyAccountSwitch(t.sqlite, bob.userId);
+    seedBlueskyData(t.sqlite, bob.userId, { timelineItems: 3 });
 
-    const response = await t.sendTo(path, method, method === 'POST' ? t.switchBody : undefined);
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
-    expect(t.fetchMock).not.toHaveBeenCalled();
-    expect(t.sqlite.prepare('SELECT * FROM bluesky_account_switch').all()).toEqual([]);
+    expect(await (await t.sendTo('account-switch', 'GET')).json()).toEqual({ state: 'idle' });
+    expect(await (await t.sendTo('account-switch/preview', 'GET')).json()).toMatchObject({
+      counts: { timelineItems: 0 },
+    });
+    expect(await (await bob.sendTo('account-switch', 'GET')).json()).toMatchObject({ state: 'purging' });
   });
 });
 
 describe('GET /api/iori/v1/bluesky/account-switch/preview', () => {
   it('削除される件数を返し、通知は Bluesky の type だけを数える', async () => {
     const t = await setup();
-    seedBlueskyData(t.sqlite, {
+    seedBlueskyData(t.sqlite, t.userId, {
       timelineItems: 3,
       likes: 2,
       reposts: 1,
@@ -387,8 +449,7 @@ describe('GET /api/iori/v1/bluesky/account-switch/preview', () => {
       moderatedActors: 5,
       crossposts: 6,
     });
-    const userId = (t.sqlite.prepare('SELECT userId FROM users').get() as { userId: string }).userId;
-    seedNotifications(t.sqlite, userId, [
+    seedNotifications(t.sqlite, t.userId, [
       { id: 'n1', type: 'blueskyLike', createdAt: 1 },
       { id: 'n2', type: 'blueskyMention', createdAt: 2 },
       { id: 'n3', type: 'follow', createdAt: 3 },
@@ -422,7 +483,7 @@ describe('GET /api/iori/v1/bluesky/account-switch', () => {
 
   it('印があれば purging と進捗を返し、試行が 30 回を超えたら stalled にする', async () => {
     const t = await setup();
-    insertBlueskyAccountSwitch(t.sqlite, {
+    insertBlueskyAccountSwitch(t.sqlite, t.userId, {
       startedAt: Date.UTC(2026, 10, 12, 3, 4, 5),
       attempts: 31,
       lastError: 'Error: boom',
@@ -504,10 +565,25 @@ describe('POST /api/iori/v1/bluesky/account-switch', () => {
     expect(t.sqlite.prepare('SELECT accessJwt FROM bluesky_sessions').all()).toEqual([{ accessJwt: 'old' }]);
   });
 
+  it('切り替え先のアカウントがほかのユーザーにつながっていれば 409 account_linked_elsewhere で、何も変えない', async () => {
+    const t = await setup();
+    const bob = await t.anotherUser();
+    t.seedCurrent();
+    t.seedStoredCredential('did:plc:alice', bob.userId);
+
+    const response = await t.sendTo('account-switch', 'POST', t.switchBody);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'account_linked_elsewhere' });
+    expect(t.sqlite.prepare('SELECT * FROM bluesky_account_switch').all()).toEqual([]);
+    expect(t.sqlite.prepare('SELECT userId FROM bluesky_credentials').all()).toEqual([{ userId: bob.userId }]);
+    expect(t.sqlite.prepare('SELECT accessJwt FROM bluesky_sessions').all()).toEqual([{ accessJwt: 'old' }]);
+  });
+
   it('切り替え中は 409 switch_in_progress', async () => {
     const t = await setup();
     t.seedCurrent();
-    insertBlueskyAccountSwitch(t.sqlite);
+    insertBlueskyAccountSwitch(t.sqlite, t.userId);
 
     const response = await t.sendTo('account-switch', 'POST', t.switchBody);
 

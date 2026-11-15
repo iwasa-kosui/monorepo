@@ -148,6 +148,7 @@ describe('POST /api/v1/statuses の visibility', () => {
       crosspostResolver: createD1BlueskyCrosspostResolver(t.db),
       crosspostSavedStore: createD1BlueskyCrosspostSavedStore(t.db),
       send: send as unknown as SendBlueskyCrosspostUseCase,
+      isBlueskyLinked: async () => true,
       waitUntil,
       now: Instant.now,
     });
