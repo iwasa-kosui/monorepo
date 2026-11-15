@@ -86,14 +86,14 @@ describe('Bluesky のプロフィール画面', () => {
     expect(await response.text()).toContain('/static/blueskyProfile.js');
   });
 
-  it('所有者でないユーザーのページは 404 にし、画面を返さない', async () => {
+  it('Bluesky のアカウントはユーザーごとなので、所有者でないユーザーにも画面を返す', async () => {
     const response = await setup().request(PAGE, { headers: { Cookie: `sessionId=${otherSessionId}` } });
 
-    expect(response.status).toBe(404);
-    expect(await response.text()).not.toContain('/static/blueskyProfile.js');
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('/static/blueskyProfile.js');
   });
 
-  it('フィードのページは、未ログインを 302、所有者を画面、所有者でないユーザーを 404 にする', async () => {
+  it('フィードのページは、未ログインを 302、ログインしていればだれにでも画面を返す', async () => {
     const t = setup();
 
     const anonymous = await t.request('/feeds');
@@ -104,29 +104,28 @@ describe('Bluesky のプロフィール画面', () => {
     expect(owner.headers.get('Cache-Control')).toBe('no-store');
     expect(await owner.text()).toContain('/static/blueskyFeeds.js');
     const other = await t.request('/feeds', { headers: { Cookie: `sessionId=${otherSessionId}` } });
-    expect(other.status).toBe(404);
-    expect(await other.text()).not.toContain('/static/blueskyFeeds.js');
+    expect(other.status).toBe(200);
+    expect(await other.text()).toContain('/static/blueskyFeeds.js');
   });
 
-  it('未ログインの API は 401、所有者でないユーザーの API は 403 にする', async () => {
-    const t = setup();
-
-    expect((await t.request(PROFILE_API)).status).toBe(401);
-    expect((await t.request(PROFILE_API, { headers: { Cookie: `sessionId=${otherSessionId}` } })).status).toBe(403);
+  it('未ログインの API は 401 にする', async () => {
+    expect((await setup().request(PROFILE_API)).status).toBe(401);
   });
 
-  it('Bluesky の取り込みが無効なら、所有者の API は 409 にする', async () => {
-    const response = await setup().request(PROFILE_API, { headers: { Cookie: `sessionId=${sessionId}` } });
+  it('Bluesky の取り込みが無効なら、所有者でもほかのユーザーでも API は 409 にする', async () => {
+    for (const id of [sessionId, otherSessionId]) {
+      const response = await setup().request(PROFILE_API, { headers: { Cookie: `sessionId=${id}` } });
 
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({ error: 'Bluesky timeline is disabled' });
+    }
   });
 
-  it('いいね一覧の API は、未ログインを 401、所有者でないユーザーを 403、取り込みが無効の所有者を 409 にする', async () => {
+  it('いいね一覧の API は、未ログインを 401、取り込みが無効ならログインしているユーザーを 409 にする', async () => {
     const t = setup();
 
     expect((await t.request(LIKED_POSTS_API)).status).toBe(401);
-    expect((await t.request(LIKED_POSTS_API, { headers: { Cookie: `sessionId=${otherSessionId}` } })).status).toBe(403);
+    expect((await t.request(LIKED_POSTS_API, { headers: { Cookie: `sessionId=${otherSessionId}` } })).status).toBe(409);
     const disabled = await t.request(LIKED_POSTS_API, { headers: { Cookie: `sessionId=${sessionId}` } });
     expect(disabled.status).toBe(409);
     expect(await disabled.json()).toEqual({ error: 'Bluesky timeline is disabled' });
@@ -141,12 +140,12 @@ describe('Bluesky のプロフィール画面', () => {
     ACTOR_FEEDS_API,
     ACTOR_LISTS_API,
   ])(
-    'フィードの API %s は、未ログインを 401、所有者でないユーザーを 403、取り込みが無効の所有者を 409 にする',
+    'フィードの API %s は、未ログインを 401、取り込みが無効ならログインしているユーザーを 409 にする',
     async (path) => {
       const t = setup();
 
       expect((await t.request(path)).status).toBe(401);
-      expect((await t.request(path, { headers: { Cookie: `sessionId=${otherSessionId}` } })).status).toBe(403);
+      expect((await t.request(path, { headers: { Cookie: `sessionId=${otherSessionId}` } })).status).toBe(409);
       const disabled = await t.request(path, { headers: { Cookie: `sessionId=${sessionId}` } });
       expect(disabled.status).toBe(409);
       expect(await disabled.json()).toEqual({ error: 'Bluesky timeline is disabled' });
