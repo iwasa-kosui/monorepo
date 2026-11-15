@@ -2,8 +2,10 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import { BlueskyAccountSwitch } from '../../../domain/blueskyAccountSwitch/blueskyAccountSwitch.ts';
 
+/** userId は users に存在するユーザー（外部キー）。 */
 export const insertBlueskyAccountSwitch = (
   sqlite: DatabaseSync,
+  userId: string,
   overrides: Partial<{
     switchId: string;
     fromDid: string;
@@ -23,9 +25,9 @@ export const insertBlueskyAccountSwitch = (
     ...overrides,
   };
   sqlite.prepare(
-    'INSERT INTO bluesky_account_switch(id,switchId,fromDid,toDid,startedAt,attempts,lastError,deletedCounts,updatedAt) VALUES (?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO bluesky_account_switch(userId,switchId,fromDid,toDid,startedAt,attempts,lastError,deletedCounts,updatedAt) VALUES (?,?,?,?,?,?,?,?,?)',
   ).run(
-    'default',
+    userId,
     row.switchId,
     row.fromDid,
     row.toDid,
@@ -66,18 +68,19 @@ export const BLUESKY_DATA_TABLES = {
   chatPushReceipts: 'bluesky_chat_push_receipts',
 } as const;
 
+// 各 SQL の先頭の列は userId。
 const inserts: Readonly<Record<keyof typeof BLUESKY_DATA_TABLES, { sql: string; values: (i: number) => unknown[] }>> = {
   syncStatus: {
-    sql: 'INSERT INTO bluesky_sync_status(scope) VALUES (?)',
+    sql: 'INSERT INTO bluesky_sync_status(userId,scope) VALUES (?,?)',
     values: (i) => [`scope-${i}`],
   },
   crossposts: {
-    sql: 'INSERT INTO bluesky_crossposts(postId,status,createdAt,updatedAt) VALUES (?,?,?,?)',
+    sql: 'INSERT INTO bluesky_crossposts(userId,postId,status,createdAt,updatedAt) VALUES (?,?,?,?,?)',
     values: (i) => [`post-${i}`, i % 2 === 0 ? 'pending' : 'sent', AT, AT],
   },
   timelineItems: {
     sql:
-      'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
     values: (
       i,
     ) => [
@@ -94,63 +97,76 @@ const inserts: Readonly<Record<keyof typeof BLUESKY_DATA_TABLES, { sql: string; 
     ],
   },
   likes: {
-    sql: 'INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)',
+    sql: 'INSERT INTO bluesky_likes(userId,subjectUri,likeUri,createdAt) VALUES (?,?,?,?)',
     values: (i) => [`at://subject/${i}`, `at://like/${i}`, AT],
   },
   reposts: {
-    sql: 'INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)',
+    sql: 'INSERT INTO bluesky_reposts(userId,subjectUri,repostUri,createdAt) VALUES (?,?,?,?)',
     values: (i) => [`at://subject/${i}`, `at://repost/${i}`, AT],
   },
   bookmarks: {
-    sql: 'INSERT INTO bluesky_bookmarks(subjectUri,createdAt) VALUES (?,?)',
+    sql: 'INSERT INTO bluesky_bookmarks(userId,subjectUri,createdAt) VALUES (?,?,?)',
     values: (i) => [`at://subject/${i}`, AT],
   },
   moderatedActors: {
-    sql: 'INSERT INTO bluesky_moderated_actors(did,muted,updatedAt) VALUES (?,?,?)',
+    sql: 'INSERT INTO bluesky_moderated_actors(userId,did,muted,updatedAt) VALUES (?,?,?,?)',
     values: (i) => [`did:plc:actor${i}`, 1, AT],
   },
   notificationReceipts: {
-    sql: 'INSERT INTO bluesky_notification_receipts(uri,indexedAt,receivedAt) VALUES (?,?,?)',
+    sql: 'INSERT INTO bluesky_notification_receipts(userId,uri,indexedAt,receivedAt) VALUES (?,?,?,?)',
     values: (i) => [`at://receipt/${i}`, AT, AT],
   },
   notificationSyncState: {
-    sql: 'INSERT INTO bluesky_notification_sync_state(id,initialSyncCompletedAt) VALUES (?,?)',
-    values: (i) => [`state-${i}`, AT],
+    // ユーザーごとに 1 行しかないので、size は 0 か 1 として扱う。
+    sql: 'INSERT OR IGNORE INTO bluesky_notification_sync_state(userId,initialSyncCompletedAt) VALUES (?,?)',
+    values: () => [AT],
   },
   chatPushReceipts: {
-    sql: 'INSERT INTO bluesky_chat_push_receipts(convoId,lastMessageId,notifiedAt) VALUES (?,?,?)',
+    sql: 'INSERT INTO bluesky_chat_push_receipts(userId,convoId,lastMessageId,notifiedAt) VALUES (?,?,?,?)',
     values: (i) => [`convo-${i}`, `message-${i}`, AT],
   },
 };
 
-export const seedBlueskyData = (sqlite: DatabaseSync, sizes: BlueskyDataSizes) => {
+export const seedBlueskyData = (sqlite: DatabaseSync, userId: string, sizes: BlueskyDataSizes) => {
   sqlite.exec('BEGIN');
   for (const [name, { sql, values }] of Object.entries(inserts)) {
     const statement = sqlite.prepare(sql);
     const size = sizes[name as keyof BlueskyDataSizes] ?? 0;
-    for (let i = 0; i < size; i += 1) statement.run(...(values(i) as never[]));
+    for (let i = 0; i < size; i += 1) statement.run(userId, ...(values(i) as never[]));
   }
   sqlite.exec('COMMIT');
 };
 
-export const seedPostSwitchBlueskyData = (sqlite: DatabaseSync, createdAt: number) => {
-  sqlite.prepare('INSERT INTO bluesky_crossposts(postId,status,createdAt,updatedAt) VALUES (?,?,?,?)')
-    .run('post-after', 'sent', createdAt, createdAt);
-  sqlite.prepare('INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)')
-    .run('at://subject/after', 'at://like/after', createdAt);
-  sqlite.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)')
-    .run('at://subject/after', 'at://repost/after', createdAt);
-  sqlite.prepare('INSERT INTO bluesky_bookmarks(subjectUri,createdAt) VALUES (?,?)')
-    .run('at://subject/after', createdAt);
-  sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,updatedAt) VALUES (?,?,?)')
-    .run('did:plc:after', 1, createdAt);
+export const seedPostSwitchBlueskyData = (sqlite: DatabaseSync, userId: string, createdAt: number) => {
+  sqlite.prepare('INSERT INTO bluesky_crossposts(userId,postId,status,createdAt,updatedAt) VALUES (?,?,?,?,?)')
+    .run(userId, 'post-after', 'sent', createdAt, createdAt);
+  sqlite.prepare('INSERT INTO bluesky_likes(userId,subjectUri,likeUri,createdAt) VALUES (?,?,?,?)')
+    .run(userId, 'at://subject/after', 'at://like/after', createdAt);
+  sqlite.prepare('INSERT INTO bluesky_reposts(userId,subjectUri,repostUri,createdAt) VALUES (?,?,?,?)')
+    .run(userId, 'at://subject/after', 'at://repost/after', createdAt);
+  sqlite.prepare('INSERT INTO bluesky_bookmarks(userId,subjectUri,createdAt) VALUES (?,?,?)')
+    .run(userId, 'at://subject/after', createdAt);
+  sqlite.prepare('INSERT INTO bluesky_moderated_actors(userId,did,muted,updatedAt) VALUES (?,?,?,?)')
+    .run(userId, 'did:plc:after', 1, createdAt);
 };
 
-export const countBlueskyData = (sqlite: DatabaseSync): Record<keyof typeof BLUESKY_DATA_TABLES, number> =>
+/** userId を渡すとそのユーザーの行だけを数える。 */
+export const countBlueskyData = (
+  sqlite: DatabaseSync,
+  userId?: string,
+): Record<keyof typeof BLUESKY_DATA_TABLES, number> =>
   Object.fromEntries(
     Object.entries(BLUESKY_DATA_TABLES).map(([name, table]) => [
       name,
-      Number((sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number | bigint }).n),
+      Number(
+        (
+          (userId === undefined
+            ? sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()
+            : sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE userId = ?`).get(userId)) as {
+              n: number | bigint;
+            }
+        ).n,
+      ),
     ]),
   ) as Record<keyof typeof BLUESKY_DATA_TABLES, number>;
 
@@ -166,12 +182,12 @@ export const seedNotifications = (
     'INSERT INTO notifications(notificationId,recipientUserId,type,isRead,createdAt) VALUES (?,?,?,?,?)',
   );
   const child = sqlite.prepare(
-    'INSERT INTO notification_bluesky(notificationId,blueskyUri,reason,authorDid,authorHandle) VALUES (?,?,?,?,?)',
+    'INSERT INTO notification_bluesky(notificationId,recipientUserId,blueskyUri,reason,authorDid,authorHandle) VALUES (?,?,?,?,?,?)',
   );
   for (const notification of notifications) {
     parent.run(notification.id, userId, notification.type, 0, notification.createdAt);
     if (notification.type.startsWith('bluesky')) {
-      child.run(notification.id, `at://notification/${notification.id}`, 'like', 'did:plc:x', 'x.test');
+      child.run(notification.id, userId, `at://notification/${notification.id}`, 'like', 'did:plc:x', 'x.test');
     }
   }
   sqlite.exec('COMMIT');

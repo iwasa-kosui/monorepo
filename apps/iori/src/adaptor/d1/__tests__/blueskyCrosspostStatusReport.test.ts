@@ -9,12 +9,14 @@ import {
 } from '../../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { PostId } from '../../../domain/post/postId.ts';
+import { UserId } from '../../../domain/user/userId.ts';
 import { createD1BlueskyCrosspostSavedStore } from '../blueskyCrosspost/blueskyCrosspostSavedStore.ts';
 import { createD1BlueskyCrosspostStatusReportResolver } from '../blueskyCrosspost/blueskyCrosspostStatusReportResolver.ts';
+import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const at = (minutes: number) => Instant.orThrow(Date.UTC(2026, 10, 8, 0, minutes));
-const input = {
+const limits = {
   maxAttempts: MAX_BLUESKY_CROSSPOST_ATTEMPTS,
   maxDeleteAttempts: MAX_BLUESKY_DELETE_ATTEMPTS,
   failuresLimit: BLUESKY_CROSSPOST_RECENT_FAILURES_LIMIT,
@@ -27,8 +29,17 @@ const sentRefs = {
   rootCid: null,
 };
 
+// 集計の対象のユーザー。別のユーザーの行は owner を変えて作る。
+const ME = UserId.orThrow('00000000-0000-4000-8000-0000000000a1');
+const OTHER = UserId.orThrow('00000000-0000-4000-8000-0000000000b2');
+const input = { userId: ME, ...limits };
+
 const setup = () => {
-  const { sqlite, db, queries } = createSqliteD1Fixture();
+  const fixture = createSqliteD1Fixture();
+  const { sqlite, db, queries } = fixture;
+  const users = createMastodonSeed(fixture);
+  users.addLocalActor('alice', ME);
+  users.addLocalActor('bob', OTHER);
   return {
     sqlite,
     queries,
@@ -37,13 +48,13 @@ const setup = () => {
   };
 };
 
-const sending = (postId: PostId, minute: number, times: number) => {
-  let row = BlueskyCrosspost.pending(postId, at(minute));
+const sending = (postId: PostId, minute: number, times: number, owner: UserId = ME) => {
+  let row = BlueskyCrosspost.pending(postId, owner, at(minute));
   for (let i = 0; i < times; i += 1) row = BlueskyCrosspost.markSending(row, at(minute));
   return row;
 };
-const failed = (postId: PostId, minute: number, times: number, error = 'error') =>
-  BlueskyCrosspost.markFailed(sending(postId, minute, times), error, at(minute));
+const failed = (postId: PostId, minute: number, times: number, error = 'error', owner: UserId = ME) =>
+  BlueskyCrosspost.markFailed(sending(postId, minute, times, owner), error, at(minute));
 const deleting = (postId: PostId, minute: number, failures: number, error = 'error') => {
   let row = BlueskyCrosspost.markDeleting(
     BlueskyCrosspost.markSent(sending(postId, minute, 0), sentRefs, at(minute)),
@@ -59,10 +70,10 @@ describe('D1 の bluesky_crossposts の状態の集計', () => {
     const save = async (row: BlueskyCrosspost) => {
       await savedStore.save(row);
     };
-    await save(BlueskyCrosspost.pending(PostId.generate(), at(1)));
-    await save(BlueskyCrosspost.pending(PostId.generate(), at(1)));
+    await save(BlueskyCrosspost.pending(PostId.generate(), ME, at(1)));
+    await save(BlueskyCrosspost.pending(PostId.generate(), ME, at(1)));
     await save(BlueskyCrosspost.markSent(sending(PostId.generate(), 2, 0), sentRefs, at(2)));
-    await save(BlueskyCrosspost.skipped(PostId.generate(), 'sensitive', at(3)));
+    await save(BlueskyCrosspost.skipped(PostId.generate(), ME, 'sensitive', at(3)));
     await save(failed(PostId.generate(), 4, MAX_BLUESKY_CROSSPOST_ATTEMPTS - 1));
     await save(failed(PostId.generate(), 5, MAX_BLUESKY_CROSSPOST_ATTEMPTS));
     await save(failed(PostId.generate(), 6, MAX_BLUESKY_CROSSPOST_ATTEMPTS + 1));
@@ -85,9 +96,9 @@ describe('D1 の bluesky_crossposts の状態の集計', () => {
     await savedStore.save(failed(failedId, 1, 2, 'createRecord failed: status 500'));
     await savedStore.save(deleting(deletingId, 3, 1, 'deleteRecord failed: status 502'));
     await savedStore.save(sending(pendingId, 2, 1));
-    await savedStore.save(BlueskyCrosspost.pending(freshPendingId, at(9)));
+    await savedStore.save(BlueskyCrosspost.pending(freshPendingId, ME, at(9)));
     await savedStore.save(BlueskyCrosspost.markSent(sending(sentId, 8, 0), sentRefs, at(8)));
-    await savedStore.save(BlueskyCrosspost.skipped(skippedId, 'sensitive', at(7)));
+    await savedStore.save(BlueskyCrosspost.skipped(skippedId, ME, 'sensitive', at(7)));
 
     const { recentFailures } = Result.unsafeUnwrap(await resolver.resolve(input));
 
@@ -121,7 +132,21 @@ describe('D1 の bluesky_crossposts の状態の集計', () => {
     expect(recentFailures.map(({ postId }) => postId)).toEqual(ids.slice(2).reverse());
   });
 
-  it('クエリは件数の集計 1 回と直近の失敗 1 回で、直近の失敗は status の index で絞る', async () => {
+  it('件数も直近の失敗も、指定したユーザーのクロスポストだけを数える', async () => {
+    const { resolver, savedStore } = setup();
+    const mine = PostId.generate();
+    await savedStore.save(failed(mine, 1, 1));
+    await savedStore.save(failed(PostId.generate(), 2, MAX_BLUESKY_CROSSPOST_ATTEMPTS, 'error', OTHER));
+    await savedStore.save(BlueskyCrosspost.pending(PostId.generate(), OTHER, at(3)));
+
+    const report = Result.unsafeUnwrap(await resolver.resolve(input));
+
+    expect(report.counts).toEqual({ pending: 0, sent: 0, failed: 1, skipped: 0, deleting: 0 });
+    expect(report.exhausted).toEqual({ pending: 0, failed: 0, deleting: 0 });
+    expect(report.recentFailures.map(({ postId }) => postId)).toEqual([mine]);
+  });
+
+  it('クエリは件数の集計 1 回と直近の失敗 1 回で、直近の失敗は表を全件走査せず index で絞る', async () => {
     const { resolver, queries, sqlite } = setup();
 
     await resolver.resolve(input);
@@ -132,6 +157,7 @@ describe('D1 の bluesky_crossposts の状態の集計', () => {
     const plan = (sqlite.prepare(`EXPLAIN QUERY PLAN ${failuresQuery.sql}`).all(...failuresQuery.params) as Array<
       { detail: string }
     >).map(({ detail }) => detail).join('\n');
-    expect(plan).toContain('bluesky_crossposts_status_created_at_idx');
+    expect(plan).toMatch(/USING (COVERING )?INDEX/);
+    expect(plan).not.toMatch(/SCAN bluesky_crossposts\b(?! USING)/);
   });
 });

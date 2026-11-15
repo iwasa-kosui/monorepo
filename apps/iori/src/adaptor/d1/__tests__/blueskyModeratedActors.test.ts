@@ -2,6 +2,7 @@ import { Result } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { Instant } from '../../../domain/instant/instant.ts';
+import { UserId } from '../../../domain/user/userId.ts';
 import { createD1BlueskyModeratedActorsResolver } from '../blueskyModeration/blueskyModeratedActorsResolver.ts';
 import {
   createD1BlueskyBlockDeletedStore,
@@ -9,6 +10,7 @@ import {
   createD1BlueskyMuteDeletedStore,
   createD1BlueskyMuteSavedStore,
 } from '../blueskyModeration/blueskyModeratedActorsStore.ts';
+import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const T1 = Instant.orThrow(Date.UTC(2026, 10, 12, 1));
@@ -27,17 +29,25 @@ const setup = () => {
   const fixture = createSqliteD1Fixture();
   fixtures.push(fixture);
   const { db, sqlite } = fixture;
-  const resolver = createD1BlueskyModeratedActorsResolver(db);
+  const users = createMastodonSeed(fixture);
+  const userId = UserId.orThrow(users.addLocalActor('me').userId);
+  const other = UserId.orThrow(users.addLocalActor('other').userId);
+  const resolver = createD1BlueskyModeratedActorsResolver(db, userId);
   return {
+    db,
     sqlite,
-    muteSaved: createD1BlueskyMuteSavedStore(db),
-    muteDeleted: createD1BlueskyMuteDeletedStore(db),
-    blockSaved: createD1BlueskyBlockSavedStore(db),
-    blockDeleted: createD1BlueskyBlockDeletedStore(db),
+    userId,
+    other,
+    muteSaved: createD1BlueskyMuteSavedStore(db, userId),
+    muteDeleted: createD1BlueskyMuteDeletedStore(db, userId),
+    blockSaved: createD1BlueskyBlockSavedStore(db, userId),
+    blockDeleted: createD1BlueskyBlockDeletedStore(db, userId),
     updatedAt: async (did: string) => Result.unsafeUnwrap(await resolver.resolveUpdatedAt(did)),
     state: async (did: string) => Result.unsafeUnwrap(await resolver.resolveState(did)),
-    rows: () =>
-      sqlite.prepare('SELECT did, muted, blockUri, updatedAt FROM bluesky_moderated_actors ORDER BY did').all(),
+    rows: (owner: string = userId) =>
+      sqlite.prepare(
+        'SELECT did, muted, blockUri, updatedAt FROM bluesky_moderated_actors WHERE userId = ? ORDER BY did',
+      ).all(owner),
   };
 };
 
@@ -92,5 +102,19 @@ describe('D1 の bluesky_moderated_actors', () => {
       { did: BOB, muted: 1, blockUri: null, updatedAt: T1 },
     ]);
     expect(await t.state(ALICE)).toEqual({ muted: false, blockUri: null });
+  });
+
+  it('ミュートとブロックはユーザーごとで、別のユーザーの状態は見えず、解除しても変わらない', async () => {
+    const t = setup();
+    await t.muteSaved.save(ALICE, T1);
+    await createD1BlueskyBlockSavedStore(t.db, t.other).save(ALICE, BLOCK, T1);
+
+    expect(await t.state(ALICE)).toEqual({ muted: true, blockUri: null });
+
+    await createD1BlueskyMuteDeletedStore(t.db, t.other).delete(ALICE, T2);
+    await createD1BlueskyBlockDeletedStore(t.db, t.other).delete(ALICE, T3);
+
+    expect(t.rows()).toEqual([{ did: ALICE, muted: 1, blockUri: null, updatedAt: T1 }]);
+    expect(t.rows(t.other)).toEqual([{ did: ALICE, muted: 0, blockUri: null, updatedAt: T3 }]);
   });
 });

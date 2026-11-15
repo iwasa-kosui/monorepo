@@ -6,6 +6,7 @@ import { toBlueskyTimelineItem, toBlueskyTimelineItemRow } from './blueskyTimeli
 
 const AT = new Date(Date.UTC(2026, 10, 8, 1));
 const row = (embed: unknown, bridgyOriginalUrl: string | null = null) => ({
+  userId: '00000000-0000-4000-8000-000000000001',
   feedItemId: 'at://did:plc:author/app.bsky.feed.post/3kabc',
   uri: 'at://did:plc:author/app.bsky.feed.post/3kabc',
   cid: 'cid',

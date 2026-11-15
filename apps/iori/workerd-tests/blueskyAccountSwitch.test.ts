@@ -23,6 +23,7 @@ import { createD1Db } from '../src/adaptor/d1/client.ts';
 import { BlueskyAccountSwitch } from '../src/domain/blueskyAccountSwitch/blueskyAccountSwitch.ts';
 import type { BlueskySession } from '../src/domain/blueskyCrosspost/blueskyCrosspost.ts';
 import { Instant } from '../src/domain/instant/instant.ts';
+import { UserId } from '../src/domain/user/userId.ts';
 import {
   createBlueskyCredentialRegisteredStore,
   createBlueskyCredentialRemovedStore,
@@ -32,7 +33,9 @@ import { PurgeBlueskyAccountSwitchUseCase } from '../src/useCase/purgeBlueskyAcc
 const db = createD1Db(env.DB);
 const STARTED_AT = Instant.orThrow(1_800_000_000_000);
 const NOW = Instant.orThrow(STARTED_AT + 100_000);
-const userId = crypto.randomUUID();
+const userId = UserId.orThrow(crypto.randomUUID());
+// 切り替えをしていない、別のユーザー。このユーザーの行は消えてはいけない。
+const otherUserId = UserId.orThrow(crypto.randomUUID());
 const actorId = crypto.randomUUID();
 const postId = crypto.randomUUID();
 const run = crypto.randomUUID();
@@ -55,32 +58,33 @@ const countOf = async (table: string, where = '1 = 1') =>
 
 const series = (n: number) => `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${n})`;
 
-const seedBlueskyTables = (sizes: { timeline: number; likes: number }) =>
+const seedBlueskyTables = (sizes: { timeline: number; likes: number }, owner: UserId = userId) =>
   env.DB.batch([
-    env.DB.prepare('INSERT INTO bluesky_sync_status(scope) VALUES (?)').bind(`timeline-${run}`),
+    env.DB.prepare('INSERT INTO bluesky_sync_status(userId,scope) VALUES (?,?)').bind(owner, `timeline-${run}`),
     env.DB.prepare(
-      'INSERT INTO bluesky_crossposts(postId,status,uri,createdAt,updatedAt) VALUES (?,?,?,?,?)',
-    ).bind(postId, 'sent', 'at://did:plc:old/app.bsky.feed.post/1', 1, 1),
+      'INSERT INTO bluesky_crossposts(postId,userId,status,uri,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+    ).bind(owner === userId ? postId : `${run}-${owner}`, owner, 'sent', 'at://did:plc:old/app.bsky.feed.post/1', 1, 1),
     env.DB.prepare(
-      `INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,postedAt,indexedAt,fetchedAt)
+      `INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,postedAt,indexedAt,fetchedAt)
        ${series(sizes.timeline)}
-       SELECT 'item-${run}-' || i, 'at://x/' || i, 'cid', 'did:plc:x', 'x.test', 'text', '[]', 1, 1, 1 FROM n`,
-    ),
+       SELECT ?, 'item-${run}-' || i, 'at://x/' || i, 'cid', 'did:plc:x', 'x.test', 'text', '[]', 1, 1, 1 FROM n`,
+    ).bind(owner),
     env.DB.prepare(
-      `INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) ${series(sizes.likes)}
-       SELECT 'at://s/${run}/' || i, 'at://l/' || i, 1 FROM n`,
-    ),
-    env.DB.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)')
-      .bind(`at://s/${run}/r`, 'at://r/1', 1),
-    env.DB.prepare('INSERT INTO bluesky_bookmarks(subjectUri,createdAt) VALUES (?,?)').bind(`at://s/${run}/b`, 1),
-    env.DB.prepare('INSERT INTO bluesky_moderated_actors(did,muted,updatedAt) VALUES (?,?,?)')
-      .bind(`did:plc:muted-${run}`, 1, 1),
-    env.DB.prepare('INSERT INTO bluesky_notification_receipts(uri,indexedAt,receivedAt) VALUES (?,?,?)')
-      .bind(`at://receipt/${run}`, 1, 1),
-    env.DB.prepare('INSERT INTO bluesky_notification_sync_state(id,initialSyncCompletedAt) VALUES (?,?)')
-      .bind(`default-${run}`, 1),
-    env.DB.prepare('INSERT INTO bluesky_chat_push_receipts(convoId,lastMessageId,notifiedAt) VALUES (?,?,?)')
-      .bind(`convo-${run}`, 'message-1', 1),
+      `INSERT INTO bluesky_likes(userId,subjectUri,likeUri,createdAt) ${series(sizes.likes)}
+       SELECT ?, 'at://s/${run}/' || i, 'at://l/' || i, 1 FROM n`,
+    ).bind(owner),
+    env.DB.prepare('INSERT INTO bluesky_reposts(userId,subjectUri,repostUri,createdAt) VALUES (?,?,?,?)')
+      .bind(owner, `at://s/${run}/r`, 'at://r/1', 1),
+    env.DB.prepare('INSERT INTO bluesky_bookmarks(userId,subjectUri,createdAt) VALUES (?,?,?)')
+      .bind(owner, `at://s/${run}/b`, 1),
+    env.DB.prepare('INSERT INTO bluesky_moderated_actors(userId,did,muted,updatedAt) VALUES (?,?,?,?)')
+      .bind(owner, `did:plc:muted-${run}`, 1, 1),
+    env.DB.prepare('INSERT INTO bluesky_notification_receipts(userId,uri,indexedAt,receivedAt) VALUES (?,?,?,?)')
+      .bind(owner, `at://receipt/${run}`, 1, 1),
+    env.DB.prepare('INSERT INTO bluesky_notification_sync_state(userId,initialSyncCompletedAt) VALUES (?,?)')
+      .bind(owner, 1),
+    env.DB.prepare('INSERT INTO bluesky_chat_push_receipts(userId,convoId,lastMessageId,notifiedAt) VALUES (?,?,?,?)')
+      .bind(owner, `convo-${run}`, 'message-1', 1),
   ]);
 
 const seedNotifications = (blueskyCount: number) =>
@@ -92,8 +96,10 @@ const seedNotifications = (blueskyCount: number) =>
          0, 1000 + i FROM n`,
     ),
     env.DB.prepare(
-      `INSERT INTO notification_bluesky(notificationId,blueskyUri,reason,authorDid,authorHandle) ${series(blueskyCount)}
-       SELECT '${run}-bsky-' || printf('%05d', i), 'at://n/${run}/' || i, 'like', 'did:plc:x', 'x.test' FROM n`,
+      `INSERT INTO notification_bluesky(notificationId,recipientUserId,blueskyUri,reason,authorDid,authorHandle) ${
+        series(blueskyCount)
+      }
+       SELECT '${run}-bsky-' || printf('%05d', i), '${userId}', 'at://n/${run}/' || i, 'like', 'did:plc:x', 'x.test' FROM n`,
     ),
     env.DB.prepare('INSERT INTO notifications(notificationId,recipientUserId,type,isRead,createdAt) VALUES (?,?,?,?,?)')
       .bind(`${run}-fedi-old`, userId, 'follow', 0, 10),
@@ -107,9 +113,9 @@ const seedNotifications = (blueskyCount: number) =>
 
 const insertSwitchRow = () =>
   env.DB.prepare(
-    'INSERT INTO bluesky_account_switch(id,switchId,fromDid,toDid,startedAt,attempts,lastError,deletedCounts,updatedAt) VALUES (?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO bluesky_account_switch(userId,switchId,fromDid,toDid,startedAt,attempts,lastError,deletedCounts,updatedAt) VALUES (?,?,?,?,?,?,?,?,?)',
   ).bind(
-    'default',
+    userId,
     run,
     'did:plc:old',
     'did:plc:new',
@@ -122,8 +128,8 @@ const insertSwitchRow = () =>
 
 const purgeUseCase = (now: Instant = NOW) =>
   PurgeBlueskyAccountSwitchUseCase.create({
-    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db),
-    purger: createD1BlueskyAccountSwitchPurger(db),
+    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db, userId),
+    purger: createD1BlueskyAccountSwitchPurger(db, userId),
     progressStore: createD1BlueskyAccountSwitchProgressStore(db),
     failedStore: createD1BlueskyAccountSwitchFailedStore(db),
     completedStore: createD1BlueskyAccountSwitchCompletedStore(db),
@@ -136,7 +142,7 @@ const resetTables = () =>
     env.DB.prepare('DELETE FROM bluesky_account_switch'),
     env.DB.prepare('DELETE FROM mastodon_markers WHERE userId = ?').bind(userId),
     env.DB.prepare('DELETE FROM notification_bluesky'),
-    env.DB.prepare('DELETE FROM notifications WHERE recipientUserId = ?').bind(userId),
+    env.DB.prepare('DELETE FROM notifications WHERE recipientUserId IN (?,?)').bind(userId, otherUserId),
     env.DB.prepare('DELETE FROM domain_events WHERE aggregateName = ?').bind('blueskyAccountSwitch'),
     env.DB.prepare('DELETE FROM bluesky_credentials'),
     env.DB.prepare('DELETE FROM bluesky_sessions'),
@@ -147,6 +153,7 @@ beforeEach(async () => {
   await resetTables();
   await env.DB.batch([
     env.DB.prepare('INSERT OR IGNORE INTO users(userId,username) VALUES (?,?)').bind(userId, `switch-${run}`),
+    env.DB.prepare('INSERT OR IGNORE INTO users(userId,username) VALUES (?,?)').bind(otherUserId, `other-${run}`),
     env.DB.prepare('INSERT OR IGNORE INTO actors(actorId,uri,inboxUrl,type) VALUES (?,?,?,?)')
       .bind(actorId, `https://example.test/users/${actorId}`, `https://example.test/users/${actorId}/inbox`, 'local'),
     env.DB.prepare('INSERT OR IGNORE INTO posts(postId,actorId,content,createdAt,type) VALUES (?,?,?,?,?)')
@@ -162,7 +169,7 @@ afterAll(async () => {
     env.DB.prepare('DELETE FROM local_posts WHERE postId = ?').bind(postId),
     env.DB.prepare('DELETE FROM posts WHERE postId = ?').bind(postId),
     env.DB.prepare('DELETE FROM actors WHERE actorId = ?').bind(actorId),
-    env.DB.prepare('DELETE FROM users WHERE userId = ?').bind(userId),
+    env.DB.prepare('DELETE FROM users WHERE userId IN (?,?)').bind(userId, otherUserId),
   ]);
 });
 
@@ -191,6 +198,46 @@ describe('アカウントの切り替えの削除（実 D1）', () => {
     expect(await countOf('posts', `postId = '${postId}'`)).toBe(1);
     expect(await countOf('local_posts', `postId = '${postId}'`)).toBe(1);
     expect(await countOf('bluesky_account_switch')).toBe(0);
+  });
+
+  it('切り替えたユーザーの行だけを消し、別のユーザーの Bluesky の行と通知は残す', async () => {
+    await seedBlueskyTables({ timeline: 5, likes: 3 });
+    await seedBlueskyTables({ timeline: 4, likes: 2 }, otherUserId);
+    await env.DB.batch([
+      env.DB.prepare(
+        'INSERT INTO notifications(notificationId,recipientUserId,type,isRead,createdAt) VALUES (?,?,?,?,?)',
+      )
+        .bind(`${run}-other-bsky`, otherUserId, 'blueskyLike', 0, 1),
+      env.DB.prepare(
+        'INSERT INTO notification_bluesky(notificationId,recipientUserId,blueskyUri,reason,authorDid,authorHandle) VALUES (?,?,?,?,?,?)',
+      ).bind(`${run}-other-bsky`, otherUserId, `at://n/${run}/other`, 'like', 'did:plc:x', 'x.test'),
+    ]);
+    await insertSwitchRow();
+
+    const result = Result.unsafeUnwrap(await purgeUseCase().run());
+
+    expect(result.status).toBe('completed');
+    for (const table of BLUESKY_TABLES) {
+      expect(await countOf(table, `userId = '${userId}'`), table).toBe(0);
+    }
+    const otherCounts = Object.fromEntries(
+      await Promise.all(
+        BLUESKY_TABLES.map(async (table) => [table, await countOf(table, `userId = '${otherUserId}'`)]),
+      ),
+    );
+    expect(otherCounts).toEqual({
+      bluesky_sync_status: 1,
+      bluesky_crossposts: 1,
+      bluesky_timeline_items: 4,
+      bluesky_likes: 2,
+      bluesky_reposts: 1,
+      bluesky_bookmarks: 1,
+      bluesky_moderated_actors: 1,
+      bluesky_notification_receipts: 1,
+      bluesky_notification_sync_state: 1,
+      bluesky_chat_push_receipts: 1,
+    });
+    expect(await countOf('notification_bluesky', `recipientUserId = '${otherUserId}'`)).toBe(1);
   });
 
   it('既読位置は、Bluesky の通知から前の Fediverse の通知に動き、home の既読位置は変わらない', async () => {
@@ -251,14 +298,14 @@ describe('アカウントの切り替えの削除（実 D1）', () => {
   it('切り替えの開始より後に作られたいいねとクロスポストは削除せず、残っていても完了する', async () => {
     await seedBlueskyTables({ timeline: 3, likes: 3 });
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)')
-        .bind(`at://s/${run}/after`, 'at://l/after', STARTED_AT + 1_000),
-      env.DB.prepare('INSERT INTO bluesky_crossposts(postId,status,createdAt,updatedAt) VALUES (?,?,?,?)')
-        .bind(`${run}-after`, 'sent', STARTED_AT + 1_000, STARTED_AT + 1_000),
-      env.DB.prepare('INSERT INTO bluesky_bookmarks(subjectUri,createdAt) VALUES (?,?)')
-        .bind(`at://s/${run}/after`, STARTED_AT + 1_000),
-      env.DB.prepare('INSERT INTO bluesky_moderated_actors(did,muted,updatedAt) VALUES (?,?,?)')
-        .bind(`did:plc:after-${run}`, 1, STARTED_AT + 1_000),
+      env.DB.prepare('INSERT INTO bluesky_likes(userId,subjectUri,likeUri,createdAt) VALUES (?,?,?,?)')
+        .bind(userId, `at://s/${run}/after`, 'at://l/after', STARTED_AT + 1_000),
+      env.DB.prepare('INSERT INTO bluesky_crossposts(postId,userId,status,createdAt,updatedAt) VALUES (?,?,?,?,?)')
+        .bind(`${run}-after`, userId, 'sent', STARTED_AT + 1_000, STARTED_AT + 1_000),
+      env.DB.prepare('INSERT INTO bluesky_bookmarks(userId,subjectUri,createdAt) VALUES (?,?,?)')
+        .bind(userId, `at://s/${run}/after`, STARTED_AT + 1_000),
+      env.DB.prepare('INSERT INTO bluesky_moderated_actors(userId,did,muted,updatedAt) VALUES (?,?,?,?)')
+        .bind(userId, `did:plc:after-${run}`, 1, STARTED_AT + 1_000),
     ]);
     await insertSwitchRow();
 
@@ -325,14 +372,15 @@ describe('切り替えの 1 段目（実 D1）', () => {
     Result.unsafeUnwrap(BlueskyAccountSwitch.start(NOW)({ fromDid, toDid: 'did:plc:new' }));
 
   it('印、資格情報、セッション、開始のイベントを 1 回の batch で書き、ログイン失敗の記録を消す', async () => {
-    await env.DB.prepare('INSERT INTO bluesky_login_failures(scope,failedAt) VALUES (?,?)').bind('timeline', 1).run();
-    const store = createD1BlueskyAccountSwitchStartedStore(db, 'timeline');
+    await env.DB.prepare('INSERT INTO bluesky_login_failures(userId,scope,failedAt) VALUES (?,?,?)')
+      .bind(userId, 'timeline', 1).run();
+    const store = createD1BlueskyAccountSwitchStartedStore(db, userId, 'timeline');
     const event = started('did:plc:old');
 
     expect(await store.store({ event, credential, session })).toMatchObject({ ok: true });
 
-    const stored = await createD1BlueskyStoredCredentialResolver(db).resolve();
-    const sessionRow = await createD1BlueskySessionResolver(db).resolve();
+    const stored = await createD1BlueskyStoredCredentialResolver(db, userId).resolve();
+    const sessionRow = await createD1BlueskySessionResolver(db, userId).resolve();
     expect(stored).toMatchObject({ ok: true, val: { did: 'did:plc:new' } });
     expect(sessionRow).toMatchObject({ ok: true, val: { accessJwt: 'new-access' } });
     expect(await countOf('bluesky_login_failures')).toBe(0);
@@ -341,7 +389,7 @@ describe('切り替えの 1 段目（実 D1）', () => {
   });
 
   it('印がすでにあるときは、2 回目の batch を丸ごと取り消し、SwitchInProgress を返す', async () => {
-    const store = createD1BlueskyAccountSwitchStartedStore(db, 'timeline');
+    const store = createD1BlueskyAccountSwitchStartedStore(db, userId, 'timeline');
     await store.store({ event: started('did:plc:old'), credential, session });
 
     const second = await store.store({
@@ -351,7 +399,7 @@ describe('切り替えの 1 段目（実 D1）', () => {
     });
 
     expect(second).toMatchObject({ ok: false, err: { type: 'BlueskyAccountSwitchInProgress' } });
-    const stored = await createD1BlueskyStoredCredentialResolver(db).resolve();
+    const stored = await createD1BlueskyStoredCredentialResolver(db, userId).resolve();
     expect(stored).toMatchObject({ ok: true, val: { did: 'did:plc:new' } });
     expect(await countOf('domain_events', `eventName = 'blueskyAccountSwitch.started'`)).toBe(1);
   });
@@ -359,53 +407,85 @@ describe('切り替えの 1 段目（実 D1）', () => {
   it('前のアカウントのブロックの行を消し、消した件数を切り替えの行に入れる。切り替え中に新しいアカウントでミュートした行は、削除の後も残る', async () => {
     const did = `did:plc:blocked-${run}`;
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
-        .bind(did, 0, 'at://did:plc:old/app.bsky.graph.block/1', 1),
-      env.DB.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
-        .bind(`did:plc:muted-${run}`, 1, null, 1),
+      env.DB.prepare('INSERT INTO bluesky_moderated_actors(userId,did,muted,blockUri,updatedAt) VALUES (?,?,?,?,?)')
+        .bind(userId, did, 0, 'at://did:plc:old/app.bsky.graph.block/1', 1),
+      env.DB.prepare('INSERT INTO bluesky_moderated_actors(userId,did,muted,blockUri,updatedAt) VALUES (?,?,?,?,?)')
+        .bind(userId, `did:plc:muted-${run}`, 1, null, 1),
+      env.DB.prepare('INSERT INTO bluesky_moderated_actors(userId,did,muted,blockUri,updatedAt) VALUES (?,?,?,?,?)')
+        .bind(otherUserId, did, 0, 'at://did:plc:other/app.bsky.graph.block/1', 1),
     ]);
-    const store = createD1BlueskyAccountSwitchStartedStore(db, 'timeline');
+    const store = createD1BlueskyAccountSwitchStartedStore(db, userId, 'timeline');
 
     expect(await store.store({ event: started('did:plc:old'), credential, session })).toMatchObject({ ok: true });
 
-    expect(await countOf('bluesky_moderated_actors')).toBe(0);
+    expect(await countOf('bluesky_moderated_actors', `userId = '${userId}'`)).toBe(0);
+    // 別のユーザーのブロックは、件数にも数えず消さない。
+    expect(await countOf('bluesky_moderated_actors', `userId = '${otherUserId}'`)).toBe(1);
     const row = await env.DB.prepare('SELECT deletedCounts FROM bluesky_account_switch')
       .first<{ deletedCounts: string }>();
     expect(JSON.parse(row!.deletedCounts)).toMatchObject({ moderatedActors: 2 });
-    await createD1BlueskyMuteSavedStore(db).save(did, Instant.orThrow(NOW + 1_000));
+    await createD1BlueskyMuteSavedStore(db, userId).save(did, Instant.orThrow(NOW + 1_000));
 
     const result = Result.unsafeUnwrap(await purgeUseCase(Instant.orThrow(NOW + 100_000)).run());
 
     expect(result.status).toBe('completed');
-    const remaining = await env.DB.prepare('SELECT did, muted, blockUri FROM bluesky_moderated_actors').all();
+    const remaining = await env.DB.prepare('SELECT did, muted, blockUri FROM bluesky_moderated_actors WHERE userId = ?')
+      .bind(userId).all();
     expect(remaining.results).toEqual([{ did, muted: 1, blockUri: null }]);
     const event = await env.DB.prepare('SELECT eventPayload FROM domain_events WHERE eventName = ?')
       .bind('blueskyAccountSwitch.completed').first<{ eventPayload: string }>();
     expect(JSON.parse(event!.eventPayload).deletedCounts).toMatchObject({ moderatedActors: 2 });
   });
 
+  it('DID の照合は自分の資格情報だけで行い、別のユーザーの資格情報の DID が違っても始め、その行は変えない', async () => {
+    await createD1BlueskyStoredCredentialSavedStore(db, userId).save({ ...credential, did: 'did:plc:old' });
+    await createD1BlueskyStoredCredentialSavedStore(db, otherUserId).save({
+      ...credential,
+      did: 'did:plc:neighbor',
+      identifier: 'neighbor.bsky.social',
+    });
+    const store = createD1BlueskyAccountSwitchStartedStore(db, userId, 'timeline');
+
+    const result = await store.store({ event: started('did:plc:old'), credential, session });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(await createD1BlueskyStoredCredentialResolver(db, userId).resolve()).toMatchObject({
+      ok: true,
+      val: { did: 'did:plc:new' },
+    });
+    expect(await createD1BlueskyStoredCredentialResolver(db, otherUserId).resolve()).toMatchObject({
+      ok: true,
+      val: { did: 'did:plc:neighbor' },
+    });
+  });
+
   it('保存済みの DID が fromDid と違うときは、何も変えずに DidChanged を返す', async () => {
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO bluesky_login_failures(scope,failedAt) VALUES (?,?)').bind('timeline', 1),
-      env.DB.prepare('INSERT INTO bluesky_moderated_actors(did,muted,updatedAt) VALUES (?,?,?)')
-        .bind(`did:plc:muted-${run}`, 1, 1),
+      env.DB.prepare('INSERT INTO bluesky_login_failures(userId,scope,failedAt) VALUES (?,?,?)')
+        .bind(userId, 'timeline', 1),
+      env.DB.prepare('INSERT INTO bluesky_moderated_actors(userId,did,muted,updatedAt) VALUES (?,?,?,?)')
+        .bind(userId, `did:plc:muted-${run}`, 1, 1),
     ]);
-    await createD1BlueskyStoredCredentialSavedStore(db).save({
+    await createD1BlueskyStoredCredentialSavedStore(db, userId).save({
       ...credential,
       did: 'did:plc:other',
       identifier: 'other.bsky.social',
     });
-    await createD1BlueskySessionSavedStore(db).save({ ...session, did: 'did:plc:other', accessJwt: 'other-access' });
-    const store = createD1BlueskyAccountSwitchStartedStore(db, 'timeline');
+    await createD1BlueskySessionSavedStore(db, userId).save({
+      ...session,
+      did: 'did:plc:other',
+      accessJwt: 'other-access',
+    });
+    const store = createD1BlueskyAccountSwitchStartedStore(db, userId, 'timeline');
 
     const result = await store.store({ event: started('did:plc:old'), credential, session });
 
     expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyDidChanged' } });
-    expect(await createD1BlueskyStoredCredentialResolver(db).resolve()).toMatchObject({
+    expect(await createD1BlueskyStoredCredentialResolver(db, userId).resolve()).toMatchObject({
       ok: true,
       val: { did: 'did:plc:other' },
     });
-    expect(await createD1BlueskySessionResolver(db).resolve()).toMatchObject({
+    expect(await createD1BlueskySessionResolver(db, userId).resolve()).toMatchObject({
       ok: true,
       val: { accessJwt: 'other-access' },
     });
@@ -437,16 +517,17 @@ describe('切り替え中の PUT と DELETE のストア（実 D1）', () => {
     updatedAt: NOW,
   };
   const seedPrevious = async () => {
-    await createD1BlueskyStoredCredentialSavedStore(db).save(previousCredential);
-    await createD1BlueskySessionSavedStore(db).save(previousSession);
-    await env.DB.prepare('INSERT INTO bluesky_login_failures(scope,failedAt) VALUES (?,?)').bind('timeline', 1).run();
+    await createD1BlueskyStoredCredentialSavedStore(db, userId).save(previousCredential);
+    await createD1BlueskySessionSavedStore(db, userId).save(previousSession);
+    await env.DB.prepare('INSERT INTO bluesky_login_failures(userId,scope,failedAt) VALUES (?,?,?)')
+      .bind(userId, 'timeline', 1).run();
   };
   const expectPreviousKept = async () => {
-    expect(await createD1BlueskyStoredCredentialResolver(db).resolve()).toMatchObject({
+    expect(await createD1BlueskyStoredCredentialResolver(db, userId).resolve()).toMatchObject({
       ok: true,
       val: { did: 'did:plc:old', identifier: 'old.bsky.social' },
     });
-    expect(await createD1BlueskySessionResolver(db).resolve()).toMatchObject({
+    expect(await createD1BlueskySessionResolver(db, userId).resolve()).toMatchObject({
       ok: true,
       val: { accessJwt: 'old-access' },
     });
@@ -456,7 +537,7 @@ describe('切り替え中の PUT と DELETE のストア（実 D1）', () => {
   it('切り替えの行があるときは、PUT のストアは何も変えず SwitchInProgress を返す', async () => {
     await seedPrevious();
     await insertSwitchRow();
-    const store = createBlueskyCredentialRegisteredStore(db, 'timeline');
+    const store = createBlueskyCredentialRegisteredStore(db, userId, 'timeline');
 
     const result = await store.store({
       credential: { ...previousCredential, did: 'did:plc:new', identifier: 'new.bsky.social' },
@@ -471,7 +552,7 @@ describe('切り替え中の PUT と DELETE のストア（実 D1）', () => {
     await seedPrevious();
     await insertSwitchRow();
 
-    const result = await createBlueskyCredentialRemovedStore(db).delete();
+    const result = await createBlueskyCredentialRemovedStore(db, userId).delete();
 
     expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyAccountSwitchInProgress' } });
     await expectPreviousKept();
@@ -479,12 +560,28 @@ describe('切り替え中の PUT と DELETE のストア（実 D1）', () => {
 
   it('切り替えの行が無いときは、DELETE のストアは資格情報とセッションを消し、何も無くても成功する', async () => {
     await seedPrevious();
-    const store = createBlueskyCredentialRemovedStore(db);
+    const store = createBlueskyCredentialRemovedStore(db, userId);
 
     expect(await store.delete()).toMatchObject({ ok: true });
     expect(await store.delete()).toMatchObject({ ok: true });
 
     expect(await countOf('bluesky_credentials')).toBe(0);
     expect(await countOf('bluesky_sessions')).toBe(0);
+  });
+
+  it('別のユーザーが切り替え中でも、自分の資格情報の削除は止めず、そのユーザーの資格情報は残す', async () => {
+    await seedPrevious();
+    await createD1BlueskyStoredCredentialSavedStore(db, otherUserId).save({
+      ...previousCredential,
+      did: 'did:plc:neighbor',
+    });
+    await insertSwitchRow();
+    await env.DB.prepare('UPDATE bluesky_account_switch SET userId = ? WHERE userId = ?').bind(otherUserId, userId)
+      .run();
+
+    expect(await createBlueskyCredentialRemovedStore(db, userId).delete()).toMatchObject({ ok: true });
+
+    expect(await countOf('bluesky_credentials', `userId = '${userId}'`)).toBe(0);
+    expect(await countOf('bluesky_credentials', `userId = '${otherUserId}'`)).toBe(1);
   });
 });

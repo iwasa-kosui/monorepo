@@ -498,10 +498,10 @@ describe('createD1PostExtrasResolverByPosts', () => {
     const mine = t.seed.addLocalPost(me, 1_000);
     const mineWithoutRow = t.seed.addLocalPost(me, 1_100);
     const theirs = t.seed.addLocalPost(bob, 2_000);
-    for (const post of [mine, theirs]) {
+    for (const [post, owner] of [[mine, me], [theirs, bob]] as const) {
       t.sqlite.prepare(
-        'INSERT INTO bluesky_crossposts(postId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?)',
-      ).run(post.postId, 'failed', 1, 1_000, 1_000);
+        'INSERT INTO bluesky_crossposts(postId,userId,status,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+      ).run(post.postId, owner.userId, 'failed', 1, 1_000, 1_000);
     }
     const posts = await createD1PostsWithAuthorResolverByPostIds(t.db).resolve({
       postIds: [mine, mineWithoutRow, theirs].map((post) => PostId.orThrow(post.postId)),

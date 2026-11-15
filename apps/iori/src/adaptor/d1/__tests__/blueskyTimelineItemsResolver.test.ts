@@ -2,10 +2,14 @@ import { Result } from '@iwasa-kosui/result';
 import { describe, expect, it } from 'vitest';
 
 import { Instant } from '../../../domain/instant/instant.ts';
+import { UserId } from '../../../domain/user/userId.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../blueskyTimeline/blueskyTimelineItemsResolver.ts';
+import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const BASE = Date.UTC(2026, 10, 8, 12);
+const ME = UserId.orThrow('00000000-0000-4000-8000-0000000000a1');
+const OTHER = UserId.orThrow('00000000-0000-4000-8000-0000000000b2');
 
 const setup = (
   rows: ReadonlyArray<
@@ -16,12 +20,20 @@ const setup = (
   repostedUris: readonly string[] = [],
   bookmarkedUris: readonly string[] = [],
 ) => {
-  const { sqlite, db, queries } = createSqliteD1Fixture();
+  const fixture = createSqliteD1Fixture();
+  const { sqlite, db, queries } = fixture;
+  const users = createMastodonSeed(fixture);
+  users.addLocalActor('me', ME);
+  users.addLocalActor('other', OTHER);
   const insert = sqlite.prepare(
-    'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
   );
-  for (const row of rows) {
+  const addItem = (
+    owner: UserId,
+    row: Readonly<{ feedItemId: string; indexedAt: number; uri?: string; repostedByDid?: string; authorDid?: string }>,
+  ) =>
     insert.run(
+      owner,
       row.feedItemId,
       row.uri ?? row.feedItemId,
       'cid',
@@ -34,23 +46,36 @@ const setup = (
       row.indexedAt,
       1,
     );
-  }
+  for (const row of rows) addItem(ME, row);
   const insertCrosspost = sqlite.prepare(
-    'INSERT INTO bluesky_crossposts(postId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+    'INSERT INTO bluesky_crossposts(postId,userId,status,uri,attempts,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?)',
   );
-  crosspostUris.forEach((uri, index) => insertCrosspost.run(`post-${index}`, 'sent', uri, 1, 1, 1));
-  const insertLike = sqlite.prepare('INSERT INTO bluesky_likes(subjectUri,likeUri,createdAt) VALUES (?,?,?)');
-  likedUris.forEach((uri, index) => insertLike.run(uri, `at://did:plc:me/app.bsky.feed.like/3k${index}`, 1));
-  const insertRepost = sqlite.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)');
-  repostedUris.forEach((uri, index) => insertRepost.run(uri, `at://did:plc:me/app.bsky.feed.repost/3k${index}`, 1));
-  const insertBookmark = sqlite.prepare('INSERT INTO bluesky_bookmarks(subjectUri,createdAt) VALUES (?,?)');
-  bookmarkedUris.forEach((uri) => insertBookmark.run(uri, 1));
-  const resolver = createD1BlueskyTimelineItemsResolver(db);
+  let crosspostCount = 0;
+  const addCrosspost = (owner: UserId, uri: string | null) =>
+    insertCrosspost.run(`post-${crosspostCount++}`, owner, 'sent', uri, 1, 1, 1);
+  crosspostUris.forEach((uri) => addCrosspost(ME, uri));
+  const insertLike = sqlite.prepare('INSERT INTO bluesky_likes(userId,subjectUri,likeUri,createdAt) VALUES (?,?,?,?)');
+  const addLike = (owner: UserId, uri: string) => insertLike.run(owner, uri, `${uri}#like`, 1);
+  likedUris.forEach((uri) => addLike(ME, uri));
+  const insertRepost = sqlite.prepare(
+    'INSERT INTO bluesky_reposts(userId,subjectUri,repostUri,createdAt) VALUES (?,?,?,?)',
+  );
+  const addRepost = (owner: UserId, uri: string) => insertRepost.run(owner, uri, `${uri}#repost`, 1);
+  repostedUris.forEach((uri) => addRepost(ME, uri));
+  const insertBookmark = sqlite.prepare('INSERT INTO bluesky_bookmarks(userId,subjectUri,createdAt) VALUES (?,?,?)');
+  const addBookmark = (owner: UserId, uri: string) => insertBookmark.run(owner, uri, 1);
+  bookmarkedUris.forEach((uri) => addBookmark(ME, uri));
+  const resolver = createD1BlueskyTimelineItemsResolver(db, ME);
   return {
     queries,
-    moderate: (did: string, muted: number, blockUri: string | null) =>
-      sqlite.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
-        .run(did, muted, blockUri, 1),
+    addItem,
+    addCrosspost,
+    addLike,
+    addRepost,
+    addBookmark,
+    moderate: (did: string, muted: number, blockUri: string | null, owner: UserId = ME) =>
+      sqlite.prepare('INSERT INTO bluesky_moderated_actors(userId,did,muted,blockUri,updatedAt) VALUES (?,?,?,?,?)')
+        .run(owner, did, muted, blockUri, 1),
     resolveItems: async (limit: number) => Result.unsafeUnwrap(await resolver.resolve({ limit, before: undefined })),
     resolve: async (input: { limit: number; before?: number; beforeId?: string; excludeCrossposted?: boolean }) =>
       Result.unsafeUnwrap(
@@ -268,6 +293,51 @@ describe('D1 の bluesky_timeline_items リゾルバー', () => {
       await t.resolveItems(10);
 
       expect(t.queries).toHaveLength(1);
+    });
+  });
+
+  describe('ユーザーごとの分離', () => {
+    it('別のユーザーのタイムラインの項目は返さない', async () => {
+      const t = setup([{ feedItemId: 'mine', indexedAt: BASE }]);
+      t.addItem(OTHER, { feedItemId: 'theirs', indexedAt: BASE + 1 });
+
+      expect(await t.resolve({ limit: 10 })).toEqual(['mine']);
+    });
+
+    it('同じ feedItemId を別のユーザーも持っていても、自分の行だけを 1 件返す', async () => {
+      const t = setup([{ feedItemId: 'shared', indexedAt: BASE }]);
+      t.addItem(OTHER, { feedItemId: 'shared', indexedAt: BASE });
+
+      expect(await t.resolve({ limit: 10 })).toEqual(['shared']);
+    });
+
+    it('別のユーザーのいいね・リポスト・ブックマークを自分のものとして示さない', async () => {
+      const t = setup([{ feedItemId: 'item', uri: 'at://shared', indexedAt: BASE }]);
+      t.addLike(OTHER, 'at://shared');
+      t.addRepost(OTHER, 'at://shared');
+      t.addBookmark(OTHER, 'at://shared');
+
+      const [item] = await t.resolveItems(10);
+
+      expect(item).toMatchObject({ liked: false, reposted: false, bookmarked: false });
+    });
+
+    it('別のユーザーのミュート・ブロックでは除かない', async () => {
+      const t = setup([
+        { feedItemId: 'by-x', authorDid: 'did:plc:x', indexedAt: BASE },
+        { feedItemId: 'by-y', authorDid: 'did:plc:y', indexedAt: BASE - 1 },
+      ]);
+      t.moderate('did:plc:x', 1, null, OTHER);
+      t.moderate('did:plc:y', 0, 'at://did:plc:other/app.bsky.graph.block/1', OTHER);
+
+      expect(await t.resolve({ limit: 10 })).toEqual(['by-x', 'by-y']);
+    });
+
+    it('excludeCrossposted は、別のユーザーのクロスポストと同じ uri の行を除かない', async () => {
+      const t = setup([{ feedItemId: 'item', uri: 'at://theirs', indexedAt: BASE }]);
+      t.addCrosspost(OTHER, 'at://theirs');
+
+      expect(await t.resolve({ limit: 10, excludeCrossposted: true })).toEqual(['item']);
     });
   });
 });
