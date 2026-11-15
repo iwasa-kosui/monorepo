@@ -1,0 +1,87 @@
+<figure class="fig">
+<div class="fig-headline">検証の方向と検出範囲</div>
+<div class="fig-tabs">
+<input type="radio" name="fig-vc-tab" id="fig-vc-tab-1" checked>
+<label for="fig-vc-tab-1" class="fig-tab-label">PRD からコードへの検証</label>
+<input type="radio" name="fig-vc-tab" id="fig-vc-tab-2">
+<label for="fig-vc-tab-2" class="fig-tab-label">コードから PRD への確認</label>
+<div class="fig-panel">
+<svg viewBox="0 0 560 276" role="img" aria-labelledby="fig-vc-1-title fig-vc-1-desc">
+<title id="fig-vc-1-title">PRD からコードへの検証</title>
+<desc id="fig-vc-1-desc">左にPRDの3つの振る舞い、右にコードの4つの振る舞いを並べた図です。PRDからコードへの矢印は、対応する3つの振る舞いだけに引かれ、確認済みの印が付きます。コードの4つ目の振る舞い「別の端末で作業を再開する」は、検証の対象外です。</desc>
+<rect class="fig-pill" x="82" y="8" width="64" height="28" rx="14"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="114" y="27.5">PRD</text>
+<rect class="fig-pill" x="406" y="8" width="80" height="28" rx="14"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="446" y="27.5">コード</text>
+<rect class="fig-card" x="8" y="52" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="114" y="79.5">作業を開始する</text>
+<rect class="fig-card" x="8" y="108" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="114" y="135.5">作業を完了する</text>
+<rect class="fig-card" x="8" y="164" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="114" y="183">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="114" y="200">端末で再開する</text>
+<rect class="fig-card-dash" x="8" y="220" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="114" y="247.5">記述なし</text>
+<rect class="fig-card" x="340" y="52" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="446" y="79.5">作業を開始する</text>
+<rect class="fig-card" x="340" y="108" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="446" y="135.5">作業を完了する</text>
+<rect class="fig-card" x="340" y="164" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="446" y="183">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="446" y="200">端末で再開する</text>
+<rect class="fig-card-soft" x="340" y="220" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="446" y="247.5">別の端末で作業を再開する</text>
+<path class="fig-line-agent fig-thick" d="M224 74L328 74"></path>
+<path class="fig-mk-agent" d="M336 74L328 78L328 70Z"></path>
+<circle class="fig-fill-agent fig-ring" cx="280" cy="74" r="9"></circle>
+<path class="fig-line-on" d="M275 74L279 78L285 70"></path>
+<path class="fig-line-agent fig-thick" d="M224 130L328 130"></path>
+<path class="fig-mk-agent" d="M336 130L328 134L328 126Z"></path>
+<circle class="fig-fill-agent fig-ring" cx="280" cy="130" r="9"></circle>
+<path class="fig-line-on" d="M275 130L279 134L285 126"></path>
+<path class="fig-line-agent fig-thick" d="M224 186L328 186"></path>
+<path class="fig-mk-agent" d="M336 186L328 190L328 182Z"></path>
+<circle class="fig-fill-agent fig-ring" cx="280" cy="186" r="9"></circle>
+<path class="fig-line-on" d="M275 186L279 190L285 182"></path>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="280" y="247.5">検証の対象外</text>
+</svg>
+</div>
+<div class="fig-panel">
+<svg viewBox="0 0 560 276" role="img" aria-labelledby="fig-vc-2-title fig-vc-2-desc">
+<title id="fig-vc-2-title">コードから PRD への確認</title>
+<desc id="fig-vc-2-desc">左にPRDの3つの振る舞い、右にコードの4つの振る舞いを並べた図です。コードの4つの振る舞いから、PRDへ矢印を向けます。上の3つはPRDに対応する記述があります。4つ目の「別の端末で作業を再開する」は、PRDの「記述なし」の枠に向かい、PRDに記述がないことが分かります。</desc>
+<rect class="fig-pill" x="82" y="8" width="64" height="28" rx="14"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="114" y="27.5">PRD</text>
+<rect class="fig-pill" x="406" y="8" width="80" height="28" rx="14"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="446" y="27.5">コード</text>
+<rect class="fig-card" x="8" y="52" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="114" y="79.5">作業を開始する</text>
+<rect class="fig-card" x="8" y="108" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="114" y="135.5">作業を完了する</text>
+<rect class="fig-card" x="8" y="164" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="114" y="183">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="114" y="200">端末で再開する</text>
+<rect class="fig-card-problem" x="8" y="220" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="114" y="247.5">記述なし</text>
+<rect class="fig-card" x="340" y="52" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="446" y="79.5">作業を開始する</text>
+<rect class="fig-card" x="340" y="108" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="446" y="135.5">作業を完了する</text>
+<rect class="fig-card" x="340" y="164" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="446" y="183">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="446" y="200">端末で再開する</text>
+<rect class="fig-card-problem" x="340" y="220" width="212" height="44" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="446" y="247.5">別の端末で作業を再開する</text>
+<path class="fig-line-agent fig-thick" d="M336 74L232 74"></path>
+<path class="fig-mk-agent" d="M224 74L232 70L232 78Z"></path>
+<path class="fig-line-agent fig-thick" d="M336 130L232 130"></path>
+<path class="fig-mk-agent" d="M224 130L232 126L232 134Z"></path>
+<path class="fig-line-agent fig-thick" d="M336 186L232 186"></path>
+<path class="fig-mk-agent" d="M224 186L232 182L232 190Z"></path>
+<path class="fig-line-problem fig-thick" d="M336 242L232 242"></path>
+<path class="fig-mk-problem" d="M224 242L232 238L232 246Z"></path>
+</svg>
+</div>
+</div>
+<figcaption>PRD からコードへの検証では、PRD に記述のない振る舞いを検出できません。検出には、コードから PRD への確認が必要です。</figcaption>
+</figure>

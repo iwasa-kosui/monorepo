@@ -1,5 +1,19 @@
 import { collection, config, fields, singleton } from '@keystatic/core';
+import { block } from '@keystatic/core/content-components';
+
 import './src/styles/keystatic.css';
+
+const contentComponents = {
+  Figure: block({
+    label: '図',
+    schema: {
+      name: fields.text({
+        label: '図の名前',
+        description: 'src/figures/ のファイル名（拡張子なし）',
+      }),
+    },
+  }),
+};
 
 const postSchema = {
   title: fields.slug({ name: { label: 'Title' } }),
@@ -26,7 +40,7 @@ const postSchema = {
   ogIcon: fields.text({ label: 'OG Icon' }),
   ogSvg: fields.text({ label: 'OG SVG' }),
   private: fields.checkbox({ label: 'Private' }),
-  content: fields.mdx({ label: 'Content' }),
+  content: fields.mdx({ label: 'Content', components: contentComponents }),
 } as const;
 
 export default config({

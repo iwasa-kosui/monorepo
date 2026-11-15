@@ -7,6 +7,7 @@
   --fig-soft: #f6f5f9;
   --fig-agent: #4f5bd5;
   --fig-agent-soft: #eceefc;
+  --fig-on-agent: #ffffff;
   --fig-human: #e05e52;
   --fig-human-strong: #cf4b3f;
   --fig-human-soft: #fdeceb;
@@ -29,6 +30,7 @@
     --fig-soft: #22222a;
     --fig-agent: #8b93f0;
     --fig-agent-soft: #2b2e55;
+    --fig-on-agent: #1c1c22;
     --fig-human: #f0887e;
     --fig-human-strong: #f0887e;
     --fig-human-soft: #4a2a28;
@@ -393,13 +395,18 @@
   .fig-step-nav {
   outline: 2px solid var(--fig-agent);
   outline-offset: 4px;
-  border-radius: 9999px;
+  border-radius: 12px;
+}
+
+.fig-step-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .fig-step-dots {
   display: flex;
   justify-content: center;
-  margin-bottom: 0.25rem;
 }
 
 .fig-step-dots > label {
@@ -450,24 +457,41 @@
 }
 
 .fig-step-nav {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  margin-top: 0.75rem;
+  gap: 0.5rem;
+  margin-bottom: 0.875rem;
 }
 
 .fig-step-prev,
 .fig-step-next {
-  padding: 0.375rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.375rem 0.75rem;
   border: 1px solid var(--fig-ink);
   border-radius: 9999px;
-  background: var(--fig-ink);
-  color: var(--fig-surface);
+  background: transparent;
+  color: var(--fig-ink);
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.4;
+  white-space: nowrap;
   cursor: pointer;
   user-select: none;
+}
+
+.fig-step-prev {
+  justify-self: start;
+}
+
+.fig-step-next {
+  justify-self: end;
+  border-color: var(--fig-agent);
+  background: var(--fig-agent);
+  color: var(--fig-on-agent);
 }
 
 .fig-step-prev.fig-step-off,

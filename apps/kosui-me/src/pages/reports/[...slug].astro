@@ -1,5 +1,6 @@
 ---
 import AuthorCard from '@/components/AuthorCard.astro';
+import Figure from '@/components/Figure.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { type CollectionEntry, getCollection, render } from 'astro:content';
 
@@ -64,7 +65,7 @@ function formatDate(dateStr: string): string {
       </p>
     </aside>
     <div class="prose">
-      <Content />
+      <Content components={{ Figure }} />
     </div>
   </article>
 

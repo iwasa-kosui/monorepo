@@ -1,0 +1,395 @@
+<figure class="fig">
+<div class="fig-headline">業務上の判断の配置と PRD との照合</div>
+<div class="fig-steps">
+<input type="radio" name="fig-sd-step" id="fig-sd-step-1" aria-label="ステップ 1 / 6" checked>
+<input type="radio" name="fig-sd-step" id="fig-sd-step-2" aria-label="ステップ 2 / 6">
+<input type="radio" name="fig-sd-step" id="fig-sd-step-3" aria-label="ステップ 3 / 6">
+<input type="radio" name="fig-sd-step" id="fig-sd-step-4" aria-label="ステップ 4 / 6">
+<input type="radio" name="fig-sd-step" id="fig-sd-step-5" aria-label="ステップ 5 / 6">
+<input type="radio" name="fig-sd-step" id="fig-sd-step-6" aria-label="ステップ 6 / 6">
+<div class="fig-step">
+<div class="fig-step-nav">
+<span class="fig-step-prev fig-step-off" aria-disabled="true">← 戻る</span>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sd-step-1" aria-label="ステップ 1" aria-current="step"></label>
+<label for="fig-sd-step-2" aria-label="ステップ 2"></label>
+<label for="fig-sd-step-3" aria-label="ステップ 3"></label>
+<label for="fig-sd-step-4" aria-label="ステップ 4"></label>
+<label for="fig-sd-step-5" aria-label="ステップ 5"></label>
+<label for="fig-sd-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">1 / 6</span>
+</div>
+<label for="fig-sd-step-2" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-sd-s1-title fig-sd-s1-desc">
+<title id="fig-sd-s1-title">コードの構造 ステップ 1</title>
+<desc id="fig-sd-s1-desc">左にPRDの3つの業務ルール、右にコードの4つのファイル（画面、ハンドラ、バッチ、リポジトリ）を並べた図です。各ファイルには、コードの行を表す横棒があり、業務上の判断を表す横棒は複数のファイルにあります。リポジトリの1本の横棒は灰色で、取得条件というラベルが付いています。</desc>
+<rect class="fig-card" x="8" y="40" width="176" height="232" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-b" x="20" y="62">PRD</text>
+<rect class="fig-card-soft" x="18" y="79" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="105.5">作業を開始する</text>
+<rect class="fig-card-soft" x="18" y="127" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="153.5">作業を完了する</text>
+<rect class="fig-card-soft" x="18" y="175" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="193">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="210">端末で再開する</text>
+<rect class="fig-card" x="252" y="40" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="51" width="120" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="63" width="160" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="75" width="90" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="71">画面</text>
+<rect class="fig-card" x="252" y="100" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar" x="262" y="111" width="140" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="123" width="110" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="135" width="170" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="131">ハンドラ</text>
+<rect class="fig-card" x="252" y="160" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="171" width="100" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="183" width="150" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="195" width="140" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="191">バッチ</text>
+<rect class="fig-card" x="252" y="220" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="231" width="130" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="243" width="90" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="255" width="70" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="251">リポジトリ</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="340" y="264">取得条件</text>
+<rect class="fig-bar-agent" x="252" y="296" width="28" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm" x="290" y="304">業務上の判断</text>
+<rect class="fig-bar" x="402" y="296" width="28" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm" x="440" y="304">ほかのコード</text>
+</svg>
+<div class="fig-callout">業務上の判断が、画面、ハンドラ、リポジトリなどの複数のファイルに分散しています。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-sd-step-1" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sd-step-1" aria-label="ステップ 1"></label>
+<label for="fig-sd-step-2" aria-label="ステップ 2" aria-current="step"></label>
+<label for="fig-sd-step-3" aria-label="ステップ 3"></label>
+<label for="fig-sd-step-4" aria-label="ステップ 4"></label>
+<label for="fig-sd-step-5" aria-label="ステップ 5"></label>
+<label for="fig-sd-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">2 / 6</span>
+</div>
+<label for="fig-sd-step-3" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-sd-s2-title fig-sd-s2-desc">
+<title id="fig-sd-s2-title">コードの構造 ステップ 2</title>
+<desc id="fig-sd-s2-desc">PRDの3つの業務ルールそれぞれから、コード側の業務上の判断を表す横棒へ線を引いた図です。線は、画面、ハンドラ、バッチ、リポジトリの複数のファイルにまたがります。</desc>
+<rect class="fig-card" x="8" y="40" width="176" height="232" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-b" x="20" y="62">PRD</text>
+<rect class="fig-card-soft" x="18" y="79" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="105.5">作業を開始する</text>
+<rect class="fig-card-soft" x="18" y="127" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="153.5">作業を完了する</text>
+<rect class="fig-card-soft" x="18" y="175" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="193">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="210">端末で再開する</text>
+<rect class="fig-card" x="252" y="40" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="51" width="120" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="63" width="160" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="75" width="90" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="71">画面</text>
+<rect class="fig-card" x="252" y="100" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar" x="262" y="111" width="140" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="123" width="110" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="135" width="170" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="131">ハンドラ</text>
+<rect class="fig-card" x="252" y="160" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="171" width="100" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="183" width="150" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="195" width="140" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="191">バッチ</text>
+<rect class="fig-card" x="252" y="220" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="231" width="130" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="243" width="90" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="255" width="70" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="251">リポジトリ</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="340" y="264">取得条件</text>
+<path class="fig-line-agent" d="M176 96L260 54.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="54.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 96L260 126.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="126.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 96L260 234.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="234.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 142L260 78.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="78.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 142L260 174.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="174.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 142L260 246.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="246.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 188L260 198.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="198.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 188L260 126.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="126.5" r="2.5"></circle>
+<rect class="fig-bar-agent" x="252" y="296" width="28" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm" x="290" y="304">業務上の判断</text>
+<rect class="fig-bar" x="402" y="296" width="28" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm" x="440" y="304">ほかのコード</text>
+</svg>
+<div class="fig-callout">PRD の各項目に対応する箇所を見つけるには、すべてのファイルを読む必要があります。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-sd-step-2" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sd-step-1" aria-label="ステップ 1"></label>
+<label for="fig-sd-step-2" aria-label="ステップ 2"></label>
+<label for="fig-sd-step-3" aria-label="ステップ 3" aria-current="step"></label>
+<label for="fig-sd-step-4" aria-label="ステップ 4"></label>
+<label for="fig-sd-step-5" aria-label="ステップ 5"></label>
+<label for="fig-sd-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">3 / 6</span>
+</div>
+<label for="fig-sd-step-4" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-sd-s3-title fig-sd-s3-desc">
+<title id="fig-sd-s3-title">コードの構造 ステップ 3</title>
+<desc id="fig-sd-s3-desc">リポジトリの取得条件の横棒を、破線の枠で囲んだ図です。吹き出しに、別の端末での再開に関する判断が、データの取得条件として記述されている、と書かれています。この横棒とPRDの間には、線がありません。</desc>
+<rect class="fig-card" x="8" y="40" width="176" height="232" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-b" x="20" y="62">PRD</text>
+<rect class="fig-card-soft" x="18" y="79" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="105.5">作業を開始する</text>
+<rect class="fig-card-soft" x="18" y="127" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="153.5">作業を完了する</text>
+<rect class="fig-card-soft" x="18" y="175" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="193">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="210">端末で再開する</text>
+<g class="fig-dim">
+<rect class="fig-card" x="252" y="40" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="51" width="120" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="63" width="160" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="75" width="90" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="71">画面</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="252" y="100" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar" x="262" y="111" width="140" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="123" width="110" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="135" width="170" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="131">ハンドラ</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="252" y="160" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="171" width="100" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="183" width="150" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="195" width="140" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="191">バッチ</text>
+</g>
+<rect class="fig-card" x="252" y="220" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="231" width="130" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="243" width="90" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="255" width="70" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="251">リポジトリ</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="340" y="264">取得条件</text>
+<rect class="fig-card-problem-dash" x="256" y="250" width="150" height="17" rx="4"></rect>
+<rect class="fig-card-problem" x="252" y="286" width="300" height="56" rx="12"></rect>
+<path class="fig-card-problem" d="M288 286L302 272L316 286Z"></path>
+<text class="fig-t fig-t-sm fig-b fig-c-problem" x="266" y="307">別の端末での再開に関する判断が、</text>
+<text class="fig-t fig-t-sm fig-b fig-c-problem" x="266" y="326">データの取得条件として記述されている</text>
+</svg>
+<div class="fig-callout">別の端末で作業を再開する判断は、データの取得条件として記述されています。業務の用語で記述されていないため、照合の対象から漏れます。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-sd-step-3" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sd-step-1" aria-label="ステップ 1"></label>
+<label for="fig-sd-step-2" aria-label="ステップ 2"></label>
+<label for="fig-sd-step-3" aria-label="ステップ 3"></label>
+<label for="fig-sd-step-4" aria-label="ステップ 4" aria-current="step"></label>
+<label for="fig-sd-step-5" aria-label="ステップ 5"></label>
+<label for="fig-sd-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">4 / 6</span>
+</div>
+<label for="fig-sd-step-5" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-sd-s4-title fig-sd-s4-desc">
+<title id="fig-sd-s4-title">コードの構造 ステップ 4</title>
+<desc id="fig-sd-s4-desc">左上にPRDを薄い帯で示し、その下に入力、業務の状態と遷移、出力の3つの列を並べた図です。左の入力の列に画面とハンドラの札、中央に業務の状態と遷移の札、右の出力の列にリポジトリの札とデータベースの円柱があります。中央の札には、作業を開始する、作業を完了する、中断した作業を同じ端末で再開する、の3つの遷移が並び、札の下に入出力を持たないと書かれています。入力から中央へコマンドの矢印、中央からリポジトリへ新しい状態を保存する矢印、リポジトリから中央へ現在の状態を読み込む矢印があります。</desc>
+<g class="fig-dim">
+<rect class="fig-card-soft" x="8" y="6" width="544" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-b" x="28" y="26">PRD</text>
+</g>
+<text class="fig-t fig-t-sm fig-b fig-c-muted fig-mid" x="50" y="80">入力</text>
+<text class="fig-t fig-t-sm fig-b fig-c-muted fig-mid" x="494" y="80">出力</text>
+<rect class="fig-card-soft" x="8" y="90" width="84" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="50" y="116.5">画面</text>
+<rect class="fig-card-soft" x="8" y="138" width="84" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="50" y="164.5">ハンドラ</text>
+<rect class="fig-card" x="172" y="60" width="170" height="226" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-b" x="184" y="82">業務の状態と遷移</text>
+<rect class="fig-card-agent" x="180" y="90" width="154" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="257" y="116.5">作業を開始する</text>
+<rect class="fig-card-agent" x="180" y="138" width="154" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="257" y="164.5">作業を完了する</text>
+<rect class="fig-card-agent" x="180" y="186" width="154" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="257" y="204">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="257" y="221">端末で再開する</text>
+<text class="fig-t fig-t-sm fig-c-muted fig-mid" x="257" y="308">入出力を持たない</text>
+<rect class="fig-card-soft" x="436" y="90" width="116" height="156" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-b fig-mid" x="494" y="112">リポジトリ</text>
+<text class="fig-t fig-t-sm fig-mid" x="494" y="132">記録の</text>
+<text class="fig-t fig-t-sm fig-mid" x="494" y="150">読み書きだけ</text>
+<path class="fig-line" d="M494 246V265"></path>
+<path class="fig-card-soft" d="M440 274V310A54 9 0 0 0 548 310V274A54 9 0 0 0 440 274Z"></path>
+<ellipse class="fig-card-soft" cx="494" cy="274" rx="54" ry="9"></ellipse>
+<text class="fig-t fig-t-sm fig-mid" x="494" y="304">データベース</text>
+<path class="fig-line" d="M94 111H162"></path>
+<path class="fig-mk" d="M170 111L162 115L162 107Z"></path>
+<path class="fig-line" d="M94 159H162"></path>
+<path class="fig-mk" d="M170 159L162 163L162 155Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="132" y="140">コマンド</text>
+<path class="fig-line" d="M344 102H428"></path>
+<path class="fig-mk" d="M436 102L428 106L428 98Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="389" y="122">新しい状態</text>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="389" y="139">を保存</text>
+<path class="fig-line" d="M436 160H352"></path>
+<path class="fig-mk" d="M344 160L352 164L352 156Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="389" y="180">現在の状態</text>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="389" y="197">を読み込み</text>
+</svg>
+<div class="fig-callout">画面、ハンドラ、リポジトリのような入出力をシステムの端に寄せ、業務の状態と遷移を入出力を持たない処理として中央に置きます。リポジトリは記録の読み書きだけを担当します。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-sd-step-4" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sd-step-1" aria-label="ステップ 1"></label>
+<label for="fig-sd-step-2" aria-label="ステップ 2"></label>
+<label for="fig-sd-step-3" aria-label="ステップ 3"></label>
+<label for="fig-sd-step-4" aria-label="ステップ 4"></label>
+<label for="fig-sd-step-5" aria-label="ステップ 5" aria-current="step"></label>
+<label for="fig-sd-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">5 / 6</span>
+</div>
+<label for="fig-sd-step-6" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-sd-s5-title fig-sd-s5-desc">
+<title id="fig-sd-s5-title">コードの構造 ステップ 5</title>
+<desc id="fig-sd-s5-desc">ステップ4の配置のまま、リポジトリの札の中の取得条件の横棒が、問題色の破線の枠に囲まれ、取り消し線で薄く表示されています。そこから中央の札の4行目へ、業務上の判断を移す矢印が引かれています。中央の札には、別の端末で作業を再開する、の遷移が4行目に加わり、問題色の枠で強調されています。</desc>
+<g class="fig-dim">
+<rect class="fig-card-soft" x="8" y="6" width="544" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-b" x="28" y="26">PRD</text>
+</g>
+<text class="fig-t fig-t-sm fig-b fig-c-muted fig-mid" x="50" y="80">入力</text>
+<text class="fig-t fig-t-sm fig-b fig-c-muted fig-mid" x="494" y="80">出力</text>
+<rect class="fig-card-soft" x="8" y="90" width="84" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="50" y="116.5">画面</text>
+<rect class="fig-card-soft" x="8" y="138" width="84" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="50" y="164.5">ハンドラ</text>
+<rect class="fig-card" x="172" y="60" width="170" height="226" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-b" x="184" y="82">業務の状態と遷移</text>
+<rect class="fig-card-agent" x="180" y="90" width="154" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="257" y="116.5">作業を開始する</text>
+<rect class="fig-card-agent" x="180" y="138" width="154" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="257" y="164.5">作業を完了する</text>
+<rect class="fig-card-agent" x="180" y="186" width="154" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="257" y="204">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="257" y="221">端末で再開する</text>
+<rect class="fig-card-problem" x="180" y="234" width="154" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="257" y="252">別の端末で作業を</text>
+<text class="fig-t fig-t-sm fig-mid" x="257" y="269">再開する</text>
+<text class="fig-t fig-t-sm fig-c-muted fig-mid" x="257" y="308">入出力を持たない</text>
+<rect class="fig-card-soft" x="436" y="90" width="116" height="156" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-b fig-mid" x="494" y="112">リポジトリ</text>
+<text class="fig-t fig-t-sm fig-mid" x="494" y="132">記録の</text>
+<text class="fig-t fig-t-sm fig-mid" x="494" y="150">読み書きだけ</text>
+<path class="fig-line" d="M494 246V265"></path>
+<path class="fig-card-soft" d="M440 274V310A54 9 0 0 0 548 310V274A54 9 0 0 0 440 274Z"></path>
+<ellipse class="fig-card-soft" cx="494" cy="274" rx="54" ry="9"></ellipse>
+<text class="fig-t fig-t-sm fig-mid" x="494" y="304">データベース</text>
+<path class="fig-line" d="M94 111H162"></path>
+<path class="fig-mk" d="M170 111L162 115L162 107Z"></path>
+<path class="fig-line" d="M94 159H162"></path>
+<path class="fig-mk" d="M170 159L162 163L162 155Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="132" y="140">コマンド</text>
+<path class="fig-line" d="M344 102H428"></path>
+<path class="fig-mk" d="M436 102L428 106L428 98Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="389" y="122">新しい状態</text>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="389" y="139">を保存</text>
+<path class="fig-line" d="M436 160H352"></path>
+<path class="fig-mk" d="M344 160L352 164L352 156Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="389" y="180">現在の状態</text>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="389" y="197">を読み込み</text>
+<rect class="fig-card-problem-dash" x="444" y="210" width="100" height="24" rx="4"></rect>
+<rect class="fig-bar" x="450" y="218.5" width="16" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-c-muted" x="472" y="227">取得条件</text>
+<path class="fig-line" d="M470 222.5H534"></path>
+<path class="fig-line-problem" d="M444 222H389V255H344"></path>
+<path class="fig-mk-problem" d="M336 255L344 259L344 251Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="389" y="276">業務上の</text>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="389" y="293">判断を移す</text>
+</svg>
+<div class="fig-callout">データの取得条件に埋もれていた『別の端末で作業を再開する』判断を、業務の遷移として中央に移します。業務上の判断が、入出力を持たない一覧に集約されます。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-sd-step-5" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sd-step-1" aria-label="ステップ 1"></label>
+<label for="fig-sd-step-2" aria-label="ステップ 2"></label>
+<label for="fig-sd-step-3" aria-label="ステップ 3"></label>
+<label for="fig-sd-step-4" aria-label="ステップ 4"></label>
+<label for="fig-sd-step-5" aria-label="ステップ 5"></label>
+<label for="fig-sd-step-6" aria-label="ステップ 6" aria-current="step"></label>
+</div>
+<span class="fig-step-count">6 / 6</span>
+</div>
+<label for="fig-sd-step-1" class="fig-step-next">最初から</label>
+</div>
+<svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-sd-s6-title fig-sd-s6-desc">
+<title id="fig-sd-s6-title">コードの構造 ステップ 6</title>
+<desc id="fig-sd-s6-desc">PRDの3行とコードの4行を、横一直線の線で行ごとに結んだ図です。上の3行は対応があり、確認済みの印が付きます。4行目の「別の端末で作業を再開する」は、PRD側の「記述なし」の枠と結ばれ、PRDにない遷移として強調されます。</desc>
+<rect class="fig-card" x="8" y="40" width="176" height="232" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-b" x="20" y="62">PRD</text>
+<rect class="fig-card-soft" x="18" y="79" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="105.5">作業を開始する</text>
+<rect class="fig-card-soft" x="18" y="127" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="153.5">作業を完了する</text>
+<rect class="fig-card-soft" x="18" y="175" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="193">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="210">端末で再開する</text>
+<rect class="fig-card-problem" x="18" y="223" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="96" y="249.5">記述なし</text>
+<rect class="fig-card" x="252" y="40" width="300" height="232" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-b" x="264" y="62">業務の状態と遷移</text>
+<rect class="fig-card-agent" x="262" y="79" width="280" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm" x="276" y="105.5">作業を開始する</text>
+<rect class="fig-card-agent" x="262" y="127" width="280" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm" x="276" y="153.5">作業を完了する</text>
+<rect class="fig-card-agent" x="262" y="175" width="280" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm" x="276" y="201.5">中断した作業を同じ端末で再開する</text>
+<rect class="fig-card-problem" x="262" y="223" width="280" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm" x="276" y="249.5">別の端末で作業を再開する</text>
+<path class="fig-line-agent fig-thick" d="M174 100H262"></path>
+<circle class="fig-fill-agent fig-ring" cx="218" cy="100" r="9"></circle>
+<path class="fig-line-on" d="M213 100L217 104L223 96"></path>
+<path class="fig-line-agent fig-thick" d="M174 148H262"></path>
+<circle class="fig-fill-agent fig-ring" cx="218" cy="148" r="9"></circle>
+<path class="fig-line-on" d="M213 148L217 152L223 144"></path>
+<path class="fig-line-agent fig-thick" d="M174 196H262"></path>
+<circle class="fig-fill-agent fig-ring" cx="218" cy="196" r="9"></circle>
+<path class="fig-line-on" d="M213 196L217 200L223 192"></path>
+<path class="fig-line-problem fig-thick" d="M174 244H262"></path>
+<rect class="fig-pill-problem" x="418" y="276" width="134" height="28" rx="14"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-problem" x="485" y="295.5">PRD にない遷移</text>
+</svg>
+<div class="fig-callout">PRD と行単位で照合でき、PRD に記述のない遷移を差分として検出できます。</div>
+</div>
+</div>
+<figcaption>状態と遷移を集約すると、PRD と行単位で照合でき、PRD にない遷移を検出できます。</figcaption>
+</figure>
