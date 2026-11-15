@@ -102,6 +102,10 @@ import { createD1MutedActorsResolverByUserIdWithPagination } from '../adaptor/d1
 import { createD1MuteDeletedStore } from '../adaptor/d1/mute/muteDeletedStore.ts';
 import { createD1MuteResolver } from '../adaptor/d1/mute/muteResolver.ts';
 import {
+  createD1MentionNotificationCreatedStore,
+  createD1MentionNotificationResolverByRecipientAndMentionPostId,
+} from '../adaptor/d1/notification/inboxNotificationAdapters.ts';
+import {
   createD1NotificationDismissedStore,
   createD1NotificationsClearedStore,
   createD1ReplyNotificationCreatedStore,
@@ -240,6 +244,7 @@ import { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
+import { notifyMentions } from '../useCase/helper/notifyMentions.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
 import { ListPasskeysUseCase } from '../useCase/listPasskeys.ts';
@@ -358,6 +363,14 @@ export const createWorkerRuntimePorts = async (
     subject: env.VAPID_SUBJECT,
     publicKey: env.VAPID_PUBLIC_KEY,
     privateKey: env.VAPID_PRIVATE_KEY,
+  });
+  const mentionNotifier = notifyMentions({
+    actorResolverByUri: createD1ActorResolverByUri(db),
+    mentionNotificationCreatedStore: createD1MentionNotificationCreatedStore(db),
+    mentionNotificationResolver: createD1MentionNotificationResolverByRecipientAndMentionPostId(db),
+    pushSubscriptionsResolver,
+    webPushSender,
+    blockResolver: createD1BlockResolver(db),
   });
   const remotePostUpserter = createD1RemotePostUpserter({
     postResolverByUri: createD1PostResolverByUri(db),
@@ -780,6 +793,7 @@ export const createWorkerRuntimePorts = async (
         acceptedRelaysResolver: createD1AcceptedRelaysResolver(db),
         postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
         scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
+        mentionNotifier,
         origin: env.ORIGIN,
       }),
       remoteActorLookup: createCloudflareRemoteActorLookup(federationRuntime.federation),
@@ -1025,6 +1039,7 @@ export const createWorkerRuntimePorts = async (
         actorResolverById: createD1ActorResolverById(db),
         postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
         scheduleBlueskyCrosspost: blueskyCrosspost?.schedule,
+        mentionNotifier,
         origin: env.ORIGIN,
       }),
       updatePostUseCase: UpdatePostUseCase.create({

@@ -51,6 +51,7 @@ import { FetchRemoteOutboxUseCase } from '../../../../useCase/fetchRemoteOutbox.
 import { FetchReplyNotesRecursiveUseCase } from '../../../../useCase/fetchReplyNotesRecursive.ts';
 import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
+import { notifyMentions } from '../../../../useCase/helper/notifyMentions.ts';
 import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
 import { ListRemoteActorFollowsUseCase } from '../../../../useCase/listRemoteActorFollows.ts';
@@ -180,6 +181,10 @@ import { createD1MuteCreatedStore } from '../../../d1/mute/muteCreatedStore.ts';
 import { createD1MutedActorsResolverByUserIdWithPagination } from '../../../d1/mute/mutedActorsResolverByUserIdWithPagination.ts';
 import { createD1MuteDeletedStore } from '../../../d1/mute/muteDeletedStore.ts';
 import { createD1MuteResolver } from '../../../d1/mute/muteResolver.ts';
+import {
+  createD1MentionNotificationCreatedStore,
+  createD1MentionNotificationResolverByRecipientAndMentionPostId,
+} from '../../../d1/notification/inboxNotificationAdapters.ts';
 import {
   createD1NotificationDismissedStore,
   createD1NotificationsClearedStore,
@@ -330,6 +335,8 @@ export const setupReadApi = (
   const federation = {
     sendActivity: vi.fn(async () => undefined),
     getActorUri: (username: string) => new URL(`${ORIGIN}/users/${username}`),
+    getInboxUri: (username?: string) =>
+      new URL(username === undefined ? `${ORIGIN}/inbox` : `${ORIGIN}/users/${username}/inbox`),
     getFollowersUri: (username: string) => new URL(`${ORIGIN}/users/${username}/followers`),
     getObjectUri: (_type: unknown, values: { identifier: string; id: string }) =>
       new URL(`${ORIGIN}/users/${values.identifier}/posts/${values.id}`),
@@ -441,6 +448,14 @@ export const setupReadApi = (
     htmlToPlainText,
     ...options.searchTimeline,
   });
+  const mentionNotifier = notifyMentions({
+    actorResolverByUri: createD1ActorResolverByUri(db),
+    mentionNotificationCreatedStore: createD1MentionNotificationCreatedStore(db),
+    mentionNotificationResolver: createD1MentionNotificationResolverByRecipientAndMentionPostId(db),
+    pushSubscriptionsResolver: createD1PushSubscriptionsResolverByUserId(db),
+    webPushSender: { send: () => RA.ok(undefined) },
+    blockResolver: createD1BlockResolver(db),
+  });
   const createPostUseCase = CreatePostUseCase.create({
     sessionResolver,
     postCreatedStore,
@@ -456,6 +471,7 @@ export const setupReadApi = (
     postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
     origin: ORIGIN,
     scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
+    mentionNotifier,
   });
   const sendReplyUseCase = SendReplyUseCase.create({
     sessionResolver,
@@ -473,6 +489,7 @@ export const setupReadApi = (
     postQuotesResolver: createD1PostQuotesResolverByPostIds(db),
     origin: ORIGIN,
     scheduleBlueskyCrosspost: options.scheduleBlueskyCrosspost,
+    mentionNotifier,
   });
   const deletePostUseCase = DeletePostUseCase.create({
     sessionResolver,
@@ -507,6 +524,7 @@ export const setupReadApi = (
           authn,
           userResolver,
           remoteActorLookup,
+          userResolverByUsername: createD1UserResolverByUsername(db),
           actorResolverByUserId,
           postsWithAuthorResolverByPostIds: createD1PostsWithAuthorResolverByPostIds(db),
           repostResolverById: createD1RepostResolverById(db),

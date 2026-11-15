@@ -108,3 +108,5 @@ async ({ now, mentioner, mentionPostId, recipientActorUris, replyRecipientUserId
     );
   }
 };
+
+export type MentionNotifier = ReturnType<typeof notifyMentions>;
