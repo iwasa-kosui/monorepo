@@ -18,8 +18,8 @@ export const SettingsView = ({ isOwner, onProfileLoaded }: Props) => (
     <ProfileSettingsSection onLoaded={onProfileLoaded} />
     <NotificationsSettingsSection />
     <PostingSettingsSection />
-    <BlueskySettingsSection isOwner={isOwner} />
-    <BlueskyProfileSettingsSection isOwner={isOwner} />
+    <BlueskySettingsSection />
+    <BlueskyProfileSettingsSection />
     {isOwner && <RelaysSettingsSection />}
     <SecuritySettingsSection />
     {isOwner && <XFeedSourcesSettingsSection />}

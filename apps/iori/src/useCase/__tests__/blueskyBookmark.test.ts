@@ -8,6 +8,7 @@ import { createD1BlueskyBookmarkTargetResolver } from '../../adaptor/d1/blueskyT
 import { createD1BlueskyViewerBookmarksSyncedStore } from '../../adaptor/d1/blueskyTimeline/blueskyViewerBookmarksSyncedStore.ts';
 import { BlueskyFetchedTimelineItem } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { UserId } from '../../domain/user/userId.ts';
 import type { BlueskyBookmarkReader, BlueskyBookmarksPage } from '../../ports/blueskyBookmarkReader.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type { BlueskyPostCidResolver } from '../../ports/blueskyPostCidResolver.ts';
@@ -25,16 +26,24 @@ const failure: BlueskyClientError = {
   status: 500,
 };
 
+const USER_ID = UserId.orThrow('00000000-0000-4000-8000-000000000001');
+
+const fixtureWithUser = () => {
+  const fixture = createSqliteD1Fixture();
+  fixture.sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'alice');
+  return fixture;
+};
+
 const setup = () => {
-  const { db, sqlite } = createSqliteD1Fixture();
+  const { db, sqlite } = fixtureWithUser();
   const insertItem = sqlite.prepare(
-    'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
   );
-  insertItem.run(POST, POST, 'bafypost', 'did:plc:a', 'alice.bsky.social', 't', '[]', null, 1, 1, 1);
-  insertItem.run(REPOST, POST, 'bafypost', 'did:plc:a', 'alice.bsky.social', 't', '[]', 'did:plc:b', 1, 1, 1);
+  insertItem.run(USER_ID, POST, POST, 'bafypost', 'did:plc:a', 'alice.bsky.social', 't', '[]', null, 1, 1, 1);
+  insertItem.run(USER_ID, REPOST, POST, 'bafypost', 'did:plc:a', 'alice.bsky.social', 't', '[]', 'did:plc:b', 1, 1, 1);
   const createBookmark = vi.fn<BlueskyClient['createBookmark']>(async () => RA.ok(undefined));
   const deleteBookmark = vi.fn<BlueskyClient['deleteBookmark']>(async () => RA.ok(undefined));
-  const targetResolver = createD1BlueskyBookmarkTargetResolver(db);
+  const targetResolver = createD1BlueskyBookmarkTargetResolver(db, USER_ID);
   const resolveCid = vi.fn<BlueskyPostCidResolver['resolve']>(async (uri) =>
     RA.ok(uri === POST ? { cid: 'bafyfresh', likeUri: null, repostUri: null } : undefined)
   );
@@ -42,17 +51,17 @@ const setup = () => {
     client: { createBookmark },
     targetResolver,
     cidResolver: { resolve: resolveCid },
-    savedStore: createD1BlueskyBookmarkSavedStore(db),
+    savedStore: createD1BlueskyBookmarkSavedStore(db, USER_ID),
     now: () => NOW,
   });
   const unbookmark = UnbookmarkBlueskyPostUseCase.create({
     client: { deleteBookmark },
     targetResolver,
-    deletedStore: createD1BlueskyBookmarkDeletedStore(db),
+    deletedStore: createD1BlueskyBookmarkDeletedStore(db, USER_ID),
   });
   const bookmarks = () => sqlite.prepare('SELECT subjectUri, createdAt FROM bluesky_bookmarks').all();
   const seedBookmark = () =>
-    sqlite.prepare('INSERT INTO bluesky_bookmarks(subjectUri,createdAt) VALUES (?,?)').run(POST, 1);
+    sqlite.prepare('INSERT INTO bluesky_bookmarks(userId,subjectUri,createdAt) VALUES (?,?,?)').run(USER_ID, POST, 1);
   return { bookmark, unbookmark, createBookmark, deleteBookmark, resolveCid, bookmarks, seedBookmark };
 };
 
@@ -196,8 +205,8 @@ describe('ListBlueskyBookmarksUseCase', () => {
   const page: BlueskyBookmarksPage = { items: [itemOf(1), itemOf(2), itemOf(1)], cursor: 'next' };
 
   const listSetup = (getBookmarks: BlueskyBookmarkReader['getBookmarks']) => {
-    const { db, sqlite } = createSqliteD1Fixture();
-    const viewerBookmarksStore = createD1BlueskyViewerBookmarksSyncedStore(db);
+    const { db, sqlite } = fixtureWithUser();
+    const viewerBookmarksStore = createD1BlueskyViewerBookmarksSyncedStore(db, USER_ID);
     const useCase = ListBlueskyBookmarksUseCase.create({ reader: { getBookmarks }, viewerBookmarksStore });
     const rows = () => sqlite.prepare('SELECT subjectUri, createdAt FROM bluesky_bookmarks ORDER BY subjectUri').all();
     return { useCase, viewerBookmarksStore, rows, sqlite };
@@ -205,7 +214,11 @@ describe('ListBlueskyBookmarksUseCase', () => {
 
   it('取得したページの uri を重複なく bluesky_bookmarks に追加し、保存済みの行は書き直さない', async () => {
     const t = listSetup(async () => RA.ok(page));
-    t.sqlite.prepare('INSERT INTO bluesky_bookmarks(subjectUri,createdAt) VALUES (?,?)').run(itemOf(2).uri, 5);
+    t.sqlite.prepare('INSERT INTO bluesky_bookmarks(userId,subjectUri,createdAt) VALUES (?,?,?)').run(
+      USER_ID,
+      itemOf(2).uri,
+      5,
+    );
 
     await t.useCase.run({ cursor: undefined });
 

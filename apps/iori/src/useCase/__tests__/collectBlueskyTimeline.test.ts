@@ -10,9 +10,12 @@ import { createD1BlueskyViewerLikesSyncedStore } from '../../adaptor/d1/blueskyT
 import { createD1BlueskyViewerRepostsSyncedStore } from '../../adaptor/d1/blueskyTimeline/blueskyViewerRepostsSyncedStore.ts';
 import { BlueskyFetchedTimelineItem } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { UserId } from '../../domain/user/userId.ts';
 import type { BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type { BlueskyTimelineFetcher, BlueskyTimelinePage } from '../../ports/blueskyTimelineFetcher.ts';
 import { CollectBlueskyTimelineUseCase } from '../collectBlueskyTimeline.ts';
+
+const USER_ID = UserId.orThrow('00000000-0000-4000-8000-0000000000a1');
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 8, 12));
@@ -60,6 +63,7 @@ const pageOf = (items: BlueskyFetchedTimelineItem[], cursor: string | undefined,
 
 const setup = (pages: ReadonlyArray<BlueskyTimelinePage | BlueskyClientError>) => {
   const { db, sqlite, queries } = createSqliteD1Fixture();
+  sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'alice');
   const queue = [...pages];
   const fetch = vi.fn(async (_input: { limit: number; cursor: string | undefined }) => {
     const next = queue.shift();
@@ -67,15 +71,15 @@ const setup = (pages: ReadonlyArray<BlueskyTimelinePage | BlueskyClientError>) =
     return 'type' in next ? RA.err(next) : RA.ok(next);
   });
   const fetcher: BlueskyTimelineFetcher = { fetch };
-  const savedStore = createD1BlueskyTimelineItemsSavedStore(db);
+  const savedStore = createD1BlueskyTimelineItemsSavedStore(db, USER_ID);
   const save = vi.spyOn(savedStore, 'save');
   const useCase = CollectBlueskyTimelineUseCase.create({
     fetcher,
-    existingResolver: createD1BlueskyTimelineExistingFeedItemIdsResolver(db),
+    existingResolver: createD1BlueskyTimelineExistingFeedItemIdsResolver(db, USER_ID),
     savedStore,
-    viewerLikesStore: createD1BlueskyViewerLikesSyncedStore(db),
-    viewerRepostsStore: createD1BlueskyViewerRepostsSyncedStore(db),
-    viewerBookmarksStore: createD1BlueskyViewerBookmarksSyncedStore(db),
+    viewerLikesStore: createD1BlueskyViewerLikesSyncedStore(db, USER_ID),
+    viewerRepostsStore: createD1BlueskyViewerRepostsSyncedStore(db, USER_ID),
+    viewerBookmarksStore: createD1BlueskyViewerBookmarksSyncedStore(db, USER_ID),
     now: () => NOW,
   });
   const stored = () =>
@@ -209,7 +213,10 @@ describe('CollectBlueskyTimelineUseCase', () => {
     const t = setup([pageOf([rich], undefined)]);
     await t.useCase.run();
 
-    const resolved = await createD1BlueskyTimelineItemsResolver(t.db).resolve({ limit: 10, before: undefined });
+    const resolved = await createD1BlueskyTimelineItemsResolver(t.db, USER_ID).resolve({
+      limit: 10,
+      before: undefined,
+    });
 
     const { viewerLikeUri: _viewerLikeUri, viewerRepostUri: _viewerRepostUri, ...expected } = rich;
     expect(resolved).toEqual({ ok: true, val: [{ ...expected, threadMuted: null }] });
@@ -232,7 +239,7 @@ describe('CollectBlueskyTimelineUseCase', () => {
 
       expect(likeRows(t)).toEqual([{ subjectUri: liked.uri, likeUri: likeUri(1), createdAt: NOW }]);
       const resolved = Result.unsafeUnwrap(
-        await createD1BlueskyTimelineItemsResolver(t.db).resolve({ limit: 10, before: undefined }),
+        await createD1BlueskyTimelineItemsResolver(t.db, USER_ID).resolve({ limit: 10, before: undefined }),
       );
       expect(resolved.map((item) => [item.uri, item.liked])).toEqual([[liked.uri, true], [recent(2).uri, false]]);
     });
@@ -324,7 +331,7 @@ describe('CollectBlueskyTimelineUseCase', () => {
 
       expect(repostRows(t)).toEqual([{ subjectUri: reposted.uri, repostUri: repostUri(1), createdAt: NOW }]);
       const resolved = Result.unsafeUnwrap(
-        await createD1BlueskyTimelineItemsResolver(t.db).resolve({ limit: 10, before: undefined }),
+        await createD1BlueskyTimelineItemsResolver(t.db, USER_ID).resolve({ limit: 10, before: undefined }),
       );
       expect(resolved.map((item) => [item.uri, item.reposted])).toEqual([[reposted.uri, true], [recent(2).uri, false]]);
     });
@@ -394,7 +401,8 @@ describe('CollectBlueskyTimelineUseCase', () => {
     describe('別クライアントで取り消したリポストの削除', () => {
       const MINUTE = 60 * 1000;
       const seedRepost = (t: ReturnType<typeof setup>, n: number, createdAt: number) =>
-        t.sqlite.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)').run(
+        t.sqlite.prepare('INSERT INTO bluesky_reposts(userId,subjectUri,repostUri,createdAt) VALUES (?,?,?,?)').run(
+          USER_ID,
           recent(n).uri,
           repostUri(n),
           createdAt,
@@ -476,7 +484,8 @@ describe('CollectBlueskyTimelineUseCase', () => {
         const items = Array.from({ length: 100 }, (_, n) => itemAt(n, NOW - 1000));
         const t = setup([pageOf(items, undefined)]);
         for (let n = 0; n < 100; n += 1) {
-          t.sqlite.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)').run(
+          t.sqlite.prepare('INSERT INTO bluesky_reposts(userId,subjectUri,repostUri,createdAt) VALUES (?,?,?,?)').run(
+            USER_ID,
             items[n]!.uri,
             repostUri(n),
             NOW - 10 * MINUTE,
@@ -510,7 +519,8 @@ describe('CollectBlueskyTimelineUseCase', () => {
         sql.trim().split(/\s/)[0]?.toLowerCase()
       );
     const seedBookmark = (t: ReturnType<typeof setup>, n: number, createdAt: number) =>
-      t.sqlite.prepare('INSERT INTO bluesky_bookmarks(subjectUri,createdAt) VALUES (?,?)').run(
+      t.sqlite.prepare('INSERT INTO bluesky_bookmarks(userId,subjectUri,createdAt) VALUES (?,?,?)').run(
+        USER_ID,
         recent(n).uri,
         createdAt,
       );
@@ -521,7 +531,7 @@ describe('CollectBlueskyTimelineUseCase', () => {
       await t.useCase.run();
 
       expect(bookmarkRows(t)).toEqual([{ subjectUri: recent(2).uri, createdAt: NOW }]);
-      const resolver = createD1BlueskyTimelineItemsResolver(t.db);
+      const resolver = createD1BlueskyTimelineItemsResolver(t.db, USER_ID);
       const items = Result.unsafeUnwrap(await resolver.resolve({ limit: 10, before: undefined }));
       expect(items.map((item) => [item.feedItemId, item.bookmarked])).toEqual([
         [recent(1).feedItemId, false],

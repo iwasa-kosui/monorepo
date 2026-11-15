@@ -11,7 +11,7 @@ import type { IoriD1Db } from '../client.ts';
 import { blueskyCrosspostsTable } from '../schema.ts';
 
 export const createD1BlueskyCrosspostStatusReportResolver = (db: IoriD1Db): BlueskyCrosspostStatusReportResolver => ({
-  resolve: async ({ maxAttempts, maxDeleteAttempts, failuresLimit }) => {
+  resolve: async ({ userId, maxAttempts, maxDeleteAttempts, failuresLimit }) => {
     const [groups, failures] = await Promise.all([
       db.select({
         status: blueskyCrosspostsTable.status,
@@ -21,7 +21,8 @@ export const createD1BlueskyCrosspostStatusReportResolver = (db: IoriD1Db): Blue
           when ${blueskyCrosspostsTable.status} = 'failed' and ${blueskyCrosspostsTable.attempts} >= ${maxAttempts} then 1
           when ${blueskyCrosspostsTable.status} = 'deleting' and ${blueskyCrosspostsTable.attempts} >= ${maxDeleteAttempts} then 1
           else 0 end), 0)`.mapWith(Number),
-      }).from(blueskyCrosspostsTable).groupBy(blueskyCrosspostsTable.status),
+      }).from(blueskyCrosspostsTable).where(eq(blueskyCrosspostsTable.userId, userId))
+        .groupBy(blueskyCrosspostsTable.status),
       db.select({
         postId: blueskyCrosspostsTable.postId,
         status: blueskyCrosspostsTable.status,
@@ -29,9 +30,12 @@ export const createD1BlueskyCrosspostStatusReportResolver = (db: IoriD1Db): Blue
         lastError: blueskyCrosspostsTable.lastError,
         updatedAt: blueskyCrosspostsTable.updatedAt,
       }).from(blueskyCrosspostsTable)
-        .where(or(
-          inArray(blueskyCrosspostsTable.status, ['failed', 'deleting']),
-          and(eq(blueskyCrosspostsTable.status, 'pending'), gt(blueskyCrosspostsTable.attempts, 0)),
+        .where(and(
+          eq(blueskyCrosspostsTable.userId, userId),
+          or(
+            inArray(blueskyCrosspostsTable.status, ['failed', 'deleting']),
+            and(eq(blueskyCrosspostsTable.status, 'pending'), gt(blueskyCrosspostsTable.attempts, 0)),
+          ),
         ))
         .orderBy(desc(blueskyCrosspostsTable.updatedAt), desc(blueskyCrosspostsTable.postId))
         .limit(failuresLimit),

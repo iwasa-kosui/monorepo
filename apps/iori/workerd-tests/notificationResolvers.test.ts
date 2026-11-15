@@ -78,10 +78,11 @@ const addBlueskyFollow = (recipientUserId: string, authorDid: string, createdAt:
       )
         .bind(notificationId, recipientUserId, 'blueskyFollow', 0, createdAt),
       env.DB.prepare(
-        'INSERT INTO notification_bluesky(notificationId,blueskyUri,reason,authorDid,authorHandle) VALUES (?,?,?,?,?)',
+        'INSERT INTO notification_bluesky(notificationId,recipientUserId,blueskyUri,reason,authorDid,authorHandle) VALUES (?,?,?,?,?,?)',
       )
         .bind(
           notificationId,
+          recipientUserId,
           `at://${authorDid}/app.bsky.graph.follow/${notificationId}`,
           'follow',
           authorDid,
@@ -92,8 +93,8 @@ const addBlueskyFollow = (recipientUserId: string, authorDid: string, createdAt:
 };
 
 const addModeratedActor = (did: string, muted: number, blockUri: string | null) =>
-  env.DB.prepare('INSERT INTO bluesky_moderated_actors(did,muted,blockUri,updatedAt) VALUES (?,?,?,?)')
-    .bind(did, muted, blockUri, 1);
+  env.DB.prepare('INSERT INTO bluesky_moderated_actors(userId,did,muted,blockUri,updatedAt) VALUES (?,?,?,?,?)')
+    .bind(moderatedUserId, did, muted, blockUri, 1);
 
 const aliceLike = addNotification('like', meId, alice, 1_000);
 const bobLike = addNotification('like', meId, bob, 2_000);
@@ -106,6 +107,8 @@ const otherAliceLike = addNotification('like', otherId, alice, 7_000);
 const mutedFollow = addBlueskyFollow(moderatedUserId, mutedDid, 1_000);
 const blockedFollow = addBlueskyFollow(moderatedUserId, blockedDid, 2_000);
 const visibleFollow = addBlueskyFollow(moderatedUserId, visibleDid, 3_000);
+// ミュート・ブロックは moderatedUserId のもの。別の受け取り手には効かない。
+const otherMutedFollow = addBlueskyFollow(otherId, mutedDid, 4_000);
 
 const resolveByPage = async (
   recipient: string,
@@ -157,7 +160,7 @@ beforeAll(async () => {
     addBlock(otherId, carol),
     ...[aliceLike, bobLike, aliceMention, bobMention, carolLike, otherBobLike, otherAliceLike]
       .flatMap((notification) => notification.statements),
-    ...[mutedFollow, blockedFollow, visibleFollow].flatMap((notification) => notification.statements),
+    ...[mutedFollow, blockedFollow, visibleFollow, otherMutedFollow].flatMap((notification) => notification.statements),
   ]);
 });
 
@@ -179,7 +182,7 @@ afterAll(async () => {
       notifications,
     ),
     env.DB.prepare('DELETE FROM blocks WHERE blockId IN (SELECT value FROM json_each(?))').bind(blocks),
-    env.DB.prepare('DELETE FROM bluesky_moderated_actors WHERE did IN (?, ?)').bind(mutedDid, blockedDid),
+    env.DB.prepare('DELETE FROM bluesky_moderated_actors WHERE userId = ?').bind(moderatedUserId),
     env.DB.prepare('DELETE FROM actors WHERE actorId IN (?, ?, ?)').bind(alice, bob, carol),
     env.DB.prepare('DELETE FROM users WHERE userId IN (?, ?, ?)').bind(meId, otherId, moderatedUserId),
   ]);
@@ -229,5 +232,12 @@ describe('通知のリゾルバーが workerd の D1 で Bluesky のミュート
   it('一覧と件数も、同じ通知を除く', async () => {
     expect(await resolveByPage(moderatedUserId, blueskyTypes)).toEqual([visibleFollow.notificationId]);
     expect(await count(moderatedUserId, blueskyTypes)).toBe(1);
+  });
+
+  it('別のユーザーのミュートとブロックでは、ほかの受け取り手の通知を除かない', async () => {
+    expect(await resolveByPage(otherId, blueskyTypes)).toEqual([otherMutedFollow.notificationId]);
+    expect((await resolveById(otherId, otherMutedFollow.notificationId))?.notification).toMatchObject({
+      type: 'blueskyFollow',
+    });
   });
 });

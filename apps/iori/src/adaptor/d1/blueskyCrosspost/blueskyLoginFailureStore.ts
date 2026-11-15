@@ -7,37 +7,49 @@ import type {
   BlueskyLoginFailureSavedStore,
 } from '../../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { Instant } from '../../../domain/instant/instant.ts';
+import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { blueskyLoginFailuresTable } from '../schema.ts';
 
-export const createD1BlueskyLoginFailureResolver = (db: IoriD1Db, scope: string): BlueskyLoginFailureResolver => ({
+export const createD1BlueskyLoginFailureResolver = (
+  db: IoriD1Db,
+  userId: UserId,
+  scope: string,
+): BlueskyLoginFailureResolver => ({
   resolve: async () => {
     const [row] = await db.select().from(blueskyLoginFailuresTable)
-      .where(eq(blueskyLoginFailuresTable.scope, scope)).limit(1);
+      .where(and(eq(blueskyLoginFailuresTable.userId, userId), eq(blueskyLoginFailuresTable.scope, scope))).limit(1);
     return RA.ok(row === undefined ? undefined : row.failedAt.getTime() as Instant);
   },
 });
 
-export const createD1BlueskyLoginFailureSavedStore = (db: IoriD1Db, scope: string): BlueskyLoginFailureSavedStore => ({
+export const createD1BlueskyLoginFailureSavedStore = (
+  db: IoriD1Db,
+  userId: UserId,
+  scope: string,
+): BlueskyLoginFailureSavedStore => ({
   save: async (failedAt) => {
     const values = { failedAt: new Date(failedAt) };
-    await db.insert(blueskyLoginFailuresTable).values({ scope, ...values }).onConflictDoUpdate({
-      target: blueskyLoginFailuresTable.scope,
+    await db.insert(blueskyLoginFailuresTable).values({ userId, scope, ...values }).onConflictDoUpdate({
+      target: [blueskyLoginFailuresTable.userId, blueskyLoginFailuresTable.scope],
       set: values,
     });
     return RA.ok(undefined);
   },
 });
 
-export const blueskyLoginFailureDeleteQuery = (db: IoriD1Db, scope: string, guard?: SQL) =>
-  db.delete(blueskyLoginFailuresTable).where(and(eq(blueskyLoginFailuresTable.scope, scope), guard));
+export const blueskyLoginFailureDeleteQuery = (db: IoriD1Db, userId: UserId, scope: string, guard?: SQL) =>
+  db.delete(blueskyLoginFailuresTable).where(
+    and(eq(blueskyLoginFailuresTable.userId, userId), eq(blueskyLoginFailuresTable.scope, scope), guard),
+  );
 
 export const createD1BlueskyLoginFailureDeletedStore = (
   db: IoriD1Db,
+  userId: UserId,
   scope: string,
 ): BlueskyLoginFailureDeletedStore => ({
   delete: async () => {
-    await blueskyLoginFailureDeleteQuery(db, scope);
+    await blueskyLoginFailureDeleteQuery(db, userId, scope);
     return RA.ok(undefined);
   },
 });

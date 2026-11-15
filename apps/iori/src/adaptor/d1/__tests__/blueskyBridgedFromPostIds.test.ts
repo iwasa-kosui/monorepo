@@ -1,14 +1,18 @@
 import { Result } from '@iwasa-kosui/result';
 import { describe, expect, it } from 'vitest';
 
+import { UserId } from '../../../domain/user/userId.ts';
 import { createD1BlueskyTimelineItemsResolver } from '../blueskyTimeline/blueskyTimelineItemsResolver.ts';
+import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const BASE = Date.UTC(2026, 10, 8, 12);
 const BRIDGED_HANDLE = 'alice.mastodon.example.ap.brid.gy';
 
 const setup = () => {
-  const { sqlite, db } = createSqliteD1Fixture();
+  const fixture = createSqliteD1Fixture();
+  const { sqlite, db } = fixture;
+  const userId = UserId.orThrow(createMastodonSeed(fixture).addLocalActor('alice').userId);
   sqlite.exec(
     'INSERT INTO actors(actorId,type,uri,inboxUrl) VALUES (\'actor-1\',\'remote\',\'https://mastodon.example/users/alice\',\'https://mastodon.example/inbox\')',
   );
@@ -17,9 +21,9 @@ const setup = () => {
   );
   const insertRemotePost = sqlite.prepare('INSERT INTO remote_posts(postId,uri,url) VALUES (?,?,?)');
   const insertItem = sqlite.prepare(
-    'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,bridgyOriginalUrl,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,bridgyOriginalUrl,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
   );
-  const resolver = createD1BlueskyTimelineItemsResolver(db);
+  const resolver = createD1BlueskyTimelineItemsResolver(db, userId);
   return {
     remotePost: (postId: string, uri: string, url: string | null, deletedAt: number | null = null) => {
       insertPost.run(postId, 'actor-1', 'hi', 1000, 'remote', deletedAt);
@@ -27,6 +31,7 @@ const setup = () => {
     },
     blueskyItem: (feedItemId: string, bridgyOriginalUrl: string | null, authorHandle: string = BRIDGED_HANDLE) =>
       insertItem.run(
+        userId,
         feedItemId,
         feedItemId,
         'cid',

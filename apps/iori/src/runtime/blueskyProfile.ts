@@ -3,14 +3,12 @@ import type { RA } from '@iwasa-kosui/result';
 import { createBlueskyFeedReader } from '../adaptor/bluesky/blueskyFeedReader.ts';
 import { createBlueskyProfileReader } from '../adaptor/bluesky/blueskyProfileReader.ts';
 import type { IoriD1Db } from '../adaptor/d1/client.ts';
-import { createD1UserResolverByUsername } from '../adaptor/d1/user/userResolverByUsername.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { BlueskyClientError } from '../ports/blueskyClient.ts';
 import { FollowBlueskyActorUseCase } from '../useCase/followBlueskyActor.ts';
 import { GetBlueskyFeedInfoUseCase } from '../useCase/getBlueskyFeedInfo.ts';
 import { GetBlueskyProfileUseCase } from '../useCase/getBlueskyProfile.ts';
 import { GetOwnBlueskyProfileUseCase } from '../useCase/getOwnBlueskyProfile.ts';
-import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { ListBlueskyActorFeedsUseCase } from '../useCase/listBlueskyActorFeeds.ts';
 import { ListBlueskyActorFollowersUseCase } from '../useCase/listBlueskyActorFollowers.ts';
 import { ListBlueskyActorFollowsUseCase } from '../useCase/listBlueskyActorFollows.ts';
@@ -24,6 +22,7 @@ import { ResolveBlueskyFeedUrlUseCase } from '../useCase/resolveBlueskyFeedUrl.t
 import { UnfollowBlueskyActorUseCase } from '../useCase/unfollowBlueskyActor.ts';
 import { UpdateBlueskyProfileUseCase } from '../useCase/updateBlueskyProfile.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
+import type { BlueskyAccountConfig } from './blueskyCredential.ts';
 import { createTimelineClient, resolveBlueskyTimelineConfig } from './blueskyTimeline.ts';
 
 export type BlueskyProfileRuntimePorts = Readonly<{
@@ -44,15 +43,14 @@ export type BlueskyProfileRuntimePorts = Readonly<{
   getOwnBlueskyProfileUseCase: GetOwnBlueskyProfileUseCase | undefined;
   updateBlueskyProfileUseCase: UpdateBlueskyProfileUseCase | undefined;
   viewerDid: (() => RA<string, BlueskyClientError>) | undefined;
-  isDigestOwner: IsDigestOwner;
 }>;
 
 export const createBlueskyProfileRuntimePorts = (
   env: IoriWorkerEnv,
+  account: BlueskyAccountConfig,
   db: IoriD1Db,
   deps: Readonly<{ fetch?: typeof fetch }> = {},
 ): BlueskyProfileRuntimePorts => {
-  const isDigestOwner = IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) });
   const config = resolveBlueskyTimelineConfig(env);
   if (config === undefined) {
     return {
@@ -73,10 +71,9 @@ export const createBlueskyProfileRuntimePorts = (
       getOwnBlueskyProfileUseCase: undefined,
       updateBlueskyProfileUseCase: undefined,
       viewerDid: undefined,
-      isDigestOwner,
     };
   }
-  const client = createTimelineClient(config, db, deps);
+  const client = createTimelineClient(account, db, deps);
   const reader = createBlueskyProfileReader({ client, now: Instant.now });
   const feedReader = createBlueskyFeedReader({ client, now: Instant.now });
   return {
@@ -101,6 +98,5 @@ export const createBlueskyProfileRuntimePorts = (
     }),
     updateBlueskyProfileUseCase: UpdateBlueskyProfileUseCase.create({ client, now: Instant.now }),
     viewerDid: () => client.viewerDid(),
-    isDigestOwner,
   };
 };

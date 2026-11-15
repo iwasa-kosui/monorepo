@@ -10,7 +10,7 @@ import {
 import type { BlueskyTimelineItemsDeletedStore } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { PostId } from '../domain/post/postId.ts';
-import type { BlueskyClient } from '../ports/blueskyClient.ts';
+import type { BlueskyClientForUser } from '../ports/blueskyClient.ts';
 import { deleteBlueskyRecordWith } from './helper/deleteBlueskyRecord.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -25,7 +25,7 @@ type Deps = Readonly<{
   crosspostSavedStore: BlueskyCrosspostSavedStore;
   crosspostDeletedStore: BlueskyCrosspostDeletedStore;
   timelineItemsDeletedStore: BlueskyTimelineItemsDeletedStore;
-  client: BlueskyClient;
+  clientFor: BlueskyClientForUser;
   waitUntil: (promise: Promise<unknown>) => void;
   now: () => Instant;
 }>;

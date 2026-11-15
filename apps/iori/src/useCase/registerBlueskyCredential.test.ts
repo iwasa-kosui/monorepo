@@ -5,7 +5,10 @@ import { createAesGcmCipherFactory } from '../adaptor/crypto/aesGcmCipher.ts';
 import { insertBlueskyAccountSwitch } from '../adaptor/d1/__tests__/blueskyAccountSwitchFixture.ts';
 import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts';
 import { createD1BlueskyAccountSwitchResolver } from '../adaptor/d1/blueskyAccountSwitch/blueskyAccountSwitchResolver.ts';
-import { createD1BlueskyStoredCredentialResolver } from '../adaptor/d1/blueskyCredential/blueskyCredentialStore.ts';
+import {
+  createD1BlueskyCredentialUserIdResolverByDid,
+  createD1BlueskyStoredCredentialResolver,
+} from '../adaptor/d1/blueskyCredential/blueskyCredentialStore.ts';
 import { createD1BlueskyLoginFailureSavedStore } from '../adaptor/d1/blueskyCrosspost/blueskyLoginFailureStore.ts';
 import {
   createD1BlueskySessionResolver,
@@ -25,6 +28,7 @@ import { RegisterBlueskyCredentialUseCase } from './registerBlueskyCredential.ts
 import { VerifyCurrentPasswordUseCase } from './verifyCurrentPassword.ts';
 
 const USER_ID = UserId.orThrow('00000000-0000-4000-8000-000000000001');
+const OTHER_USER_ID = UserId.orThrow('00000000-0000-4000-8000-000000000002');
 const PASSWORD = 'correct-horse-battery';
 const KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(3)));
 const NOW = Instant.orThrow(1_800_000_000_000);
@@ -70,6 +74,7 @@ const setup = async (options: {
   fixtures.push(fixture);
   const { db, sqlite } = fixture;
   sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'kosui');
+  sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(OTHER_USER_ID, 'bob');
   const hashed = await Password.hashPassword(fakeDerive)(Password.orThrow(PASSWORD));
   sqlite.prepare(
     'INSERT INTO user_passwords(userId,algorithm,parallelism,tagLength,memory,passes,nonceHex,tagHex) VALUES (?,?,?,?,?,?,?,?)',
@@ -92,8 +97,8 @@ const setup = async (options: {
     key: 'key' in options ? options.key : KEY,
     aadOf: blueskyCredentialAad,
   });
-  const sessionResolver = createD1BlueskySessionResolver(db);
-  const storedResolver = createD1BlueskyStoredCredentialResolver(db);
+  const sessionResolver = createD1BlueskySessionResolver(db, USER_ID);
+  const storedResolver = createD1BlueskyStoredCredentialResolver(db, USER_ID);
   const useCase = RegisterBlueskyCredentialUseCase.create({
     cipherFor,
     envCredentials: options.env,
@@ -103,9 +108,10 @@ const setup = async (options: {
     }),
     verifier,
     storedResolver,
+    linkedUserIdResolver: createD1BlueskyCredentialUserIdResolverByDid(db),
     sessionResolver,
-    registeredStore: createBlueskyCredentialRegisteredStore(db, 'timeline'),
-    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db),
+    registeredStore: createBlueskyCredentialRegisteredStore(db, USER_ID, 'timeline'),
+    accountSwitchResolver: createD1BlueskyAccountSwitchResolver(db, USER_ID),
     now: () => NOW,
   });
   const input = {
@@ -117,10 +123,17 @@ const setup = async (options: {
   const credentialRows = () => sqlite.prepare('SELECT * FROM bluesky_credentials').all();
   const sessionRows = () => sqlite.prepare('SELECT * FROM bluesky_sessions').all();
   const seedSession = (did: string) =>
-    createD1BlueskySessionSavedStore(db).save(session({ did, accessJwt: 'old-access', refreshJwt: 'old-refresh' }));
-  const seedLoginFailure = () => createD1BlueskyLoginFailureSavedStore(db, 'timeline').save(NOW);
+    createD1BlueskySessionSavedStore(db, USER_ID).save(
+      session({ did, accessJwt: 'old-access', refreshJwt: 'old-refresh' }),
+    );
+  const seedLoginFailure = () => createD1BlueskyLoginFailureSavedStore(db, USER_ID, 'timeline').save(NOW);
   const loginFailureRows = () => sqlite.prepare('SELECT * FROM bluesky_login_failures').all();
+  const linkCredential = (userId: UserId, did: string) =>
+    sqlite.prepare(
+      'INSERT INTO bluesky_credentials(userId,identifier,did,handle,appPasswordCiphertext,appPasswordIv,keyVersion,chatPermitted,verifiedAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    ).run(userId, 'linked.example', did, 'linked.example', 'ciphertext', 'iv', 1, 1, 1, 1);
   return {
+    linkCredential,
     useCase,
     input,
     verifier,
@@ -198,7 +211,7 @@ describe('RegisterBlueskyCredentialUseCase', () => {
 
   it('アカウントの切り替え中は、パスワードの確認の後で BlueskyAccountSwitchInProgress にし、Bluesky を呼ばない', async () => {
     const t = await setup();
-    insertBlueskyAccountSwitch(t.sqlite);
+    insertBlueskyAccountSwitch(t.sqlite, USER_ID);
 
     const wrong = await t.useCase.run({ ...t.input, currentPassword: 'wrong-password-value' });
     const result = await t.useCase.run(t.input);
@@ -207,6 +220,32 @@ describe('RegisterBlueskyCredentialUseCase', () => {
     expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyAccountSwitchInProgress' } });
     expect(t.verifier.login).not.toHaveBeenCalled();
     expect(t.credentialRows()).toEqual([]);
+  });
+
+  it('そのアカウントがほかのユーザーにつながっていれば BlueskyAccountLinkedElsewhere にし、何も保存しない', async () => {
+    const t = await setup();
+    t.linkCredential(OTHER_USER_ID, 'did:plc:alice');
+
+    const result = await t.useCase.run(t.input);
+
+    expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyAccountLinkedElsewhere' } });
+    expect(t.credentialRows()).toMatchObject([{ userId: OTHER_USER_ID, did: 'did:plc:alice' }]);
+    expect(t.sessionRows()).toEqual([]);
+    expect(t.verifier.logout).toHaveBeenCalledWith(session());
+  });
+
+  it('そのアカウントが同じユーザーにつながっているなら、登録し直せる', async () => {
+    const t = await setup();
+    t.linkCredential(USER_ID, 'did:plc:alice');
+
+    const result = await t.useCase.run(t.input);
+
+    expect(result.ok).toBe(true);
+    expect(t.credentialRows()).toMatchObject([{
+      userId: USER_ID,
+      did: 'did:plc:alice',
+      identifier: 'alice.bsky.social',
+    }]);
   });
 
   it('保存済みの資格情報があるときは、そちらの DID と比べる', async () => {
@@ -363,7 +402,7 @@ describe('RegisterBlueskyCredentialUseCase', () => {
     const rows = t.credentialRows() as Array<Record<string, unknown>>;
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      id: 'default',
+      userId: USER_ID,
       identifier: 'alice.bsky.social',
       did: 'did:plc:alice',
       handle: 'alice.bsky.social',
@@ -377,7 +416,7 @@ describe('RegisterBlueskyCredentialUseCase', () => {
     const secret = { ciphertext: rows[0]!.appPasswordCiphertext as string, iv: rows[0]!.appPasswordIv as string };
     expect(await cipherFor('did:plc:alice').decrypt(secret)).toBe('abcd-efgh-ijkl-mnop');
     expect(await cipherFor('did:plc:other').decrypt(secret)).toBeUndefined();
-    expect(t.sessionRows()).toMatchObject([{ id: 'default', accessJwt: 'new-access', refreshJwt: 'new-refresh' }]);
+    expect(t.sessionRows()).toMatchObject([{ userId: USER_ID, accessJwt: 'new-access', refreshJwt: 'new-refresh' }]);
     expect(t.loginFailureRows()).toEqual([]);
   });
 });

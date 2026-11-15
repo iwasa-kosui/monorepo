@@ -1,4 +1,4 @@
-import { RA } from '@iwasa-kosui/result';
+import { RA, Result } from '@iwasa-kosui/result';
 
 import {
   BlueskyAccountSwitch,
@@ -10,6 +10,8 @@ import {
 } from '../domain/blueskyAccountSwitch/blueskyAccountSwitch.ts';
 import {
   BLUESKY_CREDENTIAL_KEY_VERSION,
+  BlueskyAccountLinkedElsewhere,
+  type BlueskyCredentialUserIdResolverByDid,
   type BlueskyStoredCredentialResolver,
 } from '../domain/blueskyCredential/blueskyCredential.ts';
 import type { BlueskySession, BlueskySessionResolver } from '../domain/blueskyCrosspost/blueskyCrosspost.ts';
@@ -33,6 +35,7 @@ type Input = Readonly<{
 }>;
 
 export type SwitchBlueskyAccountError =
+  | BlueskyAccountLinkedElsewhere
   | BlueskyCredentialKeyMissing
   | InvalidCurrentPassword
   | BlueskyLoginFailed
@@ -47,6 +50,7 @@ type Deps = Readonly<{
   verifyCurrentPassword: VerifyCurrentPasswordUseCase;
   verifier: BlueskyCredentialVerifier;
   storedResolver: BlueskyStoredCredentialResolver;
+  linkedUserIdResolver: BlueskyCredentialUserIdResolverByDid;
   sessionResolver: BlueskySessionResolver;
   accountSwitchResolver: BlueskyAccountSwitchResolver;
   startedStore: BlueskyAccountSwitchStartedStore;
@@ -59,6 +63,7 @@ const create = ({
   verifyCurrentPassword,
   verifier,
   storedResolver,
+  linkedUserIdResolver,
   sessionResolver,
   accountSwitchResolver,
   startedStore,
@@ -83,6 +88,11 @@ const create = ({
       return RA.err({ type: 'BlueskyLoginFailed', message: 'Bluesky login failed.', cause: login.err });
     }
     const session = login.val;
+    const linkedUserId = Result.unsafeUnwrap(await linkedUserIdResolver.resolve(session.did));
+    if (linkedUserId !== undefined && linkedUserId !== input.userId) {
+      await discard(session);
+      return RA.err(BlueskyAccountLinkedElsewhere.create());
+    }
 
     const { current, envSession } = await resolveCurrentBlueskyAccount({
       storedResolver,

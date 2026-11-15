@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../d1/__tests__/sqliteFixture.ts';
 import { createD1BlueskyCrosspostStatusReportResolver } from '../../d1/blueskyCrosspost/blueskyCrosspostStatusReportResolver.ts';
-import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerIoriBlueskyCrosspostStatusRouter } from '../workerIoriBlueskyCrosspostStatusRouter.ts';
 import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
@@ -29,7 +28,6 @@ const setup = (options: { enabled?: boolean } = {}) => {
     '/api',
     createWorkerIoriBlueskyCrosspostStatusRouter({
       authn,
-      userResolverByUsername: createD1UserResolverByUsername(fixture.db),
       blueskyCrosspostStatusReportResolver: createD1BlueskyCrosspostStatusReportResolver(fixture.db),
       blueskyCrosspostEnabled: options.enabled ?? true,
     }),
@@ -38,18 +36,20 @@ const setup = (options: { enabled?: boolean } = {}) => {
   const signInAs = async (username: string, scope = 'read:statuses') => {
     const issued = await harness.issueUserToken(scope);
     seed.addLocalActor(username, issued.userId);
-    return { Authorization: `Bearer ${issued.token}` };
+    return { userId: issued.userId, headers: { Authorization: `Bearer ${issued.token}` } };
   };
   const insert = fixture.sqlite.prepare(
-    'INSERT INTO bluesky_crossposts(postId,status,skipReason,uri,cid,rkey,rootUri,rootCid,attempts,lastError,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO bluesky_crossposts(postId,userId,status,skipReason,uri,cid,rkey,rootUri,rootCid,attempts,lastError,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
   );
   const addCrosspost = (
+    userId: string,
     postId: string,
     status: string,
     options: { attempts?: number; lastError?: string | null; updatedAt?: number; sent?: boolean } = {},
   ) =>
     insert.run(
       postId,
+      userId,
       status,
       status === 'skipped' ? 'sensitive' : null,
       options.sent === true ? 'at://did:plc:secret/app.bsky.feed.post/3krkeysecret' : null,
@@ -77,27 +77,37 @@ describe('GET /api/iori/v1/bluesky/crossposts/status', () => {
     expect(await response.json()).toEqual({ error: 'The access token is invalid' });
   });
 
-  it('所有者以外のログインユーザーは 403 にし、集計を返さない', async () => {
+  it('ログイン中のユーザーが投稿したクロスポストだけを集計し、ほかのユーザーの失敗を返さない', async () => {
     const t = setup();
-    t.addCrosspost(postId(1), 'failed', { attempts: 1, lastError: 'createRecord failed: status 500' });
-    const headers = await t.signInAs('alice');
+    const kosui = await t.signInAs('kosui');
+    const alice = await t.signInAs('alice');
+    t.addCrosspost(kosui.userId, postId(1), 'sent');
+    t.addCrosspost(alice.userId, postId(2), 'failed', { attempts: 1, lastError: 'alice failed' });
+    t.addCrosspost(alice.userId, postId(3), 'pending');
 
-    const response = await t.request(headers);
+    const mine = await (await t.request(kosui.headers)).json() as Record<string, unknown>;
+    const hers = await (await t.request(alice.headers)).json() as Record<string, unknown>;
 
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
+    expect(mine).toMatchObject({
+      counts: { pending: 0, sent: 1, failed: 0, skipped: 0, deleting: 0 },
+      recentFailures: [],
+    });
+    expect(hers).toMatchObject({
+      counts: { pending: 1, sent: 0, failed: 1, skipped: 0, deleting: 0 },
+      recentFailures: [{ postId: postId(2), lastError: 'alice failed' }],
+    });
   });
 
-  it('read:statuses を満たさない scope のトークンは所有者でも 403 にする', async () => {
+  it('read:statuses を満たさない scope のトークンは 403 にする', async () => {
     const t = setup();
-    const headers = await t.signInAs('kosui', 'read:search');
+    const { headers } = await t.signInAs('kosui', 'read:search');
 
     expect((await t.request(headers)).status).toBe(403);
   });
 
-  it('所有者は 200 で、行が無ければ件数がすべて 0 になる', async () => {
+  it('行が無ければ 200 で件数がすべて 0 になる', async () => {
     const t = setup();
-    const headers = await t.signInAs('kosui');
+    const { headers } = await t.signInAs('kosui');
 
     const response = await t.request(headers);
 
@@ -112,8 +122,8 @@ describe('GET /api/iori/v1/bluesky/crossposts/status', () => {
 
   it('無効のときも 200 で、そのときの DB の状態を返す', async () => {
     const t = setup({ enabled: false });
-    t.addCrosspost(postId(1), 'failed', { attempts: 1, lastError: 'login failed' });
-    const headers = await t.signInAs('kosui');
+    const { userId, headers } = await t.signInAs('kosui');
+    t.addCrosspost(userId, postId(1), 'failed', { attempts: 1, lastError: 'login failed' });
 
     const response = await t.request(headers);
 
@@ -123,8 +133,12 @@ describe('GET /api/iori/v1/bluesky/crossposts/status', () => {
 
   it('直近の失敗の updatedAt を ISO 文字列にして返す', async () => {
     const t = setup();
-    t.addCrosspost(postId(1), 'failed', { attempts: 1, lastError: 'error 1', updatedAt: Date.UTC(2026, 10, 8, 0, 12) });
-    const headers = await t.signInAs('kosui');
+    const { userId, headers } = await t.signInAs('kosui');
+    t.addCrosspost(userId, postId(1), 'failed', {
+      attempts: 1,
+      lastError: 'error 1',
+      updatedAt: Date.UTC(2026, 10, 8, 0, 12),
+    });
 
     const body = await (await t.request(headers)).json() as { recentFailures: Array<Record<string, unknown>> };
 
@@ -139,10 +153,11 @@ describe('GET /api/iori/v1/bluesky/crossposts/status', () => {
 
   it('秘密、uri、cid、rkey、skipReason を応答に含めない', async () => {
     const t = setup();
+    const { userId, headers } = await t.signInAs('kosui');
     t.sqlite.prepare(
-      'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
+      'INSERT INTO bluesky_sessions(userId,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
     ).run(
-      'default',
+      userId,
       'did:plc:secret',
       'iori.example.com',
       'https://pds.example',
@@ -150,9 +165,12 @@ describe('GET /api/iori/v1/bluesky/crossposts/status', () => {
       'REFRESH-JWT-SECRET',
       1,
     );
-    t.addCrosspost(postId(1), 'deleting', { attempts: 2, lastError: 'deleteRecord failed: status 502', sent: true });
-    t.addCrosspost(postId(2), 'skipped');
-    const headers = await t.signInAs('kosui');
+    t.addCrosspost(userId, postId(1), 'deleting', {
+      attempts: 2,
+      lastError: 'deleteRecord failed: status 502',
+      sent: true,
+    });
+    t.addCrosspost(userId, postId(2), 'skipped');
 
     const response = await t.request(headers);
     const text = await response.text();

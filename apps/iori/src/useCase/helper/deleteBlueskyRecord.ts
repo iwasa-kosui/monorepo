@@ -8,10 +8,10 @@ import {
 } from '../../domain/blueskyCrosspost/blueskyCrosspost.ts';
 import type { BlueskyTimelineItemsDeletedStore } from '../../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import type { Instant } from '../../domain/instant/instant.ts';
-import type { BlueskyClient } from '../../ports/blueskyClient.ts';
+import type { BlueskyClientForUser } from '../../ports/blueskyClient.ts';
 
 type Deps = Readonly<{
-  client: BlueskyClient;
+  clientFor: BlueskyClientForUser;
   crosspostSavedStore: BlueskyCrosspostSavedStore;
   crosspostDeletedStore: BlueskyCrosspostDeletedStore;
   timelineItemsDeletedStore: BlueskyTimelineItemsDeletedStore;
@@ -19,7 +19,7 @@ type Deps = Readonly<{
 }>;
 
 export const deleteBlueskyRecordWith =
-  ({ client, crosspostSavedStore, crosspostDeletedStore, timelineItemsDeletedStore, now }: Deps) =>
+  ({ clientFor, crosspostSavedStore, crosspostDeletedStore, timelineItemsDeletedStore, now }: Deps) =>
   async (
     crosspost: BlueskyCrosspost,
   ): Promise<'deleted' | 'failed'> => {
@@ -27,7 +27,7 @@ export const deleteBlueskyRecordWith =
       Result.unsafeUnwrap(await crosspostDeletedStore.delete(crosspost.postId));
       return 'deleted';
     }
-    const deleted = await client.deleteRecord(crosspost.rkey);
+    const deleted = await clientFor(crosspost.userId).deleteRecord(crosspost.rkey);
     if (deleted.ok) {
       if (crosspost.uri !== null) Result.unsafeUnwrap(await timelineItemsDeletedStore.deleteByUri(crosspost.uri));
       Result.unsafeUnwrap(await crosspostDeletedStore.delete(crosspost.postId));

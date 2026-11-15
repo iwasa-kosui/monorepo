@@ -74,9 +74,17 @@ describe('createBlueskyCrosspostUseCases', () => {
       null,
     );
     sqlite.prepare(
-      'INSERT INTO bluesky_sessions(id,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
+      'INSERT INTO bluesky_sessions(userId,did,handle,pdsUrl,accessJwt,refreshJwt,updatedAt) VALUES (?,?,?,?,?,?,?)',
     )
-      .run('default', 'did:plc:abc', 'iori.example.com', 'https://pds.example.net', 'access', 'refresh', now);
+      .run(
+        '00000000-0000-4000-8000-000000000001',
+        'did:plc:abc',
+        'iori.example.com',
+        'https://pds.example.net',
+        'access',
+        'refresh',
+        now,
+      );
     const requests: Array<{ url: string; body: unknown }> = [];
     const fetchStub = (async (url: string | URL | Request, init?: RequestInit) => {
       requests.push({ url: String(url), body: JSON.parse(String(init?.body)) });

@@ -2,22 +2,30 @@ import { Result } from '@iwasa-kosui/result';
 import { describe, expect, it } from 'vitest';
 
 import { Instant } from '../../../domain/instant/instant.ts';
+import { UserId } from '../../../domain/user/userId.ts';
 import {
   createD1BlueskySyncFailedStore,
   createD1BlueskySyncStatusResolver,
   createD1BlueskySyncSucceededStore,
 } from '../blueskySyncStatus/blueskySyncStatusStore.ts';
+import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const at = (minutes: number) => Instant.orThrow(Date.UTC(2026, 10, 12, 0, minutes));
 
 const setup = () => {
-  const { sqlite, db } = createSqliteD1Fixture();
+  const fixture = createSqliteD1Fixture();
+  const { sqlite, db } = fixture;
+  const users = createMastodonSeed(fixture);
+  const userId = UserId.orThrow(users.addLocalActor('me').userId);
+  const other = UserId.orThrow(users.addLocalActor('other').userId);
   return {
     sqlite,
-    resolver: createD1BlueskySyncStatusResolver(db),
-    succeededStore: createD1BlueskySyncSucceededStore(db),
-    failedStore: createD1BlueskySyncFailedStore(db),
+    db,
+    other,
+    resolver: createD1BlueskySyncStatusResolver(db, userId),
+    succeededStore: createD1BlueskySyncSucceededStore(db, userId),
+    failedStore: createD1BlueskySyncFailedStore(db, userId),
   };
 };
 
@@ -71,6 +79,18 @@ describe('BlueskySyncStatus の D1 store', () => {
         lastFailureKind: 'auth',
         lastFailureCode: null,
       },
+    ]);
+  });
+
+  it('状態はユーザーごとで、別のユーザーの成功・失敗は自分の状態に出ない', async () => {
+    const { db, other, resolver, succeededStore } = setup();
+    await succeededStore.save('timeline', at(1));
+
+    await createD1BlueskySyncFailedStore(db, other).save('timeline', at(5), 'http', 'UpstreamFailure');
+    await createD1BlueskySyncSucceededStore(db, other).save('notifications', at(6));
+
+    expect(Result.unsafeUnwrap(await resolver.resolve())).toEqual([
+      { scope: 'timeline', lastSucceededAt: at(1), lastFailedAt: null, lastFailureKind: null, lastFailureCode: null },
     ]);
   });
 });

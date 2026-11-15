@@ -294,6 +294,8 @@ export const setupReadApi = (
     blueskySearch?: BlueskySearch;
     blueskyChat?: BlueskyChat;
     blueskyViewerDid?: () => RA<string, BlueskyClientError>;
+    /** Bluesky のアカウントをつないでいるユーザーか。省略するとだれでもつないでいる扱い */
+    blueskyLinked?: (userId: UserId) => boolean;
     refreshXPosts?: RefreshXPostsUseCase;
     scheduleBlueskyCrosspost?: ScheduleBlueskyCrosspostUseCase;
     postVersionsResolver?: PostVersionsResolverByPostId;
@@ -766,93 +768,105 @@ export const setupReadApi = (
         '/api',
         createWorkerIoriBlueskyRouter({
           authn,
-          blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db),
           blueskyTimelineEnabled: options.blueskyTimelineEnabled ?? false,
-          blueskySyncStatusResolver: createD1BlueskySyncStatusResolver(db),
-          blueskyLoginFailureResolver: createD1BlueskyLoginFailureResolver(db, 'timeline'),
           now: options.blueskyNow,
-          likeBlueskyPostUseCase: options.blueskyLikeClient === undefined ? undefined : LikeBlueskyPostUseCase.create({
-            client: options.blueskyLikeClient,
-            targetResolver: createD1BlueskyLikeTargetResolver(db),
-            likeUriResolver: createD1BlueskyLikeUriResolver(db),
-            cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
-            savedStore: createD1BlueskyLikeSavedStore(db),
-            now: Instant.now,
-          }),
-          unlikeBlueskyPostUseCase: options.blueskyLikeClient === undefined
-            ? undefined
-            : UnlikeBlueskyPostUseCase.create({
-              client: options.blueskyLikeClient,
-              targetResolver: createD1BlueskyLikeTargetResolver(db),
-              likeUriResolver: createD1BlueskyLikeUriResolver(db),
-              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
-              deletedStore: createD1BlueskyLikeDeletedStore(db),
-            }),
-          repostBlueskyPostUseCase: options.blueskyRepostClient === undefined
-            ? undefined
-            : RepostBlueskyPostUseCase.create({
-              client: options.blueskyRepostClient,
-              targetResolver: createD1BlueskyRepostTargetResolver(db),
-              repostUriResolver: createD1BlueskyRepostUriResolver(db),
-              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
-              viewerRepostResolver: { resolve: async () => RA.ok(null) },
-              savedStore: createD1BlueskyRepostSavedStore(db),
-              now: Instant.now,
-            }),
-          undoRepostBlueskyPostUseCase: options.blueskyRepostClient === undefined
-            ? undefined
-            : UndoRepostBlueskyPostUseCase.create({
-              client: options.blueskyRepostClient,
-              targetResolver: createD1BlueskyRepostTargetResolver(db),
-              repostUriResolver: createD1BlueskyRepostUriResolver(db),
-              cidResolver: { resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])) },
-              deletedStore: createD1BlueskyRepostDeletedStore(db),
-            }),
-          blueskyPostThreadFetcher: options.blueskyPostThreadFetcher,
-          replyToBlueskyPostUseCase: options.blueskyReplyClient === undefined
-            ? undefined
-            : ReplyToBlueskyPostUseCase.create({
-              client: options.blueskyReplyClient,
-              query: options.blueskyReplyClient.query,
-              targetResolver: createD1BlueskyLikeTargetResolver(db),
-              now: Instant.now,
-            }),
-          postToBlueskyUseCase: options.blueskyPostClient === undefined
-            ? undefined
-            : PostToBlueskyUseCase.create({
-              client: options.blueskyPostClient,
-              query: options.blueskyPostClient.query,
-              now: Instant.now,
-            }),
-          deleteOwnBlueskyPostUseCase: options.blueskyDeleteClient === undefined
-            ? undefined
-            : DeleteOwnBlueskyPostUseCase.create({
-              client: options.blueskyDeleteClient,
-              postIdsResolver: createD1PostIdsResolverByBlueskyUris(db),
-              deletePost: deletePostUseCase,
-              timelineItemsDeletedStore: createD1BlueskyTimelineItemsDeletedStore(db),
-            }),
           mediaUploadResolver,
           uploads: options.uploads ?? { get: async () => undefined },
-          quoteBlueskyPostUseCase: options.blueskyQuoteClient === undefined
-            ? undefined
-            : QuoteBlueskyPostUseCase.create({
-              client: options.blueskyQuoteClient,
-              query: options.blueskyQuoteClient.query,
-              now: Instant.now,
-            }),
-          markBlueskyNotificationsSeenUseCase: options.blueskySeenClient === undefined
-            ? undefined
-            : MarkBlueskyNotificationsSeenUseCase.create({
-              client: options.blueskySeenClient,
-              now: options.blueskyNow ?? Instant.now,
-            }),
-          blueskySearch: options.blueskySearch,
-          blueskyChat: options.blueskyChat === undefined
-            ? undefined
-            : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
-          viewerDid: options.blueskyViewerDid,
-          isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
+          forUser: async (userId) => ({
+            linked: options.blueskyLinked?.(userId) ?? true,
+            blueskyTimelineItemsResolver: createD1BlueskyTimelineItemsResolver(db, userId),
+            blueskySyncStatusResolver: createD1BlueskySyncStatusResolver(db, userId),
+            blueskyLoginFailureResolver: createD1BlueskyLoginFailureResolver(db, userId, 'timeline'),
+            likeBlueskyPostUseCase: options.blueskyLikeClient === undefined
+              ? undefined
+              : LikeBlueskyPostUseCase.create({
+                client: options.blueskyLikeClient,
+                targetResolver: createD1BlueskyLikeTargetResolver(db, userId),
+                likeUriResolver: createD1BlueskyLikeUriResolver(db, userId),
+                cidResolver: {
+                  resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])),
+                },
+                savedStore: createD1BlueskyLikeSavedStore(db, userId),
+                now: Instant.now,
+              }),
+            unlikeBlueskyPostUseCase: options.blueskyLikeClient === undefined
+              ? undefined
+              : UnlikeBlueskyPostUseCase.create({
+                client: options.blueskyLikeClient,
+                targetResolver: createD1BlueskyLikeTargetResolver(db, userId),
+                likeUriResolver: createD1BlueskyLikeUriResolver(db, userId),
+                cidResolver: {
+                  resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])),
+                },
+                deletedStore: createD1BlueskyLikeDeletedStore(db, userId),
+              }),
+            repostBlueskyPostUseCase: options.blueskyRepostClient === undefined
+              ? undefined
+              : RepostBlueskyPostUseCase.create({
+                client: options.blueskyRepostClient,
+                targetResolver: createD1BlueskyRepostTargetResolver(db, userId),
+                repostUriResolver: createD1BlueskyRepostUriResolver(db, userId),
+                cidResolver: {
+                  resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])),
+                },
+                viewerRepostResolver: { resolve: async () => RA.ok(null) },
+                savedStore: createD1BlueskyRepostSavedStore(db, userId),
+                now: Instant.now,
+              }),
+            undoRepostBlueskyPostUseCase: options.blueskyRepostClient === undefined
+              ? undefined
+              : UndoRepostBlueskyPostUseCase.create({
+                client: options.blueskyRepostClient,
+                targetResolver: createD1BlueskyRepostTargetResolver(db, userId),
+                repostUriResolver: createD1BlueskyRepostUriResolver(db, userId),
+                cidResolver: {
+                  resolve: async (uri) => RA.ok(resolveBlueskyPostSubject(options.blueskyPostCids?.[uri])),
+                },
+                deletedStore: createD1BlueskyRepostDeletedStore(db, userId),
+              }),
+            blueskyPostThreadFetcher: options.blueskyPostThreadFetcher,
+            replyToBlueskyPostUseCase: options.blueskyReplyClient === undefined
+              ? undefined
+              : ReplyToBlueskyPostUseCase.create({
+                client: options.blueskyReplyClient,
+                query: options.blueskyReplyClient.query,
+                targetResolver: createD1BlueskyLikeTargetResolver(db, userId),
+                now: Instant.now,
+              }),
+            postToBlueskyUseCase: options.blueskyPostClient === undefined
+              ? undefined
+              : PostToBlueskyUseCase.create({
+                client: options.blueskyPostClient,
+                query: options.blueskyPostClient.query,
+                now: Instant.now,
+              }),
+            deleteOwnBlueskyPostUseCase: options.blueskyDeleteClient === undefined
+              ? undefined
+              : DeleteOwnBlueskyPostUseCase.create({
+                client: options.blueskyDeleteClient,
+                postIdsResolver: createD1PostIdsResolverByBlueskyUris(db, userId),
+                deletePost: deletePostUseCase,
+                timelineItemsDeletedStore: createD1BlueskyTimelineItemsDeletedStore(db),
+              }),
+            quoteBlueskyPostUseCase: options.blueskyQuoteClient === undefined
+              ? undefined
+              : QuoteBlueskyPostUseCase.create({
+                client: options.blueskyQuoteClient,
+                query: options.blueskyQuoteClient.query,
+                now: Instant.now,
+              }),
+            markBlueskyNotificationsSeenUseCase: options.blueskySeenClient === undefined
+              ? undefined
+              : MarkBlueskyNotificationsSeenUseCase.create({
+                client: options.blueskySeenClient,
+                now: options.blueskyNow ?? Instant.now,
+              }),
+            blueskySearch: options.blueskySearch,
+            blueskyChat: options.blueskyChat === undefined
+              ? undefined
+              : BlueskyChatUseCases.create({ chat: options.blueskyChat, query: async () => RA.ok({}) }),
+            viewerDid: options.blueskyViewerDid,
+          }),
           createContext,
         }),
       );

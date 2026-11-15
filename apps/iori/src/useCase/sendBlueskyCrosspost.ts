@@ -24,6 +24,7 @@ import type { LinkPreviewsResolverByPostId } from '../domain/linkPreview/linkPre
 import type { LocalPostResolverByUri, PostQuotesResolverByPostIds, PostResolver } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import type { UserResolver } from '../domain/user/user.ts';
+import type { UserId } from '../domain/user/userId.ts';
 import type { BlueskyClient, BlueskyQueryClient, BlueskyThumbnailFetcher } from '../ports/blueskyClient.ts';
 import type { PostImageObjectStore } from '../ports/postImageObjectStore.ts';
 import { findMentionHandles, withMentionFacets } from './helper/blueskyMentionFacets.ts';
@@ -53,8 +54,8 @@ type Deps = Readonly<{
   timelineItemsDeletedStore: BlueskyTimelineItemsDeletedStore;
   uploads: PostImageObjectStore;
   thumbnailFetcher: BlueskyThumbnailFetcher;
-  client: BlueskyClient;
-  query: BlueskyQueryClient['query'];
+  /** 投稿者の Bluesky アカウントのクライアント */
+  clientFor: (userId: UserId) => BlueskyClient & BlueskyQueryClient;
   origin: string;
   now: () => Instant;
 }>;
@@ -88,10 +89,13 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     }
   };
 
-  const resolveMentionDids = async (handles: readonly string[]): Promise<Map<string, string>> => {
+  const resolveMentionDids = async (
+    query: BlueskyQueryClient['query'],
+    handles: readonly string[],
+  ): Promise<Map<string, string>> => {
     if (handles.length === 0) return new Map();
     try {
-      return await resolveDids(deps.query, handles);
+      return await resolveDids(query, handles);
     } catch (error) {
       getLogger().warn('Bluesky mention handles could not be resolved.', { errorName: errorNameOf(error) });
       return new Map();
@@ -117,6 +121,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     const quote = hasContentWarning(post.summary) ? { kind: 'none' as const } : await resolveQuoteContext(post);
     if (replyTo.kind === 'waiting' || quote.kind === 'waiting') return 'noop';
 
+    const client = deps.clientFor(crosspost.userId);
     const attempting = BlueskyCrosspost.markSending(crosspost, deps.now());
     if (!Result.unsafeUnwrap(await deps.crosspostSavedStore.update(attempting))) return 'noop';
 
@@ -173,22 +178,22 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       withMentionFacets(
         draft.val.text,
         draft.val.facets,
-        await resolveMentionDids(findMentionHandles(draft.val.text, draft.val.facets, mentionOptions)),
+        await resolveMentionDids(client.query, findMentionHandles(draft.val.text, draft.val.facets, mentionOptions)),
         mentionOptions,
       ),
       mentionOptions,
     );
     const imageBlobs = [];
     for (const image of draft.val.images) {
-      const uploaded = await deps.client.uploadBlob(image);
+      const uploaded = await client.uploadBlob(image);
       if (!uploaded.ok) return failWith(attempting, uploaded.err.message);
       imageBlobs.push(uploaded.val);
     }
     const thumbInput = draft.val.external?.thumb;
-    const thumbUploaded = thumbInput === undefined ? undefined : await deps.client.uploadBlob(thumbInput);
+    const thumbUploaded = thumbInput === undefined ? undefined : await client.uploadBlob(thumbInput);
 
     const rkey = blueskyRkeyOf({ postId, createdAt: post.createdAt });
-    let created = await deps.client.createRecord(
+    let created = await client.createRecord(
       toBlueskyPostRecord({ ...draft.val, facets }, {
         images: imageBlobs,
         ...(thumbUploaded?.ok ? { thumb: thumbUploaded.val } : {}),
@@ -196,7 +201,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
       rkey,
     );
     if (!created.ok && created.err.kind !== 'auth') {
-      const existing = await deps.client.getRecord(rkey);
+      const existing = await client.getRecord(rkey);
       if (existing.ok) created = existing;
     }
     if (!created.ok) return failWith(attempting, created.err.message);

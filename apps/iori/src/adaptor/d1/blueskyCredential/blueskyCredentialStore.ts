@@ -2,21 +2,24 @@ import { RA } from '@iwasa-kosui/result';
 import { and, eq, type SQL, sql } from 'drizzle-orm';
 
 import {
+  type BlueskyCredentialUserIdResolverByDid,
   BlueskyStoredCredential,
   type BlueskyStoredCredentialDeletedStore,
   type BlueskyStoredCredentialResolver,
   type BlueskyStoredCredentialSavedStore,
 } from '../../../domain/blueskyCredential/blueskyCredential.ts';
+import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import { guardedInsert } from '../guardedInsert.ts';
 import { blueskyCredentialsTable } from '../schema.ts';
 
-export const BLUESKY_CREDENTIAL_ID = 'default';
-
-export const createD1BlueskyStoredCredentialResolver = (db: IoriD1Db): BlueskyStoredCredentialResolver => ({
+export const createD1BlueskyStoredCredentialResolver = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyStoredCredentialResolver => ({
   resolve: async () => {
     const [row] = await db.select().from(blueskyCredentialsTable)
-      .where(eq(blueskyCredentialsTable.id, BLUESKY_CREDENTIAL_ID)).limit(1);
+      .where(eq(blueskyCredentialsTable.userId, userId)).limit(1);
     return RA.ok(
       row === undefined ? undefined : BlueskyStoredCredential.orThrow({
         identifier: row.identifier,
@@ -35,6 +38,7 @@ export const createD1BlueskyStoredCredentialResolver = (db: IoriD1Db): BlueskySt
 
 export const blueskyStoredCredentialSaveQuery = (
   db: IoriD1Db,
+  userId: UserId,
   credential: BlueskyStoredCredential,
   guard: SQL = sql`true`,
 ) => {
@@ -43,23 +47,45 @@ export const blueskyStoredCredentialSaveQuery = (
     verifiedAt: new Date(credential.verifiedAt),
     updatedAt: new Date(credential.updatedAt),
   };
-  return guardedInsert(db, blueskyCredentialsTable, { id: BLUESKY_CREDENTIAL_ID, ...values }, guard)
-    .onConflictDoUpdate({ target: blueskyCredentialsTable.id, set: values });
+  return guardedInsert(db, blueskyCredentialsTable, { userId, ...values }, guard)
+    .onConflictDoUpdate({ target: blueskyCredentialsTable.userId, set: values });
 };
 
-export const blueskyStoredCredentialDeleteQuery = (db: IoriD1Db, guard?: SQL) =>
-  db.delete(blueskyCredentialsTable).where(and(eq(blueskyCredentialsTable.id, BLUESKY_CREDENTIAL_ID), guard));
+export const blueskyStoredCredentialDeleteQuery = (db: IoriD1Db, userId: UserId, guard?: SQL) =>
+  db.delete(blueskyCredentialsTable).where(and(eq(blueskyCredentialsTable.userId, userId), guard));
 
-export const createD1BlueskyStoredCredentialSavedStore = (db: IoriD1Db): BlueskyStoredCredentialSavedStore => ({
+export const createD1BlueskyStoredCredentialSavedStore = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyStoredCredentialSavedStore => ({
   save: async (credential) => {
-    await blueskyStoredCredentialSaveQuery(db, credential);
+    await blueskyStoredCredentialSaveQuery(db, userId, credential);
     return RA.ok(undefined);
   },
 });
 
-export const createD1BlueskyStoredCredentialDeletedStore = (db: IoriD1Db): BlueskyStoredCredentialDeletedStore => ({
+export const createD1BlueskyStoredCredentialDeletedStore = (
+  db: IoriD1Db,
+  userId: UserId,
+): BlueskyStoredCredentialDeletedStore => ({
   delete: async () => {
-    await blueskyStoredCredentialDeleteQuery(db);
+    await blueskyStoredCredentialDeleteQuery(db, userId);
     return RA.ok(undefined);
+  },
+});
+
+export const createD1BlueskyCredentialUserIdResolverByDid = (db: IoriD1Db): BlueskyCredentialUserIdResolverByDid => ({
+  resolve: async (did) => {
+    const [row] = await db.select({ userId: blueskyCredentialsTable.userId }).from(blueskyCredentialsTable)
+      .where(eq(blueskyCredentialsTable.did, did)).limit(1);
+    return RA.ok(row?.userId as UserId | undefined);
+  },
+});
+
+/** Bluesky のアカウントをつないでいるユーザーの一覧。定期実行で、ユーザーごとに同期するのに使う */
+export const createD1BlueskyLinkedUserIdsResolver = (db: IoriD1Db) => ({
+  resolve: async (): Promise<readonly UserId[]> => {
+    const rows = await db.select({ userId: blueskyCredentialsTable.userId }).from(blueskyCredentialsTable);
+    return rows.map((row) => row.userId as UserId);
   },
 });

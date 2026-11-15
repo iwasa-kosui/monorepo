@@ -477,6 +477,7 @@ describe('toReblogStatus', () => {
 describe('toIoriBlueskyCrosspost', () => {
   const crosspost = (overrides: Partial<BlueskyCrosspost>): BlueskyCrosspost => ({
     postId: localPost.postId,
+    userId: localPost.userId,
     status: 'pending',
     skipReason: null,
     uri: null,

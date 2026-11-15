@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { blueskyFeedKindOf } from '../../../domain/blueskyFeed/blueskyFeedUri.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
+import type { UserId } from '../../../domain/user/userId.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../../ports/blueskyClient.ts';
 import type { BlueskyFeedReader } from '../../../ports/blueskyFeedReader.ts';
 import type { BlueskyProfile, BlueskyProfileReader } from '../../../ports/blueskyProfileReader.ts';
@@ -11,7 +12,6 @@ import { FollowBlueskyActorUseCase } from '../../../useCase/followBlueskyActor.t
 import { GetBlueskyFeedInfoUseCase } from '../../../useCase/getBlueskyFeedInfo.ts';
 import { GetBlueskyProfileUseCase } from '../../../useCase/getBlueskyProfile.ts';
 import { GetOwnBlueskyProfileUseCase } from '../../../useCase/getOwnBlueskyProfile.ts';
-import { IsDigestOwner } from '../../../useCase/isDigestOwner.ts';
 import { ListBlueskyActorFeedsUseCase } from '../../../useCase/listBlueskyActorFeeds.ts';
 import { ListBlueskyActorFollowersUseCase } from '../../../useCase/listBlueskyActorFollowers.ts';
 import { ListBlueskyActorFollowsUseCase } from '../../../useCase/listBlueskyActorFollows.ts';
@@ -26,7 +26,6 @@ import { UnfollowBlueskyActorUseCase } from '../../../useCase/unfollowBlueskyAct
 import { UpdateBlueskyProfileUseCase } from '../../../useCase/updateBlueskyProfile.ts';
 import { createMastodonSeed } from '../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../d1/__tests__/sqliteFixture.ts';
-import { createD1UserResolverByUsername } from '../../d1/user/userResolverByUsername.ts';
 import { createMastodonAuthn } from '../mastodonAuthn.ts';
 import { createWorkerIoriBlueskyProfileRouter } from '../workerIoriBlueskyProfileRouter.ts';
 import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
@@ -117,7 +116,6 @@ const feedItem = {
 
 const setup = async (options: {
   scope: string;
-  owner?: boolean;
   enabled?: boolean;
   reader?: Partial<BlueskyProfileReader>;
   feedReader?: Partial<BlueskyFeedReader>;
@@ -197,6 +195,7 @@ const setup = async (options: {
     ...options.client,
   };
   const enabled = options.enabled !== false;
+  const viewerDidByUser = new Map<UserId, () => RA<string, BlueskyClientError>>();
   const app = new Hono().route(
     '/api',
     createWorkerIoriBlueskyProfileRouter({
@@ -204,40 +203,42 @@ const setup = async (options: {
         verifyAccessTokenUseCase: harness.memory.useCases.verifyAccessTokenUseCase,
         sessionResolver: harness.memory.sessionResolver as never,
       }),
-      getBlueskyProfileUseCase: enabled ? GetBlueskyProfileUseCase.create({ reader }) : undefined,
-      listBlueskyAuthorFeedUseCase: enabled ? ListBlueskyAuthorFeedUseCase.create({ reader }) : undefined,
-      listBlueskyActorLikesUseCase: enabled
-        ? ListBlueskyActorLikesUseCase.create({ reader, viewerDid: options.ownDid ?? (async () => RA.ok(OWN_DID)) })
-        : undefined,
-      listBlueskySavedFeedsUseCase: enabled ? ListBlueskySavedFeedsUseCase.create({ reader: feedReader }) : undefined,
-      listBlueskyFeedPostsUseCase: enabled ? ListBlueskyFeedPostsUseCase.create({ reader: feedReader }) : undefined,
-      getBlueskyFeedInfoUseCase: enabled ? GetBlueskyFeedInfoUseCase.create({ reader: feedReader }) : undefined,
-      resolveBlueskyFeedUrlUseCase: enabled ? ResolveBlueskyFeedUrlUseCase.create({ reader: feedReader }) : undefined,
-      listBlueskyListMembersUseCase: enabled ? ListBlueskyListMembersUseCase.create({ reader: feedReader }) : undefined,
-      listBlueskyActorFeedsUseCase: enabled ? ListBlueskyActorFeedsUseCase.create({ reader: feedReader }) : undefined,
-      listBlueskyActorListsUseCase: enabled ? ListBlueskyActorListsUseCase.create({ reader: feedReader }) : undefined,
-      listBlueskyActorFollowsUseCase: enabled ? ListBlueskyActorFollowsUseCase.create({ reader }) : undefined,
-      listBlueskyActorFollowersUseCase: enabled ? ListBlueskyActorFollowersUseCase.create({ reader }) : undefined,
-      followBlueskyActorUseCase: enabled ? FollowBlueskyActorUseCase.create({ reader, client }) : undefined,
-      unfollowBlueskyActorUseCase: enabled ? UnfollowBlueskyActorUseCase.create({ reader, client }) : undefined,
-      getOwnBlueskyProfileUseCase: enabled
-        ? GetOwnBlueskyProfileUseCase.create({
-          reader,
-          client,
-          viewerDid: options.ownDid ?? (async () => RA.ok(OWN_DID)),
-        })
-        : undefined,
-      updateBlueskyProfileUseCase: enabled
-        ? UpdateBlueskyProfileUseCase.create({ client, now: () => Instant.orThrow(NOW) })
-        : undefined,
-      viewerDid: options.viewerDid,
-      isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(fixture.db) }),
+      forUser: async (userId: UserId) => ({
+        getBlueskyProfileUseCase: enabled ? GetBlueskyProfileUseCase.create({ reader }) : undefined,
+        listBlueskyAuthorFeedUseCase: enabled ? ListBlueskyAuthorFeedUseCase.create({ reader }) : undefined,
+        listBlueskyActorLikesUseCase: enabled
+          ? ListBlueskyActorLikesUseCase.create({ reader, viewerDid: options.ownDid ?? (async () => RA.ok(OWN_DID)) })
+          : undefined,
+        listBlueskySavedFeedsUseCase: enabled ? ListBlueskySavedFeedsUseCase.create({ reader: feedReader }) : undefined,
+        listBlueskyFeedPostsUseCase: enabled ? ListBlueskyFeedPostsUseCase.create({ reader: feedReader }) : undefined,
+        getBlueskyFeedInfoUseCase: enabled ? GetBlueskyFeedInfoUseCase.create({ reader: feedReader }) : undefined,
+        resolveBlueskyFeedUrlUseCase: enabled ? ResolveBlueskyFeedUrlUseCase.create({ reader: feedReader }) : undefined,
+        listBlueskyListMembersUseCase: enabled
+          ? ListBlueskyListMembersUseCase.create({ reader: feedReader })
+          : undefined,
+        listBlueskyActorFeedsUseCase: enabled ? ListBlueskyActorFeedsUseCase.create({ reader: feedReader }) : undefined,
+        listBlueskyActorListsUseCase: enabled ? ListBlueskyActorListsUseCase.create({ reader: feedReader }) : undefined,
+        listBlueskyActorFollowsUseCase: enabled ? ListBlueskyActorFollowsUseCase.create({ reader }) : undefined,
+        listBlueskyActorFollowersUseCase: enabled ? ListBlueskyActorFollowersUseCase.create({ reader }) : undefined,
+        followBlueskyActorUseCase: enabled ? FollowBlueskyActorUseCase.create({ reader, client }) : undefined,
+        unfollowBlueskyActorUseCase: enabled ? UnfollowBlueskyActorUseCase.create({ reader, client }) : undefined,
+        getOwnBlueskyProfileUseCase: enabled
+          ? GetOwnBlueskyProfileUseCase.create({
+            reader,
+            client,
+            viewerDid: options.ownDid ?? (async () => RA.ok(OWN_DID)),
+          })
+          : undefined,
+        updateBlueskyProfileUseCase: enabled
+          ? UpdateBlueskyProfileUseCase.create({ client, now: () => Instant.orThrow(NOW) })
+          : undefined,
+        viewerDid: viewerDidByUser.get(userId) ?? options.viewerDid,
+      }),
     }),
   );
   const issued = await harness.issueUserToken(options.scope);
   const seed = createMastodonSeed(fixture);
-  seed.addLocalActor('kosui', options.owner === false ? undefined : issued.userId);
-  if (options.owner === false) seed.addLocalActor('alice', issued.userId);
+  seed.addLocalActor('kosui', issued.userId);
   const bearer = { Authorization: `Bearer ${issued.token}` };
   const get = (path: string) => app.request(`${ORIGIN}${path}`, { headers: bearer });
   const anonymous = (path: string, init: RequestInit = {}) => app.request(`${ORIGIN}${path}`, init);
@@ -249,7 +250,16 @@ const setup = async (options: {
     });
   const put = (path: string, form: FormData, headers: Record<string, string> = bearer) =>
     app.request(`${ORIGIN}${path}`, { method: 'PUT', headers, body: form });
-  return { get, send, put, anonymous, reader, feedReader, client, sessionId: issued.sessionId };
+  /** 自分の DID がちがう、別のユーザーでログインする */
+  const anotherUser = async (viewerDid: () => RA<string, BlueskyClientError>) => {
+    const other = await harness.issueUserToken(options.scope);
+    seed.addLocalActor('alice', other.userId);
+    viewerDidByUser.set(other.userId, viewerDid);
+    return {
+      get: (path: string) => app.request(`${ORIGIN}${path}`, { headers: { Authorization: `Bearer ${other.token}` } }),
+    };
+  };
+  return { get, send, put, anonymous, anotherUser, reader, feedReader, client, sessionId: issued.sessionId };
 };
 
 describe('GET /api/iori/v1/bluesky/profiles/:actor', () => {
@@ -266,19 +276,6 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor', () => {
 
     expect((await t.get(`${PROFILES}/${DID}`)).status).toBe(403);
     expect(t.reader.getProfile).not.toHaveBeenCalled();
-  });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:accounts', owner: false });
-
-    const response = await t.get(`${PROFILES}/${DID}`);
-    const feed = await t.get(`${PROFILES}/${DID}/feed`);
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
-    expect(feed.status).toBe(403);
-    expect(t.reader.getProfile).not.toHaveBeenCalled();
-    expect(t.reader.getAuthorFeed).not.toHaveBeenCalled();
   });
 
   it('無効のときは 409 を返す', async () => {
@@ -315,6 +312,14 @@ describe('GET /api/iori/v1/bluesky/profiles/:actor', () => {
     expect(await (await other.get(`${PROFILES}/${DID}`)).json()).toMatchObject({ isSelf: false });
     expect((await failed.get(`${PROFILES}/${DID}`)).status).toBe(200);
     expect(await (await failed.get(`${PROFILES}/${DID}`)).json()).toMatchObject({ isSelf: false });
+  });
+
+  it('isSelf はログイン中のユーザーの Bluesky アカウントの DID で決める', async () => {
+    const t = await setup({ scope: 'read:accounts', viewerDid: async () => RA.ok(DID) });
+    const bob = await t.anotherUser(async () => RA.ok('did:plc:bob'));
+
+    expect(await (await t.get(`${PROFILES}/${DID}`)).json()).toMatchObject({ isSelf: true });
+    expect(await (await bob.get(`${PROFILES}/${DID}`)).json()).toMatchObject({ isSelf: false });
   });
 
   it('アカウントが無ければ 404 にする', async () => {
@@ -411,16 +416,6 @@ describe('GET /api/iori/v1/bluesky/liked-posts', () => {
     expect((await t.get(LIKED_POSTS)).status).toBe(403);
     expect(t.reader.getActorLikes).not.toHaveBeenCalled();
   });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:accounts', owner: false });
-
-    const response = await t.get(LIKED_POSTS);
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
-    expect(t.reader.getActorLikes).not.toHaveBeenCalled();
-  });
 });
 
 describe('GET /api/iori/v1/bluesky/feeds', () => {
@@ -443,16 +438,6 @@ describe('GET /api/iori/v1/bluesky/feeds', () => {
 
     expect((await t.anonymous(FEEDS)).status).toBe(401);
     expect((await t.get(FEEDS)).status).toBe(403);
-    expect(t.feedReader.listSavedFeeds).not.toHaveBeenCalled();
-  });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:accounts', owner: false });
-
-    const response = await t.get(FEEDS);
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader.listSavedFeeds).not.toHaveBeenCalled();
   });
 });
@@ -488,16 +473,6 @@ describe('GET /api/iori/v1/bluesky/feeds/posts', () => {
 
     expect((await t.anonymous(path)).status).toBe(401);
     expect((await t.get(path)).status).toBe(403);
-    expect(t.feedReader.getFeedPosts).not.toHaveBeenCalled();
-  });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:accounts', owner: false });
-
-    const response = await t.get(`${FEED_POSTS}?uri=${encodeURIComponent(FEED_URI)}`);
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader.getFeedPosts).not.toHaveBeenCalled();
   });
 
@@ -596,16 +571,6 @@ describe('GET /api/iori/v1/bluesky/feeds/info', () => {
     expect((await t.get(path)).status).toBe(403);
     expect(t.feedReader.getFeedInfo).not.toHaveBeenCalled();
   });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:accounts', owner: false });
-
-    const response = await t.get(`${FEED_INFO}?uri=${encodeURIComponent(FEED_URI)}`);
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
-    expect(t.feedReader.getFeedInfo).not.toHaveBeenCalled();
-  });
 });
 
 describe('GET /api/iori/v1/bluesky/feeds/resolve', () => {
@@ -642,16 +607,6 @@ describe('GET /api/iori/v1/bluesky/feeds/resolve', () => {
     expect((await t.anonymous(path)).status).toBe(401);
     expect((await t.get(path)).status).toBe(403);
   });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:accounts', owner: false });
-
-    const response = await t.get(resolve('https://bsky.app/profile/own.bsky.social/feed/a'));
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
-    expect(t.feedReader.resolveHandle).not.toHaveBeenCalled();
-  });
 });
 
 describe('GET /api/iori/v1/bluesky/lists/members', () => {
@@ -683,16 +638,6 @@ describe('GET /api/iori/v1/bluesky/lists/members', () => {
     expect((await t.get(path)).status).toBe(403);
     expect(t.feedReader.getListMembers).not.toHaveBeenCalled();
   });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:accounts', owner: false });
-
-    const response = await t.get(`${LIST_MEMBERS}?uri=${encodeURIComponent(LIST_URI)}`);
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
-    expect(t.feedReader.getListMembers).not.toHaveBeenCalled();
-  });
 });
 
 describe.each(
@@ -721,16 +666,6 @@ describe.each(
 
     expect((await t.anonymous(path)).status).toBe(401);
     expect((await t.get(path)).status).toBe(403);
-    expect(t.feedReader[method]).not.toHaveBeenCalled();
-  });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:accounts', owner: false });
-
-    const response = await t.get(path);
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.feedReader[method]).not.toHaveBeenCalled();
   });
 });
@@ -771,16 +706,6 @@ describe.each(
     expect((await t.get(path)).status).toBe(403);
     expect(t.reader[method]).not.toHaveBeenCalled();
   });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:accounts', owner: false });
-
-    const response = await t.get(path);
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
-    expect(t.reader[method]).not.toHaveBeenCalled();
-  });
 });
 
 describe('POST /api/iori/v1/bluesky/follows', () => {
@@ -797,15 +722,6 @@ describe('POST /api/iori/v1/bluesky/follows', () => {
     const t = await setup({ scope: 'read:accounts' });
 
     expect((await t.send('POST', FOLLOWS, { did: DID })).status).toBe(403);
-    expect(t.client.createFollow).not.toHaveBeenCalled();
-  });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'write:follows', owner: false });
-
-    const response = await t.send('POST', FOLLOWS, { did: DID });
-
-    expect(response.status).toBe(403);
     expect(t.client.createFollow).not.toHaveBeenCalled();
   });
 
@@ -845,13 +761,11 @@ describe('DELETE /api/iori/v1/bluesky/follows', () => {
     expect(t.client.deleteFollow).not.toHaveBeenCalled();
   });
 
-  it('所有者でない利用者を 403、無効なら 409 にする', async () => {
-    const nonOwner = await setup({ scope: 'write:follows', owner: false });
+  it('無効なら 409 にし、Bluesky を呼ばない', async () => {
     const disabled = await setup({ scope: 'write:follows', enabled: false });
 
-    expect((await unfollow(nonOwner)).status).toBe(403);
-    expect(nonOwner.client.deleteFollow).not.toHaveBeenCalled();
     expect((await unfollow(disabled)).status).toBe(409);
+    expect(disabled.client.deleteFollow).not.toHaveBeenCalled();
   });
 
   it('did が無い、または did: で始まらないなら 400 にする', async () => {
@@ -894,16 +808,6 @@ describe('GET /api/iori/v1/bluesky/profile', () => {
 
     expect((await t.anonymous(OWN_PROFILE)).status).toBe(401);
     expect((await t.get(OWN_PROFILE)).status).toBe(403);
-    expect(t.reader.getProfile).not.toHaveBeenCalled();
-  });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'read:accounts', owner: false });
-
-    const response = await t.get(OWN_PROFILE);
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual({ error: 'Forbidden' });
     expect(t.reader.getProfile).not.toHaveBeenCalled();
   });
 
@@ -970,14 +874,6 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
     const t = await setup({ scope: 'read:accounts' });
 
     expect((await t.put(OWN_PROFILE, form())).status).toBe(403);
-    expect(t.client.putProfileRecord).not.toHaveBeenCalled();
-  });
-
-  it('所有者でない利用者を 403 にし、Bluesky を呼ばない', async () => {
-    const t = await setup({ scope: 'write:accounts', owner: false });
-
-    expect((await t.put(OWN_PROFILE, form())).status).toBe(403);
-    expect(t.client.getProfileRecord).not.toHaveBeenCalled();
     expect(t.client.putProfileRecord).not.toHaveBeenCalled();
   });
 

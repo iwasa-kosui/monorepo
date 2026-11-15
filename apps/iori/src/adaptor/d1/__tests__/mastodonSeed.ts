@@ -326,9 +326,10 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
     const notificationId = addNotification(recipientUserId, type, createdAt);
     const blueskyUri = options.blueskyUri ?? `at://did:plc:alice/app.bsky.feed.like/${notificationId}`;
     sqlite.prepare(
-      'INSERT INTO notification_bluesky(notificationId,blueskyUri,reason,authorDid,authorHandle,authorDisplayName,authorAvatar,subjectUri,targetPostId,text) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO notification_bluesky(notificationId,recipientUserId,blueskyUri,reason,authorDid,authorHandle,authorDisplayName,authorAvatar,subjectUri,targetPostId,text) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
     ).run(
       notificationId,
+      recipientUserId,
       blueskyUri,
       options.reason
         ?? {
@@ -351,8 +352,8 @@ export const createMastodonSeed = ({ sqlite }: Fixture) => {
       options.text ?? null,
     );
     if (options.receipt !== false) {
-      sqlite.prepare('INSERT INTO bluesky_notification_receipts(uri,indexedAt,receivedAt) VALUES (?,?,?)')
-        .run(blueskyUri, createdAt, createdAt);
+      sqlite.prepare('INSERT INTO bluesky_notification_receipts(userId,uri,indexedAt,receivedAt) VALUES (?,?,?,?)')
+        .run(recipientUserId, blueskyUri, createdAt, createdAt);
     }
     return notificationId;
   };

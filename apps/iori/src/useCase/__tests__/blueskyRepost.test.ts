@@ -8,11 +8,14 @@ import { createD1BlueskyRepostTargetResolver } from '../../adaptor/d1/blueskyTim
 import { createD1BlueskyRepostUriResolver } from '../../adaptor/d1/blueskyTimeline/blueskyRepostUriResolver.ts';
 import { deriveBlueskyRepostRkey } from '../../domain/blueskyTimeline/blueskyRepost.ts';
 import { Instant } from '../../domain/instant/instant.ts';
+import { UserId } from '../../domain/user/userId.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
 import type { BlueskyPostCidResolver } from '../../ports/blueskyPostCidResolver.ts';
 import type { BlueskyViewerRepostResolver } from '../../ports/blueskyViewerRepostResolver.ts';
 import { RepostBlueskyPostUseCase } from '../repostBlueskyPost.ts';
 import { UndoRepostBlueskyPostUseCase } from '../undoRepostBlueskyPost.ts';
+
+const USER_ID = UserId.orThrow('00000000-0000-4000-8000-0000000000a1');
 
 const NOW = Instant.orThrow(Date.UTC(2026, 10, 8, 12));
 const POST = 'at://did:plc:a/app.bsky.feed.post/1';
@@ -28,20 +31,34 @@ const failure: BlueskyClientError = {
 
 const setup = () => {
   const { db, sqlite, queries } = createSqliteD1Fixture();
+  sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(USER_ID, 'alice');
   const insertItem = sqlite.prepare(
-    'INSERT INTO bluesky_timeline_items(feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO bluesky_timeline_items(userId,feedItemId,uri,cid,authorDid,authorHandle,text,facets,repostedByDid,postedAt,indexedAt,fetchedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
   );
-  insertItem.run(POST, POST, 'bafypost', 'did:plc:a', 'alice.bsky.social', 't', '[]', null, 1, 1, 1);
-  insertItem.run(REPOST_ROW, POST, 'bafypost', 'did:plc:a', 'alice.bsky.social', 't', '[]', 'did:plc:b', 1, 1, 1);
+  insertItem.run(USER_ID, POST, POST, 'bafypost', 'did:plc:a', 'alice.bsky.social', 't', '[]', null, 1, 1, 1);
+  insertItem.run(
+    USER_ID,
+    REPOST_ROW,
+    POST,
+    'bafypost',
+    'did:plc:a',
+    'alice.bsky.social',
+    't',
+    '[]',
+    'did:plc:b',
+    1,
+    1,
+    1,
+  );
   const createRepost = vi.fn<BlueskyClient['createRepost']>(async () => RA.ok({ uri: CREATED }));
   const deleteRepost = vi.fn<BlueskyClient['deleteRepost']>(async () => RA.ok(undefined));
   const resolveViewerRepost = vi.fn<BlueskyViewerRepostResolver['resolve']>(async () => RA.ok(null));
-  const targetResolver = createD1BlueskyRepostTargetResolver(db);
-  const repostUriResolver = createD1BlueskyRepostUriResolver(db);
+  const targetResolver = createD1BlueskyRepostTargetResolver(db, USER_ID);
+  const repostUriResolver = createD1BlueskyRepostUriResolver(db, USER_ID);
   const resolveCid = vi.fn<BlueskyPostCidResolver['resolve']>(async (uri) =>
     RA.ok(uri === POST ? { cid: 'bafyfresh', likeUri: null, repostUri: null } : undefined)
   );
-  const save = vi.fn(createD1BlueskyRepostSavedStore(db).save);
+  const save = vi.fn(createD1BlueskyRepostSavedStore(db, USER_ID).save);
   const repost = RepostBlueskyPostUseCase.create({
     client: { createRepost },
     targetResolver,
@@ -56,11 +73,12 @@ const setup = () => {
     targetResolver,
     repostUriResolver,
     cidResolver: { resolve: resolveCid },
-    deletedStore: createD1BlueskyRepostDeletedStore(db),
+    deletedStore: createD1BlueskyRepostDeletedStore(db, USER_ID),
   });
   const reposts = () => sqlite.prepare('SELECT subjectUri, repostUri, createdAt FROM bluesky_reposts').all();
   const seedRepost = (repostUri = REPOST) =>
-    sqlite.prepare('INSERT INTO bluesky_reposts(subjectUri,repostUri,createdAt) VALUES (?,?,?)').run(
+    sqlite.prepare('INSERT INTO bluesky_reposts(userId,subjectUri,repostUri,createdAt) VALUES (?,?,?,?)').run(
+      USER_ID,
       POST,
       repostUri,
       1,

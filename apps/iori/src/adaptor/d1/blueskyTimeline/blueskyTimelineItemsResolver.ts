@@ -2,6 +2,7 @@ import { RA } from '@iwasa-kosui/result';
 import { and, desc, eq, isNotNull, lt, notExists, or, type SQL, sql } from 'drizzle-orm';
 
 import type { BlueskyTimelineItemsResolver } from '../../../domain/blueskyTimeline/blueskyTimelineItem.ts';
+import type { UserId } from '../../../domain/user/userId.ts';
 import type { IoriD1Db } from '../client.ts';
 import {
   blueskyBookmarksTable,
@@ -14,13 +15,15 @@ import {
 import { toBlueskyTimelineItem } from './blueskyTimelineItemRow.ts';
 import { withBridgedFromPostIds } from './bridgedFromPostIds.ts';
 
-export const createD1BlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimelineItemsResolver => ({
+export const createD1BlueskyTimelineItemsResolver = (db: IoriD1Db, userId: UserId): BlueskyTimelineItemsResolver => ({
   resolve: async ({ limit, before, beforeId, excludeCrossposted }) => {
     const beforeAt = before === undefined ? undefined : new Date(before);
     const conditions: SQL[] = [
+      eq(blueskyTimelineItemsTable.userId, userId),
       notExists(
         db.select({ one: sql`1` }).from(blueskyModeratedActorsTable)
           .where(and(
+            eq(blueskyModeratedActorsTable.userId, userId),
             or(
               eq(blueskyModeratedActorsTable.did, blueskyTimelineItemsTable.authorDid),
               eq(blueskyModeratedActorsTable.did, blueskyTimelineItemsTable.repostedByDid),
@@ -48,7 +51,10 @@ export const createD1BlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimel
           isNotNull(blueskyTimelineItemsTable.repostedByDid),
           notExists(
             db.select({ one: sql`1` }).from(blueskyCrosspostsTable)
-              .where(eq(blueskyCrosspostsTable.uri, blueskyTimelineItemsTable.uri)),
+              .where(and(
+                eq(blueskyCrosspostsTable.userId, userId),
+                eq(blueskyCrosspostsTable.uri, blueskyTimelineItemsTable.uri),
+              )),
           ),
         )!,
       );
@@ -60,9 +66,21 @@ export const createD1BlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimel
       bookmarkedUri: blueskyBookmarksTable.subjectUri,
     })
       .from(blueskyTimelineItemsTable)
-      .leftJoin(blueskyLikesTable, eq(blueskyLikesTable.subjectUri, blueskyTimelineItemsTable.uri))
-      .leftJoin(blueskyRepostsTable, eq(blueskyRepostsTable.subjectUri, blueskyTimelineItemsTable.uri))
-      .leftJoin(blueskyBookmarksTable, eq(blueskyBookmarksTable.subjectUri, blueskyTimelineItemsTable.uri))
+      .leftJoin(
+        blueskyLikesTable,
+        and(eq(blueskyLikesTable.userId, userId), eq(blueskyLikesTable.subjectUri, blueskyTimelineItemsTable.uri)),
+      )
+      .leftJoin(
+        blueskyRepostsTable,
+        and(eq(blueskyRepostsTable.userId, userId), eq(blueskyRepostsTable.subjectUri, blueskyTimelineItemsTable.uri)),
+      )
+      .leftJoin(
+        blueskyBookmarksTable,
+        and(
+          eq(blueskyBookmarksTable.userId, userId),
+          eq(blueskyBookmarksTable.subjectUri, blueskyTimelineItemsTable.uri),
+        ),
+      )
       .where(and(...conditions))
       .orderBy(desc(blueskyTimelineItemsTable.indexedAt), desc(blueskyTimelineItemsTable.feedItemId))
       .limit(limit);
