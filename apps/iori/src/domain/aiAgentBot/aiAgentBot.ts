@@ -34,8 +34,8 @@ export const AI_AGENT_BOT_PROFILE = {
  * 画像を差し替えるときはファイル名も変え、ほかのサーバーのキャッシュに古い画像が残らないようにする。
  */
 export const AI_AGENT_BOT_IMAGES = {
-  avatarPath: '/bot/iori-avatar-octopus-dynamic.png',
-  headerPath: '/bot/iori-header-octopus-dynamic.png',
+  avatarPath: '/bot/iori-avatar-octopus-pot.png',
+  headerPath: '/bot/iori-header-octopus-pot.png',
 } as const;
 
 /** 1 つのスレッドで bot が返信する上限。bot どうしや人との応酬が終わらないのを防ぐ */
