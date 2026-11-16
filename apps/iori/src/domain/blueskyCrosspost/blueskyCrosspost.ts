@@ -4,6 +4,7 @@ import z from 'zod/v4';
 import { Schema } from '../../helper/schema.ts';
 import type { Agg } from '../aggregate/index.ts';
 import { Instant } from '../instant/instant.ts';
+import { mentionLinksOfHtml } from '../post/mention.ts';
 import { PostId } from '../post/postId.ts';
 import type { Visibility } from '../post/visibility.ts';
 import { UserId } from '../user/userId.ts';
@@ -13,12 +14,14 @@ export type BlueskyCrosspostStatus = z.infer<typeof BlueskyCrosspostStatus>;
 
 // content_warning と sensitive は、送らなかった過去の行を読むために残す
 // deleted_on_bluesky は、送ったかもしれない投稿が Bluesky 側に無かったとき。本人が Bluesky で消したとみなし、送り直さない
+// fediverse_mention は、本文で Fediverse のアカウントにメンションしているとき。相手のいない Bluesky には送らない
 export const BlueskySkipReason = z.enum([
   'visibility',
   'content_warning',
   'sensitive',
   'reply_to_unsent',
   'deleted_on_bluesky',
+  'fediverse_mention',
 ]);
 export type BlueskySkipReason = z.infer<typeof BlueskySkipReason>;
 
@@ -182,10 +185,12 @@ export type BlueskyQuoteContext =
   | Readonly<{ kind: 'sent'; uri: string; cid: string; quoteUri: string }>;
 
 const decideSkip = (
-  input: Readonly<{ visibility: Visibility; replyTo: BlueskyReplyContext }>,
+  input: Readonly<{ visibility: Visibility; replyTo: BlueskyReplyContext; html: string }>,
 ): BlueskySkipReason | undefined => {
   if (input.visibility !== 'public') return 'visibility';
   if (input.replyTo.kind === 'unsent') return 'reply_to_unsent';
+  // Fediverse のアカウント（bot を含む）に宛てた投稿は、Bluesky では宛先のない独り言になる
+  if (mentionLinksOfHtml(input.html).length > 0) return 'fediverse_mention';
   return undefined;
 };
 

@@ -395,6 +395,24 @@ describe('ScheduleBlueskyCrosspostUseCase と SendBlueskyCrosspostUseCase', () =
     expect(t.created).toEqual([]);
   });
 
+  it('Fediverse へのメンションを含む投稿は、送信済みの自分の投稿への返信でも送らない', async () => {
+    const t = setup();
+    const mention =
+      '<span class="h-card"><a href="https://bot.example/users/bot" class="u-url mention">@<span>bot@bot.example</span></a></span>';
+    const parent = t.addPost({ content: '<p>親</p>' });
+    await run(t.schedule.run({ postId: parent.postId }));
+    await t.flush();
+    const topLevel = t.addPost({ content: `<p>${mention} 今日の天気は？</p>` });
+    const reply = t.addPost({ content: `<p>${mention} ありがとう</p>`, inReplyToUri: parent.uri });
+
+    for (const post of [topLevel, reply]) {
+      expect(await run(t.schedule.run({ postId: post.postId }))).toBe('skipped');
+      expect(await t.row(post.postId)).toMatchObject({ status: 'skipped', skipReason: 'fediverse_mention' });
+    }
+    await t.flush();
+    expect(t.created).toHaveLength(1);
+  });
+
   it('R2 の画像を alt つきで送る', async () => {
     const t = setup();
     const post = t.addPost({ content: '<p>写真</p>' });

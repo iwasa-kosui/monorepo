@@ -122,7 +122,7 @@ const create = (deps: Deps): SendBlueskyCrosspostUseCase => {
     }
 
     const replyTo = await resolveReplyContext(post);
-    const skipReason = BlueskyCrosspost.decideSkip({ visibility: post.visibility, replyTo });
+    const skipReason = BlueskyCrosspost.decideSkip({ visibility: post.visibility, replyTo, html: post.content });
     if (skipReason !== undefined) {
       await deps.crosspostSavedStore.update(BlueskyCrosspost.markSkipped(crosspost, skipReason, deps.now()));
       return 'skipped';
