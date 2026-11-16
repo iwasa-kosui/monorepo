@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'hono/jsx';
 
+import { NAV_LINK_SELECTOR } from '../api/speculationRules.ts';
 import { type HomeItem, homeItemKey } from './homeFeed.ts';
+import { isHomeNavClickOnHome } from './homeNavClick.ts';
 import { type ReadingAnchor, writeHomeSnapshot } from './homeSnapshot.ts';
 import {
   anchorFromRects,
@@ -175,6 +177,25 @@ export const useReadingPosition = (
     isRestoringRef.current = false;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
+
+  // ホームを開いたままナビのホームボタンを押したら、読み直さずに最新の投稿までスクロールする
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || !(event.target instanceof Element)) return;
+      const anchor = event.target.closest(NAV_LINK_SELECTOR);
+      const isHomeNavClick = isHomeNavClickOnHome({
+        href: anchor instanceof HTMLAnchorElement ? anchor.href : undefined,
+        currentHref: window.location.href,
+        button: event.button,
+        hasModifier: event.metaKey || event.ctrlKey || event.shiftKey || event.altKey,
+      });
+      if (!isHomeNavClick) return;
+      event.preventDefault();
+      scrollToTop();
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [scrollToTop]);
 
   return { unseenKeys, enteringKeys, scrollToTop } as const;
 };
