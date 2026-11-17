@@ -17,7 +17,7 @@ export const AI_AGENT_BOT_MAX_OUTPUT_TOKENS = 8192;
 const PERSONA = [
   'あなたは「iori」という名前（アカウントのユーザー名は agent）の AI エージェントで、blog.kosui.me にある Fediverse（Mastodon などと相互につながる分散型 SNS）の bot アカウントとして暮らしています。',
   'blog.kosui.me は iori というソフトウェアで動く、日々の考えを記録し、ほかの人の知識を集めて育てる個人の知識管理の場所です。あなたはそこに住む、好奇心が強く、物事を少し斜めから見る案内役です。',
-  'ツールを使って投稿・スレッド・タイムライン・Web ページ・最近よく読まれている記事・Bluesky でいま話題になっていることを調べられます。また、いいね・リポスト・フォローもできます。',
+  'ツールを使って投稿・スレッド・タイムライン・Web ページ・最近よく読まれている記事を調べられます。また、いいね・リポスト・フォローもできます。',
   '返信や投稿も、ツールを使って行います。ツールを使わずに書いた文は、誰にも届きません。',
   '',
   '守ること:',
@@ -86,13 +86,6 @@ const MUSING_TASKS: Readonly<Record<AiAgentBotMusingTheme, readonly string[]>> =
     '何が書かれているかの要点と、なぜ読まれているのかについてのあなたの考えを短く書き、記事の URL を添えてください。',
     'はてなブックマークの数は、ツールで確かめた数だけを書いてください。',
   ],
-  blueskyTopic: [
-    'いまの仕事: Bluesky でいま話題になっていることを 1 つ見つけ、それについて書いた投稿を、create_post ツールで 1 件投稿します。',
-    '「Bluesky で話題になっていること」を読み、Bluesky 全体の話題、タイムラインで複数の人が触れている話題、最近の投稿に共通して出てくる話題から、読んだ人の考えが深まりそうなものを 1 つ選んでください。',
-    '選んだ話題について、get_bluesky_trend_posts で人々の投稿を読んだり、fetch_url でリンク先の記事を確かめたりして、何が起きていて、人々が何を話しているのかを調べてください。',
-    '1 人の投稿を取り上げるのではなく、話題そのものを、あなたの考えと一緒に短くまとめてください。出典になる記事の URL があれば添えてください。',
-    '特定の人を攻撃したり、私的なやりとりを広めたりする話題は選ばないでください。確かめられない噂は書かないでください。',
-  ],
   timeline: [
     'いまの仕事: 自分から 1 件投稿します。',
     'タイムラインを読み、興味を引いた話題をツールで調べて、読んだ人の考えが深まるような短い投稿を create_post ツールで投稿してください。',
@@ -116,7 +109,6 @@ export const musingUserPrompt = (
     theme: AiAgentBotMusingTheme;
     timeline: string;
     popularArticles: string;
-    blueskyTopics: string;
     ownPosts: string;
     memory: string;
     now: string;
@@ -129,9 +121,6 @@ export const musingUserPrompt = (
     '',
     ...(input.theme === 'popularArticle'
       ? ['## 最近よく読まれている記事（はてなブックマークの多い順）', input.popularArticles, '']
-      : []),
-    ...(input.theme === 'blueskyTopic'
-      ? ['## Bluesky で話題になっていること', input.blueskyTopics, '']
       : []),
     ...(input.theme === 'timeline'
       ? ['## 最近のタイムライン（新しい順。あなた以外の投稿）', input.timeline, '']
