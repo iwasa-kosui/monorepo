@@ -15,8 +15,8 @@ import {
   lookupAccount,
   unfollow,
 } from '../api/mastodonClient.ts';
-import { accountHandle, remoteUserPathOf, updateStatusesByPostId } from '../api/status.ts';
 import { profileHeaderUrl } from '../api/profileHeader.ts';
+import { accountHandle, remoteUserPathOf, updateStatusesByPostId } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { FollowToggleButton } from '../components/FollowToggleButton.tsx';

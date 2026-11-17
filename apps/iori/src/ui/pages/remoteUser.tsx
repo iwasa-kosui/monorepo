@@ -22,8 +22,8 @@ import {
   unfollow,
   unmute,
 } from '../api/mastodonClient.ts';
-import { isLocalAccount, updateStatusesByPostId } from '../api/status.ts';
 import { profileHeaderUrl } from '../api/profileHeader.ts';
+import { isLocalAccount, updateStatusesByPostId } from '../api/status.ts';
 import { CustomEmojiText } from '../components/CustomEmojiText.tsx';
 import { FediverseAccountRow } from '../components/FediverseAccountRow.tsx';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
