@@ -1,11 +1,7 @@
 import type { RequestContext } from '@fedify/fedify';
 import { Delete, PUBLIC_COLLECTION } from '@fedify/vocab';
-import { RA, Result } from '@iwasa-kosui/result';
+import { Result } from '@iwasa-kosui/result';
 
-import {
-  createBlueskyPublicTrendPostsResolver,
-  createBlueskyPublicTrendsResolver,
-} from '../adaptor/bluesky/blueskyPublicTopicsResolver.ts';
 import { createD1LocalActorCreatedStore } from '../adaptor/d1/actor/localActorCreatedStore.ts';
 import { createD1LocalActorProfileUpdatedStore } from '../adaptor/d1/actor/localActorProfileUpdatedStore.ts';
 import { createD1LogoUriUpdatedStore } from '../adaptor/d1/actor/logoUriUpdatedStore.ts';
@@ -28,8 +24,6 @@ import { createD1AiAgentBotPendingTriggersResolver } from '../adaptor/d1/aiAgent
 import { createD1AiAgentBotRepliedCountResolverSince } from '../adaptor/d1/aiAgentBot/aiAgentBotRepliedCountResolverSince.ts';
 import { createD1AiAgentBotTriggerClaimedStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggerClaimedStore.ts';
 import { createD1AiAgentBotTriggersHandledStore } from '../adaptor/d1/aiAgentBot/aiAgentBotTriggersHandledStore.ts';
-import { createD1BlueskyTimelineItemsResolver } from '../adaptor/d1/blueskyTimeline/blueskyTimelineItemsResolver.ts';
-import type { IoriD1Db } from '../adaptor/d1/client.ts';
 import { createD1PopularArticlesResolverByFetchedSince } from '../adaptor/d1/feedEntry/popularArticlesResolverByFetchedSince.ts';
 import { createD1LocalAccountRetiredStore } from '../adaptor/d1/user/localAccountRetiredStore.ts';
 import { createD1UserCreatedStore } from '../adaptor/d1/user/userCreatedStore.ts';
@@ -43,27 +37,16 @@ import type { ActorId } from '../domain/actor/actorId.ts';
 import type { LocalActor } from '../domain/actor/localActor.ts';
 import { AiAgentBot } from '../domain/aiAgentBot/aiAgentBot.ts';
 import {
-  BlueskyTopics,
-  type BlueskyTrendPostsResolver,
-  type BlueskyTrendsResolver,
   POPULAR_ARTICLE_WINDOW_MS,
   type PopularArticlesResolverByFetchedSince,
 } from '../domain/aiAgentBot/aiAgentBotMaterial.ts';
-import type { BlueskyTimelineItemsResolver } from '../domain/blueskyTimeline/blueskyTimelineItem.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { plainTextToHtml } from '../domain/post/plainTextToHtml.ts';
 import type { PostWithAuthor } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import { TimelineSearchQuery } from '../domain/timelineSearch/timelineSearchQuery.ts';
 import type { User } from '../domain/user/user.ts';
-import { Username } from '../domain/user/username.ts';
-import { DAILY_DIGEST_USERNAME } from '../scheduled/digestTasks.ts';
-import {
-  type AgentBlueskyTopics,
-  type AgentPostView,
-  type AiAgentBotCapabilities,
-  MAX_BLUESKY_TREND_POSTS,
-} from '../useCase/aiAgent/agentTools.ts';
+import { type AgentPostView, type AiAgentBotCapabilities } from '../useCase/aiAgent/agentTools.ts';
 import { EnsureAiAgentBotUseCase } from '../useCase/ensureAiAgentBot.ts';
 import { type AiAgentBotFollower, FollowBackAiAgentFollowersUseCase } from '../useCase/followBackAiAgentFollowers.ts';
 import { type AiAgentBotPoster, PostAiAgentMusingUseCase } from '../useCase/postAiAgentMusing.ts';
@@ -123,66 +106,14 @@ const fetchPage = (safeFetcher: SafeFetcher) => async (url: string) => {
 
 type Bot = Readonly<{ user: User; actor: LocalActor }>;
 
-/** bot が話題の材料を読むところ。人気の記事と、Bluesky のタイムラインと、Bluesky 全体の話題 */
+/** bot が話題の材料を読むところ。いまは人気の記事だけ */
 export type AiAgentBotMaterialSources = Readonly<{
   popularArticlesResolver: PopularArticlesResolverByFetchedSince;
-  blueskyTimelineItemsResolver: BlueskyTimelineItemsResolver;
-  blueskyTrendsResolver: BlueskyTrendsResolver;
-  blueskyTrendPostsResolver: BlueskyTrendPostsResolver;
 }>;
-
-/** 話題を探すときに読む、Bluesky のタイムラインの投稿の数 */
-const BLUESKY_TOPIC_SCAN_LIMIT = 100;
-const MAX_BLUESKY_TRENDS = 10;
-const MAX_BLUESKY_TIMELINE_TOPICS = 8;
-const MAX_BLUESKY_RECENT_POSTS = 20;
 
 const readPopularArticles = (sources: AiAgentBotMaterialSources) => async (limit: number) => {
   const fetchedSince = Instant.addDuration(Instant.now(), -POPULAR_ARTICLE_WINDOW_MS);
   return (await sources.popularArticlesResolver.resolve({ fetchedSince, limit })).val;
-};
-
-/** bot が話題の材料にするのは、オーナー（kosui）がつないでいる Bluesky のタイムライン */
-const createOwnerBlueskyTimelineItemsResolver = (db: IoriD1Db): BlueskyTimelineItemsResolver => ({
-  resolve: async (condition) => {
-    const owner = await createD1UserResolverByUsername(db).resolve(Username.parseOrThrow(DAILY_DIGEST_USERNAME));
-    if (!owner.ok || owner.val === undefined) return RA.ok([]);
-    return createD1BlueskyTimelineItemsResolver(db, owner.val.id).resolve(condition);
-  },
-});
-
-/**
- * Bluesky の話題を読む。1 回の実行の中では、最初に読んだものを使い回す
- * （投稿の前に読んだ話題と、ツールで読み直した話題の topic が食い違わないようにするため）
- */
-const blueskyTopicsReader = (sources: AiAgentBotMaterialSources) => {
-  let cached: Promise<AgentBlueskyTopics> | undefined;
-  const read = async (): Promise<AgentBlueskyTopics> => {
-    const now = Instant.now();
-    const [items, trends] = await Promise.all([
-      sources.blueskyTimelineItemsResolver.resolve({ limit: BLUESKY_TOPIC_SCAN_LIMIT, before: undefined }),
-      sources.blueskyTrendsResolver.resolve(MAX_BLUESKY_TRENDS),
-    ]);
-    return {
-      trends: trends.val,
-      timelineTopics: BlueskyTopics.collectTimelineTopics(items.val, now, MAX_BLUESKY_TIMELINE_TOPICS),
-      recentPosts: BlueskyTopics.recentTimelinePosts(items.val, now, MAX_BLUESKY_RECENT_POSTS),
-    };
-  };
-  const readTopics = () => (cached ??= read());
-  return {
-    readBlueskyTopics: readTopics,
-    readBlueskyTrendPosts: async (topic: string) => {
-      const trend = (await readTopics()).trends.find((entry) => entry.topic === topic || entry.displayName === topic);
-      if (trend === undefined) return undefined;
-      if (trend.feedUri === null) return [];
-      return (await sources.blueskyTrendPostsResolver.resolve({
-        feedUri: trend.feedUri,
-        limit: MAX_BLUESKY_TREND_POSTS,
-      }))
-        .val;
-    },
-  };
 };
 
 /** bot から見える範囲で読み、bot として行動するツールの中身を用意する */
@@ -245,7 +176,6 @@ export const createAiAgentBotCapabilities = (
       (await readTimeline([bot.actor.id], limit)).filter((post) => post.authorActorId === bot.actor.id),
     fetchUrl: fetchPage(safeFetcher),
     readPopularArticles: readPopularArticles(materials),
-    ...blueskyTopicsReader(materials),
     likePost: async (postId) => {
       const liked = await socialActions.sendLikeUseCase.run({ userId: bot.user.id, postId, ...context });
       return liked.ok ? Result.ok(undefined) : Result.err(message(liked.err));
@@ -392,12 +322,8 @@ export const createAiAgentBotRuntime = async (
   }).run({ ctx });
   const bot = ensured.val;
   const context = { request, ctx };
-  const safeFetcher = createSafeFetcher();
   const materials: AiAgentBotMaterialSources = {
     popularArticlesResolver: createD1PopularArticlesResolverByFetchedSince(db),
-    blueskyTimelineItemsResolver: createOwnerBlueskyTimelineItemsResolver(db),
-    blueskyTrendsResolver: createBlueskyPublicTrendsResolver({ safeFetcher }),
-    blueskyTrendPostsResolver: createBlueskyPublicTrendPostsResolver({ safeFetcher }),
   };
   const shared = {
     repliedCountResolverSince: createD1AiAgentBotRepliedCountResolverSince(db),
