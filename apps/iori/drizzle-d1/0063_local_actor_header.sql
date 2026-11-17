@@ -1,0 +1,1 @@
+ALTER TABLE `local_actors` ADD `headerUri` text;

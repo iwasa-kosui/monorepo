@@ -4,15 +4,22 @@ import { ProfileFormFields } from './ProfileFormFields.tsx';
 type Props = Readonly<{
   displayName: string;
   note: string;
+  headerUrl?: string | undefined;
   isSubmitting: boolean;
   errorText: string | undefined;
   onSubmit: (e: Event) => void;
 }>;
 
-export const UpdateProfileModal = ({ displayName, note, isSubmitting, errorText, onSubmit }: Props) => (
+export const UpdateProfileModal = ({ displayName, note, headerUrl, isSubmitting, errorText, onSubmit }: Props) => (
   <Modal id='update-bio' showCloseButton={false}>
     <form onSubmit={onSubmit}>
-      <ProfileFormFields idPrefix='update-bio' displayName={displayName} note={note} errorText={errorText} />
+      <ProfileFormFields
+        idPrefix='update-bio'
+        displayName={displayName}
+        note={note}
+        headerUrl={headerUrl}
+        errorText={errorText}
+      />
       <div class='flex gap-2 justify-end'>
         <a href='#'>
           <button

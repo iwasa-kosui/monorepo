@@ -179,7 +179,12 @@ export const BlueskyProfileSettingsForm = (
   </SettingsSection>
 );
 
-const BlueskyProfileSettingsEditor = () => {
+type EditorProps = Readonly<{
+  /** ほかのフォームから Bluesky のプロフィールを保存したときに増える。変わったら読み込み直す */
+  revision: number;
+}>;
+
+const BlueskyProfileSettingsEditor = ({ revision }: EditorProps) => {
   const [edit, setEdit] = useState<BlueskyProfileEditState<OwnBlueskyProfile> | undefined>(undefined);
   const [loadFailed, setLoadFailed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -214,7 +219,7 @@ const BlueskyProfileSettingsEditor = () => {
 
   useEffect(() => {
     reload();
-  }, [reload]);
+  }, [reload, revision]);
 
   const prepareImage = async (
     value: FormDataEntryValue | null,
@@ -287,13 +292,16 @@ const BlueskyProfileSettingsEditor = () => {
 
 type GateProps = Readonly<{
   status: BlueskyStatus | undefined;
+  revision?: number | undefined;
 }>;
 
 // status.enabled は、ログイン中のユーザーが Bluesky のアカウントをつないでいるときだけ true になる
-export const BlueskyProfileSettingsGate = ({ status }: GateProps) =>
-  status?.enabled === true ? <BlueskyProfileSettingsEditor /> : null;
+export const BlueskyProfileSettingsGate = ({ status, revision }: GateProps) =>
+  status?.enabled === true ? <BlueskyProfileSettingsEditor revision={revision ?? 0} /> : null;
 
-export const BlueskyProfileSettingsSection = () => {
+type SectionProps = Readonly<{ revision?: number | undefined }>;
+
+export const BlueskyProfileSettingsSection = ({ revision }: SectionProps) => {
   const { status } = useBlueskyStatus();
-  return <BlueskyProfileSettingsGate status={status} />;
+  return <BlueskyProfileSettingsGate status={status} revision={revision} />;
 };

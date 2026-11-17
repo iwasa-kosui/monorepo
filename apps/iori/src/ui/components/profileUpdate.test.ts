@@ -63,3 +63,33 @@ describe('toProfileUpdate', () => {
     expect(toProfileUpdate(form, { displayName: '岩佐', note: '一行目\n二行目' })).toEqual({});
   });
 });
+
+describe('toProfileUpdate のバナー', () => {
+  const initial = { displayName: '岩佐', note: '自己紹介' };
+  const baseForm = () => {
+    const form = new FormData();
+    form.set('display_name', '岩佐');
+    form.set('note', '自己紹介');
+    return form;
+  };
+
+  it('バナーの削除だけを選んだとき、変更ありとして removeHeader を送る', () => {
+    const form = baseForm();
+    form.set('header', new File([], '', { type: 'application/octet-stream' }));
+    form.set('remove_header', 'on');
+
+    const update = toProfileUpdate(form, initial);
+
+    expect(update).toEqual({ removeHeader: true });
+    expect(isEmptyProfileUpdate(update)).toBe(false);
+  });
+
+  it('新しいバナーを選んでいるときは、削除のチェックがあっても差し替えだけを送る', () => {
+    const form = baseForm();
+    const header = new File([new Uint8Array([1])], 'h.png', { type: 'image/png' });
+    form.set('header', header);
+    form.set('remove_header', 'on');
+
+    expect(toProfileUpdate(form, initial)).toEqual({ header });
+  });
+});

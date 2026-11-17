@@ -20,6 +20,7 @@ export const toLocalActor = (
   logoUri: actor.logoUri ?? undefined,
   displayName: localActor.displayName ?? undefined,
   bio: localActor.bio ?? undefined,
+  headerUri: localActor.headerUri ?? undefined,
 });
 
 export const createD1ActorResolverByUserId = (db: IoriD1Db): ActorResolverByUserId => ({

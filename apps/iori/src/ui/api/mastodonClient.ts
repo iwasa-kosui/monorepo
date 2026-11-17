@@ -516,14 +516,38 @@ export const updateMedia = (id: string, description: string): Promise<MediaAttac
   return send<MediaAttachment>('PUT', `/api/v1/media/${encodeURIComponent(id)}`, body);
 };
 
-export const updateProfile = (
-  { displayName, note, avatar }: Readonly<{ displayName?: string; note?: string; avatar?: File | undefined }>,
+const deleteProfileHeader = async (): Promise<CredentialAccount> => {
+  const res = await fetch('/api/v1/profile/header', {
+    method: 'DELETE',
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  });
+  if (!res.ok) throw await toApiError(res);
+  return await res.json() as CredentialAccount;
+};
+
+export const updateProfile = async (
+  { displayName, note, avatar, header, removeHeader }: Readonly<{
+    displayName?: string;
+    note?: string;
+    avatar?: File | undefined;
+    header?: File | undefined;
+    removeHeader?: boolean;
+  }>,
 ): Promise<CredentialAccount> => {
   const body = new FormData();
   if (displayName !== undefined) body.append('display_name', displayName);
   if (note !== undefined) body.append('note', note);
   if (avatar !== undefined) body.append('avatar', avatar);
-  return send<CredentialAccount>('PATCH', '/api/v1/accounts/update_credentials', body);
+  if (header !== undefined) body.append('header', header);
+  // ヘッダーの削除は Mastodon の API に合わせて別のリクエストで送る。新しい画像を選んでいれば差し替えを優先する
+  if (removeHeader !== true || header !== undefined) {
+    return send<CredentialAccount>('PATCH', '/api/v1/accounts/update_credentials', body);
+  }
+  if (displayName !== undefined || note !== undefined || avatar !== undefined) {
+    await send<CredentialAccount>('PATCH', '/api/v1/accounts/update_credentials', body);
+  }
+  return deleteProfileHeader();
 };
 
 export type SearchStatusesResult = IoriSearchStatusesResponse;

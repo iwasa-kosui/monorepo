@@ -143,7 +143,8 @@ export const toAccount = (source: AccountSource, options: ToAccountOptions): Acc
       displayName: actor.displayName,
       note: actor.bio === undefined ? undefined : plainTextToHtml(actor.bio),
       bot: AiAgentBot.isBotUsername(user.username),
-      headerUri: AiAgentBot.isBotUsername(user.username) ? AiAgentBot.images.headerPath : undefined,
+      headerUri: actor.headerUri
+        ?? (AiAgentBot.isBotUsername(user.username) ? AiAgentBot.images.headerPath : undefined),
     }, options);
   }
   const { actor } = source;

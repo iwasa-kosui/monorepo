@@ -9,7 +9,7 @@ import { actorsTable, followsTable, localActorsTable, remoteActorsTable } from '
 
 const toActor = (row: {
   actors: { actorId: string; uri: string; inboxUrl: string; logoUri: string | null };
-  local_actors: { userId: string; displayName: string | null; bio: string | null } | null;
+  local_actors: { userId: string; displayName: string | null; bio: string | null; headerUri: string | null } | null;
   remote_actors: { url: string | null; username: string | null } | null;
 }): Actor => {
   if (row.remote_actors !== null) {
@@ -33,6 +33,7 @@ const toActor = (row: {
       logoUri: row.actors.logoUri ?? undefined,
       displayName: row.local_actors.displayName ?? undefined,
       bio: row.local_actors.bio ?? undefined,
+      headerUri: row.local_actors.headerUri ?? undefined,
     };
   }
   throw new Error(`Actor type could not be determined for actorId: ${row.actors.actorId}`);

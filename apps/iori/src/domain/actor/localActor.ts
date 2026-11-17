@@ -14,6 +14,7 @@ const zodType = z.object({
   logoUri: z.string().optional(),
   displayName: LocalActorProfile.displayNameSchema.optional(),
   bio: LocalActorProfile.bioSchema.optional(),
+  headerUri: z.string().optional(),
 }).describe('LocalActor');
 
 export type LocalActor = z.output<typeof zodType>;

@@ -221,6 +221,12 @@ describe('mastodon client media and avatar writes', () => {
   const callOf = (fetchMock: ReturnType<typeof stubFetch>) =>
     (fetchMock.mock.calls as unknown[][])[0] as [string, RequestInit];
   const image = () => new File([new Uint8Array([1, 2, 3])], 'photo.png', { type: 'image/png' });
+  // レスポンスの本文は一度しか読めないので、複数回のリクエストには毎回新しいレスポンスを返す
+  const stubFetchEach = (respond: () => Response) => {
+    const fetchMock = vi.fn((_path: string, _init: RequestInit) => Promise.resolve(respond()));
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  };
   const attachment = { id: 'm1', type: 'image', url: 'https://iori.example/uploads/m1.png' };
 
   it('uploads a file to /api/v2/media as same-origin multipart without a Content-Type header', async () => {
@@ -250,5 +256,24 @@ describe('mastodon client media and avatar writes', () => {
     expect(body.get('display_name')).toBe('岩佐');
     expect(body.get('note')).toBe('');
     expect(body.has('avatar')).toBe(false);
+  });
+
+  it('バナーの削除は、ほかの変更を保存したあとに DELETE /api/v1/profile/header で送る', async () => {
+    const fetchMock = stubFetchEach(() => jsonResponse({ id: 'a1' }));
+
+    await updateProfile({ displayName: '岩佐', removeHeader: true });
+
+    expect(fetchMock.mock.calls.map(([path, init]) => [path, init.method])).toEqual([
+      ['/api/v1/accounts/update_credentials', 'PATCH'],
+      ['/api/v1/profile/header', 'DELETE'],
+    ]);
+  });
+
+  it('バナーの削除だけのときは、空の PATCH を送らない', async () => {
+    const fetchMock = stubFetchEach(() => jsonResponse({ id: 'a1' }));
+
+    await updateProfile({ removeHeader: true });
+
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(['/api/v1/profile/header']);
   });
 });

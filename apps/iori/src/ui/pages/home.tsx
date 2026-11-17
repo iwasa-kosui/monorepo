@@ -6,6 +6,7 @@ import type { Status } from '../../adaptor/mastodon/entities.ts';
 import type { PostDestination } from '../../domain/post/postDestination.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { fetchPublicTimeline, fetchVerifyCredentials, updateProfile } from '../api/mastodonClient.ts';
+import { profileHeaderUrl } from '../api/profileHeader.ts';
 import { displayStatus } from '../api/status.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { BlueskyQuoteModal, BlueskyReplyModal } from '../components/BlueskyReplyModal.tsx';
@@ -712,6 +713,7 @@ const UpdateBioModal = () => {
     <UpdateProfileModal
       displayName={data.me.display_name}
       note={data.me.source.note}
+      headerUrl={profileHeaderUrl(data.me.header)}
       isSubmitting={isSubmitting}
       errorText={errorText}
       onSubmit={handleSubmit}

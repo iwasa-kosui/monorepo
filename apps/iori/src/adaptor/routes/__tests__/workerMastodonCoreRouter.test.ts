@@ -10,6 +10,7 @@ import type { Instant } from '../../../domain/instant/instant.ts';
 import type { User } from '../../../domain/user/user.ts';
 import { Username } from '../../../domain/user/username.ts';
 import { UpdateAvatarUseCase } from '../../../useCase/updateAvatar.ts';
+import { UpdateHeaderUseCase } from '../../../useCase/updateHeader.ts';
 import { UpdateProfileUseCase } from '../../../useCase/updateProfile.ts';
 import { CredentialAccountSchema, InstanceV1Schema, InstanceV2Schema } from '../../mastodon/entities.ts';
 import { createPostImageR2ObjectStore } from '../../r2/postImageObjectStore.ts';
@@ -83,6 +84,18 @@ const setup = (
             logoUriStored(event);
             const actor = [...actors.values()].find((candidate) => candidate.id === event.aggregateId);
             if (actor !== undefined) actors.set(actor.userId, { ...actor, logoUri: event.aggregateState.logoUri });
+            return RA.ok(undefined);
+          },
+        },
+        origin: ORIGIN,
+      }),
+      updateHeaderUseCase: UpdateHeaderUseCase.create({
+        actorResolverByUserId,
+        uploads: createPostImageR2ObjectStore({ bucket: bucket as never }),
+        headerUriUpdatedStore: {
+          store: async (event) => {
+            const actor = [...actors.values()].find((candidate) => candidate.id === event.aggregateId);
+            if (actor !== undefined) actors.set(actor.userId, { ...actor, headerUri: event.aggregateState.headerUri });
             return RA.ok(undefined);
           },
         },
@@ -264,6 +277,59 @@ describe('createWorkerMastodonCoreRouter', () => {
       expect(h.bucket.put).not.toHaveBeenCalled();
       expect(h.logoUriStored).not.toHaveBeenCalled();
       expect(h.actors.get(userId)?.logoUri).toBeUndefined();
+    });
+
+    it('header を保存して Account の header に出し、フォロワーへ image つきの Update を送る', async () => {
+      const { h, token, userId } = await setupUser('read:accounts write:accounts');
+
+      const response = await patch(h, token, { header: new File([png()], 'h.png', { type: 'image/png' }) });
+
+      expect(response.status).toBe(200);
+      const body = CredentialAccountSchema.parse(await response.json());
+      expect(body.header).toMatch(new RegExp(`^${ORIGIN}/uploads/[0-9a-f-]{36}\\.png$`));
+      expect(body.header_static).toBe(body.header);
+      expect(body.avatar).toBe(`${ORIGIN}/default-avatar.png`);
+      expect(h.actors.get(userId)?.headerUri).toBe(body.header);
+      const activity = h.sendActivity.mock.calls[0]?.[2] as Update;
+      const person = await activity.getObject() as Person;
+      expect((await person.getImage())?.url?.href).toBe(body.header);
+    });
+
+    it('header が画像でなければ 422 にして、一緒に送った avatar も保存しない', async () => {
+      const { h, token, userId } = await setupUser();
+
+      const response = await patch(h, token, {
+        avatar: new File([png()], 'a.png', { type: 'image/png' }),
+        header: new File([new TextEncoder().encode('<html></html>')], 'h.png', { type: 'image/png' }),
+      });
+
+      expect(response.status).toBe(422);
+      expect(h.bucket.put).not.toHaveBeenCalled();
+      expect(h.actors.get(userId)?.logoUri).toBeUndefined();
+      expect(h.actors.get(userId)?.headerUri).toBeUndefined();
+      expect(h.sendActivity).not.toHaveBeenCalled();
+    });
+
+    it('DELETE /api/v1/profile/header でヘッダーを未設定に戻し、フォロワーへ知らせる', async () => {
+      const { h, token, userId } = await setupUser('read:accounts write:accounts');
+      await patch(h, token, { header: new File([png()], 'h.png', { type: 'image/png' }) });
+      h.sendActivity.mockClear();
+
+      const response = await h.request('/api/v1/profile/header', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      expect(response.status).toBe(200);
+      expect(CredentialAccountSchema.parse(await response.json()).header).toBe(`${ORIGIN}/default-header.png`);
+      expect(h.actors.get(userId)?.headerUri).toBeUndefined();
+      expect(h.sendActivity).toHaveBeenCalledTimes(1);
+      const again = await h.request('/api/v1/profile/header', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(again.status).toBe(200);
+      expect(h.sendActivity).toHaveBeenCalledTimes(1);
     });
 
     it('iori にない項目は受け付けて無視する', async () => {
