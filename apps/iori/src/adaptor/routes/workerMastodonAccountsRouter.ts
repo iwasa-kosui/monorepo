@@ -8,10 +8,10 @@ import type {
 import type {
   AccountRelationship,
   AccountRelationshipsResolverByActorIds,
-  AcctLookup,
   ActorIdResolverByAcct,
   ActorIdsResolverByMentionQuery,
 } from '../../domain/actor/accountRelationship.ts';
+import { parseAcct } from '../../domain/actor/acct.ts';
 import type { Actor, ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import { ActorId } from '../../domain/actor/actorId.ts';
 import { parseMentionQuery } from '../../domain/actor/mentionQuery.ts';
@@ -19,7 +19,6 @@ import { Scope } from '../../domain/oauth/scope.ts';
 import type { PageRequest } from '../../domain/page/page.ts';
 import type { AccountStatusItemsResolverByActorId } from '../../domain/post/accountStatusItem.ts';
 import type { UserId } from '../../domain/user/userId.ts';
-import { Username } from '../../domain/user/username.ts';
 import type { WorkerBlockAction, WorkerRemoteActorAction } from '../../runtime/ports.ts';
 import type { CreateMuteUseCase } from '../../useCase/createMute.ts';
 import type { DeleteMuteUseCase } from '../../useCase/deleteMute.ts';
@@ -95,18 +94,6 @@ const relationshipOf = (relationship: AccountRelationship) =>
     muting: relationship.muting,
     blocking: relationship.blocking,
   });
-
-const parseAcct = (acct: string, localHost: string): AcctLookup | undefined => {
-  const [username, host, ...rest] = (acct.startsWith('@') ? acct.slice(1) : acct).split('@');
-  if (username === undefined || username.length === 0 || rest.length > 0 || host === '') {
-    return undefined;
-  }
-  if (host === undefined || host.toLowerCase() === localHost.toLowerCase()) {
-    const parsed = Username.parse(username);
-    return parsed.ok ? { type: 'local', username: parsed.val } : undefined;
-  }
-  return { type: 'remote', username, host: host.toLowerCase() };
-};
 
 const accountIdPattern = '[0-9a-fA-F-]+';
 const maxAccountsPerRequest = 40;

@@ -9,6 +9,7 @@ import { renderWorkerOgImage } from './adaptor/ogImage/workerOgImageRenderer.ts'
 import { createR2OgImageStore } from './adaptor/r2/ogImageStore.ts';
 import { parseUploadFilenameImageId } from './adaptor/r2/postImageObjectStore.ts';
 import { createMastodonAuthn } from './adaptor/routes/mastodonAuthn.ts';
+import { createWorkerActorHandleRouter } from './adaptor/routes/workerActorHandleRouter.ts';
 import { createWorkerAuthApiRouter } from './adaptor/routes/workerAuthApiRouter.ts';
 import { createWorkerAuthFormRouter } from './adaptor/routes/workerAuthFormRouter.ts';
 import { createWorkerCoreApiRouter } from './adaptor/routes/workerCoreApiRouter.ts';
@@ -189,6 +190,10 @@ export default {
         });
         app.all('/__smoke__/*', (c) => c.notFound());
         app.route('/users', createWorkerRemoteFollowRedirectRouter());
+        app.route(
+          '/',
+          createWorkerActorHandleRouter({ actorIdResolverByAcct: runtime.mastodon.actorIdResolverByAcct }),
+        );
         app.route(
           '/api',
           createWorkerAuthApiRouter({
