@@ -1,7 +1,6 @@
 import { type PropsWithChildren, useCallback, useEffect, useRef, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-import { DEFAULT_HEADER_PATH } from '../../adaptor/mastodon/defaultImages.ts';
 import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
 import { openFediverseConversation } from '../api/fediverseConversationClient.ts';
@@ -24,6 +23,7 @@ import {
   unmute,
 } from '../api/mastodonClient.ts';
 import { isLocalAccount, updateStatusesByPostId } from '../api/status.ts';
+import { profileHeaderUrl } from '../api/profileHeader.ts';
 import { CustomEmojiText } from '../components/CustomEmojiText.tsx';
 import { FediverseAccountRow } from '../components/FediverseAccountRow.tsx';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
@@ -99,14 +99,6 @@ const FOLLOW_LIST_HEADINGS: Readonly<Record<RemoteFollowListKind, string>> = {
   followers: 'フォロワー',
 };
 
-const isDefaultHeader = (header: string): boolean => {
-  try {
-    return new URL(header, 'https://base.invalid').pathname === DEFAULT_HEADER_PATH;
-  } catch {
-    return false;
-  }
-};
-
 export const RemoteUserPage = ({
   account,
   statuses,
@@ -145,8 +137,7 @@ export const RemoteUserPage = ({
   const displayName = hasDisplayName ? account.display_name : account.username;
 
   const logoUrl = safeUrl(account.avatar);
-  const rawHeaderUrl = safeUrl(account.header);
-  const headerUrl = rawHeaderUrl !== undefined && !isDefaultHeader(rawHeaderUrl) ? rawHeaderUrl : undefined;
+  const headerUrl = profileHeaderUrl(account.header);
   const profileUrl = safeUrl(account.url);
 
   return (

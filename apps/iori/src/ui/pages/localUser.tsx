@@ -16,6 +16,7 @@ import {
   unfollow,
 } from '../api/mastodonClient.ts';
 import { accountHandle, remoteUserPathOf, updateStatusesByPostId } from '../api/status.ts';
+import { profileHeaderUrl } from '../api/profileHeader.ts';
 import { ActorLink } from '../components/ActorLink.tsx';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { FollowToggleButton } from '../components/FollowToggleButton.tsx';
@@ -59,6 +60,8 @@ export const LocalUserPage = ({
   followToggle,
 }: Props) => {
   const logoUrl = safeUrl(account.avatar);
+  const headerUrl = profileHeaderUrl(account.header);
+  const displayName = account.display_name.trim() !== '' ? account.display_name : account.username;
 
   return (
     <>
@@ -78,6 +81,13 @@ export const LocalUserPage = ({
       </div>
       <section class='mb-8'>
         <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg'>
+          {headerUrl && (
+            <img
+              src={headerUrl}
+              alt='ヘッダー画像'
+              class='w-full h-32 object-cover rounded-xl mb-4 relative z-10'
+            />
+          )}
           <div class='flex items-center gap-4 mb-4 relative z-10'>
             <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-clay-sm'>
               {logoUrl
@@ -89,12 +99,12 @@ export const LocalUserPage = ({
                   />
                 )
                 : (
-                  account.username.charAt(0).toUpperCase()
+                  displayName.charAt(0).toUpperCase()
                 )}
             </div>
             <div class='flex-1 min-w-0'>
               <h1 class='text-2xl font-bold text-charcoal dark:text-white truncate'>
-                {account.username}
+                {displayName}
               </h1>
               <p class='text-charcoal-light dark:text-gray-400 truncate'>{handle}</p>
             </div>
