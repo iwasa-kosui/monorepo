@@ -22,14 +22,15 @@ import {
   unfollow,
   unmute,
 } from '../api/mastodonClient.ts';
-import { isLocalAccount, updateStatusesByPostId } from '../api/status.ts';
 import { profileHeaderUrl } from '../api/profileHeader.ts';
+import { isLocalAccount, updateStatusesByPostId } from '../api/status.ts';
 import { CustomEmojiText } from '../components/CustomEmojiText.tsx';
 import { FediverseAccountRow } from '../components/FediverseAccountRow.tsx';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { FollowToggleButton } from '../components/FollowToggleButton.tsx';
 import { PagedList } from '../components/PagedList.tsx';
 import { PostView } from '../components/PostView.tsx';
+import { ProfileBanner } from '../components/ProfileBanner.tsx';
 import type { ReportCategory } from '../components/ReportModal.tsx';
 import { ReportModal } from '../components/ReportModal.tsx';
 import { statusActionProps, type StatusActions } from '../components/statusActionProps.ts';
@@ -144,13 +145,7 @@ export const RemoteUserPage = ({
     <>
       <section class='mb-8'>
         <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg'>
-          {headerUrl && (
-            <img
-              src={headerUrl}
-              alt='ヘッダー画像'
-              class='w-full h-32 object-cover rounded-xl mb-4 relative z-10'
-            />
-          )}
+          {headerUrl && <ProfileBanner url={headerUrl} />}
           <div class='flex items-center gap-4 mb-4 relative z-10'>
             <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-clay-sm'>
               {logoUrl

@@ -7,6 +7,7 @@ import { createD1ActorResolverByUri } from '../adaptor/d1/actor/actorResolverByU
 import { createD1ActorResolverByUserId } from '../adaptor/d1/actor/actorResolverByUserId.ts';
 import { createD1ActorsResolverByFollowerId } from '../adaptor/d1/actor/actorsResolverByFollowerId.ts';
 import { createD1ActorsResolverByFollowingId } from '../adaptor/d1/actor/actorsResolverByFollowingId.ts';
+import { createD1HeaderUriUpdatedStore } from '../adaptor/d1/actor/headerUriUpdatedStore.ts';
 import { createD1LocalActorCreatedStore } from '../adaptor/d1/actor/localActorCreatedStore.ts';
 import { createD1LocalActorProfileUpdatedStore } from '../adaptor/d1/actor/localActorProfileUpdatedStore.ts';
 import { createD1LogoUriUpdatedStore } from '../adaptor/d1/actor/logoUriUpdatedStore.ts';
@@ -281,6 +282,7 @@ import { UndoRepostUseCase } from '../useCase/undoRepost.ts';
 import { UnpublishArticleUseCase } from '../useCase/unpublishArticle.ts';
 import { UpdateArticleBodyUseCase } from '../useCase/updateArticleBody.ts';
 import { UpdateAvatarUseCase } from '../useCase/updateAvatar.ts';
+import { UpdateHeaderUseCase } from '../useCase/updateHeader.ts';
 import { UpdateMediaDescriptionUseCase } from '../useCase/updateMediaDescription.ts';
 import { UpdatePostUseCase } from '../useCase/updatePost.ts';
 import { UpdateProfileUseCase } from '../useCase/updateProfile.ts';
@@ -650,6 +652,12 @@ export const createWorkerRuntimePorts = async (
           actorResolverByUserId,
           uploads,
           logoUriUpdatedStore: createD1LogoUriUpdatedStore(db),
+          origin: env.ORIGIN,
+        }),
+        updateHeaderUseCase: UpdateHeaderUseCase.create({
+          actorResolverByUserId,
+          uploads,
+          headerUriUpdatedStore: createD1HeaderUriUpdatedStore(db),
           origin: env.ORIGIN,
         }),
         localActorProfileUpdatedStore: createD1LocalActorProfileUpdatedStore(db),

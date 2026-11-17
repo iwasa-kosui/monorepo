@@ -52,6 +52,7 @@ export const localActorsTable = sqliteTable('local_actors', {
   userId: text('userId').notNull().references(() => usersTable.userId),
   displayName: text('displayName'),
   bio: text('bio'),
+  headerUri: text('headerUri'),
 }, (table) => [
   uniqueIndex('local_actor_user_unique').on(table.userId),
 ]);

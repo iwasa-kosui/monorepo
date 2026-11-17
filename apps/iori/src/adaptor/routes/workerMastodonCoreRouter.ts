@@ -164,19 +164,34 @@ export const createWorkerMastodonCoreRouter = ({
       }
       const body = await readRequestBody(c);
       const avatar = body['avatar'];
-      if (body['header'] instanceof File) {
-        return c.json({ error: 'Validation failed: header is not supported' }, 422);
-      }
+      const header = body['header'];
       if ('avatar' in body && !(avatar instanceof File)) {
         return c.json({ error: 'Validation failed: avatar must be a file' }, 422);
+      }
+      if ('header' in body && !(header instanceof File)) {
+        return c.json({ error: 'Validation failed: header must be a file' }, 422);
       }
       const updated = await updateProfileUseCase.run({
         userId,
         displayName: bodyString(body, 'display_name'),
         bio: bodyString(body, 'note'),
         avatar: avatar instanceof File ? new Uint8Array(await avatar.arrayBuffer()) : undefined,
+        header: header instanceof File ? new Uint8Array(await header.arrayBuffer()) : undefined,
         ctx: createContext(c.req.raw),
       });
+      if (!updated.ok) {
+        return updated.err.type === 'UserNotFoundError'
+          ? c.json(actorNotFound, 422)
+          : c.json({ error: `Validation failed: ${updated.err.message}` }, 422);
+      }
+      return respondWithCredentials(c, userId);
+    })
+    .delete('/v1/profile/header', authn.requireUser(writeAccounts), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId ?? undefined;
+      if (userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      const updated = await updateProfileUseCase.run({ userId, header: null, ctx: createContext(c.req.raw) });
       if (!updated.ok) {
         return updated.err.type === 'UserNotFoundError'
           ? c.json(actorNotFound, 422)

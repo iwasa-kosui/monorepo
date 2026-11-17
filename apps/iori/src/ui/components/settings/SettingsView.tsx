@@ -1,3 +1,5 @@
+import { useState } from 'hono/jsx';
+
 import { BlueskyProfileSettingsSection } from './BlueskyProfileSettingsSection.tsx';
 import { BlueskySettingsSection } from './BlueskySettingsSection.tsx';
 import { NotificationsSettingsSection } from './NotificationsSettingsSection.tsx';
@@ -12,16 +14,22 @@ type Props = Readonly<{
   onProfileLoaded?: () => void;
 }>;
 
-export const SettingsView = ({ isOwner, onProfileLoaded }: Props) => (
-  <div>
-    <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>設定</h1>
-    <ProfileSettingsSection onLoaded={onProfileLoaded} />
-    <NotificationsSettingsSection />
-    <PostingSettingsSection />
-    <BlueskySettingsSection />
-    <BlueskyProfileSettingsSection />
-    {isOwner && <RelaysSettingsSection />}
-    <SecuritySettingsSection />
-    {isOwner && <XFeedSourcesSettingsSection />}
-  </div>
-);
+export const SettingsView = ({ isOwner, onProfileLoaded }: Props) => {
+  const [blueskyProfileRevision, setBlueskyProfileRevision] = useState(0);
+  return (
+    <div>
+      <h1 class='text-2xl font-bold text-charcoal dark:text-white mb-6'>設定</h1>
+      <ProfileSettingsSection
+        onLoaded={onProfileLoaded}
+        onBlueskyProfileSaved={() => setBlueskyProfileRevision((revision) => revision + 1)}
+      />
+      <NotificationsSettingsSection />
+      <PostingSettingsSection />
+      <BlueskySettingsSection />
+      <BlueskyProfileSettingsSection revision={blueskyProfileRevision} />
+      {isOwner && <RelaysSettingsSection />}
+      <SecuritySettingsSection />
+      {isOwner && <XFeedSourcesSettingsSection />}
+    </div>
+  );
+};

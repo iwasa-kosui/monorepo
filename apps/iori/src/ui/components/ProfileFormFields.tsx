@@ -2,6 +2,8 @@ type Props = Readonly<{
   idPrefix: string;
   displayName: string;
   note: string;
+  /** いま設定しているバナー。未設定なら undefined */
+  headerUrl?: string | undefined;
   errorText: string | undefined;
 }>;
 
@@ -9,7 +11,7 @@ const FIELD_CLASS =
   'w-full px-4 py-3 rounded-clay bg-warm-gray dark:bg-gray-700 text-charcoal dark:text-white focus:outline-none focus:ring-2 focus:ring-terracotta/30 border border-warm-gray-dark dark:border-gray-600 shadow-clay-inset mb-3 transition-all';
 const LABEL_CLASS = 'block text-charcoal-light dark:text-gray-400 text-sm mb-1';
 
-export const ProfileFormFields = ({ idPrefix, displayName, note, errorText }: Props) => (
+export const ProfileFormFields = ({ idPrefix, displayName, note, headerUrl, errorText }: Props) => (
   <>
     <label class={LABEL_CLASS} for={`${idPrefix}-display-name`}>表示名</label>
     <input
@@ -31,6 +33,25 @@ export const ProfileFormFields = ({ idPrefix, displayName, note, errorText }: Pr
       accept='image/jpeg,image/png,image/gif,image/webp'
       class={FIELD_CLASS}
     />
+    <label class={LABEL_CLASS} for={`${idPrefix}-header`}>
+      バナー（JPEG、PNG、GIF、WebP のいずれか。5MB まで）
+    </label>
+    {headerUrl !== undefined && (
+      <img src={headerUrl} alt='現在のバナー' class='w-full h-24 rounded-clay object-cover mb-2' />
+    )}
+    <input
+      id={`${idPrefix}-header`}
+      type='file'
+      name='header'
+      accept='image/jpeg,image/png,image/gif,image/webp'
+      class={FIELD_CLASS}
+    />
+    {headerUrl !== undefined && (
+      <label class='flex items-center gap-2 text-sm text-charcoal-light dark:text-gray-400 mb-3'>
+        <input type='checkbox' name='remove_header' />
+        バナーを削除
+      </label>
+    )}
     {errorText !== undefined && <p class='text-terracotta text-sm mb-3'>{errorText}</p>}
   </>
 );

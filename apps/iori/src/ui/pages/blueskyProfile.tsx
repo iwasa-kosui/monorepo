@@ -46,6 +46,7 @@ import { BlueskyReportPostModal } from '../components/BlueskyReportPostModal.tsx
 import { BlueskyTimelineItemView } from '../components/BlueskyTimelineItemView.tsx';
 import { FollowToggleButton } from '../components/FollowToggleButton.tsx';
 import { PagedList } from '../components/PagedList.tsx';
+import { ProfileBanner } from '../components/ProfileBanner.tsx';
 import { type ReportCategory, ReportModal } from '../components/ReportModal.tsx';
 import { appendUniqueBy } from '../hooks/appendUnique.ts';
 import { chatConvoPath, chatErrorMessageOf } from '../hooks/blueskyChat.ts';
@@ -211,13 +212,7 @@ export const BlueskyProfilePage = (
     <>
       <section class='mb-8'>
         <div class='bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover blob-bg'>
-          {profile.banner !== null && (
-            <img
-              src={profile.banner}
-              alt='ヘッダー画像'
-              class='w-full h-32 object-cover rounded-xl mb-4 relative z-10'
-            />
-          )}
+          {profile.banner !== null && <ProfileBanner url={profile.banner} />}
           <div class='flex items-center gap-4 mb-4 relative z-10'>
             <div class='w-16 h-16 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-clay-sm'>
               {profile.avatar !== null

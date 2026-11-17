@@ -102,6 +102,7 @@ export const createD1AccountProfilesResolverByActorIds = (db: IoriD1Db): Account
             logoUri: row.actors.logoUri ?? undefined,
             displayName: row.local_actors.displayName ?? undefined,
             bio: row.local_actors.bio ?? undefined,
+            headerUri: row.local_actors.headerUri ?? undefined,
           },
           stats,
         });

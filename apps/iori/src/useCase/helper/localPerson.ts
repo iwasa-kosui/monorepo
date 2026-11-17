@@ -27,8 +27,10 @@ export const buildLocalPerson = async (
     icon: actor.logoUri === undefined
       ? undefined
       : new Image({ url: new URL(actor.logoUri), mediaType: 'image/png' }),
-    // ローカルのアクターはカバー画像を持たないが、bot だけは決まったカバー画像を出す
-    image: isBot
+    // 自分で設定したヘッダー画像を優先する。bot は未設定でも決まったカバー画像を出す
+    image: actor.headerUri !== undefined
+      ? new Image({ url: new URL(actor.headerUri) })
+      : isBot
       ? new Image({ url: new URL(AiAgentBot.images.headerPath, ctx.origin), mediaType: 'image/png' })
       : undefined,
     publicKey: keys.at(0)?.cryptographicKey,
