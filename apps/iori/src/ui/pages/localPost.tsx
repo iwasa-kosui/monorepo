@@ -2,16 +2,19 @@ import { useCallback, useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Status } from '../../adaptor/mastodon/entities.ts';
+import type { IoriStatusInteractionsResponse } from '../../adaptor/routes/workerIoriActionsRouter.ts';
 import {
   deleteStatus,
   fetchRemoteContext,
   fetchStatus,
   fetchStatusContext,
+  fetchStatusInteractions,
   fetchVerifyCredentials,
 } from '../api/mastodonClient.ts';
 import { accountHref, displayStatus, isLocalAccount } from '../api/status.ts';
 import { EditPostModal } from '../components/EditPostModal.tsx';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
+import { PostInteractionsView } from '../components/PostInteractionsView.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { QuoteModal } from '../components/QuoteModal.tsx';
 import { statusActionProps } from '../components/statusActionProps.ts';
@@ -45,6 +48,8 @@ const LocalPostPage = () => {
   const [contextFailed, setContextFailed] = useState(false);
   const [isRetryingContext, setIsRetryingContext] = useState(false);
   const [isLoadingRemoteContext, setIsLoadingRemoteContext] = useState(false);
+  const [interactions, setInteractions] = useState<IoriStatusInteractionsResponse | null>(null);
+  const [isLoadingInteractions, setIsLoadingInteractions] = useState(false);
   const [isLoggedIn] = useState(() => getIsLoggedIn());
   const [currentAccountId, setCurrentAccountId] = useState<string | undefined>(undefined);
 
@@ -108,6 +113,20 @@ const LocalPostPage = () => {
     }
   };
 
+  const loadInteractions = async () => {
+    const postId = getPostIdFromUrl();
+    if (!postId) return;
+
+    setIsLoadingInteractions(true);
+    try {
+      setInteractions(await fetchStatusInteractions(postId));
+    } catch (err) {
+      console.error('Failed to load the interactions:', err);
+    } finally {
+      setIsLoadingInteractions(false);
+    }
+  };
+
   const handleRetryContext = async () => {
     const postId = getPostIdFromUrl();
     if (!postId) return;
@@ -126,7 +145,7 @@ const LocalPostPage = () => {
 
   useEffect(() => {
     fetchThread().then(async (loaded) => {
-      if (loaded && isLoggedIn) await loadRemoteContext();
+      if (loaded && isLoggedIn) await Promise.all([loadRemoteContext(), loadInteractions()]);
     });
     if (isLoggedIn) {
       fetchVerifyCredentials()
@@ -299,6 +318,7 @@ const LocalPostPage = () => {
                 isLoggedIn={isLoggedIn}
                 {...statusActionProps(isLoggedIn ? actions : undefined, threadData.currentPost)}
               />
+              <PostInteractionsView interactions={interactions} />
               {originalPostUrl && (
                 <a
                   href={originalPostUrl}
@@ -343,9 +363,9 @@ const LocalPostPage = () => {
               ))}
             </>
           )}
-          {showsRemoteContextLoading(isLoadingRemoteContext, threadData.currentPost) && (
+          {showsRemoteContextLoading(isLoadingRemoteContext || isLoadingInteractions, threadData.currentPost) && (
             <p role='status' class='text-sm text-charcoal-light dark:text-gray-400'>
-              相手のサーバーから返信を読み込んでいます
+              相手のサーバーから返信や反応を読み込んでいます
             </p>
           )}
         </div>

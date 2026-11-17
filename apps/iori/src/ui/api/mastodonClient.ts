@@ -14,6 +14,7 @@ import type {
   IoriRemoteContextResponse,
   IoriRemoteFollowsResponse,
   IoriRemoteStatusesResponse,
+  IoriStatusInteractionsResponse,
 } from '../../adaptor/routes/workerIoriActionsRouter.ts';
 import type {
   IoriBlueskyDeletePostResponse,
@@ -326,6 +327,9 @@ export const unreact = (id: string, emoji: string): Promise<Status> => act<Statu
 
 export const fetchRemoteContext = (id: string): Promise<IoriRemoteContextResponse> =>
   post<IoriRemoteContextResponse>(`/api/iori/v1/statuses/${encodeURIComponent(id)}/remote-context`);
+
+export const fetchStatusInteractions = async (id: string): Promise<IoriStatusInteractionsResponse> =>
+  (await request<IoriStatusInteractionsResponse>(`/api/iori/v1/statuses/${encodeURIComponent(id)}/interactions`)).body;
 
 export const fetchRemoteStatuses = (accountId: string): Promise<IoriRemoteStatusesResponse> =>
   post<IoriRemoteStatusesResponse>(`/api/iori/v1/accounts/${encodeURIComponent(accountId)}/remote-statuses`);

@@ -537,6 +537,79 @@ describe('POST /api/iori/v1/push/subscribe', () => {
   });
 });
 
+describe('GET /api/iori/v1/statuses/:id/interactions', () => {
+  const interactionsPath = (postId: string) => `/api/iori/v1/statuses/${postId}/interactions`;
+  const get = (t: Awaited<ReturnType<typeof seedReactions>>, postId: string, headers: Record<string, string>) =>
+    t.request(interactionsPath(postId), { headers });
+
+  it('手元の反応と相手のサーバーの反応を、誰がしたか分かる形で返す', async () => {
+    const t = await seedReactions();
+    t.seed.addLike(t.me.actorId, t.publicNote.postId, 10_000);
+    t.seed.addEmojiReact(t.me.actorId, t.publicNote.postId, '👍');
+    const bob = {
+      actorId: null,
+      isLocal: false,
+      name: 'Bob',
+      acct: 'bob@remote.example',
+      avatarUrl: 'https://remote.example/bob.png',
+      url: 'https://remote.example/@bob',
+    };
+    t.remotePostInteractions.fetch.mockResolvedValue({
+      likes: [bob],
+      reposts: [bob],
+      reactions: [{ emoji: '👍', emojiImageUrl: null, actors: [bob] }],
+    });
+
+    const response = await get(t, t.publicNote.postId, t.me.bearer);
+
+    expect(response.status).toBe(200);
+    const me = { id: t.me.actorId, local: true, display_name: 'kosui', acct: 'kosui', avatar: null };
+    const remoteBob = {
+      id: null,
+      local: false,
+      display_name: 'Bob',
+      acct: 'bob@remote.example',
+      avatar: 'https://remote.example/bob.png',
+      url: 'https://remote.example/@bob',
+    };
+    expect(await response.json()).toMatchObject({
+      favourited_by: [me, remoteBob],
+      reblogged_by: [remoteBob],
+      reactions: [{ name: '👍', url: null, accounts: [me, remoteBob] }],
+    });
+  });
+
+  it('ローカルの投稿では、相手のサーバーに問い合わせない', async () => {
+    const t = await seedReactions();
+    t.seed.addLike(t.alice.actorId, t.local.postId, 10_000);
+
+    const response = await get(t, t.local.postId, t.me.bearer);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ favourited_by: [{ acct: 'alice@remote.example', local: false }] });
+    expect(t.remotePostInteractions.fetch).not.toHaveBeenCalled();
+  });
+
+  it('ログインしていなければ 401 にして、相手のサーバーに問い合わせない', async () => {
+    const t = await seedReactions();
+
+    const response = await get(t, t.publicNote.postId, {});
+
+    expect(response.status).toBe(401);
+    expect(t.remotePostInteractions.fetch).not.toHaveBeenCalled();
+  });
+
+  it('見えない投稿は 404 にして、相手のサーバーに問い合わせない', async () => {
+    const t = await seedReactions();
+    const hidden = t.seed.addRemotePost(t.alice, 3_000, { visibility: 'private', timeline: false });
+
+    const response = await get(t, hidden.postId, t.me.bearer);
+
+    expect(response.status).toBe(404);
+    expect(t.remotePostInteractions.fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/iori/v1/statuses/:id/remote-context', () => {
   const remoteContextPath = (postId: string) => `/api/iori/v1/statuses/${postId}/remote-context`;
   const post = (t: Awaited<ReturnType<typeof seedReactions>>, postId: string, headers: Record<string, string>) =>
