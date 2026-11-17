@@ -11,7 +11,9 @@ const remoteActorId = ActorId.generate();
 
 const actorIdResolverByAcct: ActorIdResolverByAcct = {
   resolve: (lookup) => {
-    if (lookup.type === 'local') return RA.ok(lookup.username === 'kosui' ? localActorId : undefined);
+    if (lookup.type === 'local') {
+      return RA.ok(lookup.username === 'kosui' || lookup.username === 'local.example' ? localActorId : undefined);
+    }
     return RA.ok(lookup.username === 'test' && lookup.host === 'example.com' ? remoteActorId : undefined);
   },
 };
@@ -28,6 +30,10 @@ describe('createWorkerActorHandleRouter', () => {
     ['/@test@example.com', `/remote-users/${remoteActorId}`],
     ['/@test@Example.COM', `/remote-users/${remoteActorId}`],
     ['/@test@example.com?tab=media', `/remote-users/${remoteActorId}?tab=media`],
+    ['/@alice.bsky.social', '/bluesky/profile/alice.bsky.social'],
+    ['/@alice.bsky.social/', '/bluesky/profile/alice.bsky.social'],
+    ['/@did:plc:abc123', '/bluesky/profile/did%3Aplc%3Aabc123'],
+    ['/@local.example', '/users/local.example'],
   ])('redirects %s to the profile page %s', async (path, location) => {
     const response = await get(path);
 
@@ -42,6 +48,9 @@ describe('createWorkerActorHandleRouter', () => {
     '/@test@example.com@extra',
     '/@test@',
     '/@',
+    '/@handle.invalid',
+    '/@-bad.example',
+    '/@alice.bsky.social@unknown.example',
     '/@kosui/1',
     '/kosui',
   ])('does not redirect %s', async (path) => {
