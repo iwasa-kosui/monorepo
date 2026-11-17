@@ -148,11 +148,42 @@ export const BOT_REPEAT_SIMILARITY_THRESHOLD = 0.8;
 /** 1 回の投稿に載せる文字数の上限（メンションを除く） */
 export const MAX_BOT_POST_CHARACTERS = 480;
 
+/** 本文の末尾に並んだ URL（出典）。前に空白か改行がある */
+const TRAILING_URLS = /(?:\s+https?:\/\/\S+)+$/;
+
+/**
+ * 上限を超えた文章を切り詰めて「…」を付ける。
+ * 切る位置が URL の途中なら、その URL の手前で切る。途中で切れた URL は開けないリンクになるため。
+ */
+const truncateProse = (text: string, max: number): string => {
+  const chars = [...text];
+  if (chars.length <= max) return text;
+  const head = chars.slice(0, Math.max(max - 1, 0)).join('');
+  const cut = [...text.matchAll(/https?:\/\/\S+/g)].find((url) =>
+    url.index < head.length && head.length < url.index + url[0].length
+  );
+  return `${(cut === undefined ? head : head.slice(0, cut.index)).trimEnd()}…`;
+};
+
+/**
+ * 上限を超えた本文を切り詰める。
+ * 末尾に並んだ URL は出典なので残し、その前の文章を切り詰める。URL だけで上限に届くときは、文章と同じく手前で切る。
+ */
+const truncatePostText = (text: string, max: number): string => {
+  if ([...text].length <= max) return text;
+  const trailing = TRAILING_URLS.exec(text);
+  if (trailing === null) return truncateProse(text, max);
+  const budget = max - [...trailing[0]].length;
+  return budget < 2
+    ? truncateProse(text, max)
+    : `${truncateProse(text.slice(0, trailing.index), budget)}${trailing[0]}`;
+};
+
 /**
  * モデルがツールに渡した本文を、投稿できる本文に整える。空なら undefined を返す。
  * - 前後の空白と、全体を囲む引用符やコードフェンスを取り除く
  * - 先頭のメンション（@user、@user@host、Markdown のリンクにした [@user](URL)）を取り除く。メンションは iori が付け直す
- * - 上限を超えた分は切り詰めて「…」を付ける
+ * - 上限を超えた分は切り詰めて「…」を付ける。URL は途中で切らない（truncatePostText）
  */
 const normalizePostText = (raw: string): string | undefined => {
   let text = raw.trim();
@@ -161,8 +192,7 @@ const normalizePostText = (raw: string): string | undefined => {
   if (text.length >= 2 && /^["「『]/.test(text) && /["」』]$/.test(text)) text = text.slice(1, -1).trim();
   text = text.replace(/^(?:(?:@[\w.-]+(?:@[\w.-]+)?|\[@[\w.-]+(?:@[\w.-]+)?\]\([^)\s]*\))(?:\s+|$))+/, '').trim();
   if (text.length === 0) return undefined;
-  const chars = [...text];
-  return chars.length > MAX_BOT_POST_CHARACTERS ? `${chars.slice(0, MAX_BOT_POST_CHARACTERS - 1).join('')}…` : text;
+  return truncatePostText(text, MAX_BOT_POST_CHARACTERS);
 };
 
 /** 比べるために、空白・記号を除き、全角半角と大文字小文字をそろえる */

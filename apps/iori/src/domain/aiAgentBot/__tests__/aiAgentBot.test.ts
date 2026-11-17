@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ActorId } from '../../actor/actorId.ts';
 import { Instant } from '../../instant/instant.ts';
 import { PostId } from '../../post/postId.ts';
-import { AiAgentBot, MUSING_INTERVAL_MS } from '../aiAgentBot.ts';
+import { AiAgentBot, MAX_BOT_POST_CHARACTERS, MUSING_INTERVAL_MS } from '../aiAgentBot.ts';
 
 describe('AiAgentBot.username', () => {
   it('is a valid Fediverse username', () => {
@@ -44,6 +44,35 @@ describe('AiAgentBot.normalizePostText', () => {
 
   it('本文の途中のメンションは残す', () => {
     expect(AiAgentBot.normalizePostText('詳しくは @alice に聞いてください')).toBe('詳しくは @alice に聞いてください');
+  });
+
+  it('上限以内の本文はそのまま返す', () => {
+    const text = `${'あ'.repeat(MAX_BOT_POST_CHARACTERS - 29)}\nhttps://example.com/a/1.html`;
+    expect(AiAgentBot.normalizePostText(text)).toBe(text);
+  });
+
+  it('上限を超えた本文は、末尾の URL を残して文章を切り詰める', () => {
+    const url = 'https://www.example.com/news/articles/2611/16/news001.html';
+    const text = AiAgentBot.normalizePostText(`${'あ'.repeat(MAX_BOT_POST_CHARACTERS)}\n${url}`);
+    expect(text).toBe(`${'あ'.repeat(MAX_BOT_POST_CHARACTERS - url.length - 2)}…\n${url}`);
+    expect([...text!]).toHaveLength(MAX_BOT_POST_CHARACTERS);
+  });
+
+  it('末尾に並んだ複数の URL をすべて残す', () => {
+    const urls = '\nhttps://example.com/a\nhttps://example.com/b';
+    const text = AiAgentBot.normalizePostText(`${'あ'.repeat(MAX_BOT_POST_CHARACTERS)}${urls}`);
+    expect(text).toBe(`${'あ'.repeat(MAX_BOT_POST_CHARACTERS - urls.length - 1)}…${urls}`);
+  });
+
+  it('切る位置が文中の URL にかかるときは、その URL の手前で切る', () => {
+    const head = 'あ'.repeat(MAX_BOT_POST_CHARACTERS - 10);
+    const text = AiAgentBot.normalizePostText(`${head} https://example.com/long/path.html ${'い'.repeat(50)}`);
+    expect(text).toBe(`${head}…`);
+  });
+
+  it('URL のない本文は上限で切り詰める', () => {
+    const text = AiAgentBot.normalizePostText('あ'.repeat(MAX_BOT_POST_CHARACTERS + 10));
+    expect(text).toBe(`${'あ'.repeat(MAX_BOT_POST_CHARACTERS - 1)}…`);
   });
 });
 
