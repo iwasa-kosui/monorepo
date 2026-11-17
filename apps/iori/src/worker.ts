@@ -192,7 +192,14 @@ export default {
         app.route('/users', createWorkerRemoteFollowRedirectRouter());
         app.route(
           '/',
-          createWorkerActorHandleRouter({ actorIdResolverByAcct: runtime.mastodon.actorIdResolverByAcct }),
+          createWorkerActorHandleRouter({
+            actorIdResolverByAcct: runtime.mastodon.actorIdResolverByAcct,
+            resolveRemoteAccountUseCase: runtime.mastodon.resolveRemoteAccountUseCase,
+            viewerUserIdOf: async (handleRequest) => {
+              const identity = await pageIdentity(handleRequest, runtime);
+              return identity.isLoggedIn ? identity.userId : undefined;
+            },
+          }),
         );
         app.route(
           '/api',
