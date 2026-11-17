@@ -9,10 +9,12 @@ import { Scope } from '../../domain/oauth/scope.ts';
 import type { PostsWithAuthorResolverByPostIds, PostWithAuthor } from '../../domain/post/post.ts';
 import { PostContent } from '../../domain/post/postContent.ts';
 import { PostId } from '../../domain/post/postId.ts';
+import type { Interactor } from '../../domain/postInteraction/postInteractions.ts';
 import type { AllRelaysResolver } from '../../domain/relay/relay.ts';
 import type { UserId } from '../../domain/user/userId.ts';
 import type { FetchRemoteContextUseCase } from '../../useCase/fetchRemoteContext.ts';
 import type { FetchRemoteOutboxUseCase } from '../../useCase/fetchRemoteOutbox.ts';
+import type { GetPostInteractionsUseCase } from '../../useCase/getPostInteractions.ts';
 import type { IsDigestOwner } from '../../useCase/isDigestOwner.ts';
 import type { ListRemoteActorFollowsUseCase } from '../../useCase/listRemoteActorFollows.ts';
 import type { SendEmojiReactUseCase } from '../../useCase/sendEmojiReact.ts';
@@ -21,6 +23,7 @@ import type { SubscribeRelayUseCase } from '../../useCase/subscribeRelay.ts';
 import type { UndoEmojiReactUseCase } from '../../useCase/undoEmojiReact.ts';
 import type { InferUseCaseError } from '../../useCase/useCase.ts';
 import type { Account } from '../mastodon/entities.ts';
+import { toSafeApiUrl } from '../mastodon/safeApiUrl.ts';
 import { type StatusAssembler, StatusAssemblyError } from '../mastodon/statusAssembler.ts';
 import { actorNotFound, handleInternalError, internalServerError } from './helper/mastodonErrors.ts';
 import { readRequestBody } from './helper/requestBody.ts';
@@ -35,6 +38,7 @@ export type WorkerIoriActionsRouterDeps = Readonly<{
   undoEmojiReactUseCase: UndoEmojiReactUseCase;
   fetchRemoteContextUseCase: FetchRemoteContextUseCase;
   fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase;
+  getPostInteractionsUseCase: GetPostInteractionsUseCase;
   listRemoteActorFollowsUseCase: ListRemoteActorFollowsUseCase;
   subscribeRelayUseCase: SubscribeRelayUseCase;
   subscribePushUseCase: SubscribePushUseCase;
@@ -44,6 +48,19 @@ export type WorkerIoriActionsRouterDeps = Readonly<{
 }>;
 
 export type IoriRemoteContextResponse = Readonly<{ fetched: number }>;
+export type IoriInteractionAccount = Readonly<{
+  id: string | null;
+  local: boolean;
+  display_name: string;
+  acct: string;
+  avatar: string | null;
+  url: string | null;
+}>;
+export type IoriStatusInteractionsResponse = Readonly<{
+  favourited_by: readonly IoriInteractionAccount[];
+  reblogged_by: readonly IoriInteractionAccount[];
+  reactions: readonly Readonly<{ name: string; url: string | null; accounts: readonly IoriInteractionAccount[] }>[];
+}>;
 export type IoriRemoteStatusesResponse = Readonly<{ fetched: number }>;
 export type IoriRemoteFollowsResponse = Readonly<{
   accounts: readonly Account[];
@@ -69,6 +86,15 @@ const urlSchema = z.string().url();
 const pushSubscriptionSchema = z.object({
   endpoint: z.url(),
   keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }),
+});
+
+const toInteractionAccount = (interactor: Interactor): IoriInteractionAccount => ({
+  id: interactor.actorId,
+  local: interactor.isLocal,
+  display_name: interactor.name,
+  acct: interactor.isLocal ? interactor.acct.split('@')[0] ?? interactor.acct : interactor.acct,
+  avatar: toSafeApiUrl(interactor.avatarUrl, 'https://invalid.invalid') ?? null,
+  url: toSafeApiUrl(interactor.url, 'https://invalid.invalid') ?? null,
 });
 
 const validationFailed = (field: string) => ({ error: `Validation failed: ${field}` }) as const;
@@ -103,6 +129,7 @@ export const createWorkerIoriActionsRouter = ({
   undoEmojiReactUseCase,
   fetchRemoteContextUseCase,
   fetchRemoteOutboxUseCase,
+  getPostInteractionsUseCase,
   listRemoteActorFollowsUseCase,
   subscribeRelayUseCase,
   subscribePushUseCase,
@@ -238,6 +265,42 @@ export const createWorkerIoriActionsRouter = ({
         return fetched.err.type === 'PostNotFoundError' ? c.json(recordNotFound, 404) : c.json(invalidToken, 401);
       }
       return c.json({ fetched: fetched.val.fetchedCount } satisfies IoriRemoteContextResponse);
+    })
+    .get('/iori/v1/statuses/:id/interactions', authn.requireUser(read), async (c) => {
+      const userId = getMastodonPrincipal(c)?.userId;
+      if (userId === null || userId === undefined) {
+        return c.json(invalidToken, 401);
+      }
+      const id = PostId.parse(c.req.param('id'));
+      if (!id.ok) {
+        return c.json(recordNotFound, 404);
+      }
+      const viewer = await actorResolverByUserId.resolve(userId);
+      if (!viewer.ok) {
+        return c.json(internalServerError, 500);
+      }
+      if (viewer.val === undefined) {
+        return c.json(actorNotFound, 422);
+      }
+      const post = await resolvePost(id.val, viewer.val.id);
+      if (post === undefined) {
+        return c.json(recordNotFound, 404);
+      }
+      const interactions = await getPostInteractionsUseCase.run({ postId: post.postId });
+      if (!interactions.ok) {
+        return c.json(recordNotFound, 404);
+      }
+      return c.json(
+        {
+          favourited_by: interactions.val.likes.map(toInteractionAccount),
+          reblogged_by: interactions.val.reposts.map(toInteractionAccount),
+          reactions: interactions.val.reactions.map((reaction) => ({
+            name: reaction.emoji,
+            url: reaction.emojiImageUrl,
+            accounts: reaction.actors.map(toInteractionAccount),
+          })),
+        } satisfies IoriStatusInteractionsResponse,
+      );
     })
     .post('/iori/v1/accounts/:id/remote-statuses', authn.requireUser(writeStatuses), async (c) => {
       const userId = getMastodonPrincipal(c)?.userId;

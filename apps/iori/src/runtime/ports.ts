@@ -101,6 +101,7 @@ import type { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import type { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import type { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import type { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
+import type { GetPostInteractionsUseCase } from '../useCase/getPostInteractions.ts';
 import type { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import type { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import type { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
@@ -296,6 +297,7 @@ export type IoriSocialActionsRuntimePorts = Readonly<{
   undoEmojiReactUseCase: UndoEmojiReactUseCase;
   fetchRemoteContextUseCase: FetchRemoteContextUseCase;
   fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase;
+  getPostInteractionsUseCase: GetPostInteractionsUseCase;
   listRemoteActorFollowsUseCase: ListRemoteActorFollowsUseCase;
 }>;
 export type IoriArticlesRuntimePorts = Readonly<{

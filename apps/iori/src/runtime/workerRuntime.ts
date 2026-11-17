@@ -158,6 +158,7 @@ import { createD1RemotePostPollVotesResolverByPostIds } from '../adaptor/d1/post
 import { createD1RemotePostUpserter } from '../adaptor/d1/post/remotePostUpserter.ts';
 import { createD1RemotePostUrisResolverByUris } from '../adaptor/d1/post/remotePostUrisResolverByUris.ts';
 import { createD1ThreadResolver } from '../adaptor/d1/post/threadResolver.ts';
+import { createD1StoredPostInteractionsResolver } from '../adaptor/d1/postInteraction/storedPostInteractionsResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../adaptor/d1/pushSubscription/pushSubscriptionCreatedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../adaptor/d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
@@ -191,6 +192,7 @@ import { createD1UserPreferencesSavedStore } from '../adaptor/d1/userPreferences
 import { isBlockedUri } from '../adaptor/fedify/blockedInboxDomain.ts';
 import { createCloudflareRemoteActorLookup } from '../adaptor/fedify/cloudflareRemoteActorLookup.ts';
 import { createLookupUrlResolver } from '../adaptor/fedify/lookupUrlResolver.ts';
+import { createRemotePostInteractionsFetcher } from '../adaptor/fediverseApi/remotePostInteractionsFetcher.ts';
 import { createStatusAssembler } from '../adaptor/mastodon/statusAssembler.ts';
 import { createOgpFetcher } from '../adaptor/ogp/ogpFetcher.ts';
 import { createR2OgImageStore } from '../adaptor/r2/ogImageStore.ts';
@@ -241,6 +243,7 @@ import { GetArticleForEditUseCase } from '../useCase/getArticleForEdit.ts';
 import { GetArticlesUseCase } from '../useCase/getArticles.ts';
 import { GetArticleWithThreadUseCase } from '../useCase/getArticleWithThread.ts';
 import { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
+import { GetPostInteractionsUseCase } from '../useCase/getPostInteractions.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
@@ -898,6 +901,12 @@ export const createWorkerRuntimePorts = async (
           remotePostUpserter,
           isBlockedUri: (uri) => isBlockedUri(uri),
         }),
+        isBlockedUri: (uri) => isBlockedUri(uri),
+      }),
+      getPostInteractionsUseCase: GetPostInteractionsUseCase.create({
+        postResolver,
+        storedPostInteractionsResolver: createD1StoredPostInteractionsResolver(db),
+        remotePostInteractionsFetcher: createRemotePostInteractionsFetcher(),
         isBlockedUri: (uri) => isBlockedUri(uri),
       }),
       fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase.create({

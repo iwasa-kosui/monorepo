@@ -8,6 +8,7 @@ import { Instant } from '../../../../domain/instant/instant.ts';
 import { MediaId } from '../../../../domain/mediaUpload/mediaId.ts';
 import { MediaUpload } from '../../../../domain/mediaUpload/mediaUpload.ts';
 import type { PostVersionsResolverByPostId } from '../../../../domain/post/post.ts';
+import { PostInteractions } from '../../../../domain/postInteraction/postInteractions.ts';
 import { UserId } from '../../../../domain/user/userId.ts';
 import type { BlueskyChat } from '../../../../ports/blueskyChat.ts';
 import type {
@@ -49,6 +50,7 @@ import { EditDigestTopicUseCase } from '../../../../useCase/editDigestTopic.ts';
 import { FetchRemoteContextUseCase } from '../../../../useCase/fetchRemoteContext.ts';
 import { FetchRemoteOutboxUseCase } from '../../../../useCase/fetchRemoteOutbox.ts';
 import { FetchReplyNotesRecursiveUseCase } from '../../../../useCase/fetchReplyNotesRecursive.ts';
+import { GetPostInteractionsUseCase } from '../../../../useCase/getPostInteractions.ts';
 import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
 import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { notifyMentions } from '../../../../useCase/helper/notifyMentions.ts';
@@ -216,6 +218,7 @@ import { createD1RemotePostPollVotesResolverByPostIds } from '../../../d1/post/r
 import { createD1RemotePostUpserter } from '../../../d1/post/remotePostUpserter.ts';
 import { createD1RemotePostUrisResolverByUris } from '../../../d1/post/remotePostUrisResolverByUris.ts';
 import { createD1ThreadResolver } from '../../../d1/post/threadResolver.ts';
+import { createD1StoredPostInteractionsResolver } from '../../../d1/postInteraction/storedPostInteractionsResolver.ts';
 import { createD1PushSubscriptionCreatedStore } from '../../../d1/pushSubscription/pushSubscriptionCreatedStore.ts';
 import { createD1PushSubscriptionResolverByEndpoint } from '../../../d1/pushSubscription/pushSubscriptionResolverByEndpoint.ts';
 import { createD1PushSubscriptionsResolverByUserId } from '../../../d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
@@ -350,6 +353,11 @@ export const setupReadApi = (
     getDocumentLoader: vi.fn(async (): Promise<unknown> => ({})),
     getActorKeyPairs: vi.fn(async () => []),
     lookupObject: vi.fn(async (_uri?: string, _options?: unknown): Promise<unknown> => null),
+  };
+  const remotePostInteractions = {
+    fetch: vi.fn(async (_post: Readonly<{ uri: string; url: string | null }>): Promise<PostInteractions> =>
+      PostInteractions.empty
+    ),
   };
   const createContext = () => federation as never;
   const remoteActorLookup = {
@@ -1056,6 +1064,12 @@ export const setupReadApi = (
             }),
             isBlockedUri: () => false,
           }),
+          getPostInteractionsUseCase: GetPostInteractionsUseCase.create({
+            postResolver,
+            storedPostInteractionsResolver: createD1StoredPostInteractionsResolver(db),
+            remotePostInteractionsFetcher: remotePostInteractions,
+            isBlockedUri: () => false,
+          }),
           fetchRemoteOutboxUseCase: FetchRemoteOutboxUseCase.create({
             origin: ORIGIN,
             userResolver,
@@ -1127,6 +1141,7 @@ export const setupReadApi = (
     addMedia,
     bearerFor,
     federation,
+    remotePostInteractions,
     remoteActorLookup,
     queries: fixture.queries,
     sqlite: fixture.sqlite,
