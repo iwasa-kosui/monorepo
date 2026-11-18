@@ -17,6 +17,7 @@ import { Session, type SessionStartedStore } from '../domain/session/session.ts'
 import type { SessionId } from '../domain/session/sessionId.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import { consumeWebAuthnChallengeWith } from './helper/consumeWebAuthnChallenge.ts';
+import { rejectCrossOriginClientData } from './helper/rejectCrossOriginClientData.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
@@ -39,7 +40,7 @@ export type PasskeyUserHandleMismatchError = Readonly<{
 export const PasskeyUserHandleMismatchError = {
   create: (userId: UserId): PasskeyUserHandleMismatchError => ({
     type: 'PasskeyUserHandleMismatchError',
-    message: 'The user handle in the response does not match the owner of the passkey.',
+    message: 'The user handle in the response is missing or does not match the owner of the passkey.',
     detail: { userId },
   }),
 } as const;
@@ -93,10 +94,11 @@ const create = ({
       RA.andBind('credential', () => resolveCredential(input.response.id)),
       RA.andThrough(({ credential }) => {
         const { userHandle } = input.response.response;
-        return userHandle === undefined || isoBase64URL.toUTF8String(userHandle) === credential.userId
+        return userHandle !== undefined && isoBase64URL.toUTF8String(userHandle) === credential.userId
           ? RA.ok(undefined)
           : RA.err(PasskeyUserHandleMismatchError.create(credential.userId));
       }),
+      RA.andThrough(() => rejectCrossOriginClientData(input.response.response.clientDataJSON)),
       RA.andBind('authenticationInfo', async ({ challenge, credential }) => {
         try {
           const verification = await verifyAuthenticationResponse({
@@ -123,7 +125,11 @@ const create = ({
       }),
       RA.bind(
         'used',
-        ({ credential, authenticationInfo }) => PasskeyCredential.use(now)(credential, authenticationInfo.newCounter),
+        ({ credential, authenticationInfo }) =>
+          PasskeyCredential.use(now)(credential, {
+            counter: authenticationInfo.newCounter,
+            backedUp: authenticationInfo.credentialBackedUp,
+          }),
       ),
       RA.andThrough(({ used }) => passkeyUsedStore.store(used)),
       RA.bind('sessionStarted', ({ credential }) =>

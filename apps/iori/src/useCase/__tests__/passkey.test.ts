@@ -81,8 +81,11 @@ const setup = async () => {
     if (!started.ok) throw new Error(`unexpected ${started.err.type}`);
     return started.val;
   };
-  const registrationResponse = async (challenge: string): Promise<RegistrationResponseJSON> =>
-    authenticator.createRegistrationResponse({ challenge, origin, rpId });
+  const registrationResponse = async (
+    challenge: string,
+    params: Partial<{ backupEligible: boolean; backedUp: boolean; crossOrigin: boolean }> = {},
+  ): Promise<RegistrationResponseJSON> =>
+    authenticator.createRegistrationResponse({ challenge, origin, rpId, ...params });
   const register = async (name?: string) => {
     const { options, challengeId } = await beginRegistration();
     const response = await registrationResponse(options.challenge);
@@ -95,9 +98,23 @@ const setup = async () => {
   };
   const authenticationResponse = async (
     challenge: string,
-    params: Partial<{ counter: number; userHandle: string; origin: string }> = {},
+    { omitUserHandle = false, ...params }: Partial<{
+      counter: number;
+      userHandle: string;
+      omitUserHandle: boolean;
+      origin: string;
+      backupEligible: boolean;
+      backedUp: boolean;
+      crossOrigin: boolean;
+    }> = {},
   ): Promise<AuthenticationResponseJSON> =>
-    authenticator.createAuthenticationResponse({ challenge, origin, rpId, ...params });
+    authenticator.createAuthenticationResponse({
+      challenge,
+      origin,
+      rpId,
+      ...(omitUserHandle ? {} : { userHandle: isoBase64URL.fromUTF8String(user.id) }),
+      ...params,
+    });
 
   return {
     ...memory,
@@ -244,6 +261,18 @@ describe('FinishPasskeyRegistrationUseCase', () => {
     expect(h.credentials.size).toBe(0);
   });
 
+  it('ほかのオリジンの iframe の中で作った応答は失敗し、資格情報を保存しない', async () => {
+    const h = await setup();
+    const { options, challengeId } = await h.beginRegistration();
+    const response = await h.registrationResponse(options.challenge, { crossOrigin: true });
+
+    const result = await h.finishRegistration.run({ userId: h.user.id, challengeId, response });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.err.type).toBe('PasskeyVerificationFailedError');
+    expect(h.credentials.size).toBe(0);
+  });
+
   it('purpose が違う challenge は失敗する', async () => {
     const h = await setup();
     const { options, challengeId } = await h.beginAuthentication();
@@ -359,6 +388,63 @@ describe('FinishPasskeyAuthenticationUseCase', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.err.type).toBe('PasskeyCredentialNotFoundError');
     expect(h.sessionStartedStore.store).not.toHaveBeenCalled();
+  });
+
+  it('userHandle がない応答は失敗する', async () => {
+    const h = await setup();
+    await h.register();
+    const { options, challengeId } = await h.beginAuthentication();
+    const response = await h.authenticationResponse(options.challenge, { omitUserHandle: true });
+
+    const result = await h.finishAuthentication.run({ challengeId, response });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.err.type).toBe('PasskeyUserHandleMismatchError');
+    expect(h.sessionStartedStore.store).not.toHaveBeenCalled();
+  });
+
+  it('ほかのオリジンの iframe の中で作った応答は失敗し、セッションを開始しない', async () => {
+    const h = await setup();
+    await h.register();
+    const { options, challengeId } = await h.beginAuthentication();
+    const response = await h.authenticationResponse(options.challenge, { crossOrigin: true });
+
+    const result = await h.finishAuthentication.run({ challengeId, response });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.err.type).toBe('PasskeyVerificationFailedError');
+    expect(h.sessionStartedStore.store).not.toHaveBeenCalled();
+  });
+
+  it('ログインのたびに backedUp を応答の BS フラグに合わせる', async () => {
+    const h = await setup();
+    const registration = await h.beginRegistration();
+    await h.finishRegistration.run({
+      userId: h.user.id,
+      challengeId: registration.challengeId,
+      response: await h.registrationResponse(registration.options.challenge, { backupEligible: true }),
+    });
+    expect(h.credentials.get(h.authenticator.credentialId)).toMatchObject({ backedUp: false });
+
+    const first = await h.beginAuthentication();
+    const backedUp = await h.finishAuthentication.run({
+      challengeId: first.challengeId,
+      response: await h.authenticationResponse(first.options.challenge, {
+        counter: 1,
+        backupEligible: true,
+        backedUp: true,
+      }),
+    });
+    expect(backedUp.ok).toBe(true);
+    expect(h.credentials.get(h.authenticator.credentialId)).toMatchObject({ backedUp: true });
+
+    const second = await h.beginAuthentication();
+    const notBackedUp = await h.finishAuthentication.run({
+      challengeId: second.challengeId,
+      response: await h.authenticationResponse(second.options.challenge, { counter: 2, backupEligible: true }),
+    });
+    expect(notBackedUp.ok).toBe(true);
+    expect(h.credentials.get(h.authenticator.credentialId)).toMatchObject({ backedUp: false });
   });
 
   it('userHandle が資格情報の持ち主と違うと失敗する', async () => {

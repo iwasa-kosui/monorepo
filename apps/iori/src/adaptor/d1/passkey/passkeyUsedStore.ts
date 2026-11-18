@@ -12,6 +12,7 @@ export const createD1PasskeyUsedStore = (db: IoriD1Db): PasskeyUsedStore => ({
       db.update(passkeyCredentialsTable)
         .set({
           counter: event.eventPayload.counter,
+          backedUp: event.eventPayload.backedUp,
           lastUsedAt: new Date(event.eventPayload.lastUsedAt),
         })
         .where(eq(passkeyCredentialsTable.credentialId, event.eventPayload.credentialId)),

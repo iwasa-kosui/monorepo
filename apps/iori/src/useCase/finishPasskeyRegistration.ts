@@ -14,6 +14,7 @@ import type { WebAuthnChallengeConsumer, WebAuthnChallengeInvalidError } from '.
 import type { WebAuthnChallengeId } from '../domain/passkey/webAuthnChallengeId.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import { consumeWebAuthnChallengeWith } from './helper/consumeWebAuthnChallenge.ts';
+import { rejectCrossOriginClientData } from './helper/rejectCrossOriginClientData.ts';
 import type { UseCase } from './useCase.ts';
 
 type Input = Readonly<{
@@ -72,6 +73,7 @@ const create = ({
         purpose: 'registration',
         userId: input.userId,
       }),
+      RA.andThrough(() => rejectCrossOriginClientData(input.response.response.clientDataJSON)),
       RA.andThen(async (challenge) => {
         try {
           const verification = await verifyRegistrationResponse({

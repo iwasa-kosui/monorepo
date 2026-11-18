@@ -4,6 +4,7 @@ import {
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from '@simplewebauthn/server';
+import { isoBase64URL } from '@simplewebauthn/server/helpers';
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 
@@ -173,6 +174,7 @@ describe('passkey の D1 ストアとリゾルバー', () => {
         challenge: registration.options.challenge,
         origin,
         rpId: rpID,
+        backupEligible: true,
       }),
       name: 'テスト用の端末',
     });
@@ -186,7 +188,7 @@ describe('passkey の D1 ストアとリゾルバー', () => {
       counter: 0,
       name: 'テスト用の端末',
       transports: ['internal'],
-      deviceType: 'singleDevice',
+      deviceType: 'multiDevice',
       backedUp: false,
       lastUsedAt: null,
     });
@@ -199,6 +201,9 @@ describe('passkey の D1 ストアとリゾルバー', () => {
       origin,
       rpId: rpID,
       counter: 4,
+      userHandle: isoBase64URL.fromUTF8String(h.userId),
+      backupEligible: true,
+      backedUp: true,
     });
     const signedIn = await h.finishAuthentication.run({
       challengeId: authentication.challengeId,
@@ -209,7 +214,7 @@ describe('passkey の D1 ストアとリゾルバー', () => {
     const session = await createD1SessionResolver(db).resolve(signedIn.val.sessionId);
     expect(session.ok && session.val?.userId).toBe(h.userId);
     const used = await h.passkeyCredentialResolverByCredentialId.resolve(credentialId);
-    expect(used.ok && used.val).toMatchObject({ counter: 4 });
+    expect(used.ok && used.val).toMatchObject({ counter: 4, backedUp: true });
     expect(used.ok && used.val?.lastUsedAt).not.toBeNull();
 
     const reused = await h.finishAuthentication.run({
