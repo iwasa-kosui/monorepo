@@ -259,6 +259,10 @@
   stroke-width: 2;
 }
 
+.fig-bold {
+  stroke-width: 2.5;
+}
+
 .fig-mk {
   fill: var(--fig-line);
 }
