@@ -259,6 +259,10 @@
   stroke-width: 2;
 }
 
+.fig-bold {
+  stroke-width: 2.5;
+}
+
 .fig-mk {
   fill: var(--fig-line);
 }
@@ -278,6 +282,20 @@
 .fig-ring {
   stroke: var(--fig-surface);
   stroke-width: 2;
+}
+
+.fig-glow-agent,
+.fig-glow-human {
+  fill: none;
+  stroke-width: 3;
+}
+
+.fig-glow-agent {
+  stroke: var(--fig-agent);
+}
+
+.fig-glow-human {
+  stroke: var(--fig-human-strong);
 }
 
 .fig-sr-only,
@@ -302,29 +320,74 @@
   gap: 0.5rem;
 }
 
+.fig-tabs::before {
+  content: "クリックで切り替えられます";
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--fig-muted);
+}
+
 .fig-tab-label {
   padding: 0.375rem 0.875rem;
-  border: 1px solid var(--fig-rule);
+  border: 1px solid var(--fig-muted);
   border-radius: 9999px;
-  background: var(--fig-soft);
-  color: var(--fig-muted);
+  background: var(--fig-surface);
+  color: var(--fig-ink);
+  box-shadow: 0 2px 0 var(--fig-rule), 0 2px 6px rgb(0 0 0 / 0.08);
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.4;
   text-align: center;
   cursor: pointer;
+  transition:
+    color 0.15s,
+    background-color 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s,
+    transform 0.15s;
   user-select: none;
+}
+
+.fig-tabs > input:not(:checked) + .fig-tab-label:hover {
+  border-color: var(--fig-agent);
+  color: var(--fig-agent);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 var(--fig-rule), 0 4px 10px rgb(0 0 0 / 0.12);
+}
+
+.fig-tab-label:active {
+  transform: translateY(1px);
+  box-shadow: none;
 }
 
 .fig-tabs > input:checked + .fig-tab-label {
   border-color: var(--fig-ink);
   background: var(--fig-ink);
   color: var(--fig-surface);
+  box-shadow: none;
+  cursor: default;
 }
 
 .fig-tabs > input:focus-visible + .fig-tab-label {
   outline: 2px solid var(--fig-agent);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fig-tab-label {
+    transition: none;
+  }
+
+  .fig-tab-label:hover,
+  .fig-tab-label:active,
+  .fig-tabs > input:not(:checked) + .fig-tab-label:hover {
+    transform: none;
+  }
+
+  .fig-anim {
+    display: none;
+  }
 }
 
 .fig-panel {

@@ -19,3 +19,17 @@ if (html === undefined) {
 ---
 
 <Fragment set:html={html} />
+
+<script>
+document.addEventListener('change', (event) => {
+  const tabs = event.target instanceof Element
+    ? event.target.closest('.fig-tabs')
+    : null;
+  if (!tabs) return;
+  for (const svg of tabs.querySelectorAll<SVGSVGElement>('.fig-panel svg')) {
+    if (svg.querySelector('.fig-anim') && svg.checkVisibility()) {
+      svg.setCurrentTime(0);
+    }
+  }
+});
+</script>
