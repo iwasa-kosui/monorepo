@@ -1,0 +1,373 @@
+<figure class="fig">
+<div class="fig-headline">端末Bによる作業の再開と不整合</div>
+<div class="fig-tabs">
+<input type="radio" name="fig-cs-tab" id="fig-cs-tab-1" checked>
+<label for="fig-cs-tab-1" class="fig-tab-label">PRD の想定</label>
+<input type="radio" name="fig-cs-tab" id="fig-cs-tab-2">
+<label for="fig-cs-tab-2" class="fig-tab-label">実際の実装</label>
+<div class="fig-panel">
+<svg viewBox="0 0 560 322" role="img" aria-labelledby="fig-cs-1-title fig-cs-1-desc">
+<title id="fig-cs-1-title">PRD の想定のシーケンス図</title>
+<desc id="fig-cs-1-desc">ユーザー、端末A、端末B、作業の記録の4つのライフラインのシーケンス図です。ユーザーが端末Aで作業を開始し、端末Aが作業を作成します。ユーザーが端末Bでセットアップを開始し、端末Bも作業を作成します。その後、端末Aと端末Bが、それぞれ自分の作業を更新します。作業は端末ごとに独立しています。</desc>
+<path class="fig-line-rule fig-dash" d="M56 38V316"></path>
+<path class="fig-line-rule fig-dash" d="M176 38V316"></path>
+<path class="fig-line-rule fig-dash" d="M336 38V316"></path>
+<path class="fig-line-rule fig-dash" d="M496 38V316"></path>
+<rect class="fig-card" x="12" y="8" width="88" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="56" y="28.5">ユーザー</text>
+<rect class="fig-card" x="140" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="176" y="28.5">端末A</text>
+<rect class="fig-card" x="300" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="28.5">端末B</text>
+<rect class="fig-card" x="444" y="8" width="104" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="496" y="28.5">作業の記録</text>
+<path class="fig-line" d="M56 72L168 72"></path>
+<path class="fig-mk" d="M176 72L168 76L168 68Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="116" y="65">作業を開始</text>
+<path class="fig-line" d="M176 106L488 106"></path>
+<path class="fig-mk" d="M496 106L488 110L488 102Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="99">作業を作成</text>
+<path class="fig-line" d="M56 140L328 140"></path>
+<path class="fig-mk" d="M336 140L328 144L328 136Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="133">セットアップを開始</text>
+<path class="fig-line" d="M336 174L488 174"></path>
+<path class="fig-mk" d="M496 174L488 178L488 170Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="416" y="167">作業を作成</text>
+<path class="fig-line" d="M176 208L488 208"></path>
+<path class="fig-mk" d="M496 208L488 212L488 204Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="201">作業 A を更新</text>
+<path class="fig-line" d="M336 242L488 242"></path>
+<path class="fig-mk" d="M496 242L488 246L488 238Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="416" y="235">作業 B を更新</text>
+<rect class="fig-card-soft" x="332" y="274" width="220" height="32" rx="16"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="442" y="295.5">端末ごとに独立した作業</text>
+</svg>
+<div class="fig-callout">PRD では、端末ごとに独立した作業を作成することを想定しています。</div>
+</div>
+<div class="fig-panel">
+<div class="fig-steps">
+<input type="radio" name="fig-cs-step" id="fig-cs-step-1" aria-label="ステップ 1 / 6" checked>
+<input type="radio" name="fig-cs-step" id="fig-cs-step-2" aria-label="ステップ 2 / 6">
+<input type="radio" name="fig-cs-step" id="fig-cs-step-3" aria-label="ステップ 3 / 6">
+<input type="radio" name="fig-cs-step" id="fig-cs-step-4" aria-label="ステップ 4 / 6">
+<input type="radio" name="fig-cs-step" id="fig-cs-step-5" aria-label="ステップ 5 / 6">
+<input type="radio" name="fig-cs-step" id="fig-cs-step-6" aria-label="ステップ 6 / 6">
+<div class="fig-step">
+<div class="fig-step-nav">
+<span class="fig-step-prev fig-step-off" aria-disabled="true">← 戻る</span>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-cs-step-1" aria-label="ステップ 1" aria-current="step"></label>
+<label for="fig-cs-step-2" aria-label="ステップ 2"></label>
+<label for="fig-cs-step-3" aria-label="ステップ 3"></label>
+<label for="fig-cs-step-4" aria-label="ステップ 4"></label>
+<label for="fig-cs-step-5" aria-label="ステップ 5"></label>
+<label for="fig-cs-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">1 / 6</span>
+</div>
+<label for="fig-cs-step-2" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 396" role="img" aria-labelledby="fig-cs-s1-title fig-cs-s1-desc">
+<title id="fig-cs-s1-title">実際の実装のシーケンス図 ステップ 1</title>
+<desc id="fig-cs-s1-desc">ユーザーが端末Aで作業を開始し、端末Aが作業の記録に作業を作成します。</desc>
+<path class="fig-line-rule fig-dash" d="M56 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M176 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M336 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M496 38V390"></path>
+<rect class="fig-card" x="12" y="8" width="88" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="56" y="28.5">ユーザー</text>
+<rect class="fig-card" x="140" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="176" y="28.5">端末A</text>
+<rect class="fig-card" x="300" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="28.5">端末B</text>
+<rect class="fig-card" x="444" y="8" width="104" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="496" y="28.5">作業の記録</text>
+<path class="fig-line-agent fig-thick" d="M56 72L168 72"></path>
+<path class="fig-mk-agent" d="M176 72L168 76L168 68Z"></path>
+<text class="fig-t fig-t-sm fig-b fig-c-agent fig-mid" x="116" y="65">作業を開始</text>
+<path class="fig-line-agent fig-thick" d="M176 106L488 106"></path>
+<path class="fig-mk-agent" d="M496 106L488 110L488 102Z"></path>
+<text class="fig-t fig-t-sm fig-b fig-c-agent" x="186" y="99">作業を作成</text>
+</svg>
+<div class="fig-callout">ユーザーが端末Aで作業を開始し、端末Aは作業の記録を作成します。ここまでは PRD の想定と同じです。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-cs-step-1" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-cs-step-1" aria-label="ステップ 1"></label>
+<label for="fig-cs-step-2" aria-label="ステップ 2" aria-current="step"></label>
+<label for="fig-cs-step-3" aria-label="ステップ 3"></label>
+<label for="fig-cs-step-4" aria-label="ステップ 4"></label>
+<label for="fig-cs-step-5" aria-label="ステップ 5"></label>
+<label for="fig-cs-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">2 / 6</span>
+</div>
+<label for="fig-cs-step-3" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 396" role="img" aria-labelledby="fig-cs-s2-title fig-cs-s2-desc">
+<title id="fig-cs-s2-title">実際の実装のシーケンス図 ステップ 2</title>
+<desc id="fig-cs-s2-desc">同じユーザーが端末Bでセットアップを開始します。</desc>
+<path class="fig-line-rule fig-dash" d="M56 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M176 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M336 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M496 38V390"></path>
+<rect class="fig-card" x="12" y="8" width="88" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="56" y="28.5">ユーザー</text>
+<rect class="fig-card" x="140" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="176" y="28.5">端末A</text>
+<rect class="fig-card" x="300" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="28.5">端末B</text>
+<rect class="fig-card" x="444" y="8" width="104" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="496" y="28.5">作業の記録</text>
+<path class="fig-line" d="M56 72L168 72"></path>
+<path class="fig-mk" d="M176 72L168 76L168 68Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="116" y="65">作業を開始</text>
+<path class="fig-line" d="M176 106L488 106"></path>
+<path class="fig-mk" d="M496 106L488 110L488 102Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="99">作業を作成</text>
+<path class="fig-line-agent fig-thick" d="M56 140L328 140"></path>
+<path class="fig-mk-agent" d="M336 140L328 144L328 136Z"></path>
+<text class="fig-t fig-t-sm fig-b fig-c-agent" x="186" y="133">セットアップを開始</text>
+</svg>
+<div class="fig-callout">同じユーザーが、端末Bでもセットアップを開始します。ユーザーが複数の端末を並行して準備する場面です。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-cs-step-2" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-cs-step-1" aria-label="ステップ 1"></label>
+<label for="fig-cs-step-2" aria-label="ステップ 2"></label>
+<label for="fig-cs-step-3" aria-label="ステップ 3" aria-current="step"></label>
+<label for="fig-cs-step-4" aria-label="ステップ 4"></label>
+<label for="fig-cs-step-5" aria-label="ステップ 5"></label>
+<label for="fig-cs-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">3 / 6</span>
+</div>
+<label for="fig-cs-step-4" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 396" role="img" aria-labelledby="fig-cs-s3-title fig-cs-s3-desc">
+<title id="fig-cs-s3-title">実際の実装のシーケンス図 ステップ 3</title>
+<desc id="fig-cs-s3-desc">端末Bが、進行中の作業を作業の記録から取得します。作業の記録は、端末Aの作業を端末Bに返します。</desc>
+<path class="fig-line-rule fig-dash" d="M56 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M176 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M336 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M496 38V390"></path>
+<rect class="fig-card" x="12" y="8" width="88" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="56" y="28.5">ユーザー</text>
+<rect class="fig-card" x="140" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="176" y="28.5">端末A</text>
+<rect class="fig-card" x="300" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="28.5">端末B</text>
+<rect class="fig-card" x="444" y="8" width="104" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="496" y="28.5">作業の記録</text>
+<path class="fig-line" d="M56 72L168 72"></path>
+<path class="fig-mk" d="M176 72L168 76L168 68Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="116" y="65">作業を開始</text>
+<path class="fig-line" d="M176 106L488 106"></path>
+<path class="fig-mk" d="M496 106L488 110L488 102Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="99">作業を作成</text>
+<path class="fig-line" d="M56 140L328 140"></path>
+<path class="fig-mk" d="M336 140L328 144L328 136Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="133">セットアップを開始</text>
+<path class="fig-line-agent fig-thick" d="M336 174L488 174"></path>
+<path class="fig-mk-agent" d="M496 174L488 178L488 170Z"></path>
+<text class="fig-t fig-t-sm fig-b fig-c-agent fig-mid" x="416" y="167">進行中の作業を取得</text>
+<path class="fig-line-agent fig-thick fig-dash" d="M496 208L344 208"></path>
+<path class="fig-mk-agent" d="M336 208L344 204L344 212Z"></path>
+<text class="fig-t fig-t-sm fig-b fig-c-agent fig-mid" x="416" y="201">端末Aの作業</text>
+</svg>
+<div class="fig-callout">端末Bは、新しい作業を作成せずに、進行中の作業を取得します。端末Bが取得する作業は、端末Aで開始した作業です。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-cs-step-3" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-cs-step-1" aria-label="ステップ 1"></label>
+<label for="fig-cs-step-2" aria-label="ステップ 2"></label>
+<label for="fig-cs-step-3" aria-label="ステップ 3"></label>
+<label for="fig-cs-step-4" aria-label="ステップ 4" aria-current="step"></label>
+<label for="fig-cs-step-5" aria-label="ステップ 5"></label>
+<label for="fig-cs-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">4 / 6</span>
+</div>
+<label for="fig-cs-step-5" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 396" role="img" aria-labelledby="fig-cs-s4-title fig-cs-s4-desc">
+<title id="fig-cs-s4-title">実際の実装のシーケンス図 ステップ 4</title>
+<desc id="fig-cs-s4-desc">端末Bが、端末Aの作業を再開します。この振る舞いは PRD に記述がありません。</desc>
+<path class="fig-line-rule fig-dash" d="M56 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M176 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M336 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M496 38V390"></path>
+<rect class="fig-card" x="12" y="8" width="88" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="56" y="28.5">ユーザー</text>
+<rect class="fig-card" x="140" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="176" y="28.5">端末A</text>
+<rect class="fig-card" x="300" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="28.5">端末B</text>
+<rect class="fig-card" x="444" y="8" width="104" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="496" y="28.5">作業の記録</text>
+<path class="fig-line" d="M56 72L168 72"></path>
+<path class="fig-mk" d="M176 72L168 76L168 68Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="116" y="65">作業を開始</text>
+<path class="fig-line" d="M176 106L488 106"></path>
+<path class="fig-mk" d="M496 106L488 110L488 102Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="99">作業を作成</text>
+<path class="fig-line" d="M56 140L328 140"></path>
+<path class="fig-mk" d="M336 140L328 144L328 136Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="133">セットアップを開始</text>
+<path class="fig-line" d="M336 174L488 174"></path>
+<path class="fig-mk" d="M496 174L488 178L488 170Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="416" y="167">進行中の作業を取得</text>
+<path class="fig-line fig-dash" d="M496 208L344 208"></path>
+<path class="fig-mk" d="M336 208L344 204L344 212Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="416" y="201">端末Aの作業</text>
+<path class="fig-line-problem fig-thick" d="M336 242L366 242L366 264L345 264"></path>
+<path class="fig-mk-problem" d="M337 264L345 260L345 268Z"></path>
+<text class="fig-t fig-t-sm fig-b fig-c-problem" x="376" y="258">作業を再開</text>
+<rect class="fig-card-problem" x="196" y="229" width="130" height="40" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="261" y="246">PRD に記述の</text>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="261" y="263">ない振る舞い</text>
+<path class="fig-line-problem fig-dash" d="M326 249H334"></path>
+</svg>
+<div class="fig-callout">端末Bは、端末Aの作業をそのまま再開します。この振る舞いは PRD に記述されていません。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-cs-step-4" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-cs-step-1" aria-label="ステップ 1"></label>
+<label for="fig-cs-step-2" aria-label="ステップ 2"></label>
+<label for="fig-cs-step-3" aria-label="ステップ 3"></label>
+<label for="fig-cs-step-4" aria-label="ステップ 4"></label>
+<label for="fig-cs-step-5" aria-label="ステップ 5" aria-current="step"></label>
+<label for="fig-cs-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">5 / 6</span>
+</div>
+<label for="fig-cs-step-6" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 396" role="img" aria-labelledby="fig-cs-s5-title fig-cs-s5-desc">
+<title id="fig-cs-s5-title">実際の実装のシーケンス図 ステップ 5</title>
+<desc id="fig-cs-s5-desc">端末Aと端末Bが、同じ作業の記録を更新します。</desc>
+<path class="fig-line-rule fig-dash" d="M56 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M176 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M336 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M496 38V390"></path>
+<rect class="fig-card" x="12" y="8" width="88" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="56" y="28.5">ユーザー</text>
+<rect class="fig-card" x="140" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="176" y="28.5">端末A</text>
+<rect class="fig-card" x="300" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="28.5">端末B</text>
+<rect class="fig-card" x="444" y="8" width="104" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="496" y="28.5">作業の記録</text>
+<path class="fig-line" d="M56 72L168 72"></path>
+<path class="fig-mk" d="M176 72L168 76L168 68Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="116" y="65">作業を開始</text>
+<path class="fig-line" d="M176 106L488 106"></path>
+<path class="fig-mk" d="M496 106L488 110L488 102Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="99">作業を作成</text>
+<path class="fig-line" d="M56 140L328 140"></path>
+<path class="fig-mk" d="M336 140L328 144L328 136Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="133">セットアップを開始</text>
+<path class="fig-line" d="M336 174L488 174"></path>
+<path class="fig-mk" d="M496 174L488 178L488 170Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="416" y="167">進行中の作業を取得</text>
+<path class="fig-line fig-dash" d="M496 208L344 208"></path>
+<path class="fig-mk" d="M336 208L344 204L344 212Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="416" y="201">端末Aの作業</text>
+<path class="fig-line" d="M336 242L366 242L366 264L345 264"></path>
+<path class="fig-mk" d="M337 264L345 260L345 268Z"></path>
+<text class="fig-t fig-t-sm" x="376" y="258">作業を再開</text>
+<path class="fig-line-agent fig-thick" d="M176 298L488 298"></path>
+<path class="fig-mk-agent" d="M496 298L488 302L488 294Z"></path>
+<text class="fig-t fig-t-sm fig-b fig-c-agent" x="186" y="291">作業を更新</text>
+<path class="fig-line-agent fig-thick" d="M336 332L488 332"></path>
+<path class="fig-mk-agent" d="M496 332L488 336L488 328Z"></path>
+<text class="fig-t fig-t-sm fig-b fig-c-agent fig-mid" x="416" y="325">作業を更新</text>
+<rect class="fig-card-problem" x="196" y="229" width="130" height="40" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="261" y="246">PRD に記述の</text>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="261" y="263">ない振る舞い</text>
+<path class="fig-line-problem fig-dash" d="M326 249H334"></path>
+</svg>
+<div class="fig-callout">端末Aと端末Bが、同じ作業の記録を更新します。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-cs-step-5" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-cs-step-1" aria-label="ステップ 1"></label>
+<label for="fig-cs-step-2" aria-label="ステップ 2"></label>
+<label for="fig-cs-step-3" aria-label="ステップ 3"></label>
+<label for="fig-cs-step-4" aria-label="ステップ 4"></label>
+<label for="fig-cs-step-5" aria-label="ステップ 5"></label>
+<label for="fig-cs-step-6" aria-label="ステップ 6" aria-current="step"></label>
+</div>
+<span class="fig-step-count">6 / 6</span>
+</div>
+<label for="fig-cs-step-1" class="fig-step-next">最初から</label>
+</div>
+<svg viewBox="0 0 560 396" role="img" aria-labelledby="fig-cs-s6-title fig-cs-s6-desc">
+<title id="fig-cs-s6-title">実際の実装のシーケンス図 ステップ 6</title>
+<desc id="fig-cs-s6-desc">2台の更新が衝突し、作業の記録に不整合が発生します。</desc>
+<path class="fig-line-rule fig-dash" d="M56 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M176 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M336 38V390"></path>
+<path class="fig-line-rule fig-dash" d="M496 38V390"></path>
+<rect class="fig-card" x="12" y="8" width="88" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="56" y="28.5">ユーザー</text>
+<rect class="fig-card" x="140" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="176" y="28.5">端末A</text>
+<rect class="fig-card" x="300" y="8" width="72" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="28.5">端末B</text>
+<rect class="fig-card" x="444" y="8" width="104" height="30" rx="15"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="496" y="28.5">作業の記録</text>
+<path class="fig-line" d="M56 72L168 72"></path>
+<path class="fig-mk" d="M176 72L168 76L168 68Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="116" y="65">作業を開始</text>
+<path class="fig-line" d="M176 106L488 106"></path>
+<path class="fig-mk" d="M496 106L488 110L488 102Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="99">作業を作成</text>
+<path class="fig-line" d="M56 140L328 140"></path>
+<path class="fig-mk" d="M336 140L328 144L328 136Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="133">セットアップを開始</text>
+<path class="fig-line" d="M336 174L488 174"></path>
+<path class="fig-mk" d="M496 174L488 178L488 170Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="416" y="167">進行中の作業を取得</text>
+<path class="fig-line fig-dash" d="M496 208L344 208"></path>
+<path class="fig-mk" d="M336 208L344 204L344 212Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="416" y="201">端末Aの作業</text>
+<path class="fig-line" d="M336 242L366 242L366 264L345 264"></path>
+<path class="fig-mk" d="M337 264L345 260L345 268Z"></path>
+<text class="fig-t fig-t-sm" x="376" y="258">作業を再開</text>
+<path class="fig-line" d="M176 298L488 298"></path>
+<path class="fig-mk" d="M496 298L488 302L488 294Z"></path>
+<text class="fig-t fig-t-sm" x="186" y="291">作業を更新</text>
+<path class="fig-line" d="M336 332L488 332"></path>
+<path class="fig-mk" d="M496 332L488 336L488 328Z"></path>
+<text class="fig-t fig-t-sm fig-mid" x="416" y="325">作業を更新</text>
+<rect class="fig-card-problem" x="196" y="229" width="130" height="40" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="261" y="246">PRD に記述の</text>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-problem" x="261" y="263">ない振る舞い</text>
+<path class="fig-line-problem fig-dash" d="M326 249H334"></path>
+<rect class="fig-pill-problem" x="456" y="352" width="80" height="28" rx="14"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-problem" x="496" y="371.5">不整合</text>
+</svg>
+<div class="fig-callout">2台の更新が衝突し、作業の記録に不整合が発生します。PRD を起点にした検証は、この振る舞いを対象にしていません。</div>
+</div>
+</div>
+</div>
+</div>
+<figcaption>PRD では端末ごとに独立した作業を想定していましたが、実装では端末Bが端末Aの作業を再開し、不整合が発生します。</figcaption>
+</figure>

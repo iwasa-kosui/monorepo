@@ -1,0 +1,186 @@
+<figure class="fig">
+<div class="fig-headline">人の関与箇所の比較</div>
+<div class="fig-tabs">
+<input type="radio" name="fig-fs-tab" id="fig-fs-tab-1" checked>
+<label for="fig-fs-tab-1" class="fig-tab-label">ターミナルで指示する開発</label>
+<input type="radio" name="fig-fs-tab" id="fig-fs-tab-2">
+<label for="fig-fs-tab-2" class="fig-tab-label">ソフトウェアファクトリー</label>
+<input type="radio" name="fig-fs-tab" id="fig-fs-tab-3">
+<label for="fig-fs-tab-3" class="fig-tab-label">ループの構造</label>
+<div class="fig-panel">
+<svg viewBox="0 0 560 244" role="img" aria-labelledby="fig-fs-1-title fig-fs-1-desc">
+<title id="fig-fs-1-title">ターミナルで指示する開発の時間軸</title>
+<desc id="fig-fs-1-desc">横軸を時間とし、上段に人、下段にエージェントを置いた図です。人の指示、エージェントの実行、人の確認が交互に3回続きます。2回目と3回目の間に、人が離席している区間があります。この区間では、エージェントも停止しています。課題ごとに人の入力が必要です。</desc>
+<rect class="fig-card-soft" x="0" y="28" width="560" height="52" rx="12"></rect>
+<rect class="fig-card-soft" x="0" y="130" width="560" height="52" rx="12"></rect>
+<rect class="fig-band" x="296" y="24" width="108" height="162" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-muted" x="350" y="59.5">離席</text>
+<text class="fig-t fig-t fig-b fig-c-human" x="8" y="20">人</text>
+<text class="fig-t fig-t fig-b fig-end fig-c-human" x="552" y="20">課題ごとに人の入力が必要</text>
+<text class="fig-t fig-t fig-b fig-c-agent" x="8" y="206">エージェント</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="8" y="231">時間</text>
+<path class="fig-line" d="M50 226L544 226"></path>
+<path class="fig-mk" d="M552 226L544 230L544 222Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-muted" x="350" y="161.5">停止</text>
+<rect class="fig-card-human" x="8" y="32" width="42" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="29" y="59.5">指示</text>
+<rect class="fig-card-agent" x="54" y="134" width="42" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="75" y="161.5">実行</text>
+<rect class="fig-card-human" x="100" y="32" width="42" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="121" y="59.5">確認</text>
+<path class="fig-line" d="M35 79L64.7 125.3"></path>
+<path class="fig-mk" d="M69 132L61.3 127.4L68 123.1Z"></path>
+<path class="fig-line" d="M81 132L110.6 86.7"></path>
+<path class="fig-mk" d="M115 80L114 88.9L107.3 84.5Z"></path>
+<rect class="fig-card-human" x="146" y="32" width="42" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="167" y="59.5">指示</text>
+<rect class="fig-card-agent" x="192" y="134" width="42" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="213" y="161.5">実行</text>
+<rect class="fig-card-human" x="238" y="32" width="42" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="259" y="59.5">確認</text>
+<path class="fig-line" d="M173 79L202.7 125.3"></path>
+<path class="fig-mk" d="M207 132L199.3 127.4L206 123.1Z"></path>
+<path class="fig-line" d="M219 132L248.6 86.7"></path>
+<path class="fig-mk" d="M253 80L252 88.9L245.3 84.5Z"></path>
+<rect class="fig-card-human" x="412" y="32" width="42" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="433" y="59.5">指示</text>
+<rect class="fig-card-agent" x="458" y="134" width="42" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="479" y="161.5">実行</text>
+<rect class="fig-card-human" x="504" y="32" width="42" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="525" y="59.5">確認</text>
+<path class="fig-line" d="M439 79L468.7 125.3"></path>
+<path class="fig-mk" d="M473 132L465.3 127.4L472 123.1Z"></path>
+<path class="fig-line" d="M485 132L514.6 86.7"></path>
+<path class="fig-mk" d="M519 80L518 88.9L511.3 84.5Z"></path>
+</svg>
+</div>
+<div class="fig-panel">
+<svg viewBox="0 0 560 244" role="img" aria-labelledby="fig-fs-2-title fig-fs-2-desc">
+<title id="fig-fs-2-title">ソフトウェアファクトリーの時間軸</title>
+<desc id="fig-fs-2-desc">横軸を時間とし、上段に人、下段にエージェントを置いた図です。人は、左端で意図を作成し、中ほどで論点に回答し、右端でマージを判断します。エージェントは、左端でバックログと論点を生成し、その後、実装とレビューの循環を右端まで続けます。生成から最初の循環へ矢印が伸びます。人が離席している区間でも、エージェントは止まりません。右端の手前にレビュー待ちの列があり、そこから人のマージの判断へ線が伸びます。人の関与は3点に限定されます。</desc>
+<rect class="fig-card-soft" x="0" y="28" width="560" height="52" rx="12"></rect>
+<rect class="fig-card-soft" x="0" y="130" width="560" height="52" rx="12"></rect>
+<rect class="fig-band" x="296" y="24" width="108" height="162" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-muted" x="350" y="59.5">離席</text>
+<text class="fig-t fig-t fig-b fig-c-human" x="8" y="20">人</text>
+<text class="fig-t fig-t fig-b fig-end fig-c-human" x="552" y="20">人の関与は3点に限定</text>
+<text class="fig-t fig-t fig-b fig-c-agent" x="8" y="206">エージェント</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="8" y="231">時間</text>
+<path class="fig-line" d="M50 226L544 226"></path>
+<path class="fig-mk" d="M552 226L544 230L544 222Z"></path>
+<circle class="fig-fill-human" cx="17" cy="54" r="9"></circle>
+<text class="fig-t fig-t-sm" x="32" y="59.5">意図を作成</text>
+<circle class="fig-fill-human" cx="196" cy="54" r="9"></circle>
+<text class="fig-t fig-t-sm" x="211" y="59.5">論点に回答</text>
+<circle class="fig-fill-human" cx="529" cy="54" r="9"></circle>
+<text class="fig-t fig-t-sm fig-end" x="514" y="59.5">マージを判断</text>
+<rect class="fig-card-agent" x="8" y="134" width="112" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="64" y="151">バックログと</text>
+<text class="fig-t fig-t-sm fig-mid" x="64" y="169">論点を生成</text>
+<path class="fig-line" d="M120 156L154 156"></path>
+<path class="fig-mk" d="M160 156L154 159L154 153Z"></path>
+<rect class="fig-card-agent" x="160" y="134" width="140" height="44" rx="10"></rect>
+<path class="fig-line-agent" d="M170.1 152A8 8 0 0 1 183.9 152"></path>
+<path class="fig-mk-agent" d="M185.4 154.6L179.4 151.2L185.5 147.7Z"></path>
+<path class="fig-line-agent" d="M183.9 160A8 8 0 0 1 170.1 160"></path>
+<path class="fig-mk-agent" d="M168.6 157.4L174.6 160.8L168.5 164.3Z"></path>
+<text class="fig-t fig-t-sm" x="191" y="161.5">実装⇄レビュー</text>
+<rect class="fig-card-agent" x="312" y="134" width="140" height="44" rx="10"></rect>
+<path class="fig-line-agent" d="M322.1 152A8 8 0 0 1 335.9 152"></path>
+<path class="fig-mk-agent" d="M337.4 154.6L331.4 151.2L337.5 147.7Z"></path>
+<path class="fig-line-agent" d="M335.9 160A8 8 0 0 1 322.1 160"></path>
+<path class="fig-mk-agent" d="M320.6 157.4L326.6 160.8L320.5 164.3Z"></path>
+<text class="fig-t fig-t-sm" x="343" y="161.5">実装⇄レビュー</text>
+<path class="fig-line" d="M300 156L306 156"></path>
+<path class="fig-mk" d="M312 156L306 159L306 153Z"></path>
+<path class="fig-line" d="M452 156L458 156"></path>
+<path class="fig-mk" d="M464 156L458 159L458 153Z"></path>
+<rect class="fig-card" x="466" y="139" width="22" height="34" rx="5"></rect>
+<rect class="fig-card" x="492" y="139" width="22" height="34" rx="5"></rect>
+<rect class="fig-card" x="518" y="139" width="22" height="34" rx="5"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="504" y="206">レビュー待ち</text>
+<path class="fig-line" d="M529 137L529 73"></path>
+<path class="fig-mk" d="M529 65L533 73L525 73Z"></path>
+</svg>
+</div>
+<div class="fig-panel">
+<svg viewBox="0 0 568 480" role="img" aria-labelledby="fig-fs-3-title fig-fs-3-desc">
+<title id="fig-fs-3-title">ループの構造</title>
+<desc id="fig-fs-3-desc">上段の左に、人が記述する意図と、ナレッジベースが並ぶ図です。この2つから、エージェントがバックログと論点を生成します。バックログからは、課題を取得する線が worker と reviewer の循環へ向かいます。論点からは、人が回答する線が人へ向かい、仮の案で実装を継続する破線が worker と reviewer の循環へ向かいます。worker と reviewer の循環は、指摘が解消されるまで自動で反復されます。循環の出力は PR になり、PR の上には、PR ごとに作成する解説ページがあります。人が解説ページを読んで判断する線は、判断・マージに向かいます。PR と判断・マージの間には、上限のあるレビュー待ちの列があります。上限に達すると、新しい課題を取得しない経路が worker に戻ります。下部では、retro がスキル改善の PR を作成し、その PR が判断・マージに届きます。</desc>
+<rect class="fig-card-human" x="8" y="12" width="60" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="38" y="35.5">意図</text>
+<rect class="fig-card" x="88" y="12" width="125" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="150.5" y="35.5">ナレッジベース</text>
+<path class="fig-line-agent" d="M38 48L38 58L132 58L132 72"></path>
+<path class="fig-mk-agent" d="M132 80L128 72L136 72Z"></path>
+<path class="fig-line-agent" d="M150 48L150 72"></path>
+<path class="fig-mk-agent" d="M150 80L146 72L154 72Z"></path>
+<rect class="fig-card-agent" x="119" y="80" width="50" height="28" rx="14"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="144" y="99.5">生成</text>
+<path class="fig-line-agent" d="M144 108L144 132"></path>
+<path class="fig-mk-agent" d="M144 140L140 132L148 132Z"></path>
+<path class="fig-line-agent" d="M169 94L236 94L236 132"></path>
+<path class="fig-mk-agent" d="M236 140L232 132L240 132Z"></path>
+<rect class="fig-card" x="98" y="140" width="92" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="144" y="163.5">バックログ</text>
+<rect class="fig-card" x="204" y="140" width="64" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="236" y="163.5">論点</text>
+<path class="fig-line" d="M144 176L144 266"></path>
+<path class="fig-mk" d="M144 274L140 266L148 266Z"></path>
+<text class="fig-t fig-t-sm fig-end fig-c-muted" x="136" y="232">課題を取得</text>
+<rect class="fig-pill-human" x="520" y="20" width="36" height="24" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="538" y="37.5">人</text>
+<path class="fig-line-human" d="M268 158L538 158L538 54"></path>
+<path class="fig-mk-human" d="M538 46L534 54L542 54Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-c-human" x="403" y="150">人が回答</text>
+<path class="fig-line fig-dash" d="M212 176L212 288L184 288"></path>
+<path class="fig-mk" d="M176 288L184 284L184 292Z"></path>
+<text class="fig-t fig-t-sm fig-c-muted" x="220" y="200">仮の案で実装を継続</text>
+<circle class="fig-card-agent" cx="144" cy="316" r="42"></circle>
+<path class="fig-mk-agent" d="M174.8 287L164.7 285.1L171.1 277.4Z"></path>
+<path class="fig-mk-agent" d="M113.2 345L123.3 346.9L116.9 354.6Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="144" y="302">worker</text>
+<text class="fig-t fig-t-sm fig-mid" x="144" y="320">⇄</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="144" y="338">reviewer</text>
+<text class="fig-t fig-t-sm fig-mid" x="144" y="386">指摘が解消されるまで</text>
+<text class="fig-t fig-t-sm fig-mid" x="144" y="404">自動で反復</text>
+<path class="fig-line" d="M186 316L218 316"></path>
+<path class="fig-mk" d="M226 316L218 312L218 320Z"></path>
+<rect class="fig-card" x="226" y="296" width="88" height="40" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="270" y="321.5">PR</text>
+<path class="fig-line" d="M270 296L270 260"></path>
+<path class="fig-mk" d="M270 252L266 260L274 260Z"></path>
+<text class="fig-t fig-t-sm fig-c-muted" x="280" y="276">PR ごとに作成</text>
+<rect class="fig-card" x="226" y="216" width="88" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="270" y="239.5">解説ページ</text>
+<path class="fig-line-human" d="M314 234L466 234L466 288"></path>
+<path class="fig-mk-human" d="M466 296L462 288L470 288Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-c-human" x="390" y="226">人が読んで判断する</text>
+<path class="fig-line" d="M314 316L326 316"></path>
+<path class="fig-mk" d="M334 316L326 312L326 320Z"></path>
+<rect class="fig-card" x="334" y="284" width="100" height="64" rx="10"></rect>
+<rect class="fig-card-soft" x="347" y="292" width="22" height="14" rx="4"></rect>
+<rect class="fig-card-soft" x="373" y="292" width="22" height="14" rx="4"></rect>
+<rect class="fig-card-soft" x="399" y="292" width="22" height="14" rx="4"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="384" y="328">レビュー待ち</text>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="384" y="344">（上限あり）</text>
+<path class="fig-line" d="M434 316L446 316"></path>
+<path class="fig-mk" d="M454 316L446 312L446 320Z"></path>
+<rect class="fig-card-human" x="454" y="296" width="104" height="40" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="506" y="321.5">判断・マージ</text>
+<path class="fig-line fig-dash" d="M384 348L384 366L206 366L206 334L191 334"></path>
+<path class="fig-mk" d="M183 334L191 330L191 338Z"></path>
+<text class="fig-t fig-t-sm fig-c-muted" x="232" y="388">上限に達すると新しい課題を取得しない</text>
+<rect class="fig-card-agent" x="8" y="424" width="68" height="40" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="42" y="449.5">retro</text>
+<path class="fig-line" d="M76 444L92 444"></path>
+<path class="fig-mk" d="M100 444L92 448L92 440Z"></path>
+<rect class="fig-card" x="100" y="424" width="168" height="40" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="184" y="449.5">スキル改善の PR</text>
+<path class="fig-line-agent" d="M268 444L506 444L506 344"></path>
+<path class="fig-mk-agent" d="M506 336L510 344L502 344Z"></path>
+</svg>
+</div>
+</div>
+<figcaption>ターミナルで指示する開発では、課題ごとに人の入力が必要です。ソフトウェアファクトリーでは、人の関与は意図の作成、論点への回答、マージの判断の3点に限定されます。</figcaption>
+</figure>

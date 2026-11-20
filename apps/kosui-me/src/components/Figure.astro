@@ -1,0 +1,21 @@
+---
+interface Props {
+  name: string;
+}
+
+const { name } = Astro.props;
+
+const figures = import.meta.glob<string>('../figures/*.html', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+
+const html = figures[`../figures/${name}.html`];
+
+if (html === undefined) {
+  throw new Error(`Figure "${name}" not found in src/figures/`);
+}
+---
+
+<Fragment set:html={html} />

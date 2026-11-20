@@ -1,0 +1,191 @@
+<figure class="fig">
+<div class="fig-headline">ビジネスロジックの分散と照合の漏れ</div>
+<div class="fig-steps">
+<input type="radio" name="fig-ls-step" id="fig-ls-step-1" aria-label="ステップ 1 / 3" checked>
+<input type="radio" name="fig-ls-step" id="fig-ls-step-2" aria-label="ステップ 2 / 3">
+<input type="radio" name="fig-ls-step" id="fig-ls-step-3" aria-label="ステップ 3 / 3">
+<div class="fig-step">
+<div class="fig-step-nav">
+<span class="fig-step-prev fig-step-off" aria-disabled="true">← 戻る</span>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-ls-step-1" aria-label="ステップ 1" aria-current="step"></label>
+<label for="fig-ls-step-2" aria-label="ステップ 2"></label>
+<label for="fig-ls-step-3" aria-label="ステップ 3"></label>
+</div>
+<span class="fig-step-count">1 / 3</span>
+</div>
+<label for="fig-ls-step-2" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-ls-s1-title fig-ls-s1-desc">
+<title id="fig-ls-s1-title">コードの構造 ステップ 1</title>
+<desc id="fig-ls-s1-desc">左にPRDの3つの業務ルール、右にコードの4つのファイル（画面、ハンドラ、バッチ、リポジトリ）を並べた図です。各ファイルには、コードの行を表す横棒があり、ビジネスロジックを表す横棒は複数のファイルにあります。リポジトリの1本の横棒は灰色で、取得条件というラベルが付いています。</desc>
+<rect class="fig-card" x="8" y="40" width="176" height="232" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-b" x="20" y="62">PRD</text>
+<rect class="fig-card-soft" x="18" y="79" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="105.5">作業を開始する</text>
+<rect class="fig-card-soft" x="18" y="127" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="153.5">作業を完了する</text>
+<rect class="fig-card-soft" x="18" y="175" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="193">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="210">端末で再開する</text>
+<rect class="fig-card" x="252" y="40" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="51" width="120" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="63" width="160" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="75" width="90" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="71">画面</text>
+<rect class="fig-card" x="252" y="100" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar" x="262" y="111" width="140" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="123" width="110" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="135" width="170" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="131">ハンドラ</text>
+<rect class="fig-card" x="252" y="160" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="171" width="100" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="183" width="150" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="195" width="140" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="191">バッチ</text>
+<rect class="fig-card" x="252" y="220" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="231" width="130" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="243" width="90" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="255" width="70" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="251">リポジトリ</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="340" y="264">取得条件</text>
+<rect class="fig-bar-agent" x="252" y="296" width="28" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm" x="290" y="304">ビジネスロジック</text>
+<rect class="fig-bar" x="418" y="296" width="28" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm" x="456" y="304">ほかのコード</text>
+</svg>
+<div class="fig-callout">ビジネスロジックが、画面、ハンドラ、リポジトリなどの複数のファイルに分散しています。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-ls-step-1" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-ls-step-1" aria-label="ステップ 1"></label>
+<label for="fig-ls-step-2" aria-label="ステップ 2" aria-current="step"></label>
+<label for="fig-ls-step-3" aria-label="ステップ 3"></label>
+</div>
+<span class="fig-step-count">2 / 3</span>
+</div>
+<label for="fig-ls-step-3" class="fig-step-next">次へ →</label>
+</div>
+<svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-ls-s2-title fig-ls-s2-desc">
+<title id="fig-ls-s2-title">コードの構造 ステップ 2</title>
+<desc id="fig-ls-s2-desc">PRDの3つの業務ルールそれぞれから、コード側のビジネスロジックを表す横棒へ線を引いた図です。線は、画面、ハンドラ、バッチ、リポジトリの複数のファイルにまたがります。</desc>
+<rect class="fig-card" x="8" y="40" width="176" height="232" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-b" x="20" y="62">PRD</text>
+<rect class="fig-card-soft" x="18" y="79" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="105.5">作業を開始する</text>
+<rect class="fig-card-soft" x="18" y="127" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="153.5">作業を完了する</text>
+<rect class="fig-card-soft" x="18" y="175" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="193">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="210">端末で再開する</text>
+<rect class="fig-card" x="252" y="40" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="51" width="120" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="63" width="160" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="75" width="90" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="71">画面</text>
+<rect class="fig-card" x="252" y="100" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar" x="262" y="111" width="140" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="123" width="110" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="135" width="170" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="131">ハンドラ</text>
+<rect class="fig-card" x="252" y="160" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="171" width="100" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="183" width="150" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="195" width="140" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="191">バッチ</text>
+<rect class="fig-card" x="252" y="220" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="231" width="130" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="243" width="90" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="255" width="70" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="251">リポジトリ</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="340" y="264">取得条件</text>
+<path class="fig-line-agent" d="M176 96L260 54.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="54.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 96L260 126.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="126.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 96L260 234.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="234.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 142L260 78.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="78.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 142L260 174.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="174.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 142L260 246.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="246.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 188L260 198.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="198.5" r="2.5"></circle>
+<path class="fig-line-agent" d="M176 188L260 126.5"></path>
+<circle class="fig-fill-agent" cx="262" cy="126.5" r="2.5"></circle>
+<rect class="fig-bar-agent" x="252" y="296" width="28" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm" x="290" y="304">ビジネスロジック</text>
+<rect class="fig-bar" x="418" y="296" width="28" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm" x="456" y="304">ほかのコード</text>
+</svg>
+<div class="fig-callout">PRD の各項目に対応する箇所を見つけるには、すべてのファイルを読む必要があります。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-ls-step-2" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-ls-step-1" aria-label="ステップ 1"></label>
+<label for="fig-ls-step-2" aria-label="ステップ 2"></label>
+<label for="fig-ls-step-3" aria-label="ステップ 3" aria-current="step"></label>
+</div>
+<span class="fig-step-count">3 / 3</span>
+</div>
+<label for="fig-ls-step-1" class="fig-step-next">最初から</label>
+</div>
+<svg viewBox="0 0 560 350" role="img" aria-labelledby="fig-ls-s3-title fig-ls-s3-desc">
+<title id="fig-ls-s3-title">コードの構造 ステップ 3</title>
+<desc id="fig-ls-s3-desc">リポジトリの取得条件の横棒を、破線の枠で囲んだ図です。吹き出しに、別の端末での再開に関するロジックが、データの取得条件として記述されている、と書かれています。この横棒とPRDの間には、線がありません。</desc>
+<rect class="fig-card" x="8" y="40" width="176" height="232" rx="12"></rect>
+<text class="fig-t fig-t-sm fig-b" x="20" y="62">PRD</text>
+<rect class="fig-card-soft" x="18" y="79" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="105.5">作業を開始する</text>
+<rect class="fig-card-soft" x="18" y="127" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="153.5">作業を完了する</text>
+<rect class="fig-card-soft" x="18" y="175" width="156" height="42" rx="8"></rect>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="193">中断した作業を同じ</text>
+<text class="fig-t fig-t-sm fig-mid" x="96" y="210">端末で再開する</text>
+<g class="fig-dim">
+<rect class="fig-card" x="252" y="40" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="51" width="120" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="63" width="160" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="75" width="90" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="71">画面</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="252" y="100" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar" x="262" y="111" width="140" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="123" width="110" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="135" width="170" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="131">ハンドラ</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="252" y="160" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="171" width="100" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="183" width="150" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="195" width="140" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="191">バッチ</text>
+</g>
+<rect class="fig-card" x="252" y="220" width="300" height="52" rx="10"></rect>
+<rect class="fig-bar-agent" x="262" y="231" width="130" height="7" rx="3.5"></rect>
+<rect class="fig-bar-agent" x="262" y="243" width="90" height="7" rx="3.5"></rect>
+<rect class="fig-bar" x="262" y="255" width="70" height="7" rx="3.5"></rect>
+<text class="fig-t fig-t-sm fig-end fig-b" x="542" y="251">リポジトリ</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="340" y="264">取得条件</text>
+<rect class="fig-card-problem-dash" x="256" y="250" width="150" height="17" rx="4"></rect>
+<rect class="fig-card-problem" x="252" y="286" width="300" height="56" rx="12"></rect>
+<path class="fig-card-problem" d="M288 286L302 272L316 286Z"></path>
+<text class="fig-t fig-t-sm fig-b fig-c-problem" x="266" y="307">別の端末での再開に関するロジックが、</text>
+<text class="fig-t fig-t-sm fig-b fig-c-problem" x="266" y="326">データの取得条件として記述されている</text>
+</svg>
+<div class="fig-callout">別の端末で作業を再開するロジックは、データの取得条件として記述されています。業務の用語で記述されていないため、照合の対象から漏れます。</div>
+</div>
+</div>
+<figcaption>ビジネスロジックが分散していると、データの取得条件として記述されたロジックが PRD との照合から漏れます。</figcaption>
+</figure>
