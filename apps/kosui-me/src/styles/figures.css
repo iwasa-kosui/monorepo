@@ -284,6 +284,20 @@
   stroke-width: 2;
 }
 
+.fig-glow-agent,
+.fig-glow-human {
+  fill: none;
+  stroke-width: 3;
+}
+
+.fig-glow-agent {
+  stroke: var(--fig-agent);
+}
+
+.fig-glow-human {
+  stroke: var(--fig-human-strong);
+}
+
 .fig-sr-only,
 .fig-tabs > input[type="radio"],
 .fig-steps > input[type="radio"] {
@@ -369,6 +383,10 @@
   .fig-tab-label:active,
   .fig-tabs > input:not(:checked) + .fig-tab-label:hover {
     transform: none;
+  }
+
+  .fig-anim {
+    display: none;
   }
 }
 
