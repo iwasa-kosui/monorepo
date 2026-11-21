@@ -522,27 +522,6 @@
   body.chapter-page:has(.play) {
     height: 100dvh;
   }
-  body.chapter-page:has(.play) .chapter-main {
-    max-width: none;
-    padding: 0.25rem 0.75rem;
-  }
-  body.chapter-page:has(.play) .chapter-header h1 {
-    line-height: 1.2;
-  }
-  body.chapter-page:has(.play) .chapter-nav a {
-    padding-block: 0.2rem;
-  }
-  body.chapter-page:has(.play) .chapter-header {
-    column-gap: 0.75rem;
-  }
-  body.chapter-page:has(.play) .chapter-range {
-    flex-basis: auto;
-    order: 1;
-    margin-right: auto;
-  }
-  body.chapter-page:has(.play) .chapter-links {
-    order: 2;
-  }
   body.chapter-page:has(.play) .chapter-body {
     margin-block: 0.25rem;
   }

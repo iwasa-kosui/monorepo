@@ -158,7 +158,7 @@ test.describe('/play/add-record/ の転送', () => {
 });
 
 test.describe('第2章の場面 ステップ1 /chapters/chapter-2/4/', () => {
-  test('h1 は章の見出しの 1 つだけで、場面の見出しは h2。PageNav がある', async ({ page }) => {
+  test('h1 は章の見出しの 1 つだけで、場面の見出しは h2。前後の移動がある', async ({ page }) => {
     await open(page);
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page.getByRole('heading', { level: 2, name: 'この来院がキャンセルになっているのはなぜですか。' }))

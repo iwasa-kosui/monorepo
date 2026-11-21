@@ -1,11 +1,10 @@
 ---
 import { getCollection, render } from 'astro:content';
 
-import PageNav from '../../components/PageNav.astro';
-import PageProgress from '../../components/PageProgress.astro';
-import { buildChapterPages, pagePath } from '../../lib/chapter-routes';
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import { schedule, withTimeRanges } from '../../schedule';
+import LessonFrame from '../../components/frame/LessonFrame.astro';
+import { lessonPageOf } from '../../lesson-pages';
+import { buildChapterPages } from '../../lib/chapter-routes';
+import { schedule } from '../../schedule';
 
 export const getStaticPaths = async () => {
   const pages = buildChapterPages(
@@ -22,59 +21,18 @@ export const getStaticPaths = async () => {
         `goal は章の最初のページだけに置きます: ${page.entry.id}`,
       );
     }
+    lessonPageOf(page.entry.id);
   }
-  return pages.map((page, index) => ({
+  return pages.map((page) => ({
     params: { slug: page.slug },
-    props: { page, previous: pages[index - 1], next: pages[index + 1] },
+    props: { page },
   }));
 };
 
-const { page, previous, next } = Astro.props;
-const rows = withTimeRanges(schedule);
-const rowOf = (chapter: string) => {
-  const row = rows.find((candidate) => candidate.id === chapter);
-  if (row === undefined) {
-    throw new Error(`schedule.ts に章がありません: ${chapter}`);
-  }
-  return row;
-};
-const row = rowOf(page.chapter);
-const linkTo = (target: typeof page | undefined) =>
-  target === undefined ? undefined : {
-    href: pagePath(target.chapter, target.number),
-    hint: target.chapter === page.chapter
-      ? undefined
-      : `（${rowOf(target.chapter).title}）`,
-  };
-const progress = `${page.number}/${page.total}`;
+const { page } = Astro.props;
 const { Content } = await render(page.entry);
 ---
 
-<BaseLayout
-  title={`${row.title} ${progress}`}
-  chapterPage
-  wide={page.chapter === 'intro' || page.entry.data.wide === true}
->
-  <header class="chapter-header">
-    <h1>{row.title} <span class="chapter-progress">{progress}</span></h1>
-    <p class="chapter-links">
-      <a href="/">トップページへ</a>｜<a href="/troubleshooting/"
-      >うまく動かないとき</a>
-    </p>
-    <p class="chapter-range">
-      {row.range}{row.parts === undefined ? '' : `：${row.parts}`}
-    </p>
-    <PageProgress chapter={page.chapter} number={page.number} />
-  </header>
-  {
-    page.entry.data.goal !== undefined && (
-      <p class="chapter-goal">
-        <strong>できるようになること：</strong>{page.entry.data.goal}
-      </p>
-    )
-  }
-  <article class="chapter-body">
-    <Content />
-  </article>
-  <PageNav previous={linkTo(previous)} next={linkTo(next)} />
-</BaseLayout>
+<LessonFrame chapter={page.chapter} number={page.number}>
+  <Content />
+</LessonFrame>
