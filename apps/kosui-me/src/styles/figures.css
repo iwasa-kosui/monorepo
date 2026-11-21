@@ -47,6 +47,17 @@
   height: auto;
 }
 
+.fig-scroll {
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .fig-scroll > svg {
+    width: 520px;
+    max-width: none;
+  }
+}
+
 .fig figcaption {
   margin-top: 0.75rem;
   text-align: center;
@@ -74,6 +85,10 @@
 
 .fig-t-sm {
   font-size: 15px;
+}
+
+.fig-t-xs {
+  font-size: 13px;
 }
 
 .fig-b {
@@ -410,6 +425,7 @@
 
 .fig-step {
   grid-area: 1 / 1;
+  min-width: 0;
   visibility: hidden;
 }
 
