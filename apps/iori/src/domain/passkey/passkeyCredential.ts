@@ -39,6 +39,7 @@ export type PasskeyRegistered = PasskeyCredentialEvent<
 export type PasskeyUsedPayload = Readonly<{
   credentialId: PasskeyCredentialId;
   counter: number;
+  backedUp: boolean;
   lastUsedAt: Instant;
 }>;
 export type PasskeyUsed = PasskeyCredentialEvent<
@@ -77,13 +78,17 @@ const register =
     );
   };
 
-const use = (now: Instant) => (credential: PasskeyCredential, newCounter: number): PasskeyUsed => {
-  const used: PasskeyCredential = { ...credential, counter: newCounter, lastUsedAt: now };
+const use = (now: Instant) =>
+(
+  credential: PasskeyCredential,
+  { counter, backedUp }: Readonly<{ counter: number; backedUp: boolean }>,
+): PasskeyUsed => {
+  const used: PasskeyCredential = { ...credential, counter, backedUp, lastUsedAt: now };
   return PasskeyCredentialEvent.create(
     credential.credentialId,
     used,
     'passkeyCredential.used',
-    { credentialId: credential.credentialId, counter: newCounter, lastUsedAt: now },
+    { credentialId: credential.credentialId, counter, backedUp, lastUsedAt: now },
     now,
   );
 };

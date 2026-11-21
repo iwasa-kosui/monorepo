@@ -30,8 +30,12 @@ const rawSignatureToDer = (signature: Uint8Array<ArrayBuffer>): Uint8Array<Array
   return isoUint8Array.concat([new Uint8Array([0x30, body.length]), body]) as Uint8Array<ArrayBuffer>;
 };
 
-const clientDataJSON = (type: 'webauthn.create' | 'webauthn.get', challenge: string, origin: string) =>
-  new TextEncoder().encode(JSON.stringify({ type, challenge, origin, crossOrigin: false }));
+const clientDataJSON = (
+  type: 'webauthn.create' | 'webauthn.get',
+  challenge: string,
+  origin: string,
+  crossOrigin = false,
+) => new TextEncoder().encode(JSON.stringify({ type, challenge, origin, crossOrigin }));
 
 export type SoftwareAuthenticator = Readonly<{
   credentialId: string;
@@ -42,6 +46,7 @@ export type SoftwareAuthenticator = Readonly<{
       rpId: string;
       backupEligible?: boolean;
       backedUp?: boolean;
+      crossOrigin?: boolean;
     }>,
   ) => Promise<RegistrationResponseJSON>;
   createAuthenticationResponse: (
@@ -51,6 +56,9 @@ export type SoftwareAuthenticator = Readonly<{
       rpId: string;
       counter?: number;
       userHandle?: string;
+      backupEligible?: boolean;
+      backedUp?: boolean;
+      crossOrigin?: boolean;
     }>,
   ) => Promise<AuthenticationResponseJSON>;
 }>;
@@ -72,7 +80,7 @@ export const createSoftwareAuthenticator = async (): Promise<SoftwareAuthenticat
 
   return {
     credentialId,
-    createRegistrationResponse: async ({ challenge, origin, rpId, backupEligible, backedUp }) => {
+    createRegistrationResponse: async ({ challenge, origin, rpId, backupEligible, backedUp, crossOrigin }) => {
       const flags = FLAG_UP | FLAG_UV | FLAG_AT | (backupEligible ? FLAG_BE : 0) | (backedUp ? FLAG_BS : 0);
       const credentialIdLength = new Uint8Array(2);
       new DataView(credentialIdLength.buffer).setUint16(0, rawCredentialId.length);
@@ -97,20 +105,22 @@ export const createSoftwareAuthenticator = async (): Promise<SoftwareAuthenticat
         rawId: credentialId,
         type: 'public-key',
         response: {
-          clientDataJSON: isoBase64URL.fromBuffer(clientDataJSON('webauthn.create', challenge, origin)),
+          clientDataJSON: isoBase64URL.fromBuffer(clientDataJSON('webauthn.create', challenge, origin, crossOrigin)),
           attestationObject: isoBase64URL.fromBuffer(attestationObject),
           transports: ['internal'],
         },
         clientExtensionResults: {},
       };
     },
-    createAuthenticationResponse: async ({ challenge, origin, rpId, counter = 1, userHandle }) => {
+    createAuthenticationResponse: async (
+      { challenge, origin, rpId, counter = 1, userHandle, backupEligible, backedUp, crossOrigin },
+    ) => {
       const authData = isoUint8Array.concat([
         await sha256(new TextEncoder().encode(rpId)),
-        new Uint8Array([FLAG_UP | FLAG_UV]),
+        new Uint8Array([FLAG_UP | FLAG_UV | (backupEligible ? FLAG_BE : 0) | (backedUp ? FLAG_BS : 0)]),
         counterBytes(counter),
       ]);
-      const clientData = clientDataJSON('webauthn.get', challenge, origin);
+      const clientData = clientDataJSON('webauthn.get', challenge, origin, crossOrigin);
       const signedData = isoUint8Array.concat([authData, await sha256(clientData)]) as Uint8Array<ArrayBuffer>;
       const signature = new Uint8Array(
         await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, keyPair.privateKey, signedData),
