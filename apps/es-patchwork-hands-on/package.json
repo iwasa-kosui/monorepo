@@ -46,6 +46,7 @@
     "lint:fix": "eslint . --fix",
     "format": "dprint fmt",
     "format:check": "dprint check",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "generate:og": "node scripts/generate-og-image.ts"
   }
 }

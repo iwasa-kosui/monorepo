@@ -2,9 +2,13 @@
 import TopBar from '../components/frame/TopBar.astro';
 import '../styles/global.css';
 
+import { chapterGoalOf } from '../lib/page-meta';
+import { siteDescription, siteName, siteTitle } from '../site';
+
 interface Props {
   title?: string;
-  frontmatter?: { title?: string; topBar?: boolean };
+  description?: string;
+  frontmatter?: { title?: string; description?: string; topBar?: boolean };
   chapterPage?: boolean;
   topBar?: boolean;
   noindex?: boolean;
@@ -15,6 +19,20 @@ const chapterPage = Astro.props.chapterPage ?? false;
 const topBar = Astro.props.frontmatter?.topBar ?? Astro.props.topBar
   ?? false;
 const noindex = Astro.props.noindex ?? false;
+const pageTitle = title === undefined || chapterPage || title === siteTitle
+    || title.includes(siteName)
+  ? title
+  : `${title} | ${siteName}`;
+const description = Astro.props.description
+  ?? Astro.props.frontmatter?.description
+  ?? (await chapterGoalOf(Astro.url.pathname))
+  ?? siteDescription;
+const imageUrl = Astro.site === undefined
+  ? undefined
+  : new URL('/og.png', Astro.site).href;
+const canonicalUrl = Astro.site === undefined
+  ? undefined
+  : new URL(Astro.url.pathname, Astro.site).href;
 ---
 
 <!DOCTYPE html>
@@ -23,7 +41,49 @@ const noindex = Astro.props.noindex ?? false;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     {noindex && <meta name="robots" content="noindex" />}
-    <title>{title}</title>
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta
+      name="theme-color"
+      content="#ffffff"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#111827"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    {!chapterPage && <meta property="og:site_name" content={siteName} />}
+    <meta property="og:locale" content="ja_JP" />
+    <meta name="twitter:card" content="summary_large_image" />
+    {imageUrl !== undefined && <meta property="og:image" content={imageUrl} />}
+    {
+      imageUrl !== undefined && (
+        <meta property="og:image:width" content="1200" />
+      )
+    }
+    {
+      imageUrl !== undefined && (
+        <meta property="og:image:height" content="630" />
+      )
+    }
+    {
+      imageUrl !== undefined && (
+        <meta property="og:image:alt" content={siteTitle} />
+      )
+    }
+    {imageUrl !== undefined && <meta name="twitter:image" content={imageUrl} />}
+    {
+      canonicalUrl !== undefined && (
+        <meta property="og:url" content={canonicalUrl} />
+      )
+    }
+    {canonicalUrl !== undefined && <link rel="canonical" href={canonicalUrl} />}
   </head>
   <body class:list={{ 'chapter-page': chapterPage }}>
     {
