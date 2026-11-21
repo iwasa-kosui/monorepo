@@ -1,3 +1,7 @@
+---
+wide: true
+---
+
 import CodeBlock from '../../../components/CodeBlock.astro';
 import { whoCancelledQuery } from '../../../lib/snapshots';
 
@@ -5,3 +9,9 @@ import { whoCancelledQuery } from '../../../lib/snapshots';
 
 <CodeBlock code={whoCancelledQuery()} />
 
+### 読むところ
+
+- `LEFT JOIN` は、`visits` の各行に、同じ来院の ID を持つ業務イベントを結びつけます。業務イベントが無い来院も結果に残り、その行の業務イベントの列は `NULL` になります。
+- `payload ->> '$.operatedBy'` と `payload ->> '$.reason'` は、第2章のステップ2で `payload` に入れた2つの値を取り出します。
+
+この SELECT は `visits` テーブルを変えずに、問い合わせに答える列を結果に並べます。

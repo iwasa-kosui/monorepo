@@ -210,7 +210,7 @@ test.describe('下部のフッター', () => {
 });
 
 test.describe('章ページ以外の上部バー', () => {
-  for (const path of ['/setup/', '/troubleshooting/', '/no-such-page/']) {
+  for (const path of ['/setup/', '/troubleshooting/', '/glossary/', '/no-such-page/']) {
     test(`${path} には上部バーだけが出る`, async ({ page }) => {
       const response = await page.goto(path);
       if (path === '/no-such-page/') expect(response?.status()).toBe(404);

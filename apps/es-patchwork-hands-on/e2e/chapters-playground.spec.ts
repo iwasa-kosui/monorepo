@@ -33,6 +33,14 @@ const openScene = async (page: Page, path: string): Promise<Locator> => {
   return play;
 };
 
+const loadAnswer = async (play: Locator, name: string): Promise<void> => {
+  const answerStep = play.locator('details.play-hint-step').last();
+  if (!(await answerStep.evaluate((element) => (element as HTMLDetailsElement).open))) {
+    await answerStep.locator('summary').click();
+  }
+  await play.getByRole('button', { name }).click();
+};
+
 const summary = (playground: Locator): Locator => playground.locator('[data-role="summary"]');
 
 const runTests = async (playground: Locator): Promise<void> => {
@@ -111,7 +119,7 @@ test.describe('第2章', () => {
     await runTests(stepOne);
     await expect(summary(stepOne)).toHaveText('pass 4 / fail 4');
 
-    await stepOne.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
+    await loadAnswer(stepOne, 'ステップ1の完成コードを読み込む');
     await runTests(stepOne);
     await expect(summary(stepOne)).toHaveText('pass 7 / fail 1');
 
@@ -137,13 +145,13 @@ test.describe('第2章', () => {
 
   test('完成コードを読み込むボタンで、ステップ1は pass 7 / fail 1、ステップ2は pass 8 / fail 0 になる', async ({ page }) => {
     const stepOne = await openScene(page, '/chapters/chapter-2/4/');
-    await stepOne.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
+    await loadAnswer(stepOne, 'ステップ1の完成コードを読み込む');
     await runTests(stepOne);
     await expect(summary(stepOne)).toHaveText('pass 7 / fail 1');
 
     const stepTwo = await openScene(page, '/chapters/chapter-2/5/');
     await expect(stepTwo.locator('.cm-content')).toContainText('VisitCancelled');
-    await stepTwo.getByRole('button', { name: 'ステップ2の完成コードを読み込む' }).click();
+    await loadAnswer(stepTwo, 'ステップ2の完成コードを読み込む');
     await runTests(stepTwo);
     await expect(summary(stepTwo)).toHaveText('pass 8 / fail 0');
   });
@@ -153,7 +161,7 @@ test.describe('第2章', () => {
     const stored = (): Promise<string | null> => page.evaluate((key) => window.localStorage.getItem(key), storageKey);
     expect(await stored()).toBeNull();
 
-    await stepTwo.getByRole('button', { name: 'ステップ2の完成コードを読み込む' }).click();
+    await loadAnswer(stepTwo, 'ステップ2の完成コードを読み込む');
     await expect.poll(stored).toBe(JSON.stringify({ 'visits.ts': cancelVisitFrom('chapter-2-step-2') }));
 
     await stepTwo.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
@@ -200,7 +208,7 @@ test.describe('第3章', () => {
 
   test('第2章で書いた visits.ts のテストがすべて成功すると、そのコードで作る', async ({ page }) => {
     const stepTwo = await openScene(page, '/chapters/chapter-2/5/');
-    await stepTwo.getByRole('button', { name: 'ステップ2の完成コードを読み込む' }).click();
+    await loadAnswer(stepTwo, 'ステップ2の完成コードを読み込む');
     const playground = await open(page, '/chapters/chapter-3/');
     await expect(playground.locator('[data-role="origin"]')).toHaveText(
       '第2章で書いた visits.ts で、このデータベースを作りました。',
@@ -210,7 +218,7 @@ test.describe('第3章', () => {
 
   test('場面で書いたステップ1のコードはテストが成功しきらないので、ステップ2の完成コードで作る', async ({ page }) => {
     const stepOne = await openScene(page, '/chapters/chapter-2/4/');
-    await stepOne.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
+    await loadAnswer(stepOne, 'ステップ1の完成コードを読み込む');
     const playground = await open(page, '/chapters/chapter-3/');
     await expect(playground.locator('[data-role="origin"]')).toHaveText(
       '第2章で書いた visits.ts は全部のテストに成功していないので、ステップ2の完成コードでこのデータベースを作りました。',
