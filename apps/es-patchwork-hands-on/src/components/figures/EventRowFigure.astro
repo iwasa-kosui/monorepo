@@ -95,7 +95,7 @@ const targetState =
 .call {
   margin: 0;
   border: 2px solid var(--role-accent-strong);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--role-surface);
   padding: 0.375rem 0.625rem;
   font-size: 0.875rem;
@@ -120,12 +120,12 @@ const targetState =
   visibility: visible;
 }
 .arg {
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   transition: background-color 0.4s ease;
 }
 [data-step="4"] .arg {
   background: var(--role-highlight);
-  color: var(--role-console);
+  color: var(--role-on-highlight);
 }
 
 .card {
@@ -134,7 +134,7 @@ const targetState =
   gap: 0.25rem;
   margin: 0;
   border: 2px solid var(--role-rule);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--role-surface);
   padding: 0.375rem 0.5rem;
   list-style: none;
@@ -162,7 +162,7 @@ const targetState =
   align-items: center;
   min-height: 1.5rem;
   border: 1px dashed var(--role-border);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   padding: 0.125rem 0.375rem;
   font-family: var(--font-code);
   font-size: 0.8125rem;
@@ -180,7 +180,7 @@ const targetState =
 .badge {
   display: none;
   border: 2px solid var(--role-accent-strong);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   background: var(--role-highlight-soft);
   padding: 0 0.375rem;
   font-size: 0.75rem;
@@ -190,7 +190,7 @@ const targetState =
 }
 [data-step="6"] .badge {
   background: var(--role-highlight);
-  color: var(--role-console);
+  color: var(--role-on-highlight);
   box-shadow: 0 0 0 2px var(--role-danger);
 }
 .field[data-filled] .val {

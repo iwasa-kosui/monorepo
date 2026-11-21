@@ -10,12 +10,6 @@
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
   --shadow-raised: 0 0.25rem 0.75rem rgb(0 0 0 / 0.18);
 
   --gray-0: #ffffff;
@@ -41,6 +35,7 @@
   --green-300: #86efac;
   --green-500: #22c55e;
   --green-600: #16a34a;
+  --green-700: #15803d;
   --green-800: #166534;
   --green-950: #052e16;
   --red-50: #fef2f2;
@@ -51,6 +46,7 @@
   --amber-300: #fcd34d;
   --amber-500: #f59e0b;
   --amber-600: #d97706;
+  --amber-700: #b45309;
   --amber-800: #92400e;
   --amber-950: #3a2a07;
   --yellow-100: #fef9c3;
@@ -61,8 +57,6 @@
   --violet-700: #6d28d9;
   --cyan-300: #67e8f9;
   --cyan-700: #0e7490;
-  --green-700: #15803d;
-  --amber-700: #b45309;
 
   --role-bg: var(--gray-0);
   --role-surface: var(--gray-0);
@@ -76,6 +70,7 @@
   --role-accent-soft: var(--blue-100);
   --role-accent-strong: var(--navy-900);
   --role-on-accent: var(--gray-0);
+  --role-on-strong: var(--gray-0);
   --role-success: var(--green-800);
   --role-success-soft: var(--green-50);
   --role-success-line: var(--green-600);
@@ -86,6 +81,7 @@
   --role-warning-line: var(--amber-600);
   --role-highlight: var(--yellow-400);
   --role-highlight-soft: var(--yellow-100);
+  --role-on-highlight: var(--gray-900);
   --role-console: var(--gray-900);
   --role-on-console: var(--gray-50);
   --role-code-keyword: var(--violet-700);
@@ -111,6 +107,7 @@
     --role-accent-soft: var(--blue-900);
     --role-accent-strong: var(--blue-200);
     --role-on-accent: var(--gray-950);
+    --role-on-strong: var(--gray-950);
     --role-success: var(--green-300);
     --role-success-soft: var(--green-950);
     --role-success-line: var(--green-500);
@@ -121,6 +118,7 @@
     --role-warning-line: var(--amber-500);
     --role-highlight: var(--yellow-500);
     --role-highlight-soft: var(--yellow-950);
+    --role-on-highlight: var(--gray-950);
     --role-console: var(--gray-950);
     --role-on-console: var(--gray-100);
     --role-code-keyword: var(--violet-300);

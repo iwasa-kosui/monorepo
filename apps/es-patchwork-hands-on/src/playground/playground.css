@@ -3,7 +3,7 @@
   max-width: 100%;
   margin-block: 1rem;
   border: 1px solid var(--role-rule);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   background: var(--role-sunken);
   padding: 0.75rem;
 }
@@ -17,7 +17,7 @@
 }
 .content .playground-switch button {
   border: 1px solid var(--role-accent);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--role-surface);
   padding: 0.3rem 0.8rem;
   font-size: 0.9rem;
@@ -43,7 +43,7 @@
 }
 .playground button {
   border: 1px solid var(--role-border);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--role-surface);
   padding: 0.3rem 0.8rem;
   font-size: 0.9rem;
@@ -182,7 +182,7 @@
   padding: 0.25rem 0.75rem;
 }
 .playground-log {
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   background: var(--role-console);
   padding: 0.5rem;
   color: var(--role-on-console);

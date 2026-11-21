@@ -151,7 +151,7 @@ const messages = {
 }
 .frame {
   border: 2px dashed var(--role-border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   background: var(--role-surface);
   padding: 0.375rem 0.625rem 0.5rem;
   transition: border-color 0.4s ease, background-color 0.4s ease;
@@ -167,9 +167,9 @@ const messages = {
 .stamp {
   display: none;
   margin-left: auto;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   padding: 0 0.5rem;
-  color: var(--role-surface);
+  color: var(--role-on-strong);
   font-size: 0.8125rem;
 }
 .stamp-commit {
@@ -191,7 +191,7 @@ const messages = {
   align-items: center;
   gap: 0.5rem;
   border: 2px solid transparent;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   padding: 0.25rem 0.5rem;
   font-size: 0.9375rem;
   transition: border-color 0.4s ease, background-color 0.4s ease;
@@ -203,7 +203,7 @@ const messages = {
   height: 1.25rem;
   border-radius: 50%;
   background: var(--role-accent-strong);
-  color: var(--role-surface);
+  color: var(--role-on-strong);
   font-size: 0.75rem;
   font-weight: 700;
 }
@@ -254,7 +254,7 @@ const messages = {
 .tag {
   display: none;
   margin-left: 0.375rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   padding: 0 0.375rem;
   font-size: 0.75rem;
   font-weight: 700;
@@ -266,7 +266,7 @@ const messages = {
 }
 .tag-commit {
   background: var(--role-success);
-  color: var(--role-surface);
+  color: var(--role-on-strong);
 }
 
 .status {
@@ -289,7 +289,7 @@ const messages = {
 }
 .v-cancelled .val {
   border: 2px dashed var(--role-danger);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   padding: 0 0.25rem;
 }
 [data-visit="pending"] .v-reserved,

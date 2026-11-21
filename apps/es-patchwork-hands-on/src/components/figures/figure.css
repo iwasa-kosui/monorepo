@@ -5,7 +5,7 @@
   gap: 0.75rem;
   min-width: 0;
   border: 1px solid var(--role-rule);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   background: var(--role-sunken);
   padding: 0.875rem 1rem;
   color: var(--role-fg);
@@ -33,7 +33,7 @@
 }
 .content .cfig .cfig-controls button {
   border: 1px solid var(--role-accent);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   background: var(--role-surface);
   padding: 0.5rem 1rem;
   color: var(--role-accent);

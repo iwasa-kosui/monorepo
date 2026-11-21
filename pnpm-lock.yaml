@@ -35,7 +35,7 @@ importers:
         specifier: 6.43.15
         version: 6.43.15
       '@lezer/highlight':
-        specifier: ^1.2.5
+        specifier: 1.2.5
         version: 1.2.5
       astro:
         specifier: 5.16.15
