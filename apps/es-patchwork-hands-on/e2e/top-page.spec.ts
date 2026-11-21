@@ -36,6 +36,15 @@ for (const path of ['/', '/chapters/chapter-2/']) {
   });
 }
 
+test('章のページの title と og:title にサイト名を含めず、og:site_name も出さない', async ({ page }) => {
+  for (const path of ['/chapters/intro/', '/chapters/chapter-1/']) {
+    await page.goto(path);
+    expect(await page.title()).not.toContain('イベントソーシング');
+    await expect(page.locator('meta[property="og:title"]')).not.toHaveAttribute('content', /イベントソーシング/);
+    await expect(page.locator('meta[property="og:site_name"]')).toHaveCount(0);
+  }
+});
+
 test('章のページの description は、その章の goal と一致する', async ({ page }) => {
   await page.goto('/chapters/chapter-2/');
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', chapter2Goal());

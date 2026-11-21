@@ -12,5 +12,5 @@
     "types": ["node"]
   },
   "include": ["**/*.ts", "../scripts/*.ts"],
-  "exclude": ["../scripts/check-browser-runtime.ts"]
+  "exclude": ["../scripts/check-browser-runtime.ts", "../scripts/generate-og-image.ts"]
 }

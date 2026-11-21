@@ -4,7 +4,13 @@ import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { buildChapterPages, pagePath } from '../lib/chapter-routes';
 import { schedule, withTimeRanges } from '../schedule';
-import { siteDescription, siteName, siteSubtitle, siteTitle } from '../site';
+import {
+  eventLabel,
+  siteDescription,
+  siteName,
+  siteSubtitle,
+  siteTitle,
+} from '../site';
 
 const totalMinutes = schedule.reduce((sum, row) => sum + row.minutes, 0);
 const firstChapter = schedule[0];
@@ -29,9 +35,7 @@ const rows = withTimeRanges(schedule).map((row) => ({
   <div class="top-page grid gap-6 lg:grid-cols-2 lg:items-start lg:gap-8">
     <section class="top-hero">
       <p class="top-eyebrow">
-        YAPC::Tokyo 2026 ライブコーディング・ハンズオン・<span
-          class="whitespace-nowrap"
-        >{totalMinutes}分</span>
+        {eventLabel}・<span class="whitespace-nowrap">{totalMinutes}分</span>
       </p>
       <h1 class="top-title">
         <span class="block">{siteName}</span>

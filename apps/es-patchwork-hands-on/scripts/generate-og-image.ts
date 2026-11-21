@@ -2,6 +2,8 @@ import { chromium } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { eventLabel, siteName, siteSubtitle } from '../src/site.ts';
+
 const root = join(import.meta.dirname, '..');
 const tokens = readFileSync(join(root, 'src/styles/tokens.css'), 'utf8');
 
@@ -18,6 +20,13 @@ const blue300 = tokenValue('--blue-300');
 const blue200 = tokenValue('--blue-200');
 const gray0 = tokenValue('--gray-0');
 const yellow400 = tokenValue('--yellow-400');
+const titleBreak = 'イベントソーシング';
+const titleBreakIndex = siteName.indexOf(titleBreak);
+if (titleBreakIndex <= 0) {
+  throw new Error(`siteName を ${titleBreak} の直前で2行に分けられません`);
+}
+const titleLines = [siteName.slice(0, titleBreakIndex), siteName.slice(titleBreakIndex)];
+
 const fontBody = tokenValue('--font-body').replace(/\s+/g, ' ');
 
 const html = `<!DOCTYPE html>
@@ -76,9 +85,9 @@ const html = `<!DOCTYPE html>
       <rect x="7" y="14" width="13" height="4" rx="1.5" fill="${gray0}" />
       <rect x="7" y="20" width="9" height="4" rx="1.5" fill="${yellow400}" />
     </svg>
-    <p class="event">YAPC::Tokyo 2026 ライブコーディング・ハンズオン</p>
-    <h1>もう他人ごとじゃない<br />イベントソーシング</h1>
-    <p class="subtitle">社会を支える既存システムへの部分適用</p>
+    <p class="event">${eventLabel}</p>
+    <h1>${titleLines.join('<br />')}</h1>
+    <p class="subtitle">${siteSubtitle}</p>
     <div class="band"></div>
   </div>
 </body>
