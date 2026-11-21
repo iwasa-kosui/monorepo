@@ -18,7 +18,7 @@
   order: 1;
   column-gap: 0.75rem;
   font-size: 0.8125rem;
-  color: #4b5563;
+  color: var(--role-muted);
 }
 .content .page-progress__status {
   display: flex;
@@ -29,7 +29,7 @@
   white-space: nowrap;
 }
 .content .page-progress__status strong {
-  color: #111827;
+  color: var(--role-fg);
 }
 
 .content .page-progress__menu {
@@ -37,13 +37,13 @@
 }
 .content .page-progress__menu > summary {
   display: inline-block;
-  border: 1px solid #1d4ed8;
-  border-radius: 0.375rem;
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
   padding: 0 0.5rem;
   font-size: 0.8125rem;
   font-weight: 400;
   line-height: 1.15;
-  color: #1d4ed8;
+  color: var(--role-accent);
   white-space: nowrap;
   list-style: none;
 }
@@ -54,8 +54,8 @@
   content: " ▾";
 }
 .content .page-progress__menu[open] > summary {
-  background: #1d4ed8;
-  color: #fff;
+  background: var(--role-accent);
+  color: var(--role-on-accent);
 }
 .content .page-progress__menu[open] > summary::after {
   content: " ▴";
@@ -72,14 +72,14 @@
   gap: 0.75rem 1rem;
   max-height: calc(100dvh - 7rem);
   overflow-y: auto;
-  border: 1px solid #9ca3af;
-  border-radius: 0.375rem;
-  background: #fff;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
   padding: 0.75rem;
-  box-shadow: 0 6px 16px rgb(0 0 0 / 0.18);
+  box-shadow: var(--shadow-raised);
   font-size: 0.8125rem;
   line-height: 1.4;
-  color: #111827;
+  color: var(--role-fg);
 }
 .content .page-progress__group-title {
   display: flex;
@@ -87,7 +87,7 @@
   margin: 0 0 0.25rem;
 }
 .content .page-progress__group-title span {
-  color: #4b5563;
+  color: var(--role-muted);
   font-size: 0.75rem;
 }
 .content .page-progress__panel ol {
@@ -100,12 +100,12 @@
 }
 .content .page-progress__panel a {
   display: block;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   padding: 0.125rem 0.375rem;
 }
 .content .page-progress__panel a[aria-current="page"] {
-  background: #dbeafe;
-  color: #111827;
+  background: var(--role-accent-soft);
+  color: var(--role-fg);
   font-weight: 700;
   text-decoration: none;
 }
@@ -116,12 +116,12 @@
   right: 0;
   left: 0;
   height: 3px;
-  background: #e5e7eb;
+  background: var(--role-rule);
 }
 .page-progress__bar-fill {
   display: block;
   height: 100%;
-  background: #1d4ed8;
+  background: var(--role-accent);
 }
 
 @media (min-width: 1100px) {

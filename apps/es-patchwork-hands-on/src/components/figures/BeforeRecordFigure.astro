@@ -148,7 +148,7 @@ const points = [
   right: 0;
   left: 0;
   height: 2px;
-  background: var(--ink);
+  background: var(--role-accent-strong);
 }
 .point {
   position: relative;
@@ -164,9 +164,9 @@ const points = [
   width: 1rem;
   height: 1rem;
   box-sizing: border-box;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--role-accent-strong);
   border-radius: 50%;
-  background: var(--paper);
+  background: var(--role-surface);
   transition: background-color 0.4s ease, box-shadow 0.4s ease;
 }
 .point-label {
@@ -175,17 +175,17 @@ const points = [
   line-height: 1.35;
 }
 .point[data-state="done"] .dot {
-  background: var(--ink);
+  background: var(--role-accent-strong);
 }
 .point[data-state="current"] .dot {
-  background: var(--red);
-  box-shadow: 0 0 0 4px var(--yellow);
+  background: var(--role-danger);
+  box-shadow: 0 0 0 4px var(--role-highlight);
 }
 .point[data-state="current"] .point-label {
-  color: var(--ink);
+  color: var(--role-accent-strong);
 }
 .point[data-state="future"] .point-label {
-  color: var(--muted);
+  color: var(--role-muted);
   font-weight: 400;
 }
 
@@ -201,10 +201,10 @@ const points = [
 }
 .s-cancelled {
   display: none;
-  border: 2px solid var(--red);
-  border-radius: 0.25rem;
+  border: 2px solid var(--role-danger);
+  border-radius: var(--radius-sm);
   padding: 0 0.25rem;
-  color: var(--red);
+  color: var(--role-danger);
   font-weight: 700;
 }
 [data-tama="cancelled"] [data-row="tama"] .s-reserved,
@@ -223,11 +223,11 @@ const points = [
 }
 [data-events="row"] .row-event {
   display: table-row;
-  background: var(--soft-yellow);
+  background: var(--role-highlight-soft);
   font-weight: 700;
 }
 .row-empty td {
-  color: var(--muted);
+  color: var(--role-muted);
 }
 .result {
   display: none;
@@ -262,8 +262,8 @@ const points = [
   width: 16%;
 }
 .result td.null {
-  background: #fee2e2;
-  color: var(--red);
+  background: var(--role-danger-soft);
+  color: var(--role-danger);
   font-style: italic;
   font-weight: 700;
 }

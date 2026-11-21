@@ -1,29 +1,17 @@
 .content .cfig {
-  --line: #d1d5db;
-  --panel: #f3f4f6;
-  --paper: #ffffff;
-  --text: #374151;
-  --muted: #4b5563;
-  --accent: #1d4ed8;
-  --ink: #1e2a5a;
-  --red: #dc2626;
-  --ok: #166534;
-  --yellow: #facc15;
-  --soft-yellow: #fef9c3;
-  --gray: #9ca3af;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 0.75rem;
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  background: var(--panel);
+  border: 1px solid var(--role-rule);
+  border-radius: var(--radius-lg);
+  background: var(--role-sunken);
   padding: 0.875rem 1rem;
-  color: var(--text);
+  color: var(--role-fg);
 }
 .content .cfig code {
-  background: #e5e7eb;
+  background: var(--role-rule);
 }
 .content .cfig .cfig-sr {
   position: absolute;
@@ -44,25 +32,25 @@
   gap: 0.5rem;
 }
 .content .cfig .cfig-controls button {
-  border: 1px solid var(--accent);
-  border-radius: 0.375rem;
-  background: var(--paper);
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
   padding: 0.5rem 1rem;
-  color: var(--accent);
+  color: var(--role-accent);
   font-size: 0.9375rem;
   cursor: pointer;
 }
 .content .cfig .cfig-controls button:hover:not(:disabled) {
-  background: #dbeafe;
+  background: var(--role-accent-soft);
 }
 .content .cfig .cfig-controls button[aria-pressed="true"] {
-  background: var(--accent);
-  color: var(--paper);
+  background: var(--role-accent);
+  color: var(--role-on-accent);
 }
 .content .cfig .cfig-controls button:disabled {
-  border-color: var(--line);
-  background: var(--paper);
-  color: var(--muted);
+  border-color: var(--role-rule);
+  background: var(--role-surface);
+  color: var(--role-muted);
   cursor: not-allowed;
 }
 .content .cfig .cfig-message {
@@ -77,7 +65,7 @@
   width: 100%;
   margin: 0;
   border-collapse: collapse;
-  background: var(--paper);
+  background: var(--role-surface);
   font-size: 0.875rem;
   overflow-wrap: anywhere;
 }
@@ -88,12 +76,12 @@
 }
 .content .cfig .cfig-table th,
 .content .cfig .cfig-table td {
-  border: 1px solid var(--line);
+  border: 1px solid var(--role-rule);
   padding: 0.25rem 0.5rem;
   text-align: left;
 }
 .content .cfig .cfig-table th {
-  background: var(--panel);
+  background: var(--role-sunken);
   font-weight: 700;
 }
 

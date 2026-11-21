@@ -150,9 +150,9 @@ const messages = {
   font-weight: 700;
 }
 .frame {
-  border: 2px dashed var(--gray);
-  border-radius: 0.5rem;
-  background: var(--paper);
+  border: 2px dashed var(--role-border);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
   padding: 0.375rem 0.625rem 0.5rem;
   transition: border-color 0.4s ease, background-color 0.4s ease;
 }
@@ -167,16 +167,16 @@ const messages = {
 .stamp {
   display: none;
   margin-left: auto;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   padding: 0 0.5rem;
-  color: var(--paper);
+  color: var(--role-on-strong);
   font-size: 0.8125rem;
 }
 .stamp-commit {
-  background: var(--ok);
+  background: var(--role-success);
 }
 .stamp-rollback {
-  background: var(--red);
+  background: var(--role-danger);
 }
 .ops {
   display: flex;
@@ -191,7 +191,7 @@ const messages = {
   align-items: center;
   gap: 0.5rem;
   border: 2px solid transparent;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
   padding: 0.25rem 0.5rem;
   font-size: 0.9375rem;
   transition: border-color 0.4s ease, background-color 0.4s ease;
@@ -202,30 +202,30 @@ const messages = {
   width: 1.25rem;
   height: 1.25rem;
   border-radius: 50%;
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--role-accent-strong);
+  color: var(--role-on-strong);
   font-size: 0.75rem;
   font-weight: 700;
 }
 .fail-mark {
   display: none;
   margin-left: auto;
-  color: var(--red);
+  color: var(--role-danger);
   font-weight: 700;
 }
 
 [data-frame="open"] .frame {
   border-style: solid;
-  border-color: var(--accent);
+  border-color: var(--role-accent);
 }
 [data-frame="committed"] .frame {
   border-style: solid;
-  border-color: var(--ok);
-  background: #f0fdf4;
+  border-color: var(--role-success);
+  background: var(--role-success-soft);
 }
 [data-frame="rolledback"] .frame {
-  border-color: var(--red);
-  background: #fef2f2;
+  border-color: var(--role-danger);
+  background: var(--role-danger-soft);
 }
 [data-frame="committed"] .stamp-commit,
 [data-frame="rolledback"] .stamp-rollback {
@@ -233,12 +233,12 @@ const messages = {
 }
 [data-update="active"] .op-update,
 [data-insert="active"] .op-insert {
-  border-color: var(--accent);
-  background: #dbeafe;
+  border-color: var(--role-accent);
+  background: var(--role-accent-soft);
 }
 [data-insert="failed"] .op-insert {
-  border-color: var(--red);
-  background: #fef2f2;
+  border-color: var(--role-danger);
+  background: var(--role-danger-soft);
 }
 [data-insert="failed"] .fail-mark {
   display: inline;
@@ -254,19 +254,19 @@ const messages = {
 .tag {
   display: none;
   margin-left: 0.375rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   padding: 0 0.375rem;
   font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
 }
 .tag-pending {
-  border: 1px dashed var(--ink);
-  color: var(--ink);
+  border: 1px dashed var(--role-accent-strong);
+  color: var(--role-accent-strong);
 }
 .tag-commit {
-  background: var(--ok);
-  color: var(--paper);
+  background: var(--role-success);
+  color: var(--role-on-strong);
 }
 
 .status {
@@ -281,15 +281,15 @@ const messages = {
   font-weight: 700;
 }
 .v-cancelled {
-  color: var(--red);
+  color: var(--role-danger);
   font-weight: 700;
   opacity: 0;
   transform: translateX(-1.5rem);
   visibility: hidden;
 }
 .v-cancelled .val {
-  border: 2px dashed var(--red);
-  border-radius: 0.25rem;
+  border: 2px dashed var(--role-danger);
+  border-radius: var(--radius-sm);
   padding: 0 0.25rem;
 }
 [data-visit="pending"] .v-reserved,
@@ -325,14 +325,14 @@ const messages = {
 }
 [data-events="pending"] .row-event td {
   border-style: dashed;
-  border-color: var(--ink);
+  border-color: var(--role-accent-strong);
 }
 [data-events="pending"] .row-event .tag-pending,
 [data-events="committed"] .row-event .tag-commit {
   display: inline-block;
 }
 .row-empty td {
-  color: var(--muted);
+  color: var(--role-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
