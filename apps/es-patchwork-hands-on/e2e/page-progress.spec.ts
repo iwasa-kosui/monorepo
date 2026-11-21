@@ -47,7 +47,7 @@ test('章の中の進み具合は、見出しにこれまでどおり出る', as
 });
 
 test('章ページ以外には進み具合とページ一覧を出さない', async ({ page }) => {
-  for (const path of ['/', '/setup/', '/troubleshooting/']) {
+  for (const path of ['/', '/setup/', '/troubleshooting/', '/glossary/']) {
     await page.goto(path);
     await expect(page.locator('.lesson-bar__status')).toHaveCount(0);
     await expect(page.locator('.lesson-pages')).toHaveCount(0);

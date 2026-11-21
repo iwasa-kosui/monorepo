@@ -90,7 +90,6 @@ const answersOf = (events: Row[]): Filled[] => {
 };
 
 const nextPageNote = '次のページのステップ2で、「誰が」「なぜ」を記録します。';
-const changesTitle = '右の「ステップ2で変える2か所」';
 
 const quoted = (labels: string[]): string => labels.map((label) => `「${label}」`).join('');
 
@@ -113,7 +112,6 @@ const mount = (root: HTMLElement): void => {
   const events = query<HTMLElement>(root, '[data-role="events"]');
   const eventsBadge = query<HTMLElement>(root, '[data-role="events-badge"]');
   const eventsCaption = query<HTMLElement>(root, '[data-role="events-caption"]');
-  const blanks = root.querySelector<HTMLElement>('[data-role="blanks"]');
   const summary = query<HTMLElement>(root, '[data-role="summary"]');
   const failed = query<HTMLElement>(root, '[data-role="failed"]');
   const answerCells = [...root.querySelectorAll<HTMLElement>('[data-answer]')];
@@ -121,7 +119,6 @@ const mount = (root: HTMLElement): void => {
 
   let busy = false;
   let hasResult = false;
-  let templateShown = false;
   let answersShown = false;
   let backup: string | null = null;
 
@@ -187,12 +184,6 @@ const mount = (root: HTMLElement): void => {
     'visits.ts': config.head + code() + config.tail,
   });
 
-  const showBlanks = (): void => {
-    if (blanks !== null) {
-      blanks.hidden = !(templateShown || new RegExp(blankPattern.source).test(code()));
-    }
-  };
-
   const updateControls = (): void => {
     const idle = !busy && root.dataset.state === 'ready';
     runButton.disabled = !idle;
@@ -205,7 +196,6 @@ const mount = (root: HTMLElement): void => {
     if (templateButton !== null) {
       templateButton.disabled = !idle || code().includes(templateMarker);
     }
-    showBlanks();
   };
 
   const say = (sentences: string[]): void => {
@@ -217,13 +207,14 @@ const mount = (root: HTMLElement): void => {
   };
 
   const stepOneUnfinished = '「ステップ1の完成コードを読み込む」を押して続けます。';
-  const changeCancelVisit = `${changesTitle}のとおりに \`cancelVisit\` を変更します。`;
+  const changeCancelVisit = '`cancelVisit` の `input` の型と `payload` を変更します。';
+  const askHints = '迷ったら、右の「ヒントと解答」を上から順に開きます。';
 
   const sayStart = (): void => {
     if (config.step === 2) {
       say(
         code().includes(templateMarker)
-          ? [changeCancelVisit, '終わったら「ポチの来院をキャンセルする」を押します。']
+          ? [changeCancelVisit, askHints, '終わったら「ポチの来院をキャンセルする」を押します。']
           : [`ステップ1が終わっていないときは、${stepOneUnfinished}`],
       );
       return;
@@ -526,7 +517,7 @@ const mount = (root: HTMLElement): void => {
       } else if (passed === 7 && failures.length === 1 && failures[0]?.name === pochiTest) {
         say(
           config.step === 2
-            ? [`残りの 1 件は「${pochiTest}」です。`, `${changesTitle}のとおりに変更します。`]
+            ? [`残りの 1 件は「${pochiTest}」です。`, changeCancelVisit, askHints]
             : answersShown
             ? [
               `残りの 1 件は「${pochiTest}」です。`,
@@ -568,11 +559,11 @@ const mount = (root: HTMLElement): void => {
       effects: EditorView.scrollIntoView(from, { y: 'center' }),
     });
     view.focus();
-    templateShown = true;
     updateControls();
     say([
-      '雛形の 4 つの空欄を、「空欄に入れる値」の表のとおりに書き換えます。',
+      '雛形の 4 つの空欄を書き換えます。',
       'Tab キーで次の空欄に移れます。',
+      '値に迷ったら、右の「ヒントと解答」を上から順に開きます。',
       '終わったら「ポチの来院をキャンセルする」を押します。',
     ]);
   };
@@ -596,8 +587,29 @@ const mount = (root: HTMLElement): void => {
   runButton.addEventListener('click', () => void run());
   testsButton.addEventListener('click', () => void runTests());
   templateButton?.addEventListener('click', insertRecordTemplate);
+  const closeHint = (details: HTMLDetailsElement | null, moveFocus: boolean): void => {
+    if (details === null) {
+      return;
+    }
+    details.open = false;
+    if (moveFocus) {
+      details.querySelector('summary')?.focus();
+    }
+  };
+
+  for (const button of root.querySelectorAll<HTMLElement>('[data-role="hint-close"]')) {
+    button.addEventListener('click', () => closeHint(button.closest('details'), true));
+  }
+  root.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !(event.target instanceof Element)) {
+      return;
+    }
+    closeHint(event.target.closest<HTMLDetailsElement>('details.play-hint-step[open]'), true);
+  });
+
   completeButton.addEventListener('click', () => {
     replaceWithBackup(config.complete);
+    closeHint(completeButton.closest('details'), false);
     clearMessage();
     say(
       config.step === 2
@@ -607,6 +619,7 @@ const mount = (root: HTMLElement): void => {
   });
   completeStep2Button?.addEventListener('click', () => {
     replaceWithBackup(config.completeStep2 ?? config.complete);
+    closeHint(completeStep2Button?.closest('details') ?? null, false);
     clearMessage();
     say([
       'ステップ2の完成コードを読み込みました。',
@@ -616,7 +629,6 @@ const mount = (root: HTMLElement): void => {
   });
   resetButton.addEventListener('click', () => {
     replaceWithBackup(config.initial);
-    templateShown = false;
     resetOutputs(initialResult);
     sayStart();
     updateControls();

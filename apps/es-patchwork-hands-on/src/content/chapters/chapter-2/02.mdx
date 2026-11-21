@@ -2,7 +2,9 @@ import CodePlayground from '../../../components/CodePlayground.astro';
 
 ## 記録に失敗すると、来院の更新も戻る
 
-「記録を失敗させて実行する」を押すと、`business_events` への記録が必ず失敗する状態で、完成した `cancelVisit` を実行します。実行の前と後で、`visits` の `status` が同じままであることを確かめます。
+### やること
+
+「記録を失敗させて実行する」を押します。`fail-record.ts` は、記録が必ず失敗する状態で、完成コードの `cancelVisit` を実行します。完成コードは、演習を終えた時点のコードです。
 
 <CodePlayground
   exercise="chapter-2-step-2"
@@ -11,3 +13,11 @@ import CodePlayground from '../../../components/CodePlayground.astro';
   lesson="fail-record.ts"
   scripts={[{ file: 'fail-record.ts', label: '記録を失敗させて実行する' }]}
 />
+
+### 確かめること
+
+「実行の前」と「実行の後」で、`status` が `reserved` のままであることを確かめます。
+
+### 気づくこと
+
+記録と来院の更新は同じトランザクションにあるので、記録が失敗すると DB は来院の更新も取り消します。記録の抜けたキャンセルは残りません。

@@ -156,3 +156,94 @@ test.describe('スマートフォンの画面は横にスクロールしない',
     });
   }
 });
+
+const hintPaths: readonly string[] = ['/chapters/chapter-2/4/', '/chapters/chapter-2/5/'];
+
+const collectHintFailures = async (
+  page: Page,
+  size: Size,
+  overflows: (metrics: Metrics) => boolean,
+  checkInnerScroll: boolean,
+): Promise<string[]> => {
+  await page.setViewportSize(size);
+  const failures: string[] = [];
+  for (const path of hintPaths) {
+    await page.goto(path);
+    await waitForPlaygrounds(page, path);
+    const steps = page.locator('details.play-hint-step');
+    const count = await steps.count();
+    expect(count).toBe(4);
+    for (let index = 0; index < count; index += 1) {
+      await steps.nth(index).locator('summary').click();
+      const label = `${path}（ヒントと解答の ${index + 1} つ目を開いた状態）`;
+      const metrics = await measure(page);
+      if (overflows(metrics)) {
+        failures.push(describeFailure(label, size, metrics));
+      }
+      if (checkInnerScroll) {
+        failures.push(...(await innerScrollers(page)).map((scroller) => describeScroller(label, size, scroller)));
+      }
+      const close = steps.nth(index).locator('[data-role="hint-close"]');
+      if (await close.isVisible()) {
+        const body = await steps.nth(index).locator('.play-hint-body').evaluate((element) => ({
+          clientHeight: element.clientHeight,
+          scrollHeight: element.scrollHeight,
+        }));
+        if (body.scrollHeight > body.clientHeight + 1) {
+          failures.push(
+            `${label} ${size.width}x${size.height}: 重ねた本文の高さ=${body.clientHeight}/${body.scrollHeight}`,
+          );
+        }
+        const testsButton = page.locator('[data-role="tests"]');
+        if (!(await testsButton.isVisible())) {
+          failures.push(`${label} ${size.width}x${size.height}: 「テストを実行する」ボタンが見えない`);
+        } else {
+          const bodyBox = await steps.nth(index).locator('.play-hint-body').boundingBox();
+          const buttonBox = await testsButton.boundingBox();
+          if (
+            bodyBox !== null && buttonBox !== null
+            && bodyBox.x < buttonBox.x + buttonBox.width && buttonBox.x < bodyBox.x + bodyBox.width
+            && bodyBox.y < buttonBox.y + buttonBox.height && buttonBox.y < bodyBox.y + bodyBox.height
+          ) {
+            failures.push(
+              `${label} ${size.width}x${size.height}: 開いた本文が「テストを実行する」ボタンに重なっている`,
+            );
+          }
+        }
+        await close.click();
+      }
+    }
+  }
+  return failures;
+};
+
+test.describe('「ヒントと解答」を開いても PC の画面は一画面に収まる', () => {
+  for (const size of desktopSizes) {
+    test(`${size.width}x${size.height} で各ヒントを開いてもスクロールが出ない`, async ({ page }) => {
+      const failures = await collectHintFailures(
+        page,
+        size,
+        (metrics) =>
+          metrics.scrollHeight > metrics.innerHeight
+          || metrics.scrollWidth > metrics.innerWidth
+          || metrics.bodyScrollHeight > metrics.bodyClientHeight,
+        true,
+      );
+      expect(failures).toEqual([]);
+    });
+  }
+});
+
+test.describe('「ヒントと解答」を開いてもスマートフォンの画面は横にスクロールしない', () => {
+  for (const size of phoneSizes) {
+    test(`${size.width}x${size.height} で各ヒントを開いても横にスクロールが出ない`, async ({ page }) => {
+      const failures = await collectHintFailures(
+        page,
+        size,
+        (metrics) => metrics.scrollWidth > metrics.innerWidth,
+        false,
+      );
+      expect(failures).toEqual([]);
+    });
+  }
+});
