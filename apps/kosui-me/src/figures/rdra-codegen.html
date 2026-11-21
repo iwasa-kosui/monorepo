@@ -1,0 +1,449 @@
+<figure class="fig">
+<div class="fig-steps">
+<input type="radio" name="fig-rc-step" id="fig-rc-step-1" aria-label="ステップ 1 / 5" checked>
+<input type="radio" name="fig-rc-step" id="fig-rc-step-2" aria-label="ステップ 2 / 5">
+<input type="radio" name="fig-rc-step" id="fig-rc-step-3" aria-label="ステップ 3 / 5">
+<input type="radio" name="fig-rc-step" id="fig-rc-step-4" aria-label="ステップ 4 / 5">
+<input type="radio" name="fig-rc-step" id="fig-rc-step-5" aria-label="ステップ 5 / 5">
+<div class="fig-step">
+<div class="fig-step-nav">
+<span class="fig-step-prev fig-step-off" aria-disabled="true">← 戻る</span>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-rc-step-1" aria-label="ステップ 1" aria-current="step"></label>
+<label for="fig-rc-step-2" aria-label="ステップ 2"></label>
+<label for="fig-rc-step-3" aria-label="ステップ 3"></label>
+<label for="fig-rc-step-4" aria-label="ステップ 4"></label>
+<label for="fig-rc-step-5" aria-label="ステップ 5"></label>
+</div>
+<span class="fig-step-count">1 / 5</span>
+</div>
+<label for="fig-rc-step-2" class="fig-step-next">次へ →</label>
+</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 680 324" role="img" aria-labelledby="fig-rc-s1-title fig-rc-s1-desc">
+<title id="fig-rc-s1-title">遷移系からの2つの出力 ステップ 1</title>
+<desc id="fig-rc-s1-desc">要求分析（RDRA）の箱から rdra-ish-dsl の定義の箱へ矢印が伸びています。この2つの箱が強調されています。</desc>
+<rect class="fig-card-agent" x="4" y="16" width="110" height="88" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="59" y="42">要求分析</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="59" y="60">（RDRA）</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="59" y="82">ユースケース・</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="59" y="98">データ・状態</text>
+<path class="fig-line-agent fig-thick" d="M114 60L134 60"></path>
+<path class="fig-mk-agent" d="M142 60L134 56L134 64Z"></path>
+<rect class="fig-card-agent" x="142" y="32" width="116" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="200" y="56">rdra-ish-dsl</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="200" y="75">の定義</text>
+<g class="fig-dim">
+<path class="fig-line" d="M258 60L278 60"></path>
+<path class="fig-mk" d="M286 60L278 56L278 64Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="286" y="30" width="100" height="60" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="55">遷移系</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="336" y="76">状態と状態遷移</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M386 60L406 60"></path>
+<path class="fig-mk" d="M414 60L406 56L406 64Z"></path>
+<circle class="fig-mk" cx="386" cy="60" r="3.5"></circle>
+<rect class="fig-card" x="414" y="32" width="100" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="464" y="65">TLA+ の仕様</text>
+<path class="fig-line" d="M514 60L534 60"></path>
+<path class="fig-mk" d="M542 60L534 56L534 64Z"></path>
+<rect class="fig-card" x="542" y="32" width="134" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="609" y="65">TLC でモデル検査</text>
+<text class="fig-t fig-t-xs fig-end fig-b" x="676" y="112">仕様バグ・設計バグを検出</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M336 90V135H94V185"></path>
+<circle class="fig-mk" cx="336" cy="90" r="3.5"></circle>
+<path class="fig-mk" d="M94 193L90 185L98 185Z"></path>
+<path class="fig-card" d="M68 193H120L134 215L120 237H68L54 215Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="94" y="220">check</text>
+<path class="fig-line" d="M134 215L172 215"></path>
+<path class="fig-mk" d="M180 215L172 211L172 219Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="180" y="163" width="224" height="104" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="292" y="187">生成された TypeScript</text>
+<path class="fig-line-rule" d="M192 198H392"></path>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="218">状態ごとの型と直和型</text>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="238">ユースケースごとの状態遷移関数</text>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="258">DBの行から状態への変換</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line-problem" d="M94 237V282"></path>
+<rect class="fig-card-problem" x="4" y="282" width="232" height="32" rx="16"></rect>
+<circle class="fig-fill-problem" cx="24" cy="298" r="9"></circle>
+<path class="fig-line-on" d="M20.5 294.5L27.5 301.5M27.5 294.5L20.5 301.5"></path>
+<text class="fig-t fig-t-xs fig-b fig-c-problem" x="40" y="302.5">検査を通らなければ生成を拒否</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line fig-dash" d="M404 215H506"></path>
+<path class="fig-mk" d="M514 215L506 211L506 219Z"></path>
+<text class="fig-t fig-t-xs fig-mid fig-b" x="459" y="205">検証が届かない</text>
+<rect class="fig-card-dash" x="514" y="187" width="116" height="80" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="213">既存のコード</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="231">への実装</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="249">（手書き）</text>
+</g>
+</svg>
+</div>
+<div class="fig-callout">RDRAで、ユースケース・データ・状態といった要件を明らかにし、DSLで定義します。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-rc-step-1" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-rc-step-1" aria-label="ステップ 1"></label>
+<label for="fig-rc-step-2" aria-label="ステップ 2" aria-current="step"></label>
+<label for="fig-rc-step-3" aria-label="ステップ 3"></label>
+<label for="fig-rc-step-4" aria-label="ステップ 4"></label>
+<label for="fig-rc-step-5" aria-label="ステップ 5"></label>
+</div>
+<span class="fig-step-count">2 / 5</span>
+</div>
+<label for="fig-rc-step-3" class="fig-step-next">次へ →</label>
+</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 680 324" role="img" aria-labelledby="fig-rc-s2-title fig-rc-s2-desc">
+<title id="fig-rc-s2-title">遷移系からの2つの出力 ステップ 2</title>
+<desc id="fig-rc-s2-desc">rdra-ish-dsl の定義の箱から遷移系の箱へ矢印が伸びています。遷移系の箱が強調されています。</desc>
+<g class="fig-dim">
+<rect class="fig-card" x="4" y="16" width="110" height="88" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="59" y="42">要求分析</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="59" y="60">（RDRA）</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="59" y="82">ユースケース・</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="59" y="98">データ・状態</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M114 60L134 60"></path>
+<path class="fig-mk" d="M142 60L134 56L134 64Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="142" y="32" width="116" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="200" y="56">rdra-ish-dsl</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="200" y="75">の定義</text>
+</g>
+<path class="fig-line-agent fig-thick" d="M258 60L278 60"></path>
+<path class="fig-mk-agent" d="M286 60L278 56L278 64Z"></path>
+<rect class="fig-card-agent" x="286" y="30" width="100" height="60" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="55">遷移系</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="336" y="76">状態と状態遷移</text>
+<g class="fig-dim">
+<path class="fig-line" d="M386 60L406 60"></path>
+<path class="fig-mk" d="M414 60L406 56L406 64Z"></path>
+<circle class="fig-mk" cx="386" cy="60" r="3.5"></circle>
+<rect class="fig-card" x="414" y="32" width="100" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="464" y="65">TLA+ の仕様</text>
+<path class="fig-line" d="M514 60L534 60"></path>
+<path class="fig-mk" d="M542 60L534 56L534 64Z"></path>
+<rect class="fig-card" x="542" y="32" width="134" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="609" y="65">TLC でモデル検査</text>
+<text class="fig-t fig-t-xs fig-end fig-b" x="676" y="112">仕様バグ・設計バグを検出</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M336 90V135H94V185"></path>
+<circle class="fig-mk" cx="336" cy="90" r="3.5"></circle>
+<path class="fig-mk" d="M94 193L90 185L98 185Z"></path>
+<path class="fig-card" d="M68 193H120L134 215L120 237H68L54 215Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="94" y="220">check</text>
+<path class="fig-line" d="M134 215L172 215"></path>
+<path class="fig-mk" d="M180 215L172 211L172 219Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="180" y="163" width="224" height="104" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="292" y="187">生成された TypeScript</text>
+<path class="fig-line-rule" d="M192 198H392"></path>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="218">状態ごとの型と直和型</text>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="238">ユースケースごとの状態遷移関数</text>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="258">DBの行から状態への変換</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line-problem" d="M94 237V282"></path>
+<rect class="fig-card-problem" x="4" y="282" width="232" height="32" rx="16"></rect>
+<circle class="fig-fill-problem" cx="24" cy="298" r="9"></circle>
+<path class="fig-line-on" d="M20.5 294.5L27.5 301.5M27.5 294.5L20.5 301.5"></path>
+<text class="fig-t fig-t-xs fig-b fig-c-problem" x="40" y="302.5">検査を通らなければ生成を拒否</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line fig-dash" d="M404 215H506"></path>
+<path class="fig-mk" d="M514 215L506 211L506 219Z"></path>
+<text class="fig-t fig-t-xs fig-mid fig-b" x="459" y="205">検証が届かない</text>
+<rect class="fig-card-dash" x="514" y="187" width="116" height="80" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="213">既存のコード</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="231">への実装</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="249">（手書き）</text>
+</g>
+</svg>
+</div>
+<div class="fig-callout">rdra-ish-dslは、DSLの定義から、状態と状態遷移からなる遷移系を組み立てます。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-rc-step-2" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-rc-step-1" aria-label="ステップ 1"></label>
+<label for="fig-rc-step-2" aria-label="ステップ 2"></label>
+<label for="fig-rc-step-3" aria-label="ステップ 3" aria-current="step"></label>
+<label for="fig-rc-step-4" aria-label="ステップ 4"></label>
+<label for="fig-rc-step-5" aria-label="ステップ 5"></label>
+</div>
+<span class="fig-step-count">3 / 5</span>
+</div>
+<label for="fig-rc-step-4" class="fig-step-next">次へ →</label>
+</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 680 324" role="img" aria-labelledby="fig-rc-s3-title fig-rc-s3-desc">
+<title id="fig-rc-s3-title">遷移系からの2つの出力 ステップ 3</title>
+<desc id="fig-rc-s3-desc">遷移系の箱から2本の枝が分かれています。上の枝は、TLA+ の仕様の箱を経て、TLC でモデル検査する箱に続き、仕様バグ・設計バグを検出します。この上の枝が強調されています。</desc>
+<g class="fig-dim">
+<rect class="fig-card" x="4" y="16" width="110" height="88" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="59" y="42">要求分析</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="59" y="60">（RDRA）</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="59" y="82">ユースケース・</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="59" y="98">データ・状態</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M114 60L134 60"></path>
+<path class="fig-mk" d="M142 60L134 56L134 64Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="142" y="32" width="116" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="200" y="56">rdra-ish-dsl</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="200" y="75">の定義</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M258 60L278 60"></path>
+<path class="fig-mk" d="M286 60L278 56L278 64Z"></path>
+</g>
+<rect class="fig-card" x="286" y="30" width="100" height="60" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="55">遷移系</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="336" y="76">状態と状態遷移</text>
+<path class="fig-line-agent fig-thick" d="M386 60L406 60"></path>
+<path class="fig-mk-agent" d="M414 60L406 56L406 64Z"></path>
+<circle class="fig-fill-agent" cx="386" cy="60" r="3.5"></circle>
+<rect class="fig-card-agent" x="414" y="32" width="100" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="464" y="65">TLA+ の仕様</text>
+<path class="fig-line-agent fig-thick" d="M514 60L534 60"></path>
+<path class="fig-mk-agent" d="M542 60L534 56L534 64Z"></path>
+<rect class="fig-card-agent" x="542" y="32" width="134" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="609" y="65">TLC でモデル検査</text>
+<text class="fig-t fig-t-xs fig-end fig-b fig-c-agent" x="676" y="112">仕様バグ・設計バグを検出</text>
+<g class="fig-dim">
+<path class="fig-line" d="M336 90V135H94V185"></path>
+<circle class="fig-mk" cx="336" cy="90" r="3.5"></circle>
+<path class="fig-mk" d="M94 193L90 185L98 185Z"></path>
+<path class="fig-card" d="M68 193H120L134 215L120 237H68L54 215Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="94" y="220">check</text>
+<path class="fig-line" d="M134 215L172 215"></path>
+<path class="fig-mk" d="M180 215L172 211L172 219Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="180" y="163" width="224" height="104" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="292" y="187">生成された TypeScript</text>
+<path class="fig-line-rule" d="M192 198H392"></path>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="218">状態ごとの型と直和型</text>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="238">ユースケースごとの状態遷移関数</text>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="258">DBの行から状態への変換</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line-problem" d="M94 237V282"></path>
+<rect class="fig-card-problem" x="4" y="282" width="232" height="32" rx="16"></rect>
+<circle class="fig-fill-problem" cx="24" cy="298" r="9"></circle>
+<path class="fig-line-on" d="M20.5 294.5L27.5 301.5M27.5 294.5L20.5 301.5"></path>
+<text class="fig-t fig-t-xs fig-b fig-c-problem" x="40" y="302.5">検査を通らなければ生成を拒否</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line fig-dash" d="M404 215H506"></path>
+<path class="fig-mk" d="M514 215L506 211L506 219Z"></path>
+<text class="fig-t fig-t-xs fig-mid fig-b" x="459" y="205">検証が届かない</text>
+<rect class="fig-card-dash" x="514" y="187" width="116" height="80" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="213">既存のコード</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="231">への実装</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="249">（手書き）</text>
+</g>
+</svg>
+</div>
+<div class="fig-callout">遷移系をTLA+の仕様として出力し、TLCでモデル検査します。ここで仕様バグや設計バグを検出できました。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-rc-step-3" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-rc-step-1" aria-label="ステップ 1"></label>
+<label for="fig-rc-step-2" aria-label="ステップ 2"></label>
+<label for="fig-rc-step-3" aria-label="ステップ 3"></label>
+<label for="fig-rc-step-4" aria-label="ステップ 4" aria-current="step"></label>
+<label for="fig-rc-step-5" aria-label="ステップ 5"></label>
+</div>
+<span class="fig-step-count">4 / 5</span>
+</div>
+<label for="fig-rc-step-5" class="fig-step-next">次へ →</label>
+</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 680 324" role="img" aria-labelledby="fig-rc-s4-title fig-rc-s4-desc">
+<title id="fig-rc-s4-title">遷移系からの2つの出力 ステップ 4</title>
+<desc id="fig-rc-s4-desc">遷移系の箱から2本の枝が分かれています。下の枝は、関門 check を経て、生成された TypeScript の箱に続きます。検査を通らなければ生成を拒否します。この下の枝が強調されています。</desc>
+<g class="fig-dim">
+<rect class="fig-card" x="4" y="16" width="110" height="88" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="59" y="42">要求分析</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="59" y="60">（RDRA）</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="59" y="82">ユースケース・</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="59" y="98">データ・状態</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M114 60L134 60"></path>
+<path class="fig-mk" d="M142 60L134 56L134 64Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="142" y="32" width="116" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="200" y="56">rdra-ish-dsl</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="200" y="75">の定義</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M258 60L278 60"></path>
+<path class="fig-mk" d="M286 60L278 56L278 64Z"></path>
+</g>
+<rect class="fig-card" x="286" y="30" width="100" height="60" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="55">遷移系</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="336" y="76">状態と状態遷移</text>
+<g class="fig-dim">
+<path class="fig-line" d="M386 60L406 60"></path>
+<path class="fig-mk" d="M414 60L406 56L406 64Z"></path>
+<circle class="fig-mk" cx="386" cy="60" r="3.5"></circle>
+<rect class="fig-card" x="414" y="32" width="100" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="464" y="65">TLA+ の仕様</text>
+<path class="fig-line" d="M514 60L534 60"></path>
+<path class="fig-mk" d="M542 60L534 56L534 64Z"></path>
+<rect class="fig-card" x="542" y="32" width="134" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="609" y="65">TLC でモデル検査</text>
+<text class="fig-t fig-t-xs fig-end fig-b" x="676" y="112">仕様バグ・設計バグを検出</text>
+</g>
+<path class="fig-line-agent fig-thick" d="M336 90V135H94V185"></path>
+<circle class="fig-fill-agent" cx="336" cy="90" r="3.5"></circle>
+<path class="fig-mk-agent" d="M94 193L90 185L98 185Z"></path>
+<path class="fig-card-agent" d="M68 193H120L134 215L120 237H68L54 215Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="94" y="220">check</text>
+<path class="fig-line-agent fig-thick" d="M134 215L172 215"></path>
+<path class="fig-mk-agent" d="M180 215L172 211L172 219Z"></path>
+<rect class="fig-card-agent" x="180" y="163" width="224" height="104" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="292" y="187">生成された TypeScript</text>
+<path class="fig-line-rule" d="M192 198H392"></path>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="218">状態ごとの型と直和型</text>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="238">ユースケースごとの状態遷移関数</text>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="258">DBの行から状態への変換</text>
+<path class="fig-line-problem" d="M94 237V282"></path>
+<rect class="fig-card-problem" x="4" y="282" width="232" height="32" rx="16"></rect>
+<circle class="fig-fill-problem" cx="24" cy="298" r="9"></circle>
+<path class="fig-line-on" d="M20.5 294.5L27.5 301.5M27.5 294.5L20.5 301.5"></path>
+<text class="fig-t fig-t-xs fig-b fig-c-problem" x="40" y="302.5">検査を通らなければ生成を拒否</text>
+<g class="fig-dim">
+<path class="fig-line fig-dash" d="M404 215H506"></path>
+<path class="fig-mk" d="M514 215L506 211L506 219Z"></path>
+<text class="fig-t fig-t-xs fig-mid fig-b" x="459" y="205">検証が届かない</text>
+<rect class="fig-card-dash" x="514" y="187" width="116" height="80" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="213">既存のコード</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="231">への実装</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="249">（手書き）</text>
+</g>
+</svg>
+</div>
+<div class="fig-callout">同じ遷移系から、TypeScriptの型と状態遷移関数を生成します。検査を通らないモデルからは生成しないため、生成されたコードは検証済みのモデルと一致します。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-rc-step-4" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-rc-step-1" aria-label="ステップ 1"></label>
+<label for="fig-rc-step-2" aria-label="ステップ 2"></label>
+<label for="fig-rc-step-3" aria-label="ステップ 3"></label>
+<label for="fig-rc-step-4" aria-label="ステップ 4"></label>
+<label for="fig-rc-step-5" aria-label="ステップ 5" aria-current="step"></label>
+</div>
+<span class="fig-step-count">5 / 5</span>
+</div>
+<label for="fig-rc-step-1" class="fig-step-next">最初から</label>
+</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 680 324" role="img" aria-labelledby="fig-rc-s5-title fig-rc-s5-desc">
+<title id="fig-rc-s5-title">遷移系からの2つの出力 ステップ 5</title>
+<desc id="fig-rc-s5-desc">生成された TypeScript の箱から、既存のコードへの実装（手書き）の箱へ、破線の矢印が伸びています。破線の矢印には、検証が届かないと書かれています。破線の矢印と既存のコードへの実装の箱が強調されています。</desc>
+<g class="fig-dim">
+<rect class="fig-card" x="4" y="16" width="110" height="88" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="59" y="42">要求分析</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="59" y="60">（RDRA）</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="59" y="82">ユースケース・</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="59" y="98">データ・状態</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M114 60L134 60"></path>
+<path class="fig-mk" d="M142 60L134 56L134 64Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="142" y="32" width="116" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="200" y="56">rdra-ish-dsl</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="200" y="75">の定義</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M258 60L278 60"></path>
+<path class="fig-mk" d="M286 60L278 56L278 64Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="286" y="30" width="100" height="60" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="336" y="55">遷移系</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="336" y="76">状態と状態遷移</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M386 60L406 60"></path>
+<path class="fig-mk" d="M414 60L406 56L406 64Z"></path>
+<circle class="fig-mk" cx="386" cy="60" r="3.5"></circle>
+<rect class="fig-card" x="414" y="32" width="100" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="464" y="65">TLA+ の仕様</text>
+<path class="fig-line" d="M514 60L534 60"></path>
+<path class="fig-mk" d="M542 60L534 56L534 64Z"></path>
+<rect class="fig-card" x="542" y="32" width="134" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="609" y="65">TLC でモデル検査</text>
+<text class="fig-t fig-t-xs fig-end fig-b" x="676" y="112">仕様バグ・設計バグを検出</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M336 90V135H94V185"></path>
+<circle class="fig-mk" cx="336" cy="90" r="3.5"></circle>
+<path class="fig-mk" d="M94 193L90 185L98 185Z"></path>
+<path class="fig-card" d="M68 193H120L134 215L120 237H68L54 215Z"></path>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="94" y="220">check</text>
+<path class="fig-line" d="M134 215L172 215"></path>
+<path class="fig-mk" d="M180 215L172 211L172 219Z"></path>
+</g>
+<rect class="fig-card" x="180" y="163" width="224" height="104" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="292" y="187">生成された TypeScript</text>
+<path class="fig-line-rule" d="M192 198H392"></path>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="218">状態ごとの型と直和型</text>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="238">ユースケースごとの状態遷移関数</text>
+<text class="fig-t fig-t-xs fig-mid" x="292" y="258">DBの行から状態への変換</text>
+<g class="fig-dim">
+<path class="fig-line-problem" d="M94 237V282"></path>
+<rect class="fig-card-problem" x="4" y="282" width="232" height="32" rx="16"></rect>
+<circle class="fig-fill-problem" cx="24" cy="298" r="9"></circle>
+<path class="fig-line-on" d="M20.5 294.5L27.5 301.5M27.5 294.5L20.5 301.5"></path>
+<text class="fig-t fig-t-xs fig-b fig-c-problem" x="40" y="302.5">検査を通らなければ生成を拒否</text>
+</g>
+<path class="fig-line-problem fig-dash" d="M404 215H506"></path>
+<path class="fig-mk-problem" d="M514 215L506 211L506 219Z"></path>
+<text class="fig-t fig-t-xs fig-mid fig-b fig-c-problem" x="459" y="205">検証が届かない</text>
+<rect class="fig-card-problem-dash" x="514" y="187" width="116" height="80" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="213">既存のコード</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="231">への実装</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="572" y="249">（手書き）</text>
+</svg>
+</div>
+<div class="fig-callout">ただし、生成されたコードは、既存のコードへ手で実装するときのベースにとどまります。手で書いた実装には検証が届かず、モデルから乖離する可能性があります。</div>
+</div>
+</div>
+<figcaption>同じ遷移系から、モデル検査の仕様と TypeScript のコードを出力する</figcaption>
+</figure>
