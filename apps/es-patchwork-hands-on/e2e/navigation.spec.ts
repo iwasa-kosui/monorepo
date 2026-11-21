@@ -155,11 +155,11 @@ test.describe('矢印キー', () => {
 test.describe('役割の行', () => {
   test('本文の上に役割の行が出る', async ({ page }) => {
     await page.goto('/chapters/chapter-1/');
-    await expect(page.locator('.lesson-role')).toHaveText(/^\s*課題: .+。\s*$/);
+    await expect(page.locator('.lesson-role')).toHaveText(/^\s*やってみる: .+。\s*$/);
     await page.goto('/chapters/chapter-2/4/');
     await expect(page.locator('.lesson-role')).toHaveText(/^\s*演習: /);
 
-    const rolePattern = /^(背景|課題|やってみる|説明|演習|確認|実演|比較|まとめ|持ち帰り): [^。]+。$/;
+    const rolePattern = /^(課題|説明|やってみる|演習|実演|まとめ): [^。]+。$/;
     for (const path of chapterPagePaths()) {
       await page.goto(path);
       const role = page.locator('.lesson-role');

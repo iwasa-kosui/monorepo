@@ -60,7 +60,9 @@ const groups = groupPages(pages, index).map((group) => {
   return {
     id: groupRow.id,
     title: groupRow.title,
-    range: groupRow.range,
+    range: groupRow.parts === undefined
+      ? groupRow.range
+      : `${groupRow.range}：${groupRow.parts}`,
     hasCurrent: group.hasCurrent,
     links: group.members.map((member) => ({
       href: pagePath(member.page.chapter, member.page.number),
@@ -97,6 +99,13 @@ const roleParts = meta.role.split('`');
       <p class="lesson-bar__status">
         <span>全体 <strong>{index + 1}/{pages.length}</strong></span>
         <span>目安 {elapsed}ごろ</span>
+        <span class="lesson-bar__range">
+          この章 {row.range}{
+            row.parts !== undefined && (
+              <span class="lesson-bar__parts">：{row.parts}</span>
+            )
+          }
+        </span>
       </p>
       <a class="lesson-bar__help" href="/troubleshooting/"
       >うまく動かないとき</a>
@@ -112,14 +121,14 @@ const roleParts = meta.role.split('`');
       </details>
     </TopBar>
     <div class="lesson-frame__body">
-      <aside class="lesson-sidebar">
+      <div class="lesson-sidebar">
         <LessonPageList
           groups={groups}
           idPrefix="side"
           label="章ごとのページ"
           collapsible
         />
-      </aside>
+      </div>
       <main class="lesson-main content">
         <p class="lesson-role">
           <strong>{pageFlows[meta.flow]}</strong>: {

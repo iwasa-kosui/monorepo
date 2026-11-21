@@ -31,9 +31,13 @@
 .lesson-bar__status strong {
   color: var(--role-fg);
 }
+.lesson-bar__parts {
+  display: none;
+}
 
 .lesson-menu {
   position: relative;
+  margin-left: auto;
 }
 .lesson-menu > summary {
   border: 1px solid var(--role-accent);
@@ -275,9 +279,6 @@ summary.lesson-pages__title:focus-visible {
   .lesson-bar__status {
     order: 11;
   }
-  .lesson-menu {
-    margin-left: auto;
-  }
   .lesson-footer small,
   .lesson-footer kbd,
   .lesson-footer__hint {
@@ -295,6 +296,9 @@ summary.lesson-pages__title:focus-visible {
     overflow-y: auto;
     border-right: 1px solid var(--role-rule);
     padding: 0.5rem 0.5rem 0.75rem;
+  }
+  .lesson-bar__parts {
+    display: inline;
   }
 }
 

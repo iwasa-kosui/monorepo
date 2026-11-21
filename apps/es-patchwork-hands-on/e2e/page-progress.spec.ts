@@ -55,6 +55,15 @@ test('章ページ以外には進み具合とページ一覧を出さない', as
   }
 });
 
+test('幅 1440 未満では、上部バーに章の時間帯だけを出し、内訳はメニューの章の見出しに出す', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/chapters/chapter-2/3/');
+  await expect(page.locator('.lesson-bar__status')).toContainText('この章 0:09〜0:23（14分）');
+  await expect(page.locator('.lesson-bar__parts')).toBeHidden();
+  await openList(page);
+  await expect(page.locator('.lesson-menu__panel .lesson-pages__group').nth(2)).toContainText('演習9分');
+});
+
 test.describe('ページ一覧（幅 1440px 未満のメニュー）', () => {
   test.use({ viewport: { width: 1024, height: 720 } });
 
@@ -141,15 +150,10 @@ test.describe('ページ一覧（幅 1440px 未満のメニュー）', () => {
 });
 
 test.describe('一覧を開いても画面が動かない', () => {
-  const cases = [
-    { path: '/chapters/chapter-2/4/', width: 1280 },
-    { path: '/chapters/chapter-2/5/', width: 1280 },
-    { path: '/chapters/intro/', width: 1280 },
-    { path: '/chapters/chapter-4/3/', width: 1280 },
-  ];
-  for (const { path, width } of cases) {
-    test(`${width}x640 の ${path}`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 640 });
+  const paths = ['/chapters/chapter-2/4/', '/chapters/chapter-2/5/', '/chapters/intro/', '/chapters/chapter-4/3/'];
+  for (const path of paths) {
+    test(`1280x640 の ${path}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 640 });
       await page.goto(path);
       for (const playground of await page.locator('[data-playground]:not([hidden])').all()) {
         await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
@@ -301,5 +305,20 @@ test.describe('サイドバー（幅 1440px 以上）', () => {
     await expect(page.locator('.lesson-menu > summary')).toBeVisible();
     const width = await page.locator('.lesson-main').evaluate((element) => element.getBoundingClientRect().width);
     expect(width).toBeGreaterThan(1400);
+  });
+
+  test('章の時間帯と内訳がサイドバーの章の見出しに出る', async ({ page }) => {
+    await page.goto('/chapters/chapter-2/3/');
+    await expect(page.locator('.lesson-sidebar .lesson-pages__group').nth(2)).toContainText(
+      '0:09〜0:23（14分）：説明2分、演習9分、解答の確認3分',
+    );
+  });
+
+  test('上部バーに章の時間帯と内訳が出る', async ({ page }) => {
+    await page.goto('/chapters/chapter-2/3/');
+    await expect(page.locator('.lesson-bar__status')).toContainText(
+      'この章 0:09〜0:23（14分）：説明2分、演習9分、解答の確認3分',
+    );
+    await expect(page.locator('.lesson-bar__parts')).toBeVisible();
   });
 });
