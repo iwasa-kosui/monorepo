@@ -1,0 +1,206 @@
+---
+import { type CollectionEntry, getCollection } from 'astro:content';
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { lessonPageOf, pageFlows } from '../../lesson-pages';
+import {
+  buildChapterPages,
+  type ChapterPage,
+  pagePath,
+} from '../../lib/chapter-routes';
+import { groupPages } from '../../lib/lesson-frame';
+import {
+  elapsedMinutes,
+  firstHeading,
+  formatElapsed,
+  pageLabel,
+} from '../../lib/page-guide';
+import { schedule, withTimeRanges } from '../../schedule';
+import '../../styles/lesson-frame.css';
+import LessonFooter from './LessonFooter.astro';
+import LessonPageList from './LessonPageList.astro';
+import TopBar from './TopBar.astro';
+
+interface Props {
+  chapter: string;
+  number: number;
+}
+
+type Page = ChapterPage<CollectionEntry<'chapters'>>;
+
+const { chapter, number } = Astro.props;
+const pages = buildChapterPages(
+  await getCollection('chapters'),
+  schedule.map((row) => row.id),
+);
+const index = pages.findIndex((page) =>
+  page.chapter === chapter && page.number === number
+);
+const page = pages[index];
+if (page === undefined) {
+  throw new Error(`ページが見つかりません: ${chapter} ${number}`);
+}
+const rows = withTimeRanges(schedule);
+const rowOf = (id: string) => {
+  const row = rows.find((candidate) => candidate.id === id);
+  if (row === undefined) {
+    throw new Error(`schedule.ts に章がありません: ${id}`);
+  }
+  return row;
+};
+const row = rowOf(chapter);
+const meta = lessonPageOf(page.entry.id);
+const elapsed = formatElapsed(
+  elapsedMinutes(schedule, chapter, number, page.total),
+);
+const labelOf = (target: Page) =>
+  pageLabel(target.number, firstHeading(target.entry.body));
+const groups = groupPages(pages, index).map((group) => {
+  const groupRow = rowOf(group.chapter);
+  return {
+    id: groupRow.id,
+    title: groupRow.title,
+    range: groupRow.parts === undefined
+      ? groupRow.range
+      : `${groupRow.range}：${groupRow.parts}`,
+    hasCurrent: group.hasCurrent,
+    links: group.members.map((member) => ({
+      href: pagePath(member.page.chapter, member.page.number),
+      label: labelOf(member.page),
+      route: member.route,
+    })),
+  };
+});
+const linkTo = (target: Page | undefined) =>
+  target === undefined ? undefined : {
+    href: pagePath(target.chapter, target.number),
+    hint: target.chapter === chapter ? undefined : rowOf(target.chapter).title,
+    title: labelOf(target),
+  };
+const fullWidth = meta.flow === 'exercise';
+const wide = chapter === 'intro' || page.entry.data.wide === true;
+const goal = page.entry.data.goal;
+const roleParts = meta.role.split('`');
+---
+
+<BaseLayout title={`${row.title} ${page.number}/${page.total}`} chapterPage>
+  <div
+    class:list={['lesson-frame', {
+      'lesson-frame--full': fullWidth,
+      'lesson-frame--wide': wide,
+    }]}
+    data-flow={meta.flow}
+  >
+    <TopBar>
+      <h1 class="lesson-bar__title">
+        {row.title}
+        <span class="lesson-bar__count">{page.number}/{page.total}</span>
+      </h1>
+      <p class="lesson-bar__status">
+        <span>全体 <strong>{index + 1}/{pages.length}</strong></span>
+        <span>目安 {elapsed}ごろ</span>
+        <span class="lesson-bar__range">
+          この章 {row.range}{
+            row.parts !== undefined && (
+              <span class="lesson-bar__parts">：{row.parts}</span>
+            )
+          }
+        </span>
+      </p>
+      <a class="lesson-bar__help" href="/troubleshooting/"
+      >うまく動かないとき</a>
+      <details class="lesson-menu">
+        <summary>ページ一覧</summary>
+        <div class="lesson-menu__panel">
+          <LessonPageList
+            groups={groups}
+            idPrefix="menu"
+            label="全ページの一覧"
+          />
+        </div>
+      </details>
+    </TopBar>
+    <div class="lesson-frame__body">
+      <div class="lesson-sidebar">
+        <LessonPageList
+          groups={groups}
+          idPrefix="side"
+          label="章ごとのページ"
+          collapsible
+        />
+      </div>
+      <main class="lesson-main content">
+        <p class="lesson-role">
+          <strong>{pageFlows[meta.flow]}</strong>: {
+            roleParts.map((part, index) =>
+              index % 2 === 1 ? (
+              <code>{part}</code>
+            ) : part
+            )
+          }
+        </p>
+        {
+          goal !== undefined && (
+            <p class="chapter-goal">
+              <strong>できるようになること：</strong>{goal}
+            </p>
+          )
+        }
+        <article class="chapter-body">
+          <slot />
+        </article>
+      </main>
+    </div>
+    <LessonFooter
+      previous={linkTo(pages[index - 1])}
+      next={linkTo(pages[index + 1])}
+      progress={(index + 1) / pages.length}
+    />
+  </div>
+</BaseLayout>
+
+<script>
+const revealCurrent = (container: HTMLElement | null): void => {
+  const here = container?.querySelector<HTMLElement>('[aria-current="page"]');
+  if (container == null || here == null || container.clientHeight === 0) return;
+  const box = container.getBoundingClientRect();
+  const rect = here.getBoundingClientRect();
+  if (rect.top < box.top) container.scrollTop += rect.top - box.top;
+  else if (rect.bottom > box.bottom) {
+    container.scrollTop += rect.bottom - box.bottom;
+  }
+};
+
+revealCurrent(document.querySelector<HTMLElement>('.lesson-sidebar'));
+
+const menu = document.querySelector<HTMLDetailsElement>('.lesson-menu');
+
+if (menu !== null) {
+  const close = (): void => {
+    menu.open = false;
+  };
+
+  menu.addEventListener('toggle', () => {
+    if (menu.open) {
+      revealCurrent(menu.querySelector<HTMLElement>('.lesson-menu__panel'));
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !menu.open) return;
+    close();
+    menu.querySelector('summary')?.focus();
+  });
+
+  menu.addEventListener('focusout', (event) => {
+    const next = event.relatedTarget;
+    if (menu.open && next instanceof Node && !menu.contains(next)) close();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (
+      menu.open && event.target instanceof Node && !menu.contains(event.target)
+    ) close();
+  });
+}
+</script>

@@ -151,3 +151,123 @@ test.describe('矢印キー', () => {
     expect(pathOf(page)).toBe('/chapters/chapter-2/2/');
   });
 });
+
+test.describe('役割の行', () => {
+  test('本文の上に役割の行が出る', async ({ page }) => {
+    await page.goto('/chapters/chapter-1/');
+    await expect(page.locator('.lesson-role')).toHaveText(/^\s*やってみる: .+。\s*$/);
+    await page.goto('/chapters/chapter-2/4/');
+    await expect(page.locator('.lesson-role')).toHaveText(/^\s*演習: /);
+
+    const rolePattern = /^(課題|説明|やってみる|演習|実演|まとめ): [^。]+。$/;
+    for (const path of chapterPagePaths()) {
+      await page.goto(path);
+      const role = page.locator('.lesson-role');
+      await expect(role, path).toHaveCount(1);
+      expect((await role.innerText()).trim(), path).toMatch(rolePattern);
+      const roleBox = await role.boundingBox();
+      const bodyBox = await page.locator('.chapter-body').boundingBox();
+      expect(roleBox, path).not.toBeNull();
+      expect(bodyBox, path).not.toBeNull();
+      expect(roleBox?.y ?? Infinity, path).toBeLessThan(bodyBox?.y ?? 0);
+    }
+  });
+});
+
+test.describe('下部のフッター', () => {
+  test('下部のフッターに前後のリンクとキー操作のヒントが出る', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/chapters/chapter-2/2/');
+    const footer = page.locator('.lesson-footer');
+    await expect(footer).toBeVisible();
+    await expect(footer.locator('a[rel="prev"] kbd')).toBeVisible();
+    await expect(footer.locator('a[rel="prev"] kbd')).toHaveText('←');
+    await expect(footer.locator('a[rel="next"] kbd')).toBeVisible();
+    await expect(footer.locator('a[rel="next"] kbd')).toHaveText('→');
+    await expect(page.locator('.lesson-footer__hint')).toHaveText('← → キーでも移動できます');
+    const footerBottom = await footer.evaluate((element) => element.getBoundingClientRect().bottom);
+    const innerHeight = await page.evaluate(() => window.innerHeight);
+    expect(Math.abs(footerBottom - innerHeight)).toBeLessThanOrEqual(1);
+  });
+
+  test('章の境界の前後リンクには隣の章の名前が出る', async ({ page }) => {
+    await page.goto('/chapters/intro/3/');
+    await expect(page.locator('.lesson-footer a[rel="next"]')).toContainText('第1章');
+  });
+
+  test('入力欄にフォーカスがある間は、ヒントがページを移動しないことを示す', async ({ page }) => {
+    await page.goto('/chapters/chapter-2/2/');
+    const hint = page.locator('.lesson-footer__hint');
+    await expect(hint).toHaveText('← → キーでも移動できます');
+    await page.evaluate(() => {
+      document.body.insertAdjacentHTML('beforeend', '<textarea id="probe"></textarea>');
+      (document.getElementById('probe') as HTMLElement).focus();
+    });
+    await expect(hint).toHaveText('入力中は ← → でページを移動しません');
+    await page.locator('h1').click();
+    await expect(hint).toHaveText('← → キーでも移動できます');
+  });
+});
+
+test.describe('章ページ以外の上部バー', () => {
+  for (const path of ['/setup/', '/troubleshooting/', '/no-such-page/']) {
+    test(`${path} には上部バーだけが出る`, async ({ page }) => {
+      const response = await page.goto(path);
+      if (path === '/no-such-page/') expect(response?.status()).toBe(404);
+      const bar = page.locator('header.top-bar');
+      await expect(bar).toBeVisible();
+      const home = bar.getByRole('link', { name: 'トップページへ' });
+      await expect(home).toBeVisible();
+      await expect(home).toHaveAttribute('href', '/');
+      await expect(page.locator('.lesson-sidebar')).toHaveCount(0);
+      await expect(page.locator('.lesson-footer')).toHaveCount(0);
+      await expect(page.locator('.lesson-menu')).toHaveCount(0);
+      await expect(page.locator('.lesson-bar__status')).toHaveCount(0);
+    });
+  }
+
+  test('トップページには上部バーを付けない', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('.top-bar')).toHaveCount(0);
+  });
+});
+
+test('キーボードだけで、導入からまとめまで前後に移動できる', async ({ page }) => {
+  test.setTimeout(120_000);
+  const expected = chapterPagePaths();
+  const first = expected[0] ?? '/';
+  const last = expected.at(-1) ?? '/';
+  const limit = expected.length + 5;
+  const walk = async (key: 'ArrowRight' | 'ArrowLeft', goal: string): Promise<string[]> => {
+    const visited = [pathOf(page)];
+    while (pathOf(page) !== goal && visited.length <= limit) {
+      const before = pathOf(page);
+      await page.locator('h1').click();
+      await page.keyboard.press(key);
+      await page.waitForURL((url) => url.pathname !== before);
+      await page.waitForLoadState('load');
+      visited.push(pathOf(page));
+    }
+    return visited;
+  };
+  await page.goto(first);
+  expect(await walk('ArrowRight', last)).toEqual(expected);
+  expect(await walk('ArrowLeft', first)).toEqual([...expected].reverse());
+});
+
+test('サイドバーのリンクにフォーカスが見える', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 790 });
+  await page.goto('/chapters/chapter-2/3/');
+  await page.locator('.top-bar__home').focus();
+  const reached = (): Promise<boolean> =>
+    page.evaluate(() => document.activeElement?.matches('.lesson-sidebar a[aria-current="page"]') ?? false);
+  for (let count = 0; count < 60 && !(await reached()); count += 1) {
+    await page.keyboard.press('Tab');
+  }
+  expect(await reached(), 'Tab で現在のページのリンクに届きません').toBe(true);
+  const outline = await page.locator('.lesson-sidebar a[aria-current="page"]').evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { style: style.outlineStyle, width: style.outlineWidth };
+  });
+  expect(outline).toEqual({ style: 'solid', width: '2px' });
+});

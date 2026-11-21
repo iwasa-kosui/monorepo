@@ -1,0 +1,112 @@
+---
+import '../../styles/lesson-frame.css';
+
+interface Link {
+  readonly href: string;
+  readonly hint?: string;
+  readonly title?: string;
+}
+
+interface Props {
+  previous?: Link;
+  next?: Link;
+  progress?: number;
+}
+
+const { previous, next, progress } = Astro.props;
+---
+
+<nav class="lesson-footer" aria-label="ページの移動">
+  {
+    progress !== undefined && (
+      <span class="lesson-footer__progress" aria-hidden="true">
+        <span
+          class="lesson-footer__progress-fill"
+          style={`width: ${progress * 100}%`}
+        />
+      </span>
+    )
+  }
+  {
+    previous === undefined ? <span /> : (
+      <a
+        class="lesson-footer__link lesson-footer__link--previous"
+        rel="prev"
+        href={previous.href}
+        title={previous.title}
+      >
+        <kbd aria-hidden="true">←</kbd>
+        <span>前へ</span>
+        {previous.hint !== undefined && <small>（{previous.hint}）</small>}
+      </a>
+    )
+  }
+  <p class="lesson-footer__hint" data-key-hint>← → キーでも移動できます</p>
+  {
+    next === undefined ? <span /> : (
+      <a
+        class="lesson-footer__link lesson-footer__link--next"
+        rel="next"
+        href={next.href}
+        title={next.title}
+      >
+        {next.hint !== undefined && <small>（{next.hint}）</small>}
+        <span>次へ</span>
+        <kbd aria-hidden="true">→</kbd>
+      </a>
+    )
+  }
+</nav>
+
+<script>
+const isEditing = (element: Element | null): boolean =>
+  element instanceof HTMLElement
+  && (element.isContentEditable
+    || ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName));
+
+const scrollsSideways = (element: Element): boolean =>
+  element.scrollWidth > element.clientWidth
+  && ['auto', 'scroll'].includes(getComputedStyle(element).overflowX);
+
+const isInSidewaysScroller = (element: Element | null): boolean => {
+  for (
+    let current = element;
+    current !== null;
+    current = current.parentElement
+  ) {
+    if (scrollsSideways(current)) return true;
+  }
+  return false;
+};
+
+const keepsArrowKeys = (element: Element | null): boolean =>
+  isEditing(element) || isInSidewaysScroller(element);
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  if (
+    event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey
+    || event.metaKey || event.shiftKey
+  ) return;
+  if (keepsArrowKeys(document.activeElement)) return;
+  const link = document.querySelector<HTMLAnchorElement>(
+    event.key === 'ArrowLeft'
+      ? '.lesson-footer a[rel="prev"]'
+      : '.lesson-footer a[rel="next"]',
+  );
+  if (link === null) return;
+  event.preventDefault();
+  location.assign(link.href);
+});
+
+const hint = document.querySelector<HTMLElement>('[data-key-hint]');
+const pageHint = hint?.textContent ?? '';
+const showHint = (target: EventTarget | null): void => {
+  if (hint === null) return;
+  hint.textContent = target instanceof Element && keepsArrowKeys(target)
+    ? '入力中は ← → でページを移動しません'
+    : pageHint;
+};
+document.addEventListener('focusin', (event) => showHint(event.target));
+document.addEventListener('focusout', (event) => showHint(event.relatedTarget));
+</script>
