@@ -587,33 +587,29 @@ const mount = (root: HTMLElement): void => {
   runButton.addEventListener('click', () => void run());
   testsButton.addEventListener('click', () => void runTests());
   templateButton?.addEventListener('click', insertRecordTemplate);
-  const closeHintOf = (button: HTMLElement | null): void => {
-    button?.closest('details')?.removeAttribute('open');
-  };
-
-  const closeHint = (details: HTMLDetailsElement): void => {
+  const closeHint = (details: HTMLDetailsElement | null, moveFocus: boolean): void => {
+    if (details === null) {
+      return;
+    }
     details.open = false;
-    details.querySelector('summary')?.focus();
+    if (moveFocus) {
+      details.querySelector('summary')?.focus();
+    }
   };
 
   for (const button of root.querySelectorAll<HTMLElement>('[data-role="hint-close"]')) {
-    button.addEventListener('click', () => {
-      const details = button.closest('details');
-      if (details !== null) {
-        closeHint(details);
-      }
-    });
+    button.addEventListener('click', () => closeHint(button.closest('details'), true));
   }
   root.addEventListener('keydown', (event) => {
-    const opened = root.querySelector<HTMLDetailsElement>('details.play-hint-step[open]');
-    if (event.key === 'Escape' && opened !== null) {
-      closeHint(opened);
+    if (event.key !== 'Escape' || !(event.target instanceof Element)) {
+      return;
     }
+    closeHint(event.target.closest<HTMLDetailsElement>('details.play-hint-step[open]'), true);
   });
 
   completeButton.addEventListener('click', () => {
     replaceWithBackup(config.complete);
-    closeHintOf(completeButton);
+    closeHint(completeButton.closest('details'), false);
     clearMessage();
     say(
       config.step === 2
@@ -623,7 +619,7 @@ const mount = (root: HTMLElement): void => {
   });
   completeStep2Button?.addEventListener('click', () => {
     replaceWithBackup(config.completeStep2 ?? config.complete);
-    closeHintOf(completeStep2Button);
+    closeHint(completeStep2Button?.closest('details') ?? null, false);
     clearMessage();
     say([
       'ステップ2の完成コードを読み込みました。',

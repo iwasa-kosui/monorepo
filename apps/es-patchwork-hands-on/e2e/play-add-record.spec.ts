@@ -950,12 +950,12 @@ test.describe('第2章の場面 ステップ2 /chapters/chapter-2/5/', () => {
 
 test.describe('ヒントと解答の開閉', () => {
   for (const path of [stepOnePath, stepTwoPath]) {
-    test(`${path} 広い画面では、開いた本文が右の列に重なり、Escape キーで閉じる`, async ({ page }) => {
+    test(`${path} 広い画面では、開いた本文が「問い合わせへの答え」と「ヒントと解答」の上に重なり、Escape キーで閉じる`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 640 });
       await open(page, path);
       await hintSteps(page).nth(1).locator('summary').click();
       const placement = await page.evaluate(() => {
-        const column = document.querySelector('.play-col-hints')?.getBoundingClientRect();
+        const column = document.querySelector('.play-hint-area')?.getBoundingClientRect();
         const body = document.querySelector('details.play-hint-step[open] > .play-hint-body')?.getBoundingClientRect();
         return column === undefined || body === undefined
           ? null
@@ -967,9 +967,20 @@ test.describe('ヒントと解答の開閉', () => {
           };
       });
       expect(placement).toEqual({ dTop: 0, dLeft: 0, dWidth: 0, dHeight: 0 });
+      await hintSteps(page).nth(1).locator('[data-role="hint-close"]').focus();
       await page.keyboard.press('Escape');
       await expectAllClosed(page);
       await expect(hintSteps(page).nth(1).locator('summary')).toBeFocused();
+    });
+
+    test(`${path} ヒント3を開いた状態でエディタにフォーカスして Escape を押しても、ヒントは開いたままで、フォーカスはエディタに残る`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 640 });
+      await open(page, path);
+      await hintSteps(page).nth(2).locator('summary').click();
+      await page.locator('.cm-content').focus();
+      await page.keyboard.press('Escape');
+      await expectOnlyOpen(page, 2);
+      await expect(page.locator('.cm-content')).toBeFocused();
     });
 
     test(`${path} スマートフォンの幅では、本文がその場に開き、次を開くと前が閉じる`, async ({ page }) => {

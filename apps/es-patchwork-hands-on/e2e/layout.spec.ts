@@ -194,6 +194,22 @@ const collectHintFailures = async (
             `${label} ${size.width}x${size.height}: 重ねた本文の高さ=${body.clientHeight}/${body.scrollHeight}`,
           );
         }
+        const testsButton = page.locator('[data-role="tests"]');
+        if (!(await testsButton.isVisible())) {
+          failures.push(`${label} ${size.width}x${size.height}: 「テストを実行する」ボタンが見えない`);
+        } else {
+          const bodyBox = await steps.nth(index).locator('.play-hint-body').boundingBox();
+          const buttonBox = await testsButton.boundingBox();
+          if (
+            bodyBox !== null && buttonBox !== null
+            && bodyBox.x < buttonBox.x + buttonBox.width && buttonBox.x < bodyBox.x + bodyBox.width
+            && bodyBox.y < buttonBox.y + buttonBox.height && buttonBox.y < bodyBox.y + bodyBox.height
+          ) {
+            failures.push(
+              `${label} ${size.width}x${size.height}: 開いた本文が「テストを実行する」ボタンに重なっている`,
+            );
+          }
+        }
         await close.click();
       }
     }

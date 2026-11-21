@@ -9,7 +9,7 @@ import SqlPlayground from '../../../components/SqlPlayground.astro';
 ## 来院のキャンセル理由を visits テーブルで調べる
 
 1. 「show-visits.ts を実行する」を押します。実行欄は、ページの中でコードや SQL を実行する欄です。見るだけの人は、講師の画面で結果を確かめます。
-2. 出た行から、「この来院がキャンセルになっているのはなぜですか」に答えてみます。`show-visits.ts` は理由と操作した人を `cancelVisit` に渡していますが、行にはどちらも残っていません。
+2. 出た行から、「この来院がキャンセルになっているのはなぜですか」に答えてみます。`show-visits.ts` は理由と操作した人を `cancelVisit` に渡していますが、行にはどちらも、キャンセルした日時も残っていません。この行からは、誰が、いつ、なぜキャンセルしたのかに答えられません。
 3. 「SQL で調べる」を押し、理由や操作した人の列が `visits` にあるかを SQL で確かめます。
 
 <PlaygroundTabs labels={['show-visits.ts を実行する', 'SQL で調べる']} label="実行欄" />
