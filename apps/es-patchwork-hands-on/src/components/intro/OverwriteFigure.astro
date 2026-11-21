@@ -131,27 +131,16 @@
 
 <style>
 .figure {
-  --line: #d1d5db;
-  --panel: #f3f4f6;
-  --paper: #ffffff;
-  --text: #374151;
-  --muted: #4b5563;
-  --accent: #1d4ed8;
-  --ink: #1e2a5a;
-  --red: #dc2626;
-  --yellow: #facc15;
-  --blue: #2563eb;
-  --gray: #9ca3af;
   --row-height: 3rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 0.75rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--role-rule);
   border-radius: 0.5rem;
-  background: var(--panel);
+  background: var(--role-sunken);
   padding: 0.875rem 1rem;
-  color: var(--text);
+  color: var(--role-fg);
 }
 .figure-title {
   margin: 0;
@@ -173,14 +162,14 @@
   width: 100%;
   height: 90px;
   border-radius: 0.375rem;
-  background: var(--paper);
+  background: var(--role-surface);
 }
 .scene .bubble,
 .scene .line,
 .scene .headset,
 .scene .spark {
-  fill: var(--paper);
-  stroke: var(--ink);
+  fill: var(--role-surface);
+  stroke: var(--role-accent-strong);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -191,38 +180,38 @@
   fill: none;
 }
 .scene .spark {
-  stroke: var(--red);
+  stroke: var(--role-danger);
 }
 .scene .skin {
-  fill: #fde8c8;
-  stroke: var(--ink);
+  fill: var(--role-warning-soft);
+  stroke: var(--role-accent-strong);
   stroke-width: 3;
   stroke-linejoin: round;
 }
 .scene .hair {
-  fill: var(--yellow);
-  stroke: var(--ink);
+  fill: var(--role-highlight);
+  stroke: var(--role-accent-strong);
   stroke-width: 3;
   stroke-linejoin: round;
 }
 .scene .hair.dark {
-  fill: var(--ink);
+  fill: var(--role-accent-strong);
 }
 .scene .shirt {
-  fill: var(--red);
-  stroke: var(--ink);
+  fill: var(--role-danger);
+  stroke: var(--role-accent-strong);
   stroke-width: 2;
   stroke-linejoin: round;
 }
 .scene .shirt.blue {
-  fill: var(--blue);
+  fill: var(--role-accent);
 }
 .scene .cheek {
-  fill: var(--red);
+  fill: var(--role-danger);
   opacity: 0.5;
 }
 .scene .bubble-text {
-  fill: var(--ink);
+  fill: var(--role-accent-strong);
   font-size: 13px;
   font-weight: 700;
 }
@@ -236,17 +225,17 @@
   width: 100%;
   margin: 0;
   border-collapse: collapse;
-  background: var(--paper);
+  background: var(--role-surface);
   font-size: 1rem;
 }
 .visit-table th,
 .visit-table td {
-  border: 1px solid var(--line);
+  border: 1px solid var(--role-rule);
   padding: 0.375rem 0.75rem;
   text-align: left;
 }
 .visit-table th {
-  background: var(--panel);
+  background: var(--role-sunken);
   font-weight: 700;
 }
 .visit-table td {
@@ -268,7 +257,7 @@
   opacity: 1;
 }
 .value-new {
-  color: var(--red);
+  color: var(--role-danger);
   opacity: 0;
   transform: translateX(-1.5rem);
 }
@@ -282,17 +271,18 @@
   gap: 1.25rem;
   height: var(--row-height);
   box-sizing: border-box;
-  background: var(--yellow);
+  background: var(--role-highlight);
   padding-inline: 0.75rem;
-  color: var(--ink);
+  color: var(--role-console);
   font-size: 1rem;
   font-weight: 700;
   white-space: nowrap;
 }
 .backup .tag {
-  border: 2px solid var(--ink);
+  border: 2px solid var(--role-accent-strong);
   border-radius: 0.25rem;
-  background: var(--paper);
+  background: var(--role-surface);
+  color: var(--role-fg);
   padding-inline: 0.375rem;
   font-size: 0.75rem;
 }
@@ -349,9 +339,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  border: 2px dashed var(--gray);
+  border: 2px dashed var(--role-border);
   border-radius: 0.375rem;
-  background: var(--paper);
+  background: var(--role-surface);
   padding: 0.875rem 1rem;
 }
 .card-label {
@@ -359,16 +349,16 @@
   font-weight: 700;
 }
 .card-value {
-  color: var(--muted);
+  color: var(--role-muted);
   font-size: 1rem;
 }
 [data-step="2"] .card {
   animation: shake 0.6s ease 1.1s both;
-  background: #e5e7eb;
-  color: var(--gray);
+  background: var(--role-sunken);
+  color: var(--role-muted);
 }
 [data-step="2"] .card-value {
-  color: var(--gray);
+  color: var(--role-muted);
 }
 @keyframes shake {
   0%, 100% {
@@ -394,20 +384,20 @@
   gap: 0.5rem;
 }
 .controls button {
-  border: 1px solid var(--accent);
+  border: 1px solid var(--role-accent);
   border-radius: 0.375rem;
-  background: var(--paper);
+  background: var(--role-surface);
   padding: 0.5rem 1rem;
-  color: var(--accent);
+  color: var(--role-accent);
   font-size: 0.9375rem;
   cursor: pointer;
 }
 .controls button:hover:not(:disabled) {
-  background: #dbeafe;
+  background: var(--role-accent-soft);
 }
 .controls button:disabled {
-  border-color: var(--line);
-  color: var(--gray);
+  border-color: var(--role-rule);
+  color: var(--role-muted);
   cursor: not-allowed;
 }
 .message {

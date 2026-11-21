@@ -94,9 +94,9 @@ const targetState =
 <style>
 .call {
   margin: 0;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--role-accent-strong);
   border-radius: 0.375rem;
-  background: var(--paper);
+  background: var(--role-surface);
   padding: 0.375rem 0.625rem;
   font-size: 0.875rem;
   line-height: 1.5;
@@ -109,14 +109,14 @@ const targetState =
 }
 .flow {
   margin: -0.25rem 0;
-  color: var(--muted);
+  color: var(--role-muted);
   font-size: 0.875rem;
   line-height: 1;
   text-align: center;
   visibility: hidden;
 }
 [data-step="4"] .flow {
-  color: var(--red);
+  color: var(--role-danger);
   visibility: visible;
 }
 .arg {
@@ -124,8 +124,8 @@ const targetState =
   transition: background-color 0.4s ease;
 }
 [data-step="4"] .arg {
-  background: var(--yellow);
-  color: var(--ink);
+  background: var(--role-highlight);
+  color: var(--role-console);
 }
 
 .card {
@@ -133,16 +133,16 @@ const targetState =
   flex-direction: column;
   gap: 0.25rem;
   margin: 0;
-  border: 2px solid var(--line);
+  border: 2px solid var(--role-rule);
   border-radius: 0.375rem;
-  background: var(--paper);
+  background: var(--role-surface);
   padding: 0.375rem 0.5rem;
   list-style: none;
   transition: border-color 0.4s ease, box-shadow 0.4s ease;
 }
 [data-step="6"] .card {
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px var(--yellow);
+  border-color: var(--role-danger);
+  box-shadow: 0 0 0 3px var(--role-highlight);
 }
 .field {
   display: grid;
@@ -161,10 +161,10 @@ const targetState =
   display: flex;
   align-items: center;
   min-height: 1.5rem;
-  border: 1px dashed var(--gray);
+  border: 1px dashed var(--role-border);
   border-radius: 0.25rem;
   padding: 0.125rem 0.375rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-code);
   font-size: 0.8125rem;
   overflow-wrap: anywhere;
   transition: background-color 0.4s ease, border-color 0.4s ease;
@@ -179,9 +179,9 @@ const targetState =
 }
 .badge {
   display: none;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--role-accent-strong);
   border-radius: 0.25rem;
-  background: var(--soft-yellow);
+  background: var(--role-highlight-soft);
   padding: 0 0.375rem;
   font-size: 0.75rem;
   font-weight: 700;
@@ -189,19 +189,20 @@ const targetState =
   transition: background-color 0.4s ease;
 }
 [data-step="6"] .badge {
-  background: var(--yellow);
-  box-shadow: 0 0 0 2px var(--red);
+  background: var(--role-highlight);
+  color: var(--role-console);
+  box-shadow: 0 0 0 2px var(--role-danger);
 }
 .field[data-filled] .val {
   border-style: solid;
-  border-color: var(--line);
+  border-color: var(--role-rule);
 }
 .field[data-filled] .val-text {
   display: inline;
 }
 .field[data-focus] .val {
-  border-color: var(--accent);
-  background: #dbeafe;
+  border-color: var(--role-accent);
+  background: var(--role-accent-soft);
 }
 .badge[data-filled] {
   display: inline-block;

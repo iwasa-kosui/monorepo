@@ -1,0 +1,27 @@
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--role-bg);
+  --color-surface: var(--role-surface);
+  --color-sunken: var(--role-sunken);
+  --color-fg: var(--role-fg);
+  --color-muted: var(--role-muted);
+  --color-border: var(--role-border);
+  --color-rule: var(--role-rule);
+  --color-faint: var(--role-faint);
+  --color-accent: var(--role-accent);
+  --color-accent-soft: var(--role-accent-soft);
+  --color-accent-strong: var(--role-accent-strong);
+  --color-on-accent: var(--role-on-accent);
+  --color-success: var(--role-success);
+  --color-success-soft: var(--role-success-soft);
+  --color-success-line: var(--role-success-line);
+  --color-danger: var(--role-danger);
+  --color-danger-soft: var(--role-danger-soft);
+  --color-warning: var(--role-warning);
+  --color-warning-soft: var(--role-warning-soft);
+  --color-warning-line: var(--role-warning-line);
+  --color-highlight: var(--role-highlight);
+  --color-highlight-soft: var(--role-highlight-soft);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-code);
+}
