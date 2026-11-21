@@ -120,7 +120,7 @@
 <div class="fig-panel">
 <svg viewBox="0 0 568 480" role="img" aria-labelledby="fig-fs-3-title fig-fs-3-desc">
 <title id="fig-fs-3-title">ループの構造</title>
-<desc id="fig-fs-3-desc">上段の左に、人が記述する意図と、ナレッジベースが並ぶ図です。この2つから、エージェントがバックログと論点を生成します。バックログからは、課題を取得する線が worker と reviewer の循環へ向かいます。論点からは、人が回答する線が人へ向かい、仮の案で実装を継続する破線が worker と reviewer の循環へ向かいます。worker と reviewer の循環は、指摘が解消されるまで自動で反復されます。循環の出力は PR になり、PR の上には、PR ごとに作成する解説ページがあります。人が解説ページを読んで判断する線は、判断・マージに向かいます。PR と判断・マージの間には、上限のあるレビュー待ちの列があります。上限に達すると、新しい課題を取得しない経路が worker に戻ります。下部では、retro がスキル改善の PR を作成し、その PR が判断・マージに届きます。アニメーションでは、意図から課題が生まれ、worker と reviewer が PR を作り、レビュー待ちが上限に達すると止まり、人が判断・マージすると再び流れる様子を、16秒周期でくり返し示します。</desc>
+<desc id="fig-fs-3-desc">上段の左に、人が記述する意図と、ナレッジベースが並ぶ図です。この2つから、エージェントがバックログと論点を生成します。バックログからは、課題を取得する線が worker と reviewer の循環へ向かいます。論点からは、人が回答する線が人へ向かい、仮の案で実装を継続する破線が worker と reviewer の循環へ向かいます。worker と reviewer の循環は、指摘が解消されるまで自動で反復されます。worker と reviewer の組は複数が並列に動きます。循環の出力は PR になり、PR の上には、PR ごとに作成する解説ページがあります。人が解説ページを読んで判断する線は、判断・マージに向かいます。PR と判断・マージの間には、上限のあるレビュー待ちの列があります。上限に達すると、新しい課題を取得しない経路が worker に戻ります。下部では、retro がスキル改善の PR を作成し、その PR が判断・マージに届きます。アニメーションでは、意図から課題が生まれ、worker と reviewer が PR を作り、レビュー待ちが上限に達すると止まり、人が判断・マージすると再び流れる様子を、16秒周期でくり返し示します。</desc>
 <rect class="fig-card-human" x="8" y="12" width="60" height="36" rx="10"></rect>
 <text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="38" y="35.5">意図</text>
 <rect class="fig-card" x="88" y="12" width="125" height="36" rx="10"></rect>
@@ -150,14 +150,23 @@
 <path class="fig-line fig-dash" d="M212 176L212 288L184 288"></path>
 <path class="fig-mk" d="M176 288L184 284L184 292Z"></path>
 <text class="fig-t fig-t-sm fig-c-muted" x="220" y="200">仮の案で実装を継続</text>
+<circle class="fig-card-agent" cx="128" cy="332" r="42"></circle>
+<g class="fig-anim">
+<circle class="fig-fill-agent fig-ring" r="5"><animateMotion dur="16s" repeatCount="indefinite" begin="0s" path="M107 368.37A42 42 0 1 1 149 295.63A42 42 0 1 1 107 368.37A42 42 0 1 1 149 295.63A42 42 0 1 1 107 368.37A42 42 0 1 1 149 295.63A42 42 0 1 1 107 368.37A42 42 0 1 1 149 295.63A42 42 0 1 1 107 368.37" calcMode="linear" keyPoints="0;0.75;0.75;1" keyTimes="0;0.625;0.8125;1"></animateMotion></circle>
+</g>
+<circle class="fig-card-agent" cx="136" cy="324" r="42"></circle>
+<g class="fig-anim">
+<circle class="fig-fill-agent fig-ring" r="5"><animateMotion dur="16s" repeatCount="indefinite" begin="0s" path="M115 287.63A42 42 0 1 1 157 360.37A42 42 0 1 1 115 287.63A42 42 0 1 1 157 360.37A42 42 0 1 1 115 287.63A42 42 0 1 1 157 360.37A42 42 0 1 1 115 287.63A42 42 0 1 1 157 360.37A42 42 0 1 1 115 287.63" calcMode="linear" keyPoints="0;0.75;0.75;1" keyTimes="0;0.625;0.8125;1"></animateMotion></circle>
+</g>
 <circle class="fig-card-agent" cx="144" cy="316" r="42"></circle>
 <path class="fig-mk-agent" d="M174.8 287L164.7 285.1L171.1 277.4Z"></path>
 <path class="fig-mk-agent" d="M113.2 345L123.3 346.9L116.9 354.6Z"></path>
+<text class="fig-t fig-t-sm fig-b fig-c-agent" x="76" y="290">×N</text>
 <text class="fig-t fig-t-sm fig-mid fig-b" x="144" y="302">worker</text>
 <text class="fig-t fig-t-sm fig-mid" x="144" y="320">⇄</text>
 <text class="fig-t fig-t-sm fig-mid fig-b" x="144" y="338">reviewer</text>
-<text class="fig-t fig-t-sm fig-mid" x="144" y="386">指摘が解消されるまで</text>
-<text class="fig-t fig-t-sm fig-mid" x="144" y="404">自動で反復</text>
+<text class="fig-t fig-t-sm fig-mid" x="144" y="396">指摘が解消されるまで</text>
+<text class="fig-t fig-t-sm fig-mid" x="144" y="414">自動で反復</text>
 <path class="fig-line" d="M186 316L218 316"></path>
 <path class="fig-mk" d="M226 316L218 312L218 320Z"></path>
 <rect class="fig-card" x="226" y="296" width="88" height="40" rx="10"></rect>
@@ -229,7 +238,7 @@
 <circle class="fig-fill-agent fig-ring" r="5" opacity="0"><animateMotion dur="16s" repeatCount="indefinite" begin="0s" path="M76 444L92 444" calcMode="linear" keyPoints="0;0;1;1" keyTimes="0;0.8625;0.9;1"></animateMotion><animate attributeName="opacity" dur="16s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.8625;0.871875;0.890625;0.9;1"></animate></circle>
 <circle class="fig-fill-agent fig-ring" r="5" opacity="0"><animateMotion dur="16s" repeatCount="indefinite" begin="0s" path="M268 444L506 444L506 344" calcMode="linear" keyPoints="0;0;1;1" keyTimes="0;0.9;0.9625;1"></animateMotion><animate attributeName="opacity" dur="16s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.9;0.909375;0.953125;0.9625;1"></animate></circle>
 <circle class="fig-fill-agent fig-ring" r="5"><animateMotion dur="16s" repeatCount="indefinite" begin="0s" path="M186 316A42 42 0 1 1 102 316A42 42 0 1 1 186 316A42 42 0 1 1 102 316A42 42 0 1 1 186 316A42 42 0 1 1 102 316A42 42 0 1 1 186 316A42 42 0 1 1 102 316A42 42 0 1 1 186 316" calcMode="linear" keyPoints="0;0.75;0.75;1" keyTimes="0;0.625;0.8125;1"></animateMotion></circle>
-<text class="fig-t fig-t-sm fig-b fig-c-agent fig-mid" x="60" y="321" opacity="0"><animate attributeName="opacity" dur="16s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.6375;0.65625;0.8;0.81875;1"></animate>待機中</text>
+<text class="fig-t fig-t-sm fig-b fig-c-agent fig-mid" x="44" y="321" opacity="0"><animate attributeName="opacity" dur="16s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.6375;0.65625;0.8;0.81875;1"></animate>待機中</text>
 </g>
 </svg>
 </div>
