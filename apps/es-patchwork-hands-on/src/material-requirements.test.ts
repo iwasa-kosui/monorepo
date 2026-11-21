@@ -32,6 +32,7 @@ const participantFiles = [
   ...new Set([
     ...['src/pages', 'src/content', 'src/components', 'src/layouts', 'exercises'].flatMap(listFiles),
     'src/schedule.ts',
+    'src/site.ts',
   ].map((path) => path.replace(chapterPagePath, 'src/content/chapters/$1.mdx'))),
 ];
 
@@ -73,13 +74,13 @@ describe('PRD の受入条件', () => {
     expect(filesContaining('イベントソーシング')).toEqual([
       'src/content/chapters/intro.mdx',
       'src/content/chapters/summary.mdx',
-      'src/pages/index.mdx',
       'src/pages/setup.astro',
+      'src/site.ts',
     ]);
   });
 
-  it('index.mdx と setup.astro では、イベントソーシングを含む行がすべて「もう他人ごとじゃないイベントソーシング」を含む', () => {
-    for (const path of ['src/pages/index.mdx', 'src/pages/setup.astro']) {
+  it('site.ts と setup.astro では、イベントソーシングを含む行がすべて「もう他人ごとじゃないイベントソーシング」を含む', () => {
+    for (const path of ['src/site.ts', 'src/pages/setup.astro']) {
       const lines = read(path).split('\n').filter((line) => line.includes('イベントソーシング'));
       expect(lines.length).toBeGreaterThan(0);
       for (const line of lines) {
@@ -140,8 +141,8 @@ describe('PRD の受入条件', () => {
     }
   });
 
-  it('index.mdx に講師の画面を見るだけで追える旨が書かれている', () => {
-    expect(read('src/pages/index.mdx')).toContain('講師の画面を見るだけで追えます');
+  it('index.astro に講師の画面を見るだけで追える旨が書かれている', () => {
+    expect(read('src/pages/index.astro')).toContain('講師の画面を見るだけで追えます');
   });
 
   it('chapter-1.mdx に show-visits.ts の実行コマンドが書かれている', () => {

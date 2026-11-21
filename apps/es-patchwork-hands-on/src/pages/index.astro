@@ -1,0 +1,93 @@
+---
+import { getCollection } from 'astro:content';
+
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { buildChapterPages, pagePath } from '../lib/chapter-routes';
+import { schedule, withTimeRanges } from '../schedule';
+import { siteDescription, siteName, siteSubtitle, siteTitle } from '../site';
+
+const totalMinutes = schedule.reduce((sum, row) => sum + row.minutes, 0);
+const firstChapter = schedule[0];
+if (firstChapter === undefined) {
+  throw new Error('schedule.ts に章がありません');
+}
+const firstPages = new Map(
+  buildChapterPages(
+    await getCollection('chapters'),
+    schedule.map((row) => row.id),
+  )
+    .filter((page) => page.number === 1)
+    .map((page) => [page.chapter, page.entry] as const),
+);
+const rows = withTimeRanges(schedule).map((row) => ({
+  ...row,
+  entry: firstPages.get(row.id),
+}));
+---
+
+<BaseLayout title={siteTitle} description={siteDescription}>
+  <div class="top-page grid gap-6 lg:grid-cols-2 lg:items-start lg:gap-8">
+    <section class="top-hero">
+      <p class="top-eyebrow">
+        YAPC::Tokyo 2026 ライブコーディング・ハンズオン・<span
+          class="whitespace-nowrap"
+        >{totalMinutes}分</span>
+      </p>
+      <h1 class="top-title">
+        <span class="block">{siteName}</span>
+        <span class="top-subtitle">{siteSubtitle}</span>
+      </h1>
+      <p class="top-lead">
+        全体を移行しなくても、既存の更新処理に記録を足せば、足した後の変更を説明できることを確かめます。題材は架空の動物病院の来院管理です。
+      </p>
+      <p class="top-note">
+        手元でコードを動かさなくても、講師の画面を見るだけで追えます。前提知識は、SQL
+        の UPDATE と INSERT が読めることです。TypeScript は読めれば十分です。
+      </p>
+      <div class="flex flex-wrap gap-3">
+        <a
+          href={pagePath(firstChapter.id, 1)}
+          class="top-button top-button-primary bg-accent border-accent"
+        >導入から始める</a>
+        <a href="/setup/" class="top-button top-button-secondary border-border"
+        >事前準備</a>
+      </div>
+      <p class="top-note">
+        手元で動かす方は、事前準備を当日までに済ませてください。
+      </p>
+    </section>
+    <section>
+      <div class="flex items-baseline justify-between gap-3">
+        <h2 class="top-flow-heading">教材の流れ</h2>
+        <span class="text-muted text-sm">合計 {totalMinutes}分</span>
+      </div>
+      <ol class="top-flow">
+        {
+          rows.map((row) => (
+            <li>
+              {
+                row.entry === undefined ? (
+                  <div class="top-card bg-sunken border-rule">
+                    <span class="top-card-range text-muted">{row.range}</span>
+                    <span class="top-card-title">{row.title}</span>
+                  </div>
+                ) : (
+                  <a
+                    href={pagePath(row.id, 1)}
+                    class="top-card top-card-link bg-surface border-rule"
+                  >
+                    <span class="top-card-range text-muted">{row.range}</span>
+                    <span class="top-card-title">{row.title}</span>
+                    <span class="top-card-goal text-muted">
+                      {row.entry.data.goal}
+                    </span>
+                  </a>
+                )
+              }
+            </li>
+          ))
+        }
+      </ol>
+    </section>
+  </div>
+</BaseLayout>
