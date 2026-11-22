@@ -28,6 +28,7 @@ import { extractRecipientActorUris } from '../extractRecipients.ts';
 import { extractVisibility } from '../extractVisibility.ts';
 import type { InboxActorResolver } from '../inboxActorResolver.ts';
 import { isFetchFailure } from '../relayForwardedCreate/refetchRelayForwardedNote.ts';
+import { resolveImplicitQuoteUri } from '../resolveImplicitQuoteUri.ts';
 import { extractAttachments } from './extractAttachments.ts';
 import { saveFederatedNote } from './saveFederatedNote.ts';
 
@@ -118,15 +119,17 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
 
   const attachments = await extractAttachments(object, documentLoader);
   const inReplyToUri = object.replyTargetId?.href ?? null;
-  const quoteUri = await extractQuoteUri(object);
+  const explicitQuoteUri = await extractQuoteUri(object);
   const addressed = object.toIds.length + object.ccIds.length > 0 ? object : activity;
   const visibility = extractVisibility(addressed, actor.followersId);
   const recipientActorUris = extractRecipientActorUris([object, activity], deps.origin);
 
-  const parsedReplyTarget = inReplyToUri && URL.canParse(inReplyToUri) ? ctx.parseUri(new URL(inReplyToUri)) : null;
-  const repliesToLocalPost = parsedReplyTarget?.type === 'object'
-    && (parsedReplyTarget.class?.typeId?.href === NOTE_TYPE_ID
-      || parsedReplyTarget.class?.typeId?.href === ARTICLE_TYPE_ID);
+  const isLocalPostUri = (uri: string): boolean => {
+    const parsed = URL.canParse(uri) ? ctx.parseUri(new URL(uri)) : null;
+    return parsed?.type === 'object'
+      && (parsed.class?.typeId?.href === NOTE_TYPE_ID || parsed.class?.typeId?.href === ARTICLE_TYPE_ID);
+  };
+  const repliesToLocalPost = inReplyToUri !== null && isLocalPostUri(inReplyToUri);
 
   if (recipientActorUris.length === 0 && !repliesToLocalPost) {
     const actorId = activity.actorId;
@@ -151,6 +154,12 @@ export const createOnCreate = (deps: OnCreateDeps) => async (ctx: InboxContext<u
       return;
     }
   }
+
+  // 引用のプロパティを付けずに本文末尾のリンクだけで引用を表す実装があるので、リンク先が投稿なら引用として扱う
+  const quoteUri = explicitQuoteUri ?? await resolveImplicitQuoteUri(object, {
+    isLocalPostUri,
+    lookupObject: (uri, options) => ctx.lookupObject(uri, { documentLoader, ...options }),
+  });
 
   return RA.flow(
     deps.addRemotePostUseCase.run({

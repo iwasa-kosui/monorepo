@@ -296,6 +296,28 @@ describe('createOnCreate', () => {
         expect(addRemotePostUseCase.run).toHaveBeenCalledOnce();
       });
 
+      it('treats a trailing link that resolves to a post as a quote when the note has no quote property', async () => {
+        const { listener, create, addRemotePostUseCase, fetchReplyNotesRecursiveUseCase } = setup(true);
+        const note = new Note({
+          id: new URL('https://remote.example/posts/1'),
+          content: '<p>再テスト。<br><a href="https://other.example/@bob/quoted">other.example/@bob/quoted</a></p>',
+          attribution: alice,
+          tos: [publicUri],
+        });
+        const ctx = {
+          lookupObject: vi.fn(async () => new Note({ id: quoteId })),
+          parseUri: vi.fn(() => null),
+          documentLoader: vi.fn(),
+        } as never;
+
+        await listener(ctx, create(note));
+
+        expect(addRemotePostUseCase.run).toHaveBeenCalledWith(expect.objectContaining({ quoteUri: quoteId.href }));
+        expect(fetchReplyNotesRecursiveUseCase.run).toHaveBeenCalledWith(
+          expect.objectContaining({ inReplyToUri: quoteId.href, maxDepth: 1 }),
+        );
+      });
+
       it('passes the quoted note URI when saving to the federated timeline, without fetching the quoted note', async () => {
         const { listener, create, remotePostUpserter, fetchReplyNotesRecursiveUseCase } = setup(false, [
           { relayId: 'relay-1' },
