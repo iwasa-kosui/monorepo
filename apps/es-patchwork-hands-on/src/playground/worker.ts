@@ -12,7 +12,7 @@ type Scope = {
 
 const scope = self as unknown as Scope;
 
-const loading = initSqlJs({ locateFile: () => wasmUrl });
+const loading = initSqlJs({ locateFile: () => wasmUrl, useOldExtensionFunctions: true });
 
 loading.then(
   () => scope.postMessage({ type: 'ready' }),

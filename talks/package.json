@@ -12,21 +12,21 @@
     "export": "node scripts/export.mjs"
   },
   "dependencies": {
-    "@iconify-json/bi": "^1.1.23",
+    "@iconify-json/bi": "^1.2.7",
     "@iconify-json/mdi": "^1.2.3",
-    "@iconify-json/tabler": "^1.1.110",
-    "@iconify-json/vscode-icons": "^1.1.33",
-    "@slidev/cli": "^52.11.3",
+    "@iconify-json/tabler": "^1.2.46",
+    "@iconify-json/vscode-icons": "^1.2.100",
+    "@slidev/cli": "^53.1.0",
     "@slidev/theme-default": "latest",
     "@slidev/theme-seriph": "latest",
-    "@slidev/types": "^52.11.3",
-    "fp-ts": "2.16.5",
+    "@slidev/types": "^53.1.0",
+    "fp-ts": "2.16.11",
     "markdown-it-github-alerts": "1.0.1",
     "newtype-ts": "0.3.5",
-    "vue": "^3.5.26"
+    "vue": "^3.5.46"
   },
   "devDependencies": {
-    "@types/node": "^22.15.3",
-    "playwright-chromium": "1.63.0"
+    "@types/node": "^24.19.2",
+    "playwright-chromium": "1.65.1"
   }
 }

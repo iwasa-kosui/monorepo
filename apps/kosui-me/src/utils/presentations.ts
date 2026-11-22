@@ -1,11 +1,20 @@
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-// Navigate from src/utils/ to monorepo root's talks/ directory
-const talksRoot = join(__dirname, '..', '..', '..', '..', 'talks');
+// ビルド時はこのモジュールがバンドルされて置き場所が変わるので、階層を数えずに
+// pnpm-workspace.yaml のあるモノレポのルートまで遡って talks/ を見つける。
+const findWorkspaceRoot = (start: string): string => {
+  let dir = start;
+  while (!existsSync(join(dir, 'pnpm-workspace.yaml'))) {
+    const parent = dirname(dir);
+    if (parent === dir) return start;
+    dir = parent;
+  }
+  return dir;
+};
+const talksRoot = join(findWorkspaceRoot(dirname(fileURLToPath(import.meta.url))), 'talks');
 
 export interface TalkMetadata {
   date?: string;

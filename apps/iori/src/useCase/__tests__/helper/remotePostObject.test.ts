@@ -1,5 +1,5 @@
 import { Article, Collection, Image, Link, Note, Person, Question } from '@fedify/vocab';
-import { Temporal } from '@js-temporal/polyfill';
+import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it } from 'vitest';
 
 import { sanitizePostContent } from '../../../domain/post/sanitizePostContent.ts';

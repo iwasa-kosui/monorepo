@@ -94,7 +94,7 @@ const fetchAsset = async (
   const headers = new Headers();
   assetsResponse.headers.forEach((value, key) => headers.set(key, value));
 
-  return new Response(assetsResponse.body as BodyInit, {
+  return new Response(assetsResponse.body as unknown as BodyInit, {
     status: assetsResponse.status,
     statusText: assetsResponse.statusText,
     headers,

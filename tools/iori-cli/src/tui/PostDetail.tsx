@@ -1,4 +1,4 @@
-import { Box, Text, useInput, useStdout } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 import React from 'react';
 
 import { stripHtml } from '../output.js';
@@ -13,7 +13,7 @@ interface PostDetailProps {
 }
 
 export function PostDetail({ item, onBack, onLike, onRepost, onDelete }: PostDetailProps): React.ReactElement {
-  const { stdout } = useStdout();
+  const { columns } = useWindowSize();
   const { post } = item;
   const content = stripHtml(post.content);
   const time = new Date(post.createdAt).toLocaleString();
@@ -47,11 +47,11 @@ export function PostDetail({ item, onBack, onLike, onRepost, onDelete }: PostDet
           </Text>
           <Text dimColor>{'  '}{time}</Text>
         </Text>
-        <Text dimColor>{'─'.repeat(Math.min(stdout?.columns ?? 40, 60))}</Text>
+        <Text dimColor>{'─'.repeat(Math.min(columns, 60))}</Text>
         <Box paddingLeft={2} paddingTop={1} paddingBottom={1}>
           <Text wrap='wrap'>{content}</Text>
         </Box>
-        <Text dimColor>{'─'.repeat(Math.min(stdout?.columns ?? 40, 60))}</Text>
+        <Text dimColor>{'─'.repeat(Math.min(columns, 60))}</Text>
         <Box paddingLeft={2} gap={2}>
           <Text color={post.liked ? 'red' : 'gray'}>
             {'♡ '}

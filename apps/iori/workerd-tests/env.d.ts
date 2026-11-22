@@ -1,10 +1,12 @@
-/// <reference types="@cloudflare/vitest-pool-workers" />
+/// <reference types="@cloudflare/vitest-plugin/types" />
 
 import type { IoriWorkerEnv } from '../src/workerEnv.ts';
 
-declare module 'cloudflare:test' {
-  interface ProvidedEnv extends IoriWorkerEnv {
-    TEST_MIGRATIONS: { name: string; queries: string[] }[];
-    TEST_OG_FONT_BASE64: string;
+declare global {
+  namespace Cloudflare {
+    interface Env extends IoriWorkerEnv {
+      TEST_MIGRATIONS: { name: string; queries: string[] }[];
+      TEST_OG_FONT_BASE64: string;
+    }
   }
 }

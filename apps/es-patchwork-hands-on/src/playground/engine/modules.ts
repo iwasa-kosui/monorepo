@@ -24,7 +24,7 @@ export const stripTypes = (source: string, fileName: string): string => {
     }).code;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new SyntaxError(`${fileName}: ${message}`);
+    throw new SyntaxError(`${fileName}: ${message}`, { cause: error });
   }
 };
 

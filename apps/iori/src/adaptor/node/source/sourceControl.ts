@@ -61,7 +61,7 @@ async function readMarker(path: string): Promise<Identity | undefined> {
     file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined;
-    throw new Error('invalid_freeze_state');
+    throw new Error('invalid_freeze_state', { cause: error });
   }
   try {
     const stat = await file.stat();

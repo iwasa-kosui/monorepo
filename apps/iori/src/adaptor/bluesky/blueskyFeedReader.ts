@@ -49,7 +49,7 @@ const listMembersZodType = z.looseObject({
   cursor: z.string().optional(),
   items: z.array(z.unknown()),
 });
-const listMemberZodType = z.looseObject({ subject: z.unknown() });
+const listMemberZodType = z.looseObject({ subject: z.unknown().optional() });
 const resolvedHandleZodType = z.looseObject({ did: z.string().min(1) });
 
 type SavedFeedEntry = Readonly<{ uri: string; kind: BlueskyFeedKind; pinned: boolean }>;

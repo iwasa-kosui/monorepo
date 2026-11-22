@@ -12,6 +12,7 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "strict": true,
+    "types": ["vite/client"],
     "skipLibCheck": true,
     "jsx": "react-jsx",
     "rootDir": "./"

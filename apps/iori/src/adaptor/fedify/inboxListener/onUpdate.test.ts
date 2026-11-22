@@ -1,6 +1,6 @@
 import { Collection, Image, Note, Person, Question, Update } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
-import { Temporal } from '@js-temporal/polyfill';
+import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

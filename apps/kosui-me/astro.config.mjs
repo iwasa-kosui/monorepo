@@ -1,3 +1,4 @@
+import { unified } from '@astrojs/markdown-remark';
 import mdx from '@astrojs/mdx';
 import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
@@ -13,7 +14,6 @@ const noindexPostPaths = listNoindexPostPaths(
 
 const integrations = [
   mdx({
-    remarkPlugins: [remarkMermaid],
     shikiConfig: {
       theme: 'github-dark',
     },
@@ -36,11 +36,17 @@ if (process.env.KEYSTATIC) {
 export default defineConfig({
   site: 'https://kosui.me',
   output: 'static',
+  // Astro 7 の既定（'jsx'）は要素間の空白や改行を落とすので、従来どおり見た目を変えない圧縮にする。
+  compressHTML: true,
   trailingSlash: 'never',
   build: {
     format: 'file',
   },
   integrations,
+  markdown: {
+    // Astro 7 の既定（satteri）は remark プラグインを実行しないので、unified を使う。MDX もこの設定を引き継ぐ。
+    processor: unified({ remarkPlugins: [remarkMermaid] }),
+  },
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: {

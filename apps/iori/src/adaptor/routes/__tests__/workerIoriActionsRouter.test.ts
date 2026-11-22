@@ -10,7 +10,7 @@ import {
   OrderedCollectionPage,
   Person,
 } from '@fedify/vocab';
-import { Temporal } from '@js-temporal/polyfill';
+import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StatusSchema } from '../../mastodon/entities.ts';

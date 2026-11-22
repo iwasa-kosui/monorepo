@@ -13,7 +13,7 @@ const testFilesUnder = (directory: string): string[] =>
 
 // モジュールやグローバルを差し替えるテストは isolated、それ以外は shared のプロジェクトに分ける。
 // test:ci は shared だけを --no-isolate で走らせ、ワーカーでモジュールを使い回して読み込みの時間を省く。
-// （vitest 3.1 ではプロジェクトごとの isolate が効かないため、CLI の引数で切り替える）
+// isolate は CLI の引数で切り替える。
 const sharedStatePatterns = [
   /vi\.(mock|doMock|stubGlobal|stubEnv|resetModules)\(/,
   /process\.env\.[A-Z_]+ *=/,
@@ -38,7 +38,7 @@ export default defineConfig({
       include: ['src/useCase/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/**/__tests__/**'],
     },
-    workspace: [
+    projects: [
       { extends: true, test: { name: 'isolated', include: isolatedFiles } },
       { extends: true, test: { name: 'shared', include, exclude: isolatedFiles } },
     ],

@@ -12,7 +12,7 @@ const THREAD_VIEW_POST = 'app.bsky.feed.defs#threadViewPost';
 const NOT_FOUND_POST = 'app.bsky.feed.defs#notFoundPost';
 const BLOCKED_POST = 'app.bsky.feed.defs#blockedPost';
 
-const responseZodType = z.looseObject({ thread: z.unknown() });
+const responseZodType = z.looseObject({ thread: z.unknown().optional() });
 const typedZodType = z.looseObject({ $type: z.string() });
 const threadViewZodType = z.looseObject({
   post: postViewZodType,

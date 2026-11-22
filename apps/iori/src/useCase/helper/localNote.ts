@@ -1,6 +1,6 @@
 import type { RequestContext } from '@fedify/fedify';
 import { Note } from '@fedify/vocab';
-import { Temporal } from '@js-temporal/polyfill';
+import { Temporal } from 'temporal-polyfill';
 
 import type { LocalPost } from '../../domain/post/post.ts';
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
