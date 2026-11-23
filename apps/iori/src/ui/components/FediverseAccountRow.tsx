@@ -32,18 +32,22 @@ export const accountNoteExcerpt = (note: string): string => {
   return chars.length > NOTE_MAX_LENGTH ? `${chars.slice(0, NOTE_MAX_LENGTH).join('')}…` : text;
 };
 
-type Props = Readonly<{ account: Account }>;
+type Props = Readonly<{
+  account: Account;
+  onSelect?: (account: Account) => void;
+  disabled?: boolean;
+}>;
 
-export const FediverseAccountRow = ({ account }: Props) => {
+const ROW_CLASS =
+  'flex items-start gap-3 bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-4 hover:bg-sand-light dark:hover:bg-gray-700 transition-colors';
+
+export const FediverseAccountRow = ({ account, onSelect, disabled }: Props) => {
   const avatar = safeAbsoluteUrl(account.avatar);
   const handle = accountHandle(account);
   const displayName = account.display_name.trim() === '' ? account.username : account.display_name;
   const excerpt = accountNoteExcerpt(account.note);
-  return (
-    <a
-      href={accountHref(account)}
-      class='flex items-start gap-3 bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-4 hover:bg-sand-light dark:hover:bg-gray-700 transition-colors'
-    >
+  const content = (
+    <>
       <span class='w-10 h-10 blob-avatar bg-terracotta dark:bg-gray-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 shadow-clay-sm overflow-hidden'>
         {avatar === undefined
           ? handle.charAt(0).toUpperCase()
@@ -60,6 +64,18 @@ export const FediverseAccountRow = ({ account }: Props) => {
           <span class='block mt-1 text-sm text-charcoal dark:text-gray-100 break-words'>{excerpt}</span>
         )}
       </span>
-    </a>
+    </>
   );
+  return onSelect === undefined
+    ? <a href={accountHref(account)} class={ROW_CLASS}>{content}</a>
+    : (
+      <button
+        type='button'
+        onClick={() => onSelect(account)}
+        disabled={disabled === true}
+        class={`${ROW_CLASS} w-full text-left disabled:opacity-50`}
+      >
+        {content}
+      </button>
+    );
 };

@@ -17,6 +17,7 @@ import { MESSAGES_READ_EVENT } from '../api/messageBadge.ts';
 import { BlueskyChatComposer } from '../components/BlueskyChatComposer.tsx';
 import { FediverseChatConvoRow } from '../components/FediverseChatConvoRow.tsx';
 import { FediverseChatMessageItem } from '../components/FediverseChatMessageItem.tsx';
+import { FediverseNewConversation } from '../components/FediverseNewConversation.tsx';
 import {
   FEDIVERSE_ENCRYPTION_NOTICE,
   fediverseConversationTitle,
@@ -87,6 +88,7 @@ export const FediverseConversationSection = () => {
   return (
     <section class='space-y-3' data-testid='fediverse-section'>
       <h2 class='text-lg font-bold text-charcoal dark:text-white'>Fediverse</h2>
+      <FediverseNewConversation />
       {error !== null && <p role='alert' class='text-sm text-red-600 dark:text-red-400'>{error}</p>}
       {conversations === null
         ? error === null && <p class={mutedClass}>Loading...</p>

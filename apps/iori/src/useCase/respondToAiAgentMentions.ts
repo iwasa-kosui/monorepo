@@ -102,11 +102,17 @@ export const handleOf = (actor: Actor | undefined): string => {
   return actor.username === undefined || host === undefined ? actor.uri : `@${actor.username}@${host}`;
 };
 
-/** 返信の本文を作る。リモートの相手には、先頭にメンションを付けて相手に届くようにする */
+/** 返信の本文を作る。リモートの相手と、DM に返すときのローカルの相手には、先頭にメンションを付けて相手に届くようにする */
 export const buildReplyContent = (
   author: Actor | undefined,
   text: string,
+  direct = false,
 ): Readonly<{ content: string; mentions: readonly MentionRecipient[] }> => {
+  if (author?.type === 'local' && direct && URL.canParse(author.uri)) {
+    const uri = new URL(author.uri);
+    const acct = `${uri.pathname.split('/').filter((segment) => segment !== '').at(-1)}@${uri.host}`;
+    return { content: plainTextToHtml(`@${acct} ${text}`, new Map([[acct, author.uri]])), mentions: [] };
+  }
   if (author?.type !== 'remote' || author.username === undefined || !URL.canParse(author.uri)) {
     return { content: plainTextToHtml(text), mentions: [] };
   }
@@ -122,7 +128,13 @@ export const buildReplyContent = (
  * 各返信の先頭には相手へのメンションを付ける。
  */
 export const createThreadedReplyTool = (
-  input: Readonly<{ replier: AiAgentBotReplier; author: Actor | undefined; postId: PostId; limit: number }>,
+  input: Readonly<{
+    replier: AiAgentBotReplier;
+    author: Actor | undefined;
+    postId: PostId;
+    limit: number;
+    direct?: boolean;
+  }>,
 ): PublishTool => {
   let replyTo = input.postId;
   return createPublishTool({
@@ -135,7 +147,10 @@ export const createThreadedReplyTool = (
     limit: input.limit,
     done: '返信しました。続きがあれば、もう一度 reply を呼べます。',
     publish: async (text) => {
-      const sent = await input.replier.reply({ postId: replyTo, ...buildReplyContent(input.author, text) });
+      const sent = await input.replier.reply({
+        postId: replyTo,
+        ...buildReplyContent(input.author, text, input.direct),
+      });
       if (!sent.ok) return Result.err(sent.err);
       replyTo = sent.val;
       return Result.ok(undefined);
@@ -177,6 +192,7 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
       author,
       postId: trigger.postId,
       limit: Math.min(MAX_BOT_REPLIES_PER_TRIGGER, MAX_BOT_REPLIES_PER_THREAD - botRepliesInThread),
+      direct: triggerPost.visibility === 'direct',
     });
     const memory = await loadAgentMemory(deps, {
       author: { actorId: trigger.authorActorId, handle: handleOf(author) },

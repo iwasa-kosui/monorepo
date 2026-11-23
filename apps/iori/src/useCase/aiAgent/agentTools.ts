@@ -9,6 +9,7 @@ import {
   MIN_FOLLOWUP_DELAY_MINUTES,
 } from '../../domain/aiAgentBot/aiAgentBotFollowup.ts';
 import { PostId } from '../../domain/post/postId.ts';
+import type { Visibility } from '../../domain/post/visibility.ts';
 import type { AgentTool } from './agentLoop.ts';
 
 /** モデルに読ませる投稿。本文は HTML を外した文 */
@@ -16,6 +17,7 @@ export type AgentPostView = Readonly<{
   postId: PostId;
   /** モデルには見せない。bot 自身の投稿を数えるのに使う */
   authorActorId: ActorId;
+  visibility?: Visibility;
   author: string;
   text: string;
   createdAt: string;
