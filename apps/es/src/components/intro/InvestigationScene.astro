@@ -1,0 +1,2889 @@
+---
+import { Code } from 'astro:components';
+
+import { cancelVisitOf, snapshotFiles } from '../../lib/snapshots';
+import '../figures/figure.css';
+import SqlPlayground from '../SqlPlayground.astro';
+import { clockOf, describeLog } from './incident-log';
+import {
+  earlierLogs,
+  initialAffected,
+  initialVisits,
+  startedAt,
+  startGuide,
+  visibleFromMinutes,
+} from './incident-scenario';
+
+interface Props {
+  id?: string;
+}
+
+const { id = 'investigation' } = Astro.props;
+
+const files = snapshotFiles('chapter-1-start');
+const sourceOf = (name: string): string => {
+  const source = files[name];
+  if (source === undefined) {
+    throw new Error(`chapter-1-start に ${name} がありません`);
+  }
+  return source;
+};
+
+const tools = [
+  {
+    key: 'console',
+    label: 'DB コンソール',
+    url: 'https://db.internal.example/console',
+  },
+  {
+    key: 'logs',
+    label: 'ログの検索',
+    url: 'https://logs.internal.example/logs',
+  },
+  {
+    key: 'repo',
+    label: 'リポジトリ',
+    url: 'https://code.internal.example/clinic/visits.ts',
+  },
+] as const;
+
+const unknownText = 'まだ分からない';
+const memos = [
+  { key: 'who', label: '誰が', text: 'どこにも残っていない' },
+  { key: 'when', label: 'いつ', text: '2026-11-06 18:11:58' },
+  { key: 'what', label: '何を', text: 'status が cancelled' },
+  { key: 'why', label: 'なぜ', text: 'どこにも残っていない' },
+] as const;
+const memoResult = {
+  who: 'missing',
+  when: 'found',
+  what: 'found',
+  why: 'missing',
+} as const;
+
+const createVisits = /CREATE TABLE visits \([\s\S]*?\n\s*\);/.exec(
+  sourceOf('db.ts'),
+)?.[0];
+if (createVisits === undefined) {
+  throw new Error('db.ts から visits の CREATE TABLE 文を切り出せません');
+}
+const columns = createVisits.split('\n').slice(1, -1).map((line) => {
+  const match = /^\s*(\w+)\s+(\w+)/.exec(line);
+  if (match === null) {
+    throw new Error(`visits の列の定義を読めません: ${line}`);
+  }
+  return { name: match[1] ?? '', type: match[2] ?? '' };
+});
+const sqlLiteral = (value: string): string =>
+  `'${value.replaceAll(`'`, `''`)}'`;
+const insertRows = initialVisits.map((visit) =>
+  `  (${[visit.id, visit.petName, visit.status].map(sqlLiteral).join(', ')})`
+).join(',\n');
+const setupSql = `${createVisits}
+INSERT INTO visits (id, pet_name, status) VALUES
+${insertRows};`;
+
+const facets = [
+  {
+    key: 'service',
+    label: 'Service',
+    items: [{ value: 'clinic-api', label: 'clinic-api' }],
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    items: [
+      { value: 'info', label: 'Info' },
+      { value: 'warn', label: 'Warn' },
+    ],
+  },
+  {
+    key: 'method',
+    label: 'HTTP Method',
+    items: [
+      { value: 'GET', label: 'GET' },
+      { value: 'POST', label: 'POST' },
+    ],
+  },
+] as const;
+
+const barCount = visibleFromMinutes + 1;
+const bars = Array.from({ length: barCount }, (_, index) => index);
+const axisBars = [0, Math.floor(barCount / 2), barCount - 1];
+const firstBarTime = startedAt - visibleFromMinutes * 60_000;
+
+const code = sourceOf('visits.ts').trimEnd();
+
+const tabId = (key: string): string => `${id}-tab-${key}`;
+const panelId = (key: string): string => `${id}-panel-${key}`;
+
+const cancelEntry = earlierLogs.find((entry) => describeLog(entry, 0).cancel);
+if (cancelEntry === undefined) {
+  throw new Error('キャンセルのログがありません');
+}
+const cancelLog = describeLog(cancelEntry, Date.parse(cancelEntry.time));
+const cancelVisitCode = cancelVisitOf('chapter-1-start');
+const agentUrl = 'https://agent.internal.example/sessions/1';
+const agentConclusion = [
+  { label: 'いつ', text: '2026-11-06 18:11:58' },
+  { label: '何を', text: 'status を cancelled に更新' },
+  { label: '誰が', text: '特定できません' },
+  { label: 'なぜ', text: '特定できません' },
+] as const;
+---
+
+<section
+  class="cfig scene"
+  data-investigation
+  data-opened=""
+  data-selected="console"
+  data-phase="idle"
+  data-ready="false"
+  aria-label="来院のキャンセル理由の調査"
+>
+  <div class="status-bar" role="group" aria-label="対応の状況">
+    <p class="status-item status-elapsed" role="timer" aria-live="off">
+      対応開始から <span data-elapsed>00:00</span>
+    </p>
+    <p class="status-item status-clock">
+      <span class="cfig-sr">画面内の現在時刻</span>
+      <time data-clock>{clockOf(startedAt)}</time>
+    </p>
+    <p class="status-item status-affected">
+      キャンセルになった来院 <strong data-affected>{initialAffected}件</strong>
+    </p>
+    <div class="status-actions">
+      <button type="button" data-action="pause" disabled>一時停止</button>
+      <button type="button" data-action="reset" disabled>
+        最初からやり直す
+      </button>
+    </div>
+  </div>
+
+  <div class="workspace" data-workspace>
+    <div class="win chat" role="group" aria-label="チャット" data-window inert>
+      <div class="win-bar">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <p class="channel"># 問い合わせ対応</p>
+      </div>
+
+      <ol
+        class="feed"
+        aria-live="polite"
+        aria-label="チャットの投稿"
+        tabindex="0"
+        data-feed
+      >
+      </ol>
+
+      <template data-post>
+        <li class="post">
+          <span class="avatar" aria-hidden="true" data-avatar></span>
+          <div class="post-main">
+            <p class="post-head">
+              <strong data-name></strong>
+              <time data-time></time>
+            </p>
+            <p class="post-text" data-text></p>
+          </div>
+        </li>
+      </template>
+
+      <div class="composer">
+        <p class="memo-title" id={`${id}-memo`}>返信の下書き（調査メモ）</p>
+        <dl
+          class="memo-list"
+          aria-labelledby={`${id}-memo`}
+          data-unknown={unknownText}
+        >
+          {
+            memos.map((memo) => (
+              <div class="memo-row">
+                <dt>{memo.label}</dt>
+                <dd
+                  data-memo={memo.key}
+                  data-state="unknown"
+                  data-result={memoResult[memo.key]}
+                  data-label={memo.label}
+                  data-text={memo.text}
+                >
+                  {unknownText}
+                </dd>
+              </div>
+            ))
+          }
+        </dl>
+        <p class="reason" id={`${id}-reason`} data-reason>
+          3つのツールをすべて開くと返信できます。
+        </p>
+        <div class="actions">
+          <button type="button" data-action="interim" disabled>
+            途中経過を報告する
+          </button>
+          <button
+            type="button"
+            class="primary"
+            data-action="reply"
+            aria-describedby={`${id}-reason`}
+            disabled
+          >
+            調査結果を返信する
+          </button>
+          <button type="button" data-action="answer">答えを見る</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="win browser"
+      role="group"
+      aria-label="ブラウザ"
+      data-window
+      inert
+    >
+      <div class="win-bar tab-strip">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div class="tabs" role="tablist" aria-label="開くツール">
+          {
+            tools.map((tool) => (
+              <button
+                type="button"
+                class="tab"
+                role="tab"
+                id={tabId(tool.key)}
+                data-tool={tool.key}
+                data-url={tool.url}
+                aria-selected={tool.key === 'console' ? 'true' : 'false'}
+                aria-controls={panelId(tool.key)}
+                tabindex={tool.key === 'console' ? 0 : -1}
+              >
+                {tool.label} <span class="unseen" data-unseen>未確認</span>
+              </button>
+            ))
+          }
+        </div>
+      </div>
+      <p class="address">
+        <span class="cfig-sr">アドレス</span>
+        <span class="address-text" data-address>{tools[0].url}</span>
+      </p>
+
+      <div class="pages">
+        <div
+          class="panel"
+          role="tabpanel"
+          id={panelId('console')}
+          aria-labelledby={tabId('console')}
+          data-tool="console"
+        >
+          <div class="console">
+            <div class="tables" role="group" aria-label="テーブルの一覧">
+              <p class="side-title">Tables</p>
+              <button type="button" class="table-item" data-table="visits">
+                visits
+              </button>
+              <ul class="columns" aria-label="visits の列">
+                {
+                  columns.map((column) => (
+                    <li>
+                      <code>{column.name}</code>
+                      <span>{column.type}</span>
+                    </li>
+                  ))
+                }
+              </ul>
+            </div>
+            <SqlPlayground
+              id="chapter-1-console"
+              setup={setupSql}
+              initial="SELECT * FROM visits;"
+            />
+          </div>
+          <p class="panel-note">いまの状態だけが入っています。</p>
+        </div>
+
+        <div
+          class="panel"
+          role="tabpanel"
+          id={panelId('logs')}
+          aria-labelledby={tabId('logs')}
+          data-tool="logs"
+          hidden
+        >
+          <div class="logs">
+            <div class="facets" role="group" aria-label="ログの絞り込み">
+              {
+                facets.map((facet) => (
+                  <fieldset class="facet">
+                    <legend>{facet.label}</legend>
+                    {
+                      facet.items.map((item) => (
+                        <label class="facet-item">
+                          <input
+                            type="checkbox"
+                            data-facet={facet.key}
+                            value={item.value}
+                          />
+                          <span class="facet-name">{item.label}</span>
+                          <span class="facet-count" data-facet-count>0</span>
+                        </label>
+                      ))
+                    }
+                  </fieldset>
+                ))
+              }
+            </div>
+
+            <div class="logs-main">
+              <div class="search-row">
+                <label class="cfig-sr" for={`${id}-query`}
+                >ログの検索クエリ</label>
+                <input
+                  type="search"
+                  class="query"
+                  id={`${id}-query`}
+                  value="service:clinic-api"
+                  spellcheck="false"
+                  autocomplete="off"
+                  data-query
+                  data-initial="service:clinic-api"
+                />
+                <span class="range">Past 15 Minutes</span>
+                <span class="live" data-live data-state="off">
+                  <i aria-hidden="true"></i>Live
+                </span>
+              </div>
+
+              <div class="chart" role="img" data-chart>
+                <div class="bars" aria-hidden="true">
+                  {
+                    bars.map(() => (
+                      <span class="bar" data-warn="false" style="height: 0%">
+                      </span>
+                    ))
+                  }
+                </div>
+                <div class="axis" aria-hidden="true">
+                  {
+                    axisBars.map((index) => (
+                      <span data-tick={index}>
+                        {
+                          clockOf(
+                        firstBarTime + index * 60_000,
+                      ).slice(0, 5)
+                        }
+                      </span>
+                    ))
+                  }
+                </div>
+              </div>
+
+              <p class="log-count" data-log-count>
+                0件中 0件
+              </p>
+
+              <div
+                class="log-scroll"
+                role="region"
+                aria-label="ログの一覧"
+                data-log-scroll
+              >
+                <table class="log-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">DATE</th>
+                      <th scope="col">HOST</th>
+                      <th scope="col">SERVICE</th>
+                      <th scope="col">CONTENT</th>
+                    </tr>
+                  </thead>
+                  <tbody data-log-body></tbody>
+                </table>
+                <p class="log-empty" data-empty hidden>
+                  条件に合うログはありません。
+                </p>
+                <template data-log-row-template>
+                  <table>
+                    <tbody>
+                      <tr class="log-row" tabindex="0" data-log-row>
+                        <td class="col-date">
+                          <time data-log-date></time>
+                        </td>
+                        <td>clinic-api-1</td>
+                        <td>clinic-api</td>
+                        <td class="col-content">
+                          <span class="level" data-log-level></span>
+                          <span data-log-content></span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </template>
+              </div>
+
+              <div
+                class="detail"
+                role="region"
+                aria-label="ログの詳細"
+                data-detail
+                hidden
+              >
+                <div class="detail-head">
+                  <p class="detail-title">Log</p>
+                  <button
+                    type="button"
+                    data-detail-close
+                    aria-label="ログの詳細を閉じる"
+                  >
+                    閉じる
+                  </button>
+                </div>
+                <div class="detail-body">
+                  <p class="detail-message" data-detail-field="message"></p>
+                  <dl class="detail-summary">
+                    <div>
+                      <dt>Date</dt>
+                      <dd data-detail-field="date"></dd>
+                    </div>
+                    <div>
+                      <dt>Status</dt>
+                      <dd data-detail-field="status"></dd>
+                    </div>
+                    <div>
+                      <dt>Service</dt>
+                      <dd>clinic-api</dd>
+                    </div>
+                    <div>
+                      <dt>Host</dt>
+                      <dd>clinic-api-1</dd>
+                    </div>
+                  </dl>
+                  <p class="detail-section">Event Attributes</p>
+                  <dl class="detail-attrs">
+                    <div>
+                      <dt>http.method</dt>
+                      <dd data-detail-attr="http.method"></dd>
+                    </div>
+                    <div>
+                      <dt>http.url</dt>
+                      <dd data-detail-attr="http.url"></dd>
+                    </div>
+                    <div>
+                      <dt>http.status_code</dt>
+                      <dd data-detail-attr="http.status_code"></dd>
+                    </div>
+                    <div>
+                      <dt>duration</dt>
+                      <dd data-detail-attr="duration"></dd>
+                    </div>
+                    <div>
+                      <dt>network.client.ip</dt>
+                      <dd data-detail-attr="network.client.ip"></dd>
+                    </div>
+                    <div>
+                      <dt>http.useragent</dt>
+                      <dd data-detail-attr="http.useragent"></dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="panel-note">
+            キャンセルの操作があった時刻は分かります。理由と操作した人は、ログの属性にありません。
+          </p>
+        </div>
+
+        <div
+          class="panel"
+          role="tabpanel"
+          id={panelId('repo')}
+          aria-labelledby={tabId('repo')}
+          data-tool="repo"
+          hidden
+        >
+          <div class="repo-head">
+            <span class="repo-path">clinic / <strong>visits.ts</strong></span>
+          </div>
+          <Code code={code} lang="ts" />
+          <p class="panel-note">
+            status
+            を書き換えるだけで、理由と操作した人はどこにも保存していません。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="start" role="group" aria-labelledby={`${id}-start`} data-start>
+      <div class="start-card">
+        <p class="start-text" id={`${id}-start`}>
+          {startGuide.join('')}
+        </p>
+        <button type="button" class="primary" data-action="start">
+          対応を始める
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <template data-agent-tab>
+    <button
+      type="button"
+      class="tab"
+      role="tab"
+      id={tabId('agent')}
+      data-tool="agent"
+      data-url={agentUrl}
+      aria-selected="false"
+      aria-controls={panelId('agent')}
+      tabindex="-1"
+    >
+      エージェント
+    </button>
+  </template>
+
+  <template data-agent-panel>
+    <div
+      class="panel"
+      role="tabpanel"
+      id={panelId('agent')}
+      aria-labelledby={tabId('agent')}
+      data-tool="agent"
+      hidden
+    >
+      <div class="agent-bar">
+        <span class="agent-brand">Coding Agent</span>
+        <span class="agent-session">visit-pochi のキャンセルの調査</span>
+        <span class="agent-status" data-agent-status data-state="running"
+        >実行中</span>
+      </div>
+      <div
+        class="agent-log"
+        role="log"
+        aria-label="エージェントの会話"
+        tabindex="0"
+        data-agent-log
+      >
+        <ol class="turns" data-agent-list></ol>
+      </div>
+      <div class="agent-composer">
+        <label class="cfig-sr" for={`${id}-agent-input`}
+        >エージェントへの依頼</label>
+        <textarea
+          class="agent-input"
+          id={`${id}-agent-input`}
+          rows="2"
+          placeholder="依頼を入力"
+          data-agent-input
+        ></textarea>
+        <button type="button" class="agent-send" data-agent-send disabled>
+          送信
+        </button>
+      </div>
+    </div>
+  </template>
+
+  <template data-agent-parts>
+    <li class="turn user" data-part="user">
+      <p class="bubble" data-text></p>
+    </li>
+    <li class="turn agent" data-part="reply">
+      <p data-text></p>
+    </li>
+    <li class="thinking" data-part="thinking" data-thinking>
+      <span class="thinking-mark" aria-hidden="true"></span>考え中…
+    </li>
+  </template>
+
+  <template data-agent-steps>
+    <li class="turn user" data-kind="user">
+      <p class="bubble">
+        visit-pochi
+        の来院がキャンセルになっています。誰が、いつ、なぜキャンセルしたのかを調べてください。
+      </p>
+    </li>
+    <li class="turn agent" data-kind="agent">
+      <p>データベース、ログ、コードの順に調べます。</p>
+    </li>
+    <li class="turn tool" data-kind="tool" data-state="done">
+      <details>
+        <summary>
+          <span class="tool-state" aria-hidden="true"></span>
+          <span class="cfig-sr" data-tool-state-text>完了</span>
+          <span class="tool-name">SQL</span>
+          <code class="tool-target"
+          >SELECT * FROM visits WHERE id = 'visit-pochi';</code>
+        </summary>
+        <div class="tool-body" data-tool-body>
+          <table class="tool-table">
+            <thead>
+              <tr>
+                <th scope="col">id</th>
+                <th scope="col">pet_name</th>
+                <th scope="col">status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>visit-pochi</td>
+                <td>ポチ</td>
+                <td>cancelled</td>
+              </tr>
+            </tbody>
+          </table>
+          <button type="button" data-open-tool="console">
+            この画面を開く<span class="cfig-sr">（DB コンソール）</span>
+          </button>
+        </div>
+      </details>
+    </li>
+    <li class="turn agent" data-kind="agent">
+      <p>
+        status は cancelled です。キャンセルした人、理由、日時の列はありません。
+      </p>
+    </li>
+    <li class="turn tool" data-kind="tool" data-state="done">
+      <details>
+        <summary>
+          <span class="tool-state" aria-hidden="true"></span>
+          <span class="cfig-sr" data-tool-state-text>完了</span>
+          <span class="tool-name">Logs</span>
+          <code class="tool-target">service:clinic-api visit-pochi</code>
+        </summary>
+        <div class="tool-body" data-tool-body>
+          <p class="tool-line">
+            <code>{cancelLog.iso} {cancelLog.content}</code>
+          </p>
+          <dl class="tool-attrs">
+            {
+              cancelLog.attrs.map(([key, value]) => (
+                <div>
+                  <dt>{key}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))
+            }
+          </dl>
+          <button type="button" data-open-tool="logs">
+            この画面を開く<span class="cfig-sr">（ログの検索）</span>
+          </button>
+        </div>
+      </details>
+    </li>
+    <li class="turn agent" data-kind="agent">
+      <p>
+        2026-11-06 18:11:58
+        にキャンセルの操作がありました。ログの属性に、操作した人と理由はありません。
+      </p>
+    </li>
+    <li class="turn tool" data-kind="tool" data-state="done">
+      <details>
+        <summary>
+          <span class="tool-state" aria-hidden="true"></span>
+          <span class="cfig-sr" data-tool-state-text>完了</span>
+          <span class="tool-name">Read</span>
+          <code class="tool-target">clinic/visits.ts</code>
+        </summary>
+        <div class="tool-body" data-tool-body>
+          <pre class="tool-pre"><code>{cancelVisitCode}</code></pre>
+          <button type="button" data-open-tool="repo">
+            この画面を開く<span class="cfig-sr">（リポジトリ）</span>
+          </button>
+        </div>
+      </details>
+    </li>
+    <li class="turn agent" data-kind="agent">
+      <p>
+        cancelVisit は status
+        を書き換えるだけです。理由と操作した人を受け取っておらず、どこにも保存していません。
+      </p>
+    </li>
+    <li class="turn agent conclusion" data-kind="agent">
+      <dl class="agent-result">
+        {
+          agentConclusion.map((item) => (
+            <div>
+              <dt>{item.label}</dt>
+              <dd>{item.text}</dd>
+            </div>
+          ))
+        }
+      </dl>
+      <p>
+        理由と操作した人は、データベースにも、ログにも、コードにも記録されていません。記録されていないデータは、私にも復元できません。
+      </p>
+    </li>
+  </template>
+</section>
+
+<style>
+:global(.content) :global(.cfig).scene {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.375rem;
+  padding: 0.375rem;
+}
+.scene > * {
+  min-width: 0;
+}
+
+.scene .status-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem 1.25rem;
+  border: 1px solid var(--role-rule);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
+  padding: 0.1875rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.scene .status-item {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.scene .status-elapsed span {
+  font-weight: 700;
+}
+.scene .status-clock time {
+  font-family: var(--font-code);
+  font-weight: 700;
+}
+.scene .status-affected strong {
+  color: var(--role-danger);
+}
+.scene .status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-left: auto;
+}
+.scene .status-actions button,
+.scene .start button {
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.0625rem 0.75rem;
+  color: var(--role-accent);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.scene .status-actions button:hover:not(:disabled) {
+  background: var(--role-accent-soft);
+}
+.scene .status-actions button:disabled {
+  border-color: var(--role-rule);
+  color: var(--role-muted);
+  cursor: not-allowed;
+}
+
+.scene .workspace {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.375rem;
+  min-width: 0;
+  min-height: 0;
+}
+.scene .start {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--role-bg) 80%, transparent);
+  padding: 1.5rem 0.75rem;
+  backdrop-filter: blur(2px);
+}
+.scene .start-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  max-width: 28rem;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
+  box-shadow: var(--shadow-raised);
+  padding: 1rem 1.25rem;
+}
+.scene .start-text {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.scene .start button {
+  background: var(--role-accent);
+  padding: 0.375rem 1.25rem;
+  color: var(--role-on-accent);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.scene .start button:hover {
+  opacity: 0.9;
+}
+.scene [hidden] {
+  display: none;
+}
+
+.scene .win {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
+  overflow: hidden;
+}
+.scene .win-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.25rem 0.625rem;
+}
+.scene .dots {
+  display: inline-flex;
+  flex: none;
+  gap: 0.25rem;
+}
+.scene .dots i {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--role-faint);
+}
+.scene .channel {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.scene button {
+  font: inherit;
+}
+.scene button:focus-visible,
+.scene input:focus-visible,
+.scene .feed:focus-visible,
+.scene .log-scroll:focus-visible,
+.scene .log-row:focus-visible,
+.scene .agent-log:focus-visible,
+.scene :global(pre.astro-code:focus-visible) {
+  outline: 2px solid var(--role-accent);
+  outline-offset: -2px;
+}
+
+.scene .feed {
+  flex: 0 0 auto;
+  max-height: 14rem;
+  margin: 0;
+  overflow-y: auto;
+  padding: 0.5rem 0.625rem;
+  list-style: none;
+}
+.scene .post {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+}
+.scene .post + .post {
+  margin-top: 0.5rem;
+}
+.scene .avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-md);
+  background: var(--role-accent-soft);
+  color: var(--role-accent-strong);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.scene .is-you .avatar {
+  background: var(--role-accent);
+  color: var(--role-on-accent);
+}
+.scene .post-main {
+  min-width: 0;
+}
+.scene .post-head {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.scene .post-head time {
+  margin-left: 0.375rem;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+}
+.scene .post-text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.scene .composer {
+  border-top: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.375rem 0.625rem 0.5rem;
+}
+.scene .memo-title {
+  margin: 0 0 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .memo-list {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 0.25rem 0.5rem;
+  margin: 0;
+}
+.scene .memo-row dt {
+  margin: 0;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .memo-row dd {
+  margin: 0;
+  border-radius: var(--radius-sm);
+  padding: 0 0.375rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.scene .memo-row dd::before {
+  margin-right: 0.25rem;
+}
+.scene .memo-row dd[data-state="unknown"] {
+  color: var(--role-muted);
+}
+.scene .memo-row dd[data-state="unknown"]::before {
+  content: "・" / "";
+}
+.scene .memo-row dd[data-state="found"] {
+  background: var(--role-accent-soft);
+  color: var(--role-accent-strong);
+  font-weight: 700;
+}
+.scene .memo-row dd[data-state="found"]::before {
+  content: "✓" / "";
+}
+.scene .memo-row dd[data-state="missing"] {
+  background: var(--role-danger-soft);
+  color: var(--role-danger);
+  font-weight: 700;
+}
+.scene .memo-row dd[data-state="missing"]::before {
+  content: "✕" / "";
+}
+.scene .reason {
+  margin: 0.25rem 0 0;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.scene :global([data-role="reset"]),
+.scene :global([data-role="reset-sql"]),
+.scene :global([data-role="restore"]) {
+  display: none !important;
+}
+.scene .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.375rem;
+}
+.scene .actions button {
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.25rem 0.625rem;
+  color: var(--role-accent);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.scene .actions button:hover:not(:disabled) {
+  background: var(--role-accent-soft);
+}
+.scene .actions button.primary {
+  background: var(--role-accent);
+  color: var(--role-on-accent);
+}
+.scene .actions button.primary:hover:not(:disabled) {
+  background: var(--role-accent);
+  opacity: 0.9;
+}
+.scene .actions button:disabled {
+  border-color: var(--role-rule);
+  background: var(--role-surface);
+  color: var(--role-muted);
+  cursor: not-allowed;
+}
+
+.scene .tab-strip {
+  align-items: flex-end;
+  padding-bottom: 0;
+}
+.scene .tab-strip .dots {
+  align-self: center;
+}
+.scene .tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.scene .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: -1px;
+  border: 1px solid var(--role-rule);
+  border-bottom: 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: transparent;
+  padding: 0.25rem 0.75rem;
+  color: var(--role-muted);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.scene .tab:hover:not([aria-selected="true"]) {
+  background: var(--role-accent-soft);
+}
+.scene .tab[aria-selected="true"] {
+  background: var(--role-surface);
+  box-shadow: inset 0 2px 0 var(--role-accent);
+  color: var(--role-fg);
+  font-weight: 700;
+}
+.scene .unseen {
+  border: 1px solid var(--role-warning-line);
+  border-radius: 999px;
+  background: var(--role-warning-soft);
+  padding: 0 0.375rem;
+  color: var(--role-warning);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.scene .address {
+  display: flex;
+  margin: 0;
+  border-bottom: 1px solid var(--role-rule);
+  padding: 0.25rem 0.625rem;
+}
+.scene .address-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--role-sunken);
+  padding: 0 0.75rem;
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene .pages {
+  display: flex;
+  flex-direction: column;
+  height: 26rem;
+  min-height: 0;
+}
+.scene .panel {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.scene .panel[hidden] {
+  display: none;
+}
+.scene .panel-note {
+  margin: 0;
+  border-top: 1px solid var(--role-rule);
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.scene .console {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+.scene .tables {
+  flex: none;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.375rem 0.625rem;
+}
+.scene .side-title {
+  margin: 0 0 0.125rem;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .table-item {
+  display: block;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0.125rem 0.375rem;
+  color: var(--role-accent);
+  font-family: var(--font-code);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.scene .table-item:hover {
+  background: var(--role-accent-soft);
+}
+.scene .columns {
+  margin: 0;
+  padding: 0 0 0 0.375rem;
+  list-style: none;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.scene .columns li {
+  margin: 0;
+}
+.scene .columns code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.75rem;
+}
+.scene .columns span {
+  color: var(--role-muted);
+  font-family: var(--font-code);
+}
+
+.scene :global(.playground) {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--role-surface);
+  padding: 0.375rem 0.625rem;
+}
+.scene :global(.playground-status),
+.scene :global(.playground-toolbar) {
+  margin-bottom: 0.25rem;
+}
+.scene :global(.playground-toolbar) {
+  align-items: center;
+}
+.scene :global(.playground button) {
+  padding: 0.125rem 0.625rem;
+  font-size: 0.8125rem;
+}
+.scene :global(.playground-hint) {
+  font-size: 0.75rem;
+}
+:global(.content) .scene :global(.playground-panes) {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+  min-height: 0;
+}
+:global(.content) .scene :global(.playground-pane-editor) {
+  display: block;
+  flex: none;
+  min-height: 0;
+}
+:global(.content) .scene :global(.playground-editor) {
+  position: static;
+  height: 4.5rem;
+  min-height: 0;
+  overflow: hidden;
+}
+:global(.content) .scene :global(.playground-editor .cm-editor) {
+  height: 100%;
+  max-height: none;
+}
+:global(.content) .scene :global(.playground-results) {
+  display: block;
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  margin-top: 0;
+  overflow: auto;
+  border: 1px solid var(--role-rule);
+  background: var(--role-surface);
+  padding: 0.375rem 0.5rem;
+}
+
+.scene .logs {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+.scene .facets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+}
+.scene .facet {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.scene .facet legend {
+  padding: 0;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .facet-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.scene .facet-item input {
+  margin: 0;
+}
+.scene .facet-count {
+  margin-left: auto;
+  color: var(--role-muted);
+  font-variant-numeric: tabular-nums;
+}
+.scene .logs-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.scene .search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  border-bottom: 1px solid var(--role-rule);
+  padding: 0.25rem 0.625rem;
+}
+.scene .query {
+  flex: 1 1 12rem;
+  min-width: 0;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.125rem 0.5rem;
+  color: var(--role-fg);
+  font-family: var(--font-code);
+  font-size: 0.8125rem;
+}
+.scene .range {
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.scene .live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .live i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--role-faint);
+}
+.scene .live[data-state="on"] {
+  color: var(--role-danger);
+}
+.scene .live[data-state="on"] i {
+  background: var(--role-danger);
+}
+.scene .chart {
+  flex: none;
+  border-bottom: 1px solid var(--role-rule);
+  padding: 0.25rem 0.625rem 0.125rem;
+}
+.scene .bars {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  align-items: end;
+  gap: 2px;
+  height: 2.5rem;
+  border-bottom: 1px solid var(--role-rule);
+}
+.scene .bar {
+  display: block;
+  min-height: 0;
+  border-radius: 1px 1px 0 0;
+  background: var(--role-accent);
+}
+.scene .bar[data-warn="true"] {
+  background: var(--role-warning-line);
+}
+.scene .axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.scene .log-count {
+  flex: none;
+  margin: 0;
+  padding: 0.125rem 0.625rem;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+}
+.scene .log-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 14rem;
+  overflow: auto;
+}
+.scene .log-table {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+}
+.scene .log-table th,
+.scene .log-table td {
+  border-bottom: 1px solid var(--role-rule);
+  padding: 0.125rem 0.5rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.scene .log-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--role-sunken);
+  color: var(--role-muted);
+  font-weight: 700;
+}
+.scene .log-row {
+  cursor: pointer;
+}
+.scene .log-row:hover {
+  background: var(--role-accent-soft);
+}
+.scene .log-row[aria-current="true"] {
+  background: var(--role-accent-soft);
+}
+.scene .log-row .col-date {
+  border-left: 3px solid var(--role-accent);
+}
+.scene .log-row[data-level="warn"] .col-date {
+  border-left-color: var(--role-warning-line);
+}
+.scene .level {
+  display: inline-block;
+  min-width: 4ch;
+  margin-right: 0.5ch;
+  color: var(--role-accent);
+  font-weight: 700;
+}
+.scene .level[data-level="warn"] {
+  color: var(--role-warning);
+}
+.scene .log-empty {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.8125rem;
+}
+
+.scene .detail {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: min(22rem, 100%);
+  border-left: 1px solid var(--role-border);
+  background: var(--role-surface);
+  box-shadow: var(--shadow-raised);
+}
+.scene .detail[hidden] {
+  display: none;
+}
+.scene .detail-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.125rem 0.625rem;
+}
+.scene .detail-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.scene .detail-head button {
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0 0.5rem;
+  color: var(--role-accent);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.scene .detail-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+}
+.scene .detail-message {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-code);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.scene .detail-section {
+  margin: 0.375rem 0 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .detail dl {
+  margin: 0;
+}
+.scene .detail dl > div {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  border-top: 1px solid var(--role-rule);
+  padding: 0.0625rem 0;
+}
+.scene .detail dt {
+  margin: 0;
+  color: var(--role-muted);
+  font-family: var(--font-code);
+}
+.scene .detail dd {
+  margin: 0;
+  font-family: var(--font-code);
+  overflow-wrap: anywhere;
+}
+
+.scene .agent-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem 0.625rem;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+}
+.scene .agent-brand {
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .agent-session {
+  min-width: 0;
+  font-weight: 700;
+}
+.scene .agent-status {
+  margin-left: auto;
+  border: 1px solid var(--role-accent);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  color: var(--role-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .agent-status[data-state="done"] {
+  border-color: var(--role-success-line);
+  color: var(--role-success);
+}
+.scene .agent-log {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 22rem;
+  overflow: auto;
+  padding: 0.5rem 0.75rem;
+}
+.scene .turns {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+.scene .turn {
+  margin: 0;
+}
+.scene .turn + .turn,
+.scene .turn + .thinking,
+.scene .thinking + .turn {
+  margin-top: 0.5rem;
+}
+.scene .turn.user {
+  display: flex;
+  justify-content: flex-end;
+}
+.scene .bubble {
+  max-width: 85%;
+  margin: 0;
+  border-radius: var(--radius-lg);
+  background: var(--role-accent-soft);
+  padding: 0.25rem 0.625rem;
+  color: var(--role-accent-strong);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.scene .turn.agent p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.scene .turn.agent p + p {
+  margin-top: 0.25rem;
+}
+.scene .thinking {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  color: var(--role-muted);
+  font-size: 0.8125rem;
+}
+.scene .thinking-mark {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--role-muted);
+}
+.scene .turn.tool details {
+  border: 1px solid var(--role-rule);
+  border-radius: var(--radius-md);
+  background: var(--role-sunken);
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+}
+.scene .turn.tool summary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.1875rem 0.5rem;
+  list-style: none;
+  cursor: pointer;
+}
+.scene .turn.tool summary::-webkit-details-marker {
+  display: none;
+}
+.scene .turn.tool summary::after {
+  content: "▸" / "";
+  margin-left: auto;
+  color: var(--role-muted);
+}
+.scene .turn.tool details[open] summary::after {
+  content: "▾" / "";
+}
+.scene .turn.tool summary:focus-visible {
+  outline: 2px solid var(--role-accent);
+  outline-offset: -2px;
+}
+.scene .tool-state {
+  flex: none;
+  width: 0.875rem;
+  text-align: center;
+}
+.scene .turn.tool[data-state="done"] .tool-state::before {
+  content: "✓" / "";
+  color: var(--role-success);
+  font-weight: 700;
+}
+.scene .turn.tool[data-state="running"] .tool-state::before {
+  content: "";
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 2px solid var(--role-rule);
+  border-top-color: var(--role-accent);
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.scene .tool-name {
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: var(--role-rule);
+  padding: 0 0.375rem;
+  font-weight: 700;
+}
+.scene .tool-target {
+  min-width: 0;
+  overflow: hidden;
+  background: transparent;
+  padding: 0;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scene .tool-body {
+  border-top: 1px solid var(--role-rule);
+  background: var(--role-surface);
+  padding: 0.375rem 0.5rem;
+}
+.scene .tool-body[hidden] {
+  display: none;
+}
+.scene .tool-body > button {
+  position: relative;
+  margin-top: 0.375rem;
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.0625rem 0.625rem;
+  color: var(--role-accent);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.scene .tool-body > button:hover {
+  background: var(--role-accent-soft);
+}
+.scene .tool-table {
+  display: table;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+.scene .tool-table th,
+.scene .tool-table td {
+  border: 1px solid var(--role-rule);
+  padding: 0.0625rem 0.5rem;
+  text-align: left;
+}
+.scene .tool-table th {
+  background: var(--role-sunken);
+}
+.scene .tool-line {
+  margin: 0 0 0.25rem;
+}
+.scene .tool-line code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.scene .tool-attrs {
+  margin: 0;
+}
+.scene .tool-attrs > div {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  border-top: 1px solid var(--role-rule);
+}
+.scene .tool-attrs dt {
+  margin: 0;
+  color: var(--role-muted);
+}
+.scene .tool-attrs dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.scene .tool-pre {
+  max-height: 11rem;
+  margin: 0;
+  overflow: auto;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.scene .tool-pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.75rem;
+}
+.scene .agent-result {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  justify-content: start;
+  gap: 0.125rem 1.5rem;
+  margin: 0 0 0.25rem;
+  font-size: 0.875rem;
+}
+.scene .agent-result > div {
+  display: flex;
+  gap: 0.5rem;
+}
+.scene .agent-result dt {
+  margin: 0;
+  color: var(--role-muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.scene .agent-result dd {
+  margin: 0;
+}
+.scene .agent-composer {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 0.5rem;
+  border-top: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.375rem 0.625rem;
+}
+.scene .agent-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 2.75rem;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.25rem 0.5rem;
+  color: var(--role-fg);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  resize: none;
+}
+.scene .agent-input:focus-visible {
+  outline: 2px solid var(--role-accent);
+  outline-offset: -2px;
+}
+.scene .agent-send {
+  flex: none;
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-accent);
+  padding: 0.25rem 0.875rem;
+  color: var(--role-on-accent);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.scene .agent-send:disabled {
+  border-color: var(--role-rule);
+  background: var(--role-surface);
+  color: var(--role-muted);
+  cursor: not-allowed;
+}
+@media (max-width: 639px) {
+  .scene .agent-result {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .scene .turn.tool[data-state="running"] .tool-state::before {
+    animation: agent-spin 0.8s linear infinite;
+  }
+  .scene .thinking-mark {
+    animation: agent-pulse 1s ease-in-out infinite;
+  }
+}
+@keyframes agent-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes agent-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.scene .repo-head {
+  flex: none;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.25rem 0.625rem;
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+}
+.scene :global(pre.astro-code) {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 20rem;
+  margin: 0;
+  overflow: auto;
+  border-radius: 0;
+  padding: 0.375rem 0;
+  background: var(--role-console) !important;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.scene :global(pre.astro-code code) {
+  display: grid;
+  width: max-content;
+  min-width: 100%;
+  background: transparent;
+  counter-reset: line;
+}
+.scene :global(pre.astro-code .line) {
+  padding: 0 0.625rem;
+}
+.scene :global(pre.astro-code .line::before) {
+  content: counter(line);
+  counter-increment: line;
+  display: inline-block;
+  width: 1.5rem;
+  margin-right: 1rem;
+  color: var(--role-on-console);
+  opacity: 0.55;
+  text-align: right;
+}
+
+@media (min-width: 640px) {
+  .scene .console {
+    flex-direction: row;
+  }
+  .scene .tables {
+    width: 10rem;
+    border-right: 1px solid var(--role-rule);
+    border-bottom: 0;
+  }
+  .scene .logs {
+    grid-template-columns: 8rem minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .scene .facets {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    border-right: 1px solid var(--role-rule);
+    border-bottom: 0;
+    overflow-y: auto;
+  }
+  .scene .log-scroll {
+    max-height: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  :global(.content) :global(.chapter-body) > .scene {
+    flex: 1 1 0;
+    min-height: 26rem;
+  }
+  .scene .workspace {
+    flex: 1 1 0;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .scene .start {
+    align-items: center;
+  }
+  .scene .feed {
+    flex: 1 1 0;
+    max-height: none;
+    min-height: 10rem;
+  }
+  .scene .pages {
+    flex: 1 1 0;
+    height: auto;
+  }
+  .scene :global(pre.astro-code) {
+    max-height: none;
+  }
+  .scene .agent-log {
+    max-height: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .scene .tab,
+  .scene .table-item,
+  .scene .log-row {
+    transition: background-color 0.1s;
+  }
+}
+</style>
+
+<script>
+import { clockOf, describeLog, minuteOf } from './incident-log';
+import {
+  actors,
+  earlierLogs,
+  heartbeat,
+  initialAffected,
+  interim,
+  reply,
+  startedAt,
+  timeline,
+  visibleFromMinutes,
+} from './incident-scenario';
+import type { LogEntry, Post, TimedEvent } from './incident-scenario';
+
+const tools = ['console', 'logs', 'repo'] as const;
+type Tool = (typeof tools)[number];
+const isTool = (value: string | undefined): value is Tool =>
+  tools.some((tool) => tool === value);
+
+type LogRow = {
+  element: HTMLTableRowElement;
+  level: string;
+  method: string;
+  time: number;
+  text: string;
+  cancel: boolean;
+  date: string;
+  content: string;
+  attrs: Map<string, string>;
+  dynamic: boolean;
+};
+
+type Status = 'idle' | 'running' | 'paused' | 'ended';
+type Pending = { at: number; run: () => void };
+
+const minuteMs = 60_000;
+const tickMs = 250;
+const maxDynamicRows = 600;
+
+const formatElapsed = (ms: number): string => {
+  const total = Math.floor(ms / 1000);
+  const pad = (value: number): string => String(value).padStart(2, '0');
+  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+};
+
+for (
+  const root of document.querySelectorAll<HTMLElement>('[data-investigation]')
+) {
+  const must = <T extends Element>(selector: string): T => {
+    const found = root.querySelector<T>(selector);
+    if (found === null) {
+      throw new Error(`要素が見つかりません: ${selector}`);
+    }
+    return found;
+  };
+
+  const tabList = must<HTMLElement>('[role="tablist"]');
+  const pages = must<HTMLElement>('.pages');
+  const tabsOf = (): HTMLButtonElement[] => [
+    ...root.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+  ];
+  const panelsOf = (): HTMLElement[] => [
+    ...root.querySelectorAll<HTMLElement>('[role="tabpanel"]'),
+  ];
+  const agentTab = must<HTMLTemplateElement>('template[data-agent-tab]');
+  const agentPanel = must<HTMLTemplateElement>('template[data-agent-panel]');
+  const agentSteps = must<HTMLTemplateElement>('template[data-agent-steps]');
+  const agentParts = must<HTMLTemplateElement>('template[data-agent-parts]');
+  const postTemplate = must<HTMLTemplateElement>('template[data-post]');
+  const rowTemplate = must<HTMLTemplateElement>(
+    'template[data-log-row-template]',
+  );
+  const address = must<HTMLElement>('[data-address]');
+  const feed = must<HTMLElement>('[data-feed]');
+  const reason = must<HTMLElement>('[data-reason]');
+  const memoList = must<HTMLElement>('[data-unknown]');
+  const memos = [...root.querySelectorAll<HTMLElement>('[data-memo]')];
+  const replyButton = must<HTMLButtonElement>('[data-action="reply"]');
+  const interimButton = must<HTMLButtonElement>('[data-action="interim"]');
+  const answerButton = must<HTMLButtonElement>('[data-action="answer"]');
+  const resetButton = must<HTMLButtonElement>('[data-action="reset"]');
+  const pauseButton = must<HTMLButtonElement>('[data-action="pause"]');
+  const startButton = must<HTMLButtonElement>('[data-action="start"]');
+  const startPanel = must<HTMLElement>('[data-start]');
+  const elapsedText = must<HTMLElement>('[data-elapsed]');
+  const clockText = must<HTMLElement>('[data-clock]');
+  const affectedText = must<HTMLElement>('[data-affected]');
+  const live = must<HTMLElement>('[data-live]');
+  const windows = [...root.querySelectorAll<HTMLElement>('[data-window]')];
+  const unknownText = memoList.dataset.unknown ?? '';
+
+  const playground = must<HTMLElement>('[data-playground="sql"]');
+  const results = must<HTMLElement>('[data-role="results"]');
+  const resetSql = must<HTMLButtonElement>('[data-role="reset-sql"]');
+  const restoreSql = must<HTMLButtonElement>('[data-role="restore"]');
+
+  const query = must<HTMLInputElement>('[data-query]');
+  const logCount = must<HTMLElement>('[data-log-count]');
+  const logEmpty = must<HTMLElement>('[data-empty]');
+  const logBody = must<HTMLElement>('[data-log-body]');
+  const chart = must<HTMLElement>('[data-chart]');
+  const bars = [...chart.querySelectorAll<HTMLElement>('.bar')];
+  const axes = [...chart.querySelectorAll<HTMLElement>('[data-tick]')];
+  const facetInputs = [
+    ...root.querySelectorAll<HTMLInputElement>('[data-facet]'),
+  ];
+  const detail = must<HTMLElement>('[data-detail]');
+  const detailClose = must<HTMLButtonElement>('[data-detail-close]');
+
+  const parseRow = (): HTMLTableRowElement => {
+    const element = rowTemplate.content.querySelector('tr')?.cloneNode(true);
+    if (!(element instanceof HTMLTableRowElement)) {
+      throw new Error('ログの行の部品が見つかりません');
+    }
+    return element;
+  };
+
+  const rows: LogRow[] = [];
+  const state = {
+    selected: 'console' as string,
+    opened: new Set<Tool>(),
+    agent: false,
+    revealed: false,
+    replied: false,
+    current: null as LogRow | null,
+    status: 'idle' as Status,
+    affected: initialAffected,
+  };
+
+  let startedMs = 0;
+  let pausedAt: number | null = null;
+  let pausedTotal = 0;
+  let frozenMs: number | null = null;
+  let intervalId: number | undefined;
+  let queue: Pending[] = [];
+  let nextBeat = 1;
+  let shownMinute = -1;
+
+  const elapsedMs = (): number => {
+    if (state.status === 'idle') return 0;
+    if (frozenMs !== null) return frozenMs;
+    return Math.max(0, (pausedAt ?? Date.now()) - startedMs - pausedTotal);
+  };
+
+  const facetValue = (row: LogRow, facet: string): string =>
+    facet === 'status'
+      ? row.level
+      : facet === 'method'
+      ? row.method
+      : 'clinic-api';
+
+  const matchesToken = (row: LogRow, token: string): boolean => {
+    const pair = /^(@?[\w.]+):(.+)$/.exec(token);
+    if (pair !== null) {
+      const key = pair[1] ?? '';
+      const value = (pair[2] ?? '').toLowerCase();
+      if (key === 'service') return value === 'clinic-api';
+      if (key === 'host') return value === 'clinic-api-1';
+      if (key === 'status') return row.level === value;
+      if (key.startsWith('@')) {
+        const attr = row.attrs.get(key.slice(1));
+        if (attr !== undefined) return attr.toLowerCase() === value;
+      }
+    }
+    return row.text.includes(token.toLowerCase());
+  };
+
+  const showsPochiStatus = (): boolean => {
+    for (const result of results.querySelectorAll('.playground-result')) {
+      const heads = [...result.querySelectorAll('thead th')].map((cell) =>
+        cell.textContent
+      );
+      if (!heads.includes('status')) continue;
+      const body = [...result.querySelectorAll('tbody tr')];
+      const statement =
+        result.querySelector('.playground-statement code')?.textContent ?? '';
+      const named = body.some((row) =>
+        [...row.querySelectorAll('td')].some((cell) =>
+          cell.textContent === 'visit-pochi'
+        )
+      );
+      if (named || (body.length > 0 && statement.includes('visit-pochi'))) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const refreshLogs = (): void => {
+    const tokens = query.value.split(/\s+/).filter((token) => token !== '');
+    const byQuery = rows.filter((row) =>
+      tokens.every((token) => matchesToken(row, token))
+    );
+    const checked = new Map<string, Set<string>>();
+    for (const input of facetInputs) {
+      const facet = input.dataset.facet ?? '';
+      const count = byQuery.filter((row) =>
+        facetValue(row, facet) === input.value
+      ).length;
+      const label = input.closest('label')?.querySelector('[data-facet-count]');
+      if (label !== null && label !== undefined) {
+        label.textContent = String(count);
+      }
+      if (input.checked) {
+        checked.set(
+          facet,
+          (checked.get(facet) ?? new Set<string>()).add(input.value),
+        );
+      }
+    }
+    const shown = byQuery.filter((row) =>
+      [...checked].every(([facet, values]) =>
+        values.has(facetValue(row, facet))
+      )
+    );
+    const shownSet = new Set(shown);
+    for (const row of rows) {
+      row.element.hidden = !shownSet.has(row);
+    }
+    logCount.textContent = `${rows.length}件中 ${shown.length}件`;
+    logEmpty.hidden = shown.length !== 0;
+
+    const now = startedAt + elapsedMs();
+    const lastBar = Math.floor(now / minuteMs) * minuteMs;
+    const firstBar = lastBar - visibleFromMinutes * minuteMs;
+    shownMinute = lastBar;
+    const counts = bars.map((_, index) =>
+      shown.filter((row) =>
+        Math.floor((row.time - firstBar) / minuteMs) === index
+      )
+    );
+    const peak = Math.max(...counts.map((list) => list.length));
+    bars.forEach((bar, index) => {
+      const list = counts[index] ?? [];
+      bar.style.height = list.length === 0
+        ? '0%'
+        : `${Math.max(8, Math.round(list.length / peak * 100))}%`;
+      bar.dataset.warn = String(list.some((row) => row.level === 'warn'));
+    });
+    for (const axis of axes) {
+      axis.textContent = minuteOf(
+        firstBar + Number(axis.dataset.tick ?? '0') * minuteMs,
+      );
+    }
+    const total = counts.reduce((sum, list) => sum + list.length, 0);
+    const warnMinutes = counts.flatMap((list, index) =>
+      list.some((row) => row.level === 'warn')
+        ? [minuteOf(firstBar + index * minuteMs)]
+        : []
+    );
+    const peakIndex = counts.findIndex((list) => list.length === peak);
+    chart.setAttribute(
+      'aria-label',
+      total === 0
+        ? '1分ごとのログ件数。表示中のログはありません。'
+        : `1分ごとのログ件数。合計 ${total} 件。最も多いのは ${
+          minuteOf(firstBar + peakIndex * minuteMs)
+        } の ${peak} 件。${
+          warnMinutes.length === 0
+            ? 'Warn を含む時間帯はありません。'
+            : `Warn を含む時間帯は ${warnMinutes.join('、')}。`
+        }`,
+    );
+    if (state.current !== null && state.current.element.hidden) {
+      closeDetail(false);
+    }
+  };
+
+  const fillDetail = (row: LogRow): void => {
+    for (
+      const field of detail.querySelectorAll<HTMLElement>('[data-detail-field]')
+    ) {
+      const key = field.dataset.detailField;
+      field.textContent = key === 'message'
+        ? row.content
+        : key === 'date'
+        ? row.date
+        : row.level === 'warn'
+        ? 'Warn'
+        : 'Info';
+    }
+    for (
+      const attr of detail.querySelectorAll<HTMLElement>('[data-detail-attr]')
+    ) {
+      attr.textContent = row.attrs.get(attr.dataset.detailAttr ?? '') ?? '';
+    }
+  };
+
+  const openDetail = (row: LogRow): void => {
+    state.current?.element.removeAttribute('aria-current');
+    state.current = row;
+    row.element.setAttribute('aria-current', 'true');
+    fillDetail(row);
+    detail.hidden = false;
+    if (row.cancel) state.opened.add('logs');
+    render();
+    detailClose.focus();
+  };
+
+  function closeDetail(restoreFocus: boolean): void {
+    const row = state.current;
+    state.current = null;
+    row?.element.removeAttribute('aria-current');
+    detail.hidden = true;
+    if (restoreFocus && row !== null && !row.element.hidden) {
+      row.element.focus();
+    }
+  }
+
+  const addRow = (entry: LogEntry, time: number, dynamic: boolean): void => {
+    const view = describeLog(entry, time);
+    const element = parseRow();
+    element.dataset.level = view.level;
+    element.dataset.method = view.method;
+    element.dataset.cancel = String(view.cancel);
+    element.dataset.date = view.iso;
+    const dateCell = element.querySelector<HTMLElement>('[data-log-date]');
+    if (dateCell !== null) {
+      dateCell.textContent = view.date;
+      dateCell.setAttribute('datetime', view.iso);
+    }
+    const levelCell = element.querySelector<HTMLElement>('[data-log-level]');
+    if (levelCell !== null) {
+      levelCell.textContent = view.levelLabel;
+      levelCell.dataset.level = view.level;
+    }
+    const contentCell = element.querySelector<HTMLElement>(
+      '[data-log-content]',
+    );
+    if (contentCell !== null) contentCell.textContent = view.content;
+    const row: LogRow = {
+      element,
+      level: view.level,
+      method: view.method,
+      time: view.time,
+      text: view.text,
+      cancel: view.cancel,
+      date: view.iso,
+      content: view.content,
+      attrs: new Map(view.attrs),
+      dynamic,
+    };
+    element.addEventListener('click', () => openDetail(row));
+    element.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      openDetail(row);
+    });
+    rows.push(row);
+    logBody.prepend(element);
+  };
+
+  const trimRows = (): void => {
+    let dynamicCount = rows.filter((row) => row.dynamic).length;
+    while (dynamicCount > maxDynamicRows) {
+      const index = rows.findIndex((row) => row.dynamic);
+      const [removed] = rows.splice(index, 1);
+      if (removed === undefined) break;
+      if (state.current === removed) closeDetail(false);
+      removed.element.remove();
+      dynamicCount -= 1;
+    }
+  };
+
+  const loadEarlierLogs = (): void => {
+    const from = startedAt - visibleFromMinutes * minuteMs;
+    for (const entry of earlierLogs) {
+      const time = Date.parse(entry.time);
+      if (time >= from) addRow(entry, time, false);
+    }
+  };
+
+  const addPost = (post: Post, at: number): void => {
+    const copy = postTemplate.content.querySelector('li')?.cloneNode(true);
+    if (!(copy instanceof HTMLElement)) {
+      throw new Error('投稿の部品が見つかりません');
+    }
+    const actor = actors[post.actor];
+    copy.classList.toggle('is-you', post.actor === 'you');
+    const fill = (selector: string, text: string): void => {
+      const target = copy.querySelector(selector);
+      if (target !== null) target.textContent = text;
+    };
+    fill('[data-avatar]', actor.avatar);
+    fill('[data-name]', actor.name);
+    fill('[data-time]', minuteOf(startedAt + at));
+    fill('[data-text]', post.text);
+    feed.append(copy);
+    feed.scrollTop = feed.scrollHeight;
+  };
+
+  const reasonText = (): string => {
+    const missing = tools.filter((tool) => !state.opened.has(tool));
+    if (missing.length === tools.length) {
+      return '3つのツールをすべて開くと返信できます。';
+    }
+    if (missing.length >= 2) {
+      return `あと${missing.length}つのツールを開くと返信できます。`;
+    }
+    if (missing[0] === 'console') {
+      return 'DB コンソールで、visit-pochi の status を表示すると返信できます。';
+    }
+    if (missing[0] === 'logs') {
+      return 'ログの検索で、キャンセルの操作のログを開くと返信できます。';
+    }
+    return 'リポジトリのタブを開くと返信できます。';
+  };
+
+  const renderClock = (): void => {
+    const ms = elapsedMs();
+    elapsedText.textContent = formatElapsed(ms);
+    clockText.textContent = clockOf(startedAt + ms);
+    affectedText.textContent = `${state.affected}件`;
+  };
+
+  function render(): void {
+    const ready = state.revealed
+      || tools.every((tool) => state.opened.has(tool));
+    const known = {
+      what: state.revealed || state.opened.has('console'),
+      when: state.revealed || state.opened.has('logs'),
+      who: ready,
+      why: ready,
+    };
+    const started = state.status === 'running' || state.status === 'paused';
+    root.dataset.opened = [...state.opened].join(' ');
+    root.dataset.selected = state.selected;
+    root.dataset.ready = String(ready);
+    root.dataset.phase = state.status === 'idle'
+      ? 'idle'
+      : state.status === 'ended'
+      ? 'ended'
+      : state.status === 'paused'
+      ? 'paused'
+      : state.replied
+      ? 'replied'
+      : 'running';
+    startPanel.hidden = state.status !== 'idle';
+    for (const element of windows) {
+      element.inert = state.status === 'idle';
+    }
+    live.dataset.state = state.status === 'running' ? 'on' : 'off';
+    pauseButton.textContent = state.status === 'paused'
+      ? '再開する'
+      : '一時停止';
+    pauseButton.disabled = !started;
+    resetButton.disabled = state.status === 'idle';
+    interimButton.disabled = !started || state.replied;
+    const tabs = tabsOf();
+    for (const tab of tabs) {
+      const tool = tab.dataset.tool;
+      const isSelected = tool === state.selected;
+      tab.setAttribute('aria-selected', String(isSelected));
+      tab.tabIndex = isSelected ? 0 : -1;
+      const unseen = tab.querySelector<HTMLElement>('[data-unseen]');
+      if (unseen !== null) {
+        unseen.hidden = isTool(tool) && state.opened.has(tool);
+      }
+    }
+    for (const panel of panelsOf()) {
+      panel.hidden = panel.dataset.tool !== state.selected;
+    }
+    const selectedTab = tabs.find((tab) => tab.dataset.tool === state.selected);
+    address.textContent = selectedTab?.dataset.url ?? '';
+    for (const memo of memos) {
+      const key = memo.dataset.memo;
+      const isKnown =
+        key === 'what' || key === 'when' || key === 'who' || key === 'why'
+          ? known[key]
+          : false;
+      memo.dataset.state = isKnown
+        ? memo.dataset.result ?? 'unknown'
+        : 'unknown';
+      memo.textContent = isKnown ? memo.dataset.text ?? '' : unknownText;
+    }
+    answerButton.disabled = state.agent;
+    replyButton.disabled = !ready || !started;
+    replyButton.hidden = state.replied;
+    reason.hidden = ready || state.replied;
+    reason.textContent = reasonText();
+    renderClock();
+  }
+
+  const stopInterval = (): void => {
+    window.clearInterval(intervalId);
+    intervalId = undefined;
+  };
+
+  const insertPending = (items: Pending[]): void => {
+    queue = [...queue, ...items].sort((a, b) => a.at - b.at);
+  };
+
+  const heartbeatAt = (index: number): number =>
+    index * heartbeat.everySeconds * 1000;
+
+  const addHeartbeat = (index: number): void => {
+    const request = heartbeat.requests[(index - 1) % heartbeat.requests.length];
+    if (request === undefined) return;
+    const duration = heartbeat.durations[
+      (index - 1) % heartbeat.durations.length
+    ] ?? 0;
+    const millis = heartbeat.millis[(index - 1) % heartbeat.millis.length] ?? 0;
+    addRow(
+      {
+        level: 'INFO',
+        method: request.method,
+        path: request.path,
+        status: 200,
+        duration,
+      },
+      startedAt + heartbeatAt(index) + millis,
+      true,
+    );
+  };
+
+  const perform = (event: TimedEvent): void => {
+    if (event.kind === 'post') {
+      if (event.unlessReplied === true && state.replied) return;
+      addPost(event.post, event.at * 1000);
+    } else if (event.kind === 'log') {
+      addRow(event.entry, startedAt + event.at * 1000 + event.millis, true);
+    } else if (event.kind === 'sql') {
+      playground.dispatchEvent(
+        new CustomEvent('playground:exec-sql', { detail: { sql: event.sql } }),
+      );
+    } else {
+      state.affected = event.count;
+    }
+  };
+
+  const finish = (at: number): void => {
+    state.status = 'ended';
+    frozenMs = at;
+    stopInterval();
+    refreshLogs();
+    render();
+  };
+
+  const tick = (): void => {
+    if (state.status !== 'running') return;
+    const now = elapsedMs();
+    let changed = false;
+    for (;;) {
+      const head = queue[0];
+      const beatAt = heartbeatAt(nextBeat);
+      if (beatAt <= now && (head === undefined || beatAt <= head.at)) {
+        addHeartbeat(nextBeat);
+        nextBeat += 1;
+        changed = true;
+        continue;
+      }
+      if (head !== undefined && head.at <= now) {
+        queue.shift();
+        head.run();
+        changed = true;
+        if (state.status !== 'running') break;
+        continue;
+      }
+      break;
+    }
+    if (state.status !== 'running') return;
+    trimRows();
+    const minute = Math.floor((startedAt + now) / minuteMs) * minuteMs;
+    if (changed || minute !== shownMinute) refreshLogs();
+    renderClock();
+  };
+
+  const startInterval = (): void => {
+    stopInterval();
+    intervalId = window.setInterval(tick, tickMs);
+  };
+
+  const start = (): void => {
+    if (state.status !== 'idle') return;
+    state.status = 'running';
+    startedMs = Date.now();
+    pausedAt = null;
+    pausedTotal = 0;
+    frozenMs = null;
+    nextBeat = 1;
+    queue = [];
+    insertPending(
+      timeline.map((event) => ({
+        at: event.at * 1000,
+        run: () => perform(event),
+      })),
+    );
+    startInterval();
+    render();
+    tick();
+    feed.focus({ preventScroll: true });
+  };
+
+  const pause = (): void => {
+    if (state.status !== 'running') return;
+    tick();
+    if (state.status !== 'running') return;
+    pausedAt = Date.now();
+    state.status = 'paused';
+    stopInterval();
+    render();
+  };
+
+  const resume = (): void => {
+    if (state.status !== 'paused' || pausedAt === null) return;
+    pausedTotal += Date.now() - pausedAt;
+    pausedAt = null;
+    state.status = 'running';
+    startInterval();
+    render();
+    tick();
+  };
+
+  const select = (tool: string): void => {
+    state.selected = tool;
+    if (tool === 'repo') state.opened.add(tool);
+    render();
+  };
+
+  const tabOf = (event: Event): HTMLButtonElement | null =>
+    event.target instanceof Element
+      ? event.target.closest<HTMLButtonElement>('[role="tab"]')
+      : null;
+  tabList.addEventListener('click', (event) => {
+    const tab = tabOf(event);
+    if (tab !== null) select(tab.dataset.tool ?? '');
+  });
+  tabList.addEventListener('keydown', (event) => {
+    const tab = tabOf(event);
+    if (
+      tab === null || event.altKey || event.ctrlKey || event.metaKey
+      || event.shiftKey
+    ) return;
+    const tabs = tabsOf();
+    const index = tabs.indexOf(tab);
+    const target = event.key === 'ArrowRight'
+      ? tabs[(index + 1) % tabs.length]
+      : event.key === 'ArrowLeft'
+      ? tabs[(index + tabs.length - 1) % tabs.length]
+      : event.key === 'Home'
+      ? tabs[0]
+      : event.key === 'End'
+      ? tabs[tabs.length - 1]
+      : undefined;
+    if (target === undefined) return;
+    event.preventDefault();
+    select(target.dataset.tool ?? '');
+    target.focus();
+  });
+
+  query.addEventListener('input', refreshLogs);
+  for (const input of facetInputs) {
+    input.addEventListener('change', refreshLogs);
+  }
+
+  detailClose.addEventListener('click', () => closeDetail(true));
+  root.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !detail.hidden) {
+      event.preventDefault();
+      closeDetail(true);
+    }
+  });
+
+  const setSql = (sql: string): void => {
+    playground.dispatchEvent(
+      new CustomEvent('playground:set-sql', { detail: { sql, run: true } }),
+    );
+  };
+  for (
+    const button of root.querySelectorAll<HTMLButtonElement>('[data-table]')
+  ) {
+    button.addEventListener(
+      'click',
+      () => setSql(`SELECT * FROM ${button.dataset.table ?? ''};`),
+    );
+  }
+
+  const placeholder = (): void => {
+    const note = document.createElement('p');
+    note.className = 'playground-note';
+    note.textContent = 'クエリを実行すると、結果がここに出ます。';
+    results.replaceChildren(note);
+  };
+  const quietEditor = (): boolean => {
+    const announced = playground.querySelector('.cm-announced');
+    announced?.removeAttribute('aria-live');
+    return announced !== null;
+  };
+  if (!quietEditor()) {
+    const editorWatcher = new MutationObserver(() => {
+      if (quietEditor()) editorWatcher.disconnect();
+    });
+    editorWatcher.observe(playground, { childList: true, subtree: true });
+  }
+  results.removeAttribute('aria-live');
+  results.setAttribute('role', 'status');
+  placeholder();
+  new MutationObserver(() => {
+    if (
+      results.querySelector('.playground-result, .playground-error') !== null
+      && !state.opened.has('console') && showsPochiStatus()
+    ) {
+      state.opened.add('console');
+      render();
+    }
+  }).observe(results, { childList: true });
+
+  startButton.addEventListener('click', start);
+  pauseButton.addEventListener(
+    'click',
+    () => (state.status === 'paused' ? resume() : pause()),
+  );
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) tick();
+  });
+
+  replyButton.addEventListener('click', () => {
+    tick();
+    if (state.status !== 'running' && state.status !== 'paused') return;
+    const at = elapsedMs();
+    const lines: string[] = [reply.text];
+    if (at >= reply.tamaAfter * 1000) lines.push(reply.tamaText);
+    addPost({ actor: 'you', text: lines.join('\n') }, at);
+    state.replied = true;
+    let when = at;
+    insertPending(
+      reply.followUps.map((item, index) => {
+        when += item.delay * 1000;
+        const due = when;
+        const last = index === reply.followUps.length - 1;
+        return {
+          at: due,
+          run: () => {
+            addPost({ actor: 'support', text: item.text }, due);
+            if (last) finish(due);
+          },
+        };
+      }),
+    );
+    render();
+    feed.focus({ preventScroll: true });
+  });
+
+  interimButton.addEventListener('click', () => {
+    tick();
+    if (state.status !== 'running' && state.status !== 'paused') return;
+    const parts = interim.order.map((key) => {
+      const memo = memos.find((item) => item.dataset.memo === key);
+      const value = memo === undefined || memo.dataset.state === 'unknown'
+        ? interim.unknown
+        : memo.dataset.text ?? interim.unknown;
+      return `${memo?.dataset.label ?? ''}: ${value}`;
+    });
+    addPost(
+      { actor: 'you', text: `${interim.heading}${parts.join(' / ')}` },
+      elapsedMs(),
+    );
+  });
+
+  let agentTimers: number[] = [];
+  const stepDelay = 800;
+  const toolDelay = 600;
+  const agentFollowUp =
+    'これ以上調べられるデータがありません。理由と操作した人は、どこにも記録されていません。';
+
+  const startAgent = (): void => {
+    state.agent = true;
+    tabList.append(agentTab.content.cloneNode(true));
+    pages.append(agentPanel.content.cloneNode(true));
+    const list = must<HTMLElement>('[data-agent-list]');
+    const log = must<HTMLElement>('[data-agent-log]');
+    const statusLabel = must<HTMLElement>('[data-agent-status]');
+    const input = must<HTMLTextAreaElement>('[data-agent-input]');
+    const send = must<HTMLButtonElement>('[data-agent-send]');
+    const blocks = [...agentSteps.content.children];
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const later = (ms: number, run: () => void): void => {
+      if (ms === 0) {
+        run();
+      } else {
+        agentTimers.push(window.setTimeout(run, ms));
+      }
+    };
+    const part = (name: string): HTMLElement => {
+      const found = agentParts.content.querySelector(`[data-part="${name}"]`);
+      const copy = found?.cloneNode(true);
+      if (!(copy instanceof HTMLElement)) {
+        throw new Error(`部品が見つかりません: ${name}`);
+      }
+      return copy;
+    };
+    const toEnd = (): void => {
+      log.scrollTop = log.scrollHeight;
+    };
+    const append = (node: Node): void => {
+      list.querySelector('[data-thinking]')?.remove();
+      list.append(node);
+      toEnd();
+    };
+    const thinking = (): void => {
+      list.querySelector('[data-thinking]')?.remove();
+      list.append(part('thinking'));
+      toEnd();
+    };
+    const setRunning = (running: boolean): void => {
+      statusLabel.dataset.state = running ? 'running' : 'done';
+      statusLabel.textContent = running ? '実行中' : '完了';
+      send.disabled = running;
+    };
+    const setToolState = (node: HTMLElement, running: boolean): void => {
+      node.dataset.state = running ? 'running' : 'done';
+      const body = node.querySelector<HTMLElement>('[data-tool-body]');
+      if (body !== null) body.hidden = running;
+      const label = node.querySelector('[data-tool-state-text]');
+      if (label !== null) label.textContent = running ? '実行中' : '完了';
+    };
+    const complete = (): void => {
+      state.revealed = true;
+      setRunning(false);
+      render();
+    };
+
+    select('agent');
+    setRunning(true);
+    if (reduced) {
+      for (const block of blocks) append(block.cloneNode(true));
+      complete();
+    } else {
+      let elapsed = 0;
+      blocks.forEach((block, index) => {
+        const node = block.cloneNode(true) as HTMLElement;
+        const isTool = block.getAttribute('data-kind') === 'tool';
+        const last = index === blocks.length - 1;
+        if (index > 0) elapsed += stepDelay;
+        later(elapsed, () => {
+          if (isTool) setToolState(node, true);
+          append(node);
+          if (last) complete();
+          else if (!isTool) thinking();
+        });
+        if (isTool) {
+          elapsed += toolDelay;
+          later(elapsed, () => {
+            setToolState(node, false);
+            if (!last) thinking();
+          });
+        }
+      });
+    }
+
+    const submit = (): void => {
+      const text = input.value.trim();
+      if (text === '' || send.disabled) return;
+      input.value = '';
+      const user = part('user');
+      const userText = user.querySelector('[data-text]');
+      if (userText !== null) userText.textContent = text;
+      append(user);
+      const answer = (): void => {
+        const answerNode = part('reply');
+        const answerText = answerNode.querySelector('[data-text]');
+        if (answerText !== null) answerText.textContent = agentFollowUp;
+        append(answerNode);
+        setRunning(false);
+      };
+      setRunning(true);
+      if (reduced) {
+        answer();
+      } else {
+        thinking();
+        later(stepDelay, answer);
+      }
+    };
+    send.addEventListener('click', submit);
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      submit();
+    });
+  };
+
+  const openTool = (tool: string): void => {
+    select(tool);
+    if (tool === 'console') {
+      setSql(`SELECT * FROM visits WHERE id = 'visit-pochi';`);
+    }
+    if (tool === 'logs') {
+      query.value = 'service:clinic-api visit-pochi';
+      for (const input of facetInputs) input.checked = false;
+      refreshLogs();
+      const target = rows.find((row) => row.cancel);
+      if (target !== undefined) openDetail(target);
+    }
+  };
+  root.addEventListener('click', (event) => {
+    const button = event.target instanceof Element
+      ? event.target.closest<HTMLElement>('[data-open-tool]')
+      : null;
+    if (button !== null) openTool(button.dataset.openTool ?? '');
+  });
+
+  answerButton.addEventListener('click', () => {
+    if (!state.agent) startAgent();
+  });
+  resetButton.addEventListener('click', () => {
+    stopInterval();
+    for (const timer of agentTimers) window.clearTimeout(timer);
+    agentTimers = [];
+    for (const element of root.querySelectorAll('[data-tool="agent"]')) {
+      element.remove();
+    }
+    state.status = 'idle';
+    state.agent = false;
+    state.opened.clear();
+    state.revealed = false;
+    state.replied = false;
+    state.selected = 'console';
+    state.affected = initialAffected;
+    pausedAt = null;
+    pausedTotal = 0;
+    frozenMs = null;
+    queue = [];
+    nextBeat = 1;
+    feed.replaceChildren();
+    for (const row of rows.filter((item) => item.dynamic)) {
+      row.element.remove();
+    }
+    rows.splice(0, rows.length, ...rows.filter((row) => !row.dynamic));
+    query.value = query.dataset.initial ?? '';
+    for (const input of facetInputs) input.checked = false;
+    closeDetail(false);
+    refreshLogs();
+    resetSql.click();
+    restoreSql.hidden = true;
+    playground.dispatchEvent(new CustomEvent('playground:discard-state'));
+    placeholder();
+    render();
+    startButton.focus();
+  });
+
+  loadEarlierLogs();
+  refreshLogs();
+  render();
+}
+</script>

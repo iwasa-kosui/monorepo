@@ -85,7 +85,7 @@ test.describe('ページ一覧（幅 1440px 未満のメニュー）', () => {
     const groups = page.locator('.lesson-menu__panel .lesson-pages__group');
     await expect(groups).toHaveCount(6);
     await expect(groups.nth(0)).toContainText('導入');
-    await expect(groups.nth(0)).toContainText('0:00〜0:06（6分）');
+    await expect(groups.nth(0)).toContainText('0:00〜0:08（8分）');
     await expect(groups.nth(2)).toContainText('第2章');
   });
 
@@ -232,7 +232,7 @@ test.describe('サイドバー（幅 1440px 以上）', () => {
     const opened = await groups.evaluateAll((elements) => elements.map((element) => element.hasAttribute('open')));
     expect(opened).toEqual([false, false, true, false, false, false]);
     await expect(groups.nth(0)).toContainText('導入');
-    await expect(groups.nth(0)).toContainText('0:00〜0:06（6分）');
+    await expect(groups.nth(0)).toContainText('0:00〜0:08（8分）');
     await expect(groups.nth(2)).toContainText('第2章');
   });
 

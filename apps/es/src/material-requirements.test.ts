@@ -89,13 +89,6 @@ describe('PRD の受入条件', () => {
     }
   });
 
-  it('intro.mdx では「今日の題材」より後にイベントソーシングが出ない', () => {
-    const intro = read('src/content/chapters/intro.mdx');
-    const heading = intro.indexOf('## 今日の題材');
-    expect(heading).toBeGreaterThanOrEqual(0);
-    expect(intro.slice(heading)).not.toContain('イベントソーシング');
-  });
-
   it('intro.mdx と chapter-1.mdx に業務イベント、business_events、target_ が出ない', () => {
     for (const path of ['src/content/chapters/intro.mdx', 'src/content/chapters/chapter-1.mdx']) {
       const text = read(path);
@@ -146,8 +139,8 @@ describe('PRD の受入条件', () => {
     expect(read('src/pages/index.astro')).toContain('講師の画面を見るだけで追えます');
   });
 
-  it('chapter-1.mdx に show-visits.ts の実行コマンドが書かれている', () => {
-    expect(read('src/content/chapters/chapter-1.mdx')).toContain('node show-visits.ts');
+  it('intro/02.mdx に調査の画面が置かれている', () => {
+    expect(read('src/content/chapters/intro/02.mdx')).toContain('<InvestigationScene />');
   });
 
   it('chapter-2.mdx の変更量の表記が実物の差分と合う', () => {

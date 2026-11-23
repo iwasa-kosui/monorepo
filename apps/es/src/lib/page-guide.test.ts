@@ -66,8 +66,8 @@ describe('schedule の pageStarts', () => {
     row.pageStarts === undefined ? [] : [{ id: row.id, minutes: row.minutes, pageStarts: row.pageStarts }]
   );
 
-  it('第2章と第4章が持つ', () => {
-    expect(withStarts.map((row) => row.id)).toEqual(['chapter-2', 'chapter-4']);
+  it('導入と第2章と第4章が持つ', () => {
+    expect(withStarts.map((row) => row.id)).toEqual(['intro', 'chapter-2', 'chapter-4']);
   });
 
   for (const row of withStarts) {

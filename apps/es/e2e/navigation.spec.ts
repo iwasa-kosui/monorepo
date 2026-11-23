@@ -43,17 +43,17 @@ test('「前へ」を順にたどると全ページを逆順に通って導入�
 });
 
 test('章の境界でも「次へ」「前へ」で隣の章のページへ移動する', async ({ page }) => {
-  await page.goto('/chapters/intro/6/');
+  await page.goto('/chapters/intro/8/');
   await page.getByRole('link', { name: /次へ/ }).click();
   await expect(page).toHaveURL(/\/chapters\/chapter-1\/$/);
   await page.getByRole('link', { name: /前へ/ }).click();
-  await expect(page).toHaveURL(/\/chapters\/intro\/6\/$/);
+  await expect(page).toHaveURL(/\/chapters\/intro\/8\/$/);
 });
 
 test('ページの上部に章の名前と進み具合が出る', async ({ page }) => {
   await page.goto('/chapters/intro/2/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('導入');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('2/6');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('2/8');
   await expect(page.getByRole('link', { name: 'トップページへ' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'うまく動かないとき' })).toBeVisible();
 });
@@ -76,12 +76,12 @@ test.describe('矢印キー', () => {
   });
 
   test('章の境界でも矢印キーで移動する', async ({ page }) => {
-    await page.goto('/chapters/intro/6/');
+    await page.goto('/chapters/intro/8/');
     await page.keyboard.press('ArrowRight');
     await expect(page).toHaveURL(/\/chapters\/chapter-1\/$/);
     await page.waitForLoadState('load');
     await page.keyboard.press('ArrowLeft');
-    await expect(page).toHaveURL(/\/chapters\/intro\/6\/$/);
+    await expect(page).toHaveURL(/\/chapters\/intro\/8\/$/);
   });
 
   const editors = [
@@ -120,24 +120,24 @@ test.describe('矢印キー', () => {
 
   test('横にスクロールできるコード欄にフォーカスがあるときは移動しない', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/chapters/chapter-1/2/');
+    await page.goto('/chapters/chapter-3/2/');
     const code = page.locator('pre').first();
     expect(await code.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
     await logHandledKeys(page);
     await code.focus();
     await page.keyboard.press('ArrowRight');
     expect(await handledKeys(page)).toEqual([false]);
-    expect(pathOf(page)).toBe('/chapters/chapter-1/2/');
+    expect(pathOf(page)).toBe('/chapters/chapter-3/2/');
   });
 
   test('横にスクロールしないコード欄にフォーカスがあるときは移動する', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 640 });
-    await page.goto('/chapters/chapter-1/2/');
+    await page.goto('/chapters/chapter-3/2/');
     const code = page.locator('pre').first();
     expect(await code.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false);
     await code.focus();
     await page.keyboard.press('ArrowLeft');
-    await expect(page).toHaveURL(/\/chapters\/chapter-1\/$/);
+    await expect(page).toHaveURL(/\/chapters\/chapter-3\/$/);
   });
 
   test('キーを押し続けて繰り返されたイベントでは移動しない', async ({ page }) => {
@@ -154,7 +154,7 @@ test.describe('矢印キー', () => {
 
 test.describe('役割の行', () => {
   test('本文の上に役割の行が出る', async ({ page }) => {
-    await page.goto('/chapters/chapter-1/');
+    await page.goto('/chapters/chapter-1/2/');
     await expect(page.locator('.lesson-role')).toHaveText(/^\s*やってみる: .+。\s*$/);
     await page.goto('/chapters/chapter-2/4/');
     await expect(page.locator('.lesson-role')).toHaveText(/^\s*演習: /);
@@ -169,7 +169,14 @@ test.describe('役割の行', () => {
       const bodyBox = await page.locator('.chapter-body').boundingBox();
       expect(roleBox, path).not.toBeNull();
       expect(bodyBox, path).not.toBeNull();
-      expect(roleBox?.y ?? Infinity, path).toBeLessThan(bodyBox?.y ?? 0);
+      const hiddenOnScreen = ((await role.getAttribute('class')) ?? '').includes('visually-hidden');
+      if (hiddenOnScreen) {
+        expect(roleBox?.width ?? Infinity, path).toBeLessThanOrEqual(1);
+        expect(roleBox?.height ?? Infinity, path).toBeLessThanOrEqual(1);
+        expect(roleBox?.y ?? Infinity, path).toBeLessThanOrEqual(bodyBox?.y ?? 0);
+      } else {
+        expect(roleBox?.y ?? Infinity, path).toBeLessThan(bodyBox?.y ?? 0);
+      }
     }
   });
 });
@@ -191,7 +198,7 @@ test.describe('下部のフッター', () => {
   });
 
   test('章の境界の前後リンクには隣の章の名前が出る', async ({ page }) => {
-    await page.goto('/chapters/intro/6/');
+    await page.goto('/chapters/intro/8/');
     await expect(page.locator('.lesson-footer a[rel="next"]')).toContainText('第1章');
   });
 

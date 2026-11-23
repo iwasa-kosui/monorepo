@@ -1,5 +1,12 @@
 ---
-
+const diagramLabels = {
+  timetravel:
+    '構成図。受付スタッフの操作は、更新処理を呼ぶコード、更新処理、visits テーブルの順に届く。記録は、データ基盤にある日ごとの visits の写しに残る。誰が、なぜは記録まで届かない。',
+  trigger:
+    '構成図。受付スタッフの操作は、更新処理を呼ぶコード、更新処理、visits テーブルの順に届く。記録は、データベースの中の変更の記録に残る。手作業の SQL による変更も残る。誰が、なぜは記録まで届かない。',
+  code:
+    '構成図。受付スタッフの操作は、更新処理を呼ぶコード、更新処理、visits テーブルの順に届く。記録は、更新処理がデータベースの中に足した記録に残る。誰が、なぜは記録まで届く。',
+};
 ---
 
 <section
@@ -9,44 +16,15 @@
   aria-labelledby="method-title"
 >
   <p id="method-title" class="figure-title">
-    方法を1つ選んで、記録する場所と、分かることを確かめてみてください。
+    方法を1つ選んで、同じ出来事のあとに残るデータを比べてみてください。
   </p>
 
-  <div class="flow" aria-hidden="true">
-    <div class="box code-box">
-      <span class="box-name">更新処理を呼ぶコード</span>
-      <span class="box-note">なぜを知っている</span>
-      <span class="badge badge-code">記録する場所</span>
-    </div>
-    <div class="track track-code-process"><span class="arrow"></span></div>
-    <div class="box process-box">
-      <span class="box-name">更新処理</span>
-    </div>
-    <div class="track track-process-table">
-      <span class="arrow"></span>
-      <span class="dot"></span>
-      <span class="dot late"></span>
-    </div>
-    <div class="box table-box">
-      <span class="box-name">テーブル</span>
-      <span class="badge badge-table">記録する場所</span>
-    </div>
-    <div class="track track-down">
-      <span class="arrow down"></span>
-      <span class="dot"></span>
-    </div>
-    <div class="box slot-box">
-      <span class="box-name">記録</span>
-    </div>
-    <div class="box sql-box">
-      <span class="box-name">手作業の SQL</span>
-    </div>
-    <div class="track track-sql-table">
-      <span class="arrow"></span>
-      <span class="dot"></span>
-      <span class="dot late"></span>
-    </div>
-  </div>
+  <p class="event">
+    <span class="label">起きたこと</span>
+    <span class="event-text">
+      受付スタッフが、飼い主の都合で、ポチの来院をキャンセルした。
+    </span>
+  </p>
 
   <div class="choices" role="group" aria-label="記録する方法">
     <button type="button" data-method-button="timetravel" aria-pressed="true">
@@ -60,36 +38,199 @@
     </button>
   </div>
 
-  <table class="results">
-    <caption class="sr-only">選んだ方法で分かること</caption>
-    <tbody>
-      <tr>
-        <th scope="row">変更前の値が見える</th>
-        <td data-result="before" data-good="true">
-          <span class="mark" aria-hidden="true">○</span>
-          <span data-text>見える</span>
-        </td>
-      </tr>
-      <tr>
-        <th scope="row">手作業の SQL の変更も見える</th>
-        <td data-result="manual" data-good="true">
-          <span class="mark" aria-hidden="true">○</span>
-          <span data-text>見える</span>
-        </td>
-      </tr>
-      <tr>
-        <th scope="row">なぜ変えたかが残る</th>
-        <td data-result="why" data-good="false">
-          <span class="mark" aria-hidden="true">×</span>
-          <span data-text>残らない</span>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="body">
+    <div class="diagram-wrap">
+      <div
+        class="diagram"
+        role="img"
+        aria-label={diagramLabels.timetravel}
+        data-diagram
+        data-label-timetravel={diagramLabels.timetravel}
+        data-label-trigger={diagramLabels.trigger}
+        data-label-code={diagramLabels.code}
+      >
+        <div class="dg">
+          <div class="frame frame-app" aria-hidden="true">
+            <span class="frame-title">アプリケーション</span>
+          </div>
+          <div class="frame frame-db" aria-hidden="true">
+            <span class="frame-title">データベース</span>
+          </div>
+          <div class="frame frame-wh" aria-hidden="true">
+            <span class="frame-title">データ基盤</span>
+          </div>
 
-  <p class="message" aria-live="polite" data-message>
-    テーブルの変化は分かります。なぜ変えたのかはテーブルに届いていません。
-  </p>
+          <div class="node node-staff" data-node="staff" aria-hidden="true">
+            受付<br />スタッフ
+          </div>
+          <span class="arrow arrow-h a-staff" aria-hidden="true"></span>
+          <div class="node node-caller" data-node="caller" aria-hidden="true">
+            <span>更新処理を<br />呼ぶコード</span>
+            <span class="chip">誰が・なぜを<br />知っている</span>
+          </div>
+          <p class="reach" aria-hidden="true">
+            <span class="reach-blocked">記録まで<br />届かない</span>
+            <span class="reach-through">記録まで届く</span>
+          </p>
+          <span class="arrow arrow-h a-call" aria-hidden="true"></span>
+          <div class="node node-process" data-node="process" aria-hidden="true">
+            更新<br />処理
+          </div>
+          <span class="arrow arrow-h a-visits" aria-hidden="true"></span>
+          <span class="arrow arrow-h a-record" aria-hidden="true">
+            <span class="arrow-label">誰が・なぜを渡す</span>
+          </span>
+
+          <div
+            class="node node-cand node-record"
+            data-node="record"
+            aria-hidden="true"
+          >
+            <span>足した記録</span>
+            <span class="badge">ここに残る</span>
+          </div>
+          <div
+            class="node node-cand node-changelog"
+            data-node="changelog"
+            aria-hidden="true"
+          >
+            <span>変更の記録</span>
+            <span class="badge">ここに残る</span>
+          </div>
+          <span class="arrow arrow-v a-log" aria-hidden="true">
+            <span class="arrow-line"></span>
+            <span class="arrow-label">トリガーや CDC</span>
+          </span>
+          <div class="node node-visits" data-node="visits" aria-hidden="true">
+            visits テーブル
+          </div>
+
+          <span class="arrow arrow-h a-wh" aria-hidden="true">
+            <span class="arrow-label">1日1回の写し</span>
+          </span>
+          <div
+            class="node node-cand node-warehouse"
+            data-node="warehouse"
+            aria-hidden="true"
+          >
+            <span>日ごとの<br />visits の<br />写し</span>
+            <span class="badge">ここに残る</span>
+          </div>
+
+          <span class="arrow arrow-v a-manual" aria-hidden="true">
+            <span class="arrow-line"></span>
+          </span>
+          <div class="node node-manual" data-node="manual" aria-hidden="true">
+            手作業の SQL
+          </div>
+        </div>
+      </div>
+      <p class="scroll-hint" aria-hidden="true">
+        構成図は左右にスクロールできます。
+      </p>
+    </div>
+
+    <div class="data">
+      <div class="evidence" data-evidence="timetravel">
+        <table>
+          <caption>データ基盤に残る、日ごとの visits テーブル</caption>
+          <thead>
+            <tr>
+              <th scope="col">時点</th>
+              <th scope="col">id</th>
+              <th scope="col">pet_name</th>
+              <th scope="col">status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2026-11-06 00:00</td>
+              <td>visit-pochi</td>
+              <td>ポチ</td>
+              <td>reserved</td>
+            </tr>
+            <tr>
+              <td>2026-11-07 00:00</td>
+              <td>visit-pochi</td>
+              <td>ポチ</td>
+              <td>cancelled</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="evidence" data-evidence="trigger" hidden>
+        <table>
+          <caption>トリガーや CDC が残す、変更の記録</caption>
+          <thead>
+            <tr>
+              <th scope="col">変更された時刻</th>
+              <th scope="col">テーブル</th>
+              <th scope="col">行</th>
+              <th scope="col">列</th>
+              <th scope="col">変更前</th>
+              <th scope="col">変更後</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2026-11-06 18:11:58</td>
+              <td>visits</td>
+              <td>visit-pochi</td>
+              <td>status</td>
+              <td>reserved</td>
+              <td>cancelled</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="evidence" data-evidence="code" hidden>
+        <table>
+          <caption>更新処理を呼ぶコードが足す記録</caption>
+          <thead>
+            <tr>
+              <th scope="col">いつ</th>
+              <th scope="col">何を</th>
+              <th scope="col">誰が</th>
+              <th scope="col">なぜ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2026-11-06 18:11:58</td>
+              <td>来院のキャンセル</td>
+              <td>受付スタッフ</td>
+              <td>飼い主の都合</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <dl class="answers">
+        <div>
+          <dt>誰が</dt>
+          <dd data-answer="who" data-found="false">残らない</dd>
+        </div>
+        <div>
+          <dt>いつ</dt>
+          <dd data-answer="when" data-found="true">11月6日のどこか</dd>
+        </div>
+        <div>
+          <dt>何を</dt>
+          <dd data-answer="what" data-found="true">reserved から cancelled</dd>
+        </div>
+        <div>
+          <dt>なぜ</dt>
+          <dd data-answer="why" data-found="false">残らない</dd>
+        </div>
+      </dl>
+
+      <p class="message" aria-live="polite" data-message>
+        前の日と比べれば、値が変わったことは分かります。誰がなぜ変えたのかは、どの日のテーブルにもありません。
+      </p>
+    </div>
+  </div>
 </section>
 
 <style>
@@ -110,219 +251,25 @@
   font-weight: 700;
   line-height: 1.5;
 }
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
 
-.flow {
-  display: grid;
-  grid-template-columns: 1.25fr 1.5rem 0.9fr 1.5rem 0.9fr;
-  grid-template-rows: auto auto auto;
-  align-items: center;
-  row-gap: 0.25rem;
-  border-radius: var(--radius-md);
-  background: var(--role-surface);
-  padding: 1.25rem 0.75rem 0.75rem;
-}
-.box {
-  position: relative;
+.event {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 0.125rem;
-  min-height: 3.75rem;
-  border: 2px solid var(--role-accent-strong);
+  margin: 0;
   border-radius: var(--radius-md);
   background: var(--role-surface);
-  padding: 0.25rem 0.375rem;
-  text-align: center;
-  transition:
-    box-shadow 0.4s ease,
-    background-color 0.4s ease,
-    border-color 0.4s ease;
+  padding: 0.5rem 0.75rem;
 }
-.box-name {
-  font-size: 0.9375rem;
-  font-weight: 700;
-  line-height: 1.3;
-}
-.box-note {
+.label {
   color: var(--role-muted);
   font-size: 0.8125rem;
-}
-.code-box {
-  grid-column: 1;
-  grid-row: 1;
-}
-.track-code-process {
-  grid-column: 2;
-  grid-row: 1;
-}
-.process-box {
-  grid-column: 3;
-  grid-row: 1;
-}
-.track-process-table {
-  grid-column: 4;
-  grid-row: 1;
-}
-.table-box {
-  grid-column: 5;
-  grid-row: 1 / 4;
-  align-self: stretch;
-}
-.track-down {
-  grid-column: 1;
-  grid-row: 2;
-  height: 1.75rem;
-}
-.slot-box {
-  grid-column: 1;
-  grid-row: 3;
-  min-height: 2.5rem;
-  border-style: dashed;
-  border-color: var(--role-border);
-  color: var(--role-muted);
-}
-.sql-box {
-  grid-column: 3;
-  grid-row: 3;
-}
-.track-sql-table {
-  grid-column: 4;
-  grid-row: 3;
-}
-
-.track {
-  position: relative;
-  height: 1.5rem;
-}
-.arrow {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  left: 0;
-  height: 2px;
-  background: var(--role-accent-strong);
-  translate: 0 -50%;
-}
-.arrow::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: -1px;
-  border: 5px solid transparent;
-  border-left: 8px solid var(--role-accent-strong);
-  border-right: 0;
-  translate: 0 -50%;
-}
-.arrow.down {
-  top: 0;
-  right: auto;
-  bottom: 0;
-  left: 50%;
-  width: 2px;
-  height: auto;
-  translate: -50% 0;
-}
-.arrow.down::after {
-  top: auto;
-  right: auto;
-  bottom: -1px;
-  left: 50%;
-  border: 5px solid transparent;
-  border-top: 8px solid var(--role-accent-strong);
-  border-bottom: 0;
-  translate: -50% 0;
-}
-.dot {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  display: none;
-  width: 0.625rem;
-  height: 0.625rem;
-  border: 2px solid var(--role-accent-strong);
-  border-radius: 50%;
-  background: var(--role-danger);
-  translate: -50% -50%;
-}
-.track-down .dot {
-  top: 0;
-  left: 50%;
-}
-
-.badge {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  display: none;
-  margin-bottom: 0.25rem;
-  border: 2px solid var(--role-accent-strong);
-  border-radius: var(--radius-sm);
-  background: var(--role-highlight);
-  padding: 0 0.375rem;
-  color: var(--role-on-highlight);
-  font-size: 0.75rem;
   font-weight: 700;
-  white-space: nowrap;
-  translate: -50% 0;
 }
-
-[data-method="timetravel"] .table-box,
-[data-method="trigger"] .table-box,
-[data-method="code"] .code-box {
-  border-color: var(--role-danger);
-  background: var(--role-highlight-soft);
-  box-shadow: 0 0 0 4px var(--role-highlight);
-}
-[data-method="timetravel"] .badge-table,
-[data-method="trigger"] .badge-table,
-[data-method="code"] .badge-code {
-  display: block;
-}
-[data-method="code"] .slot-box {
-  border-style: solid;
-  border-color: var(--role-danger);
-  background: var(--role-highlight-soft);
-  color: var(--role-accent-strong);
-}
-[data-method="timetravel"] .track-process-table .dot,
-[data-method="timetravel"] .track-sql-table .dot,
-[data-method="trigger"] .track-process-table .dot,
-[data-method="trigger"] .track-sql-table .dot,
-[data-method="code"] .track-down .dot {
-  display: block;
-  animation: travel 1.6s linear infinite;
-}
-[data-method="timetravel"] .dot.late,
-[data-method="trigger"] .dot.late {
-  animation-delay: 0.8s;
-}
-[data-method="code"] .track-down .dot {
-  animation-name: travel-down;
-}
-@keyframes travel {
-  0% {
-    left: 0;
-  }
-  100% {
-    left: 100%;
-  }
-}
-@keyframes travel-down {
-  0% {
-    top: 0;
-  }
-  100% {
-    top: 100%;
-  }
+.event-text {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .choices {
@@ -347,45 +294,406 @@
   color: var(--role-on-accent);
 }
 
-.results {
-  display: table;
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  min-width: 0;
+}
+.data {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.diagram-wrap {
+  min-width: 0;
+}
+.diagram {
+  min-width: 0;
+  overflow-x: auto;
+}
+.scroll-hint {
+  display: none;
+  margin: 0.25rem 0 0;
+  color: var(--role-muted);
+  font-size: 0.8125rem;
+}
+.dg {
+  --pad: 0.3125rem;
+  position: relative;
+  display: grid;
+  grid-template-columns:
+    3.75rem 0.75rem var(--pad) 6rem 0.75rem 3.25rem var(--pad) 5rem
+    var(--pad) 7.5rem var(--pad) 3.75rem var(--pad) 5.25rem var(--pad);
+  grid-template-rows:
+    1.5rem 3rem var(--pad) 3rem 1.5rem 3rem var(--pad) 1.25rem 2rem;
+  width: max-content;
+  margin-inline: auto;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.frame {
+  z-index: 0;
+  grid-row: 1 / 8;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
+}
+.frame-title {
+  display: block;
+  padding: 0.125rem 0.5rem;
+  color: var(--role-muted);
+  font-weight: 700;
+}
+.frame-app {
+  grid-column: 3 / 8;
+}
+.frame-db {
+  grid-column: 9 / 12;
+}
+.frame-wh {
+  grid-column: 13 / 16;
+  border-width: 2px;
+}
+
+.node {
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 0;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-md);
+  background: var(--role-sunken);
+  padding: 0.125rem;
+  text-align: center;
+}
+.node-cand {
+  border-width: 2px;
+}
+.node-staff {
+  grid-column: 1;
+  grid-row: 2 / 6;
+  align-self: center;
+  padding-block: 0.375rem;
+}
+.node-caller {
+  grid-column: 4;
+  grid-row: 2 / 6;
+}
+.node-process {
+  grid-column: 6;
+  grid-row: 2 / 7;
+}
+.node-record {
+  grid-column: 10;
+  grid-row: 2;
+}
+.node-changelog {
+  grid-column: 10;
+  grid-row: 4;
+}
+.node-visits {
+  grid-column: 10;
+  grid-row: 6;
+}
+.node-warehouse {
+  grid-column: 14;
+  grid-row: 2 / 7;
+}
+.node-manual {
+  grid-column: 10;
+  grid-row: 9;
+}
+
+.chip {
+  border: 1px solid var(--role-warning-line);
+  border-radius: var(--radius-sm);
+  background: var(--role-warning-soft);
+  padding: 0 0.125rem;
+  color: var(--role-warning);
+  font-weight: 700;
+}
+.reach {
+  z-index: 1;
+  grid-column: 4 / 6;
+  grid-row: 6;
+  align-self: start;
+  margin: 0;
+  padding-top: 0.125rem;
+  font-weight: 700;
+  text-align: center;
+}
+.reach-blocked {
+  color: var(--role-danger);
+}
+.reach-blocked::before {
+  content: "✕ " / "";
+}
+.reach-through {
+  display: none;
+  color: var(--role-success);
+}
+.reach-through::before {
+  content: "✓ " / "";
+}
+[data-method="code"] .reach-blocked {
+  display: none;
+}
+[data-method="code"] .reach-through {
+  display: inline;
+}
+
+.badge {
+  display: none;
+  border-radius: 999px;
+  background: var(--role-accent-strong);
+  padding: 0 0.25rem;
+  color: var(--role-on-strong);
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.arrow {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  color: var(--role-fg);
+  pointer-events: none;
+}
+.arrow-h::before {
+  content: "";
+  flex: 1 1 auto;
+  height: 2px;
+  background: currentColor;
+}
+.arrow-h::after {
+  content: "";
+  flex: 0 0 auto;
+  border-block: 0.3125rem solid transparent;
+  border-left: 0.5rem solid currentColor;
+}
+.arrow-v {
+  gap: 0.25rem;
+}
+.arrow-line {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: stretch;
+  width: 0.625rem;
+}
+.arrow-line::before {
+  content: "";
+  flex: 0 0 auto;
+  border-inline: 0.3125rem solid transparent;
+  border-bottom: 0.5rem solid currentColor;
+}
+.arrow-line::after {
+  content: "";
+  flex: 1 1 auto;
+  width: 2px;
+  background: currentColor;
+}
+.arrow-label {
+  color: var(--role-accent-strong);
+  font-weight: 700;
+  line-height: 1.25;
+}
+.arrow-v .arrow-label {
+  white-space: nowrap;
+}
+.arrow-h .arrow-label {
+  position: absolute;
+  right: var(--pad);
+  bottom: calc(50% + 0.25rem);
+  left: var(--pad);
+  text-align: center;
+}
+
+.a-staff {
+  grid-column: 2;
+  grid-row: 2 / 6;
+}
+.a-call {
+  grid-column: 5;
+  grid-row: 2 / 6;
+}
+.a-visits {
+  grid-column: 7 / 10;
+  grid-row: 6;
+}
+.a-record {
+  grid-column: 7 / 10;
+  grid-row: 2;
+}
+.a-log {
+  grid-column: 10;
+  grid-row: 5;
+  padding-left: 0.375rem;
+}
+.a-wh {
+  grid-column: 11 / 14;
+  grid-row: 6;
+}
+.a-manual {
+  grid-column: 10;
+  grid-row: 7 / 9;
+  justify-content: center;
+}
+.a-record,
+.a-log,
+.a-wh {
+  display: none;
+  color: var(--role-accent);
+}
+[data-method="timetravel"] .a-wh,
+[data-method="trigger"] .a-log,
+[data-method="code"] .a-record {
+  display: flex;
+}
+
+[data-method="timetravel"] [data-node="warehouse"],
+[data-method="trigger"] [data-node="changelog"],
+[data-method="code"] [data-node="record"] {
+  border-style: solid;
+  border-color: var(--role-accent);
+  background: var(--role-accent-soft);
+  font-weight: 700;
+}
+[data-method="timetravel"] [data-node="warehouse"] .badge,
+[data-method="trigger"] [data-node="changelog"] .badge,
+[data-method="code"] [data-node="record"] .badge {
+  display: block;
+}
+[data-method="timetravel"] .frame-wh,
+[data-method="trigger"] .frame-wh,
+[data-method="code"] .frame-wh {
+  border-style: dashed;
+}
+[data-method="timetravel"] .frame-wh {
+  border-style: solid;
+  border-color: var(--role-accent);
+}
+[data-method="timetravel"] [data-node="changelog"],
+[data-method="timetravel"] [data-node="record"],
+[data-method="trigger"] [data-node="record"],
+[data-method="trigger"] [data-node="warehouse"],
+[data-method="code"] [data-node="changelog"],
+[data-method="code"] [data-node="warehouse"] {
+  border-style: dashed;
+  background: transparent;
+  color: var(--role-muted);
+}
+
+.evidence {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+}
+.evidence table {
   width: 100%;
   margin: 0;
   border-collapse: collapse;
-  background: var(--role-surface);
-  font-size: 1rem;
+  font-size: 0.8125rem;
 }
-.results th,
-.results td {
-  border: 1px solid var(--role-rule);
-  padding: 0.5rem 0.75rem;
+.evidence caption {
+  padding: 0.375rem 0.75rem;
+  color: var(--role-muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
   text-align: left;
 }
-.results th {
+.evidence th,
+.evidence td {
+  border: 1px solid var(--role-rule);
+  padding: 0.375rem 0.5rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.evidence td {
+  white-space: normal;
+}
+.evidence th {
   background: var(--role-sunken);
   font-weight: 700;
 }
-.results td {
-  font-weight: 700;
-  transition: background-color 0.4s ease;
+.evidence td {
+  font-family: var(--font-code);
 }
-.mark {
-  margin-right: 0.5rem;
+
+.answers {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+.answers dt {
+  color: var(--role-muted);
+  font-size: 0.8125rem;
   font-weight: 700;
 }
-.results td[data-good="true"] {
+.answers dd {
+  margin: 0.125rem 0 0;
+  border-radius: var(--radius-md);
+  padding: 0.375rem 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.answers dd[data-found="true"] {
   background: var(--role-highlight-soft);
 }
-.results td[data-good="false"] {
+.answers dd[data-found="false"] {
   background: var(--role-sunken);
   color: var(--role-muted);
 }
 .message {
   margin: 0;
-  min-height: 3rem;
-  font-size: 1.0625rem;
+  min-height: 4.5rem;
+  font-size: 1rem;
   font-weight: 700;
   line-height: 1.5;
+}
+
+@media (min-width: 1024px) {
+  .body {
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 1rem;
+  }
+}
+
+@media (max-width: 42rem) {
+  .scroll-hint {
+    display: block;
+  }
+}
+
+@media (max-width: 640px) {
+  .answers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 33rem) {
+  .answers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .node,
+  .frame {
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
 }
 
 @media (max-height: 700px) {
@@ -396,91 +704,95 @@
   .figure-title {
     font-size: 0.8125rem;
   }
-  .flow {
-    row-gap: 0.125rem;
-    padding: 1.25rem 0.625rem 0.5rem;
+  .event {
+    padding: 0.25rem 0.625rem;
   }
-  .box {
-    min-height: 2.75rem;
-  }
-  .slot-box {
-    min-height: 1.75rem;
-  }
-  .box-name {
-    font-size: 0.8125rem;
-  }
-  .box-note {
+  .label {
     font-size: 0.75rem;
   }
-  .track-down {
-    height: 1rem;
-  }
-  .badge {
-    font-size: 0.6875rem;
+  .event-text {
+    font-size: 0.875rem;
+    line-height: 1.4;
   }
   .choices button {
     padding: 0.25rem 0.625rem;
     font-size: 0.8125rem;
   }
-  .results {
+  .evidence table {
+    font-size: 0.75rem;
+  }
+  .evidence caption {
+    padding: 0.25rem 0.625rem;
+    font-size: 0.75rem;
+  }
+  .evidence th,
+  .evidence td {
+    padding: 0.25rem 0.5rem;
+  }
+  .answers {
+    gap: 0.375rem;
+  }
+  .answers dt {
+    font-size: 0.75rem;
+  }
+  .answers dd {
+    padding: 0.25rem 0.375rem;
     font-size: 0.8125rem;
   }
-  .results th,
-  .results td {
-    padding: 0.25rem 0.625rem;
-  }
   .message {
-    min-height: 2.5rem;
+    min-height: 3.5rem;
     font-size: 0.875rem;
     line-height: 1.4;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .box,
-  .results td {
-    transition: none;
-  }
-  .dot {
-    display: none !important;
-    animation: none !important;
   }
 }
 </style>
 
 <script>
 type Method = 'timetravel' | 'trigger' | 'code';
+type Question = 'who' | 'when' | 'what' | 'why';
+type Answer = readonly [found: boolean, text: string];
 
 type Outcome = {
   readonly message: string;
-  readonly before: readonly [boolean, string];
-  readonly manual: readonly [boolean, string];
-  readonly why: readonly [boolean, string];
+  readonly answers: Record<Question, Answer>;
 };
+
+const notKept: Answer = [false, '残らない'];
 
 const outcomes: Record<Method, Outcome> = {
   timetravel: {
     message:
-      'テーブルの変化は分かります。なぜ変えたのかはテーブルに届いていません。',
-    before: [true, '見える'],
-    manual: [true, '見える'],
-    why: [false, '残らない'],
+      '前の日と比べれば、値が変わったことは分かります。誰がなぜ変えたのかは、どの日のテーブルにもありません。',
+    answers: {
+      who: notKept,
+      when: [true, '11月6日のどこか'],
+      what: [true, 'reserved から cancelled'],
+      why: notKept,
+    },
   },
   trigger: {
     message:
-      '手作業の SQL まで拾えます。なぜ変えたのかはテーブルに届いていません。',
-    before: [true, '見える'],
-    manual: [true, '見える'],
-    why: [false, '残らない'],
+      '変更の前後の値と時刻が残ります。手作業の SQL による変更も拾えます。誰がなぜ変えたのかは残りません。',
+    answers: {
+      who: notKept,
+      when: [true, '18:11:58'],
+      what: [true, 'reserved から cancelled'],
+      why: notKept,
+    },
   },
   code: {
     message:
-      'なぜを知っているコードの場所で書きます。手作業の SQL は拾えません。',
-    before: [true, '記録に書けば見える'],
-    manual: [false, '見えない'],
-    why: [true, '残る'],
+      '誰が、いつ、何を、なぜが1行に残ります。手作業の SQL による変更は拾えません。',
+    answers: {
+      who: [true, '受付スタッフ'],
+      when: [true, '18:11:58'],
+      what: [true, '来院のキャンセル'],
+      why: [true, '飼い主の都合'],
+    },
   },
 };
+
+const questions: readonly Question[] = ['who', 'when', 'what', 'why'];
 
 const isMethod = (value: string | undefined): value is Method =>
   value === 'timetravel' || value === 'trigger' || value === 'code';
@@ -489,8 +801,12 @@ for (
   const root of document.querySelectorAll<HTMLElement>('[data-method-figure]')
 ) {
   const message = root.querySelector<HTMLElement>('[data-message]');
+  const diagram = root.querySelector<HTMLElement>('[data-diagram]');
   const buttons = [
     ...root.querySelectorAll<HTMLButtonElement>('[data-method-button]'),
+  ];
+  const evidences = [
+    ...root.querySelectorAll<HTMLElement>('[data-evidence]'),
   ];
   if (message === null) continue;
 
@@ -498,28 +814,25 @@ for (
     const outcome = outcomes[method];
     root.dataset.method = method;
     message.textContent = outcome.message;
+    const label = diagram?.getAttribute(`data-label-${method}`);
+    if (label != null) diagram?.setAttribute('aria-label', label);
     for (const button of buttons) {
       button.setAttribute(
         'aria-pressed',
         String(button.dataset.methodButton === method),
       );
     }
-    for (const key of ['before', 'manual', 'why'] as const) {
-      const cell = root.querySelector<HTMLElement>(`[data-result="${key}"]`);
-      const text = cell?.querySelector<HTMLElement>('[data-text]');
-      const mark = cell?.querySelector<HTMLElement>('.mark');
-      if (
-        cell === null || cell === undefined || text === null
-        || text === undefined
-      ) continue;
-      const [good, label] = outcome[key];
-      cell.dataset.good = String(good);
-      text.textContent = label;
-      if (mark !== null && mark !== undefined) {
-        mark.textContent = good
-          ? '○'
-          : '×';
-      }
+    for (const evidence of evidences) {
+      evidence.hidden = evidence.dataset.evidence !== method;
+    }
+    for (const question of questions) {
+      const cell = root.querySelector<HTMLElement>(
+        `[data-answer="${question}"]`,
+      );
+      if (cell === null) continue;
+      const [found, text] = outcome.answers[question];
+      cell.dataset.found = String(found);
+      cell.textContent = text;
     }
   };
 

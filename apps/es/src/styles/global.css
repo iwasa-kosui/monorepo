@@ -122,6 +122,17 @@ body.chapter-page {
 .content .chapter-goal {
   margin: 0.25rem 0 0;
 }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
 
 .content .chapter-body {
   display: flex;
