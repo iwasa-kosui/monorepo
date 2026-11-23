@@ -77,7 +77,7 @@ export const LocalUserPage = ({
           href='/about'
           class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
         >
-          ioriについて
+          このサイトについて
         </a>
       </div>
       <section class='mb-8'>
