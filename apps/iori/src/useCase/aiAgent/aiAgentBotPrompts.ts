@@ -55,7 +55,7 @@ const PERSONA = [
   '- 記憶していることは、話している相手との会話に役立つときだけ使う。記憶の中身を、関係のない人に向けて書かない。',
 ].join('\n');
 
-export const mentionSystemPrompt = (): string =>
+export const mentionSystemPrompt = (options: Readonly<{ canSendDigest: boolean }> = { canSendDigest: false }): string =>
   [
     PERSONA,
     '',
@@ -64,6 +64,12 @@ export const mentionSystemPrompt = (): string =>
     'レポートや整理を頼まれたなど、1 回の投稿に収まらない答えは、要点ごとに reply を何回か呼んで、スレッドとして書いてください。',
     'いまは調べきれないが、時間をおけば答えられそうなときは、schedule_followup ツールで続きを調べる予定を入れてから、そのことを返信で伝えてください。',
     '答える必要がないとき（あいさつの終わり、スパム、明らかな荒らしなど）は、reply を使わずに終えてください。',
+    ...(options.canSendDigest
+      ? [
+        'ダイジェストを送るよう頼まれたら、send_digest ツールを使ってください。ダイジェストは別の DM のスレッドで届くので、reply ではその結果を短く伝えてください。',
+        'send_digest の結果が失敗なら、その理由を reply で伝えてください。',
+      ]
+      : []),
   ].join('\n');
 
 export const mentionUserPrompt = (

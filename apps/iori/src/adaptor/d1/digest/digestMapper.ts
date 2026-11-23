@@ -6,7 +6,16 @@ import { digestItemsTable, digestTrendsTable, digestXPostsTable } from '../schem
 
 export const reconstructDigest = async (db: IoriD1Db, header: DigestHeader): Promise<Digest> => {
   const [items, trends, xPosts] = await Promise.all([
-    db.select().from(digestItemsTable)
+    db.select({
+      digestItemId: digestItemsTable.digestItemId,
+      feedEntryId: digestItemsTable.feedEntryId,
+      url: digestItemsTable.url,
+      title: digestItemsTable.title,
+      rank: digestItemsTable.rank,
+      score: digestItemsTable.score,
+      summary: digestItemsTable.summary,
+      reasonInterestSourceId: digestItemsTable.reasonInterestSourceId,
+    }).from(digestItemsTable)
       .where(eq(digestItemsTable.digestId, header.digestId))
       .orderBy(asc(digestItemsTable.rank)),
     db.select().from(digestTrendsTable)
@@ -18,10 +27,7 @@ export const reconstructDigest = async (db: IoriD1Db, header: DigestHeader): Pro
   ]);
   return Digest.parseOrThrow({
     ...header,
-    items: items.map(({ feedbackAt, ...item }) => ({
-      ...item,
-      feedbackAt: feedbackAt === null ? null : feedbackAt.getTime(),
-    })),
+    items,
     trends: trends.map(({ digestId: _digestId, ...trend }) => trend),
     xPostFeedEntryIds: xPosts.map((post) => post.feedEntryId),
   });

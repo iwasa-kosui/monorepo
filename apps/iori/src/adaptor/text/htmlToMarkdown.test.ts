@@ -1,28 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildDigestBodies } from '../../domain/digest/digestBody.ts';
 import { PostContent } from '../../domain/post/postContent.ts';
 import { htmlToMarkdown } from './htmlToMarkdown.ts';
 
-const digest = buildDigestBodies({
-  radar: undefined,
-  recommendations: [
-    {
-      title: 'First article',
-      url: 'https://example.com/first',
-      summary: '一行目\n二行目',
-      fromHatena: false,
-      reason: { scope: 'kosui', label: 'https://kosui.me/posts/a', url: 'https://kosui.me/posts/a' },
-    },
-    { title: 'Second article', url: 'https://example.com/second', summary: null, fromHatena: false, reason: null },
-  ],
-  timelineTrends: [],
-  hatenaTrends: [],
-});
+const listHtml = '<h2>あなたへのおすすめ</h2><ul>'
+  + '<li><a href="https://example.com/first">First article</a><br>一行目<br>二行目'
+  + '<br>関心の根拠: <a href="https://kosui.me/posts/a">https://kosui.me/posts/a</a></li>'
+  + '<li><a href="https://example.com/second">Second article</a></li></ul>';
 
 describe('htmlToMarkdown', () => {
-  it('ダイジェストの本文を見出しと箇条書きとリンクの Markdown にする', () => {
-    expect(htmlToMarkdown(digest.privateHtml)).toBe(
+  it('見出し、箇条書き、リンクを Markdown にする', () => {
+    expect(htmlToMarkdown(listHtml)).toBe(
       [
         '## あなたへのおすすめ',
         '',
@@ -36,7 +24,7 @@ describe('htmlToMarkdown', () => {
   });
 
   it('変換した Markdown を HTML に戻しても見出し、リンク、箇条書き、改行が残る', async () => {
-    const html = await PostContent.fromMarkdown(htmlToMarkdown(digest.privateHtml));
+    const html = await PostContent.fromMarkdown(htmlToMarkdown(listHtml));
 
     expect(html).toContain('<h2>あなたへのおすすめ</h2>');
     expect(html).toContain('<a href="https://example.com/first">First article</a>');

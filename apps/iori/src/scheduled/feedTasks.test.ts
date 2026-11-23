@@ -1,4 +1,4 @@
-import { RA } from '@iwasa-kosui/result';
+import { RA, Result } from '@iwasa-kosui/result';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMastodonSeed } from '../adaptor/d1/__tests__/mastodonSeed.ts';
@@ -6,7 +6,8 @@ import { createSqliteD1Fixture } from '../adaptor/d1/__tests__/sqliteFixture.ts'
 import { defaultFeedSources } from '../domain/feedSource/defaultFeedSources.ts';
 import { EMBEDDING_DIMENSIONS } from '../domain/interestSource/embedding.ts';
 import { float32ToBytes } from '../domain/interestSource/embeddingBytes.ts';
-import { createDailyDigestTask } from './digestTasks.ts';
+import { PostId } from '../domain/post/postId.ts';
+import { createDailyDigestTaskFrom } from './digestTasks.ts';
 import { collectFeedsTask } from './feedTasks.ts';
 import { type ScheduledTaskContext } from './scheduledTasks.ts';
 
@@ -250,6 +251,13 @@ describe('collectFeedsTask', () => {
 
     await collectFeedsTask.run(t.context(COLLECT_TIME));
     vi.setSystemTime(DIGEST_TIME);
+    const createDailyDigestTask = createDailyDigestTaskFrom(async () => ({
+      dmSender: {
+        sendSummary: async () => Result.ok(PostId.generate()),
+        sendReply: async () => Result.ok(PostId.generate()),
+      },
+      deletePost: async () => Result.ok(undefined),
+    }));
     await createDailyDigestTask.run(t.context(DIGEST_TIME));
 
     const items = t.fixture.sqlite.prepare('SELECT title, score FROM digest_items').all() as Array<

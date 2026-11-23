@@ -5,8 +5,6 @@ import type { LocalActor } from '../../domain/actor/localActor.ts';
 import type { Article, ArticleResolver, ArticleWithDependentsDeletedStore } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
 import type { ArticleBody, ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
-import type { DigestHeader, DigestHeaderResolverByArticleId } from '../../domain/digest/digest.ts';
-import { DigestId } from '../../domain/digest/digestId.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { User } from '../../domain/user/user.ts';
@@ -19,7 +17,7 @@ import {
   createMockUserResolver,
 } from './helper/mockAdaptors.ts';
 
-const setup = (options: Readonly<{ hasBody: boolean; hasDigest: boolean }>) => {
+const setup = (options: Readonly<{ hasBody: boolean }>) => {
   const user: User = { id: crypto.randomUUID() as User['id'], username: 'kosui' as Username };
   const session: Session = {
     sessionId: crypto.randomUUID() as Session['sessionId'],
@@ -39,7 +37,7 @@ const setup = (options: Readonly<{ hasBody: boolean; hasDigest: boolean }>) => {
     authorActorId: actor.id,
     authorUserId: user.id,
     rootPostId: null,
-    title: 'Digest',
+    title: 'Draft',
     status: 'draft',
     createdAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
     publishedAt: null,
@@ -51,16 +49,6 @@ const setup = (options: Readonly<{ hasBody: boolean; hasDigest: boolean }>) => {
     publicHtml: '<p>public</p>',
     markdown: null,
     updatedAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
-  };
-  const digestHeader: DigestHeader = {
-    digestId: DigestId.generate(),
-    userId: user.id,
-    digestDate: '2026-08-05',
-    articleId: article.articleId,
-    createdAt: Instant.orThrow(Date.parse('2026-08-05T00:00:00.000Z')),
-    pushSentAt: null,
-    trigger: 'scheduled',
-    topicKey: 'summary',
   };
   const sessionResolver = createMockSessionResolver();
   sessionResolver.setSession(session);
@@ -74,11 +62,6 @@ const setup = (options: Readonly<{ hasBody: boolean; hasDigest: boolean }>) => {
   const articleBodyResolver: ArticleBodyResolver = {
     resolve: vi.fn(async () => RA.ok(options.hasBody ? body : undefined)) as unknown as ArticleBodyResolver['resolve'],
   };
-  const digestHeaderResolverByArticleId: DigestHeaderResolverByArticleId = {
-    resolve: vi.fn(async () =>
-      RA.ok(options.hasDigest ? digestHeader : undefined)
-    ) as unknown as DigestHeaderResolverByArticleId['resolve'],
-  };
   const articleWithDependentsDeletedStore: ArticleWithDependentsDeletedStore = {
     store: vi.fn(async () => RA.ok(undefined)),
   };
@@ -88,10 +71,9 @@ const setup = (options: Readonly<{ hasBody: boolean; hasDigest: boolean }>) => {
     actorResolverByUserId,
     articleResolver,
     articleBodyResolver,
-    digestHeaderResolverByArticleId,
     articleWithDependentsDeletedStore,
   };
-  return { deps, session, article, digestHeader, articleWithDependentsDeletedStore };
+  return { deps, session, article, articleWithDependentsDeletedStore };
 };
 
 describe('DeleteArticleUseCase', () => {
@@ -102,11 +84,8 @@ describe('DeleteArticleUseCase', () => {
       ctx: createMockRequestContext(),
     });
 
-  it('ダイジェストの article は、article、本文、digest の削除イベントを1回の store 呼び出しで渡す', async () => {
-    const { deps, session, article, digestHeader, articleWithDependentsDeletedStore } = setup({
-      hasBody: true,
-      hasDigest: true,
-    });
+  it('本文がある article は、article と本文の削除イベントを1回の store 呼び出しで渡す', async () => {
+    const { deps, session, article, articleWithDependentsDeletedStore } = setup({ hasBody: true });
 
     const result = await run(deps, session, article);
 
@@ -119,35 +98,17 @@ describe('DeleteArticleUseCase', () => {
         aggregateId: article.articleId,
         aggregateState: undefined,
       }),
-      expect.objectContaining({
-        eventName: 'digest.expired',
-        eventPayload: { digestId: digestHeader.digestId, digestDate: digestHeader.digestDate },
-      }),
     );
   });
 
-  it('本文だけある article は、digest の削除イベントを渡さない', async () => {
-    const { deps, session, article, articleWithDependentsDeletedStore } = setup({ hasBody: true, hasDigest: false });
+  it('本文がない article は article の削除イベントだけを渡す', async () => {
+    const { deps, session, article, articleWithDependentsDeletedStore } = setup({ hasBody: false });
 
     const result = await run(deps, session, article);
 
     expect(result.ok).toBe(true);
     expect(articleWithDependentsDeletedStore.store).toHaveBeenCalledWith(
       expect.objectContaining({ eventName: 'article.deleted' }),
-      expect.objectContaining({ eventName: 'articleBody.deleted' }),
-      undefined,
-    );
-  });
-
-  it('本文も digest もない article は article の削除イベントだけを渡す', async () => {
-    const { deps, session, article, articleWithDependentsDeletedStore } = setup({ hasBody: false, hasDigest: false });
-
-    const result = await run(deps, session, article);
-
-    expect(result.ok).toBe(true);
-    expect(articleWithDependentsDeletedStore.store).toHaveBeenCalledWith(
-      expect.objectContaining({ eventName: 'article.deleted' }),
-      undefined,
       undefined,
     );
   });

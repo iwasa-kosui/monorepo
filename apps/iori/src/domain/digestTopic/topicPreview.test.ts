@@ -224,7 +224,6 @@ describe('previewDigestItems', () => {
     rank: 1,
     title: 'T',
     url: 'https://example.com/t',
-    feedback: null,
     embedding,
   });
   const comparableTopics = [topic('a', vector(1, 0)), topic('b', vector(0, 1))];

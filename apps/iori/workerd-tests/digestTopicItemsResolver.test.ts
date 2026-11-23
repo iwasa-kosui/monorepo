@@ -22,17 +22,12 @@ const userIds = [USER_ID, OTHER_USER_ID];
 
 const addDigest = async (userId: UserId, digestDate: string, topicKey: string) => {
   const digestId = crypto.randomUUID();
-  const articleId = crypto.randomUUID();
   await env.DB.prepare(
-    'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
-  ).bind(articleId, ACTOR_IDS[userId], userId, null, 'title', 'draft', 1_000, null, null).run();
+    'INSERT INTO digests(digestId,userId,digestDate,postId,createdAt,topicKey) VALUES (?,?,?,?,?,?)',
+  ).bind(digestId, userId, digestDate, crypto.randomUUID(), 2_000, topicKey).run();
   await env.DB.prepare(
-    'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt,topicKey) VALUES (?,?,?,?,?,?,?)',
-  ).bind(digestId, userId, digestDate, articleId, 2_000, null, topicKey).run();
-  await env.DB.prepare(
-    'INSERT INTO digest_items(digestItemId,digestId,feedEntryId,url,title,rank,score,summary,reasonInterestSourceId,feedback) VALUES (?,?,?,?,?,?,?,?,?,?)',
-  ).bind(crypto.randomUUID(), digestId, ENTRY_ID, 'https://example.com/a', 'A', 1, null, null, null, 'interested')
-    .run();
+    'INSERT INTO digest_items(digestItemId,digestId,feedEntryId,url,title,rank) VALUES (?,?,?,?,?,?)',
+  ).bind(crypto.randomUUID(), digestId, ENTRY_ID, 'https://example.com/a', 'A', 1).run();
 };
 
 const clean = () =>
@@ -41,7 +36,6 @@ const clean = () =>
       `DELETE FROM digest_items WHERE digestId IN (SELECT digestId FROM digests WHERE userId IN (?, ?))`,
     ).bind(...userIds),
     env.DB.prepare('DELETE FROM digests WHERE userId IN (?, ?)').bind(...userIds),
-    env.DB.prepare('DELETE FROM articles WHERE authorUserId IN (?, ?)').bind(...userIds),
     env.DB.prepare('DELETE FROM local_actors WHERE userId IN (?, ?)').bind(...userIds),
     env.DB.prepare('DELETE FROM actors WHERE actorId IN (?, ?)').bind(...Object.values(ACTOR_IDS)),
     env.DB.prepare('DELETE FROM users WHERE userId IN (?, ?)').bind(...userIds),
@@ -89,7 +83,6 @@ describe('preview resolvers on workerd D1', () => {
       topicKey: 'genai',
       rank: 1,
       title: 'A',
-      feedback: 'interested',
     });
     expect(resolved.val[0]!.embedding?.[0]).toBe(1);
   });

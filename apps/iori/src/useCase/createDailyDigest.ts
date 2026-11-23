@@ -2,33 +2,23 @@ import { RA } from '@iwasa-kosui/result';
 
 import type { SafeFetcher } from '../adaptor/http/safeFetch.ts';
 import { htmlToPlainText } from '../adaptor/text/htmlToPlainText.ts';
-import type { WebPushSender } from '../adaptor/webPush/webPush.ts';
-import {
-  Article,
-  ArticleNotFoundError,
-  type ArticleResolver,
-  type ArticleWithDependentsDeletedStore,
-  type DraftArticleWithDependentsDeletedStore,
-} from '../domain/article/article.ts';
-import type { ArticleId } from '../domain/article/articleId.ts';
-import { ArticleBody, type ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
 import {
   Digest,
-  DigestAlreadyPublishedError,
+  type DigestCreated,
   type DigestCreatedStore,
-  DigestDraftEditedError,
+  type DigestDmSender,
   type DigestHeadersResolverByUserIdAndDigestDate,
   type DigestItemUrlsResolverByUserId,
   type DigestParseError,
-  type DigestPushSentStore,
   DigestTopicsUnavailableError,
   type DigestTrigger,
   type LatestDigestHeaderResolverByUserId,
   SUMMARY_DIGEST_TOPIC_KEY,
 } from '../domain/digest/digest.ts';
 import {
-  buildDigestBodies,
-  buildSummaryBodies,
+  buildSummaryDmHtml,
+  buildTopicDmHtml,
+  buildXPostsDmHtml,
   type DigestBodyReason,
   type DigestBodyRecommendation,
 } from '../domain/digest/digestBody.ts';
@@ -48,7 +38,7 @@ import { assignTopics, TopicAssignmentPolicy } from '../domain/digestTopic/topic
 import type { FeedEntry } from '../domain/feedEntry/feedEntry.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { InterestSourceId } from '../domain/interestSource/interestSourceId.ts';
-import type { PushSubscriptionsResolverByUserId } from '../domain/pushSubscription/pushSubscription.ts';
+import type { PostId } from '../domain/post/postId.ts';
 import {
   type InterestVectorsResolverByUserId,
   type RecommendableArticle,
@@ -56,14 +46,11 @@ import {
   Recommendation,
   type StoredInterestVector,
 } from '../domain/recommendation/recommendation.ts';
-import type { UserNotFoundError } from '../domain/user/user.ts';
 import type { UserId } from '../domain/user/userId.ts';
 import type { TextGenerator } from '../ports/textGenerator.ts';
 import { runWithConcurrency } from './collectFeedEntries.ts';
-import type { CreateArticleWithBodyUseCase } from './createArticleWithBody.ts';
 import type { EnsureDefaultDigestTopicsUseCase } from './ensureDefaultDigestTopics.ts';
 import { fetchArticleBodyText } from './helper/fetchArticleBodyText.ts';
-import { resolveReplaceableDigests } from './helper/resolveReplaceableDigests.ts';
 import type { IsDigestOwner } from './isDigestOwner.ts';
 import type { UseCase } from './useCase.ts';
 
@@ -99,15 +86,13 @@ type Ok = Readonly<{
   trigger: DigestTrigger;
   digestDate: string;
   digestId?: DigestId;
-  articleId?: ArticleId;
-  replaced: boolean;
+  postId?: PostId;
   durationMs: number;
   topics: number;
   items: number;
   trends: number;
   xPosts: number;
   summarized: number;
-  pushed: number;
   skippedReason?: string;
   recommendation: Readonly<{
     materials: number;
@@ -123,30 +108,39 @@ type Ok = Readonly<{
   }>;
 }>;
 
+export type DigestSendFailedError = Readonly<{
+  type: 'DigestSendFailedError';
+  message: string;
+}>;
+
+export const DigestSendFailedError = {
+  create: (cause: string): DigestSendFailedError => ({
+    type: 'DigestSendFailedError',
+    message: `Sending the digest summary DM failed: ${cause}`,
+  }),
+} as const;
+
 type DigestStoreFailedError = Readonly<{
   type: 'DigestStoreFailedError';
   message: string;
-  detail: { articleIds: ReadonlyArray<ArticleId> };
+  detail: { postIds: ReadonlyArray<PostId> };
 }>;
 
 const DigestStoreFailedError = {
-  create: (articleIds: ReadonlyArray<ArticleId>, cause: unknown): DigestStoreFailedError => ({
+  create: (postIds: ReadonlyArray<PostId>, cause: unknown): DigestStoreFailedError => ({
     type: 'DigestStoreFailedError',
-    message: `Storing the digests failed after the articles "${articleIds.join('", "')}" were created: ${
+    message: `Storing the digests failed after the DMs "${postIds.join('", "')}" were sent: ${
       cause instanceof Error ? cause.message : String(cause)
     }`,
-    detail: { articleIds },
+    detail: { postIds },
   }),
 } as const;
 
 type Err =
-  | UserNotFoundError
   | DigestParseError
   | DigestStoreFailedError
-  | DigestAlreadyPublishedError
-  | DigestDraftEditedError
-  | DigestTopicsUnavailableError
-  | ArticleNotFoundError;
+  | DigestSendFailedError
+  | DigestTopicsUnavailableError;
 
 export type CreateDailyDigestUseCase = UseCase<Input, Ok, Err>;
 
@@ -156,10 +150,6 @@ type Deps = Readonly<{
   latestDigestHeaderResolverByUserId: LatestDigestHeaderResolverByUserId;
   digestItemUrlsResolverByUserId: DigestItemUrlsResolverByUserId;
   ensureDefaultDigestTopicsUseCase: EnsureDefaultDigestTopicsUseCase;
-  articleResolver: ArticleResolver;
-  articleBodyResolver: ArticleBodyResolver;
-  articleWithDependentsDeletedStore: ArticleWithDependentsDeletedStore;
-  draftArticleWithDependentsDeletedStore: DraftArticleWithDependentsDeletedStore;
   radarFeedEntriesResolverByFetchedSince: RadarFeedEntriesResolverByFetchedSince;
   hatenaTrendsResolverByFetchedSince: HatenaTrendsResolverByFetchedSince;
   timelineLinkTrendsResolverByUserId: TimelineLinkTrendsResolverByUserId;
@@ -169,11 +159,8 @@ type Deps = Readonly<{
   recommendableArticlesResolverByFetchedSince: RecommendableArticlesResolverByFetchedSince;
   safeFetcher: Pick<SafeFetcher, 'fetchText'>;
   textGenerator: TextGenerator | undefined;
-  createArticleWithBodyUseCase: CreateArticleWithBodyUseCase;
+  digestDmSender: DigestDmSender;
   digestCreatedStore: DigestCreatedStore;
-  digestPushSentStore: DigestPushSentStore;
-  pushSubscriptionsResolverByUserId: PushSubscriptionsResolverByUserId;
-  webPushSender: WebPushSender;
   topicAssignmentPolicy?: TopicAssignmentPolicy;
   now: () => Instant;
   sleep: (ms: number) => Promise<void>;
@@ -279,10 +266,6 @@ const create = ({
   latestDigestHeaderResolverByUserId,
   digestItemUrlsResolverByUserId,
   ensureDefaultDigestTopicsUseCase,
-  articleResolver,
-  articleBodyResolver,
-  articleWithDependentsDeletedStore,
-  draftArticleWithDependentsDeletedStore,
   radarFeedEntriesResolverByFetchedSince,
   hatenaTrendsResolverByFetchedSince,
   timelineLinkTrendsResolverByUserId,
@@ -292,11 +275,8 @@ const create = ({
   recommendableArticlesResolverByFetchedSince,
   safeFetcher,
   textGenerator,
-  createArticleWithBodyUseCase,
+  digestDmSender,
   digestCreatedStore,
-  digestPushSentStore,
-  pushSubscriptionsResolverByUserId,
-  webPushSender,
   topicAssignmentPolicy = TopicAssignmentPolicy.default,
   now,
   sleep,
@@ -335,22 +315,6 @@ const create = ({
     return summary === '' ? null : summary;
   };
 
-  const deleteDraftArticle = async (articleId: ArticleId): Promise<void> => {
-    const deletedAt = now();
-    try {
-      await articleWithDependentsDeletedStore.store(
-        Article.deleteArticle(deletedAt)(articleId),
-        ArticleBody.deleteArticleBody(deletedAt)(articleId),
-        undefined,
-      );
-    } catch (error) {
-      console.error('iori digest: deleting the article left by the failed digest failed.', {
-        articleId,
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-    }
-  };
-
   const run = async ({ userId, trigger }: Input) => {
     const startedAt = now();
     const deadline = trigger === 'requested' ? startedAt + REQUESTED_DEADLINE_MS : undefined;
@@ -360,7 +324,6 @@ const create = ({
       status: 'skipped',
       trigger,
       digestDate,
-      replaced: false,
       ...(skippedReason === undefined ? {} : { skippedReason }),
       durationMs: now() - startedAt,
       topics: 0,
@@ -368,7 +331,6 @@ const create = ({
       trends: 0,
       xPosts: 0,
       summarized: 0,
-      pushed: 0,
       recommendation: {
         materials: 0,
         candidates: 0,
@@ -383,39 +345,12 @@ const create = ({
       },
     });
 
-    const notReplaceable = () =>
-      trigger === 'scheduled' ? RA.ok(skipped()) : RA.err(DigestAlreadyPublishedError.create(digestDate));
-
-    const editedDraft = () => {
-      if (trigger === 'scheduled') {
-        console.info('iori digest: the draft was edited, so generation was skipped.', { digestDate });
-        return RA.ok(skipped());
-      }
-      return RA.err(DigestDraftEditedError.create(digestDate));
-    };
-
-    const existing = await resolveReplaceableDigests(
-      { digestHeadersResolverByUserIdAndDigestDate, articleResolver, articleBodyResolver },
-      { userId, digestDate },
-    );
-    if (existing.missingArticleId !== undefined) {
-      return trigger === 'scheduled'
-        ? RA.ok(skipped())
-        : RA.err(ArticleNotFoundError.create(existing.missingArticleId));
-    }
-    if (trigger === 'scheduled' && existing.existing.some((header) => header.trigger !== 'requested')) {
-      return RA.ok(skipped());
-    }
-    if (existing.blockedBy === 'edited') return editedDraft();
-    if (existing.blockedBy === 'published') return notReplaceable();
-
     if (trigger === 'scheduled') {
+      const existing = await digestHeadersResolverByUserIdAndDigestDate.resolve({ userId, digestDate });
+      if (existing.val.some((header) => header.trigger === 'scheduled')) return RA.ok(skipped());
       const subscription = await digestSubscriptionResolverByUserId.resolve(userId);
       if (subscription.val !== undefined && !subscription.val.enabled) return RA.ok(skipped());
     }
-
-    const keptTopicKeys: ReadonlySet<string> = new Set(existing.kept.map((header) => header.topicKey));
-    const keptTopicHeaders = existing.kept;
 
     const ensured = await ensureDefaultDigestTopicsUseCase.run({ userId });
     const enabledTopics = ensured.val.topics.filter((topic) => topic.enabled);
@@ -459,10 +394,7 @@ const create = ({
           ? xPostsResolverByFetchedSince.resolve({ fetchedSince: since, limit: X_POSTS_CANDIDATE_LIMIT })
           : RA.ok<ReadonlyArray<XPost>>([]),
         interestVectorsResolverByUserId.resolve(userId),
-        digestItemUrlsResolverByUserId.resolve({
-          userId,
-          excludingDigestIds: existing.replaceable.map((header) => header.digestId),
-        }),
+        digestItemUrlsResolverByUserId.resolve({ userId, excludingDigestIds: [] }),
         recommendableArticlesResolverByFetchedSince.resolve({ fetchedSince }),
       ]);
     const radar = radarEntries.val[0];
@@ -492,7 +424,6 @@ const create = ({
       (assignment.matches.get(article) ?? olderAssignment.matches.get(article))!.similarity;
     const selections: TopicSelection[] = [];
     for (const topic of topics) {
-      if (keptTopicKeys.has(topic.topicKey)) continue;
       const assigned = assignedByTopic.get(topic.topicKey) ?? [];
       const ranked = hasPositiveMaterial
         ? Recommendation.scoreArticles({ materials, articles: assigned, now: startedAt, limit: assigned.length })
@@ -511,7 +442,7 @@ const create = ({
     }
     const scoringMs = Date.now() - scoringStartedAt;
     selections.sort((a, b) => b.eligibleCount - a.eligibleCount || a.topic.sortOrder - b.topic.sortOrder);
-    const chosen = takeTopicsIncludingTies(selections, Math.max(0, TOPICS_PER_DAY_LIMIT - keptTopicHeaders.length));
+    const chosen = takeTopicsIncludingTies(selections, TOPICS_PER_DAY_LIMIT);
 
     const selectedItems = chosen.flatMap((selection) => selection.items);
     let fetchedBodies = 0;
@@ -568,62 +499,68 @@ const create = ({
       };
     };
 
-    const createdArticleIds: ArticleId[] = [];
-    const discardCreatedArticles = async () => {
-      for (const articleId of createdArticleIds) await deleteDraftArticle(articleId);
-    };
-    const createArticle = async (title: string, bodies: Readonly<{ privateHtml: string; publicHtml: string }>) => {
-      const article = await createArticleWithBodyUseCase.run({ userId, title, ...bodies });
-      if (article.ok) createdArticleIds.push(article.val.article.articleId);
-      return article;
-    };
+    const summarySent = await digestDmSender.sendSummary({
+      ownerUserId: userId,
+      html: buildSummaryDmHtml({
+        radar,
+        topics: chosen.map(({ topic }) => ({ name: topic.name })),
+        timelineTrends: timelineTrends.val,
+        hatenaTrends: hatenaTrends.val,
+      }),
+    });
+    if (!summarySent.ok) {
+      console.error('iori digest: sending the summary DM failed.', { digestDate, errorMessage: summarySent.err });
+      return RA.err(DigestSendFailedError.create(summarySent.err));
+    }
+    const summaryPostId = summarySent.val;
 
-    const topicDigests: Array<Readonly<{ selection: TopicSelection; articleId: ArticleId }>> = [];
+    const sentTopics: Array<Readonly<{ selection: TopicSelection; postId: PostId }>> = [];
+    let replyFailed = false;
     for (const selection of chosen) {
-      const article = await createArticle(
-        `${selection.topic.name}のダイジェスト ${digestDate}`,
-        buildDigestBodies({
+      const reply = await digestDmSender.sendReply({
+        ownerUserId: userId,
+        parentPostId: summaryPostId,
+        html: buildTopicDmHtml({
+          topicName: selection.topic.name,
           radar: undefined,
           recommendations: selection.items.map(toRecommendation),
           timelineTrends: [],
           hatenaTrends: [],
         }),
-      );
-      if (!article.ok) {
-        await discardCreatedArticles();
-        return article;
+      });
+      if (!reply.ok) {
+        console.error('iori digest: sending a topic DM failed.', {
+          digestDate,
+          topicKey: selection.topic.topicKey,
+          errorMessage: reply.err,
+        });
+        replyFailed = true;
+        break;
       }
-      topicDigests.push({ selection, articleId: article.val.article.articleId });
+      sentTopics.push({ selection, postId: reply.val });
     }
 
-    const topicNameByKey = new Map(enabledTopics.map((topic) => [topic.topicKey, topic.name]));
-    const summaryArticle = await createArticle(
-      `技術ニュースのまとめ ${digestDate}`,
-      buildSummaryBodies({
-        radar,
-        topics: [
-          ...keptTopicHeaders.map((header) => ({
-            name: topicNameByKey.get(header.topicKey) ?? header.topicKey,
-            articleId: header.articleId,
-          })),
-          ...topicDigests.map(({ selection, articleId }) => ({ name: selection.topic.name, articleId })),
-        ],
-        timelineTrends: timelineTrends.val,
-        hatenaTrends: hatenaTrends.val,
-      }),
-    );
-    if (!summaryArticle.ok) {
-      await discardCreatedArticles();
-      return summaryArticle;
+    let xPostsPostId: PostId | null = null;
+    if (!replyFailed && xPosts.length > 0) {
+      const reply = await digestDmSender.sendReply({
+        ownerUserId: userId,
+        parentPostId: summaryPostId,
+        html: buildXPostsDmHtml(xPosts),
+      });
+      if (reply.ok) {
+        xPostsPostId = reply.val;
+      } else {
+        console.error('iori digest: sending the X posts DM failed.', { digestDate, errorMessage: reply.err });
+      }
     }
-    const summaryArticleId = summaryArticle.val.article.articleId;
 
-    const createdEvents = [];
-    for (const { selection, articleId } of topicDigests) {
+    const createdEvents: DigestCreated[] = [];
+    for (const { selection, postId } of sentTopics) {
       const created = Digest.create({
         userId,
         digestDate,
-        articleId,
+        postId,
+        xPostsPostId: null,
         trigger,
         topicKey: selection.topic.topicKey,
         items: selection.items.map((item, index) => ({
@@ -634,22 +571,18 @@ const create = ({
           score: item.score,
           summary: summaryByFeedEntryId.get(item.article.feedEntryId) ?? null,
           reasonInterestSourceId: item.reasonInterestSourceId,
-          feedback: null,
-          feedbackAt: null,
         })),
         trends: [],
         xPostFeedEntryIds: [],
       }, now());
-      if (!created.ok) {
-        await discardCreatedArticles();
-        return created;
-      }
+      if (!created.ok) return created;
       createdEvents.push(created.val);
     }
     const summaryCreated = Digest.create({
       userId,
       digestDate,
-      articleId: summaryArticleId,
+      postId: summaryPostId,
+      xPostsPostId,
       trigger,
       topicKey: SUMMARY_DIGEST_TOPIC_KEY,
       items: [],
@@ -657,106 +590,53 @@ const create = ({
         ...hatenaTrends.val.map((trend, index) => ({ kind: 'hatena' as const, rank: index + 1, ...trend })),
         ...timelineTrends.val.map((trend, index) => ({ kind: 'timeline_link' as const, rank: index + 1, ...trend })),
       ],
-      xPostFeedEntryIds: xPosts.map((post) => post.feedEntryId),
+      xPostFeedEntryIds: xPostsPostId === null ? [] : xPosts.map((post) => post.feedEntryId),
     }, now());
-    if (!summaryCreated.ok) {
-      await discardCreatedArticles();
-      return summaryCreated;
-    }
+    if (!summaryCreated.ok) return summaryCreated;
     createdEvents.push(summaryCreated.val);
-
-    const replacedAt = now();
-    for (const header of existing.replaceable) {
-      const replacingArticle = await articleResolver.resolve(header.articleId);
-      if (replacingArticle.val?.status !== 'draft') {
-        await discardCreatedArticles();
-        return notReplaceable();
-      }
-      const body = await articleBodyResolver.resolve(header.articleId);
-      if (Article.isBodyEdited(replacingArticle.val, body.val)) {
-        await discardCreatedArticles();
-        return editedDraft();
-      }
-      const deleted = await draftArticleWithDependentsDeletedStore.store(
-        Article.deleteArticle(replacedAt)(header.articleId),
-        body.val === undefined ? undefined : ArticleBody.deleteArticleBody(replacedAt)(header.articleId),
-        Digest.expire(header, replacedAt),
-      );
-      if (!deleted.val.deleted) {
-        await discardCreatedArticles();
-        return notReplaceable();
-      }
-    }
 
     try {
       await digestCreatedStore.store(...createdEvents);
     } catch (error) {
-      const storeFailed = DigestStoreFailedError.create(createdArticleIds, error);
-      console.error('iori digest: storing the digests failed after the articles were created.', {
-        articleIds: createdArticleIds,
+      const sentPostIds = [
+        summaryPostId,
+        ...sentTopics.map(({ postId }) => postId),
+        ...(xPostsPostId === null ? [] : [xPostsPostId]),
+      ];
+      const storeFailed = DigestStoreFailedError.create(sentPostIds, error);
+      console.error('iori digest: storing the digests failed after the DMs were sent.', {
+        postIds: sentPostIds,
         errorMessage: storeFailed.message,
       });
-      await discardCreatedArticles();
       return RA.err(storeFailed);
     }
     const summaryDigest = summaryCreated.val.aggregateState;
-    const durationMs = now() - startedAt;
 
-    const createdOk = (pushed: number) =>
-      RA.ok<Ok>({
-        status: 'created',
-        trigger,
-        digestDate,
-        digestId: summaryDigest.digestId,
-        articleId: summaryDigest.articleId,
-        replaced: existing.replaceable.length > 0,
-        durationMs,
-        topics: topicDigests.length,
-        items: selectedItems.length,
-        trends: summaryDigest.trends.length,
-        xPosts: xPosts.length,
-        summarized,
-        pushed,
-        recommendation: {
-          materials: materials.length,
-          candidates: countedCandidates,
-          selected: selectedItems.length,
-          scoringMs,
-          fetchedBodies,
-          fallbackToDescription,
-          assignedToTopics: countedCandidates - assignment.others.length,
-          belowMinSimilarity: assignment.otherCounts.belowMinSimilarity,
-          belowMinMargin: assignment.otherCounts.belowMinMargin,
-          excluded: assignment.otherCounts.excluded,
-        },
-      });
-    if (trigger === 'requested') return createdOk(0);
-
-    const pushSubscriptions = await pushSubscriptionsResolverByUserId.resolve(userId);
-    const payload = {
-      title: '今日のダイジェスト',
-      body: `${
-        radar === undefined ? '' : 'Radar の新しい版と'
-      }トピック ${topicDigests.length} 本、おすすめ ${selectedItems.length} 件`,
-      url: `/articles/${summaryDigest.articleId}`,
-    };
-    const sent = await Promise.all(pushSubscriptions.val.map(async (pushSubscription) => {
-      const result = await webPushSender.send(pushSubscription, payload);
-      if (!result.ok) {
-        console.error('iori digest: sending a web push failed.', {
-          subscriptionId: pushSubscription.subscriptionId,
-          errorMessage: result.err.message,
-          statusCode: result.err.statusCode,
-        });
-      }
-      return result.ok;
-    }));
-    const pushed = sent.filter(Boolean).length;
-    if (pushed > 0 || pushSubscriptions.val.length === 0) {
-      await digestPushSentStore.store(Digest.recordPushSent(summaryDigest, now()));
-    }
-
-    return createdOk(pushed);
+    return RA.ok<Ok>({
+      status: 'created',
+      trigger,
+      digestDate,
+      digestId: summaryDigest.digestId,
+      postId: summaryPostId,
+      durationMs: now() - startedAt,
+      topics: sentTopics.length,
+      items: sentTopics.reduce((total, { selection }) => total + selection.items.length, 0),
+      trends: summaryDigest.trends.length,
+      xPosts: xPostsPostId === null ? 0 : xPosts.length,
+      summarized,
+      recommendation: {
+        materials: materials.length,
+        candidates: countedCandidates,
+        selected: selectedItems.length,
+        scoringMs,
+        fetchedBodies,
+        fallbackToDescription,
+        assignedToTopics: countedCandidates - assignment.others.length,
+        belowMinSimilarity: assignment.otherCounts.belowMinSimilarity,
+        belowMinMargin: assignment.otherCounts.belowMinMargin,
+        excluded: assignment.otherCounts.excluded,
+      },
+    });
   };
 
   return { run };

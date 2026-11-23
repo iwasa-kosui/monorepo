@@ -17,15 +17,21 @@ const setup = () => {
     createdAt: number,
     trigger = 'scheduled',
     topicKey = 'summary',
+    legacy = false,
   ) => {
     const digestId = crypto.randomUUID();
-    const articleId = crypto.randomUUID();
     fixture.sqlite.prepare(
-      'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
-    ).run(articleId, owner.actorId, owner.userId, null, 'title', 'draft', 1_000, null, null);
-    fixture.sqlite.prepare(
-      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt,trigger,topicKey) VALUES (?,?,?,?,?,?,?,?)',
-    ).run(digestId, owner.userId, digestDate, articleId, createdAt, null, trigger, topicKey);
+      'INSERT INTO digests(digestId,userId,digestDate,articleId,postId,createdAt,trigger,topicKey) VALUES (?,?,?,?,?,?,?,?)',
+    ).run(
+      digestId,
+      owner.userId,
+      digestDate,
+      legacy ? crypto.randomUUID() : null,
+      legacy ? null : crypto.randomUUID(),
+      createdAt,
+      trigger,
+      topicKey,
+    );
     return DigestId.orThrow(digestId);
   };
   return { db: fixture.db, me, other, addDigest };
@@ -65,5 +71,18 @@ describe('createD1LatestDigestHeaderResolverByUserId', () => {
     });
 
     expect(result.ok && result.val?.digestId).toBe(previous);
+  });
+
+  it('postId が NULL の旧 digest は、より新しくても返さない', async () => {
+    const { db, me, addDigest } = setup();
+    const current = addDigest(me, '2026-11-03', 1_000);
+    addDigest(me, '2026-11-04', 3_000, 'scheduled', 'summary', true);
+
+    const result = await createD1LatestDigestHeaderResolverByUserId(db).resolve({
+      userId: UserId.orThrow(me.userId),
+      digestDateBefore: '2026-11-05',
+    });
+
+    expect(result.ok && result.val?.digestId).toBe(current);
   });
 });

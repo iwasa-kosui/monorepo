@@ -5,8 +5,7 @@ import { Schema } from '../../helper/schema.ts';
 import { ActorId } from '../actor/actorId.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
-import type { ArticleBody, ArticleBodyDeleted, ArticleBodyWritten } from '../articleBody/articleBody.ts';
-import type { DigestExpired } from '../digest/digest.ts';
+import type { ArticleBodyDeleted, ArticleBodyWritten } from '../articleBody/articleBody.ts';
 import { Instant } from '../instant/instant.ts';
 import { PostId } from '../post/postId.ts';
 import { UserId } from '../user/userId.ts';
@@ -123,9 +122,6 @@ const changeArticleTitle =
     };
   };
 
-const isBodyEdited = (article: Pick<Article, 'createdAt'>, body: Pick<ArticleBody, 'updatedAt'> | undefined): boolean =>
-  body !== undefined && body.updatedAt > article.createdAt;
-
 const deleteArticle = (now: Instant) => (articleId: ArticleId): ArticleDeleted => {
   return ArticleEvent.create(articleId, undefined, 'article.deleted', { articleId, deletedAt: now }, now);
 };
@@ -136,7 +132,6 @@ export const Article = {
   publishArticle,
   unpublishArticle,
   changeArticleTitle,
-  isBodyEdited,
   deleteArticle,
 } as const;
 
@@ -158,15 +153,7 @@ export type ArticleWithDependentsDeletedStore = Readonly<{
   store: (
     articleDeleted: ArticleDeleted,
     bodyDeleted: ArticleBodyDeleted | undefined,
-    digestExpired: DigestExpired | undefined,
   ) => RA<void, never>;
-}>;
-export type DraftArticleWithDependentsDeletedStore = Readonly<{
-  store: (
-    articleDeleted: ArticleDeleted,
-    bodyDeleted: ArticleBodyDeleted | undefined,
-    digestExpired: DigestExpired,
-  ) => RA<{ deleted: boolean }, never>;
 }>;
 
 export type ArticleResolver = Agg.Resolver<ArticleId, Article | undefined>;

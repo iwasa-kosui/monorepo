@@ -11,7 +11,7 @@ import { collectBlueskyChatPushTask } from './blueskyChatPushTasks.ts';
 import { retryBlueskyCrosspostsTask } from './blueskyCrosspostTasks.ts';
 import { collectBlueskyNotificationsTask, expireBlueskyNotificationReceiptsTask } from './blueskyNotificationTasks.ts';
 import { collectBlueskyTimelineTask, expireBlueskyTimelineTask } from './blueskyTimelineTasks.ts';
-import { createDailyDigestTask, expireDigestsTask } from './digestTasks.ts';
+import { createDailyDigestTask, expireDigestsTask, removeExpiredDigestXPostsTask } from './digestTasks.ts';
 import { archiveDomainEventsTask } from './eventArchiveTasks.ts';
 import { pruneFederatedPostsTask } from './federatedPostTasks.ts';
 import { collectFeedsTask, detectRadarVolumeTask } from './feedTasks.ts';
@@ -60,7 +60,7 @@ export const scheduledTasks: ScheduledTaskTable = {
   ],
   '0 21 * * *': [syncKosuiInterestSourcesTask],
   '15 20 * * 1': [detectRadarVolumeTask],
-  '30 21 * * *': [createDailyDigestTask, expireDigestsTask],
+  '30 21 * * *': [createDailyDigestTask, expireDigestsTask, removeExpiredDigestXPostsTask],
   '0 19 * * *': [archiveDomainEventsTask],
 };
 

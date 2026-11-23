@@ -185,8 +185,7 @@ export default {
         app.get('/digest', async (c) => {
           const identity = await pageIdentity(c.req.raw, runtime);
           if (!identity.isLoggedIn) return c.redirect('/sign-in');
-          const latest = await runtime.digest.digestResolverByUserId.resolve(identity.userId);
-          return c.redirect(latest.ok && latest.val !== undefined ? `/articles/${latest.val.articleId}` : '/articles');
+          return c.redirect('/messages');
         });
         app.all('/__smoke__/*', (c) => c.notFound());
         app.route('/users', createWorkerRemoteFollowRedirectRouter());

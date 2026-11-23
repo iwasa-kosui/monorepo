@@ -2,7 +2,6 @@ import { RA } from '@iwasa-kosui/result';
 import { describe, expect, it } from 'vitest';
 
 import { createIoriApp } from '../../../appFactory.tsx';
-import { buildDigestBodies } from '../../../domain/digest/digestBody.ts';
 import { renderMarkdownToUnsanitizedHtml } from '../../../domain/post/postContent.ts';
 import { UserId } from '../../../domain/user/userId.ts';
 import { createMockRequestContext } from '../../../useCase/__tests__/helper/mockAdaptors.ts';
@@ -25,14 +24,10 @@ const json = { 'Content-Type': 'application/json' };
 const unused = { run: async () => RA.err({}) } as never;
 const CREATED_AT = 1_000;
 
-const digestBody = buildDigestBodies({
-  radar: undefined,
-  recommendations: [
-    { title: 'First', url: 'https://example.com/first', summary: '要約', fromHatena: false, reason: null },
-  ],
-  timelineTrends: [],
-  hatenaTrends: [],
-});
+const draftBody = {
+  privateHtml: '<h2>あなたへのおすすめ</h2><ul><li><a href="https://example.com/first">First</a><br>要約</li></ul>',
+  publicHtml: '<h2>あなたへのおすすめ</h2><ul><li><a href="https://example.com/first">First</a><br>要約</li></ul>',
+};
 
 const setup = () => {
   const harness = createOAuthHarness();
@@ -74,8 +69,8 @@ const setup = () => {
         'INSERT INTO article_bodies(articleId,privateHtml,publicHtml,markdown,updatedAt) VALUES (?,?,?,?,?)',
       ).run(
         articleId,
-        options.privateHtml ?? digestBody.privateHtml,
-        options.publicHtml ?? digestBody.publicHtml,
+        options.privateHtml ?? draftBody.privateHtml,
+        options.publicHtml ?? draftBody.publicHtml,
         options.markdown ?? null,
         CREATED_AT,
       );

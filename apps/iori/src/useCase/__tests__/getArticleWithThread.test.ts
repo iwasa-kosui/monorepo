@@ -5,8 +5,6 @@ import { ActorId } from '../../domain/actor/actorId.ts';
 import type { Article, ArticleResolver, ArticleStatus } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';
 import type { ArticleBody, ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
-import type { DigestXPost, DigestXPostsResolverByArticleId } from '../../domain/digest/digest.ts';
-import { XUsername } from '../../domain/feedSource/xUsername.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { PostWithAuthor, ThreadResolver } from '../../domain/post/post.ts';
 import { PostId } from '../../domain/post/postId.ts';
@@ -144,95 +142,6 @@ describe('GetArticleWithThreadUseCase', () => {
       });
 
       expect(result).toMatchObject({ ok: true, val: { body: { html: '<p>public</p>' } } });
-    });
-
-    describe('X の投稿', () => {
-      const xPostsOf = (...titles: string[]) =>
-        titles.map((title, index) => ({
-          username: XUsername.orThrow('jack'),
-          title,
-          url: `https://x.com/jack/status/${index + 1}`,
-        }));
-      const xNow = Instant.orThrow(Date.parse('2026-11-08T00:00:00.000Z'));
-      const createXDeps = (article: Article, posts: ReadonlyArray<DigestXPost>, owner = true) => {
-        const isDigestOwner = vi.fn(async () => owner);
-        const resolveXPosts = vi.fn(async () => RA.ok(posts));
-        const digestXPostsResolverByArticleId: DigestXPostsResolverByArticleId = {
-          resolve: resolveXPosts as unknown as DigestXPostsResolverByArticleId['resolve'],
-        };
-        return {
-          ...createBodyDeps(article, createBody(article)),
-          digestXPostsResolverByArticleId,
-          isDigestOwner,
-          now: () => xNow,
-          resolveXPosts,
-        };
-      };
-
-      it.each(['draft', 'unpublished'] as const)(
-        '作者が %s を開くと、private_html の後ろに「X の投稿」の節を足す',
-        async (status) => {
-          const article = createBodyArticle(status);
-          const deps = createXDeps(article, xPostsOf('first', 'second'));
-
-          const result = await GetArticleWithThreadUseCase.create(deps).run({
-            articleId: article.articleId,
-            viewerUserId: authorUserId,
-          });
-
-          expect(result).toMatchObject({
-            ok: true,
-            val: {
-              body: {
-                html: '<p>private</p><h2>X の投稿</h2><ul>'
-                  + '<li>@jack <a href="https://x.com/jack/status/1">first</a></li>'
-                  + '<li>@jack <a href="https://x.com/jack/status/2">second</a></li></ul>',
-              },
-            },
-          });
-          expect(result).toMatchObject({ ok: true, val: { hasXPosts: true } });
-        },
-      );
-
-      it('投稿が1件も残っていなければ、節を足さない', async () => {
-        const article = createBodyArticle('draft');
-        const deps = createXDeps(article, []);
-
-        const result = await GetArticleWithThreadUseCase.create(deps).run({
-          articleId: article.articleId,
-          viewerUserId: authorUserId,
-        });
-
-        expect(result).toMatchObject({ ok: true, val: { body: { html: '<p>private</p>' } } });
-        expect(result.ok && result.val.hasXPosts).toBeFalsy();
-      });
-
-      it('所有者でない作者には、保存された行があっても節を足さず、投稿を引かない', async () => {
-        const article = createBodyArticle('draft');
-        const deps = createXDeps(article, xPostsOf('first'), false);
-
-        const result = await GetArticleWithThreadUseCase.create(deps).run({
-          articleId: article.articleId,
-          viewerUserId: authorUserId,
-        });
-
-        expect(result).toMatchObject({ ok: true, val: { body: { html: '<p>private</p>' } } });
-        expect(result.ok && result.val.hasXPosts).toBeFalsy();
-        expect(deps.resolveXPosts).not.toHaveBeenCalled();
-      });
-
-      it('published の記事には、作者が開いても節を足さず、投稿を引かない', async () => {
-        const article = createBodyArticle('published');
-        const deps = createXDeps(article, xPostsOf('first'));
-
-        const result = await GetArticleWithThreadUseCase.create(deps).run({
-          articleId: article.articleId,
-          viewerUserId: authorUserId,
-        });
-
-        expect(result).toMatchObject({ ok: true, val: { body: { html: '<p>public</p>' } } });
-        expect(deps.resolveXPosts).not.toHaveBeenCalled();
-      });
     });
 
     it('rootPostId がある article は従来どおり thread を返し、body を返さない', async () => {

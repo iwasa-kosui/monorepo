@@ -122,6 +122,7 @@ describe('RespondToAiAgentMentionsUseCase', () => {
       triggersHandledStore,
       repliedCountResolverSince: { resolve: async () => RA.ok(0) },
       actorResolverById: { resolve: async () => RA.ok(undefined) },
+      isDigestOwner: async () => false,
       chatModel: publishing('reply', 'こんにちは！'),
       ...createInMemoryFollowups(() => now).deps,
       ...createInMemoryMemories(() => now).deps,
