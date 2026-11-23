@@ -5,6 +5,7 @@ import { Actor } from '../domain/actor/actor.ts';
 import type { LocalActor } from '../domain/actor/localActor.ts';
 import type { HeaderUriUpdatedStore } from '../domain/actor/updateHeaderUri.ts';
 import { ImageId } from '../domain/image/imageId.ts';
+import { stripImageMetadata } from '../domain/image/stripImageMetadata.ts';
 import { type InvalidUploadImageError, UploadImage } from '../domain/image/uploadImage.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { UserNotFoundError } from '../domain/user/user.ts';
@@ -34,14 +35,16 @@ const create = ({ actorResolverByUserId, uploads, headerUriUpdatedStore, origin 
     RA.flow(
       RA.ok(bytes),
       RA.andThen((body) => UploadImage.validate(body)),
-      RA.map((mimeType) =>
-        uploads.put({
+      RA.map((mimeType) => {
+        // 位置情報などのメタデータを残したまま公開しない
+        const body = stripImageMetadata(bytes);
+        return uploads.put({
           imageId: ImageId.generate(),
-          body: bytes,
+          body,
           contentType: mimeType,
-          contentLength: bytes.byteLength,
-        })
-      ),
+          contentLength: body.byteLength,
+        });
+      }),
       RA.map((stored) => new URL(stored.url, origin).href),
     );
 

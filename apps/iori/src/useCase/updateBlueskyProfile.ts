@@ -5,6 +5,7 @@ import {
   BlueskyProfileInput,
   type BlueskyProfileInvalid,
 } from '../domain/blueskyProfile/blueskyProfileInput.ts';
+import { stripImageMetadata } from '../domain/image/stripImageMetadata.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { BlueskyClient, BlueskyClientError } from '../ports/blueskyClient.ts';
 import type { UseCase } from './useCase.ts';
@@ -66,7 +67,8 @@ const create = ({ client, now }: Deps): UpdateBlueskyProfileUseCase => {
       ] as const
     ) {
       if (image !== undefined) {
-        const blob = await client.uploadBlob(image);
+        // 位置情報などのメタデータを残したまま公開しない
+        const blob = await client.uploadBlob({ ...image, bytes: stripImageMetadata(image.bytes) });
         if (!blob.ok) return RA.err(blob.err);
         record = withField(record, key, blob.val);
       } else if (remove) {
