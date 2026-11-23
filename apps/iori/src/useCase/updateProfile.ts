@@ -54,7 +54,7 @@ const create = (
       RA.andBind('patch', ({ displayName, bio }) => LocalActorProfile.validate({ displayName, bio })),
       // ヘッダーが不正なときに、アバターだけ保存されて終わらないよう先に確かめる
       RA.andThrough(({ header }) =>
-        header === undefined || header === null ? RA.ok(undefined) : UploadImage.validate(header)
+        header === undefined || header === null ? RA.ok(undefined) : UploadImage.sanitize(header)
       ),
       RA.andBind('avatarUpdated', ({ userId, avatar }) =>
         avatar === undefined

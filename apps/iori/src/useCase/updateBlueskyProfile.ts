@@ -1,10 +1,11 @@
-import { RA } from '@iwasa-kosui/result';
+import { RA, Result } from '@iwasa-kosui/result';
 
 import {
   type BlueskyProfileImageInput,
   BlueskyProfileInput,
   type BlueskyProfileInvalid,
 } from '../domain/blueskyProfile/blueskyProfileInput.ts';
+import { UploadImage } from '../domain/image/uploadImage.ts';
 import type { Instant } from '../domain/instant/instant.ts';
 import type { BlueskyClient, BlueskyClientError } from '../ports/blueskyClient.ts';
 import type { UseCase } from './useCase.ts';
@@ -45,10 +46,26 @@ const withField = (
   return value === undefined ? rest : { ...rest, [key]: value };
 };
 
+const sanitized = (
+  label: string,
+  image: BlueskyProfileImageInput | undefined,
+): Result<BlueskyProfileImageInput | undefined, BlueskyProfileInvalid> => {
+  if (image === undefined) return Result.ok(undefined);
+  const result = UploadImage.sanitize(image.bytes);
+  return result.ok
+    ? Result.ok({ mimeType: image.mimeType, bytes: result.val.bytes })
+    : Result.err({ type: 'BlueskyProfileInvalid', reason: `${label}の画像を読み込めませんでした` });
+};
+
 const create = ({ client, now }: Deps): UpdateBlueskyProfileUseCase => {
   const run = async (input: Input): RA<Ok, Err> => {
     const validated = BlueskyProfileInput.validate(input);
     if (!validated.ok) return RA.err(validated.err);
+    // 位置情報などのメタデータを残したまま公開しない。片方だけ上げて終わらないよう、どちらも先に済ませる
+    const avatar = sanitized('アバター', input.avatar);
+    if (!avatar.ok) return RA.err(avatar.err);
+    const banner = sanitized('バナー', input.banner);
+    if (!banner.ok) return RA.err(banner.err);
     const current = await client.getProfileRecord();
     if (!current.ok) return RA.err(current.err);
     const currentCid = current.val?.cid ?? null;
@@ -61,8 +78,8 @@ const create = ({ client, now }: Deps): UpdateBlueskyProfileUseCase => {
     record = withField(record, 'description', validated.val.description === '' ? undefined : validated.val.description);
     for (
       const [key, image, remove] of [
-        ['avatar', input.avatar, input.removeAvatar],
-        ['banner', input.banner, input.removeBanner],
+        ['avatar', avatar.val, input.removeAvatar],
+        ['banner', banner.val, input.removeBanner],
       ] as const
     ) {
       if (image !== undefined) {

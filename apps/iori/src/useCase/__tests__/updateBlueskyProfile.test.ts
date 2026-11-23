@@ -1,6 +1,7 @@
 import { RA, Result } from '@iwasa-kosui/result';
 import { describe, expect, it, vi } from 'vitest';
 
+import { tinyPng } from '../../domain/image/__tests__/helper/tinyImage.ts';
 import { Instant } from '../../domain/instant/instant.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../ports/blueskyClient.ts';
 import { UpdateBlueskyProfileUseCase } from '../updateBlueskyProfile.ts';
@@ -35,7 +36,7 @@ const base = {
   removeBanner: false,
   expectedCid: 'bafycurrent',
 };
-const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const PNG_BYTES = tinyPng().byteLength;
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
 const imageBytes = (size: number, signature: readonly number[]) => {
   const bytes = new Uint8Array(size);
@@ -77,7 +78,7 @@ describe('UpdateBlueskyProfileUseCase', () => {
     const result = await t.useCase.run({
       ...base,
       expectedCid: 'bafystale',
-      avatar: { bytes: imageBytes(8, PNG_SIGNATURE), mimeType: 'image/png' },
+      avatar: { bytes: tinyPng(), mimeType: 'image/png' },
     });
 
     expect(result).toEqual({ ok: false, err: { type: 'BlueskyProfileConflict' } });
@@ -124,13 +125,13 @@ describe('UpdateBlueskyProfileUseCase', () => {
 
   it('画像を送ると uploadBlob で上げて、その blob に差し替える。送らなかった側は既存を保持する', async () => {
     const t = setup();
-    const avatar = { bytes: imageBytes(9, PNG_SIGNATURE), mimeType: 'image/png' };
+    const avatar = { bytes: tinyPng(), mimeType: 'image/png' };
 
     await t.useCase.run({ ...base, avatar });
 
     expect(t.uploadBlob).toHaveBeenCalledExactlyOnceWith(avatar);
     expect(t.putRecord()).toMatchObject({
-      avatar: { $type: 'blob', ref: { $link: 'new-9' }, mimeType: 'image/png', size: 9 },
+      avatar: { $type: 'blob', ref: { $link: `new-${PNG_BYTES}` }, mimeType: 'image/png', size: PNG_BYTES },
       banner: OLD_BANNER,
     });
   });
@@ -150,11 +151,11 @@ describe('UpdateBlueskyProfileUseCase', () => {
 
     await t.useCase.run({
       ...base,
-      avatar: { bytes: imageBytes(8, PNG_SIGNATURE), mimeType: 'image/png' },
+      avatar: { bytes: tinyPng(), mimeType: 'image/png' },
       removeAvatar: true,
     });
 
-    expect(t.putRecord()).toMatchObject({ avatar: { ref: { $link: 'new-8' } } });
+    expect(t.putRecord()).toMatchObject({ avatar: { ref: { $link: `new-${PNG_BYTES}` } } });
   });
 
   it('既存のレコードが無く expectedCid も null なら、createdAt を現在時刻にして、swapCid を null にして作る', async () => {
@@ -208,10 +209,25 @@ describe('UpdateBlueskyProfileUseCase', () => {
 
     const result = await t.useCase.run({
       ...base,
-      avatar: { bytes: imageBytes(8, PNG_SIGNATURE), mimeType: 'image/png' },
+      avatar: { bytes: tinyPng(), mimeType: 'image/png' },
     });
 
     expect(result).toEqual({ ok: false, err: failure });
+    expect(t.putProfileRecord).not.toHaveBeenCalled();
+  });
+
+  it('構造を読めない画像は、メタデータを消せないので何も上げずに BlueskyProfileInvalid を返す', async () => {
+    const t = setup();
+    const broken = tinyPng().slice(0, 40);
+
+    const result = await t.useCase.run({
+      ...base,
+      avatar: { bytes: tinyPng(), mimeType: 'image/png' },
+      banner: { bytes: broken, mimeType: 'image/png' },
+    });
+
+    expect(result).toMatchObject({ ok: false, err: { type: 'BlueskyProfileInvalid' } });
+    expect(t.uploadBlob).not.toHaveBeenCalled();
     expect(t.putProfileRecord).not.toHaveBeenCalled();
   });
 });

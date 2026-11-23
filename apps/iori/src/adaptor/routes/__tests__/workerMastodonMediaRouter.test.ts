@@ -1,7 +1,9 @@
 import { RA } from '@iwasa-kosui/result';
+import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createIoriApp } from '../../../appFactory.tsx';
+import { tinyPng } from '../../../domain/image/__tests__/helper/tinyImage.ts';
 import { UPLOAD_IMAGE_MAX_BYTES } from '../../../domain/image/uploadImage.ts';
 import type { MediaUpload } from '../../../domain/mediaUpload/mediaUpload.ts';
 import { GetMediaUploadUseCase } from '../../../useCase/getMediaUpload.ts';
@@ -14,9 +16,10 @@ import { createWorkerMastodonFallbackRouter } from '../workerMastodonFallbackRou
 import { createWorkerMastodonMediaRouter } from '../workerMastodonMediaRouter.ts';
 import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 
-const pngBytes = (size = 16) => {
-  const bytes = new Uint8Array(size);
-  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const pngBytes = (size?: number) => {
+  const png = tinyPng();
+  const bytes = new Uint8Array(size ?? png.byteLength);
+  bytes.set(png);
   return bytes;
 };
 
@@ -106,6 +109,22 @@ describe('POST /api/v2/media', () => {
       mimeType: 'image/png',
       description: '猫の写真',
     });
+  });
+
+  it('位置情報などのメタデータを取り除いてから R2 に保存する', async () => {
+    const s = setup();
+    const { headers } = await s.user();
+    const photo = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#888' } })
+      .withExif({ IFD0: { Make: 'SecretCamera' }, IFD3: { GPSLatitudeRef: 'N', GPSLatitude: '35/1 40/1 0/1' } })
+      .jpeg()
+      .toBuffer();
+
+    const response = await s.upload(headers, { file: filePart(new Uint8Array(photo), 'image/jpeg') });
+
+    expect(response.status).toBe(200);
+    const [, stored] = s.bucket.put.mock.calls[0] as unknown as [string, Uint8Array];
+    expect((await sharp(stored).metadata()).exif).toBeUndefined();
+    expect(new TextDecoder('latin1').decode(stored)).not.toContain('SecretCamera');
   });
 
   it('申告の type が違っても、先頭のバイトで形式を決める', async () => {

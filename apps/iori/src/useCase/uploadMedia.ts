@@ -39,18 +39,19 @@ const create = ({ userResolver, uploads, mediaUploadCreatedStore, origin }: Deps
     RA.flow(
       RA.ok(input),
       RA.andBind('user', ({ userId }) => resolveUser(userId)),
-      RA.andBind('mimeType', ({ bytes }) => UploadImage.validate(bytes)),
+      // 位置情報などのメタデータを残したまま公開しない
+      RA.andBind('image', ({ bytes }) => UploadImage.sanitize(bytes)),
       // R2 に置く前に検査し、不正な説明で残骸を作らない
       RA.andBind('normalizedDescription', ({ description }) => MediaUpload.normalizeDescription(description)),
       RA.bind('mediaId', () => MediaId.generate()),
-      RA.bind('stored', ({ bytes, mimeType, mediaId }) =>
+      RA.bind('stored', ({ image, mediaId }) =>
         uploads.put({
           imageId: ImageId.orThrow(mediaId),
-          body: bytes,
-          contentType: mimeType,
-          contentLength: bytes.byteLength,
+          body: image.bytes,
+          contentType: image.mimeType,
+          contentLength: image.bytes.byteLength,
         })),
-      RA.andBind('created', ({ user, mediaId, stored, mimeType, normalizedDescription }) =>
+      RA.andBind('created', ({ user, mediaId, stored, image: { mimeType }, normalizedDescription }) =>
         MediaUpload.create(
           {
             mediaId,

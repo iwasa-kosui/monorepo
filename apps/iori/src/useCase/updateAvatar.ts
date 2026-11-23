@@ -33,13 +33,14 @@ const create = ({ actorResolverByUserId, uploads, logoUriUpdatedStore, origin }:
     RA.flow(
       RA.ok(input),
       RA.andBind('actor', ({ userId }) => resolveLocalActor(userId)),
-      RA.andBind('mimeType', ({ bytes }) => UploadImage.validate(bytes)),
-      RA.bind('stored', ({ bytes, mimeType }) =>
+      // 位置情報などのメタデータを残したまま公開しない
+      RA.andBind('image', ({ bytes }) => UploadImage.sanitize(bytes)),
+      RA.bind('stored', ({ image }) =>
         uploads.put({
           imageId: ImageId.generate(),
-          body: bytes,
-          contentType: mimeType,
-          contentLength: bytes.byteLength,
+          body: image.bytes,
+          contentType: image.mimeType,
+          contentLength: image.bytes.byteLength,
         })),
       RA.bind('logoUri', ({ stored }) => new URL(stored.url, origin).href),
       RA.andThrough(({ actor, logoUri }) =>

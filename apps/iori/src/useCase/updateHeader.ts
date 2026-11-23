@@ -33,13 +33,14 @@ const create = ({ actorResolverByUserId, uploads, headerUriUpdatedStore, origin 
   const upload = (bytes: Uint8Array): RA<string, InvalidUploadImageError> =>
     RA.flow(
       RA.ok(bytes),
-      RA.andThen((body) => UploadImage.validate(body)),
-      RA.map((mimeType) =>
+      // 位置情報などのメタデータを残したまま公開しない
+      RA.andThen((body) => UploadImage.sanitize(body)),
+      RA.map((image) =>
         uploads.put({
           imageId: ImageId.generate(),
-          body: bytes,
-          contentType: mimeType,
-          contentLength: bytes.byteLength,
+          body: image.bytes,
+          contentType: image.mimeType,
+          contentLength: image.bytes.byteLength,
         })
       ),
       RA.map((stored) => new URL(stored.url, origin).href),
