@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { StructuredData } from '@/utils/structuredData';
 import externalArticlesData from '../content/external-articles/data.json';
 import talksData from '../content/talks/data.json';
 
@@ -64,6 +65,7 @@ const education = [
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -75,6 +77,7 @@ function formatDate(dateStr: string): string {
   title="About - kosui"
   ogTitle="About"
   ogDescription="医療SaaSの品質要求に応えるアーキテクチャ設計とプラットフォーム構築を専門とするテックリード。"
+  jsonLd={[StructuredData.person()]}
 >
   <section class="mb-10">
     <h1 class="text-3xl font-bold mb-6">About</h1>

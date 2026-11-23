@@ -14,6 +14,7 @@ const sortedPosts: PostEntry[] = posts.sort(
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -21,7 +22,11 @@ function formatDate(dateStr: string): string {
 }
 ---
 
-<BaseLayout title="Posts - kosui" ogTitle="Posts">
+<BaseLayout
+  title="Posts - kosui"
+  ogTitle="Posts"
+  ogDescription="岩佐 幸翠（kosui）が書いた技術記事の一覧です。TypeScript、アーキテクチャ設計、SRE、チーム開発について書いています。"
+>
   <h1 class="text-3xl font-bold mb-8">
     <span class="heading-accent">Posts</span>
   </h1>

@@ -7,10 +7,11 @@ import { defineConfig } from 'astro/config';
 import { fileURLToPath } from 'node:url';
 import { remarkMermaid } from './src/plugins/remark-mermaid.mjs';
 import { listNoindexPostPaths } from './src/utils/noindexPostPaths.ts';
+import { listPostLastmods } from './src/utils/postLastmods.ts';
 
-const noindexPostPaths = listNoindexPostPaths(
-  fileURLToPath(new URL('./src/content/posts', import.meta.url)),
-);
+const postsDir = fileURLToPath(new URL('./src/content/posts', import.meta.url));
+const noindexPostPaths = listNoindexPostPaths(postsDir);
+const postLastmods = listPostLastmods(postsDir);
 
 const integrations = [
   mdx({
@@ -25,6 +26,11 @@ const integrations = [
       !page.includes('/reports')
       && !page.endsWith('.md')
       && !noindexPostPaths.has(decodeURI(new URL(page).pathname)),
+    // 記事の URL には公開日時を lastmod として付け、クローラーに鮮度を伝える
+    serialize: (item) => {
+      const lastmod = postLastmods.get(decodeURI(new URL(item.url).pathname));
+      return lastmod ? { ...item, lastmod } : item;
+    },
   }),
 ];
 

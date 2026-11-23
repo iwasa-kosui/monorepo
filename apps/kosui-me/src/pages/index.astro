@@ -2,6 +2,7 @@
 import ThemeBadge from '@/components/ThemeBadge.astro';
 import { getAllThemes } from '@/config/themes';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { StructuredData } from '@/utils/structuredData';
 import { type CollectionEntry, getCollection } from 'astro:content';
 import externalArticlesData from '../content/external-articles/data.json';
 import talksData from '../content/talks/data.json';
@@ -84,6 +85,7 @@ function countByTheme(slug: string): number {
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -109,7 +111,7 @@ const kindConfig = {
 } as const;
 ---
 
-<BaseLayout>
+<BaseLayout jsonLd={[StructuredData.website(), StructuredData.person()]}>
   <section class="mb-12">
     <div class="flex items-start gap-5">
       <img

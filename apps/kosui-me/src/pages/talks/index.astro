@@ -13,6 +13,7 @@ const presentations = findPresentations().filter(
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -27,7 +28,11 @@ const platformNames: Record<ExternalSlideType, string> = {
 };
 ---
 
-<BaseLayout title="Talks - kosui" ogTitle="Talks">
+<BaseLayout
+  title="Talks - kosui"
+  ogTitle="Talks"
+  ogDescription="岩佐 幸翠（kosui）の登壇資料の一覧です。カンファレンスや勉強会で発表したスライドを掲載しています。"
+>
   <h1 class="text-3xl font-bold mb-8">
     <span class="heading-accent">Talks</span>
   </h1>

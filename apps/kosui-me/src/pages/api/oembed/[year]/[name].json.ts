@@ -19,7 +19,7 @@ export const GET: APIRoute = ({ props }) => {
     ? `${SITE_URL}/slides${presentation.basePath}?embedded=true&controls=true`
     : presentation.external.embedUrl;
 
-  const pageUrl = `${SITE_URL}/talks/${presentation.year}/${presentation.name}/`;
+  const pageUrl = `${SITE_URL}/talks/${presentation.year}/${presentation.name}`;
   const ogImageUrl = `${SITE_URL}/og/talks/${presentation.year}/${presentation.name}.png`;
 
   const oembedResponse = {
