@@ -1,16 +1,11 @@
-import RecordStartFigure from '../../../components/intro/RecordStartFigure.astro';
+---
+wide: true
+---
 
-<div class="intro-spread">
-<div class="intro-text">
+import MethodFigure from '../../../components/intro/MethodFigure.astro';
 
-## 後から記録を足すことの限界
+## 記録する方法の比較
 
-もちろん、後から記録を足しても、足す前に起きたことは分かりません。第3章で、キャンセルの理由を答えられない行を見てもらいます。
+過去の状態を見るだけなら、私たちもデータ基盤のタイムトラベルで調べられるようにしました。手作業の SQL まで拾うならトリガーや CDC の方が強いです。しかし、なぜ変えたのかを知っているのは更新処理を呼ぶコードだけです。
 
-しかし、「今記録できていないから今さらやっても仕方がない」という考えは捨てるべきです。データが記録できていない状態を現在進行形の問題として捉えるべきです。
-
-この問題は、私たちアプリケーション開発者にとっても他人ごとではありません。
-
-</div>
-<RecordStartFigure />
-</div>
+<MethodFigure />

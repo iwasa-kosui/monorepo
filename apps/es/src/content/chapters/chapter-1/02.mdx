@@ -1,18 +1,7 @@
-import CodeBlock from '../../../components/CodeBlock.astro';
 import OwnQuestion from '../../../components/OwnQuestion.astro';
-import { cancelVisitOf } from '../../../lib/snapshots';
 import Quote from '../../../components/Quote.astro';
 
-<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
-<div class="intro-text">
-
-## 開始コードを読む
-
-開始コードは、演習を始める時点のコードです。`chapter-1-start` にあります。`visits.ts` の `cancelVisit` は、来院の状態を確かめて `status` を `cancelled` に更新します。このコードは、誰が、いつ、なぜキャンセルしたのかをどこにも残しません。
-
-<CodeBlock code={cancelVisitOf('chapter-1-start')} />
-
-</div>
+<div class="grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)] lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
 <div class="intro-text">
 
 <Quote source="kosui.me の記事より" href="https://kosui.me/posts/2025/05/06/142842">
@@ -26,6 +15,9 @@ import Quote from '../../../components/Quote.astro';
 例えば、顧客から監査記録の提出を求められた場合、データ変更の記録があれば、それを整形し適切に匿名化することで顧客のニーズに応えられます。
 
 </Quote>
+
+</div>
+<div class="intro-text">
 
 ## 自分のシステムの問いを1つ挙げる
 

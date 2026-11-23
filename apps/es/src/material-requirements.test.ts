@@ -146,8 +146,8 @@ describe('PRD の受入条件', () => {
     expect(read('src/pages/index.astro')).toContain('講師の画面を見るだけで追えます');
   });
 
-  it('chapter-1.mdx に show-visits.ts の実行コマンドが書かれている', () => {
-    expect(read('src/content/chapters/chapter-1.mdx')).toContain('node show-visits.ts');
+  it('chapter-1/01.mdx に調査の画面が置かれている', () => {
+    expect(read('src/content/chapters/chapter-1/01.mdx')).toContain('<InvestigationScene />');
   });
 
   it('chapter-2.mdx の変更量の表記が実物の差分と合う', () => {

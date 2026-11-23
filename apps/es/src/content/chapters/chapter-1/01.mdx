@@ -1,60 +1,12 @@
 ---
 goal: 自分のシステムで答えられない問いを1つ挙げられます。
+wide: true
 ---
 
-import CodePlayground from '../../../components/CodePlayground.astro';
-import PlaygroundTabs from '../../../components/PlaygroundTabs.astro';
-import SqlPlayground from '../../../components/SqlPlayground.astro';
+import InvestigationScene from '../../../components/chapter-1/InvestigationScene.astro';
 
-## 来院のキャンセル理由を visits テーブルで調べる
+## 来院のキャンセル理由を調べる
 
-1. 「show-visits.ts を実行する」を押します。実行欄は、ページの中でコードや SQL を実行する欄です。見るだけの人は、講師の画面で結果を確かめます。
-2. 出た行から、「この来院がキャンセルになっているのはなぜですか」に答えてみます。`show-visits.ts` は理由と操作した人を `cancelVisit` に渡していますが、行にはどちらも、キャンセルした日時も残っていません。この行からは、誰が、いつ、なぜキャンセルしたのかに答えられません。
-3. 「SQL で調べる」を押し、理由や操作した人の列が `visits` にあるかを SQL で確かめます。
+カスタマーサポートから調査依頼が届いています。ブラウザで社内のツールを開いて、誰が、いつ、何を、なぜキャンセルしたのかを調べてください。
 
-<PlaygroundTabs labels={['show-visits.ts を実行する', 'SQL で調べる']} label="実行欄" />
-
-<CodePlayground
-  exercise="chapter-1-start"
-  editable={[]}
-  readonly={['show-visits.ts']}
-  scripts={[{ file: 'show-visits.ts', label: 'show-visits.ts を実行する' }]}
-/>
-
-<SqlPlayground
-  hidden
-  id="chapter-1-visits"
-  script={{ exercise: 'chapter-1-start', entry: 'show-visits.ts' }}
-  initial="SELECT * FROM visits ORDER BY id;"
-/>
-
-<div class="detail-row">
-
-<details>
-<summary>出力例を見る</summary>
-
-```text
-┌─────────┬───────────────┬──────────┬─────────────┐
-│ (index) │ id            │ pet_name │ status      │
-├─────────┼───────────────┼──────────┼─────────────┤
-│ 0       │ 'visit-pochi' │ 'ポチ'   │ 'cancelled' │
-│ 1       │ 'visit-tama'  │ 'タマ'   │ 'cancelled' │
-└─────────┴───────────────┴──────────┴─────────────┘
-```
-
-</details>
-
-<details>
-<summary>手元の Node で動かすとき</summary>
-
-事前準備で展開したディレクトリの中にある `chapter-1-start` に移動して、次のコマンドを実行します。
-
-```bash
-node show-visits.ts
-```
-
-`ExperimentalWarning: SQLite is an experimental feature` という警告が出ても問題ありません。
-
-</details>
-
-</div>
+<InvestigationScene />

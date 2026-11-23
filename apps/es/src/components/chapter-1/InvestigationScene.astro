@@ -1,0 +1,2522 @@
+---
+import { Code } from 'astro:components';
+
+import { cancelVisitOf, snapshotFiles } from '../../lib/snapshots';
+import '../figures/figure.css';
+import SqlPlayground from '../SqlPlayground.astro';
+
+interface Props {
+  id?: string;
+}
+
+const { id = 'investigation' } = Astro.props;
+
+const files = snapshotFiles('chapter-1-start');
+const sourceOf = (name: string): string => {
+  const source = files[name];
+  if (source === undefined) {
+    throw new Error(`chapter-1-start に ${name} がありません`);
+  }
+  return source;
+};
+
+const tools = [
+  {
+    key: 'console',
+    label: 'DB コンソール',
+    url: 'https://db.internal.example/console',
+  },
+  {
+    key: 'logs',
+    label: 'ログの検索',
+    url: 'https://logs.internal.example/logs',
+  },
+  {
+    key: 'repo',
+    label: 'リポジトリ',
+    url: 'https://code.internal.example/clinic/visits.ts',
+  },
+] as const;
+
+const unknownText = 'まだ分からない';
+const memos = [
+  { key: 'who', label: '誰が', text: 'どこにも残っていない' },
+  { key: 'when', label: 'いつ', text: '2026-11-06 18:11:58' },
+  { key: 'what', label: '何を', text: 'status が cancelled' },
+  { key: 'why', label: 'なぜ', text: 'どこにも残っていない' },
+] as const;
+const memoResult = {
+  who: 'missing',
+  when: 'found',
+  what: 'found',
+  why: 'missing',
+} as const;
+
+const createVisits = /CREATE TABLE visits \([\s\S]*?\n\s*\);/.exec(
+  sourceOf('db.ts'),
+)?.[0];
+if (createVisits === undefined) {
+  throw new Error('db.ts から visits の CREATE TABLE 文を切り出せません');
+}
+const columns = createVisits.split('\n').slice(1, -1).map((line) => {
+  const match = /^\s*(\w+)\s+(\w+)/.exec(line);
+  if (match === null) {
+    throw new Error(`visits の列の定義を読めません: ${line}`);
+  }
+  return { name: match[1] ?? '', type: match[2] ?? '' };
+});
+const setupSql = `${createVisits}
+INSERT INTO visits (id, pet_name, status) VALUES
+  ('visit-pochi', 'ポチ', 'cancelled'),
+  ('visit-tama', 'タマ', 'cancelled');`;
+
+const rawLogs = [
+  '09:12:04.118Z INFO  POST /visits 201 15ms',
+  '09:12:04.170Z INFO  GET /visits/visit-pochi 200 6ms',
+  '10:31:47.902Z INFO  GET /visits 200 9ms',
+  '11:05:13.356Z INFO  GET /visits/visit-tama 200 5ms',
+  '12:48:30.611Z WARN  GET /visits/visit-9999 404 4ms',
+  '13:20:09.045Z INFO  GET /visits 200 8ms',
+  '14:02:55.730Z INFO  GET /visits/visit-pochi 200 5ms',
+  '15:36:41.287Z INFO  GET /visits 200 7ms',
+  '16:19:02.664Z INFO  GET /visits/visit-tama 200 6ms',
+  '17:44:18.509Z INFO  GET /visits 200 8ms',
+  '18:10:41.203Z INFO  GET /visits 200 8ms',
+  '18:11:52.117Z INFO  GET /visits/visit-pochi 200 5ms',
+  '18:11:58.846Z INFO  POST /visits/visit-pochi/cancel 200 12ms',
+  '18:11:58.901Z INFO  GET /visits 200 7ms',
+  '18:14:20.455Z INFO  GET /visits/visit-tama 200 5ms',
+  '18:30:06.392Z INFO  GET /visits 200 9ms',
+  '19:02:47.815Z INFO  GET /visits/visit-pochi 200 5ms',
+  '19:45:33.076Z INFO  GET /visits 200 8ms',
+  '20:10:59.248Z INFO  GET /visits 200 7ms',
+  '21:03:12.530Z INFO  GET /visits/visit-tama 200 6ms',
+];
+
+const logs = rawLogs.map((line) => {
+  const match =
+    /^(\d{2}):(\d{2}):(\d{2}\.\d{3})Z (INFO|WARN)\s+(GET|POST) (\S+) (\d{3}) (\d+)ms$/
+      .exec(line);
+  if (match === null) {
+    throw new Error(`ログの行を読めません: ${line}`);
+  }
+  const [
+    ,
+    hour = '',
+    minute = '',
+    second = '',
+    level = '',
+    method = '',
+    path = '',
+    status = '',
+    duration = '',
+  ] = match;
+  const content = `${method} ${path} ${status} ${duration}ms`;
+  const date = `Nov 06 ${hour}:${minute}:${second}`;
+  return {
+    iso: `2026-11-06T${hour}:${minute}:${second}Z`,
+    date,
+    hour: Number(hour),
+    level: level.toLowerCase(),
+    levelLabel: level,
+    method,
+    content,
+    text: `${date} ${content}`.toLowerCase(),
+    cancel: method === 'POST' && path === '/visits/visit-pochi/cancel',
+    attrs: [
+      ['http.method', method],
+      ['http.url', path],
+      ['http.status_code', status],
+      ['duration', duration],
+      ['network.client.ip', '10.0.3.21'],
+      ['http.useragent', 'Mozilla/5.0'],
+    ],
+  };
+});
+
+const countBy = (pick: (log: (typeof logs)[number]) => string, value: string) =>
+  logs.filter((log) => pick(log) === value).length;
+const facets = [
+  {
+    key: 'service',
+    label: 'Service',
+    items: [{ value: 'clinic-api', label: 'clinic-api', count: logs.length }],
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    items: [
+      {
+        value: 'info',
+        label: 'Info',
+        count: countBy((log) => log.level, 'info'),
+      },
+      {
+        value: 'warn',
+        label: 'Warn',
+        count: countBy((log) => log.level, 'warn'),
+      },
+    ],
+  },
+  {
+    key: 'method',
+    label: 'HTTP Method',
+    items: [
+      {
+        value: 'GET',
+        label: 'GET',
+        count: countBy((log) => log.method, 'GET'),
+      },
+      {
+        value: 'POST',
+        label: 'POST',
+        count: countBy((log) => log.method, 'POST'),
+      },
+    ],
+  },
+] as const;
+
+const hours = Array.from({ length: 24 }, (_, hour) => ({
+  hour,
+  count: logs.filter((log) => log.hour === hour).length,
+  warn: logs.some((log) => log.hour === hour && log.level === 'warn'),
+}));
+const maxCount = Math.max(...hours.map((hour) => hour.count));
+const chartLabel = `1時間ごとのログ件数。合計 ${logs.length} 件。最も多いのは ${
+  hours.find((hour) => hour.count === maxCount)?.hour ?? 0
+} 時台の ${maxCount} 件。Warn を含む時間帯は ${
+  hours.filter((hour) => hour.warn).map((hour) => `${hour.hour} 時台`).join(
+    '、',
+  )
+}。`;
+
+const code = sourceOf('visits.ts').trimEnd();
+
+const tabId = (key: string): string => `${id}-tab-${key}`;
+const panelId = (key: string): string => `${id}-panel-${key}`;
+
+const cancelLog = logs.find((log) => log.cancel);
+if (cancelLog === undefined) {
+  throw new Error('キャンセルのログがありません');
+}
+const cancelVisitCode = cancelVisitOf('chapter-1-start');
+const agentUrl = 'https://agent.internal.example/sessions/1';
+const agentConclusion = [
+  { label: 'いつ', text: '2026-11-06 18:11:58' },
+  { label: '何を', text: 'status を cancelled に更新' },
+  { label: '誰が', text: '特定できません' },
+  { label: 'なぜ', text: '特定できません' },
+] as const;
+---
+
+<section
+  class="cfig scene"
+  data-investigation
+  data-opened=""
+  data-selected="console"
+  data-phase="initial"
+  aria-label="来院のキャンセル理由の調査"
+>
+  <div class="win chat" role="group" aria-label="チャット">
+    <div class="win-bar">
+      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <p class="channel"># 問い合わせ対応</p>
+    </div>
+
+    <ol
+      class="feed"
+      aria-live="polite"
+      aria-label="チャットの投稿"
+      tabindex="0"
+      data-feed
+    >
+      <li class="post">
+        <span class="avatar" aria-hidden="true">カ</span>
+        <div class="post-main">
+          <p class="post-head">
+            <strong>カスタマーサポート</strong>
+            <time>10:02</time>
+          </p>
+          <p class="post-text">
+            動物病院から問い合わせが来ています。『この来院がキャンセルになっているのはなぜですか。』ポチの来院（visit-pochi）です。誰が、いつ、なぜキャンセルしたのか、調べてもらえますか。
+          </p>
+        </div>
+      </li>
+    </ol>
+
+    <template data-replies>
+      <li class="post is-you" data-reply>
+        <span class="avatar" aria-hidden="true">あ</span>
+        <div class="post-main">
+          <p class="post-head"><strong>あなた</strong></p>
+          <p class="post-text">
+            2026-11-06 18:11:58
+            にキャンセルの操作がありました。誰が、なぜキャンセルしたのかは、どこにも残っていませんでした。
+          </p>
+        </div>
+      </li>
+      <li class="post" data-reply>
+        <span class="avatar" aria-hidden="true">カ</span>
+        <div class="post-main">
+          <p class="post-head"><strong>カスタマーサポート</strong></p>
+          <p class="post-text">なんで記録取ってないんですか</p>
+        </div>
+      </li>
+    </template>
+
+    <div class="composer">
+      <p class="memo-title" id={`${id}-memo`}>返信の下書き（調査メモ）</p>
+      <dl
+        class="memo-list"
+        aria-labelledby={`${id}-memo`}
+        data-unknown={unknownText}
+      >
+        {
+          memos.map((memo) => (
+            <div class="memo-row">
+              <dt>{memo.label}</dt>
+              <dd
+                data-memo={memo.key}
+                data-state="unknown"
+                data-result={memoResult[memo.key]}
+                data-text={memo.text}
+              >
+                {unknownText}
+              </dd>
+            </div>
+          ))
+        }
+      </dl>
+      <p class="reason" id={`${id}-reason`} data-reason>
+        3つのツールをすべて開くと返信できます。
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="primary"
+          data-action="reply"
+          aria-describedby={`${id}-reason`}
+          disabled
+        >
+          調査結果を返信する
+        </button>
+        <button type="button" data-action="answer">答えを見る</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="win browser" role="group" aria-label="ブラウザ">
+    <div class="win-bar tab-strip">
+      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <div class="tabs" role="tablist" aria-label="開くツール">
+        {
+          tools.map((tool) => (
+            <button
+              type="button"
+              class="tab"
+              role="tab"
+              id={tabId(tool.key)}
+              data-tool={tool.key}
+              data-url={tool.url}
+              aria-selected={tool.key === 'console' ? 'true' : 'false'}
+              aria-controls={panelId(tool.key)}
+              tabindex={tool.key === 'console' ? 0 : -1}
+            >
+              {tool.label} <span class="unseen" data-unseen>未確認</span>
+            </button>
+          ))
+        }
+      </div>
+    </div>
+    <p class="address">
+      <span class="cfig-sr">アドレス</span>
+      <span class="address-text" data-address>{tools[0].url}</span>
+    </p>
+
+    <div class="pages">
+      <div
+        class="panel"
+        role="tabpanel"
+        id={panelId('console')}
+        aria-labelledby={tabId('console')}
+        data-tool="console"
+      >
+        <div class="console">
+          <div class="tables" role="group" aria-label="テーブルの一覧">
+            <p class="side-title">Tables</p>
+            <button type="button" class="table-item" data-table="visits">
+              visits
+            </button>
+            <ul class="columns" aria-label="visits の列">
+              {
+                columns.map((column) => (
+                  <li>
+                    <code>{column.name}</code>
+                    <span>{column.type}</span>
+                  </li>
+                ))
+              }
+            </ul>
+          </div>
+          <SqlPlayground
+            id="chapter-1-console"
+            setup={setupSql}
+            initial="SELECT * FROM visits;"
+          />
+        </div>
+        <p class="panel-note">いまの状態だけが入っています。</p>
+      </div>
+
+      <div
+        class="panel"
+        role="tabpanel"
+        id={panelId('logs')}
+        aria-labelledby={tabId('logs')}
+        data-tool="logs"
+        hidden
+      >
+        <div class="logs">
+          <div class="facets" role="group" aria-label="ログの絞り込み">
+            {
+              facets.map((facet) => (
+                <fieldset class="facet">
+                  <legend>{facet.label}</legend>
+                  {
+                    facet.items.map((item) => (
+                      <label class="facet-item">
+                        <input
+                          type="checkbox"
+                          data-facet={facet.key}
+                          value={item.value}
+                        />
+                        <span class="facet-name">{item.label}</span>
+                        <span class="facet-count" data-facet-count>{
+                          item.count
+                        }</span>
+                      </label>
+                    ))
+                  }
+                </fieldset>
+              ))
+            }
+          </div>
+
+          <div class="logs-main">
+            <div class="search-row">
+              <label class="cfig-sr" for={`${id}-query`}
+              >ログの検索クエリ</label>
+              <input
+                type="search"
+                class="query"
+                id={`${id}-query`}
+                value="service:clinic-api"
+                spellcheck="false"
+                autocomplete="off"
+                data-query
+                data-initial="service:clinic-api"
+              />
+              <span class="range">Nov 6, 2026 00:00 – 23:59</span>
+            </div>
+
+            <div class="chart" role="img" aria-label={chartLabel} data-chart>
+              <div class="bars" aria-hidden="true">
+                {
+                  hours.map((hour) => (
+                    <span
+                      class="bar"
+                      data-warn={hour.warn ? 'true' : 'false'}
+                      style={`height: ${
+                        hour.count === 0
+                          ? 0
+                          : Math.max(
+                            8,
+                            Math.round(
+                              hour.count / maxCount * 100,
+                            ),
+                          )
+                      }%`}
+                    >
+                    </span>
+                  ))
+                }
+              </div>
+              <div class="axis" aria-hidden="true">
+                <span>00:00</span>
+                <span>06:00</span>
+                <span>12:00</span>
+                <span>18:00</span>
+                <span>24:00</span>
+              </div>
+            </div>
+
+            <p class="log-count" data-log-count>
+              {logs.length}件中 {logs.length}件
+            </p>
+
+            <div
+              class="log-scroll"
+              role="region"
+              aria-label="ログの一覧"
+              data-log-scroll
+            >
+              <table class="log-table">
+                <thead>
+                  <tr>
+                    <th scope="col">DATE</th>
+                    <th scope="col">HOST</th>
+                    <th scope="col">SERVICE</th>
+                    <th scope="col">CONTENT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {
+                    logs.map((log) => (
+                      <tr
+                        class="log-row"
+                        tabindex="0"
+                        data-log-row
+                        data-level={log.level}
+                        data-method={log.method}
+                        data-hour={log.hour}
+                        data-text={log.text}
+                        data-cancel={log.cancel ? 'true' : 'false'}
+                        data-date={log.iso}
+                        data-content={log.content}
+                        data-attrs={JSON.stringify(log.attrs)}
+                      >
+                        <td class="col-date">
+                          <time datetime={log.iso}>{log.date}</time>
+                        </td>
+                        <td>clinic-api-1</td>
+                        <td>clinic-api</td>
+                        <td class="col-content">
+                          <span class="level" data-level={log.level}>{
+                            log.levelLabel
+                          }</span>
+                          <span>{log.content}</span>
+                        </td>
+                      </tr>
+                    ))
+                  }
+                </tbody>
+              </table>
+              <p class="log-empty" data-empty hidden>
+                条件に合うログはありません。
+              </p>
+            </div>
+
+            <div
+              class="detail"
+              role="region"
+              aria-label="ログの詳細"
+              data-detail
+              hidden
+            >
+              <div class="detail-head">
+                <p class="detail-title">Log</p>
+                <button
+                  type="button"
+                  data-detail-close
+                  aria-label="ログの詳細を閉じる"
+                >
+                  閉じる
+                </button>
+              </div>
+              <div class="detail-body">
+                <p class="detail-message" data-detail-field="message"></p>
+                <dl class="detail-summary">
+                  <div>
+                    <dt>Date</dt>
+                    <dd data-detail-field="date"></dd>
+                  </div>
+                  <div>
+                    <dt>Status</dt>
+                    <dd data-detail-field="status"></dd>
+                  </div>
+                  <div>
+                    <dt>Service</dt>
+                    <dd>clinic-api</dd>
+                  </div>
+                  <div>
+                    <dt>Host</dt>
+                    <dd>clinic-api-1</dd>
+                  </div>
+                </dl>
+                <p class="detail-section">Event Attributes</p>
+                <dl class="detail-attrs">
+                  <div>
+                    <dt>http.method</dt>
+                    <dd data-detail-attr="http.method"></dd>
+                  </div>
+                  <div>
+                    <dt>http.url</dt>
+                    <dd data-detail-attr="http.url"></dd>
+                  </div>
+                  <div>
+                    <dt>http.status_code</dt>
+                    <dd data-detail-attr="http.status_code"></dd>
+                  </div>
+                  <div>
+                    <dt>duration</dt>
+                    <dd data-detail-attr="duration"></dd>
+                  </div>
+                  <div>
+                    <dt>network.client.ip</dt>
+                    <dd data-detail-attr="network.client.ip"></dd>
+                  </div>
+                  <div>
+                    <dt>http.useragent</dt>
+                    <dd data-detail-attr="http.useragent"></dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          キャンセルの操作があった時刻は分かります。理由と操作した人は、ログの属性にありません。
+        </p>
+      </div>
+
+      <div
+        class="panel"
+        role="tabpanel"
+        id={panelId('repo')}
+        aria-labelledby={tabId('repo')}
+        data-tool="repo"
+        hidden
+      >
+        <div class="repo-head">
+          <span class="repo-path">clinic / <strong>visits.ts</strong></span>
+        </div>
+        <Code code={code} lang="ts" />
+        <p class="panel-note">
+          status
+          を書き換えるだけで、理由と操作した人はどこにも保存していません。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="scene-foot">
+    <button type="button" data-action="reset">最初からやり直す</button>
+  </div>
+
+  <template data-agent-tab>
+    <button
+      type="button"
+      class="tab"
+      role="tab"
+      id={tabId('agent')}
+      data-tool="agent"
+      data-url={agentUrl}
+      aria-selected="false"
+      aria-controls={panelId('agent')}
+      tabindex="-1"
+    >
+      エージェント
+    </button>
+  </template>
+
+  <template data-agent-panel>
+    <div
+      class="panel"
+      role="tabpanel"
+      id={panelId('agent')}
+      aria-labelledby={tabId('agent')}
+      data-tool="agent"
+      hidden
+    >
+      <div class="agent-bar">
+        <span class="agent-brand">Coding Agent</span>
+        <span class="agent-session">visit-pochi のキャンセルの調査</span>
+        <span class="agent-status" data-agent-status data-state="running"
+        >実行中</span>
+      </div>
+      <div
+        class="agent-log"
+        role="log"
+        aria-label="エージェントの会話"
+        tabindex="0"
+        data-agent-log
+      >
+        <ol class="turns" data-agent-list></ol>
+      </div>
+      <div class="agent-composer">
+        <label class="cfig-sr" for={`${id}-agent-input`}
+        >エージェントへの依頼</label>
+        <textarea
+          class="agent-input"
+          id={`${id}-agent-input`}
+          rows="2"
+          placeholder="依頼を入力"
+          data-agent-input
+        ></textarea>
+        <button type="button" class="agent-send" data-agent-send disabled>
+          送信
+        </button>
+      </div>
+    </div>
+  </template>
+
+  <template data-agent-parts>
+    <li class="turn user" data-part="user">
+      <p class="bubble" data-text></p>
+    </li>
+    <li class="turn agent" data-part="reply">
+      <p data-text></p>
+    </li>
+    <li class="thinking" data-part="thinking" data-thinking>
+      <span class="thinking-mark" aria-hidden="true"></span>考え中…
+    </li>
+  </template>
+
+  <template data-agent-steps>
+    <li class="turn user" data-kind="user">
+      <p class="bubble">
+        visit-pochi
+        の来院がキャンセルになっています。誰が、いつ、なぜキャンセルしたのかを調べてください。
+      </p>
+    </li>
+    <li class="turn agent" data-kind="agent">
+      <p>データベース、ログ、コードの順に調べます。</p>
+    </li>
+    <li class="turn tool" data-kind="tool" data-state="done">
+      <details>
+        <summary>
+          <span class="tool-state" aria-hidden="true"></span>
+          <span class="cfig-sr" data-tool-state-text>完了</span>
+          <span class="tool-name">SQL</span>
+          <code class="tool-target"
+          >SELECT * FROM visits WHERE id = 'visit-pochi';</code>
+        </summary>
+        <div class="tool-body" data-tool-body>
+          <table class="tool-table">
+            <thead>
+              <tr>
+                <th scope="col">id</th>
+                <th scope="col">pet_name</th>
+                <th scope="col">status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>visit-pochi</td>
+                <td>ポチ</td>
+                <td>cancelled</td>
+              </tr>
+            </tbody>
+          </table>
+          <button type="button" data-open-tool="console">
+            この画面を開く<span class="cfig-sr">（DB コンソール）</span>
+          </button>
+        </div>
+      </details>
+    </li>
+    <li class="turn agent" data-kind="agent">
+      <p>
+        status は cancelled です。キャンセルした人、理由、日時の列はありません。
+      </p>
+    </li>
+    <li class="turn tool" data-kind="tool" data-state="done">
+      <details>
+        <summary>
+          <span class="tool-state" aria-hidden="true"></span>
+          <span class="cfig-sr" data-tool-state-text>完了</span>
+          <span class="tool-name">Logs</span>
+          <code class="tool-target">service:clinic-api visit-pochi</code>
+        </summary>
+        <div class="tool-body" data-tool-body>
+          <p class="tool-line">
+            <code>{cancelLog.iso} {cancelLog.content}</code>
+          </p>
+          <dl class="tool-attrs">
+            {
+              cancelLog.attrs.map(([key, value]) => (
+                <div>
+                  <dt>{key}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))
+            }
+          </dl>
+          <button type="button" data-open-tool="logs">
+            この画面を開く<span class="cfig-sr">（ログの検索）</span>
+          </button>
+        </div>
+      </details>
+    </li>
+    <li class="turn agent" data-kind="agent">
+      <p>
+        2026-11-06 18:11:58
+        にキャンセルの操作がありました。ログの属性に、操作した人と理由はありません。
+      </p>
+    </li>
+    <li class="turn tool" data-kind="tool" data-state="done">
+      <details>
+        <summary>
+          <span class="tool-state" aria-hidden="true"></span>
+          <span class="cfig-sr" data-tool-state-text>完了</span>
+          <span class="tool-name">Read</span>
+          <code class="tool-target">clinic/visits.ts</code>
+        </summary>
+        <div class="tool-body" data-tool-body>
+          <pre class="tool-pre"><code>{cancelVisitCode}</code></pre>
+          <button type="button" data-open-tool="repo">
+            この画面を開く<span class="cfig-sr">（リポジトリ）</span>
+          </button>
+        </div>
+      </details>
+    </li>
+    <li class="turn agent" data-kind="agent">
+      <p>
+        cancelVisit は status
+        を書き換えるだけです。理由と操作した人を受け取っておらず、どこにも保存していません。
+      </p>
+    </li>
+    <li class="turn agent conclusion" data-kind="agent">
+      <dl class="agent-result">
+        {
+          agentConclusion.map((item) => (
+            <div>
+              <dt>{item.label}</dt>
+              <dd>{item.text}</dd>
+            </div>
+          ))
+        }
+      </dl>
+      <p>
+        理由と操作した人は、データベースにも、ログにも、コードにも記録されていません。記録されていないデータは、私にも復元できません。
+      </p>
+    </li>
+  </template>
+</section>
+
+<style>
+:global(.content) :global(.cfig).scene {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  align-content: start;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+.scene > * {
+  min-width: 0;
+}
+.scene [hidden] {
+  display: none;
+}
+
+.scene .win {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
+  overflow: hidden;
+}
+.scene .win-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.25rem 0.625rem;
+}
+.scene .dots {
+  display: inline-flex;
+  flex: none;
+  gap: 0.25rem;
+}
+.scene .dots i {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--role-faint);
+}
+.scene .channel {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.scene button {
+  font: inherit;
+}
+.scene button:focus-visible,
+.scene input:focus-visible,
+.scene .feed:focus-visible,
+.scene .log-scroll:focus-visible,
+.scene .log-row:focus-visible,
+.scene .agent-log:focus-visible,
+.scene :global(pre.astro-code:focus-visible) {
+  outline: 2px solid var(--role-accent);
+  outline-offset: -2px;
+}
+
+.scene .feed {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  list-style: none;
+}
+.scene .post {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+}
+.scene .post + .post {
+  margin-top: 0.5rem;
+}
+.scene .avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-md);
+  background: var(--role-accent-soft);
+  color: var(--role-accent-strong);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.scene .is-you .avatar {
+  background: var(--role-accent);
+  color: var(--role-on-accent);
+}
+.scene .post-main {
+  min-width: 0;
+}
+.scene .post-head {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.scene .post-head time {
+  margin-left: 0.375rem;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+}
+.scene .post-text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.scene .composer {
+  border-top: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.375rem 0.625rem 0.5rem;
+}
+.scene .memo-title {
+  margin: 0 0 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .memo-list {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 0.25rem 0.5rem;
+  margin: 0;
+}
+.scene .memo-row dt {
+  margin: 0;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .memo-row dd {
+  margin: 0;
+  border-radius: var(--radius-sm);
+  padding: 0 0.375rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.scene .memo-row dd::before {
+  margin-right: 0.25rem;
+}
+.scene .memo-row dd[data-state="unknown"] {
+  color: var(--role-muted);
+}
+.scene .memo-row dd[data-state="unknown"]::before {
+  content: "・" / "";
+}
+.scene .memo-row dd[data-state="found"] {
+  background: var(--role-accent-soft);
+  color: var(--role-accent-strong);
+  font-weight: 700;
+}
+.scene .memo-row dd[data-state="found"]::before {
+  content: "✓" / "";
+}
+.scene .memo-row dd[data-state="missing"] {
+  background: var(--role-danger-soft);
+  color: var(--role-danger);
+  font-weight: 700;
+}
+.scene .memo-row dd[data-state="missing"]::before {
+  content: "✕" / "";
+}
+.scene .reason {
+  margin: 0.25rem 0 0;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.scene .scene-foot {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+}
+.scene .scene-foot button {
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.125rem 0.75rem;
+  color: var(--role-accent);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.scene .scene-foot button:hover {
+  background: var(--role-accent-soft);
+}
+.scene :global([data-role="reset"]),
+.scene :global([data-role="reset-sql"]),
+.scene :global([data-role="restore"]) {
+  display: none !important;
+}
+.scene .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.375rem;
+}
+.scene .actions button {
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.25rem 0.625rem;
+  color: var(--role-accent);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.scene .actions button:hover:not(:disabled) {
+  background: var(--role-accent-soft);
+}
+.scene .actions button.primary {
+  background: var(--role-accent);
+  color: var(--role-on-accent);
+}
+.scene .actions button.primary:hover:not(:disabled) {
+  background: var(--role-accent);
+  opacity: 0.9;
+}
+.scene .actions button:disabled {
+  border-color: var(--role-rule);
+  background: var(--role-surface);
+  color: var(--role-muted);
+  cursor: not-allowed;
+}
+
+.scene .tab-strip {
+  align-items: flex-end;
+  padding-bottom: 0;
+}
+.scene .tab-strip .dots {
+  align-self: center;
+}
+.scene .tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.scene .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: -1px;
+  border: 1px solid var(--role-rule);
+  border-bottom: 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: transparent;
+  padding: 0.25rem 0.75rem;
+  color: var(--role-muted);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.scene .tab:hover:not([aria-selected="true"]) {
+  background: var(--role-accent-soft);
+}
+.scene .tab[aria-selected="true"] {
+  background: var(--role-surface);
+  box-shadow: inset 0 2px 0 var(--role-accent);
+  color: var(--role-fg);
+  font-weight: 700;
+}
+.scene .unseen {
+  border: 1px solid var(--role-warning-line);
+  border-radius: 999px;
+  background: var(--role-warning-soft);
+  padding: 0 0.375rem;
+  color: var(--role-warning);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.scene .address {
+  display: flex;
+  margin: 0;
+  border-bottom: 1px solid var(--role-rule);
+  padding: 0.25rem 0.625rem;
+}
+.scene .address-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--role-sunken);
+  padding: 0 0.75rem;
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene .pages {
+  display: flex;
+  flex-direction: column;
+  height: 26rem;
+  min-height: 0;
+}
+.scene .panel {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.scene .panel[hidden] {
+  display: none;
+}
+.scene .panel-note {
+  margin: 0;
+  border-top: 1px solid var(--role-rule);
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.scene .console {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+.scene .tables {
+  flex: none;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.375rem 0.625rem;
+}
+.scene .side-title {
+  margin: 0 0 0.125rem;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .table-item {
+  display: block;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0.125rem 0.375rem;
+  color: var(--role-accent);
+  font-family: var(--font-code);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.scene .table-item:hover {
+  background: var(--role-accent-soft);
+}
+.scene .columns {
+  margin: 0;
+  padding: 0 0 0 0.375rem;
+  list-style: none;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.scene .columns li {
+  margin: 0;
+}
+.scene .columns code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.75rem;
+}
+.scene .columns span {
+  color: var(--role-muted);
+  font-family: var(--font-code);
+}
+
+.scene :global(.playground) {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--role-surface);
+  padding: 0.375rem 0.625rem;
+}
+.scene :global(.playground-status),
+.scene :global(.playground-toolbar) {
+  margin-bottom: 0.25rem;
+}
+.scene :global(.playground-toolbar) {
+  align-items: center;
+}
+.scene :global(.playground button) {
+  padding: 0.125rem 0.625rem;
+  font-size: 0.8125rem;
+}
+.scene :global(.playground-hint) {
+  font-size: 0.75rem;
+}
+:global(.content) .scene :global(.playground-panes) {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+  min-height: 0;
+}
+:global(.content) .scene :global(.playground-pane-editor) {
+  display: block;
+  flex: none;
+  min-height: 0;
+}
+:global(.content) .scene :global(.playground-editor) {
+  position: static;
+  height: 4.5rem;
+  min-height: 0;
+  overflow: hidden;
+}
+:global(.content) .scene :global(.playground-editor .cm-editor) {
+  height: 100%;
+  max-height: none;
+}
+:global(.content) .scene :global(.playground-results) {
+  display: block;
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  margin-top: 0;
+  overflow: auto;
+  border: 1px solid var(--role-rule);
+  background: var(--role-surface);
+  padding: 0.375rem 0.5rem;
+}
+
+.scene .logs {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+.scene .facets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+}
+.scene .facet {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.scene .facet legend {
+  padding: 0;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .facet-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.scene .facet-item input {
+  margin: 0;
+}
+.scene .facet-count {
+  margin-left: auto;
+  color: var(--role-muted);
+  font-variant-numeric: tabular-nums;
+}
+.scene .logs-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.scene .search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  border-bottom: 1px solid var(--role-rule);
+  padding: 0.25rem 0.625rem;
+}
+.scene .query {
+  flex: 1 1 12rem;
+  min-width: 0;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.125rem 0.5rem;
+  color: var(--role-fg);
+  font-family: var(--font-code);
+  font-size: 0.8125rem;
+}
+.scene .range {
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.scene .chart {
+  flex: none;
+  border-bottom: 1px solid var(--role-rule);
+  padding: 0.25rem 0.625rem 0.125rem;
+}
+.scene .bars {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  align-items: end;
+  gap: 2px;
+  height: 2.5rem;
+  border-bottom: 1px solid var(--role-rule);
+}
+.scene .bar {
+  display: block;
+  min-height: 0;
+  border-radius: 1px 1px 0 0;
+  background: var(--role-accent);
+}
+.scene .bar[data-warn="true"] {
+  background: var(--role-warning-line);
+}
+.scene .axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.scene .log-count {
+  flex: none;
+  margin: 0;
+  padding: 0.125rem 0.625rem;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+}
+.scene .log-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 14rem;
+  overflow: auto;
+}
+.scene .log-table {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+}
+.scene .log-table th,
+.scene .log-table td {
+  border-bottom: 1px solid var(--role-rule);
+  padding: 0.125rem 0.5rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.scene .log-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--role-sunken);
+  color: var(--role-muted);
+  font-weight: 700;
+}
+.scene .log-row {
+  cursor: pointer;
+}
+.scene .log-row:hover {
+  background: var(--role-accent-soft);
+}
+.scene .log-row[aria-current="true"] {
+  background: var(--role-accent-soft);
+}
+.scene .log-row .col-date {
+  border-left: 3px solid var(--role-accent);
+}
+.scene .log-row[data-level="warn"] .col-date {
+  border-left-color: var(--role-warning-line);
+}
+.scene .level {
+  display: inline-block;
+  min-width: 4ch;
+  margin-right: 0.5ch;
+  color: var(--role-accent);
+  font-weight: 700;
+}
+.scene .level[data-level="warn"] {
+  color: var(--role-warning);
+}
+.scene .log-empty {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.8125rem;
+}
+
+.scene .detail {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: min(22rem, 100%);
+  border-left: 1px solid var(--role-border);
+  background: var(--role-surface);
+  box-shadow: var(--shadow-raised);
+}
+.scene .detail[hidden] {
+  display: none;
+}
+.scene .detail-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.125rem 0.625rem;
+}
+.scene .detail-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.scene .detail-head button {
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0 0.5rem;
+  color: var(--role-accent);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.scene .detail-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+}
+.scene .detail-message {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-code);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.scene .detail-section {
+  margin: 0.375rem 0 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .detail dl {
+  margin: 0;
+}
+.scene .detail dl > div {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  border-top: 1px solid var(--role-rule);
+  padding: 0.0625rem 0;
+}
+.scene .detail dt {
+  margin: 0;
+  color: var(--role-muted);
+  font-family: var(--font-code);
+}
+.scene .detail dd {
+  margin: 0;
+  font-family: var(--font-code);
+  overflow-wrap: anywhere;
+}
+
+.scene .agent-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem 0.625rem;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+}
+.scene .agent-brand {
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .agent-session {
+  min-width: 0;
+  font-weight: 700;
+}
+.scene .agent-status {
+  margin-left: auto;
+  border: 1px solid var(--role-accent);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  color: var(--role-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.scene .agent-status[data-state="done"] {
+  border-color: var(--role-success-line);
+  color: var(--role-success);
+}
+.scene .agent-log {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 22rem;
+  overflow: auto;
+  padding: 0.5rem 0.75rem;
+}
+.scene .turns {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+.scene .turn {
+  margin: 0;
+}
+.scene .turn + .turn,
+.scene .turn + .thinking,
+.scene .thinking + .turn {
+  margin-top: 0.5rem;
+}
+.scene .turn.user {
+  display: flex;
+  justify-content: flex-end;
+}
+.scene .bubble {
+  max-width: 85%;
+  margin: 0;
+  border-radius: var(--radius-lg);
+  background: var(--role-accent-soft);
+  padding: 0.25rem 0.625rem;
+  color: var(--role-accent-strong);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.scene .turn.agent p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.scene .turn.agent p + p {
+  margin-top: 0.25rem;
+}
+.scene .thinking {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  color: var(--role-muted);
+  font-size: 0.8125rem;
+}
+.scene .thinking-mark {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--role-muted);
+}
+.scene .turn.tool details {
+  border: 1px solid var(--role-rule);
+  border-radius: var(--radius-md);
+  background: var(--role-sunken);
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+}
+.scene .turn.tool summary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.1875rem 0.5rem;
+  list-style: none;
+  cursor: pointer;
+}
+.scene .turn.tool summary::-webkit-details-marker {
+  display: none;
+}
+.scene .turn.tool summary::after {
+  content: "▸" / "";
+  margin-left: auto;
+  color: var(--role-muted);
+}
+.scene .turn.tool details[open] summary::after {
+  content: "▾" / "";
+}
+.scene .turn.tool summary:focus-visible {
+  outline: 2px solid var(--role-accent);
+  outline-offset: -2px;
+}
+.scene .tool-state {
+  flex: none;
+  width: 0.875rem;
+  text-align: center;
+}
+.scene .turn.tool[data-state="done"] .tool-state::before {
+  content: "✓" / "";
+  color: var(--role-success);
+  font-weight: 700;
+}
+.scene .turn.tool[data-state="running"] .tool-state::before {
+  content: "";
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 2px solid var(--role-rule);
+  border-top-color: var(--role-accent);
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.scene .tool-name {
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: var(--role-rule);
+  padding: 0 0.375rem;
+  font-weight: 700;
+}
+.scene .tool-target {
+  min-width: 0;
+  overflow: hidden;
+  background: transparent;
+  padding: 0;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scene .tool-body {
+  border-top: 1px solid var(--role-rule);
+  background: var(--role-surface);
+  padding: 0.375rem 0.5rem;
+}
+.scene .tool-body[hidden] {
+  display: none;
+}
+.scene .tool-body > button {
+  position: relative;
+  margin-top: 0.375rem;
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.0625rem 0.625rem;
+  color: var(--role-accent);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.scene .tool-body > button:hover {
+  background: var(--role-accent-soft);
+}
+.scene .tool-table {
+  display: table;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+.scene .tool-table th,
+.scene .tool-table td {
+  border: 1px solid var(--role-rule);
+  padding: 0.0625rem 0.5rem;
+  text-align: left;
+}
+.scene .tool-table th {
+  background: var(--role-sunken);
+}
+.scene .tool-line {
+  margin: 0 0 0.25rem;
+}
+.scene .tool-line code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.scene .tool-attrs {
+  margin: 0;
+}
+.scene .tool-attrs > div {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  border-top: 1px solid var(--role-rule);
+}
+.scene .tool-attrs dt {
+  margin: 0;
+  color: var(--role-muted);
+}
+.scene .tool-attrs dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.scene .tool-pre {
+  max-height: 11rem;
+  margin: 0;
+  overflow: auto;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.scene .tool-pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.75rem;
+}
+.scene .agent-result {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  justify-content: start;
+  gap: 0.125rem 1.5rem;
+  margin: 0 0 0.25rem;
+  font-size: 0.875rem;
+}
+.scene .agent-result > div {
+  display: flex;
+  gap: 0.5rem;
+}
+.scene .agent-result dt {
+  margin: 0;
+  color: var(--role-muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.scene .agent-result dd {
+  margin: 0;
+}
+.scene .agent-composer {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 0.5rem;
+  border-top: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.375rem 0.625rem;
+}
+.scene .agent-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 2.75rem;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.25rem 0.5rem;
+  color: var(--role-fg);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  resize: none;
+}
+.scene .agent-input:focus-visible {
+  outline: 2px solid var(--role-accent);
+  outline-offset: -2px;
+}
+.scene .agent-send {
+  flex: none;
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-accent);
+  padding: 0.25rem 0.875rem;
+  color: var(--role-on-accent);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.scene .agent-send:disabled {
+  border-color: var(--role-rule);
+  background: var(--role-surface);
+  color: var(--role-muted);
+  cursor: not-allowed;
+}
+@media (max-width: 639px) {
+  .scene .agent-result {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .scene .turn.tool[data-state="running"] .tool-state::before {
+    animation: agent-spin 0.8s linear infinite;
+  }
+  .scene .thinking-mark {
+    animation: agent-pulse 1s ease-in-out infinite;
+  }
+}
+@keyframes agent-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes agent-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.scene .repo-head {
+  flex: none;
+  border-bottom: 1px solid var(--role-rule);
+  background: var(--role-sunken);
+  padding: 0.25rem 0.625rem;
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+}
+.scene :global(pre.astro-code) {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 20rem;
+  margin: 0;
+  overflow: auto;
+  border-radius: 0;
+  padding: 0.375rem 0;
+  background: var(--role-console) !important;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.scene :global(pre.astro-code code) {
+  display: grid;
+  width: max-content;
+  min-width: 100%;
+  background: transparent;
+  counter-reset: line;
+}
+.scene :global(pre.astro-code .line) {
+  padding: 0 0.625rem;
+}
+.scene :global(pre.astro-code .line::before) {
+  content: counter(line);
+  counter-increment: line;
+  display: inline-block;
+  width: 1.5rem;
+  margin-right: 1rem;
+  color: var(--role-on-console);
+  opacity: 0.55;
+  text-align: right;
+}
+
+@media (min-width: 640px) {
+  .scene .console {
+    flex-direction: row;
+  }
+  .scene .tables {
+    width: 10rem;
+    border-right: 1px solid var(--role-rule);
+    border-bottom: 0;
+  }
+  .scene .logs {
+    grid-template-columns: 8rem minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .scene .facets {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    border-right: 1px solid var(--role-rule);
+    border-bottom: 0;
+    overflow-y: auto;
+  }
+  .scene .log-scroll {
+    max-height: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  :global(.content) :global(.chapter-body) > .scene {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    flex: 1 1 0;
+    min-height: 26rem;
+    max-height: 40rem;
+  }
+  .scene .feed {
+    flex: 1 1 0;
+    min-height: 10rem;
+    overflow-y: auto;
+  }
+  .scene .pages {
+    flex: 1 1 0;
+    height: auto;
+  }
+  .scene :global(pre.astro-code) {
+    max-height: none;
+  }
+  .scene .agent-log {
+    max-height: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .scene .tab,
+  .scene .table-item,
+  .scene .log-row {
+    transition: background-color 0.1s;
+  }
+}
+</style>
+
+<script>
+const tools = ['console', 'logs', 'repo'] as const;
+type Tool = (typeof tools)[number];
+const isTool = (value: string | undefined): value is Tool =>
+  tools.some((tool) => tool === value);
+
+type LogRow = {
+  element: HTMLTableRowElement;
+  level: string;
+  method: string;
+  hour: number;
+  text: string;
+  cancel: boolean;
+  date: string;
+  content: string;
+  attrs: Map<string, string>;
+};
+
+const parseAttrs = (raw: string | undefined): Map<string, string> => {
+  const parsed: unknown = JSON.parse(raw ?? '[]');
+  const entries = Array.isArray(parsed)
+    ? parsed.flatMap((entry: unknown): [string, string][] =>
+      Array.isArray(entry) && typeof entry[0] === 'string'
+        && typeof entry[1] === 'string'
+        ? [[entry[0], entry[1]]]
+        : []
+    )
+    : [];
+  return new Map(entries);
+};
+
+for (
+  const root of document.querySelectorAll<HTMLElement>('[data-investigation]')
+) {
+  const must = <T extends Element>(selector: string): T => {
+    const found = root.querySelector<T>(selector);
+    if (found === null) {
+      throw new Error(`要素が見つかりません: ${selector}`);
+    }
+    return found;
+  };
+
+  const tabList = must<HTMLElement>('[role="tablist"]');
+  const pages = must<HTMLElement>('.pages');
+  const tabsOf = (): HTMLButtonElement[] => [
+    ...root.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+  ];
+  const panelsOf = (): HTMLElement[] => [
+    ...root.querySelectorAll<HTMLElement>('[role="tabpanel"]'),
+  ];
+  const agentTab = must<HTMLTemplateElement>('template[data-agent-tab]');
+  const agentPanel = must<HTMLTemplateElement>('template[data-agent-panel]');
+  const agentSteps = must<HTMLTemplateElement>('template[data-agent-steps]');
+  const agentParts = must<HTMLTemplateElement>('template[data-agent-parts]');
+  const address = must<HTMLElement>('[data-address]');
+  const feed = must<HTMLElement>('[data-feed]');
+  const replies = must<HTMLTemplateElement>('template[data-replies]');
+  const reason = must<HTMLElement>('[data-reason]');
+  const memoList = must<HTMLElement>('[data-unknown]');
+  const memos = [...root.querySelectorAll<HTMLElement>('[data-memo]')];
+  const replyButton = must<HTMLButtonElement>('[data-action="reply"]');
+  const answerButton = must<HTMLButtonElement>('[data-action="answer"]');
+  const resetButton = must<HTMLButtonElement>('[data-action="reset"]');
+  const unknownText = memoList.dataset.unknown ?? '';
+
+  const playground = must<HTMLElement>('[data-playground="sql"]');
+  const results = must<HTMLElement>('[data-role="results"]');
+  const dbReset = must<HTMLButtonElement>('[data-role="reset"]');
+  const resetSql = must<HTMLButtonElement>('[data-role="reset-sql"]');
+  const restoreSql = must<HTMLButtonElement>('[data-role="restore"]');
+
+  const query = must<HTMLInputElement>('[data-query]');
+  const logCount = must<HTMLElement>('[data-log-count]');
+  const logEmpty = must<HTMLElement>('[data-empty]');
+  const chart = must<HTMLElement>('[data-chart]');
+  const bars = [...chart.querySelectorAll<HTMLElement>('.bar')];
+  const facetInputs = [
+    ...root.querySelectorAll<HTMLInputElement>('[data-facet]'),
+  ];
+  const detail = must<HTMLElement>('[data-detail]');
+  const detailClose = must<HTMLButtonElement>('[data-detail-close]');
+
+  const rows: LogRow[] = [
+    ...root.querySelectorAll<HTMLTableRowElement>('[data-log-row]'),
+  ].map((element) => ({
+    element,
+    level: element.dataset.level ?? '',
+    method: element.dataset.method ?? '',
+    hour: Number(element.dataset.hour ?? '0'),
+    text: element.dataset.text ?? '',
+    cancel: element.dataset.cancel === 'true',
+    date: element.dataset.date ?? '',
+    content: element.dataset.content ?? '',
+    attrs: parseAttrs(element.dataset.attrs),
+  }));
+
+  const state = {
+    selected: 'console' as string,
+    opened: new Set<Tool>(),
+    agent: false,
+    revealed: false,
+    replied: false,
+    current: null as LogRow | null,
+  };
+  let resetting = false;
+
+  const facetValue = (row: LogRow, facet: string): string =>
+    facet === 'status'
+      ? row.level
+      : facet === 'method'
+      ? row.method
+      : 'clinic-api';
+
+  const matchesToken = (row: LogRow, token: string): boolean => {
+    const pair = /^(@?[\w.]+):(.+)$/.exec(token);
+    if (pair !== null) {
+      const key = pair[1] ?? '';
+      const value = (pair[2] ?? '').toLowerCase();
+      if (key === 'service') return value === 'clinic-api';
+      if (key === 'host') return value === 'clinic-api-1';
+      if (key === 'status') return row.level === value;
+      if (key.startsWith('@')) {
+        const attr = row.attrs.get(key.slice(1));
+        if (attr !== undefined) return attr.toLowerCase() === value;
+      }
+    }
+    return row.text.includes(token.toLowerCase());
+  };
+
+  const showsPochiStatus = (): boolean => {
+    for (const result of results.querySelectorAll('.playground-result')) {
+      const heads = [...result.querySelectorAll('thead th')].map((cell) =>
+        cell.textContent
+      );
+      if (!heads.includes('status')) continue;
+      const body = [...result.querySelectorAll('tbody tr')];
+      const statement =
+        result.querySelector('.playground-statement code')?.textContent ?? '';
+      const named = body.some((row) =>
+        [...row.querySelectorAll('td')].some((cell) =>
+          cell.textContent === 'visit-pochi'
+        )
+      );
+      if (named || (body.length > 0 && statement.includes('visit-pochi'))) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const refreshLogs = (): void => {
+    const tokens = query.value.split(/\s+/).filter((token) => token !== '');
+    const byQuery = rows.filter((row) =>
+      tokens.every((token) => matchesToken(row, token))
+    );
+    const checked = new Map<string, Set<string>>();
+    for (const input of facetInputs) {
+      const facet = input.dataset.facet ?? '';
+      const count = byQuery.filter((row) =>
+        facetValue(row, facet) === input.value
+      ).length;
+      const label = input.closest('label')?.querySelector('[data-facet-count]');
+      if (label !== null && label !== undefined) {
+        label.textContent = String(count);
+      }
+      if (input.checked) {
+        checked.set(
+          facet,
+          (checked.get(facet) ?? new Set<string>()).add(input.value),
+        );
+      }
+    }
+    const shown = byQuery.filter((row) =>
+      [...checked].every(([facet, values]) =>
+        values.has(facetValue(row, facet))
+      )
+    );
+    for (const row of rows) {
+      row.element.hidden = !shown.includes(row);
+    }
+    logCount.textContent = `${rows.length}件中 ${shown.length}件`;
+    logEmpty.hidden = shown.length !== 0;
+    const counts = bars.map((_, hour) =>
+      shown.filter((row) => row.hour === hour)
+    );
+    const peak = Math.max(...counts.map((list) => list.length));
+    bars.forEach((bar, hour) => {
+      const list = counts[hour] ?? [];
+      bar.style.height = list.length === 0
+        ? '0%'
+        : `${Math.max(8, Math.round(list.length / peak * 100))}%`;
+      bar.dataset.warn = String(list.some((row) => row.level === 'warn'));
+    });
+    const warnHours = counts.flatMap((
+      list,
+      hour,
+    ) => (list.some((row) => row.level === 'warn') ? [`${hour} 時台`] : []));
+    const peakHour = counts.findIndex((list) => list.length === peak);
+    chart.setAttribute(
+      'aria-label',
+      shown.length === 0
+        ? '1時間ごとのログ件数。表示中のログはありません。'
+        : `1時間ごとのログ件数。合計 ${shown.length} 件。最も多いのは ${peakHour} 時台の ${peak} 件。${
+          warnHours.length === 0
+            ? 'Warn を含む時間帯はありません。'
+            : `Warn を含む時間帯は ${warnHours.join('、')}。`
+        }`,
+    );
+    if (state.current !== null && state.current.element.hidden) {
+      closeDetail(false);
+    }
+  };
+
+  const fillDetail = (row: LogRow): void => {
+    for (
+      const field of detail.querySelectorAll<HTMLElement>('[data-detail-field]')
+    ) {
+      const key = field.dataset.detailField;
+      field.textContent = key === 'message'
+        ? row.content
+        : key === 'date'
+        ? row.date
+        : row.level === 'warn'
+        ? 'Warn'
+        : 'Info';
+    }
+    for (
+      const attr of detail.querySelectorAll<HTMLElement>('[data-detail-attr]')
+    ) {
+      attr.textContent = row.attrs.get(attr.dataset.detailAttr ?? '') ?? '';
+    }
+  };
+
+  const openDetail = (row: LogRow): void => {
+    state.current?.element.removeAttribute('aria-current');
+    state.current = row;
+    row.element.setAttribute('aria-current', 'true');
+    fillDetail(row);
+    detail.hidden = false;
+    if (row.cancel) state.opened.add('logs');
+    render();
+    detailClose.focus();
+  };
+
+  function closeDetail(restoreFocus: boolean): void {
+    const row = state.current;
+    state.current = null;
+    row?.element.removeAttribute('aria-current');
+    detail.hidden = true;
+    if (restoreFocus && row !== null && !row.element.hidden) {
+      row.element.focus();
+    }
+  }
+
+  const reasonText = (): string => {
+    const missing = tools.filter((tool) => !state.opened.has(tool));
+    if (missing.length === tools.length) {
+      return '3つのツールをすべて開くと返信できます。';
+    }
+    if (missing.length >= 2) {
+      return `あと${missing.length}つのツールを開くと返信できます。`;
+    }
+    if (missing[0] === 'console') {
+      return 'DB コンソールで、visit-pochi の status を表示すると返信できます。';
+    }
+    if (missing[0] === 'logs') {
+      return 'ログの検索で、キャンセルの操作のログを開くと返信できます。';
+    }
+    return 'リポジトリのタブを開くと返信できます。';
+  };
+
+  function render(): void {
+    const ready = state.revealed
+      || tools.every((tool) => state.opened.has(tool));
+    const known = {
+      what: state.revealed || state.opened.has('console'),
+      when: state.revealed || state.opened.has('logs'),
+      who: ready,
+      why: ready,
+    };
+    root.dataset.opened = [...state.opened].join(' ');
+    root.dataset.selected = state.selected;
+    root.dataset.phase = state.replied
+      ? 'replied'
+      : ready
+      ? 'ready'
+      : state.opened.size > 0 || state.agent
+      ? 'investigating'
+      : 'initial';
+    const tabs = tabsOf();
+    for (const tab of tabs) {
+      const tool = tab.dataset.tool;
+      const isSelected = tool === state.selected;
+      tab.setAttribute('aria-selected', String(isSelected));
+      tab.tabIndex = isSelected ? 0 : -1;
+      const unseen = tab.querySelector<HTMLElement>('[data-unseen]');
+      if (unseen !== null) {
+        unseen.hidden = isTool(tool) && state.opened.has(tool);
+      }
+    }
+    for (const panel of panelsOf()) {
+      panel.hidden = panel.dataset.tool !== state.selected;
+    }
+    const selectedTab = tabs.find((tab) => tab.dataset.tool === state.selected);
+    address.textContent = selectedTab?.dataset.url ?? '';
+    for (const memo of memos) {
+      const key = memo.dataset.memo;
+      const isKnown =
+        key === 'what' || key === 'when' || key === 'who' || key === 'why'
+          ? known[key]
+          : false;
+      memo.dataset.state = isKnown
+        ? memo.dataset.result ?? 'unknown'
+        : 'unknown';
+      memo.textContent = isKnown ? memo.dataset.text ?? '' : unknownText;
+    }
+    answerButton.disabled = state.agent;
+    replyButton.disabled = !ready;
+    replyButton.hidden = state.replied;
+    reason.hidden = ready || state.replied;
+    reason.textContent = reasonText();
+  }
+
+  const select = (tool: string): void => {
+    state.selected = tool;
+    if (tool === 'repo') state.opened.add(tool);
+    render();
+  };
+
+  const tabOf = (event: Event): HTMLButtonElement | null =>
+    event.target instanceof Element
+      ? event.target.closest<HTMLButtonElement>('[role="tab"]')
+      : null;
+  tabList.addEventListener('click', (event) => {
+    const tab = tabOf(event);
+    if (tab !== null) select(tab.dataset.tool ?? '');
+  });
+  tabList.addEventListener('keydown', (event) => {
+    const tab = tabOf(event);
+    if (
+      tab === null || event.altKey || event.ctrlKey || event.metaKey
+      || event.shiftKey
+    ) return;
+    const tabs = tabsOf();
+    const index = tabs.indexOf(tab);
+    const target = event.key === 'ArrowRight'
+      ? tabs[(index + 1) % tabs.length]
+      : event.key === 'ArrowLeft'
+      ? tabs[(index + tabs.length - 1) % tabs.length]
+      : event.key === 'Home'
+      ? tabs[0]
+      : event.key === 'End'
+      ? tabs[tabs.length - 1]
+      : undefined;
+    if (target === undefined) return;
+    event.preventDefault();
+    select(target.dataset.tool ?? '');
+    target.focus();
+  });
+
+  query.addEventListener('input', refreshLogs);
+  for (const input of facetInputs) {
+    input.addEventListener('change', refreshLogs);
+  }
+
+  for (const row of rows) {
+    row.element.addEventListener('click', () => openDetail(row));
+    row.element.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      openDetail(row);
+    });
+  }
+  detailClose.addEventListener('click', () => closeDetail(true));
+  root.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !detail.hidden) {
+      event.preventDefault();
+      closeDetail(true);
+    }
+  });
+
+  const setSql = (sql: string): void => {
+    playground.dispatchEvent(
+      new CustomEvent('playground:set-sql', { detail: { sql, run: true } }),
+    );
+  };
+  for (
+    const button of root.querySelectorAll<HTMLButtonElement>('[data-table]')
+  ) {
+    button.addEventListener(
+      'click',
+      () => setSql(`SELECT * FROM ${button.dataset.table ?? ''};`),
+    );
+  }
+
+  const placeholder = (): void => {
+    const note = document.createElement('p');
+    note.className = 'playground-note';
+    note.textContent = 'クエリを実行すると、結果がここに出ます。';
+    results.replaceChildren(note);
+  };
+  const quietEditor = (): boolean => {
+    const announced = playground.querySelector('.cm-announced');
+    announced?.removeAttribute('aria-live');
+    return announced !== null;
+  };
+  if (!quietEditor()) {
+    const editorWatcher = new MutationObserver(() => {
+      if (quietEditor()) editorWatcher.disconnect();
+    });
+    editorWatcher.observe(playground, { childList: true, subtree: true });
+  }
+  results.removeAttribute('aria-live');
+  results.setAttribute('role', 'status');
+  placeholder();
+  new MutationObserver(() => {
+    if (
+      results.querySelector('.playground-result, .playground-error') !== null
+    ) {
+      resetting = false;
+      if (!state.opened.has('console') && showsPochiStatus()) {
+        state.opened.add('console');
+        render();
+      }
+      return;
+    }
+    if (resetting) {
+      resetting = false;
+      placeholder();
+    }
+  }).observe(results, { childList: true });
+
+  replyButton.addEventListener('click', () => {
+    feed.append(replies.content.cloneNode(true));
+    state.replied = true;
+    render();
+    feed.focus({ preventScroll: true });
+    feed.lastElementChild?.scrollIntoView({ block: 'nearest' });
+  });
+
+  let agentTimers: number[] = [];
+  const stepDelay = 800;
+  const toolDelay = 600;
+  const followUp =
+    'これ以上調べられるデータがありません。理由と操作した人は、どこにも記録されていません。';
+
+  const startAgent = (): void => {
+    state.agent = true;
+    tabList.append(agentTab.content.cloneNode(true));
+    pages.append(agentPanel.content.cloneNode(true));
+    const list = must<HTMLElement>('[data-agent-list]');
+    const log = must<HTMLElement>('[data-agent-log]');
+    const statusLabel = must<HTMLElement>('[data-agent-status]');
+    const input = must<HTMLTextAreaElement>('[data-agent-input]');
+    const send = must<HTMLButtonElement>('[data-agent-send]');
+    const blocks = [...agentSteps.content.children];
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const later = (ms: number, run: () => void): void => {
+      if (ms === 0) {
+        run();
+      } else {
+        agentTimers.push(window.setTimeout(run, ms));
+      }
+    };
+    const part = (name: string): HTMLElement => {
+      const found = agentParts.content.querySelector(`[data-part="${name}"]`);
+      const copy = found?.cloneNode(true);
+      if (!(copy instanceof HTMLElement)) {
+        throw new Error(`部品が見つかりません: ${name}`);
+      }
+      return copy;
+    };
+    const toEnd = (): void => {
+      log.scrollTop = log.scrollHeight;
+    };
+    const append = (node: Node): void => {
+      list.querySelector('[data-thinking]')?.remove();
+      list.append(node);
+      toEnd();
+    };
+    const thinking = (): void => {
+      list.querySelector('[data-thinking]')?.remove();
+      list.append(part('thinking'));
+      toEnd();
+    };
+    const setRunning = (running: boolean): void => {
+      statusLabel.dataset.state = running ? 'running' : 'done';
+      statusLabel.textContent = running ? '実行中' : '完了';
+      send.disabled = running;
+    };
+    const setToolState = (node: HTMLElement, running: boolean): void => {
+      node.dataset.state = running ? 'running' : 'done';
+      const body = node.querySelector<HTMLElement>('[data-tool-body]');
+      if (body !== null) body.hidden = running;
+      const label = node.querySelector('[data-tool-state-text]');
+      if (label !== null) label.textContent = running ? '実行中' : '完了';
+    };
+    const complete = (): void => {
+      state.revealed = true;
+      setRunning(false);
+      render();
+    };
+
+    select('agent');
+    setRunning(true);
+    if (reduced) {
+      for (const block of blocks) append(block.cloneNode(true));
+      complete();
+    } else {
+      let elapsed = 0;
+      blocks.forEach((block, index) => {
+        const node = block.cloneNode(true) as HTMLElement;
+        const isTool = block.getAttribute('data-kind') === 'tool';
+        const last = index === blocks.length - 1;
+        if (index > 0) elapsed += stepDelay;
+        later(elapsed, () => {
+          if (isTool) setToolState(node, true);
+          append(node);
+          if (last) complete();
+          else if (!isTool) thinking();
+        });
+        if (isTool) {
+          elapsed += toolDelay;
+          later(elapsed, () => {
+            setToolState(node, false);
+            if (!last) thinking();
+          });
+        }
+      });
+    }
+
+    const submit = (): void => {
+      const text = input.value.trim();
+      if (text === '' || send.disabled) return;
+      input.value = '';
+      const user = part('user');
+      const userText = user.querySelector('[data-text]');
+      if (userText !== null) userText.textContent = text;
+      append(user);
+      const answer = (): void => {
+        const reply = part('reply');
+        const replyText = reply.querySelector('[data-text]');
+        if (replyText !== null) replyText.textContent = followUp;
+        append(reply);
+        setRunning(false);
+      };
+      setRunning(true);
+      if (reduced) {
+        answer();
+      } else {
+        thinking();
+        later(stepDelay, answer);
+      }
+    };
+    send.addEventListener('click', submit);
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      submit();
+    });
+  };
+
+  const openTool = (tool: string): void => {
+    select(tool);
+    if (tool === 'console') {
+      setSql(`SELECT * FROM visits WHERE id = 'visit-pochi';`);
+    }
+    if (tool === 'logs') {
+      query.value = 'service:clinic-api visit-pochi';
+      for (const input of facetInputs) input.checked = false;
+      refreshLogs();
+      const target = rows.find((row) => row.cancel);
+      if (target !== undefined) openDetail(target);
+    }
+  };
+  root.addEventListener('click', (event) => {
+    const button = event.target instanceof Element
+      ? event.target.closest<HTMLElement>('[data-open-tool]')
+      : null;
+    if (button !== null) openTool(button.dataset.openTool ?? '');
+  });
+
+  answerButton.addEventListener('click', () => {
+    if (!state.agent) startAgent();
+  });
+  resetButton.addEventListener('click', () => {
+    for (const timer of agentTimers) window.clearTimeout(timer);
+    agentTimers = [];
+    for (const element of root.querySelectorAll('[data-tool="agent"]')) {
+      element.remove();
+    }
+    state.agent = false;
+    state.opened.clear();
+    state.revealed = false;
+    state.replied = false;
+    state.selected = 'console';
+    for (const reply of feed.querySelectorAll('[data-reply]')) reply.remove();
+    query.value = query.dataset.initial ?? '';
+    for (const input of facetInputs) input.checked = false;
+    closeDetail(false);
+    refreshLogs();
+    resetSql.click();
+    restoreSql.hidden = true;
+    if (dbReset.disabled) {
+      placeholder();
+    } else {
+      resetting = true;
+      dbReset.click();
+    }
+    render();
+  });
+
+  refreshLogs();
+  render();
+}
+</script>

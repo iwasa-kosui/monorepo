@@ -262,6 +262,20 @@ const mount = (root: HTMLElement): void => {
     backup = null;
     restoreButton.hidden = true;
   });
+  root.addEventListener('playground:set-sql', (event) => {
+    const detail = (event as CustomEvent<{ sql: string; run: boolean }>).detail;
+    backup = null;
+    restoreButton.hidden = true;
+    view.setState(stateFor(detail.sql));
+    if (detail.sql === config.initialSql) {
+      clearSql(config.storageId);
+    } else {
+      saveSql(config.storageId, detail.sql);
+    }
+    if (detail.run) {
+      void run();
+    }
+  });
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) {
       backup = null;

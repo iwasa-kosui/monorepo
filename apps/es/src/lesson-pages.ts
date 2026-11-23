@@ -29,25 +29,27 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   },
   'intro/04': {
     flow: 'problem',
-    role: '講師が、このハンズオンの目的と、記録する方法の比較を話すのを聞きます。',
+    role: '講師が、このハンズオンの目的を話すのを聞きます。',
   },
   'intro/05': {
     flow: 'problem',
-    role: '講師が、後から記録を足すことの限界を話すのを聞きます。',
+    role: '講師が、記録する方法の比較を話すのを聞きます。',
   },
   'intro/06': {
+    flow: 'problem',
+    role: '講師が、後から記録を足すことの限界を話すのを聞きます。',
+  },
+  'intro/07': {
     flow: 'problem',
     role: '講師が、コードを見ない開発の時代の品質保証と、今日の題材を話すのを聞きます。',
   },
   'chapter-1/01': {
     flow: 'try',
-    role:
-      '`show-visits.ts` を実行し、`visits` テーブルの行からは誰が、いつ、なぜキャンセルしたかを答えられないことを確かめます。',
+    role: 'チャットに届いた調査依頼を受けて、DB コンソール、ログの検索、リポジトリで、キャンセルの理由を調べます。',
   },
   'chapter-1/02': {
     flow: 'problem',
-    role:
-      '開始コードの `cancelVisit` が理由と操作した人を残さないことを読み、自分のシステムで答えられない問いを1つ挙げます。',
+    role: '自分のシステムで、現在の状態だけでは答えられない問いを1つ挙げます。',
   },
   'chapter-1/03': {
     flow: 'try',
