@@ -21,41 +21,58 @@ iori provides a "**second brain connected to collective intelligence**" — not 
 
 ### Knowledge Collection
 
-| Feature  | Description                                                         | Status      |
-| -------- | ------------------------------------------------------------------- | ----------- |
-| Follow   | Subscribe to interesting users and receive their notes continuously | Implemented |
-| Bookmark | Save useful notes for later reference and organization              | Not yet     |
-| Quote    | Incorporate others' notes with your own thoughts added              | Not yet     |
+| Feature          | Description                                                         | Status      |
+| ---------------- | ------------------------------------------------------------------- | ----------- |
+| Follow           | Subscribe to interesting users and receive their notes continuously | Implemented |
+| Bookmark         | Save useful notes for later reference and organization              | Implemented |
+| Quote            | Incorporate others' notes with your own thoughts added              | Implemented |
+| Bluesky Timeline | Import the Bluesky timeline                                         | Implemented |
+| Timeline Summary | Summarize the timeline with AI                                      | Implemented |
+| Translation      | Translate notes with AI                                             | Implemented |
+| Daily Digest     | Generate a daily digest with AI                                     | Implemented |
 
 ### Knowledge Accumulation & Organization
 
-| Feature          | Description                                     | Status      |
-| ---------------- | ----------------------------------------------- | ----------- |
-| Notes            | Record fleeting thoughts and memos (short-form) | Implemented |
-| Threads          | Develop thinking through replies to notes       | Implemented |
-| Articles         | Long-form content that compiles threads         | Implemented |
-| Full-text Search | Search through accumulated knowledge            | Not yet     |
-| Tags             | Categorize notes and articles with tags         | Not yet     |
+| Feature  | Description                                     | Status      |
+| -------- | ----------------------------------------------- | ----------- |
+| Notes    | Record fleeting thoughts and memos (short-form) | Implemented |
+| Threads  | Develop thinking through replies to notes       | Implemented |
+| Articles | Long-form content that compiles threads         | Implemented |
+| Search   | Search post text by partial match               | Implemented |
+| Tags     | Categorize notes and articles with tags         | Not yet     |
 
 ### Knowledge Sharing
 
-| Feature         | Description                                                 | Status      |
-| --------------- | ----------------------------------------------------------- | ----------- |
-| ActivityPub     | Interoperate with Mastodon, Misskey, and others             | Implemented |
-| Like & Repost   | React to others' notes                                      | Implemented |
-| Emoji Reactions | React with custom emojis                                    | Implemented |
-| Notifications   | Follow, like, and reply notifications with Web Push support | Implemented |
+| Feature            | Description                                                 | Status      |
+| ------------------ | ----------------------------------------------------------- | ----------- |
+| ActivityPub        | Interoperate with Mastodon, Misskey, and others             | Implemented |
+| Like & Repost      | React to others' notes                                      | Implemented |
+| Emoji Reactions    | React with custom emojis                                    | Implemented |
+| Notifications      | Follow, like, and reply notifications with Web Push support | Implemented |
+| Bluesky Cross-post | Post notes to Bluesky at the same time                      | Implemented |
+| Mastodon API       | Mastodon-compatible API for Mastodon client apps            | Implemented |
+| AI Bot             | Answer mentions with an AI bot                              | Implemented |
+
+### Account & Safety
+
+| Feature      | Description                            | Status      |
+| ------------ | -------------------------------------- | ----------- |
+| Passkey Auth | Sign in with passkeys                  | Implemented |
+| Mute         | Hide a user's notes                    | Implemented |
+| Block        | Block a user from interacting with you | Implemented |
 
 ## Tech Stack
 
-| Category   | Technology                                            |
-| ---------- | ----------------------------------------------------- |
-| Runtime    | Node.js                                               |
-| Framework  | [Hono](https://hono.dev/)                             |
-| Federation | [Fedify](https://fedify.dev/)                         |
-| Database   | PostgreSQL + [Drizzle ORM](https://orm.drizzle.team/) |
-| Validation | [Zod](https://zod.dev/)                               |
-| Build      | [Vite](https://vite.dev/)                             |
+| Category        | Technology                                               |
+| --------------- | -------------------------------------------------------- |
+| Runtime         | Cloudflare Workers                                       |
+| Framework       | [Hono](https://hono.dev/)                                |
+| Federation      | [Fedify](https://fedify.dev/)                            |
+| Database        | Cloudflare D1 + [Drizzle ORM](https://orm.drizzle.team/) |
+| Storage / Queue | Cloudflare R2, KV, Queues                                |
+| AI              | Workers AI                                               |
+| Validation      | [Zod](https://zod.dev/)                                  |
+| Build           | [Vite](https://vite.dev/)                                |
 
 ## Setup
 
