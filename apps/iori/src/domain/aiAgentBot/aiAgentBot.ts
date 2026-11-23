@@ -4,6 +4,7 @@ import type { ActorId } from '../actor/actorId.ts';
 import type { RemoteActorType } from '../actor/remoteActor.ts';
 import type { Instant } from '../instant/instant.ts';
 import type { PostId } from '../post/postId.ts';
+import type { Visibility } from '../post/visibility.ts';
 import type { UserId } from '../user/userId.ts';
 
 /**
@@ -37,6 +38,12 @@ export const AI_AGENT_BOT_IMAGES = {
   avatarPath: '/bot/iori-avatar-octopus-flat.png',
   headerPath: '/bot/iori-header-octopus-flat.png',
 } as const;
+
+/**
+ * bot の投稿の公開範囲。自分からの投稿も返信も、フォロワーだけに見せる。
+ * 返信は、返信先がこれより狭い公開範囲（DM）ならそちらに合わせる。メンションした相手にはフォロワーでなくても届く。
+ */
+export const AI_AGENT_BOT_POST_VISIBILITY: Visibility = 'private';
 
 /** 1 つのスレッドで bot が返信する上限。bot どうしや人との応酬が終わらないのを防ぐ */
 export const MAX_BOT_REPLIES_PER_THREAD = 20;
@@ -232,6 +239,7 @@ export const AiAgentBot = {
   retiredUsernames: RETIRED_AI_AGENT_BOT_USERNAMES,
   profile: AI_AGENT_BOT_PROFILE,
   images: AI_AGENT_BOT_IMAGES,
+  postVisibility: AI_AGENT_BOT_POST_VISIBILITY,
   isBotUsername: isAiAgentBotUsername,
   isRetiredUsername: isRetiredAiAgentBotUsername,
   decideMusingTheme,
