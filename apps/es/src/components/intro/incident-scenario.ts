@@ -181,6 +181,12 @@ export const heartbeat = {
   millis: [118, 402, 276, 531],
 };
 
+export const startGuide = [
+  'あなたは、動物病院向けの予約システムの開発者です。',
+  'カスタマーサポートから連絡が届きます。届いた連絡に対応してください。',
+  '手を動かす人はこのブラウザで動かせます。見るだけの人は講師の画面で追えます。',
+] as const;
+
 export const cancelTamaSql = `UPDATE visits SET status = 'cancelled' WHERE id = 'visit-tama';`;
 
 export const timeline: readonly TimedEvent[] = [

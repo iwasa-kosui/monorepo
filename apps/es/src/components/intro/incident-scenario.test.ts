@@ -100,7 +100,7 @@ describe('障害対応の筋書き', () => {
     expect(reply.followUps.at(-1)?.text).toBe('なんで記録取ってないんですか');
   });
 
-  it('第1章では使わない語を、文面に含まない', () => {
+  it('導入では使わない語を、文面に含まない', () => {
     for (const text of texts) {
       for (const word of ['業務イベント', 'business_events', 'target_']) {
         expect(text).not.toContain(word);

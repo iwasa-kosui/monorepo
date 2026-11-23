@@ -56,7 +56,7 @@ const cancelVisitOf = (snapshot: string): string => {
 
 test.describe('第1章', () => {
   test('テストを実行すると pass 4 / fail 4 になる', async ({ page }) => {
-    const playground = await open(page, '/chapters/chapter-1/3/');
+    const playground = await open(page, '/chapters/chapter-1/2/');
     await runTests(playground);
     await expect(summary(playground)).toHaveText('pass 4 / fail 4');
   });
@@ -65,7 +65,7 @@ test.describe('第1章', () => {
     await page.addInitScript(([key, value]) => {
       window.localStorage.setItem(key ?? '', JSON.stringify({ 'visits.ts': value }));
     }, [storageKey, cancelVisitFrom('chapter-2-step-2')]);
-    const playground = await open(page, '/chapters/chapter-1/3/');
+    const playground = await open(page, '/chapters/chapter-1/2/');
     await runTests(playground);
     await expect(summary(playground)).toHaveText('pass 4 / fail 4');
   });

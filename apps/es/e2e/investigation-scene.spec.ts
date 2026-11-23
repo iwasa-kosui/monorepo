@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 
-const path = '/chapters/chapter-1/';
+const path = '/chapters/intro/2/';
 
 const unknown = 'まだ分からない';
 const missing = 'どこにも残っていない';
@@ -56,7 +56,7 @@ const replyText =
   '2026-11-06 18:11:58 にポチの来院のキャンセルの操作がありました。誰が、なぜキャンセルしたのかは、どこにも残っていませんでした。';
 const tamaReplyText = 'タマの来院も、18:20:30 に同じ操作でキャンセルになっています。';
 const startText =
-  'あなたは、動物病院向けの予約システムの開発者です。カスタマーサポートから連絡が届きます。届いた連絡に対応してください。';
+  'あなたは、動物病院向けの予約システムの開発者です。カスタマーサポートから連絡が届きます。届いた連絡に対応してください。手を動かす人はこのブラウザで動かせます。見るだけの人は講師の画面で追えます。';
 
 const ready = async (page: Page): Promise<void> => {
   await page.goto(path);
@@ -153,7 +153,7 @@ const expectIdle = async (page: Page): Promise<void> => {
   }
 };
 
-test.describe('第1章 調査の画面', () => {
+test.describe('導入 調査の画面', () => {
   test('開始前は、案内だけが操作でき、2 つのウィンドウは操作できず、進行は始まっていない', async ({ page }) => {
     await ready(page);
     await expectIdle(page);
@@ -508,7 +508,7 @@ test.describe('第1章 調査の画面', () => {
     await expect(timer(page)).toHaveText('対応開始から 00:36');
   });
 
-  test('役割の行と目標、本文の見出しは、見た目から隠れ、読み上げには残る', async ({ page }) => {
+  test('役割の行と本文の見出しは、見た目から隠れ、読み上げには残る', async ({ page }) => {
     await ready(page);
     const hiddenOnScreen = async (locator: Locator): Promise<void> => {
       const box = await locator.boundingBox();
@@ -516,17 +516,16 @@ test.describe('第1章 調査の画面', () => {
       expect(box?.height ?? 0).toBeLessThanOrEqual(1);
     };
     await hiddenOnScreen(page.locator('.lesson-role'));
-    await hiddenOnScreen(page.locator('.chapter-goal'));
     await hiddenOnScreen(page.locator('.chapter-body > .visually-hidden'));
     const tree = await page.locator('main').ariaSnapshot();
     expect(tree).toContain('やってみる');
-    expect(tree).toContain('チャットに届いた調査依頼を受けて');
-    expect(tree).toContain('できるようになること：');
-    expect(tree).toContain('自分のシステムで答えられない問いを1つ挙げられます。');
-    expect(tree).toContain('来院のキャンセル理由を調べる');
-    await expect(page.getByRole('heading', { level: 2 })).toHaveText('来院のキャンセル理由を調べる');
+    expect(tree).toContain('カスタマーサポートから届いた連絡に対応して');
+    expect(tree).not.toContain('できるようになること：');
+    expect(tree).toContain('障害対応を体験する');
+    await expect(page.getByRole('heading', { level: 2 })).toHaveText('障害対応を体験する');
+    await expect(page.locator('.chapter-goal')).toHaveCount(0);
     await expect(page.locator('.chapter-body')).toContainText(
-      'カスタマーサポートから調査依頼が届いています。ブラウザで社内のツールを開いて、誰が、いつ、何を、なぜキャンセルしたのかを調べてください。',
+      'カスタマーサポートから連絡が届きます。ブラウザで社内のツールを開いて、誰が、いつ、何を、なぜキャンセルしたのかを調べてください。',
     );
     await expect(page.locator('.lesson-bar__title')).toBeVisible();
     await expect(page.locator('.lesson-footer')).toBeVisible();
@@ -544,7 +543,7 @@ test.describe('第1章 調査の画面', () => {
 
   test('開始後の初期状態では、チャットの投稿 1、調査メモ、無効な返信ボタン、アドレスバー、DB コンソールが出る', async ({ page }) => {
     await begin(page);
-    await expect(page.getByRole('heading', { level: 2 })).toHaveText('来院のキャンセル理由を調べる');
+    await expect(page.getByRole('heading', { level: 2 })).toHaveText('障害対応を体験する');
     const chat = scene(page).getByRole('group', { name: 'チャット' });
     await expect(chat).toContainText('# 問い合わせ対応');
     await expect(posts(page)).toHaveCount(1);
@@ -1283,7 +1282,7 @@ test.describe('第1章 調査の画面', () => {
     await expect(results(page).locator('tbody tr').nth(0)).toContainText('visit-pochi');
   });
 
-  test('文言に、第1章では使わない語が出ない', async ({ page }) => {
+  test('文言に、導入では使わない語が出ない', async ({ page }) => {
     await begin(page);
     const read = async (): Promise<string> => page.locator('.chapter-body').innerText();
     const check = async (): Promise<void> => {

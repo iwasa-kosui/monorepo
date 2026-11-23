@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 
-const writePath = '/chapters/chapter-1/2/';
+const writePath = '/chapters/chapter-1/';
 const viewPaths = ['/chapters/chapter-4/', '/chapters/chapter-4/5/', '/chapters/summary/2/'];
 const storageKey = 'es:question:chapter-1';
 const summaryPath = '/chapters/summary/2/';
@@ -48,7 +48,7 @@ const fit = (page: Page): Promise<Fit> =>
   });
 
 test.describe('第1章で挙げた問い', () => {
-  test('第1章の2ページ目に書くと保存され、再読み込みしても残る', async ({ page }) => {
+  test('第1章の1ページ目に書くと保存され、再読み込みしても残る', async ({ page }) => {
     await page.goto(writePath);
     const input = page.getByRole('textbox', { name: '自分のシステムの問いを1つ挙げる' });
     await expect(input).toHaveValue('');
@@ -63,7 +63,7 @@ test.describe('第1章で挙げた問い', () => {
     await page.getByRole('textbox', { name: '自分のシステムの問いを1つ挙げる' }).fill(sampleQuestion);
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowLeft');
-    await expect(page).toHaveURL(/\/chapters\/chapter-1\/2\/$/);
+    await expect(page).toHaveURL(/\/chapters\/chapter-1\/$/);
   });
 
   test('保存が無いときは、第4章の1ページ目と5ページ目、まとめの2ページ目に題材の問いが出る', async ({ page }) => {
@@ -167,7 +167,7 @@ test.describe('長い問いを保存した状態でも収まる', () => {
     test(`${size.width}x${size.height} でページ全体にスクロールが出ず、問いは1行に省略され、全文が title に入る`, async ({ page }) => {
       await page.setViewportSize(size);
       await saveDirectly(page, longQuestion);
-      for (const path of ['/chapters/chapter-1/2/', ...viewPaths]) {
+      for (const path of ['/chapters/chapter-1/', ...viewPaths]) {
         await page.goto(path);
         const axes = page.locator('[data-axis]');
         const count = Math.max(await axes.count(), 1);
@@ -181,7 +181,7 @@ test.describe('長い問いを保存した状態でも収まる', () => {
           expect(measured.pageWidth, label).toBeLessThanOrEqual(measured.innerWidth);
           expect(measured.bodyScrollHeight, label).toBeLessThanOrEqual(measured.bodyClientHeight);
         }
-        if (path !== '/chapters/chapter-1/2/') {
+        if (path !== '/chapters/chapter-1/') {
           const text = view(page).locator('[data-text]');
           await expect(text).toHaveAttribute('title', longQuestion);
           expect(await text.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
@@ -195,7 +195,7 @@ test.describe('長い問いを保存した状態でも収まる', () => {
     test(`${size.width}x${size.height} で横にスクロールが出ない`, async ({ page }) => {
       await page.setViewportSize(size);
       await saveDirectly(page, longQuestion);
-      for (const path of ['/chapters/chapter-1/2/', ...viewPaths]) {
+      for (const path of ['/chapters/chapter-1/', ...viewPaths]) {
         await page.goto(path);
         const measured = await fit(page);
         expect(measured.pageWidth, `${path} ${size.width}x${size.height}`).toBeLessThanOrEqual(measured.innerWidth);

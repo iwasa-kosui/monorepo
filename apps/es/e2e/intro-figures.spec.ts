@@ -56,8 +56,8 @@ for (const reducedMotion of motions) {
   test.describe(`導入の図解（reducedMotion: ${reducedMotion}）`, () => {
     test.use({ reducedMotion });
 
-    test('5 ページ目: 方法を選ぶと、構成図と残るデータと4つの答えが変わる', async ({ page }) => {
-      await page.goto('/chapters/intro/5/');
+    test('6 ページ目: 方法を選ぶと、構成図と残るデータと4つの答えが変わる', async ({ page }) => {
+      await page.goto('/chapters/intro/6/');
       const figure = page.locator('[data-method-figure]');
       const diagram = figure.locator('[data-diagram]');
       const message = figure.locator('[aria-live="polite"]');
@@ -139,8 +139,8 @@ for (const reducedMotion of motions) {
       await expectDiagram(diagram, 'warehouse', 'blocked');
     });
 
-    test('6 ページ目: スライダーを動かすと、答えられる件数の文が変わる', async ({ page }) => {
-      await page.goto('/chapters/intro/6/');
+    test('7 ページ目: スライダーを動かすと、答えられる件数の文が変わる', async ({ page }) => {
+      await page.goto('/chapters/intro/7/');
       const figure = page.locator('[data-record-figure]');
       const message = figure.locator('[aria-live="polite"]');
       const slider = figure.getByRole('slider', { name: '記録を足す日' });
@@ -162,7 +162,7 @@ for (const reducedMotion of motions) {
     });
 
     test('スライダーをキーボードで動かしても前後のページへ移動しない', async ({ page }) => {
-      await page.goto('/chapters/intro/6/');
+      await page.goto('/chapters/intro/7/');
       const figure = page.locator('[data-record-figure]');
       const slider = figure.getByRole('slider', { name: '記録を足す日' });
       await slider.focus();
@@ -175,7 +175,7 @@ for (const reducedMotion of motions) {
       await page.keyboard.press('ArrowLeft');
       await page.keyboard.press('ArrowLeft');
       await expect(slider).toHaveValue('2');
-      expect(pathOf(page)).toBe('/chapters/intro/6/');
+      expect(pathOf(page)).toBe('/chapters/intro/7/');
     });
   });
 }

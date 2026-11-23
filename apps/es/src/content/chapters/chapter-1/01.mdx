@@ -1,17 +1,33 @@
 ---
 goal: 自分のシステムで答えられない問いを1つ挙げられます。
-wide: true
-immersive: true
 ---
 
-import InvestigationScene from '../../../components/chapter-1/InvestigationScene.astro';
+import OwnQuestion from '../../../components/OwnQuestion.astro';
+import Quote from '../../../components/Quote.astro';
 
-<div class="visually-hidden">
+<div class="grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)] lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
+<div class="intro-text">
 
-## 来院のキャンセル理由を調べる
+<Quote source="kosui.me の記事より" href="https://kosui.me/posts/2025/05/06/142842">
 
-カスタマーサポートから調査依頼が届いています。ブラウザで社内のツールを開いて、誰が、いつ、何を、なぜキャンセルしたのかを調べてください。
+不整合なデータが発生した場合、データ変更の記録を確認することで、いつどのような操作によってそれが発生したのかを特定できます。
+
+</Quote>
+
+<Quote source="kosui.me の記事より" href="https://kosui.me/posts/2025/05/06/142842">
+
+例えば、顧客から監査記録の提出を求められた場合、データ変更の記録があれば、それを整形し適切に匿名化することで顧客のニーズに応えられます。
+
+</Quote>
 
 </div>
+<div class="intro-text">
 
-<InvestigationScene />
+## 自分のシステムの問いを1つ挙げる
+
+自分のシステムで、現在の状態だけでは答えられない問いを1つ挙げます。次に、その問いの答えが入る列が今のテーブルにあるかを思い出します。問いが思いつかないときは、題材の問いで進めます。
+
+<OwnQuestion />
+
+</div>
+</div>

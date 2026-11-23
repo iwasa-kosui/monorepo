@@ -10,6 +10,7 @@ import {
   initialAffected,
   initialVisits,
   startedAt,
+  startGuide,
   visibleFromMinutes,
 } from './incident-scenario';
 
@@ -516,7 +517,7 @@ const agentConclusion = [
     <div class="start" role="group" aria-labelledby={`${id}-start`} data-start>
       <div class="start-card">
         <p class="start-text" id={`${id}-start`}>
-          あなたは、動物病院向けの予約システムの開発者です。カスタマーサポートから連絡が届きます。届いた連絡に対応してください。
+          {startGuide.join('')}
         </p>
         <button type="button" class="primary" data-action="start">
           対応を始める
