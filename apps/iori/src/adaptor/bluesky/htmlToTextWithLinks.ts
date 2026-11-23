@@ -6,7 +6,54 @@ export type TextWithLinks = Readonly<{ text: string; links: readonly TextLink[] 
 const LINK_OPEN = '';
 const LINK_CLOSE = '';
 
-const withoutMarkers = (text: string): string => text.replaceAll(LINK_OPEN, '').replaceAll(LINK_CLOSE, '');
+const QUOTE_OPEN = '';
+const QUOTE_CLOSE = '';
+
+const withoutMarkers = (text: string): string =>
+  text.replaceAll(LINK_OPEN, '').replaceAll(LINK_CLOSE, '').replaceAll(QUOTE_OPEN, '').replaceAll(QUOTE_CLOSE, '');
+
+type Line = Readonly<{ depth: number; text: string }>;
+
+// 引用の印を読んで、行ごとの引用の深さを求める。印は必ず行頭（開く）か行末（閉じる）にある。
+const toLines = (marked: string): readonly Line[] => {
+  const lines: Line[] = [];
+  let depth = 0;
+  for (const raw of marked.split('\n')) {
+    let lineDepth = depth;
+    let content = '';
+    for (const character of raw) {
+      if (character === QUOTE_OPEN) {
+        depth += 1;
+        lineDepth = Math.max(lineDepth, depth);
+      } else if (character === QUOTE_CLOSE) {
+        depth = Math.max(0, depth - 1);
+      } else {
+        content += character;
+      }
+    }
+    const text = content.replace(/[^\S\n]+/g, ' ').trim();
+    const last = lines.at(-1);
+    if (text !== '') {
+      lines.push({ depth: lineDepth, text });
+    } else if (last !== undefined && last.text === '') {
+      lines[lines.length - 1] = { depth: Math.min(last.depth, lineDepth), text: '' };
+    } else if (last !== undefined) {
+      lines.push({ depth: lineDepth, text: '' });
+    }
+  }
+  return lines.at(-1)?.text === '' ? lines.slice(0, -1) : lines;
+};
+
+// 引用の中の行は、Markdown と同じく行頭に「>」を付ける。
+// 空行は、前後の行がどちらも引用の中にあるときだけ引用の続きとして扱う。
+const quoteLines = (lines: readonly Line[]): string =>
+  lines
+    .map(({ depth, text }, index) => {
+      if (text !== '') return '> '.repeat(depth) + text;
+      const around = Math.min(depth, lines[index - 1]?.depth ?? 0, lines[index + 1]?.depth ?? 0);
+      return '> '.repeat(around).trimEnd();
+    })
+    .join('\n');
 
 const hrefOf = (attributes: string): string | undefined => {
   const match = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attributes);
@@ -33,7 +80,6 @@ const BLOCK_BREAKS: Readonly<Record<string, string>> = {
   h4: '\n',
   h5: '\n',
   h6: '\n',
-  blockquote: '\n',
   pre: '\n',
   ul: '\n',
   ol: '\n',
@@ -63,6 +109,8 @@ export const htmlToTextWithLinks = (html: string): TextWithLinks => {
         marked += LINK_CLOSE;
         linkOpen = false;
       }
+    } else if (name === 'blockquote') {
+      marked += closing ? `${QUOTE_CLOSE}\n` : `\n${QUOTE_OPEN}`;
     } else if (closing) {
       marked += BLOCK_BREAKS[name] ?? '';
     }
@@ -70,12 +118,7 @@ export const htmlToTextWithLinks = (html: string): TextWithLinks => {
   marked += withoutMarkers(decodeEntities(cleaned.slice(cursor)));
   if (linkOpen) marked += LINK_CLOSE;
 
-  const normalized = marked
-    .split('\n')
-    .map((line) => line.replace(/[^\S\n]+/g, ' ').trim())
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  const normalized = quoteLines(toLines(marked));
 
   let text = '';
   const links: TextLink[] = [];

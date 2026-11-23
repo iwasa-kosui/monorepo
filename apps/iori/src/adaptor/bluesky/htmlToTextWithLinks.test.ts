@@ -43,4 +43,22 @@ describe('htmlToTextWithLinks', () => {
     expect(text).toBe('前 リンク 後');
     expect(links).toEqual([{ start: 2, end: 5, uri: 'https://example.com/a' }]);
   });
+
+  it('引用の各行の先頭に > を付け、引用の外の行には付けない', () => {
+    const { text } = htmlToTextWithLinks('<p>前</p><blockquote><p>a<br>b</p><p>c</p></blockquote><p>後</p>');
+    expect(text).toBe('前\n\n> a\n> b\n>\n> c\n\n後');
+  });
+
+  it('入れ子の引用は深さの分だけ > を重ねる', () => {
+    const { text } = htmlToTextWithLinks('<blockquote><p>a</p><blockquote><p>b</p></blockquote></blockquote>');
+    expect(text).toBe('> a\n>\n> > b');
+  });
+
+  it('引用の中のリンクは > の分だけ位置がずれる', () => {
+    const { text, links } = htmlToTextWithLinks(
+      '<blockquote><p>見て <a href="https://example.com/a">example.com/a</a></p></blockquote>',
+    );
+    expect(text).toBe('> 見て example.com/a');
+    expect(text.slice(links[0]!.start, links[0]!.end)).toBe('example.com/a');
+  });
 });
