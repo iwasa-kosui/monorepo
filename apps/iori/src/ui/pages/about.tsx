@@ -1,18 +1,9 @@
 import { useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
-const USERNAME = 'kosui';
+import { AboutArchitecture, bodyClass, cardClass, insetClass, listClass } from '../components/AboutArchitecture.tsx';
 
-const stack = [
-  { name: 'Runtime', value: 'Cloudflare Workers' },
-  { name: 'Framework', value: 'Hono' },
-  { name: 'Federation', value: 'Fedify' },
-  { name: 'Database', value: 'Cloudflare D1 + Drizzle ORM' },
-  { name: 'Storage / Queue', value: 'Cloudflare R2, KV, Queues' },
-  { name: 'AI', value: 'Workers AI' },
-  { name: 'Validation', value: 'Zod' },
-  { name: 'Build', value: 'Vite' },
-] as const;
+const USERNAME = 'kosui';
 
 const content = {
   ja: {
@@ -85,10 +76,6 @@ const content = {
           ],
         },
       ],
-    },
-    stack: {
-      title: '構成',
-      items: stack,
     },
     source: {
       title: 'ソースコード',
@@ -167,10 +154,6 @@ const content = {
         },
       ],
     },
-    stack: {
-      title: 'Stack',
-      items: stack,
-    },
     source: {
       title: 'Source Code',
       description: 'The source code of iori is available on GitHub.',
@@ -185,16 +168,12 @@ const detectLanguage = (): 'ja' | 'en' => {
   return 'en';
 };
 
-const cardClass = 'bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 sm:p-8';
-const insetClass = 'bg-sand-light/50 dark:bg-gray-700/50 rounded-xl shadow-clay-inset';
 const primaryButtonClass =
   'px-5 py-2.5 bg-terracotta hover:bg-terracotta-dark text-white font-medium rounded-clay shadow-clay-btn hover:shadow-clay-btn-hover transition-all text-center active:scale-[0.98] active:translate-y-px';
 const secondaryButtonClass =
   'px-5 py-2.5 border border-warm-gray-dark dark:border-gray-600 text-charcoal dark:text-gray-200 hover:bg-sand-light/50 dark:hover:bg-gray-700/50 font-medium rounded-clay transition-all text-center active:scale-[0.98] active:translate-y-px';
 const h2Class = 'text-xl font-semibold text-charcoal dark:text-white mb-4';
 const h3Class = 'font-medium text-charcoal dark:text-white mb-2';
-const bodyClass = 'text-charcoal-light dark:text-gray-400';
-const listClass = 'list-disc pl-5 space-y-1 text-charcoal-light dark:text-gray-400';
 
 const AboutPage = () => {
   const lang = detectLanguage();
@@ -283,17 +262,7 @@ const AboutPage = () => {
         </div>
       </section>
 
-      <section class={cardClass}>
-        <h2 class={h2Class}>{t.stack.title}</h2>
-        <dl class='grid gap-3 sm:grid-cols-2'>
-          {t.stack.items.map((item) => (
-            <div key={item.name} class={`${insetClass} p-3`}>
-              <dt class='text-sm text-charcoal-light dark:text-gray-400'>{item.name}</dt>
-              <dd class='font-medium text-charcoal dark:text-white'>{item.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
+      <AboutArchitecture lang={lang} />
 
       <section class={cardClass}>
         <h2 class={h2Class}>{t.source.title}</h2>
