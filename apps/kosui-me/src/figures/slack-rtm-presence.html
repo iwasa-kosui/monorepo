@@ -1,0 +1,69 @@
+<figure class="fig">
+<div class="fig-headline">プレゼンスは見えている範囲だけ届く</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 640 300" role="img" aria-labelledby="fig-spr-title fig-spr-desc">
+<title id="fig-spr-title">画面に見えているユーザーだけのプレゼンスを受け取る流れ</title>
+<desc id="fig-spr-desc">左にクライアントの画面があり、ユーザー P と Q が見えています。ユーザー R は画面外にあります。中央の Gateway Server が、クライアントと右の Presence Server の間を WebSocket で中継します。Presence Server は P、Q、R のオンライン状態を持っています。アニメーションでは、まずクライアントが P と Q だけを照会します。次に R がオンラインになりますが、画面外なので通知は来ません。最後に Q がオンラインになると、Gateway Server を経由して通知が届き、画面の Q の印が点灯します。14 秒周期でくり返します。</desc>
+<text class="fig-t fig-t-xs fig-c-muted" x="8" y="20">クライアントの画面</text>
+<rect class="fig-card" x="8" y="28" width="190" height="144" rx="12"></rect>
+<rect class="fig-card-soft" x="20" y="44" width="166" height="36" rx="8"></rect>
+<circle class="fig-fill-agent" cx="40" cy="62" r="6"></circle>
+<text class="fig-t fig-t-sm" x="56" y="67.5">ユーザー P</text>
+<rect class="fig-card-soft" x="20" y="88" width="166" height="36" rx="8"></rect>
+<circle class="fig-card" cx="40" cy="106" r="6"></circle>
+<text class="fig-t fig-t-sm" x="56" y="111.5">ユーザー Q</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="103" y="152">見えているのは P と Q</text>
+<rect class="fig-card-dash" x="8" y="184" width="190" height="60" rx="12"></rect>
+<g class="fig-dim">
+<rect class="fig-card-soft" x="20" y="196" width="166" height="36" rx="8"></rect>
+<circle class="fig-card" cx="40" cy="214" r="6"></circle>
+<text class="fig-t fig-t-sm" x="56" y="219.5">ユーザー R</text>
+</g>
+<text class="fig-t fig-t-xs fig-c-muted" x="8" y="262">画面外（スクロールしないと見えない）</text>
+<rect class="fig-card-agent" x="290" y="84" width="100" height="56" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="340" y="108.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="340" y="126.5">中継</text>
+<path class="fig-line" d="M206 112L282 112"></path>
+<path class="fig-mk" d="M290 112L282 116L282 108Z"></path>
+<path class="fig-mk" d="M198 112L206 108L206 116Z"></path>
+<path class="fig-line" d="M398 112L470 112"></path>
+<path class="fig-mk" d="M478 112L470 116L470 108Z"></path>
+<path class="fig-mk" d="M390 112L398 108L398 116Z"></path>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="244" y="102">WebSocket</text>
+<rect class="fig-card-agent" x="478" y="20" width="154" height="224" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="555" y="44">PS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="555" y="62">Presence Server</text>
+<rect class="fig-card" x="490" y="76" width="130" height="36" rx="8"></rect>
+<circle class="fig-fill-agent" cx="510" cy="94" r="6"></circle>
+<text class="fig-t fig-t-sm" x="526" y="99.5">ユーザー P</text>
+<rect class="fig-card" x="490" y="126" width="130" height="36" rx="8"></rect>
+<circle class="fig-card" cx="510" cy="144" r="6"></circle>
+<text class="fig-t fig-t-sm" x="526" y="149.5">ユーザー Q</text>
+<rect class="fig-card" x="490" y="176" width="130" height="36" rx="8"></rect>
+<circle class="fig-card" cx="510" cy="194" r="6"></circle>
+<text class="fig-t fig-t-sm" x="526" y="199.5">ユーザー R</text>
+<g class="fig-anim">
+<text class="fig-t fig-t-sm fig-b" x="8" y="288" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.014286000000000002;0.025;0.203571;0.214286;1"></animate>① 画面に見えている P と Q だけを照会する</text>
+<rect class="fig-glow-human" x="20" y="44" width="166" height="36" rx="8" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.014286000000000002;0.025;0.075;0.085714;1"></animate></rect>
+<rect class="fig-glow-human" x="20" y="88" width="166" height="36" rx="8" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.014286000000000002;0.025;0.075;0.085714;1"></animate></rect>
+<circle class="fig-fill-human fig-ring" r="5.5" opacity="0"><animateMotion dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M198 112L290 112" keyPoints="0;0;1;1" keyTimes="0;0.042857;0.107143;1"></animateMotion><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.042857;0.05;0.107143;0.11428599999999998;1"></animate></circle>
+<circle class="fig-fill-human fig-ring" r="5.5" opacity="0"><animateMotion dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M390 112L478 112" keyPoints="0;0;1;1" keyTimes="0;0.107143;0.171429;1"></animateMotion><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.107143;0.11428599999999998;0.171429;0.178571;1"></animate></circle>
+<rect class="fig-glow-agent" x="490" y="76" width="130" height="36" rx="8" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.164286;0.175;0.21785700000000002;0.228571;1"></animate></rect>
+<rect class="fig-glow-agent" x="490" y="126" width="130" height="36" rx="8" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.164286;0.175;0.21785700000000002;0.228571;1"></animate></rect>
+<text class="fig-t fig-t-sm fig-b" x="8" y="288" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.23571399999999998;0.246429;0.48928599999999994;0.5;1"></animate>② R がオンラインになっても、画面外なので通知は来ない</text>
+<circle class="fig-fill-agent" cx="510" cy="194" r="6" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.271429;0.282143;0.960714;0.9714290000000001;1"></animate></circle>
+<rect class="fig-glow-agent" x="490" y="176" width="130" height="36" rx="8" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.264286;0.275;0.33214299999999997;0.342857;1"></animate></rect>
+<text class="fig-t fig-t-xs fig-b fig-end" x="470" y="200" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.3;0.310714;0.48214300000000004;0.492857;1"></animate>通知しない</text>
+<text class="fig-t fig-t-sm fig-b" x="8" y="288" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.507143;0.517857;0.960714;0.9714290000000001;1"></animate>③ Q がオンラインになると、GS 経由で通知が届く</text>
+<circle class="fig-fill-agent" cx="510" cy="144" r="6" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.535714;0.5464289999999999;0.960714;0.9714290000000001;1"></animate></circle>
+<rect class="fig-glow-agent" x="490" y="126" width="130" height="36" rx="8" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.528571;0.5392859999999999;0.596429;0.607143;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M478 112L390 112" keyPoints="0;0;1;1" keyTimes="0;0.6;0.6642859999999999;1"></animateMotion><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.6;0.607143;0.6642859999999999;0.6714289999999999;1"></animate></circle>
+<rect class="fig-glow-agent" x="290" y="84" width="100" height="56" rx="10" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.657143;0.6678569999999999;0.696429;0.7071430000000001;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M290 112L198 112" keyPoints="0;0;1;1" keyTimes="0;0.685714;0.75;1"></animateMotion><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.685714;0.692857;0.75;0.757143;1"></animate></circle>
+<circle class="fig-fill-agent" cx="40" cy="106" r="6" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.75;0.760714;0.960714;0.9714290000000001;1"></animate></circle>
+<rect class="fig-glow-human" x="20" y="88" width="166" height="36" rx="8" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.742857;0.753571;0.9464290000000001;0.9571430000000001;1"></animate></rect>
+</g>
+</svg>
+</div>
+<figcaption>塗りつぶした丸がオンライン、白抜きの丸がオフラインです。ユーザー名と人数は説明用の例です。</figcaption>
+</figure>

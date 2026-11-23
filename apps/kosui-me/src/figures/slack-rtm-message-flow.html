@@ -1,0 +1,92 @@
+<figure class="fig">
+<div class="fig-headline">メッセージが届くまでの経路</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 640 392" role="img" aria-labelledby="fig-smf-title fig-smf-desc">
+<title id="fig-smf-title">チャットのメッセージが届くまでの経路</title>
+<desc id="fig-smf-desc">左のリージョン 1 に、クライアント A と B、Gateway Server の GS-1 があります。右のリージョン 2 に、GS-2 とクライアント C があります。下のバックエンドに、Webapp、Admin Server、このチャンネルを担当する CS が並びます。1 番で、A が Webapp の API を呼びます。2 番で、Webapp がメッセージを Admin Server へ渡します。3 番で、Admin Server がチャンネル ID のハッシュで担当の CS を決めて渡します。4 番で、CS が購読している GS-1 と GS-2 へ送ります。5 番で、GS-1 が B へ、GS-2 が C へ、WebSocket で届けます。アニメーションでは、この経路を点の移動で示し、12 秒周期でくり返します。</desc>
+<rect class="fig-card-soft" x="8" y="4" width="244" height="160" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-c-muted" x="16" y="22">リージョン 1</text>
+<rect class="fig-card-soft" x="388" y="4" width="244" height="160" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-c-muted" x="396" y="22">リージョン 2</text>
+<rect class="fig-card-soft" x="8" y="236" width="624" height="112" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-c-muted" x="16" y="256">バックエンド</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="102" y="104">WebSocket</text>
+<rect class="fig-card" x="60" y="270" width="96" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="108" y="289.5">Webapp</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="108" y="307.5">API</text>
+<rect class="fig-card" x="200" y="270" width="100" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="250" y="289.5">AS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="250" y="307.5">Admin Server</text>
+<rect class="fig-card-agent" x="340" y="270" width="160" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="420" y="289.5">CS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="420" y="307.5">このチャンネルの担当</text>
+<rect class="fig-card-agent" x="140" y="36" width="100" height="112" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="190" y="97.5">GS-1</text>
+<rect class="fig-card-agent" x="400" y="36" width="100" height="112" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="450" y="97.5">GS-2</text>
+<rect class="fig-card-human" x="20" y="36" width="44" height="40" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="42" y="61.5">B</text>
+<rect class="fig-card-human" x="20" y="108" width="44" height="40" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="42" y="133.5">A</text>
+<rect class="fig-card-human" x="576" y="72" width="44" height="40" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="598" y="97.5">C</text>
+<path class="fig-line" d="M64 128L140 128"></path>
+<path class="fig-line-agent fig-thick" d="M42 148L42 293L52 293"></path>
+<path class="fig-mk-agent" d="M60 293L52 297L52 289Z"></path>
+<path class="fig-line-agent fig-thick" d="M156 293L192 293"></path>
+<path class="fig-mk-agent" d="M200 293L192 297L192 289Z"></path>
+<path class="fig-line-agent fig-thick" d="M300 293L332 293"></path>
+<path class="fig-mk-agent" d="M340 293L332 297L332 289Z"></path>
+<path class="fig-line-agent fig-thick" d="M420 270L420 188"></path>
+<path class="fig-line-agent fig-thick" d="M420 188L204 188L204 156"></path>
+<path class="fig-mk-agent" d="M204 148L208 156L200 156Z"></path>
+<path class="fig-line-agent fig-thick" d="M420 188L450 188L450 156"></path>
+<path class="fig-mk-agent" d="M450 148L454 156L446 156Z"></path>
+<path class="fig-line-agent fig-thick" d="M140 56L72 56"></path>
+<path class="fig-mk-agent" d="M64 56L72 52L72 60Z"></path>
+<path class="fig-line-agent fig-thick" d="M500 92L568 92"></path>
+<path class="fig-mk-agent" d="M576 92L568 96L568 88Z"></path>
+<text class="fig-t fig-t-xs fig-b fig-c-agent" x="56" y="204">API 呼び出し</text>
+<text class="fig-t fig-t-xs fig-b fig-c-agent" x="436" y="219">購読している全 GS へ</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="320" y="338">チャンネル ID のハッシュで担当の CS を決める</text>
+<circle class="fig-fill-agent" cx="42" cy="180" r="10"></circle>
+<text class="fig-t fig-t-xs fig-mid fig-b fig-c-on-human" x="42" y="184.5">1</text>
+<circle class="fig-fill-agent" cx="178" cy="268" r="10"></circle>
+<text class="fig-t fig-t-xs fig-mid fig-b fig-c-on-human" x="178" y="272.5">2</text>
+<circle class="fig-fill-agent" cx="320" cy="268" r="10"></circle>
+<text class="fig-t fig-t-xs fig-mid fig-b fig-c-on-human" x="320" y="272.5">3</text>
+<circle class="fig-fill-agent" cx="420" cy="214" r="10"></circle>
+<text class="fig-t fig-t-xs fig-mid fig-b fig-c-on-human" x="420" y="218.5">4</text>
+<circle class="fig-fill-agent" cx="102" cy="74" r="10"></circle>
+<text class="fig-t fig-t-xs fig-mid fig-b fig-c-on-human" x="102" y="78.5">5</text>
+<circle class="fig-fill-agent" cx="538" cy="110" r="10"></circle>
+<text class="fig-t fig-t-xs fig-mid fig-b fig-c-on-human" x="538" y="114.5">5</text>
+<g class="fig-anim">
+<text class="fig-t fig-t-sm fig-b" x="8" y="378" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.016666999999999998;0.029167000000000002;0.17916700000000002;0.191667;1"></animate>① A が Webapp の API を呼び、メッセージを送信</text>
+<rect class="fig-glow-human" x="20" y="108" width="44" height="40" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.016666999999999998;0.029167000000000002;0.0625;0.075;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M42 148L42 293L60 293" keyPoints="0;0;1;1" keyTimes="0;0.033333;0.166667;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.033333;0.041667;0.166667;0.175;1"></animate></circle>
+<rect class="fig-glow-agent" x="60" y="270" width="96" height="46" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.158333;0.17083299999999998;0.20416700000000002;0.216667;1"></animate></rect>
+<text class="fig-t fig-t-sm fig-b" x="8" y="378" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.2;0.2125;0.2625;0.275;1"></animate>② Webapp がメッセージを AS へ渡す</text>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M156 293L200 293" keyPoints="0;0;1;1" keyTimes="0;0.2;0.258333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.2;0.208333;0.258333;0.266667;1"></animate></circle>
+<rect class="fig-glow-agent" x="200" y="270" width="100" height="46" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.25;0.2625;0.304167;0.31666700000000003;1"></animate></rect>
+<text class="fig-t fig-t-sm fig-b" x="8" y="378" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.283333;0.295833;0.37916700000000003;0.391667;1"></animate>③ AS がチャンネル ID から担当の CS を見つけて渡す</text>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M300 293L340 293" keyPoints="0;0;1;1" keyTimes="0;0.3;0.366667;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.3;0.30833299999999997;0.366667;0.375;1"></animate></circle>
+<rect class="fig-glow-agent" x="340" y="270" width="160" height="46" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.358333;0.37083299999999997;0.4125;0.425;1"></animate></rect>
+<text class="fig-t fig-t-sm fig-b" x="8" y="378" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.4;0.4125;0.570833;0.583333;1"></animate>④ CS が、このチャンネルを購読している全 GS へ送る</text>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M420 270L420 188" keyPoints="0;0;1;1" keyTimes="0;0.408333;0.458333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.408333;0.416667;0.458333;0.466667;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M420 188L204 188L204 148" keyPoints="0;0;1;1" keyTimes="0;0.458333;0.55;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.458333;0.466667;0.55;0.558333;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M420 188L450 188L450 148" keyPoints="0;0;1;1" keyTimes="0;0.458333;0.55;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.458333;0.466667;0.55;0.558333;1"></animate></circle>
+<rect class="fig-glow-agent" x="140" y="36" width="100" height="112" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.541667;0.554167;0.595833;0.608333;1"></animate></rect>
+<rect class="fig-glow-agent" x="400" y="36" width="100" height="112" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.541667;0.554167;0.595833;0.608333;1"></animate></rect>
+<text class="fig-t fig-t-sm fig-b" x="8" y="378" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.591667;0.604167;0.954167;0.966667;1"></animate>⑤ GS が、購読中のクライアントの WebSocket へ届ける</text>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M140 56L64 56" keyPoints="0;0;1;1" keyTimes="0;0.6;0.683333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.6;0.608333;0.683333;0.691667;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M500 92L576 92" keyPoints="0;0;1;1" keyTimes="0;0.6;0.683333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.6;0.608333;0.683333;0.691667;1"></animate></circle>
+<rect class="fig-glow-human" x="20" y="36" width="44" height="40" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.675;0.6875;0.9375;0.95;1"></animate></rect>
+<rect class="fig-glow-human" x="576" y="72" width="44" height="40" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.675;0.6875;0.9375;0.95;1"></animate></rect>
+<text class="fig-t fig-t-xs fig-b fig-c-agent" x="72" y="44" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.683333;0.695833;0.9375;0.95;1"></animate>受信</text>
+<text class="fig-t fig-t-xs fig-b fig-c-agent fig-end" x="620" y="132" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.683333;0.695833;0.9375;0.95;1"></animate>受信</text>
+</g>
+</svg>
+</div>
+<figcaption>A と B は同じリージョン、C は別のリージョンにいます。A が送ったメッセージが B と C に届くまでを示します。Envoy は省略しています。</figcaption>
+</figure>
