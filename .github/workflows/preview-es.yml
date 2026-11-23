@@ -1,4 +1,4 @@
-name: Preview es-patchwork-hands-on
+name: Preview es
 
 on:
   pull_request:
@@ -8,18 +8,18 @@ on:
       - synchronize
       - closed
     paths:
-      - "apps/es-patchwork-hands-on/**"
-      - ".github/workflows/preview-es-patchwork-hands-on.yml"
+      - "apps/es/**"
+      - ".github/workflows/preview-es.yml"
 
 concurrency:
-  group: es-patchwork-hands-on-preview-${{ github.event.pull_request.number }}
+  group: es-preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 env:
-  PREVIEW_WORKER_NAME: es-patchwork-hands-on-pr-${{ github.event.pull_request.number }}
+  PREVIEW_WORKER_NAME: es-pr-${{ github.event.pull_request.number }}
 
 jobs:
   deploy:
@@ -47,7 +47,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm --filter es-patchwork-hands-on run build
+        run: pnpm --filter es run build
 
       - name: Deploy preview Worker
         id: deploy
@@ -56,7 +56,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -o pipefail
-          pnpm --filter es-patchwork-hands-on exec wrangler deploy --name "$PREVIEW_WORKER_NAME" 2>&1 | tee "$RUNNER_TEMP/wrangler-deploy.log"
+          pnpm --filter es exec wrangler deploy --name "$PREVIEW_WORKER_NAME" 2>&1 | tee "$RUNNER_TEMP/wrangler-deploy.log"
 
           preview_url=$(sed -nE 's#.*(https://[^[:space:]]+\.workers\.dev).*#\1#p' "$RUNNER_TEMP/wrangler-deploy.log" | tail -n 1)
           if [ -z "$preview_url" ]; then
@@ -72,8 +72,8 @@ jobs:
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
         with:
           script: |
-            const marker = "<!-- preview-deploy-es-patchwork-hands-on -->";
-            const body = `${marker}\n\n🚀 [es-patchwork-hands-on のプレビューを開く](${process.env.PREVIEW_URL})`;
+            const marker = "<!-- preview-deploy-es -->";
+            const body = `${marker}\n\n🚀 [es のプレビューを開く](${process.env.PREVIEW_URL})`;
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
             const comments = await github.paginate(
@@ -127,4 +127,4 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.ES_PATCHWORK_CLOUDFLARE_DEPLOY_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm --filter es-patchwork-hands-on exec wrangler delete "$PREVIEW_WORKER_NAME" --force
+        run: pnpm --filter es exec wrangler delete "$PREVIEW_WORKER_NAME" --force

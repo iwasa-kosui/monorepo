@@ -1,4 +1,4 @@
-const prefix = 'es-patchwork-hands-on:code:';
+const prefix = 'es:code:';
 
 const storage = (): Storage | null => {
   try {
@@ -39,7 +39,7 @@ export const clearEdits = (exerciseId: string): void => {
   }
 };
 
-const sqlPrefix = 'es-patchwork-hands-on:sql:';
+const sqlPrefix = 'es:sql:';
 
 export const loadSql = (id: string): string | null => {
   try {
@@ -65,7 +65,7 @@ export const clearSql = (id: string): void => {
   }
 };
 
-const questionPrefix = 'es-patchwork-hands-on:question:';
+const questionPrefix = 'es:question:';
 
 export const loadQuestion = (id: string): string | null => {
   try {

@@ -215,7 +215,7 @@ test.describe('コードの実行欄', () => {
     await page.keyboard.press('ControlOrMeta+Home');
     await page.keyboard.type('// first ');
     const keys = await page.evaluate(() => Object.keys(window.localStorage));
-    expect(keys).toEqual(['es-patchwork-hands-on:code:chapter-1-start']);
+    expect(keys).toEqual(['es:code:chapter-1-start']);
     await expect(codeBox(page, 1).locator('.cm-content')).not.toContainText('// first');
   });
 
@@ -433,7 +433,7 @@ test.describe('編集内容を失わないための戻すボタン', () => {
     const box = sqlBox(page);
     await replaceEditorText(box, 'SELECT 99 AS n');
     expect(await page.evaluate(() => Object.keys(window.localStorage))).toEqual([
-      'es-patchwork-hands-on:sql:check-sql',
+      'es:sql:check-sql',
     ]);
     await box.getByRole('button', { name: 'データベースを最初の状態に戻す' }).click();
     await expect(box.locator('.cm-content')).toContainText('SELECT 99 AS n');

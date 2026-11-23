@@ -203,7 +203,7 @@ test.describe('第4章の SQL の欄', () => {
     const first = await openSql(page, patterns[0].path);
     await replaceEditorText(first, 'SELECT 1 AS only_in_summary_table');
     const keys = await page.evaluate(() => Object.keys(window.localStorage));
-    expect(keys).toEqual(['es-patchwork-hands-on:sql:chapter-4-summary-table']);
+    expect(keys).toEqual(['es:sql:chapter-4-summary-table']);
     const second = await openSql(page, patterns[1].path);
     await expect(second.locator('.cm-content')).not.toContainText('only_in_summary_table');
   });
@@ -317,16 +317,16 @@ test.describe('第4章の持ち帰りの演習', () => {
       Object.fromEntries(Object.entries(window.localStorage).map(([key, value]) => [key, value]))
     );
     expect(Object.keys(stored).sort()).toEqual([
-      'es-patchwork-hands-on:code:chapter-4-audit-log-start',
-      'es-patchwork-hands-on:code:chapter-4-external-sync-start',
-      'es-patchwork-hands-on:code:chapter-4-summary-table-start',
+      'es:code:chapter-4-audit-log-start',
+      'es:code:chapter-4-external-sync-start',
+      'es:code:chapter-4-summary-table-start',
     ]);
-    expect(stored['es-patchwork-hands-on:code:chapter-4-summary-table-start']).toContain('集計の編集');
-    expect(stored['es-patchwork-hands-on:code:chapter-4-summary-table-start']).not.toContain('外部の編集');
-    expect(stored['es-patchwork-hands-on:code:chapter-4-external-sync-start']).toContain('外部の編集');
-    expect(stored['es-patchwork-hands-on:code:chapter-4-external-sync-start']).not.toContain('監査の編集');
-    expect(stored['es-patchwork-hands-on:code:chapter-4-audit-log-start']).toContain('監査の編集');
-    expect(stored['es-patchwork-hands-on:code:chapter-4-audit-log-start']).not.toContain('集計の編集');
+    expect(stored['es:code:chapter-4-summary-table-start']).toContain('集計の編集');
+    expect(stored['es:code:chapter-4-summary-table-start']).not.toContain('外部の編集');
+    expect(stored['es:code:chapter-4-external-sync-start']).toContain('外部の編集');
+    expect(stored['es:code:chapter-4-external-sync-start']).not.toContain('監査の編集');
+    expect(stored['es:code:chapter-4-audit-log-start']).toContain('監査の編集');
+    expect(stored['es:code:chapter-4-audit-log-start']).not.toContain('集計の編集');
 
     await page.reload();
     await expect(visible(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });

@@ -37,8 +37,8 @@
 - [ ] 第4章の3ページ目の実行欄で「what-was-sent.ts を実行する」を押して、出力が出る。
 - [ ] 第4章の4ページ目の実行欄で「why-changed.ts を実行する」を押して、出力が出る。
 - [ ] 章のページをブラウザのタブで開く。
-- [ ] 会場の Wi-Fi が未確認なので、手元の開発サーバーでもページを開ける状態にする。コマンドは `pnpm --filter es-patchwork-hands-on dev` を使う。このコマンドは `apps/es-patchwork-hands-on/package.json` の `dev`（`astro dev`）を実行する。
-- [ ] 資料の URL を画面で見せられる状態にする。公開後の URL: `https://es-patchwork-hands-on.kosui.workers.dev/`
+- [ ] 会場の Wi-Fi が未確認なので、手元の開発サーバーでもページを開ける状態にする。コマンドは `pnpm --filter es dev` を使う。このコマンドは `apps/es/package.json` の `dev`（`astro dev`）を実行する。
+- [ ] 資料の URL を画面で見せられる状態にする。公開後の URL: `https://es.kosui.workers.dev/`
 
 ## 導入 0:00〜0:05
 

@@ -1,4 +1,4 @@
-# 聴講者の参加前後の変化から見た es-patchwork-hands-on の差と優先順位
+# 聴講者の参加前後の変化から見た es の差と優先順位
 
 2026-11-12 時点の分析結果と意思決定用メモです。読者は講師と、作業を割り当てる管理役です。
 
@@ -18,7 +18,7 @@
 依頼の内容は次のとおりです。
 
 - 依頼日: 2026-11-12
-- 依頼の趣旨: fp-with-ts-hands-on に比べて es-patchwork-hands-on の完成度が低い。
+- 依頼の趣旨: fp-with-ts-hands-on に比べて es の完成度が低い。
 - 求めた作業: 聴講者のペルソナを定める。理想のセッションと参加前後の変化を定める。現状との差から、優先する問題と打ち手を整理する。
 
 対象の枠は次のとおりです。出典は https://fortee.jp/yapc-tokyo-2026/proposal/a21683f2-0372-4df7-9e4c-5c0fb02faca7 です。
@@ -193,7 +193,7 @@
 
 - 差1: 雛形のページは `src/content/chapters/chapter-2/04.mdx:6` です。`e2e/play-add-record.spec.ts:141-150` が、リンクのないことを検査しています。
 - 差3: 第4章の9分は `docs/prd.md` の時間割にあります。20ページは `src/content/chapters/chapter-4/` の `01.mdx` から `20.mdx` です。第4章の実演7分は未確定です。
-- 差8: fp-with-ts-hands-on は、進捗・ページ一覧・目安時間を `SessionFrame.astro` で出します。パスは `apps/docs/src/components/session-frame/` です。es-patchwork-hands-on にないことは、コードを読んだ範囲の確認です。画面では確かめていません。
+- 差8: fp-with-ts-hands-on は、進捗・ページ一覧・目安時間を `SessionFrame.astro` で出します。パスは `apps/docs/src/components/session-frame/` です。es にないことは、コードを読んだ範囲の確認です。画面では確かめていません。
 - 差9: `docs/instructor-script.md` の `:127-129`、`:105-106`、`:36` です。Node の事前準備は決定 2026-11-08 で取り消されています。
 - 差10: 未確認の記述は `docs/prd.md:159` です。リハーサルはバックログの U1 です。
 
@@ -203,8 +203,8 @@
 
 - fp-with-ts は127ページで約180分です。1ページの本文の中央値は約219字です。全ページで同じ枠を使います。枠は、役割を1文で示す行、前後の移動、進捗、目安時間、ページ一覧です。出典は `apps/docs/src/components/session-frame/SessionFrame.astro` です。
 - fp-with-ts の演習は、合否が表ですぐ返ります。出典は `guard-exercise/ResultTable.tsx` です。自分の業務ルールを書く欄を最初に置き、最後に見直します。出典は `handover/OwnRuleWorksheet.astro` で、書いた内容を localStorage に保存します。
-- fp-with-ts の本文は中立の説明調で、講師の一人称はありません。講師の言葉は運営資料 `docs/event/facilitator-guide.md` にあります。es-patchwork は YAPC 向けに講師の言葉を教材に入れる方針です。そのため、講師の言葉の置き方は fp-with-ts を手本にしません。
-- es-patchwork は全47ページで40分です。第4章だけで20ページあります。
+- fp-with-ts の本文は中立の説明調で、講師の一人称はありません。講師の言葉は運営資料 `docs/event/facilitator-guide.md` にあります。es は YAPC 向けに講師の言葉を教材に入れる方針です。そのため、講師の言葉の置き方は fp-with-ts を手本にしません。
+- es は全47ページで40分です。第4章だけで20ページあります。
 
 ## 優先する問題と打ち手
 

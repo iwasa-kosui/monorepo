@@ -8,7 +8,7 @@ importers:
 
   .: {}
 
-  apps/es-patchwork-hands-on:
+  apps/es:
     dependencies:
       '@astrojs/check':
         specifier: 0.9.12
