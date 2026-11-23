@@ -1,6 +1,6 @@
 import * as yaml from 'js-yaml';
 import { execSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,6 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const kosuiMeRoot = dirname(__dirname);
 const talksRoot = join(kosuiMeRoot, '..', '..', 'talks');
 const distDir = join(kosuiMeRoot, 'dist', 'slides');
+const siteUrl = 'https://kosui.me';
 
 function parseFrontmatter(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
@@ -78,6 +79,30 @@ function buildPresentation(presentation) {
   cpSync(srcDist, destDir, { recursive: true });
 
   console.log(`Copied to ${destDir}`);
+
+  addCanonicalLink(destDir, presentation);
+}
+
+// スライド単体のページは、同じ内容を載せたトークページと重複する。
+// 検索エンジンにはトークページを正規の URL として伝える。
+function addCanonicalLink(destDir, presentation) {
+  const canonicalUrl = `${siteUrl}/talks/${presentation.year}/${presentation.name}`;
+  const link = `<link rel="canonical" href="${canonicalUrl}">`;
+
+  for (const fileName of ['index.html', '404.html']) {
+    const htmlPath = join(destDir, fileName);
+    if (!existsSync(htmlPath)) continue;
+
+    const html = readFileSync(htmlPath, 'utf-8');
+    if (html.includes('rel="canonical"')) continue;
+    if (!html.includes('</head>')) {
+      console.error(`</head> not found: ${htmlPath}`);
+      process.exit(1);
+    }
+
+    writeFileSync(htmlPath, html.replace('</head>', `${link}</head>`));
+    console.log(`Added canonical link to ${htmlPath}`);
+  }
 }
 
 // Main

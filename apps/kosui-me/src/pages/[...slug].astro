@@ -7,6 +7,7 @@ import RelatedArticles from '@/components/RelatedArticles.astro';
 import ShareButtons from '@/components/ShareButtons.astro';
 import ThemeHubLinks from '@/components/ThemeHubLinks.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { StructuredData } from '@/utils/structuredData';
 import { type CollectionEntry, getCollection, render } from 'astro:content';
 
 type PostEntry = CollectionEntry<'posts'>;
@@ -27,6 +28,7 @@ const isDraft = post.data.draft === true;
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -37,6 +39,23 @@ const slugFileName = post.data.slug.replace(/\//g, '-');
 const ogImage = `https://kosui.me/og/${slugFileName}.png`;
 const pageUrl = `https://kosui.me/${post.data.slug}`;
 const markdownUrl = `/${post.data.slug}.md`;
+// Keystatic は空欄を空文字で保存するので、空文字は更新なしとして扱う。
+const updatedDate = post.data.updatedDate || undefined;
+// 公開日と同じ日の修正は、読者に「更新」として見せない。
+const updatedLabel = updatedDate !== undefined
+    && formatDate(updatedDate) !== formatDate(post.data.date)
+  ? formatDate(updatedDate)
+  : undefined;
+const jsonLd = isPrivate || isDraft ? [] : [
+  StructuredData.blogPosting({
+    url: pageUrl,
+    title: post.data.title,
+    image: ogImage,
+    publishedTime: post.data.date,
+    ...(updatedDate ? { modifiedTime: updatedDate } : {}),
+    ...(post.data.description ? { description: post.data.description } : {}),
+  }),
+];
 ---
 
 <BaseLayout
@@ -47,6 +66,9 @@ const markdownUrl = `/${post.data.slug}.md`;
   ogType="article"
   authorUrl="https://www.hatena.ne.jp/kosui_me/"
   noindex={isPrivate || isDraft}
+  publishedTime={post.data.date}
+  {...(updatedDate ? { modifiedTime: updatedDate } : {})}
+  jsonLd={jsonLd}
 >
   <article
     class="article-paper"
@@ -61,6 +83,14 @@ const markdownUrl = `/${post.data.slug}.md`;
       >
         {formatDate(post.data.date)}
       </time>
+      {
+        updatedLabel && (
+          <span class="text-sm text-subtle dark:text-[#9ca3af] ml-2">
+            （更新:
+            <time datetime={updatedDate}>{updatedLabel}</time>）
+          </span>
+        )
+      }
       <h1
         class="text-3xl font-bold mt-2 mb-4"
         transition:name={`post-title-${post.data.slug}`}

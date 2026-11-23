@@ -88,6 +88,7 @@ const timeline: TimelineItem[] = [
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -113,7 +114,11 @@ const kindConfig = {
 } as const;
 ---
 
-<BaseLayout title={`${theme.name} - kosui`} ogTitle={theme.name}>
+<BaseLayout
+  title={`${theme.name} - kosui`}
+  ogTitle={theme.name}
+  ogDescription={`${theme.name}（${theme.description}）に関する、岩佐 幸翠（kosui）の記事・登壇資料・寄稿の一覧です。`}
+>
   <header class="mb-8">
     <h1 class="text-3xl font-bold mb-2">
       <span class="heading-accent">{theme.name}</span>

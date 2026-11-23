@@ -2,6 +2,8 @@
 import { ClientRouter } from 'astro:transitions';
 import '../styles/global.css';
 import { SearchModal } from '@/components/SearchModal/SearchModal';
+import { toCanonicalPath } from '@/utils/canonicalPath';
+import { type JsonLd, StructuredData } from '@/utils/structuredData';
 
 interface Props {
   title?: string;
@@ -15,6 +17,9 @@ interface Props {
   authorUrl?: string;
   noindex?: boolean;
   wide?: boolean;
+  publishedTime?: string;
+  modifiedTime?: string;
+  jsonLd?: readonly JsonLd[];
 }
 
 const {
@@ -30,6 +35,9 @@ const {
   authorUrl,
   noindex = false,
   wide = false,
+  publishedTime,
+  modifiedTime,
+  jsonLd = [],
 } = Astro.props;
 
 const mainMaxWidth = wide ? 'max-w-6xl' : 'max-w-3xl';
@@ -37,9 +45,14 @@ const mainMaxWidth = wide ? 'max-w-6xl' : 'max-w-3xl';
 const displayTitle = ogTitle ? `${ogTitle} - kosui` : title;
 const displayOgTitle = ogTitle ?? title;
 const displayOgDescription = ogDescription ?? description;
-// build.format が 'file' のとき、Astro 7 はトップページの pathname を /index.html で返す。
-const pathname = Astro.url.pathname.replace(/\/index\.html$/, '/');
+const pathname = toCanonicalPath(Astro.url.pathname);
 const canonicalUrl = ogUrl ?? new URL(pathname, Astro.site).href;
+const publishedIso = publishedTime
+  ? StructuredData.toIsoString(publishedTime)
+  : undefined;
+const modifiedIso =
+  (modifiedTime ? StructuredData.toIsoString(modifiedTime) : undefined)
+    ?? publishedIso;
 
 const slideUpFade = {
   forwards: {
@@ -119,7 +132,27 @@ const navItems = [
     <meta property="og:image:height" content="630" />
     <link rel="canonical" href={canonicalUrl} />
     {authorUrl && <link rel="author" href={authorUrl} />}
-    {ogUrl && <meta property="og:url" content={ogUrl} />}
+    <meta property="og:url" content={canonicalUrl} />
+    <meta name="author" content="岩佐 幸翠" />
+    {
+      publishedIso && (
+        <meta property="article:published_time" content={publishedIso} />
+      )
+    }
+    {
+      modifiedIso && (
+        <meta property="article:modified_time" content={modifiedIso} />
+      )
+    }
+    {
+      jsonLd.map((item) => (
+        <script
+          is:inline
+          type="application/ld+json"
+          set:html={StructuredData.serialize(item)}
+        />
+      ))
+    }
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={displayOgTitle} />
     <meta name="twitter:description" content={displayOgDescription} />

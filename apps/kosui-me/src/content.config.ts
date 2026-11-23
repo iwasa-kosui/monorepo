@@ -6,6 +6,7 @@ const posts = defineCollection({
   schema: z.object({
     title: z.string(),
     date: z.string(),
+    updatedDate: z.string().optional(),
     slug: z.string(),
     description: z.string().optional(),
     themes: z.array(z.enum(['typescript', 'architecture', 'sre', 'team'])).optional(),
@@ -22,6 +23,7 @@ const reports = defineCollection({
   schema: z.object({
     title: z.string(),
     date: z.string(),
+    updatedDate: z.string().optional(),
     slug: z.string(),
     description: z.string().optional(),
     themes: z.array(z.string()).optional(),

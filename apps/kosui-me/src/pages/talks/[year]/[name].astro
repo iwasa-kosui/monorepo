@@ -23,6 +23,7 @@ const talk = presentation.talk;
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -30,7 +31,8 @@ function formatDate(dateStr: string): string {
 }
 
 const siteUrl = 'https://kosui.me';
-const pageUrl = `${siteUrl}/talks/${presentation.year}/${presentation.name}/`;
+// trailingSlash: 'never' なので、末尾にスラッシュを付けた URL はリダイレクトされる。canonical には付けない。
+const pageUrl = `${siteUrl}/talks/${presentation.year}/${presentation.name}`;
 ---
 
 <BaseLayout
