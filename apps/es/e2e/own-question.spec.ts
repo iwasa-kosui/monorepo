@@ -2,9 +2,9 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const writePath = '/chapters/chapter-1/2/';
 const viewPaths = ['/chapters/chapter-4/', '/chapters/chapter-4/5/', '/chapters/summary/2/'];
-const storageKey = 'es-patchwork-hands-on:question:chapter-1';
+const storageKey = 'es:question:chapter-1';
 const summaryPath = '/chapters/summary/2/';
-const summaryKey = 'es-patchwork-hands-on:question:summary-update';
+const summaryKey = 'es:question:summary-update';
 const summaryLabel = '選んだ更新処理と、記録する内容（誰が、いつ、何を）と変更理由（なぜ）';
 const sampleUpdate = '注文のキャンセル処理に、誰がいつなぜ行ったかの記録を足す';
 const sampleQuestion = '注文のキャンセルを誰がいつなぜ行ったか分かるか';

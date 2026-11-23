@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "es-patchwork-hands-on",
+  "name": "es",
   "main": "worker/index.ts",
   "compatibility_date": "2026-08-04",
   "assets": {

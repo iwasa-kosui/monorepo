@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const exercise = (snapshot: string, file: string): string =>
   readFileSync(fileURLToPath(new URL(`../exercises/${snapshot}/${file}`, import.meta.url)), 'utf8');
 
-const storageKey = 'es-patchwork-hands-on:code:chapter-1-start';
+const storageKey = 'es:code:chapter-1-start';
 
 const box = (page: Page): Locator => page.locator('[data-playground]').first();
 

@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 const redirectPath = '/play/add-record/';
 const stepOnePath = '/chapters/chapter-2/4/';
 const stepTwoPath = '/chapters/chapter-2/5/';
-const storageKey = 'es-patchwork-hands-on:code:play-add-record';
-const chapterStartKey = 'es-patchwork-hands-on:code:chapter-1-start';
+const storageKey = 'es:code:play-add-record';
+const chapterStartKey = 'es:code:chapter-1-start';
 const missing = '記録にありません';
 const pochiTest = 'キャンセルした人と理由を答えられる';
 

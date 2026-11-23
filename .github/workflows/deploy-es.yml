@@ -1,19 +1,19 @@
-name: Deploy es-patchwork-hands-on
+name: Deploy es
 
 on:
   push:
     branches:
       - main
     paths:
-      - "apps/es-patchwork-hands-on/**"
-      - ".github/workflows/deploy-es-patchwork-hands-on.yml"
+      - "apps/es/**"
+      - ".github/workflows/deploy-es.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-es-patchwork-hands-on
+  group: deploy-es
   cancel-in-progress: false
 
 jobs:
@@ -37,16 +37,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: pnpm --filter es-patchwork-hands-on run typecheck
+        run: pnpm --filter es run typecheck
 
       - name: Test
-        run: pnpm --filter es-patchwork-hands-on run test:ci
+        run: pnpm --filter es run test:ci
 
       - name: Build
-        run: pnpm --filter es-patchwork-hands-on run build
+        run: pnpm --filter es run build
 
       - name: Deploy to Cloudflare Workers
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.ES_PATCHWORK_CLOUDFLARE_DEPLOY_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm --filter es-patchwork-hands-on exec wrangler deploy
+        run: pnpm --filter es exec wrangler deploy
