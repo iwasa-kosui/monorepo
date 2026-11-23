@@ -1,0 +1,904 @@
+<figure class="fig">
+<div class="fig-headline">リアルタイム基盤の全体像</div>
+<div class="fig-steps">
+<input type="radio" name="fig-sov-step" id="fig-sov-step-1" aria-label="ステップ 1 / 6" checked>
+<input type="radio" name="fig-sov-step" id="fig-sov-step-2" aria-label="ステップ 2 / 6">
+<input type="radio" name="fig-sov-step" id="fig-sov-step-3" aria-label="ステップ 3 / 6">
+<input type="radio" name="fig-sov-step" id="fig-sov-step-4" aria-label="ステップ 4 / 6">
+<input type="radio" name="fig-sov-step" id="fig-sov-step-5" aria-label="ステップ 5 / 6">
+<input type="radio" name="fig-sov-step" id="fig-sov-step-6" aria-label="ステップ 6 / 6">
+<div class="fig-step">
+<div class="fig-step-nav">
+<span class="fig-step-prev fig-step-off" aria-disabled="true">← 戻る</span>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sov-step-1" aria-label="ステップ 1" aria-current="step"></label>
+<label for="fig-sov-step-2" aria-label="ステップ 2"></label>
+<label for="fig-sov-step-3" aria-label="ステップ 3"></label>
+<label for="fig-sov-step-4" aria-label="ステップ 4"></label>
+<label for="fig-sov-step-5" aria-label="ステップ 5"></label>
+<label for="fig-sov-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">1 / 6</span>
+</div>
+<label for="fig-sov-step-2" class="fig-step-next">次へ →</label>
+</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 640 400" role="img" aria-labelledby="fig-sov-s1-title fig-sov-s1-desc">
+<title id="fig-sov-s1-title">Slack のリアルタイム基盤の全体像 ステップ 1</title>
+<desc id="fig-sov-s1-desc">クライアント A・B・C から、2 本の経路が伸びています。1 本は WebSocket で、エッジリージョンの Envoy を通って Gateway Server に届きます。もう 1 本は API 呼び出しで、バックエンドの Webapp に届きます。この 2 本の経路が強調されています。</desc>
+<rect class="fig-card-soft" x="112" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="348" y="105">エッジリージョン 1</text>
+<rect class="fig-card-soft" x="388" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="624" y="105">エッジリージョン 2</text>
+<rect class="fig-card-soft" x="8" y="206" width="624" height="186" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-c-muted" x="16" y="226">バックエンド</text>
+<rect class="fig-card-human" x="120" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="140" y="31.5">A</text>
+<rect class="fig-card-human" x="172" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="192" y="31.5">B</text>
+<rect class="fig-card-human" x="422" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="442" y="31.5">C</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="222" y="31">クライアント</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="472" y="31">クライアント</text>
+<path class="fig-line-agent fig-thick" d="M140 44L140 106"></path>
+<path class="fig-mk-agent" d="M140 114L136 106L144 106Z"></path>
+<path class="fig-line-agent fig-thick" d="M192 44L192 106"></path>
+<path class="fig-mk-agent" d="M192 114L188 106L196 106Z"></path>
+<path class="fig-line-agent fig-thick" d="M442 44L442 106"></path>
+<path class="fig-mk-agent" d="M442 114L438 106L446 106Z"></path>
+<text class="fig-t fig-t-xs fig-b fig-c-agent" x="200" y="76">WebSocket</text>
+<text class="fig-t fig-t-xs fig-b fig-c-agent" x="450" y="76">WebSocket</text>
+<path class="fig-line-agent fig-thick" d="M120 26L52 26L52 242"></path>
+<path class="fig-mk-agent" d="M52 250L48 242L56 242Z"></path>
+<text class="fig-t fig-t-xs fig-end fig-b fig-c-agent" x="44" y="134">API</text>
+<rect class="fig-card-agent" x="124" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="166" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="166" y="151.5">プロキシ</text>
+<rect class="fig-card-agent" x="400" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="442" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="442" y="151.5">プロキシ</text>
+<path class="fig-line-agent fig-thick" d="M208 137L220 137"></path>
+<path class="fig-mk-agent" d="M228 137L220 141L220 133Z"></path>
+<path class="fig-line-agent fig-thick" d="M484 137L496 137"></path>
+<path class="fig-mk-agent" d="M504 137L496 141L496 133Z"></path>
+<rect class="fig-card-agent" x="228" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="286" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="286" y="151.5">Gateway Server</text>
+<rect class="fig-card-agent" x="504" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="151.5">Gateway Server</text>
+<g class="fig-dim">
+<path class="fig-line" d="M300 168L300 234"></path>
+<path class="fig-mk" d="M300 242L296 234L304 234Z"></path>
+<path class="fig-mk" d="M300 160L304 168L296 168Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M540 168L540 192L360 192L360 234"></path>
+<path class="fig-mk" d="M360 242L356 234L364 234Z"></path>
+<path class="fig-mk" d="M540 160L544 168L536 168Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="292" y="198">購読・配信</text>
+<g class="fig-dim">
+<path class="fig-line" d="M590 168L590 242"></path>
+<path class="fig-mk" d="M590 250L586 242L594 242Z"></path>
+<path class="fig-mk" d="M590 160L594 168L586 168Z"></path>
+</g>
+<rect class="fig-card-agent" x="16" y="250" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="58" y="269.5">Webapp</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="58" y="287.5">API</text>
+<g class="fig-dim">
+<path class="fig-line" d="M100 273L124 273"></path>
+<path class="fig-mk" d="M132 273L124 277L124 269Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="132" y="250" width="110" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="269.5">AS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="287.5">Admin Server</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M242 273L254 273"></path>
+<path class="fig-mk" d="M262 273L254 277L254 269Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="270" y="242" width="122" height="46" rx="10"></rect>
+<rect class="fig-card" x="266" y="246" width="122" height="46" rx="10"></rect>
+<rect class="fig-card" x="262" y="250" width="122" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="269.5">CS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="287.5">Channel Server</text>
+<text class="fig-t fig-t-sm fig-b fig-c-muted" x="400" y="262">×N</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="504" y="250" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="269.5">PS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="287.5">Presence Server</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="132" y="336" width="110" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="354.5">Consul</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="372.5">サービス検出</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="262" y="336" width="122" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="354.5">CHARM</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="372.5">リングを管理</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M340 336L340 304"></path>
+<path class="fig-mk" d="M340 296L344 304L336 304Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M285 296L285 316L222 316L222 328"></path>
+<path class="fig-mk" d="M222 336L218 328L226 328Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M170 296L170 328"></path>
+<path class="fig-mk" d="M170 336L166 328L174 328Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M262 358L250 358"></path>
+<path class="fig-mk" d="M242 358L250 354L250 362Z"></path>
+</g>
+</svg>
+</div>
+<div class="fig-callout">クライアントは 2 本の経路を持ちます。メッセージの送信などの API 呼び出しは Webapp へ、リアルタイムなイベントの受信は WebSocket で最寄りのエッジリージョンへ向かいます。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-sov-step-1" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sov-step-1" aria-label="ステップ 1"></label>
+<label for="fig-sov-step-2" aria-label="ステップ 2" aria-current="step"></label>
+<label for="fig-sov-step-3" aria-label="ステップ 3"></label>
+<label for="fig-sov-step-4" aria-label="ステップ 4"></label>
+<label for="fig-sov-step-5" aria-label="ステップ 5"></label>
+<label for="fig-sov-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">2 / 6</span>
+</div>
+<label for="fig-sov-step-3" class="fig-step-next">次へ →</label>
+</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 640 400" role="img" aria-labelledby="fig-sov-s2-title fig-sov-s2-desc">
+<title id="fig-sov-s2-title">Slack のリアルタイム基盤の全体像 ステップ 2</title>
+<desc id="fig-sov-s2-desc">クライアントから Envoy を通って Gateway Server に届く WebSocket の経路と、2 つのリージョンの Gateway Server が強調されています。</desc>
+<rect class="fig-card-soft" x="112" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="348" y="105">エッジリージョン 1</text>
+<rect class="fig-card-soft" x="388" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="624" y="105">エッジリージョン 2</text>
+<rect class="fig-card-soft" x="8" y="206" width="624" height="186" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-c-muted" x="16" y="226">バックエンド</text>
+<rect class="fig-card-human" x="120" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="140" y="31.5">A</text>
+<rect class="fig-card-human" x="172" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="192" y="31.5">B</text>
+<rect class="fig-card-human" x="422" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="442" y="31.5">C</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="222" y="31">クライアント</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="472" y="31">クライアント</text>
+<path class="fig-line-agent fig-thick" d="M140 44L140 106"></path>
+<path class="fig-mk-agent" d="M140 114L136 106L144 106Z"></path>
+<path class="fig-line-agent fig-thick" d="M192 44L192 106"></path>
+<path class="fig-mk-agent" d="M192 114L188 106L196 106Z"></path>
+<path class="fig-line-agent fig-thick" d="M442 44L442 106"></path>
+<path class="fig-mk-agent" d="M442 114L438 106L446 106Z"></path>
+<text class="fig-t fig-t-xs fig-b fig-c-agent" x="200" y="76">WebSocket</text>
+<text class="fig-t fig-t-xs fig-b fig-c-agent" x="450" y="76">WebSocket</text>
+<g class="fig-dim">
+<path class="fig-line" d="M120 26L52 26L52 242"></path>
+<path class="fig-mk" d="M52 250L48 242L56 242Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="44" y="134">API</text>
+<rect class="fig-card-agent" x="124" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="166" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="166" y="151.5">プロキシ</text>
+<rect class="fig-card-agent" x="400" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="442" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="442" y="151.5">プロキシ</text>
+<path class="fig-line-agent fig-thick" d="M208 137L220 137"></path>
+<path class="fig-mk-agent" d="M228 137L220 141L220 133Z"></path>
+<path class="fig-line-agent fig-thick" d="M484 137L496 137"></path>
+<path class="fig-mk-agent" d="M504 137L496 141L496 133Z"></path>
+<rect class="fig-card-agent" x="228" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="286" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="286" y="151.5">Gateway Server</text>
+<rect class="fig-card-agent" x="504" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="151.5">Gateway Server</text>
+<g class="fig-dim">
+<path class="fig-line" d="M300 168L300 234"></path>
+<path class="fig-mk" d="M300 242L296 234L304 234Z"></path>
+<path class="fig-mk" d="M300 160L304 168L296 168Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M540 168L540 192L360 192L360 234"></path>
+<path class="fig-mk" d="M360 242L356 234L364 234Z"></path>
+<path class="fig-mk" d="M540 160L544 168L536 168Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="292" y="198">購読・配信</text>
+<g class="fig-dim">
+<path class="fig-line" d="M590 168L590 242"></path>
+<path class="fig-mk" d="M590 250L586 242L594 242Z"></path>
+<path class="fig-mk" d="M590 160L594 168L586 168Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="16" y="250" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="58" y="269.5">Webapp</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="58" y="287.5">API</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M100 273L124 273"></path>
+<path class="fig-mk" d="M132 273L124 277L124 269Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="132" y="250" width="110" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="269.5">AS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="287.5">Admin Server</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M242 273L254 273"></path>
+<path class="fig-mk" d="M262 273L254 277L254 269Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="270" y="242" width="122" height="46" rx="10"></rect>
+<rect class="fig-card" x="266" y="246" width="122" height="46" rx="10"></rect>
+<rect class="fig-card" x="262" y="250" width="122" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="269.5">CS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="287.5">Channel Server</text>
+<text class="fig-t fig-t-sm fig-b fig-c-muted" x="400" y="262">×N</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="504" y="250" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="269.5">PS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="287.5">Presence Server</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="132" y="336" width="110" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="354.5">Consul</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="372.5">サービス検出</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="262" y="336" width="122" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="354.5">CHARM</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="372.5">リングを管理</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M340 336L340 304"></path>
+<path class="fig-mk" d="M340 296L344 304L336 304Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M285 296L285 316L222 316L222 328"></path>
+<path class="fig-mk" d="M222 336L218 328L226 328Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M170 296L170 328"></path>
+<path class="fig-mk" d="M170 336L166 328L174 328Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M262 358L250 358"></path>
+<path class="fig-mk" d="M242 358L250 354L250 362Z"></path>
+</g>
+</svg>
+</div>
+<div class="fig-callout">Gateway Server（GS）は、クライアントと CS の間に立ちます。ユーザーの情報と、WebSocket ごとのチャンネルの購読をメモリに持ちます。ほかのサーバーと違い、複数のリージョンに配置されます。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-sov-step-2" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sov-step-1" aria-label="ステップ 1"></label>
+<label for="fig-sov-step-2" aria-label="ステップ 2"></label>
+<label for="fig-sov-step-3" aria-label="ステップ 3" aria-current="step"></label>
+<label for="fig-sov-step-4" aria-label="ステップ 4"></label>
+<label for="fig-sov-step-5" aria-label="ステップ 5"></label>
+<label for="fig-sov-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">3 / 6</span>
+</div>
+<label for="fig-sov-step-4" class="fig-step-next">次へ →</label>
+</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 640 400" role="img" aria-labelledby="fig-sov-s3-title fig-sov-s3-desc">
+<title id="fig-sov-s3-title">Slack のリアルタイム基盤の全体像 ステップ 3</title>
+<desc id="fig-sov-s3-desc">複数台の Channel Server と、Channel Server と各 Gateway Server を結ぶ購読・配信の線、Admin Server から Channel Server への線が強調されています。</desc>
+<rect class="fig-card-soft" x="112" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="348" y="105">エッジリージョン 1</text>
+<rect class="fig-card-soft" x="388" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="624" y="105">エッジリージョン 2</text>
+<rect class="fig-card-soft" x="8" y="206" width="624" height="186" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-c-muted" x="16" y="226">バックエンド</text>
+<g class="fig-dim">
+<rect class="fig-card-human" x="120" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="140" y="31.5">A</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card-human" x="172" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="192" y="31.5">B</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card-human" x="422" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="442" y="31.5">C</text>
+</g>
+<text class="fig-t fig-t-sm fig-c-muted" x="222" y="31">クライアント</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="472" y="31">クライアント</text>
+<g class="fig-dim">
+<path class="fig-line" d="M140 44L140 106"></path>
+<path class="fig-mk" d="M140 114L136 106L144 106Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M192 44L192 106"></path>
+<path class="fig-mk" d="M192 114L188 106L196 106Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M442 44L442 106"></path>
+<path class="fig-mk" d="M442 114L438 106L446 106Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-c-muted" x="200" y="76">WebSocket</text>
+<text class="fig-t fig-t-xs fig-c-muted" x="450" y="76">WebSocket</text>
+<g class="fig-dim">
+<path class="fig-line" d="M120 26L52 26L52 242"></path>
+<path class="fig-mk" d="M52 250L48 242L56 242Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="44" y="134">API</text>
+<g class="fig-dim">
+<rect class="fig-card" x="124" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="166" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="166" y="151.5">プロキシ</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="400" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="442" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="442" y="151.5">プロキシ</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M208 137L220 137"></path>
+<path class="fig-mk" d="M228 137L220 141L220 133Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M484 137L496 137"></path>
+<path class="fig-mk" d="M504 137L496 141L496 133Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="228" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="286" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="286" y="151.5">Gateway Server</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="504" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="151.5">Gateway Server</text>
+</g>
+<path class="fig-line-agent fig-thick" d="M300 168L300 234"></path>
+<path class="fig-mk-agent" d="M300 242L296 234L304 234Z"></path>
+<path class="fig-mk-agent" d="M300 160L304 168L296 168Z"></path>
+<path class="fig-line-agent fig-thick" d="M540 168L540 192L360 192L360 234"></path>
+<path class="fig-mk-agent" d="M360 242L356 234L364 234Z"></path>
+<path class="fig-mk-agent" d="M540 160L544 168L536 168Z"></path>
+<text class="fig-t fig-t-xs fig-end fig-b fig-c-agent" x="292" y="198">購読・配信</text>
+<g class="fig-dim">
+<path class="fig-line" d="M590 168L590 242"></path>
+<path class="fig-mk" d="M590 250L586 242L594 242Z"></path>
+<path class="fig-mk" d="M590 160L594 168L586 168Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="16" y="250" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="58" y="269.5">Webapp</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="58" y="287.5">API</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M100 273L124 273"></path>
+<path class="fig-mk" d="M132 273L124 277L124 269Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="132" y="250" width="110" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="269.5">AS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="287.5">Admin Server</text>
+</g>
+<path class="fig-line-agent fig-thick" d="M242 273L254 273"></path>
+<path class="fig-mk-agent" d="M262 273L254 277L254 269Z"></path>
+<rect class="fig-card-agent" x="270" y="242" width="122" height="46" rx="10"></rect>
+<rect class="fig-card-agent" x="266" y="246" width="122" height="46" rx="10"></rect>
+<rect class="fig-card-agent" x="262" y="250" width="122" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="269.5">CS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="287.5">Channel Server</text>
+<text class="fig-t fig-t-sm fig-b fig-c-agent" x="400" y="262">×N</text>
+<g class="fig-dim">
+<rect class="fig-card" x="504" y="250" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="269.5">PS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="287.5">Presence Server</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="132" y="336" width="110" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="354.5">Consul</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="372.5">サービス検出</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="262" y="336" width="122" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="354.5">CHARM</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="372.5">リングを管理</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M340 336L340 304"></path>
+<path class="fig-mk" d="M340 296L344 304L336 304Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M285 296L285 316L222 316L222 328"></path>
+<path class="fig-mk" d="M222 336L218 328L226 328Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M170 296L170 328"></path>
+<path class="fig-mk" d="M170 336L166 328L174 328Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M262 358L250 358"></path>
+<path class="fig-mk" d="M242 358L250 354L250 362Z"></path>
+</g>
+</svg>
+</div>
+<div class="fig-callout">Channel Server（CS）は、チャンネルごとの配信を担当します。チャンネルの履歴の一部をメモリに持ちます。チャンネル ID のコンシステントハッシュで担当の CS が決まり、ピーク時は 1 台が約 1,600 万チャンネルを受け持ちます。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-sov-step-3" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sov-step-1" aria-label="ステップ 1"></label>
+<label for="fig-sov-step-2" aria-label="ステップ 2"></label>
+<label for="fig-sov-step-3" aria-label="ステップ 3"></label>
+<label for="fig-sov-step-4" aria-label="ステップ 4" aria-current="step"></label>
+<label for="fig-sov-step-5" aria-label="ステップ 5"></label>
+<label for="fig-sov-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">4 / 6</span>
+</div>
+<label for="fig-sov-step-5" class="fig-step-next">次へ →</label>
+</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 640 400" role="img" aria-labelledby="fig-sov-s4-title fig-sov-s4-desc">
+<title id="fig-sov-s4-title">Slack のリアルタイム基盤の全体像 ステップ 4</title>
+<desc id="fig-sov-s4-desc">Webapp から Admin Server を通って Channel Server へ向かう経路が強調されています。</desc>
+<rect class="fig-card-soft" x="112" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="348" y="105">エッジリージョン 1</text>
+<rect class="fig-card-soft" x="388" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="624" y="105">エッジリージョン 2</text>
+<rect class="fig-card-soft" x="8" y="206" width="624" height="186" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-c-muted" x="16" y="226">バックエンド</text>
+<g class="fig-dim">
+<rect class="fig-card-human" x="120" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="140" y="31.5">A</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card-human" x="172" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="192" y="31.5">B</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card-human" x="422" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="442" y="31.5">C</text>
+</g>
+<text class="fig-t fig-t-sm fig-c-muted" x="222" y="31">クライアント</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="472" y="31">クライアント</text>
+<g class="fig-dim">
+<path class="fig-line" d="M140 44L140 106"></path>
+<path class="fig-mk" d="M140 114L136 106L144 106Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M192 44L192 106"></path>
+<path class="fig-mk" d="M192 114L188 106L196 106Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M442 44L442 106"></path>
+<path class="fig-mk" d="M442 114L438 106L446 106Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-c-muted" x="200" y="76">WebSocket</text>
+<text class="fig-t fig-t-xs fig-c-muted" x="450" y="76">WebSocket</text>
+<g class="fig-dim">
+<path class="fig-line" d="M120 26L52 26L52 242"></path>
+<path class="fig-mk" d="M52 250L48 242L56 242Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="44" y="134">API</text>
+<g class="fig-dim">
+<rect class="fig-card" x="124" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="166" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="166" y="151.5">プロキシ</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="400" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="442" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="442" y="151.5">プロキシ</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M208 137L220 137"></path>
+<path class="fig-mk" d="M228 137L220 141L220 133Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M484 137L496 137"></path>
+<path class="fig-mk" d="M504 137L496 141L496 133Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="228" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="286" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="286" y="151.5">Gateway Server</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="504" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="151.5">Gateway Server</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M300 168L300 234"></path>
+<path class="fig-mk" d="M300 242L296 234L304 234Z"></path>
+<path class="fig-mk" d="M300 160L304 168L296 168Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M540 168L540 192L360 192L360 234"></path>
+<path class="fig-mk" d="M360 242L356 234L364 234Z"></path>
+<path class="fig-mk" d="M540 160L544 168L536 168Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="292" y="198">購読・配信</text>
+<g class="fig-dim">
+<path class="fig-line" d="M590 168L590 242"></path>
+<path class="fig-mk" d="M590 250L586 242L594 242Z"></path>
+<path class="fig-mk" d="M590 160L594 168L586 168Z"></path>
+</g>
+<rect class="fig-card-agent" x="16" y="250" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="58" y="269.5">Webapp</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="58" y="287.5">API</text>
+<path class="fig-line-agent fig-thick" d="M100 273L124 273"></path>
+<path class="fig-mk-agent" d="M132 273L124 277L124 269Z"></path>
+<rect class="fig-card-agent" x="132" y="250" width="110" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="269.5">AS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="287.5">Admin Server</text>
+<path class="fig-line-agent fig-thick" d="M242 273L254 273"></path>
+<path class="fig-mk-agent" d="M262 273L254 277L254 269Z"></path>
+<g class="fig-dim">
+<rect class="fig-card" x="270" y="242" width="122" height="46" rx="10"></rect>
+<rect class="fig-card" x="266" y="246" width="122" height="46" rx="10"></rect>
+<rect class="fig-card" x="262" y="250" width="122" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="269.5">CS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="287.5">Channel Server</text>
+<text class="fig-t fig-t-sm fig-b fig-c-muted" x="400" y="262">×N</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="504" y="250" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="269.5">PS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="287.5">Presence Server</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="132" y="336" width="110" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="354.5">Consul</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="372.5">サービス検出</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="262" y="336" width="122" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="354.5">CHARM</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="372.5">リングを管理</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M340 336L340 304"></path>
+<path class="fig-mk" d="M340 296L344 304L336 304Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M285 296L285 316L222 316L222 328"></path>
+<path class="fig-mk" d="M222 336L218 328L226 328Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M170 296L170 328"></path>
+<path class="fig-mk" d="M170 336L166 328L174 328Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M262 358L250 358"></path>
+<path class="fig-mk" d="M242 358L250 354L250 362Z"></path>
+</g>
+</svg>
+</div>
+<div class="fig-callout">Admin Server（AS）は、Webapp と CS の間をつなぎます。状態を持たないサーバーです。Webapp が受け取ったメッセージを、担当の CS へ渡します。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-sov-step-4" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sov-step-1" aria-label="ステップ 1"></label>
+<label for="fig-sov-step-2" aria-label="ステップ 2"></label>
+<label for="fig-sov-step-3" aria-label="ステップ 3"></label>
+<label for="fig-sov-step-4" aria-label="ステップ 4"></label>
+<label for="fig-sov-step-5" aria-label="ステップ 5" aria-current="step"></label>
+<label for="fig-sov-step-6" aria-label="ステップ 6"></label>
+</div>
+<span class="fig-step-count">5 / 6</span>
+</div>
+<label for="fig-sov-step-6" class="fig-step-next">次へ →</label>
+</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 640 400" role="img" aria-labelledby="fig-sov-s5-title fig-sov-s5-desc">
+<title id="fig-sov-s5-title">Slack のリアルタイム基盤の全体像 ステップ 5</title>
+<desc id="fig-sov-s5-desc">Presence Server と、Gateway Server から Presence Server への線が強調されています。</desc>
+<rect class="fig-card-soft" x="112" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="348" y="105">エッジリージョン 1</text>
+<rect class="fig-card-soft" x="388" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="624" y="105">エッジリージョン 2</text>
+<rect class="fig-card-soft" x="8" y="206" width="624" height="186" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-c-muted" x="16" y="226">バックエンド</text>
+<g class="fig-dim">
+<rect class="fig-card-human" x="120" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="140" y="31.5">A</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card-human" x="172" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="192" y="31.5">B</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card-human" x="422" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="442" y="31.5">C</text>
+</g>
+<text class="fig-t fig-t-sm fig-c-muted" x="222" y="31">クライアント</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="472" y="31">クライアント</text>
+<g class="fig-dim">
+<path class="fig-line" d="M140 44L140 106"></path>
+<path class="fig-mk" d="M140 114L136 106L144 106Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M192 44L192 106"></path>
+<path class="fig-mk" d="M192 114L188 106L196 106Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M442 44L442 106"></path>
+<path class="fig-mk" d="M442 114L438 106L446 106Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-c-muted" x="200" y="76">WebSocket</text>
+<text class="fig-t fig-t-xs fig-c-muted" x="450" y="76">WebSocket</text>
+<g class="fig-dim">
+<path class="fig-line" d="M120 26L52 26L52 242"></path>
+<path class="fig-mk" d="M52 250L48 242L56 242Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="44" y="134">API</text>
+<g class="fig-dim">
+<rect class="fig-card" x="124" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="166" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="166" y="151.5">プロキシ</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="400" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="442" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="442" y="151.5">プロキシ</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M208 137L220 137"></path>
+<path class="fig-mk" d="M228 137L220 141L220 133Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M484 137L496 137"></path>
+<path class="fig-mk" d="M504 137L496 141L496 133Z"></path>
+</g>
+<rect class="fig-card-agent" x="228" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="286" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="286" y="151.5">Gateway Server</text>
+<rect class="fig-card-agent" x="504" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="151.5">Gateway Server</text>
+<g class="fig-dim">
+<path class="fig-line" d="M300 168L300 234"></path>
+<path class="fig-mk" d="M300 242L296 234L304 234Z"></path>
+<path class="fig-mk" d="M300 160L304 168L296 168Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M540 168L540 192L360 192L360 234"></path>
+<path class="fig-mk" d="M360 242L356 234L364 234Z"></path>
+<path class="fig-mk" d="M540 160L544 168L536 168Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="292" y="198">購読・配信</text>
+<path class="fig-line-agent fig-thick" d="M590 168L590 242"></path>
+<path class="fig-mk-agent" d="M590 250L586 242L594 242Z"></path>
+<path class="fig-mk-agent" d="M590 160L594 168L586 168Z"></path>
+<g class="fig-dim">
+<rect class="fig-card" x="16" y="250" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="58" y="269.5">Webapp</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="58" y="287.5">API</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M100 273L124 273"></path>
+<path class="fig-mk" d="M132 273L124 277L124 269Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="132" y="250" width="110" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="269.5">AS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="287.5">Admin Server</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M242 273L254 273"></path>
+<path class="fig-mk" d="M262 273L254 277L254 269Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="270" y="242" width="122" height="46" rx="10"></rect>
+<rect class="fig-card" x="266" y="246" width="122" height="46" rx="10"></rect>
+<rect class="fig-card" x="262" y="250" width="122" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="269.5">CS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="287.5">Channel Server</text>
+<text class="fig-t fig-t-sm fig-b fig-c-muted" x="400" y="262">×N</text>
+</g>
+<rect class="fig-card-agent" x="504" y="250" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="269.5">PS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="287.5">Presence Server</text>
+<g class="fig-dim">
+<rect class="fig-card" x="132" y="336" width="110" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="354.5">Consul</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="372.5">サービス検出</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="262" y="336" width="122" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="354.5">CHARM</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="372.5">リングを管理</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M340 336L340 304"></path>
+<path class="fig-mk" d="M340 296L344 304L336 304Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M285 296L285 316L222 316L222 328"></path>
+<path class="fig-mk" d="M222 336L218 328L226 328Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M170 296L170 328"></path>
+<path class="fig-mk" d="M170 336L166 328L174 328Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M262 358L250 358"></path>
+<path class="fig-mk" d="M242 358L250 354L250 362Z"></path>
+</g>
+</svg>
+</div>
+<div class="fig-callout">Presence Server（PS）は、どのユーザーがオンラインかをメモリに持ちます。ユーザーはハッシュで PS に割り当てられます。クライアントからの照会と変更の通知は、GS が中継します（図では線を 1 本だけ描いています）。</div>
+</div>
+<div class="fig-step">
+<div class="fig-step-nav">
+<label for="fig-sov-step-5" class="fig-step-prev">← 戻る</label>
+<div class="fig-step-center">
+<div class="fig-step-dots">
+<label for="fig-sov-step-1" aria-label="ステップ 1"></label>
+<label for="fig-sov-step-2" aria-label="ステップ 2"></label>
+<label for="fig-sov-step-3" aria-label="ステップ 3"></label>
+<label for="fig-sov-step-4" aria-label="ステップ 4"></label>
+<label for="fig-sov-step-5" aria-label="ステップ 5"></label>
+<label for="fig-sov-step-6" aria-label="ステップ 6" aria-current="step"></label>
+</div>
+<span class="fig-step-count">6 / 6</span>
+</div>
+<label for="fig-sov-step-1" class="fig-step-next">最初から</label>
+</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 640 400" role="img" aria-labelledby="fig-sov-s6-title fig-sov-s6-desc">
+<title id="fig-sov-s6-title">Slack のリアルタイム基盤の全体像 ステップ 6</title>
+<desc id="fig-sov-s6-desc">CHARM と Consul が強調されています。CHARM から Channel Server へ、CHARM から Consul へ線が伸びています。Channel Server と Admin Server からも Consul へ線が伸びています。</desc>
+<rect class="fig-card-soft" x="112" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="348" y="105">エッジリージョン 1</text>
+<rect class="fig-card-soft" x="388" y="88" width="244" height="88" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="624" y="105">エッジリージョン 2</text>
+<rect class="fig-card-soft" x="8" y="206" width="624" height="186" rx="12"></rect>
+<text class="fig-t fig-t-xs fig-c-muted" x="16" y="226">バックエンド</text>
+<g class="fig-dim">
+<rect class="fig-card-human" x="120" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="140" y="31.5">A</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card-human" x="172" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="192" y="31.5">B</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card-human" x="422" y="8" width="40" height="36" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="442" y="31.5">C</text>
+</g>
+<text class="fig-t fig-t-sm fig-c-muted" x="222" y="31">クライアント</text>
+<text class="fig-t fig-t-sm fig-c-muted" x="472" y="31">クライアント</text>
+<g class="fig-dim">
+<path class="fig-line" d="M140 44L140 106"></path>
+<path class="fig-mk" d="M140 114L136 106L144 106Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M192 44L192 106"></path>
+<path class="fig-mk" d="M192 114L188 106L196 106Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M442 44L442 106"></path>
+<path class="fig-mk" d="M442 114L438 106L446 106Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-c-muted" x="200" y="76">WebSocket</text>
+<text class="fig-t fig-t-xs fig-c-muted" x="450" y="76">WebSocket</text>
+<g class="fig-dim">
+<path class="fig-line" d="M120 26L52 26L52 242"></path>
+<path class="fig-mk" d="M52 250L48 242L56 242Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="44" y="134">API</text>
+<g class="fig-dim">
+<rect class="fig-card" x="124" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="166" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="166" y="151.5">プロキシ</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="400" y="114" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="442" y="133.5">Envoy</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="442" y="151.5">プロキシ</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M208 137L220 137"></path>
+<path class="fig-mk" d="M228 137L220 141L220 133Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M484 137L496 137"></path>
+<path class="fig-mk" d="M504 137L496 141L496 133Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="228" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="286" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="286" y="151.5">Gateway Server</text>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="504" y="114" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="133.5">GS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="151.5">Gateway Server</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M300 168L300 234"></path>
+<path class="fig-mk" d="M300 242L296 234L304 234Z"></path>
+<path class="fig-mk" d="M300 160L304 168L296 168Z"></path>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M540 168L540 192L360 192L360 234"></path>
+<path class="fig-mk" d="M360 242L356 234L364 234Z"></path>
+<path class="fig-mk" d="M540 160L544 168L536 168Z"></path>
+</g>
+<text class="fig-t fig-t-xs fig-end fig-c-muted" x="292" y="198">購読・配信</text>
+<g class="fig-dim">
+<path class="fig-line" d="M590 168L590 242"></path>
+<path class="fig-mk" d="M590 250L586 242L594 242Z"></path>
+<path class="fig-mk" d="M590 160L594 168L586 168Z"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="16" y="250" width="84" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="58" y="269.5">Webapp</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="58" y="287.5">API</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M100 273L124 273"></path>
+<path class="fig-mk" d="M132 273L124 277L124 269Z"></path>
+</g>
+<rect class="fig-card-agent" x="132" y="250" width="110" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="269.5">AS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="287.5">Admin Server</text>
+<g class="fig-dim">
+<path class="fig-line" d="M242 273L254 273"></path>
+<path class="fig-mk" d="M262 273L254 277L254 269Z"></path>
+</g>
+<rect class="fig-card-agent" x="270" y="242" width="122" height="46" rx="10"></rect>
+<rect class="fig-card-agent" x="266" y="246" width="122" height="46" rx="10"></rect>
+<rect class="fig-card-agent" x="262" y="250" width="122" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="269.5">CS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="287.5">Channel Server</text>
+<text class="fig-t fig-t-sm fig-b fig-c-agent" x="400" y="262">×N</text>
+<g class="fig-dim">
+<rect class="fig-card" x="504" y="250" width="116" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="562" y="269.5">PS</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="562" y="287.5">Presence Server</text>
+</g>
+<rect class="fig-card-agent" x="132" y="336" width="110" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="187" y="354.5">Consul</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="187" y="372.5">サービス検出</text>
+<rect class="fig-card-agent" x="262" y="336" width="122" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="323" y="354.5">CHARM</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="323" y="372.5">リングを管理</text>
+<path class="fig-line-agent fig-thick" d="M340 336L340 304"></path>
+<path class="fig-mk-agent" d="M340 296L344 304L336 304Z"></path>
+<path class="fig-line-agent fig-thick" d="M285 296L285 316L222 316L222 328"></path>
+<path class="fig-mk-agent" d="M222 336L218 328L226 328Z"></path>
+<path class="fig-line-agent fig-thick" d="M170 296L170 328"></path>
+<path class="fig-mk-agent" d="M170 336L166 328L174 328Z"></path>
+<path class="fig-line-agent fig-thick" d="M262 358L250 358"></path>
+<path class="fig-mk-agent" d="M242 358L250 354L250 362Z"></path>
+</svg>
+</div>
+<div class="fig-callout">CHARM は、CS のハッシュリングを管理します。不健全な CS を新しい CS に入れ替えます。CS は Consul に登録され、AS と CS は Consul に問い合わせて最新のリングの設定を取得します。</div>
+</div>
+</div>
+<figcaption>「次へ」を押すと、サーバーを 1 種類ずつ強調して役割を説明します。</figcaption>
+</figure>

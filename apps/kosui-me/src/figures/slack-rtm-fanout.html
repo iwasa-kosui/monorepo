@@ -1,0 +1,96 @@
+<figure class="fig">
+<div class="fig-headline">2 段階の購読で配信先を絞る</div>
+<div class="fig-scroll">
+<svg viewBox="0 0 640 300" role="img" aria-labelledby="fig-sfo-title fig-sfo-desc">
+<title id="fig-sfo-title">CS と GS の 2 段階の購読によるファンアウト</title>
+<desc id="fig-sfo-desc">左の Admin Server から、#dev 宛てのメッセージが 1 件、CS に届きます。CS は #dev の購読者として GS-1 と GS-2 を記録しています。CS は GS-1 と GS-2 へ送り、#dev を購読していない GS-3 へは送りません。GS-1 は #dev の購読者として A と B を、GS-2 は C を記録しています。GS-1 は A と B へ、GS-2 は C へ WebSocket で届けます。#dev を購読していないクライアント D、E、F には届きません。1 件の受信が、3 件の配信になります。アニメーションでは、この流れを点の移動で示し、10 秒周期でくり返します。</desc>
+<rect class="fig-card" x="8" y="146" width="60" height="44" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="38" y="173.5">AS</text>
+<path class="fig-line-agent fig-thick" d="M68 168L100 168"></path>
+<path class="fig-mk-agent" d="M108 168L100 172L100 164Z"></path>
+<text class="fig-t fig-t-xs fig-mid fig-b fig-c-agent" x="38" y="136">1 件</text>
+<rect class="fig-card-agent" x="108" y="112" width="170" height="112" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="193" y="136">CS</text>
+<rect class="fig-card" x="120" y="148" width="146" height="64" rx="8"></rect>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="193" y="172">#dev の購読者</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="193" y="196">GS-1・GS-2</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="193" y="250">購読していない GS には</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="193" y="268">送らない</text>
+<path class="fig-line-agent fig-thick" d="M278 148L318 148L318 59L352 59"></path>
+<path class="fig-mk-agent" d="M360 59L352 63L352 55Z"></path>
+<path class="fig-line-agent fig-thick" d="M278 168L352 168"></path>
+<path class="fig-mk-agent" d="M360 168L352 172L352 164Z"></path>
+<g class="fig-dim">
+<path class="fig-line fig-dash" d="M278 188L318 188L318 259L360 259"></path>
+</g>
+<rect class="fig-card-agent" x="360" y="8" width="130" height="102" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="425" y="30">GS-1</text>
+<rect class="fig-card" x="370" y="40" width="110" height="60" rx="8"></rect>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="425" y="67">#dev の購読者</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="425" y="86">A・B</text>
+<rect class="fig-card-agent" x="360" y="126" width="130" height="84" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="425" y="148">GS-2</text>
+<rect class="fig-card" x="370" y="158" width="110" height="42" rx="8"></rect>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="425" y="176">#dev の購読者</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="425" y="195">C</text>
+<g class="fig-dim">
+<rect class="fig-card" x="360" y="226" width="130" height="66" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="425" y="248">GS-3</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="425" y="272">#dev の購読なし</text>
+</g>
+<path class="fig-line-agent fig-thick" d="M490 23L564 23"></path>
+<path class="fig-mk-agent" d="M572 23L564 27L564 19Z"></path>
+<rect class="fig-card-human" x="572" y="8" width="52" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="598" y="28.5">A</text>
+<path class="fig-line-agent fig-thick" d="M490 59L564 59"></path>
+<path class="fig-mk-agent" d="M572 59L564 63L564 55Z"></path>
+<rect class="fig-card-human" x="572" y="44" width="52" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="598" y="64.5">B</text>
+<g class="fig-dim">
+<path class="fig-line" d="M490 95L572 95"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="572" y="80" width="52" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="598" y="100.5">D</text>
+</g>
+<path class="fig-line-agent fig-thick" d="M490 150L564 150"></path>
+<path class="fig-mk-agent" d="M572 150L564 154L564 146Z"></path>
+<rect class="fig-card-human" x="572" y="135" width="52" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-on-human" x="598" y="155.5">C</text>
+<g class="fig-dim">
+<path class="fig-line" d="M490 186L572 186"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="572" y="171" width="52" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="598" y="191.5">E</text>
+</g>
+<g class="fig-dim">
+<path class="fig-line" d="M490 259L572 259"></path>
+</g>
+<g class="fig-dim">
+<rect class="fig-card" x="572" y="244" width="52" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-c-muted" x="598" y="264.5">F</text>
+</g>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="531" y="122">WebSocket</text>
+<g class="fig-anim">
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M68 168L108 168" keyPoints="0;0;1;1" keyTimes="0;0.04;0.12;1"></animateMotion><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.04;0.05;0.12;0.13;1"></animate></circle>
+<rect class="fig-glow-agent" x="108" y="112" width="170" height="112" rx="10" opacity="0"><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.11;0.125;0.205;0.22;1"></animate></rect>
+<rect class="fig-glow-agent" x="120" y="148" width="146" height="64" rx="8" opacity="0"><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.13;0.145;0.225;0.24;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M278 148L318 148L318 59L360 59" keyPoints="0;0;1;1" keyTimes="0;0.23;0.38;1"></animateMotion><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.23;0.24;0.38;0.39;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M278 168L360 168" keyPoints="0;0;1;1" keyTimes="0;0.23;0.38;1"></animateMotion><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.23;0.24;0.38;0.39;1"></animate></circle>
+<rect class="fig-glow-agent" x="360" y="8" width="130" height="102" rx="10" opacity="0"><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.37;0.385;0.465;0.48;1"></animate></rect>
+<rect class="fig-glow-agent" x="360" y="126" width="130" height="84" rx="10" opacity="0"><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.37;0.385;0.465;0.48;1"></animate></rect>
+<rect class="fig-glow-agent" x="370" y="40" width="110" height="60" rx="8" opacity="0"><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.39;0.405;0.485;0.5;1"></animate></rect>
+<rect class="fig-glow-agent" x="370" y="158" width="110" height="42" rx="8" opacity="0"><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.39;0.405;0.485;0.5;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M490 23L572 23" keyPoints="0;0;1;1" keyTimes="0;0.5;0.6;1"></animateMotion><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.5;0.51;0.6;0.61;1"></animate></circle>
+<rect class="fig-glow-human" x="572" y="8" width="52" height="30" rx="10" opacity="0"><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.59;0.605;0.925;0.94;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M490 59L572 59" keyPoints="0;0;1;1" keyTimes="0;0.5;0.6;1"></animateMotion><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.5;0.51;0.6;0.61;1"></animate></circle>
+<rect class="fig-glow-human" x="572" y="44" width="52" height="30" rx="10" opacity="0"><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.59;0.605;0.925;0.94;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M490 150L572 150" keyPoints="0;0;1;1" keyTimes="0;0.5;0.6;1"></animateMotion><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.5;0.51;0.6;0.61;1"></animate></circle>
+<rect class="fig-glow-human" x="572" y="135" width="52" height="30" rx="10" opacity="0"><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.59;0.605;0.925;0.94;1"></animate></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b fig-c-agent" x="560" y="293" opacity="0"><animate attributeName="opacity" dur="10s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.6;0.615;0.925;0.94;1"></animate>3 件の配信</text>
+</g>
+</svg>
+</div>
+<figcaption>CS は「どの GS がこのチャンネルを購読しているか」だけを知り、GS は「どの WebSocket がこのチャンネルを購読しているか」を知っています。</figcaption>
+</figure>

@@ -1,0 +1,150 @@
+<figure class="fig">
+<div class="fig-headline">コンシステントハッシュによる CS の割り当て</div>
+<div class="fig-tabs">
+<input type="radio" name="fig-shr-tab" id="fig-shr-tab-1" checked>
+<label for="fig-shr-tab-1" class="fig-tab-label">チャンネルの割り当て</label>
+<input type="radio" name="fig-shr-tab" id="fig-shr-tab-2">
+<label for="fig-shr-tab-2" class="fig-tab-label">CS の入れ替え</label>
+<div class="fig-panel">
+<div class="fig-scroll">
+<svg viewBox="0 0 640 330" role="img" aria-labelledby="fig-shr-1-title fig-shr-1-desc">
+<title id="fig-shr-1-title">チャンネル ID から担当の CS を決める流れ</title>
+<desc id="fig-shr-1-desc">左に #general、#dev、ファイル、ハドルの 4 つのチャンネル ID が並びます。それぞれが hash を通り、右の円形のリング上の位置に写されます。リングには CS-1 から CS-4 の 4 台が等間隔に並んでいます。各チャンネルは、リング上の位置から時計回りに進んで最初に出会う CS に割り当てられます。#general は CS-2、#dev は CS-3、ファイルは CS-4、ハドルは CS-1 が担当します。アニメーションでは、チャンネルが 1 つずつ hash を通り、リングを時計回りに進んで担当の CS に届く様子を、12 秒周期でくり返し示します。</desc>
+<text class="fig-t fig-t-xs fig-c-muted" x="8" y="74">チャンネル ID</text>
+<rect class="fig-card" x="8" y="86" width="120" height="32" rx="16"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="68" y="107.5">#general</text>
+<path class="fig-line" d="M128 102L152 102"></path>
+<rect class="fig-card" x="8" y="128" width="120" height="32" rx="16"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="68" y="149.5">#dev</text>
+<path class="fig-line" d="M128 144L152 144"></path>
+<rect class="fig-card" x="8" y="170" width="120" height="32" rx="16"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="68" y="191.5">ファイル</text>
+<path class="fig-line" d="M128 186L152 186"></path>
+<rect class="fig-card" x="8" y="212" width="120" height="32" rx="16"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="68" y="233.5">ハドル</text>
+<path class="fig-line" d="M128 228L152 228"></path>
+<path class="fig-line" d="M152 102L152 228"></path>
+<path class="fig-line" d="M152 165L168 165"></path>
+<path class="fig-mk" d="M176 165L168 169L168 161Z"></path>
+<rect class="fig-card-agent" x="176" y="145" width="76" height="40" rx="20"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="214" y="170.5">hash</text>
+<path class="fig-line" d="M252 165L318 165"></path>
+<path class="fig-mk" d="M326 165L318 169L318 161Z"></path>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="289" y="138">リング上の</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="289" y="155">位置へ</text>
+<circle class="fig-line" cx="450" cy="165" r="110"></circle>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="450" y="163">時計回りに進み</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="450" y="181">最初の CS が担当</text>
+<path class="fig-line-agent fig-bold" d="M559.58 155.41A110 110 0 0 1 549.69 211.49"></path>
+<path class="fig-mk-agent" d="M549.69 211.49L549.42 201.43L557.58 205.23Z"></path>
+<circle class="fig-card" cx="559.58" cy="155.41" r="5"></circle>
+<text class="fig-t fig-t-xs fig-b" x="569" y="152">#general</text>
+<path class="fig-line-agent fig-bold" d="M459.59 274.58A110 110 0 0 1 403.51 264.69"></path>
+<path class="fig-mk-agent" d="M403.51 264.69L413.57 264.42L409.77 272.58Z"></path>
+<circle class="fig-card" cx="459.59" cy="274.58" r="5"></circle>
+<text class="fig-t fig-t-xs fig-b" x="468" y="294">#dev</text>
+<path class="fig-line-agent fig-bold" d="M343.75 193.47A110 110 0 0 1 350.31 118.51"></path>
+<path class="fig-mk-agent" d="M350.31 118.51L350.58 128.57L342.42 124.77Z"></path>
+<circle class="fig-card" cx="343.75" cy="193.47" r="5"></circle>
+<text class="fig-t fig-t-xs fig-b fig-end" x="336" y="214">ファイル</text>
+<path class="fig-line-agent fig-bold" d="M440.41 55.42A110 110 0 0 1 496.49 65.31"></path>
+<path class="fig-mk-agent" d="M496.49 65.31L486.43 65.58L490.23 57.42Z"></path>
+<circle class="fig-card" cx="440.41" cy="55.42" r="5"></circle>
+<text class="fig-t fig-t-xs fig-b fig-end" x="432" y="44">ハドル</text>
+<rect class="fig-card-agent" x="497.78" y="72.22" width="60" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="527.78" y="92.72">CS-1</text>
+<rect class="fig-card-agent" x="497.78" y="227.78" width="60" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="527.78" y="248.28">CS-2</text>
+<rect class="fig-card-agent" x="342.22" y="227.78" width="60" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="372.22" y="248.28">CS-3</text>
+<rect class="fig-card-agent" x="342.22" y="72.22" width="60" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="372.22" y="92.72">CS-4</text>
+<g class="fig-anim">
+<rect class="fig-glow-agent" x="8" y="86" width="120" height="32" rx="16" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.025;0.0375;0.079167;0.091667;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M128 102L152 102L152 165L176 165" keyPoints="0;0;1;1" keyTimes="0;0.05;0.108333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.05;0.058333;0.108333;0.116667;1"></animate></circle>
+<rect class="fig-glow-agent" x="176" y="145" width="76" height="40" rx="20" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.1;0.1125;0.145833;0.158333;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="6.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M559.58 155.41A110 110 0 0 1 549.69 211.49" keyPoints="0;0;1;1" keyTimes="0;0.15;0.225;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.15;0.158333;0.225;0.23333299999999998;1"></animate></circle>
+<rect class="fig-glow-agent" x="497.78" y="227.78" width="60" height="30" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.216667;0.229167;0.2625;0.275;1"></animate></rect>
+<rect class="fig-glow-agent" x="8" y="128" width="120" height="32" rx="16" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.266667;0.279167;0.320833;0.333333;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M128 144L152 144L152 165L176 165" keyPoints="0;0;1;1" keyTimes="0;0.291667;0.35;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.291667;0.3;0.35;0.358333;1"></animate></circle>
+<rect class="fig-glow-agent" x="176" y="145" width="76" height="40" rx="20" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.341667;0.354167;0.3875;0.4;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="6.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M459.59 274.58A110 110 0 0 1 403.51 264.69" keyPoints="0;0;1;1" keyTimes="0;0.391667;0.466667;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.391667;0.4;0.466667;0.475;1"></animate></circle>
+<rect class="fig-glow-agent" x="342.22" y="227.78" width="60" height="30" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.458333;0.470833;0.504167;0.516667;1"></animate></rect>
+<rect class="fig-glow-agent" x="8" y="170" width="120" height="32" rx="16" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.508333;0.520833;0.5625;0.575;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M128 186L152 186L152 165L176 165" keyPoints="0;0;1;1" keyTimes="0;0.533333;0.591667;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.533333;0.541667;0.591667;0.6;1"></animate></circle>
+<rect class="fig-glow-agent" x="176" y="145" width="76" height="40" rx="20" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.583333;0.595833;0.629167;0.641667;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="6.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M343.75 193.47A110 110 0 0 1 350.31 118.51" keyPoints="0;0;1;1" keyTimes="0;0.633333;0.708333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.633333;0.641667;0.708333;0.716667;1"></animate></circle>
+<rect class="fig-glow-agent" x="342.22" y="72.22" width="60" height="30" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.7;0.7125;0.745833;0.758333;1"></animate></rect>
+<rect class="fig-glow-agent" x="8" y="212" width="120" height="32" rx="16" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.75;0.7625;0.804167;0.816667;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M128 228L152 228L152 165L176 165" keyPoints="0;0;1;1" keyTimes="0;0.775;0.833333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.775;0.783333;0.833333;0.841667;1"></animate></circle>
+<rect class="fig-glow-agent" x="176" y="145" width="76" height="40" rx="20" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.825;0.8375;0.870833;0.883333;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="6.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M440.41 55.42A110 110 0 0 1 496.49 65.31" keyPoints="0;0;1;1" keyTimes="0;0.875;0.95;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.875;0.883333;0.95;0.958333;1"></animate></circle>
+<rect class="fig-glow-agent" x="497.78" y="72.22" width="60" height="30" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.941667;0.954167;0.9875;1;1"></animate></rect>
+</g>
+</svg>
+</div>
+</div>
+<div class="fig-panel">
+<div class="fig-scroll">
+<svg viewBox="0 0 640 330" role="img" aria-labelledby="fig-shr-2-title fig-shr-2-desc">
+<title id="fig-shr-2-title">不健全な CS を入れ替える流れ</title>
+<desc id="fig-shr-2-desc">左に、CS-1 から CS-4 が並ぶ円形のリングがあります。CS-2 が不健全になり、リングのうち CS-2 の担当範囲だけ配信が遅れます。ほかの CS の担当範囲は影響を受けません。右の CHARM が、CS-2 を新しい CS に入れ替えます。20 秒未満で配信が再開します。アニメーションでは、ほかの CS にはメッセージが届き続ける一方、CS-2 行きのメッセージは途中で止まり、CHARM が新しい CS を投入したあとに届く様子を、12 秒周期でくり返し示します。</desc>
+<circle class="fig-line" cx="200" cy="170" r="110"></circle>
+<path class="fig-line-problem fig-bold" d="M296.21 116.67A110 110 0 0 1 296.21 223.33"></path>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="200" y="168">ほかの CS の</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="200" y="186">担当範囲は影響なし</text>
+<text class="fig-t fig-t-xs fig-b fig-c-problem" x="326" y="150">CS-2 の担当範囲だけ</text>
+<text class="fig-t fig-t-xs fig-b fig-c-problem" x="326" y="168">配信が遅れる</text>
+<rect class="fig-card-agent" x="470" y="224.78" width="120" height="46" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="530" y="244.28">CHARM</text>
+<text class="fig-t fig-t-xs fig-mid fig-c-muted" x="530" y="262.28">リングを管理</text>
+<path class="fig-line-agent fig-thick" d="M470 247.78L315.78 247.78"></path>
+<path class="fig-mk-agent" d="M307.78 247.78L315.78 243.78L315.78 251.78Z"></path>
+<text class="fig-t fig-t-xs fig-mid fig-b fig-c-agent" x="388.89" y="238.78">新しい CS に入れ替え</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="530" y="297.78">20 秒未満で</text>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="530" y="317.78">配信を再開</text>
+<rect class="fig-card-agent" x="247.78" y="77.22" width="60" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="277.78" y="97.72">CS-1</text>
+<rect class="fig-card-problem" x="247.78" y="232.78" width="60" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="277.78" y="253.28">CS-2</text>
+<text class="fig-t fig-t-xs fig-mid fig-b fig-c-problem" x="277.78" y="281.78">不健全</text>
+<rect class="fig-card-agent" x="92.22" y="232.78" width="60" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="122.22" y="253.28">CS-3</text>
+<rect class="fig-card-agent" x="92.22" y="77.22" width="60" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="122.22" y="97.72">CS-4</text>
+<g class="fig-anim">
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M146.67 73.79A110 110 0 0 1 253.33 73.79" keyPoints="0;0;1;1" keyTimes="0;0.016666999999999998;0.116667;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.016666999999999998;0.025;0.116667;0.125;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M146.67 73.79A110 110 0 0 1 253.33 73.79" keyPoints="0;0;1;1" keyTimes="0;0.183333;0.283333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.183333;0.191667;0.283333;0.291667;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M146.67 73.79A110 110 0 0 1 253.33 73.79" keyPoints="0;0;1;1" keyTimes="0;0.35;0.45;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.35;0.358333;0.45;0.458333;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M146.67 73.79A110 110 0 0 1 253.33 73.79" keyPoints="0;0;1;1" keyTimes="0;0.516667;0.616667;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.516667;0.525;0.616667;0.625;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M146.67 73.79A110 110 0 0 1 253.33 73.79" keyPoints="0;0;1;1" keyTimes="0;0.683333;0.783333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.683333;0.691667;0.783333;0.791667;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M146.67 73.79A110 110 0 0 1 253.33 73.79" keyPoints="0;0;1;1" keyTimes="0;0.85;0.95;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.85;0.858333;0.95;0.958333;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M253.33 266.21A110 110 0 0 1 146.67 266.21" keyPoints="0;0;1;1" keyTimes="0;0.016666999999999998;0.116667;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.016666999999999998;0.025;0.116667;0.125;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M253.33 266.21A110 110 0 0 1 146.67 266.21" keyPoints="0;0;1;1" keyTimes="0;0.183333;0.283333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.183333;0.191667;0.283333;0.291667;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M253.33 266.21A110 110 0 0 1 146.67 266.21" keyPoints="0;0;1;1" keyTimes="0;0.35;0.45;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.35;0.358333;0.45;0.458333;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M253.33 266.21A110 110 0 0 1 146.67 266.21" keyPoints="0;0;1;1" keyTimes="0;0.516667;0.616667;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.516667;0.525;0.616667;0.625;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M253.33 266.21A110 110 0 0 1 146.67 266.21" keyPoints="0;0;1;1" keyTimes="0;0.683333;0.783333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.683333;0.691667;0.783333;0.791667;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M253.33 266.21A110 110 0 0 1 146.67 266.21" keyPoints="0;0;1;1" keyTimes="0;0.85;0.95;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.85;0.858333;0.95;0.958333;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M103.79 223.33A110 110 0 0 1 103.79 116.67" keyPoints="0;0;1;1" keyTimes="0;0.016666999999999998;0.116667;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.016666999999999998;0.025;0.116667;0.125;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M103.79 223.33A110 110 0 0 1 103.79 116.67" keyPoints="0;0;1;1" keyTimes="0;0.183333;0.283333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.183333;0.191667;0.283333;0.291667;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M103.79 223.33A110 110 0 0 1 103.79 116.67" keyPoints="0;0;1;1" keyTimes="0;0.35;0.45;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.35;0.358333;0.45;0.458333;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M103.79 223.33A110 110 0 0 1 103.79 116.67" keyPoints="0;0;1;1" keyTimes="0;0.516667;0.616667;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.516667;0.525;0.616667;0.625;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M103.79 223.33A110 110 0 0 1 103.79 116.67" keyPoints="0;0;1;1" keyTimes="0;0.683333;0.783333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.683333;0.691667;0.783333;0.791667;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M103.79 223.33A110 110 0 0 1 103.79 116.67" keyPoints="0;0;1;1" keyTimes="0;0.85;0.95;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.85;0.858333;0.95;0.958333;1"></animate></circle>
+<circle class="fig-fill-problem fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M299.69 123.51A110 110 0 0 1 296.21 223.33" keyPoints="0;0;0.72;0.72;1;1" keyTimes="0;0.025;0.091667;0.633333;0.691667;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.025;0.033333;0.683333;0.7;1"></animate></circle>
+<circle class="fig-fill-problem fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M299.69 123.51A110 110 0 0 1 296.21 223.33" keyPoints="0;0;0.5;0.5;1;1" keyTimes="0;0.158333;0.225;0.675;0.733333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.158333;0.166667;0.725;0.741667;1"></animate></circle>
+<circle class="fig-fill-problem fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M299.69 123.51A110 110 0 0 1 296.21 223.33" keyPoints="0;0;0.28;0.28;1;1" keyTimes="0;0.291667;0.358333;0.716667;0.775;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.291667;0.3;0.766667;0.783333;1"></animate></circle>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M299.69 123.51A110 110 0 0 1 296.21 223.33" keyPoints="0;0;1;1" keyTimes="0;0.8;0.9;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.8;0.808333;0.9;0.908333;1"></animate></circle>
+<rect class="fig-glow-agent" x="470" y="224.78" width="120" height="46" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.3;0.3125;0.37083299999999997;0.383333;1"></animate></rect>
+<circle class="fig-fill-agent fig-ring" r="5.5" opacity="0"><animateMotion dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" path="M470 247.78L307.78 247.78" keyPoints="0;0;1;1" keyTimes="0;0.383333;0.533333;1"></animateMotion><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.383333;0.391667;0.533333;0.541667;1"></animate></circle>
+<g opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.55;0.5625;0.9625;0.975;1"></animate><rect class="fig-fill-surface" x="243.78" y="228.78" width="68" height="60" rx="10"></rect><rect class="fig-card-agent" x="247.78" y="232.78" width="60" height="30" rx="10"></rect>
+<text class="fig-t fig-t-sm fig-mid fig-b" x="277.78" y="253.28">CS-2</text><text class="fig-t fig-t-xs fig-mid fig-b fig-c-agent" x="277.78" y="281.78">新しい CS</text></g>
+<path class="fig-line-agent fig-bold" d="M296.21 116.67A110 110 0 0 1 296.21 223.33" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;1;1;0;0" keyTimes="0;0.6;0.6125;0.9625;0.975;1"></animate></path>
+<rect class="fig-glow-agent" x="247.78" y="232.78" width="60" height="30" rx="10" opacity="0"><animate attributeName="opacity" dur="12s" repeatCount="indefinite" begin="0s" calcMode="linear" values="0;0;0.9;0.9;0;0" keyTimes="0;0.541667;0.554167;0.620833;0.633333;1"></animate></rect>
+</g>
+</svg>
+</div>
+</div>
+</div>
+<figcaption>チャンネル ID のハッシュ値で、担当の CS が決まります。リングを時計回りにたどる説明は、コンシステントハッシュの一般的な仕組みです。CS を 4 台にしたのは図の都合です。</figcaption>
+</figure>
