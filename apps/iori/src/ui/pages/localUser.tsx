@@ -3,6 +3,7 @@ import { render } from 'hono/jsx/dom';
 
 import type { Account, Status } from '../../adaptor/mastodon/entities.ts';
 import { safeUrl } from '../../helper/safeUrl.ts';
+import { openFediverseConversation } from '../api/fediverseConversationClient.ts';
 import {
   failureMessage,
   fetchAccountStatuses,
@@ -20,10 +21,12 @@ import { accountHandle, remoteUserPathOf, updateStatusesByPostId } from '../api/
 import { ActorLink } from '../components/ActorLink.tsx';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { FollowToggleButton } from '../components/FollowToggleButton.tsx';
+import { MessageButton } from '../components/MessageButton.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { ProfileBanner } from '../components/ProfileBanner.tsx';
 import { statusActionProps, type StatusActions } from '../components/statusActionProps.ts';
 import { appendUniqueById } from '../hooks/appendUnique.ts';
+import { fediverseChatPath, fediverseErrorMessageOf } from '../hooks/fediverseConversation.ts';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll.ts';
 import { useReplyDialog, type UseReplyDialogReturn } from '../hooks/useReplyDialog.ts';
 import { useStatusListActions } from '../hooks/useStatusListActions.ts';
@@ -41,12 +44,19 @@ type Props = Readonly<{
   reply?: UseReplyDialogReturn;
   /** ログインしていて、表示中のアカウントが自分ではないときだけ渡す */
   followToggle?: FollowToggle;
+  message?: MessageAction;
 }>;
 
 type FollowToggle = Readonly<{
   following: boolean;
   disabled: boolean;
   onToggle: () => unknown;
+}>;
+
+type MessageAction = Readonly<{
+  disabled: boolean;
+  error: string | undefined;
+  onOpen: () => unknown;
 }>;
 
 export const LocalUserPage = ({
@@ -59,6 +69,7 @@ export const LocalUserPage = ({
   actions,
   reply,
   followToggle,
+  message,
 }: Props) => {
   const logoUrl = safeUrl(account.avatar);
   const headerUrl = profileHeaderUrl(account.header);
@@ -138,12 +149,13 @@ export const LocalUserPage = ({
             </div>
             {followToggle !== undefined
               ? (
-                <div class='ml-auto'>
+                <div class='ml-auto flex items-center gap-3'>
                   <FollowToggleButton
                     following={followToggle.following}
                     disabled={followToggle.disabled}
                     onClick={followToggle.onToggle}
                   />
+                  {message !== undefined && <MessageButton disabled={message.disabled} onClick={message.onOpen} />}
                 </div>
               )
               : (
@@ -155,6 +167,9 @@ export const LocalUserPage = ({
                 </a>
               )}
           </div>
+          {message?.error !== undefined && (
+            <p role='alert' class='mt-3 relative z-10 text-sm text-red-600 dark:text-red-400'>{message.error}</p>
+          )}
         </div>
 
         <div>
@@ -351,6 +366,9 @@ const App = () => {
   const [isLoggedIn] = useState(() => getIsLoggedIn());
   const isFetchingMoreRef = useRef(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
+  const [isOpeningMessage, setIsOpeningMessage] = useState(false);
+  const [messageError, setMessageError] = useState<string | undefined>(undefined);
+  const isOpeningMessageRef = useRef(false);
 
   useEffect(() => {
     const username = getUsernameFromUrl();
@@ -439,6 +457,22 @@ const App = () => {
     }
   };
 
+  const openMessage = async () => {
+    if (loaded === undefined || isOpeningMessageRef.current) return;
+    isOpeningMessageRef.current = true;
+    setIsOpeningMessage(true);
+    setMessageError(undefined);
+    try {
+      const { key } = await openFediverseConversation(loaded.account.uri);
+      window.location.href = fediverseChatPath(key);
+    } catch (error) {
+      console.error('Failed to open the Fediverse conversation:', error);
+      setMessageError(fediverseErrorMessageOf(error));
+      isOpeningMessageRef.current = false;
+      setIsOpeningMessage(false);
+    }
+  };
+
   if (data === null) {
     return <div class='text-gray-500 dark:text-gray-400'>Loading...</div>;
   }
@@ -460,6 +494,9 @@ const App = () => {
       followToggle={data.isFollowing === undefined
         ? undefined
         : { following: data.isFollowing, disabled: isTogglingFollow, onToggle: toggleFollow }}
+      message={data.isFollowing === undefined
+        ? undefined
+        : { disabled: isOpeningMessage, error: messageError, onOpen: openMessage }}
     />
   );
 };

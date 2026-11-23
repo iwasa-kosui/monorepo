@@ -232,9 +232,7 @@ const create = ({
         if (replyVisibility !== 'direct') {
           return RA.ok([]);
         }
-        const parentAuthor = parentPost.type === 'remote'
-          ? await actorResolverById?.resolve(parentPost.actorId)
-          : undefined;
+        const parentAuthor = await actorResolverById?.resolve(parentPost.actorId);
         const parentAuthorUri = parentAuthor?.ok ? parentAuthor.val?.uri : undefined;
         return RA.ok([
           ctx.getActorUri(user.username).href,

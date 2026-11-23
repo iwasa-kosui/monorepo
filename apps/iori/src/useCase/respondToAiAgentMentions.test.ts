@@ -12,6 +12,7 @@ import { MAX_PENDING_FOLLOWUPS } from '../domain/aiAgentBot/aiAgentBotFollowup.t
 import { type AiAgentBotMemory, AiAgentBotMemoryId } from '../domain/aiAgentBot/aiAgentBotMemory.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { PostId } from '../domain/post/postId.ts';
+import type { Visibility } from '../domain/post/visibility.ts';
 import { UserId } from '../domain/user/userId.ts';
 import type { AgentChatModel, AgentChatRequest, AgentChatResponse } from '../ports/agentChatModel.ts';
 import { createInMemoryFollowups } from './aiAgent/__tests__/inMemoryFollowups.ts';
@@ -85,6 +86,7 @@ const remoteActor: Actor = {
 
 type RunOptions = Readonly<{
   author?: Actor;
+  triggerVisibility?: Visibility;
   sendDigest?: (userId: UserId) => Promise<Result<DigestSent, never>>;
 }>;
 
@@ -116,9 +118,12 @@ const run = async (
     ...followups.deps,
     ...memories.deps,
   });
+  const visibleTrigger = options.triggerVisibility === undefined
+    ? triggerPost
+    : { ...triggerPost, visibility: options.triggerVisibility };
   const summary = await useCase.run({
     bot: BOT,
-    capabilities,
+    capabilities: { ...capabilities, readPost: async () => visibleTrigger, readThread: async () => [visibleTrigger] },
     ...(options.sendDigest === undefined ? {} : { sendDigest: options.sendDigest }),
     replier: {
       reply: async (reply) => {
@@ -142,6 +147,33 @@ describe('RespondToAiAgentMentionsUseCase', () => {
     expect(replies).toEqual([{ postId: TRIGGER_POST_ID, content: '<p>調べた結果です。</p>', mentions: [] }]);
     expect(stored).toMatchObject([{ postId: TRIGGER_POST_ID, outcome: 'replied', reason: null }]);
     expect(summary.replied).toBe(1);
+  });
+
+  it('DM への返信は、ローカルの相手にも先頭にメンションを付けて、配送先には加えない', async () => {
+    const { model } = scriptedModel((_, call) =>
+      call === 0 ? toolCall('reply', { text: '調べた結果です。' }) : { content: 'おわり', toolCalls: [] }
+    );
+    const { replies } = await run(model, Result.ok(null), 0, [], [], {
+      author: localActor(OWNER_USER_ID),
+      triggerVisibility: 'direct',
+    });
+    expect(replies).toEqual([{
+      postId: TRIGGER_POST_ID,
+      content:
+        '<p><span class="h-card"><a href="https://iori.test/users/someone" class="u-url mention">@<span>someone@iori.test</span></a></span> 調べた結果です。</p>',
+      mentions: [],
+    }]);
+  });
+
+  it('DM でない投稿への返信は、ローカルの相手にメンションを付けない', async () => {
+    const { model } = scriptedModel((_, call) =>
+      call === 0 ? toolCall('reply', { text: '調べた結果です。' }) : { content: 'おわり', toolCalls: [] }
+    );
+    const { replies } = await run(model, Result.ok(null), 0, [], [], {
+      author: localActor(OWNER_USER_ID),
+      triggerVisibility: 'private',
+    });
+    expect(replies).toEqual([{ postId: TRIGGER_POST_ID, content: '<p>調べた結果です。</p>', mentions: [] }]);
   });
 
   it('reply を使わずに終えたら、最後の文は送らず、答えなかったと記録する', async () => {

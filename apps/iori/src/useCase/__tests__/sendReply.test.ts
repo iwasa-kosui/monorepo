@@ -436,6 +436,37 @@ describe('SendReplyUseCase のメンション', () => {
     });
   });
 
+  it('親がローカルの direct の返信は、親の作者を参加者に保存する', async () => {
+    const { deps, session, localParent } = setup();
+    const botParent: LocalPost = {
+      ...localParent,
+      postId: crypto.randomUUID() as PostId,
+      actorId: crypto.randomUUID() as LocalPost['actorId'],
+      userId: crypto.randomUUID() as LocalPost['userId'],
+      visibility: 'direct',
+    };
+    deps.postResolver.setPost(botParent);
+    const actorResolverById = {
+      resolve: vi.fn(() => RA.ok({ id: botParent.actorId, uri: ownerUri } as never)),
+    };
+
+    const result = await SendReplyUseCase.create({ ...deps, actorResolverById }).run({
+      sessionId: session.sessionId,
+      postId: botParent.postId,
+      content: '<p>hi</p>',
+      imageUrls: [],
+      visibility: 'direct',
+      request: new Request('https://example.com'),
+      ctx: createContext(),
+    });
+
+    expect(result.ok && result.val.post.visibility).toBe('direct');
+    expect(actorResolverById.resolve).toHaveBeenCalledWith(botParent.actorId);
+    expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
+      participantActorUris: ['https://example.com/users/kosui', ownerUri],
+    });
+  });
+
   it('public の返信の参加者は保存しない', async () => {
     const { deps, session, localParent } = setup();
 

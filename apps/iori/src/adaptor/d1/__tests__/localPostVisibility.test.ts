@@ -13,7 +13,7 @@ import { createD1PostResolver } from '../post/postResolver.ts';
 import { createD1PostsResolverByActorId } from '../post/postsResolverByActorId.ts';
 import { createD1PostsWithAuthorResolverByPostIds } from '../post/postWithAuthorBatch.ts';
 import { createD1TimelineItemsResolverByActorIds } from '../timeline/timelineItemsResolverByActorIds.ts';
-import { createMastodonSeed } from './mastodonSeed.ts';
+import { createMastodonSeed, SEED_ORIGIN } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
 const fixtures: ReturnType<typeof createSqliteD1Fixture>[] = [];
@@ -180,5 +180,47 @@ describe('onlyVisibleToViewer でのローカルの投稿の絞り込み', () =>
 
     const postIds = result.ok ? result.val.flatMap((item) => item.type === 'post' ? [item.post.postId] : []) : [];
     expect([...postIds].sort()).toEqual([publicPost.postId, unlistedPost.postId].sort());
+  });
+});
+
+describe('onlyVisibleToViewer でのローカルの direct の投稿', () => {
+  const seedDirect = () => {
+    const t = setup();
+    const author = t.seed.addLocalActor('kosui');
+    const recipient = t.seed.addLocalActor('agent');
+    const bystander = t.seed.addLocalActor('hanako');
+    const remoteFollower = t.seed.addRemoteActor('follower');
+    t.seed.addFollow(bystander.actorId, author.actorId);
+    t.seed.addFollow(remoteFollower.actorId, author.actorId);
+    const direct = t.seed.addLocalPost(author, 1_000, { visibility: 'direct', timeline: false });
+    for (const username of ['kosui', 'agent']) {
+      t.sqlite.prepare('INSERT INTO direct_post_participants(postId,actorUri) VALUES (?,?)').run(
+        direct.postId,
+        `${SEED_ORIGIN}/users/${username}`,
+      );
+    }
+    const visibleTo = async (viewerActorId: string) => {
+      const result = await createD1PostsWithAuthorResolverByPostIds(t.db).resolve({
+        postIds: [PostId.orThrow(direct.postId)],
+        currentActorId: ActorId.orThrow(viewerActorId),
+        onlyVisibleToViewer: true,
+      });
+      return result.ok && result.val.has(PostId.orThrow(direct.postId));
+    };
+    return { visibleTo, author, recipient, bystander, remoteFollower };
+  };
+
+  it('作者と、参加者に入っているローカルの利用者に見える', async () => {
+    const { visibleTo, author, recipient } = seedDirect();
+
+    expect(await visibleTo(author.actorId)).toBe(true);
+    expect(await visibleTo(recipient.actorId)).toBe(true);
+  });
+
+  it('参加者に入っていない人には、作者をフォローしていても見えない', async () => {
+    const { visibleTo, bystander, remoteFollower } = seedDirect();
+
+    expect(await visibleTo(bystander.actorId)).toBe(false);
+    expect(await visibleTo(remoteFollower.actorId)).toBe(false);
   });
 });

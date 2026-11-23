@@ -491,24 +491,36 @@ describe('POST /api/v1/statuses のメンション', () => {
       expect(t.federation.sendActivity).not.toHaveBeenCalled();
     });
 
-    it('自サーバーのアカウントしかメンションしていないときは 422 にして投稿を作らない', async () => {
+    it('自サーバーのアカウントだけをメンションしても作成でき、宛先を参加者に記録して通知し、配送しない', async () => {
       const t = await withRemoteAlice();
-      t.remoteActorLookup.lookup.mockImplementation(
-        (() =>
-          RA.ok(
-            new Person({
-              id: new URL(`${ORIGIN}/users/alice`),
-              inbox: new URL(`${ORIGIN}/users/alice/inbox`),
-            }),
-          )) as never,
-      );
 
-      const response = await t.json({ status: 'hi @alice@remote.example', visibility: 'direct' });
+      const response = await t.json({ status: 'hi @alice@iori.test', visibility: 'direct' });
+
+      expect(response.status).toBe(200);
+      const status = StatusSchema.parse(await response.json());
+      expect(status.visibility).toBe('direct');
+      const participants = t.sqlite.prepare('SELECT actorUri FROM direct_post_participants WHERE postId = ?')
+        .all(status.id) as { actorUri: string }[];
+      expect(participants.map((row) => row.actorUri).sort()).toEqual(
+        [`${ORIGIN}/users/alice`, `${ORIGIN}/users/${t.me.username}`].sort(),
+      );
+      expect(
+        t.sqlite.prepare(
+          `SELECT n.recipientUserId FROM notification_mentions m
+           JOIN notifications n ON n.notificationId = m.notificationId WHERE m.mentionPostId = ?`,
+        ).all(status.id),
+      ).toEqual([{ recipientUserId: t.alice.userId }]);
+      expect(t.federation.sendActivity).not.toHaveBeenCalled();
+    });
+
+    it('本文のアカウント名がどのアカウントにも解決できないときは 422 にして投稿を作らない', async () => {
+      const t = await withRemoteAlice();
+
+      const response = await t.json({ status: 'hi @nobody@iori.test', visibility: 'direct' });
 
       expect(response.status).toBe(422);
       expect(((await response.json()) as { error: string }).error).toMatch(/^Validation failed: /);
       expect(t.count('posts')).toBe(0);
-      expect(t.federation.sendActivity).not.toHaveBeenCalled();
     });
   });
 });

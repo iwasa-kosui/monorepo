@@ -28,6 +28,7 @@ import { CustomEmojiText } from '../components/CustomEmojiText.tsx';
 import { FediverseAccountRow } from '../components/FediverseAccountRow.tsx';
 import { FediverseReplyModal } from '../components/FediverseReplyModal.tsx';
 import { FollowToggleButton } from '../components/FollowToggleButton.tsx';
+import { MessageButton } from '../components/MessageButton.tsx';
 import { PagedList } from '../components/PagedList.tsx';
 import { PostView } from '../components/PostView.tsx';
 import { ProfileBanner } from '../components/ProfileBanner.tsx';
@@ -358,29 +359,10 @@ export const RemoteUserPage = ({
                     </svg>
                   </button>
                   {onMessage !== undefined && (
-                    <button
-                      type='button'
-                      onClick={onMessage}
+                    <MessageButton
                       disabled={isOpeningMessage === true}
-                      class='flex items-center justify-center p-2 rounded-xl text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light hover:bg-sand-light dark:hover:bg-gray-700 transition-colors disabled:opacity-50'
-                      title='メッセージ'
-                      aria-label='メッセージ'
-                    >
-                      <svg
-                        xmlns='http://www.w3.org/2000/svg'
-                        class='h-5 w-5'
-                        fill='none'
-                        viewBox='0 0 24 24'
-                        stroke='currentColor'
-                        stroke-width='2'
-                      >
-                        <path
-                          stroke-linecap='round'
-                          stroke-linejoin='round'
-                          d='M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
-                        />
-                      </svg>
-                    </button>
+                      onClick={onMessage}
+                    />
                   )}
                   {isReported && <span role='status' class='text-sm text-sage-dark dark:text-sage'>通報しました</span>}
                 </>

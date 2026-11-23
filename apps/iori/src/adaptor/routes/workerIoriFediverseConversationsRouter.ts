@@ -116,6 +116,8 @@ const invalidActorUri = { error: 'Validation failed: actorUri' } as const;
 const invalidPeers = { error: 'Validation failed: peers' } as const;
 const invalidToken = { error: 'The access token is invalid' } as const;
 
+type Mentionable = Readonly<{ uri: string; acct: string; recipient: MentionRecipient | undefined }>;
+
 type Access = Readonly<{ userId: FediverseConversationViewer['userId']; viewer: FediverseConversationViewer }>;
 
 const lastSegmentOf = (uri: string): string => {
@@ -391,11 +393,13 @@ export const createWorkerIoriFediverseConversationsRouter = ({
         const actors = await resolveActors(granted.peerUris);
         const accounts = await resolveAccounts(c, actors);
         const peers = granted.peerUris.map((uri) => ({ uri, actor: actors.get(uri), account: accounts.get(uri) }));
-        const mentionable = peers.flatMap(({ uri, actor, account }) => {
-          const recipient = actor === undefined || actor.type !== 'remote'
-            ? undefined
-            : MentionRecipient.parse({ id: uri, inboxUrl: actor.inboxUrl });
-          return account === undefined || !account.acct.includes('@') || recipient === undefined || !recipient.ok
+        const mentionable = peers.flatMap(({ uri, actor, account }): Mentionable[] => {
+          if (actor === undefined || account === undefined) return [];
+          if (actor.type === 'local') {
+            return [{ uri, acct: `${account.username}@${new URL(uri).host}`, recipient: undefined }];
+          }
+          const recipient = MentionRecipient.parse({ id: uri, inboxUrl: actor.inboxUrl });
+          return !account.acct.includes('@') || !recipient.ok
             ? []
             : [{ uri, acct: account.acct, recipient: recipient.val }];
         });
@@ -411,7 +415,7 @@ export const createWorkerIoriFediverseConversationsRouter = ({
           visibility: 'direct' as const,
           userId: granted.userId,
           content,
-          mentions: mentionable.map(({ recipient }) => recipient),
+          mentions: mentionable.flatMap(({ recipient }) => recipient === undefined ? [] : [recipient]),
           summary: null,
           sensitive: false,
           images: [],

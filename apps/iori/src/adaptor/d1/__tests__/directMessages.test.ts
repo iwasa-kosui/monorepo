@@ -92,9 +92,16 @@ describe('direct の投稿の一覧', () => {
     expect(await t.resolve()).toEqual([]);
   });
 
-  it('閲覧者が参加者に入っていても、閲覧できない他のユーザーの direct の投稿を含めない', async () => {
+  it('ローカルのユーザーが書いた direct の投稿を、参加者に入っている閲覧者に返し、参加者に入っていない閲覧者には返さない', async () => {
     const t = setup();
-    t.localDirect(t.hanako, 1000, [hanakoUri, kosuiUri]);
+    const toKosui = t.localDirect(t.hanako, 1000, [hanakoUri, kosuiUri]);
+    t.localDirect(t.hanako, 2000, [hanakoUri, aliceUri]);
+
+    expect(idsOf(await t.resolve())).toEqual([toKosui]);
+  });
+
+  it('閲覧者が参加者に入っていても、宛先に入っていないリモートの direct の投稿を含めない', async () => {
+    const t = setup();
     t.remoteDirect(t.alice, 2000, [aliceUri, kosuiUri], [aliceUri]);
 
     expect(await t.resolve()).toEqual([]);

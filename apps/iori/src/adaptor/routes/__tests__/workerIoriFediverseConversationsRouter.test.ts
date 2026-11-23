@@ -363,18 +363,77 @@ describe('POST /conversations/:key/messages', () => {
     expect(t.count('posts')).toBe(1);
   });
 
-  it.each([
-    ['actors に無い相手', 'https://ghost.example/users/ghost'],
-    ['このサーバーのユーザー', `${ORIGIN}/users/hanako`],
-  ])('%s には送れず 422 にして投稿を作らない', async (_name, uri) => {
+  it('actors に無い相手には送れず 422 にして投稿を作らない', async () => {
     const t = await setup();
 
-    const response = await t.post(`/${keyOf(uri)}/messages`, { text: 'hi' });
+    const response = await t.post(`/${keyOf('https://ghost.example/users/ghost')}/messages`, { text: 'hi' });
 
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: 'Validation failed: peers' });
     expect(t.count('posts')).toBe(0);
     expect(t.sent()).toHaveLength(0);
+  });
+
+  describe('このサーバーのユーザーが相手のとき', () => {
+    const hanakoUri = `${ORIGIN}/users/hanako`;
+    const hanakoKey = keyOf(hanakoUri);
+    const notificationsOf = (t: Setup, postId: string) =>
+      t.sqlite.prepare(
+        `SELECT n.recipientUserId FROM notification_mentions m
+         JOIN notifications n ON n.notificationId = m.notificationId WHERE m.mentionPostId = ?`,
+      ).all(postId);
+
+    it('相手へのメンションを先頭に付けた direct で投稿し、相手を参加者に記録して通知し、何も配送しない', async () => {
+      const t = await setup();
+
+      const response = await t.post(`/${hanakoKey}/messages`, { text: 'hello' });
+
+      expect(response.status).toBe(201);
+      const status = StatusSchema.parse(((await response.json()) as { message: unknown }).message);
+      expect(status.visibility).toBe('direct');
+      expect(status.content).toBe(
+        `<p><span class="h-card"><a href="${hanakoUri}" class="u-url mention">@<span>hanako@${
+          new URL(ORIGIN).host
+        }</span></a></span> hello</p>`,
+      );
+      const participants = t.sqlite.prepare('SELECT actorUri FROM direct_post_participants WHERE postId = ?')
+        .all(status.id) as { actorUri: string }[];
+      expect(participants.map((row) => row.actorUri).sort()).toEqual([hanakoUri, meUri].sort());
+      expect(notificationsOf(t, status.id)).toEqual([{ recipientUserId: t.hanako.userId }]);
+      expect(t.sent()).toHaveLength(0);
+    });
+
+    it('会話の最新の投稿が相手のものなら、それへの返信にして、相手を参加者に残す', async () => {
+      const t = await setup();
+      const latest = t.seed.addLocalPost(t.hanako, NOW - 1000, { visibility: 'direct', timeline: false });
+      for (const uri of [hanakoUri, meUri]) {
+        t.sqlite.prepare('INSERT INTO direct_post_participants(postId,actorUri) VALUES (?,?)').run(latest.postId, uri);
+      }
+
+      const response = await t.post(`/${hanakoKey}/messages`, { text: 'again' });
+
+      expect(response.status).toBe(201);
+      const status = StatusSchema.parse(((await response.json()) as { message: unknown }).message);
+      expect(status.in_reply_to_id).toBe(latest.postId);
+      const participants = t.sqlite.prepare('SELECT actorUri FROM direct_post_participants WHERE postId = ?')
+        .all(status.id) as { actorUri: string }[];
+      expect(participants.map((row) => row.actorUri).sort()).toEqual([hanakoUri, meUri].sort());
+      expect(notificationsOf(t, status.id)).toEqual([{ recipientUserId: t.hanako.userId }]);
+      expect(t.sent()).toHaveLength(0);
+    });
+
+    it('このサーバーのユーザーとリモートの相手を同じ会話にできる', async () => {
+      const t = await setup();
+
+      const response = await t.post(`/${keyOf(hanakoUri, aliceUri)}/messages`, { text: 'hi' });
+
+      expect(response.status).toBe(201);
+      const status = StatusSchema.parse(((await response.json()) as { message: unknown }).message);
+      expect(status.content).toContain(`href="${hanakoUri}"`);
+      expect(status.content).toContain(`href="${aliceUri}"`);
+      expect(t.sent()).toHaveLength(1);
+      expect(t.sent()[0]?.[1]).toEqual([expect.objectContaining({ id: new URL(aliceUri) })]);
+    });
   });
 });
 
@@ -426,6 +485,15 @@ describe('POST /conversations', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ key: aliceKey });
+  });
+
+  it('このサーバーのユーザーの key を返す', async () => {
+    const t = await setup();
+
+    const response = await t.post('', { actorUri: `${ORIGIN}/users/hanako` });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ key: keyOf(`${ORIGIN}/users/hanako`) });
   });
 
   it('actors に存在しない相手を 404 にする', async () => {

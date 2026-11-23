@@ -96,6 +96,7 @@ const create = (deps: Deps): RunAiAgentFollowupsUseCase => {
       author,
       postId: followup.postId,
       limit: Math.min(MAX_BOT_REPLIES_PER_TRIGGER, MAX_BOT_REPLIES_PER_THREAD - botRepliesInThread),
+      direct: target.visibility === 'direct',
     });
 
     const memory = await loadAgentMemory(deps, {

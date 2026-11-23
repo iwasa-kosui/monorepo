@@ -441,7 +441,7 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
       expect(note.ccIds).toEqual([]);
     });
 
-    it('他サーバーのメンションの無い本文に編集すると 422 にして変えない', async () => {
+    it('メンションの無い本文に編集すると 422 にして変えない', async () => {
       const t = await withRemoteAlice();
       const created = await postDirect(t);
       t.federation.sendActivity.mockClear();
@@ -450,7 +450,7 @@ describe('PUT /api/v1/statuses/:id の配送', () => {
 
       expect(response.status).toBe(422);
       expect(((await response.json()) as { error: string }).error).toBe(
-        'Validation failed: Direct statuses must mention at least one account on another server',
+        'Validation failed: Direct statuses must mention at least one account',
       );
       expect(t.rowOf(created.id)).toMatchObject({ sourceText: 'hi @alice@remote.example', editedAt: null });
       expect(t.sentActivities()).toHaveLength(0);
