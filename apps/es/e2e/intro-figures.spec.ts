@@ -40,8 +40,8 @@ for (const reducedMotion of motions) {
       await expect(update).toBeEnabled();
     });
 
-    test('2 ページ目: 方法を選ぶと、結果の文と表が変わる', async ({ page }) => {
-      await page.goto('/chapters/intro/2/');
+    test('3 ページ目: 方法を選ぶと、結果の文と表が変わる', async ({ page }) => {
+      await page.goto('/chapters/intro/3/');
       const figure = page.locator('[data-method-figure]');
       const message = figure.locator('[aria-live="polite"]');
       const timeTravel = figure.getByRole('button', { name: 'データ基盤のタイムトラベル' });
@@ -68,8 +68,8 @@ for (const reducedMotion of motions) {
       await expect(message).toHaveText('テーブルの変化は分かります。なぜ変えたのかはテーブルに届いていません。');
     });
 
-    test('3 ページ目: スライダーを動かすと、答えられる件数の文が変わる', async ({ page }) => {
-      await page.goto('/chapters/intro/3/');
+    test('4 ページ目: スライダーを動かすと、答えられる件数の文が変わる', async ({ page }) => {
+      await page.goto('/chapters/intro/4/');
       const figure = page.locator('[data-record-figure]');
       const message = figure.locator('[aria-live="polite"]');
       const slider = figure.getByRole('slider', { name: '記録を足す日' });
@@ -91,7 +91,7 @@ for (const reducedMotion of motions) {
     });
 
     test('スライダーをキーボードで動かしても前後のページへ移動しない', async ({ page }) => {
-      await page.goto('/chapters/intro/3/');
+      await page.goto('/chapters/intro/4/');
       const figure = page.locator('[data-record-figure]');
       const slider = figure.getByRole('slider', { name: '記録を足す日' });
       await slider.focus();
@@ -104,7 +104,7 @@ for (const reducedMotion of motions) {
       await page.keyboard.press('ArrowLeft');
       await page.keyboard.press('ArrowLeft');
       await expect(slider).toHaveValue('2');
-      expect(pathOf(page)).toBe('/chapters/intro/3/');
+      expect(pathOf(page)).toBe('/chapters/intro/4/');
     });
   });
 }

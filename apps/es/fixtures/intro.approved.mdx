@@ -15,7 +15,7 @@ import OverwriteFigure from '../../../components/intro/OverwriteFigure.astro';
 
 > 一度失われてしまったデータを復元することは二度とできません。
 
-### 何が戻らないのか
+### 既存システムの問題
 
 私は医療機関向けのサービスで認証基盤や ID 基盤を担当しています。一部の基盤は最新のデータだけを保存していました。
 
@@ -23,7 +23,7 @@ import OverwriteFigure from '../../../components/intro/OverwriteFigure.astro';
 
 バックアップで戻るのは残っていた値だけです。誰がなぜ変えたのかは、残していなければどこにもありません。
 
-### なぜ今この話か
+### 社会を支えるプロダクトでの重要性
 
 機能は AI で作れるようになりました。でも捨てたデータは AI にも復元できません。
 
@@ -32,12 +32,10 @@ import OverwriteFigure from '../../../components/intro/OverwriteFigure.astro';
 </div>
 <OverwriteFigure />
 </div>
-import MethodFigure from '../../../components/intro/MethodFigure.astro';
-
-<div class="intro-spread">
+<div class="grid gap-4 lg:grid-cols-2 lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
 <div class="intro-text">
 
-## 残っていると何ができるか
+## 記録はアプリケーション開発者をも助ける
 
 残っていて助かったことを言います。
 
@@ -46,11 +44,29 @@ import MethodFigure from '../../../components/intro/MethodFigure.astro';
 
 監査のためだけの話ではありません。開発でも得をします。医療システムとして要求される監査性もそうです。過去の契約を見ないと、そのデータを何に使ってよいか判断できないこともあります。
 
-## 正直に言います
+</div>
+<div class="intro-text">
+
+## イベントソーシングは現実的ではない？
 
 イベントソーシングは「最初からイベント中心に設計しなければ使えない」「考えることが多く、現実的ではない」と思われがちです。私も意味があまり分かりませんでした。その割にコストが高い選択肢だと思っていました。
 
+しかし、最新のデータだけを保存している基盤を担当し、問い合わせや障害、監査のたびに過去を説明できず苦しみました。そこから、そのまま導入するのではなく、必要なエッセンスを既存システムへ部分的に適用してきました。
+
+### このハンズオンの目的
+
+そこで本ハンズオンでは、「記録が全くない状態」から「少なくとも記録だけはある状態」を、既存システムのままでも目指せることを確かめます。他人ごとだと思っていた私なりの「パッチワーク」が、みなさんのシステムでのヒントになれば幸いです。
+
 「CQRSやイベントソーシングを導入しなくても、イベントを記録するだけで大きな価値がある」。これが私の考えです。
+
+</div>
+</div>
+import MethodFigure from '../../../components/intro/MethodFigure.astro';
+
+<div class="intro-spread">
+<div class="intro-text">
+
+## 記録する方法の比較
 
 過去の状態を見るだけなら、私たちもデータ基盤のタイムトラベルで調べられるようにしました。手作業の SQL まで拾うならトリガーや CDC の方が強いです。誰が、いつ、何を、なぜがもう残っているなら今日の方法は要りません。
 
@@ -66,7 +82,7 @@ import RecordStartFigure from '../../../components/intro/RecordStartFigure.astro
 <div class="intro-spread">
 <div class="intro-text">
 
-## 足す前のことは分かりません。それでも足します
+## 後から記録を足すことの限界
 
 足しても、足す前に起きたことは分かりません。第3章で、キャンセルの理由を答えられない行を見てもらいます。
 
@@ -74,7 +90,7 @@ import RecordStartFigure from '../../../components/intro/RecordStartFigure.astro
 
 「なんで記録取ってないんですか」。次に聞かれるのはあなたかもしれません。もう他人ごとではありません。
 
-## 全面移行か何もしないかの二択ではありません
+## 全面移行か何もしないかの二択ではない
 
 既存のテーブルと更新処理はそのままです。記録を1か所足します。第2章の終わりに、記録を足すと `visits.ts` が何行変わるかを見ます。導入するかは持ち帰って判断してください。
 
