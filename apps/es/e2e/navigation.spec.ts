@@ -169,7 +169,14 @@ test.describe('役割の行', () => {
       const bodyBox = await page.locator('.chapter-body').boundingBox();
       expect(roleBox, path).not.toBeNull();
       expect(bodyBox, path).not.toBeNull();
-      expect(roleBox?.y ?? Infinity, path).toBeLessThan(bodyBox?.y ?? 0);
+      const hiddenOnScreen = ((await role.getAttribute('class')) ?? '').includes('visually-hidden');
+      if (hiddenOnScreen) {
+        expect(roleBox?.width ?? Infinity, path).toBeLessThanOrEqual(1);
+        expect(roleBox?.height ?? Infinity, path).toBeLessThanOrEqual(1);
+        expect(roleBox?.y ?? Infinity, path).toBeLessThanOrEqual(bodyBox?.y ?? 0);
+      } else {
+        expect(roleBox?.y ?? Infinity, path).toBeLessThan(bodyBox?.y ?? 0);
+      }
     }
   });
 });

@@ -79,6 +79,7 @@ const linkTo = (target: Page | undefined) =>
   };
 const fullWidth = meta.flow === 'exercise';
 const wide = chapter === 'intro' || page.entry.data.wide === true;
+const immersive = page.entry.data.immersive === true;
 const goal = page.entry.data.goal;
 const roleParts = meta.role.split('`');
 ---
@@ -88,6 +89,7 @@ const roleParts = meta.role.split('`');
     class:list={['lesson-frame', {
       'lesson-frame--full': fullWidth,
       'lesson-frame--wide': wide,
+      'lesson-frame--immersive': immersive,
     }]}
     data-flow={meta.flow}
   >
@@ -131,7 +133,7 @@ const roleParts = meta.role.split('`');
         />
       </div>
       <main class="lesson-main content">
-        <p class="lesson-role">
+        <p class:list={['lesson-role', { 'visually-hidden': immersive }]}>
           <strong>{pageFlows[meta.flow]}</strong>: {
             roleParts.map((part, index) =>
               index % 2 === 1 ? (
@@ -142,7 +144,7 @@ const roleParts = meta.role.split('`');
         </p>
         {
           goal !== undefined && (
-            <p class="chapter-goal">
+            <p class:list={['chapter-goal', { 'visually-hidden': immersive }]}>
               <strong>できるようになること：</strong>{goal}
             </p>
           )

@@ -6,6 +6,7 @@ const chapters = defineCollection({
   schema: z.object({
     goal: z.string().optional(),
     wide: z.boolean().optional(),
+    immersive: z.boolean().optional(),
   }).strict(),
 });
 

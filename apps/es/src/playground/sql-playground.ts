@@ -117,6 +117,9 @@ const mount = (root: HTMLElement): void => {
     if (state === 'ready' && config.setupScript !== null) {
       void prepareOnReady();
     }
+    if (state === 'ready') {
+      flushExec();
+    }
   }, (message) => {
     show(failureElement(new RuntimeScriptError(message), ''));
   });
@@ -193,7 +196,35 @@ const mount = (root: HTMLElement): void => {
     } finally {
       busy = false;
       updateControls();
+      flushExec();
     }
+  };
+
+  const execQueue: string[] = [];
+
+  const execQuietly = async (sql: string): Promise<void> => {
+    if (preparedGeneration !== runtime.generation) {
+      const setupError = await prepare();
+      if (setupError !== null) {
+        return;
+      }
+    }
+    await runtime.runSql(sql);
+  };
+
+  const flushExec = (): void => {
+    const sql = execQueue[0];
+    if (sql === undefined || busy || runtime.state !== 'ready') {
+      return;
+    }
+    execQueue.shift();
+    busy = true;
+    updateControls();
+    void execQuietly(sql).catch(() => undefined).finally(() => {
+      busy = false;
+      updateControls();
+      flushExec();
+    });
   };
 
   const prepareOnReady = (): Promise<void> =>
@@ -275,6 +306,14 @@ const mount = (root: HTMLElement): void => {
     if (detail.run) {
       void run();
     }
+  });
+  root.addEventListener('playground:exec-sql', (event) => {
+    execQueue.push((event as CustomEvent<{ sql: string }>).detail.sql);
+    flushExec();
+  });
+  root.addEventListener('playground:discard-state', () => {
+    execQueue.length = 0;
+    preparedGeneration = -1;
   });
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) {

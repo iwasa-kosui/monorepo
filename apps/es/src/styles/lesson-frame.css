@@ -338,3 +338,12 @@ summary.lesson-pages__title:focus-visible {
     padding-block: 0.0625rem;
   }
 }
+
+.lesson-frame.lesson-frame--immersive .lesson-main {
+  max-width: none;
+  padding: 0.25rem 0.5rem;
+}
+.lesson-frame--immersive .content .chapter-body {
+  gap: 0;
+  margin-block: 0;
+}

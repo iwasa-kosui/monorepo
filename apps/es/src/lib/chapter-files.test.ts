@@ -28,6 +28,25 @@ describe('章のページ', () => {
   });
 });
 
+describe('immersive のページ', () => {
+  it('immersive は第1章の 1 ページ目だけに付き、goal と wide も残っている', () => {
+    const flagged = chapterNames().flatMap((chapter) =>
+      chapterPageFiles(chapter)
+        .filter((file) => /^immersive: true$/m.test(read(`src/content/chapters/${chapter}/${file}`)))
+        .map((file) => `${chapter}/${file}`)
+    );
+    expect(flagged).toEqual(['chapter-1/01.mdx']);
+    const source = read('src/content/chapters/chapter-1/01.mdx');
+    expect(source).toMatch(/^goal: .+$/m);
+    expect(source).toMatch(/^wide: true$/m);
+  });
+
+  it('見た目から隠す本文の見出しは、読み上げに残る', () => {
+    const source = read('src/content/chapters/chapter-1/01.mdx');
+    expect(source).toMatch(/<div class="visually-hidden">\n\n## .+\n\n.+\n\n<\/div>\n\n<InvestigationScene \/>/);
+  });
+});
+
 describe('導入の文面', () => {
   it('導入は 7 ページに分かれている', () => {
     expect(chapterPageFiles('intro')).toHaveLength(7);
