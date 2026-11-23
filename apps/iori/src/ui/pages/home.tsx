@@ -907,7 +907,7 @@ const ServerTimeline = () => {
             href='/about'
             class='text-sm text-charcoal-light dark:text-gray-400 hover:text-terracotta dark:hover:text-terracotta-light transition-colors'
           >
-            ioriについて
+            このサイトについて
           </a>
           <a
             href='/sign-in'
