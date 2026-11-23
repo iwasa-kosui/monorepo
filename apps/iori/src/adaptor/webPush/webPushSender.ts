@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import webpush from 'web-push';
+import * as webpush from 'web-push';
 
 import type { PushSubscription } from '../../domain/pushSubscription/pushSubscription.ts';
 import { Env } from '../../env.ts';

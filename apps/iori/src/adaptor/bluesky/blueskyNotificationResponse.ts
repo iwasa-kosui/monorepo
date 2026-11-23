@@ -36,7 +36,7 @@ const notificationZodType = z.looseObject({
   isRead: z.boolean(),
   indexedAt: z.string(),
 });
-const recordTextZodType = z.looseObject({ text: z.unknown() });
+const recordTextZodType = z.looseObject({ text: z.unknown().optional() });
 const replyRecordZodType = z.looseObject({
   reply: z.looseObject({ parent: z.looseObject({ uri: z.string().min(1) }) }),
 });

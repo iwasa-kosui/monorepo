@@ -37,7 +37,9 @@ const mainMaxWidth = wide ? 'max-w-6xl' : 'max-w-3xl';
 const displayTitle = ogTitle ? `${ogTitle} - kosui` : title;
 const displayOgTitle = ogTitle ?? title;
 const displayOgDescription = ogDescription ?? description;
-const canonicalUrl = ogUrl ?? new URL(Astro.url.pathname, Astro.site).href;
+// build.format が 'file' のとき、Astro 7 はトップページの pathname を /index.html で返す。
+const pathname = Astro.url.pathname.replace(/\/index\.html$/, '/');
+const canonicalUrl = ogUrl ?? new URL(pathname, Astro.site).href;
 
 const slideUpFade = {
   forwards: {
@@ -71,8 +73,6 @@ const slideUpFade = {
     },
   },
 };
-
-const pathname = Astro.url.pathname;
 
 const navItems = [
   {

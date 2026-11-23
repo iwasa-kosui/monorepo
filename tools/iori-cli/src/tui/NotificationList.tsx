@@ -1,4 +1,4 @@
-import { Box, Text, useStdout } from 'ink';
+import { Box, Text, useWindowSize } from 'ink';
 import React from 'react';
 
 import type { NotificationItemData } from '../types.js';
@@ -13,8 +13,7 @@ const LINES_PER_ITEM = 3;
 const RESERVED_LINES = 4;
 
 export function NotificationList({ items, selectedIndex }: NotificationListProps): React.ReactElement {
-  const { stdout } = useStdout();
-  const terminalRows = stdout?.rows ?? 24;
+  const { columns, rows: terminalRows } = useWindowSize();
 
   const visibleCount = Math.max(1, Math.floor((terminalRows - RESERVED_LINES) / LINES_PER_ITEM));
 
@@ -36,7 +35,7 @@ export function NotificationList({ items, selectedIndex }: NotificationListProps
             flexDirection='column'
           >
             <NotificationItem item={item} isSelected={actualIndex === selectedIndex} />
-            <Text dimColor>{'─'.repeat(Math.min(stdout?.columns ?? 40, 60))}</Text>
+            <Text dimColor>{'─'.repeat(Math.min(columns, 60))}</Text>
           </Box>
         );
       })}

@@ -29,7 +29,7 @@ const tweetZodType = z.object({
   text: z.string(),
   createdAt: z.string().transform((value) => parseTweetCreatedAt(value) ?? null),
   isReply: z.boolean().nullish(),
-  retweeted_tweet: z.unknown(),
+  retweeted_tweet: z.unknown().optional(),
 });
 
 const searchResponseZodType = z.object({

@@ -13,7 +13,7 @@ export const createR2OgImageStore = (bucket: OgImageR2Bucket): OgImageStore => (
       return undefined;
     }
 
-    return new Response(object.body as BodyInit, {
+    return new Response(object.body as unknown as BodyInit, {
       headers: {
         'Content-Type': object.httpMetadata?.contentType ?? 'image/png',
         'Cache-Control': ogImageCacheControl,

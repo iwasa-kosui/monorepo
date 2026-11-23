@@ -1940,7 +1940,7 @@ describe('/api/iori/v1/bluesky/chat', () => {
 
     const failedList = (error: BlueskyClientError) => chatMock({ listConvos: async () => RA.err(error) });
     const loggedLines = (warn: ReturnType<typeof vi.spyOn>) =>
-      warn.mock.calls.map(([line]) => JSON.parse(line as string) as Record<string, unknown>);
+      warn.mock.calls.map(([line]: unknown[]) => JSON.parse(line as string) as Record<string, unknown>);
 
     it('chat_not_permitted で 403 にするとき、秘密値を含まない 1 行を console.warn に出す', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

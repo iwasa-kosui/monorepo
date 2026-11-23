@@ -29,7 +29,10 @@ const asSqliteError = <T>(action: () => T): T => {
   try {
     return action();
   } catch (error) {
-    if (error instanceof Error && !('code' in error)) {
+    // sql.js 1.17 以降はエラーに SQLITE_ERROR などの code を付ける。node:sqlite に合わせて上書きする。
+    const hasNodeCode = error instanceof Error && 'code' in error && typeof error.code === 'string'
+      && error.code.startsWith('ERR_');
+    if (error instanceof Error && !hasNodeCode) {
       Object.assign(error, { code: 'ERR_SQLITE_ERROR' });
     }
     throw error;

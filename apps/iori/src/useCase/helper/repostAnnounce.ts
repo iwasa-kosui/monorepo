@@ -1,6 +1,6 @@
 import { type RequestContext } from '@fedify/fedify';
 import { Announce, Article as FedifyArticle, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
-import type { Temporal } from '@js-temporal/polyfill';
+import type { Temporal } from 'temporal-polyfill';
 
 import type { ArticleResolverByRootPostId } from '../../domain/article/article.ts';
 import type { PostId } from '../../domain/post/postId.ts';

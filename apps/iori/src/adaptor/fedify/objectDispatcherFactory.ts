@@ -1,8 +1,8 @@
 import { type RequestContext } from '@fedify/fedify';
 import { Article as FedifyArticle, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
-import { Temporal } from '@js-temporal/polyfill';
 import { getLogger } from '@logtape/logtape';
+import { Temporal } from 'temporal-polyfill';
 
 import type { ArticleResolver } from '../../domain/article/article.ts';
 import { ArticleId } from '../../domain/article/articleId.ts';

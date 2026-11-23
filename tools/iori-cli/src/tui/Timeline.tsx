@@ -1,4 +1,4 @@
-import { Box, Text, useStdout } from 'ink';
+import { Box, Text, useWindowSize } from 'ink';
 import React from 'react';
 
 import type { TimelineItemData } from '../types.js';
@@ -13,7 +13,7 @@ interface TimelineProps {
 }
 
 export function Timeline({ items, selectedIndex, loadingMore, hasMore }: TimelineProps): React.ReactElement {
-  const { stdout } = useStdout();
+  const { columns } = useWindowSize();
   const { itemsPerPage, totalPages } = usePagination(items.length);
 
   const currentPage = Math.floor(selectedIndex / itemsPerPage);
@@ -31,7 +31,7 @@ export function Timeline({ items, selectedIndex, loadingMore, hasMore }: Timelin
         return (
           <Box key={item.timelineItemId} flexDirection='column'>
             <PostItem item={item} isSelected={actualIndex === selectedIndex} />
-            <Text dimColor>{'─'.repeat(Math.min(stdout?.columns ?? 40, 60))}</Text>
+            <Text dimColor>{'─'.repeat(Math.min(columns, 60))}</Text>
           </Box>
         );
       })}

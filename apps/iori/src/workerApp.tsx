@@ -4,11 +4,12 @@ import { Hono } from 'hono';
 import worker from './worker.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
 
-const executionContext: ExecutionContext = {
+const executionContextStub: Partial<ExecutionContext> = {
   waitUntil: () => undefined,
   passThroughOnException: () => undefined,
   props: undefined,
-} as ExecutionContext;
+};
+const executionContext = executionContextStub as ExecutionContext;
 
 /**
  * Creates an app bound to one Worker environment.  The Worker runtime itself

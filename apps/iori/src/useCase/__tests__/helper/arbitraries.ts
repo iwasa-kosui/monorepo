@@ -16,7 +16,7 @@ import type { Username } from '../../../domain/user/username.ts';
 export const arbUserId = (): fc.Arbitrary<UserId> => fc.uuid().map((uuid) => uuid as UserId);
 
 export const arbUsername = (): fc.Arbitrary<Username> =>
-  fc.stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789_'), { minLength: 1, maxLength: 255 })
+  fc.string({ unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789_'), minLength: 1, maxLength: 255 })
     .map((s) => s as Username);
 
 export const arbAcceptableUsername = (): fc.Arbitrary<Username> => fc.constant('kosui' as Username);
@@ -46,6 +46,9 @@ export const arbSession = (opts?: { expired?: boolean }): fc.Arbitrary<Session> 
   }) as fc.Arbitrary<Session>;
 };
 
+const arbHexString = (length: number): fc.Arbitrary<string> =>
+  fc.string({ unit: fc.constantFrom(...'0123456789abcdef'), minLength: length, maxLength: length });
+
 export const arbHashedPassword = (): fc.Arbitrary<HashedPassword> =>
   fc.record({
     algorithm: fc.constant('argon2id' as const),
@@ -53,8 +56,8 @@ export const arbHashedPassword = (): fc.Arbitrary<HashedPassword> =>
     tagLength: fc.constant(64),
     memory: fc.constant(65536),
     passes: fc.constant(3),
-    nonceHex: fc.hexaString({ minLength: 32, maxLength: 32 }),
-    tagHex: fc.hexaString({ minLength: 128, maxLength: 128 }),
+    nonceHex: arbHexString(32),
+    tagHex: arbHexString(128),
   });
 
 export const arbContent = (): fc.Arbitrary<string> => fc.string({ minLength: 1, maxLength: 500 });
@@ -93,7 +96,7 @@ export const arbRemoteActor = (): fc.Arbitrary<RemoteActor> =>
     inboxUrl: fc.webUrl().map((url) => `${url}/inbox`),
     type: fc.constant('remote' as const),
     username: fc.option(
-      fc.stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz'), { minLength: 1, maxLength: 20 }),
+      fc.string({ unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz'), minLength: 1, maxLength: 20 }),
       {
         nil: undefined,
       },

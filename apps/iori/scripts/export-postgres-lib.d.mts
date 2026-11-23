@@ -4,7 +4,7 @@ export const EXPORT_ROW_SCOPE: Readonly<Record<string, string | null>>;
 export const EXPORT_LIMITS: Readonly<{ rowBytes: number; pageRows: number; totalBytes: number; deadlineMs: number }>;
 export type PostgresExportClient = {
   on?(event: 'error', listener: (error: Error) => void): unknown;
-  connect(): Promise<void>;
+  connect(): Promise<unknown>;
   end(): Promise<void>;
   query(sql: string): Promise<{ rows: readonly { row?: unknown; [key: string]: unknown }[] }>;
 };

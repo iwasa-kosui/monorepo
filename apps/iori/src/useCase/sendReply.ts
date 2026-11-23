@@ -1,8 +1,8 @@
 import { type RequestContext } from '@fedify/fedify';
 import { Create, isActor, Note, type Recipient } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
-import { Temporal } from '@js-temporal/polyfill';
 import { getLogger } from '@logtape/logtape';
+import { Temporal } from 'temporal-polyfill';
 
 import type { PushPayload, WebPushSender } from '../adaptor/webPush/webPush.ts';
 import type { Actor, ActorResolverByUserId } from '../domain/actor/actor.ts';

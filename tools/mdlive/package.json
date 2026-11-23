@@ -25,23 +25,23 @@
   },
   "dependencies": {
     "@iwasa-kosui/result": "workspace:*",
-    "ignore": "7.0.5",
-    "marked": "^15.0.0",
-    "shiki": "^3.0.0",
-    "ws": "^8.18.0",
-    "zod": "^3.24.0"
+    "ignore": "7.0.16",
+    "marked": "^18.2.1",
+    "shiki": "^4.6.0",
+    "ws": "^8.23.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.2",
-    "@types/node": "^20",
-    "@types/ws": "^8.5.0",
-    "dprint": "0.51.1",
-    "eslint": "^9",
-    "eslint-plugin-simple-import-sort": "12.1.1",
-    "eslint-plugin-unused-imports": "4.3.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5",
-    "typescript-eslint": "8.53.0",
-    "vitest": "4.0.15"
+    "@eslint/js": "10.0.1",
+    "@types/node": "^24.19.2",
+    "@types/ws": "^8.18.2",
+    "dprint": "0.65.0",
+    "eslint": "^10.15.0",
+    "eslint-plugin-simple-import-sort": "14.0.0",
+    "eslint-plugin-unused-imports": "4.4.1",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "8.73.0",
+    "vitest": "5.1.1"
   }
 }

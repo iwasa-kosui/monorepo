@@ -16,7 +16,7 @@ const REPOST_REASON = 'app.bsky.feed.defs#reasonRepost';
 const pageZodType = z.object({ cursor: z.string().optional(), feed: z.array(z.unknown()) });
 const feedViewPostZodType = z.looseObject({
   post: postViewZodType,
-  reply: z.looseObject({ parent: z.unknown() }).optional(),
+  reply: z.looseObject({ parent: z.unknown().optional() }).optional(),
   reason: z.unknown().optional(),
 });
 const reasonZodType = z.looseObject({ $type: z.string() });

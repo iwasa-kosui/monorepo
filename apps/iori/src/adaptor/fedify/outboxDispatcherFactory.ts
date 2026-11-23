@@ -1,8 +1,8 @@
 import { type RequestContext } from '@fedify/fedify';
 import { Create, Note } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
-import { Temporal } from '@js-temporal/polyfill';
 import { getLogger } from '@logtape/logtape';
+import { Temporal } from 'temporal-polyfill';
 
 import type { ActorResolverByUserId } from '../../domain/actor/actor.ts';
 import { Post, type PostQuotesResolverByPostIds, type PostsResolverByActorId } from '../../domain/post/post.ts';

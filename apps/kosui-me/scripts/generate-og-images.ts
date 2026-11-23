@@ -479,6 +479,8 @@ const createOgImage = (post: PostMeta): SatoriNode => {
               padding: '40px 50px',
               margin: '80px 60px 0 60px',
               width: '1080px',
+              // 新しい satori は width を content-box として扱う。padding 込みで 1080px に収める。
+              boxSizing: 'border-box',
               minHeight: '360px',
               maxHeight: '420px',
               boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08)',
@@ -494,6 +496,7 @@ const createOgImage = (post: PostMeta): SatoriNode => {
               display: 'flex',
               justifyContent: 'flex-end',
               width: '1080px',
+              boxSizing: 'border-box',
               marginTop: '16px',
               paddingRight: '8px',
             },
@@ -574,6 +577,8 @@ const createReportOgImage = (report: PostMeta): SatoriNode => {
               padding: '40px 50px',
               margin: '80px 60px 0 60px',
               width: '1080px',
+              // 新しい satori は width を content-box として扱う。padding 込みで 1080px に収める。
+              boxSizing: 'border-box',
               minHeight: '360px',
               maxHeight: '420px',
               boxShadow: '0 4px 24px rgba(0, 0, 0, 0.08)',
@@ -640,6 +645,7 @@ const createReportOgImage = (report: PostMeta): SatoriNode => {
               display: 'flex',
               justifyContent: 'flex-end',
               width: '1080px',
+              boxSizing: 'border-box',
               marginTop: '16px',
               paddingRight: '8px',
             },

@@ -70,7 +70,7 @@ const videoViewZodType = z.looseObject({
     .catch(undefined),
   alt: z.string().optional().catch(undefined),
 });
-const recordViewZodType = z.looseObject({ record: z.unknown() });
+const recordViewZodType = z.looseObject({ record: z.unknown().optional() });
 const quoteTargetZodType = z.looseObject({ $type: z.string().optional(), uri: z.string().min(1) });
 const viewRecordZodType = z.looseObject({
   uri: z.string().min(1),
@@ -87,7 +87,7 @@ const QUOTE_UNAVAILABLE_REASONS = {
   'app.bsky.embed.record#viewBlocked': 'blocked',
   'app.bsky.embed.record#viewDetached': 'detached',
 } as const;
-const recordWithMediaViewZodType = z.looseObject({ record: z.unknown(), media: z.unknown() });
+const recordWithMediaViewZodType = z.looseObject({ record: z.unknown().optional(), media: z.unknown().optional() });
 
 export const toInstant = (value: string): Instant | undefined => {
   const parsed = Instant.of(Date.parse(value));

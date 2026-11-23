@@ -10,7 +10,7 @@ import {
 } from '@fedify/vocab';
 import type { DocumentLoader } from '@fedify/vocab-runtime';
 import { RA } from '@iwasa-kosui/result';
-import { Temporal } from '@js-temporal/polyfill';
+import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it, vi } from 'vitest';
 
 import { isBlockedUri } from '../../adaptor/fedify/blockedInboxDomain.ts';

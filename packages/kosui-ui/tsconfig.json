@@ -3,6 +3,7 @@
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
     "jsx": "react-jsx",
+    "types": ["vite/client"],
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,

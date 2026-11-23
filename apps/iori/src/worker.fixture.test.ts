@@ -1,4 +1,4 @@
-import type { ExecutionContext, Queue } from '@cloudflare/workers-types';
+import type { ExecutionContext, Queue, QueueSendResponse } from '@cloudflare/workers-types';
 import { exportJwk, generateCryptoKeyPair } from '@fedify/fedify';
 import { Create } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
@@ -246,9 +246,11 @@ const makeSeed = async () => {
   } satisfies FixtureRows;
 };
 
+const queueSendResponse: QueueSendResponse = { metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } } };
+
 const makeEnv = (
   db: FixtureD1,
-  { smokeQueueToken, send = async () => {} }: { smokeQueueToken?: string; send?: Queue['send'] } = {},
+  { smokeQueueToken, send = async () => queueSendResponse }: { smokeQueueToken?: string; send?: Queue['send'] } = {},
 ): IoriWorkerEnv => ({
   DB: db as unknown as IoriWorkerEnv['DB'],
   UPLOADS: {
@@ -276,7 +278,7 @@ const makeEnv = (
 
 describe('Worker fixture', () => {
   it('enqueues a fixture marker only through the staging smoke route with its configured token', async () => {
-    const send = vi.fn(async () => undefined);
+    const send = vi.fn(async () => queueSendResponse);
     const env = makeEnv(new FixtureD1(await makeSeed()), { smokeQueueToken: 'fixture-smoke-token', send });
     const context = {} as ExecutionContext;
 

@@ -1,8 +1,8 @@
 import { type RequestContext } from '@fedify/fedify';
 import { Create, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
-import { Temporal } from '@js-temporal/polyfill';
 import { getLogger } from '@logtape/logtape';
+import { Temporal } from 'temporal-polyfill';
 
 import { sanitizePostContent } from '../../domain/post/sanitizePostContent.ts';
 import { Username } from '../../domain/user/username.ts';

@@ -63,7 +63,7 @@ const convoZodType = z.looseObject({
   status: z.string().optional(),
   unreadCount: z.number().int().nonnegative().default(0),
 });
-const convoResponseZodType = z.object({ convo: z.unknown() });
+const convoResponseZodType = z.object({ convo: z.unknown().optional() });
 const convosPageZodType = z.object({ cursor: z.string().optional(), convos: z.array(z.unknown()) });
 const messagesPageZodType = z.object({ cursor: z.string().optional(), messages: z.array(z.unknown()) });
 

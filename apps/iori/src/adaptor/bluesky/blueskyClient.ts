@@ -71,7 +71,7 @@ const sessionResponseSchema = z.object({
   didDoc: z.unknown().optional(),
 });
 const didDocSchema = z.object({
-  service: z.array(z.object({ id: z.string(), serviceEndpoint: z.unknown() })),
+  service: z.array(z.object({ id: z.string(), serviceEndpoint: z.unknown().optional() })),
 });
 const blobSchema = z.object({
   $type: z.literal('blob'),

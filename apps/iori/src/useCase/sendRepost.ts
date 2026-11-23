@@ -1,7 +1,7 @@
 import { type RequestContext } from '@fedify/fedify';
 import { isActor } from '@fedify/vocab';
 import { RA } from '@iwasa-kosui/result';
-import { Temporal } from '@js-temporal/polyfill';
+import { Temporal } from 'temporal-polyfill';
 
 import { ActorIdentity } from '../adaptor/fedify/actorIdentity.ts';
 import { extractContentWarning } from '../adaptor/fedify/extractContentWarning.ts';

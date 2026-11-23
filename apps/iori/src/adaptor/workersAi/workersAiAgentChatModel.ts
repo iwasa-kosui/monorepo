@@ -19,7 +19,8 @@ const parseArguments = (raw: unknown): unknown => {
 /** Workers AI 独自の形: { response, tool_calls: [{ name, arguments }] } */
 const nativeSchema = z.object({
   response: z.unknown().optional(),
-  tool_calls: z.array(z.object({ id: z.string().optional(), name: z.string(), arguments: z.unknown() })).optional(),
+  tool_calls: z.array(z.object({ id: z.string().optional(), name: z.string(), arguments: z.unknown().optional() }))
+    .optional(),
 });
 
 /** OpenAI 互換の形: { choices: [{ message: { content, tool_calls: [{ id, function: { name, arguments } }] } }] } */
@@ -32,7 +33,7 @@ const choicesSchema = z.object({
         reasoning_content: z.string().nullish(),
         tool_calls: z.array(z.object({
           id: z.string().optional(),
-          function: z.object({ name: z.string(), arguments: z.unknown() }),
+          function: z.object({ name: z.string(), arguments: z.unknown().optional() }),
         })).nullish(),
       }),
     }),

@@ -1,5 +1,5 @@
 import { Application, Emoji, Group, Image, Person, PropertyValue, Service } from '@fedify/vocab';
-import { Temporal } from '@js-temporal/polyfill';
+import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ActorIdentity, PROFILE_LIMITS } from './actorIdentity.ts';
