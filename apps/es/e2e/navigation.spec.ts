@@ -43,17 +43,17 @@ test('「前へ」を順にたどると全ページを逆順に通って導入�
 });
 
 test('章の境界でも「次へ」「前へ」で隣の章のページへ移動する', async ({ page }) => {
-  await page.goto('/chapters/intro/5/');
+  await page.goto('/chapters/intro/6/');
   await page.getByRole('link', { name: /次へ/ }).click();
   await expect(page).toHaveURL(/\/chapters\/chapter-1\/$/);
   await page.getByRole('link', { name: /前へ/ }).click();
-  await expect(page).toHaveURL(/\/chapters\/intro\/5\/$/);
+  await expect(page).toHaveURL(/\/chapters\/intro\/6\/$/);
 });
 
 test('ページの上部に章の名前と進み具合が出る', async ({ page }) => {
   await page.goto('/chapters/intro/2/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('導入');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('2/5');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('2/6');
   await expect(page.getByRole('link', { name: 'トップページへ' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'うまく動かないとき' })).toBeVisible();
 });
@@ -76,12 +76,12 @@ test.describe('矢印キー', () => {
   });
 
   test('章の境界でも矢印キーで移動する', async ({ page }) => {
-    await page.goto('/chapters/intro/5/');
+    await page.goto('/chapters/intro/6/');
     await page.keyboard.press('ArrowRight');
     await expect(page).toHaveURL(/\/chapters\/chapter-1\/$/);
     await page.waitForLoadState('load');
     await page.keyboard.press('ArrowLeft');
-    await expect(page).toHaveURL(/\/chapters\/intro\/5\/$/);
+    await expect(page).toHaveURL(/\/chapters\/intro\/6\/$/);
   });
 
   const editors = [
@@ -191,7 +191,7 @@ test.describe('下部のフッター', () => {
   });
 
   test('章の境界の前後リンクには隣の章の名前が出る', async ({ page }) => {
-    await page.goto('/chapters/intro/5/');
+    await page.goto('/chapters/intro/6/');
     await expect(page.locator('.lesson-footer a[rel="next"]')).toContainText('第1章');
   });
 
