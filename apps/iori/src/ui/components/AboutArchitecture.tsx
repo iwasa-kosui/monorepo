@@ -1,8 +1,7 @@
 import type { Child } from 'hono/jsx';
 
 type Lang = 'ja' | 'en';
-type NodeKind = 'external' | 'worker' | 'service';
-type FlowNode = { readonly name: string; readonly description?: string; readonly kind: NodeKind };
+type Tone = 'worker' | 'fedi' | 'bsky' | 'store' | 'plain';
 
 export const cardClass = 'bg-cream dark:bg-gray-800 rounded-clay shadow-clay dark:shadow-clay-dark p-6 sm:p-8';
 export const insetClass = 'bg-sand-light/50 dark:bg-gray-700/50 rounded-xl shadow-clay-inset';
@@ -25,615 +24,647 @@ const stack = [
 const content = {
   ja: {
     title: 'しくみ',
-    intro: 'iori がどのように動いているかを、図で説明します。',
-    overview: {
-      title: '全体像',
+    intro: 'iori の設計のうち、特徴のある5つを図で説明します。',
+    legend: { worker: 'Worker', fedi: 'ActivityPub', bsky: 'AT Protocol', store: 'Cloudflare のサービス' },
+    serverless: {
+      title: '常駐するサーバーを持たない',
       description:
-        'iori は Cloudflare の上で、1つの Worker として動いています。常時起動しているサーバーはなく、リクエストやメッセージが届いたときだけプログラムが動きます。Worker には3つの入口があり、データの保存や配送は Cloudflare の各サービスに任せています。',
-      caption: 'iori の全体構成',
-      externals: [
-        { name: 'ブラウザ', description: '読む人、書く人' },
-        { name: '他のサーバー', description: 'Mastodon、Misskey など' },
-        { name: 'Bluesky', description: 'AT Protocol' },
-      ],
-      arrowLabel: 'HTTPS',
-      worker: { name: 'iori の Worker', description: 'Hono + Fedify' },
-      entries: [
-        { name: 'fetch', description: 'HTTP リクエストに応答する' },
-        { name: 'queue', description: 'キューのメッセージを処理する' },
-        { name: 'scheduled', description: 'Cron Triggers が起動する定期処理' },
-      ],
-      services: [
-        { name: 'D1', description: 'データベース。投稿やフォローなど、すべてのデータ' },
-        { name: 'R2', description: '画像の保存' },
-        { name: 'Queues', description: '連合の配送を順に処理するキュー' },
-        { name: 'KV', description: '連合で使う一時的なデータ' },
-        { name: 'Workers AI', description: '要約、翻訳、bot の発言' },
-        { name: 'Workers Assets', description: '画面の JavaScript の配信' },
-      ],
-      legend: { external: '外部', worker: 'Worker', service: 'Cloudflare のサービス' },
-    },
-    page: {
-      title: 'ページを開いたとき',
-      description:
-        '画面は、ブラウザの中で JavaScript が描画します。Worker が返すのは HTML の枠だけで、表示するデータは API から取得します。',
-      caption: 'ページを表示するまでの流れ',
-      steps: [
-        {
-          from: { name: 'ブラウザ', kind: 'external' },
-          to: { name: 'Worker', kind: 'worker' },
-          text: 'ページを要求します。Worker は HTML の枠を返します。',
-        },
-        {
-          from: { name: 'ブラウザ', kind: 'external' },
-          to: { name: 'Workers Assets', kind: 'service' },
-          text: '画面の JavaScript を取得します。この通信は Worker を経由しません。',
-        },
-        {
-          from: { name: 'ブラウザ', kind: 'external' },
-          to: { name: 'Worker', kind: 'worker' },
-          text: 'JavaScript が API を呼びます。',
-        },
-        {
-          from: { name: 'Worker', kind: 'worker' },
-          to: { name: 'D1', kind: 'service' },
-          text: 'Worker はデータを読み書きし、結果を JSON で返します。',
-        },
-      ],
+        'iori は Cloudflare Workers の上で、1つの Worker として動きます。Worker が動くきっかけは、HTTP リクエスト、キューのメッセージ、Cron Triggers の3つだけです。フォロワーへの配送のように時間のかかる処理は、Queues に積み、あとから queue の入口で処理します。',
+      label: '3つのきっかけが1つの Worker を起動し、Worker が D1、R2、KV、Workers AI を使う図',
+      http: '画面、アプリ、連合',
+      queues: '配送の順番待ち',
+      cron: '毎分から毎日まで',
+      worker: 'iori の Worker',
+      fetch: 'すぐに応答する',
+      queue: 'あとで処理する',
+      scheduled: '定期的に実行する',
+      enqueue: '積む',
+      d1: 'データベース',
+      r2: '画像',
+      kv: '一時データ',
+      ai: '要約、翻訳、bot',
       notes: [
-        'API は、Mastodon 互換 API と iori 独自の API の2種類です。',
-        'Mastodon 互換 API があるので、Mastodon 用のクライアントアプリも同じ API を使えます。',
+        '画面も、Mastodon 互換 API を呼ぶクライアントの1つです。そのため、Mastodon 用のアプリからも同じように使えます。',
       ],
     },
     delivery: {
-      title: '投稿が Fediverse に届くまで',
+      title: '1つのノートを、2つのプロトコルへ送る',
       description:
-        '投稿の保存と、他のサーバーへの配送を分けています。配送はキューに積み、利用者に応答を返したあとで処理します。フォロワーのサーバーが応答しなくても、投稿そのものは失敗しません。',
-      flows: [
-        {
-          caption: '送信: 自分の投稿をフォロワーに届ける',
-          nodes: [
-            { name: '利用者', description: 'ノートを投稿する', kind: 'external' },
-            { name: 'Worker (fetch)', description: 'D1 に保存し、配送をキューに積む', kind: 'worker' },
-            { name: 'Queues', description: '配送を1件ずつ渡す', kind: 'service' },
-            { name: 'Worker (queue)', description: '署名して送信する', kind: 'worker' },
-            { name: 'フォロワーのサーバー', description: '投稿を受け取る', kind: 'external' },
-          ],
-        },
-        {
-          caption: '受信: 他のサーバーの投稿を受け取る',
-          nodes: [
-            { name: '他のサーバー', description: '投稿やフォローを送る', kind: 'external' },
-            { name: 'Worker (fetch)', description: '署名を検証し、キューに積む', kind: 'worker' },
-            { name: 'Queues', description: '処理を1件ずつ渡す', kind: 'service' },
-            { name: 'Worker (queue)', description: 'D1 にタイムラインと通知を保存する', kind: 'worker' },
-            { name: '利用者', description: 'Web Push で通知を受け取る', kind: 'external' },
-          ],
-        },
-      ],
-      notes: [
-        '失敗した配送は、間隔を空けて再試行します。',
-        '再試行しても届かなかったメッセージは、別のキュー（DLQ）に移します。',
-        '署名に使う鍵は、D1 に保存しています。',
-      ],
+        'ノートを保存すると、iori は ActivityPub と AT Protocol の両方へ送ります。Fediverse へは、キューを通してフォロワーのサーバーに配送し、届かなければ間隔を空けて再試行します。Bluesky へは、投稿への応答を返した直後に送信します。',
+      label: '1つのノートが D1 に保存され、キューを通って Fediverse のサーバーへ、直接 Bluesky へ送られる図',
+      note: 'ノートを投稿',
+      worker: '保存して、配送を依頼する',
+      batch: '1つのバッチで書く',
+      queues: '配送を積む',
+      queue: '署名して送信する',
+      retry: '届かなければ再試行',
+      bluesky: '応答のあとに送信',
+      others: 'その他',
+      followers: 'フォロワーのサーバー',
+      notes: ['相手のサーバーが応答しなくても、投稿は失敗しません。'],
     },
-    schedule: {
-      title: '定期処理と Bluesky',
+    timeline: {
+      title: '届く投稿と、取りに行く投稿を1つの一覧にする',
       description:
-        'Cron Triggers が決まった間隔で Worker を起動します。Bluesky とのやり取りも、この定期処理を使っています。',
-      caption: '定期処理の間隔と内容',
-      rows: [
-        {
-          interval: '毎分',
-          items: ['Bluesky のタイムラインと通知を取り込む', 'bot がメンションに返信する'],
-        },
-        {
-          interval: '3時間ごと',
-          items: [
-            'RSS などのフィードを収集する',
-            '失敗した Bluesky への同時投稿を再送する',
-            '保持期間を過ぎた Bluesky のタイムラインを削除する',
-          ],
-        },
-        {
-          interval: '毎日',
-          items: ['日次ダイジェストを作成する'],
-        },
-      ],
-      notes: [
-        'Bluesky への同時投稿は、投稿の応答を返した直後に送信します。',
-        '取り込んだ Bluesky のタイムラインは、30日間保持します。',
-        'Bluesky のアプリパスワードは、暗号化して D1 に保存しています。',
-      ],
+        'Fediverse の投稿は、相手のサーバーから iori に届きます。Bluesky の投稿は、iori が毎分取りに行きます。届き方の違う2種類の投稿を、ホームタイムラインでは時刻の順に1つの一覧へ混ぜます。',
+      label: 'Fediverse から届く投稿と、Bluesky から取得する投稿が、D1 を経てホームタイムラインで1つになる図',
+      fediverse: 'Fediverse のサーバー',
+      pushed: '相手から届く',
+      pulled: 'iori が取りに行く',
+      fetch: '署名を検証する',
+      scheduled: '毎分起動する',
+      queues: 'queue の入口が処理する',
+      d1: '投稿を保存する',
+      home: 'ホームタイムライン',
+      merged: '時刻の順に1つの一覧へ混ぜる',
+      notes: ['同じ投稿が両方から届いた場合は、重複を取り除きます。'],
     },
-    code: {
-      title: 'コードの構造',
+    events: {
+      title: '状態とイベントを、同じバッチで書く',
       description:
-        'コードは役割ごとに層を分けています。依存は上の層から下の層へ向かい、ルールを書く domain は外部のサービスに依存しません。',
-      layersCaption: '層と依存の向き',
-      routes: { name: 'adaptor/routes', description: 'HTTP の入口。入力を検証してユースケースを呼ぶ' },
-      useCase: { name: 'useCase', description: '業務の流れ。認可、保存、配送の依頼を順に実行する' },
-      domain: { name: 'domain', description: 'ルールとデータの形。外部に依存しない' },
-      adaptor: {
-        name: 'adaptor/d1 など',
-        description: 'データベースや外部サービスとの接続。domain が定義した型を実装する',
-      },
-      implementLabel: '実装する',
-      writeCaption: '1回の書き込み',
-      write: { name: '投稿を保存する', description: 'ストアが1つのバッチにまとめる' },
-      tables: { name: '状態のテーブル', description: 'posts など。画面はここを読む' },
-      events: { name: 'domain_events', description: '何が起きたかの記録' },
+        'domain の関数はデータベースに触れず、「何が起きたか」を表すイベントを返します。ストアは、いまの状態とそのイベントを、D1 の1つのバッチで書き込みます。記録したイベントは、投稿の編集履歴の表示などに使います。',
+      label: 'useCase が domain を呼び、domain が返したイベントをストアが状態と一緒に1つのバッチで D1 に書き込む図',
+      useCase: '業務の流れを組み立てる',
+      domain: '状態を変えず、イベントを返す',
+      store: '1つのバッチにまとめる',
+      state: 'いまの状態',
+      record: '何が起きたかの記録',
+      batch: 'D1 の db.batch。両方を書くか、どちらも書かない',
       notes: [
-        '状態の変更は、ドメインイベントとして記録します。状態とイベントは、同じバッチで D1 に書き込みます。',
-        'イベントは、投稿の編集履歴の表示などに使います。',
         'エラーは例外を投げず、Result 型の値として返します。',
         'データの形は Zod のスキーマで定義し、型をスキーマから導出します。',
       ],
     },
-    deploy: {
-      title: 'デプロイ',
-      description: 'main ブランチへの merge をきっかけに、GitHub Actions が本番へデプロイします。',
-      caption: 'デプロイの流れ',
-      nodes: [
-        { name: 'main に merge', kind: 'external' },
-        { name: 'ビルドと検査', description: 'GitHub Actions', kind: 'external' },
-        { name: '承認', description: '人が確認する', kind: 'external' },
-        { name: 'マイグレーション', description: 'D1 のスキーマを更新する', kind: 'service' },
-        { name: 'デプロイ', description: '新しい Worker を公開する', kind: 'worker' },
-      ],
+    digest: {
+      title: '自分の投稿から、毎朝読む記事を選ぶ',
+      description:
+        'iori は3時間ごとに28のフィードを収集し、記事を埋め込みに変換します。私の投稿といいねも同じように埋め込みに変換し、関心の手がかりにします。毎朝、手がかりに近い記事をトピックごとに選び、要約してダイジェストにします。',
+      label:
+        'フィードの記事と自分の投稿を埋め込みに変換して D1 に保存し、Worker が類似度を計算して毎朝のダイジェストを作る図',
+      feeds: '28のフィード',
+      feedsSub: 'Zenn、はてブ、Hacker News など',
+      own: '自分の投稿といいね',
+      ownSub: '関心の手がかり',
+      space: '埋め込みの空間（1024次元）',
+      spaceSub: 'bge-m3 で変換して D1 に保存する。近さは Worker が計算する',
+      ownDot: '自分の投稿',
+      nearDot: '近い記事',
+      result: '毎朝 6:30 のダイジェスト',
+      resultSub: '最大4トピック、各5件を要約して通知する',
       notes: [
-        'D1、R2、KV、Queues は Terraform で管理しています。',
-        'Worker の本体と設定は Wrangler で管理しています。',
-        'マイグレーションが失敗した場合、Worker はデプロイしません。',
+        '埋め込みは D1 の BLOB の列に保存し、類似度は Worker の中で計算します。専用のベクトルデータベースは使っていません。',
+        '新しい手がかりほど重くなるように、時間の経過で重みを減らします。',
       ],
     },
-    stack: {
-      title: '使っている技術',
-      items: stack,
-    },
+    stack: { title: '使っている技術', items: stack },
   },
   en: {
     title: 'How it works',
-    intro: 'This section explains how iori works, with diagrams.',
-    overview: {
-      title: 'Overview',
+    intro: 'Five distinctive parts of the design of iori, explained with diagrams.',
+    legend: { worker: 'Worker', fedi: 'ActivityPub', bsky: 'AT Protocol', store: 'Cloudflare services' },
+    serverless: {
+      title: 'No always-on server',
       description:
-        'iori runs as a single Worker on Cloudflare. No server stays running. The program runs only when a request or a message arrives. The Worker has three entry points, and it leaves data storage and delivery to Cloudflare services.',
-      caption: 'Overall architecture of iori',
-      externals: [
-        { name: 'Browser', description: 'Readers and writers' },
-        { name: 'Other servers', description: 'Mastodon, Misskey, and others' },
-        { name: 'Bluesky', description: 'AT Protocol' },
-      ],
-      arrowLabel: 'HTTPS',
-      worker: { name: 'iori Worker', description: 'Hono + Fedify' },
-      entries: [
-        { name: 'fetch', description: 'Responds to HTTP requests' },
-        { name: 'queue', description: 'Processes queue messages' },
-        { name: 'scheduled', description: 'Periodic jobs started by Cron Triggers' },
-      ],
-      services: [
-        { name: 'D1', description: 'Database. All data, such as posts and follows' },
-        { name: 'R2', description: 'Image storage' },
-        { name: 'Queues', description: 'A queue that processes federation deliveries in order' },
-        { name: 'KV', description: 'Temporary data used by federation' },
-        { name: 'Workers AI', description: 'Summaries, translation, and bot replies' },
-        { name: 'Workers Assets', description: 'Serves the JavaScript for the screens' },
-      ],
-      legend: { external: 'External', worker: 'Worker', service: 'Cloudflare services' },
-    },
-    page: {
-      title: 'Opening a page',
-      description:
-        'JavaScript in the browser renders the screens. The Worker returns only a frame of HTML, and the data to display comes from the API.',
-      caption: 'From request to rendered page',
-      steps: [
-        {
-          from: { name: 'Browser', kind: 'external' },
-          to: { name: 'Worker', kind: 'worker' },
-          text: 'Requests the page. The Worker returns a frame of HTML.',
-        },
-        {
-          from: { name: 'Browser', kind: 'external' },
-          to: { name: 'Workers Assets', kind: 'service' },
-          text: 'Fetches the JavaScript for the screens. This request does not go through the Worker.',
-        },
-        {
-          from: { name: 'Browser', kind: 'external' },
-          to: { name: 'Worker', kind: 'worker' },
-          text: 'The JavaScript calls the API.',
-        },
-        {
-          from: { name: 'Worker', kind: 'worker' },
-          to: { name: 'D1', kind: 'service' },
-          text: 'The Worker reads and writes data, and returns the result as JSON.',
-        },
-      ],
+        'iori runs on Cloudflare Workers as a single Worker. Only three things start the Worker: an HTTP request, a queue message, and Cron Triggers. Slow work such as delivery to followers is put on Queues and handled later by the queue entry point.',
+      label: 'Three triggers start one Worker, and the Worker uses D1, R2, KV, and Workers AI',
+      http: 'apps and servers',
+      queues: 'pending work',
+      cron: 'minutely to daily',
+      worker: 'iori Worker',
+      fetch: 'responds now',
+      queue: 'works later',
+      scheduled: 'runs on schedule',
+      enqueue: 'enqueue',
+      d1: 'database',
+      r2: 'images',
+      kv: 'temp state',
+      ai: 'summaries, bot',
       notes: [
-        'The API comes in two kinds: the Mastodon-compatible API and iori\'s own API.',
-        'Because the Mastodon-compatible API exists, client apps made for Mastodon can use the same API.',
+        'The web UI is also a client of the Mastodon-compatible API, so Mastodon apps can use iori in the same way.',
       ],
     },
     delivery: {
-      title: 'Delivering a post to the Fediverse',
+      title: 'One note, two protocols',
       description:
-        'Saving a post and delivering it to other servers are separate steps. Deliveries go into a queue and are processed after the response returns to the user. Even if a follower\'s server does not respond, the post itself does not fail.',
-      flows: [
-        {
-          caption: 'Sending: delivering my post to followers',
-          nodes: [
-            { name: 'User', description: 'Posts a note', kind: 'external' },
-            { name: 'Worker (fetch)', description: 'Saves to D1 and queues the delivery', kind: 'worker' },
-            { name: 'Queues', description: 'Hands over deliveries one by one', kind: 'service' },
-            { name: 'Worker (queue)', description: 'Signs and sends', kind: 'worker' },
-            { name: 'Follower\'s server', description: 'Receives the post', kind: 'external' },
-          ],
-        },
-        {
-          caption: 'Receiving: receiving posts from other servers',
-          nodes: [
-            { name: 'Other server', description: 'Sends posts and follows', kind: 'external' },
-            { name: 'Worker (fetch)', description: 'Verifies the signature and queues it', kind: 'worker' },
-            { name: 'Queues', description: 'Hands over items one by one', kind: 'service' },
-            { name: 'Worker (queue)', description: 'Saves timelines and notifications to D1', kind: 'worker' },
-            { name: 'User', description: 'Receives notifications via Web Push', kind: 'external' },
-          ],
-        },
-      ],
-      notes: [
-        'Failed deliveries are retried at intervals.',
-        'Messages that still fail after retries move to a separate queue (DLQ).',
-        'The keys used for signing are stored in D1.',
-      ],
+        'When a note is saved, iori sends it over both ActivityPub and AT Protocol. For the Fediverse, it delivers to the followers\' servers through a queue and retries at intervals on failure. For Bluesky, it sends right after responding to the post request.',
+      label: 'One note is saved to D1, delivered to Fediverse servers through a queue, and sent directly to Bluesky',
+      note: 'Post a note',
+      worker: 'save, then deliver',
+      batch: 'one batch',
+      queues: 'holds deliveries',
+      queue: 'signs and sends',
+      retry: 'retries on failure',
+      bluesky: 'sent right after',
+      others: 'others',
+      followers: 'followers\' servers',
+      notes: ['The post does not fail even when a remote server does not respond.'],
     },
-    schedule: {
-      title: 'Scheduled jobs and Bluesky',
+    timeline: {
+      title: 'Pushed and pulled posts in one timeline',
       description:
-        'Cron Triggers start the Worker at set intervals. Exchanges with Bluesky also use these scheduled jobs.',
-      caption: 'Schedule intervals and jobs',
-      rows: [
-        {
-          interval: 'Every minute',
-          items: ['Imports the Bluesky timeline and notifications', 'The bot replies to mentions'],
-        },
-        {
-          interval: 'Every 3 hours',
-          items: [
-            'Collects feeds such as RSS',
-            'Resends failed cross-posts to Bluesky',
-            'Deletes Bluesky timeline items past the retention period',
-          ],
-        },
-        {
-          interval: 'Every day',
-          items: ['Creates the daily digest'],
-        },
-      ],
-      notes: [
-        'Cross-posts to Bluesky are sent right after the response for the post returns.',
-        'The imported Bluesky timeline is kept for 30 days.',
-        'The Bluesky app password is encrypted and stored in D1.',
-      ],
+        'Fediverse posts are pushed to iori by remote servers. Bluesky posts are pulled by iori every minute. The home timeline merges these two kinds of posts into one list ordered by time.',
+      label: 'Posts pushed from the Fediverse and posts pulled from Bluesky go through D1 and become one home timeline',
+      fediverse: 'Fediverse servers',
+      pushed: 'pushed to iori',
+      pulled: 'pulled by iori',
+      fetch: 'verifies the signature',
+      scheduled: 'runs every minute',
+      queues: 'handled by queue',
+      d1: 'stores the posts',
+      home: 'Home timeline',
+      merged: 'merged into one list by time',
+      notes: ['When the same post arrives from both sides, the duplicate is removed.'],
     },
-    code: {
-      title: 'Code structure',
+    events: {
+      title: 'State and events in one batch',
       description:
-        'The code is split into layers by role. Dependencies point from upper layers to lower layers, and domain, which holds the rules, does not depend on external services.',
-      layersCaption: 'Layers and the direction of dependencies',
-      routes: { name: 'adaptor/routes', description: 'HTTP entry point. Validates input and calls use cases' },
-      useCase: {
-        name: 'useCase',
-        description: 'Business flow. Runs authorization, saving, and delivery requests in order',
-      },
-      domain: { name: 'domain', description: 'Rules and the shape of data. Depends on nothing external' },
-      adaptor: {
-        name: 'adaptor/d1 and others',
-        description: 'Connections to the database and external services. Implements the types that domain defines',
-      },
-      implementLabel: 'Implements',
-      writeCaption: 'One write',
-      write: { name: 'Save a post', description: 'The store puts it into one batch' },
-      tables: { name: 'State tables', description: 'posts and others. Screens read from here' },
-      events: { name: 'domain_events', description: 'A record of what happened' },
+        'Functions in domain do not touch the database. They return an event that describes what happened. The store writes the current state and that event in a single D1 batch. The recorded events are used for features such as the edit history of a post.',
+      label:
+        'useCase calls domain, and the store writes the event returned by domain together with the state in one D1 batch',
+      useCase: 'orchestrates the flow',
+      domain: 'pure function, returns an event',
+      store: 'one batch per write',
+      state: 'current state',
+      record: 'record of what happened',
+      batch: 'D1 db.batch: both rows or neither',
       notes: [
-        'State changes are recorded as domain events. The state and the event are written to D1 in the same batch.',
-        'Events are used for things such as showing a post\'s edit history.',
-        'Errors are returned as Result values, not thrown as exceptions.',
-        'The shape of data is defined by Zod schemas, and types are derived from the schemas.',
+        'Errors are returned as Result values instead of thrown exceptions.',
+        'Data shapes are defined as Zod schemas, and types are derived from the schemas.',
       ],
     },
-    deploy: {
-      title: 'Deployment',
-      description: 'A merge into the main branch triggers GitHub Actions to deploy to production.',
-      caption: 'Deployment flow',
-      nodes: [
-        { name: 'Merge into main', kind: 'external' },
-        { name: 'Build and checks', description: 'GitHub Actions', kind: 'external' },
-        { name: 'Approval', description: 'A person reviews', kind: 'external' },
-        { name: 'Migration', description: 'Updates the D1 schema', kind: 'service' },
-        { name: 'Deploy', description: 'Publishes the new Worker', kind: 'worker' },
-      ],
+    digest: {
+      title: 'Picking each morning\'s reading from my own posts',
+      description:
+        'Every three hours, iori collects 28 feeds and converts the articles into embeddings. My posts and likes are converted into embeddings in the same way and used as signals of interest. Each morning, iori picks the articles closest to those signals for each topic, summarizes them, and builds a digest.',
+      label:
+        'Feed articles and my posts are embedded and stored in D1, and the Worker scores similarity to build the daily digest',
+      feeds: '28 feeds',
+      feedsSub: 'Zenn, Hatena Bookmark, Hacker News…',
+      own: 'My posts and likes',
+      ownSub: 'signals of interest',
+      space: 'Embedding space (1024 dimensions)',
+      spaceSub: 'embedded with bge-m3, stored in D1, scored in the Worker',
+      ownDot: 'my posts',
+      nearDot: 'close articles',
+      result: 'Daily digest at 6:30 JST',
+      resultSub: 'up to 4 topics × 5 articles, summarized and pushed',
       notes: [
-        'D1, R2, KV, and Queues are managed with Terraform.',
-        'The Worker code and its configuration are managed with Wrangler.',
-        'If the migration fails, the Worker is not deployed.',
+        'Embeddings are stored in BLOB columns of D1, and similarity is computed inside the Worker. There is no dedicated vector database.',
+        'Weights decay over time so that newer signals count more.',
       ],
     },
-    stack: {
-      title: 'Stack',
-      items: stack,
-    },
+    stack: { title: 'Stack', items: stack },
   },
 } as const;
 
-const nodeKindClass: Record<NodeKind, string> = {
-  external: 'border border-sage dark:border-sage-dark bg-sage/15 dark:bg-sage/10',
-  worker: 'border-2 border-terracotta bg-terracotta/10 dark:bg-terracotta/15',
-  service: 'border border-warm-gray-dark dark:border-gray-600 bg-sand-light/50 dark:bg-gray-700/50',
+type Content = (typeof content)[Lang];
+
+const figureStyle = `
+.ifig{--ink:#5A5450;--sub:#7A746E;--line:#CFC8BC;--card:#FDF9F6;--accent:#C2785C;--accent-soft:#F6E6DD;--sage:#6B8567;--sage-soft:#E6EEE4;--sand:#F1E9DA;--blue:#4A7FB5;--blue-soft:#E3EDF7}
+@media (prefers-color-scheme:dark){.ifig{--ink:#F0EEE9;--sub:#A39E96;--line:#5A5450;--card:#262321;--accent:#D49A82;--accent-soft:#4A332A;--sage:#8FA88B;--sage-soft:#2C382B;--sand:#3D3835;--blue:#7FB0DE;--blue-soft:#243648}}
+.ifig .t{fill:var(--ink);font-size:13.5px;font-weight:700}
+.ifig .m{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+.ifig .s{fill:var(--sub);font-size:11.5px}
+.ifig .l{font-size:10.5px;font-weight:600}
+.ifig .flow{stroke-dasharray:3 5;animation:ifig-dash 1s linear infinite}
+@keyframes ifig-dash{to{stroke-dashoffset:-16}}
+.ifig .halo{transform-box:fill-box;transform-origin:center;animation:ifig-pulse 3.2s ease-in-out infinite}
+@keyframes ifig-pulse{0%,100%{transform:scale(.82)}50%{transform:scale(1.08)}}
+@media (prefers-reduced-motion:reduce){.ifig .halo{animation:none}}
+@media (prefers-reduced-motion:reduce){.ifig .flow{animation:none}.ifig .pk{display:none}}
+`;
+
+const tones: Record<Tone, { readonly fill: string; readonly stroke: string }> = {
+  worker: { fill: 'var(--accent-soft)', stroke: 'var(--accent)' },
+  fedi: { fill: 'var(--sage-soft)', stroke: 'var(--sage)' },
+  bsky: { fill: 'var(--blue-soft)', stroke: 'var(--blue)' },
+  store: { fill: 'var(--sand)', stroke: 'var(--line)' },
+  plain: { fill: 'var(--card)', stroke: 'var(--line)' },
 };
 
-const rightArrowPath = 'M5 12h14M13 6l6 6-6 6';
-const verticalArrowPaths = {
-  down: 'M12 5v14M6 13l6 6 6-6',
-  up: 'M12 19V5M6 11l6-6 6 6',
-  both: 'M12 3v18M6 9l6-6 6 6M6 15l6 6 6-6',
+const colors = {
+  accent: 'var(--accent)',
+  sage: 'var(--sage)',
+  blue: 'var(--blue)',
+  sub: 'var(--sub)',
 } as const;
 
-const ArrowSvg = ({ d, class: className }: { d: string; class: string }) => (
-  <svg
-    xmlns='http://www.w3.org/2000/svg'
-    aria-hidden='true'
-    class={className}
+type BoxProps = {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+  readonly tone: Tone;
+  readonly title: string;
+  readonly sub?: string;
+  readonly mono?: boolean;
+};
+
+const Box = ({ x, y, w, h, tone, title, sub, mono }: BoxProps) => (
+  <g>
+    <rect
+      x={x}
+      y={y}
+      width={w}
+      height={h}
+      rx='10'
+      fill={tones[tone].fill}
+      stroke={tones[tone].stroke}
+      stroke-width='1.25'
+    />
+    <text x={x + w / 2} y={sub ? y + h / 2 - 3 : y + h / 2 + 4.5} text-anchor='middle' class={mono ? 't m' : 't'}>
+      {title}
+    </text>
+    {sub && <text x={x + w / 2} y={y + h / 2 + 13} text-anchor='middle' class='s'>{sub}</text>}
+  </g>
+);
+
+const Line = ({ d, marker, both }: { d: string; marker: string; both?: boolean }) => (
+  <path
+    d={d}
     fill='none'
-    viewBox='0 0 24 24'
-    stroke='currentColor'
-    stroke-width='2'
-  >
-    <path stroke-linecap='round' stroke-linejoin='round' d={d} />
-  </svg>
+    stroke={colors.sub}
+    stroke-width='1.4'
+    stroke-linecap='round'
+    class='flow'
+    marker-end={`url(#${marker})`}
+    marker-start={both ? `url(#${marker})` : undefined}
+  />
 );
 
-const Node = (
-  { name, description, kind, class: className = '', children }: {
-    name: string;
-    description?: string;
-    kind: NodeKind;
-    class?: string;
-    children?: Child;
+const Label = (
+  { x, y, color, anchor, children }: {
+    x: number;
+    y: number;
+    color: string;
+    anchor?: 'start' | 'middle' | 'end';
+    children: Child;
   },
+) => <text x={x} y={y} fill={color} text-anchor={anchor ?? 'start'} class='l'>{children}</text>;
+
+const fraction = (value: number) => value.toFixed(3);
+
+const Packet = (
+  { d, cycle, from, to, color }: { d: string; cycle: number; from: number; to: number; color: string },
 ) => (
-  <div class={`rounded-xl px-3 py-2 text-center ${nodeKindClass[kind]} ${className}`}>
-    <p class='text-sm font-bold text-charcoal dark:text-white break-words'>{name}</p>
-    {description && <p class='text-xs text-charcoal-light dark:text-gray-400 break-words'>{description}</p>}
-    {children}
-  </div>
+  <circle r='4' fill={color} opacity='0' class='pk'>
+    <animateMotion
+      dur={`${cycle}s`}
+      repeatCount='indefinite'
+      path={d}
+      calcMode='linear'
+      keyPoints='0;0;1;1'
+      keyTimes={`0;${fraction(from)};${fraction(to)};1`}
+    />
+    <animate
+      attributeName='opacity'
+      dur={`${cycle}s`}
+      repeatCount='indefinite'
+      values='0;0;1;1;0;0'
+      keyTimes={`0;${fraction(from)};${fraction(from + 0.015)};${fraction(to - 0.015)};${fraction(to)};1`}
+    />
+  </circle>
 );
 
-const FlowArrow = ({ label }: { label?: string }) => (
-  <div
-    aria-hidden='true'
-    class='flex shrink-0 items-center justify-center gap-1 text-charcoal-light dark:text-gray-500'
-  >
-    <ArrowSvg d={rightArrowPath} class='h-5 w-5 rotate-90 sm:rotate-0' />
-    {label && <span class='text-xs'>{label}</span>}
-  </div>
-);
-
-const VerticalArrow = (
-  { direction, label }: { direction: keyof typeof verticalArrowPaths; label?: string },
+const Diagram = (
+  { id, height, label, children }: { id: string; height: number; label: string; children: Child },
 ) => (
-  <div
-    aria-hidden='true'
-    class='flex items-center justify-center gap-2 py-2 text-charcoal-light dark:text-gray-500'
-  >
-    <ArrowSvg d={verticalArrowPaths[direction]} class='h-5 w-5' />
-    {label && <span class='text-xs'>{label}</span>}
-  </div>
-);
-
-const Figure = ({ caption, children }: { caption: string; children: Child }) => (
-  <figure class='bg-sand-light/30 dark:bg-gray-900/30 rounded-xl p-4'>
-    {children}
-    <figcaption class='mt-3 text-xs text-center text-charcoal-light dark:text-gray-400'>{caption}</figcaption>
+  <figure class='my-5 -mx-2 rounded-xl bg-warm-white py-4 dark:bg-gray-900/40 sm:mx-0 sm:px-4'>
+    <svg
+      xmlns='http://www.w3.org/2000/svg'
+      viewBox={`0 0 400 ${height}`}
+      role='img'
+      aria-label={label}
+      class='ifig mx-auto block w-full max-w-[460px]'
+    >
+      <defs>
+        <marker
+          id={id}
+          viewBox='0 0 8 8'
+          refX='6.5'
+          refY='4'
+          markerWidth='6'
+          markerHeight='6'
+          orient='auto-start-reverse'
+        >
+          <path d='M0.5 0.8 L7 4 L0.5 7.2 z' fill={colors.sub} />
+        </marker>
+      </defs>
+      {children}
+    </svg>
   </figure>
 );
 
-const FlowList = ({ nodes }: { nodes: readonly FlowNode[] }) => (
-  <ol class='mx-auto flex max-w-md flex-col items-stretch gap-1'>
-    {nodes.flatMap((node, index) => [
-      ...(index > 0
-        ? [
-          <li
-            key={`arrow-${node.name}`}
-            aria-hidden='true'
-            class='flex items-center justify-center text-charcoal-light dark:text-gray-500'
-          >
-            <ArrowSvg d={verticalArrowPaths.down} class='h-5 w-5' />
-          </li>,
-        ]
-        : []),
-      <li key={node.name} class='min-w-0'>
-        <Node name={node.name} description={node.description} kind={node.kind} class='h-full' />
-      </li>,
-    ])}
-  </ol>
-);
-
-const Step = (
-  { number, from, to, text }: { number: number; from: FlowNode; to: FlowNode; text: string },
-) => (
-  <li class='flex gap-3'>
-    <span class='flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-terracotta text-sm font-semibold text-white'>
-      {number}
-    </span>
-    <div class='min-w-0 flex-1'>
-      <div class='flex flex-col items-center gap-1 sm:flex-row'>
-        <Node name={from.name} kind={from.kind} class='w-full sm:w-44' />
-        <FlowArrow />
-        <Node name={to.name} kind={to.kind} class='w-full sm:w-44' />
-      </div>
-      <p class='mt-2 text-sm text-charcoal-light dark:text-gray-400'>{text}</p>
-    </div>
-  </li>
-);
-
 const Notes = ({ items }: { items: readonly string[] }) => (
-  <ul class={`${listClass} mt-4`}>
+  <ul class={listClass}>
     {items.map((item) => <li key={item}>{item}</li>)}
   </ul>
 );
 
-const Legend = ({ labels }: { labels: Record<NodeKind, string> }) => (
-  <ul class='mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-charcoal-light dark:text-gray-400'>
-    {(['external', 'worker', 'service'] as const).map((kind) => (
-      <li key={kind} class='flex items-center gap-1.5'>
-        <span class={`inline-block h-3 w-5 rounded ${nodeKindClass[kind]}`} />
-        {labels[kind]}
+const Section = (
+  { title, description, notes, children }: {
+    title: string;
+    description: string;
+    notes: readonly string[];
+    children: Child;
+  },
+) => (
+  <section class={cardClass}>
+    <h3 class={h3Class}>{title}</h3>
+    <p class={bodyClass}>{description}</p>
+    {children}
+    <Notes items={notes} />
+  </section>
+);
+
+const Serverless = ({ t }: { t: Content['serverless'] }) => {
+  const id = 'ifig-arrow-serverless';
+  const http = 'M68 60 L68 97';
+  const queues = 'M200 60 L200 97';
+  const cron = 'M332 60 L332 97';
+  const enqueue = 'M124 120 C134 120 134 110 134 100 L134 48 C134 40 136 35 141 35';
+  const toD1 = 'M51.5 200 L51.5 237';
+  const toR2 = 'M150.5 200 L150.5 237';
+  const toKv = 'M249.5 200 L249.5 237';
+  const toAi = 'M348.5 200 L348.5 237';
+  return (
+    <Diagram id={id} height={298} label={t.label}>
+      <Box x={12} y={10} w={112} h={50} tone='fedi' title='HTTP' sub={t.http} />
+      <Box x={144} y={10} w={112} h={50} tone='store' title='Queues' sub={t.queues} />
+      <Box x={276} y={10} w={112} h={50} tone='store' title='Cron Triggers' sub={t.cron} />
+      <rect
+        x='4'
+        y='88'
+        width='392'
+        height='112'
+        rx='14'
+        fill={tones.worker.fill}
+        stroke={tones.worker.stroke}
+        stroke-width='1.5'
+      />
+      <text x='20' y='186' class='t'>{t.worker}</text>
+      <text x='380' y='186' text-anchor='end' class='s'>Hono + Fedify</text>
+      <Box x={12} y={100} w={112} h={56} tone='plain' title='fetch' sub={t.fetch} mono />
+      <Box x={144} y={100} w={112} h={56} tone='plain' title='queue' sub={t.queue} mono />
+      <Box x={276} y={100} w={112} h={56} tone='plain' title='scheduled' sub={t.scheduled} mono />
+      <Line d={http} marker={id} />
+      <Line d={queues} marker={id} />
+      <Line d={cron} marker={id} />
+      <Line d={enqueue} marker={id} />
+      <Label x={139} y={80} color={colors.accent}>{t.enqueue}</Label>
+      <Box x={4} y={240} w={95} h={50} tone='store' title='D1' sub={t.d1} />
+      <Box x={103} y={240} w={95} h={50} tone='store' title='R2' sub={t.r2} />
+      <Box x={202} y={240} w={95} h={50} tone='store' title='KV' sub={t.kv} />
+      <Box x={301} y={240} w={95} h={50} tone='store' title='Workers AI' sub={t.ai} />
+      <Line d={toD1} marker={id} both />
+      <Line d={toR2} marker={id} both />
+      <Line d={toKv} marker={id} both />
+      <Line d={toAi} marker={id} both />
+      <Packet d={http} cycle={7} from={0.02} to={0.12} color={colors.sage} />
+      <Packet d={toD1} cycle={7} from={0.13} to={0.23} color={colors.accent} />
+      <Packet d={enqueue} cycle={7} from={0.24} to={0.38} color={colors.accent} />
+      <Packet d={queues} cycle={7} from={0.4} to={0.5} color={colors.accent} />
+      <Packet d={toKv} cycle={7} from={0.51} to={0.61} color={colors.accent} />
+      <Packet d={cron} cycle={7} from={0.66} to={0.76} color={colors.accent} />
+      <Packet d={toAi} cycle={7} from={0.77} to={0.87} color={colors.accent} />
+    </Diagram>
+  );
+};
+
+const Delivery = ({ t }: { t: Content['delivery'] }) => {
+  const id = 'ifig-arrow-delivery';
+  const post = 'M200 48 L200 73';
+  const toD1 = 'M160 124 C160 150 68 144 68 167';
+  const toQueues = 'M200 124 L200 167';
+  const toBluesky = 'M240 124 C240 150 332 144 332 167';
+  const toQueue = 'M200 214 L200 241';
+  const retry = 'M261 256 C284 250 284 282 263 278';
+  const left = 'M200 288 C200 308 88 302 88 323';
+  const center = 'M200 288 L200 323';
+  const right = 'M200 288 C200 308 312 302 312 323';
+  return (
+    <Diagram id={id} height={392} label={t.label}>
+      <Box x={130} y={8} w={140} h={40} tone='plain' title={t.note} />
+      <Box x={110} y={76} w={180} h={48} tone='worker' title='fetch' sub={t.worker} mono />
+      <Line d={post} marker={id} />
+      <Line d={toD1} marker={id} />
+      <Line d={toQueues} marker={id} />
+      <Line d={toBluesky} marker={id} />
+      <rect
+        x='8'
+        y='170'
+        width='120'
+        height='96'
+        rx='10'
+        fill={tones.store.fill}
+        stroke={tones.store.stroke}
+        stroke-width='1.25'
+      />
+      <text x='68' y='189' text-anchor='middle' class='t'>D1</text>
+      <rect x='16' y='198' width='104' height='26' rx='6' fill='var(--card)' stroke='var(--line)' />
+      <text x='68' y='215' text-anchor='middle' class='t m'>posts</text>
+      <rect x='16' y='230' width='104' height='26' rx='6' fill='var(--card)' stroke='var(--line)' />
+      <text x='68' y='247' text-anchor='middle' class='t m'>domain_events</text>
+      <Label x={68} y={282} color={colors.sub} anchor='middle'>{t.batch}</Label>
+      <Box x={140} y={170} w={120} h={44} tone='store' title='Queues' sub={t.queues} />
+      <Box x={272} y={170} w={120} h={44} tone='bsky' title='Bluesky' sub={t.bluesky} />
+      <Label x={340} y={158} color={colors.blue}>AT Protocol</Label>
+      <Line d={toQueue} marker={id} />
+      <Label x={208} y={232} color={colors.sage}>ActivityPub</Label>
+      <Box x={140} y={244} w={120} h={44} tone='worker' title='queue' sub={t.queue} mono />
+      <Line d={retry} marker={id} />
+      <Label x={286} y={270} color={colors.sub}>{t.retry}</Label>
+      <Line d={left} marker={id} />
+      <Line d={center} marker={id} />
+      <Line d={right} marker={id} />
+      <Box x={38} y={326} w={100} h={36} tone='fedi' title='Mastodon' />
+      <Box x={150} y={326} w={100} h={36} tone='fedi' title='Misskey' />
+      <Box x={262} y={326} w={100} h={36} tone='fedi' title={t.others} />
+      <Label x={200} y={382} color={colors.sage} anchor='middle'>{t.followers}</Label>
+      <Packet d={post} cycle={7} from={0.02} to={0.1} color={colors.accent} />
+      <Packet d={toD1} cycle={7} from={0.12} to={0.24} color={colors.accent} />
+      <Packet d={toQueues} cycle={7} from={0.12} to={0.22} color={colors.sage} />
+      <Packet d={toBluesky} cycle={7} from={0.28} to={0.42} color={colors.blue} />
+      <Packet d={toQueue} cycle={7} from={0.3} to={0.38} color={colors.sage} />
+      <Packet d={left} cycle={7} from={0.42} to={0.56} color={colors.sage} />
+      <Packet d={center} cycle={7} from={0.46} to={0.56} color={colors.sage} />
+      <Packet d={right} cycle={7} from={0.5} to={0.64} color={colors.sage} />
+    </Diagram>
+  );
+};
+
+const Timeline = ({ t }: { t: Content['timeline'] }) => {
+  const id = 'ifig-arrow-timeline';
+  const push = 'M100 54 L100 89';
+  const ask = 'M290 92 L290 57';
+  const pull = 'M310 54 L310 89';
+  const toQueues = 'M100 138 L100 173';
+  const fediToD1 = 'M100 222 C100 246 160 238 160 259';
+  const bskyToD1 = 'M300 138 C300 222 240 232 240 259';
+  const toHome = 'M200 308 L200 333';
+  return (
+    <Diagram id={id} height={390} label={t.label}>
+      <Box x={16} y={8} w={168} h={46} tone='fedi' title={t.fediverse} sub={t.pushed} />
+      <Box x={216} y={8} w={168} h={46} tone='bsky' title='Bluesky' sub={t.pulled} />
+      <Line d={push} marker={id} />
+      <Label x={108} y={77} color={colors.sage}>ActivityPub</Label>
+      <Line d={ask} marker={id} />
+      <Line d={pull} marker={id} />
+      <Label x={318} y={77} color={colors.blue}>AT Protocol</Label>
+      <Box x={16} y={92} w={168} h={46} tone='worker' title='fetch' sub={t.fetch} mono />
+      <Box x={216} y={92} w={168} h={46} tone='worker' title='scheduled' sub={t.scheduled} mono />
+      <Line d={toQueues} marker={id} />
+      <Box x={16} y={176} w={168} h={46} tone='store' title='Queues' sub={t.queues} />
+      <Line d={fediToD1} marker={id} />
+      <Line d={bskyToD1} marker={id} />
+      <Box x={96} y={262} w={208} h={46} tone='store' title='D1' sub={t.d1} />
+      <Line d={toHome} marker={id} />
+      <Box x={76} y={336} w={248} h={46} tone='plain' title={t.home} sub={t.merged} />
+      <Packet d={push} cycle={8} from={0.02} to={0.1} color={colors.sage} />
+      <Packet d={toQueues} cycle={8} from={0.11} to={0.19} color={colors.sage} />
+      <Packet d={fediToD1} cycle={8} from={0.2} to={0.3} color={colors.sage} />
+      <Packet d={toHome} cycle={8} from={0.31} to={0.39} color={colors.sage} />
+      <Packet d={ask} cycle={8} from={0.46} to={0.54} color={colors.accent} />
+      <Packet d={pull} cycle={8} from={0.55} to={0.63} color={colors.blue} />
+      <Packet d={bskyToD1} cycle={8} from={0.64} to={0.8} color={colors.blue} />
+      <Packet d={toHome} cycle={8} from={0.81} to={0.89} color={colors.blue} />
+    </Diagram>
+  );
+};
+
+const Events = ({ t }: { t: Content['events'] }) => {
+  const id = 'ifig-arrow-events';
+  const call = 'M200 50 L200 75';
+  const emit = 'M200 126 L200 175';
+  const toState = 'M170 220 C170 242 104 236 104 255';
+  const toRecord = 'M230 220 C230 242 296 236 296 255';
+  return (
+    <Diagram id={id} height={336} label={t.label}>
+      <Box x={120} y={8} w={160} h={42} tone='plain' title='useCase' sub={t.useCase} mono />
+      <Line d={call} marker={id} />
+      <Box x={100} y={78} w={200} h={48} tone='worker' title='domain' sub={t.domain} mono />
+      <Line d={emit} marker={id} />
+      <rect x='212' y='139' width='104' height='24' rx='12' fill='var(--card)' stroke='var(--accent)' />
+      <text x='264' y='155' text-anchor='middle' fill='var(--accent)' class='m'>post.created</text>
+      <Box x={120} y={178} w={160} h={42} tone='plain' title='store' sub={t.store} mono />
+      <rect
+        x='8'
+        y='246'
+        width='384'
+        height='82'
+        rx='12'
+        fill='none'
+        stroke='var(--accent)'
+        stroke-width='1.25'
+        stroke-dasharray='5 4'
+      />
+      <Line d={toState} marker={id} />
+      <Line d={toRecord} marker={id} />
+      <Box x={20} y={258} w={168} h={44} tone='store' title='posts' sub={t.state} mono />
+      <Box x={212} y={258} w={168} h={44} tone='store' title='domain_events' sub={t.record} mono />
+      <Label x={200} y={319} color={colors.accent} anchor='middle'>{t.batch}</Label>
+      <Packet d={call} cycle={5} from={0.03} to={0.15} color={colors.accent} />
+      <Packet d={emit} cycle={5} from={0.2} to={0.38} color={colors.accent} />
+      <Packet d={toState} cycle={5} from={0.44} to={0.62} color={colors.accent} />
+      <Packet d={toRecord} cycle={5} from={0.44} to={0.62} color={colors.accent} />
+    </Diagram>
+  );
+};
+
+const Digest = ({ t }: { t: Content['digest'] }) => {
+  const id = 'ifig-arrow-digest';
+  const feedA = 'M86 54 L86 89';
+  const feedB = 'M126 54 L126 89';
+  const feedC = 'M166 54 L166 89';
+  const own = 'M324 54 L324 89';
+  const toResult = 'M200 290 L200 333';
+  const others = [
+    [40, 140],
+    [70, 150],
+    [30, 190],
+    [60, 230],
+    [45, 252],
+    [120, 240],
+    [150, 228],
+    [140, 198],
+    [160, 170],
+    [170, 130],
+    [190, 200],
+    [200, 160],
+    [210, 240],
+    [255, 225],
+    [285, 250],
+    [330, 180],
+    [340, 140],
+    [350, 252],
+    [372, 240],
+  ] as const;
+  const mine = [[110, 170], [250, 150], [300, 215]] as const;
+  const near = [[128, 152], [92, 188], [232, 138], [268, 170], [318, 232]] as const;
+  return (
+    <Diagram id={id} height={388} label={t.label}>
+      <Box x={8} y={8} w={236} h={46} tone='plain' title={t.feeds} sub={t.feedsSub} />
+      <Box x={256} y={8} w={136} h={46} tone='fedi' title={t.own} sub={t.ownSub} />
+      <Line d={feedA} marker={id} />
+      <Line d={feedB} marker={id} />
+      <Line d={feedC} marker={id} />
+      <Line d={own} marker={id} />
+      <rect x='8' y='92' width='384' height='198' rx='12' fill='var(--card)' stroke='var(--line)' stroke-width='1.25' />
+      <Label x={20} y={112} color={colors.sub}>{t.space}</Label>
+      {mine.map(([cx, cy]) => (
+        <circle key={`halo-${cx}`} cx={cx} cy={cy} r='32' fill='var(--sage)' opacity='0.16' class='halo' />
+      ))}
+      {others.map(([cx, cy]) => <circle key={`o-${cx}-${cy}`} cx={cx} cy={cy} r='3' fill='var(--line)' />)}
+      {near.map(([cx, cy]) => <circle key={`n-${cx}-${cy}`} cx={cx} cy={cy} r='4.5' fill='var(--accent)' />)}
+      {mine.map(([cx, cy]) => (
+        <circle
+          key={`m-${cx}`}
+          cx={cx}
+          cy={cy}
+          r='5.5'
+          fill='var(--sage)'
+          stroke='var(--card)'
+          stroke-width='1.5'
+        />
+      ))}
+      <Label x={311} y={211} color={colors.sage}>{t.ownDot}</Label>
+      <Label x={137} y={147} color={colors.accent}>{t.nearDot}</Label>
+      <text x='200' y='279' text-anchor='middle' class='s'>{t.spaceSub}</text>
+      <Line d={toResult} marker={id} />
+      <Box x={8} y={336} w={384} h={46} tone='worker' title={t.result} sub={t.resultSub} />
+      <Packet d={feedA} cycle={8} from={0.02} to={0.1} color={colors.sub} />
+      <Packet d={feedB} cycle={8} from={0.05} to={0.13} color={colors.sub} />
+      <Packet d={feedC} cycle={8} from={0.08} to={0.16} color={colors.sub} />
+      <Packet d={own} cycle={8} from={0.06} to={0.14} color={colors.sage} />
+      {near.map(([cx, cy], index) => (
+        <Packet
+          key={`p-${cx}`}
+          d={`M${cx} ${cy} C${cx} 290 200 280 200 333`}
+          cycle={8}
+          from={0.3 + index * 0.08}
+          to={0.52 + index * 0.08}
+          color={colors.accent}
+        />
+      ))}
+    </Diagram>
+  );
+};
+
+const Legend = ({ t }: { t: Content['legend'] }) => (
+  <ul class='ifig flex flex-wrap gap-x-4 gap-y-1 pt-3 text-xs text-charcoal-light dark:text-gray-400'>
+    {(['worker', 'fedi', 'bsky', 'store'] as const).map((tone) => (
+      <li key={tone} class='flex items-center gap-1.5'>
+        <span
+          class='inline-block h-3 w-4 rounded'
+          style={`background:${tones[tone].fill};border:1.25px solid ${tones[tone].stroke}`}
+        />
+        {t[tone]}
       </li>
     ))}
   </ul>
 );
 
-const Overview = ({ t }: { t: (typeof content)[Lang]['overview'] }) => (
-  <section class={cardClass}>
-    <h3 class={h3Class}>{t.title}</h3>
-    <p class={`${bodyClass} mb-4`}>{t.description}</p>
-    <Figure caption={t.caption}>
-      <ul class='grid gap-2 sm:grid-cols-3'>
-        {t.externals.map((node) => (
-          <li key={node.name}>
-            <Node name={node.name} description={node.description} kind='external' class='h-full' />
-          </li>
-        ))}
-      </ul>
-      <VerticalArrow direction='both' label={t.arrowLabel} />
-      <Node name={t.worker.name} description={t.worker.description} kind='worker' class='w-full'>
-        <ul class='mt-3 grid gap-2 sm:grid-cols-3'>
-          {t.entries.map((entry) => (
-            <li
-              key={entry.name}
-              class='rounded-lg border border-terracotta/40 bg-cream dark:bg-gray-800 px-2 py-1.5'
-            >
-              <p class='text-sm font-bold text-charcoal dark:text-white'>{entry.name}</p>
-              <p class='text-xs text-charcoal-light dark:text-gray-400'>{entry.description}</p>
-            </li>
-          ))}
-        </ul>
-      </Node>
-      <VerticalArrow direction='down' />
-      <ul class='grid grid-cols-2 gap-2 sm:grid-cols-3'>
-        {t.services.map((node) => (
-          <li key={node.name}>
-            <Node name={node.name} description={node.description} kind='service' class='h-full' />
-          </li>
-        ))}
-      </ul>
-      <Legend labels={t.legend} />
-    </Figure>
-  </section>
-);
-
-const PageLoad = ({ t }: { t: (typeof content)[Lang]['page'] }) => (
-  <section class={cardClass}>
-    <h3 class={h3Class}>{t.title}</h3>
-    <p class={`${bodyClass} mb-4`}>{t.description}</p>
-    <Figure caption={t.caption}>
-      <ol class='space-y-4'>
-        {t.steps.map((step, index) => (
-          <Step key={step.text} number={index + 1} from={step.from} to={step.to} text={step.text} />
-        ))}
-      </ol>
-    </Figure>
-    <Notes items={t.notes} />
-  </section>
-);
-
-const Delivery = ({ t }: { t: (typeof content)[Lang]['delivery'] }) => (
-  <section class={cardClass}>
-    <h3 class={h3Class}>{t.title}</h3>
-    <p class={`${bodyClass} mb-4`}>{t.description}</p>
-    <div class='space-y-4'>
-      {t.flows.map((flow) => (
-        <Figure key={flow.caption} caption={flow.caption}>
-          <FlowList nodes={flow.nodes} />
-        </Figure>
-      ))}
-    </div>
-    <Notes items={t.notes} />
-  </section>
-);
-
-const Schedule = ({ t }: { t: (typeof content)[Lang]['schedule'] }) => (
-  <section class={cardClass}>
-    <h3 class={h3Class}>{t.title}</h3>
-    <p class={`${bodyClass} mb-4`}>{t.description}</p>
-    <Figure caption={t.caption}>
-      <ul class='space-y-2'>
-        {t.rows.map((row) => (
-          <li
-            key={row.interval}
-            class='flex flex-col gap-2 rounded-xl bg-cream dark:bg-gray-800 p-3 sm:flex-row sm:items-start sm:gap-4'
-          >
-            <span class='shrink-0 self-start rounded-full bg-terracotta px-3 py-1 text-xs font-semibold text-white sm:w-28 sm:text-center'>
-              {row.interval}
-            </span>
-            <ul class='list-disc space-y-1 pl-5 text-sm text-charcoal dark:text-gray-200'>
-              {row.items.map((item) => <li key={item}>{item}</li>)}
-            </ul>
-          </li>
-        ))}
-      </ul>
-    </Figure>
-    <Notes items={t.notes} />
-  </section>
-);
-
-const CodeStructure = ({ t }: { t: (typeof content)[Lang]['code'] }) => (
-  <section class={cardClass}>
-    <h3 class={h3Class}>{t.title}</h3>
-    <p class={`${bodyClass} mb-4`}>{t.description}</p>
-    <div class='space-y-4'>
-      <Figure caption={t.layersCaption}>
-        <div class='mx-auto max-w-md'>
-          <Node name={t.routes.name} description={t.routes.description} kind='service' />
-          <VerticalArrow direction='down' />
-          <Node name={t.useCase.name} description={t.useCase.description} kind='service' />
-          <VerticalArrow direction='down' />
-          <Node name={t.domain.name} description={t.domain.description} kind='worker' />
-          <VerticalArrow direction='up' label={t.implementLabel} />
-          <Node name={t.adaptor.name} description={t.adaptor.description} kind='service' />
-        </div>
-      </Figure>
-      <Figure caption={t.writeCaption}>
-        <div class='flex flex-col items-stretch gap-1 sm:flex-row sm:items-center'>
-          <Node name={t.write.name} description={t.write.description} kind='service' class='sm:w-1/3' />
-          <ul class='flex min-w-0 flex-1 flex-col gap-2'>
-            {[t.tables, t.events].map((node) => (
-              <li key={node.name} class='flex flex-col items-center gap-1 sm:flex-row'>
-                <FlowArrow />
-                <Node name={node.name} description={node.description} kind='service' class='w-full sm:flex-1' />
-              </li>
-            ))}
-          </ul>
-        </div>
-      </Figure>
-    </div>
-    <Notes items={t.notes} />
-  </section>
-);
-
-const Deploy = ({ t }: { t: (typeof content)[Lang]['deploy'] }) => (
-  <section class={cardClass}>
-    <h3 class={h3Class}>{t.title}</h3>
-    <p class={`${bodyClass} mb-4`}>{t.description}</p>
-    <Figure caption={t.caption}>
-      <FlowList nodes={t.nodes} />
-    </Figure>
-    <Notes items={t.notes} />
-  </section>
-);
-
-const Stack = ({ t }: { t: (typeof content)[Lang]['stack'] }) => (
+const Stack = ({ t }: { t: Content['stack'] }) => (
   <section class={cardClass}>
     <h3 class={h3Class}>{t.title}</h3>
     <dl class='grid gap-3 sm:grid-cols-2'>
@@ -651,16 +682,27 @@ export const AboutArchitecture = ({ lang }: { lang: Lang }) => {
   const t = content[lang];
   return (
     <section class='space-y-6'>
+      <style>{figureStyle}</style>
       <div class='pt-6 px-2'>
         <h2 class='text-2xl font-bold text-charcoal dark:text-white mb-2'>{t.title}</h2>
         <p class={bodyClass}>{t.intro}</p>
+        <Legend t={t.legend} />
       </div>
-      <Overview t={t.overview} />
-      <PageLoad t={t.page} />
-      <Delivery t={t.delivery} />
-      <Schedule t={t.schedule} />
-      <CodeStructure t={t.code} />
-      <Deploy t={t.deploy} />
+      <Section title={t.serverless.title} description={t.serverless.description} notes={t.serverless.notes}>
+        <Serverless t={t.serverless} />
+      </Section>
+      <Section title={t.delivery.title} description={t.delivery.description} notes={t.delivery.notes}>
+        <Delivery t={t.delivery} />
+      </Section>
+      <Section title={t.timeline.title} description={t.timeline.description} notes={t.timeline.notes}>
+        <Timeline t={t.timeline} />
+      </Section>
+      <Section title={t.events.title} description={t.events.description} notes={t.events.notes}>
+        <Events t={t.events} />
+      </Section>
+      <Section title={t.digest.title} description={t.digest.description} notes={t.digest.notes}>
+        <Digest t={t.digest} />
+      </Section>
       <Stack t={t.stack} />
     </section>
   );

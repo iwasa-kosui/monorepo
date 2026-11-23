@@ -4,6 +4,7 @@ import { render } from 'hono/jsx/dom';
 import { AboutArchitecture, bodyClass, cardClass, insetClass, listClass } from '../components/AboutArchitecture.tsx';
 
 const USERNAME = 'kosui';
+const BLUESKY_HANDLE = 'kosui.me';
 
 const content = {
   ja: {
@@ -14,11 +15,14 @@ const content = {
     follow: {
       title: 'フォローする',
       description:
-        'Mastodon や Misskey など、ActivityPub に対応したサービスのアカウントからフォローできます。アカウントがなくても、投稿と記事はこのサイトで読めます。',
+        'Fediverse と Bluesky のどちらからでもフォローできます。アカウントがなくても、投稿と記事はこのサイトで読めます。',
+      fediverseDescription: 'Mastodon や Misskey など、ActivityPub に対応したサービスから',
+      blueskyDescription: 'Bluesky のアカウントから',
       copy: 'コピー',
       copied: 'コピーしました',
       note: '新しいアカウントの登録は受け付けていません。',
-      followLink: 'フォローする',
+      followFediverse: 'Fediverse でフォローする',
+      followBluesky: 'Bluesky でフォローする',
       postsLink: '投稿を読む',
       articlesLink: '記事を読む',
     },
@@ -91,11 +95,14 @@ const content = {
     follow: {
       title: 'Follow',
       description:
-        'You can follow from any ActivityPub-compatible service such as Mastodon or Misskey. Without an account, you can still read the posts and articles on this site.',
+        'You can follow from either the Fediverse or Bluesky. Without an account, you can still read the posts and articles on this site.',
+      fediverseDescription: 'From Mastodon, Misskey, or any ActivityPub service',
+      blueskyDescription: 'From your Bluesky account',
       copy: 'Copy',
       copied: 'Copied',
       note: 'New account registration is closed.',
-      followLink: 'Follow',
+      followFediverse: 'Follow on the Fediverse',
+      followBluesky: 'Follow on Bluesky',
       postsLink: 'Read posts',
       articlesLink: 'Read articles',
     },
@@ -170,6 +177,8 @@ const detectLanguage = (): 'ja' | 'en' => {
 
 const primaryButtonClass =
   'px-5 py-2.5 bg-terracotta hover:bg-terracotta-dark text-white font-medium rounded-clay shadow-clay-btn hover:shadow-clay-btn-hover transition-all text-center active:scale-[0.98] active:translate-y-px';
+const blueskyButtonClass =
+  'px-5 py-2.5 bg-[#4A7FB5] hover:bg-[#3D6C9C] text-white font-medium rounded-clay shadow-clay-btn hover:shadow-clay-btn-hover transition-all text-center active:scale-[0.98] active:translate-y-px';
 const secondaryButtonClass =
   'px-5 py-2.5 border border-warm-gray-dark dark:border-gray-600 text-charcoal dark:text-gray-200 hover:bg-sand-light/50 dark:hover:bg-gray-700/50 font-medium rounded-clay transition-all text-center active:scale-[0.98] active:translate-y-px';
 const h2Class = 'text-xl font-semibold text-charcoal dark:text-white mb-4';
@@ -210,19 +219,42 @@ const AboutPage = () => {
       <section class={cardClass}>
         <h2 class={h2Class}>{t.follow.title}</h2>
         <p class={`${bodyClass} mb-4`}>{t.follow.description}</p>
-        <div class={`flex items-center justify-between gap-3 ${insetClass} p-3 mb-2`}>
-          <code class='font-mono text-charcoal dark:text-white break-all'>{handle}</code>
-          <button
-            type='button'
-            onClick={handleCopy}
-            class='shrink-0 px-3 py-1.5 text-sm border border-warm-gray-dark dark:border-gray-600 text-charcoal dark:text-gray-200 hover:bg-sand-light/50 dark:hover:bg-gray-700/50 rounded-clay transition-all active:scale-[0.98]'
-          >
-            {copied ? t.follow.copied : t.follow.copy}
-          </button>
+        <div class='grid gap-4 sm:grid-cols-2 mb-3'>
+          <div class={`${insetClass} flex flex-col gap-3 p-4`}>
+            <div>
+              <h3 class='font-semibold text-sage-dark dark:text-sage'>Fediverse</h3>
+              <p class='text-xs text-charcoal-light dark:text-gray-400'>{t.follow.fediverseDescription}</p>
+            </div>
+            <div class='flex items-center justify-between gap-2'>
+              <code class='font-mono text-sm text-charcoal dark:text-white break-all'>{handle}</code>
+              <button
+                type='button'
+                onClick={handleCopy}
+                class='shrink-0 px-2.5 py-1 text-xs border border-warm-gray-dark dark:border-gray-600 text-charcoal dark:text-gray-200 hover:bg-sand-light/50 dark:hover:bg-gray-700/50 rounded-clay transition-all active:scale-[0.98]'
+              >
+                {copied ? t.follow.copied : t.follow.copy}
+              </button>
+            </div>
+            <a href='/follow' class={`${primaryButtonClass} mt-auto`}>{t.follow.followFediverse}</a>
+          </div>
+          <div class={`${insetClass} flex flex-col gap-3 p-4`}>
+            <div>
+              <h3 class='font-semibold text-[#4A7FB5] dark:text-[#7FB0DE]'>Bluesky</h3>
+              <p class='text-xs text-charcoal-light dark:text-gray-400'>{t.follow.blueskyDescription}</p>
+            </div>
+            <code class='font-mono text-sm text-charcoal dark:text-white break-all'>@{BLUESKY_HANDLE}</code>
+            <a
+              href={`https://bsky.app/profile/${BLUESKY_HANDLE}`}
+              target='_blank'
+              rel='noopener noreferrer'
+              class={`${blueskyButtonClass} mt-auto`}
+            >
+              {t.follow.followBluesky}
+            </a>
+          </div>
         </div>
         <p class='text-xs text-charcoal-light dark:text-gray-400 mb-5'>{t.follow.note}</p>
         <div class='flex flex-wrap gap-3'>
-          <a href='/follow' class={primaryButtonClass}>{t.follow.followLink}</a>
           <a href={`/users/${USERNAME}`} class={secondaryButtonClass}>{t.follow.postsLink}</a>
           <a href='/articles' class={secondaryButtonClass}>{t.follow.articlesLink}</a>
         </div>
