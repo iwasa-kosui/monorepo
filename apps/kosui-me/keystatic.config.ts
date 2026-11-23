@@ -18,6 +18,10 @@ const contentComponents = {
 const postSchema = {
   title: fields.slug({ name: { label: 'Title' } }),
   date: fields.text({ label: 'Date' }),
+  updatedDate: fields.text({
+    label: 'Updated Date',
+    description: '公開後に本文を直したときの日時（例: 2026-01-01T12:00:00+09:00）。直していなければ空にする',
+  }),
   slug: fields.text({ label: 'Slug' }),
   description: fields.text({ label: 'Description', multiline: true }),
   themes: fields.array(

@@ -34,6 +34,12 @@ describe('StructuredData.blogPosting', () => {
     });
   });
 
+  it('更新日時が日時として読めなければ公開日時を使う', () => {
+    const jsonLd = StructuredData.blogPosting({ ...article, modifiedTime: '未定' });
+
+    expect(jsonLd).toMatchObject({ dateModified: '2025-12-31T15:30:00.000Z' });
+  });
+
   it('日時として読めない文字列と、説明のない記事では、その項目を出さない', () => {
     const jsonLd = StructuredData.blogPosting({
       url: article.url,

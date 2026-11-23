@@ -50,9 +50,9 @@ const canonicalUrl = ogUrl ?? new URL(pathname, Astro.site).href;
 const publishedIso = publishedTime
   ? StructuredData.toIsoString(publishedTime)
   : undefined;
-const modifiedIso = modifiedTime
-  ? StructuredData.toIsoString(modifiedTime)
-  : publishedIso;
+const modifiedIso =
+  (modifiedTime ? StructuredData.toIsoString(modifiedTime) : undefined)
+    ?? publishedIso;
 
 const slideUpFade = {
   forwards: {

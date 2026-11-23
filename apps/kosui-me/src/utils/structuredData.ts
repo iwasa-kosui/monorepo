@@ -52,7 +52,7 @@ const toIsoString = (value: string): string | undefined => {
 
 const blogPostingJsonLd = (article: Article): JsonLd => {
   const datePublished = toIsoString(article.publishedTime);
-  const dateModified = article.modifiedTime ? toIsoString(article.modifiedTime) : datePublished;
+  const dateModified = (article.modifiedTime ? toIsoString(article.modifiedTime) : undefined) ?? datePublished;
   return {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
