@@ -205,6 +205,7 @@ export const createAiAgentBotReplier = (
       postId,
       content,
       mentions,
+      visibility: AiAgentBot.postVisibility,
       summary: null,
       sensitive: false,
       images: [],
@@ -288,7 +289,7 @@ export const createAiAgentBotPoster = (
     const created = await runtime.posting.createPostUseCase.run({
       userId: bot.user.id,
       content: plainTextToHtml(text),
-      visibility: 'public',
+      visibility: AiAgentBot.postVisibility,
       summary: null,
       sensitive: false,
       images: [],

@@ -26,7 +26,7 @@ import {
 import { type AgentMemoryDeps, loadAgentMemory } from './aiAgent/memoryTools.ts';
 import type { UseCase } from './useCase.ts';
 
-/** bot として公開の投稿をする。runtime が CreatePostUseCase を包んで用意する */
+/** bot として投稿する。公開範囲は AiAgentBot.postVisibility。runtime が CreatePostUseCase を包んで用意する */
 export type AiAgentBotPoster = Readonly<{
   post: (text: string) => Promise<Result<PostId, string>>;
 }>;
@@ -84,7 +84,7 @@ const create = (deps: Deps): PostAiAgentMusingUseCase => {
       const postErrors: string[] = [];
       const postTool = createPublishTool({
         name: 'create_post',
-        description: '自分の投稿として公開する。投稿の本文だけを渡す。',
+        description: '自分の投稿として、フォロワーに向けて投稿する。投稿の本文だけを渡す。',
         limit: 1,
         done: '投稿しました。',
         publish: async (text) => {
