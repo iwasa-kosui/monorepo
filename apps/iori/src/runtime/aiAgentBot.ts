@@ -89,6 +89,7 @@ export const toAgentPostView = (post: PostWithAuthor): AgentPostView => {
   return {
     postId: post.postId,
     authorActorId: post.actorId,
+    ...(post.visibility === null ? {} : { visibility: post.visibility }),
     author: authorHandle(post),
     text: post.summary === null || post.summary.length === 0 ? text : `（注意書き: ${post.summary}）\n${text}`,
     createdAt: new Date(post.createdAt).toISOString(),

@@ -7,6 +7,7 @@ import type { IoriD1Db } from '../client.ts';
 import { idsJson } from '../idsJson.ts';
 import {
   actorsTable,
+  directPostParticipantsTable,
   followsTable,
   localPostsTable,
   postsTable,
@@ -20,6 +21,8 @@ const visibleRemotePost = alias(remotePostsTable, 'visible_remote_post');
 const visibleRecipient = alias(remotePostRecipientsTable, 'visible_recipient');
 const visibleViewerActor = alias(actorsTable, 'visible_viewer_actor');
 const visibleFollow = alias(followsTable, 'visible_follow');
+const visibleParticipant = alias(directPostParticipantsTable, 'visible_participant');
+const visibleParticipantActor = alias(actorsTable, 'visible_participant_actor');
 
 export const visibleToViewer = (
   input: Readonly<{ currentActorId: ActorId | undefined; onlyVisibleToViewer: boolean | undefined }>,
@@ -41,6 +44,17 @@ export const visibleToViewer = (
                 select 1 from ${followsTable} ${visibleLocalFollow}
                 where ${visibleLocalFollow.followerId} = ${currentActorId}
                   and ${visibleLocalFollow.followingId} = ${postsTable.actorId}
+              )
+            )
+            or (
+              ${visibleLocalPost.visibility} = 'direct'
+              and exists (
+                select 1 from ${directPostParticipantsTable} ${visibleParticipant}
+                where ${visibleParticipant.postId} = ${postsTable.postId}
+                  and ${visibleParticipant.actorUri} = (
+                    select ${visibleParticipantActor.uri} from ${actorsTable} ${visibleParticipantActor}
+                    where ${visibleParticipantActor.actorId} = ${currentActorId}
+                  )
               )
             )
           )

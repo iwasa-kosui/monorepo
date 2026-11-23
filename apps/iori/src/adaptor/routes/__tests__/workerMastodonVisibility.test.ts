@@ -224,3 +224,50 @@ describe('ログイン中の閲覧者に宛先外の private と direct のリ�
     expect(linkOf(response, 'next')?.searchParams.get('max_id')).toBe(hidden);
   });
 });
+
+describe('ローカルのユーザーが書いた direct の投稿は、参加者にだけ返す', () => {
+  const seedLocalDirect = async () => {
+    const t = await seedViewer();
+    const agent = t.seed.addLocalActor('agent');
+    t.seed.addLocalActor('hanako');
+    const agentUri = 'https://iori.test/users/agent';
+    const direct = (createdAt: number, participantUris: ReadonlyArray<string>) => {
+      const post = t.seed.addLocalPost(agent, createdAt, { visibility: 'direct', timeline: false });
+      for (const uri of participantUris) {
+        t.sqlite.prepare('INSERT INTO direct_post_participants(postId,actorUri) VALUES (?,?)').run(post.postId, uri);
+      }
+      return post;
+    };
+    return {
+      ...t,
+      agent,
+      toMe: direct(1_000, [agentUri, kosuiUri]),
+      toHanako: direct(2_000, [agentUri, 'https://iori.test/users/hanako']),
+    };
+  };
+
+  it('statuses/:id は参加者に返し、参加者でない閲覧者と未ログインの閲覧者には 404 にする', async () => {
+    const t = await seedLocalDirect();
+
+    const [toMe, toHanako, anonymous] = await Promise.all([
+      t.request(`/api/v1/statuses/${t.toMe.postId}`, { headers: t.me.bearer }),
+      t.request(`/api/v1/statuses/${t.toHanako.postId}`, { headers: t.me.bearer }),
+      t.request(`/api/v1/statuses/${t.toMe.postId}`),
+    ]);
+
+    expect([toMe.status, toHanako.status, anonymous.status]).toEqual([200, 404, 404]);
+    expect(StatusSchema.parse(await toMe.json())).toMatchObject({ id: t.toMe.postId, visibility: 'direct' });
+  });
+
+  it('accounts/:id/statuses は参加者の direct だけを返し、未ログインの閲覧者には返さない', async () => {
+    const t = await seedLocalDirect();
+
+    const [viewer, anonymous] = await Promise.all([
+      t.request(`/api/v1/accounts/${t.agent.actorId}/statuses`, { headers: t.me.bearer }),
+      t.request(`/api/v1/accounts/${t.agent.actorId}/statuses`),
+    ]);
+
+    expect(idsOf(await viewer.json())).toEqual([t.toMe.postId]);
+    expect(idsOf(await anonymous.json())).toEqual([]);
+  });
+});
