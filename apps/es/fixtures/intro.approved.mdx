@@ -32,9 +32,7 @@ import OverwriteFigure from '../../../components/intro/OverwriteFigure.astro';
 </div>
 <OverwriteFigure />
 </div>
-import MethodFigure from '../../../components/intro/MethodFigure.astro';
-
-<div class="intro-spread">
+<div class="grid gap-4 lg:grid-cols-2 lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
 <div class="intro-text">
 
 ## 残っていると何ができるか
@@ -46,11 +44,27 @@ import MethodFigure from '../../../components/intro/MethodFigure.astro';
 
 監査のためだけの話ではありません。開発でも得をします。医療システムとして要求される監査性もそうです。過去の契約を見ないと、そのデータを何に使ってよいか判断できないこともあります。
 
+</div>
+<div class="intro-text">
+
 ## 正直に言います
 
 イベントソーシングは「最初からイベント中心に設計しなければ使えない」「考えることが多く、現実的ではない」と思われがちです。私も意味があまり分かりませんでした。その割にコストが高い選択肢だと思っていました。
 
+### なぜこのハンズオンをするのか
+
+でも、現在の状態しか残っていないデータのために、問い合わせでも障害でも監査でも過去を説明できず苦しみました。そこから、そのまま導入するのではなく、必要なエッセンスだけを既存システムに足してきました。他人ごとだと思っていた設計手法を現実的な方法に変えてきた、この私なりの「パッチワーク」を伝えたくて、今日のハンズオンをします。
+
 「CQRSやイベントソーシングを導入しなくても、イベントを記録するだけで大きな価値がある」。これが私の考えです。
+
+</div>
+</div>
+import MethodFigure from '../../../components/intro/MethodFigure.astro';
+
+<div class="intro-spread">
+<div class="intro-text">
+
+## 今日は1か所、記録を足します
 
 過去の状態を見るだけなら、私たちもデータ基盤のタイムトラベルで調べられるようにしました。手作業の SQL まで拾うならトリガーや CDC の方が強いです。誰が、いつ、何を、なぜがもう残っているなら今日の方法は要りません。
 
