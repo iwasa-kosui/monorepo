@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { blueskyFeedKindOf } from '../../../domain/blueskyFeed/blueskyFeedUri.ts';
+import { tinyPng } from '../../../domain/image/__tests__/helper/tinyImage.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import type { UserId } from '../../../domain/user/userId.ts';
 import type { BlueskyClient, BlueskyClientError } from '../../../ports/blueskyClient.ts';
@@ -853,9 +854,10 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
     for (const [key, value] of Object.entries(fields)) data.set(key, value);
     return data;
   };
+  const PNG_BYTES = tinyPng().byteLength;
   const pngBytes = (size: number) => {
     const bytes = new Uint8Array(size);
-    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].slice(0, size));
+    bytes.set(tinyPng().slice(0, size));
     return bytes;
   };
   const png = (size: number, name = 'a.png', type = 'image/png') => new File([pngBytes(size)], name, { type });
@@ -957,12 +959,12 @@ describe('PUT /api/iori/v1/bluesky/profile', () => {
   it('avatar と banner のファイルを uploadBlob で上げて record に入れる。サイズ 0 のファイルは未指定として扱う', async () => {
     const t = await setup({ scope: 'write:accounts' });
 
-    const response = await t.put(OWN_PROFILE, form({ avatar: png(9), banner: png(0, 'empty.png') }));
+    const response = await t.put(OWN_PROFILE, form({ avatar: png(PNG_BYTES), banner: png(0, 'empty.png') }));
 
     expect(response.status).toBe(200);
-    expect(t.client.uploadBlob).toHaveBeenCalledExactlyOnceWith({ bytes: pngBytes(9), mimeType: 'image/png' });
+    expect(t.client.uploadBlob).toHaveBeenCalledExactlyOnceWith({ bytes: pngBytes(PNG_BYTES), mimeType: 'image/png' });
     const record = vi.mocked(t.client.putProfileRecord).mock.calls[0]![0];
-    expect(record).toMatchObject({ avatar: { $type: 'blob', ref: { $link: 'bafyblob' }, size: 9 } });
+    expect(record).toMatchObject({ avatar: { $type: 'blob', ref: { $link: 'bafyblob' }, size: PNG_BYTES } });
     expect(record).not.toHaveProperty('banner');
   });
 

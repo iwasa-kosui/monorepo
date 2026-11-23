@@ -10,6 +10,7 @@ import {
   NotificationSchema,
   StatusSchema,
 } from './adaptor/mastodon/entities.ts';
+import { tinyPng } from './domain/image/__tests__/helper/tinyImage.ts';
 import { admissionFixture } from './testing/admissionFixture.ts';
 import worker from './worker.ts';
 import type { IoriWorkerEnv } from './workerEnv.ts';
@@ -457,11 +458,7 @@ describe('Worker の Mastodon 互換 API', () => {
   });
 
   describe('メディアとプロフィール画像', () => {
-    const png = () => {
-      const bytes = new Uint8Array(32);
-      bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-      return bytes;
-    };
+    const png = tinyPng;
     const headers = { Cookie: `sessionId=${sessionId}`, Origin: origin };
     const form = (values: Record<string, string | File>) => {
       const body = new FormData();

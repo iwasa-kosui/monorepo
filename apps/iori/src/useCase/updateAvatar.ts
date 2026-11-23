@@ -5,7 +5,6 @@ import { Actor } from '../domain/actor/actor.ts';
 import type { LocalActor } from '../domain/actor/localActor.ts';
 import type { LogoUriUpdatedStore } from '../domain/actor/updateLogoUri.ts';
 import { ImageId } from '../domain/image/imageId.ts';
-import { stripImageMetadata } from '../domain/image/stripImageMetadata.ts';
 import { type InvalidUploadImageError, UploadImage } from '../domain/image/uploadImage.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import type { UserNotFoundError } from '../domain/user/user.ts';
@@ -34,15 +33,14 @@ const create = ({ actorResolverByUserId, uploads, logoUriUpdatedStore, origin }:
     RA.flow(
       RA.ok(input),
       RA.andBind('actor', ({ userId }) => resolveLocalActor(userId)),
-      RA.andBind('mimeType', ({ bytes }) => UploadImage.validate(bytes)),
       // 位置情報などのメタデータを残したまま公開しない
-      RA.bind('body', ({ bytes }) => stripImageMetadata(bytes)),
-      RA.bind('stored', ({ body, mimeType }) =>
+      RA.andBind('image', ({ bytes }) => UploadImage.sanitize(bytes)),
+      RA.bind('stored', ({ image }) =>
         uploads.put({
           imageId: ImageId.generate(),
-          body,
-          contentType: mimeType,
-          contentLength: body.byteLength,
+          body: image.bytes,
+          contentType: image.mimeType,
+          contentLength: image.bytes.byteLength,
         })),
       RA.bind('logoUri', ({ stored }) => new URL(stored.url, origin).href),
       RA.andThrough(({ actor, logoUri }) =>

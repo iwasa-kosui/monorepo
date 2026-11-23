@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createIoriApp } from '../../../appFactory.tsx';
+import { tinyPng } from '../../../domain/image/__tests__/helper/tinyImage.ts';
 import { UPLOAD_IMAGE_MAX_BYTES } from '../../../domain/image/uploadImage.ts';
 import type { MediaUpload } from '../../../domain/mediaUpload/mediaUpload.ts';
 import { GetMediaUploadUseCase } from '../../../useCase/getMediaUpload.ts';
@@ -15,9 +16,10 @@ import { createWorkerMastodonFallbackRouter } from '../workerMastodonFallbackRou
 import { createWorkerMastodonMediaRouter } from '../workerMastodonMediaRouter.ts';
 import { createOAuthHarness, ORIGIN } from './helper/oauthHarness.ts';
 
-const pngBytes = (size = 16) => {
-  const bytes = new Uint8Array(size);
-  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const pngBytes = (size?: number) => {
+  const png = tinyPng();
+  const bytes = new Uint8Array(size ?? png.byteLength);
+  bytes.set(png);
   return bytes;
 };
 

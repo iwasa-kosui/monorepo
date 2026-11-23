@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createIoriApp } from '../../../appFactory.tsx';
 import type { LocalActor } from '../../../domain/actor/actor.ts';
 import { ActorId } from '../../../domain/actor/actorId.ts';
+import { tinyPng } from '../../../domain/image/__tests__/helper/tinyImage.ts';
 import { UPLOAD_IMAGE_MAX_BYTES } from '../../../domain/image/uploadImage.ts';
 import type { Instant } from '../../../domain/instant/instant.ts';
 import type { User } from '../../../domain/user/user.ts';
@@ -214,9 +215,10 @@ describe('createWorkerMastodonCoreRouter', () => {
   });
 
   describe('PATCH /api/v1/accounts/update_credentials', () => {
-    const png = (size = 16) => {
-      const bytes = new Uint8Array(size);
-      bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const png = (size?: number) => {
+      const image = tinyPng();
+      const bytes = new Uint8Array(size ?? image.byteLength);
+      bytes.set(image);
       return bytes;
     };
     const patch = (h: ReturnType<typeof setup>, token: string, values: Record<string, string | File>) => {

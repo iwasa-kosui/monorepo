@@ -1,7 +1,6 @@
 import { RA } from '@iwasa-kosui/result';
 
 import { ImageId } from '../domain/image/imageId.ts';
-import { stripImageMetadata } from '../domain/image/stripImageMetadata.ts';
 import { type InvalidUploadImageError, UploadImage } from '../domain/image/uploadImage.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { MediaId } from '../domain/mediaUpload/mediaId.ts';
@@ -40,20 +39,19 @@ const create = ({ userResolver, uploads, mediaUploadCreatedStore, origin }: Deps
     RA.flow(
       RA.ok(input),
       RA.andBind('user', ({ userId }) => resolveUser(userId)),
-      RA.andBind('mimeType', ({ bytes }) => UploadImage.validate(bytes)),
+      // 位置情報などのメタデータを残したまま公開しない
+      RA.andBind('image', ({ bytes }) => UploadImage.sanitize(bytes)),
       // R2 に置く前に検査し、不正な説明で残骸を作らない
       RA.andBind('normalizedDescription', ({ description }) => MediaUpload.normalizeDescription(description)),
       RA.bind('mediaId', () => MediaId.generate()),
-      // 位置情報などのメタデータを残したまま公開しない
-      RA.bind('body', ({ bytes }) => stripImageMetadata(bytes)),
-      RA.bind('stored', ({ body, mimeType, mediaId }) =>
+      RA.bind('stored', ({ image, mediaId }) =>
         uploads.put({
           imageId: ImageId.orThrow(mediaId),
-          body,
-          contentType: mimeType,
-          contentLength: body.byteLength,
+          body: image.bytes,
+          contentType: image.mimeType,
+          contentLength: image.bytes.byteLength,
         })),
-      RA.andBind('created', ({ user, mediaId, stored, mimeType, normalizedDescription }) =>
+      RA.andBind('created', ({ user, mediaId, stored, image: { mimeType }, normalizedDescription }) =>
         MediaUpload.create(
           {
             mediaId,

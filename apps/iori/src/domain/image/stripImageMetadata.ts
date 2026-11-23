@@ -5,9 +5,9 @@
 // - 消すもの: Exif（GPS・撮影日時・機種・埋め込みサムネイル）、XMP、IPTC、コメント、末尾に足されたデータ
 //
 // 画像の向きは Exif にしかないので、向きだけを持つ最小の Exif に置き換える。
-// 構造を読めなかった画像は、元のバイト列をそのまま返す。
+// 構造を読めなかった画像は undefined を返す。メタデータを消せたか分からないものを公開しないためで、呼び出し側が拒否する。
 
-import { detectUploadImageMimeType } from './uploadImage.ts';
+import type { UploadImageMimeType } from './uploadImage.ts';
 
 type Bytes = Uint8Array;
 
@@ -105,6 +105,7 @@ const endOfJpegScan = (bytes: Bytes, start: number): number => {
 const stripJpeg = (bytes: Bytes): Bytes | undefined => {
   const parts: Bytes[] = [bytes.subarray(0, 2)];
   let exifKept = false;
+  let scanSeen = false;
   let pos = 2;
   while (pos + 2 <= bytes.byteLength) {
     if (bytes[pos] !== 0xff) {
@@ -120,7 +121,7 @@ const stripJpeg = (bytes: Bytes): Bytes | undefined => {
     if (marker === 0xd9) {
       // EOI より後ろに足されたデータ（別の画像や独自のメタデータ）は捨てる
       parts.push(bytes.subarray(pos, pos + 2));
-      return concat(parts);
+      return scanSeen ? concat(parts) : undefined;
     }
     if (isStandaloneJpegMarker(marker)) {
       parts.push(bytes.subarray(pos, pos + 2));
@@ -157,13 +158,14 @@ const stripJpeg = (bytes: Bytes): Bytes | undefined => {
     }
 
     if (marker === 0xda) {
+      scanSeen = true;
       const scanEnd = endOfJpegScan(bytes, pos);
       parts.push(bytes.subarray(pos, scanEnd));
       pos = scanEnd;
     }
   }
-  // EOI がない（途中で切れている）画像も、読めたところまでを返す
-  return concat(parts);
+  // EOI がなくても、画素まで読めていれば表示できるので返す
+  return scanSeen ? concat(parts) : undefined;
 };
 
 // --- PNG ---
@@ -351,17 +353,16 @@ const stripGif = (bytes: Bytes): Bytes | undefined => {
   return undefined;
 };
 
+const STRIP: Readonly<Record<UploadImageMimeType, (bytes: Bytes) => Bytes | undefined>> = {
+  'image/jpeg': stripJpeg,
+  'image/png': stripPng,
+  'image/gif': stripGif,
+  'image/webp': stripWebp,
+};
+
 /**
  * 画像からメタデータを取り除いたバイト列を返す。
- * 対応していない形式や、構造を読めなかった画像は、そのまま返す。
+ * 構造を読めなかった画像は undefined を返す。
  */
-export const stripImageMetadata = (bytes: Uint8Array): Uint8Array => {
-  const strip = {
-    'image/jpeg': stripJpeg,
-    'image/png': stripPng,
-    'image/gif': stripGif,
-    'image/webp': stripWebp,
-  };
-  const mimeType = detectUploadImageMimeType(bytes);
-  return mimeType === undefined ? bytes : strip[mimeType](bytes) ?? bytes;
-};
+export const stripImageMetadata = (bytes: Uint8Array, mimeType: UploadImageMimeType): Uint8Array | undefined =>
+  STRIP[mimeType](bytes);

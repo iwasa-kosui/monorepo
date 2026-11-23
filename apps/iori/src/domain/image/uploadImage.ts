@@ -1,5 +1,7 @@
 import { Result } from '@iwasa-kosui/result';
 
+import { stripImageMetadata } from './stripImageMetadata.ts';
+
 export const UPLOAD_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 
 export type UploadImageMimeType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
@@ -20,7 +22,7 @@ export const detectUploadImageMimeType = (bytes: Uint8Array): UploadImageMimeTyp
 export type InvalidUploadImageError = Readonly<{
   type: 'InvalidUploadImageError';
   message: string;
-  detail: { reason: 'empty' | 'tooLarge' | 'unsupportedFormat' };
+  detail: { reason: 'empty' | 'tooLarge' | 'unsupportedFormat' | 'corrupted' };
 }>;
 
 export const InvalidUploadImageError = {
@@ -30,10 +32,13 @@ export const InvalidUploadImageError = {
       empty: 'The file is empty',
       tooLarge: 'The file is too large. Max size: 5MB',
       unsupportedFormat: 'Unsupported file type. Allowed: JPEG, PNG, GIF, WebP',
+      corrupted: 'The file is corrupted and could not be read',
     }[reason],
     detail: { reason },
   }),
 } as const;
+
+export type SanitizedUploadImage = Readonly<{ mimeType: UploadImageMimeType; bytes: Uint8Array }>;
 
 export const UploadImage = {
   validate: (bytes: Uint8Array): Result<UploadImageMimeType, InvalidUploadImageError> => {
@@ -43,5 +48,17 @@ export const UploadImage = {
     return mimeType === undefined
       ? Result.err(InvalidUploadImageError.create('unsupportedFormat'))
       : Result.ok(mimeType);
+  },
+  /**
+   * 検査したうえで、位置情報などのメタデータを取り除く。保存や公開にはこの結果の bytes を使う。
+   * 構造を読めずメタデータを消せなかった画像は、そのまま公開しないよう corrupted で拒否する。
+   */
+  sanitize: (bytes: Uint8Array): Result<SanitizedUploadImage, InvalidUploadImageError> => {
+    const mimeType = UploadImage.validate(bytes);
+    if (!mimeType.ok) return mimeType;
+    const stripped = stripImageMetadata(bytes, mimeType.val);
+    return stripped === undefined
+      ? Result.err(InvalidUploadImageError.create('corrupted'))
+      : Result.ok({ mimeType: mimeType.val, bytes: stripped });
   },
 } as const;

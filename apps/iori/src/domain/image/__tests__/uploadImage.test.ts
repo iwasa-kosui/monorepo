@@ -71,3 +71,12 @@ describe('UploadImage.validate', () => {
     expect(UploadImage.validate(html)).toMatchObject({ ok: false, err: { detail: { reason: 'unsupportedFormat' } } });
   });
 });
+
+describe('UploadImage.sanitize', () => {
+  it('シグネチャだけ正しく、構造を読めない中身は corrupted で拒否する', () => {
+    expect(UploadImage.sanitize(new Uint8Array(png))).toMatchObject({
+      ok: false,
+      err: { type: 'InvalidUploadImageError', detail: { reason: 'corrupted' } },
+    });
+  });
+});
