@@ -58,7 +58,7 @@ test('章ページ以外には進み具合とページ一覧を出さない', as
 test('幅 1440 未満では、上部バーに章の時間帯だけを出し、内訳はメニューの章の見出しに出す', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/chapters/chapter-2/3/');
-  await expect(page.locator('.lesson-bar__status')).toContainText('この章 0:09〜0:23（14分）');
+  await expect(page.locator('.lesson-bar__status')).toContainText('この章 0:10〜0:23（13分）');
   await expect(page.locator('.lesson-bar__parts')).toBeHidden();
   await openList(page);
   await expect(page.locator('.lesson-menu__panel .lesson-pages__group').nth(2)).toContainText('演習9分');
@@ -85,7 +85,7 @@ test.describe('ページ一覧（幅 1440px 未満のメニュー）', () => {
     const groups = page.locator('.lesson-menu__panel .lesson-pages__group');
     await expect(groups).toHaveCount(6);
     await expect(groups.nth(0)).toContainText('導入');
-    await expect(groups.nth(0)).toContainText('0:00〜0:05（5分）');
+    await expect(groups.nth(0)).toContainText('0:00〜0:06（6分）');
     await expect(groups.nth(2)).toContainText('第2章');
   });
 
@@ -232,7 +232,7 @@ test.describe('サイドバー（幅 1440px 以上）', () => {
     const opened = await groups.evaluateAll((elements) => elements.map((element) => element.hasAttribute('open')));
     expect(opened).toEqual([false, false, true, false, false, false]);
     await expect(groups.nth(0)).toContainText('導入');
-    await expect(groups.nth(0)).toContainText('0:00〜0:05（5分）');
+    await expect(groups.nth(0)).toContainText('0:00〜0:06（6分）');
     await expect(groups.nth(2)).toContainText('第2章');
   });
 
@@ -310,14 +310,14 @@ test.describe('サイドバー（幅 1440px 以上）', () => {
   test('章の時間帯と内訳がサイドバーの章の見出しに出る', async ({ page }) => {
     await page.goto('/chapters/chapter-2/3/');
     await expect(page.locator('.lesson-sidebar .lesson-pages__group').nth(2)).toContainText(
-      '0:09〜0:23（14分）：説明2分、演習9分、解答の確認3分',
+      '0:10〜0:23（13分）：説明2分、演習9分、解答の確認2分',
     );
   });
 
   test('上部バーに章の時間帯と内訳が出る', async ({ page }) => {
     await page.goto('/chapters/chapter-2/3/');
     await expect(page.locator('.lesson-bar__status')).toContainText(
-      'この章 0:09〜0:23（14分）：説明2分、演習9分、解答の確認3分',
+      'この章 0:10〜0:23（13分）：説明2分、演習9分、解答の確認2分',
     );
     await expect(page.locator('.lesson-bar__parts')).toBeVisible();
   });

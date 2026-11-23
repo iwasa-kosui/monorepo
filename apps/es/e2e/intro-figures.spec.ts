@@ -8,40 +8,8 @@ for (const reducedMotion of motions) {
   test.describe(`導入の図解（reducedMotion: ${reducedMotion}）`, () => {
     test.use({ reducedMotion });
 
-    test('1 ページ目: 上書きとバックアップの順にボタンを押すと、結果の文が変わる', async ({ page }) => {
-      await page.goto('/chapters/intro/');
-      const figure = page.locator('[data-overwrite-figure]');
-      const message = figure.locator('[aria-live="polite"]');
-      const update = figure.getByRole('button', { name: 'この来院をキャンセルに更新する' });
-      const restore = figure.getByRole('button', { name: 'バックアップから戻す' });
-      const reset = figure.getByRole('button', { name: '最初に戻す' });
-
-      await expect(message).toHaveText('「この来院をキャンセルに更新する」を押してください。');
-      await expect(update).toBeEnabled();
-      await expect(restore).toBeDisabled();
-      await expect(reset).toBeDisabled();
-
-      await update.click();
-      await expect(message).toHaveText('古い値は上書きで消えました。理由を書く列はありません。');
-      await expect(figure).toHaveAttribute('data-step', '1');
-      await expect(update).toBeDisabled();
-      await expect(restore).toBeEnabled();
-      await expect(reset).toBeEnabled();
-
-      await restore.click();
-      await expect(message).toHaveText('値は戻りました。誰がなぜ変えたのかは戻りません。');
-      await expect(figure).toHaveAttribute('data-step', '2');
-      await expect(restore).toBeDisabled();
-      await expect(figure.getByText('残っていません')).toHaveCount(2);
-
-      await reset.click();
-      await expect(message).toHaveText('「この来院をキャンセルに更新する」を押してください。');
-      await expect(figure).toHaveAttribute('data-step', '0');
-      await expect(update).toBeEnabled();
-    });
-
-    test('3 ページ目: 方法を選ぶと、結果の文と表が変わる', async ({ page }) => {
-      await page.goto('/chapters/intro/3/');
+    test('4 ページ目: 方法を選ぶと、結果の文と表が変わる', async ({ page }) => {
+      await page.goto('/chapters/intro/4/');
       const figure = page.locator('[data-method-figure]');
       const message = figure.locator('[aria-live="polite"]');
       const timeTravel = figure.getByRole('button', { name: 'データ基盤のタイムトラベル' });
@@ -68,8 +36,8 @@ for (const reducedMotion of motions) {
       await expect(message).toHaveText('テーブルの変化は分かります。なぜ変えたのかはテーブルに届いていません。');
     });
 
-    test('4 ページ目: スライダーを動かすと、答えられる件数の文が変わる', async ({ page }) => {
-      await page.goto('/chapters/intro/4/');
+    test('5 ページ目: スライダーを動かすと、答えられる件数の文が変わる', async ({ page }) => {
+      await page.goto('/chapters/intro/5/');
       const figure = page.locator('[data-record-figure]');
       const message = figure.locator('[aria-live="polite"]');
       const slider = figure.getByRole('slider', { name: '記録を足す日' });
@@ -91,7 +59,7 @@ for (const reducedMotion of motions) {
     });
 
     test('スライダーをキーボードで動かしても前後のページへ移動しない', async ({ page }) => {
-      await page.goto('/chapters/intro/4/');
+      await page.goto('/chapters/intro/5/');
       const figure = page.locator('[data-record-figure]');
       const slider = figure.getByRole('slider', { name: '記録を足す日' });
       await slider.focus();
@@ -104,7 +72,7 @@ for (const reducedMotion of motions) {
       await page.keyboard.press('ArrowLeft');
       await page.keyboard.press('ArrowLeft');
       await expect(slider).toHaveValue('2');
-      expect(pathOf(page)).toBe('/chapters/intro/4/');
+      expect(pathOf(page)).toBe('/chapters/intro/5/');
     });
   });
 }
