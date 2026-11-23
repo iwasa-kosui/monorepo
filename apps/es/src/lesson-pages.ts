@@ -23,7 +23,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'intro/02': {
     flow: 'problem',
     role:
-      '記録が残っていると障害対応や移行で何ができるかと、講師がこのハンズオンをする理由と、イベントを記録するだけでも価値があるという考えを聞きます。',
+      '記録が残っていると障害対応や移行で何ができるかと、このハンズオンの目的と、イベントを記録するだけでも価値があるという考えを聞きます。',
   },
   'intro/03': {
     flow: 'problem',
