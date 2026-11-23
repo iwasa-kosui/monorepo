@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -38,11 +39,44 @@ function findLocalPresentations() {
   return presentations;
 }
 
+/**
+ * slidev export に渡すブラウザの実行ファイルを決める。
+ *
+ * 通常は Playwright が自分のリビジョンに合うブラウザを使うので何も渡さない（undefined）。
+ * Claude Code のクラウド環境のように、別リビジョンのブラウザだけが
+ * PLAYWRIGHT_BROWSERS_PATH に置かれていてダウンロードもできない環境では、
+ * そこにあるリビジョンなしのリンク（chromium_headless_shell / chromium）を使う。
+ * SLIDEV_EXECUTABLE_PATH を指定すれば常にそれを使う。
+ */
+function resolveExecutablePath() {
+  if (process.env.SLIDEV_EXECUTABLE_PATH) return process.env.SLIDEV_EXECUTABLE_PATH;
+
+  const browsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  if (!browsersPath || !existsSync(browsersPath)) return undefined;
+
+  try {
+    const requireFromTalks = createRequire(join(talksRoot, 'package.json'));
+    const requireFromPlaywright = createRequire(requireFromTalks.resolve('playwright-chromium'));
+    const { browsers } = requireFromPlaywright('playwright-core/browsers.json');
+    const revision = browsers.find((b) => b.name === 'chromium-headless-shell')?.revision;
+    if (revision && existsSync(join(browsersPath, `chromium_headless_shell-${revision}`))) return undefined;
+  } catch {
+    // リビジョンが分からないときは、下のフォールバックがあればそれを使う
+  }
+
+  return ['chromium_headless_shell', 'chromium']
+    .map((name) => join(browsersPath, name))
+    .find((candidate) => existsSync(candidate));
+}
+
+const executablePath = resolveExecutablePath();
+
 function exportFirstSlide(presentation, workDir) {
   const slidesRelPath = `${presentation.year}/${presentation.name}/slides.md`;
+  const executablePathOption = executablePath ? ` --executable-path ${executablePath}` : '';
 
   execSync(
-    `pnpm exec slidev export ${slidesRelPath} --format png --range 1 --output ${workDir}`,
+    `pnpm exec slidev export ${slidesRelPath} --format png --range 1 --output ${workDir}${executablePathOption}`,
     { cwd: talksRoot, stdio: 'inherit' },
   );
 
@@ -58,6 +92,7 @@ async function main() {
 
   const presentations = findLocalPresentations();
   console.log(`Found ${presentations.length} local presentation(s)`);
+  if (executablePath) console.log(`Using browser executable: ${executablePath}`);
 
   for (const p of presentations) {
     const outDir = join(outputBaseDir, p.year);
