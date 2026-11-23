@@ -595,14 +595,19 @@ export const digestsTable = sqliteTable('digests', {
   digestId: text('digestId').primaryKey(),
   userId: text('userId').notNull().references(() => usersTable.userId),
   digestDate: text('digestDate').notNull(),
-  articleId: text('articleId').notNull().references(() => articlesTable.articleId),
+  // 旧データ。読まない
+  articleId: text('articleId'),
+  postId: text('postId'),
+  xPostsPostId: text('xPostsPostId'),
   createdAt: timestamp().notNull(),
+  // 旧データ。読まない
   pushSentAt: timestamp(),
   trigger: text('trigger').notNull().default('scheduled'),
   topicKey: text('topicKey').notNull().default('summary'),
 }, (table) => [
-  uniqueIndex('digests_user_id_digest_date_topic_key_unique').on(table.userId, table.digestDate, table.topicKey),
+  index('digests_user_id_digest_date_topic_key_idx').on(table.userId, table.digestDate, table.topicKey),
   index('digests_digest_date_idx').on(table.digestDate),
+  index('digests_post_id_idx').on(table.postId),
 ]);
 
 export const digestTopicsTable = sqliteTable('digest_topics', {
@@ -643,12 +648,15 @@ export const digestItemsTable = sqliteTable('digest_items', {
   score: real('score'),
   summary: text('summary'),
   reasonInterestSourceId: text('reasonInterestSourceId'),
+  // 旧データ。読まない
   feedback: text('feedback'),
+  // 旧データ。読まない
   feedbackAt: timestamp(),
 }, (table) => [
   uniqueIndex('digest_items_digest_id_rank_unique').on(table.digestId, table.rank),
 ]);
 
+// 旧データ。読まない
 export const digestDeepDivesTable = sqliteTable('digest_deep_dives', {
   deepDiveId: text('deepDiveId').primaryKey(),
   userId: text('userId').notNull().references(() => usersTable.userId),
@@ -660,6 +668,7 @@ export const digestDeepDivesTable = sqliteTable('digest_deep_dives', {
   uniqueIndex('digest_deep_dives_digest_item_id_unique').on(table.digestItemId),
 ]);
 
+// 旧データ。読まない
 export const digestDeepDiveTurnsTable = sqliteTable('digest_deep_dive_turns', {
   turnId: text('turnId').primaryKey(),
   deepDiveId: text('deepDiveId').notNull().references(() => digestDeepDivesTable.deepDiveId),
@@ -671,6 +680,7 @@ export const digestDeepDiveTurnsTable = sqliteTable('digest_deep_dive_turns', {
   uniqueIndex('digest_deep_dive_turns_deep_dive_id_turn_number_unique').on(table.deepDiveId, table.turnNumber),
 ]);
 
+// 旧データ。読まない
 export const digestDeepDiveUsagesTable = sqliteTable('digest_deep_dive_usages', {
   userId: text('userId').notNull().references(() => usersTable.userId),
   day: text('day').notNull(),

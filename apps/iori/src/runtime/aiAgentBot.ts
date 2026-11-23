@@ -46,14 +46,18 @@ import type { PostWithAuthor } from '../domain/post/post.ts';
 import type { PostId } from '../domain/post/postId.ts';
 import { TimelineSearchQuery } from '../domain/timelineSearch/timelineSearchQuery.ts';
 import type { User } from '../domain/user/user.ts';
+import { createDigestSendingUseCases } from '../scheduled/digestTasks.ts';
 import { type AgentPostView, type AiAgentBotCapabilities } from '../useCase/aiAgent/agentTools.ts';
+import type { SendDigestTo } from '../useCase/aiAgent/digestTool.ts';
 import { EnsureAiAgentBotUseCase } from '../useCase/ensureAiAgentBot.ts';
 import { type AiAgentBotFollower, FollowBackAiAgentFollowersUseCase } from '../useCase/followBackAiAgentFollowers.ts';
+import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { type AiAgentBotPoster, PostAiAgentMusingUseCase } from '../useCase/postAiAgentMusing.ts';
 import { type AiAgentBotReplier, RespondToAiAgentMentionsUseCase } from '../useCase/respondToAiAgentMentions.ts';
 import { type LocalActorDeletionAnnouncer, RetireLocalAccountsUseCase } from '../useCase/retireLocalAccounts.ts';
 import { RunAiAgentFollowupsUseCase } from '../useCase/runAiAgentFollowups.ts';
 import type { IoriWorkerEnv } from '../workerEnv.ts';
+import { createDigestDmSender, createDigestPostDeleter } from './digestDm.ts';
 import type { WorkerRuntimePorts } from './ports.ts';
 
 export const AI_AGENT_BOT_ENABLED_VALUE = 'enabled';
@@ -300,6 +304,24 @@ export const createAiAgentBotPoster = (
   },
 });
 
+export const createAiAgentBotDigestSender = (
+  env: IoriWorkerEnv,
+  runtime: WorkerRuntimePorts,
+  bot: Bot,
+  context: Readonly<{ request: Request; ctx: RequestContext<unknown> }>,
+): SendDigestTo => {
+  const { requestDigest } = createDigestSendingUseCases(env, {
+    dmSender: createDigestDmSender(runtime, bot, context),
+    deletePost: createDigestPostDeleter(runtime, bot, context),
+  });
+  return async (userId) => {
+    const requested = await requestDigest.run({ userId });
+    return requested.ok
+      ? Result.ok({ topics: requested.val.topics, items: requested.val.items })
+      : Result.err(requested.err);
+  };
+};
+
 /** bot の cron が使うものをまとめて用意する。bot が無効なら undefined を返す */
 export const createAiAgentBotRuntime = async (
   env: IoriWorkerEnv,
@@ -333,11 +355,13 @@ export const createAiAgentBotRuntime = async (
     memoriesResolverBySubject: createD1AiAgentBotMemoriesResolverBySubject(db),
     memoryChangedStore: createD1AiAgentBotMemoryChangedStore(db),
     actorResolverById: runtime.mastodon.actorResolverById,
+    isDigestOwner: IsDigestOwner.create({ userResolverByUsername: createD1UserResolverByUsername(db) }),
     chatModel,
     now: Instant.now,
   };
   return {
     bot,
+    sendDigest: createAiAgentBotDigestSender(env, runtime, bot, context),
     capabilities: createAiAgentBotCapabilities(runtime, bot, context, materials),
     follower: createAiAgentBotFollower(runtime, bot, context),
     followBack: FollowBackAiAgentFollowersUseCase.create({

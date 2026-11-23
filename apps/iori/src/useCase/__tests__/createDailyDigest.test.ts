@@ -1,19 +1,13 @@
-import { RA } from '@iwasa-kosui/result';
+import { RA, Result } from '@iwasa-kosui/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createMastodonSeed } from '../../adaptor/d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../adaptor/d1/__tests__/sqliteFixture.ts';
-import { createD1ActorResolverByUserId } from '../../adaptor/d1/actor/actorResolverByUserId.ts';
-import { createD1ArticleResolver } from '../../adaptor/d1/article/articleResolver.ts';
-import { createD1ArticleWithBodyCreatedStore } from '../../adaptor/d1/article/articleWithBodyCreatedStore.ts';
-import { createD1ArticleWithDependentsDeletedStore } from '../../adaptor/d1/article/articleWithDependentsDeletedStore.ts';
-import { createD1DraftArticleWithDependentsDeletedStore } from '../../adaptor/d1/article/draftArticleWithDependentsDeletedStore.ts';
-import { createD1ArticleBodyResolver } from '../../adaptor/d1/articleBody/articleBodyResolver.ts';
 import type { IoriD1Db } from '../../adaptor/d1/client.ts';
 import { createD1DigestCreatedStore } from '../../adaptor/d1/digest/digestCreatedStore.ts';
+import { createD1DigestExpiredStore } from '../../adaptor/d1/digest/digestExpiredStore.ts';
 import { createD1DigestHeadersResolverByUserIdAndDigestDate } from '../../adaptor/d1/digest/digestHeadersResolverByUserIdAndDigestDate.ts';
 import { createD1DigestItemUrlsResolverByUserId } from '../../adaptor/d1/digest/digestItemUrlsResolverByUserId.ts';
-import { createD1DigestPushSentStore } from '../../adaptor/d1/digest/digestPushSentStore.ts';
 import { createD1LatestDigestHeaderResolverByUserId } from '../../adaptor/d1/digest/latestDigestHeaderResolverByUserId.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestTopicCreatedStore } from '../../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
@@ -23,21 +17,16 @@ import { createD1HatenaTrendsResolverByFetchedSince } from '../../adaptor/d1/fee
 import { createD1RadarFeedEntriesResolverByFetchedSince } from '../../adaptor/d1/feedEntry/radarFeedEntriesResolverByFetchedSince.ts';
 import { createD1XPostsResolverByFetchedSince } from '../../adaptor/d1/feedEntry/xPostsResolverByFetchedSince.ts';
 import { createD1TimelineLinkTrendsResolverByUserId } from '../../adaptor/d1/linkPreview/timelineLinkTrendsResolverByUserId.ts';
-import { createD1PushSubscriptionsResolverByUserId } from '../../adaptor/d1/pushSubscription/pushSubscriptionsResolverByUserId.ts';
 import { createD1InterestVectorsResolverByUserId } from '../../adaptor/d1/recommendation/interestVectorsResolverByUserId.ts';
 import { createD1RecommendableArticlesResolverByFetchedSince } from '../../adaptor/d1/recommendation/recommendableArticlesResolverByFetchedSince.ts';
 import { createD1UserResolverByUsername } from '../../adaptor/d1/user/userResolverByUsername.ts';
 import { createSafeFetcher, type SafeFetcher } from '../../adaptor/http/safeFetch.ts';
-import type { WebPushSender } from '../../adaptor/webPush/webPush.ts';
 import {
-  Article,
-  type ArticleResolver,
-  type ArticleWithDependentsDeletedStore,
-  type DraftArticleWithDependentsDeletedStore,
-} from '../../domain/article/article.ts';
-import { ArticleId } from '../../domain/article/articleId.ts';
-import { ArticleBody, type ArticleBodyResolver } from '../../domain/articleBody/articleBody.ts';
-import { Digest, type DigestCreatedStore, type DigestTrigger } from '../../domain/digest/digest.ts';
+  Digest,
+  type DigestCreatedStore,
+  type DigestDmSender,
+  type DigestTrigger,
+} from '../../domain/digest/digest.ts';
 import { DigestId } from '../../domain/digest/digestId.ts';
 import type { XPostsResolverByFetchedSince } from '../../domain/digest/digestMaterial.ts';
 import { defaultDigestTopics } from '../../domain/digestTopic/defaultDigestTopics.ts';
@@ -45,10 +34,10 @@ import { TopicAssignmentPolicy } from '../../domain/digestTopic/topicAssignment.
 import { Instant } from '../../domain/instant/instant.ts';
 import { EMBEDDING_DIMENSIONS } from '../../domain/interestSource/embedding.ts';
 import { float32ToBytes } from '../../domain/interestSource/embeddingBytes.ts';
+import { PostId } from '../../domain/post/postId.ts';
 import { UserId } from '../../domain/user/userId.ts';
 import type { TextGenerator } from '../../ports/textGenerator.ts';
 import { createStubTextGenerator } from '../../testing/aiStubs.ts';
-import { CreateArticleWithBodyUseCase } from '../createArticleWithBody.ts';
 import {
   CreateDailyDigestUseCase,
   DIGEST_SUMMARY_MODEL,
@@ -71,6 +60,14 @@ type EntryOptions = Readonly<{
   embedding?: Float32Array;
 }>;
 
+type SentDm = Readonly<{
+  kind: 'summary' | 'reply';
+  ownerUserId: UserId;
+  postId: PostId;
+  parentPostId: PostId | null;
+  html: string;
+}>;
+
 const documentOf = (input: string): string => {
   expect(input.startsWith('<document>\n')).toBe(true);
   expect(input.endsWith('\n</document>')).toBe(true);
@@ -81,20 +78,19 @@ const basis = (index: number) => Float32Array.from({ length: EMBEDDING_DIMENSION
 const vec = (components: Readonly<Record<number, number>>) =>
   Float32Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => components[i] ?? 0);
 
+const topicName = (topicKey: string): string => defaultDigestTopics.find((topic) => topic.topicKey === topicKey)!.name;
+
 const setup = (
   options: {
     textGenerator?: TextGenerator;
-    send?: WebPushSender['send'];
     sleep?: (ms: number) => Promise<void>;
     now?: () => number;
     fetchText?: SafeFetcher['fetchText'];
     digestCreatedStore?: (db: IoriD1Db) => DigestCreatedStore;
-    articleWithDependentsDeletedStore?: (db: IoriD1Db) => ArticleWithDependentsDeletedStore;
-    draftArticleWithDependentsDeletedStore?: (db: IoriD1Db) => DraftArticleWithDependentsDeletedStore;
-    articleResolver?: (db: IoriD1Db) => ArticleResolver;
-    articleBodyResolver?: (db: IoriD1Db) => ArticleBodyResolver;
     topicAssignmentPolicy?: TopicAssignmentPolicy;
     isDigestOwner?: IsDigestOwner;
+    failSummary?: boolean;
+    failReplyAt?: ReadonlyArray<number>;
   } = {},
 ) => {
   const fixture = createSqliteD1Fixture();
@@ -104,7 +100,6 @@ const setup = (
   const clock = { value: NOW };
   const currentNow = () => Instant.orThrow(options.now?.() ?? clock.value);
 
-  const send = vi.fn<WebPushSender['send']>(options.send ?? (() => RA.ok(undefined)));
   const fetchText = vi.fn<SafeFetcher['fetchText']>(
     options.fetchText
       ?? (() => RA.err({ type: 'SafeFetchError', reason: 'network', message: 'no network in tests' })),
@@ -115,6 +110,24 @@ const setup = (
   const resolveXPosts = vi.fn<XPostsResolverByFetchedSince['resolve']>(
     createD1XPostsResolverByFetchedSince(db).resolve,
   );
+  const dms: SentDm[] = [];
+  let replyCount = 0;
+  const digestDmSender: DigestDmSender = {
+    sendSummary: async ({ ownerUserId, html }) => {
+      if (options.failSummary === true) return Result.err('summary down');
+      const postId = PostId.generate();
+      dms.push({ kind: 'summary', ownerUserId, postId, parentPostId: null, html });
+      return Result.ok(postId);
+    },
+    sendReply: async ({ ownerUserId, parentPostId, html }) => {
+      const index = replyCount;
+      replyCount += 1;
+      if (options.failReplyAt?.includes(index) === true) return Result.err('reply down');
+      const postId = PostId.generate();
+      dms.push({ kind: 'reply', ownerUserId, postId, parentPostId, html });
+      return Result.ok(postId);
+    },
+  };
   const useCase = CreateDailyDigestUseCase.create({
     digestSubscriptionResolverByUserId: createD1DigestSubscriptionResolverByUserId(db),
     digestHeadersResolverByUserIdAndDigestDate: createD1DigestHeadersResolverByUserIdAndDigestDate(db),
@@ -127,12 +140,6 @@ const setup = (
       textEmbedder: undefined,
       now: currentNow,
     }),
-    articleResolver: (options.articleResolver ?? createD1ArticleResolver)(db),
-    articleBodyResolver: (options.articleBodyResolver ?? createD1ArticleBodyResolver)(db),
-    articleWithDependentsDeletedStore: (options.articleWithDependentsDeletedStore
-      ?? createD1ArticleWithDependentsDeletedStore)(db),
-    draftArticleWithDependentsDeletedStore: (options.draftArticleWithDependentsDeletedStore
-      ?? createD1DraftArticleWithDependentsDeletedStore)(db),
     radarFeedEntriesResolverByFetchedSince: createD1RadarFeedEntriesResolverByFetchedSince(db),
     hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
     timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
@@ -143,19 +150,13 @@ const setup = (
     recommendableArticlesResolverByFetchedSince: createD1RecommendableArticlesResolverByFetchedSince(db),
     safeFetcher: { fetchText },
     textGenerator: options.textGenerator,
-    createArticleWithBodyUseCase: CreateArticleWithBodyUseCase.create({
-      actorResolverByUserId: createD1ActorResolverByUserId(db),
-      articleWithBodyCreatedStore: createD1ArticleWithBodyCreatedStore(db),
-    }),
+    digestDmSender,
     digestCreatedStore: {
       store: (...events) => {
         storeCalls.push(events);
         return digestCreatedStore.store(...events);
       },
     },
-    digestPushSentStore: createD1DigestPushSentStore(db),
-    pushSubscriptionsResolverByUserId: createD1PushSubscriptionsResolverByUserId(db),
-    webPushSender: { send },
     topicAssignmentPolicy: options.topicAssignmentPolicy,
     now: currentNow,
     sleep: options.sleep ?? (() => new Promise(() => undefined)),
@@ -254,17 +255,13 @@ const setup = (
     sqlite.prepare(
       'INSERT INTO link_previews(linkPreviewId,postId,url,title,description,imageUrl,faviconUrl,siteName,createdAt) VALUES (?,?,?,?,?,?,?,?,?)',
     ).run(seed.uuid(), postId, url, title, null, null, null, null, createdAt);
-  const addPushSubscription = (endpoint: string) =>
-    sqlite.prepare(
-      'INSERT INTO push_subscriptions(subscriptionId,userId,endpoint,p256dhKey,authKey,createdAt) VALUES (?,?,?,?,?,?)',
-    ).run(seed.uuid(), me.userId, endpoint, 'p256dh', 'auth', 1);
   const setSubscription = (enabled: boolean) =>
     sqlite.prepare('INSERT INTO digest_subscriptions(userId,enabled,createdAt,updatedAt) VALUES (?,?,?,?)')
       .run(me.userId, enabled ? 1 : 0, 1, 1);
   const all = (query: string) => sqlite.prepare(query).all();
   const digestOf = (topicKey: string) =>
-    sqlite.prepare('SELECT digestId, articleId, trigger, pushSentAt FROM digests WHERE topicKey = ?').get(topicKey) as
-      | { digestId: string; articleId: string; trigger: string; pushSentAt: number | null }
+    sqlite.prepare('SELECT digestId, postId, xPostsPostId, trigger FROM digests WHERE topicKey = ?').get(topicKey) as
+      | { digestId: string; postId: string; xPostsPostId: string | null; trigger: string }
       | undefined;
   const topicKeys = () =>
     (all('SELECT topicKey FROM digests ORDER BY topicKey') as Array<{ topicKey: string }>).map((row) => row.topicKey);
@@ -281,14 +278,13 @@ const setup = (
       }
     >;
   const titlesOf = (topicKey: string) => itemsOf(topicKey).map((item) => item.title);
-  const bodiesOf = (topicKey: string) =>
-    sqlite.prepare(
-      'SELECT privateHtml, publicHtml FROM article_bodies WHERE articleId = (SELECT articleId FROM digests WHERE topicKey = ?)',
-    ).get(topicKey) as {
-      privateHtml: string;
-      publicHtml: string;
-    };
-  const bodies = () => bodiesOf('summary');
+  const dmOf = (postId: string) => {
+    const dm = dms.find((candidate) => candidate.postId === postId);
+    if (dm === undefined) throw new Error(`no DM was sent as ${postId}`);
+    return dm;
+  };
+  const htmlOf = (topicKey: string) => dmOf(digestOf(topicKey)!.postId).html;
+  const summaryHtml = () => htmlOf('summary');
   const runResult = (trigger: DigestTrigger = 'scheduled') =>
     useCase.run({ userId: UserId.orThrow(me.userId), trigger });
   const run = async (trigger: DigestTrigger = 'scheduled') => {
@@ -296,23 +292,12 @@ const setup = (
     if (!result.ok) throw new Error(`unexpected error: ${JSON.stringify(result.err)}`);
     return result.val;
   };
-  const setArticleStatus = (status: string) => sqlite.prepare('UPDATE articles SET status = ?').run(status);
-  const setArticleStatusOf = (topicKey: string, status: string) =>
-    sqlite.prepare(
-      'UPDATE articles SET status = ? WHERE articleId = (SELECT articleId FROM digests WHERE topicKey = ?)',
-    ).run(status, topicKey);
-  const editArticleBody = () => sqlite.prepare('UPDATE article_bodies SET updatedAt = updatedAt + 1').run();
-  const editArticleBodyOf = (topicKey: string) =>
-    sqlite.prepare(
-      'UPDATE article_bodies SET updatedAt = updatedAt + 1 WHERE articleId = (SELECT articleId FROM digests WHERE topicKey = ?)',
-    ).run(topicKey);
-
   return {
     fixture,
     seed,
     me,
     clock,
-    send,
+    dms,
     fetchText,
     storeCalls,
     resolveXPosts,
@@ -324,21 +309,17 @@ const setup = (
     addTopic,
     addInterest,
     addLink,
-    addPushSubscription,
     setSubscription,
     all,
     digestOf,
     topicKeys,
     itemsOf,
     titlesOf,
-    bodiesOf,
-    bodies,
+    dmOf,
+    htmlOf,
+    summaryHtml,
     run,
     runResult,
-    setArticleStatus,
-    setArticleStatusOf,
-    editArticleBody,
-    editArticleBodyOf,
   };
 };
 
@@ -359,11 +340,10 @@ describe('CreateDailyDigestUseCase: 材料の選び方', () => {
 
     await t.run();
 
-    const { privateHtml, publicHtml } = t.bodies();
-    expect(privateHtml).toContain('Radar Vol. 34');
-    expect(privateHtml).not.toContain('Radar Vol. 33');
-    expect(privateHtml).not.toContain('Radar Vol. 35');
-    expect(publicHtml).not.toContain('Radar');
+    const html = t.summaryHtml();
+    expect(html).toContain('Radar Vol. 34');
+    expect(html).not.toContain('Radar Vol. 33');
+    expect(html).not.toContain('Radar Vol. 35');
   });
 
   it('Radar の新しい版が無ければ Radar の節を出さない', async () => {
@@ -372,7 +352,7 @@ describe('CreateDailyDigestUseCase: 材料の選び方', () => {
 
     await t.run();
 
-    expect(t.bodies().privateHtml).not.toContain('Radar');
+    expect(t.summaryHtml()).not.toContain('Radar');
   });
 
   it('Radar はトピックの記事に載せない', async () => {
@@ -383,7 +363,7 @@ describe('CreateDailyDigestUseCase: 材料の選び方', () => {
     await t.run();
 
     expect(t.titlesOf('genai')).toEqual(['Entry 1', 'Entry 2', 'Entry 3']);
-    expect(t.bodiesOf('genai').privateHtml).not.toContain('Radar');
+    expect(t.htmlOf('genai')).not.toContain('Radar');
   });
 
   it('関心の材料が無いとき、トピックの項目は rss とはてなの直近 24 時間から、はてなの件数の多い順に上位 5 件を選ぶ', async () => {
@@ -708,14 +688,12 @@ describe('CreateDailyDigestUseCase: 重複の除外', () => {
       t.addEntries(t.sources.rss, 's', 3, () => ({ embedding: basis(2), fetchedAt: NOW - DAY - HOUR }));
       t.clock.value = (NOW - DAY) as typeof NOW;
       await t.run();
-      t.setArticleStatusOf('genai', 'published');
-      t.setArticleStatusOf('platform', 'unpublished');
       t.clock.value = NOW;
     };
     const variant = (prefix: string, index: number, suffix: string) =>
       `https://example.com/${encodeURIComponent(`${prefix} ${index}`)}${suffix}`;
 
-    it('published、unpublished、draft のどれの項目も、同じ正規化 URL なら載せない', async () => {
+    it('前の日に送ったどのトピックの項目も、同じ正規化 URL なら載せない', async () => {
       const t = setup();
       await runPreviousDay(t);
       t.addEntries(
@@ -757,15 +735,12 @@ describe('CreateDailyDigestUseCase: 重複の除外', () => {
       ).toEqual([{ title: 'fresh 1' }, { title: 'fresh 2' }, { title: 'fresh 3' }]);
     });
 
-    it('トピックの記事を削除すると、その項目の URL は次の生成で候補に戻り、削除していないトピックの URL は除外されたままにする', async () => {
+    it('期限切れで消えたトピックの項目の URL は次の生成で候補に戻り、消えていないトピックの URL は除外されたままにする', async () => {
       const t = setup();
       await runPreviousDay(t);
-      const deleted = t.digestOf('genai')!;
-      const deletedAt = Instant.orThrow(NOW);
-      await createD1ArticleWithDependentsDeletedStore(t.fixture.db).store(
-        Article.deleteArticle(deletedAt)(ArticleId.orThrow(deleted.articleId)),
-        ArticleBody.deleteArticleBody(deletedAt)(ArticleId.orThrow(deleted.articleId)),
-        Digest.expire({ digestId: DigestId.orThrow(deleted.digestId), digestDate: '2026-11-04' }, deletedAt),
+      const expired = t.digestOf('genai')!;
+      await createD1DigestExpiredStore(t.fixture.db).store(
+        Digest.expire({ digestId: DigestId.orThrow(expired.digestId), digestDate: '2026-11-04' }, Instant.orThrow(NOW)),
       );
       t.addEntries(t.sources.rss, 'g again', 3, (index) => ({ url: variant('g', index, '/') }));
       t.addEntries(t.sources.rss, 'p again', 3, (index) => ({ url: variant('p', index, '/'), embedding: basis(1) }));
@@ -932,10 +907,10 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
     expect(items[0]!.score).toBeCloseTo(1, 3);
     expect(items[1]!.score).toBeCloseTo(0.71, 2);
     expect(items[2]!.score).toBeCloseTo(0.45, 2);
-    const { privateHtml } = t.bodiesOf('genai');
-    expect(privateHtml).toContain('<h2>あなたへのおすすめ</h2>');
-    expect(privateHtml).not.toContain('<h2>新着</h2>');
-    expect(privateHtml).not.toContain('はてなブックマーク 99');
+    const html = t.htmlOf('genai');
+    expect(html).toContain('<h2>あなたへのおすすめ</h2>');
+    expect(html).not.toContain('<h2>新着</h2>');
+    expect(html).not.toContain('はてなブックマーク 99');
   });
 
   it('関心なしのベクトルだけなら、点数をつけずにはてなの件数の順にし、score と根拠を null にする', async () => {
@@ -1123,7 +1098,7 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
     expect(result.recommendation).toMatchObject({ fetchedBodies: 0, fallbackToDescription: 3 });
   });
 
-  it('非公開版には関心の根拠を出し、公開版ははてな由来の記事と iori の投稿やいいねの根拠を除く', async () => {
+  it('おすすめの項目に、関心の根拠を出す', async () => {
     const t = setup();
     t.addInterest('kosui_post', KOSUI_REF, vec({ 0: 1, 1: 1 }));
     t.addInterest('own_post', 'post-id-1', vec({ 0: 1, 2: 1 }));
@@ -1135,20 +1110,11 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
 
     await t.run();
 
-    const { privateHtml, publicHtml } = t.bodiesOf('genai');
-    expect(privateHtml).toContain('Hot Kosui');
-    expect(privateHtml).toContain(`関心の根拠: <a href="${KOSUI_REF}"`);
-    expect(privateHtml).toContain('関心の根拠: iori の投稿');
-    expect(privateHtml).toContain('関心の根拠: iori のいいね');
-    expect(publicHtml).toContain('<h2>あなたへのおすすめ</h2>');
-    expect(publicHtml).toContain('Rss Kosui');
-    expect(publicHtml).toContain('Rss Post');
-    expect(publicHtml).toContain('Rss Like');
-    expect(publicHtml).not.toContain('Hot Kosui');
-    expect(publicHtml).toContain(`関心の根拠: <a href="${KOSUI_REF}"`);
-    expect(publicHtml).not.toContain('iori の投稿');
-    expect(publicHtml).not.toContain('iori のいいね');
-    expect(publicHtml).not.toContain('77');
+    const html = t.htmlOf('genai');
+    expect(html).toContain('Hot Kosui');
+    expect(html).toContain(`関心の根拠: <a href="${KOSUI_REF}"`);
+    expect(html).toContain('関心の根拠: iori の投稿');
+    expect(html).toContain('関心の根拠: iori のいいね');
   });
 });
 
@@ -1263,34 +1229,56 @@ describe('stripThinkBlocks', () => {
   });
 });
 
-describe('CreateDailyDigestUseCase: 保存', () => {
-  it('title に日本時間の日付を付けた draft の article と、本文を、まとめとトピックごとに作る', async () => {
+describe('CreateDailyDigestUseCase: 送信と保存', () => {
+  it('まとめを 1 通送り、トピックごとの返信を、まとめを親にして所有者宛てに送る', async () => {
     const t = setup();
-    t.addEntries(t.sources.rss, 'Title', 3);
+    t.addTopic('platform', basis(1));
+    t.addEntries(t.sources.rss, 'Gen', 3);
+    t.addEntries(t.sources.rss, 'Plat', 3, () => ({ embedding: basis(1) }));
 
     const result = await t.run();
 
-    expect(t.all('SELECT articleId, authorUserId, rootPostId, title, status FROM articles ORDER BY title')).toEqual([
-      {
-        articleId: result.articleId,
-        authorUserId: t.me.userId,
-        rootPostId: null,
-        title: '技術ニュースのまとめ 2026-11-05',
-        status: 'draft',
-      },
-      {
-        articleId: t.digestOf('genai')!.articleId,
-        authorUserId: t.me.userId,
-        rootPostId: null,
-        title: '生成 AI とエージェントのダイジェスト 2026-11-05',
-        status: 'draft',
-      },
+    const [summary, ...replies] = t.dms;
+    expect(summary).toMatchObject({ kind: 'summary', parentPostId: null });
+    expect(replies.map((dm) => [dm.kind, dm.parentPostId])).toEqual([
+      ['reply', summary!.postId],
+      ['reply', summary!.postId],
     ]);
-    expect(t.all('SELECT count(*) AS n FROM article_bodies')).toEqual([{ n: 2 }]);
-    expect(result.articleId).toBe(t.digestOf('summary')!.articleId);
+    expect(t.dms.every((dm) => dm.ownerUserId === t.me.userId)).toBe(true);
+    expect(replies[0]!.html).toContain(`<h1>${topicName('genai')}</h1>`);
+    expect(replies[1]!.html).toContain(`<h1>${topicName('platform')}</h1>`);
+    expect(result).toMatchObject({ status: 'created', postId: summary!.postId, topics: 2 });
   });
 
-  it('まとめには Radar、トピックの記事へのリンク、みんなの関心を載せ、トピックの記事には載せない', async () => {
+  it('送れた DM ごとに digest を、その DM の postId で保存する', async () => {
+    const t = setup();
+    t.addTopic('platform', basis(1));
+    t.addEntries(t.sources.rss, 'Gen', 3);
+    t.addEntries(t.sources.rss, 'Plat', 3, () => ({ embedding: basis(1) }));
+
+    await t.run();
+
+    const [summary, genai, platform] = t.dms;
+    expect(t.all('SELECT topicKey, postId, xPostsPostId, trigger, digestDate FROM digests ORDER BY topicKey')).toEqual([
+      { topicKey: 'genai', postId: genai!.postId, xPostsPostId: null, trigger: 'scheduled', digestDate: '2026-11-05' },
+      {
+        topicKey: 'platform',
+        postId: platform!.postId,
+        xPostsPostId: null,
+        trigger: 'scheduled',
+        digestDate: '2026-11-05',
+      },
+      {
+        topicKey: 'summary',
+        postId: summary!.postId,
+        xPostsPostId: null,
+        trigger: 'scheduled',
+        digestDate: '2026-11-05',
+      },
+    ]);
+  });
+
+  it('まとめには Radar、トピックの名前、みんなの関心を載せ、トピックの返信には載せない', async () => {
     const t = setup();
     const alice = t.seed.addRemoteActor('alice');
     t.seed.addFollow(t.me.actorId, alice.actorId);
@@ -1305,23 +1293,17 @@ describe('CreateDailyDigestUseCase: 保存', () => {
 
     await t.run();
 
-    const summary = t.bodies();
-    const topic = t.bodiesOf('genai');
-    expect(summary.privateHtml).toContain('Private link');
-    expect(summary.privateHtml).toContain('Hot entry');
-    expect(summary.privateHtml).toContain('Radar Vol. 34');
-    expect(summary.privateHtml).toMatch(
-      new RegExp(`<a href="/articles/${t.digestOf('genai')!.articleId}"[^>]*>生成 AI とエージェント</a>`),
-    );
-    expect(summary.publicHtml).toBe('<p>このまとめは公開を想定していません。</p>');
-    expect(topic.privateHtml).toContain('News 1');
-    expect(topic.privateHtml).not.toContain('Private link');
-    expect(topic.privateHtml).not.toContain('Hot entry');
-    expect(topic.privateHtml).not.toContain('Radar');
-    expect(topic.privateHtml).not.toContain('はてなブックマーク 77');
-    expect(topic.publicHtml).toContain('News 1');
-    expect(topic.publicHtml).not.toContain('Private link');
-    expect(topic.publicHtml).not.toContain('77');
+    const summary = t.summaryHtml();
+    const topic = t.htmlOf('genai');
+    expect(summary).toContain('Private link');
+    expect(summary).toContain('Hot entry');
+    expect(summary).toContain('Radar Vol. 34');
+    expect(summary).toContain(topicName('genai'));
+    expect(topic).toContain('News 1');
+    expect(topic).not.toContain('Private link');
+    expect(topic).not.toContain('Hot entry');
+    expect(topic).not.toContain('Radar');
+    expect(topic).not.toContain('はてなブックマーク 77');
   });
 
   it('digest、items、trends と、digest.created の domain event を保存し、items はトピックの digest、trends はまとめの digest に付ける', async () => {
@@ -1338,19 +1320,19 @@ describe('CreateDailyDigestUseCase: 保存', () => {
     expect(result).toMatchObject({
       status: 'created',
       digestId: summary.digestId,
-      articleId: summary.articleId,
+      postId: summary.postId,
       topics: 1,
       items: 3,
       trends: 1,
       summarized: 0,
     });
-    expect(t.all('SELECT digestId, userId, digestDate, articleId, topicKey, createdAt FROM digests ORDER BY topicKey'))
+    expect(t.all('SELECT digestId, userId, digestDate, postId, topicKey, createdAt FROM digests ORDER BY topicKey'))
       .toEqual([
         {
           digestId: topic.digestId,
           userId: t.me.userId,
           digestDate: '2026-11-05',
-          articleId: topic.articleId,
+          postId: topic.postId,
           topicKey: 'genai',
           createdAt: NOW,
         },
@@ -1358,14 +1340,14 @@ describe('CreateDailyDigestUseCase: 保存', () => {
           digestId: summary.digestId,
           userId: t.me.userId,
           digestDate: '2026-11-05',
-          articleId: summary.articleId,
+          postId: summary.postId,
           topicKey: 'summary',
           createdAt: NOW,
         },
       ]);
     expect(
       t.all(
-        'SELECT digestId, feedEntryId, url, title, rank, score, summary, reasonInterestSourceId, feedback, feedbackAt FROM digest_items WHERE rank = 1',
+        'SELECT digestId, feedEntryId, url, title, rank, score, summary, reasonInterestSourceId FROM digest_items WHERE rank = 1',
       ),
     ).toEqual([{
       digestId: topic.digestId,
@@ -1376,8 +1358,6 @@ describe('CreateDailyDigestUseCase: 保存', () => {
       score: null,
       summary: null,
       reasonInterestSourceId: null,
-      feedback: null,
-      feedbackAt: null,
     }]);
     expect(t.all('SELECT count(*) AS n FROM digest_items WHERE digestId = \'' + summary.digestId + '\'')).toEqual([
       { n: 0 },
@@ -1393,7 +1373,6 @@ describe('CreateDailyDigestUseCase: 保存', () => {
     expect(t.all('SELECT eventName FROM domain_events WHERE aggregateName = \'digest\' ORDER BY eventName')).toEqual([
       { eventName: 'digest.created' },
       { eventName: 'digest.created' },
-      { eventName: 'digest.pushSent' },
     ]);
   });
 
@@ -1409,18 +1388,18 @@ describe('CreateDailyDigestUseCase: 保存', () => {
     expect(t.storeCalls[0]).toHaveLength(3);
   });
 
-  it('材料が 1 件も無くても、まとめの digest と article だけを作る', async () => {
+  it('材料が 1 件も無くても、まとめだけを送って、まとめの digest を保存する', async () => {
     const t = setup();
 
     const result = await t.run();
 
     expect(result).toMatchObject({ status: 'created', topics: 0, items: 0, trends: 0, summarized: 0 });
     expect(t.all('SELECT topicKey FROM digests')).toEqual([{ topicKey: 'summary' }]);
-    expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 1 }]);
-    expect(t.bodies().privateHtml).toContain('載せる記事はありません');
+    expect(t.dms).toHaveLength(1);
+    expect(t.summaryHtml()).toContain('載せる記事はありません');
   });
 
-  it('article を作った後に digest の保存が失敗したら、すべての articleId を console.error に出し、すべての article と本文を消してエラーを返す', async () => {
+  it('DM を送った後に digest の保存が失敗したら、送った postId を console.error に出して DigestStoreFailedError を返す', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const t = setup({
       digestCreatedStore: () => ({
@@ -1432,25 +1411,16 @@ describe('CreateDailyDigestUseCase: 保存', () => {
     const result = await t.runResult();
 
     expect(result).toMatchObject({ ok: false, err: { type: 'DigestStoreFailedError' } });
-    const articleIds = (result as unknown as { err: { detail: { articleIds: string[] } } }).err.detail.articleIds;
-    expect(articleIds).toHaveLength(2);
+    const postIds = (result as unknown as { err: { detail: { postIds: string[] } } }).err.detail.postIds;
+    expect(postIds).toEqual(t.dms.map((dm) => dm.postId));
     expect(error).toHaveBeenCalledWith(
-      'iori digest: storing the digests failed after the articles were created.',
-      expect.objectContaining({ articleIds }),
+      'iori digest: storing the digests failed after the DMs were sent.',
+      expect.objectContaining({ postIds }),
     );
-    expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 0 }]);
-    expect(t.all('SELECT count(*) AS n FROM article_bodies')).toEqual([{ n: 0 }]);
     expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 0 }]);
-    expect(t.all('SELECT eventName FROM domain_events WHERE eventName LIKE \'article.%\' ORDER BY eventName')).toEqual([
-      { eventName: 'article.created' },
-      { eventName: 'article.created' },
-      { eventName: 'article.deleted' },
-      { eventName: 'article.deleted' },
-    ]);
-    expect(t.send).not.toHaveBeenCalled();
   });
 
-  it('article を作った後に Digest.create の検証が失敗したら、すべての article と本文を消して検証エラーを返す', async () => {
+  it('Digest.create の検証が失敗したら、何も保存せずに検証エラーを返す', async () => {
     const t = setup();
     t.addEntries(t.sources.rss, 'Entry', 2);
     t.addEntry(t.sources.rss, '', { count: 1, embedding: basis(0) });
@@ -1459,141 +1429,59 @@ describe('CreateDailyDigestUseCase: 保存', () => {
 
     expect(result.ok).toBe(false);
     expect(result).not.toMatchObject({ err: { type: 'DigestStoreFailedError' } });
-    expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 0 }]);
-    expect(t.all('SELECT count(*) AS n FROM article_bodies')).toEqual([{ n: 0 }]);
     expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 0 }]);
-    expect(t.all('SELECT eventName FROM domain_events WHERE eventName LIKE \'article.%\' ORDER BY eventName')).toEqual([
-      { eventName: 'article.created' },
-      { eventName: 'article.created' },
-      { eventName: 'article.deleted' },
-      { eventName: 'article.deleted' },
-    ]);
-    expect(t.send).not.toHaveBeenCalled();
-  });
-
-  it('article を消すのも失敗したら、その失敗を console.error に出して DigestStoreFailedError を返す', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const t = setup({
-      digestCreatedStore: () => ({
-        store: () => Promise.reject(new Error('d1 down')),
-      }),
-      articleWithDependentsDeletedStore: () => ({
-        store: () => Promise.reject(new Error('delete failed')),
-      }),
-    });
-    t.addEntries(t.sources.rss, 'Entry', 3);
-
-    const result = await t.runResult();
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'DigestStoreFailedError' } });
-    expect(error).toHaveBeenCalledWith(
-      'iori digest: deleting the article left by the failed digest failed.',
-      expect.objectContaining({ errorMessage: 'delete failed' }),
-    );
-    expect(
-      error.mock.calls.filter(([message]) =>
-        message === 'iori digest: deleting the article left by the failed digest failed.'
-      ),
-    )
-      .toHaveLength(2);
-    expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 2 }]);
-  });
-
-  it('ユーザーに actor が無ければ、digest も article も保存せずに UserNotFoundError を返す', async () => {
-    const t = setup();
-    const userId = UserId.generate();
-    t.fixture.sqlite.prepare('INSERT INTO users(userId,username) VALUES (?,?)').run(userId, 'ghost');
-    t.fixture.sqlite.prepare(
-      'INSERT INTO digest_topics(userId,topicKey,name,description,embedding,embeddedAt,sortOrder,enabled,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    ).run(userId, 'genai', '生成 AI', '説明', float32ToBytes(basis(0)), NOW, 0, 1, 1, 1);
-    t.addEntries(t.sources.rss, 'Entry', 3);
-
-    const result = await t.useCase.run({ userId, trigger: 'scheduled' });
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'UserNotFoundError' } });
-    expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 0 }]);
-    expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 0 }]);
-    expect(t.send).not.toHaveBeenCalled();
+    expect(t.storeCalls).toHaveLength(0);
   });
 });
 
-describe('CreateDailyDigestUseCase: Web Push', () => {
-  it('本人の購読すべてに、まとめの article を開く通知を送り、まとめの digest にだけ pushSentAt と digest.pushSent を記録する', async () => {
-    const t = setup();
-    t.addEntries(t.sources.rss, 'One', 3);
-    t.addPushSubscription('https://push.example/1');
-    t.addPushSubscription('https://push.example/2');
+describe('CreateDailyDigestUseCase: 送信の失敗', () => {
+  const seedThreeTopics = (t: ReturnType<typeof setup>) => {
+    t.addTopic('platform', basis(1));
+    t.addTopic('server', basis(2));
+    t.addEntries(t.sources.rss, 'Gen', 3);
+    t.addEntries(t.sources.rss, 'Plat', 3, () => ({ embedding: basis(1) }));
+    t.addEntries(t.sources.rss, 'Serv', 3, () => ({ embedding: basis(2) }));
+  };
 
-    const result = await t.run();
-
-    expect(result.pushed).toBe(2);
-    expect(t.send).toHaveBeenCalledTimes(2);
-    expect(t.send.mock.calls.map(([subscription]) => subscription.endpoint).sort()).toEqual([
-      'https://push.example/1',
-      'https://push.example/2',
-    ]);
-    expect(t.send.mock.calls[0]![1]).toEqual({
-      title: '今日のダイジェスト',
-      body: 'トピック 1 本、おすすめ 3 件',
-      url: `/articles/${result.articleId}`,
-    });
-    expect(t.all('SELECT topicKey, pushSentAt FROM digests ORDER BY topicKey')).toEqual([
-      { topicKey: 'genai', pushSentAt: null },
-      { topicKey: 'summary', pushSentAt: NOW },
-    ]);
-    expect(t.all('SELECT eventName FROM domain_events WHERE aggregateName = \'digest\' ORDER BY occurredAt, eventName'))
-      .toEqual([{ eventName: 'digest.created' }, { eventName: 'digest.created' }, { eventName: 'digest.pushSent' }]);
-  });
-
-  it('1 件でも送れれば pushSentAt を記録し、失敗は console.error に出して続ける', async () => {
+  it('まとめの送信に失敗したら、返信も保存もせずに DigestSendFailedError を返し、console.error に出す', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const t = setup({
-      send: (subscription) =>
-        subscription.endpoint.endsWith('/1')
-          ? RA.err({ type: 'SendError', message: 'gone', statusCode: 410 })
-          : RA.ok(undefined),
-    });
-    t.addPushSubscription('https://push.example/1');
-    t.addPushSubscription('https://push.example/2');
+    const t = setup({ failSummary: true });
+    seedThreeTopics(t);
 
-    const result = await t.run();
+    const result = await t.runResult();
 
-    expect(result).toMatchObject({ status: 'created', pushed: 1 });
-    expect(t.all('SELECT pushSentAt FROM digests')).toEqual([{ pushSentAt: NOW }]);
+    expect(result).toMatchObject({ ok: false, err: { type: 'DigestSendFailedError' } });
+    expect(t.dms).toEqual([]);
+    expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 0 }]);
+    expect(t.storeCalls).toHaveLength(0);
     expect(error).toHaveBeenCalledWith(
-      'iori digest: sending a web push failed.',
-      expect.objectContaining({ errorMessage: 'gone', statusCode: 410 }),
+      'iori digest: sending the summary DM failed.',
+      expect.objectContaining({ errorMessage: 'summary down' }),
     );
   });
 
-  it('すべて送れなければ pushSentAt を記録しない', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const t = setup({ send: () => RA.err({ type: 'SendError', message: 'down' }) });
-    t.addPushSubscription('https://push.example/1');
+  it('トピックの返信が途中で失敗したら、そこで止めて、送れた分だけ保存し、created を返す', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const t = setup({ failReplyAt: [1] });
+    seedThreeTopics(t);
 
     const result = await t.run();
 
-    expect(result).toMatchObject({ status: 'created', pushed: 0 });
-    expect(t.all('SELECT pushSentAt FROM digests')).toEqual([{ pushSentAt: null }]);
-    expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'digest.pushSent\'')).toEqual([{ n: 0 }]);
-  });
-
-  it('購読が 0 件でも pushSentAt を記録する', async () => {
-    const t = setup();
-
-    const result = await t.run();
-
-    expect(result.pushed).toBe(0);
-    expect(t.send).not.toHaveBeenCalled();
-    expect(t.all('SELECT pushSentAt FROM digests')).toEqual([{ pushSentAt: NOW }]);
+    expect(result).toMatchObject({ status: 'created', topics: 1, items: 3 });
+    expect(t.dms.map((dm) => dm.kind)).toEqual(['summary', 'reply']);
+    expect(t.topicKeys()).toEqual(['genai', 'summary']);
+    expect(t.digestOf('genai')!.postId).toBe(t.dms[1]!.postId);
+    expect(error).toHaveBeenCalledWith(
+      'iori digest: sending a topic DM failed.',
+      expect.objectContaining({ topicKey: 'platform', errorMessage: 'reply down' }),
+    );
   });
 });
 
 describe('CreateDailyDigestUseCase: 作る条件', () => {
-  it('同じ日の 2 回目は何もせずに skipped を返す', async () => {
+  it('同じ日の scheduled の 2 回目は何も送らずに skipped を返す', async () => {
     const t = setup();
     t.addEntries(t.sources.rss, 'One', 3);
-    t.addPushSubscription('https://push.example/1');
     const first = await t.run();
 
     const second = await t.run();
@@ -1603,14 +1491,12 @@ describe('CreateDailyDigestUseCase: 作る条件', () => {
       status: 'skipped',
       trigger: 'scheduled',
       digestDate: '2026-11-05',
-      replaced: false,
       durationMs: 0,
       topics: 0,
       items: 0,
       trends: 0,
       xPosts: 0,
       summarized: 0,
-      pushed: 0,
       recommendation: {
         materials: 0,
         candidates: 0,
@@ -1625,8 +1511,7 @@ describe('CreateDailyDigestUseCase: 作る条件', () => {
       },
     });
     expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 2 }]);
-    expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 2 }]);
-    expect(t.send).toHaveBeenCalledTimes(1);
+    expect(t.dms).toHaveLength(2);
   });
 
   it('日本時間の日付が変われば、同じ UTC の日でも作る', async () => {
@@ -1644,17 +1529,15 @@ describe('CreateDailyDigestUseCase: 作る条件', () => {
     ]);
   });
 
-  it('購読が無効なら、何も作らずに skipped を返す', async () => {
+  it('購読が無効なら、scheduled は何も送らずに skipped を返す', async () => {
     const t = setup();
     t.setSubscription(false);
-    t.addPushSubscription('https://push.example/1');
 
     const result = await t.run();
 
     expect(result.status).toBe('skipped');
     expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 0 }]);
-    expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 0 }]);
-    expect(t.send).not.toHaveBeenCalled();
+    expect(t.dms).toHaveLength(0);
   });
 });
 
@@ -1670,16 +1553,14 @@ describe('CreateDailyDigestUseCase: 埋め込みのある有効なトピック�
       const t = setup();
       makeUnusable(t);
       t.addEntries(t.sources.rss, 'Entry', 3);
-      t.addPushSubscription('https://push.example/1');
 
       const result = await t.run('scheduled');
 
-      expect(result).toMatchObject({ status: 'skipped', skippedReason: 'topics not embedded', replaced: false });
+      expect(result).toMatchObject({ status: 'skipped', skippedReason: 'topics not embedded' });
       expect(warn).toHaveBeenCalledTimes(1);
       expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 0 }]);
-      expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 0 }]);
       expect(t.storeCalls).toHaveLength(0);
-      expect(t.send).not.toHaveBeenCalled();
+      expect(t.dms).toHaveLength(0);
     });
 
     it('requested は DigestTopicsUnavailableError を返し、何も作らない', async () => {
@@ -1692,15 +1573,16 @@ describe('CreateDailyDigestUseCase: 埋め込みのある有効なトピック�
 
       expect(result).toMatchObject({ ok: false, err: { type: 'DigestTopicsUnavailableError' } });
       expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 0 }]);
-      expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 0 }]);
+      expect(t.dms).toHaveLength(0);
     });
 
-    it('置き換える draft があっても、削除も作成も保存もしない', async () => {
+    it('すでに送った digest があっても、送信も保存も削除もしない', async () => {
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const t = setup();
       t.addEntries(t.sources.rss, 'Entry', 3);
       await t.run('requested');
-      const before = t.all('SELECT digestId, articleId, topicKey FROM digests ORDER BY topicKey');
+      const before = t.all('SELECT digestId, postId, topicKey FROM digests ORDER BY topicKey');
+      const sentBefore = t.dms.length;
       makeUnusable(t);
       t.clock.value = (NOW + HOUR) as typeof NOW;
       const storeCallsBefore = t.storeCalls.length;
@@ -1710,9 +1592,8 @@ describe('CreateDailyDigestUseCase: 埋め込みのある有効なトピック�
 
       expect(scheduled).toMatchObject({ status: 'skipped', skippedReason: 'topics not embedded' });
       expect(requested).toMatchObject({ ok: false, err: { type: 'DigestTopicsUnavailableError' } });
-      expect(t.all('SELECT digestId, articleId, topicKey FROM digests ORDER BY topicKey')).toEqual(before);
-      expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 2 }]);
-      expect(t.all('SELECT count(*) AS n FROM article_bodies')).toEqual([{ n: 2 }]);
+      expect(t.all('SELECT digestId, postId, topicKey FROM digests ORDER BY topicKey')).toEqual(before);
+      expect(t.dms).toHaveLength(sentBefore);
       expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'digest.expired\'')).toEqual([
         { n: 0 },
       ]);
@@ -1722,566 +1603,58 @@ describe('CreateDailyDigestUseCase: 埋め込みのある有効なトピック�
 });
 
 describe('CreateDailyDigestUseCase: requested', () => {
-  const seedTwoTopics = (t: ReturnType<typeof setup>) => {
-    t.addTopic('platform', basis(1));
-    t.addEntries(t.sources.rss, 'Gen', 3, (index) => ({ fetchedAt: NOW - 2 * HOUR, count: 10 - index }));
-    t.addEntries(t.sources.rss, 'Plat', 3, (index) => ({
-      embedding: basis(1),
-      fetchedAt: NOW - 2 * HOUR,
-      count: 10 - index,
-    }));
-  };
-  const snapshot = (t: ReturnType<typeof setup>) =>
-    t.all('SELECT digestId, articleId, topicKey FROM digests ORDER BY topicKey');
+  const titlesOfTrigger = (t: ReturnType<typeof setup>, trigger: DigestTrigger) =>
+    (t.all(
+      `SELECT title FROM digest_items WHERE digestId = (SELECT digestId FROM digests WHERE trigger = '${trigger}' AND topicKey = 'genai') ORDER BY title`,
+    ) as Array<{ title: string }>).map((row) => row.title);
 
-  it('同じ日の draft の digest を、古い digest と article をすべて消してから作り直す', async () => {
+  it('その日に scheduled の digest があっても、新しくまとめを送り、前の digest は残す', async () => {
     const t = setup();
-    t.addEntries(t.sources.rss, 'Before', 3, (index) => ({ count: index, fetchedAt: NOW - 2 * HOUR }));
-    const first = await t.run('requested');
-    const firstRows = snapshot(t) as Array<{ digestId: string; articleId: string }>;
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-    t.addEntries(t.sources.rss, 'After', 3, (index) => ({ count: 10 + index, fetchedAt: NOW + 30 * 60 * 1000 }));
-
-    const second = await t.run('requested');
-
-    expect(second).toMatchObject({ status: 'created', replaced: true, trigger: 'requested' });
-    expect(second.digestId).not.toBe(first.digestId);
-    const rows = snapshot(t) as Array<{ digestId: string; articleId: string; topicKey: string }>;
-    expect(rows.map((row) => row.topicKey)).toEqual(['genai', 'summary']);
-    expect(rows.map((row) => row.digestId)).not.toEqual(expect.arrayContaining(firstRows.map((row) => row.digestId)));
-    expect(rows.find((row) => row.topicKey === 'summary')).toMatchObject({
-      digestId: second.digestId,
-      articleId: second.articleId,
-    });
-    expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 2 }]);
-    expect(t.all('SELECT count(*) AS n FROM article_bodies')).toEqual([{ n: 2 }]);
-    for (const row of firstRows) {
-      expect(t.all(`SELECT count(*) AS n FROM digest_items WHERE digestId = '${row.digestId}'`)).toEqual([{ n: 0 }]);
-      expect(t.all(`SELECT count(*) AS n FROM articles WHERE articleId = '${row.articleId}'`)).toEqual([{ n: 0 }]);
-    }
-    expect(t.titlesOf('genai')).toEqual(['After 3', 'After 2', 'After 1', 'Before 3', 'Before 2']);
-    expect(
-      t.all(
-        'SELECT eventName, count(*) AS n FROM domain_events WHERE eventName IN (\'digest.expired\', \'article.deleted\', \'articleBody.deleted\') GROUP BY eventName ORDER BY eventName',
-      ),
-    ).toEqual([
-      { eventName: 'article.deleted', n: 2 },
-      { eventName: 'articleBody.deleted', n: 2 },
-      { eventName: 'digest.expired', n: 2 },
-    ]);
-  });
-
-  it('置き換える draft の項目は除外の対象にせず、同じ記事をもう一度選べる', async () => {
-    const t = setup();
-    t.addEntries(t.sources.rss, 'Same', 3, (index) => ({ count: index, fetchedAt: NOW - 2 * HOUR }));
-    await t.run('requested');
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-
-    const second = await t.run('requested');
-
-    expect(second.replaced).toBe(true);
-    expect(t.titlesOf('genai')).toEqual(['Same 3', 'Same 2', 'Same 1']);
-  });
-
-  it('公開済みの topic の digest は残し、その topic を作らず、残りの digest を置き換える', async () => {
-    const t = setup();
-    seedTwoTopics(t);
-    await t.run('requested');
-    const kept = t.digestOf('genai')!;
-    const previousPlatform = t.digestOf('platform')!;
-    const previousSummary = t.digestOf('summary')!;
-    t.setArticleStatusOf('genai', 'published');
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-    t.addEntries(t.sources.rss, 'Later', 3, () => ({ fetchedAt: NOW, count: 1 }));
-
-    const result = await t.run('requested');
-
-    expect(result).toMatchObject({ status: 'created', replaced: true, topics: 1 });
-    expect(t.digestOf('genai')).toMatchObject({ digestId: kept.digestId, articleId: kept.articleId });
-    expect(t.digestOf('platform')!.digestId).not.toBe(previousPlatform.digestId);
-    expect(t.digestOf('summary')!.digestId).not.toBe(previousSummary.digestId);
-    expect(t.titlesOf('genai')).toEqual(['Gen 1', 'Gen 2', 'Gen 3']);
-    expect(t.titlesOf('platform')).toEqual(['Plat 1', 'Plat 2', 'Plat 3']);
-    expect(t.all('SELECT status FROM articles WHERE articleId = \'' + kept.articleId + '\'')).toEqual([
-      { status: 'published' },
-    ]);
-    expect(t.bodies().privateHtml).toContain(`/articles/${kept.articleId}`);
-    expect(t.bodies().privateHtml).toContain(`/articles/${t.digestOf('platform')!.articleId}`);
-  });
-
-  it('残る topic があって枠が減っても、減った枠の境界と記事数が同じ topic はすべて作る', async () => {
-    const t = setup();
-    t.addEntries(t.sources.rss, 'genai', 3, () => ({ fetchedAt: NOW - 2 * HOUR }));
-    t.addTopic('platform', basis(1));
-    t.addEntries(t.sources.rss, 'platform', 3, () => ({ embedding: basis(1), fetchedAt: NOW - 2 * HOUR }));
-    await t.run('requested');
-    for (const topicKey of ['genai', 'platform']) t.setArticleStatusOf(topicKey, 'published');
-    for (const [topicKey, index] of [['server', 2], ['design', 3], ['ciam', 4]] as const) {
-      t.addTopic(topicKey, basis(index));
-      t.addEntries(t.sources.rss, topicKey, 3, () => ({ embedding: basis(index), fetchedAt: NOW }));
-    }
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-
-    const result = await t.run('requested');
-
-    expect(result).toMatchObject({ status: 'created', replaced: true, topics: 3 });
-    expect(t.topicKeys()).toEqual(['ciam', 'design', 'genai', 'platform', 'server', 'summary']);
-  });
-
-  it('残る topic の記事の項目は、置き換えで作る topic に載せない', async () => {
-    const t = setup();
-    seedTwoTopics(t);
-    await t.run('requested');
-    t.setArticleStatusOf('genai', 'published');
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-    t.addEntries(t.sources.rss, 'Plat extra', 1, () => ({ embedding: basis(1), fetchedAt: NOW }));
-    t.addEntries(t.sources.rss, 'Gen again', 3, (index) => ({
-      url: `https://example.com/${encodeURIComponent(`Gen ${index}`)}/`,
-      embedding: basis(1),
-      fetchedAt: NOW,
-    }));
-
-    await t.run('requested');
-
-    const platform = t.titlesOf('platform');
-    expect(platform.some((title) => title.startsWith('Gen again'))).toBe(false);
-    expect(platform).toEqual(expect.arrayContaining(['Plat extra 1', 'Plat 1', 'Plat 2', 'Plat 3']));
-  });
-
-  describe.each(
-    [
-      ['requested', { ok: false, err: { type: 'DigestAlreadyPublishedError', detail: { digestDate: '2026-11-05' } } }],
-      ['scheduled', { ok: true, val: { status: 'skipped' } }],
-    ] as const,
-  )('まとめが残るとき (%s)', (trigger, expected) => {
-    it.each(['published', 'unpublished'] as const)(
-      '%s のまとめがあれば、draft の topic の digest も作り直さず、何も作らず何も消さない',
-      async (status) => {
-        const t = setup();
-        seedTwoTopics(t);
-        await t.run('requested');
-        t.setArticleStatusOf('summary', status);
-        const before = snapshot(t);
-        t.clock.value = (NOW + HOUR) as typeof NOW;
-
-        const result = await t.runResult(trigger);
-
-        expect(result).toMatchObject(expected);
-        expect(snapshot(t)).toEqual(before);
-        expect(t.all('SELECT status FROM articles ORDER BY status')).toEqual([
-          { status: 'draft' },
-          { status: 'draft' },
-          { status },
-        ]);
-        expect(t.all('SELECT count(*) AS n FROM article_bodies')).toEqual([{ n: 3 }]);
-        expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'article.created\'')).toEqual([
-          { n: 3 },
-        ]);
-        expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'digest.expired\'')).toEqual([
-          { n: 0 },
-        ]);
-        expect(t.send).not.toHaveBeenCalled();
-      },
-    );
-
-    it('編集済みのまとめがあれば、topic の digest が公開済みでも作り直さない', async () => {
-      const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-      const t = setup();
-      seedTwoTopics(t);
-      await t.run('requested');
-      t.editArticleBodyOf('summary');
-      t.setArticleStatusOf('genai', 'published');
-      const before = snapshot(t);
-      t.clock.value = (NOW + HOUR) as typeof NOW;
-
-      const result = await t.runResult(trigger);
-
-      expect(result).toMatchObject(
-        trigger === 'requested'
-          ? { ok: false, err: { type: 'DigestDraftEditedError', detail: { digestDate: '2026-11-05' } } }
-          : expected,
-      );
-      expect(snapshot(t)).toEqual(before);
-      expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 3 }]);
-      expect(info).toHaveBeenCalledTimes(trigger === 'scheduled' ? 1 : 0);
-    });
-
-    it('まとめが残るときは、トピックを用意する処理も呼ばない', async () => {
-      const t = setup();
-      seedTwoTopics(t);
-      await t.run('requested');
-      t.setArticleStatusOf('summary', 'published');
-      t.all('DELETE FROM digest_topics');
-      t.clock.value = (NOW + HOUR) as typeof NOW;
-
-      await t.runResult(trigger);
-
-      expect(t.all('SELECT count(*) AS n FROM digest_topics')).toEqual([{ n: 0 }]);
-    });
-  });
-
-  it('編集済みの topic の digest は残し、残りを置き換える', async () => {
-    const t = setup();
-    seedTwoTopics(t);
-    await t.run('requested');
-    const kept = t.digestOf('platform')!;
-    t.editArticleBodyOf('platform');
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-
-    const result = await t.run('requested');
-
-    expect(result).toMatchObject({ status: 'created', replaced: true, topics: 1 });
-    expect(t.digestOf('platform')).toMatchObject({ digestId: kept.digestId });
-    expect(t.titlesOf('genai')).toEqual(['Gen 1', 'Gen 2', 'Gen 3']);
-  });
-
-  it('まとめが残り、作れる topic が無ければ、置き換える draft を消さずに DigestAlreadyPublishedError を返す', async () => {
-    const t = setup();
-    seedTwoTopics(t);
-    await t.run('requested');
-    t.setArticleStatusOf('summary', 'published');
-    t.all('DELETE FROM feed_entries');
-    const before = snapshot(t);
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-
-    const result = await t.runResult('requested');
-
-    expect(result).toMatchObject({ ok: false, err: { type: 'DigestAlreadyPublishedError' } });
-    expect(snapshot(t)).toEqual(before);
-    expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 3 }]);
-  });
-
-  it('残る topic が 4 本に達していれば、新しい topic は作らない', async () => {
-    const t = setup();
-    const keys: Array<[string, number, number]> = [['platform', 1, 4], ['server', 2, 4], ['design', 3, 4], [
-      'ciam',
-      4,
-      3,
-    ]];
-    t.addEntries(t.sources.rss, 'genai', 4, () => ({ fetchedAt: NOW - 2 * HOUR }));
-    for (const [topicKey, index, count] of keys) {
-      t.addTopic(topicKey, basis(index));
-      t.addEntries(t.sources.rss, topicKey, count, () => ({ embedding: basis(index), fetchedAt: NOW - 2 * HOUR }));
-    }
-    await t.run('requested');
-    expect(t.topicKeys()).toEqual(['design', 'genai', 'platform', 'server', 'summary']);
-    for (const topicKey of ['genai', 'platform', 'server', 'design']) t.setArticleStatusOf(topicKey, 'published');
-    t.addTopic('security', basis(5));
-    t.addEntries(t.sources.rss, 'security', 3, () => ({ embedding: basis(5), fetchedAt: NOW }));
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-
-    const result = await t.run('requested');
-
-    expect(result).toMatchObject({ status: 'created', replaced: true, topics: 0 });
-    expect(t.topicKeys()).toEqual(['design', 'genai', 'platform', 'server', 'summary']);
-  });
-
-  it.each(['published', 'unpublished'])(
-    '同じ日の digest の article がすべて %s なら、何も変えずに DigestAlreadyPublishedError を返す',
-    async (status) => {
-      const t = setup();
-      t.addEntries(t.sources.rss, 'Entry', 3);
-      await t.run('requested');
-      const before = snapshot(t);
-      t.setArticleStatus(status);
-      t.clock.value = (NOW + HOUR) as typeof NOW;
-
-      const result = await t.runResult('requested');
-
-      expect(result).toMatchObject({
-        ok: false,
-        err: { type: 'DigestAlreadyPublishedError', detail: { digestDate: '2026-11-05' } },
-      });
-      expect(snapshot(t)).toEqual(before);
-      expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 2 }]);
-    },
-  );
-
-  describe.each(
-    [
-      ['requested', { ok: false, err: { type: 'DigestDraftEditedError', detail: { digestDate: '2026-11-05' } } }],
-      ['scheduled', { ok: true, val: { status: 'skipped' } }],
-    ] as const,
-  )('編集済みの draft があるとき (%s)', (trigger, expected) => {
-    const expectKept = (t: ReturnType<typeof setup>, before: unknown) => {
-      expect(snapshot(t)).toEqual(before);
-      expect(t.all('SELECT status FROM articles')).toEqual([{ status: 'draft' }, { status: 'draft' }]);
-      expect(t.all('SELECT count(*) AS n FROM article_bodies')).toEqual([{ n: 2 }]);
-      expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'digest.expired\'')).toEqual([
-        { n: 0 },
-      ]);
-    };
-
-    it('すべて編集済みなら、何も消さずに、requested はエラーを返し、scheduled は console.info に出して skipped を返す', async () => {
-      const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-      const t = setup();
-      t.addEntries(t.sources.rss, 'Entry', 3);
-      await t.run('requested');
-      const before = snapshot(t);
-      t.editArticleBody();
-      t.clock.value = (NOW + HOUR) as typeof NOW;
-
-      const result = await t.runResult(trigger);
-
-      expect(result).toMatchObject(expected);
-      expectKept(t, before);
-      expect(info).toHaveBeenCalledTimes(trigger === 'scheduled' ? 1 : 0);
-    });
-
-    it('生成の途中で編集されても、削除の直前に取り直した本文で気づき、何も消さない', async () => {
-      const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-      const calls = { count: 0 };
-      const hooks: { edit?: () => void } = {};
-      const t = setup({
-        articleBodyResolver: (db) => {
-          const real = createD1ArticleBodyResolver(db);
-          return {
-            resolve: (articleId) => {
-              calls.count += 1;
-              if (calls.count === 3) hooks.edit?.();
-              return real.resolve(articleId);
-            },
-          };
-        },
-      });
-      t.addEntries(t.sources.rss, 'Entry', 3);
-      await t.run('requested');
-      const before = snapshot(t);
-      t.clock.value = (NOW + HOUR) as typeof NOW;
-      hooks.edit = () => t.editArticleBody();
-      calls.count = 0;
-
-      const result = await t.runResult(trigger);
-
-      expect(calls.count).toBe(3);
-      expect(result).toMatchObject(expected);
-      expectKept(t, before);
-      expect(info).toHaveBeenCalledTimes(trigger === 'scheduled' ? 1 : 0);
-    });
-  });
-
-  describe.each(
-    [
-      ['requested', { ok: false, err: { type: 'DigestAlreadyPublishedError' } }],
-      ['scheduled', { ok: true, val: { status: 'skipped' } }],
-    ] as const,
-  )('置き換えの途中で公開されたとき (%s)', (trigger, expected) => {
-    const seedRequestedDigest = async (options: Parameters<typeof setup>[0]) => {
-      const t = setup(options);
-      t.addEntries(t.sources.rss, 'Entry', 3);
-      await t.run('requested');
-      const before = snapshot(t);
-      t.clock.value = (NOW + HOUR) as typeof NOW;
-      return { t, before };
-    };
-    const expectNothingDeleted = (t: ReturnType<typeof setup>, before: unknown) => {
-      expect(snapshot(t)).toEqual(before);
-      expect(t.all('SELECT count(*) AS n FROM article_bodies')).toEqual([{ n: 2 }]);
-      expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'digest.expired\'')).toEqual([
-        { n: 0 },
-      ]);
-    };
-
-    it('削除の直前に取り直した article が draft でなければ、何も消さずに置き換えをやめる', async () => {
-      const calls = { count: 0 };
-      const { t, before } = await seedRequestedDigest({
-        articleResolver: (db) => {
-          const real = createD1ArticleResolver(db);
-          return {
-            resolve: async (articleId) => {
-              calls.count += 1;
-              const resolved = await real.resolve(articleId);
-              return calls.count < 3 || !resolved.ok || resolved.val === undefined
-                ? resolved
-                : RA.ok({ ...resolved.val, status: 'published' as const });
-            },
-          };
-        },
-      });
-      calls.count = 0;
-
-      const result = await t.runResult(trigger);
-
-      expect(result).toMatchObject(expected);
-      expect(calls.count).toBe(3);
-      expectNothingDeleted(t, before);
-      expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 2 }]);
-    });
-
-    it('取り直した後、削除までの間に公開されたら、条件付きの削除が何も消さずに置き換えをやめる', async () => {
-      const hooks: { publish?: () => void } = {};
-      const { t, before } = await seedRequestedDigest({
-        draftArticleWithDependentsDeletedStore: (db) => {
-          const real = createD1DraftArticleWithDependentsDeletedStore(db);
-          return {
-            store: (...events) => {
-              hooks.publish?.();
-              return real.store(...events);
-            },
-          };
-        },
-      });
-      hooks.publish = () => t.setArticleStatus('published');
-
-      const result = await t.runResult(trigger);
-
-      expect(result).toMatchObject(expected);
-      expectNothingDeleted(t, before);
-      expect(t.all('SELECT status FROM articles')).toEqual([{ status: 'published' }, { status: 'published' }]);
-    });
-
-    it('2 本目の削除が拒まれたら、作った新しい article をすべて消して、その時点で止める', async () => {
-      const hooks: { publish?: () => void } = {};
-      const calls = { count: 0 };
-      const { t, before } = await seedRequestedDigest({
-        draftArticleWithDependentsDeletedStore: (db) => {
-          const real = createD1DraftArticleWithDependentsDeletedStore(db);
-          return {
-            store: (...events) => {
-              calls.count += 1;
-              if (calls.count === 2) hooks.publish?.();
-              return real.store(...events);
-            },
-          };
-        },
-      });
-      hooks.publish = () => t.setArticleStatus('published');
-
-      const result = await t.runResult(trigger);
-
-      expect(result).toMatchObject(expected);
-      expect(calls.count).toBe(2);
-      expect(snapshot(t)).toHaveLength((before as unknown[]).length - 1);
-      expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 1 }]);
-      expect(t.all('SELECT count(*) AS n FROM article_bodies')).toEqual([{ n: 1 }]);
-      expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'article.created\'')).toEqual([{
-        n: 4,
-      }]);
-      expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'digest.created\'')).toEqual([{
-        n: 2,
-      }]);
-    });
-  });
-
-  it('新しい article を作ってから、置き換える旧 draft を消し、そのあとで新しい digest をまとめて保存する', async () => {
-    const hooks: { beforeDelete?: () => void; beforeStore?: () => void } = {};
-    const t = setup({
-      draftArticleWithDependentsDeletedStore: (db) => {
-        const real = createD1DraftArticleWithDependentsDeletedStore(db);
-        return {
-          store: (...events) => {
-            hooks.beforeDelete?.();
-            return real.store(...events);
-          },
-        };
-      },
-      digestCreatedStore: (db) => {
-        const real = createD1DigestCreatedStore(db);
-        return {
-          store: (...events) => {
-            hooks.beforeStore?.();
-            return real.store(...events);
-          },
-        };
-      },
-    });
-    t.addEntries(t.sources.rss, 'Entry', 3);
-    await t.run('requested');
-    const oldDigestIds = (t.all('SELECT digestId FROM digests') as Array<{ digestId: string }>).map((row) =>
-      row.digestId
-    );
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-    const observed: { atFirstDelete?: unknown; atStore?: unknown } = {};
-    const observe = () => ({
-      articles: t.all('SELECT count(*) AS n FROM articles'),
-      digestIds: (t.all('SELECT digestId FROM digests') as Array<{ digestId: string }>).map((row) => row.digestId),
-    });
-    hooks.beforeDelete = () => {
-      observed.atFirstDelete ??= observe();
-    };
-    hooks.beforeStore = () => {
-      observed.atStore = observe();
-    };
-
-    await t.run('requested');
-
-    expect(observed.atFirstDelete).toEqual({ articles: [{ n: 4 }], digestIds: oldDigestIds });
-    expect(observed.atStore).toEqual({ articles: [{ n: 2 }], digestIds: [] });
-    expect(t.all('SELECT count(*) AS n FROM digests')).toEqual([{ n: 2 }]);
-  });
-
-  it('scheduled は requested の draft の digest を置き換え、trigger を scheduled にして Web Push を送る', async () => {
-    const t = setup();
-    t.addEntries(t.sources.rss, 'Entry', 3);
-    t.addPushSubscription('https://push.example/1');
-    const requested = await t.run('requested');
-    t.clock.value = (NOW + HOUR) as typeof NOW;
-
+    t.addEntries(t.sources.rss, 'First', 3, () => ({ fetchedAt: NOW - 2 * HOUR }));
     const scheduled = await t.run('scheduled');
+    t.clock.value = (NOW + HOUR) as typeof NOW;
+    t.addEntries(t.sources.rss, 'Second', 3, () => ({ fetchedAt: NOW + 30 * 60 * 1000 }));
 
-    expect(scheduled).toMatchObject({ status: 'created', replaced: true, trigger: 'scheduled', pushed: 1 });
-    expect(scheduled.digestId).not.toBe(requested.digestId);
-    expect(t.all('SELECT topicKey, trigger FROM digests ORDER BY topicKey')).toEqual([
+    const requested = await t.run('requested');
+
+    expect(requested).toMatchObject({ status: 'created', trigger: 'requested' });
+    expect(requested.digestId).not.toBe(scheduled.digestId);
+    expect(t.all('SELECT topicKey, trigger FROM digests ORDER BY trigger, topicKey')).toEqual([
+      { topicKey: 'genai', trigger: 'requested' },
+      { topicKey: 'summary', trigger: 'requested' },
       { topicKey: 'genai', trigger: 'scheduled' },
       { topicKey: 'summary', trigger: 'scheduled' },
     ]);
-    expect(t.all('SELECT count(*) AS n FROM articles')).toEqual([{ n: 2 }]);
+    expect(titlesOfTrigger(t, 'scheduled')).toEqual(['First 1', 'First 2', 'First 3']);
+    expect(titlesOfTrigger(t, 'requested')).toEqual(['Second 1', 'Second 2', 'Second 3']);
+    expect(t.dms.filter((dm) => dm.kind === 'summary')).toHaveLength(2);
   });
 
-  it('scheduled は scheduled の digest を draft でも置き換えずに skipped を返す', async () => {
+  it('同じ日に requested を続けても、そのたびにまとめを送って保存する', async () => {
     const t = setup();
-    t.addEntries(t.sources.rss, 'Entry', 3);
-    await t.run('scheduled');
-    const before = snapshot(t);
-
-    const second = await t.run('scheduled');
-
-    expect(second.status).toBe('skipped');
-    expect(snapshot(t)).toEqual(before);
-  });
-
-  it('scheduled は requested でない digest が 1 本でもあれば、置き換えられる requested の draft があっても skipped を返す', async () => {
-    const t = setup();
-    t.addEntries(t.sources.rss, 'Entry', 3);
-    await t.run('requested');
-    t.all('UPDATE digests SET trigger = \'scheduled\' WHERE topicKey = \'genai\'');
-    const before = snapshot(t);
+    t.addEntries(t.sources.rss, 'First', 3, () => ({ fetchedAt: NOW - 2 * HOUR }));
+    const first = await t.run('requested');
     t.clock.value = (NOW + HOUR) as typeof NOW;
+    t.addEntries(t.sources.rss, 'Second', 3, () => ({ fetchedAt: NOW + 30 * 60 * 1000 }));
 
-    const scheduled = await t.run('scheduled');
+    const second = await t.run('requested');
 
-    expect(scheduled.status).toBe('skipped');
-    expect(snapshot(t)).toEqual(before);
+    expect(second.status).toBe('created');
+    expect(second.digestId).not.toBe(first.digestId);
+    expect(second.postId).not.toBe(first.postId);
+    expect(t.all('SELECT count(*) AS n FROM digests WHERE topicKey = \'summary\'')).toEqual([{ n: 2 }]);
+    expect(t.dms.filter((dm) => dm.kind === 'summary')).toHaveLength(2);
   });
 
-  it('購読が無効でも requested は作る', async () => {
+  it('購読が無効でも requested は送る', async () => {
     const t = setup();
     t.setSubscription(false);
-
-    expect((await t.run('requested')).status).toBe('created');
-  });
-
-  it('購読が無効なら scheduled は requested の draft を置き換えない', async () => {
-    const t = setup();
-    const requested = await t.run('requested');
-    t.setSubscription(false);
-
-    const scheduled = await t.run('scheduled');
-
-    expect(scheduled.status).toBe('skipped');
-    expect(t.all('SELECT digestId FROM digests')).toEqual([{ digestId: requested.digestId }]);
-  });
-
-  it('Web Push を送らず、pushSentAt を NULL のままにする', async () => {
-    const t = setup();
-    t.addPushSubscription('https://push.example/1');
+    t.addEntries(t.sources.rss, 'Entry', 3);
 
     const result = await t.run('requested');
 
-    expect(result.pushed).toBe(0);
-    expect(t.send).not.toHaveBeenCalled();
-    expect(t.all('SELECT pushSentAt FROM digests')).toEqual([{ pushSentAt: null }]);
-    expect(t.all('SELECT count(*) AS n FROM domain_events WHERE eventName = \'digest.pushSent\'')).toEqual([{ n: 0 }]);
+    expect(result.status).toBe('created');
+    expect(t.dms).toHaveLength(2);
   });
 });
 
@@ -2301,16 +1674,12 @@ describe('CreateDailyDigestUseCase: 材料の窓の始まり', () => {
       t.addLink(post.postId, `https://example.com/link-${title}`, `link ${title}`, fetchedAt);
     }
   };
-  const materials = (t: ReturnType<typeof setup>, digestId: string | undefined, articleId: string | undefined) => ({
+  const materials = (t: ReturnType<typeof setup>, digestId: string | undefined, postId: string | undefined) => ({
     items: (t.all('SELECT title FROM digest_items ORDER BY title') as Array<{ title: string }>).map((row) => row.title),
     trends: (t.all(`SELECT title FROM digest_trends WHERE digestId = '${digestId}' ORDER BY title`) as Array<
       { title: string }
     >).map((row) => row.title),
-    radar: ['radar newer', 'radar older'].map((title) =>
-      (t.all(`SELECT privateHtml FROM article_bodies WHERE articleId = '${articleId}'`) as Array<
-        { privateHtml: string }
-      >)[0]!.privateHtml.includes(title)
-    ),
+    radar: ['radar newer', 'radar older'].map((title) => t.dmOf(postId!).html.includes(title)),
   });
 
   it('直前の日の digest の createdAt が 24 時間前より遅ければ、createdAt から後の材料だけを 4 つの材料すべてで使う', async () => {
@@ -2322,7 +1691,7 @@ describe('CreateDailyDigestUseCase: 材料の窓の始まり', () => {
 
     const result = await t.run('scheduled');
 
-    expect(materials(t, result.digestId, result.articleId)).toEqual({
+    expect(materials(t, result.digestId, result.postId)).toEqual({
       items: ['rss newer 1', 'rss newer 2', 'rss newer 3'],
       trends: ['hatena newer', 'link newer'],
       radar: [true, false],
@@ -2338,7 +1707,7 @@ describe('CreateDailyDigestUseCase: 材料の窓の始まり', () => {
 
     const result = await t.run('scheduled');
 
-    expect(materials(t, result.digestId, result.articleId)).toEqual({
+    expect(materials(t, result.digestId, result.postId)).toEqual({
       items: ['rss newer 1', 'rss newer 2', 'rss newer 3'],
       trends: ['hatena newer', 'link newer'],
       radar: [true, false],
@@ -2699,10 +2068,10 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
       ...options,
     });
   };
-  const storedFeedEntryIds = (t: ReturnType<typeof setup>, articleId?: string): string[] =>
+  const storedFeedEntryIds = (t: ReturnType<typeof setup>, digestId?: string): string[] =>
     (t.all(
       `SELECT x.feedEntryId FROM digest_x_posts x JOIN digests d ON d.digestId = x.digestId ${
-        articleId === undefined ? '' : `WHERE d.articleId = '${articleId}'`
+        digestId === undefined ? '' : `WHERE d.digestId = '${digestId}'`
       } ORDER BY x.rank`,
     ) as Array<{ feedEntryId: string }>).map((row) => row.feedEntryId);
   const dump = (t: ReturnType<typeof setup>, query: string): string => JSON.stringify(t.all(query));
@@ -2715,7 +2084,7 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
     const result = await t.run();
 
     expect(result.xPosts).toBe(1);
-    expect(storedFeedEntryIds(t, result.articleId)).toEqual([post.feedEntryId]);
+    expect(storedFeedEntryIds(t, result.digestId)).toEqual([post.feedEntryId]);
     expect(t.all('SELECT * FROM digest_x_posts')).toEqual([
       { digestId: result.digestId, rank: 1, feedEntryId: post.feedEntryId },
     ]);
@@ -2732,7 +2101,7 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
 
     const result = await t.run('scheduled');
 
-    expect(storedFeedEntryIds(t, result.articleId)).toEqual([newer.feedEntryId]);
+    expect(storedFeedEntryIds(t, result.digestId)).toEqual([newer.feedEntryId]);
   });
 
   it('所有者でないユーザーのまとめには、X の投稿を引かず、feedEntryId も保存しない', async () => {
@@ -2767,7 +2136,44 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
     ]);
   });
 
-  it('記事、記事本文、digest の項目と trends、domain event には、投稿の本文もユーザー名も URL も feedEntryId も入れない', async () => {
+  it('投稿の返信を最後に 1 通、まとめを親にして送り、その postId をまとめの digest の xPostsPostId に保存する', async () => {
+    const t = setup();
+    const post = addXPost(t, addXSource(t, USERNAME), POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
+    t.addEntries(t.sources.rss, 'News', 3);
+
+    const result = await t.run();
+
+    const [summary, topic, xPosts] = t.dms;
+    expect(t.dms).toHaveLength(3);
+    expect(topic!.html).toContain('News 1');
+    expect(xPosts).toMatchObject({ kind: 'reply', parentPostId: summary!.postId });
+    expect(xPosts!.html).toContain(`@${USERNAME}`);
+    expect(xPosts!.html).toContain(POST_TEXT);
+    expect(xPosts!.html).toContain(post.url);
+    expect(t.digestOf('summary')).toMatchObject({ postId: summary!.postId, xPostsPostId: xPosts!.postId });
+    expect(t.digestOf('genai')!.xPostsPostId).toBeNull();
+    expect(result.xPosts).toBe(1);
+  });
+
+  it('投稿の返信の送信に失敗したら、まとめとトピックは保存し、xPostsPostId も feedEntryId も保存しない', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const t = setup({ failReplyAt: [1] });
+    addXPost(t, addXSource(t, USERNAME), POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
+    t.addEntries(t.sources.rss, 'News', 3);
+
+    const result = await t.run();
+
+    expect(result).toMatchObject({ status: 'created', topics: 1, xPosts: 0 });
+    expect(t.dms.map((dm) => dm.kind)).toEqual(['summary', 'reply']);
+    expect(t.digestOf('summary')!.xPostsPostId).toBeNull();
+    expect(storedFeedEntryIds(t)).toEqual([]);
+    expect(error).toHaveBeenCalledWith(
+      'iori digest: sending the X posts DM failed.',
+      expect.objectContaining({ errorMessage: 'reply down' }),
+    );
+  });
+
+  it('まとめとトピックの DM、digest の項目と trends、digest 以外の domain event には、投稿の本文もユーザー名も URL も feedEntryId も入れない', async () => {
     const t = setup();
     const source = addXSource(t, USERNAME);
     const post = addXPost(t, source, POST_TEXT, { embedding: basis(0), fetchedAt: NOW - 2 * HOUR });
@@ -2777,11 +2183,10 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
     const result = await t.run();
 
     expect(result).toMatchObject({ topics: 1, xPosts: 1 });
-    expect(t.bodiesOf('genai').privateHtml).toContain('News 1');
-    expect(t.bodies().publicHtml).toBe('<p>このまとめは公開を想定していません。</p>');
+    expect(t.htmlOf('genai')).toContain('News 1');
     const stored = [
-      dump(t, 'SELECT * FROM articles'),
-      dump(t, 'SELECT * FROM article_bodies'),
+      t.summaryHtml(),
+      t.htmlOf('genai'),
       dump(t, 'SELECT * FROM digests'),
       dump(t, 'SELECT * FROM digest_items'),
       dump(t, 'SELECT * FROM digest_trends'),
@@ -2819,30 +2224,6 @@ describe('CreateDailyDigestUseCase: X の投稿', () => {
     expect(JSON.stringify(calls)).not.toContain(USERNAME);
     expect(JSON.stringify(logs.flatMap((log) => log.mock.calls))).not.toContain(POST_TEXT);
     expect(JSON.stringify(logs.flatMap((log) => log.mock.calls))).not.toContain(USERNAME);
-  });
-
-  it('Web Push の通知には、投稿の本文もユーザー名も入れない', async () => {
-    const t = setup();
-    t.addPushSubscription('https://push.example/endpoint');
-    addXPost(t, addXSource(t, USERNAME), POST_TEXT, { fetchedAt: NOW - 2 * HOUR });
-
-    await t.run();
-
-    expect(JSON.stringify(t.send.mock.calls)).not.toContain(POST_TEXT);
-    expect(JSON.stringify(t.send.mock.calls)).not.toContain(USERNAME);
-  });
-
-  it('日を置き換えて作り直すと、前の digest の X の投稿の行を消し、新しい digest の行だけが残る', async () => {
-    const t = setup();
-    const source = addXSource(t, 'user_a');
-    const first = addXPost(t, source, 'first', { fetchedAt: NOW - 2 * HOUR });
-    await t.run('requested');
-    const second = addXPost(t, source, 'second', { fetchedAt: NOW - 1 * HOUR, publishedAt: NOW });
-
-    await t.run('requested');
-
-    expect(storedFeedEntryIds(t)).toEqual([second.feedEntryId, first.feedEntryId]);
-    expect(t.all('SELECT count(DISTINCT digestId) AS n FROM digest_x_posts')).toEqual([{ n: 1 }]);
   });
 });
 

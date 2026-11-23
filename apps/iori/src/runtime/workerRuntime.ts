@@ -42,16 +42,7 @@ import { createD1BookmarkedPostIdsResolverByActorIdWithPagination } from '../ada
 import { createD1BookmarkResolver } from '../adaptor/d1/bookmark/bookmarkResolver.ts';
 import { createD1BookmarksResolverByPostId } from '../adaptor/d1/bookmark/bookmarksResolverByPostId.ts';
 import { createD1Db } from '../adaptor/d1/client.ts';
-import { createD1DigestHeaderResolverByArticleId } from '../adaptor/d1/digest/digestHeaderResolverByArticleId.ts';
-import { createD1DigestHeadersResolverByArticleIds } from '../adaptor/d1/digest/digestHeadersResolverByArticleIds.ts';
-import { createD1DigestItemFeedbackGivenStore } from '../adaptor/d1/digest/digestItemFeedbackGivenStore.ts';
-import { createD1DigestResolverByArticleId } from '../adaptor/d1/digest/digestResolverByArticleId.ts';
-import { createD1DigestResolverByDigestItemId } from '../adaptor/d1/digest/digestResolverByDigestItemId.ts';
-import { createD1DigestResolverByUserId } from '../adaptor/d1/digest/digestResolverByUserId.ts';
-import { createD1DigestResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestResolverByUserIdAndDigestDate.ts';
-import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../adaptor/d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../adaptor/d1/digest/digestTopicItemsResolverByUserIdAndDigestDateFrom.ts';
-import { createD1DigestXPostsResolverByArticleId } from '../adaptor/d1/digest/digestXPostsResolverByArticleId.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../adaptor/d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../adaptor/d1/digestSubscription/digestSubscriptionSavedStore.ts';
 import { createD1DigestTopicCreatedStore } from '../adaptor/d1/digestTopic/digestTopicCreatedStore.ts';
@@ -67,7 +58,6 @@ import { createD1FederatedTimelineItemsResolver } from '../adaptor/d1/federatedT
 import { createD1DirectMessageActorsResolverByUris } from '../adaptor/d1/fediverseConversation/directMessageActorsResolverByUris.ts';
 import { createD1DirectMessageNotificationsReadMarker } from '../adaptor/d1/fediverseConversation/directMessageNotificationsReadMarker.ts';
 import { createD1DirectMessagePostsResolver } from '../adaptor/d1/fediverseConversation/directMessagePostsResolver.ts';
-import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../adaptor/d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../adaptor/d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1XFeedEntriesResolver } from '../adaptor/d1/feedEntry/xFeedEntriesResolver.ts';
 import { createD1AllFeedSourcesResolver } from '../adaptor/d1/feedSource/allFeedSourcesResolver.ts';
@@ -84,9 +74,6 @@ import { createD1FollowResolver } from '../adaptor/d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../adaptor/d1/follow/undoFollowingProcessedStore.ts';
 import { createD1PostImageCreatedStore } from '../adaptor/d1/image/postImageCreatedStore.ts';
 import { createD1PostImagesResolverByPostId } from '../adaptor/d1/image/postImagesResolver.ts';
-import { createD1InterestSourceDeletedStore } from '../adaptor/d1/interestSource/interestSourceDeletedStore.ts';
-import { createD1InterestSourceEmbeddingCopiedStore } from '../adaptor/d1/interestSource/interestSourceEmbeddingCopiedStore.ts';
-import { createD1InterestSourcesResolverByUserIdAndRefAndKinds } from '../adaptor/d1/interestSource/interestSourcesResolverByUserIdAndRefAndKinds.ts';
 import { createD1LikedPostIdsResolverByActorIdWithPagination } from '../adaptor/d1/like/likedPostIdsResolverByActorIdWithPagination.ts';
 import { createD1LikeResolver } from '../adaptor/d1/like/likeResolver.ts';
 import { createD1LocalLikeCreatedStore } from '../adaptor/d1/like/localLikeCreatedStore.ts';
@@ -209,7 +196,6 @@ import { Instant } from '../domain/instant/instant.ts';
 import type { Argon2idDerive } from '../domain/password/argon2idDerive.ts';
 import { renderMarkdownToUnsanitizedHtml } from '../domain/post/postContent.ts';
 import { createCloudflareFederationRuntime, type WaitUntil } from '../federation.cloudflare.ts';
-import { createDigestUseCases } from '../scheduled/digestTasks.ts';
 import { createRefreshXPostsUseCase } from '../scheduled/feedTasks.ts';
 import { AcceptFollowRequestUseCase } from '../useCase/acceptFollowRequest.ts';
 import { AcceptUnfollowUseCase } from '../useCase/acceptUnfollow.ts';
@@ -247,7 +233,6 @@ import { GetMediaUploadUseCase } from '../useCase/getMediaUpload.ts';
 import { GetPostInteractionsUseCase } from '../useCase/getPostInteractions.ts';
 import { createGetTimelineUseCase } from '../useCase/getTimeline.ts';
 import { GetXFeedEntriesUseCase } from '../useCase/getXFeedEntries.ts';
-import { GiveDigestItemFeedbackUseCase } from '../useCase/giveDigestItemFeedback.ts';
 import { notifyMentions } from '../useCase/helper/notifyMentions.ts';
 import { IsDigestOwner } from '../useCase/isDigestOwner.ts';
 import { IssueAuthorizationCodeUseCase } from '../useCase/issueAuthorizationCode.ts';
@@ -342,7 +327,6 @@ export const createWorkerRuntimePorts = async (
     timelineSearchCandidatesResolver: createD1TimelineSearchCandidatesResolver(db),
     htmlToPlainText,
   });
-  const digestResolverByUserIdAndDigestDate = createD1DigestResolverByUserIdAndDigestDate(db);
   const digestSubscriptionResolverByUserId = createD1DigestSubscriptionResolverByUserId(db);
   const userPreferencesResolverByUserId = createD1UserPreferencesResolverByUserId(db);
   const allFeedSourcesResolver = createD1AllFeedSourcesResolver(db);
@@ -695,27 +679,12 @@ export const createWorkerRuntimePorts = async (
         }),
     },
     digest: {
-      digestResolverByUserIdAndDigestDate,
-      digestResolverByUserId: createD1DigestResolverByUserId(db),
-      digestTopicEntriesResolverByUserIdAndDigestDate: createD1DigestTopicEntriesResolverByUserIdAndDigestDate(db),
       timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
       hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
       digestSubscriptionResolverByUserId,
       saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase.create({
         digestSubscriptionResolverByUserId,
         digestSubscriptionSavedStore: createD1DigestSubscriptionSavedStore(db),
-      }),
-      requestDigestUseCase: createDigestUseCases(env).requestDigest,
-      deepDiveDigestItemUseCase: createDigestUseCases(env).deepDiveDigestItem,
-      giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase.create({
-        articleResolver,
-        digestResolverByDigestItemId: createD1DigestResolverByDigestItemId(db),
-        feedEntryEmbeddingResolverByFeedEntryId: createD1FeedEntryEmbeddingResolverByFeedEntryId(db),
-        interestSourcesResolverByUserIdAndRefAndKinds: createD1InterestSourcesResolverByUserIdAndRefAndKinds(db),
-        interestSourceDeletedStore: createD1InterestSourceDeletedStore(db),
-        interestSourceEmbeddingCopiedStore: createD1InterestSourceEmbeddingCopiedStore(db),
-        digestItemFeedbackGivenStore: createD1DigestItemFeedbackGivenStore(db),
-        now: Instant.now,
       }),
       allFeedSourcesResolver,
       addFeedSourceUseCase: AddFeedSourceUseCase.create({
@@ -943,8 +912,6 @@ export const createWorkerRuntimePorts = async (
         articleResolver,
         threadResolver: createD1ThreadResolver(db, env.ORIGIN),
         articleBodyResolver,
-        digestXPostsResolverByArticleId: createD1DigestXPostsResolverByArticleId(db),
-        isDigestOwner,
       }),
       getArticlesUseCase: GetArticlesUseCase.create({
         sessionResolver,
@@ -986,7 +953,6 @@ export const createWorkerRuntimePorts = async (
         articleResolver,
         articlePublishedStore: createD1ArticlePublishedStore(db),
         articleBodyResolver,
-        digestResolverByArticleId: createD1DigestResolverByArticleId(db),
       }),
       unpublishArticleUseCase: UnpublishArticleUseCase.create({
         sessionResolver,
@@ -1001,12 +967,9 @@ export const createWorkerRuntimePorts = async (
         actorResolverByUserId,
         articleResolver,
         articleBodyResolver,
-        digestHeaderResolverByArticleId: createD1DigestHeaderResolverByArticleId(db),
         articleWithDependentsDeletedStore: createD1ArticleWithDependentsDeletedStore(db),
       }),
       publishedArticlesResolver: createD1PublishedArticlesWithAuthorResolver(db),
-      digestHeadersResolverByArticleIds: createD1DigestHeadersResolverByArticleIds(db),
-      digestResolverByArticleId: createD1DigestResolverByArticleId(db),
       actorResolverByUserId,
       // OGP images are generated on first request by serveOgImage and cached in R2.
       publishOgImage: async () => undefined,

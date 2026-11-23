@@ -34,17 +34,6 @@ const setup = () => {
     userId,
     Date.now() + 60_000,
   );
-  const addDigest = (digestDate: string, topicKey = 'summary') => {
-    const articleId = crypto.randomUUID();
-    sqlite.prepare(
-      'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
-    ).run(articleId, actorId, userId, null, `ダイジェスト ${digestDate}`, 'draft', 1_000, null, null);
-    sqlite.prepare(
-      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt,topicKey) VALUES (?,?,?,?,?,?,?)',
-    )
-      .run(crypto.randomUUID(), userId, digestDate, articleId, 2_000, null, topicKey);
-    return articleId;
-  };
   const env = {
     DB: fixture.binding,
     UPLOADS: { get: async () => null, put: async () => undefined, head: async () => null },
@@ -58,7 +47,7 @@ const setup = () => {
   } as unknown as IoriWorkerEnv;
   const request = (path: string, init?: RequestInit) =>
     worker.fetch(new Request(`${origin}${path}`, { redirect: 'manual', ...init }), env, executionContext);
-  return { request, addDigest };
+  return { request };
 };
 
 describe('GET /digest', () => {
@@ -69,21 +58,10 @@ describe('GET /digest', () => {
     expect(new URL(response.headers.get('Location')!, origin).pathname).toBe('/sign-in');
   });
 
-  it('ログイン中で digest がなければ /articles へ 302 で返す', async () => {
+  it('ログイン中なら /messages へ 302 で返す', async () => {
     const response = await setup().request('/digest', { headers: { Cookie: `sessionId=${sessionId}` } });
 
     expect(response.status).toBe(302);
-    expect(new URL(response.headers.get('Location')!, origin).pathname).toBe('/articles');
-  });
-
-  it('ログイン中で digest があれば、最新のまとめの article へ 302 で返す', async () => {
-    const { request, addDigest } = setup();
-    addDigest('2026-11-04');
-    const latest = addDigest('2026-11-05');
-
-    const response = await request('/digest', { headers: { Cookie: `sessionId=${sessionId}` } });
-
-    expect(response.status).toBe(302);
-    expect(new URL(response.headers.get('Location')!, origin).pathname).toBe(`/articles/${latest}`);
+    expect(new URL(response.headers.get('Location')!, origin).pathname).toBe('/messages');
   });
 });

@@ -45,6 +45,8 @@ export const AI_AGENT_BOT_IMAGES = {
  */
 export const AI_AGENT_BOT_POST_VISIBILITY: Visibility = 'private';
 
+export const AI_AGENT_BOT_DIGEST_VISIBILITY: Visibility = 'direct';
+
 /** 1 つのスレッドで bot が返信する上限。bot どうしや人との応酬が終わらないのを防ぐ */
 export const MAX_BOT_REPLIES_PER_THREAD = 20;
 
@@ -240,6 +242,7 @@ export const AiAgentBot = {
   profile: AI_AGENT_BOT_PROFILE,
   images: AI_AGENT_BOT_IMAGES,
   postVisibility: AI_AGENT_BOT_POST_VISIBILITY,
+  digestVisibility: AI_AGENT_BOT_DIGEST_VISIBILITY,
   isBotUsername: isAiAgentBotUsername,
   isRetiredUsername: isRetiredAiAgentBotUsername,
   decideMusingTheme,

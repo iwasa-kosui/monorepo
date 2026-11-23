@@ -1,4 +1,4 @@
-import type { DigestFeedback, DigestTopicItem } from '../digest/digest.ts';
+import type { DigestTopicItem } from '../digest/digest.ts';
 import type { Instant } from '../instant/instant.ts';
 import { Recommendation } from '../recommendation/recommendation.ts';
 import {
@@ -69,7 +69,6 @@ export type DigestItemPreview = Readonly<{
   rank: number;
   title: string;
   url: string;
-  feedback: DigestFeedback | null;
   first: TopicSimilarity | null;
   second: TopicSimilarity | null;
   margin: number | null;

@@ -66,6 +66,7 @@ export const ARCHIVE_PLAIN_EVENT_NAMES = [
   'digest.expired',
   'digest.itemFeedbackGiven',
   'digest.pushSent',
+  'digest.xPostsRemoved',
   'digestDeepDive.started',
   'digestDeepDive.turnAdded',
   'digestSubscription.saved',

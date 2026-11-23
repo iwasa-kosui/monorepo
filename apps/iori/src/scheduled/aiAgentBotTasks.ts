@@ -23,6 +23,7 @@ export const createRespondToAiAgentMentionsTask = (createBotRuntime: CreateBotRu
       bot: { userId: bot.bot.user.id, actorId: bot.bot.actor.id },
       capabilities: bot.capabilities,
       replier: bot.replier,
+      sendDigest: bot.sendDigest,
     });
     console.info('iori ai agent bot responded to mentions.', result.val);
   },

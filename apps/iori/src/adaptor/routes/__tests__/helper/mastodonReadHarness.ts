@@ -26,7 +26,6 @@ import type { TextGenerator } from '../../../../ports/textGenerator.ts';
 import type { TopicRelevanceJudge } from '../../../../ports/topicRelevanceJudge.ts';
 import { createWorkerBlockActions, createWorkerFollowActions } from '../../../../runtime/workerCoreUseCases.ts';
 import { createWorkerReportAction } from '../../../../runtime/workerReportActions.ts';
-import { createDigestUseCases } from '../../../../scheduled/digestTasks.ts';
 import { AcceptFollowRequestUseCase } from '../../../../useCase/acceptFollowRequest.ts';
 import { AcceptUnfollowUseCase } from '../../../../useCase/acceptUnfollow.ts';
 import { AddDigestTopicUseCase } from '../../../../useCase/addDigestTopic.ts';
@@ -52,7 +51,6 @@ import { FetchRemoteOutboxUseCase } from '../../../../useCase/fetchRemoteOutbox.
 import { FetchReplyNotesRecursiveUseCase } from '../../../../useCase/fetchReplyNotesRecursive.ts';
 import { GetPostInteractionsUseCase } from '../../../../useCase/getPostInteractions.ts';
 import { GetXFeedEntriesUseCase } from '../../../../useCase/getXFeedEntries.ts';
-import { GiveDigestItemFeedbackUseCase } from '../../../../useCase/giveDigestItemFeedback.ts';
 import { notifyMentions } from '../../../../useCase/helper/notifyMentions.ts';
 import { IsDigestOwner } from '../../../../useCase/isDigestOwner.ts';
 import { LikeBlueskyPostUseCase } from '../../../../useCase/likeBlueskyPost.ts';
@@ -86,7 +84,6 @@ import { UndoRepostBlueskyPostUseCase } from '../../../../useCase/undoRepostBlue
 import { UnlikeBlueskyPostUseCase } from '../../../../useCase/unlikeBlueskyPost.ts';
 import { UpdatePostUseCase } from '../../../../useCase/updatePost.ts';
 import { VotePollUseCase } from '../../../../useCase/votePoll.ts';
-import type { IoriWorkerEnv } from '../../../../workerEnv.ts';
 import { createMastodonSeed } from '../../../d1/__tests__/mastodonSeed.ts';
 import { createSqliteD1Fixture } from '../../../d1/__tests__/sqliteFixture.ts';
 import { createD1AccountProfilesResolverByActorIds } from '../../../d1/actor/accountProfilesResolverByActorIds.ts';
@@ -103,7 +100,6 @@ import { createD1AiSummaryUsageRecorder } from '../../../d1/aiSummary/aiSummaryU
 import { createD1AiTranslationUsageRecorder } from '../../../d1/aiTranslation/aiTranslationUsageRecorder.ts';
 import { createD1PostTranslationStore } from '../../../d1/aiTranslation/postTranslationStore.ts';
 import { createD1ArticleDeletedStore } from '../../../d1/article/articleDeletedStore.ts';
-import { createD1ArticleResolver } from '../../../d1/article/articleResolver.ts';
 import { createD1ArticleResolverByRootPostId } from '../../../d1/article/articleResolverByRootPostId.ts';
 import { createD1BlockCreatedStore } from '../../../d1/block/blockCreatedStore.ts';
 import { createD1BlockDeletedStore } from '../../../d1/block/blockDeletedStore.ts';
@@ -128,11 +124,6 @@ import { createD1BookmarkCreatedStore } from '../../../d1/bookmark/bookmarkCreat
 import { createD1BookmarkDeletedStore } from '../../../d1/bookmark/bookmarkDeletedStore.ts';
 import { createD1BookmarkedPostIdsResolverByActorIdWithPagination } from '../../../d1/bookmark/bookmarkedPostIdsResolverByActorIdWithPagination.ts';
 import { createD1BookmarkResolver } from '../../../d1/bookmark/bookmarkResolver.ts';
-import { createD1DigestItemFeedbackGivenStore } from '../../../d1/digest/digestItemFeedbackGivenStore.ts';
-import { createD1DigestResolverByDigestItemId } from '../../../d1/digest/digestResolverByDigestItemId.ts';
-import { createD1DigestResolverByUserId } from '../../../d1/digest/digestResolverByUserId.ts';
-import { createD1DigestResolverByUserIdAndDigestDate } from '../../../d1/digest/digestResolverByUserIdAndDigestDate.ts';
-import { createD1DigestTopicEntriesResolverByUserIdAndDigestDate } from '../../../d1/digest/digestTopicEntriesResolverByUserIdAndDigestDate.ts';
 import { createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom } from '../../../d1/digest/digestTopicItemsResolverByUserIdAndDigestDateFrom.ts';
 import { createD1DigestSubscriptionResolverByUserId } from '../../../d1/digestSubscription/digestSubscriptionResolverByUserId.ts';
 import { createD1DigestSubscriptionSavedStore } from '../../../d1/digestSubscription/digestSubscriptionSavedStore.ts';
@@ -149,7 +140,6 @@ import { createD1FederatedTimelineItemsResolver } from '../../../d1/federatedTim
 import { createD1DirectMessageActorsResolverByUris } from '../../../d1/fediverseConversation/directMessageActorsResolverByUris.ts';
 import { createD1DirectMessageNotificationsReadMarker } from '../../../d1/fediverseConversation/directMessageNotificationsReadMarker.ts';
 import { createD1DirectMessagePostsResolver } from '../../../d1/fediverseConversation/directMessagePostsResolver.ts';
-import { createD1FeedEntryEmbeddingResolverByFeedEntryId } from '../../../d1/feedEntry/feedEntryEmbeddingResolverByFeedEntryId.ts';
 import { createD1HatenaTrendsResolverByFetchedSince } from '../../../d1/feedEntry/hatenaTrendsResolverByFetchedSince.ts';
 import { createD1XFeedEntriesResolver } from '../../../d1/feedEntry/xFeedEntriesResolver.ts';
 import { createD1AllFeedSourcesResolver } from '../../../d1/feedSource/allFeedSourcesResolver.ts';
@@ -166,9 +156,6 @@ import { createD1FollowResolver } from '../../../d1/follow/followResolver.ts';
 import { createD1UndoFollowingProcessedStore } from '../../../d1/follow/undoFollowingProcessedStore.ts';
 import { createD1PostImageCreatedStore } from '../../../d1/image/postImageCreatedStore.ts';
 import { createD1PostImagesResolverByPostId } from '../../../d1/image/postImagesResolver.ts';
-import { createD1InterestSourceDeletedStore } from '../../../d1/interestSource/interestSourceDeletedStore.ts';
-import { createD1InterestSourceEmbeddingCopiedStore } from '../../../d1/interestSource/interestSourceEmbeddingCopiedStore.ts';
-import { createD1InterestSourcesResolverByUserIdAndRefAndKinds } from '../../../d1/interestSource/interestSourcesResolverByUserIdAndRefAndKinds.ts';
 import { createD1LikedPostIdsResolverByActorIdWithPagination } from '../../../d1/like/likedPostIdsResolverByActorIdWithPagination.ts';
 import { createD1LikeResolver } from '../../../d1/like/likeResolver.ts';
 import { createD1LocalLikeCreatedStore } from '../../../d1/like/localLikeCreatedStore.ts';
@@ -929,29 +916,12 @@ export const setupReadApi = (
         '/api',
         createWorkerIoriDigestRouter({
           authn,
-          digestResolverByUserIdAndDigestDate: createD1DigestResolverByUserIdAndDigestDate(db),
-          digestResolverByUserId: createD1DigestResolverByUserId(db),
-          digestTopicEntriesResolverByUserIdAndDigestDate: createD1DigestTopicEntriesResolverByUserIdAndDigestDate(db),
           timelineLinkTrendsResolverByUserId: createD1TimelineLinkTrendsResolverByUserId(db),
           hatenaTrendsResolverByFetchedSince: createD1HatenaTrendsResolverByFetchedSince(db),
           digestSubscriptionResolverByUserId,
           saveDigestSubscriptionUseCase: SaveDigestSubscriptionUseCase.create({
             digestSubscriptionResolverByUserId,
             digestSubscriptionSavedStore: createD1DigestSubscriptionSavedStore(db),
-          }),
-          requestDigestUseCase: createDigestUseCases({ DB: fixture.binding } as unknown as IoriWorkerEnv)
-            .requestDigest,
-          deepDiveDigestItemUseCase: createDigestUseCases({ DB: fixture.binding } as unknown as IoriWorkerEnv)
-            .deepDiveDigestItem,
-          giveDigestItemFeedbackUseCase: GiveDigestItemFeedbackUseCase.create({
-            articleResolver: createD1ArticleResolver(db),
-            digestResolverByDigestItemId: createD1DigestResolverByDigestItemId(db),
-            feedEntryEmbeddingResolverByFeedEntryId: createD1FeedEntryEmbeddingResolverByFeedEntryId(db),
-            interestSourcesResolverByUserIdAndRefAndKinds: createD1InterestSourcesResolverByUserIdAndRefAndKinds(db),
-            interestSourceDeletedStore: createD1InterestSourceDeletedStore(db),
-            interestSourceEmbeddingCopiedStore: createD1InterestSourceEmbeddingCopiedStore(db),
-            digestItemFeedbackGivenStore: createD1DigestItemFeedbackGivenStore(db),
-            now: Instant.now,
           }),
           allFeedSourcesResolver,
           addFeedSourceUseCase: AddFeedSourceUseCase.create({

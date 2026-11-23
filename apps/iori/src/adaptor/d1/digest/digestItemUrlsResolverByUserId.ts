@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, eq, notInArray } from 'drizzle-orm';
+import { and, eq, isNotNull, notInArray } from 'drizzle-orm';
 
 import type { DigestItemUrlsResolverByUserId } from '../../../domain/digest/digest.ts';
 import type { IoriD1Db } from '../client.ts';
@@ -11,6 +11,7 @@ export const createD1DigestItemUrlsResolverByUserId = (db: IoriD1Db): DigestItem
       .innerJoin(digestsTable, eq(digestsTable.digestId, digestItemsTable.digestId))
       .where(and(
         eq(digestsTable.userId, userId),
+        isNotNull(digestsTable.postId),
         excludingDigestIds.length === 0 ? undefined : notInArray(digestsTable.digestId, [...excludingDigestIds]),
       ));
     return RA.ok(rows.map((row) => row.url));

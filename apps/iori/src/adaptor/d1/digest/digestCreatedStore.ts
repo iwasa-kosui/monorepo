@@ -11,20 +11,13 @@ export const createD1DigestCreatedStore = (db: IoriD1Db): DigestCreatedStore => 
     await runBatch(
       db,
       events.flatMap((event) => {
-        const { items, trends, xPostFeedEntryIds, createdAt, pushSentAt, ...digest } = event.aggregateState;
+        const { items, trends, xPostFeedEntryIds, createdAt, ...digest } = event.aggregateState;
         return [
           db.insert(digestsTable).values({
             ...digest,
             createdAt: new Date(createdAt),
-            pushSentAt: pushSentAt === null ? null : new Date(pushSentAt),
           }),
-          ...items.map(({ feedbackAt, ...item }) =>
-            db.insert(digestItemsTable).values({
-              ...item,
-              feedbackAt: feedbackAt === null ? null : new Date(feedbackAt),
-              digestId: digest.digestId,
-            })
-          ),
+          ...items.map((item) => db.insert(digestItemsTable).values({ ...item, digestId: digest.digestId })),
           ...trends.map((trend) => db.insert(digestTrendsTable).values({ ...trend, digestId: digest.digestId })),
           ...xPostFeedEntryIds.map((feedEntryId, index) =>
             db.insert(digestXPostsTable).values({ digestId: digest.digestId, rank: index + 1, feedEntryId })

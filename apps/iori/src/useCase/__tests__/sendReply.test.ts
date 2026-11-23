@@ -390,6 +390,52 @@ describe('SendReplyUseCase のメンション', () => {
     expect(calls[0]?.[3]).toEqual({ preferSharedInbox: false });
   });
 
+  const ownerUri = 'https://example.com/users/owner';
+
+  it.each([
+    ['既定では', undefined],
+    ['notifyMentions が true のとき', true],
+  ])('%s、本文でメンションしたローカルの利用者に通知する', async (_, notifyMentions) => {
+    const { deps, session, localParent } = setup();
+    const mentionNotifier = vi.fn(async () => undefined);
+
+    await SendReplyUseCase.create({ ...deps, mentionNotifier }).run({
+      sessionId: session.sessionId,
+      postId: localParent.postId,
+      content: `<p>${mentionHtml(ownerUri, 'owner@example.com')} hi</p>`,
+      imageUrls: [],
+      visibility: 'direct',
+      ...(notifyMentions === undefined ? {} : { notifyMentions }),
+      request: new Request('https://example.com'),
+      ctx: createContext(),
+    });
+
+    expect(mentionNotifier).toHaveBeenCalledTimes(1);
+    expect(mentionNotifier).toHaveBeenCalledWith(expect.objectContaining({ recipientActorUris: [ownerUri] }));
+  });
+
+  it('notifyMentions が false のときは、本文でメンションしていてもメンション通知を作らず、返信は保存する', async () => {
+    const { deps, session, localParent } = setup();
+    const mentionNotifier = vi.fn(async () => undefined);
+
+    const result = await SendReplyUseCase.create({ ...deps, mentionNotifier }).run({
+      sessionId: session.sessionId,
+      postId: localParent.postId,
+      content: `<p>${mentionHtml(ownerUri, 'owner@example.com')} hi</p>`,
+      imageUrls: [],
+      visibility: 'direct',
+      notifyMentions: false,
+      request: new Request('https://example.com'),
+      ctx: createContext(),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mentionNotifier).not.toHaveBeenCalled();
+    expect(vi.mocked(deps.postCreatedStore.store).mock.calls[0]?.[0]?.eventPayload).toMatchObject({
+      participantActorUris: ['https://example.com/users/kosui', ownerUri],
+    });
+  });
+
   it('public の返信の参加者は保存しない', async () => {
     const { deps, session, localParent } = setup();
 

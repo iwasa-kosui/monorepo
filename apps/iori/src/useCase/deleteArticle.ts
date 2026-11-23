@@ -12,7 +12,6 @@ import {
 } from '../domain/article/article.ts';
 import { ArticleId } from '../domain/article/articleId.ts';
 import { ArticleBody, type ArticleBodyResolver } from '../domain/articleBody/articleBody.ts';
-import { Digest, type DigestHeaderResolverByArticleId } from '../domain/digest/digest.ts';
 import { Instant } from '../domain/instant/instant.ts';
 import { SessionExpiredError, type SessionResolver } from '../domain/session/session.ts';
 import { UserNotFoundError, type UserResolver } from '../domain/user/user.ts';
@@ -56,7 +55,6 @@ type Deps = Readonly<{
   actorResolverByUserId: ActorResolverByUserId;
   articleResolver: ArticleResolver;
   articleBodyResolver: ArticleBodyResolver;
-  digestHeaderResolverByArticleId: DigestHeaderResolverByArticleId;
   articleWithDependentsDeletedStore: ArticleWithDependentsDeletedStore;
 }>;
 
@@ -66,7 +64,6 @@ const create = ({
   actorResolverByUserId,
   articleResolver,
   articleBodyResolver,
-  digestHeaderResolverByArticleId,
   articleWithDependentsDeletedStore,
 }: Deps): DeleteArticleUseCase => {
   const now = Instant.now();
@@ -97,15 +94,10 @@ const create = ({
         if (!body.ok) {
           return body;
         }
-        const digestHeader = await digestHeaderResolverByArticleId.resolve(articleId);
-        if (!digestHeader.ok) {
-          return digestHeader;
-        }
 
         await articleWithDependentsDeletedStore.store(
           Article.deleteArticle(now)(articleId),
           body.val === undefined ? undefined : ArticleBody.deleteArticleBody(now)(articleId),
-          digestHeader.val === undefined ? undefined : Digest.expire(digestHeader.val, now),
         );
 
         if (existingArticle.status === 'published') {

@@ -60,6 +60,7 @@ type Input =
     visibility?: Visibility;
     crosspostToBluesky?: boolean;
     mentions?: ReadonlyArray<MentionRecipient>;
+    notifyMentions?: boolean;
     quoteUri?: string;
     request: Request;
     ctx: RequestContext<unknown>;
@@ -467,9 +468,9 @@ const create = ({
         return RA.ok(undefined);
       }),
       // 本文でメンションしたローカルの利用者へ通知する。返信の通知を受ける相手には重ねて作らない
-      RA.andThrough(async ({ actor, replyPost, parentPost, inReplyToUri }) => {
+      RA.andThrough(async ({ actor, replyPost, parentPost, inReplyToUri, notifyMentions }) => {
         const recipientActorUris = toMentionNoteFields(replyPost.content).ccs.map((uri) => uri.href);
-        if (mentionNotifier === undefined || recipientActorUris.length === 0) {
+        if (notifyMentions === false || mentionNotifier === undefined || recipientActorUris.length === 0) {
           return RA.ok(undefined);
         }
         try {

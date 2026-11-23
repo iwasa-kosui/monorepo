@@ -1,12 +1,12 @@
-import { err, ok, type Result } from '@iwasa-kosui/result';
+import type { Result } from '@iwasa-kosui/result';
 import z from 'zod/v4';
 
 import { Schema } from '../../helper/schema.ts';
 import { AggregateEvent, type DomainEvent } from '../aggregate/event.ts';
 import type { Agg } from '../aggregate/index.ts';
-import { ArticleId } from '../article/articleId.ts';
 import type { XUsername } from '../feedSource/xUsername.ts';
 import { Instant } from '../instant/instant.ts';
+import { PostId } from '../post/postId.ts';
 import { UserId } from '../user/userId.ts';
 import { DigestId } from './digestId.ts';
 import { DigestItemId } from './digestItemId.ts';
@@ -22,13 +22,6 @@ export const DigestTrigger = {
   zodType: digestTriggerZodType,
 } as const;
 
-export const digestFeedbackKinds = ['interested', 'not_interested'] as const;
-const digestFeedbackZodType = z.enum(digestFeedbackKinds);
-export type DigestFeedback = z.output<typeof digestFeedbackZodType>;
-export const DigestFeedback = {
-  zodType: digestFeedbackZodType,
-} as const;
-
 const digestItemZodType = z.object({
   digestItemId: DigestItemId.zodType,
   feedEntryId: z.string().min(1),
@@ -38,8 +31,6 @@ const digestItemZodType = z.object({
   score: z.number().nullable(),
   summary: z.string().nullable(),
   reasonInterestSourceId: z.string().nullable(),
-  feedback: digestFeedbackZodType.nullable(),
-  feedbackAt: z.nullable(Instant.zodType),
 });
 export type DigestItem = z.output<typeof digestItemZodType>;
 
@@ -60,9 +51,9 @@ const digestHeaderZodType = z.object({
   digestId: DigestId.zodType,
   userId: UserId.zodType,
   digestDate: digestDateZodType,
-  articleId: ArticleId.zodType,
+  postId: PostId.zodType,
+  xPostsPostId: z.nullable(PostId.zodType),
   createdAt: Instant.zodType,
-  pushSentAt: z.nullable(Instant.zodType),
   trigger: digestTriggerZodType,
   topicKey: z.string().min(1),
 });
@@ -95,26 +86,22 @@ type DigestEvent<
 const DigestEvent = AggregateEvent.createFactory<DigestAggregate>('digest');
 
 export type DigestCreated = DigestEvent<Digest, 'digest.created', Digest>;
-export type DigestPushSent = DigestEvent<
-  Digest,
-  'digest.pushSent',
-  { digestId: DigestId; pushSentAt: Instant }
->;
-export type DigestItemFeedbackGiven = DigestEvent<
-  Digest,
-  'digest.itemFeedbackGiven',
-  { digestItemId: DigestItemId; feedback: DigestFeedback | null; feedbackAt: Instant | null }
->;
 export type DigestExpired = DigestEvent<
   undefined,
   'digest.expired',
   { digestId: DigestId; digestDate: string }
 >;
+export type DigestXPostsRemoved = DigestEvent<
+  Digest,
+  'digest.xPostsRemoved',
+  { digestId: DigestId }
+>;
 
 export type CreateDigestPayload = Readonly<{
   userId: UserId;
   digestDate: string;
-  articleId: ArticleId;
+  postId: PostId;
+  xPostsPostId: PostId | null;
   trigger: DigestTrigger;
   topicKey: string;
   items: ReadonlyArray<Omit<DigestItem, 'digestItemId'>>;
@@ -127,7 +114,6 @@ const create = (payload: CreateDigestPayload, now: Instant): Result<DigestCreate
     ...payload,
     digestId: DigestId.generate(),
     createdAt: now,
-    pushSentAt: null,
     items: payload.items.map((item) => ({ ...item, digestItemId: DigestItemId.generate() })),
   });
   if (!parsed.ok) return parsed;
@@ -136,84 +122,6 @@ const create = (payload: CreateDigestPayload, now: Instant): Result<DigestCreate
     ...parsed,
     val: DigestEvent.create(toAggregateId(digest), digest, 'digest.created', digest, now),
   };
-};
-
-const recordPushSent = (digest: Digest, now: Instant): DigestPushSent => {
-  const sent: Digest = { ...digest, pushSentAt: now };
-  return DigestEvent.create(
-    toAggregateId(sent),
-    sent,
-    'digest.pushSent',
-    { digestId: sent.digestId, pushSentAt: now },
-    now,
-  );
-};
-
-export type DigestItemNotFoundError = Readonly<{
-  type: 'DigestItemNotFoundError';
-  message: string;
-  detail: { digestItemId: DigestItemId };
-}>;
-
-export const DigestItemNotFoundError = {
-  create: (digestItemId: DigestItemId): DigestItemNotFoundError => ({
-    type: 'DigestItemNotFoundError',
-    message: `The digest item "${digestItemId}" is not found.`,
-    detail: { digestItemId },
-  }),
-} as const;
-
-export type DigestArticlePublishedError = Readonly<{
-  type: 'DigestArticlePublishedError';
-  message: string;
-  detail: { articleId: ArticleId };
-}>;
-
-export const DigestArticlePublishedError = {
-  create: (articleId: ArticleId): DigestArticlePublishedError => ({
-    type: 'DigestArticlePublishedError',
-    message: `The article "${articleId}" of the digest has already been published.`,
-    detail: { articleId },
-  }),
-} as const;
-
-export type DigestSummaryNotPublishableError = Readonly<{
-  type: 'DigestSummaryNotPublishableError';
-  message: string;
-  detail: { articleId: ArticleId };
-}>;
-
-export const DigestSummaryNotPublishableError = {
-  create: (articleId: ArticleId): DigestSummaryNotPublishableError => ({
-    type: 'DigestSummaryNotPublishableError',
-    message: 'このまとめは公開できません',
-    detail: { articleId },
-  }),
-} as const;
-
-const giveFeedback = (
-  digest: Digest,
-  digestItemId: DigestItemId,
-  feedback: DigestFeedback,
-  now: Instant,
-): Result<DigestItemFeedbackGiven, DigestItemNotFoundError> => {
-  const item = digest.items.find((candidate) => candidate.digestItemId === digestItemId);
-  if (item === undefined) return err(DigestItemNotFoundError.create(digestItemId));
-  const next = item.feedback === feedback ? null : feedback;
-  const feedbackAt = next === null ? null : now;
-  const updated: Digest = {
-    ...digest,
-    items: digest.items.map((candidate) =>
-      candidate.digestItemId === digestItemId ? { ...candidate, feedback: next, feedbackAt } : candidate
-    ),
-  };
-  return ok(DigestEvent.create(
-    toAggregateId(updated),
-    updated,
-    'digest.itemFeedbackGiven',
-    { digestItemId, feedback: next, feedbackAt },
-    now,
-  ));
 };
 
 const expire = (header: Pick<DigestHeader, 'digestId' | 'digestDate'>, now: Instant): DigestExpired =>
@@ -225,23 +133,23 @@ const expire = (header: Pick<DigestHeader, 'digestId' | 'digestDate'>, now: Inst
     now,
   );
 
+const removeXPosts = (digest: Digest, now: Instant): DigestXPostsRemoved => {
+  const removed: Digest = { ...digest, xPostsPostId: null };
+  return DigestEvent.create(
+    toAggregateId(removed),
+    removed,
+    'digest.xPostsRemoved',
+    { digestId: removed.digestId },
+    now,
+  );
+};
+
 export type DigestCreatedStore = Agg.Store<DigestCreated>;
-export type DigestPushSentStore = Agg.Store<DigestPushSent>;
-export type DigestItemFeedbackGivenStore = Agg.Store<DigestItemFeedbackGiven>;
 export type DigestExpiredStore = Agg.Store<DigestExpired>;
+export type DigestXPostsRemovedStore = Agg.Store<DigestXPostsRemoved>;
 export type DigestHeadersResolverByUserIdAndDigestDate = Agg.Resolver<
   { userId: UserId; digestDate: string },
   ReadonlyArray<DigestHeader>
->;
-export type DigestTopicEntry = Readonly<{
-  topicKey: string;
-  name: string;
-  articleId: ArticleId;
-  itemCount: number;
-}>;
-export type DigestTopicEntriesResolverByUserIdAndDigestDate = Agg.Resolver<
-  { userId: UserId; digestDate: string },
-  ReadonlyArray<DigestTopicEntry>
 >;
 export type DigestTopicItem = Readonly<{
   digestDate: string;
@@ -249,7 +157,6 @@ export type DigestTopicItem = Readonly<{
   rank: number;
   title: string;
   url: string;
-  feedback: DigestFeedback | null;
   embedding: Float32Array | null;
 }>;
 export type DigestTopicItemsResolverByUserIdAndDigestDateFrom = Agg.Resolver<
@@ -257,12 +164,6 @@ export type DigestTopicItemsResolverByUserIdAndDigestDateFrom = Agg.Resolver<
   ReadonlyArray<DigestTopicItem>
 >;
 export type DigestXPost = Readonly<{ username: XUsername; title: string; url: string }>;
-export type DigestXPostsResolverByArticleId = Agg.Resolver<
-  { articleId: ArticleId; now: Instant },
-  ReadonlyArray<DigestXPost>
->;
-export type DigestHeaderResolverByArticleId = Agg.Resolver<ArticleId, DigestHeader | undefined>;
-export type DigestResolverByArticleId = Agg.Resolver<ArticleId, Digest | undefined>;
 export type DigestItemUrlsResolverByUserId = Agg.Resolver<
   { userId: UserId; excludingDigestIds: ReadonlyArray<DigestId> },
   ReadonlyArray<string>
@@ -271,45 +172,21 @@ export type LatestDigestHeaderResolverByUserId = Agg.Resolver<
   { userId: UserId; digestDateBefore: string },
   DigestHeader | undefined
 >;
-export type DigestHeadersResolverByArticleIds = Agg.Resolver<ReadonlyArray<ArticleId>, ReadonlyArray<DigestHeader>>;
-export type DigestResolverByUserIdAndDigestDate = Agg.Resolver<
-  { userId: UserId; digestDate: string },
-  Digest | undefined
->;
-export type DigestResolverByUserId = Agg.Resolver<UserId, Digest | undefined>;
-export type DigestResolverByDigestItemId = Agg.Resolver<DigestItemId, Digest | undefined>;
 export type DigestHeadersResolverByDigestDateBefore = Agg.Resolver<
   { digestDateBefore: string; limit: number },
   ReadonlyArray<DigestHeader>
 >;
+export type DigestsResolverByXPostsCreatedBefore = Agg.Resolver<
+  { createdBefore: Instant },
+  ReadonlyArray<Digest>
+>;
 
-export type DigestAlreadyPublishedError = Readonly<{
-  type: 'DigestAlreadyPublishedError';
-  message: string;
-  detail: { digestDate: string };
+export type DigestDmSender = Readonly<{
+  sendSummary: (input: Readonly<{ ownerUserId: UserId; html: string }>) => Promise<Result<PostId, string>>;
+  sendReply: (
+    input: Readonly<{ ownerUserId: UserId; parentPostId: PostId; html: string }>,
+  ) => Promise<Result<PostId, string>>;
 }>;
-
-export const DigestAlreadyPublishedError = {
-  create: (digestDate: string): DigestAlreadyPublishedError => ({
-    type: 'DigestAlreadyPublishedError',
-    message: `The digest of "${digestDate}" has already been published.`,
-    detail: { digestDate },
-  }),
-} as const;
-
-export type DigestDraftEditedError = Readonly<{
-  type: 'DigestDraftEditedError';
-  message: string;
-  detail: { digestDate: string };
-}>;
-
-export const DigestDraftEditedError = {
-  create: (digestDate: string): DigestDraftEditedError => ({
-    type: 'DigestDraftEditedError',
-    message: `The draft digest of "${digestDate}" has been edited and cannot be replaced.`,
-    detail: { digestDate },
-  }),
-} as const;
 
 export type DigestTopicsUnavailableError = Readonly<{
   type: 'DigestTopicsUnavailableError';
@@ -326,8 +203,7 @@ export const DigestTopicsUnavailableError = {
 export const Digest = {
   ...schema,
   create,
-  recordPushSent,
-  giveFeedback,
   expire,
+  removeXPosts,
   toAggregateId,
 } as const;

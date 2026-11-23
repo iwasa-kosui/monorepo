@@ -1,5 +1,5 @@
 import { RA } from '@iwasa-kosui/result';
-import { asc, lt } from 'drizzle-orm';
+import { and, asc, isNotNull, lt } from 'drizzle-orm';
 
 import type { DigestHeadersResolverByDigestDateBefore } from '../../../domain/digest/digest.ts';
 import type { IoriD1Db } from '../client.ts';
@@ -11,7 +11,7 @@ export const createD1DigestHeadersResolverByDigestDateBefore = (
 ): DigestHeadersResolverByDigestDateBefore => ({
   resolve: async ({ digestDateBefore, limit }) => {
     const rows = await db.select().from(digestsTable)
-      .where(lt(digestsTable.digestDate, digestDateBefore))
+      .where(and(isNotNull(digestsTable.postId), lt(digestsTable.digestDate, digestDateBefore)))
       .orderBy(asc(digestsTable.digestDate), asc(digestsTable.digestId))
       .limit(limit);
     return RA.ok(rows.map(reconstructDigestHeader));

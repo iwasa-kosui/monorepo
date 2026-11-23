@@ -91,6 +91,13 @@ const eventNamesInSource = (): string[] => {
   return [...new Set(names)].sort();
 };
 
+const eventNamesRemovedFromSource = [
+  'digest.itemFeedbackGiven',
+  'digest.pushSent',
+  'digestDeepDive.started',
+  'digestDeepDive.turnAdded',
+] as const;
+
 describe('archive event name lists', () => {
   const plain: readonly string[] = ARCHIVE_PLAIN_EVENT_NAMES;
   const redacted: readonly string[] = ARCHIVE_REDACTED_EVENT_NAMES;
@@ -105,7 +112,7 @@ describe('archive event name lists', () => {
   });
 
   it('PLAIN と REDACTED は重ならず、どちらにも src に無い名前を含まない', () => {
-    const names = new Set(eventNamesInSource());
+    const names = new Set([...eventNamesInSource(), ...eventNamesRemovedFromSource]);
 
     expect(plain.filter((name) => redacted.includes(name))).toEqual([]);
     expect([...plain, ...redacted].filter((name) => !names.has(name))).toEqual([]);

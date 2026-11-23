@@ -58,7 +58,6 @@ const digestItem = (n: number): DigestTopicItem => ({
   rank: n,
   title: `項目 ${n}`,
   url: `https://example.com/${n}`,
-  feedback: null,
   embedding: new Float32Array([1, 0]),
 });
 

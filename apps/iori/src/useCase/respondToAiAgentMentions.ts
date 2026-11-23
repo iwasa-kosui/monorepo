@@ -38,8 +38,10 @@ import {
   mentionSystemPrompt,
   mentionUserPrompt,
 } from './aiAgent/aiAgentBotPrompts.ts';
+import { createDigestTool, type SendDigestTo } from './aiAgent/digestTool.ts';
 import { createFollowupTools, type FollowupSchedulerDeps } from './aiAgent/followupScheduler.ts';
 import { type AgentMemoryDeps, loadAgentMemory } from './aiAgent/memoryTools.ts';
+import type { IsDigestOwner } from './isDigestOwner.ts';
 import type { UseCase } from './useCase.ts';
 
 /** 1 回の実行で答えるトリガーの数。cron は 1 分ごとに動くので、少しずつ片付ける */
@@ -62,6 +64,7 @@ type Input = Readonly<{
   bot: Readonly<{ userId: UserId; actorId: ActorId }>;
   capabilities: AiAgentBotCapabilities;
   replier: AiAgentBotReplier;
+  sendDigest?: SendDigestTo;
 }>;
 
 export type RespondToAiAgentMentionsSummary = Readonly<{
@@ -87,6 +90,7 @@ type Deps =
     triggersHandledStore: AiAgentBotTriggersHandledStore;
     repliedCountResolverSince: AiAgentBotRepliedCountResolverSince;
     actorResolverById: ActorResolverById;
+    isDigestOwner: IsDigestOwner;
     chatModel: AgentChatModel;
     now: () => Instant;
   }>;
@@ -150,7 +154,7 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
 
   const respond = async (
     trigger: AiAgentBotTrigger,
-    { bot, capabilities, replier }: Input,
+    { bot, capabilities, replier, sendDigest }: Input,
   ): Promise<Omit<AiAgentBotTriggerHandled, 'handledAt' | 'postId'>> => {
     const author = (await deps.actorResolverById.resolve(trigger.authorActorId)).val;
     const thread = await capabilities.readThread(trigger.postId);
@@ -178,9 +182,17 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
       author: { actorId: trigger.authorActorId, handle: handleOf(author) },
     });
 
+    const ownerUserId = author?.type === 'local' && sendDigest !== undefined
+        && await deps.isDigestOwner(author.userId)
+      ? author.userId
+      : undefined;
+    const digestTools = ownerUserId === undefined || sendDigest === undefined
+      ? []
+      : [createDigestTool(() => sendDigest(ownerUserId))];
+
     const result = await agent({
       model: AI_AGENT_BOT_MODEL,
-      system: mentionSystemPrompt(),
+      system: mentionSystemPrompt({ canSendDigest: digestTools.length > 0 }),
       input: mentionUserPrompt({
         thread: formatPosts(thread.filter((post) => post.postId !== trigger.postId)),
         trigger: formatPost(triggerPost),
@@ -190,6 +202,7 @@ const create = (deps: Deps): RespondToAiAgentMentionsUseCase => {
       tools: [
         ...createAgentTools(capabilities),
         ...memory.tools,
+        ...digestTools,
         replyTool.tool,
         ...createFollowupTools(deps, { postId: trigger.postId, authorActorId: trigger.authorActorId, round: 1 }),
       ],

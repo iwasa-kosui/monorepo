@@ -2,16 +2,14 @@ import { useEffect, useState } from 'hono/jsx';
 import { render } from 'hono/jsx/dom';
 
 import type { Article } from '../../domain/article/article.ts';
-import { ARTICLES_URL, isMastodonApiError, requestDigest } from '../api/mastodonClient.ts';
+import { ARTICLES_URL } from '../api/mastodonClient.ts';
 import { keepsCachedView } from '../api/pageCache.ts';
 import { clearAllCache, readCache, writeCache } from '../api/responseCache.ts';
-import { buildDigestRequestFailureMessage, DIGEST_REQUEST_PENDING_LABEL } from './digestRequestMessage.ts';
 
 type ArticleWithStatus = Article & {
   isPublishing?: boolean;
   isUnpublishing?: boolean;
   isDeleting?: boolean;
-  isDigest?: boolean;
 };
 
 type ArticlesResponse = {
@@ -43,8 +41,6 @@ const ArticlesPage = () => {
   const [newArticleTitle, setNewArticleTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [isRequestingDigest, setIsRequestingDigest] = useState(false);
-  const [digestRequestError, setDigestRequestError] = useState<string | null>(null);
 
   const fetchArticles = async () => {
     try {
@@ -113,7 +109,7 @@ const ArticlesPage = () => {
         setArticles((prev) =>
           prev.map((a) =>
             a.articleId === articleId
-              ? { ...data.article, isDigest: a.isDigest, isUnpublishing: false }
+              ? { ...data.article, isUnpublishing: false }
               : a
           )
         );
@@ -187,25 +183,6 @@ const ArticlesPage = () => {
     }
   };
 
-  const handleRequestDigest = async () => {
-    setIsRequestingDigest(true);
-    setDigestRequestError(null);
-
-    try {
-      const { articleId } = await requestDigest();
-      window.location.href = `/articles/${articleId}`;
-    } catch (err) {
-      setDigestRequestError(
-        buildDigestRequestFailureMessage(
-          isMastodonApiError(err)
-            ? { status: err.status, error: err.message, retryAfterSeconds: err.retryAfterSeconds }
-            : {},
-        ),
-      );
-      setIsRequestingDigest(false);
-    }
-  };
-
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('ja-JP', {
       year: 'numeric',
@@ -272,34 +249,6 @@ const ArticlesPage = () => {
 
   return (
     <div class='flex flex-col h-full'>
-      {isLoggedIn && (
-        <a
-          href='/digest'
-          class='md:hidden mb-4 px-4 py-3 rounded-clay bg-cream dark:bg-gray-800 shadow-clay dark:shadow-clay-dark text-sm font-medium text-charcoal dark:text-white flex items-center justify-between flex-shrink-0'
-        >
-          最新のダイジェスト
-          <svg class='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-            <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 5l7 7-7 7' />
-          </svg>
-        </a>
-      )}
-      {isLoggedIn && (
-        <div class='mb-4 flex flex-col items-start gap-2 flex-shrink-0'>
-          <button
-            type='button'
-            onClick={handleRequestDigest}
-            disabled={isRequestingDigest}
-            class='px-4 py-2 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-clay transition-all shadow-clay-btn hover:shadow-clay-btn-hover active:translate-y-0.5 active:scale-[0.98]'
-          >
-            {isRequestingDigest ? DIGEST_REQUEST_PENDING_LABEL : '今すぐダイジェストを作る'}
-          </button>
-          {digestRequestError && (
-            <p role='alert' class='text-sm text-terracotta-dark dark:text-terracotta-light'>
-              {digestRequestError}
-            </p>
-          )}
-        </div>
-      )}
       {/* Header */}
       <div class='flex items-center justify-between mb-6 flex-shrink-0'>
         <h1 class='text-xl font-semibold text-charcoal dark:text-white'>
@@ -409,25 +358,16 @@ const ArticlesPage = () => {
                   </div>
                   <div class='flex items-center gap-2 flex-shrink-0'>
                     {article.status === 'draft' || article.status === 'unpublished'
-                      ? article.isDigest
-                        ? (
-                          <a
-                            href={`/articles/${article.articleId}`}
-                            class='px-3 py-1.5 bg-sage-dark hover:bg-sage text-white text-sm font-medium rounded-xl transition-all shadow-clay-sm'
-                          >
-                            詳細で公開
-                          </a>
-                        )
-                        : (
-                          <button
-                            type='button'
-                            onClick={() => handlePublish(article.articleId)}
-                            disabled={article.isPublishing}
-                            class='px-3 py-1.5 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all shadow-clay-sm'
-                          >
-                            {article.isPublishing ? '公開中...' : '公開'}
-                          </button>
-                        )
+                      ? (
+                        <button
+                          type='button'
+                          onClick={() => handlePublish(article.articleId)}
+                          disabled={article.isPublishing}
+                          class='px-3 py-1.5 bg-sage-dark hover:bg-sage disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all shadow-clay-sm'
+                        >
+                          {article.isPublishing ? '公開中...' : '公開'}
+                        </button>
+                      )
                       : (
                         <button
                           type='button'

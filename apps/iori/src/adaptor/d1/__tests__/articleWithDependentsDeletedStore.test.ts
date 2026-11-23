@@ -3,11 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { Article } from '../../../domain/article/article.ts';
 import { ArticleId } from '../../../domain/article/articleId.ts';
 import { ArticleBody } from '../../../domain/articleBody/articleBody.ts';
-import { Digest } from '../../../domain/digest/digest.ts';
-import { DigestId } from '../../../domain/digest/digestId.ts';
 import { Instant } from '../../../domain/instant/instant.ts';
 import { createD1ArticleWithDependentsDeletedStore } from '../article/articleWithDependentsDeletedStore.ts';
-import { createD1DigestHeaderResolverByArticleId } from '../digest/digestHeaderResolverByArticleId.ts';
 import { createMastodonSeed } from './mastodonSeed.ts';
 import { createSqliteD1Fixture } from './sqliteFixture.ts';
 
@@ -17,27 +14,13 @@ const setup = () => {
   const fixture = createSqliteD1Fixture();
   const author = createMastodonSeed(fixture).addLocalActor('kosui');
   const articleId = ArticleId.generate();
-  const digestId = DigestId.generate();
   fixture.sqlite.prepare(
     'INSERT INTO articles(articleId,authorActorId,authorUserId,rootPostId,title,status,createdAt,publishedAt,unpublishedAt) VALUES (?,?,?,?,?,?,?,?,?)',
   ).run(articleId, author.actorId, author.userId, null, 'title', 'draft', 1_000, null, null);
   const addBody = () =>
     fixture.sqlite.prepare('INSERT INTO article_bodies(articleId,privateHtml,publicHtml,updatedAt) VALUES (?,?,?,?)')
       .run(articleId, '<p>private</p>', '<p>public</p>', 1_000);
-  const addDigest = () => {
-    fixture.sqlite.prepare(
-      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt,pushSentAt) VALUES (?,?,?,?,?,?)',
-    ).run(digestId, author.userId, '2026-11-05', articleId, 2_000, null);
-    fixture.sqlite.prepare(
-      'INSERT INTO digest_items(digestItemId,digestId,feedEntryId,url,title,rank,score,summary,reasonInterestSourceId,feedback) VALUES (?,?,?,?,?,?,?,?,?,?)',
-    ).run('item-1', digestId, 'entry-1', 'https://example.com/a', 'A', 1, null, null, null, null);
-    fixture.sqlite.prepare('INSERT INTO digest_trends(digestId,kind,rank,url,title,count) VALUES (?,?,?,?,?,?)')
-      .run(digestId, 'hatena', 1, 'https://example.com/t', 'T', 3);
-    fixture.sqlite.prepare('INSERT INTO digest_x_posts(digestId,rank,feedEntryId) VALUES (?,?,?)').run(
-      digestId,
-      1,
-      'x-1',
-    );
+  const addDeepDive = () => {
     fixture.sqlite.prepare(
       'INSERT INTO digest_deep_dives(deepDiveId,userId,digestItemId,articleId,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
     ).run('dive-1', author.userId, 'item-1', articleId, 3_000, 3_000);
@@ -50,52 +33,45 @@ const setup = () => {
   const eventNames = () =>
     (fixture.sqlite.prepare('SELECT eventName FROM domain_events ORDER BY rowid').all() as Array<{ eventName: string }>)
       .map((row) => row.eventName);
-  return { fixture, articleId, digestId, addBody, addDigest, count, eventNames };
+  return { fixture, articleId, addBody, addDeepDive, count, eventNames };
 };
 
 describe('createD1ArticleWithDependentsDeletedStore', () => {
-  it('ダイジェストの article は、digest、items、trends、本文、article を消してイベントを書く', async () => {
-    const { fixture, articleId, addBody, addDigest, count, eventNames } = setup();
+  it('article は、深掘り、本文、article を消してイベントを書き、digest の行は触らない', async () => {
+    const { fixture, articleId, addBody, addDeepDive, count, eventNames } = setup();
     addBody();
-    addDigest();
-    const header = await createD1DigestHeaderResolverByArticleId(fixture.db).resolve(articleId);
-    if (!header.ok || header.val === undefined) throw new Error('digest header not found');
+    addDeepDive();
+    fixture.sqlite.prepare(
+      'INSERT INTO digests(digestId,userId,digestDate,articleId,createdAt) VALUES (?,(SELECT userId FROM users),?,?,?)',
+    ).run('digest-1', '2026-11-05', articleId, 2_000);
 
     await createD1ArticleWithDependentsDeletedStore(fixture.db).store(
       Article.deleteArticle(now)(articleId),
       ArticleBody.deleteArticleBody(now)(articleId),
-      Digest.expire(header.val, now),
     );
 
-    expect(count('digest_trends')).toBe(0);
-    expect(count('digest_x_posts')).toBe(0);
-    expect(count('digest_items')).toBe(0);
     expect(count('digest_deep_dives')).toBe(0);
     expect(count('digest_deep_dive_turns')).toBe(0);
-    expect(count('digests')).toBe(0);
     expect(count('article_bodies')).toBe(0);
     expect(count('articles')).toBe(0);
-    expect(eventNames()).toEqual(['digest.expired', 'articleBody.deleted', 'article.deleted']);
+    expect(count('digests')).toBe(1);
+    expect(eventNames()).toEqual(['articleBody.deleted', 'article.deleted']);
   });
 
   it('batch の途中で失敗したら、消した行も戻る', async () => {
-    const { fixture, articleId, digestId, addBody, addDigest, count } = setup();
+    const { fixture, articleId, addBody, addDeepDive, count } = setup();
     addBody();
-    addDigest();
+    addDeepDive();
     fixture.sqlite.exec('DROP TABLE domain_events');
 
     await expect(
       createD1ArticleWithDependentsDeletedStore(fixture.db).store(
         Article.deleteArticle(now)(articleId),
         ArticleBody.deleteArticleBody(now)(articleId),
-        Digest.expire({ digestId, digestDate: '2026-11-05' }, now),
       ),
     ).rejects.toThrow();
 
-    expect(count('digests')).toBe(1);
-    expect(count('digest_items')).toBe(1);
-    expect(count('digest_trends')).toBe(1);
-    expect(count('digest_x_posts')).toBe(1);
+    expect(count('digest_deep_dives')).toBe(1);
     expect(count('article_bodies')).toBe(1);
     expect(count('articles')).toBe(1);
   });

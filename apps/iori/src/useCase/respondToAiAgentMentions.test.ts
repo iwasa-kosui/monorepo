@@ -1,6 +1,7 @@
 import { RA, Result } from '@iwasa-kosui/result';
 import { describe, expect, it } from 'vitest';
 
+import type { Actor } from '../domain/actor/actor.ts';
 import { ActorId } from '../domain/actor/actorId.ts';
 import {
   type AiAgentBotTrigger,
@@ -17,6 +18,7 @@ import { createInMemoryFollowups } from './aiAgent/__tests__/inMemoryFollowups.t
 import { createInMemoryMemories } from './aiAgent/__tests__/inMemoryMemories.ts';
 import type { AgentPostView, AiAgentBotCapabilities } from './aiAgent/agentTools.ts';
 import { AI_AGENT_BOT_MAX_STEPS } from './aiAgent/aiAgentBotPrompts.ts';
+import type { DigestSent } from './aiAgent/digestTool.ts';
 import { type AiAgentBotReply, RespondToAiAgentMentionsUseCase } from './respondToAiAgentMentions.ts';
 
 const NOW = Instant.orThrow(1_800_000_000_000);
@@ -63,12 +65,36 @@ const scriptedModel = (script: (request: AgentChatRequest, call: number) => Agen
   return { model, requests };
 };
 
+const OWNER_USER_ID = UserId.generate();
+
+const localActor = (userId: UserId): Actor => ({
+  id: AUTHOR_ACTOR_ID,
+  userId,
+  uri: 'https://iori.test/users/someone',
+  inboxUrl: 'https://iori.test/users/someone/inbox',
+  type: 'local',
+});
+
+const remoteActor: Actor = {
+  id: AUTHOR_ACTOR_ID,
+  uri: 'https://remote.test/users/kosui',
+  inboxUrl: 'https://remote.test/users/kosui/inbox',
+  type: 'remote',
+  username: 'kosui',
+};
+
+type RunOptions = Readonly<{
+  author?: Actor;
+  sendDigest?: (userId: UserId) => Promise<Result<DigestSent, never>>;
+}>;
+
 const run = async (
   chatModel: AgentChatModel,
   replyResult: Result<null, string> = Result.ok(null),
   pendingFollowups = 0,
   sentIds: PostId[] = [],
   initialMemories: readonly AiAgentBotMemory[] = [],
+  options: RunOptions = {},
 ) => {
   const followups = createInMemoryFollowups(() => NOW, pendingFollowups);
   const memories = createInMemoryMemories(() => NOW, initialMemories);
@@ -84,7 +110,8 @@ const run = async (
       },
     },
     repliedCountResolverSince: { resolve: () => RA.ok(0) },
-    actorResolverById: { resolve: () => RA.ok(undefined) },
+    actorResolverById: { resolve: () => RA.ok(options.author) },
+    isDigestOwner: async (userId) => userId === OWNER_USER_ID,
     chatModel,
     ...followups.deps,
     ...memories.deps,
@@ -92,6 +119,7 @@ const run = async (
   const summary = await useCase.run({
     bot: BOT,
     capabilities,
+    ...(options.sendDigest === undefined ? {} : { sendDigest: options.sendDigest }),
     replier: {
       reply: async (reply) => {
         replies.push(reply);
@@ -192,6 +220,68 @@ describe('RespondToAiAgentMentionsUseCase', () => {
     const { scheduled } = await run(model, Result.ok(null), MAX_PENDING_FOLLOWUPS);
     expect(scheduled).toEqual([]);
     expect(requests[1]?.messages.at(-1)).toMatchObject({ role: 'tool', content: expect.stringMatching(/^エラー/) });
+  });
+
+  describe('ダイジェストの依頼', () => {
+    const digestRequestFrom = async (options: RunOptions) => {
+      const sentTo: UserId[] = [];
+      const { model, requests } = scriptedModel((_, call) =>
+        call === 0
+          ? toolCall('send_digest', {})
+          : call === 1
+          ? toolCall('reply', { text: '送りました。' })
+          : { content: undefined, toolCalls: [] }
+      );
+      const result = await run(model, Result.ok(null), 0, [], [], {
+        sendDigest: async (userId) => {
+          sentTo.push(userId);
+          return Result.ok({ topics: 3, items: 12 });
+        },
+        ...options,
+      });
+      return { ...result, sentTo, requests };
+    };
+    const sendDigestResult = (requests: readonly AgentChatRequest[]) =>
+      requests.at(-1)?.messages.find((message) => message.role === 'tool' && message.name === 'send_digest')?.content
+        ?? '';
+    const offeredTools = (requests: readonly AgentChatRequest[]) => requests[0]?.tools.map((tool) => tool.name) ?? [];
+
+    it('所有者からの依頼では send_digest が使え、所有者の UserId で 1 回だけ送る', async () => {
+      const { sentTo, requests, stored } = await digestRequestFrom({ author: localActor(OWNER_USER_ID) });
+      expect(offeredTools(requests)).toContain('send_digest');
+      expect(sentTo).toEqual([OWNER_USER_ID]);
+      expect(sendDigestResult(requests)).toContain('送りました');
+      expect(stored).toMatchObject([{ outcome: 'replied' }]);
+    });
+
+    it('所有者以外のローカルユーザーからの依頼では、send_digest を渡さず、送らない', async () => {
+      const { sentTo, requests } = await digestRequestFrom({ author: localActor(UserId.generate()) });
+      expect(offeredTools(requests)).not.toContain('send_digest');
+      expect(sentTo).toEqual([]);
+      expect(requests[0]?.messages.find((message) => message.role === 'system')?.content).not.toContain('send_digest');
+    });
+
+    it('リモートのアクターからの依頼では、ユーザー名が所有者と同じでも、send_digest を渡さず、送らない', async () => {
+      const { sentTo, requests } = await digestRequestFrom({ author: remoteActor });
+      expect(offeredTools(requests)).not.toContain('send_digest');
+      expect(sentTo).toEqual([]);
+    });
+
+    it('投稿者を解決できないときは、send_digest を渡さない', async () => {
+      const { sentTo, requests } = await digestRequestFrom({ author: undefined });
+      expect(offeredTools(requests)).not.toContain('send_digest');
+      expect(sentTo).toEqual([]);
+    });
+
+    it('digest を送る関数が渡されていないときは、所有者からの依頼でも send_digest を渡さない', async () => {
+      const { requests } = await digestRequestFrom({ author: localActor(OWNER_USER_ID), sendDigest: undefined });
+      expect(offeredTools(requests)).not.toContain('send_digest');
+    });
+
+    it('所有者からの依頼では、send_digest が使えることをシステムプロンプトで伝える', async () => {
+      const { requests } = await digestRequestFrom({ author: localActor(OWNER_USER_ID) });
+      expect(requests[0]?.messages.find((message) => message.role === 'system')?.content).toContain('send_digest');
+    });
   });
 
   describe('記憶', () => {

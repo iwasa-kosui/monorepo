@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { XUsername } from '../feedSource/xUsername.ts';
 import {
-  buildDigestBodies,
-  buildSummaryBodies,
-  buildXPostsSection,
+  buildSummaryDmHtml,
+  buildTopicDmHtml,
+  buildXPostsDmHtml,
   type DigestBodyInput,
   type DigestBodyRecommendation,
 } from './digestBody.ts';
@@ -15,23 +15,21 @@ const input: DigestBodyInput = {
   hatenaTrends: [{ title: 'Hot entry', url: 'https://example.com/hot', count: 500 }],
 };
 
-describe('buildDigestBodies', () => {
-  it('public には Radar だけを出し、iori のタイムラインとはてなブックマークの節を出さない', () => {
-    const { publicHtml, privateHtml } = buildDigestBodies(input);
+const topicHtml = (override: Partial<Parameters<typeof buildTopicDmHtml>[0]> = {}) =>
+  buildTopicDmHtml({ topicName: 'トピック', ...input, ...override });
 
-    expect(privateHtml).toContain('Shared link');
-    expect(privateHtml).toContain('Hot entry');
-    expect(publicHtml).toContain('Technology Radar Vol. 34');
-    expect(publicHtml).not.toContain('Shared link');
-    expect(publicHtml).not.toContain('https://example.com/shared');
-    expect(publicHtml).not.toContain('Hot entry');
-    expect(publicHtml).not.toContain('https://example.com/hot');
-    expect(publicHtml).not.toContain('みんなの関心');
-    expect(publicHtml).not.toContain('はてなブックマーク');
+describe('buildTopicDmHtml', () => {
+  it('トピック名の見出しと、タイムラインとはてなブックマークの節を出す', () => {
+    const html = topicHtml({ topicName: '生成 AI <特集>' });
+
+    expect(html).toContain('<h1>生成 AI &lt;特集&gt;</h1>');
+    expect(html).toContain('Technology Radar Vol. 34');
+    expect(html).toContain('Shared link');
+    expect(html).toContain('Hot entry');
   });
 
   it('タイトルと要約と URL の HTML をエスケープする', () => {
-    const { privateHtml, publicHtml } = buildDigestBodies({
+    const html = topicHtml({
       radar: { title: '<b>radar</b>', url: 'https://example.com/r?a=1&b="2"' },
       recommendations: [{
         title: '<script>alert(1)</script> & "quote"',
@@ -44,20 +42,18 @@ describe('buildDigestBodies', () => {
       hatenaTrends: [{ title: '\'h\'', url: 'https://example.com/h', count: 2 }],
     });
 
-    for (const html of [privateHtml, publicHtml]) {
-      expect(html).not.toContain('<script>');
-      expect(html).not.toContain('<img');
-      expect(html).not.toContain('<b>radar</b>');
-      expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quote&quot;');
-      expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
-      expect(html).toContain('href="https://example.com/r?a=1&amp;b=%222%22"');
-    }
-    expect(privateHtml).toContain('&lt;i&gt;t&lt;/i&gt;');
-    expect(privateHtml).toContain('&#39;h&#39;');
+    expect(html).not.toContain('<script>');
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<b>radar</b>');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quote&quot;');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).toContain('href="https://example.com/r?a=1&amp;b=%222%22"');
+    expect(html).toContain('&lt;i&gt;t&lt;/i&gt;');
+    expect(html).toContain('&#39;h&#39;');
   });
 
   it('https と http 以外の URL にはリンクを付けず、タイトルだけを出す', () => {
-    const { privateHtml } = buildDigestBodies({
+    const html = topicHtml({
       radar: { title: 'Radar', url: 'javascript:alert(1)' },
       recommendations: [
         { title: 'Data', url: 'data:text/html,x', summary: null, fromHatena: false, reason: null },
@@ -68,17 +64,17 @@ describe('buildDigestBodies', () => {
       hatenaTrends: [],
     });
 
-    expect(privateHtml).not.toContain('javascript:');
-    expect(privateHtml).not.toContain('data:');
-    expect(privateHtml).not.toContain('file:');
-    expect(privateHtml).toContain('<li>Radar</li>');
-    expect(privateHtml).toContain('<li>Data</li>');
-    expect(privateHtml).toContain('<li>Broken</li>');
-    expect(privateHtml).toContain('<a href="http://example.com/p">Plain http</a>');
+    expect(html).not.toContain('javascript:');
+    expect(html).not.toContain('data:');
+    expect(html).not.toContain('file:');
+    expect(html).toContain('<li>Radar</li>');
+    expect(html).toContain('<li>Data</li>');
+    expect(html).toContain('<li>Broken</li>');
+    expect(html).toContain('<a href="http://example.com/p">Plain http</a>');
   });
 });
 
-describe('buildDigestBodies: あなたへのおすすめ', () => {
+describe('buildTopicDmHtml: あなたへのおすすめ', () => {
   const recommendations: ReadonlyArray<DigestBodyRecommendation> = [
     {
       title: 'Kosui based',
@@ -105,35 +101,17 @@ describe('buildDigestBodies: あなたへのおすすめ', () => {
   ];
   const withRecommendations: DigestBodyInput = { ...input, recommendations };
 
-  it('public ははてな由来の記事を除き、iori の投稿といいねの根拠の行を消し、kosui.me の根拠の行は残す', () => {
-    const { publicHtml } = buildDigestBodies({
-      ...withRecommendations,
-      recommendations: [
-        ...recommendations,
-        {
-          title: 'Like based',
-          url: 'https://example.com/l',
-          summary: null,
-          fromHatena: false,
-          reason: { scope: 'own', label: 'iori のいいね' },
-        },
-      ],
-    });
+  it('はてな由来の記事と、iori の投稿の根拠の行も含めて出す', () => {
+    const html = topicHtml(withRecommendations);
 
-    expect(publicHtml).toContain('<h2>あなたへのおすすめ</h2>');
-    expect(publicHtml).toContain('Kosui based');
-    expect(publicHtml).toContain('<a href="https://kosui.me/posts/a">https://kosui.me/posts/a</a>');
-    expect(publicHtml).toContain('<a href="https://example.com/p">Post based</a><br>要約P</li>');
-    expect(publicHtml).toContain('<li><a href="https://example.com/l">Like based</a></li>');
-    expect(publicHtml).not.toContain('Hatena based');
-    expect(publicHtml).not.toContain('https://kosui.me/posts/b');
-    expect(publicHtml).not.toContain('iori の投稿');
-    expect(publicHtml).not.toContain('iori のいいね');
-    expect(publicHtml).not.toContain('はてなブックマーク');
+    expect(html).toContain('<h2>あなたへのおすすめ</h2>');
+    expect(html).toContain('Hatena based');
+    expect(html).toContain('<a href="https://kosui.me/posts/a">https://kosui.me/posts/a</a>');
+    expect(html).toContain('<a href="https://example.com/p">Post based</a><br>要約P<br>関心の根拠: iori の投稿</li>');
   });
 
   it('根拠のラベルとリンクをエスケープし、http と https 以外の URL にはリンクを付けない', () => {
-    const { privateHtml } = buildDigestBodies({
+    const html = topicHtml({
       ...withRecommendations,
       recommendations: [
         {
@@ -146,44 +124,50 @@ describe('buildDigestBodies: あなたへのおすすめ', () => {
       ],
     });
 
-    expect(privateHtml).toContain('関心の根拠: &lt;b&gt;x&lt;/b&gt;');
-    expect(privateHtml).not.toContain('javascript:');
+    expect(html).toContain('関心の根拠: &lt;b&gt;x&lt;/b&gt;');
+    expect(html).not.toContain('javascript:');
   });
 });
 
-describe('buildSummaryBodies', () => {
+describe('buildSummaryDmHtml', () => {
   const summaryInput = {
     radar: { title: 'Technology Radar Vol. 34', url: 'https://www.thoughtworks.com/radar' },
-    topics: [
-      { name: '生成 AI とエージェント', articleId: '0198f0f0-0000-7000-8000-000000000001' },
-      { name: 'セキュリティ <特集>', articleId: '0198f0f0-0000-7000-8000-000000000002' },
-    ],
+    topics: [{ name: '生成 AI とエージェント' }, { name: 'セキュリティ <特集>' }],
     timelineTrends: [{ title: 'Shared link', url: 'https://example.com/shared', count: 3 }],
     hatenaTrends: [{ title: 'Hot entry', url: 'https://example.com/hot', count: 500 }],
   };
 
-  it('public には Radar もトレンドもトピックも出さず、公開を想定しない旨だけを出す', () => {
-    const { publicHtml } = buildSummaryBodies(summaryInput);
+  it('トピック別の節は、相対リンクを出さず、エスケープしたトピック名だけを並べる', () => {
+    const html = buildSummaryDmHtml(summaryInput);
 
-    expect(publicHtml).toBe('<p>このまとめは公開を想定していません。</p>');
+    expect(html).toContain('<ul><li>生成 AI とエージェント</li><li>セキュリティ &lt;特集&gt;</li></ul>');
+    expect(html).not.toContain('/articles/');
+    expect(html).not.toMatch(/href="\//);
   });
 
-  it('X の投稿の節を、private にも public にも入れない', () => {
-    expect(buildSummaryBodies(summaryInput).privateHtml).not.toContain('X の投稿');
-    expect(buildSummaryBodies(summaryInput).publicHtml).toBe('<p>このまとめは公開を想定していません。</p>');
+  it('X の投稿の節を入れない', () => {
+    expect(buildSummaryDmHtml(summaryInput)).not.toContain('X の投稿');
   });
 });
 
-describe('buildXPostsSection', () => {
+describe('buildXPostsDmHtml', () => {
   const xPosts = [
     { username: XUsername.orThrow('jack'), title: 'secret <b>post</b>', url: 'https://x.com/jack/status/111' },
     { username: XUsername.orThrow('sundar'), title: 'another post', url: 'https://x.com/sundar/status/222' },
   ];
 
+  it('X の投稿の節だけを出し、タイトルをエスケープする', () => {
+    const html = buildXPostsDmHtml(xPosts);
+
+    expect(html).toContain('<h2>X の投稿</h2>');
+    expect(html).toContain('@jack <a href="https://x.com/jack/status/111">secret &lt;b&gt;post&lt;/b&gt;</a>');
+    expect(html).not.toContain('<b>');
+  });
+
   it('http と https 以外の URL はリンクにしない', () => {
     const [post] = xPosts;
 
-    expect(buildXPostsSection([{ ...post!, url: 'javascript:alert(1)' }])).toContain('@jack secret &lt;b&gt;');
-    expect(buildXPostsSection([{ ...post!, url: 'javascript:alert(1)' }])).not.toContain('href');
+    expect(buildXPostsDmHtml([{ ...post!, url: 'javascript:alert(1)' }])).toContain('@jack secret &lt;b&gt;');
+    expect(buildXPostsDmHtml([{ ...post!, url: 'javascript:alert(1)' }])).not.toContain('href');
   });
 });

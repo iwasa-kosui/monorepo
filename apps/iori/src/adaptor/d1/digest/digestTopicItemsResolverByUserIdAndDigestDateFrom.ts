@@ -1,8 +1,7 @@
 import { RA } from '@iwasa-kosui/result';
-import { and, asc, desc, eq, gte, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNotNull, ne } from 'drizzle-orm';
 
 import {
-  DigestFeedback,
   type DigestTopicItemsResolverByUserIdAndDigestDateFrom,
   SUMMARY_DIGEST_TOPIC_KEY,
 } from '../../../domain/digest/digest.ts';
@@ -20,13 +19,13 @@ export const createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom = (
       rank: digestItemsTable.rank,
       title: digestItemsTable.title,
       url: digestItemsTable.url,
-      feedback: digestItemsTable.feedback,
       embedding: feedEntriesTable.embedding,
     }).from(digestItemsTable)
       .innerJoin(digestsTable, eq(digestsTable.digestId, digestItemsTable.digestId))
       .leftJoin(feedEntriesTable, eq(feedEntriesTable.feedEntryId, digestItemsTable.feedEntryId))
       .where(and(
         eq(digestsTable.userId, userId),
+        isNotNull(digestsTable.postId),
         gte(digestsTable.digestDate, digestDateFrom),
         ne(digestsTable.topicKey, SUMMARY_DIGEST_TOPIC_KEY),
       ))
@@ -38,7 +37,6 @@ export const createD1DigestTopicItemsResolverByUserIdAndDigestDateFrom = (
       rank: row.rank,
       title: row.title,
       url: row.url,
-      feedback: DigestFeedback.zodType.nullable().parse(row.feedback),
       embedding: row.embedding !== null && Embedding.validate(row.embedding).ok ? row.embedding : null,
     })));
   },
