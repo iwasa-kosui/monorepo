@@ -1,4 +1,4 @@
-import { extractExport, extractFrom, extractLines, toInsertTemplate } from './extract';
+import { extractExport, extractFrom, extractLines, insertTemplates, toInsertTemplate } from './extract';
 
 const sources = import.meta.glob<string>('/exercises/chapter-*/*.ts', {
   query: '?raw',
@@ -29,7 +29,10 @@ export const exportOf = (snapshot: string, file: string, name: string): string =
 export const readFunctionsOf = (snapshot: string, firstFunction: string): string =>
   extractFrom(readSnapshot(snapshot, 'visits.ts'), `export const ${firstFunction} =`);
 
-export const insertTemplate = (): string => toInsertTemplate(readSnapshot('chapter-2-step-1', 'visits.ts'));
+export const insertTemplateOf = (step: 1 | 2): string =>
+  step === 1
+    ? toInsertTemplate(readSnapshot('chapter-2-step-1', 'visits.ts'), insertTemplates.step1)
+    : toInsertTemplate(readSnapshot('chapter-2-step-2', 'visits.ts'), insertTemplates.step2);
 
 export const whoCancelledQuery = (): string =>
   extractLines(readSnapshot('chapter-2-step-2', 'who-cancelled.ts'), 'const rows =', '`).all();');
@@ -44,6 +47,9 @@ export const snapshotFiles = (snapshot: string): Record<string, string> => {
   }
   return Object.fromEntries(files);
 };
+
+export const projectFilesOf = (snapshot: string): string[] =>
+  Object.keys(snapshotFiles(snapshot)).sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
 
 export const lessonFile = (name: string): Record<string, string> => {
   const source = lessons[`/lessons/${name}`];

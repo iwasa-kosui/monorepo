@@ -149,7 +149,8 @@ export type RepoConfig = {
 
 export type EditorConfig = {
   readonly project: string;
-  readonly files: readonly string[];
+  readonly branch: string;
+  readonly snapshot: string;
   readonly active: string;
 };
 

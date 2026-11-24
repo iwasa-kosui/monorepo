@@ -59,7 +59,7 @@ describe('既存の業務', () => {
   });
 });
 
-describe('第2章 ステップ1', () => {
+describe('第2章 ステップ2', () => {
   it('来院をキャンセルすると、来院キャンセルの記録が1行残る', () => {
     cancelVisit(db, cancelInput);
     const events = eventsOf(visitId);
@@ -84,9 +84,7 @@ describe('第2章 ステップ1', () => {
     assert.throws(() => cancelVisit(db, cancelInput), /記録に失敗しました/, '記録の失敗が更新処理に伝わっていません');
     assert.equal(statusOf(visitId), 'reserved');
   });
-});
 
-describe('第2章 ステップ2', () => {
   it('キャンセルした人と理由を答えられる', () => {
     cancelVisit(db, cancelInput);
     const answer = db.prepare(`

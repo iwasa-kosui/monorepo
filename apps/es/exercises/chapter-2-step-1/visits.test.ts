@@ -6,14 +6,14 @@ import { cancelVisit, completeVisit, reserveVisit } from './visits.ts';
 
 const visitId = 'visit-1';
 const cancelInput = { visitId, reason: '飼い主の都合', operatedBy: '受付スタッフ' };
-const missingEvent =
-  `来院キャンセルの記録がありません（business_events を target_type = 'Visit'、target_id = '${visitId}' で探しました）`;
+const secondCancelInput = { visitId, reason: '来院前に回復したため', operatedBy: '院長' };
+const missingRecord = `来院キャンセルの記録がありません（visit_cancellations を visit_id = '${visitId}' で探しました）`;
 
 let db: DatabaseSync;
 
 const statusOf = (id: string) => db.prepare(`SELECT status FROM visits WHERE id = ?`).get(id)?.status;
-const eventsOf = (id: string) =>
-  db.prepare(`SELECT * FROM business_events WHERE target_type = 'Visit' AND target_id = ?`).all(id);
+const cancellationsOf = (id: string) =>
+  db.prepare(`SELECT * FROM visit_cancellations WHERE visit_id = ? ORDER BY id`).all(id);
 
 beforeEach(() => {
   db = createDatabase();
@@ -35,7 +35,7 @@ describe('既存の業務', () => {
   it('キャンセルできなかったときは、記録を残さない', () => {
     completeVisit(db, { visitId });
     assert.throws(() => cancelVisit(db, cancelInput));
-    assert.equal(eventsOf(visitId).length, 0);
+    assert.equal(cancellationsOf(visitId).length, 0);
   });
 
   it('来院の更新に失敗したら、記録も残らない', () => {
@@ -46,61 +46,50 @@ describe('既存の業務', () => {
       END;
     `);
     assert.throws(() => cancelVisit(db, cancelInput), /更新に失敗しました/);
-    assert.equal(eventsOf(visitId).length, 0);
+    assert.equal(cancellationsOf(visitId).length, 0);
   });
 });
 
 describe('第2章 ステップ1', () => {
   it('来院をキャンセルすると、来院キャンセルの記録が1行残る', () => {
     cancelVisit(db, cancelInput);
-    const events = eventsOf(visitId);
-    assert.equal(events.length, 1, missingEvent);
-    assert.equal(events[0]?.event_name, 'VisitCancelled');
+    assert.equal(cancellationsOf(visitId).length, 1, missingRecord);
   });
 
-  it('キャンセルの記録に、キャンセル後の来院の状態が残る', () => {
+  it('キャンセルした人と理由を答えられる', () => {
     cancelVisit(db, cancelInput);
-    const event = eventsOf(visitId)[0];
-    assert.ok(event, missingEvent);
-    assert.equal(JSON.parse(String(event.target_state)).status, 'cancelled');
+    const record = cancellationsOf(visitId)[0];
+    assert.ok(record, missingRecord);
+    assert.equal(
+      record.operated_by,
+      cancelInput.operatedBy,
+      'キャンセルした人を答えられません（operated_by を読みました）',
+    );
+    assert.equal(record.reason, cancelInput.reason, 'キャンセルの理由を答えられません（reason を読みました）');
+    assert.ok(
+      !Number.isNaN(Date.parse(String(record.cancelled_at))),
+      'キャンセルした時刻を答えられません（cancelled_at を読みました）',
+    );
+  });
+
+  it('同じ来院をもう一度キャンセルしても、前の記録は消えない', () => {
+    cancelVisit(db, cancelInput);
+    cancelVisit(db, secondCancelInput);
+    assert.deepEqual(
+      cancellationsOf(visitId).map((record) => record.reason),
+      [cancelInput.reason, secondCancelInput.reason],
+      '2回のキャンセルの理由が、2行で残っていません（reason を読みました）',
+    );
   });
 
   it('記録に失敗したら、来院のキャンセルも失敗する', () => {
     db.exec(`
-      CREATE TRIGGER reject_event BEFORE INSERT ON business_events
+      CREATE TRIGGER reject_record BEFORE INSERT ON visit_cancellations
       BEGIN
         SELECT RAISE(ABORT, '記録に失敗しました');
       END;
     `);
     assert.throws(() => cancelVisit(db, cancelInput), /記録に失敗しました/, '記録の失敗が更新処理に伝わっていません');
     assert.equal(statusOf(visitId), 'reserved');
-  });
-});
-
-describe('第2章 ステップ2', () => {
-  it('キャンセルした人と理由を答えられる', () => {
-    cancelVisit(db, cancelInput);
-    const answer = db.prepare(`
-      SELECT
-        event_at,
-        event_name,
-        payload ->> '$.operatedBy' AS operated_by,
-        payload ->> '$.reason' AS reason
-      FROM business_events
-      WHERE target_type = 'Visit' AND target_id = ?
-    `).get(visitId);
-    assert.ok(answer, missingEvent);
-    assert.equal(
-      answer.operated_by,
-      cancelInput.operatedBy,
-      'キャンセルした人を答えられません（payload の operatedBy を読みました）',
-    );
-    assert.equal(
-      answer.reason,
-      cancelInput.reason,
-      'キャンセルの理由を答えられません（payload の reason を読みました）',
-    );
-    assert.equal(answer.event_name, 'VisitCancelled');
-    assert.ok(!Number.isNaN(Date.parse(String(answer.event_at))), 'キャンセルした時刻を答えられません');
   });
 });

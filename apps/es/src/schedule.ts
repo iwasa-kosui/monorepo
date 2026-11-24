@@ -14,7 +14,7 @@ export const schedule: readonly ScheduleRow[] = [
     title: '第2章 更新と同じトランザクションで記録する',
     minutes: 13,
     parts: '説明2分、演習9分、解答の確認2分',
-    pageStarts: [0, 1, 1, 2, 7, 12],
+    pageStarts: [0, 1, 6, 7, 12],
   },
   { id: 'chapter-3', title: '第3章 記録から、誰がなぜキャンセルしたかを答える', minutes: 5 },
   {

@@ -13,14 +13,14 @@ const messages = {
     start,
     begin,
     update,
-    '`INSERT` で、`business_events` に1行を書きます。まだ確定していません。',
+    '`INSERT` で、`visit_cancellations` に1行を書きます。まだ確定していません。',
     'トランザクションを確定します。来院の更新と記録の両方が残ります。',
   ],
   fail: [
     start,
     begin,
     update,
-    '`business_events` への記録が失敗します。',
+    '`visit_cancellations` への記録が失敗します。',
     'トランザクションを取り消します。`visits` の `status` は `reserved` に戻ります。記録が抜けたキャンセルは残りません。',
   ],
 };
@@ -54,7 +54,7 @@ const messages = {
         </li>
         <li class="op op-insert">
           <span class="op-no" aria-hidden="true">2</span>
-          <code>INSERT INTO business_events</code>
+          <code>INSERT INTO visit_cancellations</code>
           <span class="fail-mark">× 失敗</span>
         </li>
       </ol>
@@ -89,12 +89,12 @@ const messages = {
       </tbody>
     </table>
     <table class="cfig-table events-table">
-      <caption><code>business_events</code></caption>
+      <caption><code>visit_cancellations</code></caption>
       <thead>
         <tr>
-          <th scope="col">event_id</th>
-          <th scope="col">event_name</th>
-          <th scope="col">target_id</th>
+          <th scope="col">id</th>
+          <th scope="col">visit_id</th>
+          <th scope="col">reason</th>
         </tr>
       </thead>
       <tbody>
@@ -103,9 +103,9 @@ const messages = {
         </tr>
         <tr class="row-event">
           <td>1</td>
-          <td>VisitCancelled</td>
+          <td>visit-pochi</td>
           <td>
-            visit-pochi
+            飼い主の都合
             <span class="tag tag-pending">確定前</span>
             <span class="tag tag-commit">確定</span>
           </td>

@@ -19,14 +19,14 @@ const transactionSuccess = [
   '経路を選んで「次へ」を押すと、cancelVisit の処理を1つずつ進めます。',
   'withTransaction がトランザクションを始めます。',
   'UPDATE で、visits の status が cancelled になります。まだ確定していません。',
-  'INSERT で、business_events に1行を書きます。まだ確定していません。',
+  'INSERT で、visit_cancellations に1行を書きます。まだ確定していません。',
   'トランザクションを確定します。来院の更新と記録の両方が残ります。',
 ];
 const transactionFail = [
   transactionSuccess[0],
   transactionSuccess[1],
   transactionSuccess[2],
-  'business_events への記録が失敗します。',
+  'visit_cancellations への記録が失敗します。',
   'トランザクションを取り消します。visits の status は reserved に戻ります。記録が抜けたキャンセルは残りません。',
 ];
 const eventRowMessages = [
