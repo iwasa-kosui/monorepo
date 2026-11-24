@@ -1,4 +1,5 @@
 ---
+import SiteIcon from '@/components/SiteIcon.astro';
 import { ClientRouter } from 'astro:transitions';
 import '../styles/global.css';
 import { SearchModal } from '@/components/SearchModal/SearchModal';
@@ -183,13 +184,9 @@ const navItems = [
             href="/"
             class="flex items-center gap-2 sm:gap-3 text-2xl font-bold text-accent hover:text-accent-dark transition-colors"
           >
-            <img
-              src="https://icon.kosui.me"
-              alt=""
-              width="40"
-              height="40"
-              class="rounded-full"
-              transition:name={pathname !== '/' ? 'site-logo' : undefined}
+            <SiteIcon
+              size={40}
+              transitionName={pathname !== '/' ? 'site-logo' : undefined}
             />
             <span class="hidden sm:inline">kosui</span>
           </a>
