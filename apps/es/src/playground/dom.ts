@@ -45,6 +45,26 @@ export const failureElement = (error: unknown, timeoutNote: string): HTMLElement
   ]);
 };
 
+export const mountWhenShown = (root: HTMLElement, mount: (root: HTMLElement) => void): void => {
+  const panel = root.closest<HTMLElement>('[role="tabpanel"][data-tool]');
+  const shown = (): boolean => !root.hidden && panel?.hidden !== true;
+  if (shown()) {
+    mount(root);
+    return;
+  }
+  const observer = new MutationObserver(() => {
+    if (shown()) {
+      observer.disconnect();
+      mount(root);
+    }
+  });
+  const options = { attributes: true, attributeFilter: ['hidden'] };
+  observer.observe(root, options);
+  if (panel !== null) {
+    observer.observe(panel, options);
+  }
+};
+
 export const applyRuntimeState = (root: HTMLElement, state: 'loading' | 'ready' | 'failed'): void => {
   root.dataset.state = state;
   const status = query<HTMLElement>(root, '[data-role="status"]');

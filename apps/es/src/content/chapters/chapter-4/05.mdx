@@ -1,7 +1,21 @@
+---
+wide: true
+immersive: true
+---
+
 import DecisionTable from '../../../components/DecisionTable.astro';
 import OwnQuestionView from '../../../components/OwnQuestionView.astro';
+import { chapter4Compare } from '../../../components/chapters/chapter-4';
+import Workspace from '../../../components/workspace/Workspace.astro';
+
+<div class="visually-hidden">
 
 ## 3つのパターンを表で比べて、自分のシステムに近いものを1つ選ぶ
+
+</div>
+
+<Workspace scenario={chapter4Compare}>
+<Fragment slot="memo">
 
 第1章で挙げた問いに近いパターンを1つ選びます。選んだパターンの「活用するもの」と「記録しないもの」を読みます。
 
@@ -10,3 +24,6 @@ import OwnQuestionView from '../../../components/OwnQuestionView.astro';
 <DecisionTable heading="比較" byAxis>
   <OwnQuestionView />
 </DecisionTable>
+
+</Fragment>
+</Workspace>

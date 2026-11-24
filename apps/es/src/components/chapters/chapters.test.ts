@@ -75,6 +75,30 @@ const answeredThanks = 'はやっ！ありがとうございます、病院さ�
 const tamaAsked = 'あと、タマちゃん（visit-tama）の方もキャンセルの理由わかりますか？';
 const tamaAnswer = 'タマの方は、記録を足す前のキャンセルなので、理由は残ってないです…';
 const tamaAcknowledged = 'そうなんですね…了解です';
+const otherTeams = '記録の話、ほかのチームからも相談が来てます';
+const threeConsultations =
+  '3つあるので順番に見ていきましょう。自分が挙げた質問に近いのはどれか、考えながら見てもらえると';
+const financeGreeting = 'お疲れ様です。昨日のキャンセル件数の件で質問です';
+const financeAsked = '集計だと3件なんですが、一覧で数えると2件しかなくて…どっちが正しいですか？';
+const financeAnswer = '記録から数え直すと2件でした。集計の3件のうち1件は、対応する記録が無いです';
+const financeThanks = 'なるほど、助かります！';
+const reminderGreeting = 'すみません、また1件お願いします🙏';
+const reminderAsked =
+  'キャンセルしたのにリマインドの通知が届いた、って飼い主さんから連絡があって…取り消しって送れてますか？';
+const reminderAnswer = '送信の記録を見ました。取り消しを送ったあと、結果が確認できてない送信が1件あります';
+const reminderThanks = 'ありがとうございます、飼い主さんに確認してみます！';
+const auditGreeting = 'お疲れ様です、監査対応で確認させてください';
+const auditAsked = '監査ログに reserved → cancelled の変更は残ってるんですが、理由が載ってなくて。分かりますか？';
+const auditAnswer = '監査ログと記録を突き合わせると、理由が分かる変更と、分からない変更があります。一覧を出しました';
+const auditThanks = 'ありがとうございます。理由が無い分は別途確認します';
+const comparisonMade = '3つを同じ軸で並べた表を作りました';
+const chooseOne = '自分のシステムに近いのを1つ選んでみてください';
+const takeHome = '時間の関係で、実装は持ち帰りにします';
+const startingCodes = '開始コードを3つ置いておくので、選んだパターンで試してみてください';
+const goodWork = 'おつかれさまでした！';
+const todayMemo = '今日やったことを設計メモにまとめました';
+const decideLast = '最後に、自分のシステムで記録を足す更新処理を1つ決めて、ここに書いてみてください';
+const skipIfNone = '答えたい質問が特に無ければ、足さなくて大丈夫です';
 
 const answered: readonly (readonly [string, string])[] = [
   ['support', inquiry],
@@ -94,6 +118,31 @@ const earlier: readonly (readonly [string, string])[] = [
   ['techlead', failedFour],
 ];
 
+const chapter4Texts = [
+  otherTeams,
+  threeConsultations,
+  financeGreeting,
+  financeAsked,
+  financeAnswer,
+  financeThanks,
+  reminderGreeting,
+  reminderAsked,
+  reminderAnswer,
+  reminderThanks,
+  auditGreeting,
+  auditAsked,
+  auditAnswer,
+  auditThanks,
+  comparisonMade,
+  chooseOne,
+  takeHome,
+  startingCodes,
+  goodWork,
+  todayMemo,
+  decideLast,
+  skipIfNone,
+];
+
 const pairs = (scenario: WorkspaceScenario): (readonly [string, string])[] =>
   postsOf(scenario).map((post) => [post.actor, post.text] as const);
 
@@ -105,8 +154,8 @@ const opened = (scenario: WorkspaceScenario): (readonly [string, string])[] =>
 const openedAt = (scenario: WorkspaceScenario): (number | undefined)[] =>
   scenario.timeline.flatMap((event) => (event.at !== undefined && event.kind === 'post' ? [event.at] : []));
 
-describe('第1章から第3章の筋書き', () => {
-  it('12 ページ分あり、章のページと同じ ID を持つ', () => {
+describe('第1章から第4章とまとめの筋書き', () => {
+  it('20 ページ分あり、章のページと同じ ID を持つ', () => {
     expect(Object.keys(lessonScenarios)).toEqual([
       'chapter-1/01',
       'chapter-1/02',
@@ -120,8 +169,16 @@ describe('第1章から第3章の筋書き', () => {
       'chapter-3/02',
       'chapter-3/03',
       'chapter-3/04',
+      'chapter-4/01',
+      'chapter-4/02',
+      'chapter-4/03',
+      'chapter-4/04',
+      'chapter-4/05',
+      'chapter-4/06',
+      'summary/01',
+      'summary/02',
     ]);
-    expect(new Set(entries.map(([, scenario]) => scenario.id)).size).toBe(12);
+    expect(new Set(entries.map(([, scenario]) => scenario.id)).size).toBe(20);
   });
 
   it.each(entries)('%s は、検査に通り、時計の無い筋書きで、MDX のスロットと対応している', (id, scenario) => {
@@ -134,13 +191,18 @@ describe('第1章から第3章の筋書き', () => {
     expect(slots.filter((slot) => slot !== 'composer').sort()).toEqual(slotted.sort());
   });
 
-  it('発言者は、カスタマーサポート、あなた、テックリードの 3 人で、頭文字と色が異なる', () => {
+  it('発言者は、カスタマーサポート、あなた、テックリード、経理、情シスの 5 人で、頭文字と色が異なる', () => {
     for (const [, scenario] of entries) {
-      expect(Object.values(scenario.actors).map((actor) => [actor.name, actor.avatar, actor.tone])).toEqual([
+      const actors = Object.values(scenario.actors);
+      expect(actors.map((actor) => [actor.name, actor.avatar, actor.tone])).toEqual([
         ['カスタマーサポート', 'カ', 'rose'],
         ['あなた', 'あ', 'blue'],
         ['テックリード', 'テ', 'violet'],
+        ['経理', '経', 'green'],
+        ['情シス', '情', 'amber'],
       ]);
+      expect(new Set(actors.map((actor) => actor.avatar)).size).toBe(5);
+      expect(new Set(actors.map((actor) => actor.tone)).size).toBe(5);
       expect(Object.values(scenario.actors).filter((actor) => actor.self === true).map((actor) => actor.name)).toEqual([
         'あなた',
       ]);
@@ -189,6 +251,7 @@ describe('第1章から第3章の筋書き', () => {
       tamaAsked,
       tamaAnswer,
       tamaAcknowledged,
+      ...chapter4Texts,
     ]);
     for (const [id, scenario] of entries) {
       for (const post of postsOf(scenario)) {
@@ -214,7 +277,7 @@ describe('第1章から第3章の筋書き', () => {
     for (const [id, scenario] of entries) {
       for (const post of postsOf(scenario)) {
         if (emoji.test(post.text)) {
-          expect([failedFour, thanks, answeredThanks], id).toContain(post.text);
+          expect([failedFour, thanks, answeredThanks, reminderGreeting], id).toContain(post.text);
         }
       }
     }
@@ -384,6 +447,175 @@ describe('第1章から第3章の筋書き', () => {
     });
   });
 
+  describe('第4章', () => {
+    const history = (id: string): (readonly [string, string])[] => {
+      const scenario = lessonScenarios[id];
+      if (scenario === undefined) throw new Error(id);
+      return scenario.history.map((post) => [post.actor, post.text] as const);
+    };
+
+    it('1 ページ目は、第3章 4 ページ目の最後のやり取りを履歴に持ち、開いた時点でテックリードが 2 件投稿する', () => {
+      const scenario = lessonScenarios['chapter-4/01'];
+      if (scenario === undefined) throw new Error('筋書きがありません');
+      expect(history('chapter-4/01')).toEqual([
+        ['support', tamaAsked],
+        ['you', tamaAnswer],
+        ['support', tamaAcknowledged],
+      ]);
+      expect(opened(scenario)).toEqual([['techlead', otherTeams], ['techlead', threeConsultations]]);
+      expect(summary(scenario)).toEqual(['memo:doc:相談の一覧']);
+      expect(scenario.chat.buttons).toEqual([]);
+      expect(scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]))).toEqual([]);
+    });
+
+    const consultations = [
+      {
+        id: 'chapter-4/02',
+        history: [['techlead', otherTeams], ['techlead', threeConsultations]],
+        opened: [['finance', financeGreeting], ['finance', financeAsked]],
+        answer: financeAnswer,
+        follow: ['finance', financeThanks],
+        tabs: [
+          'memo:doc:相談1: 集計の件数が合わない',
+          'editor:editor:visits.ts — clinic-api',
+          'console:console:DB Console',
+        ],
+        storageId: 'chapter-4-summary-table',
+        exercise: 'chapter-4-summary-table-done',
+        entry: 'why-this-count.ts',
+        sqlHead: 'SELECT\n  c.visit_date,',
+      },
+      {
+        id: 'chapter-4/03',
+        history: [
+          ['finance', financeGreeting],
+          ['finance', financeAsked],
+          ['you', financeAnswer],
+          ['finance', financeThanks],
+        ],
+        opened: [['support', reminderGreeting], ['support', reminderAsked]],
+        answer: reminderAnswer,
+        follow: ['support', reminderThanks],
+        tabs: [
+          'memo:doc:相談2: 外部への送信が届いたか分からない',
+          'editor:editor:visits.ts — clinic-api',
+          'console:console:DB Console',
+        ],
+        storageId: 'chapter-4-external-sync',
+        exercise: 'chapter-4-external-sync-done',
+        entry: 'what-was-sent.ts',
+        sqlHead: 'SELECT\n  requested.target_id AS visit_id,',
+      },
+      {
+        id: 'chapter-4/04',
+        history: [
+          ['support', reminderGreeting],
+          ['support', reminderAsked],
+          ['you', reminderAnswer],
+          ['support', reminderThanks],
+        ],
+        opened: [['it', auditGreeting], ['it', auditAsked]],
+        answer: auditAnswer,
+        follow: ['it', auditThanks],
+        tabs: [
+          'memo:doc:相談3: 監査ログに理由がない',
+          'editor:editor:visits.ts — clinic-api',
+          'console:console:DB Console',
+        ],
+        storageId: 'chapter-4-audit-log',
+        exercise: 'chapter-4-audit-log-done',
+        entry: 'why-changed.ts',
+        sqlHead: 'SELECT\n  a.id AS audit_log_id,',
+      },
+    ] as const;
+
+    it.each(consultations)(
+      '$id は、直前のやり取りを履歴に持ち、相手が 2 件投稿し、コードを実行した合図の後に返信できる',
+      (item) => {
+        const scenario = lessonScenarios[item.id];
+        if (scenario === undefined) throw new Error('筋書きがありません');
+        expect(history(item.id)).toEqual(item.history);
+        expect(opened(scenario)).toEqual(item.opened);
+        expect(summary(scenario)).toEqual(item.tabs);
+        expect(scenario.chat.buttons.map((button) => [button.name, button.label])).toEqual([['reply', '返信する']]);
+        expect(scenario.gates?.reply.requires.map((requirement) => requirement.signal)).toEqual(['code:run']);
+        expect(scenario.reply?.lines).toEqual([{ text: item.answer }]);
+        expect(scenario.reply?.followUps.map((followUp) => [followUp.actor, followUp.text])).toEqual([item.follow]);
+        expect(scenario.timeline.flatMap((event) => (event.when === undefined ? [] : [event]))).toEqual([]);
+      },
+    );
+
+    it.each(consultations)(
+      '$id の DB Console は、これまでの SQL の欄と同じ保存キー、実行する演習、初期の SQL を持つ',
+      (item) => {
+        const scenario = lessonScenarios[item.id];
+        const console = scenario?.tabs.find((tab) => tab.kind === 'console');
+        if (console?.kind !== 'console') throw new Error('DB Console のタブがありません');
+        expect(console.config.storageId).toBe(item.storageId);
+        expect(console.config.setup).toMatchObject({ kind: 'script', exercise: item.exercise, entry: item.entry });
+        expect(console.config.initialSql.startsWith(item.sqlHead)).toBe(true);
+        expect(console.config.controls).toBe(true);
+        const editor = scenario?.tabs.find((tab) => tab.kind === 'editor');
+        if (editor?.kind !== 'editor') throw new Error('エディタのタブがありません');
+        expect(editor.config.files).toEqual(['db.ts', 'visits.test.ts', 'visits.ts', item.entry]);
+      },
+    );
+
+    it('5 ページ目は、情シスとのやり取りを履歴に持ち、テックリードが 2 件投稿する', () => {
+      const scenario = lessonScenarios['chapter-4/05'];
+      if (scenario === undefined) throw new Error('筋書きがありません');
+      expect(history('chapter-4/05')).toEqual([
+        ['it', auditGreeting],
+        ['it', auditAsked],
+        ['you', auditAnswer],
+        ['it', auditThanks],
+      ]);
+      expect(opened(scenario)).toEqual([['techlead', comparisonMade], ['techlead', chooseOne]]);
+      expect(summary(scenario)).toEqual(['memo:doc:3つのパターンの比較']);
+    });
+
+    it('6 ページ目は、文書を最初のタブにし、3 つの開始コードを別々のエディタのタブにする', () => {
+      const scenario = lessonScenarios['chapter-4/06'];
+      if (scenario === undefined) throw new Error('筋書きがありません');
+      expect(history('chapter-4/06')).toEqual([['techlead', comparisonMade], ['techlead', chooseOne]]);
+      expect(opened(scenario)).toEqual([['techlead', takeHome], ['techlead', startingCodes]]);
+      expect(summary(scenario)).toEqual([
+        'guide:doc:持ち帰りの演習',
+        'summary-table:editor:集計テーブル（chapter-4-summary-table-start）',
+        'external-sync:editor:外部システム同期（chapter-4-external-sync-start）',
+        'audit-log:editor:既存の監査ログ（chapter-4-audit-log-start）',
+      ]);
+      expect(scenario.tabs.every((tab) => tab.initial !== false)).toBe(true);
+    });
+  });
+
+  describe('まとめ', () => {
+    it('1 ページ目は、第4章 6 ページ目のテックリードの 2 件を履歴に持ち、開いた時点でテックリードが 2 件投稿する', () => {
+      const scenario = lessonScenarios['summary/01'];
+      if (scenario === undefined) throw new Error('筋書きがありません');
+      expect(pairs({ ...scenario, timeline: [] })).toEqual([['techlead', takeHome], ['techlead', startingCodes]]);
+      expect(opened(scenario)).toEqual([['techlead', goodWork], ['techlead', todayMemo]]);
+      expect(summary(scenario)).toEqual(['memo:doc:今日やったこと']);
+    });
+
+    it('2 ページ目は、1 ページ目のテックリードの 2 件を履歴に持ち、入力欄と文書だけを持つ', () => {
+      const scenario = lessonScenarios['summary/02'];
+      if (scenario === undefined) throw new Error('筋書きがありません');
+      expect(pairs({ ...scenario, timeline: [] })).toEqual([['techlead', goodWork], ['techlead', todayMemo]]);
+      expect(opened(scenario)).toEqual([['techlead', decideLast], ['techlead', skipIfNone]]);
+      expect(summary(scenario)).toEqual(['memo:doc:持ち帰る手順']);
+      expect(scenario.chat.buttons).toEqual([]);
+      expect(mdxOf('summary/02')).toMatch(/<Fragment slot="composer">\n<OwnQuestion id="summary-update" /);
+    });
+
+    it('実行基盤を使うタブ（console、editor）を置かない', () => {
+      for (const id of ['summary/01', 'summary/02']) {
+        const scenario = lessonScenarios[id];
+        expect(scenario?.tabs.map((tab) => tab.kind), id).toEqual(['doc']);
+      }
+    });
+  });
+
   it('待つ合図は、すべて決まった合図の名前である', () => {
     for (const [id, scenario] of entries) {
       for (const event of scenario.timeline) {
@@ -403,6 +635,7 @@ describe('第1章から第3章の筋書き', () => {
             'Claude',
             ['ドメイン', 'イベント'].join(''),
             ['D', 'D', 'D'].join(''),
+            ['イベント', 'ソーシング'].join(''),
           ]
         ) {
           expect(text, `${id}`).not.toContain(word);

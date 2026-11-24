@@ -1,23 +1,28 @@
 ---
 goal: 自分のシステムで、記録を足す更新処理を1つ決められます。
+wide: true
+immersive: true
 ---
 
 import Quote from '../../../components/Quote.astro';
+import { summaryToday } from '../../../components/chapters/summary';
+import Workspace from '../../../components/workspace/Workspace.astro';
 
-<div class="grid gap-4 lg:grid-cols-2 lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
-<div class="intro-text">
+<div class="visually-hidden">
 
 ## 今日やったこと
+
+</div>
+
+<Workspace scenario={summaryToday}>
+<Fragment slot="memo">
 
 1. 現在の状態だけでは答えられない問いを、実行して確かめました。
 2. 既存の更新処理に、業務イベントの記録を足しました。記録は更新と同じトランザクションに入れました。
 3. 業務イベントから「誰が、いつ、何を、なぜ」に答えました。記録を足す前の出来事は分からないことも確かめました。
 4. 3つのパターンを判断表で比べました。
 
-</div>
-<div class="intro-text">
-
-## イベントソーシングのうち今日使った考え方と使わなかったこと
+### イベントソーシングのうち今日使った考え方と使わなかったこと
 
 イベントソーシングは、状態の変化を出来事として順に記録し、その記録から現在の状態を組み立て直す設計です。
 
@@ -40,5 +45,5 @@ CQRSやイベントソーシングを導入しなくても、イベントを記�
 
 </Quote>
 
-</div>
-</div>
+</Fragment>
+</Workspace>

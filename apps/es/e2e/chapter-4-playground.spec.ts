@@ -14,6 +14,7 @@ const patterns = [
     start: 'chapter-4-summary-table-start',
     script: 'why-this-count.ts',
     path: '/chapters/chapter-4/2/',
+    docTitle: '相談1: 集計の件数が合わない',
     startSummary: 'pass 10 / fail 5',
   },
   {
@@ -22,6 +23,7 @@ const patterns = [
     start: 'chapter-4-external-sync-start',
     script: 'what-was-sent.ts',
     path: '/chapters/chapter-4/3/',
+    docTitle: '相談2: 外部への送信が届いたか分からない',
     startSummary: 'pass 11 / fail 4',
   },
   {
@@ -30,6 +32,7 @@ const patterns = [
     start: 'chapter-4-audit-log-start',
     script: 'why-changed.ts',
     path: '/chapters/chapter-4/4/',
+    docTitle: '相談3: 監査ログに理由がない',
     startSummary: 'pass 11 / fail 4',
   },
 ] as const;
@@ -37,11 +40,18 @@ const patterns = [
 const takeawayPath = '/chapters/chapter-4/6/';
 const comparisonPath = '/chapters/chapter-4/5/';
 
-const visible = (page: Page): Locator => page.locator('[data-playground]:not([hidden])');
+const codeTab = 'visits.ts — clinic-api';
+const sqlTab = 'DB Console';
 
-const open = async (page: Page, path: string): Promise<Locator> => {
+const scene = (page: Page): Locator => page.locator('[data-investigation]');
+const tab = (page: Page, name: string): Locator => scene(page).getByRole('tab', { name });
+const visible = (page: Page): Locator => page.locator('[data-playground]:visible');
+
+const open = async (page: Page, path: string, name: string = codeTab): Promise<Locator> => {
   await page.goto(path);
+  await tab(page, name).click();
   const playground = visible(page);
+  await expect(playground).toHaveCount(1);
   await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
   return playground;
 };
@@ -122,14 +132,7 @@ test.describe('第4章の SQL の欄', () => {
   const results = (playground: Locator): Locator => playground.locator('[data-role="results"]');
   const rows = (playground: Locator): Locator => results(playground).locator('tbody tr');
 
-  const openSql = async (page: Page, path: string): Promise<Locator> => {
-    await page.goto(path);
-    await page.getByRole('group', { name: '実行欄' }).getByRole('button', { name: 'SQL で調べる' }).click();
-    const playground = visible(page);
-    await expect(playground).toHaveCount(1);
-    await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    return playground;
-  };
+  const openSql = (page: Page, path: string): Promise<Locator> => open(page, path, sqlTab);
 
   const count = async (playground: Locator, table: string, expected: string): Promise<void> => {
     await replaceEditorText(playground, `SELECT count(*) AS n FROM ${table}`);
@@ -138,16 +141,27 @@ test.describe('第4章の SQL の欄', () => {
   };
 
   for (const pattern of patterns) {
-    test(`${pattern.name}: 最初は完成コードの欄だけが出て、「SQL で調べる」を押すと SQL の欄に切り替わる`, async ({ page }) => {
+    test(`${pattern.name}: 最初は文書のタブだけが開いて実行欄は起動せず、エディタのタブで完成コードの欄、DB Console のタブで SQL の欄が起動する`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 640 });
-      await open(page, pattern.path);
-      const buttons = page.getByRole('group', { name: '実行欄' }).getByRole('button');
-      await expect(buttons).toHaveText(['完成コードを実行する', 'SQL で調べる']);
+      await page.goto(pattern.path);
+      await expect(scene(page).getByRole('tab').locator('.tab-title')).toHaveText([
+        pattern.docTitle,
+        codeTab,
+        sqlTab,
+      ]);
+      await expect(scene(page).getByRole('tab').first()).toHaveAttribute('aria-selected', 'true');
       await expect(page.locator('[data-playground]')).toHaveCount(2);
+      await expect(visible(page)).toHaveCount(0);
+      await expect(page.locator('[data-playground][data-mounted]')).toHaveCount(0);
+      await tab(page, codeTab).click();
       await expect(visible(page)).toHaveAttribute('data-playground', 'code');
-      const playground = await openSql(page, pattern.path);
+      await expect(page.locator('[data-playground][data-mounted]')).toHaveCount(1);
+      await expect(page.locator('[data-playground="sql"][data-mounted]')).toHaveCount(0);
+      await tab(page, sqlTab).click();
+      const playground = visible(page);
+      await expect(playground).toHaveCount(1);
       await expect(playground).toHaveAttribute('data-playground', 'sql');
-      await expect(buttons.nth(1)).toHaveAttribute('aria-pressed', 'true');
+      await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
       await playground.getByRole('button', { name: '実行する' }).click();
       await expect(results(playground).locator('tbody tr').first()).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
@@ -259,31 +273,39 @@ test.describe('第4章の判断表の比較', () => {
 });
 
 test.describe('第4章の持ち帰りの演習', () => {
-  const switcher = (page: Page): Locator => page.getByRole('group', { name: 'パターン' });
+  const tabNameOf = (name: string): string => {
+    const pattern = patterns.find((item) => item.name === name);
+    return `${name}（${pattern?.start ?? ''}）`;
+  };
 
   const choose = async (page: Page, name: string): Promise<Locator> => {
-    await switcher(page).getByRole('button', { name }).click();
+    await tab(page, tabNameOf(name)).click();
     const playground = visible(page);
     await expect(playground).toHaveCount(1);
     await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
     return playground;
   };
 
-  test('最初は集計テーブルの開始のコードだけが出て、3 つのボタンで切り替えられる', async ({ page }) => {
-    await open(page, takeawayPath);
-    await expect(switcher(page).getByRole('button')).toHaveText([
+  test('最初は文書のタブだけが開いて開始のコードは起動せず、3 つのエディタのタブで切り替えられる', async ({ page }) => {
+    await page.goto(takeawayPath);
+    await expect(scene(page).getByRole('tab').locator('.tab-title')).toHaveText([
+      '持ち帰りの演習',
       '集計テーブル（chapter-4-summary-table-start）',
       '外部システム同期（chapter-4-external-sync-start）',
       '既存の監査ログ（chapter-4-audit-log-start）',
     ]);
-    await expect(visible(page)).toHaveCount(1);
+    await expect(scene(page).getByRole('tab').first()).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('[data-playground]')).toHaveCount(3);
-    await expect(visible(page).locator('.cm-content')).toContainText('explainCancellationCount');
+    await expect(visible(page)).toHaveCount(0);
+    await expect(page.locator('[data-playground][data-mounted]')).toHaveCount(0);
+    const summary = await choose(page, '集計テーブル');
+    await expect(summary.locator('.cm-content')).toContainText('explainCancellationCount');
+    await expect(page.locator('[data-playground][data-mounted]')).toHaveCount(1);
   });
 
   for (const pattern of patterns) {
     test(`${pattern.name}: 開始は ${pattern.startSummary}、完成コードを読み込むと pass 15 / fail 0 になる`, async ({ page }) => {
-      await open(page, takeawayPath);
+      await page.goto(takeawayPath);
       const playground = await choose(page, pattern.name);
       await expect(playground.getByRole('tab', { name: /visits\.ts/ }).first()).toHaveAttribute(
         'aria-selected',
@@ -303,8 +325,8 @@ test.describe('第4章の持ち帰りの演習', () => {
 
   test('3 つのパターンの編集内容は別々に保存し、混ざらない', async ({ page }) => {
     test.setTimeout(90_000);
-    await open(page, takeawayPath);
-    await typeAtTop(visible(page), '// 集計の編集 ');
+    await page.goto(takeawayPath);
+    await typeAtTop(await choose(page, '集計テーブル'), '// 集計の編集 ');
     const external = await choose(page, '外部システム同期');
     await expect(external.locator('.cm-content')).not.toContainText('集計の編集');
     await typeAtTop(external, '// 外部の編集 ');
@@ -329,8 +351,8 @@ test.describe('第4章の持ち帰りの演習', () => {
     expect(stored['es:code:chapter-4-audit-log-start']).not.toContain('集計の編集');
 
     await page.reload();
-    await expect(visible(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    await expect(visible(page).locator('.cm-content')).toContainText('集計の編集');
+    const reloadedSummary = await choose(page, '集計テーブル');
+    await expect(reloadedSummary.locator('.cm-content')).toContainText('集計の編集');
     const reloadedExternal = await choose(page, '外部システム同期');
     await expect(reloadedExternal.locator('.cm-content')).toContainText('外部の編集');
     await expect(reloadedExternal.locator('.cm-content')).not.toContainText('集計の編集');
@@ -338,7 +360,7 @@ test.describe('第4章の持ち帰りの演習', () => {
 
   test('1280x640 でページ全体にスクロールが出ない', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 640 });
-    await open(page, takeawayPath);
+    await page.goto(takeawayPath);
     for (const name of ['外部システム同期', '既存の監査ログ', '集計テーブル']) {
       const playground = await choose(page, name);
       await runTests(playground);
