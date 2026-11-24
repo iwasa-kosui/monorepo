@@ -883,7 +883,7 @@ test.describe('導入 調査の画面', () => {
     await tab(page, /リポジトリ/).click();
     await expect(address(page)).toHaveText('https://code.internal.example/clinic/visits.ts');
     const repo = panel(page, /リポジトリ/);
-    await expect(repo).toContainText('clinic / visits.ts');
+    await expect(repo).toContainText('clinic / clinic-api');
     await expect(repo).toContainText(`import { withTransaction } from './db.ts';`);
     await expect(repo).toContainText('export const reserveVisit');
     await expect(repo).toContainText('export const completeVisit');
@@ -893,6 +893,201 @@ test.describe('導入 調査の画面', () => {
     await expect(repo).toContainText('status を書き換えるだけで、理由と操作した人はどこにも保存していません。');
     await expect(unseen(page, /リポジトリ/)).toBeHidden();
     await expect(scene(page)).toHaveAttribute('data-opened', 'repo');
+  });
+
+  test('タブの表示名はブラウザのタブのタイトルらしく、アクセシブルな名前に日本語の名前が残る', async ({ page }) => {
+    await begin(page);
+    await expect(scene(page).locator('.tab .tab-title')).toHaveText([
+      'DB Console',
+      'Log Explorer',
+      'clinic-api/visits.ts',
+    ]);
+    await expect(tab(page, /DB コンソール/)).toHaveAccessibleName(/DB Console.*DB コンソール/);
+    await expect(tab(page, /ログの検索/)).toHaveAccessibleName(/Log Explorer.*ログの検索/);
+    await expect(tab(page, /リポジトリ/)).toHaveAccessibleName(/clinic-api\/visits\.ts.*リポジトリ/);
+    await expect(tab(page, /DB コンソール/)).toHaveAccessibleName(/未確認/);
+    await expect(scene(page).locator('.tab .fav')).toHaveCount(3);
+    for (const element of await scene(page).locator('.tab .fav').all()) {
+      await expect(element).toHaveAttribute('aria-hidden', 'true');
+    }
+    await answerButton(page).click();
+    await expect(scene(page).locator('.tab .tab-title')).toHaveText([
+      'DB Console',
+      'Log Explorer',
+      'clinic-api/visits.ts',
+      'Coding Agent',
+    ]);
+    await expect(agentTab(page)).toHaveAccessibleName(/Coding Agent.*エージェント/);
+  });
+
+  test('アドレスバーは、戻る・進む・再読み込みの記号と鍵の記号を持ち、記号は装飾として扱われる', async ({ page }) => {
+    await begin(page);
+    await expect(scene(page).locator('.address .nav')).toHaveAttribute('aria-hidden', 'true');
+    await expect(scene(page).locator('.address .nav i')).toHaveText(['←', '→', '↻']);
+    await expect(scene(page).locator('.address .lock')).toHaveAttribute('aria-hidden', 'true');
+    await expect(address(page)).toHaveText('https://db.internal.example/console');
+  });
+
+  test('チャットのサイドバー、入力欄の装飾、ログのナビゲーションは、装飾として扱われ、操作できない', async ({ page }) => {
+    await begin(page);
+    const side = scene(page).locator('.chat-side');
+    await expect(side).toHaveAttribute('aria-hidden', 'true');
+    await expect(side.locator('.chs li')).toHaveText(['# general', '# dev', '# 問い合わせ対応', '# 障害対応']);
+    await expect(side.locator('.chs li.on')).toHaveText('# 問い合わせ対応');
+    await expect(side.locator('button, a, input, [tabindex]')).toHaveCount(0);
+    await expect(scene(page).locator('.composer .fmt')).toHaveAttribute('aria-hidden', 'true');
+    await expect(scene(page).locator('.composer .ph')).toHaveAttribute('aria-hidden', 'true');
+    await expect(scene(page).locator('.composer .send-shape')).toHaveAttribute('aria-hidden', 'true');
+    await expect(scene(page).locator('.composer .ph')).toHaveText('# 問い合わせ対応 へのメッセージ');
+    await expect(scene(page).getByRole('heading')).toHaveCount(0);
+    const rail = scene(page).locator('.lg-rail');
+    await expect(rail).toHaveAttribute('aria-hidden', 'true');
+    await expect(rail.locator('button, a, input, [tabindex]')).toHaveCount(0);
+    await expect(scene(page).locator('.repo-tabs')).toHaveAttribute('aria-hidden', 'true');
+    await expect(scene(page).locator('.repo-tabs span')).toHaveText(['Code', 'Issues', 'Pull requests']);
+    await expect(scene(page).locator('.repo-bar .seg')).toHaveAttribute('aria-hidden', 'true');
+    await expect(scene(page).getByRole('tab')).toHaveCount(3);
+  });
+
+  test('チャットのサイドバーは、ウィンドウの幅が足りないときだけ隠れる', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 640 });
+    await begin(page);
+    await expect(scene(page).locator('.chat-side')).toBeVisible();
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(scene(page).locator('.chat-side')).toBeHidden();
+    await page.setViewportSize({ width: 800, height: 900 });
+    await expect(scene(page).locator('.chat-side')).toBeVisible();
+  });
+
+  test('DB コンソールは、接続名と SQLite の表示、テーブルの木構造、結果の行番号と行数の帯を持つ', async ({ page }) => {
+    await begin(page);
+    const conn = panel(page, /DB コンソール/).locator('.db-conn');
+    await expect(conn).toContainText('clinic_production（read-write）');
+    await expect(conn).toContainText('SQLite');
+    await expect(scene(page).locator('.side-title')).toHaveText('Tables');
+    await runSql(page, 'SELECT * FROM visits ORDER BY id;');
+    await expect(results(page).locator('tbody tr')).toHaveCount(2);
+    const marker = (selector: string): Promise<{ display: string; content: string }> =>
+      results(page).locator(selector).first().evaluate((row) => {
+        const style = getComputedStyle(row, '::before');
+        return { display: style.display, content: style.content };
+      });
+    expect(await marker('tbody tr')).toEqual({ display: 'table-cell', content: 'counter(row)' });
+    expect((await marker('thead tr')).display).toBe('table-cell');
+    await expect(results(page).locator('.playground-result > .playground-note')).toHaveText('2 行');
+    await expect(panel(page, /DB コンソール/)).toContainText('いまの状態だけが入っています。');
+  });
+
+  test('ログの検索は、画面名の帯、検索バー、ファセットの件数と印を持ち、Warn と Info の印が区別できる', async ({ page }) => {
+    await begin(page);
+    await tab(page, /ログの検索/).click();
+    const logs = panel(page, /ログの検索/);
+    await expect(logs.locator('.lg-title')).toHaveText('Logs');
+    await expect(logs.locator('.lg-sub')).toHaveText('Explorer');
+    await expect(logs.locator('.query-box .mag')).toHaveAttribute('aria-hidden', 'true');
+    await expect(logs.locator('.facet legend')).toHaveText(['Service', 'Status', 'HTTP Method']);
+    await expect(logs.locator('.swatch')).toHaveCount(2);
+    await expect(logs.locator('.swatch[data-level="info"]')).toHaveAttribute('aria-hidden', 'true');
+    const colors = await logs.locator('.swatch').evaluateAll((items) =>
+      items.map((item) => getComputedStyle(item).backgroundColor)
+    );
+    expect(new Set(colors).size).toBe(2);
+    await cancelRow(page).locator('.col-date').click();
+    await expect(detail(page)).toHaveAttribute('data-level', 'info');
+    await expect(detail(page).locator('.detail-section')).toHaveText('Event Attributes');
+  });
+
+  test('リポジトリは、パス、公開範囲、ブランチ、パンくず、実物から数えた行数を持つ', async ({ page }) => {
+    await begin(page);
+    await tab(page, /リポジトリ/).click();
+    const repo = panel(page, /リポジトリ/);
+    await expect(repo.locator('.repo-path')).toHaveText('clinic / clinic-api');
+    await expect(repo.locator('.repo-path strong')).toHaveText('clinic-api');
+    await expect(repo.locator('.repo-badge')).toHaveText('Private');
+    await expect(repo.locator('.branch')).toHaveText('main');
+    await expect(repo.locator('.crumbs')).toHaveText('clinic-api / src / visits.ts');
+    const lines = await repo.locator('pre .line').count();
+    await expect(repo.locator('.repo-lines')).toHaveText(`${lines} lines`);
+  });
+
+  test('エージェントは、左寄せの吹き出し、明朝系の本文、「依頼を入力」の入力欄を持つ', async ({ page }) => {
+    await begin(page);
+    await answerButton(page).click();
+    await expect(turns(page)).toHaveCount(9, { timeout: agentDone });
+    const box = await turns(page).first().locator('.bubble').evaluate((element) => {
+      const outer = element.closest('.turns')?.getBoundingClientRect();
+      const inner = element.getBoundingClientRect();
+      return { left: inner.left - (outer?.left ?? 0), narrower: inner.width < (outer?.width ?? 0) };
+    });
+    expect(box.left).toBeLessThan(2);
+    expect(box.narrower).toBe(true);
+    const font = await turns(page).nth(1).locator('p').evaluate((element) => getComputedStyle(element).fontFamily);
+    expect(font).toContain('Mincho');
+    await expect(agentSend(page)).toBeEnabled();
+    await expect(agentInput(page)).toHaveAttribute('placeholder', '依頼を入力');
+  });
+
+  test('どの画面にも、実在の製品名が出ない', async ({ page }) => {
+    await begin(page);
+    const check = async (label: string): Promise<void> => {
+      const text = await scene(page).innerText();
+      const content = await scene(page).evaluate((element) => {
+        const labels = [...element.querySelectorAll('[aria-label], [title], [placeholder]')].flatMap((node) =>
+          ['aria-label', 'title', 'placeholder'].map((name) => node.getAttribute(name) ?? '')
+        );
+        return [element.textContent ?? '', ...labels].join('\n');
+      });
+      const all = `${text}\n${content}`.toLowerCase();
+      for (const word of ['slack', 'datadog', 'github', 'claude']) {
+        expect(all, `${label}: ${word}`).not.toContain(word);
+      }
+    };
+    await check('開始直後');
+    await tab(page, /ログの検索/).click();
+    await cancelRow(page).locator('.col-date').click();
+    await check('ログ');
+    await tab(page, /リポジトリ/).click();
+    await check('リポジトリ');
+    await answerButton(page).click();
+    await expect(turns(page)).toHaveCount(9, { timeout: agentDone });
+    await check('エージェント');
+    await reply(page).click();
+    await check('返信後');
+  });
+
+  test('ダークモードでは、チャット、DB コンソール、ログの検索、リポジトリ、エージェントの背景色がライトと異なる', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await begin(page);
+    await answerButton(page).click();
+    const read = (): Promise<Record<string, string>> =>
+      page.evaluate(() => {
+        const background = (selector: string): string => {
+          const element = document.querySelector(selector);
+          return element === null ? 'missing' : getComputedStyle(element).backgroundColor;
+        };
+        return {
+          chat: background('[data-investigation] .chat'),
+          frame: background('[data-investigation] .browser'),
+          tabStrip: background('[data-investigation] .tab-strip'),
+          console: background('[role="tabpanel"][data-tool="console"]'),
+          logs: background('[role="tabpanel"][data-tool="logs"]'),
+          repo: background('[role="tabpanel"][data-tool="repo"]'),
+          agent: background('[role="tabpanel"][data-tool="agent"]'),
+          code: background('[data-investigation] pre.astro-code'),
+          sidebar: background('[data-investigation] .chat-side'),
+        };
+      });
+    const light = await read();
+    await page.emulateMedia({ colorScheme: 'dark' });
+    const dark = await read();
+    for (const key of Object.keys(light)) {
+      expect(light[key], `${key} light`).not.toBe('missing');
+      if (key === 'sidebar') {
+        expect(dark[key], key).toBe(light[key]);
+      } else {
+        expect(dark[key], key).not.toBe(light[key]);
+      }
+    }
   });
 
   test('左右の矢印キー、Home、End でタブを移動でき、ページは移動しない', async ({ page }) => {
