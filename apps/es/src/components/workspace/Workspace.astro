@@ -531,9 +531,44 @@ const hasComposer = Astro.slots.has('composer');
     order: 4;
     margin-left: auto;
   }
-  .scene .status-actions button {
-    padding-inline: 0.5rem;
+  .scene .status-bar {
+    border-top: 0;
+    padding: 0.375rem 0.875rem;
+  }
+  .scene .status-clock time {
+    color: var(--role-muted);
     font-size: 0.75rem;
+    font-weight: 400;
+  }
+  .scene .status-actions button {
+    border: 0;
+    border-radius: 999px;
+    background: var(--role-sunken);
+    padding: 0.1875rem 0.75rem;
+    color: var(--role-fg);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .scene .status-actions button:disabled {
+    color: var(--role-faint);
+  }
+  .scene .start {
+    padding: 1.25rem 1rem;
+  }
+  .scene .start-card {
+    align-items: stretch;
+    gap: 1rem;
+    border: 0;
+    border-radius: 1.25rem;
+    padding: 1.25rem;
+  }
+  .scene .start-text {
+    font-size: 0.9375rem;
+  }
+  .scene .start button {
+    border: 0;
+    border-radius: 999px;
+    padding: 0.625rem 1.25rem;
   }
   .scene :global(.win[data-window]) {
     border-inline: 0;

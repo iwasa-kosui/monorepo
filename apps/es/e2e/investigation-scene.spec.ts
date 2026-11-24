@@ -1805,7 +1805,7 @@ test.describe('導入 調査の画面', () => {
     expect(chatView.left).toBe(0);
     expect(chatView.width).toBe(375);
     expect(Math.abs(chatView.barTop)).toBeLessThanOrEqual(1);
-    expect(chatView.barHeight).toBeLessThanOrEqual(56);
+    expect(chatView.barHeight).toBeLessThanOrEqual(60);
     expect(Math.abs(chatView.stripToFooter)).toBeLessThanOrEqual(2);
     expect(chatView.contentHeight).toBeGreaterThan(560);
     expect(chatView.overflow).toBeLessThanOrEqual(0);
