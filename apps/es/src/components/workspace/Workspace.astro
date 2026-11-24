@@ -369,6 +369,7 @@ const hasComposer = Astro.slots.has('composer');
   --br-unseen-bg: #fff1c2;
   --br-unseen: #6b4300;
   --br-unseen-line: #b7791f;
+  --br-unseen-dot: #b45309;
   --br-fav-teal: #0e8f8a;
   --br-fav-violet: #632ca6;
   --br-fav-ink: #1f2328;
@@ -490,21 +491,40 @@ const hasComposer = Astro.slots.has('composer');
 }
 
 @media (max-width: 639px) {
-  .scene .tab-strip {
-    padding-bottom: 0.25rem;
-  }
-  .scene .tab-strip .dots {
-    display: none;
-  }
   .scene .workspace {
     gap: 0;
   }
   .scene .browser {
-    order: -1;
+    overflow: clip;
+  }
+  .scene .tab-strip {
+    position: sticky;
+    bottom: var(--ws-bottom, 3.5rem);
+    z-index: 5;
+    order: 1;
+    border-top: 1px solid var(--br-rule);
+    padding: 0.25rem 0.375rem;
+  }
+  .scene .tab-strip .dots {
+    display: none;
+  }
+  .scene .tabs {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.125rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .scene .tabs::-webkit-scrollbar {
+    display: none;
   }
   .scene[data-view="chat"] .browser {
-    border-bottom: 0;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    position: sticky;
+    bottom: var(--ws-bottom, 3.5rem);
+    z-index: 5;
+    border-top: 0;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
   .scene[data-view="chat"] .address,
   .scene[data-view="chat"] .pages {
@@ -512,8 +532,8 @@ const hasComposer = Astro.slots.has('composer');
   }
   .scene[data-view="chat"] :global(.win.chat) {
     min-height: 28rem;
-    border-top: 0;
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    border-bottom: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   }
   .scene[data-view="tools"] :global(.win.chat) {
     display: none;
@@ -556,6 +576,7 @@ const hasComposer = Astro.slots.has('composer');
     --br-unseen-bg: #4b3a0b;
     --br-unseen: #ffd971;
     --br-unseen-line: #b88a1a;
+    --br-unseen-dot: #ffc83d;
     --br-fav-violet: #a98be0;
     --br-fav-ink: #ffffff;
     --br-fav-blue: #6e9bff;

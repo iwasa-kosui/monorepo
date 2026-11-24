@@ -24,6 +24,8 @@ export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
   const pages = must<HTMLElement>(root, '.pages');
   const address = must<HTMLElement>(root, '[data-address]');
   const added = new Set<string>();
+  const stripEdge = 8;
+  let shown = '';
 
   const tabsOf = (): HTMLButtonElement[] => [...tabList.querySelectorAll<HTMLButtonElement>('[role="tab"][data-tool]')];
   const chatTab = tabList.querySelector<HTMLButtonElement>('[data-chat-tab]');
@@ -108,6 +110,15 @@ export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
       }
       for (const panel of panelsOf()) {
         panel.hidden = panel.dataset.tool !== selected;
+      }
+      const front = view.chatFront ? chatTab : tabs.find((tab) => tab.dataset.tool === selected);
+      const frontKey = view.chatFront ? 'chat' : `tool:${selected}`;
+      if (front !== null && front !== undefined && frontKey !== shown) {
+        shown = frontKey;
+        const strip = tabList.getBoundingClientRect();
+        const box = front.getBoundingClientRect();
+        if (box.width > 0 && box.left < strip.left) tabList.scrollLeft -= strip.left - box.left + stripEdge;
+        else if (box.width > 0 && box.right > strip.right) tabList.scrollLeft += box.right - strip.right + stripEdge;
       }
       address.textContent = tabs.find((tab) => tab.dataset.tool === selected)?.dataset.url ?? '';
     },

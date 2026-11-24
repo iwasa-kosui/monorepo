@@ -1657,7 +1657,7 @@ test.describe('導入 調査の画面', () => {
         return { chat: rect('[data-investigation] .chat'), browser: rect('[data-investigation] .browser') };
       });
       if (size.width < 640) {
-        expect(boxes.browser?.bottom ?? 0).toBeLessThanOrEqual((boxes.chat?.top ?? 0) + 1);
+        expect(boxes.chat?.top ?? 0).toBeLessThan(boxes.browser?.top ?? 0);
       } else {
         expect(boxes.chat?.bottom ?? 0).toBeLessThanOrEqual((boxes.browser?.top ?? 0) + 1);
       }
@@ -1697,6 +1697,7 @@ test.describe('導入 調査の画面', () => {
     await tab(page, /DB コンソール/).click();
     await expect(chatWindow).toBeHidden();
     await expect(panel(page, /DB コンソール/)).toBeVisible();
+    await expect(address(page)).toBeVisible();
     await expect(address(page)).toHaveText('https://db.internal.example/console');
     await expect(chatTab).toHaveAttribute('aria-selected', 'false');
     await expect(tab(page, /DB コンソール/)).toHaveAttribute('aria-selected', 'true');
@@ -1707,6 +1708,76 @@ test.describe('導入 調査の画面', () => {
     await expect(chatWindow).toBeVisible();
     await expect(scene(page).locator('.pages')).toBeHidden();
     await expect(scene(page)).toHaveAttribute('data-selected', 'console');
+  });
+
+  test('375px 幅では、タブは折り返さず 1 段に並び、横にスクロールして選べる。未確認は点で出る', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await begin(page);
+    const strip = scene(page).getByRole('tablist', { name: '開くツール' });
+    const boxes = await scene(page).getByRole('tab').evaluateAll((elements) =>
+      elements.map((element) => {
+        const box = element.getBoundingClientRect();
+        return { top: Math.round(box.top), height: box.height };
+      })
+    );
+    expect(new Set(boxes.map((box) => box.top)).size).toBe(1);
+    for (const box of boxes) expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(await strip.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+    const dot = unseen(page, /リポジトリ/);
+    await expect(tab(page, /リポジトリ/)).toHaveAccessibleName(/未確認/);
+    const size = await dot.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return { width: box.width, height: box.height };
+    });
+    expect(size).toEqual({ width: 8, height: 8 });
+
+    await tab(page, /リポジトリ/).click();
+    await expect(tab(page, /リポジトリ/)).toHaveAttribute('aria-selected', 'true');
+    const inside = await tab(page, /リポジトリ/).evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const outer = element.closest('[role="tablist"]')?.getBoundingClientRect();
+      return outer !== undefined && box.left >= outer.left - 1 && box.right <= outer.right + 1;
+    });
+    expect(inside).toBe(true);
+    await tab(page, /リポジトリ/).press('Home');
+    await expect(tab(page, /チャット/)).toBeFocused();
+    await expect(tab(page, /チャット/)).toBeInViewport({ ratio: 1 });
+  });
+
+  test('375px 幅では、タブの並びが画面の下部で「前へ」「次へ」のすぐ上に貼り付く', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 600 });
+    await begin(page);
+    const strip = scene(page).getByRole('tablist', { name: '開くツール' });
+    const gap = (): Promise<number> =>
+      page.evaluate(() => {
+        const bar = document.querySelector('[data-investigation] .tab-strip')?.getBoundingClientRect();
+        const footer = document.querySelector('.lesson-footer')?.getBoundingClientRect();
+        return bar === undefined || footer === undefined ? 999 : footer.top - bar.bottom;
+      });
+    const expectPinned = async (label: string): Promise<void> => {
+      await expect(strip, label).toBeInViewport({ ratio: 1 });
+      const distance = await gap();
+      expect(distance, label).toBeGreaterThanOrEqual(-1);
+      expect(distance, label).toBeLessThanOrEqual(2);
+    };
+    await expectPinned('chat');
+    await tab(page, /DB コンソール/).click();
+    await expectPinned('tools');
+    const order = await page.evaluate(() => {
+      const rect = (selector: string) =>
+        document.querySelector(`[data-investigation] ${selector}`)?.getBoundingClientRect();
+      return {
+        address: rect('.address')?.top ?? 0,
+        pages: rect('.pages')?.top ?? 0,
+        bar: rect('.tab-strip')?.top ?? 0,
+      };
+    });
+    expect(order.address).toBeLessThan(order.pages);
+    expect(order.pages).toBeLessThan(order.bar);
+    await page.evaluate(() => window.scrollTo(0, 60));
+    await expectPinned('scrolled');
   });
 
   test('375px 幅で別のタブを見ている間に届いた投稿は、チャットのタブに未読の数で出る', async ({ page }) => {

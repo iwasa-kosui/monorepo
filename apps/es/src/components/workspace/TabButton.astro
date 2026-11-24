@@ -192,9 +192,21 @@ const props = Astro.props;
     display: inline-flex;
   }
   :global(.scene[data-scenario]) .tab {
-    margin-bottom: 0.125rem;
+    flex: none;
+    min-height: 2.75rem;
+    max-width: none;
     border-radius: var(--radius-md);
-    padding: 0.25rem 0.5rem;
+    padding: 0.25rem 0.625rem;
+  }
+  :global(.scene[data-scenario]) .unseen {
+    width: 0.5rem;
+    height: 0.5rem;
+    border: 0;
+    background: var(--br-unseen-dot);
+    padding: 0;
+    overflow: hidden;
+    color: transparent;
+    font-size: 0;
   }
   :global(.scene[data-scenario]) .tab[aria-selected="true"]::before,
   :global(.scene[data-scenario]) .tab[aria-selected="true"]::after {

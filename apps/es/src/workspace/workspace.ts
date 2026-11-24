@@ -385,6 +385,12 @@ export const mountWorkspace = (root: HTMLElement): void => {
   );
   resetButton?.addEventListener('click', reset);
   compact.addEventListener('change', render);
+  const footer = document.querySelector<HTMLElement>('.lesson-footer');
+  if (footer !== null) {
+    const keepAboveFooter = (): void => root.style.setProperty('--ws-bottom', `${footer.offsetHeight}px`);
+    new ResizeObserver(keepAboveFooter).observe(footer);
+    keepAboveFooter();
+  }
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) scheduler.tick();
   });
