@@ -243,8 +243,8 @@ describe('SummarizeTimelineUseCase', () => {
 
     expect(t.calls).toHaveLength(1);
     expect(t.calls[0]).toMatchObject({
-      model: '@cf/meta/llama-4-scout-17b-16e-instruct',
-      maxOutputTokens: 600,
+      model: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+      maxOutputTokens: 2600,
       documents: [
         '[1] @alice 2026-11-04 00:00（JST）\n京都の寺',
         '[2] @bob 2026-11-04 01:30（JST）\n旅行の計画',

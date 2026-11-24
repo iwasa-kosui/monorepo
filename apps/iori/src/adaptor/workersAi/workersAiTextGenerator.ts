@@ -45,7 +45,7 @@ const hasOnlyReasoning = (message: ChoiceMessage | undefined): boolean => {
 };
 
 export const createWorkersAiTextGenerator = (ai: WorkersAiRunner): TextGenerator => {
-  const generate = async ({ model, instruction, input, maxOutputTokens }: GenerateRequest) => {
+  const generate = async ({ model, instruction, input, maxOutputTokens, reasoningEffort }: GenerateRequest) => {
     if (input.length === 0) return RA.err(aiError('No input to generate from.'));
     try {
       const raw = await ai.run(model, {
@@ -54,6 +54,7 @@ export const createWorkersAiTextGenerator = (ai: WorkersAiRunner): TextGenerator
           { role: 'user', content: input },
         ],
         max_tokens: maxOutputTokens,
+        reasoning_effort: reasoningEffort,
       });
       const message = readChoiceMessage(raw);
       const text = extractText(raw, message);
@@ -69,9 +70,15 @@ export const createWorkersAiTextGenerator = (ai: WorkersAiRunner): TextGenerator
   };
   return {
     generate,
-    summarize: async ({ model, instruction, documents, maxOutputTokens }) => {
+    summarize: async ({ model, instruction, documents, maxOutputTokens, reasoningEffort }) => {
       if (documents.length === 0) return RA.err(aiError('No documents to summarize.'));
-      return generate({ model, instruction, input: documents.join(DOCUMENT_SEPARATOR), maxOutputTokens });
+      return generate({
+        model,
+        instruction,
+        input: documents.join(DOCUMENT_SEPARATOR),
+        maxOutputTokens,
+        reasoningEffort,
+      });
     },
   };
 };

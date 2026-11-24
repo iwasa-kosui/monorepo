@@ -5,7 +5,7 @@ import { SearchTerm } from '../../domain/timelineSearch/searchTerm.ts';
 import type { AiError } from '../../ports/aiError.ts';
 import type { TextGenerator } from '../../ports/textGenerator.ts';
 
-export const QUERY_EXPANSION_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
+export const QUERY_EXPANSION_MODEL = '@cf/deepseek-ai/deepseek-v4.1-flash-1017';
 
 const MAX_OUTPUT_TOKENS = 256;
 const MIN_EXPANDED_TERM_CHARS = 2;
@@ -83,6 +83,7 @@ export const expandQuery = async (
         instruction: INSTRUCTION,
         input: query,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
+        reasoningEffort: 'none',
       }),
       timeout,
     ]);

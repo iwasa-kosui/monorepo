@@ -148,7 +148,7 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
       used_status_count: 4,
       excluded_non_public_count: 1,
       truncated: false,
-      model: '@cf/meta/llama-4-scout-17b-16e-instruct',
+      model: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
       remaining_today: 19,
     });
     expect(body.source_status_ids).toHaveLength(2);
@@ -183,7 +183,7 @@ describe('POST /api/iori/v1/timeline/summaries', () => {
       used_status_count: 3,
       excluded_non_public_count: 0,
       truncated: false,
-      model: '@cf/meta/llama-4-scout-17b-16e-instruct',
+      model: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
       remaining_today: 19,
     });
   });
