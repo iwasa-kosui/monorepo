@@ -76,7 +76,7 @@ describe('POST /api/v1/statuses/:id/translate', () => {
       spoiler_text: '',
       language: 'ja',
       detected_source_language: 'en',
-      provider: 'Workers AI (Llama 4 Scout)',
+      provider: 'Workers AI (DeepSeek V4.1 Flash)',
       media_attachments: [],
       poll: null,
     });

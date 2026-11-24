@@ -25,8 +25,8 @@ import type { AiError } from '../ports/aiError.ts';
 import type { TextGenerator } from '../ports/textGenerator.ts';
 import type { UseCase } from './useCase.ts';
 
-export const TRANSLATION_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
-export const TRANSLATION_PROVIDER = 'Workers AI (Llama 4 Scout)';
+export const TRANSLATION_MODEL = '@cf/deepseek-ai/deepseek-v4.1-flash-1017';
+export const TRANSLATION_PROVIDER = 'Workers AI (DeepSeek V4.1 Flash)';
 export const TRANSLATION_TIMEOUT_MS = 20_000;
 export const TRANSLATION_TARGET_LANGUAGE = 'ja';
 
@@ -140,6 +140,7 @@ const create = ({
           instruction: INSTRUCTION,
           input,
           maxOutputTokens: MAX_OUTPUT_TOKENS,
+          reasoningEffort: 'none',
         }),
         timeout,
       ]);

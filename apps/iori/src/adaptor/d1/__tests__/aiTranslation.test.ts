@@ -26,7 +26,7 @@ const translation = (postId: string, overrides: Partial<PostTranslation> = {}) =
     sourceHash: 'hash-1',
     content: '<p>こんにちは</p>',
     detectedSourceLanguage: 'en',
-    model: '@cf/meta/llama-4-scout-17b-16e-instruct',
+    model: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
     createdAt: 1_000 as PostTranslation['createdAt'],
     ...overrides,
   });

@@ -789,7 +789,7 @@ describe('CreateDailyDigestUseCase: 要約', () => {
     expect(calls).toHaveLength(3);
     expect(calls[0]).toMatchObject({
       model: DIGEST_SUMMARY_MODEL,
-      maxOutputTokens: 512,
+      maxOutputTokens: 2512,
       input: '<document>\nTitle\n\nHello world\n</document>',
     });
     expect(Array.from(documentOf((calls[1] as { input: string }).input))).toHaveLength(1000);
@@ -1001,7 +1001,7 @@ describe('CreateDailyDigestUseCase: あなたへのおすすめ', () => {
     const input = inputOf(calls, 'Match');
     expect(Array.from(documentOf(input))).toHaveLength(6000);
     expect(documentOf(input).startsWith(`Match\n\n${'あ'.repeat(10)}`)).toBe(true);
-    expect(calls[0]).toMatchObject({ model: DIGEST_SUMMARY_MODEL, maxOutputTokens: 512 });
+    expect(calls[0]).toMatchObject({ model: DIGEST_SUMMARY_MODEL, maxOutputTokens: 2512 });
     expect(t.all('SELECT summary FROM digest_items')).toEqual([
       { summary: 'おすすめの要約' },
       { summary: 'おすすめの要約' },

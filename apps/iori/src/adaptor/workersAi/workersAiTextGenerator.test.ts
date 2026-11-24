@@ -7,8 +7,15 @@ const summarizeRequest = {
   instruction: 'Summarize.',
   documents: ['first', 'second'],
   maxOutputTokens: 256,
-};
-const generateRequest = { model: 'test-model', instruction: 'Write.', input: 'topic', maxOutputTokens: 128 };
+  reasoningEffort: 'low',
+} as const;
+const generateRequest = {
+  model: 'test-model',
+  instruction: 'Write.',
+  input: 'topic',
+  maxOutputTokens: 128,
+  reasoningEffort: 'none',
+} as const;
 
 describe('createWorkersAiTextGenerator summarize', () => {
   it('joins documents and returns the response text', async () => {
@@ -21,6 +28,7 @@ describe('createWorkersAiTextGenerator summarize', () => {
         { role: 'user', content: 'first\n\n---\n\nsecond' },
       ],
       max_tokens: 256,
+      reasoning_effort: 'low',
     });
   });
 
@@ -73,7 +81,14 @@ describe('createWorkersAiTextGenerator generate', () => {
         { role: 'user', content: 'topic' },
       ],
       max_tokens: 128,
+      reasoning_effort: 'none',
     });
+  });
+
+  it.each(['none', 'low', 'high', 'max'] as const)('passes reasoning effort %s to run', async (reasoningEffort) => {
+    const run = vi.fn(async () => ({ response: 'generated' }));
+    await createWorkersAiTextGenerator({ run }).generate({ ...generateRequest, reasoningEffort });
+    expect(run).toHaveBeenCalledWith('test-model', expect.objectContaining({ reasoning_effort: reasoningEffort }));
   });
 
   it.each([
