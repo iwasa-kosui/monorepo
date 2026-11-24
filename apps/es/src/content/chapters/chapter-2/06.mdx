@@ -1,6 +1,20 @@
+---
+wide: true
+immersive: true
+---
+
 import Quote from '../../../components/Quote.astro';
+import { chapter2Change } from '../../../components/chapters/chapter-2';
+import Workspace from '../../../components/workspace/Workspace.astro';
+
+<div class="visually-hidden">
 
 ## 記録を足すと visits.ts は何行変わるか
+
+</div>
+
+<Workspace scenario={chapter2Change}>
+<Fragment slot="pr">
 
 `chapter-1-start` から `chapter-2-step-2` への `visits.ts` の変更量は、+13/-1 行です。変更した関数は `cancelVisit` だけです。`business_events` テーブルの作成は `CREATE TABLE` 1つで、9行です。`visits` テーブルは変えていません。
 
@@ -27,3 +41,6 @@ import Quote from '../../../components/Quote.astro';
 フルリプレイスは全機能を一斉に移行するため、ダウンタイムやバグのリスクが大きすぎます。私たちは段階的導入を選びました。
 
 </Quote>
+
+</Fragment>
+</Workspace>

@@ -1,0 +1,547 @@
+---
+import { clockOf } from '../../workspace/clock';
+import type { TabKind, WorkspaceScenario } from '../../workspace/scenario';
+import { assertScenario } from '../../workspace/validate';
+import '../figures/figure.css';
+import AgentPanel from './AgentPanel.astro';
+import ChatWindow from './ChatWindow.astro';
+import DbConsolePanel from './DbConsolePanel.astro';
+import DocPanel from './DocPanel.astro';
+import EditorPanel from './EditorPanel.astro';
+import LogExplorerPanel from './LogExplorerPanel.astro';
+import PrPanel from './PrPanel.astro';
+import RepoPanel from './RepoPanel.astro';
+import SlotPanel from './SlotPanel.astro';
+import TabButton from './TabButton.astro';
+
+interface Props {
+  scenario: WorkspaceScenario;
+}
+
+const { scenario } = Astro.props;
+assertScenario(scenario);
+
+const panelComponents = {
+  console: DbConsolePanel,
+  logs: LogExplorerPanel,
+  repo: RepoPanel,
+  agent: AgentPanel,
+  slot: SlotPanel,
+  editor: EditorPanel,
+  doc: DocPanel,
+  pr: PrPanel,
+} satisfies Record<TabKind, unknown>;
+
+const timed = scenario.mode === 'timed';
+const firstTab = scenario.tabs.find((tab) => tab.initial !== false);
+if (firstTab === undefined) {
+  throw new Error('最初から表示するタブがありません');
+}
+const { status } = scenario;
+const counter = status.counter;
+const collapsed = scenario.chat.collapsed === true;
+const showStatus = timed;
+const hasComposer = Astro.slots.has('composer');
+---
+
+<section
+  class="cfig scene"
+  data-investigation
+  data-scenario={JSON.stringify(scenario)}
+  data-opened=""
+  data-selected={firstTab.key}
+  data-phase={timed ? 'idle' : 'running'}
+  data-ready="false"
+  aria-label={scenario.label}
+>
+  {
+    showStatus && (
+      <div class="status-bar" role="group" aria-label={status.label}>
+        {
+          timed && (
+            <>
+              <p
+                class="status-item status-elapsed"
+                role="timer"
+                aria-live="off"
+              >
+                {status.elapsed} <span data-elapsed>00:00</span>
+              </p>
+              <p class="status-item status-clock">
+                <span class="cfig-sr">画面内の現在時刻</span>
+                <time data-clock>{clockOf(scenario.startedAt)}</time>
+              </p>
+            </>
+          )
+        }
+        {
+          counter !== undefined && (
+            <p class="status-item status-affected">
+              {counter.label}
+              <strong data-affected>{counter.initial}{counter.unit}</strong>
+            </p>
+          )
+        }
+        <div class="status-actions">
+          {
+            timed && (
+              <button type="button" data-action="pause" disabled>
+                一時停止
+              </button>
+            )
+          }
+          <button type="button" data-action="reset" disabled={timed}>
+            最初からやり直す
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  <div
+    class="workspace"
+    data-workspace
+    data-chat-collapsed={collapsed ? '' : undefined}
+  >
+    {
+      hasComposer
+        ? (
+        <ChatWindow scenario={scenario} composer={true}>
+          <slot name="composer" slot="composer" />
+        </ChatWindow>
+      )
+        : <ChatWindow scenario={scenario} />
+    }
+
+    <div
+      class="win browser"
+      role="group"
+      aria-label="ブラウザ"
+      data-window
+      inert={timed}
+    >
+      <div class="win-bar tab-strip">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div class="tabs" role="tablist" aria-label="開くツール">
+          {
+            scenario.tabs.map((tab) =>
+              tab.initial === false
+                ? (
+              <template data-tab-button={tab.key}>
+                <TabButton scenario={scenario} tab={tab} selected={false} />
+              </template>
+            )
+                : (
+              <TabButton
+                scenario={scenario}
+                tab={tab}
+                selected={tab.key === firstTab.key}
+              />
+            )
+            )
+          }
+        </div>
+      </div>
+      <p class="address">
+        <span class="nav" aria-hidden="true"><i>←</i><i>→</i><i>↻</i></span>
+        <span class="url-pill">
+          <span class="cfig-sr">アドレス</span>
+          <span class="lock" aria-hidden="true"></span>
+          <span class="address-text" data-address>{firstTab.url}</span>
+        </span>
+      </p>
+
+      <div class="pages">
+        {
+          scenario.tabs.map((tab) => {
+            const Panel = panelComponents[tab.kind];
+            return tab.initial === false
+              ? (
+            <template data-tab-panel={tab.key}>
+              <Panel scenario={scenario} tab={tab} hidden={true}>
+                <slot name={tab.key} />
+              </Panel>
+            </template>
+          )
+              : (
+            <Panel
+              scenario={scenario}
+              tab={tab}
+              hidden={tab.key !== firstTab.key}
+            >
+              <slot name={tab.key} />
+            </Panel>
+          );
+          })
+        }
+      </div>
+    </div>
+
+    {
+      timed && (
+        <div
+          class="start"
+          role="group"
+          aria-labelledby={`${scenario.id}-start`}
+          data-start
+        >
+          <div class="start-card">
+            <p class="start-text" id={`${scenario.id}-start`}>
+              {scenario.startGuide.join('')}
+            </p>
+            <button type="button" class="primary" data-action="start">
+              {status.start}
+            </button>
+          </div>
+        </div>
+      )
+    }
+  </div>
+</section>
+
+<style>
+:global(.content) :global(.cfig).scene {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.375rem;
+  padding: 0.375rem;
+}
+.scene > * {
+  min-width: 0;
+}
+
+.scene .status-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem 1.25rem;
+  border: 1px solid var(--role-rule);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
+  padding: 0.1875rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.scene .status-item {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.scene .status-elapsed span {
+  font-weight: 700;
+}
+.scene .status-clock time {
+  font-family: var(--font-code);
+  font-weight: 700;
+}
+.scene .status-affected strong {
+  color: var(--role-danger);
+}
+.scene .status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-left: auto;
+}
+.scene .status-actions button,
+.scene .start button {
+  border: 1px solid var(--role-accent);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.0625rem 0.75rem;
+  color: var(--role-accent);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.scene .status-actions button:hover:not(:disabled) {
+  background: var(--role-accent-soft);
+}
+.scene .status-actions button:disabled {
+  border-color: var(--role-rule);
+  color: var(--role-muted);
+  cursor: not-allowed;
+}
+
+.scene .workspace {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.375rem;
+  min-width: 0;
+  min-height: 0;
+}
+.scene .start {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--role-bg) 80%, transparent);
+  padding: 1.5rem 0.75rem;
+  backdrop-filter: blur(2px);
+}
+.scene .start-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  max-width: 28rem;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
+  box-shadow: var(--shadow-raised);
+  padding: 1rem 1.25rem;
+}
+.scene .start-text {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.scene .start button {
+  background: var(--role-accent);
+  padding: 0.375rem 1.25rem;
+  color: var(--role-on-accent);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.scene .start button:hover {
+  opacity: 0.9;
+}
+.scene :global([hidden]:not(.playground *)) {
+  display: none;
+}
+
+.scene :global(.win[data-window]) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
+  overflow: hidden;
+}
+.scene .win-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: var(--role-sunken);
+  padding: 0.25rem 0.625rem;
+}
+.scene :global(.dots) {
+  display: inline-flex;
+  flex: none;
+  gap: 0.25rem;
+}
+.scene :global(.dots i) {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--dot, var(--role-faint));
+}
+.scene :global(button:not(.playground *)) {
+  font: inherit;
+}
+.scene :global(button:not(.playground *):focus-visible),
+.scene :global(input:not(.playground *):focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.scene .browser {
+  --br-strip: #dee1e6;
+  --br-chrome: #ffffff;
+  --br-pill: #f1f3f4;
+  --br-text: #202124;
+  --br-tab: #3c4043;
+  --br-tab-hover: #eceff3;
+  --br-nav: #5f6368;
+  --br-rule: #dadce0;
+  --br-dot: #8a8f96;
+  --br-unseen-bg: #fff1c2;
+  --br-unseen: #6b4300;
+  --br-unseen-line: #b7791f;
+  --br-fav-teal: #0e8f8a;
+  --br-fav-violet: #632ca6;
+  --br-fav-ink: #1f2328;
+  --br-fav-coral: #d97757;
+  --br-fav-blue: #2f6fed;
+  --br-fav-azure: #007acc;
+  --ring: #1a5fc8;
+  --dot: var(--br-dot);
+  background: var(--br-chrome);
+  color: var(--br-text);
+}
+.scene .tab-strip {
+  align-items: flex-end;
+  gap: 0.625rem;
+  border-bottom: 0;
+  background: var(--br-strip);
+  padding: 0.375rem 0.625rem 0;
+}
+.scene .tab-strip .dots {
+  align-self: center;
+  margin-bottom: 0.25rem;
+}
+.scene .tabs {
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0 0.125rem;
+  min-width: 0;
+}
+.scene .address {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin: 0;
+  border-bottom: 1px solid var(--br-rule);
+  background: var(--br-chrome);
+  padding: 0.25rem 0.625rem;
+}
+.scene .nav {
+  display: inline-flex;
+  flex: none;
+  gap: 0.625rem;
+  color: var(--br-nav);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.scene .nav i {
+  font-style: normal;
+}
+.scene .url-pill {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.4375rem;
+  min-width: 0;
+  border-radius: 999px;
+  background: var(--br-pill);
+  padding: 0 0.75rem;
+  color: var(--br-text);
+}
+.scene .lock {
+  position: relative;
+  flex: none;
+  width: 0.5625rem;
+  height: 0.4375rem;
+  margin-top: 0.25rem;
+  border-radius: 1px;
+  background: var(--br-nav);
+}
+.scene .lock::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 0.3125rem;
+  height: 0.25rem;
+  transform: translateX(-50%);
+  border: 1.5px solid var(--br-nav);
+  border-bottom: 0;
+  border-radius: 0.1875rem 0.1875rem 0 0;
+}
+.scene .address-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene .pages {
+  display: flex;
+  flex-direction: column;
+  height: 26rem;
+  min-height: 0;
+}
+.scene :global(.panel[role="tabpanel"]) {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.scene :global(.panel[role="tabpanel"][hidden]) {
+  display: none;
+}
+.scene :global(.panel-note) {
+  flex: none;
+  margin: 0;
+  border-top: 1px solid var(--pn-rule);
+  background: var(--pn-bg);
+  padding: 0.25rem 0.625rem;
+  color: var(--pn-fg);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 639px) {
+  .scene .tab-strip {
+    padding-bottom: 0.25rem;
+  }
+  .scene .tab-strip .dots {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  :global(.content) :global(.chapter-body) > .scene {
+    flex: 1 1 0;
+    min-height: 26rem;
+  }
+  .scene .workspace {
+    flex: 1 1 0;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .scene .workspace[data-chat-collapsed] {
+    grid-template-columns: 3.5rem minmax(0, 1fr);
+  }
+  .scene .start {
+    align-items: center;
+  }
+  .scene .pages {
+    flex: 1 1 0;
+    height: auto;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .scene .browser {
+    --br-strip: #202124;
+    --br-chrome: #35363a;
+    --br-pill: #202124;
+    --br-text: #e8eaed;
+    --br-tab: #bdc1c6;
+    --br-tab-hover: #2b2c2f;
+    --br-nav: #bdc1c6;
+    --br-rule: #4a4c50;
+    --br-dot: #6b6f75;
+    --br-unseen-bg: #4b3a0b;
+    --br-unseen: #ffd971;
+    --br-unseen-line: #b88a1a;
+    --br-fav-violet: #a98be0;
+    --br-fav-ink: #ffffff;
+    --br-fav-blue: #6e9bff;
+    --br-fav-azure: #3aa0e8;
+    --ring: #8ab4f8;
+  }
+}
+</style>
+
+<script>
+import { bootWorkspaces } from '../../workspace/boot';
+
+bootWorkspaces();
+</script>

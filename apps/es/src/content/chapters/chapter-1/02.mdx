@@ -1,19 +1,34 @@
+---
+wide: true
+immersive: true
+---
+
 import CodePlayground from '../../../components/CodePlayground.astro';
+import { chapter1RunTests } from '../../../components/chapters/chapter-1';
+import Workspace from '../../../components/workspace/Workspace.astro';
+
+<div class="visually-hidden">
 
 ## テストを実行する
 
-実行欄は、ページの中でコードを実行する欄です。「テストを実行する」を押します。
+</div>
 
-実行すると、4件が成功して4件が失敗します。ここでは失敗して正常です。実行欄には、件数と失敗したテストが出ます。`pass 4 / fail 4` の行は、実行欄の結果の一番上に出ます。
-
-成功した4件は、既存の業務が動いていることを示します。失敗した4件は、第2章で書くコードがまだ無いので失敗しています。「キャンセルした人と理由を答えられる」が成功すれば、問い合わせに答えられます。
-
+<Workspace scenario={chapter1RunTests}>
+<Fragment slot="editor">
 <CodePlayground
   exercise="chapter-1-start"
   editable={[]}
   readonly={['visits.test.ts']}
   testFile="visits.test.ts"
 />
+</Fragment>
+<Fragment slot="guide">
+
+実行欄は、ページの中でコードを実行する欄です。「テストを実行する」を押します。
+
+実行すると、4件が成功して4件が失敗します。ここでは失敗して正常です。実行欄には、件数と失敗したテストが出ます。`pass 4 / fail 4` の行は、実行欄の結果の一番上に出ます。
+
+成功した4件は、既存の業務が動いていることを示します。失敗した4件は、第2章で書くコードがまだ無いので失敗しています。「キャンセルした人と理由を答えられる」が成功すれば、問い合わせに答えられます。
 
 <div class="detail-row">
 
@@ -54,3 +69,6 @@ node --test visits.test.ts
 </details>
 
 </div>
+
+</Fragment>
+</Workspace>

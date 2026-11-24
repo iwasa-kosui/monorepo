@@ -1,0 +1,806 @@
+---
+import type { WorkspaceScenario } from '../../workspace/scenario';
+
+interface Props {
+  scenario: WorkspaceScenario;
+  composer?: boolean;
+}
+
+const { scenario, composer = false } = Astro.props;
+const { chat, memo, gates } = scenario;
+const timed = scenario.mode === 'timed';
+const memoId = `${scenario.id}-memo`;
+const reasonId = `${scenario.id}-reason`;
+const initialReason = gates?.reply.reasons.all ?? '';
+const collapsed = chat.collapsed === true;
+const mainId = `${scenario.id}-chat-main`;
+const hasComposerSlot = composer;
+const railActorIds = [
+  ...new Set([
+    ...scenario.history.map((post) => post.actor),
+    ...scenario.timeline.flatMap((
+      event,
+    ) => (event.kind === 'post' ? [event.post.actor] : [])),
+  ]),
+];
+const railActors = railActorIds.flatMap((id) => {
+  const actor = scenario.actors[id];
+  return actor === undefined || actor.self === true ? [] : [actor];
+});
+---
+
+<div
+  class="win chat"
+  role="group"
+  aria-label="チャット"
+  data-window
+  data-collapsed={collapsed ? '' : undefined}
+  inert={timed}
+>
+  {
+    collapsed && (
+      <button
+        type="button"
+        class="chat-rail"
+        data-rail
+        aria-expanded="false"
+        aria-controls={mainId}
+        aria-label="チャット"
+      >
+        <span class="rail-hash" aria-hidden="true">#</span>
+        <span class="rail-avatars" aria-hidden="true">
+          {
+            railActors.map((actor) => (
+              <span class="rail-avatar" data-tone={actor.tone}>
+                {actor.avatar}
+              </span>
+            ))
+          }
+        </span>
+        <span class="rail-unread" data-unread hidden aria-hidden="true">0</span>
+      </button>
+    )
+  }
+  <div class="chat-side" aria-hidden="true">
+    <span class="dots"><i></i><i></i><i></i></span>
+    <p class="ws">{chat.workspace}</p>
+    <ul class="chs">
+      {
+        chat.channels.map((channel) => (
+          <li class={channel.current ? 'on' : undefined}>{channel.name}</li>
+        ))
+      }
+    </ul>
+  </div>
+
+  <div class="chat-main" id={mainId}>
+    <div class="chat-head">
+      <p class="channel">{chat.channel}</p>
+      {
+        !timed && (
+          <button type="button" class="chat-reset" data-action="reset">
+            最初からやり直す
+          </button>
+        )
+      }
+    </div>
+
+    <ol
+      class="feed"
+      aria-live="polite"
+      aria-label="チャットの投稿"
+      tabindex="0"
+      data-feed
+    >
+    </ol>
+
+    <p class="typing" aria-hidden="true" data-typing>
+      <span class="typing-dots"><i></i><i></i><i></i></span>
+      <span data-typing-text></span>
+    </p>
+
+    <template data-post>
+      <li class="post">
+        <span class="avatar" aria-hidden="true" data-avatar></span>
+        <div class="post-main">
+          <p class="post-head">
+            <strong data-name></strong>
+            <time data-time></time>
+          </p>
+          <p class="post-text" data-text></p>
+        </div>
+      </li>
+    </template>
+
+    <div class="composer">
+      <div class="compose-box">
+        <p class="fmt" aria-hidden="true">
+          <b>B</b>
+          <i>I</i>
+          <s>S</s>
+          <svg
+            viewBox="0 0 16 16"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
+            <rect x="1" y="5.5" width="8" height="5" rx="2.5"></rect>
+            <rect x="7" y="5.5" width="8" height="5" rx="2.5"></rect>
+          </svg>
+          <span>&lt;/&gt;</span>
+          <span>≡</span>
+        </p>
+        {
+          hasComposerSlot
+            ? (
+            <div class="compose-slot">
+              <slot name="composer" />
+            </div>
+          )
+            : <p class="ph" aria-hidden="true">{chat.placeholder}</p>
+        }
+        {
+          memo !== undefined && (
+            <>
+              <p class="memo-title" id={memoId}>{memo.title}</p>
+              <dl
+                class="memo-list"
+                aria-labelledby={memoId}
+                data-unknown={memo.unknown}
+              >
+                {
+                  memo.items.map((item) => (
+                    <div class="memo-row">
+                      <dt>{item.label}</dt>
+                      <dd
+                        data-memo={item.key}
+                        data-state="unknown"
+                        data-result={item.result}
+                        data-label={item.label}
+                        data-text={item.text}
+                      >
+                        {memo.unknown}
+                      </dd>
+                    </div>
+                  ))
+                }
+              </dl>
+            </>
+          )
+        }
+        {
+          gates !== undefined && (
+            <p class="reason" id={reasonId} data-reason>
+              {initialReason}
+            </p>
+          )
+        }
+        <div class="compose-foot">
+          <div class="actions">
+            {
+              chat.buttons.map((button) => (
+                <button
+                  type="button"
+                  class={button.primary ? 'primary' : undefined}
+                  data-action={button.name}
+                  aria-describedby={button.name === 'reply' && gates !== undefined
+                  ? reasonId
+                  : undefined}
+                  disabled={button.name !== 'answer' || button.locked === true}
+                >
+                  {button.label}
+                </button>
+              ))
+            }
+          </div>
+          <span class="send-shape" aria-hidden="true">
+            <svg
+              viewBox="0 0 16 16"
+              width="14"
+              height="14"
+              fill="currentColor"
+            >
+              <path d="M2 2.5 14 8 2 13.5 3.8 8z"></path>
+            </svg>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+:global(.scene[data-scenario]) .win.chat {
+  --c-side: #3f0e40;
+  --c-side-text: #d9c8da;
+  --c-side-sel: #1164a3;
+  --c-bg: #ffffff;
+  --c-fg: #1d1c1d;
+  --c-muted: #616061;
+  --c-rule: #dddddd;
+  --c-edge: #868686;
+  --c-toolbar: #f8f8f8;
+  --c-btn: #ffffff;
+  --c-btn-hover: #f4f4f4;
+  --c-btn-off: #f4f4f4;
+  --c-green: #007a5a;
+  --c-green-hover: #00694d;
+  --c-found-bg: #e0f4ea;
+  --c-found: #0b5d44;
+  --c-missing-bg: #fde8ea;
+  --c-missing: #a31621;
+  --c-av-rose: #b03060;
+  --c-av-blue: #1264a3;
+  --c-av-green: #2e7d32;
+  --c-av-amber: #8a5a00;
+  --c-av-violet: #6b3fa0;
+  --c-av-slate: #4a5568;
+  --ring: #1264a3;
+  flex-direction: row;
+  container-type: inline-size;
+  background: var(--c-bg);
+  color: var(--c-fg);
+}
+:global(.scene[data-scenario]) .chat-side {
+  display: none;
+  flex: none;
+  flex-direction: column;
+  width: 9rem;
+  background: var(--c-side);
+  padding: 0.5rem 0;
+  color: var(--c-side-text);
+  --dot: rgb(255 255 255 / 0.55);
+}
+:global(.scene[data-scenario]) .chat-side .dots {
+  padding: 0 0.75rem 0.5rem;
+}
+:global(.scene[data-scenario]) .ws {
+  margin: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.2);
+  padding: 0.125rem 0.75rem 0.5rem;
+  color: #ffffff;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+:global(.scene[data-scenario]) .chs {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario]) .chs li {
+  margin: 0 0.5rem;
+  border-radius: var(--radius-md);
+  padding: 0.125rem 0.5rem;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:global(.scene[data-scenario]) .chs li.on {
+  background: var(--c-side-sel);
+  color: #ffffff;
+  font-weight: 700;
+}
+@container (min-width: 26rem) {
+  :global(.scene[data-scenario]) .chat-side {
+    display: flex;
+  }
+}
+:global(.scene[data-scenario]) .chat-main {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+:global(.scene[data-scenario]) .chat-head {
+  flex: none;
+  border-bottom: 1px solid var(--c-rule);
+  padding: 0.375rem 0.75rem;
+}
+:global(.scene[data-scenario]) .channel {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+:global(.scene[data-scenario]) .feed {
+  flex: 0 0 auto;
+  max-height: 14rem;
+  margin: 0;
+  overflow-y: auto;
+  padding: 0.5rem 0.75rem;
+  list-style: none;
+}
+:global(.scene[data-scenario]) .post {
+  display: flex;
+  gap: 0.625rem;
+  margin: 0;
+}
+:global(.scene[data-scenario]) .post + .post {
+  margin-top: 0.625rem;
+}
+:global(.scene[data-scenario]) .post + .post.is-continued {
+  margin-top: 0.125rem;
+}
+:global(.scene[data-scenario]) .post.is-continued .avatar {
+  height: 0;
+  visibility: hidden;
+}
+:global(.scene[data-scenario]) .post.is-continued .post-head {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+:global(.scene[data-scenario]) .post.is-continued .post-main {
+  position: relative;
+}
+:global(.scene[data-scenario]) .typing {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 1.5rem;
+  margin: 0;
+  padding: 0 0.75rem;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+  visibility: hidden;
+}
+:global(.scene[data-scenario]) .typing[data-active] {
+  visibility: visible;
+}
+:global(.scene[data-scenario]) .typing-dots {
+  display: inline-flex;
+  gap: 0.1875rem;
+}
+:global(.scene[data-scenario]) .typing-dots i {
+  width: 0.3125rem;
+  height: 0.3125rem;
+  border-radius: 50%;
+  background: var(--c-muted);
+}
+@media (prefers-reduced-motion: no-preference) {
+  :global(.scene[data-scenario]) .typing[data-active] .typing-dots i {
+    animation: typing-blink 1s infinite ease-in-out;
+  }
+  :global(.scene[data-scenario]) .typing-dots i:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  :global(.scene[data-scenario]) .typing-dots i:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+}
+@keyframes typing-blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+:global(.scene[data-scenario]) .avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-md);
+  background: var(--c-av-slate);
+  color: #ffffff;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .post[data-tone="rose"] .avatar {
+  background: var(--c-av-rose);
+}
+:global(.scene[data-scenario]) .post[data-tone="blue"] .avatar {
+  background: var(--c-av-blue);
+}
+:global(.scene[data-scenario]) .post[data-tone="green"] .avatar {
+  background: var(--c-av-green);
+}
+:global(.scene[data-scenario]) .post[data-tone="amber"] .avatar {
+  background: var(--c-av-amber);
+}
+:global(.scene[data-scenario]) .post[data-tone="violet"] .avatar {
+  background: var(--c-av-violet);
+}
+:global(.scene[data-scenario]) .post-main {
+  min-width: 0;
+}
+:global(.scene[data-scenario]) .post-head {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+:global(.scene[data-scenario]) .post-head strong {
+  font-weight: 900;
+}
+:global(.scene[data-scenario]) .post-head time {
+  margin-left: 0.375rem;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .post-text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+:global(.scene[data-scenario]) .composer {
+  flex: none;
+  padding: 0.25rem 0.75rem 0.625rem;
+}
+:global(.scene[data-scenario]) .compose-box {
+  border: 1px solid var(--c-edge);
+  border-radius: 0.5rem;
+  background: var(--c-bg);
+}
+:global(.scene[data-scenario]) .fmt {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  border-bottom: 1px solid var(--c-rule);
+  border-radius: 0.4375rem 0.4375rem 0 0;
+  background: var(--c-toolbar);
+  padding: 0.125rem 0.625rem;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+:global(.scene[data-scenario]) .fmt b {
+  font-weight: 900;
+}
+:global(.scene[data-scenario]) .fmt i {
+  font-family: serif;
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .ph {
+  margin: 0;
+  padding: 0.25rem 0.625rem 0;
+  color: var(--c-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+:global(.scene[data-scenario]) .memo-title {
+  margin: 0.25rem 0.625rem 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .memo-list {
+  display: grid;
+  gap: 0.125rem;
+  margin: 0 0.625rem;
+}
+:global(.scene[data-scenario]) .memo-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+:global(.scene[data-scenario]) .memo-row dt {
+  flex: none;
+  width: 2.25rem;
+  margin: 0;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .memo-row dd {
+  margin: 0;
+  border-radius: var(--radius-sm);
+  padding: 0 0.375rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+:global(.scene[data-scenario]) .memo-row dd::before {
+  margin-right: 0.25rem;
+}
+:global(.scene[data-scenario]) .memo-row dd[data-state="unknown"] {
+  color: var(--c-muted);
+}
+:global(.scene[data-scenario]) .memo-row dd[data-state="unknown"]::before {
+  content: "・" / "";
+}
+:global(.scene[data-scenario]) .memo-row dd[data-state="found"] {
+  background: var(--c-found-bg);
+  color: var(--c-found);
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .memo-row dd[data-state="found"]::before {
+  content: "✓" / "";
+}
+:global(.scene[data-scenario]) .memo-row dd[data-state="missing"] {
+  background: var(--c-missing-bg);
+  color: var(--c-missing);
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .memo-row dd[data-state="missing"]::before {
+  content: "✕" / "";
+}
+:global(.scene[data-scenario]) .reason {
+  margin: 0.25rem 0.625rem 0;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+:global(.scene[data-scenario]) .compose-foot {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem 0.5rem 0.625rem;
+}
+:global(.scene[data-scenario]) .actions {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+:global(.scene[data-scenario]) .actions button {
+  border: 1px solid var(--c-edge);
+  border-radius: var(--radius-md);
+  background: var(--c-btn);
+  padding: 0.1875rem 0.625rem;
+  color: var(--c-fg);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .actions button:hover:not(:disabled) {
+  background: var(--c-btn-hover);
+}
+:global(.scene[data-scenario]) .actions button.primary {
+  border-color: var(--c-green);
+  background: var(--c-green);
+  color: #ffffff;
+}
+:global(.scene[data-scenario]) .actions button.primary:hover:not(:disabled) {
+  background: var(--c-green-hover);
+}
+:global(.scene[data-scenario]) .actions button:disabled {
+  border-color: var(--c-rule);
+  background: var(--c-btn-off);
+  color: var(--c-muted);
+  cursor: not-allowed;
+}
+:global(.scene[data-scenario]) .actions button:focus-visible {
+  outline-offset: 2px;
+}
+:global(.scene[data-scenario]) .send-shape {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-md);
+  background: var(--c-btn-off);
+  color: var(--c-muted);
+}
+:global(.scene[data-ready="true"][data-scenario]) .send-shape {
+  background: var(--c-green);
+  color: #ffffff;
+}
+
+:global(.scene[data-scenario]) .feed:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+@media (min-width: 1024px) {
+  :global(.scene[data-scenario]) .feed {
+    flex: 1 1 0;
+    max-height: none;
+    min-height: 10rem;
+  }
+}
+:global(.scene[data-scenario]) .chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+:global(.scene[data-scenario]) .chat-reset {
+  flex: none;
+  border: 1px solid var(--c-edge);
+  border-radius: var(--radius-md);
+  background: var(--c-btn);
+  padding: 0 0.625rem;
+  color: var(--c-fg);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .chat-reset:hover:not(:disabled) {
+  background: var(--c-btn-hover);
+}
+:global(.scene[data-scenario]) .chat-reset:disabled {
+  color: var(--c-muted);
+  cursor: not-allowed;
+}
+:global(.scene[data-scenario]) .compose-slot {
+  padding: 0.25rem 0.625rem 0;
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario]) .compose-slot :global(textarea) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--c-fg);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  resize: none;
+}
+:global(.scene[data-scenario]) .compose-slot :global(textarea:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+:global(.scene[data-scenario]) .compose-slot :global([data-saved]) {
+  min-height: 1.25rem;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+}
+
+:global(.scene[data-scenario]) .win.chat[data-collapsed] {
+  position: relative;
+  z-index: 15;
+  overflow: visible;
+  background: var(--c-side);
+}
+:global(.scene[data-scenario]) .win.chat[data-collapsed] .chat-side {
+  display: none;
+}
+:global(.scene[data-scenario]) .win.chat[data-collapsed] .chat-main {
+  display: none;
+}
+:global(.scene[data-scenario]) .win.chat[data-collapsed][data-open] .chat-main {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  display: flex;
+  height: 20rem;
+  margin-top: 0.25rem;
+  border: 1px solid var(--c-edge);
+  border-radius: var(--radius-lg);
+  background: var(--c-bg);
+  box-shadow: var(--shadow-raised);
+  overflow: hidden;
+}
+:global(.scene[data-scenario]) .chat-rail {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: var(--c-side);
+  padding: 0.25rem 0.75rem;
+  color: var(--c-side-text);
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .chat-rail:hover {
+  background: color-mix(in srgb, var(--c-side) 85%, #ffffff);
+}
+:global(.scene[data-scenario]) .chat-rail[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--c-side) 85%, #ffffff);
+}
+:global(.scene[data-scenario]) .chat-rail:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: -4px;
+}
+:global(.scene[data-scenario]) .rail-hash {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #ffffff;
+}
+:global(.scene[data-scenario]) .rail-avatars {
+  display: flex;
+  gap: 0.375rem;
+}
+:global(.scene[data-scenario]) .rail-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  background: var(--c-av-slate);
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .rail-avatar[data-tone="rose"] {
+  background: var(--c-av-rose);
+}
+:global(.scene[data-scenario]) .rail-avatar[data-tone="blue"] {
+  background: var(--c-av-blue);
+}
+:global(.scene[data-scenario]) .rail-avatar[data-tone="green"] {
+  background: var(--c-av-green);
+}
+:global(.scene[data-scenario]) .rail-avatar[data-tone="amber"] {
+  background: var(--c-av-amber);
+}
+:global(.scene[data-scenario]) .rail-avatar[data-tone="violet"] {
+  background: var(--c-av-violet);
+}
+:global(.scene[data-scenario]) .rail-unread {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: #e01e5a;
+  padding: 0 0.3125rem;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+:global(.scene[data-scenario]) .rail-unread[hidden] {
+  display: none;
+}
+@media (min-width: 1024px) {
+  :global(.scene[data-scenario])
+    .win.chat[data-collapsed][data-open]
+    .chat-main {
+    top: 0;
+    right: auto;
+    bottom: 0;
+    left: 3.5rem;
+    width: min(26rem, 85vw);
+    height: auto;
+    margin-top: 0;
+  }
+  :global(.scene[data-scenario]) .chat-rail {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+  }
+  :global(.scene[data-scenario]) .rail-avatars {
+    flex-direction: column;
+  }
+  :global(.scene[data-scenario]) .rail-unread {
+    position: absolute;
+    top: 2.25rem;
+    right: 0.125rem;
+    outline: 2px solid var(--c-side);
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :global(.scene[data-scenario]) .win.chat {
+    --c-bg: #1a1d21;
+    --c-fg: #d1d2d3;
+    --c-muted: #ababad;
+    --c-rule: #35373b;
+    --c-edge: #7d7f82;
+    --c-toolbar: #222529;
+    --c-btn: #1a1d21;
+    --c-btn-hover: #2a2d31;
+    --c-btn-off: #222529;
+    --c-found-bg: #12392e;
+    --c-found: #86ddb5;
+    --c-missing-bg: #4a1f25;
+    --c-missing: #ffabb1;
+    --ring: #78b9f0;
+  }
+}
+</style>

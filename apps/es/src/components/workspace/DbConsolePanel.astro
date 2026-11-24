@@ -1,0 +1,538 @@
+---
+import { snapshotFiles } from '../../lib/snapshots';
+import { resolveDbSetup } from '../../workspace/db-setup';
+import {
+  expectTab,
+  panelIdOf,
+  type PanelProps,
+  tabIdOf,
+} from '../../workspace/panel-props';
+import SqlPlayground from '../SqlPlayground.astro';
+
+type Props = PanelProps;
+
+const { scenario, tab: definition, hidden } = Astro.props;
+const tab = expectTab(definition, 'console');
+const config = tab.config;
+
+const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
+  const source = snapshotFiles(snapshot)[file];
+  if (source === undefined) {
+    throw new Error(`${snapshot} に ${file} がありません`);
+  }
+  return source;
+});
+---
+
+<div
+  class="panel"
+  role="tabpanel"
+  id={panelIdOf(scenario, tab.key)}
+  aria-labelledby={tabIdOf(scenario, tab.key)}
+  data-tool={tab.key}
+  data-kind="console"
+  data-controls={config.controls === true ? 'shown' : undefined}
+  hidden={hidden}
+>
+  <div class="console">
+    <div class="db-conn">
+      <span class="db-dot" aria-hidden="true"></span>
+      <span class="db-name">{config.connection.name}</span>
+      <span class="db-kind">{config.connection.engine}</span>
+    </div>
+    <div class="db-body">
+      <div class="tables" role="group" aria-label="テーブルの一覧">
+        <p class="side-title">Tables</p>
+        {
+          resolved.tables.map((table) => (
+            <>
+              <button type="button" class="table-item" data-table={table.name}>
+                <span class="tbl-icon" aria-hidden="true"></span>{table.name}
+              </button>
+              <ul class="columns" aria-label={`${table.name} の列`}>
+                {
+                  table.columns.map((column) => (
+                    <li>
+                      <code>{column.name}</code>
+                      <span>{column.type}</span>
+                    </li>
+                  ))
+                }
+              </ul>
+            </>
+          ))
+        }
+      </div>
+      {
+        resolved.kind === 'sql'
+          ? (
+          <SqlPlayground
+            id={config.storageId}
+            setup={resolved.sql}
+            initial={config.initialSql}
+          />
+        )
+          : (
+          <SqlPlayground
+            id={config.storageId}
+            script={{
+              exercise: resolved.setup.exercise,
+              entry: resolved.setup.entry,
+              ...(resolved.setup.own === undefined
+                ? {}
+                : { own: resolved.setup.own }),
+            }}
+            initial={config.initialSql}
+          />
+        )
+      }
+    </div>
+  </div>
+  {tab.note !== undefined && <p class="panel-note">{tab.note}</p>}
+</div>
+
+<style>
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]:not([data-controls])
+  :global([data-role="reset"]),
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]:not([data-controls])
+  :global([data-role="reset-sql"]),
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]:not([data-controls])
+  :global([data-role="restore"]) {
+  display: none !important;
+}
+:global(.scene[data-scenario]) .panel[data-kind="console"] {
+  --db-bg: #ffffff;
+  --db-band: #eef2f5;
+  --db-side: #f5f7fa;
+  --db-head: #e4e9ee;
+  --db-fg: #1f2933;
+  --db-muted: #52606d;
+  --db-rule: #d5dbe1;
+  --db-grid: #c9d1d9;
+  --db-edge: #7b8794;
+  --db-accent: #0b7a75;
+  --db-on-accent: #ffffff;
+  --db-soft: #d7f0ee;
+  --db-online: #1f9d55;
+  --db-danger: #b42318;
+  --db-danger-soft: #fdecea;
+  --db-keyword: #7a2e9e;
+  --db-string: #1e6b3a;
+  --db-number: #9a4a00;
+  --db-comment: #5a6772;
+  --db-func: #0b6b8f;
+  --pn-bg: var(--db-band);
+  --pn-fg: var(--db-fg);
+  --pn-rule: var(--db-rule);
+  --ring: #0b7a75;
+  --role-surface: var(--db-bg);
+  --role-sunken: var(--db-side);
+  --role-fg: var(--db-fg);
+  --role-muted: var(--db-muted);
+  --role-rule: var(--db-rule);
+  --role-border: var(--db-edge);
+  --role-accent: var(--db-accent);
+  --role-accent-soft: var(--db-soft);
+  --role-on-accent: var(--db-on-accent);
+  --role-danger: var(--db-danger);
+  --role-danger-soft: var(--db-danger-soft);
+  --role-code-keyword: var(--db-keyword);
+  --role-code-string: var(--db-string);
+  --role-code-number: var(--db-number);
+  --role-code-comment: var(--db-comment);
+  --role-code-function: var(--db-func);
+  --role-code-type: var(--db-func);
+  background: var(--db-bg);
+  color: var(--db-fg);
+}
+:global(.scene[data-scenario]) .console {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+:global(.scene[data-scenario]) .db-conn {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--db-rule);
+  background: var(--db-band);
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+:global(.scene[data-scenario]) .db-dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--db-online);
+}
+:global(.scene[data-scenario]) .db-name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-code);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:global(.scene[data-scenario]) .db-kind {
+  flex: none;
+  margin-left: auto;
+  border: 1px solid var(--db-rule);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  color: var(--db-muted);
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .db-body {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+:global(.scene[data-scenario]) .tables {
+  flex: none;
+  border-bottom: 1px solid var(--db-rule);
+  background: var(--db-side);
+  padding: 0.375rem 0.5rem;
+}
+:global(.scene[data-scenario]) .side-title {
+  margin: 0 0 0.125rem;
+  color: var(--db-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .side-title::before {
+  content: "▾" / "";
+  margin-right: 0.25rem;
+}
+:global(.scene[data-scenario]) .table-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0.125rem 0.375rem 0.125rem 0.75rem;
+  color: var(--db-fg);
+  font-family: var(--font-code);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .table-item:hover {
+  background: var(--db-soft);
+}
+:global(.scene[data-scenario]) .tbl-icon {
+  flex: none;
+  width: 0.75rem;
+  height: 0.625rem;
+  border: 1.5px solid var(--db-accent);
+  border-top-width: 3px;
+  border-radius: 1px;
+  background: linear-gradient(
+    to right,
+    transparent calc(50% - 0.5px),
+    var(--db-accent) calc(50% - 0.5px),
+    var(--db-accent) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
+}
+:global(.scene[data-scenario]) .columns {
+  margin: 0;
+  padding: 0 0 0 2rem;
+  list-style: none;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+:global(.scene[data-scenario]) .columns li {
+  margin: 0;
+}
+:global(.scene[data-scenario]) .columns code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .columns span {
+  color: var(--db-muted);
+  font-family: var(--font-code);
+}
+
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground) {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--db-bg);
+  padding: 0.375rem 0.625rem;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-status),
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-toolbar) {
+  margin-bottom: 0.25rem;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-status) {
+  color: var(--db-muted);
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-toolbar) {
+  align-items: center;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground button) {
+  padding: 0.125rem 0.625rem;
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground button[data-role="run"]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 700;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground button[data-role="run"])::before {
+  content: "";
+  border-top: 0.3125rem solid transparent;
+  border-bottom: 0.3125rem solid transparent;
+  border-left: 0.5rem solid currentColor;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground button[data-role="run"]:disabled) {
+  background: var(--db-band);
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-hint) {
+  font-size: 0.75rem;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-panes) {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+  min-height: 0;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-pane-editor) {
+  display: block;
+  flex: none;
+  min-height: 0;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-editor) {
+  position: static;
+  height: 4.5rem;
+  min-height: 0;
+  overflow: hidden;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .panel[data-kind="console"][data-controls]
+  :global(.playground-editor) {
+  height: 8rem;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-editor .cm-editor) {
+  height: 100%;
+  max-height: none;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-results) {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  max-height: none;
+  margin-top: 0;
+  overflow: auto;
+  border: 1px solid var(--db-grid);
+  background: var(--db-bg);
+  padding: 0;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-results > *) {
+  flex: none;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-results > .playground-note) {
+  margin: 0;
+  padding: 0.375rem 0.5rem;
+  color: var(--db-muted);
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-results > .playground-result) {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  margin: 0;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result + .playground-result) {
+  border-top: 2px solid var(--db-grid);
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result .playground-statement) {
+  margin: 0;
+  border-bottom: 1px solid var(--db-grid);
+  background: var(--db-band);
+  padding: 0.125rem 0.5rem;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result .playground-statement code) {
+  background: transparent;
+  padding: 0;
+  color: var(--db-muted);
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result table) {
+  margin: 0;
+  border-collapse: collapse;
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  counter-reset: row;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result th),
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result td) {
+  border: 1px solid var(--db-grid);
+  padding: 0.125rem 0.5rem;
+  text-align: left;
+  white-space: nowrap;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result th) {
+  background: var(--db-head);
+  color: var(--db-muted);
+  font-weight: 700;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result tr)::before {
+  content: "";
+  display: table-cell;
+  width: 2rem;
+  border: 1px solid var(--db-grid);
+  background: var(--db-head);
+  padding: 0.125rem 0.5rem;
+  color: var(--db-muted);
+  text-align: right;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result tbody tr) {
+  counter-increment: row;
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result tbody tr)::before {
+  content: counter(row);
+}
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.playground-result > .playground-note) {
+  position: sticky;
+  bottom: 0;
+  margin: auto 0 0;
+  border-top: 1px solid var(--db-grid);
+  background: var(--db-band);
+  padding: 0.125rem 0.625rem;
+  color: var(--db-muted);
+  font-size: 0.75rem;
+}
+
+:global(.scene[data-scenario])
+  .panel[data-kind="console"]
+  :global(.cm-editor.cm-focused) {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+@media (min-width: 640px) {
+  :global(.scene[data-scenario]) .db-body {
+    flex-direction: row;
+  }
+  :global(.scene[data-scenario]) .tables {
+    width: 10rem;
+    border-right: 1px solid var(--db-rule);
+    border-bottom: 0;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :global(.scene[data-scenario]) .table-item {
+    transition: background-color 0.1s;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :global(.scene[data-scenario]) .panel[data-kind="console"] {
+    --db-bg: #161b1f;
+    --db-band: #1f262b;
+    --db-side: #1b2126;
+    --db-head: #26303a;
+    --db-fg: #e3e8ec;
+    --db-muted: #a5b1bc;
+    --db-rule: #34404a;
+    --db-grid: #3a4752;
+    --db-edge: #6f7c88;
+    --db-accent: #2fb8ac;
+    --db-on-accent: #04201e;
+    --db-soft: #16413f;
+    --db-online: #4cd07d;
+    --db-danger: #ff9a92;
+    --db-danger-soft: #4a1f1c;
+    --db-keyword: #c9a0f0;
+    --db-string: #8ad9a0;
+    --db-number: #f0b070;
+    --db-comment: #9aa7b2;
+    --db-func: #6cc4e8;
+    --ring: #5ed3c8;
+  }
+}
+</style>

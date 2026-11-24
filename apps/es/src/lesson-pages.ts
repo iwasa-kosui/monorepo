@@ -50,51 +50,54 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   },
   'chapter-1/01': {
     flow: 'problem',
-    role: '自分のシステムで、現在の状態だけでは答えられない問いを1つ挙げます。',
+    role: 'チャットの入力欄に、自分のシステムで現在の状態だけでは答えられない問いを1つ書きます。',
   },
   'chapter-1/02': {
     flow: 'try',
-    role: 'テストを実行し、第2章で書くコードがまだ無いために4件が失敗することを確かめます。',
+    role: 'エディタでテストを実行し、第2章で書くコードがまだ無いために4件が失敗することを確かめます。',
   },
   'chapter-2/01': {
     flow: 'explain',
-    role: 'キャンセルした人と理由を、来院の更新と同じトランザクションで業務イベントとして記録する方針を読みます。',
+    role:
+      '設計メモで、キャンセルした人と理由を、来院の更新と同じトランザクションで業務イベントとして記録する方針を読みます。',
   },
   'chapter-2/02': {
     flow: 'try',
-    role: '記録が失敗する状態で実行し、来院の更新も取り消されることを確かめます。',
+    role: 'エディタで記録が失敗する状態のコードを実行し、来院の更新も取り消されることを確かめます。',
   },
   'chapter-2/03': {
     flow: 'explain',
-    role: '`business_events` の各列を残す理由と、誰が、いつ、何を、なぜに答える列を読みます。',
+    role: '設計メモで、`business_events` の各列を残す理由と、誰が、いつ、何を、なぜに答える列を読みます。',
   },
   'chapter-2/04': {
     flow: 'exercise',
-    role: '`cancelVisit` の空欄を埋めて、来院のキャンセルを業務イベントとして記録します。',
+    role: 'エディタで `cancelVisit` の空欄を埋めて、来院のキャンセルを業務イベントとして記録します。',
   },
   'chapter-2/05': {
     flow: 'exercise',
-    role: '`cancelVisit` の入力と `payload` を変えて、キャンセルの理由と操作した人も記録します。',
+    role: 'エディタで `cancelVisit` の入力と `payload` を変えて、キャンセルの理由と操作した人も記録します。',
   },
   'chapter-2/06': {
     flow: 'explain',
-    role: '記録を足すと `visits.ts` が何行変わるかと、足した後も残る作業と、記録されない変更を読みます。',
+    role:
+      'プルリクエストで、記録を足すと `visits.ts` が何行変わるかと、足した後も残る作業と、記録されない変更を読みます。',
   },
   'chapter-3/01': {
     flow: 'try',
-    role: '`visits` と業務イベントを結びつける SQL を実行し、結果の表を出します。',
+    role: 'DB コンソールで `visits` と業務イベントを結びつける SQL を実行し、結果から問い合わせに返信します。',
   },
   'chapter-3/02': {
     flow: 'explain',
-    role: '`who-cancelled.ts` が `visits` と `business_events` を来院の ID で結びつける SELECT を読みます。',
+    role: '文書で、`who-cancelled.ts` が `visits` と `business_events` を来院の ID で結びつける SELECT を読みます。',
   },
   'chapter-3/03': {
     flow: 'try',
-    role: '実行結果の表から、`visit-pochi` の問い合わせに誰が、いつ、何を、なぜで答えます。',
+    role: '文書の表から、`visit-pochi` の問い合わせに誰が、いつ、何を、なぜで答えます。',
   },
   'chapter-3/04': {
     flow: 'problem',
-    role: '記録を足す前にキャンセルされた `visit-tama` の問い合わせには、今も答えられないことを確かめます。',
+    role:
+      '記録を足す前にキャンセルされた `visit-tama` の問い合わせには、今も答えられないことを図で確かめて返信します。',
   },
   'chapter-4/01': {
     flow: 'explain',

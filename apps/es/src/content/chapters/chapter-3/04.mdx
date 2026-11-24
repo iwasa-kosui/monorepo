@@ -1,22 +1,27 @@
 ---
 wide: true
+immersive: true
 ---
 
 import BeforeRecordFigure from '../../../components/figures/BeforeRecordFigure.astro';
 import Quote from '../../../components/Quote.astro';
+import { chapter3Before } from '../../../components/chapters/chapter-3';
+import Workspace from '../../../components/workspace/Workspace.astro';
 
-<div class="intro-spread">
-<div class="intro-text">
+<div class="visually-hidden">
 
 ## 記録を足す前にキャンセルされた来院には答えられない
+
+</div>
+
+<Workspace scenario={chapter3Before}>
+<Fragment slot="memo">
 
 `visit-tama` は、記録を足す前にキャンセルされた来院を表します。導入の障害対応で見た行の1つです。この行の `event_at` から `reason` までの列は `null` なので、この来院の問い合わせには今も答えられません。記録を足しても、足す前に起きたことは分かりません。
 
 記録を足した時点から先の変更には答えられるようになります。記録を足す前のデータをどう扱うかは、各自のシステムの事情で判断します。
 
-</div>
 <BeforeRecordFigure />
-</div>
 
 <Quote source="kosui.me の記事より" href="https://kosui.me/posts/2025/05/06/142842">
 
@@ -29,3 +34,6 @@ import Quote from '../../../components/Quote.astro';
 過去データには操作者情報がないという問題は、「システム移行」イベントとして記録することで対応しました。
 
 </Quote>
+
+</Fragment>
+</Workspace>

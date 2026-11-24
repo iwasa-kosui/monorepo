@@ -1,9 +1,15 @@
 ---
 wide: true
+immersive: true
 ---
 
 import CodeBlock from '../../../components/CodeBlock.astro';
+import { chapter3Read } from '../../../components/chapters/chapter-3';
+import Workspace from '../../../components/workspace/Workspace.astro';
 import { whoCancelledQuery } from '../../../lib/snapshots';
+
+<Workspace scenario={chapter3Read}>
+<Fragment slot="memo">
 
 `who-cancelled.ts` は、来院を2件用意して次の SELECT を実行します。`visits` と `business_events` を来院の ID で結びつけます。
 
@@ -15,3 +21,6 @@ import { whoCancelledQuery } from '../../../lib/snapshots';
 - `payload ->> '$.operatedBy'` と `payload ->> '$.reason'` は、第2章のステップ2で `payload` に入れた2つの値を取り出します。
 
 この SELECT は `visits` テーブルを変えずに、問い合わせに答える列を結果に並べます。
+
+</Fragment>
+</Workspace>

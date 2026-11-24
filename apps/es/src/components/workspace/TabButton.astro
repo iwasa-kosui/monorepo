@@ -1,0 +1,148 @@
+---
+import type { PanelProps } from '../../workspace/panel-props';
+import { panelIdOf, tabIdOf } from '../../workspace/panel-props';
+
+interface Props extends Pick<PanelProps, 'scenario' | 'tab'> {
+  selected: boolean;
+}
+
+const { scenario, tab, selected } = Astro.props;
+---
+
+<button
+  type="button"
+  class="tab"
+  role="tab"
+  id={tabIdOf(scenario, tab.key)}
+  data-tool={tab.key}
+  data-url={tab.url}
+  aria-selected={selected ? 'true' : 'false'}
+  aria-controls={panelIdOf(scenario, tab.key)}
+  tabindex={selected ? 0 : -1}
+>
+  <span
+    class="fav"
+    aria-hidden="true"
+    data-tone={tab.favicon.tone}
+    data-shape={tab.favicon.shape}
+  ></span>
+  <span class="tab-title">{tab.title}</span>
+  <span class="cfig-sr">（{tab.label}）</span>
+  <span class="unseen" data-unseen hidden={tab.seen === undefined}>未確認</span>
+</button>
+
+<style>
+:global(.scene[data-scenario]) .tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: transparent;
+  padding: 0.375rem 0.75rem;
+  color: var(--br-tab);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .tab:hover:not([aria-selected="true"]) {
+  background: var(--br-tab-hover);
+}
+:global(.scene[data-scenario]) .tab[aria-selected="true"] {
+  background: var(--br-chrome);
+  color: var(--br-text);
+}
+:global(.scene[data-scenario]) .tab[aria-selected="true"]::before,
+:global(.scene[data-scenario]) .tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+}
+:global(.scene[data-scenario]) .tab[aria-selected="true"]::before {
+  left: -0.5rem;
+  background: radial-gradient(
+    circle at 0 0,
+    transparent 0.5rem,
+    var(--br-chrome) calc(0.5rem + 0.5px)
+  );
+}
+:global(.scene[data-scenario]) .tab[aria-selected="true"]::after {
+  right: -0.5rem;
+  background: radial-gradient(
+    circle at 100% 0,
+    transparent 0.5rem,
+    var(--br-chrome) calc(0.5rem + 0.5px)
+  );
+}
+:global(.scene[data-scenario]) .tab:focus-visible {
+  z-index: 1;
+}
+:global(.scene[data-scenario]) .tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:global(.scene[data-scenario]) .unseen {
+  flex: none;
+  border: 1px solid var(--br-unseen-line);
+  border-radius: 999px;
+  background: var(--br-unseen-bg);
+  padding: 0 0.375rem;
+  color: var(--br-unseen);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+:global(.scene[data-scenario]) .fav {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+}
+:global(.scene[data-scenario]) .fav[data-shape="square"] {
+  border-radius: 0.1875rem;
+}
+:global(.scene[data-scenario]) .fav[data-shape="rounded"] {
+  border-radius: 0.25rem;
+}
+:global(.scene[data-scenario]) .fav[data-tone="teal"] {
+  background: var(--br-fav-teal);
+}
+:global(.scene[data-scenario]) .fav[data-tone="violet"] {
+  background: var(--br-fav-violet);
+}
+:global(.scene[data-scenario]) .fav[data-tone="ink"] {
+  background: var(--br-fav-ink);
+}
+:global(.scene[data-scenario]) .fav[data-tone="coral"] {
+  background: var(--br-fav-coral);
+}
+:global(.scene[data-scenario]) .fav[data-tone="blue"] {
+  background: var(--br-fav-blue);
+}
+:global(.scene[data-scenario]) .fav[data-tone="azure"] {
+  background: var(--br-fav-azure);
+}
+@media (max-width: 639px) {
+  :global(.scene[data-scenario]) .tab {
+    margin-bottom: 0.125rem;
+    border-radius: var(--radius-md);
+    padding: 0.25rem 0.5rem;
+  }
+  :global(.scene[data-scenario]) .tab[aria-selected="true"]::before,
+  :global(.scene[data-scenario]) .tab[aria-selected="true"]::after {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :global(.scene[data-scenario]) .tab {
+    transition: background-color 0.1s;
+  }
+}
+</style>

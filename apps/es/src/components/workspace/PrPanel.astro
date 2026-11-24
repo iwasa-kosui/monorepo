@@ -1,0 +1,446 @@
+---
+import { snapshotFiles } from '../../lib/snapshots';
+import { diffFiles } from '../../workspace/diff';
+import {
+  expectTab,
+  panelIdOf,
+  type PanelProps,
+  tabIdOf,
+} from '../../workspace/panel-props';
+
+type Props = PanelProps;
+
+const { scenario, tab: definition, hidden } = Astro.props;
+const tab = expectTab(definition, 'pr');
+const config = tab.config;
+
+const sourceOf = (snapshot: string): string => {
+  const source = snapshotFiles(snapshot)[config.diff.file];
+  if (source === undefined) {
+    throw new Error(`${snapshot} に ${config.diff.file} がありません`);
+  }
+  return source;
+};
+const diff = diffFiles(
+  sourceOf(config.diff.before),
+  sourceOf(config.diff.after),
+  config.diff.context,
+);
+const signOf = { add: '+', del: '−', same: ' ' } as const;
+const wordOf = { add: '追加', del: '削除', same: '変更なし' } as const;
+const sectionId = (name: string): string =>
+  `${panelIdOf(scenario, tab.key)}-${name}`;
+---
+
+<div
+  class="panel"
+  role="tabpanel"
+  id={panelIdOf(scenario, tab.key)}
+  aria-labelledby={tabIdOf(scenario, tab.key)}
+  data-tool={tab.key}
+  data-kind="pr"
+  hidden={hidden}
+>
+  <div class="pr">
+    <div class="pr-head">
+      <p class="pr-repo">
+        <span>{config.owner}</span>
+        <span class="sep">/</span>
+        <strong>{config.name}</strong>
+      </p>
+      <p class="pr-title">
+        <span class="pr-title-text">{config.title}</span>
+        <span class="pr-number">#{config.number}</span>
+      </p>
+      <p class="pr-meta">
+        <span class="pr-state">{config.status}</span>
+        <span class="pr-stat" data-pr-stat>
+          <span class="pr-add">+{diff.added}</span>
+          <span class="pr-del">−{diff.deleted}</span>
+        </span>
+      </p>
+    </div>
+    <div class="pr-tabs" role="tablist" aria-label="プルリクエストの表示">
+      <button
+        type="button"
+        role="tab"
+        id={sectionId('conversation-tab')}
+        aria-controls={sectionId('conversation')}
+        aria-selected="true"
+        data-pr-view="conversation"
+      >
+        Conversation
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id={sectionId('files-tab')}
+        aria-controls={sectionId('files')}
+        aria-selected="false"
+        tabindex="-1"
+        data-pr-view="files"
+      >
+        Files changed <span class="pr-count">1</span>
+      </button>
+    </div>
+    <div class="pr-body">
+      <section
+        class="pr-section"
+        id={sectionId('conversation')}
+        role="tabpanel"
+        aria-labelledby={sectionId('conversation-tab')}
+        data-pr-section="conversation"
+      >
+        <div class="pr-comment">
+          <slot />
+        </div>
+      </section>
+      <section
+        class="pr-section"
+        id={sectionId('files')}
+        role="tabpanel"
+        aria-labelledby={sectionId('files-tab')}
+        data-pr-section="files"
+        hidden
+      >
+        <div class="pr-file">
+          <p class="pr-file-head">
+            <code>{config.diff.file}</code>
+            <span class="pr-stat">
+              <span class="pr-add">+{diff.added}</span>
+              <span class="pr-del">−{diff.deleted}</span>
+            </span>
+          </p>
+          <div
+            class="pr-diff-scroll"
+            tabindex="0"
+            role="region"
+            aria-label={`${config.diff.file} の差分`}
+          >
+            {
+              diff.hunks.map((hunk) => (
+                <table class="pr-diff">
+                  <caption class="pr-hunk">{hunk.header}</caption>
+                  <tbody>
+                    {
+                      hunk.lines.map((line) => (
+                        <tr class={`pr-line pr-${line.kind}`}>
+                          <td class="pr-num">{line.oldNumber}</td>
+                          <td class="pr-num">{line.newNumber}</td>
+                          <td class="pr-code">
+                            <span class="pr-sr">{wordOf[line.kind]}:</span>
+                            <span class="pr-sign" aria-hidden="true">
+                              {signOf[line.kind]}
+                            </span>{line.text}
+                          </td>
+                        </tr>
+                      ))
+                    }
+                  </tbody>
+                </table>
+              ))
+            }
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  {tab.note !== undefined && <p class="panel-note">{tab.note}</p>}
+</div>
+
+<style>
+:global(.scene[data-scenario]) .panel[data-kind="pr"] {
+  --gh-bg: #ffffff;
+  --gh-band: #f6f8fa;
+  --gh-fg: #1f2328;
+  --gh-muted: #59636e;
+  --gh-rule: #d1d9e0;
+  --gh-link: #0969da;
+  --gh-tab-line: #fd8c73;
+  --gh-open: #1a7f37;
+  --gh-open-text: #ffffff;
+  --gh-add-bg: #dafbe1;
+  --gh-add-num: #aceebb;
+  --gh-add-text: #116329;
+  --gh-del-bg: #ffebe9;
+  --gh-del-num: #ffcecb;
+  --gh-del-text: #82071e;
+  --gh-hunk: #ddf4ff;
+  --pn-bg: var(--gh-band);
+  --pn-fg: var(--gh-fg);
+  --pn-rule: var(--gh-rule);
+  --ring: #0969da;
+  --role-bg: var(--gh-bg);
+  --role-surface: var(--gh-bg);
+  --role-sunken: var(--gh-band);
+  --role-fg: var(--gh-fg);
+  --role-muted: var(--gh-muted);
+  --role-rule: var(--gh-rule);
+  --role-accent: var(--gh-link);
+  background: var(--gh-bg);
+  color: var(--gh-fg);
+}
+:global(.scene[data-scenario]) .pr {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+:global(.scene[data-scenario]) .pr p {
+  margin: 0;
+}
+:global(.scene[data-scenario]) .pr-head {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem 0.75rem;
+  padding: 0.375rem 0.75rem 0.25rem;
+}
+:global(.scene[data-scenario]) .pr-repo {
+  color: var(--gh-muted);
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario]) .pr-repo span:first-child,
+:global(.scene[data-scenario]) .pr-repo strong {
+  color: var(--gh-link);
+}
+:global(.scene[data-scenario]) .pr-title {
+  flex: 1 1 14rem;
+  min-width: 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+:global(.scene[data-scenario]) .pr-number {
+  color: var(--gh-muted);
+  font-weight: 400;
+}
+:global(.scene[data-scenario]) .pr-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario]) .pr-state {
+  border-radius: 999px;
+  background: var(--gh-open);
+  padding: 0 0.625rem;
+  color: var(--gh-open-text);
+  font-weight: 700;
+  line-height: 1.6;
+}
+:global(.scene[data-scenario]) .pr-stat {
+  font-family: var(--font-code);
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .pr-add {
+  color: var(--gh-add-text);
+}
+:global(.scene[data-scenario]) .pr-del {
+  margin-left: 0.25rem;
+  color: var(--gh-del-text);
+}
+:global(.scene[data-scenario]) .pr-tabs {
+  display: flex;
+  flex: none;
+  gap: 0.25rem;
+  margin: 0 0.75rem;
+  border-bottom: 1px solid var(--gh-rule);
+}
+:global(.scene[data-scenario]) .pr-tabs button {
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 0.125rem 0.625rem;
+  color: var(--gh-muted);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .pr-tabs button[aria-selected="true"] {
+  border-bottom-color: var(--gh-tab-line);
+  color: var(--gh-fg);
+  font-weight: 700;
+}
+:global(.scene[data-scenario])
+  .pr-tabs
+  button:hover:not([aria-selected="true"]) {
+  color: var(--gh-fg);
+}
+:global(.scene[data-scenario]) .pr-count {
+  margin-left: 0.25rem;
+  border-radius: 999px;
+  background: var(--gh-rule);
+  padding: 0 0.375rem;
+  color: var(--gh-fg);
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .pr-body {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+:global(.scene[data-scenario]) .pr-section {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+:global(.scene[data-scenario]) .pr-section[hidden] {
+  display: none;
+}
+:global(.scene[data-scenario]) .pr-comment {
+  max-width: 48rem;
+  border: 1px solid var(--gh-rule);
+  border-radius: var(--radius-lg);
+  background: var(--gh-bg);
+  padding: 0.5rem 1rem 0.75rem;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+:global(.scene[data-scenario]) .pr-comment > :global(:first-child) {
+  margin-top: 0;
+}
+:global(.scene[data-scenario]) .pr-comment > :global(:last-child) {
+  margin-bottom: 0;
+}
+:global(.content) :global(.scene[data-scenario]) .pr-comment :global(h2) {
+  margin-block: 0.75rem 0.375rem;
+  font-size: 1.125rem;
+}
+:global(.content) :global(.scene[data-scenario]) .pr-comment :global(p),
+:global(.content) :global(.scene[data-scenario]) .pr-comment :global(ul),
+:global(.content) :global(.scene[data-scenario]) .pr-comment :global(ol) {
+  margin-block: 0.5rem;
+}
+:global(.scene[data-scenario]) .pr-comment :global(li + li) {
+  margin-top: 0.25rem;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .pr-comment
+  :global(:not(pre) > code) {
+  background: var(--gh-band);
+}
+:global(.scene[data-scenario]) .pr-comment :global(figure.quote) {
+  margin-block: 0.5rem;
+}
+:global(.scene[data-scenario]) .pr-file {
+  overflow: hidden;
+  border: 1px solid var(--gh-rule);
+  border-radius: var(--radius-lg);
+}
+:global(.scene[data-scenario]) .pr-file-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--gh-rule);
+  background: var(--gh-band);
+  padding: 0.1875rem 0.625rem;
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario]) .pr-file-head code {
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-code);
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .pr-diff-scroll {
+  overflow-x: auto;
+}
+:global(.scene[data-scenario]) .pr-diff-scroll:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+:global(.content) :global(.scene[data-scenario]) .pr-diff {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+:global(.scene[data-scenario]) .pr-hunk {
+  background: var(--gh-hunk);
+  padding: 0 0.625rem;
+  color: var(--gh-muted);
+  text-align: left;
+  caption-side: top;
+}
+:global(.content) :global(.scene[data-scenario]) .pr-diff td {
+  border: 0;
+  padding: 0;
+}
+:global(.scene[data-scenario]) .pr-num {
+  width: 2.5rem;
+  min-width: 2.5rem;
+  padding: 0 0.5rem;
+  color: var(--gh-muted);
+  text-align: right;
+  user-select: none;
+}
+:global(.scene[data-scenario]) .pr-code {
+  padding: 0 0.625rem;
+  white-space: pre;
+}
+:global(.scene[data-scenario]) .pr-sign {
+  display: inline-block;
+  width: 1.5ch;
+  margin-right: 0.5ch;
+  text-align: center;
+}
+:global(.scene[data-scenario]) .pr-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+:global(.scene[data-scenario]) .pr-line.pr-add td {
+  background: var(--gh-add-bg);
+}
+:global(.scene[data-scenario]) .pr-line.pr-add td.pr-num {
+  background: var(--gh-add-num);
+}
+:global(.scene[data-scenario]) .pr-line.pr-add .pr-code {
+  color: var(--gh-add-text);
+}
+:global(.scene[data-scenario]) .pr-line.pr-del td {
+  background: var(--gh-del-bg);
+}
+:global(.scene[data-scenario]) .pr-line.pr-del td.pr-num {
+  background: var(--gh-del-num);
+}
+:global(.scene[data-scenario]) .pr-line.pr-del .pr-code {
+  color: var(--gh-del-text);
+}
+@media (prefers-color-scheme: dark) {
+  :global(.scene[data-scenario]) .panel[data-kind="pr"] {
+    --gh-bg: #0d1117;
+    --gh-band: #151b23;
+    --gh-fg: #e6edf3;
+    --gh-muted: #9198a1;
+    --gh-rule: #3d444d;
+    --gh-link: #4493f8;
+    --gh-tab-line: #f78166;
+    --gh-open: #238636;
+    --gh-add-bg: #12261e;
+    --gh-add-num: #1b4721;
+    --gh-add-text: #7ee787;
+    --gh-del-bg: #2d1316;
+    --gh-del-num: #5a1e22;
+    --gh-del-text: #ffa198;
+    --gh-hunk: #121d2f;
+    --ring: #4493f8;
+  }
+}
+</style>

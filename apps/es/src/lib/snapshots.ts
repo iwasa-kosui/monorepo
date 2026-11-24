@@ -23,6 +23,9 @@ const readSnapshot = (snapshot: string, file: string): string => {
 export const cancelVisitOf = (snapshot: string): string =>
   extractExport(readSnapshot(snapshot, 'visits.ts'), 'cancelVisit');
 
+export const exportOf = (snapshot: string, file: string, name: string): string =>
+  extractExport(readSnapshot(snapshot, file), name);
+
 export const readFunctionsOf = (snapshot: string, firstFunction: string): string =>
   extractFrom(readSnapshot(snapshot, 'visits.ts'), `export const ${firstFunction} =`);
 

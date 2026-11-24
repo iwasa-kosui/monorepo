@@ -1,23 +1,22 @@
 ---
 goal: 「誰が、いつ、何を、なぜ」を業務イベントから答えられます。
+wide: true
+immersive: true
 ---
 
-import SqlPlayground from '../../../components/SqlPlayground.astro';
-import { whoCancelledSql } from '../../../lib/snapshots';
+import { chapter3Answer } from '../../../components/chapters/chapter-3';
+import Workspace from '../../../components/workspace/Workspace.astro';
+
+<div class="visually-hidden">
 
 ## 業務イベントから、誰がなぜキャンセルしたかを答える
 
-「実行する」を押します。SQL を書き換えて実行することもできます。
+</div>
 
-<SqlPlayground
-  id="chapter-3-who-cancelled"
-  script={{
-    exercise: 'chapter-2-step-2',
-    entry: 'who-cancelled.ts',
-    own: { exercise: 'chapter-1-start', file: 'visits.ts', testFile: 'visits.test.ts' },
-  }}
-  initial={whoCancelledSql()}
-/>
+<Workspace scenario={chapter3Answer}>
+<Fragment slot="guide">
+
+「実行する」を押します。SQL を書き換えて実行することもできます。
 
 <details>
 <summary>手元の Node で動かすとき</summary>
@@ -29,3 +28,6 @@ node who-cancelled.ts
 ```
 
 </details>
+
+</Fragment>
+</Workspace>

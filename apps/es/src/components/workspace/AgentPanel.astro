@@ -1,0 +1,617 @@
+---
+import { exportOf } from '../../lib/snapshots';
+import { describeLog } from '../../workspace/log-format';
+import {
+  expectTab,
+  panelIdOf,
+  type PanelProps,
+  tabIdOf,
+} from '../../workspace/panel-props';
+import { tabOfKind } from '../../workspace/scenario';
+
+type Props = PanelProps;
+
+const { scenario, tab: definition, hidden } = Astro.props;
+const tab = expectTab(definition, 'agent');
+const agent = scenario.agent;
+if (agent === undefined) {
+  throw new Error('エージェントのタブには、筋書きの agent が必要です');
+}
+
+const labelOf = (key: string): string =>
+  scenario.tabs.find((item) => item.key === key)?.label ?? key;
+
+const logView = (time: string) => {
+  const logs = tabOfKind(scenario, 'logs');
+  const entry = logs?.config.earlier.find((item) => item.time === time);
+  if (logs === undefined || entry === undefined) {
+    throw new Error(`エージェントが示すログが見つかりません: ${time}`);
+  }
+  return describeLog(entry, Date.parse(entry.time), logs.config);
+};
+---
+
+<div
+  class="panel"
+  role="tabpanel"
+  id={panelIdOf(scenario, tab.key)}
+  aria-labelledby={tabIdOf(scenario, tab.key)}
+  data-tool={tab.key}
+  data-kind="agent"
+  hidden={hidden}
+>
+  <div class="agent-bar">
+    <span class="agent-brand">{agent.brand}</span>
+    <span class="agent-slash" aria-hidden="true">/</span>
+    <span class="agent-session">{agent.session}</span>
+    <span class="agent-status" data-agent-status data-state="running"
+    >実行中</span>
+  </div>
+  <div
+    class="agent-log"
+    role="log"
+    aria-label="エージェントの会話"
+    tabindex="0"
+    data-agent-log
+  >
+    <ol class="turns" data-agent-list></ol>
+  </div>
+  <div class="agent-composer">
+    <label class="cfig-sr" for={`${scenario.id}-agent-input`}
+    >エージェントへの依頼</label>
+    <div class="agent-box">
+      <textarea
+        class="agent-input"
+        id={`${scenario.id}-agent-input`}
+        rows="2"
+        placeholder="依頼を入力"
+        data-agent-input
+      ></textarea>
+      <button type="button" class="agent-send" data-agent-send disabled>
+        <span class="cfig-sr">送信</span>
+        <svg
+          viewBox="0 0 16 16"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <template data-agent-parts>
+    <li class="turn user" data-part="user">
+      <p class="bubble" data-text></p>
+    </li>
+    <li class="turn agent" data-part="reply">
+      <p data-text></p>
+    </li>
+    <li class="thinking" data-part="thinking" data-thinking>
+      <span class="thinking-mark" aria-hidden="true"></span>考え中…
+    </li>
+  </template>
+
+  <template data-agent-steps>
+    {
+      agent.steps.map((step) =>
+        step.kind === 'user'
+          ? (
+        <li class="turn user" data-kind="user">
+          <p class="bubble">{step.text}</p>
+        </li>
+      )
+          : step.kind === 'agent'
+          ? (
+        <li class="turn agent" data-kind="agent">
+          <p>{step.text}</p>
+        </li>
+      )
+          : step.kind === 'tool'
+          ? (
+        <li class="turn tool" data-kind="tool" data-state="done">
+          <details>
+            <summary>
+              <span class="tool-state" aria-hidden="true"></span>
+              <span class="cfig-sr" data-tool-state-text>完了</span>
+              <span class="tool-name">{step.name}</span>
+              <code class="tool-target">{step.target}</code>
+            </summary>
+            <div class="tool-body" data-tool-body>
+              {
+                step.body.type === 'rows' && (
+                  <table class="tool-table">
+                    <thead>
+                      <tr>
+                        {
+                          step.body.columns.map((
+                    column,
+                  ) => (
+                            <th scope="col">{column}</th>
+                          ))
+                        }
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {
+                        step.body.rows.map((row) => (
+                          <tr>
+                            {row.map((cell) => <td>{cell}</td>)}
+                          </tr>
+                        ))
+                      }
+                    </tbody>
+                  </table>
+                )
+              }
+              {
+                step.body.type === 'log' && (
+                  <>
+                    <p class="tool-line">
+                      <code>{logView(step.body.time).iso}
+                        {logView(step.body.time).content}</code>
+                    </p>
+                    <dl class="tool-attrs">
+                      {
+                        logView(step.body.time).attrs.map((
+                  [key, value],
+                ) => (
+                          <div>
+                            <dt>{key}</dt>
+                            <dd>{value}</dd>
+                          </div>
+                        ))
+                      }
+                    </dl>
+                  </>
+                )
+              }
+              {
+                step.body.type === 'code' && (
+                  <pre class="tool-pre"><code>{exportOf(step.body.snapshot, step.body.file, step.body.export)}</code></pre>
+                )
+              }
+              <button type="button" data-open-tool={step.open}>
+                この画面を開く<span class="cfig-sr"
+                >（{labelOf(step.open)}）</span>
+              </button>
+            </div>
+          </details>
+        </li>
+      )
+          : (
+        <li class="turn agent conclusion" data-kind="agent">
+          <dl class="agent-result">
+            {
+              step.items.map((item) => (
+                <div>
+                  <dt>{item.label}</dt>
+                  <dd>{item.text}</dd>
+                </div>
+              ))
+            }
+          </dl>
+          <p>{step.text}</p>
+        </li>
+      )
+      )
+    }
+  </template>
+</div>
+
+<style>
+:global(.scene[data-scenario]) .panel[data-kind="agent"] {
+  --ag-bg: #faf9f5;
+  --ag-card: #ffffff;
+  --ag-fg: #141413;
+  --ag-muted: #5e5d59;
+  --ag-line: #dcd8ca;
+  --ag-edge: #8a877b;
+  --ag-bubble: #f0eee6;
+  --ag-accent: #d97757;
+  --ag-accent-strong: #b5502b;
+  --ag-on-accent: #ffffff;
+  --ag-done: #2f7d4f;
+  --ag-off: #e3e0d4;
+  --ag-off-fg: #6b685f;
+  --pn-bg: var(--ag-bubble);
+  --pn-fg: var(--ag-fg);
+  --pn-rule: var(--ag-line);
+  --ring: #b5502b;
+  background: var(--ag-bg);
+  color: var(--ag-fg);
+}
+:global(.scene[data-scenario]) .agent-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem 0.5rem;
+  border-bottom: 1px solid var(--ag-line);
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario]) .agent-brand,
+:global(.scene[data-scenario]) .agent-slash {
+  color: var(--ag-muted);
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .agent-session {
+  min-width: 0;
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .agent-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-left: auto;
+  color: var(--ag-muted);
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .agent-status::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ag-accent-strong);
+}
+:global(.scene[data-scenario]) .agent-status[data-state="done"]::before {
+  background: var(--ag-done);
+}
+:global(.scene[data-scenario]) .agent-log {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 22rem;
+  overflow: auto;
+  padding: 0.625rem 0.75rem;
+}
+:global(.scene[data-scenario]) .turns {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+:global(.scene[data-scenario]) .turn {
+  margin: 0;
+}
+:global(.scene[data-scenario]) .turn + .turn,
+:global(.scene[data-scenario]) .turn + .thinking,
+:global(.scene[data-scenario]) .thinking + .turn {
+  margin-top: 0.625rem;
+}
+:global(.scene[data-scenario]) .turn.user {
+  display: flex;
+  justify-content: flex-start;
+}
+:global(.scene[data-scenario]) .bubble {
+  width: fit-content;
+  max-width: 85%;
+  margin: 0;
+  border-radius: 1rem;
+  background: var(--ag-bubble);
+  padding: 0.375rem 0.875rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+:global(.scene[data-scenario]) .turn.agent p {
+  margin: 0;
+  font-family: ui-serif, Georgia, "Hiragino Mincho ProN", "Yu Mincho", serif;
+  font-size: 0.9375rem;
+  line-height: 1.8;
+}
+:global(.scene[data-scenario]) .turn.agent p + p {
+  margin-top: 0.375rem;
+}
+:global(.scene[data-scenario]) .thinking {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--ag-muted);
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario]) .thinking-mark {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ag-accent-strong);
+}
+:global(.scene[data-scenario]) .turn.tool details {
+  border: 1px solid var(--ag-line);
+  border-radius: 0.5rem;
+  background: var(--ag-card);
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario]) .turn.tool summary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.625rem;
+  list-style: none;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .turn.tool summary::-webkit-details-marker {
+  display: none;
+}
+:global(.scene[data-scenario]) .turn.tool summary::after {
+  content: "";
+  flex: none;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  margin: -0.1875rem 0.125rem 0 auto;
+  transform: rotate(45deg);
+  border-right: 1.5px solid var(--ag-muted);
+  border-bottom: 1.5px solid var(--ag-muted);
+}
+:global(.scene[data-scenario]) .turn.tool details[open] summary::after {
+  margin-top: 0.1875rem;
+  transform: rotate(225deg);
+}
+:global(.scene[data-scenario]) .turn.tool summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+:global(.scene[data-scenario]) .tool-state {
+  flex: none;
+  width: 0.875rem;
+  text-align: center;
+}
+:global(.scene[data-scenario])
+  .turn.tool[data-state="done"]
+  .tool-state::before {
+  content: "✓" / "";
+  color: var(--ag-done);
+  font-weight: 700;
+}
+:global(.scene[data-scenario])
+  .turn.tool[data-state="running"]
+  .tool-state::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ag-accent-strong);
+  vertical-align: middle;
+}
+:global(.scene[data-scenario]) .tool-name {
+  flex: none;
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .tool-target {
+  min-width: 0;
+  overflow: hidden;
+  background: transparent;
+  padding: 0;
+  color: var(--ag-muted);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:global(.scene[data-scenario]) .tool-body {
+  border-top: 1px solid var(--ag-line);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .tool-body[hidden] {
+  display: none;
+}
+:global(.scene[data-scenario]) .tool-body > button {
+  position: relative;
+  margin-top: 0.375rem;
+  border: 1px solid var(--ag-edge);
+  border-radius: 0.5rem;
+  background: var(--ag-card);
+  padding: 0.0625rem 0.625rem;
+  color: var(--ag-fg);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .tool-body > button:hover {
+  background: var(--ag-bubble);
+}
+:global(.scene[data-scenario]) .tool-table {
+  display: table;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .tool-table th,
+:global(.scene[data-scenario]) .tool-table td {
+  border: 1px solid var(--ag-line);
+  padding: 0.0625rem 0.5rem;
+  text-align: left;
+}
+:global(.scene[data-scenario]) .tool-table th {
+  background: var(--ag-bubble);
+}
+:global(.scene[data-scenario]) .tool-line {
+  margin: 0 0 0.25rem;
+}
+:global(.scene[data-scenario]) .tool-line code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+:global(.scene[data-scenario]) .tool-attrs {
+  margin: 0;
+}
+:global(.scene[data-scenario]) .tool-attrs > div {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  border-top: 1px solid var(--ag-line);
+}
+:global(.scene[data-scenario]) .tool-attrs dt {
+  margin: 0;
+  color: var(--ag-muted);
+}
+:global(.scene[data-scenario]) .tool-attrs dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+:global(.scene[data-scenario]) .tool-pre {
+  max-height: 11rem;
+  margin: 0;
+  overflow: auto;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+:global(.scene[data-scenario]) .tool-pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .agent-result {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  justify-content: start;
+  gap: 0.125rem 1.5rem;
+  margin: 0 0 0.375rem;
+  border: 1px solid var(--ag-line);
+  border-left: 3px solid var(--ag-accent-strong);
+  border-radius: 0.5rem;
+  background: var(--ag-card);
+  padding: 0.375rem 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+}
+:global(.scene[data-scenario]) .agent-result > div {
+  display: flex;
+  gap: 0.5rem;
+}
+:global(.scene[data-scenario]) .agent-result dt {
+  margin: 0;
+  color: var(--ag-muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+:global(.scene[data-scenario]) .agent-result dd {
+  margin: 0;
+}
+:global(.scene[data-scenario]) .agent-composer {
+  position: relative;
+  flex: none;
+  padding: 0.375rem 0.75rem 0.625rem;
+}
+:global(.scene[data-scenario]) .agent-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  border: 1px solid var(--ag-edge);
+  border-radius: 1rem;
+  background: var(--ag-card);
+  box-shadow: 0 1px 3px rgb(20 20 19 / 0.08);
+  padding: 0.375rem 0.5rem 0.375rem 0.875rem;
+}
+:global(.scene[data-scenario]) .agent-box:focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+:global(.scene[data-scenario]) .agent-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 2.75rem;
+  border: 0;
+  background: transparent;
+  padding: 0.25rem 0;
+  color: var(--ag-fg);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  resize: none;
+}
+:global(.scene[data-scenario]) .agent-input::placeholder {
+  color: var(--ag-muted);
+  opacity: 1;
+}
+:global(.scene[data-scenario]) .agent-input:focus-visible {
+  outline: 0;
+}
+:global(.scene[data-scenario]) .agent-send {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ag-accent);
+  color: var(--ag-on-accent);
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .agent-send:hover:not(:disabled) {
+  background: var(--ag-accent-strong);
+}
+:global(.scene[data-scenario]) .agent-send:disabled {
+  background: var(--ag-off);
+  color: var(--ag-off-fg);
+  cursor: not-allowed;
+}
+:global(.scene[data-scenario]) .agent-send:focus-visible {
+  outline-offset: 2px;
+}
+@media (max-width: 639px) {
+  :global(.scene[data-scenario]) .agent-result {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :global(.scene[data-scenario])
+    .turn.tool[data-state="running"]
+    .tool-state::before,
+  :global(.scene[data-scenario]) .thinking-mark,
+  :global(.scene[data-scenario]) .agent-status[data-state="running"]::before {
+    animation: agent-pulse 1s ease-in-out infinite;
+  }
+}
+@keyframes agent-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+:global(.scene[data-scenario]) .agent-log:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+@media (min-width: 1024px) {
+  :global(.scene[data-scenario]) .agent-log {
+    max-height: none;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :global(.scene[data-scenario]) .panel[data-kind="agent"] {
+    --ag-bg: #262624;
+    --ag-card: #30302e;
+    --ag-fg: #f5f4ed;
+    --ag-muted: #b8b5a9;
+    --ag-line: #4a4943;
+    --ag-edge: #85827a;
+    --ag-bubble: #3a3935;
+    --ag-accent-strong: #ee9a7b;
+    --ag-done: #7fd0a0;
+    --ag-off: #3f3e3a;
+    --ag-off-fg: #a6a398;
+    --ring: #f0a284;
+  }
+  :global(.scene[data-scenario]) .agent-send:hover:not(:disabled) {
+    background: var(--ag-accent-strong);
+    color: #141413;
+  }
+}
+</style>
