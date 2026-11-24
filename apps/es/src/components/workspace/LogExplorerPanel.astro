@@ -1,0 +1,743 @@
+---
+import { clockOf } from '../../workspace/clock';
+import {
+  expectTab,
+  panelIdOf,
+  type PanelProps,
+  tabIdOf,
+} from '../../workspace/panel-props';
+
+type Props = PanelProps;
+
+const { scenario, tab: definition, hidden } = Astro.props;
+const tab = expectTab(definition, 'logs');
+const config = tab.config;
+
+const facets = [
+  {
+    key: 'service',
+    label: 'Service',
+    items: [{ value: config.service, label: config.service }],
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    items: [
+      { value: 'info', label: 'Info' },
+      { value: 'warn', label: 'Warn' },
+    ],
+  },
+  {
+    key: 'method',
+    label: 'HTTP Method',
+    items: [
+      { value: 'GET', label: 'GET' },
+      { value: 'POST', label: 'POST' },
+    ],
+  },
+] as const;
+
+const barCount = config.visibleFromMinutes + 1;
+const bars = Array.from({ length: barCount }, (_, index) => index);
+const axisBars = [0, Math.floor(barCount / 2), barCount - 1];
+const firstBarTime = scenario.startedAt - config.visibleFromMinutes * 60_000;
+const queryId = `${scenario.id}-query`;
+const attributeNames = [
+  'http.method',
+  'http.url',
+  'http.status_code',
+  'duration',
+  'network.client.ip',
+  'http.useragent',
+] as const;
+---
+
+<div
+  class="panel"
+  role="tabpanel"
+  id={panelIdOf(scenario, tab.key)}
+  aria-labelledby={tabIdOf(scenario, tab.key)}
+  data-tool={tab.key}
+  data-kind="logs"
+  hidden={hidden}
+>
+  <div class="logs-shell">
+    <div class="lg-rail" aria-hidden="true">
+      {config.rail.map((on) => <i class={on ? 'on' : undefined}></i>)}
+    </div>
+    <div class="lg-col">
+      <div class="lg-head">
+        <p class="lg-title">Logs</p>
+        <p class="lg-sub">Explorer</p>
+      </div>
+      <div class="logs">
+        <div class="facets" role="group" aria-label="ログの絞り込み">
+          {
+            facets.map((facet) => (
+              <fieldset class="facet">
+                <legend>{facet.label}</legend>
+                {
+                  facet.items.map((item) => (
+                    <label class="facet-item">
+                      <input
+                        type="checkbox"
+                        data-facet={facet.key}
+                        value={item.value}
+                      />
+                      {
+                        facet.key === 'status' && (
+                          <span
+                            class="swatch"
+                            data-level={item.value}
+                            aria-hidden="true"
+                          >
+                          </span>
+                        )
+                      }
+                      <span class="facet-name">{item.label}</span>
+                      <span class="facet-count" data-facet-count>0</span>
+                    </label>
+                  ))
+                }
+              </fieldset>
+            ))
+          }
+        </div>
+
+        <div class="logs-main">
+          <div class="search-row">
+            <label class="cfig-sr" for={queryId}>ログの検索クエリ</label>
+            <div class="query-box">
+              <svg
+                class="mag"
+                viewBox="0 0 16 16"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                <circle cx="7" cy="7" r="4.5"></circle>
+                <path d="M10.5 10.5 14 14"></path>
+              </svg>
+              <input
+                type="search"
+                class="query"
+                id={queryId}
+                value={config.initialQuery}
+                spellcheck="false"
+                autocomplete="off"
+                data-query
+                data-initial={config.initialQuery}
+              />
+            </div>
+            <span class="range">Past {config.visibleFromMinutes} Minutes</span>
+            <span class="live" data-live data-state="off">
+              <i aria-hidden="true"></i>Live
+            </span>
+          </div>
+
+          <div class="chart" role="img" data-chart>
+            <div class="bars" aria-hidden="true">
+              {
+                bars.map(() => (
+                  <span
+                    class="bar"
+                    data-warn="false"
+                    style="height: 0%"
+                  >
+                  </span>
+                ))
+              }
+            </div>
+            <div class="axis" aria-hidden="true">
+              {
+                axisBars.map((index) => (
+                  <span data-tick={index}>
+                    {
+                      clockOf(firstBarTime + index * 60_000)
+                    .slice(0, 5)
+                    }
+                  </span>
+                ))
+              }
+            </div>
+          </div>
+
+          <p class="log-count" data-log-count>
+            0件中 0件
+          </p>
+
+          <div
+            class="log-scroll"
+            role="region"
+            aria-label="ログの一覧"
+            data-log-scroll
+          >
+            <table class="log-table">
+              <thead>
+                <tr>
+                  <th scope="col">DATE</th>
+                  <th scope="col">HOST</th>
+                  <th scope="col">SERVICE</th>
+                  <th scope="col">CONTENT</th>
+                </tr>
+              </thead>
+              <tbody data-log-body></tbody>
+            </table>
+            <p class="log-empty" data-empty hidden>
+              条件に合うログはありません。
+            </p>
+            <template data-log-row-template>
+              <table>
+                <tbody>
+                  <tr class="log-row" tabindex="0" data-log-row>
+                    <td class="col-date">
+                      <time data-log-date></time>
+                    </td>
+                    <td>{config.host}</td>
+                    <td>{config.service}</td>
+                    <td class="col-content">
+                      <span class="level" data-log-level></span>
+                      <span data-log-content></span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </template>
+          </div>
+
+          <div
+            class="detail"
+            role="region"
+            aria-label="ログの詳細"
+            data-detail
+            hidden
+          >
+            <div class="detail-head">
+              <p class="detail-title">Log</p>
+              <button
+                type="button"
+                data-detail-close
+                aria-label="ログの詳細を閉じる"
+              >
+                閉じる
+              </button>
+            </div>
+            <div class="detail-body">
+              <p class="detail-message" data-detail-field="message"></p>
+              <dl class="detail-summary">
+                <div>
+                  <dt>Date</dt>
+                  <dd data-detail-field="date"></dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd data-detail-field="status"></dd>
+                </div>
+                <div>
+                  <dt>Service</dt>
+                  <dd>{config.service}</dd>
+                </div>
+                <div>
+                  <dt>Host</dt>
+                  <dd>{config.host}</dd>
+                </div>
+              </dl>
+              <p class="detail-section">Event Attributes</p>
+              <dl class="detail-attrs">
+                {
+                  attributeNames.map((name) => (
+                    <div>
+                      <dt>{name}</dt>
+                      <dd data-detail-attr={name}></dd>
+                    </div>
+                  ))
+                }
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {tab.note !== undefined && <p class="panel-note">{tab.note}</p>}
+</div>
+
+<style>
+:global(.scene[data-scenario]) .panel[data-kind="logs"] {
+  --lg-bg: #ffffff;
+  --lg-panel: #f6f7fa;
+  --lg-fg: #2a2c38;
+  --lg-muted: #5a5e73;
+  --lg-rule: #e3e5eb;
+  --lg-edge: #8b8fa3;
+  --lg-rail: #632ca6;
+  --lg-accent: #632ca6;
+  --lg-info: #3f9ae0;
+  --lg-info-text: #14659f;
+  --lg-info-soft: #e6f1fb;
+  --lg-warn: #b58105;
+  --lg-warn-text: #7f5200;
+  --lg-warn-soft: #fff4cc;
+  --lg-select: #dbe9fa;
+  --lg-hover: #eef3fa;
+  --lg-live: #1f9d55;
+  --pn-bg: var(--lg-panel);
+  --pn-fg: var(--lg-fg);
+  --pn-rule: var(--lg-rule);
+  --ring: #632ca6;
+  background: var(--lg-bg);
+  color: var(--lg-fg);
+}
+:global(.scene[data-scenario]) .logs-shell {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+}
+:global(.scene[data-scenario]) .lg-rail {
+  display: none;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  width: 2.25rem;
+  background: var(--lg-rail);
+  padding-top: 0.5rem;
+}
+:global(.scene[data-scenario]) .lg-rail i {
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-md);
+  background: radial-gradient(
+    circle,
+    rgb(255 255 255 / 0.6) 0.3125rem,
+    transparent 0.3125rem
+  );
+}
+:global(.scene[data-scenario]) .lg-rail i:nth-child(2n) {
+  background: linear-gradient(
+    rgb(255 255 255 / 0.6),
+    rgb(255 255 255 / 0.6)
+  ) center / 0.5625rem 0.5625rem no-repeat;
+}
+:global(.scene[data-scenario]) .lg-rail i.on {
+  background:
+    radial-gradient(circle, #ffffff 0.3125rem, transparent 0.3125rem),
+    rgb(255 255 255 / 0.22);
+}
+:global(.scene[data-scenario]) .lg-col {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+:global(.scene[data-scenario]) .lg-head {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--lg-rule);
+  padding: 0.25rem 0.625rem;
+}
+:global(.scene[data-scenario]) .lg-head p {
+  margin: 0;
+  line-height: 1.5;
+}
+:global(.scene[data-scenario]) .lg-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .lg-sub {
+  border-bottom: 2px solid var(--lg-accent);
+  color: var(--lg-muted);
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario]) .logs {
+  display: grid;
+  flex: 1 1 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+:global(.scene[data-scenario]) .facets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  border-bottom: 1px solid var(--lg-rule);
+  background: var(--lg-panel);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .facet {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+:global(.scene[data-scenario]) .facet legend {
+  padding: 0;
+  color: var(--lg-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+:global(.scene[data-scenario]) .facet-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .facet-item input {
+  margin: 0;
+  accent-color: var(--lg-accent);
+}
+:global(.scene[data-scenario]) .swatch {
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 1px solid var(--lg-info-text);
+  border-radius: 2px;
+  background: var(--lg-info);
+}
+:global(.scene[data-scenario]) .swatch[data-level="warn"] {
+  border-color: var(--lg-warn-text);
+  background: var(--lg-warn);
+}
+:global(.scene[data-scenario]) .facet-count {
+  margin-left: auto;
+  color: var(--lg-muted);
+  font-variant-numeric: tabular-nums;
+}
+:global(.scene[data-scenario]) .logs-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+:global(.scene[data-scenario]) .search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--lg-rule);
+  padding: 0.25rem 0.625rem;
+}
+:global(.scene[data-scenario]) .query-box {
+  display: flex;
+  flex: 1 1 12rem;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  border: 1px solid var(--lg-edge);
+  border-radius: var(--radius-md);
+  background: var(--lg-bg);
+  padding-left: 0.5rem;
+  color: var(--lg-muted);
+}
+:global(.scene[data-scenario]) .query-box:focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+:global(.scene[data-scenario]) .mag {
+  flex: none;
+}
+:global(.scene[data-scenario]) .query {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0.125rem 0.5rem 0.125rem 0;
+  color: var(--lg-fg);
+  font-family: var(--font-code);
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario]) .query:focus-visible {
+  outline: 0;
+}
+:global(.scene[data-scenario]) .range,
+:global(.scene[data-scenario]) .live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--lg-rule);
+  border-radius: var(--radius-md);
+  background: var(--lg-panel);
+  padding: 0.0625rem 0.5rem;
+  color: var(--lg-fg);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+:global(.scene[data-scenario]) .range::after {
+  content: "▾" / "";
+  color: var(--lg-muted);
+}
+:global(.scene[data-scenario]) .live {
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .live i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 1.5px solid var(--lg-muted);
+  border-radius: 50%;
+}
+:global(.scene[data-scenario]) .live[data-state="on"] i {
+  border-color: var(--lg-live);
+  background: var(--lg-live);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lg-live) 30%, transparent);
+}
+:global(.scene[data-scenario]) .chart {
+  flex: none;
+  border-bottom: 1px solid var(--lg-rule);
+  padding: 0.25rem 0.625rem 0.125rem;
+}
+:global(.scene[data-scenario]) .bars {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  align-items: end;
+  gap: 2px;
+  height: 2.5rem;
+  border-bottom: 1px solid var(--lg-rule);
+}
+:global(.scene[data-scenario]) .bar {
+  display: block;
+  min-height: 0;
+  border-radius: 1px 1px 0 0;
+  background: var(--lg-info);
+}
+:global(.scene[data-scenario]) .bar[data-warn="true"] {
+  background: var(--lg-warn);
+}
+:global(.scene[data-scenario]) .axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--lg-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+:global(.scene[data-scenario]) .log-count {
+  flex: none;
+  margin: 0;
+  padding: 0.125rem 0.625rem;
+  color: var(--lg-muted);
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .log-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 14rem;
+  overflow: auto;
+}
+:global(.scene[data-scenario]) .log-table {
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .log-table th,
+:global(.scene[data-scenario]) .log-table td {
+  border-bottom: 1px solid var(--lg-rule);
+  padding: 0.125rem 0.5rem;
+  text-align: left;
+  white-space: nowrap;
+}
+:global(.scene[data-scenario]) .log-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--lg-panel);
+  color: var(--lg-muted);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+:global(.scene[data-scenario]) .log-row {
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .log-row:hover {
+  background: var(--lg-hover);
+}
+:global(.scene[data-scenario]) .log-row[aria-current="true"] {
+  background: var(--lg-select);
+}
+:global(.scene[data-scenario]) .log-row .col-date {
+  border-left: 3px solid var(--lg-info);
+}
+:global(.scene[data-scenario]) .log-row[data-level="warn"] .col-date {
+  border-left-color: var(--lg-warn);
+}
+:global(.scene[data-scenario]) .level {
+  display: inline-block;
+  min-width: 4ch;
+  margin-right: 0.5ch;
+  color: var(--lg-info-text);
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .level[data-level="warn"] {
+  color: var(--lg-warn-text);
+}
+:global(.scene[data-scenario]) .log-empty {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.8125rem;
+}
+
+:global(.scene[data-scenario]) .detail {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: min(22rem, 100%);
+  border-top: 3px solid var(--lg-info);
+  border-left: 1px solid var(--lg-edge);
+  background: var(--lg-bg);
+  box-shadow: var(--shadow-raised);
+}
+:global(.scene[data-scenario]) .detail[data-level="warn"] {
+  border-top-color: var(--lg-warn);
+}
+:global(.scene[data-scenario]) .detail[hidden] {
+  display: none;
+}
+:global(.scene[data-scenario]) .detail-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--lg-rule);
+  background: var(--lg-panel);
+  padding: 0.125rem 0.625rem;
+}
+:global(.scene[data-scenario]) .detail-title {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .detail-head button {
+  border: 1px solid var(--lg-accent);
+  border-radius: var(--radius-md);
+  background: var(--lg-bg);
+  padding: 0 0.5rem;
+  color: var(--lg-accent);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .detail-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+}
+:global(.scene[data-scenario]) .detail-message {
+  margin: -0.375rem -0.625rem 0.375rem;
+  border-left: 4px solid var(--lg-info);
+  background: var(--lg-info-soft);
+  padding: 0.375rem 0.625rem;
+  font-family: var(--font-code);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+:global(.scene[data-scenario]) .detail[data-level="warn"] .detail-message {
+  border-left-color: var(--lg-warn);
+  background: var(--lg-warn-soft);
+}
+:global(.scene[data-scenario]) .detail-section {
+  margin: 0.375rem 0 0.125rem;
+  color: var(--lg-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+:global(.scene[data-scenario]) .detail dl {
+  margin: 0;
+}
+:global(.scene[data-scenario]) .detail dl > div {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  border-top: 1px solid var(--lg-rule);
+  padding: 0.0625rem 0;
+}
+:global(.scene[data-scenario]) .detail dt {
+  margin: 0;
+  color: var(--lg-muted);
+  font-family: var(--font-code);
+}
+:global(.scene[data-scenario]) .detail-attrs dt {
+  color: var(--lg-accent);
+}
+:global(.scene[data-scenario]) .detail dd {
+  margin: 0;
+  font-family: var(--font-code);
+  overflow-wrap: anywhere;
+}
+
+:global(.scene[data-scenario]) .log-scroll:focus-visible,
+:global(.scene[data-scenario]) .log-row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+@media (min-width: 640px) {
+  :global(.scene[data-scenario]) .logs {
+    grid-template-columns: 9rem minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  :global(.scene[data-scenario]) .facets {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    border-right: 1px solid var(--lg-rule);
+    border-bottom: 0;
+    overflow-y: auto;
+  }
+  :global(.scene[data-scenario]) .log-scroll {
+    max-height: none;
+  }
+}
+@media (min-width: 480px) {
+  :global(.scene[data-scenario]) .lg-rail {
+    display: flex;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :global(.scene[data-scenario]) .log-row {
+    transition: background-color 0.1s;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :global(.scene[data-scenario]) .panel[data-kind="logs"] {
+    --lg-bg: #1e1e2e;
+    --lg-panel: #252538;
+    --lg-fg: #e4e5ec;
+    --lg-muted: #a9abbd;
+    --lg-rule: #3a3b52;
+    --lg-edge: #7c7f99;
+    --lg-rail: #4b1f85;
+    --lg-accent: #b9a0f0;
+    --lg-info: #4aa3ea;
+    --lg-info-text: #74b8f0;
+    --lg-info-soft: #24354f;
+    --lg-warn: #e8b93a;
+    --lg-warn-text: #f2ca5c;
+    --lg-warn-soft: #43391a;
+    --lg-select: #2c3c5a;
+    --lg-hover: #2a2a40;
+    --lg-live: #4cd07d;
+    --ring: #b9a0f0;
+  }
+}
+</style>
