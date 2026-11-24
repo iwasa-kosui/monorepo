@@ -1,0 +1,44 @@
+---
+import {
+  expectTab,
+  panelIdOf,
+  type PanelProps,
+  tabIdOf,
+} from '../../workspace/panel-props';
+
+type Props = PanelProps;
+
+const { scenario, tab: definition, hidden } = Astro.props;
+const tab = expectTab(definition, 'slot');
+---
+
+<div
+  class="panel"
+  role="tabpanel"
+  id={panelIdOf(scenario, tab.key)}
+  aria-labelledby={tabIdOf(scenario, tab.key)}
+  data-tool={tab.key}
+  data-kind="slot"
+  hidden={hidden}
+>
+  <div class="slot-body">
+    <slot />
+  </div>
+  {tab.note !== undefined && <p class="panel-note">{tab.note}</p>}
+</div>
+
+<style>
+:global(.scene[data-scenario]) .panel[data-kind="slot"] {
+  --pn-bg: var(--role-sunken);
+  --pn-fg: var(--role-fg);
+  --pn-rule: var(--role-rule);
+  --ring: var(--role-accent);
+  background: var(--role-surface);
+  color: var(--role-fg);
+}
+:global(.scene[data-scenario]) .slot-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+</style>
