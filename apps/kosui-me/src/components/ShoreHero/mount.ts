@@ -26,6 +26,10 @@ const UNIFORMS = [
   'uVisible',
   'uBlink',
   'uGain',
+  'uGrain',
+  'uSheen',
+  'uWetTint',
+  'uShadowTint',
   'uSand',
   'uSeaShallow',
   'uSeaDeep',
@@ -49,7 +53,11 @@ type Palette = Readonly<{
   light: Rgb;
   shell: Rgb;
   eye: Rgb;
+  wetTint: Rgb;
+  shadowTint: Rgb;
   gain: number;
+  grain: number;
+  sheen: number;
 }>;
 
 const parseHex = (value: string): Rgb => {
@@ -65,6 +73,7 @@ const parseHex = (value: string): Rgb => {
 const readPalette = (element: HTMLElement): Palette => {
   const style = getComputedStyle(element);
   const color = (name: string): Rgb => parseHex(style.getPropertyValue(name));
+  const number = (name: string): number => parseFloat(style.getPropertyValue(name)) || 1;
   return {
     sand: color('--shore-sand'),
     seaShallow: color('--shore-sea-shallow'),
@@ -73,7 +82,11 @@ const readPalette = (element: HTMLElement): Palette => {
     light: color('--shore-light'),
     shell: color('--shore-shell'),
     eye: color('--shore-eye'),
-    gain: parseFloat(style.getPropertyValue('--shore-gain')) || 0.6,
+    wetTint: color('--shore-wet-tint'),
+    shadowTint: color('--shore-shadow-tint'),
+    gain: number('--shore-gain'),
+    grain: number('--shore-grain'),
+    sheen: number('--shore-sheen'),
   };
 };
 
@@ -327,6 +340,10 @@ export const mountShore = (elements: ShoreElements): () => void => {
       !reduceMotion && elapsed % 5.5 > 5.36 ? 0 : 1,
     );
     gl.uniform1f(uniforms.uGain, palette.gain);
+    gl.uniform1f(uniforms.uGrain, palette.grain);
+    gl.uniform1f(uniforms.uSheen, palette.sheen);
+    gl.uniform3fv(uniforms.uWetTint, palette.wetTint);
+    gl.uniform3fv(uniforms.uShadowTint, palette.shadowTint);
     gl.uniform3fv(uniforms.uSand, palette.sand);
     gl.uniform3fv(uniforms.uSeaShallow, palette.seaShallow);
     gl.uniform3fv(uniforms.uSeaDeep, palette.seaDeep);

@@ -27,7 +27,11 @@ uniform float uCover;       // エビが水をかぶっている度合い（0〜
 uniform float uVisible;     // エビの見え方（0〜1）
 uniform float uBlink;       // 0 のあいだ目を閉じる
 uniform float uGain;        // 光の強さ
+uniform float uGrain;       // 砂粒の強さ
+uniform float uSheen;       // 濡れた砂の照り返しの強さ
 uniform vec3 uSand, uSeaShallow, uSeaDeep, uFoam, uLight, uShell, uEye;
+uniform vec3 uWetTint;       // 濡れた砂に掛ける色
+uniform vec3 uShadowTint;    // 影に掛ける色
 uniform sampler2D uSprite, uShadow;
 
 const vec2 SEAWARD = vec2(.8944, -.4472);  // 海の方向（右上）
@@ -149,14 +153,14 @@ void main() {
   ) - .5) * size * .05 * smoothstep(0., .25, depth);
 
   // 砂
-  float grain = (hash(floor(refracted * uPixelRatio)) - .5) * .05 + (noise(refracted * .9) - .5) * .045;
+  float grain = ((hash(floor(refracted * uPixelRatio)) - .5) * .05 + (noise(refracted * .9) - .5) * .045) * uGrain;
   float mottle = fbm(refracted / size * 2.6) - .5;
   float ripple = sin(dot((refracted - center) / size, SEAWARD) * 70. + fbm(refracted / size * 2.4) * 9.) * .5 + .5;
-  vec3 col = uSand * (1. + grain + mottle * .05 - ripple * .007);
-  col += uLight * step(.9965, hash(floor(refracted * 1.4) + 3.)) * .1 * uGain;
-  col = mix(col, col * vec3(.86, .78, .77), wet);
+  vec3 col = uSand * (1. + grain + mottle * .05 * uGrain - ripple * .007 * uGrain);
+  col += uLight * step(.9965, hash(floor(refracted * 1.4) + 3.)) * .1 * uGain * mix(1., uGrain, .4);
+  col = mix(col, col * uWetTint, wet);
   float fresh = wet * exp(-max(line - s, 0.) * 3.6);
-  col += uLight * (.02 + .2 * fresh) * wet * uGain * (.55 + .45 * noise(refracted * .018 + t * .05));
+  col += uLight * (.02 + .2 * fresh) * wet * uGain * uSheen * (.55 + .45 * noise(refracted * .018 + t * .05));
 
   float tt = t + 3.;
   float phase = fract(tt / PERIOD);
@@ -174,7 +178,7 @@ void main() {
   vec2 sq = (toCell(px - vec2(.016, .024) * size, t, wobble) + 2.) / 24.;
   float shadow = (sq.x < 0. || sq.y < 0. || sq.x > 1. || sq.y > 1.) ? 0. : texture2D(uShadow, sq).r;
   float arrived = smoothstep(0., .9, t);
-  col = mix(col, col * vec3(.55, .45, .52), shadow * .55 * arrived * (1. - .4 * inWater) * (1. - .6 * uCover) * uVisible);
+  col = mix(col, col * uShadowTint, shadow * .55 * arrived * (1. - .4 * inWater) * (1. - .6 * uCover) * uVisible);
 
   // エビ（4 点で縁をならす）。水をかぶっている部分だけ揺らぐ
   vec2 acc = vec2(0.);

@@ -92,7 +92,11 @@ const { themes } = Astro.props;
   --shore-light: #ffffff;
   --shore-shell: #ee7b6f;
   --shore-eye: #3750b1;
+  --shore-wet-tint: #dbc7c4;
+  --shore-shadow-tint: #8c7385;
   --shore-gain: 1;
+  --shore-grain: 1;
+  --shore-sheen: 1;
   --shore-ink: #1f2740;
   --shore-muted: #4b526d;
   --shore-line: rgba(31, 39, 64, 0.16);
@@ -112,14 +116,18 @@ const { themes } = Astro.props;
 /* 夜の浜: 暗い砂に青黒い海 */
 @media (prefers-color-scheme: dark) {
   .shore {
-    --shore-sand: #222838;
-    --shore-sea-shallow: #27466b;
-    --shore-sea-deep: #040a17;
-    --shore-foam: #b9cbe6;
-    --shore-light: #7fa6de;
-    --shore-shell: #f47f70;
+    --shore-sand: #2b3147;
+    --shore-sea-shallow: #3b6c98;
+    --shore-sea-deep: #050d1c;
+    --shore-foam: #dbe7f8;
+    --shore-light: #a9c9f7;
+    --shore-shell: #e6786c;
     --shore-eye: #8aa0f5;
-    --shore-gain: 0.5;
+    --shore-wet-tint: #a8aecb;
+    --shore-shadow-tint: #2e2e44;
+    --shore-gain: 0.8;
+    --shore-grain: 2.2;
+    --shore-sheen: 2;
     --shore-ink: #f3f1ee;
     --shore-muted: #b3bacb;
     --shore-line: rgba(243, 241, 238, 0.18);
