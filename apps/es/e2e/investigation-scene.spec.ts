@@ -1710,7 +1710,7 @@ test.describe('導入 調査の画面', () => {
     await expect(scene(page)).toHaveAttribute('data-selected', 'console');
   });
 
-  test('375px 幅では、タブは折り返さず 1 段に並び、横にスクロールして選べる。未確認は点で出る', async ({ page }) => {
+  test('375px 幅では、タブは短い名前で 1 段に並ぶ。未確認は点で出る', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await begin(page);
     const strip = scene(page).getByRole('tablist', { name: '開くツール' });
@@ -1722,7 +1722,9 @@ test.describe('導入 調査の画面', () => {
     );
     expect(new Set(boxes.map((box) => box.top)).size).toBe(1);
     for (const box of boxes) expect(box.height).toBeGreaterThanOrEqual(44);
-    expect(await strip.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+    expect(await strip.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await expect(scene(page).locator('.tab:visible .tab-short:visible')).toHaveText(['DB', 'ログ', 'コード']);
+    await expect(tab(page, /DB コンソール/)).toHaveAccessibleName(/DB Console.*DB コンソール/);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
     const dot = unseen(page, /リポジトリ/);
@@ -1805,6 +1807,7 @@ test.describe('導入 調査の画面', () => {
       await page.setViewportSize(size);
       await begin(page);
       await expect(scene(page).locator('[data-chat-tab]')).toBeHidden();
+      await expect(scene(page).locator('.tab-short:visible')).toHaveCount(0);
       await expect(scene(page).getByRole('tab')).toHaveCount(3);
       await expect(scene(page).locator('.win.chat')).toBeVisible();
       await expect(scene(page).locator('.pages')).toBeVisible();
