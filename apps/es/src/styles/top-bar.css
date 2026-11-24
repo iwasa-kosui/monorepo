@@ -11,9 +11,13 @@
   line-height: 1.5;
 }
 .top-bar a {
-  color: var(--role-accent);
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
+  color: var(--role-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+.top-bar a:hover {
+  color: var(--role-fg);
 }
 .top-bar a:focus-visible,
 .top-bar summary:focus-visible {
@@ -29,9 +33,7 @@
     padding: 0.5rem 0.875rem 0.625rem;
   }
   .top-bar a {
-    color: var(--role-muted);
     font-size: 0.75rem;
     font-weight: 600;
-    text-decoration: none;
   }
 }
