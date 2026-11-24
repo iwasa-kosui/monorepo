@@ -142,7 +142,7 @@ export const incidentScenario: WorkspaceScenario = {
     label: '対応の状況',
     elapsed: '対応開始から',
     start: '対応を始める',
-    counter: { label: 'キャンセルになった来院', unit: '件', initial: 1 },
+    counter: { label: 'キャンセルになった来院', short: 'キャンセル', unit: '件', initial: 1 },
   },
   startGuide: [
     'あなたは、動物病院向けの予約システムの開発者です。',

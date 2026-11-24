@@ -1775,7 +1775,7 @@ test.describe('導入 調査の画面', () => {
       };
     });
     expect(order.pages).toBeLessThan(order.bar);
-    await page.evaluate(() => window.scrollTo(0, 60));
+    await page.evaluate(() => window.scrollTo(0, 20));
     await expectPinned('scrolled');
   });
 
@@ -1845,6 +1845,26 @@ test.describe('導入 調査の画面', () => {
     await tab(page, /DB コンソール/).click();
     const running = await panel(page, /DB コンソール/).evaluate((element) => element.getAnimations().length);
     expect(running).toBe(0);
+  });
+
+  test('375px 幅では、状況の帯が 1 行になり、ボタンはアイコンだけで名前は読み上げに残る', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await begin(page);
+    const bar = scene(page).getByRole('group', { name: '対応の状況' });
+    expect((await bar.boundingBox())?.height).toBeLessThanOrEqual(48);
+    await expect(timer(page)).toHaveText(/対応開始から\s*00:0\d/);
+    await expect(clock(page)).toBeHidden();
+    await expect(affected(page)).toHaveText(/キャンセルになった来院\s*1件/);
+    await expect(pauseButton(page)).toHaveAccessibleName('再開する');
+    await expect(resetButton(page)).toHaveAccessibleName('最初からやり直す');
+    for (const button of [pauseButton(page), resetButton(page)]) {
+      const box = await button.boundingBox();
+      expect(box?.width).toBe(32);
+      expect(box?.height).toBe(32);
+    }
+    await expect(scene(page).locator('.composer .fmt')).toBeHidden();
+    await expect(scene(page).locator('.composer .ph')).toBeHidden();
+    await expect(scene(page).locator('.composer .send-shape')).toBeHidden();
   });
 
   test('375px 幅で別のタブを見ている間に届いた投稿は、チャットのタブに未読の数で出る', async ({ page }) => {

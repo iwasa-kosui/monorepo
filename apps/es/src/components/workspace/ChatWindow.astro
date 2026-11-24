@@ -772,6 +772,64 @@ const railActors = railActorIds.flatMap((id) => {
     min-height: 14rem;
     max-height: none;
   }
+  :global(.scene[data-scenario]) .fmt,
+  :global(.scene[data-scenario]) .ph,
+  :global(.scene[data-scenario]) .send-shape {
+    display: none;
+  }
+  :global(.scene[data-scenario]) .chat-head {
+    border-bottom: 0;
+    padding: 0.5rem 0.875rem 0.25rem;
+  }
+  :global(.scene[data-scenario]) .feed {
+    padding-inline: 0.875rem;
+  }
+  :global(.scene[data-scenario]) .typing {
+    padding-inline: 0.875rem;
+  }
+  :global(.scene[data-scenario]) .composer {
+    padding: 0.25rem 0.625rem 0.625rem;
+  }
+  :global(.scene[data-scenario]) .compose-box {
+    border: 0;
+    border-radius: 1rem;
+    background: var(--c-toolbar);
+    padding-top: 0.375rem;
+  }
+  :global(.scene[data-scenario]) .compose-foot {
+    padding: 0.625rem;
+  }
+  :global(.scene[data-scenario]) .actions {
+    gap: 0.5rem;
+  }
+  :global(.scene[data-scenario]) .actions button,
+  :global(.scene[data-scenario]) .chat-reset {
+    min-height: 2.25rem;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--c-fg) 10%, transparent);
+    padding: 0 0.875rem;
+    color: var(--c-fg);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  :global(.scene[data-scenario]) .chat-reset {
+    min-height: 1.75rem;
+    padding: 0 0.75rem;
+    font-size: 0.75rem;
+  }
+  :global(.scene[data-scenario]) .actions button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--c-fg) 16%, transparent);
+  }
+  :global(.scene[data-scenario]) .actions button.primary,
+  :global(.scene[data-scenario]) .actions button.primary:hover:not(:disabled) {
+    background: var(--role-accent);
+    color: var(--role-on-accent);
+  }
+  :global(.scene[data-scenario]) .actions button:disabled {
+    background: color-mix(in srgb, var(--c-fg) 6%, transparent);
+    color: var(--c-muted);
+  }
 }
 @media (min-width: 1024px) {
   :global(.scene[data-scenario])

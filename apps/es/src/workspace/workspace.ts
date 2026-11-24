@@ -390,7 +390,10 @@ export const mountWorkspace = (root: HTMLElement): void => {
   const statusBar = root.querySelector<HTMLElement>('.status-bar');
   const tabStrip = root.querySelector<HTMLElement>('.tab-strip');
   const measureBars = (): void => {
-    root.style.setProperty('--ws-top', `${statusBar?.offsetHeight ?? 0}px`);
+    const above = timed
+      ? (statusBar?.offsetHeight ?? 0)
+      : Math.max(0, root.getBoundingClientRect().top + window.scrollY);
+    root.style.setProperty('--ws-top', `${above}px`);
     if (tabStrip !== null) root.style.setProperty('--ws-strip', `${tabStrip.offsetHeight}px`);
     if (footer !== null) root.style.setProperty('--ws-bottom', `${footer.offsetHeight}px`);
   };

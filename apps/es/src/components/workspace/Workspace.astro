@@ -66,7 +66,8 @@ const hasComposer = Astro.slots.has('composer');
                 role="timer"
                 aria-live="off"
               >
-                {status.elapsed} <span data-elapsed>00:00</span>
+                <span class="status-label">{status.elapsed}</span>
+                <span data-elapsed>00:00</span>
               </p>
               <p class="status-item status-clock">
                 <span class="cfig-sr">画面内の現在時刻</span>
@@ -78,7 +79,9 @@ const hasComposer = Astro.slots.has('composer');
         {
           counter !== undefined && (
             <p class="status-item status-affected">
-              {counter.label}
+              <span class="status-label" data-short={counter.short}>{
+                counter.label
+              }</span>
               <strong data-affected>{counter.initial}{counter.unit}</strong>
             </p>
           )
@@ -513,41 +516,87 @@ const hasComposer = Astro.slots.has('composer');
   :global(.lesson-frame--immersive) :global(.content) :global(.cfig).scene {
     margin-inline: -0.5rem;
   }
+  .scene {
+    --icon-pause: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='14' y='4' width='4' height='16' rx='1'/%3E%3Crect x='6' y='4' width='4' height='16' rx='1'/%3E%3C/svg%3E");
+    --icon-play: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='6 3 20 12 6 21 6 3'/%3E%3C/svg%3E");
+    --icon-rotate: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/%3E%3Cpath d='M3 3v5h5'/%3E%3C/svg%3E");
+    --icon-timer: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='10' x2='14' y1='2' y2='2'/%3E%3Cline x1='12' x2='15' y1='14' y2='11'/%3E%3Ccircle cx='12' cy='14' r='8'/%3E%3C/svg%3E");
+  }
   .scene .status-bar {
-    gap: 0 0.75rem;
+    flex-wrap: nowrap;
+    gap: 0.625rem;
+    border-top: 0;
     border-inline: 0;
     border-radius: 0;
+    padding: 0.375rem 0.625rem 0.375rem 0.875rem;
   }
   .scene .status-elapsed {
-    order: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    font-size: 0.9375rem;
   }
-  .scene .status-actions {
-    order: 2;
+  .scene .status-elapsed::before {
+    content: "";
+    width: 1rem;
+    height: 1rem;
+    background: var(--role-muted);
+    -webkit-mask: var(--icon-timer) center / contain no-repeat;
+    mask: var(--icon-timer) center / contain no-repeat;
   }
-  .scene .status-affected {
-    order: 3;
+  .scene .status-elapsed .status-label,
+  .scene .status-affected .status-label[data-short] {
+    font-size: 0;
   }
   .scene .status-clock {
-    order: 4;
-    margin-left: auto;
+    display: none;
   }
-  .scene .status-bar {
-    border-top: 0;
-    padding: 0.375rem 0.875rem;
-  }
-  .scene .status-clock time {
-    color: var(--role-muted);
+  .scene .status-affected {
+    border-radius: 999px;
+    background: var(--role-danger-soft);
+    padding: 0.125rem 0.625rem;
+    color: var(--role-danger);
     font-size: 0.75rem;
-    font-weight: 400;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .scene .status-affected .status-label[data-short]::before {
+    content: attr(data-short);
+    font-size: 0.75rem;
+  }
+  .scene .status-actions {
+    flex-wrap: nowrap;
+    gap: 0.375rem;
   }
   .scene .status-actions button {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
     border: 0;
     border-radius: 999px;
     background: var(--role-sunken);
-    padding: 0.1875rem 0.75rem;
+    padding: 0;
     color: var(--role-fg);
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0;
+  }
+  .scene .status-actions button::before {
+    content: "";
+    width: 1rem;
+    height: 1rem;
+    background: currentColor;
+    -webkit-mask: var(--icon-pause) center / contain no-repeat;
+    mask: var(--icon-pause) center / contain no-repeat;
+  }
+  .scene .status-actions button[data-action="reset"]::before {
+    -webkit-mask-image: var(--icon-rotate);
+    mask-image: var(--icon-rotate);
+  }
+  .scene[data-phase="paused"]
+    .status-actions
+    button[data-action="pause"]::before {
+    -webkit-mask-image: var(--icon-play);
+    mask-image: var(--icon-play);
   }
   .scene .status-actions button:disabled {
     color: var(--role-faint);
@@ -566,9 +615,10 @@ const hasComposer = Astro.slots.has('composer');
     font-size: 0.9375rem;
   }
   .scene .start button {
+    min-height: 2.75rem;
     border: 0;
     border-radius: 999px;
-    padding: 0.625rem 1.25rem;
+    padding: 0 1.25rem;
   }
   .scene :global(.win[data-window]) {
     border-inline: 0;
