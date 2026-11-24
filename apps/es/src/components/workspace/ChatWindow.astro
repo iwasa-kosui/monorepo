@@ -267,6 +267,27 @@ const railActors = railActorIds.flatMap((id) => {
   font-weight: 700;
   line-height: 1.4;
 }
+:global(.scene[data-scenario]) .ws::after {
+  content: "";
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-left: 0.25rem;
+  background: currentColor;
+  opacity: 0.7;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+:global(.scene[data-scenario]) .chs::before {
+  content: "チャンネル";
+  display: block;
+  padding: 0 1rem 0.1875rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  opacity: 0.7;
+}
 :global(.scene[data-scenario]) .chs {
   margin: 0.5rem 0 0;
   padding: 0;
@@ -398,7 +419,7 @@ const railActors = railActorIds.flatMap((id) => {
   justify-content: center;
   width: 2.25rem;
   height: 2.25rem;
-  border-radius: var(--radius-md);
+  border-radius: 0.5rem;
   background: var(--c-av-slate);
   color: #ffffff;
   font-size: 0.9375rem;
@@ -616,9 +637,9 @@ const railActors = railActorIds.flatMap((id) => {
 }
 :global(.scene[data-scenario]) .chat-reset {
   flex: none;
-  border: 1px solid var(--c-edge);
-  border-radius: var(--radius-md);
-  background: var(--c-btn);
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--c-fg) 9%, transparent);
   padding: 0 0.625rem;
   color: var(--c-fg);
   font-size: 0.75rem;
@@ -626,7 +647,7 @@ const railActors = railActorIds.flatMap((id) => {
   cursor: pointer;
 }
 :global(.scene[data-scenario]) .chat-reset:hover:not(:disabled) {
-  background: var(--c-btn-hover);
+  background: color-mix(in srgb, var(--c-fg) 15%, transparent);
 }
 :global(.scene[data-scenario]) .chat-reset:disabled {
   color: var(--c-muted);

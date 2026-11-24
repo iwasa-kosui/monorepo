@@ -278,18 +278,19 @@ const diagramLabels = {
   gap: 0.5rem;
 }
 .choices button {
-  border: 1px solid var(--role-accent);
-  border-radius: var(--radius-md);
-  background: var(--role-surface);
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--role-fg) 9%, transparent);
   padding: 0.5rem 1rem;
-  color: var(--role-accent);
+  color: var(--role-fg);
   font-size: 0.9375rem;
   cursor: pointer;
 }
 .choices button:hover {
-  background: var(--role-accent-soft);
+  background: color-mix(in srgb, var(--role-fg) 15%, transparent);
 }
-.choices button[aria-pressed="true"] {
+.choices button[aria-pressed="true"],
+.choices button[aria-pressed="true"]:hover {
   background: var(--role-accent);
   color: var(--role-on-accent);
 }

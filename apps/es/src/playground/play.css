@@ -33,18 +33,20 @@
   font-size: 0.875rem;
 }
 .play button {
-  border: 1px solid var(--role-border);
-  border-radius: var(--radius-md);
-  background: var(--role-surface);
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--role-fg) 9%, transparent);
   padding: 0.4rem 0.75rem;
   color: var(--role-fg);
   font-size: 1rem;
   line-height: 1.4;
   cursor: pointer;
 }
+.play button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--role-fg) 15%, transparent);
+}
 .play button:disabled {
-  border-color: var(--role-rule);
-  background: var(--role-sunken);
+  background: color-mix(in srgb, var(--role-fg) 5%, transparent);
   color: var(--role-muted);
   cursor: not-allowed;
 }
@@ -52,15 +54,17 @@
   outline: 3px solid var(--role-accent);
   outline-offset: 2px;
 }
-.play button.play-primary {
-  border-color: var(--role-accent);
+.play button.play-primary,
+.play button.play-primary:hover:not(:disabled) {
   background: var(--role-accent);
   color: var(--role-on-accent);
   font-weight: 700;
 }
+.play button.play-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
 .play button.play-primary:disabled {
-  border-color: var(--role-border);
-  background: var(--role-sunken);
+  background: color-mix(in srgb, var(--role-fg) 5%, transparent);
   color: var(--role-muted);
 }
 .play button.play-quiet {
@@ -75,8 +79,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem 0.75rem;
-  border: 1px solid var(--role-accent);
-  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
   background: var(--role-accent-soft);
   padding: 0.4rem 0.75rem;
 }
@@ -221,8 +225,8 @@
 
 .play-panel {
   min-width: 0;
-  border: 1px solid var(--role-rule);
-  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--role-rule) 70%, transparent);
+  border-radius: 0.75rem;
   background: var(--role-surface);
   padding: 0.4rem 0.6rem;
 }

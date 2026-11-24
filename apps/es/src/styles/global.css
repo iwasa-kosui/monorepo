@@ -214,9 +214,10 @@ body.chapter-page {
   display: none;
 }
 .content .axis-buttons button {
-  border: 1px solid var(--role-accent);
-  border-radius: var(--radius-md);
-  background: var(--role-surface);
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--role-fg) 9%, transparent);
+  color: var(--role-fg);
   padding: 0.25rem 0.75rem;
   font-size: 0.875rem;
   cursor: pointer;
