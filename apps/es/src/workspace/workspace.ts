@@ -43,8 +43,11 @@ export const mountWorkspace = (root: HTMLElement): void => {
   const fired = new Map<SignalName, Set<string>>();
   const latest = new Map<SignalName, Readonly<Record<string, unknown>>>();
   const controllers = new Map<string, PanelController>();
+  const compact = matchMedia('(max-width: 639px)');
+  const firstView: 'chat' | 'tools' = timed ? 'chat' : 'tools';
   const state = {
     selected: firstTab.key,
+    view: firstView,
     opened: [] as string[],
     forcedUnseen: new Set<string>(),
     replied: false,
@@ -93,6 +96,8 @@ export const mountWorkspace = (root: HTMLElement): void => {
     const started = status === 'running' || status === 'paused';
     root.dataset.opened = state.opened.join(' ');
     root.dataset.selected = state.selected;
+    root.dataset.view = state.view;
+    const chatFront = compact.matches && state.view === 'chat';
     root.dataset.ready = String(gate.ready);
     root.dataset.phase = status === 'idle'
       ? 'idle'
@@ -116,7 +121,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
       ...scenario.tabs.flatMap((tab) => tab.seen !== undefined && !state.opened.includes(tab.key) ? [tab.key] : []),
       ...state.forcedUnseen,
     ]);
-    tabs.sync({ selected: state.selected, unseen });
+    tabs.sync({ selected: state.selected, unseen, chatFront });
     chat.render({
       started,
       replied: state.replied,
@@ -125,6 +130,8 @@ export const mountWorkspace = (root: HTMLElement): void => {
       memo: scenario.memo === undefined ? [] : memoViews(scenario.memo, fired, state.memoOverrides, latest),
       answerRequested: fired.has('agent:requested'),
       unlocked: state.unlocked,
+      tabbed: compact.matches,
+      front: chatFront,
     });
     updatePanels();
     renderClock();
@@ -152,7 +159,13 @@ export const mountWorkspace = (root: HTMLElement): void => {
   const choose = (key: string): void => {
     state.forcedUnseen.delete(key);
     state.selected = key;
+    state.view = 'tools';
     emit('tab:selected', { key });
+  };
+
+  const chooseChat = (): void => {
+    state.view = 'chat';
+    render();
   };
 
   const mountController = (tab: TabDefinition, panel: HTMLElement): void => {
@@ -169,7 +182,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     );
   };
 
-  const tabs = createTabs(root, { choose });
+  const tabs = createTabs(root, { choose, chooseChat });
 
   const controllerOf = (kind: TabKind, key?: string): PanelController | undefined => {
     const tab = tabOfKind(scenario, kind, key);
@@ -286,6 +299,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
       }
       tabs.removeAdded();
       state.selected = firstTab.key;
+      state.view = firstView;
       state.opened = [];
     }
     fired.clear();
@@ -370,6 +384,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     () => (scheduler.status() === 'paused' ? scheduler.resume() : scheduler.pause()),
   );
   resetButton?.addEventListener('click', reset);
+  compact.addEventListener('change', render);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) scheduler.tick();
   });

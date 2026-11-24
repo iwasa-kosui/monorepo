@@ -927,7 +927,7 @@ test.describe('導入 調査の画面', () => {
 
   test('タブの表示名はブラウザのタブのタイトルらしく、アクセシブルな名前に日本語の名前が残る', async ({ page }) => {
     await begin(page);
-    await expect(scene(page).locator('.tab .tab-title')).toHaveText([
+    await expect(scene(page).locator('.tab[data-tool] .tab-title')).toHaveText([
       'DB Console',
       'Log Explorer',
       'clinic-api/visits.ts',
@@ -936,12 +936,12 @@ test.describe('導入 調査の画面', () => {
     await expect(tab(page, /ログの検索/)).toHaveAccessibleName(/Log Explorer.*ログの検索/);
     await expect(tab(page, /リポジトリ/)).toHaveAccessibleName(/clinic-api\/visits\.ts.*リポジトリ/);
     await expect(tab(page, /DB コンソール/)).toHaveAccessibleName(/未確認/);
-    await expect(scene(page).locator('.tab .fav')).toHaveCount(3);
-    for (const element of await scene(page).locator('.tab .fav').all()) {
+    await expect(scene(page).locator('.tab[data-tool] .fav')).toHaveCount(3);
+    for (const element of await scene(page).locator('.tab[data-tool] .fav').all()) {
       await expect(element).toHaveAttribute('aria-hidden', 'true');
     }
     await answerButton(page).click();
-    await expect(scene(page).locator('.tab .tab-title')).toHaveText([
+    await expect(scene(page).locator('.tab[data-tool] .tab-title')).toHaveText([
       'DB Console',
       'Log Explorer',
       'clinic-api/visits.ts',
@@ -1648,7 +1648,7 @@ test.describe('導入 調査の画面', () => {
     });
   }
 
-  for (const size of [{ width: 375, height: 812 }, { width: 800, height: 700 }]) {
+  for (const size of [{ width: 375, height: 600 }, { width: 800, height: 700 }]) {
     test(`${size.width}x${size.height} では縦に並び、スクロールしても上部の帯が画面の上部に見える`, async ({ page }) => {
       await page.setViewportSize(size);
       await begin(page);
@@ -1656,7 +1656,11 @@ test.describe('導入 調査の画面', () => {
         const rect = (selector: string) => document.querySelector(selector)?.getBoundingClientRect();
         return { chat: rect('[data-investigation] .chat'), browser: rect('[data-investigation] .browser') };
       });
-      expect(boxes.chat?.bottom ?? 0).toBeLessThanOrEqual((boxes.browser?.top ?? 0) + 1);
+      if (size.width < 640) {
+        expect(boxes.browser?.bottom ?? 0).toBeLessThanOrEqual((boxes.chat?.top ?? 0) + 1);
+      } else {
+        expect(boxes.chat?.bottom ?? 0).toBeLessThanOrEqual((boxes.browser?.top ?? 0) + 1);
+      }
       expect(boxes.chat?.left).toBe(boxes.browser?.left);
       await page.evaluate(() => {
         const body = document.querySelector('.chapter-body');
@@ -1676,6 +1680,76 @@ test.describe('導入 調査の画面', () => {
       await expect(scene(page).getByRole('group', { name: '対応の状況' })).toBeInViewport({ ratio: 1 });
     });
   }
+
+  test('375px 幅では、チャットがタブの一つになり、最初はチャットが前に出る', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await begin(page);
+    const chatTab = tab(page, /チャット/);
+    const chatWindow = scene(page).locator('.win.chat');
+    await expect(scene(page).getByRole('tab')).toHaveCount(4);
+    await expect(chatTab).toHaveAttribute('aria-selected', 'true');
+    await expect(tab(page, /DB コンソール/)).toHaveAttribute('aria-selected', 'false');
+    await expect(chatWindow).toBeVisible();
+    await expect(posts(page).first()).toBeVisible();
+    await expect(scene(page).locator('.pages')).toBeHidden();
+    await expect(scene(page).locator('.address')).toBeHidden();
+
+    await tab(page, /DB コンソール/).click();
+    await expect(chatWindow).toBeHidden();
+    await expect(panel(page, /DB コンソール/)).toBeVisible();
+    await expect(address(page)).toHaveText('https://db.internal.example/console');
+    await expect(chatTab).toHaveAttribute('aria-selected', 'false');
+    await expect(tab(page, /DB コンソール/)).toHaveAttribute('aria-selected', 'true');
+
+    await tab(page, /DB コンソール/).press('ArrowLeft');
+    await expect(chatTab).toBeFocused();
+    await expect(chatTab).toHaveAttribute('aria-selected', 'true');
+    await expect(chatWindow).toBeVisible();
+    await expect(scene(page).locator('.pages')).toBeHidden();
+    await expect(scene(page)).toHaveAttribute('data-selected', 'console');
+  });
+
+  test('375px 幅で別のタブを見ている間に届いた投稿は、チャットのタブに未読の数で出る', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await timed(page);
+    const chatTab = tab(page, /チャット/);
+    const badge = scene(page).locator('[data-chat-unread]');
+    await expect(posts(page)).toHaveCount(1);
+    await expect(badge).toBeHidden();
+    await tab(page, /DB コンソール/).click();
+    await page.clock.runFor(10_000);
+    await expect(badge).toBeVisible();
+    const count = Number(await badge.textContent());
+    expect(count).toBeGreaterThanOrEqual(1);
+    await expect(chatTab).toHaveAccessibleName(new RegExp(`^チャット\\s*（未読 ${count} 件）$`));
+    await chatTab.click();
+    await expect(badge).toBeHidden();
+    await expect(chatTab).toHaveAccessibleName('チャット');
+    await expect(posts(page)).toHaveCount(1 + count);
+    await expect(posts(page).last()).toBeInViewport();
+  });
+
+  test('640px 以上の幅では、チャットのタブは出ず、チャットとブラウザの両方が見える', async ({ page }) => {
+    for (const size of [{ width: 800, height: 900 }, { width: 1280, height: 640 }]) {
+      await page.setViewportSize(size);
+      await begin(page);
+      await expect(scene(page).locator('[data-chat-tab]')).toBeHidden();
+      await expect(scene(page).getByRole('tab')).toHaveCount(3);
+      await expect(scene(page).locator('.win.chat')).toBeVisible();
+      await expect(scene(page).locator('.pages')).toBeVisible();
+      await expect(tab(page, /DB コンソール/)).toHaveAttribute('aria-selected', 'true');
+    }
+  });
+
+  test('チャットを前に出したまま幅を広げると、選んでいたツールのタブが選ばれた表示に戻る', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await begin(page);
+    await expect(tab(page, /DB コンソール/)).toHaveAttribute('aria-selected', 'false');
+    await page.setViewportSize({ width: 1280, height: 640 });
+    await expect(tab(page, /DB コンソール/)).toHaveAttribute('aria-selected', 'true');
+    await expect(scene(page).locator('.pages')).toBeVisible();
+    await expect(scene(page).locator('.win.chat')).toBeVisible();
+  });
 
   test('375px 幅では、ログの一覧とコードが中だけで横にスクロールする', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });

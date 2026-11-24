@@ -3,6 +3,7 @@ import { must } from './dom';
 export type TabsView = {
   readonly selected: string;
   readonly unseen: ReadonlySet<string>;
+  readonly chatFront: boolean;
 };
 
 export type Tabs = {
@@ -15,6 +16,7 @@ export type Tabs = {
 
 export type TabsHooks = {
   readonly choose: (key: string) => void;
+  readonly chooseChat: () => void;
 };
 
 export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
@@ -23,7 +25,14 @@ export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
   const address = must<HTMLElement>(root, '[data-address]');
   const added = new Set<string>();
 
-  const tabsOf = (): HTMLButtonElement[] => [...tabList.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  const tabsOf = (): HTMLButtonElement[] => [...tabList.querySelectorAll<HTMLButtonElement>('[role="tab"][data-tool]')];
+  const chatTab = tabList.querySelector<HTMLButtonElement>('[data-chat-tab]');
+  const shownTabsOf = (): HTMLButtonElement[] =>
+    [...tabList.querySelectorAll<HTMLButtonElement>('[role="tab"]')].filter((tab) => tab.getClientRects().length > 0);
+  const pick = (tab: HTMLButtonElement): void => {
+    if (tab === chatTab) hooks.chooseChat();
+    else hooks.choose(tab.dataset.tool ?? '');
+  };
   const panelsOf = (): HTMLElement[] => [...pages.querySelectorAll<HTMLElement>('[role="tabpanel"][data-tool]')];
   const templateOf = (kind: 'button' | 'panel', key: string): HTMLTemplateElement | null =>
     root.querySelector<HTMLTemplateElement>(`template[data-tab-${kind}="${key}"]`);
@@ -33,12 +42,12 @@ export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
 
   tabList.addEventListener('click', (event) => {
     const tab = tabOf(event);
-    if (tab !== null) hooks.choose(tab.dataset.tool ?? '');
+    if (tab !== null) pick(tab);
   });
   tabList.addEventListener('keydown', (event) => {
     const tab = tabOf(event);
     if (tab === null || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-    const tabs = tabsOf();
+    const tabs = shownTabsOf();
     const index = tabs.indexOf(tab);
     const target = event.key === 'ArrowRight'
       ? tabs[(index + 1) % tabs.length]
@@ -51,7 +60,7 @@ export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
       : undefined;
     if (target === undefined) return;
     event.preventDefault();
-    hooks.choose(target.dataset.tool ?? '');
+    pick(target);
     target.focus();
   });
 
@@ -85,13 +94,17 @@ export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
       const tabs = tabsOf();
       for (const tab of tabs) {
         const key = tab.dataset.tool ?? '';
-        const isSelected = key === selected;
+        const isSelected = key === selected && !view.chatFront;
         tab.setAttribute('aria-selected', String(isSelected));
         tab.tabIndex = isSelected ? 0 : -1;
         const unseen = tab.querySelector<HTMLElement>('[data-unseen]');
         if (unseen !== null) {
           unseen.hidden = !view.unseen.has(key);
         }
+      }
+      if (chatTab !== null) {
+        chatTab.setAttribute('aria-selected', String(view.chatFront));
+        chatTab.tabIndex = view.chatFront ? 0 : -1;
       }
       for (const panel of panelsOf()) {
         panel.hidden = panel.dataset.tool !== selected;

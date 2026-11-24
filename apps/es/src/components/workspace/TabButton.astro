@@ -1,35 +1,69 @@
 ---
 import type { PanelProps } from '../../workspace/panel-props';
-import { panelIdOf, tabIdOf } from '../../workspace/panel-props';
+import {
+  chatPanelIdOf,
+  chatTabIdOf,
+  panelIdOf,
+  tabIdOf,
+} from '../../workspace/panel-props';
 
-interface Props extends Pick<PanelProps, 'scenario' | 'tab'> {
-  selected: boolean;
-}
+type Props =
+  | (Pick<PanelProps, 'scenario' | 'tab'> & { selected: boolean })
+  | (Pick<PanelProps, 'scenario'> & { chat: true });
 
-const { scenario, tab, selected } = Astro.props;
+const props = Astro.props;
 ---
 
-<button
-  type="button"
-  class="tab"
-  role="tab"
-  id={tabIdOf(scenario, tab.key)}
-  data-tool={tab.key}
-  data-url={tab.url}
-  aria-selected={selected ? 'true' : 'false'}
-  aria-controls={panelIdOf(scenario, tab.key)}
-  tabindex={selected ? 0 : -1}
->
-  <span
-    class="fav"
-    aria-hidden="true"
-    data-tone={tab.favicon.tone}
-    data-shape={tab.favicon.shape}
-  ></span>
-  <span class="tab-title">{tab.title}</span>
-  <span class="cfig-sr">（{tab.label}）</span>
-  <span class="unseen" data-unseen hidden={tab.seen === undefined}>未確認</span>
-</button>
+{
+  'chat' in props
+    ? (
+    <button
+      type="button"
+      class="tab chat-tab"
+      role="tab"
+      id={chatTabIdOf(props.scenario)}
+      data-chat-tab
+      aria-selected="false"
+      aria-controls={chatPanelIdOf(props.scenario)}
+      tabindex="-1"
+    >
+      <span
+        class="fav"
+        aria-hidden="true"
+        data-tone="plum"
+        data-shape="rounded"
+      ></span>
+      <span class="tab-title">チャット</span>
+      <span class="cfig-sr" data-chat-unread-label></span>
+      <span class="chat-unread" data-chat-unread hidden aria-hidden="true"
+      >0</span>
+    </button>
+  )
+    : (
+    <button
+      type="button"
+      class="tab"
+      role="tab"
+      id={tabIdOf(props.scenario, props.tab.key)}
+      data-tool={props.tab.key}
+      data-url={props.tab.url}
+      aria-selected={props.selected ? 'true' : 'false'}
+      aria-controls={panelIdOf(props.scenario, props.tab.key)}
+      tabindex={props.selected ? 0 : -1}
+    >
+      <span
+        class="fav"
+        aria-hidden="true"
+        data-tone={props.tab.favicon.tone}
+        data-shape={props.tab.favicon.shape}
+      ></span>
+      <span class="tab-title">{props.tab.title}</span>
+      <span class="cfig-sr">（{props.tab.label}）</span>
+      <span class="unseen" data-unseen hidden={props.tab.seen === undefined}
+      >未確認</span>
+    </button>
+  )
+}
 
 <style>
 :global(.scene[data-scenario]) .tab {
@@ -129,7 +163,34 @@ const { scenario, tab, selected } = Astro.props;
 :global(.scene[data-scenario]) .fav[data-tone="azure"] {
   background: var(--br-fav-azure);
 }
+:global(.scene[data-scenario]) .fav[data-tone="plum"] {
+  background: var(--br-fav-plum);
+}
+:global(.scene[data-scenario]) .chat-tab {
+  display: none;
+}
+:global(.scene[data-scenario]) .chat-unread {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 999px;
+  background: #e01e5a;
+  padding: 0 0.3125rem;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+:global(.scene[data-scenario]) .chat-unread[hidden] {
+  display: none;
+}
 @media (max-width: 639px) {
+  :global(.scene[data-scenario]) .chat-tab {
+    display: inline-flex;
+  }
   :global(.scene[data-scenario]) .tab {
     margin-bottom: 0.125rem;
     border-radius: var(--radius-md);

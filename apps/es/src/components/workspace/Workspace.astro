@@ -50,6 +50,7 @@ const hasComposer = Astro.slots.has('composer');
   data-scenario={JSON.stringify(scenario)}
   data-opened=""
   data-selected={firstTab.key}
+  data-view={timed ? 'chat' : 'tools'}
   data-phase={timed ? 'idle' : 'running'}
   data-ready="false"
   aria-label={scenario.label}
@@ -123,6 +124,7 @@ const hasComposer = Astro.slots.has('composer');
       <div class="win-bar tab-strip">
         <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
         <div class="tabs" role="tablist" aria-label="開くツール">
+          <TabButton scenario={scenario} chat={true} />
           {
             scenario.tabs.map((tab) =>
               tab.initial === false
@@ -373,6 +375,7 @@ const hasComposer = Astro.slots.has('composer');
   --br-fav-coral: #d97757;
   --br-fav-blue: #2f6fed;
   --br-fav-azure: #007acc;
+  --br-fav-plum: #4a154b;
   --ring: #1a5fc8;
   --dot: var(--br-dot);
   background: var(--br-chrome);
@@ -493,6 +496,28 @@ const hasComposer = Astro.slots.has('composer');
   .scene .tab-strip .dots {
     display: none;
   }
+  .scene .workspace {
+    gap: 0;
+  }
+  .scene .browser {
+    order: -1;
+  }
+  .scene[data-view="chat"] .browser {
+    border-bottom: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .scene[data-view="chat"] .address,
+  .scene[data-view="chat"] .pages {
+    display: none;
+  }
+  .scene[data-view="chat"] :global(.win.chat) {
+    min-height: 28rem;
+    border-top: 0;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  }
+  .scene[data-view="tools"] :global(.win.chat) {
+    display: none;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -535,6 +560,7 @@ const hasComposer = Astro.slots.has('composer');
     --br-fav-ink: #ffffff;
     --br-fav-blue: #6e9bff;
     --br-fav-azure: #3aa0e8;
+    --br-fav-plum: #c58ac8;
     --ring: #8ab4f8;
   }
 }
