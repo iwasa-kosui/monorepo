@@ -1,3 +1,4 @@
+import { goneNote, PRESSED_NOTE, recordLoss } from './notes';
 import { FRAGMENT_SHADER, VERTEX_SHADER } from './shader';
 import { buildShadowTexture, buildSpriteTexture, GRID, SHADOW_SIZE } from './shrimp';
 import { carry, coverage, createWaves, type Drift, initialDrift, visibility } from './wave';
@@ -180,6 +181,8 @@ export type ShoreElements = Readonly<{
   button: HTMLButtonElement;
   /** スクロールに合わせて奥へ下げる、ヒーローの中身 */
   content: HTMLElement;
+  /** エビのそばに一言を出す場所 */
+  note: HTMLElement;
 }>;
 
 /**
@@ -187,7 +190,7 @@ export type ShoreElements = Readonly<{
  * WebGL が使えない環境では何もせず、静止したドット絵（SVG）がそのまま見える。
  */
 export const mountShore = (elements: ShoreElements): () => void => {
-  const { hero, canvas, slot, button, content } = elements;
+  const { hero, canvas, slot, button, content, note } = elements;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -232,6 +235,19 @@ export const mountShore = (elements: ShoreElements): () => void => {
   let visible = true;
   let frame = 0;
   let disposed = false;
+  let noteTimer: number | undefined;
+
+  /** 一言を出す。`duration` を渡すと、その時間（ミリ秒）で消す */
+  const showNote = (text: string, duration?: number): void => {
+    window.clearTimeout(noteTimer);
+    note.textContent = text;
+    note.classList.add('is-shown');
+    if (duration === undefined) return;
+    noteTimer = window.setTimeout(
+      () => note.classList.remove('is-shown'),
+      duration,
+    );
+  };
 
   /** 描画が重い端末では、解像度を段階的に下げる */
   const adaptQuality = (now: number): void => {
@@ -265,8 +281,12 @@ export const mountShore = (elements: ShoreElements): () => void => {
     const time = reduceMotion ? STILL_TIME : elapsed;
     const wave = waves.at(time);
     if (!reduceMotion && previousTime !== undefined) {
+      const wasGone = drift.gone;
       drift = carry(drift, previousTime, time, waves);
-      if (drift.gone) button.hidden = true;
+      if (drift.gone && !wasGone) {
+        button.hidden = true;
+        showNote(goneNote(recordLoss(window.localStorage)));
+      }
     }
     previousTime = time;
     cover += (coverage(drift, wave, tide) - cover) * 0.12;
@@ -351,6 +371,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
   };
   const onPress = (): void => {
     hopAt = performance.now();
+    showNote(PRESSED_NOTE, 2600);
     requestDraw();
   };
   const onContextLost = (event: Event): void => {
@@ -374,6 +395,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
     button.removeEventListener('click', onPress);
     canvas.removeEventListener('webglcontextlost', onContextLost);
     hero.classList.remove('is-live');
+    window.clearTimeout(noteTimer);
     gl.getExtension('WEBGL_lose_context')?.loseContext();
   };
 

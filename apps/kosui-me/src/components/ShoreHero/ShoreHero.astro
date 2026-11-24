@@ -25,7 +25,7 @@ const { themes } = Astro.props;
       <h1 class="shore-name" id="shore-name">岩佐 幸翠</h1>
       <p class="shore-latin">Kosui Iwasa</p>
       <p class="shore-bio">
-        医療SaaSの共通基盤を開発しています。認証認可基盤・組織管理・テナント分離などのプラットフォーム領域を担当。TypeScriptと関数型プログラミングを軸に、堅牢で型安全なシステム設計を実践しています。TSKaigi、関数型まつり、SRE
+        医療SaaSの共通基盤を開発しています。認証認可基盤・組織管理・テナント分離などのプラットフォーム領域を担当。TSKaigi、関数型まつり、SRE
         Kaigiなどのカンファレンスで登壇。
       </p>
       <div class="shore-actions">
@@ -64,6 +64,7 @@ const { themes } = Astro.props;
           </svg>
         </button>
       </div>
+      <p class="shore-note" data-shore-note aria-live="polite"></p>
     </div>
   </div>
   <nav class="shore-themes" aria-label="テーマ別に読む">
@@ -266,6 +267,23 @@ const { themes } = Astro.props;
   height: 100%;
 }
 
+/* エビのそばに出す一言。エビのいない砂の上に置く */
+.shore-note {
+  position: absolute;
+  left: 0;
+  top: 30%;
+  width: 34%;
+  font-size: 0.75rem;
+  line-height: 1.8;
+  color: var(--shore-muted);
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.shore-note.is-shown {
+  opacity: 1;
+}
+
 /* 海を描けているときは、エビもシェーダーが描く */
 .shore.is-live .shore-shrimp svg {
   visibility: hidden;
@@ -361,6 +379,13 @@ const { themes } = Astro.props;
     top: -3.125%;
   }
 
+  .shore-note {
+    left: 37.5%;
+    top: 64%;
+    width: 62.5%;
+    font-size: 0.8125rem;
+  }
+
   .shore-themes ul {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -405,8 +430,9 @@ const mount = (): void => {
   const slot = hero?.querySelector<HTMLElement>('[data-shore-slot]');
   const button = hero?.querySelector<HTMLButtonElement>('[data-shore-shrimp]');
   const content = hero?.querySelector<HTMLElement>('[data-shore-content]');
-  if (!hero || !canvas || !slot || !button || !content) return;
-  dispose = mountShore({ hero, canvas, slot, button, content });
+  const note = hero?.querySelector<HTMLElement>('[data-shore-note]');
+  if (!hero || !canvas || !slot || !button || !content || !note) return;
+  dispose = mountShore({ hero, canvas, slot, button, content, note });
 };
 
 document.addEventListener('astro:page-load', mount);
