@@ -1732,7 +1732,7 @@ test.describe('導入 調査の画面', () => {
       const box = element.getBoundingClientRect();
       return { width: box.width, height: box.height };
     });
-    expect(size).toEqual({ width: 8, height: 8 });
+    expect(size).toEqual({ width: 6, height: 6 });
 
     await tab(page, /リポジトリ/).click();
     await expect(tab(page, /リポジトリ/)).toHaveAttribute('aria-selected', 'true');
