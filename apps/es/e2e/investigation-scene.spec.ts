@@ -1782,6 +1782,44 @@ test.describe('導入 調査の画面', () => {
     await expectPinned('scrolled');
   });
 
+  test('375px 幅では、始めると作業環境が画面の端から端まで、上部の帯から「前へ」「次へ」の上までを使う', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await begin(page);
+    const measure = (): Promise<Record<string, number>> =>
+      page.evaluate(() => {
+        const rect = (selector: string) => document.querySelector(selector)?.getBoundingClientRect();
+        const sceneBox = rect('[data-investigation]');
+        const bar = rect('[data-investigation] .status-bar');
+        const strip = rect('[data-investigation] .tab-strip');
+        const pages = rect('[data-investigation] .pages');
+        const chat = rect('[data-investigation] .win.chat');
+        const footer = rect('.lesson-footer');
+        return {
+          left: sceneBox?.left ?? -1,
+          width: sceneBox?.width ?? -1,
+          barTop: bar?.top ?? -1,
+          barHeight: bar?.height ?? -1,
+          stripToFooter: (footer?.top ?? 0) - (strip?.bottom ?? 0),
+          contentHeight: Math.max(pages?.height ?? 0, chat?.height ?? 0),
+          overflow: document.documentElement.scrollWidth - window.innerWidth,
+        };
+      });
+    const chatView = await measure();
+    expect(chatView.left).toBe(0);
+    expect(chatView.width).toBe(375);
+    expect(Math.abs(chatView.barTop)).toBeLessThanOrEqual(1);
+    expect(chatView.barHeight).toBeLessThanOrEqual(56);
+    expect(Math.abs(chatView.stripToFooter)).toBeLessThanOrEqual(2);
+    expect(chatView.contentHeight).toBeGreaterThan(560);
+    expect(chatView.overflow).toBeLessThanOrEqual(0);
+    await tab(page, /DB コンソール/).click();
+    const toolView = await measure();
+    expect(Math.abs(toolView.barTop)).toBeLessThanOrEqual(1);
+    expect(Math.abs(toolView.stripToFooter)).toBeLessThanOrEqual(2);
+    expect(toolView.contentHeight).toBeGreaterThan(560);
+    expect(toolView.overflow).toBeLessThanOrEqual(0);
+  });
+
   test('375px 幅で別のタブを見ている間に届いた投稿は、チャットのタブに未読の数で出る', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await timed(page);

@@ -287,6 +287,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
   const begin = (): void => {
     scheduler.start(timedItems(), waitingItems());
     if (timed) chat.focusFeed();
+    if (timed && compact.matches) root.scrollIntoView({ block: 'start' });
     emit('workspace:started');
   };
 
@@ -386,11 +387,16 @@ export const mountWorkspace = (root: HTMLElement): void => {
   resetButton?.addEventListener('click', reset);
   compact.addEventListener('change', render);
   const footer = document.querySelector<HTMLElement>('.lesson-footer');
-  if (footer !== null) {
-    const keepAboveFooter = (): void => root.style.setProperty('--ws-bottom', `${footer.offsetHeight}px`);
-    new ResizeObserver(keepAboveFooter).observe(footer);
-    keepAboveFooter();
+  const statusBar = root.querySelector<HTMLElement>('.status-bar');
+  const measureBars = (): void => {
+    root.style.setProperty('--ws-top', `${statusBar?.offsetHeight ?? 0}px`);
+    if (footer !== null) root.style.setProperty('--ws-bottom', `${footer.offsetHeight}px`);
+  };
+  const barObserver = new ResizeObserver(measureBars);
+  for (const bar of [footer, statusBar]) {
+    if (bar !== null) barObserver.observe(bar);
   }
+  measureBars();
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) scheduler.tick();
   });
