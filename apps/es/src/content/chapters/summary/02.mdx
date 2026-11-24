@@ -1,11 +1,25 @@
+---
+wide: true
+immersive: true
+---
+
 import OwnQuestion from '../../../components/OwnQuestion.astro';
 import OwnQuestionView from '../../../components/OwnQuestionView.astro';
 import Quote from '../../../components/Quote.astro';
+import { summaryDecide } from '../../../components/chapters/summary';
+import Workspace from '../../../components/workspace/Workspace.astro';
 
-<div class="grid gap-4 lg:grid-cols-2 lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
-<div class="intro-text">
+<div class="visually-hidden">
 
 ## 自分のシステムで記録を足す更新処理を1つ決める
+
+</div>
+
+<Workspace scenario={summaryDecide}>
+<Fragment slot="composer">
+<OwnQuestion id="summary-update" label="選んだ更新処理と、記録する内容（誰が、いつ、何を）と変更理由（なぜ）" showLabel rows={2} />
+</Fragment>
+<Fragment slot="memo">
 
 捨てたデータは復元できませんが、記録を足した日から先の出来事は残せます。
 
@@ -19,22 +33,17 @@ import Quote from '../../../components/Quote.astro';
 4. その更新処理がトランザクションの中にあるかを確かめます。
 5. 第4章の判断表で、近いパターンを1つ選び、業務イベントを何に使い、何を記録しないかを読みます。
 
-<OwnQuestion id="summary-update" label="選んだ更新処理と、記録する内容（誰が、いつ、何を）と変更理由（なぜ）" showLabel rows={2} />
-
 自分の問いが無ければ、足さなくて構いません。
 
 履歴テーブルや ORM の履歴機能がすでにあるなら、そこに理由の列を足すほうが手間が少ないかもしれません。
 
-</div>
-<div class="intro-text">
-
-## 持ち帰りの教材
+### 持ち帰りの教材
 
 - [第4章の持ち帰りの演習](/chapters/chapter-4/6/#持ち帰りの演習)は、3つのパターンを実装する手順を示します。
 - 事前準備で展開したディレクトリの `chapter-4-decision-table.md` は、第4章の判断表です。
 - 第2章で触れた[関連記事](https://kosui.me/posts/2025/05/06/142842)は、PostgreSQL 向けのテーブル設計を載せています。この記事は、業務イベントに当たるものをドメインイベントと呼び、`business_events` を `domain_events`、`target_id` を `aggregate_id`、`target_type` を `aggregate_name`、`target_state` を `aggregate_props` と呼びます。
 
-## 当日に手を動かせなかったとき
+### 当日に手を動かせなかったとき
 
 1. 事前準備のページの手順で、演習を展開します。
 2. 第1章から順に進めます。演習は `chapter-1-start` で始めます。ステップ1と2の解答は、それぞれ `chapter-2-step-1` と `chapter-2-step-2` にあります。
@@ -48,5 +57,5 @@ import Quote from '../../../components/Quote.astro';
 
 </Quote>
 
-</div>
-</div>
+</Fragment>
+</Workspace>

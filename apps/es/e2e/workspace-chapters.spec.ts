@@ -31,10 +31,36 @@ const answeredThanks = 'はやっ！ありがとうございます、病院さ�
 const tamaAsked = 'あと、タマちゃん（visit-tama）の方もキャンセルの理由わかりますか？';
 const tamaAnswer = 'タマの方は、記録を足す前のキャンセルなので、理由は残ってないです…';
 const tamaAcknowledged = 'そうなんですね…了解です';
+const otherTeams = '記録の話、ほかのチームからも相談が来てます';
+const threeConsultations =
+  '3つあるので順番に見ていきましょう。自分が挙げた質問に近いのはどれか、考えながら見てもらえると';
+const financeGreeting = 'お疲れ様です。昨日のキャンセル件数の件で質問です';
+const financeAsked = '集計だと3件なんですが、一覧で数えると2件しかなくて…どっちが正しいですか？';
+const financeAnswer = '記録から数え直すと2件でした。集計の3件のうち1件は、対応する記録が無いです';
+const financeThanks = 'なるほど、助かります！';
+const reminderGreeting = 'すみません、また1件お願いします🙏';
+const reminderAsked =
+  'キャンセルしたのにリマインドの通知が届いた、って飼い主さんから連絡があって…取り消しって送れてますか？';
+const reminderAnswer = '送信の記録を見ました。取り消しを送ったあと、結果が確認できてない送信が1件あります';
+const reminderThanks = 'ありがとうございます、飼い主さんに確認してみます！';
+const auditGreeting = 'お疲れ様です、監査対応で確認させてください';
+const auditAsked = '監査ログに reserved → cancelled の変更は残ってるんですが、理由が載ってなくて。分かりますか？';
+const auditAnswer = '監査ログと記録を突き合わせると、理由が分かる変更と、分からない変更があります。一覧を出しました';
+const auditThanks = 'ありがとうございます。理由が無い分は別途確認します';
+const comparisonMade = '3つを同じ軸で並べた表を作りました';
+const chooseOne = '自分のシステムに近いのを1つ選んでみてください';
+const takeHome = '時間の関係で、実装は持ち帰りにします';
+const startingCodes = '開始コードを3つ置いておくので、選んだパターンで試してみてください';
+const goodWork = 'おつかれさまでした！';
+const todayMemo = '今日やったことを設計メモにまとめました';
+const decideLast = '最後に、自分のシステムで記録を足す更新処理を1つ決めて、ここに書いてみてください';
+const skipIfNone = '答えたい質問が特に無ければ、足さなくて大丈夫です';
 
 const support = 'カスタマーサポート';
 const lead = 'テックリード';
 const you = 'あなた';
+const finance = '経理';
+const infoSys = '情シス';
 
 const introduction: readonly (readonly [string, string])[] = [
   [support, inquiry],
@@ -57,6 +83,42 @@ const answered: readonly (readonly [string, string])[] = [
   [you, staffReply],
   [support, answeredThanks],
 ];
+
+const tamaExchange: readonly (readonly [string, string])[] = [
+  [support, tamaAsked],
+  [you, tamaAnswer],
+  [support, tamaAcknowledged],
+];
+const consultationList: readonly (readonly [string, string])[] = [[lead, otherTeams], [lead, threeConsultations]];
+const financeExchange: readonly (readonly [string, string])[] = [
+  [finance, financeGreeting],
+  [finance, financeAsked],
+  [you, financeAnswer],
+  [finance, financeThanks],
+];
+const reminderExchange: readonly (readonly [string, string])[] = [
+  [support, reminderGreeting],
+  [support, reminderAsked],
+  [you, reminderAnswer],
+  [support, reminderThanks],
+];
+const auditExchange: readonly (readonly [string, string])[] = [
+  [infoSys, auditGreeting],
+  [infoSys, auditAsked],
+  [you, auditAnswer],
+  [infoSys, auditThanks],
+];
+const comparisonPosts: readonly (readonly [string, string])[] = [[lead, comparisonMade], [lead, chooseOne]];
+const takeawayPosts: readonly (readonly [string, string])[] = [[lead, takeHome], [lead, startingCodes]];
+const todayPosts: readonly (readonly [string, string])[] = [[lead, goodWork], [lead, todayMemo]];
+
+const codeTab = 'visits.ts — clinic-api';
+const sqlTab = 'DB Console';
+const startTabs = [
+  '集計テーブル（chapter-4-summary-table-start）',
+  '外部システム同期（chapter-4-external-sync-start）',
+  '既存の監査ログ（chapter-4-audit-log-start）',
+] as const;
 
 const pages: readonly Expected[] = [
   {
@@ -138,6 +200,62 @@ const pages: readonly Expected[] = [
     posts: [...answered, [support, tamaAsked]],
     hiddenHeading: '記録を足す前にキャンセルされた来院には答えられない',
   },
+  {
+    id: '4-1',
+    path: '/chapters/chapter-4/',
+    tabs: ['相談の一覧'],
+    posts: [...tamaExchange, ...consultationList],
+    hiddenHeading: 'この章の進め方',
+  },
+  {
+    id: '4-2',
+    path: '/chapters/chapter-4/2/',
+    tabs: ['相談1: 集計の件数が合わない', codeTab, sqlTab],
+    posts: [...consultationList, [finance, financeGreeting], [finance, financeAsked]],
+    hiddenHeading: '集計テーブル',
+  },
+  {
+    id: '4-3',
+    path: '/chapters/chapter-4/3/',
+    tabs: ['相談2: 外部への送信が届いたか分からない', codeTab, sqlTab],
+    posts: [...financeExchange, [support, reminderGreeting], [support, reminderAsked]],
+    hiddenHeading: '外部システム同期',
+  },
+  {
+    id: '4-4',
+    path: '/chapters/chapter-4/4/',
+    tabs: ['相談3: 監査ログに理由がない', codeTab, sqlTab],
+    posts: [...reminderExchange, [infoSys, auditGreeting], [infoSys, auditAsked]],
+    hiddenHeading: '既存の監査ログ',
+  },
+  {
+    id: '4-5',
+    path: '/chapters/chapter-4/5/',
+    tabs: ['3つのパターンの比較'],
+    posts: [...auditExchange, ...comparisonPosts],
+    hiddenHeading: '3つのパターンを表で比べて、自分のシステムに近いものを1つ選ぶ',
+  },
+  {
+    id: '4-6',
+    path: '/chapters/chapter-4/6/',
+    tabs: ['持ち帰りの演習', ...startTabs],
+    posts: [...comparisonPosts, ...takeawayPosts],
+    hiddenHeading: '持ち帰りの演習',
+  },
+  {
+    id: 'summary-1',
+    path: '/chapters/summary/',
+    tabs: ['今日やったこと'],
+    posts: [...takeawayPosts, ...todayPosts],
+    hiddenHeading: '今日やったこと',
+  },
+  {
+    id: 'summary-2',
+    path: '/chapters/summary/2/',
+    tabs: ['持ち帰る手順'],
+    posts: [...todayPosts, [lead, decideLast], [lead, skipIfNone]],
+    hiddenHeading: '自分のシステムで記録を足す更新処理を1つ決める',
+  },
 ];
 
 const scene = (page: Page): Locator => page.locator('[data-investigation]');
@@ -153,7 +271,7 @@ const reply = (page: Page, name: string): Locator => scene(page).getByRole('butt
 const resetChat = (page: Page): Locator => scene(page).getByRole('button', { name: '最初からやり直す' });
 
 const waitForPlaygrounds = async (page: Page): Promise<void> => {
-  for (const playground of await page.locator('[data-playground]:not([hidden]), [data-play]').all()) {
+  for (const playground of await page.locator('[data-playground]:visible, [data-play]').all()) {
     await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
   }
 };
@@ -474,6 +592,250 @@ test.describe('各ページの代表的な操作', () => {
 
 const typing = (page: Page): Locator => scene(page).locator('[data-typing]');
 
+const postsOfPage = (id: string): readonly (readonly [string, string])[] =>
+  pages.find((item) => item.id === id)?.posts ?? [];
+
+const consultations = [
+  {
+    id: '4-2',
+    path: '/chapters/chapter-4/2/',
+    doc: '相談1: 集計の件数が合わない',
+    script: 'why-this-count.ts',
+    answer: [you, financeAnswer],
+    thanks: [finance, financeThanks],
+    tables: ['visits', 'business_events', 'daily_cancellation_counts'],
+    sqlKey: 'es:sql:chapter-4-summary-table',
+    head: ['visit_date', 'recorded_count', 'recalculated_count'],
+  },
+  {
+    id: '4-3',
+    path: '/chapters/chapter-4/3/',
+    doc: '相談2: 外部への送信が届いたか分からない',
+    script: 'what-was-sent.ts',
+    answer: [you, reminderAnswer],
+    thanks: [support, reminderThanks],
+    tables: ['visits', 'business_events'],
+    sqlKey: 'es:sql:chapter-4-external-sync',
+    head: ['visit_id', 'event_at', 'message'],
+  },
+  {
+    id: '4-4',
+    path: '/chapters/chapter-4/4/',
+    doc: '相談3: 監査ログに理由がない',
+    script: 'why-changed.ts',
+    answer: [you, auditAnswer],
+    thanks: [infoSys, auditThanks],
+    tables: ['visits', 'business_events', 'audit_logs'],
+    sqlKey: 'es:sql:chapter-4-audit-log',
+    head: ['audit_log_id', 'row_id', 'old_value', 'new_value', 'operated_by', 'operated_at'],
+  },
+] as const;
+
+const fitsOnePage = (page: Page): Promise<boolean> =>
+  page.evaluate(() =>
+    document.documentElement.scrollHeight <= window.innerHeight
+    && document.documentElement.scrollWidth <= window.innerWidth
+  );
+
+test.describe('第4章とまとめの代表的な操作', () => {
+  test('4-1: 文書に本文、引用 2 件、題材の問い、判断表があり、実行欄は無い', async ({ page }) => {
+    await open(page, '/chapters/chapter-4/');
+    const panel = scene(page).getByRole('tabpanel', { name: /相談の一覧/ });
+    await expect(panel).toContainText('判断表は、パターンを同じ観点で並べた表です。');
+    await expect(panel.locator('figure.quote')).toHaveCount(2);
+    await expect(panel.locator('[data-own-question-view]')).toContainText('題材の問い');
+    await expect(panel.getByRole('heading', { name: '自分のシステムに近いパターンを選ぶ' })).toBeVisible();
+    await expect(page.locator('[data-playground]')).toHaveCount(0);
+    await expect(scene(page).getByRole('button', { name: '返信する' })).toHaveCount(0);
+  });
+
+  for (const item of consultations) {
+    test(`${item.id}: 文書が最初に開き、エディタで確認用スクリプトを実行すると返信でき、返信の後に相手が礼を言う`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 640 });
+      await open(page, item.path);
+      await recordSignals(page);
+      await expect(tab(page, item.doc)).toHaveAttribute('aria-selected', 'true');
+      await expect(page.locator('[data-playground][data-mounted]')).toHaveCount(0);
+      await expect(reply(page, '返信する')).toBeDisabled();
+      await expect(scene(page).locator('[data-reason]')).toHaveText(
+        'エディタで確認用スクリプトを実行すると返信できます。',
+      );
+
+      await tab(page, codeTab).click();
+      const playground = scene(page).locator('[data-playground="code"]');
+      await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+      await playground.getByRole('button', { name: 'テストを実行する' }).click();
+      await expect(playground.locator('[data-role="summary"]')).toHaveText('pass 15 / fail 0');
+      await expect(reply(page, '返信する')).toBeDisabled();
+      await playground.getByRole('button', { name: `${item.script} を実行する` }).click();
+      await expect(playground.locator('.playground-log')).toContainText('(index)');
+      expect((await signalsOf(page)).map((signal) => signal.name)).toContain('code:run');
+      await expect(reply(page, '返信する')).toBeEnabled();
+      expect(await fitsOnePage(page)).toBe(true);
+
+      await tab(page, item.doc).click();
+      await reply(page, '返信する').click();
+      expect((await postsOf(page)).at(-1)).toEqual(item.answer);
+      await expect(reply(page, '返信する')).toBeHidden();
+      await expect.poll(async () => (await postsOf(page)).at(-1)).toEqual(item.thanks);
+      await expect(typing(page)).toBeHidden();
+
+      await resetChat(page).click();
+      await expect.poll(() => postsOf(page)).toEqual(postsOfPage(item.id));
+      await expect(reply(page, '返信する')).toBeDisabled();
+      await expect(tab(page, item.doc)).toHaveAttribute('aria-selected', 'true');
+      await tab(page, codeTab).click();
+      await expect(playground.locator('.playground-log')).toContainText('(index)');
+    });
+
+    test(`${item.id}: DB Console は、開くまで起動せず、開くとテーブルの一覧と初期の SQL の結果が出る`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 640 });
+      await open(page, item.path);
+      await expect(scene(page).locator('[data-playground="sql"][data-mounted]')).toHaveCount(0);
+      await tab(page, sqlTab).click();
+      const playground = scene(page).locator('[data-playground="sql"]');
+      await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+      await expect(scene(page).getByRole('group', { name: 'テーブルの一覧' }).locator('.table-item')).toHaveText([
+        ...item.tables,
+      ]);
+      await playground.getByRole('button', { name: '実行する' }).click();
+      const results = playground.locator('[data-role="results"]');
+      await expect(results.locator('thead th')).toHaveText([...item.head]);
+      await expect(results.locator('tbody tr')).toHaveCount(1);
+      await replaceEditorText(playground, 'SELECT 1');
+      expect(await page.evaluate((key) => window.localStorage.getItem(key), item.sqlKey)).toBe('SELECT 1');
+      await expect(playground.getByRole('button', { name: 'データベースを最初の状態に戻す' })).toBeVisible();
+      await expect(playground.getByRole('button', { name: '最初の SQL に戻す' })).toBeVisible();
+      expect(await fitsOnePage(page)).toBe(true);
+    });
+  }
+
+  test('4-3 と 4-5: 経理と情シスのアバターは、頭文字が出て、ほかの発言者と色が区別できる', async ({ page }) => {
+    const colorsOf = (): Promise<Record<string, string>> =>
+      feed(page).locator('.post').evaluateAll((items) =>
+        Object.fromEntries(
+          items.map((item) => [
+            item.querySelector('[data-name]')?.textContent ?? '',
+            `${item.querySelector('.avatar')?.textContent ?? ''}:${
+              getComputedStyle(item.querySelector('.avatar') as Element).backgroundColor
+            }`,
+          ]),
+        )
+      );
+    await open(page, '/chapters/chapter-4/3/');
+    await expect.poll(() => posts(page).count()).toBe(postsOfPage('4-3').length);
+    const first = await colorsOf();
+    expect(first[finance]?.startsWith('経:')).toBe(true);
+    expect(new Set(Object.values(first).map((value) => value.split(':')[1])).size).toBe(Object.keys(first).length);
+    await open(page, '/chapters/chapter-4/5/');
+    await expect.poll(() => posts(page).count()).toBe(postsOfPage('4-5').length);
+    const second = await colorsOf();
+    expect(second[infoSys]?.startsWith('情:')).toBe(true);
+    expect(new Set(Object.values(second).map((value) => value.split(':')[1])).size).toBe(Object.keys(second).length);
+    expect(first[finance]?.split(':')[1]).not.toBe(second[infoSys]?.split(':')[1]);
+  });
+
+  test('4-5: 軸のボタンで比較表の行が切り替わり、題材の問いが文書の中に出る', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 640 });
+    await open(page, '/chapters/chapter-4/5/');
+    const panel = scene(page).getByRole('tabpanel', { name: /3つのパターンの比較/ });
+    await expect(panel.locator('[data-own-question-view]')).toContainText('題材の問い');
+    const buttons = panel.locator('[data-axis]');
+    await expect(buttons).toHaveCount(5);
+    await expect(buttons.nth(0)).toHaveAttribute('aria-pressed', 'true');
+    await buttons.nth(3).click();
+    await expect(buttons.nth(3)).toHaveAttribute('aria-pressed', 'true');
+    await expect(panel.locator('tbody tr:visible')).toHaveCount(1);
+    await expect(panel.locator('tbody tr:visible td').first()).toHaveText('導入した後に担当者とシステムが続ける作業');
+    const code = buttons.nth(0).locator('code');
+    await expect(code).toHaveCount(1);
+    expect(await code.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+  });
+
+  test('4-6: 開始のコードは、そのタブを開くまで起動せず、開くと完成コードの読み込みが使える', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 640 });
+    await open(page, '/chapters/chapter-4/6/');
+    const panel = scene(page).getByRole('tabpanel', { name: /持ち帰りの演習/ });
+    await expect(panel).toContainText('選んだパターンのタブを押して、開始のコードを開きます。');
+    await expect(page.locator('[data-playground]')).toHaveCount(3);
+    await expect(page.locator('[data-playground][data-mounted]')).toHaveCount(0);
+    for (const [index, name] of startTabs.entries()) {
+      await tab(page, name).click();
+      const playground = scene(page).locator('[data-playground]:visible');
+      await expect(playground).toHaveCount(1);
+      await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+      await expect(page.locator('[data-playground][data-mounted]')).toHaveCount(index + 1);
+      await expect(playground.getByRole('button', { name: '完成コードを読み込む' })).toBeVisible();
+      await expect(scene(page).locator('.address-text')).toContainText(
+        `clinic-api/${name.split('（')[1]?.slice(0, -1)}/`,
+      );
+    }
+    const audit = scene(page).locator('[data-playground]:visible');
+    await audit.getByRole('button', { name: 'テストを実行する' }).click();
+    await expect(audit.locator('[data-role="summary"]')).toHaveText('pass 11 / fail 4');
+    expect(await fitsOnePage(page)).toBe(true);
+    await tab(page, '持ち帰りの演習').click();
+    await expect(panel).toBeVisible();
+  });
+
+  test('まとめの 1 ページ目: 文書に今日やったこと、引用 1 件があり、実行欄は無い', async ({ page }) => {
+    await open(page, '/chapters/summary/');
+    const panel = scene(page).getByRole('tabpanel', { name: /今日やったこと/ });
+    await expect(panel).toContainText('現在の状態だけでは答えられない問いを、実行して確かめました。');
+    await expect(panel.getByRole('heading', { name: 'イベントソーシングのうち今日使った考え方と使わなかったこと' }))
+      .toBeVisible();
+    await expect(panel.locator('figure.quote')).toHaveCount(1);
+    await expect(page.locator('[data-playground]')).toHaveCount(0);
+  });
+
+  test('まとめの 2 ページ目: 入力欄に書いた更新処理が保存され、文書に題材の問い、引用 1 件、持ち帰りの教材がある', async ({ page }) => {
+    await open(page, '/chapters/summary/2/');
+    await recordSignals(page);
+    const label = '選んだ更新処理と、記録する内容（誰が、いつ、何を）と変更理由（なぜ）';
+    const written = '注文のキャンセル処理に、誰がいつなぜ行ったかの記録を足す';
+    const input = scene(page).getByRole('textbox', { name: label });
+    await expect(scene(page).locator('.compose-box').getByRole('textbox')).toBeVisible();
+    await expect(input).toHaveAttribute('placeholder', '# 問い合わせ対応 へのメッセージ');
+    await input.fill(written);
+    await expect(scene(page).getByRole('status').filter({ hasText: 'このブラウザに保存しました。' })).toBeVisible();
+    expect(await page.evaluate(() => window.localStorage.getItem('es:question:summary-update'))).toBe(written);
+    expect((await signalsOf(page)).map((signal) => signal.name)).toContain('question:written');
+    const panel = scene(page).getByRole('tabpanel', { name: /持ち帰る手順/ });
+    await expect(panel.locator('[data-own-question-view]')).toContainText('題材の問い');
+    await expect(panel.locator('figure.quote')).toHaveCount(1);
+    await expect(panel.getByRole('heading', { name: '持ち帰りの教材' })).toBeVisible();
+    await expect(panel.getByRole('link', { name: '第4章の持ち帰りの演習' })).toHaveAttribute(
+      'href',
+      `/chapters/chapter-4/6/#${encodeURIComponent('持ち帰りの演習')}`,
+    );
+    await resetChat(page).click();
+    await expect(input).toHaveValue(written);
+    await expect.poll(() => postsOf(page)).toEqual(postsOfPage('summary-2'));
+  });
+
+  for (const path of ['/chapters/summary/', '/chapters/summary/2/']) {
+    test(`${path}: 実行基盤の JS を読み込まず、実行欄も実行用のワーカーも無い`, async ({ page }) => {
+      const scripts: string[] = [];
+      const workers: string[] = [];
+      page.on('response', (response) => {
+        if (response.request().resourceType() === 'script') scripts.push(response.url());
+      });
+      page.on('worker', (worker) => workers.push(worker.url()));
+      await open(page, path);
+      await page.waitForLoadState('networkidle');
+      expect(scripts.length).toBeGreaterThan(0);
+      for (const url of scripts) {
+        const body = await (await page.request.get(url)).text();
+        for (const marker of ['cm-editor', 'sql-wasm', 'sucrase']) {
+          expect(body, `${url} ${marker}`).not.toContain(marker);
+        }
+      }
+      expect(workers).toEqual([]);
+      await expect(page.locator('[data-playground], [data-play]')).toHaveCount(0);
+    });
+  }
+});
+
 test.describe('連続投稿と入力中の表示', () => {
   test('同じ発言者の投稿が続くと、2 件目以降はアバターと名前を出さず、読み上げには発言者名が残る', async ({ page }) => {
     await open(page, '/chapters/chapter-1/2/');
@@ -713,12 +1075,24 @@ test.describe('画面に出さない語', () => {
     }
   });
 
-  test('ドメインイベントと DDD は、どのページにも出ない', async ({ page }) => {
-    for (const expected of pages) {
+  test('ドメインイベントと DDD は、まとめの2ページ目の本文以外のどこにも出ない', async ({ page }) => {
+    for (const expected of pages.filter((item) => item.id !== 'summary-2')) {
       await open(page, expected.path);
       const text = await visibleText(page);
       expect(text, expected.id).not.toContain('ドメインイベント');
       expect(text, expected.id).not.toContain('DDD');
+    }
+  });
+
+  test('チャットの投稿と筋書きのデータに、イベントソーシング、ドメインイベント、DDD が出ない', async ({ page }) => {
+    for (const expected of pages) {
+      await open(page, expected.path);
+      const chat = (await feed(page).textContent()) ?? '';
+      const data = (await scene(page).getAttribute('data-scenario')) ?? '';
+      for (const word of ['イベントソーシング', 'ドメインイベント', 'DDD']) {
+        expect(chat, `${expected.id} ${word} のチャット`).not.toContain(word);
+        expect(data, `${expected.id} ${word} の筋書き`).not.toContain(word);
+      }
     }
   });
 });
@@ -734,6 +1108,7 @@ test.describe('画面に収まる', () => {
         await open(page, expected.path);
         for (const tabName of expected.tabs) {
           await tab(page, tabName).click();
+          await waitForPlaygrounds(page);
           const metrics = await page.evaluate(() => ({
             scrollHeight: document.documentElement.scrollHeight,
             innerHeight: window.innerHeight,
@@ -756,6 +1131,7 @@ test.describe('画面に収まる', () => {
       await open(page, expected.path);
       for (const tabName of expected.tabs) {
         await tab(page, tabName).click();
+        await waitForPlaygrounds(page);
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         if (overflow > 0) failures.push(`${expected.id} ${tabName} ${overflow}px`);
       }

@@ -1,12 +1,23 @@
 ---
 goal: 判断表で3つのパターンを比べて、第1章で挙げた問いに近いパターンを1つ選べます。
+wide: true
+immersive: true
 ---
 
 import DecisionTable from '../../../components/DecisionTable.astro';
 import OwnQuestionView from '../../../components/OwnQuestionView.astro';
 import Quote from '../../../components/Quote.astro';
+import { chapter4Overview } from '../../../components/chapters/chapter-4';
+import Workspace from '../../../components/workspace/Workspace.astro';
+
+<div class="visually-hidden">
 
 ## この章の進め方
+
+</div>
+
+<Workspace scenario={chapter4Overview}>
+<Fragment slot="memo">
 
 パターンは、第2章の記録を既存のシステムに足す場面の例です。どのパターンも `business_events` に記録します。講師は3つのパターンの完成コードと実行結果を順に見せます。参加者はこの章でコードを書きません。最後に、参加者は判断表で3つのパターンを比べ、第1章で挙げた問いに近いパターンを1つ選びます。判断表は、パターンを同じ観点で並べた表です。各パターンの実装は持ち帰りの演習です。
 
@@ -25,3 +36,6 @@ import Quote from '../../../components/Quote.astro';
 <OwnQuestionView />
 
 <DecisionTable heading="自分のシステムに近いパターンを選ぶ" />
+
+</Fragment>
+</Workspace>

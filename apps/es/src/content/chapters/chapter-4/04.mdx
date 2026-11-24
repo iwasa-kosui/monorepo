@@ -1,17 +1,22 @@
+---
+wide: true
+immersive: true
+---
+
 import CodeBlock from '../../../components/CodeBlock.astro';
 import CodePlayground from '../../../components/CodePlayground.astro';
-import PlaygroundTabs from '../../../components/PlaygroundTabs.astro';
-import SqlPlayground from '../../../components/SqlPlayground.astro';
+import { chapter4AuditLog } from '../../../components/chapters/chapter-4';
+import Workspace from '../../../components/workspace/Workspace.astro';
 import { readFunctionsOf } from '../../../lib/snapshots';
+
+<div class="visually-hidden">
 
 ## 既存の監査ログ
 
-> この変更の業務上の理由は何か。
+</div>
 
-`audit_logs` テーブルは、変更前後の値と操作者を持ちます。業務上の理由は持ちません。このパターンでは、監査ログと業務イベントの役割を分けます。`cancelVisit` は監査ログの ID を業務イベントの `payload` に入れます。`payload` は変更前後の値を持ちません。
-
-<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} label="実行欄" />
-
+<Workspace scenario={chapter4AuditLog}>
+<Fragment slot="editor">
 <CodePlayground
   exercise="chapter-4-audit-log-done"
   editable={['visits.ts']}
@@ -20,25 +25,14 @@ import { readFunctionsOf } from '../../../lib/snapshots';
   reveal="export const cancelVisit"
   scripts={[{ file: 'why-changed.ts', label: 'why-changed.ts を実行する' }]}
 />
+</Fragment>
+<Fragment slot="memo">
 
-<SqlPlayground
-  hidden
-  id="chapter-4-audit-log"
-  script={{ exercise: 'chapter-4-audit-log-done', entry: 'why-changed.ts' }}
-  initial={`SELECT
-  a.id AS audit_log_id,
-  a.row_id,
-  a.old_value,
-  a.new_value,
-  a.operated_by,
-  a.operated_at
-FROM audit_logs AS a
-LEFT JOIN business_events AS e ON e.payload ->> '$.auditLogId' = a.id
-WHERE e.event_id IS NULL
-ORDER BY a.id;`}
-/>
+> この変更の業務上の理由は何か。
 
-上の表の1行目と2行目は、変更前後の値が同じです。担当者は `reason` で2つを見分けられます。3行目の診察の完了は業務イベントを記録しないので、`reason` が `null` です。
+`audit_logs` テーブルは、変更前後の値と操作者を持ちます。業務上の理由は持ちません。このパターンでは、監査ログと業務イベントの役割を分けます。`cancelVisit` は監査ログの ID を業務イベントの `payload` に入れます。`payload` は変更前後の値を持ちません。
+
+実行結果の表の1行目と2行目は、変更前後の値が同じです。担当者は `reason` で2つを見分けられます。3行目の診察の完了は業務イベントを記録しないので、`reason` が `null` です。
 
 <div class="detail-row">
 
@@ -77,3 +71,6 @@ ORDER BY a.id;`}
 </details>
 
 </div>
+
+</Fragment>
+</Workspace>

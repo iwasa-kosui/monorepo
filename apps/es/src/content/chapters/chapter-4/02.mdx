@@ -1,17 +1,22 @@
+---
+wide: true
+immersive: true
+---
+
 import CodeBlock from '../../../components/CodeBlock.astro';
 import CodePlayground from '../../../components/CodePlayground.astro';
-import PlaygroundTabs from '../../../components/PlaygroundTabs.astro';
-import SqlPlayground from '../../../components/SqlPlayground.astro';
+import { chapter4SummaryTable } from '../../../components/chapters/chapter-4';
+import Workspace from '../../../components/workspace/Workspace.astro';
 import { readFunctionsOf } from '../../../lib/snapshots';
+
+<div class="visually-hidden">
 
 ## 集計テーブル
 
-> この集計値はなぜこの値なのか。
+</div>
 
-`daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。テーブルの行には数しかありません。`cancelVisit` は業務イベントとキャンセル数を同じトランザクションで書きます。このパターンの開始と完成で `cancelVisit` は同じで、開発者は読み取り関数だけを足します。読み取り関数は、業務イベントを読んで問いに答える関数です。キャンセル数の3に対して、業務イベントから再計算した値は2です。差の1は、業務イベントを導入する前から残っているキャンセルです。この比較は差があることを示しますが、差の理由は示しません。
-
-<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} label="実行欄" />
-
+<Workspace scenario={chapter4SummaryTable}>
+<Fragment slot="editor">
 <CodePlayground
   exercise="chapter-4-summary-table-done"
   editable={['visits.ts']}
@@ -20,22 +25,14 @@ import { readFunctionsOf } from '../../../lib/snapshots';
   reveal="export const cancelVisit"
   scripts={[{ file: 'why-this-count.ts', label: 'why-this-count.ts を実行する' }]}
 />
+</Fragment>
+<Fragment slot="memo">
 
-<SqlPlayground
-  hidden
-  id="chapter-4-summary-table"
-  script={{ exercise: 'chapter-4-summary-table-done', entry: 'why-this-count.ts' }}
-  initial={`SELECT
-  c.visit_date,
-  c.cancelled_count AS recorded_count,
-  (
-    SELECT count(*) FROM business_events AS e
-    WHERE e.event_name = 'VisitCancelled' AND e.target_state ->> '$.visit_date' = c.visit_date
-  ) AS recalculated_count
-FROM daily_cancellation_counts AS c;`}
-/>
+> この集計値はなぜこの値なのか。
 
-上の表は、キャンセル数の内訳を理由と操作者つきで示します。
+`daily_cancellation_counts` テーブルは、診察日ごとのキャンセル数を持ちます。テーブルの行には数しかありません。`cancelVisit` は業務イベントとキャンセル数を同じトランザクションで書きます。このパターンの開始と完成で `cancelVisit` は同じで、開発者は読み取り関数だけを足します。読み取り関数は、業務イベントを読んで問いに答える関数です。キャンセル数の3に対して、業務イベントから再計算した値は2です。差の1は、業務イベントを導入する前から残っているキャンセルです。この比較は差があることを示しますが、差の理由は示しません。
+
+実行結果の表は、キャンセル数の内訳を理由と操作者つきで示します。
 
 <div class="detail-row">
 
@@ -73,3 +70,6 @@ FROM daily_cancellation_counts AS c;`}
 </details>
 
 </div>
+
+</Fragment>
+</Workspace>

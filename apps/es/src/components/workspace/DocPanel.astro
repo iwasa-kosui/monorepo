@@ -184,6 +184,12 @@ const config = tab.config;
   :global(:not(pre) > code) {
   background: var(--dc-code);
 }
+:global(.content)
+  :global(.scene[data-scenario])
+  .doc-paper
+  :global(.axis-buttons button code) {
+  background: transparent;
+}
 :global(.content) :global(.scene[data-scenario]) .doc-paper :global(pre) {
   margin-block: 0.5rem;
   font-size: 0.75rem;
