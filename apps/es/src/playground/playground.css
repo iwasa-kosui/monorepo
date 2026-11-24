@@ -16,9 +16,9 @@
   gap: 0.5rem;
 }
 .content .playground-switch button {
-  border: 1px solid var(--role-accent);
-  border-radius: var(--radius-md);
-  background: var(--role-surface);
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--role-fg) 9%, transparent);
   padding: 0.3rem 0.8rem;
   font-size: 0.9rem;
   cursor: pointer;
@@ -42,27 +42,32 @@
   margin-bottom: 0.5rem;
 }
 .playground button {
-  border: 1px solid var(--role-border);
-  border-radius: var(--radius-md);
-  background: var(--role-surface);
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--role-fg) 9%, transparent);
   padding: 0.3rem 0.8rem;
+  color: var(--role-fg);
   font-size: 0.9rem;
   cursor: pointer;
 }
+.playground button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--role-fg) 15%, transparent);
+}
 .playground button:disabled {
+  background: color-mix(in srgb, var(--role-fg) 5%, transparent);
   color: var(--role-muted);
   cursor: not-allowed;
 }
 .playground button[data-role="run"],
-.playground button[data-run-file] {
-  border-color: var(--role-accent);
+.playground button[data-run-file],
+.playground button[data-role="run"]:hover:not(:disabled),
+.playground button[data-run-file]:hover:not(:disabled) {
   background: var(--role-accent);
   color: var(--role-on-accent);
 }
 .playground button[data-role="run"]:disabled,
 .playground button[data-run-file]:disabled {
-  border-color: var(--role-border);
-  background: var(--role-sunken);
+  background: color-mix(in srgb, var(--role-fg) 5%, transparent);
   color: var(--role-muted);
 }
 .playground-hint {

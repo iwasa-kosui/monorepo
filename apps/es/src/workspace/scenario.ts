@@ -205,7 +205,12 @@ export type StatusConfig = {
   readonly label: string;
   readonly elapsed: string;
   readonly start: string;
-  readonly counter?: { readonly label: string; readonly unit: string; readonly initial: number };
+  readonly counter?: {
+    readonly label: string;
+    readonly short?: string;
+    readonly unit: string;
+    readonly initial: number;
+  };
 };
 
 export type ChatButton = {

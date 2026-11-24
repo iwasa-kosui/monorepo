@@ -1,4 +1,5 @@
 ---
+import { chatPanelIdOf } from '../../workspace/panel-props';
 import type { WorkspaceScenario } from '../../workspace/scenario';
 
 interface Props {
@@ -31,6 +32,7 @@ const railActors = railActorIds.flatMap((id) => {
 
 <div
   class="win chat"
+  id={chatPanelIdOf(scenario)}
   role="group"
   aria-label="チャット"
   data-window
@@ -265,6 +267,27 @@ const railActors = railActorIds.flatMap((id) => {
   font-weight: 700;
   line-height: 1.4;
 }
+:global(.scene[data-scenario]) .ws::after {
+  content: "";
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-left: 0.25rem;
+  background: currentColor;
+  opacity: 0.7;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+:global(.scene[data-scenario]) .chs::before {
+  content: "チャンネル";
+  display: block;
+  padding: 0 1rem 0.1875rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  opacity: 0.7;
+}
 :global(.scene[data-scenario]) .chs {
   margin: 0.5rem 0 0;
   padding: 0;
@@ -396,7 +419,7 @@ const railActors = railActorIds.flatMap((id) => {
   justify-content: center;
   width: 2.25rem;
   height: 2.25rem;
-  border-radius: var(--radius-md);
+  border-radius: 0.5rem;
   background: var(--c-av-slate);
   color: #ffffff;
   font-size: 0.9375rem;
@@ -614,9 +637,9 @@ const railActors = railActorIds.flatMap((id) => {
 }
 :global(.scene[data-scenario]) .chat-reset {
   flex: none;
-  border: 1px solid var(--c-edge);
-  border-radius: var(--radius-md);
-  background: var(--c-btn);
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--c-fg) 9%, transparent);
   padding: 0 0.625rem;
   color: var(--c-fg);
   font-size: 0.75rem;
@@ -624,7 +647,7 @@ const railActors = railActorIds.flatMap((id) => {
   cursor: pointer;
 }
 :global(.scene[data-scenario]) .chat-reset:hover:not(:disabled) {
-  background: var(--c-btn-hover);
+  background: color-mix(in srgb, var(--c-fg) 15%, transparent);
 }
 :global(.scene[data-scenario]) .chat-reset:disabled {
   color: var(--c-muted);
@@ -654,31 +677,35 @@ const railActors = railActorIds.flatMap((id) => {
   font-size: 0.75rem;
 }
 
-:global(.scene[data-scenario]) .win.chat[data-collapsed] {
-  position: relative;
-  z-index: 15;
-  overflow: visible;
-  background: var(--c-side);
-}
-:global(.scene[data-scenario]) .win.chat[data-collapsed] .chat-side {
-  display: none;
-}
-:global(.scene[data-scenario]) .win.chat[data-collapsed] .chat-main {
-  display: none;
-}
-:global(.scene[data-scenario]) .win.chat[data-collapsed][data-open] .chat-main {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  left: 0;
-  display: flex;
-  height: 20rem;
-  margin-top: 0.25rem;
-  border: 1px solid var(--c-edge);
-  border-radius: var(--radius-lg);
-  background: var(--c-bg);
-  box-shadow: var(--shadow-raised);
-  overflow: hidden;
+@media (min-width: 640px) {
+  :global(.scene[data-scenario]) .win.chat[data-collapsed] {
+    position: relative;
+    z-index: 15;
+    overflow: visible;
+    background: var(--c-side);
+  }
+  :global(.scene[data-scenario]) .win.chat[data-collapsed] .chat-side {
+    display: none;
+  }
+  :global(.scene[data-scenario]) .win.chat[data-collapsed] .chat-main {
+    display: none;
+  }
+  :global(.scene[data-scenario])
+    .win.chat[data-collapsed][data-open]
+    .chat-main {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    display: flex;
+    height: 20rem;
+    margin-top: 0.25rem;
+    border: 1px solid var(--c-edge);
+    border-radius: var(--radius-lg);
+    background: var(--c-bg);
+    box-shadow: var(--shadow-raised);
+    overflow: hidden;
+  }
 }
 :global(.scene[data-scenario]) .chat-rail {
   position: relative;
@@ -756,6 +783,74 @@ const railActors = railActorIds.flatMap((id) => {
 }
 :global(.scene[data-scenario]) .rail-unread[hidden] {
   display: none;
+}
+@media (max-width: 639px) {
+  :global(.scene[data-scenario]) .chat-rail {
+    display: none;
+  }
+  :global(.scene[data-scenario]) .feed {
+    flex: 1 1 0;
+    min-height: 14rem;
+    max-height: none;
+  }
+  :global(.scene[data-scenario]) .fmt,
+  :global(.scene[data-scenario]) .ph,
+  :global(.scene[data-scenario]) .send-shape {
+    display: none;
+  }
+  :global(.scene[data-scenario]) .chat-head {
+    border-bottom: 0;
+    padding: 0.5rem 0.875rem 0.25rem;
+  }
+  :global(.scene[data-scenario]) .feed {
+    padding-inline: 0.875rem;
+  }
+  :global(.scene[data-scenario]) .typing {
+    padding-inline: 0.875rem;
+  }
+  :global(.scene[data-scenario]) .composer {
+    padding: 0.25rem 0.625rem 0.625rem;
+  }
+  :global(.scene[data-scenario]) .compose-box {
+    border: 0;
+    border-radius: 1rem;
+    background: var(--c-toolbar);
+    padding-top: 0.375rem;
+  }
+  :global(.scene[data-scenario]) .compose-foot {
+    padding: 0.625rem;
+  }
+  :global(.scene[data-scenario]) .actions {
+    gap: 0.5rem;
+  }
+  :global(.scene[data-scenario]) .actions button,
+  :global(.scene[data-scenario]) .chat-reset {
+    min-height: 2.25rem;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--c-fg) 10%, transparent);
+    padding: 0 0.875rem;
+    color: var(--c-fg);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  :global(.scene[data-scenario]) .chat-reset {
+    min-height: 1.75rem;
+    padding: 0 0.75rem;
+    font-size: 0.75rem;
+  }
+  :global(.scene[data-scenario]) .actions button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--c-fg) 16%, transparent);
+  }
+  :global(.scene[data-scenario]) .actions button.primary,
+  :global(.scene[data-scenario]) .actions button.primary:hover:not(:disabled) {
+    background: var(--role-accent);
+    color: var(--role-on-accent);
+  }
+  :global(.scene[data-scenario]) .actions button:disabled {
+    background: color-mix(in srgb, var(--c-fg) 6%, transparent);
+    color: var(--c-muted);
+  }
 }
 @media (min-width: 1024px) {
   :global(.scene[data-scenario])

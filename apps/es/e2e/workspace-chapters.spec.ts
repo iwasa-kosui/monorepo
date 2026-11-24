@@ -673,19 +673,36 @@ test.describe('演習のページでは、チャットを細い帯に折りた�
     expect((await signalsOf(page)).map((signal) => signal.name)).not.toContain('tests:passed');
   });
 
-  test('スマートフォンの幅では帯が横長になり、開くと帯の下に重なる', async ({ page }) => {
+  test('スマートフォンの幅では帯を出さず、チャットはタブの一つになる。最初は本文のタブが前に出る', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await open(page, '/chapters/chapter-2/4/');
-    const bar = await rail(page).boundingBox();
-    expect(bar?.width).toBeGreaterThan(300);
-    expect(bar?.height).toBeLessThan(70);
-    await rail(page).click();
-    await expect(chatMain(page)).toBeVisible();
-    const chat = await chatMain(page).boundingBox();
-    expect(chat !== null && bar !== null && chat.y >= bar.y + bar.height - 1).toBe(true);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.keyboard.press('Escape');
+    const chatTab = tab(page, /チャット/);
+    await expect(rail(page)).toBeHidden();
+    await expect(chatTab).toBeVisible();
+    await expect(chatTab).toHaveAttribute('aria-selected', 'false');
     await expect(chatMain(page)).toBeHidden();
+    await expect(scene(page).locator('.pages')).toBeVisible();
+    await chatTab.click();
+    await expect(chatTab).toHaveAttribute('aria-selected', 'true');
+    await expect(chatMain(page)).toBeVisible();
+    await expect(posts(page)).toHaveCount(1);
+    await expect(scene(page).locator('.pages')).toBeHidden();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await tab(page, /エディタ/).click();
+    await expect(chatMain(page)).toBeHidden();
+    await expect(scene(page).locator('.pages')).toBeVisible();
+  });
+
+  test('スマートフォンの幅では、開いた時点で届く投稿がチャットのタブに未読の数で出る', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await open(page, '/chapters/chapter-3/');
+    const chatTab = tab(page, /チャット/);
+    const badge = scene(page).locator('[data-chat-unread]');
+    await expect(badge).toBeVisible();
+    await expect(chatTab).toHaveAccessibleName(/^チャット\s*（未読 \d+ 件）$/);
+    await chatTab.click();
+    await expect(badge).toBeHidden();
+    await expect(chatMain(page)).toBeVisible();
   });
 });
 
