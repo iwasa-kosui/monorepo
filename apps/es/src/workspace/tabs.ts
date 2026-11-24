@@ -4,6 +4,7 @@ export type TabsView = {
   readonly selected: string;
   readonly unseen: ReadonlySet<string>;
   readonly chatFront: boolean;
+  readonly compact: boolean;
 };
 
 export type Tabs = {
@@ -25,7 +26,34 @@ export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
   const address = must<HTMLElement>(root, '[data-address]');
   const added = new Set<string>();
   const stripEdge = 8;
+  const chatWindow = root.querySelector<HTMLElement>('.win.chat');
   let shown = '';
+  let shownTab: HTMLButtonElement | null = null;
+
+  const placeGlider = (): void => {
+    if (shownTab === null || shownTab.getClientRects().length === 0) return;
+    tabList.style.setProperty('--glide-x', `${shownTab.offsetLeft}px`);
+    tabList.style.setProperty('--glide-w', `${shownTab.offsetWidth}px`);
+    if (tabList.dataset.glide === undefined) {
+      tabList.dataset.glide = 'set';
+      requestAnimationFrame(() => {
+        tabList.dataset.glide = 'live';
+      });
+    }
+  };
+  new ResizeObserver(placeGlider).observe(tabList);
+
+  const slideIn = (target: HTMLElement | null | undefined, direction: 1 | -1): void => {
+    if (target === null || target === undefined) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    target.animate(
+      [
+        { opacity: 0, transform: `translateX(${direction * 28}px)` },
+        { opacity: 1, transform: 'translateX(0)' },
+      ],
+      { duration: 300, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+    );
+  };
 
   const tabsOf = (): HTMLButtonElement[] => [...tabList.querySelectorAll<HTMLButtonElement>('[role="tab"][data-tool]')];
   const chatTab = tabList.querySelector<HTMLButtonElement>('[data-chat-tab]');
@@ -114,12 +142,21 @@ export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
       const front = view.chatFront ? chatTab : tabs.find((tab) => tab.dataset.tool === selected);
       const frontKey = view.chatFront ? 'chat' : `tool:${selected}`;
       if (front !== null && front !== undefined && frontKey !== shown) {
+        const order = shownTabsOf();
+        const previous = shownTab;
+        const first = shown === '';
         shown = frontKey;
+        shownTab = front;
+        if (view.compact && !first && previous !== null) {
+          const panel = view.chatFront ? chatWindow : panelsOf().find((item) => item.dataset.tool === selected);
+          slideIn(panel, order.indexOf(front) >= order.indexOf(previous) ? 1 : -1);
+        }
         const strip = tabList.getBoundingClientRect();
         const box = front.getBoundingClientRect();
         if (box.width > 0 && box.left < strip.left) tabList.scrollLeft -= strip.left - box.left + stripEdge;
         else if (box.width > 0 && box.right > strip.right) tabList.scrollLeft += box.right - strip.right + stripEdge;
       }
+      placeGlider();
       address.textContent = tabs.find((tab) => tab.dataset.tool === selected)?.dataset.url ?? '';
     },
   };

@@ -121,7 +121,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
       ...scenario.tabs.flatMap((tab) => tab.seen !== undefined && !state.opened.includes(tab.key) ? [tab.key] : []),
       ...state.forcedUnseen,
     ]);
-    tabs.sync({ selected: state.selected, unseen, chatFront });
+    tabs.sync({ selected: state.selected, unseen, chatFront, compact: compact.matches });
     chat.render({
       started,
       replied: state.replied,
@@ -388,12 +388,14 @@ export const mountWorkspace = (root: HTMLElement): void => {
   compact.addEventListener('change', render);
   const footer = document.querySelector<HTMLElement>('.lesson-footer');
   const statusBar = root.querySelector<HTMLElement>('.status-bar');
+  const tabStrip = root.querySelector<HTMLElement>('.tab-strip');
   const measureBars = (): void => {
     root.style.setProperty('--ws-top', `${statusBar?.offsetHeight ?? 0}px`);
+    if (tabStrip !== null) root.style.setProperty('--ws-strip', `${tabStrip.offsetHeight}px`);
     if (footer !== null) root.style.setProperty('--ws-bottom', `${footer.offsetHeight}px`);
   };
   const barObserver = new ResizeObserver(measureBars);
-  for (const bar of [footer, statusBar]) {
+  for (const bar of [footer, statusBar, tabStrip]) {
     if (bar !== null) barObserver.observe(bar);
   }
   measureBars();

@@ -1697,8 +1697,7 @@ test.describe('導入 調査の画面', () => {
     await tab(page, /DB コンソール/).click();
     await expect(chatWindow).toBeHidden();
     await expect(panel(page, /DB コンソール/)).toBeVisible();
-    await expect(address(page)).toBeVisible();
-    await expect(address(page)).toHaveText('https://db.internal.example/console');
+    await expect(scene(page).locator('.address')).toBeHidden();
     await expect(chatTab).toHaveAttribute('aria-selected', 'false');
     await expect(tab(page, /DB コンソール/)).toHaveAttribute('aria-selected', 'true');
 
@@ -1771,12 +1770,10 @@ test.describe('導入 調査の画面', () => {
       const rect = (selector: string) =>
         document.querySelector(`[data-investigation] ${selector}`)?.getBoundingClientRect();
       return {
-        address: rect('.address')?.top ?? 0,
         pages: rect('.pages')?.top ?? 0,
         bar: rect('.tab-strip')?.top ?? 0,
       };
     });
-    expect(order.address).toBeLessThan(order.pages);
     expect(order.pages).toBeLessThan(order.bar);
     await page.evaluate(() => window.scrollTo(0, 60));
     await expectPinned('scrolled');
@@ -1818,6 +1815,36 @@ test.describe('導入 調査の画面', () => {
     expect(Math.abs(toolView.stripToFooter)).toBeLessThanOrEqual(2);
     expect(toolView.contentHeight).toBeGreaterThan(560);
     expect(toolView.overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('375px 幅では、タブにアイコンが出て、選んだタブの背景が選んだ先へ移る', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await begin(page);
+    await expect(scene(page).locator('.tab .tab-icon:visible')).toHaveCount(4);
+    await expect(scene(page).locator('.tab .fav:visible')).toHaveCount(0);
+    const offset = (name: RegExp): Promise<number> =>
+      tab(page, name).evaluate((element) => {
+        const glider = element.closest('[role="tablist"]')?.querySelector('[data-glider]');
+        const box = element.getBoundingClientRect();
+        const pill = glider?.getBoundingClientRect();
+        return pill === undefined ? 999 : Math.abs(pill.left - box.left) + Math.abs(pill.width - box.width);
+      });
+    await expect.poll(() => offset(/チャット/)).toBeLessThanOrEqual(1);
+    await tab(page, /ログの検索/).click();
+    await expect(panel(page, /ログの検索/)).toBeVisible();
+    await expect.poll(() => offset(/ログの検索/)).toBeLessThanOrEqual(1);
+    await tab(page, /チャット/).click();
+    await expect.poll(() => offset(/チャット/)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
+  test('375px 幅で動きを減らす設定のときは、タブを切り替えても中身を動かさない', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 375, height: 812 });
+    await begin(page);
+    await tab(page, /DB コンソール/).click();
+    const running = await panel(page, /DB コンソール/).evaluate((element) => element.getAnimations().length);
+    expect(running).toBe(0);
   });
 
   test('375px 幅で別のタブを見ている間に届いた投稿は、チャットのタブに未読の数で出る', async ({ page }) => {

@@ -124,6 +124,7 @@ const hasComposer = Astro.slots.has('composer');
       <div class="win-bar tab-strip">
         <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
         <div class="tabs" role="tablist" aria-label="開くツール">
+          <span class="tab-glider" aria-hidden="true" data-glider></span>
           <TabButton scenario={scenario} chat={true} />
           {
             scenario.tabs.map((tab) =>
@@ -401,6 +402,9 @@ const hasComposer = Astro.slots.has('composer');
   gap: 0 0.125rem;
   min-width: 0;
 }
+.scene .tab-glider {
+  display: none;
+}
 .scene .address {
   display: flex;
   align-items: center;
@@ -537,8 +541,17 @@ const hasComposer = Astro.slots.has('composer');
   .scene .pages {
     height: max(
       20rem,
-      calc(100dvh - var(--ws-top, 0px) - var(--ws-bottom, 3.5rem) - 5.375rem)
+      calc(
+        100dvh - var(--ws-top, 0px) - var(--ws-bottom, 3.5rem) -
+          var(--ws-strip, 3.8125rem)
+      )
     );
+  }
+  .scene .workspace {
+    overflow-x: clip;
+  }
+  .scene .address {
+    display: none;
   }
   .scene .tab-strip {
     position: sticky;
@@ -546,15 +559,35 @@ const hasComposer = Astro.slots.has('composer');
     z-index: 5;
     order: 1;
     border-top: 1px solid var(--br-rule);
-    padding: 0.25rem 0.375rem;
+    background: color-mix(in srgb, var(--br-strip) 84%, transparent);
+    padding: 0.25rem 0.5rem;
+    -webkit-backdrop-filter: saturate(1.6) blur(16px);
+    backdrop-filter: saturate(1.6) blur(16px);
+  }
+  .scene .tab-glider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    display: block;
+    width: var(--glide-w, 0px);
+    transform: translateX(var(--glide-x, 0px));
+    border-radius: 0.875rem;
+    background: color-mix(in srgb, var(--ring) 15%, transparent);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .scene .tabs[data-glide] .tab-glider {
+    opacity: 1;
   }
   .scene .tab-strip .dots {
     display: none;
   }
   .scene .tabs {
+    position: relative;
     flex-wrap: nowrap;
-    align-items: center;
-    gap: 0.125rem;
+    align-items: stretch;
+    gap: 0;
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scrollbar-width: none;
@@ -567,20 +600,31 @@ const hasComposer = Astro.slots.has('composer');
     bottom: var(--ws-bottom, 3.5rem);
     z-index: 5;
     border-top: 0;
+    background: transparent;
   }
-  .scene[data-view="chat"] .address,
   .scene[data-view="chat"] .pages {
     display: none;
   }
   .scene[data-view="chat"] :global(.win.chat) {
     min-height: max(
       20rem,
-      calc(100dvh - var(--ws-top, 0px) - var(--ws-bottom, 3.5rem) - 3.375rem)
+      calc(
+        100dvh - var(--ws-top, 0px) - var(--ws-bottom, 3.5rem) -
+          var(--ws-strip, 3.8125rem)
+      )
     );
     border-bottom: 0;
   }
   .scene[data-view="tools"] :global(.win.chat) {
     display: none;
+  }
+}
+
+@media (max-width: 639px) and (prefers-reduced-motion: no-preference) {
+  .scene .tabs[data-glide="live"] .tab-glider {
+    transition:
+      transform 0.42s cubic-bezier(0.3, 1.28, 0.5, 1),
+      width 0.42s cubic-bezier(0.3, 1.28, 0.5, 1);
   }
 }
 
