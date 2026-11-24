@@ -43,6 +43,14 @@ const {
 
 const mainMaxWidth = wide ? 'max-w-6xl' : 'max-w-3xl';
 
+// ヒーローを持つページでは、ヘッダーをヒーローの上に重ね、本文をシートとして下から重ねる
+const hasHero = Astro.slots.has('hero');
+
+// ヒーローの上では、海の色に負けない濃さにする
+const navIdleColor = hasHero
+  ? 'text-charcoal dark:text-[#ececec] hover:text-accent-dark dark:hover:text-accent-light'
+  : 'text-subtle dark:text-[#9ca3af] hover:text-charcoal dark:hover:text-[#ececec]';
+
 const displayTitle = ogTitle ? `${ogTitle} - kosui` : title;
 const displayOgTitle = ogTitle ?? title;
 const displayOgDescription = ogDescription ?? description;
@@ -178,16 +186,23 @@ const navItems = [
   </head>
   <body>
     <div class="min-h-screen flex flex-col">
-      <header transition:name="site-header">
-        <nav class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+      <header
+        transition:name="site-header"
+        class:list={[hasHero && 'absolute inset-x-0 top-0 z-10']}
+      >
+        <nav
+          class:list={[
+            'py-4 flex items-center justify-between',
+            hasHero
+              ? 'px-[max(1rem,4.4vw)]'
+              : 'max-w-3xl mx-auto px-4',
+          ]}
+        >
           <a
             href="/"
             class="flex items-center gap-2 sm:gap-3 text-2xl font-bold text-accent hover:text-accent-dark transition-colors"
           >
-            <SiteIcon
-              size={40}
-              transitionName={pathname !== '/' ? 'site-logo' : undefined}
-            />
+            <SiteIcon size={40} transitionName="site-logo" />
             <span class="hidden sm:inline">kosui</span>
           </a>
           <div class="hidden md:flex gap-0.5 sm:gap-1 text-xs sm:text-sm">
@@ -197,7 +212,7 @@ const navItems = [
                   href={item.href}
                   class={item.isActive
                   ? 'px-2 sm:px-3 py-1.5 rounded-full bg-accent text-white font-semibold transition-colors'
-                  : 'px-2 sm:px-3 py-1.5 rounded-full text-subtle dark:text-[#9ca3af] hover:text-charcoal dark:hover:text-[#ececec] transition-colors'}
+                  : `px-2 sm:px-3 py-1.5 rounded-full ${navIdleColor} transition-colors`}
                   {...('external' in item
                   ? {
                     target: '_blank',
@@ -212,7 +227,7 @@ const navItems = [
           </div>
           <button
             type="button"
-            class="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full text-subtle dark:text-[#9ca3af] hover:text-charcoal dark:hover:text-[#ececec] transition-colors"
+            class={`inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full ${navIdleColor} transition-colors`}
             aria-label="検索を開く"
             data-search-trigger
           >
@@ -233,22 +248,25 @@ const navItems = [
           </button>
         </nav>
       </header>
-      <main
-        class={`flex-1 ${mainMaxWidth} mx-auto px-4 py-8 pb-20 md:pb-8 w-full`}
-        transition:animate={slideUpFade}
-      >
-        <slot />
-      </main>
-      <footer>
-        <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-subtle dark:text-[#9ca3af]">
-          &copy; {new Date().getFullYear()} kosui
-          <span class="mx-1">&middot;</span>
-          <a
-            href="/privacy"
-            class="hover:text-accent dark:hover:text-accent-light transition-colors"
-          >Privacy Policy</a>
-        </div>
-      </footer>
+      <slot name="hero" />
+      <div class:list={['flex-1 flex flex-col', hasHero && 'page-sheet']}>
+        <main
+          class={`flex-1 ${mainMaxWidth} mx-auto px-4 py-8 pb-20 md:pb-8 w-full`}
+          transition:animate={slideUpFade}
+        >
+          <slot />
+        </main>
+        <footer>
+          <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-subtle dark:text-[#9ca3af]">
+            &copy; {new Date().getFullYear()} kosui
+            <span class="mx-1">&middot;</span>
+            <a
+              href="/privacy"
+              class="hover:text-accent dark:hover:text-accent-light transition-colors"
+            >Privacy Policy</a>
+          </div>
+        </footer>
+      </div>
     </div>
     <nav
       class="fixed bottom-0 inset-x-0 bg-bg/80 dark:bg-[#111114]/80 backdrop-blur border-t border-border dark:border-[#2a2a32] md:hidden bottom-nav"
