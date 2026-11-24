@@ -10,6 +10,7 @@ import {
 import { safeAbsoluteUrl } from '../../helper/safeUrl.ts';
 import { segmentBlueskyText } from './blueskyRichText.ts';
 import { BlueskyVideoPlayer } from './BlueskyVideoPlayer.tsx';
+import { BookmarkButton } from './BookmarkButton.tsx';
 import { PostMenu, type PostMenuItem } from './PostMenu.tsx';
 import { QuoteIcon } from './QuoteIcon.tsx';
 
@@ -523,6 +524,11 @@ export const BlueskyTimelineItemView = ({
           {onLike !== undefined && (
             <BlueskyLikeButton item={item} onLike={onLike} onUndoLike={onUndoLike} isPending={isLikePending === true} />
           )}
+          <BookmarkButton
+            bookmarked={item.bookmarked}
+            onBookmark={onBookmark === undefined ? undefined : () => onBookmark(item)}
+            onUndoBookmark={onUndoBookmark === undefined ? undefined : () => onUndoBookmark(item)}
+          />
           <PostMenu items={menuItems} />
         </div>
       )}
