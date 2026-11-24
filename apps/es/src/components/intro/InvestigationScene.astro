@@ -33,19 +33,31 @@ const tools = [
   {
     key: 'console',
     label: 'DB コンソール',
+    title: 'DB Console',
     url: 'https://db.internal.example/console',
   },
   {
     key: 'logs',
     label: 'ログの検索',
+    title: 'Log Explorer',
     url: 'https://logs.internal.example/logs',
   },
   {
     key: 'repo',
     label: 'リポジトリ',
+    title: 'clinic-api/visits.ts',
     url: 'https://code.internal.example/clinic/visits.ts',
   },
 ] as const;
+
+const channels = [
+  { name: '# general', current: false },
+  { name: '# dev', current: false },
+  { name: '# 問い合わせ対応', current: true },
+  { name: '# 障害対応', current: false },
+] as const;
+
+const railMarks = [false, false, true, false, false] as const;
 
 const unknownText = 'まだ分からない';
 const memos = [
@@ -113,6 +125,7 @@ const axisBars = [0, Math.floor(barCount / 2), barCount - 1];
 const firstBarTime = startedAt - visibleFromMinutes * 60_000;
 
 const code = sourceOf('visits.ts').trimEnd();
+const codeLines = code.split('\n').length;
 
 const tabId = (key: string): string => `${id}-tab-${key}`;
 const panelId = (key: string): string => `${id}-panel-${key}`;
@@ -162,74 +175,120 @@ const agentConclusion = [
 
   <div class="workspace" data-workspace>
     <div class="win chat" role="group" aria-label="チャット" data-window inert>
-      <div class="win-bar">
-        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-        <p class="channel"># 問い合わせ対応</p>
-      </div>
-
-      <ol
-        class="feed"
-        aria-live="polite"
-        aria-label="チャットの投稿"
-        tabindex="0"
-        data-feed
-      >
-      </ol>
-
-      <template data-post>
-        <li class="post">
-          <span class="avatar" aria-hidden="true" data-avatar></span>
-          <div class="post-main">
-            <p class="post-head">
-              <strong data-name></strong>
-              <time data-time></time>
-            </p>
-            <p class="post-text" data-text></p>
-          </div>
-        </li>
-      </template>
-
-      <div class="composer">
-        <p class="memo-title" id={`${id}-memo`}>返信の下書き（調査メモ）</p>
-        <dl
-          class="memo-list"
-          aria-labelledby={`${id}-memo`}
-          data-unknown={unknownText}
-        >
+      <div class="chat-side" aria-hidden="true">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <p class="ws">clinic-dev</p>
+        <ul class="chs">
           {
-            memos.map((memo) => (
-              <div class="memo-row">
-                <dt>{memo.label}</dt>
-                <dd
-                  data-memo={memo.key}
-                  data-state="unknown"
-                  data-result={memoResult[memo.key]}
-                  data-label={memo.label}
-                  data-text={memo.text}
-                >
-                  {unknownText}
-                </dd>
-              </div>
+            channels.map((channel) => (
+              <li class={channel.current ? 'on' : undefined}>{channel.name}</li>
             ))
           }
-        </dl>
-        <p class="reason" id={`${id}-reason`} data-reason>
-          3つのツールをすべて開くと返信できます。
-        </p>
-        <div class="actions">
-          <button type="button" data-action="interim" disabled>
-            途中経過を報告する
-          </button>
-          <button
-            type="button"
-            class="primary"
-            data-action="reply"
-            aria-describedby={`${id}-reason`}
-            disabled
-          >
-            調査結果を返信する
-          </button>
-          <button type="button" data-action="answer">答えを見る</button>
+        </ul>
+      </div>
+
+      <div class="chat-main">
+        <div class="chat-head">
+          <p class="channel"># 問い合わせ対応</p>
+        </div>
+
+        <ol
+          class="feed"
+          aria-live="polite"
+          aria-label="チャットの投稿"
+          tabindex="0"
+          data-feed
+        >
+        </ol>
+
+        <template data-post>
+          <li class="post">
+            <span class="avatar" aria-hidden="true" data-avatar></span>
+            <div class="post-main">
+              <p class="post-head">
+                <strong data-name></strong>
+                <time data-time></time>
+              </p>
+              <p class="post-text" data-text></p>
+            </div>
+          </li>
+        </template>
+
+        <div class="composer">
+          <div class="compose-box">
+            <p class="fmt" aria-hidden="true">
+              <b>B</b>
+              <i>I</i>
+              <s>S</s>
+              <svg
+                viewBox="0 0 16 16"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <rect x="1" y="5.5" width="8" height="5" rx="2.5"></rect>
+                <rect x="7" y="5.5" width="8" height="5" rx="2.5"></rect>
+              </svg>
+              <span>&lt;/&gt;</span>
+              <span>≡</span>
+            </p>
+            <p class="ph" aria-hidden="true"># 問い合わせ対応 へのメッセージ</p>
+            <p class="memo-title" id={`${id}-memo`}>返信の下書き（調査メモ）</p>
+            <dl
+              class="memo-list"
+              aria-labelledby={`${id}-memo`}
+              data-unknown={unknownText}
+            >
+              {
+                memos.map((memo) => (
+                  <div class="memo-row">
+                    <dt>{memo.label}</dt>
+                    <dd
+                      data-memo={memo.key}
+                      data-state="unknown"
+                      data-result={memoResult[memo.key]}
+                      data-label={memo.label}
+                      data-text={memo.text}
+                    >
+                      {unknownText}
+                    </dd>
+                  </div>
+                ))
+              }
+            </dl>
+            <p class="reason" id={`${id}-reason`} data-reason>
+              3つのツールをすべて開くと返信できます。
+            </p>
+            <div class="compose-foot">
+              <div class="actions">
+                <button type="button" data-action="interim" disabled>
+                  途中経過を報告する
+                </button>
+                <button
+                  type="button"
+                  class="primary"
+                  data-action="reply"
+                  aria-describedby={`${id}-reason`}
+                  disabled
+                >
+                  調査結果を返信する
+                </button>
+                <button type="button" data-action="answer">答えを見る</button>
+              </div>
+              <span class="send-shape" aria-hidden="true">
+                <svg
+                  viewBox="0 0 16 16"
+                  width="14"
+                  height="14"
+                  fill="currentColor"
+                >
+                  <path d="M2 2.5 14 8 2 13.5 3.8 8z"></path>
+                </svg>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -257,15 +316,22 @@ const agentConclusion = [
                 aria-controls={panelId(tool.key)}
                 tabindex={tool.key === 'console' ? 0 : -1}
               >
-                {tool.label} <span class="unseen" data-unseen>未確認</span>
+                <span class="fav" aria-hidden="true"></span>
+                <span class="tab-title">{tool.title}</span>
+                <span class="cfig-sr">（{tool.label}）</span>
+                <span class="unseen" data-unseen>未確認</span>
               </button>
             ))
           }
         </div>
       </div>
       <p class="address">
-        <span class="cfig-sr">アドレス</span>
-        <span class="address-text" data-address>{tools[0].url}</span>
+        <span class="nav" aria-hidden="true"><i>←</i><i>→</i><i>↻</i></span>
+        <span class="url-pill">
+          <span class="cfig-sr">アドレス</span>
+          <span class="lock" aria-hidden="true"></span>
+          <span class="address-text" data-address>{tools[0].url}</span>
+        </span>
       </p>
 
       <div class="pages">
@@ -277,27 +343,34 @@ const agentConclusion = [
           data-tool="console"
         >
           <div class="console">
-            <div class="tables" role="group" aria-label="テーブルの一覧">
-              <p class="side-title">Tables</p>
-              <button type="button" class="table-item" data-table="visits">
-                visits
-              </button>
-              <ul class="columns" aria-label="visits の列">
-                {
-                  columns.map((column) => (
-                    <li>
-                      <code>{column.name}</code>
-                      <span>{column.type}</span>
-                    </li>
-                  ))
-                }
-              </ul>
+            <div class="db-conn">
+              <span class="db-dot" aria-hidden="true"></span>
+              <span class="db-name">clinic_production（read-write）</span>
+              <span class="db-kind">SQLite</span>
             </div>
-            <SqlPlayground
-              id="chapter-1-console"
-              setup={setupSql}
-              initial="SELECT * FROM visits;"
-            />
+            <div class="db-body">
+              <div class="tables" role="group" aria-label="テーブルの一覧">
+                <p class="side-title">Tables</p>
+                <button type="button" class="table-item" data-table="visits">
+                  <span class="tbl-icon" aria-hidden="true"></span>visits
+                </button>
+                <ul class="columns" aria-label="visits の列">
+                  {
+                    columns.map((column) => (
+                      <li>
+                        <code>{column.name}</code>
+                        <span>{column.type}</span>
+                      </li>
+                    ))
+                  }
+                </ul>
+              </div>
+              <SqlPlayground
+                id="chapter-1-console"
+                setup={setupSql}
+                initial="SELECT * FROM visits;"
+              />
+            </div>
           </div>
           <p class="panel-note">いまの状態だけが入っています。</p>
         </div>
@@ -310,181 +383,228 @@ const agentConclusion = [
           data-tool="logs"
           hidden
         >
-          <div class="logs">
-            <div class="facets" role="group" aria-label="ログの絞り込み">
-              {
-                facets.map((facet) => (
-                  <fieldset class="facet">
-                    <legend>{facet.label}</legend>
-                    {
-                      facet.items.map((item) => (
-                        <label class="facet-item">
-                          <input
-                            type="checkbox"
-                            data-facet={facet.key}
-                            value={item.value}
-                          />
-                          <span class="facet-name">{item.label}</span>
-                          <span class="facet-count" data-facet-count>0</span>
-                        </label>
-                      ))
-                    }
-                  </fieldset>
-                ))
-              }
+          <div class="logs-shell">
+            <div class="lg-rail" aria-hidden="true">
+              {railMarks.map((on) => <i class={on ? 'on' : undefined}></i>)}
             </div>
-
-            <div class="logs-main">
-              <div class="search-row">
-                <label class="cfig-sr" for={`${id}-query`}
-                >ログの検索クエリ</label>
-                <input
-                  type="search"
-                  class="query"
-                  id={`${id}-query`}
-                  value="service:clinic-api"
-                  spellcheck="false"
-                  autocomplete="off"
-                  data-query
-                  data-initial="service:clinic-api"
-                />
-                <span class="range">Past 15 Minutes</span>
-                <span class="live" data-live data-state="off">
-                  <i aria-hidden="true"></i>Live
-                </span>
+            <div class="lg-col">
+              <div class="lg-head">
+                <p class="lg-title">Logs</p>
+                <p class="lg-sub">Explorer</p>
               </div>
-
-              <div class="chart" role="img" data-chart>
-                <div class="bars" aria-hidden="true">
+              <div class="logs">
+                <div class="facets" role="group" aria-label="ログの絞り込み">
                   {
-                    bars.map(() => (
-                      <span class="bar" data-warn="false" style="height: 0%">
-                      </span>
-                    ))
-                  }
-                </div>
-                <div class="axis" aria-hidden="true">
-                  {
-                    axisBars.map((index) => (
-                      <span data-tick={index}>
+                    facets.map((facet) => (
+                      <fieldset class="facet">
+                        <legend>{facet.label}</legend>
                         {
-                          clockOf(
-                        firstBarTime + index * 60_000,
-                      ).slice(0, 5)
+                          facet.items.map((
+                        item,
+                      ) => (
+                            <label class="facet-item">
+                              <input
+                                type="checkbox"
+                                data-facet={facet.key}
+                                value={item.value}
+                              />
+                              {
+                                facet.key === 'status'
+                          && (
+                                  <span
+                                    class="swatch"
+                                    data-level={item.value}
+                                    aria-hidden="true"
+                                  >
+                                  </span>
+                                )
+                              }
+                              <span class="facet-name">{item.label}</span>
+                              <span class="facet-count" data-facet-count
+                              >0</span>
+                            </label>
+                          ))
                         }
-                      </span>
+                      </fieldset>
                     ))
                   }
                 </div>
-              </div>
 
-              <p class="log-count" data-log-count>
-                0件中 0件
-              </p>
+                <div class="logs-main">
+                  <div class="search-row">
+                    <label class="cfig-sr" for={`${id}-query`}
+                    >ログの検索クエリ</label>
+                    <div class="query-box">
+                      <svg
+                        class="mag"
+                        viewBox="0 0 16 16"
+                        width="14"
+                        height="14"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        aria-hidden="true"
+                      >
+                        <circle cx="7" cy="7" r="4.5"></circle>
+                        <path d="M10.5 10.5 14 14"></path>
+                      </svg>
+                      <input
+                        type="search"
+                        class="query"
+                        id={`${id}-query`}
+                        value="service:clinic-api"
+                        spellcheck="false"
+                        autocomplete="off"
+                        data-query
+                        data-initial="service:clinic-api"
+                      />
+                    </div>
+                    <span class="range">Past 15 Minutes</span>
+                    <span class="live" data-live data-state="off">
+                      <i aria-hidden="true"></i>Live
+                    </span>
+                  </div>
 
-              <div
-                class="log-scroll"
-                role="region"
-                aria-label="ログの一覧"
-                data-log-scroll
-              >
-                <table class="log-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">DATE</th>
-                      <th scope="col">HOST</th>
-                      <th scope="col">SERVICE</th>
-                      <th scope="col">CONTENT</th>
-                    </tr>
-                  </thead>
-                  <tbody data-log-body></tbody>
-                </table>
-                <p class="log-empty" data-empty hidden>
-                  条件に合うログはありません。
-                </p>
-                <template data-log-row-template>
-                  <table>
-                    <tbody>
-                      <tr class="log-row" tabindex="0" data-log-row>
-                        <td class="col-date">
-                          <time data-log-date></time>
-                        </td>
-                        <td>clinic-api-1</td>
-                        <td>clinic-api</td>
-                        <td class="col-content">
-                          <span class="level" data-log-level></span>
-                          <span data-log-content></span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </template>
-              </div>
+                  <div class="chart" role="img" data-chart>
+                    <div class="bars" aria-hidden="true">
+                      {
+                        bars.map(() => (
+                          <span
+                            class="bar"
+                            data-warn="false"
+                            style="height: 0%"
+                          >
+                          </span>
+                        ))
+                      }
+                    </div>
+                    <div class="axis" aria-hidden="true">
+                      {
+                        axisBars.map((
+                          index,
+                        ) => (
+                          <span data-tick={index}>
+                            {
+                              clockOf(
+                            firstBarTime
+                              + index * 60_000,
+                          ).slice(0, 5)
+                            }
+                          </span>
+                        ))
+                      }
+                    </div>
+                  </div>
 
-              <div
-                class="detail"
-                role="region"
-                aria-label="ログの詳細"
-                data-detail
-                hidden
-              >
-                <div class="detail-head">
-                  <p class="detail-title">Log</p>
-                  <button
-                    type="button"
-                    data-detail-close
-                    aria-label="ログの詳細を閉じる"
+                  <p class="log-count" data-log-count>
+                    0件中 0件
+                  </p>
+
+                  <div
+                    class="log-scroll"
+                    role="region"
+                    aria-label="ログの一覧"
+                    data-log-scroll
                   >
-                    閉じる
-                  </button>
-                </div>
-                <div class="detail-body">
-                  <p class="detail-message" data-detail-field="message"></p>
-                  <dl class="detail-summary">
-                    <div>
-                      <dt>Date</dt>
-                      <dd data-detail-field="date"></dd>
+                    <table class="log-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">DATE</th>
+                          <th scope="col">HOST</th>
+                          <th scope="col">SERVICE</th>
+                          <th scope="col">CONTENT</th>
+                        </tr>
+                      </thead>
+                      <tbody data-log-body></tbody>
+                    </table>
+                    <p class="log-empty" data-empty hidden>
+                      条件に合うログはありません。
+                    </p>
+                    <template data-log-row-template>
+                      <table>
+                        <tbody>
+                          <tr class="log-row" tabindex="0" data-log-row>
+                            <td class="col-date">
+                              <time data-log-date></time>
+                            </td>
+                            <td>clinic-api-1</td>
+                            <td>clinic-api</td>
+                            <td class="col-content">
+                              <span class="level" data-log-level></span>
+                              <span data-log-content></span>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </template>
+                  </div>
+
+                  <div
+                    class="detail"
+                    role="region"
+                    aria-label="ログの詳細"
+                    data-detail
+                    hidden
+                  >
+                    <div class="detail-head">
+                      <p class="detail-title">Log</p>
+                      <button
+                        type="button"
+                        data-detail-close
+                        aria-label="ログの詳細を閉じる"
+                      >
+                        閉じる
+                      </button>
                     </div>
-                    <div>
-                      <dt>Status</dt>
-                      <dd data-detail-field="status"></dd>
+                    <div class="detail-body">
+                      <p class="detail-message" data-detail-field="message"></p>
+                      <dl class="detail-summary">
+                        <div>
+                          <dt>Date</dt>
+                          <dd data-detail-field="date"></dd>
+                        </div>
+                        <div>
+                          <dt>Status</dt>
+                          <dd data-detail-field="status"></dd>
+                        </div>
+                        <div>
+                          <dt>Service</dt>
+                          <dd>clinic-api</dd>
+                        </div>
+                        <div>
+                          <dt>Host</dt>
+                          <dd>clinic-api-1</dd>
+                        </div>
+                      </dl>
+                      <p class="detail-section">Event Attributes</p>
+                      <dl class="detail-attrs">
+                        <div>
+                          <dt>http.method</dt>
+                          <dd data-detail-attr="http.method"></dd>
+                        </div>
+                        <div>
+                          <dt>http.url</dt>
+                          <dd data-detail-attr="http.url"></dd>
+                        </div>
+                        <div>
+                          <dt>http.status_code</dt>
+                          <dd data-detail-attr="http.status_code"></dd>
+                        </div>
+                        <div>
+                          <dt>duration</dt>
+                          <dd data-detail-attr="duration"></dd>
+                        </div>
+                        <div>
+                          <dt>network.client.ip</dt>
+                          <dd data-detail-attr="network.client.ip"></dd>
+                        </div>
+                        <div>
+                          <dt>http.useragent</dt>
+                          <dd data-detail-attr="http.useragent"></dd>
+                        </div>
+                      </dl>
                     </div>
-                    <div>
-                      <dt>Service</dt>
-                      <dd>clinic-api</dd>
-                    </div>
-                    <div>
-                      <dt>Host</dt>
-                      <dd>clinic-api-1</dd>
-                    </div>
-                  </dl>
-                  <p class="detail-section">Event Attributes</p>
-                  <dl class="detail-attrs">
-                    <div>
-                      <dt>http.method</dt>
-                      <dd data-detail-attr="http.method"></dd>
-                    </div>
-                    <div>
-                      <dt>http.url</dt>
-                      <dd data-detail-attr="http.url"></dd>
-                    </div>
-                    <div>
-                      <dt>http.status_code</dt>
-                      <dd data-detail-attr="http.status_code"></dd>
-                    </div>
-                    <div>
-                      <dt>duration</dt>
-                      <dd data-detail-attr="duration"></dd>
-                    </div>
-                    <div>
-                      <dt>network.client.ip</dt>
-                      <dd data-detail-attr="network.client.ip"></dd>
-                    </div>
-                    <div>
-                      <dt>http.useragent</dt>
-                      <dd data-detail-attr="http.useragent"></dd>
-                    </div>
-                  </dl>
+                  </div>
                 </div>
               </div>
             </div>
@@ -502,10 +622,47 @@ const agentConclusion = [
           data-tool="repo"
           hidden
         >
-          <div class="repo-head">
-            <span class="repo-path">clinic / <strong>visits.ts</strong></span>
+          <div class="repo-body">
+            <div class="repo-top">
+              <p class="repo-path">
+                <span>clinic</span>
+                <span class="sep">/</span>
+                <strong>clinic-api</strong>
+              </p>
+              <span class="repo-badge">Private</span>
+            </div>
+            <p class="repo-tabs" aria-hidden="true">
+              <span class="on">Code</span>
+              <span>Issues</span>
+              <span>Pull requests</span>
+            </p>
+            <div class="repo-nav">
+              <span class="branch">main</span>
+              <p class="crumbs">
+                <span>clinic-api</span>
+                <span class="sep">/</span>
+                <span>src</span>
+                <span class="sep">/</span>
+                <strong>visits.ts</strong>
+              </p>
+            </div>
+            <div class="repo-code">
+              <div class="repo-bar">
+                <span class="seg" aria-hidden="true"><span class="on"
+                  >Code</span><span>Blame</span></span>
+                <span class="repo-lines">{codeLines} lines</span>
+              </div>
+              <Code
+                code={code}
+                lang="ts"
+                themes={{
+                  light: 'github-light-default',
+                  dark: 'github-dark-default',
+                }}
+                defaultColor={false}
+              />
+            </div>
           </div>
-          <Code code={code} lang="ts" />
           <p class="panel-note">
             status
             を書き換えるだけで、理由と操作した人はどこにも保存していません。
@@ -538,7 +695,9 @@ const agentConclusion = [
       aria-controls={panelId('agent')}
       tabindex="-1"
     >
-      エージェント
+      <span class="fav" aria-hidden="true"></span>
+      <span class="tab-title">Coding Agent</span>
+      <span class="cfig-sr">（エージェント）</span>
     </button>
   </template>
 
@@ -553,6 +712,7 @@ const agentConclusion = [
     >
       <div class="agent-bar">
         <span class="agent-brand">Coding Agent</span>
+        <span class="agent-slash" aria-hidden="true">/</span>
         <span class="agent-session">visit-pochi のキャンセルの調査</span>
         <span class="agent-status" data-agent-status data-state="running"
         >実行中</span>
@@ -569,16 +729,31 @@ const agentConclusion = [
       <div class="agent-composer">
         <label class="cfig-sr" for={`${id}-agent-input`}
         >エージェントへの依頼</label>
-        <textarea
-          class="agent-input"
-          id={`${id}-agent-input`}
-          rows="2"
-          placeholder="依頼を入力"
-          data-agent-input
-        ></textarea>
-        <button type="button" class="agent-send" data-agent-send disabled>
-          送信
-        </button>
+        <div class="agent-box">
+          <textarea
+            class="agent-input"
+            id={`${id}-agent-input`}
+            rows="2"
+            placeholder="依頼を入力"
+            data-agent-input
+          ></textarea>
+          <button type="button" class="agent-send" data-agent-send disabled>
+            <span class="cfig-sr">送信</span>
+            <svg
+              viewBox="0 0 16 16"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"></path>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   </template>
@@ -848,7 +1023,6 @@ const agentConclusion = [
   display: flex;
   align-items: center;
   gap: 0.625rem;
-  border-bottom: 1px solid var(--role-rule);
   background: var(--role-sunken);
   padding: 0.25rem 0.625rem;
 }
@@ -861,15 +1035,8 @@ const agentConclusion = [
   width: 0.625rem;
   height: 0.625rem;
   border-radius: 50%;
-  background: var(--role-faint);
+  background: var(--dot, var(--role-faint));
 }
-.scene .channel {
-  margin: 0;
-  font-size: 0.875rem;
-  font-weight: 700;
-  line-height: 1.5;
-}
-
 .scene button {
   font: inherit;
 }
@@ -879,9 +1046,103 @@ const agentConclusion = [
 .scene .log-scroll:focus-visible,
 .scene .log-row:focus-visible,
 .scene .agent-log:focus-visible,
-.scene :global(pre.astro-code:focus-visible) {
-  outline: 2px solid var(--role-accent);
+.scene :global(pre.astro-code:focus-visible),
+.scene :global(.cm-editor.cm-focused) {
+  outline: 2px solid var(--ring);
   outline-offset: -2px;
+}
+
+.scene .chat {
+  --c-side: #3f0e40;
+  --c-side-text: #d9c8da;
+  --c-side-sel: #1164a3;
+  --c-bg: #ffffff;
+  --c-fg: #1d1c1d;
+  --c-muted: #616061;
+  --c-rule: #dddddd;
+  --c-edge: #868686;
+  --c-toolbar: #f8f8f8;
+  --c-btn: #ffffff;
+  --c-btn-hover: #f4f4f4;
+  --c-btn-off: #f4f4f4;
+  --c-green: #007a5a;
+  --c-green-hover: #00694d;
+  --c-found-bg: #e0f4ea;
+  --c-found: #0b5d44;
+  --c-missing-bg: #fde8ea;
+  --c-missing: #a31621;
+  --c-av-support: #b03060;
+  --c-av-you: #1264a3;
+  --ring: #1264a3;
+  flex-direction: row;
+  container-type: inline-size;
+  background: var(--c-bg);
+  color: var(--c-fg);
+}
+.scene .chat-side {
+  display: none;
+  flex: none;
+  flex-direction: column;
+  width: 9rem;
+  background: var(--c-side);
+  padding: 0.5rem 0;
+  color: var(--c-side-text);
+  --dot: rgb(255 255 255 / 0.55);
+}
+.scene .chat-side .dots {
+  padding: 0 0.75rem 0.5rem;
+}
+.scene .ws {
+  margin: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.2);
+  padding: 0.125rem 0.75rem 0.5rem;
+  color: #ffffff;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.scene .chs {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+}
+.scene .chs li {
+  margin: 0 0.5rem;
+  border-radius: var(--radius-md);
+  padding: 0.125rem 0.5rem;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scene .chs li.on {
+  background: var(--c-side-sel);
+  color: #ffffff;
+  font-weight: 700;
+}
+@container (min-width: 26rem) {
+  .scene .chat-side {
+    display: flex;
+  }
+}
+.scene .chat-main {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.scene .chat-head {
+  flex: none;
+  border-bottom: 1px solid var(--c-rule);
+  padding: 0.375rem 0.75rem;
+}
+.scene .channel {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .scene .feed {
@@ -889,45 +1150,47 @@ const agentConclusion = [
   max-height: 14rem;
   margin: 0;
   overflow-y: auto;
-  padding: 0.5rem 0.625rem;
+  padding: 0.5rem 0.75rem;
   list-style: none;
 }
 .scene .post {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.625rem;
   margin: 0;
 }
 .scene .post + .post {
-  margin-top: 0.5rem;
+  margin-top: 0.625rem;
 }
 .scene .avatar {
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2.25rem;
+  height: 2.25rem;
   border-radius: var(--radius-md);
-  background: var(--role-accent-soft);
-  color: var(--role-accent-strong);
-  font-size: 0.8125rem;
+  background: var(--c-av-support);
+  color: #ffffff;
+  font-size: 0.9375rem;
   font-weight: 700;
 }
 .scene .is-you .avatar {
-  background: var(--role-accent);
-  color: var(--role-on-accent);
+  background: var(--c-av-you);
 }
 .scene .post-main {
   min-width: 0;
 }
 .scene .post-head {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   line-height: 1.4;
+}
+.scene .post-head strong {
+  font-weight: 900;
 }
 .scene .post-head time {
   margin-left: 0.375rem;
-  color: var(--role-muted);
+  color: var(--c-muted);
   font-size: 0.75rem;
 }
 .scene .post-text {
@@ -938,24 +1201,61 @@ const agentConclusion = [
 }
 
 .scene .composer {
-  border-top: 1px solid var(--role-rule);
-  background: var(--role-sunken);
-  padding: 0.375rem 0.625rem 0.5rem;
+  flex: none;
+  padding: 0.25rem 0.75rem 0.625rem;
+}
+.scene .compose-box {
+  border: 1px solid var(--c-edge);
+  border-radius: 0.5rem;
+  background: var(--c-bg);
+}
+.scene .fmt {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  border-bottom: 1px solid var(--c-rule);
+  border-radius: 0.4375rem 0.4375rem 0 0;
+  background: var(--c-toolbar);
+  padding: 0.125rem 0.625rem;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.scene .fmt b {
+  font-weight: 900;
+}
+.scene .fmt i {
+  font-family: serif;
+  font-weight: 700;
+}
+.scene .ph {
+  margin: 0;
+  padding: 0.25rem 0.625rem 0;
+  color: var(--c-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
 .scene .memo-title {
-  margin: 0 0 0.125rem;
+  margin: 0.25rem 0.625rem 0.125rem;
   font-size: 0.75rem;
   font-weight: 700;
 }
 .scene .memo-list {
   display: grid;
-  grid-template-columns: repeat(2, auto);
-  gap: 0.25rem 0.5rem;
-  margin: 0;
+  gap: 0.125rem;
+  margin: 0 0.625rem;
+}
+.scene .memo-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
 }
 .scene .memo-row dt {
+  flex: none;
+  width: 2.25rem;
   margin: 0;
-  color: var(--role-muted);
+  color: var(--c-muted);
   font-size: 0.75rem;
   font-weight: 700;
 }
@@ -970,30 +1270,30 @@ const agentConclusion = [
   margin-right: 0.25rem;
 }
 .scene .memo-row dd[data-state="unknown"] {
-  color: var(--role-muted);
+  color: var(--c-muted);
 }
 .scene .memo-row dd[data-state="unknown"]::before {
   content: "・" / "";
 }
 .scene .memo-row dd[data-state="found"] {
-  background: var(--role-accent-soft);
-  color: var(--role-accent-strong);
+  background: var(--c-found-bg);
+  color: var(--c-found);
   font-weight: 700;
 }
 .scene .memo-row dd[data-state="found"]::before {
   content: "✓" / "";
 }
 .scene .memo-row dd[data-state="missing"] {
-  background: var(--role-danger-soft);
-  color: var(--role-danger);
+  background: var(--c-missing-bg);
+  color: var(--c-missing);
   font-weight: 700;
 }
 .scene .memo-row dd[data-state="missing"]::before {
   content: "✕" / "";
 }
 .scene .reason {
-  margin: 0.25rem 0 0;
-  color: var(--role-muted);
+  margin: 0.25rem 0.625rem 0;
+  color: var(--c-muted);
   font-size: 0.75rem;
   line-height: 1.4;
 }
@@ -1002,100 +1302,247 @@ const agentConclusion = [
 .scene :global([data-role="restore"]) {
   display: none !important;
 }
+.scene .compose-foot {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem 0.5rem 0.625rem;
+}
 .scene .actions {
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   gap: 0.375rem;
-  margin-top: 0.375rem;
 }
 .scene .actions button {
-  border: 1px solid var(--role-accent);
+  border: 1px solid var(--c-edge);
   border-radius: var(--radius-md);
-  background: var(--role-surface);
-  padding: 0.25rem 0.625rem;
-  color: var(--role-accent);
+  background: var(--c-btn);
+  padding: 0.1875rem 0.625rem;
+  color: var(--c-fg);
   font-size: 0.8125rem;
+  font-weight: 700;
   cursor: pointer;
 }
 .scene .actions button:hover:not(:disabled) {
-  background: var(--role-accent-soft);
+  background: var(--c-btn-hover);
 }
 .scene .actions button.primary {
-  background: var(--role-accent);
-  color: var(--role-on-accent);
+  border-color: var(--c-green);
+  background: var(--c-green);
+  color: #ffffff;
 }
 .scene .actions button.primary:hover:not(:disabled) {
-  background: var(--role-accent);
-  opacity: 0.9;
+  background: var(--c-green-hover);
 }
 .scene .actions button:disabled {
-  border-color: var(--role-rule);
-  background: var(--role-surface);
-  color: var(--role-muted);
+  border-color: var(--c-rule);
+  background: var(--c-btn-off);
+  color: var(--c-muted);
   cursor: not-allowed;
 }
+.scene .actions button:focus-visible {
+  outline-offset: 2px;
+}
+.scene .send-shape {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-md);
+  background: var(--c-btn-off);
+  color: var(--c-muted);
+}
+.scene[data-ready="true"] .send-shape {
+  background: var(--c-green);
+  color: #ffffff;
+}
 
+.scene .browser {
+  --br-strip: #dee1e6;
+  --br-chrome: #ffffff;
+  --br-pill: #f1f3f4;
+  --br-text: #202124;
+  --br-tab: #3c4043;
+  --br-tab-hover: #eceff3;
+  --br-nav: #5f6368;
+  --br-rule: #dadce0;
+  --br-dot: #8a8f96;
+  --br-unseen-bg: #fff1c2;
+  --br-unseen: #6b4300;
+  --br-unseen-line: #b7791f;
+  --br-fav-console: #0e8f8a;
+  --br-fav-logs: #632ca6;
+  --br-fav-repo: #1f2328;
+  --br-fav-agent: #d97757;
+  --ring: #1a5fc8;
+  --dot: var(--br-dot);
+  background: var(--br-chrome);
+  color: var(--br-text);
+}
 .scene .tab-strip {
   align-items: flex-end;
-  padding-bottom: 0;
+  gap: 0.625rem;
+  border-bottom: 0;
+  background: var(--br-strip);
+  padding: 0.375rem 0.625rem 0;
 }
 .scene .tab-strip .dots {
   align-self: center;
+  margin-bottom: 0.25rem;
 }
 .scene .tabs {
   display: flex;
+  flex: 1 1 0;
   flex-wrap: wrap;
-  gap: 0.25rem;
+  align-items: flex-end;
+  gap: 0 0.125rem;
   min-width: 0;
 }
 .scene .tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  margin-bottom: -1px;
-  border: 1px solid var(--role-rule);
-  border-bottom: 0;
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  gap: 0.4375rem;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0.5rem 0.5rem 0 0;
   background: transparent;
-  padding: 0.25rem 0.75rem;
-  color: var(--role-muted);
+  padding: 0.375rem 0.75rem;
+  color: var(--br-tab);
   font-size: 0.8125rem;
   cursor: pointer;
 }
 .scene .tab:hover:not([aria-selected="true"]) {
-  background: var(--role-accent-soft);
+  background: var(--br-tab-hover);
 }
 .scene .tab[aria-selected="true"] {
-  background: var(--role-surface);
-  box-shadow: inset 0 2px 0 var(--role-accent);
-  color: var(--role-fg);
-  font-weight: 700;
+  background: var(--br-chrome);
+  color: var(--br-text);
+}
+.scene .tab[aria-selected="true"]::before,
+.scene .tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+}
+.scene .tab[aria-selected="true"]::before {
+  left: -0.5rem;
+  background: radial-gradient(
+    circle at 0 0,
+    transparent 0.5rem,
+    var(--br-chrome) calc(0.5rem + 0.5px)
+  );
+}
+.scene .tab[aria-selected="true"]::after {
+  right: -0.5rem;
+  background: radial-gradient(
+    circle at 100% 0,
+    transparent 0.5rem,
+    var(--br-chrome) calc(0.5rem + 0.5px)
+  );
+}
+.scene .tab:focus-visible {
+  z-index: 1;
+}
+.scene .fav {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--br-fav-console);
+}
+.scene .tab[data-tool="logs"] .fav {
+  border-radius: 0.1875rem;
+  background: var(--br-fav-logs);
+}
+.scene .tab[data-tool="repo"] .fav {
+  background: var(--br-fav-repo);
+}
+.scene .tab[data-tool="agent"] .fav {
+  border-radius: 0.25rem;
+  background: var(--br-fav-agent);
+}
+.scene .tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .scene .unseen {
-  border: 1px solid var(--role-warning-line);
+  flex: none;
+  border: 1px solid var(--br-unseen-line);
   border-radius: 999px;
-  background: var(--role-warning-soft);
+  background: var(--br-unseen-bg);
   padding: 0 0.375rem;
-  color: var(--role-warning);
+  color: var(--br-unseen);
   font-size: 0.75rem;
   font-weight: 700;
   line-height: 1.4;
 }
 .scene .address {
   display: flex;
+  align-items: center;
+  gap: 0.625rem;
   margin: 0;
-  border-bottom: 1px solid var(--role-rule);
+  border-bottom: 1px solid var(--br-rule);
+  background: var(--br-chrome);
   padding: 0.25rem 0.625rem;
+}
+.scene .nav {
+  display: inline-flex;
+  flex: none;
+  gap: 0.625rem;
+  color: var(--br-nav);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.scene .nav i {
+  font-style: normal;
+}
+.scene .url-pill {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.4375rem;
+  min-width: 0;
+  border-radius: 999px;
+  background: var(--br-pill);
+  padding: 0 0.75rem;
+  color: var(--br-text);
+}
+.scene .lock {
+  position: relative;
+  flex: none;
+  width: 0.5625rem;
+  height: 0.4375rem;
+  margin-top: 0.25rem;
+  border-radius: 1px;
+  background: var(--br-nav);
+}
+.scene .lock::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 0.3125rem;
+  height: 0.25rem;
+  transform: translateX(-50%);
+  border: 1.5px solid var(--br-nav);
+  border-bottom: 0;
+  border-radius: 0.1875rem 0.1875rem 0 0;
 }
 .scene .address-text {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  border-radius: 999px;
-  background: var(--role-sunken);
-  padding: 0 0.75rem;
-  font-family: var(--font-code);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   line-height: 1.6;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1118,14 +1565,103 @@ const agentConclusion = [
   display: none;
 }
 .scene .panel-note {
+  flex: none;
   margin: 0;
-  border-top: 1px solid var(--role-rule);
+  border-top: 1px solid var(--pn-rule);
+  background: var(--pn-bg);
   padding: 0.25rem 0.625rem;
+  color: var(--pn-fg);
   font-size: 0.8125rem;
   line-height: 1.5;
 }
 
+.scene .panel[data-tool="console"] {
+  --db-bg: #ffffff;
+  --db-band: #eef2f5;
+  --db-side: #f5f7fa;
+  --db-head: #e4e9ee;
+  --db-fg: #1f2933;
+  --db-muted: #52606d;
+  --db-rule: #d5dbe1;
+  --db-grid: #c9d1d9;
+  --db-edge: #7b8794;
+  --db-accent: #0b7a75;
+  --db-on-accent: #ffffff;
+  --db-soft: #d7f0ee;
+  --db-online: #1f9d55;
+  --db-danger: #b42318;
+  --db-danger-soft: #fdecea;
+  --db-keyword: #7a2e9e;
+  --db-string: #1e6b3a;
+  --db-number: #9a4a00;
+  --db-comment: #5a6772;
+  --db-func: #0b6b8f;
+  --pn-bg: var(--db-band);
+  --pn-fg: var(--db-fg);
+  --pn-rule: var(--db-rule);
+  --ring: #0b7a75;
+  --role-surface: var(--db-bg);
+  --role-sunken: var(--db-side);
+  --role-fg: var(--db-fg);
+  --role-muted: var(--db-muted);
+  --role-rule: var(--db-rule);
+  --role-border: var(--db-edge);
+  --role-accent: var(--db-accent);
+  --role-accent-soft: var(--db-soft);
+  --role-on-accent: var(--db-on-accent);
+  --role-danger: var(--db-danger);
+  --role-danger-soft: var(--db-danger-soft);
+  --role-code-keyword: var(--db-keyword);
+  --role-code-string: var(--db-string);
+  --role-code-number: var(--db-number);
+  --role-code-comment: var(--db-comment);
+  --role-code-function: var(--db-func);
+  --role-code-type: var(--db-func);
+  background: var(--db-bg);
+  color: var(--db-fg);
+}
 .scene .console {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+.scene .db-conn {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--db-rule);
+  background: var(--db-band);
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.scene .db-dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--db-online);
+}
+.scene .db-name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-code);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scene .db-kind {
+  flex: none;
+  margin-left: auto;
+  border: 1px solid var(--db-rule);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  color: var(--db-muted);
+  font-size: 0.75rem;
+}
+.scene .db-body {
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
@@ -1133,24 +1669,30 @@ const agentConclusion = [
 }
 .scene .tables {
   flex: none;
-  border-bottom: 1px solid var(--role-rule);
-  background: var(--role-sunken);
-  padding: 0.375rem 0.625rem;
+  border-bottom: 1px solid var(--db-rule);
+  background: var(--db-side);
+  padding: 0.375rem 0.5rem;
 }
 .scene .side-title {
   margin: 0 0 0.125rem;
-  color: var(--role-muted);
+  color: var(--db-muted);
   font-size: 0.75rem;
   font-weight: 700;
 }
+.scene .side-title::before {
+  content: "▾" / "";
+  margin-right: 0.25rem;
+}
 .scene .table-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
   width: 100%;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
-  padding: 0.125rem 0.375rem;
-  color: var(--role-accent);
+  padding: 0.125rem 0.375rem 0.125rem 0.75rem;
+  color: var(--db-fg);
   font-family: var(--font-code);
   font-size: 0.8125rem;
   font-weight: 700;
@@ -1158,11 +1700,26 @@ const agentConclusion = [
   cursor: pointer;
 }
 .scene .table-item:hover {
-  background: var(--role-accent-soft);
+  background: var(--db-soft);
+}
+.scene .tbl-icon {
+  flex: none;
+  width: 0.75rem;
+  height: 0.625rem;
+  border: 1.5px solid var(--db-accent);
+  border-top-width: 3px;
+  border-radius: 1px;
+  background: linear-gradient(
+    to right,
+    transparent calc(50% - 0.5px),
+    var(--db-accent) calc(50% - 0.5px),
+    var(--db-accent) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
 }
 .scene .columns {
   margin: 0;
-  padding: 0 0 0 0.375rem;
+  padding: 0 0 0 2rem;
   list-style: none;
   font-size: 0.75rem;
   line-height: 1.5;
@@ -1176,7 +1733,7 @@ const agentConclusion = [
   font-size: 0.75rem;
 }
 .scene .columns span {
-  color: var(--role-muted);
+  color: var(--db-muted);
   font-family: var(--font-code);
 }
 
@@ -1189,12 +1746,16 @@ const agentConclusion = [
   margin: 0;
   border: 0;
   border-radius: 0;
-  background: var(--role-surface);
+  background: var(--db-bg);
   padding: 0.375rem 0.625rem;
 }
 .scene :global(.playground-status),
 .scene :global(.playground-toolbar) {
   margin-bottom: 0.25rem;
+}
+.scene :global(.playground-status) {
+  color: var(--db-muted);
+  font-size: 0.75rem;
 }
 .scene :global(.playground-toolbar) {
   align-items: center;
@@ -1202,6 +1763,21 @@ const agentConclusion = [
 .scene :global(.playground button) {
   padding: 0.125rem 0.625rem;
   font-size: 0.8125rem;
+}
+.scene :global(.playground button[data-role="run"]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 700;
+}
+.scene :global(.playground button[data-role="run"])::before {
+  content: "";
+  border-top: 0.3125rem solid transparent;
+  border-bottom: 0.3125rem solid transparent;
+  border-left: 0.5rem solid currentColor;
+}
+.scene :global(.playground button[data-role="run"]:disabled) {
+  background: var(--db-band);
 }
 .scene :global(.playground-hint) {
   font-size: 0.75rem;
@@ -1230,17 +1806,182 @@ const agentConclusion = [
   max-height: none;
 }
 :global(.content) .scene :global(.playground-results) {
-  display: block;
+  display: flex;
   flex: 1 1 0;
+  flex-direction: column;
   min-height: 0;
   max-height: none;
   margin-top: 0;
   overflow: auto;
-  border: 1px solid var(--role-rule);
-  background: var(--role-surface);
+  border: 1px solid var(--db-grid);
+  background: var(--db-bg);
+  padding: 0;
+}
+.scene :global(.playground-results > *) {
+  flex: none;
+}
+.scene :global(.playground-results > .playground-note) {
+  margin: 0;
   padding: 0.375rem 0.5rem;
+  color: var(--db-muted);
+}
+.scene :global(.playground-results > .playground-result) {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  margin: 0;
+}
+.scene :global(.playground-result + .playground-result) {
+  border-top: 2px solid var(--db-grid);
+}
+.scene :global(.playground-result .playground-statement) {
+  margin: 0;
+  border-bottom: 1px solid var(--db-grid);
+  background: var(--db-band);
+  padding: 0.125rem 0.5rem;
+}
+.scene :global(.playground-result .playground-statement code) {
+  background: transparent;
+  padding: 0;
+  color: var(--db-muted);
+  font-size: 0.75rem;
+}
+.scene :global(.playground-result table) {
+  margin: 0;
+  border-collapse: collapse;
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  counter-reset: row;
+}
+.scene :global(.playground-result th),
+.scene :global(.playground-result td) {
+  border: 1px solid var(--db-grid);
+  padding: 0.125rem 0.5rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.scene :global(.playground-result th) {
+  background: var(--db-head);
+  color: var(--db-muted);
+  font-weight: 700;
+}
+.scene :global(.playground-result tr)::before {
+  content: "";
+  display: table-cell;
+  width: 2rem;
+  border: 1px solid var(--db-grid);
+  background: var(--db-head);
+  padding: 0.125rem 0.5rem;
+  color: var(--db-muted);
+  text-align: right;
+}
+.scene :global(.playground-result tbody tr) {
+  counter-increment: row;
+}
+.scene :global(.playground-result tbody tr)::before {
+  content: counter(row);
+}
+.scene :global(.playground-result > .playground-note) {
+  position: sticky;
+  bottom: 0;
+  margin: auto 0 0;
+  border-top: 1px solid var(--db-grid);
+  background: var(--db-band);
+  padding: 0.125rem 0.625rem;
+  color: var(--db-muted);
+  font-size: 0.75rem;
 }
 
+.scene .panel[data-tool="logs"] {
+  --lg-bg: #ffffff;
+  --lg-panel: #f6f7fa;
+  --lg-fg: #2a2c38;
+  --lg-muted: #5a5e73;
+  --lg-rule: #e3e5eb;
+  --lg-edge: #8b8fa3;
+  --lg-rail: #632ca6;
+  --lg-accent: #632ca6;
+  --lg-info: #3f9ae0;
+  --lg-info-text: #14659f;
+  --lg-info-soft: #e6f1fb;
+  --lg-warn: #b58105;
+  --lg-warn-text: #7f5200;
+  --lg-warn-soft: #fff4cc;
+  --lg-select: #dbe9fa;
+  --lg-hover: #eef3fa;
+  --lg-live: #1f9d55;
+  --pn-bg: var(--lg-panel);
+  --pn-fg: var(--lg-fg);
+  --pn-rule: var(--lg-rule);
+  --ring: #632ca6;
+  background: var(--lg-bg);
+  color: var(--lg-fg);
+}
+.scene .logs-shell {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.scene .lg-rail {
+  display: none;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  width: 2.25rem;
+  background: var(--lg-rail);
+  padding-top: 0.5rem;
+}
+.scene .lg-rail i {
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-md);
+  background: radial-gradient(
+    circle,
+    rgb(255 255 255 / 0.6) 0.3125rem,
+    transparent 0.3125rem
+  );
+}
+.scene .lg-rail i:nth-child(2n) {
+  background: linear-gradient(
+    rgb(255 255 255 / 0.6),
+    rgb(255 255 255 / 0.6)
+  ) center / 0.5625rem 0.5625rem no-repeat;
+}
+.scene .lg-rail i.on {
+  background:
+    radial-gradient(circle, #ffffff 0.3125rem, transparent 0.3125rem),
+    rgb(255 255 255 / 0.22);
+}
+.scene .lg-col {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.scene .lg-head {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--lg-rule);
+  padding: 0.25rem 0.625rem;
+}
+.scene .lg-head p {
+  margin: 0;
+  line-height: 1.5;
+}
+.scene .lg-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.scene .lg-sub {
+  border-bottom: 2px solid var(--lg-accent);
+  color: var(--lg-muted);
+  font-size: 0.8125rem;
+}
 .scene .logs {
   display: grid;
   flex: 1 1 0;
@@ -1252,8 +1993,8 @@ const agentConclusion = [
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem 1rem;
-  border-bottom: 1px solid var(--role-rule);
-  background: var(--role-sunken);
+  border-bottom: 1px solid var(--lg-rule);
+  background: var(--lg-panel);
   padding: 0.375rem 0.625rem;
   font-size: 0.75rem;
 }
@@ -1265,23 +2006,38 @@ const agentConclusion = [
 }
 .scene .facet legend {
   padding: 0;
-  color: var(--role-muted);
+  color: var(--lg-muted);
   font-size: 0.75rem;
   font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .scene .facet-item {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  line-height: 1.5;
+  line-height: 1.6;
   cursor: pointer;
 }
 .scene .facet-item input {
   margin: 0;
+  accent-color: var(--lg-accent);
+}
+.scene .swatch {
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 1px solid var(--lg-info-text);
+  border-radius: 2px;
+  background: var(--lg-info);
+}
+.scene .swatch[data-level="warn"] {
+  border-color: var(--lg-warn-text);
+  background: var(--lg-warn);
 }
 .scene .facet-count {
   margin-left: auto;
-  color: var(--role-muted);
+  color: var(--lg-muted);
   font-variant-numeric: tabular-nums;
 }
 .scene .logs-main {
@@ -1295,49 +2051,77 @@ const agentConclusion = [
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.75rem;
-  border-bottom: 1px solid var(--role-rule);
+  gap: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--lg-rule);
   padding: 0.25rem 0.625rem;
 }
-.scene .query {
+.scene .query-box {
+  display: flex;
   flex: 1 1 12rem;
+  align-items: center;
+  gap: 0.375rem;
   min-width: 0;
-  border: 1px solid var(--role-border);
+  border: 1px solid var(--lg-edge);
   border-radius: var(--radius-md);
-  background: var(--role-surface);
-  padding: 0.125rem 0.5rem;
-  color: var(--role-fg);
+  background: var(--lg-bg);
+  padding-left: 0.5rem;
+  color: var(--lg-muted);
+}
+.scene .query-box:focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.scene .mag {
+  flex: none;
+}
+.scene .query {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0.125rem 0.5rem 0.125rem 0;
+  color: var(--lg-fg);
   font-family: var(--font-code);
   font-size: 0.8125rem;
 }
-.scene .range {
-  color: var(--role-muted);
-  font-size: 0.75rem;
-  white-space: nowrap;
+.scene .query:focus-visible {
+  outline: 0;
 }
+.scene .range,
 .scene .live {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  color: var(--role-muted);
+  border: 1px solid var(--lg-rule);
+  border-radius: var(--radius-md);
+  background: var(--lg-panel);
+  padding: 0.0625rem 0.5rem;
+  color: var(--lg-fg);
   font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.scene .range::after {
+  content: "▾" / "";
+  color: var(--lg-muted);
+}
+.scene .live {
   font-weight: 700;
 }
 .scene .live i {
   width: 0.5rem;
   height: 0.5rem;
+  border: 1.5px solid var(--lg-muted);
   border-radius: 50%;
-  background: var(--role-faint);
-}
-.scene .live[data-state="on"] {
-  color: var(--role-danger);
 }
 .scene .live[data-state="on"] i {
-  background: var(--role-danger);
+  border-color: var(--lg-live);
+  background: var(--lg-live);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lg-live) 30%, transparent);
 }
 .scene .chart {
   flex: none;
-  border-bottom: 1px solid var(--role-rule);
+  border-bottom: 1px solid var(--lg-rule);
   padding: 0.25rem 0.625rem 0.125rem;
 }
 .scene .bars {
@@ -1346,21 +2130,21 @@ const agentConclusion = [
   align-items: end;
   gap: 2px;
   height: 2.5rem;
-  border-bottom: 1px solid var(--role-rule);
+  border-bottom: 1px solid var(--lg-rule);
 }
 .scene .bar {
   display: block;
   min-height: 0;
   border-radius: 1px 1px 0 0;
-  background: var(--role-accent);
+  background: var(--lg-info);
 }
 .scene .bar[data-warn="true"] {
-  background: var(--role-warning-line);
+  background: var(--lg-warn);
 }
 .scene .axis {
   display: flex;
   justify-content: space-between;
-  color: var(--role-muted);
+  color: var(--lg-muted);
   font-size: 0.75rem;
   line-height: 1.4;
 }
@@ -1368,7 +2152,7 @@ const agentConclusion = [
   flex: none;
   margin: 0;
   padding: 0.125rem 0.625rem;
-  color: var(--role-muted);
+  color: var(--lg-muted);
   font-size: 0.75rem;
 }
 .scene .log-scroll {
@@ -1388,7 +2172,7 @@ const agentConclusion = [
 }
 .scene .log-table th,
 .scene .log-table td {
-  border-bottom: 1px solid var(--role-rule);
+  border-bottom: 1px solid var(--lg-rule);
   padding: 0.125rem 0.5rem;
   text-align: left;
   white-space: nowrap;
@@ -1397,34 +2181,35 @@ const agentConclusion = [
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--role-sunken);
-  color: var(--role-muted);
+  background: var(--lg-panel);
+  color: var(--lg-muted);
   font-weight: 700;
+  letter-spacing: 0.04em;
 }
 .scene .log-row {
   cursor: pointer;
 }
 .scene .log-row:hover {
-  background: var(--role-accent-soft);
+  background: var(--lg-hover);
 }
 .scene .log-row[aria-current="true"] {
-  background: var(--role-accent-soft);
+  background: var(--lg-select);
 }
 .scene .log-row .col-date {
-  border-left: 3px solid var(--role-accent);
+  border-left: 3px solid var(--lg-info);
 }
 .scene .log-row[data-level="warn"] .col-date {
-  border-left-color: var(--role-warning-line);
+  border-left-color: var(--lg-warn);
 }
 .scene .level {
   display: inline-block;
   min-width: 4ch;
   margin-right: 0.5ch;
-  color: var(--role-accent);
+  color: var(--lg-info-text);
   font-weight: 700;
 }
 .scene .level[data-level="warn"] {
-  color: var(--role-warning);
+  color: var(--lg-warn-text);
 }
 .scene .log-empty {
   margin: 0;
@@ -1441,9 +2226,13 @@ const agentConclusion = [
   display: flex;
   flex-direction: column;
   width: min(22rem, 100%);
-  border-left: 1px solid var(--role-border);
-  background: var(--role-surface);
+  border-top: 3px solid var(--lg-info);
+  border-left: 1px solid var(--lg-edge);
+  background: var(--lg-bg);
   box-shadow: var(--shadow-raised);
+}
+.scene .detail[data-level="warn"] {
+  border-top-color: var(--lg-warn);
 }
 .scene .detail[hidden] {
   display: none;
@@ -1453,8 +2242,8 @@ const agentConclusion = [
   flex: none;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--role-rule);
-  background: var(--role-sunken);
+  border-bottom: 1px solid var(--lg-rule);
+  background: var(--lg-panel);
   padding: 0.125rem 0.625rem;
 }
 .scene .detail-title {
@@ -1463,11 +2252,11 @@ const agentConclusion = [
   font-weight: 700;
 }
 .scene .detail-head button {
-  border: 1px solid var(--role-accent);
+  border: 1px solid var(--lg-accent);
   border-radius: var(--radius-md);
-  background: var(--role-surface);
+  background: var(--lg-bg);
   padding: 0 0.5rem;
-  color: var(--role-accent);
+  color: var(--lg-accent);
   font-size: 0.75rem;
   cursor: pointer;
 }
@@ -1479,16 +2268,25 @@ const agentConclusion = [
   font-size: 0.75rem;
 }
 .scene .detail-message {
-  margin: 0 0 0.25rem;
+  margin: -0.375rem -0.625rem 0.375rem;
+  border-left: 4px solid var(--lg-info);
+  background: var(--lg-info-soft);
+  padding: 0.375rem 0.625rem;
   font-family: var(--font-code);
   font-size: 0.8125rem;
   font-weight: 700;
   overflow-wrap: anywhere;
 }
+.scene .detail[data-level="warn"] .detail-message {
+  border-left-color: var(--lg-warn);
+  background: var(--lg-warn-soft);
+}
 .scene .detail-section {
   margin: 0.375rem 0 0.125rem;
+  color: var(--lg-muted);
   font-size: 0.75rem;
   font-weight: 700;
+  letter-spacing: 0.04em;
 }
 .scene .detail dl {
   margin: 0;
@@ -1497,13 +2295,16 @@ const agentConclusion = [
   display: grid;
   grid-template-columns: 8.5rem minmax(0, 1fr);
   gap: 0.5rem;
-  border-top: 1px solid var(--role-rule);
+  border-top: 1px solid var(--lg-rule);
   padding: 0.0625rem 0;
 }
 .scene .detail dt {
   margin: 0;
-  color: var(--role-muted);
+  color: var(--lg-muted);
   font-family: var(--font-code);
+}
+.scene .detail-attrs dt {
+  color: var(--lg-accent);
 }
 .scene .detail dd {
   margin: 0;
@@ -1511,45 +2312,251 @@ const agentConclusion = [
   overflow-wrap: anywhere;
 }
 
+.scene .panel[data-tool="repo"] {
+  --gh-bg: #ffffff;
+  --gh-band: #f6f8fa;
+  --gh-fg: #1f2328;
+  --gh-muted: #59636e;
+  --gh-rule: #d1d9e0;
+  --gh-link: #0969da;
+  --gh-tab-line: #fd8c73;
+  --gh-select: #ddf4ff;
+  --pn-bg: var(--gh-band);
+  --pn-fg: var(--gh-fg);
+  --pn-rule: var(--gh-rule);
+  --ring: #0969da;
+  background: var(--gh-bg);
+  color: var(--gh-fg);
+}
+.scene .repo-body {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-height: 0;
+  padding: 0.5rem 0.625rem;
+}
+.scene .repo-top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+}
+.scene .repo-path {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+.scene .repo-path .sep,
+.scene .crumbs .sep {
+  color: var(--gh-muted);
+}
+.scene .repo-path > span:first-child {
+  color: var(--gh-link);
+}
+.scene .repo-path strong {
+  color: var(--gh-link);
+  font-weight: 700;
+}
+.scene .repo-badge {
+  border: 1px solid var(--gh-rule);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  color: var(--gh-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.scene .repo-tabs {
+  display: flex;
+  flex: none;
+  gap: 0.25rem;
+  margin: 0;
+  border-bottom: 1px solid var(--gh-rule);
+  font-size: 0.8125rem;
+}
+.scene .repo-tabs span {
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  padding: 0.125rem 0.5rem;
+  color: var(--gh-muted);
+  line-height: 1.5;
+}
+.scene .repo-tabs span.on {
+  border-bottom-color: var(--gh-tab-line);
+  color: var(--gh-fg);
+  font-weight: 700;
+}
+.scene .repo-nav {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.625rem;
+}
+.scene .branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid var(--gh-rule);
+  border-radius: var(--radius-md);
+  background: var(--gh-band);
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.scene .branch::after {
+  content: "▾" / "";
+  color: var(--gh-muted);
+  font-weight: 400;
+}
+.scene .crumbs {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.scene .crumbs span:not(.sep) {
+  color: var(--gh-link);
+}
+.scene .repo-code {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--gh-rule);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.scene .repo-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--gh-rule);
+  background: var(--gh-band);
+  padding: 0.1875rem 0.625rem;
+  font-size: 0.75rem;
+}
+.scene .seg {
+  display: inline-flex;
+  border: 1px solid var(--gh-rule);
+  border-radius: var(--radius-md);
+  background: var(--gh-bg);
+  overflow: hidden;
+  line-height: 1.5;
+}
+.scene .seg span {
+  padding: 0 0.5rem;
+  color: var(--gh-muted);
+}
+.scene .seg span.on {
+  background: var(--gh-select);
+  color: var(--gh-fg);
+  font-weight: 700;
+}
+.scene .repo-lines {
+  color: var(--gh-muted);
+}
+.scene :global(pre.astro-code) {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 20rem;
+  margin: 0;
+  overflow: auto;
+  border-radius: 0;
+  padding: 0.375rem 0;
+  background-color: var(--gh-bg) !important;
+  color: var(--gh-fg);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.scene :global(pre.astro-code span) {
+  color: var(--shiki-light);
+}
+.scene :global(pre.astro-code code) {
+  display: grid;
+  width: max-content;
+  min-width: 100%;
+  background: transparent;
+  counter-reset: line;
+}
+.scene :global(pre.astro-code .line) {
+  padding: 0 0.625rem;
+}
+.scene :global(pre.astro-code .line::before) {
+  content: counter(line);
+  counter-increment: line;
+  display: inline-block;
+  width: 1.5rem;
+  margin-right: 1rem;
+  color: var(--gh-muted);
+  text-align: right;
+}
+
+.scene .panel[data-tool="agent"] {
+  --ag-bg: #faf9f5;
+  --ag-card: #ffffff;
+  --ag-fg: #141413;
+  --ag-muted: #5e5d59;
+  --ag-line: #dcd8ca;
+  --ag-edge: #8a877b;
+  --ag-bubble: #f0eee6;
+  --ag-accent: #d97757;
+  --ag-accent-strong: #b5502b;
+  --ag-on-accent: #ffffff;
+  --ag-done: #2f7d4f;
+  --ag-off: #e3e0d4;
+  --ag-off-fg: #6b685f;
+  --pn-bg: var(--ag-bubble);
+  --pn-fg: var(--ag-fg);
+  --pn-rule: var(--ag-line);
+  --ring: #b5502b;
+  background: var(--ag-bg);
+  color: var(--ag-fg);
+}
 .scene .agent-bar {
   display: flex;
   flex: none;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.125rem 0.625rem;
-  border-bottom: 1px solid var(--role-rule);
-  background: var(--role-sunken);
-  padding: 0.25rem 0.625rem;
+  gap: 0.125rem 0.5rem;
+  border-bottom: 1px solid var(--ag-line);
+  padding: 0.25rem 0.75rem;
   font-size: 0.8125rem;
 }
-.scene .agent-brand {
-  color: var(--role-muted);
+.scene .agent-brand,
+.scene .agent-slash {
+  color: var(--ag-muted);
   font-size: 0.75rem;
-  font-weight: 700;
 }
 .scene .agent-session {
   min-width: 0;
   font-weight: 700;
 }
 .scene .agent-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   margin-left: auto;
-  border: 1px solid var(--role-accent);
-  border-radius: 999px;
-  padding: 0 0.5rem;
-  color: var(--role-accent);
+  color: var(--ag-muted);
   font-size: 0.75rem;
-  font-weight: 700;
 }
-.scene .agent-status[data-state="done"] {
-  border-color: var(--role-success-line);
-  color: var(--role-success);
+.scene .agent-status::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--ag-accent-strong);
+}
+.scene .agent-status[data-state="done"]::before {
+  background: var(--ag-done);
 }
 .scene .agent-log {
   flex: 1 1 0;
   min-height: 0;
   max-height: 22rem;
   overflow: auto;
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 0.75rem;
 }
 .scene .turns {
   max-width: 44rem;
@@ -1563,57 +2570,59 @@ const agentConclusion = [
 .scene .turn + .turn,
 .scene .turn + .thinking,
 .scene .thinking + .turn {
-  margin-top: 0.5rem;
+  margin-top: 0.625rem;
 }
 .scene .turn.user {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 .scene .bubble {
+  width: fit-content;
   max-width: 85%;
   margin: 0;
-  border-radius: var(--radius-lg);
-  background: var(--role-accent-soft);
-  padding: 0.25rem 0.625rem;
-  color: var(--role-accent-strong);
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-.scene .turn.agent p {
-  margin: 0;
+  border-radius: 1rem;
+  background: var(--ag-bubble);
+  padding: 0.375rem 0.875rem;
   font-size: 0.875rem;
   line-height: 1.6;
 }
+.scene .turn.agent p {
+  margin: 0;
+  font-family: ui-serif, Georgia, "Hiragino Mincho ProN", "Yu Mincho", serif;
+  font-size: 0.9375rem;
+  line-height: 1.8;
+}
 .scene .turn.agent p + p {
-  margin-top: 0.25rem;
+  margin-top: 0.375rem;
 }
 .scene .thinking {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.5rem;
   margin: 0;
-  color: var(--role-muted);
+  color: var(--ag-muted);
   font-size: 0.8125rem;
 }
 .scene .thinking-mark {
+  flex: none;
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: var(--role-muted);
+  background: var(--ag-accent-strong);
 }
 .scene .turn.tool details {
-  border: 1px solid var(--role-rule);
-  border-radius: var(--radius-md);
-  background: var(--role-sunken);
-  font-family: var(--font-code);
-  font-size: 0.75rem;
+  border: 1px solid var(--ag-line);
+  border-radius: 0.5rem;
+  background: var(--ag-card);
+  font-size: 0.8125rem;
 }
 .scene .turn.tool summary {
   position: relative;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.1875rem 0.5rem;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.625rem;
   list-style: none;
   cursor: pointer;
 }
@@ -1621,15 +2630,21 @@ const agentConclusion = [
   display: none;
 }
 .scene .turn.tool summary::after {
-  content: "▸" / "";
-  margin-left: auto;
-  color: var(--role-muted);
+  content: "";
+  flex: none;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  margin: -0.1875rem 0.125rem 0 auto;
+  transform: rotate(45deg);
+  border-right: 1.5px solid var(--ag-muted);
+  border-bottom: 1.5px solid var(--ag-muted);
 }
 .scene .turn.tool details[open] summary::after {
-  content: "▾" / "";
+  margin-top: 0.1875rem;
+  transform: rotate(225deg);
 }
 .scene .turn.tool summary:focus-visible {
-  outline: 2px solid var(--role-accent);
+  outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
 .scene .tool-state {
@@ -1639,24 +2654,20 @@ const agentConclusion = [
 }
 .scene .turn.tool[data-state="done"] .tool-state::before {
   content: "✓" / "";
-  color: var(--role-success);
+  color: var(--ag-done);
   font-weight: 700;
 }
 .scene .turn.tool[data-state="running"] .tool-state::before {
   content: "";
   display: inline-block;
-  width: 0.625rem;
-  height: 0.625rem;
-  border: 2px solid var(--role-rule);
-  border-top-color: var(--role-accent);
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 50%;
+  background: var(--ag-accent-strong);
   vertical-align: middle;
 }
 .scene .tool-name {
   flex: none;
-  border-radius: var(--radius-sm);
-  background: var(--role-rule);
-  padding: 0 0.375rem;
   font-weight: 700;
 }
 .scene .tool-target {
@@ -1664,14 +2675,15 @@ const agentConclusion = [
   overflow: hidden;
   background: transparent;
   padding: 0;
+  color: var(--ag-muted);
   font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .scene .tool-body {
-  border-top: 1px solid var(--role-rule);
-  background: var(--role-surface);
-  padding: 0.375rem 0.5rem;
+  border-top: 1px solid var(--ag-line);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
 }
 .scene .tool-body[hidden] {
   display: none;
@@ -1679,17 +2691,17 @@ const agentConclusion = [
 .scene .tool-body > button {
   position: relative;
   margin-top: 0.375rem;
-  border: 1px solid var(--role-accent);
-  border-radius: var(--radius-md);
-  background: var(--role-surface);
+  border: 1px solid var(--ag-edge);
+  border-radius: 0.5rem;
+  background: var(--ag-card);
   padding: 0.0625rem 0.625rem;
-  color: var(--role-accent);
+  color: var(--ag-fg);
   font-family: var(--font-body);
   font-size: 0.75rem;
   cursor: pointer;
 }
 .scene .tool-body > button:hover {
-  background: var(--role-accent-soft);
+  background: var(--ag-bubble);
 }
 .scene .tool-table {
   display: table;
@@ -1699,12 +2711,12 @@ const agentConclusion = [
 }
 .scene .tool-table th,
 .scene .tool-table td {
-  border: 1px solid var(--role-rule);
+  border: 1px solid var(--ag-line);
   padding: 0.0625rem 0.5rem;
   text-align: left;
 }
 .scene .tool-table th {
-  background: var(--role-sunken);
+  background: var(--ag-bubble);
 }
 .scene .tool-line {
   margin: 0 0 0.25rem;
@@ -1722,11 +2734,11 @@ const agentConclusion = [
   display: grid;
   grid-template-columns: 8.5rem minmax(0, 1fr);
   gap: 0.5rem;
-  border-top: 1px solid var(--role-rule);
+  border-top: 1px solid var(--ag-line);
 }
 .scene .tool-attrs dt {
   margin: 0;
-  color: var(--role-muted);
+  color: var(--ag-muted);
 }
 .scene .tool-attrs dd {
   margin: 0;
@@ -1750,7 +2762,13 @@ const agentConclusion = [
   grid-template-columns: repeat(2, auto);
   justify-content: start;
   gap: 0.125rem 1.5rem;
-  margin: 0 0 0.25rem;
+  margin: 0 0 0.375rem;
+  border: 1px solid var(--ag-line);
+  border-left: 3px solid var(--ag-accent-strong);
+  border-radius: 0.5rem;
+  background: var(--ag-card);
+  padding: 0.375rem 0.75rem;
+  font-family: var(--font-body);
   font-size: 0.875rem;
 }
 .scene .agent-result > div {
@@ -1759,7 +2777,7 @@ const agentConclusion = [
 }
 .scene .agent-result dt {
   margin: 0;
-  color: var(--role-muted);
+  color: var(--ag-muted);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1768,47 +2786,68 @@ const agentConclusion = [
 }
 .scene .agent-composer {
   position: relative;
-  display: flex;
   flex: none;
+  padding: 0.375rem 0.75rem 0.625rem;
+}
+.scene .agent-box {
+  display: flex;
   align-items: flex-end;
   gap: 0.5rem;
-  border-top: 1px solid var(--role-rule);
-  background: var(--role-sunken);
-  padding: 0.375rem 0.625rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  border: 1px solid var(--ag-edge);
+  border-radius: 1rem;
+  background: var(--ag-card);
+  box-shadow: 0 1px 3px rgb(20 20 19 / 0.08);
+  padding: 0.375rem 0.5rem 0.375rem 0.875rem;
+}
+.scene .agent-box:focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 .scene .agent-input {
   flex: 1 1 auto;
   min-width: 0;
   height: 2.75rem;
-  border: 1px solid var(--role-border);
-  border-radius: var(--radius-md);
-  background: var(--role-surface);
-  padding: 0.25rem 0.5rem;
-  color: var(--role-fg);
+  border: 0;
+  background: transparent;
+  padding: 0.25rem 0;
+  color: var(--ag-fg);
   font: inherit;
   font-size: 0.875rem;
-  line-height: 1.4;
+  line-height: 1.5;
   resize: none;
 }
+.scene .agent-input::placeholder {
+  color: var(--ag-muted);
+  opacity: 1;
+}
 .scene .agent-input:focus-visible {
-  outline: 2px solid var(--role-accent);
-  outline-offset: -2px;
+  outline: 0;
 }
 .scene .agent-send {
+  display: inline-flex;
   flex: none;
-  border: 1px solid var(--role-accent);
-  border-radius: var(--radius-md);
-  background: var(--role-accent);
-  padding: 0.25rem 0.875rem;
-  color: var(--role-on-accent);
-  font-size: 0.8125rem;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ag-accent);
+  color: var(--ag-on-accent);
   cursor: pointer;
 }
+.scene .agent-send:hover:not(:disabled) {
+  background: var(--ag-accent-strong);
+}
 .scene .agent-send:disabled {
-  border-color: var(--role-rule);
-  background: var(--role-surface);
-  color: var(--role-muted);
+  background: var(--ag-off);
+  color: var(--ag-off-fg);
   cursor: not-allowed;
+}
+.scene .agent-send:focus-visible {
+  outline-offset: 2px;
 }
 @media (max-width: 639px) {
   .scene .agent-result {
@@ -1816,16 +2855,10 @@ const agentConclusion = [
   }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .scene .turn.tool[data-state="running"] .tool-state::before {
-    animation: agent-spin 0.8s linear infinite;
-  }
-  .scene .thinking-mark {
+  .scene .turn.tool[data-state="running"] .tool-state::before,
+  .scene .thinking-mark,
+  .scene .agent-status[data-state="running"]::before {
     animation: agent-pulse 1s ease-in-out infinite;
-  }
-}
-@keyframes agent-spin {
-  to {
-    transform: rotate(360deg);
   }
 }
 @keyframes agent-pulse {
@@ -1834,70 +2867,51 @@ const agentConclusion = [
   }
 }
 
-.scene .repo-head {
-  flex: none;
-  border-bottom: 1px solid var(--role-rule);
-  background: var(--role-sunken);
-  padding: 0.25rem 0.625rem;
-  font-family: var(--font-code);
-  font-size: 0.75rem;
+@media (max-width: 639px) {
+  .scene .tab-strip {
+    padding-bottom: 0.25rem;
+  }
+  .scene .tab-strip .dots {
+    display: none;
+  }
+  .scene .tab {
+    margin-bottom: 0.125rem;
+    border-radius: var(--radius-md);
+    padding: 0.25rem 0.5rem;
+  }
+  .scene .tab[aria-selected="true"]::before,
+  .scene .tab[aria-selected="true"]::after {
+    display: none;
+  }
 }
-.scene :global(pre.astro-code) {
-  flex: 1 1 0;
-  min-height: 0;
-  max-height: 20rem;
-  margin: 0;
-  overflow: auto;
-  border-radius: 0;
-  padding: 0.375rem 0;
-  background: var(--role-console) !important;
-  font-size: 0.75rem;
-  line-height: 1.6;
-}
-.scene :global(pre.astro-code code) {
-  display: grid;
-  width: max-content;
-  min-width: 100%;
-  background: transparent;
-  counter-reset: line;
-}
-.scene :global(pre.astro-code .line) {
-  padding: 0 0.625rem;
-}
-.scene :global(pre.astro-code .line::before) {
-  content: counter(line);
-  counter-increment: line;
-  display: inline-block;
-  width: 1.5rem;
-  margin-right: 1rem;
-  color: var(--role-on-console);
-  opacity: 0.55;
-  text-align: right;
-}
-
 @media (min-width: 640px) {
-  .scene .console {
+  .scene .db-body {
     flex-direction: row;
   }
   .scene .tables {
     width: 10rem;
-    border-right: 1px solid var(--role-rule);
+    border-right: 1px solid var(--db-rule);
     border-bottom: 0;
   }
   .scene .logs {
-    grid-template-columns: 8rem minmax(0, 1fr);
+    grid-template-columns: 9rem minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }
   .scene .facets {
     flex-direction: column;
     flex-wrap: nowrap;
     gap: 0.5rem;
-    border-right: 1px solid var(--role-rule);
+    border-right: 1px solid var(--lg-rule);
     border-bottom: 0;
     overflow-y: auto;
   }
   .scene .log-scroll {
     max-height: none;
+  }
+}
+@media (min-width: 480px) {
+  .scene .lg-rail {
+    display: flex;
   }
 }
 
@@ -1908,7 +2922,7 @@ const agentConclusion = [
   }
   .scene .workspace {
     flex: 1 1 0;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
     grid-template-rows: minmax(0, 1fr);
   }
   .scene .start {
@@ -1936,6 +2950,117 @@ const agentConclusion = [
   .scene .table-item,
   .scene .log-row {
     transition: background-color 0.1s;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .scene .chat {
+    --c-bg: #1a1d21;
+    --c-fg: #d1d2d3;
+    --c-muted: #ababad;
+    --c-rule: #35373b;
+    --c-edge: #7d7f82;
+    --c-toolbar: #222529;
+    --c-btn: #1a1d21;
+    --c-btn-hover: #2a2d31;
+    --c-btn-off: #222529;
+    --c-found-bg: #12392e;
+    --c-found: #86ddb5;
+    --c-missing-bg: #4a1f25;
+    --c-missing: #ffabb1;
+    --ring: #78b9f0;
+  }
+  .scene .browser {
+    --br-strip: #202124;
+    --br-chrome: #35363a;
+    --br-pill: #202124;
+    --br-text: #e8eaed;
+    --br-tab: #bdc1c6;
+    --br-tab-hover: #2b2c2f;
+    --br-nav: #bdc1c6;
+    --br-rule: #4a4c50;
+    --br-dot: #6b6f75;
+    --br-unseen-bg: #4b3a0b;
+    --br-unseen: #ffd971;
+    --br-unseen-line: #b88a1a;
+    --br-fav-logs: #a98be0;
+    --br-fav-repo: #ffffff;
+    --ring: #8ab4f8;
+  }
+  .scene .panel[data-tool="console"] {
+    --db-bg: #161b1f;
+    --db-band: #1f262b;
+    --db-side: #1b2126;
+    --db-head: #26303a;
+    --db-fg: #e3e8ec;
+    --db-muted: #a5b1bc;
+    --db-rule: #34404a;
+    --db-grid: #3a4752;
+    --db-edge: #6f7c88;
+    --db-accent: #2fb8ac;
+    --db-on-accent: #04201e;
+    --db-soft: #16413f;
+    --db-online: #4cd07d;
+    --db-danger: #ff9a92;
+    --db-danger-soft: #4a1f1c;
+    --db-keyword: #c9a0f0;
+    --db-string: #8ad9a0;
+    --db-number: #f0b070;
+    --db-comment: #9aa7b2;
+    --db-func: #6cc4e8;
+    --ring: #5ed3c8;
+  }
+  .scene .panel[data-tool="logs"] {
+    --lg-bg: #1e1e2e;
+    --lg-panel: #252538;
+    --lg-fg: #e4e5ec;
+    --lg-muted: #a9abbd;
+    --lg-rule: #3a3b52;
+    --lg-edge: #7c7f99;
+    --lg-rail: #4b1f85;
+    --lg-accent: #b9a0f0;
+    --lg-info: #4aa3ea;
+    --lg-info-text: #74b8f0;
+    --lg-info-soft: #24354f;
+    --lg-warn: #e8b93a;
+    --lg-warn-text: #f2ca5c;
+    --lg-warn-soft: #43391a;
+    --lg-select: #2c3c5a;
+    --lg-hover: #2a2a40;
+    --lg-live: #4cd07d;
+    --ring: #b9a0f0;
+  }
+  .scene .panel[data-tool="repo"] {
+    --gh-bg: #0d1117;
+    --gh-band: #151b23;
+    --gh-fg: #e6edf3;
+    --gh-muted: #9198a1;
+    --gh-rule: #3d444d;
+    --gh-link: #4493f8;
+    --gh-tab-line: #f78166;
+    --gh-select: #1a2a44;
+    --ring: #4493f8;
+  }
+  .scene :global(pre.astro-code span) {
+    color: var(--shiki-dark);
+  }
+  .scene .panel[data-tool="agent"] {
+    --ag-bg: #262624;
+    --ag-card: #30302e;
+    --ag-fg: #f5f4ed;
+    --ag-muted: #b8b5a9;
+    --ag-line: #4a4943;
+    --ag-edge: #85827a;
+    --ag-bubble: #3a3935;
+    --ag-accent-strong: #ee9a7b;
+    --ag-done: #7fd0a0;
+    --ag-off: #3f3e3a;
+    --ag-off-fg: #a6a398;
+    --ring: #f0a284;
+  }
+  .scene .agent-send:hover:not(:disabled) {
+    background: var(--ag-accent-strong);
+    color: #141413;
   }
 }
 </style>
@@ -2222,6 +3347,7 @@ for (
         ? 'Warn'
         : 'Info';
     }
+    detail.dataset.level = row.level;
     for (
       const attr of detail.querySelectorAll<HTMLElement>('[data-detail-attr]')
     ) {
