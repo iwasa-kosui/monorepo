@@ -10,6 +10,7 @@ import { accountHandle, accountHref, detailHref, displayStatus, isLocalAccount }
 import { translationErrorMessage } from '../api/translation.ts';
 import { BlueskyCrosspostIcon } from './BlueskyCrosspostIcon.tsx';
 import { toBlueskyCrosspostMark } from './blueskyCrosspostMark.ts';
+import { BookmarkButton } from './BookmarkButton.tsx';
 import { DirectMark, isDirectStatus } from './DirectMark.tsx';
 import { EmojiPicker } from './EmojiPicker.tsx';
 import { LinkPreviewCard } from './LinkPreviewCard.tsx';
@@ -780,6 +781,11 @@ export const PostView = (
                 {post.favourites_count > 0 && <span class='text-sm'>{post.favourites_count}</span>}
               </button>
             )}
+            <BookmarkButton
+              bookmarked={post.bookmarked}
+              onBookmark={onBookmark === undefined ? undefined : () => onBookmark(post.id)}
+              onUndoBookmark={onUndoBookmark === undefined ? undefined : () => onUndoBookmark(post.id)}
+            />
             {/* Emoji reaction button */}
             {onEmojiReact && (
               <div class='relative'>
