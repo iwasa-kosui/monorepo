@@ -1,0 +1,394 @@
+---
+/**
+ * トップページのタイムライン。砂浜の上に、年ごとにまとめた行として並べる。
+ */
+import { getTheme } from '@/config/themes';
+import {
+  formatMonthDay,
+  groupByYear,
+  KIND_LABEL,
+  type TimelineEntry,
+} from './timeline';
+
+type Props = {
+  entries: readonly TimelineEntry[];
+};
+
+const { entries } = Astro.props;
+const groups = groupByYear(entries);
+---
+
+<section class="tl" data-timeline aria-labelledby="timeline">
+  <header class="tl-head">
+    <h2 class="tl-title" id="timeline">Timeline</h2>
+    <p class="tl-count">{entries.length} 件</p>
+  </header>
+  {
+    groups.map((group) => (
+      <section class="tl-year" aria-label={`${group.year}年`}>
+        <h3 class="tl-year-label">{group.year}</h3>
+        <ol class="tl-rows">
+          {
+            group.entries.map((entry) => (
+              <li class="tl-row" data-timeline-row>
+                <time class="tl-date" datetime={entry.date}>
+                  {formatMonthDay(entry.date)}
+                </time>
+                <div class="tl-body">
+                  <p class="tl-meta">
+                    <span class="tl-kind">{KIND_LABEL[entry.kind]}</span>
+                    {entry.context && <span>{entry.context}</span>}
+                  </p>
+                  <h4
+                    class="tl-heading"
+                    transition:name={entry.transitionName}
+                  >
+                    <a
+                      class="tl-link"
+                      href={entry.href}
+                      {...(entry.external
+                      ? { target: '_blank', rel: 'noopener noreferrer' }
+                      : {})}
+                    >
+                      {entry.title}
+                    </a>
+                  </h4>
+                  {
+                    entry.description && (
+                      <p class="tl-description">{entry.description}</p>
+                    )
+                  }
+                  {
+                    entry.themes.length > 0 && (
+                      <ul class="tl-themes">
+                        {
+                          entry.themes.map((slug) => {
+                const theme = getTheme(slug);
+                return (
+                            <li>
+                              <a href={`/themes/${slug}`}>
+                                <i
+                                  aria-hidden="true"
+                                  style={`background-color: ${
+                                    theme?.color ?? 'currentColor'
+                                  }`}
+                                />
+                                {theme?.name ?? slug}
+                              </a>
+                            </li>
+                          );
+              })
+                        }
+                      </ul>
+                    )
+                  }
+                </div>
+                <span class="tl-go" aria-hidden="true">
+                  {entry.external ? '↗' : '→'}
+                </span>
+              </li>
+            ))
+          }
+        </ol>
+      </section>
+    ))
+  }
+</section>
+
+<style>
+.tl {
+  --tl-ink: #1f2740;
+  --tl-muted: #4b526d;
+  --tl-line: rgba(31, 39, 64, 0.16);
+  --tl-wash: rgba(31, 39, 64, 0.06);
+  --tl-kind: #b23c30;
+  --tl-go: #ee7b6f;
+  --tl-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  padding-top: clamp(1rem, 4vw, 3rem);
+  color: var(--tl-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tl {
+    --tl-ink: #f3f1ee;
+    --tl-muted: #b3bacb;
+    --tl-line: rgba(243, 241, 238, 0.18);
+    --tl-wash: rgba(243, 241, 238, 0.07);
+    --tl-kind: #f6a595;
+    --tl-go: #f47f70;
+  }
+}
+
+.tl-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding-bottom: clamp(1.5rem, 4vw, 3rem);
+}
+
+.tl-title {
+  font-size: clamp(3rem, 6.6vw, 6rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+
+.tl-count {
+  padding-bottom: 0.5rem;
+  color: var(--tl-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-year-label {
+  padding: 1.25rem 0 0.75rem;
+  border-top: 1px solid var(--tl-ink);
+  font-size: clamp(1.5rem, 2.4vw, 2.25rem);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.tl-year + .tl-year {
+  margin-top: clamp(2rem, 5vw, 4rem);
+}
+
+.tl-row {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 1.25rem 0 1.5rem;
+  border-top: 1px solid var(--tl-line);
+  transition: opacity 0.8s var(--tl-ease), transform 0.8s var(--tl-ease);
+}
+
+/* 波が右から寄せてくるように、濡れた色を右から広げる */
+.tl-row::before {
+  content: "";
+  position: absolute;
+  inset: 0 -1rem;
+  z-index: -1;
+  border-radius: 1rem;
+  background: var(--tl-wash);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.6s var(--tl-ease);
+}
+
+.tl-row:hover::before,
+.tl-row:focus-within::before {
+  transform: scaleX(1);
+}
+
+.tl-date {
+  color: var(--tl-muted);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-body {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.tl-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.125rem 0.75rem;
+  color: var(--tl-muted);
+  font-size: 0.8125rem;
+}
+
+.tl-kind {
+  color: var(--tl-kind);
+  font-weight: 600;
+}
+
+.tl-heading {
+  margin-top: 0.25rem;
+  font-size: clamp(1.125rem, 1.7vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1.5;
+  text-wrap: pretty;
+  transition: transform 0.5s var(--tl-ease);
+}
+
+.tl-row:hover .tl-heading {
+  transform: translateX(0.5rem);
+}
+
+/* 行のどこを押してもリンクになる */
+.tl-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.tl-link:focus-visible {
+  outline: none;
+}
+
+.tl-row:has(.tl-link:focus-visible) {
+  outline: 2px solid var(--tl-kind);
+  outline-offset: 4px;
+  border-radius: 0.5rem;
+}
+
+.tl-description {
+  margin-top: 0.375rem;
+  max-width: 46em;
+  color: var(--tl-muted);
+  font-size: 0.875rem;
+  line-height: 1.8;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.tl-themes {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.tl-themes a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  color: var(--tl-muted);
+  transition: color 0.3s;
+}
+
+.tl-themes a:hover {
+  color: var(--tl-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+
+.tl-themes i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+.tl-go {
+  grid-row: 1;
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--tl-line);
+  border-radius: 50%;
+  transition:
+    background-color 0.3s,
+    border-color 0.3s,
+    color 0.3s,
+    transform 0.5s var(--tl-ease);
+}
+
+.tl-row:hover .tl-go {
+  border-color: transparent;
+  background-color: var(--tl-go);
+  color: #1f2740;
+  transform: translateX(0.25rem);
+}
+
+/* 画面に入ってくる行は、下から少し上がる */
+.tl.is-watching .tl-row:not(.is-in) {
+  opacity: 0.15;
+  transform: translateY(1.5rem);
+}
+
+@media (min-width: 861px) {
+  .tl-year {
+    display: grid;
+    grid-template-columns: 9rem minmax(0, 1fr);
+    border-top: 1px solid var(--tl-ink);
+  }
+
+  .tl-year-label {
+    position: sticky;
+    top: 1.5rem;
+    align-self: start;
+    padding-top: 1.5rem;
+    border-top: 0;
+  }
+
+  .tl-row {
+    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 0 2rem;
+    padding: 1.75rem 0 2rem;
+  }
+
+  .tl-rows > .tl-row:first-child {
+    border-top: 0;
+  }
+
+  .tl-date {
+    padding-top: 0.125rem;
+  }
+
+  .tl-body {
+    grid-column: 2;
+  }
+
+  .tl-go {
+    grid-column: 3;
+    width: 3rem;
+    height: 3rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-row,
+  .tl-row::before,
+  .tl-heading,
+  .tl-go {
+    transition: none;
+  }
+}
+</style>
+
+<script>
+const watch = (): void => {
+  const timeline = document.querySelector<HTMLElement>('[data-timeline]');
+  if (!timeline) return;
+  if (
+    !('IntersectionObserver' in window)
+    || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) {
+    return;
+  }
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        entry.target.classList.add('is-in');
+        observer.unobserve(entry.target);
+      }
+    },
+    { rootMargin: '0px 0px -6% 0px' },
+  );
+  timeline.classList.add('is-watching');
+  timeline
+    .querySelectorAll('[data-timeline-row]')
+    .forEach((row) => observer.observe(row));
+};
+
+document.addEventListener('astro:page-load', watch);
+</script>

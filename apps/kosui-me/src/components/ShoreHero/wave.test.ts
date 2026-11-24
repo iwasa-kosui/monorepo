@@ -52,6 +52,14 @@ describe('createWaves', () => {
     expect(waves.at(WAVE_PERIOD * 3).amplitude).toBe(first);
   });
 
+  it('周期が始まった時刻を返す', () => {
+    const waves = createWaves(seeded(7));
+    expect(waves.at(0).cycleStart).toBe(-3);
+    expect(waves.at(6.9).cycleStart).toBe(-3);
+    expect(waves.at(7).cycleStart).toBe(7);
+    expect(waves.at(26.9).cycleStart).toBe(17);
+  });
+
   it('1 つ前の波の強さを返す', () => {
     const waves = createWaves(seeded(7));
     const third = waves.at(WAVE_PERIOD * 2);

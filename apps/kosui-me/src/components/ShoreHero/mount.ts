@@ -17,7 +17,7 @@ const UNIFORMS = [
   'uPixelRatio',
   'uTime',
   'uTide',
-  'uCycle',
+  'uCycleStart',
   'uAmplitude',
   'uRect',
   'uOffset',
@@ -192,8 +192,6 @@ export type ShoreElements = Readonly<{
   slot: HTMLElement;
   /** エビに重ねた、触れる・押すためのボタン */
   button: HTMLButtonElement;
-  /** スクロールに合わせて奥へ下げる、ヒーローの中身 */
-  content: HTMLElement;
   /** エビのそばに一言を出す場所 */
   note: HTMLElement;
 }>;
@@ -203,7 +201,7 @@ export type ShoreElements = Readonly<{
  * WebGL が使えない環境では何もせず、静止したドット絵（SVG）がそのまま見える。
  */
 export const mountShore = (elements: ShoreElements): () => void => {
-  const { hero, canvas, slot, button, content, note } = elements;
+  const { hero, canvas, slot, button, note } = elements;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -291,7 +289,13 @@ export const mountShore = (elements: ShoreElements): () => void => {
     }
 
     const elapsed = (now - startedAt) / 1000;
-    const time = reduceMotion ? STILL_TIME : elapsed;
+    // data-shore-time を付けると、その時刻で止めた絵になる（見た目の確認用）
+    const pinned = hero.dataset.shoreTime;
+    const time = reduceMotion
+      ? STILL_TIME
+      : pinned === undefined
+      ? elapsed
+      : Number(pinned);
     const wave = waves.at(time);
     if (!reduceMotion && previousTime !== undefined) {
       const wasGone = drift.gone;
@@ -319,7 +323,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
     gl.uniform1f(uniforms.uPixelRatio, pixelRatio);
     gl.uniform1f(uniforms.uTime, time);
     gl.uniform1f(uniforms.uTide, tide);
-    gl.uniform1f(uniforms.uCycle, wave.cycle);
+    gl.uniform1f(uniforms.uCycleStart, wave.cycleStart);
     gl.uniform2f(uniforms.uAmplitude, wave.amplitude, wave.previousAmplitude);
     gl.uniform3f(
       uniforms.uRect,
@@ -360,17 +364,11 @@ export const mountShore = (elements: ShoreElements): () => void => {
     if (!disposed && frame === 0) frame = requestAnimationFrame(draw);
   };
 
-  // スクロール: 潮が満ちて浜とエビを覆い、ヒーローの中身は奥へ下がる
+  // スクロール: ページを読み進めるほど潮が満ち、浜とエビを覆う
   let scrollQueued = false;
   const applyScroll = (): void => {
     scrollQueued = false;
-    const sticky = getComputedStyle(hero).position === 'sticky';
-    const progress = sticky
-      ? Math.min(1, Math.max(0, window.scrollY / (hero.offsetHeight || 1)))
-      : 0;
-    tide = progress;
-    content.style.transform = `translate3d(0, ${(-progress * 60).toFixed(1)}px, 0)`;
-    content.style.opacity = (1 - progress * 0.75).toFixed(3);
+    tide = Math.min(1, Math.max(0, window.scrollY / (hero.offsetHeight || 1)));
   };
   const onScroll = (): void => {
     if (scrollQueued) return;

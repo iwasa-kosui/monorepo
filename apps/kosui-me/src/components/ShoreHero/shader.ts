@@ -18,7 +18,7 @@ uniform vec2 uResolution;   // 描画先の大きさ（デバイスピクセル�
 uniform float uPixelRatio;
 uniform float uTime;        // 秒
 uniform float uTide;        // スクロールで満ちた潮（0〜1）
-uniform float uCycle;       // いま何回目の波か
+uniform float uCycleStart;  // いまの波の周期が始まった時刻
 uniform vec2 uAmplitude;    // x = いまの波の強さ, y = 1 つ前の波の強さ
 uniform vec3 uRect;         // エビのドット絵の左上（CSS px）と 1 辺の長さ
 uniform vec2 uOffset;       // エビの移動量（マス）
@@ -86,10 +86,11 @@ float caustic(vec2 uv, float time) {
 }
 
 // 波の寄せ引き: 速く寄せて、ゆっくり引く
+// 周期の境目は JS から受け取る。シェーダー側で数え直すと、丸め誤差で境目の 1 コマだけ食い違う
 float swash(float t) {
-  float tt = t + 3.;
-  float c = floor(tt / PERIOD), ph = fract(tt / PERIOD);
-  float amp = c < .5 ? 1.2 : (c >= uCycle ? uAmplitude.x : uAmplitude.y);
+  float since = t - uCycleStart;
+  float ph = clamp(since < 0. ? since / PERIOD + 1. : since / PERIOD, 0., 1.);
+  float amp = since < 0. ? uAmplitude.y : uAmplitude.x;
   float u = ph < .36 ? 1. - pow(1. - ph / .36, 2.4) : pow(1. - (ph - .36) / .64, 1.7);
   return u * amp;
 }
@@ -100,6 +101,30 @@ float shore(float a, float t) {
   float lobe = noise(vec2(a * 1.25, t * .11)) - .5;
   float lobe2 = noise(vec2(a * 3.3 + 5., t * .17)) - .5;
   return mix(.66, -.7, u) + (lobe * .36 + lobe2 * .1) * (.35 + .9 * u) - uTide * 2.8;
+}
+
+// 波打ち際が位置 s まで来るのに必要な寄せ具合。at はそのときの時刻
+float needed(float s, float a, float at) {
+  float lobe = (noise(vec2(a * 1.25, at * .11)) - .5) * .36 + (noise(vec2(a * 3.3 + 5., at * .17)) - .5) * .1;
+  return (.66 + .35 * lobe - uTide * 2.8 - s) / (1.36 - .9 * lobe);
+}
+
+// cycleStart から始まる波の引き波が、位置 s を通り過ぎた時刻。
+// reached は、その波がそこまで届いたか（0〜1。届いた範囲の縁でなだらかに 0 になる）
+float passedAt(float s, float a, float cycleStart, float amp, out float reached) {
+  float at = cycleStart + .36 * PERIOD;   // まず、寄せきった時刻の波の形で見積もる
+  float profile = 0.;
+  for (int i = 0; i < 2; i++) {
+    profile = needed(s, a, at) / amp;
+    at = cycleStart + (.36 + .64 * (1. - pow(clamp(profile, 0., 1.), 1. / 1.7))) * PERIOD;
+  }
+  reached = 1. - smoothstep(.9, 1., profile);
+  return at;
+}
+
+// 濡れてからの秒数に対する、砂の濡れ具合。段をつけず、なだらかに乾く
+float dryness(float seconds) {
+  return 1. - smoothstep(.5, 11., seconds);
 }
 
 // 画面上の位置から、ドット絵のマス座標へ。wobble は水越しの揺らぎの強さ
@@ -138,13 +163,14 @@ void main() {
   float inWater = smoothstep(0., .012, w);
   float depth = max(w, 0.);
 
-  // 濡れた砂: 少し前までの波の到達点から、乾いていく分を引く
-  float wetLine = 1e3;
-  for (int k = 0; k < 10; k++) {
-    float back = float(k) * .7;
-    wetLine = min(wetLine, shore(a, t - back) + back * .07);
-  }
-  float wet = smoothstep(-.03, .03, s - wetLine + (fbm(vec2(a * 4., s * 4.)) - .5) * .035);
+  // 濡れた砂: 引き波が通り過ぎてからの時間で、その場でゆっくり乾いていく
+  float phase = clamp((t - uCycleStart) / PERIOD, 0., 1.);
+  float reachedNow, reachedBefore;
+  float passedNow = passedAt(s, a, uCycleStart, uAmplitude.x, reachedNow);
+  float passedBefore = passedAt(s, a, uCycleStart - PERIOD, uAmplitude.y, reachedBefore);
+  // いまの波がまだここを引いていなければ、1 つ前の波の跡だけが残っている
+  float wetNow = t >= passedNow ? reachedNow * dryness(t - passedNow) : 0.;
+  float wet = max(max(wetNow, reachedBefore * dryness(t - passedBefore)), inWater);
 
   // 水の下は屈折で少しずれて見える
   vec2 refracted = px + (vec2(
@@ -162,14 +188,12 @@ void main() {
   float fresh = wet * exp(-max(line - s, 0.) * 3.6);
   col += uLight * (.02 + .2 * fresh) * wet * uGain * uSheen * (.55 + .45 * noise(refracted * .018 + t * .05));
 
-  float tt = t + 3.;
-  float phase = fract(tt / PERIOD);
   float fine = fbm(vec2(a * 7., s * 7.) + t * .05);
 
   // 引いたあとの砂に残る細い泡の線
   if (phase > .36) {
-    float peak = shore(a, (floor(tt / PERIOD) + .36) * PERIOD - 3.);
-    float residue = smoothstep(.006, 0., abs(s - peak - .008) - .004 * fine);
+    float peak = shore(a, uCycleStart + .36 * PERIOD);
+    float residue = 1. - smoothstep(0., .006, abs(s - peak - .008) - .004 * fine);
     col = mix(col, uFoam, residue * (1. - inWater) * (1. - smoothstep(.36, .9, phase)) * .38 * smoothstep(.3, .5, fine));
   }
 
@@ -201,14 +225,14 @@ void main() {
 
   // 泡: 濁った塊にせず、輪郭のはっきりした細い線の網と筋で描く
   float advancing = phase < .36 ? 1. : .55;
-  col *= 1. - .12 * smoothstep(.045, 0., w) * inWater;
-  float edge = smoothstep(.013 + .01 * fine, 0., w) * step(0., w) * (.5 + .5 * fine) * advancing;
-  float lace = smoothstep(.9, .975, ridge(vec2(a * 8., w * 8. - t * .35))) * smoothstep(.24, .03, w) * inWater * advancing * .75;
+  col *= 1. - .12 * (1. - smoothstep(0., .045, w)) * inWater;
+  float edge = (1. - smoothstep(0., .013 + .01 * fine, w)) * step(0., w) * (.5 + .5 * fine) * advancing;
+  float lace = smoothstep(.9, .975, ridge(vec2(a * 8., w * 8. - t * .35))) * (1. - smoothstep(.03, .24, w)) * inWater * advancing * .75;
   float streak = smoothstep(.93, .985, ridge(vec2(a * 2.2 - t * .05, w * 11. - t * .22))) * exp(-depth * 2.8) * inWater * .5;
-  col += uLight * .07 * smoothstep(.12, 0., w) * inWater * uGain;
+  col += uLight * .07 * (1. - smoothstep(0., .12, w)) * inWater * uGain;
   col = mix(col, uFoam, clamp(edge + lace + streak, 0., 1.) * .82);
 
-  float vignette = smoothstep(1.3, .3, length((uv - .5) * vec2(1.1, 1.)));
+  float vignette = 1. - smoothstep(.3, 1.3, length((uv - .5) * vec2(1.1, 1.)));
   col *= mix(.94, 1., vignette);
   col += (hash(gl_FragCoord.xy + t) - .5) * .012;
   gl_FragColor = vec4(col, 1.);

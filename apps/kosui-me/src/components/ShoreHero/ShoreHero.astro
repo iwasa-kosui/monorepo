@@ -19,7 +19,7 @@ const { themes } = Astro.props;
 
 <section class="shore" data-shore-hero aria-labelledby="shore-name">
   <canvas class="shore-sea" data-shore-canvas aria-hidden="true"></canvas>
-  <div class="shore-content" data-shore-content>
+  <div class="shore-content">
     <div class="shore-copy">
       <p class="shore-role">テックリード @ 株式会社カケハシ</p>
       <h1 class="shore-name" id="shore-name">岩佐 幸翠</h1>
@@ -83,9 +83,9 @@ const { themes } = Astro.props;
 </section>
 
 <style>
-/* 配色。シェーダーはここの値を読むので、16 進 6 桁で書く */
+/* 配色。シェーダーはここの値を読むので、16 進 6 桁で書く。砂はサイト全体の地の色と同じ */
 .shore {
-  --shore-sand: #f3e4da;
+  --shore-sand: var(--color-bg);
   --shore-sea-shallow: #f0998d;
   --shore-sea-deep: #b3324b;
   --shore-foam: #fffdfb;
@@ -109,14 +109,12 @@ const { themes } = Astro.props;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--shore-sand);
   color: var(--shore-ink);
 }
 
 /* 夜の浜: 暗い砂に青黒い海 */
 @media (prefers-color-scheme: dark) {
   .shore {
-    --shore-sand: #2b3147;
     --shore-sea-shallow: #3b6c98;
     --shore-sea-deep: #050d1c;
     --shore-foam: #dbe7f8;
@@ -144,6 +142,8 @@ const { themes } = Astro.props;
   pointer-events: none;
   opacity: 0;
   transition: opacity 1.6s ease;
+  /* 下端はページの砂へ溶け込ませる */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 10rem), transparent);
 }
 
 .shore.is-live .shore-sea {
@@ -158,7 +158,6 @@ const { themes } = Astro.props;
   align-items: center;
   gap: 1.75rem;
   padding: 5.5rem var(--shore-gutter) 2.25rem;
-  will-change: transform, opacity;
 }
 
 .shore-copy {
@@ -360,11 +359,9 @@ const { themes } = Astro.props;
   }
 }
 
-/* 広い画面: ヒーローを画面に留め、下から本文のシートが重なる */
+/* 広い画面: 最初の 1 画面をヒーローに使う */
 @media (min-width: 861px) {
   .shore {
-    position: sticky;
-    top: 0;
     height: 100svh;
     min-height: 40rem;
     max-height: 61.25rem;
@@ -437,10 +434,9 @@ const mount = (): void => {
   const canvas = hero?.querySelector<HTMLCanvasElement>('[data-shore-canvas]');
   const slot = hero?.querySelector<HTMLElement>('[data-shore-slot]');
   const button = hero?.querySelector<HTMLButtonElement>('[data-shore-shrimp]');
-  const content = hero?.querySelector<HTMLElement>('[data-shore-content]');
   const note = hero?.querySelector<HTMLElement>('[data-shore-note]');
-  if (!hero || !canvas || !slot || !button || !content || !note) return;
-  dispose = mountShore({ hero, canvas, slot, button, content, note });
+  if (!hero || !canvas || !slot || !button || !note) return;
+  dispose = mountShore({ hero, canvas, slot, button, note });
 };
 
 document.addEventListener('astro:page-load', mount);

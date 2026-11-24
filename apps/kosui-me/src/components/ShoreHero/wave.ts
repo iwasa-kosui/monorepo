@@ -63,6 +63,8 @@ export const swashProfile = (phase: number): number =>
 export type Wave = Readonly<{
   /** 何回目の波か（0 始まり） */
   cycle: number;
+  /** この波の周期が始まった時刻（秒） */
+  cycleStart: number;
   /** この波の強さ */
   amplitude: number;
   /** 1 つ前の波の強さ */
@@ -94,6 +96,7 @@ export const createWaves = (random: () => number): Waves => {
       const amplitude = amplitudeOf(cycle);
       return {
         cycle,
+        cycleStart: cycle * WAVE_PERIOD - START_OFFSET,
         amplitude,
         previousAmplitude: amplitudeOf(Math.max(0, cycle - 1)),
         line: EBB_LINE - REACH * swashProfile(phase) * amplitude,

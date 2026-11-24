@@ -43,7 +43,7 @@ const {
 
 const mainMaxWidth = wide ? 'max-w-6xl' : 'max-w-3xl';
 
-// ヒーローを持つページでは、ヘッダーをヒーローの上に重ね、本文をシートとして下から重ねる
+// ヒーローを持つページでは、ヘッダーをヒーローの上に重ね、本文をヒーローと同じ幅で並べる
 const hasHero = Astro.slots.has('hero');
 
 // ヒーローの上では、海の色に負けない濃さにする
@@ -249,27 +249,30 @@ const navItems = [
         </nav>
       </header>
       <slot name="hero" />
-      <div class:list={['flex-1 flex flex-col', hasHero && 'page-sheet']}>
-        <main
-          class={`flex-1 ${mainMaxWidth} mx-auto px-4 py-8 pb-20 md:pb-8 w-full`}
-          transition:animate={slideUpFade}
-        >
-          <slot />
-        </main>
-        <footer>
-          <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-subtle dark:text-[#9ca3af]">
-            &copy; {new Date().getFullYear()} kosui
-            <span class="mx-1">&middot;</span>
-            <a
-              href="/privacy"
-              class="hover:text-accent dark:hover:text-accent-light transition-colors"
-            >Privacy Policy</a>
-          </div>
-        </footer>
-      </div>
+      <main
+        class:list={[
+          'flex-1 py-8 pb-20 md:pb-8 w-full',
+          hasHero
+            ? 'px-[max(1rem,4.4vw)]'
+            : `${mainMaxWidth} mx-auto px-4`,
+        ]}
+        transition:animate={slideUpFade}
+      >
+        <slot />
+      </main>
+      <footer>
+        <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-subtle dark:text-[#9ca3af]">
+          &copy; {new Date().getFullYear()} kosui
+          <span class="mx-1">&middot;</span>
+          <a
+            href="/privacy"
+            class="hover:text-accent dark:hover:text-accent-light transition-colors"
+          >Privacy Policy</a>
+        </div>
+      </footer>
     </div>
     <nav
-      class="fixed bottom-0 inset-x-0 bg-bg/80 dark:bg-[#111114]/80 backdrop-blur border-t border-border dark:border-[#2a2a32] md:hidden bottom-nav"
+      class="fixed bottom-0 inset-x-0 bg-bg/80 dark:bg-[#2b3147]/80 backdrop-blur border-t border-border dark:border-[#343c57] md:hidden bottom-nav"
       aria-label="Mobile navigation"
       transition:name="mobile-nav"
     >
