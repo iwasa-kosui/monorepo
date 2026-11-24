@@ -171,13 +171,22 @@ export const incidentScenario: WorkspaceScenario = {
   },
   history: [],
   timeline: [
+    { at: 0, kind: 'post', post: { actor: 'support', text: 'お疲れ様です！すみません、急ぎで見てほしいです🙏' } },
     {
-      at: 0,
+      at: 2,
       kind: 'post',
       post: {
         actor: 'support',
         text:
-          '動物病院から電話です。予約していた来院がキャンセルになっていて、受付に飼い主が来ているそうです。\nポチの来院（visit-pochi）です。誰が、いつ、なぜキャンセルしたのか、調べてもらえますか。',
+          '動物病院さんから電話があって、予約してたはずの来院がキャンセルになってるそうです。飼い主さんがもう受付に来ちゃってて…',
+      },
+    },
+    {
+      at: 5,
+      kind: 'post',
+      post: {
+        actor: 'support',
+        text: 'ポチちゃんの来院です（visit-pochi）。誰がいつなんでキャンセルしたか、わかりますか？',
       },
     },
     {
@@ -194,13 +203,14 @@ export const incidentScenario: WorkspaceScenario = {
     },
     { at: 30, kind: 'sql', sql: cancelTamaSql },
     { at: 30, kind: 'affected', count: 2 },
+    { at: 36, kind: 'post', post: { actor: 'support', text: 'すみません、もう1件です' } },
     {
-      at: 36,
+      at: 39,
       kind: 'post',
       post: {
         actor: 'support',
         text:
-          '別の飼い主からも連絡が来ました。タマの来院（visit-tama）もキャンセルになっているそうです。さっきまで予約のままでした。',
+          '別の飼い主さんからも同じ連絡が来てて、タマちゃん（visit-tama）もキャンセルになってます。さっき見たときは予約のままだったんですが…',
       },
     },
     {
@@ -208,13 +218,13 @@ export const incidentScenario: WorkspaceScenario = {
       kind: 'post',
       post: {
         actor: 'support',
-        text: '病院に折り返します。分かったところまで教えてください。',
+        text: '病院さんに折り返さないとなので、わかってるところまででいいので教えてください！',
       },
     },
     {
       at: 105,
       kind: 'post',
-      post: { actor: 'support', text: 'まだ分かりませんか。病院が待っています。' },
+      post: { actor: 'support', text: 'どうでしょう…？病院さんずっとお待ちで💦' },
       unlessReplied: true,
     },
     { when: 'agent:requested', kind: 'tab', tab: 'agent', action: 'open' },
@@ -360,21 +370,21 @@ export const incidentScenario: WorkspaceScenario = {
     },
   },
   interim: {
-    heading: '途中経過です。',
-    unknown: '調査中',
+    heading: 'いま分かってるところです',
+    unknown: 'まだ何も分かってないです、調査中です',
+    pending: '{labels} は調査中です',
     order: ['when', 'what', 'who', 'why'],
   },
   reply: {
-    text:
-      '2026-11-06 18:11:58 にポチの来院のキャンセルの操作がありました。誰が、なぜキャンセルしたのかは、どこにも残っていませんでした。',
-    additions: [{ after: 30, text: 'タマの来院も、18:20:30 に同じ操作でキャンセルになっています。' }],
+    lines: [
+      { text: '18:11:58 にポチの来院をキャンセルする操作があったのは確認できました' },
+      { after: 30, text: 'タマの来院も 18:20:30 に同じ操作でキャンセルされてます' },
+      { text: 'ただ、誰がなんでキャンセルしたかは、DB にもログにもコードにも残ってなくて、分からないです…' },
+    ],
     followUps: [
-      {
-        actor: 'support',
-        delay: 1.5,
-        text: '誰が、なぜキャンセルしたのか分からないと、病院に説明できません。',
-      },
-      { actor: 'support', delay: 1.5, text: 'なんで記録取ってないんですか' },
+      { actor: 'support', delay: 1.5, text: 'えっ' },
+      { actor: 'support', delay: 1.5, text: '誰がなんでキャンセルしたか分からないと、病院さんに説明できないです…' },
+      { actor: 'support', delay: 2, text: 'なんで記録取ってないんですか' },
     ],
   },
   agent: {

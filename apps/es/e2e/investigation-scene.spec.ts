@@ -50,11 +50,20 @@ const followUp = 'これ以上調べられるデータがありません。理�
 const facet = (page: Page, group: string, value: string): Locator =>
   scene(page).locator(`[data-facet="${group}"][value="${value}"]`);
 
-const firstPost =
-  '動物病院から電話です。予約していた来院がキャンセルになっていて、受付に飼い主が来ているそうです。\nポチの来院（visit-pochi）です。誰が、いつ、なぜキャンセルしたのか、調べてもらえますか。';
-const replyText =
-  '2026-11-06 18:11:58 にポチの来院のキャンセルの操作がありました。誰が、なぜキャンセルしたのかは、どこにも残っていませんでした。';
-const tamaReplyText = 'タマの来院も、18:20:30 に同じ操作でキャンセルになっています。';
+const firstPost = 'お疲れ様です！すみません、急ぎで見てほしいです🙏';
+const introPosts = [
+  firstPost,
+  '動物病院さんから電話があって、予約してたはずの来院がキャンセルになってるそうです。飼い主さんがもう受付に来ちゃってて…',
+  'ポチちゃんの来院です（visit-pochi）。誰がいつなんでキャンセルしたか、わかりますか？',
+];
+const replyFirst = '18:11:58 にポチの来院をキャンセルする操作があったのは確認できました';
+const replyLast = 'ただ、誰がなんでキャンセルしたかは、DB にもログにもコードにも残ってなくて、分からないです…';
+const tamaReplyText = 'タマの来院も 18:20:30 に同じ操作でキャンセルされてます';
+const supportFollowUps = [
+  'えっ',
+  '誰がなんでキャンセルしたか分からないと、病院さんに説明できないです…',
+  'なんで記録取ってないんですか',
+];
 const startText =
   'あなたは、動物病院向けの予約システムの開発者です。カスタマーサポートから連絡が届きます。届いた連絡に対応してください。手を動かす人はこのブラウザで動かせます。見るだけの人は講師の画面で追えます。';
 
@@ -313,31 +322,44 @@ test.describe('導入 調査の画面', () => {
     ]);
   });
 
-  test('36 秒、60 秒、105 秒に、カスタマーサポートの投稿が届く', async ({ page }) => {
+  test('連絡は 0 秒、2 秒、5 秒、36 秒、39 秒、60 秒、105 秒に、短い投稿に分かれて届く', async ({ page }) => {
     await timed(page);
-    await elapse(page, 35);
+    await expect(posts(page)).toHaveCount(1);
+    await elapse(page, 1);
     await page.clock.runFor(750);
     await expect(posts(page)).toHaveCount(1);
     await page.clock.runFor(250);
     await expect(posts(page)).toHaveCount(2);
-    await expect(posts(page).nth(1)).toContainText('カスタマーサポート');
-    await expect(posts(page).nth(1)).toContainText('18:20');
-    await expect(posts(page).nth(1).locator('.post-text')).toHaveText(
-      '別の飼い主からも連絡が来ました。タマの来院（visit-tama）もキャンセルになっているそうです。さっきまで予約のままでした。',
-    );
-    await expect(posts(page).nth(1)).toBeInViewport();
-    await elapse(page, 24);
+    await expect(posts(page).nth(1).locator('.post-text')).toHaveText(introPosts[1] ?? '');
+    await elapse(page, 3);
     await expect(posts(page)).toHaveCount(3);
-    await expect(posts(page).nth(2)).toContainText('18:21');
-    await expect(posts(page).nth(2).locator('.post-text')).toHaveText(
-      '病院に折り返します。分かったところまで教えてください。',
+    await expect(posts(page).nth(2).locator('.post-text')).toHaveText(introPosts[2] ?? '');
+    await elapse(page, 30);
+    await page.clock.runFor(750);
+    await expect(posts(page)).toHaveCount(3);
+    await page.clock.runFor(250);
+    await expect(posts(page)).toHaveCount(4);
+    await expect(posts(page).nth(3)).toContainText('カスタマーサポート');
+    await expect(posts(page).nth(3)).toContainText('18:20');
+    await expect(posts(page).nth(3).locator('.post-text')).toHaveText('すみません、もう1件です');
+    await elapse(page, 3);
+    await expect(posts(page)).toHaveCount(5);
+    await expect(posts(page).nth(4).locator('.post-text')).toHaveText(
+      '別の飼い主さんからも同じ連絡が来てて、タマちゃん（visit-tama）もキャンセルになってます。さっき見たときは予約のままだったんですが…',
+    );
+    await expect(posts(page).nth(4)).toBeInViewport();
+    await elapse(page, 21);
+    await expect(posts(page)).toHaveCount(6);
+    await expect(posts(page).nth(5)).toContainText('18:21');
+    await expect(posts(page).nth(5).locator('.post-text')).toHaveText(
+      '病院さんに折り返さないとなので、わかってるところまででいいので教えてください！',
     );
     await elapse(page, 45);
-    await expect(posts(page)).toHaveCount(4);
-    await expect(posts(page).nth(3).locator('.post-text')).toHaveText('まだ分かりませんか。病院が待っています。');
-    await expect(posts(page).nth(3)).toBeInViewport();
+    await expect(posts(page)).toHaveCount(7);
+    await expect(posts(page).nth(6).locator('.post-text')).toHaveText('どうでしょう…？病院さんずっとお待ちで💦');
+    await expect(posts(page).nth(6)).toBeInViewport();
     await elapse(page, 60);
-    await expect(posts(page)).toHaveCount(4);
+    await expect(posts(page)).toHaveCount(7);
   });
 
   test('「途中経過を報告する」は、その時点の調査メモを「あなた」の投稿として送り、何度でも送れて、進行は終わらない', async ({ page }) => {
@@ -347,20 +369,20 @@ test.describe('導入 調査の画面', () => {
     await expect(posts(page)).toHaveCount(2);
     await expect(posts(page).nth(1)).toContainText('あなた');
     await expect(posts(page).nth(1).locator('.post-text')).toHaveText(
-      '途中経過です。いつ: 調査中 / 何を: 調査中 / 誰が: 調査中 / なぜ: 調査中',
+      'まだ何も分かってないです、調査中です',
     );
     await showPochi(page);
     await openCancelLog(page);
     await interim(page).click();
     await expect(posts(page)).toHaveCount(3);
     await expect(posts(page).nth(2).locator('.post-text')).toHaveText(
-      '途中経過です。いつ: 2026-11-06 18:11:58 / 何を: status が cancelled / 誰が: 調査中 / なぜ: 調査中',
+      'いま分かってるところです\nいつ: 2026-11-06 18:11:58\n何を: status が cancelled\n誰が・なぜ は調査中です',
     );
     await tab(page, /リポジトリ/).click();
     await interim(page).click();
     await expect(posts(page)).toHaveCount(4);
     await expect(posts(page).nth(3).locator('.post-text')).toHaveText(
-      `途中経過です。いつ: 2026-11-06 18:11:58 / 何を: status が cancelled / 誰が: ${missing} / なぜ: ${missing}`,
+      `いま分かってるところです\nいつ: 2026-11-06 18:11:58\n何を: status が cancelled\n誰が: ${missing}\nなぜ: ${missing}`,
     );
     await expect(scene(page)).toHaveAttribute('data-phase', 'running');
     await expect(posts(page).nth(3)).toBeInViewport();
@@ -368,53 +390,61 @@ test.describe('導入 調査の画面', () => {
     await expect(timer(page)).toHaveText('対応開始から 00:02');
   });
 
-  test('最終の返信の後、1.5 秒ごとに 2 つの投稿が届いて、進行と時計が止まる。105 秒の投稿は出ない', async ({ page }) => {
+  test('最終の返信の後、1.5 秒、3 秒、5 秒後にサポートの投稿が届いて、進行と時計が止まる。105 秒の投稿は出ない', async ({ page }) => {
     await timed(page);
     await openAll(page);
-    await elapse(page, 2);
+    await elapse(page, 6);
+    await expect(posts(page)).toHaveCount(3);
     await reply(page).click();
     await expect(scene(page)).toHaveAttribute('data-phase', 'replied');
     await expect(reply(page)).toBeHidden();
     await expect(interim(page)).toBeDisabled();
-    await expect(posts(page)).toHaveCount(2);
-    await expect(posts(page).nth(1)).toContainText('あなた');
-    await expect(posts(page).nth(1).locator('.post-text')).toHaveText(replyText);
+    await expect(posts(page)).toHaveCount(5);
+    await expect(posts(page).nth(3)).toContainText('あなた');
+    await expect(posts(page).nth(3).locator('.post-text')).toHaveText(replyFirst);
+    await expect(posts(page).nth(4).locator('.post-text')).toHaveText(replyLast);
     await page.clock.runFor(1250);
-    await expect(posts(page)).toHaveCount(2);
+    await expect(posts(page)).toHaveCount(5);
     await page.clock.runFor(250);
-    await expect(posts(page)).toHaveCount(3);
-    await expect(posts(page).nth(2)).toContainText('カスタマーサポート');
-    await expect(posts(page).nth(2).locator('.post-text')).toHaveText(
-      '誰が、なぜキャンセルしたのか分からないと、病院に説明できません。',
-    );
+    await expect(posts(page)).toHaveCount(6);
+    await expect(posts(page).nth(5)).toContainText('カスタマーサポート');
+    await expect(posts(page).nth(5).locator('.post-text')).toHaveText(supportFollowUps[0] ?? '');
     await expect(scene(page)).toHaveAttribute('data-phase', 'replied');
     await page.clock.runFor(1250);
-    await expect(posts(page)).toHaveCount(3);
+    await expect(posts(page)).toHaveCount(6);
     await page.clock.runFor(250);
-    await expect(posts(page)).toHaveCount(4);
-    await expect(posts(page).nth(3).locator('.post-text')).toHaveText('なんで記録取ってないんですか');
-    await expect(posts(page).nth(3)).toBeInViewport();
+    await expect(posts(page)).toHaveCount(7);
+    await expect(posts(page).nth(6).locator('.post-text')).toHaveText(supportFollowUps[1] ?? '');
+    await page.clock.runFor(1750);
+    await expect(posts(page)).toHaveCount(7);
+    await page.clock.runFor(250);
+    await expect(posts(page)).toHaveCount(8);
+    await expect(posts(page).nth(7).locator('.post-text')).toHaveText(supportFollowUps[2] ?? '');
+    await expect(posts(page).nth(7)).toBeInViewport();
     await expect(scene(page)).toHaveAttribute('data-phase', 'ended');
     await expect(live(page)).toHaveAttribute('data-state', 'off');
-    await expect(timer(page)).toHaveText('対応開始から 00:05');
+    await expect(timer(page)).toHaveText('対応開始から 00:11');
     await expect(pauseButton(page)).toBeDisabled();
     const rowCount = await allRows(page).count();
     await elapse(page, 120);
-    await expect(posts(page)).toHaveCount(4);
-    await expect(timer(page)).toHaveText('対応開始から 00:05');
-    await expect(clock(page)).toHaveText('18:20:05');
+    await expect(posts(page)).toHaveCount(8);
+    await expect(timer(page)).toHaveText('対応開始から 00:11');
+    await expect(clock(page)).toHaveText('18:20:11');
     await expect(allRows(page)).toHaveCount(rowCount);
     await expect(scene(page).locator(liveRegions)).toHaveCount(1);
   });
 
-  test('30 秒の出来事の後に返信すると、タマの来院も同じ投稿に加わる', async ({ page }) => {
+  test('30 秒の出来事の後に返信すると、タマの来院は 2 件目の投稿として加わる', async ({ page }) => {
     await timed(page);
     await openAll(page);
     await elapse(page, 31);
+    await expect(posts(page)).toHaveCount(3);
     await reply(page).click();
-    await expect(posts(page).nth(1)).toContainText('あなた');
-    await expect(posts(page).nth(1).locator('.post-text')).toHaveText(`${replyText}\n${tamaReplyText}`);
-    await expect(posts(page).nth(1).locator('.post-text')).toHaveText(/\n/, { useInnerText: true });
+    await expect(posts(page)).toHaveCount(6);
+    await expect(posts(page).nth(3)).toContainText('あなた');
+    await expect(posts(page).nth(3).locator('.post-text')).toHaveText(replyFirst);
+    await expect(posts(page).nth(4).locator('.post-text')).toHaveText(tamaReplyText);
+    await expect(posts(page).nth(5).locator('.post-text')).toHaveText(replyLast);
   });
 
   test('「一時停止」で進行と時計が止まり、「再開する」で続きから進む', async ({ page }) => {
@@ -427,7 +457,7 @@ test.describe('導入 調査の画面', () => {
     await page.clock.runFor(60_000);
     await expect(timer(page)).toHaveText('対応開始から 00:02');
     await expect(clock(page)).toHaveText('18:20:02');
-    await expect(posts(page)).toHaveCount(1);
+    await expect(posts(page)).toHaveCount(2);
     await expect(allRows(page)).toHaveCount(5);
     await expect(affected(page)).toHaveText('キャンセルになった来院 1件');
     await pauseButton(page).click();
@@ -439,9 +469,9 @@ test.describe('導入 調査の画面', () => {
     await expect(allRows(page)).toHaveCount(6);
     await elapse(page, 31);
     await page.clock.runFor(750);
-    await expect(posts(page)).toHaveCount(1);
+    await expect(posts(page)).toHaveCount(3);
     await page.clock.runFor(250);
-    await expect(posts(page)).toHaveCount(2);
+    await expect(posts(page)).toHaveCount(4);
     await expect(timer(page)).toHaveText('対応開始から 00:36');
   });
 
@@ -449,7 +479,7 @@ test.describe('導入 調査の画面', () => {
     await timed(page);
     await page.clock.fastForward(61_000);
     await expect(timer(page)).toHaveText('対応開始から 01:01');
-    await expect(posts(page)).toHaveCount(3);
+    await expect(posts(page)).toHaveCount(6);
     await expect(allRows(page)).toHaveCount(5 + 15 + 1);
     await expect(allRows(page).filter({ hasText: 'POST /visits/visit-tama/cancel 200 11ms' })).toHaveCount(1);
     await expect(affected(page)).toHaveText('キャンセルになった来院 2件');
@@ -503,7 +533,7 @@ test.describe('導入 調査の画面', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await timed(page);
     await elapse(page, 36);
-    await expect(posts(page)).toHaveCount(2);
+    await expect(posts(page)).toHaveCount(4);
     await expect(allRows(page)).toHaveCount(5 + 9 + 1);
     await expect(timer(page)).toHaveText('対応開始から 00:36');
   });
@@ -533,7 +563,7 @@ test.describe('導入 調査の画面', () => {
   });
 
   test('immersive でないページでは、役割の行と目標が見える', async ({ page }) => {
-    await page.goto('/chapters/chapter-2/');
+    await page.goto('/chapters/chapter-4/');
     for (const selector of ['.lesson-role', '.chapter-goal']) {
       const box = await page.locator(selector).boundingBox();
       expect(box?.width ?? 0).toBeGreaterThan(50);
@@ -1172,10 +1202,11 @@ test.describe('導入 調査の画面', () => {
     await reply(page).click();
 
     await expect(reply(page)).toBeHidden();
-    await expect(posts(page)).toHaveCount(2);
+    await expect(posts(page)).toHaveCount(3);
     await expect(posts(page).nth(1)).toContainText('あなた');
-    await expect(posts(page).nth(1).locator('.post-text')).toHaveText(replyText);
-    await expect(posts(page).nth(1)).toBeInViewport();
+    await expect(posts(page).nth(1).locator('.post-text')).toHaveText(replyFirst);
+    await expect(posts(page).nth(2).locator('.post-text')).toHaveText(replyLast);
+    await expect(posts(page).nth(2)).toBeInViewport();
     await expect(scene(page).locator(liveRegions)).toHaveCount(1);
   });
 
@@ -1298,7 +1329,7 @@ test.describe('導入 調査の画面', () => {
     await expect(reply(page)).toBeEnabled();
     await expect(answerButton(page)).toBeDisabled();
     await reply(page).click();
-    await expect(posts(page)).toHaveCount(2);
+    await expect(posts(page)).toHaveCount(3);
   });
 
   test('エージェントの実行中は、送信が無効で、Enter を押しても送られない', async ({ page }) => {
@@ -1458,7 +1489,7 @@ test.describe('導入 調査の画面', () => {
     await cancelRow(page).locator('.col-date').click();
     await tab(page, /リポジトリ/).click();
     await reply(page).click();
-    await expect(posts(page)).toHaveCount(2);
+    await expect(posts(page)).toHaveCount(3);
 
     await resetButton(page).click();
 

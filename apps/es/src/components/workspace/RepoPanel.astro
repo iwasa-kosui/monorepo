@@ -232,7 +232,9 @@ const crumbs = [config.name, ...config.path];
 :global(.scene[data-scenario]) .repo-lines {
   color: var(--gh-muted);
 }
-:global(.scene[data-scenario]) :global(pre.astro-code) {
+:global(.scene[data-scenario])
+  .panel[data-kind="repo"]
+  :global(pre.astro-code) {
   flex: 1 1 0;
   min-height: 0;
   max-height: 20rem;
@@ -245,20 +247,28 @@ const crumbs = [config.name, ...config.path];
   font-size: 0.75rem;
   line-height: 1.6;
 }
-:global(.scene[data-scenario]) :global(pre.astro-code span) {
+:global(.scene[data-scenario])
+  .panel[data-kind="repo"]
+  :global(pre.astro-code span) {
   color: var(--shiki-light);
 }
-:global(.scene[data-scenario]) :global(pre.astro-code code) {
+:global(.scene[data-scenario])
+  .panel[data-kind="repo"]
+  :global(pre.astro-code code) {
   display: grid;
   width: max-content;
   min-width: 100%;
   background: transparent;
   counter-reset: line;
 }
-:global(.scene[data-scenario]) :global(pre.astro-code .line) {
+:global(.scene[data-scenario])
+  .panel[data-kind="repo"]
+  :global(pre.astro-code .line) {
   padding: 0 0.625rem;
 }
-:global(.scene[data-scenario]) :global(pre.astro-code .line::before) {
+:global(.scene[data-scenario])
+  .panel[data-kind="repo"]
+  :global(pre.astro-code .line::before) {
   content: counter(line);
   counter-increment: line;
   display: inline-block;
@@ -268,12 +278,16 @@ const crumbs = [config.name, ...config.path];
   text-align: right;
 }
 
-:global(.scene[data-scenario]) :global(pre.astro-code:focus-visible) {
+:global(.scene[data-scenario])
+  .panel[data-kind="repo"]
+  :global(pre.astro-code:focus-visible) {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
 @media (min-width: 1024px) {
-  :global(.scene[data-scenario]) :global(pre.astro-code) {
+  :global(.scene[data-scenario])
+    .panel[data-kind="repo"]
+    :global(pre.astro-code) {
     max-height: none;
   }
 }
@@ -289,7 +303,9 @@ const crumbs = [config.name, ...config.path];
     --gh-select: #1a2a44;
     --ring: #4493f8;
   }
-  :global(.scene[data-scenario]) :global(pre.astro-code span) {
+  :global(.scene[data-scenario])
+    .panel[data-kind="repo"]
+    :global(pre.astro-code span) {
     color: var(--shiki-dark);
   }
 }

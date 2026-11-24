@@ -3,7 +3,7 @@ import { clockOf, formatElapsed } from './clock';
 import { hasFired, keyOf, record } from './conditions';
 import { emitSignal, type PanelController } from './panel';
 import { mountPanel } from './panels';
-import { interimText, type MemoOverride, memoViews, replyGate } from './rules';
+import { fillTemplate, interimText, type MemoOverride, memoViews, replyGate } from './rules';
 import {
   type ButtonName,
   type SignalDetail,
@@ -18,6 +18,9 @@ import {
 } from './scenario';
 import { createScheduler, type Recurring, type ScheduledItem, tickMs, type WaitingItem } from './scheduler';
 import { createTabs } from './tabs';
+
+const typingLeadMs = 1500;
+const signalDelayMs = 1200;
 
 export const mountWorkspace = (root: HTMLElement): void => {
   const scenario = JSON.parse(root.dataset.scenario ?? 'null') as WorkspaceScenario;
@@ -38,6 +41,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
   const windows = [...root.querySelectorAll<HTMLElement>('[data-window]')];
 
   const fired = new Map<SignalName, Set<string>>();
+  const latest = new Map<SignalName, Readonly<Record<string, unknown>>>();
   const controllers = new Map<string, PanelController>();
   const state = {
     selected: firstTab.key,
@@ -101,7 +105,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
       : 'running';
     if (startPanel !== null) startPanel.hidden = status !== 'idle';
     for (const element of windows) {
-      element.inert = status === 'idle';
+      element.inert = timed && status === 'idle';
     }
     if (pauseButton !== null) {
       pauseButton.textContent = status === 'paused' ? '再開する' : '一時停止';
@@ -118,7 +122,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
       replied: state.replied,
       ready: gate.ready,
       reason: gate.reason,
-      memo: scenario.memo === undefined ? [] : memoViews(scenario.memo, fired, state.memoOverrides),
+      memo: scenario.memo === undefined ? [] : memoViews(scenario.memo, fired, state.memoOverrides, latest),
       answerRequested: fired.has('agent:requested'),
       unlocked: state.unlocked,
     });
@@ -186,10 +190,21 @@ export const mountWorkspace = (root: HTMLElement): void => {
     else render();
   };
 
+  const reducedMotion = (): boolean => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   const perform = (event: TimelineEvent, atMs: number): void => {
     switch (event.kind) {
       case 'post':
-        if (event.unlessReplied === true && state.replied) return;
+        if (event.unlessReplied === true && state.replied) {
+          chat.clearTyping();
+          return;
+        }
+        if (event.when !== undefined && !reducedMotion()) {
+          const due = atMs + signalDelayMs;
+          chat.setTyping(event.post.actor);
+          scheduler.schedule([{ at: due, run: () => chat.addPost(event.post, due) }]);
+          return;
+        }
         chat.addPost(event.post, atMs);
         return;
       case 'log':
@@ -218,7 +233,18 @@ export const mountWorkspace = (root: HTMLElement): void => {
   const timedItems = (): ScheduledItem[] =>
     scenario.timeline.flatMap((event) => {
       const at = event.at;
-      return at === undefined ? [] : [{ at: at * 1000, run: () => perform(event, at * 1000) }];
+      if (at === undefined) return [];
+      const items: ScheduledItem[] = [{ at: at * 1000, run: () => perform(event, at * 1000) }];
+      const typingFrom = at * 1000 - typingLeadMs;
+      if (event.kind === 'post' && typingFrom > 0 && !reducedMotion()) {
+        items.push({
+          at: typingFrom,
+          run: () => {
+            if (event.unlessReplied !== true || !state.replied) chat.setTyping(event.post.actor);
+          },
+        });
+      }
+      return items;
     });
 
   const waitingItems = (): WaitingItem[] =>
@@ -239,6 +265,7 @@ export const mountWorkspace = (root: HTMLElement): void => {
     const detail = (event as CustomEvent<SignalDetail>).detail;
     const key = keyOf(detail.data);
     record(fired, detail.name, key);
+    if (detail.data !== undefined) latest.set(detail.name, detail.data);
     syncOpened();
     scheduler.signal(detail.name, key);
     render();
@@ -252,14 +279,17 @@ export const mountWorkspace = (root: HTMLElement): void => {
 
   const reset = (): void => {
     scheduler.reset();
-    for (const controller of controllers.values()) controller.reset?.();
-    for (const tab of scenario.tabs) {
-      if (tab.initial === false) controllers.delete(tab.key);
+    if (timed) {
+      for (const controller of controllers.values()) controller.reset?.();
+      for (const tab of scenario.tabs) {
+        if (tab.initial === false) controllers.delete(tab.key);
+      }
+      tabs.removeAdded();
+      state.selected = firstTab.key;
+      state.opened = [];
     }
-    tabs.removeAdded();
     fired.clear();
-    state.selected = firstTab.key;
-    state.opened = [];
+    latest.clear();
     state.forcedUnseen.clear();
     state.replied = false;
     state.counter = scenario.status.counter?.initial ?? 0;
@@ -278,9 +308,9 @@ export const mountWorkspace = (root: HTMLElement): void => {
     scheduler.tick();
     const status = scheduler.status();
     if (status !== 'running' && status !== 'paused') return;
-    const views = memoViews(scenario.memo, fired, state.memoOverrides);
+    const views = memoViews(scenario.memo, fired, state.memoOverrides, latest);
     chat.addPost(
-      { actor: selfActor, text: interimText(interim.heading, interim.unknown, interim.order, views) },
+      { actor: selfActor, text: interimText(interim.heading, interim.unknown, interim.pending, interim.order, views) },
       scheduler.elapsedMs(),
     );
     emit('chat:interim-sent');
@@ -293,25 +323,36 @@ export const mountWorkspace = (root: HTMLElement): void => {
     const status = scheduler.status();
     if (status !== 'running' && status !== 'paused') return;
     const at = scheduler.elapsedMs();
-    const lines = [
-      reply.text,
-      ...reply.additions.filter((addition) => at >= addition.after * 1000).map((addition) => addition.text),
-    ];
-    chat.addPost({ actor: selfActor, text: lines.join('\n') }, at);
+    chat.clearTyping();
+    for (const line of reply.lines) {
+      if (line.after !== undefined && at < line.after * 1000) continue;
+      const text = reply.from === undefined
+        ? line.text
+        : fillTemplate(line.text, latest.get(reply.from.signal), reply.from.formats);
+      chat.addPost({ actor: selfActor, text }, at);
+    }
     state.replied = true;
     let when = at;
+    let previous = at;
     scheduler.schedule(
-      reply.followUps.map((item, index) => {
+      reply.followUps.flatMap((item, index) => {
         when += item.delay * 1000;
         const due = when;
+        const typingFrom = Math.max(previous, due - typingLeadMs);
+        previous = due;
         const last = index === reply.followUps.length - 1;
-        return {
-          at: due,
-          run: () => {
-            chat.addPost({ actor: item.actor, text: item.text }, due);
-            if (last) scheduler.finish(due);
+        const typing = (): void => chat.setTyping(item.actor);
+        if (!reducedMotion() && typingFrom <= at) typing();
+        return [
+          ...(!reducedMotion() && typingFrom > at ? [{ at: typingFrom, run: typing }] : []),
+          {
+            at: due,
+            run: () => {
+              chat.addPost({ actor: item.actor, text: item.text }, due);
+              if (last) scheduler.finish(due);
+            },
           },
-        };
+        ];
       }),
     );
     emit('chat:replied');
@@ -332,6 +373,16 @@ export const mountWorkspace = (root: HTMLElement): void => {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) scheduler.tick();
   });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && chat.isOpen()) chat.closeRail();
+  });
+  const questionInput = root.querySelector<HTMLTextAreaElement>('[data-own-question] textarea');
+  if (questionInput !== null) {
+    questionInput.placeholder = scenario.chat.placeholder;
+    questionInput.addEventListener('input', () => {
+      if (questionInput.value.trim() !== '') emit('question:written');
+    });
+  }
   root.addEventListener('click', (event) => {
     const button = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-open-tool]') : null;
     if (button === null) return;

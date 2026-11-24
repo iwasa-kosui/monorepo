@@ -3,14 +3,30 @@ import type { WorkspaceScenario } from '../../workspace/scenario';
 
 interface Props {
   scenario: WorkspaceScenario;
+  composer?: boolean;
 }
 
-const { scenario } = Astro.props;
+const { scenario, composer = false } = Astro.props;
 const { chat, memo, gates } = scenario;
 const timed = scenario.mode === 'timed';
 const memoId = `${scenario.id}-memo`;
 const reasonId = `${scenario.id}-reason`;
 const initialReason = gates?.reply.reasons.all ?? '';
+const collapsed = chat.collapsed === true;
+const mainId = `${scenario.id}-chat-main`;
+const hasComposerSlot = composer;
+const railActorIds = [
+  ...new Set([
+    ...scenario.history.map((post) => post.actor),
+    ...scenario.timeline.flatMap((
+      event,
+    ) => (event.kind === 'post' ? [event.post.actor] : [])),
+  ]),
+];
+const railActors = railActorIds.flatMap((id) => {
+  const actor = scenario.actors[id];
+  return actor === undefined || actor.self === true ? [] : [actor];
+});
 ---
 
 <div
@@ -18,8 +34,33 @@ const initialReason = gates?.reply.reasons.all ?? '';
   role="group"
   aria-label="チャット"
   data-window
+  data-collapsed={collapsed ? '' : undefined}
   inert={timed}
 >
+  {
+    collapsed && (
+      <button
+        type="button"
+        class="chat-rail"
+        data-rail
+        aria-expanded="false"
+        aria-controls={mainId}
+        aria-label="チャット"
+      >
+        <span class="rail-hash" aria-hidden="true">#</span>
+        <span class="rail-avatars" aria-hidden="true">
+          {
+            railActors.map((actor) => (
+              <span class="rail-avatar" data-tone={actor.tone}>
+                {actor.avatar}
+              </span>
+            ))
+          }
+        </span>
+        <span class="rail-unread" data-unread hidden aria-hidden="true">0</span>
+      </button>
+    )
+  }
   <div class="chat-side" aria-hidden="true">
     <span class="dots"><i></i><i></i><i></i></span>
     <p class="ws">{chat.workspace}</p>
@@ -32,9 +73,16 @@ const initialReason = gates?.reply.reasons.all ?? '';
     </ul>
   </div>
 
-  <div class="chat-main">
+  <div class="chat-main" id={mainId}>
     <div class="chat-head">
       <p class="channel">{chat.channel}</p>
+      {
+        !timed && (
+          <button type="button" class="chat-reset" data-action="reset">
+            最初からやり直す
+          </button>
+        )
+      }
     </div>
 
     <ol
@@ -45,6 +93,11 @@ const initialReason = gates?.reply.reasons.all ?? '';
       data-feed
     >
     </ol>
+
+    <p class="typing" aria-hidden="true" data-typing>
+      <span class="typing-dots"><i></i><i></i><i></i></span>
+      <span data-typing-text></span>
+    </p>
 
     <template data-post>
       <li class="post">
@@ -79,7 +132,15 @@ const initialReason = gates?.reply.reasons.all ?? '';
           <span>&lt;/&gt;</span>
           <span>≡</span>
         </p>
-        <p class="ph" aria-hidden="true">{chat.placeholder}</p>
+        {
+          hasComposerSlot
+            ? (
+            <div class="compose-slot">
+              <slot name="composer" />
+            </div>
+          )
+            : <p class="ph" aria-hidden="true">{chat.placeholder}</p>
+        }
         {
           memo !== undefined && (
             <>
@@ -263,6 +324,70 @@ const initialReason = gates?.reply.reasons.all ?? '';
 }
 :global(.scene[data-scenario]) .post + .post {
   margin-top: 0.625rem;
+}
+:global(.scene[data-scenario]) .post + .post.is-continued {
+  margin-top: 0.125rem;
+}
+:global(.scene[data-scenario]) .post.is-continued .avatar {
+  height: 0;
+  visibility: hidden;
+}
+:global(.scene[data-scenario]) .post.is-continued .post-head {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+:global(.scene[data-scenario]) .post.is-continued .post-main {
+  position: relative;
+}
+:global(.scene[data-scenario]) .typing {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 1.5rem;
+  margin: 0;
+  padding: 0 0.75rem;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+  visibility: hidden;
+}
+:global(.scene[data-scenario]) .typing[data-active] {
+  visibility: visible;
+}
+:global(.scene[data-scenario]) .typing-dots {
+  display: inline-flex;
+  gap: 0.1875rem;
+}
+:global(.scene[data-scenario]) .typing-dots i {
+  width: 0.3125rem;
+  height: 0.3125rem;
+  border-radius: 50%;
+  background: var(--c-muted);
+}
+@media (prefers-reduced-motion: no-preference) {
+  :global(.scene[data-scenario]) .typing[data-active] .typing-dots i {
+    animation: typing-blink 1s infinite ease-in-out;
+  }
+  :global(.scene[data-scenario]) .typing-dots i:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  :global(.scene[data-scenario]) .typing-dots i:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+}
+@keyframes typing-blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
 }
 :global(.scene[data-scenario]) .avatar {
   display: inline-flex;
@@ -479,6 +604,185 @@ const initialReason = gates?.reply.reasons.all ?? '';
     flex: 1 1 0;
     max-height: none;
     min-height: 10rem;
+  }
+}
+:global(.scene[data-scenario]) .chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+:global(.scene[data-scenario]) .chat-reset {
+  flex: none;
+  border: 1px solid var(--c-edge);
+  border-radius: var(--radius-md);
+  background: var(--c-btn);
+  padding: 0 0.625rem;
+  color: var(--c-fg);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .chat-reset:hover:not(:disabled) {
+  background: var(--c-btn-hover);
+}
+:global(.scene[data-scenario]) .chat-reset:disabled {
+  color: var(--c-muted);
+  cursor: not-allowed;
+}
+:global(.scene[data-scenario]) .compose-slot {
+  padding: 0.25rem 0.625rem 0;
+  font-size: 0.8125rem;
+}
+:global(.scene[data-scenario]) .compose-slot :global(textarea) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--c-fg);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  resize: none;
+}
+:global(.scene[data-scenario]) .compose-slot :global(textarea:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+:global(.scene[data-scenario]) .compose-slot :global([data-saved]) {
+  min-height: 1.25rem;
+  color: var(--c-muted);
+  font-size: 0.75rem;
+}
+
+:global(.scene[data-scenario]) .win.chat[data-collapsed] {
+  position: relative;
+  z-index: 15;
+  overflow: visible;
+  background: var(--c-side);
+}
+:global(.scene[data-scenario]) .win.chat[data-collapsed] .chat-side {
+  display: none;
+}
+:global(.scene[data-scenario]) .win.chat[data-collapsed] .chat-main {
+  display: none;
+}
+:global(.scene[data-scenario]) .win.chat[data-collapsed][data-open] .chat-main {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  display: flex;
+  height: 20rem;
+  margin-top: 0.25rem;
+  border: 1px solid var(--c-edge);
+  border-radius: var(--radius-lg);
+  background: var(--c-bg);
+  box-shadow: var(--shadow-raised);
+  overflow: hidden;
+}
+:global(.scene[data-scenario]) .chat-rail {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: var(--c-side);
+  padding: 0.25rem 0.75rem;
+  color: var(--c-side-text);
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .chat-rail:hover {
+  background: color-mix(in srgb, var(--c-side) 85%, #ffffff);
+}
+:global(.scene[data-scenario]) .chat-rail[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--c-side) 85%, #ffffff);
+}
+:global(.scene[data-scenario]) .chat-rail:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: -4px;
+}
+:global(.scene[data-scenario]) .rail-hash {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #ffffff;
+}
+:global(.scene[data-scenario]) .rail-avatars {
+  display: flex;
+  gap: 0.375rem;
+}
+:global(.scene[data-scenario]) .rail-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  background: var(--c-av-slate);
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+:global(.scene[data-scenario]) .rail-avatar[data-tone="rose"] {
+  background: var(--c-av-rose);
+}
+:global(.scene[data-scenario]) .rail-avatar[data-tone="blue"] {
+  background: var(--c-av-blue);
+}
+:global(.scene[data-scenario]) .rail-avatar[data-tone="green"] {
+  background: var(--c-av-green);
+}
+:global(.scene[data-scenario]) .rail-avatar[data-tone="amber"] {
+  background: var(--c-av-amber);
+}
+:global(.scene[data-scenario]) .rail-avatar[data-tone="violet"] {
+  background: var(--c-av-violet);
+}
+:global(.scene[data-scenario]) .rail-unread {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: #e01e5a;
+  padding: 0 0.3125rem;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+:global(.scene[data-scenario]) .rail-unread[hidden] {
+  display: none;
+}
+@media (min-width: 1024px) {
+  :global(.scene[data-scenario])
+    .win.chat[data-collapsed][data-open]
+    .chat-main {
+    top: 0;
+    right: auto;
+    bottom: 0;
+    left: 3.5rem;
+    width: min(26rem, 85vw);
+    height: auto;
+    margin-top: 0;
+  }
+  :global(.scene[data-scenario]) .chat-rail {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+  }
+  :global(.scene[data-scenario]) .rail-avatars {
+    flex-direction: column;
+  }
+  :global(.scene[data-scenario]) .rail-unread {
+    position: absolute;
+    top: 2.25rem;
+    right: 0.125rem;
+    outline: 2px solid var(--c-side);
   }
 }
 @media (prefers-color-scheme: dark) {

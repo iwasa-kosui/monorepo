@@ -1,14 +1,21 @@
 ---
 goal: 既存の更新処理に、記録を1か所足せます。
 wide: true
+immersive: true
 ---
 
 import TransactionFigure from '../../../components/figures/TransactionFigure.astro';
+import { chapter2Explain } from '../../../components/chapters/chapter-2';
+import Workspace from '../../../components/workspace/Workspace.astro';
 
-<div class="intro-spread">
-<div class="intro-text">
+<div class="visually-hidden">
 
 ## 説明
+
+</div>
+
+<Workspace scenario={chapter2Explain}>
+<Fragment slot="memo">
 
 ### 更新処理の中で記録する
 
@@ -22,6 +29,7 @@ import TransactionFigure from '../../../components/figures/TransactionFigure.ast
 
 この演習では、業務イベントの記録を来院の更新と同じトランザクションに入れます。トランザクションは、複数の更新をまとめて、すべて成功させるか、すべて取り消すかにする DB の仕組みです。記録に失敗すると、来院の更新も失敗します。こうすると、記録が抜けたキャンセルは残りません。`cancelVisit` は開始時点で `withTransaction` の中にあるので、参加者はトランザクションを書き足さなくて済みます。
 
-</div>
 <TransactionFigure />
-</div>
+
+</Fragment>
+</Workspace>

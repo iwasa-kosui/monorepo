@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { isMet, keyOf, record } from './conditions';
-import { interimText, memoViews, replyGate } from './rules';
+import { fillTemplate, formatField, interimText, type LatestData, memoViews, readField, replyGate } from './rules';
 import type { Condition, GatesConfig, MemoConfig, SignalName } from './scenario';
 
 const firedOf = (...signals: (SignalName | [SignalName, string])[]) => {
@@ -73,9 +73,20 @@ describe('調査メモ', () => {
     expect(views.map((view) => [view.state, view.text])).toEqual([['missing', '上書き'], ['unknown', '不明']]);
   });
 
-  it('途中経過の文は、指定した順に、分かっていない項目を「調査中」にして並べる', () => {
+  it('途中経過の文は、分かっている項目を1行ずつ並べ、分かっていない項目を最後の行にまとめる', () => {
     const views = memoViews(memo, firedOf('sql:target-shown'), new Map());
-    expect(interimText('途中です。', '調査中', ['b', 'a'], views)).toBe('途中です。イ: 調査中 / ア: アの値');
+    expect(interimText('いまの状況です', 'まだ何も', '{labels} は調査中です', ['b', 'a'], views)).toBe(
+      'いまの状況です\nア: アの値\nイ は調査中です',
+    );
+    const all = memoViews(memo, firedOf('sql:target-shown', 'log:target-opened'), new Map());
+    expect(interimText('いまの状況です', 'まだ何も', '{labels} は調査中です', ['a', 'b'], all)).toBe(
+      'いまの状況です\nア: アの値\nイ: イの値',
+    );
+  });
+
+  it('分かっている項目が1つも無いときは、「まだ何も」の1行だけにする', () => {
+    const views = memoViews(memo, firedOf(), new Map());
+    expect(interimText('いまの状況です', 'まだ何も', '{labels} は調査中です', ['a', 'b'], views)).toBe('まだ何も');
   });
 });
 
@@ -110,5 +121,71 @@ describe('返信が有効になる条件', () => {
       true,
     );
     expect(replyGate(gates, firedOf('agent:concluded')).ready).toBe(true);
+  });
+});
+
+describe('結果から読む値', () => {
+  const row = {
+    operated_by: '受付スタッフ',
+    reason: '飼い主の都合',
+    event_at: '2026-11-24T05:12:33.123Z',
+    event_name: 'VisitCancelled',
+  };
+  const latestOf = (data: Record<string, unknown>): LatestData => new Map([['sql:target-shown', data]]);
+
+  it('日時は、秒までを「日付 時刻」の形にする', () => {
+    expect(formatField('2026-11-24T05:12:33.123Z', 'datetime')).toBe('2026-11-24 05:12:33');
+    expect(formatField('昨日', 'datetime')).toBe('昨日');
+    expect(formatField('そのまま', undefined)).toBe('そのまま');
+  });
+
+  it('行の値を読み、ラベルがあれば置き換える。値が無ければ読めない', () => {
+    const latest = latestOf({ row });
+    expect(readField(latest, { signal: 'sql:target-shown', field: 'reason' })).toBe('飼い主の都合');
+    expect(
+      readField(latest, {
+        signal: 'sql:target-shown',
+        field: 'event_name',
+        labels: { VisitCancelled: '来院のキャンセル' },
+      }),
+    )
+      .toBe('来院のキャンセル');
+    expect(readField(latest, { signal: 'sql:target-shown', field: 'missing' })).toBeUndefined();
+    expect(readField(new Map(), { signal: 'sql:target-shown', field: 'reason' })).toBeUndefined();
+    expect(readField(latestOf({ row: { reason: '' } }), { signal: 'sql:target-shown', field: 'reason' }))
+      .toBeUndefined();
+  });
+
+  it('メモの項目は、合図の条件に加えて値が読めたときだけ埋まる。読めなければ既定の文を出さない', () => {
+    const readMemo: MemoConfig = {
+      title: 'メモ',
+      unknown: '結果を確認してください',
+      items: [{
+        key: 'who',
+        label: '誰が',
+        text: '使わない',
+        result: 'found',
+        fill: 'sql:target-shown',
+        read: { signal: 'sql:target-shown', field: 'operated_by' },
+      }],
+    };
+    const fired = firedOf('sql:target-shown');
+    expect(memoViews(readMemo, fired, new Map(), latestOf({ row })).map((view) => [view.state, view.text])).toEqual([
+      ['found', '受付スタッフ'],
+    ]);
+    expect(memoViews(readMemo, fired, new Map(), latestOf({ row: {} })).map((view) => [view.state, view.text]))
+      .toEqual([['unknown', '結果を確認してください']]);
+    expect(memoViews(readMemo, fired, new Map()).map((view) => [view.state, view.text])).toEqual([
+      ['unknown', '結果を確認してください'],
+    ]);
+  });
+
+  it('返信の文は、波かっこの欄を結果の値で埋める', () => {
+    expect(
+      fillTemplate('{operated_by}が、{reason}でキャンセルしました。日時は {event_at} です。', { row }, {
+        event_at: 'datetime',
+      }),
+    ).toBe('受付スタッフが、飼い主の都合でキャンセルしました。日時は 2026-11-24 05:12:33 です。');
+    expect(fillTemplate('{unknown}', { row })).toBe('{unknown}');
   });
 });

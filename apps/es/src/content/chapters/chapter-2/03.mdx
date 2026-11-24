@@ -1,13 +1,20 @@
 ---
 wide: true
+immersive: true
 ---
 
 import EventRowFigure from '../../../components/figures/EventRowFigure.astro';
+import { chapter2Columns } from '../../../components/chapters/chapter-2';
+import Workspace from '../../../components/workspace/Workspace.astro';
 
-<div class="intro-spread">
-<div class="intro-text">
+<div class="visually-hidden">
 
 ### business_events テーブル
+
+</div>
+
+<Workspace scenario={chapter2Columns}>
+<Fragment slot="memo">
 
 `business_events` テーブルは開始時点の DB に用意してあります。各列は、次の問いに答えるために残します。
 
@@ -23,6 +30,7 @@ import EventRowFigure from '../../../components/figures/EventRowFigure.astro';
 
 [関連記事](https://kosui.me/posts/2025/05/06/142842)のテーブル設計は PostgreSQL 向けで、`event_id` に UUID v7 を使います。この演習は SQLite を使い、`event_id` を連番にします。参加者の Node の下限である 24.12.0 に `crypto.randomUUIDv7` が無いためです。
 
-</div>
 <EventRowFigure />
-</div>
+
+</Fragment>
+</Workspace>

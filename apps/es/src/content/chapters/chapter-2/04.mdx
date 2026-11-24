@@ -1,3 +1,14 @@
-import AddRecordScene from '../../../components/AddRecordScene.astro';
+---
+wide: true
+immersive: true
+---
 
+import AddRecordScene from '../../../components/AddRecordScene.astro';
+import { chapter2Step1 } from '../../../components/chapters/chapter-2';
+import Workspace from '../../../components/workspace/Workspace.astro';
+
+<Workspace scenario={chapter2Step1}>
+<Fragment slot="editor">
 <AddRecordScene step={1} />
+</Fragment>
+</Workspace>

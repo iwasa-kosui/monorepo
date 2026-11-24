@@ -24,7 +24,7 @@ export const createTabs = (root: HTMLElement, hooks: TabsHooks): Tabs => {
   const added = new Set<string>();
 
   const tabsOf = (): HTMLButtonElement[] => [...tabList.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-  const panelsOf = (): HTMLElement[] => [...pages.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+  const panelsOf = (): HTMLElement[] => [...pages.querySelectorAll<HTMLElement>('[role="tabpanel"][data-tool]')];
   const templateOf = (kind: 'button' | 'panel', key: string): HTMLTemplateElement | null =>
     root.querySelector<HTMLTemplateElement>(`template[data-tab-${kind}="${key}"]`);
 

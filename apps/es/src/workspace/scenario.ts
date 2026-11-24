@@ -9,6 +9,11 @@ export const signalNames = [
   'chat:replied',
   'agent:requested',
   'agent:concluded',
+  'tests:ran',
+  'tests:passed',
+  'code:run',
+  'question:written',
+  'figure:step',
 ] as const;
 
 export type SignalName = (typeof signalNames)[number];
@@ -100,8 +105,13 @@ export type DbConsoleConfig = {
   readonly initialSql: string;
   readonly connection: { readonly name: string; readonly engine: string };
   readonly setup: DbSetup;
-  readonly target?: { readonly column: string; readonly value: string };
+  readonly target?: {
+    readonly column: string;
+    readonly value: string;
+    readonly read?: readonly string[];
+  };
   readonly open?: { readonly sql: string };
+  readonly controls?: true;
 };
 
 export type LogRule = {
@@ -137,7 +147,35 @@ export type RepoConfig = {
   readonly path: readonly string[];
 };
 
-export type FaviconTone = 'teal' | 'violet' | 'ink' | 'coral';
+export type EditorConfig = {
+  readonly project: string;
+  readonly files: readonly string[];
+  readonly active: string;
+};
+
+export type DocConfig = {
+  readonly title: string;
+  readonly updatedAt: string;
+  readonly updatedBy: string;
+};
+
+export type PrDiffConfig = {
+  readonly file: string;
+  readonly before: string;
+  readonly after: string;
+  readonly context: number;
+};
+
+export type PrConfig = {
+  readonly owner: string;
+  readonly name: string;
+  readonly number: number;
+  readonly title: string;
+  readonly status: 'Open';
+  readonly diff: PrDiffConfig;
+};
+
+export type FaviconTone = 'teal' | 'violet' | 'ink' | 'coral' | 'blue' | 'azure';
 export type FaviconShape = 'circle' | 'square' | 'rounded';
 
 type TabBase = {
@@ -156,7 +194,10 @@ export type TabDefinition =
   | (TabBase & { readonly kind: 'logs'; readonly config: LogExplorerConfig })
   | (TabBase & { readonly kind: 'repo'; readonly config: RepoConfig })
   | (TabBase & { readonly kind: 'agent' })
-  | (TabBase & { readonly kind: 'slot' });
+  | (TabBase & { readonly kind: 'slot' })
+  | (TabBase & { readonly kind: 'editor'; readonly config: EditorConfig })
+  | (TabBase & { readonly kind: 'doc'; readonly config: DocConfig })
+  | (TabBase & { readonly kind: 'pr'; readonly config: PrConfig });
 
 export type TabKind = TabDefinition['kind'];
 
@@ -180,6 +221,16 @@ export type ChatConfig = {
   readonly channel: string;
   readonly placeholder: string;
   readonly buttons: readonly ChatButton[];
+  readonly collapsed?: true;
+};
+
+export type FieldFormat = 'datetime';
+
+export type MemoRead = {
+  readonly signal: SignalName;
+  readonly field: string;
+  readonly labels?: Readonly<Record<string, string>>;
+  readonly format?: FieldFormat;
 };
 
 export type MemoItem = {
@@ -188,6 +239,7 @@ export type MemoItem = {
   readonly text: string;
   readonly result: 'found' | 'missing';
   readonly fill: Condition;
+  readonly read?: MemoRead;
 };
 
 export type MemoConfig = {
@@ -207,12 +259,15 @@ export type GatesConfig = {
 export type InterimConfig = {
   readonly heading: string;
   readonly unknown: string;
+  readonly pending: string;
   readonly order: readonly string[];
 };
 
+export type ReplyLine = { readonly text: string; readonly after?: number };
+
 export type ReplyConfig = {
-  readonly text: string;
-  readonly additions: readonly { readonly after: number; readonly text: string }[];
+  readonly lines: readonly ReplyLine[];
+  readonly from?: { readonly signal: SignalName; readonly formats?: Readonly<Record<string, FieldFormat>> };
   readonly followUps: readonly { readonly actor: string; readonly delay: number; readonly text: string }[];
 };
 

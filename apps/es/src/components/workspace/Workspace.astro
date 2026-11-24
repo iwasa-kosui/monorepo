@@ -6,7 +6,10 @@ import '../figures/figure.css';
 import AgentPanel from './AgentPanel.astro';
 import ChatWindow from './ChatWindow.astro';
 import DbConsolePanel from './DbConsolePanel.astro';
+import DocPanel from './DocPanel.astro';
+import EditorPanel from './EditorPanel.astro';
 import LogExplorerPanel from './LogExplorerPanel.astro';
+import PrPanel from './PrPanel.astro';
 import RepoPanel from './RepoPanel.astro';
 import SlotPanel from './SlotPanel.astro';
 import TabButton from './TabButton.astro';
@@ -24,6 +27,9 @@ const panelComponents = {
   repo: RepoPanel,
   agent: AgentPanel,
   slot: SlotPanel,
+  editor: EditorPanel,
+  doc: DocPanel,
+  pr: PrPanel,
 } satisfies Record<TabKind, unknown>;
 
 const timed = scenario.mode === 'timed';
@@ -33,6 +39,9 @@ if (firstTab === undefined) {
 }
 const { status } = scenario;
 const counter = status.counter;
+const collapsed = scenario.chat.collapsed === true;
+const showStatus = timed;
+const hasComposer = Astro.slots.has('composer');
 ---
 
 <section
@@ -45,42 +54,64 @@ const counter = status.counter;
   data-ready="false"
   aria-label={scenario.label}
 >
-  <div class="status-bar" role="group" aria-label={status.label}>
-    {
-      timed && (
-        <>
-          <p class="status-item status-elapsed" role="timer" aria-live="off">
-            {status.elapsed} <span data-elapsed>00:00</span>
-          </p>
-          <p class="status-item status-clock">
-            <span class="cfig-sr">画面内の現在時刻</span>
-            <time data-clock>{clockOf(scenario.startedAt)}</time>
-          </p>
-        </>
-      )
-    }
-    {
-      counter !== undefined && (
-        <p class="status-item status-affected">
-          {counter.label}
-          <strong data-affected>{counter.initial}{counter.unit}</strong>
-        </p>
-      )
-    }
-    <div class="status-actions">
-      {
-        timed && (
-          <button type="button" data-action="pause" disabled>一時停止</button>
-        )
-      }
-      <button type="button" data-action="reset" disabled={timed}>
-        最初からやり直す
-      </button>
-    </div>
-  </div>
+  {
+    showStatus && (
+      <div class="status-bar" role="group" aria-label={status.label}>
+        {
+          timed && (
+            <>
+              <p
+                class="status-item status-elapsed"
+                role="timer"
+                aria-live="off"
+              >
+                {status.elapsed} <span data-elapsed>00:00</span>
+              </p>
+              <p class="status-item status-clock">
+                <span class="cfig-sr">画面内の現在時刻</span>
+                <time data-clock>{clockOf(scenario.startedAt)}</time>
+              </p>
+            </>
+          )
+        }
+        {
+          counter !== undefined && (
+            <p class="status-item status-affected">
+              {counter.label}
+              <strong data-affected>{counter.initial}{counter.unit}</strong>
+            </p>
+          )
+        }
+        <div class="status-actions">
+          {
+            timed && (
+              <button type="button" data-action="pause" disabled>
+                一時停止
+              </button>
+            )
+          }
+          <button type="button" data-action="reset" disabled={timed}>
+            最初からやり直す
+          </button>
+        </div>
+      </div>
+    )
+  }
 
-  <div class="workspace" data-workspace>
-    <ChatWindow scenario={scenario} />
+  <div
+    class="workspace"
+    data-workspace
+    data-chat-collapsed={collapsed ? '' : undefined}
+  >
+    {
+      hasComposer
+        ? (
+        <ChatWindow scenario={scenario} composer={true}>
+          <slot name="composer" slot="composer" />
+        </ChatWindow>
+      )
+        : <ChatWindow scenario={scenario} />
+    }
 
     <div
       class="win browser"
@@ -340,6 +371,8 @@ const counter = status.counter;
   --br-fav-violet: #632ca6;
   --br-fav-ink: #1f2328;
   --br-fav-coral: #d97757;
+  --br-fav-blue: #2f6fed;
+  --br-fav-azure: #007acc;
   --ring: #1a5fc8;
   --dot: var(--br-dot);
   background: var(--br-chrome);
@@ -472,6 +505,9 @@ const counter = status.counter;
     grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
     grid-template-rows: minmax(0, 1fr);
   }
+  .scene .workspace[data-chat-collapsed] {
+    grid-template-columns: 3.5rem minmax(0, 1fr);
+  }
   .scene .start {
     align-items: center;
   }
@@ -497,6 +533,8 @@ const counter = status.counter;
     --br-unseen-line: #b88a1a;
     --br-fav-violet: #a98be0;
     --br-fav-ink: #ffffff;
+    --br-fav-blue: #6e9bff;
+    --br-fav-azure: #3aa0e8;
     --ring: #8ab4f8;
   }
 }

@@ -1,12 +1,27 @@
 ---
 goal: 自分のシステムで答えられない問いを1つ挙げられます。
+wide: true
+immersive: true
 ---
 
 import OwnQuestion from '../../../components/OwnQuestion.astro';
 import Quote from '../../../components/Quote.astro';
+import { chapter1Question } from '../../../components/chapters/chapter-1';
+import Workspace from '../../../components/workspace/Workspace.astro';
 
-<div class="grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)] lg:gap-x-5 [&>*]:min-w-0 [&_h2]:text-balance">
-<div class="intro-text">
+<div class="visually-hidden">
+
+## 自分のシステムの問いを1つ挙げる
+
+</div>
+
+<Workspace scenario={chapter1Question}>
+<Fragment slot="composer">
+<OwnQuestion />
+</Fragment>
+<Fragment slot="memo">
+
+自分のシステムで、現在の状態だけでは答えられない問いを1つ挙げます。次に、その問いの答えが入る列が今のテーブルにあるかを思い出します。問いが思いつかないときは、題材の問いで進めます。
 
 <Quote source="kosui.me の記事より" href="https://kosui.me/posts/2025/05/06/142842">
 
@@ -20,14 +35,5 @@ import Quote from '../../../components/Quote.astro';
 
 </Quote>
 
-</div>
-<div class="intro-text">
-
-## 自分のシステムの問いを1つ挙げる
-
-自分のシステムで、現在の状態だけでは答えられない問いを1つ挙げます。次に、その問いの答えが入る列が今のテーブルにあるかを思い出します。問いが思いつかないときは、題材の問いで進めます。
-
-<OwnQuestion />
-
-</div>
-</div>
+</Fragment>
+</Workspace>

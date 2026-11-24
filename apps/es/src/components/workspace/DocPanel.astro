@@ -1,0 +1,241 @@
+---
+import {
+  expectTab,
+  panelIdOf,
+  type PanelProps,
+  tabIdOf,
+} from '../../workspace/panel-props';
+
+type Props = PanelProps;
+
+const { scenario, tab: definition, hidden } = Astro.props;
+const tab = expectTab(definition, 'doc');
+const config = tab.config;
+---
+
+<div
+  class="panel"
+  role="tabpanel"
+  id={panelIdOf(scenario, tab.key)}
+  aria-labelledby={tabIdOf(scenario, tab.key)}
+  data-tool={tab.key}
+  data-kind="doc"
+  hidden={hidden}
+>
+  <div class="doc">
+    <div class="doc-head">
+      <p class="doc-space" aria-hidden="true">社内ドキュメント</p>
+      <p class="doc-title">{config.title}</p>
+      <p class="doc-updated">
+        最終更新 <time datetime={config.updatedAt}>{config.updatedAt}</time>・{
+          config.updatedBy
+        }
+      </p>
+    </div>
+    <div
+      class="doc-scroll"
+      tabindex="0"
+      role="region"
+      aria-label={config.title}
+    >
+      <article class="doc-paper"><slot /></article>
+    </div>
+  </div>
+  {tab.note !== undefined && <p class="panel-note">{tab.note}</p>}
+</div>
+
+<style>
+:global(.scene[data-scenario]) .panel[data-kind="doc"] {
+  --dc-bg: #f4f5f7;
+  --dc-head: #ffffff;
+  --dc-paper: #ffffff;
+  --dc-fg: #172b4d;
+  --dc-muted: #5e6c84;
+  --dc-rule: #dfe1e6;
+  --dc-edge: #7a869a;
+  --dc-accent: #0c5fd3;
+  --dc-accent-strong: #0747a6;
+  --dc-accent-soft: #deebff;
+  --dc-on-accent: #ffffff;
+  --dc-sunken: #f4f5f7;
+  --dc-code: #ebecf0;
+  --dc-success: #1b6b3a;
+  --dc-success-soft: #e3fcef;
+  --dc-success-line: #36b37e;
+  --dc-danger: #ae2a19;
+  --dc-danger-soft: #ffebe6;
+  --dc-warning: #7a4b00;
+  --dc-warning-soft: #fff7d6;
+  --dc-warning-line: #d97706;
+  --pn-bg: var(--dc-sunken);
+  --pn-fg: var(--dc-fg);
+  --pn-rule: var(--dc-rule);
+  --ring: #0c5fd3;
+  --role-bg: var(--dc-paper);
+  --role-surface: var(--dc-paper);
+  --role-sunken: var(--dc-sunken);
+  --role-fg: var(--dc-fg);
+  --role-muted: var(--dc-muted);
+  --role-border: var(--dc-edge);
+  --role-rule: var(--dc-rule);
+  --role-accent: var(--dc-accent);
+  --role-accent-soft: var(--dc-accent-soft);
+  --role-accent-strong: var(--dc-accent-strong);
+  --role-on-accent: var(--dc-on-accent);
+  --role-success: var(--dc-success);
+  --role-success-soft: var(--dc-success-soft);
+  --role-success-line: var(--dc-success-line);
+  --role-danger: var(--dc-danger);
+  --role-danger-soft: var(--dc-danger-soft);
+  --role-warning: var(--dc-warning);
+  --role-warning-soft: var(--dc-warning-soft);
+  --role-warning-line: var(--dc-warning-line);
+  background: var(--dc-bg);
+  color: var(--dc-fg);
+}
+:global(.scene[data-scenario]) .doc {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+:global(.scene[data-scenario]) .doc-head {
+  flex: none;
+  border-bottom: 1px solid var(--dc-rule);
+  background: var(--dc-head);
+  padding: 0.25rem 1rem 0.375rem;
+}
+:global(.scene[data-scenario]) .doc-head p {
+  margin: 0;
+}
+:global(.scene[data-scenario]) .doc-space {
+  color: var(--dc-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+:global(.scene[data-scenario]) .doc-title {
+  color: var(--dc-fg);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+:global(.scene[data-scenario]) .doc-updated {
+  color: var(--dc-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+:global(.scene[data-scenario]) .doc-scroll {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.625rem 0.75rem;
+}
+:global(.scene[data-scenario]) .doc-scroll:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+:global(.scene[data-scenario]) .doc-paper {
+  max-width: 48rem;
+  margin: 0 auto;
+  border: 1px solid var(--dc-rule);
+  border-radius: var(--radius-md);
+  background: var(--dc-paper);
+  padding: 0.75rem 1.25rem 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+:global(.scene[data-scenario]) .doc-paper > :global(:first-child) {
+  margin-top: 0;
+}
+:global(.scene[data-scenario]) .doc-paper > :global(:last-child) {
+  margin-bottom: 0;
+}
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(h2) {
+  margin-block: 1rem 0.375rem;
+  font-size: 1.25rem;
+}
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(h3) {
+  margin-block: 0.875rem 0.25rem;
+  font-size: 1.0625rem;
+}
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(p),
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(ul),
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(ol),
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(table),
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(details) {
+  margin-block: 0.5rem;
+}
+:global(.scene[data-scenario]) .doc-paper :global(li + li) {
+  margin-top: 0.25rem;
+}
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(table) {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(th),
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(td) {
+  padding: 0.125rem 0.5rem;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .doc-paper
+  :global(:not(pre) > code) {
+  background: var(--dc-code);
+}
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(pre) {
+  margin-block: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .doc-paper
+  :global(.code-block pre) {
+  margin: 0;
+}
+:global(.content) :global(.scene[data-scenario]) .doc-paper :global(pre code) {
+  background: transparent;
+  padding: 0;
+}
+:global(.content)
+  :global(.scene[data-scenario])
+  .doc-paper
+  :global(.detail-row) {
+  margin-block: 0.5rem;
+}
+:global(.scene[data-scenario]) .doc-paper :global(figure.quote) {
+  margin-block: 0.5rem;
+}
+:global(.scene[data-scenario]) .doc-paper :global(.cfig) {
+  margin-block: 0.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(.scene[data-scenario]) .panel[data-kind="doc"] {
+    --dc-bg: #14181d;
+    --dc-head: #1b2026;
+    --dc-paper: #22272e;
+    --dc-fg: #dde3ea;
+    --dc-muted: #a5b0bd;
+    --dc-rule: #39414b;
+    --dc-edge: #7d8895;
+    --dc-accent: #7db4ff;
+    --dc-accent-strong: #b3d3ff;
+    --dc-accent-soft: #1d3a5f;
+    --dc-on-accent: #06121f;
+    --dc-sunken: #1b2026;
+    --dc-code: #343c46;
+    --dc-success: #7bd9a0;
+    --dc-success-soft: #14392a;
+    --dc-success-line: #36b37e;
+    --dc-danger: #ffa59a;
+    --dc-danger-soft: #4a1f1c;
+    --dc-warning: #f2c36b;
+    --dc-warning-soft: #3d3010;
+    --dc-warning-line: #d7a23a;
+    --ring: #7db4ff;
+  }
+}
+</style>

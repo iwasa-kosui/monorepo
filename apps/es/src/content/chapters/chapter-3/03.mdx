@@ -1,3 +1,14 @@
+---
+wide: true
+immersive: true
+---
+
+import { chapter3Table } from '../../../components/chapters/chapter-3';
+import Workspace from '../../../components/workspace/Workspace.astro';
+
+<Workspace scenario={chapter3Table}>
+<Fragment slot="memo">
+
 前のページで実行すると、次の表が出ます。`event_at` の値は実行のたびに変わります。
 
 | id | status | event_at | event_name | operated_by | reason |
@@ -14,3 +25,5 @@
 | 何を | `event_name` | 来院のキャンセル |
 | なぜ | `reason` | 飼い主の都合 |
 
+</Fragment>
+</Workspace>

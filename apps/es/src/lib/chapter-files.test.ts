@@ -29,20 +29,46 @@ describe('章のページ', () => {
 });
 
 describe('immersive のページ', () => {
-  it('immersive は導入の 2 ページ目だけに付き、wide も残っている', () => {
-    const flagged = chapterNames().flatMap((chapter) =>
+  const immersiveFiles = (): string[] =>
+    chapterNames().flatMap((chapter) =>
       chapterPageFiles(chapter)
         .filter((file) => /^immersive: true$/m.test(read(`src/content/chapters/${chapter}/${file}`)))
         .map((file) => `${chapter}/${file}`)
     );
-    expect(flagged).toEqual(['intro/02.mdx']);
-    const source = read('src/content/chapters/intro/02.mdx');
-    expect(source).toMatch(/^wide: true$/m);
+
+  const expected = [
+    'intro/02.mdx',
+    ...['chapter-1', 'chapter-2', 'chapter-3'].flatMap((chapter) =>
+      chapterPageFiles(chapter).map((file) => `${chapter}/${file}`)
+    ),
+  ].sort();
+
+  it('immersive は導入の 2 ページ目と、第1章から第3章の全ページに付き、wide も残っている', () => {
+    expect(immersiveFiles().sort()).toEqual(expected);
+    for (const file of expected) {
+      expect(read(`src/content/chapters/${file}`), file).toMatch(/^wide: true$/m);
+    }
   });
 
   it('見た目から隠す本文の見出しは、読み上げに残る', () => {
     const source = read('src/content/chapters/intro/02.mdx');
     expect(source).toMatch(/<div class="visually-hidden">\n\n## .+\n\n.+\n\n<\/div>\n\n<InvestigationScene \/>/);
+  });
+
+  it('第1章から第3章のページは、最初の見出しが h2 なら、隠した見出しとして作業環境の前に置く', () => {
+    for (const file of expected.filter((name) => !name.startsWith('intro/'))) {
+      const source = read(`src/content/chapters/${file}`);
+      const first = /^(#{2,3}) .+$/m.exec(source);
+      if (first?.[1] !== '##') continue;
+      expect(source, file).toMatch(/<div class="visually-hidden">\n\n## .+\n\n<\/div>\n\n<Workspace /);
+      expect(source.indexOf(first[0]), file).toBeLessThan(source.indexOf('<Workspace '));
+    }
+  });
+
+  it('作業環境を置くページは、Workspace を1つだけ持つ', () => {
+    for (const file of expected.filter((name) => !name.startsWith('intro/'))) {
+      expect(read(`src/content/chapters/${file}`).match(/<Workspace /g), file).toHaveLength(1);
+    }
   });
 });
 

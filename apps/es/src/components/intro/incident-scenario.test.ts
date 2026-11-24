@@ -25,11 +25,11 @@ const timedEvents = timeline.flatMap((event) => (event.at === undefined ? [] : [
 
 const texts = [
   ...timeline.flatMap((event) => (event.kind === 'post' ? [event.post.text] : [])),
-  reply.text,
-  ...reply.additions.map((item) => item.text),
+  ...reply.lines.map((line) => line.text),
   ...reply.followUps.map((item) => item.text),
   interim.heading,
   interim.unknown,
+  interim.pending,
 ];
 
 describe('障害対応の筋書き', () => {
@@ -42,9 +42,18 @@ describe('障害対応の筋書き', () => {
     expect(new Date(startedAt).toISOString()).toBe('2026-11-06T18:20:00.000Z');
   });
 
-  it('0 秒、30 秒、36 秒、60 秒、105 秒の出来事がある', () => {
+  it('連絡は 0 秒、36 秒、60 秒、105 秒に始まり、1 つの連絡は短い投稿を数件に分けて届ける', () => {
     const posts = timedEvents.flatMap((event) => (event.kind === 'post' ? [event.at] : []));
-    expect(posts).toEqual([0, 36, 60, 105]);
+    expect(posts).toEqual([0, 2, 5, 36, 39, 60, 105]);
+    expect(timedEvents.flatMap((event) => (event.kind === 'post' ? [event.post.text] : []))).toEqual([
+      'お疲れ様です！すみません、急ぎで見てほしいです🙏',
+      '動物病院さんから電話があって、予約してたはずの来院がキャンセルになってるそうです。飼い主さんがもう受付に来ちゃってて…',
+      'ポチちゃんの来院です（visit-pochi）。誰がいつなんでキャンセルしたか、わかりますか？',
+      'すみません、もう1件です',
+      '別の飼い主さんからも同じ連絡が来てて、タマちゃん（visit-tama）もキャンセルになってます。さっき見たときは予約のままだったんですが…',
+      '病院さんに折り返さないとなので、わかってるところまででいいので教えてください！',
+      'どうでしょう…？病院さんずっとお待ちで💦',
+    ]);
     expect(timedEvents.filter((event) => event.at === 30).map((event) => event.kind)).toEqual([
       'log',
       'sql',
@@ -114,11 +123,22 @@ describe('障害対応の筋書き', () => {
   it('投稿者の名前と最終の返信の文面がある', () => {
     expect(actors['support']?.name).toBe('カスタマーサポート');
     expect(actors['you']?.name).toBe('あなた');
-    expect(reply.followUps.map((item) => item.delay)).toEqual([1.5, 1.5]);
-    expect(reply.followUps.at(-1)?.text).toBe('なんで記録取ってないんですか');
-    expect(reply.additions).toEqual([
-      { after: 30, text: 'タマの来院も、18:20:30 に同じ操作でキャンセルになっています。' },
+    expect(reply.followUps.map((item) => item.delay)).toEqual([1.5, 1.5, 2]);
+    expect(reply.followUps.map((item) => item.text)).toEqual([
+      'えっ',
+      '誰がなんでキャンセルしたか分からないと、病院さんに説明できないです…',
+      'なんで記録取ってないんですか',
     ]);
+    expect(reply.lines).toEqual([
+      { text: '18:11:58 にポチの来院をキャンセルする操作があったのは確認できました' },
+      { after: 30, text: 'タマの来院も 18:20:30 に同じ操作でキャンセルされてます' },
+      { text: 'ただ、誰がなんでキャンセルしたかは、DB にもログにもコードにも残ってなくて、分からないです…' },
+    ]);
+    expect(interim).toMatchObject({
+      heading: 'いま分かってるところです',
+      unknown: 'まだ何も分かってないです、調査中です',
+      pending: '{labels} は調査中です',
+    });
   });
 
   it('導入では使わない語を、文面に含まない', () => {

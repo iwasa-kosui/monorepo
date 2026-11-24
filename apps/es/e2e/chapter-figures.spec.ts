@@ -298,6 +298,9 @@ const scrollers = (page: Page): Promise<string[]> =>
   page.evaluate(() => {
     const found: string[] = [];
     for (const element of document.querySelectorAll('.chapter-body *')) {
+      if (element.closest('[data-scenario] [role="tabpanel"][data-tool], [data-scenario] [data-feed]') !== null) {
+        continue;
+      }
       const style = getComputedStyle(element);
       const scrolls = (value: string): boolean => value === 'auto' || value === 'scroll';
       const overflowsY = scrolls(style.overflowY) && element.scrollHeight - element.clientHeight > 1;

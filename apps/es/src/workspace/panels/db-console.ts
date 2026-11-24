@@ -28,22 +28,26 @@ export const mountDbConsole: PanelMount<'console'> = (host) => {
     return announced !== null;
   };
 
-  const showsTarget = (): boolean => {
+  const targetRow = (): Readonly<Record<string, string | null>> | undefined => {
     const target = config.target;
-    if (target === undefined) return false;
+    if (target === undefined) return undefined;
     for (const result of results.querySelectorAll('.playground-result')) {
-      const heads = [...result.querySelectorAll('thead th')].map((cell) => cell.textContent);
+      const heads = [...result.querySelectorAll('thead th')].map((cell) => cell.textContent ?? '');
       if (!heads.includes(target.column)) continue;
       const body = [...result.querySelectorAll('tbody tr')];
       const statement = result.querySelector('.playground-statement code')?.textContent ?? '';
-      const named = body.some((row) =>
-        [...row.querySelectorAll('td')].some((cell) => cell.textContent === target.value)
-      );
-      if (named || (body.length > 0 && statement.includes(target.value))) {
-        return true;
-      }
+      const cellsOf = (row: Element): Element[] => [...row.querySelectorAll('td')];
+      const named = body.find((row) => cellsOf(row).some((cell) => cell.textContent === target.value));
+      const found = named ?? (statement.includes(target.value) ? body[0] : undefined);
+      if (found === undefined) continue;
+      const row: Record<string, string | null> = {};
+      cellsOf(found).forEach((cell, index) => {
+        row[heads[index] ?? ''] = cell.classList.contains('playground-null') ? null : cell.textContent;
+      });
+      const readable = (target.read ?? []).every((column) => heads.includes(column) && row[column] !== null);
+      if (readable) return row;
     }
-    return false;
+    return undefined;
   };
 
   for (const button of panel.querySelectorAll<HTMLButtonElement>('[data-table]')) {
@@ -62,7 +66,8 @@ export const mountDbConsole: PanelMount<'console'> = (host) => {
   new MutationObserver(() => {
     if (results.querySelector('.playground-result, .playground-error') === null) return;
     host.emit('sql:executed');
-    if (showsTarget()) host.emit('sql:target-shown');
+    const row = targetRow();
+    if (row !== undefined) host.emit('sql:target-shown', { row });
   }).observe(results, { childList: true });
 
   return {
