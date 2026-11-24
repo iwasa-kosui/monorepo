@@ -1,0 +1,447 @@
+---
+/**
+ * トップページのヒーロー。
+ * 砂浜に打ち上げられたドット絵のエビへ、右上の海から波が寄せては引く。
+ * エビは波を重ねるごとに少しずつ沖へ攫われ、最後は海に消える。
+ *
+ * 海は WebGL で描く（mount.ts）。WebGL が使えない環境では、静止したドット絵だけを見せる。
+ */
+import { EYE_PATH, SHELL_PATH } from './shrimp';
+
+type Theme = Readonly<{ slug: string; name: string; count: number }>;
+
+type Props = {
+  themes: readonly Theme[];
+};
+
+const { themes } = Astro.props;
+---
+
+<section class="shore" data-shore-hero aria-labelledby="shore-name">
+  <canvas class="shore-sea" data-shore-canvas aria-hidden="true"></canvas>
+  <div class="shore-content">
+    <div class="shore-copy">
+      <p class="shore-role">テックリード @ 株式会社カケハシ</p>
+      <h1 class="shore-name" id="shore-name">岩佐 幸翠</h1>
+      <p class="shore-latin">Kosui Iwasa</p>
+      <p class="shore-bio">
+        医療SaaSの共通基盤を開発しています。認証認可基盤・組織管理・テナント分離などのプラットフォーム領域を担当。TSKaigi、関数型まつり、SRE
+        Kaigiなどのカンファレンスで登壇。
+      </p>
+      <div class="shore-actions">
+        <a class="shore-button" href="#timeline">
+          記事を読む<span aria-hidden="true">↓</span>
+        </a>
+        <a
+          class="shore-link"
+          href="https://github.com/iwasa-kosui"
+          target="_blank"
+          rel="noopener noreferrer"
+        >GitHub</a>
+        <a
+          class="shore-link"
+          href="https://x.com/kosui_me"
+          target="_blank"
+          rel="noopener noreferrer"
+        >X</a>
+      </div>
+    </div>
+    <div class="shore-stage">
+      <div class="shore-slot" data-shore-slot>
+        <button
+          class="shore-shrimp"
+          type="button"
+          data-shore-shrimp
+          aria-label="砂浜に打ち上げられたドット絵のエビ。波に少しずつ攫われていきます。触れると弱く跳ねます"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            shape-rendering="crispEdges"
+          >
+            <path class="shore-shell" d={SHELL_PATH}></path>
+            <path class="shore-eye" d={EYE_PATH}></path>
+          </svg>
+        </button>
+      </div>
+      <p class="shore-note" data-shore-note aria-live="polite"></p>
+    </div>
+  </div>
+  <nav class="shore-themes" aria-label="テーマ別に読む">
+    <ul>
+      {
+        themes.map((theme) => (
+          <li>
+            <a href={`/themes/${theme.slug}`}>
+              {theme.name} <span>{theme.count}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </nav>
+</section>
+
+<style>
+/* 配色。シェーダーはここの値を読むので、16 進 6 桁で書く。砂はサイト全体の地の色と同じ */
+.shore {
+  --shore-sand: var(--color-bg);
+  --shore-sea-shallow: #f0998d;
+  --shore-sea-deep: #b3324b;
+  --shore-foam: #fffdfb;
+  --shore-light: #ffffff;
+  --shore-shell: #ee7b6f;
+  --shore-eye: #3750b1;
+  --shore-wet-tint: #dbc7c4;
+  --shore-shadow-tint: #8c7385;
+  --shore-gain: 1;
+  --shore-grain: 1;
+  --shore-sheen: 1;
+  --shore-ink: #1f2740;
+  --shore-muted: #4b526d;
+  --shore-line: rgba(31, 39, 64, 0.16);
+  --shore-button: #1f2740;
+  --shore-button-ink: #fffaf8;
+  --shore-gutter: max(1rem, 4.4vw);
+  --shore-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--shore-ink);
+}
+
+/* 夜の浜: 暗い砂に青黒い海 */
+@media (prefers-color-scheme: dark) {
+  .shore {
+    --shore-sea-shallow: #3b6c98;
+    --shore-sea-deep: #050d1c;
+    --shore-foam: #dbe7f8;
+    --shore-light: #a9c9f7;
+    --shore-shell: #e6786c;
+    --shore-eye: #8aa0f5;
+    --shore-wet-tint: #a8aecb;
+    --shore-shadow-tint: #2e2e44;
+    --shore-gain: 0.8;
+    --shore-grain: 2.2;
+    --shore-sheen: 2;
+    --shore-ink: #f3f1ee;
+    --shore-muted: #b3bacb;
+    --shore-line: rgba(243, 241, 238, 0.18);
+    --shore-button: #f3f1ee;
+    --shore-button-ink: #181d2c;
+  }
+}
+
+.shore-sea {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+  /* 下端はページの砂へ溶け込ませる */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 10rem), transparent);
+}
+
+.shore.is-live .shore-sea {
+  opacity: 1;
+}
+
+.shore-content {
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 1.75rem;
+  padding: 5.5rem var(--shore-gutter) 2.25rem;
+}
+
+.shore-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.shore-role {
+  font-size: 1.125rem;
+  color: var(--shore-muted);
+  animation: shore-up 0.9s 0.1s var(--shore-ease) both;
+}
+
+.shore-name {
+  margin-top: 1rem;
+  font-size: clamp(3.25rem, 8.3vw, 7.5rem);
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  animation: shore-up 1s 0.2s var(--shore-ease) both;
+}
+
+.shore-latin {
+  margin-top: 0.375rem;
+  font-size: clamp(1.625rem, 3.05vw, 2.75rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  animation: shore-up 0.9s 0.45s var(--shore-ease) both;
+}
+
+.shore-bio {
+  margin-top: clamp(1.5rem, 5vh, 3rem);
+  max-width: 30em;
+  font-size: 1rem;
+  line-height: 2;
+  text-wrap: pretty;
+  animation: shore-up 0.9s 0.6s var(--shore-ease) both;
+}
+
+.shore-actions {
+  margin-top: clamp(1.25rem, 4vh, 2.25rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  animation: shore-up 0.9s 0.75s var(--shore-ease) both;
+}
+
+.shore-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3rem;
+  height: 4rem;
+  padding: 0 1.75rem;
+  border-radius: 1.25rem;
+  background: var(--shore-button);
+  color: var(--shore-button-ink);
+  font-weight: 500;
+  transition: transform 0.4s var(--shore-ease);
+}
+
+.shore-button:hover {
+  transform: translateY(-3px);
+}
+
+.shore-link {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  text-decoration: underline;
+  text-decoration-color: var(--shore-line);
+  text-underline-offset: 0.3em;
+  transition: text-decoration-color 0.3s;
+}
+
+.shore-link:hover {
+  text-decoration-color: currentColor;
+}
+
+.shore-stage {
+  --shore-size: min(78vw, 26rem);
+  position: relative;
+  order: -1;
+  justify-self: end;
+  width: var(--shore-size);
+  height: calc(var(--shore-size) * 0.64);
+}
+
+/* 元のアイコンと同じ構図: 32 マスの枠の右上寄りに 20 マスのエビ */
+.shore-slot {
+  position: absolute;
+  left: 37.5%;
+  top: 0;
+  width: 62.5%;
+  aspect-ratio: 1;
+}
+
+.shore-shrimp {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0.75rem;
+  cursor: pointer;
+}
+
+.shore-shrimp svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* エビのそばに出す一言。エビのいない砂の上に置く */
+.shore-note {
+  position: absolute;
+  left: 0;
+  top: 30%;
+  width: 34%;
+  font-size: 0.75rem;
+  line-height: 1.8;
+  color: var(--shore-muted);
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.shore-note.is-shown {
+  opacity: 1;
+}
+
+/* 海を描けているときは、エビもシェーダーが描く */
+.shore.is-live .shore-shrimp svg {
+  visibility: hidden;
+}
+
+.shore-shell {
+  fill: var(--shore-shell);
+}
+
+.shore-eye {
+  fill: var(--shore-eye);
+}
+
+/* テーマ: 4 つのテーマへの入口。数字は記事数 */
+.shore-themes {
+  position: relative;
+  padding: 0 var(--shore-gutter) clamp(1.25rem, 4vh, 2.25rem);
+  animation: shore-up 0.9s 0.9s var(--shore-ease) both;
+}
+
+.shore-themes ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.shore-themes a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 1.125rem 0.75rem 0 0;
+  border-top: 1px solid var(--shore-line);
+  font-size: 0.9375rem;
+  transition: border-color 0.3s;
+}
+
+.shore-themes li:nth-child(even) a {
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--shore-line);
+}
+
+.shore-themes a:hover {
+  border-top-color: var(--shore-ink);
+}
+
+.shore-themes span {
+  color: var(--shore-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.shore :focus-visible {
+  outline: 2px solid var(--shore-eye);
+  outline-offset: 4px;
+  border-radius: 0.375rem;
+}
+
+@keyframes shore-up {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 広い画面: 最初の 1 画面をヒーローに使う */
+@media (min-width: 861px) {
+  .shore {
+    height: 100svh;
+    min-height: 40rem;
+    max-height: 61.25rem;
+  }
+
+  .shore-content {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4vw;
+    padding-top: 6.5rem;
+    padding-bottom: 0;
+  }
+
+  .shore-stage {
+    --shore-size: min(46vw, 72vh, 41.25rem);
+    order: 0;
+    height: var(--shore-size);
+  }
+
+  .shore-slot {
+    top: -3.125%;
+  }
+
+  .shore-note {
+    left: 37.5%;
+    top: 64%;
+    width: 62.5%;
+    font-size: 0.8125rem;
+  }
+
+  .shore-themes ul {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .shore-themes a {
+    padding-right: 1.25rem;
+    font-size: clamp(1.0625rem, 1.5vw, 1.375rem);
+  }
+
+  .shore-themes li:nth-child(even) a,
+  .shore-themes li + li a {
+    padding-left: 1.25rem;
+    border-left: 1px solid var(--shore-line);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shore *,
+  .shore-sea {
+    animation: none;
+    transition: none;
+  }
+}
+
+@media print {
+  .shore-sea {
+    display: none;
+  }
+}
+</style>
+
+<script>
+import { mountShore } from './mount';
+
+let dispose: (() => void) | undefined;
+
+const mount = (): void => {
+  dispose?.();
+  dispose = undefined;
+  const hero = document.querySelector<HTMLElement>('[data-shore-hero]');
+  const canvas = hero?.querySelector<HTMLCanvasElement>('[data-shore-canvas]');
+  const slot = hero?.querySelector<HTMLElement>('[data-shore-slot]');
+  const button = hero?.querySelector<HTMLButtonElement>('[data-shore-shrimp]');
+  const note = hero?.querySelector<HTMLElement>('[data-shore-note]');
+  if (!hero || !canvas || !slot || !button || !note) return;
+  dispose = mountShore({ hero, canvas, slot, button, note });
+};
+
+document.addEventListener('astro:page-load', mount);
+document.addEventListener('astro:before-swap', () => {
+  dispose?.();
+  dispose = undefined;
+});
+</script>

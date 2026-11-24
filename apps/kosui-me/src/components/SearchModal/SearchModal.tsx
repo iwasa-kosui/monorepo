@@ -124,7 +124,7 @@ export function SearchModal() {
 
       {/* Dialog */}
       <div
-        className={`relative w-full max-w-2xl mx-4 bg-card dark:bg-[#1c1c22] rounded-clay shadow-clay-hover dark:shadow-clay-dark-hover overflow-hidden ${
+        className={`relative w-full max-w-2xl mx-4 bg-card dark:bg-[#1f2435] rounded-clay shadow-clay-hover dark:shadow-clay-dark-hover overflow-hidden ${
           !prefersReduced ? 'animate-[searchModalIn_0.2s_ease-out]' : ''
         }`}
         role='dialog'
@@ -133,7 +133,7 @@ export function SearchModal() {
         onKeyDown={handleKeyDown}
       >
         {/* Search input */}
-        <div className='flex items-center gap-3 px-4 py-3 border-b border-border dark:border-[#2a2a32]'>
+        <div className='flex items-center gap-3 px-4 py-3 border-b border-border dark:border-[#343c57]'>
           <svg
             className='w-5 h-5 text-subtle dark:text-[#9ca3af] shrink-0'
             fill='none'
@@ -155,7 +155,7 @@ export function SearchModal() {
             placeholder='記事やトークを検索...'
             className='flex-1 bg-transparent text-charcoal dark:text-[#ececec] placeholder:text-subtle dark:placeholder:text-[#9ca3af] outline-none text-base'
           />
-          <kbd className='hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-subtle dark:text-[#9ca3af] bg-tag-bg dark:bg-[#2a2a32] rounded font-mono'>
+          <kbd className='hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-subtle dark:text-[#9ca3af] bg-tag-bg dark:bg-[#343c57] rounded font-mono'>
             {isMac ? '⌘' : 'Ctrl'}K
           </kbd>
         </div>
@@ -185,10 +185,10 @@ export function SearchModal() {
               <a
                 key={result.url}
                 href={result.url}
-                className={`block px-4 py-3 border-b border-border/50 dark:border-[#2a2a32]/50 last:border-b-0 transition-colors ${
+                className={`block px-4 py-3 border-b border-border/50 dark:border-[#343c57]/50 last:border-b-0 transition-colors ${
                   index === activeIndex
                     ? 'bg-accent/5 dark:bg-accent/10'
-                    : 'hover:bg-tag-bg dark:hover:bg-[#2a2a32]'
+                    : 'hover:bg-tag-bg dark:hover:bg-[#343c57]'
                 }`}
                 onMouseEnter={() => setActiveIndex(index)}
               >
@@ -200,7 +200,7 @@ export function SearchModal() {
                     className={`shrink-0 px-1.5 py-0.5 text-[10px] rounded-full font-medium ${
                       result.type === 'talk'
                         ? 'bg-accent/10 dark:bg-accent-light/10 text-accent dark:text-accent-light'
-                        : 'bg-tag-bg dark:bg-[#2a2a32] text-subtle dark:text-[#9ca3af]'
+                        : 'bg-tag-bg dark:bg-[#343c57] text-subtle dark:text-[#9ca3af]'
                     }`}
                   >
                     {result.type === 'talk' ? 'Talk' : 'Post'}

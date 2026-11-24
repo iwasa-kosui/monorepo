@@ -1,0 +1,27 @@
+---
+/**
+ * エビのアイコン。
+ * icon.kosui.me の画像は背景が白で塗られているため、ダークモードでは白い円が浮いてエビの色が薄く見える。
+ * ダークモードでは背景を透過にした画像へ切り替え、暗い面の上に描く。
+ */
+type Props = {
+  size: number;
+  alt?: string;
+  class?: string;
+  transitionName?: string;
+};
+
+const { size, alt = '', class: className, transitionName } = Astro.props;
+---
+
+<picture class="flex-shrink-0">
+  <source srcset="/icon-transparent.png" media="(prefers-color-scheme: dark)" />
+  <img
+    src="https://icon.kosui.me"
+    alt={alt}
+    width={size}
+    height={size}
+    class:list={['block rounded-full dark:bg-[#343c57]', className]}
+    transition:name={transitionName}
+  />
+</picture>
