@@ -1,9 +1,10 @@
 import { goneNote, PRESSED_NOTE, recordLoss } from './notes';
+import { buildPatternTexture, PATTERN_SIZE } from './pattern';
 import { FRAGMENT_SHADER, VERTEX_SHADER } from './shader';
 import { buildShadowTexture, buildSpriteTexture, GRID, SHADOW_SIZE } from './shrimp';
-import { carry, coverage, createWaves, type Drift, initialDrift, visibility } from './wave';
+import { carry, coverage, createWaves, type Drift, initialDrift, packWaves, visibility } from './wave';
 
-/** 動きを止めた 1 枚絵として見せるときの時刻（波が引いて、エビが濡れた砂の上にいる） */
+/** 動きを止めた 1 枚絵として見せるときの時刻（最初の波が引いて、エビが濡れた砂の上にいる） */
 const STILL_TIME = 5.2;
 
 /** 描画の解像度の上限（デバイスピクセル比） */
@@ -17,8 +18,8 @@ const UNIFORMS = [
   'uPixelRatio',
   'uTime',
   'uTide',
-  'uCycleStart',
-  'uAmplitude',
+  'uWaveMotion',
+  'uWaveShape',
   'uRect',
   'uOffset',
   'uRotation',
@@ -28,6 +29,7 @@ const UNIFORMS = [
   'uGain',
   'uGrain',
   'uSheen',
+  'uFroth',
   'uWetTint',
   'uShadowTint',
   'uSand',
@@ -39,6 +41,7 @@ const UNIFORMS = [
   'uEye',
   'uSprite',
   'uShadow',
+  'uPattern',
 ] as const;
 
 type UniformName = (typeof UNIFORMS)[number];
@@ -58,6 +61,7 @@ type Palette = Readonly<{
   gain: number;
   grain: number;
   sheen: number;
+  froth: number;
 }>;
 
 const parseHex = (value: string): Rgb => {
@@ -87,6 +91,7 @@ const readPalette = (element: HTMLElement): Palette => {
     gain: number('--shore-gain'),
     grain: number('--shore-grain'),
     sheen: number('--shore-sheen'),
+    froth: number('--shore-froth'),
   };
 };
 
@@ -123,12 +128,15 @@ const createProgram = (
   return program;
 };
 
+/** 模様は作るのに数十ミリ秒かかるので、ページを行き来しても 1 度だけ作る */
+let pattern: Uint8Array | undefined;
+
 const setUpTextures = (gl: WebGLRenderingContext): void => {
-  const clampNearest = (filter: number): void => {
+  const sample = (filter: number, wrap: number): void => {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
   };
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
 
@@ -145,7 +153,7 @@ const setUpTextures = (gl: WebGLRenderingContext): void => {
     gl.UNSIGNED_BYTE,
     buildSpriteTexture(),
   );
-  clampNearest(gl.NEAREST);
+  sample(gl.NEAREST, gl.CLAMP_TO_EDGE);
 
   gl.activeTexture(gl.TEXTURE1);
   gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
@@ -160,7 +168,23 @@ const setUpTextures = (gl: WebGLRenderingContext): void => {
     gl.UNSIGNED_BYTE,
     buildShadowTexture(),
   );
-  clampNearest(gl.LINEAR);
+  sample(gl.LINEAR, gl.CLAMP_TO_EDGE);
+
+  // 泡と砂のむらの模様。繰り返して並べる
+  gl.activeTexture(gl.TEXTURE2);
+  gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA,
+    PATTERN_SIZE,
+    PATTERN_SIZE,
+    0,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    pattern ??= buildPatternTexture(),
+  );
+  sample(gl.LINEAR, gl.REPEAT);
 };
 
 /** 触れたときの弱い跳ね。経過秒から [沖へ, 上へ, 回転] を返す */
@@ -229,6 +253,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
   setUpTextures(gl);
   gl.uniform1i(uniforms.uSprite, 0);
   gl.uniform1i(uniforms.uShadow, 1);
+  gl.uniform1i(uniforms.uPattern, 2);
 
   const waves = createWaves(Math.random);
   const startedAt = performance.now();
@@ -296,7 +321,6 @@ export const mountShore = (elements: ShoreElements): () => void => {
       : pinned === undefined
       ? elapsed
       : Number(pinned);
-    const wave = waves.at(time);
     if (!reduceMotion && previousTime !== undefined) {
       const wasGone = drift.gone;
       drift = carry(drift, previousTime, time, waves);
@@ -306,7 +330,8 @@ export const mountShore = (elements: ShoreElements): () => void => {
       }
     }
     previousTime = time;
-    cover += (coverage(drift, wave, tide) - cover) * 0.12;
+    const swashes = waves.visibleAt(time);
+    cover += (coverage(drift, swashes, time, tide) - cover) * 0.12;
 
     // 枠は動かさず、ボタンだけをエビの今の位置へ動かす
     const heroRect = hero.getBoundingClientRect();
@@ -323,8 +348,9 @@ export const mountShore = (elements: ShoreElements): () => void => {
     gl.uniform1f(uniforms.uPixelRatio, pixelRatio);
     gl.uniform1f(uniforms.uTime, time);
     gl.uniform1f(uniforms.uTide, tide);
-    gl.uniform1f(uniforms.uCycleStart, wave.cycleStart);
-    gl.uniform2f(uniforms.uAmplitude, wave.amplitude, wave.previousAmplitude);
+    const waveUniforms = packWaves(swashes, time);
+    gl.uniform4fv(uniforms.uWaveMotion, waveUniforms.motion);
+    gl.uniform4fv(uniforms.uWaveShape, waveUniforms.shape);
     gl.uniform3f(
       uniforms.uRect,
       slotRect.left - heroRect.left,
@@ -346,6 +372,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
     gl.uniform1f(uniforms.uGain, palette.gain);
     gl.uniform1f(uniforms.uGrain, palette.grain);
     gl.uniform1f(uniforms.uSheen, palette.sheen);
+    gl.uniform1f(uniforms.uFroth, palette.froth);
     gl.uniform3fv(uniforms.uWetTint, palette.wetTint);
     gl.uniform3fv(uniforms.uShadowTint, palette.shadowTint);
     gl.uniform3fv(uniforms.uSand, palette.sand);
