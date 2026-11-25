@@ -138,6 +138,29 @@ const socials = [
   },
 ];
 
+const otherAccounts = [
+  { label: 'Speaker Deck', href: 'https://speakerdeck.com/kosui' },
+  { label: 'はてな', href: 'https://profile.hatena.ne.jp/kosui_me/' },
+  { label: 'Qiita', href: 'https://qiita.com/kosui' },
+  { label: 'Keybase', href: 'https://keybase.io/kosui' },
+];
+
+const researcherProfiles = [
+  {
+    label: 'Google Scholar',
+    href: 'https://scholar.google.com/citations?user=DaujMhUAAAAJ&hl=ja',
+  },
+  { label: 'ORCID', href: 'https://orcid.org/0000-0003-1349-2385' },
+  {
+    label: 'Semantic Scholar',
+    href: 'https://www.semanticscholar.org/author/51138915',
+  },
+  {
+    label: 'ACL Anthology',
+    href: 'https://aclanthology.org/people/kosui-iwasa/unverified/',
+  },
+];
+
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('ja-JP', {
@@ -200,6 +223,22 @@ function formatMonthDay(dateStr: string): string {
                     <path d={social.path} />
                   </svg>
                   <span>{social.label}</span>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+        <ul class="about-sublinks">
+          {
+            otherAccounts.map((account) => (
+              <li>
+                <a
+                  href={account.href}
+                  target="_blank"
+                  rel="noopener noreferrer me"
+                  class="about-sublink"
+                >
+                  {account.label}
                 </a>
               </li>
             ))
@@ -289,6 +328,22 @@ function formatMonthDay(dateStr: string): string {
           rel="noopener noreferrer"
         >Google Scholar</a> による（2026年11月時点）
       </p>
+      <ul class="about-sublinks about-sublinks-section">
+        {
+          researcherProfiles.map((profile) => (
+            <li>
+              <a
+                href={profile.href}
+                target="_blank"
+                rel="noopener noreferrer me"
+                class="about-sublink"
+              >
+                {profile.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
     </section>
 
     <section class="about-section">
@@ -426,6 +481,38 @@ function formatMonthDay(dateStr: string): string {
 }
 
 .about-social-link:focus-visible {
+  outline: 2px solid var(--about-go);
+  outline-offset: 2px;
+}
+
+.about-sublinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.about-sublinks-section {
+  margin-top: 1.25rem;
+}
+
+.about-sublink {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--about-ink) 5%, transparent);
+  color: var(--about-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.about-sublink:hover {
+  background: color-mix(in srgb, var(--about-ink) 12%, transparent);
+  color: var(--about-ink);
+}
+
+.about-sublink:focus-visible {
   outline: 2px solid var(--about-go);
   outline-offset: 2px;
 }
