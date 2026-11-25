@@ -1,10 +1,26 @@
 import { buildPatternTexture, PATTERN_SIZE } from './pattern';
 import { FRAGMENT_SHADER, VERTEX_SHADER } from './shader';
 import { buildShadowTexture, buildSpriteTexture, GRID, SHADOW_SIZE } from './shrimp';
-import { carry, coverage, createWaves, type Drift, ebb, initialDrift, packWaves, visibility } from './wave';
+import {
+  buriedDrift,
+  carry,
+  coverage,
+  createWaves,
+  type Drift,
+  ebb,
+  initialDrift,
+  packWaves,
+  visibility,
+} from './wave';
 
 /** 動きを止めた 1 枚絵として見せるときの時刻（最初の波が引いて、エビが濡れた砂の上にいる） */
 const STILL_TIME = 5.2;
+
+/** エビが海に消えてから、次のエビが砂の下に用意されるまでの秒数 */
+const BURIED_AFTER = 12;
+
+/** 埋もれている度合いがこれを下回ったら、エビを押せるようにする */
+const PRESSABLE_BELOW = 0.4;
 
 /** 描画の解像度の上限（デバイスピクセル比） */
 const MAX_PIXEL_RATIO = 1.5;
@@ -28,6 +44,7 @@ const UNIFORMS = [
   'uRotation',
   'uCover',
   'uVisible',
+  'uBuried',
   'uBlink',
   'uGain',
   'uGrain',
@@ -263,6 +280,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
   let palette = readPalette(hero);
   let drift: Drift = initialDrift;
   let previousTime: number | undefined;
+  let goneAt: number | undefined;
   let cover = 0;
   let tide = 0;
   let twitchAt = -Infinity;
@@ -313,7 +331,15 @@ export const mountShore = (elements: ShoreElements): () => void => {
       : Number(pinned);
     if (!reduceMotion && previousTime !== undefined) {
       drift = carry(drift, previousTime, time, waves);
-      if (drift.gone) button.hidden = true;
+      // 海に消えてしばらくすると、砂に埋もれていたエビを、波が少しずつ掘り出す
+      if (drift.gone) {
+        goneAt ??= time;
+        if (time - goneAt > BURIED_AFTER) {
+          drift = buriedDrift;
+          goneAt = undefined;
+        }
+      }
+      button.hidden = drift.gone || drift.buried > PRESSABLE_BELOW;
     }
     previousTime = time;
     const swashes = waves.visibleAt(time);
@@ -349,8 +375,9 @@ export const mountShore = (elements: ShoreElements): () => void => {
       cellsY + twitchY + hopY,
     );
     gl.uniform1f(uniforms.uRotation, drift.spin + twitchTurn + hopTurn);
-    gl.uniform1f(uniforms.uCover, cover);
+    gl.uniform1f(uniforms.uCover, cover * (1 - drift.buried)); // 埋もれている間は、水に揺られない
     gl.uniform1f(uniforms.uVisible, visibility(drift));
+    gl.uniform1f(uniforms.uBuried, drift.buried);
     gl.uniform1f(
       uniforms.uBlink,
       !reduceMotion && elapsed % 5.5 > 5.36 ? 0 : 1,

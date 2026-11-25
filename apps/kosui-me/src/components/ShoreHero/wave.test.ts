@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buriedDrift,
   carry,
   coverage,
   createWaves,
@@ -183,6 +184,56 @@ describe('carry', () => {
       coarse = carry(coarse, time, time + 0.5, waves);
     }
     expect(coarse.seaward).toBeCloseTo(fine.seaward, 1);
+  });
+});
+
+describe('carry（砂に埋もれたエビ）', () => {
+  const run = (seconds: number, from = 20): Drift => {
+    const waves = createWaves(seeded(3));
+    let drift = buriedDrift;
+    for (let time = from; time < from + seconds; time += 1 / 30) {
+      drift = carry(drift, time, time + 1 / 30, waves);
+    }
+    return drift;
+  };
+
+  it('波に洗われるたびに少しずつ現れ、現れきるまでは動かない', () => {
+    let previous = 1;
+    let emerging = 0;
+    for (const seconds of [10, 20, 30, 40, 50, 60]) {
+      const drift = run(seconds);
+      expect(drift.buried).toBeLessThanOrEqual(previous);
+      if (drift.buried > 0) {
+        expect(drift.seaward).toBe(0);
+        expect(drift.gone).toBe(false);
+      }
+      if (drift.buried > 0 && drift.buried < 1) emerging += 1;
+      previous = drift.buried;
+    }
+    expect(emerging).toBeGreaterThan(0);
+  });
+
+  it('どの波の列でも、1 つの波では現れきらず、やがて現れきる', () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const waves = createWaves(seeded(seed));
+      let drift = buriedDrift;
+      let changes = 0;
+      for (let time = 20; time < 140; time += 1) {
+        const next = carry(drift, time, time + 1, waves);
+        if (next.buried < drift.buried) changes += 1;
+        drift = next;
+      }
+      expect(drift.buried).toBe(0);
+      expect(changes).toBeGreaterThan(3);
+    }
+  });
+
+  it('現れきったあとは、ほかのエビと同じく波に攫われる', () => {
+    expect(run(400).gone).toBe(true);
+  });
+
+  it('スクロールの引き潮では動かない', () => {
+    expect(ebb(buriedDrift, 1, 0)).toBe(buriedDrift);
   });
 });
 
