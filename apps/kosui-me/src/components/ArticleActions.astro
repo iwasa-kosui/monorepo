@@ -1,9 +1,11 @@
 ---
 /**
  * 記事のタイトルの下に置く、控えめな操作の列。
- * はてなブックマーク（件数つき）と、Markdown の原文へのリンクだけを出す。
- * ほかのシェア先は、読み終えた位置にある ShareButtons に任せる。
+ * シェア先と、Markdown の原文へのリンクを、同じ形と色の面に揃えて並べる。
+ * はてなブックマークだけは件数を出すのでピルに、ほかのシェア先はアイコンだけの丸にする。
  */
+import { SHARE_TARGETS } from './shareTargets';
+
 interface Props {
   title: string;
   url: string;
@@ -22,19 +24,30 @@ const { title, url, markdownUrl, shareable = true } = Astro.props;
   data-page-url={url}
 >
   {
-    shareable && (
+    shareable && SHARE_TARGETS.map((target) => (
       <a
-        data-share="hatena"
+        data-share={target.id}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="はてなブックマークに追加"
-        class="article-action"
+        title={target.name}
+        aria-label={target.ariaLabel}
+        class:list={[
+          'article-action',
+          target.id !== 'hatena' && 'article-action-icon',
+        ]}
       >
-        <span class="article-action-hatena" aria-hidden="true">B!</span>
-        <span data-hatena-count class="article-action-count hidden">0</span>
-        <span class="article-action-label">ブックマーク</span>
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d={target.iconPath} />
+        </svg>
+        {
+          target.id === 'hatena' && (
+            <span data-hatena-count class="article-action-count hidden">
+              0
+            </span>
+          )
+        }
       </a>
-    )
+    ))
   }
   <a href={markdownUrl} class="article-action" aria-label="Markdownとして表示">
     <svg
@@ -64,25 +77,37 @@ const { title, url, markdownUrl, shareable = true } = Astro.props;
 }
 
 .article-action {
-  --action-ink: #4b526d;
+  --action-ink: #3d445e;
   --action-line: rgb(31 39 64 / 0.14);
-  --action-fill: rgb(255 255 255 / 0.5);
-  --action-fill-hover: rgb(255 255 255 / 0.85);
+  --action-fill: rgb(255 255 255 / 0.55);
+  --action-fill-hover: rgb(255 255 255 / 0.9);
 
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  height: 2rem;
-  padding: 0 0.75rem;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  padding: 0 0.875rem;
   border: 1px solid var(--action-line);
   border-radius: 9999px;
   background-color: var(--action-fill);
   color: var(--action-ink);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s,
+    color 0.2s,
+    transform 0.2s;
+}
+
+/* アイコンだけの丸 */
+.article-action-icon {
+  width: 2.5rem;
+  padding: 0;
 }
 
 .article-action:hover {
@@ -91,20 +116,18 @@ const { title, url, markdownUrl, shareable = true } = Astro.props;
   color: var(--color-accent-dark);
 }
 
+.article-action:active {
+  transform: scale(0.95);
+}
+
 .article-action:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
 .article-action svg {
-  width: 0.875rem;
-  height: 0.875rem;
-}
-
-.article-action-hatena {
-  color: #008fde;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
 .article-action-count {
@@ -112,14 +135,9 @@ const { title, url, markdownUrl, shareable = true } = Astro.props;
   font-variant-numeric: tabular-nums;
 }
 
-/* 件数が出ているときは、件数がラベルの代わりになる */
-.article-action-count:not(.hidden) + .article-action-label {
-  display: none;
-}
-
 @media (prefers-color-scheme: dark) {
   .article-action {
-    --action-ink: #b3bacb;
+    --action-ink: #c5cbd9;
     --action-line: rgb(255 255 255 / 0.16);
     --action-fill: rgb(255 255 255 / 0.05);
     --action-fill-hover: rgb(255 255 255 / 0.1);
@@ -128,10 +146,6 @@ const { title, url, markdownUrl, shareable = true } = Astro.props;
   .article-action:hover {
     border-color: var(--color-accent-light);
     color: var(--color-accent-light);
-  }
-
-  .article-action-hatena {
-    color: #4db8f0;
   }
 }
 
