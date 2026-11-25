@@ -17,7 +17,11 @@ type Props = {
 const { themes } = Astro.props;
 ---
 
-<section class="shore" data-shore-hero aria-labelledby="shore-name">
+<section
+  class="shore shore-palette"
+  data-shore-hero
+  aria-labelledby="shore-name"
+>
   <canvas class="shore-sea" data-shore-canvas aria-hidden="true"></canvas>
   <div class="shore-content" data-shore-content>
     <div class="shore-copy">
@@ -82,21 +86,8 @@ const { themes } = Astro.props;
 </section>
 
 <style>
-/* 配色。シェーダーはここの値を読むので、16 進 6 桁で書く。砂はサイト全体の地の色と同じ */
+/* 海と砂の配色は global.css の .shore-palette にある（記事の背景と共有する） */
 .shore {
-  --shore-sand: var(--color-bg);
-  --shore-sea-shallow: #f0998d;
-  --shore-sea-deep: #b3324b;
-  --shore-foam: #fffdfb;
-  --shore-light: #ffffff;
-  --shore-shell: #ee7b6f;
-  --shore-eye: #3750b1;
-  --shore-wet-tint: #dbc7c4;
-  --shore-shadow-tint: #8c7385;
-  --shore-gain: 1;
-  --shore-grain: 1;
-  --shore-sheen: 1;
-  --shore-froth: 1;
   --shore-ink: #1f2740;
   --shore-muted: #4b526d;
   --shore-line: rgba(31, 39, 64, 0.16);
@@ -112,21 +103,8 @@ const { themes } = Astro.props;
   color: var(--shore-ink);
 }
 
-/* 夜の浜: 暗い砂に青黒い海 */
 @media (prefers-color-scheme: dark) {
   .shore {
-    --shore-sea-shallow: #3b6c98;
-    --shore-sea-deep: #050d1c;
-    --shore-foam: #dbe7f8;
-    --shore-light: #a9c9f7;
-    --shore-shell: #e6786c;
-    --shore-eye: #8aa0f5;
-    --shore-wet-tint: #a8aecb;
-    --shore-shadow-tint: #2e2e44;
-    --shore-gain: 0.8;
-    --shore-grain: 2.2;
-    --shore-sheen: 2;
-    --shore-froth: 0.65;
     --shore-ink: #f3f1ee;
     --shore-muted: #b3bacb;
     --shore-line: rgba(243, 241, 238, 0.18);

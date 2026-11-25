@@ -4,6 +4,7 @@ import ContentWarningModal from '@/components/ContentWarningModal.astro';
 import Figure from '@/components/Figure.astro';
 import MarkdownSourceLink from '@/components/MarkdownSourceLink.astro';
 import RelatedArticles from '@/components/RelatedArticles.astro';
+import ShoreBackdrop from '@/components/ShoreBackdrop/ShoreBackdrop.astro';
 import ShareButtons from '@/components/ShareButtons.astro';
 import ThemeHubLinks from '@/components/ThemeHubLinks.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
@@ -70,6 +71,8 @@ const jsonLd = isPrivate || isDraft ? [] : [
   {...(updatedDate ? { modifiedTime: updatedDate } : {})}
   jsonLd={jsonLd}
 >
+  <ShoreBackdrop slot="backdrop" />
+
   <article
     class="article-paper"
     data-pagefind-body
