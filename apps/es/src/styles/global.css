@@ -252,16 +252,16 @@ body.chapter-page {
   min-width: 0;
 }
 .intro-text {
-  font-size: 1rem;
-  line-height: 1.65;
+  font-size: 1.5rem;
+  line-height: 1.7;
 }
 .content .intro-text h2 {
   margin-block: 1.25rem 0.5rem;
-  font-size: 1.25rem;
+  font-size: 2rem;
 }
 .content .intro-text h3 {
   margin-block: 1rem 0.375rem;
-  font-size: 1.125rem;
+  font-size: 1.5rem;
 }
 .content .intro-text > :first-child {
   margin-top: 0;
@@ -276,7 +276,7 @@ body.chapter-page {
 }
 .content .intro-text table {
   margin-block: 0.5rem;
-  font-size: 0.8125rem;
+  font-size: 1.125rem;
   line-height: 1.35;
 }
 .content .intro-text th,
@@ -296,16 +296,16 @@ body.chapter-page {
 
 @media (max-height: 700px) {
   .content .intro-text {
-    font-size: 0.875rem;
+    font-size: 1.25rem;
     line-height: 1.55;
   }
   .content .intro-text h2 {
     margin-block: 0.75rem 0.25rem;
-    font-size: 1.125rem;
+    font-size: 1.625rem;
   }
   .content .intro-text h3 {
     margin-block: 0.625rem 0.25rem;
-    font-size: 1rem;
+    font-size: 1.25rem;
   }
   .content .intro-text p,
   .content .intro-text ul,
