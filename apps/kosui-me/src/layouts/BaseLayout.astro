@@ -43,7 +43,7 @@ const {
 
 const mainMaxWidth = wide ? 'max-w-6xl' : 'max-w-3xl';
 
-// ヒーローを持つページでは、ヘッダーをヒーローの上に重ね、本文をヒーローと同じ幅で並べる
+// ヒーローを持つページでは、ヘッダーをヒーローの上に重ね、本文を紙のシートにしてヒーローの上へ重ねる
 const hasHero = Astro.slots.has('hero');
 
 // ヒーローの上では、海の色に負けない濃さにする
@@ -248,18 +248,23 @@ const navItems = [
           </button>
         </nav>
       </header>
-      <slot name="hero" />
-      <main
-        class:list={[
-          'flex-1 py-8 pb-20 md:pb-8 w-full',
-          hasHero
-            ? 'px-[max(1rem,4.4vw)]'
-            : `${mainMaxWidth} mx-auto px-4`,
-        ]}
-        transition:animate={slideUpFade}
-      >
-        <slot />
-      </main>
+      {
+        /* 画面に留まるヒーローは、この枠の終わり（本文のシートの終わり）まで留まる */
+      }
+      <div class="flex-1 flex flex-col">
+        <slot name="hero" />
+        <main
+          class:list={[
+            'flex-1 w-full',
+            hasHero
+              ? 'relative rounded-t-[2.5rem] bg-card dark:bg-[#1f2435] px-[max(1rem,4.4vw)] pt-[clamp(3.5rem,7vw,6rem)] pb-[clamp(3rem,6vw,5rem)]'
+              : `py-8 pb-20 md:pb-8 ${mainMaxWidth} mx-auto px-4`,
+          ]}
+          transition:animate={slideUpFade}
+        >
+          <slot />
+        </main>
+      </div>
       <footer>
         <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-subtle dark:text-[#9ca3af]">
           &copy; {new Date().getFullYear()} kosui

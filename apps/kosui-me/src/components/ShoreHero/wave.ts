@@ -1,31 +1,41 @@
 /**
- * 波の寄せ引きと、エビが波に攫われていく動きの計算。
+ * 波の列と、エビが波に攫われていく動きの計算。
  *
  * 距離の単位はエビのドット絵 1 辺（20 マス）を 1 とする。
- * 波打ち際の位置 `line` は、エビの最初の位置を 0 とし、沖へ向かって正。
- * シェーダー（shader.ts）の swash / shore と同じ式を使う。変えるときは両方を直す。
+ * 波の先の位置は、凪の波打ち際を 0 とし、浜をのぼる向き（陸側）を正とする。
+ * シェーダー（shader.ts）と同じ式を使う。変えるときは両方を直す。
  */
 
-/** 波 1 回の周期（秒） */
-export const WAVE_PERIOD = 10;
-
-/** 読み込み直後に波が寄せきった状態から始めるための、時刻のずらし（秒） */
-const START_OFFSET = 3;
-
-/** 波が引ききったときの波打ち際の位置 */
+/** 凪の波打ち際から、エビの最初の位置までの距離 */
 const EBB_LINE = 0.66;
 
-/** 強さ 1 の波が寄せきったとき、波打ち際が陸側へ動く距離 */
-const REACH = 1.36;
+/** 最初の波が浜をのぼる距離。この波だけ大きくして、エビを浜に置いていく */
+const FIRST_REACH = 1.5;
 
-/** 最初の波だけ大きくして、エビを浜に置いていく */
-const FIRST_AMPLITUDE = 1.2;
+/** 最初の波が寄せきる時刻（秒）。読み込み直後は、波が寄せている途中から始まる */
+const FIRST_PEAK = 1.6;
 
-/** 寄せきるまでに使う、周期のうちの割合 */
-const ADVANCE_RATIO = 0.36;
+/** 2 つ目の波が岸に届く時刻（秒）。それまでの間、エビは濡れた砂の上に残る */
+const SECOND_ARRIVAL = 7.2;
+
+/** 3 つ目からの波が浜をのぼる距離の、下限と上限 */
+const MIN_REACH = 0.5;
+const MAX_REACH = 1.3;
+
+/** のぼる距離 1 の波が寄せきるまでの秒数。坂を上がる球と同じく、秒数は距離の平方根に比例する */
+const UPRUSH_SECONDS = 2.6;
+
+/** 引くのにかかる時間は、寄せるのにかかる時間の何倍か */
+const BACKWASH_RATIO = 1.3;
+
+/** 沖から来る波を、岸に届く何秒前から追うか */
+const LEAD = 3;
+
+/** 同時に追う波の数。シェーダーの配列の長さと同じ */
+export const WAVE_SLOTS = 4;
 
 /** 引き波がエビを沖へ引く割合 */
-const BACKWASH_PULL = 0.27;
+const BACKWASH_PULL = 0.3;
 
 /** 寄せ波がエビを陸へ押す割合。引き波より小さいので、差し引きで沖へ出ていく */
 const UPRUSH_PUSH = 0.09;
@@ -49,60 +59,153 @@ const STEP = 1 / 30;
 /** これより長く止まっていた場合（タブを離れていた等）は、その間の動きを捨てる */
 const MAX_GAP = 4;
 
-const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
+const TURN = Math.PI * 2;
+
+const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+const clamp01 = (value: number): number => clamp(value, 0, 1);
 
 /**
- * 周期内の位置（0〜1）から、波がどれだけ寄せているか（0〜1）を返す。
- * 速く寄せて、ゆっくり引く。
+ * 1 つの波。沖から白波で届き、浜をのぼって止まり、引いていく。
  */
-export const swashProfile = (phase: number): number =>
-  phase < ADVANCE_RATIO
-    ? 1 - (1 - phase / ADVANCE_RATIO) ** 2.4
-    : (1 - (phase - ADVANCE_RATIO) / (1 - ADVANCE_RATIO)) ** 1.7;
-
-export type Wave = Readonly<{
-  /** 何回目の波か（0 始まり） */
-  cycle: number;
-  /** この波の周期が始まった時刻（秒） */
-  cycleStart: number;
-  /** この波の強さ */
-  amplitude: number;
-  /** 1 つ前の波の強さ */
-  previousAmplitude: number;
-  /** 波打ち際の位置 */
-  line: number;
+export type Swash = Readonly<{
+  /** 何番目の波か（0 始まり） */
+  index: number;
+  /** 凪の波打ち際に届く時刻（秒） */
+  arrival: number;
+  /** 浜をのぼる距離 */
+  reach: number;
+  /** 寄せきるまでの秒数 */
+  uprush: number;
+  /** 寄せきってから、引ききるまでの秒数 */
+  backwash: number;
+  /** 岸沿いに 1 進むごとの、届く時刻の遅れ（秒）。波は岸に少し斜めに届く */
+  skew: number;
+  /** 岸沿いのうねりの位相（ラジアン）。のぼる距離のうねり 2 つと、届く時刻のうねり */
+  phases: readonly [number, number, number];
 }>;
 
 export type Waves = Readonly<{
-  at: (time: number) => Wave;
+  /** `time` の時点で追っている波。古い順に、多くて WAVE_SLOTS 個 */
+  visibleAt: (time: number) => readonly Swash[];
 }>;
 
 /**
- * 波の列を作る。波ごとの強さは `random` で決め、一度決めた強さは変えない。
+ * `previous` の次の波を作る。大きさと間隔は毎回ちがい、数波ごとに大きな波の組が来る。
+ * 大きな波のあとは、次の波までの間が少し長い。
+ */
+const nextSwash = (
+  previous: Swash | undefined,
+  setPhase: number,
+  random: () => number,
+): Swash => {
+  const index = previous === undefined ? 0 : previous.index + 1;
+  const reach = index === 0
+    ? FIRST_REACH
+    : index === 1
+    ? 1 + 0.12 * random()
+    : clamp(
+      0.86 + 0.3 * Math.sin(index * 1.15 + setPhase) + 0.3 * (random() - 0.5),
+      MIN_REACH,
+      MAX_REACH,
+    );
+  const uprush = UPRUSH_SECONDS * Math.sqrt(reach);
+  const arrival = previous === undefined
+    ? FIRST_PEAK - uprush
+    : index === 1
+    ? SECOND_ARRIVAL
+    : previous.arrival + 6.2 + 3.6 * random() + 0.8 * (previous.reach - 1);
+  const skew = 0.5 * (random() - 0.5);
+  return {
+    index,
+    arrival,
+    reach,
+    uprush,
+    backwash: uprush * BACKWASH_RATIO,
+    skew,
+    phases: [TURN * random(), TURN * random(), TURN * random()],
+  };
+};
+
+/**
+ * 波の列を作る。波ごとの大きさと間隔は `random` で決め、一度決めた波は変えない。
  */
 export const createWaves = (random: () => number): Waves => {
-  const amplitudes: number[] = [FIRST_AMPLITUDE];
-  const amplitudeOf = (cycle: number): number => {
-    while (amplitudes.length <= cycle) {
-      amplitudes.push(0.68 + 0.32 * random());
-    }
-    return amplitudes[cycle] ?? FIRST_AMPLITUDE;
-  };
+  const setPhase = TURN * random();
+  const swashes: Swash[] = [nextSwash(undefined, setPhase, random)];
   return {
-    at: (time) => {
-      const shifted = Math.max(0, time + START_OFFSET);
-      const cycle = Math.floor(shifted / WAVE_PERIOD);
-      const phase = shifted / WAVE_PERIOD - cycle;
-      const amplitude = amplitudeOf(cycle);
-      return {
-        cycle,
-        cycleStart: cycle * WAVE_PERIOD - START_OFFSET,
-        amplitude,
-        previousAmplitude: amplitudeOf(Math.max(0, cycle - 1)),
-        line: EBB_LINE - REACH * swashProfile(phase) * amplitude,
-      };
+    visibleAt: (time) => {
+      let last = swashes[swashes.length - 1];
+      while (last !== undefined && last.arrival - LEAD <= time) {
+        last = nextSwash(last, setPhase, random);
+        swashes.push(last);
+      }
+      let count = swashes.length;
+      while (count > 0 && (swashes[count - 1]?.arrival ?? 0) - LEAD > time) {
+        count -= 1;
+      }
+      return swashes.slice(Math.max(0, count - WAVE_SLOTS), count);
     },
   };
+};
+
+/** 岸沿いの位置 `along` で、波が浜をのぼる距離。岸沿いにうねる */
+const reachAt = (swash: Swash, along: number): number =>
+  swash.reach
+  * (1
+    + 0.14 * Math.sin(along * 1.9 + swash.phases[0])
+    + 0.07 * Math.sin(along * 4.3 + swash.phases[1]));
+
+/** 岸沿いの位置 `along` に、波が届いてからの秒数 */
+const sinceArrival = (swash: Swash, time: number, along: number): number =>
+  time
+  - swash.arrival
+  - swash.skew * along
+  - 0.3 * Math.sin(along * 1.3 + swash.phases[2]);
+
+/**
+ * 岸沿いの位置 `along` で、波の先が浜をのぼった距離。
+ * 坂を上がる球のように、速く寄せて止まり、加速しながら引く。
+ * まだ岸に届いていないか、引ききったあとは undefined を返す。
+ */
+export const frontOf = (
+  swash: Swash,
+  time: number,
+  along: number,
+): number | undefined => {
+  const since = sinceArrival(swash, time, along);
+  if (since < 0 || since > swash.uprush + swash.backwash) return undefined;
+  const fromTurn = since < swash.uprush
+    ? 1 - since / swash.uprush
+    : (since - swash.uprush) / swash.backwash;
+  return reachAt(swash, along) * (1 - fromTurn ** 2);
+};
+
+/** 岸沿いの位置 `along` で、水がいちばん陸側まで届いている距離。波がなければ凪の波打ち際（0） */
+const waterReach = (
+  swashes: readonly Swash[],
+  time: number,
+  along: number,
+): number =>
+  swashes.reduce(
+    (reach, swash) => Math.max(reach, frontOf(swash, time, along) ?? 0),
+    0,
+  );
+
+/** `position` まで水が届いている波のうち、いちばん新しいもの */
+const newestOver = (
+  swashes: readonly Swash[],
+  time: number,
+  along: number,
+  position: number,
+): Swash | undefined => {
+  for (let i = swashes.length - 1; i >= 0; i--) {
+    const swash = swashes[i];
+    if (swash === undefined) continue;
+    const front = frontOf(swash, time, along);
+    if (front !== undefined && front > position) return swash;
+  }
+  return undefined;
 };
 
 export type Drift = Readonly<{
@@ -125,7 +228,8 @@ export const initialDrift: Drift = {
 
 /**
  * `from` から `to` までの間に、波がエビを動かした結果を返す。
- * 寄せ波で少し陸へ押し、引き波でそれより多く沖へ引く。水をかぶっていない間は動かない。
+ * エビは、かぶっている水のうちいちばん新しい波の流れに乗る。
+ * 寄せ波で少し陸へ押され、引き波でそれより多く沖へ引かれる。水をかぶっていない間は動かない。
  */
 export const carry = (
   drift: Drift,
@@ -138,20 +242,30 @@ export const carry = (
 
   const steps = Math.ceil(elapsed / STEP);
   let { seaward, lateral, spin } = drift;
-  let previousLine = waves.at(from).line;
+  let previous = from;
   for (let i = 1; i <= steps; i++) {
-    const wave = waves.at(from + (elapsed * i) / steps);
+    const now = from + (elapsed * i) / steps;
+    const position = EBB_LINE - seaward;
+    const swash = newestOver(waves.visibleAt(now), now, lateral, position);
+    const front = swash && frontOf(swash, now, lateral);
+    const frontBefore = swash && frontOf(swash, previous, lateral);
     // 最初の波はエビを運んでくる波なので、攫わない
-    if (wave.cycle >= 1) {
-      const lineMove = wave.line - previousLine;
-      const covered = clamp01((seaward - wave.line) / COVER_DEPTH);
-      const move = lineMove * (lineMove > 0 ? BACKWASH_PULL : UPRUSH_PUSH)
+    if (
+      swash !== undefined
+      && swash.index > 0
+      && front !== undefined
+      && frontBefore !== undefined
+    ) {
+      const frontMove = front - frontBefore;
+      const covered = clamp01((front - position) / COVER_DEPTH);
+      const move = -frontMove
+        * (frontMove < 0 ? BACKWASH_PULL : UPRUSH_PUSH)
         * covered;
       seaward += move;
       spin += move * 1.1;
-      lateral += move * 0.12 * Math.sin(wave.cycle * 2.4);
+      lateral += move * 0.12 * Math.sin(swash.index * 2.4);
     }
-    previousLine = wave.line;
+    previous = now;
   }
   return { seaward, lateral, spin, gone: seaward > GONE_AT };
 };
@@ -159,11 +273,62 @@ export const carry = (
 /**
  * エビがどれだけ水をかぶっているか（0〜1）。`tide` はスクロールで満ちた潮（0〜1）。
  */
-export const coverage = (drift: Drift, wave: Wave, tide: number): number =>
-  clamp01((drift.seaward - (wave.line - tide * TIDE_REACH)) / COVER_DEPTH);
+export const coverage = (
+  drift: Drift,
+  swashes: readonly Swash[],
+  time: number,
+  tide: number,
+): number =>
+  clamp01(
+    (waterReach(swashes, time, drift.lateral)
+      - (EBB_LINE - drift.seaward - tide * TIDE_REACH))
+      / COVER_DEPTH,
+  );
 
 /**
  * エビの見え方（1 = はっきり見える、0 = 海に消えた）。
  */
 export const visibility = (drift: Drift): number =>
   drift.gone ? 0 : 1 - clamp01((drift.seaward - FADE_FROM) / FADE_SPAN);
+
+export type WaveUniforms = Readonly<{
+  /** 波ごとに [岸に届いてからの秒数, 浜をのぼる距離, 寄せきるまでの秒数, 引ききるまでの秒数] */
+  motion: Float32Array;
+  /** 波ごとに [斜めに届く遅れ, うねりの位相 ×3] */
+  shape: Float32Array;
+}>;
+
+/** とうに引ききった波。シェーダーの空いた枠を埋める */
+const SPENT_MOTION = [
+  1000,
+  1,
+  UPRUSH_SECONDS,
+  UPRUSH_SECONDS * BACKWASH_RATIO,
+] as const;
+
+/**
+ * 波をシェーダーへ渡す形に詰める。古い順に並べ、足りない分は先頭を引ききった波で埋める。
+ * 時刻は `time` からの差で渡す。長く開いたままでも、シェーダーの中で桁が落ちない。
+ */
+export const packWaves = (
+  swashes: readonly Swash[],
+  time: number,
+): WaveUniforms => {
+  const motion = new Float32Array(WAVE_SLOTS * 4);
+  const shape = new Float32Array(WAVE_SLOTS * 4);
+  const latest = swashes.slice(-WAVE_SLOTS);
+  const empty = WAVE_SLOTS - latest.length;
+  for (let slot = 0; slot < WAVE_SLOTS; slot++) {
+    const swash = latest[slot - empty];
+    if (swash === undefined) {
+      motion.set(SPENT_MOTION, slot * 4);
+      continue;
+    }
+    motion.set(
+      [time - swash.arrival, swash.reach, swash.uprush, swash.backwash],
+      slot * 4,
+    );
+    shape.set([swash.skew, ...swash.phases], slot * 4);
+  }
+  return { motion, shape };
+};

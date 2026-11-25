@@ -1,9 +1,10 @@
 import { goneNote, PRESSED_NOTE, recordLoss } from './notes';
+import { buildPatternTexture, PATTERN_SIZE } from './pattern';
 import { FRAGMENT_SHADER, VERTEX_SHADER } from './shader';
 import { buildShadowTexture, buildSpriteTexture, GRID, SHADOW_SIZE } from './shrimp';
-import { carry, coverage, createWaves, type Drift, initialDrift, visibility } from './wave';
+import { carry, coverage, createWaves, type Drift, initialDrift, packWaves, visibility } from './wave';
 
-/** 動きを止めた 1 枚絵として見せるときの時刻（波が引いて、エビが濡れた砂の上にいる） */
+/** 動きを止めた 1 枚絵として見せるときの時刻（最初の波が引いて、エビが濡れた砂の上にいる） */
 const STILL_TIME = 5.2;
 
 /** 描画の解像度の上限（デバイスピクセル比） */
@@ -12,13 +13,17 @@ const MAX_PIXEL_RATIO = 1.5;
 /** 1 コマにこれ以上かかる端末では、解像度を下げる（ミリ秒） */
 const SLOW_FRAME = 24;
 
+/** 本文のシートがヒーローに重なりきるまでに、名前と紹介が上へ退く距離（px）と、薄れる割合 */
+const RECEDE_DISTANCE = 60;
+const RECEDE_FADE = 0.75;
+
 const UNIFORMS = [
   'uResolution',
   'uPixelRatio',
   'uTime',
   'uTide',
-  'uCycleStart',
-  'uAmplitude',
+  'uWaveMotion',
+  'uWaveShape',
   'uRect',
   'uOffset',
   'uRotation',
@@ -28,6 +33,7 @@ const UNIFORMS = [
   'uGain',
   'uGrain',
   'uSheen',
+  'uFroth',
   'uWetTint',
   'uShadowTint',
   'uSand',
@@ -39,6 +45,7 @@ const UNIFORMS = [
   'uEye',
   'uSprite',
   'uShadow',
+  'uPattern',
 ] as const;
 
 type UniformName = (typeof UNIFORMS)[number];
@@ -58,6 +65,7 @@ type Palette = Readonly<{
   gain: number;
   grain: number;
   sheen: number;
+  froth: number;
 }>;
 
 const parseHex = (value: string): Rgb => {
@@ -87,6 +95,7 @@ const readPalette = (element: HTMLElement): Palette => {
     gain: number('--shore-gain'),
     grain: number('--shore-grain'),
     sheen: number('--shore-sheen'),
+    froth: number('--shore-froth'),
   };
 };
 
@@ -123,12 +132,15 @@ const createProgram = (
   return program;
 };
 
+/** 模様は作るのに数十ミリ秒かかるので、ページを行き来しても 1 度だけ作る */
+let pattern: Uint8Array | undefined;
+
 const setUpTextures = (gl: WebGLRenderingContext): void => {
-  const clampNearest = (filter: number): void => {
+  const sample = (filter: number, wrap: number): void => {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
   };
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
 
@@ -145,7 +157,7 @@ const setUpTextures = (gl: WebGLRenderingContext): void => {
     gl.UNSIGNED_BYTE,
     buildSpriteTexture(),
   );
-  clampNearest(gl.NEAREST);
+  sample(gl.NEAREST, gl.CLAMP_TO_EDGE);
 
   gl.activeTexture(gl.TEXTURE1);
   gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
@@ -160,7 +172,23 @@ const setUpTextures = (gl: WebGLRenderingContext): void => {
     gl.UNSIGNED_BYTE,
     buildShadowTexture(),
   );
-  clampNearest(gl.LINEAR);
+  sample(gl.LINEAR, gl.CLAMP_TO_EDGE);
+
+  // 泡と砂のむらの模様。繰り返して並べる
+  gl.activeTexture(gl.TEXTURE2);
+  gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA,
+    PATTERN_SIZE,
+    PATTERN_SIZE,
+    0,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    pattern ??= buildPatternTexture(),
+  );
+  sample(gl.LINEAR, gl.REPEAT);
 };
 
 /** 触れたときの弱い跳ね。経過秒から [沖へ, 上へ, 回転] を返す */
@@ -194,6 +222,8 @@ export type ShoreElements = Readonly<{
   button: HTMLButtonElement;
   /** エビのそばに一言を出す場所 */
   note: HTMLElement;
+  /** 名前と紹介、エビの枠をまとめた部分。本文のシートが重なる間、上へ退いて薄れる */
+  content: HTMLElement;
 }>;
 
 /**
@@ -201,7 +231,7 @@ export type ShoreElements = Readonly<{
  * WebGL が使えない環境では何もせず、静止したドット絵（SVG）がそのまま見える。
  */
 export const mountShore = (elements: ShoreElements): () => void => {
-  const { hero, canvas, slot, button, note } = elements;
+  const { hero, canvas, slot, button, note, content } = elements;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -229,6 +259,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
   setUpTextures(gl);
   gl.uniform1i(uniforms.uSprite, 0);
   gl.uniform1i(uniforms.uShadow, 1);
+  gl.uniform1i(uniforms.uPattern, 2);
 
   const waves = createWaves(Math.random);
   const startedAt = performance.now();
@@ -296,7 +327,6 @@ export const mountShore = (elements: ShoreElements): () => void => {
       : pinned === undefined
       ? elapsed
       : Number(pinned);
-    const wave = waves.at(time);
     if (!reduceMotion && previousTime !== undefined) {
       const wasGone = drift.gone;
       drift = carry(drift, previousTime, time, waves);
@@ -306,7 +336,8 @@ export const mountShore = (elements: ShoreElements): () => void => {
       }
     }
     previousTime = time;
-    cover += (coverage(drift, wave, tide) - cover) * 0.12;
+    const swashes = waves.visibleAt(time);
+    cover += (coverage(drift, swashes, time, tide) - cover) * 0.12;
 
     // 枠は動かさず、ボタンだけをエビの今の位置へ動かす
     const heroRect = hero.getBoundingClientRect();
@@ -323,8 +354,9 @@ export const mountShore = (elements: ShoreElements): () => void => {
     gl.uniform1f(uniforms.uPixelRatio, pixelRatio);
     gl.uniform1f(uniforms.uTime, time);
     gl.uniform1f(uniforms.uTide, tide);
-    gl.uniform1f(uniforms.uCycleStart, wave.cycleStart);
-    gl.uniform2f(uniforms.uAmplitude, wave.amplitude, wave.previousAmplitude);
+    const waveUniforms = packWaves(swashes, time);
+    gl.uniform4fv(uniforms.uWaveMotion, waveUniforms.motion);
+    gl.uniform4fv(uniforms.uWaveShape, waveUniforms.shape);
     gl.uniform3f(
       uniforms.uRect,
       slotRect.left - heroRect.left,
@@ -346,6 +378,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
     gl.uniform1f(uniforms.uGain, palette.gain);
     gl.uniform1f(uniforms.uGrain, palette.grain);
     gl.uniform1f(uniforms.uSheen, palette.sheen);
+    gl.uniform1f(uniforms.uFroth, palette.froth);
     gl.uniform3fv(uniforms.uWetTint, palette.wetTint);
     gl.uniform3fv(uniforms.uShadowTint, palette.shadowTint);
     gl.uniform3fv(uniforms.uSand, palette.sand);
@@ -364,11 +397,17 @@ export const mountShore = (elements: ShoreElements): () => void => {
     if (!disposed && frame === 0) frame = requestAnimationFrame(draw);
   };
 
-  // スクロール: ページを読み進めるほど潮が満ち、浜とエビを覆う
+  // スクロール: ページを読み進めるほど潮が満ち、浜とエビを覆う。
+  // ヒーローが画面に留まる幅では、本文のシートが重なる間、名前と紹介が少し上へ退いて薄れる
   let scrollQueued = false;
   const applyScroll = (): void => {
     scrollQueued = false;
     tide = Math.min(1, Math.max(0, window.scrollY / (hero.offsetHeight || 1)));
+    const pinned = getComputedStyle(hero).position === 'sticky';
+    content.style.transform = pinned
+      ? `translate3d(0, ${(-tide * RECEDE_DISTANCE).toFixed(1)}px, 0)`
+      : '';
+    content.style.opacity = pinned ? (1 - tide * RECEDE_FADE).toFixed(3) : '';
   };
   const onScroll = (): void => {
     if (scrollQueued) return;
@@ -404,12 +443,15 @@ export const mountShore = (elements: ShoreElements): () => void => {
     if (frame !== 0) cancelAnimationFrame(frame);
     observer.disconnect();
     window.removeEventListener('resize', requestDraw);
+    window.removeEventListener('resize', onScroll);
     window.removeEventListener('scroll', onScroll);
     colorScheme.removeEventListener('change', onPaletteChange);
     button.removeEventListener('pointerenter', onTouch);
     button.removeEventListener('click', onPress);
     canvas.removeEventListener('webglcontextlost', onContextLost);
     hero.classList.remove('is-live');
+    content.style.transform = '';
+    content.style.opacity = '';
     window.clearTimeout(noteTimer);
     gl.getExtension('WEBGL_lose_context')?.loseContext();
   };
@@ -421,8 +463,12 @@ export const mountShore = (elements: ShoreElements): () => void => {
   canvas.addEventListener('webglcontextlost', onContextLost);
   if (!reduceMotion) {
     window.addEventListener('scroll', onScroll, { passive: true });
+    // 画面の幅が変わると、ヒーローが画面に留まるかどうかも変わる
+    window.addEventListener('resize', onScroll);
     button.addEventListener('pointerenter', onTouch);
     button.addEventListener('click', onPress);
+    // 途中までスクロールした位置へ戻ってきたときも、はじめから潮と退き具合を合わせる
+    applyScroll();
   }
   requestDraw();
 
