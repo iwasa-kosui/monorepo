@@ -72,9 +72,10 @@ float caustic(vec2 uv, float time) {
   return pow(abs(c), 8.);
 }
 
-// 丸い舌が並んだ形。舌の間は鋭く切れ込む。波の先や水際を、この形に凹凸させる
-float tongues(float a) {
-  return abs(sin(a)) - .64;
+// 岸沿いのゆるいうねり（およそ -1〜1）。周期の合わない波を重ね、同じ形が並ばないようにする。
+// 波の先や水際を、この形に出入りさせる。角や細かい凹凸は作らない
+float swell(float a) {
+  return .6 * sin(a + .8 * sin(a * .37 + 1.3)) + .28 * sin(a * 1.83 + 2.1) + .12 * sin(a * 3.1 + .7 * sin(a * .9));
 }
 
 // 画面上の位置から、ドット絵のマス座標へ。wobble は水越しの揺らぎの強さ
@@ -126,7 +127,7 @@ void main() {
   float lapPhase = fract(t * .31 - a * .23 + .11 * sin(a * 2.9 + t * .2));
   float lapTurn = lapPhase < .42 ? 1. - lapPhase / .42 : (lapPhase - .42) / .58;
   float lapInside = (.07 + .11 * (.5 + .5 * sin(t * .23 + a * 1.3))) * (1. - lapTurn * lapTurn) - inland
-    + .03 * tongues(a * 6.1 + .6 * sin(a * 2.3 + t * .07));
+    + .025 * swell(a * 2.6 + t * .07);
 
   float inside = lapInside;   // 水際からの距離。正なら水の中
   float thinning = 0.;        // 引いていく水は薄い膜になり、縁がぼける
@@ -152,11 +153,8 @@ void main() {
     // のぼる距離は岸沿いにうねり、岸には少し斜めに届く
     float reach = motion.y * (1. + .14 * sin(a * 1.9 + shape.y) + .07 * sin(a * 4.3 + shape.z));
     float since = motion.x - shape.x * a - .3 * sin(a * 1.3 + shape.w);
-    // 波の先は丸い舌が並んだ形。この波から見た位置を、その形にずらす
-    float spot = inland - (
-      .05 * tongues(a * 5.3 + shape.z * 3. + .9 * sin(a * 1.7 + shape.w))
-      + .02 * tongues(a * 12.7 + shape.y * 5. + 1.3 * sin(a * 3.1 + shape.z))
-    ) * smoothstep(-.1, .7, inland);
+    // 波の先は岸沿いにゆるく出入りする。この波から見た位置を、その形にずらす
+    float spot = inland - .07 * swell(a * 2.2 + shape.z * 3. + shape.w) * smoothstep(-.1, .7, inland);
     float approach = 1.5 * motion.y / uprush;                        // 沖から来る速さ
     float pace = sqrt(clamp(1. - spot / reach, 0., 1.));              // 波の先がここを通るときの速さ（岸に届いたときを 1 として）
     float passedAt = spot < 0. ? spot / approach : uprush * (1. - pace);   // 波の先がここを通る時刻
