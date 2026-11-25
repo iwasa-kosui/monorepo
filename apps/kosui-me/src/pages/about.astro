@@ -1,4 +1,5 @@
 ---
+import ShoreTitle from '@/components/ShoreTitle/ShoreTitle.astro';
 import SiteIcon from '@/components/SiteIcon.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { StructuredData } from '@/utils/structuredData';
@@ -26,9 +27,18 @@ type ExternalArticleMeta = {
   themes: string[];
 };
 
-const talks = (talksData as TalkMeta[])
+const talkGroups = (talksData as TalkMeta[])
   .filter((t) => t.event !== '社内LT')
-  .slice(0, 3);
+  .sort((a, b) => b.date.localeCompare(a.date))
+  .reduce<{ year: string; talks: TalkMeta[] }[]>((groups, talk) => {
+    const last = groups.at(-1);
+    if (last && last.year === talk.year) {
+      last.talks.push(talk);
+    } else {
+      groups.push({ year: talk.year, talks: [talk] });
+    }
+    return groups;
+  }, []);
 const externalArticles = (externalArticlesData as ExternalArticleMeta[]).slice(
   0,
   3,
@@ -59,7 +69,8 @@ const education = [
   {
     period: '2017 - 2019',
     org: '東京農工大学大学院 工学府',
-    description: '人工知能・マルチエージェントシステム・自然言語処理を研究。',
+    description:
+      '人工知能・マルチエージェントシステム・自然言語処理を研究。修士（工学）取得。',
   },
   {
     period: '2013 - 2017',
@@ -74,6 +85,7 @@ const publications = [
     title: 'Dialogue Act-based Breakdown Detection in Negotiation Dialogues',
     authors: ['Atsuki Yamaguchi', 'Kosui Iwasa', 'Katsuhide Fujita'],
     url: 'https://aclanthology.org/2021.eacl-main.63/',
+    citations: 31,
   },
   {
     venue: 'WWW 2019 (Demo)',
@@ -88,12 +100,14 @@ const publications = [
       'Katsuhide Fujita',
     ],
     url: 'https://doi.org/10.1145/3308558.3314127',
+    citations: 9,
   },
   {
     venue: 'PRICAI 2018',
     title: 'Prediction of Nash Bargaining Solution in Negotiation Dialogue',
     authors: ['Kosui Iwasa', 'Katsuhide Fujita'],
     url: 'https://doi.org/10.1007/978-3-319-97304-3_60',
+    citations: 5,
   },
 ];
 
@@ -106,6 +120,15 @@ function formatDate(dateStr: string): string {
     day: '2-digit',
   });
 }
+
+function formatMonthDay(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-US', {
+    timeZone: 'Asia/Tokyo',
+    month: 'numeric',
+    day: 'numeric',
+  });
+}
 ---
 
 <BaseLayout
@@ -114,261 +137,412 @@ function formatDate(dateStr: string): string {
   ogDescription="医療SaaSの品質要求に応えるアーキテクチャ設計とプラットフォーム構築を専門とするテックリード。"
   jsonLd={[StructuredData.person()]}
 >
-  <section class="mb-10">
-    <h1 class="text-3xl font-bold mb-6">About</h1>
-    <div class="flex items-start gap-5">
+  <ShoreTitle slot="eyecatch" title="About" transitionName="about-title">
+    <Fragment slot="meta">テックリード @ 株式会社カケハシ</Fragment>
+  </ShoreTitle>
+
+  <article class="article-paper about">
+    <section class="about-profile">
       <SiteIcon
         size={72}
         alt="kosui"
         class="ring-2 ring-accent/20 flex-shrink-0"
       />
       <div>
-        <h2 class="text-2xl font-bold text-charcoal dark:text-gray-100">
-          岩佐 幸翠 <span
-            class="text-subtle dark:text-[#9ca3af] text-base font-normal"
-          >/ kosui</span>
+        <h2 class="about-name">
+          岩佐 幸翠 <span class="about-handle">/ kosui</span>
         </h2>
-        <p class="text-sm font-semibold text-accent dark:text-accent-light mt-1">
-          テックリード @ 株式会社カケハシ
-        </p>
-        <p class="text-sm text-subtle dark:text-[#9ca3af] mt-2 leading-relaxed">
+        <p class="about-text">
           医療SaaS企業にて、法令要件や顧客環境の分析からアーキテクチャ設計までを一貫して担い、認証認可・組織管理などの共通基盤をテックリードとして設計・開発しています。プロダクトチームがコアドメインに集中できるプラットフォームの構築と、関数型ドメインモデリングによる堅牢なシステム設計を実践しています。
         </p>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="mb-10">
-    <h2 class="text-2xl font-bold mb-6">
-      <span class="heading-accent">経歴</span>
-    </h2>
-    <div class="bg-card dark:bg-[#1f2435] rounded-clay shadow-clay dark:shadow-clay-dark p-6">
-      <h3 class="text-base font-semibold text-charcoal dark:text-gray-100 mb-4">
-        職歴
-      </h3>
-      <div class="space-y-4">
+    <section class="about-section">
+      <h2 class="about-heading">経歴</h2>
+      <ul>
         {
           careers.map((item) => (
-            <div class="flex gap-4">
-              <span
-                class="text-xs text-subtle dark:text-[#9ca3af] whitespace-nowrap pt-0.5 w-24 flex-shrink-0"
-              >
-                {item.period}
-              </span>
-              <div>
-                <p class="text-sm font-semibold text-charcoal dark:text-gray-100">
-                  {item.org}
-                </p>
-                <p class="text-xs font-medium text-accent dark:text-accent-light">
-                  {item.role}
-                </p>
-                <p class="text-xs text-subtle dark:text-[#9ca3af] mt-0.5 leading-relaxed">
-                  {item.description}
-                </p>
+            <li class="about-row">
+              <span class="about-lead">{item.period}</span>
+              <div class="about-body">
+                <p class="about-org">{item.org}</p>
+                <p class="about-role">{item.role}</p>
+                <p class="about-text">{item.description}</p>
                 {
                   item.highlights && (
-                    <ul class="mt-1 list-disc pl-4 space-y-0.5">
-                      {
-                        item.highlights.map((highlight) => (
-                          <li class="text-xs text-subtle dark:text-[#9ca3af] leading-relaxed">
-                            {highlight}
-                          </li>
-                        ))
-                      }
+                    <ul class="about-highlights">
+                      {item.highlights.map((highlight) => <li>{highlight}</li>)}
                     </ul>
                   )
                 }
               </div>
-            </div>
+            </li>
           ))
         }
-      </div>
+      </ul>
+    </section>
 
-      <hr class="my-5 border-gray-200 dark:border-gray-700" />
-
-      <h3 class="text-base font-semibold text-charcoal dark:text-gray-100 mb-4">
-        学歴
-      </h3>
-      <div class="space-y-4">
+    <section class="about-section">
+      <h2 class="about-heading">学歴</h2>
+      <ul>
         {
           education.map((item) => (
-            <div class="flex gap-4">
-              <span
-                class="text-xs text-subtle dark:text-[#9ca3af] whitespace-nowrap pt-0.5 w-24 flex-shrink-0"
-              >
-                {item.period}
-              </span>
-              <div>
-                <p class="text-sm font-semibold text-charcoal dark:text-gray-100">
-                  {item.org}
-                </p>
-                <p class="text-xs text-subtle dark:text-[#9ca3af] mt-0.5 leading-relaxed">
-                  {item.description}
-                </p>
+            <li class="about-row">
+              <span class="about-lead">{item.period}</span>
+              <div class="about-body">
+                <p class="about-org">{item.org}</p>
+                <p class="about-text">{item.description}</p>
               </div>
-            </div>
+            </li>
           ))
         }
-      </div>
-    </div>
-  </section>
+      </ul>
+    </section>
 
-  <section class="mb-10">
-    <h2 class="text-2xl font-bold mb-6">
-      <span class="heading-accent">論文</span>
-    </h2>
-    <ul class="space-y-3">
+    <section class="about-section">
+      <h2 class="about-heading">論文</h2>
+      <ul>
+        {
+          publications.map((publication) => (
+            <li class="about-row about-row-plain">
+              <p class="about-meta">
+                <strong>{publication.venue}</strong>
+                <span>被引用数 {publication.citations}</span>
+              </p>
+              <a
+                href={publication.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="about-link"
+              >
+                {publication.title}
+              </a>
+              <p class="about-text">
+                {
+                  publication.authors.map((author, index) => [
+                index > 0 ? ', ' : '',
+                author === 'Kosui Iwasa' ? (
+                    <strong>{author}</strong>
+                  ) : author,
+              ])
+                }
+              </p>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="about-note">
+        被引用数は Google Scholar による（2026年11月時点）
+      </p>
+    </section>
+
+    <section class="about-section">
+      <h2 class="about-heading">登壇</h2>
       {
-        publications.map((publication) => (
-          <li class="bg-card dark:bg-[#1f2435] rounded-clay shadow-clay dark:shadow-clay-dark p-4">
-            <p class="text-xs font-semibold text-accent dark:text-accent-light">
-              {publication.venue}
-            </p>
-            <a
-              href={publication.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block text-sm font-semibold text-charcoal dark:text-gray-100 mt-1 leading-snug hover:underline"
-            >
-              {publication.title}
-            </a>
-            <p class="text-xs text-subtle dark:text-[#9ca3af] mt-1 leading-relaxed">
+        talkGroups.map((group) => (
+          <section class="about-year-group">
+            <h3 class="about-year">{group.year}</h3>
+            <ul>
               {
-                publication.authors.map((author, index) => [
-              index > 0 ? ', ' : '',
-              author === 'Kosui Iwasa' ? (
-                  <strong>{author}</strong>
-                ) : author,
-            ])
+                group.talks.map((talk) => (
+                  <li class="about-row about-row-talk">
+                    <time class="about-lead" datetime={talk.date}>
+                      {formatMonthDay(talk.date)}
+                    </time>
+                    <div class="about-body">
+                      <p class="about-meta">
+                        <strong>{talk.event}</strong>
+                        {talk.duration && <span>{talk.duration}</span>}
+                      </p>
+                      <a
+                        href={`/talks/${talk.year}/${talk.name}`}
+                        class="about-link"
+                      >
+                        {talk.title}
+                      </a>
+                    </div>
+                  </li>
+                ))
               }
-            </p>
-          </li>
+            </ul>
+          </section>
         ))
       }
-    </ul>
-  </section>
+      <a href="/talks" class="about-more">すべて見る &rarr;</a>
+    </section>
 
-  <section class="mb-10">
-    <h2 class="text-2xl font-bold mb-6">
-      <span class="heading-accent">登壇 & 記事</span>
-    </h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
-        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-3">
-          登壇
-        </h3>
-        <ul class="space-y-3">
-          {
-            talks.map((talk) => (
-              <li>
-                <a
-                  href={`/talks/${talk.year}/${talk.name}`}
-                  class="block bg-card dark:bg-[#1f2435] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
-                >
-                  <time
-                    class="text-xs text-subtle dark:text-[#9ca3af]"
-                    datetime={talk.date}
-                  >
-                    {formatDate(talk.date)}
-                  </time>
-                  <p class="text-xs font-semibold text-accent dark:text-accent-light mt-0.5">
-                    @ {talk.event}
-                  </p>
-                  <p class="text-sm font-semibold text-charcoal dark:text-gray-100 mt-1 leading-snug">
-                    {talk.title}
-                  </p>
-                </a>
-              </li>
-            ))
-          }
-        </ul>
-        <a
-          href="/talks"
-          class="inline-block mt-3 text-sm font-medium text-accent dark:text-accent-light hover:underline"
-        >
-          すべて見る &rarr;
-        </a>
-      </div>
-
-      <div>
-        <h3 class="text-lg font-semibold text-charcoal dark:text-gray-100 mb-3">
-          記事
-        </h3>
-        <ul class="space-y-3">
-          {
-            externalArticles.map((article) => (
-              <li>
+    <section class="about-section">
+      <h2 class="about-heading">記事</h2>
+      <ul>
+        {
+          externalArticles.map((article) => (
+            <li class="about-row">
+              <time class="about-lead" datetime={article.date}>
+                {formatDate(article.date)}
+              </time>
+              <div class="about-body">
+                <p class="about-meta">
+                  <strong>{article.publisher}</strong>
+                </p>
                 <a
                   href={article.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="block bg-card dark:bg-[#1f2435] rounded-clay shadow-clay dark:shadow-clay-dark p-4 clay-hover-lift hover:shadow-clay-hover dark:hover:shadow-clay-dark-hover"
+                  class="about-link"
                 >
-                  <time
-                    class="text-xs text-subtle dark:text-[#9ca3af]"
-                    datetime={article.date}
-                  >
-                    {formatDate(article.date)}
-                  </time>
-                  <p class="text-xs font-semibold text-accent dark:text-accent-light mt-0.5">
-                    @ {article.publisher}
-                  </p>
-                  <p class="text-sm font-semibold text-charcoal dark:text-gray-100 mt-1 leading-snug">
-                    {article.title}
-                  </p>
+                  {article.title}
                 </a>
-              </li>
-            ))
-          }
-        </ul>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+      <a href="/posts" class="about-more">すべて見る &rarr;</a>
+    </section>
+
+    <section class="about-section">
+      <h2 class="about-heading">リンク</h2>
+      <div class="flex flex-wrap gap-2 pt-4">
         <a
-          href="/posts"
-          class="inline-block mt-3 text-sm font-medium text-accent dark:text-accent-light hover:underline"
+          href="https://github.com/iwasa-kosui"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#343c57] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
         >
-          すべて見る &rarr;
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+          </svg>
+          GitHub
+        </a>
+        <a
+          href="https://x.com/kosui_me"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#343c57] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
+        >
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+          </svg>
+          X
+        </a>
+        <a
+          href="https://scholar.google.com/citations?user=DaujMhUAAAAJ&hl=ja"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#343c57] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
+        >
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M5.242 13.769L0 9.5 12 0l12 9.5-5.242 4.269C17.548 11.249 14.978 9.5 12 9.5c-2.977 0-5.548 1.748-6.758 4.269zM12 10a7 7 0 1 0 0 14 7 7 0 0 0 0-14z" />
+          </svg>
+          Google Scholar
         </a>
       </div>
-    </div>
-  </section>
-
-  <section class="mb-10">
-    <h2 class="text-2xl font-bold mb-6">
-      <span class="heading-accent">リンク</span>
-    </h2>
-    <div class="flex flex-wrap gap-2">
-      <a
-        href="https://github.com/iwasa-kosui"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#343c57] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
-      >
-        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-        </svg>
-        GitHub
-      </a>
-      <a
-        href="https://x.com/kosui_me"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#343c57] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
-      >
-        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-        </svg>
-        X
-      </a>
-      <a
-        href="https://scholar.google.com/citations?user=DaujMhUAAAAJ&hl=ja"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#343c57] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
-      >
-        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M5.242 13.769L0 9.5 12 0l12 9.5-5.242 4.269C17.548 11.249 14.978 9.5 12 9.5c-2.977 0-5.548 1.748-6.758 4.269zM12 10a7 7 0 1 0 0 14 7 7 0 0 0 0-14z" />
-        </svg>
-        Google Scholar
-      </a>
-    </div>
-  </section>
+    </section>
+  </article>
 </BaseLayout>
+
+<style>
+.about {
+  --about-ink: #1f2740;
+  --about-muted: #4b526d;
+  --about-line: rgba(31, 39, 64, 0.16);
+  --about-go: #ee7b6f;
+  color: var(--about-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  .about {
+    --about-ink: #f3f1ee;
+    --about-muted: #b3bacb;
+    --about-line: rgba(243, 241, 238, 0.18);
+    --about-go: #f47f70;
+  }
+}
+
+.about-profile {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+.about-name {
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+.about-handle {
+  color: var(--about-muted);
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.about-section {
+  margin-top: clamp(2.5rem, 5vw, 3.5rem);
+}
+
+.about-heading {
+  padding: 1.25rem 0 0.5rem;
+  border-top: 1px solid var(--about-ink);
+  font-size: clamp(1.5rem, 1.2rem + 1.2vw, 1.875rem);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.about-year {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--about-line);
+  color: var(--about-muted);
+  font-size: 1.125rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.about-row {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: 0 1rem;
+  padding: 1.25rem 0;
+  border-top: 1px solid var(--about-line);
+}
+
+.about-section > ul > .about-row:first-child,
+.about-year + ul > .about-row:first-child {
+  border-top: 0;
+}
+
+.about-row-talk {
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+}
+
+.about-row-plain {
+  display: block;
+}
+
+.about-lead {
+  color: var(--about-muted);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+.about-body {
+  min-width: 0;
+}
+
+.about-org {
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.about-role {
+  color: var(--about-go);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.about-text {
+  margin-top: 0.375rem;
+  color: var(--about-muted);
+  font-size: 0.875rem;
+  line-height: 1.8;
+}
+
+.about-text strong {
+  color: var(--about-ink);
+  font-weight: 700;
+}
+
+.about-profile .about-text {
+  margin-top: 0.5rem;
+}
+
+.about-highlights {
+  margin-top: 0.5rem;
+  padding-left: 1.125rem;
+  list-style: disc;
+  color: var(--about-muted);
+  font-size: 0.8125rem;
+  line-height: 1.8;
+}
+
+.about-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.875rem;
+  color: var(--about-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.7;
+}
+
+.about-meta strong {
+  color: var(--about-ink);
+  font-weight: 600;
+}
+
+.about-link {
+  display: block;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.6;
+  text-decoration: underline;
+  text-decoration-color: var(--about-line);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
+  text-wrap: pretty;
+  transition: text-decoration-color 0.3s;
+}
+
+.about-link:hover,
+.about-link:focus-visible {
+  text-decoration-color: var(--about-go);
+}
+
+.about-link:focus-visible,
+.about-more:focus-visible {
+  outline: 2px solid var(--about-go);
+  outline-offset: 4px;
+  border-radius: 0.25rem;
+}
+
+.about-note {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--about-line);
+  color: var(--about-muted);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.about-more {
+  display: inline-block;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--about-line);
+  text-underline-offset: 0.25em;
+}
+
+.about-more:hover {
+  text-decoration-color: var(--about-go);
+}
+
+@media (max-width: 640px) {
+  .about-row,
+  .about-row-talk {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
+  }
+
+  .about-profile {
+    flex-direction: column;
+  }
+}
+</style>
