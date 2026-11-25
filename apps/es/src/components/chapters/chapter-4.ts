@@ -83,8 +83,6 @@ const consoleTab = (pattern: Pattern): TabDefinition => ({
   },
 });
 
-const codeFiles = (script: string): readonly string[] => ['db.ts', 'visits.test.ts', 'visits.ts', script];
-
 const replyReason = 'エディタで確認用スクリプトを実行すると返信できます。';
 
 type Consultation = {
@@ -117,7 +115,7 @@ const consultation = (options: Consultation): WorkspaceScenario =>
     },
     tabs: [
       docTab('memo', options.doc.title, options.doc.path),
-      editorTab('editor', 'visits.ts', { files: codeFiles(options.pattern.script) }),
+      editorTab('editor', 'visits.ts', { snapshot: options.pattern.exercise }),
       consoleTab(options.pattern),
     ],
   });
@@ -249,8 +247,8 @@ export const chapter4Compare: WorkspaceScenario = lessonScenario({
   tabs: [docTab('memo', '3つのパターンの比較', 'consultations/comparison')],
 });
 
-const startTab = (key: string, exercise: string, script: string, title: string): TabDefinition =>
-  editorTab(key, 'visits.ts', { files: codeFiles(script) }, { title, directory: `clinic-api/${exercise}` });
+const startTab = (key: string, exercise: string, title: string): TabDefinition =>
+  editorTab(key, 'visits.ts', { snapshot: exercise }, { title, directory: `clinic-api/${exercise}` });
 
 export const chapter4Takeaway: WorkspaceScenario = lessonScenario({
   id: 'chapter-4-takeaway',
@@ -262,19 +260,16 @@ export const chapter4Takeaway: WorkspaceScenario = lessonScenario({
     startTab(
       'summary-table',
       'chapter-4-summary-table-start',
-      summaryTable.script,
       '集計テーブル（chapter-4-summary-table-start）',
     ),
     startTab(
       'external-sync',
       'chapter-4-external-sync-start',
-      externalSync.script,
       '外部システム同期（chapter-4-external-sync-start）',
     ),
     startTab(
       'audit-log',
       'chapter-4-audit-log-start',
-      auditLog.script,
       '既存の監査ログ（chapter-4-audit-log-start）',
     ),
   ],

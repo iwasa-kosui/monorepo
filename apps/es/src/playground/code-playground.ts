@@ -1,11 +1,10 @@
-import type { EditorState } from '@codemirror/state';
-
 import { createRuntime, RuntimeScriptError } from './client.ts';
 import { applyRuntimeState, element, failureElement, mountWhenShown, query } from './dom.ts';
-import { createEditorState, createEditorView, revealText } from './editor.ts';
+import { revealText } from './editor.ts';
 import { maxLogLineChars, maxMessageChars } from './engine/limits.ts';
 import type { RunOutcome } from './engine/types.ts';
 import { clearEdits, loadEdits, saveEdits } from './storage.ts';
+import { createWorkbench } from './workbench.ts';
 
 const maxShownFailures = 50;
 
@@ -121,15 +120,15 @@ const renderOutcome = (outcome: RunOutcome, kind: 'tests' | 'script'): HTMLEleme
 
 const mount = (root: HTMLElement): void => {
   const config = JSON.parse(root.dataset.config ?? '{}') as CodeConfig;
-  const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
   const output = query<HTMLElement>(root, '[data-role="output"]');
-  const editorParent = query<HTMLElement>(root, '[data-role="editor"]');
   const resetButton = root.querySelector<HTMLButtonElement>('[data-role="reset"]');
   const retryButton = query<HTMLButtonElement>(root, '[data-role="retry"]');
   const restoreButton = root.querySelector<HTMLButtonElement>('[data-role="restore"]');
   const completeButton = root.querySelector<HTMLButtonElement>('[data-role="complete"]');
   const runButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-run-file]')];
   const shown = [...config.editable, ...config.readonly];
+  const inIde = root.closest('[data-ide]') !== null;
+  const openable = inIde ? Object.keys(config.files) : shown;
   root.setAttribute('data-mounted', '');
   let busy = false;
   let backup: Record<string, string> | null = null;
@@ -141,36 +140,28 @@ const mount = (root: HTMLElement): void => {
     }
   };
 
-  const stateFor = (file: string, doc: string): EditorState =>
-    createEditorState(doc, {
-      language: 'typescript',
-      label: `${file} のコード`,
-      readOnly: !config.editable.includes(file),
-      onChange: () => {
-        persist();
-        discardBackup();
-      },
-    });
-
   const saved = loadEdits(config.exerciseId);
-  const states = new Map<string, EditorState>(
-    shown.map((
-      file,
-    ) => [
-      file,
-      stateFor(
+  const workbench = createWorkbench({
+    root,
+    files: Object.fromEntries(
+      openable.map((file) => [
         file,
         config.editable.includes(file) ? saved[file] ?? config.files[file] ?? '' : config.files[file] ?? '',
-      ),
-    ]),
-  );
-  let active = shown[0] ?? '';
-  const view = createEditorView(editorParent, states.get(active) ?? stateFor(active, ''));
+      ]),
+    ),
+    baseline: config.files,
+    editable: config.editable,
+    opened: shown,
+    active: shown[0] ?? '',
+    onChange: () => {
+      persist();
+      discardBackup();
+    },
+    onSelect: () => reveal(),
+  });
+  const view = workbench.view;
 
-  const currentDocs = (): Record<string, string> => {
-    states.set(active, view.state);
-    return Object.fromEntries(shown.map((file) => [file, states.get(file)?.doc.toString() ?? '']));
-  };
+  const currentDocs = (): Record<string, string> => workbench.docs();
 
   function persist(): void {
     const docs = currentDocs();
@@ -183,30 +174,16 @@ const mount = (root: HTMLElement): void => {
     }
   }
 
-  const reveal = (): void => {
-    if (config.reveal !== null && config.editable.includes(active)) {
+  function reveal(): void {
+    if (config.reveal !== null && config.editable.includes(workbench.active())) {
       revealText(view, config.reveal);
     }
-  };
-
-  const select = (file: string): void => {
-    states.set(active, view.state);
-    active = file;
-    view.setState(states.get(file) ?? stateFor(file, ''));
-    reveal();
-    for (const tab of tabs) {
-      const selected = tab.dataset.file === file;
-      tab.setAttribute('aria-selected', String(selected));
-      tab.tabIndex = selected ? 0 : -1;
-    }
-  };
+  }
 
   const replaceDocs = (docs: Readonly<Record<string, string>>): void => {
-    states.set(active, view.state);
     for (const file of config.editable) {
-      states.set(file, stateFor(file, docs[file] ?? config.files[file] ?? ''));
+      workbench.setDoc(file, docs[file] ?? config.files[file] ?? '');
     }
-    view.setState(states.get(active) ?? stateFor(active, ''));
     reveal();
   };
 
@@ -246,22 +223,6 @@ const mount = (root: HTMLElement): void => {
     const file = button.dataset.runFile ?? '';
     button.addEventListener('click', () => void execute(file, file === config.testFile ? 'tests' : 'script'));
   }
-  for (const tab of tabs) {
-    tab.addEventListener('click', () => select(tab.dataset.file ?? ''));
-    tab.addEventListener('keydown', (event) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
-        return;
-      }
-      event.preventDefault();
-      const index = tabs.indexOf(tab);
-      const next = tabs[(index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
-      if (next !== undefined) {
-        select(next.dataset.file ?? '');
-        next.focus();
-      }
-    });
-  }
-
   const editableDocs = (): Record<string, string> => {
     const docs = currentDocs();
     return Object.fromEntries(config.editable.map((file) => [file, docs[file] ?? '']));
@@ -303,7 +264,7 @@ const mount = (root: HTMLElement): void => {
     }
   });
   retryButton.addEventListener('click', () => runtime.reload());
-  select(active);
+  reveal();
   updateControls();
 };
 

@@ -253,4 +253,36 @@ describe('BlueskyTimelineItemView', () => {
       expect(stopped).toBe(true);
     });
   });
+
+  describe('ブックマークのボタン', () => {
+    it('未ブックマークの投稿では、押すと onBookmark だけを呼ぶ', () => {
+      const onBookmark = vi.fn();
+      const onUndoBookmark = vi.fn();
+      const element = BlueskyTimelineItemView({ item: base, onBookmark, onUndoBookmark });
+
+      findButtonByTitle(element, 'ブックマーク')?.props.onClick({ stopPropagation: () => {} });
+
+      expect(onBookmark).toHaveBeenCalledExactlyOnceWith(base);
+      expect(onUndoBookmark).not.toHaveBeenCalled();
+    });
+
+    it('ブックマーク済みの投稿では、押すと onUndoBookmark だけを呼ぶ', () => {
+      const onBookmark = vi.fn();
+      const onUndoBookmark = vi.fn();
+      const bookmarked = { ...base, bookmarked: true };
+      const element = BlueskyTimelineItemView({ item: bookmarked, onBookmark, onUndoBookmark });
+
+      findButtonByTitle(element, 'ブックマークを外す')?.props.onClick({ stopPropagation: () => {} });
+
+      expect(onUndoBookmark).toHaveBeenCalledExactlyOnceWith(bookmarked);
+      expect(onBookmark).not.toHaveBeenCalled();
+    });
+
+    it('ブックマーク済みでも外す操作が渡されていなければ、ボタンを出さない', () => {
+      const element = BlueskyTimelineItemView({ item: { ...base, bookmarked: true }, onBookmark: () => {} });
+
+      expect(findButtonByTitle(element, 'ブックマークを外す')).toBeUndefined();
+      expect(findButtonByTitle(element, 'ブックマーク')).toBeUndefined();
+    });
+  });
 });

@@ -3,39 +3,18 @@ wide: true
 immersive: true
 ---
 
-import CodePlayground from '../../../components/CodePlayground.astro';
-import { chapter2Rollback } from '../../../components/chapters/chapter-2';
+import AddRecordScene from '../../../components/AddRecordScene.astro';
+import { chapter2Step1 } from '../../../components/chapters/chapter-2';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
 <div class="visually-hidden">
 
-## 記録に失敗すると、来院の更新も戻る
+## ステップ1: キャンセルの記録を1行足す
 
 </div>
 
-<Workspace scenario={chapter2Rollback}>
+<Workspace scenario={chapter2Step1}>
 <Fragment slot="editor">
-<CodePlayground
-  exercise="chapter-2-step-2"
-  editable={[]}
-  readonly={['fail-record.ts']}
-  lesson="fail-record.ts"
-  scripts={[{ file: 'fail-record.ts', label: '記録を失敗させて実行する' }]}
-/>
-</Fragment>
-<Fragment slot="guide">
-
-### やること
-
-「記録を失敗させて実行する」を押します。`fail-record.ts` は、記録が必ず失敗する状態で、完成コードの `cancelVisit` を実行します。完成コードは、演習を終えた時点のコードです。
-
-### 確かめること
-
-「実行の前」と「実行の後」で、`status` が `reserved` のままであることを確かめます。
-
-### 気づくこと
-
-記録と来院の更新は同じトランザクションにあるので、記録が失敗すると DB は来院の更新も取り消します。記録の抜けたキャンセルは残りません。
-
+<AddRecordScene step={1} />
 </Fragment>
 </Workspace>

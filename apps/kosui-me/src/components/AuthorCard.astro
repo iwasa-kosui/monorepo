@@ -1,4 +1,5 @@
 ---
+import SiteIcon from '@/components/SiteIcon.astro';
 interface Props {
   compact?: boolean;
 }
@@ -7,12 +8,10 @@ const { compact = false } = Astro.props;
 ---
 
 <div class="flex items-center gap-4">
-  <img
-    src="https://icon.kosui.me"
+  <SiteIcon
+    size={48}
     alt="kosui"
-    width="48"
-    height="48"
-    class="rounded-full ring-2 ring-accent/20 flex-shrink-0"
+    class="ring-2 ring-accent/20 flex-shrink-0"
   />
   <div class="min-w-0">
     <div class="flex items-baseline gap-2">

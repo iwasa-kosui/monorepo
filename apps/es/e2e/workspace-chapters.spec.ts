@@ -18,9 +18,8 @@ const ownQuestion =
 const wantRecord = '再発防止で、キャンセルしたときに記録を残すようにしたいです';
 const runTests = '先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです';
 const failedFour = '落ちた4件が、これから足すところです👍';
-const designMemo = '方針を設計メモにまとめました。ざっと読んでもらえると助かります';
-const checkRollback = '記録の書き込みに失敗したとき、来院の更新がどうなるか、一回試してみてください';
-const columnsMemo = '記録の列も設計メモに足しました';
+const decisionRecord = '方針を ADR にまとめました。ざっと読んでもらえると助かります';
+const tableRecord = '記録を1つのテーブルにまとめる案も ADR にしました';
 const prSeen = 'PR 見ました！差分、思ったより小さいですね';
 const prRemaining = '足したあとに残る作業も書いておきます';
 const thanks = 'わー、ありがとうございます！これで次からは答えられますね🙏';
@@ -138,38 +137,34 @@ const pages: readonly Expected[] = [
   {
     id: '2-1',
     path: '/chapters/chapter-2/',
-    tabs: ['設計メモ: 更新処理の中で記録する'],
-    posts: [...earlier, [lead, designMemo]],
+    tabs: ['ADR 1: 更新処理の中で記録する'],
+    posts: [...earlier, [lead, decisionRecord]],
     hiddenHeading: '説明',
   },
   {
     id: '2-2',
     path: '/chapters/chapter-2/2/',
-    tabs: ['fail-record.ts — clinic-api', '確認の手順: 記録に失敗したとき'],
-    posts: [...earlier, [lead, designMemo], [lead, checkRollback]],
-    hiddenHeading: '記録に失敗すると、来院の更新も戻る',
+    tabs: ['visits.ts — clinic-api'],
+    posts: [[support, inquiry]],
+    hiddenHeading: 'ステップ1: キャンセルの記録を1行足す',
   },
   {
     id: '2-3',
     path: '/chapters/chapter-2/3/',
-    tabs: ['設計メモ: 記録の列'],
-    posts: [...earlier, [lead, designMemo], [lead, checkRollback], [lead, columnsMemo]],
+    tabs: ['ADR 2: 記録を1つのテーブルにまとめる'],
+    posts: [...earlier, [lead, decisionRecord], [lead, tableRecord]],
+    hiddenHeading: '記録を1つのテーブルにまとめる',
   },
   {
     id: '2-4',
     path: '/chapters/chapter-2/4/',
     tabs: ['visits.ts — clinic-api'],
     posts: [[support, inquiry]],
+    hiddenHeading: 'ステップ2: 記録を business_events に移す',
   },
   {
     id: '2-5',
     path: '/chapters/chapter-2/5/',
-    tabs: ['visits.ts — clinic-api'],
-    posts: [[support, inquiry]],
-  },
-  {
-    id: '2-6',
-    path: '/chapters/chapter-2/6/',
     tabs: ['キャンセルの記録を足す'],
     posts: [[support, inquiry], [support, thanks], [lead, prSeen], [lead, prRemaining]],
     hiddenHeading: '記録を足すと visits.ts は何行変わるか',
@@ -392,55 +387,64 @@ test.describe('各ページの代表的な操作', () => {
     );
   });
 
-  test('2-1: 図を1つ進めると、合図 figure:step が起きる', async ({ page }) => {
+  test('2-1: ADR は状況、決定、結果の順で、図はボタンを押さずに読める', async ({ page }) => {
     await open(page, '/chapters/chapter-2/');
     await recordSignals(page);
-    const figure = scene(page).locator('[data-transaction-figure]');
-    await figure.getByRole('button', { name: '次へ', exact: true }).click();
-    await expect(figure).toHaveAttribute('data-step', '1');
-    await expect.poll(async () => (await signalsOf(page)).filter((signal) => signal.name === 'figure:step').length)
-      .toBe(1);
-    expect((await signalsOf(page)).find((signal) => signal.name === 'figure:step')?.data).toMatchObject({
-      key: '1',
-      step: 1,
-      last: false,
-    });
-    await expect(scene(page).getByRole('tabpanel')).toContainText('業務イベントは、業務で起きた1つの出来事を');
+    const panel = scene(page).getByRole('tabpanel', { name: /ADR 1: 更新処理の中で記録する/ });
+    await expect(panel.getByRole('heading', { level: 3 })).toHaveText(['状況', '決定', '結果']);
+    await expect(panel).toContainText('問い合わせは「誰がいつなんでキャンセルしたか」でした。');
+    await expect(panel.locator('table')).toHaveCount(0);
+    const figure = panel.locator('[data-record-decision-figure]');
+    await expect(figure.getByRole('button')).toHaveCount(0);
+    await expect(figure).toContainText('UPDATE visits');
+    await expect(figure).toContainText('INSERT INTO visit_cancellations');
+    await expect(figure.getByRole('term').filter({ hasText: 'operated_by' })).toBeVisible();
+    await expect(figure).toContainText('記録に成功する場合');
+    await expect(figure).toContainText('記録に失敗する場合');
+    expect((await signalsOf(page)).map((signal) => signal.name)).not.toContain('figure:step');
   });
 
-  test('2-2: 記録を失敗させて実行しても status は reserved のまま。合図 code:run が起きる', async ({ page }) => {
+  test('2-2: ステップ1の場面で実行とテストを押すと、合図 code:run と tests:ran が起きる', async ({ page }) => {
     await open(page, '/chapters/chapter-2/2/');
     await recordSignals(page);
-    const playground = scene(page).locator('[data-playground="code"]');
-    await playground.getByRole('button', { name: '記録を失敗させて実行する' }).click();
-    await expect(playground.locator('.playground-log')).toContainText('実行の後: status = reserved');
-    expect((await signalsOf(page)).map((signal) => signal.name)).toContain('code:run');
-    await tab(page, /確認の手順/).click();
-    await expect(scene(page).getByRole('tabpanel', { name: /確認の手順/ })).toContainText(
-      '「実行の前」と「実行の後」で',
-    );
+    const play = scene(page).locator('[data-play="add-record"]');
+    await play.getByRole('button', { name: 'ポチの来院をキャンセルする' }).click();
+    await expect(play.locator('[data-role="visits-badge"]')).toHaveText('実行後');
+    await play.getByRole('button', { name: 'テストを実行する' }).click();
+    await expect(play.locator('[data-role="summary"]')).toHaveText('pass 4 / fail 4');
+    const signals = await signalsOf(page);
+    expect(signals.map((signal) => signal.name)).toContain('code:run');
+    expect(signals.filter((signal) => signal.name === 'tests:ran').map((signal) => signal.data)).toEqual([{
+      pass: 4,
+      fail: 4,
+    }]);
   });
 
-  test('2-3: 列の表と、1行を列ごとに埋める図がある', async ({ page }) => {
+  test('2-3: ADR に、業務イベントの定義と、ステップ1の列を business_events の列に移す図がある', async ({ page }) => {
     await open(page, '/chapters/chapter-2/3/');
-    const panel = scene(page).getByRole('tabpanel', { name: /設計メモ: 記録の列/ });
-    await expect(panel.getByRole('cell', { name: 'target_state' })).toBeVisible();
-    const figure = panel.locator('[data-event-row-figure]');
-    await figure.getByRole('button', { name: '次へ', exact: true }).click();
-    await expect(figure).toHaveAttribute('data-step', '1');
+    const panel = scene(page).getByRole('tabpanel', { name: /ADR 2: 記録を1つのテーブルにまとめる/ });
+    await expect(panel.getByRole('heading', { level: 3 })).toHaveText(['状況', '決定', '結果']);
+    await expect(panel).toContainText('業務イベントは、業務で起きた1つの出来事を');
+    await expect(panel.locator('figure.quote')).toHaveCount(1);
+    await expect(panel.locator('table')).toHaveCount(0);
+    const figure = panel.locator('[data-record-mapping-figure]');
+    await expect(figure.getByRole('button')).toHaveCount(0);
+    await expect(figure.getByRole('columnheader', { name: 'ステップ1' })).toBeVisible();
+    await expect(figure.getByRole('cell', { name: 'cancelled_at' })).toBeVisible();
+    await expect(figure.getByRole('cell', { name: /^target_state/ })).toBeVisible();
     await expect(panel.getByRole('link', { name: '関連記事' })).toHaveAttribute(
       'href',
       'https://kosui.me/posts/2025/05/06/142842',
     );
   });
 
-  test('2-6: プルリクエストに +13 −1 を出し、Files changed で visits.ts の差分を見る', async ({ page }) => {
-    await open(page, '/chapters/chapter-2/6/');
+  test('2-5: プルリクエストに +13 −1 を出し、Files changed で visits.ts の差分を見る', async ({ page }) => {
+    await open(page, '/chapters/chapter-2/5/');
     const panel = scene(page).getByRole('tabpanel', { name: /キャンセルの記録を足す/ });
     await expect(panel.locator('[data-pr-stat]')).toHaveText(/^\s*\+13\s*−1\s*$/);
     await expect(panel.locator('.pr-state')).toHaveText('Open');
     await expect(panel).toContainText('変更量は、+13/-1 行です');
-    await expect(panel.locator('figure.quote')).toHaveCount(2);
+    await expect(panel.locator('figure.quote')).toHaveCount(1);
     await expect(panel.getByRole('tab', { name: 'Conversation' })).toHaveAttribute('aria-selected', 'true');
     await expect(panel.locator('.pr-file')).toBeHidden();
 
@@ -989,10 +993,10 @@ test.describe('演習のページでは、チャットを細い帯に折りた�
     await expect(rail(page)).toBeFocused();
   });
 
-  test('5 ページ目: テストがすべて成功すると、未読の数が帯に出て、開くと礼の投稿が読める', async ({ page }) => {
+  test('ステップ2: テストがすべて成功すると、未読の数が帯に出て、開くと礼の投稿が読める', async ({ page }) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 1280, height: 640 });
-    await open(page, '/chapters/chapter-2/5/');
+    await open(page, '/chapters/chapter-2/4/');
     await recordSignals(page);
     const play = page.locator('[data-play="add-record"]');
     await play.locator('details.play-hint-step').last().locator('summary').click();
@@ -1019,35 +1023,53 @@ test.describe('演習のページでは、チャットを細い帯に折りた�
     await expect(unread(page)).toBeHidden();
   });
 
-  test('4 ページ目: pass 7 / fail 1 では礼の投稿は届かない', async ({ page }) => {
+  test('ステップ1: テストがすべて成功しても、礼の投稿は届かない', async ({ page }) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 1280, height: 640 });
-    await open(page, '/chapters/chapter-2/4/');
+    await open(page, '/chapters/chapter-2/2/');
     await recordSignals(page);
     const play = page.locator('[data-play="add-record"]');
     await play.locator('details.play-hint-step').last().locator('summary').click();
     await play.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
     await play.getByRole('button', { name: 'テストを実行する' }).click();
-    await expect(play.locator('[data-role="summary"]')).toHaveText('pass 7 / fail 1');
-    await expect(unread(page)).toBeHidden();
+    await expect(play.locator('[data-role="summary"]')).toHaveText('pass 8 / fail 0');
     const tests = (await signalsOf(page)).filter((signal) => signal.name === 'tests:ran');
-    expect(tests.map((signal) => signal.data)).toEqual([{ pass: 7, fail: 1 }]);
-    expect((await signalsOf(page)).map((signal) => signal.name)).not.toContain('tests:passed');
+    expect(tests.map((signal) => signal.data)).toEqual([{ pass: 8, fail: 0 }]);
+    expect((await signalsOf(page)).map((signal) => signal.name)).toContain('tests:passed');
+    await page.waitForTimeout(1500);
+    await expect(unread(page)).toBeHidden();
   });
 
-  test('スマートフォンの幅では帯が横長になり、開くと帯の下に重なる', async ({ page }) => {
+  test('スマートフォンの幅では帯を出さず、チャットはタブの一つになる。最初は本文のタブが前に出る', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await open(page, '/chapters/chapter-2/4/');
-    const bar = await rail(page).boundingBox();
-    expect(bar?.width).toBeGreaterThan(300);
-    expect(bar?.height).toBeLessThan(70);
-    await rail(page).click();
-    await expect(chatMain(page)).toBeVisible();
-    const chat = await chatMain(page).boundingBox();
-    expect(chat !== null && bar !== null && chat.y >= bar.y + bar.height - 1).toBe(true);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.keyboard.press('Escape');
+    const chatTab = tab(page, /チャット/);
+    await expect(rail(page)).toBeHidden();
+    await expect(chatTab).toBeVisible();
+    await expect(chatTab).toHaveAttribute('aria-selected', 'false');
     await expect(chatMain(page)).toBeHidden();
+    await expect(scene(page).locator('.pages')).toBeVisible();
+    await chatTab.click();
+    await expect(chatTab).toHaveAttribute('aria-selected', 'true');
+    await expect(chatMain(page)).toBeVisible();
+    await expect(posts(page)).toHaveCount(1);
+    await expect(scene(page).locator('.pages')).toBeHidden();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await tab(page, /エディタ/).click();
+    await expect(chatMain(page)).toBeHidden();
+    await expect(scene(page).locator('.pages')).toBeVisible();
+  });
+
+  test('スマートフォンの幅では、開いた時点で届く投稿がチャットのタブに未読の数で出る', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await open(page, '/chapters/chapter-3/');
+    const chatTab = tab(page, /チャット/);
+    const badge = scene(page).locator('[data-chat-unread]');
+    await expect(badge).toBeVisible();
+    await expect(chatTab).toHaveAccessibleName(/^チャット\s*（未読 \d+ 件）$/);
+    await chatTab.click();
+    await expect(badge).toBeHidden();
+    await expect(chatMain(page)).toBeVisible();
   });
 });
 
@@ -1071,6 +1093,16 @@ test.describe('画面に出さない語', () => {
         for (const word of ['業務イベント', 'business_events', 'target_']) {
           expect(text, `${expected.id} ${word}`).not.toContain(word);
         }
+      }
+    }
+  });
+
+  test('第2章の 1 ページ目と 2 ページ目には、定義より前の業務イベント、business_events、target_ が出ない（コードの欄を除く）', async ({ page }) => {
+    for (const expected of pages.filter((item) => item.id === '2-1' || item.id === '2-2')) {
+      await open(page, expected.path);
+      const text = await visibleText(page);
+      for (const word of ['業務イベント', 'business_events', 'target_']) {
+        expect(text, `${expected.id} ${word}`).not.toContain(word);
       }
     }
   });

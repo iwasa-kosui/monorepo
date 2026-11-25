@@ -11,6 +11,8 @@ export type ChatView = {
   readonly memo: readonly MemoView[];
   readonly answerRequested: boolean;
   readonly unlocked: ReadonlySet<ButtonName>;
+  readonly tabbed: boolean;
+  readonly front: boolean;
 };
 
 export type Chat = {
@@ -37,11 +39,17 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   const chatWindow = root.querySelector<HTMLElement>('.win.chat');
   const rail = root.querySelector<HTMLButtonElement>('[data-rail]');
   const badge = root.querySelector<HTMLElement>('[data-unread]');
+  const tabBadge = root.querySelector<HTMLElement>('[data-chat-unread]');
+  const tabBadgeLabel = root.querySelector<HTMLElement>('[data-chat-unread-label]');
   const typing = root.querySelector<HTMLElement>('[data-typing]');
   const typingText = root.querySelector<HTMLElement>('[data-typing-text]');
   let typingActor: string | null = null;
   let unread = 0;
   let open = false;
+  let tabbed = false;
+  let front = false;
+
+  const visible = (): boolean => (tabbed ? front : rail === null || open);
 
   const setTyping = (actor: string): void => {
     typingActor = actor;
@@ -55,6 +63,11 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   };
 
   const renderRail = (): void => {
+    if (tabBadge !== null) {
+      tabBadge.hidden = unread === 0;
+      tabBadge.textContent = String(unread);
+    }
+    if (tabBadgeLabel !== null) tabBadgeLabel.textContent = unread > 0 ? `（未読 ${unread} 件）` : '';
     if (rail === null || chatWindow === null) return;
     chatWindow.toggleAttribute('data-open', open);
     rail.setAttribute('aria-expanded', String(open));
@@ -98,7 +111,7 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
     feed.append(copy);
     feed.scrollTop = feed.scrollHeight;
     if (typingActor === post.actor) clearTyping();
-    if (counted && rail !== null && !open && actor?.self !== true) {
+    if (counted && !visible() && actor?.self !== true) {
       unread += 1;
       renderRail();
     }
@@ -111,6 +124,16 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
   };
 
   const render = (view: ChatView): void => {
+    if (view.tabbed !== tabbed || view.front !== front) {
+      tabbed = view.tabbed;
+      front = view.front;
+      if (tabbed) open = false;
+      if (visible()) {
+        unread = 0;
+        feed.scrollTop = feed.scrollHeight;
+      }
+      renderRail();
+    }
     const disabled = (name: ButtonName, base: boolean): boolean =>
       base || (locked.has(name) && !view.unlocked.has(name));
     const interim = buttonOf('interim');

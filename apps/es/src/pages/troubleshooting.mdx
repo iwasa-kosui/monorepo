@@ -26,7 +26,7 @@ Could not find 'visits.test.ts'
 Error: Cannot find module '…/who-cancelled.ts'
 ```
 
-`node who-cancelled.ts` を実行したディレクトリに、`who-cancelled.ts` がありません。演習のディレクトリに移動できていません。`chapter-1-start` か `chapter-2-step-2` に `cd` で移動してから、もう一度実行します。
+`node who-cancelled.ts` を実行したディレクトリに、`who-cancelled.ts` がありません。演習のディレクトリに移動できていません。`chapter-2-step-2-start` か `chapter-2-step-2` に `cd` で移動してから、もう一度実行します。
 
 ### Unknown file extension ".ts"
 
@@ -52,8 +52,8 @@ Node.js のバージョンが古く、`.ts` ファイルを直接実行できま
 ### 演習の直下で node --test を実行したら失敗が混ざる
 
 ```text
-ℹ pass 96
-ℹ fail 18
+ℹ pass 100
+ℹ fail 22
 ```
 
 演習の直下で `node --test` を実行すると、すべての章のディレクトリにあるテストが実行されます。各章の開始のコードには、まだ書いていない部分があります。このため失敗が混ざります。章のディレクトリに `cd` で移動し、ファイルを指定して `node --test visits.test.ts` を実行します。
@@ -69,7 +69,7 @@ Node.js のバージョンが古く、`.ts` ファイルを直接実行できま
 
 ## 第2章のエラー
 
-ステップ1とステップ2の `cancelVisit` で出るエラーです。
+ステップ1とステップ2の `cancelVisit` で出るエラーです。ステップ1は `visit_cancellations` テーブルに、ステップ2は `business_events` テーブルに記録します。エラー文のテーブル名は、取り組んでいるステップのものが出ます。
 
 ### Expression expected
 
@@ -86,7 +86,17 @@ SyntaxError [ERR_INVALID_TYPESCRIPT_SYNTAX]: Expression expected
   'test failed'
 ```
 
-雛形の空欄が `/* event_name */` のように残っています。第2章の「ヒントと解答」のヒント3「入れる値」のとおりに、4つの空欄を値で埋めます。
+雛形の空欄が `/* 誰が */` や `/* event_name */` のように残っています。第2章の「ヒントと解答」のヒント3「入れる値」のとおりに、空欄を値で埋めます。
+
+### no such table: visit_cancellations
+
+```text
+Error: no such table: visit_cancellations
+ℹ pass 3
+ℹ fail 5
+```
+
+ステップ2を始めた時点では、この文が出て正常です。ステップ2の DB には `visit_cancellations` テーブルがないので、ステップ1の `INSERT` が失敗します。記録に失敗すると来院の更新も取り消されるので、既存の業務のテストも1件失敗します。`INSERT` を `business_events` 用に書き換えます。
 
 ### table business_events has no column named
 
@@ -94,7 +104,7 @@ SyntaxError [ERR_INVALID_TYPESCRIPT_SYNTAX]: Expression expected
 Error: table business_events has no column named event_nam
 ```
 
-INSERT の列名に、`business_events` テーブルにない名前があります。`named` の後ろに出ている名前が、誤っている列名です。`event_name` のように、列名を表の定義どおりに書き直します。
+INSERT の列名に、テーブルにない名前があります。`named` の後ろに出ている名前が、誤っている列名です。`event_name` のように、列名を表の定義どおりに書き直します。ステップ1では `table visit_cancellations has no column named` と出ます。
 
 ### 5 values for 6 columns
 
@@ -110,7 +120,7 @@ Error: 5 values for 6 columns
 Error: 7 values for 6 columns
 ```
 
-`VALUES (…)` の `?` が7個で、列は6個です。`?` を6個にそろえます。
+`VALUES (…)` の `?` が7個で、列は6個です。`?` を6個にそろえます。ステップ1の列は4個です。`3 values for 4 columns` や `5 values for 4 columns` と出たら、`?` を4個にそろえます。
 
 ### NOT NULL constraint failed
 
@@ -118,7 +128,7 @@ Error: 7 values for 6 columns
 Error: NOT NULL constraint failed: business_events.target_state
 ```
 
-`.run()` に渡した値は `?` の数より少なく、値の入らない列があります。失敗の文の末尾に、その列名が出ます。引数が2個足りないときは `business_events.target_type` と出ます。`.run()` の引数を6個にそろえます。
+`.run()` に渡した値は `?` の数より少なく、値の入らない列があります。失敗の文の末尾に、その列名が出ます。引数が2個足りないときは `business_events.target_type` と出ます。`.run()` の引数を6個にそろえます。ステップ1では `visit_cancellations.reason` のように出ます。`.run()` の引数を4個にそろえます。
 
 ### Provided value cannot be bound to SQLite parameter
 
@@ -127,7 +137,10 @@ TypeError: Provided value cannot be bound to SQLite parameter 3.
 code: 'ERR_INVALID_ARG_TYPE'
 ```
 
-SQLite に渡せない値が、`.run()` の引数にあります。オブジェクトのまま渡したことが原因です。末尾の番号は、`?` の何番目かを表します。3番目は `payload`、6番目は `target_state` です。その引数を `JSON.stringify(…)` で文字列にして渡します。
+SQLite に渡せない値が、`.run()` の引数にあります。末尾の番号は、`?` の何番目かを表します。
+
+- ステップ2では、オブジェクトのまま渡したことが原因です。3番目は `payload`、6番目は `target_state` です。その引数を `JSON.stringify(…)` で文字列にして渡します。
+- ステップ1では、`input.operatedby` のように名前を書き誤ると、値が `undefined` になってこの文が出ます。3番目は `operated_by`、4番目は `reason` です。`input.operatedBy` と `input.reason` を渡します。
 
 ### malformed JSON
 
@@ -159,9 +172,8 @@ AssertionError [ERR_ASSERTION]: キャンセルした人を答えられません
 null !== '受付スタッフ'
 ```
 
-テストが `payload` の `operatedBy` を読んで、期待した値を得られていません。次のどれかが原因です。
+ステップ2のテストが `payload` の `operatedBy` を読んで、期待した値を得られていません。次のどちらかが原因です。
 
-- ステップ2が終わっておらず、`payload` が `JSON.stringify({})` のままです。
 - `payload` のキーの名前が `operatedBy` ではありません。キーの名前は `reason` と `operatedBy` にします。
 - `operatedBy` のキーを書き忘れています。
 
@@ -173,6 +185,8 @@ null !== '受付スタッフ'
 
 `reason` に理由を、`operatedBy` に操作した人を渡します。
 
+ステップ1では、括弧の中が `operated_by を読みました` になります。`.run()` の引数を、`visit_id`、`cancelled_at`、`operated_by`、`reason` の順に渡します。
+
 ### 来院キャンセルの記録がありません
 
 ```text
@@ -181,7 +195,17 @@ AssertionError [ERR_ASSERTION]: 来院キャンセルの記録がありません
 0 !== 1
 ```
 
-`business_events` に、該当する行が入っていません。ステップ1の雛形をまだ貼っていないときも、この文が出ます。雛形を貼ったあとにも出るなら、`.run()` の引数の順番を確かめます。引数は、`event_at`、`event_name`、`payload`、`target_id`、`target_type`、`target_state` の順に渡します。`payload` と `target_id` を入れ替えると、`target_id` が `visit-1` でない行が入るため、この文が出ます。
+`business_events` に、該当する行が入っていません。`.run()` の引数の順番を確かめます。引数は、`event_at`、`event_name`、`payload`、`target_id`、`target_type`、`target_state` の順に渡します。`payload` と `target_id` を入れ替えると、`target_id` が `visit-1` でない行が入るため、この文が出ます。`target_type` が `'Visit'` でないときも、この文が出ます。
+
+ステップ1では、括弧の中が `visit_cancellations を visit_id = 'visit-1' で探しました` になります。ステップ1の雛形をまだ貼っていないときに、この文が出ます。
+
+### 2回のキャンセルの理由が、2行で残っていません
+
+```text
+AssertionError [ERR_ASSERTION]: 2回のキャンセルの理由が、2行で残っていません（reason を読みました）
+```
+
+ステップ1で、ほかのテストの失敗と一緒に出ます。先に出ている別のエラー文の項目を見て、そのエラーを直します。
 
 ### Expected values to be strictly equal
 
@@ -199,13 +223,17 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 
 `node who-cancelled.ts` の結果で確かめます。
 
-### visit-pochi の行で event_at 以下がすべて null
+### no such table: visit_cancellations と出る
 
-記録を足していないコードで実行しています。`chapter-1-start` のコードにステップ1とステップ2を反映してから、もう一度実行します。終わっていないときは `chapter-2-step-2` に移動して実行します。
+ステップ2が終わっていないコードで実行しています。`chapter-2-step-2-start` の `cancelVisit` をステップ2まで進めてから、もう一度実行します。終わっていないときは `chapter-2-step-2` に移動して実行します。
+
+### 表の列が cancelled_at、operated_by、reason になっている
+
+`chapter-1-start` か `chapter-2-step-1` で実行しています。この2つの `who-cancelled.ts` は、ステップ1の `visit_cancellations` を読みます。第3章の表は、`chapter-2-step-2-start` か `chapter-2-step-2` に移動して出します。
 
 ### visit-pochi の行で operated_by と reason だけが null
 
-ステップ2が終わっていません。`payload` に `reason` と `operatedBy` を入れてから、もう一度実行します。
+`payload` のキーの名前が、`reason` と `operatedBy` になっていません。`payload` を `JSON.stringify({ reason: …, operatedBy: … })` の形に直してから、もう一度実行します。
 
 ### visit-tama の行が null
 
@@ -217,6 +245,6 @@ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
 
 ## 追いつけないとき
 
-ステップ1が終わらないうちにステップ2へ進むときは、`chapter-2-step-1` に移動して続けます。演習が終わらないうちに次の章へ進むときは、`chapter-2-step-2` に移動します。`chapter-2-step-2` は全テストが成功する完成のスナップショットです。第3章は自分のコードを使わなくても進められます。
+ステップ1が終わらないうちにステップ2へ進むときは、`chapter-2-step-2-start` に移動して続けます。`chapter-2-step-2-start` の `visits.ts` は、ステップ1の解答です。演習が終わらないうちに次の章へ進むときは、`chapter-2-step-2` に移動します。`chapter-2-step-2` は全テストが成功する完成のスナップショットです。第3章は自分のコードを使わなくても進められます。
 
 この一覧にないエラーで止まったときは、講師の画面を見て進みます。その演習は、持ち帰りの教材で試してください。

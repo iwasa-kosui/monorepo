@@ -9,7 +9,7 @@ export const completeVisit = (db: DatabaseSync, input: { visitId: string }): voi
   db.prepare(`UPDATE visits SET status = 'completed' WHERE id = ?`).run(input.visitId);
 };
 
-export const cancelVisit = (db: DatabaseSync, input: { visitId: string }): void => {
+export const cancelVisit = (db: DatabaseSync, input: { visitId: string; reason: string; operatedBy: string }): void => {
   withTransaction(db, () => {
     const visit = db.prepare(`SELECT status FROM visits WHERE id = ?`).get(input.visitId);
     if (visit === undefined) {
@@ -19,17 +19,14 @@ export const cancelVisit = (db: DatabaseSync, input: { visitId: string }): void 
       throw new Error('診察が終わった来院はキャンセルできません');
     }
     db.prepare(`UPDATE visits SET status = 'cancelled' WHERE id = ?`).run(input.visitId);
-    const cancelled = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(input.visitId);
     db.prepare(`
-      INSERT INTO business_events (event_at, event_name, payload, target_id, target_type, target_state)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO visit_cancellations (visit_id, cancelled_at, operated_by, reason)
+      VALUES (?, ?, ?, ?)
     `).run(
-      new Date().toISOString(),
-      'VisitCancelled',
-      JSON.stringify({}),
       input.visitId,
-      'Visit',
-      JSON.stringify(cancelled),
+      new Date().toISOString(),
+      input.operatedBy,
+      input.reason,
     );
   });
 };

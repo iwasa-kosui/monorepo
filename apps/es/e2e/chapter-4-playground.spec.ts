@@ -79,12 +79,12 @@ test.describe('第4章の完成コードの実行欄', () => {
     test(`${pattern.name}: テストが pass 15 / fail 0 になり、${pattern.script} の出力が出る`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 640 });
       const playground = await open(page, pattern.path);
-      await expect(playground.getByRole('tab')).toHaveText([
-        'visits.ts ',
-        'db.ts （読み取りだけ）',
-        'visits.test.ts （読み取りだけ）',
-        `${pattern.script} （読み取りだけ）`,
-      ]);
+      const fileTabs = playground.getByRole('tab');
+      await expect(fileTabs.locator('.wb-name')).toHaveText(['visits.ts', 'db.ts', 'visits.test.ts', pattern.script]);
+      await expect(fileTabs.nth(0)).not.toContainText('読み取りだけ');
+      for (const index of [1, 2, 3]) {
+        await expect(fileTabs.nth(index)).toContainText('（読み取りだけ）');
+      }
       await expect(playground.locator('.cm-content')).toContainText('export const cancelVisit');
       await expect.poll(() => playground.locator('.cm-scroller').evaluate((element) => element.scrollTop))
         .toBeGreaterThan(0);

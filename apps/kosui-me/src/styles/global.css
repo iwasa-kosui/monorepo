@@ -9,10 +9,10 @@
 
   /* Text */
   --color-charcoal: #1a1a2e;
-  --color-subtle: #6b7280;
+  --color-subtle: #5b6170;
 
   /* Surfaces */
-  --color-bg: #faf5f4;
+  --color-bg: #f3e4da;
   --color-card: #ffffff;
   --color-tag-bg: #f0f0f2;
   --color-border: #e5e5ea;
@@ -71,9 +71,14 @@ body {
   background-repeat: repeat;
 }
 
+/* 夜の浜。サイト全体の地は砂の色にする（ヒーローの砂と同じ値） */
 @media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #2b3147;
+  }
+
   body {
-    background-color: #111114;
+    background-color: var(--color-bg);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
   }
 }
@@ -99,7 +104,7 @@ body {
 
 @media (prefers-color-scheme: dark) {
   .article-paper {
-    background-color: #1c1c22;
+    background-color: #1f2435;
     box-shadow: var(--shadow-clay-dark);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)' opacity='0.02'/%3E%3C/svg%3E");
   }
@@ -123,12 +128,12 @@ pre.mermaid {
 /* Prose-like styles for MDX content */
 .prose h1 {
   @apply text-3xl font-bold mb-6 pb-2 border-b border-border
-    dark:border-[#2a2a32];
+    dark:border-[#343c57];
 }
 
 .prose h2 {
   @apply text-2xl font-bold mt-12 mb-4 pb-2 border-b border-border
-    dark:border-[#2a2a32];
+    dark:border-[#343c57];
 }
 
 .prose h3 {
@@ -166,7 +171,7 @@ pre.mermaid {
 
 .prose blockquote {
   @apply my-4 pl-4 border-l-4 border-border text-subtle italic
-    dark:border-[#2a2a32] dark:text-[#9ca3af];
+    dark:border-[#343c57] dark:text-[#9ca3af];
 }
 
 .prose img {
@@ -179,20 +184,20 @@ pre.mermaid {
 
 .prose th,
 .prose td {
-  @apply border border-border px-3 py-2 text-left dark:border-[#2a2a32];
+  @apply border border-border px-3 py-2 text-left dark:border-[#343c57];
 }
 
 .prose th {
-  @apply bg-card font-semibold dark:bg-[#1c1c22];
+  @apply bg-card font-semibold dark:bg-[#1f2435];
 }
 
 .prose code:not(pre code) {
   @apply bg-tag-bg rounded px-1.5 py-0.5 text-sm font-mono text-charcoal
-    dark:bg-[#2a2a32] dark:text-[#9ca3af];
+    dark:bg-[#343c57] dark:text-[#9ca3af];
 }
 
 .prose hr {
-  @apply my-8 border-border dark:border-[#2a2a32];
+  @apply my-8 border-border dark:border-[#343c57];
 }
 
 .prose details {

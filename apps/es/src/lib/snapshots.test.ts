@@ -13,7 +13,7 @@ describe('whoCancelledSql', () => {
 
 describe('lessonFile', () => {
   it('教材のスクリプトを返し、無い名前はエラーにする', () => {
-    expect(Object.keys(lessonFile('fail-record.ts'))).toEqual(['fail-record.ts']);
+    expect(Object.keys(lessonFile('play-cancel.ts'))).toEqual(['play-cancel.ts']);
     expect(() => lessonFile('missing.ts')).toThrow('教材のスクリプトが見つかりません');
   });
 });

@@ -3,7 +3,7 @@ import type { PanelHost } from '../panel';
 type SlotHost = Pick<PanelHost, 'panel' | 'emit'>;
 
 const summaryPattern = /^pass (\d+) \/ fail (\d+)$/;
-const figureSelector = '[data-transaction-figure], [data-event-row-figure], [data-before-record-figure]';
+const figureSelector = '[data-before-record-figure]';
 
 const reportTests = (host: SlotHost, text: string): void => {
   const match = summaryPattern.exec(text.trim());

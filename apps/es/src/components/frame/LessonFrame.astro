@@ -95,7 +95,7 @@ const roleParts = meta.role.split('`');
   >
     <TopBar>
       <h1 class="lesson-bar__title">
-        {row.title}
+        <span class="lesson-bar__name">{row.title}</span>
         <span class="lesson-bar__count">{page.number}/{page.total}</span>
       </h1>
       <p class="lesson-bar__status">
@@ -115,6 +115,18 @@ const roleParts = meta.role.split('`');
       <details class="lesson-menu">
         <summary>ページ一覧</summary>
         <div class="lesson-menu__panel">
+          <div class="lesson-menu__extra">
+            <p class="lesson-menu__status">
+              <span>全体 <strong>{index + 1}/{pages.length}</strong></span>
+              <span>目安 {elapsed}ごろ</span>
+              <span>この章 {row.range}</span>
+            </p>
+            <p class="lesson-menu__links">
+              <a href="/">トップページへ</a>
+              <a href="/glossary/">用語</a>
+              <a href="/troubleshooting/">うまく動かないとき</a>
+            </p>
+          </div>
           <LessonPageList
             groups={groups}
             idPrefix="menu"

@@ -277,6 +277,7 @@ test.describe('まとめの2ページ目の、持ち帰る更新処理を書く�
       await page.setViewportSize(size);
       await saveBoth(page);
       await page.goto(summaryPath);
+      await page.getByRole('tab', { name: /チャット/ }).click();
       await expect(input(page)).toHaveValue(longQuestion);
       const measured = await fit(page);
       expect(measured.pageWidth).toBeLessThanOrEqual(measured.innerWidth);

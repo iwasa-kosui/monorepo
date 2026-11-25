@@ -149,7 +149,8 @@ export type RepoConfig = {
 
 export type EditorConfig = {
   readonly project: string;
-  readonly files: readonly string[];
+  readonly branch: string;
+  readonly snapshot: string;
   readonly active: string;
 };
 
@@ -205,7 +206,12 @@ export type StatusConfig = {
   readonly label: string;
   readonly elapsed: string;
   readonly start: string;
-  readonly counter?: { readonly label: string; readonly unit: string; readonly initial: number };
+  readonly counter?: {
+    readonly label: string;
+    readonly short?: string;
+    readonly unit: string;
+    readonly initial: number;
+  };
 };
 
 export type ChatButton = {

@@ -13,15 +13,43 @@ const existing = [
 ];
 const step1 = [
   '来院をキャンセルすると、来院キャンセルの記録が1行残る',
-  'キャンセルの記録に、キャンセル後の来院の状態が残る',
+  'キャンセルした人と理由を答えられる',
+  '同じ来院をもう一度キャンセルしても、前の記録は消えない',
   '記録に失敗したら、来院のキャンセルも失敗する',
 ];
-const step2 = ['キャンセルした人と理由を答えられる'];
+const step2 = [
+  '来院をキャンセルすると、来院キャンセルの記録が1行残る',
+  'キャンセルの記録に、キャンセル後の来院の状態が残る',
+  '記録に失敗したら、来院のキャンセルも失敗する',
+  'キャンセルした人と理由を答えられる',
+];
+const brokenByNewTable = '予約した来院をキャンセルすると、来院の状態がキャンセルになる';
+const missingTable = 'no such table: visit_cancellations';
 
-const snapshots = [
-  { dir: 'chapter-1-start', green: existing, red: [...step1, ...step2] },
-  { dir: 'chapter-2-step-1', green: [...existing, ...step1], red: step2 },
-  { dir: 'chapter-2-step-2', green: [...existing, ...step1, ...step2], red: [] },
+type Snapshot = {
+  dir: string;
+  green: string[];
+  red: string[];
+  answers: boolean;
+  scriptError?: string;
+};
+
+const snapshots: Snapshot[] = [
+  { dir: 'chapter-1-start', green: existing, red: step1, answers: false },
+  { dir: 'chapter-2-step-1', green: [...existing, ...step1], red: [], answers: true },
+  {
+    dir: 'chapter-2-step-2-start',
+    green: existing.filter((name) => name !== brokenByNewTable),
+    red: [brokenByNewTable, ...step2],
+    answers: false,
+    scriptError: missingTable,
+  },
+  { dir: 'chapter-2-step-2', green: [...existing, ...step2], red: [], answers: true },
+];
+
+const sameFiles = [
+  { base: 'chapter-1-start', others: ['chapter-2-step-1'] },
+  { base: 'chapter-2-step-2-start', others: ['chapter-2-step-2'] },
 ];
 
 const chapter4 = [
@@ -31,7 +59,6 @@ const chapter4 = [
     outputs: ['飼い主の都合', '来院前に回復したため', '院長'],
     existing: [
       ...existing,
-      ...step1,
       ...step2,
       'キャンセルすると、その診察日のキャンセル数が1増える',
       'キャンセル数の更新に失敗したら、来院のキャンセルも記録も残らない',
@@ -50,7 +77,6 @@ const chapter4 = [
     outputs: ['飼い主の都合', 'sent', 'failed', 'unconfirmed', '送信先に接続できません'],
     existing: [
       ...existing,
-      ...step1,
       ...step2,
       'キャンセルすると、予約リマインドの取消を送る',
       '送信に失敗しても、来院のキャンセルは取り消されない',
@@ -69,7 +95,6 @@ const chapter4 = [
     outputs: ['飼い主の都合', 'VisitCancelled', 'visit-3', 'completed'],
     existing: [
       ...existing,
-      ...step1,
       ...step2,
       'キャンセルすると、監査ログに変更前後の値と操作者が残る',
       '診察を終えると、監査ログに変更前後の値と操作者が残る',
@@ -135,20 +160,33 @@ const checkSharedFiles = (base: string, others: string[]): void => {
   }
 };
 
-for (const { dir, green, red } of snapshots) {
+const checkFailedScript = (dir: string, script: string, message: string): void => {
+  const result = runScript(dir, script);
+  if (result.status === 0 || !result.stderr.includes(message)) {
+    errors.push(`${dir}: ${script} は「${message}」で失敗するはずですが、終了コードは ${result.status} です`);
+  }
+};
+
+for (const { dir, green, red, answers, scriptError } of snapshots) {
   checkTests(dir, green, red);
+  if (scriptError !== undefined) {
+    checkFailedScript(dir, 'who-cancelled.ts', scriptError);
+    checkFailedScript(dir, 'show-visits.ts', scriptError);
+    continue;
+  }
   const who = runScript(dir, 'who-cancelled.ts');
   if (who.status !== 0) {
     errors.push(`${dir}: who-cancelled.ts の終了コードが 0 ではありません（${who.status}）`);
   }
-  if (dir === 'chapter-2-step-2') {
-    for (const text of ['受付スタッフ', '飼い主の都合', 'visit-tama']) {
-      if (!who.stdout.includes(text)) {
-        errors.push(`${dir}: who-cancelled.ts の出力に「${text}」がありません`);
-      }
+  if (!who.stdout.includes('visit-tama')) {
+    errors.push(`${dir}: who-cancelled.ts の出力に「visit-tama」がありません`);
+  }
+  for (const text of ['受付スタッフ', '飼い主の都合']) {
+    if (who.stdout.includes(text) !== answers) {
+      errors.push(
+        `${dir}: who-cancelled.ts の出力に「${text}」が${answers ? 'ありません' : '含まれています'}`,
+      );
     }
-  } else if (who.stdout.includes('受付スタッフ')) {
-    errors.push(`${dir}: who-cancelled.ts の出力に「受付スタッフ」が含まれています`);
   }
   const show = runScript(dir, 'show-visits.ts');
   if (show.status !== 0) {
@@ -164,8 +202,14 @@ for (const { dir, green, red } of snapshots) {
   }
 }
 
-const [base, ...others] = snapshots.map(({ dir }) => dir);
-checkSharedFiles(base, others);
+for (const { base, others } of sameFiles) {
+  checkSharedFiles(base, others);
+}
+
+const readVisits = (dir: string): string => readFileSync(join(exercisesDir, dir, 'visits.ts'), 'utf8');
+if (readVisits('chapter-2-step-2-start') !== readVisits('chapter-2-step-1')) {
+  errors.push('chapter-2-step-2-start/visits.ts: chapter-2-step-1 の解答と内容が違います');
+}
 
 for (const { pattern, script, outputs, existing: green, tests } of chapter4) {
   const start = `chapter-4-${pattern}-start`;

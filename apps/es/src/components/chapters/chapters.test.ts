@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+import { projectFilesOf } from '../../lib/snapshots';
 import { signalNames, type WorkspaceScenario } from '../../workspace/scenario';
 import { scenarioProblems } from '../../workspace/validate';
 import { incidentScenario } from '../intro/incident-scenario';
@@ -41,7 +42,7 @@ const textsOf = (scenario: WorkspaceScenario): string[] => [
       : tab.kind === 'pr'
       ? [tab.config.title, tab.config.owner, tab.config.name]
       : tab.kind === 'editor'
-      ? [tab.config.project, ...tab.config.files]
+      ? [tab.config.project, tab.config.branch, ...projectFilesOf(tab.config.snapshot)]
       : []
   ),
 ];
@@ -62,9 +63,8 @@ const ownQuestion =
 const wantRecord = '再発防止で、キャンセルしたときに記録を残すようにしたいです';
 const runTests = '先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです';
 const failedFour = '落ちた4件が、これから足すところです👍';
-const designMemo = '方針を設計メモにまとめました。ざっと読んでもらえると助かります';
-const checkRollback = '記録の書き込みに失敗したとき、来院の更新がどうなるか、一回試してみてください';
-const columnsMemo = '記録の列も設計メモに足しました';
+const decisionRecord = '方針を ADR にまとめました。ざっと読んでもらえると助かります';
+const tableRecord = '記録を1つのテーブルにまとめる案も ADR にしました';
 const prSeen = 'PR 見ました！差分、思ったより小さいですね';
 const prRemaining = '足したあとに残る作業も書いておきます';
 const thanks = 'わー、ありがとうございます！これで次からは答えられますね🙏';
@@ -155,7 +155,7 @@ const openedAt = (scenario: WorkspaceScenario): (number | undefined)[] =>
   scenario.timeline.flatMap((event) => (event.at !== undefined && event.kind === 'post' ? [event.at] : []));
 
 describe('第1章から第4章とまとめの筋書き', () => {
-  it('20 ページ分あり、章のページと同じ ID を持つ', () => {
+  it('19 ページ分あり、章のページと同じ ID を持つ', () => {
     expect(Object.keys(lessonScenarios)).toEqual([
       'chapter-1/01',
       'chapter-1/02',
@@ -164,7 +164,6 @@ describe('第1章から第4章とまとめの筋書き', () => {
       'chapter-2/03',
       'chapter-2/04',
       'chapter-2/05',
-      'chapter-2/06',
       'chapter-3/01',
       'chapter-3/02',
       'chapter-3/03',
@@ -178,7 +177,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
       'summary/01',
       'summary/02',
     ]);
-    expect(new Set(entries.map(([, scenario]) => scenario.id)).size).toBe(20);
+    expect(new Set(entries.map(([, scenario]) => scenario.id)).size).toBe(19);
   });
 
   it.each(entries)('%s は、検査に通り、時計の無い筋書きで、MDX のスロットと対応している', (id, scenario) => {
@@ -224,8 +223,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
 
   it('折りたたむのは、演習の 2 ページだけ', () => {
     expect(entries.filter(([, scenario]) => scenario.chat.collapsed === true).map(([id]) => id)).toEqual([
+      'chapter-2/02',
       'chapter-2/04',
-      'chapter-2/05',
     ]);
   });
 
@@ -238,9 +237,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
       wantRecord,
       runTests,
       failedFour,
-      designMemo,
-      checkRollback,
-      columnsMemo,
+      decisionRecord,
+      tableRecord,
       prSeen,
       prRemaining,
       thanks,
@@ -324,11 +322,10 @@ describe('第1章から第4章とまとめの筋書き', () => {
   });
 
   describe('第2章', () => {
-    it('1 から 3 ページ目は、それまでの投稿を履歴に持ち、テックリードが1件投稿する', () => {
+    it('ADR の 2 ページは、それまでの投稿を履歴に持ち、テックリードが1件投稿する', () => {
       const expected: [string, readonly (readonly [string, string])[], string][] = [
-        ['chapter-2/01', earlier, designMemo],
-        ['chapter-2/02', [...earlier, ['techlead', designMemo]], checkRollback],
-        ['chapter-2/03', [...earlier, ['techlead', designMemo], ['techlead', checkRollback]], columnsMemo],
+        ['chapter-2/01', earlier, decisionRecord],
+        ['chapter-2/03', [...earlier, ['techlead', decisionRecord]], tableRecord],
       ];
       for (const [id, history, post] of expected) {
         const scenario = lessonScenarios[id];
@@ -340,24 +337,25 @@ describe('第1章から第4章とまとめの筋書き', () => {
 
     it('タブの種類と名前', () => {
       expect(summary(lessonScenarios['chapter-2/01'] as WorkspaceScenario)).toEqual([
-        'memo:doc:設計メモ: 更新処理の中で記録する',
+        'memo:doc:ADR 1: 更新処理の中で記録する',
       ]);
       expect(summary(lessonScenarios['chapter-2/02'] as WorkspaceScenario)).toEqual([
-        'editor:editor:fail-record.ts — clinic-api',
-        'guide:doc:確認の手順: 記録に失敗したとき',
+        'editor:editor:visits.ts — clinic-api',
       ]);
-      expect(summary(lessonScenarios['chapter-2/03'] as WorkspaceScenario)).toEqual(['memo:doc:設計メモ: 記録の列']);
+      expect(summary(lessonScenarios['chapter-2/03'] as WorkspaceScenario)).toEqual([
+        'memo:doc:ADR 2: 記録を1つのテーブルにまとめる',
+      ]);
       expect(summary(lessonScenarios['chapter-2/04'] as WorkspaceScenario)).toEqual([
         'editor:editor:visits.ts — clinic-api',
       ]);
-      expect(summary(lessonScenarios['chapter-2/06'] as WorkspaceScenario)).toEqual([
+      expect(summary(lessonScenarios['chapter-2/05'] as WorkspaceScenario)).toEqual([
         'pr:pr:キャンセルの記録を足す',
       ]);
     });
 
-    it('演習の 2 ページは、導入の問い合わせを履歴に持ち、5 ページ目だけテスト成功の合図で礼を投稿する', () => {
-      const step1 = lessonScenarios['chapter-2/04'];
-      const step2 = lessonScenarios['chapter-2/05'];
+    it('演習の 2 ページは、導入の問い合わせを履歴に持ち、ステップ2だけテスト成功の合図で礼を投稿する', () => {
+      const step1 = lessonScenarios['chapter-2/02'];
+      const step2 = lessonScenarios['chapter-2/04'];
       if (step1 === undefined || step2 === undefined) throw new Error('筋書きがありません');
       expect(pairs(step1)).toEqual([['support', inquiry]]);
       expect(step1.timeline).toEqual([]);
@@ -369,8 +367,31 @@ describe('第1章から第4章とまとめの筋書き', () => {
       }]);
     });
 
-    it('6 ページ目は、プルリクエストの差分の設定を持つ', () => {
-      const scenario = lessonScenarios['chapter-2/06'];
+    it('演習のエディタは、ステップ1が開始コード、ステップ2がテーブルを作り直した後のコードを開く', () => {
+      const snapshots = ['chapter-2/02', 'chapter-2/04'].map((id) => {
+        const tab = lessonScenarios[id]?.tabs[0];
+        if (tab?.kind !== 'editor') throw new Error('エディタのタブがありません');
+        return [tab.config.snapshot, tab.config.active, projectFilesOf(tab.config.snapshot)];
+      });
+      const files = ['db.ts', 'show-visits.ts', 'visits.test.ts', 'visits.ts', 'who-cancelled.ts'];
+      expect(snapshots).toEqual([
+        ['chapter-1-start', 'visits.ts', files],
+        ['chapter-2-step-2-start', 'visits.ts', files],
+      ]);
+    });
+
+    it('業務イベントの語は、定義を読む 3 ページ目より前の画面の文に含まない', () => {
+      for (const id of ['chapter-2/01', 'chapter-2/02']) {
+        for (const text of textsOf(lessonScenarios[id] as WorkspaceScenario)) {
+          for (const word of ['業務イベント', 'business_events', 'target_']) {
+            expect(text, id).not.toContain(word);
+          }
+        }
+      }
+    });
+
+    it('5 ページ目は、プルリクエストの差分の設定を持つ', () => {
+      const scenario = lessonScenarios['chapter-2/05'];
       const tab = scenario?.tabs[0];
       if (tab?.kind !== 'pr') throw new Error('プルリクエストのタブがありません');
       expect(tab.config.diff).toEqual({
@@ -411,7 +432,7 @@ describe('第1章から第4章とまとめの筋書き', () => {
         kind: 'script',
         exercise: 'chapter-2-step-2',
         entry: 'who-cancelled.ts',
-        own: { exercise: 'chapter-1-start', file: 'visits.ts', testFile: 'visits.test.ts' },
+        own: { exercise: 'step-2', file: 'visits.ts', testFile: 'visits.test.ts' },
       });
       expect(console.config.target).toEqual({
         column: 'operated_by',
@@ -557,7 +578,8 @@ describe('第1章から第4章とまとめの筋書き', () => {
         expect(console.config.controls).toBe(true);
         const editor = scenario?.tabs.find((tab) => tab.kind === 'editor');
         if (editor?.kind !== 'editor') throw new Error('エディタのタブがありません');
-        expect(editor.config.files).toEqual(['db.ts', 'visits.test.ts', 'visits.ts', item.entry]);
+        expect(editor.config.snapshot).toBe(item.exercise);
+        expect(projectFilesOf(editor.config.snapshot)).toEqual(['db.ts', 'visits.test.ts', 'visits.ts', item.entry]);
       },
     );
 

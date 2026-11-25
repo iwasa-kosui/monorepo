@@ -3,35 +3,46 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const redirectPath = '/play/add-record/';
-const stepOnePath = '/chapters/chapter-2/4/';
-const stepTwoPath = '/chapters/chapter-2/5/';
-const storageKey = 'es:code:play-add-record';
-const chapterStartKey = 'es:code:chapter-1-start';
+const stepOnePath = '/chapters/chapter-2/2/';
+const stepTwoPath = '/chapters/chapter-2/4/';
+const stepOneKey = 'es:code:step-1';
+const stepTwoKey = 'es:code:step-2';
 const missing = '記録にありません';
-const pochiTest = 'キャンセルした人と理由を答えられる';
+const notRun = 'まだ実行していません';
+const askHints = '迷ったら、右の「ヒントと解答」を上から順に開きます。';
+const pressRun = '「ポチの来院をキャンセルする」を押します。';
 
 const exercise = (snapshot: string): string =>
   readFileSync(fileURLToPath(new URL(`../exercises/${snapshot}/visits.ts`, import.meta.url)), 'utf8');
 
-const cancelVisitOf = (snapshot: string): string => {
-  const lines = exercise(snapshot).split('\n');
-  const start = lines.findIndex((line) => line.startsWith('export const cancelVisit ='));
-  const end = lines.findIndex((line, index) => index > start && line === '};');
-  return lines.slice(start, end + 1).join('\n');
-};
-
-const blankValues = ['\'VisitCancelled\'', 'input.visitId', '\'Visit\'', 'JSON.stringify(cancelled)'];
+const stepOneBlanks = ['input.operatedBy', 'input.reason'];
+const stepTwoBlanks = [
+  '\'VisitCancelled\'',
+  'JSON.stringify({ reason: input.reason, operatedBy: input.operatedBy })',
+  '\'Visit\'',
+];
 
 const root = (page: Page): Locator => page.locator('[data-play="add-record"]');
+const editor = (page: Page): Locator => root(page).locator('.cm-content');
 const runButton = (page: Page): Locator => page.getByRole('button', { name: 'ポチの来院をキャンセルする' });
-const templateButton = (page: Page): Locator => page.getByRole('button', { name: /記録の雛形を/ });
+const templateButton = (page: Page): Locator => page.getByRole('button', { name: /記録の雛形を|用に書き換える/ });
 const testsButton = (page: Page): Locator => page.getByRole('button', { name: 'テストを実行する' });
+const resetButton = (page: Page): Locator => page.getByRole('button', { name: '最初のコードに戻す' });
+const restoreButton = (page: Page): Locator => page.getByRole('button', { name: '読み込む前のコードに戻す' });
 const visitStatus = (page: Page): Locator => page.locator('[data-role="visits-body"] td').nth(2);
 const eventRows = (page: Page): Locator => page.locator('[data-role="event-row"]');
+const eventValue = (page: Page, column: string): Locator =>
+  eventRows(page).first().locator('tr').filter({ has: page.locator('th', { hasText: new RegExp(`^${column}$`) }) })
+    .locator('td');
 const answer = (page: Page, key: string): Locator => page.locator(`[data-answer="${key}"] [data-role="answer-value"]`);
 const summary = (page: Page): Locator => page.locator('[data-role="summary"]');
+const failedTests = (page: Page): Locator => page.locator('[data-role="failed"] li');
 const next = (page: Page): Locator => page.locator('[data-role="next"]');
 const message = (page: Page): Locator => page.locator('[data-role="message"]');
+const hintSteps = (page: Page): Locator => page.locator('details.play-hint-step');
+
+const storedCode = (page: Page, key: string): Promise<string | null> =>
+  page.evaluate((name) => window.localStorage.getItem(name), key);
 
 const open = async (page: Page, path: string = stepOnePath): Promise<void> => {
   await page.goto(path);
@@ -41,18 +52,21 @@ const open = async (page: Page, path: string = stepOnePath): Promise<void> => {
 };
 
 const replaceCode = async (page: Page, code: string): Promise<void> => {
-  await page.locator('.cm-content').click();
+  await editor(page).click();
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.insertText(code);
 };
-
-const hintSteps = (page: Page): Locator => page.locator('details.play-hint-step');
 
 const openAnswer = async (page: Page): Promise<void> => {
   const answerStep = hintSteps(page).last();
   if (!(await answerStep.evaluate((element) => (element as HTMLDetailsElement).open))) {
     await answerStep.locator('summary').click();
   }
+};
+
+const loadAnswer = async (page: Page, step: 1 | 2): Promise<void> => {
+  await openAnswer(page);
+  await page.getByRole('button', { name: `ステップ${step}の完成コードを読み込む` }).click();
 };
 
 const expectOnlyOpen = async (page: Page, index: number): Promise<void> => {
@@ -68,67 +82,76 @@ const expectAllClosed = async (page: Page): Promise<void> => {
   }
 };
 
-const closeHint = (page: Page): Promise<void> =>
-  page.locator('details.play-hint-step[open] [data-role="hint-close"]').click();
-
 const openHintsInOrder = async (page: Page): Promise<void> => {
   await expectAllClosed(page);
   for (let index = 0; index < 4; index += 1) {
     await hintSteps(page).nth(index).locator('summary').click();
     await expectOnlyOpen(page, index);
     if (index < 3) {
-      await closeHint(page);
+      await page.locator('details.play-hint-step[open] [data-role="hint-close"]').click();
       await expectAllClosed(page);
       await expect(hintSteps(page).nth(index).locator('summary')).toBeFocused();
     }
   }
 };
 
-const openHintsStacked = async (page: Page): Promise<void> => {
-  await expectAllClosed(page);
-  for (let index = 0; index < 4; index += 1) {
-    await hintSteps(page).nth(index).locator('summary').click();
-    await expectOnlyOpen(page, index);
-  }
-};
-
-const loadStepOneAnswer = async (page: Page): Promise<void> => {
-  await openAnswer(page);
-  await page.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
-};
-
-const loadStepTwoAnswer = async (page: Page): Promise<void> => {
-  await openAnswer(page);
-  await page.getByRole('button', { name: 'ステップ2の完成コードを読み込む' }).click();
-};
-
-const fillBlanks = async (page: Page): Promise<void> => {
+const fillBlanks = async (page: Page, values: readonly string[]): Promise<void> => {
   await templateButton(page).click();
-  await expect(page.locator('.cm-content')).toContainText('/* event_name */');
-  for (const [index, value] of blankValues.entries()) {
-    await page.keyboard.type(value);
-    if (index < blankValues.length - 1) {
+  await expect(editor(page)).toBeFocused();
+  for (const [index, value] of values.entries()) {
+    await page.keyboard.insertText(value);
+    if (index < values.length - 1) {
       await page.keyboard.press('Tab');
     }
   }
 };
 
-const expectNoAnswers = async (page: Page): Promise<void> => {
-  for (const key of ['when', 'what', 'who', 'why']) {
-    await expect(answer(page, key)).toHaveText(missing);
+const expectAnswers = async (page: Page, keys: readonly string[], text: string): Promise<void> => {
+  for (const key of keys) {
+    await expect(answer(page, key)).toHaveText(text);
   }
 };
 
-const expectRecorded = async (page: Page): Promise<void> => {
+const isoTime = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/;
+
+const expectStepOneRecorded = async (page: Page): Promise<void> => {
   await expect(visitStatus(page)).toHaveText('cancelled');
   await expect(eventRows(page)).toHaveCount(1);
-  await expect(eventRows(page).locator('tr').filter({ hasText: 'event_name' }).locator('td')).toHaveText(
-    'VisitCancelled',
-  );
-  await expect(answer(page, 'when')).toHaveText(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/);
+  await expect(eventRows(page).first().locator('caption')).toHaveText('追加された行');
+  await expect(eventRows(page).first().locator('th')).toHaveText([
+    'id',
+    'visit_id',
+    'cancelled_at',
+    'operated_by',
+    'reason',
+  ]);
+  await expect(eventValue(page, 'visit_id')).toHaveText('visit-pochi');
+  await expect(page.locator('[data-role="events-caption"]')).toHaveText('0 行から 1 行に増えました。');
+  await expect(answer(page, 'who')).toHaveText('受付スタッフ');
+  await expect(answer(page, 'when')).toHaveText(isoTime);
+  await expect(answer(page, 'why')).toHaveText('飼い主の都合');
+  await expect(page.locator('[data-answer="what"]')).toHaveCount(0);
+};
+
+const expectStepTwoRecorded = async (page: Page): Promise<void> => {
+  await expect(visitStatus(page)).toHaveText('cancelled');
+  await expect(eventRows(page)).toHaveCount(1);
+  await expect(eventRows(page).first().locator('th')).toHaveText([
+    'event_id',
+    'event_at',
+    'event_name',
+    'payload',
+    'target_id',
+    'target_type',
+    'target_state',
+  ]);
+  await expect(eventValue(page, 'event_name')).toHaveText('VisitCancelled');
+  await expect(eventValue(page, 'target_type')).toHaveText('Visit');
+  await expect(eventValue(page, 'target_state')).toContainText('"status":"cancelled"');
+  await expect(answer(page, 'who')).toHaveText('受付スタッフ');
+  await expect(answer(page, 'when')).toHaveText(isoTime);
   await expect(answer(page, 'what')).toHaveText('VisitCancelled');
-  await expect(answer(page, 'who')).toHaveText(missing);
-  await expect(answer(page, 'why')).toHaveText(missing);
+  await expect(answer(page, 'why')).toHaveText('飼い主の都合');
 };
 
 type Fit = {
@@ -138,6 +161,8 @@ type Fit = {
   viewHeight: number;
   pageWidth: number;
   viewWidth: number;
+  ideHeight: number;
+  ideViewHeight: number;
   clipped: string[];
   below: string[];
 };
@@ -146,6 +171,7 @@ const measureFit = (page: Page): Promise<Fit> =>
   page.evaluate(() => {
     const columns = [...document.querySelectorAll<HTMLElement>('.play-col')];
     const body = document.querySelector('.chapter-body');
+    const ide = document.querySelector('.ide-work');
     return {
       bodyHeight: body?.scrollHeight ?? 0,
       bodyViewHeight: body?.clientHeight ?? 0,
@@ -153,6 +179,8 @@ const measureFit = (page: Page): Promise<Fit> =>
       viewHeight: window.innerHeight,
       pageWidth: document.documentElement.scrollWidth,
       viewWidth: window.innerWidth,
+      ideHeight: ide?.scrollHeight ?? 0,
+      ideViewHeight: ide?.clientHeight ?? 0,
       clipped: columns.filter((column) => column.scrollHeight > column.clientHeight + 1).map((column) =>
         column.getAttribute('aria-label') ?? ''
       ),
@@ -167,34 +195,22 @@ const expectFit = async (page: Page): Promise<void> => {
   expect(fit.pageHeight).toBeLessThanOrEqual(fit.viewHeight);
   expect(fit.bodyHeight).toBeLessThanOrEqual(fit.bodyViewHeight);
   expect(fit.pageWidth).toBeLessThanOrEqual(fit.viewWidth);
+  expect(fit.ideHeight).toBeLessThanOrEqual(fit.ideViewHeight + 1);
   expect(fit.clipped).toEqual([]);
   expect(fit.below).toEqual([]);
 };
 
-const expectWholeFunctionVisible = async (page: Page): Promise<void> => {
-  const editor = await page.evaluate(() => {
-    const scroller = document.querySelector<HTMLElement>('.cm-scroller');
-    const lines = [...(scroller?.querySelectorAll('.cm-line') ?? [])];
-    const last = lines[lines.length - 1];
-    return {
-      scrollTop: scroller?.scrollTop ?? -1,
-      scrollHeight: scroller?.scrollHeight ?? 0,
-      clientHeight: scroller?.clientHeight ?? 0,
-      scrollWidth: scroller?.scrollWidth ?? 0,
-      clientWidth: scroller?.clientWidth ?? 0,
-      lastText: last?.textContent ?? '',
-      lastBottom: last?.getBoundingClientRect().bottom ?? Infinity,
-      scrollerBottom: scroller?.getBoundingClientRect().bottom ?? 0,
-      viewHeight: window.innerHeight,
-    };
-  });
-  expect(editor.lastText).toBe('};');
-  expect(editor.scrollTop).toBe(0);
-  expect(editor.scrollHeight).toBeLessThanOrEqual(editor.clientHeight + 1);
-  expect(editor.scrollWidth).toBeLessThanOrEqual(editor.clientWidth + 1);
-  expect(editor.lastBottom).toBeLessThanOrEqual(editor.scrollerBottom + 1);
-  expect(editor.scrollerBottom).toBeLessThanOrEqual(editor.viewHeight);
-};
+const lineInView = (page: Page, text: string): Promise<boolean> =>
+  page.evaluate((needle) => {
+    const scroller = document.querySelector<HTMLElement>('[data-play] .cm-scroller');
+    const line = [...(scroller?.querySelectorAll('.cm-line') ?? [])].find((item) =>
+      (item.textContent ?? '').includes(needle)
+    );
+    if (scroller === null || line === undefined) return false;
+    const view = scroller.getBoundingClientRect();
+    const box = line.getBoundingClientRect();
+    return box.top >= view.top - 1 && box.bottom <= view.bottom + 1;
+  }, text);
 
 const runningAnimations = (page: Page): Promise<number> =>
   page.evaluate(() =>
@@ -203,75 +219,90 @@ const runningAnimations = (page: Page): Promise<number> =>
     ).length
   );
 
+const overflowing = (page: Page): Promise<number> =>
+  page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+
+const desktopSizes = [{ width: 1280, height: 640 }, { width: 1440, height: 790 }];
+
 test.describe('/play/add-record/ の転送', () => {
   test('第2章のステップ1のページへ転送する。noindex が付いている', async ({ page, request }) => {
     const html = await (await request.get(redirectPath)).text();
-    expect(html).toContain('<meta http-equiv="refresh" content="0; url=/chapters/chapter-2/4/">');
+    expect(html).toContain('<meta http-equiv="refresh" content="0; url=/chapters/chapter-2/2/">');
     expect(html).toContain('<meta name="robots" content="noindex">');
     await page.goto(redirectPath);
-    await expect(page).toHaveURL(/\/chapters\/chapter-2\/4\/$/);
+    await expect(page).toHaveURL(/\/chapters\/chapter-2\/2\/$/);
   });
 });
 
-test.describe('第2章の場面 ステップ1 /chapters/chapter-2/4/', () => {
+test.describe('第2章の場面 ステップ1 /chapters/chapter-2/2/', () => {
   test('h1 は章の見出しの 1 つだけで、場面の見出しは h2。前後の移動がある', async ({ page }) => {
     await open(page);
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page.getByRole('heading', { level: 2, name: 'この来院がキャンセルになっているのはなぜですか。' }))
       .toBeVisible();
-    await expect(page.locator('.play-step-label')).toHaveText('ステップ1: キャンセルを記録する');
+    await expect(page.locator('.play-step-label')).toHaveText('ステップ1: キャンセルの記録を1行足す');
     await expect(page.locator('nav[aria-label="ページの移動"]')).toBeVisible();
-    await expect(page.getByRole('link', { name: /次へ/ })).toHaveAttribute('href', '/chapters/chapter-2/5/');
+    await expect(page.getByRole('link', { name: /前へ/ })).toHaveAttribute('href', '/chapters/chapter-2/');
+    await expect(page.getByRole('link', { name: /次へ/ })).toHaveAttribute('href', '/chapters/chapter-2/3/');
   });
 
   test('手元の Node の案内は、開いても画面の配置を押し広げない', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 640 });
     await open(page);
-    const columns = page.locator('.play-columns');
-    const before = await columns.boundingBox();
+    const work = page.locator('.play-work');
+    const before = await work.boundingBox();
     await page.getByText('手元の Node で動かすとき').click();
     await expect(page.locator('.play-node-body')).toContainText('node --test visits.test.ts');
-    await expect(page.locator('.play-node-body')).toContainText('pass 7');
-    expect(await columns.boundingBox()).toEqual(before);
+    await expect(page.locator('.play-node-body')).toContainText('pass 8');
+    expect(await work.boundingBox()).toEqual(before);
     await expectFit(page);
   });
 
-  for (const size of [{ width: 1280, height: 640 }, { width: 1440, height: 790 }]) {
-    test(`${size.width}x${size.height} で、実行の前も後も答えが埋まった後も、ページ全体にスクロールが出ない`, async ({ page }) => {
+  for (const size of desktopSizes) {
+    test(`${size.width}x${size.height} で、実行の前も後も答えが埋まった後も、画面に収まる`, async ({ page }) => {
       await page.setViewportSize(size);
       await open(page);
       await expect(page.getByRole('heading', { name: 'この来院がキャンセルになっているのはなぜですか。' }))
         .toBeVisible();
       await expect(page.locator('nav[aria-label="ページの移動"]')).toBeVisible();
-      await expectWholeFunctionVisible(page);
+      await expect.poll(() => lineInView(page, 'export const cancelVisit')).toBe(true);
       await expectFit(page);
 
       await runButton(page).click();
       await expect(visitStatus(page)).toHaveText('cancelled');
       await expectFit(page);
 
-      await fillBlanks(page);
+      await testsButton(page).click();
+      await expect(summary(page)).toHaveText('pass 4 / fail 4');
+      await expectFit(page);
+
+      await fillBlanks(page, stepOneBlanks);
       await expectFit(page);
       await runButton(page).click();
-      await expect(answer(page, 'what')).toHaveText('VisitCancelled');
+      await expectStepOneRecorded(page);
       await expectFit(page);
 
       await testsButton(page).click();
-      await expect(summary(page)).toHaveText('pass 7 / fail 1');
+      await expect(summary(page)).toHaveText('pass 8 / fail 0');
       await expectFit(page);
     });
   }
 
-  test('実行の前は reserved で business_events が空。画面を開いただけでは動かない', async ({ page }) => {
+  test('実行の前は reserved で visit_cancellations が空。画面を開いただけでは動かない', async ({ page }) => {
     await open(page);
     await expect(page.locator('[data-role="visits-badge"]')).toHaveText('実行前');
+    await expect(page.locator('#events-title')).toHaveText('visit_cancellations');
     await expect(page.locator('[data-role="events-empty"]')).toBeVisible();
-    await expect(hintSteps(page)).toHaveCount(4);
-    await expect(page.locator('details.play-hint-step[open]')).toHaveCount(0);
+    await expect(page.locator('[data-answer]')).toHaveCount(3);
+    await expectAnswers(page, ['who', 'when', 'why'], notRun);
+    await expectAllClosed(page);
+    await expect(next(page)).toHaveText(
+      `${pressRun}いまのコードで、visits と visit_cancellations がどう変わるかを見ます。`,
+    );
     expect(await runningAnimations(page)).toBe(0);
   });
 
-  test('段階1: 何も編集せずに実行すると、visits は cancelled になり、business_events は 0 行のまま', async ({ page }) => {
+  test('段階1: 何も編集せずに実行すると、visits は cancelled になり、visit_cancellations は 0 行のまま', async ({ page }) => {
     await open(page);
     await runButton(page).click();
     await expect(visitStatus(page)).toHaveText('cancelled');
@@ -282,212 +313,206 @@ test.describe('第2章の場面 ステップ1 /chapters/chapter-2/4/', () => {
     await expect(eventRows(page)).toHaveCount(0);
     await expect(page.locator('[data-role="events-empty"]')).toHaveText('行がありません');
     await expect(page.locator('[data-role="events-caption"]')).toHaveText('0 行のままです。行は増えていません。');
-    await expectNoAnswers(page);
-    await expect(next(page)).toContainText('「記録の雛形を UPDATE の次の行に入れる」を押します。');
+    await expectAnswers(page, ['who', 'when', 'why'], missing);
+    await expect(next(page)).toHaveText(
+      'visits の status は変わりましたが、visit_cancellations は増えていません。'
+        + '「記録の雛形を UPDATE の次の行に入れる」を押します。',
+    );
   });
 
-  test('段階2から4: 雛形の空欄をキーボードで埋めて実行し、テストは pass 7 / fail 1 になる', async ({ page }) => {
+  test('段階2から4: 雛形の空欄をキーボードで埋めて実行し、テストは pass 8 / fail 0 になる', async ({ page }) => {
     await open(page);
-    await runButton(page).click();
-    await expect(visitStatus(page)).toHaveText('cancelled');
-
     await templateButton(page).click();
-    await expect(page.locator('.cm-content')).toContainText('/* event_name */');
-    await expect(next(page)).toContainText('雛形の 4 つの空欄を書き換えます。');
-    await expect(next(page)).toContainText('Tab キーで次の空欄に移れます。');
-    await expect(next(page)).toContainText('値に迷ったら、右の「ヒントと解答」を上から順に開きます。');
-    await expect(next(page)).toContainText('終わったら「ポチの来院をキャンセルする」を押します。');
+    await expect(editor(page)).toContainText(
+      'INSERT INTO visit_cancellations (visit_id, cancelled_at, operated_by, reason)',
+    );
+    await expect(editor(page)).toContainText('/* 誰が */');
+    await expect(editor(page)).toContainText('/* なぜ */');
+    await expect.poll(() => lineInView(page, '/* 誰が */')).toBe(true);
+    await expect(next(page)).toHaveText(
+      '雛形の 2 つの空欄を書き換え、input の型に reason と operatedBy を足します。'
+        + `Tab キーで次の空欄に移れます。${askHints}終わったら${pressRun}`,
+    );
     await expect(templateButton(page)).toBeDisabled();
 
-    for (const [index, value] of blankValues.entries()) {
-      await page.keyboard.type(value);
-      if (index < blankValues.length - 1) {
-        await page.keyboard.press('Tab');
-      }
-    }
-    await expect(page.locator('.cm-content')).not.toContainText('/* ');
-    await hintSteps(page).nth(1).locator('summary').click();
-    await expect(hintSteps(page).nth(1)).toContainText(
-      '更新の後に置くのは、変化後の状態を target_state に入れるためです。',
-    );
-    await closeHint(page);
-    await hintSteps(page).nth(2).locator('summary').click();
-    await expect(hintSteps(page).nth(2).locator('tbody td')).toHaveText([
-      '/* event_name */',
-      '\'VisitCancelled\'',
-      '/* target_id */',
-      'input.visitId',
-      '/* target_type */',
-      '\'Visit\'',
-      '/* target_state */',
-      'JSON.stringify(cancelled)',
-    ]);
-    await closeHint(page);
+    await page.keyboard.insertText(stepOneBlanks[0] ?? '');
+    await page.keyboard.press('Tab');
+    await page.keyboard.insertText(stepOneBlanks[1] ?? '');
+    await expect(editor(page)).not.toContainText('/* ');
 
     await runButton(page).click();
-    await expectRecorded(page);
-    await expect(page.locator('[data-role="events-caption"]')).toHaveText('0 行から 1 行に増えました。');
-    await expect(page.locator('[data-role="events-badge"]')).toHaveText('実行後');
-    await expect(next(page)).toContainText('答えの欄の「いつ」「何を」が埋まりました。');
+    await expectStepOneRecorded(page);
+    await expect(next(page)).toHaveText(
+      'visit_cancellations に 1 行増えました。答えの欄の「誰が」「いつ」「なぜ」が埋まりました。'
+        + '「テストを実行する」を押します。',
+    );
 
     await testsButton(page).click();
-    await expect(summary(page)).toHaveText('pass 7 / fail 1');
-    await expect(page.locator('[data-role="failed"] li')).toHaveCount(1);
-    await expect(page.locator('[data-role="failed"] li')).toContainText(pochiTest);
-    await expect(next(page)).toContainText(`残りの 1 件は「${pochiTest}」です。`);
-    await expect(next(page)).toContainText('答えの欄の「誰が」「なぜ」が「記録にありません」なのと対応しています。');
-    await expect(next(page)).toContainText('次のページのステップ2で、「誰が」「なぜ」を記録します。');
+    await expect(summary(page)).toHaveText('pass 8 / fail 0');
+    await expect(failedTests(page)).toHaveCount(0);
+    await expect(next(page)).toHaveText('すべてのテストが成功しました。次のページへ進みます。');
   });
 
-  test('最初のコードのままテストを実行すると、pass 4 / fail 4 になる', async ({ page }) => {
+  test('空欄を埋めて input の型も直したコードは、ステップ1の解答のファイルと同じになる', async ({ page }) => {
+    await open(page);
+    await fillBlanks(page, stepOneBlanks);
+    const typed = JSON.parse((await storedCode(page, stepOneKey)) ?? '{}') as Record<string, string>;
+    expect(
+      typed['visits.ts']?.replace(
+        'export const cancelVisit = (db: DatabaseSync, input: { visitId: string }): void => {',
+        'export const cancelVisit = (db: DatabaseSync, input: { visitId: string; reason: string; operatedBy: string }): void => {',
+      ),
+    ).toBe(exercise('chapter-2-step-1'));
+  });
+
+  test('最初のコードのままテストを実行すると、pass 4 / fail 4 になり、失敗したテストの名前が出る', async ({ page }) => {
     await open(page);
     await testsButton(page).click();
     await expect(summary(page)).toHaveText('pass 4 / fail 4');
-    await expect(page.locator('[data-role="failed"] li')).toHaveCount(4);
+    await expect(failedTests(page)).toHaveCount(4);
+    await expect(failedTests(page).first()).toContainText(
+      '第2章 ステップ1 > 来院をキャンセルすると、来院キャンセルの記録が1行残る',
+    );
+    await expect(failedTests(page).first()).toContainText('来院キャンセルの記録がありません');
+    await expect(next(page)).toHaveText(
+      'テストの結果に、失敗したテストの名前を出しています。「記録の雛形を UPDATE の次の行に入れる」を押します。',
+    );
   });
 
-  test('完成コードの読み込み: 実行すると business_events が 1 行増え、最初のコードに戻すと実行前の表示に戻る', async ({ page }) => {
+  test('完成コードの読み込み: 実行すると visit_cancellations が 1 行増え、最初のコードに戻すと実行前の表示に戻る', async ({ page }) => {
     await open(page);
-    await loadStepOneAnswer(page);
-    await expect(page.locator('.cm-content')).toContainText('VisitCancelled');
+    await loadAnswer(page, 1);
+    await expectAllClosed(page);
+    await expect(editor(page)).toContainText('input.operatedBy');
+    await expect(next(page)).toHaveText(`ステップ1の完成コードを読み込みました。${pressRun}`);
     await expect(templateButton(page)).toBeDisabled();
     await runButton(page).click();
-    await expectRecorded(page);
+    await expectStepOneRecorded(page);
     await testsButton(page).click();
-    await expect(summary(page)).toHaveText('pass 7 / fail 1');
+    await expect(summary(page)).toHaveText('pass 8 / fail 0');
 
-    await page.getByRole('button', { name: '最初のコードに戻す' }).click();
-    await expect(page.locator('.cm-content')).not.toContainText('VisitCancelled');
+    await resetButton(page).click();
+    await expect(editor(page)).not.toContainText('visit_cancellations');
     await expect(templateButton(page)).toBeEnabled();
     await expect(visitStatus(page)).toHaveText('reserved');
     await expect(page.locator('[data-role="visits-badge"]')).toHaveText('実行前');
     await expect(eventRows(page)).toHaveCount(0);
-    await expect(summary(page)).toHaveText('まだ実行していません');
-    await expect(page.locator('[data-role="failed"] li')).toHaveCount(0);
-    for (const key of ['when', 'what', 'who', 'why']) {
-      await expect(answer(page, key)).toHaveText('まだ実行していません');
-    }
+    await expect(summary(page)).toHaveText(notRun);
+    await expect(failedTests(page)).toHaveCount(0);
+    await expectAnswers(page, ['who', 'when', 'why'], notRun);
     expect(await runningAnimations(page)).toBe(0);
-
-    await runButton(page).click();
-    await expect(visitStatus(page)).toHaveText('cancelled');
-    await expect(eventRows(page)).toHaveCount(0);
-    await expectNoAnswers(page);
   });
 
-  test('構文エラーでは実際のエラーの文を同じ場所に出し、直せばもう一度実行できる', async ({ page }) => {
+  test('読み込む完成コードは、ステップ1の解答のファイルと同じ', async ({ page }) => {
     await open(page);
-    await replaceCode(page, 'export const cancelVisit = (db, input => {');
+    await loadAnswer(page, 1);
+    await expect.poll(() => storedCode(page, stepOneKey)).toBe(
+      JSON.stringify({ 'visits.ts': exercise('chapter-2-step-1') }),
+    );
+  });
+
+  test('空欄を残したまま実行すると、エラーの文を出して、前回の実行結果を消す。直せばもう一度実行できる', async ({ page }) => {
+    await open(page);
+    await runButton(page).click();
+    await expect(visitStatus(page)).toHaveText('cancelled');
+
+    await templateButton(page).click();
     await runButton(page).click();
     await expect(message(page).getByRole('alert')).toContainText('コードを最後まで実行できませんでした');
     await expect(message(page).getByRole('alert')).toContainText('SyntaxError');
     await expect(visitStatus(page)).toHaveText('reserved');
+    await expect(page.locator('[data-role="visits-badge"]')).toHaveText('実行前');
+    await expectAnswers(page, ['who', 'when', 'why'], notRun);
     await expect(runButton(page)).toBeEnabled();
 
-    await replaceCode(page, 'export const cancelVisit = (db, input) => { throw new Error(\'わざと失敗\'); };');
+    await replaceCode(page, exercise('chapter-2-step-1'));
     await runButton(page).click();
-    await expect(message(page).getByRole('alert')).toContainText('cancelVisit がエラーを出しました');
-    await expect(message(page).getByRole('alert')).toContainText('わざと失敗');
-    await expect(visitStatus(page)).toHaveText('reserved');
-    await expect(runButton(page)).toBeEnabled();
-
-    await page.getByRole('button', { name: '最初のコードに戻す' }).click();
     await expect(message(page)).toBeHidden();
-    await runButton(page).click();
-    await expect(visitStatus(page)).toHaveText('cancelled');
-    await expect(message(page)).toBeHidden();
-  });
-
-  test('編集したコードは保存され、ページを開き直しても残る。最初のコードに戻すと保存も消える', async ({ page }) => {
-    await open(page);
-    await loadStepOneAnswer(page);
-    await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), storageKey)).toContain(
-      'VisitCancelled',
-    );
-    await open(page);
-    await expect(page.locator('.cm-content')).toContainText('VisitCancelled');
-    await page.getByRole('button', { name: '最初のコードに戻す' }).click();
-    await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), storageKey)).toBeNull();
-  });
-
-  test('読み込む完成コードは、ステップ1の実ファイルの cancelVisit と同じ', async ({ page }) => {
-    await open(page);
-    await loadStepOneAnswer(page);
-    await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), storageKey)).toBe(
-      JSON.stringify({ cancelVisit: cancelVisitOf('chapter-2-step-1') }),
-    );
-  });
-
-  test('空欄を残したままページを開き直しても、visits の最初の行が表示される', async ({ page }) => {
-    await open(page);
-    await templateButton(page).click();
-    await expect(page.locator('.cm-content')).toContainText('/* event_name */');
-    await expect.poll(() => page.evaluate((key) => window.localStorage.getItem(key), storageKey)).toContain(
-      '/* event_name */',
-    );
-    await open(page);
-    await page.getByRole('button', { name: '最初のコードに戻す' }).click();
-    await expect(visitStatus(page)).toHaveText('reserved');
-  });
-
-  test('一度実行した後に構文エラーになると、前回の実行結果を消す', async ({ page }) => {
-    await open(page);
-    await runButton(page).click();
-    await expect(visitStatus(page)).toHaveText('cancelled');
-    await templateButton(page).click();
-    await expect(page.locator('.cm-content')).toContainText('/* event_name */');
-    await runButton(page).click();
-    await expect(message(page).getByRole('alert')).toContainText('コードを最後まで実行できませんでした');
-    await expect(visitStatus(page)).toHaveText('reserved');
-    await expect(page.locator('[data-role="visits-badge"]')).not.toHaveText('実行後');
-    await expect(page.locator('[data-role="visits-caption"]')).not.toHaveText(
-      'status が reserved から cancelled に変わりました。',
-    );
-    await expect(answer(page, 'who')).toHaveText('まだ実行していません');
-  });
-
-  test('キャンセルを押さずにテストを実行すると、キャンセルを押すよう案内する', async ({ page }) => {
-    await open(page);
-    await loadStepOneAnswer(page);
-    await testsButton(page).click();
-    await expect(summary(page)).toHaveText('pass 7 / fail 1');
-    await expect(next(page)).toContainText('「ポチの来院をキャンセルする」を押して');
-    await expect(next(page)).not.toContainText(missing);
-
-    await runButton(page).click();
-    await expect(visitStatus(page)).toHaveText('cancelled');
-    await testsButton(page).click();
-    await expect(next(page)).toContainText(missing);
-  });
-
-  test('status も business_events も変わらなければ、その通りに案内する', async ({ page }) => {
-    await open(page);
-    await replaceCode(page, 'export const cancelVisit = (db, input) => {};');
-    await runButton(page).click();
-    await expect(visitStatus(page)).toHaveText('reserved');
-    await expect(next(page)).toContainText('visits の status も business_events も変わっていません。');
+    await expectStepOneRecorded(page);
   });
 
   test('記録の INSERT が失敗すると、status が reserved のままであることを案内する', async ({ page }) => {
     await open(page);
-    await templateButton(page).click();
-    await expect(page.locator('.cm-content')).toContainText('/* event_name */');
-    await page.keyboard.type('null');
-    for (const value of blankValues.slice(1)) {
-      await page.keyboard.press('Tab');
-      await page.keyboard.type(value);
-    }
+    await replaceCode(page, exercise('chapter-2-step-1').replace('operated_by, reason)', 'operated_by, reaso)'));
     await runButton(page).click();
     await expect(message(page).getByRole('alert')).toContainText('cancelVisit がエラーを出しました');
+    await expect(message(page).getByRole('alert')).toContainText(
+      'table visit_cancellations has no column named reaso',
+    );
     await expect(visitStatus(page)).toHaveText('reserved');
-    await expect(next(page)).toContainText('visits の status は reserved のままです。');
-    await expect(next(page)).toContainText('記録を書き込めないときは、UPDATE も一緒に取り消されます。');
+    await expect(page.locator('[data-role="visits-caption"]')).toHaveText('status は reserved のままです。');
+    await expect(next(page)).toHaveText(
+      'visits の status は reserved のままです。記録を書き込めないときは、UPDATE も一緒に取り消されます。'
+        + 'エラーの文を読んでコードを直し、もう一度押します。',
+    );
+  });
+
+  test('誰がとなぜを取り違えると、答えの欄に取り違えた値が出て、テストが失敗する', async ({ page }) => {
+    await open(page);
+    await fillBlanks(page, [...stepOneBlanks].reverse());
+    await runButton(page).click();
+    await expect(answer(page, 'who')).toHaveText('飼い主の都合');
+    await expect(answer(page, 'why')).toHaveText('受付スタッフ');
+    await testsButton(page).click();
+    await expect(summary(page)).toHaveText('pass 6 / fail 2');
+    await expect(failedTests(page).first()).toContainText('キャンセルした人を答えられません');
+    await expect(next(page)).toHaveText(
+      'テストの結果に、失敗したテストの名前を出しています。コードを直して、もう一度押せます。',
+    );
+  });
+
+  test('編集したコードは保存され、ページを開き直しても残る。最初のコードに戻すと保存も消える', async ({ page }) => {
+    await open(page);
+    await loadAnswer(page, 1);
+    await expect.poll(() => storedCode(page, stepOneKey)).toContain('visit_cancellations');
+    await open(page);
+    await expect(editor(page)).toContainText('input.operatedBy');
+    await expect(next(page)).toHaveText(pressRun);
+    await resetButton(page).click();
+    await expect.poll(() => storedCode(page, stepOneKey)).toBeNull();
+  });
+
+  test('空欄を残したままページを開き直すと、空欄を埋めるよう案内する', async ({ page }) => {
+    await open(page);
+    await templateButton(page).click();
+    await expect.poll(() => storedCode(page, stepOneKey)).toContain('/* 誰が */');
+    await open(page);
+    await expect(editor(page)).toContainText('/* 誰が */');
+    await expect(visitStatus(page)).toHaveText('reserved');
+    await expect(next(page)).toHaveText(
+      `雛形の 2 つの空欄を書き換え、input の型に reason と operatedBy を足します。${askHints}終わったら${pressRun}`,
+    );
+    await expect(templateButton(page)).toBeDisabled();
+  });
+
+  test('「読み込む前のコードに戻す」は、編集したコードを読み込みや初期化で置き換えた直後だけ出る', async ({ page }) => {
+    await open(page);
+    await expect(restoreButton(page)).toBeHidden();
+    await loadAnswer(page, 1);
+    await expect(restoreButton(page)).toBeHidden();
+
+    await editor(page).click();
+    await page.keyboard.press('ControlOrMeta+Home');
+    await page.keyboard.insertText('// 自分のメモ\n');
+    await resetButton(page).click();
+    await expect(restoreButton(page)).toBeVisible();
+    await expect(editor(page)).not.toContainText('// 自分のメモ');
+
+    await restoreButton(page).click();
+    await expect(restoreButton(page)).toBeHidden();
+    await expect(editor(page)).toContainText('// 自分のメモ');
+
+    await loadAnswer(page, 1);
+    await expect(restoreButton(page)).toBeVisible();
+    await editor(page).click();
+    await page.keyboard.insertText(' ');
+    await expect(restoreButton(page)).toBeHidden();
   });
 
   test('動きはボタンを押したときだけで、1 秒以内に終わる', async ({ page }) => {
     await open(page);
     expect(await runningAnimations(page)).toBe(0);
-    await loadStepOneAnswer(page);
+    await loadAnswer(page, 1);
     expect(await runningAnimations(page)).toBe(0);
     await runButton(page).click();
     await expect(visitStatus(page)).toHaveText('cancelled');
@@ -524,19 +549,19 @@ test.describe('第2章の場面 ステップ1 /chapters/chapter-2/4/', () => {
   test('prefers-reduced-motion: reduce では動きが無く、値は同じように読める', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await open(page);
-    await loadStepOneAnswer(page);
+    await loadAnswer(page, 1);
     await runButton(page).click();
-    await expectRecorded(page);
+    await expectStepOneRecorded(page);
     expect(await runningAnimations(page)).toBe(0);
     const names = await page.evaluate(() => {
-      const names = (selector: string, pseudo?: string): string =>
+      const nameOf = (selector: string, pseudo?: string): string =>
         getComputedStyle(document.querySelector(selector) as Element, pseudo).animationName;
       return [
-        names('[data-changed]'),
-        names('[data-changed]', '::before'),
-        names('[data-changed] .play-new-value'),
-        names('[data-role="event-row"]'),
-        names('[data-answer="when"] [data-role="answer-value"]'),
+        nameOf('[data-changed]'),
+        nameOf('[data-changed]', '::before'),
+        nameOf('[data-changed] .play-new-value'),
+        nameOf('[data-role="event-row"]'),
+        nameOf('[data-answer="when"] [data-role="answer-value"]'),
       ];
     });
     expect(names).toEqual(['none', 'none', 'none', 'none', 'none']);
@@ -544,22 +569,13 @@ test.describe('第2章の場面 ステップ1 /chapters/chapter-2/4/', () => {
     await expect(eventRows(page).first()).toHaveCSS('opacity', '1');
   });
 
-  test('prefers-reduced-motion: reduce で business_events が増えない場合も動かない', async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await open(page);
-    await runButton(page).click();
-    await expect(visitStatus(page)).toHaveText('cancelled');
-    expect(await runningAnimations(page)).toBe(0);
-    await expectNoAnswers(page);
-  });
-
   for (const width of [360, 390]) {
-    test(`${width} 幅では縦に並び、横にはみ出さない`, async ({ page }) => {
+    test(`${width} 幅では縦に並び、問い合わせの見出しから始まり、横にはみ出さない`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
       await open(page);
-      const overflowing = (): Promise<number> =>
-        page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-      expect(await overflowing()).toBeLessThanOrEqual(0);
+      expect(await overflowing(page)).toBeLessThanOrEqual(0);
+      await expect(page.getByRole('heading', { name: 'この来院がキャンセルになっているのはなぜですか。' }))
+        .toBeInViewport();
       const lefts = await page.evaluate(() =>
         [...document.querySelectorAll('.play-col')].map((column) => Math.round(column.getBoundingClientRect().left))
       );
@@ -567,65 +583,21 @@ test.describe('第2章の場面 ステップ1 /chapters/chapter-2/4/', () => {
 
       await runButton(page).click();
       await expect(visitStatus(page)).toHaveText('cancelled');
-      expect(await overflowing()).toBeLessThanOrEqual(0);
+      expect(await overflowing(page)).toBeLessThanOrEqual(0);
 
-      await loadStepOneAnswer(page);
+      await loadAnswer(page, 1);
       await runButton(page).click();
-      await expectRecorded(page);
-      expect(await overflowing()).toBeLessThanOrEqual(0);
+      await expectStepOneRecorded(page);
+      expect(await overflowing(page)).toBeLessThanOrEqual(0);
 
       await testsButton(page).click();
-      await expect(summary(page)).toHaveText('pass 7 / fail 1');
-      expect(await overflowing()).toBeLessThanOrEqual(0);
+      await expect(summary(page)).toHaveText('pass 8 / fail 0');
+      expect(await overflowing(page)).toBeLessThanOrEqual(0);
     });
   }
 
-  test('ヒントは最初すべて閉じていて、1つずつ開いて閉じる。解答の完成コードでテストは pass 7 / fail 1 になる', async ({ page }) => {
+  test('ヒントは最初すべて閉じていて、1つずつ開いて閉じる。解答の完成コードでテストは pass 8 / fail 0 になる', async ({ page }) => {
     await open(page);
-    await expect(page.getByRole('button', { name: 'ステップ1の完成コードを読み込む' })).toBeHidden();
-    await openHintsInOrder(page);
-    await expect(page.getByRole('button', { name: 'ステップ1の完成コードを読み込む' })).toBeVisible();
-    await page.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
-    await expect(page.locator('.cm-content')).toContainText('VisitCancelled');
-    await expectAllClosed(page);
-    await testsButton(page).click();
-    await expect(summary(page)).toHaveText('pass 7 / fail 1');
-  });
-});
-
-const stepTwoCode = (): string =>
-  cancelVisitOf('chapter-2-step-1')
-    .replace('input: { visitId: string }', 'input: { visitId: string; reason: string; operatedBy: string }')
-    .replace('JSON.stringify({})', 'JSON.stringify({ reason: input.reason, operatedBy: input.operatedBy })');
-
-const loadStepOne = (page: Page): Promise<void> =>
-  page.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
-
-const restoreButton = (page: Page): Locator => page.getByRole('button', { name: '読み込む前のコードに戻す' });
-
-const storedCode = (page: Page, key: string): Promise<string | null> =>
-  page.evaluate((name) => window.localStorage.getItem(name), key);
-
-const ownStepTwoCode = (): string => stepTwoCode().replace('operatedBy: input.operatedBy', 'operatedBy: \'手元\'');
-
-const editStepTwo = async (page: Page, code: string = stepTwoCode()): Promise<string | null> => {
-  await replaceCode(page, code);
-  await expect.poll(() => storedCode(page, storageKey)).toContain('operatedBy');
-  return storedCode(page, storageKey);
-};
-
-const expectNoHorizontalScroll = async (page: Page): Promise<void> => {
-  const fit = await measureFit(page);
-  expect(fit.pageWidth).toBeLessThanOrEqual(fit.viewWidth);
-};
-
-test.describe('第2章の場面 ステップ2 /chapters/chapter-2/5/', () => {
-  test('h1 は 1 つだけ。ステップのラベルと「ヒントと解答」を出し、雛形のボタンと空欄の表は出さない', async ({ page }) => {
-    await open(page, stepTwoPath);
-    await expect(page.locator('h1')).toHaveCount(1);
-    await expect(page.locator('.play-step-label')).toHaveText('ステップ2: 理由と操作した人を記録する');
-    await expect(page.getByRole('heading', { name: 'ヒントと解答' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'ステップ2で変える2か所' })).toHaveCount(0);
     const panel = page.locator('section[aria-labelledby="hints-title"]');
     await expect(panel).toContainText('上から順に開きます。');
     await expect(hintSteps(page).locator('summary')).toHaveText([
@@ -634,269 +606,257 @@ test.describe('第2章の場面 ステップ2 /chapters/chapter-2/5/', () => {
       'ヒント3 入れる値',
       '解答',
     ]);
+    await expect(page.getByRole('button', { name: 'ステップ1の完成コードを読み込む' })).toBeHidden();
     await hintSteps(page).nth(2).locator('summary').click();
+    await expect(hintSteps(page).nth(2).locator('tbody tr')).toHaveText([
+      /\/\* 誰が \*\/\s*input\.operatedBy/,
+      /\/\* なぜ \*\/\s*input\.reason/,
+    ]);
     await expect(hintSteps(page).nth(2)).toContainText(
       'input の型に reason: string と operatedBy: string を足します。',
     );
-    await expect(hintSteps(page).nth(2)).toContainText(
-      'payload の JSON.stringify({}) を、reason と operatedBy を持つオブジェクトに変えます。キーの名前はこのとおりにします。テストと第3章の SELECT は $.reason と $.operatedBy を読みます。',
-    );
-    await expect(templateButton(page)).toHaveCount(0);
-    await expect(page.locator('[data-role="blanks"]')).toHaveCount(0);
+    await hintSteps(page).nth(2).locator('summary').click();
+    await openHintsInOrder(page);
     await expect(page.getByRole('button', { name: 'ステップ1の完成コードを読み込む' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'ステップ2の完成コードを読み込む' })).toBeHidden();
-    await expect(page.getByRole('link', { name: /前へ/ })).toHaveAttribute('href', '/chapters/chapter-2/4/');
-    await expect(page.getByRole('link', { name: /次へ/ })).toHaveAttribute('href', '/chapters/chapter-2/6/');
+    await page.getByRole('button', { name: 'ステップ1の完成コードを読み込む' }).click();
+    await expectAllClosed(page);
+    await testsButton(page).click();
+    await expect(summary(page)).toHaveText('pass 8 / fail 0');
   });
+});
 
-  test('開始時の案内は、ステップ1が終わっているかで変わる', async ({ page }) => {
+test.describe('第2章の場面 ステップ2 /chapters/chapter-2/4/', () => {
+  test('h1 は 1 つだけ。ステップのラベルと、書き換えのボタンと、「ヒントと解答」を出す', async ({ page }) => {
     await open(page, stepTwoPath);
-    await expect(next(page)).toContainText(
-      'ステップ1が終わっていないときは、「ステップ1の完成コードを読み込む」を押して続けます。',
+    await expect(page.locator('h1')).toHaveCount(1);
+    await expect(page.locator('.play-step-label')).toHaveText('ステップ2: 記録を business_events に移す');
+    await expect(page.locator('#events-title')).toHaveText('business_events');
+    await expect(templateButton(page)).toHaveText('INSERT を business_events 用に書き換える');
+    await expect(page.locator('[data-answer]')).toHaveCount(4);
+    await expect(hintSteps(page).locator('summary')).toHaveText([
+      'ヒント1 考えること',
+      'ヒント2 変える場所',
+      'ヒント3 入れる値',
+      '解答',
+    ]);
+    await hintSteps(page).nth(2).locator('summary').click();
+    await expect(hintSteps(page).nth(2).locator('tbody tr')).toHaveText([
+      /\/\* event_name \*\/\s*'VisitCancelled'/,
+      /\/\* payload \*\/\s*JSON\.stringify\(\{ reason: input\.reason, operatedBy: input\.operatedBy \}\)/,
+      /\/\* target_type \*\/\s*'Visit'/,
+    ]);
+    await expect(hintSteps(page).nth(2)).toContainText(
+      'payload のキーの名前はこのとおりにします。テストと第3章の SELECT は $.reason と $.operatedBy を読みます。',
     );
-    await loadStepOne(page);
-    await expect(next(page)).toContainText('ステップ1の完成コードを読み込みました。');
-    await expect(next(page)).toContainText('cancelVisit の input の型と payload を変更します。');
-    await page.reload();
-    await expect(root(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    await expect(next(page)).toContainText('cancelVisit の input の型と payload を変更します。');
-    await expect(next(page)).toContainText('迷ったら、右の「ヒントと解答」を上から順に開きます。');
-    await expect(next(page)).toContainText('終わったら「ポチの来院をキャンセルする」を押します。');
+    await expect(page.getByRole('button', { name: 'ステップ1の完成コードを読み込む' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /前へ/ })).toHaveAttribute('href', '/chapters/chapter-2/3/');
+    await expect(page.getByRole('link', { name: /次へ/ })).toHaveAttribute('href', '/chapters/chapter-2/5/');
   });
 
-  test('ステップ1の完成コードから編集して実行すると、誰が・なぜが出て、テストは pass 8 / fail 0 になる', async ({ page }) => {
+  test('開始時点のコードは、ステップ1の解答。実行すると記録が失敗して、来院の更新も取り消される', async ({ page }) => {
     await open(page, stepTwoPath);
-    await loadStepOne(page);
+    await expect(editor(page)).toContainText('INSERT INTO visit_cancellations');
+    await expect(next(page)).toHaveText(
+      `${pressRun}テーブルを business_events に作り直した後で、ステップ1のコードがどう動くかを見ます。`,
+    );
+
+    await runButton(page).click();
+    await expect(message(page).getByRole('alert')).toContainText('cancelVisit がエラーを出しました');
+    await expect(message(page).getByRole('alert')).toContainText('no such table: visit_cancellations');
+    await expect(visitStatus(page)).toHaveText('reserved');
+    await expect(page.locator('[data-role="visits-badge"]')).toHaveText('実行後');
+    await expect(page.locator('[data-role="visits-caption"]')).toHaveText('status は reserved のままです。');
+    await expect(eventRows(page)).toHaveCount(0);
+    await expectAnswers(page, ['who', 'when', 'what', 'why'], missing);
+    await expect(next(page)).toHaveText(
+      'visit_cancellations テーブルは、もうありません。visits の status は reserved のままです。'
+        + '記録を書き込めないときは、UPDATE も一緒に取り消されます。'
+        + '「INSERT を business_events 用に書き換える」を押します。',
+    );
+  });
+
+  test('開始時点のコードのままテストを実行すると、pass 3 / fail 5 になる', async ({ page }) => {
+    await open(page, stepTwoPath);
+    await testsButton(page).click();
+    await expect(summary(page)).toHaveText('pass 3 / fail 5');
+    await expect(failedTests(page)).toHaveCount(5);
+    await expect(failedTests(page).first()).toContainText(
+      '既存の業務 > 予約した来院をキャンセルすると、来院の状態がキャンセルになる',
+    );
+    await expect(failedTests(page).first()).toContainText('no such table: visit_cancellations');
+    await expect(next(page)).toHaveText(
+      'テストの結果に、失敗したテストの名前を出しています。「INSERT を business_events 用に書き換える」を押します。',
+    );
+  });
+
+  test('INSERT を書き換えて 3 つの空欄を埋めると、business_events に 1 行増え、テストは pass 8 / fail 0 になる', async ({ page }) => {
+    await open(page, stepTwoPath);
+    await templateButton(page).click();
+    await expect(editor(page)).not.toContainText('visit_cancellations');
+    await expect(editor(page)).toContainText(
+      'INSERT INTO business_events (event_at, event_name, payload, target_id, target_type, target_state)',
+    );
+    await expect(editor(page)).toContainText('JSON.stringify(cancelled)');
+    for (const blank of ['/* event_name */', '/* payload */', '/* target_type */']) {
+      await expect(editor(page)).toContainText(blank);
+    }
+    await expect.poll(() => lineInView(page, '/* event_name */')).toBe(true);
+    await expect(next(page)).toHaveText(
+      `雛形の 3 つの空欄を書き換えます。Tab キーで次の空欄に移れます。${askHints}終わったら${pressRun}`,
+    );
+    await expect(templateButton(page)).toBeDisabled();
+
+    for (const [index, value] of stepTwoBlanks.entries()) {
+      await page.keyboard.insertText(value);
+      if (index < stepTwoBlanks.length - 1) await page.keyboard.press('Tab');
+    }
+    await expect.poll(() => storedCode(page, stepTwoKey)).toBe(
+      JSON.stringify({ 'visits.ts': exercise('chapter-2-step-2') }),
+    );
+
+    await runButton(page).click();
+    await expect(message(page)).toBeHidden();
+    await expectStepTwoRecorded(page);
+    await expect(next(page)).toHaveText(
+      'business_events に 1 行増えました。答えの欄の「誰が」「いつ」「何を」「なぜ」が埋まりました。'
+        + '「テストを実行する」を押します。',
+    );
+    await testsButton(page).click();
+    await expect(summary(page)).toHaveText('pass 8 / fail 0');
+    await expect(next(page)).toHaveText('すべてのテストが成功しました。次のページへ進みます。');
+  });
+
+  test('payload に reason と operatedBy が無いと、誰がとなぜが「記録にありません」のままで、見直す場所を案内する', async ({ page }) => {
+    await open(page, stepTwoPath);
+    await fillBlanks(page, ['\'VisitCancelled\'', 'JSON.stringify({})', '\'Visit\'']);
     await runButton(page).click();
     await expect(eventRows(page)).toHaveCount(1);
-    await expect(answer(page, 'who')).toHaveText(missing);
-    await expect(answer(page, 'why')).toHaveText(missing);
-    await expect(next(page)).toContainText('business_events に 1 行増えました。');
-    await expect(next(page)).toContainText('答えの欄の「誰が」「なぜ」は、まだ「記録にありません」です。');
-    await expect(next(page)).toContainText(
-      'payload に reason と operatedBy が入っているかを見直して、もう一度押します。',
+    await expect(answer(page, 'what')).toHaveText('VisitCancelled');
+    await expect(answer(page, 'when')).toHaveText(isoTime);
+    await expectAnswers(page, ['who', 'why'], missing);
+    await expect(next(page)).toHaveText(
+      'business_events に 1 行増えました。答えの欄の「誰が」「なぜ」は、まだ「記録にありません」です。'
+        + 'payload に reason と operatedBy が入っているかを見直して、もう一度押します。',
     );
-
-    await replaceCode(page, stepTwoCode());
-    await runButton(page).click();
-    await expect(answer(page, 'who')).toHaveText('受付スタッフ');
-    await expect(answer(page, 'why')).toHaveText('飼い主の都合');
-    await expect(next(page)).toContainText('答えの欄の「いつ」「何を」「誰が」「なぜ」が埋まりました。');
-    await expect(next(page)).toContainText('「テストを実行する」を押します。');
-
-    await testsButton(page).click();
-    await expect(summary(page)).toHaveText('pass 8 / fail 0');
-    await expect(next(page)).toContainText('すべてのテストが成功しました。次のページへ進みます。');
-  });
-
-  test('ステップ1のコードのままテストを実行すると、pass 7 / fail 1 になり、変える2か所を案内する', async ({ page }) => {
-    await open(page, stepTwoPath);
-    await loadStepOne(page);
-    await runButton(page).click();
     await testsButton(page).click();
     await expect(summary(page)).toHaveText('pass 7 / fail 1');
-    await expect(next(page)).toContainText(`残りの 1 件は「${pochiTest}」です。`);
-    await expect(next(page)).toContainText('cancelVisit の input の型と payload を変更します。');
-    await expect(next(page)).toContainText('迷ったら、右の「ヒントと解答」を上から順に開きます。');
+    await expect(failedTests(page)).toContainText(['キャンセルした人と理由を答えられる']);
   });
 
-  test('ステップ2の完成コードを読み込むと、全テストが成功する', async ({ page }) => {
+  test('ステップ2の完成コードを読み込むと、全テストが成功する。読み込むコードは解答のファイルと同じ', async ({ page }) => {
     await open(page, stepTwoPath);
-    await loadStepTwoAnswer(page);
-    await expect(page.locator('.cm-content')).toContainText('operatedBy');
-    await expect(next(page)).toContainText('ステップ2の完成コードを読み込みました。');
-    await expect(next(page)).toContainText(
-      '全テストが成功するコードです。第3章は自分のコードを使わなくても進められます。',
+    await loadAnswer(page, 2);
+    await expect(next(page)).toHaveText(
+      'ステップ2の完成コードを読み込みました。全テストが成功するコードです。'
+        + `第3章は自分のコードを使わなくても進められます。${pressRun}`,
+    );
+    await expect.poll(() => storedCode(page, stepTwoKey)).toBe(
+      JSON.stringify({ 'visits.ts': exercise('chapter-2-step-2') }),
     );
     await runButton(page).click();
-    await expect(answer(page, 'who')).toHaveText('受付スタッフ');
-    await expect(answer(page, 'why')).toHaveText('飼い主の都合');
+    await expectStepTwoRecorded(page);
     await testsButton(page).click();
     await expect(summary(page)).toHaveText('pass 8 / fail 0');
+  });
+
+  test('ステップ1で INSERT を書いていないコードを引き継ぐと、ステップ1の解答から続ける方法を案内する', async ({ page }) => {
+    await page.addInitScript(([key, value]) => {
+      window.localStorage.setItem(key ?? '', JSON.stringify({ 'visits.ts': value }));
+    }, [stepOneKey, `// 途中\n${exercise('chapter-1-start')}`]);
+    await open(page, stepTwoPath);
+    await expect(editor(page)).toContainText('// 途中');
+    const unfinished = 'ステップ1が終わっていないときは、「最初のコードに戻す」を押して、ステップ1の解答から続けます。';
+    await expect(next(page)).toHaveText(unfinished);
+
+    await resetButton(page).click();
+    await expect(editor(page)).toContainText('INSERT INTO visit_cancellations');
+    await expect(editor(page)).not.toContainText('// 途中');
+    await expect(restoreButton(page)).toBeVisible();
+    await expect(next(page)).toContainText(pressRun);
   });
 
   test('ステップ1のページで書いたコードが、ステップ2のページに引き継がれる', async ({ page }) => {
     await open(page);
-    await loadStepOneAnswer(page);
-    await page.getByRole('link', { name: /次へ/ }).click();
-    await expect(page).toHaveURL(/\/chapters\/chapter-2\/5\/$/);
-    await expect(root(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    await expect(page.locator('.cm-content')).toContainText('VisitCancelled');
-    await runButton(page).click();
-    await expect(eventRows(page)).toHaveCount(1);
-
-    await replaceCode(page, stepTwoCode());
-    await page.getByRole('link', { name: /前へ/ }).click();
-    await expect(page).toHaveURL(/\/chapters\/chapter-2\/4\/$/);
-    await expect(root(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    await expect(page.locator('.cm-content')).toContainText('operatedBy');
-  });
-
-  test('編集してからステップ1の完成コードを読み込んでも、「読み込む前のコードに戻す」で編集が戻る', async ({ page }) => {
+    await replaceCode(
+      page,
+      exercise('chapter-2-step-1').replace('withTransaction(db, () => {', 'withTransaction(db, () => { // 自分'),
+    );
+    await expect.poll(() => storedCode(page, stepOneKey)).toContain('// 自分');
     await open(page, stepTwoPath);
-    await expect(restoreButton(page)).toBeHidden();
-    const edited = await editStepTwo(page);
-    const editedStart = await storedCode(page, chapterStartKey);
+    await expect(editor(page)).toContainText('// 自分');
+    expect(await storedCode(page, stepTwoKey)).toBeNull();
 
-    await loadStepOne(page);
-    await expect(restoreButton(page)).toBeVisible();
-    await expect(page.locator('.cm-content')).not.toContainText('operatedBy');
-    await expect.poll(() => storedCode(page, storageKey)).not.toBe(edited);
-
-    await restoreButton(page).click();
-    await expect(restoreButton(page)).toBeHidden();
-    await expect(page.locator('.cm-content')).toContainText('operatedBy');
-    await expect.poll(() => storedCode(page, storageKey)).toBe(edited);
-    expect(await storedCode(page, chapterStartKey)).toBe(editedStart);
+    await templateButton(page).click();
+    await expect(editor(page)).toContainText('// 自分');
+    await expect(editor(page)).toContainText('/* event_name */');
+    await expect.poll(() => storedCode(page, stepTwoKey)).toContain('/* event_name */');
+    expect(await storedCode(page, stepOneKey)).not.toContain('business_events');
   });
 
-  test('編集してからステップ2の完成コードを読み込んでも、「読み込む前のコードに戻す」で編集が戻る', async ({ page }) => {
+  test('bfcache から戻ったページ（pageshow の persisted）では、ステップ1で直したコードを編集欄に反映する', async ({ page, context }) => {
     await open(page, stepTwoPath);
-    await loadStepOne(page);
-    await expect(restoreButton(page)).toBeHidden();
-    const edited = await editStepTwo(page, ownStepTwoCode());
-
-    await loadStepTwoAnswer(page);
-    await expect(restoreButton(page)).toBeVisible();
-    await restoreButton(page).click();
-    await expect(restoreButton(page)).toBeHidden();
-    await expect.poll(() => storedCode(page, storageKey)).toBe(edited);
-  });
-
-  test('編集してから「最初のコードに戻す」を押しても、「読み込む前のコードに戻す」で編集が戻る', async ({ page }) => {
-    await open(page, stepTwoPath);
-    const edited = await editStepTwo(page);
-    const editedStart = await storedCode(page, chapterStartKey);
-
-    await page.getByRole('button', { name: '最初のコードに戻す' }).click();
-    await expect(restoreButton(page)).toBeVisible();
-    await expect(page.locator('.cm-content')).not.toContainText('operatedBy');
-    await expect.poll(() => storedCode(page, storageKey)).toBeNull();
-    await expect.poll(() => storedCode(page, chapterStartKey)).toBeNull();
-
-    await restoreButton(page).click();
-    await expect(restoreButton(page)).toBeHidden();
-    await expect(page.locator('.cm-content')).toContainText('operatedBy');
-    await expect.poll(() => storedCode(page, storageKey)).toBe(edited);
-    expect(await storedCode(page, chapterStartKey)).toBe(editedStart);
-  });
-
-  test('何も編集していないときや、読み込む前と同じコードのときは、「読み込む前のコードに戻す」を出さない。コードを触ると消える', async ({ page }) => {
-    await open(page, stepTwoPath);
-    await loadStepOne(page);
-    await expect(restoreButton(page)).toBeHidden();
-    await loadStepOne(page);
-    await expect(restoreButton(page)).toBeHidden();
-    await replaceCode(page, stepTwoCode());
-    await loadStepOne(page);
-    await expect(restoreButton(page)).toBeVisible();
-    await page.locator('.cm-content').click();
-    await page.keyboard.type(' ');
-    await expect(restoreButton(page)).toBeHidden();
-  });
-
-  test('bfcache から戻ったページ（pageshow の persisted）では、別のページでの編集を編集欄に反映する', async ({ page, context }) => {
-    await open(page);
-    await expect(page.locator('.cm-content')).not.toContainText('operatedBy');
+    await expect(editor(page)).not.toContainText('// 後から');
 
     const other = await context.newPage();
-    await open(other, stepTwoPath);
-    await editStepTwo(other);
+    await open(other, stepOnePath);
+    await replaceCode(other, `// 後から\n${exercise('chapter-2-step-1')}`);
+    await expect.poll(() => storedCode(other, stepOneKey)).toContain('// 後から');
     await other.close();
 
     await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false })));
-    await expect(page.locator('.cm-content')).not.toContainText('operatedBy');
+    await expect(editor(page)).not.toContainText('// 後から');
 
     await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
-    await expect(page.locator('.cm-content')).toContainText('operatedBy');
+    await expect(editor(page)).toContainText('// 後から');
     await expect(restoreButton(page)).toBeHidden();
-
-    await page.evaluate(() => window.localStorage.clear());
-    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
-    await expect(page.locator('.cm-content')).not.toContainText('operatedBy');
-    await expect(page.locator('.cm-content')).toContainText('cancelVisit');
   });
 
-  test('ステップ2で編集して page.goBack() でステップ1に戻ると、編集欄はステップ2の編集を反映する', async ({ page }) => {
-    await open(page);
-    await page.getByRole('link', { name: /次へ/ }).click();
-    await expect(page).toHaveURL(/\/chapters\/chapter-2\/5\/$/);
-    await expect(root(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    await editStepTwo(page);
-    await page.goBack();
-    await expect(page).toHaveURL(/\/chapters\/chapter-2\/4\/$/);
-    await expect(root(page)).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
-    await expect(page.locator('.cm-content')).toContainText('operatedBy');
-  });
-
-  for (const size of [{ width: 1280, height: 640 }, { width: 1440, height: 790 }]) {
-    test(`${size.width}x${size.height} で、「読み込む前のコードに戻す」が出ていても、ページ全体にスクロールが出ない`, async ({ page }) => {
-      await page.setViewportSize(size);
-      await open(page, stepTwoPath);
-      await editStepTwo(page, ownStepTwoCode());
-      await loadStepTwoAnswer(page);
-      await expect(restoreButton(page)).toBeVisible();
-      await expectFit(page);
-    });
-  }
-
-  test('1024x768 で、ステップ1もステップ2も横スクロールが出ない', async ({ page }) => {
-    await page.setViewportSize({ width: 1024, height: 768 });
-    await open(page, stepOnePath);
-    await expectNoHorizontalScroll(page);
-    await runButton(page).click();
-    await expect(visitStatus(page)).toHaveText('cancelled');
-    await expectNoHorizontalScroll(page);
-
+  test('編集してから完成コードを読み込んでも、「読み込む前のコードに戻す」で編集が戻る', async ({ page }) => {
     await open(page, stepTwoPath);
-    await expectNoHorizontalScroll(page);
-    await editStepTwo(page, ownStepTwoCode());
-    await loadStepTwoAnswer(page);
+    await expect(restoreButton(page)).toBeHidden();
+    await templateButton(page).click();
+    const edited = await storedCode(page, stepTwoKey);
+    expect(edited).toContain('/* event_name */');
+
+    await loadAnswer(page, 2);
     await expect(restoreButton(page)).toBeVisible();
-    await expectNoHorizontalScroll(page);
-    await runButton(page).click();
-    await expect(answer(page, 'who')).toHaveText('受付スタッフ');
-    await testsButton(page).click();
-    await expect(summary(page)).toHaveText('pass 8 / fail 0');
-    await expectNoHorizontalScroll(page);
+    await expect(editor(page)).not.toContainText('/* event_name */');
+
+    await restoreButton(page).click();
+    await expect(restoreButton(page)).toBeHidden();
+    await expect(editor(page)).toContainText('/* event_name */');
+    await expect.poll(() => storedCode(page, stepTwoKey)).toBe(edited);
   });
 
-  test('エディタは payload の行付近を表示する', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 640 });
-    await open(page, stepTwoPath);
-    await loadStepOne(page);
-    const visible = (): Promise<boolean> =>
-      page.evaluate(() => {
-        const scroller = document.querySelector('.cm-scroller')?.getBoundingClientRect();
-        const line = [...document.querySelectorAll('.cm-line')].find((candidate) =>
-          candidate.textContent?.includes('JSON.stringify({}),')
-        )?.getBoundingClientRect();
-        return scroller !== undefined && line !== undefined && line.top >= scroller.top
-          && line.bottom <= scroller.bottom;
-      });
-    await expect.poll(visible).toBe(true);
-  });
-
-  for (const size of [{ width: 1280, height: 640 }, { width: 1440, height: 790 }]) {
-    test(`${size.width}x${size.height} で、実行の前も後もテストの後も、ページ全体にスクロールが出ない`, async ({ page }) => {
+  for (const size of desktopSizes) {
+    test(`${size.width}x${size.height} で、実行の前も、失敗の後も、記録の後も、テストの後も、画面に収まる`, async ({ page }) => {
       await page.setViewportSize(size);
       await open(page, stepTwoPath);
+      await expect.poll(() => lineInView(page, 'export const cancelVisit')).toBe(true);
       await expectFit(page);
 
-      await loadStepOne(page);
-      await expectFit(page);
       await runButton(page).click();
-      await expect(eventRows(page)).toHaveCount(1);
+      await expect(message(page).getByRole('alert')).toBeVisible();
       await expectFit(page);
+
       await testsButton(page).click();
-      await expect(summary(page)).toHaveText('pass 7 / fail 1');
+      await expect(summary(page)).toHaveText('pass 3 / fail 5');
       await expectFit(page);
 
-      await loadStepTwoAnswer(page);
+      await fillBlanks(page, stepTwoBlanks);
+      await expectFit(page);
       await runButton(page).click();
-      await expect(answer(page, 'who')).toHaveText('受付スタッフ');
+      await expectStepTwoRecorded(page);
+      await expectFit(page);
+
       await testsButton(page).click();
       await expect(summary(page)).toHaveText('pass 8 / fail 0');
+      await expectFit(page);
+
+      await editor(page).click();
+      await page.keyboard.insertText(' ');
+      await resetButton(page).click();
+      await expect(restoreButton(page)).toBeVisible();
       await expectFit(page);
     });
   }
@@ -904,34 +864,51 @@ test.describe('第2章の場面 ステップ2 /chapters/chapter-2/5/', () => {
   test('手元の Node の案内は、開いても画面の配置を押し広げない', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 640 });
     await open(page, stepTwoPath);
-    const columns = page.locator('.play-columns');
-    const before = await columns.boundingBox();
+    const work = page.locator('.play-work');
+    const before = await work.boundingBox();
     await page.getByText('手元の Node で動かすとき').click();
+    await expect(page.locator('.play-node-body')).toContainText('chapter-2-step-2-start');
     await expect(page.locator('.play-node-body')).toContainText('pass 8');
-    await expect(page.locator('.play-node-body')).toContainText('chapter-2-step-2');
-    expect(await columns.boundingBox()).toEqual(before);
+    expect(await work.boundingBox()).toEqual(before);
     await expectFit(page);
+  });
+
+  test('1024x768 で、ステップ1もステップ2も横スクロールが出ない', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    for (const [path, step] of [[stepOnePath, 1], [stepTwoPath, 2]] as const) {
+      await open(page, path);
+      expect(await overflowing(page)).toBeLessThanOrEqual(0);
+      await loadAnswer(page, step);
+      await runButton(page).click();
+      await expect(eventRows(page)).toHaveCount(1);
+      await testsButton(page).click();
+      await expect(summary(page)).toHaveText('pass 8 / fail 0');
+      expect(await overflowing(page)).toBeLessThanOrEqual(0);
+    }
   });
 
   for (const width of [360, 390]) {
     test(`${width} 幅では縦に並び、横にはみ出さない`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
       await open(page, stepTwoPath);
-      const overflowing = (): Promise<number> =>
-        page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-      expect(await overflowing()).toBeLessThanOrEqual(0);
+      expect(await overflowing(page)).toBeLessThanOrEqual(0);
       const lefts = await page.evaluate(() =>
         [...document.querySelectorAll('.play-col')].map((column) => Math.round(column.getBoundingClientRect().left))
       );
       expect(new Set(lefts).size).toBe(1);
 
-      await loadStepTwoAnswer(page);
       await runButton(page).click();
-      await expect(answer(page, 'who')).toHaveText('受付スタッフ');
-      expect(await overflowing()).toBeLessThanOrEqual(0);
+      await expect(message(page).getByRole('alert')).toBeVisible();
+      expect(await overflowing(page)).toBeLessThanOrEqual(0);
+
+      await loadAnswer(page, 2);
+      await runButton(page).click();
+      await expectStepTwoRecorded(page);
+      expect(await overflowing(page)).toBeLessThanOrEqual(0);
+
       await testsButton(page).click();
       await expect(summary(page)).toHaveText('pass 8 / fail 0');
-      expect(await overflowing()).toBeLessThanOrEqual(0);
+      expect(await overflowing(page)).toBeLessThanOrEqual(0);
     });
   }
 
@@ -941,7 +918,7 @@ test.describe('第2章の場面 ステップ2 /chapters/chapter-2/5/', () => {
     await openHintsInOrder(page);
     await expect(page.getByRole('button', { name: 'ステップ2の完成コードを読み込む' })).toBeVisible();
     await page.getByRole('button', { name: 'ステップ2の完成コードを読み込む' }).click();
-    await expect(page.locator('.cm-content')).toContainText('operatedBy');
+    await expect(editor(page)).toContainText('VisitCancelled');
     await expectAllClosed(page);
     await testsButton(page).click();
     await expect(summary(page)).toHaveText('pass 8 / fail 0');
@@ -950,23 +927,39 @@ test.describe('第2章の場面 ステップ2 /chapters/chapter-2/5/', () => {
 
 test.describe('ヒントと解答の開閉', () => {
   for (const path of [stepOnePath, stepTwoPath]) {
-    test(`${path} 広い画面では、開いた本文が「問い合わせへの答え」と「ヒントと解答」の上に重なり、Escape キーで閉じる`, async ({ page }) => {
+    test(`${path} 広い画面では、開いた本文がデータベースの列の上に重なり、ヒントの一覧とテストを隠さない。Escape キーで閉じる`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 640 });
       await open(page, path);
       await hintSteps(page).nth(1).locator('summary').click();
       const placement = await page.evaluate(() => {
-        const column = document.querySelector('.play-hint-area')?.getBoundingClientRect();
-        const body = document.querySelector('details.play-hint-step[open] > .play-hint-body')?.getBoundingClientRect();
-        return column === undefined || body === undefined
+        const box = (selector: string): DOMRect | undefined =>
+          document.querySelector(selector)?.getBoundingClientRect();
+        const database = box('.play-col-db');
+        const hints = box('.play-col-hints');
+        const body = box('details.play-hint-step[open] > .play-hint-body');
+        return database === undefined || hints === undefined || body === undefined
           ? null
           : {
-            dTop: body.top - column.top,
-            dLeft: body.left - column.left,
-            dWidth: body.width - column.width,
-            dHeight: body.height - column.height,
+            sameTop: Math.abs(body.top - database.top) <= 1,
+            sameLeft: Math.abs(body.left - database.left) <= 1,
+            sameWidth: Math.abs(body.width - database.width) <= 1,
+            sameHeight: Math.abs(body.height - database.height) <= 1,
+            clearOfHints: body.right <= hints.left,
           };
       });
-      expect(placement).toEqual({ dTop: 0, dLeft: 0, dWidth: 0, dHeight: 0 });
+      expect(placement).toEqual({
+        sameTop: true,
+        sameLeft: true,
+        sameWidth: true,
+        sameHeight: true,
+        clearOfHints: true,
+      });
+      await expect(testsButton(page)).toBeVisible();
+      await expect(hintSteps(page).locator('summary').first()).toBeVisible();
+      const fits = await page.locator('details.play-hint-step[open] > .play-hint-body').evaluate((element) =>
+        element.scrollHeight <= element.clientHeight + 1
+      );
+      expect(fits).toBe(true);
       await hintSteps(page).nth(1).locator('[data-role="hint-close"]').focus();
       await page.keyboard.press('Escape');
       await expectAllClosed(page);
@@ -977,16 +970,20 @@ test.describe('ヒントと解答の開閉', () => {
       await page.setViewportSize({ width: 1280, height: 640 });
       await open(page, path);
       await hintSteps(page).nth(2).locator('summary').click();
-      await page.locator('.cm-content').focus();
+      await editor(page).focus();
       await page.keyboard.press('Escape');
       await expectOnlyOpen(page, 2);
-      await expect(page.locator('.cm-content')).toBeFocused();
+      await expect(editor(page)).toBeFocused();
     });
 
     test(`${path} スマートフォンの幅では、本文がその場に開き、次を開くと前が閉じる`, async ({ page }) => {
       await page.setViewportSize({ width: 390, height: 844 });
       await open(page, path);
-      await openHintsStacked(page);
+      await expectAllClosed(page);
+      for (let index = 0; index < 4; index += 1) {
+        await hintSteps(page).nth(index).locator('summary').click();
+        await expectOnlyOpen(page, index);
+      }
       await expect(page.locator('details.play-hint-step[open] [data-role="hint-close"]')).toBeHidden();
       const inFlow = await page.evaluate(() =>
         getComputedStyle(document.querySelector('details.play-hint-step[open] > .play-hint-body') as Element).position

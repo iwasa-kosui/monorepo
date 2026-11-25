@@ -1,4 +1,5 @@
 import { whoCancelledSql } from '../../lib/snapshots';
+import { sceneSteps } from '../../playground/scene-steps';
 import type { MemoItem, Post, WorkspaceScenario } from '../../workspace/scenario';
 import { answeredThanks, docTab, inquiry, lessonScenario, opening, posts, replyButton, whyNotRecorded } from './common';
 
@@ -72,7 +73,7 @@ export const chapter3Answer: WorkspaceScenario = lessonScenario({
           kind: 'script',
           exercise: 'chapter-2-step-2',
           entry: 'who-cancelled.ts',
-          own: { exercise: 'chapter-1-start', file: 'visits.ts', testFile: 'visits.test.ts' },
+          own: { exercise: sceneSteps[2].storageId, file: 'visits.ts', testFile: 'visits.test.ts' },
           tables: [
             {
               name: 'visits',

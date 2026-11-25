@@ -8,14 +8,12 @@ export const createDatabase = (): DatabaseSync => {
       pet_name TEXT NOT NULL,
       status TEXT NOT NULL CHECK (status IN ('reserved', 'checked_in', 'completed', 'cancelled'))
     );
-    CREATE TABLE business_events (
-      event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_at TEXT NOT NULL,
-      event_name TEXT NOT NULL,
-      payload TEXT NOT NULL,
-      target_id TEXT NOT NULL,
-      target_type TEXT NOT NULL,
-      target_state TEXT NOT NULL
+    CREATE TABLE visit_cancellations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      visit_id TEXT NOT NULL,
+      cancelled_at TEXT NOT NULL,
+      operated_by TEXT NOT NULL,
+      reason TEXT NOT NULL
     );
   `);
   return db;

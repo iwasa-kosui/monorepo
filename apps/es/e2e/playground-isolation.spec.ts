@@ -77,7 +77,6 @@ test('導入の 2 ページ目と第1章から第4章では、実行欄を置い
     'chapters/chapter-1/2/index.html',
     'chapters/chapter-2/2/index.html',
     'chapters/chapter-2/4/index.html',
-    'chapters/chapter-2/5/index.html',
     'chapters/chapter-3/index.html',
     'chapters/chapter-4/2/index.html',
     'chapters/chapter-4/3/index.html',

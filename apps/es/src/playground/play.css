@@ -33,18 +33,20 @@
   font-size: 0.875rem;
 }
 .play button {
-  border: 1px solid var(--role-border);
-  border-radius: var(--radius-md);
-  background: var(--role-surface);
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--role-fg) 9%, transparent);
   padding: 0.4rem 0.75rem;
   color: var(--role-fg);
   font-size: 1rem;
   line-height: 1.4;
   cursor: pointer;
 }
+.play button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--role-fg) 15%, transparent);
+}
 .play button:disabled {
-  border-color: var(--role-rule);
-  background: var(--role-sunken);
+  background: color-mix(in srgb, var(--role-fg) 5%, transparent);
   color: var(--role-muted);
   cursor: not-allowed;
 }
@@ -52,15 +54,17 @@
   outline: 3px solid var(--role-accent);
   outline-offset: 2px;
 }
-.play button.play-primary {
-  border-color: var(--role-accent);
+.play button.play-primary,
+.play button.play-primary:hover:not(:disabled) {
   background: var(--role-accent);
   color: var(--role-on-accent);
   font-weight: 700;
 }
+.play button.play-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
 .play button.play-primary:disabled {
-  border-color: var(--role-border);
-  background: var(--role-sunken);
+  background: color-mix(in srgb, var(--role-fg) 5%, transparent);
   color: var(--role-muted);
 }
 .play button.play-quiet {
@@ -75,8 +79,8 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem 0.75rem;
-  border: 1px solid var(--role-accent);
-  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
   background: var(--role-accent-soft);
   padding: 0.4rem 0.75rem;
 }
@@ -151,50 +155,65 @@
 
 .content .play .play-next {
   flex: none;
-  min-height: 4.5rem;
   border-left: 6px solid var(--role-warning-line);
   border-radius: var(--radius-sm);
   background: var(--role-warning-soft);
-  padding: 0.35rem 0.75rem;
-  font-size: 0.9375rem;
-  line-height: 1.35;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
 }
 .play-next strong {
-  display: block;
+  margin-right: 0.5rem;
   color: var(--role-warning);
 }
-.play-editor-head {
+.play-work {
+  gap: 0;
+  border: 1px solid var(--role-rule);
+}
+.play-tabbar {
   display: flex;
   flex: none;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.25rem 0.5rem;
+  gap: 0.125rem 0.375rem;
+  min-width: 0;
+  background: var(--ed-side, transparent);
 }
-.play-editor-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.5rem;
+.play-tabs {
+  flex: 1 1 0;
+  min-width: 6rem;
 }
 .play-editor {
   min-width: 0;
   min-height: 12rem;
-  border: 1px solid var(--role-border);
   background: var(--role-surface);
 }
 .play-editor .cm-editor {
   height: 100%;
   max-height: none;
 }
-.play-editor .cm-editor.cm-focused {
-  outline: 3px solid var(--role-accent);
-  outline-offset: -1px;
+.play-terminal {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-top: 1px solid var(--role-rule);
+  padding: 0.25rem 0.5rem;
 }
 .play-actions {
   display: flex;
   flex: none;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.375rem 0.5rem;
+}
+.play-editor-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.125rem 0.25rem;
+  margin-left: auto;
+  padding: 0.125rem 0.25rem;
 }
 .play-message {
   flex: none;
@@ -218,19 +237,40 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.scene .panel[data-kind="editor"] .play .playground-error {
+  border-left-width: 3px;
+  padding: 0.125rem 0.5rem;
+}
+.content .scene .panel[data-kind="editor"] .play .playground-error p {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.scene .panel[data-kind="editor"] .play .playground-error pre {
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
 
 .play-panel {
   min-width: 0;
-  border: 1px solid var(--role-rule);
-  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--role-rule) 70%, transparent);
+  border-radius: 0.75rem;
   background: var(--role-surface);
   padding: 0.4rem 0.6rem;
 }
 .play-panel > h2,
-.play-panel-head h2 {
+.play-panel-head h2,
+.play-hints-head h2,
+.play-tests-row h2 {
   font-size: 1rem;
   font-weight: 700;
   line-height: 1.5;
+}
+.play-hints-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 0.5rem;
 }
 .play-panel-head {
   display: flex;
@@ -362,7 +402,6 @@
   white-space: nowrap;
 }
 .content .play .play-hint {
-  margin-top: 0.15rem;
   color: var(--role-fg);
   font-size: 0.875rem;
   line-height: 1.4;
@@ -433,8 +472,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.75rem;
-  margin-top: 0.25rem;
+  gap: 0.125rem 0.625rem;
 }
 .play-summary {
   font-family: var(--font-code);
@@ -570,6 +608,105 @@
   }
 }
 
+/* 作業環境のエディタのタブの中では、文字と余白を詰める */
+.scene .panel[data-kind="editor"] .play {
+  flex: 1 1 auto;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+}
+.scene .panel[data-kind="editor"] .play-inquiry {
+  gap: 0.125rem 0.75rem;
+  padding: 0.125rem 0.625rem;
+}
+.content .scene .panel[data-kind="editor"] .play .play-inquiry h2 {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.scene .panel[data-kind="editor"] .play button {
+  padding-block: 0.1875rem;
+  font-size: 0.8125rem;
+}
+.scene .panel[data-kind="editor"] .play button.play-quiet {
+  padding-block: 0.0625rem;
+  font-size: 0.8125rem;
+}
+.scene .panel[data-kind="editor"] .play-panel {
+  padding: 0.25rem 0.5rem;
+}
+.scene .panel[data-kind="editor"] .play-panel > h2,
+.scene .panel[data-kind="editor"] .play-panel-head h2,
+.scene .panel[data-kind="editor"] .play-hints-head h2,
+.scene .panel[data-kind="editor"] .play-tests-row h2 {
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+.content .scene .panel[data-kind="editor"] .play .play-next {
+  border-radius: 0;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+.scene .panel[data-kind="editor"] .play-tabbar [role="tablist"] {
+  flex: 1 1 0;
+  min-width: 6rem;
+}
+.content .scene .panel[data-kind="editor"] .play .play-table th,
+.content .scene .panel[data-kind="editor"] .play .play-table td {
+  padding-block: 0.0625rem;
+}
+.content .scene .panel[data-kind="editor"] .play .play-answer th {
+  width: 3rem;
+  font-size: 0.8125rem;
+}
+.content .scene .panel[data-kind="editor"] .play .play-answer td {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+.scene .panel[data-kind="editor"] .play-caption {
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+.content .scene .panel[data-kind="editor"] .play .play-hint {
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+.scene .panel[data-kind="editor"] .play-hint-step summary {
+  padding-block: 0;
+}
+.scene .panel[data-kind="editor"] .play-tests {
+  min-height: 5.5rem;
+}
+.scene .panel[data-kind="editor"] .play-failed li {
+  border-left-width: 3px;
+  padding-inline: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+.scene .panel[data-kind="editor"] .play-failed li span {
+  font-size: 0.75rem;
+}
+.scene .panel[data-kind="editor"] .play-summary {
+  font-size: 0.8125rem;
+}
+.scene .panel[data-kind="editor"] .play-editor .cm-editor {
+  font-size: 0.75rem;
+}
+.scene .panel[data-kind="editor"] .play-editor .cm-line {
+  line-height: 1.3;
+}
+.content .scene .panel[data-kind="editor"] .play .play-event th,
+.content .scene .panel[data-kind="editor"] .play .play-event td {
+  padding-block: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.content .scene .panel[data-kind="editor"] .play .play-event th {
+  width: 5.25rem;
+}
+.scene .panel[data-kind="editor"] .play-events {
+  gap: 0.25rem;
+  margin-top: 0.125rem;
+}
+
 @media (min-width: 1100px) {
   body.chapter-page:has(.play) {
     height: 100dvh;
@@ -577,30 +714,64 @@
   body.chapter-page:has(.play) .chapter-body {
     margin-block: 0.25rem;
   }
-  .play,
-  .play-col,
+  .scene .panel[data-kind="editor"] .play {
+    display: grid;
+    flex: 1 1 0;
+    grid-template-columns:
+      minmax(0, 1.3fr) minmax(0, 1.1fr)
+      minmax(0, 0.9fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.375rem 0.5rem;
+    min-height: 0;
+    padding: 0 0.5rem 0 0;
+  }
+  .scene .panel[data-kind="editor"] .play-columns {
+    display: contents;
+  }
+  .scene .panel[data-kind="editor"] .play-inquiry {
+    grid-column: 2 / -1;
+    grid-row: 1;
+    margin-top: 0.375rem;
+  }
+  .scene .panel[data-kind="editor"] .play-work {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    border: 0;
+    border-right: 1px solid var(--role-rule);
+  }
+  .scene .panel[data-kind="editor"] .play-col:not(.play-work) {
+    grid-row: 2;
+    gap: 0.375rem;
+    margin-bottom: 0.375rem;
+  }
+  .scene .panel[data-kind="editor"] .play-col-db {
+    overflow: hidden auto;
+  }
+  .content .scene .panel[data-kind="editor"] .play .play-next {
+    min-height: calc(4 * 1.35 * 0.8125rem + 0.5rem);
+  }
   .play-hint-area {
     gap: 0.375rem;
   }
-  .play-editor .cm-editor {
-    font-size: 0.8125rem;
-  }
-  .play-columns {
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .play-hint-area {
+  /* 開いたヒントは、ヒントの一覧の左（データベースの列の上）に重ねる。幅の比は、上の格子の 1.1fr と 0.9fr に合わせる */
+  .play-col-hints {
     position: relative;
   }
   .play-hint-step[open] > .play-hint-body {
     position: absolute;
-    inset: 0;
+    top: 0;
+    right: calc(100% + 0.5rem);
+    bottom: 0;
     z-index: 10;
+    width: calc(100% * 1.1 / 0.9);
     border: 1px solid var(--role-rule);
     border-radius: var(--radius-lg);
     background: var(--role-surface);
-    padding: 0.4rem 0.6rem;
+    padding: 0.375rem 0.625rem;
     box-shadow: var(--shadow-raised);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    overflow: auto;
   }
   .play-hint-step[open] > .play-hint-body .play-hint-head {
     display: flex;
@@ -610,7 +781,11 @@
     margin-bottom: 0.25rem;
   }
   .play-hint-step[open] > .play-hint-body .play-hint-head strong {
-    font-size: 1rem;
+    font-size: 0.9375rem;
+  }
+  .content .play .play-hint-body .play-changes {
+    font-size: 0.8125rem;
+    line-height: 1.4;
   }
   .play-editor {
     flex: 1 1 0;
@@ -622,6 +797,12 @@
   body.chapter-page:has(.play) {
     height: auto;
     min-height: 100dvh;
+  }
+  .scene .panel[data-kind="editor"] .play,
+  .scene .panel[data-kind="editor"] .play-columns,
+  .scene .panel[data-kind="editor"] .play-col {
+    flex: none;
+    min-height: auto;
   }
   .play-editor {
     height: 22rem;
