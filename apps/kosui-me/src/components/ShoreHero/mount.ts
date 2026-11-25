@@ -13,6 +13,10 @@ const MAX_PIXEL_RATIO = 1.5;
 /** 1 コマにこれ以上かかる端末では、解像度を下げる（ミリ秒） */
 const SLOW_FRAME = 24;
 
+/** 本文のシートがヒーローに重なりきるまでに、名前と紹介が上へ退く距離（px）と、薄れる割合 */
+const RECEDE_DISTANCE = 60;
+const RECEDE_FADE = 0.75;
+
 const UNIFORMS = [
   'uResolution',
   'uPixelRatio',
@@ -218,6 +222,8 @@ export type ShoreElements = Readonly<{
   button: HTMLButtonElement;
   /** エビのそばに一言を出す場所 */
   note: HTMLElement;
+  /** 名前と紹介、エビの枠をまとめた部分。本文のシートが重なる間、上へ退いて薄れる */
+  content: HTMLElement;
 }>;
 
 /**
@@ -225,7 +231,7 @@ export type ShoreElements = Readonly<{
  * WebGL が使えない環境では何もせず、静止したドット絵（SVG）がそのまま見える。
  */
 export const mountShore = (elements: ShoreElements): () => void => {
-  const { hero, canvas, slot, button, note } = elements;
+  const { hero, canvas, slot, button, note, content } = elements;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -391,11 +397,17 @@ export const mountShore = (elements: ShoreElements): () => void => {
     if (!disposed && frame === 0) frame = requestAnimationFrame(draw);
   };
 
-  // スクロール: ページを読み進めるほど潮が満ち、浜とエビを覆う
+  // スクロール: ページを読み進めるほど潮が満ち、浜とエビを覆う。
+  // ヒーローが画面に留まる幅では、本文のシートが重なる間、名前と紹介が少し上へ退いて薄れる
   let scrollQueued = false;
   const applyScroll = (): void => {
     scrollQueued = false;
     tide = Math.min(1, Math.max(0, window.scrollY / (hero.offsetHeight || 1)));
+    const pinned = getComputedStyle(hero).position === 'sticky';
+    content.style.transform = pinned
+      ? `translate3d(0, ${(-tide * RECEDE_DISTANCE).toFixed(1)}px, 0)`
+      : '';
+    content.style.opacity = pinned ? (1 - tide * RECEDE_FADE).toFixed(3) : '';
   };
   const onScroll = (): void => {
     if (scrollQueued) return;
@@ -431,12 +443,15 @@ export const mountShore = (elements: ShoreElements): () => void => {
     if (frame !== 0) cancelAnimationFrame(frame);
     observer.disconnect();
     window.removeEventListener('resize', requestDraw);
+    window.removeEventListener('resize', onScroll);
     window.removeEventListener('scroll', onScroll);
     colorScheme.removeEventListener('change', onPaletteChange);
     button.removeEventListener('pointerenter', onTouch);
     button.removeEventListener('click', onPress);
     canvas.removeEventListener('webglcontextlost', onContextLost);
     hero.classList.remove('is-live');
+    content.style.transform = '';
+    content.style.opacity = '';
     window.clearTimeout(noteTimer);
     gl.getExtension('WEBGL_lose_context')?.loseContext();
   };
@@ -448,8 +463,12 @@ export const mountShore = (elements: ShoreElements): () => void => {
   canvas.addEventListener('webglcontextlost', onContextLost);
   if (!reduceMotion) {
     window.addEventListener('scroll', onScroll, { passive: true });
+    // 画面の幅が変わると、ヒーローが画面に留まるかどうかも変わる
+    window.addEventListener('resize', onScroll);
     button.addEventListener('pointerenter', onTouch);
     button.addEventListener('click', onPress);
+    // 途中までスクロールした位置へ戻ってきたときも、はじめから潮と退き具合を合わせる
+    applyScroll();
   }
   requestDraw();
 

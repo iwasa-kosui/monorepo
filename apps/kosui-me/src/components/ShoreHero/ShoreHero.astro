@@ -19,7 +19,7 @@ const { themes } = Astro.props;
 
 <section class="shore" data-shore-hero aria-labelledby="shore-name">
   <canvas class="shore-sea" data-shore-canvas aria-hidden="true"></canvas>
-  <div class="shore-content">
+  <div class="shore-content" data-shore-content>
     <div class="shore-copy">
       <p class="shore-role">テックリード @ 株式会社カケハシ</p>
       <h1 class="shore-name" id="shore-name">岩佐 幸翠</h1>
@@ -361,9 +361,12 @@ const { themes } = Astro.props;
   }
 }
 
-/* 広い画面: 最初の 1 画面をヒーローに使う */
+/* 広い画面: 最初の 1 画面をヒーローに使う。本文のシートが下から重なる間、画面に留まる */
 @media (min-width: 861px) {
   .shore {
+    position: sticky;
+    /* 画面がヒーローより低いときは、下端をそろえて留める */
+    top: min(0px, calc(100svh - 40rem));
     height: 100svh;
     min-height: 40rem;
     max-height: 61.25rem;
@@ -437,8 +440,9 @@ const mount = (): void => {
   const slot = hero?.querySelector<HTMLElement>('[data-shore-slot]');
   const button = hero?.querySelector<HTMLButtonElement>('[data-shore-shrimp]');
   const note = hero?.querySelector<HTMLElement>('[data-shore-note]');
-  if (!hero || !canvas || !slot || !button || !note) return;
-  dispose = mountShore({ hero, canvas, slot, button, note });
+  const content = hero?.querySelector<HTMLElement>('[data-shore-content]');
+  if (!hero || !canvas || !slot || !button || !note || !content) return;
+  dispose = mountShore({ hero, canvas, slot, button, note, content });
 };
 
 document.addEventListener('astro:page-load', mount);
