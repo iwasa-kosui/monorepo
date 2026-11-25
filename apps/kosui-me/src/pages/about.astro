@@ -111,6 +111,33 @@ const publications = [
   },
 ];
 
+const socials = [
+  {
+    label: 'X',
+    href: 'https://x.com/kosui_me',
+    path:
+      'M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z',
+  },
+  {
+    label: 'Fediverse',
+    href: 'https://blog.kosui.me/users/kosui',
+    path:
+      'M23.268 5.313c-.35-2.578-2.617-4.61-5.304-5.004C17.51.242 15.792 0 11.813 0h-.03c-3.98 0-4.835.242-5.288.309C3.882.692 1.496 2.518.917 5.127.64 6.412.61 7.837.661 9.143c.074 1.874.088 3.745.26 5.611.118 1.24.325 2.47.62 3.68.55 2.237 2.777 4.098 4.96 4.857 2.336.792 4.849.923 7.256.38.265-.061.527-.132.786-.213.585-.184 1.27-.39 1.774-.753a.057.057 0 0 0 .023-.043v-1.809a.052.052 0 0 0-.02-.041.053.053 0 0 0-.046-.01 20.282 20.282 0 0 1-4.709.547c-2.73 0-3.463-1.284-3.674-1.818a5.593 5.593 0 0 1-.319-1.433.053.053 0 0 1 .066-.054 19.648 19.648 0 0 0 4.622.536c.164 0 .329 0 .494-.003.9-.024 1.848-.07 2.737-.203.027-.004.054-.01.08-.016 2.394-.436 4.674-1.774 4.907-5.228.009-.147.023-.646.023-.801 0-.245.062-2.462-.01-3.76zm-3.365 8.377h-2.291V7.886c0-1.198-.504-1.805-1.512-1.805-1.115 0-1.673.721-1.673 2.147v3.015h-2.278V8.228c0-1.426-.558-2.147-1.673-2.147-1.008 0-1.512.607-1.512 1.805v5.804H6.673V7.715c0-1.198.304-2.151.916-2.858.63-.707 1.457-1.07 2.482-1.07 1.187 0 2.087.455 2.686 1.366l.578.97.579-.97c.599-.911 1.499-1.366 2.686-1.366 1.025 0 1.852.363 2.482 1.07.612.707.916 1.66.916 2.858z',
+  },
+  {
+    label: 'Bluesky',
+    href: 'https://bsky.app/profile/kosui.me',
+    path:
+      'M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.785 2.627 3.584 3.493 6.173 3.16-.388.543-.247 1.596.744 2.508-2.404.26-5.098 1.408-2.36 4.928C7.307 23.942 11.3 23.17 12 20.2c.7 2.97 4.693 3.742 6.819.643 2.738-3.52.044-4.668-2.36-4.928.991-.912 1.132-1.965.744-2.508 2.59.333 5.388-.533 6.173-3.16.246-.828.624-5.79.624-6.479 0-.688-.139-1.86-.902-2.203-.659-.3-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8z',
+  },
+  {
+    label: 'GitHub',
+    href: 'https://github.com/iwasa-kosui',
+    path:
+      'M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z',
+  },
+];
+
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('ja-JP', {
@@ -155,6 +182,29 @@ function formatMonthDay(dateStr: string): string {
         <p class="about-text">
           医療SaaS企業にて、法令要件や顧客環境の分析からアーキテクチャ設計までを一貫して担い、認証認可・組織管理などの共通基盤をテックリードとして設計・開発しています。プロダクトチームがコアドメインに集中できるプラットフォームの構築と、関数型ドメインモデリングによる堅牢なシステム設計を実践しています。
         </p>
+        <ul class="about-social">
+          {
+            socials.map((social) => (
+              <li>
+                <a
+                  href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer me"
+                  class="about-social-link"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d={social.path} />
+                  </svg>
+                  <span>{social.label}</span>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
       </div>
     </section>
 
@@ -233,7 +283,11 @@ function formatMonthDay(dateStr: string): string {
         }
       </ul>
       <p class="about-note">
-        被引用数は Google Scholar による（2026年11月時点）
+        被引用数は <a
+          href="https://scholar.google.com/citations?user=DaujMhUAAAAJ&hl=ja"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Google Scholar</a> による（2026年11月時点）
       </p>
     </section>
 
@@ -300,45 +354,6 @@ function formatMonthDay(dateStr: string): string {
       </ul>
       <a href="/posts" class="about-more">すべて見る &rarr;</a>
     </section>
-
-    <section class="about-section">
-      <h2 class="about-heading">リンク</h2>
-      <div class="flex flex-wrap gap-2 pt-4">
-        <a
-          href="https://github.com/iwasa-kosui"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#343c57] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
-        >
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-          </svg>
-          GitHub
-        </a>
-        <a
-          href="https://x.com/kosui_me"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#343c57] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
-        >
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-          </svg>
-          X
-        </a>
-        <a
-          href="https://scholar.google.com/citations?user=DaujMhUAAAAJ&hl=ja"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-full bg-tag-bg dark:bg-[#343c57] text-charcoal dark:text-[#ececec] hover:bg-accent/10 dark:hover:bg-accent/20 transition-colors"
-        >
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M5.242 13.769L0 9.5 12 0l12 9.5-5.242 4.269C17.548 11.249 14.978 9.5 12 9.5c-2.977 0-5.548 1.748-6.758 4.269zM12 10a7 7 0 1 0 0 14 7 7 0 0 0 0-14z" />
-          </svg>
-          Google Scholar
-        </a>
-      </div>
-    </section>
   </article>
 </BaseLayout>
 
@@ -379,23 +394,60 @@ function formatMonthDay(dateStr: string): string {
   font-weight: 400;
 }
 
+.about-social {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.about-social-link {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--about-ink) 8%, transparent);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.4;
+  transition: background-color 0.3s;
+}
+
+.about-social-link svg {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.about-social-link:hover {
+  background: color-mix(in srgb, var(--about-ink) 15%, transparent);
+}
+
+.about-social-link:focus-visible {
+  outline: 2px solid var(--about-go);
+  outline-offset: 2px;
+}
+
 .about-section {
-  margin-top: clamp(2.5rem, 5vw, 3.5rem);
+  margin-top: 4rem;
 }
 
 .about-heading {
-  padding: 1.25rem 0 0.5rem;
-  border-top: 1px solid var(--about-ink);
+  margin-bottom: 1.75rem;
   font-size: clamp(1.5rem, 1.2rem + 1.2vw, 1.875rem);
-  font-weight: 400;
+  font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
+.about-year-group + .about-year-group {
+  margin-top: 2rem;
+}
+
 .about-year {
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--about-line);
+  margin-bottom: 1.25rem;
   color: var(--about-muted);
   font-size: 1.125rem;
   font-weight: 400;
@@ -407,13 +459,10 @@ function formatMonthDay(dateStr: string): string {
   display: grid;
   grid-template-columns: 6.5rem minmax(0, 1fr);
   gap: 0 1rem;
-  padding: 1.25rem 0;
-  border-top: 1px solid var(--about-line);
 }
 
-.about-section > ul > .about-row:first-child,
-.about-year + ul > .about-row:first-child {
-  border-top: 0;
+.about-row + .about-row {
+  margin-top: 1.25rem;
 }
 
 .about-row-talk {
@@ -506,18 +555,29 @@ function formatMonthDay(dateStr: string): string {
 }
 
 .about-link:focus-visible,
-.about-more:focus-visible {
+.about-more:focus-visible,
+.about-note a:focus-visible {
   outline: 2px solid var(--about-go);
   outline-offset: 4px;
   border-radius: 0.25rem;
 }
 
 .about-note {
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--about-line);
+  margin-top: 1.25rem;
   color: var(--about-muted);
   font-size: 0.75rem;
   line-height: 1.6;
+}
+
+.about-note a {
+  text-decoration: underline;
+  text-decoration-color: var(--about-line);
+  text-underline-offset: 0.25em;
+}
+
+.about-note a:hover,
+.about-note a:focus-visible {
+  text-decoration-color: var(--about-go);
 }
 
 .about-more {
