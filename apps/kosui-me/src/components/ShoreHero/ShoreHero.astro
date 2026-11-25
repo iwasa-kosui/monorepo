@@ -64,7 +64,6 @@ const { themes } = Astro.props;
           </svg>
         </button>
       </div>
-      <p class="shore-note" data-shore-note aria-live="polite"></p>
     </div>
   </div>
   <nav class="shore-themes" aria-label="テーマ別に読む">
@@ -276,23 +275,6 @@ const { themes } = Astro.props;
   height: 100%;
 }
 
-/* エビのそばに出す一言。エビのいない砂の上に置く */
-.shore-note {
-  position: absolute;
-  left: 0;
-  top: 30%;
-  width: 34%;
-  font-size: 0.75rem;
-  line-height: 1.8;
-  color: var(--shore-muted);
-  opacity: 0;
-  transition: opacity 0.8s ease;
-}
-
-.shore-note.is-shown {
-  opacity: 1;
-}
-
 /* 海を描けているときは、エビもシェーダーが描く */
 .shore.is-live .shore-shrimp svg {
   visibility: hidden;
@@ -389,13 +371,6 @@ const { themes } = Astro.props;
     top: -3.125%;
   }
 
-  .shore-note {
-    left: 37.5%;
-    top: 64%;
-    width: 62.5%;
-    font-size: 0.8125rem;
-  }
-
   .shore-themes ul {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -439,10 +414,9 @@ const mount = (): void => {
   const canvas = hero?.querySelector<HTMLCanvasElement>('[data-shore-canvas]');
   const slot = hero?.querySelector<HTMLElement>('[data-shore-slot]');
   const button = hero?.querySelector<HTMLButtonElement>('[data-shore-shrimp]');
-  const note = hero?.querySelector<HTMLElement>('[data-shore-note]');
   const content = hero?.querySelector<HTMLElement>('[data-shore-content]');
-  if (!hero || !canvas || !slot || !button || !note || !content) return;
-  dispose = mountShore({ hero, canvas, slot, button, note, content });
+  if (!hero || !canvas || !slot || !button || !content) return;
+  dispose = mountShore({ hero, canvas, slot, button, content });
 };
 
 document.addEventListener('astro:page-load', mount);
