@@ -1,6 +1,7 @@
 ---
 import AuthorCard from '@/components/AuthorCard.astro';
 import Figure from '@/components/Figure.astro';
+import ShoreBackdrop from '@/components/ShoreBackdrop/ShoreBackdrop.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { type CollectionEntry, getCollection, render } from 'astro:content';
 
@@ -40,6 +41,8 @@ function formatDate(dateStr: string): string {
   ogType="article"
   noindex={true}
 >
+  <ShoreBackdrop slot="backdrop" />
+
   <article class="article-paper">
     <header class="mb-8">
       <time

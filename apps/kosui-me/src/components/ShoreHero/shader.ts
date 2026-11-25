@@ -393,24 +393,27 @@ void main() {
     col = mix(col, uFoam * mark.y, mark.x * (1. - inWater) * .85 * (1. - popped) * mix(1., uFroth, .5));
   }
 
-  // エビの影
   float wobble = smoothstep(0., .1, inside) * (.3 + .7 * inWater);
-  vec2 sq = (toCell(px - vec2(.016, .024) * size, t, wobble) + 2.) / 24.;
-  float shadow = (sq.x < 0. || sq.y < 0. || sq.x > 1. || sq.y > 1.) ? 0. : texture2D(uShadow, sq).r;
-  float arrived = smoothstep(0., .9, t);
-  col = mix(col, col * uShadowTint, shadow * .55 * arrived * (1. - .4 * inWater) * (1. - .6 * uCover) * uVisible * smoothstep(.3, 1., 1. - uBuried));
+  float alpha = 0.;   // エビの濃さ
+  if (uVisible > 0.) {   // エビを描かない画面（記事の背景）では、ドット絵を読まない
+    // エビの影
+    vec2 sq = (toCell(px - vec2(.016, .024) * size, t, wobble) + 2.) / 24.;
+    float shadow = (sq.x < 0. || sq.y < 0. || sq.x > 1. || sq.y > 1.) ? 0. : texture2D(uShadow, sq).r;
+    float arrived = smoothstep(0., .9, t);
+    col = mix(col, col * uShadowTint, shadow * .55 * arrived * (1. - .4 * inWater) * (1. - .6 * uCover) * uVisible * smoothstep(.3, 1., 1. - uBuried));
 
-  // エビ（4 点で縁をならす）。水をかぶっている部分だけ揺らぐ
-  vec2 acc = vec2(0.);
-  float o = .25;
-  acc += sprite(toCell(px + vec2(-o, -o), t, wobble));
-  acc += sprite(toCell(px + vec2(o, -o), t, wobble));
-  acc += sprite(toCell(px + vec2(-o, o), t, wobble));
-  acc += sprite(toCell(px + vec2(o, o), t, wobble));
-  float alpha = acc.x * .25 * arrived * uVisible;
-  float eye = acc.x > 0. ? acc.y / acc.x : 0.;
-  vec3 shrimp = mix(uShell, uEye, eye * uBlink) * mix(1., .93, damp);
-  col = mix(col, shrimp, alpha);
+    // エビ（4 点で縁をならす）。水をかぶっている部分だけ揺らぐ
+    vec2 acc = vec2(0.);
+    float o = .25;
+    acc += sprite(toCell(px + vec2(-o, -o), t, wobble));
+    acc += sprite(toCell(px + vec2(o, -o), t, wobble));
+    acc += sprite(toCell(px + vec2(-o, o), t, wobble));
+    acc += sprite(toCell(px + vec2(o, o), t, wobble));
+    alpha = acc.x * .25 * arrived * uVisible;
+    float eye = acc.x > 0. ? acc.y / acc.x : 0.;
+    vec3 shrimp = mix(uShell, uEye, eye * uBlink) * mix(1., .93, damp);
+    col = mix(col, shrimp, alpha);
+  }
 
   // 泡: 生まれたては白い帯。時間がたつと穴があいて網になり、ちぎれて消える。
   // 水が引いても泡はすぐには消えず、波の届いたところまで砂の上に残る

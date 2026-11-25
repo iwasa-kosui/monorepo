@@ -185,6 +185,8 @@ const navItems = [
     <ClientRouter />
   </head>
   <body>
+    {/* 本文の後ろに敷く背景（記事ページの波） */}
+    <slot name="backdrop" />
     <div class="min-h-screen flex flex-col">
       <header
         transition:name="site-header"

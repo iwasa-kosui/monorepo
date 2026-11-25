@@ -1,0 +1,88 @@
+---
+/**
+* 記事の背景。トップページのヒーローと同じ波打ち際を、紙の後ろの砂に描く。
+* 海は右上の隅にあり、波はそこから紙のほうへ寄せては引く。
+*
+* 広い画面では、紙の右の余白に留まり、読み進めても波が見える。
+* 余白のない狭い画面では、ページの上端にだけ置き、読み進めると画面の外へ流れていく。
+*
+* BaseLayout の backdrop スロットに置く。WebGL が使えない環境では、砂の地だけが見える。
+*/
+---
+
+<div class="backdrop shore-palette" data-shore-backdrop aria-hidden="true">
+  <canvas data-shore-backdrop-canvas></canvas>
+</div>
+
+<style>
+.backdrop {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 24rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+  /* 下端はページの砂へ溶け込ませる */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 9rem), transparent);
+}
+
+.backdrop.is-live {
+  opacity: 1;
+}
+
+.backdrop canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 広い画面: 紙（幅 48rem の列から左右 1rem ずつ内側）の右の余白に留める。
+   左端は紙の下に 4rem もぐり込ませ、紙のないところではページの砂へ溶け込ませる */
+@media (min-width: 68rem) {
+  .backdrop {
+    position: fixed;
+    bottom: 0;
+    left: calc(50% + 19rem);
+    height: auto;
+    mask-image: linear-gradient(to right, transparent, #000 3.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop {
+    transition: none;
+  }
+}
+
+@media print {
+  .backdrop {
+    display: none;
+  }
+}
+</style>
+
+<script>
+import { mountBackdrop } from './mount';
+
+let dispose: (() => void) | undefined;
+
+const mount = (): void => {
+  dispose?.();
+  dispose = undefined;
+  const root = document.querySelector<HTMLElement>('[data-shore-backdrop]');
+  const canvas = root?.querySelector<HTMLCanvasElement>(
+    '[data-shore-backdrop-canvas]',
+  );
+  if (!root || !canvas) return;
+  dispose = mountBackdrop({ root, canvas });
+};
+
+document.addEventListener('astro:page-load', mount);
+document.addEventListener('astro:before-swap', () => {
+  dispose?.();
+  dispose = undefined;
+});
+</script>
