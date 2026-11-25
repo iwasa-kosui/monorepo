@@ -42,7 +42,7 @@ test('全ページで、全体の進み具合が 1 から順に増え、目安�
 
 test('章の中の進み具合は、見出しにこれまでどおり出る', async ({ page }) => {
   await page.goto('/chapters/chapter-2/4/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('4/6');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('4/5');
   await expect(page.getByRole('heading', { level: 1 })).not.toContainText('全体');
 });
 
@@ -90,10 +90,10 @@ test.describe('ページ一覧（幅 1440px 未満のメニュー）', () => {
   });
 
   test('見出しの無いページは「N ページ目」と表示する', async ({ page }) => {
-    await page.goto('/chapters/chapter-2/');
+    await page.goto('/chapters/chapter-3/');
     await openList(page);
-    await expect(page.locator('.lesson-menu__panel a[href="/chapters/chapter-2/4/"]')).toHaveText('4 ページ目');
-    await expect(page.locator('.lesson-menu__panel a[href="/chapters/chapter-2/6/"]')).not.toContainText('ページ目');
+    await expect(page.locator('.lesson-menu__panel a[href="/chapters/chapter-3/3/"]')).toHaveText('3 ページ目');
+    await expect(page.locator('.lesson-menu__panel a[href="/chapters/chapter-3/4/"]')).not.toContainText('ページ目');
   });
 
   test('リンクを押すとそのページへ移動する', async ({ page }) => {
@@ -150,7 +150,7 @@ test.describe('ページ一覧（幅 1440px 未満のメニュー）', () => {
 });
 
 test.describe('一覧を開いても画面が動かない', () => {
-  const paths = ['/chapters/chapter-2/4/', '/chapters/chapter-2/5/', '/chapters/intro/', '/chapters/chapter-4/3/'];
+  const paths = ['/chapters/chapter-2/2/', '/chapters/chapter-2/4/', '/chapters/intro/', '/chapters/chapter-4/3/'];
   for (const path of paths) {
     test(`1280x640 の ${path}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 640 });
@@ -176,7 +176,7 @@ test.describe('一覧を開いても画面が動かない', () => {
     });
   }
 
-  for (const path of ['/chapters/chapter-2/4/', '/chapters/chapter-2/5/']) {
+  for (const path of ['/chapters/chapter-2/2/', '/chapters/chapter-2/4/']) {
     test(`1280x640 の ${path} は、章の見出しが 1 行に収まる`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 640 });
       await page.goto(path);
@@ -252,9 +252,9 @@ test.describe('サイドバー（幅 1440px 以上）', () => {
   });
 
   test('見出しの無いページは「N ページ目」と表示する', async ({ page }) => {
-    await page.goto('/chapters/chapter-2/3/');
-    await expect(page.locator('.lesson-sidebar a[href="/chapters/chapter-2/4/"]')).toHaveText('4 ページ目');
-    await expect(page.locator('.lesson-sidebar a[href="/chapters/chapter-2/6/"]')).not.toContainText('ページ目');
+    await page.goto('/chapters/chapter-3/2/');
+    await expect(page.locator('.lesson-sidebar a[href="/chapters/chapter-3/3/"]')).toHaveText('3 ページ目');
+    await expect(page.locator('.lesson-sidebar a[href="/chapters/chapter-3/4/"]')).not.toContainText('ページ目');
   });
 
   test('リンクを押すとそのページへ移動する', async ({ page }) => {
@@ -330,7 +330,7 @@ test.describe('スマートフォンの幅の上部の帯', () => {
     await page.goto('/chapters/chapter-2/4/');
     const bar = page.locator('.top-bar');
     await expect(bar.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(bar.locator('.lesson-bar__count')).toHaveText('4/6');
+    await expect(bar.locator('.lesson-bar__count')).toHaveText('4/5');
     await expect(bar.locator('.top-bar__home')).toBeHidden();
     await expect(bar.locator('.lesson-bar__help').first()).toBeHidden();
     await expect(bar.locator('.lesson-bar__status')).toBeHidden();

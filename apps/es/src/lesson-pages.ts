@@ -59,25 +59,21 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-2/01': {
     flow: 'explain',
     role:
-      '設計メモで、キャンセルした人と理由を、来院の更新と同じトランザクションで業務イベントとして記録する方針を読みます。',
+      'ADR（設計上の決定を残す文書）で、キャンセルした人と理由を、来院の更新と同じトランザクションで `visit_cancellations` に追記する方針を読みます。',
   },
   'chapter-2/02': {
-    flow: 'try',
-    role: 'エディタで記録が失敗する状態のコードを実行し、来院の更新も取り消されることを確かめます。',
+    flow: 'exercise',
+    role: 'エディタで `cancelVisit` の空欄を埋めて、来院のキャンセルを `visit_cancellations` に記録します。',
   },
   'chapter-2/03': {
     flow: 'explain',
-    role: '設計メモで、`business_events` の各列を残す理由と、誰が、いつ、何を、なぜに答える列を読みます。',
+    role: 'ADR で、出来事の記録を1つのテーブルにまとめる理由と、`business_events` の各列を残す理由を読みます。',
   },
   'chapter-2/04': {
     flow: 'exercise',
-    role: 'エディタで `cancelVisit` の空欄を埋めて、来院のキャンセルを業務イベントとして記録します。',
+    role: 'エディタで `cancelVisit` の `INSERT` を書き換えて、来院のキャンセルを業務イベントとして記録します。',
   },
   'chapter-2/05': {
-    flow: 'exercise',
-    role: 'エディタで `cancelVisit` の入力と `payload` を変えて、キャンセルの理由と操作した人も記録します。',
-  },
-  'chapter-2/06': {
     flow: 'explain',
     role:
       'プルリクエストで、記録を足すと `visits.ts` が何行変わるかと、足した後も残る作業と、記録されない変更を読みます。',

@@ -42,9 +42,11 @@ try {
   if (start.status === 0 || !/pass 4\b/.test(start.stdout) || !/fail 4\b/.test(start.stdout)) {
     errors.push(`chapter-1-start: 事前準備のページの説明（pass 4、fail 4）と結果が違います\n${start.stdout}`);
   }
-  const done = runTests('chapter-2-step-2');
-  if (done.status !== 0) {
-    errors.push(`chapter-2-step-2: 展開先でテストが成功しません\n${done.stdout}`);
+  for (const dir of ['chapter-2-step-1', 'chapter-2-step-2']) {
+    const done = runTests(dir);
+    if (done.status !== 0) {
+      errors.push(`${dir}: 展開先でテストが成功しません\n${done.stdout}`);
+    }
   }
 } finally {
   rmSync(workDir, { recursive: true, force: true });

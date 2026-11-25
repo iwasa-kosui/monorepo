@@ -67,7 +67,7 @@ describe('既存の業務', () => {
   });
 });
 
-describe('第2章 ステップ1', () => {
+describe('第2章 ステップ2', () => {
   it('来院をキャンセルすると、来院キャンセルの記録が1行残る', async () => {
     await cancelVisit(db, send, cancelInput);
     const events = eventsOf(visitId).filter((event) => event.event_name === 'VisitCancelled');
@@ -96,9 +96,7 @@ describe('第2章 ステップ1', () => {
     );
     assert.equal(statusOf(visitId), 'reserved');
   });
-});
 
-describe('第2章 ステップ2', () => {
   it('キャンセルした人と理由を答えられる', async () => {
     await cancelVisit(db, send, cancelInput);
     const answer = db.prepare(`

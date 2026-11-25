@@ -160,7 +160,7 @@ test.describe('スマートフォンの画面は横にスクロールしない',
   }
 });
 
-const hintPaths: readonly string[] = ['/chapters/chapter-2/4/', '/chapters/chapter-2/5/'];
+const hintPaths: readonly string[] = ['/chapters/chapter-2/2/', '/chapters/chapter-2/4/'];
 
 const collectHintFailures = async (
   page: Page,

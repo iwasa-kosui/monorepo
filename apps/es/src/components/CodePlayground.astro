@@ -1,14 +1,14 @@
 ---
 import '../playground/playground.css';
+import '../playground/workbench.css';
 
-import { lessonFile, snapshotFiles } from '../lib/snapshots';
+import { snapshotFiles } from '../lib/snapshots';
 
 interface Props {
   exercise: string;
   editable: string[];
   readonly?: string[];
   testFile?: string;
-  lesson?: string;
   reveal?: string;
   scripts?: { file: string; label: string }[];
   complete?: { exercise: string; label?: string };
@@ -19,7 +19,6 @@ const {
   exercise,
   editable,
   testFile,
-  lesson,
   reveal,
   scripts = [],
   complete,
@@ -29,10 +28,7 @@ const readonlyFiles = Astro.props.readonly ?? [];
 const shown = [...editable, ...readonlyFiles];
 const config = JSON.stringify({
   exerciseId: exercise,
-  files: {
-    ...snapshotFiles(exercise),
-    ...(lesson === undefined ? {} : lessonFile(lesson)),
-  },
+  files: snapshotFiles(exercise),
   editable,
   readonly: readonlyFiles,
   testFile: testFile ?? null,

@@ -20,7 +20,7 @@ export const chapter1RunTests: WorkspaceScenario = lessonScenario({
     { when: 'tests:ran', kind: 'post', post: posts.failedFour },
   ],
   tabs: [
-    editorTab('editor', 'visits.test.ts'),
+    editorTab('editor', 'visits.test.ts', { snapshot: 'chapter-1-start' }),
     docTab('guide', 'テストの読み方', 'guides/how-to-read-tests'),
   ],
 });

@@ -11,33 +11,29 @@ const narrowSizes: readonly Size[] = [
   { width: 360, height: 640 },
 ];
 
-const transactionPath = '/chapters/chapter-2/';
-const eventRowPath = '/chapters/chapter-2/3/';
+const decisionPath = '/chapters/chapter-2/';
+const mappingPath = '/chapters/chapter-2/3/';
 const beforeRecordPath = '/chapters/chapter-3/4/';
 
-const transactionSuccess = [
-  '経路を選んで「次へ」を押すと、cancelVisit の処理を1つずつ進めます。',
-  'withTransaction がトランザクションを始めます。',
-  'UPDATE で、visits の status が cancelled になります。まだ確定していません。',
-  'INSERT で、business_events に1行を書きます。まだ確定していません。',
-  'トランザクションを確定します。来院の更新と記録の両方が残ります。',
-];
-const transactionFail = [
-  transactionSuccess[0],
-  transactionSuccess[1],
-  transactionSuccess[2],
-  'business_events への記録が失敗します。',
-  'トランザクションを取り消します。visits の status は reserved に戻ります。記録が抜けたキャンセルは残りません。',
-];
-const eventRowMessages = [
-  '「次へ」を押すと、ポチのキャンセルで書く1行が列ごとに埋まります。',
-  'event_id は DB が連番で採番します。',
-  'event_at は「いつ」に答えます。',
-  'event_name は「何を」に答えます。',
-  'payload には、呼び出し元が渡した理由と操作した人が入ります。「誰が」「なぜ」に答えます。',
-  'target_ で始まる3列は、どの来院がどの状態になったかを残します。',
-  'この1行で、問い合わせの「誰が、いつ、何を、なぜ」に答えられます。',
-];
+const mappingRows = [
+  { from: ['id'], column: 'event_id', value: '1', why: '1行を指し示すため' },
+  { from: ['cancelled_at'], column: 'event_at', value: '2026-11-06T18:11:58.846Z', why: '「いつ」に答えるため' },
+  { from: ['テーブルの名前'], column: 'event_name', value: 'VisitCancelled', why: '「何を」に答えるため' },
+  {
+    from: ['operated_by', 'reason'],
+    column: 'payload',
+    value: '{"reason":"飼い主の都合","operatedBy":"受付スタッフ"}',
+    why: '「誰が」「なぜ」に答えるため',
+  },
+  { from: ['visit_id'], column: 'target_id', value: 'visit-pochi', why: '問い合わせの来院の記録を探すため' },
+  { from: [], column: 'target_type', value: 'Visit', why: '来院以外の対象も同じテーブルに記録するため' },
+  {
+    from: [],
+    column: 'target_state',
+    value: '{"id":"visit-pochi","pet_name":"ポチ","status":"cancelled"}',
+    why: 'その時点の状態を後から確かめるため',
+  },
+] as const;
 const beforeRecordMessages = [
   '「次へ」を押して、時間を進めます。2件の来院は、どちらも reserved です。',
   'タマの来院がキャンセルされます。このときは記録のコードがありません。visits の status だけが cancelled になります。',
@@ -70,153 +66,105 @@ for (const reducedMotion of motions) {
   test.describe(`章の図解（reducedMotion: ${reducedMotion}）`, () => {
     test.use({ reducedMotion });
 
-    test('第2章 1 ページ目: 記録に成功する経路で、確定すると来院の更新と記録の両方が残る', async ({ page }) => {
-      await page.goto(transactionPath);
-      const figure = page.locator('[data-transaction-figure]');
-      const success = figure.getByRole('button', { name: '記録に成功する場合' });
-      const fail = figure.getByRole('button', { name: '記録に失敗する場合' });
-      const reserved = figure.locator('[data-value="reserved"]');
-      const cancelled = figure.locator('[data-value="cancelled"]');
+    test('第2章 1 ページ目: 図はボタンが無く、呼び出し元から2つの書き込みまでを上から読める', async ({ page }) => {
+      await page.goto(decisionPath);
+      const figure = page.locator('[data-record-decision-figure]');
 
-      await expect(success).toHaveAttribute('aria-pressed', 'true');
-      await expect(fail).toHaveAttribute('aria-pressed', 'false');
-      await expect(reserved).toBeVisible();
-      await expect(cancelled).toBeHidden();
-      await expect(figure.getByText('行がありません')).toBeVisible();
-
-      await stepThrough(figure, transactionSuccess);
-
-      await expect(reserved).toBeHidden();
-      await expect(cancelled).toBeVisible();
-      await expect(figure.locator('.v-cancelled .tag-commit')).toBeVisible();
-      await expect(figure.locator('.row-event')).toBeVisible();
-      await expect(figure.getByText('行がありません')).toBeHidden();
-      await expect(figure.locator('.stamp-commit')).toBeVisible();
-      await expect(figure.locator('.stamp-rollback')).toBeHidden();
-    });
-
-    test('第2章 1 ページ目: 記録に失敗する経路で、取り消すと status が reserved に戻り記録は空のまま', async ({ page }) => {
-      await page.goto(transactionPath);
-      const figure = page.locator('[data-transaction-figure]');
-      const success = figure.getByRole('button', { name: '記録に成功する場合' });
-      const fail = figure.getByRole('button', { name: '記録に失敗する場合' });
-      const reserved = figure.locator('[data-value="reserved"]');
-      const cancelled = figure.locator('[data-value="cancelled"]');
-
-      await fail.click();
-      await expect(fail).toHaveAttribute('aria-pressed', 'true');
-      await expect(success).toHaveAttribute('aria-pressed', 'false');
-      await expect(figure).toHaveAttribute('data-path', 'fail');
-
-      await stepThrough(figure, transactionFail);
-
-      await expect(reserved).toBeVisible();
-      await expect(cancelled).toBeHidden();
-      await expect(figure.getByText('行がありません')).toBeVisible();
-      await expect(figure.locator('.row-event')).toBeHidden();
-      await expect(figure.locator('.fail-mark')).toBeVisible();
-      await expect(figure.locator('.stamp-rollback')).toBeVisible();
-      await expect(figure.locator('.stamp-commit')).toBeHidden();
-    });
-
-    test('第2章 1 ページ目: 失敗経路の 3 ステップ目で INSERT に失敗の印が付き、cancelled は確定前のまま', async ({ page }) => {
-      await page.goto(transactionPath);
-      const figure = page.locator('[data-transaction-figure]');
-      const { next } = controls(figure);
-
-      await figure.getByRole('button', { name: '記録に失敗する場合' }).click();
-      for (let index = 0; index < 3; index += 1) await next.click();
-
-      await expect(figure.locator('.fail-mark')).toBeVisible();
-      await expect(figure.locator('.v-cancelled .tag-pending')).toBeVisible();
-      await expect(figure.locator('.v-cancelled .tag-commit')).toBeHidden();
-      await expect(figure.locator('.stamp-commit')).toBeHidden();
-      await expect(figure.locator('.stamp-rollback')).toBeHidden();
-    });
-
-    test('第2章 1 ページ目: 経路を切り替えると最初に戻る', async ({ page }) => {
-      await page.goto(transactionPath);
-      const figure = page.locator('[data-transaction-figure]');
-      const { next, reset, message } = controls(figure);
-
-      await next.click();
-      await next.click();
-      await expect(figure).toHaveAttribute('data-step', '2');
-
-      await figure.getByRole('button', { name: '記録に失敗する場合' }).click();
-      await expect(figure).toHaveAttribute('data-step', '0');
-      await expect(message).toHaveText(transactionFail[0] ?? '');
-      await expect(next).toBeEnabled();
-      await expect(reset).toBeDisabled();
-      await expect(figure.locator('[data-value="reserved"]')).toBeVisible();
-
-      await next.click();
-      await next.click();
-      await next.click();
-      await figure.getByRole('button', { name: '記録に成功する場合' }).click();
-      await expect(figure).toHaveAttribute('data-step', '0');
-      await expect(figure).toHaveAttribute('data-path', 'success');
-      await expect(message).toHaveText(transactionSuccess[0] ?? '');
-    });
-
-    test('第2章 1 ページ目: 「最初に戻す」で最初のステップに戻る', async ({ page }) => {
-      await page.goto(transactionPath);
-      const figure = page.locator('[data-transaction-figure]');
-      const { next, reset, message } = controls(figure);
-
-      await next.click();
-      await next.click();
-      await reset.click();
-
-      await expect(figure).toHaveAttribute('data-step', '0');
-      await expect(message).toHaveText(transactionSuccess[0] ?? '');
-      await expect(reset).toBeDisabled();
-    });
-
-    test('第2章 3 ページ目: 「次へ」で列ごとに値が埋まり、最後に payload の値が読める', async ({ page }) => {
-      await page.goto(eventRowPath);
-      const figure = page.locator('[data-event-row-figure]');
-      const values = figure.locator('.val-text');
-      const call = figure.locator('.call');
-
-      await expect(call).toHaveText(
+      await expect(figure.getByRole('button')).toHaveCount(0);
+      await expect(figure.locator('.call')).toHaveText(
         'cancelVisit(db, { visitId: \'visit-pochi\', reason: \'飼い主の都合\', operatedBy: \'受付スタッフ\' })',
       );
-      await expect(figure.locator('.badge:visible')).toHaveCount(0);
-      await expect(figure.locator('.val-text:visible')).toHaveCount(0);
+      await expect(figure.locator('.call .mark')).toHaveText([
+        'reason: \'飼い主の都合\'',
+        'operatedBy: \'受付スタッフ\'',
+      ]);
+      await expect(figure.locator('.op-sql')).toHaveText(['UPDATE visits', 'INSERT INTO visit_cancellations']);
 
-      const { next } = controls(figure);
-      await next.click();
-      await expect(values.nth(0)).toBeVisible();
-      await expect(values.nth(0)).toHaveText('1');
-      await next.click();
-      await expect(values.nth(1)).toHaveText('2026-11-06T18:11:58.846Z');
-      await expect(figure.locator('.badge:visible')).toHaveText(['いつ']);
-      await next.click();
-      await expect(values.nth(2)).toHaveText('VisitCancelled');
-      await expect(figure.locator('.badge:visible')).toHaveText(['いつ', '何を']);
-      await next.click();
-      await expect(values.nth(3)).toHaveText('{"reason":"飼い主の都合","operatedBy":"受付スタッフ"}');
-      await expect(figure.locator('.badge:visible')).toHaveText(['いつ', '何を', '誰が', 'なぜ']);
-      await expect(figure.locator('.call .arg')).toHaveCount(2);
-      await next.click();
-      await expect(values.nth(4)).toHaveText('visit-pochi');
-      await expect(values.nth(5)).toHaveText('Visit');
-      await expect(values.nth(6)).toHaveText('{"id":"visit-pochi","pet_name":"ポチ","status":"cancelled"}');
-      await next.click();
-      await expect(figure.locator('.val-text:visible')).toHaveCount(7);
+      const visits = figure.locator('[data-write="visits"]');
+      await expect(visits.getByRole('term')).toHaveText(['id', 'pet_name', 'status']);
+      await expect(visits.locator('.value')).toHaveText(['visit-pochi', 'ポチ', 'cancelled']);
+      await expect(visits.locator('.before')).toHaveText('reserved');
+
+      const record = figure.locator('[data-write="visit_cancellations"]');
+      await expect(record.locator('dt > .mono')).toHaveText([
+        'id',
+        'visit_id',
+        'cancelled_at',
+        'operated_by',
+        'reason',
+      ]);
+      await expect(record.locator('.value')).toHaveText([
+        '1',
+        'visit-pochi',
+        '2026-11-06T18:11:58.846Z',
+        '受付スタッフ',
+        '飼い主の都合',
+      ]);
+      await expect(record.locator('.value.mark')).toHaveText(['受付スタッフ', '飼い主の都合']);
+      await expect(record.locator('.badge:visible')).toHaveText(['いつ', '誰が', 'なぜ']);
     });
 
-    test('第2章 3 ページ目: 各ステップのメッセージとボタンの状態', async ({ page }) => {
-      await page.goto(eventRowPath);
-      const figure = page.locator('[data-event-row-figure]');
-      await stepThrough(figure, eventRowMessages);
+    test('第2章 1 ページ目: 図に、記録に成功する場合と失敗する場合の結果が並ぶ', async ({ page }) => {
+      await page.goto(decisionPath);
+      const figure = page.locator('[data-record-decision-figure]');
+      const success = figure.locator('[data-outcome="success"]');
+      const fail = figure.locator('[data-outcome="fail"]');
 
-      const { reset, message } = controls(figure);
-      await expect(figure.locator('.badge:visible')).toHaveCount(4);
-      await reset.click();
-      await expect(message).toHaveText(eventRowMessages[0] ?? '');
-      await expect(figure.locator('.val-text:visible')).toHaveCount(0);
+      await expect(success.locator('.stamp')).toHaveText('確定');
+      await expect(success).toContainText('記録に成功する場合');
+      await expect(success).toContainText('トランザクションを確定します。来院の更新と記録の両方が残ります。');
+      await expect(fail.locator('.stamp')).toHaveText('取り消し');
+      await expect(fail).toContainText('記録に失敗する場合');
+      await expect(fail).toContainText('への記録が失敗すると、トランザクションを取り消します。');
+      await expect(fail).toContainText(/visits の status は reserved に戻ります。/);
+
+      const successBox = await success.boundingBox();
+      const failBox = await fail.boundingBox();
+      const frameBox = await figure.locator('.frame').boundingBox();
+      expect(successBox !== null && failBox !== null && frameBox !== null).toBe(true);
+      expect((successBox?.y ?? 0) >= (frameBox?.y ?? 0) + (frameBox?.height ?? 0)).toBe(true);
+      expect(Math.abs((successBox?.y ?? 0) - (failBox?.y ?? 0)) < 1).toBe(true);
+    });
+
+    test('第2章 3 ページ目: 図はボタンが無く、テーブルを1つにまとめることと、列の対応を読める', async ({ page }) => {
+      await page.goto(mappingPath);
+      const figure = page.locator('[data-record-mapping-figure]');
+
+      await expect(figure.getByRole('button')).toHaveCount(0);
+      await expect(figure.locator('.side-head')).toHaveText(['出来事ごとにテーブルを作る', '1つのテーブルにまとめる']);
+      await expect(figure.locator('.chip')).toHaveText([
+        'visit_cancellations',
+        '診察の完了を記録するテーブル',
+        '…',
+        'business_events',
+      ]);
+
+      const table = figure.getByRole('table', { name: 'ステップ1の列と business_events の列の対応' });
+      await expect(table.getByRole('columnheader')).toHaveText(['ステップ1', 'business_events の列', '残す理由']);
+      await expect(table.getByRole('row')).toHaveCount(mappingRows.length + 1);
+      for (const expected of mappingRows) {
+        const row = table.locator(`[data-column="${expected.column}"]`);
+        if (expected.from.length === 0) await expect(row.locator('.none')).toHaveText('無し');
+        else await expect(row.locator('.source')).toHaveText([...expected.from]);
+        await expect(row.locator('.name')).toHaveText(expected.column);
+        await expect(row.locator('.value')).toHaveText(expected.value);
+        await expect(row.locator('.why')).toHaveText(expected.why);
+      }
+      await expect(table.locator('.name')).toHaveText(mappingRows.map((row) => row.column));
+    });
+
+    test('第2章 3 ページ目: ステップ1の列は business_events の列の左に並び、同じ行にある', async ({ page }) => {
+      await page.goto(mappingPath);
+      const figure = page.locator('[data-record-mapping-figure]');
+      for (const expected of mappingRows) {
+        const row = figure.locator(`[data-column="${expected.column}"]`);
+        const from = await row.locator('.from').boundingBox();
+        const to = await row.locator('.to').boundingBox();
+        expect(from !== null && to !== null, expected.column).toBe(true);
+        expect((from?.x ?? 0) + (from?.width ?? 0) <= (to?.x ?? 0) + 1, expected.column).toBe(true);
+        const fromMiddle = (from?.y ?? 0) + (from?.height ?? 0) / 2;
+        expect(fromMiddle >= (to?.y ?? 0) - 1, expected.column).toBe(true);
+      }
     });
 
     test('第3章 4 ページ目: 時間を進めると、記録を足す前のタマの行だけ NULL になる', async ({ page }) => {
@@ -310,18 +258,16 @@ const scrollers = (page: Page): Promise<string[]> =>
     return found;
   });
 
-type Route = { readonly name: string; readonly path: string; readonly steps: number; readonly fail?: true };
+type Route = { readonly name: string; readonly path: string; readonly steps: number };
 
 const routes: readonly Route[] = [
-  { name: '図1 成功', path: transactionPath, steps: transactionSuccess.length },
-  { name: '図1 失敗', path: transactionPath, steps: transactionFail.length, fail: true },
-  { name: '図2', path: eventRowPath, steps: eventRowMessages.length },
+  { name: '図1', path: decisionPath, steps: 1 },
+  { name: '図2', path: mappingPath, steps: 1 },
   { name: '図3', path: beforeRecordPath, steps: beforeRecordMessages.length },
 ];
 
 const openRoute = async (page: Page, route: Route): Promise<void> => {
   await page.goto(route.path);
-  if (route.fail === true) await page.getByRole('button', { name: '記録に失敗する場合' }).click();
 };
 
 const eachStep = async (page: Page, route: Route, check: (step: number) => Promise<void>): Promise<void> => {
@@ -366,6 +312,57 @@ test.describe('図解を含むページは全ステップで一画面に収ま�
           if (metrics.scrollWidth > metrics.innerWidth) failures.push(`step ${step}: ${JSON.stringify(metrics)}`);
         });
         expect(failures).toEqual([]);
+      });
+    }
+  }
+});
+
+const staticFigures = [
+  { name: '図1', path: decisionPath, selector: '[data-record-decision-figure]' },
+  { name: '図2', path: mappingPath, selector: '[data-record-mapping-figure]' },
+] as const;
+
+const showDocument = async (page: Page): Promise<void> => {
+  const documentTab = page.getByRole('tab', { name: /ADR/ });
+  if ((await documentTab.getAttribute('aria-selected')) !== 'true') await documentTab.click();
+};
+
+test.describe('第2章の図は、ボタンを押さずに全体を読める', () => {
+  for (const size of desktopSizes) {
+    for (const item of staticFigures) {
+      test(`${item.name} ${size.width}x${size.height} で、図の高さが文書の表示域に収まる`, async ({ page }) => {
+        await page.setViewportSize(size);
+        await page.goto(item.path);
+        const heights = await page.locator(item.selector).evaluate((figure) => ({
+          figure: figure.getBoundingClientRect().height,
+          view: figure.closest('.doc-scroll')?.clientHeight ?? 0,
+        }));
+        expect(heights.view).toBeGreaterThan(0);
+        expect(heights.figure).toBeLessThanOrEqual(heights.view);
+      });
+    }
+  }
+
+  for (const size of [...desktopSizes, ...narrowSizes]) {
+    for (const item of staticFigures) {
+      test(`${item.name} ${size.width}x${size.height} で、図の中身が図の幅からはみ出さない`, async ({ page }) => {
+        await page.setViewportSize(size);
+        await page.goto(item.path);
+        await showDocument(page);
+        const result = await page.locator(item.selector).evaluate((figure) => {
+          const box = figure.getBoundingClientRect();
+          const outside: string[] = [];
+          for (const element of figure.querySelectorAll('*')) {
+            const rect = element.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) continue;
+            if (rect.left < box.left - 1 || rect.right > box.right + 1) {
+              outside.push(`${element.tagName.toLowerCase()}.${[...element.classList].join('.')}`);
+            }
+          }
+          return { width: box.width, outside };
+        });
+        expect(result.width).toBeGreaterThan(0);
+        expect(result.outside).toEqual([]);
       });
     }
   }

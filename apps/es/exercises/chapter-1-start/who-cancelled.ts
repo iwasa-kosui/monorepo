@@ -12,13 +12,11 @@ const rows = db.prepare(`
   SELECT
     visits.id,
     visits.status,
-    business_events.event_at,
-    business_events.event_name,
-    business_events.payload ->> '$.operatedBy' AS operated_by,
-    business_events.payload ->> '$.reason' AS reason
+    visit_cancellations.cancelled_at,
+    visit_cancellations.operated_by,
+    visit_cancellations.reason
   FROM visits
-  LEFT JOIN business_events
-    ON business_events.target_type = 'Visit' AND business_events.target_id = visits.id
+  LEFT JOIN visit_cancellations ON visit_cancellations.visit_id = visits.id
   ORDER BY visits.id
 `).all();
 console.table(rows);

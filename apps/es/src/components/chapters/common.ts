@@ -50,9 +50,8 @@ export const posts = {
   wantRecord: lead('再発防止で、キャンセルしたときに記録を残すようにしたいです'),
   runTests: lead('先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです'),
   failedFour: lead('落ちた4件が、これから足すところです👍'),
-  designMemo: lead('方針を設計メモにまとめました。ざっと読んでもらえると助かります'),
-  checkRollback: lead('記録の書き込みに失敗したとき、来院の更新がどうなるか、一回試してみてください'),
-  columnsMemo: lead('記録の列も設計メモに足しました'),
+  decisionRecord: lead('方針を ADR にまとめました。ざっと読んでもらえると助かります'),
+  tableRecord: lead('記録を1つのテーブルにまとめる案も ADR にしました'),
   prSeen: lead('PR 見ました！差分、思ったより小さいですね'),
   prRemaining: lead('足したあとに残る作業も書いておきます'),
   otherClinicFirst: support('お疲れ様です！別の病院さんから、また同じ問い合わせが来てて…'),
@@ -107,14 +106,6 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
 export const opening = (...group: readonly Post[]): TimelineEvent[] =>
   group.map((post, index) => ({ at: index * 2, kind: 'post', post }));
 
-export const projectFiles: readonly string[] = [
-  'db.ts',
-  'show-visits.ts',
-  'visits.test.ts',
-  'visits.ts',
-  'who-cancelled.ts',
-];
-
 const documentTab = (key: string, title: string, path: string, config: DocConfig): TabDefinition => ({
   key,
   kind: 'doc',
@@ -128,12 +119,16 @@ const documentTab = (key: string, title: string, path: string, config: DocConfig
 export const docTab = (key: string, title: string, path: string): TabDefinition =>
   documentTab(key, title, path, { title, updatedAt: '2026-11-09', updatedBy: 'テックリード' });
 
-export const editorTab = (key: string, active: string, config?: Partial<EditorConfig>): TabDefinition => ({
+export const editorTab = (
+  key: string,
+  active: string,
+  config: Pick<EditorConfig, 'snapshot'> & Partial<EditorConfig>,
+): TabDefinition => ({
   key,
   kind: 'editor',
   title: `${active} — clinic-api`,
   label: 'エディタ',
   url: `https://ide.internal.example/clinic-api/${active}`,
   favicon: { tone: 'azure', shape: 'rounded' },
-  config: { project: 'clinic-api', files: projectFiles, active, ...config },
+  config: { project: 'clinic-api', branch: 'record-cancellation', active, ...config },
 });

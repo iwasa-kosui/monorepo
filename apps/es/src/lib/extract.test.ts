@@ -2,10 +2,14 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
+  blankLabelsOf,
+  blankValuesOf,
+  extractBlock,
   extractExport,
   extractFrom,
   extractHtmlSection,
   extractLines,
+  insertTemplates,
   tableBodyRows,
   toInsertTemplate,
 } from './extract';
@@ -18,7 +22,7 @@ describe('extractExport', () => {
     const code = extractExport(read('chapter-2-step-1/visits.ts'), 'cancelVisit');
     expect(code.startsWith('export const cancelVisit =')).toBe(true);
     expect(code.endsWith('};')).toBe(true);
-    expect(code).toContain(`'VisitCancelled'`);
+    expect(code).toContain('INSERT INTO visit_cancellations');
     expect(code).not.toContain('reserveVisit');
   });
 
@@ -102,19 +106,52 @@ describe('tableBodyRows', () => {
 });
 
 describe('toInsertTemplate', () => {
-  it('空欄を埋めるとステップ1の解答に戻る', () => {
-    const source = read('chapter-2-step-1/visits.ts');
-    const filled = toInsertTemplate(source)
-      .replace('/* event_name */', `'VisitCancelled'`)
-      .replace('/* target_id */', 'input.visitId')
-      .replace('/* target_type */', `'Visit'`)
-      .replace('/* target_state */', 'JSON.stringify(cancelled)');
+  it.each(
+    [
+      ['step1', 'chapter-2-step-1', 2],
+      ['step2', 'chapter-2-step-2', 3],
+    ] as const,
+  )('%s の空欄を埋めると %s の解答に戻る', (name, snapshot, count) => {
+    const source = read(`${snapshot}/visits.ts`);
+    const template = insertTemplates[name];
+    const labels = blankLabelsOf(template);
+    const values = blankValuesOf(template);
+    const filled = labels.reduce(
+      (text, label, index) => text.replace(label, values[index] ?? ''),
+      toInsertTemplate(source, template),
+    );
+    expect(labels).toHaveLength(count);
     expect(source).toContain(filled);
   });
 
-  it('雛形に解答の値を残さない', () => {
-    const template = toInsertTemplate(read('chapter-2-step-1/visits.ts'));
+  it('ステップ1の雛形は、呼び出し元が渡す2つを空欄にし、来院の ID と時刻を残す', () => {
+    const template = toInsertTemplate(read('chapter-2-step-1/visits.ts'), insertTemplates.step1);
+    expect(blankLabelsOf(insertTemplates.step1)).toEqual(['/* 誰が */', '/* なぜ */']);
+    expect(template.startsWith('    db.prepare(`\n      INSERT INTO visit_cancellations')).toBe(true);
+    expect(template).toContain('input.visitId,');
+    expect(template).toContain('new Date().toISOString(),');
+    expect(template).not.toContain('input.operatedBy');
+    expect(template).not.toContain('input.reason');
+  });
+
+  it('ステップ2の雛形は、ステップ1から引き継ぐ値と変化後の状態を残し、まとめるときに変わる3つを空欄にする', () => {
+    const template = toInsertTemplate(read('chapter-2-step-2/visits.ts'), insertTemplates.step2);
+    expect(blankLabelsOf(insertTemplates.step2)).toEqual(['/* event_name */', '/* payload */', '/* target_type */']);
+    expect(template).toContain('new Date().toISOString(),');
+    expect(template).toContain('input.visitId,');
+    expect(template).toContain('JSON.stringify(cancelled),');
     expect(template).not.toContain('VisitCancelled');
-    expect(template).toContain('JSON.stringify({})');
+    expect(template).not.toContain('operatedBy');
+    expect(template).not.toContain(`'Visit'`);
+  });
+
+  it('雛形にする行が解答に無ければビルドを止める', () => {
+    expect(() => toInsertTemplate(read('chapter-1-start/visits.ts'), insertTemplates.step1)).toThrow('開始行');
+  });
+});
+
+describe('extractBlock', () => {
+  it('行の全体が一致する開始行から、その後の終了行までを返す', () => {
+    expect(extractBlock('  a(\na(\n  b\n);\nc\n);', 'a(', ');')).toBe('a(\n  b\n);');
   });
 });

@@ -1,0 +1,416 @@
+---
+import './figure.css';
+
+type Source = { readonly name: string; readonly plain?: true };
+type Row = {
+  readonly from: readonly Source[];
+  readonly column: string;
+  readonly value: string;
+  readonly why: string;
+};
+
+const rows: readonly Row[] = [
+  {
+    from: [{ name: 'id' }],
+    column: 'event_id',
+    value: '1',
+    why: '1行を指し示すため',
+  },
+  {
+    from: [{ name: 'cancelled_at' }],
+    column: 'event_at',
+    value: '2026-11-06T18:11:58.846Z',
+    why: '「いつ」に答えるため',
+  },
+  {
+    from: [{ name: 'テーブルの名前', plain: true }],
+    column: 'event_name',
+    value: 'VisitCancelled',
+    why: '「何を」に答えるため',
+  },
+  {
+    from: [{ name: 'operated_by' }, { name: 'reason' }],
+    column: 'payload',
+    value: '{"reason":"飼い主の都合","operatedBy":"受付スタッフ"}',
+    why: '「誰が」「なぜ」に答えるため',
+  },
+  {
+    from: [{ name: 'visit_id' }],
+    column: 'target_id',
+    value: 'visit-pochi',
+    why: '問い合わせの来院の記録を探すため',
+  },
+  {
+    from: [],
+    column: 'target_type',
+    value: 'Visit',
+    why: '来院以外の対象も同じテーブルに記録するため',
+  },
+  {
+    from: [],
+    column: 'target_state',
+    value: '{"id":"visit-pochi","pet_name":"ポチ","status":"cancelled"}',
+    why: 'その時点の状態を後から確かめるため',
+  },
+];
+---
+
+<section
+  class="cfig mapping"
+  data-record-mapping-figure
+  aria-label="ステップ1の列を business_events の列に移す図"
+>
+  <div class="merge">
+    <div class="side">
+      <div class="side-head">出来事ごとにテーブルを作る</div>
+      <ul class="chips">
+        <li class="chip mono">visit_cancellations</li>
+        <li class="chip ghost">診察の完了を記録するテーブル</li>
+        <li class="chip ghost">…</li>
+      </ul>
+    </div>
+    <div class="merge-arrow" aria-hidden="true"></div>
+    <div class="side one">
+      <div class="side-head">1つのテーブルにまとめる</div>
+      <ul class="chips">
+        <li class="chip mono">business_events</li>
+      </ul>
+    </div>
+  </div>
+
+  <div
+    class="map"
+    role="table"
+    aria-label="ステップ1の列と business_events の列の対応"
+  >
+    <div class="row head" role="row">
+      <span class="from" role="columnheader">ステップ1</span>
+      <span class="to" role="columnheader">
+        <span class="mono">business_events</span> の列
+      </span>
+      <span class="why" role="columnheader">残す理由</span>
+    </div>
+    {
+      rows.map((row) => (
+        <div class="row" role="row" data-column={row.column}>
+          <span class="from" role="cell">
+            <span class="sources">
+              {
+                row.from.length === 0
+              ? (
+                  <span class="none">無し</span>
+                )
+              : row.from.map((source) => (
+                  <span
+                    class:list={['source', { mono: source.plain !== true }]}
+                  >
+                    {source.name}
+                  </span>
+                ))
+              }
+            </span>
+            <span class="arrow" aria-hidden="true"></span>
+          </span>
+          <span class="to" role="cell">
+            <span class="mono name">{row.column}</span>
+            <span class="mono value">
+              {
+                row.value.split(/(?<=,)/).map((part) => (
+                  <span class="part">{part}</span>
+                ))
+              }
+            </span>
+          </span>
+          <span class="why" role="cell">{row.why}</span>
+        </div>
+      ))
+    }
+  </div>
+</section>
+
+<style>
+.cfig.mapping {
+  --fig-small: 0.8125rem;
+  container-type: inline-size;
+  gap: 0.5rem;
+}
+.mono {
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+}
+
+.merge {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: stretch;
+  gap: 0.375rem;
+}
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  border: 2px solid var(--role-rule);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
+  padding: 0.1875rem 0.5rem 0.3125rem;
+}
+.side.one {
+  border-color: var(--role-accent-strong);
+}
+.side-head {
+  font-size: var(--fig-small);
+  font-weight: 700;
+  line-height: 1.5;
+}
+.cfig .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cfig .chip {
+  margin: 0;
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-sm);
+  background: var(--role-sunken);
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.cfig .chip.mono {
+  font-weight: 700;
+}
+.cfig .chip.ghost {
+  border-style: dashed;
+  background: transparent;
+  color: var(--role-muted);
+}
+.one .chip {
+  border-color: var(--role-accent-strong);
+  background: var(--role-accent-strong);
+  color: var(--role-on-strong);
+}
+.merge-arrow {
+  align-self: center;
+  color: var(--role-accent-strong);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.merge-arrow::before {
+  content: "→";
+}
+
+.map {
+  display: flex;
+  flex-direction: column;
+}
+.row {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr) 12.75rem;
+  align-items: stretch;
+  line-height: 1.5;
+}
+.from {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  padding-block: 0.125rem;
+}
+.sources {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  min-width: 0;
+}
+.source,
+.none {
+  border: 1px solid var(--role-border);
+  border-radius: var(--radius-sm);
+  background: var(--role-surface);
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.source.mono {
+  font-weight: 700;
+}
+.none {
+  border-style: dashed;
+  background: transparent;
+  color: var(--role-muted);
+}
+.arrow {
+  position: relative;
+  flex: 1;
+  min-width: 1rem;
+  height: 2px;
+  margin-right: 0.375rem;
+  background: var(--role-accent-strong);
+}
+.arrow::after {
+  position: absolute;
+  top: 50%;
+  right: -0.3125rem;
+  border: 0.3125rem solid transparent;
+  border-right: 0;
+  border-left-color: var(--role-accent-strong);
+  content: "";
+  transform: translateY(-50%);
+}
+.sources:has(.none) + .arrow {
+  background: var(--role-border);
+}
+.sources:has(.none) + .arrow::after {
+  border-left-color: var(--role-border);
+}
+.to {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+  border-inline: 2px solid var(--role-accent-strong);
+  border-top: 1px solid var(--role-rule);
+  background: var(--role-surface);
+  padding: 0.125rem 0.5rem;
+}
+.name {
+  flex: none;
+  width: 12.5ch;
+  font-weight: 700;
+}
+.value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.part {
+  display: inline-block;
+  max-width: 100%;
+}
+.why {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-left: 0.5rem;
+  color: var(--role-muted);
+  font-size: 0.75rem;
+  text-wrap: balance;
+}
+.head .from,
+.head .why {
+  align-items: flex-end;
+  color: var(--role-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.head .to {
+  display: block;
+  border: 2px solid var(--role-accent-strong);
+  border-bottom: 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--role-accent-strong);
+  padding-block: 0;
+  color: var(--role-on-strong);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.head .mono {
+  font-size: inherit;
+}
+.head + .row .to {
+  border-top: 0;
+}
+.row:last-child .to {
+  border-bottom: 2px solid var(--role-accent-strong);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+@container (max-width: 40rem) {
+  .row {
+    grid-template-columns: 8rem minmax(0, 1fr);
+  }
+  .from {
+    grid-row: 1 / span 2;
+  }
+  .to {
+    grid-column: 2;
+    flex-wrap: wrap;
+    gap: 0 0.5rem;
+    padding-bottom: 0;
+  }
+  .name {
+    width: auto;
+  }
+  .why {
+    grid-column: 2;
+    border-inline: 2px solid var(--role-accent-strong);
+    background: var(--role-surface);
+    padding: 0 0.5rem 0.125rem;
+  }
+  .head .to {
+    padding-bottom: 0;
+  }
+  .head .why {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    border: 0;
+    padding: 0;
+    white-space: nowrap;
+  }
+  .row:last-child .to {
+    border-bottom: 0;
+    border-radius: 0;
+  }
+  .row:last-child .why {
+    border-bottom: 2px solid var(--role-accent-strong);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+  }
+}
+@container (max-width: 28rem) {
+  .merge {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.125rem;
+  }
+  .merge-arrow {
+    justify-self: center;
+  }
+  .merge-arrow::before {
+    content: "↓";
+  }
+}
+@container (max-width: 24rem) {
+  .row {
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+  }
+  .source,
+  .none {
+    padding-inline: 0.3125rem;
+    font-size: 0.6875rem;
+  }
+  .from {
+    gap: 0.125rem;
+  }
+  .arrow {
+    min-width: 0.5rem;
+    margin-right: 0.3125rem;
+  }
+  .to,
+  .why {
+    padding-inline: 0.375rem;
+  }
+}
+
+@media (max-height: 700px) {
+  .cfig.mapping {
+    --fig-small: 0.75rem;
+  }
+}
+</style>

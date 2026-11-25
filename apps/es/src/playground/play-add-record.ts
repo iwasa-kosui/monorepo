@@ -1,48 +1,44 @@
-import { StateEffect } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 
 import { createRuntime, RuntimeScriptError } from './client.ts';
 import { applyRuntimeState, element, failureElement, query } from './dom.ts';
-import { createEditorState, createEditorView } from './editor.ts';
+import { revealText } from './editor.ts';
 import type { RunOutcome } from './engine/types.ts';
+import { type SceneAnswer, sceneSteps } from './scene-steps.ts';
 import { clearEdits, loadEdits, saveEdits } from './storage.ts';
+import { createWorkbench } from './workbench.ts';
 
 type Config = {
-  exerciseId: string;
   step: 1 | 2;
+  storageId: string;
+  carryFrom: string | null;
+  table: string;
   files: Record<string, string>;
-  head: string;
-  tail: string;
+  project: string[];
   initial: string;
   complete: string;
-  completeStep2: string | null;
   template: string;
 };
 
 type Row = Record<string, string | number | null>;
-type Snapshot = { visits: Row[]; business_events: Row[] };
+type Snapshot = Record<string, Row[]>;
 type RunResult = { before: Snapshot; after: Snapshot; error: string | null };
-type Filled = { key: string; label: string; value: string | null };
+type Filled = SceneAnswer & { value: string | null };
 
-const editedFile = 'cancelVisit';
-const chapterStartId = 'chapter-1-start';
-const revealMarker = 'JSON.stringify({';
+const editedFile = 'visits.ts';
 const visitId = 'visit-pochi';
 const updateMarker = '\'cancelled\'';
-const templateMarker = 'const cancelled =';
-const blankPattern = /\/\* (?:event_name|target_id|target_type|target_state) \*\//g;
+const functionMarker = 'export const cancelVisit';
+const oldInsert = 'INSERT INTO visit_cancellations';
+const blankPattern = /\/\* [^*\n]+ \*\//g;
+const firstBlankPattern = /\/\* [^*\n]+ \*\//;
 const missingText = '記録にありません';
 const notRunText = 'まだ実行していません';
-const pochiTest = 'キャンセルした人と理由を答えられる';
 
 const isRow = (value: unknown): value is Row => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const isSnapshot = (value: unknown): value is Snapshot =>
-  isRow(value)
-  && Array.isArray(value.visits)
-  && value.visits.every(isRow)
-  && Array.isArray(value.business_events)
-  && value.business_events.every(isRow);
+  isRow(value) && Object.values(value).every((rows) => Array.isArray(rows) && rows.every(isRow));
 
 const parseResult = (outcome: RunOutcome): RunResult | null => {
   const last = outcome.logs.at(-1)?.text;
@@ -78,30 +74,21 @@ const payloadOf = (row: Row): Record<string, unknown> => {
 
 const nonEmpty = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null);
 
-const answersOf = (events: Row[]): Filled[] => {
-  const row = events[0];
-  const payload = row === undefined ? {} : payloadOf(row);
-  return [
-    { key: 'when', label: 'いつ', value: row === undefined ? null : nonEmpty(row.event_at) },
-    { key: 'what', label: '何を', value: row === undefined ? null : nonEmpty(row.event_name) },
-    { key: 'who', label: '誰が', value: nonEmpty(payload.operatedBy) },
-    { key: 'why', label: 'なぜ', value: nonEmpty(payload.reason) },
-  ];
-};
-
-const nextPageNote = '次のページのステップ2で、「誰が」「なぜ」を記録します。';
-
 const quoted = (labels: string[]): string => labels.map((label) => `「${label}」`).join('');
 
 const mount = (root: HTMLElement): void => {
   const config = JSON.parse(root.dataset.config ?? '{}') as Config;
+  const scene = sceneSteps[config.step];
+  const table = config.table;
+  const templateMarker = `INSERT INTO ${table}`;
   const next = query<HTMLElement>(root, '[data-role="next"]');
   const message = query<HTMLElement>(root, '[data-role="message"]');
-  const editorParent = query<HTMLElement>(root, '[data-role="editor"]');
   const runButton = query<HTMLButtonElement>(root, '[data-role="run"]');
-  const templateButton = root.querySelector<HTMLButtonElement>('[data-role="template"]');
-  const completeButton = query<HTMLButtonElement>(root, '[data-role="complete"]');
-  const completeStep2Button = root.querySelector<HTMLButtonElement>('[data-role="complete-step-2"]');
+  const templateButton = query<HTMLButtonElement>(root, '[data-role="template"]');
+  const completeButton = query<HTMLButtonElement>(
+    root,
+    config.step === 1 ? '[data-role="complete"]' : '[data-role="complete-step-2"]',
+  );
   const resetButton = query<HTMLButtonElement>(root, '[data-role="reset"]');
   const restoreButton = query<HTMLButtonElement>(root, '[data-role="restore"]');
   const testsButton = query<HTMLButtonElement>(root, '[data-role="tests"]');
@@ -119,7 +106,6 @@ const mount = (root: HTMLElement): void => {
 
   let busy = false;
   let hasResult = false;
-  let answersShown = false;
   let backup: string | null = null;
 
   const discardBackup = (): void => {
@@ -127,49 +113,50 @@ const mount = (root: HTMLElement): void => {
     restoreButton.hidden = true;
   };
 
-  const saved = loadEdits(config.exerciseId)[editedFile];
-  const view = createEditorView(
-    editorParent,
-    createEditorState(saved ?? config.initial, {
-      language: 'typescript',
-      label: 'cancelVisit のコード',
-      onChange: () => {
-        persist();
-        discardBackup();
-        updateControls();
-      },
-    }),
-  );
-  view.dispatch({ effects: StateEffect.appendConfig.of(EditorView.lineWrapping) });
+  const startCode = (): string =>
+    config.carryFrom === null ? config.initial : loadEdits(config.carryFrom)[editedFile] ?? config.initial;
 
-  const code = (): string => view.state.doc.toString();
+  const storedCode = (): string => loadEdits(config.storageId)[editedFile] ?? startCode();
+
+  const workbench = createWorkbench({
+    root,
+    files: Object.fromEntries(
+      config.project.map((file) => [file, file === editedFile ? storedCode() : config.files[file] ?? '']),
+    ),
+    baseline: config.files,
+    editable: [editedFile],
+    opened: [editedFile],
+    active: editedFile,
+    wrap: true,
+    onChange: () => {
+      persist();
+      discardBackup();
+      updateControls();
+    },
+  });
+  const view = workbench.view;
+
+  const code = (): string => workbench.doc(editedFile);
 
   function persist(): void {
-    if (code() === config.initial) {
-      clearEdits(config.exerciseId);
-      clearEdits(chapterStartId);
+    if (code() === startCode()) {
+      clearEdits(config.storageId);
     } else {
-      saveEdits(config.exerciseId, { [editedFile]: code() });
-      // 第3章が参加者のコードを使うため
-      saveEdits(chapterStartId, { 'visits.ts': config.head + code() + config.tail });
+      saveEdits(config.storageId, { [editedFile]: code() });
     }
   }
 
-  const revealPayload = (): void => {
-    if (config.step !== 2) {
-      return;
-    }
-    const index = code().indexOf(revealMarker);
-    if (index !== -1) {
-      requestAnimationFrame(() => {
-        view.dispatch({ effects: EditorView.scrollIntoView(index, { y: 'center' }) });
-      });
+  const reveal = (marker: string): void => {
+    if (workbench.active() === editedFile) {
+      revealText(view, marker, 4);
     }
   };
 
+  const revealFunction = (): void => reveal(functionMarker);
+
   const setCode = (doc: string): void => {
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc }, selection: { anchor: 0 } });
-    revealPayload();
+    workbench.replaceDoc(editedFile, doc);
+    revealFunction();
   };
 
   const replaceWithBackup = (target: string): void => {
@@ -179,23 +166,17 @@ const mount = (root: HTMLElement): void => {
     restoreButton.hidden = backup === null;
   };
 
-  const filesWith = (): Record<string, string> => ({
-    ...config.files,
-    'visits.ts': config.head + code() + config.tail,
-  });
+  const filesWith = (): Record<string, string> => ({ ...config.files, [editedFile]: code() });
+
+  const hasRecordCode = (): boolean => code().includes(templateMarker);
 
   const updateControls = (): void => {
     const idle = !busy && root.dataset.state === 'ready';
     runButton.disabled = !idle;
     testsButton.disabled = !idle;
     completeButton.disabled = !idle;
-    if (completeStep2Button !== null) {
-      completeStep2Button.disabled = !idle;
-    }
     resetButton.disabled = !idle;
-    if (templateButton !== null) {
-      templateButton.disabled = !idle || code().includes(templateMarker);
-    }
+    templateButton.disabled = !idle || hasRecordCode();
   };
 
   const say = (sentences: string[]): void => {
@@ -206,23 +187,32 @@ const mount = (root: HTMLElement): void => {
     );
   };
 
-  const stepOneUnfinished = '「ステップ1の完成コードを読み込む」を押して続けます。';
-  const changeCancelVisit = '`cancelVisit` の `input` の型と `payload` を変更します。';
+  const pressRun = '「ポチの来院をキャンセルする」を押します。';
+  const pressTemplate = config.step === 1
+    ? '「記録の雛形を `UPDATE` の次の行に入れる」を押します。'
+    : '「INSERT を `business_events` 用に書き換える」を押します。';
+  const stepOneUnfinished =
+    'ステップ1が終わっていないときは、「最初のコードに戻す」を押して、ステップ1の解答から続けます。';
   const askHints = '迷ったら、右の「ヒントと解答」を上から順に開きます。';
+  const blankCount = config.template.match(blankPattern)?.length ?? 0;
+  const fillBlanks = config.step === 1
+    ? `雛形の ${blankCount} つの空欄を書き換え、\`input\` の型に \`reason\` と \`operatedBy\` を足します。`
+    : `雛形の ${blankCount} つの空欄を書き換えます。`;
 
   const sayStart = (): void => {
-    if (config.step === 2) {
-      say(
-        code().includes(templateMarker)
-          ? [changeCancelVisit, askHints, '終わったら「ポチの来院をキャンセルする」を押します。']
-          : [`ステップ1が終わっていないときは、${stepOneUnfinished}`],
-      );
+    if (hasRecordCode()) {
+      say(firstBlankPattern.test(code()) ? [fillBlanks, askHints, `終わったら${pressRun}`] : [pressRun]);
       return;
     }
-    say([
-      '「ポチの来院をキャンセルする」を押します。',
-      'いまのコードで、visits と business_events がどう変わるかを見ます。',
-    ]);
+    if (config.step === 2 && !code().includes(oldInsert)) {
+      say([stepOneUnfinished]);
+      return;
+    }
+    say(
+      config.step === 1
+        ? [pressRun, `いまのコードで、\`visits\` と \`${table}\` がどう変わるかを見ます。`]
+        : [pressRun, `テーブルを \`${table}\` に作り直した後で、ステップ1のコードがどう動くかを見ます。`],
+    );
   };
 
   const clearMessage = (): void => {
@@ -277,9 +267,9 @@ const mount = (root: HTMLElement): void => {
   };
 
   const eventTable = (row: Row, added: boolean): HTMLElement => {
-    const table = element('table', {
+    const rowTable = element('table', {
       className: 'play-table play-event',
-      attributes: { 'aria-label': 'business_events の行', 'data-role': 'event-row' },
+      attributes: { 'aria-label': `${table} の行`, 'data-role': 'event-row' },
     }, [
       ...(added ? [element('caption', { text: '追加された行' })] : []),
       element(
@@ -294,9 +284,9 @@ const mount = (root: HTMLElement): void => {
       ),
     ]);
     if (added) {
-      table.dataset.new = '';
+      rowTable.dataset.new = '';
     }
-    return table;
+    return rowTable;
   };
 
   const renderEvents = (before: Row[], after: Row[], phase: 'before' | 'after'): void => {
@@ -324,8 +314,21 @@ const mount = (root: HTMLElement): void => {
     }
   };
 
+  const valueOf = (key: SceneAnswer['key'], row: Row | undefined): string | null => {
+    if (row === undefined) {
+      return null;
+    }
+    if (config.step === 1) {
+      return nonEmpty({ who: row.operated_by, when: row.cancelled_at, what: null, why: row.reason }[key]);
+    }
+    const payload = payloadOf(row);
+    return nonEmpty({ who: payload.operatedBy, when: row.event_at, what: row.event_name, why: payload.reason }[key]);
+  };
+
+  const answersOf = (rows: Row[]): Filled[] =>
+    scene.answers.map((answer) => ({ ...answer, value: valueOf(answer.key, rows[0]) }));
+
   const renderAnswers = (rows: Row[] | null): void => {
-    answersShown = rows !== null;
     const filled = rows === null ? null : answersOf(rows);
     for (const cell of answerCells) {
       const value = query<HTMLElement>(cell, '[data-role="answer-value"]');
@@ -344,10 +347,13 @@ const mount = (root: HTMLElement): void => {
     }
   };
 
+  const recordsOf = (snapshot: Snapshot): Row[] => snapshot[table] ?? [];
+  const visitsOf = (snapshot: Snapshot): Row[] => snapshot.visits ?? [];
+
   const renderTables = (result: RunResult, phase: 'before' | 'after'): void => {
     const shown = phase === 'before' ? result.before : result.after;
-    renderVisits(result.before.visits, shown.visits, phase);
-    renderEvents(result.before.business_events, shown.business_events, phase);
+    renderVisits(visitsOf(result.before), visitsOf(shown), phase);
+    renderEvents(recordsOf(result.before), recordsOf(shown), phase);
   };
 
   const clearRunResult = (initial: RunResult | null): void => {
@@ -358,8 +364,8 @@ const mount = (root: HTMLElement): void => {
   };
 
   const statusChanged = (result: RunResult): boolean => {
-    const target = result.after.visits.find((row) => row.id === visitId) ?? result.after.visits[0];
-    const earlier = result.before.visits.find((row) => row.id === target?.id);
+    const target = visitsOf(result.after).find((row) => row.id === visitId) ?? visitsOf(result.after)[0];
+    const earlier = visitsOf(result.before).find((row) => row.id === target?.id);
     return target !== undefined && earlier !== undefined && earlier.status !== target.status;
   };
 
@@ -404,6 +410,43 @@ const mount = (root: HTMLElement): void => {
     }
   }
 
+  const sayFailedRun = (result: RunResult): void => {
+    const rolledBack = statusChanged(result)
+      ? []
+      : [
+        '`visits` の `status` は `reserved` のままです。',
+        ...(hasRecordCode() || code().includes(oldInsert)
+          ? ['記録を書き込めないときは、`UPDATE` も一緒に取り消されます。']
+          : []),
+      ];
+    if (config.step === 2 && !hasRecordCode() && result.error?.includes('visit_cancellations') === true) {
+      say(['`visit_cancellations` テーブルは、もうありません。', ...rolledBack, pressTemplate]);
+      return;
+    }
+    say([...rolledBack, 'エラーの文を読んでコードを直し、もう一度押します。']);
+  };
+
+  const sayRecorded = (result: RunResult): void => {
+    const answers = answersOf(recordsOf(result.after));
+    const added = `\`${table}\` に ${recordsOf(result.after).length - recordsOf(result.before).length} 行増えました。`;
+    const unfilled = answers.filter((answer) => answer.value === null).map((answer) => answer.label);
+    if (unfilled.length > 0) {
+      say([
+        added,
+        `答えの欄の${quoted(unfilled)}は、まだ「${missingText}」です。`,
+        config.step === 1
+          ? '空欄に入れた値を見直して、もう一度押します。'
+          : '`payload` に `reason` と `operatedBy` が入っているかを見直して、もう一度押します。',
+      ]);
+      return;
+    }
+    say([
+      added,
+      `答えの欄の${quoted(answers.map((answer) => answer.label))}が埋まりました。`,
+      '「テストを実行する」を押します。',
+    ]);
+  };
+
   const run = async (): Promise<void> => {
     if (busy || runtime.state !== 'ready') {
       return;
@@ -426,49 +469,26 @@ const mount = (root: HTMLElement): void => {
       }
       hasResult = true;
       renderTables(result, 'after');
-      renderAnswers(result.after.business_events);
+      renderAnswers(recordsOf(result.after));
       if (result.error !== null) {
         showError('cancelVisit がエラーを出しました', result.error);
-        if (!statusChanged(result)) {
-          say([
-            'visits の status は reserved のままです。',
-            ...(code().includes(templateMarker) ? ['記録を書き込めないときは、UPDATE も一緒に取り消されます。'] : []),
-            'エラーの文を読んでコードを直し、もう一度押します。',
-          ]);
-        }
+        sayFailedRun(result);
         return;
       }
-      if (result.after.business_events.length > result.before.business_events.length) {
-        const answers = answersOf(result.after.business_events);
-        const labels = answers.filter((answer) => answer.value !== null).map((answer) => answer.label);
-        const added = `business_events に ${
-          result.after.business_events.length - result.before.business_events.length
-        } 行増えました。`;
-        const unfilled = answers.filter((answer) =>
-          answer.value === null && (answer.key === 'who' || answer.key === 'why')
-        )
-          .map((answer) => answer.label);
-        if (config.step === 2 && unfilled.length > 0) {
-          say([
-            added,
-            `答えの欄の${quoted(unfilled)}は、まだ「${missingText}」です。`,
-            '`payload` に `reason` と `operatedBy` が入っているかを見直して、もう一度押します。',
-          ]);
-          return;
-        }
-        say([added, `答えの欄の${quoted(labels)}が埋まりました。`, '「テストを実行する」を押します。']);
-      } else {
-        say([
-          statusChanged(result)
-            ? 'visits の status は変わりましたが、business_events は増えていません。'
-            : 'visits の status も business_events も変わっていません。',
-          code().includes(templateMarker)
-            ? 'コードを見直して、もう一度押します。'
-            : config.step === 2
-            ? `ステップ1が終わっていないときは、${stepOneUnfinished}`
-            : '「記録の雛形を UPDATE の次の行に入れる」を押します。',
-        ]);
+      if (recordsOf(result.after).length > recordsOf(result.before).length) {
+        sayRecorded(result);
+        return;
       }
+      say([
+        statusChanged(result)
+          ? `\`visits\` の \`status\` は変わりましたが、\`${table}\` は増えていません。`
+          : `\`visits\` の \`status\` も \`${table}\` も変わっていません。`,
+        hasRecordCode()
+          ? 'コードを見直して、もう一度押します。'
+          : config.step === 2 && !code().includes(oldInsert)
+          ? stepOneUnfinished
+          : pressTemplate,
+      ]);
     } catch (error) {
       showMessage(failureElement(error, '終わらない繰り返しがないか確かめてください'));
     } finally {
@@ -509,29 +529,16 @@ const mount = (root: HTMLElement): void => {
         ])
       ));
       if (failures.length === 0) {
-        say(
-          config.step === 2
-            ? ['すべてのテストが成功しました。', '次のページへ進みます。']
-            : ['すべてのテストが成功しました。'],
-        );
-      } else if (passed === 7 && failures.length === 1 && failures[0]?.name === pochiTest) {
-        say(
-          config.step === 2
-            ? [`残りの 1 件は「${pochiTest}」です。`, changeCancelVisit, askHints]
-            : answersShown
-            ? [
-              `残りの 1 件は「${pochiTest}」です。`,
-              `答えの欄の${quoted(['誰が', 'なぜ'])}が「${missingText}」なのと対応しています。`,
-              nextPageNote,
-            ]
-            : [
-              `残りの 1 件は「${pochiTest}」です。`,
-              `「ポチの来院をキャンセルする」を押して、答えの欄の${quoted(['誰が', 'なぜ'])}を確かめます。`,
-              nextPageNote,
-            ],
-        );
+        say(['すべてのテストが成功しました。', '次のページへ進みます。']);
       } else {
-        say(['テストの結果に、失敗したテストの名前を出しています。', 'コードを直して、もう一度押せます。']);
+        say([
+          'テストの結果に、失敗したテストの名前を出しています。',
+          hasRecordCode()
+            ? 'コードを直して、もう一度押せます。'
+            : config.step === 2 && !code().includes(oldInsert)
+            ? stepOneUnfinished
+            : pressTemplate,
+        ]);
       }
     } catch (error) {
       showMessage(failureElement(error, '終わらない繰り返しがないか確かめてください'));
@@ -541,35 +548,56 @@ const mount = (root: HTMLElement): void => {
     }
   };
 
+  const insertAfterUpdate = (doc: string): { from: number; to: number; insert: string } | null => {
+    const marker = doc.indexOf(updateMarker, Math.max(doc.indexOf(functionMarker), 0));
+    if (marker === -1) {
+      return null;
+    }
+    const lineEnd = view.state.doc.lineAt(marker).to;
+    return { from: lineEnd, to: lineEnd, insert: `\n${config.template}` };
+  };
+
+  const replaceOldInsert = (doc: string): { from: number; to: number; insert: string } | null => {
+    const old = doc.indexOf(oldInsert);
+    const statement = old === -1 ? -1 : doc.lastIndexOf('db.prepare(', old);
+    if (statement === -1) {
+      return null;
+    }
+    let line = view.state.doc.lineAt(old);
+    while (!line.text.trimEnd().endsWith(');') && line.number < view.state.doc.lines) {
+      line = view.state.doc.line(line.number + 1);
+    }
+    return { from: view.state.doc.lineAt(statement).from, to: line.to, insert: config.template };
+  };
+
   const insertRecordTemplate = (): void => {
+    workbench.open(editedFile);
     const doc = code();
-    const marker = doc.indexOf(updateMarker);
-    if (doc.includes(templateMarker) || marker === -1) {
+    const change = hasRecordCode()
+      ? null
+      : (config.step === 2 ? replaceOldInsert(doc) : null) ?? insertAfterUpdate(doc);
+    if (change === null) {
       showError('雛形を入れる場所が見つかりません', '「最初のコードに戻す」を押してから、もう一度試してください。');
       return;
     }
     clearMessage();
-    const lineEnd = view.state.doc.lineAt(marker).to;
-    const insert = `\n${config.template}`;
-    const first = '/* event_name */';
-    const from = lineEnd + insert.indexOf(first);
+    const first = firstBlankPattern.exec(change.insert);
+    const from = change.from + (first?.index ?? 0);
     view.dispatch({
-      changes: { from: lineEnd, insert },
-      selection: { anchor: from, head: from + first.length },
+      changes: change,
+      selection: { anchor: from, head: from + (first?.[0].length ?? 0) },
       effects: EditorView.scrollIntoView(from, { y: 'center' }),
     });
     view.focus();
     updateControls();
-    say([
-      '雛形の 4 つの空欄を書き換えます。',
-      'Tab キーで次の空欄に移れます。',
-      '値に迷ったら、右の「ヒントと解答」を上から順に開きます。',
-      '終わったら「ポチの来院をキャンセルする」を押します。',
-    ]);
+    say([fillBlanks, 'Tab キーで次の空欄に移れます。', askHints, `終わったら${pressRun}`]);
   };
 
-  editorParent.addEventListener('keydown', (event) => {
+  query<HTMLElement>(root, '[data-role="editor"]').addEventListener('keydown', (event) => {
     if (event.key !== 'Tab' || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+    if (workbench.active() !== editedFile) {
       return;
     }
     const after = view.state.selection.main.to;
@@ -586,7 +614,7 @@ const mount = (root: HTMLElement): void => {
 
   runButton.addEventListener('click', () => void run());
   testsButton.addEventListener('click', () => void runTests());
-  templateButton?.addEventListener('click', insertRecordTemplate);
+  templateButton.addEventListener('click', insertRecordTemplate);
   const closeHint = (details: HTMLDetailsElement | null, moveFocus: boolean): void => {
     if (details === null) {
       return;
@@ -607,27 +635,28 @@ const mount = (root: HTMLElement): void => {
     closeHint(event.target.closest<HTMLDetailsElement>('details.play-hint-step[open]'), true);
   });
 
-  completeButton.addEventListener('click', () => {
-    replaceWithBackup(config.complete);
-    closeHint(completeButton.closest('details'), false);
+  const load = (target: string, sentences: string[]): void => {
+    workbench.open(editedFile);
+    replaceWithBackup(target);
     clearMessage();
-    say(
-      config.step === 2
-        ? ['ステップ1の完成コードを読み込みました。', changeCancelVisit]
-        : ['ステップ1の完成コードを読み込みました。', '「ポチの来院をキャンセルする」を押します。'],
+    say(sentences);
+  };
+
+  completeButton.addEventListener('click', () => {
+    closeHint(completeButton.closest('details'), false);
+    load(
+      config.complete,
+      config.step === 1
+        ? ['ステップ1の完成コードを読み込みました。', pressRun]
+        : [
+          'ステップ2の完成コードを読み込みました。',
+          '全テストが成功するコードです。第3章は自分のコードを使わなくても進められます。',
+          pressRun,
+        ],
     );
   });
-  completeStep2Button?.addEventListener('click', () => {
-    replaceWithBackup(config.completeStep2 ?? config.complete);
-    closeHint(completeStep2Button?.closest('details') ?? null, false);
-    clearMessage();
-    say([
-      'ステップ2の完成コードを読み込みました。',
-      '全テストが成功するコードです。第3章は自分のコードを使わなくても進められます。',
-      '「ポチの来院をキャンセルする」を押します。',
-    ]);
-  });
   resetButton.addEventListener('click', () => {
+    workbench.open(editedFile);
     replaceWithBackup(config.initial);
     resetOutputs(initialResult);
     sayStart();
@@ -635,6 +664,7 @@ const mount = (root: HTMLElement): void => {
   });
   restoreButton.addEventListener('click', () => {
     if (backup !== null) {
+      workbench.open(editedFile);
       setCode(backup);
     }
     discardBackup();
@@ -643,7 +673,7 @@ const mount = (root: HTMLElement): void => {
   });
   window.addEventListener('pageshow', (event) => {
     if (event.persisted) {
-      const restored = loadEdits(config.exerciseId)[editedFile] ?? config.initial;
+      const restored = storedCode();
       if (restored !== code()) {
         setCode(restored);
       }
@@ -653,7 +683,7 @@ const mount = (root: HTMLElement): void => {
   });
   retryButton.addEventListener('click', () => runtime.reload());
 
-  revealPayload();
+  revealFunction();
   sayStart();
   updateControls();
 };

@@ -1,3 +1,4 @@
+import { sceneSteps } from '../../playground/scene-steps';
 import type { Post, TabDefinition, WorkspaceScenario } from '../../workspace/scenario';
 import { docTab, editorTab, inquiry, lessonScenario, opening, posts, thanks, whyNotRecorded } from './common';
 
@@ -15,46 +16,36 @@ export const chapter2Explain: WorkspaceScenario = lessonScenario({
   id: 'chapter-2-explain',
   label: '更新処理の中で記録する方針',
   history: earlier,
-  timeline: opening(posts.designMemo),
-  tabs: [docTab('memo', '設計メモ: 更新処理の中で記録する', 'design/record-in-update')],
+  timeline: opening(posts.decisionRecord),
+  tabs: [docTab('memo', 'ADR 1: 更新処理の中で記録する', 'adr/1-record-in-update')],
 });
 
-export const chapter2Rollback: WorkspaceScenario = lessonScenario({
-  id: 'chapter-2-rollback',
-  label: '記録に失敗すると、来院の更新も戻る',
-  history: [...earlier, posts.designMemo],
-  timeline: opening(posts.checkRollback),
-  tabs: [
-    editorTab('editor', 'fail-record.ts'),
-    docTab('guide', '確認の手順: 記録に失敗したとき', 'guides/rollback-check'),
-  ],
-});
-
-export const chapter2Columns: WorkspaceScenario = lessonScenario({
-  id: 'chapter-2-columns',
-  label: '記録のテーブルの列',
-  history: [...earlier, posts.designMemo, posts.checkRollback],
-  timeline: opening(posts.columnsMemo),
-  tabs: [docTab('memo', '設計メモ: 記録の列', 'design/record-columns')],
-});
-
-const exerciseTab: TabDefinition = editorTab('editor', 'visits.ts');
+const stepTab = (step: 1 | 2): TabDefinition =>
+  editorTab('editor', 'visits.ts', { snapshot: sceneSteps[step].snapshot });
 
 export const chapter2Step1: WorkspaceScenario = lessonScenario({
   id: 'chapter-2-step-1',
-  label: '演習 ステップ1: キャンセルを記録する',
+  label: `演習 ${sceneSteps[1].label}`,
   history: [inquiry],
   collapsed: true,
-  tabs: [exerciseTab],
+  tabs: [stepTab(1)],
+});
+
+export const chapter2Table: WorkspaceScenario = lessonScenario({
+  id: 'chapter-2-table',
+  label: '記録を1つのテーブルにまとめる',
+  history: [...earlier, posts.decisionRecord],
+  timeline: opening(posts.tableRecord),
+  tabs: [docTab('memo', 'ADR 2: 記録を1つのテーブルにまとめる', 'adr/2-record-table')],
 });
 
 export const chapter2Step2: WorkspaceScenario = lessonScenario({
   id: 'chapter-2-step-2',
-  label: '演習 ステップ2: 理由と操作した人を記録する',
+  label: `演習 ${sceneSteps[2].label}`,
   history: [inquiry],
   collapsed: true,
   timeline: [{ when: 'tests:passed', kind: 'post', post: thanks }],
-  tabs: [exerciseTab],
+  tabs: [stepTab(2)],
 });
 
 export const chapter2Change: WorkspaceScenario = lessonScenario({

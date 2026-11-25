@@ -557,7 +557,7 @@ test.describe('矢印キー', () => {
   });
 
   test('章のページの編集欄でも、左右の矢印キーを押してもページは移動しない', async ({ page }) => {
-    await page.goto('/chapters/chapter-2/5/');
+    await page.goto('/chapters/chapter-2/4/');
     const scene = page.locator('[data-play="add-record"]');
     await waitUntilReady(scene);
     await page.waitForLoadState('load');

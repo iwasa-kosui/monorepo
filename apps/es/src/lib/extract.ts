@@ -42,19 +42,66 @@ export const extractHtmlSection = (html: string, heading: string): string => {
   return section.trim();
 };
 
-const blanks: readonly (readonly [string, string])[] = [
-  [`      'VisitCancelled',`, '      /* event_name */,'],
-  ['      input.visitId,', '      /* target_id */,'],
-  [`      'Visit',`, '      /* target_type */,'],
-  ['      JSON.stringify(cancelled),', '      /* target_state */,'],
-];
+export type TemplateBlank = { readonly line: string; readonly blank: string };
 
-export const toInsertTemplate = (stepOneSource: string): string => {
-  const answer = extractLines(stepOneSource, '    const cancelled =', '    );');
-  return blanks.reduce((template, [line, blank]) => {
-    if (!template.split('\n').includes(line)) {
+export type InsertTemplate = {
+  readonly start: string;
+  readonly end: string;
+  readonly blanks: readonly TemplateBlank[];
+};
+
+const blankLine = (label: string): string => `      /* ${label} */,`;
+
+// ステップ1の空欄は、呼び出し元が知っている2つ（誰が、なぜ）にする。
+// ステップ2の空欄は、1つのテーブルにまとめるときに変わる3つ（出来事の名前、業務の情報、対象の種類）にする。
+export const insertTemplates = {
+  step1: {
+    start: '    db.prepare(`',
+    end: '    );',
+    blanks: [
+      { line: '      input.operatedBy,', blank: blankLine('誰が') },
+      { line: '      input.reason,', blank: blankLine('なぜ') },
+    ],
+  },
+  step2: {
+    start: '    const cancelled = db.prepare(`SELECT * FROM visits WHERE id = ?`).get(input.visitId);',
+    end: '    );',
+    blanks: [
+      { line: `      'VisitCancelled',`, blank: blankLine('event_name') },
+      {
+        line: '      JSON.stringify({ reason: input.reason, operatedBy: input.operatedBy }),',
+        blank: blankLine('payload'),
+      },
+      { line: `      'Visit',`, blank: blankLine('target_type') },
+    ],
+  },
+} as const satisfies Record<string, InsertTemplate>;
+
+export const blankLabelsOf = (template: InsertTemplate): string[] =>
+  template.blanks.map(({ blank }) => blank.trim().replace(/,$/, ''));
+
+export const blankValuesOf = (template: InsertTemplate): string[] =>
+  template.blanks.map(({ line }) => line.trim().replace(/,$/, ''));
+
+export const extractBlock = (source: string, startLine: string, endLine: string): string => {
+  const lines = source.split('\n');
+  const start = lines.indexOf(startLine);
+  if (start === -1) {
+    throw new Error(`切り出しの開始行が見つかりません: ${startLine}`);
+  }
+  const end = lines.indexOf(endLine, start);
+  if (end === -1) {
+    throw new Error(`切り出しの終了行が見つかりません: ${endLine}`);
+  }
+  return lines.slice(start, end + 1).join('\n');
+};
+
+export const toInsertTemplate = (answerSource: string, template: InsertTemplate): string => {
+  const lines = extractBlock(answerSource, template.start, template.end).split('\n');
+  for (const { line } of template.blanks) {
+    if (!lines.includes(line)) {
       throw new Error(`雛形にする行が見つかりません: ${line}`);
     }
-    return template.split('\n').map((current) => (current === line ? blank : current)).join('\n');
-  }, answer);
+  }
+  return lines.map((current) => template.blanks.find(({ line }) => line === current)?.blank ?? current).join('\n');
 };
