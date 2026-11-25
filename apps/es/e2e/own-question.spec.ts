@@ -13,6 +13,21 @@ const topicQuestion = 'この来院がキャンセルになっているのはな
 const topicLabel = '題材の問い';
 const longQuestion = '長い問い'.repeat(50);
 
+const openChat = async (page: Page): Promise<void> => {
+  const rail = page.locator('[data-rail]');
+  await expect(page.locator('[data-investigation]')).toBeVisible();
+  if (!(await rail.isVisible())) return;
+  await expect(async () => {
+    if ((await rail.getAttribute('aria-expanded')) !== 'true') await rail.click();
+    await expect(rail).toHaveAttribute('aria-expanded', 'true', { timeout: 500 });
+  }).toPass();
+};
+
+const openWithChat = async (page: Page, path: string): Promise<void> => {
+  await page.goto(path);
+  await openChat(page);
+};
+
 const view = (page: Page): Locator => page.locator('[data-own-question-view]');
 
 const expectTopic = async (page: Page): Promise<void> => {
@@ -49,17 +64,18 @@ const fit = (page: Page): Promise<Fit> =>
 
 test.describe('第1章で挙げた問い', () => {
   test('第1章の1ページ目に書くと保存され、再読み込みしても残る', async ({ page }) => {
-    await page.goto(writePath);
+    await openWithChat(page, writePath);
     const input = page.getByRole('textbox', { name: '自分のシステムの問いを1つ挙げる' });
     await expect(input).toHaveValue('');
     await input.fill(sampleQuestion);
     await expect(page.getByRole('status').filter({ hasText: 'このブラウザに保存しました。' })).toBeVisible();
     await page.reload();
+    await openChat(page);
     await expect(input).toHaveValue(sampleQuestion);
   });
 
   test('入力欄で左右の矢印キーを押しても、ページは移動しない', async ({ page }) => {
-    await page.goto(writePath);
+    await openWithChat(page, writePath);
     await page.getByRole('textbox', { name: '自分のシステムの問いを1つ挙げる' }).fill(sampleQuestion);
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowLeft');
@@ -74,7 +90,7 @@ test.describe('第1章で挙げた問い', () => {
   });
 
   test('書いた問いが、第4章の1ページ目と5ページ目、まとめの2ページ目に出る', async ({ page }) => {
-    await page.goto(writePath);
+    await openWithChat(page, writePath);
     await page.getByRole('textbox', { name: '自分のシステムの問いを1つ挙げる' }).fill(sampleQuestion);
     for (const path of viewPaths) {
       await page.goto(path);
@@ -86,7 +102,7 @@ test.describe('第1章で挙げた問い', () => {
   });
 
   test('問いを消すと、表示は題材の問いに戻る', async ({ page }) => {
-    await page.goto(writePath);
+    await openWithChat(page, writePath);
     const input = page.getByRole('textbox', { name: '自分のシステムの問いを1つ挙げる' });
     await input.fill(sampleQuestion);
     await input.fill('');
@@ -140,7 +156,7 @@ test.describe('第1章で挙げた問い', () => {
         await page.goto(path);
         await expectTopic(page);
       }
-      await page.goto(writePath);
+      await openWithChat(page, writePath);
       const input = page.getByRole('textbox', { name: '自分のシステムの問いを1つ挙げる' });
       await input.fill(sampleQuestion);
       await expect(input).toHaveValue(sampleQuestion);
@@ -208,25 +224,26 @@ test.describe('まとめの2ページ目の、持ち帰る更新処理を書く�
   const input = (page: Page): Locator => page.getByRole('textbox', { name: summaryLabel });
 
   test('書くと保存され、再読み込みしても残る', async ({ page }) => {
-    await page.goto(summaryPath);
+    await openWithChat(page, summaryPath);
     await expect(input(page)).toHaveValue('');
     await input(page).fill(sampleUpdate);
     await expect(page.getByRole('status').filter({ hasText: 'このブラウザに保存しました。' })).toBeVisible();
     expect(await page.evaluate((key) => window.localStorage.getItem(key), summaryKey)).toBe(sampleUpdate);
     await page.reload();
+    await openChat(page);
     await expect(input(page)).toHaveValue(sampleUpdate);
   });
 
   test('第1章の問いとは別に保存され、互いに混ざらない', async ({ page }) => {
-    await page.goto(writePath);
+    await openWithChat(page, writePath);
     await page.getByRole('textbox', { name: '自分のシステムの問いを1つ挙げる' }).fill(sampleQuestion);
-    await page.goto(summaryPath);
+    await openWithChat(page, summaryPath);
     await expect(input(page)).toHaveValue('');
     await expect(view(page)).toContainText(sampleQuestion);
     await input(page).fill(sampleUpdate);
     await expect(view(page)).not.toContainText(sampleUpdate);
     expect(await page.evaluate((key) => window.localStorage.getItem(key), storageKey)).toBe(sampleQuestion);
-    await page.goto(writePath);
+    await openWithChat(page, writePath);
     await expect(page.getByRole('textbox', { name: '自分のシステムの問いを1つ挙げる' })).toHaveValue(sampleQuestion);
   });
 
@@ -242,7 +259,7 @@ test.describe('まとめの2ページ目の、持ち帰る更新処理を書く�
         value: { getItem: fail, setItem: fail, removeItem: fail },
       });
     });
-    await page.goto(summaryPath);
+    await openWithChat(page, summaryPath);
     await expectTopic(page);
     await input(page).fill(sampleUpdate);
     await expect(input(page)).toHaveValue(sampleUpdate);
@@ -263,7 +280,7 @@ test.describe('まとめの2ページ目の、持ち帰る更新処理を書く�
     test(`長い問いと長い更新処理を保存した状態でも、${size.width}x${size.height} でページ全体にスクロールが出ない`, async ({ page }) => {
       await page.setViewportSize(size);
       await saveBoth(page);
-      await page.goto(summaryPath);
+      await openWithChat(page, summaryPath);
       await expect(input(page)).toHaveValue(longQuestion);
       const measured = await fit(page);
       expect(measured.pageHeight).toBeLessThanOrEqual(measured.innerHeight);
@@ -276,7 +293,7 @@ test.describe('まとめの2ページ目の、持ち帰る更新処理を書く�
     test(`長い問いと長い更新処理を保存した状態でも、${size.width}x${size.height} で横にスクロールが出ない`, async ({ page }) => {
       await page.setViewportSize(size);
       await saveBoth(page);
-      await page.goto(summaryPath);
+      await openWithChat(page, summaryPath);
       await page.getByRole('tab', { name: /チャット/ }).click();
       await expect(input(page)).toHaveValue(longQuestion);
       const measured = await fit(page);

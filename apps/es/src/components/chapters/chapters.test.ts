@@ -221,11 +221,25 @@ describe('第1章から第4章とまとめの筋書き', () => {
     }
   });
 
-  it('折りたたむのは、演習の 2 ページだけ', () => {
-    expect(entries.filter(([, scenario]) => scenario.chat.collapsed === true).map(([id]) => id)).toEqual([
-      'chapter-2/02',
-      'chapter-2/04',
+  it('折りたたむのは、演習の 2 ページと、タブが文書だけのページ', () => {
+    const docsOnly = entries
+      .filter(([, scenario]) => scenario.tabs.every((tab) => tab.kind === 'doc'))
+      .map(([id]) => id);
+    expect(docsOnly).toEqual([
+      'chapter-1/01',
+      'chapter-2/01',
+      'chapter-2/03',
+      'chapter-3/02',
+      'chapter-3/03',
+      'chapter-3/04',
+      'chapter-4/01',
+      'chapter-4/05',
+      'summary/01',
+      'summary/02',
     ]);
+    expect(entries.filter(([, scenario]) => scenario.chat.collapsed === true).map(([id]) => id).sort()).toEqual(
+      ['chapter-2/02', 'chapter-2/04', ...docsOnly].sort(),
+    );
   });
 
   it('投稿の文は、定めた文だけである', () => {

@@ -166,7 +166,6 @@ export const createChat = (root: HTMLElement, scenario: WorkspaceScenario): Chat
       feed.replaceChildren();
       clearTyping();
       unread = 0;
-      open = false;
       renderRail();
     },
     setTyping,
