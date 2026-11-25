@@ -4,7 +4,7 @@ import ContentWarningModal from '@/components/ContentWarningModal.astro';
 import Figure from '@/components/Figure.astro';
 import MarkdownSourceLink from '@/components/MarkdownSourceLink.astro';
 import RelatedArticles from '@/components/RelatedArticles.astro';
-import ShoreBackdrop from '@/components/ShoreBackdrop/ShoreBackdrop.astro';
+import ShoreTitle from '@/components/ShoreTitle/ShoreTitle.astro';
 import ShareButtons from '@/components/ShareButtons.astro';
 import ThemeHubLinks from '@/components/ThemeHubLinks.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
@@ -71,7 +71,23 @@ const jsonLd = isPrivate || isDraft ? [] : [
   {...(updatedDate ? { modifiedTime: updatedDate } : {})}
   jsonLd={jsonLd}
 >
-  <ShoreBackdrop slot="backdrop" />
+  <ShoreTitle
+    slot="eyecatch"
+    title={post.data.title}
+    transitionName={`post-title-${post.data.slug}`}
+  >
+    <Fragment slot="meta">
+      <time datetime={post.data.date}>{formatDate(post.data.date)}</time>
+      {
+        updatedLabel && (
+          <span class="ml-2">
+            （更新:
+            <time datetime={updatedDate}>{updatedLabel}</time>）
+          </span>
+        )
+      }
+    </Fragment>
+  </ShoreTitle>
 
   <article
     class="article-paper"
@@ -80,26 +96,6 @@ const jsonLd = isPrivate || isDraft ? [] : [
     {...(isPrivate ? { 'data-pagefind-ignore': 'all' } : {})}
   >
     <header class="mb-8">
-      <time
-        class="text-sm text-accent dark:text-accent-light"
-        datetime={post.data.date}
-      >
-        {formatDate(post.data.date)}
-      </time>
-      {
-        updatedLabel && (
-          <span class="text-sm text-subtle dark:text-[#9ca3af] ml-2">
-            （更新:
-            <time datetime={updatedDate}>{updatedLabel}</time>）
-          </span>
-        )
-      }
-      <h1
-        class="text-3xl font-bold mt-2 mb-4"
-        transition:name={`post-title-${post.data.slug}`}
-      >
-        {post.data.title}
-      </h1>
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <AuthorCard compact />
         {!isPrivate && <ShareButtons title={post.data.title} url={pageUrl} />}

@@ -19,6 +19,7 @@ const UNIFORMS = [
   'uWaveShape',
   'uRect',
   'uOffset',
+  'uScale',
   'uRotation',
   'uCover',
   'uVisible',
@@ -192,6 +193,8 @@ const setUpTextures = (gl: WebGLRenderingContext): void => {
 export type ShrimpPose = Readonly<{
   /** 移動量（マス） */
   offset: readonly [number, number];
+  /** 大きさ。1 で、海の位置を決める正方形いっぱいに描く。小さくしても、移動量の尺は変わらない */
+  scale: number;
   /** 回転（ラジアン） */
   rotation: number;
   /** 水をかぶっている度合い（0〜1） */
@@ -282,6 +285,7 @@ export const createShoreRenderer = (
       gl.uniform4fv(uniforms.uWaveShape, scene.waves.shape);
       gl.uniform3f(uniforms.uRect, ...scene.rect);
       gl.uniform2f(uniforms.uOffset, ...(shrimp?.offset ?? [0, 0]));
+      gl.uniform1f(uniforms.uScale, shrimp?.scale ?? 1);
       gl.uniform1f(uniforms.uRotation, shrimp?.rotation ?? 0);
       gl.uniform1f(uniforms.uCover, shrimp?.cover ?? 0);
       gl.uniform1f(uniforms.uVisible, shrimp?.visible ?? 0);
