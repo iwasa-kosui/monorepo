@@ -7,7 +7,7 @@
  * 広い画面では、紙の右の余白に留まり、読み進めても波とエビが見える。
  * 余白のない狭い画面では、ページの上端に置き、紙の下へもぐり込む。読み進めると画面の外へ流れていく。
  *
- * BaseLayout の eyecatch スロットに置く。日付などは meta スロットで渡す。
+ * BaseLayout の eyecatch スロットに置く。日付などは meta スロットで、タイトルの下に並べる操作は actions スロットで渡す。
  * 海は WebGL で描く（ShoreHero/mount.ts）。WebGL が使えない環境では、砂の地に静止したドット絵だけを見せる。
  */
 import { EYE_PATH, SHELL_PATH } from '../ShoreHero/shrimp';
@@ -51,6 +51,13 @@ const { title, transitionName } = Astro.props;
     >
       {title}
     </h1>
+    {
+      Astro.slots.has('actions') && (
+        <div class="title-shore-actions">
+          <slot name="actions" />
+        </div>
+      )
+    }
   </div>
 </div>
 
@@ -170,6 +177,11 @@ const { title, transitionName } = Astro.props;
   word-break: auto-phrase;
   text-wrap: balance;
   animation: title-shore-up 1s 0.2s var(--shore-ease) both;
+}
+
+.title-shore-actions {
+  margin-top: 1rem;
+  animation: title-shore-up 1s 0.3s var(--shore-ease) both;
 }
 
 @keyframes title-shore-up {

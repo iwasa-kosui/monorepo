@@ -1,0 +1,173 @@
+---
+/**
+ * 記事のタイトルの下に置く、控えめな操作の列。
+ * シェア先と、Markdown の原文へのリンクを、同じ形と色の面に揃えて並べる。
+ * Markdown へのリンクは、広い画面にだけ出す。
+ * はてなブックマークだけは件数を出すのでピルに、ほかのシェア先はアイコンだけの丸にする。
+ */
+import { SHARE_TARGETS } from './shareTargets';
+
+interface Props {
+  title: string;
+  url: string;
+  markdownUrl: string;
+  /** 限定公開の記事では、シェアの導線を出さない */
+  shareable?: boolean;
+}
+
+const { title, url, markdownUrl, shareable = true } = Astro.props;
+---
+
+<div
+  class="article-actions"
+  data-share-buttons
+  data-page-title={title}
+  data-page-url={url}
+>
+  {
+    shareable && SHARE_TARGETS.map((target) => (
+      <a
+        data-share={target.id}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={target.name}
+        aria-label={target.ariaLabel}
+        class:list={[
+          'article-action',
+          target.id !== 'hatena' && 'article-action-icon',
+        ]}
+      >
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d={target.iconPath} />
+        </svg>
+        {
+          target.id === 'hatena' && (
+            <span data-hatena-count class="article-action-count hidden">
+              0
+            </span>
+          )
+        }
+      </a>
+    ))
+  }
+  <a
+    href={markdownUrl}
+    class="article-action article-action-markdown"
+    aria-label="Markdownとして表示"
+  >
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="9" y1="13" x2="15" y2="13" />
+      <line x1="9" y1="17" x2="15" y2="17" />
+    </svg>
+    <span>Markdown</span>
+  </a>
+</div>
+
+<style>
+.article-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.article-action {
+  --action-ink: #3d445e;
+  --action-line: rgb(31 39 64 / 0.14);
+  --action-fill: rgb(255 255 255 / 0.55);
+  --action-fill-hover: rgb(255 255 255 / 0.9);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  padding: 0 0.875rem;
+  border: 1px solid var(--action-line);
+  border-radius: 9999px;
+  background-color: var(--action-fill);
+  color: var(--action-ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s,
+    color 0.2s,
+    transform 0.2s;
+}
+
+/* アイコンだけの丸 */
+.article-action-icon {
+  width: 2.5rem;
+  padding: 0;
+}
+
+.article-action:hover {
+  border-color: var(--color-accent);
+  background-color: var(--action-fill-hover);
+  color: var(--color-accent-dark);
+}
+
+.article-action:active {
+  transform: scale(0.95);
+}
+
+.article-action:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.article-action svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* 狭い画面では、Markdown へのリンクを出さない。シェア先だけで 1 行に収める */
+@media (max-width: 47.99rem) {
+  .article-action-markdown {
+    display: none;
+  }
+}
+
+.article-action-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-color-scheme: dark) {
+  .article-action {
+    --action-ink: #c5cbd9;
+    --action-line: rgb(255 255 255 / 0.16);
+    --action-fill: rgb(255 255 255 / 0.05);
+    --action-fill-hover: rgb(255 255 255 / 0.1);
+  }
+
+  .article-action:hover {
+    border-color: var(--color-accent-light);
+    color: var(--color-accent-light);
+  }
+}
+
+@media print {
+  .article-actions {
+    display: none;
+  }
+}
+</style>
+
+<script>
+import './shareButtonsClient';
+</script>

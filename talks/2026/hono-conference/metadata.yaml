@@ -1,0 +1,13 @@
+title: "Honoが叶える、いつでも降りられるLambdalith"
+talk:
+  date: "2026-10-11"
+  event: "Hono Conference in Tokyo 2026"
+  eventUrl: "https://honoconf.dev/"
+  description: |
+    Hono Conference in Tokyo 2026 のスポンサーセッション。
+  duration: "15min"
+  videoUrl: "https://www.youtube.com/watch?v=0NsNVEgJeQ0"
+external:
+  type: speakerdeck
+  url: "https://speakerdeck.com/kakehashi/hono-ga-kanaeru-itsu-demo-orirareru-lambdalith"
+  embedUrl: "https://speakerdeck.com/player/283e7b00c4de41a5a86b27e7babdc6cc"

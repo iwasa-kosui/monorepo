@@ -233,9 +233,10 @@ const navItems = [
               ))
             }
           </div>
+          {/* 狭い画面では、検索は下のナビにある */}
           <button
             type="button"
-            class={`inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-full ${navIdleColor} transition-colors`}
+            class={`hidden md:inline-flex items-center gap-1 px-3 py-1.5 rounded-full ${navIdleColor} transition-colors`}
             aria-label="検索を開く"
             data-search-trigger
           >
@@ -267,7 +268,7 @@ const navItems = [
             'flex-1 w-full',
             hasHero
               ? 'relative rounded-t-[2.5rem] bg-card dark:bg-[#1f2435] px-[max(1rem,4.4vw)] pt-[clamp(3.5rem,7vw,6rem)] pb-[clamp(3rem,6vw,5rem)]'
-              : `py-8 pb-20 md:pb-8 ${mainMaxWidth} mx-auto px-4`,
+              : `py-8 ${mainMaxWidth} mx-auto px-4`,
             // タイトルの帯の海は、本文の後ろに敷く
             hasEyecatch && 'relative',
           ]}
@@ -276,7 +277,8 @@ const navItems = [
           <slot />
         </main>
       </div>
-      <footer>
+      {/* 狭い画面では、浮かんだナビの分だけ下を空ける */}
+      <footer class="floating-nav-clearance">
         <div class="max-w-3xl mx-auto px-4 py-6 text-center text-sm text-subtle dark:text-[#9ca3af]">
           &copy; {new Date().getFullYear()} kosui
           <span class="mx-1">&middot;</span>
@@ -287,23 +289,25 @@ const navItems = [
         </div>
       </footer>
     </div>
-    <nav
-      class="fixed bottom-0 inset-x-0 bg-bg/80 dark:bg-[#2b3147]/80 backdrop-blur border-t border-border dark:border-[#343c57] md:hidden bottom-nav"
-      aria-label="Mobile navigation"
-      transition:name="mobile-nav"
-    >
-      <div class="flex items-center justify-around max-w-3xl mx-auto px-4 py-2">
+    {
+      /* 狭い画面のナビ。画面の端から離して浮かべる。ページの行き先はピルに、検索は隣の丸いボタンに分ける */
+    }
+    <nav class="floating-nav" aria-label="Mobile navigation">
+      {
+        /* 遷移の名前は、背景をぼかす面それぞれに付ける。親に付けると、面が親の中だけを背景として扱い、下の本文がぼけない */
+      }
+      <div
+        class="floating-nav-surface floating-nav-tabs"
+        transition:name="mobile-nav"
+      >
         {
           navItems.filter(item => !('external' in item)).map((
               item,
             ) => (
             <a
               href={item.href}
-              class={`flex flex-col items-center gap-0.5 py-1 px-3 text-[10px] transition-all ${
-                item.isActive
-                  ? 'text-accent font-semibold scale-110'
-                  : 'text-subtle dark:text-[#9ca3af] active:scale-95'
-              }`}
+              class="floating-nav-item"
+              {...(item.isActive ? { 'aria-current': 'page' } : {})}
             >
               {
                 item.label === 'Posts' && (
@@ -317,6 +321,7 @@ const navItems = [
                     stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
+                    aria-hidden="true"
                   >
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <polyline points="14 2 14 8 20 8" />
@@ -338,6 +343,7 @@ const navItems = [
                     stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
+                    aria-hidden="true"
                   >
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
@@ -358,6 +364,7 @@ const navItems = [
                     stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
+                    aria-hidden="true"
                   >
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                     <circle cx="12" cy="7" r="4" />
@@ -368,29 +375,30 @@ const navItems = [
             </a>
           ))
         }
-        <button
-          type="button"
-          class="flex flex-col items-center gap-0.5 py-1 px-3 text-[10px] transition-all text-subtle dark:text-[#9ca3af] active:scale-95"
-          aria-label="検索を開く"
-          data-search-trigger
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <span>Search</span>
-        </button>
       </div>
+      <button
+        type="button"
+        class="floating-nav-surface floating-nav-search"
+        aria-label="検索を開く"
+        data-search-trigger
+        transition:name="mobile-nav-search"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </button>
     </nav>
     <script>
     document.addEventListener('astro:page-load', () => {
