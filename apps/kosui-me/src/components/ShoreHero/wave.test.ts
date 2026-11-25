@@ -5,6 +5,7 @@ import {
   coverage,
   createWaves,
   type Drift,
+  ebb,
   frontOf,
   initialDrift,
   packWaves,
@@ -182,6 +183,47 @@ describe('carry', () => {
       coarse = carry(coarse, time, time + 0.5, waves);
     }
     expect(coarse.seaward).toBeCloseTo(fine.seaward, 1);
+  });
+});
+
+describe('ebb', () => {
+  it('満ちきった潮が引くと、戻りきる前にエビは海へ消える', () => {
+    expect(ebb(initialDrift, 1, 0.75).gone).toBe(false);
+    expect(ebb(initialDrift, 1, 0.6).gone).toBe(true);
+    expect(ebb(initialDrift, 1, 0).gone).toBe(true);
+  });
+
+  it('エビをすっかり覆った潮なら、途中まで満ちただけでも攫う', () => {
+    expect(ebb(initialDrift, 0.35, 0).gone).toBe(true);
+  });
+
+  it('潮がエビに届いていなければ動かない', () => {
+    expect(ebb(initialDrift, 0.2, 0)).toBe(initialDrift);
+  });
+
+  it('浅くかぶっただけなら、少し沖へずれて浜に残る', () => {
+    const nudged = ebb(initialDrift, 0.25, 0);
+    expect(nudged.seaward).toBeGreaterThan(0);
+    expect(nudged.seaward).toBeLessThan(0.3);
+    expect(nudged.gone).toBe(false);
+  });
+
+  it('潮が満ちていく間は動かない', () => {
+    expect(ebb(initialDrift, 0, 1)).toBe(initialDrift);
+    expect(ebb(initialDrift, 0.5, 0.5)).toBe(initialDrift);
+  });
+
+  it('少しずつ引いても、一気に引いても、ほぼ同じところへ運ぶ', () => {
+    let gradual = initialDrift;
+    for (let tide = 1; tide > 0.8 + 1e-9; tide -= 0.004) {
+      gradual = ebb(gradual, tide, tide - 0.004);
+    }
+    expect(gradual.seaward).toBeCloseTo(ebb(initialDrift, 1, 0.8).seaward, 1);
+  });
+
+  it('消えたあとは動かない', () => {
+    const gone: Drift = { ...initialDrift, seaward: 2, gone: true };
+    expect(ebb(gone, 1, 0)).toBe(gone);
   });
 });
 

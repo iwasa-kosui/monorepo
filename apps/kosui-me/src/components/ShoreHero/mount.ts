@@ -1,7 +1,7 @@
 import { buildPatternTexture, PATTERN_SIZE } from './pattern';
 import { FRAGMENT_SHADER, VERTEX_SHADER } from './shader';
 import { buildShadowTexture, buildSpriteTexture, GRID, SHADOW_SIZE } from './shrimp';
-import { carry, coverage, createWaves, type Drift, initialDrift, packWaves, visibility } from './wave';
+import { carry, coverage, createWaves, type Drift, ebb, initialDrift, packWaves, visibility } from './wave';
 
 /** 動きを止めた 1 枚絵として見せるときの時刻（最初の波が引いて、エビが濡れた砂の上にいる） */
 const STILL_TIME = 5.2;
@@ -378,11 +378,15 @@ export const mountShore = (elements: ShoreElements): () => void => {
   };
 
   // スクロール: ページを読み進めるほど潮が満ち、浜とエビを覆う。
+  // 上へ戻ると潮が引き、覆われていたエビを沖へ連れていく。戻りきる頃には、エビは浜にいない。
   // ヒーローが画面に留まる幅では、本文のシートが重なる間、名前と紹介が少し上へ退いて薄れる
   let scrollQueued = false;
   const applyScroll = (): void => {
     scrollQueued = false;
-    tide = Math.min(1, Math.max(0, window.scrollY / (hero.offsetHeight || 1)));
+    const nextTide = Math.min(1, Math.max(0, window.scrollY / (hero.offsetHeight || 1)));
+    drift = ebb(drift, tide, nextTide);
+    if (drift.gone) button.hidden = true;
+    tide = nextTide;
     const pinned = getComputedStyle(hero).position === 'sticky';
     content.style.transform = pinned
       ? `translate3d(0, ${(-tide * RECEDE_DISTANCE).toFixed(1)}px, 0)`

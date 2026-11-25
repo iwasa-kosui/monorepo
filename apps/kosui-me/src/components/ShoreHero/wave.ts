@@ -53,6 +53,15 @@ const FADE_SPAN = 0.5;
 /** スクロールで潮が満ちるとき、波打ち際が陸側へ動く距離 */
 const TIDE_REACH = 2.8;
 
+/**
+ * 引き潮がエビを沖へ引く割合。波打ち際が下がった距離の何倍、エビが沖へ動くか。
+ * 1 より大きいので、潮にすっかり覆われたエビは、潮が引ききる前に必ず海へ消える
+ */
+const EBB_PULL = 1.6;
+
+/** 引き潮を積分するときの、波打ち際の刻み */
+const EBB_STEP = 0.02;
+
 /** 1 回の積分の刻み（秒） */
 const STEP = 1 / 30;
 
@@ -268,6 +277,30 @@ export const carry = (
     previous = now;
   }
   return { seaward, lateral, spin, gone: seaward > GONE_AT };
+};
+
+/**
+ * スクロールで満ちた潮が `tideFrom` から `tideTo`（どちらも 0〜1）へ引く間に、エビを動かした結果を返す。
+ * 潮をかぶっているエビは、引いていく水に沖へ運ばれる。浅くかぶっただけなら少しずれるだけで、
+ * すっかり覆われていたら海へ消える。潮が満ちていく間と、潮の届いていないエビは動かない。
+ * 時間によらず、潮の引いた量だけで決まる（画面の外にいる間や、一気に戻ったときも同じ結果になる）。
+ */
+export const ebb = (drift: Drift, tideFrom: number, tideTo: number): Drift => {
+  const fall = (tideFrom - tideTo) * TIDE_REACH;
+  if (drift.gone || !(fall > 0)) return drift;
+
+  const steps = Math.ceil(fall / EBB_STEP);
+  const stride = fall / steps;
+  let { seaward, spin } = drift;
+  for (let i = 0; i < steps; i++) {
+    const waterline = tideFrom * TIDE_REACH - stride * i;
+    const covered = clamp01((waterline - (EBB_LINE - seaward)) / COVER_DEPTH);
+    const move = stride * EBB_PULL * covered;
+    seaward += move;
+    spin += move * 1.1;
+  }
+  if (seaward === drift.seaward) return drift;
+  return { ...drift, seaward, spin, gone: seaward > GONE_AT };
 };
 
 /**
