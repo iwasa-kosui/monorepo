@@ -243,25 +243,17 @@ body.chapter-page {
   }
 }
 
-.intro-spread {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1rem;
-}
-.intro-spread > * {
-  min-width: 0;
-}
 .intro-text {
-  font-size: 1rem;
-  line-height: 1.65;
+  font-size: 1.5rem;
+  line-height: 1.7;
 }
 .content .intro-text h2 {
   margin-block: 1.25rem 0.5rem;
-  font-size: 1.25rem;
+  font-size: 2rem;
 }
 .content .intro-text h3 {
   margin-block: 1rem 0.375rem;
-  font-size: 1.125rem;
+  font-size: 1.5rem;
 }
 .content .intro-text > :first-child {
   margin-top: 0;
@@ -276,7 +268,7 @@ body.chapter-page {
 }
 .content .intro-text table {
   margin-block: 0.5rem;
-  font-size: 0.8125rem;
+  font-size: 1.125rem;
   line-height: 1.35;
 }
 .content .intro-text th,
@@ -284,33 +276,35 @@ body.chapter-page {
   padding: 0.125rem 0.5rem;
 }
 
-@media (min-width: 1024px) {
-  .intro-spread {
-    grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
-    column-gap: 2rem;
-  }
-  .content .chapter-body > .intro-spread {
-    flex: 1 0 auto;
-  }
-}
-
-@media (max-height: 700px) {
+@media (max-height: 800px) {
   .content .intro-text {
-    font-size: 0.875rem;
+    font-size: 1.25rem;
     line-height: 1.55;
   }
   .content .intro-text h2 {
     margin-block: 0.75rem 0.25rem;
-    font-size: 1.125rem;
+    font-size: 1.625rem;
   }
   .content .intro-text h3 {
     margin-block: 0.625rem 0.25rem;
-    font-size: 1rem;
+    font-size: 1.25rem;
   }
   .content .intro-text p,
   .content .intro-text ul,
   .content .intro-text blockquote {
     margin-block: 0.25rem;
+  }
+}
+
+@media (max-height: 700px) {
+  .content .intro-text {
+    font-size: 1.1875rem;
+  }
+  .content .intro-text h2 {
+    font-size: 1.5625rem;
+  }
+  .content .intro-text h3 {
+    font-size: 1.1875rem;
   }
 }
 

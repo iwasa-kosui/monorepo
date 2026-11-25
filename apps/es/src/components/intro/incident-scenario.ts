@@ -1,10 +1,10 @@
 import type { Condition, EarlierLog, SignalRef, WorkspaceScenario } from '../../workspace/scenario';
 
-const startedAt = Date.UTC(2026, 10, 6, 18, 20, 0);
+export const startedAt = Date.UTC(2026, 10, 6, 18, 20, 0);
 
 const cancelTamaSql = `UPDATE visits SET status = 'cancelled' WHERE id = 'visit-tama';`;
 
-const earlierLogs: readonly EarlierLog[] = [
+export const earlierLogs: readonly EarlierLog[] = [
   {
     time: '2026-11-06T09:12:04.118Z',
     level: 'INFO',

@@ -6,7 +6,7 @@ import { distDir, htmlFiles, readDistFile } from './dist';
 
 const checkFile = 'playground-check/index.html';
 
-const embeddedPages = /^chapters\/(?:chapter-[1234]\/(?:\d+\/)?|intro\/2\/)index\.html$/;
+const embeddedPages = /^chapters\/(?:chapter-[1234]\/(?:\d+\/)?|intro\/[26]\/)index\.html$/;
 
 const markers = ['cm-editor', 'sql-wasm', 'sucrase'];
 
@@ -47,7 +47,7 @@ test('確認用ページは実行基盤の JS を読み込み、noindex を付�
   expect(html).toContain('<meta name="robots" content="noindex">');
 });
 
-test('確認用ページと、導入の 2 ページ目と、第1章から第4章のページ以外の HTML は実行基盤の JS を読み込まず、確認用ページへのリンクも持たない', () => {
+test('確認用ページと、導入の 2 ページ目と 6 ページ目と、第1章から第4章のページ以外の HTML は実行基盤の JS を読み込まず、確認用ページへのリンクも持たない', () => {
   const others = htmlFiles().filter((file) =>
     file !== checkFile && !embeddedPages.test(file) && !file.startsWith('play/')
   );
@@ -63,7 +63,7 @@ test('確認用ページと、導入の 2 ページ目と、第1章から第4章
   expect(offenders).toEqual([]);
 });
 
-test('導入の 2 ページ目と第1章から第4章では、実行欄を置いたページだけが実行基盤の JS を読み込む', () => {
+test('導入の 2・6 ページ目と第1章から第4章では、実行欄を置いたページだけが実行基盤の JS を読み込む', () => {
   const pages = htmlFiles().filter((file) => embeddedPages.test(file));
   expect(pages.length).toBeGreaterThan(10);
   const mismatches = pages.filter((file) => {
@@ -83,5 +83,6 @@ test('導入の 2 ページ目と第1章から第4章では、実行欄を置い
     'chapters/chapter-4/4/index.html',
     'chapters/chapter-4/6/index.html',
     'chapters/intro/2/index.html',
+    'chapters/intro/6/index.html',
   ]);
 });

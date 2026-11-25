@@ -89,6 +89,7 @@ const roleParts = meta.role.split('`');
     class:list={['lesson-frame', {
       'lesson-frame--full': fullWidth,
       'lesson-frame--wide': wide,
+      'lesson-frame--intro': chapter === 'intro',
       'lesson-frame--immersive': immersive,
     }]}
     data-flow={meta.flow}

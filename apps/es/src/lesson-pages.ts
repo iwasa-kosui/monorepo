@@ -37,20 +37,16 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
     role: '講師が、このハンズオンの目的を話すのを聞きます。',
   },
   'intro/06': {
-    flow: 'problem',
-    role: '講師が、記録する方法の比較を話すのを聞きます。',
+    flow: 'try',
+    role: 'アクセスログとDBバックアップで、ポチのキャンセルを調べます。',
   },
   'intro/07': {
-    flow: 'problem',
-    role: '講師が、後から記録を足すことの限界を話すのを聞きます。',
-  },
-  'intro/08': {
     flow: 'problem',
     role: '講師が、コードを見ない開発の時代の品質保証を話すのを聞きます。',
   },
   'chapter-1/01': {
     flow: 'problem',
-    role: 'チャットの入力欄に、自分のシステムで現在の状態だけでは答えられない問いを1つ書きます。',
+    role: '自分のシステムで、DB を見ても分からなかったことを1つ書きます。',
   },
   'chapter-1/02': {
     flow: 'try',

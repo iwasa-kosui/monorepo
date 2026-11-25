@@ -7,7 +7,7 @@ export type ScheduleRow = {
 };
 
 export const schedule: readonly ScheduleRow[] = [
-  { id: 'intro', title: '導入', minutes: 8, pageStarts: [0, 1, 3, 4, 5, 5, 6, 7] },
+  { id: 'intro', title: '導入', minutes: 8, pageStarts: [0, 1, 3, 4, 5, 5, 7] },
   { id: 'chapter-1', title: '第1章 答えられない問いを挙げる', minutes: 2 },
   {
     id: 'chapter-2',

@@ -40,6 +40,9 @@ if (firstTab === undefined) {
 const { status } = scenario;
 const counter = status.counter;
 const collapsed = scenario.chat.collapsed === true;
+const chatHidden = collapsed
+  && scenario.history.length === 0
+  && scenario.timeline.every((event) => event.kind !== 'post');
 const showStatus = timed;
 const hasComposer = Astro.slots.has('composer');
 ---
@@ -105,7 +108,8 @@ const hasComposer = Astro.slots.has('composer');
   <div
     class="workspace"
     data-workspace
-    data-chat-collapsed={collapsed ? '' : undefined}
+    data-chat-collapsed={collapsed && !chatHidden ? '' : undefined}
+    data-chat-hidden={chatHidden ? '' : undefined}
   >
     {
       hasComposer
@@ -542,6 +546,11 @@ const hasComposer = Astro.slots.has('composer');
   line-height: 1.5;
 }
 
+.scene .workspace[data-chat-hidden] :global(.win.chat),
+.scene .workspace[data-chat-hidden] :global(.chat-tab) {
+  display: none;
+}
+
 @media (max-width: 639px) {
   :global(.content) :global(.cfig).scene {
     gap: 0;
@@ -727,6 +736,9 @@ const hasComposer = Astro.slots.has('composer');
   }
   .scene .workspace[data-chat-collapsed] {
     grid-template-columns: 3.5rem minmax(0, 1fr);
+  }
+  .scene .workspace[data-chat-hidden] {
+    grid-template-columns: minmax(0, 1fr);
   }
   .scene .start {
     align-items: center;

@@ -41,7 +41,8 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 
 - ステップ1でテーブルの名前が表していた「何が起きたか」は、`event_name` の値で表します。
 - 来院以外の対象の記録も同じテーブルに入るので、対象は `target_type` と `target_id` の組で表します。
-- `operated_by` や `reason` のように出来事ごとに違う列は、JSON にして `payload` の1列に入れます。
+- 来院の行からは、誰がなぜキャンセルしたのかを知ることはできません。`operated_by` や `reason` のように出来事ごとに違う列は、JSON にして `payload` の1列に入れます。
+- `target_state` には、変更後の来院の行をそのまま入れます。`visits` の行はこの後も変わりますが、「いつ何が起きたか」と「その時の状態はどうだったか」が両方わかります。
 - ステップ2の開始時点の DB には、`visit_cancellations` テーブルの代わりに `business_events` テーブルを用意してあります。
 - [関連記事](https://kosui.me/posts/2025/05/06/142842)のテーブル設計は PostgreSQL 向けで、`event_id` に UUID v7 を使います。この演習は SQLite を使い、`event_id` を連番にします。参加者の Node の下限である 24.12.0 に `crypto.randomUUIDv7` が無いためです。
 
