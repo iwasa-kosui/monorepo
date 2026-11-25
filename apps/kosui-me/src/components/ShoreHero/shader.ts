@@ -22,6 +22,7 @@ uniform vec4 uWaveMotion[4];  // 波ごと: 岸に届いてからの秒数, 浜�
 uniform vec4 uWaveShape[4];   // 波ごと: 斜めに届く遅れ, 岸沿いのうねりの位相 ×3
 uniform vec3 uRect;           // エビのドット絵の左上（CSS px）と 1 辺の長さ
 uniform vec2 uOffset;         // エビの移動量（マス）
+uniform float uScale;         // エビの大きさ（1 = ドット絵の枠いっぱい）
 uniform float uRotation;      // エビの回転（ラジアン）
 uniform float uCover;         // エビが水をかぶっている度合い（0〜1）
 uniform float uVisible;       // エビの見え方（0〜1）
@@ -95,7 +96,7 @@ vec2 toCell(vec2 px, float t, float wobble) {
   q -= uOffset + SEAWARD * 5.5 * adrift * adrift + ALONG * sin(t * 1.3) * .4 * uCover;
   float an = uRotation + sin(t * 1.1) * .07 * uCover;
   vec2 c = q - vec2(9.5);
-  q = vec2(c.x * cos(an) + c.y * sin(an), -c.x * sin(an) + c.y * cos(an)) + vec2(9.5);
+  q = vec2(c.x * cos(an) + c.y * sin(an), -c.x * sin(an) + c.y * cos(an)) / uScale + vec2(9.5);
   q += vec2(
     sin(q.y * .42 + t * 1.5) + .5 * sin(q.y * .9 - t * 1.1 + 2.),
     sin(q.x * .38 + t * 1.25 + 1.7) + .5 * sin(q.x * .8 + t * .9)

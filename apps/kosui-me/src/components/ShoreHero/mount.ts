@@ -53,9 +53,9 @@ export type ShoreElements = Readonly<{
   /** ヒーロー全体。配色のカスタムプロパティを持ち、canvas はこの大きさに合わせる */
   hero: HTMLElement;
   canvas: HTMLCanvasElement;
-  /** エビの最初の位置と大きさを決める枠 */
+  /** エビの最初の位置と、波の大きさを決める枠 */
   slot: HTMLElement;
-  /** エビに重ねた、触れる・押すためのボタン */
+  /** エビに重ねた、触れる・押すためのボタン。枠より小さくすると、エビもその大きさになる */
   button: HTMLButtonElement;
   /** 名前と紹介、エビの枠をまとめた部分。本文のシートが重なる間、上へ退いて薄れる */
   content: HTMLElement;
@@ -126,6 +126,8 @@ export const mountShore = (elements: ShoreElements): () => void => {
     const cell = slotRect.width / GRID;
     button.style.transform = `translate(${(cellsX * cell).toFixed(1)}px, ${(cellsY * cell).toFixed(1)}px)`;
 
+    // 跳ねる高さは、エビの大きさに合わせる
+    const scale = button.offsetWidth / (slot.offsetWidth || 1) || 1;
     const [twitchX, twitchY, twitchTurn] = twitch((now - twitchAt) / 1000);
     const [hopX, hopY, hopTurn] = hop((now - hopAt) / 800);
 
@@ -142,7 +144,11 @@ export const mountShore = (elements: ShoreElements): () => void => {
         slotRect.width,
       ],
       shrimp: {
-        offset: [cellsX + twitchX + hopX, cellsY + twitchY + hopY],
+        offset: [
+          cellsX + (twitchX + hopX) * scale,
+          cellsY + (twitchY + hopY) * scale,
+        ],
+        scale,
         rotation: drift.spin + twitchTurn + hopTurn,
         cover: cover * (1 - drift.buried), // 埋もれている間は、水に揺られない
         visible: visibility(drift),
