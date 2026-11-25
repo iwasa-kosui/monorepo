@@ -1,4 +1,4 @@
-import type { EditorState } from '@codemirror/state';
+import { Compartment, type EditorState, type Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 
 import { type FileSelectedDetail, fileSelectedEvent } from '../workspace/ide-events.ts';
@@ -13,6 +13,7 @@ export type WorkbenchOptions = {
   readonly opened: readonly string[];
   readonly active: string;
   readonly wrap?: boolean;
+  readonly typecheck?: boolean;
   readonly onChange?: (file: string) => void;
   readonly onSelect?: (file: string) => void;
 };
@@ -53,12 +54,18 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
     if (mark !== null && mark !== undefined) mark.hidden = !isEditable(file) || doc === baseline[file];
   };
 
+  const typecheckSlot = new Compartment();
+  let typecheckExtensions: ReadonlyMap<string, Extension> = new Map();
+
   const stateFor = (file: string, doc: string): EditorState =>
     createEditorState(doc, {
       language: 'typescript',
       label: `${file} のコード`,
       readOnly: !isEditable(file),
       ...(options.wrap === true ? { wrap: true } : {}),
+      ...(options.typecheck === true && isEditable(file)
+        ? { typecheck: typecheckSlot.of(typecheckExtensions.get(file) ?? []) }
+        : {}),
       onChange: (next) => {
         markModified(file, next);
         options.onChange?.(file);
@@ -72,6 +79,21 @@ export const createWorkbench = (options: WorkbenchOptions): Workbench => {
   const keep = (): void => {
     states.set(active, view.state);
   };
+
+  if (options.typecheck === true) {
+    void import('./typecheck/extension.ts').then(({ createTypecheckExtensions }) => {
+      typecheckExtensions = createTypecheckExtensions(options.files, options.editable);
+      keep();
+      for (const [file, state] of states) {
+        const extension = typecheckExtensions.get(file);
+        if (extension === undefined) continue;
+        const effects = typecheckSlot.reconfigure(extension);
+        if (file === active) view.dispatch({ effects });
+        else states.set(file, state.update({ effects }).state);
+      }
+      keep();
+    }).catch(() => undefined);
+  }
 
   const tabsOf = (): HTMLButtonElement[] => [...tabList.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
   const tabOf = (file: string): HTMLButtonElement | undefined => tabsOf().find((tab) => tab.dataset.file === file);
