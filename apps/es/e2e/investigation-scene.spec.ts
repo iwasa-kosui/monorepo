@@ -563,7 +563,7 @@ test.describe('導入 調査の画面', () => {
   });
 
   test('immersive でないページでは、役割の行と目標が見える', async ({ page }) => {
-    await page.goto('/chapters/chapter-4/');
+    await page.goto('/chapters/intro/');
     for (const selector of ['.lesson-role', '.chapter-goal']) {
       const box = await page.locator(selector).boundingBox();
       expect(box?.width ?? 0).toBeGreaterThan(50);

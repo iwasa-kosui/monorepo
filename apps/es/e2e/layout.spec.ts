@@ -82,11 +82,11 @@ const describeFailure = (path: string, size: Size, metrics: Metrics): string =>
   + `chapterBody=${metrics.bodyScrollHeight}/${metrics.bodyClientHeight}`;
 
 const waitForPlaygrounds = async (page: Page, path: string): Promise<void> => {
-  for (const playground of await page.locator('[data-playground]:not([hidden])').all()) {
+  for (const playground of await page.locator('[data-playground]:visible').all()) {
     await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
   }
   if (path === '/chapters/chapter-3/') {
-    await expect(page.locator('[data-role="origin"]')).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('[data-role="origin"]:not([hidden])')).toHaveCount(1, { timeout: 30_000 });
   }
 };
 
@@ -102,7 +102,9 @@ const collectFailures = async (
     await page.goto(path);
     await waitForPlaygrounds(page, path);
     const axisButtons = page.locator('[data-axis]');
-    const tabButtons = page.locator('[data-playground-switch] button');
+    const tabButtons = page.locator(
+      '[data-investigation]:not([data-phase="idle"]) [aria-label="開くツール"] > [role="tab"]:visible',
+    );
     const [switches, noun] = (await axisButtons.count()) > 0
       ? [axisButtons, '軸'] as const
       : [tabButtons, 'タブ'] as const;

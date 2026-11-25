@@ -197,6 +197,8 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
 }
 :global(.scene[data-scenario]) .tables {
   flex: none;
+  max-height: 7.5rem;
+  overflow: auto;
   border-bottom: 1px solid var(--db-rule);
   background: var(--db-side);
   padding: 0.375rem 0.5rem;
@@ -501,6 +503,7 @@ const resolved = resolveDbSetup(config.setup, (snapshot, file) => {
   }
   :global(.scene[data-scenario]) .tables {
     width: 10rem;
+    max-height: none;
     border-right: 1px solid var(--db-rule);
     border-bottom: 0;
   }

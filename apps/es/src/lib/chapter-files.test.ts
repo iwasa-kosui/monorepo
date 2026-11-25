@@ -38,12 +38,12 @@ describe('immersive のページ', () => {
 
   const expected = [
     'intro/02.mdx',
-    ...['chapter-1', 'chapter-2', 'chapter-3'].flatMap((chapter) =>
+    ...chapterNames().filter((chapter) => chapter !== 'intro').flatMap((chapter) =>
       chapterPageFiles(chapter).map((file) => `${chapter}/${file}`)
     ),
   ].sort();
 
-  it('immersive は導入の 2 ページ目と、第1章から第3章の全ページに付き、wide も残っている', () => {
+  it('immersive は導入の 2 ページ目と、第1章から第4章とまとめの全ページに付き、wide も残っている', () => {
     expect(immersiveFiles().sort()).toEqual(expected);
     for (const file of expected) {
       expect(read(`src/content/chapters/${file}`), file).toMatch(/^wide: true$/m);
@@ -55,7 +55,7 @@ describe('immersive のページ', () => {
     expect(source).toMatch(/<div class="visually-hidden">\n\n## .+\n\n.+\n\n<\/div>\n\n<InvestigationScene \/>/);
   });
 
-  it('第1章から第3章のページは、最初の見出しが h2 なら、隠した見出しとして作業環境の前に置く', () => {
+  it('第1章から第4章とまとめのページは、最初の見出しが h2 なら、隠した見出しとして作業環境の前に置く', () => {
     for (const file of expected.filter((name) => !name.startsWith('intro/'))) {
       const source = read(`src/content/chapters/${file}`);
       const first = /^(#{2,3}) .+$/m.exec(source);

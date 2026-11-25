@@ -155,7 +155,7 @@ test.describe('一覧を開いても画面が動かない', () => {
     test(`1280x640 の ${path}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 640 });
       await page.goto(path);
-      for (const playground of await page.locator('[data-playground]:not([hidden])').all()) {
+      for (const playground of await page.locator('[data-playground]:visible').all()) {
         await expect(playground).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
       }
       const bodyTop = async (): Promise<number> =>

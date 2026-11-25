@@ -16,6 +16,8 @@ export const mountEditor: PanelMount<'editor'> = (host) => {
   const address = root.querySelector<HTMLElement>('[data-address]');
   const project = tab.config.project;
   const baseUrl = tab.url.slice(0, tab.url.lastIndexOf('/') + 1);
+  // タブの名前がファイル名でないとき（開始コードを並べるタブ）は、ファイルを選んでも名前を変えない
+  const namedByFile = tab.title === `${tab.config.active} — ${project}`;
 
   const isDrawer = (): boolean => {
     const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
@@ -55,7 +57,7 @@ export const mountEditor: PanelMount<'editor'> = (host) => {
     const { file } = (event as CustomEvent<FileSelectedDetail>).detail;
     if (browserTab === null) return;
     const title = browserTab.querySelector<HTMLElement>('.tab-title');
-    if (title !== null) title.textContent = `${file} — ${project}`;
+    if (title !== null && namedByFile) title.textContent = `${file} — ${project}`;
     browserTab.dataset.url = `${baseUrl}${file}`;
     if (address !== null && browserTab.getAttribute('aria-selected') === 'true') {
       address.textContent = browserTab.dataset.url;

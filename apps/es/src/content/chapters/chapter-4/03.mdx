@@ -1,17 +1,22 @@
+---
+wide: true
+immersive: true
+---
+
 import CodeBlock from '../../../components/CodeBlock.astro';
 import CodePlayground from '../../../components/CodePlayground.astro';
-import PlaygroundTabs from '../../../components/PlaygroundTabs.astro';
-import SqlPlayground from '../../../components/SqlPlayground.astro';
+import { chapter4ExternalSync } from '../../../components/chapters/chapter-4';
+import Workspace from '../../../components/workspace/Workspace.astro';
 import { readFunctionsOf } from '../../../lib/snapshots';
+
+<div class="visually-hidden">
 
 ## 外部システム同期
 
-> 外部システムに、いつ何を送ったのか。
+</div>
 
-`cancelVisit` は来院をキャンセルしたあと、リマインダーの取り消しを外部システムへ送ります。外部への送信はトランザクションに入りません。そこで `cancelVisit` は記録を2回に分けます。`cancelVisit` は、トランザクションの中で `VisitCancelled` と送信の予定 `ReminderCancellationRequested` を記録します。`cancelVisit` は、コミットの後に外部へ送り、結果を `ReminderCancellationSent` か `ReminderCancellationFailed` として記録します。
-
-<PlaygroundTabs labels={['完成コードを実行する', 'SQL で調べる']} label="実行欄" />
-
+<Workspace scenario={chapter4ExternalSync}>
+<Fragment slot="editor">
 <CodePlayground
   exercise="chapter-4-external-sync-done"
   editable={['visits.ts']}
@@ -20,24 +25,12 @@ import { readFunctionsOf } from '../../../lib/snapshots';
   reveal="export const cancelVisit"
   scripts={[{ file: 'what-was-sent.ts', label: 'what-was-sent.ts を実行する' }]}
 />
+</Fragment>
+<Fragment slot="memo">
 
-<SqlPlayground
-  hidden
-  id="chapter-4-external-sync"
-  script={{ exercise: 'chapter-4-external-sync-done', entry: 'what-was-sent.ts' }}
-  initial={`SELECT
-  requested.target_id AS visit_id,
-  requested.event_at,
-  requested.payload ->> '$.message' AS message
-FROM business_events AS requested
-WHERE requested.event_name = 'ReminderCancellationRequested'
-  AND NOT EXISTS (
-    SELECT 1 FROM business_events AS finished
-    WHERE finished.event_name IN ('ReminderCancellationSent', 'ReminderCancellationFailed')
-      AND finished.payload ->> '$.causationEventId' = requested.event_id
-  )
-ORDER BY requested.event_id;`}
-/>
+> 外部システムに、いつ何を送ったのか。
+
+`cancelVisit` は来院をキャンセルしたあと、リマインダーの取り消しを外部システムへ送ります。外部への送信はトランザクションに入りません。そこで `cancelVisit` は記録を2回に分けます。`cancelVisit` は、トランザクションの中で `VisitCancelled` と送信の予定 `ReminderCancellationRequested` を記録します。`cancelVisit` は、コミットの後に外部へ送り、結果を `ReminderCancellationSent` か `ReminderCancellationFailed` として記録します。
 
 3行目は、確認用スクリプトが結果の記録を失敗させた例です。`result` の `unconfirmed` は、送信の予定があり結果の記録が無い送信を表します。この送信が外部に届いたとは限りません。この演習のコードは、未確認の送信を再送しません。
 
@@ -80,3 +73,6 @@ ORDER BY requested.event_id;`}
 </details>
 
 </div>
+
+</Fragment>
+</Workspace>

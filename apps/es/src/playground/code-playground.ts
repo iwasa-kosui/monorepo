@@ -1,5 +1,5 @@
 import { createRuntime, RuntimeScriptError } from './client.ts';
-import { applyRuntimeState, element, failureElement, query } from './dom.ts';
+import { applyRuntimeState, element, failureElement, mountWhenShown, query } from './dom.ts';
 import { revealText } from './editor.ts';
 import { maxLogLineChars, maxMessageChars } from './engine/limits.ts';
 import type { RunOutcome } from './engine/types.ts';
@@ -269,15 +269,5 @@ const mount = (root: HTMLElement): void => {
 };
 
 for (const root of document.querySelectorAll<HTMLElement>('[data-playground="code"]')) {
-  if (!root.hidden) {
-    mount(root);
-    continue;
-  }
-  const observer = new MutationObserver(() => {
-    if (!root.hidden) {
-      observer.disconnect();
-      mount(root);
-    }
-  });
-  observer.observe(root, { attributes: true, attributeFilter: ['hidden'] });
+  mountWhenShown(root, mount);
 }
