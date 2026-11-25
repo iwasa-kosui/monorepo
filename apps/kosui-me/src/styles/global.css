@@ -86,8 +86,8 @@ body {
 /* 海辺の配色。シェーダーがこの値を読むので、色は 16 進 6 桁で書く。砂はサイト全体の地の色と同じ */
 .shore-palette {
   --shore-sand: var(--color-bg);
-  --shore-sea-shallow: #f0998d;
-  --shore-sea-deep: #b3324b;
+  --shore-sea-shallow: #8cc6dc;
+  --shore-sea-deep: #2264a3;
   --shore-foam: #fffdfb;
   --shore-light: #ffffff;
   --shore-shell: #ee7b6f;
