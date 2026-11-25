@@ -126,15 +126,22 @@ float laceOf(vec4 holes, float radius, float soften, float rough) {
 // 水の縁に寄り集まった泡の帯。x = 泡のあるところ（0〜1）, y = 泡の明るさ。
 // along は岸沿いの位置、dist は水の縁から沖へ測った距離。strength（0〜1）が小さいほど細い。
 // 陸側の端は水の縁そのもので、くっきりしている。帯は途切れずに続くが、太さは岸沿いにむらがある。
-// 沖側の端はむらに沿ってちぎれ、後ろの泡の網につながる。泡は細かい粒の集まりで、粒の間がわずかに暗い
-vec2 frothBand(float along, float dist, float seed, float strength, float soften) {
+// 沖側の端はむらに沿ってちぎれ、後ろの泡の網につながる。泡は細かい粒の集まりで、粒の間がわずかに暗い。
+// lift は波の先の高さ。高い波の泡は太い。
+// pad は、崩れた峰から転がり落ちてくる白波のかたまりの幅。かたまりは厚く、こぶの間に陰ができる
+vec2 frothBand(float along, float dist, float seed, float strength, float soften, float lift, float pad) {
   vec4 clumps = texture2D(uPattern, vec2(along * .9 + seed * .13, seed * .29));
   vec4 grains = texture2D(uPattern, vec2(along, dist) * 4.6 + seed * vec2(.37, .61));
   float clump = smoothstep(.4, .68, clumps.b);
-  float width = strength * (.012 + .05 * clump * clump + .014 * smoothstep(.35, .65, clumps.a));
-  float ragged = width * (.55 + 1.1 * smoothstep(.3, .7, grains.b));
+  float width = strength * (1. + .9 * lift) * (.012 + .05 * clump * clump + .014 * smoothstep(.35, .65, clumps.a));
+  float jag = smoothstep(.3, .7, grains.b);
+  float ragged = width * (.55 + 1.1 * jag) + pad * (.92 + .16 * jag);
   float band = smoothstep(-soften, soften, ragged - dist) * smoothstep(-soften, soften, dist);
-  float tone = 1. - .1 * smoothstep(.45, .9, grains.g * .686) - .06 * smoothstep(.5, 1., dist / max(width, .001));
+  float tone = 1. - .1 * smoothstep(.45, .9, grains.g * .686) - .06 * smoothstep(.5, 1., dist / max(width + pad, .001));
+  if (pad > 0.) {
+    float lumps = texture2D(uPattern, vec2(along, dist) * 2.9 + seed * vec2(.61, .37)).a;
+    tone -= .05 * min(pad * 8., 1.) * smoothstep(.42, .62, lumps);
+  }
   return vec2(band, tone);
 }
 
@@ -158,20 +165,31 @@ void main() {
   // 大きな波の合間も、小さな波が斜めに寄せては引く
   float lapPhase = fract(t * .31 - a * .23 + .11 * sin(a * 2.9 + t * .2));
   float lapTurn = lapPhase < .42 ? 1. - lapPhase / .42 : (lapPhase - .42) / .58;
-  float lapInside = (.07 + .11 * (.5 + .5 * sin(t * .23 + a * 1.3))) * (1. - lapTurn * lapTurn) - inland
-    + .045 * lobes(a * 2.3 + t * .03, 5.) + .015 * ruffle;
+  float lapShape = .045 * lobes(a * 2.3 + t * .03, 5.) + .015 * ruffle;
+  float lapInside = (.07 + .11 * (.5 + .5 * sin(t * .23 + a * 1.3))) * (1. - lapTurn * lapTurn) - inland + lapShape;
+  float lapThin = smoothstep(.42, .62, lapPhase);   // 小さな波も、引くときは縁が薄い膜になる
 
   float inside = lapInside;   // 水際からの距離。正なら水の中
-  float thinning = 0.;        // 引いていく水は薄い膜になり、縁がぼける
-  float foam = 0.;            // 泡の濃さ
+  // 水の見え方（0〜1）。引いていく薄い膜は、ほとんど見えない
+  float water = smoothstep(0., mix(.012, .09, lapThin), lapInside - lapThin * (.03 * fine.b + .04 * coarse.a));
+  float thinning = lapThin;   // 引いていく水は薄い膜になる
+  float sheen = 0.;           // 引いていく薄い膜の照り返し
+  float swell = 0.;           // つぶれた波の先の後ろに盛り上がった、水の高さ
+  float ridge = 0.;           // 浜にぶつかる前の、山のままの波の高さ
+  float face = 0., back = 0.; // その山の、手前の斜面の急さと、奥の背
+  float foam = 0.;            // 水に浮いている泡の濃さ
   float densest = 0.;         // いちばん濃い泡を残した波の、泡の濃さ
   float foamY = inland;       // その波の水といっしょに動く、泡の模様の座標
   float foamSeed = 0.;
+  float foamDrag = 0.;        // その泡が、引き波に引かれた度合い
+  // 水が引いたあと、砂に取り残された泡。濃さと、取り残されてからの秒数、取り残されたときの模様を覚える
+  float strand = 0., strandAge = 0., strandY = 0., strandSeed = 0., strandDrag = 0., strandLand = 0.;
+  float washed = 0.;          // 1 なら、ここは波がのぼった浜の上か、そのすぐ沖
   float flow = 0.;            // 水の動いた距離。水の下の模様をいっしょに流す
   float damp = 0.;            // 砂の濡れ具合
   float gloss = 0.;           // 引いた直後の、水の膜の照り返し
   // 波の先の泡の縁。いちばん近い波の先について、そこからの距離と、泡の残り具合を覚える
-  float rimNear = 0., rimDist = 0., rimStrength = 0., rimSeed = 0.;
+  float rimNear = 0., rimDist = 0., rimStrength = 0., rimSeed = 0., rimLift = 0., rimPad = 0.;
   // 波がいちばん上まで届いたところに置いていかれた泡。その線からの距離と、置かれてからの秒数を覚える
   float markNear = 0., markDist = 0., markAge = 0., markSeed = 0.;
   float streaking = 0.;       // 引き波の流れに沿った筋の強さ
@@ -204,37 +222,113 @@ void main() {
     float behind = front - spot;                                      // 波の先からの距離。正なら波の先より沖
 
     // 水際。引ききった波は、そのまま海へ下がっていく
-    float within = since < 0. ? -9.
-      : (since > drained ? -(since - drained) * 2. * reach / backwash - spot : behind);
+    float within = since > drained ? -(since - drained) * 2. * reach / backwash - spot : behind;
+    float thin = smoothstep(.05, .6, ebb);
     if (within > inside) {
       inside = within;
-      thinning = smoothstep(.05, .6, ebb);
+      thinning = thin;
     }
+    // 引いていく水は、縁へ向かって薄い膜になる。膜は砂が透けて、むらになって消えるので、水際の線は見えない
+    float visible = smoothstep(0., mix(.012, .34, thin), within - thin * (.1 * fine.b + .12 * coarse.a));
+    water = max(water, visible);
+    sheen = max(sheen, step(0., within) * smoothstep(0., .3, thin) * (1. - visible));
 
-    // 泡は波の先で生まれ、時間とともに消える。勢いのある波ほど、たくさん残す
+    // 波は、浜にぶつかるまで山のまま寄せてくる。沖では低く、岸に近づくにつれて高くなる。
+    // 峰は波の先から離れた奥にあり、手前は急な斜面、奥はなだらかな背になる。峰の高さは山脈のように岸沿いでちがう。
+    // 岸が近づくと、高い峰から先に白波が立ち、斜面を転がり落ちて波の先まで届く。
+    // その白波のかたまりが浜にぶつかると、山はつぶれて平たく広がり、薄い水になって浜をのぼる
+    float shoal = smoothstep(-2.6, -1.2, since);                      // 沖では低く、岸に近づくにつれて高くなる
+    float phase = since / uprush;                                     // 岸に届いたときを 0、寄せきるときを 1 とした時刻
+    float stand = shoal * (1. - smoothstep(.18, .48, phase));         // 山のまま立っている度合い
+    float grand = clamp(motion.y, .6, 1.3);                           // 波の大きさ
+    float tall = rise * grand * shoal * (1. - stand);                 // つぶれたあとの波の先の高さ。浜をのぼるうちに低くなる
+    swell = max(swell, tall * step(0., behind) * exp(-behind / .28));
+    float rollAt = 0., rollPad = 0., broken = 1.;                     // 白波の前の縁（波の先からの距離）、白波のかたまりの幅、崩れ具合
+    if (stand > 0.) {
+      float peak = clamp(lobes(a * 1.7 + shape.w * 3., shape.y * 5.) + .4, 0., 1.);
+      float finger = clamp(lobes(a * 5.3 + shape.z * 3., shape.w * 4.) + .4, 0., 1.);
+      float crestAt = .22 * grand * (.75 + .5 * peak);                // 波の先から峰までの距離
+      float mount = stand * grand * (.7 + .6 * peak);                 // 峰の高さ
+      float up = clamp(behind / crestAt, 0., 1.), past = max(behind - crestAt, 0.) / .32;
+      ridge = max(ridge, mount * up * up * (3. - 2. * up) * exp(-past));
+      face = max(face, mount * 4. * up * (1. - up));
+      back = max(back, mount * past * exp(1. - past));
+      // 浜に届くと、高い峰から先に崩れる。白波は峰で生まれ、斜面を転がり落ちて波の先へ向かう。
+      // 届く前も、いちばん高い峰には白波が少し立っている
+      broken = max(
+        smoothstep(0., 1., clamp(1.6 * smoothstep(0., .22, phase) - .6 * (.6 * (1. - peak) + .4 * finger), 0., 1.)),
+        .14 * smoothstep(.45, .9, peak)
+      );
+      rollAt = crestAt * (1. - broken);
+      rollPad = stand * crestAt * broken;
+    }
+    float aft = behind - rollAt;                                      // 白波の前の縁からの距離。正なら縁より沖
+    float impact = smoothstep(.08, .22, phase) * (1. - smoothstep(.3, .65, phase));   // 白波のかたまりが浜にぶつかって、あたりが泡立つ
+
+    // 泡は波の先で生まれ、水に浮いている間にゆっくり消える。勢いのある波ほど、たくさん残す。
+    // 引き波では、水際は泡より速く下がる。泡は水に置いていかれて砂に取り残され、その場で弾けて消える
     float age = since - passedAt;                                     // 波の先が通ってからの秒数
-    float covered = step(0., age) * step(spot, reach) * (spot < 0. ? 1. : step(since, baredAt));   // いまここに、この波の水がある
-    float vigor = spot < 0. ? 1. : pace;
-    float bubbles = covered * vigor * (.6 * exp(-max(age, 0.) / .12) + .4 * exp(-max(age, 0.) / 2.2));
+    float swept = step(0., age) * step(spot, reach);                  // この波の先が、ここを通った
+    float ashore = spot < 0. ? 0. : max(since - baredAt, 0.);         // 泡が砂に取り残されてからの秒数
+    float covered = swept * step(ashore, 0.);                         // いまここに、この波の水がある
+    // 波に置いていかれてからの秒数。沖では、波が引ききってから数える。
+    // 沖と浜で泡の減り方をそろえるので、凪の波打ち際に泡の境目ができない
+    float lingered = spot < 0. ? max(since - drained, 0.) : ashore;
+    float afloat = max(age - lingered, 0.);                           // 泡が波の水に浮いていた秒数
+    float vigor = spot < 0. ? shoal : .25 + .75 * pace;               // 浜の高いところへ届く頃には、泡は減っている
+    float floating = vigor * (.6 * exp(-afloat / .12) + .2 * exp(-afloat / 1.2) + .2 * exp(-afloat / 9.));   // 生まれたての泡はすぐに減るが、残った泡は長く浮いている
+    float dragged = min(ebb, pace);                                   // 引き波に引かれた度合い。取り残されたあとは変わらない
+    float carriedY = (spot - .7 * max(front, spot)) / (1. + dragged); // 泡の模様は水といっしょに動き、引き波で伸びる。取り残されたあとは動かない
+    float height = clamp(spot / 1.4, 0., 1.);                         // 浜の高いところほど、水が早く砂に吸われる
+    // 波に置いていかれた泡は、ところどころから弾けて消える。沖に残った泡も、波が引ききってから同じように消える
+    float life = mix(8., 4., height);                                 // 泡が消えきるまでの秒数。水が早く吸われる高いところほど短い
+    float popping = 1. - smoothstep(.1 * life, life, lingered + (fine.b - .5) * 1.2 * life * smoothstep(0., .8, lingered));
     // 泡は波の先に寄り集まって、いっしょに浜をのぼる。のぼるうちに減り、引き始めると砂に置いていかれる。
     // そのすぐ後ろには、ちぎれた泡が尾を引く
-    float held = step(since, drained) * (since < uprush ? .45 + .55 * rise : .45 * (1. - smoothstep(0., .3, ebb)));
-    bubbles += covered * held * (.5 * (1. - smoothstep(0., .08, behind)) + .3 * (1. - smoothstep(0., .4, behind)));
+    float held = shoal * step(since, drained) * (since < uprush ? .45 + .55 * rise : .45 * (1. - smoothstep(0., .45, ebb)));
+    // 崩れる前の波には泡がない。山が立っている間は、峰の奥の背にも少ない。つぶれると、あたりが泡立つ
+    float bubbles = covered * smoothstep(-.01, .01, aft) * broken * (1. - .8 * stand) * popping
+      * (floating + held * (.5 * (1. - smoothstep(0., .08, aft)) + .3 * (1. - smoothstep(0., .4, aft)))
+        + .4 * impact * (1. - smoothstep(0., .5, aft)));
+    if (covered > 0.) {
+      // 前の波が残した泡は、沖でも浜でも、この波が洗い流す。波の先が通って、少ししてから消える。
+      // 水に浮いた泡は、崩れる前の波には乗り越えられるだけで、白波に巻き込まれて消える
+      float wash = smoothstep(0., .12, age), churn = 1. - wash * broken * smoothstep(-.01, .03, aft);
+      strand *= 1. - wash;
+      foam *= churn;
+      densest *= churn;
+      clash *= churn;
+      washed = smoothstep(-.3, -.1, spot);
+    } else if (swept > 0.) {
+      strand = (floating + .36 * (1. - smoothstep(0., .45, pace))) * popping;
+      strandAge = ashore;
+      strandY = carriedY;
+      strandSeed = shape.y;
+      strandDrag = dragged;
+      strandLand = smoothstep(0., .22, spot);
+      washed = smoothstep(-.3, -.1, spot);
+    }
     foam += bubbles;
     if (bubbles > densest) {
       densest = bubbles;
-      foamY = (spot - .7 * front) / (1. + ebb);   // 泡の模様は水といっしょに動き、引き波で伸びる
+      foamY = carriedY;
       foamSeed = shape.y;
+      foamDrag = dragged;
     }
-    if (age >= 0. && spot < reach) flow = .5 * front;
-    float near = held * step(-.02, behind) * (1. - smoothstep(0., .12, behind));
+    // 水の下の模様は、波の先が通って少ししてから、この波の流れに乗る。波の先で模様が切れない
+    if (age >= 0. && spot < reach) flow = mix(flow, .5 * front, smoothstep(0., .35, age));
+    float roll = held * smoothstep(0., .15, broken);                  // 崩れる前の波には、白波の縁がない
+    float near = roll * step(-.02, aft) * (1. - smoothstep(0., .3 + rollPad, aft));
     if (near > rimNear) {
       rimNear = near;
-      rimDist = behind;
-      rimStrength = held;
+      rimDist = aft;
+      rimStrength = roll;
       rimSeed = shape.y;
+      rimLift = tall;
+      rimPad = rollPad;
     }
-    float pull = covered * step(0., spot) * smoothstep(.2, .55, ebb) * (1. - smoothstep(.88, 1., ebb));
+    float pull = covered * smoothstep(0., .15, spot) * smoothstep(.2, .55, ebb) * (1. - smoothstep(.88, 1., ebb))
+      * smoothstep(0., .15, behind);   // 膜の薄い水際では、筋も薄れる
     if (pull > streaking) {
       streaking = pull;
       streakY = spot - front;
@@ -244,9 +338,8 @@ void main() {
     // 水が引いたあとの砂。濡れた跡は波の届いた線でくっきり残り、縁からゆっくり乾く
     float bared = since - baredAt;                                    // 砂が現れてからの秒数
     float sinceTurn = since - uprush;                                 // 波が寄せきってからの秒数
-    float height = clamp(spot / 1.4, 0., 1.);                         // 浜の高いところほど、水の膜が早く消える
-    float glossTime = mix(3.2, 1.2, height);
-    float bare = step(0., bared) * step(0., spot)
+    float glossTime = mix(3.2, 1.2, height);                          // 浜の高いところほど、水の膜が早く消える
+    float bare = step(0., bared) * smoothstep(-.03, .03, spot)
       * (1. - smoothstep(reach - .008 - .05 * smoothstep(1., 9., sinceTurn), reach, spot + (fine.b - .5) * .025));
     damp = max(damp, bare * (1. - smoothstep(3., 13., sinceTurn + (coarse.b - .5) * 1.5)));
     gloss = max(gloss, bare * (1. - smoothstep(.55 * glossTime, glossTime, bared + coarse.a - .5)));
@@ -268,11 +361,17 @@ void main() {
     rimDist = lapInside;
     rimStrength = .3;
     rimSeed = 4.2;
+    rimLift = 0.;
+    rimPad = 0.;
   }
-  float inWater = smoothstep(0., mix(.012, .08, thinning), inside);
+  float submerged = smoothstep(-.012, 0., inside);   // 薄い膜でも、水のあるところ
+  float inWater = water;
   float depth = max(inside, 0.);
-  damp = max(max(damp, inWater), 1. - smoothstep(.2, .3, inland));
-  gloss *= 1. - inWater;
+  // 小さな波の届くところは、いつも濡れている。その縁は小さな波の形をなぞり、むらになって乾いた砂へつながる
+  float lapped = 1. - smoothstep(.12, .4, inland - lapShape - (coarse.b - .5) * .14);
+  damp = 1. - (1. - max(damp, submerged)) * (1. - lapped);
+  // 薄い膜は、水が引いた直後の砂と同じように照り返す。水際の前後で、見え方が変わらない
+  gloss = max(gloss * (1. - inWater), min(sheen, 1. - inWater));
 
   // 水の下は屈折で少しずれて見える。そのゆらぎは水といっしょに流れる
   vec4 shimmer = texture2D(uPattern, (r + SEAWARD * flow) * .75 + vec2(t * .021, -t * .017));
@@ -290,12 +389,12 @@ void main() {
   float edgeSoften = .002 + 1.5 / (size * uPixelRatio);
   if (markNear > 0.) {
     float popped = smoothstep(.5, 13., markAge + (fine.b - .5) * 9.);
-    vec2 mark = frothBand(a, markDist, markSeed, .45 * (1. - .6 * popped), edgeSoften);
+    vec2 mark = frothBand(a, markDist, markSeed, .45 * (1. - .6 * popped), edgeSoften, 0., 0.);
     col = mix(col, uFoam * mark.y, mark.x * (1. - inWater) * .85 * (1. - popped) * mix(1., uFroth, .5));
   }
 
   // エビの影
-  float wobble = smoothstep(0., .1, inside);
+  float wobble = smoothstep(0., .1, inside) * (.3 + .7 * inWater);
   vec2 sq = (toCell(px - vec2(.016, .024) * size, t, wobble) + 2.) / 24.;
   float shadow = (sq.x < 0. || sq.y < 0. || sq.x > 1. || sq.y > 1.) ? 0. : texture2D(uShadow, sq).r;
   float arrived = smoothstep(0., .9, t);
@@ -313,29 +412,52 @@ void main() {
   vec3 shrimp = mix(uShell, uEye, eye * uBlink) * mix(1., .93, damp);
   col = mix(col, shrimp, alpha);
 
-  // 泡: 生まれたては白い帯。時間がたつと穴があいて網になり、ちぎれて消える
-  foam = min(foam + .5 * clash * (1. - smoothstep(.03, .2, abs(inland + .03))), 1.);   // 引き波が海とぶつかるところにも立つ
+  // 泡: 生まれたては白い帯。時間がたつと穴があいて網になり、ちぎれて消える。
+  // 水が引いても泡はすぐには消えず、波の届いたところまで砂の上に残る
+  foam = min(foam + .5 * clash * (1. - smoothstep(.03, .2, abs(inland + .03))) * inWater, 1.);   // 引き波が海とぶつかるところにも立つ
+  float stranded = strand > foam ? 1. : 0.;   // 1 なら、ここの泡は波に置いていかれたもの
+  // 小さな波の届く低いところでは、置いていかれた泡も水に浮いたまま。浜の高いところほど、砂に取り残された泡になる
+  float beached = stranded * strandLand;
+  float amount = max(foam, strand);
   float lace = 0., laceShadow = 0., foamAlpha = 0., foamTone = 1.;
-  if (foam > 0. || streaking > 0.) {   // 泡のないところでは、模様を読まない
-    vec2 foamUv = mat2(.8, .6, -.6, .8) * vec2(a, foamY * .6) * .95 + foamSeed * vec2(.37, .61);   // 網目は流れの向きに伸びる
-    vec4 patches = texture2D(uPattern, foamUv * .23 + vec2(t * .007, -t * .005));   // 泡が濃く残るところと、抜けるところ
-    vec4 warp = texture2D(uPattern, foamUv * .83 + vec2(-t * .013, t * .01));       // 網目のゆがみ
+  if (amount > 0. || streaking > 0.) {   // 泡のないところでは、模様を読まない
+    float laceY = mix(foamY, strandY, stranded), laceSeed = mix(foamSeed, strandSeed, stranded);
+    float laceTime = t - beached * strandAge;   // 砂の上の泡は流れない。取り残されたときの模様のまま止まる
+    vec2 foamUv = mat2(.8, .6, -.6, .8) * vec2(a, laceY * .6) * .95 + laceSeed * vec2(.37, .61);   // 網目は流れの向きに伸びる
+    vec4 patches = texture2D(uPattern, foamUv * .23 + vec2(laceTime * .007, -laceTime * .005));   // 泡が濃く残るところと、抜けるところ
+    vec4 warp = texture2D(uPattern, foamUv * .83 + vec2(-laceTime * .013, laceTime * .01));       // 網目のゆがみ
     vec2 warped = foamUv + (warp.ba - .5) * .06 + (patches.ba - .5) * .09;
-    float density = foam * mix(.2, 1.5, smoothstep(.36, .64, patches.b)) + .5 * foam * foam * foam;
+    // 引き波は泡を流れの向きに梳く。泡は、流れに沿ったぼんやりした筋になって残る
+    float comb = smoothstep(.36, .64, texture2D(uPattern, vec2(a * 2.7 + laceSeed * .4 + (patches.a - .5) * .5, s * .4 + .5)).b);
+    float combed = .75 * smoothstep(.1, .6, mix(foamDrag, strandDrag, stranded)) * (1. - smoothstep(.25, .6, amount));   // 濃い泡は梳かれにくい
+    float density = amount * mix(.2, 1.5, smoothstep(.36, .64, patches.b)) * mix(1., .45 + 1.1 * comb, combed) + .5 * amount * amount * amount;
     float present = smoothstep(.02, .1, density);
     float holeRadius = .98 - 1.15 * pow(density, .75);
-    float soften = .04 + 6. / (size * uPixelRatio);
+    float crisp = .04 + 6. / (size * uPixelRatio);
+    float soften = crisp + .14 * beached * smoothstep(0., .6, strandAge);   // 砂に残った泡は、縁がぼやける
     vec4 holes = texture2D(uPattern, warped);
     float rough = (texture2D(uPattern, foamUv * 2.7 + .31).b - .5) * .9;   // 穴の縁は、穴より細かいむらでゆがむ
     lace = laceOf(holes, holeRadius, soften, rough) * present;
     laceShadow = laceOf(texture2D(uPattern, warped + vec2(-.0105, -.0058)), holeRadius, soften, rough) * present;
+    if (beached > 0.) {
+      // 砂の上の泡は、網の糸がその場でほどけて、細かい粒の集まりになっていく。粒は、泡の薄いところから弾けて減る
+      vec4 beadCells = texture2D(uPattern, vec2(a, s) * 1.9 + .17);
+      float beadRadius = .24 + .3 * smoothstep(0., .35, density) + (fine.a - .5) * .3;
+      float beadSoften = .06 + 7. / (size * uPixelRatio);
+      vec2 beadEdge = vec2(beadCells.g * 1.2 - beadRadius, beadCells.r * 1.2 - .7 * beadRadius);   // 粒の縁からの距離（小さい粒・大きい粒）
+      vec2 bead = (1. - smoothstep(-beadSoften, beadSoften, beadEdge)) * (.65 + .35 * smoothstep(-.3, -.05, beadEdge));   // 粒は膜でできていて、まんなかが少し透ける
+      float beads = max(bead.x, bead.y) * laceOf(holes, holeRadius - .25, crisp + .12, rough) * present;   // 粒は、糸のあったあたりに散らばる
+      lace = mix(lace, beads, beached * smoothstep(0., 1.4, strandAge));
+    }
     float streak = streaking * smoothstep(.6, .72, texture2D(uPattern, vec2(a * 3.7 + .5, streakY * .3)).b);   // 引き波の流れに沿った筋
-    foamAlpha = max(lace * (.62 + .32 * clamp(density, 0., 1.)), streak * .16) * uFroth * inWater;
+    // 浜の上では、水際をまたいで泡がつながる。浮いている泡と砂に残った泡を、水際で切らない
+    float shown = mix(max(inWater, washed), .85, beached);
+    foamAlpha = max(lace * (.62 + .32 * clamp(density, 0., 1.)) * shown, streak * .16 * submerged) * uFroth;
     foamTone = .95 + .05 * holes.g;
   }
 
   if (rimNear > 0.) {   // 波の先の泡の縁
-    vec2 rim = frothBand(a, rimDist, rimSeed, rimStrength, edgeSoften);
+    vec2 rim = frothBand(a, rimDist, rimSeed, rimStrength, edgeSoften, rimLift, rimPad);
     float rimAlpha = rim.x * .95 * smoothstep(0., .2, rimStrength) * mix(1., uFroth, .5);
     foamTone = mix(foamTone, rim.y, rim.x);
     foamAlpha = max(foamAlpha, rimAlpha);
@@ -343,18 +465,22 @@ void main() {
     col *= 1. - .14 * smoothstep(-.012, -.002, rimDist) * (1. - smoothstep(-.002, .002, rimDist)) * min(1., rimStrength * 2.);
   }
 
-  // 透明な水: 寄せた波は薄い膜で砂が透け、沖だけが深い色になる
+  // 透明な水: 浜の上の水は浅く、砂が透ける。山のままの波と、沖だけが深い色になる
   col *= 1. - .09 * laceShadow * (1. - lace) * inWater * smoothstep(.01, .08, depth);   // 泡が底に落とす影
   float offshore = max(s - .3, 0.);
-  float thickness = min(depth, .3) * .5 * (1. - .45 * thinning) + offshore;
-  vec3 sea = mix(uSeaShallow, uSeaDeep, 1. - exp(-offshore * 1.7));
+  float thickness = min(depth, .3) * .5 * (1. - .45 * thinning) + .45 * swell + .9 * ridge + offshore;
+  vec3 sea = mix(uSeaShallow, uSeaDeep, 1. - exp(-(offshore + .5 * ridge) * 1.7));
   col = mix(col, sea, inWater * (.05 + .9 * (1. - exp(-thickness * 2.2))));
   if (inWater > 0.) {   // 光の網目は水の下にだけ映る
     col += uLight * caustic((r + SEAWARD * flow) * .85 + vec2(0., t * .02), t * .5) * .36
-      * inWater * exp(-offshore * 1.4) * uGain * smoothstep(0., .07, depth) * (1. - .6 * foamAlpha);
+      * inWater * exp(-offshore * 1.4) * uGain * smoothstep(0., .07, depth) * (1. - .6 * foamAlpha) * (1. - .7 * min(ridge, 1.));
   }
+  // 山の起伏: 手前の急な斜面は暗く、奥のなだらかな背は空を映して明るい
+  col *= 1. - .14 * min(face, 1.) * inWater;
+  col += uLight * .05 * min(back, 1.) * inWater * uGain;
   col *= 1. - .12 * (1. - smoothstep(0., .045, inside)) * inWater * (1. - .7 * thinning);   // 水際は少し暗く縁どられる
   col += uLight * .07 * (1. - smoothstep(0., .12, inside)) * inWater * uGain;
+  foamAlpha *= 1. - .75 * alpha * (1. - inWater);   // 砂に残った泡は、エビの体をほとんど隠さない
   col = mix(col, uFoam * foamTone, foamAlpha);
 
   float vignette = 1. - smoothstep(.3, 1.3, length((uv - .5) * vec2(1.1, 1.)));
