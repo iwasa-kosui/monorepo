@@ -2,6 +2,7 @@
 /**
  * 記事のタイトルの下に置く、控えめな操作の列。
  * シェア先と、Markdown の原文へのリンクを、同じ形と色の面に揃えて並べる。
+ * Markdown へのリンクは、広い画面にだけ出す。
  * はてなブックマークだけは件数を出すのでピルに、ほかのシェア先はアイコンだけの丸にする。
  */
 import { SHARE_TARGETS } from './shareTargets';
@@ -49,7 +50,11 @@ const { title, url, markdownUrl, shareable = true } = Astro.props;
       </a>
     ))
   }
-  <a href={markdownUrl} class="article-action" aria-label="Markdownとして表示">
+  <a
+    href={markdownUrl}
+    class="article-action article-action-markdown"
+    aria-label="Markdownとして表示"
+  >
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
@@ -128,6 +133,13 @@ const { title, url, markdownUrl, shareable = true } = Astro.props;
 .article-action svg {
   width: 1.125rem;
   height: 1.125rem;
+}
+
+/* 狭い画面では、Markdown へのリンクを出さない。シェア先だけで 1 行に収める */
+@media (max-width: 47.99rem) {
+  .article-action-markdown {
+    display: none;
+  }
 }
 
 .article-action-count {
