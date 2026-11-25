@@ -1,0 +1,212 @@
+---
+/**
+ * 記事のタイトルの帯。トップページのヒーローと同じ波打ち際に、タイトルを置く。
+ * 右上の海から波が寄せ、砂浜のドット絵のエビを少しずつ沖へ攫っていく。
+ *
+ * BaseLayout の eyecatch スロットに置く。日付などは meta スロットで渡す。
+ * 海は WebGL で描く（ShoreHero/mount.ts）。WebGL が使えない環境では、砂の地に静止したドット絵だけを見せる。
+ */
+import { EYE_PATH, SHELL_PATH } from '../ShoreHero/shrimp';
+
+type Props = {
+  title: string;
+  /** ページをまたぐ遷移で、一覧のタイトルとつなぐ名前 */
+  transitionName: string;
+};
+
+const { title, transitionName } = Astro.props;
+---
+
+<div class="title-shore shore-palette" data-shore-hero>
+  <canvas class="title-shore-sea" data-shore-canvas aria-hidden="true"></canvas>
+  <div class="title-shore-content" data-shore-content>
+    <div class="title-shore-copy">
+      <p class="title-shore-meta"><slot name="meta" /></p>
+      <h1
+        class="title-shore-title"
+        data-pagefind-meta="title"
+        transition:name={transitionName}
+      >
+        {title}
+      </h1>
+    </div>
+    <div class="title-shore-slot" data-shore-slot>
+      <button
+        class="title-shore-shrimp"
+        type="button"
+        data-shore-shrimp
+        aria-label="砂浜に打ち上げられたドット絵のエビ。波に少しずつ攫われていきます。触れると弱く跳ねます"
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          shape-rendering="crispEdges"
+        >
+          <path class="title-shore-shell" d={SHELL_PATH}></path>
+          <path class="title-shore-eye" d={EYE_PATH}></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* 海と砂の配色は global.css の .shore-palette にある */
+.title-shore {
+  --shore-ink: #1f2740;
+  --shore-muted: #4b526d;
+  --shore-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* エビのドット絵の 1 辺。波の大きさもこれで決まる */
+  --shore-size: clamp(7.5rem, 36vw, 10rem);
+
+  position: relative;
+  overflow: hidden;
+  color: var(--shore-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  .title-shore {
+    --shore-ink: #f3f1ee;
+    --shore-muted: #b3bacb;
+  }
+}
+
+.title-shore-sea {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+  /* 下端はページの砂へ溶け込ませる */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 5rem), transparent);
+}
+
+.title-shore.is-live .title-shore-sea {
+  opacity: 1;
+}
+
+/* 左端は、下に続く紙（幅 48rem の列から 1rem 内側）にそろえる。右は画面の端まで使う */
+.title-shore-content {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 4.25rem max(1rem, 4.4vw) 1rem max(1rem, calc(50% - 23rem));
+}
+
+.title-shore-copy {
+  min-width: 0;
+}
+
+.title-shore-meta {
+  font-size: 0.875rem;
+  color: var(--shore-muted);
+  font-variant-numeric: tabular-nums;
+  animation: title-shore-up 0.9s 0.1s var(--shore-ease) both;
+}
+
+.title-shore-title {
+  margin-top: 0.5rem;
+  font-size: clamp(1.75rem, 1.2rem + 2.2vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+  word-break: auto-phrase;
+  text-wrap: balance;
+  animation: title-shore-up 1s 0.2s var(--shore-ease) both;
+}
+
+.title-shore-slot {
+  position: relative;
+  order: -1;
+  justify-self: end;
+  width: var(--shore-size);
+  aspect-ratio: 1;
+}
+
+.title-shore-shrimp {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0.75rem;
+  cursor: pointer;
+}
+
+.title-shore-shrimp svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 海を描けているときは、エビもシェーダーが描く */
+.title-shore.is-live .title-shore-shrimp svg {
+  visibility: hidden;
+}
+
+.title-shore-shell {
+  fill: var(--shore-shell);
+}
+
+.title-shore-eye {
+  fill: var(--shore-eye);
+}
+
+.title-shore :focus-visible {
+  outline: 2px solid var(--shore-eye);
+  outline-offset: 4px;
+}
+
+@keyframes title-shore-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 広い画面: タイトルの右にエビを並べる */
+@media (min-width: 861px) {
+  .title-shore {
+    --shore-size: clamp(11rem, 18vw, 16rem);
+  }
+
+  .title-shore-content {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2.5rem;
+    min-height: 23rem;
+    padding-top: 5.5rem;
+    padding-bottom: 2rem;
+  }
+
+  .title-shore-slot {
+    order: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-shore *,
+  .title-shore-sea {
+    animation: none;
+    transition: none;
+  }
+}
+
+@media print {
+  .title-shore-sea,
+  .title-shore-slot {
+    display: none;
+  }
+}
+</style>
+
+<script>
+import '../ShoreHero/autoMount';
+</script>

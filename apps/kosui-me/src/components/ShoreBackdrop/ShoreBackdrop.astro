@@ -1,16 +1,29 @@
 ---
 /**
-* 記事の背景。トップページのヒーローと同じ波打ち際を、紙の後ろの砂に描く。
-* 海は右上の隅にあり、波はそこから紙のほうへ寄せては引く。
-*
-* 広い画面では、紙の右の余白に留まり、読み進めても波が見える。
-* 余白のない狭い画面では、ページの上端にだけ置き、読み進めると画面の外へ流れていく。
-*
-* BaseLayout の backdrop スロットに置く。WebGL が使えない環境では、砂の地だけが見える。
-*/
+ * 記事の背景。トップページのヒーローと同じ波打ち際を、紙の後ろの砂に描く。
+ * 海は右上の隅にあり、波はそこから紙のほうへ寄せては引く。
+ *
+ * 広い画面では、紙の右の余白に留まり、読み進めても波が見える。
+ * 余白のない狭い画面では、ページの上端にだけ置き、読み進めると画面の外へ流れていく。
+ *
+ * タイトルの帯（ShoreTitle）のあるページでは afterHero を付ける。
+ * 帯がすでに海を描いているので、帯が画面にある間は隠れ、読み進めて帯が画面から外れると余白に現れる。
+ * 余白のない狭い画面では、帯と同じ場所に重なるので出さない。
+ *
+ * BaseLayout の backdrop スロットに置く。WebGL が使えない環境では、砂の地だけが見える。
+ */
+type Props = {
+  afterHero?: boolean;
+};
+
+const { afterHero = false } = Astro.props;
 ---
 
-<div class="backdrop shore-palette" data-shore-backdrop aria-hidden="true">
+<div
+  class:list={['backdrop shore-palette', afterHero && 'backdrop-after-hero']}
+  data-shore-backdrop
+  aria-hidden="true"
+>
   <canvas data-shore-backdrop-canvas></canvas>
 </div>
 
@@ -39,6 +52,10 @@
   height: 100%;
 }
 
+.backdrop-after-hero {
+  display: none;
+}
+
 /* 広い画面: 紙（幅 48rem の列から左右 1rem ずつ内側）の右の余白に留める。
    左端は紙の下に 4rem もぐり込ませ、紙のないところではページの砂へ溶け込ませる */
 @media (min-width: 68rem) {
@@ -48,6 +65,10 @@
     left: calc(50% + 19rem);
     height: auto;
     mask-image: linear-gradient(to right, transparent, #000 3.5rem);
+  }
+
+  .backdrop-after-hero {
+    display: block;
   }
 }
 
@@ -77,7 +98,10 @@ const mount = (): void => {
     '[data-shore-backdrop-canvas]',
   );
   if (!root || !canvas) return;
-  dispose = mountBackdrop({ root, canvas });
+  const hero = root.classList.contains('backdrop-after-hero')
+    ? document.querySelector<HTMLElement>('[data-shore-hero]')
+    : null;
+  dispose = mountBackdrop({ root, canvas, ...(hero ? { hero } : {}) });
 };
 
 document.addEventListener('astro:page-load', mount);

@@ -1,4 +1,4 @@
-import { createQuality, createShoreRenderer, readPalette } from '../ShoreHero/renderer';
+import { createQuality, createShoreRenderer, readPalette, type ShoreRenderer } from '../ShoreHero/renderer';
 import { createWaves, packWaves } from '../ShoreHero/wave';
 import { placeSea } from './placement';
 
@@ -12,6 +12,8 @@ export type BackdropElements = Readonly<{
   /** 背景の枠。配色のカスタムプロパティを持ち、canvas はこの大きさに合わせる */
   root: HTMLElement;
   canvas: HTMLCanvasElement;
+  /** 同じページで海を描いている帯。これが画面にある間、背景は隠れて描くのをやめる */
+  hero?: HTMLElement;
 }>;
 
 /**
@@ -19,18 +21,19 @@ export type BackdropElements = Readonly<{
  * WebGL が使えない環境では何もせず、砂の地だけが見える。
  */
 export const mountBackdrop = (elements: BackdropElements): () => void => {
-  const { root, canvas } = elements;
+  const { root, canvas, hero } = elements;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
 
-  const renderer = createShoreRenderer(canvas);
-  if (!renderer) return () => {};
+  // 描く段になってから用意する。狭い画面で帯の後ろに回り、1 度も描かないことがある
+  let renderer: ShoreRenderer | undefined;
 
   const waves = createWaves(Math.random);
   const quality = createQuality();
   const startedAt = performance.now();
   let palette = readPalette(root);
-  let visible = true;
+  let onScreen = true;
+  let heroOnScreen = hero !== undefined;
   let frame = 0;
   let disposed = false;
 
@@ -39,7 +42,13 @@ export const mountBackdrop = (elements: BackdropElements): () => void => {
     if (disposed) return;
     const width = root.clientWidth;
     const height = root.clientHeight;
-    if (width === 0 || height === 0) return;
+    if (width === 0 || height === 0 || heroOnScreen) return;
+    renderer ??= createShoreRenderer(canvas);
+    if (!renderer) {
+      dispose();
+      return;
+    }
+    root.classList.add('is-live');
 
     // data-shore-time を付けると、その時刻で止めた絵になる（見た目の確認用）
     const pinned = root.dataset.shoreTime;
@@ -60,7 +69,7 @@ export const mountBackdrop = (elements: BackdropElements): () => void => {
       palette,
     });
 
-    if (!reduceMotion && visible) frame = requestAnimationFrame(draw);
+    if (!reduceMotion && onScreen) frame = requestAnimationFrame(draw);
   };
 
   const requestDraw = (): void => {
@@ -76,9 +85,14 @@ export const mountBackdrop = (elements: BackdropElements): () => void => {
     dispose();
   };
   // 狭い画面では、背景はページの上端にだけある。読み進めて画面から外れたら、描くのをやめる
+  // 帯が画面にある間は隠れ、帯が画面から外れると現れる
   const observer = new IntersectionObserver((entries) => {
-    visible = entries.some((entry) => entry.isIntersecting);
-    if (visible) requestDraw();
+    for (const entry of entries) {
+      if (entry.target === hero) heroOnScreen = entry.isIntersecting;
+      else onScreen = entry.isIntersecting;
+    }
+    if (heroOnScreen) root.classList.remove('is-live');
+    else if (onScreen) requestDraw();
   });
 
   const dispose = (): void => {
@@ -90,11 +104,11 @@ export const mountBackdrop = (elements: BackdropElements): () => void => {
     colorScheme.removeEventListener('change', onPaletteChange);
     canvas.removeEventListener('webglcontextlost', onContextLost);
     root.classList.remove('is-live');
-    renderer.dispose();
+    renderer?.dispose();
   };
 
-  root.classList.add('is-live');
   observer.observe(root);
+  if (hero) observer.observe(hero);
   window.addEventListener('resize', requestDraw);
   colorScheme.addEventListener('change', onPaletteChange);
   canvas.addEventListener('webglcontextlost', onContextLost);
