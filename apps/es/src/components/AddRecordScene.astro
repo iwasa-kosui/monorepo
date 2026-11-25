@@ -1,9 +1,11 @@
 ---
 import '../playground/play.css';
+import '../playground/agent.css';
 import '../playground/workbench.css';
 
 import { blankLabelsOf, blankValuesOf, insertTemplates } from '../lib/extract';
 import { insertTemplateOf, lessonFile, snapshotFiles } from '../lib/snapshots';
+import { agentLimits } from '../playground/agent-protocol';
 import { sceneSteps } from '../playground/scene-steps';
 
 interface Props {
@@ -409,6 +411,83 @@ const blanks = blankLabelsOf(template).map((
               >
                 ステップ{step}の完成コードを読み込む
               </button>
+            </div>
+          </details>
+          <details class="play-agent-step" name={`hints-step-${step}`}>
+            <summary>生成AIに頼む</summary>
+            <div class="play-agent-body">
+              <div class="play-agent-head">
+                <strong>生成AIに頼む</strong>
+                <button
+                  type="button"
+                  class="play-quiet"
+                  data-role="agent-close"
+                >
+                  閉じる
+                </button>
+              </div>
+              <div class="play-agent-copy">
+                <button type="button" data-role="agent-copy">
+                  手元のコーディングエージェント用のプロンプトをコピーする
+                </button>
+                <span
+                  class="play-agent-copied"
+                  data-role="agent-copied"
+                  aria-live="polite"
+                >
+                </span>
+              </div>
+              <textarea
+                class="play-agent-prompt"
+                data-role="agent-prompt"
+                aria-label="手元のコーディングエージェント用のプロンプト"
+                rows="6"
+                readonly
+                hidden
+              ></textarea>
+              <form class="play-agent-form" data-role="agent-login">
+                <label for="agent-password">講師が伝えるパスワード</label>
+                <div class="play-agent-row">
+                  <input
+                    id="agent-password"
+                    type="password"
+                    autocomplete="off"
+                    data-role="agent-password"
+                  />
+                  <button type="submit">使い始める</button>
+                </div>
+                <p
+                  class="play-agent-note"
+                  data-role="agent-login-error"
+                  role="alert"
+                >
+                </p>
+              </form>
+              <form class="play-agent-form" data-role="agent-form" hidden>
+                <label for="agent-request">生成AIへの依頼</label>
+                <textarea
+                  id="agent-request"
+                  rows="3"
+                  maxlength={agentLimits.turnChars}
+                  data-role="agent-request"
+                ></textarea>
+                <div class="play-agent-row">
+                  <button
+                    type="submit"
+                    class="play-primary"
+                    data-role="agent-send"
+                  >
+                    依頼する
+                  </button>
+                </div>
+              </form>
+              <ol
+                class="play-agent-log"
+                data-role="agent-log"
+                aria-label="経過"
+                aria-live="polite"
+              >
+              </ol>
             </div>
           </details>
         </section>

@@ -14,6 +14,26 @@ describe('handleRequest', () => {
     expect(fetchAsset).not.toHaveBeenCalled();
   });
 
+  it('/api/agent は ASSETS を呼ばず、AGENT_PASSWORD が未設定なら 503 を返す', async () => {
+    const fetchAsset = vi.fn();
+    const response = await handleRequest(new Request('https://example.com/api/agent', { method: 'POST' }), {
+      ASSETS: { fetch: fetchAsset },
+    });
+
+    expect(response.status).toBe(503);
+    expect(fetchAsset).not.toHaveBeenCalled();
+  });
+
+  it('/api/ の下の知らないパスは、ASSETS を呼ばずに 404 を返す', async () => {
+    const fetchAsset = vi.fn();
+    const response = await handleRequest(new Request('https://example.com/api/unknown'), {
+      ASSETS: { fetch: fetchAsset },
+    });
+
+    expect(response.status).toBe(404);
+    expect(fetchAsset).not.toHaveBeenCalled();
+  });
+
   it('それ以外のパスは ASSETS.fetch の応答をそのまま返す', async () => {
     const assetResponse = new Response('asset', { status: 404 });
     const fetchAsset = vi.fn().mockResolvedValue(assetResponse);

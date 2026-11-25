@@ -1,0 +1,135 @@
+.content .play .play-agent-step {
+  margin: 0.25rem 0 0;
+  border: 1px solid var(--role-rule);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+}
+.play-agent-step summary {
+  cursor: pointer;
+  padding: 0.1rem 0.5rem;
+  background: var(--role-sunken);
+  font-weight: 700;
+}
+.play-agent-step[open] summary {
+  border-bottom: 1px solid var(--role-rule);
+}
+.scene .panel[data-kind="editor"] .play-agent-step summary {
+  padding-block: 0;
+}
+.play-agent-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  line-height: 1.35;
+}
+.play-agent-head {
+  display: none;
+}
+.play-agent-copy,
+.play-agent-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+.play-agent-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.play-agent-form label {
+  font-weight: 700;
+}
+.play-agent-form input,
+.play-agent-form textarea,
+.play-agent-prompt {
+  box-sizing: border-box;
+  border: 1px solid var(--role-rule);
+  border-radius: var(--radius-sm);
+  background: var(--role-surface);
+  padding: 0.25rem 0.4rem;
+  color: var(--role-fg);
+  font: inherit;
+}
+.play-agent-form input {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+.play-agent-form textarea,
+.play-agent-prompt {
+  width: 100%;
+  resize: vertical;
+}
+.play-agent-prompt {
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+}
+.play-agent-form input:focus-visible,
+.play-agent-form textarea:focus-visible,
+.play-agent-prompt:focus-visible {
+  outline: 3px solid var(--role-accent);
+  outline-offset: 1px;
+}
+.play-agent-form textarea:disabled {
+  color: var(--role-muted);
+  cursor: not-allowed;
+}
+.content .play .play-agent-note {
+  font-weight: 700;
+}
+.content .play .play-agent-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  max-height: 14rem;
+  list-style: none;
+  overflow-y: auto;
+}
+.play-agent-log:empty {
+  display: none;
+}
+.play-agent-entry {
+  border-left: 3px solid var(--role-accent);
+  padding-left: 0.4rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.play-agent-entry code {
+  font-size: 0.8125rem;
+}
+
+@media (min-width: 1100px) {
+  .play-agent-step[open] > .play-agent-body {
+    position: absolute;
+    top: 0;
+    right: calc(100% + 0.5rem);
+    bottom: 0;
+    z-index: 10;
+    width: calc(100% * 1.1 / 0.9);
+    border: 1px solid var(--role-rule);
+    border-radius: var(--radius-lg);
+    background: var(--role-surface);
+    padding: 0.375rem 0.625rem;
+    box-shadow: var(--shadow-raised);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    overflow: auto;
+  }
+  .play-agent-step[open] > .play-agent-body .play-agent-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .play-agent-step[open] > .play-agent-body .play-agent-head strong {
+    font-size: 0.9375rem;
+  }
+  .content .play .play-agent-step[open] .play-agent-log {
+    flex: 1 1 0;
+    min-height: 3rem;
+    max-height: none;
+  }
+}

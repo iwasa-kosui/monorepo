@@ -37,7 +37,8 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build && node scripts/build-exercises-tarball.ts",
-    "preview": "wrangler dev",
+    "preview": "wrangler dev --config wrangler.dev.jsonc",
+    "preview:ai": "wrangler dev",
     "test": "vitest",
     "test:ci": "vitest --run",
     "typecheck": "astro check && tsc --noEmit",
@@ -47,6 +48,7 @@
     "format": "dprint fmt",
     "format:check": "dprint check",
     "test:e2e": "playwright test",
-    "generate:og": "node scripts/generate-og-image.ts"
+    "generate:og": "node scripts/generate-og-image.ts",
+    "generate:agent-context": "node scripts/generate-agent-context.ts"
   }
 }

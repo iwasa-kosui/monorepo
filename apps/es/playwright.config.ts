@@ -13,11 +13,11 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', testMatch: 'playground.spec.ts', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', testMatch: 'playground.spec.ts', use: { ...devices['Desktop Safari'] } },
+    { name: 'firefox', testMatch: ['playground.spec.ts', 'agent.spec.ts'], use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', testMatch: ['playground.spec.ts', 'agent.spec.ts'], use: { ...devices['Desktop Safari'] } },
   ],
   webServer: {
-    command: `pnpm exec wrangler dev --ip 127.0.0.1 --port ${port}`,
+    command: `pnpm exec wrangler dev --config wrangler.dev.jsonc --ip 127.0.0.1 --port ${port}`,
     url: `http://127.0.0.1:${port}/healthz`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
