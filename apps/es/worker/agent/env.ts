@@ -9,6 +9,7 @@ export type RateLimitBinding = Readonly<{
 export type AgentEnv = Readonly<{
   AI?: AiBinding;
   AGENT_PASSWORD?: string;
+  AGENT_MODEL?: string;
   AGENT_RATE_LIMIT?: RateLimitBinding;
   AGENT_AUTH_FAILURE_LIMIT?: RateLimitBinding;
 }>;

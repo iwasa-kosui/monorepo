@@ -273,10 +273,17 @@ describe('handleAgent のモデル呼び出し', () => {
     await handleAgent(post(body), env);
     const [model, inputs] = env.run.mock.calls[0] as [
       string,
-      { messages: { role: string; content: string }[]; max_tokens: number; tools: unknown[] },
+      {
+        messages: { role: string; content: string }[];
+        max_completion_tokens: number;
+        reasoning_effort: string;
+        tools: unknown[];
+      },
     ];
-    expect(model).toMatch(/^@cf\//);
-    expect(inputs.max_tokens).toBe(agentLimits.maxOutputTokens);
+    expect(model).toBe('@cf/openai/gpt-oss-120b');
+    expect(inputs.max_completion_tokens).toBe(agentLimits.maxOutputTokens);
+    expect(inputs).not.toHaveProperty('max_tokens');
+    expect(inputs.reasoning_effort).toBe('low');
     expect(inputs.tools).toHaveLength(4);
     expect(inputs.messages[0]?.role).toBe('system');
     expect(inputs.messages[0]?.content).toContain('business_events');
@@ -286,6 +293,40 @@ describe('handleAgent のモデル呼び出し', () => {
     expect(last?.content).toContain('export const marker = "現在のコード";');
     expect(last?.content).toContain('pass 3 / fail 5');
     expect(last?.content).toContain('記録が残る: 行がありません');
+  });
+
+  it('AGENT_MODEL が許可リストにあるときは、そのモデルを使う', async () => {
+    for (const model of ['@cf/openai/gpt-oss-20b', '@cf/deepseek-ai/deepseek-v4.1-flash-1017']) {
+      const env = envWith(modelReply('say', { message: 'x' }), { AGENT_MODEL: model });
+      await handleAgent(post(validBody), env);
+      expect(env.run.mock.calls[0]?.[0]).toBe(model);
+    }
+  });
+
+  it('AGENT_MODEL が許可リストに無いときは、既定のモデルを使う', async () => {
+    const env = envWith(modelReply('say', { message: 'x' }), { AGENT_MODEL: '@cf/example/unknown-model' });
+    await handleAgent(post(validBody), env);
+    expect(env.run.mock.calls[0]?.[0]).toBe('@cf/openai/gpt-oss-120b');
+  });
+
+  it.each([
+    ['429 の状態を持つ例外', Object.assign(new Error('failed'), { status: 429 })],
+    ['rate limit を含むメッセージ', new Error('AiError: Rate limit exceeded')],
+    ['429 を含むメッセージ', new Error('request failed with 429')],
+    ['capacity を含むメッセージ', new Error('3040: Capacity temporarily exceeded, please try again.')],
+  ])('上流の制限（%s）は 429 を返す', async (_label, error) => {
+    const env: AgentEnv = { AGENT_PASSWORD: password, AI: { run: vi.fn().mockRejectedValue(error) } };
+    const response = await handleAgent(post(validBody), env);
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('60');
+  });
+
+  it('制限に当たらない例外は 502 を返す', async () => {
+    const env: AgentEnv = {
+      AGENT_PASSWORD: password,
+      AI: { run: vi.fn().mockRejectedValue(new Error('InferenceUpstreamError: internal')) },
+    };
+    expect((await handleAgent(post(validBody), env)).status).toBe(502);
   });
 
   it('クライアントが system の発言を履歴に混ぜても、システムプロンプトは差し替えられない', async () => {

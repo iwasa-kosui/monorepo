@@ -1,7 +1,7 @@
 import { agentLimits } from '../../src/playground/agent-protocol.ts';
 import { bearerTokenOf, matchesPassword } from './auth.ts';
 import type { AgentEnv } from './env.ts';
-import { askModel } from './model.ts';
+import { askModel, isUpstreamLimit } from './model.ts';
 import { parseAgentRequest, readLimitedText } from './request.ts';
 
 const respond = (status: number, body: Record<string, unknown>, headers: Record<string, string> = {}): Response =>
@@ -46,9 +46,11 @@ export const handleAgent = async (request: Request, env: AgentEnv): Promise<Resp
     return respond(503, { error: 'disabled' });
   }
   try {
-    const move = await askModel(env.AI, parsed.value);
+    const move = await askModel(env.AI, parsed.value, env.AGENT_MODEL);
     return move === null ? respond(502, { error: 'bad_model_reply' }) : respond(200, { move });
-  } catch {
-    return respond(502, { error: 'model_failed' });
+  } catch (error) {
+    return isUpstreamLimit(error)
+      ? respond(429, { error: 'upstream_limit' }, { 'retry-after': '60' })
+      : respond(502, { error: 'model_failed' });
   }
 };

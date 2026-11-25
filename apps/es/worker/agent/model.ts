@@ -2,7 +2,16 @@ import { agentLimits, type AgentMove, type AgentRequest } from '../../src/playgr
 import type { AiBinding } from './env.ts';
 import { buildMessages } from './prompt.ts';
 
-export const agentModel = '@cf/deepseek-ai/deepseek-v4.1-flash-1017';
+export const defaultAgentModel = '@cf/openai/gpt-oss-120b';
+
+export const allowedAgentModels: readonly string[] = [
+  defaultAgentModel,
+  '@cf/openai/gpt-oss-20b',
+  '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+];
+
+export const agentModelOf = (configured: string | undefined): string =>
+  configured !== undefined && allowedAgentModels.includes(configured) ? configured : defaultAgentModel;
 
 const messageProperty = { message: { type: 'string', description: '参加者への短い説明。日本語で書く' } };
 
@@ -136,13 +145,26 @@ export const moveOf = (raw: unknown): AgentMove | null => {
   return calls.length === 0 && text !== '' ? { kind: 'message', text } : null;
 };
 
-export const askModel = async (ai: AiBinding, request: AgentRequest): Promise<AgentMove | null> =>
+export const askModel = async (
+  ai: AiBinding,
+  request: AgentRequest,
+  configuredModel?: string,
+): Promise<AgentMove | null> =>
   moveOf(
-    await ai.run(agentModel, {
+    await ai.run(agentModelOf(configuredModel), {
       messages: buildMessages(request),
       tools,
-      max_tokens: agentLimits.maxOutputTokens,
+      max_completion_tokens: agentLimits.maxOutputTokens,
       temperature: 0.2,
       reasoning_effort: 'low',
     }),
   );
+
+export const isUpstreamLimit = (error: unknown): boolean => {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+  const status = (error as Record<string, unknown>)['status'] ?? (error as Record<string, unknown>)['statusCode'];
+  const message = error instanceof Error ? error.message : String((error as Record<string, unknown>)['message'] ?? '');
+  return status === 429 || /rate limit|429|capacity/i.test(message);
+};
