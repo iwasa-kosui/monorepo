@@ -23,6 +23,7 @@ export interface TalkMetadata {
   themes?: string[];
   duration?: string;
   eventUrl?: string;
+  videoUrl?: string;
   unlisted?: boolean;
 }
 
