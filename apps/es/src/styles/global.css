@@ -294,7 +294,7 @@ body.chapter-page {
   }
 }
 
-@media (max-height: 700px) {
+@media (max-height: 800px) {
   .content .intro-text {
     font-size: 1.25rem;
     line-height: 1.55;
