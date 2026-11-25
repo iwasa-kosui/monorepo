@@ -105,6 +105,8 @@ type LessonOptions = Pick<WorkspaceScenario, 'id' | 'label' | 'tabs'> & {
   readonly reply?: WorkspaceScenario['reply'];
 };
 
+const docsOnly = (tabs: readonly TabDefinition[]): boolean => tabs.every((tab) => tab.kind === 'doc');
+
 export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
   id: options.id,
   mode: 'untimed',
@@ -123,7 +125,7 @@ export const lessonScenario = (options: LessonOptions): WorkspaceScenario => ({
     channel: '# 問い合わせ対応',
     placeholder: '# 問い合わせ対応 へのメッセージ',
     buttons: options.buttons ?? [],
-    ...(options.collapsed === true ? { collapsed: true as const } : {}),
+    ...(options.collapsed === true || docsOnly(options.tabs) ? { collapsed: true as const } : {}),
   },
   actors,
   history: options.history ?? [],

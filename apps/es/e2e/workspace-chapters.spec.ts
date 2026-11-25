@@ -346,6 +346,7 @@ test.describe('各ページの代表的な操作', () => {
   test('1-1: 入力欄に問いを書くと保存され、合図 question:written が起きる', async ({ page }) => {
     await open(page, '/chapters/chapter-1/');
     await recordSignals(page);
+    await rail(page).click();
     const input = scene(page).getByRole('textbox', { name: '自分のシステムの問いを1つ挙げる' });
     await expect(scene(page).locator('.compose-box').getByRole('textbox')).toBeVisible();
     await expect(input).toHaveAttribute('placeholder', '# 問い合わせ対応 へのメッセージ');
@@ -549,15 +550,17 @@ test.describe('各ページの代表的な操作', () => {
     await recordSignals(page);
     const figure = scene(page).locator('[data-before-record-figure]');
     const next = figure.getByRole('button', { name: '次へ', exact: true });
-    await expect(reply(page, '返信する')).toBeDisabled();
+    const replyButton = scene(page).locator('[data-action="reply"]');
+    await expect(replyButton).toBeDisabled();
     await expect(scene(page).locator('[data-reason]')).toHaveText('図を最後まで進めると返信できます。');
     for (let step = 1; step <= 3; step += 1) {
       await next.click();
       await expect(figure).toHaveAttribute('data-step', String(step));
-      await expect(reply(page, '返信する')).toBeDisabled();
+      await expect(replyButton).toBeDisabled();
     }
     await next.click();
     await expect(figure).toHaveAttribute('data-step', '4');
+    await rail(page).click();
     await expect(reply(page, '返信する')).toBeEnabled();
     await expect(posts(page)).toHaveCount(answered.length + 1);
     expect(
@@ -586,6 +589,7 @@ test.describe('各ページの代表的な操作', () => {
     await expect(posts(page)).toHaveCount(7);
 
     await open(page, '/chapters/chapter-1/');
+    await rail(page).click();
     const input = scene(page).getByRole('textbox', { name: '自分のシステムの問いを1つ挙げる' });
     await input.fill('消えない問い');
     await resetChat(page).click();
@@ -797,6 +801,7 @@ test.describe('第4章とまとめの代表的な操作', () => {
     await recordSignals(page);
     const label = '選んだ更新処理と、記録する内容（誰が、いつ、何を）と変更理由（なぜ）';
     const written = '注文のキャンセル処理に、誰がいつなぜ行ったかの記録を足す';
+    await rail(page).click();
     const input = scene(page).getByRole('textbox', { name: label });
     await expect(scene(page).locator('.compose-box').getByRole('textbox')).toBeVisible();
     await expect(input).toHaveAttribute('placeholder', '# 問い合わせ対応 へのメッセージ');
@@ -875,6 +880,7 @@ test.describe('連続投稿と入力中の表示', () => {
     await page.clock.install({ time: new Date('2026-11-24T09:00:00Z') });
     await page.goto('/chapters/chapter-1/');
     await expect(scene(page)).toBeVisible();
+    await rail(page).click();
     await page.clock.runFor(100);
     await expect(posts(page)).toHaveCount(3);
     await expect(typing(page)).toBeHidden();
@@ -907,6 +913,7 @@ test.describe('連続投稿と入力中の表示', () => {
     await expect(posts(page)).toHaveCount(answered.length + 1);
     const figure = scene(page).locator('[data-before-record-figure]');
     for (let step = 0; step < 4; step += 1) await figure.getByRole('button', { name: '次へ', exact: true }).click();
+    await rail(page).click();
     await reply(page, '返信する').click();
     await expect(typing(page)).toBeVisible();
     await expect(typing(page)).toHaveText(`${support} が入力中…`);
@@ -1038,6 +1045,19 @@ test.describe('演習のページでは、チャットを細い帯に折りた�
     expect((await signalsOf(page)).map((signal) => signal.name)).toContain('tests:passed');
     await page.waitForTimeout(1500);
     await expect(unread(page)).toBeHidden();
+  });
+
+  test('タブが文書だけのページでも帯に折りたたみ、開いた時点の投稿は未読の数で出る', async ({ page }) => {
+    await open(page, '/chapters/chapter-2/');
+    await expect(rail(page)).toBeVisible();
+    await expect(chatMain(page)).toBeHidden();
+    await expect(rail(page)).toHaveAccessibleName('チャット（未読 1 件）');
+    const chatBox = await scene(page).locator('.win.chat').boundingBox();
+    const browserBox = await scene(page).locator('.win.browser').boundingBox();
+    expect(chatBox?.width ?? 0).toBeLessThan(64);
+    expect(browserBox?.width ?? 0).toBeGreaterThan(1100);
+    await rail(page).click();
+    await expect(posts(page).last()).toBeVisible();
   });
 
   test('スマートフォンの幅では帯を出さず、チャットはタブの一つになる。最初は本文のタブが前に出る', async ({ page }) => {
