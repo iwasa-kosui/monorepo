@@ -1,22 +1,17 @@
 ---
 wide: true
+immersive: true
 ---
 
 import BackupRestore from '../../../components/intro/BackupRestore.astro';
-import EvidenceResult from '../../../components/intro/EvidenceResult.astro';
 import { evidenceScenario } from '../../../components/intro/evidence-scenario';
 import Workspace from '../../../components/workspace/Workspace.astro';
 
-<div class="intro-text">
+<div class="visually-hidden">
 
 ## アクセスログとDBバックアップでは何が解決できないのか
 
 アクセスログとDBバックアップに、誰が、いつ、何を、なぜは残っているでしょうか。2ページ目のポチのキャンセルを、もう一度調べてみましょう。
-
-1. 「アクセスログ」のタブで、`visit-pochi` を検索します。
-2. 「定期バックアップ」のタブで、今日 0:00 のバックアップを復元します。
-3. 復元した DB の `visits` と、「DB」のタブの今の `visits` を比べます。
-4. 「分かったことを見る」を押します。
 
 </div>
 
@@ -25,5 +20,3 @@ import Workspace from '../../../components/workspace/Workspace.astro';
 <BackupRestore />
 </Fragment>
 </Workspace>
-
-<EvidenceResult />

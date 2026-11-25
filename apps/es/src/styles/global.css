@@ -260,12 +260,8 @@ body.chapter-page {
 }
 .content .intro-text p,
 .content .intro-text ul,
-.content .intro-text ol,
 .content .intro-text blockquote {
   margin-block: 0.5rem;
-}
-.content .intro-text ol {
-  padding-left: 2.25rem;
 }
 .content .intro-text li + li {
   margin-top: 0.25rem;
@@ -295,7 +291,6 @@ body.chapter-page {
   }
   .content .intro-text p,
   .content .intro-text ul,
-  .content .intro-text ol,
   .content .intro-text blockquote {
     margin-block: 0.25rem;
   }
@@ -310,36 +305,6 @@ body.chapter-page {
   }
   .content .intro-text h3 {
     font-size: 1.1875rem;
-  }
-}
-
-@media (min-width: 1024px) and (max-height: 800px) {
-  .content .chapter-body:has(> [data-evidence-result]) {
-    position: relative;
-    display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
-    grid-template-rows: minmax(0, 1fr) auto;
-    column-gap: 1rem;
-  }
-  .content .chapter-body:has(> [data-evidence-result]) > .intro-text {
-    grid-column: 1;
-    grid-row: 1;
-    min-height: 0;
-  }
-  .content .chapter-body:has(> [data-evidence-result]) > .scene {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    min-height: 0;
-  }
-  .content
-    .chapter-body:has(> [data-evidence-result])
-    > [data-evidence-result] {
-    position: static;
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .content .chapter-body:has(> [data-evidence-result]) [data-evidence-body] {
-    bottom: 3.25rem;
   }
 }
 

@@ -162,6 +162,8 @@ const initial = 'SELECT * FROM visits;';
 </style>
 
 <script>
+import { emitSignal } from '../../workspace/panel';
+
 for (
   const root of document.querySelectorAll<HTMLElement>('[data-backup-restore]')
 ) {
@@ -178,6 +180,16 @@ for (
     button === null || status === null || bar === null || heading === null
     || playground === null
   ) continue;
+
+  const results = playground.querySelector<HTMLElement>(
+    '[data-role="results"]',
+  );
+  if (results !== null) {
+    new MutationObserver(() => {
+      if (results.querySelector('.playground-result') === null) return;
+      emitSignal(root, 'sql:executed', { key: 'restored' });
+    }).observe(results, { childList: true });
+  }
 
   let restoredOnce = false;
 

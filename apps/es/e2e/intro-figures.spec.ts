@@ -12,46 +12,94 @@ const runSelect = async (panel: Locator): Promise<void> => {
   await playground.locator('[data-role="run"]').click();
 };
 
+const unknown = 'まだ分からない';
+const missing = 'どこにも残っていない';
+const memoKeys = ['who', 'when', 'what', 'why'] as const;
+const memo = (page: Page, key: string): Locator => scene(page).locator(`[data-memo="${key}"]`);
+const unseen = (page: Page, name: RegExp): Locator => tab(page, name).locator('[data-unseen]');
+
+const expectMemo = async (
+  page: Page,
+  expected: Readonly<Record<(typeof memoKeys)[number], readonly [string, string]>>,
+): Promise<void> => {
+  for (const key of memoKeys) {
+    await expect(memo(page, key), key).toHaveAttribute('data-state', expected[key][0]);
+    await expect(memo(page, key), key).toHaveText(expected[key][1]);
+  }
+};
+
+const allUnknown = {
+  who: ['unknown', unknown],
+  when: ['unknown', unknown],
+  what: ['unknown', unknown],
+  why: ['unknown', unknown],
+} as const;
+
+const openCancelLog = async (page: Page): Promise<void> => {
+  await scene(page).locator('[data-query]').fill('visit-pochi');
+  await expect(scene(page).locator('[data-log-row]:visible')).toHaveCount(2);
+  await expect(scene(page).locator('[data-log-row]:visible').first()).toContainText(
+    'POST /visits/visit-pochi/cancel 200 12ms',
+  );
+  await expect(scene(page).locator('[data-log-row]:visible').first()).toContainText('Nov 06 18:11:58');
+  await scene(page).locator('[data-log-row]:visible').first().click();
+  await expect(scene(page).getByRole('region', { name: 'ログの詳細' })).toBeVisible();
+};
+
 for (const reducedMotion of motions) {
   test.describe(`導入の 6 ページ目（reducedMotion: ${reducedMotion}）`, () => {
     test.use({ reducedMotion });
 
-    test('アクセスログとDBバックアップで調べ、ボタンを押すと分かったことの表が出る', async ({ page }) => {
-      test.setTimeout(60_000);
+    test('初期表示は、問い合わせのチャットと、4 行とも分からない調査メモだけが出ている', async ({ page }) => {
       await page.goto('/chapters/intro/6/');
-      const result = page.locator('[data-evidence-result]');
-      const toggle = result.getByRole('button', { name: '分かったことを見る' });
 
+      await expect(page.locator('.lesson-frame')).toHaveClass(/lesson-frame--immersive/);
       await expect(
         page.getByRole('heading', { level: 2, name: 'アクセスログとDBバックアップでは何が解決できないのか' }),
-      ).toBeVisible();
-      await expect(
-        page.getByText(
-          'アクセスログとDBバックアップに、誰が、いつ、何を、なぜは残っているでしょうか。2ページ目のポチのキャンセルを、もう一度調べてみましょう。',
-        ),
-      ).toBeVisible();
-      await expect(page.locator('.intro-text ol li')).toHaveText([
-        '「アクセスログ」のタブで、visit-pochi を検索します。',
-        '「定期バックアップ」のタブで、今日 0:00 のバックアップを復元します。',
-        '復元した DB の visits と、「DB」のタブの今の visits を比べます。',
-        '「分かったことを見る」を押します。',
-      ]);
+      ).toBeAttached();
+      await expect(page.locator('[data-evidence-result]')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: '分かったことを見る' })).toHaveCount(0);
+      await expect(page.locator('.intro-text')).toHaveCount(0);
+
       await expect(scene(page).getByRole('tab')).toHaveCount(3);
       await expect(tab(page, /ログの検索/)).toContainText('アクセスログ');
       await expect(tab(page, /DB コンソール/)).toContainText('DB');
       await expect(tab(page, /定期バックアップ/)).toBeVisible();
+      await expect(tab(page, /エージェント/)).toHaveCount(0);
+      await expect(unseen(page, /ログの検索/)).toBeVisible();
+      await expect(unseen(page, /DB コンソール/)).toBeVisible();
+      await expect(unseen(page, /定期バックアップ/)).toBeVisible();
+
+      await expect(scene(page).locator('[data-feed] .post .post-text')).toHaveText([
+        'ポチちゃんの来院です（visit-pochi）。誰がいつなんでキャンセルしたか、わかりますか？',
+        'なんで記録取ってないんですか',
+      ]);
+      await expect(scene(page).locator('.compose-foot .actions button')).toHaveCount(0);
+      await expect(scene(page).locator('.memo-title')).toHaveText('調査メモ');
+      await expect(scene(page).locator('.memo-list dt')).toHaveText(['誰が', 'いつ', '何を', 'なぜ']);
+      await expectMemo(page, allUnknown);
+    });
+
+    test('アクセスログでポチのキャンセルの行を開くと「いつ」が分かる。検索しただけでは分からない', async ({ page }) => {
+      await page.goto('/chapters/intro/6/');
 
       await scene(page).locator('[data-query]').fill('visit-pochi');
       await expect(scene(page).locator('[data-log-row]:visible')).toHaveCount(2);
-      await expect(scene(page).locator('[data-log-row]:visible').first()).toContainText(
-        'POST /visits/visit-pochi/cancel 200 12ms',
-      );
-      await expect(scene(page).locator('[data-log-row]:visible').first()).toContainText('Nov 06 18:11:58');
+      await expectMemo(page, allUnknown);
+
+      await openCancelLog(page);
+      await expectMemo(page, { ...allUnknown, when: ['found', '2026-11-06 18:11:58'] });
+      await expect(unseen(page, /ログの検索/)).toBeHidden();
+    });
+
+    test('復元した DB で SELECT すると「何を」が分かり、「誰が」と「なぜ」はどこにも残っていないと分かる', async ({ page }) => {
+      test.setTimeout(60_000);
+      await page.goto('/chapters/intro/6/');
+      await openCancelLog(page);
 
       await tab(page, /DB コンソール/).click();
       const current = panelOf(page, 'console');
       await runSelect(current);
-      await expect(current.locator('[data-role="results"] tbody tr')).toHaveCount(2);
       await expect(current.locator('[data-role="results"] tbody td')).toHaveText([
         'visit-pochi',
         'ポチ',
@@ -60,6 +108,8 @@ for (const reducedMotion of motions) {
         'タマ',
         'cancelled',
       ]);
+      await expectMemo(page, { ...allUnknown, when: ['found', '2026-11-06 18:11:58'] });
+      await expect(unseen(page, /DB コンソール/)).toBeHidden();
 
       await tab(page, /定期バックアップ/).click();
       const backup = panelOf(page, 'backup');
@@ -78,6 +128,7 @@ for (const reducedMotion of motions) {
       await expect(backup.getByRole('radio').first()).toBeDisabled();
       await expect(restored).toBeHidden();
       await expect(backup.getByRole('heading', { name: /復元した DB/ })).toBeHidden();
+      await expectMemo(page, { ...allUnknown, when: ['found', '2026-11-06 18:11:58'] });
 
       await expect(backup.getByRole('heading', { name: '復元した DB（2026-11-06 00:00 時点）' })).toBeVisible({
         timeout: 10_000,
@@ -85,6 +136,8 @@ for (const reducedMotion of motions) {
       await expect(backup.getByText('復元しています')).toBeHidden();
       await expect(restoreButton).toBeEnabled();
       await expect(restored).toBeVisible();
+      await expectMemo(page, { ...allUnknown, when: ['found', '2026-11-06 18:11:58'] });
+
       await runSelect(backup);
       await expect(restored.locator('[data-role="results"] tbody td')).toHaveText([
         'visit-pochi',
@@ -94,46 +147,16 @@ for (const reducedMotion of motions) {
         'タマ',
         'reserved',
       ]);
+      await expectMemo(page, {
+        who: ['missing', missing],
+        when: ['found', '2026-11-06 18:11:58'],
+        what: ['found', 'reserved から cancelled'],
+        why: ['missing', missing],
+      });
+      await expect(unseen(page, /定期バックアップ/)).toBeHidden();
 
       await tab(page, /DB コンソール/).click();
       await expect(current.locator('[data-role="results"] tbody td').nth(2)).toHaveText('cancelled');
-
-      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      await expect(page.getByRole('table', { name: 'ポチのキャンセルについて分かったこと' })).toBeHidden();
-      await expect(page.getByText('なぜ変えたのかを知っているのは更新処理を呼ぶコードだけです。')).toBeHidden();
-
-      await toggle.click();
-      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-      const table = page.getByRole('table', { name: 'ポチのキャンセルについて分かったこと' });
-      await expect(table).toBeVisible();
-      await expect(table.locator('thead th')).toHaveText(['誰が', 'いつ', '何を', 'なぜ']);
-      await expect(table.locator('tbody th')).toHaveText([
-        'アクセスログ',
-        'DBバックアップ',
-        '更新処理を呼ぶコードに記録を足していた場合',
-      ]);
-      await expect(table.locator('tbody td')).toHaveText([
-        '残っていない',
-        '2026-11-06 18:11:58',
-        'POST /visits/visit-pochi/cancel',
-        '残っていない',
-        '残っていない',
-        '11月6日 0:00 から今までのどこか',
-        'reserved から cancelled',
-        '残っていない',
-        '受付スタッフ',
-        '2026-11-06 18:11:58',
-        '来院のキャンセル',
-        '飼い主の都合',
-      ]);
-      await expect(table.locator('td[data-found="false"]')).toHaveCount(4);
-      await expect(table.locator('td[data-found="true"]')).toHaveCount(8);
-      await expect(page.getByText('なぜ変えたのかを知っているのは更新処理を呼ぶコードだけです。')).toBeVisible();
-
-      await result.getByRole('button', { name: '閉じる' }).click();
-      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      await expect(toggle).toBeFocused();
-      await expect(table).toBeHidden();
     });
 
     test('別のバックアップを選んで復元し直すと、もう一度待ってから復元した DB が置き換わる', async ({ page }) => {
@@ -151,6 +174,7 @@ for (const reducedMotion of motions) {
       await page.keyboard.insertText(`UPDATE visits SET status = 'checked_in';`);
       await restored.locator('[data-role="run"]').click();
       await expect(restored.locator('[data-role="results"]')).toContainText('2 行を変更しました');
+      await expectMemo(page, { ...allUnknown, what: ['found', 'reserved から cancelled'] });
 
       await backup.getByRole('radio', { name: '2026-11-04 00:00' }).check();
       await backup.getByRole('button', { name: '復元する' }).click();
@@ -168,6 +192,15 @@ for (const reducedMotion of motions) {
         'タマ',
         'reserved',
       ]);
+
+      await tab(page, /ログの検索/).click();
+      await openCancelLog(page);
+      await expectMemo(page, {
+        who: ['missing', missing],
+        when: ['found', '2026-11-06 18:11:58'],
+        what: ['found', 'reserved から cancelled'],
+        why: ['missing', missing],
+      });
     });
   });
 }
