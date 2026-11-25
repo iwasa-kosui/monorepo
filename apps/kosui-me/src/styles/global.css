@@ -145,6 +145,11 @@ body {
   }
 }
 
+/* 紙が本文から始まるときは、最初の見出しや段落の上の余白を紙の余白に任せる */
+.article-paper > .prose:first-child > :first-child {
+  margin-top: 0;
+}
+
 /* Shiki code blocks */
 pre.astro-code {
   @apply overflow-x-auto rounded-2xl p-6 text-sm leading-relaxed my-4;
@@ -295,9 +300,115 @@ pre.mermaid {
   z-index: 0;
 }
 
-/* Bottom navigation safe area for iPhone notch/home bar */
-.bottom-nav {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+/* ===== Floating navigation（狭い画面） =====
+   画面の下端から離して浮かべる。ホームバーのある端末では、その分だけ持ち上げる */
+.floating-nav {
+  --floating-nav-ink: var(--color-subtle);
+  --floating-nav-fill: rgb(255 255 255 / 0.78);
+  --floating-nav-line: rgb(255 255 255 / 0.7);
+  --floating-nav-shadow:
+    0 0 0 1px rgb(60 50 45 / 0.05), 0 1px 2px rgb(60 50 45 / 0.06), 0 8px 24px
+    rgb(60 50 45 / 0.14);
+  --floating-nav-active-ink: var(--color-accent-dark);
+  --floating-nav-active-fill: rgb(224 94 82 / 0.12);
+
+  position: fixed;
+  right: 0;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  padding-inline: 1rem;
+  /* ナビの左右の余白は、下の本文を触れるままにする */
+  pointer-events: none;
+}
+
+.floating-nav-surface {
+  pointer-events: auto;
+  border: 1px solid var(--floating-nav-line);
+  border-radius: 9999px;
+  background-color: var(--floating-nav-fill);
+  box-shadow: var(--floating-nav-shadow);
+  color: var(--floating-nav-ink);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  backdrop-filter: blur(16px) saturate(1.6);
+}
+
+.floating-nav-tabs {
+  display: flex;
+  gap: 0.125rem;
+  padding: 0.25rem;
+}
+
+.floating-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  width: 4.5rem;
+  height: 3rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1;
+  transition: background-color 0.2s, color 0.2s, transform 0.2s;
+}
+
+.floating-nav-item[aria-current="page"] {
+  background-color: var(--floating-nav-active-fill);
+  color: var(--floating-nav-active-ink);
+  font-weight: 700;
+}
+
+.floating-nav-search {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  transition: transform 0.2s;
+}
+
+.floating-nav-item:active,
+.floating-nav-search:active {
+  transform: scale(0.94);
+}
+
+.floating-nav-item:focus-visible,
+.floating-nav-search:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .floating-nav {
+    --floating-nav-ink: #b3bacb;
+    --floating-nav-fill: rgb(31 36 53 / 0.78);
+    --floating-nav-line: rgb(255 255 255 / 0.1);
+    --floating-nav-shadow:
+      0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35);
+    --floating-nav-active-ink: var(--color-accent-light);
+    --floating-nav-active-fill: rgb(240 136 126 / 0.16);
+  }
+}
+
+/* 浮かんだナビに、ページの末尾が隠れないようにする */
+.floating-nav-clearance {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* 広い画面では、ヘッダーのナビを使う */
+@media (min-width: 48rem) {
+  .floating-nav {
+    display: none;
+  }
+
+  .floating-nav-clearance {
+    padding-bottom: 0;
+  }
 }
 
 .line-clamp-2 {
@@ -448,7 +559,7 @@ pre.mermaid {
 @media print {
   header,
   footer,
-  .bottom-nav {
+  .floating-nav {
     display: none !important;
   }
 
