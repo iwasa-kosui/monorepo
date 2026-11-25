@@ -25,6 +25,7 @@ uniform vec2 uOffset;         // エビの移動量（マス）
 uniform float uRotation;      // エビの回転（ラジアン）
 uniform float uCover;         // エビが水をかぶっている度合い（0〜1）
 uniform float uVisible;       // エビの見え方（0〜1）
+uniform float uBuried;        // エビが砂に埋もれている度合い（0〜1）
 uniform float uBlink;         // 0 のあいだ目を閉じる
 uniform float uGain;          // 光の強さ
 uniform float uGrain;         // 砂粒の強さ
@@ -72,10 +73,18 @@ float caustic(vec2 uv, float time) {
   return pow(abs(c), 8.);
 }
 
-// 岸沿いのゆるいうねり（およそ -1〜1）。周期の合わない波を重ね、同じ形が並ばないようにする。
-// 波の先や水際を、この形に出入りさせる。角や細かい凹凸は作らない
-float swell(float a) {
-  return .6 * sin(a + .8 * sin(a * .37 + 1.3)) + .28 * sin(a * 1.83 + 2.1) + .12 * sin(a * 3.1 + .7 * sin(a * .9));
+// 浜に広がる水の縁の形（およそ -.5〜.5）。陸へ張り出す弧がいくつも重なり、弧と弧の間は沖へ浅く切れ込む。
+// 弧の幅と高さは 1 つずつちがい、低い弧は隣に呑まれるので、同じ形は並ばない。
+// x が 1 進むごとに弧が 1 つ。seed を変えると別の並びになる
+float lobes(float x, float seed) {
+  float cell = floor(x), sum = 0.;
+  for (int n = -1; n <= 1; n++) {
+    float c = cell + float(n);
+    float h1 = hash(vec2(c, seed)), h2 = hash(vec2(seed + 3.7, c));
+    float d = (x - c - .5 - (h1 - .5) * .4) / (.6 + .3 * h2);
+    sum += exp(10. * (.4 + .6 * fract(h1 * 7.3 + h2)) * (1. - d * d));   // 弧の間の角は、少しだけ丸める
+  }
+  return log(sum) / 10. - .5;
 }
 
 // 画面上の位置から、ドット絵のマス座標へ。wobble は水越しの揺らぎの強さ
@@ -94,11 +103,15 @@ vec2 toCell(vec2 px, float t, float wobble) {
   return q;
 }
 
-// x = 絵のあるマスか, y = 目のマスか
+// x = 絵のあるマスか, y = 目のマスか。
+// 砂に埋もれている間は、マスごとに砂のかぶり方がちがい、浅いマスから現れる（体のまんなかほど浅い）
 vec2 sprite(vec2 q) {
   if (q.x < 0. || q.y < 0. || q.x >= 20. || q.y >= 20.) return vec2(0.);
-  vec4 s = texture2D(uSprite, (floor(q) + .5) / 20.);
-  return vec2(step(.5, s.a), step(.5, s.r));
+  vec2 cell = floor(q);
+  vec4 s = texture2D(uSprite, (cell + .5) / 20.);
+  float sandOver = .55 * hash(cell + 11.) + .03 * length(cell - vec2(11., 9.));
+  float shown = step(.5, s.a) * smoothstep(sandOver, sandOver + .2, 1. - uBuried);
+  return vec2(shown, shown * step(.5, s.r));
 }
 
 // 泡の濃さから、泡のあるところ（0〜1）を返す。
@@ -127,7 +140,7 @@ void main() {
   float lapPhase = fract(t * .31 - a * .23 + .11 * sin(a * 2.9 + t * .2));
   float lapTurn = lapPhase < .42 ? 1. - lapPhase / .42 : (lapPhase - .42) / .58;
   float lapInside = (.07 + .11 * (.5 + .5 * sin(t * .23 + a * 1.3))) * (1. - lapTurn * lapTurn) - inland
-    + .025 * swell(a * 2.6 + t * .07);
+    + .045 * lobes(a * 2.3 + t * .03, 5.);
 
   float inside = lapInside;   // 水際からの距離。正なら水の中
   float thinning = 0.;        // 引いていく水は薄い膜になり、縁がぼける
@@ -153,8 +166,11 @@ void main() {
     // のぼる距離は岸沿いにうねり、岸には少し斜めに届く
     float reach = motion.y * (1. + .14 * sin(a * 1.9 + shape.y) + .07 * sin(a * 4.3 + shape.z));
     float since = motion.x - shape.x * a - .3 * sin(a * 1.3 + shape.w);
-    // 波の先は岸沿いにゆるく出入りする。この波から見た位置を、その形にずらす
-    float spot = inland - .07 * swell(a * 2.2 + shape.z * 3. + shape.w) * smoothstep(-.1, .7, inland);
+    // 波の先は、大きな弧と小さな弧が重なった形。この波から見た位置を、その形にずらす
+    float spot = inland - (
+      .1 * lobes(a * 1.5 + .35 * sin(a * 1.1 + shape.w), shape.z * 9.)
+      + .035 * lobes(a * 4.1 + shape.y, shape.w * 9.)
+    ) * smoothstep(-.1, .7, inland);
     float approach = 1.5 * motion.y / uprush;                        // 沖から来る速さ
     float pace = sqrt(clamp(1. - spot / reach, 0., 1.));              // 波の先がここを通るときの速さ（岸に届いたときを 1 として）
     float passedAt = spot < 0. ? spot / approach : uprush * (1. - pace);   // 波の先がここを通る時刻
@@ -235,7 +251,7 @@ void main() {
   vec2 sq = (toCell(px - vec2(.016, .024) * size, t, wobble) + 2.) / 24.;
   float shadow = (sq.x < 0. || sq.y < 0. || sq.x > 1. || sq.y > 1.) ? 0. : texture2D(uShadow, sq).r;
   float arrived = smoothstep(0., .9, t);
-  col = mix(col, col * uShadowTint, shadow * .55 * arrived * (1. - .4 * inWater) * (1. - .6 * uCover) * uVisible);
+  col = mix(col, col * uShadowTint, shadow * .55 * arrived * (1. - .4 * inWater) * (1. - .6 * uCover) * uVisible * smoothstep(.3, 1., 1. - uBuried));
 
   // エビ（4 点で縁をならす）。水をかぶっている部分だけ揺らぐ
   vec2 acc = vec2(0.);

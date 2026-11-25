@@ -59,6 +59,12 @@ const TIDE_REACH = 2.8;
  */
 const EBB_PULL = 1.6;
 
+/**
+ * 引き波が、埋もれたエビの上の砂をさらう割合。波の先がエビの上を 1 下がるごとに、どれだけ掘り出すか。
+ * エビをしっかり覆う波で 3 つほどかかる
+ */
+const UNEARTH_RATE = 1.4;
+
 /** 引き潮を積分するときの、波打ち際の刻み */
 const EBB_STEP = 0.02;
 
@@ -226,6 +232,8 @@ export type Drift = Readonly<{
   spin: number;
   /** 海に消えたか */
   gone: boolean;
+  /** 砂に埋もれている度合い（1 = すっかり埋もれている、0 = 砂の上にいる） */
+  buried: number;
 }>;
 
 export const initialDrift: Drift = {
@@ -233,12 +241,17 @@ export const initialDrift: Drift = {
   lateral: 0,
   spin: 0,
   gone: false,
+  buried: 0,
 };
+
+/** 砂にすっかり埋もれたエビ。最初の位置にいて、波に洗われるたびに少しずつ現れる */
+export const buriedDrift: Drift = { ...initialDrift, buried: 1 };
 
 /**
  * `from` から `to` までの間に、波がエビを動かした結果を返す。
  * エビは、かぶっている水のうちいちばん新しい波の流れに乗る。
  * 寄せ波で少し陸へ押され、引き波でそれより多く沖へ引かれる。水をかぶっていない間は動かない。
+ * 砂に埋もれているエビは動かず、引き波が上の砂をさらうたびに少しずつ現れる。現れきってから、波に運ばれる。
  */
 export const carry = (
   drift: Drift,
@@ -250,7 +263,7 @@ export const carry = (
   if (drift.gone || elapsed <= 0 || elapsed > MAX_GAP) return drift;
 
   const steps = Math.ceil(elapsed / STEP);
-  let { seaward, lateral, spin } = drift;
+  let { seaward, lateral, spin, buried } = drift;
   let previous = from;
   for (let i = 1; i <= steps; i++) {
     const now = from + (elapsed * i) / steps;
@@ -267,27 +280,31 @@ export const carry = (
     ) {
       const frontMove = front - frontBefore;
       const covered = clamp01((front - position) / COVER_DEPTH);
-      const move = -frontMove
-        * (frontMove < 0 ? BACKWASH_PULL : UPRUSH_PUSH)
-        * covered;
-      seaward += move;
-      spin += move * 1.1;
-      lateral += move * 0.12 * Math.sin(swash.index * 2.4);
+      if (buried > 0) {
+        buried = Math.max(0, buried - Math.max(0, -frontMove) * UNEARTH_RATE * covered);
+      } else {
+        const move = -frontMove
+          * (frontMove < 0 ? BACKWASH_PULL : UPRUSH_PUSH)
+          * covered;
+        seaward += move;
+        spin += move * 1.1;
+        lateral += move * 0.12 * Math.sin(swash.index * 2.4);
+      }
     }
     previous = now;
   }
-  return { seaward, lateral, spin, gone: seaward > GONE_AT };
+  return { seaward, lateral, spin, gone: seaward > GONE_AT, buried };
 };
 
 /**
  * スクロールで満ちた潮が `tideFrom` から `tideTo`（どちらも 0〜1）へ引く間に、エビを動かした結果を返す。
  * 潮をかぶっているエビは、引いていく水に沖へ運ばれる。浅くかぶっただけなら少しずれるだけで、
- * すっかり覆われていたら海へ消える。潮が満ちていく間と、潮の届いていないエビは動かない。
+ * すっかり覆われていたら海へ消える。潮が満ちていく間と、潮の届いていないエビ、砂に埋もれているエビは動かない。
  * 時間によらず、潮の引いた量だけで決まる（画面の外にいる間や、一気に戻ったときも同じ結果になる）。
  */
 export const ebb = (drift: Drift, tideFrom: number, tideTo: number): Drift => {
   const fall = (tideFrom - tideTo) * TIDE_REACH;
-  if (drift.gone || !(fall > 0)) return drift;
+  if (drift.gone || drift.buried > 0 || !(fall > 0)) return drift;
 
   const steps = Math.ceil(fall / EBB_STEP);
   const stride = fall / steps;
@@ -319,7 +336,7 @@ export const coverage = (
   );
 
 /**
- * エビの見え方（1 = はっきり見える、0 = 海に消えた）。
+ * エビの見え方（1 = はっきり見える、0 = 海に消えた）。砂に埋もれている度合いは含めない。
  */
 export const visibility = (drift: Drift): number =>
   drift.gone ? 0 : 1 - clamp01((drift.seaward - FADE_FROM) / FADE_SPAN);
