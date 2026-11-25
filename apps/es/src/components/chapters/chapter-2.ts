@@ -16,8 +16,8 @@ export const chapter2Explain: WorkspaceScenario = lessonScenario({
   id: 'chapter-2-explain',
   label: '更新処理の中で記録する方針',
   history: earlier,
-  timeline: opening(posts.designMemo),
-  tabs: [docTab('memo', '設計メモ: 更新処理の中で記録する', 'design/record-in-update')],
+  timeline: opening(posts.decisionRecord),
+  tabs: [docTab('memo', 'ADR 1: 更新処理の中で記録する', 'adr/1-record-in-update')],
 });
 
 const stepTab = (step: 1 | 2): TabDefinition =>
@@ -34,9 +34,9 @@ export const chapter2Step1: WorkspaceScenario = lessonScenario({
 export const chapter2Table: WorkspaceScenario = lessonScenario({
   id: 'chapter-2-table',
   label: '記録を1つのテーブルにまとめる',
-  history: [...earlier, posts.designMemo],
-  timeline: opening(posts.tableMemo),
-  tabs: [docTab('memo', '設計メモ: 記録を1つのテーブルにまとめる', 'design/record-table')],
+  history: [...earlier, posts.decisionRecord],
+  timeline: opening(posts.tableRecord),
+  tabs: [docTab('memo', 'ADR 2: 記録を1つのテーブルにまとめる', 'adr/2-record-table')],
 });
 
 export const chapter2Step2: WorkspaceScenario = lessonScenario({

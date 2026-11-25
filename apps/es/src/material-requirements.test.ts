@@ -98,17 +98,23 @@ describe('PRD の受入条件', () => {
     }
   });
 
-  it('chapter-2.mdx の業務イベントは定義が先に出て、business_events はその後に出る', () => {
+  it('chapter-2.mdx の業務イベントは、ステップ1の後の ADR で定義が先に出て、business_events はその後に出る', () => {
     const text = read('src/content/chapters/chapter-2.mdx');
     const first = text.indexOf('業務イベント');
     expect(first).toBeGreaterThanOrEqual(0);
     const lineStart = text.lastIndexOf('\n', first) + 1;
     const lineEnd = text.indexOf('\n', first);
     expect(text.slice(lineStart, lineEnd)).toMatch(/^業務イベントは、業務で起きた/);
-    const heading = text.indexOf('### 更新処理の中で記録する');
-    expect(heading).toBeGreaterThanOrEqual(0);
-    expect(first).toBeGreaterThan(heading);
+    const stepOne = text.indexOf('<AddRecordScene step={1} />');
+    expect(stepOne).toBeGreaterThanOrEqual(0);
+    expect(first).toBeGreaterThan(stepOne);
     expect(text.indexOf('business_events')).toBeGreaterThan(lineEnd);
+  });
+
+  it('chapter-2.mdx の ADR の2ページは、状況、決定、結果の順に書く', () => {
+    const text = read('src/content/chapters/chapter-2.mdx');
+    const headings = [...text.matchAll(/^### (.+)$/gm)].map((match) => match[1]);
+    expect(headings.slice(0, 6)).toEqual(['状況', '決定', '結果', '状況', '決定', '結果']);
   });
 
   it('schedule の title に業務イベントが出ない', () => {

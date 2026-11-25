@@ -31,8 +31,8 @@ const sentencesOf = (text: string): string[] => text.match(/[^。]+。/g) ?? [];
 describe('章の引用', () => {
   const quotes = chapterNames().flatMap((chapter) => quotesOf(readChapterText(chapter)));
 
-  it('引用を11件置いている', () => {
-    expect(quotes.length).toBe(11);
+  it('引用を10件置いている', () => {
+    expect(quotes.length).toBe(10);
   });
 
   it('引用文の各文が出典のファイルに一字一句含まれる', () => {

@@ -1,0 +1,443 @@
+---
+import './figure.css';
+
+type Cell = {
+  readonly column: string;
+  readonly value: string;
+  readonly answers?: string;
+  readonly before?: string;
+  readonly mark?: true;
+};
+type Part = string | { readonly code: string };
+type Write = {
+  readonly sql: string;
+  readonly table: string;
+  readonly note: readonly Part[];
+  readonly cells: readonly Cell[];
+  readonly label: string;
+};
+
+const visit: readonly Cell[] = [
+  { column: 'id', value: 'visit-pochi' },
+  { column: 'pet_name', value: 'ポチ' },
+  { column: 'status', value: 'cancelled', before: 'reserved' },
+];
+const record: readonly Cell[] = [
+  { column: 'id', value: '1' },
+  { column: 'visit_id', value: 'visit-pochi' },
+  {
+    column: 'cancelled_at',
+    value: '2026-11-06T18:11:58.846Z',
+    answers: 'いつ',
+  },
+  { column: 'operated_by', value: '受付スタッフ', answers: '誰が', mark: true },
+  { column: 'reason', value: '飼い主の都合', answers: 'なぜ', mark: true },
+];
+const writes: readonly Write[] = [
+  {
+    sql: 'UPDATE visits',
+    table: 'visits',
+    note: [{ code: 'visits' }, ' の ', { code: 'status' }, ' が ', {
+      code: 'cancelled',
+    }, ' になります。'],
+    cells: visit,
+    label: 'visits の行',
+  },
+  {
+    sql: 'INSERT INTO visit_cancellations',
+    table: 'visit_cancellations',
+    note: [{ code: 'visit_cancellations' }, ' に1行を書きます。'],
+    cells: record,
+    label: 'visit_cancellations に書く1行',
+  },
+];
+---
+
+<section
+  class="cfig decision"
+  data-record-decision-figure
+  aria-label="cancelVisit が、来院の更新と記録を同じトランザクションで行う図"
+>
+  <div class="caller">
+    <span class="tag">呼び出し元</span>
+    <span class="mono call"
+    >cancelVisit(db, &#123; visitId: 'visit-pochi', <span class="mark"
+      >reason: '飼い主の都合'</span>, <span class="mark"
+      >operatedBy: '受付スタッフ'</span> &#125;)</span>
+  </div>
+  <div class="down" aria-hidden="true">↓</div>
+
+  <div class="frame">
+    <div class="frame-head">
+      <span class="mono">cancelVisit</span> の <span class="mono"
+      >withTransaction</span>
+    </div>
+    <ol class="ops">
+      {
+        writes.map((write, index) => (
+          <li class="op" data-write={write.table}>
+            <div class="op-line">
+              <span class="op-no" aria-hidden="true">{index + 1}</span>
+              <span class="mono op-sql">{write.sql}</span>
+              <span class="op-note">
+                {
+                  write.note.map((part) =>
+                typeof part === 'string'
+                  ? part
+                  : (
+                    <span class="mono">{part.code}</span>
+                  )
+              )
+                }
+              </span>
+            </div>
+            <dl class="cells" aria-label={write.label}>
+              {
+                write.cells.map((cell) => (
+                  <div class="cell">
+                    <dt>
+                      <span class="mono">{cell.column}</span>
+                      {
+                        cell.answers !== undefined && (
+                          <span class="badge">{cell.answers}</span>
+                        )
+                      }
+                    </dt>
+                    <dd class="mono">
+                      {
+                        cell.before !== undefined && (
+                          <>
+                            <span class="before">{cell.before}</span>
+                            <span class="to" aria-hidden="true">→</span>
+                            <span class="cfig-sr">から</span>
+                          </>
+                        )
+                      }
+                      <span
+                        class:list={['value', {
+                          mark: cell.mark === true,
+                          after: cell.before !== undefined,
+                        }]}
+                      >{cell.value}</span>
+                      {
+                        cell.answers !== undefined && (
+                          <span class="badge">{cell.answers}</span>
+                        )
+                      }
+                    </dd>
+                  </div>
+                ))
+              }
+            </dl>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+
+  <div class="fork" aria-hidden="true">
+    <span>↓</span>
+    <span>↓</span>
+  </div>
+  <div class="outcomes">
+    <div class="outcome" data-outcome="success">
+      <div class="outcome-head">
+        <strong>記録に成功する場合</strong>
+        <span class="stamp">確定</span>
+      </div>
+      <div class="outcome-text">
+        トランザクションを確定します。来院の更新と記録の両方が残ります。
+      </div>
+    </div>
+    <div class="outcome" data-outcome="fail">
+      <div class="outcome-head">
+        <strong>記録に失敗する場合</strong>
+        <span class="stamp">取り消し</span>
+      </div>
+      <div class="outcome-text">
+        <span class="mono">visit_cancellations</span>
+        への記録が失敗すると、トランザクションを取り消します。<span class="mono"
+        >visits</span> の <span class="mono">status</span> は <span class="mono"
+        >reserved</span> に戻ります。
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+.cfig.decision {
+  --fig-text: 0.875rem;
+  --fig-small: 0.8125rem;
+  --fig-code: 0.8125rem;
+  container-type: inline-size;
+  gap: 0.25rem;
+}
+.mono {
+  font-family: var(--font-code);
+  font-size: var(--fig-code);
+}
+.mark {
+  border-radius: var(--radius-sm);
+  background: var(--role-highlight);
+  color: var(--role-on-highlight);
+}
+
+.caller {
+  border: 2px solid var(--role-accent-strong);
+  border-radius: var(--radius-md);
+  background: var(--role-surface);
+  padding: 0.1875rem 0.5rem;
+  line-height: 1.5;
+}
+.tag {
+  display: inline-block;
+  margin-right: 0.375rem;
+  border-radius: var(--radius-sm);
+  background: var(--role-accent-strong);
+  padding: 0 0.5rem;
+  color: var(--role-on-strong);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.call {
+  overflow-wrap: anywhere;
+}
+.down,
+.fork {
+  margin-block: -0.125rem;
+  color: var(--role-muted);
+  font-size: 0.875rem;
+  line-height: 1;
+  text-align: center;
+}
+.fork,
+.outcomes {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 0.5rem;
+}
+
+.frame {
+  border: 2px solid var(--role-accent);
+  border-radius: var(--radius-lg);
+  background: var(--role-surface);
+  padding: 0.125rem 0.375rem 0.375rem;
+}
+.frame-head {
+  font-size: var(--fig-text);
+  font-weight: 700;
+  line-height: 1.5;
+}
+.frame-head .mono {
+  font-size: inherit;
+}
+.cfig .ops {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cfig .op {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  border-radius: var(--radius-md);
+  background: var(--role-accent-soft);
+  padding: 0.1875rem 0.375rem 0.3125rem;
+}
+.op-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5rem;
+  font-size: var(--fig-small);
+  line-height: 1.5;
+}
+.op-no {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  align-self: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: var(--role-accent-strong);
+  color: var(--role-on-strong);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.op-sql {
+  font-weight: 700;
+}
+
+.cfig .cells {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: auto auto;
+  gap: 1px;
+  margin: 0;
+  border: 1px solid var(--role-rule);
+  background: var(--role-rule);
+  line-height: 1.5;
+}
+[data-write="visits"] .cells {
+  align-self: flex-start;
+  min-width: min(100%, 22rem);
+}
+.cell {
+  display: contents;
+}
+.cfig .cells dt,
+.cfig .cells dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.375rem;
+  margin: 0;
+  padding: 0.0625rem 0.375rem;
+  overflow-wrap: anywhere;
+}
+.cfig .cells dt {
+  background: var(--role-sunken);
+  font-weight: 700;
+}
+.cfig .cells dd {
+  background: var(--role-surface);
+}
+.badge {
+  border: 2px solid var(--role-accent-strong);
+  border-radius: var(--radius-sm);
+  background: var(--role-highlight-soft);
+  padding: 0 0.3125rem;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.cfig .cells dd .badge {
+  display: none;
+  margin-left: auto;
+  font-family: var(--font-body, inherit);
+  font-weight: 700;
+}
+.value {
+  display: inline-block;
+  max-width: 100%;
+}
+.before {
+  color: var(--role-muted);
+}
+.to {
+  color: var(--role-muted);
+}
+.after {
+  font-weight: 700;
+}
+
+.outcome {
+  min-width: 0;
+  border: 2px solid var(--role-rule);
+  border-radius: var(--radius-lg);
+  padding: 0.1875rem 0.5rem 0.3125rem;
+}
+.outcome[data-outcome="success"] {
+  border-color: var(--role-success-line);
+  background: var(--role-success-soft);
+}
+.outcome[data-outcome="fail"] {
+  border-color: var(--role-danger);
+  background: var(--role-danger-soft);
+}
+.outcome-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.125rem 0.375rem;
+  font-size: var(--fig-text);
+  line-height: 1.5;
+}
+.stamp {
+  border-radius: var(--radius-sm);
+  padding: 0 0.5rem;
+  color: var(--role-on-strong);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+[data-outcome="success"] .stamp {
+  background: var(--role-success);
+}
+[data-outcome="fail"] .stamp {
+  background: var(--role-danger);
+}
+.outcome-text {
+  font-size: var(--fig-small);
+  line-height: 1.5;
+}
+
+@container (max-width: 36rem) {
+  .cfig .cells dt {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .cfig .cells .mono {
+    font-size: 0.75rem;
+  }
+}
+@container (max-width: 32.5rem) {
+  .cfig .cells {
+    grid-auto-flow: row;
+    grid-template-rows: none;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  [data-write="visits"] .cells {
+    align-self: stretch;
+    min-width: 0;
+  }
+  .cfig .cells dt {
+    flex-direction: row;
+    align-items: center;
+  }
+  .cfig .cells dt .badge {
+    display: none;
+  }
+  .cfig .cells dd .badge {
+    display: inline-block;
+  }
+}
+@container (max-width: 30rem) {
+  .fork,
+  .outcomes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fork span + span {
+    display: none;
+  }
+}
+
+@media (max-height: 700px) {
+  .cfig.decision {
+    --fig-text: 0.8125rem;
+    --fig-small: 0.75rem;
+    --fig-code: 0.75rem;
+    padding-block: 0.375rem;
+  }
+  .down,
+  .fork {
+    margin-block: 0;
+    font-size: 0.8125rem;
+  }
+  .cfig .op {
+    padding: 0.125rem 0.375rem 0.25rem;
+  }
+  .cfig .cells dt,
+  .cfig .cells dd {
+    padding-block: 0;
+  }
+  .outcome {
+    padding-block: 0.125rem 0.25rem;
+  }
+}
+</style>

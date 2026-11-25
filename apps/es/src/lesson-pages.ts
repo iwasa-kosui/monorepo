@@ -59,7 +59,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'chapter-2/01': {
     flow: 'explain',
     role:
-      '設計メモで、キャンセルした人と理由を、来院の更新と同じトランザクションで `visit_cancellations` に追記する方針を読みます。',
+      'ADR（設計上の決定を残す文書）で、キャンセルした人と理由を、来院の更新と同じトランザクションで `visit_cancellations` に追記する方針を読みます。',
   },
   'chapter-2/02': {
     flow: 'exercise',
@@ -67,7 +67,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   },
   'chapter-2/03': {
     flow: 'explain',
-    role: '設計メモで、出来事の記録を1つのテーブルにまとめる理由と、`business_events` の各列を残す理由を読みます。',
+    role: 'ADR で、出来事の記録を1つのテーブルにまとめる理由と、`business_events` の各列を残す理由を読みます。',
   },
   'chapter-2/04': {
     flow: 'exercise',

@@ -18,8 +18,8 @@ const ownQuestion =
 const wantRecord = '再発防止で、キャンセルしたときに記録を残すようにしたいです';
 const runTests = '先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです';
 const failedFour = '落ちた4件が、これから足すところです👍';
-const designMemo = '方針を設計メモにまとめました。ざっと読んでもらえると助かります';
-const tableMemo = '記録を1つのテーブルにまとめる案も設計メモに足しました';
+const decisionRecord = '方針を ADR にまとめました。ざっと読んでもらえると助かります';
+const tableRecord = '記録を1つのテーブルにまとめる案も ADR にしました';
 const prSeen = 'PR 見ました！差分、思ったより小さいですね';
 const prRemaining = '足したあとに残る作業も書いておきます';
 const thanks = 'わー、ありがとうございます！これで次からは答えられますね🙏';
@@ -75,8 +75,8 @@ const pages: readonly Expected[] = [
   {
     id: '2-1',
     path: '/chapters/chapter-2/',
-    tabs: ['設計メモ: 更新処理の中で記録する'],
-    posts: [...earlier, [lead, designMemo]],
+    tabs: ['ADR 1: 更新処理の中で記録する'],
+    posts: [...earlier, [lead, decisionRecord]],
     hiddenHeading: '説明',
   },
   {
@@ -89,8 +89,8 @@ const pages: readonly Expected[] = [
   {
     id: '2-3',
     path: '/chapters/chapter-2/3/',
-    tabs: ['設計メモ: 記録を1つのテーブルにまとめる'],
-    posts: [...earlier, [lead, designMemo], [lead, tableMemo]],
+    tabs: ['ADR 2: 記録を1つのテーブルにまとめる'],
+    posts: [...earlier, [lead, decisionRecord], [lead, tableRecord]],
     hiddenHeading: '記録を1つのテーブルにまとめる',
   },
   {
@@ -269,23 +269,21 @@ test.describe('各ページの代表的な操作', () => {
     );
   });
 
-  test('2-1: 図を1つ進めると、合図 figure:step が起きる', async ({ page }) => {
+  test('2-1: ADR は状況、決定、結果の順で、図はボタンを押さずに読める', async ({ page }) => {
     await open(page, '/chapters/chapter-2/');
     await recordSignals(page);
-    const figure = scene(page).locator('[data-transaction-figure]');
-    await figure.getByRole('button', { name: '次へ', exact: true }).click();
-    await expect(figure).toHaveAttribute('data-step', '1');
-    await expect.poll(async () => (await signalsOf(page)).filter((signal) => signal.name === 'figure:step').length)
-      .toBe(1);
-    expect((await signalsOf(page)).find((signal) => signal.name === 'figure:step')?.data).toMatchObject({
-      key: '1',
-      step: 1,
-      last: false,
-    });
-    const panel = scene(page).getByRole('tabpanel');
+    const panel = scene(page).getByRole('tabpanel', { name: /ADR 1: 更新処理の中で記録する/ });
+    await expect(panel.getByRole('heading', { level: 3 })).toHaveText(['状況', '決定', '結果']);
     await expect(panel).toContainText('問い合わせは「誰がいつなんでキャンセルしたか」でした。');
-    await expect(panel.getByRole('cell', { name: 'operated_by' })).toBeVisible();
+    await expect(panel.locator('table')).toHaveCount(0);
+    const figure = panel.locator('[data-record-decision-figure]');
+    await expect(figure.getByRole('button')).toHaveCount(0);
+    await expect(figure).toContainText('UPDATE visits');
     await expect(figure).toContainText('INSERT INTO visit_cancellations');
+    await expect(figure.getByRole('term').filter({ hasText: 'operated_by' })).toBeVisible();
+    await expect(figure).toContainText('記録に成功する場合');
+    await expect(figure).toContainText('記録に失敗する場合');
+    expect((await signalsOf(page)).map((signal) => signal.name)).not.toContain('figure:step');
   });
 
   test('2-2: ステップ1の場面で実行とテストを押すと、合図 code:run と tests:ran が起きる', async ({ page }) => {
@@ -304,17 +302,18 @@ test.describe('各ページの代表的な操作', () => {
     }]);
   });
 
-  test('2-3: 業務イベントの定義と、ステップ1の列からの対応の表と、1行を列ごとに埋める図がある', async ({ page }) => {
+  test('2-3: ADR に、業務イベントの定義と、ステップ1の列を business_events の列に移す図がある', async ({ page }) => {
     await open(page, '/chapters/chapter-2/3/');
-    const panel = scene(page).getByRole('tabpanel', { name: /設計メモ: 記録を1つのテーブルにまとめる/ });
+    const panel = scene(page).getByRole('tabpanel', { name: /ADR 2: 記録を1つのテーブルにまとめる/ });
+    await expect(panel.getByRole('heading', { level: 3 })).toHaveText(['状況', '決定', '結果']);
     await expect(panel).toContainText('業務イベントは、業務で起きた1つの出来事を');
-    await expect(panel.getByRole('columnheader', { name: 'ステップ1' })).toBeVisible();
-    await expect(panel.getByRole('cell', { name: 'cancelled_at' })).toBeVisible();
-    await expect(panel.getByRole('cell', { name: 'target_state' })).toBeVisible();
-    await expect(panel.locator('figure.quote')).toHaveCount(2);
-    const figure = panel.locator('[data-event-row-figure]');
-    await figure.getByRole('button', { name: '次へ', exact: true }).click();
-    await expect(figure).toHaveAttribute('data-step', '1');
+    await expect(panel.locator('figure.quote')).toHaveCount(1);
+    await expect(panel.locator('table')).toHaveCount(0);
+    const figure = panel.locator('[data-record-mapping-figure]');
+    await expect(figure.getByRole('button')).toHaveCount(0);
+    await expect(figure.getByRole('columnheader', { name: 'ステップ1' })).toBeVisible();
+    await expect(figure.getByRole('cell', { name: 'cancelled_at' })).toBeVisible();
+    await expect(figure.getByRole('cell', { name: /^target_state/ })).toBeVisible();
     await expect(panel.getByRole('link', { name: '関連記事' })).toHaveAttribute(
       'href',
       'https://kosui.me/posts/2025/05/06/142842',

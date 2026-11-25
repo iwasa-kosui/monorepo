@@ -63,8 +63,8 @@ const ownQuestion =
 const wantRecord = '再発防止で、キャンセルしたときに記録を残すようにしたいです';
 const runTests = '先にテストを書いておいたので、まず流してみてください。いまは4件落ちるはずです';
 const failedFour = '落ちた4件が、これから足すところです👍';
-const designMemo = '方針を設計メモにまとめました。ざっと読んでもらえると助かります';
-const tableMemo = '記録を1つのテーブルにまとめる案も設計メモに足しました';
+const decisionRecord = '方針を ADR にまとめました。ざっと読んでもらえると助かります';
+const tableRecord = '記録を1つのテーブルにまとめる案も ADR にしました';
 const prSeen = 'PR 見ました！差分、思ったより小さいですね';
 const prRemaining = '足したあとに残る作業も書いておきます';
 const thanks = 'わー、ありがとうございます！これで次からは答えられますね🙏';
@@ -175,8 +175,8 @@ describe('第1章から第3章の筋書き', () => {
       wantRecord,
       runTests,
       failedFour,
-      designMemo,
-      tableMemo,
+      decisionRecord,
+      tableRecord,
       prSeen,
       prRemaining,
       thanks,
@@ -259,10 +259,10 @@ describe('第1章から第3章の筋書き', () => {
   });
 
   describe('第2章', () => {
-    it('設計メモの 2 ページは、それまでの投稿を履歴に持ち、テックリードが1件投稿する', () => {
+    it('ADR の 2 ページは、それまでの投稿を履歴に持ち、テックリードが1件投稿する', () => {
       const expected: [string, readonly (readonly [string, string])[], string][] = [
-        ['chapter-2/01', earlier, designMemo],
-        ['chapter-2/03', [...earlier, ['techlead', designMemo]], tableMemo],
+        ['chapter-2/01', earlier, decisionRecord],
+        ['chapter-2/03', [...earlier, ['techlead', decisionRecord]], tableRecord],
       ];
       for (const [id, history, post] of expected) {
         const scenario = lessonScenarios[id];
@@ -274,13 +274,13 @@ describe('第1章から第3章の筋書き', () => {
 
     it('タブの種類と名前', () => {
       expect(summary(lessonScenarios['chapter-2/01'] as WorkspaceScenario)).toEqual([
-        'memo:doc:設計メモ: 更新処理の中で記録する',
+        'memo:doc:ADR 1: 更新処理の中で記録する',
       ]);
       expect(summary(lessonScenarios['chapter-2/02'] as WorkspaceScenario)).toEqual([
         'editor:editor:visits.ts — clinic-api',
       ]);
       expect(summary(lessonScenarios['chapter-2/03'] as WorkspaceScenario)).toEqual([
-        'memo:doc:設計メモ: 記録を1つのテーブルにまとめる',
+        'memo:doc:ADR 2: 記録を1つのテーブルにまとめる',
       ]);
       expect(summary(lessonScenarios['chapter-2/04'] as WorkspaceScenario)).toEqual([
         'editor:editor:visits.ts — clinic-api',
