@@ -73,8 +73,8 @@ describe('immersive のページ', () => {
 });
 
 describe('導入の文面', () => {
-  it('導入は 8 ページに分かれている', () => {
-    expect(chapterPageFiles('intro')).toHaveLength(8);
+  it('導入は 7 ページに分かれている', () => {
+    expect(chapterPageFiles('intro')).toHaveLength(7);
   });
 
   it('分けたページをつないだ本文が、承認済みの導入と 1 文字も違わない', () => {
