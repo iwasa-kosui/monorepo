@@ -46,7 +46,7 @@ const mainMaxWidth = wide ? 'max-w-6xl' : 'max-w-3xl';
 // ヒーローを持つページでは、ヘッダーをヒーローの上に重ね、本文を紙のシートにしてヒーローの上へ重ねる
 const hasHero = Astro.slots.has('hero');
 
-// 記事のタイトルの帯を持つページでは、ヘッダーを帯の上に重ねる。本文は紙の列のままにする
+// 記事のタイトルの帯を持つページでは、ヘッダーを帯の上に重ねる。本文は紙の列のままにし、帯の海の手前に置く
 const hasEyecatch = Astro.slots.has('eyecatch');
 
 // ヒーローやタイトルの帯の上では、海の色に負けない濃さにする
@@ -268,6 +268,8 @@ const navItems = [
             hasHero
               ? 'relative rounded-t-[2.5rem] bg-card dark:bg-[#1f2435] px-[max(1rem,4.4vw)] pt-[clamp(3.5rem,7vw,6rem)] pb-[clamp(3rem,6vw,5rem)]'
               : `py-8 pb-20 md:pb-8 ${mainMaxWidth} mx-auto px-4`,
+            // タイトルの帯の海は、本文の後ろに敷く
+            hasEyecatch && 'relative',
           ]}
           transition:animate={slideUpFade}
         >

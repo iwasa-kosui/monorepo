@@ -57,8 +57,11 @@ export type ShoreElements = Readonly<{
   slot: HTMLElement;
   /** エビに重ねた、触れる・押すためのボタン。枠より小さくすると、エビもその大きさになる */
   button: HTMLButtonElement;
-  /** 名前と紹介、エビの枠をまとめた部分。本文のシートが重なる間、上へ退いて薄れる */
-  content: HTMLElement;
+  /**
+   * 名前と紹介、エビの枠をまとめた部分。本文のシートが重なる間、上へ退いて薄れる。
+   * 省くと、スクロールに応じた動き（潮が満ちる、上へ退く）をしない。画面に留まり続ける海で使う
+   */
+  content?: HTMLElement;
 }>;
 
 /**
@@ -171,6 +174,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
   let scrollQueued = false;
   const applyScroll = (): void => {
     scrollQueued = false;
+    if (!content) return;
     const nextTide = Math.min(1, Math.max(0, window.scrollY / (hero.offsetHeight || 1)));
     drift = ebb(drift, tide, nextTide);
     if (drift.gone) button.hidden = true;
@@ -221,8 +225,10 @@ export const mountShore = (elements: ShoreElements): () => void => {
     button.removeEventListener('click', onPress);
     canvas.removeEventListener('webglcontextlost', onContextLost);
     hero.classList.remove('is-live');
-    content.style.transform = '';
-    content.style.opacity = '';
+    if (content) {
+      content.style.transform = '';
+      content.style.opacity = '';
+    }
     renderer.dispose();
   };
 
@@ -232,11 +238,13 @@ export const mountShore = (elements: ShoreElements): () => void => {
   colorScheme.addEventListener('change', onPaletteChange);
   canvas.addEventListener('webglcontextlost', onContextLost);
   if (!reduceMotion) {
+    button.addEventListener('pointerenter', onTouch);
+    button.addEventListener('click', onPress);
+  }
+  if (!reduceMotion && content) {
     window.addEventListener('scroll', onScroll, { passive: true });
     // 画面の幅が変わると、ヒーローが画面に留まるかどうかも変わる
     window.addEventListener('resize', onScroll);
-    button.addEventListener('pointerenter', onTouch);
-    button.addEventListener('click', onPress);
     // 途中までスクロールした位置へ戻ってきたときも、はじめから潮と退き具合を合わせる
     applyScroll();
   }

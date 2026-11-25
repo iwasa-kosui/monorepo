@@ -15,8 +15,14 @@ const mount = (): void => {
   const slot = hero?.querySelector<HTMLElement>('[data-shore-slot]');
   const button = hero?.querySelector<HTMLButtonElement>('[data-shore-shrimp]');
   const content = hero?.querySelector<HTMLElement>('[data-shore-content]');
-  if (!hero || !canvas || !slot || !button || !content) return;
-  dispose = mountShore({ hero, canvas, slot, button, content });
+  if (!hero || !canvas || !slot || !button) return;
+  dispose = mountShore({
+    hero,
+    canvas,
+    slot,
+    button,
+    ...(content ? { content } : {}),
+  });
 };
 
 document.addEventListener('astro:page-load', mount);

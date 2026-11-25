@@ -1,7 +1,11 @@
 ---
 /**
- * 記事のタイトルの帯。トップページのヒーローと同じ波打ち際に、タイトルを置く。
- * 右上の海から波が寄せ、砂浜のドット絵のエビを少しずつ沖へ攫っていく。
+ * 記事のタイトルの帯。紙の上の砂にタイトルを置き、その右上の隅に、トップページのヒーローと同じ波打ち際を描く。
+ * 波は海から紙のほうへ寄せては引き、砂浜のドット絵のエビを少しずつ沖へ攫っていく。
+ *
+ * 海は帯で切らず、本文の後ろへ続ける。
+ * 広い画面では、紙の右の余白に留まり、読み進めても波とエビが見える。
+ * 余白のない狭い画面では、ページの上端に置き、紙の下へもぐり込む。読み進めると画面の外へ流れていく。
  *
  * BaseLayout の eyecatch スロットに置く。日付などは meta スロットで渡す。
  * 海は WebGL で描く（ShoreHero/mount.ts）。WebGL が使えない環境では、砂の地に静止したドット絵だけを見せる。
@@ -17,19 +21,9 @@ type Props = {
 const { title, transitionName } = Astro.props;
 ---
 
-<div class="title-shore shore-palette" data-shore-hero>
-  <canvas class="title-shore-sea" data-shore-canvas aria-hidden="true"></canvas>
-  <div class="title-shore-content" data-shore-content>
-    <div class="title-shore-copy">
-      <p class="title-shore-meta"><slot name="meta" /></p>
-      <h1
-        class="title-shore-title"
-        data-pagefind-meta="title"
-        transition:name={transitionName}
-      >
-        {title}
-      </h1>
-    </div>
+<div class="title-shore">
+  <div class="title-shore-sea shore-palette" data-shore-hero>
+    <canvas data-shore-canvas aria-hidden="true"></canvas>
     <div class="title-shore-slot" data-shore-slot>
       <button
         class="title-shore-shrimp"
@@ -48,6 +42,16 @@ const { title, transitionName } = Astro.props;
       </button>
     </div>
   </div>
+  <div class="title-shore-copy">
+    <p class="title-shore-meta"><slot name="meta" /></p>
+    <h1
+      class="title-shore-title"
+      data-pagefind-meta="title"
+      transition:name={transitionName}
+    >
+      {title}
+    </h1>
+  </div>
 </div>
 
 <style>
@@ -56,12 +60,6 @@ const { title, transitionName } = Astro.props;
   --shore-ink: #1f2740;
   --shore-muted: #4b526d;
   --shore-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  /* 波の大きさを決める正方形の 1 辺。エビはそのまんなかに、小さく置く */
-  --shore-size: clamp(7.5rem, 36vw, 10rem);
-  --shore-shrimp: 44%;
-
-  position: relative;
-  overflow: hidden;
   color: var(--shore-ink);
 }
 
@@ -72,33 +70,87 @@ const { title, transitionName } = Astro.props;
   }
 }
 
+/* 海。ページの上端に置く。帯より下まで続き、紙の下へもぐり込む */
 .title-shore-sea {
+  /* 距離の単位（波の大きさを決める正方形の 1 辺）と、そのうちエビの占める割合 */
+  --shore-unit: clamp(5rem, 22vw, 6.5rem);
+  --shore-shrimp: 56%;
+
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 32rem;
+  overflow: hidden;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 1.6s ease;
-  /* 下端はページの砂へ溶け込ませる */
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 5rem), transparent);
+  /* 波はふつう下端まで届かない。届いた分は、ページの砂へ溶け込ませる */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 8rem), transparent);
 }
 
-.title-shore.is-live .title-shore-sea {
+.title-shore-sea canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+}
+
+.title-shore-sea.is-live canvas {
   opacity: 1;
 }
 
-/* 左端は、下に続く紙（幅 48rem の列から 1rem 内側）にそろえる。右は画面の端まで使う */
-.title-shore-content {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.75rem;
-  padding: 4.25rem max(1rem, 4.4vw) 1rem max(1rem, calc(50% - 23rem));
+/* 海は右上の隅にあり、波はそこから左下へ寄せる。
+   凪の波打ち際は、この正方形の中心から沖へ単位の 0.66 倍のところを通る。
+   上端で右端より少し内側を通るように、正方形を右上の隅から少し下げて置く */
+.title-shore-slot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--shore-unit);
+  aspect-ratio: 1;
+  transform: translate(-4%, 60%);
 }
 
+.title-shore-shrimp {
+  position: absolute;
+  inset: calc((100% - var(--shore-shrimp)) / 2);
+  width: var(--shore-shrimp);
+  height: var(--shore-shrimp);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.title-shore-shrimp svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 海を描けているときは、エビもシェーダーが描く */
+.title-shore-sea.is-live .title-shore-shrimp svg {
+  visibility: hidden;
+}
+
+.title-shore-shell {
+  fill: var(--shore-shell);
+}
+
+.title-shore-eye {
+  fill: var(--shore-eye);
+}
+
+.title-shore-shrimp:focus-visible {
+  outline: 2px solid var(--shore-eye);
+  outline-offset: 4px;
+}
+
+/* タイトル。下に続く紙と同じ列（幅 48rem、左右 1rem ずつ内側）に置く */
 .title-shore-copy {
-  min-width: 0;
+  position: relative;
+  max-width: 48rem;
+  margin-inline: auto;
+  padding: 8.5rem 1rem 0.5rem;
 }
 
 .title-shore-meta {
@@ -120,49 +172,6 @@ const { title, transitionName } = Astro.props;
   animation: title-shore-up 1s 0.2s var(--shore-ease) both;
 }
 
-.title-shore-slot {
-  position: relative;
-  order: -1;
-  justify-self: end;
-  width: var(--shore-size);
-  aspect-ratio: 1;
-  /* エビの上下の空きを詰める */
-  margin-block: -1.25rem;
-}
-
-.title-shore-shrimp {
-  position: absolute;
-  inset: calc((100% - var(--shore-shrimp)) / 2);
-  width: var(--shore-shrimp);
-  height: var(--shore-shrimp);
-  border-radius: 0.75rem;
-  cursor: pointer;
-}
-
-.title-shore-shrimp svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-/* 海を描けているときは、エビもシェーダーが描く */
-.title-shore.is-live .title-shore-shrimp svg {
-  visibility: hidden;
-}
-
-.title-shore-shell {
-  fill: var(--shore-shell);
-}
-
-.title-shore-eye {
-  fill: var(--shore-eye);
-}
-
-.title-shore :focus-visible {
-  outline: 2px solid var(--shore-eye);
-  outline-offset: 4px;
-}
-
 @keyframes title-shore-up {
   from {
     opacity: 0;
@@ -174,38 +183,36 @@ const { title, transitionName } = Astro.props;
   }
 }
 
-/* 広い画面: タイトルの右にエビを並べる */
-@media (min-width: 861px) {
-  .title-shore {
-    --shore-size: clamp(11rem, 18vw, 16rem);
+/* 広い画面: 海を、紙（幅 48rem の列から左右 1rem ずつ内側）の右の余白に留める。
+   左端は紙の下に 4rem もぐり込ませ、紙のないところではページの砂へ溶け込ませる */
+@media (min-width: 68rem) {
+  .title-shore-sea {
+    --shore-unit: clamp(7.5rem, 40%, 15rem);
+    --shore-shrimp: 48%;
+
+    position: fixed;
+    bottom: 0;
+    left: calc(50% + 19rem);
+    height: auto;
+    mask-image: linear-gradient(to right, transparent, #000 3.5rem);
   }
 
-  .title-shore-content {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 2.5rem;
-    min-height: 23rem;
-    padding-top: 5.5rem;
-    padding-bottom: 2rem;
-  }
-
-  .title-shore-slot {
-    order: 0;
-    margin-block: 0;
+  .title-shore-copy {
+    padding-top: 7rem;
+    padding-bottom: 1.5rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .title-shore *,
-  .title-shore-sea {
+  .title-shore-sea canvas {
     animation: none;
     transition: none;
   }
 }
 
 @media print {
-  .title-shore-sea,
-  .title-shore-slot {
+  .title-shore-sea {
     display: none;
   }
 }
