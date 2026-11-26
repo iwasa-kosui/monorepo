@@ -215,7 +215,6 @@ private: true
 - 保存先: `apps/kosui-me/src/content/posts/`
 - `date` は現在日時を使用（+09:00 JST）
 - `private: true` を必ず設定（公開はユーザーが手動で行う）
-- `ogIcon` は必要に応じて設定（ts, infra, react など）
 
 ### 文体・スタイル
 

@@ -41,8 +41,6 @@ const postSchema = {
     },
   ),
   image: fields.text({ label: 'Image' }),
-  ogIcon: fields.text({ label: 'OG Icon' }),
-  ogSvg: fields.text({ label: 'OG SVG' }),
   private: fields.checkbox({ label: 'Private' }),
   content: fields.mdx({ label: 'Content', components: contentComponents }),
 } as const;

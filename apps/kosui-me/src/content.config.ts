@@ -11,8 +11,6 @@ const posts = defineCollection({
     description: z.string().optional(),
     themes: z.array(z.enum(['typescript', 'architecture', 'sre', 'team'])).optional(),
     image: z.string().optional(),
-    ogIcon: z.string().optional(),
-    ogSvg: z.string().optional(),
     private: z.boolean().optional(),
     draft: z.boolean().optional(),
   }),
@@ -28,8 +26,6 @@ const reports = defineCollection({
     description: z.string().optional(),
     themes: z.array(z.string()).optional(),
     image: z.string().optional(),
-    ogIcon: z.string().optional(),
-    ogSvg: z.string().optional(),
     private: z.boolean().optional(),
   }),
 });
