@@ -158,6 +158,7 @@ export type DocConfig = {
   readonly title: string;
   readonly updatedAt: string;
   readonly updatedBy: string;
+  readonly approvable?: boolean;
 };
 
 export type PrDiffConfig = {

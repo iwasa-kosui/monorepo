@@ -51,7 +51,7 @@ const chooseOne = '自分のシステムに近いのを1つ選んでみてくだ
 const takeHome = '時間の関係で、実装は持ち帰りにします';
 const startingCodes = '開始コードを3つ置いておくので、選んだパターンで試してみてください';
 const goodWork = 'おつかれさまでした！';
-const todayMemo = '今日やったことを設計メモにまとめました';
+const todayMemo = '本日の実施内容を設計メモにまとめました';
 const decideLast = '最後に、自分のシステムで記録を足す更新処理を1つ決めて、ここに書いてみてください';
 const skipIfNone = '答えたい質問が特に無ければ、足さなくて大丈夫です';
 
@@ -240,9 +240,9 @@ const pages: readonly Expected[] = [
   {
     id: 'summary-1',
     path: '/chapters/summary/',
-    tabs: ['今日やったこと'],
+    tabs: ['本日の実施内容'],
     posts: [...takeawayPosts, ...todayPosts],
-    hiddenHeading: '今日やったこと',
+    hiddenHeading: '本日の実施内容',
   },
   {
     id: 'summary-2',
@@ -437,6 +437,40 @@ test.describe('各ページの代表的な操作', () => {
       'href',
       'https://kosui.me/posts/2025/05/06/142842',
     );
+  });
+
+  test('2-1: ADR の Approve を押すと帯が完了になり、もう一度押すと講義に戻る', async ({ page }) => {
+    await open(page, '/chapters/chapter-2/');
+    const bar = page.locator('[data-action-bar]');
+    const approve = scene(page).getByRole('button', { name: 'Approve', exact: true });
+    await expect(approve).toBeVisible();
+    await expect(approve).toHaveAttribute('aria-pressed', 'false');
+    expect((await approve.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    await expect(bar).toHaveAttribute('data-state', 'listen');
+    await approve.click();
+    const approved = scene(page).getByRole('button', { name: 'Approved', exact: true });
+    await expect(approved).toHaveAttribute('aria-pressed', 'true');
+    await expect(bar).toHaveAttribute('data-state', 'done');
+    await expect(bar.locator('[data-action-chip]')).toHaveText('完了');
+    await expect(bar.getByRole('link', { name: '次へ' })).toBeVisible();
+    await approved.click();
+    await expect(scene(page).getByRole('button', { name: 'Approve', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await expect(bar).toHaveAttribute('data-state', 'listen');
+    await expect(bar.locator('[data-action-chip]')).toHaveText('講義');
+  });
+
+  test('2-3: 2つ目の ADR にも Approve のボタンがある', async ({ page }) => {
+    await open(page, '/chapters/chapter-2/3/');
+    await expect(scene(page).getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
+  });
+
+  test('4-5: ADR でない文書には Approve のボタンが無い', async ({ page }) => {
+    await open(page, '/chapters/chapter-4/5/');
+    await expect(scene(page).getByRole('tabpanel', { name: /3つのパターンの比較/ })).toBeVisible();
+    await expect(scene(page).getByRole('button', { name: /^Approve/ })).toHaveCount(0);
   });
 
   test('2-5: プルリクエストに +13 −1 を出し、Files changed で visits.ts の差分を見る', async ({ page }) => {
@@ -786,9 +820,9 @@ test.describe('第4章とまとめの代表的な操作', () => {
     await expect(panel).toBeVisible();
   });
 
-  test('まとめの 1 ページ目: 文書に今日やったこと、引用 1 件があり、実行欄は無い', async ({ page }) => {
+  test('まとめの 1 ページ目: 文書に本日の実施内容、引用 1 件があり、実行欄は無い', async ({ page }) => {
     await open(page, '/chapters/summary/');
-    const panel = scene(page).getByRole('tabpanel', { name: /今日やったこと/ });
+    const panel = scene(page).getByRole('tabpanel', { name: /本日の実施内容/ });
     await expect(panel).toContainText('現在の状態だけでは答えられない問いを、実行して確かめました。');
     await expect(panel.getByRole('heading', { name: 'イベントソーシングのうち今日使った考え方と使わなかったこと' }))
       .toBeVisible();

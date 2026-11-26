@@ -11,6 +11,7 @@ type Props = PanelProps;
 const { scenario, tab: definition, hidden } = Astro.props;
 const tab = expectTab(definition, 'doc');
 const config = tab.config;
+const approvable = config.approvable === true;
 ---
 
 <div
@@ -24,29 +25,54 @@ const config = tab.config;
 >
   <div class="doc">
     <div class="doc-head">
-      <p class="doc-space" aria-hidden="true">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20">
-          </path>
-        </svg>
-        <span>社内ドキュメント</span>
-      </p>
-      <p class="doc-title">{config.title}</p>
-      <p class="doc-updated">
-        <span class="doc-avatar" aria-hidden="true">{
-          [...config.updatedBy][0]
-        }</span>
-        最終更新 <time datetime={config.updatedAt}>{config.updatedAt}</time>・{
-          config.updatedBy
-        }
-      </p>
+      <div class="doc-head-text">
+        <p class="doc-space" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20">
+            </path>
+          </svg>
+          <span>社内ドキュメント</span>
+        </p>
+        <p class="doc-title">{config.title}</p>
+        <p class="doc-updated">
+          <span class="doc-avatar" aria-hidden="true">{
+            [...config.updatedBy][0]
+          }</span>
+          最終更新 <time datetime={config.updatedAt}>{
+            config.updatedAt
+          }</time>・{config.updatedBy}
+        </p>
+      </div>
+      {
+        approvable && (
+          <button
+            class="doc-approve"
+            type="button"
+            aria-pressed="false"
+            data-approve
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 12.5l4.5 4.5L19 7.5"></path>
+            </svg>
+            <span data-approve-label>Approve</span>
+          </button>
+        )
+      }
     </div>
     <div
       class="doc-scroll"
@@ -116,10 +142,18 @@ const config = tab.config;
   min-height: 0;
 }
 :global(.scene[data-scenario]) .doc-head {
+  display: flex;
   flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
   background: var(--dc-paper);
   padding: var(--space-3)
     max(var(--space-5), calc(50% - 24rem + var(--space-4))) var(--space-2);
+}
+:global(.scene[data-scenario]) .doc-head-text {
+  flex: 1 1 24rem;
+  min-width: 0;
 }
 :global(.scene[data-scenario]) .doc-head p {
   margin: 0;
@@ -163,6 +197,45 @@ const config = tab.config;
   color: var(--dc-muted);
   font-size: var(--text-note);
   line-height: var(--leading-normal);
+}
+:global(.scene[data-scenario]) .doc-approve {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--dc-accent);
+  color: var(--dc-on-accent);
+  padding: 0 1.25rem;
+  min-height: var(--tap-min);
+  font: inherit;
+  font-size: var(--text-code);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  cursor: pointer;
+}
+:global(.scene[data-scenario]) .doc-approve svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+:global(.scene[data-scenario]) .doc-approve[aria-pressed="false"] svg {
+  display: none;
+}
+:global(.scene[data-scenario]) .doc-approve[aria-pressed="true"] {
+  background: var(--role-success);
+}
+:global(.scene[data-scenario]) .doc-approve:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  :global(.scene[data-scenario]) .doc-approve {
+    transition: background-color 150ms ease;
+  }
 }
 :global(.scene[data-scenario]) .doc-scroll {
   position: relative;
