@@ -21,7 +21,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'intro/01': {
     flow: 'problem',
     mode: 'listen',
-    role: '講師の話を聞く',
+    role: '社会を支えるシステム',
   },
   'intro/02': {
     flow: 'try',
@@ -32,17 +32,17 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'intro/03': {
     flow: 'problem',
     mode: 'listen',
-    role: '講師の話を聞く',
+    role: '求められる品質',
   },
   'intro/04': {
     flow: 'problem',
     mode: 'listen',
-    role: '講師の話を聞く',
+    role: 'イベントソーシングの段階的な適用',
   },
   'intro/05': {
     flow: 'problem',
     mode: 'listen',
-    role: '講師の話を聞く',
+    role: 'このハンズオンの目的',
   },
   'intro/06': {
     flow: 'try',
@@ -52,7 +52,7 @@ export const lessonPages: Readonly<Record<string, LessonPage>> = {
   'intro/07': {
     flow: 'problem',
     mode: 'listen',
-    role: '講師の話を聞く',
+    role: 'コードを見ない開発と品質の保証',
   },
   'chapter-1/01': {
     flow: 'problem',
