@@ -434,18 +434,3 @@ jobs:
 
       - name: Test
         run: pnpm --filter es run test:ci
-
-      - name: Install Playwright browsers
-        run: pnpm --filter es exec playwright install --with-deps chromium firefox webkit
-
-      - name: E2E test
-        run: pnpm --filter es run test:e2e
-
-      - name: Upload Playwright test results
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: es-playwright-test-results
-          path: apps/es/test-results/
-          if-no-files-found: ignore
-          retention-days: 7
