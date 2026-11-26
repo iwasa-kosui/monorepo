@@ -546,7 +546,7 @@ test.describe('導入 調査の画面', () => {
       expect(box?.height ?? 0).toBeLessThanOrEqual(1);
     };
     await hiddenOnScreen(page.locator('.chapter-body > .visually-hidden'));
-    await expect(page.locator('[data-action-chip]')).toHaveText('手を動かす');
+    await expect(page.locator('[data-action-chip]')).toHaveText('ワーク');
     await expect(page.locator('[data-action-text]')).toContainText('カスタマーサポートから届いた連絡に対応して');
     const tree = await page.locator('main').ariaSnapshot();
     expect(tree).not.toContain('できるようになること：');

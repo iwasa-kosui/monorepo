@@ -46,7 +46,7 @@ describe('showsNext', () => {
 
 describe('actionChipLabels', () => {
   it('状態ごとの札の文言を持つ', () => {
-    expect(actionChipLabels).toEqual({ listen: '聞く', do: '手を動かす', done: 'できました' });
+    expect(actionChipLabels).toEqual({ listen: '講義', do: 'ワーク', done: '完了' });
   });
 });
 

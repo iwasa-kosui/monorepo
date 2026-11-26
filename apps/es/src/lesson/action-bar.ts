@@ -20,9 +20,9 @@ export type ActionView = {
 export const ACTION_EVENT = 'lesson:action';
 
 export const actionChipLabels: Readonly<Record<ActionState, string>> = {
-  listen: '聞く',
-  do: '手を動かす',
-  done: 'できました',
+  listen: '講義',
+  do: 'ワーク',
+  done: '完了',
 };
 
 export const showsNext = (state: ActionState): boolean => state !== 'do';

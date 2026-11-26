@@ -165,7 +165,7 @@ test.describe('矢印キー', () => {
 });
 
 test.describe('いますることの帯', () => {
-  const chipOf = { listen: '聞く', do: '手を動かす', done: 'できました' } as const;
+  const chipOf = { listen: '講義', do: 'ワーク', done: '完了' } as const;
 
   test('全ページで、本文の上に帯が1つ出て、役割の文と状態が合っている', async ({ page }) => {
     const textPattern = /^(?:[^。]+。){1,2}$/;
@@ -173,7 +173,7 @@ test.describe('いますることの帯', () => {
       await page.goto(path);
       const bar = page.locator('[data-action-bar]');
       await expect(bar, path).toHaveCount(1);
-      await expect(bar, path).toHaveAttribute('aria-label', 'いますること');
+      await expect(bar, path).toHaveAttribute('aria-label', '現在の作業');
       await expect(bar, path).toHaveAttribute('aria-live', 'polite');
       const state = (await bar.getAttribute('data-state')) as 'listen' | 'do' | null;
       expect(['listen', 'do'], path).toContain(state);
@@ -198,21 +198,21 @@ test.describe('いますることの帯', () => {
     }
   });
 
-  test('聞くページでは灰色の帯に「聞く」が出て、「次へ」を押すと次のページへ進む', async ({ page }) => {
+  test('聞くページでは灰色の帯に「講義」が出て、「次へ」を押すと次のページへ進む', async ({ page }) => {
     await page.goto('/chapters/intro/');
     const bar = page.locator('[data-action-bar]');
     await expect(bar).toHaveAttribute('data-state', 'listen');
-    await expect(bar.locator('[data-action-chip]')).toHaveText('聞く');
+    await expect(bar.locator('[data-action-chip]')).toHaveText('講義');
     await expect(bar).toHaveCSS('background-color', 'rgb(241, 243, 246)');
     await bar.getByRole('link', { name: '次へ' }).click();
     await expect(page).toHaveURL(/\/chapters\/intro\/2\/$/);
   });
 
-  test('手を動かすページでは青い帯に「手を動かす」が出て、「次へ」は隠れる', async ({ page }) => {
+  test('手を動かすページでは青い帯に「ワーク」が出て、「次へ」は隠れる', async ({ page }) => {
     await page.goto('/chapters/chapter-2/2/');
     const bar = page.locator('[data-action-bar]');
     await expect(bar).toHaveAttribute('data-state', 'do');
-    await expect(bar.locator('[data-action-chip]')).toHaveText('手を動かす');
+    await expect(bar.locator('[data-action-chip]')).toHaveText('ワーク');
     await expect(bar).toHaveCSS('background-color', 'rgb(29, 78, 216)');
     await expect(bar.locator('[data-action-next]')).toBeHidden();
   });
@@ -247,7 +247,7 @@ test.describe('いますることの帯', () => {
       document.dispatchEvent(new CustomEvent('lesson:action', { detail: { state: 'done', button: null } }));
     });
     await expect(bar).toHaveAttribute('data-state', 'done');
-    await expect(bar.locator('[data-action-chip]')).toHaveText('できました');
+    await expect(bar.locator('[data-action-chip]')).toHaveText('完了');
     await expect(bar).toHaveCSS('background-color', 'rgb(11, 107, 58)');
     await expect(bar.locator('[data-action-slot]').getByRole('button')).toHaveCount(0);
     const next = bar.getByRole('link', { name: '次へ' });
@@ -259,7 +259,7 @@ test.describe('いますることの帯', () => {
     await page.evaluate(() => {
       document.dispatchEvent(new CustomEvent('lesson:action', { detail: { state: 'listen' } }));
     });
-    await expect(bar.locator('[data-action-chip]')).toHaveText('聞く');
+    await expect(bar.locator('[data-action-chip]')).toHaveText('講義');
     await expect(next).toHaveClass(/btn--outline/);
   });
 });
