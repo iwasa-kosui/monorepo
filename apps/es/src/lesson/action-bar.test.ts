@@ -10,7 +10,7 @@ import {
   showsNext,
 } from './action-bar';
 
-const listening: ActionView = { state: 'listen', text: '講師の話を聞きます。', button: null };
+const listening: ActionView = { state: 'listen', text: '講師の話を聞く', button: null };
 const run = { label: 'テストを実行する', onClick: () => undefined };
 
 describe('applyAction', () => {

@@ -18,9 +18,10 @@ describe('lessonPages', () => {
   });
 
   it.each(Object.entries(lessonPages))(
-    '%s の役割の行は1文で、見出し語から始めず、バッククォートが対になっている',
+    '%s の役割の行は句点のない常体の一言で、見出し語から始めず、バッククォートが対になっている',
     (_, page) => {
-      expect(page.role).toMatch(/^[^。]+。$/);
+      expect(page.role).toMatch(/^[^。]+$/);
+      expect(page.role).not.toMatch(/(ます|です)$/);
       expect(page.role.split('`').length % 2).toBe(1);
       expect(Object.values(pageFlows).filter((label) => page.role.startsWith(label))).toEqual([]);
     },
