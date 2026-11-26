@@ -111,10 +111,10 @@ describe('PRD の受入条件', () => {
     expect(text.indexOf('business_events')).toBeGreaterThan(lineEnd);
   });
 
-  it('chapter-2.mdx の ADR の2ページは、状況、決定、結果の順に書く', () => {
+  it('chapter-2.mdx の ADR の2ページは、状況、決定、結果、代替案の順に書く', () => {
     const text = read('src/content/chapters/chapter-2.mdx');
     const headings = [...text.matchAll(/^### (.+)$/gm)].map((match) => match[1]);
-    expect(headings.slice(0, 6)).toEqual(['状況', '決定', '結果', '状況', '決定', '結果']);
+    expect(headings.slice(0, 8)).toEqual(['状況', '決定', '結果', '代替案', '状況', '決定', '結果', '代替案']);
   });
 
   it('schedule の title に業務イベントが出ない', () => {
