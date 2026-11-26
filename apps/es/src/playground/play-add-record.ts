@@ -210,7 +210,7 @@ const mount = (root: HTMLElement): void => {
     : '「INSERT を `business_events` 用に書き換える」を押します。';
   const stepOneUnfinished =
     'ステップ1が終わっていないときは、「最初のコードに戻す」を押して、ステップ1の解答から続けます。';
-  const askHints = '迷ったら、右の「ヒントと解答」を上から順に開きます。';
+  const askHints = '判断に迷うときは、右の「ヒントと解答」を上から順に開きます。';
   const blankCount = config.template.match(blankPattern)?.length ?? 0;
   const fillBlanks = config.step === 1
     ? `雛形の ${blankCount} つの空欄を書き換え、\`input\` の型に \`reason\` と \`operatedBy\` を足します。`

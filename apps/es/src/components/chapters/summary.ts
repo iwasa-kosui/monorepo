@@ -3,10 +3,10 @@ import { docTab, lessonScenario, opening, posts } from './common';
 
 export const summaryToday: WorkspaceScenario = lessonScenario({
   id: 'summary-today',
-  label: '今日やったことを振り返る',
+  label: '本日の実施内容を振り返る',
   history: [posts.takeHome, posts.startingCodes],
   timeline: opening(posts.goodWork, posts.todayMemo),
-  tabs: [docTab('memo', '今日やったこと', 'records/today')],
+  tabs: [docTab('memo', '本日の実施内容', 'records/today')],
 });
 
 export const summaryDecide: WorkspaceScenario = lessonScenario({
