@@ -1,9 +1,12 @@
 import { EditorView } from '@codemirror/view';
 
+import { testReportOf } from './agent-client.ts';
+import type { TestReport } from './agent-protocol.ts';
 import { createRuntime, RuntimeScriptError } from './client.ts';
 import { applyRuntimeState, element, failureElement, query } from './dom.ts';
 import { revealText } from './editor.ts';
 import type { RunOutcome } from './engine/types.ts';
+import { mountAgent } from './play-agent.ts';
 import { type SceneAnswer, sceneSteps } from './scene-steps.ts';
 import { clearEdits, loadEdits, saveEdits } from './storage.ts';
 import { createWorkbench } from './workbench.ts';
@@ -498,9 +501,9 @@ const mount = (root: HTMLElement): void => {
     }
   };
 
-  const runTests = async (): Promise<void> => {
+  const runTests = async (): Promise<TestReport | null> => {
     if (busy || runtime.state !== 'ready') {
-      return;
+      return null;
     }
     busy = true;
     updateControls();
@@ -512,12 +515,12 @@ const mount = (root: HTMLElement): void => {
         summary.textContent = 'テストを実行できませんでした';
         summary.dataset.result = 'error';
         showError('コードを最後まで実行できませんでした', outcome.error);
-        return;
+        return null;
       }
       if (outcome.tests === null) {
         summary.textContent = 'テストが見つかりませんでした';
         summary.dataset.result = 'error';
-        return;
+        return null;
       }
       const passed = outcome.tests.filter((test) => test.status === 'pass').length;
       const failures = outcome.tests.filter((test) => test.status === 'fail');
@@ -541,8 +544,10 @@ const mount = (root: HTMLElement): void => {
             : pressTemplate,
         ]);
       }
+      return testReportOf(outcome.tests);
     } catch (error) {
       showMessage(failureElement(error, '終わらない繰り返しがないか確かめてください'));
+      return null;
     } finally {
       busy = false;
       updateControls();
@@ -642,6 +647,15 @@ const mount = (root: HTMLElement): void => {
     clearMessage();
     say(sentences);
   };
+
+  mountAgent(root, config.step, {
+    code,
+    replace: (doc) => {
+      workbench.open(editedFile);
+      replaceWithBackup(doc);
+    },
+    runTests,
+  });
 
   completeButton.addEventListener('click', () => {
     closeHint(completeButton.closest('details'), false);

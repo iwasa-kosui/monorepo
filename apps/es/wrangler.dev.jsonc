@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "es",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-08-04",
+  "assets": {
+    "directory": "dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash",
+    "run_worker_first": ["/healthz", "/api/*"],
+  },
+  "ratelimits": [
+    {
+      "name": "AGENT_RATE_LIMIT",
+      "namespace_id": "1001",
+      "simple": { "limit": 200, "period": 60 },
+    },
+    {
+      "name": "AGENT_AUTH_FAILURE_LIMIT",
+      "namespace_id": "1002",
+      "simple": { "limit": 10, "period": 60 },
+    },
+  ],
+}
