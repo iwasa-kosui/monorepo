@@ -73,8 +73,8 @@ const parseHex = (value: string): Rgb => {
 };
 
 /**
- * 配色は CSS のカスタムプロパティから読む（global.css の .shore-palette）。
- * ライトとダークの切り替えは CSS 側で行う
+ * 配色は CSS のカスタムプロパティから読む（global.css の :root）。
+ * ライトとダークの切り替えは CSS 側で行う。海を押すと、<html> に書いた値が上書きする（paletteSwitch.ts）
  */
 export const readPalette = (element: HTMLElement): Palette => {
   const style = getComputedStyle(element);

@@ -10,6 +10,7 @@ import {
   frontOf,
   initialDrift,
   packWaves,
+  submerged,
   type Swash,
   visibility,
   WAVE_SLOTS,
@@ -328,5 +329,31 @@ describe('packWaves', () => {
     const { motion } = packWaves(swashes, 40);
     expect(slot(motion, 0)[0]).toBe(32);
     expect(slot(motion, WAVE_SLOTS - 1)[0]).toBe(8);
+  });
+});
+
+describe('submerged', () => {
+  /** 凪の波打ち際から、沖へ `seaward` だけ離れた地点（岸沿いの位置は 0） */
+  const offshore = (seaward: number): readonly [number, number] => [
+    0.8944 * (0.66 + seaward),
+    -0.4472 * (0.66 + seaward),
+  ];
+
+  it('波が引いている間は、凪の波打ち際より沖が水の中で、エビのいる浜は水の外', () => {
+    const waves = createWaves(seeded(1));
+    const swashes = waves.visibleAt(6.5);
+    expect(submerged(...offshore(0.3), swashes, 6.5, 0)).toBe(true);
+    expect(submerged(0, 0, swashes, 6.5, 0)).toBe(false);
+    expect(submerged(...offshore(-0.3), swashes, 6.5, 0)).toBe(false);
+  });
+
+  it('波が寄せきったときは、エビのいる浜まで水の中', () => {
+    const waves = createWaves(seeded(1));
+    expect(submerged(0, 0, waves.visibleAt(1.6), 1.6, 0)).toBe(true);
+  });
+
+  it('潮が満ちると、波がなくても浜まで水の中', () => {
+    const waves = createWaves(seeded(1));
+    expect(submerged(0, 0, waves.visibleAt(6.5), 6.5, 1)).toBe(true);
   });
 });

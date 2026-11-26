@@ -336,6 +336,30 @@ export const coverage = (
   );
 
 /**
+ * 小さな波が、凪の波打ち際から浜をのぼる距離のめやす。
+ * 小さな波はシェーダーだけが描くので、その分を水のあるところに含める
+ */
+const LAP_REACH = 0.08;
+
+/**
+ * 海の位置を決める正方形の中心から `right`・`down`（1 辺を 1 とした、画面の右向きと下向きの距離）の地点が、水の中か。
+ * 海を押したかどうかを決めるのに使う。`tide` はスクロールで満ちた潮（0〜1）。
+ * 沖は右上にある（shader.ts の SEAWARD と ALONG と同じ向き）。
+ */
+export const submerged = (
+  right: number,
+  down: number,
+  swashes: readonly Swash[],
+  time: number,
+  tide: number,
+): boolean => {
+  const seaward = 0.8944 * right - 0.4472 * down;
+  const along = 0.4472 * right + 0.8944 * down;
+  return waterReach(swashes, time, along) + LAP_REACH
+    >= EBB_LINE - seaward - tide * TIDE_REACH;
+};
+
+/**
  * エビの見え方（1 = はっきり見える、0 = 海に消えた）。砂に埋もれている度合いは含めない。
  */
 export const visibility = (drift: Drift): number =>

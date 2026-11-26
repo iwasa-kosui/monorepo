@@ -69,6 +69,8 @@ body {
   background-color: var(--color-bg);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
   background-repeat: repeat;
+  /* 海を押すと、砂の色も変わる。海と同じ速さで移り変える（ShoreHero/palette.ts の PALETTE_FADE） */
+  transition: background-color 0.9s ease;
 }
 
 /* 夜の浜。サイト全体の地は砂の色にする（ヒーローの砂と同じ値） */
@@ -83,8 +85,9 @@ body {
   }
 }
 
-/* 海辺の配色。シェーダーがこの値を読むので、色は 16 進 6 桁で書く。砂はサイト全体の地の色と同じ */
-.shore-palette {
+/* 海辺の配色。シェーダーがこの値を読むので、色は 16 進 6 桁で書く。砂はサイト全体の地の色と同じ。
+   はじめは珊瑚色の海。海を押すと、海と砂の色を <html> に書いて上書きする（ShoreHero/paletteSwitch.ts） */
+:root {
   --shore-sand: var(--color-bg);
   --shore-sea-shallow: #f0998d;
   --shore-sea-deep: #b3324b;
@@ -102,7 +105,7 @@ body {
 
 /* 夜の浜: 暗い砂に青黒い海 */
 @media (prefers-color-scheme: dark) {
-  .shore-palette {
+  :root {
     --shore-sea-shallow: #3b6c98;
     --shore-sea-deep: #050d1c;
     --shore-foam: #dbe7f8;
@@ -550,7 +553,8 @@ pre.mermaid {
     background-size: 100% 3px;
   }
 
-  .clay-hover-lift {
+  .clay-hover-lift,
+  body {
     transition: none;
   }
 }

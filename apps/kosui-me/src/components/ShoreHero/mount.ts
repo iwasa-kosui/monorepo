@@ -1,5 +1,8 @@
+import { createPaletteFade } from './palette';
+import { PALETTE_EVENT } from './paletteSwitch';
 import { createQuality, createShoreRenderer, readPalette } from './renderer';
 import { GRID } from './shrimp';
+import { watchSeaTaps } from './tap';
 import {
   buriedDrift,
   carry,
@@ -9,6 +12,7 @@ import {
   ebb,
   initialDrift,
   packWaves,
+  submerged,
   visibility,
 } from './wave';
 
@@ -66,6 +70,7 @@ export type ShoreElements = Readonly<{
 
 /**
  * 海辺の描画を始める。戻り値の関数で止めて後片付けをする。
+ * 海を押すと、海と浜の配色がでたらめに切り替わる。
  * WebGL が使えない環境では何もせず、静止したドット絵（SVG）がそのまま見える。
  */
 export const mountShore = (elements: ShoreElements): () => void => {
@@ -78,7 +83,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
 
   const waves = createWaves(Math.random);
   const startedAt = performance.now();
-  let palette = readPalette(hero);
+  const palette = createPaletteFade(readPalette(hero));
   let drift: Drift = initialDrift;
   let previousTime: number | undefined;
   let goneAt: number | undefined;
@@ -158,7 +163,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
         buried: drift.buried,
         blinking: !reduceMotion && elapsed % 5.5 > 5.36,
       },
-      palette,
+      palette: palette.at(now),
     });
 
     if (!reduceMotion && visible) frame = requestAnimationFrame(draw);
@@ -192,9 +197,22 @@ export const mountShore = (elements: ShoreElements): () => void => {
   };
 
   const onPaletteChange = (): void => {
-    palette = readPalette(hero);
+    palette.change(readPalette(hero), performance.now(), reduceMotion);
     requestDraw();
   };
+  // 押したところが水の中か。最後に描いたコマの波で決める
+  const stopWatchingTaps = watchSeaTaps(hero, (clientX, clientY) => {
+    const slotRect = slot.getBoundingClientRect();
+    const size = slotRect.width;
+    if (size === 0 || previousTime === undefined) return false;
+    return submerged(
+      (clientX - slotRect.left) / size - 0.5,
+      (clientY - slotRect.top) / size - 0.5,
+      waves.visibleAt(previousTime),
+      previousTime,
+      tide,
+    );
+  });
   const onTouch = (): void => {
     const now = performance.now();
     if (now - twitchAt > 1200 && now - hopAt > 800) twitchAt = now;
@@ -221,6 +239,8 @@ export const mountShore = (elements: ShoreElements): () => void => {
     window.removeEventListener('resize', onScroll);
     window.removeEventListener('scroll', onScroll);
     colorScheme.removeEventListener('change', onPaletteChange);
+    document.removeEventListener(PALETTE_EVENT, onPaletteChange);
+    stopWatchingTaps();
     button.removeEventListener('pointerenter', onTouch);
     button.removeEventListener('click', onPress);
     canvas.removeEventListener('webglcontextlost', onContextLost);
@@ -236,6 +256,7 @@ export const mountShore = (elements: ShoreElements): () => void => {
   observer.observe(hero);
   window.addEventListener('resize', requestDraw);
   colorScheme.addEventListener('change', onPaletteChange);
+  document.addEventListener(PALETTE_EVENT, onPaletteChange);
   canvas.addEventListener('webglcontextlost', onContextLost);
   if (!reduceMotion) {
     button.addEventListener('pointerenter', onTouch);

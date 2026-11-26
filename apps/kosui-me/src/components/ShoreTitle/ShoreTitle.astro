@@ -22,7 +22,7 @@ const { title, transitionName } = Astro.props;
 ---
 
 <div class="title-shore">
-  <div class="title-shore-sea shore-palette" data-shore-hero>
+  <div class="title-shore-sea" data-shore-hero>
     <canvas data-shore-canvas aria-hidden="true"></canvas>
     <div class="title-shore-slot" data-shore-slot>
       <button
@@ -62,7 +62,7 @@ const { title, transitionName } = Astro.props;
 </div>
 
 <style>
-/* 海と砂の配色は global.css の .shore-palette にある */
+/* 海と砂の配色は global.css の :root にある */
 .title-shore {
   --shore-ink: #1f2740;
   --shore-muted: #4b526d;

@@ -1,5 +1,8 @@
+import { createPaletteFade } from '../ShoreHero/palette';
+import { PALETTE_EVENT } from '../ShoreHero/paletteSwitch';
 import { createQuality, createShoreRenderer, readPalette } from '../ShoreHero/renderer';
-import { createWaves, packWaves } from '../ShoreHero/wave';
+import { watchSeaTaps } from '../ShoreHero/tap';
+import { createWaves, packWaves, submerged } from '../ShoreHero/wave';
 import { placeSea } from './placement';
 
 /** 動きを止めた 1 枚絵として見せるときの時刻（最初の波が引いて、泡と濡れた跡が砂に残っている） */
@@ -16,6 +19,7 @@ export type BackdropElements = Readonly<{
 
 /**
  * 記事の背景に、波打ち際を描き始める。戻り値の関数で止めて後片付けをする。
+ * 海を押すと、海と浜の配色がでたらめに切り替わる。
  * WebGL が使えない環境では何もせず、砂の地だけが見える。
  */
 export const mountBackdrop = (elements: BackdropElements): () => void => {
@@ -29,7 +33,8 @@ export const mountBackdrop = (elements: BackdropElements): () => void => {
   const waves = createWaves(Math.random);
   const quality = createQuality();
   const startedAt = performance.now();
-  let palette = readPalette(root);
+  const palette = createPaletteFade(readPalette(root));
+  let shownTime: number | undefined;
   let visible = true;
   let frame = 0;
   let disposed = false;
@@ -48,6 +53,7 @@ export const mountBackdrop = (elements: BackdropElements): () => void => {
       : pinned === undefined
       ? (now - startedAt) / 1000
       : Number(pinned);
+    shownTime = time;
     renderer.render({
       width,
       height,
@@ -57,7 +63,7 @@ export const mountBackdrop = (elements: BackdropElements): () => void => {
       tide: 0,
       waves: packWaves(waves.visibleAt(time), time),
       rect: placeSea(width),
-      palette,
+      palette: palette.at(now),
     });
 
     if (!reduceMotion && visible) frame = requestAnimationFrame(draw);
@@ -68,9 +74,22 @@ export const mountBackdrop = (elements: BackdropElements): () => void => {
   };
 
   const onPaletteChange = (): void => {
-    palette = readPalette(root);
+    palette.change(readPalette(root), performance.now(), reduceMotion);
     requestDraw();
   };
+  // 押したところが水の中か。最後に描いたコマの波で決める
+  const stopWatchingTaps = watchSeaTaps(root, (clientX, clientY) => {
+    if (shownTime === undefined) return false;
+    const rootRect = root.getBoundingClientRect();
+    const [left, top, unit] = placeSea(rootRect.width);
+    return submerged(
+      (clientX - rootRect.left - left) / unit - 0.5,
+      (clientY - rootRect.top - top) / unit - 0.5,
+      waves.visibleAt(shownTime),
+      shownTime,
+      0,
+    );
+  });
   const onContextLost = (event: Event): void => {
     event.preventDefault();
     dispose();
@@ -88,6 +107,8 @@ export const mountBackdrop = (elements: BackdropElements): () => void => {
     observer.disconnect();
     window.removeEventListener('resize', requestDraw);
     colorScheme.removeEventListener('change', onPaletteChange);
+    document.removeEventListener(PALETTE_EVENT, onPaletteChange);
+    stopWatchingTaps();
     canvas.removeEventListener('webglcontextlost', onContextLost);
     root.classList.remove('is-live');
     renderer.dispose();
@@ -97,6 +118,7 @@ export const mountBackdrop = (elements: BackdropElements): () => void => {
   observer.observe(root);
   window.addEventListener('resize', requestDraw);
   colorScheme.addEventListener('change', onPaletteChange);
+  document.addEventListener(PALETTE_EVENT, onPaletteChange);
   canvas.addEventListener('webglcontextlost', onContextLost);
   requestDraw();
 
